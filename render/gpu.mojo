@@ -356,6 +356,7 @@ from materials.nodes import (
     offset_normal,
     has_output,
     perspective_shares,
+    perspective_shares_over,
     run_nodes,
 )
 from render.transmission import (
@@ -7140,7 +7141,7 @@ def rasterize_kernel(
             if not shades(test, tested or hashed or covered or masked):
                 stencil = test.stencil
                 continue
-            var shares = perspective_shares(wa, wb, wc, aw, bw, cw)
+            var shares = perspective_shares_over(inv_w, wa, wb, wc, aw, bw, cw)
             var share_a = shares[0]
             var share_b = shares[1]
             var share_c = shares[2]

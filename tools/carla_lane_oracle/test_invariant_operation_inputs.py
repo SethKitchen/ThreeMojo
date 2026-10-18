@@ -3382,7 +3382,7 @@ class OperationReachedBindingControls(unittest.TestCase):
 
 # Exact test-only PR760 implementation successor. Historical inverse data and
 # whole-file predecessor digests below remain unchanged.
-_PR760_CHECKER_SOURCE_EDGES = {'coverage_loop_proofs.py': {'after_sha256': '9cac1aebd4a72744db21cd143259a4d6ada695f13930d9e971b792cc7a75a1d8',
+_PR760_CHECKER_SOURCE_EDGES = {'coverage_loop_proofs.py': {'after_sha256': '3bcd5c6975a8d606866672eb6c7a8ea72b2fc3aa13a7f3c00f231971dfa50805',
                              'before_sha256': '28ff5cfe131ee2812d0a71a4a525ef3c962e5fa80442196dbb4b4cecfdb3d1ed',
                              'edits': ((497,
                                         507,
@@ -3979,7 +3979,7 @@ _PR760_CHECKER_SOURCE_EDGES = {'coverage_loop_proofs.py': {'after_sha256': '9cac
                                          " 'materials/material.mojo': "
                                          "'0722ad172e97c70cc530348a627eb52cde41c643cabef385423ee8ea6d8b77b9',\n",
                                          " 'materials/nodes.mojo': "
-                                         "'5e4a3a33b1e2b8dd84705412c61e4d75938f0aae45d7e318b164bfd48bb0bb97',\n",
+                                         "'525920b0e48d73cd4329a51ed127e38c59972ebc48c8562c20ce2200b072c3ef',\n",
                                          " 'math/__init__.mojo': "
                                          "'5f3ace6c2d6162c4a542666c21a966d54d5b98b8d4982794ea5bfbbcc4f52479',\n",
                                          " 'math/arc_tangent.mojo': "
@@ -4121,7 +4121,7 @@ _PR760_CHECKER_SOURCE_EDGES = {'coverage_loop_proofs.py': {'after_sha256': '9cac
                                          " 'tests/test_reconciled_hair_density.mojo': "
                                          "'2e0c703b365bc98d3d6fc4c8796d4133edf004eafb753262ca89cd6d639be3c4',\n",
                                          " 'tools/carla_lane_oracle/pr760_arithmetic_stage.py': "
-                                         "'77d838415054e1fea54ede845bf70e8d98ed7243c3e74dbcef0283e4798b21cb',\n",
+                                         "'d9a3548f27899ff7ff202e2b467d5cae96c2e5946619cf7617a3ae8322322fc6',\n",
                                          " 'units/__init__.mojo': "
                                          "'5f3ace6c2d6162c4a542666c21a966d54d5b98b8d4982794ea5bfbbcc4f52479',\n",
                                          " 'units/measure.mojo': "
@@ -4366,7 +4366,7 @@ _PR760_CHECKER_SOURCE_EDGES = {'coverage_loop_proofs.py': {'after_sha256': '9cac
                                          'include_roots=include_roots, **operation_args))\n',
                                          '            result.update(density760_loops(root, '
                                          'include_roots=include_roots, **operation_args))\n')))},
- 'full_audit_cleanup_contracts.py': {'after_sha256': 'cfff9707a98289b6c91ad2d59305a5354ef2177b13e1d3fda64fe0240ad560f2',
+ 'full_audit_cleanup_contracts.py': {'after_sha256': '9214d6b8e315ec7b143c6a2ff505bc21092b40e876a99763bebb7ed9c74f3dff',
                                      'before_sha256': '6138ba2dcac394c716ea9ed32e74e0c6d15857d5c605fc82304d21d0c80fdc69',
                                      'edits': ((53,
                                                 54,
@@ -4383,11 +4383,11 @@ _PR760_CHECKER_SOURCE_EDGES = {'coverage_loop_proofs.py': {'after_sha256': '9cac
                                                  "{'tools/carla_lane_oracle/scaled_float32_contracts.py': "
                                                  "'e3a59a9f8d5a9394007c03fab6ac696e04998812dad5843a22e721bfbe57c2a1',\n",),
                                                 ('PR760_STAGE_SHA256 = '
-                                                 "'77d838415054e1fea54ede845bf70e8d98ed7243c3e74dbcef0283e4798b21cb'\n",
+                                                 "'d9a3548f27899ff7ff202e2b467d5cae96c2e5946619cf7617a3ae8322322fc6'\n",
                                                  'PR760_IMAGE = '
                                                  "'tools/carla_lane_oracle/pr760-source-image.json'\n",
                                                  'PR760_IMAGE_SHA256 = '
-                                                 "'242cebf3e80285c10ce01d6bd13a8b559199a8d08518b516890d6a36a609411f'\n",
+                                                 "'94204c37b84977309d67c06f6791f995e8089c3a2be52126ac4a91df0f5ec5cd'\n",
                                                  'PR760_OWNER_PREDECESSOR = '
                                                  "'tools/carla_lane_oracle/pr760-owner-predecessor.txt'\n",
                                                  'PR760_OWNER_PREDECESSOR_SHA256 = '
@@ -5165,10 +5165,10 @@ _PR760_CHECKER_SOURCE_EDGES = {'coverage_loop_proofs.py': {'after_sha256': '9cac
                                                  'PR760_IMAGE_SHA256, PR760_OWNER_PREDECESSOR, '
                                                  'PR760_OWNER_PREDECESSOR_SHA256) == (\n',
                                                  '        '
-                                                 "'77d838415054e1fea54ede845bf70e8d98ed7243c3e74dbcef0283e4798b21cb',\n",
+                                                 "'d9a3548f27899ff7ff202e2b467d5cae96c2e5946619cf7617a3ae8322322fc6',\n",
                                                  "        'tools/carla_lane_oracle/pr760-source-image.json',\n",
                                                  '        '
-                                                 "'242cebf3e80285c10ce01d6bd13a8b559199a8d08518b516890d6a36a609411f',\n",
+                                                 "'94204c37b84977309d67c06f6791f995e8089c3a2be52126ac4a91df0f5ec5cd',\n",
                                                  '        '
                                                  "'tools/carla_lane_oracle/pr760-owner-predecessor.txt',\n",
                                                  '        '

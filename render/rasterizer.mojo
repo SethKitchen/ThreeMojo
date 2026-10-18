@@ -166,6 +166,7 @@ from materials.nodes import (
     offset_normal,
     has_output,
     perspective_shares,
+    perspective_shares_over,
     run_nodes,
 )
 from render.transmission import (
@@ -4321,10 +4322,11 @@ def rasterize_shaded(
             # everything at or in front of the near plane, and an
             # orthographic camera leaves w at one, not zero, so its inv_w
             # is one and the correction divides by one. The guard is for
-            # hand-built input. `perspective_shares` is that correction,
-            # and the GPU kernel calls it, so the two still round alike.
-            var shares = perspective_shares(
-                wa, wb, wc, a.inv_w, b.inv_w, c.inv_w
+            # hand-built input. `perspective_shares_over` is that
+            # correction over the `inv_w` the depth used, and the GPU kernel
+            # calls it the same way, so the two still round alike.
+            var shares = perspective_shares_over(
+                inv_w, wa, wb, wc, a.inv_w, b.inv_w, c.inv_w
             )
             var share_a = shares[0]
             var share_b = shares[1]

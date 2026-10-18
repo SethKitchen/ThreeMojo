@@ -145,9 +145,9 @@ NATIVE_SUPPORT_INPUTS = ('tools/native_test_support.py', 'tools/fixtures/carla_s
 NATIVE_SUPPORT_MAPPING = {'tests/test_carla_junction_endpoint_refusals.mojo': ['tools/fixtures/carla_sum2_fp_state.c'],
  'tests/test_carla_sum2_environment.mojo': ['tools/fixtures/carla_sum2_fp_state.c']}
 THEOREM_DOCUMENT = 'docs/validation/full-audit-711-invariants.md'
-PR760_STAGE_SHA256 = '77d838415054e1fea54ede845bf70e8d98ed7243c3e74dbcef0283e4798b21cb'
+PR760_STAGE_SHA256 = 'd9a3548f27899ff7ff202e2b467d5cae96c2e5946619cf7617a3ae8322322fc6'
 PR760_IMAGE = 'tools/carla_lane_oracle/pr760-source-image.json'
-PR760_IMAGE_SHA256 = '242cebf3e80285c10ce01d6bd13a8b559199a8d08518b516890d6a36a609411f'
+PR760_IMAGE_SHA256 = '94204c37b84977309d67c06f6791f995e8089c3a2be52126ac4a91df0f5ec5cd'
 PR760_OWNER_PREDECESSOR = 'tools/carla_lane_oracle/pr760-owner-predecessor.txt'
 PR760_OWNER_PREDECESSOR_SHA256 = '6138ba2dcac394c716ea9ed32e74e0c6d15857d5c605fc82304d21d0c80fdc69'
 DEPENDENCY_TOOL_SHA256 = {'tools/carla_lane_oracle/winner_sign_contracts.py': 'f850902634073364fe2407b00d12e9fdfb2ecfc6cf2a03414269fbb7984a8a7f',
@@ -4126,9 +4126,9 @@ PR760_IMPLEMENTATION_SUCCESSORS = {'tools/carla_lane_oracle/border_parser_contra
 def _pr760_authority_data():
     """Bind successor data selectors to literal executing-code constants."""
     require((PR760_STAGE_SHA256, PR760_IMAGE, PR760_IMAGE_SHA256, PR760_OWNER_PREDECESSOR, PR760_OWNER_PREDECESSOR_SHA256) == (
-        '77d838415054e1fea54ede845bf70e8d98ed7243c3e74dbcef0283e4798b21cb',
+        'd9a3548f27899ff7ff202e2b467d5cae96c2e5946619cf7617a3ae8322322fc6',
         'tools/carla_lane_oracle/pr760-source-image.json',
-        '242cebf3e80285c10ce01d6bd13a8b559199a8d08518b516890d6a36a609411f',
+        '94204c37b84977309d67c06f6791f995e8089c3a2be52126ac4a91df0f5ec5cd',
         'tools/carla_lane_oracle/pr760-owner-predecessor.txt',
         '6138ba2dcac394c716ea9ed32e74e0c6d15857d5c605fc82304d21d0c80fdc69',
     ), 'PR760 authority selectors changed')

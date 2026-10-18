@@ -72,7 +72,8 @@ class LegacyProvenanceControls(unittest.TestCase):
 class ClosedPhysicalImageControls(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
-        cls.temporary = tempfile.TemporaryDirectory(prefix='pr760-physical-')
+        cls.temporary = tempfile.TemporaryDirectory(
+            prefix='pr760-physical-', dir=Path(tempfile.gettempdir()).resolve())
         cls.root = Path(cls.temporary.name)/'source'
         cls.root.mkdir()
         data = json.loads((ROOT/owner.PR760_IMAGE).read_bytes())
@@ -185,7 +186,8 @@ class ClosedPhysicalImageControls(unittest.TestCase):
 
     def test_historical_minimal_helper_roots_and_current_partial_refusal(self):
         leaf = owner.scaled_float32
-        with tempfile.TemporaryDirectory(prefix='pr760-legacy-') as directory:
+        with tempfile.TemporaryDirectory(
+                prefix='pr760-legacy-', dir=Path(tempfile.gettempdir()).resolve()) as directory:
             root = Path(directory)
             expected = {**leaf.PACKAGE_INPUTS, **leaf.PROVIDER_INPUTS, **leaf.TESTS,
                         **leaf.AFTER_SHA256, leaf.LEAF:owner.DEPENDENCY_TOOL_SHA256[leaf.LEAF]}

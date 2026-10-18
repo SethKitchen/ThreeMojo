@@ -14232,8 +14232,8 @@ EDGES = {'animation/animation_clip.mojo': {'after_sha256': '71842bfcf4a72c6c652a
                                                    'id")\n'],
                                         'start': 4072,
                                         'stop': 4075}]},
- 'materials/nodes.mojo': {'after_sha256': '5e4a3a33b1e2b8dd84705412c61e4d75938f0aae45d7e318b164bfd48bb0bb97',
-                          'after_token_sha256': '90a2f6a92263b099b914fb2cfdadcd8d09ad67ca0d202e2e443097d4bf1aa82b',
+ 'materials/nodes.mojo': {'after_sha256': '525920b0e48d73cd4329a51ed127e38c59972ebc48c8562c20ce2200b072c3ef',
+                          'after_token_sha256': '823893b8e379ec938e21cdfcdd7f837cdc0206060d88fbc5a6f449e338c473c7',
                           'before_sha256': '6f0e83a402cdb921eb76da0d7670d48c1d32fcc39c6138dc140c4259d388ded4',
                           'before_token_sha256': 'efb4c3d2bb183dd5370cc05432b4d914bfe5983ac4e155e5e0176235a0e0ec53',
                           'edits': [{'after': ['from core.ordinal import index_in_count\n',
@@ -14962,24 +14962,66 @@ EDGES = {'animation/animation_clip.mojo': {'after_sha256': '71842bfcf4a72c6c652a
                                      'before': ['        return FloatColor(1.0, 1.0, 1.0, 1.0)\n'],
                                      'start': 7124,
                                      'stop': 7125},
+                                    {'after': ['    return perspective_shares_over(\n',
+                                               '        wa * ia + wb * ib + wc * ic, wa, wb, wc, ia, '
+                                               'ib, ic\n',
+                                               '    )\n',
+                                               '\n',
+                                               '\n',
+                                               'def perspective_shares_over(\n',
+                                               '    inv_w: Float32,\n',
+                                               '    wa: Float32,\n',
+                                               '    wb: Float32,\n',
+                                               '    wc: Float32,\n',
+                                               '    ia: Float32,\n',
+                                               '    ib: Float32,\n',
+                                               '    ic: Float32,\n',
+                                               ') -> Lanes:\n',
+                                               '    """Return each corner\'s perspective-correct weight '
+                                               'at a sample, over\n',
+                                               '    an interpolated `1 / w` the caller already has.\n',
+                                               '\n',
+                                               '    A rasterizer that tests depth with `inv_w` passes '
+                                               'that same value, so\n',
+                                               '    the weights and the depth are rounded from one '
+                                               'sum.\n',
+                                               '\n',
+                                               '    Args:\n',
+                                               '        inv_w: The interpolated `1 / w` at the '
+                                               'sample.\n',
+                                               "        wa: The first corner's screen-space weight.\n",
+                                               "        wb: The second's.\n",
+                                               "        wc: The third's.\n",
+                                               "        ia: The first corner's `1 / w`.\n",
+                                               "        ib: The second's.\n",
+                                               "        ic: The third's.\n",
+                                               '\n',
+                                               '    Returns:\n',
+                                               '        The three weights, in the first three lanes, or '
+                                               'the screen weights\n',
+                                               '        where `inv_w` is zero.\n',
+                                               '    """\n'],
+                                     'before': ['    var inv_w = wa * ia + wb * ib + wc * ic\n'],
+                                     'start': 7220,
+                                     'stop': 7253},
                                     {'after': ['        return OPAQUE_WHITE\n'],
                                      'before': ['        return FloatColor(1.0, 1.0, 1.0, 1.0)\n'],
-                                     'start': 7281,
-                                     'stop': 7282},
+                                     'start': 7313,
+                                     'stop': 7314},
                                     {'after': ['        return OPAQUE_WHITE\n'],
                                      'before': ['        return FloatColor(1.0, 1.0, 1.0, 1.0)\n'],
-                                     'start': 7297,
-                                     'stop': 7298},
+                                     'start': 7329,
+                                     'stop': 7330},
                                     {'after': ['        return OPAQUE_WHITE\n'],
                                      'before': ['        return FloatColor(1.0, 1.0, 1.0, 1.0)\n'],
-                                     'start': 7311,
-                                     'stop': 7312},
+                                     'start': 7343,
+                                     'stop': 7344},
                                     {'after': ['    var size = sqrt(squared_length3[DType.float32](v.x, '
                                                'v.y, v.z))\n'],
                                      'before': ['    var size = sqrt(v.x * v.x + v.y * v.y + v.z * '
                                                 'v.z)\n'],
-                                     'start': 7366,
-                                     'stop': 7367},
+                                     'start': 7398,
+                                     'stop': 7399},
                                     {'after': ['        weighted_sum3(a.position, b.position, '
                                                'c.position, s[0], s[1], s[2]),\n',
                                                '        _unit(weighted_sum3(a.normal, b.normal, '
@@ -15012,13 +15054,13 @@ EDGES = {'animation/animation_clip.mojo': {'after_sha256': '71842bfcf4a72c6c652a
                                                 '            a.color.z * s[0] + b.color.z * s[1] + '
                                                 'c.color.z * s[2],\n',
                                                 '        ),\n'],
-                                     'start': 7405,
-                                     'stop': 7408},
+                                     'start': 7437,
+                                     'stop': 7440},
                                     {'after': ['    var size = sqrt(squared_length3[DType.float32](x, '
                                                'y, z))\n'],
                                      'before': ['    var size = sqrt(x * x + y * y + z * z)\n'],
-                                     'start': 8593,
-                                     'stop': 8594}]},
+                                     'start': 8625,
+                                     'stop': 8626}]},
  'materials/volume_node_material.mojo': {'after_sha256': 'f8e08ddbfb285a9d5344c156a9424cb8c309cb4771ff132f7eaca193f69eab29',
                                          'after_token_sha256': '4af43647675454d33bd5aea9498d06f66b909b068e9d036e290d5ffb38c75212',
                                          'before_sha256': '4d0a7753bae1642679286957903fb436ac06f71ad683a618ec1fdf69af609a30',
@@ -27522,8 +27564,8 @@ EDGES = {'animation/animation_clip.mojo': {'after_sha256': '71842bfcf4a72c6c652a
                                          'before': ['            )\n'],
                                          'start': 613,
                                          'stop': 615}]},
- 'render/rasterizer.mojo': {'after_sha256': 'e1dfcd4fcf6eaa4283eed3b340b872735a09f2d94fad59c089df2c733329ab02',
-                            'after_token_sha256': '2d14bd01192bae1cf857e618faae3862784974825aad31e9d41fb0b7361f7311',
+ 'render/rasterizer.mojo': {'after_sha256': 'e8d1e85a25a771edc28ab063a8ae1b38946ca1589014c0bb6ea6126aa5a9cf25',
+                            'after_token_sha256': '49c113f28ee16d52cbbb50c6f93b18902581fde0c15cede8634e71dfb64e16d0',
                             'before_sha256': '29628131f65e0308142c7e8f646d2efb75c71044328f2096edb8b46a286a2164',
                             'before_token_sha256': 'baef1508ed183d20da76dd5d56c922f8bf8da457cdf3e268270ee910ee90a052',
                             'edits': [{'after': ['from core.ordinal import (\n',
@@ -27573,10 +27615,14 @@ EDGES = {'animation/animation_clip.mojo': {'after_sha256': '71842bfcf4a72c6c652a
                                        'before': ['    AT_RIGHT,\n', '    AT_UP,\n'],
                                        'start': 139,
                                        'stop': 139},
+                                      {'after': ['    perspective_shares_over,\n'],
+                                       'before': [],
+                                       'start': 168,
+                                       'stop': 169},
                                       {'after': [],
                                        'before': ['    gl_point_coord,\n'],
-                                       'start': 220,
-                                       'stop': 220},
+                                       'start': 221,
+                                       'stop': 221},
                                       {'after': [')\n',
                                                  'from math.curve_checks import require_at_least_one\n',
                                                  'from math.finite import (\n',
@@ -27586,8 +27632,8 @@ EDGES = {'animation/animation_clip.mojo': {'after_sha256': '71842bfcf4a72c6c652a
                                                  '    require_non_negative_finite,\n',
                                                  '    require_unit_finite,\n'],
                                        'before': [],
-                                       'start': 222,
-                                       'stop': 230},
+                                       'start': 223,
+                                       'stop': 231},
                                       {'after': ['    var left = min3(triangle.a.x, triangle.b.x, '
                                                  'triangle.c.x)\n',
                                                  '    var right = max3(triangle.a.x, triangle.b.x, '
@@ -27604,8 +27650,8 @@ EDGES = {'animation/animation_clip.mojo': {'after_sha256': '71842bfcf4a72c6c652a
                                                   'triangle.c.y))\n',
                                                   '    var bottom = max(triangle.a.y, max(triangle.b.y, '
                                                   'triangle.c.y))\n'],
-                                       'start': 485,
-                                       'stop': 489},
+                                       'start': 486,
+                                       'stop': 490},
                                       {'after': ['        require_unit_finite(\n',
                                                  '            Float64(self.sheen_roughness),\n',
                                                  '            "A triangle\'s sheen roughness must be '
@@ -27626,8 +27672,8 @@ EDGES = {'animation/animation_clip.mojo': {'after_sha256': '71842bfcf4a72c6c652a
                                                   '_is_unit_fraction(self.iridescence):\n',
                                                   '            raise Error("A triangle\'s iridescence '
                                                   'must be between zero and one")\n'],
-                                       'start': 752,
-                                       'stop': 760},
+                                       'start': 753,
+                                       'stop': 761},
                                       {'after': ['        require_finite_group(\n',
                                                  '            scale.is_finite(),\n',
                                                  '            "A triangle\'s clearcoat normal scale '
@@ -27637,19 +27683,19 @@ EDGES = {'animation/animation_clip.mojo': {'after_sha256': '71842bfcf4a72c6c652a
                                                   'isfinite(scale.y):\n',
                                                   '            raise Error("A triangle\'s clearcoat '
                                                   'normal scale must be finite")\n'],
-                                       'start': 787,
-                                       'stop': 791},
+                                       'start': 788,
+                                       'stop': 792},
                                       {'after': ['        require_valid(\n',
                                                  '            self.normal_map_type.is_valid(),\n',
                                                  '            (\n'],
                                        'before': ['        if not self.normal_map_type.is_valid():\n',
                                                   '            raise Error(\n'],
-                                       'start': 848,
-                                       'stop': 851},
+                                       'start': 849,
+                                       'stop': 852},
                                       {'after': ['            ),\n', '        )\n'],
                                        'before': ['            )\n'],
-                                       'start': 853,
-                                       'stop': 855},
+                                       'start': 854,
+                                       'stop': 856},
                                       {'after': ['        require_non_negative_finite(\n',
                                                  '            Float64(ratio), "A triangle\'s refraction '
                                                  'ratio cannot be negative"\n',
@@ -27657,8 +27703,8 @@ EDGES = {'animation/animation_clip.mojo': {'after_sha256': '71842bfcf4a72c6c652a
                                        'before': ['        if not isfinite(ratio) or ratio < 0:\n',
                                                   '            raise Error("A triangle\'s refraction '
                                                   'ratio cannot be negative")\n'],
-                                       'start': 856,
-                                       'stop': 859},
+                                       'start': 857,
+                                       'stop': 860},
                                       {'after': ['        return ordinal_valid(self.value, '
                                                  'SHADE_SHADOW.value)\n'],
                                        'before': ['        return (\n',
@@ -27667,8 +27713,8 @@ EDGES = {'animation/animation_clip.mojo': {'after_sha256': '71842bfcf4a72c6c652a
                                                   '            or self == SHADE_TEXTURE\n',
                                                   '            or self == SHADE_SHADOW\n',
                                                   '        )\n'],
-                                       'start': 1911,
-                                       'stop': 1912},
+                                       'start': 1912,
+                                       'stop': 1913},
                                       {'after': ['\n',
                                                  '\n',
                                                  'def require_shade_mode(mode: ShadeMode) raises:\n',
@@ -27687,16 +27733,16 @@ EDGES = {'animation/animation_clip.mojo': {'after_sha256': '71842bfcf4a72c6c652a
                                                  '    require_valid(mode.is_valid(), "A shading mode '
                                                  'that is none of the four")\n'],
                                        'before': [],
-                                       'start': 1918,
-                                       'stop': 1932},
+                                       'start': 1919,
+                                       'stop': 1933},
                                       {'after': ['    var shares = perspective_shares(\n',
                                                  '        weights.wa, weights.wb, weights.wc, a.inv_w, '
                                                  'b.inv_w, c.inv_w\n'],
                                        'before': ['    var inv_w = (\n',
                                                   '        weights.wa * a.inv_w + weights.wb * b.inv_w '
                                                   '+ weights.wc * c.inv_w\n'],
-                                       'start': 1948,
-                                       'stop': 1950},
+                                       'start': 1949,
+                                       'stop': 1951},
                                       {'after': ['    var share_a = shares[0]\n',
                                                  '    var share_b = shares[1]\n',
                                                  '    var share_c = shares[2]\n'],
@@ -27708,8 +27754,8 @@ EDGES = {'animation/animation_clip.mojo': {'after_sha256': '71842bfcf4a72c6c652a
                                                   '        share_a = weights.wa * a.inv_w * rcp\n',
                                                   '        share_b = weights.wb * b.inv_w * rcp\n',
                                                   '        share_c = weights.wc * c.inv_w * rcp\n'],
-                                       'start': 1951,
-                                       'stop': 1954},
+                                       'start': 1952,
+                                       'stop': 1955},
                                       {'after': ['        return weighted_sum2(\n',
                                                  '            Vector2(a.u1, a.v1),\n',
                                                  '            Vector2(b.u1, b.v1),\n',
@@ -27722,8 +27768,8 @@ EDGES = {'animation/animation_clip.mojo': {'after_sha256': '71842bfcf4a72c6c652a
                                                   'share_c,\n',
                                                   '            a.v1 * share_a + b.v1 * share_b + c.v1 * '
                                                   'share_c,\n'],
-                                       'start': 1955,
-                                       'stop': 1962},
+                                       'start': 1956,
+                                       'stop': 1963},
                                       {'after': ['    return weighted_sum2(\n',
                                                  '        Vector2(a.u, a.v),\n',
                                                  '        Vector2(b.u, b.v),\n',
@@ -27736,16 +27782,16 @@ EDGES = {'animation/animation_clip.mojo': {'after_sha256': '71842bfcf4a72c6c652a
                                                   'share_c,\n',
                                                   '        a.v * share_a + b.v * share_b + c.v * '
                                                   'share_c,\n'],
-                                       'start': 1963,
-                                       'stop': 1970},
+                                       'start': 1964,
+                                       'stop': 1971},
                                       {'after': ['    var shares = perspective_shares(\n',
                                                  '        weights.wa, weights.wb, weights.wc, a.inv_w, '
                                                  'b.inv_w, c.inv_w\n'],
                                        'before': ['    var inv_w = (\n',
                                                   '        weights.wa * a.inv_w + weights.wb * b.inv_w '
                                                   '+ weights.wc * c.inv_w\n'],
-                                       'start': 1985,
-                                       'stop': 1987},
+                                       'start': 1986,
+                                       'stop': 1988},
                                       {'after': ['    var share_a = shares[0]\n',
                                                  '    var share_b = shares[1]\n',
                                                  '    var share_c = shares[2]\n',
@@ -27767,8 +27813,8 @@ EDGES = {'animation/animation_clip.mojo': {'after_sha256': '71842bfcf4a72c6c652a
                                                   '        a.world.z * share_a + b.world.z * share_b + '
                                                   'c.world.z * share_c,\n',
                                                   '    )\n'],
-                                       'start': 1988,
-                                       'stop': 1992},
+                                       'start': 1989,
+                                       'stop': 1993},
                                       {'after': ['    var tangent = q1_perp * uv_along_x.x + q0_perp * '
                                                  'uv_along_y.x\n',
                                                  '    var bitangent = q1_perp * uv_along_x.y + q0_perp '
@@ -27789,8 +27835,8 @@ EDGES = {'animation/animation_clip.mojo': {'after_sha256': '71842bfcf4a72c6c652a
                                                   '        q1_perp.z * uv_along_x.y + q0_perp.z * '
                                                   'uv_along_y.y,\n',
                                                   '    )\n'],
-                                       'start': 2041,
-                                       'stop': 2043},
+                                       'start': 2042,
+                                       'stop': 2044},
                                       {'after': ['    var finite = uv_along_x.is_finite() and '
                                                  'uv_along_y.is_finite()\n'],
                                        'before': ['    var finite = (\n',
@@ -27799,8 +27845,8 @@ EDGES = {'animation/animation_clip.mojo': {'after_sha256': '71842bfcf4a72c6c652a
                                                   '        and isfinite(uv_along_y.x)\n',
                                                   '        and isfinite(uv_along_y.y)\n',
                                                   '    )\n'],
-                                       'start': 2067,
-                                       'stop': 2068},
+                                       'start': 2068,
+                                       'stop': 2069},
                                       {'after': ['    var perturbed = weighted_sum3(\n',
                                                  '        tangent, bitangent, normal, map_x, map_y, '
                                                  'map_z\n'],
@@ -27811,16 +27857,16 @@ EDGES = {'animation/animation_clip.mojo': {'after_sha256': '71842bfcf4a72c6c652a
                                                   'normal.y * map_z,\n',
                                                   '        tangent.z * map_x + bitangent.z * map_y + '
                                                   'normal.z * map_z,\n'],
-                                       'start': 2159,
-                                       'stop': 2161},
+                                       'start': 2160,
+                                       'stop': 2162},
                                       {'after': ['    var shares = perspective_shares(\n',
                                                  '        weights.wa, weights.wb, weights.wc, a.inv_w, '
                                                  'b.inv_w, c.inv_w\n'],
                                        'before': ['    var inv_w = (\n',
                                                   '        weights.wa * a.inv_w + weights.wb * b.inv_w '
                                                   '+ weights.wc * c.inv_w\n'],
-                                       'start': 2354,
-                                       'stop': 2356},
+                                       'start': 2355,
+                                       'stop': 2357},
                                       {'after': ['    var share_a = shares[0]\n',
                                                  '    var share_b = shares[1]\n',
                                                  '    var share_c = shares[2]\n',
@@ -27842,8 +27888,8 @@ EDGES = {'animation/animation_clip.mojo': {'after_sha256': '71842bfcf4a72c6c652a
                                                   '+ c.normal.y * share_c,\n',
                                                   '        a.normal.z * share_a + b.normal.z * share_b '
                                                   '+ c.normal.z * share_c,\n'],
-                                       'start': 2357,
-                                       'stop': 2362},
+                                       'start': 2358,
+                                       'stop': 2363},
                                       {'after': ['    var in_x = length2(along_x.x * across, along_x.y '
                                                  '* down)\n',
                                                  '    var in_y = length2(along_y.x * across, along_y.y '
@@ -27852,8 +27898,8 @@ EDGES = {'animation/animation_clip.mojo': {'after_sha256': '71842bfcf4a72c6c652a
                                                   '* down)\n',
                                                   '    var in_y = _length(along_y.x * across, along_y.y '
                                                   '* down)\n'],
-                                       'start': 2416,
-                                       'stop': 2418},
+                                       'start': 2417,
+                                       'stop': 2419},
                                       {'after': [],
                                        'before': ['\n',
                                                   '\n',
@@ -27861,8 +27907,8 @@ EDGES = {'animation/animation_clip.mojo': {'after_sha256': '71842bfcf4a72c6c652a
                                                   '    """Return the length of a two-component '
                                                   'vector."""\n',
                                                   '    return length2(x, y)\n'],
-                                       'start': 2426,
-                                       'stop': 2426},
+                                       'start': 2427,
+                                       'stop': 2427},
                                       {'after': [],
                                        'before': ['\n',
                                                   '\n',
@@ -27885,8 +27931,8 @@ EDGES = {'animation/animation_clip.mojo': {'after_sha256': '71842bfcf4a72c6c652a
                                                   '        facing.x * 0.5 + 0.5, facing.y * 0.5 + 0.5, '
                                                   'facing.z * 0.5 + 0.5\n',
                                                   '    )\n'],
-                                       'start': 2456,
-                                       'stop': 2456},
+                                       'start': 2457,
+                                       'stop': 2457},
                                       {'after': ['    return weighted_sum3(a, b, c, shares[0], '
                                                  'shares[1], shares[2])\n'],
                                        'before': ['    return Vector3(\n',
@@ -27897,8 +27943,8 @@ EDGES = {'animation/animation_clip.mojo': {'after_sha256': '71842bfcf4a72c6c652a
                                                   '        a.z * shares[0] + b.z * shares[1] + c.z * '
                                                   'shares[2],\n',
                                                   '    )\n'],
-                                       'start': 2497,
-                                       'stop': 2498},
+                                       'start': 2498,
+                                       'stop': 2499},
                                       {'after': ['    require_valid(\n',
                                                  '        a.depth_packing.is_valid(),\n',
                                                  '        "A triangle\'s depth packing is none of the '
@@ -27907,8 +27953,8 @@ EDGES = {'animation/animation_clip.mojo': {'after_sha256': '71842bfcf4a72c6c652a
                                        'before': ['    if not a.depth_packing.is_valid():\n',
                                                   '        raise Error("A triangle\'s depth packing is '
                                                   'none of the four")\n'],
-                                       'start': 2611,
-                                       'stop': 2615},
+                                       'start': 2612,
+                                       'stop': 2616},
                                       {'after': ['\n',
                                                  '\n',
                                                  'def require_triangle_lighting(named: Int, count: Int) '
@@ -27931,8 +27977,8 @@ EDGES = {'animation/animation_clip.mojo': {'after_sha256': '71842bfcf4a72c6c652a
                                                  '        raise Error("A triangle names a lighting the '
                                                  'frame does not have")\n'],
                                        'before': [],
-                                       'start': 2636,
-                                       'stop': 2652},
+                                       'start': 2637,
+                                       'stop': 2653},
                                       {'after': ['    require_unit_finite(\n',
                                                  '        Float64(a.alpha_test),\n',
                                                  '        "A triangle\'s alpha test must be between '
@@ -27942,8 +27988,8 @@ EDGES = {'animation/animation_clip.mojo': {'after_sha256': '71842bfcf4a72c6c652a
                                                   '0 or a.alpha_test > 1:\n',
                                                   '        raise Error("A triangle\'s alpha test must '
                                                   'be between zero and one")\n'],
-                                       'start': 2738,
-                                       'stop': 2742},
+                                       'start': 2739,
+                                       'stop': 2743},
                                       {'after': ['    require_non_negative_finite(\n',
                                                  '        Float64(a.shininess), "A triangle\'s '
                                                  'shininess cannot be negative"\n',
@@ -27952,8 +27998,8 @@ EDGES = {'animation/animation_clip.mojo': {'after_sha256': '71842bfcf4a72c6c652a
                                                   '0:\n',
                                                   '        raise Error("A triangle\'s shininess cannot '
                                                   'be negative")\n'],
-                                       'start': 2744,
-                                       'stop': 2747},
+                                       'start': 2745,
+                                       'stop': 2748},
                                       {'after': ['    require_valid(\n',
                                                  '        a.blend.is_valid(),\n',
                                                  '        "A triangle\'s blend policy is not a blending '
@@ -27969,8 +28015,8 @@ EDGES = {'animation/animation_clip.mojo': {'after_sha256': '71842bfcf4a72c6c652a
                                                   '    if not a.kind.is_valid():\n',
                                                   '        raise Error("A triangle\'s material kind is '
                                                   'none of the thirteen")\n'],
-                                       'start': 2751,
-                                       'stop': 2758},
+                                       'start': 2752,
+                                       'stop': 2759},
                                       {'after': ['    require_unmixed_data(a.kind.is_data(), '
                                                  'a.blend.mixes())\n'],
                                        'before': ['    if a.kind.is_data() and a.blend.mixes():\n',
@@ -27980,8 +28026,8 @@ EDGES = {'animation/animation_clip.mojo': {'after_sha256': '71842bfcf4a72c6c652a
                                                   '            " bytes or the scene\'s light, not a '
                                                   'mixture of the two"\n',
                                                   '        )\n'],
-                                       'start': 2806,
-                                       'stop': 2807},
+                                       'start': 2807,
+                                       'stop': 2808},
                                       {'after': ['    require_valid(\n',
                                                  '        a.combine.is_valid(),\n',
                                                  '        "A triangle\'s combine is none of the three '
@@ -27990,8 +28036,8 @@ EDGES = {'animation/animation_clip.mojo': {'after_sha256': '71842bfcf4a72c6c652a
                                        'before': ['    if not a.combine.is_valid():\n',
                                                   '        raise Error("A triangle\'s combine is none '
                                                   'of the three operations")\n'],
-                                       'start': 2832,
-                                       'stop': 2836},
+                                       'start': 2833,
+                                       'stop': 2837},
                                       {'after': ['    require_unit_finite(\n',
                                                  '        Float64(a.roughness),\n',
                                                  '        "A triangle\'s roughness must be between zero '
@@ -28063,8 +28109,8 @@ EDGES = {'animation/animation_clip.mojo': {'after_sha256': '71842bfcf4a72c6c652a
                                                   '    if not isfinite(a.bump_scale):\n',
                                                   '        raise Error("A triangle\'s bump scale must '
                                                   'be finite")\n'],
-                                       'start': 2853,
-                                       'stop': 2884},
+                                       'start': 2854,
+                                       'stop': 2885},
                                       {'after': ['    require_non_negative_finite(\n',
                                                  '        Float64(a.ao_map_intensity),\n',
                                                  '        "A triangle\'s ao map intensity cannot be '
@@ -28083,8 +28129,8 @@ EDGES = {'animation/animation_clip.mojo': {'after_sha256': '71842bfcf4a72c6c652a
                                                   'a.light_map_intensity < 0:\n',
                                                   '        raise Error("A triangle\'s light map '
                                                   'intensity cannot be negative")\n'],
-                                       'start': 2951,
-                                       'stop': 2959},
+                                       'start': 2952,
+                                       'stop': 2960},
                                       {'after': ['    require_unit_finite(\n',
                                                  '        Float64(a.transmission),\n',
                                                  '        "A triangle\'s transmission must be between '
@@ -28093,8 +28139,8 @@ EDGES = {'animation/animation_clip.mojo': {'after_sha256': '71842bfcf4a72c6c652a
                                        'before': ['    if not _is_unit_fraction(a.transmission):\n',
                                                   '        raise Error("A triangle\'s transmission must '
                                                   'be between zero and one")\n'],
-                                       'start': 3004,
-                                       'stop': 3008},
+                                       'start': 3005,
+                                       'stop': 3009},
                                       {'after': ['    require_non_negative_finite(\n',
                                                  '        Float64(a.dispersion), "A triangle\'s '
                                                  'dispersion cannot be negative"\n',
@@ -28103,8 +28149,8 @@ EDGES = {'animation/animation_clip.mojo': {'after_sha256': '71842bfcf4a72c6c652a
                                                   '0:\n',
                                                   '        raise Error("A triangle\'s dispersion cannot '
                                                   'be negative")\n'],
-                                       'start': 3015,
-                                       'stop': 3018},
+                                       'start': 3016,
+                                       'stop': 3019},
                                       {'after': ['    require_valid(\n',
                                                  '        a.nodes.is_valid(),\n',
                                                  '        "A triangle names a node program id that '
@@ -28113,8 +28159,8 @@ EDGES = {'animation/animation_clip.mojo': {'after_sha256': '71842bfcf4a72c6c652a
                                        'before': ['    if not a.nodes.is_valid():\n',
                                                   '        raise Error("A triangle names a node program '
                                                   'id that nothing can hold")\n'],
-                                       'start': 3037,
-                                       'stop': 3041},
+                                       'start': 3038,
+                                       'stop': 3042},
                                       {'after': ['    return value.is_finite() and value.x >= 0 and '
                                                  'value.y >= 0 and value.z >= 0\n'],
                                        'before': ['    return (\n',
@@ -28125,8 +28171,8 @@ EDGES = {'animation/animation_clip.mojo': {'after_sha256': '71842bfcf4a72c6c652a
                                                   '        and value.y >= 0\n',
                                                   '        and value.z >= 0\n',
                                                   '    )\n'],
-                                       'start': 3050,
-                                       'stop': 3051},
+                                       'start': 3051,
+                                       'stop': 3052},
                                       {'after': ['def require_linear_data(linear: Bool, name: String) '
                                                  'raises:\n',
                                                  '    """Refuse a data map that is not stored in linear '
@@ -28194,8 +28240,8 @@ EDGES = {'animation/animation_clip.mojo': {'after_sha256': '71842bfcf4a72c6c652a
                                                  '\n',
                                                  '\n'],
                                        'before': [],
-                                       'start': 3267,
-                                       'stop': 3317},
+                                       'start': 3268,
+                                       'stop': 3318},
                                       {'after': ['    require_data_descriptors(\n',
                                                  '        image.color_space == LINEAR, image.alpha == '
                                                  'IGNORED, name\n',
@@ -28213,8 +28259,8 @@ EDGES = {'animation/animation_clip.mojo': {'after_sha256': '71842bfcf4a72c6c652a
                                                   '            + " must ignore its own alpha; build the '
                                                   'texture with alpha=IGNORED"\n',
                                                   '        )\n'],
-                                       'start': 3334,
-                                       'stop': 3337},
+                                       'start': 3335,
+                                       'stop': 3338},
                                       {'after': ['    return mix_delta(MATCAP_FLOOR, MATCAP_CEILING, '
                                                  'v)\n',
                                                  '\n',
@@ -28296,8 +28342,8 @@ EDGES = {'animation/animation_clip.mojo': {'after_sha256': '71842bfcf4a72c6c652a
                                                  '        )\n'],
                                        'before': ['    return MATCAP_FLOOR + (MATCAP_CEILING - '
                                                   'MATCAP_FLOOR) * v\n'],
-                                       'start': 3405,
-                                       'stop': 3467},
+                                       'start': 3406,
+                                       'stop': 3468},
                                       {'after': ['    require_gradient_texels(not image.is_blank())\n',
                                                  '    require_gradient_row(image.height)\n',
                                                  '    require_data_descriptors(\n',
@@ -28335,8 +28381,8 @@ EDGES = {'animation/animation_clip.mojo': {'after_sha256': '71842bfcf4a72c6c652a
                                                   '            "A gradient map must hold bytes: its '
                                                   'tones are read one byte each"\n',
                                                   '        )\n'],
-                                       'start': 3499,
-                                       'stop': 3505},
+                                       'start': 3500,
+                                       'stop': 3506},
                                       {'after': ['        check_color_map(textures.get(a.emissive_map), '
                                                  '"An emissive map")\n'],
                                        'before': ['        if textures.get(a.emissive_map).alpha != '
@@ -28346,8 +28392,8 @@ EDGES = {'animation/animation_clip.mojo': {'after_sha256': '71842bfcf4a72c6c652a
                                                   'alpha; build the texture"\n',
                                                   '                " with alpha=IGNORED"\n',
                                                   '            )\n'],
-                                       'start': 3589,
-                                       'stop': 3590},
+                                       'start': 3590,
+                                       'stop': 3591},
                                       {'after': ['        check_color_map(textures.get(a.matcap), "A '
                                                  'matcap")\n'],
                                        'before': ['        if textures.get(a.matcap).alpha != '
@@ -28357,8 +28403,8 @@ EDGES = {'animation/animation_clip.mojo': {'after_sha256': '71842bfcf4a72c6c652a
                                                   'build the texture with"\n',
                                                   '                " alpha=IGNORED"\n',
                                                   '            )\n'],
-                                       'start': 3602,
-                                       'stop': 3603},
+                                       'start': 3603,
+                                       'stop': 3604},
                                       {'after': ['def require_program_uniform(\n',
                                                  '    value: Int, kind: String, missing: String, '
                                                  'setter: String\n',
@@ -28399,8 +28445,8 @@ EDGES = {'animation/animation_clip.mojo': {'after_sha256': '71842bfcf4a72c6c652a
                                                  '\n',
                                                  '\n'],
                                        'before': [],
-                                       'start': 3694,
-                                       'stop': 3725},
+                                       'start': 3695,
+                                       'stop': 3726},
                                       {'after': ['                require_program_uniform(\n',
                                                  '                    program.textures[index].value,\n',
                                                  '                    "a texture",\n',
@@ -28415,8 +28461,8 @@ EDGES = {'animation/animation_clip.mojo': {'after_sha256': '71842bfcf4a72c6c652a
                                                   '                        " no texture; call '
                                                   'set_texture() first"\n',
                                                   '                    )\n'],
-                                       'start': 3756,
-                                       'stop': 3762},
+                                       'start': 3757,
+                                       'stop': 3763},
                                       {'after': ['                require_program_uniform(\n',
                                                  '                    program.cubes[index].value, "a '
                                                  'cube", "cube", "set_cube"\n',
@@ -28428,8 +28474,8 @@ EDGES = {'animation/animation_clip.mojo': {'after_sha256': '71842bfcf4a72c6c652a
                                                   '                        " cube; call set_cube() '
                                                   'first"\n',
                                                   '                    )\n'],
-                                       'start': 3764,
-                                       'stop': 3767},
+                                       'start': 3765,
+                                       'stop': 3768},
                                       {'after': ['                require_program_uniform(\n',
                                                  '                    program.volumes[index].value,\n',
                                                  '                    "a 3D texture",\n',
@@ -28444,8 +28490,8 @@ EDGES = {'animation/animation_clip.mojo': {'after_sha256': '71842bfcf4a72c6c652a
                                                   '                        " no texture; call '
                                                   'set_volume() first"\n',
                                                   '                    )\n'],
-                                       'start': 3769,
-                                       'stop': 3775},
+                                       'start': 3770,
+                                       'stop': 3776},
                                       {'after': ['                require_program_uniform(\n',
                                                  '                    program.arrays[index].value,\n',
                                                  '                    "an array texture",\n',
@@ -28460,14 +28506,14 @@ EDGES = {'animation/animation_clip.mojo': {'after_sha256': '71842bfcf4a72c6c652a
                                                   '                        " names no texture; call '
                                                   'set_array() first"\n',
                                                   '                    )\n'],
-                                       'start': 3777,
-                                       'stop': 3783},
+                                       'start': 3778,
+                                       'stop': 3784},
                                       {'after': ['    require_uv_channel(image.channel)\n'],
                                        'before': ['    if not image.channel.is_valid():\n',
                                                   '        raise Error("A texture\'s channel must be '
                                                   'UV_CHANNEL_0 or UV_CHANNEL_1")\n'],
-                                       'start': 3799,
-                                       'stop': 3800},
+                                       'start': 3800,
+                                       'stop': 3801},
                                       {'after': ['def require_ignored_alpha(ignores_alpha: Bool, name: '
                                                  'String) raises:\n',
                                                  '    """Refuse a color map that reads its alpha as '
@@ -28500,8 +28546,8 @@ EDGES = {'animation/animation_clip.mojo': {'after_sha256': '71842bfcf4a72c6c652a
                                                  '\n',
                                                  '\n'],
                                        'before': [],
-                                       'start': 3900,
-                                       'stop': 3923},
+                                       'start': 3901,
+                                       'stop': 3924},
                                       {'after': ['    The rule `require_ignored_alpha` states, for a '
                                                  'map that holds a color\n',
                                                  '    and no coverage: a sheen color map. Filtered as '
@@ -28514,8 +28560,8 @@ EDGES = {'animation/animation_clip.mojo': {'after_sha256': '71842bfcf4a72c6c652a
                                                   'coverage, a texel with a\n',
                                                   '    low alpha would darken its neighbors. Shared by '
                                                   'both backends.\n'],
-                                       'start': 3926,
-                                       'stop': 3929},
+                                       'start': 3927,
+                                       'stop': 3930},
                                       {'after': ['    require_ignored_alpha(image.alpha == IGNORED, '
                                                  'name)\n',
                                                  '\n',
@@ -28544,14 +28590,14 @@ EDGES = {'animation/animation_clip.mojo': {'after_sha256': '71842bfcf4a72c6c652a
                                                  '    """\n',
                                                  '    if not reads_alpha:\n'],
                                        'before': ['    if image.alpha != IGNORED:\n'],
-                                       'start': 3937,
-                                       'stop': 3957},
+                                       'start': 3938,
+                                       'stop': 3958},
                                       {'after': ['            + " is read from its alpha; build the '
                                                  'texture with alpha=COVERAGE"\n'],
                                        'before': ['            + " must ignore its alpha; build the '
                                                   'texture with alpha=IGNORED"\n'],
-                                       'start': 3959,
-                                       'stop': 3960},
+                                       'start': 3960,
+                                       'stop': 3961},
                                       {'after': ['    require_linear_data(image.color_space == LINEAR, '
                                                  'name)\n',
                                                  '    require_coverage_alpha(image.alpha == COVERAGE, '
@@ -28591,8 +28637,8 @@ EDGES = {'animation/animation_clip.mojo': {'after_sha256': '71842bfcf4a72c6c652a
                                                   '        a.z * share_a + b.z * share_b + c.z * '
                                                   'share_c,\n',
                                                   '    )\n'],
-                                       'start': 3980,
-                                       'stop': 3982},
+                                       'start': 3981,
+                                       'stop': 3983},
                                       {'after': ['    require_ignored_alpha(image.alpha == IGNORED, "A '
                                                  'light map")\n'],
                                        'before': ['    if image.alpha != IGNORED:\n',
@@ -28601,24 +28647,26 @@ EDGES = {'animation/animation_clip.mojo': {'after_sha256': '71842bfcf4a72c6c652a
                                                   'build the texture with"\n',
                                                   '            " alpha=IGNORED"\n',
                                                   '        )\n'],
-                                       'start': 3998,
-                                       'stop': 3999},
+                                       'start': 3999,
+                                       'stop': 4000},
                                       {'after': ['    require_shade_mode(mode)\n'],
                                        'before': ['    if not mode.is_valid():\n',
                                                   '        raise Error("A shading mode that is none of '
                                                   'the four")\n'],
-                                       'start': 4113,
-                                       'stop': 4114},
+                                       'start': 4114,
+                                       'stop': 4115},
                                       {'after': ['            # orthographic camera leaves w at one, '
                                                  'not zero, so its inv_w\n',
                                                  '            # is one and the correction divides by '
                                                  'one. The guard is for\n',
-                                                 '            # hand-built input. `perspective_shares` '
-                                                 'is that correction,\n',
-                                                 '            # and the GPU kernel calls it, so the two '
-                                                 'still round alike.\n',
-                                                 '            var shares = perspective_shares(\n',
-                                                 '                wa, wb, wc, a.inv_w, b.inv_w, '
+                                                 '            # hand-built input. '
+                                                 '`perspective_shares_over` is that\n',
+                                                 '            # correction over the `inv_w` the depth '
+                                                 'used, and the GPU kernel\n',
+                                                 '            # calls it the same way, so the two still '
+                                                 'round alike.\n',
+                                                 '            var shares = perspective_shares_over(\n',
+                                                 '                inv_w, wa, wb, wc, a.inv_w, b.inv_w, '
                                                  'c.inv_w\n',
                                                  '            )\n',
                                                  '            var share_a = shares[0]\n',
@@ -28643,8 +28691,8 @@ EDGES = {'animation/animation_clip.mojo': {'after_sha256': '71842bfcf4a72c6c652a
                                                   '                share_a = wa * a.inv_w * rcp\n',
                                                   '                share_b = wb * b.inv_w * rcp\n',
                                                   '                share_c = wc * c.inv_w * rcp\n'],
-                                       'start': 4321,
-                                       'stop': 4331},
+                                       'start': 4322,
+                                       'stop': 4333},
                                       {'after': ['            var rgb = weighted_sum3(\n',
                                                  '                Vector3(a.color.r, a.color.g, '
                                                  'a.color.b),\n',
@@ -28657,8 +28705,8 @@ EDGES = {'animation/animation_clip.mojo': {'after_sha256': '71842bfcf4a72c6c652a
                                                  '                share_c,\n',
                                                  '            )\n'],
                                        'before': [],
-                                       'start': 4346,
-                                       'stop': 4354},
+                                       'start': 4348,
+                                       'stop': 4356},
                                       {'after': ['                rgb.x,\n',
                                                  '                rgb.y,\n',
                                                  '                rgb.z,\n'],
@@ -28668,8 +28716,8 @@ EDGES = {'animation/animation_clip.mojo': {'after_sha256': '71842bfcf4a72c6c652a
                                                   'share_b + c.color.g * share_c,\n',
                                                   '                a.color.b * share_a + b.color.b * '
                                                   'share_b + c.color.b * share_c,\n'],
-                                       'start': 4355,
-                                       'stop': 4358},
+                                       'start': 4357,
+                                       'stop': 4360},
                                       {'after': ['                facing = weighted_sum3(\n',
                                                  '                    a.normal, b.normal, c.normal, '
                                                  'share_a, share_b, share_c\n'],
@@ -28683,8 +28731,8 @@ EDGES = {'animation/animation_clip.mojo': {'after_sha256': '71842bfcf4a72c6c652a
                                                   '                    a.normal.z * share_a\n',
                                                   '                    + b.normal.z * share_b\n',
                                                   '                    + c.normal.z * share_c,\n'],
-                                       'start': 4390,
-                                       'stop': 4392},
+                                       'start': 4392,
+                                       'stop': 4394},
                                       {'after': ['                spot = weighted_sum3(\n',
                                                  '                    a.world, b.world, c.world, '
                                                  'share_a, share_b, share_c\n'],
@@ -28698,8 +28746,8 @@ EDGES = {'animation/animation_clip.mojo': {'after_sha256': '71842bfcf4a72c6c652a
                                                   '                    a.world.z * share_a\n',
                                                   '                    + b.world.z * share_b\n',
                                                   '                    + c.world.z * share_c,\n'],
-                                       'start': 4413,
-                                       'stop': 4415},
+                                       'start': 4415,
+                                       'stop': 4417},
                                       {'after': ['                var uv = weighted_sum2(\n',
                                                  '                    Vector2(a.u, a.v),\n',
                                                  '                    Vector2(b.u, b.v),\n',
@@ -28726,20 +28774,20 @@ EDGES = {'animation/animation_clip.mojo': {'after_sha256': '71842bfcf4a72c6c652a
                                                   '+ c.u1 * share_c,\n',
                                                   '                    a.v1 * share_a + b.v1 * share_b '
                                                   '+ c.v1 * share_c,\n'],
-                                       'start': 4424,
-                                       'stop': 4441},
+                                       'start': 4426,
+                                       'stop': 4443},
                                       {'after': ['                        weighted_sum3(\n'],
                                        'before': ['                        _shared(\n'],
-                                       'start': 4658,
-                                       'stop': 4659},
+                                       'start': 4660,
+                                       'stop': 4661},
                                       {'after': ['                        weighted_sum3(\n'],
                                        'before': ['                        _shared(\n'],
-                                       'start': 4666,
-                                       'stop': 4667},
+                                       'start': 4668,
+                                       'stop': 4669},
                                       {'after': ['                    indirect = weighted_sum3(\n'],
                                        'before': ['                    indirect = _shared(\n'],
-                                       'start': 4810,
-                                       'stop': 4811},
+                                       'start': 4812,
+                                       'stop': 4813},
                                       {'after': ['                        mix_delta(shaded.r, '
                                                  'backdrop[0], share),\n',
                                                  '                        mix_delta(shaded.g, '
@@ -28752,8 +28800,8 @@ EDGES = {'animation/animation_clip.mojo': {'after_sha256': '71842bfcf4a72c6c652a
                                                   'shaded.g) * share,\n',
                                                   '                        shaded.b + (backdrop[2] - '
                                                   'shaded.b) * share,\n'],
-                                       'start': 5251,
-                                       'stop': 5254},
+                                       'start': 5253,
+                                       'stop': 5256},
                                       {'after': ['                var dot_nv = '
                                                  'clamp(facing.dot(toward_eye), 0, 1)\n',
                                                  '                var dot_nv_coat = '
@@ -28766,8 +28814,8 @@ EDGES = {'animation/animation_clip.mojo': {'after_sha256': '71842bfcf4a72c6c652a
                                                   '                    Float32(0), min(Float32(1), '
                                                   'coat_normal.dot(toward_eye))\n',
                                                   '                )\n'],
-                                       'start': 5522,
-                                       'stop': 5524},
+                                       'start': 5524,
+                                       'stop': 5526},
                                       {'after': ['def _host_level[\n',
                                                  '    origin: Origin[mut=False]\n',
                                                  '](\n',
@@ -28858,61 +28906,61 @@ EDGES = {'animation/animation_clip.mojo': {'after_sha256': '71842bfcf4a72c6c652a
                                                  '\n',
                                                  '\n'],
                                        'before': [],
-                                       'start': 5832,
-                                       'stop': 5908},
+                                       'start': 5834,
+                                       'stop': 5910},
                                       {'after': ['        return _host_level(self.textures, slot, u, v, '
                                                  'level)\n'],
                                        'before': ['        return '
                                                   'self.textures[].textures[slot].sample_level(u, v, '
                                                   'level)\n'],
-                                       'start': 5997,
-                                       'stop': 5998},
+                                       'start': 5999,
+                                       'stop': 6000},
                                       {'after': ['        return _host_grad(self.textures, slot, u, v, '
                                                  'dx, dy)\n'],
                                        'before': ['        return '
                                                   'self.textures[].textures[slot]._sample_grad(u, v, '
                                                   'dx, dy)\n'],
-                                       'start': 6003,
-                                       'stop': 6004},
+                                       'start': 6005,
+                                       'stop': 6006},
                                       {'after': ['        return _host_cube(self.cubes, slot, '
                                                  'direction)\n'],
                                        'before': ['        return '
                                                   'self.cubes[].textures[slot].sample(direction)\n'],
-                                       'start': 6007,
-                                       'stop': 6008},
+                                       'start': 6009,
+                                       'stop': 6010},
                                       {'after': ['        return _host_volume(self.volumes, slot, '
                                                  'at)\n'],
                                        'before': ['        return '
                                                   'self.volumes[].textures[slot].sample(at.x, at.y, '
                                                   'at.z)\n'],
-                                       'start': 6011,
-                                       'stop': 6012},
+                                       'start': 6013,
+                                       'stop': 6014},
                                       {'after': ['        return _host_array(self.arrays, slot, at)\n'],
                                        'before': ['        return '
                                                   'self.arrays[].textures[slot].sample(at.x, at.y, '
                                                   'at.z)\n'],
-                                       'start': 6015,
-                                       'stop': 6016},
+                                       'start': 6017,
+                                       'stop': 6018},
                                       {'after': ['        return _host_fetch(self.textures, slot, x, y, '
                                                  'level)\n'],
                                        'before': ['        return '
                                                   'self.textures[].textures[slot].fetch(x, y, level)\n'],
-                                       'start': 6019,
-                                       'stop': 6020},
+                                       'start': 6021,
+                                       'stop': 6022},
                                       {'after': ['        return _host_size(self.textures, slot, '
                                                  'level)\n'],
                                        'before': ['        return '
                                                   'self.textures[].textures[slot].fetch_size(level)\n'],
-                                       'start': 6023,
-                                       'stop': 6024},
+                                       'start': 6025,
+                                       'stop': 6026},
                                       {'after': ['        var x, y = sample_pixel(self.x, self.y, '
                                                  'context)\n'],
                                        'before': ['        var x = self.x + (1 if context == AT_RIGHT '
                                                   'else 0)\n',
                                                   '        var y = self.y - (1 if context == AT_UP else '
                                                   '0)\n'],
-                                       'start': 6029,
-                                       'stop': 6030},
+                                       'start': 6031,
+                                       'stop': 6032},
                                       {'after': ['        return pixel_frag_coord(\n',
                                                  '            self.x, self.y, self.height, self.depth, '
                                                  'context\n'],
@@ -28925,61 +28973,61 @@ EDGES = {'animation/animation_clip.mojo': {'after_sha256': '71842bfcf4a72c6c652a
                                                   '            Float32(self.height - y) - 0.5,\n',
                                                   '            self.depth * 0.5 + 0.5,\n',
                                                   '            1,\n'],
-                                       'start': 6051,
-                                       'stop': 6053},
+                                       'start': 6053,
+                                       'stop': 6055},
                                       {'after': ['        return screen_size_coord(self.width, '
                                                  'self.height)\n'],
                                        'before': ['        return SIMD[DType.float32, 4](\n',
                                                   '            Float32(self.width), '
                                                   'Float32(self.height), 0, 0\n',
                                                   '        )\n'],
-                                       'start': 6057,
-                                       'stop': 6058},
+                                       'start': 6059,
+                                       'stop': 6060},
                                       {'after': ['        return _host_level(self.textures, slot, u, v, '
                                                  'level)\n'],
                                        'before': ['        return '
                                                   'self.textures[].textures[slot].sample_level(u, v, '
                                                   'level)\n'],
-                                       'start': 6161,
-                                       'stop': 6162},
+                                       'start': 6163,
+                                       'stop': 6164},
                                       {'after': ['        return _host_grad(self.textures, slot, u, v, '
                                                  'dx, dy)\n'],
                                        'before': ['        return '
                                                   'self.textures[].textures[slot]._sample_grad(u, v, '
                                                   'dx, dy)\n'],
-                                       'start': 6167,
-                                       'stop': 6168},
+                                       'start': 6169,
+                                       'stop': 6170},
                                       {'after': ['        return _host_cube(self.cubes, slot, '
                                                  'direction)\n'],
                                        'before': ['        return '
                                                   'self.cubes[].textures[slot].sample(direction)\n'],
-                                       'start': 6171,
-                                       'stop': 6172},
+                                       'start': 6173,
+                                       'stop': 6174},
                                       {'after': ['        return _host_volume(self.volumes, slot, '
                                                  'at)\n'],
                                        'before': ['        return '
                                                   'self.volumes[].textures[slot].sample(at.x, at.y, '
                                                   'at.z)\n'],
-                                       'start': 6175,
-                                       'stop': 6176},
+                                       'start': 6177,
+                                       'stop': 6178},
                                       {'after': ['        return _host_array(self.arrays, slot, at)\n'],
                                        'before': ['        return '
                                                   'self.arrays[].textures[slot].sample(at.x, at.y, '
                                                   'at.z)\n'],
-                                       'start': 6179,
-                                       'stop': 6180},
+                                       'start': 6181,
+                                       'stop': 6182},
                                       {'after': ['        return _host_fetch(self.textures, slot, x, y, '
                                                  'level)\n'],
                                        'before': ['        return '
                                                   'self.textures[].textures[slot].fetch(x, y, level)\n'],
-                                       'start': 6183,
-                                       'stop': 6184},
+                                       'start': 6185,
+                                       'stop': 6186},
                                       {'after': ['        return _host_size(self.textures, slot, '
                                                  'level)\n'],
                                        'before': ['        return '
                                                   'self.textures[].textures[slot].fetch_size(level)\n'],
-                                       'start': 6187,
-                                       'stop': 6188},
+                                       'start': 6189,
+                                       'stop': 6190},
                                       {'after': ['        return pixel_frag_coord(\n',
                                                  '            self.x, self.y, self.height, self.depth, '
                                                  'context\n'],
@@ -28992,16 +29040,16 @@ EDGES = {'animation/animation_clip.mojo': {'after_sha256': '71842bfcf4a72c6c652a
                                                   '            Float32(self.height - y) - 0.5,\n',
                                                   '            self.depth * 0.5 + 0.5,\n',
                                                   '            1,\n'],
-                                       'start': 6204,
-                                       'stop': 6206},
+                                       'start': 6206,
+                                       'stop': 6208},
                                       {'after': ['        return screen_size_coord(self.width, '
                                                  'self.height)\n'],
                                        'before': ['        return SIMD[DType.float32, 4](\n',
                                                   '            Float32(self.width), '
                                                   'Float32(self.height), 0, 0\n',
                                                   '        )\n'],
-                                       'start': 6210,
-                                       'stop': 6211},
+                                       'start': 6212,
+                                       'stop': 6213},
                                       {'after': ['        return sampled_point_coord(\n',
                                                  '            context,\n',
                                                  '            self.x,\n',
@@ -29014,74 +29062,74 @@ EDGES = {'animation/animation_clip.mojo': {'after_sha256': '71842bfcf4a72c6c652a
                                                   '        var y = self.y - (1 if context == AT_UP else '
                                                   '0)\n',
                                                   '        var place = gl_point_coord(\n'],
-                                       'start': 6223,
-                                       'stop': 6227},
+                                       'start': 6225,
+                                       'stop': 6229},
                                       {'after': [],
                                        'before': ['            x,\n', '            y,\n'],
-                                       'start': 6229,
-                                       'stop': 6229},
+                                       'start': 6231,
+                                       'stop': 6231},
                                       {'after': [],
                                        'before': ['        return SIMD[DType.float32, 4](place.x, '
                                                   'place.y, 0, 0)\n'],
-                                       'start': 6230,
-                                       'stop': 6230},
+                                       'start': 6232,
+                                       'stop': 6232},
                                       {'after': ['        return _host_level(self.textures, slot, u, v, '
                                                  'level)\n'],
                                        'before': ['        return '
                                                   'self.textures[].textures[slot].sample_level(u, v, '
                                                   'level)\n'],
-                                       'start': 6318,
-                                       'stop': 6319},
+                                       'start': 6320,
+                                       'stop': 6321},
                                       {'after': ['        return _host_grad(self.textures, slot, u, v, '
                                                  'dx, dy)\n'],
                                        'before': ['        return '
                                                   'self.textures[].textures[slot]._sample_grad(u, v, '
                                                   'dx, dy)\n'],
-                                       'start': 6324,
-                                       'stop': 6325},
+                                       'start': 6326,
+                                       'stop': 6327},
                                       {'after': ['        return _host_cube(self.cubes, slot, '
                                                  'direction)\n'],
                                        'before': ['        return '
                                                   'self.cubes[].textures[slot].sample(direction)\n'],
-                                       'start': 6328,
-                                       'stop': 6329},
+                                       'start': 6330,
+                                       'stop': 6331},
                                       {'after': ['        return _host_volume(self.volumes, slot, '
                                                  'at)\n'],
                                        'before': ['        return '
                                                   'self.volumes[].textures[slot].sample(at.x, at.y, '
                                                   'at.z)\n'],
-                                       'start': 6332,
-                                       'stop': 6333},
+                                       'start': 6334,
+                                       'stop': 6335},
                                       {'after': ['        return _host_array(self.arrays, slot, at)\n'],
                                        'before': ['        return '
                                                   'self.arrays[].textures[slot].sample(at.x, at.y, '
                                                   'at.z)\n'],
-                                       'start': 6336,
-                                       'stop': 6337},
+                                       'start': 6338,
+                                       'stop': 6339},
                                       {'after': ['        return _host_fetch(self.textures, slot, x, y, '
                                                  'level)\n'],
                                        'before': ['        return '
                                                   'self.textures[].textures[slot].fetch(x, y, level)\n'],
-                                       'start': 6340,
-                                       'stop': 6341},
+                                       'start': 6342,
+                                       'stop': 6343},
                                       {'after': ['        return _host_size(self.textures, slot, '
                                                  'level)\n'],
                                        'before': ['        return '
                                                   'self.textures[].textures[slot].fetch_size(level)\n'],
-                                       'start': 6344,
-                                       'stop': 6345},
+                                       'start': 6346,
+                                       'stop': 6347},
                                       {'after': ['        var x, y = sample_pixel(self.x, self.y, '
                                                  'context)\n'],
                                        'before': [],
-                                       'start': 6349,
-                                       'stop': 6350},
+                                       'start': 6351,
+                                       'stop': 6352},
                                       {'after': ['            x,\n', '            y,\n'],
                                        'before': ['            self.x + (1 if context == AT_RIGHT else '
                                                   '0),\n',
                                                   '            self.y - (1 if context == AT_UP else '
                                                   '0),\n'],
-                                       'start': 6355,
-                                       'stop': 6357},
+                                       'start': 6357,
+                                       'stop': 6359},
                                       {'after': ['        return pixel_frag_coord(\n',
                                                  '            self.x, self.y, self.height, self.depth, '
                                                  'context\n'],
@@ -29094,30 +29142,30 @@ EDGES = {'animation/animation_clip.mojo': {'after_sha256': '71842bfcf4a72c6c652a
                                                   '            Float32(self.height - y) - 0.5,\n',
                                                   '            self.depth * 0.5 + 0.5,\n',
                                                   '            1,\n'],
-                                       'start': 6370,
-                                       'stop': 6372},
+                                       'start': 6372,
+                                       'stop': 6374},
                                       {'after': ['        return screen_size_coord(self.width, '
                                                  'self.height)\n'],
                                        'before': ['        return SIMD[DType.float32, 4](\n',
                                                   '            Float32(self.width), '
                                                   'Float32(self.height), 0, 0\n',
                                                   '        )\n'],
-                                       'start': 6376,
-                                       'stop': 6377},
+                                       'start': 6378,
+                                       'stop': 6379},
                                       {'after': ['    require_valid(a.blend.is_valid(), "A line needs a '
                                                  'blend policy that exists")\n'],
                                        'before': ['    if not a.blend.is_valid():\n',
                                                   '        raise Error("A line needs a blend policy '
                                                   'that exists")\n'],
-                                       'start': 6427,
-                                       'stop': 6428},
+                                       'start': 6429,
+                                       'stop': 6430},
                                       {'after': ['    require_valid(a.kind.is_valid(), "A line needs a '
                                                  'material kind that exists")\n'],
                                        'before': ['    if not a.kind.is_valid():\n',
                                                   '        raise Error("A line needs a material kind '
                                                   'that exists")\n'],
-                                       'start': 6430,
-                                       'stop': 6431},
+                                       'start': 6432,
+                                       'stop': 6433},
                                       {'after': ['    require_dash_size(a.dash_size)\n',
                                                  '    require_gap_size(a.gap_size)\n'],
                                        'before': ['    if not isfinite(a.dash_size) or a.dash_size < '
@@ -29127,36 +29175,36 @@ EDGES = {'animation/animation_clip.mojo': {'after_sha256': '71842bfcf4a72c6c652a
                                                   '    if not isfinite(a.gap_size) or a.gap_size < 0:\n',
                                                   '        raise Error("A gap size cannot be '
                                                   'negative")\n'],
-                                       'start': 6439,
-                                       'stop': 6441},
+                                       'start': 6441,
+                                       'stop': 6443},
                                       {'after': ['        var stored_z = fragment_depth(\n',
                                                  '            a.state, mix_delta(a.z, b.z, share), '
                                                  'total\n',
                                                  '        )\n'],
                                        'before': ['        var stored_z = fragment_depth(a.state, a.z + '
                                                   '(b.z - a.z) * share, total)\n'],
-                                       'start': 6596,
-                                       'stop': 6599},
+                                       'start': 6598,
+                                       'stop': 6601},
                                       {'after': ['        var along = mix_delta(a.line_distance, '
                                                  'b.line_distance, toward)\n'],
                                        'before': ['        var along = (\n',
                                                   '            a.line_distance + (b.line_distance - '
                                                   'a.line_distance) * toward\n',
                                                   '        )\n'],
-                                       'start': 6602,
-                                       'stop': 6603},
+                                       'start': 6604,
+                                       'stop': 6605},
                                       {'after': ['            var depth = mix_delta(a.view_depth, '
                                                  'b.view_depth, toward)\n'],
                                        'before': ['            var depth = a.view_depth + (b.view_depth '
                                                   '- a.view_depth) * toward\n'],
-                                       'start': 6612,
-                                       'stop': 6613},
+                                       'start': 6614,
+                                       'stop': 6615},
                                       {'after': ['                nodes.depth = mix_delta(a.z, b.z, '
                                                  'share)\n'],
                                        'before': ['                nodes.depth = a.z + (b.z - a.z) * '
                                                   'share\n'],
-                                       'start': 6640,
-                                       'stop': 6641},
+                                       'start': 6642,
+                                       'stop': 6643},
                                       {'after': ['    require_valid(\n',
                                                  '        point.blend.is_valid(), "A point needs a '
                                                  'blend policy that exists"\n',
@@ -29171,8 +29219,8 @@ EDGES = {'animation/animation_clip.mojo': {'after_sha256': '71842bfcf4a72c6c652a
                                                   '    if not point.kind.is_valid():\n',
                                                   '        raise Error("A point needs a material kind '
                                                   'that exists")\n'],
-                                       'start': 6752,
-                                       'stop': 6758},
+                                       'start': 6754,
+                                       'stop': 6760},
                                       {'after': ['    require_positive_finite(\n',
                                                  '        Float64(point.point_size), "A point needs a '
                                                  'size above zero"\n',
@@ -29193,14 +29241,14 @@ EDGES = {'animation/animation_clip.mojo': {'after_sha256': '71842bfcf4a72c6c652a
                                                   '    ):\n',
                                                   '        raise Error("A point\'s alpha test must be '
                                                   'between zero and one")\n'],
-                                       'start': 6760,
-                                       'stop': 6767},
+                                       'start': 6762,
+                                       'stop': 6769},
                                       {'after': ['    require_shade_mode(mode)\n'],
                                        'before': ['    if not mode.is_valid():\n',
                                                   '        raise Error("A shading mode that is none of '
                                                   'the four")\n'],
-                                       'start': 6877,
-                                       'stop': 6878},
+                                       'start': 6879,
+                                       'stop': 6880},
                                       {'after': ['        return ordinal_valid(self.value, '
                                                  'DRAW_SPLATS.value)\n'],
                                        'before': ['        return (\n',
@@ -29209,8 +29257,8 @@ EDGES = {'animation/animation_clip.mojo': {'after_sha256': '71842bfcf4a72c6c652a
                                                   '            or self == DRAW_POINTS\n',
                                                   '            or self == DRAW_SPLATS\n',
                                                   '        )\n'],
-                                       'start': 7085,
-                                       'stop': 7086},
+                                       'start': 7087,
+                                       'stop': 7088},
                                       {'after': ['        require_valid(\n',
                                                  '            draw.kind.is_valid(),\n',
                                                  '            (\n',
@@ -29225,8 +29273,8 @@ EDGES = {'animation/animation_clip.mojo': {'after_sha256': '71842bfcf4a72c6c652a
                                                   'DRAW_TRIANGLES,"\n',
                                                   '                " DRAW_SEGMENTS or DRAW_POINTS"\n',
                                                   '            )\n'],
-                                       'start': 7157,
-                                       'stop': 7164},
+                                       'start': 7159,
+                                       'stop': 7166},
                                       {'after': ['def require_whole_triangles(corner_count: Int) '
                                                  'raises:\n',
                                                  '    """Refuse a corner list that is not whole '
@@ -29270,8 +29318,8 @@ EDGES = {'animation/animation_clip.mojo': {'after_sha256': '71842bfcf4a72c6c652a
                                                  '\n',
                                                  '\n'],
                                        'before': [],
-                                       'start': 7460,
-                                       'stop': 7490},
+                                       'start': 7462,
+                                       'stop': 7492},
                                       {'after': ['    require_whole_triangles(len(corners))\n',
                                                  '    require_whole_segments(len(segments))\n',
                                                  '    require_at_least_one(workers, "Rasterizing needs '
@@ -29289,21 +29337,21 @@ EDGES = {'animation/animation_clip.mojo': {'after_sha256': '71842bfcf4a72c6c652a
                                                   '    if not mode.is_valid():\n',
                                                   '        raise Error("A shading mode that is none of '
                                                   'the four")\n'],
-                                       'start': 7509,
-                                       'stop': 7513},
+                                       'start': 7511,
+                                       'stop': 7515},
                                       {'after': ['        require_triangle_lighting(named, '
                                                  'len(lightings))\n'],
                                        'before': ['        if named < 0 or named > len(lightings):\n',
                                                   '            raise Error("A triangle names a lighting '
                                                   'the frame does not have")\n'],
-                                       'start': 7539,
-                                       'stop': 7540},
+                                       'start': 7541,
+                                       'stop': 7542},
                                       {'after': ['    require_whole_triangles(len(corners))\n'],
                                        'before': ['    if len(corners) % 3 != 0:\n',
                                                   '        raise Error("Rasterizing needs whole '
                                                   'triangles")\n'],
-                                       'start': 7753,
-                                       'stop': 7754},
+                                       'start': 7755,
+                                       'stop': 7756},
                                       {'after': ['        require_index_in_count(\n',
                                                  '            named,\n',
                                                  '            len(surfaces),\n',
@@ -29313,8 +29361,8 @@ EDGES = {'animation/animation_clip.mojo': {'after_sha256': '71842bfcf4a72c6c652a
                                        'before': ['        if named < 0 or named >= len(surfaces):\n',
                                                   '            raise Error("A corner names a surface '
                                                   'the frame does not have")\n'],
-                                       'start': 7758,
-                                       'stop': 7763}]},
+                                       'start': 7760,
+                                       'stop': 7765}]},
  'render/rgbe.mojo': {'after_sha256': 'c192c096acd19697fca443827e82c9bc345478b7e4ec5535ac3fa89b9a4e0599',
                       'after_token_sha256': 'b045cd79b2a4adb0d806c1fb59de96d7fdb99a97a77d3d60347caf5c34547005',
                       'before_sha256': '0af5ef6dbe7a98b3887df779c9abddc35c74a86e8d7657b41a21616fbe085117',
@@ -34454,7 +34502,7 @@ REGISTRY_INPUT_SHA256 = {'animation/animation_clip.mojo': '71842bfcf4a72c6c652a6
  'materials/compute_ids.mojo': '215ccb1704fb7b30d8a0ad7ec14e839dc399f29f7c7ca29f0403f5c32e25a39e',
  'materials/glsl.mojo': 'b643822cb1cc25051a6eac7b954c6e6b84de312d5b4cb6976e82edd89705395e',
  'materials/material.mojo': '0722ad172e97c70cc530348a627eb52cde41c643cabef385423ee8ea6d8b77b9',
- 'materials/nodes.mojo': '5e4a3a33b1e2b8dd84705412c61e4d75938f0aae45d7e318b164bfd48bb0bb97',
+ 'materials/nodes.mojo': '525920b0e48d73cd4329a51ed127e38c59972ebc48c8562c20ce2200b072c3ef',
  'materials/volume_node_material.mojo': 'f8e08ddbfb285a9d5344c156a9424cb8c309cb4771ff132f7eaca193f69eab29',
  'math/arc_tangent.mojo': 'fde08cd180cb0e2bd94fca6196f86c4b318ef6f1a4ed8e588aaad848076ea8e5',
  'math/bezier.mojo': '4a4087e15d2472bcbeedd492c5a866039988cc1988029a5c28c828eedfb77034',
@@ -34557,7 +34605,7 @@ REGISTRY_INPUT_SHA256 = {'animation/animation_clip.mojo': '71842bfcf4a72c6c652a6
  'render/png.mojo': '75d9105e434ed286b207d55d27e90328a24a2ad9f4b8e6580f8de156256558c4',
  'render/pvrtc.mojo': '2a309b3816d4cd18703f0be777fd79283dc7fd99cf9cc24d7df78b54de1b5a52',
  'render/raster_state.mojo': 'a8fc16d55ca53f4e36c333d99f3ce9eb110ea523aac33b90194c17a8f4fb1211',
- 'render/rasterizer.mojo': 'e1dfcd4fcf6eaa4283eed3b340b872735a09f2d94fad59c089df2c733329ab02',
+ 'render/rasterizer.mojo': 'e8d1e85a25a771edc28ab063a8ae1b38946ca1589014c0bb6ea6126aa5a9cf25',
  'render/rgbe.mojo': 'c192c096acd19697fca443827e82c9bc345478b7e4ec5535ac3fa89b9a4e0599',
  'render/screen_coord.mojo': '73665bf734a9e1253ad2e6a9bc9e25184b90d33673d8033b8fb71984c09c181b',
  'render/splat_raster.mojo': '5ec9036208ec0d16e12f078a99a49e2ecba067075fda893bc74810ee9c7c119b',
@@ -34968,7 +35016,7 @@ REGISTRY_PROVIDER_SHA256 = {'animation/keyframe_track.mojo': '88024d946b3aebe154
  'loaders/utf8.mojo': 'e0d5891d9d2954bd5c4329cda8a3492f4f6464b402b84489eae000cf8e0ce10a',
  'materials/compute_ids.mojo': '215ccb1704fb7b30d8a0ad7ec14e839dc399f29f7c7ca29f0403f5c32e25a39e',
  'materials/material.mojo': '0722ad172e97c70cc530348a627eb52cde41c643cabef385423ee8ea6d8b77b9',
- 'materials/nodes.mojo': '5e4a3a33b1e2b8dd84705412c61e4d75938f0aae45d7e318b164bfd48bb0bb97',
+ 'materials/nodes.mojo': '525920b0e48d73cd4329a51ed127e38c59972ebc48c8562c20ce2200b072c3ef',
  'math/arc_tangent.mojo': 'fde08cd180cb0e2bd94fca6196f86c4b318ef6f1a4ed8e588aaad848076ea8e5',
  'math/bezier.mojo': '4a4087e15d2472bcbeedd492c5a866039988cc1988029a5c28c828eedfb77034',
  'math/bounds.mojo': '712403832a9fc9bdcd835e68e1934dd4de37e8b218e418f797a717da3684ee25',
@@ -35038,7 +35086,7 @@ REGISTRY_PROVIDER_SHA256 = {'animation/keyframe_track.mojo': '88024d946b3aebe154
  'render/packing.mojo': 'e7b3b4158fb6992edad74bd0870b4509b79d6547785ec9285448b2467b98f083',
  'render/png.mojo': '75d9105e434ed286b207d55d27e90328a24a2ad9f4b8e6580f8de156256558c4',
  'render/raster_state.mojo': 'a8fc16d55ca53f4e36c333d99f3ce9eb110ea523aac33b90194c17a8f4fb1211',
- 'render/rasterizer.mojo': 'e1dfcd4fcf6eaa4283eed3b340b872735a09f2d94fad59c089df2c733329ab02',
+ 'render/rasterizer.mojo': 'e8d1e85a25a771edc28ab063a8ae1b38946ca1589014c0bb6ea6126aa5a9cf25',
  'render/rgbe.mojo': 'c192c096acd19697fca443827e82c9bc345478b7e4ec5535ac3fa89b9a4e0599',
  'render/screen_coord.mojo': '73665bf734a9e1253ad2e6a9bc9e25184b90d33673d8033b8fb71984c09c181b',
  'render/splat_raster.mojo': '5ec9036208ec0d16e12f078a99a49e2ecba067075fda893bc74810ee9c7c119b',
@@ -40689,7 +40737,7 @@ REGISTRY_REVIEW_RECORDS = {'animation/animation_clip.mojo': {'admission_granted'
                                        {'path': 'render/volume_texture_store.mojo',
                                         'sha256': '105a32971b5e88c613ec3a350d9b2c99c27d19080c6c66fb9d42bd4be546c8b0'},
                                        {'path': 'materials/nodes.mojo',
-                                        'sha256': '5e4a3a33b1e2b8dd84705412c61e4d75938f0aae45d7e318b164bfd48bb0bb97'},
+                                        'sha256': '525920b0e48d73cd4329a51ed127e38c59972ebc48c8562c20ce2200b072c3ef'},
                                        {'path': 'math/matrix3.mojo',
                                         'sha256': 'b134fabd9dbf12f41c46724ccaa89582be5efbb929677a47c64af45c4d0a1e97'},
                                        {'path': 'math/matrix4.mojo',
@@ -40742,7 +40790,7 @@ REGISTRY_REVIEW_RECORDS = {'animation/animation_clip.mojo': {'admission_granted'
                                            {'path': 'render/texture_store.mojo',
                                             'sha256': '78dfcc5c37879dd286272674096b13bad72efdefac769f85525790800f1fbd4b'},
                                            {'path': 'materials/nodes.mojo',
-                                            'sha256': '5e4a3a33b1e2b8dd84705412c61e4d75938f0aae45d7e318b164bfd48bb0bb97'},
+                                            'sha256': '525920b0e48d73cd4329a51ed127e38c59972ebc48c8562c20ce2200b072c3ef'},
                                            {'path': 'lights/light.mojo',
                                             'sha256': 'bc5654ee21e462cf9c86bc5eeffdd2ae7eaed91c3607a03312322e342d9108da'},
                                            {'path': 'lights/physical_layers.mojo',
@@ -40954,7 +41002,7 @@ REGISTRY_REVIEW_RECORDS = {'animation/animation_clip.mojo': {'admission_granted'
                                        'compile_roots owns fresh NodeProgram separately from live local '
                                        '_Pool. Guard/lookup/type arithmetic correspondence reviewed; '
                                        'generic native exhaustive equivalence not claimed.'],
-                          'frozen_current_sha256': '5e4a3a33b1e2b8dd84705412c61e4d75938f0aae45d7e318b164bfd48bb0bb97',
+                          'frozen_current_sha256': '525920b0e48d73cd4329a51ed127e38c59972ebc48c8562c20ce2200b072c3ef',
                           'kind': 'typed_materials',
                           'path': 'materials/nodes.mojo',
                           'providers': [{'path': 'core/ordinal.mojo',
@@ -41048,7 +41096,7 @@ REGISTRY_REVIEW_RECORDS = {'animation/animation_clip.mojo': {'admission_granted'
                                                        {'path': 'materials/material.mojo',
                                                         'sha256': '0722ad172e97c70cc530348a627eb52cde41c643cabef385423ee8ea6d8b77b9'},
                                                        {'path': 'materials/nodes.mojo',
-                                                        'sha256': '5e4a3a33b1e2b8dd84705412c61e4d75938f0aae45d7e318b164bfd48bb0bb97'},
+                                                        'sha256': '525920b0e48d73cd4329a51ed127e38c59972ebc48c8562c20ce2200b072c3ef'},
                                                        {'path': 'math/utils.mojo',
                                                         'sha256': 'd32e99704324833af194084f0b1d646a894c63bdd0b8ce1baa0da8a287c1d690'},
                                                        {'path': 'math/vector3.mojo',
@@ -43162,7 +43210,7 @@ REGISTRY_REVIEW_RECORDS = {'animation/animation_clip.mojo': {'admission_granted'
                                                 {'path': 'materials/material.mojo',
                                                  'sha256': '0722ad172e97c70cc530348a627eb52cde41c643cabef385423ee8ea6d8b77b9'},
                                                 {'path': 'materials/nodes.mojo',
-                                                 'sha256': '5e4a3a33b1e2b8dd84705412c61e4d75938f0aae45d7e318b164bfd48bb0bb97'},
+                                                 'sha256': '525920b0e48d73cd4329a51ed127e38c59972ebc48c8562c20ce2200b072c3ef'},
                                                 {'path': 'render/antialias.mojo',
                                                  'sha256': '71e47b0a1c7a8af71de0001b481db81c6d558a25d8bafcb300467c07313b74fa'},
                                                 {'path': 'render/cube_texture_store.mojo',
@@ -43449,7 +43497,7 @@ REGISTRY_REVIEW_RECORDS = {'animation/animation_clip.mojo': {'admission_granted'
                                            {'path': 'render/framebuffer.mojo',
                                             'sha256': 'cc907b6c905ad936f68fca609a7ddcffcd2090977088170670c4b43bfa6ad6ef'},
                                            {'path': 'render/rasterizer.mojo',
-                                            'sha256': 'e1dfcd4fcf6eaa4283eed3b340b872735a09f2d94fad59c089df2c733329ab02'},
+                                            'sha256': 'e8d1e85a25a771edc28ab063a8ae1b38946ca1589014c0bb6ea6126aa5a9cf25'},
                                            {'path': 'render/target.mojo',
                                             'sha256': 'cf004fbceafd55ffe634492cddcbb0893a9a0602ccc5da46b374df9a433fefb8'},
                                            {'path': 'renderers/draw_filter.mojo',
@@ -43616,7 +43664,7 @@ REGISTRY_REVIEW_RECORDS = {'animation/animation_clip.mojo': {'admission_granted'
                                      'providers': [{'path': 'core/ordinal.mojo',
                                                     'sha256': '020ae821e6e4d6f596174a672f70876d43a13d5a397bd42ef1b2152ac736bb90'},
                                                    {'path': 'materials/nodes.mojo',
-                                                    'sha256': '5e4a3a33b1e2b8dd84705412c61e4d75938f0aae45d7e318b164bfd48bb0bb97'},
+                                                    'sha256': '525920b0e48d73cd4329a51ed127e38c59972ebc48c8562c20ce2200b072c3ef'},
                                                    {'path': 'math/utils.mojo',
                                                     'sha256': 'd32e99704324833af194084f0b1d646a894c63bdd0b8ce1baa0da8a287c1d690'},
                                                    {'path': 'math/vector2.mojo',
@@ -45148,8 +45196,8 @@ REGISTRY_REVIEW_RECORDS = {'animation/animation_clip.mojo': {'admission_granted'
                                               'Validation/data/gradient/map/uniform guards extracted. '
                                               '_host_* wrappers and screen_coord helpers replace '
                                               'repeated host-node methods.',
-                            'current_sha256': 'e1dfcd4fcf6eaa4283eed3b340b872735a09f2d94fad59c089df2c733329ab02',
-                            'current_token_sha256': '2d14bd01192bae1cf857e618faae3862784974825aad31e9d41fb0b7361f7311',
+                            'current_sha256': 'e8d1e85a25a771edc28ab063a8ae1b38946ca1589014c0bb6ea6126aa5a9cf25',
+                            'current_token_sha256': '49c113f28ee16d52cbbb50c6f93b18902581fde0c15cede8634e71dfb64e16d0',
                             'evaluation_and_ieee': 'Ordinary Float32 expression grouping retained, '
                                                    'including weighted sums and depth interpolation. '
                                                    'Upper-first dot clamps were already '
@@ -45160,7 +45208,7 @@ REGISTRY_REVIEW_RECORDS = {'animation/animation_clip.mojo': {'admission_granted'
                                                            'Providers and lexical resolver closure must '
                                                            'be operation-owned at admission.',
                             'inverse_candidate_key': 'render/rasterizer.mojo',
-                            'inverse_edit_count': 127,
+                            'inverse_edit_count': 128,
                             'inverse_recovers_exact_main': True,
                             'original_sha256': '29628131f65e0308142c7e8f646d2efb75c71044328f2096edb8b46a286a2164',
                             'original_token_sha256': 'baef1508ed183d20da76dd5d56c922f8bf8da457cdf3e268270ee910ee90a052',
@@ -45213,10 +45261,10 @@ REGISTRY_REVIEW_RECORDS = {'animation/animation_clip.mojo': {'admission_granted'
                                                                'require_positive_finite',
                                                                'require_unit_finite'],
                                                    'unresolved_symbols': []},
-                                                  {'provider': 'materials/nodes.mojo@5e4a3a33b1e2b8dd84705412c61e4d75938f0aae45d7e318b164bfd48bb0bb97',
-                                                   'symbols': ['perspective_shares'],
+                                                  {'provider': 'materials/nodes.mojo@525920b0e48d73cd4329a51ed127e38c59972ebc48c8562c20ce2200b072c3ef',
+                                                   'symbols': ['perspective_shares', 'perspective_shares_over'],
                                                    'unresolved_symbols': []},
-                                                  {'provider': 'render/rasterizer.mojo@e1dfcd4fcf6eaa4283eed3b340b872735a09f2d94fad59c089df2c733329ab02',
+                                                  {'provider': 'render/rasterizer.mojo@e8d1e85a25a771edc28ab063a8ae1b38946ca1589014c0bb6ea6126aa5a9cf25',
                                                    'symbols': ['_host_array',
                                                                '_host_cube',
                                                                '_host_fetch',
@@ -46075,7 +46123,7 @@ REGISTRY_REVIEW_RECORDS = {'animation/animation_clip.mojo': {'admission_granted'
                                                    {'provider': 'core/search.mojo@1bc8bedd8b4d91ff3a455fa8232dc36fdfdeae0b7f61adf8d41ee16467b8df72',
                                                     'symbols': ['first_match'],
                                                     'unresolved_symbols': []},
-                                                   {'provider': 'render/rasterizer.mojo@e1dfcd4fcf6eaa4283eed3b340b872735a09f2d94fad59c089df2c733329ab02',
+                                                   {'provider': 'render/rasterizer.mojo@e8d1e85a25a771edc28ab063a8ae1b38946ca1589014c0bb6ea6126aa5a9cf25',
                                                     'symbols': ['require_shade_mode'],
                                                     'unresolved_symbols': []},
                                                    {'provider': 'math/vector3.mojo@39bd8f3d5102eb8d32f95fb0982b5886050c43031de416903d692e1c2c664b4a',
@@ -47231,7 +47279,7 @@ DATA_NAMES = ('STATUS',
  'REGISTRY_QUALIFICATION_READY',
  'REGISTRY_UNRESOLVED_CONDITIONS',
  'REGISTRY_QUALIFICATION_RECORDS')
-DATA_SHA256 = '97a6441599bb3b198255455185c8dfd1d06e66512e659a2df72cc671c2cc841b'
+DATA_SHA256 = '843e87592b5bcece65628c272b8264a7453fb36f0a03524dd6147c72eb9cb25b'
 # END FIXED STAGING DATA
 
 
@@ -47248,8 +47296,8 @@ def sha(value):
 def verify_stage_data():
     """Authenticate fixed provenance data without granting root admission."""
     payload = {name: globals()[name] for name in DATA_NAMES}
-    require(DATA_SHA256 == '97a6441599bb3b198255455185c8dfd1d06e66512e659a2df72cc671c2cc841b'
-            and sha(json.dumps(payload, sort_keys=True, separators=(',', ':'))) == '97a6441599bb3b198255455185c8dfd1d06e66512e659a2df72cc671c2cc841b',
+    require(DATA_SHA256 == '843e87592b5bcece65628c272b8264a7453fb36f0a03524dd6147c72eb9cb25b'
+            and sha(json.dumps(payload, sort_keys=True, separators=(',', ':'))) == '843e87592b5bcece65628c272b8264a7453fb36f0a03524dd6147c72eb9cb25b',
             'fixed staging data changed')
     require(STATUS == 'staged-provenance-only' and len(OUTSTANDING_TYPED_PATHS) == 163
             and REGISTRY_QUALIFICATION_READY is False and REGISTRY_UNRESOLVED_CONDITIONS,

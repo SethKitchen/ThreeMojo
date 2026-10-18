@@ -7218,7 +7218,39 @@ def perspective_shares(
         The three weights, in the first three lanes, or the screen weights
         where the interpolated `1 / w` is zero.
     """
-    var inv_w = wa * ia + wb * ib + wc * ic
+    return perspective_shares_over(
+        wa * ia + wb * ib + wc * ic, wa, wb, wc, ia, ib, ic
+    )
+
+
+def perspective_shares_over(
+    inv_w: Float32,
+    wa: Float32,
+    wb: Float32,
+    wc: Float32,
+    ia: Float32,
+    ib: Float32,
+    ic: Float32,
+) -> Lanes:
+    """Return each corner's perspective-correct weight at a sample, over
+    an interpolated `1 / w` the caller already has.
+
+    A rasterizer that tests depth with `inv_w` passes that same value, so
+    the weights and the depth are rounded from one sum.
+
+    Args:
+        inv_w: The interpolated `1 / w` at the sample.
+        wa: The first corner's screen-space weight.
+        wb: The second's.
+        wc: The third's.
+        ia: The first corner's `1 / w`.
+        ib: The second's.
+        ic: The third's.
+
+    Returns:
+        The three weights, in the first three lanes, or the screen weights
+        where `inv_w` is zero.
+    """
     if inv_w == 0:
         return Lanes(wa, wb, wc, 0)
     var rcp = Float32(1) / inv_w
