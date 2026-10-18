@@ -135,6 +135,18 @@ def view_offset(
     return view
 
 
+def disable_view_offset(mut view: Optional[ViewOffset]):
+    """Turn a tile off and keep its numbers.
+
+    A camera that has never set a tile stays without one.
+
+    Args:
+        view: The tile, or none.
+    """
+    if Bool(view):
+        view.value().enabled = False
+
+
 trait Camera(Copyable, Movable):
     """Something a `Renderer` can draw through."""
 

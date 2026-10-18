@@ -37,6 +37,7 @@ from std.math import isfinite
 from cameras.camera import (
     Camera,
     ViewOffset,
+    disable_view_offset,
     placed_view_matrix,
     scene_view_matrix,
     view_offset,
@@ -175,8 +176,7 @@ struct OrthographicCamera(Camera):
 
         The tile is kept, disabled, as three.js keeps it.
         """
-        if Bool(self.view):
-            self.view.value().enabled = False
+        disable_view_offset(self.view)
 
     def visible_layers(self) -> Layers:
         """Return which layers this camera draws; see `core.layers`."""

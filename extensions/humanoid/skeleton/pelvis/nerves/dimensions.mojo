@@ -25,12 +25,12 @@ from extensions.humanoid.side import LEFT, BodySide
 from extensions.humanoid.skeleton.field import (
     DistanceField,
     TubeChain,
-    enlarge_tube_chain,
     field_gradient,
     flip_x,
     mix_point,
     tube_chain_bounds,
     tube_chain_distance,
+    widen_for_display,
 )
 from extensions.humanoid.skeleton.pelvis.bones.dimensions import (
     pelvis_frame,
@@ -135,11 +135,9 @@ struct PelvisNerveField(DistanceField, ImplicitlyCopyable):
             A wider copy with a larger blend and box.
         """
         var field = self
-        field.chain = enlarge_tube_chain(field.chain, least)
-        field.k = Float32(0.4) * least
-        field.epsilon = Float32(0.25) * least
-        field.low = field.low - Vector3(least, least, least)
-        field.high = field.high + Vector3(least, least, least)
+        widen_for_display(
+            field.chain, field.k, field.epsilon, field.low, field.high, least
+        )
         return field
 
 
