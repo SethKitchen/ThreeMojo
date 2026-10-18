@@ -54,13 +54,14 @@ from math.norm import length2, squared_length2
 
 from math.arc_tangent import atan2_float32
 from math.matrix4 import Matrix4
-from math.utils import clamp
+from math.utils import clamp, glsl_mod
 from math.vector3 import Vector3
+from postprocessing.display_nodes import luminance_of
 from postprocessing.sampling import LightView, u_of, v_of
 from postprocessing.screen_space import DepthView, glsl_rand
 from render.framebuffer import TRANSPARENT_BLACK, Color, FloatColor
 from render.target import RenderTarget
-from std.math import cos, floor, isfinite, pow, sin, sqrt
+from std.math import cos, isfinite, pow, sin, sqrt
 from units.si import Angle, RADIAN
 
 
@@ -447,12 +448,7 @@ def effect_luminance(r: Float32, g: Float32, b: Float32) -> Float32:
     Returns:
         The weighted sum.
     """
-    return 0.2126729 * r + 0.7151522 * g + 0.0721750 * b
-
-
-def _glsl_mod(x: Float32, y: Float32) -> Float32:
-    """Return GLSL's `mod`: `x - y * floor(x / y)`."""
-    return x - y * floor(x / y)
+    return luminance_of(r, g, b)
 
 
 def _straight(source: LightView, u: Float32, v: Float32) -> FloatColor:
@@ -927,7 +923,7 @@ def kaleido_pixel(
     var r = length2(px, py)
     var a = atan2_float32(py, px) + angle.value
     var wedge = KALEIDO_TAU / sides
-    a = _glsl_mod(a, wedge)
+    a = glsl_mod(a, wedge)
     a = abs(a - wedge / 2)
     return source.sample(r * cos(a) + 0.5, r * sin(a) + 0.5)
 

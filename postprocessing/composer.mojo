@@ -75,6 +75,7 @@ from postprocessing.display_nodes import (
     dof_light,
     hash_blur_light,
     lensflare_light,
+    luminance_of,
     motion_blur_light,
 )
 from postprocessing.denoise import (
@@ -4140,7 +4141,7 @@ def luminance(color: FloatColor) -> Float32:
     Returns:
         The weighted sum of red, green and blue.
     """
-    return 0.2126729 * color.r + 0.7151522 * color.g + 0.0721750 * color.b
+    return luminance_of(color.r, color.g, color.b)
 
 
 def copy_pixel(color: FloatColor, opacity: Float32) -> FloatColor:
