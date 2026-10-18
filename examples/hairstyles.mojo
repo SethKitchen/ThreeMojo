@@ -20,6 +20,7 @@ The default is 140.
 """
 
 from examples.output import example_destination
+from examples.preview import turn_about_vertical
 
 from cameras.perspective_camera import PerspectiveCamera
 from core.assets import Assets
@@ -53,7 +54,6 @@ from render.framebuffer import Color, Framebuffer
 from render.tonemap import ACES_FILMIC_TONE_MAPPING
 from renderers.environment import pmrem_from_scene
 from renderers.renderer import Renderer, available_workers
-from std.math import cos, sin
 from std.pathlib import Path
 from std.sys import argv
 from units.si import Angle, DEGREE, FOOT, Length, METER, RADIAN
@@ -99,21 +99,6 @@ def _model() raises -> HumanoidSpec:
     for index in range(len(values)):
         genome = genome.with_gene(Gene(index), Expression(values[index]))
     return HumanoidSpec(Length(5.6, FOOT), FEMALE, UNTONED, genome)
-
-
-def _turned(v: Vector3, angle: Float32) -> Vector3:
-    """Return `v` turned by `angle` radians about the vertical.
-
-    Args:
-        v: The vector.
-        angle: The turn, counterclockwise seen from above.
-
-    Returns:
-        The turned vector.
-    """
-    var c = cos(angle)
-    var s = sin(angle)
-    return Vector3(v.x * c + v.z * s, v.y, -v.x * s + v.z * c)
 
 
 def main() raises:
@@ -216,15 +201,19 @@ def main() raises:
     var fill_toward = Vector3(1.0, 0.8, 2.0)
     fill_toward.normalize()
     var lights = List[HairLight]()
-    lights.append(HairLight(_turned(key_toward, -turn), KEY_RADIANCE))
     lights.append(
-        HairLight(_turned(fill_toward, -turn), Vector3(0.5, 0.55, 0.65))
+        HairLight(turn_about_vertical(key_toward, -turn), KEY_RADIANCE)
+    )
+    lights.append(
+        HairLight(
+            turn_about_vertical(fill_toward, -turn), Vector3(0.5, 0.55, 0.65)
+        )
     )
     for index in range(len(hairs)):
         hairs[index].shade(
             assets,
             lights,
-            _turned(eye - places[index], -turn) + center,
+            turn_about_vertical(eye - places[index], -turn) + center,
             AMBIENT,
         )
     scene.update()

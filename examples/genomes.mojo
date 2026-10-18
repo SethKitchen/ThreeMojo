@@ -22,6 +22,7 @@ how many frames to draw, one or more. The default is 24.
 """
 
 from examples.output import example_destination
+from examples.preview import turn_about_vertical
 
 from cameras.perspective_camera import PerspectiveCamera
 from core.assets import Assets
@@ -48,7 +49,7 @@ from extensions.humanoid.genome import (
     HAIR_LENGTH,
     Expression,
     Gene,
-    Genome,
+    genome_from_values,
 )
 from extensions.humanoid.quality import (
     anatomy_detail,
@@ -81,7 +82,7 @@ from render.framebuffer import Color, Framebuffer
 from render.tonemap import ACES_FILMIC_TONE_MAPPING
 from renderers.environment import pmrem_from_scene
 from renderers.renderer import Renderer, available_workers
-from std.math import cos, sin
+from std.math import sin
 from std.pathlib import Path
 from std.sys import argv
 from units.si import Angle, DEGREE, FOOT, Length, METER, RADIAN
@@ -111,24 +112,6 @@ comptime SPACING_Y = Float32(0.3)
 comptime CUT_BELOW = Float32(0.13)
 
 
-def _genome(values: List[Float32]) raises -> Genome:
-    """Return a genome whose genes 0, 1, 2, ... take `values` in order.
-
-    Args:
-        values: One expression per gene, from `MELANIN` on.
-
-    Returns:
-        The genome.
-
-    Raises:
-        Error: If a value lies outside -1 through 1.
-    """
-    var genome = Genome()
-    for index in range(len(values)):
-        genome = genome.with_gene(Gene(index), Expression(values[index]))
-    return genome
-
-
 def _people() raises -> List[HumanoidSpec]:
     """Return the six people the gallery shows.
 
@@ -143,41 +126,41 @@ def _people() raises -> List[HumanoidSpec]:
     # fmt: off
     # Fair, freckled and red-haired, with blue eyes, a small upturned
     # nose, a narrow face and ears that stand out.
-    people.append(HumanoidSpec(stature, FEMALE, UNTONED, _genome([
+    people.append(HumanoidSpec(stature, FEMALE, UNTONED, genome_from_values([
         -0.9, -0.5, 0.9, -0.2, 0.95, -0.9, 0.3, 0.1, 0.2, -0.3,
         0.2, -0.3, 0.4, -0.5, -0.5, 0.2, 0.1, -0.3, 0.2, -0.2,
         0.6, 0.3, -0.5, 0.1, 0.1, -0.6, -0.1, 0.2, -0.4, 0.3,
     ])))
     # Deep brown skin, dark eyes and hair, a broad nose, full lips and
     # a strong jaw.
-    people.append(HumanoidSpec(stature, MALE, UNTONED, _genome([
+    people.append(HumanoidSpec(stature, MALE, UNTONED, genome_from_values([
         0.95, 0.2, -1.0, 1.0, -1.0, 0.9, 0.0, 0.3, 0.0, 0.2,
         -0.2, 0.5, -0.2, 0.0, 0.8, -0.1, -0.4, 0.4, 0.9, 0.1,
         -0.3, 0.0, 0.3, 0.0, 0.0, 0.7, 0.4, 0.3, 0.5, 0.2,
     ])))
     # Olive skin, hazel eyes, a long high-bridged nose and a long head.
-    people.append(HumanoidSpec(stature, MALE, UNTONED, _genome([
+    people.append(HumanoidSpec(stature, MALE, UNTONED, genome_from_values([
         0.1, 0.9, -0.6, 0.6, -0.4, 0.05, -0.1, -0.2, -0.1, 0.5,
         -0.4, 0.8, -0.3, 0.8, 0.0, 0.7, 0.9, 0.0, -0.3, 0.3,
         -0.2, -0.5, -0.3, 0.7, 0.1, 0.2, 0.6, -0.2, 0.8, 0.0,
     ])))
     # Light warm skin, dark hair, almond eyes tilted up, a low bridge,
     # a broad round head and small ears.
-    people.append(HumanoidSpec(stature, FEMALE, UNTONED, _genome([
+    people.append(HumanoidSpec(stature, FEMALE, UNTONED, genome_from_values([
         -0.3, 0.6, -0.8, 0.95, -0.8, 0.8, -0.2, 0.4, 0.9, -0.6,
         0.3, -0.2, 0.1, -0.3, 0.2, -0.6, -0.9, -0.3, 0.1, -0.5,
         -0.6, -0.8, 0.7, -0.6, 0.2, 0.1, -0.3, 0.8, -0.8, 0.1,
     ])))
     # Medium brown skin, big eyes, arched brows, a wide mouth and a
     # small chin.
-    people.append(HumanoidSpec(stature, FEMALE, UNTONED, _genome([
+    people.append(HumanoidSpec(stature, FEMALE, UNTONED, genome_from_values([
         0.45, 0.3, -0.4, 0.8, -0.2, 0.7, 0.8, -0.1, 0.3, -0.5,
         0.5, 0.2, 0.9, -0.2, 0.3, 0.1, -0.2, 0.7, 0.6, 0.2,
         0.0, 0.8, 0.0, 0.0, 0.3, -0.5, -0.6, 0.4, -0.3, 0.6,
     ])))
     # Very fair and cool, blond, gray-blue eyes, deep-set under a heavy
     # brow ridge, big ears and a tall head.
-    people.append(HumanoidSpec(stature, MALE, UNTONED, _genome([
+    people.append(HumanoidSpec(stature, MALE, UNTONED, genome_from_values([
         -0.6, -0.9, 0.2, -0.8, -0.1, -0.6, -0.3, 0.0, -0.4, 0.9,
         -0.6, 0.7, -0.6, 0.4, 0.2, 0.5, 0.6, -0.2, -0.6, 0.9,
         0.2, 1.0, -0.2, 0.4, 0.8, 0.5, 0.8, 0.6, 1.0, -0.3,
@@ -212,21 +195,6 @@ def _people() raises -> List[HumanoidSpec]:
                 Expression(shapes[index * FACE_SHAPES + mode]),
             )
     return people^
-
-
-def _turned(v: Vector3, angle: Float32) -> Vector3:
-    """Return `v` turned by `angle` radians about the vertical.
-
-    Args:
-        v: The vector.
-        angle: The turn, counterclockwise seen from above.
-
-    Returns:
-        The turned vector.
-    """
-    var c = cos(angle)
-    var s = sin(angle)
-    return Vector3(v.x * c + v.z * s, v.y, -v.x * s + v.z * c)
 
 
 def main() raises:
@@ -381,13 +349,18 @@ def main() raises:
         for index in range(len(hairs)):
             # Carry the camera and the lights into the head's own frame.
             var lights = List[HairLight]()
-            lights.append(HairLight(_turned(key_toward, -angle), KEY_RADIANCE))
-            lights.append(HairLight(_turned(rim_toward, -angle), RIM_RADIANCE))
+            lights.append(
+                HairLight(turn_about_vertical(key_toward, -angle), KEY_RADIANCE)
+            )
+            lights.append(
+                HairLight(turn_about_vertical(rim_toward, -angle), RIM_RADIANCE)
+            )
             var camera_at = (
-                _turned(eye - places[index], -angle) + centers[index]
+                turn_about_vertical(eye - places[index], -angle)
+                + centers[index]
             )
             # The breeze, from the viewer's left, turned with the head.
-            var breeze = _turned(Vector3(1.0, 0.1, 0.3), -angle)
+            var breeze = turn_about_vertical(Vector3(1.0, 0.1, 0.3), -angle)
             breeze.normalize()
             for _ in range(WIND_STEPS):
                 motions[index].step(colliders[index], HairWind(breeze, WIND))

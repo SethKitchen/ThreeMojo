@@ -3,7 +3,7 @@
 # Noncommercial use is free; commercial use requires a paid license.
 # See LICENSE, LICENSE-COMMERCIAL.md and THIRD-PARTY-NOTICES.md.
 
-"""Colored triangles and daylight for the examples.
+"""Colored triangles, daylight, and a turn about the vertical.
 
 The triangles are stored z up and drawn y up. The color runs from blue,
 through white, to red.
@@ -17,8 +17,10 @@ from core.scene import Scene
 from generators.utils import Vec3d
 from lights.light import ambient_light, directional_light
 from materials.material import Material
+from math.vector3 import Vector3
 from objects.mesh import Mesh
 from render.framebuffer import Color
+from std.math import cos, sin
 
 
 struct Triangles(Movable):
@@ -158,6 +160,21 @@ def add_sky_and_sun(mut scene: Scene, fill: Float32, sun: Float32) raises:
     scene.add_light(
         directional_light(Color(255, 246, 230), scene.add(lamp^), sun)
     )
+
+
+def turn_about_vertical(v: Vector3, angle: Float32) -> Vector3:
+    """Return `v` turned by `angle` radians about the vertical.
+
+    Args:
+        v: The vector.
+        angle: The turn, counterclockwise seen from above.
+
+    Returns:
+        The turned vector.
+    """
+    var c = cos(angle)
+    var s = sin(angle)
+    return Vector3(v.x * c + v.z * s, v.y, -v.x * s + v.z * c)
 
 
 def main():
