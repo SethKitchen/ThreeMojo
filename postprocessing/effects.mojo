@@ -1800,11 +1800,6 @@ def check_bokeh2(settings: Bokeh2Settings) raises:
         raise Error("A bokeh 2 needs a ring and a sample at least")
 
 
-def _smoothstep(edge0: Float32, edge1: Float32, x: Float32) -> Float32:
-    """Return GLSL's `smoothstep`, its edges in either order."""
-    return clamped_smoothstep(edge0, edge1, x)
-
-
 def bokeh2_penta(pw: Float32, ph: Float32, rings: Int) -> Float32:
     """Return `BokehShader2`'s `penta`: how far a tap lies inside a
     pentagon, feathered, zero to one.
@@ -1819,17 +1814,17 @@ def bokeh2_penta(pw: Float32, ph: Float32, rings: Int) -> Float32:
     """
     var scale = Float32(rings) - 1.3
     var inorout = Float32(-4)
-    inorout += _smoothstep(-_FEATHER, _FEATHER, pw + scale)
-    inorout += _smoothstep(
+    inorout += clamped_smoothstep(-_FEATHER, _FEATHER, pw + scale)
+    inorout += clamped_smoothstep(
         -_FEATHER, _FEATHER, 0.309016994 * pw + 0.951056516 * ph + scale
     )
-    inorout += _smoothstep(
+    inorout += clamped_smoothstep(
         -_FEATHER, _FEATHER, -0.809016994 * pw + 0.587785252 * ph + scale
     )
-    inorout += _smoothstep(
+    inorout += clamped_smoothstep(
         -_FEATHER, _FEATHER, -0.809016994 * pw - 0.587785252 * ph + scale
     )
-    inorout += _smoothstep(
+    inorout += clamped_smoothstep(
         -_FEATHER, _FEATHER, 0.309016994 * pw - 0.951056516 * ph + scale
     )
     return min(max(inorout, Float32(0)), Float32(1))
@@ -1961,8 +1956,12 @@ def bokeh2_pixel(
         col = col * (1 / s)
     if settings.show_focus:
         var edge = 0.002 * z
-        var m = min(max(_smoothstep(0, edge, blur), Float32(0)), Float32(1))
-        var e = min(max(_smoothstep(1 - edge, 1, blur), Float32(0)), Float32(1))
+        var m = min(
+            max(clamped_smoothstep(0, edge, blur), Float32(0)), Float32(1)
+        )
+        var e = min(
+            max(clamped_smoothstep(1 - edge, 1, blur), Float32(0)), Float32(1)
+        )
         var warm = (1 - m) * 0.6
         col = Vector3(
             col.x + (1 - col.x) * warm,
@@ -1982,7 +1981,7 @@ def bokeh2_pixel(
         var fade = settings.fstop / _VIGN_FADE
         var shade = min(
             max(
-                _smoothstep(_VIGN_OUT + fade, _VIGN_IN + fade, dist),
+                clamped_smoothstep(_VIGN_OUT + fade, _VIGN_IN + fade, dist),
                 Float32(0),
             ),
             Float32(1),

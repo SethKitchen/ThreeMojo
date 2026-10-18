@@ -94,8 +94,8 @@ from extensions.humanoid.skeleton.morph import (
     IDENTITY_SPREAD,
     HeadMorph,
     bump,
-    smoothstep,
 )
+from math.smoothstep import clamped_smoothstep
 from extensions.humanoid.skeleton.torso.bones.dimensions import (
     shoulder_girdle,
     torso_dimensions,
@@ -132,9 +132,15 @@ def _moved(gene: Gene, value: Float32, point: Vector3) raises -> Vector3:
 
 
 def test_helpers() raises:
-    assert_equal(smoothstep(0, 1, -1), 0)
-    assert_equal(smoothstep(0, 1, 2), 1)
-    assert_equal(smoothstep(0, 1, 0.5), 0.5)
+    assert_equal(
+        clamped_smoothstep(Float32(0), Float32(1), Float32(-1)), Float32(0)
+    )
+    assert_equal(
+        clamped_smoothstep(Float32(0), Float32(1), Float32(2)), Float32(1)
+    )
+    assert_equal(
+        clamped_smoothstep(Float32(0), Float32(1), Float32(0.5)), Float32(0.5)
+    )
     assert_equal(bump(Vector3(0, 0, 0), Vector3(0, 0, 0), 1), 1)
     assert_equal(bump(Vector3(2, 0, 0), Vector3(0, 0, 0), 1), 0)
 

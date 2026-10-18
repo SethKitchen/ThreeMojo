@@ -115,21 +115,6 @@ comptime _EYE_SHIFTS = SIMD[DType.float32, 32](
 )
 
 
-def smoothstep(edge0: Float32, edge1: Float32, x: Float32) -> Float32:
-    """Return the Hermite step from `edge0` to `edge1`.
-
-    Args:
-        edge0: Where the step starts, at zero.
-        edge1: Where it ends, at one.
-        x: The value to step.
-
-    Returns:
-        Zero below `edge0`, one above `edge1`, and a smooth curve
-        between.
-    """
-    return clamped_smoothstep(edge0, edge1, x)
-
-
 def bump(point: Vector3, center: Vector3, radius: Float32) -> Float32:
     """Return a smooth weight that is one at `center` and zero at
     `radius` and beyond.
@@ -502,7 +487,7 @@ struct HeadMorph(ImplicitlyCopyable):
         p = p + d
         # The whole head: breadth and length of the cranium, and the
         # height of the vault, fading out down the neck.
-        var head = smoothstep(59.0, 69.0, point.y)
+        var head = clamped_smoothstep(59.0, 69.0, point.y)
         if head > 0:
             var s = self.cranium_scale()
             p.x = p.x * (1 + (s.x - 1) * head)
@@ -510,5 +495,9 @@ struct HeadMorph(ImplicitlyCopyable):
             if p.y > VAULT_Y:
                 p.y = VAULT_Y + (p.y - VAULT_Y) * s.y
         # The neck stretches between its base and the skull.
-        p.y += NECK_STRETCH * self.neck_length * smoothstep(51.5, 64.0, point.y)
+        p.y += (
+            NECK_STRETCH
+            * self.neck_length
+            * clamped_smoothstep(51.5, 64.0, point.y)
+        )
         return p

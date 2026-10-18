@@ -534,11 +534,6 @@ def _rotated(v: Point3, axis: Point3, angle: Float64) -> Point3:
     )
 
 
-def _clamp_unit(value: Float64) -> Float64:
-    """Return `value` held to minus one through one, for `acos`."""
-    return clamp(value, -1.0, 1.0)
-
-
 def frames3_of[
     C: SpaceCurve
 ](
@@ -602,8 +597,10 @@ def frames3_of[
         if length3(turn) > NUMBER_EPSILON:
             turn = normalized3(turn)
             var theta = acos(
-                _clamp_unit(
-                    dot3(frames.tangents[step - 1], frames.tangents[step])
+                clamp(
+                    dot3(frames.tangents[step - 1], frames.tangents[step]),
+                    -1.0,
+                    1.0,
                 )
             )
             next_normal = _rotated(next_normal, turn, theta)
@@ -611,7 +608,7 @@ def frames3_of[
         frames.binormals.append(cross3(frames.tangents[step], next_normal))
     if closed:
         var theta = acos(
-            _clamp_unit(dot3(frames.normals[0], frames.normals[segments]))
+            clamp(dot3(frames.normals[0], frames.normals[segments]), -1.0, 1.0)
         )
         theta /= Float64(segments)
         var twist = cross3(frames.normals[0], frames.normals[segments])

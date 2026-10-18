@@ -327,12 +327,7 @@ def circle(
     var du = u - 0.5
     var dv = v - 0.5
     var dist = length2(du, dv) * 2
-    return _smoothstep_any(scale, scale - softness * scale, dist)
-
-
-def _smoothstep_any(edge0: Float32, edge1: Float32, x: Float32) -> Float32:
-    """Return GLSL's `smoothstep` for edges in either order."""
-    return clamped_smoothstep(edge0, edge1, x)
+    return clamped_smoothstep(scale, scale - softness * scale, dist)
 
 
 def crt_vignette(

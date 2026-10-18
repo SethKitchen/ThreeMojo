@@ -39,7 +39,7 @@ from extensions.humanoid.skeleton.head.skin.dimensions import (
     HeadSkinField,
 )
 from extensions.humanoid.skeleton.torso.sweep import SweepField
-from extensions.humanoid.skeleton.morph import smoothstep
+from math.smoothstep import clamped_smoothstep
 from math.utils import clamp
 from math.vector3 import Vector3, component_max, component_min, mix_delta3
 from std.math import max, min, sqrt
@@ -67,7 +67,7 @@ struct _Zone(ImplicitlyCopyable):
         # Most points lie outside most zones.
         if q >= 1:
             return 0
-        return 1 - smoothstep(self.core, 1, sqrt(q))
+        return 1 - clamped_smoothstep(self.core, 1, sqrt(q))
 
 
 # The name of the attribute that says how thin the skin is: one where
@@ -76,19 +76,18 @@ struct _Zone(ImplicitlyCopyable):
 comptime THINNESS = "thinness"
 
 
-def _mix(a: Vector3, b: Vector3, t: Float32) -> Vector3:
-    """Return `a` moved toward `b` by `t`."""
-    return mix_delta3(a, b, t)
-
-
 def _zones(h: HeadDimensions) raises -> List[_Zone]:
     """Return the face's zones of color for the head `h`."""
     var c = h.cm(1)
     var dark = clamp((h.torso.genome.get(MELANIN) + 1) / 2, 0, 1)
     # Lips: pink and red on fair skin, deeper and a little violet on
     # dark skin.
-    var lips = _mix(Vector3(0.95, 0.60, 0.64), Vector3(0.78, 0.60, 0.70), dark)
-    var flush = _mix(Vector3(1.05, 0.93, 0.93), Vector3(1.02, 0.97, 0.97), dark)
+    var lips = mix_delta3(
+        Vector3(0.95, 0.60, 0.64), Vector3(0.78, 0.60, 0.70), dark
+    )
+    var flush = mix_delta3(
+        Vector3(1.05, 0.93, 0.93), Vector3(1.02, 0.97, 0.97), dark
+    )
     var lid = Vector3(0.93, 0.87, 0.90)
     var zones = List[_Zone]()
     zones.append(
@@ -154,7 +153,7 @@ def _zones(h: HeadDimensions) raises -> List[_Zone]:
         )
     if h.sex == MALE:
         # The beard's shadow over the jaw, the chin and the upper lip.
-        var beard = _mix(
+        var beard = mix_delta3(
             Vector3(0.9, 0.9, 0.94), Vector3(0.95, 0.95, 0.96), dark
         )
         zones.append(
@@ -196,9 +195,9 @@ def _lash_line(lids: EyeLids, point: Vector3) -> Float32:
     var taper = max(Float32(0.05), 1 - across * across)
     var open = sqrt(across * across + (qy / lids.height) ** 2 / taper)
     # A band just outside the slit, on the lid's front.
-    var band = 1 - smoothstep(0.0, 0.35, abs(open - 1.08))
+    var band = 1 - clamped_smoothstep(0.0, 0.35, abs(open - 1.08))
     var upper = Float32(0.85) if qy > 0 else Float32(0.45)
-    return band * upper * (1 - smoothstep(0.85, 1.0, abs(across)))
+    return band * upper * (1 - clamped_smoothstep(0.85, 1.0, abs(across)))
 
 
 def _thin_zones(h: HeadDimensions) raises -> List[_Zone]:
@@ -314,7 +313,7 @@ struct _Brows(Movable):
         var d = min(self.right.distance(point), self.left.distance(point))
         if d > self.edge:
             return 0
-        var cover = 1 - smoothstep(-self.edge, self.edge, d)
+        var cover = 1 - clamped_smoothstep(-self.edge, self.edge, d)
         # Each hair is a streak: a hashed shade on a fine lattice.
         var qx = Int((point.x / self.grain) * 3)
         var qy = Int(point.y / self.grain)
@@ -388,11 +387,11 @@ def tint_head_skin(
                 continue
             var f = zones[z].factor
             if z < 2:
-                color = _mix(color, f, w)
+                color = mix_delta3(color, f, w)
             else:
                 var one = Vector3(1, 1, 1)
                 color = color * (one + (f - one) * w)
-        color = _mix(color, brows.factor, brows.weight(p))
+        color = mix_delta3(color, brows.factor, brows.weight(p))
         var lash = _lash_line(lids, p)
         if lash > 0:
             color = color * (1 - Float32(0.8) * lash)

@@ -41,7 +41,8 @@ from extensions.humanoid.skeleton.field import (
     finite_point,
     mix_point,
 )
-from extensions.humanoid.skeleton.morph import HeadMorph, smoothstep
+from extensions.humanoid.skeleton.morph import HeadMorph
+from math.smoothstep import clamped_smoothstep
 from extensions.humanoid.skeleton.pelvis.bones.dimensions import (
     TEMPLATE_CM,
     pelvis_dimensions,
@@ -252,9 +253,9 @@ struct TorsoFrame(ImplicitlyCopyable):
             p.x *= slim
             p.z = NECK_AXIS_Z + (p.z - NECK_AXIS_Z) * slim
         if self.shoulders != 1:
-            p.x *= 1 + (self.shoulders - 1) * smoothstep(18.0, 46.0, y)
+            p.x *= 1 + (self.shoulders - 1) * clamped_smoothstep(18.0, 46.0, y)
         if self.chest != 1:
-            var grow = 1 + (self.chest - 1) * smoothstep(14.0, 30.0, y)
+            var grow = 1 + (self.chest - 1) * clamped_smoothstep(14.0, 30.0, y)
             p.z = SPINE_Z + (p.z - SPINE_Z) * grow
         var unit = TEMPLATE_CM * self.stature
         var placed = self.anchor + Vector3(
@@ -264,7 +265,7 @@ struct TorsoFrame(ImplicitlyCopyable):
         )
         if self.head == 1:
             return placed
-        var grow = 1 + (self.head - 1) * smoothstep(
+        var grow = 1 + (self.head - 1) * clamped_smoothstep(
             HEAD_GROWS_FROM, HEAD_GROWS_TO, y
         )
         var pivot = self.anchor + Vector3(
@@ -285,8 +286,8 @@ struct TorsoFrame(ImplicitlyCopyable):
             one at its base, under the jaw, and on a torso's own frame.
         """
         return 1 + (self.neck - 1) * (
-            smoothstep(NECK_SLIM_FROM, NECK_SLIM_FULL, y)
-            - smoothstep(NECK_SLIM_UNTIL, NECK_SLIM_TO, y)
+            clamped_smoothstep(NECK_SLIM_FROM, NECK_SLIM_FULL, y)
+            - clamped_smoothstep(NECK_SLIM_UNTIL, NECK_SLIM_TO, y)
         )
 
     def cm(self, value: Float32) -> Float32:
