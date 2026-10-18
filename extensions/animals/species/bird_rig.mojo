@@ -842,6 +842,44 @@ def wing_normal(rig: Rig, side: String) raises -> V3:
     return -n if n.y < 0.0 else n
 
 
+def wing_arm(
+    rig: Rig, side: String
+) raises -> Tuple[Float64, V3, V3, V3, V3, V3, BoneId, BoneId, BoneId]:
+    """Return one wing's side sign, joints, normal and arm bones.
+
+    Args:
+        rig: The rig.
+        side: `L` or `R`.
+
+    Returns:
+        One for the left and minus one for the right, then the shoulder,
+        elbow, wrist and hand tip, the dorsal normal, and the humerus,
+        ulna and hand bones.
+
+    Raises:
+        Error: If a joint or bone is missing.
+    """
+    var sign = 1.0 if side == "L" else -1.0
+    var shoulder = rig.j("shoulder" + side)
+    var elbow = rig.j("elbow" + side)
+    var wrist = rig.j("wrist" + side)
+    var tip = rig.j("handTip" + side)
+    var normal = normalize(cross(elbow - shoulder, wrist - elbow))
+    if normal.y < 0.0:
+        normal = -normal
+    return (
+        sign,
+        shoulder,
+        elbow,
+        wrist,
+        tip,
+        normal,
+        rig.bone("humerus" + side),
+        rig.bone("ulna" + side),
+        rig.bone("hand" + side),
+    )
+
+
 def wing_segment(
     mut m: SdfModel,
     s: Float64,

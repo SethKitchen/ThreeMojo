@@ -54,7 +54,7 @@ from extensions.animals.species.bird_rig import (
     rectrix,
     secondary,
     wing_joints,
-    wing_normal,
+    wing_arm,
     wing_segment,
 )
 from extensions.animals.traits import Traits, pick_age, pick_sex
@@ -606,20 +606,14 @@ def crow_sculpt(mut m: SdfModel, rig: Rig, t: Traits) raises:
 
     # WINGS: the arm. The flight feathers follow as fins.
     for side in [String("L"), String("R")]:  # pragma: no branch
-        var s = 1.0 if side == "L" else -1.0
-        var sh = rig.j("shoulder" + side)
-        var el = rig.j("elbow" + side)
-        var wr = rig.j("wrist" + side)
-        var tp = rig.j("handTip" + side)
-        var n = wing_normal(rig, side)
-        var ulna = rig.bone("ulna" + side)
+        var s, sh, el, wr, tp, n, humerus, ulna, hand = wing_arm(rig, side)
         wing_segment(
             m,
             s,
             n,
             sh,
             el,
-            rig.bone("humerus" + side),
+            humerus,
             0.01,
             0.026,
             0.009,
@@ -633,7 +627,7 @@ def crow_sculpt(mut m: SdfModel, rig: Rig, t: Traits) raises:
             n,
             wr,
             tp,
-            rig.bone("hand" + side),
+            hand,
             0.0055,
             0.012,
             0.004,
@@ -654,7 +648,7 @@ def crow_sculpt(mut m: SdfModel, rig: Rig, t: Traits) raises:
             "patagium",
             0.009,
         )
-        _ = m.sphere("wrist", rig.bone("hand" + side), wr, 0.0065, k=0.006)
+        _ = m.sphere("wrist", hand, wr, 0.0065, k=0.006)
 
     # The flight feathers, their coverts and the tail, as fins.
     var feathers = _feathers()
