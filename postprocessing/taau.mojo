@@ -56,6 +56,7 @@ from postprocessing.traa import (
     TRAA_JITTERS,
     clip_aabb,
     flicker_reduction,
+    reproject_window_depth,
     traa_jitter,
 )
 from render.framebuffer import FloatColor
@@ -250,16 +251,17 @@ def previous_window_depth(
     Returns:
         The depth, in this frame's window depth.
     """
-    var x = Int(floor(u * Float32(previous.width)))
-    var y = Int(floor(v_down * Float32(previous.height)))
-    var depth = previous.load(x, y, 0)
-    var clip = Vector3(u * 2 - 1, (1 - v_down) * 2 - 1, depth * 2 - 1)
-    var seen = previous_projection_inverse.transform_point(clip)
-    var world = previous_camera_world.transform_point(seen)
-    var view_z = view.transform_point(world).z
-    if perspective:
-        return ((near + view_z) * far) / ((far - near) * view_z)
-    return (view_z + near) / (near - far)
+    return reproject_window_depth(
+        previous,
+        u,
+        v_down,
+        near,
+        far,
+        perspective,
+        previous_projection_inverse,
+        previous_camera_world,
+        view,
+    )
 
 
 def taau_pixel(
