@@ -54,6 +54,7 @@ from loaders.draco_attributes import (
     Octahedron,
     _add_face_normal,
     _limit_normal,
+    _mirrored_values,
     _predicted_tex_sides,
     _rotate,
     _rotation_count,
@@ -497,18 +498,7 @@ def _parallelogram(
     var o = map[data.table.vertex(opposite)]
     var n = map[data.table.vertex(data.table.next(opposite))]
     var r = map[data.table.vertex(data.table.previous(opposite))]
-    if o >= p or n >= p or r >= p:
-        return None
-    var out = List[Int](capacity=components)
-    for c in range(components):  # pragma: no branch
-        out.append(
-            to_int32(
-                values[n * components + c]
-                + values[r * components + c]
-                - values[o * components + c]
-            )
-        )
-    return out^
+    return _mirrored_values(o, n, r, p, values, components)
 
 
 def _previous(values: List[Int], p: Int, components: Int) -> List[Int]:
