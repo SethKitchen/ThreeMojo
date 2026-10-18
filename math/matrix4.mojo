@@ -942,11 +942,15 @@ struct Matrix4(Equatable, ImplicitlyCopyable):
         var sx = self._axis_length(0)
         var sy = self._axis_length(1)
         var sz = self._axis_length(2)
-        if sx == 0 or sy == 0 or sz == 0:
-            raise Error(
+        require_axis_extent(
+            sx,
+            sy,
+            sz,
+            (
                 "A transform with no extent along an axis has no rotation"
                 " to decompose"
-            )
+            ),
+        )
         if not isfinite(sx) or not isfinite(sy) or not isfinite(sz):
             raise Error("A decomposed axis scale must fit in Float32")
         var determinant = self.determinant()
@@ -1015,6 +1019,27 @@ def require_affine(matrix: Matrix4, message: String) raises:
         Error: If the matrix is not affine.
     """
     if not matrix.is_affine():
+        raise Error(message)
+
+
+def require_axis_extent(
+    x: Float32, y: Float32, z: Float32, message: String
+) raises:
+    """Refuse an axis length of zero.
+
+    Args:
+        x: The length of the first axis.
+        y: The length of the second axis.
+        z: The length of the third axis.
+        message: The error text for this caller.
+
+    Returns:
+        Nothing. The call returns when every length is nonzero.
+
+    Raises:
+        Error: If any length is zero.
+    """
+    if x == 0 or y == 0 or z == 0:
         raise Error(message)
 
 
