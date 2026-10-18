@@ -12,11 +12,8 @@ from loaders.lwo import _vertex_normals as lwo_normals
 from loaders.usd_geometry import compute_vertex_normals as usd_normals
 from loaders.svg_path import eigen_decomposition
 from math.triangle_normal import normal_or_zero, polygon_normal
-from postprocessing.effects import _hypot
 from renderers.renderer import face_normal
 from units.si import Length, METER
-from controls.arcball_controls import _angle_to
-from controls.transform_controls import _angle_between
 from core.buffer_attribute import BufferAttribute
 from core.buffer_geometry import BufferGeometry, NORMAL, POSITION, TANGENT, UV
 from core.gaussian_splat_utils import write_covariance
@@ -45,13 +42,14 @@ from loaders.vrml_geometry import _Vector, normal_attribute
 from math.matrix3 import Matrix3
 from math.matrix4 import Matrix4, scaling
 from math.norm import (
+    length2,
     normalized_cross3,
     normalized_difference2,
     normalized_difference3,
     reciprocal_normalized3,
 )
 from math.vector2 import Vector2
-from math.vector3 import Vector3
+from math.vector3 import Vector3, radians_between
 from objects.line import _unit as line_unit
 from objects.reflector_for_ssr import fresnel_coefficient
 from render.cube_texture import equirect_uv
@@ -94,17 +92,17 @@ def test_scalar_consumers_cover_float32_binary_exponents() raises:
         assert_almost_equal(l[0], Float32(0.7071067811865475), atol=1e-6)
         assert_equal(l[1], -l[0])
         assert_almost_equal(
-            _angle_to(Vector3(scale, 0, 0), Vector3(scale, 0, 0)),
+            radians_between(Vector3(scale, 0, 0), Vector3(scale, 0, 0)),
             Float32(0),
             atol=1e-6,
         )
         assert_almost_equal(
-            _angle_between(Vector3(scale, 0, 0), Vector3(-scale, 0, 0)),
+            radians_between(Vector3(scale, 0, 0), Vector3(-scale, 0, 0)),
             Float32(pi),
             atol=1e-6,
         )
         assert_almost_equal(
-            _angle_to(Vector3(scale, 0, 0), Vector3(0, scale, 0)),
+            radians_between(Vector3(scale, 0, 0), Vector3(0, scale, 0)),
             Float32(pi / 2),
             atol=1e-6,
         )
@@ -430,7 +428,7 @@ def test_loader_and_polygon_normal_builders_keep_small_faces() raises:
             0,
         )
         assert_almost_equal(
-            _hypot(3 * scale, 4 * scale) / scale, Float32(5), atol=1e-6
+            length2(3 * scale, 4 * scale) / scale, Float32(5), atol=1e-6
         )
 
 

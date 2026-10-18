@@ -2406,8 +2406,8 @@ def mip_level(
         and isfinite(along_y.y * down)
     ):
         return anisotropic_footprint(along_x, along_y, width, height, 1).level
-    var in_x = _length(along_x.x * across, along_x.y * down)
-    var in_y = _length(along_y.x * across, along_y.y * down)
+    var in_x = length2(along_x.x * across, along_x.y * down)
+    var in_y = length2(along_y.x * across, along_y.y * down)
     if not isfinite(in_x) or not isfinite(in_y):
         return anisotropic_footprint(along_x, along_y, width, height, 1).level
     var longest = in_x
@@ -2416,11 +2416,6 @@ def mip_level(
     if longest <= 0:
         return 0
     return log2(longest)
-
-
-def _length(x: Float32, y: Float32) -> Float32:
-    """Return the length of a two-component vector."""
-    return length2(x, y)
 
 
 def data_color(r: Float32, g: Float32, b: Float32, a: Float32) -> FloatColor:

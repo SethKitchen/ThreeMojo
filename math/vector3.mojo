@@ -748,6 +748,22 @@ def component_max(a: Vector3, b: Vector3) -> Vector3:
     return Vector3(max(a.x, b.x), max(a.y, b.y), max(a.z, b.z))
 
 
+def radians_between(a: Vector3, b: Vector3) -> Float32:
+    """Return the angle between two vectors, in radians.
+
+    Args:
+        a: One vector.
+        b: The other.
+
+    Returns:
+        From zero to pi. A quarter turn if either vector has no length.
+
+    Raises:
+        Error: Never.
+    """
+    return a.angle_to(b).to(RADIAN)
+
+
 def reflect_vector(incident: Vector3, normal: Vector3) -> Vector3:
     """Return `incident` reflected by a unit `normal`.
 

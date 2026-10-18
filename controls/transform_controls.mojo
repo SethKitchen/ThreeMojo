@@ -87,7 +87,7 @@ from math.quaternion import Quaternion
 from math.ray import Ray
 from math.utils import js_round
 from math.vector2 import Vector2
-from math.vector3 import Vector3
+from math.vector3 import Vector3, radians_between
 from render.framebuffer import Color, FloatColor
 from std.math import acos, atan2, cos, inf, pi, sin, sqrt
 from units.si import Angle, Length, METER, RADIAN
@@ -1030,7 +1030,7 @@ struct TransformControls(Copyable, Movable):
                 angle = offset.dot(across) * speed
         if self.axis == HANDLE_E or in_plane:
             axis = eye
-            angle = _angle_between(self._point_end, self._point_start)
+            angle = radians_between(self._point_end, self._point_start)
             var start = self._point_start
             var end = self._point_end
             start.normalize()
@@ -1466,19 +1466,6 @@ def _ratio(numerator: Float32, denominator: Float32) -> Float32:
         How many times longer.
     """
     return numerator / denominator if denominator != 0 else 1
-
-
-def _angle_between(a: Vector3, b: Vector3) -> Float32:
-    """Return the angle between two directions, three.js's `angleTo`.
-
-    Args:
-        a: One direction.
-        b: The other.
-
-    Returns:
-        The angle in radians, or a quarter turn when either has no length.
-    """
-    return a.angle_to(b).to(RADIAN)
 
 
 def _baked(
