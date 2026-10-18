@@ -62,7 +62,6 @@ culled by where its square would be with the attenuation on. Set
 from core.object3d import NodeId
 from materials.material import MaterialId
 from math.vector2 import Vector2
-from std.math import isfinite
 
 # The bounding sphere of the unit square, three.js's `Sprite` geometry
 # bound: half the square's diagonal.
@@ -113,7 +112,7 @@ struct Sprite(ImplicitlyCopyable):
             raise Error("A sprite must name a scene node")
         if material.value < 0:
             raise Error("A sprite must name a material")
-        if not isfinite(center.x) or not isfinite(center.y):
+        if not center.is_finite():
             raise Error("A sprite's center must be finite")
         self.material = material
         self.node = node

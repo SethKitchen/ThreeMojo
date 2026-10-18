@@ -25,6 +25,7 @@ from std.math import (
     copysign,
     cos,
     floor,
+    isfinite,
     pi,
     sin,
     trunc,
@@ -61,6 +62,14 @@ struct Vector2(Equatable, ImplicitlyCopyable, PolylineVertex):
     def length(self) -> Float32:
         """Return the Euclidean length of the vector."""
         return length2(self.x, self.y)
+
+    def is_finite(self) -> Bool:
+        """Return True if every component is finite.
+
+        Returns:
+            True when `x` and `y` are both finite.
+        """
+        return isfinite(self.x) and isfinite(self.y)
 
     def add(mut self, other: Self):
         """Add `other` into `self`, component-wise."""

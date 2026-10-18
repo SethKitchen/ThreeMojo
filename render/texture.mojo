@@ -1823,11 +1823,7 @@ struct Texture(Movable):
             The color found there, or opaque white if the texture is blank.
         """
         if explicit:
-            if (
-                not isfinite(footprint.level)
-                or not isfinite(footprint.step.x)
-                or not isfinite(footprint.step.y)
-            ):
+            if not isfinite(footprint.level) or not footprint.step.is_finite():
                 return TRANSPARENT_BLACK
         if footprint.taps == 1:
             if explicit:
@@ -1919,14 +1915,7 @@ def texture_grad_finite(
     Returns:
         Whether all six components are finite.
     """
-    return (
-        isfinite(u)
-        and isfinite(v)
-        and isfinite(dx.x)
-        and isfinite(dx.y)
-        and isfinite(dy.x)
-        and isfinite(dy.y)
-    )
+    return isfinite(u) and isfinite(v) and dx.is_finite() and dy.is_finite()
 
 
 def gradient_sample_coordinate(value: Float32, mode: Wrap) -> Float32:
@@ -1992,7 +1981,7 @@ struct Footprint(ImplicitlyCopyable):
             )
         if not isfinite(self.level):
             raise Error("A footprint's level must be finite")
-        if not isfinite(self.step.x) or not isfinite(self.step.y):
+        if not self.step.is_finite():
             raise Error("A footprint's step must be finite")
 
 

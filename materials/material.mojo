@@ -2151,7 +2151,7 @@ struct Material(ImplicitlyCopyable):
                 "A material's specular or clearcoat map id cannot be negative"
             )
         var coat_scale = clearcoat_normal_scale
-        if not isfinite(coat_scale.x) or not isfinite(coat_scale.y):
+        if not coat_scale.is_finite():
             raise Error("A clearcoat normal scale must be finite")
         var coat_scaled = coat_scale.x != 1 or coat_scale.y != 1
         if clearcoat_normal_map == NO_TEXTURE and coat_scaled:
@@ -2256,7 +2256,7 @@ struct Material(ImplicitlyCopyable):
             raise Error("A material's normal map id cannot be negative")
         if bump_map.value < 0 and bump_map != NO_TEXTURE:
             raise Error("A material's bump map id cannot be negative")
-        if not isfinite(normal_scale.x) or not isfinite(normal_scale.y):
+        if not normal_scale.is_finite():
             raise Error("A normal scale must be finite")
         if not isfinite(bump_scale):
             raise Error("A bump scale must be finite")

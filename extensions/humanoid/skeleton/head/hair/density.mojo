@@ -30,7 +30,7 @@ comptime MAX_HAIR_DENSITY_RESOLUTION = 64
 
 def _checked_density_point(point: Vector3) raises -> Vector3:
     """Return the unchanged point after checking all three coordinates."""
-    if not isfinite(point.x) or not isfinite(point.y) or not isfinite(point.z):
+    if not point.is_finite():
         raise Error("Hair density needs finite positions")
     return point
 
@@ -200,17 +200,9 @@ struct HairDensity(Movable):
             Error: If the point or direction is not finite, or the current
                 resolution or diameter is outside its domain.
         """
-        if (
-            not isfinite(point.x)
-            or not isfinite(point.y)
-            or not isfinite(point.z)
-        ):
+        if not point.is_finite():
             raise Error("Hair optical depth needs a finite point")
-        if (
-            not isfinite(direction.x)
-            or not isfinite(direction.y)
-            or not isfinite(direction.z)
-        ):
+        if not direction.is_finite():
             raise Error("Hair optical depth needs a finite light direction")
         self.validate()
         if not self.populated or self._slot(point) < 0:
