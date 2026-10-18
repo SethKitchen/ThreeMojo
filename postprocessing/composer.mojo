@@ -52,6 +52,7 @@ from cameras.camera import Camera
 from core.assets import Assets
 from core.layers import Layers
 from core.scene import Scene
+from math.norm import squared_length2
 from math.smoothstep import smoothstep
 from math.utils import SeededRandom
 from math.vector2 import Vector2
@@ -4907,7 +4908,7 @@ def vignette_pixel(
     var base = color.unpremultiplied()
     var u = (u_of(x, width) - 0.5) * offset
     var v = (v_of(y, height) - 0.5) * offset
-    var mixed = mix(base, edge, u * u + v * v)
+    var mixed = mix(base, edge, squared_length2[DType.float32](u, v))
     return FloatColor(mixed.r, mixed.g, mixed.b, base.a).premultiplied()
 
 

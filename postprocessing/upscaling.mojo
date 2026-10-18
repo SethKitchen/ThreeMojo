@@ -32,6 +32,7 @@ size, as a scene pass with `setResolutionScale` hands it over, and writes
 it at the frame's size.
 """
 
+from math.norm import squared_length2
 from postprocessing.display_nodes import scaled_size
 from postprocessing.sampling import LightView, u_of, v_of
 from render.framebuffer import FloatColor
@@ -313,7 +314,7 @@ def easu_weight(
     var vy = -offset_x * dir_y + offset_y * dir_x
     var sx = vx * len2_x
     var sy = vy * len2_y
-    var d2 = min(sx * sx + sy * sy, clp)
+    var d2 = min(squared_length2[DType.float32](sx, sy), clp)
     var w_b = d2 * Float32(2.0 / 5.0) - 1
     var w_a = d2 * lob - 1
     return (
@@ -383,7 +384,7 @@ def easu_pixel(
     edge.add(fx * fy, gl, jl, kl, ll, ol)
     var dir_x = edge.dir_x
     var dir_y = edge.dir_y
-    var dir_sq = dir_x * dir_x + dir_y * dir_y
+    var dir_sq = squared_length2[DType.float32](dir_x, dir_y)
     var flat = dir_sq < Float32(1.0 / 32768.0)
     var r_dir_len = 1 / sqrt(max(dir_sq, Float32(1.0 / 32768.0)))
     if flat:
@@ -393,7 +394,9 @@ def easu_pixel(
         dir_y *= r_dir_len
     var length = edge.length * 0.5
     length *= length
-    var stretch = (dir_x * dir_x + dir_y * dir_y) / max(abs(dir_x), abs(dir_y))
+    var stretch = squared_length2[DType.float32](dir_x, dir_y) / max(
+        abs(dir_x), abs(dir_y)
+    )
     var len2_x = 1 + (stretch - 1) * length
     var len2_y = 1 - length * 0.5
     var lob = 0.5 + Float32(1.0 / 4.0 - 0.04 - 0.5) * length

@@ -50,7 +50,7 @@ from std.math import isfinite
 
 from math.norm import normalized_difference2, _ordinary_product
 
-from math.norm import length2
+from math.norm import length2, squared_length2
 
 from math.arc_tangent import atan2_float32
 from math.matrix4 import Matrix4
@@ -1168,7 +1168,7 @@ def focus_pixel(
     var add = org
     var vin_x = (u - 0.5) * 1.4
     var vin_y = (v - 0.5) * 1.4
-    var sample_dist = (vin_x * vin_x + vin_y * vin_y) * 2
+    var sample_dist = squared_length2[DType.float32](vin_x, vin_y) * 2
     var f = (
         (settings.wave_factor * 100 + sample_dist)
         * settings.sample_distance

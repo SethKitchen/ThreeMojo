@@ -42,6 +42,7 @@ from core.ordinal import ordinal_valid
 
 from render.color_math import floor_channels
 from math.matrix4 import Matrix4
+from math.norm import squared_length2
 from math.smoothstep import smoothstep
 from math.vector2 import Vector2
 from math.vector3 import Vector3
@@ -657,7 +658,8 @@ def temporal_reproject_pixel(
     var off_y = -moved.y * 0.5 * Float32(h)
     var motion = min(
         max(
-            sqrt(off_x * off_x + off_y * off_y) / settings.max_velocity_length,
+            sqrt(squared_length2[DType.float32](off_x, off_y))
+            / settings.max_velocity_length,
             0,
         ),
         1,

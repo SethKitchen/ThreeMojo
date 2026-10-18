@@ -32,7 +32,7 @@ See `docs/wiki/Norm-consumers.md` for the changed operations, retained
 limits, and explicit zero and nonfinite rules.
 """
 
-from math.norm import length2
+from math.norm import length2, squared_length2
 
 from postprocessing.display_nodes import (
     exp_f,
@@ -226,7 +226,7 @@ def barrel_uv(
     """
     var cx = (u - 0.5) * 2
     var cy = (v - 0.5) * 2
-    var r2 = cx * cx + cy * cy
+    var r2 = squared_length2[DType.float32](cx, cy)
     var distortion = 1 - r2 * curvature
     var corner = 1 - curvature * 2
     return (
@@ -863,7 +863,7 @@ def depth_aware_blend_pixel(
     push_y /= count
     var su = u
     var sv = v
-    if sqrt(push_x * push_x + push_y * push_y) > 0:
+    if sqrt(squared_length2[DType.float32](push_x, push_y)) > 0:
         su = u + settings.edge_strength * push_x / Float32(w)
         sv = v + settings.edge_strength * push_y / Float32(h)
     var choice = sample_down(blend, su, sv).r
