@@ -22,6 +22,7 @@ Run it with `mojo run -I . bench/physics_ccd_box_bench.mojo`.
 from extensions.physics.body import BodyId, DYNAMIC, STATIC, RigidBody
 from extensions.physics.ccd import SPHERE_MESH_CCD
 from extensions.physics.shape import PhysicsMaterial, Shape
+from bench.contacts import bodies_missing_contact
 from extensions.physics.world import CollisionEvent, PhysicsWorld
 from math.matrix3 import Matrix3
 from math.quaternion import Quaternion
@@ -55,19 +56,6 @@ def _lowest(body: RigidBody) -> Float64:
     return Float64(body.position.z) - Float64(_HALF.z)
 
 
-def _missing(events: List[CollisionEvent], bodies: Int) -> Int:
-    """Return how many boxes 1 to `bodies` no event pairs with the ground."""
-    var touched = List[Bool](length=bodies + 1, fill=False)
-    for event in events:
-        if event.other.value == 0 and event.body.value > 0:
-            touched[event.body.value] = True
-    var missing = 0
-    for i in range(1, bodies + 1):
-        if not touched[i]:
-            missing += 1
-    return missing
-
-
 def _box(at: Vector3) raises -> RigidBody:
     var body = RigidBody(
         DYNAMIC,
@@ -96,7 +84,7 @@ def _controls() raises:
     var events = List[CollisionEvent]()
     for _ in range(3):
         events.append(CollisionEvent(BodyId(1), BodyId(0), Vector3(0, 0, 1)))
-    assert_equal(_missing(events, 2), 1)
+    assert_equal(bodies_missing_contact(events, 2), 1)
 
 
 def _world(side: Int, boxes: Int, continuous: Bool) raises -> PhysicsWorld:
@@ -151,7 +139,7 @@ def _run(name: String, side: Int, boxes: Int) raises:
             for i in range(1, len(world.bodies)):
                 least = min(least, _lowest(world.bodies[i]))
             if continuous:
-                assert_equal(_missing(world.events, boxes), 0)
+                assert_equal(bodies_missing_contact(world.events, boxes), 0)
         if continuous:
             assert_true(least > -_TOLERANCE, String(least))
         print(
