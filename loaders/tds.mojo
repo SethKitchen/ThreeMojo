@@ -134,14 +134,17 @@ struct _Chunk(Copyable, Movable):
         return self.position >= self.end
 
 
-struct _Reader:
-    """Reads chunks and values from the bytes of a file."""
+struct _Reader[origin: Origin[mut=False]]:
+    """Reads chunks and values from the bytes of a file.
 
-    var bytes: List[UInt8]
+    The caller keeps the bytes for the read.
+    """
 
-    def __init__(out self, var bytes: List[UInt8]):
-        """Hold the file."""
-        self.bytes = bytes^
+    var bytes: Span[UInt8, Self.origin]
+
+    def __init__(out self, bytes: Span[UInt8, Self.origin]):
+        """Hold the file. The caller keeps it."""
+        self.bytes = bytes
 
     def need(self, at: Int, size: Int) raises:
         """Refuse a read that runs past the end of the file."""
@@ -358,16 +361,21 @@ struct TdsModel(Movable):
         self.mesh_count = 0
 
 
-struct _Loader:
-    """Walks the chunks, three.js's `TDSLoader` methods."""
+struct _Loader[origin: Origin[mut=False]]:
+    """Walks the chunks, three.js's `TDSLoader` methods.
 
-    var r: _Reader
+    The caller keeps the bytes for the read.
+    """
+
+    var r: _Reader[Self.origin]
     var model: TdsModel
     var resource_path: String
 
-    def __init__(out self, var bytes: List[UInt8], resource_path: String):
-        """Start reading a file."""
-        self.r = _Reader(bytes^)
+    def __init__(
+        out self, bytes: Span[UInt8, Self.origin], resource_path: String
+    ):
+        """Start reading a file. The caller keeps the bytes."""
+        self.r = _Reader(bytes)
         self.model = TdsModel()
         self.resource_path = resource_path
 
@@ -703,7 +711,7 @@ def parse_3ds(
             before its file, or a map's file is not an image
             `decode_image` reads.
     """
-    var loader = _Loader(bytes.copy(), resource_path)
+    var loader = _Loader(Span(bytes), resource_path)
     var group = Object3D()
     group.parent = parent
     loader.model.root = scene.add(group^)
