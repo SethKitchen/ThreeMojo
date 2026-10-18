@@ -2467,6 +2467,49 @@ def _group_clip_sets(
     any_of.extend(Span(_planes_in_view(groups.intersection_planes, view)))
 
 
+def _clip_draw(
+    material: Material,
+    scene: Scene,
+    node: NodeId,
+    view: Matrix4,
+    sides: List[Plane],
+    global_planes: List[Plane],
+    local: Bool,
+    casters_only: Bool,
+    mut cut: List[Plane],
+    mut any_of: List[Plane],
+) raises:
+    """Set the planes that cut one draw, then add its clipping groups.
+
+    Args:
+        material: The draw's material.
+        scene: The scene, which holds the groups.
+        node: The draw's node.
+        view: The world-to-camera transform.
+        sides: The camera's side planes, in camera space.
+        global_planes: The renderer's planes, already in camera space.
+        local: Whether the renderer lets a material's planes cut.
+        casters_only: Whether this is a light's view for a shadow map.
+        cut: Set to the planes that each cut, then the groups' union.
+        any_of: Set to the planes of which one is enough, then the
+            groups' intersection.
+
+    Raises:
+        Error: Everything `_clip_sets` and `_group_clip_sets` raise.
+    """
+    _clip_sets(
+        material,
+        view,
+        sides,
+        global_planes,
+        local,
+        casters_only,
+        cut,
+        any_of,
+    )
+    _group_clip_sets(scene, node, view, casters_only, cut, any_of)
+
+
 def _planes_in_view(planes: List[Plane], view: Matrix4) raises -> List[Plane]:
     """Return world-space planes carried into camera space.
 
@@ -6723,20 +6766,14 @@ struct Renderer(Movable):
                 var wide_begin = len(corners)
                 var wide_cut = List[Plane]()
                 var wide_any = List[Plane]()
-                _clip_sets(
+                _clip_draw(
                     assets.materials.get(draws[slot].material),
+                    scene,
+                    draws[slot].node,
                     view,
                     sides,
                     global_planes,
                     self.local_clipping_enabled,
-                    casters_only,
-                    wide_cut,
-                    wide_any,
-                )
-                _group_clip_sets(
-                    scene,
-                    draws[slot].node,
-                    view,
                     casters_only,
                     wide_cut,
                     wide_any,
@@ -6781,20 +6818,14 @@ struct Renderer(Movable):
                 var begin = len(corners)
                 var sprite_cut = List[Plane]()
                 var sprite_any = List[Plane]()
-                _clip_sets(
+                _clip_draw(
                     assets.materials.get(draws[slot].material),
+                    scene,
+                    draws[slot].node,
                     view,
                     sides,
                     global_planes,
                     self.local_clipping_enabled,
-                    casters_only,
-                    sprite_cut,
-                    sprite_any,
-                )
-                _group_clip_sets(
-                    scene,
-                    draws[slot].node,
-                    view,
                     casters_only,
                     sprite_cut,
                     sprite_any,
@@ -6868,8 +6899,10 @@ struct Renderer(Movable):
                 side = BACK_SIDE
             var cut = List[Plane]()
             var any_of = List[Plane]()
-            _clip_sets(
+            _clip_draw(
                 material,
+                scene,
+                draws[slot].node,
                 view,
                 sides,
                 global_planes,
@@ -6877,9 +6910,6 @@ struct Renderer(Movable):
                 casters_only,
                 cut,
                 any_of,
-            )
-            _group_clip_sets(
-                scene, draws[slot].node, view, casters_only, cut, any_of
             )
             # Carried on every vertex of this mesh, so one flat triangle list
             # can hold a scene whose meshes use different images.
@@ -7586,8 +7616,10 @@ struct Renderer(Movable):
             var shown = _shown_of(material)
             var cut = List[Plane]()
             var any_of = List[Plane]()
-            _clip_sets(
+            _clip_draw(
                 material,
+                scene,
+                line.node,
                 view,
                 sides,
                 global_planes,
@@ -7596,7 +7628,6 @@ struct Renderer(Movable):
                 cut,
                 any_of,
             )
-            _group_clip_sets(scene, line.node, view, casters_only, cut, any_of)
             # A line is unlit and untextured, and these refuse the
             # alternatives rather than carrying them and drawing neither.
             # See the module docstring of `objects.line`.
@@ -8070,8 +8101,10 @@ struct Renderer(Movable):
             var shown = _shown_of(material)
             var cut = List[Plane]()
             var any_of = List[Plane]()
-            _clip_sets(
+            _clip_draw(
                 material,
+                scene,
+                points.node,
                 view,
                 sides,
                 global_planes,
@@ -8079,9 +8112,6 @@ struct Renderer(Movable):
                 casters_only,
                 cut,
                 any_of,
-            )
-            _group_clip_sets(
-                scene, points.node, view, casters_only, cut, any_of
             )
             # A point is unlit, and refuses a lit kind rather than being
             # shaded by a normal it does not have. See `objects.points`.
