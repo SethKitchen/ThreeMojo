@@ -37,7 +37,7 @@ from animation.keyframe_track import POSITION, QUATERNION, KeyframeTrack
 from core.object3d import NO_PARENT, NodeId, Object3D
 from core.scene import Scene
 from loaders.js_number import js_parse_float, js_parse_int
-from loaders.js_text import text_lines
+from loaders.js_text import split_fields, text_lines
 from math.matrix4 import Matrix4
 from math.vector3 import Vector3
 from objects.skeleton import Bone, Skeleton
@@ -204,10 +204,7 @@ struct _Lines:
         Raises:
             Error: If the file ends first.
         """
-        var out = List[String]()
-        for token in self.next().split():  # pragma: no branch
-            out.append(String(token))
-        return out^
+        return split_fields(self.next())
 
 
 def _number(text: String, what: String) raises -> Float64:

@@ -51,6 +51,7 @@ from core.buffer_geometry import (
     MaterialIndex,
 )
 from loaders.bytes import bytes_match
+from loaders.js_text import split_fields
 from loaders.text_number import file_line, read_finite_float32
 from render.srgb import srgb_to_linear
 from math.finite import require_finite
@@ -283,8 +284,8 @@ struct _Words:
         # always runs.
         for raw in text.split("\n"):  # pragma: no branch
             line += 1
-            for word in String(raw).split():
-                self.words.append(String(word))
+            for word in split_fields(String(raw)):
+                self.words.append(word)
                 self.lines.append(line)
 
     def done(self) -> Bool:

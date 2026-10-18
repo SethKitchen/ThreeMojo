@@ -37,7 +37,7 @@ largest number is not above zero, which three.js divides by zero.
 
 from loaders.bytes import ascii_digit, js_float_byte_at
 from loaders.js_number import js_string_to_number
-from loaders.js_text import text_lines
+from loaders.js_text import split_fields, text_lines
 from render.srgb import LINEAR
 from render.texture import (
     BILINEAR,
@@ -186,8 +186,8 @@ def parse_lut_3dl(
     # A split gives at least one line: these loops always run.
     for line in lines:  # pragma: no branch
         if _is_grid(line):
-            for field in line.split():
-                grid.append(_number(String(field)))
+            for field in split_fields(line):
+                grid.append(_number(field))
             if len(grid) == 0:
                 # A line of spaces: `"".split( /\s+/ )` is one empty
                 # string, and `Number( "" )` is zero.

@@ -70,6 +70,7 @@ from loaders.bytes import (
     js_float_byte_at,
     space_tab_line,
 )
+from loaders.js_text import split_fields
 from loaders.svg_path import (
     SvgMatrix,
     SvgShapePath,
@@ -969,8 +970,8 @@ struct _Parser(Movable):
         var style = parent.copy()
         var sheet = CssRule(String())
         if self.doc.has_attribute(node, "class"):
-            for cls in self.doc.attribute(node, "class").split():
-                self._merge(sheet, "." + String(cls))
+            for cls in split_fields(self.doc.attribute(node, "class")):
+                self._merge(sheet, "." + cls)
         if self.doc.has_attribute(node, "id"):
             self._merge(sheet, "#" + self.doc.attribute(node, "id"))
         var inline = parse_css_declarations(self.doc.attribute(node, "style"))
