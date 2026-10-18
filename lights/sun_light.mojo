@@ -54,13 +54,18 @@ from cameras.camera import Camera
 from core.object3d import NodeId, Object3D
 from core.scene import Scene
 from lights.csm import CsmFrustum
-from lights.light import DIRECTIONAL, Light, directional_light
+from lights.light import (
+    DIRECTIONAL,
+    Light,
+    directional_light,
+    require_light_intensity,
+)
 from lights.shadow import LightShadow, SUN_BLEND, ShadowCascade
 from math.matrix4 import Matrix4
 from math.utils import mix_delta
 from math.vector3 import Vector3
 from render.framebuffer import Color
-from std.math import ceil, floor, isfinite, log, exp, max, min, sqrt
+from std.math import ceil, floor, log, exp, max, min, sqrt
 from units.si import Length, METER
 
 # How many cascades a sun draws, three.js's `_cascadeCount`.
@@ -347,8 +352,7 @@ struct SunLight(Movable):
         Raises:
             Error: If `Light.validate` refuses the intensity.
         """
-        if not isfinite(intensity) or intensity < 0:
-            raise Error("A light's intensity must be finite and not negative")
+        require_light_intensity(intensity)
         self.color = color
         self.intensity = intensity
         self.cast_shadow = False

@@ -34,7 +34,14 @@ and C of that model for the 21st day of each month.
 
 from std.math import cos, exp, isfinite, pi
 from std.pathlib import Path
-from extensions.energy.solar import SunPosition, day_of_year, sun_position
+from extensions.energy.solar import (
+    SunPosition,
+    day_of_year,
+    require_latitude,
+    require_longitude,
+    require_month,
+    sun_position,
+)
 from units.si import (
     Angle64,
     DEGREE,
@@ -97,10 +104,8 @@ struct WeatherLocation(Copyable, Movable):
         var lat = self.latitude.to(DEGREE64)
         var lon = self.longitude.to(DEGREE64)
         var zone = self.time_zone.to(HOUR)
-        if not (lat >= -90 and lat <= 90):
-            raise Error("A latitude must be from -90 to 90 degrees")
-        if not (lon >= -180 and lon <= 180):
-            raise Error("A longitude must be from -180 to 180 degrees")
+        require_latitude(lat)
+        require_longitude(lon)
         if not (zone >= -12 and zone <= 14):
             raise Error("A time zone must be from -12 to 14 hours")
         if not isfinite(self.elevation.to(METER)):
@@ -364,8 +369,7 @@ def ashrae_clear_sky(
         Error: If the month is not 1 to 12 or the clearness is not over
             zero and up to 1.5.
     """
-    if month < 1 or month > 12:
-        raise Error("A month must be 1 to 12")
+    require_month(month)
     _check_clearness(clearness)
     var zero = HeatFlux64(0)
     if not sun.is_up():

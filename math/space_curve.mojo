@@ -47,7 +47,11 @@ as three.js does for its `CatmullRomCurve3` and the two Bezier curves.
 """
 
 from math.cross import wide_cross, wide_dot
-from math.curve_checks import check_curve_parameter, curve_sample_count
+from math.curve_checks import (
+    check_curve_parameter,
+    curve_sample_count,
+    require_length_table,
+)
 from math.utils import clamp
 from math.curve3 import Curve3, FrenetFrames
 from math.vector3 import Vector3
@@ -298,8 +302,7 @@ def u_to_t(lengths: List[Float64], u: Float64) raises -> Float64:
             fewer than two entries.
     """
     check_curve_parameter(u)
-    if len(lengths) < 2:
-        raise Error("A curve length table needs at least two entries")
+    require_length_table(len(lengths))
     var count = len(lengths)
     var target = u * lengths[count - 1]
     var low = 0

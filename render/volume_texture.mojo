@@ -59,6 +59,7 @@ from render.texture import (
     TexelType,
     Wrap,
     mix_straight,
+    require_float_linear,
     wrap_index,
 )
 from std.math import floor, isfinite
@@ -405,8 +406,7 @@ def _check_modes(
             "A volume texture needs a color space it can decode: SRGB or LINEAR"
         )
     image.validate()
-    if image.texel_type == FLOAT_TYPE and space != LINEAR:
-        raise Error("A float texture holds linear light: it must be LINEAR")
+    require_float_linear(image.texel_type, space)
 
 
 struct Data3DTexture(Movable, VolumeSampler, VolumeTexels):

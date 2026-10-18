@@ -31,9 +31,11 @@ the wrong sign, and repeats until nothing changes.
 The simulation is deterministic: it has no random input and no thread.
 """
 
-from std.math import isfinite
-
-from extensions.energy.conduction import FaceCondition, LayeredWall
+from extensions.energy.conduction import (
+    FaceCondition,
+    LayeredWall,
+    require_fourier,
+)
 from extensions.energy.ids import EXTERIOR, GROUND, INTERZONE, ZoneId
 from extensions.energy.solar import (
     SurfaceOrientation,
@@ -101,8 +103,7 @@ struct SimulationOptions(ImplicitlyCopyable):
         """
         if self.substeps < 1 or self.substeps > 60:
             raise Error("Substeps must be 1 to 60")
-        if not (self.fourier > 0 and isfinite(self.fourier)):
-            raise Error("A Fourier number must be positive and finite")
+        require_fourier(self.fourier)
         if not (
             self.ground_temperature.is_valid()
             and self.initial_temperature.is_valid()

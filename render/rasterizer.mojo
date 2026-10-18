@@ -55,6 +55,8 @@ from materials.material import (
     VOLUME,
     DEFAULT_STEPS,
     check_steps,
+    require_dash_size,
+    require_gap_size,
     LAMBERT,
     MAX_IOR,
     MIN_IOR,
@@ -6168,10 +6170,8 @@ def check_line_state(a: RasterVertex, b: RasterVertex) raises:
         raise Error("A line's ends must agree about the node program")
     # The first end is checked before the two are compared: a dash that
     # is not a number agrees with nothing, itself included.
-    if not isfinite(a.dash_size) or a.dash_size < 0:
-        raise Error("A dash size cannot be negative")
-    if not isfinite(a.gap_size) or a.gap_size < 0:
-        raise Error("A gap size cannot be negative")
+    require_dash_size(a.dash_size)
+    require_gap_size(a.gap_size)
     if a.dash_size != b.dash_size or a.gap_size != b.gap_size:
         raise Error("A line's ends must agree about the dashes")
     if a.state != b.state:

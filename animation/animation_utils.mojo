@@ -64,10 +64,13 @@ keeps one key of every track, or none, is refused. three.js returns a
 clip of no length and nothing can play it.
 """
 
-from animation.animation_clip import ADDITIVE_BLEND_MODE, AnimationClip
+from animation.animation_clip import (
+    ADDITIVE_BLEND_MODE,
+    AnimationClip,
+    require_frame_rate,
+)
 from animation.keyframe_track import CUBIC_SPLINE, KeyframeTrack, QUATERNION
 from math.quaternion import Quaternion
-from std.math import isfinite
 from units.si import Duration, SECOND
 
 
@@ -83,8 +86,7 @@ def checked_fps(fps: Float32) raises -> Float32:
     Raises:
         Error: If the rate is not a number or is not above zero.
     """
-    if not isfinite(fps) or fps <= 0:
-        raise Error("A frame rate must be a number above zero")
+    require_frame_rate(fps)
     return fps
 
 

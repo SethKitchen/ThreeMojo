@@ -3,7 +3,7 @@
 # Noncommercial use is free; commercial use requires a paid license.
 # See LICENSE, LICENSE-COMMERCIAL.md and THIRD-PARTY-NOTICES.md.
 
-"""Shared kind, count, and parameter boundaries for curves."""
+"""Shared kind, count, length-table, and parameter boundaries for curves."""
 
 from math.polyline import PolylineVertex
 
@@ -22,6 +22,22 @@ def require_curve_kind(valid: Bool) raises:
     """
     if not valid:
         raise Error("A curve needs a kind that exists")
+
+
+def require_length_table(count: Int) raises:
+    """Refuse a curve length table with fewer than two entries.
+
+    Args:
+        count: How many entries the table has.
+
+    Returns:
+        Nothing. The call returns when the table has at least two entries.
+
+    Raises:
+        Error: If the table has fewer than two entries.
+    """
+    if count < 2:
+        raise Error("A curve length table needs at least two entries")
 
 
 def require_control_count(wanted: Int, count: Int) raises:

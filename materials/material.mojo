@@ -713,6 +713,40 @@ def check_steps(steps: Int) raises:
         raise Error("A volume's ray takes at least one step")
 
 
+def require_dash_size(size: Float32) raises:
+    """Refuse a dash length that is negative or not finite.
+
+    Args:
+        size: The dash length, in meters.
+
+    Returns:
+        Nothing. The call returns when the length is finite and not
+            negative.
+
+    Raises:
+        Error: If the length is negative or not finite.
+    """
+    if not isfinite(size) or size < 0:
+        raise Error("A dash size cannot be negative")
+
+
+def require_gap_size(size: Float32) raises:
+    """Refuse a gap length that is negative or not finite.
+
+    Args:
+        size: The gap length, in meters.
+
+    Returns:
+        Nothing. The call returns when the length is finite and not
+            negative.
+
+    Raises:
+        Error: If the length is negative or not finite.
+    """
+    if not isfinite(size) or size < 0:
+        raise Error("A gap size cannot be negative")
+
+
 @fieldwise_init
 struct MaterialKind(Equatable, ImplicitlyCopyable, Writable):
     """Whether a surface is lit, as a type rather than a bare int.
@@ -1852,10 +1886,8 @@ struct Material(ImplicitlyCopyable):
         self.transparent = transparent
         var dash = dash_size.to(METER)
         var gap = gap_size.to(METER)
-        if not isfinite(dash) or dash < 0:
-            raise Error("A dash size cannot be negative")
-        if not isfinite(gap) or gap < 0:
-            raise Error("A gap size cannot be negative")
+        require_dash_size(dash)
+        require_gap_size(gap)
         if not isfinite(dash_scale):
             raise Error("A dash scale must be finite")
         if gap > 0 and dash == 0:

@@ -92,7 +92,7 @@ from lights.light import (
 )
 from loaders.collada_animation import read_collada_animations
 from loaders.collada_id import collada_reference
-from loaders.collada_numbers import collada_floats
+from loaders.collada_numbers import collada_floats, require_positive_stride
 from loaders.model_nodes import (
     authored_color,
     decompose_onto,
@@ -1618,8 +1618,7 @@ struct _Loader(Movable):
                     stride = _ints(
                         self.document.attribute(accessor, "stride", "1")
                     )[0]
-            if stride < 1:
-                raise Error("Collada: a source's stride must be positive")
+            require_positive_stride(stride)
             sources[self.document.attribute(source, "id")] = _Source(
                 values^, stride
             )
@@ -2181,8 +2180,7 @@ struct _Loader(Movable):
                 stride = _ints(
                     self.document.attribute(accessor, "stride", "3")
                 )[0]
-        if stride < 1:
-            raise Error("Collada: a source's stride must be positive")
+        require_positive_stride(stride)
         return _Source(values^, stride)
 
     def is_bone(mut self, element: Int, mut assets: Assets) raises -> Bool:
