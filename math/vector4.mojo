@@ -24,7 +24,12 @@ thresholds and its fallback axes are three.js's.
 """
 
 from math.matrix4 import Matrix4
-from math.polyline import PolylineVertex, clamp_to_length
+from math.polyline import (
+    PolylineVertex,
+    add_scaled,
+    clamp_to_length,
+    scale_to_length,
+)
 from math.quaternion import Quaternion
 from math.vector3 import Vector3, _js_round
 from math.norm import length4, normalized4
@@ -316,7 +321,7 @@ struct Vector4(Equatable, ImplicitlyCopyable, PolylineVertex):
             other: The vector to add.
             factor: What to scale it by first.
         """
-        self = self + other * factor
+        add_scaled(self, other, factor)
 
     def length_sq(self) -> Float32:
         """Return the squared length, three.js's `lengthSq`.
@@ -342,8 +347,7 @@ struct Vector4(Equatable, ImplicitlyCopyable, PolylineVertex):
         Args:
             length: The new length.
         """
-        self.normalize()
-        self = self * length
+        scale_to_length(self, length)
 
     def lerp(mut self, other: Self, alpha: Float32):
         """Move this vector toward `other` by `alpha`, three.js's `lerp`.

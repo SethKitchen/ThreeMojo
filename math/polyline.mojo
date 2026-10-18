@@ -70,6 +70,17 @@ trait PolylineVertex(Deinitable, ImplicitlyCopyable, Movable):
         """
         ...
 
+    def __add__(self, other: Self) -> Self:
+        """Return the sum of this step and `other`.
+
+        Args:
+            other: The step to add.
+
+        Returns:
+            The sum.
+        """
+        ...
+
 
 def prefix_lengths[T: PolylineVertex](samples: List[T]) -> List[Float32]:
     """Return the distance along `samples`, starting at zero.
@@ -124,3 +135,53 @@ def clamp_to_length[
         return
     value.normalize()
     value = value * limit
+
+
+def scale_to_length[T: PolylineVertex](mut value: T, length: Float32):
+    """Scale `value` to `length`. A zero vector stays zero.
+
+    Args:
+        value: The vector, changed in place.
+        length: The new length.
+    """
+    value.normalize()
+    value = value * length
+
+
+def add_scaled[T: PolylineVertex](mut value: T, other: T, factor: Float32):
+    """Add `other` times `factor` into `value`.
+
+    Args:
+        value: The vector, changed in place.
+        other: The vector to add.
+        factor: What to scale `other` by first.
+    """
+    value = value + other * factor
+
+
+def distance_between[T: PolylineVertex](start: T, end: T) -> Float32:
+    """Return the distance from `start` to `end`.
+
+    Args:
+        start: The first point.
+        end: The other point.
+
+    Returns:
+        The Euclidean distance.
+    """
+    var step = start - end
+    return step.length()
+
+
+def distance_between_squared[T: PolylineVertex](start: T, end: T) -> Float32:
+    """Return the squared distance from `start` to `end`.
+
+    Args:
+        start: The first point.
+        end: The other point.
+
+    Returns:
+        The squared Euclidean distance.
+    """
+    var step = start - end
+    return step.length_sq()
