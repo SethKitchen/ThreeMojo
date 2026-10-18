@@ -18,7 +18,13 @@ from extensions.sdf.ids import (
 )
 from extensions.animals.parts import BODY
 from extensions.animals.kit import EyeSpec
-from extensions.animals.rig import Rig, add_sided
+from extensions.animals.rig import (
+    Rig,
+    add_axial_bones,
+    add_digitigrade_limbs,
+    add_sided,
+    add_tail_bones,
+)
 from extensions.sdf.field import SdfModel
 from extensions.sdf.vector import (
     V3,
@@ -278,33 +284,11 @@ def hoofed_bones(mut rig: Rig, tail_segs: Int, snout: Bool = False) raises:
     Raises:
         Error: If a joint is missing.
     """
-    _ = rig.add_bone("pelvis", "lumbosacral", "tailBase", "")
-    _ = rig.add_bone("spine1", "lumbosacral", "lumbarMid", "pelvis")
-    _ = rig.add_bone("spine2", "lumbarMid", "thoraxRear", "spine1")
-    _ = rig.add_bone("spine3", "thoraxRear", "chestMid", "spine2")
-    _ = rig.add_bone("chest", "chestMid", "neckBase", "spine3")
-    _ = rig.add_bone("neck1", "neckBase", "neckMid", "chest")
-    _ = rig.add_bone("neck2", "neckMid", "occiput", "neck1")
-    _ = rig.add_bone("head", "occiput", "nose", "neck2")
+    add_axial_bones(rig)
     _ = rig.add_bone("jaw", "jawHinge", "jawTip", "head")
     add_sided(rig, "ear{S}", "earBase{S}", "earTip{S}", "head")
-    add_sided(rig, "scapula{S}", "scapTop{S}", "shoulder{S}", "chest")
-    add_sided(rig, "humerus{S}", "shoulder{S}", "elbow{S}", "scapula{S}")
-    add_sided(rig, "radius{S}", "elbow{S}", "wrist{S}", "humerus{S}")
-    add_sided(rig, "metacarpus{S}", "wrist{S}", "mcp{S}", "radius{S}")
-    add_sided(rig, "fpaw{S}", "mcp{S}", "fcoffin{S}", "metacarpus{S}")
-    add_sided(rig, "femur{S}", "hip{S}", "knee{S}", "pelvis")
-    add_sided(rig, "tibia{S}", "knee{S}", "hock{S}", "femur{S}")
-    add_sided(rig, "metatarsus{S}", "hock{S}", "mtp{S}", "tibia{S}")
-    add_sided(rig, "hpaw{S}", "mtp{S}", "hcoffin{S}", "metatarsus{S}")
-    for i in range(tail_segs):
-        var parent = String("pelvis") if i == 0 else "tail" + String(i - 1)
-        _ = rig.add_bone(
-            "tail" + String(i),
-            "tail" + String(i),
-            "tail" + String(i + 1),
-            parent,
-        )
+    add_digitigrade_limbs(rig, "fcoffin{S}", "hcoffin{S}")
+    add_tail_bones(rig, tail_segs)
     if snout:
         _ = rig.add_bone("snout", "snoutBase", "nose", "head")
     add_sided(rig, "fhoof{S}", "fcoffin{S}", "ftoe{S}", "fpaw{S}")
