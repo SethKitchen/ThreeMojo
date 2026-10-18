@@ -2119,8 +2119,8 @@ struct _Exporter(Movable):
             writer.string(clip.name)
         else:
             writer.string("clip_" + String(len(self.animations)))
-        _write_array(writer, "samplers", samplers)
-        _write_array(writer, "channels", channels)
+        writer.raw_array("samplers", samplers)
+        writer.raw_array("channels", channels)
         writer.end_object()
         self.animations.append(writer.finish())
 
@@ -2199,7 +2199,7 @@ struct _Exporter(Movable):
             writer.begin_object()
             writer.key(LIGHTS_PUNCTUAL)
             writer.begin_object()
-            _write_array(writer, "lights", self.lights)
+            writer.raw_array("lights", self.lights)
             writer.end_object()
             writer.end_object()
         writer.key("scene")
@@ -2218,17 +2218,17 @@ struct _Exporter(Movable):
             writer.raw(_with_custom(scene, ""))
         writer.end_object()
         writer.end_array()
-        _write_array(writer, "nodes", nodes)
-        _write_array(writer, "meshes", self.meshes)
-        _write_array(writer, "cameras", self.cameras)
-        _write_array(writer, "skins", self.skins)
-        _write_array(writer, "animations", self.animations)
-        _write_array(writer, "materials", self.materials)
-        _write_array(writer, "textures", self.textures)
-        _write_array(writer, "images", self.images)
-        _write_array(writer, "samplers", self.samplers)
-        _write_array(writer, "accessors", self.accessors)
-        _write_array(writer, "bufferViews", self.views)
+        writer.raw_array("nodes", nodes)
+        writer.raw_array("meshes", self.meshes)
+        writer.raw_array("cameras", self.cameras)
+        writer.raw_array("skins", self.skins)
+        writer.raw_array("animations", self.animations)
+        writer.raw_array("materials", self.materials)
+        writer.raw_array("textures", self.textures)
+        writer.raw_array("images", self.images)
+        writer.raw_array("samplers", self.samplers)
+        writer.raw_array("accessors", self.accessors)
+        writer.raw_array("bufferViews", self.views)
         if len(self.bin) > 0:
             writer.key("buffers")
             writer.begin_array()
@@ -2811,20 +2811,6 @@ def _write_integers(mut writer: JsonWriter, numbers: List[Int]) raises:
     # Every caller writes at least one number.
     for value in numbers:  # pragma: no branch
         writer.integer(value)
-    writer.end_array()
-
-
-def _write_array(
-    mut writer: JsonWriter, key: String, entries: List[String]
-) raises:
-    """Write a top-level array of JSON texts under `key`, or nothing when
-    it is empty: the specification asks for at least one entry."""
-    if len(entries) == 0:
-        return
-    writer.key(key)
-    writer.begin_array()
-    for entry in entries:  # pragma: no branch
-        writer.raw(entry)
     writer.end_array()
 
 
