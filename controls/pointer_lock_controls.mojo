@@ -55,6 +55,7 @@ from controls.input import (
 from math.euler import Euler, YXZ
 from math.vector3 import Vector3
 from std.math import pi
+from units.measure import angle_radians
 from units.si import (
     Angle,
     Duration,
@@ -101,7 +102,7 @@ struct PointerLockControls(Copyable, Movable):
         self.enabled = True
         self.is_locked = False
         self.min_polar_angle = Angle(0.0, RADIAN)
-        self.max_polar_angle = Angle(Float32(pi), RADIAN)
+        self.max_polar_angle = angle_radians(pi)
         self.pointer_speed = 1.0
         self.movement_speed = Velocity(1.0, METER_PER_SECOND)
         self.key_timeout = HOLD_TIMEOUT

@@ -96,7 +96,8 @@ from math.finite import (
     require_unit_finite,
 )
 from std.math import floor, inf, isfinite, sqrt
-from units.si import Length, METER
+from units.measure import length_meters
+from units.si import Length
 
 # The largest `Float32`, three.js's `MAX_FLOAT32`.
 comptime MAX_FLOAT32 = 3.4028234663852886e38
@@ -1506,7 +1507,7 @@ struct Sculptor(Movable):
         Returns:
             The radius, or zero when there is no hit.
         """
-        return Length(Float32(sqrt(self._world_radius2)), METER)
+        return length_meters(sqrt(self._world_radius2))
 
     def sculpt_mesh(self) -> ref[origin_of(self._sculpt_mesh)] SculptorMesh:
         """Return the welded mesh the tools change.

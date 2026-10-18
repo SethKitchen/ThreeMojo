@@ -132,7 +132,8 @@ from extensions.animals.registry import (
 from extensions.animals.rig import Pose, Rig
 from extensions.sdf.vector import V3, Rigid, length, lerp
 from std.math import cos, pow
-from units.si import DEGREE, KILOGRAM, METER, Angle, Length, Mass
+from units.measure import angle_degrees, length_meters
+from units.si import KILOGRAM, Length, Mass
 
 # The greyhound's biceps femoris share of body mass, a side.
 comptime BICEPS_FEMORIS_SHARE = 485.0 / 31800.0
@@ -762,7 +763,7 @@ struct AnimalMuscle(Copyable, Movable):
             stored_float32(unit),
             "A muscle path length must fit a positive finite SI length",
         )
-        return Length(Float32(unit), METER)
+        return length_meters(unit)
 
 
 def descends(rig: Rig, bone: Int, ancestor: Int) raises -> Bool:
@@ -884,9 +885,9 @@ def _build(
                 )
             var arch = MuscleArchitecture(
                 Mass(Float32(spec.share * m), KILOGRAM),
-                Length(Float32(fiber), METER),
-                Angle(Float32(spec.pennation_degrees), DEGREE),
-                Length(Float32(slack), METER),
+                length_meters(fiber),
+                angle_degrees(spec.pennation_degrees),
+                length_meters(slack),
                 default_tension(),
                 muscle_density(),
             )

@@ -42,6 +42,7 @@ from extensions.animals.options import (
 from extensions.animals.registry import SpeciesId, species_variants
 from std.math import isfinite
 from extensions.animals.warp import Warps, scale_warp
+from units.measure import length_meters
 from units.si import KILOGRAM, METER, Length, Mass
 
 # Canonical samples per reference length.
@@ -248,14 +249,14 @@ def calibrate(
     var published = Float64(body.reference_length.to(METER))
     # The reference landmark is analytic and independent of occupancy.
     # The fixed canonical grid only estimates mass.
-    var step = Length(Float32(published / CANON_CELLS), METER)
+    var step = length_meters(published / CANON_CELLS)
     var measured = Float64(reference_length(canon).to(METER))
     var scale = published / measured
     var target = Float64(body.male_mass.to(KILOGRAM))
     var cal = Calibration(
         scale,
         1.0,
-        Length(Float32(measured), METER),
+        length_meters(measured),
         body.reference_length,
         body.male_mass,
         body.male_mass,

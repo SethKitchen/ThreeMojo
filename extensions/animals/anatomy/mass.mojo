@@ -60,6 +60,7 @@ from math.vector3 import Vector3, vector3_from_float64
 from render.tasks import TaskGroup
 from std.math import ceil, isfinite, sqrt
 from std.sys import num_logical_cores
+from units.measure import length_meters
 from units.si import CUBIC_METER, METER, Length, Volume
 
 # Cells per block side. A block is culled and skipped as a whole.
@@ -124,12 +125,12 @@ struct BodyMass(Movable):
         self.bones = bones^
         self.step = step
         self.volume = Volume(Float32(stats[VOLUME]), CUBIC_METER)
-        self.ground = Length(Float32(stats[GROUND]), METER)
-        self.withers = Length(Float32(stats[WITHERS]), METER)
+        self.ground = length_meters(stats[GROUND])
+        self.withers = length_meters(stats[WITHERS])
         var body = max(0.0, stats[BODY_HIGH] - stats[BODY_LOW])
-        self.body_length = Length(Float32(body), METER)
+        self.body_length = length_meters(body)
         var total = max(0.0, stats[TOTAL_HIGH] - stats[TOTAL_LOW])
-        self.total_length = Length(Float32(total), METER)
+        self.total_length = length_meters(total)
 
     def reference(self, kind: ReferenceKind) raises -> Length:
         """Return a reference length of the sampled sculpt.

@@ -42,8 +42,8 @@ from extensions.physics.quantities import NEWTON_METER, Torque
 from extensions.sdf.vector import V3
 from math.finite import stored_float32, require_finite
 from std.math import cos, isfinite
+from units.measure import length_meters
 from units.si import (
-    METER,
     NEWTON,
     PASCAL,
     STANDARD_GRAVITY,
@@ -151,8 +151,8 @@ def _load(
         joint,
         Force(Float32(push), NEWTON),
         Torque(Float32(need), NEWTON_METER),
-        Length(Float32(ground), METER),
-        Length(Float32(lever), METER),
+        length_meters(ground),
+        length_meters(lever),
         advantage,
         Pressure(Float32(sigma), PASCAL),
         activation,

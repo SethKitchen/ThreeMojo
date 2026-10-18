@@ -74,7 +74,7 @@ from math.vector3 import append_float64_xyz
 from render.framebuffer import Color
 from std.math import pi, sqrt
 from std.sys import num_logical_cores
-from units.si import METER, Length
+from units.measure import length_meters
 
 # Linear tissue colors.
 comptime SKIN_COLOR = (0.62, 0.42, 0.33)
@@ -230,7 +230,7 @@ def _layer(
         ids,
         box[0],
         box[1],
-        Length(Float32(cell), METER),
+        length_meters(cell),
         workers=threads,
     )
     return _layer_geometry(model, surface, tissue, tendon)
@@ -291,7 +291,7 @@ def _skin_layer(
             ids,
             box[0],
             box[1],
-            Length(Float32(animal.cell), METER),
+            length_meters(animal.cell),
             workers=threads,
         )
         merge(surface, piece)
