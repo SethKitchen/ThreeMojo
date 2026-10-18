@@ -54,7 +54,7 @@ from math.curve_checks import (
 )
 from math.utils import clamp_unit
 from math.curve3 import Curve3, FrenetFrames
-from math.vector3 import Vector3
+from math.vector3 import Vector3, vector3_from_float64
 from math.norm import (
     length3 as scalar_length3,
     normalized3 as scalar_normalized3,
@@ -102,7 +102,7 @@ def to_vector3(p: Point3) -> Vector3:
     Returns:
         The vector.
     """
-    return Vector3(Float32(p[0]), Float32(p[1]), Float32(p[2]))
+    return vector3_from_float64(p[0], p[1], p[2])
 
 
 def dot3(a: Point3, b: Point3) -> Float64:

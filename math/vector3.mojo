@@ -398,7 +398,7 @@ struct Vector3(Equatable, ImplicitlyCopyable, PolylineVertex):
         var y = wide[1]
         var z = wide[2]
         var unit = normalized3(x, y, z)
-        self = Vector3(Float32(unit[0]), Float32(unit[1]), Float32(unit[2]))
+        self = vector3_from_float64(unit[0], unit[1], unit[2])
 
     def apply_quaternion(mut self, quaternion: Quaternion):
         """Turn this vector by a rotation, three.js's `applyQuaternion`.
@@ -448,7 +448,7 @@ struct Vector3(Equatable, ImplicitlyCopyable, PolylineVertex):
         var y = wide[1]
         var z = wide[2]
         var unit = normalized3(x, y, z)
-        self = Vector3(Float32(unit[0]), Float32(unit[1]), Float32(unit[2]))
+        self = vector3_from_float64(unit[0], unit[1], unit[2])
 
     def project(mut self, view: Matrix4, projection: Matrix4):
         """Carry this world-space point into normalized device space,
