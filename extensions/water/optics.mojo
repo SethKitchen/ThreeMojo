@@ -230,12 +230,8 @@ def refract(
     if k < 0.0:
         return Refracted(False, 0.0, 0.0, 0.0)
     var scale = eta * cosi + sqrt(k)
-    return Refracted(
-        True,
-        eta * ix - scale * nx,
-        eta * iy - scale * ny,
-        eta * iz - scale * nz,
-    )
+    var bent = Vector3(ix, iy, iz) * eta - Vector3(nx, ny, nz) * scale
+    return Refracted(True, bent.x, bent.y, bent.z)
 
 
 def refracted_sun(sun: Vector3) -> Refracted:

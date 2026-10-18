@@ -94,6 +94,19 @@ struct Point3(ImplicitlyCopyable, Writable):
         """
         return Point3(self.x / divisor, self.y / divisor, self.z / divisor)
 
+    def dot(self, other: Self) -> Float64:
+        """Return the dot product.
+
+        The products are added in x, y, z order.
+
+        Args:
+            other: The other point.
+
+        Returns:
+            The sum of the component products.
+        """
+        return self.x * other.x + self.y * other.y + self.z * other.z
+
 
 def point_of(values: List[Float32], vertex: Int) -> Point3:
     """Return one vertex of a packed list, widened to doubles.

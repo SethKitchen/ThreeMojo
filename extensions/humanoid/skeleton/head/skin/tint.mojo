@@ -390,11 +390,8 @@ def tint_head_skin(
             if z < 2:
                 color = _mix(color, f, w)
             else:
-                color = Vector3(
-                    color.x * (1 + (f.x - 1) * w),
-                    color.y * (1 + (f.y - 1) * w),
-                    color.z * (1 + (f.z - 1) * w),
-                )
+                var one = Vector3(1, 1, 1)
+                color = color * (one + (f - one) * w)
         color = _mix(color, brows.factor, brows.weight(p))
         var lash = _lash_line(lids, p)
         if lash > 0:
