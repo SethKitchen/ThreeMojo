@@ -46,7 +46,7 @@ from cameras.camera import Camera
 from core.assets import Assets
 from core.scene import Scene
 from math.matrix4 import Matrix4
-from math.vector2 import Vector2
+from math.vector2 import Vector2, append_vector2
 from math.vector3 import Vector3
 from postprocessing.antialiasing import JitteredCamera
 from postprocessing.display_nodes import luminance_of
@@ -789,8 +789,7 @@ def read_drawn_frame(
     # The size is positive, so the loop runs.
     for slot in range(count):  # pragma: no branch
         beauty.append(drawn.straight_at(slot))
-        velocities.append(drawn.velocities[slot].x)
-        velocities.append(drawn.velocities[slot].y)
+        append_vector2(velocities, drawn.velocities[slot])
 
 
 def traa_render[

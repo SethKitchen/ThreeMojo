@@ -53,7 +53,7 @@ from math.matrix_determinant import _determinant3_f32
 from math.path import Shape
 from math.polygon_area import signed_area64
 from math.sort_utils import stable_sort
-from math.vector2 import Vector2, component_max, component_min
+from math.vector2 import Vector2, append_vector2, component_max, component_min
 from math.finite import require_finite_group
 
 
@@ -582,14 +582,12 @@ def shape_geometry(
     var uvs = List[Float32]()
     for index in range(len(cut.points)):  # pragma: no branch
         var point = cut.points[index]
-        data.append(point.x)
-        data.append(point.y)
+        append_vector2(data, point)
         data.append(0)
         normals.append(0)
         normals.append(0)
         normals.append(1)
-        uvs.append(point.x)
-        uvs.append(point.y)
+        append_vector2(uvs, point)
 
     var geometry = BufferGeometry()
     indexed_surface(geometry, data^, normals^, uvs^, cut.index.copy())

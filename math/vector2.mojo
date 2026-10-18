@@ -483,3 +483,20 @@ def weighted_sum2(
         `a * weight_a + b * weight_b + c * weight_c`.
     """
     return a * weight_a + b * weight_b + c * weight_c
+
+
+def append_vector2(mut values: List[Float32], point: Vector2):
+    """Append `point`'s two components.
+
+    Args:
+        values: The list that receives x and y.
+        point: The vector.
+
+    Returns:
+        Nothing. Two numbers are appended.
+
+    Raises:
+        Error: Never.
+    """
+    values.append(point.x)
+    values.append(point.y)
