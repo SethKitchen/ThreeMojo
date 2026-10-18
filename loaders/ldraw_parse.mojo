@@ -39,7 +39,7 @@ that is not a number, and a file that is not found.
 """
 
 from math.utils import clamp
-from loaders.bytes import hex_digit_value
+from loaders.bytes import hex_digit_value, is_sign_mark, space_tab_line
 from loaders.js_number import js_parse_float
 from std.math import nan
 from std.pathlib import Path
@@ -62,10 +62,10 @@ def js_parse_int(text: String) -> Float64:
     """
     var b = text.as_bytes()
     var i = 0
-    while i < len(b) and (b[i] == 32 or b[i] == 9 or b[i] == 10 or b[i] == 13):
+    while i < len(b) and space_tab_line(b[i]):
         i += 1
     var negative = False
-    if i < len(b) and (b[i] == 43 or b[i] == 45):
+    if i < len(b) and is_sign_mark(b[i]):
         negative = b[i] == 45
         i += 1
     var radix = 10

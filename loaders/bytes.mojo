@@ -173,6 +173,36 @@ def ascii_digit_at(bytes: Span[UInt8, _], at: Int) -> Bool:
     return at < len(bytes) and ascii_digit(bytes[at])
 
 
+def is_sign_mark(byte: Int) -> Bool:
+    """Return True for `+` or `-`.
+
+    Args:
+        byte: A byte value.
+
+    Returns:
+        Whether it is a sign.
+
+    Raises:
+        Error: Never.
+    """
+    return byte == 43 or byte == 45
+
+
+def is_sign_mark(byte: UInt8) -> Bool:
+    """Return True for `+` or `-`.
+
+    Args:
+        byte: A byte value.
+
+    Returns:
+        Whether it is a sign.
+
+    Raises:
+        Error: Never.
+    """
+    return is_sign_mark(Int(byte))
+
+
 def is_exponent_mark(byte: Int) -> Bool:
     """Return True for `e` or `E`.
 

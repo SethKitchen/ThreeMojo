@@ -48,7 +48,7 @@ limits, and explicit zero and nonfinite rules.
 """
 
 from math.norm import length3
-from loaders.bytes import ascii_digit, hex_digit_value
+from loaders.bytes import ascii_digit, hex_digit_value, is_sign_mark
 from loaders.js_number import js_parse_float, js_parse_int
 from loaders.js_text import (
     is_js_space,
@@ -438,7 +438,7 @@ def _parse_int_radix(word: List[Int], radix: Int) -> Float64:
     while k < len(word) and word[k] == 0xA0:
         k += 1
     var negative = False
-    if k < len(word) and (word[k] == 43 or word[k] == 45):
+    if k < len(word) and is_sign_mark(word[k]):
         negative = word[k] == 45
         k += 1
     var hex_prefix = (

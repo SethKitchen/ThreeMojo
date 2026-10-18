@@ -27,6 +27,7 @@ from loaders.bytes import (
     ascii_space_at,
     hex_digit_value,
     is_exponent_mark,
+    is_sign_mark,
 )
 from std.math import inf, isfinite, isnan, nan
 from std.ffi import external_call
@@ -51,7 +52,7 @@ def is_decimal_text(text: String) -> Bool:
 
 def _sign_at(bytes: Span[UInt8, _], i: Int) -> Bool:
     """Return True if there is a `+` or a `-` at `i`."""
-    return i < len(bytes) and (bytes[i] == 43 or bytes[i] == 45)
+    return i < len(bytes) and is_sign_mark(bytes[i])
 
 
 def js_parse_float(text: String) -> Float64:

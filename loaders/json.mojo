@@ -34,6 +34,7 @@ from loaders.bytes import (
     bytes_match,
     hex_digit_value,
     is_exponent_mark,
+    is_sign_mark,
     space_tab_line,
 )
 from loaders.utf8 import append_utf8
@@ -880,7 +881,7 @@ struct _Parser(Movable):
             _ = self.digits()
         if is_exponent_mark(self.peek()):
             self.at += 1
-            if self.peek() == 43 or self.peek() == 45:
+            if is_sign_mark(self.peek()):
                 self.at += 1
             _ = self.digits()
         var text = List[UInt8]()
