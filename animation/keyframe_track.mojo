@@ -705,6 +705,22 @@ def material_target(
     return TrackTarget(kind, material.value, 0)
 
 
+def require_track_target(target: TrackTarget) raises:
+    """Refuse a track target whose kind or slot is not valid.
+
+    Args:
+        target: The track target.
+
+    Returns:
+        Nothing. The call returns when the kind exists and the slot fits it.
+
+    Raises:
+        Error: If the kind does not exist or the slot does not fit it.
+    """
+    if not target.is_valid():
+        raise Error("A track needs a kind that exists and fits its slot")
+
+
 def light_target(light: LightIndex, kind: TrackKind) raises -> TrackTarget:
     """Return the target for one property of one light.
 
@@ -957,8 +973,7 @@ struct KeyframeTrack(Copyable, Movable):
                 a rotation key is not of unit length, or if a flag key is
                 neither zero nor one.
         """
-        if not target.is_valid():
-            raise Error("A track needs a kind that exists and fits its slot")
+        require_track_target(target)
         var kind = target.kind
         if kind.is_string():
             raise Error("A string track takes strings, not numbers")
@@ -1095,8 +1110,7 @@ struct KeyframeTrack(Copyable, Movable):
                 number; and as the constructor that takes an interpolation
                 does, for the target, the times and the values.
         """
-        if not target.is_valid():
-            raise Error("A track needs a kind that exists and fits its slot")
+        require_track_target(target)
         if interpolation != CUBIC_SPLINE and interpolation != BEZIER:
             raise Error("A track with tangents is CUBIC_SPLINE or BEZIER")
         check_interpolation(target.kind, interpolation)
@@ -1143,8 +1157,7 @@ struct KeyframeTrack(Copyable, Movable):
                 string a key, and as the constructor that takes numbers
                 does, for the target and the times.
         """
-        if not target.is_valid():
-            raise Error("A track needs a kind that exists and fits its slot")
+        require_track_target(target)
         if not target.kind.is_string():
             raise Error("Only a string track takes strings")
         if len(strings) != len(times):

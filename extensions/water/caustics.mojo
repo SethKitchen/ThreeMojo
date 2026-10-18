@@ -13,6 +13,7 @@ arithmetic runs on a `CausticField` and on a copy in device memory.
 """
 
 from extensions.water.optics import channel_ior, refract
+from extensions.water.spectrum import require_ocean_patch
 from extensions.water.surface import SurfaceField, sample_surface
 from math.vector3 import Vector3
 from math.norm import squared_length3
@@ -113,8 +114,7 @@ struct CausticField(CausticTexels, Movable):
         """
         if n <= 0:
             raise Error("Caustic resolution must be positive")
-        if patch.value <= 0.0:
-            raise Error("Ocean patch length must be positive")
+        require_ocean_patch(patch.value)
         self.n = n
         self.patch = patch.value
         self.samples = List[Float32](length=n * n * 3, fill=0.0)

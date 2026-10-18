@@ -26,6 +26,7 @@ See Bathe and Wilson, "Large eigenvalue problems in dynamic analysis"
 section 11.6.
 """
 
+from math.finite import require_positive_tolerance
 from std.math import isfinite, sqrt
 from extensions.numerics.dense import (
     DenseMatrix,
@@ -348,8 +349,7 @@ def lowest_modes(
         raise Error("The stiffness and mass must have one size")
     if count < 1 or count > n:
         raise Error("The mode count must be from one to the matrix size")
-    if not (tolerance > 0 and isfinite(tolerance)):
-        raise Error("A tolerance must be positive and finite")
+    require_positive_tolerance(tolerance)
     if max_iterations < 1:
         raise Error("An iteration budget must be one or more")
     var factor = SkylineFactor(k, reverse_cuthill_mckee(k))

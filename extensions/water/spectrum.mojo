@@ -20,6 +20,22 @@ from std.math import cos, exp, floor, hypot, log, sin, sqrt
 from units.si import SECOND, Duration, Length
 
 
+def require_ocean_patch(length: Float32) raises:
+    """Refuse an ocean patch whose length is not positive.
+
+    Args:
+        length: The patch length, in meters.
+
+    Returns:
+        Nothing. The call returns when the length is positive.
+
+    Raises:
+        Error: If the length is not positive.
+    """
+    if length <= 0.0:
+        raise Error("Ocean patch length must be positive")
+
+
 def clearwater_patch() -> Length:
     """Return Clearwater's repeating patch size, 4.6 m.
 
@@ -121,8 +137,7 @@ def build_spectrum(
     Raises:
         Error: If the resolution, the patch or the slope is not valid.
     """
-    if patch.value <= 0.0:
-        raise Error("Ocean patch length must be positive")
+    require_ocean_patch(patch.value)
     if target_slope <= 0.0:
         raise Error("Ocean target slope must be positive")
     require_resolution(resolution)
@@ -182,8 +197,7 @@ def evolve_spectrum(
     Raises:
         Error: If `patch` is not positive, or the grid size is not valid.
     """
-    if patch.value <= 0.0:
-        raise Error("Ocean patch length must be positive")
+    require_ocean_patch(patch.value)
     var resolution = SpectrumResolution(spectrum.n)
     var out = ComplexField(resolution)
     var length = patch.value

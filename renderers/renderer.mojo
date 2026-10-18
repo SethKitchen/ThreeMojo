@@ -198,6 +198,7 @@ from objects.line import (
 )
 from objects.line_segments2 import (
     LineCoverage,
+    require_line_coverage,
     STRAND_LINE_COVERAGE,
     cap_steps,
     dash_spans,
@@ -1949,8 +1950,7 @@ def _draws(
     # opts into shadow casting; ordinary wide lines do not cast by default.
     for index in range(len(scene.wide_lines)):
         ref line = scene.wide_lines[index]
-        if not line.coverage.is_valid():
-            raise Error("A wide line needs a named coverage rule")
+        require_line_coverage(line.coverage)
         if casters_only and not line.cast_shadow:
             continue
         if not scene.shows(line.node, visible):
@@ -4177,8 +4177,7 @@ def _emit_wide_line(
             material's depth, color, stencil or offset state is refused.
     """
     var material = assets.materials.get(draw.material)
-    if not coverage.is_valid():
-        raise Error("A wide line needs a named coverage rule")
+    require_line_coverage(coverage)
     var strand = coverage == STRAND_LINE_COVERAGE
     if strand and (
         not isfinite(material.opacity)

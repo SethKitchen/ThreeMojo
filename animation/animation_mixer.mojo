@@ -289,6 +289,7 @@ from animation.animation_clip import (
 from animation.animation_object_group import AnimationObjectGroup
 from animation.keyframe_track import (
     KeyframeTrack,
+    require_track_target,
     CAMERA_FAR,
     CAMERA_FOV,
     CAMERA_NEAR,
@@ -1302,8 +1303,7 @@ def check_target(
             the list it indexes, or it drives a material and there are no
             assets, or a camera and there are no cameras.
     """
-    if not target.is_valid():
-        raise Error("A track needs a kind that exists and fits its slot")
+    require_track_target(target)
     var kind = target.kind
     var count = scene.count()
     if kind.is_camera():

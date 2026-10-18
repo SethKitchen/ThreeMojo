@@ -224,6 +224,7 @@ from render.rasterizer import (
     RasterVertex,
     ShadeMode,
     require_shade_mode,
+    require_whole_triangles,
     Triangle,
     TangentFrame,
     check_alpha_map,
@@ -10060,8 +10061,7 @@ struct GpuRenderer(Movable):
                 `programs`.
         """
         require_depth_mode(depth_mode)
-        if len(corners) % 3 != 0:
-            raise Error("Rasterizing needs whole triangles")
+        require_whole_triangles(len(corners))
         if len(lines) % 2 != 0:
             raise Error("Rasterizing needs whole segments")
         require_shade_mode(mode)

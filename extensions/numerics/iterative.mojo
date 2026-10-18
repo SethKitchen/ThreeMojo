@@ -19,9 +19,16 @@ linear systems" (1952), and Saad, "Iterative Methods for Sparse Linear
 Systems" (2nd edition, 2003), algorithm 9.1.
 """
 
-from std.math import isfinite
 from extensions.numerics.sparse import CsrMatrix
-from extensions.numerics.vector import axpy, check_finite, dot, norm, zeros
+from extensions.numerics.vector import (
+    axpy,
+    check_finite,
+    dot,
+    norm,
+    require_row_count,
+    zeros,
+)
+from math.finite import require_positive_tolerance
 
 
 @fieldwise_init
@@ -95,10 +102,8 @@ def conjugate_gradient(
             entry is not positive, or the matrix shows a non-positive
             curvature, which means it is not positive definite.
     """
-    if len(b) != a.size:
-        raise Error("The right-hand side must have one entry per row")
-    if not (tolerance > 0 and isfinite(tolerance)):
-        raise Error("A tolerance must be positive and finite")
+    require_row_count(len(b), a.size)
+    require_positive_tolerance(tolerance)
     if max_iterations < 0:
         raise Error("An iteration budget must be zero or more")
     check_finite(b)

@@ -14,6 +14,23 @@ entries keeps a finite, accurate length.
 from std.math import isfinite, sqrt
 
 
+def require_row_count(length: Int, rows: Int) raises:
+    """Refuse a right-hand side that does not match the row count.
+
+    Args:
+        length: How many entries the right-hand side has.
+        rows: How many rows the matrix has.
+
+    Returns:
+        Nothing. The call returns when the counts match.
+
+    Raises:
+        Error: If the right-hand side does not have one entry per row.
+    """
+    if length != rows:
+        raise Error("The right-hand side must have one entry per row")
+
+
 def zeros(size: Int) raises -> List[Float64]:
     """Return a vector of zeros.
 

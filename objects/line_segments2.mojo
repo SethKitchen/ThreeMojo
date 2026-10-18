@@ -80,6 +80,22 @@ comptime SOLID_LINE_COVERAGE = LineCoverage(0)
 comptime STRAND_LINE_COVERAGE = LineCoverage(1)
 
 
+def require_line_coverage(coverage: LineCoverage) raises:
+    """Refuse a wide-line coverage that is not named.
+
+    Args:
+        coverage: The coverage rule.
+
+    Returns:
+        Nothing. The call returns when the rule is named.
+
+    Raises:
+        Error: If the coverage is not named.
+    """
+    if not coverage.is_valid():
+        raise Error("A wide line needs a named coverage rule")
+
+
 struct LineSegments2(ImplicitlyCopyable):
     """A list of wide sticks at a scene node, three.js's `LineSegments2`."""
 
@@ -132,8 +148,7 @@ struct LineSegments2(ImplicitlyCopyable):
             raise Error("A wide line must name a geometry")
         if material.value < 0:
             raise Error("A wide line must name a material")
-        if not coverage.is_valid():
-            raise Error("A wide line needs a named coverage rule")
+        require_line_coverage(coverage)
         self.geometry = geometry
         self.material = material
         self.node = node
