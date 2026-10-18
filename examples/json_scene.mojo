@@ -12,6 +12,8 @@ with `write_object_json` and read with `load_object_json`. The picture
 is the scene that came back, not the one that was written.
 """
 
+from examples.output import write_example
+
 from cameras.perspective_camera import PerspectiveCamera
 from core.assets import Assets
 from core.clock import Clock
@@ -23,13 +25,11 @@ from lights.light import ambient_light, directional_light
 from loaders.object_loader import ObjectCameras, load_object_json
 from materials.material import Material
 from objects.mesh import Mesh
-from render.apng import encode
 from render.framebuffer import Color, Framebuffer
 from renderers.renderer import Renderer, available_workers
 from std.os import remove
-from std.pathlib import Path
-from std.sys import argv, stderr
-from units.si import Angle, DEGREE, Length, METER, MILLISECOND
+from std.sys import argv
+from units.si import Angle, DEGREE, Length, METER
 
 comptime DEFAULT_OUTPUT = "out/scenejson.png"
 comptime WIDTH = 240
@@ -92,12 +92,4 @@ def main() raises:
         loaded.update()
         frames.append(renderer.render(loaded, loaded_assets, camera_again))
 
-    print(
-        '{"frames_ms": ',
-        frame_clock.elapsed().to(MILLISECOND),
-        "}",
-        sep="",
-        file=stderr,
-    )
-    Path(destination).write_bytes(encode(frames, delay_ms=DELAY_MS))
-    print("Wrote", destination, "-", FRAMES, "frames")
+    write_example(frames, destination, DELAY_MS, FRAMES, frame_clock)

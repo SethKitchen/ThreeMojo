@@ -12,6 +12,8 @@ the height sets the vertex color. The ground turns one whole turn. The
 field itself stays put, so the loop has no jump.
 """
 
+from examples.output import write_example
+
 from cameras.perspective_camera import PerspectiveCamera
 from core.assets import Assets
 from core.buffer_attribute import BufferAttribute
@@ -25,12 +27,10 @@ from math.noise import SimplexNoise
 from math.utils import SeededRandom
 from math.vector3 import Vector3
 from objects.mesh import Mesh
-from render.apng import encode
 from render.framebuffer import Color, Framebuffer
 from renderers.renderer import Renderer, available_workers
-from std.pathlib import Path
-from std.sys import argv, stderr
-from units.si import DEGREE, METER, Angle, Length, MILLISECOND
+from std.sys import argv
+from units.si import DEGREE, METER, Angle, Length
 
 comptime DEFAULT_OUTPUT = "out/mathaddons.png"
 comptime WIDTH = 240
@@ -186,12 +186,4 @@ def main() raises:
     for _ in range(FRAMES):
         frames.append(frame_at(renderer, camera, assets, scene, ground, step))
 
-    print(
-        '{"frames_ms": ',
-        frame_clock.elapsed().to(MILLISECOND),
-        "}",
-        sep="",
-        file=stderr,
-    )
-    Path(destination).write_bytes(encode(frames, delay_ms=DELAY_MS))
-    print("Wrote", destination, "-", FRAMES, "frames")
+    write_example(frames, destination, DELAY_MS, FRAMES, frame_clock)

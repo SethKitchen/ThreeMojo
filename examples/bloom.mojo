@@ -12,6 +12,8 @@ the light above a threshold bleed, darkens the corners, and applies the
 renderer's tone curve once at the end.
 """
 
+from examples.output import write_example
+
 from cameras.perspective_camera import PerspectiveCamera
 from core.assets import Assets
 from core.clock import Clock
@@ -30,13 +32,11 @@ from postprocessing.composer import (
     render_pass,
     vignette_pass,
 )
-from render.apng import encode
 from render.framebuffer import Color, Framebuffer
 from render.tonemap import ACES_FILMIC_TONE_MAPPING
 from renderers.renderer import Renderer, available_workers
-from std.pathlib import Path
-from std.sys import argv, stderr
-from units.si import Angle, DEGREE, Length, METER, MILLISECOND
+from std.sys import argv
+from units.si import Angle, DEGREE, Length, METER
 
 comptime DEFAULT_OUTPUT = "out/postprocessing.png"
 comptime WIDTH = 240
@@ -155,12 +155,4 @@ def main() raises:
             )
         )
 
-    print(
-        '{"frames_ms": ',
-        frame_clock.elapsed().to(MILLISECOND),
-        "}",
-        sep="",
-        file=stderr,
-    )
-    Path(destination).write_bytes(encode(frames, delay_ms=DELAY_MS))
-    print("Wrote", destination, "-", FRAMES, "frames")
+    write_example(frames, destination, DELAY_MS, FRAMES, frame_clock)

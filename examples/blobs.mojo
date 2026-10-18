@@ -12,6 +12,8 @@ two balls, then builds the surface where the field crosses isolation.
 Each ball paints its own color onto the vertices. The surface turns.
 """
 
+from examples.output import write_example
+
 from cameras.perspective_camera import PerspectiveCamera
 from core.assets import Assets
 from core.clock import Clock
@@ -22,12 +24,10 @@ from materials.material import Material
 from math.vector3 import Vector3
 from objects.marching_cubes import MarchingCubes
 from objects.mesh import Mesh
-from render.apng import encode
 from render.framebuffer import Color, FloatColor, Framebuffer
 from renderers.renderer import Renderer, available_workers
-from std.pathlib import Path
-from std.sys import argv, stderr
-from units.si import DEGREE, METER, Angle, Length, MILLISECOND
+from std.sys import argv
+from units.si import DEGREE, METER, Angle, Length
 
 comptime DEFAULT_OUTPUT = "out/blobs.png"
 comptime WIDTH = 240
@@ -111,12 +111,4 @@ def main() raises:
     for _ in range(FRAMES):
         frames.append(frame_at(renderer, camera, assets, scene, node, step))
 
-    print(
-        '{"frames_ms": ',
-        frame_clock.elapsed().to(MILLISECOND),
-        "}",
-        sep="",
-        file=stderr,
-    )
-    Path(destination).write_bytes(encode(frames, delay_ms=DELAY_MS))
-    print("Wrote", destination, "-", FRAMES, "frames")
+    write_example(frames, destination, DELAY_MS, FRAMES, frame_clock)

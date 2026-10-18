@@ -19,6 +19,8 @@ that `Triangle.area2` already computes. A concave model, or two objects
 overlapping, needs the depth buffer, which is what `cubes.mojo` adds.
 """
 
+from examples.output import write_example
+
 from cameras.perspective_camera import PerspectiveCamera
 from core.buffer_geometry import POSITION, BufferGeometry
 from core.clock import Clock
@@ -26,12 +28,10 @@ from geometries.box import cube as cube_geometry
 from math.matrix4 import Matrix4, rotation_x, rotation_y
 from math.vector2 import Vector2
 from math.vector3 import Vector3
-from render.apng import encode
 from render.framebuffer import Color, Framebuffer
 from render.rasterizer import Triangle, rasterize
-from std.pathlib import Path
-from std.sys import argv, stderr
-from units.si import Angle, DEGREE, Length, METER, MILLISECOND
+from std.sys import argv
+from units.si import Angle, DEGREE, Length, METER
 
 comptime DEFAULT_OUTPUT = "out/cube.png"
 comptime WIDTH = 240
@@ -122,12 +122,4 @@ def main() raises:
         model.premultiply(rotation_x(Angle(20.0, DEGREE)))
         frames.append(frame_at(camera, geometry, model))
 
-    print(
-        '{"frames_ms": ',
-        frame_clock.elapsed().to(MILLISECOND),
-        "}",
-        sep="",
-        file=stderr,
-    )
-    Path(destination).write_bytes(encode(frames, delay_ms=DELAY_MS))
-    print("Wrote", destination, "-", FRAMES, "frames")
+    write_example(frames, destination, DELAY_MS, FRAMES, frame_clock)

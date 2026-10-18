@@ -12,6 +12,8 @@ and a normal attachment. The top band is that light through ACES, so a
 bright lamp keeps its color. The bottom band is the view-space normal.
 """
 
+from examples.output import write_example
+
 from cameras.perspective_camera import PerspectiveCamera
 from core.assets import Assets
 from core.clock import Clock
@@ -34,9 +36,8 @@ from render.target import (
 )
 from render.tonemap import ACES_FILMIC_TONE_MAPPING, tone_map
 from renderers.renderer import Renderer, available_workers
-from std.pathlib import Path
-from std.sys import argv, stderr
-from units.si import Angle, DEGREE, Length, METER, MILLISECOND
+from std.sys import argv
+from units.si import Angle, DEGREE, Length, METER
 
 comptime DEFAULT_OUTPUT = "out/targets.png"
 comptime WIDTH = 240
@@ -142,12 +143,4 @@ def main() raises:
         var normals = held.attachment(1)
         frames.append(show(light^, normals^))
 
-    print(
-        '{"frames_ms": ',
-        frame_clock.elapsed().to(MILLISECOND),
-        "}",
-        sep="",
-        file=stderr,
-    )
-    Path(destination).write_bytes(encode(frames, delay_ms=DELAY_MS))
-    print("Wrote", destination, "-", FRAMES, "frames")
+    write_example(frames, destination, DELAY_MS, FRAMES, frame_clock)

@@ -14,6 +14,8 @@ ring stands in front of the box. The eyes are set wide apart for a
 scene this small, so the parallax shows at this size.
 """
 
+from examples.output import write_example
+
 from cameras.array_camera import ArrayCamera
 from cameras.perspective_camera import PerspectiveCamera
 from cameras.stereo_camera import StereoCamera
@@ -27,13 +29,11 @@ from lights.light import ambient_light, directional_light
 from materials.material import Material
 from math.vector3 import Vector3
 from objects.mesh import Mesh
-from render.apng import encode
 from render.framebuffer import Color, Framebuffer
 from render.rect import Rect
 from renderers.renderer import Renderer, available_workers
-from std.pathlib import Path
-from std.sys import argv, stderr
-from units.si import Angle, DEGREE, Length, METER, MILLISECOND
+from std.sys import argv
+from units.si import Angle, DEGREE, Length, METER
 
 comptime DEFAULT_OUTPUT = "out/stereo.png"
 comptime WIDTH = 240
@@ -108,12 +108,4 @@ def main() raises:
         eyes.add(stereo.right, RIGHT)
         frames.append(renderer.render_array(scene, assets, eyes))
 
-    print(
-        '{"frames_ms": ',
-        frame_clock.elapsed().to(MILLISECOND),
-        "}",
-        sep="",
-        file=stderr,
-    )
-    Path(destination).write_bytes(encode(frames, delay_ms=DELAY_MS))
-    print("Wrote", destination, "-", FRAMES, "frames")
+    write_example(frames, destination, DELAY_MS, FRAMES, frame_clock)

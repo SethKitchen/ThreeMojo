@@ -12,6 +12,8 @@ the sine of `Renderer.time`. A `POSITION_NODE` pushes each vertex along
 its normal by the same wave. The lights still shade the sphere.
 """
 
+from examples.output import write_example
+
 from cameras.perspective_camera import PerspectiveCamera
 from core.assets import Assets
 from core.clock import Clock
@@ -23,13 +25,11 @@ from materials.material import STANDARD, Material
 from materials.nodes import COLOR_NODE, POSITION_NODE, NodeGraph
 from math.vector3 import Vector3
 from objects.mesh import Mesh
-from render.apng import encode
 from render.framebuffer import Color, Framebuffer
 from renderers.renderer import Renderer, available_workers
 from std.math import pi
-from std.pathlib import Path
-from std.sys import argv, stderr
-from units.si import DEGREE, METER, SECOND, Angle, Duration, Length, MILLISECOND
+from std.sys import argv
+from units.si import DEGREE, METER, SECOND, Angle, Duration, Length
 
 comptime DEFAULT_OUTPUT = "out/nodes.png"
 comptime WIDTH = 240
@@ -132,12 +132,4 @@ def main() raises:
             frame_at(renderer, camera, assets, scene, node, step, seconds)
         )
 
-    print(
-        '{"frames_ms": ',
-        frame_clock.elapsed().to(MILLISECOND),
-        "}",
-        sep="",
-        file=stderr,
-    )
-    Path(destination).write_bytes(encode(frames, delay_ms=DELAY_MS))
-    print("Wrote", destination, "-", FRAMES, "frames")
+    write_example(frames, destination, DELAY_MS, FRAMES, frame_clock)

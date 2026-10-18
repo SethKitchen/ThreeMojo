@@ -15,6 +15,8 @@ reflects that one, so the boxes go round in its surface as they go round
 the scene. The floor reflects the sky a little, mixed into its own gray.
 """
 
+from examples.output import write_example
+
 from cameras.cube_camera import CubeCamera
 from cameras.perspective_camera import PerspectiveCamera
 from core.assets import Assets
@@ -45,9 +47,8 @@ from render.framebuffer import Color, FloatColor, Framebuffer
 from render.srgb import SRGB
 from render.texture import BILINEAR, CLAMP, Texture
 from renderers.renderer import Renderer, available_workers
-from std.pathlib import Path
-from std.sys import argv, stderr
-from units.si import Angle, DEGREE, Length, METER, MILLISECOND
+from std.sys import argv
+from units.si import Angle, DEGREE, Length, METER
 
 comptime DEFAULT_OUTPUT = "out/mirror.png"
 comptime WIDTH = 240
@@ -201,12 +202,4 @@ def main() raises:
         scene.add_mesh(Mesh(ball, chrome, center_node))
         frames.append(renderer.render(scene, assets, camera))
 
-    print(
-        '{"frames_ms": ',
-        frame_clock.elapsed().to(MILLISECOND),
-        "}",
-        sep="",
-        file=stderr,
-    )
-    Path(destination).write_bytes(encode(frames, delay_ms=DELAY_MS))
-    print("Wrote", destination, "-", FRAMES, "frames")
+    write_example(frames, destination, DELAY_MS, FRAMES, frame_clock)

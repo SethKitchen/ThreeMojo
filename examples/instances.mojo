@@ -11,6 +11,8 @@ The copies sit on a ring. The node they share turns, so the ring turns with
 it. Nothing here is eight Mesh objects.
 """
 
+from examples.output import write_example
+
 from cameras.perspective_camera import PerspectiveCamera
 from core.assets import Assets
 from core.clock import Clock
@@ -22,13 +24,11 @@ from materials.material import Material
 from math.matrix4 import rotation_y, translation
 from math.vector3 import Vector3
 from objects.instanced_mesh import InstancedMesh
-from render.apng import encode
 from render.framebuffer import Color, Framebuffer
 from renderers.renderer import Renderer, available_workers
 from std.math import cos, pi, sin
-from std.pathlib import Path
-from std.sys import argv, stderr
-from units.si import Angle, DEGREE, Length, METER, RADIAN, MILLISECOND
+from std.sys import argv
+from units.si import Angle, DEGREE, Length, METER, RADIAN
 
 comptime DEFAULT_OUTPUT = "out/instances.png"
 comptime WIDTH = 240
@@ -112,12 +112,4 @@ def main() raises:
     for _ in range(FRAMES):
         frames.append(frame_at(renderer, camera, assets, scene, node, step))
 
-    print(
-        '{"frames_ms": ',
-        frame_clock.elapsed().to(MILLISECOND),
-        "}",
-        sep="",
-        file=stderr,
-    )
-    Path(destination).write_bytes(encode(frames, delay_ms=DELAY_MS))
-    print("Wrote", destination, "-", FRAMES, "frames")
+    write_example(frames, destination, DELAY_MS, FRAMES, frame_clock)

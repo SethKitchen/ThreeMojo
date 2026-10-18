@@ -13,6 +13,8 @@ matte surface. The right sphere is gray. Its specular color map tints
 the highlight gold or blue per texel.
 """
 
+from examples.output import write_example
+
 from cameras.perspective_camera import PerspectiveCamera
 from core.assets import Assets
 from core.clock import Clock
@@ -22,13 +24,11 @@ from geometries.sphere import sphere
 from lights.light import ambient_light, directional_light
 from materials.material import physical_material
 from objects.mesh import Mesh
-from render.apng import encode
 from render.framebuffer import Color, Framebuffer
 from render.texture import IGNORED, data_texture
 from renderers.renderer import Renderer, available_workers
-from std.pathlib import Path
-from std.sys import argv, stderr
-from units.si import DEGREE, METER, Angle, Length, MILLISECOND
+from std.sys import argv
+from units.si import DEGREE, METER, Angle, Length
 
 comptime DEFAULT_OUTPUT = "out/coats.png"
 comptime WIDTH = 320
@@ -172,12 +172,4 @@ def main() raises:
     for _ in range(FRAMES):
         frames.append(frame_at(renderer, camera, assets, scene, pivot, step))
 
-    print(
-        '{"frames_ms": ',
-        frame_clock.elapsed().to(MILLISECOND),
-        "}",
-        sep="",
-        file=stderr,
-    )
-    Path(destination).write_bytes(encode(frames, delay_ms=DELAY_MS))
-    print("Wrote", destination, "-", FRAMES, "frames")
+    write_example(frames, destination, DELAY_MS, FRAMES, frame_clock)

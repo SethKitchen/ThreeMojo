@@ -12,6 +12,8 @@ writer stores that cube as the scene's environment, and the reader
 builds its PMREM again. The picture is the ball that came back.
 """
 
+from examples.output import write_example
+
 from cameras.perspective_camera import PerspectiveCamera
 from core.assets import Assets
 from core.background import cube_background
@@ -33,9 +35,8 @@ from render.srgb import SRGB
 from render.texture import BILINEAR, CLAMP, Texture
 from renderers.renderer import Renderer, available_workers
 from std.os import remove
-from std.pathlib import Path
-from std.sys import argv, stderr
-from units.si import DEGREE, METER, Angle, Length, MILLISECOND
+from std.sys import argv
+from units.si import DEGREE, METER, Angle, Length
 
 comptime DEFAULT_OUTPUT = "out/environment.png"
 comptime WIDTH = 240
@@ -132,12 +133,4 @@ def main() raises:
         loaded.update()
         frames.append(renderer.render(loaded, loaded_assets, camera))
 
-    print(
-        '{"frames_ms": ',
-        frame_clock.elapsed().to(MILLISECOND),
-        "}",
-        sep="",
-        file=stderr,
-    )
-    Path(destination).write_bytes(encode(frames, delay_ms=DELAY_MS))
-    print("Wrote", destination, "-", FRAMES, "frames")
+    write_example(frames, destination, DELAY_MS, FRAMES, frame_clock)
