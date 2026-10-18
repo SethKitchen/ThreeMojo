@@ -185,11 +185,6 @@ def node_material_properties() -> List[String]:
     ]
 
 
-def _position(names: List[String], name: String) -> Int:
-    """Return where a name is in a list, or -1."""
-    return first_match(names, name)
-
-
 def node_json_type_of(name: String) -> NodeJsonType:
     """Return the `NodeJsonType` of a three.js class name.
 
@@ -200,7 +195,7 @@ def node_json_type_of(name: String) -> NodeJsonType:
         Its type, or `NodeJsonType(-1)`, which is not valid, for a class the
         loader does not read.
     """
-    return NodeJsonType(_position(node_json_type_names(), name))
+    return NodeJsonType(first_match(node_json_type_names(), name))
 
 
 def node_output_of(property: String) -> NodeOutput:
@@ -213,7 +208,7 @@ def node_output_of(property: String) -> NodeOutput:
         Its output, or `NodeOutput(-1)`, which is not valid, for a property
         this port has no output for.
     """
-    return NodeOutput(_position(node_material_properties(), property))
+    return NodeOutput(first_match(node_material_properties(), property))
 
 
 def plain_material_type(name: String) -> String:
@@ -417,7 +412,7 @@ struct NodeLoader(Movable):
                 "Node JSON: an attribute is a float or a vector, not a "
                 + type.name()
             )
-        var at = _position(self._attribute_names, name)
+        var at = first_match(self._attribute_names, name)
         if at >= 0:
             self._attribute_types[at] = type
             return
@@ -493,7 +488,7 @@ struct NodeLoader(Movable):
             return NodeRef(self._built[uuid])
         if uuid not in self._items:
             raise Error("Node JSON: no node has the uuid " + uuid)
-        if _position(self._open, uuid) >= 0:
+        if first_match(self._open, uuid) >= 0:
             raise Error("Node JSON: a node reads itself: " + uuid)
         self._open.append(uuid)
         var built = self._build(document, self._items[uuid], uuid)
@@ -555,7 +550,7 @@ struct NodeLoader(Movable):
             return self._input(document, item, "node")
         if type == JSON_VARYING_NODE:
             var value = self._input(document, item, "node")
-            if _position_of_int(self._leaves, value.value) >= 0:
+            if first_match(self._leaves, value.value) >= 0:
                 return value
             return self.graph.varying(value)
         if type == JSON_CONST_NODE:
@@ -705,7 +700,7 @@ struct NodeLoader(Movable):
             return self._leaf(self.graph.normal_local())
         if name == "color":
             return self._leaf(self.graph.vertex_color())
-        var at = _position(self._attribute_names, name)
+        var at = first_match(self._attribute_names, name)
         if at < 0:
             raise Error(
                 "Node JSON: the attribute "
@@ -769,12 +764,12 @@ struct NodeLoader(Movable):
         """Build a `MathNode`, by its `method`."""
         var method = _text(document, item, "method")
         var a = self._input(document, item, "aNode")
-        if _position(_unary_methods(), method) >= 0:
+        if first_match(_unary_methods(), method) >= 0:
             return self._unary(method, a)
         if method == "atan" and not self._has_input(document, item, "bNode"):
             return self.graph.atan(a)
-        var binary = _position(_binary_methods(), method) >= 0
-        if not binary and _position(_ternary_methods(), method) < 0:
+        var binary = first_match(_binary_methods(), method) >= 0
+        if not binary and first_match(_ternary_methods(), method) < 0:
             raise Error("Node JSON: the math method " + method + " is not read")
         var b = self._input(document, item, "bNode")
         if binary:
@@ -1166,11 +1161,6 @@ struct NodeLoader(Movable):
         return NodeMaterialGraph(self.graph.copy(), self.textures.copy())
 
 
-def _position_of_int(values: List[Int], value: Int) -> Int:
-    """Return where a number is in a list, or -1."""
-    return first_match(values, value)
-
-
 def _unary_methods() -> List[String]:
     """Return the math methods of one value this loader reads."""
     return [
@@ -1218,7 +1208,7 @@ def _value_width(name: String) -> Int:
     """Return how many numbers a `valueType` holds, or -1 for one that is
     not read: `float`, `bool`, `vec2` to `vec4`, `color`, `mat3` and
     `mat4`."""
-    var at = _position(
+    var at = first_match(
         ["float", "bool", "vec2", "vec3", "vec4", "color", "mat3", "mat4"],
         name,
     )

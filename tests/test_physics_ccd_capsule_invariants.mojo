@@ -14,7 +14,8 @@ from extensions.physics.ccd import (
     _initial_triangle_contact,
     _sweep_triangle,
 )
-from extensions.physics.shape import PhysicsMaterial, Shape, _wide, _wide_dot
+from extensions.physics.shape import PhysicsMaterial, Shape
+from math.cross import wide_dot, widen_vector
 from extensions.physics.world import (
     PhysicsWorld,
     _CCDImpact,
@@ -89,14 +90,14 @@ def test_actual_half_axis_has_an_outward_bound() raises:
             Vector3(0, 0, 0), Vector3(0, 0, 0), radius=0.0001, half_height=100
         )
         body.rotation = q
-        var half = _wide(
+        var half = widen_vector(
             body.shape_world_rotation().rotate(
                 Vector3(0, 0, body.shape.half_height)
             )
         )
         var radius = Float64(body.shape.radius)
         var bound_axis = _ccd_bound(body) - radius
-        assert_true(bound_axis * bound_axis >= _wide_dot(half, half))
+        assert_true(bound_axis * bound_axis >= wide_dot(half, half))
         assert_true(_ccd_bound(body) < 100.01)
     var point = _capsule(Vector3(0, 0, 0), Vector3(0, 0, 0), half_height=0)
     assert_almost_equal(
@@ -435,7 +436,7 @@ def test_normal_velocity_closure_keeps_other_components() raises:
                 before[(axis + 1) % 3] = 3
                 before[(axis + 2) % 3] = -2
                 for restitution in [Float64(0), Float64(1)]:
-                    var approach = _wide_dot(before, normal)
+                    var approach = wide_dot(before, normal)
                     var target = -restitution * approach
                     var projected = before - normal * (
                         (1 + restitution) * approach
@@ -459,7 +460,7 @@ def test_normal_velocity_closure_keeps_other_components() raises:
                     # unit roundoffs. Dominant-component closure uses fewer
                     # operations, including the final recomputed dot.
                     assert_true(
-                        abs(_wide_dot(closed, normal) - target)
+                        abs(wide_dot(closed, normal) - target)
                         <= scale * 7.105427357601002e-15
                     )
                     assert_true(not _approaches(closed, normal))
@@ -473,8 +474,8 @@ def test_normal_velocity_closure_keeps_other_components() raises:
                         )
                     # Retain the established CCD energy ceiling.
                     assert_true(
-                        _wide_dot(closed, closed)
-                        <= _wide_dot(before, before) * 1.000001
+                        wide_dot(closed, closed)
+                        <= wide_dot(before, before) * 1.000001
                     )
 
 
@@ -486,8 +487,8 @@ def test_near_axis_vertex_response_keeps_material_and_energy_contracts() raises:
             _step_pair(indexed, brute, 0.01)
             _assert_tree(indexed)
             assert_equal(indexed.contact_count, 1)
-            var velocity = _wide(indexed.bodies[1].linear_velocity)
-            assert_true(_wide_dot(velocity, velocity) <= 6400 * 1.000001)
+            var velocity = widen_vector(indexed.bodies[1].linear_velocity)
+            assert_true(wide_dot(velocity, velocity) <= 6400 * 1.000001)
             assert_true(indexed.bodies[1].angular_velocity == Vector3(0, 0, 0))
             assert_almost_equal(
                 indexed.bodies[1].position.z, 0.3 + 0.6 * restitution, atol=2e-6
@@ -531,29 +532,30 @@ def test_oblique_sphere_response_keeps_tangent_and_spin_energy() raises:
             _step_pair(indexed, brute, 0.01)
             _assert_tree(indexed)
             assert_equal(indexed.contact_count, 1)
-            var velocity = _wide(indexed.bodies[1].linear_velocity)
-            var angular = _wide(indexed.bodies[1].angular_velocity)
-            var final_energy = _wide_dot(
+            var velocity = widen_vector(indexed.bodies[1].linear_velocity)
+            var angular = widen_vector(indexed.bodies[1].angular_velocity)
+            var final_energy = wide_dot(
                 velocity, velocity
-            ) + inertia * _wide_dot(angular, angular)
+            ) + inertia * wide_dot(angular, angular)
             assert_true(final_energy <= initial_energy * 1.000001)
             # The ideal vertex normal is (0.6, 0, 0.8), so the incoming
             # normal speed is 64 m/s and the tangent speed is 48 m/s.
             assert_almost_equal(
-                _wide_dot(velocity, _v(0.6, 0, 0.8)),
+                wide_dot(velocity, _v(0.6, 0, 0.8)),
                 Float64(64 * restitution),
                 atol=1e-5,
             )
             assert_almost_equal(
-                _wide_dot(
-                    _wide(indexed.events[0].normal_impulse), _v(0.6, 0, 0.8)
+                wide_dot(
+                    widen_vector(indexed.events[0].normal_impulse),
+                    _v(0.6, 0, 0.8),
                 ),
                 Float64(64 * (1 + restitution)),
                 atol=1e-5,
             )
             if friction == 0:
                 assert_almost_equal(
-                    _wide_dot(velocity, _v(0.8, 0, -0.6)),
+                    wide_dot(velocity, _v(0.8, 0, -0.6)),
                     Float64(48),
                     atol=1e-5,
                 )
@@ -570,7 +572,7 @@ def test_oblique_sphere_response_keeps_tangent_and_spin_energy() raises:
                         Float64(friction) * 64 * (1 + Float64(restitution))
                     )
                     assert_almost_equal(
-                        _wide_dot(velocity, _v(0.8, 0, -0.6)),
+                        wide_dot(velocity, _v(0.8, 0, -0.6)),
                         48 - limit,
                         atol=1e-5,
                     )
@@ -615,8 +617,8 @@ def test_retained_vertex_normals_keep_one_impact_across_nearby_rotations() raise
                 assert_almost_equal(
                     indexed.bodies[1].position.z, radius, atol=2e-6
                 )
-                var velocity = _wide(indexed.bodies[1].linear_velocity)
-                assert_true(_wide_dot(velocity, velocity) <= 6400 * 1.000001)
+                var velocity = widen_vector(indexed.bodies[1].linear_velocity)
+                assert_true(wide_dot(velocity, velocity) <= 6400 * 1.000001)
 
 
 def test_initial_contact_lookup_preserves_present_front_features() raises:

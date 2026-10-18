@@ -114,11 +114,11 @@ def _animation_word(name: String) -> Optional[String]:
     var bytes = name.as_bytes()
     var at = 0
     while at < len(bytes):
-        if not _letter(bytes[at]):
+        if not ascii_letter(Int(bytes[at])):
             at += 1
             continue
         var end = at
-        while end < len(bytes) and _letter(bytes[end]):
+        while end < len(bytes) and ascii_letter(Int(bytes[end])):
             end += 1
         var next = end
         if next < len(bytes) and bytes[next] == 95:
@@ -127,11 +127,6 @@ def _animation_word(name: String) -> Optional[String]:
             return String(name[byte=at:end])
         at = end
     return None
-
-
-def _letter(byte: UInt8) -> Bool:
-    """Return True for an ASCII letter, either case."""
-    return ascii_letter(Int(byte))
 
 
 struct MorphBlendMesh(Movable):

@@ -354,22 +354,6 @@ def load_collada(
     return loader.model.copy()
 
 
-def _floats(text: String) raises -> List[Float64]:
-    """Return the numbers a white-space separated list holds.
-
-    Args:
-        text: The list.
-
-    Returns:
-        The numbers.
-
-    Raises:
-        Error: If one is not a number, or is not finite once it is a
-            `Float32`.
-    """
-    return collada_floats(text)
-
-
 def _ints(text: String) raises -> List[Int]:
     """Return the whole numbers a white-space separated list holds.
 
@@ -677,7 +661,7 @@ struct _Loader(Movable):
         Raises:
             Error: If the text is not `count` numbers.
         """
-        var values = _floats(self.document.text(element))
+        var values = collada_floats(self.document.text(element))
         if len(values) != count:
             raise Error(
                 "Collada: "
@@ -724,7 +708,7 @@ struct _Loader(Movable):
         Raises:
             Error: If there are too few, or one is not a number.
         """
-        var values = _floats(self.document.text(element))
+        var values = collada_floats(self.document.text(element))
         var need = 3
         if alpha:
             need = 4
@@ -741,7 +725,7 @@ struct _Loader(Movable):
             return
         var unit = self.document.child(asset, "unit")
         if unit != NO_ELEMENT and self.document.has_attribute(unit, "meter"):
-            var meter = _floats(self.document.attribute(unit, "meter"))
+            var meter = collada_floats(self.document.attribute(unit, "meter"))
             if len(meter) != 1 or meter[0] <= 0:
                 raise Error("Collada: <unit meter> must be one positive number")
             self.model.unit = Length(Float32(meter[0]), METER)
@@ -915,7 +899,7 @@ struct _Loader(Movable):
     def side(self, element: Int) raises -> Side:
         """Return the side a `<double_sided>` asks for: both for one,
         the front for anything else, as three.js reads it."""
-        var values = _floats(self.document.text(element))
+        var values = collada_floats(self.document.text(element))
         if len(values) == 1 and values[0] == 1:
             return DOUBLE_SIDE
         return FRONT_SIDE
@@ -1621,7 +1605,7 @@ struct _Loader(Movable):
             var values = List[Float64]()
             var array = self.document.child(source, "float_array")
             if array != NO_ELEMENT:
-                values = _floats(self.document.text(array))
+                values = collada_floats(self.document.text(array))
             var stride = 1
             var common = self.document.child(source, "technique_common")
             if common != NO_ELEMENT:
@@ -2179,7 +2163,7 @@ struct _Loader(Movable):
         var values = List[Float64]()
         var array = self.document.child(element, "float_array")
         if array != NO_ELEMENT:
-            values = _floats(self.document.text(array))
+            values = collada_floats(self.document.text(array))
         var stride = 3
         var common = self.document.child(element, "technique_common")
         if common != NO_ELEMENT:
