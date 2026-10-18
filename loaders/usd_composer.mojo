@@ -112,7 +112,7 @@ from math.matrix4 import (
 from math.quaternion import Quaternion
 from math.vector2 import Vector2
 from objects.mesh import Mesh
-from render.framebuffer import Color
+from render.framebuffer import Color, rgb_is_white
 from render.srgb import LINEAR, SRGB, ColorSpace
 from render.texture import (
     BILINEAR,
@@ -2499,7 +2499,7 @@ struct _Composer(Movable):
         var tint = attrs.get("primvars:displayColor")
         if self.layer.truthy(tint) and self.layer.length(tint) >= 3:
             for material in object.materials:  # pragma: no branch
-                var white = _is_white(built.materials[material].color)
+                var white = rgb_is_white(built.materials[material].color)
                 if white and built.materials[material].map == NO_TEXTURE:
                     var color = self.color(tint, "displayColor")
                     if Bool(color):
@@ -2607,18 +2607,6 @@ struct _Composer(Movable):
         var at = built.add(object^)
         self.apply_transform(at, spec, attrs, built)
         return at
-
-
-def _is_white(color: Color) -> Bool:
-    """Return three.js's `color.r === 1 && color.g === 1 && color.b === 1`.
-
-    Args:
-        color: The color.
-
-    Returns:
-        Whether it is white.
-    """
-    return color.r == 255 and color.g == 255 and color.b == 255
 
 
 def _is_primitive(type_name: String) -> Bool:

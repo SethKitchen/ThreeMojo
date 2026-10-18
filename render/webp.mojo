@@ -65,11 +65,6 @@ def _tag(bytes: List[UInt8], at: Int) -> String:
     return out
 
 
-def _le(bytes: List[UInt8], at: Int, count: Int) -> Int:
-    """Return a little-endian number of `count` bytes."""
-    return little_endian_uint(bytes, at, count)
-
-
 def _slice(bytes: List[UInt8], start: Int, end: Int) -> List[UInt8]:
     """Return a copy of bytes `start` to `end`."""
     return copy_bytes(bytes, start, end - start)
@@ -170,7 +165,7 @@ def decode(bytes: List[UInt8]) raises -> DecodedImage:
         raise Error("WebP: not a RIFF WEBP file")
     # libwebp's `ParseRIFF`, `ParseVP8X`, `ParseOptionalChunks` and
     # `ParseVP8Header`, with all of the file at hand.
-    var riff = _le(bytes, 4, 4)
+    var riff = little_endian_uint(bytes, 4, 4)
     if riff < 12 or riff > len(bytes) - 8:
         raise Error("WebP: the RIFF size does not fit the file")
     var at = 12
@@ -181,21 +176,21 @@ def decode(bytes: List[UInt8]) raises -> DecodedImage:
     # The RIFF size is at least 12 and fits the file, so a chunk header
     # follows `WEBP`.
     if _tag(bytes, at) == "VP8X":
-        if _le(bytes, at + 4, 4) != 10:
+        if little_endian_uint(bytes, at + 4, 4) != 10:
             raise Error("WebP: a VP8X chunk that is not ten bytes")
         if len(bytes) - at < 18:
             raise Error("WebP: the VP8X chunk runs past the file")
         if Int(bytes[at + 8]) & 0x02 != 0:
             raise Error("WebP: an animation is not decoded")
-        canvas_width = _le(bytes, at + 12, 3) + 1
-        canvas_height = _le(bytes, at + 15, 3) + 1
+        canvas_width = little_endian_uint(bytes, at + 12, 3) + 1
+        canvas_height = little_endian_uint(bytes, at + 15, 3) + 1
         at += 18
         # Chunks up to the image; the last alpha chunk counts.
         var total = 4 + 18
         while True:
             if len(bytes) - at < 8:
                 raise Error("WebP: the file has no image chunk")
-            var size = _le(bytes, at + 4, 4)
+            var size = little_endian_uint(bytes, at + 4, 4)
             var disk = (8 + size + 1) & ~1
             total += disk
             if total > riff:
@@ -211,7 +206,7 @@ def decode(bytes: List[UInt8]) raises -> DecodedImage:
     var tag = _tag(bytes, at)
     if tag != "VP8 " and tag != "VP8L":
         raise Error("WebP: the image chunk is not VP8 or VP8L")
-    var size = _le(bytes, at + 4, 4)
+    var size = little_endian_uint(bytes, at + 4, 4)
     # Within the RIFF size, which fits the file, is within the file.
     if size > riff - 12:
         raise Error("WebP: the image chunk runs past the file")

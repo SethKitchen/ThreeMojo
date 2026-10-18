@@ -38,7 +38,7 @@ from loaders.bytes import (
 )
 from render.framebuffer import FloatColor
 from render.srgb import LINEAR, SRGB, ColorSpace, linear_to_srgb, srgb_to_linear
-from math.utils import js_round
+from math.utils import js_round_int
 from std.math import floor
 
 # The CSS color names and their sRGB values, three.js's `Color.NAMES`, in
@@ -679,12 +679,6 @@ def _from_hex(value: Int, space: ColorSpace) raises -> FloatColor:
     )
 
 
-def _round(value: Float64) -> Int:
-    """Return `value` rounded to the nearest whole number, a half up, as
-    JavaScript's `Math.round` rounds."""
-    return Int(js_round(value))
-
-
 def _fixed3(value: Float32) -> String:
     """Return `value` with three decimals, as JavaScript's `toFixed(3)`
     writes it: a tie rounds away from zero, and a negative value keeps its
@@ -718,11 +712,11 @@ def format_style(color: FloatColor, space: ColorSpace = SRGB) raises -> String:
     if space == SRGB:
         return (
             "rgb("
-            + String(_round(Float64(linear_to_srgb(color.r)) * 255))
+            + String(js_round_int(Float64(linear_to_srgb(color.r)) * 255))
             + ","
-            + String(_round(Float64(linear_to_srgb(color.g)) * 255))
+            + String(js_round_int(Float64(linear_to_srgb(color.g)) * 255))
             + ","
-            + String(_round(Float64(linear_to_srgb(color.b)) * 255))
+            + String(js_round_int(Float64(linear_to_srgb(color.b)) * 255))
             + ")"
         )
     if space != LINEAR:
