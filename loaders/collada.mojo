@@ -141,6 +141,7 @@ from render.texture import CLAMP, COVERAGE, IGNORED, REPEAT, Alpha, Wrap
 from render.texture_store import TextureId
 from std.math import sqrt
 from std.pathlib import Path
+from units.measure import angle_degrees, length_meters
 from units.si import DEGREE, METER, Angle, Length
 
 # How deep `<instance_node>` can nest. A file that instances a node inside
@@ -736,7 +737,7 @@ struct _Loader(Movable):
             var meter = collada_floats(self.document.attribute(unit, "meter"))
             if len(meter) != 1 or meter[0] <= 0:
                 raise Error("Collada: <unit meter> must be one positive number")
-            self.model.unit = Length(Float32(meter[0]), METER)
+            self.model.unit = length_meters(meter[0])
         var up = self.document.child(asset, "up_axis")
         if up == NO_ELEMENT:
             return
@@ -1196,7 +1197,7 @@ struct _Loader(Movable):
                 matrix.multiply(
                     rotation_axis(
                         vector3_from_float64(v[0], v[1], v[2]),
-                        Angle(Float32(v[3]), DEGREE),
+                        angle_degrees(v[3]),
                     )
                 )
             elif name == "scale":
@@ -1371,12 +1372,12 @@ struct _Loader(Movable):
                 xmag = self.number(projection, "xmag", 0)
                 ymag = self.number(projection, "ymag", 0)
             var camera = OrthographicCamera(
-                Length(Float32(-xmag / 2), METER),
-                Length(Float32(xmag / 2), METER),
-                Length(Float32(ymag / 2), METER),
-                Length(Float32(-ymag / 2), METER),
-                Length(Float32(near), METER),
-                Length(Float32(far), METER),
+                length_meters(-xmag / 2),
+                length_meters(xmag / 2),
+                length_meters(ymag / 2),
+                length_meters(-ymag / 2),
+                length_meters(near),
+                length_meters(far),
             )
             camera.attach(node)
             self.model.orthographic_cameras.append(camera^)
@@ -1385,12 +1386,12 @@ struct _Loader(Movable):
         if projection != NO_ELEMENT:
             aspect = self.number(projection, "aspect_ratio", 1)
             if self.document.child(projection, "yfov") != NO_ELEMENT:
-                fov = Angle(Float32(self.number(projection, "yfov", 0)), DEGREE)
+                fov = angle_degrees(self.number(projection, "yfov", 0))
         var camera = PerspectiveCamera(
             fov,
             Float32(aspect),
-            Length(Float32(near), METER),
-            Length(Float32(far), METER),
+            length_meters(near),
+            length_meters(far),
         )
         camera.attach(node)
         self.model.perspective_cameras.append(camera)
