@@ -30,7 +30,7 @@ from math.box_extent import box_exterior
 from math.norm import squared_length3
 from math.cross import cross_vectors
 from math.utils import max3, min3
-from math.vector3 import Vector3, component_max, component_min
+from math.vector3 import Vector3, component_max, component_min, midpoint
 from std.math import max, min, sqrt
 
 # The piece kinds.
@@ -174,7 +174,7 @@ struct Sculpt(Copyable, DistanceField, Movable):
     @staticmethod
     def _capsule(a: Vector3, b: Vector3, ra: Float32, rb: Float32) -> Piece:
         """Return a tapered capsule piece."""
-        var center = (a + b) * Float32(0.5)
+        var center = midpoint(a, b)
         var reach = (b - a).length() * Float32(0.5) + max(ra, rb)
         return Piece(
             _CAPSULE,
