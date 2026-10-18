@@ -21,6 +21,7 @@ from extensions.humanoid.side import LEFT
 from extensions.humanoid.skeleton.field import (
     DistanceField,
     TubeChain,
+    enlarge_tube_chain,
     field_gradient,
     mix_point,
     tube_chain_bounds,
@@ -28,7 +29,6 @@ from extensions.humanoid.skeleton.field import (
 )
 from extensions.humanoid.skeleton.leg.muscles.dimensions import MuscleDimensions
 from math.vector3 import Vector3
-from std.math import max
 
 
 @fieldwise_init
@@ -123,11 +123,7 @@ def _display_nerve_field(
     """Return a nerve with a diagrammatic minimum mesh radius."""
     var field = NerveField(dimensions, part)
     var least = 0.0015 * dimensions.stature.value
-    field.chain.r0 = max(field.chain.r0, least)
-    field.chain.r1 = max(field.chain.r1, least)
-    field.chain.r2 = max(field.chain.r2, least)
-    field.chain.r3 = max(field.chain.r3, least)
-    field.chain.r4 = max(field.chain.r4, least)
+    field.chain = enlarge_tube_chain(field.chain, least)
     field.k = 0.0008 * dimensions.stature.value
     field.epsilon = Float32(0.25) * least
     var box = tube_chain_bounds(field.chain, 0.008 + field.chain.r2)

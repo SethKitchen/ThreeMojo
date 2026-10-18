@@ -23,6 +23,7 @@ Plus y is proximal. Plus x is body-right. Plus z is anterior.
     var d = skin_distance(dims, Vector3(0, 0, 0))
 """
 
+from extensions.humanoid.skeleton.dermis import dermal_shell_distance
 from extensions.humanoid.skeleton.field import (
     DistanceField,
     TubeChain,
@@ -191,8 +192,7 @@ struct SkinLayerField(Copyable, DistanceField, Movable):
         Negative is inside the dermis. Deep anatomy and exterior space
         are both outside this shell.
         """
-        var d = self.outer.distance(point)
-        return max(d, -d - self.thickness)
+        return dermal_shell_distance(self.outer.distance(point), self.thickness)
 
     def gradient(self, point: Vector3) -> Vector3:
         """Return the unit outward normal of the dermal shell at `point`."""
