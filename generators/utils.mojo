@@ -26,6 +26,7 @@ from core.ordinal import ordinal_valid
 from core.buffer_attribute import BufferAttribute
 from core.buffer_geometry import BufferGeometry
 from geometries.utils import merge_vertices
+from math.cross import cross_components
 from math.matrix4 import Matrix4
 from math.norm import length3, normalized3, _ordinary_squared
 from math.quaternion import quaternion_rotate
@@ -155,11 +156,10 @@ struct Vec3d(ImplicitlyCopyable):
         Returns:
             The cross product.
         """
-        return Vec3d(
-            self.y * other.z - self.z * other.y,
-            self.z * other.x - self.x * other.z,
-            self.x * other.y - self.y * other.x,
+        var x, y, z = cross_components[DType.float64](
+            self.x, self.y, self.z, other.x, other.y, other.z
         )
+        return Vec3d(x, y, z)
 
     def length(self) -> Float64:
         """Return the scale-safe length.

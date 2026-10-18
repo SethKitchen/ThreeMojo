@@ -39,6 +39,7 @@ This is not a three.js port. See Extensions.
 from core.binary import little_endian_u32
 from core.buffer_geometry import BufferGeometry
 from geometries.surface import indexed_surface
+from math.cross import cross_vectors
 from math.vector3 import Vector3
 from std.math import isfinite, min
 
@@ -828,11 +829,7 @@ struct FaceModel(Movable):
             var c = points[owners[indices[t + 2]]]
             var e1 = b - a
             var e2 = c - a
-            var n = Vector3(
-                e1.y * e2.z - e1.z * e2.y,
-                e1.z * e2.x - e1.x * e2.z,
-                e1.x * e2.y - e1.y * e2.x,
-            )
+            var n = cross_vectors(e1, e2)
             for c in range(3):  # pragma: no branch
                 var p = owners[indices[t + c]]
                 sums[p] = sums[p] + n

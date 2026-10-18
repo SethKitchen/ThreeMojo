@@ -6,7 +6,8 @@
 """The cross product of two vectors, as a new vector.
 
 `Vector3.cross` keeps the product in one statement. A caller that must
-leave both inputs unchanged uses `cross_vectors`.
+leave both inputs unchanged uses `cross_vectors`. `cross_components`
+is that product for any width, including the `Float64` vectors.
 """
 
 from math.vector3 import Vector3
@@ -27,3 +28,35 @@ def cross_vectors(a: Vector3, b: Vector3) -> Vector3:
     var out = a
     out.cross(b)
     return out
+
+
+def cross_components[
+    dtype: DType
+](
+    ax: SIMD[dtype, 1],
+    ay: SIMD[dtype, 1],
+    az: SIMD[dtype, 1],
+    bx: SIMD[dtype, 1],
+    by: SIMD[dtype, 1],
+    bz: SIMD[dtype, 1],
+) -> Tuple[SIMD[dtype, 1], SIMD[dtype, 1], SIMD[dtype, 1]]:
+    """Return the components of `a` cross `b`.
+
+    The products are taken in three.js's order. The width is the caller's.
+
+    Args:
+        ax: The first vector's x.
+        ay: The first vector's y.
+        az: The first vector's z.
+        bx: The second vector's x.
+        by: The second vector's y.
+        bz: The second vector's z.
+
+    Returns:
+        The product's x, y, and z.
+    """
+    return (
+        ay * bz - az * by,
+        az * bx - ax * bz,
+        ax * by - ay * bx,
+    )

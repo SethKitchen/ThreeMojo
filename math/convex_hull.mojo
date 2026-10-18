@@ -32,6 +32,7 @@ broken one for points that are all on a line or a plane. This port refuses
 all three.
 """
 
+from math.cross import cross_components
 from math.vector3 import Vector3
 from math.exact_predicates import (
     _collinear,
@@ -116,11 +117,10 @@ struct _Point(ImplicitlyCopyable):
 
     def cross(self, other: Self) -> Self:
         """Return the cross product, three.js's `crossVectors`."""
-        return _Point(
-            self.y * other.z - self.z * other.y,
-            self.z * other.x - self.x * other.z,
-            self.x * other.y - self.y * other.x,
+        var x, y, z = cross_components[DType.float64](
+            self.x, self.y, self.z, other.x, other.y, other.z
         )
+        return _Point(x, y, z)
 
     def component(self, axis: Int) -> Float64:
         """Return x, y or z for an axis of zero, one or two."""

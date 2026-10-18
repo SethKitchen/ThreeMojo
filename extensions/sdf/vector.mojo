@@ -54,9 +54,7 @@ def cross(a: V3, b: V3) -> V3:
     Returns:
         `a` cross `b`.
     """
-    return V3(
-        a.y * b.z - a.z * b.y, a.z * b.x - a.x * b.z, a.x * b.y - a.y * b.x
-    )
+    return a.cross(b)
 
 
 def length(a: V3) -> Float64:
