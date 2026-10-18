@@ -47,6 +47,7 @@ from core.ordinal import require_positive
 from geometries.surface import (
     indexed_surface,
     record_kind,
+    record_shaft_segments,
     record_sweep,
     require_three_segments,
 )
@@ -136,8 +137,7 @@ def _record_body(
     keys first.
     """
     geometry.parameters.set_meters("height", height)
-    geometry.parameters.set_number("radialSegments", Float64(radial_segments))
-    geometry.parameters.set_number("heightSegments", Float64(height_segments))
+    record_shaft_segments(geometry, radial_segments, height_segments)
     geometry.parameters.set_boolean("openEnded", open_ended)
     record_sweep(geometry, theta_start, theta_length)
 
