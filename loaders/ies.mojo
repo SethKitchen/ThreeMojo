@@ -42,7 +42,7 @@ number, and a file that ends early. An empty line is zero, as
 """
 
 from math.rounded_product import rounded_product
-from loaders.bytes import ascii_space
+from loaders.bytes import ascii_space_at
 from loaders.js_number import js_string_to_number
 from render.exr import half_to_float
 from render.srgb import LINEAR
@@ -149,7 +149,7 @@ def _tokens(line: String) -> List[String]:
     var i = 0
     while i < len(bytes):
         var end = i
-        while _space_at(bytes, end):
+        while ascii_space_at(bytes, end):
             end += 1
         if end - i >= 2:
             text += " "
@@ -161,11 +161,6 @@ def _tokens(line: String) -> List[String]:
     for token in text.split(" "):  # pragma: no branch
         out.append(String(token))
     return out^
-
-
-def _space_at(bytes: Span[UInt8, _], i: Int) -> Bool:
-    """Return True if there is a white space byte at `i`."""
-    return i < len(bytes) and ascii_space(bytes[i])
 
 
 struct _Lines:

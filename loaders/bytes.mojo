@@ -7,8 +7,9 @@
 
 `bytes_match` asks whether an ASCII word sits at one byte.
 `ascii_space`, `ascii_digit`, and `ascii_letter` name white space, a
-decimal digit, and a letter. `hex_digit_value` reads one hexadecimal
-digit. `base64_digit` reads one letter or digit of the base64 alphabet.
+decimal digit, and a letter. `ascii_space_at` and `ascii_digit_at` ask
+the same of one index. `hex_digit_value` reads one hexadecimal digit.
+`base64_digit` reads one letter or digit of the base64 alphabet.
 """
 
 
@@ -91,6 +92,38 @@ def ascii_digit(byte: UInt8) -> Bool:
         Error: Never.
     """
     return ascii_digit(Int(byte))
+
+
+def ascii_space_at(bytes: Span[UInt8, _], at: Int) -> Bool:
+    """Return True when `at` names an ASCII white space byte.
+
+    Args:
+        bytes: The bytes to read.
+        at: The index to read.
+
+    Returns:
+        Whether `at` is inside `bytes` and that byte is white space.
+
+    Raises:
+        Error: Never.
+    """
+    return at < len(bytes) and ascii_space(bytes[at])
+
+
+def ascii_digit_at(bytes: Span[UInt8, _], at: Int) -> Bool:
+    """Return True when `at` names an ASCII decimal digit.
+
+    Args:
+        bytes: The bytes to read.
+        at: The index to read.
+
+    Returns:
+        Whether `at` is inside `bytes` and that byte is a decimal digit.
+
+    Raises:
+        Error: Never.
+    """
+    return at < len(bytes) and ascii_digit(bytes[at])
 
 
 def ascii_letter(byte: Int) -> Bool:
