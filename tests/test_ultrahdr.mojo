@@ -23,7 +23,7 @@ from std.testing import (
     assert_true,
 )
 
-from core.binary import copy_byte_range, copy_bytes
+from core.binary import copy_byte_range, copy_bytes, store_big_endian
 from loaders.json import parse_json
 from loaders.ultrahdr import (
     XMP_NAMESPACE,
@@ -158,8 +158,7 @@ def _mpf(primary_size: Int, gain_size: Int, gain_offset: Int) -> List[UInt8]:
     for i in range(len(head)):
         payload[i] = head[i]
     for pair in [(58, primary_size), (74, gain_size), (78, gain_offset)]:
-        for k in range(4):
-            payload[pair[0] + k] = UInt8((pair[1] >> (24 - 8 * k)) & 255)
+        store_big_endian(payload, pair[0], pair[1], 4)
     return _segment(0xE2, payload)
 
 

@@ -54,6 +54,7 @@ from core.binary import (
     copy_bytes,
     little_endian_i32,
     little_endian_u16,
+    append_little_endian_u16,
     little_endian_u32,
     store_little_endian,
 )
@@ -1083,9 +1084,7 @@ def piz_decode(
             var row = width * shorts[index]
             var first = starts[index] + line * row
             for step in range(row):  # pragma: no branch
-                var value = lut[values[first + step]]
-                out.append(UInt8(value & 0xFF))
-                out.append(UInt8(value >> 8))
+                append_little_endian_u16(out, lut[values[first + step]])
     return out^
 
 

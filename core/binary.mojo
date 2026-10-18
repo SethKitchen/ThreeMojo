@@ -12,7 +12,8 @@ width. `little_endian_uint` reads zero through eight bytes.
 `append_little_endian` appends a chosen width.
 `append_little_endian_u16` and `append_little_endian_u32` append a fixed
 width. `store_little_endian` writes a chosen width at an index.
-`copy_bytes` returns a new list and does not raise.
+`append_big_endian` and `store_big_endian` write the most significant
+byte first. `copy_bytes` returns a new list and does not raise.
 `copy_byte_range` copies from one index up to another.
 """
 
@@ -209,6 +210,47 @@ def store_little_endian(
     """
     for index in range(width):  # pragma: no branch
         bytes[at + index] = UInt8((value >> (8 * index)) & 0xFF)
+
+
+def append_big_endian(mut out: List[UInt8], value: Int, width: Int):
+    """Append the low `width` bytes of `value`, most significant byte first.
+
+    Args:
+        out: The buffer, extended in place.
+        value: The integer.
+        width: How many bytes to append. The caller passes a positive
+            width.
+
+    Returns:
+        Nothing.
+
+    Raises:
+        Error: Never.
+    """
+    for index in range(width):  # pragma: no branch
+        var shift = 8 * (width - 1 - index)
+        out.append(UInt8((value >> shift) & 0xFF))
+
+
+def store_big_endian(mut bytes: List[UInt8], at: Int, value: Int, width: Int):
+    """Store the low `width` bytes of `value` at `at`, most significant byte first.
+
+    Args:
+        bytes: The buffer.
+        at: The index of the first byte.
+        value: The integer.
+        width: How many bytes. The caller has checked that a positive
+            width lies inside `bytes`.
+
+    Returns:
+        Nothing.
+
+    Raises:
+        Error: Never.
+    """
+    for index in range(width):  # pragma: no branch
+        var shift = 8 * (width - 1 - index)
+        bytes[at + index] = UInt8((value >> shift) & 0xFF)
 
 
 def copy_bytes(bytes: List[UInt8], start: Int, count: Int) -> List[UInt8]:
