@@ -26,18 +26,17 @@ stay put -- so the lit face stays lit as the camera passes it, which a
 spinning cube under a fixed lamp cannot do.
 """
 
-from examples.output import spin_frame, write_example
+from examples.output import spin_clip
 
 from cameras.perspective_camera import PerspectiveCamera
 from core.assets import Assets
-from core.clock import Clock
 from core.object3d import Object3D
 from core.scene import Scene
 from geometries.box import cube
 from lights.light import ambient_light, directional_light
 from materials.material import Material
 from objects.mesh import Mesh
-from render.framebuffer import Color, Framebuffer
+from render.framebuffer import Color
 from render.png import decode
 from render.texture import BILINEAR, REPEAT, texture_from
 from renderers.renderer import Renderer, available_workers
@@ -108,11 +107,6 @@ def main() raises:
     camera.attach(eye_node)
 
     # One full circuit over the loop, so the animation repeats seamlessly.
-    var step = Angle(Float32(360) / Float32(FRAMES), DEGREE)
-    var frame_clock = Clock()
-    frame_clock.start()
-    var frames = List[Framebuffer]()
-    for _ in range(FRAMES):
-        frames.append(spin_frame(renderer, camera, assets, scene, pivot, step))
-
-    write_example(frames, destination, DELAY_MS, FRAMES, frame_clock)
+    spin_clip(
+        renderer, camera, assets, scene, pivot, FRAMES, DELAY_MS, destination
+    )

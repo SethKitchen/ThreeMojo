@@ -12,11 +12,10 @@ before the frames start. Detail stays at zero, so the triangles do not
 change. The sphere then turns one whole turn.
 """
 
-from examples.output import example_destination, spin_frame, write_example
+from examples.output import example_destination, spin_clip
 
 from cameras.perspective_camera import PerspectiveCamera
 from core.assets import Assets
-from core.clock import Clock
 from core.object3d import Object3D
 from core.scene import Scene
 from geometries.sculptor import SCULPT_INFLATE, Sculptor
@@ -26,7 +25,7 @@ from materials.material import Material
 from math.ray import Ray
 from math.vector3 import Vector3
 from objects.mesh import Mesh
-from render.framebuffer import Color, Framebuffer
+from render.framebuffer import Color
 from renderers.renderer import Renderer, available_workers
 from units.si import DEGREE, METER, Angle, Length
 
@@ -96,11 +95,6 @@ def main() raises:
     )
     camera.place(Vector3(1.75, 0.85, 3.1), Vector3(0, 0.05, 0))
 
-    var step = Angle(Float32(360) / Float32(FRAMES), DEGREE)
-    var frame_clock = Clock()
-    frame_clock.start()
-    var frames = List[Framebuffer]()
-    for _ in range(FRAMES):
-        frames.append(spin_frame(renderer, camera, assets, scene, ball, step))
-
-    write_example(frames, destination, DELAY_MS, FRAMES, frame_clock)
+    spin_clip(
+        renderer, camera, assets, scene, ball, FRAMES, DELAY_MS, destination
+    )

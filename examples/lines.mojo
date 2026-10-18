@@ -14,13 +14,12 @@ path is dashed, and its dashes are measured along the path itself, so
 they keep their length as it climbs and turns.
 """
 
-from examples.output import example_destination, spin_frame, write_example
+from examples.output import example_destination, spin_clip
 
 from cameras.perspective_camera import PerspectiveCamera
 from core.assets import Assets
 from core.buffer_attribute import BufferAttribute
 from core.buffer_geometry import BufferGeometry, POSITION
-from core.clock import Clock
 from core.object3d import Object3D
 from core.scene import Scene
 from geometries.box import cube
@@ -29,7 +28,7 @@ from materials.material import BASIC, Material, line_dashed_material
 from math.vector3 import Vector3
 from objects.line import LOOP, STRIP, Line
 from objects.mesh import Mesh
-from render.framebuffer import Color, Framebuffer
+from render.framebuffer import Color
 from renderers.renderer import Renderer, available_workers
 from std.math import cos, pi, sin
 from units.si import Angle, DEGREE, Length, METER
@@ -134,11 +133,6 @@ def main() raises:
     )
     camera.place(Vector3(0, 0.7, 3.6), Vector3(0, 0, 0))
 
-    var step = Angle(Float32(360) / Float32(FRAMES), DEGREE)
-    var frame_clock = Clock()
-    frame_clock.start()
-    var frames = List[Framebuffer]()
-    for _ in range(FRAMES):
-        frames.append(spin_frame(renderer, camera, assets, scene, node, step))
-
-    write_example(frames, destination, DELAY_MS, FRAMES, frame_clock)
+    spin_clip(
+        renderer, camera, assets, scene, node, FRAMES, DELAY_MS, destination
+    )

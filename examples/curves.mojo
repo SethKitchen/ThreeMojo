@@ -11,11 +11,10 @@ The curve is sampled, lifted into space, and given thickness. The page is
 Curves. This file draws that one path, not a set of kinds.
 """
 
-from examples.output import example_destination, spin_frame, write_example
+from examples.output import example_destination, spin_clip
 
 from cameras.perspective_camera import PerspectiveCamera
 from core.assets import Assets
-from core.clock import Clock
 from core.object3d import Object3D
 from core.scene import Scene
 from geometries.tube import tube
@@ -25,7 +24,7 @@ from math.curve import cubic_bezier
 from math.vector2 import Vector2
 from math.vector3 import Vector3
 from objects.mesh import Mesh
-from render.framebuffer import Color, Framebuffer
+from render.framebuffer import Color
 from renderers.renderer import Renderer, available_workers
 from units.si import Angle, DEGREE, Length, METER
 
@@ -75,11 +74,6 @@ def main() raises:
     )
     camera.place(Vector3(0, 0.15, 3.5), Vector3(0, 0, 0))
 
-    var step = Angle(Float32(360) / Float32(FRAMES), DEGREE)
-    var frame_clock = Clock()
-    frame_clock.start()
-    var frames = List[Framebuffer]()
-    for _ in range(FRAMES):
-        frames.append(spin_frame(renderer, camera, assets, scene, node, step))
-
-    write_example(frames, destination, DELAY_MS, FRAMES, frame_clock)
+    spin_clip(
+        renderer, camera, assets, scene, node, FRAMES, DELAY_MS, destination
+    )
