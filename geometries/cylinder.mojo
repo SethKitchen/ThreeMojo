@@ -120,6 +120,28 @@ def _append_cap(
         index.append(center)
 
 
+def _record_body(
+    mut geometry: BufferGeometry,
+    height: Length,
+    radial_segments: Int,
+    height_segments: Int,
+    open_ended: Bool,
+    theta_start: Angle,
+    theta_length: Angle,
+) raises:
+    """Record the height, the segment counts, the open end, and the sweep.
+
+    A cylinder and a cone share these keys. Each one writes its own radius
+    keys first.
+    """
+    geometry.parameters.set_meters("height", height)
+    geometry.parameters.set_number("radialSegments", Float64(radial_segments))
+    geometry.parameters.set_number("heightSegments", Float64(height_segments))
+    geometry.parameters.set_boolean("openEnded", open_ended)
+    geometry.parameters.set_radians("thetaStart", theta_start)
+    geometry.parameters.set_radians("thetaLength", theta_length)
+
+
 def cylinder(
     radius_top: Length,
     radius_bottom: Length,
@@ -286,12 +308,15 @@ def cylinder(
     record_kind(geometry, CYLINDER_GEOMETRY)
     geometry.parameters.set_meters("radiusTop", radius_top)
     geometry.parameters.set_meters("radiusBottom", radius_bottom)
-    geometry.parameters.set_meters("height", height)
-    geometry.parameters.set_number("radialSegments", Float64(radial_segments))
-    geometry.parameters.set_number("heightSegments", Float64(height_segments))
-    geometry.parameters.set_boolean("openEnded", open_ended)
-    geometry.parameters.set_radians("thetaStart", theta_start)
-    geometry.parameters.set_radians("thetaLength", theta_length)
+    _record_body(
+        geometry,
+        height,
+        radial_segments,
+        height_segments,
+        open_ended,
+        theta_start,
+        theta_length,
+    )
     return geometry^
 
 
@@ -338,10 +363,13 @@ def cone(
     )
     record_kind(geometry, CONE_GEOMETRY)
     geometry.parameters.set_meters("radius", radius)
-    geometry.parameters.set_meters("height", height)
-    geometry.parameters.set_number("radialSegments", Float64(radial_segments))
-    geometry.parameters.set_number("heightSegments", Float64(height_segments))
-    geometry.parameters.set_boolean("openEnded", open_ended)
-    geometry.parameters.set_radians("thetaStart", theta_start)
-    geometry.parameters.set_radians("thetaLength", theta_length)
+    _record_body(
+        geometry,
+        height,
+        radial_segments,
+        height_segments,
+        open_ended,
+        theta_start,
+        theta_length,
+    )
     return geometry^
