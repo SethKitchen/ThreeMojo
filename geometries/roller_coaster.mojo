@@ -29,6 +29,7 @@ numbers for its uuid; a geometry here has no uuid and takes none.
 """
 
 from core.assets import Assets
+from geometries.surface import require_at_least_one
 from core.buffer_attribute import BufferAttribute
 from core.buffer_geometry import BufferGeometry, COLOR, NORMAL, POSITION
 from core.raycaster import Raycaster
@@ -95,8 +96,9 @@ def _tangent_at[
 
 def _check(divisions: Int) raises:
     """Refuse fewer than one division."""
-    if divisions < 1:
-        raise Error("A roller coaster needs one division or more")
+    require_at_least_one(
+        divisions, "A roller coaster needs one division or more"
+    )
 
 
 def _ring(sides: Int, radius: Float64) -> List[Point3]:

@@ -7,12 +7,13 @@
 
 A plane, a sphere, a tube and the other generated solids all finish the
 same way: positions, normals, texture coordinates and a triangle index.
-They also share the checks for a positive radius, three segments, and
-positive box extents.
+They also share the checks for a positive radius, three segments, one
+segment, and positive or finite box extents.
 """
 
 from core.buffer_attribute import BufferAttribute
 from core.buffer_geometry import NORMAL, POSITION, UV, BufferGeometry
+from std.math import isfinite
 
 
 def indexed_surface(
@@ -96,3 +97,41 @@ def require_positive_extents(
     """
     if width <= 0 or height <= 0 or depth <= 0:
         raise Error("A " + name + " needs positive extents")
+
+
+def require_finite_extents(
+    width: Float32, height: Float32, depth: Float32, name: String
+) raises:
+    """Refuse a box whose width, height, or depth is not finite.
+
+    Args:
+        width: The width.
+        height: The height.
+        depth: The depth.
+        name: The solid, such as `box of lines` or `rounded box`.
+
+    Returns:
+        Nothing. The call returns when every extent is finite.
+
+    Raises:
+        Error: If any extent is not finite.
+    """
+    if not isfinite(width) or not isfinite(height) or not isfinite(depth):
+        raise Error("A " + name + " needs finite extents")
+
+
+def require_at_least_one(count: Int, message: String) raises:
+    """Refuse a count below one.
+
+    Args:
+        count: How many pieces the builder was given.
+        message: The error text for this solid.
+
+    Returns:
+        Nothing. The call returns when `count` is at least one.
+
+    Raises:
+        Error: If `count` is below one.
+    """
+    if count < 1:
+        raise Error(message)

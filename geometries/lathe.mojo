@@ -36,7 +36,7 @@ made of plain points.
 """
 
 from core.buffer_geometry import BufferGeometry, LATHE_GEOMETRY
-from geometries.surface import indexed_surface
+from geometries.surface import indexed_surface, require_at_least_one
 from core.user_data import UserData, json_number_text
 from geometries.circle import FULL_TURN, check_sweep
 from math.norm import normalized2
@@ -170,8 +170,7 @@ def lathe(
             and points[index].y == points[index + 1].y
         ):
             raise Error("A lathe's profile cannot repeat a point")
-    if segments < 1:
-        raise Error("A lathe needs at least one segment around")
+    require_at_least_one(segments, "A lathe needs at least one segment around")
     check_sweep(phi_length)
 
     var normals_2d = _profile_normals(points)

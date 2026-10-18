@@ -26,7 +26,11 @@ texture is not squeezed where the surface bends.
 """
 
 from core.buffer_attribute import BufferAttribute
-from geometries.surface import require_positive_extents
+from geometries.surface import (
+    require_at_least_one,
+    require_finite_extents,
+    require_positive_extents,
+)
 from core.buffer_geometry import (
     BufferGeometry,
     MaterialIndex,
@@ -168,19 +172,17 @@ def rounded_box(
         Error: If an extent is not finite and positive, `segments` is less
             than one, or the radius is not finite or is negative.
     """
-    if (
-        not isfinite(width.value)
-        or not isfinite(height.value)
-        or not isfinite(depth.value)
-    ):
-        raise Error("A rounded box needs finite extents")
+    require_finite_extents(
+        width.value, height.value, depth.value, "rounded box"
+    )
     if not isfinite(radius.value):
         raise Error("A rounded box needs a finite radius")
     require_positive_extents(
         width.value, height.value, depth.value, "rounded box"
     )
-    if segments < 1:
-        raise Error("A rounded box needs one segment round each edge")
+    require_at_least_one(
+        segments, "A rounded box needs one segment round each edge"
+    )
     if radius.value < 0:
         raise Error("A rounded box needs a radius of zero or more")
 

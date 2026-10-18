@@ -39,6 +39,7 @@ transport made. three.js checks neither; here both raise.
 from core.buffer_geometry import BufferGeometry, TUBE_GEOMETRY
 from geometries.surface import (
     indexed_surface,
+    require_at_least_one,
     require_positive_radius,
     require_three_segments,
 )
@@ -215,8 +216,9 @@ def tube(
             built: it stops at a ring, or two rings point straight
             opposite ways.
     """
-    if tubular_segments < 1:
-        raise Error("A tube needs at least one segment along it")
+    require_at_least_one(
+        tubular_segments, "A tube needs at least one segment along it"
+    )
     require_tube_radius(radius)
     require_tube_segments(radial_segments)
     var frames = curve.frenet_frames(tubular_segments, closed)
