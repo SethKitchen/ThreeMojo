@@ -117,6 +117,7 @@ from render.texture import (
     anisotropic_footprint,
     mix_straight,
 )
+from render.screen_coord import pixel_frag_coord
 from render.texture_store import NO_TEXTURE, TextureId, TextureStore
 from materials.nodes import (
     AO_NODE,
@@ -5835,13 +5836,8 @@ struct _HostNodes[origin: Origin[mut=False]](Copyable, NodeSource):
         Returns:
             The four numbers.
         """
-        var x = self.x + (1 if context == AT_RIGHT else 0)
-        var y = self.y - (1 if context == AT_UP else 0)
-        return SIMD[DType.float32, 4](
-            Float32(x) + 0.5,
-            Float32(self.height - y) - 0.5,
-            self.depth * 0.5 + 0.5,
-            1,
+        return pixel_frag_coord(
+            self.x, self.y, self.height, self.depth, context
         )
 
     def screen_size(self) -> SIMD[DType.float32, 4]:
@@ -5995,13 +5991,8 @@ struct _HostPointNodes[origin: Origin[mut=False]](NodeSource):
         Returns:
             The four numbers.
         """
-        var x = self.x + (1 if context == AT_RIGHT else 0)
-        var y = self.y - (1 if context == AT_UP else 0)
-        return SIMD[DType.float32, 4](
-            Float32(x) + 0.5,
-            Float32(self.height - y) - 0.5,
-            self.depth * 0.5 + 0.5,
-            1,
+        return pixel_frag_coord(
+            self.x, self.y, self.height, self.depth, context
         )
 
     def screen_size(self) -> SIMD[DType.float32, 4]:
@@ -6171,13 +6162,8 @@ struct _HostLineNodes[origin: Origin[mut=False]](NodeSource):
         Returns:
             The four numbers.
         """
-        var x = self.x + (1 if context == AT_RIGHT else 0)
-        var y = self.y - (1 if context == AT_UP else 0)
-        return SIMD[DType.float32, 4](
-            Float32(x) + 0.5,
-            Float32(self.height - y) - 0.5,
-            self.depth * 0.5 + 0.5,
-            1,
+        return pixel_frag_coord(
+            self.x, self.y, self.height, self.depth, context
         )
 
     def screen_size(self) -> SIMD[DType.float32, 4]:
