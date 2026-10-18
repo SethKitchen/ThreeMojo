@@ -285,6 +285,20 @@ def tube_set_bounds(set: TubeSet, pad: Float32) -> Bounds:
     return box
 
 
+def tube_set_soft_bounds(set: TubeSet) -> Bounds:
+    """Return the tube set's box grown by 3 mm.
+
+    The foot vessels, nerves, and lymph use this margin.
+
+    Args:
+        set: One to four tubes.
+
+    Returns:
+        An axis-aligned box around the used tubes.
+    """
+    return tube_set_bounds(set, 0.003)
+
+
 def segment_volume(set: SegmentSet) -> Float32:
     """Return the analytic volume of `set`.
 
