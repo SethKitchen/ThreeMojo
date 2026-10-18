@@ -40,6 +40,7 @@ that is not a number, and a file that is not found.
 
 from math.utils import clamp
 from loaders.bytes import hex_digit_value, is_sign_mark, space_tab_line
+from loaders.file_path import path_directory
 from loaders.js_number import js_parse_float
 from std.math import nan
 from std.pathlib import Path
@@ -794,8 +795,7 @@ struct LDrawLoader(Movable):
                 url = "models/" + url
                 state += 1
             elif state == 4:
-                var slash = file_name.rfind("/")
-                url = String(file_name[byte = 0 : slash + 1]) + url
+                url = path_directory(file_name) + url
                 state += 1
             else:
                 if lowered:

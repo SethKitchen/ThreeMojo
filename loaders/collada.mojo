@@ -92,6 +92,7 @@ from lights.light import (
     spot_light,
 )
 from loaders.collada_animation import read_collada_animations
+from loaders.file_path import path_directory
 from loaders.collada_id import collada_reference
 from loaders.collada_numbers import collada_floats, require_positive_stride
 from loaders.js_text import split_fields
@@ -298,7 +299,7 @@ def read_collada(
         Error: If the file cannot be read, or everything `load_collada`
             raises.
     """
-    var directory = String(path[byte = 0 : path.rfind("/") + 1])
+    var directory = path_directory(path)
     return load_collada(Path(path).read_text(), directory, scene, assets)
 
 

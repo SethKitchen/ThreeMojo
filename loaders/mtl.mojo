@@ -78,6 +78,7 @@ found on. Text before the first `newmtl` is skipped, as three.js skips it.
 from core.assets import Assets
 from core.geometry_store import GeometryId
 from core.object3d import NodeId
+from loaders.file_path import path_directory
 from loaders.gltf import decode_image
 from loaders.obj import ObjModel, read_obj
 from materials.material import FRONT_SIDE, Material, MaterialId, PHONG, Side
@@ -1033,18 +1034,6 @@ def parse_mtl(
     return library^
 
 
-def _directory_of(path: String) -> String:
-    """Return a path's directory, ending in `/`, or empty for none.
-
-    Args:
-        path: A file's path.
-
-    Returns:
-        The directory.
-    """
-    return String(path[byte = 0 : path.rfind("/") + 1])
-
-
 def read_mtl(
     path: String, mut assets: Assets, options: MtlOptions = MtlOptions()
 ) raises -> MtlLibrary:
@@ -1065,7 +1054,7 @@ def read_mtl(
             refuses.
     """
     return parse_mtl(
-        Path(path).read_text(), _directory_of(path), assets, options
+        Path(path).read_text(), path_directory(path), assets, options
     )
 
 
@@ -1179,7 +1168,7 @@ def read_obj_with_materials(
     """
     options.validate()
     var model = read_obj(path)
-    var directory = _directory_of(path)
+    var directory = path_directory(path)
     var library = MtlLibrary(options.side)
     for index in range(len(model.material_libraries)):
         library.merge(

@@ -76,6 +76,7 @@ from core.buffer_geometry import COLOR, NORMAL, POSITION, UV, BufferGeometry
 from core.geometry_store import GeometryId
 from core.object3d import NO_PARENT, NodeId, Object3D
 from core.scene import Scene
+from loaders.file_path import path_directory
 from loaders.gltf import decode_image
 from loaders.vrml_geometry import (
     SurfaceData,
@@ -1979,6 +1980,6 @@ def read_vrml(
         Error: If the file cannot be read, and for anything `parse_vrml`
             refuses.
     """
-    var slash = path.rfind("/")
-    var directory = String(path[byte = : slash + 1])
-    return parse_vrml(Path(path).read_text(), scene, assets, directory, parent)
+    return parse_vrml(
+        Path(path).read_text(), scene, assets, path_directory(path), parent
+    )

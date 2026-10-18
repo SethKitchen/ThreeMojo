@@ -213,6 +213,7 @@ from cameras.camera_list import CameraList
 from cameras.orthographic_camera import OrthographicCamera
 from cameras.perspective_camera import PerspectiveCamera
 from loaders.curve_json import read_shape
+from loaders.file_path import path_directory
 from loaders.geometry_json import geometry_from_parameters
 from math.path import Shape
 from core.user_data import json_value_text
@@ -831,7 +832,7 @@ def load_object_json(
         Error: If the file cannot be read, or anything `read_object_json`
             raises.
     """
-    var directory = String(path[byte = 0 : path.rfind("/") + 1])
+    var directory = path_directory(path)
     return read_object_json(Path(path).read_text(), scene, assets, directory)
 
 
