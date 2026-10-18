@@ -338,14 +338,6 @@ def _unit(v: Vec) -> Vec:
     return Vec(unit[0], unit[1], unit[2], 0)
 
 
-def _cross(a: Vec, b: Vec) -> Vec:
-    return wide_cross(a, b)
-
-
-def _dot(a: Vec, b: Vec) -> Float64:
-    return wide_dot(a, b)
-
-
 def _stored_face_normal(vertices: List[Vec]) -> Vec:
     """Preserve the normal rule for corners stored in Float32 geometry."""
     # The loader deliberately retains malformed and unrepresentable corners.
@@ -356,10 +348,10 @@ def _stored_face_normal(vertices: List[Vec]) -> Vec:
         # Every stored position has three spatial components.
         for lane in range(3):  # pragma: no branch
             if not isfinite(Float32(vertex[lane])):
-                var cross = _cross(
+                var cross = wide_cross(
                     vertices[1] - vertices[0], vertices[2] - vertices[1]
                 )
-                var magnitude = sqrt(_dot(cross, cross))
+                var magnitude = sqrt(wide_dot(cross, cross))
                 var divisor = (
                     magnitude if magnitude != 0
                     and magnitude == magnitude else Float64(1)
@@ -414,7 +406,7 @@ def _ray(a: Vec, b: Vec) -> Tuple[Vec, Vec]:
     """Return three.js's `toNormalizedRay`: the line's direction, and its
     point nearest the origin."""
     var direction = _unit(b - a)
-    var scalar = _dot(a, direction)
+    var scalar = wide_dot(a, direction)
     return (a + direction * (-scalar), direction)
 
 
@@ -510,8 +502,8 @@ def smooth_normals(
                 ray_distances.append(List[Float64]())
             var at = ray_index.get(rh1, 0)
             var direction = ray_lines[at][1]
-            var d0 = _dot(direction, v0)
-            var d1 = _dot(direction, v1)
+            var d0 = wide_dot(direction, v0)
+            var d1 = wide_dot(direction, v1)
             if d0 > d1:
                 var t = d0
                 d0 = d1
@@ -536,8 +528,8 @@ def smooth_normals(
                 if key in ray_index:
                     var at = ray_index.get(key, 0)
                     var direction = ray_lines[at][1]
-                    var d0 = _dot(direction, v0)
-                    var d1 = _dot(direction, v1)
+                    var d0 = wide_dot(direction, v0)
+                    var d1 = wide_dot(direction, v1)
                     if d0 > d1:
                         var t = d0
                         d0 = d1
@@ -580,7 +572,7 @@ def smooth_normals(
                 var other_index = half_corners[other]
                 var other_count = len(faces[g].normals)
                 var other_normal = faces[g].face_normal
-                if abs(_dot(other_normal, face_normal)) < 0.25:
+                if abs(wide_dot(other_normal, face_normal)) < 0.25:
                     continue
                 queue.append(other)
                 half.delete(reverse)
