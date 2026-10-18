@@ -41,8 +41,8 @@ from extensions.animals.kit import (
     EyeSpec,
     eye_frame_of,
     is_limb,
+    lid_unless_behind,
     mirrored_blob,
-    aperture_local,
 )
 from extensions.animals.noise import (
     cells3,
@@ -74,7 +74,7 @@ from extensions.animals.warp import (
 )
 from math.norm import squared_length2
 from std.math import cos, exp, pi, pow, sin, sqrt
-from extensions.sdf.distance import almond_distance, rect_distance
+from extensions.sdf.distance import rect_distance
 
 comptime TAIL_SEGS = 10
 # The head's origin, mid cranium between the eyes and the ears.
@@ -2004,17 +2004,6 @@ def _paint_ear(c: List[V3], t: Traits, p: V3, n: V3, male: Bool) -> V3:
     return mix3(col, c[CROWN], smoothstep(0.16, 0.04, ht))
 
 
-def _lid_distance(t: Traits, p: V3) -> Float64:
-    # The distance from a point to the nearer eye's aperture rim, in the
-    # aperture's plane, or far when the point is behind the eye.
-    var e = lion_eye(t)
-    var s = 1.0 if p.x > HEAD_O.x else -1.0
-    var ef = eye_frame_of(e, HEAD_O, s)
-    var q = aperture_local(e, ef, p)
-    var de = abs(almond_distance(q.x, q.y, e.big_r, e.d))
-    return de if q.z > -0.3 * e.r else 1.0
-
-
 def _paint_face(
     c: List[V3],
     t: Traits,
@@ -2184,7 +2173,7 @@ def _paint_face(
     var ruff = 0.0 if jaw else _ruff_pale(f, male)
     col = mix3(col, ruff_col, ruff * (0.45 if male else 0.7))
     # The eye rims: black lid margins, a pale crescent under the lower lid.
-    var de = _lid_distance(t, p)
+    var de = lid_unless_behind(lion_eye(t), HEAD_O, p, -0.3)
     var lm = 1.0 - 0.6 * juv
     var crescent = de < 0.014 and f.y < -0.02
     if crescent:

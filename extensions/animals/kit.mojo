@@ -7,6 +7,7 @@
 soft masks and the re-seeded random streams.
 
 The eye functions are procedural-animals' `core/sdf/eyeSocket.js`.
+A point behind an eye reads as one.
 """
 
 from extensions.animals.rig import Rig
@@ -375,6 +376,33 @@ def lid_distance(e: EyeSpec, ef: EyeFrame, p: V3) -> Float64:
     """
     var q = aperture_local(e, ef, p)
     return abs(almond_distance(q.x, q.y, e.big_r, e.d))
+
+
+def lid_unless_behind(
+    e: EyeSpec, head_origin: V3, p: V3, behind: Float64
+) -> Float64:
+    """Return the lid distance, or one when the point is behind the eye.
+
+    Args:
+        e: The eye.
+        head_origin: The head origin. The nearer eye is the one on the
+            point's side of it.
+        p: The point.
+        behind: How far behind the aperture, in eye radii, still counts.
+            A point at this depth or farther back returns one.
+
+    Returns:
+        The distance to the almond rim, or one.
+
+    Raises:
+        Error: Never.
+    """
+    var s = 1.0 if p.x > head_origin.x else -1.0
+    var frame = eye_frame_of(e, head_origin, s)
+    var q = aperture_local(e, frame, p)
+    if q.z > behind * e.r:
+        return abs(almond_distance(q.x, q.y, e.big_r, e.d))
+    return 1.0
 
 
 def is_front_limb(bone: String) -> Bool:
