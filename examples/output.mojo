@@ -10,7 +10,8 @@ first argument, turns a node, and stores the frames. A full circle is
 one turn divided across the frames. An example that built its own frames
 can write them here. It can also copy one tile into a sheet, light a
 scene and spin it, hang a part on a turning node, stand a body on the
-floor, place a 30 degree camera, or write a third of a turn.
+floor, place a gallery camera, add a warm lamp, or write a third of a
+turn.
 """
 
 from cameras.perspective_camera import PerspectiveCamera
@@ -18,6 +19,7 @@ from core.assets import Assets
 from core.clock import Clock
 from core.object3d import NodeId, Object3D
 from core.scene import Scene
+from lights.light import ambient_light, directional_light
 from math.vector2 import Vector2
 from math.vector3 import Vector3
 from examples.preview import add_sky_and_sun
@@ -81,17 +83,27 @@ def stand_on_floor(
 
 
 def gallery_camera(
-    width: Int, height: Int, eye: Vector3, target: Vector3
+    width: Int,
+    height: Int,
+    eye: Vector3,
+    target: Vector3,
+    field_of_view: Angle = Angle(30.0, DEGREE),
+    near: Length = Length(0.05, METER),
+    far: Length = Length(30.0, METER),
 ) raises -> PerspectiveCamera:
-    """Return a 30 degree camera looking from `eye` to `target`.
+    """Return a camera looking from `eye` to `target`.
 
-    Near is 5 centimeters. Far is 30 meters.
+    The field of view is 30 degrees, near is 5 centimeters, and far is
+    30 meters, unless a caller passes another value.
 
     Args:
         width: Image width in pixels.
         height: Image height in pixels.
         eye: Where the camera stands, in meters.
         target: Where it looks, in meters.
+        field_of_view: The vertical field of view.
+        near: The near clipping distance.
+        far: The far clipping distance.
 
     Returns:
         The placed camera.
@@ -100,13 +112,32 @@ def gallery_camera(
         Error: If the camera is not valid.
     """
     var camera = PerspectiveCamera(
-        Angle(30.0, DEGREE),
+        field_of_view,
         Float32(width) / Float32(height),
-        Length(0.05, METER),
-        Length(30.0, METER),
+        near,
+        far,
     )
     camera.place(eye, target)
     return camera^
+
+
+def warm_lamp(mut scene: Scene, x: Float32, y: Float32, z: Float32) raises:
+    """Add a warm ambient fill and one directional lamp.
+
+    Args:
+        scene: The scene.
+        x: The lamp's x, in meters.
+        y: The lamp's y, in meters.
+        z: The lamp's z, in meters.
+
+    Raises:
+        Error: If a light cannot be added.
+    """
+    var lamp = Object3D()
+    lamp.set_position(x, y, z)
+    var lamp_node = scene.add(lamp^)
+    scene.add_light(ambient_light(Color(255, 248, 235), 0.52))
+    scene.add_light(directional_light(Color(255, 244, 220), lamp_node, 2.55))
 
 
 def example_destination(default_name: String) -> String:
