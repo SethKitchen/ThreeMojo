@@ -72,6 +72,39 @@ def lerp(x: Float32, y: Float32, t: Float32) -> Float32:
     return (1 - t) * x + t * y
 
 
+def mix_delta(start: Float32, end: Float32, t: Float32) -> Float32:
+    """Return `start` moved toward `end` by `t`.
+
+    The difference is formed first, then scaled, then added. `lerp`
+    multiplies each end before the sum.
+
+    Args:
+        start: The value at zero.
+        end: The value at one.
+        t: The fraction.
+
+    Returns:
+        `start + (end - start) * t`.
+    """
+    return start + (end - start) * t
+
+
+def mix_delta(start: Float64, end: Float64, t: Float64) -> Float64:
+    """Return `start` moved toward `end` by `t`.
+
+    The difference is formed first, then scaled, then added.
+
+    Args:
+        start: The value at zero.
+        end: The value at one.
+        t: The fraction.
+
+    Returns:
+        `start + (end - start) * t`.
+    """
+    return start + (end - start) * t
+
+
 def inverse_lerp(x: Float32, y: Float32, value: Float32) -> Float32:
     """Return the fraction of the way `value` lies from `x` to `y`.
 

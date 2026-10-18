@@ -39,6 +39,7 @@ triangle shades and maps as though it were never cut.
 """
 
 from math.bounds import Plane
+from math.utils import mix_delta
 from math.vector3 import Vector3
 from render.framebuffer import FloatColor
 from std.math import isfinite
@@ -143,7 +144,7 @@ def _mix(a: Float32, b: Float32, t: Float32) -> Float32:
     # Done in floats and kept there. Rounding to a byte at each cut, as this
     # used to, spent a level of precision every time a triangle crossed a
     # plane — and a triangle can cross two.
-    return a + (b - a) * t
+    return mix_delta(a, b, t)
 
 
 @fieldwise_init
