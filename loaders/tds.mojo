@@ -53,6 +53,7 @@ so the wireframe and its width stay in `TdsMaterial`.
 """
 
 from core.assets import Assets
+from core.binary import little_endian_u32
 from core.buffer_attribute import BufferAttribute
 from core.buffer_geometry import POSITION, UV, BufferGeometry, MaterialIndex
 from core.geometry_store import GeometryId
@@ -159,9 +160,7 @@ struct _Reader:
         """
         self.need(at, 6)
         var id = Int(self.bytes[at]) | (Int(self.bytes[at + 1]) << 8)
-        var size = 0
-        for k in range(4):  # pragma: no branch
-            size |= Int(self.bytes[at + 2 + k]) << (8 * k)
+        var size = little_endian_u32(self.bytes, at + 2)
         if size < 6:
             raise Error(
                 "3DS: a chunk shorter than its header, at " + String(at)

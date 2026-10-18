@@ -54,6 +54,7 @@ empty array when it is not. A file of a version before 0.4.0 has path
 headers that three.js reads one padding byte short, so its paths are
 the wrong ones; this port reads them as three.js does.
 """
+from core.binary import little_endian_uint
 from core.ordinal import ordinal_valid
 from core.search import last_match
 
@@ -320,9 +321,7 @@ def _int32(data: List[UInt8], at: Int, width: Int) -> Int:
     Returns:
         The integer.
     """
-    var value = 0
-    for b in range(width):  # pragma: no branch
-        value |= Int(data[at + b]) << (8 * b)
+    var value = little_endian_uint(data, at, width)
     var top = 1 << (8 * width - 1)
     if value >= top:
         value -= top << 1
@@ -600,9 +599,7 @@ struct _Crate(Movable):
             Error: If the bytes pass the end.
         """
         self.need(width)
-        var value = 0
-        for b in range(width):  # pragma: no branch
-            value |= Int(self.bytes[self.at + b]) << (8 * b)
+        var value = little_endian_uint(self.bytes, self.at, width)
         self.at += width
         return value
 
@@ -887,11 +884,8 @@ struct _Crate(Movable):
         var size = self.unsigned(8)
         var reps = decompress_lz4(self.take(size), count * 8)
         for k in range(count):
-            var lo = 0
-            var hi = 0
-            for b in range(4):  # pragma: no branch
-                lo |= Int(reps[k * 8 + b]) << (8 * b)
-                hi |= Int(reps[k * 8 + 4 + b]) << (8 * b)
+            var lo = little_endian_uint(reps, k * 8, 4)
+            var hi = little_endian_uint(reps, k * 8 + 4, 4)
             self.field_reps.append(_Rep(lo, hi))
 
     def read_field_sets(mut self) raises:

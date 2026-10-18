@@ -34,6 +34,7 @@ WebP carries no color space here, so the samples are sRGB, as a browser
 takes them.
 """
 
+from core.binary import little_endian_uint
 from render.png import DecodedImage
 from render.srgb import SRGB
 from render.webp_lossless import decode_lossless, decode_lossless_stream
@@ -66,10 +67,7 @@ def _tag(bytes: List[UInt8], at: Int) -> String:
 
 def _le(bytes: List[UInt8], at: Int, count: Int) -> Int:
     """Return a little-endian number of `count` bytes."""
-    var value = 0
-    for i in range(count):  # pragma: no branch
-        value |= Int(bytes[at + i]) << (8 * i)
-    return value
+    return little_endian_uint(bytes, at, count)
 
 
 def _slice(bytes: List[UInt8], start: Int, end: Int) -> List[UInt8]:

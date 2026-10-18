@@ -36,6 +36,7 @@ expands to the wrong length; an ASCII node without `:`, an unbalanced
 other than the one its `*count` declares.
 """
 
+from core.binary import little_endian_uint
 from core.ordinal import ordinal_valid
 
 from loaders.js_text import is_js_word
@@ -774,10 +775,7 @@ def _scalar(var token: String) -> FbxProperty:
 
 def _le(bytes: List[UInt8], at: Int, count: Int) -> UInt64:
     """Return `count` bytes at `at` as a little-endian unsigned number."""
-    var value = UInt64(0)
-    for index in range(count):  # pragma: no branch
-        value |= UInt64(bytes[at + index]) << UInt64(8 * index)
-    return value
+    return UInt64(little_endian_uint(bytes, at, count))
 
 
 def _signed(value: UInt64, bits: Int) -> Int:

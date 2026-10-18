@@ -42,6 +42,8 @@ decoded without that dictionary. A KTX 2.0 file carries no dictionary,
 and three.js's Basis Universal transcoder refuses such a frame too.
 """
 
+from core.binary import little_endian_uint
+
 # A decoder that knows the size it expects passes it as the limit.
 comptime NO_LIMIT = 0x7FFFFFFFFFFFFFF
 # The magic numbers of a frame and of a skippable frame.
@@ -92,10 +94,7 @@ def _room(produced: Int, more: Int, limit: Int) raises:
 
 def _le(bytes: List[UInt8], at: Int, count: Int) -> Int:
     """Return the little-endian number of `count` bytes at `at`."""
-    var value = 0
-    for index in range(count):
-        value |= Int(bytes[at + index]) << (index * 8)
-    return value
+    return little_endian_uint(bytes, at, count)
 
 
 def _byte_or_zero(data: List[UInt8], at: Int) -> Int:

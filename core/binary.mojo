@@ -6,7 +6,8 @@
 """Little-endian integers shared by the file readers.
 
 The caller checks that `at` lies inside the buffer. These functions do
-not allocate and do not raise.
+not allocate and do not raise. `little_endian_u16` and `little_endian_u32`
+read a fixed width. `little_endian_uint` reads one through eight bytes.
 """
 
 
@@ -70,4 +71,24 @@ def little_endian_i32(bytes: List[UInt8], at: Int) -> Int:
     var value = little_endian_u32(bytes, at)
     if value >= 1 << 31:
         return value - (1 << 32)
+    return value
+
+
+def little_endian_uint(bytes: List[UInt8], at: Int, width: Int) -> Int:
+    """Return the little-endian unsigned integer of `width` bytes at `at`.
+
+    Args:
+        bytes: The buffer.
+        at: The index of the first byte.
+        width: How many bytes, zero through eight. Zero reads nothing.
+            The caller has checked that a positive width lies inside
+            `bytes`.
+
+    Returns:
+        The integer, with the first byte in the low eight bits. Zero
+        when `width` is zero. Eight bytes past 2^63 read as negative.
+    """
+    var value = 0
+    for index in range(width):
+        value |= Int(bytes[at + index]) << (8 * index)
     return value
