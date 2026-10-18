@@ -356,9 +356,7 @@ struct CSM(Movable):
         if not mode.is_valid():
             raise Error("A CSM split mode that is none of the four")
         var direction = light_direction
-        if not direction.is_finite() or (
-            direction.x == 0 and direction.y == 0 and direction.z == 0
-        ):
+        if not direction.is_finite() or (direction == Vector3(0, 0, 0)):
             raise Error("A CSM's light direction must be finite and not zero")
         direction.normalize()
         var reach = max_far.to(METER)

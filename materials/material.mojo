@@ -2518,7 +2518,7 @@ struct Material(ImplicitlyCopyable):
         var near = self.near_distance.to(METER)
         var far = self.far_distance.to(METER)
         var ranged = (
-            not _is_origin(self.reference_position)
+            self.reference_position != Vector3(0, 0, 0)
             or self.near_distance != DEFAULT_NEAR_DISTANCE
             or self.far_distance != DEFAULT_FAR_DISTANCE
         )
@@ -3940,12 +3940,6 @@ def distance_material(
         near_distance=near_distance,
         far_distance=far_distance,
     )
-
-
-def _is_origin(point: Vector3) -> Bool:
-    """Return True if `point` is the origin, three.js's default
-    `referencePosition`."""
-    return point.x == 0 and point.y == 0 and point.z == 0
 
 
 def _is_black(color: Color) -> Bool:

@@ -583,7 +583,7 @@ struct Matrix4(Equatable, ImplicitlyCopyable):
                 direction.is_finite(),
                 "A transform axis must be finite to extract rotation",
             )
-            if direction.x == 0 and direction.y == 0 and direction.z == 0:
+            if direction == Vector3(0, 0, 0):
                 raise Error(
                     "A transform with no extent along an axis has no rotation"
                     " to extract"
@@ -883,19 +883,19 @@ struct Matrix4(Equatable, ImplicitlyCopyable):
         """
         if not (eye.is_finite() and target.is_finite()):
             raise Error("Look-at positions must be finite")
-        if not up.is_finite() or (up.x == 0 and up.y == 0 and up.z == 0):
+        if not up.is_finite() or up == Vector3(0, 0, 0):
             raise Error("An up direction must be finite and not zero")
         var z = eye - target
         if not z.is_finite():
             # Halve before subtraction when opposite finite coordinates
             # would overflow. The direction is unchanged.
             z = eye * 0.5 - target * 0.5
-        if z.x == 0 and z.y == 0 and z.z == 0:
+        if z == Vector3(0, 0, 0):
             z = Vector3(0, 0, 1)
         z = _unit_direction(z)
         var above = _unit_direction(up)
         var x = _cross_direction(above, z)
-        if x.x == 0 and x.y == 0 and x.z == 0:
+        if x == Vector3(0, 0, 0):
             # Nudge along an axis that is not the dominant direction.
             # This keeps the usual y/z-up choice and works at any scale.
             if abs(z.z) > max(abs(z.x), abs(z.y)):

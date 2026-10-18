@@ -576,7 +576,7 @@ struct Vector3(Equatable, ImplicitlyCopyable, PolylineVertex):
             other: The vector to project onto. A zero vector gives a zero
                 vector, as in three.js.
         """
-        if other.x == 0 and other.y == 0 and other.z == 0:
+        if other == Vector3(0, 0, 0):
             self = Vector3(0, 0, 0)
             return
         var denominator = other.length_sq()

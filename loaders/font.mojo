@@ -494,11 +494,6 @@ struct Font(Movable):
         return shapes^
 
 
-def _same(first: Vector2, second: Vector2) -> Bool:
-    """Return True if two points are the same point."""
-    return first.x == second.x and first.y == second.y
-
-
 def _glyph_path(
     glyph: Glyph, scale: Float64, offset_x: Float64, offset_y: Float64
 ) raises -> ShapePath:
@@ -532,7 +527,7 @@ def _glyph_path(
                 Float32(Float64(raw.x) * scale + offset_x),
                 Float32(Float64(raw.y) * scale + offset_y),
             )
-            if not _same(placed, pen):
+            if placed != pen:
                 still = False
             points.append(placed)
         if step.verb == MOVE_TO:
