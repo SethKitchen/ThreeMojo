@@ -7,7 +7,8 @@
 
 from extensions.physics.body import BodyId, DYNAMIC, STATIC, RigidBody
 from extensions.physics.ccd import DISCRETE, SPHERE_MESH_CCD, _sweep_domain
-from extensions.physics.ccd_index import _CCDIndex, _bounds, _down, _up
+from extensions.physics.ccd_index import _CCDIndex, _bounds, _down
+from math.next_float import next_binary64_up
 from extensions.physics.shape import Shape, PhysicsMaterial, _wide
 from extensions.physics.world import PhysicsWorld
 from math.matrix3 import Matrix3
@@ -838,10 +839,10 @@ def test_bounds_round_each_operation_outward() raises:
         Float64(1),
         Float64(1000000),
     ]:
-        assert_true(_up(value) > value)
+        assert_true(next_binary64_up(value) > value)
         assert_true(_down(value) < value)
-        assert_equal(_down(value), -_up(-value))
-    assert_true(_up(Float64(-0.0)) > 0)
+        assert_equal(_down(value), -next_binary64_up(-value))
+    assert_true(next_binary64_up(Float64(-0.0)) > 0)
     assert_true(_down(Float64(-0.0)) < 0)
     var start = SIMD[DType.float64, 4](1, -1, 0, 0)
     var travel = SIMD[DType.float64, 4](1e-16, -1e-16, 0, 0)
