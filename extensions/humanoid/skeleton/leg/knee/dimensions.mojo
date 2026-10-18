@@ -993,12 +993,8 @@ def _trochlea_local(femur: FemurDimensions) -> Vector3:
     var W = femur.bicondylar_width.value
     var condyle_ry = 0.32 * W
     var condyle_rz = 0.34 * W
-    return Vector3(
-        0.5 * (femur.medial_condyle.x + femur.lateral_condyle.x),
-        0.5 * (femur.medial_condyle.y + femur.lateral_condyle.y)
-        + 0.12 * condyle_ry,
-        0.5 * (femur.medial_condyle.z + femur.lateral_condyle.z)
-        + 0.58 * condyle_rz,
+    return midpoint(femur.medial_condyle, femur.lateral_condyle) + Vector3(
+        0, 0.12 * condyle_ry, 0.58 * condyle_rz
     )
 
 
