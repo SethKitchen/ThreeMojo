@@ -42,7 +42,7 @@ from core.layers import Layers
 from core.object3d import NO_PARENT, NodeId
 from core.scene import Scene
 from math.vector3 import Vector3
-from render.cube_texture import FACE_COUNT, face_forward, face_up
+from render.cube_texture import face_forward, face_up, require_cube_face
 from std.math import isfinite
 from units.si import Angle, DEGREE, Length
 
@@ -147,8 +147,7 @@ struct CubeCamera(ImplicitlyCopyable):
             Error: If the face is none of the six, the node is not in the
                 scene, or the scene is stale.
         """
-        if face < 0 or face >= FACE_COUNT:
-            raise Error("A cube has six faces")
+        require_cube_face(face)
         var camera = PerspectiveCamera(FACE_FOV, 1.0, self.near, self.far)
         var stand = self.eye(scene)
         camera.up = face_up(face)

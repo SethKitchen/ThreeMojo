@@ -39,6 +39,23 @@ from units.si import (
 )
 
 
+def require_gravity(acceleration: Float64) raises:
+    """Refuse a gravity that is negative or not finite.
+
+    Args:
+        acceleration: The acceleration, in meters per second squared.
+
+    Returns:
+        Nothing. The call returns when the acceleration is zero or more
+            and finite.
+
+    Raises:
+        Error: If the acceleration is negative or not finite.
+    """
+    if not (acceleration >= 0 and isfinite(acceleration)):
+        raise Error("A gravity must be zero or more and finite")
+
+
 struct Member(Copyable, Movable):
     """A frame member between two nodes."""
 
@@ -566,6 +583,5 @@ struct StructuralModel(Copyable, Movable):
         """
         self.check_case(load_case)
         var g = acceleration.to(METER_PER_SECOND_SQUARED)
-        if not (g >= 0 and isfinite(g)):
-            raise Error("A gravity must be zero or more and finite")
+        require_gravity(g)
         self.gravity.append(GravityLoad(load_case, g))

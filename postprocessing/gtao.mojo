@@ -41,6 +41,7 @@ from postprocessing.screen_space import (
     DepthView,
     ScreenSpaceOutput,
     multiply_light,
+    require_screen_output,
     show_depth,
     show_normals,
     show_values,
@@ -134,8 +135,7 @@ def check_gtao(settings: GtaoSettings) raises:
             negative; a sample count is below two, or the denoise's radius
             below one.
     """
-    if not settings.output.is_valid():
-        raise Error("A screen-space output must be one of the six named")
+    require_screen_output(settings.output)
     if not (
         isfinite(settings.radius.value)
         and isfinite(settings.distance_exponent)

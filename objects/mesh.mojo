@@ -75,7 +75,11 @@ until there was a second property to put in it. Textures were that second
 property, and `side` a third; see `materials.material`.
 """
 
-from core.buffer_geometry import BufferGeometry, MaterialIndex
+from core.buffer_geometry import (
+    BufferGeometry,
+    MaterialIndex,
+    require_material_index,
+)
 from core.geometry_store import GeometryId
 from core.morph import MorphInfluences
 from core.object3d import NodeId
@@ -255,8 +259,7 @@ struct Mesh(ImplicitlyCopyable):
         """
         if not self.is_multi_material():
             raise Error("A mesh with one material has no material list")
-        if not index.is_valid():
-            raise Error("A group's material index cannot be negative")
+        require_material_index(index)
         if index.value >= len(self.materials):
             return None
         return self.materials[index.value]

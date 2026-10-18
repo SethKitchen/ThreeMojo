@@ -451,8 +451,18 @@ def multiply_light(mut frame: RenderTarget, values: List[Float32]):
         frame.colors[slot] = frame.colors[slot].scaled(values[slot])
 
 
-def _check_output(output: ScreenSpaceOutput) raises:
-    """Refuse an output that is none of the six."""
+def require_screen_output(output: ScreenSpaceOutput) raises:
+    """Refuse a screen-space output that is none of the six named outputs.
+
+    Args:
+        output: The output the pass writes.
+
+    Returns:
+        Nothing. The call returns when the output is named.
+
+    Raises:
+        Error: If the output is none of the six.
+    """
     if not output.is_valid():
         raise Error("A screen-space output must be one of the six named")
 
@@ -536,7 +546,7 @@ def check_ssao(settings: SsaoSettings) raises:
         Error: If the output is none of the six, the radius or a distance
             is negative or not finite, or the kernel is empty.
     """
-    _check_output(settings.output)
+    require_screen_output(settings.output)
     if not (
         isfinite(settings.kernel_radius.value)
         and isfinite(settings.min_distance)
@@ -853,7 +863,7 @@ def check_sao(settings: SaoSettings) raises:
             is negative, or the scale, kernel radius or standard deviation
             is not positive.
     """
-    _check_output(settings.output)
+    require_screen_output(settings.output)
     if not (
         isfinite(settings.bias)
         and isfinite(settings.intensity)
@@ -1220,7 +1230,7 @@ def check_ssr(settings: SsrSettings) raises:
             the opacity is outside zero to one, the thickness is negative,
             or the reach is not positive.
     """
-    _check_output(settings.output)
+    require_screen_output(settings.output)
     if not (
         isfinite(settings.opacity)
         and isfinite(settings.max_distance.value)

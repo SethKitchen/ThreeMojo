@@ -16,7 +16,11 @@ Use ConvexHull directly to retain original Float64 coordinates.
 
 from core.buffer_attribute import BufferAttribute
 from core.buffer_geometry import BufferGeometry, NORMAL, POSITION
-from math.convex_hull import ConvexHull
+from math.convex_hull import (
+    ConvexHull,
+    require_hull_count,
+    require_hull_finite,
+)
 from std.math import isfinite
 from math.vector3 import Vector3
 
@@ -62,16 +66,10 @@ def convex(points: List[SIMD[DType.float64, 4]]) raises -> BufferGeometry:
             be stored as a finite Float32, or if the rounded positions do
             not span a solid within the hull's construction tolerance.
     """
-    if len(points) < 4:
-        raise Error("A convex hull needs at least four points")
+    require_hull_count(len(points))
     var stored = List[SIMD[DType.float64, 4]]()
     for point in points:  # pragma: no branch
-        if (
-            not isfinite(point[0])
-            or not isfinite(point[1])
-            or not isfinite(point[2])
-        ):
-            raise Error("A convex hull needs finite points")
+        require_hull_finite(point[0], point[1], point[2])
         var x = Float32(point[0])
         var y = Float32(point[1])
         var z = Float32(point[2])

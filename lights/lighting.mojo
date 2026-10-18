@@ -78,6 +78,7 @@ from lights.light import (
     ALL_LIGHTS,
     Light,
     LightMask,
+    require_shadow_light,
 )
 from lights.light_probe_grid import LightProbeGrid
 from lights.ltc import (
@@ -1438,8 +1439,7 @@ struct Lighting(Movable):
                 )
         for slot in range(len(self.shadows)):
             var owner = self.shadows[slot].light
-            if owner < 0 or owner >= len(scene.lights):
-                raise Error("A shadow map names a light that is not there")
+            require_shadow_light(owner, len(scene.lights))
             require_shadow_type(self.shadows[slot].shadow_type)
             var kind = scene.lights[owner].kind
             if kind != DIRECTIONAL and kind != POINT and kind != SPOT:

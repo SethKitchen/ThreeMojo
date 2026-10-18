@@ -525,7 +525,7 @@ from materials.compute_nodes import (
 from std.atomic import Atomic
 from renderers.renderer import Frame, Renderer
 from objects.gaussian_splat import GaussianSplat
-from render.splat_raster import prepare_gaussian_splat
+from render.splat_raster import prepare_gaussian_splat, require_splat_depth
 from render.splatrule import (
     SPLAT_A,
     SPLAT_AXIS_X,
@@ -13496,8 +13496,7 @@ struct GpuSplats(Movable):
         Raises:
             Error: If the target's depth mode is not valid.
         """
-        if not target.depth_mode.is_valid():
-            raise Error("A Gaussian splat needs a valid depth mode")
+        require_splat_depth(target.depth_mode)
         var w = target.width
         var h = target.height
         var pixels = w * h

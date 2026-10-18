@@ -32,7 +32,6 @@ from math.finite import require_positive_tolerance
 from math.norm import squared_length2
 from math.polygon_hit import ray_crosses
 from math.utils import clamp
-from std.math import isfinite
 from extensions.building.ids import ElementId
 from extensions.building.kinds import (
     BEAM,
@@ -45,7 +44,7 @@ from extensions.building.material import BuildingMaterial
 from extensions.building.model import Building
 from extensions.structure.ids import LoadCaseId, MemberId, NodeId, ShellId
 from extensions.structure.kinds import UZ
-from extensions.structure.model import StructuralModel
+from extensions.structure.model import StructuralModel, require_gravity
 from extensions.topology.ids import FaceId
 from geometries.earcut import earcut
 from generators.utils import Vec3d
@@ -138,8 +137,7 @@ struct StructuralViewOptions(ImplicitlyCopyable):
         if self.shell_divisions < 0 or self.shell_divisions > _MAX_DIVISIONS:
             raise Error("The shell divisions must be from 0 to 16")
         var g = self.gravity.to(METER_PER_SECOND_SQUARED)
-        if not (g >= 0 and isfinite(g)):
-            raise Error("A gravity must be zero or more and finite")
+        require_gravity(g)
 
 
 def default_options() -> StructuralViewOptions:

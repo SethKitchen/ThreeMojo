@@ -113,6 +113,23 @@ def require_light_intensity(intensity: Float32) raises:
         raise Error("A light's intensity must be finite and not negative")
 
 
+def require_shadow_light(index: Int, count: Int) raises:
+    """Refuse a shadow map whose light is not in the list.
+
+    Args:
+        index: The light the map names.
+        count: How many lights the list has.
+
+    Returns:
+        Nothing. The call returns when the index names a light.
+
+    Raises:
+        Error: If the index is negative or past the last light.
+    """
+    if index < 0 or index >= count:
+        raise Error("A shadow map names a light that is not there")
+
+
 @fieldwise_init
 struct LightKind(Equatable, ImplicitlyCopyable, Writable):
     """Which of the seven kinds of light this is, as a type rather than an
@@ -886,6 +903,5 @@ def shadows_drawn(mut lights: List[Light], maps: List[ShadowMap]) raises:
     """
     for slot in range(len(maps)):
         var light = maps[slot].light
-        if light < 0 or light >= len(lights):
-            raise Error("A shadow map names a light that is not there")
+        require_shadow_light(light, len(lights))
         lights[light].shadow.needs_update = False
