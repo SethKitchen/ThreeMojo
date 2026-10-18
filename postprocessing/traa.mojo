@@ -40,7 +40,7 @@ limits, and explicit zero and nonfinite rules.
 
 from render.color_math import floor_channels
 from math.norm import length2
-from math.utils import clamp, max3, saturate
+from math.utils import edge_index, max3, saturate
 from math.sine import fraction
 from cameras.camera import Camera
 from core.assets import Assets
@@ -272,8 +272,8 @@ struct FloatPlane(ImplicitlyCopyable):
         Returns:
             The float.
         """
-        var cx = clamp(x, 0, self.width - 1)
-        var cy = clamp(y, 0, self.height - 1)
+        var cx = edge_index(x, self.width)
+        var cy = edge_index(y, self.height)
         return self.floats[
             unsafe_offset=(cy * self.width + cx) * self.lanes + lane
         ]

@@ -13,7 +13,7 @@ buffers through the same `LightView`; see `render.gpu.GpuComposer`.
 """
 
 from render.framebuffer import FloatColor
-from math.utils import clamp
+from math.utils import clamp, edge_index
 
 
 # A view's pointer is not tracked by the compiler: whoever builds one keeps
@@ -130,9 +130,7 @@ struct LightView(ImplicitlyCopyable):
         Raises:
             Error: Never.
         """
-        return self.at(
-            clamp(x, 0, self.width - 1), clamp(y, 0, self.height - 1)
-        )
+        return self.at(edge_index(x, self.width), edge_index(y, self.height))
 
     def tap(self, x: Float32, y: Float32) -> FloatColor:
         """Return the light at a point in pixel coordinates, blended from
