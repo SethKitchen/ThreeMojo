@@ -15,11 +15,11 @@ is the scene that came back, not the one that was written.
 from examples.output import (
     example_destination,
     fill_and_key,
+    framed_camera,
     gallery_renderer,
     write_example,
 )
 
-from cameras.perspective_camera import PerspectiveCamera
 from core.assets import Assets
 from core.clock import Clock
 from core.object3d import Object3D
@@ -65,11 +65,12 @@ def main() raises:
     var eye = Object3D()
     eye.set_position(0.5, 0.15, 3.4)
     var eye_node = scene.attach(eye^, pivot)
-    var camera = PerspectiveCamera(
-        Angle(40.0, DEGREE),
-        Float32(WIDTH) / Float32(HEIGHT),
-        Length(0.1, METER),
-        Length(40.0, METER),
+    var camera = framed_camera(
+        WIDTH,
+        HEIGHT,
+        field_of_view=Angle(40.0, DEGREE),
+        near=Length(0.1, METER),
+        far=Length(40.0, METER),
     )
     camera.attach(eye_node)
     scene.update()

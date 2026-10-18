@@ -12,7 +12,12 @@ target. Each half is cleared to its own background and drawn by its own
 camera, and neither touches the other. The target is resolved once.
 """
 
-from examples.output import example_destination, fill_and_key, write_example
+from examples.output import (
+    example_destination,
+    fill_and_key,
+    framed_camera,
+    write_example,
+)
 
 from cameras.orthographic_camera import OrthographicCamera, centered
 from cameras.perspective_camera import PerspectiveCamera
@@ -129,11 +134,12 @@ def main() raises:
     var seat_node = scene.attach(seat^, pivot)
     scene.update()
     scene.look_at(seat_node, Vector3(0, 0, 0), camera=True)
-    var camera = PerspectiveCamera(
-        Angle(45.0, DEGREE),
-        Float32(WIDTH // 2) / Float32(HEIGHT),
-        Length(0.1, METER),
-        Length(100.0, METER),
+    var camera = framed_camera(
+        WIDTH // 2,
+        HEIGHT,
+        field_of_view=Angle(45.0, DEGREE),
+        near=Length(0.1, METER),
+        far=Length(100.0, METER),
     )
     camera.attach(seat_node)
     # The plan view looks straight down, and does not move.

@@ -16,6 +16,7 @@ and its outline rides the same node.
 from examples.output import (
     example_destination,
     fill_and_key,
+    framed_camera,
     gallery_renderer,
     spin_clip,
 )
@@ -106,11 +107,12 @@ def main() raises:
     var seat_node = scene.attach(seat^, pivot)
     scene.update()
     scene.look_at(seat_node, Vector3(0, 0.2, 0), camera=True)
-    var camera = PerspectiveCamera(
-        Angle(40.0, DEGREE),
-        Float32(WIDTH) / Float32(HEIGHT),
-        Length(0.1, METER),
-        Length(100.0, METER),
+    var camera = framed_camera(
+        WIDTH,
+        HEIGHT,
+        field_of_view=Angle(40.0, DEGREE),
+        near=Length(0.1, METER),
+        far=Length(100.0, METER),
     )
     camera.attach(seat_node)
     spin_clip(

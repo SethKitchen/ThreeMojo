@@ -15,11 +15,11 @@ are drawn first, and the sphere bends and tints that picture.
 from examples.output import (
     example_destination,
     fill_and_key,
+    framed_camera,
     gallery_renderer,
     spin_clip,
 )
 
-from cameras.perspective_camera import PerspectiveCamera
 from core.assets import Assets
 from core.object3d import Object3D
 from core.scene import Scene
@@ -87,11 +87,12 @@ def main() raises:
     var eye = Object3D()
     eye.set_position(0.2, 0.35, 3.3)
     var eye_node = scene.attach(eye^, pivot)
-    var camera = PerspectiveCamera(
-        Angle(38.0, DEGREE),
-        Float32(WIDTH) / Float32(HEIGHT),
-        Length(0.1, METER),
-        Length(40.0, METER),
+    var camera = framed_camera(
+        WIDTH,
+        HEIGHT,
+        field_of_view=Angle(38.0, DEGREE),
+        near=Length(0.1, METER),
+        far=Length(40.0, METER),
     )
     camera.attach(eye_node)
 
