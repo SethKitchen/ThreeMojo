@@ -368,40 +368,6 @@ def _is_relative_name(name: String) -> Bool:
     return name != "" and name.find(":") < 0
 
 
-def _is_zero(vector: Vector3) -> Bool:
-    """Return True if all three components are zero."""
-    return vector.x == 0 and vector.y == 0 and vector.z == 0
-
-
-def _is_one(vector: Vector3) -> Bool:
-    """Return True if all three components are one."""
-    return vector.x == 1 and vector.y == 1 and vector.z == 1
-
-
-def _is_identity_rotation(rotation: Quaternion) -> Bool:
-    """Return True if a quaternion turns nothing."""
-    return (
-        rotation.x == 0
-        and rotation.y == 0
-        and rotation.z == 0
-        and rotation.w == 1
-    )
-
-
-def _is_identity_matrix(matrix: Matrix4) -> Bool:
-    """Return True if a matrix moves nothing."""
-    var identity = Matrix4()
-    var same = True
-    for index in range(16):  # pragma: no branch
-        same = same and matrix.elements[index] == identity.elements[index]
-    return same
-
-
-def _is_at(point: Vector2, u: Float32, v: Float32) -> Bool:
-    """Return True if a point is exactly at `(u, v)`."""
-    return point.x == u and point.y == v
-
-
 def _is_written_upside_down(texture: Texture) -> Bool:
     """Return True if a texture's image is written upside down: one with
     `flip_y`, whose `v` counts up from its bottom row, where glTF's counts
@@ -470,8 +436,8 @@ struct GltfPlacement(Equatable, ImplicitlyCopyable):
             False for glTF's identity, which is written as no transform.
         """
         return not (
-            _is_at(self.offset, 0, 0)
-            and _is_at(self.scale, 1, 1)
+            self.offset == Vector2(0, 0)
+            and self.scale == Vector2(1, 1)
             and self.rotation == 0
         )
 
@@ -485,8 +451,8 @@ struct GltfPlacement(Equatable, ImplicitlyCopyable):
             True if every part is equal.
         """
         return (
-            _is_at(self.offset, other.offset.x, other.offset.y)
-            and _is_at(self.scale, other.scale.x, other.scale.y)
+            self.offset == other.offset
+            and self.scale == other.scale
             and self.rotation == other.rotation
             and self.set == other.set
         )
@@ -1244,13 +1210,13 @@ struct _Exporter(Movable):
             writer.begin_object()
             writer.key(TEXTURE_TRANSFORM)
             writer.begin_object()
-            if not _is_at(placed.offset, 0, 0):
+            if placed.offset != Vector2(0, 0):
                 writer.key("offset")
                 writer.numbers([placed.offset.x, placed.offset.y])
             if placed.rotation != 0:
                 writer.key("rotation")
                 writer.number(placed.rotation)
-            if not _is_at(placed.scale, 1, 1):
+            if placed.scale != Vector2(1, 1):
                 writer.key("scale")
                 writer.numbers([placed.scale.x, placed.scale.y])
             writer.end_object()
@@ -2818,10 +2784,10 @@ def _node_json(
         writer.key("name")
         writer.string(node.name)
     if node.matrix_auto_update:
-        if not _is_zero(node.position):
+        if node.position != Vector3(0, 0, 0):
             writer.key("translation")
             writer.numbers([node.position.x, node.position.y, node.position.z])
-        if not _is_identity_rotation(node.quaternion):
+        if node.quaternion != Quaternion.identity():
             writer.key("rotation")
             writer.numbers(
                 [
@@ -2831,10 +2797,10 @@ def _node_json(
                     node.quaternion.w,
                 ],
             )
-        if not _is_one(node.scale):
+        if node.scale != Vector3(1, 1, 1):
             writer.key("scale")
             writer.numbers([node.scale.x, node.scale.y, node.scale.z])
-    elif not _is_identity_matrix(node.matrix):
+    elif node.matrix != Matrix4():
         var elements = List[Float32]()
         for index in range(16):  # pragma: no branch
             elements.append(node.matrix.elements[index])
