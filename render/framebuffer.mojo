@@ -59,7 +59,7 @@ from render.srgb import (
     srgb_to_linear,
 )
 from math.sine import fraction
-from math.utils import max3, min3
+from math.utils import max3, min3, mix_delta
 from std.math import inf
 from std.memory import bitcast
 
@@ -642,6 +642,25 @@ struct FloatColor(Equatable, ImplicitlyCopyable):
         """Return this color with its three channels scaled, alpha kept."""
         return FloatColor(
             self.r * factor, self.g * factor, self.b * factor, self.a
+        )
+
+    def mix(self, other: Self, t: Float32) -> Self:
+        """Return this color moved toward `other` by `t`, every channel.
+
+        The difference is formed first, then scaled, then added.
+
+        Args:
+            other: The color at one.
+            t: The fraction.
+
+        Returns:
+            The blend. Alpha is included.
+        """
+        return FloatColor(
+            mix_delta(self.r, other.r, t),
+            mix_delta(self.g, other.g, t),
+            mix_delta(self.b, other.b, t),
+            mix_delta(self.a, other.a, t),
         )
 
     def encode(self) -> Color:

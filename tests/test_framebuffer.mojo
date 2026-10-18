@@ -150,6 +150,19 @@ def test_colors_are_opaque_unless_given_an_alpha() raises:
     assert_equal(Color(1, 2, 3, 128).a, UInt8(128))
 
 
+def test_a_color_moves_toward_another_by_the_difference() raises:
+    var blended = FloatColor(0, 0, 0, 0).mix(FloatColor(1, 0.5, 0.25, 1), 0.5)
+    assert_equal(blended.r, Float32(0.5))
+    assert_equal(blended.g, Float32(0.25))
+    assert_equal(blended.b, Float32(0.125))
+    assert_equal(blended.a, Float32(0.5))
+    var kept = FloatColor(1, 1, 1, 1).mix(FloatColor(0, 0, 0, 0), 0)
+    assert_equal(kept.r, Float32(1))
+    assert_equal(kept.g, Float32(1))
+    assert_equal(kept.b, Float32(1))
+    assert_equal(kept.a, Float32(1))
+
+
 def test_alpha_roundtrips_through_the_buffer() raises:
     var fb = Framebuffer(2, 2, Color(0, 0, 0))
     fb.set_pixel(1, 1, Color(10, 20, 30, 64))
