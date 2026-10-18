@@ -18,7 +18,7 @@ from core.buffer_geometry import BufferGeometry
 from geometries.surface import indexed_surface
 from extensions.humanoid.skeleton.field import DistanceField
 from math.utils import clamp, max3
-from math.vector3 import Vector3, midpoint, mix_delta3
+from math.vector3 import Vector3, centroid, midpoint, mix_delta3
 from std.math import atan2, max, min, pi
 
 comptime MIN_DETAIL = 8
@@ -444,10 +444,7 @@ def _emit_triangle(
     var e1 = p1 - p0
     var e2 = p2 - p0
     e1.cross(e2)
-    var cx = (p0.x + p1.x + p2.x) * Float32(1.0 / 3.0)
-    var cy = (p0.y + p1.y + p2.y) * Float32(1.0 / 3.0)
-    var cz = (p0.z + p1.z + p2.z) * Float32(1.0 / 3.0)
-    var to_inside = Vector3(inside.x - cx, inside.y - cy, inside.z - cz)
+    var to_inside = inside - centroid(p0, p1, p2)
     if e1.dot(to_inside) > 0:
         indices.append(i0)
         indices.append(i0 + 2)
@@ -456,15 +453,6 @@ def _emit_triangle(
     indices.append(i0)
     indices.append(i0 + 1)
     indices.append(i0 + 2)
-
-
-def _mid3(a: Vector3, b: Vector3, c: Vector3) -> Vector3:
-    """Return the centroid of `a`, `b` and `c`."""
-    return Vector3(
-        (a.x + b.x + c.x) * Float32(1.0 / 3.0),
-        (a.y + b.y + c.y) * Float32(1.0 / 3.0),
-        (a.z + b.z + c.z) * Float32(1.0 / 3.0),
-    )
 
 
 def _clip_tetrahedron(
@@ -524,7 +512,7 @@ def _clip_tetrahedron(
         _emit_triangle(positions, indices, ab, cd, ac, bc_in)
         return
     if mask == 7:
-        _emit_triangle(positions, indices, ad, bd, cd, _mid3(a, b, c))
+        _emit_triangle(positions, indices, ad, bd, cd, centroid(a, b, c))
         return
     if mask == 8:
         _emit_triangle(positions, indices, ad, cd, bd, d)
@@ -540,7 +528,7 @@ def _clip_tetrahedron(
         _emit_triangle(positions, indices, ab, ad, cd, bd_in)
         return
     if mask == 11:
-        _emit_triangle(positions, indices, ac, cd, bc, _mid3(a, b, d))
+        _emit_triangle(positions, indices, ac, cd, bc, centroid(a, b, d))
         return
     if mask == 12:
         var cd_in = midpoint(c, d)
@@ -548,6 +536,6 @@ def _clip_tetrahedron(
         _emit_triangle(positions, indices, ac, bd, ad, cd_in)
         return
     if mask == 13:
-        _emit_triangle(positions, indices, ab, bc, bd, _mid3(a, c, d))
+        _emit_triangle(positions, indices, ab, bc, bd, centroid(a, c, d))
         return
-    _emit_triangle(positions, indices, ab, ad, ac, _mid3(b, c, d))
+    _emit_triangle(positions, indices, ab, ad, ac, centroid(b, c, d))

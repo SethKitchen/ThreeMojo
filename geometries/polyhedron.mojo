@@ -49,7 +49,7 @@ from core.buffer_geometry import (
     UV,
 )
 from core.user_data import UserData, json_number_text
-from math.vector3 import Vector3, mix_delta3
+from math.vector3 import Vector3, centroid, mix_delta3
 from std.math import atan2, pi, sqrt
 from units.si import Length, METER
 
@@ -237,11 +237,11 @@ def polyhedron(
 
     # The seam repairs, per face, in three.js's order.
     for triangle in range(count // 3):  # pragma: no branch
-        var middle = (
-            points[triangle * 3]
-            + points[triangle * 3 + 1]
-            + points[triangle * 3 + 2]
-        ) * (Float32(1) / 3)
+        var middle = centroid(
+            points[triangle * 3],
+            points[triangle * 3 + 1],
+            points[triangle * 3 + 2],
+        )
         var face_azimuth = _azimuth(middle)
         for corner in range(3):  # pragma: no branch
             var index = triangle * 3 + corner
