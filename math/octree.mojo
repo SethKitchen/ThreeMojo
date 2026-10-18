@@ -63,40 +63,9 @@ from math.vector3 import Vector3
 from std.math import inf, max, min, sqrt
 
 
-def _sat_axis(
-    axis: Vector3, v0: Vector3, v1: Vector3, v2: Vector3, extents: Vector3
-) -> Bool:
-    """Return whether an axis does not separate a triangle from a box at the
-    origin. One step of three.js's `satForAxes`.
-
-    Args:
-        axis: The axis.
-        v0: A corner, relative to the box's center.
-        v1: A corner.
-        v2: A corner.
-        extents: The box's half size.
-
-    Returns:
-        Whether the two overlap along the axis.
-    """
-    var r = (
-        extents.x * abs(axis.x)
-        + extents.y * abs(axis.y)
-        + extents.z * abs(axis.z)
-    )
-    var p0 = v0.dot(axis)
-    var p1 = v1.dot(axis)
-    var p2 = v2.dot(axis)
-    return not (max(-max(p0, max(p1, p2)), min(p0, min(p1, p2))) > r)
-
-
 def box_intersects_triangle(box: Box3, triangle: Triangle) -> Bool:
     """Return whether a triangle meets a box. three.js:
     `Box3.intersectsTriangle`.
-
-    The separating axis test of Akenine-Moller: the nine cross products of
-    the box's axes with the triangle's edges, the three axes of the box, and
-    the triangle's normal.
 
     Args:
         box: The box.
@@ -105,33 +74,7 @@ def box_intersects_triangle(box: Box3, triangle: Triangle) -> Bool:
     Returns:
         Whether no axis separates them. False for an empty box.
     """
-    if box.is_empty():
-        return False
-    var center = box.center()
-    var extents = box.max - center
-    var v0 = triangle.a - center
-    var v1 = triangle.b - center
-    var v2 = triangle.c - center
-    var f0 = v1 - v0
-    var f1 = v2 - v1
-    var f2 = v0 - v2
-    var normal = f0
-    normal.cross(f1)
-    return (
-        _sat_axis(Vector3(0, -f0.z, f0.y), v0, v1, v2, extents)
-        and _sat_axis(Vector3(0, -f1.z, f1.y), v0, v1, v2, extents)
-        and _sat_axis(Vector3(0, -f2.z, f2.y), v0, v1, v2, extents)
-        and _sat_axis(Vector3(f0.z, 0, -f0.x), v0, v1, v2, extents)
-        and _sat_axis(Vector3(f1.z, 0, -f1.x), v0, v1, v2, extents)
-        and _sat_axis(Vector3(f2.z, 0, -f2.x), v0, v1, v2, extents)
-        and _sat_axis(Vector3(-f0.y, f0.x, 0), v0, v1, v2, extents)
-        and _sat_axis(Vector3(-f1.y, f1.x, 0), v0, v1, v2, extents)
-        and _sat_axis(Vector3(-f2.y, f2.x, 0), v0, v1, v2, extents)
-        and _sat_axis(Vector3(1, 0, 0), v0, v1, v2, extents)
-        and _sat_axis(Vector3(0, 1, 0), v0, v1, v2, extents)
-        and _sat_axis(Vector3(0, 0, 1), v0, v1, v2, extents)
-        and _sat_axis(normal, v0, v1, v2, extents)
-    )
+    return box.intersects_triangle(triangle)
 
 
 def _normalized(vector: Vector3) -> Vector3:
