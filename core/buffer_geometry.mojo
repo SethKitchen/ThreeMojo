@@ -83,6 +83,7 @@ Extreme finite results can differ from direct three.js r180 arithmetic.
 See `docs/wiki/Norm-consumers.md` for the changed operations, retained
 limits, and explicit zero and nonfinite rules.
 """
+from core.ordinal import ordinal_valid
 
 from math.matrix_determinant import _sum_products as _exact_products
 
@@ -313,7 +314,7 @@ struct GeometryType(Equatable, ImplicitlyCopyable, Writable):
 
     def is_valid(self) -> Bool:
         """Return True if this is one of the types there are."""
-        return self.value >= 0 and self.value < len(geometry_type_names())
+        return ordinal_valid(self.value, len(geometry_type_names()) - 1)
 
     def name(self) -> String:
         """Return three.js's class name, or an empty string for a type

@@ -25,6 +25,7 @@ plans in Neufert, "Architects' Data" (5th edition, 2019), and the program
 splits of Merrell, Schkufza and Koltun, "Computer-generated residential
 building layouts" (2010), at a much simpler level.
 """
+from core.ordinal import ordinal_valid
 
 from std.math import isfinite, sqrt
 from extensions.building.kinds import (
@@ -60,7 +61,7 @@ struct FloorProgram(Equatable, ImplicitlyCopyable, Writable):
         Returns:
             Whether the value is 0 to 2.
         """
-        return self.value >= 0 and self.value <= 2
+        return ordinal_valid(self.value, 2)
 
 
 # Offices and meeting rooms around a core.

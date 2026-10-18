@@ -24,7 +24,7 @@ a cited cross-section table.
     var d = arm_muscle_distance(dims, BICEPS_BRACHII, RIGHT, p)
 """
 
-from extensions.humanoid.skeleton.ordinal import ordinal_valid
+from core.ordinal import ordinal_valid
 from extensions.humanoid.side import BodySide
 from extensions.humanoid.skeleton.arm.frame import (
     ArmDimensions,

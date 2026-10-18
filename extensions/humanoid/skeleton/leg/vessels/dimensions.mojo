@@ -18,7 +18,7 @@ line. Plus y is proximal. Plus x is body-right. Plus z is anterior.
     var d = vessel_distance(dims, FEMORAL_ARTERY, Vector3(0, 0.2, 0.02))
 """
 
-from extensions.humanoid.skeleton.ordinal import ordinal_valid
+from core.ordinal import ordinal_valid
 from extensions.humanoid.side import LEFT
 from extensions.humanoid.skeleton.field import (
     DistanceField,

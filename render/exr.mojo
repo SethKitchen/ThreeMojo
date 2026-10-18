@@ -48,6 +48,7 @@ The rows come out from the top, the first line of the data window first,
 as every other reader here returns them. three.js flips them and marks the
 texture `flipY = false`, which samples the same way.
 """
+from core.ordinal import ordinal_valid
 
 from render.float_image import FloatImage
 from render.inflate import zlib_inflate
@@ -1298,7 +1299,7 @@ struct _DwaScheme(Equatable, ImplicitlyCopyable):
 
     def is_valid(self) -> Bool:
         """Return whether this names UNKNOWN, LOSSY_DCT or RLE."""
-        return self.value >= 0 and self.value <= 2
+        return ordinal_valid(self.value, 2)
 
 
 comptime _DWA_UNKNOWN = _DwaScheme(0)

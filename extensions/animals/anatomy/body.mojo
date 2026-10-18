@@ -28,6 +28,7 @@ The coat depth is how far the sculpt's surface stands off the skin: fur,
 wool under the explicit fleece, and contour plumage. It is a `DESIGN`
 estimate. No source we read gives it.
 """
+from core.ordinal import ordinal_valid
 
 from extensions.anatomy.evidence import (
     DESIGN,
@@ -52,7 +53,7 @@ struct BodyPlan(Equatable, ImplicitlyCopyable, Writable):
         Returns:
             True for the seven plans.
         """
-        return self.value >= 0 and self.value <= 6
+        return ordinal_valid(self.value, 6)
 
 
 # A four-legged mammal: the quadruped rig and limb muscles.
@@ -83,7 +84,7 @@ struct ReferenceKind(Equatable, ImplicitlyCopyable, Writable):
         Returns:
             True for the three kinds.
         """
-        return self.value >= 0 and self.value <= 2
+        return ordinal_valid(self.value, 2)
 
 
 # Ground to the top of the withers.

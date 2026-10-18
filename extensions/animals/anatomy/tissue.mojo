@@ -11,6 +11,7 @@ coverts are solids like the trunk. Mass must not count them as flesh.
 body, coat, keratin, antler, tooth, eye or a foreign object. `segment_of`
 sorts each bone into the segment whose published density it takes.
 """
+from core.ordinal import ordinal_valid
 
 from extensions.animals.anatomy.body import (
     ANURAN,
@@ -34,7 +35,7 @@ struct BodyTissue(Equatable, ImplicitlyCopyable, Writable):
         Returns:
             True for the seven tissues.
         """
-        return self.value >= 0 and self.value <= 6
+        return ordinal_valid(self.value, 6)
 
 
 # Skin, muscle, bone and viscera: the segment's density.
@@ -65,7 +66,7 @@ struct Segment(Equatable, ImplicitlyCopyable, Writable):
         Returns:
             True for the fifteen segments.
         """
-        return self.value >= 0 and self.value < SEGMENT_COUNT
+        return ordinal_valid(self.value, SEGMENT_COUNT - 1)
 
 
 comptime HEAD = Segment(0)

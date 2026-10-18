@@ -10,6 +10,7 @@ This is procedural-animals' `normaliseOptions`. A seed picks one
 repeatable individual. The sex, the age and the morph, when they are not
 given, are drawn from the seed as the original draws them.
 """
+from core.ordinal import ordinal_valid
 
 from math.utils import SeededRandom
 
@@ -71,7 +72,7 @@ struct Quality(Equatable, ImplicitlyCopyable, Writable):
         Returns:
             Whether the value is from zero to four.
         """
-        return self.value >= 0 and self.value < 5
+        return ordinal_valid(self.value, 5 - 1)
 
     def resolution(self) -> Float64:
         """Return the tier's cell-size multiplier.

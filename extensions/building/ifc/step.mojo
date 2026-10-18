@@ -25,6 +25,7 @@ backslash, `\\X\\hh` for a byte of ISO 8859-1, `\\X2\\hhhh...\\X0\\` for UTF-16
 and `\\X4\\hhhhhhhh...\\X0\\` for UTF-32 code points. The writer escapes
 every non-ASCII character as `\\X2\\` or `\\X4\\`.
 """
+from core.ordinal import ordinal_valid
 
 from std.math import isfinite
 
@@ -45,7 +46,7 @@ struct StepKind(Equatable, ImplicitlyCopyable, Writable):
         Returns:
             Whether the value is 0 to 8.
         """
-        return self.value >= 0 and self.value <= 8
+        return ordinal_valid(self.value, 8)
 
 
 comptime INTEGER = StepKind(0)

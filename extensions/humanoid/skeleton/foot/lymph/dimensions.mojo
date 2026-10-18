@@ -20,7 +20,7 @@ Plus y is proximal. Plus x is body-right. Plus z is anterior.
     var d = lymph_distance(dims, DORSAL_LYMPHATICS, dims.mt2_head)
 """
 
-from extensions.humanoid.skeleton.ordinal import ordinal_valid
+from core.ordinal import ordinal_valid
 from extensions.humanoid.skeleton.field import (
     DistanceField,
     field_gradient,

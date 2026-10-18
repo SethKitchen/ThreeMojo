@@ -23,7 +23,7 @@ authored in template centimeters. They are not a cited lumen table.
     var d = head_vessel_distance(dims, COMMON_CAROTID_ARTERY, RIGHT, p)
 """
 
-from extensions.humanoid.skeleton.ordinal import ordinal_valid
+from core.ordinal import ordinal_valid
 from extensions.humanoid.side import BodySide
 from extensions.humanoid.skeleton.head.frame import HeadMuscleDimensions
 from extensions.humanoid.skeleton.torso.bones.dimensions import (

@@ -39,6 +39,7 @@ it. three.js does this for a `Mesh`; here it takes the geometry, the
 weights and, for a skinned mesh, one matrix per vertex. `core.scene_utils`
 has the forms that take a mesh.
 """
+from core.ordinal import ordinal_valid
 
 from core.buffer_attribute import BufferAttribute
 from core.buffer_geometry import (
@@ -78,7 +79,7 @@ struct DrawMode(Equatable, ImplicitlyCopyable, Writable):
             True for `TRIANGLES_DRAW_MODE`, `TRIANGLE_STRIP_DRAW_MODE` and
             `TRIANGLE_FAN_DRAW_MODE`.
         """
-        return self.value >= 0 and self.value <= 2
+        return ordinal_valid(self.value, 2)
 
 
 # Every three vertices are one triangle: three.js's `TrianglesDrawMode`.

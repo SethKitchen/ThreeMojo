@@ -61,6 +61,7 @@ texture. See `CompressedFormat.is_float`.
 the last row and column of blocks hang off the edge; the texels past the
 edge are decoded and dropped, as a GPU stores and never shows them.
 """
+from core.ordinal import ordinal_valid
 
 from render.bptc import BptcTables, bc6h_block, bc7_block
 from render.etc import (
@@ -109,7 +110,7 @@ struct CompressedFormat(Equatable, ImplicitlyCopyable, Writable):
     def is_valid(self) -> Bool:
         """Return True if this is one of the twenty-three formats there
         are."""
-        return self.value >= 0 and self.value <= 22
+        return ordinal_valid(self.value, 22)
 
     def is_pvrtc(self) -> Bool:
         """Return True for the four PVRTC1 formats, which `render.pvrtc`
@@ -125,7 +126,7 @@ struct CompressedFormat(Equatable, ImplicitlyCopyable, Writable):
     def is_s3tc(self) -> Bool:
         """Return True for BC1, BC2 and BC3, the formats `decode_s3tc`
         reads."""
-        return self.value >= 0 and self.value <= 3
+        return ordinal_valid(self.value, 3)
 
     def is_float(self) -> Bool:
         """Return True if a byte cannot hold this format's texels, so it

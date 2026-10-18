@@ -23,7 +23,7 @@ Plus y is proximal. Plus x is body-right. Plus z is anterior.
     var d = vessel_distance(dims, DORSALIS_PEDIS_ARTERY, Vector3(0, 0, 0.05))
 """
 
-from extensions.humanoid.skeleton.ordinal import ordinal_valid
+from core.ordinal import ordinal_valid
 from extensions.humanoid.skeleton.field import (
     DistanceField,
     field_gradient,

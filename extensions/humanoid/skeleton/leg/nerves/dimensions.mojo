@@ -17,7 +17,7 @@ line. Plus y is proximal. Plus x is body-right. Plus z is anterior.
     var d = nerve_distance(dims, SCIATIC_NERVE, Vector3(0, 0.2, -0.04))
 """
 
-from extensions.humanoid.skeleton.ordinal import ordinal_valid
+from core.ordinal import ordinal_valid
 from extensions.humanoid.side import LEFT
 from extensions.humanoid.skeleton.field import (
     DistanceField,

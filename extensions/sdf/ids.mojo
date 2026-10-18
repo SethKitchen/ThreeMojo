@@ -8,6 +8,7 @@
 Each is a type, so a bare integer cannot stand in for one. A value the
 type can hold but the code does not accept is refused where it is read.
 """
+from core.ordinal import ordinal_valid
 
 # How many surface parts there are.
 comptime SURFACE_PART_COUNT = 12
@@ -30,7 +31,7 @@ struct PrimitiveKind(Equatable, ImplicitlyCopyable, Writable):
         Returns:
             Whether the value is from zero to three.
         """
-        return self.value >= 0 and self.value < 4
+        return ordinal_valid(self.value, 4 - 1)
 
 
 comptime ELLIPSOID = PrimitiveKind(0)
@@ -93,7 +94,7 @@ struct SurfacePart(Equatable, ImplicitlyCopyable, Writable):
         Returns:
             Whether the value is from zero to `SURFACE_PART_COUNT - 1`.
         """
-        return self.value >= 0 and self.value < SURFACE_PART_COUNT
+        return ordinal_valid(self.value, SURFACE_PART_COUNT - 1)
 
 
 def require_part(part: SurfacePart) raises:

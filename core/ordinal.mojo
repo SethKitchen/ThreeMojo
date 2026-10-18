@@ -3,11 +3,11 @@
 # Noncommercial use is free; commercial use requires a paid license.
 # See LICENSE, LICENSE-COMMERCIAL.md and THIRD-PARTY-NOTICES.md.
 
-"""Range checks shared by the named part ids.
+"""Whether an integer names an entry in a closed range.
 
-Each part keeps its own type, so a hand bone cannot be passed where an
-arm bone is required. The range test is the same: zero through the last
-named value.
+A named id stores an integer. Zero is the first name. `last` is the
+last name. A value outside that range is not a name. Each id keeps its
+own type.
 """
 
 
@@ -16,7 +16,7 @@ def ordinal_valid(value: Int, last: Int) -> Bool:
 
     Args:
         value: The stored ordinal.
-        last: The value of the last named entry.
+        last: The value of the last named entry. A count is one past this.
 
     Returns:
         True when `value` is from zero through `last`.

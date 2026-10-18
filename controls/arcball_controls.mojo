@@ -51,6 +51,7 @@ Extreme finite results can differ from direct three.js r180 arithmetic.
 See `docs/wiki/Norm-consumers.md` for the changed operations, retained
 limits, and explicit zero and nonfinite rules.
 """
+from core.ordinal import ordinal_valid
 
 from math.norm import length2
 from cameras.camera import Camera
@@ -152,7 +153,7 @@ struct ArcballState(Equatable, ImplicitlyCopyable, Writable):
         Returns:
             Whether the value names a state.
         """
-        return self.value >= 0 and self.value <= 7
+        return ordinal_valid(self.value, 7)
 
 
 comptime STATE_IDLE = ArcballState(0)
@@ -179,7 +180,7 @@ struct ArcballOperation(Equatable, ImplicitlyCopyable, Writable):
         Returns:
             Whether the value names an operation.
         """
-        return self.value >= 0 and self.value <= 4
+        return ordinal_valid(self.value, 4)
 
 
 # No operation. three.js: `null`.
@@ -203,7 +204,7 @@ struct ArcballMouse(Equatable, ImplicitlyCopyable, Writable):
         Returns:
             Whether the value names a button or the wheel.
         """
-        return self.value >= 0 and self.value <= 3
+        return ordinal_valid(self.value, 3)
 
 
 comptime MOUSE_PRIMARY = ArcballMouse(0)
@@ -225,7 +226,7 @@ struct ArcballModifier(Equatable, ImplicitlyCopyable, Writable):
         Returns:
             Whether the value names a modifier.
         """
-        return self.value >= 0 and self.value <= 2
+        return ordinal_valid(self.value, 2)
 
 
 comptime NO_MODIFIER = ArcballModifier(0)

@@ -9,6 +9,7 @@ The page selects these with `?view=`. `FRAME` is the photograph. `CAUSTICS`
 is the raw caustic texture. `LINEAR` skips glare and bloom. `GLARE` shows
 the diffraction spikes on their own.
 """
+from core.ordinal import ordinal_valid
 
 
 @fieldwise_init
@@ -24,7 +25,7 @@ struct WaterView(Equatable, ImplicitlyCopyable, Writable):
 
     def is_valid(self) -> Bool:
         """Return True if this is one of the four pictures."""
-        return self.value >= 0 and self.value <= GLARE.value
+        return ordinal_valid(self.value, GLARE.value)
 
 
 def require_view(view: WaterView) raises:

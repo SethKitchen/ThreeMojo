@@ -19,7 +19,7 @@ Plus y is proximal. Plus x is body-right. Plus z is anterior.
     var d = foot_muscle_distance(dims, ABDUCTOR_HALLUCIS, dims.foot.heel)
 """
 
-from extensions.humanoid.skeleton.ordinal import ordinal_valid
+from core.ordinal import ordinal_valid
 from extensions.humanoid.athleticism import Athleticism, radius_scale
 from extensions.humanoid.side import RIGHT, BodySide
 from extensions.humanoid.spec import HumanoidSpec

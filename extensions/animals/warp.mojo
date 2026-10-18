@@ -14,6 +14,7 @@ radii follow the warp's Jacobian there. The surface is then meshed from
 the warped field, so it stays a true distance field surface and its
 normals are exact.
 """
+from core.ordinal import ordinal_valid
 
 from extensions.sdf.ids import (
     CONE,
@@ -55,7 +56,7 @@ struct WarpKind(Equatable, ImplicitlyCopyable, Writable):
         Returns:
             Whether the value is from zero to five.
         """
-        return self.value >= 0 and self.value < 6
+        return ordinal_valid(self.value, 6 - 1)
 
 
 comptime SCALE = WarpKind(0)

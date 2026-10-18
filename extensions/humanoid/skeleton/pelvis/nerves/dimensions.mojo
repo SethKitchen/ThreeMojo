@@ -20,7 +20,7 @@ separate diagrammatic minimum radius.
     var d = pelvis_nerve_distance(dims, PUDENDAL_NERVE, RIGHT, p)
 """
 
-from extensions.humanoid.skeleton.ordinal import ordinal_valid
+from core.ordinal import ordinal_valid
 from extensions.humanoid.side import LEFT, BodySide
 from extensions.humanoid.skeleton.field import (
     DistanceField,

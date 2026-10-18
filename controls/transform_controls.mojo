@@ -56,6 +56,7 @@ Extreme finite results can differ from direct three.js r180 arithmetic.
 See `docs/wiki/Norm-consumers.md` for the changed operations, retained
 limits, and explicit zero and nonfinite rules.
 """
+from core.ordinal import ordinal_valid
 
 from cameras.camera import Camera
 from controls.input import (
@@ -119,7 +120,7 @@ struct TransformMode(Equatable, ImplicitlyCopyable, Writable):
         Returns:
             Whether the value names a mode.
         """
-        return self.value >= 0 and self.value <= 2
+        return ordinal_valid(self.value, 2)
 
 
 # three.js: `'translate'`.
@@ -166,7 +167,7 @@ struct TransformAxis(Equatable, ImplicitlyCopyable, Writable):
         Returns:
             Whether the value names a handle.
         """
-        return self.value >= 0 and self.value <= 9
+        return ordinal_valid(self.value, 9)
 
     def name(self) raises -> String:
         """Return three.js's name for this handle.
@@ -236,7 +237,7 @@ struct TransformEventKind(Equatable, ImplicitlyCopyable, Writable):
         Returns:
             Whether the value names a kind.
         """
-        return self.value >= 0 and self.value <= 4
+        return ordinal_valid(self.value, 4)
 
 
 # `axis` changed. three.js: `axis-changed`.

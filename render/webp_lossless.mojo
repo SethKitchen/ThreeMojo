@@ -28,6 +28,7 @@ which tile.
 pixel or past the last, a transform named twice, and data that ends too
 soon are refused, as libwebp refuses them.
 """
+from core.ordinal import ordinal_valid
 
 # The first byte of a VP8L stream.
 comptime VP8L_SIGNATURE = 0x2F
@@ -202,7 +203,7 @@ struct WebpTransform(Equatable, ImplicitlyCopyable, Writable):
             Whether it is `PREDICTOR_TRANSFORM`, `CROSS_COLOR_TRANSFORM`,
             `SUBTRACT_GREEN_TRANSFORM` or `COLOR_INDEXING_TRANSFORM`.
         """
-        return self.value >= 0 and self.value <= 3
+        return ordinal_valid(self.value, 3)
 
 
 # Each pixel less a prediction from its neighbors.

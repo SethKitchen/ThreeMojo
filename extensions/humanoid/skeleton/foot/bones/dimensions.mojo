@@ -37,7 +37,7 @@ template. Call `validate` at every public consumer of an edited copy.
     var d = bone_distance(dims, CALCANEUS, dims.heel)
 """
 
-from extensions.humanoid.skeleton.ordinal import ordinal_valid
+from core.ordinal import ordinal_valid
 from extensions.humanoid.sex import FEMALE, MALE, Sex
 from extensions.humanoid.side import LEFT, RIGHT, BodySide
 from extensions.humanoid.skeleton.field import (

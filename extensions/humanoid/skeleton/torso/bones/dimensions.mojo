@@ -27,7 +27,7 @@ table. A female template is narrower and shallower through the chest.
     var d = torso_bone_distance(dims, T7, RIGHT, dims.centers[6])
 """
 
-from extensions.humanoid.skeleton.ordinal import ordinal_valid
+from core.ordinal import ordinal_valid
 from extensions.humanoid.genome import (
     CHEST_DEPTH,
     Genome,

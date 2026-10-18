@@ -24,7 +24,7 @@ table.
     var d = hand_muscle_distance(dims, ADDUCTOR_POLLICIS, RIGHT, p)
 """
 
-from extensions.humanoid.skeleton.ordinal import ordinal_valid
+from core.ordinal import ordinal_valid
 from extensions.humanoid.side import BodySide
 from extensions.humanoid.skeleton.arm.frame import (
     ArmDimensions,

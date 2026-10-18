@@ -22,7 +22,7 @@ not a cited osteometric table.
     var d = hand_bone_distance(dims, CAPITATE, RIGHT, dims.frame.wrist)
 """
 
-from extensions.humanoid.skeleton.ordinal import ordinal_valid
+from core.ordinal import ordinal_valid
 from extensions.humanoid.side import BodySide
 from extensions.humanoid.skeleton.arm.frame import ArmDimensions, ArmFrame
 from extensions.humanoid.skeleton.torso.sweep import (

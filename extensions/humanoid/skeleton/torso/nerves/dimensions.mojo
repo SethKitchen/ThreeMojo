@@ -22,7 +22,7 @@ and mass. Geometry applies a separate diagrammatic minimum radius.
     var d = torso_nerve_distance(dims, SPINAL_CORD, RIGHT, p)
 """
 
-from extensions.humanoid.skeleton.ordinal import ordinal_valid
+from core.ordinal import ordinal_valid
 from extensions.humanoid.side import RIGHT, BodySide
 from extensions.humanoid.skeleton.torso.bones.dimensions import (
     L1,

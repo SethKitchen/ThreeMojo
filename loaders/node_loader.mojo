@@ -48,6 +48,7 @@ well, as three.js's `vec4(colorNode)` does: the alpha multiplies the
 opacity node, or the material's `opacity`. Texture gather inputs are
 refused by name when reached. They are not ordinary RGBA samples.
 """
+from core.ordinal import ordinal_valid
 
 from loaders.json import (
     ARRAY,
@@ -93,7 +94,7 @@ struct NodeJsonType(Equatable, ImplicitlyCopyable, Writable):
         Returns:
             Whether the value is zero to `NODE_JSON_TYPE_COUNT` less one.
         """
-        return self.value >= 0 and self.value < NODE_JSON_TYPE_COUNT
+        return ordinal_valid(self.value, NODE_JSON_TYPE_COUNT - 1)
 
 
 comptime JSON_VAR_NODE = NodeJsonType(0)

@@ -22,7 +22,7 @@ authored in template centimeters. They are not a cited width table.
     var d = arm_ligament_distance(dims, ANNULAR_LIGAMENT, RIGHT, p)
 """
 
-from extensions.humanoid.skeleton.ordinal import ordinal_valid
+from core.ordinal import ordinal_valid
 from extensions.humanoid.side import BodySide
 from extensions.humanoid.skeleton.arm.frame import ArmDimensions
 from extensions.humanoid.skeleton.field import reject

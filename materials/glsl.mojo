@@ -53,6 +53,7 @@ This replaces the old silent truncation and can refuse previously accepted
 runtime-dependent exits. See the Node-materials wiki page for the proof
 subset and compatibility limits.
 """
+from core.ordinal import ordinal_valid
 
 from render.cube_texture_store import NO_CUBE_TEXTURE
 from render.volume_texture_store import (
@@ -191,7 +192,7 @@ struct _TokenKind(Equatable, ImplicitlyCopyable):
 
     def is_valid(self) -> Bool:
         """Return True if this is one of the six token kinds."""
-        return self.value >= 0 and self.value <= 5
+        return ordinal_valid(self.value, 5)
 
 
 comptime _NAME = _TokenKind(0)

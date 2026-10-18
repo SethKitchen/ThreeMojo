@@ -54,6 +54,7 @@ empty array when it is not. A file of a version before 0.4.0 has path
 headers that three.js reads one padding byte short, so its paths are
 the wrong ones; this port reads them as three.js does.
 """
+from core.ordinal import ordinal_valid
 
 from loaders.usd_specs import (
     NO_VALUE,
@@ -88,7 +89,7 @@ struct CrateType(Equatable, ImplicitlyCopyable, Writable):
 
     def is_valid(self) -> Bool:
         """Return True for the sixty-one types, zero to sixty."""
-        return self.value >= 0 and self.value <= 60
+        return ordinal_valid(self.value, 60)
 
 
 comptime CRATE_INVALID = CrateType(0)

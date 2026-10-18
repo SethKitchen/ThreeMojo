@@ -18,6 +18,7 @@ The genes are authored controls. They are not a model of the loci that
 set the traits in people. Many small genes set each of these traits,
 and development and environment change them too.
 """
+from core.ordinal import ordinal_valid
 
 from std.math import isfinite
 
@@ -38,7 +39,7 @@ struct Gene(Equatable, ImplicitlyCopyable, Writable):
 
     def is_valid(self) -> Bool:
         """Return True if this is a named gene."""
-        return self.value >= 0 and self.value < GENE_COUNT
+        return ordinal_valid(self.value, GENE_COUNT - 1)
 
 
 # Skin. Eumelanin in the epidermis: -1 is very fair, 1 is very dark.

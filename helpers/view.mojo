@@ -38,6 +38,7 @@ camera, the first in three.js's order on a tie.
 disks with a 2D canvas. This port has no canvas text. The disks are
 unlabeled, as three.js's are by default. `dispose` has no counterpart.
 """
+from core.ordinal import ordinal_valid
 
 from cameras.orthographic_camera import OrthographicCamera
 from controls.camera_frame import CameraFrame
@@ -74,7 +75,7 @@ struct ViewAxis(Equatable, ImplicitlyCopyable, Writable):
         Returns:
             Whether it is `POSITIVE_X` through `NEGATIVE_Z`.
         """
-        return self.value >= 0 and self.value <= 5
+        return ordinal_valid(self.value, 5)
 
 
 # three.js's `posX`, `posY`, `posZ`, `negX`, `negY` and `negZ`, in the

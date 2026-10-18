@@ -35,6 +35,7 @@ brings it up to date in three.js.
 Differences from three.js: touch input and the cursor style are not
 ported.
 """
+from core.ordinal import ordinal_valid
 
 from cameras.camera import Camera
 from controls.input import (
@@ -72,7 +73,7 @@ struct DragAction(Equatable, ImplicitlyCopyable, Writable):
         Returns:
             Whether the value names an action.
         """
-        return self.value >= 0 and self.value <= 2
+        return ordinal_valid(self.value, 2)
 
 
 # The button picks an object and moves it nowhere. three.js: `STATE.NONE`.
@@ -97,7 +98,7 @@ struct DragEventKind(Equatable, ImplicitlyCopyable, Writable):
         Returns:
             Whether the value names a kind.
         """
-        return self.value >= 0 and self.value <= 4
+        return ordinal_valid(self.value, 4)
 
 
 # The pointer came over an object. three.js: `hoveron`.

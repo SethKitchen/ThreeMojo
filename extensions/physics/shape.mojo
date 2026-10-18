@@ -27,6 +27,7 @@ inside. That is the method of Blow and Binstock, "How to find the inertia
 tensor (or other mass properties) of a 3D solid body represented by a
 triangle mesh" (2004).
 """
+from core.ordinal import ordinal_valid
 
 from math.convex_hull import ConvexHull
 from math.matrix3 import Matrix3
@@ -53,7 +54,7 @@ struct ShapeKind(Equatable, ImplicitlyCopyable, Writable):
         Returns:
             Whether the value is 0 to 4.
         """
-        return self.value >= 0 and self.value <= 4
+        return ordinal_valid(self.value, 4)
 
 
 comptime SPHERE = ShapeKind(0)

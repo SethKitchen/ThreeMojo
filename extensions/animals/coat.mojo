@@ -10,6 +10,7 @@ it lies on, and its position and normal in the reference animal's bind
 pose. Painting in reference space keeps every mark on the skin as the
 animal moves. The painter returns a linear color and a surface class.
 """
+from core.ordinal import ordinal_valid
 
 from extensions.animals.parts import JAW
 from extensions.sdf.ids import SurfacePart
@@ -46,7 +47,7 @@ struct SurfaceClass(Equatable, ImplicitlyCopyable, Writable):
         Returns:
             Whether the value is from zero to `SURFACE_CLASS_COUNT - 1`.
         """
-        return self.value >= 0 and self.value < SURFACE_CLASS_COUNT
+        return ordinal_valid(self.value, SURFACE_CLASS_COUNT - 1)
 
 
 comptime FUR = SurfaceClass(0)

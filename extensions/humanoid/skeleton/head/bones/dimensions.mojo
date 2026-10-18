@@ -24,7 +24,7 @@ parameters. They are not a cited osteometric table.
     var d = head_bone_distance(dims, SKULL, dims.at(0, 84.0, -1.0))
 """
 
-from extensions.humanoid.skeleton.ordinal import ordinal_valid
+from core.ordinal import ordinal_valid
 from extensions.humanoid.side import RIGHT
 from extensions.humanoid.skeleton.head.frame import HeadDimensions
 from extensions.humanoid.skeleton.torso.sweep import (

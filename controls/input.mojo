@@ -22,6 +22,7 @@ arrives. A sequence this decoder does not know is consumed and dropped.
 A position is a terminal cell: its column and its row, from zero. The
 window that reads the bytes converts a cell to the pixels it shows.
 """
+from core.ordinal import ordinal_valid
 
 comptime ESCAPE_BYTE = 27
 # '[' opens a control sequence after an escape.
@@ -69,7 +70,7 @@ struct InputKind(Equatable, ImplicitlyCopyable, Writable):
         Returns:
             Whether the value names a kind.
         """
-        return self.value >= 0 and self.value <= 6
+        return ordinal_valid(self.value, 6)
 
 
 # A key went down. three.js: `keydown`.

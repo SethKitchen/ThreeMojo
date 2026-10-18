@@ -22,6 +22,7 @@ car's paint as per-instance data.
 Every car stands on its wheels at y equals zero, centered in x and z, and
 faces +z. The material is not ported.
 """
+from core.ordinal import ordinal_valid
 
 from core.buffer_attribute import BufferAttribute
 from core.buffer_geometry import BufferGeometry, NORMAL, POSITION, UV
@@ -74,7 +75,7 @@ struct BodyType(Equatable, ImplicitlyCopyable, Writable):
         Returns:
             Whether the body is the sedan, the SUV or the taxi.
         """
-        return self.value >= 0 and self.value < 3
+        return ordinal_valid(self.value, 3 - 1)
 
 
 comptime SEDAN = BodyType(0)
