@@ -22,11 +22,7 @@ from extensions.humanoid.skeleton.occupancy import (
     TRABECULAR_FILL,
     BoneMass,
     BoneOccupancy,
-    Tally,
-    add_fill,
-    check_mass_step,
-    finish_mass,
-    grid_cells,
+    sample_bone_mass,
 )
 from extensions.humanoid.skeleton.pelvis.bones.dimensions import (
     PelvisBone,
@@ -143,27 +139,7 @@ def pelvis_bone_mass_from_dimensions(
     if not part.is_valid():
         raise Error("A pelvic bone must be one of the four bones")
     var label = pelvis_bone_label(part)
-    check_mass_step(step, label)
-    cortical.validate()
-    trabecular.validate()
     var field = PelvisBoneField(dimensions, part)
-    var dx = step.value
-    var nx = grid_cells(field.high.x - field.low.x, dx)
-    var ny = grid_cells(field.high.y - field.low.y, dx)
-    var nz = grid_cells(field.high.z - field.low.z, dx)
-    var cell = dx * dx * dx
-    var tally = Tally(0, 0, 0, 0, 0)
-    for iz in range(nz):  # pragma: no branch
-        var z = field.low.z + (Float32(iz) + Float32(0.5)) * dx
-        for iy in range(ny):  # pragma: no branch
-            var y = field.low.y + (Float32(iy) + Float32(0.5)) * dx
-            for ix in range(nx):  # pragma: no branch
-                var x = field.low.x + (Float32(ix) + Float32(0.5)) * dx
-                add_fill(
-                    tally,
-                    pelvis_bone_field_occupancy(field, Vector3(x, y, z)),
-                    cell,
-                    cortical,
-                    trabecular,
-                )
-    return finish_mass(tally)
+    return sample_bone_mass[pelvis_bone_field_occupancy](
+        field, field.low, field.high, cortical, trabecular, step, label
+    )
