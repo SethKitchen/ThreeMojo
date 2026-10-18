@@ -35,6 +35,7 @@ from extensions.animals.parts import (
 )
 from extensions.sdf.sculpt import ell_y
 from extensions.animals.kit import (
+    side_sign,
     EyeSpec,
     eye_frame_of,
 )
@@ -803,7 +804,7 @@ def spider_sculpt(mut m: SdfModel, rig: Rig, t: Traits) raises:
 
     # CHELICERAE AND FANGS.
     for side in [String("L"), String("R")]:  # pragma: no branch
-        var s = 1.0 if side == "L" else -1.0
+        var s = side_sign(side)
         var b0 = rig.j("cheBase" + side)
         var b1 = rig.j("cheTip" + side)
         var ft = rig.j("fangTip" + side)
@@ -1257,7 +1258,7 @@ def spider_paint(
     if bone.startswith("chelicera"):
         # Hair on the front face, bare glossy cuticle near the fang base.
         var side = "L" if bone.endswith("L") else "R"
-        var sgn = 1.0 if side == "L" else -1.0
+        var sgn = side_sign(side)
         var b0 = d.mm(d.chel_base)
         var b1 = d.mm(d.chel_tip)
         b0 = V3(b0.x * sgn, b0.y, b0.z)

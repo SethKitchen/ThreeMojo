@@ -34,6 +34,7 @@ from extensions.animals.parts import (
 )
 from extensions.sdf.sculpt import ell_y
 from extensions.animals.kit import (
+    side_sign,
     digitigrade_fore,
     digitigrade_hind,
     EyeSpec,
@@ -923,7 +924,7 @@ def dog_sculpt(mut m: SdfModel, rig: Rig, t: Traits) raises:
     # EARS by type.
     var ear_type = Int(t.get("earType", 0.0))
     for side in [String("L"), String("R")]:  # pragma: no branch
-        var s = 1.0 if side == "L" else -1.0
+        var s = side_sign(side)
         var base = rig.j("earBase" + side)
         var tip = rig.j("earTip" + side)
         var dir = normalize(tip - base)
@@ -1011,7 +1012,7 @@ def dog_sculpt(mut m: SdfModel, rig: Rig, t: Traits) raises:
     var leg_k = t.get("boneK")
     var pk = t.get("pawK")
     for side in [String("L"), String("R")]:  # pragma: no branch
-        var s = 1.0 if side == "L" else -1.0
+        var s = side_sign(side)
         _fore_leg(m, rig, side, s, leg_k, pk, ruff)
         _hind_leg(m, rig, side, s, leg_k, pk, ruff)
 

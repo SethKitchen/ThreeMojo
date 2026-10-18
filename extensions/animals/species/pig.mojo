@@ -33,6 +33,7 @@ from extensions.animals.parts import (
 )
 from extensions.sdf.sculpt import cone_or_ball, ell_y
 from extensions.animals.kit import (
+    side_sign,
     digitigrade_fore,
     digitigrade_hind,
     EyeSpec,
@@ -1160,13 +1161,13 @@ def pig_sculpt(mut m: SdfModel, rig: Rig, t: Traits) raises:
 
     # EARS: curved leaves tiled with slabs.
     for side in [String("L"), String("R")]:  # pragma: no branch
-        var s = 1.0 if side == "L" else -1.0
+        var s = side_sign(side)
         _ear_leaf(m, rig.bone("ear" + side), rig.j("earBase" + side), s, t)
 
     # LEGS: short and sunk in the body.
     var leg_k = (1.0 + 0.1 * boar) * (1.05 if piglet else 1.0)
     for side in [String("L"), String("R")]:  # pragma: no branch
-        var s = 1.0 if side == "L" else -1.0
+        var s = side_sign(side)
         var lat, sc, sh, e, w, mc, toe, scap, hum, rad, meta, fpaw = (
             digitigrade_fore(rig, side, s)
         )

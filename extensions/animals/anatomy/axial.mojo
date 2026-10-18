@@ -24,6 +24,7 @@ here. Arthropod muscle develops 0.3 to 0.7 MPa (Medler 2002,
 each, is a `DESIGN` value.
 """
 
+from extensions.animals.kit import side_sign
 from extensions.anatomy.evidence import (
     DESIGN,
     FROM_TEXT,
@@ -150,8 +151,8 @@ def _trunk(
         # The radius of a cylinder of the segment's mass and length.
         var radius = sqrt(m / (1000.0 * 3.141592653589793 * span))
         for side in ["L", "R"]:  # pragma: no branch
-            var x = V3(radius, 0.0, 0.0) * (1.0 if side == "L" else -1.0)
-            var mirror = 1.0 if side == "L" else -1.0
+            var x = V3(radius, 0.0, 0.0) * (side_sign(side))
+            var mirror = side_sign(side)
             out.append(
                 _muscle(
                     "myomere " + rig.bones[c].name,

@@ -30,6 +30,7 @@ from extensions.animals.coat import (
 from extensions.animals.parts import JAW
 from extensions.sdf.sculpt import ell_y
 from extensions.animals.kit import (
+    side_sign,
     digitigrade_fore,
     digitigrade_hind,
     EyeSpec,
@@ -661,7 +662,7 @@ def fox_sculpt(mut m: SdfModel, rig: Rig, t: Traits) raises:
     # EARS: big, erect, triangular, deeply cupped in front.
     var ek = t.get("ear")
     for side in [String("L"), String("R")]:  # pragma: no branch
-        var s = 1.0 if side == "L" else -1.0
+        var s = side_sign(side)
         var base = rig.j("earBase" + side)
         var tip = rig.j("earTip" + side)
         var up = normalize(tip - base)
@@ -731,7 +732,7 @@ def fox_sculpt(mut m: SdfModel, rig: Rig, t: Traits) raises:
     var bk = t.get("boneK")
     var pk = t.get("pawK")
     for side in [String("L"), String("R")]:  # pragma: no branch
-        var s = 1.0 if side == "L" else -1.0
+        var s = side_sign(side)
         _fore_leg(m, rig, side, s, bk, pk)
         _hind_leg(m, rig, side, s, bk, pk)
 

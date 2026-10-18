@@ -30,7 +30,12 @@ from extensions.animals.coat import (
 )
 from extensions.sdf.ids import BoneId
 from extensions.animals.parts import JAW
-from extensions.animals.kit import EyeSpec, pick_cumulative, hashed_stream
+from extensions.animals.kit import (
+    EyeSpec,
+    pick_cumulative,
+    hashed_stream,
+    side_sign,
+)
 from extensions.animals.noise import cells3, fbm3
 from extensions.animals.options import AnimalOptions, AnimalRandom
 from extensions.animals.rig import Rig
@@ -937,7 +942,7 @@ def fish_sculpt(mut m: SdfModel, rig: Rig, t: Traits) raises:
     # HEAD: the gill covers, the bluegill's ear flap and the upper lip.
     var op = g.v.op
     for side in [String("L"), String("R")]:  # pragma: no branch
-        var s = 1.0 if side == "L" else -1.0
+        var s = side_sign(side)
         var uc = op - 0.055
         var c = g.flank(uc, 0.02, s)
         var nrm = normalize(V3(s, 0.0, 0.12))

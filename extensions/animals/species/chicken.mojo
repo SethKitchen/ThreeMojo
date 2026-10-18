@@ -44,6 +44,7 @@ from extensions.animals.parts import (
 )
 from extensions.sdf.sculpt import ell_y
 from extensions.animals.kit import (
+    side_sign,
     EyeSpec,
     eye_frame_of,
     sculpt_eye_socket,
@@ -1045,7 +1046,7 @@ struct _Plan(ImplicitlyCopyable):
 
 
 def _plan(rig: Rig, side: String) raises -> _Plan:
-    var s = 1.0 if side == "L" else -1.0
+    var s = side_sign(side)
     var n = wing_normal(rig, side)
     var wr = rig.j("wrist" + side)
     var d = normalize(wr - rig.j("elbow" + side))
@@ -1833,7 +1834,7 @@ def chicken_sculpt(mut m: SdfModel, rig: Rig, t: Traits) raises:
     var toe_r = t.get("toeR")
     var spur = t.get("spur", 0.0)
     for side in [String("L"), String("R")]:  # pragma: no branch
-        var s = 1.0 if side == "L" else -1.0
+        var s = side_sign(side)
         var kn = rig.j("knee" + side)
         var an = rig.j("ankle" + side)
         var mt = rig.j("mtp" + side)

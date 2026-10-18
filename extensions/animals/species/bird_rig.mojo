@@ -22,6 +22,7 @@ procedural-animals renders flight and tail feathers as thin cards. Here
 so the folded wing and the tail have their silhouette.
 """
 
+from extensions.animals.kit import side_sign
 from extensions.sdf.ids import (
     BoneId,
     SurfacePart,
@@ -859,7 +860,7 @@ def wing_arm(
     Raises:
         Error: If a joint or bone is missing.
     """
-    var sign = 1.0 if side == "L" else -1.0
+    var sign = side_sign(side)
     var shoulder = rig.j("shoulder" + side)
     var elbow = rig.j("elbow" + side)
     var wrist = rig.j("wrist" + side)
@@ -1137,7 +1138,7 @@ def feather_fins(
                     + String(Int(ln * 1e5))
                 )
                 for side in [String("L"), String("R")]:  # pragma: no branch
-                    var s = 1.0 if side == "L" else -1.0
+                    var s = side_sign(side)
                     var fr = frames[i]
                     var root = (
                         fr.root + fr.normal * card.lift + fr.axis * card.shift
@@ -1309,7 +1310,7 @@ def tail_fan(
     )
     var bone = feather_bone(feathers[ids[0]])
     for side in [String("L"), String("R")]:  # pragma: no branch
-        var s = 1.0 if side == "L" else -1.0
+        var s = side_sign(side)
         var oo = o
         var aa = a
         var nn = n

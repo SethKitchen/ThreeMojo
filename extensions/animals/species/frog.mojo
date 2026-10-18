@@ -33,6 +33,7 @@ from extensions.animals.parts import (
 )
 from extensions.sdf.sculpt import ell_y
 from extensions.animals.kit import (
+    side_sign,
     digitigrade_hind,
     EyeSpec,
     eye_frame_of,
@@ -483,7 +484,7 @@ def frog_sculpt(mut m: SdfModel, rig: Rig, t: Traits) raises:
     )
     var tym = _tympanum(t)
     for side in [String("L"), String("R")]:  # pragma: no branch
-        var s = 1.0 if side == "L" else -1.0
+        var s = side_sign(side)
         # The canthus: a soft ridge from the eye to the nostril.
         _ = m.cone(
             "canthus",
@@ -680,7 +681,7 @@ def frog_sculpt(mut m: SdfModel, rig: Rig, t: Traits) raises:
     # LEGS.
     var arm = (1.18 if male else 1.0) * t.get("armK")
     for side in [String("L"), String("R")]:  # pragma: no branch
-        var s = 1.0 if side == "L" else -1.0
+        var s = side_sign(side)
         var lat = V3(s, 0.0, 0.0)
         # FRONT: short and upright, with four slender fingers.
         var sh = rig.j("shoulder" + side)

@@ -36,6 +36,7 @@ from extensions.animals.parts import (
 )
 from extensions.sdf.sculpt import ell_y, cone_or_ball
 from extensions.animals.kit import (
+    side_sign,
     digitigrade_fore,
     digitigrade_hind,
     EyeSpec,
@@ -1001,7 +1002,7 @@ def sheep_sculpt(mut m: SdfModel, rig: Rig, t: Traits) raises:
         0.024 if ear == EAR_SMALL else 0.028
     )
     for side in [String("L"), String("R")]:  # pragma: no branch
-        var s = 1.0 if side == "L" else -1.0
+        var s = side_sign(side)
         var base = rig.j("earBase" + side)
         var tip = rig.j("earTip" + side)
         var up = normalize(tip - base)
@@ -1082,7 +1083,7 @@ def sheep_sculpt(mut m: SdfModel, rig: Rig, t: Traits) raises:
     # LEGS: fine-boned, with long cannons.
     var lk = 1.0 + 0.1 * heavy
     for side in [String("L"), String("R")]:  # pragma: no branch
-        var s = 1.0 if side == "L" else -1.0
+        var s = side_sign(side)
         var lat, sc, sh, e, w, mc, toe, scap, hum, rad, meta, fpaw = (
             digitigrade_fore(rig, side, s)
         )
@@ -1512,7 +1513,7 @@ def _fleece(
             groups.append(False)
     # The legs: wool over the upper arm, the thigh and the gaskin.
     for side in [String("L"), String("R")]:  # pragma: no branch
-        var s = 1.0 if side == "L" else -1.0
+        var s = side_sign(side)
         var sh = rig.j("shoulder" + side)
         var e = rig.j("elbow" + side)
         var w = rig.j("wrist" + side)

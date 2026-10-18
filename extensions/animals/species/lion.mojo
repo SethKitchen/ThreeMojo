@@ -32,6 +32,7 @@ from extensions.animals.parts import (
 )
 from extensions.sdf.sculpt import ell_y
 from extensions.animals.kit import (
+    side_sign,
     digitigrade_fore,
     digitigrade_hind,
     EyeSpec,
@@ -983,7 +984,7 @@ def _sculpt_head(
         )
     # The upper lip's edge, deep inside the lip, on the lip bone.
     for side in [String("L"), String("R")]:  # pragma: no branch
-        var s = 1.0 if side == "L" else -1.0
+        var s = side_sign(side)
         _ = m.ell(
             "lipedge",
             rig.bone("lip" + side),
@@ -1087,7 +1088,7 @@ def _sculpt_ears(mut m: SdfModel, rig: Rig, male: Float64, juv: Float64) raises:
     # a stack of discs leaning toward the midline, narrowing to a round
     # tip, with a shallow bowl carved in front.
     for side in [String("L"), String("R")]:  # pragma: no branch
-        var s = 1.0 if side == "L" else -1.0
+        var s = side_sign(side)
         var base = rig.j("earBase" + side)
         var tip = rig.j("earTip" + side)
         var up = normalize(tip - base)
@@ -1170,7 +1171,7 @@ def _sculpt_legs(mut m: SdfModel, rig: Rig, male: Float64, juv: Float64) raises:
     var toe_x: List[Float64] = [-0.033, -0.011, 0.011, 0.033]
     var toe_z: List[Float64] = [-0.018, 0, 0, -0.018]
     for side in [String("L"), String("R")]:  # pragma: no branch
-        var s = 1.0 if side == "L" else -1.0
+        var s = side_sign(side)
         var lat, sc, sh, e, w, mc, toe, scap, hum, rad, meta, fpaw = (
             digitigrade_fore(rig, side, s)
         )

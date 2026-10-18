@@ -37,6 +37,7 @@ from extensions.animals.parts import (
 )
 from extensions.sdf.sculpt import ell_y
 from extensions.animals.kit import (
+    side_sign,
     digitigrade_fore,
     digitigrade_hind,
     EyeSpec,
@@ -805,7 +806,7 @@ def cow_sculpt(mut m: SdfModel, rig: Rig, t: Traits) raises:
         )
     var eye = _eye()
     for side in [String("L"), String("R")]:  # pragma: no branch
-        var s = 1.0 if side == "L" else -1.0
+        var s = side_sign(side)
         # The masseter, and the mandible's lower border to the chin.
         _ = head_ell(
             m,
@@ -1188,7 +1189,7 @@ def _udder(mut m: SdfModel, rig: Rig, k: Float64) raises:
 def _foreleg(
     mut m: SdfModel, rig: Rig, side: String, leg_k: Float64, bull: Float64
 ) raises:
-    var s = 1.0 if side == "L" else -1.0
+    var s = side_sign(side)
     var lat, sc, sh, e, w, mc, toe, scap, hum, rad, meta, fpaw = (
         digitigrade_fore(rig, side, s)
     )
@@ -1304,7 +1305,7 @@ def _foreleg(
 def _hind_leg(
     mut m: SdfModel, rig: Rig, side: String, leg_k: Float64, beef: Float64
 ) raises:
-    var s = 1.0 if side == "L" else -1.0
+    var s = side_sign(side)
     var lat = V3(s, 0, 0)
     var hp, kn, hk, mt, tt, fem, tib, mtar, hpaw = digitigrade_hind(rig, side)
     # The thigh: flat and lean in dairy cows, full and round in beef.

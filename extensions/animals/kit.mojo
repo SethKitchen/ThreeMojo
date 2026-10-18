@@ -25,6 +25,18 @@ from std.math import atan2, cos, exp, pi, sin, sqrt
 comptime MASK32 = 0xFFFFFFFF
 
 
+def side_sign(side: String) -> Float64:
+    """Return one for a left side and minus one for a right side.
+
+    Args:
+        side: `"L"` or `"R"`. Any other text is treated as the right.
+
+    Returns:
+        `1` for `"L"`, and `-1` otherwise.
+    """
+    return 1.0 if side == "L" else -1.0
+
+
 @fieldwise_init
 struct EyeSpec(ImplicitlyCopyable):
     """One species' eye, in head-local meters, for the left eye.

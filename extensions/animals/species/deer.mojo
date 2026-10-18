@@ -33,6 +33,7 @@ from extensions.animals.parts import (
 )
 from extensions.sdf.sculpt import ell_y
 from extensions.animals.kit import (
+    side_sign,
     digitigrade_fore,
     digitigrade_hind,
     EyeSpec,
@@ -695,7 +696,7 @@ def deer_sculpt(mut m: SdfModel, rig: Rig, t: Traits) raises:
 
     # EARS: large, broad and cupped.
     for side in [String("L"), String("R")]:  # pragma: no branch
-        var s = 1.0 if side == "L" else -1.0
+        var s = side_sign(side)
         var base = rig.j("earBase" + side)
         var tip = rig.j("earTip" + side)
         var up = normalize(tip - base)
@@ -775,7 +776,7 @@ def deer_sculpt(mut m: SdfModel, rig: Rig, t: Traits) raises:
 
 
 def _foreleg(mut m: SdfModel, rig: Rig, side: String) raises:
-    var s = 1.0 if side == "L" else -1.0
+    var s = side_sign(side)
     var lat, sc, sh, e, w, mc, toe, scap, hum, rad, meta, fpaw = (
         digitigrade_fore(rig, side, s)
     )
@@ -880,7 +881,7 @@ def _foreleg(mut m: SdfModel, rig: Rig, side: String) raises:
 
 
 def _hind_leg(mut m: SdfModel, rig: Rig, side: String) raises:
-    var s = 1.0 if side == "L" else -1.0
+    var s = side_sign(side)
     var lat = V3(s, 0, 0)
     var hp, kn, hk, mt, tt, fem, tib, mtar, hpaw = digitigrade_hind(rig, side)
     _ = ell_y(
