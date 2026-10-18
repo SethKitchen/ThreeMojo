@@ -153,7 +153,7 @@ The binding is not written. Three things block it today.
 
 1. **The platform.** Streamline's documentation covers Windows with Direct3D 11, Direct3D 12 and Vulkan 1.2. It does not mention Linux or macOS. ThreeMojo runs on macOS, Linux and WSL 2. Its GPU backend is MAX, which opens no Direct3D or Vulkan device. `slEvaluateFeature` needs the command list of such a device, and `slSetTag` needs its resources.
 2. **The runtime.** `sl.interposer`, `sl.dlss` and `nvngx_dlss` come from NVIDIA. NVIDIA ships the DLSS runtime as a separate product with its own terms. This repository does not hold it.
-3. **One unstated convention.** The headers leave the range of the clip depth open. A flat depth cannot test it. The sign of the jitter, the direction of the motion vectors, the layout of a `float4x4` and the unit of the motion vectors are settled.
+3. **Unstated conventions.** The headers leave some open. A running DLSS settled them: the sign of the jitter, the direction of the motion vectors, and the sense of the depth. The layout of a `float4x4` and the unit of the motion vectors are settled too. See [Checked against DLSS](#checked-against-dlss).
 
 The tracking issue is [#771](https://github.com/SethKitchen/ThreeMojo/issues/771). It closes when a program on an RTX machine evaluates both features through `sl.interposer`, and a test compares the result with `SpatialUpscaler`.
 
@@ -170,10 +170,11 @@ The tracking issue is [#771](https://github.com/SethKitchen/ThreeMojo/issues/771
 | Off and Ultra Quality | `eErrorInvalidParameter` |
 | The sign of the jitter | `jitterOffset` is the negative of the `JitteredCamera` offset |
 | The direction of a motion vector | It points to where the content was in the last frame |
+| The depth that DLSS reads | Nearer is smaller when `depthInverted` is false. A range of -1 to 1 gives the same result as 0 to 1 |
 | ThreeMojo's frames through DLSS | Error 0.0021, against 0.0037 for the fallback |
 | The layout of an options struct | Members lie in the order of the headers |
 
-Two more programs call `slEvaluateFeature`. One uses a synthetic scene to settle the signs. The other feeds the frames of `examples/streamline.mojo --frames` to DLSS. The README in that folder has the numbers. None of them tests the range of the clip depth.
+Three more programs call `slEvaluateFeature`. One uses a synthetic scene to settle the signs. One feeds the frames of `examples/streamline.mojo --frames` to DLSS. One tests five encodings of the depth. The README in that folder has the numbers.
 
 The tests keep the answers of the plugin. `test_the_estimate_matches_the_running_plugin` holds twenty-five of them.
 

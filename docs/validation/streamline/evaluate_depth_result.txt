@@ -1,0 +1,7 @@
+Depth encodings, a disc circling over a static background, 60 frames
+depth                                MSE whole      MSE near edge 
+correct (0..1, nearer smaller)       0.004062       0.022674      
+flat                                 0.004275       0.022538      
+inverted (nearer larger)             0.004543       0.026552      
+ndc (-1..1)                          0.004062       0.022674      
+correct, depthInverted flag true     0.004543       0.026552      

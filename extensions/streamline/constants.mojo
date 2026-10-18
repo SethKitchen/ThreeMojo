@@ -47,9 +47,14 @@ sign:
   size for such vectors. The opposite sign gave the error of having no motion
   vectors at all. `streamline_motion_vector` converts ThreeMojo's velocity.
 
-The range of the clip-space depth is still open. The probe tagged a flat
-depth, which cannot tell the ranges apart. Its matrices used the Direct3D
-range, zero at the near plane and one at the far plane, and DLSS accepted them.
+- The depth that DLSS reads has its nearer points smaller when `depthInverted`
+  is false. A disc that circled in front of a background gave the least error
+  with depths of 0 to 1, nearer smaller. Depths of -1 to 1, which is what
+  ThreeMojo's rasterizer holds, gave the same result to six places. Depths
+  with the nearer points larger cost error, and so did setting the flag on
+  depths that were not inverted. `frame_constants` sets `depth_inverted` to
+  false, and a binding tags ThreeMojo's depth as it is.
+
 `mvec_scale` is one and one for vectors that are `MOTION_NORMALIZED`, and one
 over the render size for `MOTION_PIXELS`, as the programming guides write
 them.

@@ -24,7 +24,7 @@
 
 ## What it did not show
 
-None of the three programs tests the range of the clip-space depth. They tag a flat depth. DLSS accepted the Direct3D range, zero at the near plane and one at the far plane, but a flat depth cannot tell the ranges apart. No program moves the camera.
+No program moves the camera. The depth run tests the content that moves, not the camera.
 
 ## The evaluate runs
 
@@ -53,12 +53,24 @@ The offset is in render pixels, with x across and y down. The motion vector is i
 
 The results are in `evaluate_result.txt` and `evaluate_frames_result.txt`.
 
+`evaluate_depth.cpp` tests the depth. A disc with its own texture circles in front of a static background, and DLSS gets the same frames with five depths. The error is near the disc's edge, where the disc uncovers the background.
+
+| Depth | Error, whole frame | Error near the edge |
+|---|---|---|
+| 0 to 1, nearer smaller | 0.00406 | 0.0227 |
+| -1 to 1, nearer smaller | 0.00406 | 0.0227 |
+| One value everywhere | 0.00428 | 0.0225 |
+| Nearer larger, `depthInverted` false | 0.00454 | 0.0266 |
+| 0 to 1, nearer smaller, `depthInverted` true | 0.00454 | 0.0266 |
+
+The range does not matter: a depth of -1 to 1 gave the same result as 0 to 1. The sense does. With `depthInverted` false, nearer must be smaller. The effect is small in this scene, and the edge error of the correct depth equals that of a flat depth. The whole-frame error orders the three cases.
+
 ## Run it again
 
 1. Unpack `streamline-sdk-v2.14.16.zip` from the [Streamline release](https://github.com/NVIDIA-RTX/Streamline/releases/tag/v2.14.16) into an empty folder.
 2. Set `STREAMLINE_SDK` to that folder.
 3. Run `build.bat` in this folder, from a developer prompt.
-4. Run `out\probe.exe` and `out\evaluate.exe`.
+4. Run `out\probe.exe`, `out\evaluate.exe` and `out\evaluate_depth.exe`.
 5. Write the frames with the Mojo example, then run `out\evaluate_frames.exe FRAMES OUTDIR`.
 
 The programs load the NVIDIA DLLs that the SDK ships. This repository does not hold them.

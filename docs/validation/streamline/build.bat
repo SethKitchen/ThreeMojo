@@ -9,7 +9,7 @@ if "%STREAMLINE_SDK%"=="" (
 call "%ProgramFiles%\Microsoft Visual Studio\2022\Community\VC\Auxiliary\Build\vcvars64.bat" >nul
 if not exist out mkdir out
 copy /y "%STREAMLINE_SDK%\bin\x64\development\*.dll" out\ >nul
-for %%P in (probe evaluate evaluate_frames) do (
+for %%P in (probe evaluate evaluate_frames evaluate_depth) do (
   cl /nologo /EHsc /std:c++17 /I"%STREAMLINE_SDK%\include" %%P.cpp /Fo:out\%%P.obj /Fe:out\%%P.exe ^
     /link /LIBPATH:"%STREAMLINE_SDK%\lib\x64" sl.interposer.lib d3d12.lib dxgi.lib
 )
