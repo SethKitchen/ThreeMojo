@@ -96,19 +96,6 @@ comptime _UNDEFINED = -1
 comptime _OBJECT_TEXT = "[object Object]"
 
 
-def _is_space(byte: UInt8) -> Bool:
-    """Return True for an ASCII byte that JavaScript's `\\s` matches.
-
-    Args:
-        byte: The byte.
-
-    Returns:
-        Whether it is a space, a tab, a line feed, a vertical tab, a form
-        feed or a carriage return.
-    """
-    return ascii_space(Int(byte))
-
-
 def _trim(text: String) -> String:
     """Return JavaScript's `text.trim()`.
 
@@ -121,9 +108,9 @@ def _trim(text: String) -> String:
     var bytes = text.as_bytes()
     var start = 0
     var end = len(bytes)
-    while start < end and _is_space(bytes[start]):
+    while start < end and ascii_space(bytes[start]):
         start += 1
-    while end > start and _is_space(bytes[end - 1]):
+    while end > start and ascii_space(bytes[end - 1]):
         end -= 1
     var ascii = (start == end) or (
         bytes[start] < 0x80 and bytes[end - 1] < 0x80
@@ -163,7 +150,7 @@ def _run(bytes: Span[UInt8, _], start: Int, space: Bool) -> Int:
     """
     var end = start
     while end < len(bytes) and (
-        _is_space(bytes[end]) if space else is_js_word(bytes[end])
+        ascii_space(bytes[end]) if space else is_js_word(bytes[end])
     ):
         end += 1
     return end - start

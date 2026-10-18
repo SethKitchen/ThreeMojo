@@ -167,19 +167,9 @@ def svg_unit_scale(
     return _inches(default_unit) / _inches(unit)
 
 
-def _is_space(byte: UInt8) -> Bool:
-    """Return True for an ASCII white space byte, as `\\s` takes it."""
-    return ascii_space(Int(byte))
-
-
-def _is_digit(byte: UInt8) -> Bool:
-    """Return True for `0` to `9`."""
-    return ascii_digit(Int(byte))
-
-
 def _digit_at(bytes: Span[UInt8, _], i: Int) -> Bool:
     """Return True if there is a digit at `i`."""
-    return i < len(bytes) and _is_digit(bytes[i])
+    return i < len(bytes) and ascii_digit(bytes[i])
 
 
 def _in_number_at(bytes: Span[UInt8, _], i: Int) -> Bool:
@@ -282,7 +272,7 @@ def parse_floats(
         if state == SEP:
             if is_space:
                 continue
-            var starts = _is_digit(c) or is_sign
+            var starts = ascii_digit(c) or is_sign
             if starts:
                 state = INT
                 number = current
@@ -296,7 +286,7 @@ def parse_floats(
                     raise Error("SVG: unexpected `,` at index " + String(i))
                 seen_comma = True
         if state == INT:
-            if _is_digit(c):
+            if ascii_digit(c):
                 number += current
                 continue
             if c == 46:
@@ -313,7 +303,7 @@ def parse_floats(
                 if doubled:
                     _unexpected_svg(current, i)
         if state == FLOAT:
-            if _is_digit(c):
+            if ascii_digit(c):
                 number += current
                 continue
             if is_exp:
@@ -323,7 +313,7 @@ def parse_floats(
             if second_point:
                 raise Error("SVG: unexpected `.` at index " + String(i))
         if state == EXP:
-            if _is_digit(c):
+            if ascii_digit(c):
                 exponent += current
                 continue
             if is_sign:
@@ -365,7 +355,7 @@ def parse_floats(
 def _in_number(byte: UInt8) -> Bool:
     """Return True for a byte `[+-]?\\d*\\.?\\d+(?:e[+-]?\\d+)?` can hold."""
     return (
-        _is_digit(byte)
+        ascii_digit(byte)
         or byte == 46
         or byte == 43
         or byte == 45
@@ -385,7 +375,7 @@ def _number_end(bytes: Span[UInt8, _], start: Int) -> Int:
     while _digit_at(bytes, i):
         i += 1
         digits += 1
-    var fraction = i + 1 < n and bytes[i] == 46 and _is_digit(bytes[i + 1])
+    var fraction = i + 1 < n and bytes[i] == 46 and ascii_digit(bytes[i + 1])
     if fraction:
         i += 1
         while _digit_at(bytes, i):
@@ -431,7 +421,7 @@ def svg_point_pairs(text: String) -> List[String]:
         var no_pair = (
             run == s
             or run >= n
-            or not (_is_space(bytes[run]) or bytes[run] == 44)
+            or not (ascii_space(bytes[run]) or bytes[run] == 44)
         )
         if no_pair:
             s += 1

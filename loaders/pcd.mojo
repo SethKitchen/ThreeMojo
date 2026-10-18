@@ -461,11 +461,6 @@ def _whole(text: String, what: String) raises -> Int:
     return value
 
 
-def _is_space(byte: UInt8) -> Bool:
-    """Return True for the white space a regular expression's `\\s` takes."""
-    return ascii_space(Int(byte))
-
-
 def parse_pcd_header(bytes: List[UInt8]) raises -> PcdHeader:
     """Read a PCD file's header, three.js's `parseHeader`.
 
@@ -533,11 +528,11 @@ def parse_pcd_header(bytes: List[UInt8]) raises -> PcdHeader:
         raise Error("PCD: the file has no `DATA` line")
     # `DATA`, one white space, the format word, one white space.
     var word = data_line + 4
-    if word >= len(bytes) or not _is_space(bytes[word]):
+    if word >= len(bytes) or not ascii_space(bytes[word]):
         raise Error("PCD: `DATA` must be followed by a space and a format")
     word += 1
     var word_end = word
-    while word_end < len(bytes) and not _is_space(bytes[word_end]):
+    while word_end < len(bytes) and not ascii_space(bytes[word_end]):
         word_end += 1
     if word_end >= len(bytes):
         raise Error("PCD: the file ends on its `DATA` line")

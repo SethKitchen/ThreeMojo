@@ -50,6 +50,22 @@ def ascii_space(byte: Int) -> Bool:
     return byte == 32 or (byte >= 9 and byte <= 13)
 
 
+def ascii_space(byte: UInt8) -> Bool:
+    """Return True for an ASCII white space byte.
+
+    Args:
+        byte: A byte value.
+
+    Returns:
+        Whether it is a space, a tab, a line feed, a vertical tab, a form
+        feed, or a carriage return.
+
+    Raises:
+        Error: Never.
+    """
+    return ascii_space(Int(byte))
+
+
 def ascii_digit(byte: Int) -> Bool:
     """Return True for an ASCII decimal digit.
 
@@ -60,6 +76,21 @@ def ascii_digit(byte: Int) -> Bool:
         Whether it is `0` through `9`.
     """
     return byte >= 48 and byte <= 57
+
+
+def ascii_digit(byte: UInt8) -> Bool:
+    """Return True for an ASCII decimal digit.
+
+    Args:
+        byte: A byte value.
+
+    Returns:
+        Whether it is `0` through `9`.
+
+    Raises:
+        Error: Never.
+    """
+    return ascii_digit(Int(byte))
 
 
 def ascii_letter(byte: Int) -> Bool:

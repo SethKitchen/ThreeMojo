@@ -26,16 +26,6 @@ from std.ffi import external_call
 from std.memory import bitcast
 
 
-def _is_space(byte: UInt8) -> Bool:
-    """Return True for an ASCII white space byte."""
-    return ascii_space(Int(byte))
-
-
-def _is_digit(byte: UInt8) -> Bool:
-    """Return True for `0` to `9`."""
-    return ascii_digit(Int(byte))
-
-
 def is_decimal_text(text: String) -> Bool:
     """Return True when a text holds decimal digits and nothing else.
 
@@ -47,19 +37,19 @@ def is_decimal_text(text: String) -> Bool:
     """
     var bytes = text.as_bytes()
     for at in range(len(bytes)):  # pragma: no branch
-        if not _is_digit(bytes[at]):
+        if not ascii_digit(bytes[at]):
             return False
     return True
 
 
 def _space_at(bytes: Span[UInt8, _], i: Int) -> Bool:
     """Return True if there is a white space byte at `i`."""
-    return i < len(bytes) and _is_space(bytes[i])
+    return i < len(bytes) and ascii_space(bytes[i])
 
 
 def _digit_at(bytes: Span[UInt8, _], i: Int) -> Bool:
     """Return True if there is a digit at `i`."""
-    return i < len(bytes) and _is_digit(bytes[i])
+    return i < len(bytes) and ascii_digit(bytes[i])
 
 
 def _sign_at(bytes: Span[UInt8, _], i: Int) -> Bool:
@@ -177,7 +167,7 @@ def js_string_to_number(text: String) -> Float64:
     var end = len(b)
     while _space_at(b, start):
         start += 1
-    while end > start and _is_space(b[end - 1]):
+    while end > start and ascii_space(b[end - 1]):
         end -= 1
     if start == end:
         return 0

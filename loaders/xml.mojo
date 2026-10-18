@@ -357,11 +357,6 @@ def _is_letter(byte: Int) -> Bool:
     return ascii_letter(byte)
 
 
-def _is_digit(byte: Int) -> Bool:
-    """Return True for an ASCII digit."""
-    return ascii_digit(byte)
-
-
 def _is_pubid_char(byte: Int) -> Bool:
     """Check the ASCII character set of a public identifier."""
     return (
@@ -369,7 +364,7 @@ def _is_pubid_char(byte: Int) -> Bool:
         or byte == 13
         or byte == 10
         or _is_letter(byte)
-        or _is_digit(byte)
+        or ascii_digit(byte)
         or chr(byte) in String("-'()+,./:=?;!*#@$_%")
     )
 
@@ -529,7 +524,7 @@ struct _Parser(Movable):
         var digits = version.as_bytes()
         var index = 2
         while index < len(digits):
-            if not _is_digit(Int(digits[index])):
+            if not ascii_digit(Int(digits[index])):
                 raise Error(self.where() + "invalid XML version")
             index += 1
         var field_start = self.at
@@ -547,7 +542,7 @@ struct _Parser(Movable):
                 var byte = bytes[index]
                 if not (
                     _is_letter(Int(byte))
-                    or _is_digit(Int(byte))
+                    or ascii_digit(Int(byte))
                     or byte == 46
                     or byte == 95
                     or byte == 45
