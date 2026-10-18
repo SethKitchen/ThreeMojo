@@ -12,6 +12,7 @@ each animation clip's tracks.
 """
 
 from animation.keyframe_track import MeshIndex
+from core.binary import copy_bytes
 from core.buffer_geometry import NORMAL, POSITION, UV
 from loaders.json import JsonDocument, parse_json
 from loaders.md2 import (
@@ -277,10 +278,10 @@ def test_md2_header_sections_are_bounded_before_reading() raises:
 
 def test_padded_md2_frames_follow_the_declared_stride() raises:
     var original = Path("assets/md2/fixture.md2").read_bytes()
-    var padded = List[UInt8](original[:124])
+    var padded = copy_bytes(original, 0, 124)
     for frame in range(8):
         var start = 124 + frame * 56
-        padded.extend(List[UInt8](original[start : start + 56]))
+        padded.extend(copy_bytes(original, start, 56))
         padded.extend(List[UInt8](length=8, fill=255))
     for field in [4, 15, 16]:
         var value = 64 if field == 4 else len(padded)

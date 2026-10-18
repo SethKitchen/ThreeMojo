@@ -49,7 +49,7 @@ that order whatever the masks say. The format flags are not read: a known
 code is a block format even when the flags say RGB, as in three.js.
 """
 
-from core.binary import little_endian_u32
+from core.binary import copy_bytes, little_endian_u32
 from core.extent import positive_extent
 from render.compressed_texture import (
     RED_GREEN_RGTC2_FORMAT,
@@ -320,6 +320,6 @@ def read(bytes: List[UInt8]) raises -> CompressedImage:
             if texel > 0:
                 image.mipmaps.append(_rgba(bytes, at, size, texel))
             else:
-                image.mipmaps.append(List[UInt8](bytes[at : at + size]))
+                image.mipmaps.append(copy_bytes(bytes, at, size))
             at += size
     return image^

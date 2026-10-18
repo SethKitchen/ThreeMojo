@@ -47,7 +47,12 @@ reads them at: the image sizes and offsets that libultrahdr writes.
   three.js gives an image of `NaN`s.
 """
 
-from core.binary import big_endian_u16, big_endian_u32, little_endian_u32
+from core.binary import (
+    big_endian_u16,
+    big_endian_u32,
+    copy_bytes,
+    little_endian_u32,
+)
 from loaders.bytes import bytes_match
 from loaders.js_number import js_log2, js_parse_float, js_pow
 from loaders.xml import XmlDocument, parse_xml
@@ -280,7 +285,7 @@ def _slice(bytes: List[UInt8], offset: Int, size: Int) raises -> List[UInt8]:
     """Return one of the two images, checked against the file."""
     if size < 1 or offset + size > len(bytes):
         raise Error("UltraHDR: an image of the MPF index runs past the file")
-    return List[UInt8](bytes[offset : offset + size])
+    return copy_bytes(bytes, offset, size)
 
 
 def scale_gain_map(gain: DecodedImage, width: Int, height: Int) -> List[UInt8]:

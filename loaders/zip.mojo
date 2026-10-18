@@ -33,7 +33,7 @@ does not write ZIP64, so an archive must stay under 4 GiB. It checks all
 field lengths before it allocates or writes the archive.
 """
 
-from core.binary import little_endian_u16, little_endian_u32
+from core.binary import copy_bytes, little_endian_u16, little_endian_u32
 from render.checksum import crc32
 from render.inflate import inflate
 
@@ -328,9 +328,9 @@ def unzip(bytes: List[UInt8]) raises -> List[ZipEntry]:
         _need(directory_start, start, packed, what)
         var data: List[UInt8]
         if method == ZIP_STORED:
-            data = List[UInt8](bytes[start : start + packed])
+            data = copy_bytes(bytes, start, packed)
         else:
-            data = inflate(List[UInt8](bytes[start : start + packed]), 0, size)
+            data = inflate(copy_bytes(bytes, start, packed), 0, size)
         if len(data) != size:
             raise Error(
                 "ZIP: "

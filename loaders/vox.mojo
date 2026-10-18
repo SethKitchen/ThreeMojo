@@ -37,7 +37,7 @@ writes past its volume.
 """
 
 from core.assets import Assets
-from core.binary import little_endian_u32
+from core.binary import copy_bytes, little_endian_u32
 from core.buffer_attribute import BufferAttribute
 from core.buffer_geometry import COLOR, POSITION, BufferGeometry
 from core.object3d import NO_PARENT, NodeId, Object3D
@@ -397,7 +397,7 @@ def parse_vox(bytes: List[UInt8]) raises -> List[VoxModel]:
             if i + count * 4 > len(bytes):
                 raise Error("VOX: the file ends inside its voxels")
             ref model = models[len(models) - 1]
-            model.data = List[UInt8](bytes[i : i + count * 4])
+            model.data = copy_bytes(bytes, i, count * 4)
             for v in range(count):
                 var outside = (
                     Int(model.data[v * 4]) >= model.size_x

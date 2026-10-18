@@ -42,7 +42,7 @@ decoded without that dictionary. A KTX 2.0 file carries no dictionary,
 and three.js's Basis Universal transcoder refuses such a frame too.
 """
 
-from core.binary import little_endian_uint
+from core.binary import copy_bytes, little_endian_uint
 
 # A decoder that knows the size it expects passes it as the limit.
 comptime NO_LIMIT = 0x7FFFFFFFFFFFFFF
@@ -536,7 +536,7 @@ def _literals(
         )
         if kind == 0:
             _need(header, size, len(bytes))
-            return (List[UInt8](bytes[header : header + size]), header + size)
+            return (copy_bytes(bytes, header, size), header + size)
         _need(header, 1, len(bytes))
         return (List[UInt8](length=size, fill=bytes[header]), header + 1)
     # Compressed or treeless: one stream with a three-byte header, or four
@@ -946,7 +946,7 @@ def _frame(
             at += 1
         elif kind == 2:
             _need(at, size, end)
-            var block = List[UInt8](bytes[at : at + size])
+            var block = copy_bytes(bytes, at, size)
             var read = _literals(block, state)
             _sequences(block, read[1], read[0], out, first, state, limit)
             at += size
