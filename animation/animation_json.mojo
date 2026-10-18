@@ -107,7 +107,6 @@ from loaders.json import (
     ARRAY,
     BOOLEAN,
     JsonDocument,
-    NO_NODE,
     NUMBER,
     OBJECT,
     parse_json,
@@ -653,17 +652,17 @@ def track_names(document: JsonDocument, clip: Int) raises -> List[String]:
     """
     if document.kind(clip) != OBJECT:
         raise Error("A clip in JSON must be an object")
-    var tracks = document.get(clip, "tracks")
-    if tracks == NO_NODE or document.kind(tracks) != ARRAY:
-        raise Error("A clip in JSON needs a tracks array")
+    var tracks = document.required_kind(
+        clip, "tracks", ARRAY, "A clip in JSON needs a tracks array"
+    )
     var names = List[String]()
     for index in range(document.length(tracks)):
         var track = document.at(tracks, index)
         if document.kind(track) != OBJECT:
             raise Error("A track in JSON must be an object")
-        var name = document.get(track, "name")
-        if name == NO_NODE:
-            raise Error("A track in JSON needs a name")
+        var name = document.required(
+            track, "name", "A track in JSON needs a name"
+        )
         names.append(document.string(name))
     return names^
 
@@ -697,9 +696,9 @@ def _number_list(
     document: JsonDocument, node: Int, key: String
 ) raises -> List[Float32]:
     """Return an array of numbers under a key, as `Float32`."""
-    var list = document.get(node, key)
-    if list == NO_NODE or document.kind(list) != ARRAY:
-        raise Error("A track in JSON needs a " + key + " array")
+    var list = document.required_kind(
+        node, key, ARRAY, "A track in JSON needs a " + key + " array"
+    )
     var out = List[Float32]()
     for index in range(document.length(list)):
         out.append(Float32(document.number(document.at(list, index))))
@@ -750,9 +749,9 @@ def read_track(
             refuses.
     """
     var kind = target.kind
-    var type_node = document.get(track, "type")
-    if type_node == NO_NODE:
-        raise Error("A track in JSON needs a type")
+    var type_node = document.required(
+        track, "type", "A track in JSON needs a type"
+    )
     if not _type_fits(document.string(type_node), kind):
         raise Error(
             "A track's type must be its property's: " + kind.value_type_name()
@@ -768,9 +767,9 @@ def read_track(
         how = _interpolation_of(
             document.integer(document.get(track, "interpolation"))
         )
-    var values = document.get(track, "values")
-    if values == NO_NODE or document.kind(values) != ARRAY:
-        raise Error("A track in JSON needs a values array")
+    var values = document.required_kind(
+        track, "values", ARRAY, "A track in JSON needs a values array"
+    )
     if kind.is_string():
         var texts = List[String]()
         for index in range(document.length(values)):
@@ -790,9 +789,9 @@ def read_track(
     numbers = _lane(numbers, stride, 1, target.slot if stride > 1 else 0)
     if how != BEZIER:
         return KeyframeTrack(target, times, numbers^, how)
-    var settings = document.get(track, "settings")
-    if settings == NO_NODE or document.kind(settings) != OBJECT:
-        raise Error("A Bezier track in JSON needs its settings")
+    var settings = document.required_kind(
+        track, "settings", OBJECT, "A Bezier track in JSON needs its settings"
+    )
     var lane = target.slot if stride > 1 else 0
     var ins = _lane(
         _number_list(document, settings, "inTangents"), stride, 2, lane

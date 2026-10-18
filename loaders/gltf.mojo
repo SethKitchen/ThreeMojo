@@ -1039,12 +1039,12 @@ def is_supported_extension(name: String) -> Bool:
 
 def _check_asset(document: JsonDocument, root: Int) raises:
     """Refuse a document that is not glTF 2.x."""
-    var asset = document.get(root, "asset")
-    if asset == NO_NODE or document.kind(asset) != OBJECT:
-        raise Error("glTF: no asset object")
-    var version = document.get(asset, "version")
-    if version == NO_NODE or document.kind(version) != STRING:
-        raise Error("glTF: no asset version")
+    var asset = document.required_kind(
+        root, "asset", OBJECT, "glTF: no asset object"
+    )
+    var version = document.required_kind(
+        asset, "version", STRING, "glTF: no asset version"
+    )
     if not document.string(version).startswith("2."):
         raise Error("glTF: only version 2 is read")
 
