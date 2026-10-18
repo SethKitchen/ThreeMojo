@@ -14,6 +14,7 @@ are made by patching one byte of a good file, or by assembling a small
 gray file by hand.
 """
 
+from core.search import first_match
 from render.framebuffer import Color
 from render.jpeg import (
     BLOCK_SAMPLES,
@@ -730,16 +731,12 @@ struct Bits(Movable):
     def dc(mut self, size: Int):
         """Append the DC code for a size of zero, one, two or five."""
         var sizes: List[Int] = [0, 1, 2, 5]
-        for index in range(len(sizes)):
-            if sizes[index] == size:
-                self.put(index, 3)
+        self.put(first_match(sizes, size), 3)
 
     def ac(mut self, symbol: Int):
         """Append the AC code for `symbol`, one of `AC_SYMBOLS`."""
         var symbols = ac_symbols()
-        for index in range(len(symbols)):
-            if symbols[index] == symbol:
-                self.put(index, 4)
+        self.put(first_match(symbols, symbol), 4)
 
     def finish(self) -> List[UInt8]:
         """Return every byte, the last padded with one bits."""

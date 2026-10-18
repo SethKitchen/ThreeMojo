@@ -6633,11 +6633,7 @@ struct NodeProgram(Copyable, Movable):
         var ids = List[Int]()
         for index in range(len(offsets)):
             var id = Int(self.code[offsets[index]])
-            var seen = False
-            for other in range(len(ids)):
-                if ids[other] == id:
-                    seen = True
-            if not seen:
+            if first_match(ids, id) < 0:
                 ids.append(id)
         return ids^
 
