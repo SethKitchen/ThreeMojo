@@ -42,6 +42,7 @@ from cameras.camera import Camera
 from controls.input import (
     InputEvent,
     button_choice,
+    refuse_invalid,
     POINTER_DOWN,
     POINTER_MOVE,
     POINTER_UP,
@@ -219,7 +220,7 @@ struct DragControls(Copyable, Movable):
             Error: If the button, or the action it maps to, is invalid.
         """
         if not button.is_valid():
-            raise Error("Invalid pointer button: ", button.value)
+            refuse_invalid("pointer button", button.value)
         var action = button_choice(
             button,
             self.primary_action,
@@ -228,7 +229,7 @@ struct DragControls(Copyable, Movable):
             NO_DRAG,
         )
         if not action.is_valid():
-            raise Error("Invalid drag action: ", action.value)
+            refuse_invalid("drag action", action.value)
         return action
 
     def handle[
@@ -264,9 +265,9 @@ struct DragControls(Copyable, Movable):
                 read.
         """
         if not event.kind.is_valid():
-            raise Error("Invalid input kind: ", event.kind.value)
+            refuse_invalid("input kind", event.kind.value)
         if not event.key.is_valid():
-            raise Error("Invalid key: ", event.key.value)
+            refuse_invalid("key", event.key.value)
         var action = self.action_of(event.button)
         var events = List[DragEvent]()
         if not self.enabled:

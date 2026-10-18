@@ -246,6 +246,22 @@ struct InputEvent(ImplicitlyCopyable):
         self.ctrl = ctrl
 
 
+def refuse_invalid(what: String, value: Int) raises:
+    """Refuse a number that does not name its kind.
+
+    Args:
+        what: What was refused, the words after `Invalid`.
+        value: The number that was refused.
+
+    Returns:
+        Nothing. The call raises.
+
+    Raises:
+        Error: Always. The message is `Invalid <what>: <value>`.
+    """
+    raise Error("Invalid " + what + ": ", value)
+
+
 def require_input(event: InputEvent) raises:
     """Refuse an event whose kind, button or key is not a named value.
 
@@ -259,11 +275,11 @@ def require_input(event: InputEvent) raises:
         Error: If the kind, button or key is invalid.
     """
     if not event.kind.is_valid():
-        raise Error("Invalid input kind: ", event.kind.value)
+        refuse_invalid("input kind", event.kind.value)
     if not event.button.is_valid():
-        raise Error("Invalid pointer button: ", event.button.value)
+        refuse_invalid("pointer button", event.button.value)
     if not event.key.is_valid():
-        raise Error("Invalid key: ", event.key.value)
+        refuse_invalid("key", event.key.value)
 
 
 def _is_digit(byte: UInt8) -> Bool:
