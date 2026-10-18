@@ -237,8 +237,10 @@ from render.rasterizer import (
     require_triangle_lighting,
     require_coverage_alpha,
     require_data_descriptors,
+    require_gradient_row,
     require_ignored_alpha,
     require_linear_data,
+    require_program_uniform,
     bumped_normal,
     interpolate_alpha,
     mapped_normal,
@@ -10228,44 +10230,45 @@ struct GpuRenderer(Movable):
                 if mode != SHADE_TEXTURE:
                     continue
                 for slot in range(len(program.textures)):
-                    if program.textures[slot].value < 0:
-                        raise Error(
-                            "A node program reads a texture uniform that"
-                            " names no texture; call set_texture() first"
-                        )
+                    require_program_uniform(
+                        program.textures[slot].value,
+                        "a texture",
+                        "texture",
+                        "set_texture",
+                    )
                     if program.textures[slot].value >= self.uploaded:
                         raise Error(
                             "A node program reads a texture that has not"
                             " been uploaded; call set_textures() first"
                         )
                 for slot in range(len(program.volumes)):
-                    if program.volumes[slot].value < 0:
-                        raise Error(
-                            "A node program reads a 3D texture uniform that"
-                            " names no texture; call set_volume() first"
-                        )
+                    require_program_uniform(
+                        program.volumes[slot].value,
+                        "a 3D texture",
+                        "texture",
+                        "set_volume",
+                    )
                     if program.volumes[slot].value >= len(self.volume_starts):
                         raise Error(
                             "A node program reads a 3D texture that has not"
                             " been uploaded; call set_textures() first"
                         )
                 for slot in range(len(program.arrays)):
-                    if program.arrays[slot].value < 0:
-                        raise Error(
-                            "A node program reads an array texture uniform"
-                            " that names no texture; call set_array() first"
-                        )
+                    require_program_uniform(
+                        program.arrays[slot].value,
+                        "an array texture",
+                        "texture",
+                        "set_array",
+                    )
                     if program.arrays[slot].value >= len(self.array_starts):
                         raise Error(
                             "A node program reads an array texture that has"
                             " not been uploaded; call set_textures() first"
                         )
                 for slot in range(len(program.cubes)):
-                    if program.cubes[slot].value < 0:
-                        raise Error(
-                            "A node program reads a cube uniform that names"
-                            " no cube; call set_cube() first"
-                        )
+                    require_program_uniform(
+                        program.cubes[slot].value, "a cube", "cube", "set_cube"
+                    )
                     if program.cubes[slot].value >= self.uploaded_cubes:
                         raise Error(
                             "A node program reads a cube that has not been"
@@ -10489,12 +10492,7 @@ struct GpuRenderer(Movable):
                         "A gradient map must hold texels: name no map for"
                         " the fallback"
                     )
-                if self.heights[tones.value] != 1:
-                    raise Error(
-                        "A gradient map must be one row high: it is a lookup"
-                        " table, not a picture, and a taller image has no"
-                        " unambiguous row"
-                    )
+                require_gradient_row(self.heights[tones.value])
                 require_data_descriptors(
                     self.is_linear[tones.value],
                     self.ignores_alpha[tones.value],

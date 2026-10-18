@@ -233,6 +233,23 @@ def _pivoted_inertia(a: CsrMatrix) raises -> Int:
     return negative
 
 
+def require_pair_size(first: Int, second: Int) raises:
+    """Refuse a stiffness and a mass of different sizes.
+
+    Args:
+        first: The size of one matrix.
+        second: The size of the other matrix.
+
+    Returns:
+        Nothing. The call returns when the two sizes are equal.
+
+    Raises:
+        Error: If the sizes differ.
+    """
+    if first != second:
+        raise Error("The stiffness and mass must have one size")
+
+
 def count_eigenvalues_below(
     k: CsrMatrix, m: CsrMatrix, shift: Float64
 ) raises -> Int:
@@ -254,8 +271,7 @@ def count_eigenvalues_below(
         Error: If the sizes differ, the shift or arithmetic is not finite,
             or the shift is an eigenvalue to working precision.
     """
-    if k.size != m.size:
-        raise Error("The stiffness and mass must have one size")
+    require_pair_size(k.size, m.size)
     if not isfinite(shift):
         raise Error("An eigenvalue shift must be finite")
     var shifted = _shifted(k, m, shift)
@@ -345,8 +361,7 @@ def lowest_modes(
             missed eigenvalue.
     """
     var n = k.size
-    if m.size != n:
-        raise Error("The stiffness and mass must have one size")
+    require_pair_size(m.size, n)
     if count < 1 or count > n:
         raise Error("The mode count must be from one to the matrix size")
     require_positive_tolerance(tolerance)

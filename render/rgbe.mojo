@@ -219,6 +219,24 @@ def _is_scanline_start(bytes: List[UInt8], at: Int, width: Int) -> Bool:
     )
 
 
+def require_rgbe_span(at: Int, length: Int, count: Int) raises:
+    """Refuse an RGBE read that needs more bytes than the file still holds.
+
+    Args:
+        at: The next byte to read.
+        length: How many bytes the file has.
+        count: How many bytes the read needs.
+
+    Returns:
+        Nothing. The call returns when at least `count` bytes remain.
+
+    Raises:
+        Error: If fewer than `count` bytes remain.
+    """
+    if length - at < count:
+        raise Error("RGBE: a scanline is cut short")
+
+
 def require_rgbe_byte(at: Int, length: Int) raises:
     """Refuse an RGBE read past the file.
 
@@ -232,8 +250,7 @@ def require_rgbe_byte(at: Int, length: Int) raises:
     Raises:
         Error: If the read is past the file.
     """
-    if at >= length:
-        raise Error("RGBE: a scanline is cut short")
+    require_rgbe_span(at, length, 1)
 
 
 def read_pixels(
@@ -272,8 +289,7 @@ def read_pixels(
     var at = start
     # The image is at least one row tall: the loop always runs.
     for _ in range(height):  # pragma: no branch
-        if len(bytes) - at < 4:
-            raise Error("RGBE: a scanline is cut short")
+        require_rgbe_span(at, len(bytes), 4)
         if not _is_scanline_start(bytes, at, width):
             raise Error("RGBE: a scanline must begin 2, 2 and its width")
         at += 4
@@ -294,8 +310,7 @@ def read_pixels(
                     filled += 1
                 at += 1
                 continue
-            if len(bytes) - at < run:
-                raise Error("RGBE: a scanline is cut short")
+            require_rgbe_span(at, len(bytes), run)
             for step in range(run):  # pragma: no branch
                 scan[filled] = bytes[at + step]
                 filled += 1

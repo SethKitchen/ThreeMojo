@@ -3370,6 +3370,28 @@ def matcap_fallback(v: Float32) -> Float32:
     return mix_delta(MATCAP_FLOOR, MATCAP_CEILING, v)
 
 
+def require_gradient_row(height: Int) raises:
+    """Refuse a gradient map that is not one row high.
+
+    The host asks this of a texture. The GPU asks it of the height it
+    uploaded. The words are the same.
+
+    Args:
+        height: How many rows the map has.
+
+    Returns:
+        Nothing. The call returns when the map is one row high.
+
+    Raises:
+        Error: If the map has any other height.
+    """
+    if height != 1:
+        raise Error(
+            "A gradient map must be one row high: it is a lookup table, not"
+            " a picture, and a taller image has no unambiguous row"
+        )
+
+
 def check_gradient_map(image: Texture) raises:
     """Refuse a ramp that is not stored as data.
 
@@ -3404,11 +3426,7 @@ def check_gradient_map(image: Texture) raises:
         raise Error(
             "A gradient map must hold texels: name no map for the fallback"
         )
-    if image.height != 1:
-        raise Error(
-            "A gradient map must be one row high: it is a lookup table, not"
-            " a picture, and a taller image has no unambiguous row"
-        )
+    require_gradient_row(image.height)
     require_data_descriptors(
         image.color_space == LINEAR, image.alpha == IGNORED, "A gradient map"
     )
@@ -3605,6 +3623,38 @@ def check_triangle_maps(
     )
 
 
+def require_program_uniform(
+    value: Int, kind: String, missing: String, setter: String
+) raises:
+    """Refuse a node-program uniform that names no asset.
+
+    The host asks this of a program. The GPU asks it before a launch.
+    The words are the same.
+
+    Args:
+        value: The uniform's id. A negative value names nothing.
+        kind: The uniform, with its article: "a texture" or "an array texture".
+        missing: The asset it failed to name: "texture" or "cube".
+        setter: The call that names one: "set_texture".
+
+    Returns:
+        Nothing. The call returns when the uniform names an asset.
+
+    Raises:
+        Error: If `value` is negative.
+    """
+    if value < 0:
+        raise Error(
+            "A node program reads "
+            + kind
+            + " uniform that names no "
+            + missing
+            + "; call "
+            + setter
+            + "() first"
+        )
+
+
 def check_program_maps(
     nodes: NodeProgramId,
     mode: ShadeMode,
@@ -3636,32 +3686,33 @@ def check_program_maps(
         ref program = programs.get(nodes)
         if mode == SHADE_TEXTURE:
             for index in range(len(program.textures)):
-                if program.textures[index].value < 0:
-                    raise Error(
-                        "A node program reads a texture uniform that names"
-                        " no texture; call set_texture() first"
-                    )
+                require_program_uniform(
+                    program.textures[index].value,
+                    "a texture",
+                    "texture",
+                    "set_texture",
+                )
                 _ = textures.get(program.textures[index]).width
             for index in range(len(program.cubes)):
-                if program.cubes[index].value < 0:
-                    raise Error(
-                        "A node program reads a cube uniform that names no"
-                        " cube; call set_cube() first"
-                    )
+                require_program_uniform(
+                    program.cubes[index].value, "a cube", "cube", "set_cube"
+                )
                 _ = cubes.get(program.cubes[index]).size
             for index in range(len(program.volumes)):
-                if program.volumes[index].value < 0:
-                    raise Error(
-                        "A node program reads a 3D texture uniform that names"
-                        " no texture; call set_volume() first"
-                    )
+                require_program_uniform(
+                    program.volumes[index].value,
+                    "a 3D texture",
+                    "texture",
+                    "set_volume",
+                )
                 _ = volumes.get(program.volumes[index]).image.width
             for index in range(len(program.arrays)):
-                if program.arrays[index].value < 0:
-                    raise Error(
-                        "A node program reads an array texture uniform that"
-                        " names no texture; call set_array() first"
-                    )
+                require_program_uniform(
+                    program.arrays[index].value,
+                    "an array texture",
+                    "texture",
+                    "set_array",
+                )
                 _ = arrays.get(program.arrays[index]).image.width
 
 
