@@ -31,7 +31,12 @@ from core.extent import positive_extent
 from cameras.orthographic_camera import OrthographicCamera
 from cameras.perspective_camera import PerspectiveCamera
 from controls.camera_frame import CameraFrame
-from controls.held_keys import HOLD_TIMEOUT, HeldKeys, physical_key
+from controls.held_keys import (
+    HOLD_TIMEOUT,
+    HeldKeys,
+    physical_key,
+    require_frame_time,
+)
 from controls.input import (
     ARROW_DOWN,
     ARROW_LEFT,
@@ -330,8 +335,7 @@ struct FlyControls(Copyable, Movable):
             Error: If the time is negative or the key timeout is not
                 positive.
         """
-        if delta.value < 0:
-            raise Error("A frame's time must not be negative")
+        require_frame_time(delta)
         if not self.enabled:
             return False
         var seconds = delta.to(SECOND)

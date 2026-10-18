@@ -48,7 +48,7 @@ from core.buffer_geometry import (
     UV,
 )
 from core.morph import MorphInfluences
-from core.scene import Scene
+from core.scene import Scene, require_skinned_mesh
 from materials.material import Material
 from math.bounds import Box3, Sphere
 from math.matrix4 import Matrix4
@@ -339,8 +339,7 @@ def skin_pose(scene: Scene, index: Int) raises -> SkinPose:
             there, the scene is stale, or the matrix the bones' result is
             carried back out of has no inverse.
     """
-    if index < 0 or index >= len(scene.skinned_meshes):
-        raise Error("No skinned mesh has that index")
+    require_skinned_mesh(index, len(scene.skinned_meshes))
     ref skinned = scene.skinned_meshes[index]
     # The bones' world matrices, then how far each has moved since the
     # bind. Once per mesh, whatever the vertex count.

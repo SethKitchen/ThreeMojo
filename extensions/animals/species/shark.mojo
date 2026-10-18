@@ -57,7 +57,7 @@ from extensions.animals.species.swimmer_rig import (
     spine_name,
     swimmer_bones,
 )
-from extensions.animals.traits import Traits, pick_sex
+from extensions.animals.traits import Traits, pick_sex, require_color_variant
 from extensions.sdf.vector import (
     V3,
     clamp,
@@ -511,8 +511,7 @@ def shark_traits(mut r: AnimalRandom, options: AnimalOptions) raises -> Traits:
     """
     var variant = WHITE
     if options.variant.value >= 0:
-        if options.variant.value >= 2:
-            raise Error("The species has no such color variant")
+        require_color_variant(options.variant.value, 2)
         variant = options.variant.value
     var sex = pick_sex(options.sex, r)
     var age = options.age

@@ -40,7 +40,7 @@ here has no order of its own, so the bound's order is used.
 """
 
 from core.object3d import NodeId
-from core.scene import Scene
+from core.scene import Scene, require_skinned_mesh
 from math.euler import Euler
 from math.utils import clamp
 from math.quaternion import Quaternion
@@ -146,8 +146,7 @@ struct CCDIKSolver(Movable):
                 the skeleton does not have, a chain's iteration count is
                 negative, or its blend factor is not from zero to one.
         """
-        if mesh < 0 or mesh >= len(scene.skinned_meshes):
-            raise Error("No skinned mesh has that index")
+        require_skinned_mesh(mesh, len(scene.skinned_meshes))
         var count = scene.skinned_meshes[mesh].bone_count()
         for chain in iks:
             _check_bone(chain.target, count)

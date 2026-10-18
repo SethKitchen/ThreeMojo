@@ -61,7 +61,6 @@ texture. See `CompressedFormat.is_float`.
 the last row and column of blocks hang off the edge; the texels past the
 edge are decoded and dropped, as a GPU stores and never shows them.
 """
-from core.extent import positive_extent
 from core.ordinal import ordinal_valid
 
 from render.bptc import BptcTables, bc6h_block, bc7_block
@@ -85,6 +84,7 @@ from render.texture import (
     Texture,
     Wrap,
     float_texture,
+    require_texture_size,
 )
 
 # The most bytes a decode may produce: one gibibyte, which is a 16384 by
@@ -651,8 +651,7 @@ def _check_payload(
             the named ones, or the payload's length is not the block
             grid's.
     """
-    if not positive_extent(width, height):
-        raise Error("Texture dimensions must be positive")
+    require_texture_size(width, height)
     if not format.is_valid():
         raise Error(
             "A compressed format must be one of the named formats, not "

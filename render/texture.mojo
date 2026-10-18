@@ -131,6 +131,23 @@ from std.memory import bitcast
 from units.si import Angle, RADIAN
 
 
+def require_texture_size(width: Int, height: Int) raises:
+    """Refuse a texture whose size is not positive.
+
+    Args:
+        width: The width, in pixels.
+        height: The height, in pixels.
+
+    Returns:
+        Nothing. The call returns when both sizes are positive.
+
+    Raises:
+        Error: If the width or the height is not positive.
+    """
+    if not positive_extent(width, height):
+        raise Error("Texture dimensions must be positive")
+
+
 @fieldwise_init
 struct Wrap(Equatable, ImplicitlyCopyable, Writable):
     """How a coordinate outside the unit square is resolved on one axis, as
@@ -1020,8 +1037,7 @@ struct Texture(Movable):
                 mode is none of the named values, or the filter is not
                 `NEAREST` or `BILINEAR` -- see `validate`.
         """
-        if not positive_extent(width, height):
-            raise Error("Texture dimensions must be positive")
+        require_texture_size(width, height)
         if len(pixels) != width * height * Self.CHANNELS:
             raise Error("Texture buffer length does not match the dimensions")
         self.color_space = color_space
@@ -2433,8 +2449,7 @@ def data_texture(
             through four, the data holds any number that is not finite,
             or its length is not `width * height * channels`.
     """
-    if not positive_extent(width, height):
-        raise Error("Texture dimensions must be positive")
+    require_texture_size(width, height)
     if channels < 1 or channels > 4:
         raise Error("A data texture holds one through four numbers a texel")
     if len(data) != width * height * channels:
@@ -2497,8 +2512,7 @@ def float_texture(
             not `width * height * 4`, a number is not finite, or the
             wrap, filter or alpha mode is none of the named values.
     """
-    if not positive_extent(width, height):
-        raise Error("Texture dimensions must be positive")
+    require_texture_size(width, height)
     if len(data) != width * height * Texture.CHANNELS:
         raise Error("Float texture length does not match the dimensions")
     # Both dimensions are positive, so the loop cannot run zero times.
@@ -2694,8 +2708,7 @@ def depth_texture_of_buffer(
             does not match them, the wrap mode is none of the named
             values, or the depth mode is none of the three.
     """
-    if not positive_extent(width, height):
-        raise Error("Texture dimensions must be positive")
+    require_texture_size(width, height)
     if len(depth) != width * height:
         raise Error("Depth buffer length does not match the dimensions")
     require_depth_mode(mode)

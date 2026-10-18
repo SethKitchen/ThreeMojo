@@ -43,7 +43,7 @@ also takes a bare skeleton, which forces two of the options. three.js's
 """
 
 from core.object3d import NO_PARENT, NodeId
-from core.scene import Scene
+from core.scene import Scene, require_skinned_mesh
 from math.matrix4 import Matrix4, compose
 from math.quaternion import Quaternion
 from math.vector3 import Vector3
@@ -293,8 +293,7 @@ def retarget(
             the scene, the scene is stale, or a matrix flattens an axis and
             so has no rotation to read or set.
     """
-    if target < 0 or target >= len(scene.skinned_meshes):
-        raise Error("No skinned mesh has that index")
+    require_skinned_mesh(target, len(scene.skinned_meshes))
     var bones = scene.skinned_meshes[target].skeleton.copy()
     var mesh = scene.skinned_meshes[target].node
     var held = options.preserve_bone_matrix
