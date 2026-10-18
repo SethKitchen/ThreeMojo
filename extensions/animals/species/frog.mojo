@@ -33,6 +33,7 @@ from extensions.animals.parts import (
 )
 from extensions.sdf.sculpt import ell_y
 from extensions.animals.kit import (
+    digitigrade_hind,
     EyeSpec,
     eye_frame_of,
     sculpt_eye_socket,
@@ -747,15 +748,9 @@ def frog_sculpt(mut m: SdfModel, rig: Rig, t: Traits) raises:
 
         # HIND: a heavy thigh, the tibiofibula, the long tarsus and the
         # long webbed foot.
-        var hp = rig.j("hip" + side)
-        var kn = rig.j("knee" + side)
-        var hk = rig.j("hock" + side)
-        var mt = rig.j("mtp" + side)
-        var ht = rig.j("htoe" + side)
-        var fem = rig.bone("femur" + side)
-        var tib = rig.bone("tibia" + side)
-        var tar = rig.bone("metatarsus" + side)
-        var hpaw = rig.bone("hpaw" + side)
+        var hp, kn, hk, mt, ht, fem, tib, tar, hpaw = digitigrade_hind(
+            rig, side
+        )
         # The web between the thigh and the body.
         _ = ell_y(
             m,

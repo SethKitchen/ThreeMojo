@@ -39,6 +39,7 @@ from extensions.animals.parts import (
 )
 from extensions.sdf.sculpt import ell_y
 from extensions.animals.kit import (
+    digitigrade_hind,
     fore_reach,
     EyeSpec,
     sculpt_eye_socket,
@@ -819,14 +820,9 @@ def rat_sculpt(mut m: SdfModel, rig: Rig, t: Traits) raises:
             k=0.0006,
         )
 
-        var hp = rig.j("hip" + side)
-        var kn = rig.j("knee" + side)
-        var hk = rig.j("hock" + side)
-        var mt = rig.j("mtp" + side)
-        var tt = rig.j("htoe" + side)
-        var fem = rig.bone("femur" + side)
-        var tib = rig.bone("tibia" + side)
-        var mtar = rig.bone("metatarsus" + side)
+        var hp, kn, hk, mt, tt, fem, tib, mtar, hpaw = digitigrade_hind(
+            rig, side
+        )
         _ = ell_y(
             m,
             "haunch",
@@ -885,7 +881,7 @@ def rat_sculpt(mut m: SdfModel, rig: Rig, t: Traits) raises:
             lateral=lat,
             k=0.0015,
         )
-        _toes(m, rig.bone("hpaw" + side), mt, tt, s, hspec, 0.0018)
+        _toes(m, hpaw, mt, tt, s, hspec, 0.0018)
 
     # TAIL: long, thick at the root, tapering and scaly.
     var thick = t.get("tailThick")

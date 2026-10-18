@@ -33,6 +33,7 @@ from extensions.animals.parts import (
 )
 from extensions.sdf.sculpt import ell_y
 from extensions.animals.kit import (
+    digitigrade_hind,
     fore_reach,
     EyeSpec,
     eye_frame_of,
@@ -883,13 +884,7 @@ def _foreleg(mut m: SdfModel, rig: Rig, side: String) raises:
 def _hind_leg(mut m: SdfModel, rig: Rig, side: String) raises:
     var s = 1.0 if side == "L" else -1.0
     var lat = V3(s, 0, 0)
-    var hp = rig.j("hip" + side)
-    var kn = rig.j("knee" + side)
-    var hk = rig.j("hock" + side)
-    var mt = rig.j("mtp" + side)
-    var fem = rig.bone("femur" + side)
-    var tib = rig.bone("tibia" + side)
-    var mtar = rig.bone("metatarsus" + side)
+    var hp, kn, hk, mt, tt, fem, tib, mtar, hpaw = digitigrade_hind(rig, side)
     _ = ell_y(
         m,
         "thigh",
@@ -992,11 +987,11 @@ def _hind_leg(mut m: SdfModel, rig: Rig, side: String) raises:
     )
     _digit(
         m,
-        rig.bone("hpaw" + side),
+        hpaw,
         rig.bone("hhoof" + side),
         mt,
         rig.j("hcoffin" + side),
-        rig.j("htoe" + side),
+        tt,
         0.95,
     )
 
