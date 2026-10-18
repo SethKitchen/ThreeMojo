@@ -58,7 +58,7 @@ from extensions.humanoid.skeleton.leg.femur.mass import (
     femur_mass_from_dimensions,
     femur_occupancy,
 )
-from math.utils import clamp_unit
+from math.utils import clamp, clamp_unit
 from math.vector3 import Vector3, centroid
 from std.math import inf, nan
 from std.testing import (
@@ -307,6 +307,12 @@ def test_clamp_unit_holds_the_acos_domain() raises:
     assert_equal(clamp_unit(Float32(-2)), Float32(-1))
     assert_equal(clamp_unit(Float32(2)), Float32(1))
     assert_equal(clamp_unit(Float32(0.25)), Float32(0.25))
+
+
+def test_clamp_holds_the_unit_interval() raises:
+    assert_equal(clamp(Float32(-0.2), 0, 1), Float32(0))
+    assert_equal(clamp(Float32(1.2), 0, 1), Float32(1))
+    assert_equal(clamp(Float32(0.4), 0, 1), Float32(0.4))
 
 
 def test_lerp_zero_covers_midpoint_and_clamps() raises:
