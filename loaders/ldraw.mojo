@@ -68,6 +68,7 @@ from materials.material import (
     MaterialId,
     STANDARD,
 )
+from math.matrix4 import _determinant4
 from math.quaternion import Quaternion
 from objects.line import CONTROL0, CONTROL1, DIRECTION, Line, SEGMENTS
 from objects.mesh import Mesh
@@ -225,60 +226,11 @@ def _apply(matrix: List[Float64], v: Vec) -> Vec:
 
 def _determinant(te: List[Float64]) -> Float64:
     """Return three.js's `Matrix4.determinant`."""
-    var n11 = te[0]
-    var n12 = te[4]
-    var n13 = te[8]
-    var n14 = te[12]
-    var n21 = te[1]
-    var n22 = te[5]
-    var n23 = te[9]
-    var n24 = te[13]
-    var n31 = te[2]
-    var n32 = te[6]
-    var n33 = te[10]
-    var n34 = te[14]
-    var n41 = te[3]
-    var n42 = te[7]
-    var n43 = te[11]
-    var n44 = te[15]
-    return (
-        n41
-        * (
-            +n14 * n23 * n32
-            - n13 * n24 * n32
-            - n14 * n22 * n33
-            + n12 * n24 * n33
-            + n13 * n22 * n34
-            - n12 * n23 * n34
-        )
-        + n42
-        * (
-            +n11 * n23 * n34
-            - n11 * n24 * n33
-            + n14 * n21 * n33
-            - n13 * n21 * n34
-            + n13 * n24 * n31
-            - n14 * n23 * n31
-        )
-        + n43
-        * (
-            +n11 * n24 * n32
-            - n11 * n22 * n34
-            - n14 * n21 * n32
-            + n12 * n21 * n34
-            + n14 * n22 * n31
-            - n12 * n24 * n31
-        )
-        + n44
-        * (
-            -n13 * n22 * n31
-            - n11 * n23 * n32
-            + n11 * n22 * n33
-            + n13 * n21 * n32
-            - n12 * n21 * n33
-            + n12 * n23 * n31
-        )
-    )
+    var entries = Array[Float64, 16](fill=0)
+    # A placement matrix holds sixteen entries.
+    for index in range(16):  # pragma: no branch
+        entries[index] = te[index]
+    return _determinant4(entries)
 
 
 def _decompose(te: List[Float64], mut node: LDrawNode):
