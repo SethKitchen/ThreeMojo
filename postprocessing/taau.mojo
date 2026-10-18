@@ -56,6 +56,7 @@ from postprocessing.traa import (
     TRAA_JITTERS,
     clip_aabb,
     flicker_reduction,
+    neighborhood_motion,
     reproject_window_depth,
     traa_jitter,
 )
@@ -296,22 +297,10 @@ def taau_pixel(
     # `round`: the nearest jittered input sample.
     var tap_x = Int(floor(p_x - (0.5 + frame.jitter_x) + 0.5))
     var tap_y = Int(floor(p_y - (0.5 + frame.jitter_y) + 0.5))
-    var closest = Float32(2)
-    var closest_x = tap_x
-    var closest_y = tap_y
-    var farthest = Float32(-1)
-    # Nine neighbors, fixed, across then down as three.js's loops run.
-    for dx in range(-1, 2):  # pragma: no branch
-        for dy in range(-1, 2):  # pragma: no branch
-            var d = depth.load(tap_x + dx, tap_y + dy, 0)
-            if d < closest:
-                closest = d
-                closest_x = tap_x + dx
-                closest_y = tap_y + dy
-            if d > farthest:
-                farthest = d
-    var offset_u = velocity.load(closest_x, closest_y, 0) * 0.5
-    var offset_v = velocity.load(closest_x, closest_y, 1) * -0.5
+    # A depth of at least 2 keeps the center tap.
+    var closest, farthest, offset_u, offset_v = neighborhood_motion(
+        depth, velocity, tap_x, tap_y, tap_x, tap_y
+    )
     var history_u = u - offset_u
     var history_v = v_down - offset_v
     var then = previous_window_depth(
