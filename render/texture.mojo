@@ -110,6 +110,7 @@ from render.framebuffer import (
     FloatColor,
     Framebuffer,
     OPAQUE_WHITE,
+    append_color,
     unit_byte,
     require_depth_length,
 )
@@ -2889,10 +2890,7 @@ def checkerboard(
             var shade = light
             if (x // step + y // step) % 2 == 1:
                 shade = dark
-            pixels.append(shade.r)
-            pixels.append(shade.g)
-            pixels.append(shade.b)
-            pixels.append(shade.a)
+            append_color(pixels, shade)
     return Texture(
         size, size, pixels^, wrap, filter, color_space, mipmapped, alpha
     )

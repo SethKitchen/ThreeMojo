@@ -47,7 +47,7 @@ from core.ordinal import require_non_negative
 from materials.material import MaterialId
 from math.vector3 import Vector3, append_vector3
 from objects.line import SEGMENTS, segment_count
-from render.framebuffer import FloatColor
+from render.framebuffer import FloatColor, append_float_rgb
 from render.linerule import dash_covers
 from std.math import ceil, floor, max, min, pi, sqrt
 
@@ -203,9 +203,7 @@ def _geometry_of(
         var channels = List[Float32]()
         # At least one: `has_colors` asked for a count above zero.
         for index in range(len(colors)):  # pragma: no branch
-            channels.append(colors[index].r)
-            channels.append(colors[index].g)
-            channels.append(colors[index].b)
+            append_float_rgb(channels, colors[index])
         shape.set_attribute(String(COLOR), BufferAttribute(channels^, 3))
     return shape^
 

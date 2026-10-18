@@ -84,7 +84,7 @@ from materials.material import PHONG, STANDARD, Material, MaterialId
 from math.matrix4 import Matrix4
 from objects.mesh import Mesh
 from render.css_color import parse_style
-from render.framebuffer import Color, FloatColor
+from render.framebuffer import Color, FloatColor, append_float_rgb
 from render.srgb import SRGB, linear_to_srgb
 from render.texture import (
     BILINEAR,
@@ -923,9 +923,7 @@ struct _Loader(Movable):
                 if text == "":
                     text = first
                 var color = colors[_index(text, len(colors), "color")]
-                values.append(color.r)
-                values.append(color.g)
-                values.append(color.b)
+                append_float_rgb(values, color)
         var geometry = BufferGeometry()
         geometry.set_attribute(String(POSITION), BufferAttribute(positions^, 3))
         geometry.set_attribute(String(COLOR), BufferAttribute(values^, 3))

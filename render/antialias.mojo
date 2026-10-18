@@ -69,6 +69,7 @@ from render.framebuffer import (
     Color,
     FloatColor,
     Framebuffer,
+    append_color,
     require_downsample_factor,
 )
 from render.raster_state import STANDARD_DEPTH, DepthMode, is_nearer
@@ -127,9 +128,6 @@ def downsample(
                     if is_nearer(depth_mode, z, nearest):
                         nearest = z
             var shown = (total * share).unpremultiplied().encode()
-            pixels.append(shown.r)
-            pixels.append(shown.g)
-            pixels.append(shown.b)
-            pixels.append(shown.a)
+            append_color(pixels, shown)
             depth.append(nearest)
     return Framebuffer(width, height, pixels^, depth^)
