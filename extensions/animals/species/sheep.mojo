@@ -211,10 +211,8 @@ def sheep_traits(mut r: AnimalRandom, options: AnimalOptions) raises -> Traits:
     var f0: List[Float64] = [0.05, 0.04, 0.06, 0.05, 0.004]
     var f1: List[Float64] = [0.12, 0.09, 0.1, 0.12, 0.015]
     var u = 0.5 + 0.5 * R.g()
-    var fleece = (
-        0.012
-        + 0.01 * R.next() if lamb else f0[variant]
-        + (f1[variant] - f0[variant]) * u
+    var fleece = 0.012 + 0.01 * R.next() if lamb else mix(
+        f0[variant], f1[variant], u
     )
     fleece = clamp(fleece, 0.0, 0.15)
     var staple = max(0.005, min(0.018, 0.25 * fleece + 0.004)) * (

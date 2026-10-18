@@ -69,6 +69,7 @@ from extensions.sdf.vector import (
     cross,
     dot,
     length,
+    catmull_rom,
     lerp,
     normalize,
     smoothstep,
@@ -1071,17 +1072,7 @@ def _catmull(pts: List[V3], n: Int) -> List[V3]:
         var p1 = pts[k]
         var p2 = pts[k + 1]
         var p3 = pts[min(seg, k + 2)]
-        var t2 = t * t
-        var t3 = t2 * t
-        out_pts.append(
-            (
-                p1 * 2.0
-                + (p2 - p0) * t
-                + (p0 * 2.0 - p1 * 5.0 + p2 * 4.0 - p3) * t2
-                + (p1 * 3.0 - p0 - p2 * 3.0 + p3) * t3
-            )
-            * 0.5
-        )
+        out_pts.append(catmull_rom(p0, p1, p2, p3, t))
     return out_pts^
 
 

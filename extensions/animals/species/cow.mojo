@@ -486,7 +486,7 @@ def _horn_points(t: Traits, s: Float64) -> List[V3]:
     pts.append(p)
     for i in range(1, n + 1):  # pragma: no branch
         var u = (Float64(i) - 0.5) / Float64(n)
-        var a = a0 + (a1 - a0) * u**curl
+        var a = mix(a0, a1, u**curl)
         var d = normalize(out_dir * cos(a) + tw * sin(a))
         p = p + d * ((ln + 0.03) / Float64(n))
         pts.append(p)

@@ -163,7 +163,7 @@ def _hl(v: V3) -> V3:
 
 def _face_z(z: Float64, kid: Bool) -> Float64:
     var short = kid and z > 0.02
-    return 0.02 + (z - 0.02) * KID_FACE if short else z
+    return mix(0.02, z, KID_FACE) if short else z
 
 
 def _un_face_z(z: Float64, kid: Bool) -> Float64:

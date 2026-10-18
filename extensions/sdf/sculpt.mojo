@@ -12,7 +12,14 @@ These are procedural-animals' `ellY` and `tube`.
 
 from extensions.sdf.field import SdfModel
 from extensions.sdf.ids import BoneId, SurfacePart
-from extensions.sdf.vector import V3, cross, length, normalize
+from extensions.sdf.vector import (
+    V3,
+    catmull_rom,
+    cross,
+    length,
+    mix,
+    normalize,
+)
 
 
 def ell_y(
@@ -54,17 +61,6 @@ def ell_y(
     return m.ell(
         tag, bone, c, r, axis=z, up=y, k=k, carve=carve, part=part, thin=thin
     )
-
-
-def _catmull(p0: V3, p1: V3, p2: V3, p3: V3, t: Float64) -> V3:
-    var t2 = t * t
-    var t3 = t2 * t
-    return (
-        p1 * 2.0
-        + (p2 - p0) * t
-        + (p0 * 2.0 - p1 * 5.0 + p2 * 4.0 - p3) * t2
-        + (p1 * 3.0 - p0 - p2 * 3.0 + p3) * t3
-    ) * 0.5
 
 
 def tube(
@@ -110,14 +106,13 @@ def tube(
         for j in range(spans):
             var t0 = Float64(j) / Float64(spans)
             var t1 = Float64(j + 1) / Float64(spans)
-            var dr = radii[i + 1] - radii[i]
             _ = m.cone(
                 tag,
                 bone,
-                _catmull(p0, points[i], points[i + 1], p3, t0),
-                _catmull(p0, points[i], points[i + 1], p3, t1),
-                radii[i] + dr * t0,
-                radii[i] + dr * t1,
+                catmull_rom(p0, points[i], points[i + 1], p3, t0),
+                catmull_rom(p0, points[i], points[i + 1], p3, t1),
+                mix(radii[i], radii[i + 1], t0),
+                mix(radii[i], radii[i + 1], t1),
                 k=k if i == 0 else 0.0,
                 part=part,
             )

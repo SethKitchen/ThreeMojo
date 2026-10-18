@@ -226,6 +226,7 @@ from math.matrix4 import Matrix4
 from math.utils import (
     ComponentType,
     max3,
+    mix_delta,
     INT16_COMPONENT,
     INT32_COMPONENT,
     INT8_COMPONENT,
@@ -2429,7 +2430,7 @@ def _sample(
     # Every caller reads at least one lane.
     for lane in range(width):  # pragma: no branch
         var here = values[key * width + lane]
-        out.append(here + (values[next * width + lane] - here) * blend)
+        out.append(mix_delta(here, values[next * width + lane], blend))
     return out^
 
 

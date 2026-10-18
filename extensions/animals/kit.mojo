@@ -20,6 +20,7 @@ from extensions.sdf.vector import (
     V3,
     dot,
     frame_zy,
+    mix,
     normalize,
 )
 from std.math import atan2, cos, exp, pi, sin, sqrt
@@ -273,7 +274,7 @@ def head_local(
     Returns:
         The point in reference space.
     """
-    var z = muzzle_z0 + (v.z - muzzle_z0) * muzzle if v.z > muzzle_z0 else v.z
+    var z = mix(muzzle_z0, v.z, muzzle) if v.z > muzzle_z0 else v.z
     return V3(
         head_origin.x + v.x * width * scale,
         head_origin.y + v.y * scale,

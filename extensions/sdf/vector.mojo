@@ -136,6 +136,33 @@ def cubic_bezier(p0: V3, p1: V3, p2: V3, p3: V3, t: Float64) -> V3:
     )
 
 
+def catmull_rom(p0: V3, p1: V3, p2: V3, p3: V3, t: Float64) -> V3:
+    """Return the point on a uniform Catmull-Rom span at `t`.
+
+    The span runs from `p1` to `p2`. `p0` and `p3` set the tangents.
+    The powers of `t` are formed first. Each term is added from the
+    linear term through the cubic term, and the sum is then halved.
+
+    Args:
+        p0: The point before the span.
+        p1: The start of the span.
+        p2: The end of the span.
+        p3: The point after the span.
+        t: The fraction from `p1` to `p2`.
+
+    Returns:
+        The point.
+    """
+    var t2 = t * t
+    var t3 = t2 * t
+    return (
+        p1 * 2.0
+        + (p2 - p0) * t
+        + (p0 * 2.0 - p1 * 5.0 + p2 * 4.0 - p3) * t2
+        + (p1 * 3.0 - p0 - p2 * 3.0 + p3) * t3
+    ) * 0.5
+
+
 def mirror(a: V3) -> V3:
     """Return the point mirrored to the animal's other side.
 

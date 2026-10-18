@@ -2042,7 +2042,7 @@ def _comb(t: Traits, ho: V3, v: V3) -> V3:
     if flop > 0.0:
         var a = flop * max(0.0, y - 0.012) / 0.03
         x += sin(a) * (y - 0.012) * 0.9
-        y = 0.012 + (y - 0.012) * cos(a)
+        y = mix(0.012, y, cos(a))
     return _hl(ho, t.get("headK"), V3(x, y, v.z))
 
 
