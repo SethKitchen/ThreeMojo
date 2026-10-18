@@ -68,7 +68,7 @@ from extensions.humanoid.rig.joints import (
 from math.quaternion import Quaternion
 from math.smoothstep import hermite_fade
 from math.utils import clamp
-from math.vector3 import Vector3
+from math.vector3 import Vector3, mix_delta3
 from std.math import cos, exp, pi, sin
 from units.si import DEGREE, SECOND, Angle, Duration
 
@@ -119,10 +119,8 @@ struct Pose(Copyable, Movable):
         """
         var out = Pose()
         for j in range(JOINT_COUNT):  # pragma: no branch
-            out.angles[j] = (
-                self.angles[j] + (other.angles[j] - self.angles[j]) * t
-            )
-        out.lift = self.lift + (other.lift - self.lift) * t
+            out.angles[j] = mix_delta3(self.angles[j], other.angles[j], t)
+        out.lift = mix_delta3(self.lift, other.lift, t)
         return out^
 
 

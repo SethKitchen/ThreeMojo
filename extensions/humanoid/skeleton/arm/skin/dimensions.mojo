@@ -55,6 +55,7 @@ from extensions.humanoid.skeleton.loft import (
     loft_distance,
 )
 from extensions.humanoid.skeleton.torso.sweep import SweepField
+from math.utils import mix_delta
 from math.vector3 import Vector3
 from std.math import max, min
 
@@ -166,7 +167,7 @@ struct ArmSkinField(Copyable, DistanceField, Movable):
         for section in range(ARM_SKIN_SECTIONS):  # pragma: no branch
             var y = bottom + spacing * Float32(section)
             var t = min(max((y - f.elbow.y) / f.cm(6.0) + 0.5, 0), 1)
-            covers.append(fore + (upper - fore) * t)
+            covers.append(mix_delta(fore, upper, t))
         # Two passes fill the dips; four round off each section that
         # stands proud, so the skin shows no bands.
         self.loft = fit_loft(

@@ -55,7 +55,8 @@ from extensions.humanoid.skeleton.torso.sweep import (
     spline_points,
     tube,
 )
-from math.vector3 import Vector3
+from math.utils import mix_delta
+from math.vector3 import Vector3, mix_delta3
 from std.math import cos, isfinite, max, min, sin
 from units.si import Length
 
@@ -251,12 +252,12 @@ struct TorsoFrame(ImplicitlyCopyable):
         if self.neck != 1:
             var slim = self.slim(y)
             p.x *= slim
-            p.z = NECK_AXIS_Z + (p.z - NECK_AXIS_Z) * slim
+            p.z = mix_delta(NECK_AXIS_Z, p.z, slim)
         if self.shoulders != 1:
             p.x *= 1 + (self.shoulders - 1) * clamped_smoothstep(18.0, 46.0, y)
         if self.chest != 1:
             var grow = 1 + (self.chest - 1) * clamped_smoothstep(14.0, 30.0, y)
-            p.z = SPINE_Z + (p.z - SPINE_Z) * grow
+            p.z = mix_delta(SPINE_Z, p.z, grow)
         var unit = TEMPLATE_CM * self.stature
         var placed = self.anchor + Vector3(
             p.x * unit * self.wide,
@@ -273,7 +274,7 @@ struct TorsoFrame(ImplicitlyCopyable):
             (HEAD_PIVOT_Y - PROMONTORY_Y) * unit,
             (HEAD_PIVOT_Z - PROMONTORY_Z) * unit * self.deep,
         )
-        return pivot + (placed - pivot) * grow
+        return mix_delta3(pivot, placed, grow)
 
     def slim(self, y: Float32) -> Float32:
         """Return the factor the neck is slimmed by at a height.

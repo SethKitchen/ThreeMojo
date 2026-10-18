@@ -63,7 +63,7 @@ from extensions.humanoid.skeleton.surface_nets import (
     project_to_surface,
     surface_gradient,
 )
-from math.vector3 import Vector3
+from math.vector3 import Vector3, mix_delta3
 from std.math import cos, max, min, sin
 
 # Where the scan's frame lands on the template, in template cm: the
@@ -526,7 +526,7 @@ def place(
         for v in range(len(shape)):  # pragma: no branch
             var y = scan_to_template(shape[v]).y
             var k = clamped_smoothstep(IDENTITY_FROM, IDENTITY_TO, y)
-            shape[v] = shape[v] + (other[v] - shape[v]) * k
+            shape[v] = mix_delta3(shape[v], other[v], k)
     var points = List[Vector3](capacity=len(shape))
     for p in shape:  # pragma: no branch
         var t = warp_ear(scan_to_template(p), size, protrusion, lobe)

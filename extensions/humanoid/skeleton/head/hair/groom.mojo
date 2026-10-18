@@ -616,7 +616,7 @@ def _root(
     for attempt in range(tries):
         var salt = attempt * 7 + 11
         var turn = Float32(2 * pi) * _unit(key, salt)
-        var up = lowest + (1 - lowest) * _unit(key, salt + 1)
+        var up = mix_delta(lowest, Float32(1), _unit(key, salt + 1))
         var flat = sqrt(max(Float32(0), 1 - up * up))
         var ray = Vector3(flat * cos(turn), up, flat * sin(turn))
         var p = center + ray * Float32(0.25)
@@ -704,7 +704,7 @@ def _grow_guide(
     mut levels: List[Float32],
 ):
     """Grow one guide from `root` along the comb, on the field's level."""
-    var target = spec.shortest + (spec.longest - spec.shortest) * _unit(key, 2)
+    var target = mix_delta(spec.shortest, spec.longest, _unit(key, 2))
     var phase = Float32(2 * pi) * _unit(key, 3)
     # A root at the front of the scalp may fall past the hair's edge
     # onto the forehead, down to the fringe's ragged line.
@@ -1172,7 +1172,7 @@ def _arc(
         )
         var q = _onto(
             field,
-            middle + d * (ra + (rb - ra) * t),
+            middle + d * mix_delta(ra, rb, t),
             spec.lift,
             probe,
             spec.step,

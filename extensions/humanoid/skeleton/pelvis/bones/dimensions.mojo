@@ -57,6 +57,7 @@ from extensions.humanoid.skeleton.field import (
 )
 from extensions.humanoid.skeleton.leg.femur.dimensions import femur_dimensions
 from math.catmull import catmull_rom_point
+from math.utils import mix_delta
 from math.vector3 import Vector3
 from std.math import cos, max, min, sin
 from units.si import DEGREE, Angle, Length
@@ -565,7 +566,7 @@ struct HipBoneShape(Copyable, Movable):
             Float32(0),
             Float32(1) - (point - self.hub).length() / self.reach,
         )
-        var half = self.thin + (self.thick - self.thin) * near
+        var half = mix_delta(self.thin, self.thick, near)
         # The plates meet edge to edge, so they join with a hard minimum:
         # one sheet, with no ridge where two plates meet.
         var sheet = Float32(1.0e9)
