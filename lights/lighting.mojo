@@ -1708,6 +1708,68 @@ struct Lighting(Movable):
             return Vector3(1, 1, 1)
         return self.spot_maps[slot].tint(position, normal)
 
+    def _spot_reach(
+        self, index: Int, position: Vector3
+    ) -> Tuple[Vector3, Float32, Float32, Float32]:
+        """Return one spot light's offset, distance, divisor, and cone weight.
+
+        The offset points from the surface to the bulb. The divisor is the
+        length of that offset for an ordinary light, and one when the offset
+        is already a unit direction. A surface on the bulb has distance zero.
+        The cone weight is then zero, and `spot_attenuation` is not called.
+        Otherwise the cone cosine is the offset's dot with the axis, divided
+        by the divisor, and the weight is `spot_attenuation` of that cosine.
+        That is three.js's `getSpotAttenuation`.
+
+        Args:
+            index: Which spot light, in the order they were resolved.
+            position: Where the surface is, in world space.
+
+        Returns:
+            The offset, the distance, the divisor, and the cone weight.
+        """
+        var ray = light_vector(self.spot_positions[index], position)
+        var toward = ray[0]
+        var distance = ray[1]
+        var direction_length = ray[2]
+        if distance == 0:
+            return toward, distance, direction_length, Float32(0)
+        var angle_cos = (
+            toward.dot(self.spot_directions[index]) / direction_length
+        )
+        return (
+            toward,
+            distance,
+            direction_length,
+            self.spot_attenuation(index, angle_cos, position),
+        )
+
+    def _add_hemisphere(self, total: FloatColor, normal: Vector3) -> FloatColor:
+        """Add every hemisphere light's ground-to-sky mix.
+
+        The weight is one when the surface faces the sky, zero when it
+        faces the ground, and a half when it is edge-on. three.js's
+        `getHemisphereLightIrradiance` mixes ground toward sky by that
+        weight. A toon ramp does not step this term.
+
+        Args:
+            total: The light summed so far.
+            normal: The surface's unit normal, in world space.
+
+        Returns:
+            `total` plus each hemisphere light, in index order.
+        """
+        var sum = total
+        for index in range(len(self.sky_directions)):
+            var weight = 0.5 * normal.dot(self.sky_directions[index]) + 0.5
+            ref sky = self.skies[index]
+            ref ground = self.grounds[index]
+            sum = _add_rgb(
+                sum,
+                mix_delta3(rgb_channels(ground), rgb_channels(sky), weight),
+            )
+        return sum
+
     def shadow_at(
         self, slot: Int, position: Vector3, normal: Vector3, receives: Bool
     ) -> Float32:
@@ -1961,31 +2023,13 @@ struct Lighting(Movable):
             )
             ref bulb = self.point_radiances[index]
             total = _add_rgb(total, rgb_channels(bulb) * (through * bare))
-        for index in range(len(self.sky_directions)):
-            # How far the surface is turned toward the sky: one facing it,
-            # zero facing the ground, a half edge-on. three.js's
-            # `getHemisphereLightIrradiance`, ground to sky by that weight.
-            var weight = 0.5 * normal.dot(self.sky_directions[index]) + 0.5
-            ref sky = self.skies[index]
-            ref ground = self.grounds[index]
-            total = _add_rgb(
-                total,
-                mix_delta3(rgb_channels(ground), rgb_channels(sky), weight),
-            )
+        total = self._add_hemisphere(total, normal)
         for index in range(len(self.spot_positions)):
-            var ray = light_vector(self.spot_positions[index], position)
-            var toward = ray[0]
-            var distance = ray[1]
-            var direction_length = ray[2]
+            var toward, distance, direction_length, rim = self._spot_reach(
+                index, position
+            )
             if distance == 0:
                 continue
-            # The cosine of the angle between the way to the bulb and the
-            # cone's axis, and from it how far inside the cone this is:
-            # three.js's `getSpotAttenuation`.
-            var angle_cos = (
-                toward.dot(self.spot_directions[index]) / direction_length
-            )
-            var rim = self.spot_attenuation(index, angle_cos, position)
             if rim <= 0:
                 continue
             var lambert = normal.dot(toward) / direction_length
@@ -2078,26 +2122,14 @@ struct Lighting(Movable):
             )
             ref bulb = self.point_radiances[index]
             total = _add_rgb(total, rgb_channels(bulb) * (through * bare))
-        for index in range(len(self.sky_directions)):
-            # Indirect, so it is not stepped: the same sum as `intensity_at`.
-            var weight = 0.5 * normal.dot(self.sky_directions[index]) + 0.5
-            ref sky = self.skies[index]
-            ref ground = self.grounds[index]
-            total = _add_rgb(
-                total,
-                mix_delta3(rgb_channels(ground), rgb_channels(sky), weight),
-            )
+        # Indirect, so it is not stepped: the same sum as `intensity_at`.
+        total = self._add_hemisphere(total, normal)
         for index in range(len(self.spot_positions)):
-            var ray = light_vector(self.spot_positions[index], position)
-            var toward = ray[0]
-            var distance = ray[1]
-            var direction_length = ray[2]
+            var toward, distance, direction_length, rim = self._spot_reach(
+                index, position
+            )
             if distance == 0:
                 continue
-            var angle_cos = (
-                toward.dot(self.spot_directions[index]) / direction_length
-            )
-            var rim = self.spot_attenuation(index, angle_cos, position)
             if rim <= 0:
                 continue
             var tone = toon_tone(normal.dot(toward) / direction_length, ramp)
@@ -2207,16 +2239,11 @@ struct Lighting(Movable):
             ref bulb = self.point_radiances[index]
             sum = sum + (rgb_channels(bulb) * (through * bare)) * sent
         for index in range(len(self.spot_positions)):
-            var ray = light_vector(self.spot_positions[index], position)
-            var toward = ray[0]
-            var distance = ray[1]
-            var direction_length = ray[2]
+            var toward, distance, direction_length, rim = self._spot_reach(
+                index, position
+            )
             if distance == 0:
                 continue
-            var angle_cos = (
-                toward.dot(self.spot_directions[index]) / direction_length
-            )
-            var rim = self.spot_attenuation(index, angle_cos, position)
             if rim <= 0:
                 continue
             var lambert = normal.dot(toward) / direction_length
@@ -2347,16 +2374,9 @@ struct Lighting(Movable):
             ref bulb = self.point_radiances[index]
             sum = sum + rgb_channels(bulb) * ((shadowed * bare) * sent)
         for index in range(len(self.spot_positions)):
-            var ray = light_vector(self.spot_positions[index], position)
-            var toward = ray[0]
-            var distance = ray[1]
-            var direction_length = ray[2]
+            var toward, distance, _, rim = self._spot_reach(index, position)
             if distance == 0:
                 continue
-            var angle_cos = (
-                toward.dot(self.spot_directions[index]) / direction_length
-            )
-            var rim = self.spot_attenuation(index, angle_cos, position)
             if rim <= 0:
                 continue
             var bare = rim * falloff(
@@ -2416,16 +2436,9 @@ struct Lighting(Movable):
                 ),
             )
         for index in range(len(self.spot_positions)):
-            var ray = light_vector(self.spot_positions[index], position)
-            var toward = ray[0]
-            var distance = ray[1]
-            var direction_length = ray[2]
+            var _, distance, _, rim = self._spot_reach(index, position)
             if distance == 0:
                 continue
-            var angle_cos = (
-                toward.dot(self.spot_directions[index]) / direction_length
-            )
-            var rim = self.spot_attenuation(index, angle_cos, position)
             if rim <= 0:
                 continue
             ref bulb = self.spot_radiances[index]
@@ -2485,16 +2498,11 @@ struct Lighting(Movable):
             ref bulb = self.point_radiances[index]
             total = _add_rgb(total, rgb_channels(bulb) * reach)
         for index in range(len(self.spot_positions)):
-            var ray = light_vector(self.spot_positions[index], position)
-            var toward = ray[0]
-            var distance = ray[1]
-            var direction_length = ray[2]
+            var toward, distance, direction_length, rim = self._spot_reach(
+                index, position
+            )
             if distance == 0:
                 continue
-            var angle_cos = (
-                toward.dot(self.spot_directions[index]) / direction_length
-            )
-            var rim = self.spot_attenuation(index, angle_cos, position)
             var lambert = normal.dot(toward) / direction_length
             if rim <= 0 or lambert <= 0:
                 continue
@@ -2532,15 +2540,9 @@ struct Lighting(Movable):
         Returns:
             The arriving light, linear. Alpha is not light and stays at one.
         """
-        var total = self.ambient_at(normal, position)
-        for index in range(len(self.sky_directions)):
-            var weight = 0.5 * normal.dot(self.sky_directions[index]) + 0.5
-            ref sky = self.skies[index]
-            ref ground = self.grounds[index]
-            total = _add_rgb(
-                total,
-                mix_delta3(rgb_channels(ground), rgb_channels(sky), weight),
-            )
+        var total = self._add_hemisphere(
+            self.ambient_at(normal, position), normal
+        )
         return total.scaled(self.scale)
 
     def physical_at[
@@ -2661,16 +2663,11 @@ struct Lighting(Movable):
                 layers,
             )
         for index in range(len(self.spot_positions)):
-            var ray = light_vector(self.spot_positions[index], position)
-            var toward = ray[0]
-            var distance = ray[1]
-            var direction_length = ray[2]
+            var toward, distance, direction_length, rim = self._spot_reach(
+                index, position
+            )
             if distance == 0:
                 continue
-            var angle_cos = (
-                toward.dot(self.spot_directions[index]) / direction_length
-            )
-            var rim = self.spot_attenuation(index, angle_cos, position)
             if rim <= 0:
                 continue
             var lambert, coat_lambert = light_cosines(
