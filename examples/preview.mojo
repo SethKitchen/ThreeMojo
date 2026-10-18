@@ -11,7 +11,8 @@ through white, to red.
 
 from core.assets import Assets
 from core.buffer_attribute import BufferAttribute
-from core.buffer_geometry import BufferGeometry, COLOR, NORMAL, POSITION
+from core.buffer_geometry import BufferGeometry, COLOR
+from geometries.surface import position_normal_surface
 from core.object3d import NodeId, Object3D
 from core.scene import Scene
 from generators.utils import Vec3d
@@ -104,11 +105,8 @@ struct Triangles(Movable):
             Error: If the scene refuses the mesh.
         """
         var geometry = BufferGeometry()
-        geometry.set_attribute(
-            String(POSITION), BufferAttribute(self.positions.copy(), 3)
-        )
-        geometry.set_attribute(
-            String(NORMAL), BufferAttribute(self.normals.copy(), 3)
+        position_normal_surface(
+            geometry, self.positions.copy(), self.normals.copy()
         )
         geometry.set_attribute(
             String(COLOR), BufferAttribute(self.colors.copy(), 3)

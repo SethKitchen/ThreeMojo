@@ -24,7 +24,8 @@ three.js 0.180, this rule keeps nonzero subnormal displacements.
 """
 
 from core.buffer_attribute import BufferAttribute
-from core.buffer_geometry import BufferGeometry, COLOR, NORMAL, POSITION
+from core.buffer_geometry import BufferGeometry, COLOR
+from geometries.surface import position_normal_surface
 from math.matrix4 import Matrix4
 from math.vector3 import Vector3, append_vector3
 from render.framebuffer import FloatColor
@@ -185,11 +186,8 @@ struct TubePainter(Movable):
             Error: Never; the lists hold whole points.
         """
         var geometry = BufferGeometry()
-        geometry.set_attribute(
-            String(POSITION), BufferAttribute(self.positions.copy(), 3)
-        )
-        geometry.set_attribute(
-            String(NORMAL), BufferAttribute(self.normals.copy(), 3)
+        position_normal_surface(
+            geometry, self.positions.copy(), self.normals.copy()
         )
         geometry.set_attribute(
             String(COLOR), BufferAttribute(self.colors.copy(), 3)
