@@ -40,6 +40,7 @@ from extensions.humanoid.skeleton.head.skin.dimensions import (
 )
 from extensions.humanoid.skeleton.torso.sweep import SweepField
 from extensions.humanoid.skeleton.morph import smoothstep
+from math.utils import clamp
 from math.vector3 import Vector3
 from std.math import max, min, sqrt
 
@@ -83,9 +84,7 @@ def _mix(a: Vector3, b: Vector3, t: Float32) -> Vector3:
 def _zones(h: HeadDimensions) raises -> List[_Zone]:
     """Return the face's zones of color for the head `h`."""
     var c = h.cm(1)
-    var dark = max(
-        Float32(0), min(Float32(1), (h.torso.genome.get(MELANIN) + 1) / 2)
-    )
+    var dark = clamp((h.torso.genome.get(MELANIN) + 1) / 2, 0, 1)
     # Lips: pink and red on fair skin, deeper and a little violet on
     # dark skin.
     var lips = _mix(Vector3(0.95, 0.60, 0.64), Vector3(0.78, 0.60, 0.70), dark)

@@ -305,7 +305,7 @@ def _body_grid(dimensions: HeadMuscleDimensions) raises -> HairCollider:
 def _pushed(body: Float32, y: Float32, neck: Float32, chin: Float32) -> Float32:
     """Return the body's distance pushed away above `neck`, all the way
     by `chin`."""
-    var t = min(Float32(1), max(Float32(0), (y - neck) / (chin - neck)))
+    var t = clamp((y - neck) / (chin - neck), 0, 1)
     return body + t * FAR_AWAY
 
 
@@ -1316,16 +1316,14 @@ def _curl(
         while j < len(points) - 2 and along[j + 1] < s:
             j += 1
         var span = max(along[j + 1] - along[j], Float32(1e-9))
-        var t = min(Float32(1), max(Float32(0), (s - along[j]) / span))
+        var t = clamp((s - along[j]) / span, 0, 1)
         var p = points[j] + (points[j + 1] - points[j]) * t
         var tangent = _unit_vector(points[j + 1] - points[j], Vector3(0, -1, 0))
         var n = normals[j]
         var outward = _unit_vector(n - tangent * n.dot(tangent), n)
         var across = cross_vectors(outward, tangent)
         var angle = phase + Float32(2 * pi) * s / spec.curl_length
-        var swing = spec.curl * min(
-            Float32(1), max(Float32(0), 2 * (s - taut) / spec.curl_length)
-        )
+        var swing = spec.curl * clamp(2 * (s - taut) / spec.curl_length, 0, 1)
         fine.append(
             p
             + across * (swing * cos(angle))

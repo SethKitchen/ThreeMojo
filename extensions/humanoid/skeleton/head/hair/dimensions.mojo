@@ -42,6 +42,7 @@ from extensions.humanoid.skeleton.torso.sweep import (
     Sweep,
     SweepField,
 )
+from math.utils import clamp
 from math.vector3 import Vector3
 from std.math import exp, max, min
 
@@ -469,7 +470,7 @@ struct HairShape(Copyable, DistanceField, Movable):
         if not self.scalp:
             return self.group.distance(point)
         var up = (point.y - self.ears) / (self.crown - self.ears)
-        up = max(Float32(0), min(Float32(1), up))
+        up = clamp(up, 0, 1)
         var depth = self.side_depth + (self.crown_depth - self.side_depth) * up
         var skin = self.skin.distance(point)
         var d = max(skin - depth, -skin - self.bury)

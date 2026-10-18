@@ -66,6 +66,7 @@ from extensions.humanoid.rig.joints import (
     Joint,
 )
 from math.quaternion import Quaternion
+from math.utils import clamp
 from math.vector3 import Vector3
 from std.math import cos, exp, pi, sin
 from units.si import DEGREE, SECOND, Angle, Duration
@@ -477,7 +478,7 @@ def jump_clip(bones: List[NodeId], rig: HumanoidRig) raises -> AnimationClip:
         while span < len(at) - 2 and t > at[span + 1]:
             span += 1
         var u = (t - at[span]) / (at[span + 1] - at[span])
-        u = min(Float32(1), max(Float32(0), u))
+        u = clamp(u, 0, 1)
         # Eased, so each key pose is held for a moment.
         u = u * u * (3 - 2 * u)
         poses.append(keys[span].blend(keys[span + 1], u))

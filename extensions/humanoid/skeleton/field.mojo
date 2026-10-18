@@ -474,7 +474,7 @@ def _edge_gap(edge: Vector3, offset: Vector3) -> Float32:
     var span = edge.dot(edge)
     var t = Float32(0)
     if span > 0:
-        t = max(Float32(0), min(Float32(1), edge.dot(offset) / span))
+        t = clamp(edge.dot(offset) / span, 0, 1)
     var gap = edge * t - offset
     return gap.dot(gap)
 

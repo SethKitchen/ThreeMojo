@@ -28,6 +28,7 @@ This is not a three.js port. See Extensions.
     face.apply(scene.meshes[skin])
 """
 from core.ordinal import ordinal_valid
+from math.utils import clamp
 
 from objects.mesh import Mesh
 
@@ -476,5 +477,5 @@ struct FaceWeights(Copyable, Movable):
         for k in range(len(self.shapes)):  # pragma: no branch
             mesh.set_morph_influence(
                 self.shapes[k],
-                min(Float32(1), max(Float32(0), self.weights[k])),
+                clamp(self.weights[k], 0, 1),
             )

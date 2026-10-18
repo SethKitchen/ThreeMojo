@@ -371,9 +371,7 @@ struct HairSimulation(Movable):
         # Global shape, fading from the root to the tip.
         for k in range(1, count):  # pragma: no branch
             var x = Float32(k) / Float32(count - 1)
-            var keep = 1 - min(
-                Float32(1), max(Float32(0), (x - p.extent) / p.fade)
-            )
+            var keep = 1 - clamp((x - p.extent) / p.fade, 0, 1)
             self.now[first + k] = self.now[first + k] + (
                 self.initial[first + k] - self.now[first + k]
             ) * (p.shape / iterations * keep)

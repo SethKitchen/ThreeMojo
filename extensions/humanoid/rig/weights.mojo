@@ -46,6 +46,7 @@ from extensions.humanoid.rig.joints import (
     HumanoidRig,
     Joint,
 )
+from math.utils import clamp
 from math.vector3 import Vector3
 from objects.skinned_mesh import SKIN_INDEX, SKIN_WEIGHT
 
@@ -100,7 +101,7 @@ def _segment_distance(p: Vector3, a: Vector3, b: Vector3) -> Float32:
     var t = Float32(0)
     var len2 = ab.dot(ab)
     if len2 > 0:
-        t = min(Float32(1), max(Float32(0), (p - a).dot(ab) / len2))
+        t = clamp((p - a).dot(ab) / len2, 0, 1)
     return (p - (a + ab * t)).length()
 
 
@@ -367,7 +368,7 @@ def skin_weights(
             var t = Float32(0)
             var len2 = ab.dot(ab)
             if len2 > 0:
-                t = min(Float32(1), max(Float32(0), (p - a).dot(ab) / len2))
+                t = clamp((p - a).dot(ab) / len2, 0, 1)
             # Only a bone the vertex lies beside the middle of competes:
             # by a joint, the bones on either side share it later. A bone
             # that ends a chain, as the head, a hand or the toes, keeps
