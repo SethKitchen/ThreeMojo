@@ -94,6 +94,22 @@ def _seed_score_admission_predecessor(node):
     return node
 
 
+def _inventory_admission_entries_predecessor(entries):
+    """Invert only the exact two newly reviewed inventory entry pairs."""
+    expected = ast.parse("def _public_admission_entries():\n"
+        "    return {'cache_key_contracts.py': ('verify',),\n"
+        "            'rounded_line_selector_contracts.py': ('verify_premises',),\n"
+        "            'seed_count_contracts.py': ('verify_score',),\n"
+        "            'sum2_guard_contracts.py': ('verify',),\n"
+        "            'lane_order_contracts.py': ('verify',)}").body[0]
+    if ast_key(entries) != ast_key(expected):
+        raise AssertionError('unreviewed seed admission factory inventory entry transition')
+    prior = copy.deepcopy(entries)
+    prior.body[0].value.keys = prior.body[0].value.keys[:-2]
+    prior.body[0].value.values = prior.body[0].value.values[:-2]
+    return prior
+
+
 def _seed_admission_factory_predecessor(node, entries):
     """Authenticate the single seed entry and its exact existing-parent guard."""
     node = copy.deepcopy(node)
@@ -104,6 +120,7 @@ def _seed_admission_factory_predecessor(node, entries):
         "    return {'cache_key_contracts.py': ('verify',),\n"
         "            'rounded_line_selector_contracts.py': ('verify_premises',),\n"
         "            'seed_count_contracts.py': ('verify_score',)}").body[0]
+    entries = _inventory_admission_entries_predecessor(entries)
     checked(ast_key(entries) == ast_key(expected_entries), 'entry set')
     checked(node.name == 'typed_admission_scope' and len(node.body) == 8,
             'body shape')
@@ -547,6 +564,23 @@ class SeedScoreAdmissionAstControls(unittest.TestCase):
             with self.subTest(fault=fault), self.assertRaisesRegex(AssertionError, 'unreviewed seed score admission'):
                 _seed_score_admission_predecessor(node)
 
+    def test_inventory_entry_transition_is_exact_and_preserves_old_three(self):
+        entries = function_ast(cleanup, '_public_admission_entries')
+        prior = _inventory_admission_entries_predecessor(entries)
+        self.assertEqual([key.value for key in prior.body[0].value.keys],
+                         ['cache_key_contracts.py', 'rounded_line_selector_contracts.py',
+                          'seed_count_contracts.py'])
+        for fault in ('missing', 'renamed', 'different method', 'swapped', 'extra statement'):
+            altered = copy.deepcopy(entries)
+            pairs = altered.body[0].value
+            if fault == 'missing': pairs.keys.pop(); pairs.values.pop()
+            elif fault == 'renamed': pairs.keys[-1].value = 'other_contracts.py'
+            elif fault == 'different method': pairs.values[-1].elts[0].value = 'other'
+            elif fault == 'swapped': pairs.keys[-1], pairs.keys[-2] = pairs.keys[-2], pairs.keys[-1]
+            else: altered.body.append(ast.Pass())
+            with self.subTest(fault=fault), self.assertRaisesRegex(AssertionError, 'inventory entry transition'):
+                _inventory_admission_entries_predecessor(altered)
+
     def test_seed_scope_factory_preserves_owned_paths_and_authenticated_parent_reuse(self):
         node = function_ast(source, 'typed_admission_scope')
         entries = function_ast(cleanup, '_public_admission_entries')
@@ -576,7 +610,10 @@ class SeedScoreAdmissionAstControls(unittest.TestCase):
             elif fault == 'extra entry':
                 altered.body[0].value.keys.append(ast.Constant(value='sum2_guard_contracts.py'))
                 altered.body[0].value.values.append(ast.Tuple(elts=[ast.Constant(value='verify')], ctx=ast.Load()))
-            else: altered.body[0].value.values[-1].elts[0].value = 'verify'
+            else:
+                seed = next(index for index, key in enumerate(altered.body[0].value.keys)
+                            if key.value == 'seed_count_contracts.py')
+                altered.body[0].value.values[seed].elts[0].value = 'verify'
             with self.subTest(fault=fault), self.assertRaisesRegex(AssertionError, 'unreviewed seed admission factory'):
                 _seed_admission_factory_predecessor(changed, altered)
 
@@ -4360,12 +4397,15 @@ _PR760_CHECKER_SOURCE_EDGES = {'coverage_loop_proofs.py': {'after_sha256': '08e8
              '**operation_args))\n',
              '            result.update(density760_loops(root, include_roots=include_roots, '
              '**operation_args))\n')))},
- 'full_audit_cleanup_contracts.py': {'after_sha256': '6d716b884b483fe731925b9a73e741553ef7191259b44c454e3319b00d49e369',
+ 'full_audit_cleanup_contracts.py': {'after_sha256': 'bef02a7a3764195fe12e740bc09dfd6c7bb9e70a564bf4360bcdcce169987a75',
  'before_sha256': '6138ba2dcac394c716ea9ed32e74e0c6d15857d5c605fc82304d21d0c80fdc69',
- 'edits': ((53, 54, (), ('        from . import pr760_arithmetic_stage as pr760_stage\n',)),
-           (66, 67, (), ('        import pr760_arithmetic_stage as pr760_stage\n',)),
-           (147,
-            156,
+ 'edits': ((10, 11, (), ('from contextlib import nullcontext\n',)),
+           (45, 46, (), ('        from . import lane_order_contracts as lane_order\n',)),
+           (55, 56, (), ('        from . import pr760_arithmetic_stage as pr760_stage\n',)),
+           (59, 60, (), ('        import lane_order_contracts as lane_order\n',)),
+           (69, 70, (), ('        import pr760_arithmetic_stage as pr760_stage\n',)),
+           (150,
+            159,
             ("DEPENDENCY_TOOL_SHA256 = {'tools/carla_lane_oracle/scaled_float32_contracts.py': "
              "'e3a59a9f8d5a9394007c03fab6ac696e04998812dad5843a22e721bfbe57c2a1',\n",),
             ('PR760_STAGE_SHA256 = '
@@ -4383,45 +4423,51 @@ _PR760_CHECKER_SOURCE_EDGES = {'coverage_loop_proofs.py': {'after_sha256': '08e8
              " 'tools/carla_lane_oracle/pr760_arithmetic_stage.py': PR760_STAGE_SHA256,\n",
              " 'tools/carla_lane_oracle/scaled_float32_contracts.py': "
              "'e3a59a9f8d5a9394007c03fab6ac696e04998812dad5843a22e721bfbe57c2a1',\n")),
-           (164,
-            165,
+           (167,
+            170,
             (" 'tools/carla_lane_oracle/source_contracts.py': "
-             "'83fdd35b61f0dc7739160c113ae6b4558ad07d45ffded22b7062bc9a209032d0',\n",),
+             "'83fdd35b61f0dc7739160c113ae6b4558ad07d45ffded22b7062bc9a209032d0',\n",
+             " 'tools/carla_lane_oracle/sum2_guard_contracts.py': "
+             "'acbf385486e2b0dfe15a409d039cd31c8e9fed295704bc6adcb4289818b65f63',\n"),
             (" 'tools/carla_lane_oracle/source_contracts.py': "
-             "'ebb6e75b90528b5456485433d470de36e6b33e4df98139dd0acadda75a57adf5',\n",)),
-           (170,
-            171,
+             "'ebb6e75b90528b5456485433d470de36e6b33e4df98139dd0acadda75a57adf5',\n",
+             " 'tools/carla_lane_oracle/sum2_guard_contracts.py': "
+             "'8c1d646c1dd70e1e7c9453077b63060ca506f76d2493137af0dd0a9a68012570',\n",
+             " 'tools/carla_lane_oracle/lane_order_contracts.py': "
+             "'314b1fae1f274c7223ab5dec50ad4cb97760c31926844ca92e1e6aa8560b4889',\n")),
+           (174,
+            175,
             (" 'tools/carla_lane_oracle/seed_count_contracts.py': "
              "'ff4a330326fd69bc649e6f235d1f05db4ed40e6b76b1d75e66a4474741c16345'}\n",),
             (" 'tools/carla_lane_oracle/seed_count_contracts.py': "
              "'daa8f391a18e54a3fae958150673c134897db52ce5de87291f613f84df7c6d90'}\n",)),
-           (242,
-            244,
+           (246,
+            248,
             ("                 'tools/carla_lane_oracle/scaled_float32_contracts.py')\n",),
             ("                 'tools/carla_lane_oracle/scaled_float32_contracts.py',\n",
              "                 'tools/carla_lane_oracle/pr760_arithmetic_stage.py')\n")),
-           (714,
-            715,
+           (718,
+            719,
             ("for _module in (source, guard, _sibling('affected'), _sibling('cache_key'), "
              'consumer_ledger, station, shared_helpers, runtime_view, deviation, witness_format, '
              'typed_boundary, conditioned_cubic, scaled_float32):\n',),
             ("for _module in (source, guard, _sibling('affected'), _sibling('cache_key'), "
              'consumer_ledger, station, shared_helpers, runtime_view, deviation, witness_format, '
              'typed_boundary, conditioned_cubic, scaled_float32, pr760_stage):\n',)),
-           (767,
-            768,
+           (771,
+            772,
             ('               vars(scaled_float32))\n',),
             ('               vars(scaled_float32), vars(pr760_stage))\n',)),
-           (804,
-            806,
+           (808,
+            810,
             (),
             ('    pr760_stage.verify_stage_data()\n', '    _pr760_authority_data()\n')),
-           (917,
-            918,
+           (921,
+            922,
             ('                        math_entries=None):\n',),
             ('                        math_entries=None, example_entries=None):\n',)),
-           (946,
-            953,
+           (950,
+            957,
             (),
             ('    # PR760 examples add tools/generators providers and example roots. These\n',
              '    # namespaces compete only at freshly censused compiled lookup directories;\n',
@@ -4431,9 +4477,9 @@ _PR760_CHECKER_SOURCE_EDGES = {'coverage_loop_proofs.py': {'after_sha256': '08e8
              "            or Path(path).is_absolute() or '..' in Path(path).parts for path in "
              'example_entries)):\n',
              '        return False\n')),
-           (962, 963, (), ('    coordinates = {path.casefold() for path in allowed}\n',)),
-           (1003,
-            1011,
+           (966, 967, (), ('    coordinates = {path.casefold() for path in allowed}\n',)),
+           (1007,
+            1015,
             ('                relevant = (folded in stems or folded in prefixes or stem in '
              'stems\n',),
             ('                # Appended suffixes of exact consumed coordinates remain\n',
@@ -4446,15 +4492,15 @@ _PR760_CHECKER_SOURCE_EDGES = {'coverage_loop_proofs.py': {'after_sha256': '08e8
              "                    for index, character in enumerate(name) if character == '.')\n",
              '                relevant = (coordinate_suffix or folded in stems or folded in '
              'prefixes or stem in stems\n')),
-           (1016,
-            1018,
+           (1020,
+            1022,
             (),
             ("                                and (scoped_name not in ('tools', 'examples', "
              "'generators') or example_entries is None\n",
              '                                     or relative_dir.casefold() in '
              'example_entries)\n')),
-           (1062,
-            1162,
+           (1066,
+            1166,
             (),
             ('\n',
              '\n',
@@ -4565,41 +4611,88 @@ _PR760_CHECKER_SOURCE_EDGES = {'coverage_loop_proofs.py': {'after_sha256': '08e8
              "            'provenance edge does not compose exact physical and historical "
              "endpoints')\n",
              "    return current['before_sha256']\n")),
-           (1479,
-            1480,
+           (1483,
+            1484,
             ('                        **_render_lookup_args(self._resolver_paths, '
              'self._entries))\n',),
             ('                        **_image_lookup_args(self._resolver_paths, self._entries, '
              'self._raw))\n',)),
-           (2516,
-            2517,
+           (1532,
+            1535,
+            ("            'seed_count_contracts.py': ('verify_score',)}\n",),
+            ("            'seed_count_contracts.py': ('verify_score',),\n",
+             "            'sum2_guard_contracts.py': ('verify',),\n",
+             "            'lane_order_contracts.py': ('verify',)}\n")),
+           (1536,
+            1553,
+            (),
+            ('\n',
+             'def _canonical_inventory_admission_frame(frame):\n',
+             '    """Only the two new canonical inventory entries may own a public scope."""\n',
+             "    filename = frame.f_globals.get('__file__')\n",
+             '    name = Path(filename).name if type(filename) is str else None\n',
+             "    if (name not in ('sum2_guard_contracts.py', 'lane_order_contracts.py')\n",
+             "            or frame.f_code.co_name != 'verify'):\n",
+             '        return True\n',
+             "    module = guard if name == 'sum2_guard_contracts.py' else lane_order\n",
+             "    registered = sys.modules.get((__package__ + '.' if __package__ else '') + "
+             'name[:-3])\n',
+             "    candidate = frame.f_globals.get('verify')\n",
+             '    return (type(module) is types.ModuleType and registered is module\n',
+             '            and frame.f_globals is vars(module)\n',
+             '            and type(candidate) is types.FunctionType\n',
+             '            and candidate.__globals__ is frame.f_globals\n',
+             '            and candidate.__code__ is frame.f_code\n',
+             "            and '__wrapped__' not in candidate.__dict__)\n")),
+           (1561,
+            1563,
+            (),
+            ('    if not _canonical_inventory_admission_frame(frame):\n',
+             '        return nullcontext()\n')),
+           (1580,
+            1582,
+            (),
+            ('        require(_canonical_inventory_admission_frame(frame),\n',
+             "                'public inventory admission requires its canonical owner')\n")),
+           (1604,
+            1610,
+            (),
+            ("        owner_filename = self._owner_frame.f_globals.get('__file__')\n",
+             '        inventory_owner = (type(owner_filename) is str\n',
+             "            and Path(owner_filename).name in ('sum2_guard_contracts.py', "
+             "'lane_order_contracts.py')\n",
+             "            and self._owner_frame.f_code.co_name == 'verify')\n",
+             '        if inventory_owner and not _canonical_inventory_admission_frame(frame):\n',
+             '            return False\n')),
+           (2549,
+            2550,
             ('            require(stage_args == _render_lookup_args(resolver_paths, '
              'self._include_entries),\n',),
             ('            require(stage_args == _image_lookup_args(resolver_paths, '
              'self._include_entries, self._raw),\n',)),
-           (2680,
-            2681,
+           (2713,
+            2714,
             ('                    **_render_lookup_args(self._resolver_paths, self._entries))\n',),
             ('                    **_image_lookup_args(self._resolver_paths, self._entries, '
              'self._raw))\n',)),
-           (2683,
-            2684,
+           (2716,
+            2717,
             ('                    **_render_lookup_args(self._resolver_paths, '
              'self._include_entries)),\n',),
             ('                    **_image_lookup_args(self._resolver_paths, '
              'self._include_entries, self._raw)),\n',)),
-           (2771,
-            2772,
+           (2804,
+            2805,
             ('                                **_render_lookup_args(self._resolver_paths, '
              'self._entries)),\n',),
             ('                                **_image_lookup_args(self._resolver_paths, '
              'self._entries, self._raw)),\n',)),
-           (2946,
-            2947,
+           (2979,
+            2980,
             ('                            _input_owner=None, _operation=None):\n',),
             ('                            _input_owner=None, _operation=None, _pr760=None):\n',)),
-           (2966,
-            2982,
+           (2999,
+            3015,
             (),
             ('    current = bool(_pr760) or any(name in pr760_stage.CARLA_REGISTRY_PATHS\n',
              "        and sha(raw) == pr760_stage.EDGES[name]['after_sha256']\n",
@@ -4618,8 +4711,8 @@ _PR760_CHECKER_SOURCE_EDGES = {'coverage_loop_proofs.py': {'after_sha256': '08e8
              '    if current:\n',
              '        _pr760_admit(root, _inputs=_inputs, _input_owner=_input_owner,\n',
              '                    _operation=_operation, _selection=_pr760)\n')),
-           (2984,
-            2988,
+           (3017,
+            3021,
             (),
             ("        prior = (_pr760['predecessors'][path] if _pr760 and path in "
              "_pr760['predecessors']\n",
@@ -4627,15 +4720,15 @@ _PR760_CHECKER_SOURCE_EDGES = {'coverage_loop_proofs.py': {'after_sha256': '08e8
              '                 if current and path in pr760_stage.CARLA_REGISTRY_PATHS else '
              "raw.decode('utf-8'))\n",
              "        raw = prior.encode('utf-8')\n")),
-           (3005,
-            3008,
+           (3038,
+            3041,
             (),
             ('        if current and path in pr760_stage.CARLA_REGISTRY_PATHS:\n',
              "            historical = (_pr760['predecessors'][path] if _pr760 else\n",
              '                pr760_stage.predecessor_source(path, '
              "raw.decode('utf-8'))).encode('utf-8')\n")),
-           (3019,
-            3030,
+           (3052,
+            3063,
             (),
             ('    if current:\n',
              "        texts = {path: (_pr760['predecessors'][path] if _pr760 and path in "
@@ -4653,18 +4746,18 @@ _PR760_CHECKER_SOURCE_EDGES = {'coverage_loop_proofs.py': {'after_sha256': '08e8
              "                and sha(bound['tools/carla_lane_oracle/pr760_arithmetic_stage.py']) "
              '== PR760_STAGE_SHA256,\n',
              "                'PR760 shared-helper authority changed')\n")),
-           (3130,
-            3131,
+           (3163,
+            3164,
             ('    return shared_helpers.edges(tuple(path for path in shared_helpers.SOURCE_PATHS\n',
              '        if bindings.get(path) == shared_helpers.AFTER_SHA256[path]))\n'),
             ('    return _pr760_composed_edges(shared_helpers, bindings)\n',)),
-           (3154,
-            3155,
+           (3187,
+            3188,
             ('                             _input_owner=None, _operation=None, _context=None):\n',),
             ('                             _input_owner=None, _operation=None, _context=None, '
              '_pr760=None):\n',)),
-           (3178,
-            3191,
+           (3211,
+            3224,
             ("    active = scaled_float32.verify_sources({name: raw.decode('utf-8') for name, raw "
              'in sources.items()})\n',),
             ('    current = bool(_pr760) or any(name in pr760_stage.CARLA_REGISTRY_PATHS\n',
@@ -4684,14 +4777,14 @@ _PR760_CHECKER_SOURCE_EDGES = {'coverage_loop_proofs.py': {'after_sha256': '08e8
              "raw.decode('utf-8'))\n",
              '    active = scaled_float32.verify_sources({name: historical(name, raw) for name, '
              'raw in sources.items()})\n')),
-           (3197,
-            3198,
+           (3230,
+            3231,
             ("        require(sha(observe(name)) == digest, 'scaled correctness input changed: ' + "
              'name)\n',),
             ("        require(sha(historical(name, observe(name))) == digest, 'scaled correctness "
              "input changed: ' + name)\n",)),
-           (3223,
-            3228,
+           (3256,
+            3261,
             (),
             ('    if current:\n',
              "        for name, digest in (('tools/carla_lane_oracle/pr760_arithmetic_stage.py', "
@@ -4701,13 +4794,13 @@ _PR760_CHECKER_SOURCE_EDGES = {'coverage_loop_proofs.py': {'after_sha256': '08e8
              'PR760_OWNER_PREDECESSOR_SHA256)):\n',
              "            require(sha(observe(name)) == digest, 'PR760 scaled authority changed: ' "
              '+ name)\n')),
-           (3311,
-            3312,
+           (3344,
+            3345,
             ('    return scaled_float32.edges(tuple(name for name in scaled_float32.SOURCE_PATHS\n',
              '        if bindings.get(name) == scaled_float32.AFTER_SHA256[name]))\n'),
             ('    return _pr760_composed_edges(scaled_float32, bindings)\n',)),
-           (3409,
-            3417,
+           (3442,
+            3450,
             ('                require(type(raw) is bytes and sha(_historical_typed_text(path, '
              "raw.decode('utf-8'))) == expected,\n",),
             ("                require(type(raw) is bytes, 'witness-format input is not physical "
@@ -4721,22 +4814,22 @@ _PR760_CHECKER_SOURCE_EDGES = {'coverage_loop_proofs.py': {'after_sha256': '08e8
              '                    historical = qualification_predecessor_bytes(path, raw)\n',
              '                require(sha(_historical_typed_text(path, '
              "historical.decode('utf-8'))) == expected,\n")),
-           (3433,
-            3434,
+           (3466,
+            3467,
             ('def _historical_typed_text(path, text):\n',),
             ('def _historical_typed_text(path, text, *, pr760=False):\n',)),
-           (3435,
-            3437,
+           (3468,
+            3470,
             (),
             ('    if pr760 and path in pr760_stage.CARLA_REGISTRY_PATHS:\n',
              '        text = pr760_stage.predecessor_source(path, text)\n')),
-           (3440,
-            3441,
+           (3473,
+            3474,
             ('def _typed_boundary_bindings(root, *, _snapshots=None, _operation=None):\n',),
             ('def _typed_boundary_bindings(root, *, _snapshots=None, _operation=None, '
              '_selection=None):\n',)),
-           (3444,
-            3457,
+           (3477,
+            3490,
             (),
             ('        if _pr760_select(root, _snapshots=_snapshots, _operation=_operation):\n',
              '            if (type(_operation) is _InvariantInputs and _operation._state == '
@@ -4755,39 +4848,39 @@ _PR760_CHECKER_SOURCE_EDGES = {'coverage_loop_proofs.py': {'after_sha256': '08e8
              "selection output')\n",
              '                _selection.update(candidate)\n',
              "            return candidate['bindings']\n")),
-           (3521,
-            3523,
+           (3554,
+            3556,
             ('    edge = typed_boundary.EDGES.get(path)\n',),
             ('    edge = (pr760_stage.EDGES.get(path) if path in '
              'pr760_stage.CARLA_REGISTRY_PATHS\n',
              '            else typed_boundary.EDGES.get(path))\n')),
-           (3541,
-            3543,
+           (3574,
+            3576,
             ('        if not (typed_boundary.is_current(path, text) or\n',),
             ('        new_endpoint = path in pr760_stage.CARLA_REGISTRY_PATHS and '
              "source.token_sha256(text) == edge['after_token_sha256']\n",
              '        if not (new_endpoint or typed_boundary.is_current(path, text) or\n')),
-           (3547,
-            3548,
+           (3580,
+            3581,
             ('        require(typed_boundary.is_current(path, raw),\n',),
             ("        require((sha(raw) == edge['after_sha256']) if new_endpoint else "
              'typed_boundary.is_current(path, raw),\n',)),
-           (3566,
-            3570,
+           (3599,
+            3603,
             ('        return _historical_typed_text(path, physical_text)\n',),
             ('        if new_endpoint:\n',
              '            require(_pr760_select(root, _operation=_operation,\n',
              "                _inputs=_inputs, _input_owner=_input_owner), 'new endpoint lacks "
              "complete PR760 image')\n",
              '        return _historical_typed_text(path, physical_text, pr760=new_endpoint)\n')),
-           (3609,
-            3611,
+           (3642,
+            3644,
             ('        typed_bindings = _typed_boundary_bindings(root, _snapshots=snapshots,\n',),
             ('        pr760 = {}\n',
              '        typed_bindings = _typed_boundary_bindings(root, _snapshots=snapshots, '
              '_selection=pr760,\n')),
-           (3633,
-            3637,
+           (3666,
+            3670,
             ('        scaled_bindings = _scaled_float32_bindings(root, _snapshots=snapshots)\n',
              '        scaled_edges = scaled_float32.edges(tuple(name for name in '
              'scaled_float32.SOURCE_PATHS\n',
@@ -4802,19 +4895,19 @@ _PR760_CHECKER_SOURCE_EDGES = {'coverage_loop_proofs.py': {'after_sha256': '08e8
              '        helper_bindings = _shared_helper_bindings(root, _snapshots=snapshots, '
              '_pr760=pr760 or None)\n',
              '        helper_edges = _pr760_composed_edges(shared_helpers, helper_bindings)\n')),
-           (3644,
-            3646,
+           (3677,
+            3679,
             (),
             ('        if pr760:\n',
              "            resolver_paths |= set().union(*pr760['closures'].values())\n")),
-           (3652,
-            3653,
+           (3685,
+            3686,
             ('                    **_render_lookup_args(resolver_paths, '
              "record['entry_directories'])),\n",),
             ('                    **_image_lookup_args(resolver_paths, '
              "record['entry_directories'], snapshots)),\n",)),
-           (3654,
-            3672,
+           (3687,
+            3705,
             ("        known = {p.as_posix() for p in _sibling('cache_key').input_paths(root) if "
              "p.suffix == '.mojo'}\n",
              '        # #720 resolves from actual compiled entrypoint directories. Bind all\n',
@@ -4850,13 +4943,13 @@ _PR760_CHECKER_SOURCE_EDGES = {'coverage_loop_proofs.py': {'after_sha256': '08e8
              "            entries = _sibling('affected').entry_directories(live_sources)\n",
              "            require(entries == record['entry_directories'], 'maintained entrypoint "
              "directories changed')\n")),
-           (3676,
-            3677,
+           (3709,
+            3710,
             ('            stage_args = _render_lookup_args(resolver_paths, stage_entries)\n',),
             ('            stage_args = _image_lookup_args(resolver_paths, stage_entries, '
              'snapshots)\n',)),
-           (3680,
-            3709,
+           (3713,
+            3742,
             ('        require(dependency_inventory(root, roots=(*SOURCE_PATHS, '
              "*record['inventory']), entries=entries,\n",
              '                                     _known=known, _snapshots=snapshots)\n',
@@ -4933,8 +5026,8 @@ _PR760_CHECKER_SOURCE_EDGES = {'coverage_loop_proofs.py': {'after_sha256': '08e8
              '                                              '
              'set(typed_boundary.TYPED_PRODUCTION_CLOSURE)),\n',
              "                        'typed production import inventory changed')\n")),
-           (3743,
-            3748,
+           (3776,
+            3781,
             ('                historical = _historical_typed_text(path, '
              "raw.decode('utf-8')).encode('utf-8') if path in typed_boundary.EDGES and "
              'typed_bindings else raw\n',),
@@ -4945,8 +5038,8 @@ _PR760_CHECKER_SOURCE_EDGES = {'coverage_loop_proofs.py': {'after_sha256': '08e8
              '                if path in typed_boundary.EDGES and typed_bindings:\n',
              '                    historical = _historical_typed_text(path, '
              "historical.decode('utf-8')).encode('utf-8')\n")),
-           (3753,
-            3760,
+           (3786,
+            3793,
             ('        production = set() if _capture is not None or _public_admission is not None '
              'else None\n',
              '        observed_inventory = (inventory(root, _snapshots=snapshots) if production is '
@@ -4963,22 +5056,22 @@ _PR760_CHECKER_SOURCE_EDGES = {'coverage_loop_proofs.py': {'after_sha256': '08e8
              'production is None else\n',
              '                                  inventory(root, _snapshots=snapshots, '
              '_production=production))\n')),
-           (3775,
-            3778,
+           (3808,
+            3811,
             (),
             ('        if pr760:\n',
              '            require({path.relative_to(root).as_posix() for path in '
              'guard.production_mojo_paths(root)}\n',
              "                    == production, 'PR760 production path inventory changed during "
              "verification')\n")),
-           (3781,
-            3782,
+           (3814,
+            3815,
             ('                    **_render_lookup_args(resolver_paths, '
              "record['entry_directories']))\n",),
             ('                    **_image_lookup_args(resolver_paths, '
              "record['entry_directories'], snapshots))\n",)),
-           (3913,
-            3917,
+           (3946,
+            3950,
             ('    changed = {p for p, text in texts.items() if p in SOURCE_PATHS\n',
              '               and source.token_sha256(text) != BEFORE_TOKEN_SHA256[p]}\n'),
             ('    changed = {p for p, text in texts.items() if\n',
@@ -4987,25 +5080,25 @@ _PR760_CHECKER_SOURCE_EDGES = {'coverage_loop_proofs.py': {'after_sha256': '08e8
              '               or (p in pr760_stage.CARLA_REGISTRY_PATHS and\n',
              '                   source.token_sha256(text) == '
              "pr760_stage.EDGES[p]['after_token_sha256'])}\n")),
-           (3926, 3927, (), ('    pr760 = bool(_pr760_select(root))\n',)),
-           (3938,
-            3939,
+           (3959, 3960, (), ('    pr760 = bool(_pr760_select(root))\n',)),
+           (3971,
+            3972,
             ('        text = _historical_typed_text(path, _physical_text(physical))\n',),
             ('        text = _historical_typed_text(path, _physical_text(physical), '
              'pr760=pr760)\n',)),
-           (3946,
-            3947,
+           (3979,
+            3980,
             ('            require(raw == physical and source.token_sha256(text) == '
              'source.token_sha256(_historical_typed_text(path, _physical_text(raw))),\n',),
             ('            require(raw == physical and source.token_sha256(text) == '
              'source.token_sha256(_historical_typed_text(path, _physical_text(raw), '
              'pr760=pr760)),\n',)),
-           (4033,
-            4034,
+           (4066,
+            4067,
             (),
             ('        current_image = _pr760_select(root, _operation=_operation)\n',)),
-           (4038,
-            4045,
+           (4071,
+            4078,
             ('            require(typed_boundary.is_current(path, current),\n',),
             ('            qualification = (current_image and path ==\n',
              "                'tools/carla_lane_oracle/test_witness_format_contracts.py')\n",
@@ -5015,16 +5108,16 @@ _PR760_CHECKER_SOURCE_EDGES = {'coverage_loop_proofs.py': {'after_sha256': '08e8
              "                qualification_predecessor_bytes(path, current).decode('utf-8')\n",
              "                if qualification else current.decode('utf-8'))\n",
              '            require(typed_boundary.is_current(path, projected),\n')),
-           (4047,
-            4050,
+           (4080,
+            4083,
             (),
             ('            if current_image and (path in pr760_stage.EXAMPLE_PATHS or '
              'qualification):\n',
              '                edge.update(after_sha256=sha(current),\n',
              '                            '
              "after_token_sha256=source.token_sha256(current.decode('utf-8')))\n")),
-           (4141,
-            4838,
+           (4174,
+            4871,
             (),
             ('PR760_IMPLEMENTATION_PREDECESSORS = '
              "{'tools/carla_lane_oracle/pr760-border_parser-predecessor.txt': "
@@ -11046,6 +11139,13 @@ class ReviewedAbsoluteRootTextMechanics(unittest.TestCase):
                 ('_check_context', ('body', 0, 'value', 'args', 0, 'values', 0, 'left'))):
             method = self._one_definition(public.body, name)
             expected = self._one_definition(reviewed.body, name)
+            if name == '__init__':
+                self.assertEqual(len(method.body), len(expected.body) + 1)
+                guard = ast.parse("require(_canonical_inventory_admission_frame(frame), "
+                    "'public inventory admission requires its canonical owner')").body[0]
+                self.assertEqual(ast_key(method.body[4]), ast_key(guard),
+                                 'reviewed canonical inventory owner guard drift')
+                method.body.pop(4)
             self.assertEqual(ast_key(method), ast_key(expected),
                              (name, 'reviewed public root method drift'))
             calls = [node for node in ast.walk(method) if isinstance(node, ast.Call)
@@ -11069,6 +11169,21 @@ class ReviewedAbsoluteRootTextMechanics(unittest.TestCase):
             else:
                 setattr(parent, field, value)
         return projected
+
+    def test_inventory_constructor_transition_preserves_exact_historical_root_method(self):
+        original = ast.parse(inspect.getsource(cleanup._PublicAdmission))
+        self._project_public_admission_root_calls(original)
+        for fault in ('missing', 'moved', 'condition', 'message', 'duplicate'):
+            tree = copy.deepcopy(original)
+            public = self._one_definition(tree.body, '_PublicAdmission')
+            method = self._one_definition(public.body, '__init__')
+            if fault == 'missing': method.body.pop(4)
+            elif fault == 'moved': method.body[4], method.body[5] = method.body[5], method.body[4]
+            elif fault == 'condition': method.body[4].value.args[0] = ast.Constant(True)
+            elif fault == 'message': method.body[4].value.args[1] = ast.Constant('other')
+            else: method.body.insert(4, copy.deepcopy(method.body[4]))
+            with self.subTest(fault=fault), self.assertRaises(AssertionError):
+                self._project_public_admission_root_calls(tree)
 
     def _assert_root_projection(self, tree, source_tree):
         definitions = {name: self._one_definition(tree.body, name) for name in

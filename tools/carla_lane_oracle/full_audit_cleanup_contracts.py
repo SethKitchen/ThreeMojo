@@ -8,6 +8,7 @@ from native qualification. No historical record, budget, outcome or mask is
 modified. Every projection is named and follows fresh physical admission.
 """
 import ast
+from contextlib import nullcontext
 import hashlib
 import importlib.util
 import io
@@ -42,6 +43,7 @@ try:
     if __package__:
         from . import source_contracts as source
         from . import sum2_guard_contracts as guard
+        from . import lane_order_contracts as lane_order
         from . import consumer_successor_ledger as consumer_ledger
         from . import map_station_contracts as station
         from . import map_deviation_contracts as deviation
@@ -55,6 +57,7 @@ try:
     else:
         import source_contracts as source
         import sum2_guard_contracts as guard
+        import lane_order_contracts as lane_order
         import consumer_successor_ledger as consumer_ledger
         import map_station_contracts as station
         import map_deviation_contracts as deviation
@@ -163,7 +166,8 @@ DEPENDENCY_TOOL_SHA256 = {'tools/carla_lane_oracle/winner_sign_contracts.py': 'f
  'tools/carla_lane_oracle/runtime_view_contracts.py': '67316129402fac643be3c6e49ceef94bcb25c1ef92f81fd764a6abb583f89e34',
  'tools/carla_lane_oracle/shared_helper_contracts.py': '70b070d0bd5117b146a71470a46cb7a02c7fc31dfac1a5236eed50faf75b468e',
  'tools/carla_lane_oracle/source_contracts.py': 'ebb6e75b90528b5456485433d470de36e6b33e4df98139dd0acadda75a57adf5',
- 'tools/carla_lane_oracle/sum2_guard_contracts.py': 'acbf385486e2b0dfe15a409d039cd31c8e9fed295704bc6adcb4289818b65f63',
+ 'tools/carla_lane_oracle/sum2_guard_contracts.py': '8c1d646c1dd70e1e7c9453077b63060ca506f76d2493137af0dd0a9a68012570',
+ 'tools/carla_lane_oracle/lane_order_contracts.py': '314b1fae1f274c7223ab5dec50ad4cb97760c31926844ca92e1e6aa8560b4889',
  'tools/carla_lane_oracle/typed_boundary_contracts.py': '59cc73b325af897981a2d7299cf2d4ed3c61d3ea64d5f958f2b85aef51666362',
  'tools/carla_lane_oracle/witness_format_contracts.py': 'a76ba6d5bf18be80c151fd03ea7a7ebeb75af1c1ed8af1600037d5f75ac13cb3',
  'tools/carla_lane_oracle/cache_key_contracts.py': '87233ebca3701e3a79b57b324afd48fcffb38b87cb3988859b6ae36bd63d919f',
@@ -1526,8 +1530,27 @@ class _CacheInputs:
 def _public_admission_entries():
     return {'cache_key_contracts.py': ('verify',),
             'rounded_line_selector_contracts.py': ('verify_premises',),
-            'seed_count_contracts.py': ('verify_score',)}
+            'seed_count_contracts.py': ('verify_score',),
+            'sum2_guard_contracts.py': ('verify',),
+            'lane_order_contracts.py': ('verify',)}
 
+
+def _canonical_inventory_admission_frame(frame):
+    """Only the two new canonical inventory entries may own a public scope."""
+    filename = frame.f_globals.get('__file__')
+    name = Path(filename).name if type(filename) is str else None
+    if (name not in ('sum2_guard_contracts.py', 'lane_order_contracts.py')
+            or frame.f_code.co_name != 'verify'):
+        return True
+    module = guard if name == 'sum2_guard_contracts.py' else lane_order
+    registered = sys.modules.get((__package__ + '.' if __package__ else '') + name[:-3])
+    candidate = frame.f_globals.get('verify')
+    return (type(module) is types.ModuleType and registered is module
+            and frame.f_globals is vars(module)
+            and type(candidate) is types.FunctionType
+            and candidate.__globals__ is frame.f_globals
+            and candidate.__code__ is frame.f_code
+            and '__wrapped__' not in candidate.__dict__)
 
 
 def _public_admission_scope(root, frame):
@@ -1536,6 +1559,8 @@ def _public_admission_scope(root, frame):
             and caller.f_code is _live_function_code(source.typed_admission_scope)
             and caller.f_back is frame,
             'public admission requires its direct source factory')
+    if not _canonical_inventory_admission_frame(frame):
+        return nullcontext()
     return _PublicAdmission(root, frame)
 
 
@@ -1553,6 +1578,8 @@ class _PublicAdmission:
                 and Path(filename).absolute().parent == Path(__file__).absolute().parent
                 and frame.f_code.co_name in _public_admission_entries().get(Path(filename).name, ()),
                 'unsupported public admission owner')
+        require(_canonical_inventory_admission_frame(frame),
+                'public inventory admission requires its canonical owner')
         self._owner_frame = frame
         self._owner = object()
         self._stamp = id(self)
@@ -1575,6 +1602,12 @@ class _PublicAdmission:
         require(self._authenticate_frame(frame), 'unreviewed public admission owner code')
 
     def _authenticate_frame(self, frame):
+        owner_filename = self._owner_frame.f_globals.get('__file__')
+        inventory_owner = (type(owner_filename) is str
+            and Path(owner_filename).name in ('sum2_guard_contracts.py', 'lane_order_contracts.py')
+            and self._owner_frame.f_code.co_name == 'verify')
+        if inventory_owner and not _canonical_inventory_admission_frame(frame):
+            return False
         namespace = frame.f_globals
         filename = namespace.get('__file__')
         if type(filename) is not str:

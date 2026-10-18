@@ -366,130 +366,131 @@ def _winner_seed_live_observables(text):
 
 
 def verify(root, *, _operation=None):
-    if _operation is not None:
-        _check_operation(root, _operation)
-    operation_args = {} if _operation is None else {'_operation': _operation}
-    pins = json.loads(_typed_source.historical_text(root, PINS, _observe_text(root, PINS, (root / PINS).read_text(),
-                                    _operation=_operation), _operation=_operation),
-                      object_pairs_hook=source_contracts.unique_keys)
-    require(set(pins) == {'schema', 'source_manifest_sha256', 'format_manifest_sha256',
-                          'public_doc_migration_sha256', 'final_source_freeze_sha256',
-                          'containing_model_removal_sha256', 'winner_sign_migration_sha256',
-                          'scope', 'helper_source', 'callers', 'protected_inventory'},
-            'wrong Sum2 guard pin keys')
-    require(type(pins['schema']) is int and pins['schema'] == 2,
-            'unsupported Sum2 guard pin schema')
-    require(pins['source_manifest_sha256'] == MANIFEST_SHA256,
-            'unreviewed Sum2 guard source manifest')
-    require(pins['format_manifest_sha256'] == FORMAT_MANIFEST_SHA256 and
-            pins['public_doc_migration_sha256'] == PUBLIC_DOC_MIGRATION_SHA256 and
-            pins['final_source_freeze_sha256'] == FINAL_SOURCE_FREEZE_SHA256,
-            'unreviewed final Sum2 format/documentation lineage')
-    require(pins['containing_model_removal_sha256'] == CONTAINING_MODEL_REMOVAL_SHA256,
-            'unreviewed containing-model removal lineage')
-    require(pins['winner_sign_migration_sha256'] == WINNER_SIGN_MIGRATION_SHA256 and
-            hashlib.sha256(_typed_source.historical_bytes(root, root/'tools/carla_lane_oracle/winner-sign-query-migration.json', (root/'tools/carla_lane_oracle/winner-sign-query-migration.json').read_bytes(), _operation=_operation)).hexdigest() == WINNER_SIGN_MIGRATION_SHA256,
-            'unreviewed winner/sign-query source migration')
-    require(set(pins['callers']) == set(CALLERS), 'wrong Sum2 guard caller modules')
-    helper = _typed_source.historical_text(root, 'extensions/carla/curve_sum2.mojo', _observe_text(
-        root, 'extensions/carla/curve_sum2.mojo',
-        (root/'extensions/carla/curve_sum2.mojo').read_text(), _operation=_operation), _operation=_operation)
-    require(significant(helper) == significant(pins['helper_source']),
-            'Sum2 complete guard/helper token graph changed')
-    # This fixed CALLERS-only discriminator is not partial source admission.
-    # Actual changed callers require the complete live cleanup endpoint.
-    try:
-        if __package__:
-            from . import full_audit_cleanup_contracts as full_audit
-        else:
-            import full_audit_cleanup_contracts as full_audit
-        cleanup_predecessors = full_audit.reviewed_sum2_callers(root, **operation_args)
-    except (ValueError, OSError) as error:
-        # Only direct failures in the two fixed caller files have source_path.
-        # A transitive gate failure must not be attributed to a particular caller.
-        caller = {
-            'extensions/carla/curve_bounds.mojo': 'curve_bounds',
-            'extensions/carla/lane_refinement.mojo': 'lane_refinement',
-        }.get(getattr(error, 'source_path', None), 'cleanup caller dependencies')
-        raise ValueError('Sum2 complete guarded caller changed or routing changed: '
-                         + caller + ' (' + str(error) + ')') from error
-    count = 0
-    verified_lane_predecessor = None
-    verified_map_predecessor = None
-    for module, names in CALLERS.items():
-        record = pins['callers'][module]
-        require(set(record) == {'routing', 'functions'} and set(record['functions']) == set(names),
-                'wrong Sum2 guard caller function set: ' + module)
-        path = 'extensions/carla/' + module + '.mojo'
-        physical_text = _observe_text(root, path, (root / path).read_text(), _operation=_operation)
-        text = _typed_source.historical_text(root, path, physical_text, _operation=_operation)
-        if path != cache_key.MODULE and path in cleanup_predecessors:
-            text = cleanup_predecessors[path]
-        if path == cache_key.MODULE:
-            try:
-                text = cache_key.reviewed_text(root, path, physical_text, **operation_args)
-            except (ValueError, OSError) as error:
-                raise ValueError('Sum2 complete guarded caller changed or routing changed: '
-                                 + module + ' (' + str(error) + ')') from error
-            verified_lane_predecessor = text
-        if module == 'map':
-            live_seed = declaration(text, '_try_winner_seed', ())
-            recorded_seed = record['functions']['_try_winner_seed']
-            if significant(live_seed) != significant(recorded_seed):
+    with _typed_source.typed_admission_scope(root) as _typed_admission:
+        if _operation is not None:
+            _check_operation(root, _operation)
+        operation_args = {} if _operation is None else {'_operation': _operation}
+        pins = json.loads(_typed_source.historical_text(root, PINS, _observe_text(root, PINS, (root / PINS).read_text(),
+                                        _operation=_operation), _operation=_operation),
+                          object_pairs_hook=source_contracts.unique_keys)
+        require(set(pins) == {'schema', 'source_manifest_sha256', 'format_manifest_sha256',
+                              'public_doc_migration_sha256', 'final_source_freeze_sha256',
+                              'containing_model_removal_sha256', 'winner_sign_migration_sha256',
+                              'scope', 'helper_source', 'callers', 'protected_inventory'},
+                'wrong Sum2 guard pin keys')
+        require(type(pins['schema']) is int and pins['schema'] == 2,
+                'unsupported Sum2 guard pin schema')
+        require(pins['source_manifest_sha256'] == MANIFEST_SHA256,
+                'unreviewed Sum2 guard source manifest')
+        require(pins['format_manifest_sha256'] == FORMAT_MANIFEST_SHA256 and
+                pins['public_doc_migration_sha256'] == PUBLIC_DOC_MIGRATION_SHA256 and
+                pins['final_source_freeze_sha256'] == FINAL_SOURCE_FREEZE_SHA256,
+                'unreviewed final Sum2 format/documentation lineage')
+        require(pins['containing_model_removal_sha256'] == CONTAINING_MODEL_REMOVAL_SHA256,
+                'unreviewed containing-model removal lineage')
+        require(pins['winner_sign_migration_sha256'] == WINNER_SIGN_MIGRATION_SHA256 and
+                hashlib.sha256(_typed_source.historical_bytes(root, root/'tools/carla_lane_oracle/winner-sign-query-migration.json', (root/'tools/carla_lane_oracle/winner-sign-query-migration.json').read_bytes(), _operation=_operation)).hexdigest() == WINNER_SIGN_MIGRATION_SHA256,
+                'unreviewed winner/sign-query source migration')
+        require(set(pins['callers']) == set(CALLERS), 'wrong Sum2 guard caller modules')
+        helper = _typed_source.historical_text(root, 'extensions/carla/curve_sum2.mojo', _observe_text(
+            root, 'extensions/carla/curve_sum2.mojo',
+            (root/'extensions/carla/curve_sum2.mojo').read_text(), _operation=_operation), _operation=_operation)
+        require(significant(helper) == significant(pins['helper_source']),
+                'Sum2 complete guard/helper token graph changed')
+        # This fixed CALLERS-only discriminator is not partial source admission.
+        # Actual changed callers require the complete live cleanup endpoint.
+        try:
+            if __package__:
+                from . import full_audit_cleanup_contracts as full_audit
+            else:
+                import full_audit_cleanup_contracts as full_audit
+            cleanup_predecessors = full_audit.reviewed_sum2_callers(root, **operation_args)
+        except (ValueError, OSError) as error:
+            # Only direct failures in the two fixed caller files have source_path.
+            # A transitive gate failure must not be attributed to a particular caller.
+            caller = {
+                'extensions/carla/curve_bounds.mojo': 'curve_bounds',
+                'extensions/carla/lane_refinement.mojo': 'lane_refinement',
+            }.get(getattr(error, 'source_path', None), 'cleanup caller dependencies')
+            raise ValueError('Sum2 complete guarded caller changed or routing changed: '
+                             + caller + ' (' + str(error) + ')') from error
+        count = 0
+        verified_lane_predecessor = None
+        verified_map_predecessor = None
+        for module, names in CALLERS.items():
+            record = pins['callers'][module]
+            require(set(record) == {'routing', 'functions'} and set(record['functions']) == set(names),
+                    'wrong Sum2 guard caller function set: ' + module)
+            path = 'extensions/carla/' + module + '.mojo'
+            physical_text = _observe_text(root, path, (root / path).read_text(), _operation=_operation)
+            text = _typed_source.historical_text(root, path, physical_text, _operation=_operation)
+            if path != cache_key.MODULE and path in cleanup_predecessors:
+                text = cleanup_predecessors[path]
+            if path == cache_key.MODULE:
                 try:
-                    if __package__:
-                        from . import seed_count_contracts as seed_count
-                    else:
-                        import seed_count_contracts as seed_count
-                    text = seed_count.reviewed_text(root, path, physical_text, **operation_args)
+                    text = cache_key.reviewed_text(root, path, physical_text, **operation_args)
                 except (ValueError, OSError) as error:
                     raise ValueError('Sum2 complete guarded caller changed or routing changed: '
                                      + module + ' (' + str(error) + ')') from error
-                # Read and validate the physical extraction before normalizing
-                # its upper RHS. Historical reconstruction alone is insufficient.
-                live_map = _typed_source.historical_bytes(root, path, _observe_bytes(
-                    root, path, (root/path).read_bytes(),
-                    _operation=_operation), _operation=_operation).decode('utf-8')
-                live_observables = (
-                    seed_count.score_live_observables(live_map)
-                    if seed_count.sha(live_map) in {seed_count.SCORE_AFTER_SHA256, seed_count.station.AFTER_SHA256, seed_count.deviation.AFTER_SHA256}
-                    else _winner_seed_live_observables(live_seed))
-                require(live_observables ==
-                        _winner_seed_live_observables(recorded_seed),
-                        'Sum2 live winner-seed fresh guard or debit statements changed')
-                verified_map_predecessor = text
-        require(declaration_routing(text) == record['routing'],
-                'Sum2 guard import/declaration routing changed: ' + module)
-        spans = []
-        for name in names:
-            source, span, tokens = function_span(text, name, OWNER_OVERRIDES.get((module, name), OWNERS.get(module, ())))
-            require(significant(source) == significant(record['functions'][name]),
-                    'Sum2 complete guarded caller changed: ' + module + ':' + name)
-            spans.append(span)
-            count += 1
-        # Every use of a protected callable must lie in a reviewed complete
-        # function or a separately matched direct top-level import statement.
-        import_spans = []
-        depth = 0
-        for index, token in enumerate(tokens):
-            depth += (token.type == tokenize.INDENT) - (token.type == tokenize.DEDENT)
-            if depth == 0 and token.type == tokenize.NAME and token.string in ('from', 'import'):
-                end = index
-                while end < len(tokens) and tokens[end].type != tokenize.NEWLINE:
-                    end += 1
-                import_spans.append((index, end))
-        for index, token in enumerate(tokens):
-            if token.type == tokenize.NAME and token.string in PROTECTED:
-                require(any(start <= index < end for start, end in spans + import_spans),
-                        'unreviewed Sum2 helper binding/use: ' + module + ':' + token.string)
-    require(protected_inventory(root, verified_lane_predecessor=verified_lane_predecessor,
-                                verified_map_predecessor=verified_map_predecessor,
-                                verified_cleanup_predecessors=cleanup_predecessors,
-                                **operation_args) == pins['protected_inventory'],
-            'global protected-helper use/import inventory changed')
-    reviewed_cleanup_contracts.verify(root, **operation_args)
-    return {'status': 'PASS', 'guarded_modules': len(CALLERS), 'complete_caller_declarations': count,
-            'volatile_loads': 3, 'probe_sum2_calls': 4,
-            'unsupported_paths': 'raise, infinity, unknown Jet, or absent optional proof as bound by each caller',
-            'native_fp_state_execution_qualified': False,
-            'protected_production_modules': len(pins['protected_inventory'])}
+                verified_lane_predecessor = text
+            if module == 'map':
+                live_seed = declaration(text, '_try_winner_seed', ())
+                recorded_seed = record['functions']['_try_winner_seed']
+                if significant(live_seed) != significant(recorded_seed):
+                    try:
+                        if __package__:
+                            from . import seed_count_contracts as seed_count
+                        else:
+                            import seed_count_contracts as seed_count
+                        text = seed_count.reviewed_text(root, path, physical_text, **operation_args)
+                    except (ValueError, OSError) as error:
+                        raise ValueError('Sum2 complete guarded caller changed or routing changed: '
+                                         + module + ' (' + str(error) + ')') from error
+                    # Read and validate the physical extraction before normalizing
+                    # its upper RHS. Historical reconstruction alone is insufficient.
+                    live_map = _typed_source.historical_bytes(root, path, _observe_bytes(
+                        root, path, (root/path).read_bytes(),
+                        _operation=_operation), _operation=_operation).decode('utf-8')
+                    live_observables = (
+                        seed_count.score_live_observables(live_map)
+                        if seed_count.sha(live_map) in {seed_count.SCORE_AFTER_SHA256, seed_count.station.AFTER_SHA256, seed_count.deviation.AFTER_SHA256}
+                        else _winner_seed_live_observables(live_seed))
+                    require(live_observables ==
+                            _winner_seed_live_observables(recorded_seed),
+                            'Sum2 live winner-seed fresh guard or debit statements changed')
+                    verified_map_predecessor = text
+            require(declaration_routing(text) == record['routing'],
+                    'Sum2 guard import/declaration routing changed: ' + module)
+            spans = []
+            for name in names:
+                source, span, tokens = function_span(text, name, OWNER_OVERRIDES.get((module, name), OWNERS.get(module, ())))
+                require(significant(source) == significant(record['functions'][name]),
+                        'Sum2 complete guarded caller changed: ' + module + ':' + name)
+                spans.append(span)
+                count += 1
+            # Every use of a protected callable must lie in a reviewed complete
+            # function or a separately matched direct top-level import statement.
+            import_spans = []
+            depth = 0
+            for index, token in enumerate(tokens):
+                depth += (token.type == tokenize.INDENT) - (token.type == tokenize.DEDENT)
+                if depth == 0 and token.type == tokenize.NAME and token.string in ('from', 'import'):
+                    end = index
+                    while end < len(tokens) and tokens[end].type != tokenize.NEWLINE:
+                        end += 1
+                    import_spans.append((index, end))
+            for index, token in enumerate(tokens):
+                if token.type == tokenize.NAME and token.string in PROTECTED:
+                    require(any(start <= index < end for start, end in spans + import_spans),
+                            'unreviewed Sum2 helper binding/use: ' + module + ':' + token.string)
+        require(protected_inventory(root, verified_lane_predecessor=verified_lane_predecessor,
+                                    verified_map_predecessor=verified_map_predecessor,
+                                    verified_cleanup_predecessors=cleanup_predecessors,
+                                    **operation_args) == pins['protected_inventory'],
+                'global protected-helper use/import inventory changed')
+        reviewed_cleanup_contracts.verify(root, **operation_args)
+        return {'status': 'PASS', 'guarded_modules': len(CALLERS), 'complete_caller_declarations': count,
+                'volatile_loads': 3, 'probe_sum2_calls': 4,
+                'unsupported_paths': 'raise, infinity, unknown Jet, or absent optional proof as bound by each caller',
+                'native_fp_state_execution_qualified': False,
+                'protected_production_modules': len(pins['protected_inventory'])}

@@ -2805,6 +2805,18 @@ class CacheInputViewCurrentControls(unittest.TestCase):
                 self.assertGreater(predicate.call_count, 0)
 
     def test_current_capture_keeps_initial_read_two_three_and_verify_group_aba(self):
+        current = self.root
+        try:
+            for cohort in ('pr760', 'common758'):
+                self.root = (current if cohort == 'pr760' else
+                             fixtures.copy_common758_boundary_root(self, ROOT))
+                with self.subTest(cohort=cohort):
+                    self._check_capture_reads_and_verify_group_aba(cohort)
+        finally:
+            self.root = current
+
+    def _check_capture_reads_and_verify_group_aba(self, cohort):
+        self.assertEqual(cache.verify(self.root), self.cache_record)
         name = 'extensions/carla/curve_interval.mojo'
         path = self.root/name
         original, read = path.read_bytes(), Path.read_bytes
@@ -2830,8 +2842,10 @@ class CacheInputViewCurrentControls(unittest.TestCase):
         self.assertNotIn(bound_only, helper_inputs)
         self.assertNotIn(bound_only, cleanup.typed_boundary.EDGES)
         for name, refusal, last in (
-                (name, 'typed boundary bound input changed', 'B'),
-                (bound_only, 'bound input changed after consumption', 'A')):
+                (name, 'PR760 physical input changed' if cohort == 'pr760' else
+                 'typed boundary bound input changed', 'B'),
+                (bound_only, 'PR760 physical input changed' if cohort == 'pr760' else
+                 'bound input changed after consumption', 'B' if cohort == 'pr760' else 'A')):
             path = self.root/name
             original = path.read_bytes()
             self.assertIn(name, self.record['dependency_inventory'])
@@ -2856,7 +2870,7 @@ class CacheInputViewCurrentControls(unittest.TestCase):
             self.assertIn('B', seen)
             self.assertEqual(seen[-1], last)
             if last == 'B':
-                self.assertNotIn('A', seen, 'typed refusal must precede the bound group')
+                self.assertNotIn('A', seen, 'admission refusal must precede the bound group')
             self.assertEqual(path.read_bytes(), original)
         self.assertEqual(cache.verify(self.root), self.cache_record)
 
