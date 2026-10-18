@@ -28,6 +28,7 @@ The pass runs on the host. It reads the depth and the normals that
 
 from math.noise import SimplexNoise
 from math.utils import SeededRandom
+from math.cross import cross_vectors
 from math.vector3 import Vector3
 from postprocessing.sampling import LightView, u_of, v_of
 from postprocessing.screen_space import (
@@ -309,13 +310,6 @@ def _unit(v: Vector3) -> Vector3:
     return v * (1 / size)
 
 
-def _cross(a: Vector3, b: Vector3) -> Vector3:
-    """Return the cross product."""
-    return Vector3(
-        a.y * b.z - a.z * b.y, a.z * b.x - a.x * b.z, a.x * b.y - a.y * b.x
-    )
-
-
 def _row_up(y: Int, height: Int) -> Int:
     """Return a row counted up from the bottom."""
     return height - 1 - y
@@ -401,12 +395,12 @@ def gtao_occlusion(
     for i in range(directions):  # pragma: no branch
         var angle = Float32(i) / Float32(directions) * Float32(pi)
         var direction = _unit(tangent * cos(angle) + bitangent * sin(angle))
-        var slice_bitangent = _unit(_cross(direction, view_dir))
-        var slice_tangent = _cross(slice_bitangent, view_dir)
+        var slice_bitangent = _unit(cross_vectors(direction, view_dir))
+        var slice_tangent = cross_vectors(slice_bitangent, view_dir)
         var in_slice = _unit(
             normal - slice_bitangent * normal.dot(slice_bitangent)
         )
-        var toward = _cross(in_slice, slice_bitangent)
+        var toward = cross_vectors(in_slice, slice_bitangent)
         var cos_x = view_dir.dot(toward)
         var cos_y = view_dir.dot(-toward)
         for j in range(steps):  # pragma: no branch

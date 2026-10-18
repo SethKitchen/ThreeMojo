@@ -30,6 +30,7 @@ triangle mesh" (2004).
 from core.ordinal import ordinal_valid
 
 from math.convex_hull import ConvexHull
+from math.cross import cross_vectors
 from math.matrix3 import Matrix3
 from math.matrix_determinant import _determinant3_f32
 from math.triangle import Triangle
@@ -127,9 +128,7 @@ def cross(a: Vector3, b: Vector3) -> Vector3:
     Returns:
         The product a x b.
     """
-    return Vector3(
-        a.y * b.z - a.z * b.y, a.z * b.x - a.x * b.z, a.x * b.y - a.y * b.x
-    )
+    return cross_vectors(a, b)
 
 
 def unit_or(v: Vector3, fallback: Vector3) -> Vector3:

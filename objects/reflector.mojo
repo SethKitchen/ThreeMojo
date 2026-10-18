@@ -53,7 +53,7 @@ from materials.material import MaterialId, shader_material
 from materials.nodes import NodeProgramId
 from math.bounds import Plane
 from math.matrix4 import Matrix4
-from math.projection import look_at, viewport
+from math.projection import look_at, view_to_screen
 from math.quaternion import Quaternion
 from math.vector3 import Vector3
 from objects.mesh import Mesh
@@ -204,9 +204,7 @@ struct VirtualCamera(Camera, ImplicitlyCopyable):
         Raises:
             Error: If either dimension is not positive.
         """
-        var combined = viewport(width, height)
-        combined.multiply(self.projection)
-        return combined^
+        return view_to_screen(self.projection, width, height)
 
     def near_distance(self) -> Float32:
         """Return the near clipping distance, in meters."""

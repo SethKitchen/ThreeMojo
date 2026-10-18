@@ -39,7 +39,7 @@ from cameras.camera import Camera
 from core.layers import Layers
 from core.scene import Scene
 from math.matrix4 import Matrix4, translation
-from math.projection import viewport
+from math.projection import view_to_screen
 from math.smoothstep import smoothstep
 from math.vector2 import Vector2
 from postprocessing.sampling import LightView, u_of, v_of
@@ -988,9 +988,7 @@ struct JitteredCamera(Camera, ImplicitlyCopyable):
         Raises:
             Error: If either dimension is not positive.
         """
-        var combined = viewport(width, height)
-        combined.multiply(self.projection)
-        return combined^
+        return view_to_screen(self.projection, width, height)
 
     def near_distance(self) -> Float32:
         """Return the wrapped camera's near clipping distance, in meters."""

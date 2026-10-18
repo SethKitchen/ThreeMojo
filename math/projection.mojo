@@ -299,6 +299,27 @@ def look_at(eye: Vector3, target: Vector3, up: Vector3) raises -> Matrix4:
     return matrix^
 
 
+def view_to_screen(
+    projection: Matrix4, width: Int, height: Int
+) raises -> Matrix4:
+    """Return the transform from camera space to pixels.
+
+    Args:
+        projection: The camera-to-clip matrix.
+        width: Image width in pixels.
+        height: Image height in pixels.
+
+    Returns:
+        The product viewport * projection.
+
+    Raises:
+        Error: If either dimension is not positive.
+    """
+    var combined = viewport(width, height)
+    combined.multiply(projection)
+    return combined^
+
+
 def viewport(width: Int, height: Int) raises -> Matrix4:
     """Return the matrix taking NDC to pixel coordinates.
 

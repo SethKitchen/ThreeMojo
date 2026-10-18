@@ -87,6 +87,7 @@ from lights.spot_profile import SpotProfile, needs_profile
 from math.smoothstep import smoothstep
 from math.spherical_harmonics3 import SphericalHarmonics3
 from math.vector2 import Vector2
+from math.cross import cross_vectors
 from math.vector3 import Vector3
 from render.framebuffer import Color, FloatColor
 from std.math import cos, exp2, log2, max, min, pi, sqrt
@@ -161,11 +162,7 @@ def view_direction(direction: Vector3, up: Vector3, back: Vector3) -> Vector3:
     Returns:
         The direction in view space, as long as it was.
     """
-    var right = Vector3(
-        up.y * back.z - up.z * back.y,
-        up.z * back.x - up.x * back.z,
-        up.x * back.y - up.y * back.x,
-    )
+    var right = cross_vectors(up, back)
     return Vector3(direction.dot(right), direction.dot(up), direction.dot(back))
 
 

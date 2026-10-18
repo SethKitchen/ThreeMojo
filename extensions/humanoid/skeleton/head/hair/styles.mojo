@@ -53,6 +53,7 @@ from core.ordinal import ordinal_valid
 from core.binary import little_endian_u32
 from extensions.humanoid.assets import humanoid_asset_path
 from extensions.humanoid.skeleton.head.frame import HeadDimensions
+from math.cross import cross_vectors
 from math.vector3 import Vector3
 from std.math import isfinite
 
@@ -221,11 +222,7 @@ def cranium_frame(
     if across.dot(across) < Float32(1e-6):
         across = Vector3(0, 0, 1) - up * up.z
     across = _unit(across)
-    var along = Vector3(
-        up.y * across.z - up.z * across.y,
-        up.z * across.x - up.x * across.z,
-        up.x * across.y - up.y * across.x,
-    )
+    var along = cross_vectors(up, across)
     return (across, up, along)
 
 

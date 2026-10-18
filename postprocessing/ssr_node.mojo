@@ -39,6 +39,7 @@ off.
 
 from math.matrix4 import Matrix4
 from math.vector2 import Vector2
+from math.cross import cross_vectors
 from math.vector3 import Vector3
 from postprocessing.display_nodes import luminance_of, scaled_size
 from postprocessing.sampling import LightView, u_of, v_of
@@ -179,13 +180,6 @@ def _normal_at(view: LightView, u: Float32, v_down: Float32) -> Vector3:
     return n * (1 / size)
 
 
-def _cross(a: Vector3, b: Vector3) -> Vector3:
-    """Return the cross product."""
-    return Vector3(
-        a.y * b.z - a.z * b.y, a.z * b.x - a.x * b.z, a.x * b.y - a.y * b.x
-    )
-
-
 def _view_z(frame: SsrNodeFrame, depth: Float32) -> Float32:
     """Return the view z of a window depth: three.js's
     `perspectiveDepthToViewZ` or `orthographicDepthToViewZ`."""
@@ -283,7 +277,7 @@ def ssr_node_pixel(
             continue
         var there = view.position(su, 1 - sv, d)
         var away = (
-            _cross(there - here, there - far_end).length()
+            cross_vectors(there - here, there - far_end).length()
             / (far_end - here).length()
         )
         var beside = view.position(su + 1 / w, 1 - sv, d)

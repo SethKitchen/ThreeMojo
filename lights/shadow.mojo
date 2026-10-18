@@ -78,6 +78,7 @@ compares `gl_FragCoord.z`, so a bias means the same number here as there.
 from core.ordinal import ordinal_valid
 
 from math.smoothstep import smoothstep
+from math.cross import cross_vectors
 from math.vector3 import Vector3
 from render.texture import Texture
 from render.texture_store import TextureId
@@ -1663,11 +1664,7 @@ def cube_texel(direction: Vector3, size: Int) -> Int:
     var face = cube_face(direction)
     var forward = cube_direction(face)
     var up = cube_up(face)
-    var right = Vector3(
-        forward.y * up.z - forward.z * up.y,
-        forward.z * up.x - forward.x * up.z,
-        forward.x * up.y - forward.y * up.x,
-    )
+    var right = cross_vectors(forward, up)
     var along = direction.dot(forward)
     var across = direction.dot(right) / along
     var upward = direction.dot(up) / along

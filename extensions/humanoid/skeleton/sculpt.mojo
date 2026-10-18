@@ -26,6 +26,7 @@ from extensions.humanoid.skeleton.field import (
     smax,
     smin,
 )
+from math.cross import cross_vectors
 from math.vector3 import Vector3
 from std.math import max, min, sqrt
 
@@ -86,9 +87,7 @@ def _basis(forward: Vector3, up: Vector3) -> Tuple[Vector3, Vector3, Vector3]:
     w.normalize()
     var v = up - w * up.dot(w)
     v.normalize()
-    var u = Vector3(
-        v.y * w.z - v.z * w.y, v.z * w.x - v.x * w.z, v.x * w.y - v.y * w.x
-    )
+    var u = cross_vectors(v, w)
     return (u, v, w)
 
 
