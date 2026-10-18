@@ -29,7 +29,12 @@ bits. `integer` refuses a number with a fraction.
 
 from core.ordinal import ordinal_valid
 
-from loaders.bytes import ascii_digit, bytes_match, hex_digit_value
+from loaders.bytes import (
+    ascii_digit,
+    bytes_match,
+    hex_digit_value,
+    space_tab_line,
+)
 from loaders.utf8 import append_utf8
 from math.finite import require_finite
 from std.math import isfinite
@@ -670,7 +675,7 @@ struct _Parser(Movable):
         """Step over the four whitespace bytes JSON allows."""
         while not self.done():
             var byte = self.peek()
-            if byte == 32 or byte == 9 or byte == 10 or byte == 13:
+            if space_tab_line(byte):
                 self.at += 1
             else:
                 return

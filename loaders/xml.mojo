@@ -39,6 +39,7 @@ from loaders.bytes import (
     ascii_letter,
     bytes_match,
     hex_digit_value,
+    space_tab_line,
 )
 from loaders.utf8 import append_utf8
 
@@ -290,7 +291,7 @@ def parse_xml(text: String) raises -> XmlDocument:
     var raw = text.as_bytes()
     for index in range(len(raw)):
         var byte = raw[index]
-        var control = byte < 32 and not _is_space(Int(byte))
+        var control = byte < 32 and not space_tab_line(Int(byte))
         var noncharacter = (
             byte == 0xEF
             and index + 2 < len(raw)
@@ -364,11 +365,6 @@ def _is_pubid_char(byte: Int) -> Bool:
     )
 
 
-def _is_space(byte: Int) -> Bool:
-    """Return True for the four bytes XML counts as white space."""
-    return byte == 32 or byte == 9 or byte == 10 or byte == 13
-
-
 def _is_character(point: Int) -> Bool:
     """Return True if a character reference names a character XML allows:
     a permitted whitespace, BMP character or supplementary character."""
@@ -413,7 +409,7 @@ struct _Parser(Movable):
     def skip_space(mut self) -> Bool:
         """Step over white space and return True if there was any."""
         var start = self.at
-        while _is_space(self.peek()):
+        while space_tab_line(self.peek()):
             self.at += 1
         return self.at > start
 
@@ -771,7 +767,7 @@ struct _Parser(Movable):
                 raise Error(self.where() + "'<' inside an attribute value")
             if byte == 38:
                 self.reference(out)
-            elif _is_space(byte):
+            elif space_tab_line(byte):
                 out.append(32)
                 self.at += 1
                 if byte == 13 and self.peek() == 10:
