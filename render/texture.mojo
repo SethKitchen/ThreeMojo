@@ -403,6 +403,25 @@ comptime UNSIGNED_BYTE_TYPE = TexelType(0)
 comptime FLOAT_TYPE = TexelType(1)
 
 
+def require_texel_type(texel_type: TexelType) raises:
+    """Refuse a texel type that is neither bytes nor floats.
+
+    Args:
+        texel_type: What one channel is stored as.
+
+    Returns:
+        Nothing. The call returns when the type is `UNSIGNED_BYTE_TYPE`
+            or `FLOAT_TYPE`.
+
+    Raises:
+        Error: If the type is neither of those.
+    """
+    if not texel_type.is_valid():
+        raise Error(
+            "A texture's texel type must be UNSIGNED_BYTE_TYPE or FLOAT_TYPE"
+        )
+
+
 def require_float_linear(texel_type: TexelType, space: ColorSpace) raises:
     """Refuse a float texture whose color space is not linear.
 
@@ -443,6 +462,23 @@ comptime UV_CHANNEL_0 = UvChannel(0)
 # The geometry's `uv1`, or its `uv` when it has no `uv1`. What a baked
 # ambient occlusion map or light map usually reads.
 comptime UV_CHANNEL_1 = UvChannel(1)
+
+
+def require_uv_channel(channel: UvChannel) raises:
+    """Refuse a texture channel that is neither of the two sets.
+
+    Args:
+        channel: Which coordinate set the texture reads.
+
+    Returns:
+        Nothing. The call returns when the channel is `UV_CHANNEL_0` or
+            `UV_CHANNEL_1`.
+
+    Raises:
+        Error: If the channel is neither of those.
+    """
+    if not channel.is_valid():
+        raise Error("A texture's channel must be UV_CHANNEL_0 or UV_CHANNEL_1")
 
 
 @fieldwise_init
@@ -1139,11 +1175,7 @@ struct Texture(Movable):
             )
         if not self.alpha.is_valid():
             raise Error("A texture's alpha mode must be COVERAGE or IGNORED")
-        if not self.texel_type.is_valid():
-            raise Error(
-                "A texture's texel type must be UNSIGNED_BYTE_TYPE or"
-                " FLOAT_TYPE"
-            )
+        require_texel_type(self.texel_type)
         # A float holds linear light as it is. The sRGB curve is a way to
         # spend 256 steps where the eye sees them, and a float has no steps
         # to spend: three.js's HDR loaders mark their textures linear.
@@ -1155,10 +1187,7 @@ struct Texture(Movable):
                 "A texture's anisotropy is at most MAX_ANISOTROPY: every"
                 " tap is work a fragment pays for"
             )
-        if not self.channel.is_valid():
-            raise Error(
-                "A texture's channel must be UV_CHANNEL_0 or UV_CHANNEL_1"
-            )
+        require_uv_channel(self.channel)
 
     def __init__(out self, *, copy: Self, share_data: Bool = False):
         """Copy a texture with independent sampling and transform state.

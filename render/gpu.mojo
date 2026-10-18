@@ -237,7 +237,9 @@ from render.rasterizer import (
     require_triangle_lighting,
     require_coverage_alpha,
     require_data_descriptors,
+    require_gradient_bytes,
     require_gradient_row,
+    require_gradient_texels,
     require_ignored_alpha,
     require_linear_data,
     require_program_uniform,
@@ -10487,22 +10489,14 @@ struct GpuRenderer(Movable):
                 var tones = corners[triangle * 3].gradient_map
                 if tones == NO_TEXTURE:
                     continue
-                if not self.has_texels[tones.value]:
-                    raise Error(
-                        "A gradient map must hold texels: name no map for"
-                        " the fallback"
-                    )
+                require_gradient_texels(self.has_texels[tones.value])
                 require_gradient_row(self.heights[tones.value])
                 require_data_descriptors(
                     self.is_linear[tones.value],
                     self.ignores_alpha[tones.value],
                     "A gradient map",
                 )
-                if self.holds_floats[tones.value]:
-                    raise Error(
-                        "A gradient map must hold bytes: its tones are read"
-                        " one byte each"
-                    )
+                require_gradient_bytes(self.holds_floats[tones.value])
             # A matcap's own alpha means nothing either, and only a
             # texture built to ignore it filters correctly. Its own loop,
             # because a triangle with a matcap rarely has a ramp as well.

@@ -57,6 +57,7 @@ from materials.material import (
     check_steps,
     require_dash_size,
     require_gap_size,
+    require_unmixed_data,
     LAMBERT,
     MAX_IOR,
     MIN_IOR,
@@ -118,6 +119,7 @@ from render.texture import (
     UV_CHANNEL_1,
     Texture,
     UvPlacement,
+    require_uv_channel,
     anisotropic_footprint,
     mix_straight,
 )
@@ -2784,11 +2786,7 @@ def check_triangle_state(
     # the pixel would hold part of each and resolve as neither. Refused
     # here so that both backends refuse it, and so that `RenderTarget.blend`
     # can say a mixture is always light. See `render.target`.
-    if a.kind.is_data() and a.blend.mixes():
-        raise Error(
-            "A normal or depth material cannot blend: a pixel holds its"
-            " bytes or the scene's light, not a mixture of the two"
-        )
+    require_unmixed_data(a.kind.is_data(), a.blend.mixes())
     if a.texture != NO_TEXTURE and a.texture.value < 0:
         raise Error("A triangle names a texture id that nothing can hold")
     if a.emissive_map != NO_TEXTURE and a.emissive_map.value < 0:
@@ -3370,6 +3368,48 @@ def matcap_fallback(v: Float32) -> Float32:
     return mix_delta(MATCAP_FLOOR, MATCAP_CEILING, v)
 
 
+def require_gradient_texels(has_texels: Bool) raises:
+    """Refuse a gradient map that holds no texels.
+
+    The host asks this of a texture. The GPU asks it of the flag it
+    uploaded. The words are the same.
+
+    Args:
+        has_texels: Whether the map holds at least one texel.
+
+    Returns:
+        Nothing. The call returns when the map holds texels.
+
+    Raises:
+        Error: If the map is blank.
+    """
+    if not has_texels:
+        raise Error(
+            "A gradient map must hold texels: name no map for the fallback"
+        )
+
+
+def require_gradient_bytes(holds_floats: Bool) raises:
+    """Refuse a gradient map whose tones are floats.
+
+    The host asks this of a texture. The GPU asks it of the flag it
+    uploaded. The words are the same.
+
+    Args:
+        holds_floats: Whether the map stores float texels.
+
+    Returns:
+        Nothing. The call returns when the map stores bytes.
+
+    Raises:
+        Error: If the map stores floats.
+    """
+    if holds_floats:
+        raise Error(
+            "A gradient map must hold bytes: its tones are read one byte each"
+        )
+
+
 def require_gradient_row(height: Int) raises:
     """Refuse a gradient map that is not one row high.
 
@@ -3422,18 +3462,12 @@ def check_gradient_map(image: Texture) raises:
             color space is not `LINEAR`, it reads its alpha as coverage, or
             it holds floats.
     """
-    if image.is_blank():
-        raise Error(
-            "A gradient map must hold texels: name no map for the fallback"
-        )
+    require_gradient_texels(not image.is_blank())
     require_gradient_row(image.height)
     require_data_descriptors(
         image.color_space == LINEAR, image.alpha == IGNORED, "A gradient map"
     )
-    if image.texel_type == FLOAT_TYPE:
-        raise Error(
-            "A gradient map must hold bytes: its tones are read one byte each"
-        )
+    require_gradient_bytes(image.texel_type == FLOAT_TYPE)
 
 
 def gradient_ramp(image: Texture) raises -> List[Float32]:
@@ -3729,8 +3763,7 @@ def check_channel(image: Texture) raises:
     Raises:
         Error: If its channel is not `UV_CHANNEL_0` or `UV_CHANNEL_1`.
     """
-    if not image.channel.is_valid():
-        raise Error("A texture's channel must be UV_CHANNEL_0 or UV_CHANNEL_1")
+    require_uv_channel(image.channel)
 
 
 # Where each map's placement is in `surface_maps` and `map_placements`:

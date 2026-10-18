@@ -39,6 +39,7 @@ from render.texture import (
     TexelType,
     Texture,
     float_texture,
+    require_texel_type,
     require_texture_size,
 )
 from render.volume_texture import VOLUME_CHANNELS, VolumeImage
@@ -384,10 +385,7 @@ def framebuffer_texture(
             the two, or `Texture.validate` refuses the color space.
     """
     require_texture_size(width, height)
-    if not texel_type.is_valid():
-        raise Error(
-            "A texture's texel type must be UNSIGNED_BYTE_TYPE or FLOAT_TYPE"
-        )
+    require_texel_type(texel_type)
     if texel_type == FLOAT_TYPE:
         var image = float_texture(
             width,
