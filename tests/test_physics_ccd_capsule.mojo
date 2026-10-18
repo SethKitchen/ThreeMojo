@@ -9,7 +9,12 @@ Each expected time and normal comes from the geometry by hand: a 3-4-5
 tilt, a vertex under the middle of the axis, and so on.
 """
 
-from extensions.physics.body import DYNAMIC, STATIC, RigidBody
+from extensions.physics.body import (
+    DYNAMIC,
+    STATIC,
+    RigidBody,
+    locked_inverse_inertia,
+)
 from extensions.physics.ccd import SPHERE_MESH_CCD, _sweep_capsule_triangle
 from extensions.physics.shape import Shape, PhysicsMaterial
 from extensions.physics.world import PhysicsWorld
@@ -187,11 +192,7 @@ def _capsule(
         position,
         rotation,
     )
-    var locked = Matrix3()
-    locked.elements[0] = 0
-    locked.elements[4] = 0
-    locked.elements[8] = 0
-    body.set_inverse_inertia(locked)
+    body.set_inverse_inertia(locked_inverse_inertia())
     body.linear_velocity = velocity
     body.material = PhysicsMaterial(0, 0)
     return body^

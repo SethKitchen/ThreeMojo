@@ -5,13 +5,18 @@
 
 """Adversarial controls for conservative sphere/mesh CCD candidates (#636)."""
 
-from extensions.physics.body import BodyId, DYNAMIC, STATIC, RigidBody
+from extensions.physics.body import (
+    BodyId,
+    DYNAMIC,
+    STATIC,
+    RigidBody,
+    locked_inverse_inertia,
+)
 from extensions.physics.ccd import DISCRETE, SPHERE_MESH_CCD, _sweep_domain
 from extensions.physics.ccd_index import _CCDIndex, _bounds, _down
 from math.next_float import next_binary64_up
 from extensions.physics.shape import Shape, PhysicsMaterial, _wide
 from extensions.physics.world import PhysicsWorld
-from math.matrix3 import Matrix3
 from math.quaternion import Quaternion
 from math.triangle import Triangle
 from math.vector3 import Vector3
@@ -671,11 +676,7 @@ def test_indexed_reach_refusal_restores_pending_force() raises:
         Vector3(0.5, 0, 0.5),
         Quaternion.identity(),
     )
-    var locked = Matrix3()
-    locked.elements[0] = 0
-    locked.elements[4] = 0
-    locked.elements[8] = 0
-    stationary.set_inverse_inertia(locked)
+    stationary.set_inverse_inertia(locked_inverse_inertia())
     _ = indexed.add_body(stationary.copy())
     _ = brute.add_body(stationary^)
     assert_equal(indexed._ccd_index.count, 17)

@@ -152,6 +152,21 @@ def _split_rotation(
     momentum = _rotation_apply(_rotation_back(turn), momentum)
 
 
+def locked_inverse_inertia() -> Matrix3:
+    """Return an inverse inertia that refuses every turn.
+
+    A new matrix is the identity. Clearing its diagonal leaves nine zeros.
+
+    Returns:
+        A zero matrix.
+    """
+    var locked = Matrix3()
+    locked.elements[0] = 0
+    locked.elements[4] = 0
+    locked.elements[8] = 0
+    return locked^
+
+
 struct RigidBody(Copyable, Movable):
     """One body: its pose, its motion, its shape and its mass."""
 
@@ -227,9 +242,7 @@ struct RigidBody(Copyable, Movable):
         self._has_dynamic_state = False
         self._dynamic_mass = 0
         self._dynamic_inverse_mass = 0
-        self._dynamic_inverse_inertia = Matrix3()
-        for i in range(9):  # pragma: no branch
-            self._dynamic_inverse_inertia.elements[i] = 0
+        self._dynamic_inverse_inertia = locked_inverse_inertia()
         self.shape = shape^
         self.shape_position = Vector3(0, 0, 0)
         self.shape_rotation = Quaternion.identity()
@@ -242,10 +255,7 @@ struct RigidBody(Copyable, Movable):
         self._mass = 0
         self._inverse_mass = 0
         self.center_of_mass = Vector3(0, 0, 0)
-        self._inverse_inertia = Matrix3()
-        self._inverse_inertia.elements[0] = 0
-        self._inverse_inertia.elements[4] = 0
-        self._inverse_inertia.elements[8] = 0
+        self._inverse_inertia = locked_inverse_inertia()
         self.linear_damping = 0
         self.angular_damping = 0
         self.gravity_scale = 1
@@ -369,8 +379,7 @@ struct RigidBody(Copyable, Movable):
                 self._has_dynamic_state = True
             self._mass = 0
             self._inverse_mass = 0
-            for i in range(9):  # pragma: no branch
-                self._inverse_inertia.elements[i] = 0
+            self._inverse_inertia = locked_inverse_inertia()
             if kind == STATIC:
                 self.linear_velocity = Vector3(0, 0, 0)
                 self.angular_velocity = Vector3(0, 0, 0)

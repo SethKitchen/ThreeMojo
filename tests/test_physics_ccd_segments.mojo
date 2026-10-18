@@ -10,7 +10,12 @@ start and an axis; an axis of zero is a sphere's center. The normal runs
 from B toward A.
 """
 
-from extensions.physics.body import DYNAMIC, STATIC, RigidBody
+from extensions.physics.body import (
+    DYNAMIC,
+    STATIC,
+    RigidBody,
+    locked_inverse_inertia,
+)
 from extensions.physics.ccd import (
     SPHERE_MESH_CCD,
     _point_hit,
@@ -20,7 +25,6 @@ from extensions.physics.ccd import (
 )
 from extensions.physics.shape import Shape, PhysicsMaterial
 from extensions.physics.world import PhysicsWorld
-from math.matrix3 import Matrix3
 from math.quaternion import Quaternion
 from math.triangle import Triangle
 from math.vector3 import Vector3
@@ -221,11 +225,7 @@ def _capsule(x: Float32, z: Float32, velocity: Vector3) raises -> RigidBody:
         Vector3(x, 0, z),
         Quaternion.identity(),
     )
-    var locked = Matrix3()
-    locked.elements[0] = 0
-    locked.elements[4] = 0
-    locked.elements[8] = 0
-    body.set_inverse_inertia(locked)
+    body.set_inverse_inertia(locked_inverse_inertia())
     body.linear_velocity = velocity
     body.material = PhysicsMaterial(0, 1)
     return body^
@@ -360,11 +360,7 @@ def test_a_tall_capsule_settles_on_an_indexed_floor() raises:
             Vector3(0, 0, 0.625),
             Quaternion.identity(),
         )
-        var locked = Matrix3()
-        locked.elements[0] = 0
-        locked.elements[4] = 0
-        locked.elements[8] = 0
-        capsule.set_inverse_inertia(locked)
+        capsule.set_inverse_inertia(locked_inverse_inertia())
         capsule.material = PhysicsMaterial(0, 0)
         _ = world.add_body(capsule^)
         var sphere = RigidBody(
