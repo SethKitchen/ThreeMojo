@@ -32,6 +32,7 @@ from loaders.bytes import (
     bytes_match,
     hex_digit_value,
 )
+from loaders.text_number import file_line
 
 from math.finite import require_finite
 
@@ -663,7 +664,7 @@ struct _Reader:
         self.line = 1
 
     def fail(self, message: String) -> Error:
-        return Error(String("STEP line ", self.line, ": ", message))
+        return Error(file_line("STEP", self.line) + message)
 
     def peek(self) -> Int:
         return Int(self.data[self.at]) if self.at < len(self.data) else -1
