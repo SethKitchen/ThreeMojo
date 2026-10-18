@@ -62,6 +62,22 @@ comptime EXTERNAL_JUGULAR_VEIN = HeadVessel(4)
 comptime VERTEBRAL_ARTERY = HeadVessel(5)
 
 
+def require_head_vessel(part: HeadVessel) raises:
+    """Refuse a head vessel that is not named.
+
+    Args:
+        part: The vessel.
+
+    Returns:
+        Nothing. The call returns when the vessel is named.
+
+    Raises:
+        Error: If the vessel is not named.
+    """
+    if not part.is_valid():
+        raise Error("A head vessel must be a named artery or vein")
+
+
 def is_head_artery(part: HeadVessel) raises -> Bool:
     """Return True if `part` carries arterial blood.
 
@@ -74,8 +90,7 @@ def is_head_artery(part: HeadVessel) raises -> Bool:
     Raises:
         Error: If `part` is not named.
     """
-    if not part.is_valid():
-        raise Error("A head vessel must be a named artery or vein")
+    require_head_vessel(part)
     return not (part == INTERNAL_JUGULAR_VEIN or part == EXTERNAL_JUGULAR_VEIN)
 
 
@@ -132,8 +147,7 @@ def head_vessel_field(
             not named, or if `side` is not valid.
     """
     dimensions.validate()
-    if not part.is_valid():
-        raise Error("A head vessel must be a named artery or vein")
+    require_head_vessel(part)
     require_side(side, "A head")
     var f = dimensions.head.frame
     var sweeps = List[Sweep]()

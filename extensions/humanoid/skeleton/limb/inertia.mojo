@@ -100,6 +100,7 @@ from extensions.humanoid.skeleton.limb.regions import (
     MUSCLE_REGION,
     TENDON_REGION,
     FAT_PROXY_REGION,
+    require_limb_region,
 )
 from math.vector3 import Vector3
 from std.math import isfinite, sqrt
@@ -178,8 +179,7 @@ struct SegmentEstimate(ImplicitlyCopyable):
         Raises:
             Error: If the region is not named.
         """
-        if not region.is_valid():
-            raise Error("A limb region must be named")
+        require_limb_region(region)
         return Volume(Float32(self.region_volumes[region.value]))
 
     def region_mass(self, region: LimbRegion) raises -> Mass:
@@ -194,8 +194,7 @@ struct SegmentEstimate(ImplicitlyCopyable):
         Raises:
             Error: If the region is not named.
         """
-        if not region.is_valid():
-            raise Error("A limb region must be named")
+        require_limb_region(region)
         return Mass(Float32(self.region_masses[region.value]))
 
 

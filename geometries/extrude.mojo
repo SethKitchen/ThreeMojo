@@ -831,8 +831,7 @@ def check_extrusion(
     """
     if depth.value <= 0:
         raise Error("An extrusion needs a positive depth")
-    if steps < 1:
-        raise Error("An extrusion needs at least one step")
+    _check_sweep(steps)
     if curve_segments < 1:
         raise Error("An extrusion needs at least one curve segment")
     if bevel_enabled and bevel_segments < 1:

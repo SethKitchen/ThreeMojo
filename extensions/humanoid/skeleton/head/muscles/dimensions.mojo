@@ -80,6 +80,22 @@ comptime ZYGOMATICUS_MAJOR = HeadMuscle(13)
 comptime ORBICULARIS_ORIS = HeadMuscle(14)
 
 
+def require_head_muscle(part: HeadMuscle) raises:
+    """Refuse a head muscle that is not named.
+
+    Args:
+        part: The muscle.
+
+    Returns:
+        Nothing. The call returns when the muscle is named.
+
+    Raises:
+        Error: If the muscle is not named.
+    """
+    if not part.is_valid():
+        raise Error("A head muscle must be a named muscle")
+
+
 def head_muscle_label(part: HeadMuscle) -> String:
     """Return the error-text name of `part`.
 
@@ -137,8 +153,7 @@ def is_paired_head_muscle(part: HeadMuscle) raises -> Bool:
     Raises:
         Error: If `part` is not named.
     """
-    if not part.is_valid():
-        raise Error("A head muscle must be a named muscle")
+    require_head_muscle(part)
     return not (part == SUPRAHYOID or part == ORBICULARIS_ORIS)
 
 
@@ -161,8 +176,7 @@ def head_muscle_paths(part: HeadMuscle) raises -> List[List[Float32]]:
     Raises:
         Error: If `part` is not named.
     """
-    if not part.is_valid():
-        raise Error("A head muscle must be a named muscle")
+    require_head_muscle(part)
     var paths = List[List[Float32]]()
     # fmt: off
     if part == STERNOCLEIDOMASTOID:

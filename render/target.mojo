@@ -174,6 +174,23 @@ comptime HALF_FLOAT_TARGET = TargetType(1)
 # it is, above one included.
 comptime FLOAT_TARGET = TargetType(2)
 
+
+def require_target_type(type: TargetType) raises:
+    """Refuse a render target type that is none of the three.
+
+    Args:
+        type: The attachment storage.
+
+    Returns:
+        Nothing. The call returns when the type is named.
+
+    Raises:
+        Error: If the type is none of the three.
+    """
+    if not type.is_valid():
+        raise Error("A render target type must be one of the three")
+
+
 # The largest finite half: what a half float target holds for anything
 # brighter, where a GPU writing one would round it to infinity. A texture
 # refuses infinity, so the port holds the largest number instead.
@@ -243,8 +260,7 @@ def check_target(type: TargetType, outputs: List[TargetOutput]) raises:
             first output is not `OUTPUT_COLOR`, an output is none of the
             four, or an output repeats.
     """
-    if not type.is_valid():
-        raise Error("A render target type must be one of the three")
+    require_target_type(type)
     if len(outputs) == 0 or outputs[0] != OUTPUT_COLOR:
         raise Error("A render target's first output must be the color")
     for index in range(1, len(outputs)):
@@ -1674,8 +1690,7 @@ struct RenderTarget(Movable, SampleSource):
             Error: If the wrap mode is none of the named values, or the
                 type is none of the three.
         """
-        if not type.is_valid():
-            raise Error("A render target type must be one of the three")
+        require_target_type(type)
         if type == UNSIGNED_BYTE_TARGET:
             return depth_texture_of_buffer(
                 self.width, self.height, self.depth, wrap, self.depth_mode
