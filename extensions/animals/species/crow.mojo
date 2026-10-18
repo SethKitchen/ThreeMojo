@@ -36,7 +36,7 @@ from extensions.animals.kit import (
     EyeSpec,
     sculpt_eye_socket,
 )
-from extensions.animals.noise import fbm3
+from extensions.animals.noise import fbm3, centered_fbm
 from extensions.animals.options import AnimalOptions, AnimalRandom
 from extensions.animals.rig import Rig
 from extensions.sdf.field import SdfModel
@@ -748,7 +748,7 @@ def crow_paint(
     var p = s.p
     var n = s.n
     var h = p - HEAD_O
-    var cv = fbm3(p * 40.0, 3) - 0.5
+    var cv = centered_fbm(p, 40.0, 3)
     var cond1 = tag == "bill" or tag == "mandible" or tag == "gonys"
     if cond1:
         var gape = tag != "bill" and h.z > 0.02 and abs(h.y + 0.006) < 0.0012

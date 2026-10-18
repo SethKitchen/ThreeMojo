@@ -99,6 +99,46 @@ def fbm3(p: V3, octaves: Int = 4) -> Float64:
     return s / n if n > 0.0 else 0.5
 
 
+def centered_fbm(
+    point: V3, scale: Float64, octaves: Int, shift: Float64 = 0.0
+) -> Float64:
+    """Return fractal noise at one scale on each axis, centered on zero.
+
+    Args:
+        point: The sample.
+        scale: Cells per unit on each axis.
+        octaves: How many octaves `fbm3` adds.
+        shift: An extra offset on x.
+
+    Returns:
+        The noise, about minus one half through one half.
+    """
+    return (
+        fbm3(
+            V3(point.x * scale + shift, point.y * scale, point.z * scale),
+            octaves,
+        )
+        - 0.5
+    )
+
+
+def centered_value(point: V3, scale: Float64, shift: Float64) -> Float64:
+    """Return value noise at one scale on each axis, centered on zero.
+
+    Args:
+        point: The sample.
+        scale: Cells per unit on each axis.
+        shift: An extra offset on x.
+
+    Returns:
+        The noise, about minus one half through one half.
+    """
+    return (
+        vnoise3(V3(point.x * scale + shift, point.y * scale, point.z * scale))
+        - 0.5
+    )
+
+
 @fieldwise_init
 struct Cell(ImplicitlyCopyable):
     """The nearest feature of cell noise: its distance, its gap to the

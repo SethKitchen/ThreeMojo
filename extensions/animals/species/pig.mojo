@@ -48,7 +48,7 @@ from extensions.animals.kit import (
     stream_of,
     lid_distance,
 )
-from extensions.animals.noise import fbm3, vnoise3
+from extensions.animals.noise import fbm3, vnoise3, centered_fbm
 from extensions.animals.options import (
     FEMALE,
     JUVENILE,
@@ -2039,7 +2039,7 @@ def pig_paint(
     var haze = 0.06 * smoothstep(0.55, 0.85, vnoise3(p * 700.0))
     c = mix3(c, bristle, haze)
     # A faint, broad warm variation of the skin.
-    var cv = fbm3(p * 3.0 + V3(off.z, 0.0, 0.0), 2) - 0.5
+    var cv = centered_fbm(p, 3.0, 2, off.z)
     if region != 7:
         c = channel_gain(c, cv, 0.035, 0.012, 0.012)
     var muddy = region <= 1

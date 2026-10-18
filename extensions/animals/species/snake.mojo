@@ -41,7 +41,7 @@ from extensions.animals.kit import (
     eye_frame_of,
     sculpt_eye_socket,
 )
-from extensions.animals.noise import fbm3, ihash
+from extensions.animals.noise import ihash, centered_fbm
 from extensions.animals.options import AnimalOptions, AnimalRandom
 from extensions.animals.rig import Rig
 from extensions.sdf.field import SdfModel
@@ -1117,8 +1117,8 @@ def snake_paint(
     var w = plan.head_w * plan.kh
     var hh = plan.head_h * plan.kh
     var kh = plan.kh
-    var nz_f = fbm3(p * 60.0, 3) - 0.5
-    var n_lo = fbm3(p * 9.0, 3) - 0.5
+    var nz_f = centered_fbm(p, 60.0, 3)
+    var n_lo = centered_fbm(p, 9.0, 3)
     if bone == "jaw":
         # The lower jaw: pale labials outside, the mouth lining inside.
         var mouth = n.y > 0.6 and p.y > 0.32 * hh and abs(p.x) < 0.12 * w

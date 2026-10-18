@@ -50,7 +50,7 @@ from extensions.animals.kit import (
     mirrored_blob,
     hashed_stream,
 )
-from extensions.animals.noise import fbm3
+from extensions.animals.noise import centered_fbm
 from extensions.animals.options import AnimalOptions, AnimalRandom
 from extensions.animals.rig import Rig, quadruped_bones, tail_chain
 from extensions.sdf.field import SdfModel
@@ -1350,9 +1350,9 @@ def rat_paint(
             ag *= 1.0 - 0.8 * leg * (1.0 if distal else 0.0)
     if hooded:
         var d = _hood(t, p, n, bone, region)
-        d += (fbm3(p * 1200.0, 2) - 0.5) * 0.0006
+        d += (centered_fbm(p, 1200.0, 2)) * 0.0006
         c = mix3(c, pal.get("hood"), smoothstep(0.0004, -0.0004, d))
-    var cv = fbm3(p * 90.0, 3) - 0.5
+    var cv = centered_fbm(p, 90.0, 3)
     c = channel_gain(c, cv, 0.16, 0.13, 0.1)
     c = grizzle(c, p, 1400.0, 0.06 + 0.3 * clamp(ag, 0.0, 1.0))
     return Paint(c, FUR)

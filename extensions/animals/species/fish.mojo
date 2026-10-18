@@ -37,7 +37,7 @@ from extensions.animals.kit import (
     hashed_stream,
     side_sign,
 )
-from extensions.animals.noise import cells3, fbm3
+from extensions.animals.noise import cells3, centered_fbm
 from extensions.animals.options import AnimalOptions, AnimalRandom
 from extensions.animals.rig import Rig
 from extensions.sdf.field import SdfModel
@@ -1348,7 +1348,7 @@ def fish_paint(
     var morph = Int(t.get("morph", 0.0))
     var shade = t.get("coatShade", 0.0)
     var seed = Int(t.get("coatSeed", 0.0)) % 9973
-    var noise = fbm3(p * (9.0 / sl), 3) - 0.5
+    var noise = centered_fbm(p, (9.0 / sl), 3)
     var u = clamp(g.u(p.z), 0.0, 1.3)
     var uc = min(u, 1.0)
     var e = (p.y - g.yc(uc)) / max(1e-6, g.hd(uc))
@@ -1510,7 +1510,7 @@ def fish_paint(
         var patched = k == 0 or k == 1 or k == 6
         if patched:
             var q = p + V3(1.0, 1.0, 1.0) * (
-                0.04 * sl * (fbm3(p * (14.0 / sl), 2) - 0.5)
+                0.04 * sl * (centered_fbm(p, (14.0 / sl), 2))
             )
             var d = _spot(q, 0.12 * sl, 0.07 * sl, seed)
             c = mix3(c, pal.get("spot"), smoothstep(0.004 * sl, -0.004 * sl, d))

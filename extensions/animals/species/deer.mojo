@@ -47,7 +47,7 @@ from extensions.animals.kit import (
     is_limb,
     pick_weighted,
 )
-from extensions.animals.noise import cells3, fbm3, vnoise3
+from extensions.animals.noise import cells3, vnoise3, centered_fbm
 from extensions.animals.options import (
     ADULT,
     JUVENILE,
@@ -1383,7 +1383,7 @@ def deer_paint(
     var n = s.n
     if s.part == HORN:
         return _paint_antler(pal, t, tag, p)
-    var jag = (fbm3(p * 70.0, 2) - 0.5) * 0.012
+    var jag = (centered_fbm(p, 70.0, 2)) * 0.012
     var leg = 1.0 if is_limb(bone) else 0.0
     var c: V3
     var wsdf = 1.0
@@ -1726,6 +1726,6 @@ def _paint_head(
 
 def _fur(c: V3, p: V3) -> V3:
     # Low-frequency color variation and a fine hair grain.
-    var cv = fbm3(p * 7.0, 3) - 0.5
+    var cv = centered_fbm(p, 7.0, 3)
     var v = channel_gain(c, cv, 0.14, 0.12, 0.1)
     return grizzle(v, p, 220.0, 0.06)

@@ -43,7 +43,7 @@ from extensions.animals.kit import (
     is_limb,
     mirrored_blob,
 )
-from extensions.animals.noise import fbm3
+from extensions.animals.noise import centered_fbm
 from extensions.animals.options import AnimalOptions, AnimalRandom
 from extensions.animals.rig import Rig, quadruped_bones, tail_chain
 from extensions.sdf.field import SdfModel
@@ -1156,10 +1156,10 @@ def rabbit_paint(
     var dutch = t.get("dutch", 0.0) > 0.0
     if dutch:
         var d = _dutch(p, bone, region)
-        d += (fbm3(p * 900.0, 2) - 0.5) * 0.004
+        d += (centered_fbm(p, 900.0, 2)) * 0.004
         c = mix3(c, pal.get("dutchWhite"), smoothstep(0.0008, -0.0008, d))
         ag *= smoothstep(-0.001, 0.001, d)
-    var cv = fbm3(p * 40.0, 3) - 0.5
+    var cv = centered_fbm(p, 40.0, 3)
     c = channel_gain(c, cv, 0.14, 0.12, 0.09)
     c = grizzle(c, p, 700.0, 0.06 + 0.22 * clamp(ag, 0.0, 1.0))
     return Paint(c, FUR)

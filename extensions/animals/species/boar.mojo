@@ -54,7 +54,7 @@ from extensions.animals.kit import (
     imul32,
     stream_of,
 )
-from extensions.animals.noise import fbm3, ihash, vnoise3
+from extensions.animals.noise import fbm3, ihash, vnoise3, centered_fbm
 from extensions.animals.options import (
     ADULT,
     JUVENILE,
@@ -1535,7 +1535,7 @@ def boar_paint(
             agouti = min(1.0, agouti + 0.2)
     if piglet:
         c = mix3(c, pal.get("stripe"), smoothstep(0.003, -0.003, pd))
-    var cv = fbm3(p * 6.0, 3) - 0.5
+    var cv = centered_fbm(p, 6.0, 3)
     c = channel_gain(c, cv, 0.16, 0.13, 0.1)
     # Coarse bristles: lock-to-lock streaks, then the pale tips.
     var st = vnoise3(V3(p.x * 160.0, p.y * 160.0, p.z * 25.0))

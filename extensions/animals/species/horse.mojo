@@ -43,7 +43,7 @@ from extensions.animals.kit import (
     is_limb,
     pick_weighted,
 )
-from extensions.animals.noise import cells3, fbm3, vnoise3
+from extensions.animals.noise import cells3, fbm3, vnoise3, centered_fbm
 from extensions.animals.options import MALE, AnimalOptions, AnimalRandom
 from extensions.animals.rig import Rig, tail_chain
 from extensions.sdf.field import SdfModel
@@ -1339,7 +1339,7 @@ def _face_white(t: Traits, h: V3, n: V3, hf: HeadFrame) -> Float64:
 
 def _fur(c: V3, p: V3) -> V3:
     # Low-frequency color variation and a fine hair grain.
-    var cv = fbm3(p * 5.0, 3) - 0.5
+    var cv = centered_fbm(p, 5.0, 3)
     var v = channel_gain(c, cv, 0.14, 0.12, 0.1)
     return grizzle(v, p, 160.0, 0.05)
 
@@ -1379,7 +1379,7 @@ def horse_paint(
     var n = s.n
     var coat = t.variant
     var hf = _hf()
-    var jag = (fbm3(p * 60.0, 2) - 0.5) * 0.02
+    var jag = (centered_fbm(p, 60.0, 2)) * 0.02
     var black_points = (
         coat == BAY or coat == DARK_BAY or coat == DUN or coat == BUCKSKIN
     )
@@ -1425,7 +1425,7 @@ def _paint_head(
     var p = s.p
     var hf = _hf()
     var h = hf.local(p)
-    var jag = (fbm3(p * 60.0, 2) - 0.5) * 0.02
+    var jag = (centered_fbm(p, 60.0, 2)) * 0.02
     var wsdf = _face_white(t, h, s.n, hf) + jag
     var white = wsdf < 0.0 and t.variant != GRAY
     var c = pal.get("head")
