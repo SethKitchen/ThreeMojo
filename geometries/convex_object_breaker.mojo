@@ -46,7 +46,7 @@ from math.norm import reciprocal_normalized3
 from geometries.convex import convex
 from core.buffer_geometry import BufferGeometry, NORMAL, POSITION
 from math.bounds import Plane
-from math.quaternion import Quaternion
+from math.quaternion import Quaternion, quaternion_terms
 from math.utils import SeededRandom
 from math.vector3 import Vector3
 from std.benchmark import black_box
@@ -559,18 +559,9 @@ def _local_plane(plane: _LocalPlane, object: BreakableObject) -> _LocalPlane:
     var y = Float64(q.y)
     var z = Float64(q.z)
     var w = Float64(q.w)
-    var x2 = x + x
-    var y2 = y + y
-    var z2 = z + z
-    var xx = x * x2
-    var xy = x * y2
-    var xz = x * z2
-    var yy = y * y2
-    var yz = y * z2
-    var zz = z * z2
-    var wx = w * x2
-    var wy = w * y2
-    var wz = w * z2
+    var xx, xy, xz, yy, yz, zz, wx, wy, wz = quaternion_terms[DType.float64](
+        x, y, z, w
+    )
     var e: List[Float64] = [
         1 - (yy + zz),
         xy + wz,

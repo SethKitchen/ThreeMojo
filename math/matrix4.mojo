@@ -1173,42 +1173,20 @@ def compose(
     Returns:
         The transform.
     """
-    var x = quaternion.x
-    var y = quaternion.y
-    var z = quaternion.z
-    var w = quaternion.w
-    var x2 = x + x
-    var y2 = y + y
-    var z2 = z + z
-    var xx = x * x2
-    var xy = x * y2
-    var xz = x * z2
-    var yy = y * y2
-    var yz = y * z2
-    var zz = z * z2
-    var wx = w * x2
-    var wy = w * y2
-    var wz = w * z2
+    var matrix = quaternion.to_matrix()
     var sx = scale.x
     var sy = scale.y
     var sz = scale.z
-    var matrix = Matrix4()
-    matrix.set(
-        (1 - (yy + zz)) * sx,
-        (xy - wz) * sy,
-        (xz + wy) * sz,
-        position.x,
-        (xy + wz) * sx,
-        (1 - (xx + zz)) * sy,
-        (yz - wx) * sz,
-        position.y,
-        (xz - wy) * sx,
-        (yz + wx) * sy,
-        (1 - (xx + yy)) * sz,
-        position.z,
-        0,
-        0,
-        0,
-        1,
-    )
+    matrix.elements[0] *= sx
+    matrix.elements[1] *= sx
+    matrix.elements[2] *= sx
+    matrix.elements[4] *= sy
+    matrix.elements[5] *= sy
+    matrix.elements[6] *= sy
+    matrix.elements[8] *= sz
+    matrix.elements[9] *= sz
+    matrix.elements[10] *= sz
+    matrix.elements[12] = position.x
+    matrix.elements[13] = position.y
+    matrix.elements[14] = position.z
     return matrix^

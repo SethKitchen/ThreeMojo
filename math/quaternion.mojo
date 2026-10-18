@@ -79,6 +79,52 @@ def quaternion_rotate[
     )
 
 
+def quaternion_terms[
+    dtype: DType
+](
+    x: SIMD[dtype, 1],
+    y: SIMD[dtype, 1],
+    z: SIMD[dtype, 1],
+    w: SIMD[dtype, 1],
+) -> Tuple[
+    SIMD[dtype, 1],
+    SIMD[dtype, 1],
+    SIMD[dtype, 1],
+    SIMD[dtype, 1],
+    SIMD[dtype, 1],
+    SIMD[dtype, 1],
+    SIMD[dtype, 1],
+    SIMD[dtype, 1],
+    SIMD[dtype, 1],
+]:
+    """Return the nine products a quaternion writes into a matrix.
+
+    Args:
+        x: The quaternion's x.
+        y: The quaternion's y.
+        z: The quaternion's z.
+        w: The quaternion's real part.
+
+    Returns:
+        `xx`, `xy`, `xz`, `yy`, `yz`, `zz`, `wx`, `wy`, and `wz`. Each
+        product doubles one component first, as `Quaternion.to_matrix` does.
+    """
+    var x2 = x + x
+    var y2 = y + y
+    var z2 = z + z
+    return (
+        x * x2,
+        x * y2,
+        x * z2,
+        y * y2,
+        y * z2,
+        z * z2,
+        w * x2,
+        w * y2,
+        w * z2,
+    )
+
+
 @fieldwise_init
 struct Quaternion(Equatable, ImplicitlyCopyable):
     """A rotation as (x, y, z, w), the identity being (0, 0, 0, 1)."""
@@ -207,18 +253,9 @@ struct Quaternion(Equatable, ImplicitlyCopyable):
         Returns:
             The rotation matrix.
         """
-        var x2 = self.x + self.x
-        var y2 = self.y + self.y
-        var z2 = self.z + self.z
-        var xx = self.x * x2
-        var xy = self.x * y2
-        var xz = self.x * z2
-        var yy = self.y * y2
-        var yz = self.y * z2
-        var zz = self.z * z2
-        var wx = self.w * x2
-        var wy = self.w * y2
-        var wz = self.w * z2
+        var xx, xy, xz, yy, yz, zz, wx, wy, wz = quaternion_terms[
+            DType.float32
+        ](self.x, self.y, self.z, self.w)
         var matrix = Matrix4()
         matrix.set(
             1 - (yy + zz),
