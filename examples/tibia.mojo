@@ -13,6 +13,8 @@ comes from Trotter and Gleser 1952. The surface is the cortical bone map.
 The program also prints each bone's tissue mass and Earth weight.
 """
 
+from examples.output import example_destination
+
 from cameras.perspective_camera import PerspectiveCamera
 from core.assets import Assets
 from core.object3d import NodeId, Object3D
@@ -30,7 +32,6 @@ from render.apng import encode
 from render.framebuffer import Color, Framebuffer
 from renderers.renderer import Renderer, available_workers
 from std.pathlib import Path
-from std.sys import argv
 from units.si import (
     Angle,
     DEGREE,
@@ -131,10 +132,7 @@ def add_tibia(
 
 
 def main() raises:
-    var args = argv()
-    var destination = String(DEFAULT_OUTPUT)
-    if len(args) > 1:
-        destination = String(args[1])
+    var destination = example_destination(String(DEFAULT_OUTPUT))
 
     var renderer = Renderer(WIDTH, HEIGHT, workers=available_workers())
     renderer.set_background(Color(18, 16, 14))

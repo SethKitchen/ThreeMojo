@@ -13,6 +13,8 @@ The deflection is drawn scaled up, growing with the load, and colored
 from the edges to the middle.
 """
 
+from examples.output import example_destination
+
 from cameras.perspective_camera import PerspectiveCamera
 from core.assets import Assets
 from core.buffer_attribute import BufferAttribute
@@ -29,7 +31,6 @@ from render.framebuffer import Color, Framebuffer
 from renderers.renderer import Renderer, available_workers
 from std.math import cos, pi, sin, sqrt
 from std.pathlib import Path
-from std.sys import argv
 from units.si import DEGREE, METER, Angle, Length
 from extensions.building.material import concrete
 from extensions.structure.ids import NodeId as StructureNode
@@ -210,10 +211,7 @@ def _write(frames: List[Framebuffer]) raises:
     Raises:
         Error: If the file cannot be written.
     """
-    var args = argv()
-    var destination = String(DEFAULT_OUTPUT)
-    if len(args) > 1:
-        destination = String(args[1])
+    var destination = example_destination(String(DEFAULT_OUTPUT))
     Path(destination).write_bytes(encode(frames, delay_ms=DELAY_MS))
     print("Wrote", destination, "-", len(frames), "frames")
 

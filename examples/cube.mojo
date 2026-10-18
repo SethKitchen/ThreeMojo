@@ -19,7 +19,7 @@ that `Triangle.area2` already computes. A concave model, or two objects
 overlapping, needs the depth buffer, which is what `cubes.mojo` adds.
 """
 
-from examples.output import write_example
+from examples.output import example_destination, write_example
 
 from cameras.perspective_camera import PerspectiveCamera
 from core.buffer_geometry import POSITION, BufferGeometry
@@ -30,7 +30,6 @@ from math.vector2 import Vector2
 from math.vector3 import Vector3
 from render.framebuffer import Color, Framebuffer
 from render.rasterizer import Triangle, rasterize
-from std.sys import argv
 from units.si import Angle, DEGREE, Length, METER
 
 comptime DEFAULT_OUTPUT = "out/cube.png"
@@ -98,10 +97,7 @@ def frame_at(
 
 
 def main() raises:
-    var args = argv()
-    var destination = String(DEFAULT_OUTPUT)
-    if len(args) > 1:
-        destination = String(args[1])
+    var destination = example_destination(String(DEFAULT_OUTPUT))
 
     var camera = PerspectiveCamera(
         Angle(50.0, DEGREE),

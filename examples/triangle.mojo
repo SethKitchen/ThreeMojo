@@ -12,6 +12,8 @@ actually display. Pass a path ending in `.ppm` to get the human-readable text
 format instead.
 """
 
+from examples.output import example_destination
+
 from core.clock import Clock
 from math.vector2 import Vector2
 from render.framebuffer import Color, Framebuffer
@@ -19,17 +21,14 @@ from render.png import encode as encode_png
 from render.ppm import encode as encode_ppm
 from render.rasterizer import Triangle, rasterize
 from std.pathlib import Path
-from std.sys import argv, stderr
+from std.sys import stderr
 from units.si import MILLISECOND
 
 comptime DEFAULT_OUTPUT = "out/triangle.png"
 
 
 def main() raises:
-    var args = argv()
-    var destination = String(DEFAULT_OUTPUT)
-    if len(args) > 1:
-        destination = String(args[1])
+    var destination = example_destination(String(DEFAULT_OUTPUT))
 
     var background = Color(20, 24, 32)
     var foreground = Color(255, 128, 32)

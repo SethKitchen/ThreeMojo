@@ -12,7 +12,7 @@ with `write_object_json` and read with `load_object_json`. The picture
 is the scene that came back, not the one that was written.
 """
 
-from examples.output import write_example
+from examples.output import example_destination, write_example
 
 from cameras.perspective_camera import PerspectiveCamera
 from core.assets import Assets
@@ -28,7 +28,6 @@ from objects.mesh import Mesh
 from render.framebuffer import Color, Framebuffer
 from renderers.renderer import Renderer, available_workers
 from std.os import remove
-from std.sys import argv
 from units.si import Angle, DEGREE, Length, METER
 
 comptime DEFAULT_OUTPUT = "out/scenejson.png"
@@ -39,10 +38,7 @@ comptime DELAY_MS = 55
 
 
 def main() raises:
-    var args = argv()
-    var destination = String(DEFAULT_OUTPUT)
-    if len(args) > 1:
-        destination = String(args[1])
+    var destination = example_destination(String(DEFAULT_OUTPUT))
     var document = String(destination.removesuffix(".png")) + ".json"
 
     var assets = Assets()

@@ -12,6 +12,8 @@ render view draws the storeys up to the first shaft storey, so the plan,
 the doors and the furniture show.
 """
 
+from examples.output import example_destination
+
 from cameras.perspective_camera import PerspectiveCamera
 from core.assets import Assets
 from core.object3d import NodeId, Object3D
@@ -22,7 +24,6 @@ from render.apng import encode
 from render.framebuffer import Color, Framebuffer
 from renderers.renderer import Renderer, available_workers
 from std.pathlib import Path
-from std.sys import argv
 from units.si import DEGREE, METER, Angle, Length
 from extensions.building.generate.plan import RESIDENTIAL_FLOOR
 from extensions.building.generate.tower import TowerOptions, generate_tower
@@ -103,10 +104,7 @@ def _write(frames: List[Framebuffer]) raises:
     Raises:
         Error: If the file cannot be written.
     """
-    var args = argv()
-    var destination = String(DEFAULT_OUTPUT)
-    if len(args) > 1:
-        destination = String(args[1])
+    var destination = example_destination(String(DEFAULT_OUTPUT))
     Path(destination).write_bytes(encode(frames, delay_ms=DELAY_MS))
     print("Wrote", destination, "-", len(frames), "frames")
 

@@ -12,6 +12,8 @@ ligaments and muscles. The program also prints tissue mass and Earth
 weight.
 """
 
+from examples.output import example_destination
+
 from cameras.perspective_camera import PerspectiveCamera
 from core.assets import Assets
 from core.object3d import NodeId, Object3D
@@ -40,7 +42,6 @@ from render.apng import encode
 from render.framebuffer import Color, Framebuffer
 from renderers.renderer import Renderer, available_workers
 from std.pathlib import Path
-from std.sys import argv
 from units.si import (
     Angle,
     DEGREE,
@@ -95,10 +96,7 @@ def _print_mass(label: String, grams: Float32, newtons: Float32, lbf: Float32):
 
 
 def main() raises:
-    var args = argv()
-    var destination = String(DEFAULT_OUTPUT)
-    if len(args) > 1:
-        destination = String(args[1])
+    var destination = example_destination(String(DEFAULT_OUTPUT))
 
     var person = HumanoidSpec(Length(6.0, FOOT), MALE)
     var bone = foot_bone_mass(person, CALCANEUS)

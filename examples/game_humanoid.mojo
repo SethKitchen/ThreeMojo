@@ -19,6 +19,8 @@ The optional second argument is the baked file; the default is
 budget of triangles for the skin; the default is 10000.
 """
 
+from examples.output import example_destination
+
 from animation.animation_clip import AnimationClip
 from animation.animation_mixer import (
     ONCE,
@@ -116,9 +118,7 @@ def _bake(path: String, triangles: Int) raises:
 
 def main() raises:
     var args = argv()
-    var destination = String(DEFAULT_OUTPUT)
-    if len(args) > 1:
-        destination = String(args[1])
+    var destination = example_destination(String(DEFAULT_OUTPUT))
     var baked = String(DEFAULT_BAKED)
     if len(args) > 2:
         baked = String(args[2])

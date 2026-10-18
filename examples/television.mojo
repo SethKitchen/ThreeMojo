@@ -14,7 +14,7 @@ shows both screens on a stand. The ramp the box is shaded through is a
 data texture: three numbers, never an image file.
 """
 
-from examples.output import write_example
+from examples.output import example_destination, write_example
 
 from cameras.perspective_camera import PerspectiveCamera
 from core.assets import Assets
@@ -32,7 +32,6 @@ from render.target import RenderTarget
 from render.texture import IGNORED, data_texture
 
 from renderers.renderer import Renderer, available_workers
-from std.sys import argv
 from units.si import Angle, DEGREE, Length, METER
 
 comptime DEFAULT_OUTPUT = "out/television.png"
@@ -77,10 +76,7 @@ def a_camera(
 
 
 def main() raises:
-    var args = argv()
-    var destination = String(DEFAULT_OUTPUT)
-    if len(args) > 1:
-        destination = String(args[1])
+    var destination = example_destination(String(DEFAULT_OUTPUT))
 
     # The box scene: a toon box under a lamp, shaded through a ramp built
     # from three numbers.

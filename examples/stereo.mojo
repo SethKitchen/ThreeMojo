@@ -14,7 +14,7 @@ ring stands in front of the box. The eyes are set wide apart for a
 scene this small, so the parallax shows at this size.
 """
 
-from examples.output import write_example
+from examples.output import example_destination, write_example
 
 from cameras.array_camera import ArrayCamera
 from cameras.perspective_camera import PerspectiveCamera
@@ -32,7 +32,6 @@ from objects.mesh import Mesh
 from render.framebuffer import Color, Framebuffer
 from render.rect import Rect
 from renderers.renderer import Renderer, available_workers
-from std.sys import argv
 from units.si import Angle, DEGREE, Length, METER
 
 comptime DEFAULT_OUTPUT = "out/stereo.png"
@@ -45,10 +44,7 @@ comptime RIGHT = Rect(WIDTH // 2, 0, WIDTH // 2, HEIGHT)
 
 
 def main() raises:
-    var args = argv()
-    var destination = String(DEFAULT_OUTPUT)
-    if len(args) > 1:
-        destination = String(args[1])
+    var destination = example_destination(String(DEFAULT_OUTPUT))
     var renderer = Renderer(WIDTH, HEIGHT, workers=available_workers())
     renderer.set_background(Color(16, 18, 26))
     var assets = Assets()

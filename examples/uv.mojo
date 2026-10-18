@@ -27,6 +27,8 @@ a `plane` laid flat: it is built facing +z, and a quarter turn about x makes
 that +y.
 """
 
+from examples.output import example_destination
+
 from cameras.perspective_camera import PerspectiveCamera
 from core.assets import Assets
 from core.clock import Clock
@@ -43,7 +45,7 @@ from render.rasterizer import SHADE_UV, RasterVertex, rasterize_shaded
 from render.target import RenderTarget
 from renderers.renderer import Renderer, available_workers
 from std.pathlib import Path
-from std.sys import argv, stderr
+from std.sys import stderr
 from units.si import Angle, DEGREE, Length, METER, MILLISECOND
 
 comptime DEFAULT_OUTPUT = "out/uv.png"
@@ -117,10 +119,7 @@ def flattened(corners: List[RasterVertex]) -> List[RasterVertex]:
 
 
 def main() raises:
-    var args = argv()
-    var destination = String(DEFAULT_OUTPUT)
-    if len(args) > 1:
-        destination = String(args[1])
+    var destination = example_destination(String(DEFAULT_OUTPUT))
 
     var background = Color(12, 12, 16)
     var renderer = Renderer(WIDTH, HEIGHT, workers=available_workers())

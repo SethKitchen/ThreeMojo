@@ -12,7 +12,7 @@ target. Each half is cleared to its own background and drawn by its own
 camera, and neither touches the other. The target is resolved once.
 """
 
-from examples.output import write_example
+from examples.output import example_destination, write_example
 
 from cameras.orthographic_camera import OrthographicCamera, centered
 from cameras.perspective_camera import PerspectiveCamera
@@ -30,7 +30,6 @@ from render.framebuffer import Color, Framebuffer
 from render.rect import Rect
 from render.target import RenderTarget
 from renderers.renderer import Renderer, available_workers
-from std.sys import argv
 from units.si import Angle, DEGREE, Length, METER
 
 comptime DEFAULT_OUTPUT = "out/split.png"
@@ -89,10 +88,7 @@ def frame_at(
 
 
 def main() raises:
-    var args = argv()
-    var destination = String(DEFAULT_OUTPUT)
-    if len(args) > 1:
-        destination = String(args[1])
+    var destination = example_destination(String(DEFAULT_OUTPUT))
     var renderer = Renderer(WIDTH, HEIGHT, workers=available_workers())
     renderer.set_scissor_test(True)
     var assets = Assets()

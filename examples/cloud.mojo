@@ -13,7 +13,7 @@ the cloud, and `resolve` makes the picture. The cloud turns one whole
 turn.
 """
 
-from examples.output import write_example
+from examples.output import example_destination, write_example
 
 from cameras.perspective_camera import PerspectiveCamera
 from core.assets import Assets
@@ -32,7 +32,6 @@ from render.splat_raster import draw_gaussian_splat
 from render.target import RenderTarget
 from renderers.renderer import Renderer, available_workers
 from std.math import cos, pi, sin, sqrt
-from std.sys import argv
 from units.si import DEGREE, METER, Angle, Length
 
 comptime DEFAULT_OUTPUT = "out/gaussian.png"
@@ -159,10 +158,7 @@ def frame_at(
 
 
 def main() raises:
-    var args = argv()
-    var destination = String(DEFAULT_OUTPUT)
-    if len(args) > 1:
-        destination = String(args[1])
+    var destination = example_destination(String(DEFAULT_OUTPUT))
 
     var renderer = Renderer(WIDTH, HEIGHT, workers=available_workers())
     renderer.set_background(Color(12, 14, 20))
