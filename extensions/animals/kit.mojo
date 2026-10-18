@@ -20,6 +20,7 @@ from extensions.sdf.vector import (
     V3,
     dot,
     frame_zy,
+    normalize,
 )
 from std.math import atan2, cos, exp, pi, sin, sqrt
 
@@ -36,6 +37,25 @@ def side_sign(side: String) -> Float64:
         `1` for `"L"`, and `-1` otherwise.
     """
     return 1.0 if side == "L" else -1.0
+
+
+def ear_ends(rig: Rig, side: String) raises -> Tuple[Float64, V3, V3, V3]:
+    """Return one ear's side sign, base, tip and unit axis.
+
+    Args:
+        rig: The animal's rig.
+        side: `"L"` or `"R"`.
+
+    Returns:
+        One for the left and minus one for the right, then the ear base,
+        the ear tip, and the unit axis from the base to the tip.
+
+    Raises:
+        Error: If the rig lacks an ear joint.
+    """
+    var base = rig.j("earBase" + side)
+    var tip = rig.j("earTip" + side)
+    return side_sign(side), base, tip, normalize(tip - base)
 
 
 @fieldwise_init

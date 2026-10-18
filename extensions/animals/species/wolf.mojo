@@ -34,6 +34,7 @@ from extensions.sdf.sculpt import (
 )
 from extensions.animals.kit import (
     side_sign,
+    ear_ends,
     digitigrade_fore,
     digitigrade_hind,
     EyeSpec,
@@ -727,10 +728,7 @@ def wolf_sculpt(mut m: SdfModel, rig: Rig, t: Traits) raises:
 
     # EARS: erect and triangular, set wide, with a cupped front.
     for side in [String("L"), String("R")]:  # pragma: no branch
-        var s = side_sign(side)
-        var base = rig.j("earBase" + side)
-        var tip = rig.j("earTip" + side)
-        var up = normalize(tip - base)
+        var s, base, tip, up = ear_ends(rig, side)
         var facing = normalize(V3(0.32 * s, 0.05, 1))
         var lat = normalize(cross(up, facing))
         var eb = rig.bone("ear" + side)

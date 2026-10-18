@@ -34,6 +34,7 @@ from extensions.animals.parts import (
 from extensions.sdf.sculpt import ell_y
 from extensions.animals.kit import (
     side_sign,
+    ear_ends,
     digitigrade_fore,
     digitigrade_hind,
     EyeSpec,
@@ -696,10 +697,7 @@ def deer_sculpt(mut m: SdfModel, rig: Rig, t: Traits) raises:
 
     # EARS: large, broad and cupped.
     for side in [String("L"), String("R")]:  # pragma: no branch
-        var s = side_sign(side)
-        var base = rig.j("earBase" + side)
-        var tip = rig.j("earTip" + side)
-        var up = normalize(tip - base)
+        var s, base, tip, up = ear_ends(rig, side)
         var facing = normalize(hf.dir(V3(0, 0.3, 1)) * 0.8 + V3(0.5 * s, 0, 0))
         var lat = normalize(cross(up, facing))
         var eb = rig.bone("ear" + side)
