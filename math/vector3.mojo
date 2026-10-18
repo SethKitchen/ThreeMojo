@@ -846,6 +846,25 @@ def append_vector3(mut values: List[Float32], point: Vector3):
     values.append(point.z)
 
 
+def vector3_from_float64(x: Float64, y: Float64, z: Float64) -> Vector3:
+    """Return a `Vector3` from three `Float64` components.
+
+    Each component is rounded to `Float32`.
+
+    Args:
+        x: The first component.
+        y: The second component.
+        z: The third component.
+
+    Returns:
+        The rounded vector.
+
+    Raises:
+        Error: Never.
+    """
+    return Vector3(Float32(x), Float32(y), Float32(z))
+
+
 def append_float64_xyz(
     mut values: List[Float32], x: Float64, y: Float64, z: Float64
 ):
@@ -863,9 +882,7 @@ def append_float64_xyz(
     Raises:
         Error: Never.
     """
-    values.append(Float32(x))
-    values.append(Float32(y))
-    values.append(Float32(z))
+    append_vector3(values, vector3_from_float64(x, y, z))
 
 
 def mix_delta3(start: Vector3, end: Vector3, t: Float32) -> Vector3:

@@ -27,7 +27,7 @@ from extensions.sdf.vector import V3, length
 from math.finite import require_non_negative_finite
 from math.matrix3 import Matrix3
 from math.quaternion import Quaternion
-from math.vector3 import Vector3
+from math.vector3 import Vector3, vector3_from_float64
 from std.math import pi, sqrt
 from units.si import KILOGRAM, METER, Length, Mass
 
@@ -43,10 +43,6 @@ def to_physics(p: Vector3) -> Vector3:
         In the physics frame: `+z` up, `+x` forward.
     """
     return Vector3(p.z, p.x, p.y)
-
-
-def _wide(v: V3) -> Vector3:
-    return Vector3(Float32(v.x), Float32(v.y), Float32(v.z))
 
 
 def _tensor(s: SegmentInertia) -> Matrix3:
@@ -116,9 +112,10 @@ def segment_bodies(animal: Animal, mass: BodyMass) raises -> List[RigidBody]:
         ref b = animal.rig.bones[i]
         var head = animal.rig.j(b.head)
         var tail = animal.rig.j(b.tail)
-        var span = length(tail - head)
+        var delta = tail - head
+        var span = length(delta)
         var s = mass.bone(i, Float32(span))
-        var along = to_physics(_wide(tail - head))
+        var along = to_physics(vector3_from_float64(delta.x, delta.y, delta.z))
         var turn = Quaternion.identity()
         if span > 0.0:
             along.normalize()
@@ -130,7 +127,7 @@ def segment_bodies(animal: Animal, mass: BodyMass) raises -> List[RigidBody]:
             Length(Float32(radius), METER),
             Length(Float32(0.5 * span), METER),
         )
-        var origin = to_physics(_wide(head))
+        var origin = to_physics(vector3_from_float64(head.x, head.y, head.z))
         var body = RigidBody(DYNAMIC, shape^, s.mass, origin, turn)
         body.set_shape_pose(
             Vector3(0, 0, Float32(0.5 * span)), Quaternion.identity()

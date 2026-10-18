@@ -37,7 +37,7 @@ from math.norm import (
 )
 from math.quaternion import quaternion_rotate, quaternion_terms
 from math.utils import SeededRandom
-from math.vector3 import Vector3
+from math.vector3 import Vector3, vector3_from_float64
 from math.finite import require_finite
 from std.math import cos, isfinite, sin, sqrt
 from units.si import Angle, Length, METER, RADIAN
@@ -302,7 +302,7 @@ struct Vec3d(Equatable, ImplicitlyCopyable):
         Returns:
             The vector.
         """
-        return Vector3(Float32(self.x), Float32(self.y), Float32(self.z))
+        return vector3_from_float64(self.x, self.y, self.z)
 
 
 @fieldwise_init

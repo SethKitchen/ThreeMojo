@@ -40,7 +40,7 @@ limits, and explicit zero and nonfinite rules.
 """
 
 from core.ordinal import require_index_in_count
-from math.vector3 import Vector3
+from math.vector3 import Vector3, vector3_from_float64
 
 from math.triangle_normal import (
     _triangle_cross_wide,
@@ -472,9 +472,9 @@ struct SculptorMesh(Movable):
                 Float32(az * bx - ax * bz),
                 Float32(ax * by - ay * bx),
             )
-            var first = Vector3(Float32(v1.x), Float32(v1.y), Float32(v1.z))
-            var second = Vector3(Float32(v2.x), Float32(v2.y), Float32(v2.z))
-            var third = Vector3(Float32(v3.x), Float32(v3.y), Float32(v3.z))
+            var first = vector3_from_float64(v1.x, v1.y, v1.z)
+            var second = vector3_from_float64(v2.x, v2.y, v2.z)
+            var third = vector3_from_float64(v3.x, v3.y, v3.z)
             if not _ordinary_triangle_cross(
                 second - first, third - first, raw
             ) and _finite_triangle(first, second, third):

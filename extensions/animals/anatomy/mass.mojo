@@ -56,7 +56,7 @@ from math.finite import (
     require_positive_finite,
 )
 from math.utils import clamp, min3
-from math.vector3 import Vector3
+from math.vector3 import Vector3, vector3_from_float64
 from render.tasks import TaskGroup
 from std.math import ceil, isfinite, sqrt
 from std.sys import num_logical_cores
@@ -392,7 +392,7 @@ def _sample_task_checked(
             var share = clamp(0.5 - best / h, 0.0, 1.0)
             var m = share * cell_volume * input[].density[solid]
             var bone = model[].prims[solid].bone.value
-            var spot = Vector3(Float32(q.x), Float32(q.y), Float32(q.z))
+            var spot = vector3_from_float64(q.x, q.y, q.z)
             tallies[unsafe_offset=task * bones + bone]._add_cell(
                 m, spot, widths
             )

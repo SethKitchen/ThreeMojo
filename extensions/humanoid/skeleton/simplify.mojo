@@ -44,7 +44,7 @@ from core.search import first_match
 from math.bounds import enclose_point
 from math.curve_checks import require_at_least_one
 from math.utils import clamp
-from math.vector3 import Vector3, append_vector3
+from math.vector3 import Vector3, append_vector3, vector3_from_float64
 from render.tasks import TaskGroup
 from std.collections import Dict
 from std.math import max, min
@@ -840,9 +840,7 @@ struct _Collapser(Movable):
                     common += 1
         if common != shared:
             return False
-        var point = Vector3(
-            Float32(entry.x), Float32(entry.y), Float32(entry.z)
-        )
+        var point = vector3_from_float64(entry.x, entry.y, entry.z)
         if self._turns_over(u, v, point) or self._turns_over(v, u, point):
             return False
         self.positions[u] = point

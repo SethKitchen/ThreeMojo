@@ -35,7 +35,7 @@ all three.
 from core.ordinal import require_index_in_count
 from math.cross import cross_components
 from math.norm import dot3
-from math.vector3 import Vector3
+from math.vector3 import Vector3, vector3_from_float64
 from math.exact_predicates import (
     _collinear,
     _difference_compare,
@@ -365,7 +365,7 @@ struct ConvexHull(Movable):
         """
         require_hull_face(face, len(self.faces))
         var n = self._normal[self.faces[face]]
-        return Vector3(Float32(n.x), Float32(n.y), Float32(n.z))
+        return vector3_from_float64(n.x, n.y, n.z)
 
     def contains_point(self, point: Vector3) -> Bool:
         """Return whether a finite point is inside the hull or on it.
