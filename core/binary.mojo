@@ -8,9 +8,10 @@
 The caller checks that the read lies inside the buffer. The integer
 readers do not allocate and do not raise. `little_endian_u16`,
 `little_endian_u32`, `big_endian_u16`, and `big_endian_u32` read a fixed
-width. `little_endian_uint` reads zero through eight bytes. `copy_bytes`
-returns a new list and does not raise. `copy_byte_range` copies from one
-index up to another.
+width. `little_endian_uint` reads zero through eight bytes.
+`append_little_endian_u16` and `append_little_endian_u32` append a fixed
+width. `copy_bytes` returns a new list and does not raise.
+`copy_byte_range` copies from one index up to another.
 """
 
 
@@ -132,6 +133,40 @@ def little_endian_uint(bytes: List[UInt8], at: Int, width: Int) -> Int:
     for index in range(width):
         value |= Int(bytes[at + index]) << (8 * index)
     return value
+
+
+def append_little_endian_u16(mut out: List[UInt8], value: Int):
+    """Append the low sixteen bits of `value` as two little-endian bytes.
+
+    Args:
+        out: The buffer, extended in place.
+        value: The integer. Bits above the low sixteen are not written.
+
+    Returns:
+        Nothing.
+
+    Raises:
+        Error: Never.
+    """
+    out.append(UInt8(value & 0xFF))
+    out.append(UInt8((value >> 8) & 0xFF))
+
+
+def append_little_endian_u32(mut out: List[UInt8], value: Int):
+    """Append the low thirty-two bits of `value` as four little-endian bytes.
+
+    Args:
+        out: The buffer, extended in place.
+        value: The integer. Bits above the low thirty-two are not written.
+
+    Returns:
+        Nothing.
+
+    Raises:
+        Error: Never.
+    """
+    append_little_endian_u16(out, value)
+    append_little_endian_u16(out, value >> 16)
 
 
 def copy_bytes(bytes: List[UInt8], start: Int, count: Int) -> List[UInt8]:

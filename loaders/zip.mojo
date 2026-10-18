@@ -33,7 +33,13 @@ does not write ZIP64, so an archive must stay under 4 GiB. It checks all
 field lengths before it allocates or writes the archive.
 """
 
-from core.binary import copy_bytes, little_endian_u16, little_endian_u32
+from core.binary import (
+    append_little_endian_u16,
+    append_little_endian_u32,
+    copy_bytes,
+    little_endian_u16,
+    little_endian_u32,
+)
 from render.checksum import crc32
 from render.inflate import inflate
 
@@ -359,18 +365,6 @@ def unzip(bytes: List[UInt8]) raises -> List[ZipEntry]:
     return entries^
 
 
-def _put16(mut out: List[UInt8], value: Int):
-    """Append a little-endian 16-bit value."""
-    out.append(UInt8(value & 0xFF))
-    out.append(UInt8((value >> 8) & 0xFF))
-
-
-def _put32(mut out: List[UInt8], value: Int):
-    """Append a little-endian 32-bit value."""
-    _put16(out, value & 0xFFFF)
-    _put16(out, (value >> 16) & 0xFFFF)
-
-
 def _write_length(value: Int, limit: Int, what: String) raises:
     """Refuse a negative or unrepresentable writer length before arithmetic."""
     if value < 0 or value >= limit:
@@ -461,42 +455,42 @@ def zip_archive(entries: List[ZipEntry], align: Int = 1) raises -> List[UInt8]:
         var pad = (align - (offset + _LOCAL_LENGTH + len(name)) % align) % align
         var crc = Int(crc32(entry.data))
         var size = len(entry.data)
-        _put32(out, _LOCAL_HEADER)
-        _put16(out, 20)
-        _put16(out, 0x0800)
-        _put16(out, ZIP_STORED.value)
-        _put32(out, 0)
-        _put32(out, crc)
-        _put32(out, size)
-        _put32(out, size)
-        _put16(out, len(name))
-        _put16(out, pad)
+        append_little_endian_u32(out, _LOCAL_HEADER)
+        append_little_endian_u16(out, 20)
+        append_little_endian_u16(out, 0x0800)
+        append_little_endian_u16(out, ZIP_STORED.value)
+        append_little_endian_u32(out, 0)
+        append_little_endian_u32(out, crc)
+        append_little_endian_u32(out, size)
+        append_little_endian_u32(out, size)
+        append_little_endian_u16(out, len(name))
+        append_little_endian_u16(out, pad)
         out.extend(List[UInt8](name))
         for _ in range(pad):
             out.append(0)
         out.extend(entry.data.copy())
-        _put32(directory, _CENTRAL_HEADER)
-        _put16(directory, 20)
-        _put16(directory, 20)
-        _put16(directory, 0x0800)
-        _put16(directory, ZIP_STORED.value)
-        _put32(directory, 0)
-        _put32(directory, crc)
-        _put32(directory, size)
-        _put32(directory, size)
-        _put16(directory, len(name))
-        _put32(directory, 0)
-        _put32(directory, 0)
-        _put32(directory, 0)
-        _put32(directory, offset)
+        append_little_endian_u32(directory, _CENTRAL_HEADER)
+        append_little_endian_u16(directory, 20)
+        append_little_endian_u16(directory, 20)
+        append_little_endian_u16(directory, 0x0800)
+        append_little_endian_u16(directory, ZIP_STORED.value)
+        append_little_endian_u32(directory, 0)
+        append_little_endian_u32(directory, crc)
+        append_little_endian_u32(directory, size)
+        append_little_endian_u32(directory, size)
+        append_little_endian_u16(directory, len(name))
+        append_little_endian_u32(directory, 0)
+        append_little_endian_u32(directory, 0)
+        append_little_endian_u32(directory, 0)
+        append_little_endian_u32(directory, offset)
         directory.extend(List[UInt8](name))
     var start = len(out)
     out.extend(directory^)
-    _put32(out, _END_OF_DIRECTORY)
-    _put32(out, 0)
-    _put16(out, len(entries))
-    _put16(out, len(entries))
-    _put32(out, len(out) - start - 12)
-    _put32(out, start)
-    _put16(out, 0)
+    append_little_endian_u32(out, _END_OF_DIRECTORY)
+    append_little_endian_u32(out, 0)
+    append_little_endian_u16(out, len(entries))
+    append_little_endian_u16(out, len(entries))
+    append_little_endian_u32(out, len(out) - start - 12)
+    append_little_endian_u32(out, start)
+    append_little_endian_u16(out, 0)
     return out^

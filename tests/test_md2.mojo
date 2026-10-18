@@ -12,7 +12,7 @@ each animation clip's tracks.
 """
 
 from animation.keyframe_track import MeshIndex
-from core.binary import copy_bytes
+from core.binary import append_little_endian_u32, copy_bytes
 from core.buffer_geometry import NORMAL, POSITION, UV
 from loaders.json import JsonDocument, parse_json
 from loaders.md2 import (
@@ -143,8 +143,7 @@ def test_names_and_clips() raises:
 def i32(value: Int) -> List[UInt8]:
     """Return a little-endian 32-bit value."""
     var out = List[UInt8]()
-    for k in range(4):
-        out.append(UInt8((value >> (8 * k)) & 0xFF))
+    append_little_endian_u32(out, value)
     return out^
 
 
