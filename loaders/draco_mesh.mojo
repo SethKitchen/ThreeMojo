@@ -1173,14 +1173,18 @@ def traverse_prediction_degree(
                 var right_done = right == NONE or face_done[right // 3]
                 var left_done = left == NONE or face_done[left // 3]
                 if not left_done:
-                    var priority = _priority(table, left, vertex_done, degree)
+                    var priority = corner_priority(
+                        table, left, vertex_done, degree
+                    )
                     if right_done and priority <= best:
                         corner = left
                         continue
                     stacks[priority].append(left)
                     best = min(best, priority)
                 if not right_done:
-                    var priority = _priority(table, right, vertex_done, degree)
+                    var priority = corner_priority(
+                        table, right, vertex_done, degree
+                    )
                     if priority <= best:
                         corner = right
                         continue
@@ -1190,14 +1194,25 @@ def traverse_prediction_degree(
     return points^
 
 
-def _priority(
+def corner_priority(
     table: DracoCornerTable,
     corner: Int,
     vertex_done: List[Bool],
     mut degree: List[Int],
 ) -> Int:
-    """Draco's `ComputePriority`: 0 for a reached tip, 1 for a tip that
-    two faces predict, 2 otherwise."""
+    """Return Draco's priority for a corner's tip.
+
+    Args:
+        table: The corner table.
+        corner: The corner whose tip is scored.
+        vertex_done: Whether each vertex is already reached.
+        degree: How many unfinished faces predict each vertex. A new
+            tip gains one.
+
+    Returns:
+        0 when the tip is reached, 1 when two faces predict it, and 2
+        otherwise.
+    """
     var tip = table.vertex(corner)
     if vertex_done[tip]:
         return 0
