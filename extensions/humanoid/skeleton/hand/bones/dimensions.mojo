@@ -111,6 +111,22 @@ comptime RING = Finger(3)
 comptime LITTLE = Finger(4)
 
 
+def require_finger(finger: Finger) raises:
+    """Refuse a finger that is not the thumb or a named finger.
+
+    Args:
+        finger: The digit.
+
+    Returns:
+        Nothing. The call returns when the digit is named.
+
+    Raises:
+        Error: If the digit is not named.
+    """
+    if not finger.is_valid():
+        raise Error("A finger must be the thumb or a named finger")
+
+
 def finger_label(finger: Finger) -> String:
     """Return the error-text name of `finger`.
 
@@ -207,8 +223,7 @@ def finger_bones(finger: Finger) raises -> List[HandBone]:
     Raises:
         Error: If `finger` is not named.
     """
-    if not finger.is_valid():
-        raise Error("A finger must be the thumb or a named finger")
+    require_finger(finger)
     var k = finger.value
     var out = List[HandBone]()
     out.append(HandBone(METACARPAL_1.value + k))
@@ -255,8 +270,7 @@ def finger_joints(
     Raises:
         Error: If `finger` is not named.
     """
-    if not finger.is_valid():
-        raise Error("A finger must be the thumb or a named finger")
+    require_finger(finger)
     var f = dimensions.frame
     var row = _digit_table(finger)
     var d = Vector3(row[3], row[4], row[5])
@@ -286,8 +300,7 @@ def finger_scale(finger: Finger) raises -> Float32:
     Raises:
         Error: If `finger` is not named.
     """
-    if not finger.is_valid():
-        raise Error("A finger must be the thumb or a named finger")
+    require_finger(finger)
     return _digit_table(finger)[10]
 
 

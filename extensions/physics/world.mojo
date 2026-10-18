@@ -101,6 +101,23 @@ from std.math import cos, fma, inf, isfinite, sin, sqrt
 from units.si import Duration, Length, METER, SECOND
 
 
+def _impact_exhausted(count: Int, limit: Int) raises:
+    """Refuse a step that has used every CCD impact.
+
+    Args:
+        count: How many impacts this step has taken.
+        limit: How many impacts the step may take.
+
+    Returns:
+        Nothing. The call returns when another impact is allowed.
+
+    Raises:
+        Error: If the count has reached the limit.
+    """
+    if count == limit:
+        raise Error("CCD impact limit exhausted; step rolled back")
+
+
 @fieldwise_init
 struct RaycastHit(ImplicitlyCopyable):
     """The nearest shape a ray meets."""
@@ -858,8 +875,7 @@ struct PhysicsWorld(Movable):
                     rotation, angular + push_angular, remaining
                 )
                 break
-            if count == self.ccd_max_impacts:
-                raise Error("CCD impact limit exhausted; step rolled back")
+            _impact_exhausted(count, self.ccd_max_impacts)
             at += travel * fraction
             rotation = _ccd_rotate(
                 rotation, angular + push_angular, remaining * fraction
@@ -950,8 +966,7 @@ struct PhysicsWorld(Movable):
             if triangle < 0:
                 moved += travel
                 break
-            if count == self.ccd_max_impacts:
-                raise Error("CCD impact limit exhausted; step rolled back")
+            _impact_exhausted(count, self.ccd_max_impacts)
             count += 1
             moved += travel * fraction
             remaining *= 1 - fraction
@@ -1122,8 +1137,7 @@ struct PhysicsWorld(Movable):
                         point = contact
                 step = min(step, clear)
             if triangle >= 0:
-                if count == self.ccd_max_impacts:
-                    raise Error("CCD impact limit exhausted; step rolled back")
+                _impact_exhausted(count, self.ccd_max_impacts)
                 count += 1
                 var impulse = self._ccd_rigid(
                     i,
@@ -2439,8 +2453,7 @@ def _ccd_spend(
     # A kinematic member's impacts count against the dynamic member hit.
     if not moves[k]:
         return
-    if count[k] == limit:
-        raise Error("CCD impact limit exhausted; step rolled back")
+    _impact_exhausted(count[k], limit)
     count[k] += 1
 
 

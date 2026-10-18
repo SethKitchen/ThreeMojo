@@ -44,6 +44,23 @@ from render.texture import (
 from render.volume_texture import VOLUME_CHANNELS, VolumeImage
 
 
+def require_copy_texel(source: TexelType, destination: TexelType) raises:
+    """Refuse a copy between two texel types.
+
+    Args:
+        source: The source texel type.
+        destination: The destination texel type.
+
+    Returns:
+        Nothing. The call returns when the types match.
+
+    Raises:
+        Error: If the types differ.
+    """
+    if source != destination:
+        raise Error("A texture copy needs two textures of one texel type")
+
+
 @fieldwise_init
 struct TexelPoint(Equatable, ImplicitlyCopyable, Writable):
     """Where a copy lands: three.js's `dstPosition`, a `Vector2` or a
@@ -145,8 +162,7 @@ def copy_texture_to_texture(
     """
     _check_level(source, source_level)
     _check_level(destination, destination_level)
-    if source.texel_type != destination.texel_type:
-        raise Error("A texture copy needs two textures of one texel type")
+    require_copy_texel(source.texel_type, destination.texel_type)
     if position.z != 0:
         raise Error("A 2D texture has no layers")
     var box = region.or_else(
@@ -215,8 +231,7 @@ def copy_texture_to_volume(
     """
     _check_level(source, source_level)
     destination.validate()
-    if source.texel_type != destination.texel_type:
-        raise Error("A texture copy needs two textures of one texel type")
+    require_copy_texel(source.texel_type, destination.texel_type)
     var box = region.or_else(
         Rect(
             0,
@@ -281,8 +296,7 @@ def copy_volume_to_volume(
     """
     source.validate()
     destination.validate()
-    if source.texel_type != destination.texel_type:
-        raise Error("A texture copy needs two textures of one texel type")
+    require_copy_texel(source.texel_type, destination.texel_type)
     var box = region.or_else(
         TexelBox(0, 0, 0, source.width, source.height, source.depth)
     )

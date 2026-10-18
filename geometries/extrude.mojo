@@ -621,6 +621,22 @@ def _check_sweep(steps: Int) raises:
         raise Error("An extrusion needs at least one step")
 
 
+def require_extrusion_shapes(count: Int) raises:
+    """Refuse an extrusion that has no shape.
+
+    Args:
+        count: How many shapes the extrusion holds.
+
+    Returns:
+        Nothing. The call returns when there is at least one shape.
+
+    Raises:
+        Error: If there is no shape.
+    """
+    if count == 0:
+        raise Error("An extrusion needs at least one shape")
+
+
 def extrude(
     shape: Shape,
     path: Curve3,
@@ -741,8 +757,7 @@ def extrude(
         Error: If there is no shape, or for anything the one-shape form
             raises for.
     """
-    if len(shapes) == 0:
-        raise Error("An extrusion needs at least one shape")
+    require_extrusion_shapes(len(shapes))
     var parts = List[BufferGeometry]()
     for shape in shapes:  # pragma: no branch
         parts.append(extrude(shape, path, steps, curve_segments, uv_generator))
@@ -775,8 +790,7 @@ def extrude(
         Error: If there is no shape, or for anything the one-shape form
             raises for.
     """
-    if len(shapes) == 0:
-        raise Error("An extrusion needs at least one shape")
+    require_extrusion_shapes(len(shapes))
     var parts = List[BufferGeometry]()
     for shape in shapes:  # pragma: no branch
         parts.append(extrude(shape, path, steps, curve_segments, uv_generator))
@@ -1031,8 +1045,7 @@ def extrude(
         Error: If there is no shape, or for anything the one-shape form
             raises for.
     """
-    if len(shapes) == 0:
-        raise Error("An extrusion needs at least one shape")
+    require_extrusion_shapes(len(shapes))
     var parts = List[BufferGeometry]()
     for shape in shapes:  # pragma: no branch
         parts.append(
