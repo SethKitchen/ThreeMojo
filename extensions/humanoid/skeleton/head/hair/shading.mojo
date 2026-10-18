@@ -98,11 +98,6 @@ struct HairLook(ImplicitlyCopyable):
         self.shadows = Float32(0.75)
 
 
-def _times(a: Vector3, b: Vector3) -> Vector3:
-    """Return `a` and `b` multiplied channel by channel."""
-    return Vector3(a.x * b.x, a.y * b.y, a.z * b.z)
-
-
 def _cos_half(cos_angle: Float32) -> Float32:
     """Return the cosine of half an angle from the cosine of the whole."""
     return sqrt(saturate(Float32(0.5) + Float32(0.5) * cos_angle))
@@ -333,7 +328,7 @@ def _shade_strands(
             to_camera.normalize()
             # Light is lost on its way down into the hair.
             var buried = exp(-look.attenuation * groom.depths[index])
-            var sum = _times(ambient, base) * buried
+            var sum = ambient * base * buried
             for l in range(len(lights)):  # pragma: no branch
                 var light = lights[l]
                 # The head shades the hair on its far side; the hair
@@ -349,13 +344,13 @@ def _shade_strands(
                 # so its pigment tints it twice: pale hair stays golden
                 # and does not wash out to white.
                 var diffuse = kajiya_kay(
-                    _times(base, base), light.direction, t
+                    base * base, light.direction, t
                 ) + scattered(base, light.direction, to_camera, t)
                 var specular = marschner(
                     strand_look, light.direction, to_camera, t
                 )
                 var lit = diffuse * shadow + specular * shadow
-                sum = sum + _times(lit, light.radiance)
+                sum = sum + lit * light.radiance
             colors[unsafe_offset=index * 3] = sum.x
             colors[unsafe_offset=index * 3 + 1] = sum.y
             colors[unsafe_offset=index * 3 + 2] = sum.z

@@ -115,6 +115,18 @@ struct Vector3(Equatable, ImplicitlyCopyable, PolylineVertex):
         """Return this vector scaled by a number."""
         return Vector3(self.x * factor, self.y * factor, self.z * factor)
 
+    def __mul__(self, other: Self) -> Self:
+        """Return the product of each component, three.js's `multiply`.
+
+        Args:
+            other: The factors.
+
+        Returns:
+            Each component of this vector times the same component of
+            `other`.
+        """
+        return Vector3(self.x * other.x, self.y * other.y, self.z * other.z)
+
     def __neg__(self) -> Self:
         """Return this vector pointing the other way."""
         return Vector3(-self.x, -self.y, -self.z)
@@ -511,7 +523,7 @@ struct Vector3(Equatable, ImplicitlyCopyable, PolylineVertex):
         Args:
             other: The factors.
         """
-        self = Vector3(self.x * other.x, self.y * other.y, self.z * other.z)
+        self = self * other
 
     def divide(mut self, other: Self):
         """Divide each component by `other`'s, three.js's `divide`. A zero

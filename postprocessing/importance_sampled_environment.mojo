@@ -463,9 +463,7 @@ def sample_environment_brdf(
         smith_g(n_dot_v, alpha), Float32(1e-4)
     )
     var fresnel = f_schlick(f0, v_dot_h)
-    return Vector3(
-        color.x * fresnel.x, color.y * fresnel.y, color.z * fresnel.z
-    ) * (scale * env.intensity)
+    return color * fresnel * (scale * env.intensity)
 
 
 def sample_environment_mis(
@@ -532,9 +530,7 @@ def sample_environment_mis(
         smith_g(n_dot_v, alpha), Float32(1e-4)
     )
     var fresnel1 = f_schlick(f0, v_dot_h1)
-    var result = Vector3(
-        color1.x * fresnel1.x, color1.y * fresnel1.y, color1.z * fresnel1.z
-    ) * (scale1 * w1)
+    var result = color1 * fresnel1 * (scale1 * w1)
     if alpha > 0.01:
         var v_cdf = env.table(env.marginal, env.height, xi_z)
         var u_cdf = conditional_at(env, xi_w, v_cdf)
@@ -566,11 +562,7 @@ def sample_environment_mis(
             )
             var fresnel = f_schlick(f0, v_dot_h)
             var share = spec * n_dot_l / pdf_env2 * w2
-            result = result + Vector3(
-                color.x * fresnel.x * share,
-                color.y * fresnel.y * share,
-                color.z * fresnel.z * share,
-            )
+            result = result + color * fresnel * share
     return result * env.intensity
 
 

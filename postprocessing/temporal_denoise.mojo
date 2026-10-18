@@ -631,7 +631,7 @@ def temporal_reproject_pixel(
     var flicker = settings.flicker_suppression
     # `collectNeighborhood`: the pixel and its eight neighbors.
     var m1 = _dampened(input, flicker)
-    var m2 = Vector3(m1.x * m1.x, m1.y * m1.y, m1.z * m1.z)
+    var m2 = m1 * m1
     var offsets = SIMD[DType.int32, 16](
         -1, -1, -1, 1, 1, -1, 1, 1, 1, 0, 0, -1, 0, 1, -1, 0
     )
@@ -642,7 +642,7 @@ def temporal_reproject_pixel(
         )
         var c = _dampened(near, flicker)
         m1 = m1 + c
-        m2 = m2 + Vector3(c.x * c.x, c.y * c.y, c.z * c.z)
+        m2 = m2 + c * c
     var mean = m1 * (1.0 / 9.0)
     var deviation = Vector3(
         sqrt(max(m2.x / 9 - mean.x * mean.x, 0)),

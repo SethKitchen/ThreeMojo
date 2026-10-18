@@ -705,9 +705,7 @@ def volume_refraction[
         var through = volume_attenuation(
             ray.length(), attenuation_color, attenuation_distance
         )
-        transmittance = Vector3(
-            diffuse.x * through.x, diffuse.y * through.y, diffuse.z * through.z
-        )
+        transmittance = diffuse * through
     var dot_nv = min(max(normal.dot(toward_eye), Float32(0)), Float32(1))
     var reflected = environment_brdf(dot_nv, specular, f90, roughness)
     var factor = (transmittance.x + transmittance.y + transmittance.z) / 3
