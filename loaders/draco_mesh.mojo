@@ -1157,35 +1157,42 @@ def traverse_depth_first(
     return data.points.copy()
 
 
-def traverse_prediction_degree(
+def prediction_degree_walk[
+    V: CornerVisitor
+](
     table: DracoCornerTable,
     faces: List[Int],
-    mut data: DracoEncodingData,
-) raises -> List[Int]:
-    """Visit the vertices of a table, best predicted first.
+    starts: List[Int],
+    mut data: V,
+) raises:
+    """Visit vertices best predicted first, from each start corner.
 
-    Draco's `MaxPredictionDegreeTraverser`: a face whose tip vertex is
-    already predicted from more neighbors is visited first.
+    Draco's `MaxPredictionDegreeTraverser`. A face whose tip is already
+    predicted from more neighbors is visited first. `starts` is not empty:
+    the decoder passes the first corner of every face, and the encoder
+    passes its order.
+
+    Parameters:
+        V: The record that stores each new vertex.
 
     Args:
-        table: The mesh's table.
+        table: The table to walk.
         faces: The point of each corner.
+        starts: The corners to start from, in order.
         data: The order of the values, filled as vertices are reached.
 
     Returns:
-        The point of each stored value, in order.
+        Nothing. `data.visit` stores each new vertex.
 
     Raises:
-        Error: If the table has a corner with no vertex.
+        Error: If a start corner has no vertex.
     """
     var face_done = List[Bool](length=table.faces(), fill=False)
     var vertex_done = List[Bool](length=table.vertices(), fill=False)
     var degree = List[Int](length=table.vertices(), fill=0)
     var stacks: List[List[Int]] = [List[Int](), List[Int](), List[Int]()]
-    if table.vertices() == 0:
-        return data.points.copy()
-    for face in range(table.faces()):  # pragma: no branch
-        var start = 3 * face
+    # Both callers pass at least one start.
+    for start in starts:  # pragma: no branch
         stacks[0].append(start)
         var best = 0
         var ends: List[Int] = [table.next(start), table.previous(start), start]
@@ -1236,6 +1243,35 @@ def traverse_prediction_degree(
                     stacks[priority].append(right)
                     best = min(best, priority)
                 break
+
+
+def traverse_prediction_degree(
+    table: DracoCornerTable,
+    faces: List[Int],
+    mut data: DracoEncodingData,
+) raises -> List[Int]:
+    """Visit the vertices of a table, best predicted first.
+
+    Draco's `MaxPredictionDegreeTraverser`: a face whose tip vertex is
+    already predicted from more neighbors is visited first.
+
+    Args:
+        table: The mesh's table.
+        faces: The point of each corner.
+        data: The order of the values, filled as vertices are reached.
+
+    Returns:
+        The point of each stored value, in order.
+
+    Raises:
+        Error: If the table has a corner with no vertex.
+    """
+    if table.vertices() == 0:
+        return data.points.copy()
+    var starts = List[Int]()
+    for face in range(table.faces()):  # pragma: no branch
+        starts.append(3 * face)
+    prediction_degree_walk(table, faces, starts, data)
     return data.points.copy()
 
 
