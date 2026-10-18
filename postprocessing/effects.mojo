@@ -42,7 +42,7 @@ from math.norm import length2
 from core.layers import Layers
 from math.arc_tangent import atan2_float32
 from math.sine import fraction, noise_scale, sin_float32
-from math.utils import SeededRandom
+from math.utils import SeededRandom, clamp
 from math.vector2 import Vector2
 from math.vector3 import Vector3
 from postprocessing.screen_space import DepthView, glsl_rand
@@ -1014,7 +1014,7 @@ def _dot_coverage(distance: Float32, aa: Float32) -> Float32:
     """Return how much of a pixel a dot covers: the shader's
     `dist > 0 ? clamp(dist / aa, 0, 1) : 0`, which is the clamp alone
     because `aa` is positive."""
-    return max(Float32(0), min(Float32(1), distance / aa))
+    return clamp(distance / aa, 0, 1)
 
 
 def _dot_color(

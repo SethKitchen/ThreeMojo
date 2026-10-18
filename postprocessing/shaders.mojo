@@ -54,6 +54,7 @@ from math.norm import length2
 
 from math.arc_tangent import atan2_float32
 from math.matrix4 import Matrix4
+from math.utils import clamp
 from math.vector3 import Vector3
 from postprocessing.sampling import LightView, u_of, v_of
 from postprocessing.screen_space import DepthView, glsl_rand
@@ -617,7 +618,7 @@ def bleach_bypass_color(color: FloatColor, opacity: Float32) -> FloatColor:
         The straight color, alpha kept.
     """
     var lum = effect_luminance(color.r, color.g, color.b)
-    var l = min(Float32(1), max(Float32(0), 10 * (lum - 0.45)))
+    var l = clamp(10 * (lum - 0.45), 0, 1)
     var a2 = opacity * color.a
     return FloatColor(
         _bleach(color.r, lum, l, a2),
@@ -1465,7 +1466,7 @@ def god_rays_generate_pixel(
     var sx = walk[1]
     var sy = walk[2]
     var iters = dist / step
-    var f = min(Float32(1), max(sun.z / GOD_RAYS_FADE_DEPTH, Float32(0)))
+    var f = clamp(sun.z / GOD_RAYS_FADE_DEPTH, 0, 1)
     var tu = u
     var tv = v
     var col = Float32(0)

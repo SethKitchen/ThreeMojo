@@ -40,6 +40,7 @@ from math.scaled_products import (
 
 from math.norm import length2, normalized3, _ordinary_squared
 from math.vector2 import Vector2
+from math.utils import clamp
 from math.vector3 import Vector3
 from render.framebuffer import Color, FloatColor, Framebuffer
 from units.si import Length, METER
@@ -5361,12 +5362,8 @@ def rasterize_shaded(
                 var indirect = Vector3(
                     around.r + baked.x, around.g + baked.y, around.b + baked.z
                 )
-                var dot_nv = max(
-                    Float32(0), min(Float32(1), facing.dot(toward_eye))
-                )
-                var dot_nv_coat = max(
-                    Float32(0), min(Float32(1), coat_normal.dot(toward_eye))
-                )
+                var dot_nv = clamp(facing.dot(toward_eye), 0, 1)
+                var dot_nv_coat = clamp(coat_normal.dot(toward_eye), 0, 1)
                 # The environment along the rough reflection and around
                 # the normal, three.js's `getIBLRadiance` and
                 # `getIBLIrradiance`, each read at a roughness: the

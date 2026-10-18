@@ -58,6 +58,7 @@ from lights.vxgi_cone_tracer import (
 )
 from lights.vxgi_volume import CONE_STEPS, VXGI_PI, VXGIVolume
 from math.matrix4 import Matrix4
+from math.utils import clamp
 from math.vector3 import Vector3
 from postprocessing.screen_space import DepthView
 from render.framebuffer import FloatColor
@@ -345,7 +346,7 @@ def vxgi_pixel(
     red = red / Float32(count) * scale
     green = green / Float32(count) * scale
     blue = blue / Float32(count) * scale
-    var open = max(Float32(0), min(Float32(1), 1 - occlusion / Float32(count)))
+    var open = clamp(1 - occlusion / Float32(count), 0, 1)
     var low = params[unsafe_offset=PARAM_AO_MIN]
     var ao = low + (1 - low) * pow(
         open, params[unsafe_offset=PARAM_AO_INTENSITY]

@@ -27,7 +27,7 @@ The pass runs on the host. It reads the depth and the normals that
 """
 
 from math.noise import SimplexNoise
-from math.utils import SeededRandom
+from math.utils import SeededRandom, clamp
 from math.cross import cross_vectors
 from math.vector3 import Vector3
 from postprocessing.sampling import LightView, u_of, v_of
@@ -440,7 +440,7 @@ def gtao_occlusion(
         )
         var nyb = 0.5 * (2 - cos_x * cos_x - cos_y * cos_y)
         ao += nx * nxb + ny * nyb
-    ao = min(Float32(1), max(Float32(0), ao / Float32(directions)))
+    ao = clamp(ao / Float32(directions), 0, 1)
     return pow(ao, settings.scale)
 
 
