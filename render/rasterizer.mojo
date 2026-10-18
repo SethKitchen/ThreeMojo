@@ -3227,6 +3227,31 @@ def check_alpha_map(image: Texture) raises:
     check_data_map(image, "An alpha map")
 
 
+def require_linear_data(linear: Bool, name: String) raises:
+    """Refuse a data map that is not stored in linear color.
+
+    A data map, a gradient map and a map read from its alpha ask this with
+    the same words. The host asks it of a texture. The GPU asks it of the
+    descriptor it uploaded.
+
+    Args:
+        linear: Whether the map is stored in linear color.
+        name: What to call the map in the error.
+
+    Returns:
+        Nothing. The call returns when the map is linear.
+
+    Raises:
+        Error: If the map is not stored in linear color.
+    """
+    if not linear:
+        raise Error(
+            name
+            + " holds data, not color; build the texture with"
+            " color_space=LINEAR"
+        )
+
+
 def require_data_descriptors(
     linear: Bool, ignores_alpha: Bool, name: String
 ) raises:
@@ -3246,12 +3271,7 @@ def require_data_descriptors(
     Raises:
         Error: If the map is not linear, or it reads its alpha as coverage.
     """
-    if not linear:
-        raise Error(
-            name
-            + " holds data, not color; build the texture with"
-            " color_space=LINEAR"
-        )
+    require_linear_data(linear, name)
     if not ignores_alpha:
         raise Error(
             name
@@ -3389,16 +3409,9 @@ def check_gradient_map(image: Texture) raises:
             "A gradient map must be one row high: it is a lookup table, not"
             " a picture, and a taller image has no unambiguous row"
         )
-    if image.color_space != LINEAR:
-        raise Error(
-            "A gradient map holds data, not color; build the texture with"
-            " color_space=LINEAR"
-        )
-    if image.alpha != IGNORED:
-        raise Error(
-            "A gradient map must ignore its own alpha; build the texture"
-            " with alpha=IGNORED"
-        )
+    require_data_descriptors(
+        image.color_space == LINEAR, image.alpha == IGNORED, "A gradient map"
+    )
     if image.texel_type == FLOAT_TYPE:
         raise Error(
             "A gradient map must hold bytes: its tones are read one byte each"
@@ -3487,11 +3500,7 @@ def check_triangle_maps(
     # ignore it filters accordingly -- see `render.texture.Alpha`. Asked
     # only when the map will be opened: SHADE_LIT never reads it.
     if a.emissive_map != NO_TEXTURE and mode == SHADE_TEXTURE:
-        if textures.get(a.emissive_map).alpha != IGNORED:
-            raise Error(
-                "An emissive map must ignore its alpha; build the texture"
-                " with alpha=IGNORED"
-            )
+        check_color_map(textures.get(a.emissive_map), "An emissive map")
     # An alpha map holds data, and says so twice: linear, or the sRGB curve
     # changes what its bytes mean, and alpha ignored, or filtering weights
     # its green by an alpha that means nothing.
@@ -3504,11 +3513,7 @@ def check_triangle_maps(
     # A matcap's own alpha means nothing, so only a texture built to
     # ignore it filters accordingly -- the rule an emissive map follows.
     if a.matcap != NO_TEXTURE and mode != SHADE_UV:
-        if textures.get(a.matcap).alpha != IGNORED:
-            raise Error(
-                "A matcap must ignore its alpha; build the texture with"
-                " alpha=IGNORED"
-            )
+        check_color_map(textures.get(a.matcap), "A matcap")
     # The environment a reflecting surface samples, which must be there:
     # asked before the first fragment, as the store's own `get` would ask
     # it at the first fragment and a band with no fragment would not.
@@ -3775,12 +3780,36 @@ def map_placements(
     return placed^
 
 
+def require_ignored_alpha(ignores_alpha: Bool, name: String) raises:
+    """Refuse a color map that reads its alpha as coverage.
+
+    An emissive map, a light map, a matcap and a sheen color map ask this
+    with the same words. The host asks it of a texture. The GPU asks it of
+    the descriptor it uploaded.
+
+    Args:
+        ignores_alpha: Whether the map ignores its alpha.
+        name: What to call the map in the error.
+
+    Returns:
+        Nothing. The call returns when the map ignores its alpha.
+
+    Raises:
+        Error: If the map reads its alpha as coverage.
+    """
+    if not ignores_alpha:
+        raise Error(
+            name
+            + " must ignore its alpha; build the texture with alpha=IGNORED"
+        )
+
+
 def check_color_map(image: Texture, name: String) raises:
     """Refuse a map of color whose alpha is read as coverage.
 
-    The rule `check_light_map` states, for a map that holds a color and
-    no coverage: a sheen color map. Filtered as coverage, a texel with a
-    low alpha would darken its neighbors. Shared by both backends.
+    The rule `require_ignored_alpha` states, for a map that holds a color
+    and no coverage: a sheen color map. Filtered as coverage, a texel with
+    a low alpha would darken its neighbors. Shared by both backends.
 
     Args:
         image: The texture named as the map.
@@ -3789,10 +3818,30 @@ def check_color_map(image: Texture, name: String) raises:
     Raises:
         Error: If the texture reads its alpha as coverage.
     """
-    if image.alpha != IGNORED:
+    require_ignored_alpha(image.alpha == IGNORED, name)
+
+
+def require_coverage_alpha(reads_alpha: Bool, name: String) raises:
+    """Refuse a map whose number is not read from its alpha.
+
+    A sheen roughness map and a specular intensity map ask this with the
+    same words. The host asks it of a texture. The GPU asks it of the
+    descriptor it uploaded.
+
+    Args:
+        reads_alpha: Whether the map reads its alpha as coverage.
+        name: What to call the map in the error.
+
+    Returns:
+        Nothing. The call returns when the map reads its alpha.
+
+    Raises:
+        Error: If the map ignores its alpha.
+    """
+    if not reads_alpha:
         raise Error(
             name
-            + " must ignore its alpha; build the texture with alpha=IGNORED"
+            + " is read from its alpha; build the texture with alpha=COVERAGE"
         )
 
 
@@ -3813,17 +3862,8 @@ def check_alpha_data_map(image: Texture, name: String) raises:
         Error: If the texture's color space is not `LINEAR`, or it ignores
             its alpha.
     """
-    if image.color_space != LINEAR:
-        raise Error(
-            name
-            + " holds data, not color; build the texture with"
-            " color_space=LINEAR"
-        )
-    if image.alpha != COVERAGE:
-        raise Error(
-            name
-            + " is read from its alpha; build the texture with alpha=COVERAGE"
-        )
+    require_linear_data(image.color_space == LINEAR, name)
+    require_coverage_alpha(image.alpha == COVERAGE, name)
 
 
 def check_light_map(image: Texture) raises:
@@ -3840,11 +3880,7 @@ def check_light_map(image: Texture) raises:
     Raises:
         Error: If the texture reads its alpha as coverage.
     """
-    if image.alpha != IGNORED:
-        raise Error(
-            "A light map must ignore its alpha; build the texture with"
-            " alpha=IGNORED"
-        )
+    require_ignored_alpha(image.alpha == IGNORED, "A light map")
 
 
 def rasterize_shaded(

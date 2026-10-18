@@ -235,7 +235,10 @@ from render.rasterizer import (
     check_transmission,
     check_triangle_state,
     require_triangle_lighting,
+    require_coverage_alpha,
     require_data_descriptors,
+    require_ignored_alpha,
+    require_linear_data,
     bumped_normal,
     interpolate_alpha,
     mapped_normal,
@@ -10363,10 +10366,9 @@ struct GpuRenderer(Movable):
         if mode == SHADE_TEXTURE:
             for triangle in range(triangles):
                 var glow = corners[triangle * 3].emissive_map
-                if glow != NO_TEXTURE and not self.ignores_alpha[glow.value]:
-                    raise Error(
-                        "An emissive map must ignore its alpha; build the"
-                        " texture with alpha=IGNORED"
+                if glow != NO_TEXTURE:
+                    require_ignored_alpha(
+                        self.ignores_alpha[glow.value], "An emissive map"
                     )
                 # An alpha map holds data and must say so twice; the same
                 # question `check_alpha_map` asks on the host, asked of the
@@ -10396,10 +10398,9 @@ struct GpuRenderer(Movable):
                 # alpha means nothing: `check_triangle_maps`'s two rules.
                 self._check_data_map(corners[triangle * 3].ao_map, "An ao map")
                 var baked = corners[triangle * 3].light_map
-                if baked != NO_TEXTURE and not self.ignores_alpha[baked.value]:
-                    raise Error(
-                        "A light map must ignore its alpha; build the"
-                        " texture with alpha=IGNORED"
+                if baked != NO_TEXTURE:
+                    require_ignored_alpha(
+                        self.ignores_alpha[baked.value], "A light map"
                     )
                 self._check_data_map(
                     corners[triangle * 3].specular_map, "A specular map"
@@ -10414,23 +10415,19 @@ struct GpuRenderer(Movable):
                 # The layers' maps, by `check_triangle_maps`'s three rules.
                 ref layered = corners[triangle * 3].layers
                 var tint = layered.sheen_color_map
-                if tint != NO_TEXTURE and not self.ignores_alpha[tint.value]:
-                    raise Error(
-                        "A sheen color map must ignore its alpha; build the"
-                        " texture with alpha=IGNORED"
+                if tint != NO_TEXTURE:
+                    require_ignored_alpha(
+                        self.ignores_alpha[tint.value], "A sheen color map"
                     )
                 var cloth = layered.sheen_roughness_map
                 if cloth != NO_TEXTURE:
-                    if not self.is_linear[cloth.value]:
-                        raise Error(
-                            "A sheen roughness map holds data, not color;"
-                            " build the texture with color_space=LINEAR"
-                        )
-                    if self.ignores_alpha[cloth.value]:
-                        raise Error(
-                            "A sheen roughness map is read from its alpha;"
-                            " build the texture with alpha=COVERAGE"
-                        )
+                    require_linear_data(
+                        self.is_linear[cloth.value], "A sheen roughness map"
+                    )
+                    require_coverage_alpha(
+                        not self.ignores_alpha[cloth.value],
+                        "A sheen roughness map",
+                    )
                 self._check_data_map(
                     layered.iridescence_map, "An iridescence map"
                 )
@@ -10445,23 +10442,18 @@ struct GpuRenderer(Movable):
                 # of data, as `check_triangle_maps` refuses them.
                 var intensity = layered.specular_intensity_map
                 if intensity != NO_TEXTURE:
-                    if not self.is_linear[intensity.value]:
-                        raise Error(
-                            "A specular intensity map holds data, not"
-                            " color; build the texture with"
-                            " color_space=LINEAR"
-                        )
-                    if self.ignores_alpha[intensity.value]:
-                        raise Error(
-                            "A specular intensity map is read from its"
-                            " alpha; build the texture with"
-                            " alpha=COVERAGE"
-                        )
+                    require_linear_data(
+                        self.is_linear[intensity.value],
+                        "A specular intensity map",
+                    )
+                    require_coverage_alpha(
+                        not self.ignores_alpha[intensity.value],
+                        "A specular intensity map",
+                    )
                 var shine = layered.specular_color_map
-                if shine != NO_TEXTURE and not self.ignores_alpha[shine.value]:
-                    raise Error(
-                        "A specular color map must ignore its alpha; build"
-                        " the texture with alpha=IGNORED"
+                if shine != NO_TEXTURE:
+                    require_ignored_alpha(
+                        self.ignores_alpha[shine.value], "A specular color map"
                     )
                 self._check_data_map(layered.clearcoat_map, "A clearcoat map")
                 self._check_data_map(
@@ -10503,16 +10495,11 @@ struct GpuRenderer(Movable):
                         " table, not a picture, and a taller image has no"
                         " unambiguous row"
                     )
-                if not self.is_linear[tones.value]:
-                    raise Error(
-                        "A gradient map holds data, not color; build the"
-                        " texture with color_space=LINEAR"
-                    )
-                if not self.ignores_alpha[tones.value]:
-                    raise Error(
-                        "A gradient map must ignore its own alpha; build"
-                        " the texture with alpha=IGNORED"
-                    )
+                require_data_descriptors(
+                    self.is_linear[tones.value],
+                    self.ignores_alpha[tones.value],
+                    "A gradient map",
+                )
                 if self.holds_floats[tones.value]:
                     raise Error(
                         "A gradient map must hold bytes: its tones are read"
@@ -10525,11 +10512,9 @@ struct GpuRenderer(Movable):
                 var ball = corners[triangle * 3].matcap
                 if ball == NO_TEXTURE:
                     continue
-                if not self.ignores_alpha[ball.value]:
-                    raise Error(
-                        "A matcap must ignore its alpha; build the texture"
-                        " with alpha=IGNORED"
-                    )
+                require_ignored_alpha(
+                    self.ignores_alpha[ball.value], "A matcap"
+                )
 
         # A pixel outside the scissor is left as it was, and on a
         # fresh target "as it was" is whatever the device buffer held.
@@ -10869,18 +10854,9 @@ struct GpuRenderer(Movable):
         """
         if map == NO_TEXTURE:
             return
-        if not self.is_linear[map.value]:
-            raise Error(
-                name
-                + " holds data, not color; build the texture with"
-                " color_space=LINEAR"
-            )
-        if not self.ignores_alpha[map.value]:
-            raise Error(
-                name
-                + " must ignore its own alpha; build the texture with"
-                " alpha=IGNORED"
-            )
+        require_data_descriptors(
+            self.is_linear[map.value], self.ignores_alpha[map.value], name
+        )
 
     def read_back(self) raises -> Framebuffer:
         """Copy the device render target into a host framebuffer.

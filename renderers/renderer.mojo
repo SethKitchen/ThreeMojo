@@ -278,7 +278,7 @@ from materials.nodes import (
     point_size_of,
 )
 from render.pointrule import attenuated_size
-from render.texture import IGNORED, Texture
+from render.texture import Texture
 from render.texture_store import NO_TEXTURE, TextureId
 from render.framebuffer import Color, FloatColor, Framebuffer, SrgbBytes
 from render.layered_target import TARGET_CUBE, LayeredRenderTarget
@@ -6983,13 +6983,9 @@ struct Renderer(Movable):
             # darken wherever its alpha is low -- see `render.texture.Alpha`.
             # Refused whatever the shading mode: it is a wrong asset, not a
             # wrong frame.
-            if (
-                glow_map != NO_TEXTURE
-                and assets.textures.get(glow_map).alpha != IGNORED
-            ):
-                raise Error(
-                    "A material's emissive map must ignore its alpha; build"
-                    " the texture with alpha=IGNORED"
+            if glow_map != NO_TEXTURE:
+                check_color_map(
+                    assets.textures.get(glow_map), "A material's emissive map"
                 )
             if self.shading != SHADE_TEXTURE or not material.is_emissive():
                 glow_map = NO_TEXTURE
@@ -7023,14 +7019,8 @@ struct Renderer(Movable):
             var ball = material.matcap
             if ball != NO_TEXTURE and ball.value >= assets.textures.count():
                 raise Error("A material names a matcap that is not there")
-            if (
-                ball != NO_TEXTURE
-                and assets.textures.get(ball).alpha != IGNORED
-            ):
-                raise Error(
-                    "A matcap must ignore its alpha; build the texture with"
-                    " alpha=IGNORED"
-                )
+            if ball != NO_TEXTURE:
+                check_color_map(assets.textures.get(ball), "A matcap")
             if self.shading == SHADE_UV:
                 ball = NO_TEXTURE
             # The environment the surface reflects, the scene's if the
