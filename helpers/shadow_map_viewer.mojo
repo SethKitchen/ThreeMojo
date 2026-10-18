@@ -49,6 +49,7 @@ from geometries.plane import plane
 from lights.light import DIRECTIONAL, SPOT
 from lights.shadow import VSM_SHADOW_MAP
 from materials.material import BASIC, Material
+from math.utils import clamp
 from math.vector3 import Vector3
 from objects.mesh import Mesh
 from render.framebuffer import Color
@@ -103,7 +104,7 @@ def shadow_gray(depth: Float32) -> UInt8:
     Returns:
         `1 - depth`, the depth held between zero and one, as a byte.
     """
-    var held = max(Float32(0), min(Float32(1), depth))
+    var held = clamp(depth, 0, 1)
     return UInt8(Int((1 - held) * 255 + 0.5))
 
 

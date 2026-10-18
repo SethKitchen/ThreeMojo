@@ -31,6 +31,7 @@ kernel points one at a device buffer. `render.gpu_vxgi` runs the same
 functions on the device, so the two agree.
 """
 
+from math.utils import clamp
 from math.vector3 import Vector3
 from std.math import cos, exp2, floor, log2, pow, sin, sqrt
 from std.memory import bitcast
@@ -550,7 +551,7 @@ def trace_cone(
             )
             var seen = sample_volume(opacity, grid, uvw, lod)
             var along = seen[0] * wx + seen[1] * wy + seen[2] * wz
-            along = max(Float32(0), min(Float32(1), along))
+            along = clamp(along, 0, 1)
             var a = 1 - pow(1 - along, grid.step_scale)
             var weight = a * (1 - alpha)
             if gathers:
@@ -675,7 +676,7 @@ def unorm8(value: Float32) -> Float32:
     Returns:
         The nearest of the 256 steps from zero to one.
     """
-    var held = max(Float32(0), min(Float32(1), value))
+    var held = clamp(value, 0, 1)
     return floor(held * 255 + 0.5) / 255
 
 

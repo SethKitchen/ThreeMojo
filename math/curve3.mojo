@@ -927,7 +927,7 @@ struct CurvePath3(Copyable, Movable):
                 break
         var span = self.curves[curve].length().to(METER)
         var u = 1 - (lengths[curve] - target) / span
-        return _Place(curve, max(Float32(0), min(Float32(1), u)))
+        return _Place(curve, clamp(u, 0, 1))
 
     def point(self, t: Float32) raises -> Vector3:
         """Return the point `t` of the way along the path by distance,

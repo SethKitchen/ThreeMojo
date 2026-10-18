@@ -43,6 +43,7 @@ is scaled by `Lighting.scale` once, at the end.
 """
 
 from math.smoothstep import smoothstep
+from math.utils import clamp
 from math.vector2 import Vector2
 from math.vector3 import Vector3
 from std.math import cos, exp, exp2, log2, max, min, pi, sqrt
@@ -71,7 +72,7 @@ comptime _FRESNEL_OFFSET = Float32(-6.98316)
 
 def _saturated(value: Float32) -> Float32:
     """Return `value` clamped to zero through one: GLSL's `saturate`."""
-    return max(Float32(0), min(Float32(1), value))
+    return clamp(value, 0, 1)
 
 
 def _schlick(f0: Float32, f90: Float32, cosine: Float32) -> Float32:

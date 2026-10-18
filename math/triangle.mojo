@@ -27,6 +27,7 @@ from math.triangle_normal import (
     _ordinary_triangle_cross,
     _triangle_cross_wide,
 )
+from math.utils import clamp
 from math.vector3 import Vector3
 from std.math import sqrt
 
@@ -62,7 +63,7 @@ def _wide_cross(a: _WideVector, b: _WideVector) -> _WideVector:
 
 def _wide_unit(value: Float64) -> Float64:
     """Limit a segment parameter to its closed interval."""
-    return max(Float64(0), min(Float64(1), value))
+    return clamp(value, 0.0, 1.0)
 
 
 def _segment_closest_points(
@@ -482,7 +483,7 @@ struct Line3(Equatable, ImplicitlyCopyable):
             raise Error("A segment of no length has no direction")
         var t = (point - self.start).dot(line) / length_sq
         if clamp:
-            t = max(Float32(0), min(Float32(1), t))
+            t = clamp(t, 0, 1)
         return t
 
     def closest_point(self, point: Vector3, clamp: Bool) raises -> Vector3:
@@ -583,4 +584,4 @@ struct Line3(Equatable, ImplicitlyCopyable):
 
 def _unit(value: Float32) -> Float32:
     """Return `value` limited to the range from zero to one."""
-    return max(Float32(0), min(Float32(1), value))
+    return clamp(value, 0, 1)

@@ -87,6 +87,7 @@ kernel keeps its running color the same way.
 from core.extent import positive_extent
 from core.ordinal import ordinal_valid
 
+from math.utils import clamp
 from math.vector2 import Vector2
 from math.vector3 import Vector3
 from render.blend import NORMAL_MODE, Rgba, blend_fragment
@@ -267,7 +268,7 @@ def stored(value: Float32, type: TargetType) -> Float32:
         itself for `FLOAT_TARGET`.
     """
     if type == UNSIGNED_BYTE_TARGET:
-        var held = max(Float32(0), min(Float32(1), value))
+        var held = clamp(value, 0, 1)
         return Float32(Int(held * 255 + 0.5)) / 255
     if type == HALF_FLOAT_TARGET:
         var held = max(-HALF_MAX, min(HALF_MAX, value))

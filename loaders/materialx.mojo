@@ -54,6 +54,7 @@ from render.srgb import LINEAR, SRGB, linear_to_srgb
 from render.texture import COVERAGE, IGNORED, REPEAT, Texture
 from render.texture_store import TextureId
 from std.collections import Dict
+from math.utils import clamp
 from std.math import max, min
 from std.pathlib import Path
 from units.si import Angle, DEGREE
@@ -70,7 +71,7 @@ struct MaterialXMaterials(Movable):
 
 def _byte(value: Float32) -> UInt8:
     """Return a linear channel as the sRGB byte a material keeps."""
-    var held = max(Float32(0), min(Float32(1), value))
+    var held = clamp(value, 0, 1)
     return UInt8(Int(linear_to_srgb(held) * 255 + 0.5))
 
 

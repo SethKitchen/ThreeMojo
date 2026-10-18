@@ -86,6 +86,7 @@ from lights.ltc import (
 )
 from lights.spot_profile import SpotProfile, needs_profile
 from math.smoothstep import smoothstep
+from math.utils import clamp
 from math.spherical_harmonics3 import SphericalHarmonics3
 from math.vector2 import Vector2
 from math.cross import cross_vectors
@@ -133,7 +134,7 @@ def falloff(distance: Float32, decay: Float32, cutoff: Float32) -> Float32:
     if cutoff > 0:
         var ratio = distance / cutoff
         var quartic = ratio * ratio * ratio * ratio
-        var edge = max(Float32(0), min(Float32(1), 1 - quartic))
+        var edge = clamp(1 - quartic, 0, 1)
         attenuation *= edge * edge
     return attenuation
 
@@ -416,7 +417,7 @@ def blinn_phong(
         return Vector3(0, 0, 0)
     if facing > 1:
         facing = 1
-    var grazing = max(Float32(0), min(Float32(1), toward_eye.dot(half)))
+    var grazing = clamp(toward_eye.dot(half), 0, 1)
     # three.js's F_Schlick with an f90 of one: the surface reflects its own
     # color head on and white at a grazing angle.
     var fresnel = f_schlick(specular, 1, grazing)
@@ -456,7 +457,7 @@ def f_schlick(f0: Vector3, f90: Float32, cos_vh: Float32) -> Vector3:
 
 def _saturated(value: Float32) -> Float32:
     """Return `value` clamped to zero through one: GLSL's `saturate`."""
-    return max(Float32(0), min(Float32(1), value))
+    return clamp(value, 0, 1)
 
 
 def ggx(
