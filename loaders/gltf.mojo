@@ -2539,7 +2539,7 @@ struct _Loader(Movable):
             names.append(self.document.key(ids, slot))
             uids.append(self.document.integer(self.document.at(ids, slot)))
         var data = copy_bytes(self.buffers[view[0]], view[1], view[2])
-        return _DracoPrimitive(decode_draco(data), names^, uids^)
+        return _DracoPrimitive(decode_draco(data^), names^, uids^)
 
     def attribute_floats(
         mut self,

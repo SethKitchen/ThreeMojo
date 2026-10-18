@@ -936,11 +936,11 @@ def _metadata_name(mut buffer: DracoBuffer) raises -> String:
     return String(from_utf8=Span(bytes))
 
 
-def decode_draco(bytes: List[UInt8]) raises -> DracoGeometry:
+def decode_draco(var bytes: List[UInt8]) raises -> DracoGeometry:
     """Decode a Draco file as Draco's decoder does.
 
     Args:
-        bytes: The file.
+        bytes: The file. The call takes these bytes.
 
     Returns:
         The points, the triangles and the attributes.
@@ -949,8 +949,8 @@ def decode_draco(bytes: List[UInt8]) raises -> DracoGeometry:
         Error: If the file is not a Draco file of bitstream 2.2 or 2.3, or
             its data is not valid.
     """
-    var buffer = DracoBuffer(bytes.copy())
-    var magic = buffer.bytes(min(5, len(bytes)))
+    var buffer = DracoBuffer(bytes^)
+    var magic = buffer.bytes(min(5, len(buffer.data)))
     draco_require(
         String(from_utf8=Span(magic)) == "DRACO", "the file is not Draco"
     )
@@ -1063,7 +1063,7 @@ def parse_draco(bytes: List[UInt8]) raises -> BufferGeometry:
     Raises:
         Error: If the file cannot be decoded.
     """
-    var geometry = decode_draco(bytes)
+    var geometry = decode_draco(bytes.copy())
     var names: List[String] = [
         String(POSITION),
         String(NORMAL),

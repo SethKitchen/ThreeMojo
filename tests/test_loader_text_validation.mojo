@@ -168,7 +168,7 @@ def test_draco_metadata_validates_utf8() raises:
         with assert_raises(contains=utf8_error(bytes)):
             _ = _metadata_name(buffer)
         with assert_raises(contains=utf8_error(bytes)):
-            _ = decode_draco(bytes)
+            _ = decode_draco(bytes.copy())
 
 
 def test_vtk_detection_validates_utf8() raises:
