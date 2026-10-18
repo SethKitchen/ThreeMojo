@@ -522,7 +522,7 @@ struct HuffmanTable(Movable):
                     self.lookup[(code << spare) | tail] = length * 256 + symbol
 
 
-struct BitReader(Movable):
+struct BitReader[origin: Origin[mut=False]](Movable):
     """The entropy-coded bits of a scan.
 
     A 0xFF byte in the scan is followed by a stuffed zero, which is
@@ -537,7 +537,7 @@ struct BitReader(Movable):
     still refused when it is asked for.
     """
 
-    var bytes: List[UInt8]
+    var bytes: Span[UInt8, Self.origin]
     # Where the next byte is read from.
     var at: Int
     # The bits read and not yet handed out, and how many there are.
@@ -546,9 +546,9 @@ struct BitReader(Movable):
     # Whether the reading ahead met a marker or the end of the file.
     var stopped: Bool
 
-    def __init__(out self, var bytes: List[UInt8], start: Int):
-        """Start reading `bytes` at `start`."""
-        self.bytes = bytes^
+    def __init__(out self, bytes: Span[UInt8, Self.origin], start: Int):
+        """Start reading `bytes` at `start`. The caller keeps `bytes`."""
+        self.bytes = bytes
         self.at = start
         self.held = 0
         self.count = 0
@@ -1069,7 +1069,9 @@ def _read_scan(
     return Scan(order^, first, last, high, low)
 
 
-def _dc_difference(mut reader: BitReader, dc: HuffmanTable) raises -> Int:
+def _dc_difference[
+    origin: Origin[mut=False]
+](mut reader: BitReader[origin], dc: HuffmanTable) raises -> Int:
     """Return the next DC difference: a size under the DC table, then that
     many raw bits, the standard's F.2.2.1."""
     var size = Int(reader.decode(dc))
@@ -1078,8 +1080,10 @@ def _dc_difference(mut reader: BitReader, dc: HuffmanTable) raises -> Int:
     return 0
 
 
-def _decode_sequential(
-    mut reader: BitReader,
+def _decode_sequential[
+    origin: Origin[mut=False]
+](
+    mut reader: BitReader[origin],
     mut component: Component,
     dc: HuffmanTable,
     ac: HuffmanTable,
@@ -1129,8 +1133,10 @@ def require_coefficient_band(index: Int, spectral_end: Int) raises:
         raise Error("A block's coefficients run past its band")
 
 
-def _decode_ac_first(
-    mut reader: BitReader,
+def _decode_ac_first[
+    origin: Origin[mut=False]
+](
+    mut reader: BitReader[origin],
     mut component: Component,
     ac: HuffmanTable,
     base: Int,
@@ -1164,8 +1170,10 @@ def _decode_ac_first(
         index += 1
 
 
-def _refine(
-    mut reader: BitReader, mut component: Component, at: Int, one: Int
+def _refine[
+    origin: Origin[mut=False]
+](
+    mut reader: BitReader[origin], mut component: Component, at: Int, one: Int
 ) raises:
     """Refine a coefficient already known to be nonzero by one bit of
     magnitude, away from zero.
@@ -1180,8 +1188,10 @@ def _refine(
             component.coefficients[at] = Int32(value - one)
 
 
-def _decode_ac_refine(
-    mut reader: BitReader,
+def _decode_ac_refine[
+    origin: Origin[mut=False]
+](
+    mut reader: BitReader[origin],
     mut component: Component,
     ac: HuffmanTable,
     base: Int,
@@ -1238,8 +1248,10 @@ def _decode_ac_refine(
         eob_run -= 1
 
 
-def _decode_coefficients(
-    mut reader: BitReader,
+def _decode_coefficients[
+    origin: Origin[mut=False]
+](
+    mut reader: BitReader[origin],
     mut component: Component,
     dc: HuffmanTable,
     ac: HuffmanTable,
@@ -1269,8 +1281,10 @@ def _decode_coefficients(
         _decode_ac_refine(reader, component, ac, base, scan, eob_run)
 
 
-def _decode_scan(
-    mut reader: BitReader,
+def _decode_scan[
+    origin: Origin[mut=False]
+](
+    mut reader: BitReader[origin],
     scan: Scan,
     mut components: List[Component],
     dc_tables: List[HuffmanTable],
@@ -1473,7 +1487,7 @@ def decode(bytes: List[UInt8]) raises -> DecodedImage:
     var progressive = False
     var scanned = False
     var restart_interval = 0
-    var reader = BitReader(bytes.copy(), 0)
+    var reader = BitReader(Span(bytes), 0)
     var at = 2
     var ended = False
     while not ended:
