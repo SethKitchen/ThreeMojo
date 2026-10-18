@@ -60,6 +60,7 @@ from math.curve_checks import (
     check_curve_parameter,
     curve_sample_count,
     curve_count_product,
+    parameter_samples,
 )
 from math.curve import ARC_DIVISIONS, SEGMENT_SAMPLES, u_to_t
 from math.polyline import prefix_lengths, unit_direction
@@ -450,12 +451,7 @@ struct Curve3(Copyable, Movable):
             Error: If `divisions` is less than one, its sample count cannot
                 fit in Int, or the mutable curve is not valid.
         """
-        var sample_count = curve_sample_count(divisions)
-        var out = List[Vector3]()
-        for index in range(sample_count):  # pragma: no branch
-            # At least one division, so this runs.
-            out.append(self.point(Float32(index) / Float32(divisions)))
-        return out^
+        return parameter_samples[Self.point](self, divisions)
 
     def lengths(self, divisions: Int) raises -> List[Float32]:
         """Return how far along the curve each sample is, from zero,
@@ -1039,12 +1035,7 @@ struct CurvePath3(Copyable, Movable):
                 is less than one, or a sample count cannot fit in Int.
         """
         self._need_curves()
-        var sample_count = curve_sample_count(divisions)
-        var out = List[Vector3]()
-        for index in range(sample_count):  # pragma: no branch
-            # At least one division, so this runs.
-            out.append(self.point(Float32(index) / Float32(divisions)))
-        return out^
+        return parameter_samples[Self.point](self, divisions)
 
     def frenet_frames(self, segments: Int, closed: Bool) raises -> FrenetFrames:
         """Return a frame at each of `segments + 1` equal steps along the
@@ -1064,9 +1055,5 @@ struct CurvePath3(Copyable, Movable):
                 sample count cannot fit in Int, a curve is not valid or
                 stops at a step, or two steps point straight opposite ways.
         """
-        var sample_count = curve_sample_count(segments)
-        var tangents = List[Vector3]()
-        for index in range(sample_count):  # pragma: no branch
-            # At least one segment, so this runs.
-            tangents.append(self.tangent(Float32(index) / Float32(segments)))
+        var tangents = parameter_samples[Self.tangent](self, segments)
         return transport_frames(tangents, closed)

@@ -90,6 +90,7 @@ from math.curve_checks import (
     check_curve_parameter,
     curve_sample_count,
     curve_count_product,
+    parameter_samples,
 )
 from math.polyline import prefix_lengths, unit_direction
 from math.vector2 import Vector2
@@ -626,11 +627,7 @@ struct Curve(Copyable, Movable):
             Error: If `divisions` is less than one, its sample count cannot
                 fit in Int, or the mutable curve is not valid.
         """
-        var sample_count = curve_sample_count(divisions)
-        var out = List[Vector2]()
-        for index in range(sample_count):  # pragma: no branch
-            out.append(self.point(Float32(index) / Float32(divisions)))
-        return out^
+        return parameter_samples[Self.point](self, divisions)
 
     def lengths(self, divisions: Int) raises -> List[Float32]:
         """Return how far along the curve each sample is, from zero.
