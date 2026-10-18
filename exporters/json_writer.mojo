@@ -10,7 +10,7 @@
 `begin_array` open a container, `end_object` and `end_array` close it,
 `key` names the next value in an object, and `string`, `number`,
 `integer`, `boolean`, `null`, `raw`, `numbers`, `integers` and
-`strings` write a value. The commas and the
+`strings` write a value. `metadata` writes a three.js metadata object. The commas and the
 colons are the writer's: a caller says what goes where, and the writer
 refuses what JSON has no place for -- a value in an object without a key,
 a key outside an object, a close that does not match the open, a second
@@ -176,6 +176,33 @@ struct JsonWriter(Movable):
             Error: If it is not finite, or a value has no place here.
         """
         self._write(format_float32(value))
+
+    def metadata(
+        mut self, version: Float32, type_name: String, generator: String = ""
+    ) raises:
+        """Write a three.js `metadata` object.
+
+        Args:
+            version: The format version.
+            type_name: The `type` field.
+            generator: The `generator` field. An empty string omits it.
+
+        Returns:
+            Nothing. The metadata object is written into this text.
+
+        Raises:
+            Error: If a value has no place here, or `version` is not finite.
+        """
+        self.key("metadata")
+        self.begin_object()
+        self.key("version")
+        self.number(version)
+        self.key("type")
+        self.string(type_name)
+        if generator.byte_length() > 0:
+            self.key("generator")
+            self.string(generator)
+        self.end_object()
 
     def integer(mut self, value: Int) raises:
         """Write a whole number.
