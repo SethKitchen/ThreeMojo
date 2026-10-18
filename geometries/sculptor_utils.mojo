@@ -205,11 +205,6 @@ def _dot(a: Point3, b: Point3) -> Float64:
     return dot3[DType.float64](a.x, a.y, a.z, b.x, b.y, b.z)
 
 
-def _hypot(p: Point3) -> Float64:
-    """Return the length of `p`, three.js's `Math.hypot`."""
-    return length3(p.x, p.y, p.z)
-
-
 def intersection_ray_triangle(
     origin: Point3, direction: Point3, v1: Point3, v2: Point3, v3: Point3
 ) -> Float64:
@@ -232,7 +227,11 @@ def intersection_ray_triangle(
     var edge2 = v3 - v1
     var pvec = _cross(direction, edge2)
     var det = _dot(edge1, pvec)
-    var determinant_scale = _hypot(edge1) * _hypot(edge2) * _hypot(direction)
+    var determinant_scale = (
+        length3(edge1.x, edge1.y, edge1.z)
+        * length3(edge2.x, edge2.y, edge2.z)
+        * length3(direction.x, direction.y, direction.z)
+    )
     if abs(det) <= RAY_EPSILON * determinant_scale:
         return -1.0
     var inv_det = 1.0 / det
