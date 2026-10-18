@@ -1744,6 +1744,43 @@ struct Lighting(Movable):
             self.spot_attenuation(index, angle_cos, position),
         )
 
+    def _point_weight(
+        self, index: Int, normal: Vector3, position: Vector3
+    ) -> Tuple[Bool, Vector3, Float32]:
+        """Return whether a point light faces the surface, its offset, and
+        the Lambert term times the distance falloff.
+
+        A surface on the bulb has no direction, so it is unlit and the
+        cosine is not read. Otherwise the cosine is the normal's dot with
+        the offset, divided by the offset's length afterwards: the order
+        the kernel uses, so the two round alike. A cosine of zero or below
+        is unlit. A cosine that is not an ordered number stays, and the
+        falloff still multiplies it.
+
+        Args:
+            index: Which point light, in the order they were resolved.
+            normal: The surface's unit normal, in world space.
+            position: Where the surface is, in world space.
+
+        Returns:
+            Whether the light faces the surface, the offset from the
+            surface to the bulb, and the weighted Lambert term.
+        """
+        var toward, distance, direction_length = light_vector(
+            self.positions[index], position
+        )
+        if distance == 0:
+            return False, toward, Float32(0)
+        var lambert = normal.dot(toward) / direction_length
+        if lambert <= 0:
+            return False, toward, Float32(0)
+        return (
+            True,
+            toward,
+            lambert
+            * falloff(distance, self.decays[index], self.cutoffs[index]),
+        )
+
     def _add_hemisphere(self, total: FloatColor, normal: Vector3) -> FloatColor:
         """Add every hemisphere light's ground-to-sky mix.
 
@@ -2002,21 +2039,9 @@ struct Lighting(Movable):
             ref light = self.radiances[index]
             total = _add_rgb(total, rgb_channels(light) * (through * lambert))
         for index in range(len(self.positions)):
-            # From the surface to the bulb: how far, and which way.
-            var toward, distance, direction_length = light_vector(
-                self.positions[index], position
-            )
-            # A surface exactly on the bulb has no direction to be lit from.
-            if distance == 0:
+            var lit, _, bare = self._point_weight(index, normal, position)
+            if not lit:
                 continue
-            # The dot and then the divide, in that order, because it is the
-            # order the kernel uses and the two must round alike.
-            var lambert = normal.dot(toward) / direction_length
-            if lambert <= 0:
-                continue
-            var bare = lambert * falloff(
-                distance, self.decays[index], self.cutoffs[index]
-            )
             var through = self.shadow_through(
                 self.point_shadows[index], position, normal, receives, shape
             )
@@ -2215,17 +2240,9 @@ struct Lighting(Movable):
             ref light = self.radiances[index]
             sum = sum + (rgb_channels(light) * (through * lambert)) * sent
         for index in range(len(self.positions)):
-            var toward, distance, direction_length = light_vector(
-                self.positions[index], position
-            )
-            if distance == 0:
+            var lit, toward, bare = self._point_weight(index, normal, position)
+            if not lit:
                 continue
-            var lambert = normal.dot(toward) / direction_length
-            if lambert <= 0:
-                continue
-            var bare = lambert * falloff(
-                distance, self.decays[index], self.cutoffs[index]
-            )
             var through = self.shadow_through(
                 self.point_shadows[index], position, normal, receives, shape
             )
@@ -2480,17 +2497,9 @@ struct Lighting(Movable):
         """
         var total = FloatColor(0.0, 0.0, 0.0, 1.0)
         for index in range(len(self.positions)):
-            var toward, distance, direction_length = light_vector(
-                self.positions[index], position
-            )
-            if distance == 0:
+            var lit, _, reach = self._point_weight(index, normal, position)
+            if not lit:
                 continue
-            var lambert = normal.dot(toward) / direction_length
-            if lambert <= 0:
-                continue
-            var reach = lambert * falloff(
-                distance, self.decays[index], self.cutoffs[index]
-            )
             ref bulb = self.point_radiances[index]
             total = _add_rgb(total, rgb_channels(bulb) * reach)
         for index in range(len(self.spot_positions)):
