@@ -28,7 +28,7 @@ from math.triangle_normal import (
     _ordinary_triangle_cross,
     _triangle_cross_wide,
 )
-from math.utils import clamp, max3, min3
+from math.utils import clamp, max3, min3, saturate
 from math.vector3 import Vector3
 from std.math import sqrt
 
@@ -398,7 +398,7 @@ def _nearest_on_segment(
     if length_sq == 0:
         return start
     var t = (point - start).dot(line) / length_sq
-    return start + line * _unit(t)
+    return start + line * saturate(t)
 
 
 @fieldwise_init
@@ -466,7 +466,7 @@ struct Line3(Equatable, ImplicitlyCopyable):
             raise Error("A segment of no length has no direction")
         var t = (point - self.start).dot(line) / length_sq
         if clamp:
-            t = _unit(t)
+            t = saturate(t)
         return t
 
     def closest_point(self, point: Vector3, clamp: Bool) raises -> Vector3:
@@ -563,8 +563,3 @@ struct Line3(Equatable, ImplicitlyCopyable):
             Whether the two differ.
         """
         return not self == other
-
-
-def _unit(value: Float32) -> Float32:
-    """Return `value` limited to the range from zero to one."""
-    return clamp(value, 0, 1)

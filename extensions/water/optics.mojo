@@ -18,7 +18,7 @@ from extensions.water.pebbles import (
 from math.arc_tangent import atan2_float32
 from math.smoothstep import clamped_smoothstep, hermite_fade
 from math.sine import fraction
-from math.utils import clamp, mix_bilinear, mix_delta
+from math.utils import mix_bilinear, mix_delta, saturate
 from math.norm import squared_length2, squared_length3
 from math.sine import sin_float32
 from math.vector3 import Vector3, mix_delta3
@@ -49,18 +49,6 @@ def channel_ior(channel: Int) -> Float32:
     if channel == 2:
         return 1.3365
     return 1.3335
-
-
-def clamp01(value: Float32) -> Float32:
-    """Clamp `value` to the unit interval.
-
-    Args:
-        value: Any float.
-
-    Returns:
-        `value` limited to 0 and 1.
-    """
-    return clamp(value, 0, 1)
 
 
 def smoothstep(edge0: Float32, edge1: Float32, value: Float32) -> Float32:
@@ -183,7 +171,7 @@ def fresnel(cos_i: Float32, ior: Float32) -> Float32:
     Returns:
         The reflected fraction, from 0 to 1.
     """
-    var ci = clamp01(cos_i)
+    var ci = saturate(cos_i)
     var st2 = (1.0 - ci * ci) / (ior * ior)
     if st2 >= 1.0:
         return 1.0
@@ -302,7 +290,7 @@ def aces_channel(value: Float32) -> Float32:
     var c = Float32(2.43)
     var d = Float32(0.59)
     var e = Float32(0.14)
-    return clamp01((x * (a * x + b)) / (x * (c * x + d) + e))
+    return saturate((x * (a * x + b)) / (x * (c * x + d) + e))
 
 
 def sun_direction() -> Vector3:
@@ -349,7 +337,7 @@ def sky_radiance(
     var mu = x * sun.x + y * sun.y + z * sun.z
     var zen = Vector3(0.11, 0.27, 0.62)
     var hor = Vector3(0.66, 0.78, 0.90)
-    var t = pow(clamp01(y), Float32(0.42))
+    var t = pow(saturate(y), Float32(0.42))
     var color = mix_delta3(hor, zen, t)
     var glow = Float32(0.0)
     if mu > 0.0:
@@ -383,7 +371,7 @@ def sky_radiance(
         sz /= slen
     var back = smoothstep(-0.3, 0.95, hx * sx + hz * sz)
     # The ridge stays above about 0.007 for every azimuth, so the quotient is defined.
-    var u = clamp01(y / ridge)
+    var u = saturate(y / ridge)
     var tex = fbm2(azimuth * 420.0, y * 420.0)
     var pine = 0.045 * (0.6 + 0.8 * tex)
     var rock = 0.30 * (

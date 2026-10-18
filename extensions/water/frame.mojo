@@ -28,7 +28,6 @@ from extensions.water.optics import (
     aces_channel,
     bed_color,
     beckmann,
-    clamp01,
     floor_depth,
     fresnel,
     hash12,
@@ -71,7 +70,7 @@ from cameras.camera import Camera
 from core.extent import positive_extent
 from core.scene import Scene
 from math.finite import require_finite, require_positive_finite
-from math.utils import max3, rec709_luminance
+from math.utils import max3, rec709_luminance, saturate
 from math.norm import squared_length3
 from math.matrix4 import Matrix4
 from math.vector3 import Vector3, mix_delta3
@@ -245,7 +244,7 @@ def _write_rows(
                 LINEAR,
             )
             var color = FloatColor(
-                clamp01(graded.x), clamp01(graded.y), clamp01(graded.z), 1.0
+                saturate(graded.x), saturate(graded.y), saturate(graded.z), 1.0
             ).quantize()
             var at = (y * width + x) * Framebuffer.CHANNELS
             pixels[unsafe_offset=at] = color.r
@@ -1691,9 +1690,9 @@ struct WaterScene(Movable):
                     x,
                     y,
                     FloatColor(
-                        clamp01(graded[p]),
-                        clamp01(graded[p + 1]),
-                        clamp01(graded[p + 2]),
+                        saturate(graded[p]),
+                        saturate(graded[p + 1]),
+                        saturate(graded[p + 2]),
                         1.0,
                     ).quantize(),
                 )
@@ -1809,9 +1808,9 @@ def _caustic_picture(
                 x,
                 y,
                 FloatColor(
-                    clamp01(sample.x * 0.25),
-                    clamp01(sample.y * 0.25),
-                    clamp01(sample.z * 0.25),
+                    saturate(sample.x * 0.25),
+                    saturate(sample.y * 0.25),
+                    saturate(sample.z * 0.25),
                     1.0,
                 ).quantize(),
             )
