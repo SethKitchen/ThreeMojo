@@ -588,6 +588,119 @@ def check_clip_bias(bias: Length) raises:
     require_finite(Float64(bias.to(METER)), "A clip bias must be finite")
 
 
+def _prepare_pane(
+    mut assets: Assets,
+    color: Color,
+    texture_width: Int,
+    texture_height: Int,
+    clip_bias: Length,
+    multisample: Int,
+    vertex_shader: String,
+    fragment_shader: String,
+    transparent: Bool,
+) raises -> Tuple[TextureId, NodeProgramId, MaterialId]:
+    """Check a pane and compile its target, program, and material.
+
+    The program's `color`, `tDiffuse`, and `textureMatrix` uniforms are
+    set. `textureMatrix` starts as the identity.
+
+    Args:
+        assets: The stores the texture, program, and material are added to.
+        color: The tint, as authored in sRGB.
+        texture_width: The render target's width in pixels.
+        texture_height: The render target's height in pixels.
+        clip_bias: How far past the surface the clipping plane lies.
+        multisample: How many samples each pixel of the target takes.
+        vertex_shader: The GLSL vertex shader.
+        fragment_shader: The GLSL fragment shader.
+        transparent: Whether the material blends by its alpha.
+
+    Returns:
+        The texture id, the program id, and the material id.
+
+    Raises:
+        Error: If a size is not positive, the bias is not finite, the
+            sample count is refused, or a shader does not compile or lacks
+            one of the uniforms.
+    """
+    check_texture_size(texture_width, texture_height)
+    check_clip_bias(clip_bias)
+    check_samples(multisample)
+    var texture = assets.textures.add(
+        blank_texture(texture_width, texture_height, HALF_FLOAT_TARGET)
+    )
+    var program = compile_shader_material(vertex_shader, fragment_shader)
+    program.set_uniform("color", color)
+    program.set_texture("tDiffuse", texture)
+    program.set_uniform("textureMatrix", Matrix4())
+    var program_id = assets.programs.add(program^)
+    var material = assets.materials.add(
+        shader_material(program_id, transparent=transparent)
+    )
+    return texture, program_id, material
+
+
+def _project_and_draw(
+    mut assets: Assets,
+    program: NodeProgramId,
+    camera: VirtualCamera,
+    surface: Matrix4,
+    renderer: Renderer,
+    mut scene: Scene,
+    node: NodeId,
+    cut: Plane,
+    texture: TextureId,
+    width: Int,
+    height: Int,
+    samples: Int,
+) raises -> Matrix4:
+    """Draw the virtual view and return its projective matrix.
+
+    The uniform `textureMatrix` is the camera's projection. The returned
+    matrix is that projection times the surface matrix, which is what
+    `texture_matrix` keeps.
+
+    Args:
+        assets: The stores. The texture is replaced and the program is
+            updated.
+        program: The pane's shader.
+        camera: The virtual camera.
+        surface: The pane's world matrix.
+        renderer: The renderer the scene is drawn with.
+        scene: The scene, updated. The node is hidden while the target is
+            drawn.
+        node: The node hidden during the draw.
+        cut: The clipping plane, in world space.
+        texture: The texture the target replaces.
+        width: The target's width in pixels.
+        height: The target's height in pixels.
+        samples: How many samples each pixel of the target takes.
+
+    Returns:
+        The projection times the surface matrix.
+
+    Raises:
+        Error: If the node is not in the scene, or the render raises.
+    """
+    var matrix = projective_matrix(camera)
+    assets.programs.get(program).set_uniform("textureMatrix", matrix)
+    matrix.multiply(surface)
+    var seen = render_view(
+        renderer,
+        scene,
+        assets,
+        node,
+        camera,
+        cut,
+        width,
+        height,
+        HALF_FLOAT_TARGET,
+        samples,
+    )
+    replace_texture(assets, texture, seen^)
+    return matrix^
+
+
 struct Reflector(Movable):
     """A flat mirror, three.js's `Reflector`.
 
@@ -655,18 +768,19 @@ struct Reflector(Movable):
             Error: If a size is not positive, the bias is not finite, or a
                 shader does not compile or lacks one of the uniforms.
         """
-        check_texture_size(texture_width, texture_height)
-        check_clip_bias(clip_bias)
-        check_samples(multisample)
-        self.texture = assets.textures.add(
-            blank_texture(texture_width, texture_height, HALF_FLOAT_TARGET)
+        var texture, program, material = _prepare_pane(
+            assets,
+            color,
+            texture_width,
+            texture_height,
+            clip_bias,
+            multisample,
+            vertex_shader,
+            fragment_shader,
+            False,
         )
-        var program = compile_shader_material(vertex_shader, fragment_shader)
-        program.set_uniform("color", color)
-        program.set_texture("tDiffuse", self.texture)
-        program.set_uniform("textureMatrix", Matrix4())
-        self.program = assets.programs.add(program^)
-        var material = assets.materials.add(shader_material(self.program))
+        self.texture = texture
+        self.program = program
         self.mesh = Mesh(geometry, material, node)
         self.texture_width = texture_width
         self.texture_height = texture_height
@@ -710,27 +824,24 @@ struct Reflector(Movable):
         if mirror.facing_away and not self.force_update:
             return False
         self.camera = follow_camera(camera, mirror.view)
-        var matrix = projective_matrix(self.camera)
-        assets.programs.get(self.program).set_uniform("textureMatrix", matrix)
-        matrix.multiply(surface)
-        self.texture_matrix = matrix
         var cut = Plane(
             mirror.normal,
             -mirror.normal.dot(mirror.point) + self.clip_bias.to(METER),
         )
-        var seen = render_view(
+        self.texture_matrix = _project_and_draw(
+            assets,
+            self.program,
+            self.camera,
+            surface,
             renderer,
             scene,
-            assets,
             self.mesh.node,
-            self.camera,
             cut,
+            self.texture,
             self.texture_width,
             self.texture_height,
-            HALF_FLOAT_TARGET,
             self.multisample,
         )
-        replace_texture(assets, self.texture, seen^)
         self.force_update = False
         return True
 
@@ -843,20 +954,19 @@ struct Refractor(Movable):
             Error: If a size is not positive, the bias is not finite, or a
                 shader does not compile or lacks one of the uniforms.
         """
-        check_texture_size(texture_width, texture_height)
-        check_clip_bias(clip_bias)
-        check_samples(multisample)
-        self.texture = assets.textures.add(
-            blank_texture(texture_width, texture_height, HALF_FLOAT_TARGET)
+        var texture, program, material = _prepare_pane(
+            assets,
+            color,
+            texture_width,
+            texture_height,
+            clip_bias,
+            multisample,
+            vertex_shader,
+            fragment_shader,
+            True,
         )
-        var program = compile_shader_material(vertex_shader, fragment_shader)
-        program.set_uniform("color", color)
-        program.set_texture("tDiffuse", self.texture)
-        program.set_uniform("textureMatrix", Matrix4())
-        self.program = assets.programs.add(program^)
-        var material = assets.materials.add(
-            shader_material(self.program, transparent=True)
-        )
+        self.texture = texture
+        self.program = program
         self.mesh = Mesh(geometry, material, node)
         self.texture_width = texture_width
         self.texture_height = texture_height
@@ -899,22 +1009,19 @@ struct Refractor(Movable):
             return False
         var plane = refractor_plane(surface)
         self.camera = follow_camera(camera, camera.view_matrix_in(scene))
-        var matrix = projective_matrix(self.camera)
-        assets.programs.get(self.program).set_uniform("textureMatrix", matrix)
-        matrix.multiply(surface)
-        self.texture_matrix = matrix
         var cut = Plane(plane.normal, plane.constant + self.clip_bias.to(METER))
-        var seen = render_view(
+        self.texture_matrix = _project_and_draw(
+            assets,
+            self.program,
+            self.camera,
+            surface,
             renderer,
             scene,
-            assets,
             self.mesh.node,
-            self.camera,
             cut,
+            self.texture,
             self.texture_width,
             self.texture_height,
-            HALF_FLOAT_TARGET,
             self.multisample,
         )
-        replace_texture(assets, self.texture, seen^)
         return True
