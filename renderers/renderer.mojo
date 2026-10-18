@@ -2998,25 +2998,6 @@ def _draw_offset(
     return offset
 
 
-def _column_length(matrix: Matrix4, axis: Int) -> Float32:
-    """Return the length of one of a matrix's three axis columns: how much
-    it scales along that axis, three.js's `length(modelMatrix[axis].xyz)`.
-
-    Args:
-        matrix: The transform.
-        axis: Which column, zero for x through two for z.
-
-    Returns:
-        The length.
-    """
-    ref e = matrix.elements
-    var start = axis * 4
-    var x = e[start]
-    var y = e[start + 1]
-    var z = e[start + 2]
-    return Vector3(x, y, z).length()
-
-
 def require_named_map(value: Int, count: Int, name: String) raises:
     """Refuse a map id past the textures the store holds.
 
@@ -3581,8 +3562,8 @@ def _emit_sprite(
         world.elements[12], world.elements[13], world.elements[14]
     )
     var center = view.transform_point(origin)
-    var scale_x = _column_length(world, 0)
-    var scale_y = _column_length(world, 1)
+    var scale_x = world.column_length(0)
+    var scale_y = world.column_length(1)
     if not material.size_attenuation and perspective:
         scale_x *= -center.z
         scale_y *= -center.z
@@ -7078,9 +7059,9 @@ struct Renderer(Movable):
                 # the geometry's own units, and the slab is as deep along
                 # each world axis as that axis is stretched.
                 Vector3(
-                    material.thickness.to(METER) * _column_length(world, 0),
-                    material.thickness.to(METER) * _column_length(world, 1),
-                    material.thickness.to(METER) * _column_length(world, 2),
+                    material.thickness.to(METER) * world.column_length(0),
+                    material.thickness.to(METER) * world.column_length(1),
+                    material.thickness.to(METER) * world.column_length(2),
                 ),
                 _checked_data_map(
                     assets, material.thickness_map, "A thickness map"

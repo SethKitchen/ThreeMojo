@@ -22,7 +22,6 @@ See `docs/wiki/Norm-consumers.md` for the changed operations, retained
 limits, and explicit zero and nonfinite rules.
 """
 
-from math.norm import length3, normalized3, _ordinary_squared
 from core.assets import Assets
 from core.object3d import Object3D
 from materials.material import Material, MaterialId
@@ -35,12 +34,6 @@ from render.srgb import ColorSpace
 from render.texture import Alpha, BILINEAR, Texture, Wrap, texture_from
 from std.math import isfinite, sqrt
 from std.pathlib import Path
-
-
-def _column_length(matrix: Matrix4, start: Int) -> Float32:
-    """Return the length of a column's first three entries."""
-    ref e = matrix.elements
-    return length3(e[start], e[start + 1], e[start + 2])
 
 
 def decompose_onto(mut node: Object3D, matrix: Matrix4, what: String) raises:
@@ -62,9 +55,9 @@ def decompose_onto(mut node: Object3D, matrix: Matrix4, what: String) raises:
     """
     if not matrix.is_finite():
         raise Error(what + ": a node matrix that is not finite")
-    var sx = _column_length(matrix, 0)
-    var sy = _column_length(matrix, 4)
-    var sz = _column_length(matrix, 8)
+    var sx = matrix.column_length(0)
+    var sy = matrix.column_length(1)
+    var sz = matrix.column_length(2)
     require_axis_extent(
         sx, sy, sz, what + ": a node matrix that flattens an axis"
     )
