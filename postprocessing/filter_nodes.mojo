@@ -38,6 +38,7 @@ from postprocessing.display_nodes import (
     exp_f,
     gaussian_coefficients,
     luminance_of,
+    replace_light,
 )
 from postprocessing.sampling import LightView, u_of
 from postprocessing.screen_space import DepthView
@@ -399,14 +400,11 @@ def crt_light(mut frame: RenderTarget, settings: FilterSettings):
         frame: The frame, replaced.
         settings: The CRT's settings.
     """
-    var before = frame.colors.copy()
-    var view = LightView(before, frame.width, frame.height)
-    for y in range(frame.height):  # pragma: no branch
-        for x in range(frame.width):  # pragma: no branch
-            var slot = y * frame.width + x
-            frame.colors[slot] = crt_pixel(view, x, y, settings)
-            frame.data[slot] = False
-    _ = before^
+
+    def pixel(view: LightView, x: Int, y: Int) capturing -> FloatColor:
+        return crt_pixel(view, x, y, settings)
+
+    replace_light[pixel](frame)
 
 
 # --- radialBlur --------------------------------------------------------------
@@ -488,14 +486,11 @@ def radial_blur_light(mut frame: RenderTarget, settings: FilterSettings):
         frame: The frame, replaced.
         settings: The radial blur's settings.
     """
-    var before = frame.colors.copy()
-    var view = LightView(before, frame.width, frame.height)
-    for y in range(frame.height):  # pragma: no branch
-        for x in range(frame.width):  # pragma: no branch
-            var slot = y * frame.width + x
-            frame.colors[slot] = radial_blur_pixel(view, x, y, settings)
-            frame.data[slot] = False
-    _ = before^
+
+    def pixel(view: LightView, x: Int, y: Int) capturing -> FloatColor:
+        return radial_blur_pixel(view, x, y, settings)
+
+    replace_light[pixel](frame)
 
 
 # --- BilateralBlurNode -------------------------------------------------------
