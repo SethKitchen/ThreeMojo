@@ -3093,6 +3093,21 @@ struct _Loader(Movable):
             )
         )
 
+    def _drawn_primitive(
+        self, primitives: Int, mesh: Int, slot: Int, refusal: String
+    ) raises -> Tuple[Int, GeometryId]:
+        """Return one primitive and its geometry when the primitive is
+        triangles.
+
+        An instanced node and a skinned node both ask this. Each one
+        passes the refusal that names its own kind.
+        """
+        var primitive = self.document.at(primitives, slot)
+        var at = self.model.first_primitives[mesh] + slot
+        if self.primitive_modes[at] != MODE_TRIANGLES:
+            raise Error(refusal)
+        return (primitive, self.model.geometries[at])
+
     def draw_instanced(
         mut self,
         mesh: Int,
@@ -3171,14 +3186,15 @@ struct _Loader(Movable):
             self.entry("meshes", mesh), "primitives"
         )
         for slot in range(self.model.primitive_counts[mesh]):
-            var primitive = self.document.at(primitives, slot)
-            var at = self.model.first_primitives[mesh] + slot
-            if self.primitive_modes[at] != MODE_TRIANGLES:
-                raise Error(
+            var primitive, geometry = self._drawn_primitive(
+                primitives,
+                mesh,
+                slot,
+                (
                     "glTF: an instanced node draws triangles only: an"
                     " instanced line or points is not ported"
-                )
-            var geometry = self.model.geometries[at]
+                ),
+            )
             var tinted = assets.geometries.get(geometry).has_attribute(
                 String(COLOR)
             )
@@ -3331,14 +3347,15 @@ struct _Loader(Movable):
             self.entry("meshes", mesh), "primitives"
         )
         for slot in range(self.model.primitive_counts[mesh]):
-            var primitive = self.document.at(primitives, slot)
-            var at = self.model.first_primitives[mesh] + slot
-            if self.primitive_modes[at] != MODE_TRIANGLES:
-                raise Error(
+            var primitive, geometry = self._drawn_primitive(
+                primitives,
+                mesh,
+                slot,
+                (
                     "glTF: a skinned node draws triangles only: a skinned"
                     " line or points is not ported"
-                )
-            var geometry = self.model.geometries[at]
+                ),
+            )
             ref shape = assets.geometries.get(geometry)
             var bones = shape.has_attribute(String(SKIN_INDEX))
             var shares = shape.has_attribute(String(SKIN_WEIGHT))
