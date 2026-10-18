@@ -79,6 +79,7 @@ from core.ordinal import ordinal_valid
 from lights.light_slot import LightSlot
 
 from math.smoothstep import smoothstep
+from math.utils import lerp
 from math.cross import cross_vectors
 from math.norm import squared_length2
 from math.vector3 import Vector3
@@ -1209,11 +1210,6 @@ def shadow_tap(stored: Float32, depth: Float32, bias: Float32) -> Float32:
     return 0
 
 
-def _mix(low: Float32, high: Float32, weight: Float32) -> Float32:
-    """Return GLSL's `mix`: `low` at a weight of zero, `high` at one."""
-    return low * (1 - weight) + high * weight
-
-
 def _texel_at(column: Int, row: Int, size: Int) -> Int:
     """Return a texel's index with its column and row held to the map, as
     a map clamped to its edge reads past them."""
@@ -1284,13 +1280,13 @@ def soft_shadow(
         + taps[6]
         + taps[9]
         + taps[10]
-        + _mix(taps[4], taps[7], across)
-        + _mix(taps[8], taps[11], across)
-        + _mix(taps[1], taps[13], down)
-        + _mix(taps[2], taps[14], down)
-        + _mix(
-            _mix(taps[0], taps[3], across),
-            _mix(taps[12], taps[15], across),
+        + lerp(taps[4], taps[7], across)
+        + lerp(taps[8], taps[11], across)
+        + lerp(taps[1], taps[13], down)
+        + lerp(taps[2], taps[14], down)
+        + lerp(
+            lerp(taps[0], taps[3], across),
+            lerp(taps[12], taps[15], across),
             down,
         )
     ) * (Float32(1) / 9)
@@ -1349,9 +1345,9 @@ def bilinear(
         The value between them.
     """
     var right = bilinear_fraction(across)
-    return _mix(
-        _mix(corners[first], corners[first + 1], right),
-        _mix(corners[first + 2], corners[first + 3], right),
+    return lerp(
+        lerp(corners[first], corners[first + 1], right),
+        lerp(corners[first + 2], corners[first + 3], right),
         bilinear_fraction(down),
     )
 
