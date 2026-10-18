@@ -33,13 +33,9 @@ from core.buffer_geometry import (
     POSITION,
     UV,
 )
+from math.utils import glsl_sign
 from std.math import acos, isfinite, pi, sqrt
 from units.si import Length, METER
-
-
-def _sign(value: Float64) -> Float64:
-    """Return JavaScript's `Math.sign`: one, minus one or zero."""
-    return 1.0 if value > 0 else (-1.0 if value < 0 else 0.0)
 
 
 def _length(v: List[Float64]) -> Float64:
@@ -87,7 +83,7 @@ def _get_uv(
         != 0 else pi / 2
     )
     var arc_angle_ratio = 1.0 - angle / half_arc
-    if _sign(flat[uv_axis]) == 1:
+    if glsl_sign(flat[uv_axis]) == 1:
         return arc_angle_ratio * arc_uv_ratio
     var length_uv = center_length / (total_arc_length + center_length)
     return length_uv + arc_uv_ratio + arc_uv_ratio * (1.0 - arc_angle_ratio)
@@ -224,13 +220,15 @@ def rounded_box(
         ]
         var normal = position.copy()
         for axis in range(3):  # pragma: no branch
-            normal[axis] -= _sign(normal[axis]) * half_segment
+            normal[axis] -= glsl_sign(normal[axis]) * half_segment
         var scale = 1.0 / _length(normal)
         for axis in range(3):  # pragma: no branch
             normal[axis] = normal[axis] * scale
         for axis in range(3):  # pragma: no branch
             data.append(
-                Float32(inner[axis] * _sign(position[axis]) + normal[axis] * r)
+                Float32(
+                    inner[axis] * glsl_sign(position[axis]) + normal[axis] * r
+                )
             )
             normals.append(Float32(normal[axis]))
         var side = vertex // per_side

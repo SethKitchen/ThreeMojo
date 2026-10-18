@@ -36,7 +36,7 @@ from extensions.sdf.vector import (
     normalize,
 )
 from math.norm import squared_length2, squared_length3
-from math.utils import max3, min3
+from math.utils import glsl_sign, max3, min3
 from std.collections import Dict
 from std.math import sqrt
 
@@ -129,10 +129,6 @@ def _ellipsoid(p: Primitive, q: V3) -> Float64:
     return k0 * (k0 - 1.0) / k1
 
 
-def _sign(x: Float64) -> Float64:
-    return 1.0 if x > 0.0 else (-1.0 if x < 0.0 else 0.0)
-
-
 def _cone(p: Primitive, q: V3) -> Float64:
     # Inigo Quilez's exact round cone.
     var pa = q - p.c
@@ -147,10 +143,10 @@ def _cone(p: Primitive, q: V3) -> Float64:
     var x2 = dot(v, v)
     var y2 = y * y * l2
     var z2 = z * z * l2
-    var k = _sign(rr) * rr * rr * x2
-    if _sign(z) * a2 * z2 > k:
+    var k = glsl_sign(rr) * rr * rr * x2
+    if glsl_sign(z) * a2 * z2 > k:
         return sqrt(x2 + z2) * il2 - p.r.y
-    if _sign(y) * a2 * y2 < k:
+    if glsl_sign(y) * a2 * y2 < k:
         return sqrt(x2 + y2) * il2 - p.r.x
     return (sqrt(x2 * a2 * il2) + y * rr) * il2 - p.r.x
 

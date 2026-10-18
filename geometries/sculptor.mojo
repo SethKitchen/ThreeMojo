@@ -546,15 +546,13 @@ struct Sculptor(Movable):
             self._unproject(camera, scene, client_x, client_y, -0.8),
         )
         self._ray_origin = near
-        var dx = far.x - near.x
-        var dy = far.y - near.y
-        var dz = far.z - near.z
+        var offset = far - near
         # A finite direction remains usable even when its length cannot fit.
-        if not (isfinite(dx) and isfinite(dy) and isfinite(dz)) or (
-            dx == 0 and dy == 0 and dz == 0
+        if not offset.is_finite() or (
+            offset.x == 0 and offset.y == 0 and offset.z == 0
         ):
             return False
-        var unit = reciprocal_normalized3(dx, dy, dz)
+        var unit = reciprocal_normalized3(offset.x, offset.y, offset.z)
         self._ray_direction = Point3(unit[0], unit[1], unit[2])
         return True
 
@@ -968,13 +966,7 @@ struct Sculptor(Movable):
         var origin = _point(ray.origin)
         var direction = _point(ray.direction)
         var length_sq = direction.dot(direction)
-        if (
-            not isfinite(origin.x)
-            or not isfinite(origin.y)
-            or not isfinite(origin.z)
-            or not isfinite(length_sq)
-            or length_sq == 0
-        ):
+        if not origin.is_finite() or not isfinite(length_sq) or length_sq == 0:
             raise Error(
                 "Sculptor: origin and direction must contain finite values, and"
                 " direction must be non-zero."

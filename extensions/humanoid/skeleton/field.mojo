@@ -218,11 +218,7 @@ def finite_point(point: Vector3, name: String, bone: String) raises:
     Raises:
         Error: If any coordinate is not finite.
     """
-    if not isfinite(point.x):
-        raise Error("A " + bone + " " + name + " must be finite")
-    if not isfinite(point.y):
-        raise Error("A " + bone + " " + name + " must be finite")
-    if not isfinite(point.z):
+    if not point.is_finite():
         raise Error("A " + bone + " " + name + " must be finite")
 
 
