@@ -92,7 +92,7 @@ from math.curve_checks import (
     curve_count_product,
     parameter_samples,
 )
-from math.polyline import prefix_lengths, unit_direction
+from math.polyline import PolylineVertex, prefix_lengths, unit_direction
 from math.vector2 import Vector2
 from std.math import cos, floor, isfinite, pi, sin
 from units.si import Angle, Length, METER, RADIAN
@@ -310,6 +310,41 @@ def u_to_t(table: List[Float32], u: Float32) raises -> Float32:
     if span > 0:
         within = (target - table[index - 1]) / span
     return (Float32(index - 1) + within) / Float32(last)
+
+
+def arc_samples[
+    C: AnyType,
+    T: PolylineVertex,
+    //,
+    take: def(C, Float32) raises thin -> T,
+](curve: C, divisions: Int, table: List[Float32]) raises -> List[T]:
+    """Return `divisions + 1` values at equal distances along `table`.
+
+    Parameters:
+        C: The curve type.
+        T: The value type.
+        take: Reads `curve` at one parameter.
+
+    Args:
+        curve: The curve.
+        divisions: How many equal runs to cut the length into. At least one.
+        table: How far along each sample is, from `Curve.lengths`.
+
+    Returns:
+        The values, first to last.
+
+    Raises:
+        Error: If `divisions` is less than one, the sample count cannot
+            fit in Int, the table has fewer than two entries, or `take`
+            raises.
+    """
+    var sample_count = curve_sample_count(divisions)
+    var out = List[T]()
+    # At least one division, so this loop runs.
+    for index in range(sample_count):  # pragma: no branch
+        var u = Float32(index) / Float32(divisions)
+        out.append(take(curve, u_to_t(table, u)))
+    return out^
 
 
 struct Curve(Copyable, Movable):
@@ -734,16 +769,11 @@ struct Curve(Copyable, Movable):
             Error: If `divisions` is less than one, its sample count cannot
                 fit in Int, or the mutable curve is not valid.
         """
-        var sample_count = curve_sample_count(divisions)
         # One table for the whole call. `point_at` builds its own, and
         # asking it once per point rebuilt the same hundreds of samples for
         # every point returned.
         var table = self.lengths(self.arc_divisions())
-        var out = List[Vector2]()
-        for index in range(sample_count):  # pragma: no branch
-            var u = Float32(index) / Float32(divisions)
-            out.append(self.point(u_to_t(table, u)))
-        return out^
+        return arc_samples[Self.point](self, divisions, table)
 
 
 def line(start: Vector2, end: Vector2) raises -> Curve:

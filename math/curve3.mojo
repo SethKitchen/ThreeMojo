@@ -62,7 +62,7 @@ from math.curve_checks import (
     curve_count_product,
     parameter_samples,
 )
-from math.curve import ARC_DIVISIONS, SEGMENT_SAMPLES, u_to_t
+from math.curve import ARC_DIVISIONS, SEGMENT_SAMPLES, arc_samples, u_to_t
 from math.polyline import prefix_lengths, unit_direction
 from math.quaternion import Quaternion
 from math.vector3 import Vector3
@@ -565,14 +565,7 @@ struct Curve3(Copyable, Movable):
             Error: If `divisions` is less than one, its sample count cannot
                 fit in Int, or the mutable curve is not valid.
         """
-        var sample_count = curve_sample_count(divisions)
-        var table = self.arc_table()
-        var out = List[Vector3]()
-        for index in range(sample_count):  # pragma: no branch
-            # At least one division, so this runs.
-            var u = Float32(index) / Float32(divisions)
-            out.append(self.point(u_to_t(table, u)))
-        return out^
+        return arc_samples[Self.point](self, divisions, self.arc_table())
 
     def frenet_frames(self, segments: Int, closed: Bool) raises -> FrenetFrames:
         """Return a frame at each of `segments + 1` equal steps along the
@@ -592,13 +585,9 @@ struct Curve3(Copyable, Movable):
                 fit in Int, the curve is not valid or stops at a step, or
                 two steps point straight opposite ways.
         """
-        var sample_count = curve_sample_count(segments)
-        var table = self.arc_table()
-        var tangents = List[Vector3]()
-        for index in range(sample_count):  # pragma: no branch
-            # At least one segment, so this runs.
-            var u = Float32(index) / Float32(segments)
-            tangents.append(self.tangent(u_to_t(table, u)))
+        var tangents = arc_samples[Self.tangent](
+            self, segments, self.arc_table()
+        )
         return transport_frames(tangents, closed)
 
 
