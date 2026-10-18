@@ -12,7 +12,7 @@ inside. The sun position is a uniform. The sphere sits in the light so
 the sky has something to shine on.
 """
 
-from examples.output import (
+from tools._example_output import (
     example_destination,
     gallery_camera,
     gallery_renderer,

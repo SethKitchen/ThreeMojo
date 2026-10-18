@@ -143,12 +143,11 @@ def _determinant4[dtype: DType](e: Array[SIMD[dtype, 1], 16]) -> SIMD[dtype, 1]:
 def _require_matrix4(row: Int, column: Int) raises:
     """Refuse a matrix index outside 0 to 3.
 
+    Nothing. The call returns when both indexes are inside 0 to 3.
+
     Args:
         row: The row.
         column: The column.
-
-    Returns:
-        Nothing. The call returns when both indexes are inside 0 to 3.
 
     Raises:
         Error: If either index is outside 0 to 3.
@@ -1001,14 +1000,14 @@ struct Matrix4(Equatable, ImplicitlyCopyable):
         That length is the scale along the axis. three.js reads it as
         the length of `matrix[axis].xyz`.
 
+        Error: Never.
+
         Args:
             axis: Which column, zero for x through two for z.
 
         Returns:
             The length.
 
-        Raises:
-            Error: Never.
         """
         ref e = self.elements
         var start = axis * 4
@@ -1025,12 +1024,11 @@ struct Matrix4(Equatable, ImplicitlyCopyable):
 def require_affine(matrix: Matrix4, message: String) raises:
     """Refuse a matrix that is not affine.
 
+    Nothing. The call returns when the matrix is affine.
+
     Args:
         matrix: The transform.
         message: The error text for this caller.
-
-    Returns:
-        Nothing. The call returns when the matrix is affine.
 
     Raises:
         Error: If the matrix is not affine.
@@ -1044,14 +1042,13 @@ def require_axis_extent(
 ) raises:
     """Refuse an axis length of zero.
 
+    Nothing. The call returns when every length is nonzero.
+
     Args:
         x: The length of the first axis.
         y: The length of the second axis.
         z: The length of the third axis.
         message: The error text for this caller.
-
-    Returns:
-        Nothing. The call returns when every length is nonzero.
 
     Raises:
         Error: If any length is zero.
@@ -1063,14 +1060,14 @@ def require_axis_extent(
 def column_major_matrix(elements: List[Float32]) -> Matrix4:
     """Return a matrix filled from sixteen column-major numbers.
 
+    Error: Never.
+
     Args:
         elements: Sixteen numbers. The first four are the first column.
 
     Returns:
         The matrix.
 
-    Raises:
-        Error: Never.
     """
     var matrix = Matrix4()
     fill_elements(matrix.elements, elements)

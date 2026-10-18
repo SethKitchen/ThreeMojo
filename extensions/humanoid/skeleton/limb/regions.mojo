@@ -48,11 +48,10 @@ comptime FAT_PROXY_REGION = LimbRegion(6)
 def require_limb_region(region: LimbRegion) raises:
     """Refuse a limb region that is not named.
 
+    Nothing. The call returns when the region is named.
+
     Args:
         region: The density assignment.
-
-    Returns:
-        Nothing. The call returns when the region is named.
 
     Raises:
         Error: If the region is not named.

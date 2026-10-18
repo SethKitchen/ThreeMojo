@@ -76,12 +76,11 @@ struct CellId(Equatable, ImplicitlyCopyable, Writable):
 def require_face(id: FaceId, count: Int) raises:
     """Refuse a face id that is not in range.
 
+    Nothing. The call returns when the id names a face.
+
     Args:
         id: The face.
         count: How many faces there are.
-
-    Returns:
-        Nothing. The call returns when the id names a face.
 
     Raises:
         Error: If the id is negative or past the last face.
@@ -93,12 +92,11 @@ def require_face(id: FaceId, count: Int) raises:
 def require_cell(id: CellId, count: Int) raises:
     """Refuse a cell id that is not in range.
 
+    Nothing. The call returns when the id names a cell.
+
     Args:
         id: The cell.
         count: How many cells there are.
-
-    Returns:
-        Nothing. The call returns when the id names a cell.
 
     Raises:
         Error: If the id is negative or past the last cell.

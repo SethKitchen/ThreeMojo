@@ -383,6 +383,8 @@ def lid_unless_behind(
 ) -> Float64:
     """Return the lid distance, or one when the point is behind the eye.
 
+    Error: Never.
+
     Args:
         e: The eye.
         head_origin: The head origin. The nearer eye is the one on the
@@ -394,8 +396,6 @@ def lid_unless_behind(
     Returns:
         The distance to the almond rim, or one.
 
-    Raises:
-        Error: Never.
     """
     var s = 1.0 if p.x > head_origin.x else -1.0
     var frame = eye_frame_of(e, head_origin, s)

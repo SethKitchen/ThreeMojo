@@ -12,7 +12,7 @@ vertex of it is transformed. The cube vanishes at the edge and comes back.
 That is frustum culling, not clipping.
 """
 
-from examples.output import (
+from tools._example_output import (
     example_destination,
     fill_and_key,
     gallery_camera,

@@ -709,12 +709,11 @@ def _checked_project(h: Point4) raises -> Point3:
 def require_nurbs_box(held: Int, expected: Int) raises:
     """Refuse a NURBS volume whose control points leave a hole in the box.
 
+    Nothing. The call returns when the two counts are equal.
+
     Args:
         held: How many points the row or plane holds.
         expected: How many points that row or plane must hold.
-
-    Returns:
-        Nothing. The call returns when the two counts are equal.
 
     Raises:
         Error: If the counts differ.

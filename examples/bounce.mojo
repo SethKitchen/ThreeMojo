@@ -12,7 +12,7 @@ normals, `VXGINode` gathers the bounced light, and `vxgi_light` lays
 that light on the picture. The camera sways and returns.
 """
 
-from examples.output import (
+from tools._example_output import (
     example_destination,
     framed_camera,
     gallery_renderer,

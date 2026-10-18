@@ -30,7 +30,6 @@ three.js warns and leaves the color unchanged for a string it cannot read.
 Here that string is refused.
 """
 
-from core.ordinal import require_non_negative
 from loaders.bytes import ascii_digit, ascii_space, hex_digit_value
 from loaders.js_text import is_js_word
 from render.framebuffer import FloatColor
@@ -624,9 +623,8 @@ def _parse_hex(style: String, space: ColorSpace) raises -> FloatColor:
     var digits = List[Int]()
     for index in range(1, len(bytes)):  # pragma: no branch
         var digit = hex_digit_value(Int(bytes[index]))
-        require_non_negative(
-            digit, "A hex color holds hexadecimal digits: " + style
-        )
+        if digit < 0:
+            raise Error("A hex color holds hexadecimal digits: " + style)
         digits.append(digit)
     if len(digits) == 3:
         return _from_srgb_numbers(

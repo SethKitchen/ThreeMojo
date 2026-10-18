@@ -48,7 +48,7 @@ well, as three.js's `vec4(colorNode)` does: the alpha multiplies the
 opacity node, or the material's `opacity`. Texture gather inputs are
 refused by name when reached. They are not ordinary RGBA samples.
 """
-from core.ordinal import ordinal_valid, require_valid, require_non_negative
+from core.ordinal import ordinal_valid
 from core.search import first_match
 
 from loaders.json import (
@@ -332,9 +332,9 @@ struct NodeMaterialGraph(Movable):
 
 def _text(document: JsonDocument, item: Int, key: String) raises -> String:
     """Return a node's string field, refusing one that is not a string."""
-    var at = document.required_kind(
-        item, key, STRING, "Node JSON: a node's " + key + " must be a string"
-    )
+    var at = document.get(item, key)
+    if at == NO_NODE or document.kind(at) != STRING:
+        raise Error("Node JSON: a node's " + key + " must be a string")
     return document.string(at)
 
 
@@ -348,12 +348,11 @@ def _flag(
 def require_node_object(document: JsonDocument, item: Int) raises:
     """Refuse a node JSON value that is not an object.
 
+    Nothing. The call returns when the node is an object.
+
     Args:
         document: The JSON document.
         item: The node.
-
-    Returns:
-        Nothing. The call returns when the node is an object.
 
     Raises:
         Error: If the node is not an object.
@@ -599,9 +598,10 @@ struct NodeLoader(Movable):
         """Build a constant, or a uniform named `uniform`."""
         var value_type = _text(document, item, "valueType")
         var width = _value_width(value_type)
-        require_non_negative(
-            width, "Node JSON: a value of type " + value_type + " is not read"
-        )
+        if width < 0:
+            raise Error(
+                "Node JSON: a value of type " + value_type + " is not read"
+            )
         var value = document.get(item, "value")
         var numbers = List[Float32]()
         if document.kind(value) == ARRAY:
@@ -697,12 +697,12 @@ struct NodeLoader(Movable):
         if name == "color":
             return self._leaf(self.graph.vertex_color())
         var at = first_match(self._attribute_names, name)
-        require_non_negative(
-            at,
-            "Node JSON: the attribute "
-            + name
-            + " has no type; declare it with set_attribute",
-        )
+        if at < 0:
+            raise Error(
+                "Node JSON: the attribute "
+                + name
+                + " has no type; declare it with set_attribute"
+            )
         return self._leaf(self.graph.attribute(name, self._attribute_types[at]))
 
     def _operator(
@@ -965,9 +965,8 @@ struct NodeLoader(Movable):
             if chosen == "" or type_width(name) == from_width:
                 chosen = name
         var width = type_width(chosen)
-        require_non_negative(
-            width, "Node JSON: a conversion to " + chosen + " is not read"
-        )
+        if width < 0:
+            raise Error("Node JSON: a conversion to " + chosen + " is not read")
         var shaped = self._reshape(value, from_width, width)
         var component = _component(chosen)
         if component == "int":
@@ -1107,10 +1106,10 @@ struct NodeLoader(Movable):
         for index in range(document.length(inputs)):
             var property = document.key(inputs, index)
             var output = node_output_of(property)
-            require_valid(
-                output.is_valid(),
-                "Node JSON: a node material's " + property + " is not read",
-            )
+            if not output.is_valid():
+                raise Error(
+                    "Node JSON: a node material's " + property + " is not read"
+                )
             refs[output.value] = self.node(
                 document, document.string(document.at(inputs, index))
             ).value

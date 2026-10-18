@@ -166,6 +166,10 @@ See `docs/wiki/Norm-consumers.md` for the changed operations, retained
 limits, and explicit zero and nonfinite rules.
 """
 
+from std.math import isfinite
+
+from core.ordinal import index_in_count
+
 from core.extent import require_closed_count
 from core.ordinal import (
     ordinal_valid,
@@ -331,12 +335,11 @@ comptime COMPONENT_FLOAT = 5126
 def require_sparse_indices(index_type: Int) raises:
     """Refuse a glTF sparse index type that is not an unsigned integer.
 
+    Nothing. The call returns when the type is an unsigned byte, an
+    unsigned short, or an unsigned int.
+
     Args:
         index_type: The accessor component type.
-
-    Returns:
-        Nothing. The call returns when the type is an unsigned byte, an
-            unsigned short, or an unsigned int.
 
     Raises:
         Error: If the type is not one of those three.
@@ -353,14 +356,13 @@ def require_rising_sparse_index(element: Int, last: Int, count: Int) raises:
     """Refuse a glTF sparse index that does not rise, or that falls outside
     the accessor.
 
+    Nothing. The call returns when the index is above `last` and below
+    `count`.
+
     Args:
         element: The index just read.
         last: The previous index, or -1 before the first.
         count: How many elements the accessor has.
-
-    Returns:
-        Nothing. The call returns when the index is above `last` and below
-            `count`.
 
     Raises:
         Error: If the index is at or below `last`, or at or past `count`.
@@ -374,12 +376,11 @@ def require_rising_sparse_index(element: Int, last: Int, count: Int) raises:
 def require_gltf_mesh(mesh: Int, count: Int) raises:
     """Refuse a glTF node mesh that the file does not have.
 
+    Nothing. The call returns when the index names a mesh.
+
     Args:
         mesh: The mesh index the node names.
         count: How many meshes the file has.
-
-    Returns:
-        Nothing. The call returns when the index names a mesh.
 
     Raises:
         Error: If the index is past the last mesh.
@@ -544,11 +545,10 @@ comptime GLTF_ORTHOGRAPHIC = GltfCameraKind(1)
 def require_gltf_camera(kind: GltfCameraKind) raises:
     """Refuse a glTF camera kind that is not known.
 
+    Nothing. The call returns when the kind is named.
+
     Args:
         kind: The camera kind.
-
-    Returns:
-        Nothing. The call returns when the kind is named.
 
     Raises:
         Error: If the kind is not known.
@@ -806,11 +806,8 @@ struct GltfModel(Copyable, Movable):
         Raises:
             Error: If the index names no mesh.
         """
-        require_index_in_count(
-            mesh,
-            len(self.first_primitives),
-            "glTF: no mesh at index " + String(mesh),
-        )
+        if not index_in_count(mesh, len(self.first_primitives)):
+            raise Error("glTF: no mesh at index " + String(mesh))
         var found = List[GeometryId]()
         for offset in range(self.primitive_counts[mesh]):
             found.append(self.geometries[self.first_primitives[mesh] + offset])
@@ -1299,12 +1296,10 @@ struct _Loader(Movable):
 
     def list(self, key: String) raises -> Int:
         """Return the root's array under `key`, or `NO_NODE`."""
-        return self.document.optional_kind(
-            self.document.root(),
-            key,
-            ARRAY,
-            "glTF: " + key + " must be an array",
-        )
+        var found = self.document.get(self.document.root(), key)
+        if found != NO_NODE and self.document.kind(found) != ARRAY:
+            raise Error("glTF: " + key + " must be an array")
+        return found
 
     def count(self, key: String) raises -> Int:
         """Return how many entries the root's array under `key` has."""
@@ -1333,9 +1328,9 @@ struct _Loader(Movable):
 
     def required_integer(self, node: Int, key: String) raises -> Int:
         """Return an object's whole number under `key`, which must be there."""
-        var found = self.document.required(
-            node, key, "glTF: " + key + " is required"
-        )
+        var found = self.document.get(node, key)
+        if found == NO_NODE:
+            raise Error("glTF: " + key + " is required")
         return self.document.integer(found)
 
     def number(
@@ -1346,20 +1341,27 @@ struct _Loader(Movable):
 
     def required_number(self, node: Int, key: String) raises -> Float32:
         """Return an object's number under `key`, which must be there."""
-        _ = self.document.required(node, key, "glTF: " + key + " is required")
+        if not self.document.has(node, key):
+            raise Error("glTF: " + key + " is required")
         return self.number(node, key, 0)
 
     def number_list(self, node: Int, key: String) raises -> List[Float32]:
         """Return an object's array of numbers under `key`, of any length,
         or an empty list when the key is absent."""
-        var found = self.document.optional_kind(
-            node, key, ARRAY, "glTF: " + key + " must be an array of numbers"
-        )
+        var found = self.document.get(node, key)
+        var out = List[Float32]()
         if found == NO_NODE:
-            return List[Float32]()
-        return self.document.finite_numbers(
-            found, "glTF: " + key + " must be finite"
-        )
+            return out^
+        if self.document.kind(found) != ARRAY:
+            raise Error("glTF: " + key + " must be an array of numbers")
+        for index in range(self.document.length(found)):
+            var value = Float32(
+                self.document.number(self.document.at(found, index))
+            )
+            if not isfinite(value):
+                raise Error("glTF: " + key + " must be finite")
+            out.append(value)
+        return out^
 
     def object_at(self, array: Int, index: Int) raises -> Int:
         """Return one entry of an array, which must be an object."""
@@ -1370,9 +1372,10 @@ struct _Loader(Movable):
 
     def array_of(self, node: Int, key: String) raises -> Int:
         """Return an object's array under `key`, which must be there."""
-        return self.document.required_kind(
-            node, key, ARRAY, "glTF: " + key + " must be an array"
-        )
+        var found = self.document.get(node, key)
+        if found == NO_NODE or self.document.kind(found) != ARRAY:
+            raise Error("glTF: " + key + " must be an array")
+        return found
 
     def text(self, node: Int, key: String) raises -> String:
         """Return an object's string under `key`, or empty."""
@@ -1411,9 +1414,10 @@ struct _Loader(Movable):
         )
         if all == NO_NODE:
             return NO_NODE
-        return self.document.optional_kind(
-            all, name, OBJECT, "glTF: " + name + " must be an object"
-        )
+        var found = self.document.get(all, name)
+        if found != NO_NODE and self.document.kind(found) != OBJECT:
+            raise Error("glTF: " + name + " must be an object")
+        return found
 
     def numbers(
         self, node: Int, key: String, count: Int
@@ -1421,8 +1425,9 @@ struct _Loader(Movable):
         """Return an object's array of `count` numbers under `key`, or an
         empty list when the key is absent."""
         var found = self.document.get(node, key)
+        var out = List[Float32]()
         if found == NO_NODE:
-            return List[Float32]()
+            return out^
         if (
             self.document.kind(found) != ARRAY
             or self.document.length(found) != count
@@ -1430,9 +1435,14 @@ struct _Loader(Movable):
             raise Error(
                 "glTF: " + key + " must hold " + String(count) + " numbers"
             )
-        return self.document.finite_numbers(
-            found, "glTF: " + key + " must be finite"
-        )
+        for index in range(count):  # pragma: no branch
+            var value = Float32(
+                self.document.number(self.document.at(found, index))
+            )
+            if not isfinite(value):
+                raise Error("glTF: " + key + " must be finite")
+            out.append(value)
+        return out^
 
     # --- buffers and accessors ----------------------------------------------
 
@@ -1732,11 +1742,8 @@ struct _Loader(Movable):
         for index in range(self.count("textures")):
             var texture = self.entry("textures", index)
             var image = self.image_of(texture)
-            require_index_in_count(
-                image,
-                self.count("images"),
-                "glTF: a texture names an image that is not there",
-            )
+            if image < 0 or image >= self.count("images"):
+                raise Error("glTF: a texture names an image that is not there")
             # glTF's defaults, three.js's `GLTFLoader` reads them: repeat
             # both ways, linear, and trilinear down a chain.
             var sampling = GltfSampler()
@@ -1937,11 +1944,11 @@ struct _Loader(Movable):
         second, `uv` or `uv1`: a geometry here has no third. See
         `texture_set`.
         """
-        var found = self.document.optional_kind(
-            material, key, OBJECT, "glTF: " + key + " must be an object"
-        )
+        var found = self.document.get(material, key)
         if found == NO_NODE:
             return -1
+        if self.document.kind(found) != OBJECT:
+            raise Error("glTF: " + key + " must be an object")
         var set = self.texture_set(found)
         require_closed_count(
             set,

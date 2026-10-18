@@ -12,7 +12,7 @@ the floor only receives. The map is a soft percentage-closer filter, so
 the edge of the shadow is a band rather than a step.
 """
 
-from examples.output import (
+from tools._example_output import (
     example_destination,
     gallery_camera,
     gallery_renderer,

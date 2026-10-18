@@ -12,7 +12,7 @@ on every frame. The sun stays low, so the shadow reaches across the
 floor. It walks one whole circle.
 """
 
-from examples.output import (
+from tools._example_output import (
     example_destination,
     gallery_camera,
     gallery_renderer,

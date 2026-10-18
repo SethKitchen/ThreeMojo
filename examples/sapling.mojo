@@ -12,7 +12,7 @@ a seed. The trunk is shorter than the default, so the crown fits the
 frame. The tree turns one whole turn.
 """
 
-from examples.output import (
+from tools._example_output import (
     example_destination,
     fill_and_key,
     gallery_camera,

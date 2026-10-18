@@ -48,14 +48,14 @@ def rans_precision_bits(symbol_bits: Int) -> Int:
     Draco's `ComputeRAnsPrecisionFromUniqueSymbolsBitLength`. The answer
     is `3 * symbol_bits / 2`, held from 12 to 20.
 
+    Error: Never.
+
     Args:
         symbol_bits: The bits of the widest symbol.
 
     Returns:
         The precision, in bits.
 
-    Raises:
-        Error: Never.
     """
     return clamp((3 * symbol_bits) // 2, 12, 20)
 

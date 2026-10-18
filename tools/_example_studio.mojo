@@ -9,7 +9,7 @@ A soft shadow map, filmic tone mapping, the five tissue materials, a
 room environment at intensity 0.55, a gray floor, and one sun.
 """
 
-from examples.output import gallery_renderer
+from tools._example_output import gallery_renderer
 
 from core.assets import Assets
 from core.object3d import Object3D
@@ -174,7 +174,3 @@ def studio_sun(
     sun.shadow.near = Length(0.5, METER)
     sun.shadow.far = Length(8.0, METER)
     scene.add_light(sun)
-
-
-def main():
-    return

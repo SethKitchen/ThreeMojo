@@ -103,12 +103,11 @@ from core.ordinal import require_valid
 def _impact_exhausted(count: Int, limit: Int) raises:
     """Refuse a step that has used every CCD impact.
 
+    Nothing. The call returns when another impact is allowed.
+
     Args:
         count: How many impacts this step has taken.
         limit: How many impacts the step may take.
-
-    Returns:
-        Nothing. The call returns when another impact is allowed.
 
     Raises:
         Error: If the count has reached the limit.

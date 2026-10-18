@@ -64,11 +64,10 @@ comptime TRACHEA = HeadLigament(5)
 def require_head_ligament(part: HeadLigament) raises:
     """Refuse a head ligament that is not a named part.
 
+    Nothing. The call returns when the part is named.
+
     Args:
         part: The part.
-
-    Returns:
-        Nothing. The call returns when the part is named.
 
     Raises:
         Error: If the part is not named.

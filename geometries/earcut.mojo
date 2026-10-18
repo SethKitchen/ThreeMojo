@@ -837,11 +837,10 @@ def _earcut_linked(
 def require_even_points(count: Int) raises:
     """Refuse a point list whose length is odd.
 
+    Nothing. The call returns when the count is even.
+
     Args:
         count: How many numbers the list holds, x then y for each point.
-
-    Returns:
-        Nothing. The call returns when the count is even.
 
     Raises:
         Error: If the count is odd.

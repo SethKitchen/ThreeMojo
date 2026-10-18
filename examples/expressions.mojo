@@ -16,7 +16,7 @@ The optional second argument is the mesh quality: `low`, `medium`,
 `high` or `xhigh`. The default is `high`.
 """
 
-from examples.output import (
+from tools._example_output import (
     example_destination,
     gallery_camera,
     gallery_renderer,

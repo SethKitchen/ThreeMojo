@@ -49,6 +49,8 @@ that is not valid or does not fill its declared size. three.js reads
 past most of these and yields `NaN`, or throws a `RangeError`.
 """
 
+from std.math import isfinite
+
 from core.binary import copy_byte_range, copy_bytes
 from core.buffer_attribute import BufferAttribute
 from core.search import first_match
@@ -56,7 +58,6 @@ from loaders.bytes import ascii_space
 from loaders.js_text import split_fields
 from core.buffer_geometry import COLOR, NORMAL, POSITION, BufferGeometry
 from render.srgb import srgb_to_linear
-from math.finite import finite_float32
 from std.math import floor
 from std.memory import bitcast
 from std.pathlib import Path
@@ -230,12 +231,11 @@ def decode_pcd_value(
 def require_lzf_backref(at: Int, length: Int) raises:
     """Refuse an LZF back reference that runs past the input.
 
+    Nothing. The call returns when a byte remains.
+
     Args:
         at: The next byte to read.
         length: How many bytes the input has.
-
-    Returns:
-        Nothing. The call returns when a byte remains.
 
     Raises:
         Error: If the read is past the input.
@@ -247,13 +247,12 @@ def require_lzf_backref(at: Int, length: Int) raises:
 def require_lzf_room(used: Int, extra: Int, limit: Int) raises:
     """Refuse an LZF expansion that would pass its declared size.
 
+    Nothing. The call returns when the run fits.
+
     Args:
         used: How many bytes are already written.
         extra: How many bytes the next run would write.
         limit: How many bytes the output may hold.
-
-    Returns:
-        Nothing. The call returns when the run fits.
 
     Raises:
         Error: If the run would pass the declared size.
@@ -459,7 +458,8 @@ def _whole(text: String, what: String) raises -> Int:
         value = Int(text)
     except:
         raise Error("PCD: `" + what + "` is not a whole number: " + text)
-    require_non_negative(value, "PCD: `" + what + "` is negative: " + text)
+    if value < 0:
+        raise Error("PCD: `" + what + "` is negative: " + text)
     return value
 
 
@@ -571,13 +571,15 @@ def _coordinate(value: Float64, what: String) raises -> Float32:
     Raises:
         Error: If it is not finite as a `Float32`.
     """
-    return finite_float32(
-        value,
-        "PCD: `"
-        + what
-        + "` must be a finite number, and it is "
-        + String(value),
-    )
+    var narrow = Float32(value)
+    if not isfinite(narrow):
+        raise Error(
+            "PCD: `"
+            + what
+            + "` must be a finite number, and it is "
+            + String(value)
+        )
+    return narrow
 
 
 def _triple(header: PcdHeader, a: String, b: String, c: String) raises -> Bool:

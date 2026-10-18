@@ -13,13 +13,13 @@ The deflection is drawn scaled up, growing with the load, and colored
 from the edges to the middle.
 """
 
-from examples.output import (
+from tools._example_output import (
     example_destination,
     gallery_camera,
     gallery_renderer,
     write_frames,
 )
-from examples.preview import Triangles, add_sky_and_sun, heat_color
+from tools._example_preview import Triangles, add_sky_and_sun, heat_color
 
 from cameras.perspective_camera import PerspectiveCamera
 from core.assets import Assets

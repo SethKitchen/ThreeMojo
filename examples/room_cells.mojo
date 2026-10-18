@@ -12,8 +12,12 @@ Each cell is drawn shrunk toward its center and lifted by its storey, so
 the shared faces between cells show as gaps.
 """
 
-from examples.output import example_destination, build_and_spin, gallery_camera
-from examples.preview import Triangles
+from tools._example_output import (
+    example_destination,
+    build_and_spin,
+    gallery_camera,
+)
+from tools._example_preview import Triangles
 
 from cameras.perspective_camera import PerspectiveCamera
 from core.assets import Assets

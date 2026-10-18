@@ -13,7 +13,7 @@ the cloud, and `resolve` makes the picture. The cloud turns one whole
 turn.
 """
 
-from examples.output import (
+from tools._example_output import (
     example_destination,
     gallery_camera,
     gallery_renderer,

@@ -12,13 +12,13 @@ chain's stiffness against its mass by subspace iteration. Each row is one
 mode, moving at its own frequency.
 """
 
-from examples.output import (
+from tools._example_output import (
     example_destination,
     gallery_camera,
     gallery_renderer,
     write_frames,
 )
-from examples.preview import Triangles, add_sky_and_sun
+from tools._example_preview import Triangles, add_sky_and_sun
 
 from cameras.perspective_camera import PerspectiveCamera
 from core.assets import Assets

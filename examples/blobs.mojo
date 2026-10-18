@@ -12,7 +12,7 @@ two balls, then builds the surface where the field crosses isolation.
 Each ball paints its own color onto the vertices. The surface turns.
 """
 
-from examples.output import (
+from tools._example_output import (
     example_destination,
     fill_and_key,
     gallery_camera,

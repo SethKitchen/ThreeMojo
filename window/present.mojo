@@ -12,12 +12,11 @@ from render.framebuffer import Framebuffer
 def require_window_size(width: Int, height: Int) raises:
     """Refuse a window whose size is not positive.
 
+    Nothing. The call returns when both sizes are positive.
+
     Args:
         width: The width, in pixels.
         height: The height, in pixels.
-
-    Returns:
-        Nothing. The call returns when both sizes are positive.
 
     Raises:
         Error: If the width or the height is not positive.
@@ -31,11 +30,10 @@ def require_window_size(width: Int, height: Int) raises:
 def require_open(is_open: Bool) raises:
     """Refuse a closed window.
 
+    Nothing. The call returns when the window is open.
+
     Args:
         is_open: Whether the window is open.
-
-    Returns:
-        Nothing. The call returns when the window is open.
 
     Raises:
         Error: If the window is closed.
@@ -49,14 +47,13 @@ def require_presented_frame(
 ) raises:
     """Refuse a frame a closed window cannot draw, or one of another size.
 
+    Nothing. The call returns when the frame can be drawn.
+
     Args:
         is_open: Whether the window is open.
         frame: The frame to draw.
         width: The window's width, in pixels.
         height: The window's height, in pixels.
-
-    Returns:
-        Nothing. The call returns when the frame can be drawn.
 
     Raises:
         Error: If the window is closed, or the frame is another size.

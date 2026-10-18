@@ -55,11 +55,10 @@ struct FootLigament(Equatable, ImplicitlyCopyable, Writable):
 def require_foot_ligament(part: FootLigament) raises:
     """Refuse a foot ligament that is not named.
 
+    Nothing. The call returns when the ligament is named.
+
     Args:
         part: The ligament.
-
-    Returns:
-        Nothing. The call returns when the ligament is named.
 
     Raises:
         Error: If the ligament is not named.

@@ -100,12 +100,11 @@ from units.si import Angle, DEGREE, Length, METER, RADIAN
 def require_light_intensity(intensity: Float32) raises:
     """Refuse a light intensity that is negative or not finite.
 
+    Nothing. The call returns when the intensity is finite and not
+    negative.
+
     Args:
         intensity: How bright, multiplying the color.
-
-    Returns:
-        Nothing. The call returns when the intensity is finite and not
-            negative.
 
     Raises:
         Error: If the intensity is negative or not finite.
@@ -119,12 +118,11 @@ def require_light_intensity(intensity: Float32) raises:
 def require_shadow_light(index: Int, count: Int) raises:
     """Refuse a shadow map whose light is not in the list.
 
+    Nothing. The call returns when the index names a light.
+
     Args:
         index: The light the map names.
         count: How many lights the list has.
-
-    Returns:
-        Nothing. The call returns when the index names a light.
 
     Raises:
         Error: If the index is negative or past the last light.

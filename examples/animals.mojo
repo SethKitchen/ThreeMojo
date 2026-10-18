@@ -15,7 +15,7 @@ mid-stride and the snake and the swimmers bend in an S. Each animal
 turns a whole turn.
 """
 
-from examples.output import (
+from tools._example_output import (
     example_destination,
     blit,
     gallery_camera,

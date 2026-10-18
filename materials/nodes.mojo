@@ -127,6 +127,8 @@ storage buffers and the statements' results through `NodeSource`.
 level the surface's own coordinates pick. WebGPU instead measures the
 derivatives of the coordinate the node computes.
 """
+
+from core.ordinal import index_in_count
 from core.extent import require_closed_count
 from core.ordinal import (
     ordinal_valid,
@@ -216,11 +218,10 @@ comptime PROGRAM_HEADER = PROGRAM_VIEW + 16
 def require_program_code(size: Int) raises:
     """Refuse a node program whose code is shorter than its header.
 
+    Nothing. The call returns when the code holds a header.
+
     Args:
         size: How many numbers the code holds.
-
-    Returns:
-        Nothing. The call returns when the code holds a header.
 
     Raises:
         Error: If the code is shorter than `PROGRAM_HEADER`.
@@ -686,20 +687,17 @@ def _int_kind(kind: NodeKind) -> NodeKind:
 def _refuse_integer_operation(operation: NodeKind, verb: String) raises:
     """Refuse an integer operation this graph does not have.
 
+    Nothing. The call returns when the kind is named.
+
     Args:
         operation: The kind chosen for the integer form.
         verb: The operation's name in the error.
 
-    Returns:
-        Nothing. The call returns when the kind is named.
-
     Raises:
         Error: If the kind is not named.
     """
-    require_valid(
-        operation.is_valid(),
-        "A node graph cannot " + verb + " an exact integer",
-    )
+    if not operation.is_valid():
+        raise Error("A node graph cannot " + verb + " an exact integer")
 
 
 @fieldwise_init
@@ -784,11 +782,10 @@ comptime OFFSET_NODE = NodeOutput(24)
 def require_node_output(output: NodeOutput) raises:
     """Refuse a node output that is none of the twenty-five.
 
+    Nothing. The call returns when the output is named.
+
     Args:
         output: The output.
-
-    Returns:
-        Nothing. The call returns when the output is named.
 
     Raises:
         Error: If the output is none of the twenty-five.
@@ -1136,11 +1133,10 @@ struct Fn(Copyable, Movable):
 def require_unsigned_width(width: Int) raises:
     """Refuse an unsigned uniform wider than four components.
 
+    Nothing. The call returns when the width is four or less.
+
     Args:
         width: How many components the uniform has.
-
-    Returns:
-        Nothing. The call returns when the width is four or less.
 
     Raises:
         Error: If the width is above four.
@@ -1152,12 +1148,11 @@ def require_unsigned_width(width: Int) raises:
 def _require_noise_point(type: ValueType, name: String) raises:
     """Refuse a noise point that is neither a vec2 nor a vec3.
 
+    Nothing. The call returns when the point is a vec2 or a vec3.
+
     Args:
         type: The point's type.
         name: Which noise reads the point.
-
-    Returns:
-        Nothing. The call returns when the point is a vec2 or a vec3.
 
     Raises:
         Error: If the point is another type.
@@ -2197,11 +2192,10 @@ struct NodeGraph(Copyable, Movable):
     def _require_texture_uv(self, uv: NodeRef) raises:
         """Refuse a texture coordinate that is not a vec2.
 
+        Nothing. The call returns when the node is a vec2.
+
         Args:
             uv: The coordinate node.
-
-        Returns:
-            Nothing. The call returns when the node is a vec2.
 
         Raises:
             Error: If the node is not a vec2.
@@ -2215,11 +2209,10 @@ struct NodeGraph(Copyable, Movable):
     def _require_texture_level(self, level: NodeRef) raises:
         """Refuse a mip level that is not a float.
 
+        Nothing. The call returns when the node is a float.
+
         Args:
             level: The level node.
-
-        Returns:
-            Nothing. The call returns when the node is a float.
 
         Raises:
             Error: If the node is not a float.
@@ -2233,8 +2226,7 @@ struct NodeGraph(Copyable, Movable):
     def _require_blocks_closed(self) raises:
         """Refuse a graph that still has an open If or Loop.
 
-        Returns:
-            Nothing. The call returns when every block is closed.
+        Nothing. The call returns when every block is closed.
 
         Raises:
             Error: If an If or a Loop is still open.
@@ -2814,14 +2806,13 @@ struct NodeGraph(Copyable, Movable):
         """
         self._square(m, "take a column of")
         var columns = self._columns(m)
-        require_index_in_count(
-            index,
-            len(columns),
-            "A "
-            + self._types[m.value].name()
-            + " has no column "
-            + String(index),
-        )
+        if not index_in_count(index, len(columns)):
+            raise Error(
+                "A "
+                + self._types[m.value].name()
+                + " has no column "
+                + String(index)
+            )
         return columns[index]
 
     def transpose(mut self, m: NodeRef) raises -> NodeRef:
@@ -4372,14 +4363,13 @@ struct NodeGraph(Copyable, Movable):
         var scale = 1
         for index in range(len(letters)):  # pragma: no branch
             var lane = _lane_of(letters[index])
-            require_index_in_count(
-                lane,
-                width,
-                "A swizzle names a component a "
-                + self._types[a.value].name()
-                + " does not have: "
-                + components,
-            )
+            if not index_in_count(lane, width):
+                raise Error(
+                    "A swizzle names a component a "
+                    + self._types[a.value].name()
+                    + " does not have: "
+                    + components
+                )
             packed += lane * scale
             scale *= 4
         return self._add(
@@ -6289,12 +6279,12 @@ def _allocate(reads: List[Int], mut layout: _Layout) raises:
             if free[candidate]:
                 register = candidate
                 break
-        require_non_negative(
-            register,
-            "A node output needs more than "
-            + String(MAX_REGISTERS)
-            + " values alive at once",
-        )
+        if register < 0:
+            raise Error(
+                "A node output needs more than "
+                + String(MAX_REGISTERS)
+                + " values alive at once"
+            )
         free[register] = False
         layout.dest[index] = register
         for slot in range(3):  # pragma: no branch
@@ -6323,7 +6313,8 @@ def _uniform_index(names: List[String], name: String) raises -> Int:
         Error: If no uniform has that name.
     """
     var index = first_match(names, name)
-    require_non_negative(index, "A node program has no uniform named " + name)
+    if index < 0:
+        raise Error("A node program has no uniform named " + name)
     return index
 
 

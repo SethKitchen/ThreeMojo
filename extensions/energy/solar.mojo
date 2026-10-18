@@ -44,11 +44,10 @@ from units.si import (
 def require_month(month: Int) raises:
     """Refuse a month that is not 1 to 12.
 
+    Nothing. The call returns when the month is 1 to 12.
+
     Args:
         month: The month number.
-
-    Returns:
-        Nothing. The call returns when the month is 1 to 12.
 
     Raises:
         Error: If the month is outside 1 to 12.
@@ -60,12 +59,11 @@ def require_month(month: Int) raises:
 def require_latitude(degrees: Float64) raises:
     """Refuse a latitude outside -90 to 90 degrees.
 
+    Nothing. The call returns when the latitude is in range. A value
+    that is not finite is outside the range.
+
     Args:
         degrees: The latitude, north positive.
-
-    Returns:
-        Nothing. The call returns when the latitude is in range. A value
-            that is not finite is outside the range.
 
     Raises:
         Error: If the latitude is outside -90 to 90 degrees.
@@ -77,12 +75,11 @@ def require_latitude(degrees: Float64) raises:
 def require_longitude(degrees: Float64) raises:
     """Refuse a longitude outside -180 to 180 degrees.
 
+    Nothing. The call returns when the longitude is in range. A value
+    that is not finite is outside the range.
+
     Args:
         degrees: The longitude, east positive.
-
-    Returns:
-        Nothing. The call returns when the longitude is in range. A value
-            that is not finite is outside the range.
 
     Raises:
         Error: If the longitude is outside -180 to 180 degrees.

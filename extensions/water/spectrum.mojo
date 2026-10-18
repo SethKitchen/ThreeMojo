@@ -23,11 +23,10 @@ from units.si import SECOND, Duration, Length
 def require_ocean_patch(length: Float32) raises:
     """Refuse an ocean patch whose length is not positive.
 
+    Nothing. The call returns when the length is positive.
+
     Args:
         length: The patch length, in meters.
-
-    Returns:
-        Nothing. The call returns when the length is positive.
 
     Raises:
         Error: If the length is not positive.

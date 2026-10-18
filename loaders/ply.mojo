@@ -65,13 +65,15 @@ See `docs/wiki/Norm-consumers.md` for the changed operations, retained
 limits, and explicit zero and nonfinite rules.
 """
 
+from std.math import isfinite
+
+from core.ordinal import index_in_count
+
 from core.binary import copy_byte_range
 from core.ordinal import (
     ordinal_valid,
-    require_index_in_count,
     require_valid,
     require_non_negative,
-    require_positive,
 )
 from loaders.bytes import bytes_match
 from loaders.text_number import file_line
@@ -83,7 +85,6 @@ from core.buffer_attribute import BufferAttribute
 from core.buffer_geometry import COLOR, NORMAL, POSITION, UV, BufferGeometry
 from math.vector3 import Vector3
 from render.srgb import srgb_to_linear
-from math.finite import finite_float32
 from std.memory import bitcast
 from std.pathlib import Path
 
@@ -136,10 +137,8 @@ struct PlyScalar(Equatable, ImplicitlyCopyable, Writable):
         Raises:
             Error: If this is not one of the eight types.
         """
-        require_valid(
-            self.is_valid(),
-            "PLY: a scalar type that is not known: " + String(self),
-        )
+        if not self.is_valid():
+            raise Error("PLY: a scalar type that is not known: " + String(self))
         if self.value <= PLY_UINT8.value:
             return 1
         if self.value <= PLY_UINT16.value:
@@ -480,9 +479,8 @@ def _parse_header(
                 rows = Int(fields[2])
             except:
                 raise Error(_where(line) + "not a count: " + fields[2])
-            require_non_negative(
-                rows, _where(line) + "a negative count: " + fields[2]
-            )
+            if rows < 0:
+                raise Error(_where(line) + "a negative count: " + fields[2])
             for element in elements:
                 if element.name == fields[1]:
                     raise Error(
@@ -490,9 +488,8 @@ def _parse_header(
                     )
             elements.append(_Element(fields[1], rows, List[_Property]()))
         elif keyword == "property":
-            require_positive(
-                len(elements), _where(line) + "a property before any element"
-            )
+            if len(elements) <= 0:
+                raise Error(_where(line) + "a property before any element")
             if len(fields) == 5 and fields[1] == "list":
                 var count = ply_scalar(fields[2])
                 if not count.is_integer():
@@ -651,10 +648,12 @@ def _coordinate(value: Float64, what: String) raises -> Float32:
     Raises:
         Error: If it is not finite as a `Float32`.
     """
-    return finite_float32(
-        value,
-        "`" + what + "` must be a finite number, and it is " + String(value),
-    )
+    var narrow = Float32(value)
+    if not isfinite(narrow):
+        raise Error(
+            "`" + what + "` must be a finite number, and it is " + String(value)
+        )
+    return narrow
 
 
 def _all_or_none(found: List[Int], what: String) raises -> Bool:
@@ -801,14 +800,14 @@ def parse_ply(
         var places = List[Int]()
         for name in options.custom_properties[attribute]:
             var place = vertex.find(_names(name))
-            require_non_negative(
-                place,
-                "PLY: the custom attribute `"
-                + options.custom_names[attribute]
-                + "` reads `"
-                + name
-                + "`, which a vertex has not got",
-            )
+            if place < 0:
+                raise Error(
+                    "PLY: the custom attribute `"
+                    + options.custom_names[attribute]
+                    + "` reads `"
+                    + name
+                    + "`, which a vertex has not got"
+                )
             places.append(place)
         custom_at.append(places^)
         custom_values.append(List[Float32]())
@@ -909,16 +908,15 @@ def parse_ply(
         # A face has three corners or more here, and makes a triangle or
         # more: this loop and the three below always run.
         for corner in range(first, first + count):  # pragma: no branch
-            require_index_in_count(
-                corners[corner],
-                vertex_count,
-                "PLY face "
-                + String(face)
-                + ": it names vertex "
-                + String(corners[corner])
-                + ", and the file has "
-                + String(vertex_count),
-            )
+            if not index_in_count(corners[corner], vertex_count):
+                raise Error(
+                    "PLY face "
+                    + String(face)
+                    + ": it names vertex "
+                    + String(corners[corner])
+                    + ", and the file has "
+                    + String(vertex_count)
+                )
         if count > 3:
             var points = List[Vector3]()
             for corner in range(first, first + count):  # pragma: no branch

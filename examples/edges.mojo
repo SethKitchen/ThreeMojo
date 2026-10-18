@@ -12,7 +12,7 @@ slowly moving triangle would swim. These pixels stay put until the edge
 crosses them.
 """
 
-from examples.output import (
+from tools._example_output import (
     example_destination,
     point_on_circle,
     write_third_turn,

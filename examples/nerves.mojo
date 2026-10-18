@@ -11,7 +11,7 @@ The page is Nerves. A six-foot male right leg stands with bones, knee
 tissues and the named peripheral nerves.
 """
 
-from examples.output import (
+from tools._example_output import (
     example_destination,
     gallery_camera,
     gallery_renderer,

@@ -12,7 +12,7 @@ smallest thing that animates: three points on a circle and the flat
 rasterizer. `Matrix4` exists now, and everything above `cube.mojo` uses it.
 """
 
-from examples.output import (
+from tools._example_output import (
     example_destination,
     point_on_circle,
     write_third_turn,

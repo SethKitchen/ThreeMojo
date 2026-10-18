@@ -37,12 +37,11 @@ def require_far_beyond_near(near: Float32, far: Float32) raises:
     A NaN comparison is false, so a caller that must refuse a nonfinite
     distance checks that before it calls this.
 
+    Nothing. The call returns when `far` is beyond `near`.
+
     Args:
         near: The near distance.
         far: The far distance.
-
-    Returns:
-        Nothing. The call returns when `far` is beyond `near`.
 
     Raises:
         Error: If `far` is not beyond `near`.

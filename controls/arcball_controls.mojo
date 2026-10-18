@@ -514,11 +514,10 @@ struct _Lens(ImplicitlyCopyable):
 def require_radius_factor(value: Float32) raises:
     """Refuse a radius factor that is not positive.
 
+    Nothing. The call returns when the factor is positive.
+
     Args:
         value: The factor.
-
-    Returns:
-        Nothing. The call returns when the factor is positive.
 
     Raises:
         Error: If the factor is not positive.

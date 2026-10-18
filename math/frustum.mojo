@@ -81,11 +81,10 @@ comptime NEAR = 5
 def require_frustum_matrix(matrix: Matrix4) raises:
     """Refuse a frustum matrix that is not finite.
 
+    Nothing. The call returns when every element is finite.
+
     Args:
         matrix: A projection, or a projection times a view.
-
-    Returns:
-        Nothing. The call returns when every element is finite.
 
     Raises:
         Error: If the matrix is not finite.

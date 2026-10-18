@@ -13,7 +13,7 @@ with the angle. The right sphere is brushed metal, and its highlight is
 long in one direction. The camera turns around them.
 """
 
-from examples.output import (
+from tools._example_output import (
     example_destination,
     fill_and_key,
     framed_camera,

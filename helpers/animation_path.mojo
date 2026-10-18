@@ -105,11 +105,10 @@ def animation_path(
 def require_position_track(track: Int) raises:
     """Refuse a clip that has no position track for the node.
 
+    Nothing. The call returns when the clip has that track.
+
     Args:
         track: The track index, or below zero when there is none.
-
-    Returns:
-        Nothing. The call returns when the clip has that track.
 
     Raises:
         Error: If the track index is below zero.

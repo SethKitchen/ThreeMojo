@@ -11,7 +11,7 @@ The curve is sampled, lifted into space, and given thickness. The page is
 Curves. This file draws that one path, not a set of kinds.
 """
 
-from examples.output import (
+from tools._example_output import (
     example_destination,
     fill_and_key,
     gallery_camera,

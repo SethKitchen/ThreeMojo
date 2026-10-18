@@ -54,11 +54,10 @@ from units.temperature import KELVIN, Temperature64
 def require_fourier(fourier: Float64) raises:
     """Refuse a Fourier number that is not positive and finite.
 
+    Nothing. The call returns when the number is positive and finite.
+
     Args:
         fourier: The smallest Fourier number an element may have.
-
-    Returns:
-        Nothing. The call returns when the number is positive and finite.
 
     Raises:
         Error: If the number is not positive and finite.

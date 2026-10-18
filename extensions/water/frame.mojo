@@ -119,12 +119,11 @@ struct CameraLook(ImplicitlyCopyable):
 def require_water_size(width: Int, height: Int) raises:
     """Refuse a water image whose size is not positive.
 
+    Nothing. The call returns when both sizes are positive.
+
     Args:
         width: The width, in pixels.
         height: The height, in pixels.
-
-    Returns:
-        Nothing. The call returns when both sizes are positive.
 
     Raises:
         Error: If the width or the height is not positive.

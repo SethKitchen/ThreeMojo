@@ -105,15 +105,14 @@ def append_elements[
     Parameters:
         count: How many elements the matrix stores.
 
+    Nothing. The list grows by `count` numbers.
+
+    Error: Never.
+
     Args:
         out: The list that receives the elements.
         elements: The matrix storage.
 
-    Returns:
-        Nothing. The list grows by `count` numbers.
-
-    Raises:
-        Error: Never.
     """
     for index in range(count):  # pragma: no branch
         out.append(elements[index])
@@ -125,14 +124,14 @@ def copy_elements[count: Int](elements: Array[Float32, count]) -> List[Float32]:
     Parameters:
         count: How many elements the matrix stores. Nine or sixteen.
 
+    Error: Never.
+
     Args:
         elements: The matrix storage.
 
     Returns:
         `count` numbers.
 
-    Raises:
-        Error: Never.
     """
     var values = List[Float32]()
     append_elements(values, elements)
@@ -149,15 +148,14 @@ def fill_elements[
     Parameters:
         count: How many elements the matrix stores.
 
+    Nothing. The first `count` numbers are stored.
+
+    Error: Never.
+
     Args:
         elements: The matrix storage. The call writes it from the start.
         values: At least `count` numbers, in the same order.
 
-    Returns:
-        Nothing. The first `count` numbers are stored.
-
-    Raises:
-        Error: Never.
     """
     for index in range(count):  # pragma: no branch
         elements[index] = values[index]
@@ -173,16 +171,15 @@ def store_elements[
     Parameters:
         count: How many elements the matrix stores.
 
+    Nothing. `count` slots are replaced.
+
+    Error: Never.
+
     Args:
         dest: The list. It already holds the slots.
         at: The first slot.
         elements: The matrix storage.
 
-    Returns:
-        Nothing. `count` slots are replaced.
-
-    Raises:
-        Error: Never.
     """
     for index in range(count):  # pragma: no branch
         dest[at + index] = elements[index]

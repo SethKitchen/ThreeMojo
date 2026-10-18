@@ -6,10 +6,8 @@
 """Check the anatomy report's source binding without a native probe, and
 keep the historical representative example pinned.
 
-The binding tests use small source trees. The committed template report
-records the binding of the Python tool it came from, so no test compares it
-with the current checkout; regenerating the report brings it back under
-`check_binding`.
+The committed template report must match the current source binding.
+Small source trees separately check changed inputs and refusal behavior.
 """
 
 from std.collections import Set
@@ -535,6 +533,10 @@ def test_changed_example_binding_or_scope_is_rejected() raises:
             tree.set_text(first, "status", "unsupported")
         with assert_raises():
             check_metadata(tree, report)
+
+
+def test_current_report_matches_the_source_binding() raises:
+    check_binding(".")
 
 
 def main() raises:

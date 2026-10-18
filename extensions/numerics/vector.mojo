@@ -19,12 +19,11 @@ from std.math import sqrt
 def require_row_count(length: Int, rows: Int) raises:
     """Refuse a right-hand side that does not match the row count.
 
+    Nothing. The call returns when the counts match.
+
     Args:
         length: How many entries the right-hand side has.
         rows: How many rows the matrix has.
-
-    Returns:
-        Nothing. The call returns when the counts match.
 
     Raises:
         Error: If the right-hand side does not have one entry per row.

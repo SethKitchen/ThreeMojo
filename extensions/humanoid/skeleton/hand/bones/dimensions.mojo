@@ -114,11 +114,10 @@ comptime LITTLE = Finger(4)
 def require_finger(finger: Finger) raises:
     """Refuse a finger that is not the thumb or a named finger.
 
+    Nothing. The call returns when the digit is named.
+
     Args:
         finger: The digit.
-
-    Returns:
-        Nothing. The call returns when the digit is named.
 
     Raises:
         Error: If the digit is not named.

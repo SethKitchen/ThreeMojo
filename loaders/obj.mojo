@@ -51,6 +51,10 @@ face with fewer than three corners or that is not convex, and an index
 that names nothing are refused, with the line they were found on.
 """
 
+from std.math import isfinite
+
+from core.ordinal import index_in_count
+
 from core.buffer_attribute import BufferAttribute
 from core.buffer_geometry import (
     NORMAL,
@@ -59,9 +63,8 @@ from core.buffer_geometry import (
     BufferGeometry,
     MaterialIndex,
 )
-from core.ordinal import require_index_in_count
 from loaders.js_text import split_fields
-from loaders.text_number import file_line, read_finite_float32
+from loaders.text_number import file_line
 from math.vector3 import Vector3
 from std.pathlib import Path
 
@@ -298,9 +301,24 @@ def _number(field: String, line: Int) raises -> Float32:
         Error: If the field is not a number, or is not finite once it is
             a `Float32`.
     """
-    return read_finite_float32(
-        field, _where(line), "a coordinate must be a finite number"
-    )
+    var wide: Float64
+    try:
+        wide = Float64(field)
+    except reason:
+        raise Error(
+            _where(line)
+            + "not a number: "
+            + field
+            + " ("
+            + String(reason)
+            + ")"
+        )
+    var value = Float32(wide)
+    if not isfinite(value):
+        raise Error(
+            _where(line) + "a coordinate must be a finite number: " + field
+        )
+    return value
 
 
 def _index(field: String, pool: Int, line: Int) raises -> Int:
@@ -335,11 +353,12 @@ def _index(field: String, pool: Int, line: Int) raises -> Int:
         value += pool
     else:
         value -= 1
-    require_index_in_count(
-        value,
-        pool,
-        _where(line) + "a face names an entry the file does not have: " + field,
-    )
+    if not index_in_count(value, pool):
+        raise Error(
+            _where(line)
+            + "a face names an entry the file does not have: "
+            + field
+        )
     return value
 
 

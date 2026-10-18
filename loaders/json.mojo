@@ -27,11 +27,7 @@ needs -- a byte offset, a count, an index -- exactly, up to fifty-three
 bits. `integer` refuses a number with a fraction.
 """
 
-from core.ordinal import (
-    ordinal_valid,
-    require_index_in_count,
-    require_non_negative,
-)
+from core.ordinal import ordinal_valid
 
 from loaders.bytes import (
     ascii_digit,
@@ -112,11 +108,10 @@ comptime OBJECT = JsonKind(0)
 def require_json_object(kind: JsonKind) raises:
     """Refuse a JSON node that is not an object.
 
+    Nothing. The call returns when the node is an object.
+
     Args:
         kind: The node's kind.
-
-    Returns:
-        Nothing. The call returns when the node is an object.
 
     Raises:
         Error: If the node is not an object.
@@ -200,11 +195,8 @@ struct JsonDocument(Movable):
 
     def _check(self, node: Int) raises:
         """Refuse an index that names no node."""
-        require_index_in_count(
-            node,
-            len(self.nodes),
-            "JSON: no node at index " + String(node),
-        )
+        if node < 0 or node >= len(self.nodes):
+            raise Error("JSON: no node at index " + String(node))
 
     def kind(self, node: Int) raises -> JsonKind:
         """Return what a node holds.
@@ -313,11 +305,8 @@ struct JsonDocument(Movable):
         self._check(node)
         ref found = self.nodes[node]
         require_json_object(found.kind)
-        require_index_in_count(
-            index,
-            len(found.keys),
-            "JSON: no key at position " + String(index),
-        )
+        if index < 0 or index >= len(found.keys):
+            raise Error("JSON: no key at position " + String(index))
         return found.keys[index]
 
     def at(self, node: Int, index: Int) raises -> Int:
@@ -338,11 +327,8 @@ struct JsonDocument(Movable):
         ref found = self.nodes[node]
         if found.kind != ARRAY and found.kind != OBJECT:
             raise Error("JSON: only an array or an object has children")
-        require_index_in_count(
-            index,
-            len(found.children),
-            "JSON: no child at position " + String(index),
-        )
+        if index < 0 or index >= len(found.children):
+            raise Error("JSON: no child at position " + String(index))
         return found.children[index]
 
     def number(self, node: Int) raises -> Float64:
@@ -450,7 +436,8 @@ struct JsonDocument(Movable):
         if found == NO_NODE:
             return default
         var value = Float32(self.number(found))
-        require_finite(Float64(value), label + ": " + key + " must be finite")
+        if not isfinite(value):
+            raise Error(label + ": " + key + " must be finite")
         return value
 
     def finite_numbers(
@@ -732,9 +719,8 @@ struct _Parser(Movable):
             node.number = self.number()
             document.nodes.append(node^)
             return len(document.nodes) - 1
-        require_non_negative(
-            byte, self.where() + "expected a value, found the end"
-        )
+        if byte < 0:
+            raise Error(self.where() + "expected a value, found the end")
         raise Error(self.where() + "expected a value")
 
     def object(mut self, mut document: JsonDocument, depth: Int) raises -> Int:
@@ -805,7 +791,8 @@ struct _Parser(Movable):
     def hex_digit(mut self) raises -> Int:
         """Read one hex digit of a `\\u` escape."""
         var digit = hex_digit_value(self.peek())
-        require_non_negative(digit, self.where() + "expected a hex digit")
+        if digit < 0:
+            raise Error(self.where() + "expected a hex digit")
         self.at += 1
         return digit
 
@@ -822,7 +809,8 @@ struct _Parser(Movable):
         var out = List[UInt8]()
         while True:
             var byte = self.peek()
-            require_non_negative(byte, self.where() + "unterminated string")
+            if byte < 0:
+                raise Error(self.where() + "unterminated string")
             self.at += 1
             if byte == 34:
                 break
@@ -898,7 +886,6 @@ struct _Parser(Movable):
         for index in range(start, self.at):  # pragma: no branch
             text.append(self.bytes[index])
         var value = Float64(String(unsafe_from_utf8=text))
-        require_finite(
-            Float64(value), self.where() + "a number beyond a Float64"
-        )
+        if not isfinite(value):
+            raise Error(self.where() + "a number beyond a Float64")
         return value

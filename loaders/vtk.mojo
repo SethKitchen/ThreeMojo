@@ -150,11 +150,10 @@ def _second_word(units: List[Int]) -> String:
 def require_vtk_polydata(dataset: String) raises:
     """Refuse a VTK dataset that is not PolyData.
 
+    Nothing. The call returns when the dataset is PolyData.
+
     Args:
         dataset: The DATASET word.
-
-    Returns:
-        Nothing. The call returns when the dataset is PolyData.
 
     Raises:
         Error: If the dataset is not PolyData.
@@ -243,9 +242,8 @@ def _to_index(value: Float64, what: String) raises -> Int:
     if isnan(value):
         return 0
     var length = trunc(value)
-    require_non_negative(
-        length, "VTK: " + what + " cannot have a negative length"
-    )
+    if length < 0:
+        raise Error("VTK: " + what + " cannot have a negative length")
     if length > Float64(MAX_VTK_ARRAY):
         raise Error("VTK: " + what + " is longer than this port makes")
     return Int(length)
@@ -1490,11 +1488,10 @@ def _slot_of(
 def require_vtk_piece(piece: Int) raises:
     """Refuse a PolyData element that has no Piece.
 
+    Nothing. The call returns when a Piece is present.
+
     Args:
         piece: The Piece element, or `NO_ELEMENT`.
-
-    Returns:
-        Nothing. The call returns when a Piece is present.
 
     Raises:
         Error: If the Piece is absent.

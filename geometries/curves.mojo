@@ -39,11 +39,10 @@ def _check_order(order: List[Int], count: Int) raises:
 def require_hilbert_iterations(iterations: Int) raises:
     """Refuse a Hilbert curve with a negative iteration count.
 
+    Nothing. The call returns when the count is zero or more.
+
     Args:
         iterations: How many times each cell is split.
-
-    Returns:
-        Nothing. The call returns when the count is zero or more.
 
     Raises:
         Error: If the count is negative.

@@ -19,7 +19,7 @@ prints each animal's mass, center of mass, stride, and the static load
 on each joint of its standing limbs.
 """
 
-from examples.output import example_destination, blit, gallery_camera
+from tools._example_output import example_destination, blit, gallery_camera
 
 from core.assets import Assets
 from core.buffer_geometry import BufferGeometry

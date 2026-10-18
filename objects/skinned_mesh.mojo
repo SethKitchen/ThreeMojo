@@ -131,12 +131,11 @@ comptime BONES_PER_VERTEX = 4
 def require_skin_width(item_size: Int) raises:
     """Refuse a skin attribute that is not four numbers a vertex.
 
+    Nothing. The call returns when the attribute holds four numbers
+    a vertex.
+
     Args:
         item_size: How many numbers one vertex holds.
-
-    Returns:
-        Nothing. The call returns when the attribute holds four numbers
-            a vertex.
 
     Raises:
         Error: If the attribute holds another count.

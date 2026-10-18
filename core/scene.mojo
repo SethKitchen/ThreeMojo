@@ -111,12 +111,11 @@ comptime ZERO_ANGLE = Angle(0.0, RADIAN)
 def require_instanced_mesh(index: Int, count: Int) raises:
     """Refuse an instanced-mesh index the scene does not have.
 
+    Nothing. The call returns when the index names a mesh.
+
     Args:
         index: Which mesh, as its position in the scene's list.
         count: How many instanced meshes the scene has.
-
-    Returns:
-        Nothing. The call returns when the index names a mesh.
 
     Raises:
         Error: If no instanced mesh has that index.
@@ -127,12 +126,11 @@ def require_instanced_mesh(index: Int, count: Int) raises:
 def require_skinned_mesh(index: Int, count: Int) raises:
     """Refuse a skinned-mesh index the scene does not have.
 
+    Nothing. The call returns when the index names a mesh.
+
     Args:
         index: Which mesh, as its position in the scene's list.
         count: How many skinned meshes the scene has.
-
-    Returns:
-        Nothing. The call returns when the index names a mesh.
 
     Raises:
         Error: If no skinned mesh has that index.
@@ -143,12 +141,11 @@ def require_skinned_mesh(index: Int, count: Int) raises:
 def require_mesh(index: Int, count: Int) raises:
     """Refuse a mesh index the scene does not have.
 
+    Nothing. The call returns when the index names a mesh.
+
     Args:
         index: Which mesh, as its position in the scene's list.
         count: How many meshes the scene has.
-
-    Returns:
-        Nothing. The call returns when the index names a mesh.
 
     Raises:
         Error: If no mesh has that index.
@@ -159,12 +156,11 @@ def require_mesh(index: Int, count: Int) raises:
 def require_lod_index(index: Int, count: Int) raises:
     """Refuse an LOD index the scene does not have.
 
+    Nothing. The call returns when the index names an LOD.
+
     Args:
         index: Which LOD, as its position in the scene's list.
         count: How many LODs the scene has.
-
-    Returns:
-        Nothing. The call returns when the index names an LOD.
 
     Raises:
         Error: If no LOD has that index.
@@ -197,12 +193,11 @@ struct _Links(Movable):
 def require_scene_index(index: Int, count: Int) raises:
     """Refuse a scene node index outside the array.
 
+    Nothing. The call returns when the index names an entry.
+
     Args:
         index: The node's index.
         count: How many entries the array holds.
-
-    Returns:
-        Nothing. The call returns when the index names an entry.
 
     Raises:
         Error: If the index is negative or past the last entry.
@@ -213,13 +208,12 @@ def require_scene_index(index: Int, count: Int) raises:
 def _require_scene_node(value: Int, count: Int, name: String) raises:
     """Refuse a draw whose node is past the scene.
 
+    Nothing. The call returns when the node is inside the scene.
+
     Args:
         value: The node's integer.
         count: How many nodes the scene holds.
         name: What to call the draw in the error.
-
-    Returns:
-        Nothing. The call returns when the node is inside the scene.
 
     Raises:
         Error: If the node is past the last node.
@@ -1507,12 +1501,11 @@ struct Scene(Movable):
     def _refuse_listed(self, child: Int, above: List[Int]) raises:
         """Refuse a node that is already in a parent chain.
 
+        Nothing. The call returns when the child is not in that chain.
+
         Args:
             child: The node's index.
             above: The parent and every node above it.
-
-        Returns:
-            Nothing. The call returns when the child is not in that chain.
 
         Raises:
             Error: If the child would go under itself or its own
@@ -1524,13 +1517,12 @@ struct Scene(Movable):
     def _refuse_under(self, child: Int, parent: NodeId) raises:
         """Refuse a node placed under itself or its own descendant.
 
+        Nothing. The call returns when the parent is not the child
+        and is not under the child.
+
         Args:
             child: The node's index.
             parent: The node it would go under.
-
-        Returns:
-            Nothing. The call returns when the parent is not the child
-                and is not under the child.
 
         Raises:
             Error: If the child would go under itself or its own

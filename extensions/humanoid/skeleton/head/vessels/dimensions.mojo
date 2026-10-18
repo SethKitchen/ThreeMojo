@@ -65,11 +65,10 @@ comptime VERTEBRAL_ARTERY = HeadVessel(5)
 def require_head_vessel(part: HeadVessel) raises:
     """Refuse a head vessel that is not named.
 
+    Nothing. The call returns when the vessel is named.
+
     Args:
         part: The vessel.
-
-    Returns:
-        Nothing. The call returns when the vessel is named.
 
     Raises:
         Error: If the vessel is not named.

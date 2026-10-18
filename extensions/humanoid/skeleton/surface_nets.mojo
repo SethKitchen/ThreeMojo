@@ -30,7 +30,6 @@ does not smear across it.
 
 from core.buffer_attribute import BufferAttribute
 from core.buffer_geometry import BufferGeometry, POSITION, UV
-from core.ordinal import require_positive
 from geometries.surface import indexed_surface
 from extensions.humanoid.skeleton.field import DistanceField, cross
 from extensions.humanoid.skeleton.isosurface import check_detail
@@ -536,7 +535,8 @@ def mesh_surface[
                     var q = _edge_quad(values, cells, grid, i, j, k, axis)
                     if q[0] >= 0:
                         _emit_quad(indices, positions, normals, q)
-    require_positive(len(indices), "The " + name + " field produced no surface")
+    if len(indices) <= 0:
+        raise Error("The " + name + " field produced no surface")
     _smooth_normals(normals, indices, smoothing)
     return finish_surface(positions^, normals^, indices^, low.y, span_y)
 

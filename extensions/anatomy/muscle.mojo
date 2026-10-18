@@ -222,11 +222,10 @@ def activation_rate(
 def require_fiber_length(length: Float64) raises:
     """Refuse a fiber length that is not finite and positive.
 
+    Nothing. The call returns when the length is finite and positive.
+
     Args:
         length: The fiber length, in meters.
-
-    Returns:
-        Nothing. The call returns when the length is finite and positive.
 
     Raises:
         Error: If the length is not finite and positive.

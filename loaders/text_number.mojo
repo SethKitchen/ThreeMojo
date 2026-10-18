@@ -12,7 +12,7 @@ is not a number names the parser's reason. A number that overflows a
 normal. `file_line` builds the `KIND line N: ` prefix a loader error uses.
 """
 
-from math.finite import finite_float32
+from std.math import isfinite
 
 
 def read_finite_float32(
@@ -40,11 +40,16 @@ def read_finite_float32(
         raise Error(
             prefix + "not a number: " + field + " (" + String(reason) + ")"
         )
-    return finite_float32(wide, prefix + finite + ": " + field)
+    var narrow = Float32(wide)
+    if not isfinite(narrow):
+        raise Error(prefix + finite + ": " + field)
+    return narrow
 
 
 def file_line(kind: String, line: Int) -> String:
     """Return the prefix an error names a line with.
+
+    Error: Never.
 
     Args:
         kind: The file kind, such as `OBJ` or `PLY header`.
@@ -53,7 +58,5 @@ def file_line(kind: String, line: Int) -> String:
     Returns:
         `kind`, then ` line `, then the number, then `: `.
 
-    Raises:
-        Error: Never.
     """
     return kind + " line " + String(line) + ": "

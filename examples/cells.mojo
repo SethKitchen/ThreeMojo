@@ -13,7 +13,7 @@ a mix of two colors. The time walks one full period of the cells, and
 the sphere turns one whole turn.
 """
 
-from examples.output import (
+from tools._example_output import (
     example_destination,
     fill_and_key,
     gallery_camera,

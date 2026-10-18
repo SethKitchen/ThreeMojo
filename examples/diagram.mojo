@@ -12,7 +12,7 @@ This program fills those paths into a frame so the figure can be a PNG.
 The pair turns one whole turn.
 """
 
-from examples.output import (
+from tools._example_output import (
     example_destination,
     fill_and_key,
     gallery_camera,

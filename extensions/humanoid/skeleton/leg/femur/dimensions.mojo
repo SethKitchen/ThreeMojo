@@ -46,6 +46,7 @@ from extensions.humanoid.skeleton.field import (
     acute_angle,
     bowed_station,
     check_spec,
+    clamp_unit,
     empty_bounds,
     field_gradient,
     finite_angle,
@@ -62,7 +63,6 @@ from extensions.humanoid.skeleton.field import (
     smin,
 )
 from math.quaternion import Quaternion
-from math.utils import clamp_unit
 from math.vector3 import Vector3, midpoint
 from std.math import acos, cos, max, min, sin
 from units.si import (

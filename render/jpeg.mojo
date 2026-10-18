@@ -106,11 +106,10 @@ comptime TABLE_COUNT = 4
 def require_quant_table(id: Int) raises:
     """Refuse a quantization table id past three.
 
+    Nothing. The call returns when the id is zero through three.
+
     Args:
         id: The table id.
-
-    Returns:
-        Nothing. The call returns when the id is zero through three.
 
     Raises:
         Error: If the id is past three.
@@ -783,13 +782,12 @@ def _read_quant_tables(
 def require_huffman_span(at: Int, need: Int, end: Int) raises:
     """Refuse a Huffman table that does not fit its segment.
 
+    Nothing. The call returns when the read stays inside the segment.
+
     Args:
         at: Where the table starts in the segment.
         need: How many bytes the next read needs.
         end: Where the segment ends.
-
-    Returns:
-        Nothing. The call returns when the read stays inside the segment.
 
     Raises:
         Error: If the read would pass the segment.
@@ -1121,12 +1119,11 @@ def _decode_sequential[
 def require_coefficient_band(index: Int, spectral_end: Int) raises:
     """Refuse a coefficient past the scan's band.
 
+    Nothing. The call returns when the index is inside the band.
+
     Args:
         index: The coefficient's zigzag index.
         spectral_end: The last coefficient the scan reads.
-
-    Returns:
-        Nothing. The call returns when the index is inside the band.
 
     Raises:
         Error: If the index is past the band.

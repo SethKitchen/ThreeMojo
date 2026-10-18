@@ -12,7 +12,7 @@ has `fog` off, so it stays orange while the other two fade. The camera
 walks in and back.
 """
 
-from examples.output import (
+from tools._example_output import (
     example_destination,
     fill_and_key,
     framed_camera,

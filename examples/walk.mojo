@@ -12,7 +12,7 @@ the walk and meshes its sculpt again, so the elbows, the knees and the
 hocks keep their shape as they bend. The planted feet stay on the floor.
 """
 
-from examples.output import (
+from tools._example_output import (
     example_destination,
     gallery_camera,
     gallery_renderer,

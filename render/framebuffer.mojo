@@ -134,14 +134,14 @@ struct Color(Equatable, ImplicitlyCopyable):
 def rgb_is_white(color: Color) -> Bool:
     """Return True when red, green, and blue are all 255.
 
+    Error: Never.
+
     Args:
         color: The color. Alpha is not read.
 
     Returns:
         Whether every color channel is white.
 
-    Raises:
-        Error: Never.
     """
     return color.r == 255 and color.g == 255 and color.b == 255
 
@@ -149,14 +149,14 @@ def rgb_is_white(color: Color) -> Bool:
 def rgb_is_black(color: Color) -> Bool:
     """Return True when red, green, and blue are all zero.
 
+    Error: Never.
+
     Args:
         color: The color. Alpha is not read.
 
     Returns:
         Whether every color channel is black.
 
-    Raises:
-        Error: Never.
     """
     return color.r == 0 and color.g == 0 and color.b == 0
 
@@ -164,15 +164,14 @@ def rgb_is_black(color: Color) -> Bool:
 def append_color(mut values: List[UInt8], color: Color):
     """Append `color`'s four channels.
 
+    Nothing. Four bytes are appended.
+
+    Error: Never.
+
     Args:
         values: The list that receives red, green, blue, and alpha.
         color: The eight-bit color.
 
-    Returns:
-        Nothing. Four bytes are appended.
-
-    Raises:
-        Error: Never.
     """
     values.append(color.r)
     values.append(color.g)
@@ -807,15 +806,14 @@ comptime TRANSPARENT_BLACK = FloatColor(0.0, 0.0, 0.0, 0.0)
 def append_float_rgb(mut values: List[Float32], color: FloatColor):
     """Append the red, green, and blue of a linear color.
 
+    Nothing. Three numbers are appended.
+
+    Error: Never.
+
     Args:
         values: The list that receives the three channels.
         color: The linear color. Alpha is not written.
 
-    Returns:
-        Nothing. Three numbers are appended.
-
-    Raises:
-        Error: Never.
     """
     values.append(color.r)
     values.append(color.g)
@@ -825,15 +823,14 @@ def append_float_rgb(mut values: List[Float32], color: FloatColor):
 def append_float_color(mut values: List[Float32], color: FloatColor):
     """Append `color`'s four channels.
 
+    Nothing. Four numbers are appended.
+
+    Error: Never.
+
     Args:
         values: The list that receives red, green, blue, and alpha.
         color: The linear color.
 
-    Returns:
-        Nothing. Four numbers are appended.
-
-    Raises:
-        Error: Never.
     """
     values.append(color.r)
     values.append(color.g)
@@ -844,6 +841,8 @@ def append_float_color(mut values: List[Float32], color: FloatColor):
 def opaque_from_linear(red: Float64, green: Float64, blue: Float64) -> Color:
     """Return linear light as the opaque sRGB bytes a material holds.
 
+    Error: Never.
+
     Args:
         red: Linear red.
         green: Linear green.
@@ -852,8 +851,6 @@ def opaque_from_linear(red: Float64, green: Float64, blue: Float64) -> Color:
     Returns:
         The display bytes. Alpha is 255.
 
-    Raises:
-        Error: Never.
     """
     return FloatColor(
         Float32(red), Float32(green), Float32(blue)
@@ -866,14 +863,14 @@ def unit_byte(value: Float32) -> UInt8:
     The fraction is multiplied by 255, one half is added, and the whole
     number is kept.
 
+    Error: Never.
+
     Args:
         value: The fraction.
 
     Returns:
         The byte.
 
-    Raises:
-        Error: Never.
     """
     return UInt8(Int(value * 255 + 0.5))
 
@@ -883,14 +880,14 @@ def rounded_byte(value: Float64) -> UInt8:
 
     A half rounds up.
 
+    Error: Never.
+
     Args:
         value: The number.
 
     Returns:
         The byte.
 
-    Raises:
-        Error: Never.
     """
     return UInt8(Int(clamp(value, 0.0, 255.0) + 0.5))
 
@@ -900,14 +897,14 @@ def rounded_byte(value: Float32) -> UInt8:
 
     A half rounds up.
 
+    Error: Never.
+
     Args:
         value: The number.
 
     Returns:
         The byte.
 
-    Raises:
-        Error: Never.
     """
     return UInt8(Int(clamp(value, 0, 255) + Float32(0.5)))
 
@@ -1010,12 +1007,11 @@ def _encoded(bits: Int) -> UInt8:
 def require_framebuffer_size(width: Int, height: Int) raises:
     """Refuse an image whose size is not positive.
 
+    Nothing. The call returns when both sizes are positive.
+
     Args:
         width: The width, in pixels.
         height: The height, in pixels.
-
-    Returns:
-        Nothing. The call returns when both sizes are positive.
 
     Raises:
         Error: If the width or the height is not positive.
@@ -1028,13 +1024,12 @@ def require_framebuffer_size(width: Int, height: Int) raises:
 def require_depth_length(length: Int, width: Int, height: Int) raises:
     """Refuse a depth buffer whose length is not one entry a pixel.
 
+    Nothing. The call returns when the buffer holds one depth a pixel.
+
     Args:
         length: How many depth values the buffer holds.
         width: The image width, in pixels.
         height: The image height, in pixels.
-
-    Returns:
-        Nothing. The call returns when the buffer holds one depth a pixel.
 
     Raises:
         Error: If the length is not the width times the height.
@@ -1053,15 +1048,14 @@ def require_pixel_length(
 ) raises:
     """Refuse a pixel buffer whose length disagrees with the image.
 
+    Nothing. The call returns when the buffer holds one pixel's bytes
+    for every pixel.
+
     Args:
         length: How many bytes the buffer holds.
         width: The image width, in pixels.
         height: The image height, in pixels.
         channels: How many bytes one pixel holds.
-
-    Returns:
-        Nothing. The call returns when the buffer holds one pixel's bytes
-        for every pixel.
 
     Raises:
         Error: If the length is not the width times the height times the
@@ -1079,11 +1073,10 @@ def require_pixel_length(
 def require_downsample_factor(factor: Int) raises:
     """Refuse a downsample factor below one.
 
+    Nothing. The call returns when the factor is at least one.
+
     Args:
         factor: How many pixels across and down become one.
-
-    Returns:
-        Nothing. The call returns when the factor is at least one.
 
     Raises:
         Error: If the factor is less than one.

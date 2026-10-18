@@ -10,7 +10,7 @@
 The page is Geometry. This file draws one built solid, not a row of them.
 """
 
-from examples.output import (
+from tools._example_output import (
     example_destination,
     fill_and_key,
     gallery_camera,

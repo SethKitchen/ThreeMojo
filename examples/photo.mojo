@@ -26,7 +26,7 @@ stay put -- so the lit face stays lit as the camera passes it, which a
 spinning cube under a fixed lamp cannot do.
 """
 
-from examples.output import (
+from tools._example_output import (
     fill_and_key,
     framed_camera,
     gallery_renderer,

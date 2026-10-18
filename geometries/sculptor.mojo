@@ -49,6 +49,8 @@ Extreme finite results can differ from direct three.js r180 arithmetic.
 See `docs/wiki/Norm-consumers.md` for the changed operations, retained
 limits, and explicit zero and nonfinite rules.
 """
+
+from math.finite import unit_finite
 from core.ordinal import ordinal_valid, require_index_in_count
 
 from math.norm import (
@@ -93,7 +95,6 @@ from math.vector3 import Vector3, vector3_from_float64
 from math.finite import (
     require_finite,
     require_positive_finite,
-    require_unit_finite,
 )
 from std.math import floor, inf, isfinite, sqrt
 from units.measure import length_meters
@@ -216,10 +217,10 @@ def _tool_defaults() -> List[_ToolSettings]:
 def _validate_unit_interval(name: String, value: Float64) raises -> Float64:
     """Refuse a value outside zero to one, three.js's
     `validateUnitInterval`."""
-    require_unit_finite(
-        Float64(value),
-        "Sculptor: " + name + " must be a finite number between 0 and 1.",
-    )
+    if not unit_finite(Float64(value)):
+        raise Error(
+            "Sculptor: " + name + " must be a finite number between 0 and 1."
+        )
     return value
 
 

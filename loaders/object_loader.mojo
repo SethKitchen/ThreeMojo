@@ -464,7 +464,8 @@ def euler_order_of(name: String) raises -> EulerOrder:
     """
     var orders = [XYZ, YXZ, ZXY, ZYX, YZX, XZY]
     var at = _position_of(["XYZ", "YXZ", "ZXY", "ZYX", "YZX", "XZY"], name)
-    require_non_negative(at, "Object JSON: no Euler order is named " + name)
+    if at < 0:
+        raise Error("Object JSON: no Euler order is named " + name)
     return orders[at]
 
 
@@ -771,7 +772,8 @@ struct ObjectModel(Movable):
             Error: If no object read had that uuid.
         """
         var at = _position_of(self.uuids, uuid) if len(self.uuids) > 0 else -1
-        require_non_negative(at, "Object JSON: no object has the uuid " + uuid)
+        if at < 0:
+            raise Error("Object JSON: no object has the uuid " + uuid)
         return self.nodes[at]
 
 
@@ -878,12 +880,11 @@ struct _Sampling(ImplicitlyCopyable):
 def require_object_record(document: JsonDocument, item: Int) raises:
     """Refuse an object JSON value that is not an object.
 
+    Nothing. The call returns when the value is an object.
+
     Args:
         document: The JSON document.
         item: The value.
-
-    Returns:
-        Nothing. The call returns when the value is an object.
 
     Raises:
         Error: If the value is not an object.
@@ -988,15 +989,17 @@ struct _Loader(Movable):
 
     def array(self, node: Int, key: String) raises -> Int:
         """Return an object's array under `key`, or `NO_NODE`."""
-        return self.document.optional_kind(
-            node, key, ARRAY, "Object JSON: " + key + " must be an array"
-        )
+        var found = self.document.get(node, key)
+        if found != NO_NODE and self.document.kind(found) != ARRAY:
+            raise Error("Object JSON: " + key + " must be an array")
+        return found
 
     def entry(self, node: Int, key: String) raises -> Int:
         """Return an object's object under `key`, or `NO_NODE`."""
-        return self.document.optional_kind(
-            node, key, OBJECT, "Object JSON: " + key + " must be an object"
-        )
+        var found = self.document.get(node, key)
+        if found != NO_NODE and self.document.kind(found) != OBJECT:
+            raise Error("Object JSON: " + key + " must be an object")
+        return found
 
     def numbers_of(self, list: Int) raises -> List[Float32]:
         """Return every number of an array, each finite."""
@@ -1360,11 +1363,10 @@ struct _Loader(Movable):
     def _require_texture(self, uuid: String) raises:
         """Refuse a uuid that names no texture.
 
+        Nothing. The call returns when the texture is in the file.
+
         Args:
             uuid: The texture uuid.
-
-        Returns:
-            Nothing. The call returns when the texture is in the file.
 
         Raises:
             Error: If the uuid names no texture.
@@ -1375,11 +1377,10 @@ struct _Loader(Movable):
     def _require_image(self, uuid: String) raises:
         """Refuse a uuid that names no image.
 
+        Nothing. The call returns when the image is in the file.
+
         Args:
             uuid: The image uuid.
-
-        Returns:
-            Nothing. The call returns when the image is in the file.
 
         Raises:
             Error: If the uuid names no image.
@@ -1390,11 +1391,10 @@ struct _Loader(Movable):
     def _require_material(self, uuid: String) raises:
         """Refuse a uuid that names no material.
 
+        Nothing. The call returns when the material is in the file.
+
         Args:
             uuid: The material uuid.
-
-        Returns:
-            Nothing. The call returns when the material is in the file.
 
         Raises:
             Error: If the uuid names no material.

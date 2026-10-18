@@ -12,7 +12,7 @@ writer stores that cube as the scene's environment, and the reader
 builds its PMREM again. The picture is the ball that came back.
 """
 
-from examples.output import (
+from tools._example_output import (
     example_destination,
     fill_and_key,
     gallery_camera,

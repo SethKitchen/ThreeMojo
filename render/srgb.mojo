@@ -72,11 +72,10 @@ comptime UNKNOWN_SPACE = ColorSpace(2)
 def require_known_color_space(space: ColorSpace) raises:
     """Refuse a color space a file left unknown.
 
+    Nothing. The call returns when the space is not unknown.
+
     Args:
         space: The space to read the image in.
-
-    Returns:
-        Nothing. The call returns when the space is not unknown.
 
     Raises:
         Error: If the space is unknown.

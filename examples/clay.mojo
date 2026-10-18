@@ -12,7 +12,7 @@ before the frames start. Detail stays at zero, so the triangles do not
 change. The sphere then turns one whole turn.
 """
 
-from examples.output import (
+from tools._example_output import (
     example_destination,
     fill_and_key,
     gallery_camera,

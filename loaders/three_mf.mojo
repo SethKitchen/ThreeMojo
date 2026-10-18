@@ -66,6 +66,10 @@ mesh nor components, where three.js reads `undefined` or recurses without
 end.
 """
 
+from std.math import isfinite
+
+from core.ordinal import index_in_count
+
 from core.assets import Assets
 from core.buffer_attribute import BufferAttribute
 from core.buffer_geometry import COLOR, POSITION, UV, BufferGeometry
@@ -98,8 +102,7 @@ from render.texture import (
     texture_from,
 )
 from render.texture_store import NO_TEXTURE, TextureId
-from core.ordinal import require_index_in_count, require_non_negative
-from math.finite import finite_float32
+from core.ordinal import require_non_negative
 from std.math import isnan
 from std.pathlib import Path
 from units.si import CENTIMETER, FOOT, INCH, METER, MILLIMETER, Length
@@ -296,9 +299,10 @@ def _finite(text: String, what: String) raises -> Float32:
     var value = js_parse_float(text)
     if isnan(value):
         raise Error("3MF: " + what + " is not a number: `" + text + "`")
-    return finite_float32(
-        value, "3MF: " + what + " is not finite: `" + text + "`"
-    )
+    var narrow = Float32(value)
+    if not isfinite(narrow):
+        raise Error("3MF: " + what + " is not finite: `" + text + "`")
+    return narrow
 
 
 def _index(text: String, count: Int, what: String) raises -> Int:
@@ -320,16 +324,15 @@ def _index(text: String, count: Int, what: String) raises -> Int:
         value = Int(text)
     except:
         raise Error("3MF: " + what + " index is not a whole number: " + text)
-    require_index_in_count(
-        value,
-        count,
-        "3MF: "
-        + what
-        + " index "
-        + text
-        + " is out of range, and there are "
-        + String(count),
-    )
+    if not index_in_count(value, count):
+        raise Error(
+            "3MF: "
+            + what
+            + " index "
+            + text
+            + " is out of range, and there are "
+            + String(count)
+        )
     return value
 
 
@@ -1117,9 +1120,8 @@ def _hex_byte(display: String) raises -> Int:
     var value = 0
     for byte in display.as_bytes()[7:9]:  # pragma: no branch
         var digit = hex_digit_value(Int(byte))
-        require_non_negative(
-            digit, "3MF: a color's alpha is not hex: " + display
-        )
+        if digit < 0:
+            raise Error("3MF: a color's alpha is not hex: " + display)
         value = value * 16 + digit
     return value
 

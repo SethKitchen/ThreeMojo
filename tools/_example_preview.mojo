@@ -167,8 +167,3 @@ def turn_about_vertical(v: Vector3, angle: Float32) -> Vector3:
     var c = cos(angle)
     var s = sin(angle)
     return Vector3(v.x * c + v.z * s, v.y, -v.x * s + v.z * c)
-
-
-def main():
-    # The other examples import this file. This entry lets the build check it.
-    return

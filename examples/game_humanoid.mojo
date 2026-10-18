@@ -19,7 +19,7 @@ The optional second argument is the baked file; the default is
 budget of triangles for the skin; the default is 10000.
 """
 
-from examples.output import (
+from tools._example_output import (
     example_destination,
     gallery_camera,
     gallery_renderer,

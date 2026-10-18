@@ -212,11 +212,10 @@ def _spacing(a: Vector3, b: Vector3, power: Float32) -> Float32:
 def require_catmull_type(curve_type: CatmullRomType) raises:
     """Refuse a Catmull-Rom type that is not named.
 
+    Nothing. The call returns when the type is valid.
+
     Args:
         curve_type: How the spline spaces its points.
-
-    Returns:
-        Nothing. The call returns when the type is valid.
 
     Raises:
         Error: If the type is not valid.
@@ -229,13 +228,12 @@ def require_catmull_type(curve_type: CatmullRomType) raises:
 def require_closed_catmull(closed: Bool, kind: Curve3Kind) raises:
     """Refuse a closed curve that is not a Catmull-Rom spline.
 
+    Nothing. The call returns when the curve is open, or it is a
+    Catmull-Rom spline.
+
     Args:
         closed: Whether the curve joins its last point to its first.
         kind: Which function the curve is.
-
-    Returns:
-        Nothing. The call returns when the curve is open, or it is a
-        Catmull-Rom spline.
 
     Raises:
         Error: If a curve that is not a Catmull-Rom spline is closed.

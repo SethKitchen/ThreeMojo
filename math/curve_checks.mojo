@@ -16,11 +16,10 @@ from math.polyline import PolylineVertex
 def require_curve_kind(valid: Bool) raises:
     """Refuse a curve kind that is not named.
 
+    Nothing. The call returns when the kind is named.
+
     Args:
         valid: Whether the kind is one of the named kinds.
-
-    Returns:
-        Nothing. The call returns when the kind is named.
 
     Raises:
         Error: If the kind is not named.
@@ -32,11 +31,10 @@ def require_curve_kind(valid: Bool) raises:
 def require_distinct_points(moved: Bool) raises:
     """Refuse a curve whose points are all the same point.
 
+    Nothing. The call returns when two points differ.
+
     Args:
         moved: Whether some point differs from the first.
-
-    Returns:
-        Nothing. The call returns when two points differ.
 
     Raises:
         Error: If every point is the same point.
@@ -48,11 +46,10 @@ def require_distinct_points(moved: Bool) raises:
 def require_length_table(count: Int) raises:
     """Refuse a curve length table with fewer than two entries.
 
+    Nothing. The call returns when the table has at least two entries.
+
     Args:
         count: How many entries the table has.
-
-    Returns:
-        Nothing. The call returns when the table has at least two entries.
 
     Raises:
         Error: If the table has fewer than two entries.
@@ -67,12 +64,11 @@ def require_control_count(wanted: Int, count: Int) raises:
     A wanted count of zero means a spline, which needs at least two
     points. Any other wanted count must match exactly.
 
+    Nothing. The call returns when the count matches.
+
     Args:
         wanted: How many points the kind takes. Zero means a spline.
         count: How many points the curve has.
-
-    Returns:
-        Nothing. The call returns when the count matches.
 
     Raises:
         Error: If a spline has fewer than two points, or another kind has
@@ -103,12 +99,11 @@ def check_curve_parameter(value: Float64) raises:
 def require_at_least_one(count: Int, message: String) raises:
     """Refuse a count below one.
 
+    Nothing. The call returns when `count` is at least one.
+
     Args:
         count: How many pieces the caller was given.
         message: The error text for this caller.
-
-    Returns:
-        Nothing. The call returns when `count` is at least one.
 
     Raises:
         Error: If `count` is below one.
@@ -135,12 +130,11 @@ def curve_sample_count(divisions: Int) raises -> Int:
 def require_curve_counts(first: Int, second: Int) raises:
     """Refuse a negative curve count.
 
+    Nothing. The call returns when both counts are zero or more.
+
     Args:
         first: The first count.
         second: The second count.
-
-    Returns:
-        Nothing. The call returns when both counts are zero or more.
 
     Raises:
         Error: If either count is negative.

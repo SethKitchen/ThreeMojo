@@ -38,7 +38,6 @@ from math.norm import (
 from math.quaternion import quaternion_rotate, quaternion_terms
 from math.utils import SeededRandom
 from math.vector3 import Vector3, append_float64_xyz, vector3_from_float64
-from math.finite import require_finite
 from std.math import cos, isfinite, sin, sqrt
 from units.measure import (
     angle_radians as _angle_radians,
@@ -319,17 +318,16 @@ def append_z_up_as_y_up(
 
     `x` stays. `z` becomes `y`. `-y` becomes `z`.
 
+    Nothing. Six numbers are appended.
+
+    Error: Never.
+
     Args:
         positions: The position list.
         normals: The normal list.
         point: The point, with `z` up.
         normal: The normal, with `z` up.
 
-    Returns:
-        Nothing. Six numbers are appended.
-
-    Raises:
-        Error: Never.
     """
     append_float64_xyz(positions, point.x, point.z, -point.y)
     append_float64_xyz(normals, normal.x, normal.z, -normal.y)
@@ -444,7 +442,8 @@ def check_finite(value: Float64, what: String) raises:
     Raises:
         Error: If the number is not finite.
     """
-    require_finite(Float64(value), what + " must be a finite number")
+    if not isfinite(Float64(value)):
+        raise Error(what + " must be a finite number")
 
 
 def part(geometry: BufferGeometry, id: PartId) raises -> BufferGeometry:

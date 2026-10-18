@@ -139,11 +139,10 @@ def joint_label(joint: Joint) -> String:
 def require_joint(joint: Joint) raises:
     """Refuse a joint that is not named.
 
+    Nothing. The call returns when the joint is named.
+
     Args:
         joint: The joint.
-
-    Returns:
-        Nothing. The call returns when the joint is named.
 
     Raises:
         Error: If the joint is not named.

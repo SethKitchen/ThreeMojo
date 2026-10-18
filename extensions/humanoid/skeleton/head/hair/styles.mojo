@@ -48,6 +48,8 @@ This is not a three.js port. See Extensions.
     var style = HairStyleFile(hair_style_path(LAYERED))
     var strand = style.strand(dims.head, 0)
 """
+
+from std.math import isfinite
 from core.ordinal import (
     ordinal_valid,
     require_index_in_count,
@@ -60,7 +62,6 @@ from extensions.humanoid.assets import humanoid_asset_path
 from extensions.humanoid.skeleton.head.frame import HeadDimensions
 from math.cross import cross_vectors
 from math.vector3 import Vector3
-from math.finite import require_finite
 
 comptime _VERSION = 1
 comptime _HEADER = 20
@@ -136,11 +137,10 @@ comptime PIXIE = HairStyle(12)
 def require_hair_style(style: HairStyle) raises:
     """Refuse a hair style that is not named.
 
+    Nothing. The call returns when the style is named.
+
     Args:
         style: The style.
-
-    Returns:
-        Nothing. The call returns when the style is named.
 
     Raises:
         Error: If the style is not named.
@@ -300,9 +300,8 @@ struct HairStyleFile(Movable):
         var scale = bytes.unsafe_ptr().unsafe_bitcast[Float32]()[
             unsafe_offset=4
         ]
-        require_finite(
-            Float64(scale), "The hair style scale must be finite: " + path
-        )
+        if not isfinite(Float64(scale)):
+            raise Error("The hair style scale must be finite: " + path)
         if scale < 0 or scale > Float32(1e30):
             raise Error("The hair style scale is out of range: " + path)
         var shorts = bytes.unsafe_ptr().unsafe_bitcast[Int16]()

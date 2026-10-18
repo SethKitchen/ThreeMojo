@@ -15,14 +15,14 @@ from units.si import DEGREE, METER, RADIAN, Angle, Length
 def length_meters(value: Float64) -> Length:
     """Return a number of meters as a length.
 
+    Error: Never.
+
     Args:
         value: The size in meters.
 
     Returns:
         The length.
 
-    Raises:
-        Error: Never.
     """
     return Length(Float32(value), METER)
 
@@ -30,14 +30,14 @@ def length_meters(value: Float64) -> Length:
 def angle_radians(value: Float64) -> Angle:
     """Return a number of radians as an angle.
 
+    Error: Never.
+
     Args:
         value: The size in radians.
 
     Returns:
         The angle.
 
-    Raises:
-        Error: Never.
     """
     return Angle(Float32(value), RADIAN)
 
@@ -45,13 +45,13 @@ def angle_radians(value: Float64) -> Angle:
 def angle_degrees(value: Float64) -> Angle:
     """Return a number of degrees as an angle.
 
+    Error: Never.
+
     Args:
         value: The size in degrees.
 
     Returns:
         The angle.
 
-    Raises:
-        Error: Never.
     """
     return Angle(Float32(value), DEGREE)

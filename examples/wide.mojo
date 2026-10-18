@@ -12,7 +12,7 @@ in pixels and the caps are round. The color runs along the path. A
 one-pixel line cannot do either.
 """
 
-from examples.output import (
+from tools._example_output import (
     example_destination,
     fill_and_key,
     gallery_camera,

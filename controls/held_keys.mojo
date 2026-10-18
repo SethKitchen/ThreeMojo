@@ -38,11 +38,10 @@ comptime CASE_OFFSET = 32
 def require_frame_time(delta: Duration) raises:
     """Refuse a frame whose time is negative.
 
+    Nothing. The call returns when the time is not negative.
+
     Args:
         delta: The time since the last frame.
-
-    Returns:
-        Nothing. The call returns when the time is not negative.
 
     Raises:
         Error: If the time is negative.

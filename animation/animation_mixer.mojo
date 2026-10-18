@@ -385,11 +385,10 @@ comptime PING_PONG = Loop(2)
 def require_loop(loop: Loop) raises:
     """Refuse a loop mode that is not named.
 
+    Nothing. The call returns when the mode is named.
+
     Args:
         loop: The mode.
-
-    Returns:
-        Nothing. The call returns when the mode is named.
 
     Raises:
         Error: If the mode is none of the three.
@@ -400,12 +399,11 @@ def require_loop(loop: Loop) raises:
 def require_action_weight(weight: Float32) raises:
     """Refuse an action weight that is negative or not a number.
 
+    Nothing. The call returns when the weight is a number and not
+        negative.
+
     Args:
         weight: How much of the action goes into the pose.
-
-    Returns:
-        Nothing. The call returns when the weight is a number and not
-            negative.
 
     Raises:
         Error: If the weight is not a number, or if it is negative.
@@ -417,11 +415,10 @@ def require_action_weight(weight: Float32) raises:
 def require_warp_scale(time_scale: Float32) raises:
     """Refuse a warp whose action time scale is zero.
 
+    Nothing. The call returns when the time scale is not zero.
+
     Args:
         time_scale: How fast the action's clock runs.
-
-    Returns:
-        Nothing. The call returns when the time scale is not zero.
 
     Raises:
         Error: If the time scale is zero.
@@ -433,11 +430,10 @@ def require_warp_scale(time_scale: Float32) raises:
 def require_action_time_scale(time_scale: Float32) raises:
     """Refuse an action time scale that is not a number.
 
+    Nothing. The call returns when the time scale is a number.
+
     Args:
         time_scale: How fast the action's clock runs.
-
-    Returns:
-        Nothing. The call returns when the time scale is a number.
 
     Raises:
         Error: If the time scale is not a number.
@@ -536,10 +532,10 @@ def checked_span(duration: Duration, what: String) raises -> Float32:
         Error: If the span is not a number or is negative.
     """
     var seconds = duration.to(SECOND)
-    require_finite(
-        Float64(seconds), what + " must last a time that is a number"
-    )
-    require_non_negative(seconds, what + " cannot last less than no time")
+    if not isfinite(Float64(seconds)):
+        raise Error(what + " must last a time that is a number")
+    if seconds < 0:
+        raise Error(what + " cannot last less than no time")
     return seconds
 
 

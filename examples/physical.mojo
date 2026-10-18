@@ -14,7 +14,7 @@ reflects; the sky's faces carry a mip chain, which is what a rough
 sphere reads. The last sphere of each row has a clear coat over it.
 """
 
-from examples.output import example_destination, gallery_camera
+from tools._example_output import example_destination, gallery_camera
 
 from core.assets import Assets
 from core.background import cube_background

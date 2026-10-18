@@ -18,12 +18,12 @@ how many frames to draw, one or more. The default draws the whole
 speech, twenty frames a second.
 """
 
-from examples.output import (
+from tools._example_output import (
     example_destination,
     gallery_camera,
     gallery_renderer,
 )
-from examples.preview import turn_about_vertical
+from tools._example_preview import turn_about_vertical
 
 from core.assets import Assets
 from core.object3d import Object3D

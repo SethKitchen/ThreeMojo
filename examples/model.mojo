@@ -11,7 +11,7 @@
 into a BufferGeometry. After that it is an ordinary mesh.
 """
 
-from examples.output import (
+from tools._example_output import (
     example_destination,
     fill_and_key,
     gallery_camera,

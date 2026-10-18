@@ -16,9 +16,9 @@ from extensions.water.pebbles import (
     sample_pebble_grad,
 )
 from math.arc_tangent import atan2_float32
-from math.smoothstep import clamped_smoothstep, hermite_fade
+from math.smoothstep import hermite_fade
 from math.sine import fraction
-from math.utils import mix_bilinear, mix_delta, saturate
+from math.utils import mix_bilinear, mix_delta
 from math.norm import squared_length2, squared_length3
 from math.sine import sin_float32
 from math.vector3 import Vector3, mix_delta3
@@ -51,6 +51,22 @@ def channel_ior(channel: Int) -> Float32:
     return 1.3335
 
 
+def clamp01(value: Float32) -> Float32:
+    """Clamp `value` to the unit interval.
+
+    Args:
+        value: Any float.
+
+    Returns:
+        `value` limited to 0 and 1.
+    """
+    if value <= 0.0:
+        return 0.0
+    if value >= 1.0:
+        return 1.0
+    return value
+
+
 def smoothstep(edge0: Float32, edge1: Float32, value: Float32) -> Float32:
     """Return Hermite interpolation between two edges.
 
@@ -62,7 +78,8 @@ def smoothstep(edge0: Float32, edge1: Float32, value: Float32) -> Float32:
     Returns:
         The smoothed step.
     """
-    return clamped_smoothstep(edge0, edge1, value)
+    var t = clamp01((value - edge0) / (edge1 - edge0))
+    return t * t * (3.0 - 2.0 * t)
 
 
 def hash12(x: Float32, y: Float32) -> Float32:
@@ -171,7 +188,7 @@ def fresnel(cos_i: Float32, ior: Float32) -> Float32:
     Returns:
         The reflected fraction, from 0 to 1.
     """
-    var ci = saturate(cos_i)
+    var ci = clamp01(cos_i)
     var st2 = (1.0 - ci * ci) / (ior * ior)
     if st2 >= 1.0:
         return 1.0
@@ -290,7 +307,7 @@ def aces_channel(value: Float32) -> Float32:
     var c = Float32(2.43)
     var d = Float32(0.59)
     var e = Float32(0.14)
-    return saturate((x * (a * x + b)) / (x * (c * x + d) + e))
+    return clamp01((x * (a * x + b)) / (x * (c * x + d) + e))
 
 
 def sun_direction() -> Vector3:
@@ -337,7 +354,7 @@ def sky_radiance(
     var mu = x * sun.x + y * sun.y + z * sun.z
     var zen = Vector3(0.11, 0.27, 0.62)
     var hor = Vector3(0.66, 0.78, 0.90)
-    var t = pow(saturate(y), Float32(0.42))
+    var t = pow(clamp01(y), Float32(0.42))
     var color = mix_delta3(hor, zen, t)
     var glow = Float32(0.0)
     if mu > 0.0:
@@ -371,7 +388,7 @@ def sky_radiance(
         sz /= slen
     var back = smoothstep(-0.3, 0.95, hx * sx + hz * sz)
     # The ridge stays above about 0.007 for every azimuth, so the quotient is defined.
-    var u = saturate(y / ridge)
+    var u = clamp01(y / ridge)
     var tex = fbm2(azimuth * 420.0, y * 420.0)
     var pine = 0.045 * (0.6 + 0.8 * tex)
     var rock = 0.30 * (

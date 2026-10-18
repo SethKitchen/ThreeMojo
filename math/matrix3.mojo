@@ -52,12 +52,11 @@ from units.si import Angle
 def _require_matrix3(row: Int, column: Int) raises:
     """Refuse a matrix index outside 0 to 2.
 
+    Nothing. The call returns when both indexes are inside 0 to 2.
+
     Args:
         row: The row.
         column: The column.
-
-    Returns:
-        Nothing. The call returns when both indexes are inside 0 to 2.
 
     Raises:
         Error: If either index is outside 0 to 2.

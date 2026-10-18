@@ -19,11 +19,10 @@ from std.math import floor
 def require_weld_tolerance(tolerance: Float64) raises:
     """Refuse a weld tolerance that is not positive and finite.
 
+    Nothing. The call returns when the tolerance is positive and finite.
+
     Args:
         tolerance: The merge distance, in meters.
-
-    Returns:
-        Nothing. The call returns when the tolerance is positive and finite.
 
     Raises:
         Error: If the tolerance is not positive and finite.

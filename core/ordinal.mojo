@@ -37,6 +37,8 @@ def ordinal_valid(value: Int, last: Int) -> Bool:
 def index_in_count(index: Int, count: Int) -> Bool:
     """Return True when `index` is from zero through one below `count`.
 
+    Error: Never.
+
     Args:
         index: The place to test.
         count: How many entries the list holds.
@@ -44,8 +46,6 @@ def index_in_count(index: Int, count: Int) -> Bool:
     Returns:
         True when `index` is at least zero and below `count`.
 
-    Raises:
-        Error: Never.
     """
     return index >= 0 and index < count
 
@@ -53,13 +53,12 @@ def index_in_count(index: Int, count: Int) -> Bool:
 def require_index_in_count(index: Int, count: Int, message: String) raises:
     """Refuse an index that does not name an entry.
 
+    Nothing. The call returns when `index` names an entry.
+
     Args:
         index: The place to test.
         count: How many entries the list holds.
         message: The error text for this caller.
-
-    Returns:
-        Nothing. The call returns when `index` names an entry.
 
     Raises:
         Error: If `index` is negative or not less than `count`.
@@ -71,12 +70,11 @@ def require_index_in_count(index: Int, count: Int, message: String) raises:
 def require_non_negative(value: Int, message: String) raises:
     """Refuse a value below zero.
 
+    Nothing. The call returns when `value` is zero or more.
+
     Args:
         value: The stored integer.
         message: The error text for this caller.
-
-    Returns:
-        Nothing. The call returns when `value` is zero or more.
 
     Raises:
         Error: If `value` is below zero.
@@ -88,12 +86,11 @@ def require_non_negative(value: Int, message: String) raises:
 def require_non_negative(value: Float32, message: String) raises:
     """Refuse a Float32 below zero.
 
+    Nothing. The call returns when `value` is zero or more.
+
     Args:
         value: The stored number.
         message: The error text for this caller.
-
-    Returns:
-        Nothing. The call returns when `value` is zero or more.
 
     Raises:
         Error: If `value` is below zero.
@@ -105,12 +102,11 @@ def require_non_negative(value: Float32, message: String) raises:
 def require_non_negative(value: Float64, message: String) raises:
     """Refuse a Float64 below zero.
 
+    Nothing. The call returns when `value` is zero or more.
+
     Args:
         value: The stored number.
         message: The error text for this caller.
-
-    Returns:
-        Nothing. The call returns when `value` is zero or more.
 
     Raises:
         Error: If `value` is below zero.
@@ -122,12 +118,11 @@ def require_non_negative(value: Float64, message: String) raises:
 def require_positive(value: Int, message: String) raises:
     """Refuse an integer that is zero or below.
 
+    Nothing. The call returns when `value` is one or more.
+
     Args:
         value: The stored integer.
         message: The error text for this caller.
-
-    Returns:
-        Nothing. The call returns when `value` is one or more.
 
     Raises:
         Error: If `value` is zero or below.
@@ -139,12 +134,11 @@ def require_positive(value: Int, message: String) raises:
 def require_positive(value: Float32, message: String) raises:
     """Refuse a Float32 that is zero or below.
 
+    Nothing. The call returns when `value` is above zero.
+
     Args:
         value: The stored number.
         message: The error text for this caller.
-
-    Returns:
-        Nothing. The call returns when `value` is above zero.
 
     Raises:
         Error: If `value` is zero or below.
@@ -156,12 +150,11 @@ def require_positive(value: Float32, message: String) raises:
 def require_positive(value: Float64, message: String) raises:
     """Refuse a Float64 that is zero or below.
 
+    Nothing. The call returns when `value` is above zero.
+
     Args:
         value: The stored number.
         message: The error text for this caller.
-
-    Returns:
-        Nothing. The call returns when `value` is above zero.
 
     Raises:
         Error: If `value` is zero or below.
@@ -175,27 +168,31 @@ def require_draw_ids(
 ) raises:
     """Refuse a negative node, geometry, or material id.
 
+    Nothing. The call returns when every id is zero or more.
+
     Args:
         node: The scene node id.
         geometry: The geometry id.
         material: The material id.
         label: The words that start each message, such as `A line`.
 
-    Returns:
-        Nothing. The call returns when every id is zero or more.
-
     Raises:
         Error: If `node`, `geometry`, or `material` is below zero.
     """
-    require_non_negative(node, label + " must name a scene node")
-    require_non_negative(geometry, label + " must name a geometry")
-    require_non_negative(material, label + " must name a material")
+    if node < 0:
+        raise Error(label + " must name a scene node")
+    if geometry < 0:
+        raise Error(label + " must name a geometry")
+    if material < 0:
+        raise Error(label + " must name a material")
 
 
 def ordinal_label(
     valid: Bool, value: Int, names: List[String], fallback: String
 ) -> String:
     """Return the name at `value`, or `fallback` when `valid` is false.
+
+    Error: Never.
 
     Args:
         valid: Whether `value` names an entry of `names`.
@@ -206,8 +203,6 @@ def ordinal_label(
     Returns:
         `names[value]` when `valid` is true, and `fallback` otherwise.
 
-    Raises:
-        Error: Never.
     """
     if not valid:
         return fallback
@@ -217,12 +212,11 @@ def ordinal_label(
 def require_valid(valid: Bool, message: String) raises:
     """Refuse a false validity flag.
 
+    Nothing. The call returns when `valid` is true.
+
     Args:
         valid: Whether the value is one of the named ones.
         message: The error text for this caller.
-
-    Returns:
-        Nothing. The call returns when `valid` is true.
 
     Raises:
         Error: If `valid` is false.

@@ -442,9 +442,7 @@ struct PhysicsQuerySnapshot(Movable):
 
     def _shape_hit(self, ray: Ray, entry: Int) -> Optional[RaycastHit]:
         var i = self._owners[entry]
-        return _shape_ray_hit(
-            ray, self._shapes[entry].copy(), i, self._materials[i]
-        )
+        return _shape_ray_hit(ray, self._shapes[entry], i, self._materials[i])
 
     def _triangle_hit(
         self,

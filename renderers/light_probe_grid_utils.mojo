@@ -77,11 +77,10 @@ def fibonacci_direction(index: Int, sample_count: Int) -> Vector3:
 def require_probe_samples(sample_count: Int) raises:
     """Refuse a probe bake that reads no direction.
 
+    Nothing. The call returns when the count is one or more.
+
     Args:
         sample_count: How many directions to read.
-
-    Returns:
-        Nothing. The call returns when the count is one or more.
 
     Raises:
         Error: If the count is below one.

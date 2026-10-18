@@ -12,7 +12,7 @@ actually display. Pass a path ending in `.ppm` to get the human-readable text
 format instead.
 """
 
-from examples.output import example_destination
+from tools._example_output import example_destination
 
 from core.clock import Clock
 from math.vector2 import Vector2

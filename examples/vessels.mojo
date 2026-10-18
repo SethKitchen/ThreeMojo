@@ -11,7 +11,7 @@ The page is Vessels. A six-foot male right leg stands with bones, knee
 tissues, arteries and veins.
 """
 
-from examples.output import (
+from tools._example_output import (
     example_destination,
     gallery_camera,
     gallery_renderer,

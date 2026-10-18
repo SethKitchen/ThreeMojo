@@ -36,7 +36,7 @@ interpolating the color, which is what this renderer used to do, puts a
 visible crease along every edge instead.
 """
 
-from examples.output import (
+from tools._example_output import (
     example_destination,
     gallery_camera,
     gallery_renderer,

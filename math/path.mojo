@@ -66,11 +66,10 @@ from units.si import Angle, Length, METER, RADIAN
 def require_path_divisions(divisions: Int) raises:
     """Refuse a path asked for fewer than one division.
 
+    Nothing. The call returns when there is at least one division.
+
     Args:
         divisions: How many runs to cut a curve into.
-
-    Returns:
-        Nothing. The call returns when there is at least one division.
 
     Raises:
         Error: If divisions is less than one.

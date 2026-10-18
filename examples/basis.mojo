@@ -13,7 +13,7 @@ file is decoded to bytes and sampled as an ordinary texture. The panels
 turn together.
 """
 
-from examples.output import (
+from tools._example_output import (
     example_destination,
     gallery_camera,
     gallery_renderer,

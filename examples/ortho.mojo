@@ -11,7 +11,7 @@ Parallel projection keeps the cube the same size at every depth. The
 camera is a scene node, the same way a mesh is.
 """
 
-from examples.output import (
+from tools._example_output import (
     example_destination,
     fill_and_key,
     gallery_renderer,

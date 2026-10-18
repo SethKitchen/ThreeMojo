@@ -11,7 +11,7 @@ The cube stays in the frustum. The near plane cuts it. That is clipping:
 the rasterizer draws the part that is still in front.
 """
 
-from examples.output import (
+from tools._example_output import (
     example_destination,
     fill_and_key,
     gallery_camera,

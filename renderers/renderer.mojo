@@ -2995,13 +2995,12 @@ def _draw_offset(
 def require_named_map(value: Int, count: Int, name: String) raises:
     """Refuse a map id past the textures the store holds.
 
+    Nothing. The call returns when the id is inside the store.
+
     Args:
         value: The id's integer.
         count: How many textures the store has.
         name: What to call the map in the error.
-
-    Returns:
-        Nothing. The call returns when the id is inside the store.
 
     Raises:
         Error: If the id is past the store.
@@ -3270,12 +3269,11 @@ def _checked_light_map(assets: Assets, map: TextureId) raises -> TextureId:
 def require_material_texture(map: TextureId, count: Int) raises:
     """Refuse a material texture the store does not have.
 
+    Nothing. The call returns when the id is absent or in the store.
+
     Args:
         map: The id the material names.
         count: How many textures the store has.
-
-    Returns:
-        Nothing. The call returns when the id is absent or in the store.
 
     Raises:
         Error: If the id names a texture that is not there.
@@ -3287,12 +3285,11 @@ def require_material_texture(map: TextureId, count: Int) raises:
 def require_material_alpha(map: TextureId, count: Int) raises:
     """Refuse a material alpha map the store does not have.
 
+    Nothing. The call returns when the id is absent or in the store.
+
     Args:
         map: The id the material names.
         count: How many textures the store has.
-
-    Returns:
-        Nothing. The call returns when the id is absent or in the store.
 
     Raises:
         Error: If the id names an alpha map that is not there.
@@ -3304,11 +3301,10 @@ def require_material_alpha(map: TextureId, count: Int) raises:
 def require_renderer_workers(workers: Int) raises:
     """Refuse a renderer with no worker.
 
+    Nothing. The call returns when there is one worker or more.
+
     Args:
         workers: How many threads rasterize a frame.
-
-    Returns:
-        Nothing. The call returns when there is one worker or more.
 
     Raises:
         Error: If `workers` is below one.
@@ -8578,11 +8574,10 @@ struct Renderer(Movable):
     def _require_target_size(self, target: RenderTarget) raises:
         """Refuse a target that is not this renderer's size.
 
+        Nothing. The call returns when the target matches.
+
         Args:
             target: The target to draw or clear.
-
-        Returns:
-            Nothing. The call returns when the target matches.
 
         Raises:
             Error: If the width or the height differs.

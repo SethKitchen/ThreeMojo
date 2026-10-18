@@ -11,7 +11,7 @@ The page is Muscles. A six-foot male right leg is drawn three times:
 bones only, untoned muscles, and toned muscles.
 """
 
-from examples.output import (
+from tools._example_output import (
     example_destination,
     gallery_camera,
     gallery_renderer,

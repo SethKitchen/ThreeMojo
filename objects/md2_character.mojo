@@ -78,12 +78,11 @@ struct Md2Part(Copyable, Movable):
 def require_weapon_names(names: Int, weapons: Int) raises:
     """Refuse a character that does not name each weapon once.
 
+    Nothing. The call returns when the counts match.
+
     Args:
         names: How many weapon names were given.
         weapons: How many weapon models were given.
-
-    Returns:
-        Nothing. The call returns when the counts match.
 
     Raises:
         Error: If the counts differ.

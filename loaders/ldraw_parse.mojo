@@ -38,7 +38,6 @@ hexadecimal, an edge color that names no color, an alpha or luminance
 that is not a number, and a file that is not found.
 """
 
-from core.ordinal import require_non_negative
 from math.utils import clamp
 from loaders.bytes import hex_digit_value, is_sign_mark, space_tab_line
 from loaders.file_path import path_directory
@@ -631,12 +630,13 @@ struct LDrawLoader(Movable):
                     edge_color = "#" + String(edge_color[byte=2:])
                 elif not edge_color.startswith("#"):
                     var named = self.get_material(edge_color)
-                    require_non_negative(
-                        named,
-                        "LDrawLoader: Invalid edge color while parsing material"
-                        + lp.where()
-                        + ".",
-                    )
+                    if named < 0:
+                        raise Error(
+                            "LDrawLoader: Invalid edge color while parsing"
+                            " material"
+                            + lp.where()
+                            + "."
+                        )
                     edge = self.all[named].edge
             elif upper == "ALPHA":
                 alpha = js_parse_int(lp.token())

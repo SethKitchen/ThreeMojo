@@ -237,12 +237,11 @@ def _pivoted_inertia(a: CsrMatrix) raises -> Int:
 def require_pair_size(first: Int, second: Int) raises:
     """Refuse a stiffness and a mass of different sizes.
 
+    Nothing. The call returns when the two sizes are equal.
+
     Args:
         first: The size of one matrix.
         second: The size of the other matrix.
-
-    Returns:
-        Nothing. The call returns when the two sizes are equal.
 
     Raises:
         Error: If the sizes differ.

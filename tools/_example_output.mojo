@@ -23,7 +23,7 @@ from core.scene import Scene
 from lights.light import ambient_light, directional_light
 from math.vector2 import Vector2
 from math.vector3 import Vector3
-from examples.preview import add_sky_and_sun
+from tools._example_preview import add_sky_and_sun
 from render.apng import encode
 from render.framebuffer import Color, Framebuffer
 from renderers.renderer import Renderer, available_workers
@@ -238,12 +238,6 @@ def print_tissue_mass(
         grams: The mass in grams.
         newtons: The weight in newtons.
         lbf: The weight in pounds-force.
-
-    Returns:
-        Nothing. The line is printed.
-
-    Raises:
-        Error: Never.
     """
     print(label, "-", grams, "g,", newtons, "N,", lbf, "lbf on Earth")
 
@@ -659,8 +653,3 @@ def blit(mut sheet: Framebuffer, piece: Framebuffer, x0: Int, y0: Int):
             var dst = ((y0 + y) * sheet.width + x0 + x) * channels
             for c in range(channels):
                 sheet.pixels[dst + c] = piece.pixels[src + c]
-
-
-def main():
-    # The other examples import this file. This entry lets the build check it.
-    return

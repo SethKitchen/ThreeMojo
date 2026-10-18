@@ -14,11 +14,10 @@ from std.memory import bitcast
 def require_nearest_box(empty: Bool) raises:
     """Refuse an empty box, which has no nearest point.
 
+    Nothing. The call returns when the box holds a point.
+
     Args:
         empty: Whether the box is empty.
-
-    Returns:
-        Nothing. The call returns when the box holds a point.
 
     Raises:
         Error: If the box is empty.

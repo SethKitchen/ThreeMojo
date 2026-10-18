@@ -135,11 +135,10 @@ struct LegContents(Equatable, ImplicitlyCopyable, Writable):
 def require_leg_contents(contents: LegContents) raises:
     """Refuse a leg layer set that is not named.
 
+    Nothing. The call returns when the set is named.
+
     Args:
         contents: Which tissue layers a leg draws.
-
-    Returns:
-        Nothing. The call returns when the set is named.
 
     Raises:
         Error: If the set is not a named layer set.

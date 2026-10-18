@@ -134,11 +134,10 @@ comptime VSM_SHADOW_MAP = ShadowMapType(3)
 def require_shadow_type(shadow_type: ShadowMapType) raises:
     """Refuse a shadow map type that is none of the four.
 
+    Nothing. The call returns when the type is named.
+
     Args:
         shadow_type: The filter to check.
-
-    Returns:
-        Nothing. The call returns when the type is named.
 
     Raises:
         Error: If `shadow_type` is none of the four.
@@ -151,11 +150,10 @@ def require_shadow_type(shadow_type: ShadowMapType) raises:
 def require_shadow_size(size: Int) raises:
     """Refuse a shadow map that is not at least one texel a side.
 
+    Nothing. The call returns when the size is positive.
+
     Args:
         size: The map's width and height, in texels.
-
-    Returns:
-        Nothing. The call returns when the size is positive.
 
     Raises:
         Error: If the size is not positive.

@@ -56,11 +56,10 @@ from units.si import Duration, SECOND
 def require_frame_rate(fps: Float32) raises:
     """Refuse a frame rate that is not a number above zero.
 
+    Nothing. The call returns when the rate is finite and above zero.
+
     Args:
         fps: Frames a second.
-
-    Returns:
-        Nothing. The call returns when the rate is finite and above zero.
 
     Raises:
         Error: If the rate is not a number or is not above zero.
@@ -93,11 +92,10 @@ comptime ADDITIVE_BLEND_MODE = AnimationBlendMode(1)
 def require_blend_mode(blend_mode: AnimationBlendMode) raises:
     """Refuse a blend mode that is not one of the two named modes.
 
+    Nothing. The call returns when the mode is named.
+
     Args:
         blend_mode: The mode a clip uses.
-
-    Returns:
-        Nothing. The call returns when the mode is named.
 
     Raises:
         Error: If the mode is neither of the two.
@@ -110,11 +108,10 @@ def require_blend_mode(blend_mode: AnimationBlendMode) raises:
 def require_clip_duration(runs: Float32) raises:
     """Refuse a clip that lasts no time.
 
+    Nothing. The call returns when the length is above zero.
+
     Args:
         runs: The clip's length, in seconds.
-
-    Returns:
-        Nothing. The call returns when the length is above zero.
 
     Raises:
         Error: If the length is zero or negative.

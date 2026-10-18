@@ -61,11 +61,10 @@ struct FootLymph(Equatable, ImplicitlyCopyable, Writable):
 def require_foot_lymph(part: FootLymph) raises:
     """Refuse a foot lymph trunk that is not named.
 
+    Nothing. The call returns when the trunk is named.
+
     Args:
         part: The trunk.
-
-    Returns:
-        Nothing. The call returns when the trunk is named.
 
     Raises:
         Error: If the trunk is not named.

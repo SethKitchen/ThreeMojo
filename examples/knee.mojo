@@ -11,7 +11,7 @@ The page is Knee. A six-foot male right knee shows articular cartilage,
 both menisci and both collateral ligaments on the assembled bones.
 """
 
-from examples.output import (
+from tools._example_output import (
     example_destination,
     fill_and_key,
     gallery_camera,

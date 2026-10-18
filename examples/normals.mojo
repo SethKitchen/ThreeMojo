@@ -12,7 +12,7 @@ Turning the camera turns the colors. That is why a normal is not a color
 that lighting can mix.
 """
 
-from examples.output import (
+from tools._example_output import (
     example_destination,
     framed_camera,
     gallery_renderer,

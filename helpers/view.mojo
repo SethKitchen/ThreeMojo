@@ -93,11 +93,10 @@ comptime NEGATIVE_Z = ViewAxis(5)
 def require_view_axis(axis: ViewAxis) raises:
     """Refuse a view axis that is none of the six.
 
+    Nothing. The call returns when the axis is named.
+
     Args:
         axis: The disk.
-
-    Returns:
-        Nothing. The call returns when the axis is named.
 
     Raises:
         Error: If the axis is none of the six.

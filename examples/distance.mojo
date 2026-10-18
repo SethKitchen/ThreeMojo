@@ -12,7 +12,7 @@ is from a reference point. The fraction is packed into four channels, so
 the sphere is banded rather than a smooth gray. It turns in place.
 """
 
-from examples.output import (
+from tools._example_output import (
     example_destination,
     gallery_camera,
     gallery_renderer,

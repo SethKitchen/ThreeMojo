@@ -2852,11 +2852,10 @@ struct EffectComposer(Movable):
     def _require_pass(self, index: Int) raises:
         """Refuse a pass index the composer does not have.
 
+        Nothing. The call returns when the index names a pass.
+
         Args:
             index: Which pass.
-
-        Returns:
-            Nothing. The call returns when the index names a pass.
 
         Raises:
             Error: If the index is outside the passes.

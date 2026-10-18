@@ -275,13 +275,12 @@ def parse_raw_spz(bytes: List[UInt8]) raises -> GaussianSplatGeometry:
 def require_spz_header(length: Int, least: Int) raises:
     """Refuse an SPZ file whose header is shorter than the bytes it reads.
 
+    Nothing. The call returns when the file holds at least `least`
+    bytes.
+
     Args:
         length: How many bytes the file has.
         least: How many bytes the header read needs.
-
-    Returns:
-        Nothing. The call returns when the file holds at least `least`
-            bytes.
 
     Raises:
         Error: If the file is shorter than `least`.
@@ -293,11 +292,10 @@ def require_spz_header(length: Int, least: Int) raises:
 def require_spz_magic(magic: Int) raises:
     """Refuse an SPZ file whose magic is not `NGSP`.
 
+    Nothing. The call returns when the magic is `NGSP`.
+
     Args:
         magic: The first four bytes, as a little-endian integer.
-
-    Returns:
-        Nothing. The call returns when the magic is `NGSP`.
 
     Raises:
         Error: If the magic is not `NGSP`.
@@ -309,11 +307,10 @@ def require_spz_magic(magic: Int) raises:
 def require_spz_count(count: Int) raises:
     """Refuse an SPZ file that holds too many splats.
 
+    Nothing. The call returns when the count is within the limit.
+
     Args:
         count: How many splats the file names.
-
-    Returns:
-        Nothing. The call returns when the count is within the limit.
 
     Raises:
         Error: If the count passes the limit.

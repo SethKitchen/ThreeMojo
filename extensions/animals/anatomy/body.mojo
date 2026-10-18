@@ -75,11 +75,10 @@ comptime ARACHNID = BodyPlan(6)
 def require_body_plan(plan: BodyPlan) raises:
     """Refuse a body plan that is not named.
 
+    Nothing. The call returns when the plan is named.
+
     Args:
         plan: The body plan.
-
-    Returns:
-        Nothing. The call returns when the plan is named.
 
     Raises:
         Error: If the plan is not named.
@@ -203,11 +202,10 @@ def _table() -> List[SpeciesBody]:
 def require_species(id: SpeciesId) raises:
     """Refuse a species that is not named.
 
+    Nothing. The call returns when the species is named.
+
     Args:
         id: The species.
-
-    Returns:
-        Nothing. The call returns when the species is named.
 
     Raises:
         Error: If the species is not named.

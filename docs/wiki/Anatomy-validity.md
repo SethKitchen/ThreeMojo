@@ -34,7 +34,7 @@ The binding reads each import as the compiler does. Comments and string literals
 
 The binding refuses an import statement that it cannot read, a string literal that does not end, and a bracket that does not close. The closure edges come from `tools/_imports.mojo`. That code also keeps the ancestor packages and the shadowing candidates. So the closure can only be larger than what the compiler reads.
 
-The committed report is a reference for its recorded source revision. It does not describe a later combined revision. The Python tool produced it with the version 3 binding, so its digests do not match the Mojo binding. Regenerate it to bind it to the current source. Probe reuse rejects changed source until `--build` regenerates the evidence. Regenerate the report after the final integration batch.
+The committed report uses the version 4 Mojo binding. Its tests require the source and report logic to match the current checkout. It does not describe a later combined revision. Probe reuse rejects changed source until `--build` regenerates the evidence. Regenerate the report after the final integration batch.
 
 The report uses an initial source and inventory snapshot. It rechecks source, probe and metadata before return. An observed change fails the report. These checks do not provide an atomic filesystem transaction.
 

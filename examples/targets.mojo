@@ -12,7 +12,7 @@ and a normal attachment. The top band is that light through ACES, so a
 bright lamp keeps its color. The bottom band is the view-space normal.
 """
 
-from examples.output import (
+from tools._example_output import (
     example_destination,
     gallery_camera,
     gallery_renderer,

@@ -67,7 +67,6 @@ from math.shape_path import ShapePath
 from math.vector2 import Vector2, vector2_from_float64
 from std.collections import Dict
 from math.finite import (
-    finite_float32,
     require_finite,
     require_positive_finite,
 )
@@ -160,11 +159,10 @@ struct OutlineStep(Copyable, Movable):
 def require_outline_drawn(drawn: Bool) raises:
     """Refuse a move that draws nothing.
 
+    Nothing. The call returns when the outline drew.
+
     Args:
         drawn: Whether the outline drew since the previous move.
-
-    Returns:
-        Nothing. The call returns when the outline drew.
 
     Raises:
         Error: If the outline moved and drew nothing.
@@ -228,7 +226,10 @@ def _token_number(tokens: List[String], at: Int) raises -> Float32:
     var wide = js_string_to_number(tokens[at])
     if isnan(wide):
         raise Error("'" + tokens[at] + "' is not a number")
-    return finite_float32(wide, "'" + tokens[at] + "' is not finite")
+    var narrow = Float32(wide)
+    if not isfinite(narrow):
+        raise Error("'" + tokens[at] + "' is not finite")
+    return narrow
 
 
 def parse_outline(outline: String) raises -> List[OutlineStep]:
@@ -291,9 +292,9 @@ def _field(
     Raises:
         Error: If the key is missing or does not hold a number.
     """
-    var child = document.required(
-        node, key, "Font: " + owner + " has no '" + key + "'"
-    )
+    var child = document.get(node, key)
+    if child == NO_NODE:
+        raise Error("Font: " + owner + " has no '" + key + "'")
     return document.number(child)
 
 
@@ -305,9 +306,9 @@ def _object(
     Raises:
         Error: If the key is missing or does not hold an object.
     """
-    var child = document.required(
-        node, key, "Font: " + owner + " has no '" + key + "'"
-    )
+    var child = document.get(node, key)
+    if child == NO_NODE:
+        raise Error("Font: " + owner + " has no '" + key + "'")
     if document.kind(child) != OBJECT:
         raise Error("Font: '" + key + "' must be an object")
     return child

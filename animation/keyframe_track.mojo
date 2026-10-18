@@ -715,11 +715,10 @@ def material_target(
 def require_track_target(target: TrackTarget) raises:
     """Refuse a track target whose kind or slot is not valid.
 
+    Nothing. The call returns when the kind exists and the slot fits it.
+
     Args:
         target: The track target.
-
-    Returns:
-        Nothing. The call returns when the kind exists and the slot fits it.
 
     Raises:
         Error: If the kind does not exist or the slot does not fit it.
@@ -732,12 +731,11 @@ def require_track_target(target: TrackTarget) raises:
 def require_key_values(held: Int, expected: Int) raises:
     """Refuse a track that does not hold one value for every key.
 
+    Nothing. The call returns when the two counts are equal.
+
     Args:
         held: How many values the track holds.
         expected: How many values the keys require.
-
-    Returns:
-        Nothing. The call returns when the two counts are equal.
 
     Raises:
         Error: If the counts differ.
@@ -1679,8 +1677,7 @@ struct KeyframeTrack(Copyable, Movable):
     def _require_keys(self) raises:
         """Refuse a track whose keys were removed after it was built.
 
-        Returns:
-            Nothing. The call returns when the track still holds a key.
+        Nothing. The call returns when the track still holds a key.
 
         Raises:
             Error: If the track holds no keys.

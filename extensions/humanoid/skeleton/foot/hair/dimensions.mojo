@@ -53,11 +53,10 @@ struct FootHair(Equatable, ImplicitlyCopyable, Writable):
 def require_foot_hair(part: FootHair) raises:
     """Refuse a foot hair group that is not named.
 
+    Nothing. The call returns when the group is named.
+
     Args:
         part: The hair group.
-
-    Returns:
-        Nothing. The call returns when the group is named.
 
     Raises:
         Error: If the group is not named.

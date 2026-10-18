@@ -36,6 +36,8 @@ refused with the place where it happened. three.js logs chevrotain's
 errors and then throws.
 """
 
+from std.math import isfinite
+
 from loaders.bytes import (
     ascii_digit,
     bytes_match,
@@ -43,7 +45,6 @@ from loaders.bytes import (
     is_hex_digit,
 )
 from loaders.js_number import js_parse_float
-from math.finite import require_finite
 from core.ordinal import require_valid
 
 
@@ -776,10 +777,10 @@ struct _Parser(Movable):
         elif kind == VRML_NUMBER:
             var value = VrmlValue(VRML_NUMBER_VALUE)
             value.number = js_parse_float(image)
-            require_finite(
-                Float64(value.number),
-                "VRML: a number too big for a double " + self.where(),
-            )
+            if not isfinite(Float64(value.number)):
+                raise Error(
+                    "VRML: a number too big for a double " + self.where()
+                )
             groups[3].append(value^)
         elif kind == VRML_HEX:
             var value = VrmlValue(VRML_HEX_VALUE)

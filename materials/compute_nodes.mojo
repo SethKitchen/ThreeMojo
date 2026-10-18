@@ -71,8 +71,10 @@ one launch a step. Both backends call `run_statements` on a
 `ComputeSource`, so the two agree to the float.
 """
 
+from core.ordinal import index_in_count
+
 from core.extent import require_positive_extent, require_texel_count
-from core.ordinal import require_index_in_count, require_valid, require_positive
+from core.ordinal import require_valid, require_positive
 from materials.compute_ids import (
     ATOMIC_ADD,
     ATOMIC_AND,
@@ -340,11 +342,8 @@ struct StorageBufferStore(Movable):
         """Refuse a node that names no buffer of this store, or names one as
         another type."""
         var id = node.buffer.value
-        require_index_in_count(
-            id,
-            len(self.buffers),
-            "A storage buffer store has no buffer " + String(id),
-        )
+        if not index_in_count(id, len(self.buffers)):
+            raise Error("A storage buffer store has no buffer " + String(id))
         if self.buffers[id].type != node.type:
             raise Error(
                 "A storage buffer of "
@@ -443,11 +442,10 @@ def _zero_of(mut graph: NodeGraph, type: ValueType, x: Float32) -> NodeRef:
 def require_invocation_count(count: Int) raises:
     """Refuse a compute run of no invocations.
 
+    Nothing. The call returns when the count is one or more.
+
     Args:
         count: How many invocations run.
-
-    Returns:
-        Nothing. The call returns when the count is one or more.
 
     Raises:
         Error: If the count is not positive.

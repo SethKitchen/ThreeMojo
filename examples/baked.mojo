@@ -13,7 +13,7 @@ The lamp walks a circle. A warmup of the same circle lets the average
 settle, so the recorded turn starts where it ends.
 """
 
-from examples.output import (
+from tools._example_output import (
     example_destination,
     gallery_camera,
     gallery_renderer,

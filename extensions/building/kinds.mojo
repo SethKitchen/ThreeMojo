@@ -127,11 +127,10 @@ comptime MEETING = SpaceUse(11)
 def require_space_use(use: SpaceUse) raises:
     """Refuse a space use that is not named.
 
+    Nothing. The call returns when the use is named.
+
     Args:
         use: The use of the space.
-
-    Returns:
-        Nothing. The call returns when the use is named.
 
     Raises:
         Error: If the use is not named.

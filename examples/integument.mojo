@@ -11,7 +11,7 @@ The page is Integument. A six-foot male right leg stands as a skin
 envelope with short thigh and calf hair.
 """
 
-from examples.output import (
+from tools._example_output import (
     example_destination,
     gallery_camera,
     gallery_renderer,

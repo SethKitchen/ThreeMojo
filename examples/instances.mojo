@@ -11,7 +11,7 @@ The copies sit on a ring. The node they share turns, so the ring turns with
 it. Nothing here is eight Mesh objects.
 """
 
-from examples.output import (
+from tools._example_output import (
     example_destination,
     fill_and_key,
     gallery_camera,

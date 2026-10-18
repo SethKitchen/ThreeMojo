@@ -395,13 +395,13 @@ trait CornerVisitor(Copyable, Movable):
     def visit(mut self, vertex: Int, corner: Int, faces: List[Int]):
         """Store the next value, reached at a corner.
 
+        Nothing. The record stores the vertex.
+
         Args:
             vertex: The vertex of the table.
             corner: The corner it was reached at.
             faces: The point of each corner.
 
-        Returns:
-            Nothing. The record stores the vertex.
         """
         ...
 
@@ -1101,14 +1101,13 @@ def depth_first_walk[
     Parameters:
         V: The record that stores each new vertex.
 
+    Nothing. `data.visit` stores each new vertex.
+
     Args:
         table: The table to walk.
         faces: The point of each corner.
         starts: The corners to start from, in order.
         data: The order of the values, filled as vertices are reached.
-
-    Returns:
-        Nothing. `data.visit` stores each new vertex.
 
     Raises:
         Error: If the table has a corner with no vertex.
@@ -1209,14 +1208,13 @@ def prediction_degree_walk[
     Parameters:
         V: The record that stores each new vertex.
 
+    Nothing. `data.visit` stores each new vertex.
+
     Args:
         table: The table to walk.
         faces: The point of each corner.
         starts: The corners to start from, in order.
         data: The order of the values, filled as vertices are reached.
-
-    Returns:
-        Nothing. `data.visit` stores each new vertex.
 
     Raises:
         Error: If a start corner has no vertex.

@@ -14,7 +14,7 @@ ring stands in front of the box. The eyes are set wide apart for a
 scene this small, so the parallax shows at this size.
 """
 
-from examples.output import (
+from tools._example_output import (
     example_destination,
     fill_and_key,
     framed_camera,

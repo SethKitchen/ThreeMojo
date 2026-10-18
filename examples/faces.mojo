@@ -12,7 +12,7 @@ face. The mesh wears a list, and each group draws with the material its
 index names. The box turns so every face comes around.
 """
 
-from examples.output import (
+from tools._example_output import (
     example_destination,
     fill_and_key,
     gallery_camera,

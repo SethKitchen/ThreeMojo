@@ -12,7 +12,7 @@ from the parts library beside it, and `load_ldraw` puts that model in the
 scene. The root turns one whole turn.
 """
 
-from examples.output import (
+from tools._example_output import (
     example_destination,
     fill_and_key,
     gallery_camera,

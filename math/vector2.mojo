@@ -490,6 +490,8 @@ def vector2_from_float64(x: Float64, y: Float64) -> Vector2:
 
     Each component is rounded to `Float32`.
 
+    Error: Never.
+
     Args:
         x: The first component.
         y: The second component.
@@ -497,8 +499,6 @@ def vector2_from_float64(x: Float64, y: Float64) -> Vector2:
     Returns:
         The rounded vector.
 
-    Raises:
-        Error: Never.
     """
     return Vector2(Float32(x), Float32(y))
 
@@ -506,15 +506,14 @@ def vector2_from_float64(x: Float64, y: Float64) -> Vector2:
 def append_vector2(mut values: List[Float32], point: Vector2):
     """Append `point`'s two components.
 
+    Nothing. Two numbers are appended.
+
+    Error: Never.
+
     Args:
         values: The list that receives x and y.
         point: The vector.
 
-    Returns:
-        Nothing. Two numbers are appended.
-
-    Raises:
-        Error: Never.
     """
     values.append(point.x)
     values.append(point.y)

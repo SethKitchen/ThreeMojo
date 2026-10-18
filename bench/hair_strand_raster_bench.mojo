@@ -32,7 +32,7 @@ The CPU stages need no GPU. The numbers describe the machine that runs
 the bench.
 """
 
-from bench.timing import _sorted
+from tools._bench_timing import _sorted
 from cameras.perspective_camera import PerspectiveCamera
 from core.assets import Assets
 from core.object3d import Object3D

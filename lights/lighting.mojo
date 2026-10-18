@@ -220,6 +220,8 @@ def light_cosines(
     of zero. A directional light passes a length of one, which leaves the
     dot unchanged.
 
+    Error: Never.
+
     Args:
         normal: The surface normal.
         toward: The vector toward the light, before it is normalized.
@@ -231,8 +233,6 @@ def light_cosines(
     Returns:
         The diffuse cosine, then the coat cosine.
 
-    Raises:
-        Error: Never.
     """
     var lambert = max(Float32(0), normal.dot(toward) / direction_length)
     var coat_lambert = Float32(0)

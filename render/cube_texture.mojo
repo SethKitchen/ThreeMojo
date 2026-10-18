@@ -144,11 +144,10 @@ comptime NEGATIVE_Z = 5
 def require_cube_face(index: Int) raises:
     """Refuse a cube face that is none of the six.
 
+    Nothing. The call returns when the index names a face.
+
     Args:
         index: The face, from zero.
-
-    Returns:
-        Nothing. The call returns when the index names a face.
 
     Raises:
         Error: If the index is negative or past the sixth face.
@@ -184,11 +183,10 @@ comptime SEEN_FROM_OUTSIDE = CubeLayout(1)
 def require_cube_layout(layout: CubeLayout) raises:
     """Refuse a layout that is not one of the two named layouts.
 
+    Nothing. The call returns when the layout is named.
+
     Args:
         layout: The layout of six images.
-
-    Returns:
-        Nothing. The call returns when the layout is named.
 
     Raises:
         Error: If the layout is not `SEEN_FROM_INSIDE` or
@@ -491,9 +489,8 @@ def check_rotation(euler: Euler, what: String) raises:
         or not isfinite(euler.z.value)
     ):
         raise Error(what + "'s angles must be finite")
-    require_valid(
-        euler.order.is_valid(), what + "'s order must be one of the six"
-    )
+    if not euler.order.is_valid():
+        raise Error(what + "'s order must be one of the six")
 
 
 def env_rotation(euler: Euler) raises -> Basis3:
@@ -858,11 +855,10 @@ def face_direction(face: Int, x: Int, y: Int, size: Int) -> Vector3:
 def require_equirect_texels(image: Texture) raises:
     """Refuse an equirectangular image that holds no texels.
 
+    Nothing. The call returns when the image holds texels.
+
     Args:
         image: The panorama.
-
-    Returns:
-        Nothing. The call returns when the image holds texels.
 
     Raises:
         Error: If the image is blank.
@@ -1010,11 +1006,10 @@ def validate_cube_uv(image: Texture) raises:
 def require_cube_images(count: Int) raises:
     """Refuse a cube that is not built from six images.
 
+    Nothing. The call returns when there are six images.
+
     Args:
         count: How many images were given.
-
-    Returns:
-        Nothing. The call returns when there are six images.
 
     Raises:
         Error: If the count is not six.

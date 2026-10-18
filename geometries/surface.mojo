@@ -28,7 +28,6 @@ from core.buffer_geometry import (
     GeometryType,
 )
 from core.user_data import UserData
-from core.ordinal import require_positive
 from std.math import isfinite
 from units.si import Angle, Length
 
@@ -40,13 +39,12 @@ def position_normal_surface(
 ) raises:
     """Attach positions and normals.
 
+    Nothing. The two attributes are set on `geometry`.
+
     Args:
         geometry: The geometry to fill.
         positions: Vertex positions, three numbers each.
         normals: Vertex normals, three numbers each.
-
-    Returns:
-        Nothing. The two attributes are set on `geometry`.
 
     Raises:
         Error: If either list does not divide evenly into vertices.
@@ -63,14 +61,13 @@ def textured_surface(
 ) raises:
     """Attach positions, normals and texture coordinates.
 
+    Nothing. The three attributes are set on `geometry`.
+
     Args:
         geometry: The geometry to fill.
         positions: Vertex positions, three numbers each.
         normals: Vertex normals, three numbers each.
         uvs: Texture coordinates, two numbers each.
-
-    Returns:
-        Nothing. The three attributes are set on `geometry`.
 
     Raises:
         Error: If a list does not divide evenly into vertices.
@@ -88,15 +85,14 @@ def indexed_surface(
 ) raises:
     """Attach positions, normals, texture coordinates and an index.
 
+    Nothing. The attributes and the index are set on `geometry`.
+
     Args:
         geometry: The geometry to fill.
         positions: Vertex positions, three numbers each.
         normals: Vertex normals, three numbers each.
         uvs: Texture coordinates, two numbers each.
         index: Vertex indices, three per triangle.
-
-    Returns:
-        Nothing. The attributes and the index are set on `geometry`.
 
     Raises:
         Error: If the index is not whole triangles, or an entry is negative.
@@ -108,15 +104,14 @@ def indexed_surface(
 def record_kind(mut geometry: BufferGeometry, kind: GeometryType):
     """Name a generated solid and start its parameter record.
 
+    Nothing. The kind and an empty parameter record are set.
+
+    Error: Never.
+
     Args:
         geometry: The solid.
         kind: The three.js class, such as `SPHERE_GEOMETRY`.
 
-    Returns:
-        Nothing. The kind and an empty parameter record are set.
-
-    Raises:
-        Error: Never.
     """
     geometry.kind = kind
     geometry.parameters = UserData()
@@ -127,13 +122,12 @@ def record_sweep(
 ) raises:
     """Record where a theta sweep starts and how far it runs.
 
+    Nothing. `thetaStart` and `thetaLength` hold the angles in radians.
+
     Args:
         geometry: The solid, after `record_kind`.
         theta_start: Where the sweep starts.
         theta_length: How far it sweeps.
-
-    Returns:
-        Nothing. `thetaStart` and `thetaLength` hold the angles in radians.
 
     Raises:
         Error: If either angle in radians is not finite.
@@ -147,13 +141,12 @@ def record_phi(
 ) raises:
     """Record where a phi sweep starts and how far it runs.
 
+    Nothing. `phiStart` and `phiLength` hold the angles in radians.
+
     Args:
         geometry: The solid, after `record_kind`.
         phi_start: Where the sweep starts.
         phi_length: How far it sweeps.
-
-    Returns:
-        Nothing. `phiStart` and `phiLength` hold the angles in radians.
 
     Raises:
         Error: If either angle in radians is not finite.
@@ -167,13 +160,12 @@ def record_tube(
 ) raises:
     """Record a tube's path radius and its tube radius.
 
+    Nothing. `radius` and `tube` hold the lengths in meters.
+
     Args:
         geometry: The solid, after `record_kind`.
         radius: The path radius.
         tube: The tube radius.
-
-    Returns:
-        Nothing. `radius` and `tube` hold the lengths in meters.
 
     Raises:
         Error: If either length in meters is not finite.
@@ -187,13 +179,12 @@ def record_width_height(
 ) raises:
     """Record a rectangle's width and height.
 
+    Nothing. `width` and `height` hold the lengths in meters.
+
     Args:
         geometry: The solid, after `record_kind`.
         width: The width.
         height: The height.
-
-    Returns:
-        Nothing. `width` and `height` hold the lengths in meters.
 
     Raises:
         Error: If either length in meters is not finite.
@@ -207,13 +198,12 @@ def record_grid_segments(
 ) raises:
     """Record how many cells a grid has across and down.
 
+    Nothing. `widthSegments` and `heightSegments` are set.
+
     Args:
         geometry: The solid, after `record_kind`.
         width_segments: How many cells across.
         height_segments: How many cells down.
-
-    Returns:
-        Nothing. `widthSegments` and `heightSegments` are set.
 
     Raises:
         Error: If either count is not finite as a number.
@@ -229,13 +219,12 @@ def record_shaft_segments(
 ) raises:
     """Record how many cells a shaft has around and down its side.
 
+    Nothing. `radialSegments` and `heightSegments` are set.
+
     Args:
         geometry: The solid, after `record_kind`.
         radial_segments: How many cells around.
         height_segments: How many cells down the side.
-
-    Returns:
-        Nothing. `radialSegments` and `heightSegments` are set.
 
     Raises:
         Error: If either count is not finite as a number.
@@ -247,28 +236,27 @@ def record_shaft_segments(
 def require_positive_radius(radius: Float32, name: String) raises:
     """Refuse a radius that is not positive.
 
+    Nothing. The call returns when the radius is positive.
+
     Args:
         radius: The radius.
         name: The solid, such as `sphere` or `tube`.
 
-    Returns:
-        Nothing. The call returns when the radius is positive.
-
     Raises:
         Error: If the radius is zero or negative.
     """
-    require_positive(radius, "A " + name + " needs a positive radius")
+    if radius <= 0:
+        raise Error("A " + name + " needs a positive radius")
 
 
 def require_three_segments(count: Int, message: String) raises:
     """Refuse a loop of fewer than three segments.
 
+    Nothing. The call returns when there are at least three segments.
+
     Args:
         count: How many segments the loop has.
         message: The error text for this solid.
-
-    Returns:
-        Nothing. The call returns when there are at least three segments.
 
     Raises:
         Error: If `count` is below three.
@@ -282,14 +270,13 @@ def require_positive_extents(
 ) raises:
     """Refuse a box whose width, height, or depth is not positive.
 
+    Nothing. The call returns when every extent is positive.
+
     Args:
         width: The width.
         height: The height.
         depth: The depth.
         name: The solid, such as `box` or `rounded box`.
-
-    Returns:
-        Nothing. The call returns when every extent is positive.
 
     Raises:
         Error: If any extent is zero or negative.
@@ -303,14 +290,13 @@ def require_finite_extents(
 ) raises:
     """Refuse a box whose width, height, or depth is not finite.
 
+    Nothing. The call returns when every extent is finite.
+
     Args:
         width: The width.
         height: The height.
         depth: The depth.
         name: The solid, such as `box of lines` or `rounded box`.
-
-    Returns:
-        Nothing. The call returns when every extent is finite.
 
     Raises:
         Error: If any extent is not finite.

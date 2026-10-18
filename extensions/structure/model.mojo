@@ -44,12 +44,11 @@ from core.ordinal import require_valid
 def require_gravity(acceleration: Float64) raises:
     """Refuse a gravity that is negative or not finite.
 
+    Nothing. The call returns when the acceleration is zero or more
+    and finite.
+
     Args:
         acceleration: The acceleration, in meters per second squared.
-
-    Returns:
-        Nothing. The call returns when the acceleration is zero or more
-            and finite.
 
     Raises:
         Error: If the acceleration is negative or not finite.
@@ -61,11 +60,10 @@ def require_gravity(acceleration: Float64) raises:
 def require_finite_load(value: Float64) raises:
     """Refuse a load that is not finite.
 
+    Nothing. The call returns when the load is finite.
+
     Args:
         value: The load, in its stored unit.
-
-    Returns:
-        Nothing. The call returns when the load is finite.
 
     Raises:
         Error: If the load is not finite.
@@ -184,11 +182,10 @@ struct GravityLoad(ImplicitlyCopyable):
 def require_dof(dof: Dof) raises:
     """Refuse a degree of freedom outside 0 to 5.
 
+    Nothing. The call returns when the degree of freedom is valid.
+
     Args:
         dof: The degree of freedom.
-
-    Returns:
-        Nothing. The call returns when the degree of freedom is valid.
 
     Raises:
         Error: If the degree of freedom is not valid.

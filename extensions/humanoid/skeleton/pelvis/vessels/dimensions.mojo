@@ -85,11 +85,10 @@ comptime INTERNAL_ILIAC_VEIN = PelvisVessel(12)
 def require_pelvis_vessel(part: PelvisVessel) raises:
     """Refuse a pelvic vessel that is not named.
 
+    Nothing. The call returns when the vessel is named.
+
     Args:
         part: The vessel.
-
-    Returns:
-        Nothing. The call returns when the vessel is named.
 
     Raises:
         Error: If the vessel is not named.

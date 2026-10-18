@@ -75,11 +75,10 @@ struct GeometryStore(Movable):
     def _require_geometry(self, id: GeometryId) raises:
         """Refuse a geometry id the store does not have.
 
+        Nothing. The call returns when the id names a geometry.
+
         Args:
             id: Which geometry.
-
-        Returns:
-            Nothing. The call returns when the id names a geometry.
 
         Raises:
             Error: If no geometry has that id.

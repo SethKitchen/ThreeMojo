@@ -13,7 +13,7 @@ sphere sets `allow_override` off and keeps its own color. The camera
 rides a pivot one whole turn, and the normals shift with it.
 """
 
-from examples.output import (
+from tools._example_output import (
     example_destination,
     fill_and_key,
     framed_camera,

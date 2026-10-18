@@ -385,13 +385,12 @@ def _clip_plane[
 def require_depth_planes(near: Float32, far: Float32) raises:
     """Refuse depth planes that are not finite and ordered.
 
+    Nothing. The call returns when both planes are finite and far lies
+    beyond near.
+
     Args:
         near: Distance to the near plane.
         far: Distance to the far plane.
-
-    Returns:
-        Nothing. The call returns when both planes are finite and far lies
-        beyond near.
 
     Raises:
         Error: If either plane is not finite, or far does not lie beyond

@@ -60,7 +60,9 @@ Universal 1.50. It does not know UASTC HDR 6x6, XUASTC LDR or XUBC7, and
 three.js finds no target for UASTC HDR with alpha, so this reader
 refuses them too.
 """
-from core.ordinal import ordinal_valid, require_index_in_count, require_valid
+
+from core.ordinal import index_in_count
+from core.ordinal import ordinal_valid
 
 from core.binary import copy_bytes, little_endian_u32
 from render.compressed_texture import (
@@ -631,21 +633,12 @@ struct KTX2Container(Movable):
                 ETC1S image is malformed; a video has a level past the
                 sixteenth; and everything `compressed_texture` raises.
         """
-        require_index_in_count(
-            face,
-            self.faces,
-            "KTX2: this file has no face " + String(face),
-        )
-        require_index_in_count(
-            layer,
-            self.layers,
-            "KTX2: this file has no layer " + String(layer),
-        )
-        require_index_in_count(
-            level,
-            self.levels,
-            "KTX2: this file has no level " + String(level),
-        )
+        if not index_in_count(face, self.faces):
+            raise Error("KTX2: this file has no face " + String(face))
+        if not index_in_count(layer, self.layers):
+            raise Error("KTX2: this file has no layer " + String(layer))
+        if not index_in_count(level, self.levels):
+            raise Error("KTX2: this file has no level " + String(level))
         var width = self.level_width(level)
         var height = self.level_height(level)
         if self.is_etc1s():
@@ -979,14 +972,14 @@ def read(bytes: List[UInt8]) raises -> KTX2Container:
                 " format to transcode it to"
             )
     else:
-        require_valid(
-            container.vk_format.is_valid(),
-            "KTX2: "
-            + String(container.vk_format)
-            + " is not a format this reader decodes; other ASTC footprints,"
-            " PVRTC, ETC2 with punch-through alpha and the other Vulkan"
-            " formats are not ported",
-        )
+        if not container.vk_format.is_valid():
+            raise Error(
+                "KTX2: "
+                + String(container.vk_format)
+                + " is not a format this reader decodes; other ASTC footprints,"
+                " PVRTC, ETC2 with punch-through alpha and the other Vulkan"
+                " formats are not ported"
+            )
     if not basis and container.vk_format.is_astc():
         if container.color_model != KHR_DF_MODEL_ASTC:
             raise Error(
@@ -1003,12 +996,12 @@ def read(bytes: List[UInt8]) raises -> KTX2Container:
     var animated = False
     if basis:
         animated = _has_animation_key(bytes)
-    require_valid(
-        container.supercompression.is_valid(),
-        "KTX2: "
-        + String(container.supercompression)
-        + " is not a supercompression scheme",
-    )
+    if not container.supercompression.is_valid():
+        raise Error(
+            "KTX2: "
+            + String(container.supercompression)
+            + " is not a supercompression scheme"
+        )
     if container.width <= 0 or container.height <= 0:
         raise Error("KTX2: only 2D textures are ported; 1D files are not")
     if depth != 0:

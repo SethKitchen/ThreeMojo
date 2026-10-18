@@ -12,7 +12,7 @@ stops a bare integer at compile time. A value that is not `LEFT` or
 `RIGHT` is still constructible, and the boundary that reads it refuses it.
 """
 
-from core.ordinal import ordinal_valid, require_valid
+from core.ordinal import ordinal_valid
 
 
 @fieldwise_init
@@ -35,15 +35,15 @@ comptime LEFT = BodySide(1)
 def require_side(side: BodySide, what: String) raises:
     """Refuse a side that is not right or left.
 
+    Nothing. The call returns when the side is named.
+
     Args:
         side: The side to check.
         what: The words before `side`, such as `A hand` or `An arm`.
-
-    Returns:
-        Nothing. The call returns when the side is named.
 
     Raises:
         Error: If `side` is not `RIGHT` or `LEFT`. The message is
             `<what> side must be RIGHT or LEFT`.
     """
-    require_valid(side.is_valid(), what + " side must be RIGHT or LEFT")
+    if not side.is_valid():
+        raise Error(what + " side must be RIGHT or LEFT")

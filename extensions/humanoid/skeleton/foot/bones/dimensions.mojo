@@ -115,11 +115,10 @@ struct FootBone(Equatable, ImplicitlyCopyable, Writable):
 def require_foot_bone(part: FootBone) raises:
     """Refuse a foot bone that is not named.
 
+    Nothing. The call returns when the bone is named.
+
     Args:
         part: The bone.
-
-    Returns:
-        Nothing. The call returns when the bone is named.
 
     Raises:
         Error: If the bone is not one of the twenty-six.
