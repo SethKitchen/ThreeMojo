@@ -48,7 +48,7 @@ from extensions.humanoid.skeleton.torso.sweep import (
     SweepField,
     floats,
 )
-from math.vector3 import Vector3
+from math.vector3 import Vector3, component_max, component_min
 from std.math import cos, max, min, sin, sqrt
 
 comptime HEAD_DERMIS = Float32(0.0015)
@@ -307,16 +307,8 @@ struct HeadSkinField(Copyable, DistanceField, Movable):
         self.hull = HeadHull(h)
         self.scan = ScannedHead(h, scan_model(), self.hull)
         self.ears = self.scan.ears
-        self.low = Vector3(
-            min(self.hull.low.x, self.scan.low.x),
-            min(self.hull.low.y, self.scan.low.y),
-            min(self.hull.low.z, self.scan.low.z),
-        )
-        self.high = Vector3(
-            max(self.hull.high.x, self.scan.high.x),
-            max(self.hull.high.y, self.scan.high.y),
-            max(self.hull.high.z, self.scan.high.z),
-        )
+        self.low = component_min(self.hull.low, self.scan.low)
+        self.high = component_max(self.hull.high, self.scan.high)
 
     def distance(self, point: Vector3) -> Float32:
         """Return distance to the outer surface of the neck and the head.

@@ -48,7 +48,7 @@ from core.scene import Scene
 from lights.light import DIRECTIONAL, directional_light
 from lights.shadow import ShadowCascade
 from math.matrix4 import Matrix4
-from math.vector3 import Vector3
+from math.vector3 import Vector3, component_max, component_min
 from render.framebuffer import Color
 from std.math import floor, isfinite, max, min
 from units.si import Length, METER
@@ -556,9 +556,11 @@ struct CSM(Movable):
             var high = seen.near[0]
             # Four corners, always.
             for corner in range(4):  # pragma: no branch
-                low = _lowest(_lowest(low, seen.near[corner]), seen.far[corner])
-                high = _highest(
-                    _highest(high, seen.near[corner]), seen.far[corner]
+                low = component_min(
+                    component_min(low, seen.near[corner]), seen.far[corner]
+                )
+                high = component_max(
+                    component_max(high, seen.near[corner]), seen.far[corner]
                 )
             var center = Vector3(
                 (low.x + high.x) * 0.5,
@@ -644,13 +646,3 @@ def _check_breaks(breaks: List[Float32], cascades: Int) raises:
                 "A custom CSM split's breaks must rise from zero to one"
             )
         before = at
-
-
-def _lowest(a: Vector3, b: Vector3) -> Vector3:
-    """Return the smaller of each component."""
-    return Vector3(min(a.x, b.x), min(a.y, b.y), min(a.z, b.z))
-
-
-def _highest(a: Vector3, b: Vector3) -> Vector3:
-    """Return the larger of each component."""
-    return Vector3(max(a.x, b.x), max(a.y, b.y), max(a.z, b.z))

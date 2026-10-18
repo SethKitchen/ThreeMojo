@@ -15,7 +15,7 @@ from extensions.humanoid.skeleton.field import DistanceField, finite_point
 from extensions.humanoid.skeleton.limb.sampling import SampleGrid
 from extensions.humanoid.skeleton.occupancy import check_mass_step
 from math.norm import squared_length3
-from math.vector3 import Vector3
+from math.vector3 import Vector3, component_max, component_min
 from std.math import isfinite, max, min, sqrt
 from units.si import Length, Volume
 
@@ -84,16 +84,8 @@ def diagnose_pair[
     check_mass_step(step, "overlap diagnostic")
     _check_bounds(first_low, first_high)
     _check_bounds(second_low, second_high)
-    var low = Vector3(
-        max(first_low.x, second_low.x),
-        max(first_low.y, second_low.y),
-        max(first_low.z, second_low.z),
-    )
-    var high = Vector3(
-        min(first_high.x, second_high.x),
-        min(first_high.y, second_high.y),
-        min(first_high.z, second_high.z),
-    )
+    var low = component_max(first_low, second_low)
+    var high = component_min(first_high, second_high)
     var dx = max(Float64(low.x) - Float64(high.x), Float64(0))
     var dy = max(Float64(low.y) - Float64(high.y), Float64(0))
     var dz = max(Float64(low.z) - Float64(high.z), Float64(0))
