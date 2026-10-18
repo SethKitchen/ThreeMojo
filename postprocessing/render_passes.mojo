@@ -30,7 +30,7 @@ from postprocessing.sampling import mix, u_of, v_of
 from postprocessing.effects import texture_pixel
 from postprocessing.screen_space import DepthView
 from render.cube_texture import CubeTexture
-from render.framebuffer import FloatColor
+from render.framebuffer import TRANSPARENT_BLACK, FloatColor
 from render.target import RenderTarget
 from render.texture import Texture
 from std.math import floor, isfinite
@@ -378,7 +378,7 @@ def transition_light(
         settings: The ratio, the threshold and the switch.
     """
     for slot in range(len(frame.colors)):  # pragma: no branch
-        var texel = FloatColor(0, 0, 0, 0)
+        var texel = TRANSPARENT_BLACK
         if settings.use_texture:
             texel = texels[slot]
         frame.colors[slot] = transition_pixel(

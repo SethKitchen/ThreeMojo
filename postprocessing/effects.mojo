@@ -47,7 +47,7 @@ from math.vector2 import Vector2
 from math.vector3 import Vector3
 from postprocessing.screen_space import DepthView, glsl_rand
 from postprocessing.sampling import LightView, Untracked, u_of, v_of
-from render.framebuffer import Color, FloatColor
+from render.framebuffer import TRANSPARENT_BLACK, Color, FloatColor
 from render.raster_state import (
     EQUAL_STENCIL_FUNC,
     REPLACE_STENCIL_OP,
@@ -281,7 +281,7 @@ def bokeh_pixel(source: LightView, x: Int, y: Int, blur: Float32) -> FloatColor:
     var u = u_of(x, source.width)
     var v = v_of(y, source.height)
     var aspect = Float32(source.width) / Float32(source.height)
-    var sum = FloatColor(0, 0, 0, 0)
+    var sum = TRANSPARENT_BLACK
     var index = 0
     while index < BOKEH_TAPS:
         var tap = bokeh_tap(index)
