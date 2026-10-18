@@ -80,6 +80,7 @@ from geometries.sculptor_utils import (
     intersection_ray_triangle,
     point_of,
     ray_point,
+    sqr_dist,
 )
 from math.ray import Ray
 from math.vector3 import Vector3
@@ -330,14 +331,6 @@ def _point(v: Vector3) -> Point3:
 def _vector(p: Point3) -> Vector3:
     """Return a point rounded to a `Vector3`."""
     return Vector3(Float32(p.x), Float32(p.y), Float32(p.z))
-
-
-def _dist2(a: Point3, b: Point3) -> Float64:
-    """Return the squared distance, three.js's `distanceToSquared`."""
-    var dx = a.x - b.x
-    var dy = a.y - b.y
-    var dz = a.z - b.z
-    return dx * dx + dy * dy + dz * dz
 
 
 struct Sculptor(Movable):
@@ -706,7 +699,7 @@ struct Sculptor(Movable):
         var radius_point = self._unproject(
             camera, scene, screen.x + self._size, screen.y, screen.z
         )
-        self._world_radius2 = _dist2(world_point, radius_point)
+        self._world_radius2 = sqr_dist(world_point, radius_point)
         self._local_radius2 = self._world_radius2 / scale2
 
     def _pick_vertices_in_sphere(mut self, radius2: Float64) -> List[Int]:
@@ -719,7 +712,7 @@ struct Sculptor(Movable):
         var picked = List[Int]()
         for vertex in in_cells:  # pragma: no branch
             var p = point_of(self._sculpt_mesh.vertices, vertex)
-            if _dist2(hit, p) < radius2:
+            if sqr_dist(hit, p) < radius2:
                 self._sculpt_mesh.vert_sculpt_flags[vertex] = flag
                 picked.append(vertex)
         return picked^
@@ -735,7 +728,7 @@ struct Sculptor(Movable):
             var vertex = self._sculpt_mesh.faces[self._hit_face * 3 + k]
             corners.append(vertex)
             var p = point_of(self._sculpt_mesh.vertices, vertex)
-            weights.append(sqrt(_dist2(hit, p)))
+            weights.append(sqrt(sqr_dist(hit, p)))
         var n: Point3
         if weights[0] == 0 or weights[1] == 0 or weights[2] == 0:
             var at = 0 if weights[0] == 0 else (1 if weights[1] == 0 else 2)

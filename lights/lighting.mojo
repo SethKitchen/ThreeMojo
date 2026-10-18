@@ -62,6 +62,7 @@ from lights.shadow import (
     shadow_strength,
     view_depth,
 )
+from lights.aim import light_target_position
 from lights.light import (
     AMBIENT,
     DIRECTIONAL,
@@ -1256,9 +1257,7 @@ def _aimed_at(scene: Scene, light: Light) raises -> Vector3:
     Raises:
         Error: If the target is a node the scene does not have.
     """
-    if light.target == NO_PARENT:
-        return Vector3(0, 0, 0)
-    return scene.world_position(light.target)
+    return light_target_position(scene, light)
 
 
 struct Lighting(Movable):
