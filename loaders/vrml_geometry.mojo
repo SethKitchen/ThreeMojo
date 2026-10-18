@@ -137,6 +137,38 @@ def triangulate_face_index(index: List[Float64], ccw: Bool) -> List[Float64]:
     return out^
 
 
+def _piece_values[
+    span: Int
+](data: List[Float64], index: List[Float64]) -> List[Float64]:
+    """Copy a run's three values onto every piece that run becomes.
+
+    Parameters:
+        span: How many index slots close a run. Three for a face, two
+            for a polyline.
+
+    Args:
+        data: Three values a run.
+        index: The runs, each ended by -1 or the end.
+
+    Returns:
+        Three values a piece.
+    """
+    var out = List[Float64]()
+    var start = 0
+    var i = 0
+    while i < len(index):
+        var stride = start * 3
+        out.append(at(data, stride))
+        out.append(at(data, stride + 1))
+        out.append(at(data, stride + 2))
+        var ends = at(index, i + span) == -1 or i + span >= len(index)
+        if ends:
+            i += span
+            start += 1
+        i += 1
+    return out^
+
+
 def triangulate_face_data(
     data: List[Float64], index: List[Float64]
 ) -> List[Float64]:
@@ -150,20 +182,7 @@ def triangulate_face_data(
     Returns:
         Three values a triangle.
     """
-    var out = List[Float64]()
-    var start = 0
-    var i = 0
-    while i < len(index):
-        var stride = start * 3
-        out.append(at(data, stride))
-        out.append(at(data, stride + 1))
-        out.append(at(data, stride + 2))
-        var ends = at(index, i + 3) == -1 or i + 3 >= len(index)
-        if ends:
-            i += 3
-            start += 1
-        i += 1
-    return out^
+    return _piece_values[3](data, index)
 
 
 def flatten_data(data: List[Float64], index: List[Float64]) -> List[Float64]:
@@ -220,20 +239,7 @@ def expand_line_data(
     Returns:
         Three values a segment.
     """
-    var out = List[Float64]()
-    var start = 0
-    var i = 0
-    while i < len(index):
-        var stride = start * 3
-        out.append(at(data, stride))
-        out.append(at(data, stride + 1))
-        out.append(at(data, stride + 2))
-        var ends = at(index, i + 2) == -1 or i + 2 >= len(index)
-        if ends:
-            i += 2
-            start += 1
-        i += 1
-    return out^
+    return _piece_values[2](data, index)
 
 
 def from_indexed_data(
@@ -268,6 +274,34 @@ def from_indexed_data(
     return out^
 
 
+def _corner_values[
+    corners: Int
+](index: List[Float64], data: List[Float64]) -> List[Float64]:
+    """Copy each shape's three values onto every corner.
+
+    Parameters:
+        corners: Corners a shape has. Three for a triangle, two for a
+            segment. Each caller passes one of those, so each loop runs.
+
+    Args:
+        index: The shapes: only its length is read.
+        data: Three values a shape.
+
+    Returns:
+        Three values a vertex.
+    """
+    var out = List[Float64]()
+    var i = 0
+    var j = 0
+    while i < len(index):
+        for _ in range(corners):  # pragma: no branch
+            for c in range(3):  # pragma: no branch
+                out.append(at(data, j * 3 + c))
+        i += corners
+        j += 1
+    return out^
+
+
 def from_face_data(
     index: List[Float64], face_data: List[Float64]
 ) -> List[Float64]:
@@ -281,18 +315,7 @@ def from_face_data(
     Returns:
         Three values a vertex.
     """
-    var out = List[Float64]()
-    var i = 0
-    var j = 0
-    while i < len(index):
-        # Three corners. The loop always runs.
-        for _ in range(3):  # pragma: no branch
-            # Three values. The loop always runs.
-            for c in range(3):  # pragma: no branch
-                out.append(at(face_data, j * 3 + c))
-        i += 3
-        j += 1
-    return out^
+    return _corner_values[3](index, face_data)
 
 
 def from_line_data(
@@ -308,18 +331,7 @@ def from_line_data(
     Returns:
         Three values a vertex.
     """
-    var out = List[Float64]()
-    var i = 0
-    var j = 0
-    while i < len(index):
-        # Two ends. The loop always runs.
-        for _ in range(2):  # pragma: no branch
-            # Three values. The loop always runs.
-            for c in range(3):  # pragma: no branch
-                out.append(at(line_data, j * 3 + c))
-        i += 2
-        j += 1
-    return out^
+    return _corner_values[2](index, line_data)
 
 
 def to_non_indexed(
