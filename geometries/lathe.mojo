@@ -40,6 +40,7 @@ from geometries.surface import indexed_surface
 from math.curve_checks import require_at_least_one
 from core.user_data import UserData, json_number_text
 from geometries.circle import FULL_TURN, check_sweep
+from math.finite import require_finite
 from math.norm import normalized2
 from math.vector2 import Vector2
 from std.math import cos, isfinite, sin
@@ -87,10 +88,10 @@ def _profile_normals(points: List[Vector2]) raises -> List[Vector2]:
         if index == len(points) - 1:
             # Checked radii are nonnegative Float32 values, so their
             # difference (previous.y) fits in Float32.
-            if not isfinite(previous.x):
-                raise Error(
-                    "A lathe's final profile normal must fit in Float32"
-                )
+            require_finite(
+                Float64(previous.x),
+                "A lathe's final profile normal must fit in Float32",
+            )
             normals.append(previous)
             continue
         var dx = points[index + 1].x - points[index].x

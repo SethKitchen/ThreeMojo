@@ -284,10 +284,10 @@ struct TransmissionTarget(Movable):
                         ).z
                 elif not isinf(stored):
                     raise Error("Volume scene depth cannot contain NaN")
-                if not isfinite(distance):
-                    raise Error(
-                        "Volume scene depth must reconstruct a finite distance"
-                    )
+                require_finite(
+                    Float64(distance),
+                    "Volume scene depth must reconstruct a finite distance",
+                )
                 values.append(distance)
         self.volume_depth = values^
 

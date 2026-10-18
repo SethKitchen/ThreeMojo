@@ -31,6 +31,7 @@ that is not in the scene.
 from loaders.bytes import ascii_digit, ascii_letter
 from core.scene import Scene
 from animation.keyframe_track import MeshIndex
+from math.finite import require_finite
 from std.math import floor, isfinite, nan
 
 # The name three.js gives the animation every blend mesh starts with.
@@ -386,10 +387,10 @@ struct MorphBlendMesh(Movable):
             Error: If the time is not a number, or the scene has no such
                 mesh.
         """
-        if not isfinite(delta):
-            raise Error(
-                "A blend mesh cannot move on by a time that is not a number"
-            )
+        require_finite(
+            Float64(delta),
+            "A blend mesh cannot move on by a time that is not a number",
+        )
         _check(self.mesh, scene)
         ref mesh = scene.meshes[self.mesh.value]
         # `__default` at least, so this loop always runs.

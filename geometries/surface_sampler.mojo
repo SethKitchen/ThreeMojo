@@ -45,6 +45,7 @@ from math.triangle_normal import normal_or_zero
 
 from core.buffer_attribute import BufferAttribute
 from core.buffer_geometry import BufferGeometry, COLOR, NORMAL, POSITION, UV
+from math.finite import require_finite
 from math.norm import squared_length3
 from math.utils import SeededRandom
 from math.vector2 import Vector2
@@ -248,10 +249,10 @@ struct MeshSurfaceSampler(Movable):
             # Each checked vertex weight is nonnegative, and _area is a
             # square root. Their product cannot be negative; nonfinite
             # positions can still make it NaN or infinite.
-            if not isfinite(weight):
-                raise Error(
-                    "A triangle's weight must be a number, not negative"
-                )
+            require_finite(
+                Float64(weight),
+                "A triangle's weight must be a number, not negative",
+            )
             var stored_weight = Float32(weight)
             if not isfinite(stored_weight) or (
                 weight > 0 and stored_weight == 0
