@@ -29,6 +29,7 @@ each element. `USD_SAMPLES` is the `{ times, values }` object that
 `Float32Array` stores.
 """
 from core.ordinal import ordinal_valid
+from core.search import first_match
 
 from loaders.js_number import js_string_to_number
 from loaders.js_text import js_units
@@ -232,10 +233,7 @@ struct UsdSpec(Copyable, Movable):
         Returns:
             Its place in `names`, or -1.
         """
-        for k in range(len(self.names)):
-            if self.names[k] == name:
-                return k
-        return -1
+        return first_match(self.names, name)
 
     def field(self, name: String) -> Int:
         """Return the place of a field's value.

@@ -64,6 +64,7 @@ and references that nest more than 64 deep.
 """
 
 from core.ordinal import ordinal_valid
+from core.search import first_match
 
 from core.assets import Assets
 from core.buffer_geometry import BufferGeometry
@@ -217,10 +218,7 @@ struct UsdAssets(Movable):
         Returns:
             Its place, or -1.
         """
-        for k in range(len(self.names)):
-            if self.names[k] == name:
-                return k
-        return -1
+        return first_match(self.names, name)
 
     def order(self) -> List[Int]:
         """Return the files' places in JavaScript's key order.

@@ -112,6 +112,7 @@ from animation.keyframe_track import ORTHOGRAPHIC_SLOT, TrackTarget
 from cameras.orthographic_camera import OrthographicCamera
 from cameras.perspective_camera import PerspectiveCamera
 from core.assets import Assets
+from core.search import last_match
 from core.background import (
     COLOR_BACKGROUND,
     CUBE_BACKGROUND,
@@ -1489,20 +1490,12 @@ def _influences(
 
 def _find(keys: List[Int], key: Int) -> Int:
     """Return where a key is in a list, or -1."""
-    var found = -1
-    for at in range(len(keys)):
-        if keys[at] == key:
-            found = at
-    return found
+    return last_match(keys, key)
 
 
 def _find_text(keys: List[String], key: String) -> Int:
     """Return where a text is in a list, or -1."""
-    var found = -1
-    for at in range(len(keys)):
-        if keys[at] == key:
-            found = at
-    return found
+    return last_match(keys, key)
 
 
 struct _Joined(Movable):
