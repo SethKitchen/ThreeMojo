@@ -15,6 +15,7 @@ arithmetic runs on a `CausticField` and on a copy in device memory.
 from extensions.water.optics import channel_ior, refract
 from extensions.water.spectrum import require_ocean_patch
 from extensions.water.surface import SurfaceField, sample_surface
+from math.utils import max3, min3
 from math.vector3 import Vector3
 from math.norm import squared_length3
 from std.math import abs, floor, hypot, sqrt
@@ -435,10 +436,10 @@ def _splat(
     var intensity = source_area / projected * norm
     if intensity > MAX_CAUSTIC_INTENSITY:
         intensity = MAX_CAUSTIC_INTENSITY
-    var min_x = _min3(ax, bx, cx)
-    var max_x = _max3(ax, bx, cx)
-    var min_y = _min3(ay, by, cy)
-    var max_y = _max3(ay, by, cy)
+    var min_x = min3(ax, bx, cx)
+    var max_x = max3(ax, bx, cx)
+    var min_y = min3(ay, by, cy)
+    var max_y = max3(ay, by, cy)
     var x0 = Int(floor(min_x))
     var x1 = Int(floor(max_x)) + 1
     var y0 = Int(floor(min_y))
@@ -510,24 +511,6 @@ def _edge_covers(weight: Float32, dx: Float32, dy: Float32) -> Bool:
     if weight < 0.0:
         return False
     return dy < 0.0 or (dy == 0.0 and dx > 0.0)
-
-
-def _min3(a: Float32, b: Float32, c: Float32) -> Float32:
-    var m = a
-    if b < m:
-        m = b
-    if c < m:
-        m = c
-    return m
-
-
-def _max3(a: Float32, b: Float32, c: Float32) -> Float32:
-    var m = a
-    if b > m:
-        m = b
-    if c > m:
-        m = c
-    return m
 
 
 def _build_caustic_mips(mut image: CausticField):

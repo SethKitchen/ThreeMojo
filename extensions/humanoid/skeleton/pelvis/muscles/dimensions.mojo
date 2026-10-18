@@ -73,7 +73,7 @@ from extensions.humanoid.skeleton.pelvis.bones.dimensions import (
 )
 from math.vector3 import Vector3
 from math.finite import require_positive_finite
-from std.math import pi, sqrt
+from std.math import max, pi, sqrt
 
 
 @fieldwise_init
@@ -610,26 +610,11 @@ def flat_chain(
 
 def _include_chain(mut box: Bounds, c: PelvisChain):
     """Grow `box` to hold every station of one chain."""
-    box.include_sphere(c.p0, max_f(c.ml0, c.ap0))
-    box.include_sphere(c.p1, max_f(c.ml1, c.ap1))
-    box.include_sphere(c.p2, max_f(c.ml2, c.ap2))
-    box.include_sphere(c.p3, max_f(c.ml3, c.ap3))
-    box.include_sphere(c.p4, max_f(c.ml4, c.ap4))
-
-
-def max_f(a: Float32, b: Float32) -> Float32:
-    """Return the larger of two radii.
-
-    Args:
-        a: A radius.
-        b: Another radius.
-
-    Returns:
-        The larger one.
-    """
-    if a > b:
-        return a
-    return b
+    box.include_sphere(c.p0, max(c.ml0, c.ap0))
+    box.include_sphere(c.p1, max(c.ml1, c.ap1))
+    box.include_sphere(c.p2, max(c.ml2, c.ap2))
+    box.include_sphere(c.p3, max(c.ml3, c.ap3))
+    box.include_sphere(c.p4, max(c.ml4, c.ap4))
 
 
 def _chain_volume(c: PelvisChain) -> Float32:

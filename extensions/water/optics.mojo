@@ -22,7 +22,7 @@ from math.utils import mix_bilinear, mix_delta, saturate
 from math.norm import squared_length2, squared_length3
 from math.sine import sin_float32
 from math.vector3 import Vector3, mix_delta3
-from std.math import cos, exp, floor, fma, log, pow, sin, sqrt
+from std.math import cos, exp, floor, fma, log, max, pow, sin, sqrt
 from units.si import DEGREE, Angle
 
 
@@ -614,18 +614,3 @@ def _pebbles[
     var wide = wide_a.mix(wide_b, mix)
     var height = wide.r * 0.3 + wide.g * 0.55 + wide.b * 0.15
     return BedColor(color.r, color.g, color.b, height)
-
-
-def max(a: Float32, b: Float32) -> Float32:
-    """Return the larger of two floats.
-
-    Args:
-        a: The first value.
-        b: The second value.
-
-    Returns:
-        `a` when it is greater, otherwise `b`.
-    """
-    if a > b:
-        return a
-    return b
