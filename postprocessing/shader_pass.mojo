@@ -54,7 +54,7 @@ from materials.nodes import (
 from math.vector2 import Vector2
 from math.vector3 import Vector3
 from postprocessing.sampling import LightView, Untracked, u_of, v_of
-from render.framebuffer import FloatColor, OPAQUE_WHITE
+from render.framebuffer import FloatColor, OPAQUE_WHITE, TRANSPARENT_BLACK
 from render.target import RenderTarget
 from render.texture_store import TextureStore
 from render.texture import (
@@ -320,7 +320,7 @@ struct ScreenNodes(ImplicitlyCopyable, NodeSource):
             The straight color; transparent black for nonfinite inputs.
         """
         if not texture_grad_finite(u, v, dx, dy):
-            return FloatColor(0, 0, 0, 0)
+            return TRANSPARENT_BLACK
         return self.sample(
             slot,
             gradient_sample_coordinate(u, CLAMP),
@@ -655,7 +655,7 @@ def shader_light(
     var kept_colors = saved.copy()
     var kept = LightView(kept_colors, width, height)
     if len(saved) == 0:
-        kept_colors = [FloatColor(0, 0, 0, 0)]
+        kept_colors = [TRANSPARENT_BLACK]
         kept = LightView(kept_colors, 1, 1)
     var pointer = (
         code.unsafe_ptr()

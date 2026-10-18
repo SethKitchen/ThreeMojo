@@ -599,7 +599,7 @@ struct FloatColor(Equatable, ImplicitlyCopyable):
         zero alpha gives transparent black, which is what PNG wants written.
         """
         if self.a <= 0:
-            return FloatColor(0.0, 0.0, 0.0, 0.0)
+            return TRANSPARENT_BLACK
         return FloatColor(
             self.r / self.a, self.g / self.a, self.b / self.a, self.a
         )
@@ -673,6 +673,8 @@ struct FloatColor(Equatable, ImplicitlyCopyable):
 
 # What a missing texture reads, and what a source with no map reads.
 comptime OPAQUE_WHITE = FloatColor(1.0, 1.0, 1.0, 1.0)
+# What an invalid sample and an uncovered pixel read.
+comptime TRANSPARENT_BLACK = FloatColor(0.0, 0.0, 0.0, 0.0)
 
 
 def _to_byte(value: Float32) -> UInt8:

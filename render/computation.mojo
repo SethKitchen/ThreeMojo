@@ -58,7 +58,7 @@ from math.vector2 import Vector2
 from math.vector3 import Vector3
 from postprocessing.shader_pass import SCREEN_VERTEX_SHADER
 from postprocessing.sampling import Untracked
-from render.framebuffer import FloatColor
+from render.framebuffer import FloatColor, TRANSPARENT_BLACK
 from render.texture_store import TextureId
 from render.texture import (
     CLAMP,
@@ -208,7 +208,7 @@ struct ComputeNodes(ImplicitlyCopyable, NodeSource):
             The texel's four floats; transparent black for nonfinite inputs.
         """
         if not texture_grad_finite(u, v, dx, dy):
-            return FloatColor(0, 0, 0, 0)
+            return TRANSPARENT_BLACK
         return self.sample(
             slot,
             gradient_sample_coordinate(

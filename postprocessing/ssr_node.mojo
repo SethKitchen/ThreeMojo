@@ -44,7 +44,7 @@ from math.vector3 import Vector3
 from postprocessing.display_nodes import luminance_of, scaled_size
 from postprocessing.sampling import LightView, u_of, v_of
 from postprocessing.screen_space import DepthView
-from render.framebuffer import FloatColor
+from render.framebuffer import FloatColor, TRANSPARENT_BLACK
 from render.target import RenderTarget
 from std.math import floor, isfinite, max, min
 from units.si import Length, METER
@@ -217,7 +217,7 @@ def ssr_node_pixel(
     var v_down = (Float32(y) + 0.5) / h
     var depth = view.depth_at(u, 1 - v_down)
     if depth >= 1:
-        return FloatColor(0, 0, 0, 0)
+        return TRANSPARENT_BLACK
     var here = view.position(u, 1 - v_down, depth)
     var world = frame.camera_world.transform_point(here)
     var normal = _normal_at(frame.normals, u, v_down)
@@ -226,7 +226,7 @@ def ssr_node_pixel(
         incident = here * (1 / here.length())
     var metalness = frame.metal_rough.sample(u, 1 - v_down).r
     if not settings.reflect_non_metals and metalness <= 0:
-        return FloatColor(0, 0, 0, 0)
+        return TRANSPARENT_BLACK
     # GLSL's `reflect`, made unit length.
     var reflected = incident - normal * (2 * normal.dot(incident))
     reflected = reflected * (1 / reflected.length())
@@ -245,7 +245,7 @@ def ssr_node_pixel(
     # A ray whose end has no place on the image, a surface seen edge on,
     # reflects nothing: its step count would mean nothing.
     if not (isfinite(x_len) and isfinite(y_len)):
-        return FloatColor(0, 0, 0, 0)
+        return TRANSPARENT_BLACK
     var quality = min(max(settings.quality, 0), 1)
     var total = max(Int(max(abs(x_len), abs(y_len)) * quality), 1)
     var step_x = x_len / Float32(total)
@@ -295,7 +295,7 @@ def ssr_node_pixel(
         hit_depth = d
         break
     if found == 0:
-        return FloatColor(0, 0, 0, 0)
+        return TRANSPARENT_BLACK
     var hit = view.position(hit_u, 1 - hit_v, hit_depth)
     var plane_distance = normal.dot(hit) - normal.dot(here)
     var world_distance = (
