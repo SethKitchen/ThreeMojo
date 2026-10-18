@@ -12,7 +12,7 @@ an error bound for that approximation.
 """
 
 from core.ordinal import require_index_in_count
-from math.vector3 import Vector3
+from math.vector3 import Vector3, vector3_from_float64
 from math.finite import require_positive_finite
 from std.math import ceil, isfinite, min
 from units.si import Length
@@ -110,10 +110,8 @@ struct SampleGrid(ImplicitlyCopyable):
         var y1 = min(y0 + s, Float64(self.high.y))
         var z1 = min(z0 + s, Float64(self.high.z))
         return (
-            Vector3(
-                Float32((x0 + x1) * 0.5),
-                Float32((y0 + y1) * 0.5),
-                Float32((z0 + z1) * 0.5),
+            vector3_from_float64(
+                (x0 + x1) * 0.5, (y0 + y1) * 0.5, (z0 + z1) * 0.5
             ),
-            Vector3(Float32(x1 - x0), Float32(y1 - y0), Float32(z1 - z0)),
+            vector3_from_float64(x1 - x0, y1 - y0, z1 - z0),
         )

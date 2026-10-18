@@ -29,7 +29,7 @@ from math.triangle_normal import (
     _triangle_cross_wide,
 )
 from math.utils import clamp, max3, min3, saturate
-from math.vector3 import Vector3, centroid
+from math.vector3 import Vector3, centroid, vector3_from_float64
 from std.math import sqrt
 
 # A segment whose squared length is at most this is a point to
@@ -94,12 +94,8 @@ def _segment_closest_points(
     var on_first = first + d1 * s
     var on_second = second + d2 * t
     return (
-        Vector3(
-            Float32(on_first[0]), Float32(on_first[1]), Float32(on_first[2])
-        ),
-        Vector3(
-            Float32(on_second[0]), Float32(on_second[1]), Float32(on_second[2])
-        ),
+        vector3_from_float64(on_first[0], on_first[1], on_first[2]),
+        vector3_from_float64(on_second[0], on_second[1], on_second[2]),
     )
 
 

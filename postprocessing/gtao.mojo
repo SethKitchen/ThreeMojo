@@ -31,7 +31,7 @@ from math.norm import squared_length2
 from math.noise import SimplexNoise
 from math.utils import SeededRandom, clamp
 from math.cross import cross_vectors
-from math.vector3 import Vector3, reciprocal_unit
+from math.vector3 import Vector3, reciprocal_unit, vector3_from_float64
 from postprocessing.sampling import LightView, u_of, v_of
 from postprocessing.screen_space import (
     BEAUTY_OUTPUT,
@@ -299,9 +299,7 @@ def denoise_disk(
         var radius = pow(
             Float64(i) / Float64(samples - 1), Float64(radius_exponent)
         )
-        disk.append(
-            Vector3(Float32(cos(angle)), Float32(sin(angle)), Float32(radius))
-        )
+        disk.append(vector3_from_float64(cos(angle), sin(angle), radius))
     return disk^
 
 

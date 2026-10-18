@@ -135,7 +135,7 @@ from materials.material import (
 from math.euler import XYZ, XZY, YXZ, YZX, ZXY, ZYX, Euler, EulerOrder
 from math.matrix4 import Matrix4, scaling, translation
 from math.vector2 import Vector2, append_vector2
-from math.vector3 import Vector3, append_vector3
+from math.vector3 import Vector3, append_vector3, vector3_from_float64
 from objects.mesh import Mesh
 from objects.skeleton import Bone, Skeleton
 from objects.skinned_mesh import (
@@ -1071,10 +1071,10 @@ struct _Loader(Movable):
         var entry = self.entry(node, name)
         if entry == NO_FBX_NODE:
             return default
-        return Vector3(
-            Float32(self.document.number(entry, 4)),
-            Float32(self.document.number(entry, 5)),
-            Float32(self.document.number(entry, 6)),
+        return vector3_from_float64(
+            self.document.number(entry, 4),
+            self.document.number(entry, 5),
+            self.document.number(entry, 6),
         )
 
     def entry_color(self, entry: Int) raises -> Color:
@@ -1478,20 +1478,20 @@ struct _Loader(Movable):
             face.vertices.append(vertex)
             face.points.append(
                 pre.transform_point(
-                    Vector3(
-                        Float32(positions[vertex * 3]),
-                        Float32(positions[vertex * 3 + 1]),
-                        Float32(positions[vertex * 3 + 2]),
+                    vector3_from_float64(
+                        positions[vertex * 3],
+                        positions[vertex * 3 + 1],
+                        positions[vertex * 3 + 2],
                     )
                 )
             )
             if has_normal:
                 var at = normals.start(corner, polygon, vertex)
                 var normal = turn.transform_direction(
-                    Vector3(
-                        Float32(normals.values[at]),
-                        Float32(normals.values[at + 1]),
-                        Float32(normals.values[at + 2]),
+                    vector3_from_float64(
+                        normals.values[at],
+                        normals.values[at + 1],
+                        normals.values[at + 2],
                     )
                 )
                 normal.normalize()
@@ -1506,10 +1506,10 @@ struct _Loader(Movable):
             if has_color:
                 var at = colors.start(corner, polygon, vertex)
                 face.colors.append(
-                    Vector3(
-                        Float32(colors.values[at]),
-                        Float32(colors.values[at + 1]),
-                        Float32(colors.values[at + 2]),
+                    vector3_from_float64(
+                        colors.values[at],
+                        colors.values[at + 1],
+                        colors.values[at + 2],
                     )
                 )
             if has_material:
@@ -2027,10 +2027,8 @@ struct _Loader(Movable):
                     count,
                     "FBX: a shape names a position that is not there",
                 )
-                offsets[vertex] = Vector3(
-                    Float32(moved[at * 3]),
-                    Float32(moved[at * 3 + 1]),
-                    Float32(moved[at * 3 + 2]),
+                offsets[vertex] = vector3_from_float64(
+                    moved[at * 3], moved[at * 3 + 1], moved[at * 3 + 2]
                 )
             for vertex in range(count):
                 offsets[vertex] = pre.transform_point(offsets[vertex])

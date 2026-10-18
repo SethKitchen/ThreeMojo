@@ -595,10 +595,8 @@ struct Vector3(Equatable, ImplicitlyCopyable, PolylineVertex):
             + Float64(self.y) * unit[1]
             + Float64(self.z) * unit[2]
         )
-        self = Vector3(
-            Float32(unit[0] * along),
-            Float32(unit[1] * along),
-            Float32(unit[2] * along),
+        self = vector3_from_float64(
+            unit[0] * along, unit[1] * along, unit[2] * along
         )
 
     def project_on_plane(mut self, normal: Self):
@@ -717,9 +715,7 @@ struct Vector3(Equatable, ImplicitlyCopyable, PolylineVertex):
         var theta = generator.next() * pi * 2
         var u = generator.next() * 2 - 1
         var c = sqrt(1 - u * u)
-        return Vector3(
-            Float32(c * cos(theta)), Float32(u), Float32(c * sin(theta))
-        )
+        return vector3_from_float64(c * cos(theta), u, c * sin(theta))
 
 
 def component_min(a: Vector3, b: Vector3) -> Vector3:

@@ -293,10 +293,8 @@ struct Polyhedron(Copyable, Movable):
         var normal = Vector3(0, 0, 1)
         if length > 0:
             wide_normal /= length
-            normal = Vector3(
-                Float32(wide_normal[0]),
-                Float32(wide_normal[1]),
-                Float32(wide_normal[2]),
+            normal = vector3_from_float64(
+                wide_normal[0], wide_normal[1], wide_normal[2]
             )
         self.normals.append(normal)
         self.offsets.append(Float32(wide_dot(widen_vector(normal), a)))

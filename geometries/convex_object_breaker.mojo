@@ -49,7 +49,7 @@ from math.bounds import Plane
 from math.quaternion import Quaternion, quaternion_terms
 from math.rounded_product import rounded_product
 from math.utils import SeededRandom
-from math.vector3 import Vector3
+from math.vector3 import Vector3, vector3_from_float64
 from std.collections import Set
 from std.math import cos, pi, sin, sqrt
 from units.si import Angle, KILOGRAM, Length, METER, Mass, RADIAN
@@ -260,7 +260,7 @@ struct ConvexObjectBreaker(Movable):
             return None
         var piece = BreakableObject(
             convex(points),
-            Vector3(Float32(center[0]), Float32(center[1]), Float32(center[2])),
+            vector3_from_float64(center[0], center[1], center[2]),
             object.quaternion,
             mass,
             object.velocity,

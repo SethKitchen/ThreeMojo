@@ -43,7 +43,7 @@ from geometries.surface import indexed_surface, require_three_segments
 from core.user_data import UserData
 from geometries.circle import FULL_TURN, check_sweep
 from geometries.grid import grid_index
-from math.vector3 import Vector3, append_vector3
+from math.vector3 import Vector3, append_vector3, vector3_from_float64
 from std.math import cos, pi, sin
 from units.si import Angle, Length
 
@@ -262,8 +262,8 @@ def torus_knot(
                 Float64(ahead.z) + Float64(here.z),
             )
             var nx = normalized_cross3(bx[0], bx[1], bx[2], tx, ty, tz)
-            binormal = Vector3(Float32(bx[0]), Float32(bx[1]), Float32(bx[2]))
-            normal = Vector3(Float32(nx[0]), Float32(nx[1]), Float32(nx[2]))
+            binormal = vector3_from_float64(bx[0], bx[1], bx[2])
+            normal = vector3_from_float64(nx[0], nx[1], nx[2])
         for step in range(radial_segments + 1):  # pragma: no branch
             var v = Float32(step) / Float32(radial_segments)
             var around = v * 2 * Float32(pi)
