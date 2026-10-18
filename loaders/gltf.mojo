@@ -1306,7 +1306,7 @@ struct _Loader(Movable):
         `assignExtrasToUserData`: empty when there are none, and when they
         are not an object, which three.js ignores."""
         var found = self.document.get(node, "extras")
-        if found == NO_NODE or self.document.kind(found) != OBJECT:
+        if not self.document.has_kind(found, OBJECT):
             return UserData()
         return user_data_of(self.document, found)
 
@@ -2427,7 +2427,7 @@ struct _Loader(Movable):
         for index in range(self.count("meshes")):
             var mesh = self.entry("meshes", index)
             var primitives = self.document.get(mesh, "primitives")
-            if primitives == NO_NODE or self.document.kind(primitives) != ARRAY:
+            if not self.document.has_kind(primitives, ARRAY):
                 raise Error("glTF: a mesh needs a primitives array")
             self.model.first_primitives.append(len(self.model.geometries))
             var count = self.document.length(primitives)
@@ -2475,7 +2475,7 @@ struct _Loader(Movable):
             return None
         var view = self.view_bytes(self.required_integer(found, "bufferView"))
         var ids = self.document.get(found, "attributes")
-        if ids == NO_NODE or self.document.kind(ids) != OBJECT:
+        if not self.document.has_kind(ids, OBJECT):
             raise Error("glTF: KHR_draco_mesh_compression needs attributes")
         var names = List[String]()
         var uids = List[Int]()
@@ -2587,10 +2587,10 @@ struct _Loader(Movable):
         `morphTargetDictionary`, or none when it holds no such array."""
         var names = List[String]()
         var extras = self.document.get(mesh, "extras")
-        if extras == NO_NODE or self.document.kind(extras) != OBJECT:
+        if not self.document.has_kind(extras, OBJECT):
             return names^
         var found = self.document.get(extras, "targetNames")
-        if found == NO_NODE or self.document.kind(found) != ARRAY:
+        if not self.document.has_kind(found, ARRAY):
             return names^
         for slot in range(self.document.length(found)):
             names.append(self.document.string(self.document.at(found, slot)))
@@ -2603,7 +2603,7 @@ struct _Loader(Movable):
         with indices is read out in index order, since an index here is a
         triangle index."""
         var attributes = self.document.get(primitive, "attributes")
-        if attributes == NO_NODE or self.document.kind(attributes) != OBJECT:
+        if not self.document.has_kind(attributes, OBJECT):
             raise Error("glTF: a primitive needs attributes")
         var geometry = BufferGeometry()
         var position = self.integer(attributes, "POSITION", -1)
@@ -3035,7 +3035,7 @@ struct _Loader(Movable):
         node draws plain meshes, as three.js draws them.
         """
         var attributes = self.document.get(instancing, "attributes")
-        if attributes == NO_NODE or self.document.kind(attributes) != OBJECT:
+        if not self.document.has_kind(attributes, OBJECT):
             raise Error("glTF: " + GPU_INSTANCING + " needs attributes")
         var count = -1
         var moves = List[Float32]()
@@ -3178,7 +3178,7 @@ struct _Loader(Movable):
             scene.add_light(directional_light(color, node, intensity, target))
             return
         var cone = self.document.get(entry, "spot")
-        if cone == NO_NODE or self.document.kind(cone) != OBJECT:
+        if not self.document.has_kind(cone, OBJECT):
             raise Error("glTF: a spot light needs a spot object")
         var inner = self.number(cone, "innerConeAngle", 0)
         var outer = self.number(cone, "outerConeAngle", DEFAULT_OUTER_CONE)
@@ -3293,7 +3293,7 @@ struct _Loader(Movable):
         var kind = self.text(entry, "type")
         if kind == "perspective":
             var lens = self.document.get(entry, "perspective")
-            if lens == NO_NODE or self.document.kind(lens) != OBJECT:
+            if not self.document.has_kind(lens, OBJECT):
                 raise Error("glTF: a perspective camera needs a perspective")
             var camera = PerspectiveCamera(
                 Angle(self.required_number(lens, "yfov"), RADIAN),
@@ -3305,7 +3305,7 @@ struct _Loader(Movable):
             return GltfCamera(index, name, node, camera)
         if kind == "orthographic":
             var box = self.document.get(entry, "orthographic")
-            if box == NO_NODE or self.document.kind(box) != OBJECT:
+            if not self.document.has_kind(box, OBJECT):
                 raise Error(
                     "glTF: an orthographic camera needs an orthographic"
                 )
@@ -3341,7 +3341,7 @@ struct _Loader(Movable):
                         "glTF: a channel names a sampler that is not there"
                     )
                 var target = self.document.get(channel, "target")
-                if target == NO_NODE or self.document.kind(target) != OBJECT:
+                if not self.document.has_kind(target, OBJECT):
                     raise Error("glTF: a channel needs a target object")
                 self.channel_tracks(
                     self.object_at(samplers, sampler), target, tracks

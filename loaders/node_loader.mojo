@@ -915,7 +915,7 @@ struct NodeLoader(Movable):
     def _join(mut self, document: JsonDocument, item: Int) raises -> NodeRef:
         """Build a `JoinNode`: a vector, or a matrix of its columns."""
         var list = self._input_at(document, item, "nodes")
-        if list == NO_NODE or document.kind(list) != ARRAY:
+        if not document.has_kind(list, ARRAY):
             raise Error("Node JSON: a JoinNode needs a list of nodes")
         var parts = List[NodeRef]()
         var width = 0
