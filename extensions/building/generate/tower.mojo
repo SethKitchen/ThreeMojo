@@ -227,9 +227,7 @@ def _grid(
         var row = List[Point2]()
         for k in range(count + 1):  # pragma: no branch
             var a = u_low + 0.5 + Float64(k) * spacing
-            row.append(
-                Point2(u.x * a + v.x * lines[l], u.y * a + v.y * lines[l])
-            )
+            row.append(u * a + v * lines[l])
         out.append(row^)
     return out^
 

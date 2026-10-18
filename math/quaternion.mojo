@@ -343,6 +343,14 @@ struct Quaternion(Equatable, ImplicitlyCopyable):
             components[0], components[1], components[2], components[3]
         )
 
+    def __neg__(self) -> Self:
+        """Return this quaternion with each component negated.
+
+        Returns:
+            The quaternion `(-x, -y, -z, -w)`.
+        """
+        return Quaternion(-self.x, -self.y, -self.z, -self.w)
+
     def conjugate(self) -> Self:
         """Return the opposite rotation, which for a unit quaternion is the
         inverse."""
@@ -379,7 +387,7 @@ struct Quaternion(Equatable, ImplicitlyCopyable):
         var target = other
         var cos_half = self.dot(other)
         if cos_half < 0:
-            target = Quaternion(-other.x, -other.y, -other.z, -other.w)
+            target = -other
             cos_half = -cos_half
         # Already there, or as close as a Float32 can tell.
         if cos_half >= 1:
