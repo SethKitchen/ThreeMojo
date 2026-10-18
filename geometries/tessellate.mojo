@@ -165,7 +165,7 @@ def tessellate(
                 for corner in corners:  # pragma: no branch
                     # Three corners at least, so this runs.
                     if corner == 3:
-                        next[attribute].extend(middle.copy())
+                        next[attribute].extend(Span(middle))
                         continue
                     var item = a + corner
                     for axis in range(size):  # pragma: no branch

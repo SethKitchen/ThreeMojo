@@ -1664,7 +1664,7 @@ struct _Loader(Movable):
                 )
         for index in range(len(kinds)):
             if len(line_built[index]) > 0:
-                self.built.extend(line_built[index].copy())
+                self.built.extend(Span(line_built[index]))
             elif surfaces[index].count() > 0:
                 self.built.append(
                     self.surface_geometry(surfaces[index], kinds[index], assets)

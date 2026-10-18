@@ -77,7 +77,7 @@ def chlist(var entries: List[List[UInt8]]) -> List[UInt8]:
     """Return a channel list: the entries, then a null byte."""
     var out = List[UInt8]()
     for entry in entries:
-        out.extend(entry.copy())
+        out.extend(Span(entry))
     out.append(0)
     return out^
 
@@ -94,7 +94,7 @@ def attribute(
     push_text(out, name)
     push_text(out, kind)
     append_little_endian_u32(out, len(value))
-    out.extend(value.copy())
+    out.extend(Span(value))
 
 
 def box(x_min: Int, y_min: Int, x_max: Int, y_max: Int) -> List[UInt8]:
@@ -150,7 +150,7 @@ def exr(
         out[table_at + index * 8 + 1] = UInt8((at >> 8) & 0xFF)
         append_little_endian_u32(out, lines[index])
         append_little_endian_u32(out, len(blocks[index]))
-        out.extend(blocks[index].copy())
+        out.extend(Span(blocks[index]))
     return out^
 
 
@@ -173,7 +173,7 @@ def floats(values: List[Float32]) -> List[UInt8]:
 
 def plus(var bytes: List[UInt8], more: List[UInt8]) -> List[UInt8]:
     """Return `bytes` with `more` after them."""
-    bytes.extend(more.copy())
+    bytes.extend(Span(more))
     return bytes^
 
 

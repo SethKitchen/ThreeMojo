@@ -494,7 +494,7 @@ def _vector_track(
     var times = List[Float64]()
     for axis in ["x", "y", "z"]:  # pragma: no branch
         if axis in curves.curves:
-            times.extend(curves.curves[axis].times.copy())
+            times.extend(Span(curves.curves[axis].times))
     sort(times)
     var unique = List[Float64]()
     for at in times:  # pragma: no branch

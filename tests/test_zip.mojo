@@ -394,7 +394,7 @@ def with_directory_trailer(trailer: List[UInt8]) raises -> List[UInt8]:
     """Put a record after the one-entry directory and adjust its size."""
     var original = one()
     var bytes = copy_bytes(original, 0, 91)
-    bytes.extend(trailer.copy())
+    bytes.extend(Span(trailer))
     bytes.extend(copy_byte_range(original, 91, len(original)))
     poke(bytes, 91 + len(trailer) + 12, 51 + len(trailer), 4)
     return bytes^

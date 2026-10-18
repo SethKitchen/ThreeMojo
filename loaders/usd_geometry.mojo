@@ -461,7 +461,7 @@ def triangulate_ngon_with_holes(
     var all = outer.copy()
     for hole in holes:
         flat_holes.append(_flat_2d(hole, points, basis[0], basis[1]))
-        all.extend(hole.copy())
+        all.extend(Span(hole))
     var out = List[Float64]()
     var flat = _flat_2d(outer, points, basis[0], basis[1])
     for index in triangulate_shape(flat, flat_holes):

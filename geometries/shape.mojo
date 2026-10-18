@@ -511,7 +511,7 @@ struct Contours(Movable):
         for at in range(len(holes)):
             self.starts.append(len(self.points))
             self.counts.append(len(holes[at]))
-            self.points.extend(holes[at].copy())
+            self.points.extend(Span(holes[at]))
 
     def contour_count(self) -> Int:
         """Return how many contours there are: the outline and its holes."""

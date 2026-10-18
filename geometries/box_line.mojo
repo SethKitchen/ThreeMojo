@@ -25,8 +25,8 @@ from units.si import Length, METER
 
 def _push(mut out: List[Float64], a: List[Float64], b: List[Float64]):
     """Append one stick, from `a` to `b`, three numbers each."""
-    out.extend(a.copy())
-    out.extend(b.copy())
+    out.extend(Span(a))
+    out.extend(Span(b))
 
 
 def box_line(

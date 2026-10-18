@@ -359,8 +359,8 @@ def gcode_scene(
         var vertex = List[Float64]()
         var path_vertex = List[Float64]()
         for layer in model.layers:
-            vertex.extend(layer.vertex.copy())
-            path_vertex.extend(layer.path_vertex.copy())
+            vertex.extend(Span(layer.vertex))
+            path_vertex.extend(Span(layer.path_vertex))
         _add_object(model, vertex, True, count, scene, assets)
         _add_object(model, path_vertex, False, count, scene, assets)
     return model^

@@ -542,7 +542,7 @@ def _endpoint_pair(low: List[Int], high: List[Int]) -> List[Int]:
     """Return two RGBA endpoints as eight numbers, each channel's low
     endpoint at its index and its high one four past it."""
     var out = low.copy()
-    out.extend(high.copy())
+    out.extend(Span(high))
     return out^
 
 
@@ -1017,7 +1017,7 @@ def astc_block(
     if bits.get(0, 9) == 0x1FC:
         var color = _void_extent(bits, profile)
         for _ in range(block_size * block_size):  # pragma: no branch
-            out.extend(color.copy())
+            out.extend(Span(color))
         return out^
     var row = (
         _row_of_high_bits()[bits.get(5, 4)] if bits.get(0, 2)

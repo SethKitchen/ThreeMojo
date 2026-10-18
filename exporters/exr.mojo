@@ -217,7 +217,7 @@ def _write(
     for b in range(blocks):  # pragma: no branch
         append_little_endian_u32(out, b * lines)
         append_little_endian_u32(out, len(chunks[b]))
-        out.extend(chunks[b].copy())
+        out.extend(Span(chunks[b]))
     return out^
 
 

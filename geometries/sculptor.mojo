@@ -878,7 +878,7 @@ struct Sculptor(Movable):
     def _mark_vertices_dirty(mut self, vertices: List[Int]):
         """Note the vertices to write back, three.js's
         `_markVerticesDirty`."""
-        self._dirty_vertices.extend(vertices.copy())
+        self._dirty_vertices.extend(Span(vertices))
 
     def _sync_geometry(mut self, mut assets: Assets) raises:
         """Write the positions, the normals and the index to the geometry,

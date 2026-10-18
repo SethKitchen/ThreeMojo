@@ -197,7 +197,7 @@ def chunk(id: Int, body: List[UInt8]) -> List[UInt8]:
     var size = len(body) + 6
     append_little_endian_u16(out, id)
     append_little_endian_u32(out, size)
-    out.extend(body.copy())
+    out.extend(Span(body))
     return out^
 
 
@@ -205,7 +205,7 @@ def join(parts: List[List[UInt8]]) -> List[UInt8]:
     """Return byte lists end to end."""
     var out = List[UInt8]()
     for part in parts:
-        out.extend(part.copy())
+        out.extend(Span(part))
     return out^
 
 
@@ -242,7 +242,7 @@ def triangle(extra: List[List[UInt8]]) -> List[UInt8]:
         pieces.append(float(Float32(value)))
     var points = join(pieces)
     var parts: List[List[UInt8]] = [chunk(0x4110, points)]
-    parts.extend(extra.copy())
+    parts.extend(Span(extra))
     return chunk(0x4000, join([text("T"), chunk(0x4100, join(parts))]))
 
 
