@@ -32,7 +32,6 @@ from extensions.physics.shape import (
     PhysicsMaterial,
     Polyhedron,
     _finite_vector,
-    cross,
     component,
     unit_or,
 )
@@ -43,6 +42,7 @@ from extensions.physics.world import (
     _cylinder_hit,
     _polyhedron_hit,
     _sphere_hit,
+    _triangle_ray_hit,
 )
 from math.bounds import Box3
 from math.octree import Octree
@@ -474,19 +474,14 @@ struct PhysicsQuerySnapshot(Movable):
         if owner == ignore.value or not self._enabled[owner]:
             return best
         ref tri = self._triangles[t]
-        var met = ray.intersect_triangle(tri.a, tri.b, tri.c, True)
-        if not Bool(met):
-            return best
-        var distance = (met.value() - ray.origin).length()
-        if distance > reach:
-            return best
-        if Bool(best) and best.value().distance <= distance:
-            return best
-        return RaycastHit(
-            BodyId(owner),
-            met.value(),
-            unit_or(cross(tri.b - tri.a, tri.c - tri.a), Vector3(0, 0, 1)),
-            distance,
+        return _triangle_ray_hit(
+            ray,
+            tri.a,
+            tri.b,
+            tri.c,
+            reach,
+            best,
+            owner,
             self._materials[owner],
         )
 
