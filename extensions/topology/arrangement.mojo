@@ -30,6 +30,7 @@ See de Berg, Cheong, van Kreveld and Overmars, "Computational Geometry:
 Algorithms and Applications" (3rd edition, 2008), chapter 2.
 """
 
+from math.polygon_hit import ray_crosses
 from math.utils import clamp
 from std.math import atan2, isfinite, sqrt
 from extensions.topology.ids import NO_REGION, RegionId
@@ -226,10 +227,8 @@ def contains(points: List[Point2], p: Point2) -> Bool:
     for i in range(n):
         var a = points[i]
         var b = points[j]
-        if (a.y > p.y) != (b.y > p.y):
-            var x = a.x + (p.y - a.y) * (b.x - a.x) / (b.y - a.y)
-            if p.x < x:
-                inside = not inside
+        if ray_crosses(a.x, a.y, b.x, b.y, p.x, p.y):
+            inside = not inside
         j = i
     return inside
 
