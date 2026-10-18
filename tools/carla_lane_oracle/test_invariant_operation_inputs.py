@@ -4322,7 +4322,7 @@ _PR760_CHECKER_SOURCE_EDGES = {'coverage_loop_proofs.py': {'after_sha256': '08e8
              '**operation_args))\n',
              '            result.update(density760_loops(root, include_roots=include_roots, '
              '**operation_args))\n')))},
- 'full_audit_cleanup_contracts.py': {'after_sha256': 'da8e089d37944a811f30885720b178d3d5787c86b2be3588decaf61c3662b10b',
+ 'full_audit_cleanup_contracts.py': {'after_sha256': '6fe1b9deadcc0199bbbf7b30095c0f4677dbd13f7bcf71c0c40ca42fbadcda2f',
  'before_sha256': '6138ba2dcac394c716ea9ed32e74e0c6d15857d5c605fc82304d21d0c80fdc69',
  'edits': ((53, 54, (), ('        from . import pr760_arithmetic_stage as pr760_stage\n',)),
            (66, 67, (), ('        import pr760_arithmetic_stage as pr760_stage\n',)),
@@ -4963,22 +4963,26 @@ _PR760_CHECKER_SOURCE_EDGES = {'coverage_loop_proofs.py': {'after_sha256': '08e8
             (),
             ('        current_image = _pr760_select(root, _operation=_operation)\n',)),
            (4033,
-            4036,
+            4040,
             ('            require(typed_boundary.is_current(path, current),\n',),
-            ('            projected = (pr760_stage.predecessor_source(path, '
+            ('            qualification = (current_image and path ==\n',
+             "                'tools/carla_lane_oracle/test_witness_format_contracts.py')\n",
+             '            projected = (pr760_stage.predecessor_source(path, '
              "current.decode('utf-8'))\n",
-             '                if current_image and path in pr760_stage.EXAMPLE_PATHS else '
-             "current.decode('utf-8'))\n",
+             '                if current_image and path in pr760_stage.EXAMPLE_PATHS else\n',
+             "                qualification_predecessor_bytes(path, current).decode('utf-8')\n",
+             "                if qualification else current.decode('utf-8'))\n",
              '            require(typed_boundary.is_current(path, projected),\n')),
-           (4038,
-            4041,
+           (4042,
+            4045,
             (),
-            ('            if current_image and path in pr760_stage.EXAMPLE_PATHS:\n',
+            ('            if current_image and (path in pr760_stage.EXAMPLE_PATHS or '
+             'qualification):\n',
              '                edge.update(after_sha256=sha(current),\n',
              '                            '
              "after_token_sha256=source.token_sha256(current.decode('utf-8')))\n")),
-           (4132,
-            4851,
+           (4136,
+            4855,
             (),
             ('PR760_IMPLEMENTATION_PREDECESSORS = '
              "{'tools/carla_lane_oracle/pr760-border_parser-predecessor.txt': "

@@ -504,6 +504,17 @@ class StandaloneTypedAdmissionControls(unittest.TestCase):
         self.assert_fresh_success()
 
     def test_standalone_adapters_reject_resolver_competitor_then_recover(self):
+        current = self.root
+        try:
+            for cohort in ('pr760', 'common758'):
+                self.root = (current if cohort == 'pr760' else
+                             fixtures.copy_common758_boundary_root(self, ROOT))
+                with self.subTest(cohort=cohort):
+                    self._check_standalone_resolver_competitor(cohort)
+        finally:
+            self.root = current
+
+    def _check_standalone_resolver_competitor(self, cohort):
         self.assert_fresh_success()
         competitor = self.root / 'std.mojopkg'
         self.assertFalse(competitor.exists())
@@ -511,7 +522,9 @@ class StandaloneTypedAdmissionControls(unittest.TestCase):
             competitor.write_bytes(b'local compiled namespace competitor\n')
             for name, call, _ in self.calls():
                 with self.subTest(adapter=name), self.assertRaisesRegex(
-                        cleanup.ContractError, '^full-audit cleanup successor: unreviewed alternate, compiled, package, symlink or std resolver surface$'):
+                        cleanup.ContractError, ('^full-audit cleanup successor: PR760 alternate, compiled, package, symlink or std resolver surface$'
+                         if cohort == 'pr760' else
+                         '^full-audit cleanup successor: unreviewed alternate, compiled, package, symlink or std resolver surface$')):
                     call()
         finally:
             competitor.unlink(missing_ok=True)
@@ -620,6 +633,7 @@ class FullAuditCleanupContracts(unittest.TestCase):
             'tools/carla_lane_oracle/test_typed_boundary_contracts.py',
             'tools/carla_lane_oracle/test_shared_helper_contracts.py',
             'tools/carla_lane_oracle/test_scaled_float32_contracts.py',
+            'tools/carla_lane_oracle/test_witness_format_contracts.py',
         )
         self.assertEqual(set(image['qualification_successors']), set(witnesses))
         for path in witnesses:

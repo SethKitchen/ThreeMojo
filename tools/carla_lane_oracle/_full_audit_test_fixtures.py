@@ -220,7 +220,14 @@ def copy_common758_boundary_root(case, source, *, destination=None):
             (root/name).write_bytes(previous)
     for name in ('tools/test_conditioned_coverage_loops.py', 'tools/carla_lane_oracle/test_typed_boundary_contracts.py', 'tools/carla_lane_oracle/test_shared_helper_contracts.py', 'tools/carla_lane_oracle/test_scaled_float32_contracts.py', 'tools/carla_lane_oracle/test_common758_current_successor.py', 'tools/carla_lane_oracle/test_witness_format_contracts.py'):
         target = root/name
-        target.write_bytes(cleanup.qualification_predecessor_bytes(name, target.read_bytes()))
+        raw = target.read_bytes()
+        # A module fixture can already be pre-typed when a case copies it.
+        # The complete source root was admitted above; preserve only this exact
+        # immutable endpoint, outside the two-endpoint qualification inverse.
+        if (name == 'tools/carla_lane_oracle/test_witness_format_contracts.py'
+                and cleanup.sha(raw) == typed.EDGES[name]['before_sha256']):
+            continue
+        target.write_bytes(cleanup.qualification_predecessor_bytes(name, raw))
     cleanup.verify(root, exact=True)
     return root
 

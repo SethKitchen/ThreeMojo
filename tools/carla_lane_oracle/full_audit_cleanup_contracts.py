@@ -4031,12 +4031,16 @@ def typed_successor_edges(root, *, _operation=None):
         for path in typed_boundary.SOURCE_PATHS:
             current = _observe_bytes(root, path, _regular(root, path).read_bytes(),
                                      _operation=_operation)
+            qualification = (current_image and path ==
+                'tools/carla_lane_oracle/test_witness_format_contracts.py')
             projected = (pr760_stage.predecessor_source(path, current.decode('utf-8'))
-                if current_image and path in pr760_stage.EXAMPLE_PATHS else current.decode('utf-8'))
+                if current_image and path in pr760_stage.EXAMPLE_PATHS else
+                qualification_predecessor_bytes(path, current).decode('utf-8')
+                if qualification else current.decode('utf-8'))
             require(typed_boundary.is_current(path, projected),
                     'typed successor physical endpoint changed: ' + path)
             edge = typed_boundary.edge(path)
-            if current_image and path in pr760_stage.EXAMPLE_PATHS:
+            if current_image and (path in pr760_stage.EXAMPLE_PATHS or qualification):
                 edge.update(after_sha256=sha(current),
                             after_token_sha256=source.token_sha256(current.decode('utf-8')))
             edge['scope'] = 'explicit historical provenance; current typed API admission'
