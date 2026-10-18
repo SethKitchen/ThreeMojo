@@ -43,6 +43,7 @@ from math.norm import _ordinary_squared
 from core.layers import Layers
 from core.object3d import NO_PARENT
 from core.scene import Scene
+from lights.fresnel import schlick_weight
 from lights.physical_layers import (
     PhysicalLayers,
     anisotropic_ggx,
@@ -347,10 +348,6 @@ def toon_tone(dot_nl: Float32, ramp: List[Float32]) -> Float32:
 # three.js's `G_BlinnPhong_Implicit`: the geometric term of the Blinn-Phong
 # BRDF, a constant there and here.
 comptime BLINN_PHONG_G = Float32(0.25)
-# The two numbers in three.js's `F_Schlick`, which approximates how much
-# more a surface reflects at a grazing angle.
-comptime _FRESNEL_SLOPE = Float32(-5.55473)
-comptime _FRESNEL_OFFSET = Float32(-6.98316)
 # The roughness a physical surface is never smoother than: three.js's
 # 0.0525, the base mip of a 256-texel cube map, below which a GGX lobe
 # is narrower than a pixel and sparkles.
@@ -446,7 +443,7 @@ def f_schlick(f0: Vector3, f90: Float32, cos_vh: Float32) -> Vector3:
     Returns:
         The reflectance per channel.
     """
-    var fresnel = exp2((_FRESNEL_SLOPE * cos_vh + _FRESNEL_OFFSET) * cos_vh)
+    var fresnel = schlick_weight(cos_vh)
     var keep = 1 - fresnel
     return Vector3(
         f0.x * keep + f90 * fresnel,
