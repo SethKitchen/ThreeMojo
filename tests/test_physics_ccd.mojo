@@ -418,14 +418,6 @@ def test_energy_friction_and_spin_transfer() raises:
                 assert_true(final < initial)
 
 
-def _tensor(xx: Float32, yy: Float32, zz: Float32) -> Matrix3:
-    var tensor = Matrix3()
-    tensor.elements[0] = xx
-    tensor.elements[4] = yy
-    tensor.elements[8] = zz
-    return tensor
-
-
 def _turned(q: Quaternion, tensor: Matrix3) -> Matrix3:
     # R M R^T: the tensor seen from a frame turned by q. Float32 rounding
     # can leave a pair unequal, so each pair is set to its mean.
@@ -452,7 +444,7 @@ def test_anisotropic_sphere_tensors_are_checked() raises:
     # Each refused tensor fails one condition, and the step is atomic.
     for choice in range(6):
         var world = _world()
-        var tensor = _tensor(250, 250, 250)
+        var tensor = Matrix3.diagonal(250, 250, 250)
         if choice == 0:
             tensor.elements[3] = 1
         elif choice == 1:
@@ -460,12 +452,12 @@ def test_anisotropic_sphere_tensors_are_checked() raises:
         elif choice == 2:
             tensor.elements[5] = 1
         elif choice == 3:
-            tensor = _tensor(-250, 250, 250)
+            tensor = Matrix3.diagonal(-250, 250, 250)
         elif choice == 4:
             tensor.elements[1] = 500
             tensor.elements[3] = 500
         else:
-            tensor = _tensor(250, 250, -250)
+            tensor = Matrix3.diagonal(250, 250, -250)
         world.bodies[1].set_inverse_inertia(tensor)
         var position = world.bodies[1].position
         with assert_raises(contains="symmetric positive definite"):
@@ -476,9 +468,9 @@ def test_anisotropic_sphere_tensors_are_checked() raises:
     var turn = Quaternion(0.3, -0.2, 0.5, 0.8)
     turn.normalize()
     for tensor in [
-        _tensor(250, 500, 125),
-        _tensor(250, 250, 125),
-        _turned(turn, _tensor(250, 500, 125)),
+        Matrix3.diagonal(250, 500, 125),
+        Matrix3.diagonal(250, 250, 125),
+        _turned(turn, Matrix3.diagonal(250, 500, 125)),
     ]:
         var world = _world()
         world.bodies[1].set_inverse_inertia(tensor)
@@ -499,12 +491,12 @@ def test_anisotropic_friction_matches_the_slip_axis() raises:
         world.bodies[1].material = PhysicsMaterial(1, 0)
         world.bodies[1].linear_velocity.x = 7
         if pose == 0:
-            world.bodies[1].set_inverse_inertia(_tensor(500, 250, 125))
+            world.bodies[1].set_inverse_inertia(Matrix3.diagonal(500, 250, 125))
         elif pose == 1:
-            world.bodies[1].set_inverse_inertia(_tensor(250, 250, 125))
+            world.bodies[1].set_inverse_inertia(Matrix3.diagonal(250, 250, 125))
         else:
             world.bodies[1].rotation = quarter
-            world.bodies[1].set_inverse_inertia(_tensor(250, 500, 125))
+            world.bodies[1].set_inverse_inertia(Matrix3.diagonal(250, 500, 125))
         world.step(Duration(0.02))
         var w = world.bodies[1].angular_velocity
         assert_almost_equal(world.bodies[1].linear_velocity.x, 5, atol=1e-5)
@@ -528,7 +520,7 @@ def test_anisotropic_energy_friction_and_spin_transfer() raises:
             world.bodies[1].angular_velocity = Vector3(30, 100, 20)
             world.bodies[1].rotation = tilt
             world.bodies[1].set_inverse_inertia(
-                _turned(turn, _tensor(250, 500, 125))
+                _turned(turn, Matrix3.diagonal(250, 500, 125))
             )
             var start = world.bodies[1].copy()
             var initial = 30.0 * 30 + 4 * 4 + _spin_energy(start)

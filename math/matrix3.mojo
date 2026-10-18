@@ -195,6 +195,25 @@ struct Matrix3(Equatable, ImplicitlyCopyable):
         return out^
 
     @staticmethod
+    def diagonal(x: Float32, y: Float32, z: Float32) -> Matrix3:
+        """Return a matrix with `x`, `y` and `z` on its diagonal.
+
+        The other elements are zero. A new matrix is the identity, and
+        `set` replaces that diagonal.
+
+        Args:
+            x: The first diagonal element.
+            y: The second diagonal element.
+            z: The third diagonal element.
+
+        Returns:
+            The matrix.
+        """
+        var out = Matrix3()
+        out.set(x, 0, 0, 0, y, 0, 0, 0, z)
+        return out^
+
+    @staticmethod
     def rotation(angle: Angle) -> Matrix3:
         """Return the 2D transform that turns a point counter-clockwise by
         `angle` about the origin, three.js's `makeRotation`.

@@ -198,14 +198,6 @@ def _controls() raises:
         assert_true(flat <= _SLOPE * Float64(abs(normal.z)) + 1e-9)
 
 
-def _tensor(xx: Float32, yy: Float32, zz: Float32) -> Matrix3:
-    var tensor = Matrix3()
-    tensor.elements[0] = xx
-    tensor.elements[4] = yy
-    tensor.elements[8] = zz
-    return tensor
-
-
 def _world(
     side: Int, bodies: Int, walkers: Bool, continuous: Bool
 ) raises -> PhysicsWorld:
@@ -235,7 +227,7 @@ def _world(
                 Quaternion.identity(),
             )
             # Rotation-locked: every inverse inertia element is zero.
-            body.set_inverse_inertia(_tensor(0, 0, 0))
+            body.set_inverse_inertia(Matrix3.diagonal(0, 0, 0))
             body.material = PhysicsMaterial(0.8, 0)
             _ = world.add_body(body^)
         else:
@@ -246,7 +238,7 @@ def _world(
                 at,
                 Quaternion.identity(),
             )
-            body.set_inverse_inertia(_tensor(250, 500, 125))
+            body.set_inverse_inertia(Matrix3.diagonal(250, 500, 125))
             body.material = PhysicsMaterial(0.5, 0.2)
             _ = world.add_body(body^)
     return world^

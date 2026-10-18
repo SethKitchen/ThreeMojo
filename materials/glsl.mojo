@@ -2458,11 +2458,7 @@ struct _Compiler(Movable):
         elif type == _SAMPLER_ARRAY:
             node = self.graph.array_uniform(name, NO_DATA_ARRAY_TEXTURE)
         elif type == _MAT3:
-            var zero = Matrix3()
-            zero.elements[0] = 0
-            zero.elements[4] = 0
-            zero.elements[8] = 0
-            node = self.graph.uniform(name, zero)
+            node = self.graph.uniform(name, Matrix3.diagonal(0, 0, 0))
         elif type == _MAT4:
             var zero = Matrix4()
             for index in range(0, 16, 5):  # pragma: no branch

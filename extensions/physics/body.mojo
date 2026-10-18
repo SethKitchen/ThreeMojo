@@ -160,11 +160,7 @@ def locked_inverse_inertia() -> Matrix3:
     Returns:
         A zero matrix.
     """
-    var locked = Matrix3()
-    locked.elements[0] = 0
-    locked.elements[4] = 0
-    locked.elements[8] = 0
-    return locked^
+    return Matrix3.diagonal(0, 0, 0)
 
 
 struct RigidBody(Copyable, Movable):
@@ -328,11 +324,7 @@ struct RigidBody(Copyable, Movable):
         else:
             if self._mass != 0 or self._inverse_mass != 0:
                 raise Error("A disabled body must have zero effective mass")
-            var zero = Matrix3()
-            zero.elements[0] = 0
-            zero.elements[4] = 0
-            zero.elements[8] = 0
-            if self._inverse_inertia != zero:
+            if self._inverse_inertia != locked_inverse_inertia():
                 raise Error("A disabled body must have zero inverse inertia")
             if self._has_dynamic_state:
                 self._check_dynamic_state(
