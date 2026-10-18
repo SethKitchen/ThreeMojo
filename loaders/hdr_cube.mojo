@@ -22,11 +22,12 @@ ported" in the textures page.
 
 from render.cube_texture import (
     FACE_COUNT,
-    NEGATIVE_X,
     SEEN_FROM_INSIDE,
     SEEN_FROM_OUTSIDE,
     CubeLayout,
     CubeTexture,
+    cube_image_index,
+    require_cube_layout,
 )
 from render.float_image import FloatImage
 from render.rgbe import decode as decode_rgbe
@@ -61,17 +62,11 @@ def hdr_cube_texture_from(
     """
     if len(images) != FACE_COUNT:
         raise Error("An HDR cube texture is built from exactly six images")
-    if not layout.is_valid():
-        raise Error(
-            "A cube layout must be SEEN_FROM_INSIDE or SEEN_FROM_OUTSIDE"
-        )
+    require_cube_layout(layout)
     var faces = List[Texture]()
     # A cube has six faces. The loop always runs.
     for index in range(FACE_COUNT):  # pragma: no branch
-        var source = index
-        if layout == SEEN_FROM_OUTSIDE and index < NEGATIVE_X + 1:
-            # POSITIVE_X reads the nx image and NEGATIVE_X the px one.
-            source = NEGATIVE_X - index
+        var source = cube_image_index(index, layout == SEEN_FROM_OUTSIDE)
         ref image = images[source]
         faces.append(
             float_texture(

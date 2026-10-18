@@ -190,7 +190,7 @@ from math.euler import Euler, EulerOrder
 from math.matrix4 import Matrix4
 from math.vector2 import Vector2
 from objects.skeleton import Skeleton
-from render.cube_texture import NEGATIVE_X
+from render.cube_texture import cube_image_index
 from materials.node_json import write_node_program
 from materials.nodes import NO_NODES
 from render.cube_texture_store import (
@@ -773,11 +773,9 @@ struct _Library(Movable):
         image.begin_array()
         # A valid cube holds six faces, so this never runs zero times.
         for index in range(len(cube.faces)):  # pragma: no branch
-            var source = index
-            if index < NEGATIVE_X + 1:
-                # The px image is the face along -x, and the nx image the
-                # face along +x.
-                source = NEGATIVE_X - index
+            # The px image is the face along -x, and the nx image the
+            # face along +x.
+            var source = cube_image_index(index, True)
             ref face = cube.faces[source]
             if face.texel_type == FLOAT_TEXELS:
                 raise Error(
