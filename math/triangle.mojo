@@ -20,7 +20,7 @@ Raw normals and areas retain their Float32 arithmetic and output limits.
 """
 
 from math.bounds import Box3, Plane
-from math.cross import wide_cross, widen_vector
+from math.cross import cross_vectors, wide_cross, widen_vector
 from math.matrix4 import Matrix4
 from math.norm import length3
 from math.triangle_normal import (
@@ -35,18 +35,6 @@ from std.math import sqrt
 # A segment whose squared length is at most this is a point to
 # `Line3.closest_points_to_line`. three.js: `1e-8 * 1e-8`.
 comptime POINT_EPSILON = Float32(1e-16)
-
-
-def _cross(a: Vector3, b: Vector3) -> Vector3:
-    """Return the cross product of two vectors."""
-    var out = a
-    out.cross(b)
-    return out
-
-
-def _wide_unit(value: Float64) -> Float64:
-    """Limit a segment parameter to its closed interval."""
-    return clamp(value, 0.0, 1.0)
 
 
 def _segment_closest_points(
@@ -75,18 +63,20 @@ def _segment_closest_points(
     if a <= point_epsilon and e <= point_epsilon:
         pass
     elif a <= point_epsilon:
-        t = _wide_unit(f / e)
+        t = clamp(f / e, 0.0, 1.0)
     else:
         var c = (d1 * r).reduce_add()
         if e <= point_epsilon:
-            s = _wide_unit(-c / a)
+            s = clamp(-c / a, 0.0, 1.0)
         else:
             var b = (d1 * d2).reduce_add()
             var normal = wide_cross(d1, d2)
             var denom = (normal * normal).reduce_add()
             if denom != 0:
-                s = _wide_unit(
-                    (wide_cross(d2, r) * normal).reduce_add() / denom
+                s = clamp(
+                    (wide_cross(d2, r) * normal).reduce_add() / denom,
+                    0.0,
+                    1.0,
                 )
             else:
                 # Preserve Octree's tie choice for parallel overlapping lines.
@@ -97,10 +87,10 @@ def _segment_closest_points(
             t = (b * s + f) / e
             if t < 0:
                 t = 0
-                s = _wide_unit(-c / a)
+                s = clamp(-c / a, 0.0, 1.0)
             elif t > 1:
                 t = 1
-                s = _wide_unit((b - c) / a)
+                s = clamp((b - c) / a, 0.0, 1.0)
     var on_first = first + d1 * s
     var on_second = second + d2 * t
     return (
@@ -127,7 +117,7 @@ struct Triangle(Equatable, ImplicitlyCopyable):
         Returns:
             `(c - b) x (a - b)`, three.js's order.
         """
-        return _cross(self.c - self.b, self.a - self.b)
+        return cross_vectors(self.c - self.b, self.a - self.b)
 
     def area(self) -> Float32:
         """Return the triangle's area.
@@ -146,7 +136,7 @@ struct Triangle(Equatable, ImplicitlyCopyable):
         """
         var cb = self.c - self.b
         var ab = self.a - self.b
-        var normal = _cross(cb, ab)
+        var normal = cross_vectors(cb, ab)
         if _ordinary_triangle_cross(cb, ab, normal):
             return False
         if _finite_triangle(self.a, self.b, self.c):
@@ -165,7 +155,7 @@ struct Triangle(Equatable, ImplicitlyCopyable):
         """
         var cb = self.c - self.b
         var ab = self.a - self.b
-        var out = _cross(cb, ab)
+        var out = cross_vectors(cb, ab)
         if not _ordinary_triangle_cross(cb, ab, out):
             if _finite_triangle(self.a, self.b, self.c):
                 var wide = _triangle_cross_wide(self.a, self.b, self.c)

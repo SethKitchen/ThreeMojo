@@ -7,8 +7,10 @@
 
 `mix_opaque` mixes red, green and blue and stays opaque.
 `floor_channels` raises each negative channel to zero.
+`rgb_channels` returns those three channels as a vector.
 """
 
+from math.vector3 import Vector3
 from render.framebuffer import FloatColor
 from std.math import max
 
@@ -40,3 +42,18 @@ def floor_channels(color: FloatColor) -> FloatColor:
     return FloatColor(
         max(color.r, 0), max(color.g, 0), max(color.b, 0), max(color.a, 0)
     )
+
+
+def rgb_channels(color: FloatColor) -> Vector3:
+    """Return the red, green, and blue of a linear color.
+
+    Args:
+        color: The color.
+
+    Returns:
+        Its three channels. Alpha is left out.
+
+    Raises:
+        Error: Never.
+    """
+    return Vector3(color.r, color.g, color.b)

@@ -1048,8 +1048,8 @@ def _caustic_level[
     C: CausticTexels
 ](field: C, level: Int, u: Float32, v: Float32) -> Vector3:
     var n = field.caustic_side(level)
-    var fu = u - _floor_wrap(u)
-    var fv = v - _floor_wrap(v)
+    var fu = u - floor_f(u)
+    var fv = v - floor_f(v)
     var px = fu * Float32(n) - 0.5
     var py = fv * Float32(n) - 0.5
     var x0 = Int(floor_f(px)) % n
@@ -1078,8 +1078,8 @@ def _caustic_level_texel[
 
 
 def _caustic_at(field: CausticField, u: Float32, v: Float32) -> Vector3:
-    var fu = u - _floor_wrap(u)
-    var fv = v - _floor_wrap(v)
+    var fu = u - floor_f(u)
+    var fv = v - floor_f(v)
     var n = field.n
     var px = fu * Float32(n) - 0.5
     var py = fv * Float32(n) - 0.5
@@ -1107,12 +1107,6 @@ def _caustic_texel(field: CausticField, x: Int, y: Int) -> Vector3:
 def _mix3(a: Vector3, b: Vector3, t: Float32) -> Vector3:
     var s = 1.0 - t
     return a * s + b * t
-
-
-def _floor_wrap(value: Float32) -> Float32:
-    from std.math import floor
-
-    return floor(value)
 
 
 def _exp3(v: Vector3) -> Vector3:

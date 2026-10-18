@@ -83,6 +83,7 @@ from math.utils import lerp
 from math.cross import cross_vectors
 from math.norm import squared_length2
 from math.vector3 import Vector3
+from render.color_math import rgb_channels
 from render.texture import Texture
 from render.texture_store import TextureId
 from math.sine import fraction
@@ -1886,4 +1887,4 @@ struct SpotLightMap(Copyable, LightSlot, Movable):
         if not inside_spot_map(place):
             return Vector3(1, 1, 1)
         var color = self.image.sample_level(place.x, 1 - place.y, 0)
-        return Vector3(color.r, color.g, color.b)
+        return rgb_channels(color)
