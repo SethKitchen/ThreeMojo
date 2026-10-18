@@ -634,6 +634,7 @@ class FullAuditCleanupContracts(unittest.TestCase):
             'tools/carla_lane_oracle/test_shared_helper_contracts.py',
             'tools/carla_lane_oracle/test_scaled_float32_contracts.py',
             'tools/carla_lane_oracle/test_witness_format_contracts.py',
+            'tools/carla_lane_oracle/test_coverage_invariant_contracts.py',
         )
         self.assertEqual(set(image['qualification_successors']), set(witnesses))
         for path in witnesses:

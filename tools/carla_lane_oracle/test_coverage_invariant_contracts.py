@@ -80,12 +80,13 @@ class CoverageInvariantContracts(unittest.TestCase):
             command = ('import sys; from pathlib import Path; ' + setup
                        + '; result=invariant.verify(Path.cwd()); '
                        + 'sys.exit(0 if len(result["sources"]) == 4 else 1)')
-            # Exact current direct/package commands completed in 40.007/40.211
-            # seconds on pinned Python 3.12.14. Keep a measured 60-second
-            # validation allowance; native cases retain their 5-second bound.
+            # PR760 a2ada6b6 direct/package verification completed in
+            # 152.775/147.161 seconds (152.407/147.147 CPU seconds) on pinned
+            # Python 3.12.14. Allow 300 seconds for the expanded source proof;
+            # historical imports and native cases retain their original bounds.
             with self.subTest(import_mode=setup):
                 subprocess.run([sys.executable, '-c', command], cwd=_CURRENT_SOURCE_ROOT,
-                               check=True, capture_output=True, text=True, timeout=60)
+                               check=True, capture_output=True, text=True, timeout=300)
 
     def test_historical_direct_and_qualified_package_verification(self):
         for setup in (

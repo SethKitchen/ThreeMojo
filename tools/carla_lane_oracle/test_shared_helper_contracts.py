@@ -323,12 +323,22 @@ class SharedHelperIntegrationControls(unittest.TestCase):
         self.assertTrue(cleanup.resolver_unshadowed(self.root, paths,
             **cleanup._render_lookup_args(paths, entries)))
         # The correction grants no authority to a new standalone entrypoint.
-        entry = self.root/'extensions/animals/anatomy/helper_scope_entry.mojo'
-        entry.write_text('def main():\n    pass\n')
-        try:
-            with self.assertRaisesRegex(ValueError, 'entrypoint directories changed'):
-                cleanup.shared_helper_proof_bindings(self.root, paths=helpers.SOURCE_PATHS)
-        finally: entry.unlink()
+        common = fixtures.copy_common758_boundary_root(self, ROOT)
+        for cohort, root, message in (
+                ('pr760', self.root, 'PR760 maintained entry directories changed'),
+                ('common758', common, 'maintained entrypoint directories changed')):
+            with self.subTest(cohort=cohort):
+                cleanup.shared_helper_proof_bindings(root, paths=helpers.SOURCE_PATHS)
+                entry = root/'extensions/animals/anatomy/helper_scope_entry.mojo'
+                self.assertFalse(entry.exists())
+                entry.write_text('def main():\n    pass\n')
+                try:
+                    with self.assertRaises(cleanup.ContractError) as caught:
+                        cleanup.shared_helper_proof_bindings(root, paths=helpers.SOURCE_PATHS)
+                    self.assertEqual(str(caught.exception),
+                                     'full-audit cleanup successor: ' + message)
+                finally: entry.unlink()
+                cleanup.shared_helper_proof_bindings(root, paths=helpers.SOURCE_PATHS)
 
     def test_render_namespace_is_protected_at_root_tests_and_production_entries(self):
         for name in ('render.mojo', 'tests/render.mojopkg', 'examples/render.mojo',

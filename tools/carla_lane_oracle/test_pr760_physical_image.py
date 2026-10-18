@@ -223,6 +223,7 @@ class ClosedPhysicalImageControls(unittest.TestCase):
             'tools/carla_lane_oracle/test_shared_helper_contracts.py',
             'tools/carla_lane_oracle/test_scaled_float32_contracts.py',
             'tools/carla_lane_oracle/test_witness_format_contracts.py',
+            'tools/carla_lane_oracle/test_coverage_invariant_contracts.py',
         }
         self.assertEqual(set(rows), paths)
         for path, row in rows.items():
@@ -263,6 +264,30 @@ class ClosedPhysicalImageControls(unittest.TestCase):
         raw = (self.root/path).read_bytes()
         archive = row['predecessor_archive']
         old = (self.root/archive).read_bytes()
+        for changed in (raw.replace(b'\n', b'\r\n'), raw[:-1], raw+b'# changed\n'):
+            with self.subTest(mutation=owner.sha(changed)), self.assertRaises(owner.ContractError):
+                owner.qualification_predecessor_bytes(path, changed)
+        with self.changed(archive, old+b'\n'):
+            with self.assertRaises(owner.ContractError):
+                owner.verify(self.root, exact=True)
+        target = self.root/archive
+        missing = target.with_suffix('.missing')
+        target.rename(missing)
+        try:
+            with self.assertRaises(owner.ContractError):
+                owner.verify(self.root, exact=True)
+        finally:
+            missing.rename(target)
+        owner.verify(self.root, exact=True)
+
+    def test_seventh_timeout_witness_archive_and_exact_inverse_fail_closed(self):
+        path = 'tools/carla_lane_oracle/test_coverage_invariant_contracts.py'
+        row = self.data['qualification_successors'][path]
+        raw = (self.root/path).read_bytes()
+        archive = row['predecessor_archive']
+        old = (self.root/archive).read_bytes()
+        self.assertEqual(owner.sha(old), owner.typed_boundary.HISTORICAL_BINDING_INPUTS[path])
+        self.assertEqual(owner.qualification_predecessor_bytes(path, raw), old)
         for changed in (raw.replace(b'\n', b'\r\n'), raw[:-1], raw+b'# changed\n'):
             with self.subTest(mutation=owner.sha(changed)), self.assertRaises(owner.ContractError):
                 owner.qualification_predecessor_bytes(path, changed)

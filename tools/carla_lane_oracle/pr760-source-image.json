@@ -2848,6 +2848,7 @@
     "tools/carla_lane_oracle/pr760-source-adapter-predecessor.txt": "83fdd35b61f0dc7739160c113ae6b4558ad07d45ffded22b7062bc9a209032d0",
     "tools/carla_lane_oracle/pr760-test_common758_current_successor-predecessor.txt": "010cd7008a96b80e0aea26734dafb7be0068f677c5dd73af8fb15db585e70b9f",
     "tools/carla_lane_oracle/pr760-test_conditioned_coverage_loops-predecessor.txt": "633c30c126a0ccf535bea13c66e528ee78b95dd47cf55f01eccad4f9f67d22c9",
+    "tools/carla_lane_oracle/pr760-test_coverage_invariant_contracts-predecessor.txt": "8ec5dfed0b21c02a2104c4df8778fe1e11215cd67a9fa7d4808c30e4cc4e2841",
     "tools/carla_lane_oracle/pr760-test_scaled_float32_contracts-predecessor.txt": "86cb083e302ec2f3b76beaa015bf5ec6b79bc9e2ea5058f76e80bec022649931",
     "tools/carla_lane_oracle/pr760-test_shared_helper_contracts-predecessor.txt": "c5f02d4424d7c497557991d1b08e4864dd0249158506beac08f601413a9648f2",
     "tools/carla_lane_oracle/pr760-test_typed_boundary_contracts-predecessor.txt": "7181041aa06c10cade1c7c0512c6a130cb28d5baaad293ba24874c3e3e142dd5",
@@ -2858,13 +2859,13 @@
     "tools/carla_lane_oracle/source_contracts.py": "ebb6e75b90528b5456485433d470de36e6b33e4df98139dd0acadda75a57adf5",
     "tools/carla_lane_oracle/test_common758_current_successor.py": "bae8693bfbc3557a53e54f3dea90c5bf44583d5fde349a6c24c16045acec10e4",
     "tools/carla_lane_oracle/test_conditioned_cubic_contracts.py": "e6de36edf8083671416d28f90c129bed042a6e1f9fa2dcbb5b6fc2826f3d2e48",
-    "tools/carla_lane_oracle/test_coverage_invariant_contracts.py": "8ec5dfed0b21c02a2104c4df8778fe1e11215cd67a9fa7d4808c30e4cc4e2841",
+    "tools/carla_lane_oracle/test_coverage_invariant_contracts.py": "4e931058f7e2fa6f3fe171a5bf9db576d363e37b394c553dab5098cec3cd545c",
     "tools/carla_lane_oracle/test_expectation_binding_successor.py": "59fdf894d596242d6bc5b5bb5804652b158b7bbb60c7abe688bc6b45b47f6c2e",
     "tools/carla_lane_oracle/test_pr760_arithmetic_stage.py": "b6d5ecc453ebe4c1f8d5f07e1f029b09f414dea887480fa6cf07ccd85bfacdb3",
-    "tools/carla_lane_oracle/test_pr760_physical_image.py": "7dd6b26c21a7d6613c033de22aacff759bd936759481e7f5202db9f8890517f5",
+    "tools/carla_lane_oracle/test_pr760_physical_image.py": "20a9c5c45ba2e34e5a6f8a37cb7a574142e1fd8aea20bc542c264243d5319098",
     "tools/carla_lane_oracle/test_scaled_float32_contracts.py": "dfed575b3625ee6dab4257055023be20d60da8a20529f729e890df22679396a6",
-    "tools/carla_lane_oracle/test_shared_helper_contracts.py": "e14bee90aaa9cc0f5a6a062890905c1bd772381d6351fe0198c5d677100adb78",
-    "tools/carla_lane_oracle/test_typed_boundary_contracts.py": "62998e42c4e27f9e8c8bccddf585d2aecc8a7926c8089400f595e206c104a04c",
+    "tools/carla_lane_oracle/test_shared_helper_contracts.py": "43145b8b250de9d6e89f13a3c9e8af0ac5562d03f1e49280231e9421940c09b8",
+    "tools/carla_lane_oracle/test_typed_boundary_contracts.py": "669918e650378100a340c9de225c0ceb5bcc2a1a826f6a7e7998c12e688e578d",
     "tools/carla_lane_oracle/test_typed_owned_operations.py": "b71272abd022ff7453099ede5e5cd8ca8fc0dc6ba92057a94bdcd85170e39984",
     "tools/carla_lane_oracle/test_witness_format_contracts.py": "82f7e13e72b4f99ccad63d5dfe55fc0a73c898120b43ed8416b0731489ea6f84",
     "tools/carla_lane_oracle/translated_parameter_resolution.py": "0523d91f8d3b508619d37b9e9a73106c2b961cebf5808f23e61758c2a6228be9",
@@ -2885,18 +2886,23 @@
       "before_sha256": "010cd7008a96b80e0aea26734dafb7be0068f677c5dd73af8fb15db585e70b9f",
       "predecessor_archive": "tools/carla_lane_oracle/pr760-test_common758_current_successor-predecessor.txt"
     },
+    "tools/carla_lane_oracle/test_coverage_invariant_contracts.py": {
+      "after_sha256": "4e931058f7e2fa6f3fe171a5bf9db576d363e37b394c553dab5098cec3cd545c",
+      "before_sha256": "8ec5dfed0b21c02a2104c4df8778fe1e11215cd67a9fa7d4808c30e4cc4e2841",
+      "predecessor_archive": "tools/carla_lane_oracle/pr760-test_coverage_invariant_contracts-predecessor.txt"
+    },
     "tools/carla_lane_oracle/test_scaled_float32_contracts.py": {
       "after_sha256": "dfed575b3625ee6dab4257055023be20d60da8a20529f729e890df22679396a6",
       "before_sha256": "86cb083e302ec2f3b76beaa015bf5ec6b79bc9e2ea5058f76e80bec022649931",
       "predecessor_archive": "tools/carla_lane_oracle/pr760-test_scaled_float32_contracts-predecessor.txt"
     },
     "tools/carla_lane_oracle/test_shared_helper_contracts.py": {
-      "after_sha256": "e14bee90aaa9cc0f5a6a062890905c1bd772381d6351fe0198c5d677100adb78",
+      "after_sha256": "43145b8b250de9d6e89f13a3c9e8af0ac5562d03f1e49280231e9421940c09b8",
       "before_sha256": "c5f02d4424d7c497557991d1b08e4864dd0249158506beac08f601413a9648f2",
       "predecessor_archive": "tools/carla_lane_oracle/pr760-test_shared_helper_contracts-predecessor.txt"
     },
     "tools/carla_lane_oracle/test_typed_boundary_contracts.py": {
-      "after_sha256": "62998e42c4e27f9e8c8bccddf585d2aecc8a7926c8089400f595e206c104a04c",
+      "after_sha256": "669918e650378100a340c9de225c0ceb5bcc2a1a826f6a7e7998c12e688e578d",
       "before_sha256": "7181041aa06c10cade1c7c0512c6a130cb28d5baaad293ba24874c3e3e142dd5",
       "predecessor_archive": "tools/carla_lane_oracle/pr760-test_typed_boundary_contracts-predecessor.txt"
     },

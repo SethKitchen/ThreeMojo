@@ -147,7 +147,7 @@ NATIVE_SUPPORT_MAPPING = {'tests/test_carla_junction_endpoint_refusals.mojo': ['
 THEOREM_DOCUMENT = 'docs/validation/full-audit-711-invariants.md'
 PR760_STAGE_SHA256 = '03757bafb02fbb3908919839c18d5c2c443f46469aeb01393dee57ae22054359'
 PR760_IMAGE = 'tools/carla_lane_oracle/pr760-source-image.json'
-PR760_IMAGE_SHA256 = 'b3455603c0a4f881a6aba141d3a51ead282d7cd258912989d1d24972e3ecb078'
+PR760_IMAGE_SHA256 = '775775474cd8588290ad97248fc2e7e24ac1bf769e0e813ec011051f2fa19c11'
 PR760_OWNER_PREDECESSOR = 'tools/carla_lane_oracle/pr760-owner-predecessor.txt'
 PR760_OWNER_PREDECESSOR_SHA256 = '6138ba2dcac394c716ea9ed32e74e0c6d15857d5c605fc82304d21d0c80fdc69'
 DEPENDENCY_TOOL_SHA256 = {'tools/carla_lane_oracle/winner_sign_contracts.py': 'f850902634073364fe2407b00d12e9fdfb2ecfc6cf2a03414269fbb7984a8a7f',
@@ -4149,14 +4149,14 @@ def _pr760_authority_data():
     require((PR760_STAGE_SHA256, PR760_IMAGE, PR760_IMAGE_SHA256, PR760_OWNER_PREDECESSOR, PR760_OWNER_PREDECESSOR_SHA256) == (
         '03757bafb02fbb3908919839c18d5c2c443f46469aeb01393dee57ae22054359',
         'tools/carla_lane_oracle/pr760-source-image.json',
-        'b3455603c0a4f881a6aba141d3a51ead282d7cd258912989d1d24972e3ecb078',
+        '775775474cd8588290ad97248fc2e7e24ac1bf769e0e813ec011051f2fa19c11',
         'tools/carla_lane_oracle/pr760-owner-predecessor.txt',
         '6138ba2dcac394c716ea9ed32e74e0c6d15857d5c605fc82304d21d0c80fdc69',
     ), 'PR760 authority selectors changed')
 
 
 def qualification_predecessor_bytes(path, raw):
-    """Pure exact comparison for six reviewed Python witness successors only.
+    """Pure exact comparison for seven reviewed Python witness successors only.
 
     Physical owners still consume and return actual bytes. This function grants
     neither source-image admission nor a receipt, and never reads projected files.
@@ -4344,171 +4344,133 @@ def qualification_predecessor_bytes(path, raw):
                                                                      '            witness, '
                                                                      'self.original[witness])\n')))),
      'tools/carla_lane_oracle/test_shared_helper_contracts.py': ('c5f02d4424d7c497557991d1b08e4864dd0249158506beac08f601413a9648f2',
-                                                                 'e14bee90aaa9cc0f5a6a062890905c1bd772381d6351fe0198c5d677100adb78',
-                                                                 ((25,
-                                                                   27,
-                                                                   ('        cls.texts = {path: '
-                                                                    '(ROOT/path).read_text()\n',),
-                                                                   ('        baseline = '
-                                                                    'fixtures.common758_leaf_texts(ROOT)\n',
-                                                                    '        cls.texts = {path: '
-                                                                    'baseline[path]\n')),
-                                                                  (126,
-                                                                   130,
-                                                                   ('        '
-                                                                    "self.assertEqual(bindings['render/color_math.mojo'],\n",
-                                                                    '                         '
-                                                                    "cleanup.typed_boundary.CURRENT_DEPENDENCIES['render/color_math.mojo'])\n"),
-                                                                   ("        color = 'render/color_math.mojo'\n",
-                                                                    '        self.assertEqual(bindings[color], '
-                                                                    'cleanup.sha((self.root/color).read_bytes()))\n',
-                                                                    '        '
-                                                                    'self.assertEqual(cleanup.sha(cleanup.pr760_stage.predecessor_source(\n',
-                                                                    '            color, '
-                                                                    '(self.root/color).read_text())), '
-                                                                    'cleanup.typed_boundary.CURRENT_DEPENDENCIES[color])\n')),
-                                                                  (177,
-                                                                   179,
-                                                                   ('        for root, typed in ((self.root, '
-                                                                    'True), (historical, False)):\n',),
-                                                                   ('        common = '
-                                                                    'fixtures.copy_common758_boundary_root(self, '
-                                                                    'ROOT)\n',
-                                                                    '        for root, typed in ((common, True), '
-                                                                    '(historical, False)):\n')),
-                                                                  (196,
-                                                                   213,
-                                                                   (),
-                                                                   ('\n',
-                                                                    '    def '
-                                                                    'test_pr760_old_xml_cannot_borrow_the_current_provider_image(self):\n',
-                                                                    '        baseline = '
-                                                                    'fixtures.common758_leaf_texts(self.root)\n',
-                                                                    '        old = '
-                                                                    'helpers.predecessor_source(XML, '
-                                                                    "baseline[XML]).encode('utf-8')\n",
-                                                                    '        with self.changed(XML, old):\n',
-                                                                    '            with '
-                                                                    'self.assertRaises(ValueError):\n',
-                                                                    '                '
-                                                                    'cleanup.shared_helper_proof_bindings(self.root, '
-                                                                    'paths=helpers.SOURCE_PATHS)\n',
-                                                                    '            utf8 = self.root/UTF8\n',
-                                                                    '            raw = utf8.read_bytes()\n',
-                                                                    '            utf8.unlink()\n',
-                                                                    '            try:\n',
-                                                                    '                with '
-                                                                    'self.assertRaises(FileNotFoundError) as '
-                                                                    'caught:\n',
-                                                                    '                    '
-                                                                    'cleanup.shared_helper_proof_bindings(self.root, '
-                                                                    'paths=helpers.SOURCE_PATHS)\n',
-                                                                    '                '
-                                                                    'self.assertEqual(caught.exception.filename, '
-                                                                    'str(utf8))\n',
-                                                                    '            finally:\n',
-                                                                    '                utf8.write_bytes(raw)\n',
-                                                                    '        '
-                                                                    'cleanup.shared_helper_proof_bindings(self.root, '
-                                                                    'paths=helpers.SOURCE_PATHS)\n')),
-                                                                  (234,
-                                                                   235,
-                                                                   ('                with patch.object(Path, '
-                                                                    "'read_bytes', unreadable), "
-                                                                    'self.assertRaises(OSError) as caught:\n',),
-                                                                   ('                with patch.object(Path, '
-                                                                    "'read_bytes', unreadable), "
-                                                                    'self.assertRaises((OSError, ValueError)) as '
-                                                                    'caught:\n',)),
-                                                                  (236,
-                                                                   240,
-                                                                   ('                '
-                                                                    'self.assertIs(caught.exception, '
-                                                                    'failure)\n',),
-                                                                   ('                cause = caught.exception\n',
-                                                                    '                while cause.__cause__ is '
-                                                                    'not None:\n',
-                                                                    '                    cause = '
-                                                                    'cause.__cause__\n',
-                                                                    '                self.assertIs(cause, '
-                                                                    'failure)\n')),
-                                                                  (314,
-                                                                   318,
-                                                                   ('        '
-                                                                    "self.assertEqual(bindings['render/color_math.mojo'], "
-                                                                    "helpers.PROVIDERS['render/color_math.mojo'])\n",),
-                                                                   ("        color = 'render/color_math.mojo'\n",
-                                                                    '        self.assertEqual(bindings[color], '
-                                                                    'cleanup.sha((self.root/color).read_bytes()))\n',
-                                                                    '        '
-                                                                    'self.assertEqual(cleanup.sha(cleanup.pr760_stage.predecessor_source(\n',
-                                                                    '            color, '
-                                                                    '(self.root/color).read_text())), '
-                                                                    'helpers.PROVIDERS[color])\n')))),
+ '43145b8b250de9d6e89f13a3c9e8af0ac5562d03f1e49280231e9421940c09b8',
+ ((25,
+   27,
+   ('        cls.texts = {path: (ROOT/path).read_text()\n',),
+   ('        baseline = fixtures.common758_leaf_texts(ROOT)\n',
+    '        cls.texts = {path: baseline[path]\n')),
+  (126,
+   130,
+   ("        self.assertEqual(bindings['render/color_math.mojo'],\n",
+    '                         '
+    "cleanup.typed_boundary.CURRENT_DEPENDENCIES['render/color_math.mojo'])\n"),
+   ("        color = 'render/color_math.mojo'\n",
+    '        self.assertEqual(bindings[color], cleanup.sha((self.root/color).read_bytes()))\n',
+    '        self.assertEqual(cleanup.sha(cleanup.pr760_stage.predecessor_source(\n',
+    '            color, (self.root/color).read_text())), '
+    'cleanup.typed_boundary.CURRENT_DEPENDENCIES[color])\n')),
+  (177,
+   179,
+   ('        for root, typed in ((self.root, True), (historical, False)):\n',),
+   ('        common = fixtures.copy_common758_boundary_root(self, ROOT)\n',
+    '        for root, typed in ((common, True), (historical, False)):\n')),
+  (196,
+   213,
+   (),
+   ('\n',
+    '    def test_pr760_old_xml_cannot_borrow_the_current_provider_image(self):\n',
+    '        baseline = fixtures.common758_leaf_texts(self.root)\n',
+    "        old = helpers.predecessor_source(XML, baseline[XML]).encode('utf-8')\n",
+    '        with self.changed(XML, old):\n',
+    '            with self.assertRaises(ValueError):\n',
+    '                cleanup.shared_helper_proof_bindings(self.root, paths=helpers.SOURCE_PATHS)\n',
+    '            utf8 = self.root/UTF8\n',
+    '            raw = utf8.read_bytes()\n',
+    '            utf8.unlink()\n',
+    '            try:\n',
+    '                with self.assertRaises(FileNotFoundError) as caught:\n',
+    '                    cleanup.shared_helper_proof_bindings(self.root, '
+    'paths=helpers.SOURCE_PATHS)\n',
+    '                self.assertEqual(caught.exception.filename, str(utf8))\n',
+    '            finally:\n',
+    '                utf8.write_bytes(raw)\n',
+    '        cleanup.shared_helper_proof_bindings(self.root, paths=helpers.SOURCE_PATHS)\n')),
+  (234,
+   235,
+   ("                with patch.object(Path, 'read_bytes', unreadable), self.assertRaises(OSError) "
+    'as caught:\n',),
+   ("                with patch.object(Path, 'read_bytes', unreadable), "
+    'self.assertRaises((OSError, ValueError)) as caught:\n',)),
+  (236,
+   240,
+   ('                self.assertIs(caught.exception, failure)\n',),
+   ('                cause = caught.exception\n',
+    '                while cause.__cause__ is not None:\n',
+    '                    cause = cause.__cause__\n',
+    '                self.assertIs(cause, failure)\n')),
+  (314,
+   318,
+   ("        self.assertEqual(bindings['render/color_math.mojo'], "
+    "helpers.PROVIDERS['render/color_math.mojo'])\n",),
+   ("        color = 'render/color_math.mojo'\n",
+    '        self.assertEqual(bindings[color], cleanup.sha((self.root/color).read_bytes()))\n',
+    '        self.assertEqual(cleanup.sha(cleanup.pr760_stage.predecessor_source(\n',
+    '            color, (self.root/color).read_text())), helpers.PROVIDERS[color])\n')),
+  (325,
+   341,
+   ("        entry = self.root/'extensions/animals/anatomy/helper_scope_entry.mojo'\n",
+    "        entry.write_text('def main():\\n    pass\\n')\n",
+    '        try:\n',
+    "            with self.assertRaisesRegex(ValueError, 'entrypoint directories changed'):\n",
+    '                cleanup.shared_helper_proof_bindings(self.root, paths=helpers.SOURCE_PATHS)\n',
+    '        finally: entry.unlink()\n'),
+   ('        common = fixtures.copy_common758_boundary_root(self, ROOT)\n',
+    '        for cohort, root, message in (\n',
+    "                ('pr760', self.root, 'PR760 maintained entry directories changed'),\n",
+    "                ('common758', common, 'maintained entrypoint directories changed')):\n",
+    '            with self.subTest(cohort=cohort):\n',
+    '                cleanup.shared_helper_proof_bindings(root, paths=helpers.SOURCE_PATHS)\n',
+    "                entry = root/'extensions/animals/anatomy/helper_scope_entry.mojo'\n",
+    '                self.assertFalse(entry.exists())\n',
+    "                entry.write_text('def main():\\n    pass\\n')\n",
+    '                try:\n',
+    '                    with self.assertRaises(cleanup.ContractError) as caught:\n',
+    '                        cleanup.shared_helper_proof_bindings(root, '
+    'paths=helpers.SOURCE_PATHS)\n',
+    '                    self.assertEqual(str(caught.exception),\n',
+    "                                     'full-audit cleanup successor: ' + message)\n",
+    '                finally: entry.unlink()\n',
+    '                cleanup.shared_helper_proof_bindings(root, paths=helpers.SOURCE_PATHS)\n')))),
      'tools/carla_lane_oracle/test_typed_boundary_contracts.py': ('7181041aa06c10cade1c7c0512c6a130cb28d5baaad293ba24874c3e3e142dd5',
-                                                                  '62998e42c4e27f9e8c8bccddf585d2aecc8a7926c8089400f595e206c104a04c',
-                                                                  ((18,
-                                                                    20,
-                                                                    (),
-                                                                    ('import full_audit_cleanup_contracts as '
-                                                                     'audit\n',
-                                                                     'import _full_audit_test_fixtures as '
-                                                                     'fixtures\n')),
-                                                                   (27,
-                                                                    30,
-                                                                    ('        cls.current = {path: '
-                                                                     '(ROOT/path).read_text() for path in '
-                                                                     'typed.SOURCE_PATHS}\n',),
-                                                                    ('        baseline = '
-                                                                     'fixtures.common758_leaf_texts(ROOT)\n',
-                                                                     '        cls.current = {path: '
-                                                                     'baseline[path] for path in '
-                                                                     'typed.SOURCE_PATHS}\n',
-                                                                     '        '
-                                                                     'typed.verify_sources(dict(cls.current))\n')),
-                                                                   (190,
-                                                                    191,
-                                                                    (),
-                                                                    ('        baseline = '
-                                                                     'fixtures.common758_leaf_texts(ROOT)\n',)),
-                                                                   (196,
-                                                                    201,
-                                                                    ('                '
-                                                                     'path.write_bytes((ROOT/name).read_bytes())\n',),
-                                                                    ('                raw = '
-                                                                     "(baseline[name].encode('utf-8') if name in "
-                                                                     'baseline\n',
-                                                                     '                       else '
-                                                                     '(ROOT/name).read_bytes())\n',
-                                                                     '                if name in '
-                                                                     "('tools/test_conditioned_coverage_loops.py', "
-                                                                     "'tools/carla_lane_oracle/test_typed_boundary_contracts.py', "
-                                                                     "'tools/carla_lane_oracle/test_shared_helper_contracts.py', "
-                                                                     "'tools/carla_lane_oracle/test_scaled_float32_contracts.py', "
-                                                                     "'tools/carla_lane_oracle/test_common758_current_successor.py'):\n",
-                                                                     '                    raw = '
-                                                                     'audit.qualification_predecessor_bytes(name, '
-                                                                     'raw)\n',
-                                                                     '                path.write_bytes(raw)\n')),
-                                                                   (443,
-                                                                    447,
-                                                                    ('                '
-                                                                     'self.assertEqual(hashlib.sha256(target.read_bytes()).hexdigest(), '
-                                                                     'expected)\n',),
-                                                                    ('                raw = '
-                                                                     'target.read_bytes()\n',
-                                                                     '                if path in '
-                                                                     "('tools/test_conditioned_coverage_loops.py', "
-                                                                     "'tools/carla_lane_oracle/test_typed_boundary_contracts.py', "
-                                                                     "'tools/carla_lane_oracle/test_shared_helper_contracts.py', "
-                                                                     "'tools/carla_lane_oracle/test_scaled_float32_contracts.py', "
-                                                                     "'tools/carla_lane_oracle/test_common758_current_successor.py'):\n",
-                                                                     '                    raw = '
-                                                                     'audit.qualification_predecessor_bytes(path, '
-                                                                     'raw)\n',
-                                                                     '                '
-                                                                     'self.assertEqual(hashlib.sha256(raw).hexdigest(), '
-                                                                     'expected)\n')))),
+ '669918e650378100a340c9de225c0ceb5bcc2a1a826f6a7e7998c12e688e578d',
+ ((18,
+   20,
+   (),
+   ('import full_audit_cleanup_contracts as audit\n',
+    'import _full_audit_test_fixtures as fixtures\n')),
+  (27,
+   30,
+   ('        cls.current = {path: (ROOT/path).read_text() for path in typed.SOURCE_PATHS}\n',),
+   ('        baseline = fixtures.common758_leaf_texts(ROOT)\n',
+    '        cls.current = {path: baseline[path] for path in typed.SOURCE_PATHS}\n',
+    '        typed.verify_sources(dict(cls.current))\n')),
+  (190, 191, (), ('        baseline = fixtures.common758_leaf_texts(ROOT)\n',)),
+  (196,
+   201,
+   ('                path.write_bytes((ROOT/name).read_bytes())\n',),
+   ("                raw = (baseline[name].encode('utf-8') if name in baseline\n",
+    '                       else (ROOT/name).read_bytes())\n',
+    "                if name in ('tools/test_conditioned_coverage_loops.py', "
+    "'tools/carla_lane_oracle/test_typed_boundary_contracts.py', "
+    "'tools/carla_lane_oracle/test_shared_helper_contracts.py', "
+    "'tools/carla_lane_oracle/test_scaled_float32_contracts.py', "
+    "'tools/carla_lane_oracle/test_common758_current_successor.py'):\n",
+    '                    raw = audit.qualification_predecessor_bytes(name, raw)\n',
+    '                path.write_bytes(raw)\n')),
+  (443,
+   447,
+   ('                self.assertEqual(hashlib.sha256(target.read_bytes()).hexdigest(), '
+    'expected)\n',),
+   ('                raw = target.read_bytes()\n',
+    "                if path in ('tools/test_conditioned_coverage_loops.py', "
+    "'tools/carla_lane_oracle/test_typed_boundary_contracts.py', "
+    "'tools/carla_lane_oracle/test_shared_helper_contracts.py', "
+    "'tools/carla_lane_oracle/test_scaled_float32_contracts.py', "
+    "'tools/carla_lane_oracle/test_common758_current_successor.py', "
+    "'tools/carla_lane_oracle/test_coverage_invariant_contracts.py'):\n",
+    '                    raw = audit.qualification_predecessor_bytes(path, raw)\n',
+    '                self.assertEqual(hashlib.sha256(raw).hexdigest(), expected)\n')))),
      'tools/test_conditioned_coverage_loops.py': ('633c30c126a0ccf535bea13c66e528ee78b95dd47cf55f01eccad4f9f67d22c9',
                                                   '1c7a6f9f0f32ec579b0609c0cac7fec04dedd342c7e22ec9a9956d6c6042c2dc',
                                                   ((167,
@@ -4662,7 +4624,22 @@ def qualification_predecessor_bytes(path, raw):
     'target.relative_to(self.root).as_posix()\n',
     "                      if cohort == 'pr760' else 'input changed during verification')\n",
     "            with patch.object(cleanup, 'inventory', late), self.assertRaisesRegex(ValueError, "
-    'reason):\n'))))}
+    'reason):\n')))),
+     'tools/carla_lane_oracle/test_coverage_invariant_contracts.py': ('8ec5dfed0b21c02a2104c4df8778fe1e11215cd67a9fa7d4808c30e4cc4e2841',
+ '4e931058f7e2fa6f3fe171a5bf9db576d363e37b394c553dab5098cec3cd545c',
+ ((82,
+   86,
+   ('            # Exact current direct/package commands completed in 40.007/40.211\n',
+    '            # seconds on pinned Python 3.12.14. Keep a measured 60-second\n',
+    '            # validation allowance; native cases retain their 5-second bound.\n'),
+   ('            # PR760 a2ada6b6 direct/package verification completed in\n',
+    '            # 152.775/147.161 seconds (152.407/147.147 CPU seconds) on pinned\n',
+    '            # Python 3.12.14. Allow 300 seconds for the expanded source proof;\n',
+    '            # historical imports and native cases retain their original bounds.\n')),
+  (88,
+   89,
+   ('                               check=True, capture_output=True, text=True, timeout=60)\n',),
+   ('                               check=True, capture_output=True, text=True, timeout=300)\n',))))}
     require(path in rows, 'unregistered qualification witness: ' + path)
     before_sha, after_sha, edits = rows[path]
     expected = (typed_boundary.EDGES[path]['after_sha256'] if path ==
@@ -4744,7 +4721,7 @@ def _pr760_candidate_bindings(root, *, _snapshots=None, _operation=None):
         require(all(expected.get(path) == digest
                     for path, digest in pr760_stage.REGISTRY_INPUT_SHA256.items()),
                 'PR760 physical image misses reviewed registry input')
-        for path, archive in (('tools/test_conditioned_coverage_loops.py', 'tools/carla_lane_oracle/pr760-test_conditioned_coverage_loops-predecessor.txt'), ('tools/carla_lane_oracle/test_typed_boundary_contracts.py', 'tools/carla_lane_oracle/pr760-test_typed_boundary_contracts-predecessor.txt'), ('tools/carla_lane_oracle/test_shared_helper_contracts.py', 'tools/carla_lane_oracle/pr760-test_shared_helper_contracts-predecessor.txt'), ('tools/carla_lane_oracle/test_scaled_float32_contracts.py', 'tools/carla_lane_oracle/pr760-test_scaled_float32_contracts-predecessor.txt'), ('tools/carla_lane_oracle/test_common758_current_successor.py', 'tools/carla_lane_oracle/pr760-test_common758_current_successor-predecessor.txt'), ('tools/carla_lane_oracle/test_witness_format_contracts.py', 'tools/carla_lane_oracle/pr760-test_witness_format_contracts-predecessor.txt')):
+        for path, archive in (('tools/test_conditioned_coverage_loops.py', 'tools/carla_lane_oracle/pr760-test_conditioned_coverage_loops-predecessor.txt'), ('tools/carla_lane_oracle/test_typed_boundary_contracts.py', 'tools/carla_lane_oracle/pr760-test_typed_boundary_contracts-predecessor.txt'), ('tools/carla_lane_oracle/test_shared_helper_contracts.py', 'tools/carla_lane_oracle/pr760-test_shared_helper_contracts-predecessor.txt'), ('tools/carla_lane_oracle/test_scaled_float32_contracts.py', 'tools/carla_lane_oracle/pr760-test_scaled_float32_contracts-predecessor.txt'), ('tools/carla_lane_oracle/test_common758_current_successor.py', 'tools/carla_lane_oracle/pr760-test_common758_current_successor-predecessor.txt'), ('tools/carla_lane_oracle/test_witness_format_contracts.py', 'tools/carla_lane_oracle/pr760-test_witness_format_contracts-predecessor.txt'), ('tools/carla_lane_oracle/test_coverage_invariant_contracts.py', 'tools/carla_lane_oracle/pr760-test_coverage_invariant_contracts-predecessor.txt')):
             require(qualification_predecessor_bytes(path, image[path]) == image[archive],
                     'PR760 qualification archive differs from exact predecessor: ' + path)
         # One complete fixed image, with no per-file old/new fallback.
