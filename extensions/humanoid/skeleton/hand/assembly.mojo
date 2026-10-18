@@ -15,7 +15,7 @@ the arm's wrist.
 """
 
 from core.assets import Assets
-from core.object3d import NodeId, Object3D
+from core.object3d import NodeId
 from core.scene import Scene
 from extensions.humanoid.side import require_side, RIGHT, BodySide
 from extensions.humanoid.skeleton.arm.assembly import (
@@ -24,6 +24,7 @@ from extensions.humanoid.skeleton.arm.assembly import (
     resolved_paint,
 )
 from extensions.humanoid.skeleton.arm.frame import arm_muscle_dimensions
+from extensions.humanoid.skeleton.place import place_root
 from extensions.humanoid.skeleton.hand.bones.dimensions import (
     named_hand_bones,
 )
@@ -148,9 +149,7 @@ def add_hand(
     require_hand_contents(contents)
     require_side(side, "A hand")
     var dims = arm_muscle_dimensions(spec)
-    var root = Object3D()
-    root.set_position(origin.x, origin.y, origin.z)
-    var root_id = scene.attach(root^, parent)
+    var root_id = place_root(scene, parent, origin)
     if contents.includes_bones():
         var bones = named_hand_bones()
         for index in range(len(bones)):  # pragma: no branch

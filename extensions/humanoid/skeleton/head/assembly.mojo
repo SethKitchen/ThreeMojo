@@ -18,6 +18,7 @@ from core.assets import Assets
 from core.object3d import NodeId, Object3D
 from core.scene import Scene
 from extensions.humanoid.side import LEFT, RIGHT, BodySide
+from extensions.humanoid.skeleton.place import place_root
 from extensions.humanoid.skeleton.arm.assembly import (
     UNSET_PAINT,
     place_mesh,
@@ -179,9 +180,7 @@ def add_head(
     """
     require_head_contents(contents)
     var dims = head_muscle_dimensions(spec)
-    var root = Object3D()
-    root.set_position(origin.x, origin.y, origin.z)
-    var root_id = scene.attach(root^, parent)
+    var root_id = place_root(scene, parent, origin)
     var sides: List[BodySide] = [RIGHT, LEFT]
     if contents.includes_bones():
         var bones = named_head_bones()

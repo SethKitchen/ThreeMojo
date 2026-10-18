@@ -15,7 +15,7 @@ the torso's scapula.
 """
 
 from core.assets import Assets
-from core.object3d import NodeId, Object3D
+from core.object3d import NodeId
 from core.scene import Scene
 from extensions.humanoid.side import require_side, RIGHT, BodySide
 from extensions.humanoid.skeleton.arm.bones.dimensions import named_arm_bones
@@ -74,7 +74,7 @@ from extensions.humanoid.skeleton.look import (
     skin_phong,
     vein_phong,
 )
-from extensions.humanoid.skeleton.place import place_mesh
+from extensions.humanoid.skeleton.place import place_mesh, place_root
 from extensions.humanoid.spec import HumanoidSpec
 from materials.material import MaterialId
 from math.vector3 import Vector3
@@ -135,9 +135,7 @@ def add_arm(
     require_arm_contents(contents)
     require_side(side, "An arm")
     var dims = arm_muscle_dimensions(spec)
-    var root = Object3D()
-    root.set_position(origin.x, origin.y, origin.z)
-    var root_id = scene.attach(root^, parent)
+    var root_id = place_root(scene, parent, origin)
     if contents.includes_bones():
         var bones = named_arm_bones()
         for index in range(len(bones)):  # pragma: no branch

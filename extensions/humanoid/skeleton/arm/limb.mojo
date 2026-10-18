@@ -16,10 +16,11 @@ They overlap across the wrist, so no gap shows between them.
 """
 
 from core.assets import Assets
-from core.object3d import NodeId, Object3D
+from core.object3d import NodeId
 from core.scene import Scene
 from extensions.humanoid.side import RIGHT, BodySide
 from extensions.humanoid.skeleton.arm.assembly import UNSET_PAINT, add_arm
+from extensions.humanoid.skeleton.place import place_root
 from extensions.humanoid.skeleton.arm.contents import (
     BOTH,
     ArmContents,
@@ -89,9 +90,7 @@ def add_upper_limb(
             invalid.
     """
     require_arm_contents(contents)
-    var root = Object3D()
-    root.set_position(origin.x, origin.y, origin.z)
-    var root_id = scene.attach(root^, parent)
+    var root_id = place_root(scene, parent, origin)
     _ = add_arm(
         scene,
         assets,
