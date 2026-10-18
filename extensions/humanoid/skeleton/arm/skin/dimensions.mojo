@@ -39,6 +39,7 @@ from extensions.humanoid.skeleton.arm.muscles.dimensions import (
     arm_muscle_field,
     named_arm_muscles,
 )
+from extensions.humanoid.skeleton.dermis import dermal_shell_distance
 from extensions.humanoid.skeleton.field import (
     DistanceField,
     field_gradient,
@@ -225,8 +226,7 @@ struct ArmSkinLayerField(Copyable, DistanceField, Movable):
         Negative is inside the dermis. Deep anatomy and exterior space
         are both outside this shell.
         """
-        var d = self.outer.distance(point)
-        return max(d, -d - self.thickness)
+        return dermal_shell_distance(self.outer.distance(point), self.thickness)
 
 
 def append_stations(

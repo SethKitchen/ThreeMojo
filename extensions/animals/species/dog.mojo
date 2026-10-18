@@ -37,6 +37,7 @@ from extensions.animals.kit import (
     EyeSpec,
     eye_frame_of,
     head_local,
+    reference_to_head_local,
     is_limb,
     mirrored_blob,
     hashed_stream,
@@ -1686,11 +1687,9 @@ def _terrier_patches(t: Traits) -> List[_Patch]:
 
 
 def _head_local(t: Traits, p: V3) -> V3:
-    var x = (p.x - HEAD_O.x) / t.get("headW") / HS
-    var y = (p.y - HEAD_O.y) / HS
-    var z = (p.z - HEAD_O.z) / HS
-    var mz = t.get("muzzle")
-    return V3(x, y, MUZZLE_Z0 + (z - MUZZLE_Z0) / mz if z > MUZZLE_Z0 else z)
+    return reference_to_head_local(
+        HEAD_O, HS, MUZZLE_Z0, t.get("muzzle"), t.get("headW"), p
+    )
 
 
 def _patch_field(t: Traits, p: V3, n_off: Float64) -> V3:

@@ -42,6 +42,7 @@ from extensions.humanoid.skeleton.arm.skin.dimensions import (
     ArmSkinField,
     append_stations,
 )
+from extensions.humanoid.skeleton.dermis import dermal_shell_distance
 from extensions.humanoid.skeleton.field import (
     DistanceField,
     field_gradient,
@@ -295,8 +296,7 @@ struct HandSkinLayerField(Copyable, DistanceField, Movable):
         Negative is inside the dermis. Deep anatomy and exterior space
         are both outside this shell.
         """
-        var d = self.outer.distance(point)
-        return max(d, -d - self.thickness)
+        return dermal_shell_distance(self.outer.distance(point), self.thickness)
 
 
 def _palm_covers(cover: Float32, dermis: Float32) -> List[Float32]:

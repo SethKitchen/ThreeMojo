@@ -33,6 +33,7 @@ from extensions.animals.kit import (
     EyeSpec,
     eye_frame_of,
     head_local,
+    reference_to_head_local,
     is_limb,
     is_front_limb,
     hashed_stream,
@@ -1205,11 +1206,9 @@ def fox_palette(t: Traits) raises -> Palette:
 
 
 def _head_local(t: Traits, p: V3) -> V3:
-    var x = (p.x - HEAD_O.x) / t.get("headW") / HS
-    var y = (p.y - HEAD_O.y) / HS
-    var z = (p.z - HEAD_O.z) / HS
-    var mz = t.get("muzzle")
-    return V3(x, y, MUZZLE_Z0 + (z - MUZZLE_Z0) / mz if z > MUZZLE_Z0 else z)
+    return reference_to_head_local(
+        HEAD_O, HS, MUZZLE_Z0, t.get("muzzle"), t.get("headW"), p
+    )
 
 
 def _mouth_line(t: Traits, h: V3) -> Float64:

@@ -247,6 +247,38 @@ def head_local(
     )
 
 
+def reference_to_head_local(
+    head_origin: V3,
+    scale: Float64,
+    muzzle_z0: Float64,
+    muzzle: Float64,
+    width: Float64,
+    p: V3,
+) -> V3:
+    """Return a reference point in head-local space.
+
+    This undoes `head_local`: the head scale, the width, and the muzzle
+    stretch in front of `muzzle_z0`.
+
+    Args:
+        head_origin: The head's origin in reference space.
+        scale: The head's scale.
+        muzzle_z0: Where the muzzle starts, head-local.
+        muzzle: The muzzle's length factor.
+        width: The head's width factor.
+        p: The point in reference space.
+
+    Returns:
+        The point in head-local space.
+    """
+    var x = (p.x - head_origin.x) / width / scale
+    var y = (p.y - head_origin.y) / scale
+    var z = (p.z - head_origin.z) / scale
+    return V3(
+        x, y, muzzle_z0 + (z - muzzle_z0) / muzzle if z > muzzle_z0 else z
+    )
+
+
 def aperture_tilt_along(e: EyeSpec, head_origin: V3, axis: V3) -> Float64:
     """Return the roll that lays the almond's long axis along a direction.
 

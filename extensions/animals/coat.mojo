@@ -11,6 +11,7 @@ pose. Painting in reference space keeps every mark on the skin as the
 animal moves. The painter returns a linear color and a surface class.
 """
 
+from extensions.animals.parts import JAW
 from extensions.sdf.ids import SurfacePart
 from extensions.animals.noise import fbm3
 from extensions.sdf.vector import (
@@ -282,3 +283,24 @@ def palette_of(names: List[String], hexes: List[Int]) raises -> Palette:
     for i in range(len(names)):
         out.set(names[i], srgb(hexes[i]))
     return out^
+
+
+def body_region(part: SurfacePart, bone: String) -> Int:
+    """Return the coat region of one vertex.
+
+    Args:
+        part: The surface part.
+        bone: The bone the vertex rides.
+
+    Returns:
+        0 torso, 1 neck, 2 head, 4 tail, or 5 ear.
+    """
+    var head = part == JAW or bone == "head" or bone == "snout"
+    var neck = bone == "neck1" or bone == "neck2"
+    if head:
+        return 2
+    if bone.startswith("ear"):
+        return 5
+    if bone.startswith("tail"):
+        return 4
+    return 1 if neck else 0

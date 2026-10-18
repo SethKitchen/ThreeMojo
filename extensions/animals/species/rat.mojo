@@ -26,15 +26,13 @@ from extensions.animals.coat import (
     EyeLook,
     Paint,
     Palette,
+    body_region,
     grizzle,
     mix3,
     palette_of,
     srgb,
 )
-from extensions.sdf.ids import (
-    BoneId,
-    SurfacePart,
-)
+from extensions.sdf.ids import BoneId
 from extensions.animals.parts import (
     JAW,
     TEETH,
@@ -1120,19 +1118,6 @@ def _agouti(color: Int) -> Float64:
     return table[color]
 
 
-def _region(part: SurfacePart, bone: String) -> Int:
-    # 0 torso, 1 neck, 2 head, 4 tail, 5 ear.
-    var head = part == JAW or bone == "head" or bone == "snout"
-    var neck = bone == "neck1" or bone == "neck2"
-    if head:
-        return 2
-    if bone.startswith("ear"):
-        return 5
-    if bone.startswith("tail"):
-        return 4
-    return 1 if neck else 0
-
-
 def _foot(bone: String) -> Bool:
     return (
         bone.startswith("fpaw")
@@ -1271,7 +1256,7 @@ def rat_paint(
         return Paint(tc, KERATIN)
     if tag == "claw":
         return Paint(pal.get("claw"), KERATIN)
-    var region = _region(s.part, bone)
+    var region = body_region(s.part, bone)
     var ag = _agouti(color)
     var c: V3
     if region == 4:

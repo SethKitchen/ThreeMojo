@@ -33,6 +33,7 @@ from extensions.animals.kit import (
     EyeSpec,
     eye_frame_of,
     head_local,
+    reference_to_head_local,
     is_limb,
     mirrored_blob,
     aperture_local,
@@ -1383,13 +1384,10 @@ def bear_palette(t: Traits) -> Palette:
 
 
 def _head_local(t: Traits, p: V3) -> V3:
-    # A reference point in head-local meters: the head width and the
-    # muzzle stretch undone.
-    var x = (p.x - HEAD_O.x) / t.get("headW")
-    var y = p.y - HEAD_O.y
-    var z = p.z - HEAD_O.z
-    var mz = t.get("muzzle")
-    return V3(x, y, MUZZLE_Z0 + (z - MUZZLE_Z0) / mz if z > MUZZLE_Z0 else z)
+    # The bear's head is not scaled by a separate head size.
+    return reference_to_head_local(
+        HEAD_O, 1.0, MUZZLE_Z0, t.get("muzzle"), t.get("headW"), p
+    )
 
 
 def _lock(p: V3, scale: Float64, off: Float64) -> Float64:

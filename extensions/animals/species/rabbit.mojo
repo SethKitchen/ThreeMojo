@@ -25,10 +25,10 @@ from extensions.animals.coat import (
     Palette,
     grizzle,
     mix3,
+    body_region,
     palette_of,
     srgb,
 )
-from extensions.sdf.ids import SurfacePart
 from extensions.animals.parts import JAW
 from extensions.sdf.sculpt import ell_y
 from extensions.animals.kit import (
@@ -1000,19 +1000,6 @@ def _dutch(p: V3, bone: String, region: Int) -> Float64:
     return d
 
 
-def _region(part: SurfacePart, bone: String) -> Int:
-    # 0 torso, 1 neck, 2 head, 4 tail, 5 ear.
-    var head = part == JAW or bone == "head" or bone == "snout"
-    var neck = bone == "neck1" or bone == "neck2"
-    if head:
-        return 2
-    if bone.startswith("ear"):
-        return 5
-    if bone.startswith("tail"):
-        return 4
-    return 1 if neck else 0
-
-
 def _jaw_dist(h: V3) -> Float64:
     # About the distance from a head-local point to the jaw.
     var chin = ellipsoid_estimate(
@@ -1050,7 +1037,7 @@ def rabbit_paint(
     var ag = _agouti(color)
     var h = p - HEAD_O
     var c: V3
-    var region = _region(s.part, bone)
+    var region = body_region(s.part, bone)
     if region == 2:
         if tag == "nose":
             var leather = h.z > 0.0355 and h.y > -0.024
