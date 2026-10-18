@@ -50,7 +50,11 @@ from animation.keyframe_track import (
 )
 from core.object3d import NodeId
 from loaders.collada_id import collada_reference
-from loaders.collada_numbers import collada_floats, require_positive_stride
+from loaders.collada_numbers import (
+    collada_floats,
+    collada_number,
+    require_positive_stride,
+)
 from loaders.xml import NO_ELEMENT, XmlDocument
 from math.matrix4 import Matrix4
 from math.quaternion import Quaternion
@@ -234,10 +238,7 @@ def _numbers_or_zero(text: String) raises -> Float64:
     var field = String(text.strip())
     if field == "":
         return 0
-    try:
-        return Float64(field)
-    except:
-        raise Error("Collada: not a number: " + field)
+    return collada_number(field)
 
 
 @fieldwise_init

@@ -30,7 +30,11 @@ from extensions.humanoid.skeleton.hand.bones.dimensions import (
 from extensions.humanoid.skeleton.hand.bones.geometry import (
     hand_bone_from_dimensions,
 )
-from extensions.humanoid.skeleton.hand.contents import BOTH, HandContents
+from extensions.humanoid.skeleton.hand.contents import (
+    BOTH,
+    HandContents,
+    require_hand_contents,
+)
 from extensions.humanoid.skeleton.hand.hair.dimensions import named_hand_hair
 from extensions.humanoid.skeleton.hand.hair.geometry import (
     hand_hair_from_dimensions,
@@ -141,8 +145,7 @@ def add_hand(
         Error: If the spec, `side`, a mesh, `contents` or the scene is
             invalid.
     """
-    if not contents.is_valid():
-        raise Error("Hand contents must be a named layer set")
+    require_hand_contents(contents)
     require_side(side, "A hand")
     var dims = arm_muscle_dimensions(spec)
     var root = Object3D()

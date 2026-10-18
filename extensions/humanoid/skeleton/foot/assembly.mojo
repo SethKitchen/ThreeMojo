@@ -28,7 +28,11 @@ from extensions.humanoid.skeleton.foot.bones.dimensions import (
 from extensions.humanoid.skeleton.foot.bones.geometry import (
     bone_from_dimensions,
 )
-from extensions.humanoid.skeleton.foot.contents import BOTH, FootContents
+from extensions.humanoid.skeleton.foot.contents import (
+    BOTH,
+    FootContents,
+    require_foot_contents,
+)
 from extensions.humanoid.skeleton.foot.hair.dimensions import named_foot_hair
 from extensions.humanoid.skeleton.foot.hair.geometry import hair_from_dimensions
 from extensions.humanoid.skeleton.foot.ligaments.dimensions import (
@@ -160,8 +164,7 @@ def add_foot(
     Raises:
         Error: If the spec, a mesh, `contents` or the scene is invalid.
     """
-    if not contents.is_valid():
-        raise Error("Foot contents must be a named layer set")
+    require_foot_contents(contents)
     var pose = assemble_foot(spec, side)
     var root = Object3D()
     root.set_position(origin.x, origin.y, origin.z)

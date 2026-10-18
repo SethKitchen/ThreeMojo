@@ -1009,15 +1009,31 @@ struct _Loader(Movable):
             return List[_Link]()
         return table[id].copy()
 
+    def _required_child(self, node: Int, name: String) raises -> Int:
+        """Return a child node a parent must hold.
+
+        Args:
+            node: The parent.
+            name: The child's name.
+
+        Returns:
+            The child.
+
+        Raises:
+            Error: If the parent has no such child.
+        """
+        var found = self.document.child(node, name)
+        if found == NO_FBX_NODE:
+            raise Error("FBX: " + self.document.name(node) + " has no " + name)
+        return found
+
     def text_of(self, node: Int, name: String) raises -> String:
         """Return the string a required child node holds.
 
         Raises:
             Error: If the node has no such child.
         """
-        var found = self.document.child(node, name)
-        if found == NO_FBX_NODE:
-            raise Error("FBX: " + self.document.name(node) + " has no " + name)
+        var found = self._required_child(node, name)
         return self.document.string(found, 0)
 
     def entry(self, node: Int, name: String) raises -> Int:
@@ -1820,9 +1836,7 @@ struct _Loader(Movable):
             Error: If the node has no such child, or it does not hold
                 sixteen numbers.
         """
-        var found = self.document.child(node, name)
-        if found == NO_FBX_NODE:
-            raise Error("FBX: " + self.document.name(node) + " has no " + name)
+        var found = self._required_child(node, name)
         var values = self.document.numbers(found)
         if len(values) != 16:
             raise Error("FBX: a " + name + " needs sixteen numbers")

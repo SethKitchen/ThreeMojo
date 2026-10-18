@@ -697,6 +697,36 @@ struct _Parser(Movable):
             self.at = start
             raise Error(self.where() + "an entity that is not known: " + word)
 
+    def _malformed_reference(mut self, start: Int) raises:
+        """Refuse a character reference whose digits are not digits.
+
+        Args:
+            start: Where the reference began.
+
+        Returns:
+            Nothing. This call always raises.
+
+        Raises:
+            Error: Always. The reference is malformed.
+        """
+        self.at = start
+        raise Error(self.where() + "a character reference is malformed")
+
+    def _unnamed_reference(mut self, start: Int) raises:
+        """Refuse a character reference that names no character.
+
+        Args:
+            start: Where the reference began.
+
+        Returns:
+            Nothing. This call always raises.
+
+        Raises:
+            Error: Always. The reference names nothing.
+        """
+        self.at = start
+        raise Error(self.where() + "a character reference names nothing")
+
     def code_point(mut self, word: String, start: Int) raises -> Int:
         """Return the character a `#nn` or `#xhh` reference names.
 
@@ -722,20 +752,14 @@ struct _Parser(Movable):
             if radix != 16 and digit > 9:
                 digit = -1
             if digit < 0:
-                self.at = start
-                raise Error(self.where() + "a character reference is malformed")
+                self._malformed_reference(start)
             if point > (0x10FFFF - digit) // radix:
-                self.at = start
-                raise Error(
-                    self.where() + "a character reference names nothing"
-                )
+                self._unnamed_reference(start)
             point = point * radix + digit
         if first == len(digits):
-            self.at = start
-            raise Error(self.where() + "a character reference is malformed")
+            self._malformed_reference(start)
         if not _is_character(point):
-            self.at = start
-            raise Error(self.where() + "a character reference names nothing")
+            self._unnamed_reference(start)
         return point
 
     def attribute_value(mut self) raises -> String:

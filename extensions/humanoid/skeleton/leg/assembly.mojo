@@ -22,7 +22,11 @@ from core.object3d import NodeId, Object3D
 from core.scene import Scene
 from extensions.humanoid.side import RIGHT, BodySide
 from extensions.humanoid.spec import HumanoidSpec
-from extensions.humanoid.skeleton.leg.contents import BOTH, LegContents
+from extensions.humanoid.skeleton.leg.contents import (
+    BOTH,
+    LegContents,
+    require_leg_contents,
+)
 from extensions.humanoid.skeleton.leg.femur.dimensions import FemurDimensions
 from extensions.humanoid.skeleton.leg.femur.geometry import (
     femur_from_dimensions,
@@ -211,8 +215,7 @@ def add_leg(
     Raises:
         Error: If the spec, a mesh, `contents` or the scene is invalid.
     """
-    if not contents.is_valid():
-        raise Error("Leg contents must be a named layer set")
+    require_leg_contents(contents)
     var pose = assemble_leg(spec, side)
     var root = Object3D()
     var root_id = scene.attach(root^, parent)

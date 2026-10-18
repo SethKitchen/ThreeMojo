@@ -29,7 +29,11 @@ from extensions.humanoid.skeleton.head.bones.dimensions import (
 from extensions.humanoid.skeleton.head.bones.geometry import (
     head_bone_from_dimensions,
 )
-from extensions.humanoid.skeleton.head.contents import BOTH, HeadContents
+from extensions.humanoid.skeleton.head.contents import (
+    BOTH,
+    HeadContents,
+    require_head_contents,
+)
 from extensions.humanoid.skeleton.head.frame import head_muscle_dimensions
 from extensions.humanoid.skeleton.head.hair.dimensions import SCALP_HAIR
 from extensions.humanoid.skeleton.head.hair.styles import GROWN, HairStyle
@@ -173,8 +177,7 @@ def add_head(
         Error: If the spec, a mesh, `contents`, the hair style or the
             scene is invalid.
     """
-    if not contents.is_valid():
-        raise Error("Head contents must be a named layer set")
+    require_head_contents(contents)
     var dims = head_muscle_dimensions(spec)
     var root = Object3D()
     root.set_position(origin.x, origin.y, origin.z)
