@@ -62,8 +62,10 @@ from extensions.animals.species.hoofed import (
     head_frame,
     hoofed_bones,
     ClovenHoof,
+    HornPoint,
     add_cloven_hoof,
     dewclaw_balls,
+    horn_parameter,
 )
 from extensions.animals.traits import Traits
 from extensions.sdf.vector import (
@@ -451,15 +453,6 @@ def goat_rig(t: Traits) raises -> Rig:
     _ = rig.add_bone("udder", "udderTop", "udderBot", "pelvis")
     _ = rig.add_bone("beard", "beardTop", "beardTip", "jaw")
     return rig^
-
-
-@fieldwise_init
-struct HornPoint(ImplicitlyCopyable):
-    """One station of a horn's center line: where, how thick, how far."""
-
-    var p: V3
-    var r: Float64
-    var t: Float64
 
 
 def _horn_cell(t: Traits, res: Float64) -> Float64:
@@ -2042,18 +2035,7 @@ def _legness(bone: String, p: V3) -> Float64:
 
 def _horn_t(t: Traits, p: V3) -> Float64:
     # How far along the nearer horn, 0 at its base and 1 at its tip.
-    var pth = _horn_path(t, 1.0 if p.x >= 0.0 else -1.0)
-    var best = 1e9
-    var bt = 0.0
-    for i in range(len(pth) - 1):
-        var a = pth[i].p
-        var ab = pth[i + 1].p - a
-        var u = clamp(dot(p - a, ab) / dot(ab, ab), 0.0, 1.0)
-        var dd = length(p - (a + ab * u))
-        if dd < best:
-            best = dd
-            bt = pth[i].t + (pth[i + 1].t - pth[i].t) * u
-    return bt
+    return horn_parameter(_horn_path(t, 1.0 if p.x >= 0.0 else -1.0), p)
 
 
 def _lid_distance(t: Traits, p: V3) -> Float64:

@@ -22,10 +22,45 @@ from extensions.animals.rig import Rig, add_sided
 from extensions.sdf.field import SdfModel
 from extensions.sdf.vector import (
     V3,
+    clamp,
     dot,
+    length,
     normalize,
 )
 from std.math import asin, atan2, cos, pi, sin
+
+
+@fieldwise_init
+struct HornPoint(ImplicitlyCopyable):
+    """One station of a horn's center line: where, how thick, how far."""
+
+    var p: V3
+    var r: Float64
+    var t: Float64
+
+
+def horn_parameter(path: List[HornPoint], point: V3) -> Float64:
+    """Return how far along the nearer horn a point lies.
+
+    Args:
+        path: Stations from the horn's base to its tip. `t` runs from 0
+            to 1.
+        point: The sample, in the same space as the stations.
+
+    Returns:
+        0 at the base and 1 at the tip. An empty path returns 0.
+    """
+    var best = 1e9
+    var at = 0.0
+    for i in range(len(path) - 1):
+        var a = path[i].p
+        var ab = path[i + 1].p - a
+        var u = clamp(dot(point - a, ab) / dot(ab, ab), 0.0, 1.0)
+        var dd = length(point - (a + ab * u))
+        if dd < best:
+            best = dd
+            at = path[i].t + (path[i + 1].t - path[i].t) * u
+    return at
 
 
 @fieldwise_init
