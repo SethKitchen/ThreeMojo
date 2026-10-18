@@ -32,6 +32,7 @@ Algorithms and Applications" (3rd edition, 2008), chapter 2.
 
 from math.polygon_hit import ray_crosses
 from math.utils import clamp
+from math.finite import require_finite_group
 from std.math import atan2, isfinite, sqrt
 from extensions.topology.ids import NO_REGION, RegionId
 from extensions.topology.weld import Welder
@@ -336,8 +337,10 @@ def _check_region(region: Region, layers: Int, tolerance: Float64) raises:
         raise Error("A region needs three corners or more")
     for i in range(n):  # pragma: no branch
         var p = region.points[i]
-        if not p.is_finite():
-            raise Error("A region corner must have finite coordinates")
+        require_finite_group(
+            p.is_finite(),
+            "A region corner must have finite coordinates",
+        )
     for i in range(n):  # pragma: no branch
         var a = region.points[i]
         var b = region.points[(i + 1) % n]

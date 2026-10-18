@@ -26,6 +26,7 @@ coordinate system. three.js also supports WebGPU's convention, where z runs
 from core.extent import positive_extent
 from math.matrix4 import Matrix4
 from math.vector3 import Vector3
+from math.finite import require_finite_group
 from std.math import isfinite
 
 
@@ -261,8 +262,10 @@ def orthographic(
     # path likewise has 1 / finite_extent >= 1 / FLT_MAX; overflowing
     # extents take the wide path above. Only overflow, not a zero diagonal,
     # can make the resulting orthographic projection unrepresentable.
-    if not matrix.is_finite():
-        raise Error("The projection is not representable in Float32")
+    require_finite_group(
+        matrix.is_finite(),
+        "The projection is not representable in Float32",
+    )
     return matrix^
 
 
@@ -313,8 +316,10 @@ def look_at(eye: Vector3, target: Vector3, up: Vector3) raises -> Matrix4:
         0,
         1,
     )
-    if not matrix.is_finite():
-        raise Error("The view offset is not representable in Float32")
+    require_finite_group(
+        matrix.is_finite(),
+        "The view offset is not representable in Float32",
+    )
     return matrix^
 
 

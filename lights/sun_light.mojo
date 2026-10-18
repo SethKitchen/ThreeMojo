@@ -64,6 +64,7 @@ from lights.shadow import LightShadow, SUN_BLEND, ShadowCascade
 from math.matrix4 import Matrix4
 from math.utils import mix_delta
 from math.vector3 import Vector3
+from math.finite import require_finite_group
 from render.framebuffer import Color
 from std.math import ceil, floor, log, exp, max, min, sqrt
 from units.si import Length, METER
@@ -420,8 +421,10 @@ struct SunLight(Movable):
             # fit_sun normalized the finite nonzero sun direction. Adding
             # that bounded direction cannot overflow a finite position:
             # near the largest finite Float32 they are below half an ULP.
-            if not cascade.position.is_finite():
-                raise Error("A sun's cascade position must be finite")
+            require_finite_group(
+                cascade.position.is_finite(),
+                "A sun's cascade position must be finite",
+            )
             changes.append(light)
         # All lights and node references are valid before the first write.
         for index in range(SUN_CASCADES):  # pragma: no branch

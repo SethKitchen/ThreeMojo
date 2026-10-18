@@ -29,6 +29,7 @@ from loaders.gltf import decode_image
 from math.matrix4 import Matrix4, require_axis_extent
 from math.quaternion import Quaternion
 from math.vector3 import Vector3
+from math.finite import require_finite_group
 from render.framebuffer import Color, FloatColor
 from render.srgb import ColorSpace
 from render.texture import Alpha, BILINEAR, Texture, Wrap, texture_from
@@ -53,8 +54,10 @@ def decompose_onto(mut node: Object3D, matrix: Matrix4, what: String) raises:
         Error: If an entry is not finite, or the matrix flattens an axis,
             where three.js would divide by zero.
     """
-    if not matrix.is_finite():
-        raise Error(what + ": a node matrix that is not finite")
+    require_finite_group(
+        matrix.is_finite(),
+        what + ": a node matrix that is not finite",
+    )
     var sx = matrix.column_length(0)
     var sy = matrix.column_length(1)
     var sz = matrix.column_length(2)

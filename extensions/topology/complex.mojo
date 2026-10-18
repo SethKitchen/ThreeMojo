@@ -21,6 +21,7 @@ information modeling of buildings using non-manifold topology with ASM
 and DesignScript" (2013).
 """
 
+from math.finite import require_finite_group
 from std.math import sqrt
 from extensions.topology.ids import (
     CellId,
@@ -556,8 +557,10 @@ struct CellComplex(Movable):
         require_weld_tolerance(self.welder.tolerance)
         for i in range(len(self.welder.points)):
             var point = self.welder.points[i]
-            if not point.is_finite():
-                raise Error("A vertex must have finite coordinates")
+            require_finite_group(
+                point.is_finite(),
+                "A vertex must have finite coordinates",
+            )
         if len(self.edge_faces) != len(self.edges):
             raise Error("Each edge needs an incident-face list")
         for i in range(len(self.edges)):

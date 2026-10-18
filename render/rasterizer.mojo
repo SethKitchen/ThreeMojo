@@ -219,7 +219,11 @@ from render.pointrule import (
     mip_level_of,
 )
 from math.curve_checks import require_at_least_one
-from math.finite import require_finite, require_positive_finite
+from math.finite import (
+    require_finite,
+    require_positive_finite,
+    require_finite_group,
+)
 from std.math import ceil, floor, inf, isfinite, log2, max, min, sqrt
 
 from render.tasks import TaskGroup
@@ -774,8 +778,10 @@ struct LayerFactors(ImplicitlyCopyable):
         if not isfinite(tint.dot(tint)) or faintest < 0:
             raise Error("A triangle's specular color cannot be negative")
         var scale = self.clearcoat_normal_scale
-        if not scale.is_finite():
-            raise Error("A triangle's clearcoat normal scale must be finite")
+        require_finite_group(
+            scale.is_finite(),
+            "A triangle's clearcoat normal scale must be finite",
+        )
         var coat_lowest = min(
             min(
                 self.specular_intensity_map.value,
@@ -2849,8 +2855,10 @@ def check_triangle_state(
         raise Error(
             "A triangle's clearcoat roughness must be between zero and one"
         )
-    if not a.normal_scale.is_finite():
-        raise Error("A triangle's normal scale must be finite")
+    require_finite_group(
+        a.normal_scale.is_finite(),
+        "A triangle's normal scale must be finite",
+    )
     require_finite(
         Float64(a.bump_scale), "A triangle's bump scale must be finite"
     )

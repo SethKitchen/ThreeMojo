@@ -31,7 +31,7 @@ from extensions.sdf.vector import (
 from math.norm import squared_length2
 from math.sine import fraction
 from math.utils import clamp, max3
-from math.finite import require_finite
+from math.finite import require_finite, require_finite_group
 from std.math import atan2, acos, cos, isfinite, pi, sin, sqrt
 from units.si import METER, SECOND, Duration, Length
 
@@ -124,8 +124,10 @@ def solve_two_bone(
             y-z plane, or the solution is outside the numeric range.
     """
     for p in [root, mid, end, target]:  # pragma: no branch
-        if not p.is_finite():
-            raise Error("A leg point must be finite")
+        require_finite_group(
+            p.is_finite(),
+            "A leg point must be finite",
+        )
     var a = mid - root
     var b = end - mid
     var la = length(V3(0.0, a.y, a.z))

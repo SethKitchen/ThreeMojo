@@ -57,7 +57,7 @@ taken as it is, as three.js's shader takes it; see
 
 from core.object3d import NodeId
 from math.matrix4 import Matrix4, require_affine
-from math.finite import require_finite
+from math.finite import require_finite, require_finite_group
 
 
 def require_bone_index(bone: Int, count: Int) raises:
@@ -123,8 +123,10 @@ struct Skeleton(Copyable, Movable):
         if len(bones) == 0:
             raise Error("A skeleton needs at least one bone")
         for index in range(len(bones)):  # pragma: no branch
-            if not bones[index].inverse_bind.is_finite():
-                raise Error("A bone's inverse bind must be a real transform")
+            require_finite_group(
+                bones[index].inverse_bind.is_finite(),
+                "A bone's inverse bind must be a real transform",
+            )
             require_affine(
                 bones[index].inverse_bind,
                 "A bone's inverse bind must be affine",

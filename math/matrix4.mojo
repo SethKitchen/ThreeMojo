@@ -46,6 +46,7 @@ from math.matrix_inverse import (
     _determinant_needs_wide,
     _inverse_wide,
 )
+from math.finite import require_finite_group
 from std.math import cos, fma, isfinite, sin, sqrt
 from units.si import Angle
 
@@ -578,10 +579,10 @@ struct Matrix4(Equatable, ImplicitlyCopyable):
         for axis in range(3):  # pragma: no branch
             var start = axis * 4
             var direction = Vector3(e[start], e[start + 1], e[start + 2])
-            if not direction.is_finite():
-                raise Error(
-                    "A transform axis must be finite to extract rotation"
-                )
+            require_finite_group(
+                direction.is_finite(),
+                "A transform axis must be finite to extract rotation",
+            )
             if direction.x == 0 and direction.y == 0 and direction.z == 0:
                 raise Error(
                     "A transform with no extent along an axis has no rotation"
@@ -937,8 +938,10 @@ struct Matrix4(Equatable, ImplicitlyCopyable):
             Error: If an axis has zero length, an entry is nonfinite, or
                 an axis length cannot fit in Float32. Outputs stay unchanged.
         """
-        if not self.is_finite():
-            raise Error("A transform must be finite to decompose")
+        require_finite_group(
+            self.is_finite(),
+            "A transform must be finite to decompose",
+        )
         var sx = self.column_length(0)
         var sy = self.column_length(1)
         var sz = self.column_length(2)

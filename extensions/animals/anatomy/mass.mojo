@@ -44,7 +44,7 @@ from extensions.sdf.ids import (
     SurfacePart,
 )
 from extensions.sdf.vector import V3, dot
-from math.finite import positive_finite, require_finite
+from math.finite import positive_finite, require_finite, require_finite_group
 from math.utils import clamp, min3
 from math.vector3 import Vector3
 from render.tasks import TaskGroup
@@ -474,8 +474,10 @@ def _check_sampling_model(model: SdfModel) raises:
         if not p.kind.is_valid() or not p.part.is_valid():
             raise Error("A sampled primitive kind and part must be named")
         for point in [p.c, p.b, p.ax, p.ay, p.az, p.r]:  # pragma: no branch
-            if not point.is_finite():
-                raise Error("Sampled primitive geometry must be finite")
+            require_finite_group(
+                point.is_finite(),
+                "Sampled primitive geometry must be finite",
+            )
         if p.kind != CONE:
             for axis in [p.ax, p.ay, p.az]:  # pragma: no branch
                 if abs(dot(axis, axis) - 1.0) > 1e-8:

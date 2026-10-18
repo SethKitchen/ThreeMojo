@@ -37,7 +37,7 @@ Every input and output carries its unit. The curves are dimensionless
 and take and return `Float64`.
 """
 
-from math.finite import positive_finite, require_finite
+from math.finite import positive_finite, require_finite, require_finite_group
 from math.norm import squared_length2
 from generators.utils import Vec3d
 from std.math import asin, cos, exp, isfinite, sin, sqrt
@@ -521,8 +521,10 @@ def moment_arm(
             length.
     """
     for p in [origin, insertion, center, axis]:  # pragma: no branch
-        if not p.is_finite():
-            raise Error("Muscle moment-arm points and axis must be finite")
+        require_finite_group(
+            p.is_finite(),
+            "Muscle moment-arm points and axis must be finite",
+        )
     var line = origin - insertion
     var reach = line.length()
     var size = axis.length()

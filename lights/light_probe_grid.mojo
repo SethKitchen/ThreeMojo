@@ -41,7 +41,7 @@ limits, and explicit zero and nonfinite rules.
 """
 
 from math.box_extent import box_exterior
-from math.finite import positive_finite
+from math.finite import positive_finite, require_finite_group
 from math.smoothstep import smoothstep
 from math.spherical_harmonics3 import SH_COUNT, SphericalHarmonics3
 from math.vector3 import Vector3
@@ -348,14 +348,16 @@ struct LightProbeGrid(Copyable, Movable):
             )
         # `_probe_count` requires positive axes; storage matches above.
         for index in range(len(self.probes)):  # pragma: no branch
-            if not self.probes[index].is_finite():
-                raise Error("A light probe grid's coefficients must be finite")
+            require_finite_group(
+                self.probes[index].is_finite(),
+                "A light probe grid's coefficients must be finite",
+            )
             var scaled = self.probes[index]
             scaled.scale(self.intensity)
-            if not scaled.is_finite():
-                raise Error(
-                    "A light probe grid's scaled coefficients must be finite"
-                )
+            require_finite_group(
+                scaled.is_finite(),
+                "A light probe grid's scaled coefficients must be finite",
+            )
 
     def _validate_settings(self) raises -> Int:
         """Check settings before allocation or before adopting stored probes."""
@@ -374,8 +376,10 @@ struct LightProbeGrid(Copyable, Movable):
             and depth > 0
         ):
             raise Error("A light probe grid's size must be positive lengths")
-        if not self.position.is_finite():
-            raise Error("A light probe grid's position must be finite")
+        require_finite_group(
+            self.position.is_finite(),
+            "A light probe grid's position must be finite",
+        )
         if not isfinite(self.intensity) or self.intensity < 0:
             raise Error(
                 "A light probe grid's intensity must be finite and not negative"

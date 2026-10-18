@@ -54,6 +54,7 @@ from math.path import Shape
 from math.polygon_area import signed_area64
 from math.sort_utils import stable_sort
 from math.vector2 import Vector2, component_max, component_min
+from math.finite import require_finite_group
 
 
 def turn(origin: Vector2, first: Vector2, second: Vector2) -> Float32:
@@ -340,8 +341,10 @@ def _corners(points: List[Vector2]) raises -> List[Vector2]:
         raise Error("A shape's closed contour needs three corners")
     # The short-contour refusal above proves this list is nonempty.
     for point in points:  # pragma: no branch
-        if not point.is_finite():
-            raise Error("A shape boundary needs finite coordinates")
+        require_finite_group(
+            point.is_finite(),
+            "A shape boundary needs finite coordinates",
+        )
     var corners = _clean(points)
     var doubled = signed_area64(corners) * 2
     var span = extent(corners, 0, len(corners))

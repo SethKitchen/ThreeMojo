@@ -37,6 +37,7 @@ limits, and explicit zero and nonfinite rules.
 from math.norm import length3
 from math.vector2 import Vector2
 from math.vector3 import Vector3
+from math.finite import require_finite_group
 from std.math import floor, isfinite, max, min, sqrt
 
 # three.js's `PackUpscale`, `Inv255`, `ShiftRight8` and `UnpackDownscale`.
@@ -336,8 +337,10 @@ def check_distance_range(
             greater than `near`, which would divide by zero or turn the
             fraction around.
     """
-    if not reference.is_finite():
-        raise Error("A distance's reference position must be finite")
+    require_finite_group(
+        reference.is_finite(),
+        "A distance's reference position must be finite",
+    )
     if not isfinite(near) or near < 0:
         raise Error("A near distance must be finite and not negative")
     if not isfinite(far) or far <= near:

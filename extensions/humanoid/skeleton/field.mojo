@@ -17,7 +17,7 @@ from math.cross import cross_vectors
 from math.norm import squared_length3
 from math.utils import clamp, min3, mix_delta
 from math.vector3 import Vector3, component_max, component_min, mix_delta3
-from math.finite import require_finite
+from math.finite import require_finite, require_finite_group
 from std.math import max, min, pi, sqrt
 from units.si import Angle, Length
 
@@ -266,8 +266,10 @@ def finite_point(point: Vector3, name: String, bone: String) raises:
     Raises:
         Error: If any coordinate is not finite.
     """
-    if not point.is_finite():
-        raise Error("A " + bone + " " + name + " must be finite")
+    require_finite_group(
+        point.is_finite(),
+        "A " + bone + " " + name + " must be finite",
+    )
 
 
 def clamp_unit(value: Float32) -> Float32:

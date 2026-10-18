@@ -63,6 +63,7 @@ from core.object3d import NodeId
 from core.ordinal import require_non_negative
 from materials.material import MaterialId
 from math.vector2 import Vector2
+from math.finite import require_finite_group
 
 # The bounding sphere of the unit square, three.js's `Sprite` geometry
 # bound: half the square's diagonal.
@@ -111,8 +112,10 @@ struct Sprite(ImplicitlyCopyable):
         """
         require_non_negative(node.value, "A sprite must name a scene node")
         require_non_negative(material.value, "A sprite must name a material")
-        if not center.is_finite():
-            raise Error("A sprite's center must be finite")
+        require_finite_group(
+            center.is_finite(),
+            "A sprite's center must be finite",
+        )
         self.material = material
         self.node = node
         self.center = center

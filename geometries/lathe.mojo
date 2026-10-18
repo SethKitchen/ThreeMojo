@@ -40,7 +40,7 @@ from geometries.surface import indexed_surface
 from math.curve_checks import require_at_least_one
 from core.user_data import UserData, json_number_text
 from geometries.circle import FULL_TURN, check_sweep
-from math.finite import require_finite
+from math.finite import require_finite, require_finite_group
 from math.norm import normalized2
 from math.vector2 import Vector2
 from std.math import cos, isfinite, sin
@@ -162,8 +162,10 @@ def lathe(
     if len(points) < 2:
         raise Error("A lathe needs a profile of at least two points")
     for index in range(len(points)):  # pragma: no branch
-        if not points[index].is_finite():
-            raise Error("A lathe's profile points must be finite")
+        require_finite_group(
+            points[index].is_finite(),
+            "A lathe's profile points must be finite",
+        )
         if points[index].x < 0:
             raise Error("A lathe's profile lies on one side of the axis")
     for index in range(len(points) - 1):  # pragma: no branch
