@@ -8,6 +8,22 @@
 from render.framebuffer import Framebuffer
 
 
+def require_open(is_open: Bool) raises:
+    """Refuse a closed window.
+
+    Args:
+        is_open: Whether the window is open.
+
+    Returns:
+        Nothing. The call returns when the window is open.
+
+    Raises:
+        Error: If the window is closed.
+    """
+    if not is_open:
+        raise Error("The window is closed")
+
+
 def require_presented_frame(
     is_open: Bool, frame: Framebuffer, width: Int, height: Int
 ) raises:
@@ -25,8 +41,7 @@ def require_presented_frame(
     Raises:
         Error: If the window is closed, or the frame is another size.
     """
-    if not is_open:
-        raise Error("The window is closed")
+    require_open(is_open)
     if frame.width != width or frame.height != height:
         raise Error(
             "A frame of ",

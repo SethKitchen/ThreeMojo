@@ -110,6 +110,7 @@ from render.framebuffer import (
     Color,
     FloatColor,
     Framebuffer,
+    pixel_slot,
     SrgbBytes,
 )
 from render.rect import Rect
@@ -877,9 +878,7 @@ struct RenderTarget(Movable, SampleSource):
 
     def _slot(self, x: Int, y: Int) raises -> Int:
         """Return the index of pixel (x, y), checking it is inside."""
-        if x < 0 or x >= self.width or y < 0 or y >= self.height:
-            raise Error("Pixel coordinate out of bounds")
-        return y * self.width + x
+        return pixel_slot(x, y, self.width, self.height)
 
     def depth_at(self, x: Int, y: Int) raises -> Float32:
         """Return the depth recorded at pixel (x, y)."""

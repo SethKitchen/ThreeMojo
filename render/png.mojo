@@ -20,7 +20,7 @@ own stored-block lengths, which are little-endian.
 
 from core.extent import positive_extent
 from render.checksum import Crc32, adler32
-from render.framebuffer import Color, Framebuffer
+from render.framebuffer import Color, Framebuffer, pixel_slot
 from render.srgb import LINEAR, SRGB, UNKNOWN_SPACE, ColorSpace
 from render.inflate import zlib_inflate
 
@@ -270,9 +270,7 @@ struct DecodedImage(Movable):
         Raises:
             Error: If the coordinate is outside the image.
         """
-        if x < 0 or x >= self.width or y < 0 or y >= self.height:
-            raise Error("Pixel coordinate out of bounds")
-        var at = (y * self.width + x) * Self.CHANNELS
+        var at = pixel_slot(x, y, self.width, self.height) * Self.CHANNELS
         return Color(
             self.pixels[at],
             self.pixels[at + 1],
