@@ -7,9 +7,10 @@
 
 Every `Float32` value converts exactly to `Float64`, so one test covers
 both widths. `require_finite` refuses a value that is not finite.
-`require_positive_finite` refuses a value that is not positive and finite.
-`require_finite_group` refuses a caller-tested group that is not finite.
-Callers keep their own error text.
+`finite_float32` narrows a `Float64` and refuses a result that is not
+finite. `require_positive_finite` refuses a value that is not positive
+and finite. `require_finite_group` refuses a caller-tested group that is
+not finite. Callers keep their own error text.
 """
 
 from std.math import isfinite
@@ -75,6 +76,24 @@ def require_finite(value: Float64, message: String) raises:
     """
     if not isfinite(value):
         raise Error(message)
+
+
+def finite_float32(value: Float64, message: String) raises -> Float32:
+    """Return `value` as a `Float32`, refusing a result that is not finite.
+
+    Args:
+        value: The wide number.
+        message: The error text when the `Float32` is not finite.
+
+    Returns:
+        The `Float32`.
+
+    Raises:
+        Error: If the `Float32` is not finite.
+    """
+    var narrow = Float32(value)
+    require_finite(Float64(narrow), message)
+    return narrow
 
 
 def require_finite_group(finite: Bool, message: String) raises:

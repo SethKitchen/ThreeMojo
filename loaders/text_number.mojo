@@ -12,7 +12,7 @@ is not a number names the parser's reason. A number that overflows a
 normal. `file_line` builds the `KIND line N: ` prefix a loader error uses.
 """
 
-from math.finite import require_finite
+from math.finite import finite_float32
 
 
 def read_finite_float32(
@@ -40,9 +40,7 @@ def read_finite_float32(
         raise Error(
             prefix + "not a number: " + field + " (" + String(reason) + ")"
         )
-    var value = Float32(wide)
-    require_finite(Float64(value), prefix + finite + ": " + field)
-    return value
+    return finite_float32(wide, prefix + finite + ": " + field)
 
 
 def file_line(kind: String, line: Int) -> String:

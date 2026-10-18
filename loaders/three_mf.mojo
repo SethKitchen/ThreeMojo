@@ -98,7 +98,7 @@ from render.texture import (
     texture_from,
 )
 from render.texture_store import NO_TEXTURE, TextureId
-from math.finite import require_finite
+from math.finite import finite_float32
 from std.math import isnan
 from std.pathlib import Path
 from units.si import CENTIMETER, FOOT, INCH, METER, MILLIMETER, Length
@@ -295,11 +295,9 @@ def _finite(text: String, what: String) raises -> Float32:
     var value = js_parse_float(text)
     if isnan(value):
         raise Error("3MF: " + what + " is not a number: `" + text + "`")
-    var narrow = Float32(value)
-    require_finite(
-        Float64(narrow), "3MF: " + what + " is not finite: `" + text + "`"
+    return finite_float32(
+        value, "3MF: " + what + " is not finite: `" + text + "`"
     )
-    return narrow
 
 
 def _index(text: String, count: Int, what: String) raises -> Int:

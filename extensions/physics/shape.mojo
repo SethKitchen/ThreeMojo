@@ -31,7 +31,11 @@ from core.ordinal import ordinal_valid
 
 from math.convex_hull import ConvexHull
 from math.cross import cross_vectors, wide_cross, wide_dot, widen_vector
-from math.finite import require_finite, require_positive_finite
+from math.finite import (
+    finite_float32,
+    require_finite,
+    require_positive_finite,
+)
 from math.matrix3 import Matrix3
 from math.matrix_determinant import _determinant3_f32
 from math.triangle import Triangle
@@ -171,9 +175,7 @@ def _finite_vector(v: Vector3) raises:
 
 
 def _narrow_finite(value: Float64) raises -> Float32:
-    var out = Float32(value)
-    require_finite(Float64(out), "A mass property must fit in Float32")
-    return out
+    return finite_float32(value, "A mass property must fit in Float32")
 
 
 def _inertia_determinant(inertia: Matrix3) raises -> Float64:
