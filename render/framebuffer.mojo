@@ -59,7 +59,7 @@ from render.srgb import (
     srgb_to_linear,
 )
 from math.sine import fraction
-from math.utils import max3, min3, mix_delta
+from math.utils import clamp, max3, min3, mix_delta
 from std.math import inf
 from std.memory import bitcast
 
@@ -777,6 +777,40 @@ def unit_byte(value: Float32) -> UInt8:
         Error: Never.
     """
     return UInt8(Int(value * 255 + 0.5))
+
+
+def rounded_byte(value: Float64) -> UInt8:
+    """Return a number held from 0 to 255 and rounded to a byte.
+
+    A half rounds up.
+
+    Args:
+        value: The number.
+
+    Returns:
+        The byte.
+
+    Raises:
+        Error: Never.
+    """
+    return UInt8(Int(clamp(value, 0.0, 255.0) + 0.5))
+
+
+def rounded_byte(value: Float32) -> UInt8:
+    """Return a number held from 0 to 255 and rounded to a byte.
+
+    A half rounds up.
+
+    Args:
+        value: The number.
+
+    Returns:
+        The byte.
+
+    Raises:
+        Error: Never.
+    """
+    return UInt8(Int(clamp(value, 0, 255) + Float32(0.5)))
 
 
 def _to_byte(value: Float32) -> UInt8:
