@@ -16,6 +16,7 @@ from examples.output import (
     example_destination,
     fill_and_key,
     gallery_camera,
+    gallery_renderer,
     spin_clip,
 )
 
@@ -29,7 +30,6 @@ from math.ray import Ray
 from math.vector3 import Vector3
 from objects.mesh import Mesh
 from render.framebuffer import Color
-from renderers.renderer import Renderer, available_workers
 from units.si import DEGREE, METER, Angle, Length
 
 comptime DEFAULT_OUTPUT = "out/sculptor.png"
@@ -68,8 +68,7 @@ def _raise_knob(mut scene: Scene, mut assets: Assets) raises:
 def main() raises:
     var destination = example_destination(String(DEFAULT_OUTPUT))
 
-    var renderer = Renderer(WIDTH, HEIGHT, workers=available_workers())
-    renderer.set_background(Color(16, 18, 26))
+    var renderer = gallery_renderer(WIDTH, HEIGHT, Color(16, 18, 26))
 
     var assets = Assets()
     var shape = assets.geometries.add(sphere(Length(0.9, METER), 32, 20))

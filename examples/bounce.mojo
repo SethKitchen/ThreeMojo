@@ -12,7 +12,7 @@ normals, `VXGINode` gathers the bounced light, and `vxgi_light` lays
 that light on the picture. The camera sways and returns.
 """
 
-from examples.output import example_destination, write_example
+from examples.output import example_destination, gallery_renderer, write_example
 
 from cameras.perspective_camera import PerspectiveCamera
 from core.assets import Assets
@@ -36,7 +36,7 @@ from render.target import (
     RenderTarget,
     TargetOutput,
 )
-from renderers.renderer import Renderer, available_workers
+from renderers.renderer import Renderer
 from std.math import pi, sin
 from units.si import DEGREE, METER, Angle, Length
 
@@ -134,8 +134,7 @@ def frame_at(
 def main() raises:
     var destination = example_destination(String(DEFAULT_OUTPUT))
 
-    var renderer = Renderer(WIDTH, HEIGHT, workers=available_workers())
-    renderer.set_background(Color(8, 8, 10))
+    var renderer = gallery_renderer(WIDTH, HEIGHT, Color(8, 8, 10))
 
     var assets = Assets()
     var wall = assets.geometries.add(

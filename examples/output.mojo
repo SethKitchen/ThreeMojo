@@ -10,8 +10,8 @@ first argument, turns a node, and stores the frames. A full circle is
 one turn divided across the frames. An example that built its own frames
 can write them here. It can also copy one tile into a sheet, light a
 scene and spin it, hang a part on a turning node, stand a body on the
-floor, place a gallery camera, add a fill and a key lamp, or write a
-third of a turn.
+floor, make a gallery renderer, place a gallery camera, add a fill and
+a key lamp, or write a third of a turn.
 """
 
 from cameras.camera import Camera
@@ -81,6 +81,27 @@ def stand_on_floor(
     var holder = Object3D()
     holder.set_position(x, ground, 0)
     return scene.attach(holder^, parent)
+
+
+def gallery_renderer(
+    width: Int, height: Int, background: Color
+) raises -> Renderer:
+    """Return a renderer of `width` by `height` with `background`.
+
+    Args:
+        width: Image width in pixels.
+        height: Image height in pixels.
+        background: The color behind the scene.
+
+    Returns:
+        The renderer.
+
+    Raises:
+        Error: If the renderer cannot be created.
+    """
+    var renderer = Renderer(width, height, workers=available_workers())
+    renderer.set_background(background)
+    return renderer^
 
 
 def gallery_camera(
@@ -338,8 +359,7 @@ def spin_daylight(
     Raises:
         Error: If the scene, the render, or the write is invalid.
     """
-    var renderer = Renderer(width, height, workers=available_workers())
-    renderer.set_background(background)
+    var renderer = gallery_renderer(width, height, background)
     add_sky_and_sun(scene, fill, sun)
     spin_gallery(
         renderer,

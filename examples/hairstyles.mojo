@@ -19,7 +19,11 @@ turns every head about the vertical, in degrees; zero shows the faces.
 The default is 140.
 """
 
-from examples.output import example_destination, gallery_camera
+from examples.output import (
+    example_destination,
+    gallery_camera,
+    gallery_renderer,
+)
 from examples.preview import turn_about_vertical
 
 from core.assets import Assets
@@ -52,7 +56,7 @@ from render.apng import encode
 from render.framebuffer import Color, Framebuffer
 from render.tonemap import ACES_FILMIC_TONE_MAPPING
 from renderers.environment import pmrem_from_scene
-from renderers.renderer import Renderer, available_workers
+from renderers.renderer import available_workers
 from std.pathlib import Path
 from std.sys import argv
 from units.si import Angle, FOOT, Length, METER, RADIAN
@@ -111,8 +115,7 @@ def main() raises:
         degrees = Float32(Float64(String(args[3])))
     var turn = degrees * Float32(0.017453292)
 
-    var renderer = Renderer(WIDTH, HEIGHT, workers=available_workers())
-    renderer.set_background(Color(24, 25, 28))
+    var renderer = gallery_renderer(WIDTH, HEIGHT, Color(24, 25, 28))
     renderer.tone_mapping = ACES_FILMIC_TONE_MAPPING
     renderer.tone_mapping_exposure = 1.0
     renderer.local_clipping_enabled = True

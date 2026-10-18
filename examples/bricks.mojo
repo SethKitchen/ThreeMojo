@@ -16,6 +16,7 @@ from examples.output import (
     example_destination,
     fill_and_key,
     gallery_camera,
+    gallery_renderer,
     spin_clip,
 )
 
@@ -25,7 +26,6 @@ from loaders.ldraw import load_ldraw, read_ldraw
 from loaders.ldraw_parse import LDrawLoader
 from math.vector3 import Vector3
 from render.framebuffer import Color
-from renderers.renderer import Renderer, available_workers
 from units.si import DEGREE, METER, Angle, Length
 
 comptime DEFAULT_OUTPUT = "out/models.png"
@@ -39,8 +39,7 @@ comptime LIBRARY = "assets/ldraw/library/"
 def main() raises:
     var destination = example_destination(String(DEFAULT_OUTPUT))
 
-    var renderer = Renderer(WIDTH, HEIGHT, workers=available_workers())
-    renderer.set_background(Color(16, 18, 26))
+    var renderer = gallery_renderer(WIDTH, HEIGHT, Color(16, 18, 26))
 
     var model = read_ldraw("assets/ldraw/scene.mpd", LDrawLoader(LIBRARY))
     var assets = Assets()

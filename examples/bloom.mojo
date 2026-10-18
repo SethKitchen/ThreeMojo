@@ -12,7 +12,7 @@ the light above a threshold bleed, darkens the corners, and applies the
 renderer's tone curve once at the end.
 """
 
-from examples.output import example_destination, write_example
+from examples.output import example_destination, gallery_renderer, write_example
 
 from cameras.perspective_camera import PerspectiveCamera
 from core.assets import Assets
@@ -34,7 +34,7 @@ from postprocessing.composer import (
 )
 from render.framebuffer import Color, Framebuffer
 from render.tonemap import ACES_FILMIC_TONE_MAPPING
-from renderers.renderer import Renderer, available_workers
+from renderers.renderer import Renderer
 from units.si import Angle, DEGREE, Length, METER
 
 comptime DEFAULT_OUTPUT = "out/postprocessing.png"
@@ -80,8 +80,7 @@ def frame_at(
 def main() raises:
     var destination = example_destination(String(DEFAULT_OUTPUT))
 
-    var renderer = Renderer(WIDTH, HEIGHT, workers=available_workers())
-    renderer.set_background(Color(8, 9, 14))
+    var renderer = gallery_renderer(WIDTH, HEIGHT, Color(8, 9, 14))
     renderer.set_tone_mapping(ACES_FILMIC_TONE_MAPPING, 1.1)
 
     var assets = Assets()

@@ -9,6 +9,8 @@ A soft shadow map, filmic tone mapping, the five tissue materials, a
 room environment at intensity 0.55, a gray floor, and one sun.
 """
 
+from examples.output import gallery_renderer
+
 from core.assets import Assets
 from core.object3d import Object3D
 from core.scene import Scene
@@ -29,7 +31,7 @@ from objects.mesh import Mesh
 from render.framebuffer import Color
 from render.tonemap import ACES_FILMIC_TONE_MAPPING
 from renderers.environment import pmrem_from_scene
-from renderers.renderer import Renderer, available_workers
+from renderers.renderer import Renderer
 from units.si import DEGREE, METER, Angle, Length
 
 
@@ -58,8 +60,7 @@ def studio_renderer(width: Int, height: Int) raises -> Renderer:
     Raises:
         Error: If the renderer cannot be created.
     """
-    var renderer = Renderer(width, height, workers=available_workers())
-    renderer.set_background(Color(20, 21, 24))
+    var renderer = gallery_renderer(width, height, Color(20, 21, 24))
     renderer.tone_mapping = ACES_FILMIC_TONE_MAPPING
     renderer.tone_mapping_exposure = 1.1
     renderer.shadow_map_type = PCF_SOFT_SHADOW_MAP

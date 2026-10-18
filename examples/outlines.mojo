@@ -13,7 +13,12 @@ front of it as it goes. The second camera rides a node aimed at the cube,
 and its outline rides the same node.
 """
 
-from examples.output import example_destination, fill_and_key, spin_clip
+from examples.output import (
+    example_destination,
+    fill_and_key,
+    gallery_renderer,
+    spin_clip,
+)
 
 from cameras.perspective_camera import PerspectiveCamera
 from core.assets import Assets
@@ -30,7 +35,6 @@ from math.vector3 import Vector3
 from objects.line import Line, SEGMENTS
 from objects.mesh import Mesh
 from render.framebuffer import Color
-from renderers.renderer import Renderer, available_workers
 from units.si import Angle, DEGREE, Length, METER
 
 comptime DEFAULT_OUTPUT = "out/helpers.png"
@@ -42,8 +46,7 @@ comptime DELAY_MS = 55
 
 def main() raises:
     var destination = example_destination(String(DEFAULT_OUTPUT))
-    var renderer = Renderer(WIDTH, HEIGHT, workers=available_workers())
-    renderer.set_background(Color(16, 18, 26))
+    var renderer = gallery_renderer(WIDTH, HEIGHT, Color(16, 18, 26))
     var assets = Assets()
     var scene = Scene()
     var root = scene.add(Object3D())

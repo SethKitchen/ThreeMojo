@@ -12,7 +12,12 @@ is from a reference point. The fraction is packed into four channels, so
 the sphere is banded rather than a smooth gray. It turns in place.
 """
 
-from examples.output import example_destination, gallery_camera, spin_clip
+from examples.output import (
+    example_destination,
+    gallery_camera,
+    gallery_renderer,
+    spin_clip,
+)
 
 from core.assets import Assets
 from core.object3d import Object3D
@@ -22,7 +27,6 @@ from materials.material import distance_material
 from math.vector3 import Vector3
 from objects.mesh import Mesh
 from render.framebuffer import Color
-from renderers.renderer import Renderer, available_workers
 from units.si import Angle, DEGREE, Length, METER
 
 comptime DEFAULT_OUTPUT = "out/distance.png"
@@ -35,8 +39,7 @@ comptime DELAY_MS = 55
 def main() raises:
     var destination = example_destination(String(DEFAULT_OUTPUT))
 
-    var renderer = Renderer(WIDTH, HEIGHT, workers=available_workers())
-    renderer.set_background(Color(12, 14, 20))
+    var renderer = gallery_renderer(WIDTH, HEIGHT, Color(12, 14, 20))
     var assets = Assets()
     var ball = assets.geometries.add(sphere(Length(1.0, METER), 40, 28))
     var measured = assets.materials.add(

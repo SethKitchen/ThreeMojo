@@ -26,7 +26,7 @@ stay put -- so the lit face stays lit as the camera passes it, which a
 spinning cube under a fixed lamp cannot do.
 """
 
-from examples.output import fill_and_key, spin_clip
+from examples.output import fill_and_key, gallery_renderer, spin_clip
 
 from cameras.perspective_camera import PerspectiveCamera
 from core.assets import Assets
@@ -38,7 +38,6 @@ from objects.mesh import Mesh
 from render.framebuffer import Color
 from render.png import decode
 from render.texture import BILINEAR, REPEAT, texture_from
-from renderers.renderer import Renderer, available_workers
 from std.pathlib import Path
 from std.sys import argv
 from units.si import Angle, DEGREE, Length, METER
@@ -64,8 +63,7 @@ def main() raises:
     var image = decode(Path(source).read_bytes())
     print("Read", source, "-", image.width, "x", image.height)
 
-    var renderer = Renderer(WIDTH, HEIGHT, workers=available_workers())
-    renderer.set_background(Color(14, 16, 22))
+    var renderer = gallery_renderer(WIDTH, HEIGHT, Color(14, 16, 22))
 
     var assets = Assets()
     var block = assets.geometries.add(cube(Length(1.2, METER)))

@@ -16,6 +16,7 @@ program also prints each bone's tissue mass and Earth weight.
 from examples.output import (
     example_destination,
     gallery_camera,
+    gallery_renderer,
     spin_gallery,
     warm_lamp,
 )
@@ -32,7 +33,6 @@ from materials.material import MaterialId
 from math.vector3 import Vector3
 from objects.mesh import Mesh
 from render.framebuffer import Color
-from renderers.renderer import Renderer, available_workers
 from units.si import (
     Angle,
     DEGREE,
@@ -106,8 +106,7 @@ def add_patella(
 def main() raises:
     var destination = example_destination(String(DEFAULT_OUTPUT))
 
-    var renderer = Renderer(WIDTH, HEIGHT, workers=available_workers())
-    renderer.set_background(Color(18, 16, 14))
+    var renderer = gallery_renderer(WIDTH, HEIGHT, Color(18, 16, 14))
 
     var assets = Assets()
     var map = assets.textures.add(bone_albedo(64))

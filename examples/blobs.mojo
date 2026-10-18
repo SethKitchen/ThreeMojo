@@ -16,6 +16,7 @@ from examples.output import (
     example_destination,
     fill_and_key,
     gallery_camera,
+    gallery_renderer,
     spin_clip,
 )
 
@@ -27,7 +28,6 @@ from math.vector3 import Vector3
 from objects.marching_cubes import MarchingCubes
 from objects.mesh import Mesh
 from render.framebuffer import Color, FloatColor
-from renderers.renderer import Renderer, available_workers
 from units.si import DEGREE, METER, Angle, Length
 
 comptime DEFAULT_OUTPUT = "out/blobs.png"
@@ -40,8 +40,7 @@ comptime DELAY_MS = 55
 def main() raises:
     var destination = example_destination(String(DEFAULT_OUTPUT))
 
-    var renderer = Renderer(WIDTH, HEIGHT, workers=available_workers())
-    renderer.set_background(Color(16, 18, 26))
+    var renderer = gallery_renderer(WIDTH, HEIGHT, Color(16, 18, 26))
     var field = MarchingCubes(16, enable_colors=True)
     field.reset()
     field.add_ball(0.42, 0.52, 0.5, 0.85, 10, FloatColor(1, 0.35, 0.12, 1))

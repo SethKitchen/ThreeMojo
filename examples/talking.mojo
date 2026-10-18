@@ -18,7 +18,11 @@ how many frames to draw, one or more. The default draws the whole
 speech, twenty frames a second.
 """
 
-from examples.output import example_destination, gallery_camera
+from examples.output import (
+    example_destination,
+    gallery_camera,
+    gallery_renderer,
+)
 from examples.preview import turn_about_vertical
 
 from core.assets import Assets
@@ -64,7 +68,7 @@ from render.apng import encode
 from render.framebuffer import Color, Framebuffer
 from render.tonemap import ACES_FILMIC_TONE_MAPPING
 from renderers.environment import pmrem_from_scene
-from renderers.renderer import Renderer, available_workers
+from renderers.renderer import available_workers
 from std.math import sin
 from std.pathlib import Path
 from std.sys import argv
@@ -166,8 +170,7 @@ def main() raises:
     if len(args) > 3:
         count = max(1, Int(String(args[3])))
 
-    var renderer = Renderer(WIDTH, HEIGHT, workers=available_workers())
-    renderer.set_background(Color(24, 25, 28))
+    var renderer = gallery_renderer(WIDTH, HEIGHT, Color(24, 25, 28))
     renderer.tone_mapping = ACES_FILMIC_TONE_MAPPING
     renderer.tone_mapping_exposure = 1.0
     renderer.local_clipping_enabled = True

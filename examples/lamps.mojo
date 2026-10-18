@@ -36,7 +36,12 @@ interpolating the color, which is what this renderer used to do, puts a
 visible crease along every edge instead.
 """
 
-from examples.output import example_destination, gallery_camera, write_example
+from examples.output import (
+    example_destination,
+    gallery_camera,
+    gallery_renderer,
+    write_example,
+)
 
 from cameras.perspective_camera import PerspectiveCamera
 from core.assets import Assets
@@ -49,7 +54,7 @@ from materials.material import Material
 from math.vector3 import Vector3
 from objects.mesh import Mesh
 from render.framebuffer import Color, Framebuffer
-from renderers.renderer import Renderer, available_workers
+from renderers.renderer import Renderer
 from units.si import Angle, DEGREE, Length, METER
 
 comptime DEFAULT_OUTPUT = "out/lamps.png"
@@ -97,8 +102,7 @@ def frame_at(
 def main() raises:
     var destination = example_destination(String(DEFAULT_OUTPUT))
 
-    var renderer = Renderer(WIDTH, HEIGHT, workers=available_workers())
-    renderer.set_background(Color(10, 11, 16))
+    var renderer = gallery_renderer(WIDTH, HEIGHT, Color(10, 11, 16))
 
     var assets = Assets()
     var ball = assets.geometries.add(

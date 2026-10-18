@@ -16,6 +16,7 @@ from examples.output import (
     example_destination,
     fill_and_key,
     gallery_camera,
+    gallery_renderer,
     write_example,
 )
 
@@ -30,7 +31,7 @@ from materials.nodes import COLOR_NODE, POSITION_NODE, NodeGraph
 from math.vector3 import Vector3
 from objects.mesh import Mesh
 from render.framebuffer import Color, Framebuffer
-from renderers.renderer import Renderer, available_workers
+from renderers.renderer import Renderer
 from std.math import pi
 from units.si import DEGREE, METER, SECOND, Angle, Duration, Length
 
@@ -76,8 +77,7 @@ def frame_at(
 def main() raises:
     var destination = example_destination(String(DEFAULT_OUTPUT))
 
-    var renderer = Renderer(WIDTH, HEIGHT, workers=available_workers())
-    renderer.set_background(Color(14, 16, 22))
+    var renderer = gallery_renderer(WIDTH, HEIGHT, Color(14, 16, 22))
     var assets = Assets()
     var graph = NodeGraph()
     var warm = graph.color(Color(255, 140, 40))

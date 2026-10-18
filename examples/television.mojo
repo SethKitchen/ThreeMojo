@@ -14,7 +14,12 @@ shows both screens on a stand. The ramp the box is shaded through is a
 data texture: three numbers, never an image file.
 """
 
-from examples.output import example_destination, gallery_camera, write_example
+from examples.output import (
+    example_destination,
+    gallery_camera,
+    gallery_renderer,
+    write_example,
+)
 
 from cameras.perspective_camera import PerspectiveCamera
 from core.assets import Assets
@@ -108,8 +113,7 @@ def main() raises:
 
     # The room: two screens on a stand, each showing one texture of the
     # box scene. The textures are replaced every frame.
-    var renderer = Renderer(WIDTH, HEIGHT, workers=available_workers())
-    renderer.set_background(Color(16, 18, 26))
+    var renderer = gallery_renderer(WIDTH, HEIGHT, Color(16, 18, 26))
     var room = Assets()
     var screen = room.geometries.add(
         plane(Length(1.6, METER), Length(1.2, METER))

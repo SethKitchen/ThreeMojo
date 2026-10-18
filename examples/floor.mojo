@@ -41,6 +41,7 @@ from examples.output import (
     example_destination,
     fill_and_key,
     gallery_camera,
+    gallery_renderer,
     write_example,
 )
 
@@ -57,7 +58,7 @@ from math.vector3 import Vector3
 from objects.mesh import Mesh
 from render.framebuffer import Color, Framebuffer
 from render.texture import BILINEAR, REPEAT, checkerboard
-from renderers.renderer import Renderer, available_workers
+from renderers.renderer import Renderer
 from units.si import Angle, DEGREE, Length, METER
 
 comptime DEFAULT_OUTPUT = "out/floor.png"
@@ -149,8 +150,7 @@ def frame_at(
 def main() raises:
     var destination = example_destination(String(DEFAULT_OUTPUT))
 
-    var renderer = Renderer(WIDTH, HEIGHT, workers=available_workers())
-    renderer.set_background(Color(18, 20, 28))
+    var renderer = gallery_renderer(WIDTH, HEIGHT, Color(18, 20, 28))
 
     var assets = Assets()
     # Two halves of one floor, meeting at x = 0 so the seam runs up the middle

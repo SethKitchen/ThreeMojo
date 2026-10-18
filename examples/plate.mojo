@@ -13,7 +13,12 @@ The deflection is drawn scaled up, growing with the load, and colored
 from the edges to the middle.
 """
 
-from examples.output import example_destination, gallery_camera, write_frames
+from examples.output import (
+    example_destination,
+    gallery_camera,
+    gallery_renderer,
+    write_frames,
+)
 from examples.preview import Triangles, add_sky_and_sun, heat_color
 
 from cameras.perspective_camera import PerspectiveCamera
@@ -23,7 +28,6 @@ from core.scene import Scene
 from generators.utils import Vec3d
 from math.vector3 import Vector3
 from render.framebuffer import Color, Framebuffer
-from renderers.renderer import Renderer, available_workers
 from std.math import cos, pi
 from units.si import DEGREE, METER, Angle, Length
 from extensions.building.material import concrete
@@ -93,8 +97,7 @@ def main() raises:
     var largest = Float64(0)
     for k in range(len(ids)):
         largest = max(largest, abs(result.displacements[6 * k + 2]))
-    var renderer = Renderer(WIDTH, HEIGHT, workers=available_workers())
-    renderer.set_background(Color(26, 30, 40))
+    var renderer = gallery_renderer(WIDTH, HEIGHT, Color(26, 30, 40))
     var camera = _camera()
     var frames = List[Framebuffer]()
     for f in range(FRAMES):

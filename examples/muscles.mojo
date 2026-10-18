@@ -11,7 +11,12 @@ The page is Muscles. A six-foot male right leg is drawn three times:
 bones only, untoned muscles, and toned muscles.
 """
 
-from examples.output import example_destination, gallery_camera, warm_lamp
+from examples.output import (
+    example_destination,
+    gallery_camera,
+    gallery_renderer,
+    warm_lamp,
+)
 
 from cameras.perspective_camera import PerspectiveCamera
 from core.assets import Assets
@@ -40,7 +45,7 @@ from math.vector3 import Vector3
 from materials.material import MaterialId
 from render.apng import encode
 from render.framebuffer import Color, Framebuffer
-from renderers.renderer import Renderer, available_workers
+from renderers.renderer import Renderer
 from std.pathlib import Path
 from units.si import Angle, DEGREE, FOOT, Length, METER
 
@@ -152,8 +157,7 @@ def main() raises:
     var untoned = HumanoidSpec(Length(6.0, FOOT), MALE, UNTONED)
     var toned = HumanoidSpec(Length(6.0, FOOT), MALE, TONED)
 
-    var renderer = Renderer(WIDTH, HEIGHT, workers=available_workers())
-    renderer.set_background(Color(18, 16, 14))
+    var renderer = gallery_renderer(WIDTH, HEIGHT, Color(18, 16, 14))
 
     var assets = Assets()
     var map = assets.textures.add(bone_albedo(64))

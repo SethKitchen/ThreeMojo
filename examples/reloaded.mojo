@@ -12,7 +12,12 @@ The page is Exporters. `write_gltf` writes the mesh and its material.
 a glTF file from this writer does not carry lights.
 """
 
-from examples.output import example_destination, gallery_camera, write_example
+from examples.output import (
+    example_destination,
+    gallery_camera,
+    gallery_renderer,
+    write_example,
+)
 
 from core.assets import Assets
 from core.clock import Clock
@@ -26,7 +31,6 @@ from materials.material import Material
 from math.vector3 import Vector3
 from objects.mesh import Mesh
 from render.framebuffer import Color, Framebuffer
-from renderers.renderer import Renderer, available_workers
 from std.os import remove
 from units.si import Angle, DEGREE, Length, METER
 
@@ -74,8 +78,7 @@ def main() raises:
         far=Length(40.0, METER),
     )
 
-    var renderer = Renderer(WIDTH, HEIGHT, workers=available_workers())
-    renderer.set_background(Color(16, 18, 26))
+    var renderer = gallery_renderer(WIDTH, HEIGHT, Color(16, 18, 26))
     var step = Angle(Float32(360) / Float32(FRAMES), DEGREE)
     var frame_clock = Clock()
     frame_clock.start()

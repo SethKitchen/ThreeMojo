@@ -12,7 +12,11 @@ the walk and meshes its sculpt again, so the elbows, the knees and the
 hocks keep their shape as they bend. The planted feet stay on the floor.
 """
 
-from examples.output import example_destination, gallery_camera
+from examples.output import (
+    example_destination,
+    gallery_camera,
+    gallery_renderer,
+)
 
 from core.assets import Assets
 from core.object3d import Object3D
@@ -35,7 +39,7 @@ from math.vector3 import Vector3
 from objects.mesh import Mesh
 from render.apng import encode
 from render.framebuffer import Color, Framebuffer
-from renderers.renderer import Renderer, available_workers
+from renderers.renderer import Renderer
 from std.pathlib import Path
 from units.si import DEGREE, METER, Angle, Length
 
@@ -112,8 +116,7 @@ def frame_at(
 
 def main() raises:
     var destination = example_destination(String(DEFAULT_OUTPUT))
-    var renderer = Renderer(WIDTH, HEIGHT, workers=available_workers())
-    renderer.set_background(Color(170, 190, 215))
+    var renderer = gallery_renderer(WIDTH, HEIGHT, Color(170, 190, 215))
     renderer.shadow_map_type = PCF_SOFT_SHADOW_MAP
     var wolf = create_animal(WOLF, animal_options(3, quality=MEDIUM))
     var frames = List[Framebuffer]()

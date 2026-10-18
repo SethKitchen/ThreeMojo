@@ -15,6 +15,7 @@ from examples.output import (
     example_destination,
     fill_and_key,
     gallery_camera,
+    gallery_renderer,
     write_example,
 )
 
@@ -28,7 +29,6 @@ from math.vector3 import Vector3
 from objects.mesh import Mesh
 from render.framebuffer import Color, Framebuffer
 from render.tonemap import ACES_FILMIC_TONE_MAPPING
-from renderers.renderer import Renderer, available_workers
 from std.math import cos, pi
 from units.si import Angle, DEGREE, Length, METER
 
@@ -42,8 +42,7 @@ comptime DELAY_MS = 55
 def main() raises:
     var destination = example_destination(String(DEFAULT_OUTPUT))
 
-    var renderer = Renderer(WIDTH, HEIGHT, workers=available_workers())
-    renderer.set_background(Color(8, 9, 12))
+    var renderer = gallery_renderer(WIDTH, HEIGHT, Color(8, 9, 12))
 
     var assets = Assets()
     var ball = assets.geometries.add(sphere(Length(1.0, METER), 28, 18))

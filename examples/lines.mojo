@@ -18,6 +18,7 @@ from examples.output import (
     example_destination,
     fill_and_key,
     gallery_camera,
+    gallery_renderer,
     spin_clip,
 )
 
@@ -32,7 +33,6 @@ from math.vector3 import Vector3
 from objects.line import LOOP, STRIP, Line
 from objects.mesh import Mesh
 from render.framebuffer import Color
-from renderers.renderer import Renderer, available_workers
 from std.math import cos, pi, sin
 from units.si import Angle, DEGREE, Length, METER
 
@@ -96,8 +96,7 @@ def a_rising_path(steps: Int) raises -> BufferGeometry:
 def main() raises:
     var destination = example_destination(String(DEFAULT_OUTPUT))
 
-    var renderer = Renderer(WIDTH, HEIGHT, workers=available_workers())
-    renderer.set_background(Color(16, 18, 26))
+    var renderer = gallery_renderer(WIDTH, HEIGHT, Color(16, 18, 26))
 
     var assets = Assets()
     var box = assets.geometries.add(cube(Length(1.1, METER)))

@@ -13,7 +13,12 @@ sphere sets `allow_override` off and keeps its own color. The camera
 rides a pivot one whole turn, and the normals shift with it.
 """
 
-from examples.output import example_destination, fill_and_key, spin_clip
+from examples.output import (
+    example_destination,
+    fill_and_key,
+    gallery_renderer,
+    spin_clip,
+)
 
 from cameras.perspective_camera import PerspectiveCamera
 from core.assets import Assets
@@ -23,7 +28,7 @@ from geometries.sphere import sphere
 from materials.material import Material, normal_material
 from objects.mesh import Mesh
 from render.framebuffer import Color
-from renderers.renderer import Renderer, available_workers
+from renderers.renderer import Renderer
 from units.si import DEGREE, METER, Angle, Length
 
 comptime DEFAULT_OUTPUT = "out/hooks.png"
@@ -36,8 +41,7 @@ comptime DELAY_MS = 55
 def main() raises:
     var destination = example_destination(String(DEFAULT_OUTPUT))
 
-    var renderer = Renderer(WIDTH, HEIGHT, workers=available_workers())
-    renderer.set_background(Color(16, 18, 26))
+    var renderer = gallery_renderer(WIDTH, HEIGHT, Color(16, 18, 26))
 
     var assets = Assets()
     var ball = assets.geometries.add(sphere(Length(0.42, METER), 24, 16))

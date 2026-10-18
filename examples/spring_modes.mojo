@@ -12,7 +12,12 @@ chain's stiffness against its mass by subspace iteration. Each row is one
 mode, moving at its own frequency.
 """
 
-from examples.output import example_destination, gallery_camera, write_frames
+from examples.output import (
+    example_destination,
+    gallery_camera,
+    gallery_renderer,
+    write_frames,
+)
 from examples.preview import Triangles, add_sky_and_sun
 
 from cameras.perspective_camera import PerspectiveCamera
@@ -22,7 +27,6 @@ from core.scene import Scene
 from generators.utils import Vec3d
 from math.vector3 import Vector3
 from render.framebuffer import Color, Framebuffer
-from renderers.renderer import Renderer, available_workers
 from std.math import pi, sin, sqrt
 from units.si import DEGREE, METER, Angle, Length
 from extensions.numerics.eigen import lowest_modes
@@ -67,8 +71,7 @@ def main() raises:
             k.add(i, i + 1, -1)
             k.add(i + 1, i, -1)
     var modes = lowest_modes(k.build(), mass.build(), 3, 1e-10, 100)
-    var renderer = Renderer(WIDTH, HEIGHT, workers=available_workers())
-    renderer.set_background(Color(26, 30, 40))
+    var renderer = gallery_renderer(WIDTH, HEIGHT, Color(26, 30, 40))
     var camera = _camera()
     var frames = List[Framebuffer]()
     var base = sqrt(modes.values[0])

@@ -12,7 +12,12 @@ red plastic ball has a white spot on it. The camera rides a pivot, so the
 spot moves and the lit face stays lit.
 """
 
-from examples.output import example_destination, fill_and_key, spin_clip
+from examples.output import (
+    example_destination,
+    fill_and_key,
+    gallery_renderer,
+    spin_clip,
+)
 
 from cameras.perspective_camera import PerspectiveCamera
 from core.assets import Assets
@@ -22,7 +27,6 @@ from geometries.sphere import sphere
 from materials.material import phong_material
 from objects.mesh import Mesh
 from render.framebuffer import Color
-from renderers.renderer import Renderer, available_workers
 from units.si import Angle, DEGREE, Length, METER
 
 comptime DEFAULT_OUTPUT = "out/phong.png"
@@ -35,8 +39,7 @@ comptime DELAY_MS = 55
 def main() raises:
     var destination = example_destination(String(DEFAULT_OUTPUT))
 
-    var renderer = Renderer(WIDTH, HEIGHT, workers=available_workers())
-    renderer.set_background(Color(12, 13, 18))
+    var renderer = gallery_renderer(WIDTH, HEIGHT, Color(12, 13, 18))
 
     var assets = Assets()
     var ball = assets.geometries.add(sphere(Length(1.0, METER), 32, 20))

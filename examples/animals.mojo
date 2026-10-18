@@ -15,7 +15,12 @@ mid-stride and the snake and the swimmers bend in an S. Each animal
 turns a whole turn.
 """
 
-from examples.output import example_destination, blit, gallery_camera
+from examples.output import (
+    example_destination,
+    blit,
+    gallery_camera,
+    gallery_renderer,
+)
 
 from core.assets import Assets
 from core.object3d import Object3D
@@ -43,7 +48,7 @@ from math.vector3 import Vector3
 from objects.mesh import Mesh
 from render.framebuffer import Color, Framebuffer
 from render.apng import encode
-from renderers.renderer import Renderer, available_workers
+from renderers.renderer import Renderer
 from std.math import max
 from std.pathlib import Path
 from units.si import DEGREE, METER, Angle, Length
@@ -155,8 +160,7 @@ def tiles(id: SpeciesId, renderer: Renderer) raises -> List[Framebuffer]:
 def main() raises:
     var destination = example_destination(String(DEFAULT_OUTPUT))
     var rows = (SPECIES_COUNT + COLUMNS - 1) // COLUMNS
-    var renderer = Renderer(TILE_W, TILE_H, workers=available_workers())
-    renderer.set_background(Color(170, 190, 215))
+    var renderer = gallery_renderer(TILE_W, TILE_H, Color(170, 190, 215))
     renderer.shadow_map_type = PCF_SOFT_SHADOW_MAP
     var sheets = List[Framebuffer]()
     for _ in range(FRAMES):
