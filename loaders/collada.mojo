@@ -526,6 +526,23 @@ def _require(
         raise Error("Collada: " + what + " needs " + semantic)
 
 
+def require_collada_positions(held: Int, expected: Int) raises:
+    """Refuse a Collada primitive whose positions do not match its corners.
+
+    Args:
+        held: How many position numbers were written.
+        expected: How many position numbers the corners require.
+
+    Returns:
+        Nothing. The call returns when the two counts are equal.
+
+    Raises:
+        Error: If the counts differ.
+    """
+    if held != expected:
+        raise Error("Collada: a primitive's positions do not match its corners")
+
+
 def _within(index: Int, count: Int) -> Bool:
     """Return True if an index is from zero to below a count."""
     return index >= 0 and index < count
@@ -1818,10 +1835,9 @@ struct _Loader(Movable):
                     vertices,
                     surface.corners,
                 )
-            if len(surface.corners.positions) - before != len(order) * 3:
-                raise Error(
-                    "Collada: a primitive's positions do not match its corners"
-                )
+            require_collada_positions(
+                len(surface.corners.positions) - before, len(order) * 3
+            )
             surface.counts.append(len(order))
             if symbol != "":
                 surface.symbols.append(symbol)
@@ -1834,10 +1850,7 @@ struct _Loader(Movable):
         var count = len(order)
         if count == 0:
             return
-        if len(corners.positions) != count * 3:
-            raise Error(
-                "Collada: a primitive's positions do not match its corners"
-            )
+        require_collada_positions(len(corners.positions), count * 3)
         var geometry = BufferGeometry()
         geometry.set_attribute(
             String(POSITION), BufferAttribute(corners.positions.copy(), 3)

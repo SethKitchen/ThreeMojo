@@ -370,6 +370,22 @@ struct ShapePoints(Movable):
         self.holes = holes^
 
 
+def require_separate_holes(inside: Bool) raises:
+    """Refuse a hole that lies inside another hole.
+
+    Args:
+        inside: Whether one hole's point lies inside the other hole.
+
+    Returns:
+        Nothing. The call returns when the point lies outside the other hole.
+
+    Raises:
+        Error: If the point lies inside the other hole.
+    """
+    if inside:
+        raise Error("A shape's hole cannot lie inside another hole")
+
+
 def extract_points(shape: Shape, curve_segments: Int) raises -> ShapePoints:
     """Return `shape`'s points, three.js's `Shape.extractPoints`, once
     they are checked.
@@ -406,11 +422,11 @@ def extract_points(shape: Shape, curve_segments: Int) raises -> ShapePoints:
             raise Error("A shape's hole must lie inside its outline")
         for other in range(hole):
             ref around = holes[other]
-            if _contains(around, 0, len(around) - 1, probe):
-                raise Error("A shape's hole cannot lie inside another hole")
+            require_separate_holes(_contains(around, 0, len(around) - 1, probe))
             ref current = holes[hole]
-            if _contains(current, 0, len(current) - 1, around[0]):
-                raise Error("A shape's hole cannot lie inside another hole")
+            require_separate_holes(
+                _contains(current, 0, len(current) - 1, around[0])
+            )
     return ShapePoints(outline^, holes^)
 
 
