@@ -202,7 +202,7 @@ from lights.lighting import (
 )
 from math.smoothstep import smoothstep
 from math.vector2 import Vector2
-from math.utils import clamp
+from math.utils import clamp, mix_delta
 from math.vector3 import Vector3
 from render.rasterizer import (
     joined,
@@ -6682,7 +6682,7 @@ def rasterize_kernel(
                     unsafe_offset=far_base + LANE_LINE_DISTANCE
                 ]
                 if not dash_covers(
-                    from_a + (from_b - from_a) * toward,
+                    mix_delta(from_a, from_b, toward),
                     segments[unsafe_offset=base + LANE_DASH],
                     segments[unsafe_offset=base + LANE_GAP],
                 ):
@@ -6709,7 +6709,7 @@ def rasterize_kernel(
                     unsafe_offset=base + LANE_LOG_DEPTH
                 ]
                 var stored_z = fragment_depth(
-                    state, az + (bz - az) * share, total
+                    state, mix_delta(az, bz, share), total
                 )
                 # Straight, through the function the host calls, so the one
                 # convention for a line's color lives in one place.
@@ -6749,7 +6749,7 @@ def rasterize_kernel(
                     x,
                     y,
                     Int(height),
-                    az + (bz - az) * share,
+                    mix_delta(az, bz, share),
                     Int(width),
                 )
                 var line_given = here_inputs(
@@ -6794,7 +6794,7 @@ def rasterize_kernel(
                 ):
                     var ad = segments[unsafe_offset=base + LANE_DEPTH]
                     var bd = segments[unsafe_offset=far_base + LANE_DEPTH]
-                    var seen = ad + (bd - ad) * toward
+                    var seen = mix_delta(ad, bd, toward)
                     # By name, as the triangle pass reads it. Written out as
                     # literal slots once, which took the color out of the near,
                     # far and density lanes and the distances out of the color: a
@@ -8526,9 +8526,9 @@ def rasterize_kernel(
                         var share = Float32(1)
                         if set[6]:
                             share = ran[6][0]
-                        red = red + (ran[5][0] - red) * share
-                        green = green + (ran[5][1] - green) * share
-                        blue = blue + (ran[5][2] - blue) * share
+                        red = mix_delta(red, ran[5][0], share)
+                        green = mix_delta(green, ran[5][1], share)
+                        blue = mix_delta(blue, ran[5][2], share)
                     if set[7] and ran[7][0] == 0:
                         continue
                 # Thrown away for being too transparent, three.js's
