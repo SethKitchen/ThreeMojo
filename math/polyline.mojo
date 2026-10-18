@@ -11,7 +11,8 @@ can hold its length between two bounds.
 """
 
 from math.norm import _ordinary_squared
-from std.math import max, min
+from std.math import acos, max, min, pi, sqrt
+from units.si import Angle, RADIAN
 
 
 trait PolylineVertex(Deinitable, ImplicitlyCopyable, Movable):
@@ -67,6 +68,17 @@ trait PolylineVertex(Deinitable, ImplicitlyCopyable, Movable):
 
         Returns:
             The divided step.
+        """
+        ...
+
+    def dot(self, other: Self) -> Float32:
+        """Return the dot product of this step and `other`.
+
+        Args:
+            other: The other step.
+
+        Returns:
+            The dot product.
         """
         ...
 
@@ -185,6 +197,38 @@ def distance_between_squared[T: PolylineVertex](start: T, end: T) -> Float32:
     """
     var step = start - end
     return step.length_sq()
+
+
+def angle_between[T: PolylineVertex](start: T, end: T) -> Angle:
+    """Return the angle between `start` and `end`.
+
+    Args:
+        start: The first vector.
+        end: The other vector.
+
+    Returns:
+        From zero to a half turn. A right angle if either vector is zero.
+    """
+    var first_squared = start.length_sq()
+    var second_squared = end.length_sq()
+    var product = first_squared * second_squared
+    var theta: Float32
+    if (
+        _ordinary_squared(first_squared)
+        and _ordinary_squared(second_squared)
+        and _ordinary_squared(product)
+    ):
+        theta = start.dot(end) / sqrt(product)
+    else:
+        var first = start
+        var second = end
+        first.normalize()
+        second.normalize()
+        # A zero vector stays zero, so this is every component being zero.
+        if first.length_sq() == 0 or second.length_sq() == 0:
+            return Angle(Float32(pi / 2), RADIAN)
+        theta = first.dot(second)
+    return Angle(acos(max(Float32(-1), min(Float32(1), theta))), RADIAN)
 
 
 def lerp_in_place[T: PolylineVertex](mut value: T, other: T, alpha: Float32):
