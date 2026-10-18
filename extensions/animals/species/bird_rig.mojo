@@ -42,6 +42,7 @@ from extensions.sdf.vector import (
     dot,
     length,
     lerp,
+    mix,
     mirror,
     normalize,
     rotate_about,
@@ -92,13 +93,13 @@ def lerp_pose(a: WingPose, b: WingPose, t: Float64) -> WingPose:
         The blend, key by key. The tilt is `a`'s.
     """
     return WingPose(
-        a.elev + (b.elev - a.elev) * t,
-        a.pitch + (b.pitch - a.pitch) * t,
-        a.alpha + (b.alpha - a.alpha) * t,
-        a.elbow + (b.elbow - a.elbow) * t,
-        a.wrist + (b.wrist - a.wrist) * t,
-        a.bend + (b.bend - a.bend) * t,
-        a.twist + (b.twist - a.twist) * t,
+        mix(a.elev, b.elev, t),
+        mix(a.pitch, b.pitch, t),
+        mix(a.alpha, b.alpha, t),
+        mix(a.elbow, b.elbow, t),
+        mix(a.wrist, b.wrist, t),
+        mix(a.bend, b.bend, t),
+        mix(a.twist, b.twist, t),
         a.tilt,
     )
 
@@ -527,7 +528,7 @@ def vane_width(f: Feather, t: Float64, w: Float64) -> Tuple[Float64, Float64]:
     Returns:
         The outer and the inner half width.
     """
-    var base = f.base0 + (1.0 - f.base0) * smoothstep(0.0, 0.16, t)
+    var base = mix(f.base0, 1.0, smoothstep(0.0, 0.16, t))
     var tr = f.tip_round
     var tip = 1.0
     if t > 1.0 - tr:
@@ -581,7 +582,7 @@ def neck_chain(mut rig: Rig, segs: Int, t0: V3, t1: V3, bulge: Float64) raises:
             i += 1
         var span = s[i] - s[i - 1]
         var f = (target - s[i - 1]) / (span if span != 0.0 else 1.0)
-        rig.set("neck" + String(j), pts[i - 1] + (pts[i] - pts[i - 1]) * f)
+        rig.set("neck" + String(j), lerp(pts[i - 1], pts[i], f))
 
 
 def wing_joints(mut rig: Rig, lengths: V3, pose: WingPose) raises -> WingFrames:
@@ -672,7 +673,7 @@ def feather_frames(
                     lengths.z,
                     1.0,
                     f,
-                    f.fold + (f.spread - f.fold) * e_h,
+                    mix(f.fold, f.spread, e_h),
                     False,
                 )
             )
@@ -685,7 +686,7 @@ def feather_frames(
                     lengths.y,
                     1.0,
                     f,
-                    f.fold + (f.spread - f.fold) * e_u,
+                    mix(f.fold, f.spread, e_u),
                     True,
                 )
             )
@@ -698,7 +699,7 @@ def feather_frames(
                     lat,
                     1.0,
                     f,
-                    f.fold + (f.spread - f.fold) * fan,
+                    mix(f.fold, f.spread, fan),
                 )
             )
     return out^

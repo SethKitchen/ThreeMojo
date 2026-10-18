@@ -854,7 +854,7 @@ def horse_sculpt(mut m: SdfModel, rig: Rig, t: Traits) raises:
         var z1 = -0.035
         for i in range(count):  # pragma: no branch
             var u = Float64(i) / Float64(count - 1)
-            var z = z0 + (z1 - z0) * u
+            var z = mix(z0, z1, u)
             var zb = z + 0.3 * (z1 - z0) / Float64(count - 1)
             var y = _skin_y(m, head_ids, z)
             var yb = _skin_y(m, head_ids, zb)

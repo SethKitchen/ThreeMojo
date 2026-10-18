@@ -71,6 +71,7 @@ from extensions.sdf.vector import (
     dot,
     length,
     lerp,
+    mix,
     normalize,
     smoothstep,
     rotate_about,
@@ -182,7 +183,7 @@ def pig_traits(mut r: AnimalRandom, options: AnimalOptions) raises -> Traits:
     var h1: List[Float64] = [0.9, 0.88, 0.92, 0.88, 0.82, 0.88]
     var mature = 0.0 if piglet else pow(R.next(), 1.4)
     var boar = 0.5 + 0.5 * mature if male and not piglet else 0.0
-    var href = h0[variant] + (h1[variant] - h0[variant]) * mature
+    var href = mix(h0[variant], h1[variant], mature)
     var size: Float64
     if piglet:
         size = 0.36 + 0.14 * R.next()
@@ -547,7 +548,7 @@ def _leaf_point(
             + f.wave * sin(2.0 * pi * 3.4 * u + wph) * smoothstep(0.1, 0.35, u)
         ),
     )
-    var cup = f.cup_root + (f.cup_tip - f.cup_root) * u
+    var cup = mix(f.cup_root, f.cup_tip, u)
     var kap = cup / w
     var x = a * w
     var q = p + l * (sin(kap * x) / kap) + h * ((1.0 - cos(kap * x)) / kap)
@@ -682,7 +683,7 @@ def pig_rig(t: Traits) raises -> Rig:
 
 def _sz(z: Float64, k: Float64) -> Float64:
     # The snout's length: the rostral end moves, the eyes stay.
-    return 0.06 + (z - 0.06) * k if z > 0.06 else z
+    return mix(0.06, z, k) if z > 0.06 else z
 
 
 # ---------------------------------------------------------------- SCULPT
@@ -723,8 +724,8 @@ def _tusk_cones(t: Traits, s: Float64) -> List[V3]:
         out.append(cubic_bezier(p0, p1, p2, p3, t1))
         out.append(
             V3(
-                r1 + (r0 - r1) * (1.0 - pow(t0, 1.3)),
-                r1 + (r0 - r1) * (1.0 - pow(t1, 1.3)),
+                mix(r1, r0, 1.0 - pow(t0, 1.3)),
+                mix(r1, r0, 1.0 - pow(t1, 1.3)),
                 0.0,
             )
         )
@@ -1742,7 +1743,7 @@ def _ear_vein_sd(u: Float64, w: Float64, seed: Int) -> Float64:
         var dd = sqrt((u - u0 - dx * tt) ** 2 + (w - w0 - dy * tt) ** 2)
         var r0 = veins[6 * i + 4]
         var r1 = veins[6 * i + 5]
-        d = min(d, dd - 0.8 * (r0 + (r1 - r0) * tt))
+        d = min(d, dd - 0.8 * mix(r0, r1, tt))
     return d
 
 
@@ -1780,7 +1781,7 @@ def pig_paint(
     var off = pal.get("off")
     var up = clamp(n.y, -1.0, 1.0)
     var snout_k = t.get("snoutLen", 1.0) * SNOUT_K
-    var dz = 0.06 + (0.178 - 0.06) * snout_k
+    var dz = mix(0.06, 0.178, snout_k)
     var disc_w = smoothstep(dz - 0.02, dz - 0.002, h.z)
     if s.part == TEETH:
         var cones = _tusk_cones(t, 1.0 if p.x >= 0.0 else -1.0)

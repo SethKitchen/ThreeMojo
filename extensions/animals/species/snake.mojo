@@ -49,6 +49,7 @@ from extensions.sdf.vector import (
     clamp,
     length,
     lerp,
+    mix,
     normalize,
     smoothstep,
 )
@@ -1297,7 +1298,7 @@ def snake_paint(
     var plated = not belly and sg < 1.2 * hl
     if plated:
         var plate = 0.0027 * kh if viper else 0.009 * kh
-        size = size + (plate - size) * (1.0 - hq)
+        size = mix(size, plate, 1.0 - hq)
         keel = keel * (0.5 + 0.5 * hq if viper else 1.0)
     var upper = n.y > -0.15 and p.y > 0.35 * hw
     var e = snake_eye(t)

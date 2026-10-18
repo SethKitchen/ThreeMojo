@@ -31,6 +31,7 @@ from extensions.sdf.vector import (
     V3,
     clamp,
     cross,
+    mix,
     normalize,
 )
 from math.norm import squared_length2
@@ -232,9 +233,9 @@ def fan_rays(
     var rays = List[Float64](capacity=n * 4)
     for i in range(n):
         var t = 0.0 if n == 1 else Float64(i) / Float64(n - 1)
-        var bu = base0_u + (base1_u - base0_u) * t
-        var bv = base0_v + (base1_v - base0_v) * t
-        var a = (angle0 + (angle1 - angle0) * t) * pi / 180.0
+        var bu = mix(base0_u, base1_u, t)
+        var bv = mix(base0_v, base1_v, t)
+        var a = mix(angle0, angle1, t) * pi / 180.0
         rays.append(bu)
         rays.append(bv)
         rays.append(bu + cos(a) * lengths[i])
@@ -290,8 +291,8 @@ def fin_outline(
             var tmv = (rays[i * 4 + 3] + rays[i * 4 + 7]) / 2.0
             var bmu = (rays[i * 4] + rays[i * 4 + 4]) / 2.0
             var bmv = (rays[i * 4 + 1] + rays[i * 4 + 5]) / 2.0
-            poly.append(tmu + (bmu - tmu) * notch)
-            poly.append(tmv + (bmv - tmv) * notch)
+            poly.append(mix(tmu, bmu, notch))
+            poly.append(mix(tmv, bmv, notch))
     poly.append(bnu - nx * sink)
     poly.append(bnv - ny * sink)
     return poly^

@@ -1116,7 +1116,7 @@ def _claw_point(
     var y = 0.0
     for i in range(n):  # pragma: no branch
         var u = (Float64(i) + 0.5) / Float64(n) * t
-        var th = th0 + (th1 - th0) * u
+        var th = mix(th0, th1, u)
         x += cos(th) * span * t / Float64(n)
         y -= sin(th) * span * t / Float64(n)
     return root + V3(sin(yaw), 0, cos(yaw)) * x + V3(0, y, 0)
@@ -1316,7 +1316,7 @@ def _agouti(coat: Int) -> V3:
 
 def _desat(c: V3, k: Float64) -> V3:
     var y = rec709_luminance(c.x, c.y, c.z)
-    return V3(c.x + (y - c.x) * k, c.y + (y - c.y) * k, c.z + (y - c.z) * k)
+    return V3(mix(c.x, y, k), mix(c.y, y, k), mix(c.z, y, k))
 
 
 def bear_palette(t: Traits) -> Palette:

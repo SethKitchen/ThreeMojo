@@ -1720,7 +1720,7 @@ def _locks(
             var jx = (R.next() - 0.5) * 0.05
             var jy = (R.next() - 0.5) * 0.05
             var jz = (R.next() - 0.5) * 0.05
-            p = pr.c + (pr.b - pr.c) * tt + V3(jx, jy, jz)
+            p = lerp(pr.c, pr.b, tt) + V3(jx, jy, jz)
         starts.append(p)
     # Each projection onto the fleece is independent: share them out.
     var projected = List[V3](length=tries, fill=V3(0.0, 0.0, 0.0))
