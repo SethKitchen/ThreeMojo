@@ -41,7 +41,7 @@ from core.layers import Layers
 from core.ordinal import require_index_in_count
 from core.scene import Scene
 from math.matrix4 import Matrix4, translation
-from math.utils import edge_index, mix_delta
+from math.utils import clamped_texel, mix_delta
 from math.projection import view_to_screen
 from math.smoothstep import smoothstep
 from math.vector2 import Vector2
@@ -242,12 +242,6 @@ comptime SMAA_MAX_DISTANCE_RIGHT = 2 * SMAA_MAX_SEARCH_STEPS
 comptime SMAA_SMOOTH_MAX_DISTANCE = Float32(32)
 
 
-def _clamped(x: Int, y: Int, width: Int, height: Int) -> Int:
-    """Return the index of a pixel, held inside the frame as a clamped
-    texture read holds it."""
-    return edge_index(y, height) * width + edge_index(x, width)
-
-
 struct EdgeMap(Movable):
     """Which pixels differ from the pixel to their left and from the pixel
     above: the red and green of SMAA's edges texture.
@@ -282,7 +276,7 @@ struct EdgeMap(Movable):
         Returns:
             True if the pixel differs from the one to its left.
         """
-        return self.left[_clamped(x, y, self.width, self.height)]
+        return self.left[clamped_texel(x, y, self.width, self.height)]
 
     def top_at(self, x: Int, y: Int) -> Bool:
         """Return whether a pixel has an edge above it.
@@ -294,7 +288,7 @@ struct EdgeMap(Movable):
         Returns:
             True if the pixel differs from the one above it.
         """
-        return self.top[_clamped(x, y, self.width, self.height)]
+        return self.top[clamped_texel(x, y, self.width, self.height)]
 
     def transposed(self) -> EdgeMap:
         """Return the map mirrored across its diagonal, so a column of left
@@ -344,12 +338,12 @@ def smaa_edges(colors: List[FloatColor], width: Int, height: Int) -> EdgeMap:
     while y < height:
         var x = 0
         while x < width:
-            var here = colors[_clamped(x, y, width, height)]
+            var here = colors[clamped_texel(x, y, width, height)]
             var to_left = _color_step(
-                here, colors[_clamped(x - 1, y, width, height)]
+                here, colors[clamped_texel(x - 1, y, width, height)]
             )
             var to_top = _color_step(
-                here, colors[_clamped(x, y - 1, width, height)]
+                here, colors[clamped_texel(x, y - 1, width, height)]
             )
             var left = to_left >= SMAA_THRESHOLD
             var top = to_top >= SMAA_THRESHOLD
@@ -359,10 +353,10 @@ def smaa_edges(colors: List[FloatColor], width: Int, height: Int) -> EdgeMap:
                     max(to_left, to_top),
                     max(
                         _color_step(
-                            here, colors[_clamped(x + 1, y, width, height)]
+                            here, colors[clamped_texel(x + 1, y, width, height)]
                         ),
                         _color_step(
-                            here, colors[_clamped(x, y + 1, width, height)]
+                            here, colors[clamped_texel(x, y + 1, width, height)]
                         ),
                     ),
                 )
@@ -370,10 +364,10 @@ def smaa_edges(colors: List[FloatColor], width: Int, height: Int) -> EdgeMap:
                     largest,
                     max(
                         _color_step(
-                            here, colors[_clamped(x - 2, y, width, height)]
+                            here, colors[clamped_texel(x - 2, y, width, height)]
                         ),
                         _color_step(
-                            here, colors[_clamped(x, y - 2, width, height)]
+                            here, colors[clamped_texel(x, y - 2, width, height)]
                         ),
                     ),
                 )
@@ -585,7 +579,7 @@ struct BlendWeights(Movable):
         Returns:
             The red, green, blue and alpha of SMAA's blend texture.
         """
-        return self.rgba[_clamped(x, y, self.width, self.height)]
+        return self.rgba[clamped_texel(x, y, self.width, self.height)]
 
 
 def smaa_weights(edges: EdgeMap) -> BlendWeights:
@@ -673,7 +667,7 @@ def smaa_blend(
                     # Up in `v` is up the frame, one row less.
                     oy = -1 if up > 0 else (1 if up < 0 else 0)
                 var here = colors[y * width + x]
-                var there = colors[_clamped(x + ox, y + oy, width, height)]
+                var there = colors[clamped_texel(x + ox, y + oy, width, height)]
                 out[y * width + x] = FloatColor(
                     _degamma(
                         mix_delta(_gamma(here.r), _gamma(there.r), amount)

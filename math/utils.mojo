@@ -95,6 +95,28 @@ def edge_index(index: Int, count: Int) -> Int:
     return clamp(index, 0, count - 1)
 
 
+def clamped_texel(column: Int, row: Int, width: Int, height: Int) -> Int:
+    """Return a texel's place in a row-major image, held inside the image.
+
+    A column or a row before zero reads the first place. One at the
+    width or the height, or past it, reads the last place.
+
+    Args:
+        column: The column.
+        row: The row.
+        width: How many columns. One or more.
+        height: How many rows. One or more.
+
+    Returns:
+        The place `row * width + column`, with both indexes held inside
+        the image.
+
+    Raises:
+        Error: Never.
+    """
+    return edge_index(row, height) * width + edge_index(column, width)
+
+
 def min3(x: Float32, y: Float32, z: Float32) -> Float32:
     """Return the smallest of three numbers.
 

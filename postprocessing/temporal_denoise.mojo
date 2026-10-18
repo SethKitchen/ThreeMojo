@@ -47,7 +47,7 @@ from math.norm import squared_length2
 from math.sine import fraction
 from math.smoothstep import smoothstep
 from math.vector2 import Vector2
-from math.utils import edge_index, mix_delta, saturate
+from math.utils import clamped_texel, edge_index, mix_delta, saturate
 from math.vector3 import Vector3, mix_delta3
 from postprocessing.display_nodes import exp_f, luminance_of
 from postprocessing.traa import variance_gamma
@@ -406,9 +406,7 @@ struct ReprojectInputs(Movable):
         Returns:
             The slot.
         """
-        return edge_index(y, self.height) * self.width + edge_index(
-            x, self.width
-        )
+        return clamped_texel(x, y, self.width, self.height)
 
 
 struct ReprojectCamera(ImplicitlyCopyable):
