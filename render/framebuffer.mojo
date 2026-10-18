@@ -671,6 +671,10 @@ struct FloatColor(Equatable, ImplicitlyCopyable):
         )
 
 
+# What a missing texture reads, and what a source with no map reads.
+comptime OPAQUE_WHITE = FloatColor(1.0, 1.0, 1.0, 1.0)
+
+
 def _to_byte(value: Float32) -> UInt8:
     """Return `value` in 0-1 as a rounded, clamped byte."""
     var scaled = value * 255 + 0.5

@@ -54,7 +54,7 @@ from materials.nodes import (
 from math.vector2 import Vector2
 from math.vector3 import Vector3
 from postprocessing.sampling import LightView, Untracked, u_of, v_of
-from render.framebuffer import FloatColor
+from render.framebuffer import FloatColor, OPAQUE_WHITE
 from render.target import RenderTarget
 from render.texture_store import TextureStore
 from render.texture import (
@@ -269,7 +269,7 @@ struct ScreenNodes(ImplicitlyCopyable, NodeSource):
                 .sample(u, v)
                 .unpremultiplied()
             )
-        return FloatColor(1, 1, 1, 1)
+        return OPAQUE_WHITE
 
     def _view(self, slot: Int) -> LightView:
         """Return the input image for `INPUT_SLOT` and the saved one for
@@ -341,7 +341,7 @@ struct ScreenNodes(ImplicitlyCopyable, NodeSource):
             The straight color; opaque white for a texture in the assets.
         """
         if slot != INPUT_SLOT and slot != SAVED_SLOT:
-            return FloatColor(1, 1, 1, 1)
+            return OPAQUE_WHITE
         var view = self._view(slot)
         var column = max(0, min(x, view.width - 1))
         var row = max(0, min(y, view.height - 1))

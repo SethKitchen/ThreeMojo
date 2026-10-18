@@ -100,7 +100,7 @@ from std.math import exp2
 from math.norm import length2, _ordinary_squared
 from math.matrix3 import Matrix3
 from math.vector2 import Vector2
-from render.framebuffer import Color, FloatColor, Framebuffer
+from render.framebuffer import Color, FloatColor, Framebuffer, OPAQUE_WHITE
 from render.png import DecodedImage
 from render.srgb import (
     LINEAR,
@@ -1562,7 +1562,7 @@ struct Texture(Movable):
             Error: If the texture is not blank and has no such level.
         """
         if self.is_blank():
-            return FloatColor(1.0, 1.0, 1.0, 1.0)
+            return OPAQUE_WHITE
         if not self._has_level(level):
             raise Error("No such mip level")
         return self._wrapped_texel(x, y, level)
@@ -1581,7 +1581,7 @@ struct Texture(Movable):
             The color there, or opaque white if the texture is blank.
         """
         if self.is_blank():
-            return FloatColor(1.0, 1.0, 1.0, 1.0)
+            return OPAQUE_WHITE
         var at = fetch_level(level, self.levels)
         return self._wrapped_texel(
             x, fetch_row(y, self.level_height(at), self.flip_y), at
@@ -1651,7 +1651,7 @@ struct Texture(Movable):
             Error: If the texture is not blank and has no such level.
         """
         if self.is_blank():
-            return FloatColor(1.0, 1.0, 1.0, 1.0)
+            return OPAQUE_WHITE
         if not self._has_level(level):
             raise Error("No such mip level")
         return self._sample_at(u, v, level, self.filter_at(level))
@@ -1679,7 +1679,7 @@ struct Texture(Movable):
         which `plan_levels` chose.
         """
         if self.is_blank():
-            return FloatColor(1.0, 1.0, 1.0, 1.0)
+            return OPAQUE_WHITE
         var wide = self.level_width(level)
         var tall = self.level_height(level)
         var from_top = row_coordinate(v, self.flip_y)
@@ -1795,7 +1795,7 @@ struct Texture(Movable):
         if not texture_grad_finite(u, v, dx, dy):
             return FloatColor(0, 0, 0, 0)
         if self.is_blank():
-            return FloatColor(1, 1, 1, 1)
+            return OPAQUE_WHITE
         var footprint = anisotropic_footprint(
             dx, dy, self.width, self.height, self.anisotropy
         )
@@ -1926,7 +1926,7 @@ struct Texture(Movable):
             The color found there, or opaque white if the texture is blank.
         """
         if self.is_blank():
-            return FloatColor(1.0, 1.0, 1.0, 1.0)
+            return OPAQUE_WHITE
 
         return self._sample_at(u, v, 0, self.mag_filter)
 

@@ -89,7 +89,7 @@ from render.pointrule import (
     mip_level_of,
 )
 from render.rect import Rect
-from render.framebuffer import Color, FloatColor, Framebuffer
+from render.framebuffer import Color, FloatColor, Framebuffer, OPAQUE_WHITE
 from render.target import (
     UNSIGNED_BYTE_TARGET,
     RenderTarget,
@@ -2365,17 +2365,17 @@ struct _DeviceCurve[origin: Origin[mut=True]](NodeSource):
 
     def sample(self, slot: Int, u: Float32, v: Float32) -> FloatColor:
         """Return opaque white: a curve reads no texture."""
-        return FloatColor(1, 1, 1, 1)
+        return OPAQUE_WHITE
 
     def sample_level(
         self, slot: Int, u: Float32, v: Float32, level: Float32
     ) -> FloatColor:
         """Return opaque white: a curve reads no texture."""
-        return FloatColor(1, 1, 1, 1)
+        return OPAQUE_WHITE
 
     def fetch(self, slot: Int, x: Int, y: Int, level: Int) -> FloatColor:
         """Return opaque white: a curve reads no texture."""
-        return FloatColor(1, 1, 1, 1)
+        return OPAQUE_WHITE
 
     def size(self, slot: Int, level: Int) -> SIMD[DType.float32, 4]:
         """Return zeros: a curve reads no texture."""

@@ -58,7 +58,7 @@ from materials.nodes import (
     run_nodes,
 )
 from math.vector3 import Vector3
-from render.framebuffer import FloatColor
+from render.framebuffer import FloatColor, OPAQUE_WHITE
 from std.math import exp2, isfinite, log2, max, min
 
 
@@ -429,7 +429,7 @@ struct ProgramCurve[origin: Origin[mut=False]](NodeSource):
         Returns:
             Opaque white, what a texture node reads where no texture opens.
         """
-        return FloatColor(1, 1, 1, 1)
+        return OPAQUE_WHITE
 
     def sample_level(
         self, slot: Int, u: Float32, v: Float32, level: Float32
@@ -445,7 +445,7 @@ struct ProgramCurve[origin: Origin[mut=False]](NodeSource):
         Returns:
             Opaque white.
         """
-        return FloatColor(1, 1, 1, 1)
+        return OPAQUE_WHITE
 
     def fetch(self, slot: Int, x: Int, y: Int, level: Int) -> FloatColor:
         """Return opaque white: a curve reads no texture.
@@ -459,7 +459,7 @@ struct ProgramCurve[origin: Origin[mut=False]](NodeSource):
         Returns:
             Opaque white.
         """
-        return FloatColor(1, 1, 1, 1)
+        return OPAQUE_WHITE
 
     def size(self, slot: Int, level: Int) -> SIMD[DType.float32, 4]:
         """Return zeros: a curve reads no texture.

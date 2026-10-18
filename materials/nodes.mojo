@@ -144,7 +144,7 @@ from math.smoothstep import smoothstep
 from math.vector2 import Vector2
 from math.vector3 import Vector3
 from math.vector4 import Vector4
-from render.framebuffer import Color, FloatColor
+from render.framebuffer import Color, FloatColor, OPAQUE_WHITE
 from render.cube_texture_store import NO_CUBE_TEXTURE, CubeTextureId
 from render.volume_texture_store import (
     NO_DATA_3D_TEXTURE,
@@ -6961,7 +6961,7 @@ trait NodeSource:
             The linear color, straight alpha. A source with no scene
             behind reads opaque white.
         """
-        return FloatColor(1.0, 1.0, 1.0, 1.0)
+        return OPAQUE_WHITE
 
     def point_coord(self, context: NodeContext) -> Lanes:
         """Return where a fragment is in its point, GLSL's `gl_PointCoord`:
@@ -6989,7 +6989,7 @@ trait NodeSource:
         Returns:
             The linear color, straight alpha.
         """
-        return FloatColor(1.0, 1.0, 1.0, 1.0)
+        return OPAQUE_WHITE
 
     def sample_3d(self, slot: Int, at: Vector3) -> FloatColor:
         """Return a 3D texture read at a coordinate, GLSL's `texture` of a
@@ -7003,7 +7003,7 @@ trait NodeSource:
         Returns:
             The linear color, straight alpha.
         """
-        return FloatColor(1.0, 1.0, 1.0, 1.0)
+        return OPAQUE_WHITE
 
     def sample_array(self, slot: Int, at: Vector3) -> FloatColor:
         """Return an array texture read at a coordinate and a layer,
@@ -7017,7 +7017,7 @@ trait NodeSource:
         Returns:
             The linear color, straight alpha.
         """
-        return FloatColor(1.0, 1.0, 1.0, 1.0)
+        return OPAQUE_WHITE
 
     def seen_from_behind(self) -> Bool:
         """Return whether the fragment's triangle is seen from its back,
@@ -7174,7 +7174,7 @@ struct ProgramSource[origin: Origin[mut=False]](Copyable, NodeSource):
         Returns:
             Opaque white.
         """
-        return FloatColor(1.0, 1.0, 1.0, 1.0)
+        return OPAQUE_WHITE
 
     def sample_level(
         self, slot: Int, u: Float32, v: Float32, level: Float32
@@ -7190,7 +7190,7 @@ struct ProgramSource[origin: Origin[mut=False]](Copyable, NodeSource):
         Returns:
             Opaque white.
         """
-        return FloatColor(1.0, 1.0, 1.0, 1.0)
+        return OPAQUE_WHITE
 
     def fetch(self, slot: Int, x: Int, y: Int, level: Int) -> FloatColor:
         """Return opaque white: there is no surface to read a texture on.
@@ -7204,7 +7204,7 @@ struct ProgramSource[origin: Origin[mut=False]](Copyable, NodeSource):
         Returns:
             Opaque white.
         """
-        return FloatColor(1.0, 1.0, 1.0, 1.0)
+        return OPAQUE_WHITE
 
     def size(self, slot: Int, level: Int) -> Lanes:
         """Return zeros: there is no texture here.
