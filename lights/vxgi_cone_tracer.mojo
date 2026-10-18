@@ -32,7 +32,7 @@ functions on the device, so the two agree.
 """
 
 from math.sine import fraction
-from math.utils import clamp
+from math.utils import clamp, interleaved_gradient_noise as _gradient_noise
 from math.vector3 import Vector3
 from std.math import cos, exp2, floor, log2, pow, sin, sqrt
 from std.memory import bitcast
@@ -607,10 +607,7 @@ def interleaved_gradient_noise(x: Float32, y: Float32) -> Float32:
     Returns:
         The noise, zero to one.
     """
-    return fract(
-        Float32(52.9829189)
-        * fract(x * Float32(0.06711056) + y * Float32(0.00583715))
-    )
+    return _gradient_noise(x, y)
 
 
 def tangent_frame(normal: Vector3) -> Tuple[Vector3, Vector3]:

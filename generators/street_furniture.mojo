@@ -42,7 +42,8 @@ from geometries.polyhedron import icosahedron
 from geometries.sphere import sphere
 from geometries.utils import merge_geometries, merge_vertices
 from math.matrix4 import Matrix4
-from std.math import floor, pi, sin, sqrt
+from math.sine import fraction
+from std.math import pi, sin, sqrt
 from units.si import Length, METER
 
 # A streetlight's parts.
@@ -670,7 +671,7 @@ def clump_hash(x: Float32, y: Float32, z: Float32) -> Float64:
         sin(Float64(x) * 127.1 + Float64(y) * 311.7 + Float64(z) * 74.7)
         * 43758.5453
     )
-    return s - floor(s)
+    return fraction(s)
 
 
 def leaf_clump(

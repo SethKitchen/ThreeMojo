@@ -24,6 +24,7 @@ from core.ordinal import ordinal_valid
 from math.quaternion import Quaternion
 from math.random import mulberry32_step
 from math.remainder import remainder_float64
+from math.sine import fraction
 from math.smoothstep import smoothstep
 from std.math import cos, exp, floor, isfinite, sin
 from std.memory import bitcast
@@ -103,6 +104,23 @@ def mix_delta(start: Float64, end: Float64, t: Float64) -> Float64:
         `start + (end - start) * t`.
     """
     return start + (end - start) * t
+
+
+def interleaved_gradient_noise(x: Float32, y: Float32) -> Float32:
+    """Return Jimenez's interleaved gradient noise.
+
+    three.js's `interleavedGradientNoise`: the fraction of `52.9829189`
+    times the fraction of `x * 0.06711056 + y * 0.00583715`.
+
+    Args:
+        x: The column, in pixels.
+        y: The row, in pixels.
+
+    Returns:
+        A number from zero up to one.
+    """
+    var inner = fraction(x * Float32(0.06711056) + y * Float32(0.00583715))
+    return fraction(Float32(52.9829189) * inner)
 
 
 def rec709_luminance(r: Float32, g: Float32, b: Float32) -> Float32:

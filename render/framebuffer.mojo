@@ -58,7 +58,8 @@ from render.srgb import (
     linear_to_srgb,
     srgb_to_linear,
 )
-from std.math import floor, inf
+from math.sine import fraction
+from std.math import inf
 from std.memory import bitcast
 
 
@@ -305,7 +306,7 @@ struct FloatColor(Equatable, ImplicitlyCopyable):
     ) -> FloatColor:
         """Return the color three numbers describe, in whatever space they
         are in: three.js's `setHSL` before its color conversion. Opaque."""
-        var h = hue - floor(hue)
+        var h = fraction(hue)
         var s = min(max(saturation, Float32(0)), Float32(1))
         var l = min(max(lightness, Float32(0)), Float32(1))
         var r = l

@@ -34,6 +34,7 @@ limits, and explicit zero and nonfinite rules.
 
 from math.norm import length2, squared_length2
 from math.smoothstep import clamped_smoothstep
+from math.utils import interleaved_gradient_noise as _gradient_noise
 
 from postprocessing.display_nodes import (
     exp_f,
@@ -45,7 +46,7 @@ from postprocessing.sampling import LightView, clamped_texel, u_of
 from postprocessing.screen_space import DepthView
 from render.framebuffer import FloatColor
 from render.target import RenderTarget
-from std.math import floor, isfinite, max, min, sin, sqrt
+from std.math import isfinite, max, min, sin, sqrt
 from units.si import Length, METER
 
 
@@ -203,10 +204,7 @@ def interleaved_gradient_noise(x: Float32, y: Float32) -> Float32:
     Returns:
         A number from zero up to one.
     """
-    var inner = x * Float32(0.06711056) + y * Float32(0.00583715)
-    inner = inner - floor(inner)
-    var outer = Float32(52.9829189) * inner
-    return outer - floor(outer)
+    return _gradient_noise(x, y)
 
 
 # --- CRT ---------------------------------------------------------------------

@@ -53,6 +53,7 @@ from extensions.sdf.vector import (
     smoothstep,
 )
 from math.norm import squared_length2
+from math.sine import fraction
 from std.math import atan2, floor, sin, sqrt
 from extensions.sdf.distance import rect_distance
 
@@ -1061,8 +1062,8 @@ def _scales(
     # adds a pale ridge down each scale.
     var q1 = (sg + across) / size
     var q2 = (sg - across) / size
-    var f1 = q1 - floor(q1)
-    var f2 = q2 - floor(q2)
+    var f1 = fraction(q1)
+    var f2 = fraction(q2)
     var seam = smoothstep(0.1, 0.0, min(min(f1, 1.0 - f1), min(f2, 1.0 - f2)))
     var rear = 0.5 * (f1 + f2)
     var ridge = smoothstep(0.12, 0.0, abs(f1 - f2)) * keel
@@ -1158,7 +1159,7 @@ def snake_paint(
         var rl = (total - s_vent) / 9.5
         var q = (sg - s_vent) / rl
         col = pal.get("ringW")
-        var f = q - floor(q)
+        var f = fraction(q)
         var odd = Int(floor(q)) % 2 == 1
         if odd:
             pat = -min(f, 1.0 - f) * rl
@@ -1427,7 +1428,7 @@ def snake_paint(
     if belly:
         # Wide ventral scutes: one transverse plate after another.
         var q = sg / scute
-        var f = q - floor(q)
+        var f = fraction(q)
         col = col * (0.88 + 0.14 * f - 0.12 * smoothstep(0.08, 0.0, f))
     else:
         # The relief fades onto the smooth head plates.

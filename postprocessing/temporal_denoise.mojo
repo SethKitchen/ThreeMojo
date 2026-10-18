@@ -43,6 +43,7 @@ from core.ordinal import ordinal_valid
 from render.color_math import floor_channels
 from math.matrix4 import Matrix4
 from math.norm import squared_length2
+from math.sine import fraction
 from math.smoothstep import smoothstep
 from math.vector2 import Vector2
 from math.vector3 import Vector3
@@ -729,8 +730,8 @@ def analytic_noise(x: Int, y: Int, index: Int) -> Float32:
     var at = Float32(index + NOISE_ROTATION_SEED)
     var ox = at * Float32(0.7548776662)
     var oy = at * Float32(0.5698402910)
-    var shift_x = floor((ox - floor(ox)) * 32)
-    var shift_y = floor((oy - floor(oy)) * 32)
+    var shift_x = floor(fraction(ox) * 32)
+    var shift_y = floor(fraction(oy) * 32)
     var cx = Float32(x) + shift_x
     var cy = Float32(y) + shift_y
     cx = cx - floor(cx / 32) * 32
@@ -742,7 +743,7 @@ def analytic_noise(x: Int, y: Int, index: Int) -> Float32:
         + Float32(NOISE_ROTATION_SEED)
     )
     var r = t * Float32(P) * Float32(1 / P)
-    return r - floor(r)
+    return fraction(r)
 
 
 def vogel_disk(index: Int, radius: Float32) -> Vector2:
