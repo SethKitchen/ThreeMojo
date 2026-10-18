@@ -47,7 +47,7 @@ from math.norm import squared_length2
 from math.sine import fraction
 from math.smoothstep import smoothstep
 from math.vector2 import Vector2
-from math.utils import mix_delta, saturate
+from math.utils import clamp, mix_delta, saturate
 from math.vector3 import Vector3, mix_delta3
 from postprocessing.display_nodes import exp_f, luminance_of
 from postprocessing.traa import variance_gamma
@@ -332,7 +332,7 @@ def clip_to_aabb(history: Vector3, low: Vector3, high: Vector3) -> Vector3:
 def _load(colors: LightView, x: Int, y: Int) -> FloatColor:
     """Return a texel, the edge texel's past the edge: `textureLoad`."""
     return colors.at(
-        min(max(x, 0), colors.width - 1), min(max(y, 0), colors.height - 1)
+        clamp(x, 0, colors.width - 1), clamp(y, 0, colors.height - 1)
     )
 
 
@@ -413,8 +413,8 @@ struct ReprojectInputs(Movable):
         Returns:
             The slot.
         """
-        return min(max(y, 0), self.height - 1) * self.width + min(
-            max(x, 0), self.width - 1
+        return clamp(y, 0, self.height - 1) * self.width + clamp(
+            x, 0, self.width - 1
         )
 
 
@@ -458,10 +458,10 @@ def _history_tap(
     var slot = inputs.slot(x, y)
     var color = floor_channels(inputs.history[slot])
     var depth = inputs.previous_depth[slot]
-    var u = (Float32(min(max(x, 0), inputs.width - 1)) + 0.5) / Float32(
+    var u = (Float32(clamp(x, 0, inputs.width - 1)) + 0.5) / Float32(
         inputs.width
     )
-    var v = (Float32(min(max(y, 0), inputs.height - 1)) + 0.5) / Float32(
+    var v = (Float32(clamp(y, 0, inputs.height - 1)) + 0.5) / Float32(
         inputs.height
     )
     var seen = view_position(u, v, depth, camera.previous_projection_inverse)
@@ -945,10 +945,8 @@ struct DenoiseInputs(Movable):
         Returns:
             The depth.
         """
-        var x = min(max(Int(floor(u * Float32(self.width))), 0), self.width - 1)
-        var y = min(
-            max(Int(floor(v * Float32(self.height))), 0), self.height - 1
-        )
+        var x = clamp(Int(floor(u * Float32(self.width))), 0, self.width - 1)
+        var y = clamp(Int(floor(v * Float32(self.height))), 0, self.height - 1)
         return self.depth[y * self.width + x]
 
     def normal(self, u: Float32, v: Float32) -> Vector3:

@@ -98,6 +98,7 @@ from core.extent import positive_extent
 from core.ordinal import ordinal_valid
 
 from math.finite import require_finite, require_finite_group
+from math.utils import clamp
 from std.math import exp2
 from math.norm import length2, _ordinary_squared, squared_length2
 from math.sine import fraction
@@ -794,7 +795,7 @@ def wrap_index(coordinate: Int, extent: Int, mode: Wrap) -> Int:
     if mode == CLAMP:
         # One statement and no decisions: every bilinear read makes four
         # of these calls, and a coverage run writes a record per statement.
-        return min(max(coordinate, 0), extent - 1)
+        return clamp(coordinate, 0, extent - 1)
 
     # Mojo's `%` is floored, as Python's is, so a negative coordinate already
     # comes back inside [0, extent) and needs no correcting afterwards: -1 % 4
