@@ -94,6 +94,38 @@ def _distances(path: List[Vector3], rings: Int) -> List[Float32]:
     return along^
 
 
+def require_tube_radius(radius: Length) raises:
+    """Refuse a tube radius that is not positive.
+
+    Args:
+        radius: The tube's radius.
+
+    Returns:
+        Nothing. The call returns when the radius is positive.
+
+    Raises:
+        Error: If the radius is zero or negative.
+    """
+    if radius.value <= 0:
+        raise Error("A tube needs a positive radius")
+
+
+def require_tube_segments(radial_segments: Int) raises:
+    """Refuse a tube with fewer than three segments around.
+
+    Args:
+        radial_segments: How many cells go around the tube.
+
+    Returns:
+        Nothing. The call returns when there are at least three.
+
+    Raises:
+        Error: If there are fewer than three.
+    """
+    if radial_segments < 3:
+        raise Error("A tube needs at least three segments around")
+
+
 def tube(
     path: List[Vector3],
     radius: Length,
@@ -132,10 +164,8 @@ def tube(
             continue
         if (path[next] - path[index]).length() == 0:
             raise Error("A tube's path cannot repeat a point")
-    if radius.value <= 0:
-        raise Error("A tube needs a positive radius")
-    if radial_segments < 3:
-        raise Error("A tube needs at least three segments around")
+    require_tube_radius(radius)
+    require_tube_segments(radial_segments)
 
     var rings = count
     if not closed:
@@ -183,10 +213,8 @@ def tube(
     """
     if tubular_segments < 1:
         raise Error("A tube needs at least one segment along it")
-    if radius.value <= 0:
-        raise Error("A tube needs a positive radius")
-    if radial_segments < 3:
-        raise Error("A tube needs at least three segments around")
+    require_tube_radius(radius)
+    require_tube_segments(radial_segments)
     var frames = curve.frenet_frames(tubular_segments, closed)
     var centers = curve.spaced_points(tubular_segments)
     if closed:

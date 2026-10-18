@@ -78,6 +78,22 @@ comptime DYNAMIC = BodyKind(1)
 comptime KINEMATIC = BodyKind(2)
 
 
+def require_body_kind(kind: BodyKind) raises:
+    """Refuse a body kind that is not named.
+
+    Args:
+        kind: The kind.
+
+    Returns:
+        Nothing. The call returns when the kind is named.
+
+    Raises:
+        Error: If the kind is not named.
+    """
+    if not kind.is_valid():
+        raise Error("Body kind is not valid")
+
+
 def rotation_matrix(q: Quaternion) -> Matrix3:
     """Return the 3x3 rotation of a unit quaternion.
 
@@ -230,8 +246,7 @@ struct RigidBody(Copyable, Movable):
             Error: If the kind is not valid, a mesh is not static, or a
                 dynamic body has no mass.
         """
-        if not kind.is_valid():
-            raise Error("Body kind is not valid")
+        require_body_kind(kind)
         if shape.kind == MESH and kind != STATIC:
             raise Error("A mesh body must be static")
         self._kind = kind
@@ -313,8 +328,7 @@ struct RigidBody(Copyable, Movable):
                 finite inverse tensor is invalid. Disabled effective
                 mass and inverse inertia must be zero.
         """
-        if not self._kind.is_valid():
-            raise Error("Body kind is not valid")
+        require_body_kind(self._kind)
         if self.shape.kind == MESH and self._kind != STATIC:
             raise Error("A mesh body must be static")
         if self._kind == DYNAMIC:
@@ -351,8 +365,7 @@ struct RigidBody(Copyable, Movable):
                 before disabling it when later restoration is needed.
         """
         self.validate()
-        if not kind.is_valid():
-            raise Error("Body kind is not valid")
+        require_body_kind(kind)
         if self.shape.kind == MESH and kind != STATIC:
             raise Error("A mesh body must be static")
         if kind == self._kind:

@@ -141,6 +141,22 @@ def require_shadow_type(shadow_type: ShadowMapType) raises:
         raise Error("A shadow map type that is none of the four")
 
 
+def require_shadow_size(size: Int) raises:
+    """Refuse a shadow map that is not at least one texel a side.
+
+    Args:
+        size: The map's width and height, in texels.
+
+    Returns:
+        Nothing. The call returns when the size is positive.
+
+    Raises:
+        Error: If the size is not positive.
+    """
+    if size <= 0:
+        raise Error("A shadow map must be at least one texel a side")
+
+
 # three.js's `LightShadow` defaults: a map five hundred and twelve texels
 # a side, no bias, one texel of blur, and eight blur samples for a
 # variance map.
@@ -464,8 +480,7 @@ struct ShadowMap(Copyable, LightSlot, Movable):
                 four, the depths do not fill the square, or two squares
                 under `VSM_SHADOW_MAP`, or the colors fill no square.
         """
-        if size <= 0:
-            raise Error("A shadow map must be at least one texel a side")
+        require_shadow_size(size)
         require_shadow_type(shadow_type)
         var squares = 1
         if shadow_type == VSM_SHADOW_MAP:
@@ -533,8 +548,7 @@ struct ShadowMap(Copyable, LightSlot, Movable):
                 four, the depths or the colors do not fill six squares, or
                 the far plane does not lie beyond the near plane.
         """
-        if size <= 0:
-            raise Error("A shadow map must be at least one texel a side")
+        require_shadow_size(size)
         require_shadow_type(shadow_type)
         if len(depths) != CUBE_FACES * size * size:
             raise Error("A point light's shadow must fill six square faces")

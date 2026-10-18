@@ -105,6 +105,22 @@ def require_blend_mode(blend_mode: AnimationBlendMode) raises:
         raise Error("A clip needs a blend mode that exists")
 
 
+def require_clip_duration(runs: Float32) raises:
+    """Refuse a clip that lasts no time.
+
+    Args:
+        runs: The clip's length, in seconds.
+
+    Returns:
+        Nothing. The call returns when the length is above zero.
+
+    Raises:
+        Error: If the length is zero or negative.
+    """
+    if runs <= 0:
+        raise Error("A clip must last longer than no time")
+
+
 struct AnimationClip(Copyable, Movable):
     """A named set of tracks, played as one."""
 
@@ -154,8 +170,7 @@ struct AnimationClip(Copyable, Movable):
             runs = duration.value().to(SECOND)
             if not isfinite(runs):
                 raise Error("A clip's duration must be a number")
-        if runs <= 0:
-            raise Error("A clip must last longer than no time")
+        require_clip_duration(runs)
         self.name = name
         self.tracks = tracks^
         self.blend_mode = blend_mode
@@ -187,8 +202,7 @@ struct AnimationClip(Copyable, Movable):
                 leave a clip of no length.
         """
         var runs = _longest(self.tracks)
-        if runs <= 0:
-            raise Error("A clip must last longer than no time")
+        require_clip_duration(runs)
         self.length = runs
 
     def trim(mut self) raises:

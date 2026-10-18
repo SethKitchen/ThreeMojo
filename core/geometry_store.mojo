@@ -71,6 +71,21 @@ struct GeometryStore(Movable):
         self.geometries.append(geometry^)
         return GeometryId(len(self.geometries) - 1)
 
+    def _require_geometry(self, id: GeometryId) raises:
+        """Refuse a geometry id the store does not have.
+
+        Args:
+            id: Which geometry.
+
+        Returns:
+            Nothing. The call returns when the id names a geometry.
+
+        Raises:
+            Error: If no geometry has that id.
+        """
+        if id.value < 0 or id.value >= len(self.geometries):
+            raise Error("No geometry has that id")
+
     def get(
         self, id: GeometryId
     ) raises -> ref[origin_of(self.geometries[0])] BufferGeometry:
@@ -89,8 +104,7 @@ struct GeometryStore(Movable):
         Raises:
             Error: If no geometry has that id.
         """
-        if id.value < 0 or id.value >= len(self.geometries):
-            raise Error("No geometry has that id")
+        self._require_geometry(id)
         return self.geometries[id.value]
 
     def replace(mut self, id: GeometryId, var geometry: BufferGeometry) raises:
@@ -106,6 +120,5 @@ struct GeometryStore(Movable):
         Raises:
             Error: If no geometry has that id.
         """
-        if id.value < 0 or id.value >= len(self.geometries):
-            raise Error("No geometry has that id")
+        self._require_geometry(id)
         self.geometries[id.value] = geometry^

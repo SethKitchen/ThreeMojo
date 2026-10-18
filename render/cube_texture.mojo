@@ -1004,6 +1004,22 @@ def validate_cube_uv(image: Texture) raises:
         raise Error("A PMREM's cube UV image is three tiles wide")
 
 
+def require_cube_images(count: Int) raises:
+    """Refuse a cube that is not built from six images.
+
+    Args:
+        count: How many images were given.
+
+    Returns:
+        Nothing. The call returns when there are six images.
+
+    Raises:
+        Error: If the count is not six.
+    """
+    if count != FACE_COUNT:
+        raise Error("A cube texture is built from exactly six images")
+
+
 def cube_texture_from(
     images: List[DecodedImage],
     layout: CubeLayout = SEEN_FROM_INSIDE,
@@ -1047,8 +1063,7 @@ def cube_texture_from(
             and none was given, or the faces are refused by
             `CubeTexture.validate`.
     """
-    if len(images) != FACE_COUNT:
-        raise Error("A cube texture is built from exactly six images")
+    require_cube_images(len(images))
     require_cube_layout(layout)
     var faces = List[Texture]()
     for index in range(FACE_COUNT):  # pragma: no branch
@@ -1104,8 +1119,7 @@ def cube_texture_of(
         Error: If there are not six images, or the faces are refused by
             `CubeTexture.validate`.
     """
-    if len(images) != FACE_COUNT:
-        raise Error("A cube texture is built from exactly six images")
+    require_cube_images(len(images))
     var faces = List[Texture]()
     for index in range(FACE_COUNT):  # pragma: no branch
         ref image = images[index]

@@ -376,6 +376,57 @@ comptime REPEAT = Loop(1)
 comptime PING_PONG = Loop(2)
 
 
+def require_loop(loop: Loop) raises:
+    """Refuse a loop mode that is not named.
+
+    Args:
+        loop: The mode.
+
+    Returns:
+        Nothing. The call returns when the mode is named.
+
+    Raises:
+        Error: If the mode is none of the three.
+    """
+    if not loop.is_valid():
+        raise Error("An action needs a loop mode that exists")
+
+
+def require_action_weight(weight: Float32) raises:
+    """Refuse an action weight that is negative or not a number.
+
+    Args:
+        weight: How much of the action goes into the pose.
+
+    Returns:
+        Nothing. The call returns when the weight is a number and not
+            negative.
+
+    Raises:
+        Error: If the weight is not a number, or if it is negative.
+    """
+    if not isfinite(weight):
+        raise Error("An action's weight must be a number")
+    if weight < 0:
+        raise Error("An action's weight cannot be negative")
+
+
+def require_action_time_scale(time_scale: Float32) raises:
+    """Refuse an action time scale that is not a number.
+
+    Args:
+        time_scale: How fast the action's clock runs.
+
+    Returns:
+        Nothing. The call returns when the time scale is a number.
+
+    Raises:
+        Error: If the time scale is not a number.
+    """
+    if not isfinite(time_scale):
+        raise Error("An action's time scale must be a number")
+
+
 @fieldwise_init
 struct AnimationEventKind(Equatable, ImplicitlyCopyable, Writable):
     """What happened to an action during an update, as a type rather than
@@ -1592,14 +1643,9 @@ struct AnimationAction(Copyable, Movable):
             Error: If the loop mode is none of the three, or the weight or
                 the time scale is negative or is not a number.
         """
-        if not loop.is_valid():
-            raise Error("An action needs a loop mode that exists")
-        if not isfinite(weight):
-            raise Error("An action's weight must be a number")
-        if weight < 0:
-            raise Error("An action's weight cannot be negative")
-        if not isfinite(time_scale):
-            raise Error("An action's time scale must be a number")
+        require_loop(loop)
+        require_action_weight(weight)
+        require_action_time_scale(time_scale)
         self.blend_mode = clip.blend_mode
         self.clip = clip^
         self.loop = loop
@@ -1730,8 +1776,7 @@ struct AnimationAction(Copyable, Movable):
             Error: If the loop mode is none of the three, or the
                 repetitions are below zero.
         """
-        if not loop.is_valid():
-            raise Error("An action needs a loop mode that exists")
+        require_loop(loop)
         if Bool(repetitions):
             if repetitions.value() < 0:
                 raise Error("An action cannot repeat fewer than zero times")
@@ -1806,10 +1851,7 @@ struct AnimationAction(Copyable, Movable):
         Raises:
             Error: If the weight is negative or is not a number.
         """
-        if not isfinite(weight):
-            raise Error("An action's weight must be a number")
-        if weight < 0:
-            raise Error("An action's weight cannot be negative")
+        require_action_weight(weight)
         self.weight = weight
 
     def set_effective_weight(mut self, weight: Float32) raises:
@@ -1846,8 +1888,7 @@ struct AnimationAction(Copyable, Movable):
         Raises:
             Error: If the time scale is not a number.
         """
-        if not isfinite(time_scale):
-            raise Error("An action's time scale must be a number")
+        require_action_time_scale(time_scale)
         self.time_scale = time_scale
         self.applied_time_scale = Float32(0) if self.paused else time_scale
         self.stop_warping()

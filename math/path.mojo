@@ -61,6 +61,22 @@ from math.vector2 import Vector2
 from units.si import Angle, Length, METER, RADIAN
 
 
+def require_path_divisions(divisions: Int) raises:
+    """Refuse a path asked for fewer than one division.
+
+    Args:
+        divisions: How many runs to cut a curve into.
+
+    Returns:
+        Nothing. The call returns when there is at least one division.
+
+    Raises:
+        Error: If divisions is less than one.
+    """
+    if divisions < 1:
+        raise Error("A path needs at least one division")
+
+
 def resolution_of(curve: Curve, divisions: Int) raises -> Int:
     """Return how many runs `Path.sample` cuts one curve into.
 
@@ -80,8 +96,7 @@ def resolution_of(curve: Curve, divisions: Int) raises -> Int:
             the per-curve resolution cannot fit in Int.
     """
     curve._validate()
-    if divisions < 1:
-        raise Error("A path needs at least one division")
+    require_path_divisions(divisions)
     if curve.kind == LINE:
         return 1
     if curve.kind == SPLINE:
@@ -419,8 +434,7 @@ struct Path(Copyable, Movable):
         """
         if len(self.curves) == 0:
             raise Error("A path with no curves has no points")
-        if divisions < 1:
-            raise Error("A path needs at least one division")
+        require_path_divisions(divisions)
         # Preflight the whole output before sampling any large first piece.
         var count = 1
         for index in range(len(self.curves)):  # pragma: no branch

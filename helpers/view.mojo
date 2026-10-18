@@ -89,6 +89,23 @@ comptime NEGATIVE_X = ViewAxis(3)
 comptime NEGATIVE_Y = ViewAxis(4)
 comptime NEGATIVE_Z = ViewAxis(5)
 
+
+def require_view_axis(axis: ViewAxis) raises:
+    """Refuse a view axis that is none of the six.
+
+    Args:
+        axis: The disk.
+
+    Returns:
+        Nothing. The call returns when the axis is named.
+
+    Raises:
+        Error: If the axis is none of the six.
+    """
+    if not axis.is_valid():
+        raise Error("A view axis that is none of the six")
+
+
 # How many pixels wide and tall the helper's square is, three.js's `dim`.
 comptime VIEW_HELPER_DIM = 128
 # How fast the camera turns toward an axis, three.js's `turnRate`: a full
@@ -118,8 +135,7 @@ def axis_direction(axis: ViewAxis) raises -> Vector3:
     Raises:
         Error: If the axis is none of the six.
     """
-    if not axis.is_valid():
-        raise Error("A view axis that is none of the six")
+    require_view_axis(axis)
     var directions: List[Vector3] = [
         Vector3(1, 0, 0),
         Vector3(0, 1, 0),
@@ -144,8 +160,7 @@ def axis_turn(axis: ViewAxis) raises -> Quaternion:
     Raises:
         Error: If the axis is none of the six.
     """
-    if not axis.is_valid():
-        raise Error("A view axis that is none of the six")
+    require_view_axis(axis)
     var half = Float32(pi * 0.5)
     var angles: List[Vector3] = [
         Vector3(0, half, 0),
