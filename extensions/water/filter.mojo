@@ -11,6 +11,7 @@ filter aliases. The level is the OpenGL choice: `log2` of the long texel
 derivative divided by the anisotropy.
 """
 
+from math.norm import squared_length2
 from std.math import log, sqrt
 
 
@@ -59,8 +60,8 @@ def anisotropic_step(
     var ay = dv_dx * height
     var bx = du_dy * width
     var by = dv_dy * height
-    var len_x = sqrt(ax * ax + ay * ay)
-    var len_y = sqrt(bx * bx + by * by)
+    var len_x = sqrt(squared_length2[DType.float32](ax, ay))
+    var len_y = sqrt(squared_length2[DType.float32](bx, by))
     var major = len_x
     var minor = len_y
     var du = du_dx

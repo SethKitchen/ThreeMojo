@@ -25,6 +25,7 @@ from extensions.water.spectrum import (
     clearwater_slope,
     evolve_spectrum,
 )
+from math.norm import squared_length2
 from std.math import floor
 from units.si import SECOND, Duration, Length
 
@@ -172,7 +173,7 @@ def resolve_surface(spatial: ComplexField) -> ComplexField:
             out.put(x, y, 0, h)
             out.put(x, y, 1, sx)
             out.put(x, y, 2, sz)
-            out.put(x, y, 3, sx * sx + sz * sz)
+            out.put(x, y, 3, squared_length2[DType.float32](sx, sz))
     return out^
 
 

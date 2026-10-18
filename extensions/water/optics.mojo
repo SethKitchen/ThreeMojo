@@ -17,7 +17,7 @@ from extensions.water.pebbles import (
 )
 from math.arc_tangent import atan2_float32
 from math.utils import clamp
-from math.norm import squared_length3
+from math.norm import squared_length2, squared_length3
 from math.sine import sin_float32
 from math.vector3 import Vector3
 from std.math import cos, exp, floor, fma, log, pow, sin, sqrt
@@ -192,7 +192,7 @@ def fresnel(cos_i: Float32, ior: Float32) -> Float32:
     var ct = sqrt(1.0 - st2)
     var rs = (ci - ior * ct) / (ci + ior * ct)
     var rp = (ior * ci - ct) / (ior * ci + ct)
-    return 0.5 * (rs * rs + rp * rp)
+    return 0.5 * squared_length2[DType.float32](rs, rp)
 
 
 @fieldwise_init
@@ -381,13 +381,13 @@ def sky_radiance(
     ridge += 0.002 * (value_noise(azimuth * 900.0, 3.0) - 0.5)
     var hx = x
     var hz = z
-    var hlen = sqrt(hx * hx + hz * hz)
+    var hlen = sqrt(squared_length2[DType.float32](hx, hz))
     if hlen > 1e-5:
         hx /= hlen
         hz /= hlen
     var sx = sun.x
     var sz = sun.z
-    var slen = sqrt(sx * sx + sz * sz)
+    var slen = sqrt(squared_length2[DType.float32](sx, sz))
     if slen > 1e-5:
         sx /= slen
         sz /= slen
