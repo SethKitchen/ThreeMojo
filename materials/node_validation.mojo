@@ -5,6 +5,7 @@
 
 """Validate serialized surface programs before either interpreter reads them."""
 
+from core.extent import require_closed_count
 from core.search import first_match
 from materials import nodes
 from math.finite import require_finite
@@ -151,10 +152,12 @@ def _integer_instruction(
         or kind == nodes.NODE_INT_SIGN
     )
     if width:
-        if immediate < 1 or immediate > 4:
-            raise Error(
-                "Object JSON: an integer instruction has an invalid immediate"
-            )
+        require_closed_count(
+            immediate,
+            1,
+            4,
+            "Object JSON: an integer instruction has an invalid immediate",
+        )
     elif immediate != 0:
         raise Error(
             "Object JSON: an integer instruction has an invalid immediate"
@@ -247,10 +250,12 @@ def validate_surface_program(program: nodes.NodeProgram) raises:
         raise Error("Object JSON: node attribute metadata lengths differ")
     for index in range(len(program.attribute_names)):
         var width = program.attribute_widths[index]
-        if width < 1 or width > 4:
-            raise Error(
-                "Object JSON: a node attribute width must be one through four"
-            )
+        require_closed_count(
+            width,
+            1,
+            4,
+            "Object JSON: a node attribute width must be one through four",
+        )
         _span(
             program.attribute_offsets[index],
             width,
@@ -399,10 +404,12 @@ def validate_surface_program(program: nodes.NodeProgram) raises:
                     )
             elif kind == nodes.NODE_ATTRIBUTE:
                 var width = immediate // 8
-                if width < 1 or width > 4:
-                    raise Error(
-                        "Object JSON: invalid node attribute instruction width"
-                    )
+                require_closed_count(
+                    width,
+                    1,
+                    4,
+                    "Object JSON: invalid node attribute instruction width",
+                )
                 _span(immediate % 8, width, 0, nodes.MAX_ATTRIBUTE_FLOATS)
             elif kind == nodes.NODE_JOIN:
                 var a = immediate % 5
@@ -423,11 +430,12 @@ def validate_surface_program(program: nodes.NodeProgram) raises:
                 or kind == nodes.NODE_REFRACT
                 or kind == nodes.NODE_FACEFORWARD
             ):
-                if immediate < 1 or immediate > 4:
-                    raise Error(
-                        "Object JSON: a node vector width must be one through"
-                        " four"
-                    )
+                require_closed_count(
+                    immediate,
+                    1,
+                    4,
+                    "Object JSON: a node vector width must be one through four",
+                )
             elif kind == nodes.NODE_NOISE or kind == nodes.NODE_NOISE_VEC3:
                 if immediate != 2 and immediate != 3:
                     raise Error(
