@@ -44,7 +44,14 @@ from core.layers import Layers
 from math.arc_tangent import atan2_float32
 from math.sine import fraction, noise_scale, sin_float32
 from math.smoothstep import clamped_smoothstep
-from math.utils import SeededRandom, clamp, glsl_mod, lerp, mix_delta
+from math.utils import (
+    SeededRandom,
+    clamp,
+    glsl_mod,
+    lerp,
+    mix_delta,
+    saturate,
+)
 from math.vector2 import Vector2
 from math.vector3 import Vector3
 from postprocessing.screen_space import DepthView, glsl_rand
@@ -1822,7 +1829,7 @@ def bokeh2_penta(pw: Float32, ph: Float32, rings: Int) -> Float32:
     inorout += clamped_smoothstep(
         -_FEATHER, _FEATHER, 0.309016994 * pw - 0.951056516 * ph + scale
     )
-    return min(max(inorout, Float32(0)), Float32(1))
+    return saturate(inorout)
 
 
 def _linearize(depth: Float32, znear: Float32, zfar: Float32) -> Float32:

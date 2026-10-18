@@ -47,7 +47,7 @@ from math.norm import squared_length2
 from math.sine import fraction
 from math.smoothstep import smoothstep
 from math.vector2 import Vector2
-from math.utils import mix_delta
+from math.utils import mix_delta, saturate
 from math.vector3 import Vector3, mix_delta3
 from postprocessing.display_nodes import exp_f, luminance_of
 from postprocessing.traa import variance_gamma
@@ -588,7 +588,7 @@ def stretch_confidence(inputs: ReprojectInputs, x: Int, y: Int) -> Float32:
     var fro2 = jx.x * jx.x + jx.y * jx.y + jy.x * jy.x + jy.y * jy.y
     var disc = sqrt(max(fro2 * fro2 * 0.25 - det * det, 0))
     var sig_min = sqrt(max(fro2 * 0.5 - disc, 0))
-    return min(max(sig_min, 0), 1)
+    return saturate(sig_min)
 
 
 def _dampened(color: FloatColor, flicker: Float32) -> Vector3:
