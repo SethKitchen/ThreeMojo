@@ -77,6 +77,23 @@ struct TagId(Equatable, ImplicitlyCopyable, Writable):
         return self.value >= 0
 
 
+def require_tag(id: TagId, count: Int) raises:
+    """Refuse a tag id this sculpt does not have.
+
+    Args:
+        id: The tag.
+        count: How many tags the sculpt has.
+
+    Returns:
+        Nothing. The call returns when the id names a tag.
+
+    Raises:
+        Error: If the id is negative or past the last tag.
+    """
+    if not id.is_valid() or id.value >= count:
+        raise Error("Tag id names no tag of this sculpt")
+
+
 @fieldwise_init
 struct SurfacePart(Equatable, ImplicitlyCopyable, Writable):
     """Which separate surface a primitive belongs to.

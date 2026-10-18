@@ -62,7 +62,7 @@ sRGB, and so does this: a decoded JPEG is `SRGB`.
 """
 
 from render.framebuffer import Color
-from render.png import MAX_PIXELS, DecodedImage
+from render.png import DecodedImage, require_image_pixels
 from render.srgb import SRGB
 from std.math import cos, floor, pi, sqrt
 
@@ -846,9 +846,8 @@ def _read_frame(
     if width == 0 or height == 0:
         raise Error("A JPEG file must have a width and a height")
     # Sixteen bits a dimension, so no dimension can pass the PNG reader's
-    # `MAX_DIMENSION`; the product can pass its `MAX_PIXELS`.
-    if width * height > MAX_PIXELS:
-        raise Error("Image has too many pixels")
+    # `MAX_DIMENSION`; the product can pass the PNG reader's pixel limit.
+    require_image_pixels(width, height)
     var count = Int(bytes[start + 5])
     if count != 1 and count != MAX_COMPONENTS:
         raise Error(

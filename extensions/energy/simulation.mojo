@@ -36,7 +36,13 @@ from extensions.energy.conduction import (
     LayeredWall,
     require_fourier,
 )
-from extensions.energy.ids import EXTERIOR, GROUND, INTERZONE, ZoneId
+from extensions.energy.ids import (
+    EXTERIOR,
+    GROUND,
+    INTERZONE,
+    ZoneId,
+    require_zone,
+)
 from extensions.energy.solar import (
     SurfaceOrientation,
     orientation,
@@ -186,8 +192,7 @@ struct SimulationResult(Movable):
         return step * self.zone_count + zone.value
 
     def _check_zone(self, zone: ZoneId) raises:
-        if not zone.is_valid() or zone.value >= self.zone_count:
-            raise Error("A zone id is out of range")
+        require_zone(zone, self.zone_count)
 
     def air_temperature(self, step: Int, zone: ZoneId) raises -> Temperature64:
         """Return a zone's air temperature at the end of a step.

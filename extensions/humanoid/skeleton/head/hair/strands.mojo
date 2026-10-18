@@ -37,7 +37,10 @@ from extensions.humanoid.skeleton.head.hair.groom import (
     groom_lines,
 )
 from extensions.humanoid.skeleton.head.hair.styles import GROWN, HairStyle
-from extensions.humanoid.skeleton.head.hair.density import HairDensity
+from extensions.humanoid.skeleton.head.hair.density import (
+    HairDensity,
+    require_hair_direction,
+)
 from extensions.humanoid.skeleton.head.hair.shading import (
     HairLight,
     HairLook,
@@ -189,8 +192,7 @@ struct HairStrands(Movable):
             self._optical_depths = List[Float32](length=depth_count, fill=0)
         for light in range(len(lights)):
             var d = lights[light].direction
-            if not d.is_finite():
-                raise Error("Hair optical depth needs a finite light direction")
+            require_hair_direction(d)
             if light == 0:
                 self.density.validate()
         if depth_count == 0:

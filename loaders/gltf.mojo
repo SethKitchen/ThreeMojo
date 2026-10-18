@@ -321,6 +321,28 @@ comptime COMPONENT_UNSIGNED_SHORT = 5123
 comptime COMPONENT_UNSIGNED_INT = 5125
 comptime COMPONENT_FLOAT = 5126
 
+
+def require_sparse_indices(index_type: Int) raises:
+    """Refuse a glTF sparse index type that is not an unsigned integer.
+
+    Args:
+        index_type: The accessor component type.
+
+    Returns:
+        Nothing. The call returns when the type is an unsigned byte, an
+            unsigned short, or an unsigned int.
+
+    Raises:
+        Error: If the type is not one of those three.
+    """
+    if (
+        index_type != COMPONENT_UNSIGNED_BYTE
+        and index_type != COMPONENT_UNSIGNED_SHORT
+        and index_type != COMPONENT_UNSIGNED_INT
+    ):
+        raise Error("glTF: sparse indices must be unsigned integers")
+
+
 # The primitive modes that are read: points, the three kinds of line, and
 # triangles. glTF names them by their GL constants.
 comptime MODE_POINTS = 0
@@ -1588,12 +1610,7 @@ struct _Loader(Movable):
         ):
             raise Error("glTF: sparse needs indices and values objects")
         var index_type = self.required_integer(indices, "componentType")
-        if (
-            index_type != COMPONENT_UNSIGNED_BYTE
-            and index_type != COMPONENT_UNSIGNED_SHORT
-            and index_type != COMPONENT_UNSIGNED_INT
-        ):
-            raise Error("glTF: sparse indices must be unsigned integers")
+        require_sparse_indices(index_type)
         var index_size = _component_size(index_type)
         var found = self.sparse_view(indices, changed * index_size, index_size)
         var occupied_size = offsets[width - 1] + _component_size(component)

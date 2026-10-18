@@ -204,6 +204,23 @@ comptime PROGRAM_TIME = NODE_OUTPUT_COUNT * 2
 comptime PROGRAM_VIEW = PROGRAM_TIME + 1
 comptime PROGRAM_HEADER = PROGRAM_VIEW + 16
 
+
+def require_program_code(size: Int) raises:
+    """Refuse a node program whose code is shorter than its header.
+
+    Args:
+        size: How many numbers the code holds.
+
+    Returns:
+        Nothing. The call returns when the code holds a header.
+
+    Raises:
+        Error: If the code is shorter than `PROGRAM_HEADER`.
+    """
+    if size < PROGRAM_HEADER:
+        raise Error("Object JSON: a node program's code is too short")
+
+
 comptime Lanes = SIMD[DType.float32, 4]
 
 

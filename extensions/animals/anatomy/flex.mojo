@@ -29,7 +29,7 @@ from extensions.animals.anatomy.muscles import AnimalMuscle
 from extensions.animals.build import Animal
 from extensions.animals.rig import Pose
 from extensions.sdf.field import SdfModel
-from extensions.sdf.ids import CONE, ELLIPSOID
+from extensions.sdf.ids import CONE, ELLIPSOID, require_tag
 from extensions.sdf.vector import V3, Rigid, dot, length
 from math.norm import squared_length2
 from std.math import pow, sqrt
@@ -87,8 +87,7 @@ def flexed(
     # index the rig or the tag table, including the direct flexed API.
     for p in model.prims:
         animal.rig.check(p.bone)
-        if not p.tag.is_valid() or p.tag.value >= len(model.tags):
-            raise Error("Tag id names no tag of this sculpt")
+        require_tag(p.tag, len(model.tags))
     for m in muscles:
         if len(m.bellies) == 0:
             continue

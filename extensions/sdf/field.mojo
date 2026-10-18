@@ -25,6 +25,7 @@ from extensions.sdf.ids import (
     TagId,
     require_part,
     require_kind,
+    require_tag,
 )
 from extensions.sdf.vector import (
     Rigid,
@@ -302,8 +303,7 @@ struct SdfModel(Movable):
         Raises:
             Error: If `id` names no tag of this sculpt.
         """
-        if not id.is_valid() or id.value >= len(self.tags):
-            raise Error("Tag id names no tag of this sculpt")
+        require_tag(id, len(self.tags))
         return self.tags[id.value]
 
     def _push(
@@ -861,8 +861,7 @@ struct SdfModel(Movable):
         for p in self.prims:
             require_kind(p.kind)
             require_part(p.part)
-            if not p.tag.is_valid() or p.tag.value >= len(self.tags):
-                raise Error("Tag id names no tag of this sculpt")
+            require_tag(p.tag, len(self.tags))
             if not p.bone.is_valid() or p.bone.value >= len(transforms):
                 raise Error("A primitive's bone has no transform")
             out.prims.append(p.moved(transforms[p.bone.value]))

@@ -73,6 +73,40 @@ struct CellId(Equatable, ImplicitlyCopyable, Writable):
         return self.value >= 0
 
 
+def require_face(id: FaceId, count: Int) raises:
+    """Refuse a face id that is not in range.
+
+    Args:
+        id: The face.
+        count: How many faces there are.
+
+    Returns:
+        Nothing. The call returns when the id names a face.
+
+    Raises:
+        Error: If the id is negative or past the last face.
+    """
+    if not id.is_valid() or id.value >= count:
+        raise Error("A face id is out of range")
+
+
+def require_cell(id: CellId, count: Int) raises:
+    """Refuse a cell id that is not in range.
+
+    Args:
+        id: The cell.
+        count: How many cells there are.
+
+    Returns:
+        Nothing. The call returns when the id names a cell.
+
+    Raises:
+        Error: If the id is negative or past the last cell.
+    """
+    if not id.is_valid() or id.value >= count:
+        raise Error("A cell id is out of range")
+
+
 @fieldwise_init
 struct RegionId(Equatable, ImplicitlyCopyable, Writable):
     """A caller's name for one input polygon of an arrangement."""

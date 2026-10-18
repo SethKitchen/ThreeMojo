@@ -36,7 +36,7 @@ from extensions.building.construction import (
     UPWARD_FLOW,
     inside_film,
 )
-from extensions.building.ids import ConstructionId
+from extensions.building.ids import ConstructionId, require_construction
 from extensions.building.kinds import SpaceUse, require_space_use
 from extensions.building.material import BuildingMaterial
 from extensions.building.model import Site
@@ -46,6 +46,7 @@ from extensions.energy.ids import (
     SurfaceId,
     WindowId,
     ZoneId,
+    require_zone,
 )
 from generators.utils import Vec3d
 
@@ -517,8 +518,7 @@ struct ZoneModel(Movable):
         Raises:
             Error: If it is negative or past the last zone.
         """
-        if not id.is_valid() or id.value >= len(self.zones):
-            raise Error("A zone id is out of range")
+        require_zone(id, len(self.zones))
 
     def check_surface(self, id: SurfaceId) raises:
         """Refuse a surface id that is not in range.
@@ -546,8 +546,7 @@ struct ZoneModel(Movable):
 
     def _check_surface(self, surface: Surface) raises:
         var c = surface.construction
-        if not c.is_valid() or c.value >= len(self.constructions):
-            raise Error("A construction id is out of range")
+        require_construction(c, len(self.constructions))
         if not surface.boundary.is_valid():
             raise Error("A boundary kind is not valid")
         self.check_zone(surface.inside)

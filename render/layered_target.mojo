@@ -43,6 +43,7 @@ from render.cube_texture import (
     CubeTexture,
     equirect_uv,
     face_direction,
+    require_equirect_texels,
 )
 from render.framebuffer import Color
 from render.rect import Rect
@@ -356,8 +357,7 @@ struct LayeredRenderTarget(Movable):
         if self.kind != TARGET_CUBE:
             raise Error("Only a cube target is filled from a panorama")
         panorama.validate()
-        if panorama.is_blank():
-            raise Error("An equirectangular image must hold texels")
+        require_equirect_texels(panorama)
         for face in range(FACE_COUNT):  # pragma: no branch
             for level in range(self.levels):  # pragma: no branch
                 ref held = self.images[face * self.levels + level]

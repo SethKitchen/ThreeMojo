@@ -22,7 +22,7 @@ both.
 from exporters.json_writer import JsonWriter
 from loaders.json import ARRAY, JsonDocument
 from materials import nodes
-from materials.nodes import PROGRAM_HEADER, NodeProgram, ValueType
+from materials.nodes import NodeProgram, ValueType, require_program_code
 from materials.node_validation import validate_surface_program
 from std.memory import bitcast
 
@@ -184,8 +184,7 @@ def read_node_program(
     var code = document.get(item, "codeBits" if exact else "code")
     if document.kind(code) != ARRAY:
         raise Error("Object JSON: a node program's code must be an array")
-    if document.length(code) < PROGRAM_HEADER:
-        raise Error("Object JSON: a node program's code is too short")
+    require_program_code(document.length(code))
     program.code = List[Float32](capacity=document.length(code))
     # At least a header, as asked above, so the loop runs.
     for index in range(document.length(code)):  # pragma: no branch

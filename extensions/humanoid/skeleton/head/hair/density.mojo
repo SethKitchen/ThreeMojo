@@ -20,6 +20,24 @@ from extensions.humanoid.skeleton.head.hair.groom import HairGroom
 from math.bounds import enclose_point
 from math.utils import max3
 from math.vector3 import Vector3
+
+
+def require_hair_direction(direction: Vector3) raises:
+    """Refuse a hair light direction that is not finite.
+
+    Args:
+        direction: The direction toward a distant light.
+
+    Returns:
+        Nothing. The call returns when the direction is finite.
+
+    Raises:
+        Error: If the direction is not finite.
+    """
+    if not direction.is_finite():
+        raise Error("Hair optical depth needs a finite light direction")
+
+
 from std.math import ceil, floor, isfinite, max
 from std.sys import size_of
 from units.si import Length, METER
@@ -202,8 +220,7 @@ struct HairDensity(Movable):
         """
         if not point.is_finite():
             raise Error("Hair optical depth needs a finite point")
-        if not direction.is_finite():
-            raise Error("Hair optical depth needs a finite light direction")
+        require_hair_direction(direction)
         self.validate()
         if not self.populated or self._slot(point) < 0:
             return 0

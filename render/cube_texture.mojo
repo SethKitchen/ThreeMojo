@@ -845,6 +845,22 @@ def face_direction(face: Int, x: Int, y: Int, size: Int) -> Vector3:
     return forward + right * across + up * upward
 
 
+def require_equirect_texels(image: Texture) raises:
+    """Refuse an equirectangular image that holds no texels.
+
+    Args:
+        image: The panorama.
+
+    Returns:
+        Nothing. The call returns when the image holds texels.
+
+    Raises:
+        Error: If the image is blank.
+    """
+    if image.is_blank():
+        raise Error("An equirectangular image must hold texels")
+
+
 def cube_from_equirectangular(
     image: Texture,
     size: Optional[Int] = None,
@@ -884,8 +900,7 @@ def cube_from_equirectangular(
             or the size is not positive.
     """
     image.validate()
-    if image.is_blank():
-        raise Error("An equirectangular image must hold texels")
+    require_equirect_texels(image)
     var edge = size.or_else(image.height)
     if edge <= 0:
         raise Error("A cube's faces must be at least one texel across")
