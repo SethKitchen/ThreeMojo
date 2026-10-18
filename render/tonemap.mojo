@@ -57,7 +57,7 @@ from materials.nodes import (
     has_output,
     run_nodes,
 )
-from math.utils import clamp
+from math.utils import saturate
 from math.vector3 import Vector3
 from render.framebuffer import FloatColor, OPAQUE_WHITE
 from std.math import exp2, isfinite, log2, max, min
@@ -129,11 +129,6 @@ def check_tone_mapping(mode: ToneMapping, exposure: Float32) raises:
         raise Error("A tone mapping exposure must be finite and not negative")
 
 
-def _saturate(value: Float32) -> Float32:
-    """Return `value` clamped to zero to one, GLSL's `saturate`."""
-    return clamp(value, 0, 1)
-
-
 def _pow(base: Float32, exponent: Float32) -> Float32:
     """Return `base` to `exponent` for a base of zero or more.
 
@@ -152,9 +147,9 @@ def _linear(
 ) -> FloatColor:
     """three.js's `LinearToneMapping`: the exposure, then the clamp."""
     return FloatColor(
-        _saturate(exposure * r),
-        _saturate(exposure * g),
-        _saturate(exposure * b),
+        saturate(exposure * r),
+        saturate(exposure * g),
+        saturate(exposure * b),
     )
 
 
@@ -166,9 +161,9 @@ def _reinhard(
     var eg = g * exposure
     var eb = b * exposure
     return FloatColor(
-        _saturate(er / (1 + er)),
-        _saturate(eg / (1 + eg)),
-        _saturate(eb / (1 + eb)),
+        saturate(er / (1 + er)),
+        saturate(eg / (1 + eg)),
+        saturate(eb / (1 + eb)),
     )
 
 
@@ -218,9 +213,9 @@ def _aces(r: Float32, g: Float32, b: Float32, exposure: Float32) -> FloatColor:
     var fg = _rrt_and_odt_fit(ig)
     var fb = _rrt_and_odt_fit(ib)
     return FloatColor(
-        _saturate(1.60475 * fr - 0.53108 * fg - 0.07367 * fb),
-        _saturate(-0.10208 * fr + 1.10813 * fg - 0.00605 * fb),
-        _saturate(-0.00327 * fr - 0.07276 * fg + 1.07602 * fb),
+        saturate(1.60475 * fr - 0.53108 * fg - 0.07367 * fb),
+        saturate(-0.10208 * fr + 1.10813 * fg - 0.00605 * fb),
+        saturate(-0.00327 * fr - 0.07276 * fg + 1.07602 * fb),
     )
 
 
@@ -249,7 +244,7 @@ def _agx_encode(value: Float32) -> Float32:
     """One channel's log2 encoding into zero to one, then the sigmoid."""
     var floored = max(value, Float32(1e-10))
     var ev = (log2(floored) - AGX_MIN_EV) / (AGX_MAX_EV - AGX_MIN_EV)
-    return _agx_contrast(_saturate(ev))
+    return _agx_contrast(saturate(ev))
 
 
 def _agx(r: Float32, g: Float32, b: Float32, exposure: Float32) -> FloatColor:
@@ -303,9 +298,9 @@ def _agx(r: Float32, g: Float32, b: Float32, exposure: Float32) -> FloatColor:
     var lb = _pow(max(Float32(0), xb), Float32(2.2))
     # LINEAR_REC2020_TO_LINEAR_SRGB.
     return FloatColor(
-        _saturate(1.6605 * lr - 0.5876 * lg - 0.0728 * lb),
-        _saturate(-0.1246 * lr + 1.1329 * lg - 0.0083 * lb),
-        _saturate(-0.0182 * lr - 0.1006 * lg + 1.1187 * lb),
+        saturate(1.6605 * lr - 0.5876 * lg - 0.0728 * lb),
+        saturate(-0.1246 * lr + 1.1329 * lg - 0.0083 * lb),
+        saturate(-0.0182 * lr - 0.1006 * lg + 1.1187 * lb),
     )
 
 

@@ -86,7 +86,7 @@ from lights.ltc import (
 )
 from lights.spot_profile import SpotProfile, needs_profile
 from math.smoothstep import smoothstep
-from math.utils import clamp
+from math.utils import clamp, saturate
 from math.spherical_harmonics3 import SphericalHarmonics3
 from math.vector2 import Vector2
 from math.cross import cross_vectors
@@ -455,11 +455,6 @@ def f_schlick(f0: Vector3, f90: Float32, cos_vh: Float32) -> Vector3:
     )
 
 
-def _saturated(value: Float32) -> Float32:
-    """Return `value` clamped to zero through one: GLSL's `saturate`."""
-    return clamp(value, 0, 1)
-
-
 def ggx(
     toward_light: Vector3,
     toward_eye: Vector3,
@@ -511,10 +506,10 @@ def ggx(
         return Vector3(0, 0, 0)
     half.normalize()
     var alpha = roughness * roughness
-    var dot_nl = _saturated(normal.dot(toward_light))
-    var dot_nv = _saturated(normal.dot(toward_eye))
-    var dot_nh = _saturated(normal.dot(half))
-    var dot_vh = _saturated(toward_eye.dot(half))
+    var dot_nl = saturate(normal.dot(toward_light))
+    var dot_nv = saturate(normal.dot(toward_eye))
+    var dot_nh = saturate(normal.dot(half))
+    var dot_vh = saturate(toward_eye.dot(half))
     if dot_nl == 0 or dot_nv == 0:
         return Vector3(0, 0, 0)
     var fresnel = f_schlick(f0, f90, dot_vh)
@@ -979,7 +974,7 @@ def specular_occlusion(
     """
     var base = max(Float32(0), dot_nv + occlusion)
     var power = exp2(exp2(-16 * roughness - 1) * log2(base))
-    return _saturated(power - 1 + occlusion)
+    return saturate(power - 1 + occlusion)
 
 
 def scattering_through(

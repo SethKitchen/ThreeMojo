@@ -36,7 +36,7 @@ This is not a three.js port. See Extensions.
 """
 
 from extensions.humanoid.skeleton.head.hair.groom import HairGroom
-from math.utils import clamp
+from math.utils import saturate
 from math.vector3 import Vector3
 from render.tasks import TaskGroup
 from std.math import exp, isfinite, log, max, min, pi, sqrt
@@ -103,19 +103,14 @@ def _times(a: Vector3, b: Vector3) -> Vector3:
     return Vector3(a.x * b.x, a.y * b.y, a.z * b.z)
 
 
-def _saturate(x: Float32) -> Float32:
-    """Return `x` held to zero through one."""
-    return clamp(x, 0, 1)
-
-
 def _cos_half(cos_angle: Float32) -> Float32:
     """Return the cosine of half an angle from the cosine of the whole."""
-    return sqrt(_saturate(Float32(0.5) + Float32(0.5) * cos_angle))
+    return sqrt(saturate(Float32(0.5) + Float32(0.5) * cos_angle))
 
 
 def _fresnel(cos_theta: Float32) -> Float32:
     """Return Schlick's Fresnel reflectance for hair."""
-    var m = 1 - _saturate(cos_theta)
+    var m = 1 - saturate(cos_theta)
     return HAIR_F0 + (1 - HAIR_F0) * m * m * m * m * m
 
 
@@ -187,7 +182,7 @@ def marschner(
         / (2 * max(cos_d, Float32(1e-3))),
     )
     var d_tt = exp(Float32(-3.65) * cos_phi - Float32(3.98))
-    var f_tt = _fresnel(cos_d * sqrt(_saturate(1 - h_tt * h_tt)))
+    var f_tt = _fresnel(cos_d * sqrt(saturate(1 - h_tt * h_tt)))
     result = result + t_tt * (
         look.weight_tt * m_tt * (1 - f_tt) * (1 - f_tt) * d_tt
     )
@@ -247,7 +242,7 @@ def scattered(
     var length = n.length()
     if length > Float32(1e-6):
         n = n / length
-    var wrap = (_saturate(n.dot(to_light)) + 1) / Float32(4 * pi)
+    var wrap = (saturate(n.dot(to_light)) + 1) / Float32(4 * pi)
     return Vector3(sqrt(color.x), sqrt(color.y), sqrt(color.z)) * wrap
 
 
@@ -343,7 +338,7 @@ def _shade_strands(
                 var light = lights[l]
                 # The head shades the hair on its far side; the hair
                 # over a strand shades it by its depth.
-                var facing = _saturate(
+                var facing = saturate(
                     (n.dot(light.direction) + Float32(0.3)) * 2
                 )
                 var transmission = buried
