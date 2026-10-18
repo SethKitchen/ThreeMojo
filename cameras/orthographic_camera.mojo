@@ -33,6 +33,7 @@ width and height about its center, and a view offset cuts one tile of a
 larger image out of the zoomed box, as `updateProjectionMatrix` cuts it.
 """
 
+from math.finite import positive_finite
 from std.math import isfinite
 from cameras.camera import (
     Camera,
@@ -140,7 +141,7 @@ struct OrthographicCamera(Camera):
         if self.top.value <= self.bottom.value:
             raise Error("The view volume needs top above bottom")
         require_far_beyond_near(self.near.value, self.far.value)
-        if not (self.zoom > 0 and isfinite(self.zoom)):
+        if not positive_finite(Float64(self.zoom)):
             raise Error(
                 "An orthographic zoom must be positive, got ", self.zoom
             )
@@ -328,9 +329,9 @@ def centered(
         Error: If the height or aspect is not positive, or the clipping
             planes are unusable.
     """
-    if not (height.value > 0 and isfinite(height.value)):
+    if not positive_finite(Float64(height.value)):
         raise Error("The visible height must be positive")
-    if not (aspect > 0 and isfinite(aspect)):
+    if not positive_finite(Float64(aspect)):
         raise Error("The aspect ratio must be positive")
     var half = height.value / 2
     var wide = half * aspect

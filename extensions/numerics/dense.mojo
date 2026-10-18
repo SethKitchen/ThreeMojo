@@ -22,6 +22,7 @@ See Golub and Van Loan, "Matrix Computations" (4th edition, 2013),
 sections 3.4, 4.2 and 8.5.
 """
 
+from math.finite import positive_finite
 from std.math import isfinite, sqrt
 from extensions.numerics.vector import require_row_count, zeros
 
@@ -272,7 +273,7 @@ def cholesky(a: DenseMatrix) raises -> DenseMatrix:
         var diagonal = a.get(j, j)
         for k in range(j):
             diagonal -= l.get(j, k) * l.get(j, k)
-        if not (diagonal > 0 and isfinite(diagonal)):
+        if not positive_finite(diagonal):
             raise Error("The matrix is not positive definite")
         var root = sqrt(diagonal)
         l.set(j, j, root)

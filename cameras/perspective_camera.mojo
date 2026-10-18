@@ -47,6 +47,7 @@ from cameras.camera import (
 from core.layers import Layers
 from core.object3d import NO_PARENT, NodeId
 from core.scene import Scene
+from math.finite import positive_finite
 from math.matrix4 import Matrix4
 from math.projection import perspective, view_to_screen
 from math.vector2 import Vector2
@@ -74,7 +75,7 @@ struct ViewBounds(ImplicitlyCopyable):
 
 def _positive(value: Float32) -> Bool:
     """Return True if a number is finite and above zero."""
-    return value > 0 and isfinite(value)
+    return positive_finite(Float64(value))
 
 
 def require_film_gauge(gauge: Float32) raises:

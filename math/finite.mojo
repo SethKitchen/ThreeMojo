@@ -24,7 +24,7 @@ def require_positive_tolerance(value: Float64) raises:
     Raises:
         Error: If the tolerance is not positive and finite.
     """
-    if not (value > 0 and isfinite(value)):
+    if not positive_finite(value):
         raise Error("A tolerance must be positive and finite")
 
 

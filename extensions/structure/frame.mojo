@@ -20,6 +20,7 @@ Structural Analysis", 1968, sections 5.6 and 11.3. The element has no
 shear deformation and no end releases.
 """
 
+from math.finite import positive_finite
 from std.math import isfinite
 from extensions.building.material import BuildingMaterial
 from extensions.building.model import Section
@@ -136,7 +137,7 @@ def require_member_length(length: Float64) raises:
     Raises:
         Error: If the length is not positive and finite.
     """
-    if not (length > 0 and isfinite(length)):
+    if not positive_finite(length):
         raise Error("A member length must be positive and finite")
 
 
