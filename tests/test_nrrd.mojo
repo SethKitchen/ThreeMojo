@@ -342,6 +342,24 @@ def test_text_is_read_as_three_js_reads_each_type() raises:
     _same(hex.data, [255, 65535, 0, 16])
 
 
+def test_decimal_words_stop_before_hexadecimal_digits() raises:
+    var words = List[UInt8](String("12a 12 12/").as_bytes())
+    var decimal = parse_nrrd(
+        _file(
+            "NRRD1\nsizes: 3\nencoding: ascii\ntype: ushort\nx: y\n\n",
+            words,
+        )
+    )
+    _same(decimal.data, [12, 12, 12])
+    var hexadecimal = parse_nrrd(
+        _file(
+            "NRRD1\nsizes: 3\nencoding: hex\ntype: ushort\nx: y\n\n",
+            words,
+        )
+    )
+    _same(hexadecimal.data, [298, 18, 18])
+
+
 def _same(got: List[Float64], want: List[Float64]) raises:
     """Assert two lists of numbers are equal.
 

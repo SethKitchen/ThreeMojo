@@ -10,7 +10,7 @@ from loaders.gltf import _Loader
 from loaders.json import parse_json
 from loaders.lut_cube import _number as lut_number
 from loaders.text_number import read_finite_float32
-from std.testing import TestSuite, assert_equal
+from std.testing import TestSuite, assert_equal, assert_true
 
 
 def test_lut_invalid_number_does_not_append_parser_exception() raises:
@@ -27,6 +27,25 @@ def test_lut_invalid_number_does_not_append_parser_exception() raises:
         seen = String(reason)
     assert_equal(seen, "LUT line 8: a number must be finite: 1e100")
     assert_equal(lut_number("0.25", 9), Float32(0.25))
+
+
+def test_shared_number_error_preserves_the_parser_reason() raises:
+    for field in [String("bad"), String("")]:
+        var parser_reason = String()
+        try:
+            _ = Float64(field)
+        except reason:
+            parser_reason = String(reason)
+        assert_true(parser_reason.byte_length() > 0)
+        var seen = String()
+        try:
+            _ = read_finite_float32(field, "OBJ line 7: ", "finite required")
+        except reason:
+            seen = String(reason)
+        assert_equal(
+            seen,
+            "OBJ line 7: not a number: " + field + " (" + parser_reason + ")",
+        )
 
 
 def test_shared_narrowing_keeps_finite_failure_text() raises:

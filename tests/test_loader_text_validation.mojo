@@ -24,6 +24,22 @@ from loaders.draco import _metadata_name, decode_draco
 from loaders.draco_buffer import DracoBuffer
 from loaders.vtk import parse_vtk
 from loaders.ultrahdr import parse_ultrahdr, XMP_NAMESPACE
+from loaders.utf8 import leading_utf8_bom
+
+
+def test_only_the_complete_utf8_byte_order_mark_is_skipped() raises:
+    var mark: List[UInt8] = [0xEF, 0xBB, 0xBF]
+    assert_equal(leading_utf8_bom(Span(mark)), 3)
+    var cases: List[List[UInt8]] = [
+        [],
+        [0xEF],
+        [0xEF, 0xBB],
+        [0xEE, 0xBB, 0xBF],
+        [0xEF, 0xBA, 0xBF],
+        [0xEF, 0xBB, 0xBE],
+    ]
+    for bytes in cases:
+        assert_equal(leading_utf8_bom(Span(bytes)), 0)
 
 
 def invalid_sequences() -> List[List[UInt8]]:

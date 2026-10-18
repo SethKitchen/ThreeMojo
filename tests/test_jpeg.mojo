@@ -19,6 +19,7 @@ from render.framebuffer import Color
 from render.jpeg import (
     BLOCK_SAMPLES,
     _BorrowedBitReader as BitReader,
+    BitReader as OwnedBitReader,
     HuffmanTable,
     clamp_sample,
     cosine_table,
@@ -335,6 +336,22 @@ def test_a_huffman_table_is_checked_as_it_is_built() raises:
     var wrong = BitReader(Span(stuffed), 0)
     with assert_raises():
         _ = wrong.decode(table)
+
+
+def test_public_jpeg_huffman_reuses_buffered_bits() raises:
+    var counts = List[Int](length=16, fill=0)
+    counts[0] = 2
+    var table = HuffmanTable(counts, [UInt8(7), UInt8(9)])
+    var bytes: List[UInt8] = [0b01000000, 0, 0, 0xFF, 0xD9]
+    var reader = OwnedBitReader(bytes^, 0)
+    assert_equal(reader.decode(table), UInt8(7))
+    assert_equal(reader.count, 23)
+    assert_equal(reader.at, 3)
+    # The second code is already buffered, so it must not refill or lose
+    # its position before the end marker.
+    assert_equal(reader.decode(table), UInt8(9))
+    assert_equal(reader.count, 22)
+    assert_equal(reader.at, 3)
 
 
 # --- files libjpeg wrote ----------------------------------------------------

@@ -236,8 +236,8 @@ struct ComputeNodes(ImplicitlyCopyable, NodeSource):
             Wrap(Int(self.wraps[unsafe_offset=slot * 2])),
             Wrap(Int(self.wraps[unsafe_offset=slot * 2 + 1])),
         )
-        if not placed.ready:
-            return TRANSPARENT_BLACK
+        # The same finite predicate above makes placement ready. Keep that
+        # check before reading the wrap pointers, including for empty backing.
         return self.sample(slot, placed.u, placed.v)
 
     def fetch(self, slot: Int, x: Int, y: Int, level: Int) -> FloatColor:

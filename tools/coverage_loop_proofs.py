@@ -21,6 +21,7 @@ import shlex
 import shutil
 import sys
 import tokenize
+import types
 
 import cache_key
 import coverage_toolchain_identity
@@ -1576,8 +1577,16 @@ def _reviewed_dependency_hashes(root, bindings, *, include_roots=(), _operation=
                     provider_raw[package] = value
                     providers[package] = expected_package
                 resolver_paths = {name, *providers}
-                if not all(cleanup.resolver_unshadowed(location, resolver_paths)
-                           for location in (root, *include_roots)):
+                def resolver_ok():
+                    # Source coordinates remain strict. Only include roots can
+                    # contain these exact provider origin sidecars; the receipt
+                    # owner authenticates their set and bytes before dispatch
+                    # and again before the generated proof can escape.
+                    return cleanup.resolver_unshadowed(root, resolver_paths) and all(
+                        cleanup.resolver_unshadowed(location, resolver_paths | {
+                            path + '.cov-origin' for path in resolver_paths})
+                        for location in include_roots)
+                if not resolver_ok():
                     return None
                 for provider, value in provider_raw.items():
                     if _coverage_observe_bytes(root, provider,
@@ -1591,9 +1600,23 @@ def _reviewed_dependency_hashes(root, bindings, *, include_roots=(), _operation=
                         relative_source(root, leaf, **operation_args).read_bytes(),
                         _operation=_operation) != leaf_raw
                         or cleanup.executing_checker_bindings() != executing
-                        or not all(cleanup.resolver_unshadowed(location, resolver_paths)
-                                   for location in (root, *include_roots))):
+                        or not resolver_ok()):
                     return None
+                if _operation is not None:
+                    # Keep this local theorem's consumed resolver premises in
+                    # the generated owner's final physical sweep as well.
+                    observed = (_operation._raw.keys() if _operation._state == 'active' else
+                        {path for location, path, value, mode in _operation._receipt_observations
+                         if location == _operation._root})
+                    cleanup.require(resolver_paths <= observed,
+                                    'local helper resolver inputs were not observed')
+                    _operation._resolver_paths = frozenset(
+                        _operation._resolver_paths | resolver_paths)
+                    if _operation._state == 'pending':
+                        cleanup.require(not _operation._executing
+                                        or dict(_operation._executing) == executing,
+                                        'local helper checker image changed')
+                        _operation._executing = types.MappingProxyType(dict(executing))
                 actual.update(providers)
                 actual[leaf] = executing[leaf]
                 actual[name] = physical_digest
