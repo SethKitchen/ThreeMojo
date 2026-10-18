@@ -1,0 +1,507 @@
+<!doctype html>
+<!--
+  Copyright (c) 2026 Seth Kitchen, PE
+  SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
+  Noncommercial use is free; commercial use requires a paid license.
+  See LICENSE, LICENSE-COMMERCIAL.md and THIRD-PARTY-NOTICES.md.
+
+  ThreeMojo in a browser: the WebAssembly build of the C ABI draws, and this
+  page supplies the canvas, the events and the clock, as the macOS host does.
+  Serve this folder over HTTP (run.sh web does), and open it.
+
+    ?app=core    which module to load: threemojo_<app>.wasm (core, water or splat)
+    ?w=480&h=320 the size of the frame, in pixels. Without it, the water picks
+                 the largest frame that it can draw at 30 frames a second
+    ?threads=N   the workers of the water, or 0 for one thread
+    ?gpu=0       draw on the CPU, even where the browser has WebGPU
+
+  A browser with WebGPU draws the water on its GPU: the module keeps the
+  simulation, the ocean surface, the caustics and the glare's small FFT, and
+  water.wgsl shades the frame. The frame is then 1280 by 720 pixels, and a
+  frame takes about ten milliseconds. The page falls back to the CPU when the
+  browser has no WebGPU, or the GPU does not take the shader, and says why.
+
+  The splat app is the three.js example webgpu_gaussian_splat with its tomato
+  scan: 445,409 Gaussian splats. The module keeps the scan and the orbit
+  controls and sorts the splats back to front. The browser's WebGPU projects
+  and shades every splat, and blends them: splat.wgsl. The page fetches the
+  scan, tomatoes.v4.spz, and gives it to the module. Without WebGPU the module
+  draws a small frame on the CPU, a few frames a second at most.
+
+  On the CPU the water draws on a pool of Web Workers that share memory, and
+  then it draws a frame in tens of milliseconds. A page can share memory only
+  when it is cross-origin isolated: serve.py sends the headers that make it
+  so. Any other server gets the module for one thread, which is about eight
+  times slower, and the page says so.
+-->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ThreeMojo C ABI</title>
+<style>
+  :root {
+    --bg: #101216;
+    --fg: #e8eaed;
+    --muted: #9aa0a6;
+    --panel: rgba(0, 0, 0, 0.62);
+    --accent: #7cc4ff;
+  }
+  @media (prefers-color-scheme: light) {
+    :root { --bg: #f4f5f7; --fg: #1c1e21; --muted: #5f6368; --accent: #0b63b6; }
+  }
+  html, body { margin: 0; height: 100%; background: var(--bg); color: var(--fg);
+    font: 14px/1.4 system-ui, sans-serif; }
+  main { min-height: 100%; display: grid; place-items: center; padding: 16px; box-sizing: border-box; }
+  figure { margin: 0; position: relative; max-width: 100%; }
+  canvas { display: block; width: min(960px, calc(100vw - 32px)); height: auto;
+    background: #000; touch-action: none; outline: none; }
+  canvas.crisp { image-rendering: pixelated; }
+  #controls { display: flex; flex-wrap: wrap; gap: 8px 16px; align-items: center; margin-top: 8px;
+    color: var(--muted); font-size: 12px; }
+  #controls select { font: inherit; }
+  #hud { position: absolute; left: 8px; top: 8px; margin: 0; padding: 6px 8px; border-radius: 4px;
+    background: var(--panel); color: #fff; font: 12px/1.35 ui-monospace, Menlo, Consolas, monospace;
+    pointer-events: none; white-space: pre; }
+  figcaption { margin-top: 8px; color: var(--muted); font-size: 12px; }
+  #error { color: #ff8a80; max-width: 40em; }
+  a { color: var(--accent); }
+  kbd { font: inherit; border: 1px solid var(--muted); border-radius: 3px; padding: 0 4px; }
+</style>
+</head>
+<body>
+<main>
+  <p id="error" hidden></p>
+  <figure id="stage" hidden>
+    <canvas id="screen" tabindex="0"></canvas>
+    <pre id="hud"></pre>
+    <div id="controls">
+      <label>Frame size <select id="size"></select></label>
+      <label><input type="checkbox" id="smooth" checked> Smooth</label>
+    </div>
+    <figcaption id="help"></figcaption>
+  </figure>
+</main>
+<script type="module">
+import { Button, Key, Kind, load, loadThreads } from "./threemojo.js";
+
+const params = new URLSearchParams(location.search);
+const name = (params.get("app") ?? "core").replace(/[^a-z_]/g, "");
+// What each module is, and the file that it asks the page for. `size` is the
+// default frame, and `threaded` is the default when the module can use workers.
+const APPS = {
+  core: {
+    size: [480, 320],
+    sizes: [[240, 160], [480, 320], [960, 640]],
+    help: "Move or drag over the frame. Space pauses.",
+  },
+  water: {
+    size: [192, 108],
+    threaded: [320, 180],
+    sizes: [[128, 72], [160, 90], [192, 108], [256, 144], [320, 180], [400, 225], [480, 270], [640, 360], [800, 450], [960, 540]],
+    adapt: true,
+    asset: "pebbles.jpg",
+    // What the page uses instead when it draws on a GPU. There is no Auto:
+    // every size on the list takes less than 33 ms.
+    gpu: {
+      driver: "water_gpu.js",
+      shader: "water.wgsl",
+      size: [1280, 720],
+      sizes: [[640, 360], [960, 540], [1280, 720], [1600, 900], [1920, 1080]],
+      threaded: null,
+      adapt: false,
+    },
+    help: "Press to drop a pebble in. Drag up or down to tilt the camera. Space pauses.",
+  },
+  splat: {
+    size: [160, 90],
+    sizes: [[96, 54], [128, 72], [160, 90], [192, 108], [256, 144]],
+    asset: "tomatoes.v4.spz",
+    // The module keeps the scan when the size changes: a new app would read it again.
+    resizable: true,
+    gpu: {
+      driver: "splat_gpu.js",
+      shader: "splat.wgsl",
+      size: [1280, 720],
+      sizes: [[640, 360], [960, 540], [1280, 720], [1600, 900], [1920, 1080], [2560, 1440]],
+      threaded: null,
+      adapt: false,
+    },
+    help: "Drag to orbit. Drag with the right button to pan. Scroll to zoom. Space stops the turn. " +
+      "Scan: Grail, CC BY 4.0.",
+  },
+};
+let app_info = APPS[name] ?? { size: [480, 320], sizes: [[480, 320]], help: "" };
+const side = (key, fallback) => {
+  const value = parseInt(params.get(key) ?? "", 10);
+  return Number.isFinite(value) && value > 0 ? value : fallback;
+};
+const LONGEST_STEP_MS = 100;
+const NOTCH_PIXELS = 100;
+// The size adapts so that a frame takes this long (30 frames a second), and a
+// frame that takes more than the limit sends the size down.
+const BUDGET_MS = 33;
+const LIMIT_MS = 42;
+const WARM_UP_WINDOWS = 2;
+
+const canvas = document.getElementById("screen");
+const hud = document.getElementById("hud");
+const failure = document.getElementById("error");
+const sizes = document.getElementById("size");
+const smooth = document.getElementById("smooth");
+
+function fail(message) {
+  failure.hidden = false;
+  failure.textContent = message;
+}
+
+// A browser with WebGPU draws on the device. The module then runs on one
+// thread, because the GPU does the work that the threads would do. Try it
+// first, and compile the shader now, so that a failure sends the page back to
+// the CPU before the canvas has taken a WebGPU context, which it cannot lose.
+let why = "";
+let library;
+let gpu = null;
+let shader = "";
+let gpuApp = null;
+let GpuApp = null;
+if (app_info.gpu && params.get("gpu") !== "0") {
+  try {
+    const driver = await import(`./${app_info.gpu.driver}`);
+    const found = await driver.requestGpu();
+    if (!found) throw new Error("the browser has no WebGPU adapter");
+    const response = await fetch(app_info.gpu.shader);
+    if (!response.ok) throw new Error(`${app_info.gpu.shader}: ${response.status}`);
+    shader = await response.text();
+    library = await load(`threemojo_${name}.wasm`);
+    const [trialWidth, trialHeight] = app_info.gpu.size;
+    const trial = library.create(trialWidth, trialHeight);
+    if (!trial) throw new Error("the module made no app");
+    // This makes the passes, which every later size reuses.
+    gpuApp = await driver.GpuApp.create(found.device, trial, shader);
+    gpuApp.destroy();
+    trial.destroy();
+    gpu = found;
+    GpuApp = driver.GpuApp;
+    app_info = { ...app_info, ...app_info.gpu };
+  } catch (error) {
+    why = `WebGPU is not used: ${error.message}`;
+    console.warn(why);
+    library = undefined;
+    gpuApp = null;
+  }
+}
+
+// The module with workers needs shared memory, which needs isolation. Ask for
+// one worker fewer than the cores, because this thread works too.
+const cores = navigator.hardwareConcurrency ?? 4;
+const wanted = side("threads", Math.min(cores, 16) - 1);
+const wantsThreads = !gpu && "threaded" in app_info && app_info.threaded && wanted >= 1 && params.get("threads") !== "0";
+let threads = 0;
+try {
+  if (wantsThreads && !crossOriginIsolated) {
+    why ||= "the page is not cross-origin isolated (serve it with examples/capi/serve.py)";
+  } else if (wantsThreads) {
+    try {
+      library = await loadThreads(`threemojo_${name}_threads.wasm`, { threads: wanted });
+      threads = wanted + 1;
+    } catch (error) {
+      why ||= `the module for threads did not start: ${error.message}`;
+      console.warn(why);
+    }
+  }
+  library ??= await load(`threemojo_${name}.wasm`);
+} catch (error) {
+  fail(`Could not start threemojo_${name}.wasm: ${error.message}. ` +
+       "Build it with examples/capi/build.sh web, and serve this folder over HTTP.");
+  throw error;
+}
+
+let asset = null;
+try {
+  if (app_info.asset) {
+    const response = await fetch(app_info.asset);
+    if (!response.ok) throw new Error(`${app_info.asset}: ${response.status}`);
+    asset = new Uint8Array(await response.arrayBuffer());
+  }
+} catch (error) {
+  fail(`Could not fetch ${app_info.asset}: ${error.message}`);
+  throw error;
+}
+
+// A canvas takes one kind of context for good, so the CPU's 2D context is
+// taken here only when the page does not draw on a GPU.
+const context = gpu ? null : canvas.getContext("2d", { alpha: false });
+let app = null;
+// True while a new size is being made, which a GPU takes a moment to do.
+let switching = false;
+// The frame that the device is drawing now. A new size waits for it, because
+// the frame still reads the old app and its buffers.
+let drawing = Promise.resolve();
+let width = 0;
+let height = 0;
+// Windows of one second to skip after a start, while the engine warms up.
+let settling = 0;
+
+// Make a new app at this size, and drop the old one. The water starts calm.
+// On a GPU the passes are made again for the size, and the compiled shader is
+// kept.
+async function start(newWidth, newHeight) {
+  if (app && app_info.resizable) {
+    // The scan and the view stay. The device makes only the new pictures.
+    if (gpuApp) gpuApp.resize(newWidth, newHeight);
+    else if (!app.resize(newWidth, newHeight)) throw new Error(`The module refused a ${newWidth}x${newHeight} frame`);
+    canvas.width = newWidth;
+    canvas.height = newHeight;
+    width = newWidth;
+    height = newHeight;
+    sizes.value = `${width}x${height}`;
+    settling = WARM_UP_WINDOWS;
+    return;
+  }
+  const made = library.create(newWidth, newHeight);
+  if (!made) throw new Error(`The module made no app for a ${newWidth}x${newHeight} frame`);
+  if (asset && !made.asset(asset)) {
+    made.destroy();
+    throw new Error(`The module refused ${app_info.asset}`);
+  }
+  canvas.width = newWidth;
+  canvas.height = newHeight;
+  let drawn = null;
+  if (gpu) {
+    try {
+      drawn = await GpuApp.create(gpu.device, made, shader, { canvas, reuse: gpuApp });
+    } catch (error) {
+      made.destroy();
+      // The frame that is running keeps its size.
+      if (width > 0) {
+        canvas.width = width;
+        canvas.height = height;
+      }
+      throw error;
+    }
+  }
+  if (app) app.destroy();
+  if (gpuApp) gpuApp.destroy();
+  app = made;
+  gpuApp = drawn;
+  width = newWidth;
+  height = newHeight;
+  sizes.value = automatic ? "auto" : `${width}x${height}`;
+  settling = WARM_UP_WINDOWS;
+}
+
+const first = (threads > 0 && app_info.threaded) || app_info.size;
+const choices = app_info.sizes.map(([w, h]) => `${w}x${h}`);
+const startWidth = side("w", first[0]);
+const startHeight = side("h", first[1]);
+if (!choices.includes(`${startWidth}x${startHeight}`)) choices.push(`${startWidth}x${startHeight}`);
+// Auto is the default for an app that can adapt, unless the address names a size.
+let automatic = Boolean(app_info.adapt) && !params.has("w") && !params.has("h");
+if (app_info.adapt) sizes.append(new Option("Auto", "auto"));
+for (const choice of choices) sizes.append(new Option(choice.replace("x", " by "), choice));
+try {
+  await start(startWidth, startHeight);
+} catch (error) {
+  fail(`Could not start threemojo_${name}.wasm: ${error.message}.` +
+       (gpu ? " Add ?gpu=0 to the address to draw on the CPU." : ""));
+  throw error;
+}
+if (gpu) {
+  gpu.device.lost.then((info) => fail(`The GPU device was lost: ${info.message}. Add ?gpu=0 to the address to draw on the CPU.`));
+}
+
+document.getElementById("stage").hidden = false;
+document.title = `ThreeMojo ${name}`;
+document.getElementById("help").textContent = app_info.help;
+
+// A frame that is scaled up looks best smoothed. The checkbox shows the pixels.
+smooth.addEventListener("change", () => canvas.classList.toggle("crisp", !smooth.checked));
+// Change the size while the loop runs. The loop waits until the last change is
+// done. The changes run one at a time: each one drops the app of the one
+// before it.
+let queue = Promise.resolve();
+let waiting = 0;
+function resize(w, h) {
+  waiting += 1;
+  switching = true;
+  queue = queue.then(async () => {
+    try {
+      await drawing;
+      await start(w, h);
+    } catch (error) {
+      fail(error.message);
+    } finally {
+      waiting -= 1;
+      switching = waiting > 0;
+    }
+    resetStats();
+  });
+}
+sizes.addEventListener("change", () => {
+  automatic = sizes.value === "auto";
+  if (automatic) {
+    // Keep the frame that is running, and judge it again from the start.
+    slowFrom = Infinity;
+    settling = WARM_UP_WINDOWS;
+    sizes.blur();
+    return;
+  }
+  const [w, h] = sizes.value.split("x").map(Number);
+  resize(w, h);
+  sizes.blur();
+});
+
+// Pointer: the frame's pixels, not the page's.
+function place(event) {
+  const box = canvas.getBoundingClientRect();
+  const clamp = (value, limit) => Math.max(0, Math.min(limit - 1, Math.floor(value)));
+  return [
+    clamp(((event.clientX - box.left) * width) / box.width, width),
+    clamp(((event.clientY - box.top) * height) / box.height, height),
+  ];
+}
+const buttonOf = (event) => [Button.PRIMARY, Button.MIDDLE, Button.SECONDARY][event.button] ?? Button.NONE;
+let held = Button.NONE;
+
+canvas.addEventListener("pointerdown", (event) => {
+  canvas.focus();
+  canvas.setPointerCapture(event.pointerId);
+  held = buttonOf(event);
+  app.event(Kind.POINTER_DOWN, ...place(event), held);
+});
+canvas.addEventListener("pointermove", (event) => {
+  app.event(Kind.POINTER_MOVE, ...place(event), held);
+});
+canvas.addEventListener("pointerup", (event) => {
+  app.event(Kind.POINTER_UP, ...place(event), held === Button.NONE ? 0 : held);
+  held = Button.NONE;
+});
+canvas.addEventListener("contextmenu", (event) => event.preventDefault());
+
+// Wheel: whole notches, positive toward the user, which is the sign of deltaY.
+let wheel = 0;
+canvas.addEventListener("wheel", (event) => {
+  event.preventDefault();
+  const unit = event.deltaMode === WheelEvent.DOM_DELTA_PIXEL ? NOTCH_PIXELS : 1;
+  wheel += event.deltaY / unit;
+  const [x, y] = place(event);
+  for (; wheel >= 1; wheel -= 1) app.event(Kind.WHEEL, x, y, 1);
+  for (; wheel <= -1; wheel += 1) app.event(Kind.WHEEL, x, y, -1);
+}, { passive: false });
+
+// Keys.
+const KEYS = {
+  ArrowUp: Key.ARROW_UP,
+  ArrowDown: Key.ARROW_DOWN,
+  ArrowLeft: Key.ARROW_LEFT,
+  ArrowRight: Key.ARROW_RIGHT,
+  " ": Key.SPACE,
+};
+const codeOf = (event) => KEYS[event.key] ?? (event.key.length === 1 ? event.key.toLowerCase().charCodeAt(0) : -1);
+window.addEventListener("keydown", (event) => {
+  const code = codeOf(event);
+  if (code < 0 || event.metaKey || event.ctrlKey) return;
+  // The space bar toggles, so a held key must not repeat.
+  if (code === Key.SPACE && event.repeat) return;
+  event.preventDefault();
+  app.event(Kind.KEY_DOWN, 0, 0, code);
+});
+window.addEventListener("keyup", (event) => {
+  const code = codeOf(event);
+  if (code >= 0) app.event(Kind.KEY_UP, 0, 0, code);
+});
+
+// Auto: the largest size that the last second says will fit the budget. The
+// cost grows with the number of pixels, so a size is judged by its area. A size
+// that was too slow is not tried again.
+const ladder = app_info.sizes;
+let slowFrom = Infinity;
+function adapt() {
+  if (settling > 0) {
+    settling -= 1;
+    return;
+  }
+  const area = width * height;
+  const current = ladder.findIndex(([w, h]) => w === width && h === height);
+  let best = current;
+  if (ms > LIMIT_MS) {
+    // Too slow: the largest size that is predicted to fit, and at least one down.
+    slowFrom = Math.min(slowFrom, current < 0 ? ladder.length : current);
+    best = 0;
+    for (let level = 0; level < slowFrom; level++) {
+      if ((ms * ladder[level][0] * ladder[level][1]) / area <= BUDGET_MS) best = level;
+    }
+  } else if (current >= 0) {
+    for (let level = current + 1; level < Math.min(slowFrom, ladder.length); level++) {
+      if ((ms * ladder[level][0] * ladder[level][1]) / area <= BUDGET_MS) best = level;
+    }
+  }
+  if (best !== current && best >= 0) resize(ladder[best][0], ladder[best][1]);
+}
+
+// The loop: the browser's clock and its refresh rate.
+let previous = performance.now();
+let windowStart = previous;
+let windowFrames = 0;
+let windowLibrary = 0;
+let fps = 0;
+let ms = 0;
+
+function show() {
+  const upTo = ms > 0 ? 1000 / ms : 0;
+  const how = gpu ? "WebGPU" : threads > 0 ? `${threads} threads` : "1 thread";
+  hud.textContent =
+    `${fps.toFixed(1)} fps\n${ms.toFixed(2)} ms a frame, up to ${upTo.toFixed(0)} fps\n` +
+    `wasm ${name}  ${width}x${height}${automatic ? " (auto)" : ""}  ${how}` + (why ? `\n(${why})` : "");
+}
+function resetStats() {
+  windowStart = performance.now();
+  windowFrames = 0;
+  windowLibrary = 0;
+  show();
+}
+show();
+
+async function frame(now) {
+  if (switching) {
+    requestAnimationFrame(frame);
+    return;
+  }
+  const elapsed = Math.min(Math.max(now - previous, 0), LONGEST_STEP_MS);
+  previous = now;
+
+  const begin = performance.now();
+  if (gpuApp) {
+    // The device shades the frame and shows it on the canvas.
+    const current = gpuApp.frame(Math.round(elapsed * 1000));
+    drawing = current.catch(() => {});
+    try {
+      await current;
+    } catch (error) {
+      fail(`The GPU stopped: ${error.message}. Add ?gpu=0 to the address to draw on the CPU.`);
+      return;
+    }
+  } else {
+    app.step(Math.round(elapsed * 1000));
+    context.putImageData(new ImageData(app.frame(), width, height), 0, 0);
+  }
+  const took = performance.now() - begin;
+
+  windowFrames += 1;
+  windowLibrary += took;
+  if (now - windowStart >= 1000) {
+    fps = (windowFrames * 1000) / (now - windowStart);
+    ms = windowLibrary / windowFrames;
+    windowStart = now;
+    windowFrames = 0;
+    windowLibrary = 0;
+    show();
+    if (automatic) adapt();
+  }
+  requestAnimationFrame(frame);
+}
+requestAnimationFrame(frame);
+</script>
+</body>
+</html>

@@ -82,6 +82,7 @@ mkdir -p out
 | `clay.mojo` | `sculptor.png` | [Sculptor](Sculptor) |
 | `cells.mojo` | `tslfunctions.png` | [TSL functions](TSL-functions) |
 | `cloud.mojo` | `gaussian.png` | [Gaussian splats](Gaussian-splats) |
+| `tomatoes.mojo` | `tomatoes.png` | [Gaussian splats](Gaussian-splats#three-tomatoes) |
 | `bounce.mojo` | `vxgi.png` | [Voxel global illumination](Voxel-global-illumination) |
 | `sunlight.mojo` | `lighting.png` | [Lighting addons](Lighting-addons) |
 | `vase.mojo` | `lofts.png` | [Lofts and clipping groups](Lofts-and-clipping-groups) |

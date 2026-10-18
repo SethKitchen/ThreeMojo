@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!--
+  Copyright (c) 2026 Seth Kitchen, PE
+  SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
+  Noncommercial use is free; commercial use requires a paid license.
+  See LICENSE, LICENSE-COMMERCIAL.md and THIRD-PARTY-NOTICES.md.
+
+  The macOS host runs inside this bundle so that Launch Services starts it.
+  A program that a shell starts cannot take focus on macOS 14 and later, so
+  its window opens behind the terminal.
+-->
+<plist version="1.0">
+<dict>
+  <key>CFBundleIdentifier</key><string>dev.threemojo.host</string>
+  <key>CFBundleName</key><string>ThreeMojo</string>
+  <key>CFBundleExecutable</key><string>threemojo_host</string>
+  <key>CFBundlePackageType</key><string>APPL</string>
+  <key>CFBundleVersion</key><string>1</string>
+  <key>LSMinimumSystemVersion</key><string>14.0</string>
+  <key>NSHighResolutionCapable</key><true/>
+</dict>
+</plist>
