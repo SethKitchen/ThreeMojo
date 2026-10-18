@@ -61,7 +61,7 @@ from render.texture import IGNORED, UV_CHANNEL_1, Texture, float_texture
 from render.texture_store import TextureId
 from renderers.renderer import Renderer
 from math.finite import require_positive_finite
-from math.utils import clamp
+from math.utils import edge_index
 from units.si import Length, METER
 
 
@@ -378,8 +378,8 @@ def _blur(mut target: RenderTarget, old: Texture):
                     if dx == 0 and dy == 0:
                         continue
                     var at = (
-                        clamp(y + dy, 0, size - 1) * size
-                        + clamp(x + dx, 0, size - 1)
+                        edge_index(y + dy, size) * size
+                        + edge_index(x + dx, size)
                     ) * 4
                     r += old.data[at]
                     g += old.data[at + 1]

@@ -15,7 +15,7 @@ same arithmetic runs on a `RippleField` and on a copy in device memory.
 from extensions.water.resolution import require_resolution, SpectrumResolution
 from math.norm import squared_length2
 from math.smoothstep import hermite_fade
-from math.utils import clamp, mix_bilinear
+from math.utils import edge_index, mix_bilinear
 from std.math import cos, floor, sqrt
 from units.si import Length
 
@@ -187,10 +187,10 @@ def _sample_height(
     var y0 = Int(floor(py))
     var fx = px - Float32(x0)
     var fy = py - Float32(y0)
-    var x1 = clamp(x0 + 1, 0, n - 1)
-    var y1 = clamp(y0 + 1, 0, n - 1)
-    x0 = clamp(x0, 0, n - 1)
-    y0 = clamp(y0, 0, n - 1)
+    var x1 = edge_index(x0 + 1, n)
+    var y1 = edge_index(y0 + 1, n)
+    x0 = edge_index(x0, n)
+    y0 = edge_index(y0, n)
     var h00 = field.height[field._at(x0, y0)]
     var h10 = field.height[field._at(x1, y0)]
     var h01 = field.height[field._at(x0, y1)]
@@ -347,10 +347,10 @@ def sample_ripple[
     var y0 = Int(floor(py))
     var fx = px - Float32(x0)
     var fy = py - Float32(y0)
-    var x1 = clamp(x0 + 1, 0, n - 1)
-    var y1 = clamp(y0 + 1, 0, n - 1)
-    x0 = clamp(x0, 0, n - 1)
-    y0 = clamp(y0, 0, n - 1)
+    var x1 = edge_index(x0 + 1, n)
+    var y1 = edge_index(y0 + 1, n)
+    x0 = edge_index(x0, n)
+    y0 = edge_index(y0, n)
     return _blend_normal(field, x0, y0, x1, y1, fx, fy)
 
 

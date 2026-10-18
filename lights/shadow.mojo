@@ -79,7 +79,7 @@ from core.ordinal import ordinal_valid
 from lights.light_slot import LightSlot
 
 from math.smoothstep import smoothstep
-from math.utils import clamp, lerp
+from math.utils import edge_index, lerp
 from math.cross import cross_vectors
 from math.norm import squared_length2
 from math.vector3 import Vector3
@@ -1248,7 +1248,7 @@ def _texel_at(column: Int, row: Int, size: Int) -> Int:
     a map clamped to its edge reads past them."""
     # One statement: a soft shadow reads sixteen of these per fragment,
     # and a coverage run writes a record per statement.
-    return clamp(row, 0, size - 1) * size + clamp(column, 0, size - 1)
+    return edge_index(row, size) * size + edge_index(column, size)
 
 
 def soft_texel(place: Vector3, tap: Int, size: Int) -> Int:
