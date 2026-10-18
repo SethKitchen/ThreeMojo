@@ -47,6 +47,7 @@ from core.buffer_attribute import BufferAttribute
 from core.buffer_geometry import NORMAL, POSITION, BufferGeometry, MaterialIndex
 from core.object3d import NO_PARENT, NodeId, Object3D
 from core.scene import Scene
+from core.search import first_match
 from loaders.ldraw_parse import (
     LDrawFace,
     LDrawInfo,
@@ -672,17 +673,10 @@ def _from_code(
 
 
 def _find(codes: List[String], ids: List[Int], code: String) -> Int:
-    for k in range(len(codes)):  # pragma: no branch
-        if codes[k] == code:
-            return ids[k]
-    return -1
-
-
-def _has(codes: List[String], code: String) -> Bool:
-    for c in codes:
-        if c == code:
-            return True
-    return False
+    var at = first_match(codes, code)
+    if at < 0:
+        return -1
+    return ids[at]
 
 
 struct LDrawBuilder(Movable):
@@ -792,7 +786,7 @@ struct LDrawBuilder(Movable):
                 var code = self.model.nodes[n].codes[k]
                 if (
                     parent == MAIN_COLOUR_CODE
-                    and not _has(codes, code)
+                    and first_match(codes, code) < 0
                     and not final
                 ):
                     continue
@@ -936,7 +930,7 @@ struct LDrawBuilder(Movable):
                     face.material = _from_code(
                         face.color_code, color, info, False
                     )
-                if not _has(face_codes, face.color_code):
+                if first_match(face_codes, face.color_code) < 0:
                     face_codes.append(face.color_code)
                 if inverted != sub.inverted:
                     face.vertices.reverse()

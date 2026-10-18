@@ -20,6 +20,7 @@ from coverage.mcdc import (
     find_trace,
     is_mcdc_covered,
 )
+from core.search import first_match
 from coverage.runtime import BRANCH_PREFIX, EVALUATION_PREFIX, LINE_PREFIX
 from std.collections import Set
 
@@ -371,12 +372,7 @@ def _modules_in_order(entries: List[Entry]) raises -> List[String]:
     """Return each distinct module name, in first-seen order."""
     var names = List[String]()
     for entry in entries:
-        var seen = False
-        for name in names:
-            if name == entry.module:
-                seen = True
-                break
-        if not seen:
+        if first_match(names, entry.module) < 0:
             names.append(entry.module)
     return names^
 

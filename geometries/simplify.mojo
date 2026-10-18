@@ -149,11 +149,6 @@ def _remove(mut list: List[Int], value: Int):
         _ = list.pop(at)
 
 
-def _contains(list: List[Int], value: Int) -> Bool:
-    """Return True if `value` is in `list`."""
-    return first_match(list, value) >= 0
-
-
 struct _Reduction(Movable):
     """The vertices and faces being reduced, and the lists of those still
     alive, in three.js's order."""
@@ -186,13 +181,13 @@ struct _Reduction(Movable):
 
     def add_unique_neighbor(mut self, v: Int, n: Int):
         """Add `n` to `v`'s neighbors unless it is there already."""
-        if not _contains(self.vertex_data[v].neighbors, n):
+        if first_match(self.vertex_data[v].neighbors, n) < 0:
             self.vertex_data[v].neighbors.append(n)
 
     def remove_if_non_neighbor(mut self, v: Int, n: Int):
         """Take `n` off `v`'s neighbors unless a face of `v` still has it:
         three.js's `removeIfNonNeighbor`."""
-        if not _contains(self.vertex_data[v].neighbors, n):
+        if first_match(self.vertex_data[v].neighbors, n) < 0:
             return
         for index in range(len(self.vertex_data[v].faces)):
             if self.face_data[self.vertex_data[v].faces[index]].has_vertex(n):

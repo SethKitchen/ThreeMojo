@@ -387,13 +387,6 @@ def _wrap(value: LwoValue, what: String) raises -> Wrap:
     return CLAMP
 
 
-def _in(names: List[String], key: String) -> Bool:
-    for name in names:
-        if name == key:
-            return True
-    return False
-
-
 def _without(names: List[String], key: String) -> List[String]:
     var kept = List[String]()
     for name in names:  # pragma: no branch
@@ -418,21 +411,24 @@ struct _Params(Copyable, Movable):
 
     def has(self, key: String) -> Bool:
         """Whether either set it: what the material is built from."""
-        return _in(self.maps, key) or _in(self.attributes, key)
+        return (
+            first_match(self.maps, key) >= 0
+            or first_match(self.attributes, key) >= 0
+        )
 
     def has_map(self, key: String) -> Bool:
-        return _in(self.maps, key)
+        return first_match(self.maps, key) >= 0
 
     def has_attribute(self, key: String) -> Bool:
-        return _in(self.attributes, key)
+        return first_match(self.attributes, key) >= 0
 
     def mark(mut self, key: String):
         """Set by a map."""
-        if not _in(self.maps, key):
+        if first_match(self.maps, key) < 0:
             self.maps.append(key)
 
     def mark_attribute(mut self, key: String):
-        if not _in(self.attributes, key):
+        if first_match(self.attributes, key) < 0:
             self.attributes.append(key)
 
     def drop(mut self, key: String):
