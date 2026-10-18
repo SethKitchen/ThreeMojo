@@ -28,7 +28,12 @@ three.js stores one.
 from core.buffer_geometry import BufferGeometry
 from core.ordinal import require_non_negative, require_positive
 from geometries.surface import position_normal_surface
-from generators.utils import check_finite, generator_random, meters
+from generators.utils import (
+    check_finite,
+    generator_random,
+    length_meters,
+    meters,
+)
 from math.noise import ImprovedNoise
 from math.utils import clamp
 from math.norm import squared_length2, squared_length3
@@ -411,7 +416,7 @@ struct TerrainGenerator(Movable):
             Error: If the terrain is not built.
         """
         self._check_built()
-        return Length(Float32(self._height_at(meters(x), meters(z))), METER)
+        return length_meters(self._height_at(meters(x), meters(z)))
 
     def sample_slope(self, x: Length, z: Length) raises -> Float64:
         """Return how flat the baked surface is at a point, three.js's
