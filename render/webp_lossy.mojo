@@ -32,6 +32,7 @@ profile, a zero size or a first partition past its data, or runs out of
 data where libwebp checks for it, is refused.
 """
 
+from core.binary import copy_bytes
 from render.webp_lossy_tables import (
     AC_TABLE,
     BMODES_PROBA,
@@ -721,10 +722,8 @@ struct LossyImage(Movable):
 
 
 def _slice(bytes: List[UInt8], start: Int, end: Int) -> List[UInt8]:
-    var out = List[UInt8](capacity=max(end - start, 0))
-    for i in range(start, end):
-        out.append(bytes[i])
-    return out^
+    """Return a copy of bytes `start` to `end`."""
+    return copy_bytes(bytes, start, max(end - start, 0))
 
 
 def _clip(v: Int, m: Int) -> Int:

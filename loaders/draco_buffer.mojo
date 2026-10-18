@@ -29,7 +29,7 @@ when the bytes do not suffice or do not make sense. Each reader here
 raises an `Error` in the same places.
 """
 
-from core.binary import little_endian_uint
+from core.binary import copy_bytes, little_endian_uint
 from std.memory import bitcast
 
 # The low 32 bits of an `Int`.
@@ -304,9 +304,7 @@ struct DracoBuffer(Copyable, Movable):
             Error: If fewer bytes are left.
         """
         self.need(count)
-        var out = List[UInt8](capacity=count)
-        for k in range(count):
-            out.append(self.data[self.pos + k])
+        var out = copy_bytes(self.data, self.pos, count)
         self.pos += count
         return out^
 
