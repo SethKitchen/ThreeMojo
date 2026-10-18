@@ -50,6 +50,7 @@ past most of these and yields `NaN`, or throws a `RangeError`.
 """
 
 from core.buffer_attribute import BufferAttribute
+from loaders.js_text import split_fields
 from core.buffer_geometry import COLOR, NORMAL, POSITION, BufferGeometry
 from render.srgb import srgb_to_linear
 from std.math import floor, isfinite
@@ -406,14 +407,6 @@ struct PcdModel(Movable):
         self.labels = labels^
 
 
-def _fields(line: String) -> List[String]:
-    """Return a line split on white space."""
-    var fields = List[String]()
-    for piece in line.split():
-        fields.append(String(piece))
-    return fields^
-
-
 def _whole(text: String, what: String) raises -> Int:
     """Return a whole number of a header line.
 
@@ -474,7 +467,7 @@ def parse_pcd_header(bytes: List[UInt8]) raises -> PcdHeader:
         if hash >= 0:
             var head = String(text[byte=:hash])
             text = head^
-        var fields = _fields(text)
+        var fields = split_fields(text)
         if len(fields) > 0:
             var keyword = fields[0].upper()
             if keyword.startswith("DATA"):
@@ -789,7 +782,7 @@ def parse_pcd(bytes: List[UInt8]) raises -> PcdModel:
     var normal_names: List[String] = ["normal_x", "normal_y", "normal_z"]
     for point in range(points):
         if header.data == PCD_ASCII:
-            reader.values = _fields(lines[point])
+            reader.values = split_fields(lines[point])
             if len(reader.values) < header.row_size:
                 raise Error(
                     "PCD point "

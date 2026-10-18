@@ -66,6 +66,7 @@ limits, and explicit zero and nonfinite rules.
 """
 
 from core.ordinal import ordinal_valid
+from loaders.js_text import split_fields
 
 from math.triangle_normal import _polygon_cross_wide, _triangle_cross_wide
 
@@ -360,14 +361,6 @@ def _where(line: Int) -> String:
     return "PLY header line " + String(line) + ": "
 
 
-def _fields(line: String) -> List[String]:
-    """Return a line split on white space."""
-    var fields = List[String]()
-    for piece in line.split():
-        fields.append(String(piece))
-    return fields^
-
-
 struct PlyOptions(Copyable, Movable):
     """How `parse_ply` names what it reads: three.js's
     `setPropertyNameMapping` and `setCustomPropertyNameMapping`."""
@@ -462,7 +455,7 @@ def _parse_header(
         raise Error("PLY: the file does not start with `ply`")
     var format = PlyFormat(-1)
     for index in range(1, len(lines)):
-        var fields = _fields(lines[index])
+        var fields = split_fields(lines[index])
         if len(fields) == 0:
             continue
         var line = index + 1
@@ -567,7 +560,7 @@ struct _Rows:
         if self.format != PLY_ASCII:
             return
         while self.line < len(self.lines):
-            self.fields = _fields(self.lines[self.line])
+            self.fields = split_fields(self.lines[self.line])
             self.line += 1
             self.field = 0
             if len(self.fields) > 0:
