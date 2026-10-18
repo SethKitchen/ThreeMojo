@@ -158,6 +158,19 @@ def test_an_integer_array_writes_each_value() raises:
     assert_equal(empty.finish(), "[]")
 
 
+def test_a_string_array_writes_each_value() raises:
+    var writer = JsonWriter()
+    var values = List[String]()
+    values.append("a")
+    values.append(String('b"c'))
+    writer.strings(values)
+    assert_equal(writer.finish(), String('["a","b\\"c"]'))
+    var empty = JsonWriter()
+    var none = List[String]()
+    empty.strings(none)
+    assert_equal(empty.finish(), "[]")
+
+
 def test_an_empty_raw_array_is_left_out() raises:
     var writer = JsonWriter()
     writer.begin_object()
