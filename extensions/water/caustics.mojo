@@ -12,6 +12,7 @@ The shader reads the texture through `CausticTexels`, so the same
 arithmetic runs on a `CausticField` and on a copy in device memory.
 """
 
+from core.ordinal import require_positive
 from extensions.water.optics import channel_ior, refract
 from extensions.water.spectrum import require_ocean_patch
 from extensions.water.surface import SurfaceField, sample_surface
@@ -113,8 +114,7 @@ struct CausticField(CausticTexels, Movable):
         Raises:
             Error: If `n` is not positive, or the patch is not positive.
         """
-        if n <= 0:
-            raise Error("Caustic resolution must be positive")
+        require_positive(n, "Caustic resolution must be positive")
         require_ocean_patch(patch.value)
         self.n = n
         self.patch = patch.value
@@ -265,8 +265,7 @@ def render_caustics(
     Raises:
         Error: If a size or the depth is not positive.
     """
-    if grid <= 0:
-        raise Error("Caustic ray grid must be positive")
+    require_positive(grid, "Caustic ray grid must be positive")
     if depth.value <= 0.0:
         raise Error("Water depth must be positive")
     var image = CausticField(resolution, surface.patch)

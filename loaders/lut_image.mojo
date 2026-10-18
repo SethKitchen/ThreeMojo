@@ -23,6 +23,7 @@ refuses it.
 """
 
 from core.extent import require_positive_extent, require_texel_count
+from core.ordinal import require_positive
 from loaders.gltf import decode_image
 from render.png import DecodedImage
 from render.srgb import LINEAR
@@ -63,8 +64,7 @@ def parse_lut_image(data: List[UInt8], size: Int) raises -> LutImage:
         Error: If the size is below one, or the data does not hold `size`
             cubed texels.
     """
-    if size < 1:
-        raise Error("LUT image: a size below one")
+    require_positive(size, "LUT image: a size below one")
     if size > Int.MAX // size:
         raise Error("LUT image: the table size cannot fit in Int")
     var square = size * size

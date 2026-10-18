@@ -47,7 +47,11 @@ curve given a start or an end knot has its tangents in the wrong place.
 This keeps that, because the tangent is what three.js gives.
 """
 
-from core.ordinal import require_index_in_count, require_non_negative
+from core.ordinal import (
+    require_index_in_count,
+    require_non_negative,
+    require_positive,
+)
 from geometries.parametric import ParametricSurface
 from math.curve_checks import check_curve_parameter
 from math.space_curve import Point3, SpaceCurve, normalized3, point3
@@ -622,8 +626,7 @@ def _checked_knots(
             or the active knot interval has zero width.
     """
     require_non_negative(degree, "A NURBS degree cannot be negative")
-    if points < 1:
-        raise Error("A NURBS spline needs one control point at least")
+    require_positive(points, "A NURBS spline needs one control point at least")
     if degree >= points:
         raise Error("A NURBS degree must be below its control point count")
     # Subtract from the existing length instead of adding caller counts.

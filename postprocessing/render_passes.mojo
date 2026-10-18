@@ -23,6 +23,7 @@ function of its own.
 """
 
 from cameras.camera import Camera
+from core.ordinal import require_positive
 from core.scene import Scene
 from math.smoothstep import smoothstep
 from math.utils import edge_index
@@ -70,8 +71,7 @@ def check_pixelated(settings: PixelatedSettings) raises:
         Error: If the pixel size is below one, or a strength is negative or
             not finite.
     """
-    if settings.pixel_size < 1:
-        raise Error("A pixel size is at least one")
+    require_positive(settings.pixel_size, "A pixel size is at least one")
     if not (
         isfinite(settings.normal_edge_strength)
         and isfinite(settings.depth_edge_strength)
@@ -321,8 +321,9 @@ def check_transition(settings: TransitionSettings) raises:
     """
     if not (isfinite(settings.mix_ratio) and isfinite(settings.threshold)):
         raise Error("A transition setting must be finite")
-    if settings.threshold <= 0:
-        raise Error("A transition threshold must be positive")
+    require_positive(
+        settings.threshold, "A transition threshold must be positive"
+    )
 
 
 def transition_pixel(

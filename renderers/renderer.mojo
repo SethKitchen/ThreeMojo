@@ -371,7 +371,7 @@ from math.finite import require_positive_finite
 from std.math import cos, floor, isfinite, max, min, pi, sin
 from std.memory import ArcPointer, unsafe_memcpy
 from std.sys import num_logical_cores
-from core.ordinal import require_valid
+from core.ordinal import require_valid, require_positive
 
 
 def _carriers(
@@ -6170,8 +6170,7 @@ struct Renderer(Movable):
             Error: If the factor is below one, or the larger renderer
                 cannot be built.
         """
-        if factor < 1:
-            raise Error("A renderer is scaled by at least one")
+        require_positive(factor, "A renderer is scaled by at least one")
         var big = Renderer(
             self.width * factor, self.height * factor, self.workers
         )

@@ -51,7 +51,7 @@ from math.finite import require_finite
 from std.math import floor, isnan, nan
 from std.memory import bitcast
 from std.pathlib import Path
-from core.ordinal import require_valid
+from core.ordinal import require_valid, require_positive
 
 comptime IES_WIDTH = 360
 comptime IES_HEIGHT = 180
@@ -348,8 +348,9 @@ def ies_values(lamp: IesLamp) raises -> List[Float64]:
         Error: If the lamp has no horizontal angle, where three.js reads
             `undefined`.
     """
-    if lamp.num_hor_angles < 1:
-        raise Error("IES: a lamp with no horizontal angle")
+    require_positive(
+        lamp.num_hor_angles, "IES: a lamp with no horizontal angle"
+    )
     var size = IES_WIDTH * IES_HEIGHT
     var data = List[Float64](length=size, fill=nan[DType.float64]())
     var start_theta = lamp.hor_angles[0]

@@ -30,7 +30,7 @@ See de Berg, Cheong, van Kreveld and Overmars, "Computational Geometry:
 Algorithms and Applications" (3rd edition, 2008), chapter 2.
 """
 
-from core.ordinal import require_index_in_count, require_valid
+from core.ordinal import require_index_in_count, require_valid, require_positive
 from math.polygon_hit import ray_crosses
 from math.utils import clamp
 from math.finite import require_finite_group
@@ -428,8 +428,7 @@ def arrange(
             positive and finite, a region is not a simple polygon, or two
             regions of one layer overlap.
     """
-    if layers < 1:
-        raise Error("An arrangement needs one layer or more")
+    require_positive(layers, "An arrangement needs one layer or more")
     var tol = tolerance.to(METER)
     var welder = Welder(tol)
     for r in range(len(regions)):

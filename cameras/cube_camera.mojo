@@ -40,6 +40,7 @@ a `Length`, as every camera's are.
 from cameras.perspective_camera import PerspectiveCamera
 from core.layers import Layers
 from core.object3d import NO_PARENT, NodeId
+from core.ordinal import require_positive
 from core.scene import Scene
 from math.vector3 import Vector3
 from render.cube_texture import face_forward, face_up, require_cube_face
@@ -80,8 +81,7 @@ struct CubeCamera(ImplicitlyCopyable):
                 front of the camera, the far plane is not beyond it, or
                 either plane is not finite.
         """
-        if size <= 0:
-            raise Error("A cube camera's faces need a positive size")
+        require_positive(size, "A cube camera's faces need a positive size")
         require_positive_finite(
             Float64(near.value),
             "The near plane must be in front of the camera",

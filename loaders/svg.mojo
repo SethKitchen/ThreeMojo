@@ -89,7 +89,7 @@ from loaders.xml import XmlDocument, parse_xml
 from render.css_color import parse_style
 from std.math import fma, acos, cos, isnan, pi, sin, sqrt, tan
 from std.pathlib import Path
-from core.ordinal import require_valid, require_non_negative
+from core.ordinal import require_valid, require_non_negative, require_positive
 
 # The namespace an `xlink:href` attribute is in.
 comptime XLINK_NAMESPACE = "http://www.w3.org/1999/xlink"
@@ -1101,10 +1101,9 @@ struct _Parser(Movable):
             if text == "":
                 continue
             var open = text.find("(")
-            if open <= 0:
-                raise Error(
-                    "SVG: a transform with no parenthesis: `" + text + "`"
-                )
+            require_positive(
+                open, "SVG: a transform with no parenthesis: `" + text + "`"
+            )
             var type = String(text[byte=:open])
             var array = parse_floats(String(text[byte = open + 1 :]))
             var current = SvgMatrix()

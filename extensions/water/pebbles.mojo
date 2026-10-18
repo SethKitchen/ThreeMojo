@@ -13,6 +13,7 @@ texels through `PebbleTexels`, so the same arithmetic runs on a
 `PebbleBed` and on a copy in device memory.
 """
 
+from core.ordinal import require_positive
 from extensions.water.filter import (
     anisotropic_step,
     lod_blend,
@@ -123,8 +124,7 @@ def require_pebble_width(width: Int) raises:
     Raises:
         Error: If the width is not positive.
     """
-    if width <= 0:
-        raise Error("Pebble image width must be positive")
+    require_positive(width, "Pebble image width must be positive")
 
 
 def require_pebble_height(height: Int) raises:
@@ -139,8 +139,7 @@ def require_pebble_height(height: Int) raises:
     Raises:
         Error: If the height is not positive.
     """
-    if height <= 0:
-        raise Error("Pebble image height must be positive")
+    require_positive(height, "Pebble image height must be positive")
 
 
 def require_pebble_length(held: Int, expected: Int) raises:

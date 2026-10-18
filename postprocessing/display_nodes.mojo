@@ -36,7 +36,7 @@ See `docs/wiki/Norm-consumers.md` for the changed operations, retained
 limits, and explicit zero and nonfinite rules.
 """
 
-from core.ordinal import require_non_negative
+from core.ordinal import require_non_negative, require_positive
 from math.finite import require_finite_group
 from math.norm import length2
 from math.sine import fraction
@@ -192,8 +192,10 @@ def check_display(settings: DisplaySettings) raises:
     )
     if settings.motion_samples < 2:
         raise Error("A motion blur takes at least two samples")
-    if settings.focal_length.value <= 0:
-        raise Error("A depth of field's focal length must be positive")
+    require_positive(
+        settings.focal_length.value,
+        "A depth of field's focal length must be positive",
+    )
 
 
 # --- reading a frame ---------------------------------------------------------

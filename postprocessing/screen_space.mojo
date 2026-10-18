@@ -42,7 +42,12 @@ limits, and explicit zero and nonfinite rules.
 """
 
 from core.extent import require_positive_extent, require_texel_count
-from core.ordinal import ordinal_valid, require_valid, require_non_negative
+from core.ordinal import (
+    ordinal_valid,
+    require_valid,
+    require_non_negative,
+    require_positive,
+)
 
 from postprocessing.sample_math import gaussian_pdf
 from math.norm import length2, squared_length2
@@ -555,8 +560,7 @@ def require_ssao_samples(size: Int) raises:
     Raises:
         Error: If `size` is below one.
     """
-    if size < 1:
-        raise Error("An SSAO kernel holds at least one sample")
+    require_positive(size, "An SSAO kernel holds at least one sample")
 
 
 def check_ssao(settings: SsaoSettings) raises:

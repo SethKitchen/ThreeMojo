@@ -29,7 +29,7 @@ range of no width, a value that is not a number, and a custom map that does
 not run from zero to one in order are refused. three.js gives no color for
 them.
 """
-from core.ordinal import ordinal_valid, require_valid
+from core.ordinal import ordinal_valid, require_valid, require_positive
 
 from render.color_spaces import srgb_to_linear_three
 from render.framebuffer import FloatColor
@@ -286,8 +286,7 @@ struct Lut(Copyable, Movable):
                 is below one.
         """
         check_color_map(stops)
-        if count < 1:
-            raise Error("A color table needs one step or more")
+        require_positive(count, "A color table needs one step or more")
         var step = 1.0 / Float64(count)
         var lut = List[FloatColor]()
         lut.append(_decoded(stops[0].hex))

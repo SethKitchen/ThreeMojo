@@ -71,7 +71,7 @@ from render.texture import Texture
 from render.volume_texture import Data3DTexture, VolumeSampler
 from std.math import cos, floor, fma, isfinite, pi, sin, sqrt
 from units.si import Angle, Length, METER, RADIAN
-from core.ordinal import require_valid, require_non_negative
+from core.ordinal import require_valid, require_non_negative, require_positive
 
 # --- bokeh ------------------------------------------------------------------
 
@@ -407,8 +407,7 @@ def check_glitch(settings: GlitchSettings) raises:
     require_non_negative(
         settings.frame, "A glitch frame count must not be negative"
     )
-    if settings.trigger < 1:
-        raise Error("A glitch trigger must be positive")
+    require_positive(settings.trigger, "A glitch trigger must be positive")
 
 
 def glitch_heightmap(size: Int, seed: Int) -> List[Float32]:
@@ -828,8 +827,7 @@ def check_halftone(settings: HalftoneSettings) raises:
         raise Error("A halftone setting must be finite")
     if settings.width < 0 or settings.height < 0:
         raise Error("A halftone size must not be negative")
-    if settings.radius <= 0:
-        raise Error("A halftone radius must be positive")
+    require_positive(settings.radius, "A halftone radius must be positive")
     require_non_negative(
         settings.scatter, "A halftone scatter must not be negative"
     )

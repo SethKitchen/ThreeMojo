@@ -38,7 +38,7 @@ from core.buffer_geometry import (
     CIRCLE_GEOMETRY,
     RING_GEOMETRY,
 )
-from core.ordinal import require_non_negative
+from core.ordinal import require_non_negative, require_positive
 from geometries.grid import append_cell
 from geometries.surface import (
     indexed_surface,
@@ -70,8 +70,7 @@ def check_sweep(sweep: Angle) raises:
             one turn, which would lay the shape over itself.
     """
     require_finite(Float64(sweep.value), "A sweep must be finite")
-    if sweep.value <= 0:
-        raise Error("A sweep must be positive")
+    require_positive(sweep.value, "A sweep must be positive")
     if sweep.value > FULL_TURN.value:
         raise Error("A sweep cannot be more than a full turn")
 

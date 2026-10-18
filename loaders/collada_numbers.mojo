@@ -10,6 +10,7 @@ separated list, and refuse a value that is not finite as a `Float32`.
 Both also refuse a source stride below one.
 """
 
+from core.ordinal import require_positive
 from loaders.js_text import split_fields
 from std.math import isfinite
 
@@ -26,8 +27,7 @@ def require_positive_stride(stride: Int) raises:
     Raises:
         Error: If the stride is below one.
     """
-    if stride < 1:
-        raise Error("Collada: a source's stride must be positive")
+    require_positive(stride, "Collada: a source's stride must be positive")
 
 
 def collada_number(field: String) raises -> Float64:

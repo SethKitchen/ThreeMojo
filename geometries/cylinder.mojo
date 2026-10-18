@@ -43,6 +43,7 @@ from core.buffer_geometry import (
     CYLINDER_GEOMETRY,
     MaterialIndex,
 )
+from core.ordinal import require_positive
 from geometries.surface import (
     indexed_surface,
     require_three_segments,
@@ -160,8 +161,7 @@ def cylinder(
         raise Error("A cylinder's radii cannot be negative")
     if radius_top.value == 0 and radius_bottom.value == 0:
         raise Error("A cylinder needs a radius at one end or the other")
-    if height.value <= 0:
-        raise Error("A cylinder needs a positive height")
+    require_positive(height.value, "A cylinder needs a positive height")
     require_three_segments(
         radial_segments, "A cylinder needs at least three segments around"
     )

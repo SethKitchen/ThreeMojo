@@ -37,7 +37,7 @@ from cameras.camera import Camera
 from core.assets import Assets
 from core.buffer_geometry import UV, UV1
 from core.object3d import NodeId, Object3D
-from core.ordinal import require_index_in_count
+from core.ordinal import require_index_in_count, require_positive
 from core.scene import Scene
 from geometries.plane import plane
 from materials.material import (
@@ -136,8 +136,9 @@ struct ProgressiveLightMap(Movable):
         Raises:
             Error: If the resolution is not positive.
         """
-        if resolution <= 0:
-            raise Error("A light map's resolution must be positive")
+        require_positive(
+            resolution, "A light map's resolution must be positive"
+        )
         self.resolution = resolution
         self.maps = List[TextureId]()
         for index in range(2):  # pragma: no branch

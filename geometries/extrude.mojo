@@ -95,6 +95,7 @@ is split along is part of the surface. Both forms split it as three.js's
 """
 
 from core.buffer_attribute import BufferAttribute
+from core.ordinal import require_positive
 from geometries.surface import textured_surface
 from core.buffer_geometry import (
     BufferGeometry,
@@ -829,8 +830,7 @@ def check_extrusion(
     Raises:
         Error: If any option is outside the range given above.
     """
-    if depth.value <= 0:
-        raise Error("An extrusion needs a positive depth")
+    require_positive(depth.value, "An extrusion needs a positive depth")
     _check_sweep(steps)
     require_at_least_one(
         curve_segments, "An extrusion needs at least one curve segment"

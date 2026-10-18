@@ -40,7 +40,7 @@ from core.binary import (
     little_endian_u16,
     little_endian_u32,
 )
-from core.ordinal import require_index_in_count, require_valid
+from core.ordinal import require_index_in_count, require_valid, require_positive
 from render.checksum import crc32
 from render.inflate import inflate
 
@@ -430,8 +430,7 @@ def zip_archive(entries: List[ZipEntry], align: Int = 1) raises -> List[UInt8]:
             does not fit its non-ZIP64 representation, or the complete
             archive is 4 GiB or larger.
     """
-    if align < 1:
-        raise Error("ZIP: an alignment must be one or more")
+    require_positive(align, "ZIP: an alignment must be one or more")
     _ = _archive_length(len(entries), 0, 0)
     var local_length = 0
     var directory_length = 0

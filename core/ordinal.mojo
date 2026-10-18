@@ -10,8 +10,10 @@ last name. A value outside that range is not a name. Each id keeps its
 own type. `index_in_count` is true from zero through one below a count.
 `require_index_in_count` refuses an index outside that range.
 `require_non_negative` refuses an integer, a Float32, or a Float64 below zero.
-Callers keep their own error text. `require_draw_ids` refuses a negative
-node, geometry, and material, and builds the three messages from one label.
+`require_positive` refuses an integer, a Float32, or a Float64 that is zero
+or below. Callers keep their own error text. `require_draw_ids` refuses a
+negative node, geometry, and material, and builds the three messages from
+one label.
 `ordinal_label` returns a name from a list, or a fallback when the
 value is not valid. `require_valid` refuses a false validity flag.
 """
@@ -114,6 +116,57 @@ def require_non_negative(value: Float64, message: String) raises:
         Error: If `value` is below zero.
     """
     if value < 0:
+        raise Error(message)
+
+
+def require_positive(value: Int, message: String) raises:
+    """Refuse an integer that is zero or below.
+
+    Args:
+        value: The stored integer.
+        message: The error text for this caller.
+
+    Returns:
+        Nothing. The call returns when `value` is one or more.
+
+    Raises:
+        Error: If `value` is zero or below.
+    """
+    if value <= 0:
+        raise Error(message)
+
+
+def require_positive(value: Float32, message: String) raises:
+    """Refuse a Float32 that is zero or below.
+
+    Args:
+        value: The stored number.
+        message: The error text for this caller.
+
+    Returns:
+        Nothing. The call returns when `value` is above zero.
+
+    Raises:
+        Error: If `value` is zero or below.
+    """
+    if value <= 0:
+        raise Error(message)
+
+
+def require_positive(value: Float64, message: String) raises:
+    """Refuse a Float64 that is zero or below.
+
+    Args:
+        value: The stored number.
+        message: The error text for this caller.
+
+    Returns:
+        Nothing. The call returns when `value` is above zero.
+
+    Raises:
+        Error: If `value` is zero or below.
+    """
+    if value <= 0:
         raise Error(message)
 
 

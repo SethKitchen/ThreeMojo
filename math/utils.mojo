@@ -19,7 +19,7 @@ inputs before rounding. They avoid an overflowing period or add-divisor
 step, retain small phases, and clamp Euclidean endpoint rounding toward
 zero. See the Math wiki page for the finite and exceptional contracts.
 """
-from core.ordinal import ordinal_valid, require_valid
+from core.ordinal import ordinal_valid, require_valid, require_positive
 
 from math.quaternion import Quaternion
 from math.random import mulberry32_step
@@ -733,8 +733,9 @@ def ceil_power_of_two(value: Int) raises -> Int:
     Raises:
         Error: If the value is not positive or its ceiling does not fit in Int.
     """
-    if value <= 0:
-        raise Error("Only a positive number has a power of two above it")
+    require_positive(
+        value, "Only a positive number has a power of two above it"
+    )
     var power = 1
     while power < value:
         if power > Int.MAX // 2:
@@ -755,8 +756,9 @@ def floor_power_of_two(value: Int) raises -> Int:
     Raises:
         Error: If the value is not positive.
     """
-    if value <= 0:
-        raise Error("Only a positive number has a power of two below it")
+    require_positive(
+        value, "Only a positive number has a power of two below it"
+    )
     var power = 1
     # Divide the bound first so the comparison cannot overflow.
     while power <= value // 2:

@@ -30,6 +30,7 @@ fill it and to make it raw, in a buffer larger than any platform's.
 """
 
 from controls.input import InputDecoder, InputEvent
+from core.ordinal import require_positive
 from render.framebuffer import Framebuffer
 from std.ffi import c_int, external_call
 from units.si import Duration
@@ -165,8 +166,7 @@ def _write_all(fd: Int, text: String) raises:
             base.unsafe_offset(done).unsafe_bitcast[NoneType](),
             total - done,
         )
-        if written <= 0:
-            raise Error("Could not write to the terminal")
+        require_positive(written, "Could not write to the terminal")
         done += written
 
 
@@ -363,8 +363,7 @@ struct TerminalWindow(Movable):
             buffer.unsafe_ptr().unsafe_bitcast[NoneType](),
             READ_BYTES,
         )
-        if count <= 0:
-            raise Error("Could not read the terminal: it closed")
+        require_positive(count, "Could not read the terminal: it closed")
         buffer.resize(count, 0)
         var events = self.decoder.feed(buffer)
         for index in range(len(events)):
