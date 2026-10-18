@@ -37,6 +37,7 @@ three.js reads only it, and the old Radiance run-length scheme, which
 three.js does not read either, is not read.
 """
 
+from loaders.bytes import space_tab_return
 from render.float_image import FloatImage
 from render.png import MAX_PIXELS
 
@@ -57,11 +58,6 @@ comptime RUN_FLAG = 128
 comptime MAX_DIGITS = 9
 
 
-def _is_space(byte: UInt8) -> Bool:
-    """Return True for a space, a tab or a carriage return."""
-    return byte == 0x20 or byte == 0x09 or byte == 0x0D
-
-
 def _text(bytes: List[UInt8], start: Int, end: Int) -> String:
     """Return the bytes from `start` to `end` as text, one byte a
     character."""
@@ -76,7 +72,7 @@ def _words(line: String) -> List[String]:
     var out = List[String]()
     var word = String()
     for byte in line.as_bytes():
-        if _is_space(byte):
+        if space_tab_return(byte):
             if word.byte_length() > 0:
                 out.append(word)
                 word = String()
@@ -122,7 +118,7 @@ def _is_magic(bytes: List[UInt8], start: Int, end: Int) -> Bool:
         end - start >= 3
         and bytes[start] == 0x23
         and bytes[start + 1] == 0x3F
-        and not _is_space(bytes[start + 2])
+        and not space_tab_return(bytes[start + 2])
     )
 
 
