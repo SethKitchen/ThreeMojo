@@ -4366,7 +4366,7 @@ _PR760_CHECKER_SOURCE_EDGES = {'coverage_loop_proofs.py': {'after_sha256': '9cac
                                          'include_roots=include_roots, **operation_args))\n',
                                          '            result.update(density760_loops(root, '
                                          'include_roots=include_roots, **operation_args))\n')))},
- 'full_audit_cleanup_contracts.py': {'after_sha256': 'f63d0e3daae50b30a029f608ff79ea8d992cb855b91acce5013997ca4f3651e7',
+ 'full_audit_cleanup_contracts.py': {'after_sha256': 'cfff9707a98289b6c91ad2d59305a5354ef2177b13e1d3fda64fe0240ad560f2',
                                      'before_sha256': '6138ba2dcac394c716ea9ed32e74e0c6d15857d5c605fc82304d21d0c80fdc69',
                                      'edits': ((53,
                                                 54,
@@ -4387,7 +4387,7 @@ _PR760_CHECKER_SOURCE_EDGES = {'coverage_loop_proofs.py': {'after_sha256': '9cac
                                                  'PR760_IMAGE = '
                                                  "'tools/carla_lane_oracle/pr760-source-image.json'\n",
                                                  'PR760_IMAGE_SHA256 = '
-                                                 "'2d9dabe923754c01ed178af0a2ced95ce28058bab38821dfdb25a8197889dc50'\n",
+                                                 "'242cebf3e80285c10ce01d6bd13a8b559199a8d08518b516890d6a36a609411f'\n",
                                                  'PR760_OWNER_PREDECESSOR = '
                                                  "'tools/carla_lane_oracle/pr760-owner-predecessor.txt'\n",
                                                  'PR760_OWNER_PREDECESSOR_SHA256 = '
@@ -4579,11 +4579,11 @@ _PR760_CHECKER_SOURCE_EDGES = {'coverage_loop_proofs.py': {'after_sha256': '9cac
                                                  'def provenance_after_sha256(edge):\n',
                                                  '    """Authenticate the historical comparison target separately '
                                                  'from physical bytes."""\n',
-                                                 "    require(type(edge) is dict and type(edge.get('path')) is "
-                                                 'str,\n',
-                                                 "            'invalid provenance edge')\n",
+                                                 "    require(type(edge) is dict, 'invalid provenance edge')\n",
                                                  "    if 'provenance_after_sha256' not in edge:\n",
                                                  "        return edge['after_sha256']\n",
+                                                 "    require(type(edge.get('path')) is str, 'invalid provenance "
+                                                 "edge')\n",
                                                  '    pr760_stage.verify_stage_data()\n',
                                                  "    path = edge['path']\n",
                                                  '    require(path in pr760_stage.CARLA_REGISTRY_PATHS,\n',
@@ -5168,7 +5168,7 @@ _PR760_CHECKER_SOURCE_EDGES = {'coverage_loop_proofs.py': {'after_sha256': '9cac
                                                  "'77d838415054e1fea54ede845bf70e8d98ed7243c3e74dbcef0283e4798b21cb',\n",
                                                  "        'tools/carla_lane_oracle/pr760-source-image.json',\n",
                                                  '        '
-                                                 "'2d9dabe923754c01ed178af0a2ced95ce28058bab38821dfdb25a8197889dc50',\n",
+                                                 "'242cebf3e80285c10ce01d6bd13a8b559199a8d08518b516890d6a36a609411f',\n",
                                                  '        '
                                                  "'tools/carla_lane_oracle/pr760-owner-predecessor.txt',\n",
                                                  '        '

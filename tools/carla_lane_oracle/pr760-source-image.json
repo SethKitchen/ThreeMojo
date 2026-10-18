@@ -2860,7 +2860,7 @@
     "tools/carla_lane_oracle/test_coverage_invariant_contracts.py": "8ec5dfed0b21c02a2104c4df8778fe1e11215cd67a9fa7d4808c30e4cc4e2841",
     "tools/carla_lane_oracle/test_expectation_binding_successor.py": "59fdf894d596242d6bc5b5bb5804652b158b7bbb60c7abe688bc6b45b47f6c2e",
     "tools/carla_lane_oracle/test_pr760_arithmetic_stage.py": "16a8cdd276db7fc859d9cbe706eb31f083f80dffd5984119847c495d5be661f2",
-    "tools/carla_lane_oracle/test_pr760_physical_image.py": "cf81e0a1f05dc073d6be181963540877ac506657fc89387f79d0057fbd3596f3",
+    "tools/carla_lane_oracle/test_pr760_physical_image.py": "9d7352f64ad6a96ddf9674f8f9e9c2dd4041b606da9b4b7ccaf7d6bb23b9a558",
     "tools/carla_lane_oracle/test_scaled_float32_contracts.py": "dfed575b3625ee6dab4257055023be20d60da8a20529f729e890df22679396a6",
     "tools/carla_lane_oracle/test_shared_helper_contracts.py": "e14bee90aaa9cc0f5a6a062890905c1bd772381d6351fe0198c5d677100adb78",
     "tools/carla_lane_oracle/test_typed_boundary_contracts.py": "62998e42c4e27f9e8c8bccddf585d2aecc8a7926c8089400f595e206c104a04c",

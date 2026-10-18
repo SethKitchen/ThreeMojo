@@ -20,6 +20,55 @@ import pr760_arithmetic_stage as stage
 ROOT = Path(__file__).resolve().parents[2]
 
 
+class LegacyProvenanceControls(unittest.TestCase):
+    def test_authenticated_outer_keyed_edges_keep_original_after_comparison(self):
+        import reviewed_cleanup_contracts as cleanup
+        edges = cleanup.read_record(ROOT)['sources']
+        self.assertEqual(set(edges), set(cleanup.SOURCE_PATHS))
+        for path, edge in edges.items():
+            with self.subTest(path=path):
+                self.assertEqual(set(edge), {'before_sha256', 'after_sha256',
+                    'before_token_sha256', 'after_token_sha256'})
+                original = dict(edge)
+                self.assertEqual(owner.provenance_after_sha256(edge), edge['after_sha256'])
+                self.assertEqual(edge, original)
+
+    def test_composed_field_requires_its_exact_registered_path(self):
+        import reviewed_cleanup_contracts as cleanup
+        for path, edge in cleanup.read_record(ROOT)['sources'].items():
+            for value in (None, 7, path, 'unregistered.mojo'):
+                bad = {**edge, 'provenance_after_sha256': edge['after_sha256']}
+                if value is not None:
+                    bad['path'] = value
+                with self.subTest(path=path, value=value), self.assertRaises(owner.ContractError):
+                    owner.provenance_after_sha256(bad)
+        for leaf in (owner.shared_helpers, owner.scaled_float32):
+            bindings = {p: owner.sha((ROOT/p).read_bytes()) for p in leaf.SOURCE_PATHS}
+            for path, edge in owner._pr760_composed_edges(leaf, bindings).items():
+                if 'provenance_after_sha256' not in edge:
+                    continue
+                self.assertEqual(owner.provenance_after_sha256(edge), leaf.AFTER_SHA256[path])
+                for value in (None, 7, []):
+                    bad = dict(edge)
+                    if value is None:
+                        del bad['path']
+                    else:
+                        bad['path'] = value
+                    with self.subTest(path=path, value=value), self.assertRaises(owner.ContractError):
+                        owner.provenance_after_sha256(bad)
+
+    def test_nonbuiltin_edges_still_refuse_and_legacy_missing_after_is_unchanged(self):
+        from types import MappingProxyType
+        class Edge(dict):
+            pass
+        for edge in (None, [], (), Edge(after_sha256='0'*64),
+                     MappingProxyType({'after_sha256': '0'*64})):
+            with self.subTest(kind=type(edge).__name__), self.assertRaises(owner.ContractError):
+                owner.provenance_after_sha256(edge)
+        with self.assertRaises(KeyError):
+            owner.provenance_after_sha256({})
+
+
 class ClosedPhysicalImageControls(unittest.TestCase):
     @classmethod
     def setUpClass(cls):

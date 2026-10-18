@@ -147,7 +147,7 @@ NATIVE_SUPPORT_MAPPING = {'tests/test_carla_junction_endpoint_refusals.mojo': ['
 THEOREM_DOCUMENT = 'docs/validation/full-audit-711-invariants.md'
 PR760_STAGE_SHA256 = '77d838415054e1fea54ede845bf70e8d98ed7243c3e74dbcef0283e4798b21cb'
 PR760_IMAGE = 'tools/carla_lane_oracle/pr760-source-image.json'
-PR760_IMAGE_SHA256 = '2d9dabe923754c01ed178af0a2ced95ce28058bab38821dfdb25a8197889dc50'
+PR760_IMAGE_SHA256 = '242cebf3e80285c10ce01d6bd13a8b559199a8d08518b516890d6a36a609411f'
 PR760_OWNER_PREDECESSOR = 'tools/carla_lane_oracle/pr760-owner-predecessor.txt'
 PR760_OWNER_PREDECESSOR_SHA256 = '6138ba2dcac394c716ea9ed32e74e0c6d15857d5c605fc82304d21d0c80fdc69'
 DEPENDENCY_TOOL_SHA256 = {'tools/carla_lane_oracle/winner_sign_contracts.py': 'f850902634073364fe2407b00d12e9fdfb2ecfc6cf2a03414269fbb7984a8a7f',
@@ -1129,10 +1129,10 @@ def _pr760_composed_edges(leaf, bindings):
 
 def provenance_after_sha256(edge):
     """Authenticate the historical comparison target separately from physical bytes."""
-    require(type(edge) is dict and type(edge.get('path')) is str,
-            'invalid provenance edge')
+    require(type(edge) is dict, 'invalid provenance edge')
     if 'provenance_after_sha256' not in edge:
         return edge['after_sha256']
+    require(type(edge.get('path')) is str, 'invalid provenance edge')
     pr760_stage.verify_stage_data()
     path = edge['path']
     require(path in pr760_stage.CARLA_REGISTRY_PATHS,
@@ -4128,7 +4128,7 @@ def _pr760_authority_data():
     require((PR760_STAGE_SHA256, PR760_IMAGE, PR760_IMAGE_SHA256, PR760_OWNER_PREDECESSOR, PR760_OWNER_PREDECESSOR_SHA256) == (
         '77d838415054e1fea54ede845bf70e8d98ed7243c3e74dbcef0283e4798b21cb',
         'tools/carla_lane_oracle/pr760-source-image.json',
-        '2d9dabe923754c01ed178af0a2ced95ce28058bab38821dfdb25a8197889dc50',
+        '242cebf3e80285c10ce01d6bd13a8b559199a8d08518b516890d6a36a609411f',
         'tools/carla_lane_oracle/pr760-owner-predecessor.txt',
         '6138ba2dcac394c716ea9ed32e74e0c6d15857d5c605fc82304d21d0c80fdc69',
     ), 'PR760 authority selectors changed')
