@@ -26,7 +26,7 @@ from extensions.humanoid.skeleton.hand.muscles.dimensions import (
     is_hand_tendon,
     hand_muscle_label,
 )
-from extensions.humanoid.skeleton.isosurface import check_detail, mesh_field
+from extensions.humanoid.skeleton.isosurface import mesh_checked
 from extensions.humanoid.spec import HumanoidSpec
 
 # The thinnest radius a tendon mesh shows, as a ratio of stature.
@@ -83,5 +83,4 @@ def hand_muscle_from_dimensions(
     if is_hand_tendon(part):
         field = field.widened(DISPLAY_TENDON * dimensions.arm.stature.value)
     var label = hand_muscle_label(part)
-    check_detail(detail, label)
-    return mesh_field(field, field.low, field.high, detail, label)
+    return mesh_checked(field, field.low, field.high, detail, label)

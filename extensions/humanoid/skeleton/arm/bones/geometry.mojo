@@ -24,7 +24,7 @@ from extensions.humanoid.skeleton.arm.frame import (
     ArmDimensions,
     arm_dimensions,
 )
-from extensions.humanoid.skeleton.isosurface import check_detail, mesh_field
+from extensions.humanoid.skeleton.isosurface import mesh_checked
 
 
 def arm_bone(
@@ -72,5 +72,4 @@ def arm_bone_from_dimensions(
     """
     var field = arm_bone_field(dimensions, part, side)
     var label = arm_bone_label(part)
-    check_detail(detail, label)
-    return mesh_field(field, field.low, field.high, detail, label)
+    return mesh_checked(field, field.low, field.high, detail, label)

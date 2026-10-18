@@ -77,33 +77,16 @@ def turn(origin: Vector2, first: Vector2, second: Vector2) -> Float32:
     return (first - origin).cross(second - origin)
 
 
-# How much of a turn is just the arithmetic, as a share of the size of the
-# shape being measured. About eight times `Float32`'s own epsilon: three
-# points read off a contour that spans `s` meters carry a rounding error of
-# roughly `eps * s` in each coordinate, so the turn they make carries
-# roughly `eps * s` times the distance the turn is measured across, and a
-# threshold of that shape is the only one that separates a real corner from
-# the rounding at every size.
+# Noise floor for a contour turn, as a share of the shape's size. About
+# eight times Float32 epsilon: three points on a contour of size `s` carry
+# about `eps * s` of rounding, so a turn of that size is the smallest
+# corner that is not the arithmetic.
 #
-# Two fixed thresholds came before this one, and both were wrong in a way
-# worth writing down.
-#
-# The first was 1e-6 square meters flat, described in a comment as a square
-# micrometer; it is a square millimeter, and that was the smaller mistake.
-# The real one was that a square five millimeters on a side, sampled into
-# twelve runs an edge, has a true corner whose turn measures 1.7e-7. The
-# threshold called that corner flat and threw the whole shape away, and
-# sampling it more finely made more shapes vanish rather than fewer.
-#
-# The second scaled with the distance between a point's two neighbors,
-# which reads as "how flat, for a step this long". That drops a shallow
-# corner on a long edge: the point of a triangle ten meters long and a
-# millimeter thick stands 8e-5 meters off the line through its neighbors,
-# which is a real corner of a real shape and was called flat.
-#
-# What is left is a noise floor and nothing else. A point is dropped when
-# the turn it makes is no larger than the arithmetic could have invented,
-# and kept otherwise, however shallow the corner is.
+# A flat 1e-6 m^2 cut is a square millimeter, not a square micrometer, and
+# it drops a real 5 mm corner whose turn is 1.7e-7. A cut scaled by the
+# neighbor spacing drops a triangle 10 m long and 1 mm thick: its corner
+# stands 8e-5 m off the neighbor line. Drop a point only when its turn is
+# no larger than that rounding.
 comptime NOISE = Float32(1e-6)
 
 

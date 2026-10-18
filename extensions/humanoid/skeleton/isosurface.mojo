@@ -195,6 +195,31 @@ def mesh_field[
     return mesh_samples(sample_field(field, low, grid), low, grid, bone)
 
 
+def mesh_checked[
+    F: DistanceField
+](
+    field: F, low: Vector3, high: Vector3, detail: Int, bone: String
+) raises -> BufferGeometry:
+    """Return the marching-tetrahedra surface of `field` at `detail`.
+
+    Args:
+        field: The implicit solid.
+        low: Minimum corner of the solid.
+        high: Maximum corner of the solid.
+        detail: Cells along the solid, eight through sixty-four.
+        bone: Name used in a density or empty-surface error.
+
+    Returns:
+        A geometry with `position`, `normal` and `uv` attributes.
+
+    Raises:
+        Error: If `detail` is out of range, or the field produces no
+            surface.
+    """
+    check_detail(detail, bone)
+    return mesh_field(field, low, high, detail, bone)
+
+
 def _clamp01(value: Float32) -> Float32:
     """Return `value` held to 0 through 1."""
     if value < 0:
