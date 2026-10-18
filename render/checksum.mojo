@@ -201,7 +201,7 @@ def crc32(bytes: List[UInt8]) -> UInt32:
     return crc.finish()
 
 
-def adler32(bytes: List[UInt8]) -> UInt32:
+def adler32(bytes: Span[UInt8, _]) -> UInt32:
     """Return the Adler-32 checksum zlib requires over the raw data.
 
     The two sums grow for a run of `ADLER_RUN` bytes and are reduced once
@@ -213,6 +213,9 @@ def adler32(bytes: List[UInt8]) -> UInt32:
 
     Returns:
         The checksum.
+
+    Raises:
+        Error: Never.
     """
     var low = UInt32(1)
     var high = UInt32(0)
@@ -229,3 +232,19 @@ def adler32(bytes: List[UInt8]) -> UInt32:
         low %= ADLER_MODULUS
         high %= ADLER_MODULUS
     return (high << 16) | low
+
+
+def adler32(bytes: List[UInt8]) -> UInt32:
+    """Return the Adler-32 checksum zlib requires over the raw data.
+
+    The two sums grow for a run of `ADLER_RUN` bytes and are reduced once
+    at its end, which is the same answer as reducing them after every byte
+    and a small fraction of the divisions.
+
+    Args:
+        bytes: The bytes to checksum.
+
+    Returns:
+        The checksum.
+    """
+    return adler32(Span(bytes))
