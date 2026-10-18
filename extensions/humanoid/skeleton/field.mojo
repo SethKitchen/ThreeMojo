@@ -15,7 +15,7 @@ from extensions.humanoid.side import BodySide
 from extensions.humanoid.spec import MAX_STATURE, MIN_STATURE
 from math.cross import cross_vectors
 from math.norm import squared_length3
-from math.utils import clamp, min3
+from math.utils import clamp, min3, mix_delta
 from math.vector3 import Vector3, component_max, component_min, mix_delta3
 from std.math import isfinite, max, min, pi, sqrt
 from units.si import Angle, Length
@@ -242,7 +242,7 @@ def bowed_station(t: Float32, a: Vector3, b: Vector3, bow: Vector3) -> Vector3:
     The bow offset peaks at mid-shaft, where `4 t (1 - t)` is one.
     """
     var s = 4 * t * (1 - t)
-    return a + (b - a) * t + bow * s
+    return mix_delta3(a, b, t) + bow * s
 
 
 def abs_f(value: Float32) -> Float32:
@@ -284,7 +284,7 @@ def sd_segment(
             t = 0
         if t > 1:
             t = 1
-    var radius = radius_a + (radius_b - radius_a) * t
+    var radius = mix_delta(radius_a, radius_b, t)
     return (from_a - along * t).length() - radius
 
 
@@ -327,9 +327,9 @@ def sd_ellipse_segment(
             t = 0
         if t > 1:
             t = 1
-    var ml_r = ml_a + (ml_b - ml_a) * t
-    var ap_r = ap_a + (ap_b - ap_a) * t
-    var center = a + along * t
+    var ml_r = mix_delta(ml_a, ml_b, t)
+    var ap_r = mix_delta(ap_a, ap_b, t)
+    var center = mix_delta3(a, b, t)
     var offset = point - center
     var tangent = Vector3(0, 1, 0)
     if span > 0:
@@ -651,9 +651,9 @@ def tapered_tube(
         mix_point(a, b, 0.75),
         b,
         radius_a,
-        radius_a + (radius_b - radius_a) * 0.25,
-        radius_a + (radius_b - radius_a) * 0.50,
-        radius_a + (radius_b - radius_a) * 0.75,
+        mix_delta(radius_a, radius_b, Float32(0.25)),
+        mix_delta(radius_a, radius_b, Float32(0.50)),
+        mix_delta(radius_a, radius_b, Float32(0.75)),
         radius_b,
     )
 

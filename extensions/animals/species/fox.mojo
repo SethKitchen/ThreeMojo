@@ -1218,7 +1218,7 @@ def _seg_d(h: V3, a: V3, b: V3) -> V3:
     # segment, and how far along it the nearest point is.
     var q = V3(abs(h.x), h.y, h.z)
     var u = segment_param(q, a, b)
-    return V3(length(q - (a + (b - a) * u)), u, 0.0)
+    return V3(length(q - lerp(a, b, u)), u, 0.0)
 
 
 def _tail_at(t: Traits, bone: String, p: V3) -> V3:

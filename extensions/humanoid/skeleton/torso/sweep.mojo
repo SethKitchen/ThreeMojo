@@ -30,8 +30,8 @@ from extensions.humanoid.skeleton.field import (
 from math.box_extent import box_exterior
 from math.catmull import catmull_rom_point
 from math.norm import squared_length2
-from math.utils import clamp
-from math.vector3 import Vector3, component_max, component_min
+from math.utils import clamp, mix_delta
+from math.vector3 import Vector3, component_max, component_min, mix_delta3
 from std.math import max, min, pi, sqrt
 
 # A value larger than any distance a torso part can hold.
@@ -120,9 +120,9 @@ struct Sweep(Copyable, Movable):
                 if span == 0:
                     continue
                 var t = clamp((point.y - a.p.y) / span, 0, 1)
-                var center = a.p + (b.p - a.p) * t
-                var ml = a.ml + (b.ml - a.ml) * t
-                var ap = a.ap + (b.ap - a.ap) * t
+                var center = mix_delta3(a.p, b.p, t)
+                var ml = mix_delta(a.ml, b.ml, t)
+                var ap = mix_delta(a.ap, b.ap, t)
                 var u = (point.x - center.x) / ml
                 var v = (point.z - center.z) / ap
                 var q = sqrt(squared_length2[DType.float32](u, v))
@@ -463,5 +463,5 @@ def tube(points: List[Vector3], first: Float32, last: Float32) -> Sweep:
     var count = len(points)
     for index in range(count):  # pragma: no branch
         var t = Float32(index) / Float32(max(count - 1, 1))
-        sweep.round(points[index], first + (last - first) * t)
+        sweep.round(points[index], mix_delta(first, last, t))
     return sweep^

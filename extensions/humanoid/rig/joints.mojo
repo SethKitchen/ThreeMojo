@@ -39,7 +39,7 @@ from extensions.humanoid.skeleton.head.frame import head_muscle_dimensions
 from extensions.humanoid.skeleton.leg.assembly import assemble_leg
 from extensions.humanoid.skeleton.pelvis.assembly import assemble_pelvis
 from extensions.humanoid.spec import HumanoidSpec
-from math.vector3 import Vector3
+from math.vector3 import Vector3, mix_delta3
 
 
 @fieldwise_init
@@ -315,8 +315,8 @@ def humanoid_rig(
     var atlas = head.centers[0]
     var hips = Vector3(0, 0, neck.z)
     joints[HIPS.value] = hips
-    joints[SPINE.value] = hips + (neck - hips) * Float32(1.0 / 3.0)
-    joints[CHEST.value] = hips + (neck - hips) * Float32(2.0 / 3.0)
+    joints[SPINE.value] = mix_delta3(hips, neck, Float32(1.0 / 3.0))
+    joints[CHEST.value] = mix_delta3(hips, neck, Float32(2.0 / 3.0))
     joints[NECK.value] = neck
     joints[HEAD.value] = atlas
     ends[HIPS.value] = joints[SPINE.value]

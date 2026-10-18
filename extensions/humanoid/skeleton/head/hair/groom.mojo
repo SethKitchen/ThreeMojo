@@ -72,8 +72,8 @@ from extensions.humanoid.skeleton.surface_nets import surface_gradient
 from extensions.humanoid.skeleton.torso.body import BodySkinField
 from extensions.humanoid.spec import HumanoidSpec
 from math.cross import cross_vectors
-from math.utils import clamp
-from math.vector3 import Vector3
+from math.utils import clamp, mix_delta
+from math.vector3 import Vector3, mix_delta3
 from std.math import acos, cos, max, min, pi, pow, sin, sqrt
 
 # The most guides one groom has.
@@ -1317,7 +1317,7 @@ def _curl(
             j += 1
         var span = max(along[j + 1] - along[j], Float32(1e-9))
         var t = clamp((s - along[j]) / span, 0, 1)
-        var p = points[j] + (points[j + 1] - points[j]) * t
+        var p = mix_delta3(points[j], points[j + 1], t)
         var tangent = _unit_vector(points[j + 1] - points[j], Vector3(0, -1, 0))
         var n = normals[j]
         var outward = _unit_vector(n - tangent * n.dot(tangent), n)
@@ -1330,7 +1330,7 @@ def _curl(
             + outward * (swing * Float32(0.5) * (1 + sin(angle)))
         )
         ups.append(n)
-        deep.append(depths[j] + (depths[j + 1] - depths[j]) * t)
+        deep.append(mix_delta(depths[j], depths[j + 1], t))
     points = fine^
     normals = ups^
     depths = deep^

@@ -23,6 +23,7 @@ from extensions.sdf.field import SdfModel
 from extensions.sdf.vector import (
     V3,
     length,
+    lerp,
 )
 from math.norm import squared_length3
 from math.utils import max3, min3
@@ -294,7 +295,7 @@ async def _vertex_task(
             var t = va / (va - vb)
             var pa = V3(Float64(a & 1), Float64((a >> 1) & 1), Float64(a >> 2))
             var pb = V3(Float64(b & 1), Float64((b >> 1) & 1), Float64(b >> 2))
-            sum = sum + pa + (pb - pa) * t
+            sum = sum + lerp(pa, pb, t)
             crossings += 1
         var local = sum * (1.0 / Float64(crossings))
         var low = lattice.point(gx, gy, gz)

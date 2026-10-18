@@ -31,7 +31,7 @@ from extensions.humanoid.skeleton.torso.sweep import (
     SweepField,
     floats,
 )
-from math.vector3 import Vector3
+from math.vector3 import Vector3, mix_delta3
 
 # Cortical shell, as a ratio of stature.
 comptime HAND_SHELL = Float32(0.0006)
@@ -435,7 +435,7 @@ def _long_bone(
     var gap = f.cm(JOINT_GAP)
     var bone = Sweep(Vector3(1, 0, 0))
     bone.round(a + d * (base + gap), base)
-    bone.round(a + (b - a) * 0.5, shaft)
+    bone.round(mix_delta3(a, b, Float32(0.5)), shaft)
     var end = b - d * (head + gap)
     if part.value >= DISTAL_PHALANX_1.value:
         end = b - d * head

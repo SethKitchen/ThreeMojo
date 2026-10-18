@@ -29,7 +29,7 @@ from extensions.humanoid.skeleton.field import DistanceField, cross
 from math.box_extent import box_exterior
 from math.utils import clamp, max3
 from math.bounds import enclose_point
-from math.vector3 import Vector3
+from math.vector3 import Vector3, mix_delta3
 from std.collections import Dict
 from std.math import acos, iota, max, min
 from std.atomic import Atomic, Ordering
@@ -76,7 +76,7 @@ def _closest_on_flat_triangle(
             part = ON_A
         elif t == 1:
             part = ON_B
-        return (a + ab * t, t, Float32(0), part)
+        return (mix_delta3(a, b, t), t, Float32(0), part)
     if ac2 >= bc2:
         var t = clamp((p - a).dot(ac) / ac2, 0, 1)
         var part = ON_CA
@@ -84,14 +84,14 @@ def _closest_on_flat_triangle(
             part = ON_A
         elif t == 1:
             part = ON_C
-        return (a + ac * t, Float32(0), t, part)
+        return (mix_delta3(a, c, t), Float32(0), t, part)
     var t = clamp((p - b).dot(bc) / bc2, 0, 1)
     var part = ON_BC
     if t == 0:
         part = ON_B
     elif t == 1:
         part = ON_C
-    return (b + bc * t, 1 - t, t, part)
+    return (mix_delta3(b, c, t), 1 - t, t, part)
 
 
 def closest_on_triangle(
@@ -132,7 +132,7 @@ def closest_on_triangle(
     var vc = d1 * d4 - d3 * d2
     if vc <= 0 and d1 >= 0 and d3 <= 0:
         var v = d1 / (d1 - d3)
-        return (a + ab * v, v, Float32(0), ON_AB)
+        return (mix_delta3(a, b, v), v, Float32(0), ON_AB)
     var cp = p - c
     var d5 = ab.dot(cp)
     var d6 = ac.dot(cp)
@@ -143,15 +143,15 @@ def closest_on_triangle(
     # edge terms are too; the weights are clamped against rounding.
     if vb <= 0 and d6 <= 0:
         var w = clamp(d2 / (d2 - d6), 0, 1)
-        return (a + ac * w, Float32(0), w, ON_CA)
+        return (mix_delta3(a, c, w), Float32(0), w, ON_CA)
     var va = d3 * d6 - d5 * d4
     if va <= 0:
         var w = clamp((d4 - d3) / ((d4 - d3) + (d5 - d6)), 0, 1)
-        return (b + (c - b) * w, 1 - w, w, ON_BC)
+        return (mix_delta3(b, c, w), 1 - w, w, ON_BC)
     var denom = 1 / (va + vb + vc)
     var v = vb * denom
     var w = vc * denom
-    return (a + ab * v + ac * w, v, w, ON_FACE)
+    return (mix_delta3(a, b, v) + ac * w, v, w, ON_FACE)
 
 
 def _box_gap(low: Vector3, high: Vector3, p: Vector3) -> Float32:
