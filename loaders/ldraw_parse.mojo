@@ -38,6 +38,7 @@ hexadecimal, an edge color that names no color, an alpha or luminance
 that is not a number, and a file that is not found.
 """
 
+from math.utils import clamp
 from loaders.bytes import hex_digit_value
 from loaders.js_number import js_parse_float
 from std.math import nan
@@ -645,7 +646,7 @@ struct LDrawLoader(Movable):
                         + lp.where()
                         + "."
                     )
-                alpha = max(0.0, min(1.0, alpha / 255))
+                alpha = clamp(alpha / 255, 0.0, 1.0)
                 if alpha < 1:
                     transparent = True
             elif upper == "LUMINANCE":
@@ -1031,4 +1032,4 @@ def _luminance(token: String) -> Float64:
         value = js_parse_int(token)
     if _is_nan(value):
         return value
-    return max(0.0, min(1.0, value / 255))
+    return clamp(value / 255, 0.0, 1.0)
