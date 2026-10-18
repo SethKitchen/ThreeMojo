@@ -52,7 +52,7 @@ from math.curve_checks import (
     curve_sample_count,
     require_length_table,
 )
-from math.utils import clamp
+from math.utils import clamp_unit
 from math.curve3 import Curve3, FrenetFrames
 from math.vector3 import Vector3
 from math.norm import (
@@ -600,10 +600,8 @@ def frames3_of[
         if length3(turn) > NUMBER_EPSILON:
             turn = normalized3(turn)
             var theta = acos(
-                clamp(
-                    dot3(frames.tangents[step - 1], frames.tangents[step]),
-                    -1.0,
-                    1.0,
+                clamp_unit(
+                    dot3(frames.tangents[step - 1], frames.tangents[step])
                 )
             )
             next_normal = _rotated(next_normal, turn, theta)
@@ -611,7 +609,7 @@ def frames3_of[
         frames.binormals.append(cross3(frames.tangents[step], next_normal))
     if closed:
         var theta = acos(
-            clamp(dot3(frames.normals[0], frames.normals[segments]), -1.0, 1.0)
+            clamp_unit(dot3(frames.normals[0], frames.normals[segments]))
         )
         theta /= Float64(segments)
         var twist = cross3(frames.normals[0], frames.normals[segments])

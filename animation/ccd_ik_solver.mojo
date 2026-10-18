@@ -43,7 +43,7 @@ from core.object3d import NodeId
 from core.ordinal import require_index_in_count
 from core.scene import Scene, require_skinned_mesh
 from math.euler import Euler
-from math.utils import clamp
+from math.utils import clamp_unit
 from math.quaternion import Quaternion
 from math.vector3 import Vector3
 from std.math import acos, sqrt
@@ -248,7 +248,7 @@ struct CCDIKSolver(Movable):
                 to_target.apply_quaternion(facing)
                 to_target.normalize()
                 # Rounding can carry the dot of two unit vectors past one.
-                var cosine = clamp(to_target.dot(to_effector), -1, 1)
+                var cosine = clamp_unit(to_target.dot(to_effector))
                 var angle = acos(cosine)
                 if angle < SMALLEST_TURN:
                     continue

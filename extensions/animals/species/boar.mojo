@@ -84,6 +84,7 @@ from extensions.animals.warp import (
     legs_warp,
     scale_about_warp,
 )
+from math.utils import clamp_unit
 from std.math import asin, atan2, cos, pi, pow, sin, sqrt
 from extensions.sdf.distance import ellipsoid_estimate, round_cone_estimate
 
@@ -1488,7 +1489,7 @@ def boar_paint(
         if tag == "tassel":
             c = pal.get("mane")
     else:
-        var up = clamp(n.y, -1.0, 1.0)
+        var up = clamp_unit(n.y)
         c = mix3(
             pal.get("base"), pal.get("dorsal"), smoothstep(0.2, 0.95, up) * 0.8
         )

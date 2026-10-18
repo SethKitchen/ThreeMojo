@@ -73,6 +73,7 @@ from extensions.animals.warp import (
     scale_about_warp,
 )
 from math.norm import squared_length2
+from math.utils import clamp_unit
 from std.math import atan2, cos, pi, pow, sin, sqrt
 
 comptime TAIL_SEGS = 12
@@ -1294,7 +1295,7 @@ def rat_paint(
         c = mix3(c, pal.get("belly"), clamp(chin, 0.0, 1.0) * 0.8)
         ag *= 0.75
     else:
-        var up = clamp(n.y, -1.0, 1.0)
+        var up = clamp_unit(n.y)
         c = mix3(pal.get("low"), pal.get("flank"), smoothstep(-0.35, 0.2, up))
         c = mix3(c, pal.get("back"), smoothstep(0.25, 0.85, up))
         var ventral = smoothstep(-0.2, -0.55, n.y) * smoothstep(

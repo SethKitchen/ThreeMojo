@@ -75,7 +75,7 @@ from math.bezier import (
 from math.curve import ARC_DIVISIONS, SEGMENT_SAMPLES, arc_samples, u_to_t
 from math.polyline import prefix_lengths, unit_direction
 from math.quaternion import Quaternion
-from math.utils import clamp
+from math.utils import clamp, clamp_unit
 from math.vector3 import Vector3
 from std.math import acos, floor
 from units.si import Angle, Length, METER, RADIAN
@@ -720,9 +720,7 @@ def transport_frames(
         axis.cross(tangents[ring])
         if axis.length() > STRAIGHT:
             axis.normalize()
-            var angle = acos(
-                clamp(tangents[ring - 1].dot(tangents[ring]), -1, 1)
-            )
+            var angle = acos(clamp_unit(tangents[ring - 1].dot(tangents[ring])))
             normal = _turned(normal, axis, angle)
         elif tangents[ring - 1].dot(tangents[ring]) < 0:
             raise Error("A curve's frames cannot fold straight back")
@@ -733,7 +731,7 @@ def transport_frames(
 
     if closed:
         var twist = acos(
-            clamp(frames.normals[0].dot(frames.normals[last]), -1, 1)
+            clamp_unit(frames.normals[0].dot(frames.normals[last]))
         )
         twist /= Float32(last)
         var handed = frames.normals[0]

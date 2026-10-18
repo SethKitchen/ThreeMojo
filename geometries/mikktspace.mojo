@@ -63,7 +63,7 @@ from math.matrix_determinant import _sum_products as _exact_products
 from math.triangle_normal import _difference_product_wide
 
 from math.norm import length3, normalized3, _ordinary_squared
-from math.utils import clamp
+from math.utils import clamp_unit
 from core.buffer_attribute import BufferAttribute
 from core.buffer_geometry import (
     BufferGeometry,
@@ -940,7 +940,7 @@ def _eval_space(
         var v1 = _projected_edge(p0, p1, n)
         var v2 = _projected_edge(p2, p1, n)
         var cosine = _dot(v1, v2)
-        cosine = clamp(cosine, -1, 1)
+        cosine = clamp_unit(cosine)
         var wide_angle = _corner_angle(p0, p1, p2, n, cosine)
         var angle = Float32(wide_angle)
         if wide_angle > 0 and angle < FLT_MIN:

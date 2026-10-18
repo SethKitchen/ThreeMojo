@@ -30,7 +30,7 @@ from extensions.sdf.vector import (
 )
 from math.norm import squared_length2
 from math.sine import fraction
-from math.utils import clamp, max3
+from math.utils import clamp_unit, max3
 from math.finite import require_finite, require_finite_group
 from std.math import atan2, acos, cos, isfinite, pi, sin, sqrt
 from units.si import METER, SECOND, Duration, Length
@@ -163,7 +163,7 @@ def solve_two_bone(
     var cos_root = (
         squared_length2[DType.float64](na, nr) - nb * nb
     ) / denominator
-    var at_root = acos(clamp(cos_root, -1.0, 1.0))
+    var at_root = acos(clamp_unit(cos_root))
     var upper = _angle(direction) - bend * at_root
     var upper_dir = V3(0.0, cos(upper), sin(upper))
     var new_mid = root + upper_dir * la

@@ -76,7 +76,7 @@ from extensions.animals.species.hoofed import (
 )
 from extensions.animals.traits import Traits
 from math.sine import fraction
-from math.utils import rec709_luminance
+from math.utils import clamp_unit, rec709_luminance
 from extensions.sdf.vector import (
     V3,
     clamp,
@@ -2066,7 +2066,7 @@ def goat_paint(
     var msd = _mark_sd(pal, t, masks, region, tag, bone, legness, h, p, n)
     var white = pink > 0.0 and msd > 0.0
     var mark = pal.get("mark")
-    var up = clamp(n.y, -1.0, 1.0)
+    var up = clamp_unit(n.y)
     var c: V3
     var surface = FUR
     var takes_mark = True

@@ -67,6 +67,7 @@ from extensions.animals.warp import (
 )
 from math.norm import squared_length2
 from math.smoothstep import hermite_fade
+from math.utils import clamp_unit
 from std.math import cos, pi, sin
 from extensions.sdf.distance import ellipsoid_estimate, round_cone_estimate
 
@@ -1106,7 +1107,7 @@ def rabbit_paint(
         )
         ag *= 0.3
     else:
-        var up = clamp(n.y, -1.0, 1.0)
+        var up = clamp_unit(n.y)
         c = mix3(pal.get("low"), pal.get("flank"), smoothstep(-0.3, 0.3, up))
         c = mix3(c, pal.get("back"), smoothstep(0.3, 0.9, up))
         c = mix3(

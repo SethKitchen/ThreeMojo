@@ -85,7 +85,7 @@ from extensions.animals.warp import (
     scale_about_warp,
 )
 from math.norm import squared_length2
-from math.utils import nearest_distance
+from math.utils import clamp_unit, nearest_distance
 from std.math import asin, atan2, cos, exp, floor, pi, pow, sin, sqrt
 from extensions.sdf.distance import segment_distance
 
@@ -1777,7 +1777,7 @@ def pig_paint(
     var f = _frame()
     var h = f.local(p)
     var off = pal.get("off")
-    var up = clamp(n.y, -1.0, 1.0)
+    var up = clamp_unit(n.y)
     var snout_k = t.get("snoutLen", 1.0) * SNOUT_K
     var dz = mix(0.06, 0.178, snout_k)
     var disc_w = smoothstep(dz - 0.02, dz - 0.002, h.z)

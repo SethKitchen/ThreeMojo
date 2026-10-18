@@ -36,7 +36,7 @@ Rx * Rx * Ry for it would be a rotation nobody asked for.
 """
 
 from math.matrix4 import Matrix4, rotation_x, rotation_y, rotation_z
-from math.utils import clamp
+from math.utils import clamp_unit
 from math.quaternion import Quaternion
 from math.vector3 import Vector3
 from std.math import asin, atan2
@@ -175,7 +175,7 @@ struct Euler(ImplicitlyCopyable):
         if not order.is_cyclic():
             sign = -1
         var middle_sine = sign * matrix.get(i, k)
-        var middle = asin(clamp(middle_sine, -1, 1))
+        var middle = asin(clamp_unit(middle_sine))
         var first: Float32
         var third: Float32
         if abs(middle_sine) < LOCK_THRESHOLD:

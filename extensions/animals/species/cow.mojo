@@ -86,6 +86,7 @@ from extensions.animals.warp import (
     length_warp,
     scale_about_warp,
 )
+from math.utils import clamp_unit
 from std.math import cos, pi, sin
 from extensions.sdf.distance import oriented_ellipsoid_estimate
 
@@ -1875,7 +1876,7 @@ def _paint_coat(
 ) -> V3:
     # The torso, neck and legs: countershaded, the Jersey's darker
     # shoulders, hips and lower legs.
-    var up = clamp(n.y, -1.0, 1.0)
+    var up = clamp_unit(n.y)
     var side = 1.0 if p.x >= 0.0 else -1.0
     var ventral = smoothstep(
         0.0, -0.7, n.y

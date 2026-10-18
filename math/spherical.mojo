@@ -13,7 +13,7 @@ the radius and the height are bare `Float32` meters, as `Vector3`'s
 components are.
 """
 
-from math.utils import clamp
+from math.utils import clamp, clamp_unit
 from math.vector3 import Vector3
 from math.norm import length2, _ordinary_squared
 from std.math import acos, atan2, cos, pi, sin, sqrt
@@ -50,7 +50,7 @@ struct Spherical(ImplicitlyCopyable):
             var direction = vector
             direction.normalize()
             ratio = direction.y
-        ratio = clamp(ratio, -1, 1)
+        ratio = clamp_unit(ratio)
         return Spherical(
             radius,
             Angle(acos(ratio), RADIAN),
