@@ -143,9 +143,9 @@ Each buffer must have the size of its kind, the number of channels that the guid
 
 It is not DLSS. It reads the color only, so it adds no detail that the render lacks. It does not denoise, so `supports` is false for Ray Reconstruction. A program that wants a denoised path-traced frame without DLSS must denoise it first with the passes in [Post-processing](Post-processing).
 
-`examples/streamline.mojo` shows the fallback. It renders a scene at the Balanced render size. It puts three images side by side. The first is the render, stretched with the nearest texel. The second is the same render through `SpatialUpscaler`. The third is the scene rendered at the output size.
+`docs/validation/streamline/streamline.mojo` shows the fallback. It renders a scene at the Balanced render size. It puts three images side by side. The first is the render, stretched with the nearest texel. The second is the same render through `SpatialUpscaler`. The third is the scene rendered at the output size.
 
-A row of magnified crops sits below. Run it with `mojo run -I . examples/streamline.mojo out/streamline.png`. It is not in the gallery.
+A row of magnified crops sits below. Run it with `mojo run -I . docs/validation/streamline/streamline.mojo out/streamline.png`. It is not in the gallery.
 
 ## The native binding
 
@@ -174,7 +174,7 @@ The tracking issue is [#771](https://github.com/SethKitchen/ThreeMojo/issues/771
 | ThreeMojo's frames through DLSS | Error 0.0021, against 0.0037 for the fallback |
 | The layout of an options struct | Members lie in the order of the headers |
 
-Three more programs call `slEvaluateFeature`. One uses a synthetic scene to settle the signs. One feeds the frames of `examples/streamline.mojo --frames` to DLSS. One tests five encodings of the depth. The README in that folder has the numbers.
+Three more programs call `slEvaluateFeature`. One uses a synthetic scene to settle the signs. One feeds the frames of `docs/validation/streamline/streamline.mojo --frames` to DLSS. One tests five encodings of the depth. The README in that folder has the numbers.
 
 The tests keep the answers of the plugin. `test_the_estimate_matches_the_running_plugin` holds twenty-five of them.
 

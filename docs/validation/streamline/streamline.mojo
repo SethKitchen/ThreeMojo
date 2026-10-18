@@ -5,7 +5,7 @@
 
 """Render at the size DLSS asks for, and upscale it on the CPU.
 
-    mojo run -I . examples/streamline.mojo [path.png]
+    mojo run -I . docs/validation/streamline/streamline.mojo [path.png]
 
 The page is Streamline. Three images sit side by side. On the left is a
 Balanced-mode render, 58 percent of each side, stretched to the output with
@@ -16,7 +16,7 @@ for. The row below magnifies the boxed part of each image five times.
 
 This is the CPU fallback and not DLSS. It is not in the gallery.
 
-    mojo run -I . examples/streamline.mojo --frames DIR
+    mojo run -I . docs/validation/streamline/streamline.mojo --frames DIR
 
 writes what a Streamline harness needs to run DLSS on the same scene: the
 jittered renders, their depth, the jitter that `frame_constants` hands to

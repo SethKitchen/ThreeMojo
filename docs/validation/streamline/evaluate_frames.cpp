@@ -1,4 +1,4 @@
-// Run DLSS Super Resolution (Streamline 2.14.16) on the frames that `examples/streamline.mojo --frames DIR`
+// Run DLSS Super Resolution (Streamline 2.14.16) on the frames that `docs/validation/streamline/streamline.mojo --frames DIR`
 // wrote: ThreeMojo's jittered renders, their depth, and the jitter that frame_constants hands to Streamline.
 // It measures the error against the full-size render for the jitter as given and for its negative.
 //
@@ -148,7 +148,7 @@ int main(int argc, char** argv) {
         barrier(t, SRV);
     };
 
-    // The camera of examples/streamline.mojo: 40 degrees, near 0.1, far 100. Row-major, row vectors, depth 0 to 1.
+    // The camera of docs/validation/streamline/streamline.mojo: 40 degrees, near 0.1, far 100. Row-major, row vectors, depth 0 to 1.
     const float zn = 0.1f, zf = 100.f, fov = 40.f * 3.14159265f / 180.f, aspect = (float)outW / outH;
     const float fy = 1.f / std::tan(fov / 2), fx = fy / aspect;
     sl::Constants base{};

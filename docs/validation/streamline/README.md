@@ -42,7 +42,7 @@ No program moves the camera. The depth run tests the content that moves, not the
 
 The offset is in render pixels, with x across and y down. The motion vector is in render pixels with `mvecScale` of one over the render size.
 
-`evaluate_frames.cpp` closes the loop with ThreeMojo's code. `mojo run -I . examples/streamline.mojo --frames DIR` renders 24 jittered frames with `JitteredCamera`. It takes the jitter for Streamline from `frame_constants`. The program feeds the frames to DLSS Balanced, 278 by 157 to 480 by 270, for 72 frames. The error is against the full-size render.
+`evaluate_frames.cpp` closes the loop with ThreeMojo's code. `mojo run -I . docs/validation/streamline/streamline.mojo --frames DIR` renders 24 jittered frames with `JitteredCamera`. It takes the jitter for Streamline from `frame_constants`. The program feeds the frames to DLSS Balanced, 278 by 157 to 480 by 270, for 72 frames. The error is against the full-size render.
 
 | Source | Error (MSE) |
 |---|---|
