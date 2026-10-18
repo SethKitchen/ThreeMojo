@@ -185,3 +185,30 @@ def distance_between_squared[T: PolylineVertex](start: T, end: T) -> Float32:
     """
     var step = start - end
     return step.length_sq()
+
+
+def lerp_in_place[T: PolylineVertex](mut value: T, other: T, alpha: Float32):
+    """Move `value` toward `other` by `alpha`.
+
+    Args:
+        value: The vector, changed in place.
+        other: The vector to move toward.
+        alpha: Zero stays, one arrives. Values outside run on.
+    """
+    var step = other - value
+    value = value + step * alpha
+
+
+def lerp_between[
+    T: PolylineVertex
+](mut value: T, start: T, end: T, alpha: Float32):
+    """Set `value` a fraction of the way from `start` to `end`.
+
+    Args:
+        value: The vector, changed in place.
+        start: The vector at an `alpha` of zero.
+        end: The vector at an `alpha` of one.
+        alpha: How far along.
+    """
+    var step = end - start
+    value = start + step * alpha

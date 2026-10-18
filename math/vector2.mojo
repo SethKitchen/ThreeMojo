@@ -12,6 +12,8 @@ from math.polyline import (
     clamp_to_length,
     distance_between,
     distance_between_squared,
+    lerp_between,
+    lerp_in_place,
     scale_to_length,
 )
 from math.utils import SeededRandom
@@ -312,8 +314,7 @@ struct Vector2(Equatable, ImplicitlyCopyable, PolylineVertex):
             other: The vector to move toward.
             alpha: Zero stays, one arrives.
         """
-        self.x += (other.x - self.x) * alpha
-        self.y += (other.y - self.y) * alpha
+        lerp_in_place(self, other, alpha)
 
     def lerp_vectors(mut self, start: Self, end: Self, alpha: Float32):
         """Set this vector a fraction of the way from `start` to `end`,
@@ -324,10 +325,7 @@ struct Vector2(Equatable, ImplicitlyCopyable, PolylineVertex):
             end: The vector at an `alpha` of one.
             alpha: How far along.
         """
-        self = Vector2(
-            start.x + (end.x - start.x) * alpha,
-            start.y + (end.y - start.y) * alpha,
-        )
+        lerp_between(self, start, end, alpha)
 
     def apply_matrix3(mut self, matrix: Matrix3):
         """Transform this point by a 2D affine matrix, three.js's
