@@ -35,7 +35,7 @@ than the size has, which three.js reads as levels of no width.
 """
 
 from core.binary import little_endian_u32
-from core.extent import positive_extent
+from core.extent import require_positive_extent
 from render.compressed_texture import (
     RGB_PVRTC_2BPPV1_FORMAT,
     RGB_PVRTC_4BPPV1_FORMAT,
@@ -112,8 +112,12 @@ def read(bytes: List[UInt8]) raises -> CompressedImage:
         faces = little_endian_u32(bytes, 48)
     else:
         raise Error("PVR: the file is neither version 2 nor version 3")
-    if not positive_extent(width, height, faces):
-        raise Error("PVR: the dimensions and the face count must be positive")
+    require_positive_extent(
+        width,
+        height,
+        "PVR: the dimensions and the face count must be positive",
+        faces,
+    )
     var power = (width & (width - 1)) == 0 and (height & (height - 1)) == 0
     if not power:
         raise Error("PVR: PVRTC's width and height must be powers of two")

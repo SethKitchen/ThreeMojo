@@ -129,7 +129,7 @@ from core.deform import (
     skin_pose,
     sphere_of,
 )
-from core.extent import positive_extent
+from core.extent import require_positive_extent
 from core.layers import Layers
 from core.buffer_geometry import (
     BufferGeometry,
@@ -457,8 +457,9 @@ def require_image_extent(width: Int, height: Int) raises:
     Raises:
         Error: If the width or the height is not positive.
     """
-    if not positive_extent(width, height):
-        raise Error("An image has a positive width and height")
+    require_positive_extent(
+        width, height, "An image has a positive width and height"
+    )
 
 
 struct Raycaster(ImplicitlyCopyable, RayQuery):

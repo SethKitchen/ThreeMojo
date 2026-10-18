@@ -21,7 +21,7 @@ pixel moves toward the disc's color by that share. A canvas keeps bytes,
 so each channel is rounded after each disc.
 """
 
-from core.extent import positive_extent
+from core.extent import require_positive_extent
 from math.norm import squared_length2, squared_length3
 from math.utils import SeededRandom, mix_delta
 from render.framebuffer import rounded_byte
@@ -80,8 +80,9 @@ def flakes_texture(
     Raises:
         Error: If a side is not at least one pixel.
     """
-    if not positive_extent(width, height):
-        raise Error("A flakes texture is at least one pixel on each side")
+    require_positive_extent(
+        width, height, "A flakes texture is at least one pixel on each side"
+    )
     var pixels = List[UInt8](capacity=width * height * 4)
     for _ in range(width * height):  # pragma: no branch
         pixels.append(127)

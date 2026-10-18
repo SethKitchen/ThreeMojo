@@ -46,7 +46,7 @@ from core.binary import (
     copy_byte_range,
     store_little_endian,
 )
-from core.extent import positive_extent
+from core.extent import require_positive_extent
 from geometries.curve_modifier import to_half_float
 from render.deflate import zlib_deflate
 from render.exr import (
@@ -86,8 +86,9 @@ def _check(
 ) raises:
     """Refuse a size, a compression or a sample type that three.js does
     not write."""
-    if not positive_extent(width, height):
-        raise Error("EXR export: an image needs a width and a height")
+    require_positive_extent(
+        width, height, "EXR export: an image needs a width and a height"
+    )
     if count != width * height * 4:
         raise Error(
             "EXR export: the data must hold four values for each of the "

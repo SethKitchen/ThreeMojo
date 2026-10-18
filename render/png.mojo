@@ -23,7 +23,7 @@ from core.binary import (
     append_little_endian_u16,
     big_endian_u32,
 )
-from core.extent import positive_extent
+from core.extent import require_positive_extent
 from render.checksum import Crc32, adler32
 from render.framebuffer import Color, Framebuffer, pixel_slot
 from render.srgb import LINEAR, SRGB, UNKNOWN_SPACE, ColorSpace
@@ -536,8 +536,9 @@ def decode(bytes: List[UInt8]) raises -> DecodedImage:
                 raise Error("A PNG header chunk is the wrong size")
             width = big_endian_u32(body, 0)
             height = big_endian_u32(body, 4)
-            if not positive_extent(width, height):
-                raise Error("A PNG's dimensions must be positive")
+            require_positive_extent(
+                width, height, "A PNG's dimensions must be positive"
+            )
             if width > MAX_DIMENSION or height > MAX_DIMENSION:
                 raise Error("A PNG larger than this decoder will build")
             if width * height > MAX_PIXELS:

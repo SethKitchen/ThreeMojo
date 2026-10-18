@@ -94,7 +94,7 @@ See `docs/wiki/Norm-consumers.md` for the changed operations, retained
 limits, and explicit zero and nonfinite rules.
 """
 
-from core.extent import positive_extent
+from core.extent import require_positive_extent
 from core.ordinal import ordinal_valid
 
 from math.finite import require_finite, require_finite_group
@@ -149,8 +149,9 @@ def require_texture_size(width: Int, height: Int) raises:
     Raises:
         Error: If the width or the height is not positive.
     """
-    if not positive_extent(width, height):
-        raise Error("Texture dimensions must be positive")
+    require_positive_extent(
+        width, height, "Texture dimensions must be positive"
+    )
 
 
 @fieldwise_init

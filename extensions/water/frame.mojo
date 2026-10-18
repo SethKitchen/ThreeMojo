@@ -67,7 +67,7 @@ from extensions.water.view import (
     require_view,
 )
 from cameras.camera import Camera
-from core.extent import positive_extent
+from core.extent import require_positive_extent
 from core.scene import Scene
 from math.finite import require_finite, require_positive_finite
 from math.utils import max3, rec709_luminance, saturate
@@ -125,8 +125,9 @@ def require_water_size(width: Int, height: Int) raises:
     Raises:
         Error: If the width or the height is not positive.
     """
-    if not positive_extent(width, height):
-        raise Error("Water image dimensions must be positive")
+    require_positive_extent(
+        width, height, "Water image dimensions must be positive"
+    )
 
 
 def camera_look(clock: Duration, sway: Bool, pitch: Angle) -> CameraLook:

@@ -49,7 +49,7 @@ in any order: without it, correctness depends on the draw order or on the
 scene happening to be convex.
 """
 
-from core.extent import positive_extent
+from core.extent import require_positive_extent
 from render.css_color import format_style, hex_string, parse_style
 from render.srgb import (
     LINEAR,
@@ -1019,8 +1019,9 @@ def require_framebuffer_size(width: Int, height: Int) raises:
     Raises:
         Error: If the width or the height is not positive.
     """
-    if not positive_extent(width, height):
-        raise Error("Framebuffer dimensions must be positive")
+    require_positive_extent(
+        width, height, "Framebuffer dimensions must be positive"
+    )
 
 
 def require_depth_length(length: Int, width: Int, height: Int) raises:

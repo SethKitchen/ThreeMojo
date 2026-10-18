@@ -6,7 +6,7 @@
 """Whether a width and a height are positive.
 
 A size of zero is not an image, a view, or a window. Callers keep their
-own error text.
+own error text. `require_positive_extent` raises that text.
 """
 
 
@@ -23,3 +23,25 @@ def positive_extent(width: Int, height: Int, depth: Int = 1) -> Bool:
         True when `width`, `height`, and `depth` are all greater than zero.
     """
     return width > 0 and height > 0 and depth > 0
+
+
+def require_positive_extent(
+    width: Int, height: Int, message: String, depth: Int = 1
+) raises:
+    """Refuse a size that is not positive.
+
+    Args:
+        width: The width.
+        height: The height.
+        message: The error text for this caller.
+        depth: A third size. One when the caller has only a width and a
+            height.
+
+    Returns:
+        Nothing. The call returns when every size is positive.
+
+    Raises:
+        Error: If `width`, `height`, or `depth` is not positive.
+    """
+    if not positive_extent(width, height, depth):
+        raise Error(message)

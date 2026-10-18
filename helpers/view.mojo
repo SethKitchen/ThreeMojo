@@ -38,7 +38,7 @@ camera, the first in three.js's order on a tie.
 disks with a 2D canvas. This port has no canvas text. The disks are
 unlabeled, as three.js's are by default. `dispose` has no counterpart.
 """
-from core.extent import positive_extent
+from core.extent import require_positive_extent
 from core.ordinal import ordinal_valid
 
 from cameras.orthographic_camera import OrthographicCamera
@@ -435,8 +435,9 @@ struct ViewHelper(Movable):
         Raises:
             Error: If the image has no size.
         """
-        if not positive_extent(width, height):
-            raise Error("A view helper needs an image with a size")
+        require_positive_extent(
+            width, height, "A view helper needs an image with a size"
+        )
         self._orient(camera)
         var dim = Float32(VIEW_HELPER_DIM)
         # three.js's `mouse`, from the corner the helper is drawn in.
