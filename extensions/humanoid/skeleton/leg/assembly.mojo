@@ -90,7 +90,7 @@ from extensions.humanoid.skeleton.look import (
     skin_phong,
     vein_phong,
 )
-from extensions.humanoid.skeleton.place import place_mesh
+from extensions.humanoid.skeleton.place import place_mesh_node
 from materials.material import MaterialId
 from math.vector3 import Vector3
 
@@ -220,7 +220,7 @@ def add_leg(
     var root = Object3D()
     var root_id = scene.attach(root^, parent)
     if contents.includes_bones():
-        _ = place_mesh(
+        _ = place_mesh_node(
             scene,
             assets,
             root_id,
@@ -228,7 +228,7 @@ def add_leg(
             bone_paint,
             pose.femur_origin,
         )
-        _ = place_mesh(
+        _ = place_mesh_node(
             scene,
             assets,
             root_id,
@@ -236,7 +236,7 @@ def add_leg(
             bone_paint,
             pose.tibia_origin,
         )
-        _ = place_mesh(
+        _ = place_mesh_node(
             scene,
             assets,
             root_id,
@@ -244,7 +244,7 @@ def add_leg(
             bone_paint,
             pose.fibula_origin,
         )
-        _ = place_mesh(
+        _ = place_mesh_node(
             scene,
             assets,
             root_id,
@@ -252,35 +252,35 @@ def add_leg(
             bone_paint,
             pose.patella_origin,
         )
-        _ = place_mesh(
+        _ = place_mesh_node(
             scene,
             assets,
             root_id,
             articular_cartilage(spec, side, detail),
             cartilage_paint,
         )
-        _ = place_mesh(
+        _ = place_mesh_node(
             scene,
             assets,
             root_id,
             medial_meniscus(spec, side, detail),
             meniscus_paint,
         )
-        _ = place_mesh(
+        _ = place_mesh_node(
             scene,
             assets,
             root_id,
             lateral_meniscus(spec, side, detail),
             meniscus_paint,
         )
-        _ = place_mesh(
+        _ = place_mesh_node(
             scene,
             assets,
             root_id,
             medial_collateral(spec, side, detail),
             ligament_paint,
         )
-        _ = place_mesh(
+        _ = place_mesh_node(
             scene,
             assets,
             root_id,
@@ -295,7 +295,7 @@ def add_leg(
             var paint = muscle_paint
             if is_tendon(part):
                 paint = tendon_paint
-            _ = place_mesh(
+            _ = place_mesh_node(
                 scene,
                 assets,
                 root_id,
@@ -313,7 +313,7 @@ def add_leg(
             var paint = vein
             if is_artery(vessel):
                 paint = artery
-            _ = place_mesh(
+            _ = place_mesh_node(
                 scene,
                 assets,
                 root_id,
@@ -326,7 +326,7 @@ def add_leg(
         var nodes = named_lymph_parts()
         var l_index = 0
         while l_index < len(nodes):
-            _ = place_mesh(
+            _ = place_mesh_node(
                 scene,
                 assets,
                 root_id,
@@ -339,7 +339,7 @@ def add_leg(
         var trunks = named_nerve_parts()
         var n_index = 0
         while n_index < len(trunks):
-            _ = place_mesh(
+            _ = place_mesh_node(
                 scene,
                 assets,
                 root_id,
@@ -351,7 +351,7 @@ def add_leg(
         var skin = _resolved_paint(
             assets, skin_paint, skin_phong(genome=spec.genome)
         )
-        _ = place_mesh(
+        _ = place_mesh_node(
             scene,
             assets,
             root_id,
@@ -365,7 +365,7 @@ def add_leg(
         var groups = named_hair_parts()
         var h_index = 0
         while h_index < len(groups):
-            _ = place_mesh(
+            _ = place_mesh_node(
                 scene,
                 assets,
                 root_id,

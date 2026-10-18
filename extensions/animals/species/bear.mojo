@@ -45,6 +45,7 @@ from extensions.animals.kit import (
 )
 from extensions.animals.noise import (
     fbm3,
+    vnoise3,
     centered_fbm,
     centered_value,
     offset_fbm,
@@ -1532,7 +1533,7 @@ def bear_paint(
         # Clumped locks with pale tips.
         col = col * (1.0 + 0.35 * _lock(p, 40.0, 57.0 + off))
     ag *= 1.0 - 0.8 * juv
-    var cvh = centered_fbm(p, 3.0, 2, 5.0 + off)
+    var cvh = offset_fbm(V3(p.x * 3.0 + 5.0 + off, p.y * 3.0, p.z * 3.0), 2)
     var sp = 0.2 if coat == GRIZZLED else 0.15
     col = V3(
         col.x * (1.0 + 0.18 * nz + 0.12 * cvh + sp * nz2),
@@ -1578,7 +1579,7 @@ def _paint_ear(c: List[V3], t: Traits, p: V3, n: V3, off: Float64) -> V3:
     col = mix3(col, mix3(c[HEAD], pale, 0.45), cup * (1.0 - hollow))
     col = mix3(col, c[EAR_INNER], 0.7 * hollow)
     var back = smoothstep(-0.2, -0.6, front) * smoothstep(0.35, 0.7, ht)
-    var nzr = centered_value(p, 65.0, 13.0 + off)
+    var nzr = vnoise3(V3(p.x * 65.0 + 13.0 + off, p.y * 65.0, p.z * 65.0)) - 0.5
     return mix3(col, pale, 0.3 * back * smoothstep(-0.1, 0.25, nzr))
 
 
@@ -1611,7 +1612,9 @@ def _paint_head(
     col = mix3(col, c[MUZZLE], 0.7 * muzz)
     # Short tousled hair: a light and dark motley in locks.
     var lock = _lock(p, 140.0, 31.0 + off)
-    var mot = 0.7 * lock + 0.3 * (centered_value(p, 110.0, 31.0 + off))
+    var mot = 0.7 * lock + 0.3 * (
+        vnoise3(V3(p.x * 110.0 + 31.0 + off, p.y * 110.0, p.z * 110.0)) - 0.5
+    )
     col = col * (1.0 + 0.45 * mot * (1.0 - 0.4 * muzz))
     var cheek = (
         smoothstep(0.045, 0.09, ax)

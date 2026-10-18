@@ -85,7 +85,7 @@ from extensions.humanoid.skeleton.torso.vessels.geometry import (
 )
 from materials.material import MaterialId
 from math.vector3 import Vector3
-from extensions.humanoid.skeleton.place import place_mesh, place_root
+from extensions.humanoid.skeleton.place import place_mesh_node, place_root
 
 
 def add_torso(
@@ -145,7 +145,7 @@ def add_torso(
             for s in range(2):  # pragma: no branch
                 if s == 1 and not is_paired_bone(bones[index]):
                     continue
-                _ = place_mesh(
+                _ = place_mesh_node(
                     scene,
                     assets,
                     root_id,
@@ -164,7 +164,7 @@ def add_torso(
             for s in range(2):  # pragma: no branch
                 if s == 1 and not is_paired_ligament(band):
                     continue
-                _ = place_mesh(
+                _ = place_mesh_node(
                     scene,
                     assets,
                     root_id,
@@ -179,7 +179,7 @@ def add_torso(
             for s in range(2):  # pragma: no branch
                 if s == 1 and not is_paired_muscle(parts[index]):
                     continue
-                _ = place_mesh(
+                _ = place_mesh_node(
                     scene,
                     assets,
                     root_id,
@@ -200,7 +200,7 @@ def add_torso(
             for s in range(2):  # pragma: no branch
                 if s == 1 and not is_paired_vessel(vessel):
                     continue
-                _ = place_mesh(
+                _ = place_mesh_node(
                     scene,
                     assets,
                     root_id,
@@ -216,7 +216,7 @@ def add_torso(
             for s in range(2):  # pragma: no branch
                 if s == 1 and not is_paired_lymph(groups[index]):
                     continue
-                _ = place_mesh(
+                _ = place_mesh_node(
                     scene,
                     assets,
                     root_id,
@@ -232,7 +232,7 @@ def add_torso(
             for s in range(2):  # pragma: no branch
                 if s == 1 and not is_paired_nerve(trunks[index]):
                     continue
-                _ = place_mesh(
+                _ = place_mesh_node(
                     scene,
                     assets,
                     root_id,
@@ -245,7 +245,7 @@ def add_torso(
         var skin = _resolved_paint(
             assets, skin_paint, skin_phong(genome=spec.genome)
         )
-        _ = place_mesh(
+        _ = place_mesh_node(
             scene,
             assets,
             root_id,

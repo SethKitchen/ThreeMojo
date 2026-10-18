@@ -76,6 +76,42 @@ def clamp(value: Int, low: Int, high: Int) -> Int:
     return max(low, min(high, value))
 
 
+def clamp_lower_first(value: Float32, low: Float32, high: Float32) -> Float32:
+    """Return `value` limited by the lower bound before the upper bound.
+
+    Keep the order `min(max(value, low), high)`. Under the pinned
+    arithmetic, a NaN value with finite ordered bounds returns `low`.
+    `clamp` tests the upper bound first and returns `high` for that case.
+
+    Args:
+        value: The value.
+        low: The lower bound.
+        high: The upper bound.
+
+    Returns:
+        The result of the ordered lower-bound and upper-bound operations.
+    """
+    return min(max(value, low), high)
+
+
+def clamp_lower_first(value: Float64, low: Float64, high: Float64) -> Float64:
+    """Return `value` limited by the lower bound before the upper bound.
+
+    Keep the order `min(max(value, low), high)`. Under the pinned
+    arithmetic, a NaN value with finite ordered bounds returns `low`.
+    `clamp` tests the upper bound first and returns `high` for that case.
+
+    Args:
+        value: The value.
+        low: The lower bound.
+        high: The upper bound.
+
+    Returns:
+        The result of the ordered lower-bound and upper-bound operations.
+    """
+    return min(max(value, low), high)
+
+
 def edge_index(index: Int, count: Int) -> Int:
     """Return an index held inside a row or a column.
 

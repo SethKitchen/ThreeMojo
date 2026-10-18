@@ -38,7 +38,6 @@ from math.vector3 import Vector3
 from std.memory import bitcast
 from render.framebuffer import FloatColor
 from render.srgb import linear_to_srgb, srgb_to_linear
-from math.utils import clamp
 from std.math import ceil, exp2, floor, isfinite, log2, max, min, pi, sin
 
 # three.js's `ALPHA_HASH_SCALE`.
@@ -167,7 +166,7 @@ def alpha_hash_threshold(
             threshold = (x - Float32(0.5) * a) / (1 - a)
     else:
         threshold = 1 - ((1 - x) * (1 - x) / (2 * a * (1 - a)))
-    return clamp(threshold, MIN_HASH_THRESHOLD, Float32(1))
+    return min(max(threshold, MIN_HASH_THRESHOLD), Float32(1))
 
 
 def _strand_cell(value: Float32, scale: Float32) -> UInt32:

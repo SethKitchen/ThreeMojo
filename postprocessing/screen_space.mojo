@@ -57,7 +57,7 @@ from core.layers import Layers
 from math.matrix4 import Matrix4
 from math.sine import fraction, noise_scale, sin_float32
 from math.utils import SeededRandom, edge_index
-from math.vector3 import Vector3, reciprocal_unit, reflect_vector
+from math.vector3 import Vector3
 from render.packing import packed_normal
 from postprocessing.sampling import sample, u_of, v_of
 from render.framebuffer import TRANSPARENT_BLACK, FloatColor
@@ -726,7 +726,7 @@ def _ssao_pixel(
     # nothing.
     if not length > 0:
         return 1
-    tangent = reciprocal_unit(tangent)
+    tangent = tangent * (1 / length)
     var bitangent = normal
     bitangent.cross(tangent)
     var occluded = 0
@@ -1352,7 +1352,7 @@ def _ssr_pixel(
     if view.perspective:
         incident = origin
         incident.normalize()
-    var reflected = reflect_vector(incident, normal)
+    var reflected = incident - normal * (2 * normal.dot(incident))
     var facing = -incident.dot(normal)
     # A surface seen edge on, or from behind, reflects nothing: three.js
     # divides by this and walks a ray of no finite end.

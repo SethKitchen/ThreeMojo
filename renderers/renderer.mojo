@@ -936,7 +936,9 @@ def _in_view(
     return frustum.intersects_sphere(bound)
 
 
-def _object_place(
+def _object_place[
+    C: Camera
+](
     scene: Scene,
     assets: Assets,
     node: NodeId,
@@ -947,7 +949,7 @@ def _object_place(
     receive_shadow: Bool,
     casters_only: Bool,
     receivers_cast: Bool,
-    layers: Layers,
+    camera: C,
     view: Matrix4,
     frustum: Frustum,
     slack: Float32,
@@ -973,7 +975,7 @@ def _object_place(
         receive_shadow: Whether the object receives.
         casters_only: Whether this is a light's view.
         receivers_cast: Whether that view also holds receivers.
-        layers: The camera's visible layers.
+        camera: The camera, queried only after the caster filter.
         view: The world-to-camera transform.
         frustum: The camera's frustum, in world space.
         slack: How far past a plane the bound may lie and still count.
@@ -990,7 +992,7 @@ def _object_place(
     """
     if casters_only and not _casts(cast_shadow, receive_shadow, receivers_cast):
         return (False, Matrix4(), 0)
-    if not scene.shows(node, layers):
+    if not scene.shows(node, camera.visible_layers()):
         return (False, Matrix4(), 0)
     var world = scene.world_matrix(node)
     var nodes = assets.materials.get(material).nodes
@@ -7566,7 +7568,7 @@ struct Renderer(Movable):
                 line.receive_shadow,
                 casters_only,
                 receivers_cast,
-                camera.visible_layers(),
+                camera,
                 view,
                 frustum,
                 slack,
@@ -8035,7 +8037,7 @@ struct Renderer(Movable):
                 points.receive_shadow,
                 casters_only,
                 receivers_cast,
-                camera.visible_layers(),
+                camera,
                 view,
                 frustum,
                 slack,

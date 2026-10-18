@@ -58,7 +58,7 @@ from extensions.humanoid.skeleton.pelvis.muscles.dimensions import (
     pelvis_muscle_dimensions,
 )
 from extensions.humanoid.skeleton.pelvis.skin.dimensions import PelvisSkinField
-from extensions.humanoid.skeleton.place import place_mesh, place_root
+from extensions.humanoid.skeleton.place import place_mesh_node, place_root
 from materials.material import MaterialId
 from math.bounds import enclose_point
 from math.smoothstep import hermite_fade
@@ -338,7 +338,7 @@ def add_lower_body(
         var skin = _resolved_paint(
             assets, skin_paint, skin_phong(genome=spec.genome)
         )
-        _ = place_mesh(
+        _ = place_mesh_node(
             scene,
             assets,
             root_id,

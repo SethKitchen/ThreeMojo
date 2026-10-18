@@ -29,9 +29,9 @@ The pass runs on the host. It reads the depth and the normals that
 from math.finite import require_unit_range
 from math.norm import squared_length2
 from math.noise import SimplexNoise
-from math.utils import SeededRandom, clamp
+from math.utils import SeededRandom
 from math.cross import cross_vectors
-from math.vector3 import Vector3, reciprocal_unit, vector3_from_float64
+from math.vector3 import Vector3, vector3_from_float64
 from postprocessing.sampling import LightView, u_of, v_of
 from postprocessing.screen_space import (
     BEAUTY_OUTPUT,
@@ -317,6 +317,14 @@ def _scene_sample(view: DepthView, point: Vector3) -> Vector3:
     return view.position(u, v, view.depth_at(u, v))
 
 
+def _unit(v: Vector3) -> Vector3:
+    """Return `v` at a length of one, or zero for zero."""
+    var size = v.length()
+    if size == 0:
+        return v
+    return v * (1 / size)
+
+
 def _horizon(
     view_dir: Vector3,
     center: Vector3,
@@ -333,7 +341,7 @@ def _horizon(
     var delta = seen - center
     if abs(delta.z) >= thickness or delta.length() == 0:
         return horizon
-    var cosine = view_dir.dot(reciprocal_unit(delta))
+    var cosine = view_dir.dot(_unit(delta))
     return horizon + max(Float32(0), (cosine - horizon) * weight)
 
 
@@ -375,26 +383,22 @@ def gtao_occlusion(
         ).x
     var side = Int(sqrt(Float32(len(noise))))
     var texel = noise[(_row_up(y, view.height) % side) * side + (x % side)]
-    var tangent = reciprocal_unit(Vector3(texel.r * 2 - 1, texel.g * 2 - 1, 0))
+    var tangent = _unit(Vector3(texel.r * 2 - 1, texel.g * 2 - 1, 0))
     var bitangent = Vector3(-tangent.y, tangent.x, 0)
     var reach = 0.5 + 0.5 * texel.a
     var directions = 3
     if settings.samples >= 30:
         directions = 5
     var steps = (settings.samples + directions - 1) // directions
-    var view_dir = reciprocal_unit(-center)
+    var view_dir = _unit(-center)
     var thickness = settings.thickness.value
     var ao = Float32(0)
     for i in range(directions):  # pragma: no branch
         var angle = Float32(i) / Float32(directions) * Float32(pi)
-        var direction = reciprocal_unit(
-            tangent * cos(angle) + bitangent * sin(angle)
-        )
-        var slice_bitangent = reciprocal_unit(
-            cross_vectors(direction, view_dir)
-        )
+        var direction = _unit(tangent * cos(angle) + bitangent * sin(angle))
+        var slice_bitangent = _unit(cross_vectors(direction, view_dir))
         var slice_tangent = cross_vectors(slice_bitangent, view_dir)
-        var in_slice = reciprocal_unit(
+        var in_slice = _unit(
             normal - slice_bitangent * normal.dot(slice_bitangent)
         )
         var toward = cross_vectors(in_slice, slice_bitangent)
@@ -437,7 +441,7 @@ def gtao_occlusion(
         )
         var nyb = 0.5 * (2 - cos_x * cos_x - cos_y * cos_y)
         ao += nx * nxb + ny * nyb
-    ao = clamp(ao / Float32(directions), 0, 1)
+    ao = min(Float32(1), max(Float32(0), ao / Float32(directions)))
     return pow(ao, settings.scale)
 
 

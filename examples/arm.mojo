@@ -49,7 +49,7 @@ from extensions.humanoid.skeleton.simplify import (
 )
 from extensions.humanoid.sex import MALE
 from extensions.humanoid.side import RIGHT
-from extensions.humanoid.skeleton.arm.assembly import place_mesh
+from extensions.humanoid.skeleton.arm.assembly import place_mesh_node
 from extensions.humanoid.skeleton.arm.bones.dimensions import (
     HUMERUS,
     RADIUS,
@@ -158,14 +158,14 @@ def main() raises:
     )
     # The clavicle and the scapula the arm hangs from.
     var torso = torso_dimensions(person.stature, person.sex)
-    _ = place_mesh(
+    _ = place_mesh_node(
         scene,
         assets,
         anatomy[1],
         torso_bone_from_dimensions(torso, CLAVICLE, RIGHT, detail),
         bone,
     )
-    _ = place_mesh(
+    _ = place_mesh_node(
         scene,
         assets,
         anatomy[1],

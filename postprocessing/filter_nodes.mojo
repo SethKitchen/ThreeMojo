@@ -35,7 +35,6 @@ limits, and explicit zero and nonfinite rules.
 from core.ordinal import require_non_negative, require_positive
 from math.finite import require_finite_group
 from math.norm import length2, squared_length2
-from math.smoothstep import clamped_smoothstep
 from math.utils import (
     interleaved_gradient_noise as _gradient_noise,
     mix_bilinear,
@@ -48,7 +47,7 @@ from postprocessing.display_nodes import (
     luminance_of,
     replace_light,
 )
-from postprocessing.sampling import LightView, clamped_texel, u_of
+from postprocessing.sampling import LightView, u_of
 from postprocessing.screen_space import DepthView
 from render.framebuffer import FloatColor
 from render.target import RenderTarget
@@ -312,6 +311,12 @@ def scanlines(
     return 1 - (line * 0.5 + 0.5) * intensity
 
 
+def _smoothstep_any(edge0: Float32, edge1: Float32, x: Float32) -> Float32:
+    """Return GLSL's `smoothstep` for edges in either order."""
+    var t = min(max((x - edge0) / (edge1 - edge0), 0), 1)
+    return t * t * (3 - 2 * t)
+
+
 def circle(
     scale: Float32, softness: Float32, u: Float32, v: Float32
 ) -> Float32:
@@ -330,7 +335,7 @@ def circle(
     var du = u - 0.5
     var dv = v - 0.5
     var dist = length2(du, dv) * 2
-    return clamped_smoothstep(scale, scale - softness * scale, dist)
+    return _smoothstep_any(scale, scale - softness * scale, dist)
 
 
 def crt_vignette(
@@ -694,8 +699,8 @@ def _value_at(
 ) -> Float32:
     """Return one float a pixel read bilinear at a coordinate that grows
     down, held at the edges."""
-    var px = clamped_texel(u, width)
-    var py = clamped_texel(v_down, height)
+    var px = min(max(u * Float32(width) - 0.5, 0), Float32(width - 1))
+    var py = min(max(v_down * Float32(height) - 0.5, 0), Float32(height - 1))
     var x0 = Int(px)
     var y0 = Int(py)
     var fx = px - Float32(x0)

@@ -20,7 +20,7 @@ from core.scene import Scene
 from extensions.humanoid.side import require_side, RIGHT, BodySide
 from extensions.humanoid.skeleton.arm.assembly import (
     UNSET_PAINT,
-    place_mesh,
+    place_mesh_node,
     resolved_paint,
 )
 from extensions.humanoid.skeleton.arm.frame import arm_muscle_dimensions
@@ -153,7 +153,7 @@ def add_hand(
     if contents.includes_bones():
         var bones = named_hand_bones()
         for index in range(len(bones)):  # pragma: no branch
-            _ = place_mesh(
+            _ = place_mesh_node(
                 scene,
                 assets,
                 root_id,
@@ -169,7 +169,7 @@ def add_hand(
                 or parts[index] == TRIANGULAR_FIBROCARTILAGE
             ):
                 paint = cartilage_paint
-            _ = place_mesh(
+            _ = place_mesh_node(
                 scene,
                 assets,
                 root_id,
@@ -185,7 +185,7 @@ def add_hand(
             var paint = muscle_paint
             if is_hand_tendon(parts[index]):
                 paint = tendon
-            _ = place_mesh(
+            _ = place_mesh_node(
                 scene,
                 assets,
                 root_id,
@@ -200,7 +200,7 @@ def add_hand(
             var paint = vein
             if is_hand_artery(parts[index]):
                 paint = artery
-            _ = place_mesh(
+            _ = place_mesh_node(
                 scene,
                 assets,
                 root_id,
@@ -211,7 +211,7 @@ def add_hand(
         var lymph = resolved_paint(assets, lymph_paint, lymph_phong())
         var parts = named_hand_lymph()
         for index in range(len(parts)):  # pragma: no branch
-            _ = place_mesh(
+            _ = place_mesh_node(
                 scene,
                 assets,
                 root_id,
@@ -222,7 +222,7 @@ def add_hand(
         var nerve = resolved_paint(assets, nerve_paint, nerve_phong())
         var parts = named_hand_nerves()
         for index in range(len(parts)):  # pragma: no branch
-            _ = place_mesh(
+            _ = place_mesh_node(
                 scene,
                 assets,
                 root_id,
@@ -233,7 +233,7 @@ def add_hand(
         var skin = resolved_paint(
             assets, skin_paint, skin_phong(genome=spec.genome)
         )
-        _ = place_mesh(
+        _ = place_mesh_node(
             scene,
             assets,
             root_id,
@@ -244,7 +244,7 @@ def add_hand(
         var hair = resolved_paint(assets, hair_paint, hair_phong(spec.genome))
         var parts = named_hand_hair()
         for index in range(len(parts)):  # pragma: no branch
-            _ = place_mesh(
+            _ = place_mesh_node(
                 scene,
                 assets,
                 root_id,

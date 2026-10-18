@@ -5,7 +5,7 @@
 
 """Attach a generated part under a parent.
 
-`place_root` hangs an empty node at `origin`. `place_mesh` hangs one
+`place_root` hangs an empty node at `origin`. `place_mesh_node` hangs one
 solid under a node. The default place is the parent's origin.
 """
 
@@ -42,7 +42,7 @@ def place_root(
     return scene.attach(node^, parent)
 
 
-def place_mesh(
+def place_mesh_node(
     mut scene: Scene,
     mut assets: Assets,
     parent: NodeId,
@@ -71,3 +71,25 @@ def place_mesh(
     var shape = assets.geometries.add(geometry^)
     scene.add_mesh(Mesh(shape, paint, nid))
     return nid
+
+
+def place_mesh(
+    mut scene: Scene,
+    mut assets: Assets,
+    parent: NodeId,
+    var geometry: BufferGeometry,
+    paint: MaterialId,
+) raises:
+    """Attach one mesh at the parent's origin.
+
+    Args:
+        scene: The scene that receives the node and the mesh.
+        assets: Geometry store for the new mesh.
+        parent: Node the part hangs from.
+        geometry: The solid to draw.
+        paint: Material id.
+
+    Raises:
+        Error: If the scene refuses the node or the mesh.
+    """
+    _ = place_mesh_node(scene, assets, parent, geometry^, paint)

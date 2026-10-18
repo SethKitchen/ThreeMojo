@@ -74,7 +74,7 @@ from extensions.humanoid.skeleton.surface_nets import surface_gradient
 from extensions.humanoid.skeleton.torso.body import BodySkinField
 from extensions.humanoid.spec import HumanoidSpec
 from math.cross import cross_vectors
-from math.utils import clamp, clamp_unit, mix_delta
+from math.utils import mix_delta
 from math.vector3 import Vector3, mix_delta3, append_vector3
 from std.math import acos, cos, max, min, pi, pow, sin, sqrt
 
@@ -307,7 +307,7 @@ def _body_grid(dimensions: HeadMuscleDimensions) raises -> HairCollider:
 def _pushed(body: Float32, y: Float32, neck: Float32, chin: Float32) -> Float32:
     """Return the body's distance pushed away above `neck`, all the way
     by `chin`."""
-    var t = clamp((y - neck) / (chin - neck), 0, 1)
+    var t = min(Float32(1), max(Float32(0), (y - neck) / (chin - neck)))
     return body + t * FAR_AWAY
 
 
@@ -1172,7 +1172,7 @@ def _arc(
     var rb = b.length()
     var ua = a / ra
     var ub = b / rb
-    var angle = acos(clamp_unit(ua.dot(ub)))
+    var angle = acos(min(Float32(1), max(Float32(-1), ua.dot(ub))))
     var sine = max(sin(angle), Float32(1e-6))
     var count = max(1, Int(angle * (ra + rb) / 2 / spec.step))
     var travelled = Float32(0)
@@ -1283,7 +1283,11 @@ def _coil(
     # the head.
     var first = (across * cos(start) + up * sin(start)) * c + away * lean
     var bottom = away * -1
-    var climb = Int(acos(clamp_unit(bottom.dot(first))) * radius / step)
+    var climb = Int(
+        acos(min(Float32(1), max(Float32(-1), bottom.dot(first))))
+        * radius
+        / step
+    )
     for k in range(1, climb + 1):  # pragma: no branch
         var t = Float32(k) / Float32(climb + 1)
         var d = _unit_vector(bottom * (1 - t) + first * t, first)
@@ -1330,14 +1334,16 @@ def _curl(
         while j < len(points) - 2 and along[j + 1] < s:
             j += 1
         var span = max(along[j + 1] - along[j], Float32(1e-9))
-        var t = clamp((s - along[j]) / span, 0, 1)
+        var t = min(Float32(1), max(Float32(0), (s - along[j]) / span))
         var p = mix_delta3(points[j], points[j + 1], t)
         var tangent = _unit_vector(points[j + 1] - points[j], Vector3(0, -1, 0))
         var n = normals[j]
         var outward = _unit_vector(n - tangent * n.dot(tangent), n)
         var across = cross_vectors(outward, tangent)
         var angle = phase + Float32(2 * pi) * s / spec.curl_length
-        var swing = spec.curl * clamp(2 * (s - taut) / spec.curl_length, 0, 1)
+        var swing = spec.curl * min(
+            Float32(1), max(Float32(0), 2 * (s - taut) / spec.curl_length)
+        )
         fine.append(
             p
             + across * (swing * cos(angle))

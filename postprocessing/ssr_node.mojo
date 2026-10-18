@@ -40,7 +40,7 @@ off.
 from math.matrix4 import Matrix4
 from math.vector2 import Vector2
 from math.cross import cross_vectors
-from math.vector3 import Vector3, reciprocal_unit, reflect_vector
+from math.vector3 import Vector3
 from postprocessing.display_nodes import luminance_of, scaled_size
 from postprocessing.sampling import LightView, u_of, v_of
 from postprocessing.screen_space import DepthView
@@ -173,7 +173,11 @@ struct SsrNodeFrame(ImplicitlyCopyable):
 def _normal_at(view: LightView, u: Float32, v_down: Float32) -> Vector3:
     """Return the normal at a place, bilinear and made unit length."""
     var tap = view.sample(u, 1 - v_down)
-    return reciprocal_unit(Vector3(tap.r, tap.g, tap.b))
+    var n = Vector3(tap.r, tap.g, tap.b)
+    var size = n.length()
+    if size == 0:
+        return n
+    return n * (1 / size)
 
 
 def _view_z(frame: SsrNodeFrame, depth: Float32) -> Float32:
@@ -224,7 +228,7 @@ def ssr_node_pixel(
     if not settings.reflect_non_metals and metalness <= 0:
         return TRANSPARENT_BLACK
     # GLSL's `reflect`, made unit length.
-    var reflected = reflect_vector(incident, normal)
+    var reflected = incident - normal * (2 * normal.dot(incident))
     reflected = reflected * (1 / reflected.length())
     var reach = settings.max_distance.value / (-incident).dot(normal)
     var far_end = here + reflected * reach

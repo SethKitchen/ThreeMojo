@@ -59,7 +59,7 @@ from math.norm import length2, squared_length2
 
 from math.arc_tangent import atan2_float32
 from math.matrix4 import Matrix4
-from math.utils import clamp, glsl_mod, lerp, mix_delta
+from math.utils import glsl_mod, mix_delta
 from math.vector3 import Vector3
 from postprocessing.display_nodes import luminance_of
 from postprocessing.sampling import LightView, u_of, v_of
@@ -599,8 +599,8 @@ def _bleach(base: Float32, lum: Float32, l: Float32, a2: Float32) -> Float32:
     """Return one channel of `BleachBypassShader`."""
     var result1 = 2 * base * lum
     var result2 = 1 - 2 * (1 - lum) * (1 - base)
-    var new_color = mix_delta(result1, result2, l)
-    return lerp(base, new_color, a2)
+    var new_color = result1 + (result2 - result1) * l
+    return a2 * new_color + (1 - a2) * base
 
 
 def bleach_bypass_color(color: FloatColor, opacity: Float32) -> FloatColor:
@@ -618,7 +618,7 @@ def bleach_bypass_color(color: FloatColor, opacity: Float32) -> FloatColor:
         The straight color, alpha kept.
     """
     var lum = effect_luminance(color.r, color.g, color.b)
-    var l = clamp(10 * (lum - 0.45), 0, 1)
+    var l = min(Float32(1), max(Float32(0), 10 * (lum - 0.45)))
     var a2 = opacity * color.a
     return FloatColor(
         _bleach(color.r, lum, l, a2),
@@ -1463,7 +1463,7 @@ def god_rays_generate_pixel(
     var sx = walk[1]
     var sy = walk[2]
     var iters = dist / step
-    var f = clamp(sun.z / GOD_RAYS_FADE_DEPTH, 0, 1)
+    var f = min(Float32(1), max(sun.z / GOD_RAYS_FADE_DEPTH, Float32(0)))
     var tu = u
     var tv = v
     var col = Float32(0)

@@ -72,7 +72,7 @@ from extensions.humanoid.skeleton.surface_nets import (
 )
 from geometries.utils import merge_geometries
 from extensions.humanoid.skeleton.look import UNSET_PAINT, skin_phong
-from extensions.humanoid.skeleton.place import place_mesh, place_root
+from extensions.humanoid.skeleton.place import place_mesh_node, place_root
 from extensions.humanoid.skeleton.pelvis.contents import PelvisContents
 from extensions.humanoid.skeleton.pelvis.lower_body import (
     LowerBodySkinField,
@@ -615,7 +615,7 @@ def add_body(
             skin = assets.materials.add(
                 skin_phong(genome=spec.genome, tinted=True)
             )
-        _ = place_mesh(
+        _ = place_mesh_node(
             scene,
             assets,
             root_id,
@@ -633,7 +633,7 @@ def add_body(
             # The hands have no zones of color, but a tinted skin needs
             # the attribute on every mesh it paints.
             untinted(hand_skin)
-            _ = place_mesh(scene, assets, root_id, hand_skin^, skin)
+            _ = place_mesh_node(scene, assets, root_id, hand_skin^, skin)
         # The skin's lids open on the eyes, and the scalp's hair lies on
         # it: they come with it.
         _ = add_head(

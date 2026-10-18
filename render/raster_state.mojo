@@ -52,7 +52,6 @@ from core.ordinal import ordinal_valid, require_valid
 from math.finite import positive_finite
 from math.vector3 import Vector3
 from render.blend import Rgba
-from math.utils import saturate
 from std.math import inf, isfinite, log2, max, min
 from std.memory import bitcast
 from std.utils.numerics import max_finite
@@ -220,7 +219,7 @@ def window_depth(mode: DepthMode, depth: Float32) -> Float32:
     var window = depth * 0.5 + 0.5
     if mode == REVERSED_DEPTH:
         window = depth
-    return saturate(window)
+    return min(max(window, Float32(0)), Float32(1))
 
 
 @fieldwise_init

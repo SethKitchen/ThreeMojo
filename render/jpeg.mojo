@@ -522,7 +522,170 @@ struct HuffmanTable(Movable):
                     self.lookup[(code << spare) | tail] = length * 256 + symbol
 
 
-struct BitReader[origin: Origin[mut=False]](Movable):
+struct BitReader(Movable):
+    """The entropy-coded bits of a scan.
+
+    A 0xFF byte in the scan is followed by a stuffed zero, which is
+    dropped here, and a 0xFF followed by anything else is a marker, where
+    the coded data stops. Reading past a marker is an error rather than
+    zeros: a scan that runs out of bits before its last block is a
+    truncated file, and a decoder that pads it with zeros produces a
+    plausible wrong image.
+
+    The bytes are read ahead into a buffer of up to `BUFFER_BITS` bits.
+    The reading ahead stops at a marker, so a bit past the marker is
+    still refused when it is asked for.
+    """
+
+    var bytes: List[UInt8]
+    # Where the next byte is read from.
+    var at: Int
+    # The bits read and not yet handed out, and how many there are.
+    var held: Int
+    var count: Int
+    # Whether the reading ahead met a marker or the end of the file.
+    var stopped: Bool
+
+    def __init__(out self, var bytes: List[UInt8], start: Int):
+        """Start reading `bytes` at `start`."""
+        self.bytes = bytes^
+        self.at = start
+        self.held = 0
+        self.count = 0
+        self.stopped = False
+
+    def _fill(mut self):
+        """Read whole bytes ahead until the buffer is full or the data
+        stops."""
+        while self.count <= BUFFER_BITS - 8 and not self.stopped:
+            if self.at >= len(self.bytes):
+                self.stopped = True
+                return
+            var byte = self.bytes[self.at]
+            if byte == MARKER:
+                # A stuffed zero follows a data byte of 0xFF; anything else
+                # is a marker, and the coded data stops before it.
+                if (
+                    self.at + 1 >= len(self.bytes)
+                    or self.bytes[self.at + 1] != 0
+                ):
+                    self.stopped = True
+                    return
+                self.at += 1
+            self.at += 1
+            self.held = ((self.held << 8) | Int(byte)) & BUFFER_MASK
+            self.count += 8
+
+    def bit(mut self) raises -> Int:
+        """Return the next bit.
+
+        Raises:
+            Error: If the scan's data ended before the bit.
+        """
+        return self.bits(1)
+
+    def bits(mut self, size: Int) raises -> Int:
+        """Return the next `size` bits as an unsigned number.
+
+        Args:
+            size: How many bits, zero through sixteen.
+
+        Returns:
+            The bits, first bit most significant.
+
+        Raises:
+            Error: If the scan's data ended before the bits.
+        """
+        if self.count < size:
+            self._fill()
+            if self.count < size:
+                raise Error("A scan ended before its last block")
+        self.count -= size
+        return (self.held >> self.count) & ((1 << size) - 1)
+
+    def decode(mut self, table: HuffmanTable) raises -> UInt8:
+        """Return the next symbol under `table`.
+
+        Args:
+            table: The table the symbol is coded with.
+
+        Returns:
+            The symbol.
+
+        Raises:
+            Error: If sixteen bits make no code in the table, or the scan's
+                data ended.
+        """
+        if self.count < 16:
+            self._fill()
+        if self.count >= LOOKAHEAD:
+            var entry = table.lookup[
+                (self.held >> (self.count - LOOKAHEAD)) & ((1 << LOOKAHEAD) - 1)
+            ]
+            if entry > 0:
+                self.count -= entry >> 8
+                return UInt8(entry & 255)
+        # A long code, or the last few bits of the data: a bit at a time.
+        var code = 0
+        for length in range(1, 17):  # pragma: no branch
+            code = (code << 1) | self.bit()
+            if code <= table.max_code[length]:
+                return table.symbols[
+                    table.first_symbol[length] + code - table.min_code[length]
+                ]
+        raise Error("A scan holds a code its Huffman table does not define")
+
+    def restart(mut self, expected: UInt8) raises:
+        """Consume a restart marker and the bits before it.
+
+        The bits left in the current byte are padding, and the marker
+        follows. Asked once per restart interval, with the marker that
+        interval ends with, RST0 through RST7 in turn.
+
+        Args:
+            expected: The marker that must come next.
+
+        Raises:
+            Error: If the marker is not there, or is another one.
+        """
+        # Whole bytes still held were read ahead from before the marker:
+        # data that the interval does not use.
+        var extra = self.count >= 8
+        self.count = 0
+        self.held = 0
+        self.stopped = False
+        if (
+            extra
+            or self.at + 1 >= len(self.bytes)
+            or self.bytes[self.at] != MARKER
+        ):
+            raise Error("A restart interval ended without its marker")
+        if self.bytes[self.at + 1] != expected:
+            raise Error("A restart marker arrived out of order")
+        self.at += 2
+
+    def end(mut self) raises -> Int:
+        """Return where the scan's data ends: the offset of the marker
+        after it, with the bits left in the current byte discarded.
+
+        Raises:
+            Error: If no marker follows the data.
+        """
+        var extra = self.count >= 8
+        self.count = 0
+        self.held = 0
+        self.stopped = False
+        if (
+            extra
+            or self.at + 1 >= len(self.bytes)
+            or self.bytes[self.at] != MARKER
+        ):
+            raise Error("A scan ended without a marker after it")
+        return self.at
+
+
+@fieldwise_init
+struct _BorrowedBitReader[origin: Origin[mut=False]](Movable):
     """The entropy-coded bits of a scan.
 
     A 0xFF byte in the scan is followed by a stuffed zero, which is
@@ -1071,7 +1234,7 @@ def _read_scan(
 
 def _dc_difference[
     origin: Origin[mut=False]
-](mut reader: BitReader[origin], dc: HuffmanTable) raises -> Int:
+](mut reader: _BorrowedBitReader[origin], dc: HuffmanTable) raises -> Int:
     """Return the next DC difference: a size under the DC table, then that
     many raw bits, the standard's F.2.2.1."""
     var size = Int(reader.decode(dc))
@@ -1083,7 +1246,7 @@ def _dc_difference[
 def _decode_sequential[
     origin: Origin[mut=False]
 ](
-    mut reader: BitReader[origin],
+    mut reader: _BorrowedBitReader[origin],
     mut component: Component,
     dc: HuffmanTable,
     ac: HuffmanTable,
@@ -1135,7 +1298,7 @@ def require_coefficient_band(index: Int, spectral_end: Int) raises:
 def _decode_ac_first[
     origin: Origin[mut=False]
 ](
-    mut reader: BitReader[origin],
+    mut reader: _BorrowedBitReader[origin],
     mut component: Component,
     ac: HuffmanTable,
     base: Int,
@@ -1172,7 +1335,10 @@ def _decode_ac_first[
 def _refine[
     origin: Origin[mut=False]
 ](
-    mut reader: BitReader[origin], mut component: Component, at: Int, one: Int
+    mut reader: _BorrowedBitReader[origin],
+    mut component: Component,
+    at: Int,
+    one: Int,
 ) raises:
     """Refine a coefficient already known to be nonzero by one bit of
     magnitude, away from zero.
@@ -1190,7 +1356,7 @@ def _refine[
 def _decode_ac_refine[
     origin: Origin[mut=False]
 ](
-    mut reader: BitReader[origin],
+    mut reader: _BorrowedBitReader[origin],
     mut component: Component,
     ac: HuffmanTable,
     base: Int,
@@ -1250,7 +1416,7 @@ def _decode_ac_refine[
 def _decode_coefficients[
     origin: Origin[mut=False]
 ](
-    mut reader: BitReader[origin],
+    mut reader: _BorrowedBitReader[origin],
     mut component: Component,
     dc: HuffmanTable,
     ac: HuffmanTable,
@@ -1283,7 +1449,7 @@ def _decode_coefficients[
 def _decode_scan[
     origin: Origin[mut=False]
 ](
-    mut reader: BitReader[origin],
+    mut reader: _BorrowedBitReader[origin],
     scan: Scan,
     mut components: List[Component],
     dc_tables: List[HuffmanTable],
@@ -1486,7 +1652,7 @@ def decode(bytes: List[UInt8]) raises -> DecodedImage:
     var progressive = False
     var scanned = False
     var restart_interval = 0
-    var reader = BitReader(Span(bytes), 0)
+    var reader = _BorrowedBitReader(Span(bytes), 0)
     var at = 2
     var ended = False
     while not ended:

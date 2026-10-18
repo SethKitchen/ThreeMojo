@@ -773,6 +773,7 @@ struct Curve(Copyable, Movable):
         # One table for the whole call. `point_at` builds its own, and
         # asking it once per point rebuilt the same hundreds of samples for
         # every point returned.
+        _ = curve_sample_count(divisions)
         var table = self.lengths(self.arc_divisions())
         return arc_samples[Self.point](self, divisions, table)
 

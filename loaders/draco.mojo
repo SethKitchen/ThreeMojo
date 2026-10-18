@@ -936,7 +936,7 @@ def _metadata_name(mut buffer: DracoBuffer) raises -> String:
     return String(from_utf8=Span(bytes))
 
 
-def decode_draco(var bytes: List[UInt8]) raises -> DracoGeometry:
+def _decode_draco_owned(var bytes: List[UInt8]) raises -> DracoGeometry:
     """Decode a Draco file as Draco's decoder does.
 
     Args:
@@ -1004,6 +1004,21 @@ def _srgb_to_linear(c: Float64) -> Float64:
     return js_pow(product(c, 0.9478672986) + 0.0521327014, 2.4)
 
 
+def decode_draco(bytes: List[UInt8]) raises -> DracoGeometry:
+    """Decode a Draco file while keeping the caller's bytes.
+
+    Args:
+        bytes: The file, borrowed for this call.
+
+    Returns:
+        The points, triangles and attributes, owning their decoded data.
+
+    Raises:
+        Error: If the file or its bitstream is not supported or valid.
+    """
+    return _decode_draco_owned(bytes.copy())
+
+
 def draco_buffer_geometry(
     geometry: DracoGeometry,
     names: List[String],
@@ -1049,7 +1064,7 @@ def draco_buffer_geometry(
     return out^
 
 
-def parse_draco(var bytes: List[UInt8]) raises -> BufferGeometry:
+def _parse_draco_owned(var bytes: List[UInt8]) raises -> BufferGeometry:
     """Decode a `.drc` file into a geometry, as `DRACOLoader.parse` does.
 
     Args:
@@ -1063,7 +1078,7 @@ def parse_draco(var bytes: List[UInt8]) raises -> BufferGeometry:
     Raises:
         Error: If the file cannot be decoded.
     """
-    var geometry = decode_draco(bytes^)
+    var geometry = _decode_draco_owned(bytes^)
     var names: List[String] = [
         String(POSITION),
         String(NORMAL),
@@ -1079,6 +1094,22 @@ def parse_draco(var bytes: List[UInt8]) raises -> BufferGeometry:
     return draco_buffer_geometry(geometry, names, ids, True)
 
 
+def parse_draco(bytes: List[UInt8]) raises -> BufferGeometry:
+    """Decode a `.drc` file while keeping the caller's bytes.
+
+    Args:
+        bytes: The file, borrowed for this call.
+
+    Returns:
+        The geometry with position, normal, linear color and UV attributes,
+        and an index for a mesh, as `DRACOLoader.parse` builds it.
+
+    Raises:
+        Error: If the file cannot be decoded.
+    """
+    return _parse_draco_owned(bytes.copy())
+
+
 def read_draco(path: String) raises -> BufferGeometry:
     """Read a `.drc` file and decode it, as `DRACOLoader.load` does.
 
@@ -1091,4 +1122,4 @@ def read_draco(path: String) raises -> BufferGeometry:
     Raises:
         Error: If the file cannot be read or decoded.
     """
-    return parse_draco(Path(path).read_bytes())
+    return _parse_draco_owned(Path(path).read_bytes())
