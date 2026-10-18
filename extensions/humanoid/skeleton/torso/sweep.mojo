@@ -289,10 +289,7 @@ struct SweepField(Copyable, DistanceField, Movable):
             )
         box = box.padded(pad)
         if self.mirror:
-            box = Bounds(
-                Vector3(-box.high.x, box.low.y, box.low.z),
-                Vector3(-box.low.x, box.high.y, box.high.z),
-            )
+            box = box.mirrored_on_x()
         self.low = box.low
         self.high = box.high
 

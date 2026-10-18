@@ -680,10 +680,7 @@ struct PelvisBoneField(Copyable, DistanceField, Movable):
             self.shell = HIP_SHELL * S
             box = self.hip_bone.bounds(0.004)
             if self.mirror:
-                box = Bounds(
-                    Vector3(-box.high.x, box.low.y, box.low.z),
-                    Vector3(-box.low.x, box.high.y, box.high.z),
-                )
+                box = box.mirrored_on_x()
         self.low = box.low
         self.high = box.high
 
@@ -1052,9 +1049,7 @@ def sided_bounds(low: Vector3, high: Vector3, side: BodySide) -> Bounds:
         The same box on the right, or mirrored on x on the left.
     """
     if side == LEFT:
-        return Bounds(
-            Vector3(-high.x, low.y, low.z), Vector3(-low.x, high.y, high.z)
-        )
+        return Bounds(low, high).mirrored_on_x()
     return Bounds(low, high)
 
 
