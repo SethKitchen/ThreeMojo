@@ -92,6 +92,7 @@ from lights.light import (
 )
 from loaders.collada_animation import read_collada_animations
 from loaders.collada_id import collada_reference
+from loaders.collada_numbers import collada_floats
 from loaders.model_nodes import (
     authored_color,
     decompose_onto,
@@ -130,7 +131,7 @@ from render.framebuffer import Color
 from render.srgb import LINEAR, SRGB, ColorSpace, srgb_to_linear
 from render.texture import CLAMP, COVERAGE, IGNORED, REPEAT, Alpha, Wrap
 from render.texture_store import TextureId
-from std.math import isfinite, sqrt
+from std.math import sqrt
 from std.pathlib import Path
 from units.si import DEGREE, METER, Angle, Length
 
@@ -366,18 +367,7 @@ def _floats(text: String) raises -> List[Float64]:
         Error: If one is not a number, or is not finite once it is a
             `Float32`.
     """
-    var out = List[Float64]()
-    for piece in text.split():
-        var field = String(piece)
-        var value: Float64
-        try:
-            value = Float64(field)
-        except:
-            raise Error("Collada: not a number: " + field)
-        if not isfinite(Float32(value)):
-            raise Error("Collada: a number must be finite: " + field)
-        out.append(value)
-    return out^
+    return collada_floats(text)
 
 
 def _ints(text: String) raises -> List[Int]:

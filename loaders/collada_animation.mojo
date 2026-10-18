@@ -50,11 +50,11 @@ from animation.keyframe_track import (
 )
 from core.object3d import NodeId
 from loaders.collada_id import collada_reference
+from loaders.collada_numbers import collada_floats
 from loaders.xml import NO_ELEMENT, XmlDocument
 from math.matrix4 import Matrix4
 from math.quaternion import Quaternion
 from math.vector3 import Vector3
-from std.math import isfinite
 from units.si import SECOND, Duration
 
 
@@ -86,18 +86,7 @@ def _numbers(document: XmlDocument, element: Int) raises -> List[Float64]:
     Raises:
         Error: If one is not a finite number.
     """
-    var out = List[Float64]()
-    for piece in document.text(element).split():
-        var field = String(piece)
-        var value: Float64
-        try:
-            value = Float64(field)
-        except:
-            raise Error("Collada: not a number: " + field)
-        if not isfinite(Float32(value)):
-            raise Error("Collada: a number must be finite: " + field)
-        out.append(value)
-    return out^
+    return collada_floats(document.text(element))
 
 
 def _whole(text: String) raises -> Int:
