@@ -162,7 +162,7 @@ def count_differences(a: Framebuffer, b: Framebuffer) raises -> Int:
 
 def same(a: Color, b: Color) -> Bool:
     """Return True if two colors match in every byte."""
-    return a.r == b.r and a.g == b.g and a.b == b.b and a.a == b.a
+    return a == b
 
 
 # --- the kinds and the builders ---------------------------------------------
