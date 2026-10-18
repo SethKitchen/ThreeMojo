@@ -47,7 +47,12 @@ from extensions.animals.kit import (
     is_limb,
     pick_weighted,
 )
-from extensions.animals.noise import cells3, vnoise3, centered_fbm
+from extensions.animals.noise import (
+    cells3,
+    vnoise3,
+    centered_fbm,
+    centered_value,
+)
 from extensions.animals.options import (
     ADULT,
     JUVENILE,
@@ -1451,7 +1456,7 @@ def _fawn_spot(t: Traits, bone: String, p: V3, n: V3) -> Float64:
     if not keep:
         return 0.0
     var radius = 0.008 + 0.003 * cell.id
-    var wob = 0.15 * (vnoise3(p * 60.0) - 0.5)
+    var wob = 0.15 * (centered_value(p, 60.0))
     return smoothstep(
         radius * 1.15, radius * 0.85, cell.nearest * pitch * (1.0 + wob)
     )

@@ -48,7 +48,7 @@ from extensions.animals.kit import (
     stream_of,
     lid_distance,
 )
-from extensions.animals.noise import fbm3, vnoise3, centered_fbm
+from extensions.animals.noise import fbm3, vnoise3, centered_fbm, offset_fbm
 from extensions.animals.options import (
     FEMALE,
     JUVENILE,
@@ -1703,7 +1703,7 @@ def pig_palette(t: Traits) raises -> Palette:
 
 
 def _rag(p: V3, off: V3, f: Float64, a: Float64) -> Float64:
-    return (fbm3(p * f + off, 2) - 0.5) * a
+    return (offset_fbm(p * f + off, 2)) * a
 
 
 def _ear_vein_sd(u: Float64, w: Float64, seed: Int) -> Float64:
@@ -1894,7 +1894,7 @@ def pig_paint(
             var lat = normalize(cross(evn, face))
             var q = p - eb
             var u = dot(q, evn) / le
-            var w = dot(q, lat) / le + 0.008 * (fbm3(p * 35.0 + off, 2) - 0.5)
+            var w = dot(q, lat) / le + 0.008 * (offset_fbm(p * 35.0 + off, 2))
             var vsd = _ear_vein_sd(u, w * sd, Int(t.get("coatSeed", 0.0))) * le
             var vein = smoothstep(0.0006, -0.0006, vsd)
             c = mix3(c, V3(c.x * 0.9, c.y * 0.74, c.z * 0.78), vein)
@@ -1996,7 +1996,7 @@ def pig_paint(
             var sn = (
                 1.0 - clamp(dot(p - nb, ax) / dot(ax, ax), 0.0, 1.0)
             ) * length(ax)
-            var ph = (sn + 0.012 * (fbm3(p * 25.0 + off, 2) - 0.5)) / 0.03
+            var ph = (sn + 0.012 * (offset_fbm(p * 25.0 + off, 2))) / 0.03
             var fr = nearest_distance(ph)
             crease = (
                 exp(-(((fr * 0.03) / 0.0045) ** 2))
@@ -2009,7 +2009,7 @@ def pig_paint(
         var snout_top = region == 2 or (region == 7 and tag != "nostril")
         if snout_top:
             var ddz = dz - h.z + 6.0 * h.x * h.x
-            var ph = (ddz + 0.003 * (fbm3(p * 40.0 + off, 2) - 0.5)) / 0.0095
+            var ph = (ddz + 0.003 * (offset_fbm(p * 40.0 + off, 2))) / 0.0095
             var fr = nearest_distance(ph)
             crease = (
                 exp(-(((fr * 0.0095) / 0.0018) ** 2))
@@ -2054,7 +2054,7 @@ def _mud(t: Traits, c: V3, p: V3, off: V3) -> V3:
     if mud <= 0.0:
         return c
     var caked = smoothstep(
-        0.075, 0.035, p.y + 0.02 * (fbm3(p * 9.0 + off + V3(3, 0, -3), 3) - 0.5)
+        0.075, 0.035, p.y + 0.02 * offset_fbm(p * 9.0 + off + V3(3, 0, -3), 3)
     )
     var mk = clamp(caked * min(1.0, 1.6 * mud), 0.0, 0.85)
     var mc = mix3(

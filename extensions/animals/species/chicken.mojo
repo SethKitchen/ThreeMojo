@@ -50,7 +50,7 @@ from extensions.animals.kit import (
     eye_frame_of,
     sculpt_eye_socket,
 )
-from extensions.animals.noise import fbm3, centered_fbm
+from extensions.animals.noise import centered_fbm, fbm3, offset_fbm
 from extensions.animals.options import (
     ANY_AGE,
     ANY_SEX,
@@ -2349,7 +2349,7 @@ def chicken_paint(
     var juv = t.juvenile() > 0.0
     var male = t.male() and not juv
     var b = t.variant
-    var cv = fbm3(p * 30.0 + V3(t.get("coatSeed", 0.0), 0.0, 0.0), 3) - 0.5
+    var cv = offset_fbm(p * 30.0 + V3(t.get("coatSeed", 0.0), 0.0, 0.0), 3)
     var cond9 = tag == "bill" or tag == "nostril" or tag == "mandible"
     if cond9:
         return Paint(pal.get("bill") * (1.0 + 0.1 * cv), KERATIN)

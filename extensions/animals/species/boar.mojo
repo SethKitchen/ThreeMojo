@@ -54,7 +54,7 @@ from extensions.animals.kit import (
     imul32,
     stream_of,
 )
-from extensions.animals.noise import fbm3, ihash, vnoise3, centered_fbm
+from extensions.animals.noise import centered_fbm, ihash, offset_fbm, vnoise3
 from extensions.animals.options import (
     ADULT,
     JUVENILE,
@@ -1329,7 +1329,7 @@ def _stripes(t: Traits, p: V3, face: Bool) -> Float64:
         var rr = sqrt(h.x * h.x + (h.y + 0.02) * (h.y + 0.02))
         var d = (abs(ay - 1.05) - 0.07) * rr
         var noise = (
-            fbm3(V3(h.x * 60.0 + seed, h.y * 60.0, h.z * 30.0), 2) - 0.5
+            offset_fbm(V3(h.x * 60.0 + seed, h.y * 60.0, h.z * 30.0), 2)
         ) * 0.008
         return max(d, max((h.z - 0.2) * 0.3, (-0.08 - h.z) * 0.3)) + noise
     var yc = mix(0.47, 0.45, smoothstep(0.2, -0.4, p.z))
@@ -1338,7 +1338,7 @@ def _stripes(t: Traits, p: V3, face: Bool) -> Float64:
     var zf = smoothstep(0.42, 0.3, p.z) * smoothstep(-0.6, -0.5, p.z)
     var angles: List[Float64] = [0.26, 0.52, 0.79, 1.06, 1.33, 1.62]
     var widths: List[Float64] = [0.06, 0.055, 0.055, 0.055, 0.06, 0.07]
-    var wob = (fbm3(V3(p.x * 9.0 + seed, p.y * 9.0, p.z * 5.0), 3) - 0.5) * 0.12
+    var wob = offset_fbm(V3(p.x * 9.0 + seed, p.y * 9.0, p.z * 5.0), 3) * 0.12
     var d = 1.0
     for i in range(6):  # pragma: no branch
         var a = angles[i] + wob + 0.05 * sin(p.z * 6.0 + Float64(i))

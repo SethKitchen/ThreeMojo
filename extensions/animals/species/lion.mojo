@@ -44,7 +44,12 @@ from extensions.animals.kit import (
     mirrored_blob,
     aperture_local,
 )
-from extensions.animals.noise import cells3, fbm3, centered_fbm, centered_value
+from extensions.animals.noise import (
+    cells3,
+    centered_fbm,
+    centered_value,
+    offset_fbm,
+)
 from extensions.animals.options import AnimalOptions, AnimalRandom
 from extensions.animals.rig import Rig, add_sided, quadruped_bones, tail_chain
 from extensions.sdf.field import SdfModel
@@ -1865,7 +1870,7 @@ def _mane_color(
     var fall = V3(0, -0.85, -0.5)
     var across = V3(0, 0.5, -0.85)
     var q = V3(p.x * 40.0, dot(p, fall) * 6.0, dot(p, across) * 40.0)
-    var lock = fbm3(q, 3) - 0.5
+    var lock = offset_fbm(q, 3)
     return mc * (1.0 + 1.1 * lock)
 
 

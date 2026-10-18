@@ -43,7 +43,13 @@ from extensions.animals.kit import (
     is_limb,
     pick_weighted,
 )
-from extensions.animals.noise import cells3, fbm3, vnoise3, centered_fbm
+from extensions.animals.noise import (
+    cells3,
+    centered_fbm,
+    centered_value,
+    offset_fbm,
+    vnoise3,
+)
 from extensions.animals.options import MALE, AnimalOptions, AnimalRandom
 from extensions.animals.rig import Rig, tail_chain
 from extensions.sdf.field import SdfModel
@@ -1524,7 +1530,7 @@ def _paint_body(
         var knee = 0.52 if front else 0.6
         if black_points:
             var wob = (
-                fbm3(V3(p.x * 20.0, p.y * 8.0, p.z * 20.0), 2) - 0.5
+                offset_fbm(V3(p.x * 20.0, p.y * 8.0, p.z * 20.0), 2)
             ) * 0.12
             c = mix3(
                 c,
@@ -1577,7 +1583,7 @@ def _paint_body(
     if dapples:
         # Light rounded dapples, the darker coat a network between them.
         var cell = cells3(p * 11.0, Int(t.get("coatSeed", 0.0)) % 997)
-        var wob = 0.14 * (vnoise3(p * 40.0) - 0.5)
+        var wob = 0.14 * (centered_value(p, 40.0))
         var weight = 0.75 * (1.0 - leg) * (1.0 - ventral)
         c = mix3(
             c * (1.0 - 0.12 * weight),
