@@ -16,7 +16,8 @@ every second, and follows it when the terminal answers.
 This example needs a terminal. It is not run by `make animation`.
 """
 
-from cameras.perspective_camera import PerspectiveCamera
+from examples.output import gallery_camera
+
 from controls.input import CTRL_C, ESCAPE, KEY_DOWN, Key, RESIZE
 from controls.orbit_controls import OrbitControls
 from core.assets import Assets
@@ -85,13 +86,15 @@ def main() raises:
     scene.add_light(directional_light(Color(255, 255, 255), lamp_node, 2.51))
     scene.update()
 
-    var camera = PerspectiveCamera(
-        Angle(40.0, DEGREE),
-        Float32(width) / Float32(height),
-        Length(0.1, METER),
-        Length(100.0, METER),
+    var camera = gallery_camera(
+        width,
+        height,
+        Vector3(2.4, 1.8, 3.2),
+        Vector3(0, 0.3, 0),
+        field_of_view=Angle(40.0, DEGREE),
+        near=Length(0.1, METER),
+        far=Length(100.0, METER),
     )
-    camera.place(Vector3(2.4, 1.8, 3.2), Vector3(0, 0.3, 0))
     var controls = OrbitControls(Vector3(0, 0.3, 0))
     controls.enable_damping = True
     controls.min_distance = Length(1.0, METER)

@@ -12,7 +12,7 @@ chain's stiffness against its mass by subspace iteration. Each row is one
 mode, moving at its own frequency.
 """
 
-from examples.output import example_destination, write_frames
+from examples.output import example_destination, gallery_camera, write_frames
 from examples.preview import Triangles, add_sky_and_sun
 
 from cameras.perspective_camera import PerspectiveCamera
@@ -44,13 +44,15 @@ def _camera() raises -> PerspectiveCamera:
     Raises:
         Error: If the camera's settings are not valid.
     """
-    var camera = PerspectiveCamera(
-        Angle(40.0, DEGREE),
-        Float32(WIDTH) / Float32(HEIGHT),
-        Length(0.1, METER),
-        Length(100, METER),
+    var camera = gallery_camera(
+        WIDTH,
+        HEIGHT,
+        Vector3(0, 0, 13),
+        Vector3(0, 0, 0),
+        field_of_view=Angle(40.0, DEGREE),
+        near=Length(0.1, METER),
+        far=Length(100.0, METER),
     )
-    camera.place(Vector3(0, 0, 13), Vector3(0, 0, 0))
     return camera^
 
 

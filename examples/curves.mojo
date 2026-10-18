@@ -11,9 +11,8 @@ The curve is sampled, lifted into space, and given thickness. The page is
 Curves. This file draws that one path, not a set of kinds.
 """
 
-from examples.output import example_destination, spin_clip
+from examples.output import example_destination, gallery_camera, spin_clip
 
-from cameras.perspective_camera import PerspectiveCamera
 from core.assets import Assets
 from core.object3d import Object3D
 from core.scene import Scene
@@ -66,13 +65,15 @@ def main() raises:
     scene.add_light(ambient_light(Color(255, 255, 255), 0.69))
     scene.add_light(directional_light(Color(255, 255, 255), lamp_node, 2.67))
 
-    var camera = PerspectiveCamera(
-        Angle(40.0, DEGREE),
-        Float32(WIDTH) / Float32(HEIGHT),
-        Length(0.1, METER),
-        Length(100.0, METER),
+    var camera = gallery_camera(
+        WIDTH,
+        HEIGHT,
+        Vector3(0, 0.15, 3.5),
+        Vector3(0, 0, 0),
+        field_of_view=Angle(40.0, DEGREE),
+        near=Length(0.1, METER),
+        far=Length(100.0, METER),
     )
-    camera.place(Vector3(0, 0.15, 3.5), Vector3(0, 0, 0))
 
     spin_clip(
         renderer, camera, assets, scene, node, FRAMES, DELAY_MS, destination
