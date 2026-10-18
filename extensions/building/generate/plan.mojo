@@ -140,7 +140,7 @@ def clip_half(polygon: List[Point2], n: Point2, d: Float64) -> List[Point2]:
             out.append(p)
         if (dp < 0 and dq > 0) or (dp > 0 and dq < 0):
             var t = dp / (dp - dq)
-            out.append(Point2(p.x + t * (q.x - p.x), p.y + t * (q.y - p.y)))
+            out.append(p + (q - p) * t)
     return out^
 
 
@@ -192,7 +192,7 @@ def _frame(footprint: List[Point2]) -> _Frame:
         if length > best_length:
             best_length = length
             best = Point2(d.x / length, d.y / length)
-    return _Frame(best, Point2(-best.y, best.x))
+    return _Frame(best, best.perpendicular())
 
 
 def _cuts(
@@ -221,7 +221,7 @@ def _piece(
     band: List[Point2], frame: _Frame, start: Float64, end: Float64
 ) -> List[Point2]:
     """Return the part of a band between two positions along the frame."""
-    var neg_u = Point2(-frame.u.x, -frame.u.y)
+    var neg_u = -frame.u
     return clip_half(clip_half(band, frame.u, end), neg_u, -start)
 
 
@@ -278,7 +278,7 @@ def plan_floor(
     var middle = (v_low + v_high) / 2
     var lower_line = middle - corridor / 2
     var upper_line = middle + corridor / 2
-    var neg_v = Point2(-frame.v.x, -frame.v.y)
+    var neg_v = -frame.v
     var out = List[SpacePlan]()
     # The corridor strip.
     var strip = clip_half(

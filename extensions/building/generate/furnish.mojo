@@ -235,7 +235,7 @@ def _wall_places(
         var length = sqrt(d.dot(d))
         var t = Point2(d.x / length, d.y / length)
         # Inward, for a counterclockwise outline.
-        var inward = Point2(-t.y, t.x)
+        var inward = t.perpendicular()
         var angle = atan2(inward.y, inward.x) - pi / 2
         var s = piece.width / 2 + 0.05
         while s <= length - piece.width / 2 - 0.05:

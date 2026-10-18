@@ -46,6 +46,17 @@ struct Point2(ImplicitlyCopyable, Writable):
     var x: Float64
     var y: Float64
 
+    def __add__(self, other: Self) -> Self:
+        """Return the sum.
+
+        Args:
+            other: The point to add.
+
+        Returns:
+            The component-wise sum.
+        """
+        return Point2(self.x + other.x, self.y + other.y)
+
     def __sub__(self, other: Self) -> Self:
         """Return the difference.
 
@@ -56,6 +67,33 @@ struct Point2(ImplicitlyCopyable, Writable):
             The vector from `other` to this point.
         """
         return Point2(self.x - other.x, self.y - other.y)
+
+    def __mul__(self, factor: Float64) -> Self:
+        """Return this point scaled by a factor.
+
+        Args:
+            factor: The scale.
+
+        Returns:
+            Each component multiplied by `factor`.
+        """
+        return Point2(factor * self.x, factor * self.y)
+
+    def __neg__(self) -> Self:
+        """Return this point with each component negated.
+
+        Returns:
+            The point `(-x, -y)`.
+        """
+        return Point2(-self.x, -self.y)
+
+    def perpendicular(self) -> Self:
+        """Return this vector a quarter turn counterclockwise.
+
+        Returns:
+            The vector `(-y, x)`. It has the same length.
+        """
+        return Point2(-self.y, self.x)
 
     def cross(self, other: Self) -> Float64:
         """Return the z component of the cross product.
@@ -243,7 +281,7 @@ def _on_segment(p: Point2, a: Point2, b: Point2, tolerance: Float64) -> Float64:
     var d = b - a
     var length_squared = d.dot(d)
     var t = (p - a).dot(d) / length_squared
-    var foot = Point2(a.x + t * d.x, a.y + t * d.y)
+    var foot = a + d * t
     var offset = p - foot
     if offset.dot(offset) > tolerance * tolerance:
         return -1
@@ -423,7 +461,7 @@ def arrange(
                 var r = b - a
                 var s = d - c
                 var t = (c - a).cross(s) / r.cross(s)
-                var p = Point2(a.x + t * r.x, a.y + t * r.y)
+                var p = a + r * t
                 # Rounding can put the projection a hair outside the
                 # segment; the crossing is inside it.
                 var u = clamp((p - c).dot(s) / s.dot(s), 0.0, 1.0)

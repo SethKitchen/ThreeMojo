@@ -202,7 +202,7 @@ def _grid(
             best = d.dot(d)
             var length = sqrt(best)
             u = Point2(d.x / length, d.y / length)
-    var v = Point2(-u.y, u.x)
+    var v = u.perpendicular()
     var u_low = Float64.MAX
     var u_high = -Float64.MAX
     var v_low = Float64.MAX
