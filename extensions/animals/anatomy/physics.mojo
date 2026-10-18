@@ -24,10 +24,11 @@ from extensions.animals.build import Animal
 from extensions.physics.body import DYNAMIC, RigidBody, rotation_matrix
 from extensions.physics.shape import Shape
 from extensions.sdf.vector import V3, length
+from math.finite import require_non_negative_finite
 from math.matrix3 import Matrix3
 from math.quaternion import Quaternion
 from math.vector3 import Vector3
-from std.math import isfinite, pi, sqrt
+from std.math import pi, sqrt
 from units.si import KILOGRAM, METER, Length, Mass
 
 
@@ -106,8 +107,10 @@ def segment_bodies(animal: Animal, mass: BodyMass) raises -> List[RigidBody]:
     require_sampled_rig(len(mass.bones), len(animal.rig.bones))
     var out = List[RigidBody]()
     for i in range(len(animal.rig.bones)):  # pragma: no branch
-        if not (isfinite(mass.bones[i].mass) and mass.bones[i].mass >= 0.0):
-            raise Error("A segment mass must be finite and nonnegative")
+        require_non_negative_finite(
+            Float64(mass.bones[i].mass),
+            "A segment mass must be finite and nonnegative",
+        )
         if mass.bones[i].mass == 0.0:
             continue
         ref b = animal.rig.bones[i]

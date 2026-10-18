@@ -56,7 +56,7 @@ from math.matrix4 import Matrix4
 from math.utils import mix_delta
 from math.vector3 import Vector3, component_max, component_min
 from render.framebuffer import Color
-from math.finite import require_positive_finite
+from math.finite import require_positive_finite, require_finite
 from std.math import floor, isfinite, max, min
 from units.si import Length, METER
 
@@ -368,8 +368,10 @@ struct CSM(Movable):
         require_positive_finite(
             Float64(reach), "A CSM's furthest depth must be a positive length"
         )
-        if not isfinite(light_margin.to(METER)):
-            raise Error("A CSM's light margin must be finite")
+        require_finite(
+            Float64(light_margin.to(METER)),
+            "A CSM's light margin must be finite",
+        )
         if mode == CUSTOM_SPLIT:
             _check_breaks(custom_breaks, cascades)
         self.cascades = cascades

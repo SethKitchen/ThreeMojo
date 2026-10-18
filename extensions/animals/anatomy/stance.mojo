@@ -138,8 +138,10 @@ def _load(
     var activation = sigma / tension if able else 0.0
     var advantage = lever / ground if ground > 0.0 else 0.0
     for value in [push, need, ground, lever, sigma]:  # pragma: no branch
-        if not isfinite(Float32(value)):
-            raise Error("Standing loads must fit finite SI quantities")
+        require_finite(
+            Float64(Float32(value)),
+            "Standing loads must fit finite SI quantities",
+        )
     # `sigma` fits a Float32 and the tension is a positive Float32, so the
     # activation is finite. A foot all but level with its joint can still
     # overflow the advantage.
