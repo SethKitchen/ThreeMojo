@@ -119,7 +119,7 @@ from math.matrix4 import (
 )
 from math.quaternion import Quaternion
 from math.vector2 import Vector2
-from math.vector3 import Vector3
+from math.vector3 import Vector3, append_vector3
 from std.math import isfinite
 from units.si import Angle, Length, METER
 
@@ -1704,9 +1704,7 @@ struct BufferGeometry(Movable):
         if slot < 0:
             var numbers = List[Float32](capacity=len(points) * 3)
             for point in points:
-                numbers.append(point.x)
-                numbers.append(point.y)
-                numbers.append(point.z)
+                append_vector3(numbers, point)
             self.set_attribute(String(POSITION), BufferAttribute(numbers^, 3))
             return
         ref positions = self.values[slot]

@@ -74,7 +74,7 @@ from extensions.humanoid.skeleton.torso.body import BodySkinField
 from extensions.humanoid.spec import HumanoidSpec
 from math.cross import cross_vectors
 from math.utils import clamp, clamp_unit, mix_delta
-from math.vector3 import Vector3, mix_delta3
+from math.vector3 import Vector3, mix_delta3, append_vector3
 from std.math import acos, cos, max, min, pi, pow, sin, sqrt
 
 # The most guides one groom has.
@@ -1427,9 +1427,7 @@ def groom_lines(groom: HairGroom) raises -> BufferGeometry:
         ):  # pragma: no branch
             for end in range(2):  # pragma: no branch
                 var p = groom.points[index + end]
-                positions.append(p.x)
-                positions.append(p.y)
-                positions.append(p.z)
+                append_vector3(positions, p)
     var geometry = BufferGeometry()
     geometry.set_attribute(String(POSITION), BufferAttribute(positions^, 3))
     return geometry^

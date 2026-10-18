@@ -46,20 +46,13 @@ from core.buffer_geometry import (
     TETRAHEDRON_GEOMETRY,
 )
 from core.user_data import UserData, json_number_text
-from math.vector3 import Vector3, centroid, mix_delta3
+from math.vector3 import Vector3, append_vector3, centroid, mix_delta3
 from std.math import atan2, pi, sqrt
 from units.si import Length, METER
 
 # The golden ratio, (1 + root 5) / 2, which the icosahedron and the
 # dodecahedron are built on.
 comptime GOLDEN = Float32(1.618034)
-
-
-def _push(mut data: List[Float32], point: Vector3):
-    """Append a point's three components."""
-    data.append(point.x)
-    data.append(point.y)
-    data.append(point.z)
 
 
 def _subdivide_face(
@@ -93,13 +86,13 @@ def _subdivide_face(
         for j in range(2 * (columns - i) - 1):  # pragma: no branch
             var k = j // 2
             if j % 2 == 0:
-                _push(data, rows[i][k + 1])
-                _push(data, rows[i + 1][k])
-                _push(data, rows[i][k])
+                append_vector3(data, rows[i][k + 1])
+                append_vector3(data, rows[i + 1][k])
+                append_vector3(data, rows[i][k])
             else:
-                _push(data, rows[i][k + 1])
-                _push(data, rows[i + 1][k + 1])
-                _push(data, rows[i + 1][k])
+                append_vector3(data, rows[i][k + 1])
+                append_vector3(data, rows[i + 1][k + 1])
+                append_vector3(data, rows[i + 1][k])
 
 
 def _azimuth(point: Vector3) -> Float32:
@@ -226,7 +219,7 @@ def polyhedron(
         )
         direction.normalize()
         points.append(direction)
-        _push(normals, direction)
+        append_vector3(normals, direction)
         data[vertex * 3] = direction.x * radius.value
         data[vertex * 3 + 1] = direction.y * radius.value
         data[vertex * 3 + 2] = direction.z * radius.value

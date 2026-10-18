@@ -68,7 +68,7 @@ from extensions.humanoid.rig.joints import (
 from math.quaternion import Quaternion
 from math.smoothstep import hermite_fade
 from math.utils import clamp
-from math.vector3 import Vector3, mix_delta3
+from math.vector3 import Vector3, mix_delta3, append_vector3
 from std.math import cos, exp, pi, sin
 from units.si import DEGREE, SECOND, Angle, Duration
 
@@ -192,9 +192,7 @@ def clip_from_poses(
     var places = List[Float32](capacity=3 * len(poses))
     for k in range(len(poses)):  # pragma: no branch
         var p = rest + poses[k].lift
-        places.append(p.x)
-        places.append(p.y)
-        places.append(p.z)
+        append_vector3(places, p)
     tracks.append(KeyframeTrack(bones[HIPS.value], POSITION, times, places^))
     return AnimationClip(name, tracks^)
 

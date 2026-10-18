@@ -48,7 +48,7 @@ from geometries.grid import grid_index
 from loaders.curve_json import write_curve3
 from math.curve3 import Curve3, FrenetFrames, transport_frames
 from math.curve_checks import require_at_least_one
-from math.vector3 import Vector3
+from math.vector3 import Vector3, append_vector3
 from std.math import cos, pi, sin
 from units.si import Length, METER
 
@@ -276,12 +276,8 @@ def _sweep(
             var along_binormal = frames.binormals[ring] * sin(around)
             var outward = along_normal + along_binormal
             var vertex = center + outward * thickness
-            data.append(vertex.x)
-            data.append(vertex.y)
-            data.append(vertex.z)
-            normal_data.append(outward.x)
-            normal_data.append(outward.y)
-            normal_data.append(outward.z)
+            append_vector3(data, vertex)
+            append_vector3(normal_data, outward)
             uvs.append(u)
             uvs.append(v)
 

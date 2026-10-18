@@ -37,7 +37,7 @@ from math.triangle_normal import normal_or_zero
 from core.buffer_geometry import BufferGeometry
 from geometries.grid import append_cell
 from geometries.surface import indexed_surface
-from math.vector3 import Vector3
+from math.vector3 import Vector3, append_vector3
 from math.finite import require_finite_group
 from std.math import cos, pi, sin
 
@@ -141,9 +141,7 @@ def parametric[
         for j in range(slices + 1):  # pragma: no branch
             var u = Float32(j) / Float32(slices)
             var p0 = _check(surface.point(u, v))
-            data.append(p0.x)
-            data.append(p0.y)
-            data.append(p0.z)
+            append_vector3(data, p0)
             var pu_point: Vector3
             var u_sign = Float32(1)
             if u - EPS >= 0:
@@ -159,9 +157,7 @@ def parametric[
             else:
                 pv_point = _check(surface.point(u, v + EPS))
             var pu = normal_or_zero(p0, pu_point, pv_point) * (u_sign * v_sign)
-            normals.append(pu.x)
-            normals.append(pu.y)
-            normals.append(pu.z)
+            append_vector3(normals, pu)
             uvs.append(u)
             uvs.append(v)
 

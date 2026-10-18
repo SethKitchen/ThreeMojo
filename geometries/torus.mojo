@@ -43,7 +43,7 @@ from geometries.surface import indexed_surface, require_three_segments
 from core.user_data import UserData
 from geometries.circle import FULL_TURN, check_sweep
 from geometries.grid import grid_index
-from math.vector3 import Vector3
+from math.vector3 import Vector3, append_vector3
 from std.math import cos, pi, sin
 from units.si import Angle, Length, METER, RADIAN
 
@@ -63,14 +63,10 @@ def _append_tube_vertex(
     v: Float32,
 ):
     """Append a vertex on a tube, its normal pointing away from `center`."""
-    data.append(vertex.x)
-    data.append(vertex.y)
-    data.append(vertex.z)
+    append_vector3(data, vertex)
     var normal = vertex - center
     normal.normalize()
-    normals.append(normal.x)
-    normals.append(normal.y)
-    normals.append(normal.z)
+    append_vector3(normals, normal)
     uvs.append(u)
     uvs.append(v)
 

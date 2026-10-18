@@ -41,7 +41,13 @@ from extensions.humanoid.skeleton.head.skin.dimensions import (
 from extensions.humanoid.skeleton.torso.sweep import SweepField
 from math.smoothstep import clamped_smoothstep
 from math.utils import clamp
-from math.vector3 import Vector3, component_max, component_min, mix_delta3
+from math.vector3 import (
+    Vector3,
+    component_max,
+    component_min,
+    mix_delta3,
+    append_vector3,
+)
 from std.math import max, min, sqrt
 
 
@@ -395,9 +401,7 @@ def tint_head_skin(
         var lash = _lash_line(lids, p)
         if lash > 0:
             color = color * (1 - Float32(0.8) * lash)
-        colors.append(color.x)
-        colors.append(color.y)
-        colors.append(color.z)
+        append_vector3(colors, color)
     geometry.set_attribute(String(COLOR), BufferAttribute(colors^, 3))
     geometry.set_attribute(String(THINNESS), BufferAttribute(thinness^, 1))
 

@@ -97,7 +97,7 @@ from extensions.humanoid.skeleton.torso.body import (
 from extensions.humanoid.spec import HumanoidSpec
 from materials.material import MaterialId
 from math.matrix4 import Matrix4
-from math.vector3 import Vector3
+from math.vector3 import Vector3, append_vector3
 from objects.skeleton import bind_skeleton
 from objects.skinned_mesh import SkinnedMesh
 
@@ -242,9 +242,7 @@ def _outline(mut points: List[Float32], mesh: BufferGeometry) raises:
     ref placed = mesh.attribute_view(String(POSITION))
     for v in range(placed.count()):  # pragma: no branch
         var p = placed.vector3(v)
-        points.append(p.x)
-        points.append(p.y)
-        points.append(p.z)
+        append_vector3(points, p)
 
 
 def _budgeted(

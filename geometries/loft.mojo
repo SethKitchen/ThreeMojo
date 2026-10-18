@@ -54,7 +54,7 @@ from geometries.earcut import triangulate_shape
 from geometries.grid import append_cell
 from math.shape_path import is_clockwise
 from math.vector2 import Vector2, component_max, component_min
-from math.vector3 import Vector3
+from math.vector3 import Vector3, append_vector3
 from math.finite import require_finite_group
 
 # JavaScript's `Number.EPSILON`, which keeps a cap's texture from dividing
@@ -197,9 +197,7 @@ def _cap(
     # The cap's own vertices, so it shades flat with a hard edge.
     var first = len(vertices) // 3
     for column in range(columns):  # pragma: no branch
-        vertices.append(points[column].x)
-        vertices.append(points[column].y)
-        vertices.append(points[column].z)
+        append_vector3(vertices, points[column])
         uvs.append((contour[column].x - low.x) / width)
         uvs.append((contour[column].y - low.y) / height)
     for corner in range(len(faces)):
@@ -247,9 +245,7 @@ def loft(
         var total_v = column_v[per_row - 1]
         for column in range(per_row):  # pragma: no branch
             var point = sections[row][column % columns]
-            vertices.append(point.x)
-            vertices.append(point.y)
-            vertices.append(point.z)
+            append_vector3(vertices, point)
             uvs.append(_fraction(row_u[row], total_u, row, rows))
             uvs.append(_fraction(column_v[column], total_v, column, per_row))
     var indices = List[Int]()

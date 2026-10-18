@@ -29,7 +29,7 @@ from cameras.camera import Camera
 from core.buffer_attribute import BufferAttribute
 from core.buffer_geometry import BufferGeometry, COLOR, POSITION
 from math.matrix4 import Matrix4
-from math.vector3 import Vector3
+from math.vector3 import Vector3, append_vector3
 from render.framebuffer import Color, FloatColor
 
 # three.js's five colors, as authored.
@@ -62,9 +62,7 @@ def _push(
     var point = Vector3(0, 0, 0)
     if z != APEX_Z:
         point = unproject.transform_point(Vector3(x, y, z))
-    positions.append(point.x)
-    positions.append(point.y)
-    positions.append(point.z)
+    append_vector3(positions, point)
     colors.append(color.r)
     colors.append(color.g)
     colors.append(color.b)
