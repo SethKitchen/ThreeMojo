@@ -94,6 +94,7 @@ from render.texture import (
     texture_from,
 )
 from render.texture_store import NO_TEXTURE, TextureId
+from loaders.js_text import split_fields
 from loaders.text_number import file_line, read_finite_float32
 from std.pathlib import Path
 from units.si import METER, Length
@@ -497,9 +498,7 @@ def _channels(
         Error: If there are not exactly three numbers, or one is not a
             number or is outside zero to one once divided.
     """
-    var fields = List[String]()
-    for piece in value.split():  # pragma: no branch
-        fields.append(String(piece))
+    var fields = split_fields(value)
     if len(fields) != 3:
         raise Error(_where(line) + "a color needs three numbers: " + value)
     var out = List[Float32]()
@@ -612,9 +611,7 @@ def _texture_line(value: String, line: Int) raises -> _TextureLine:
         Error: If an option is not known or lacks its values, or no file
             is named.
     """
-    var tokens = List[String]()
-    for piece in value.split():  # pragma: no branch
-        tokens.append(String(piece))
+    var tokens = split_fields(value)
     var file = String()
     var repeat = Vector2(1, 1)
     var offset = Vector2(0, 0)
