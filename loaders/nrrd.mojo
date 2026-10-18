@@ -48,6 +48,7 @@ limits, and explicit zero and nonfinite rules.
 """
 
 from math.norm import length3
+from loaders.bytes import hex_digit_value
 from loaders.js_number import js_parse_float, js_parse_int
 from loaders.js_text import (
     is_js_space,
@@ -451,12 +452,9 @@ def _parse_int_radix(word: List[Int], radix: Int) -> Float64:
     var value = Float64(0)
     var digits = 0
     while k < len(word):
-        var u = word[k]
-        var digit = -1
-        if u >= 48 and u <= 57:
-            digit = u - 48
-        elif radix == 16 and (u | 32) >= 97 and (u | 32) <= 102:
-            digit = (u | 32) - 87
+        var digit = hex_digit_value(word[k])
+        if radix != 16 and digit > 9:
+            digit = -1
         if digit < 0:
             break
         value = value * Float64(radix) + Float64(digit)

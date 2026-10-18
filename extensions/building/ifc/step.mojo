@@ -26,7 +26,7 @@ and `\\X4\\hhhhhhhh...\\X0\\` for UTF-32 code points. The writer escapes
 every non-ASCII character as `\\X2\\` or `\\X4\\`.
 """
 from core.ordinal import ordinal_valid
-from loaders.bytes import bytes_match
+from loaders.bytes import bytes_match, hex_digit_value
 
 from std.math import isfinite
 
@@ -726,15 +726,8 @@ struct _Reader:
         for _ in range(count):  # pragma: no branch
             if self.at >= len(self.data):
                 raise self.fail("a short hexadecimal escape")
-            var c = Int(self.data[self.at])
-            var digit: Int
-            if c >= 48 and c <= 57:
-                digit = c - 48
-            elif c >= 65 and c <= 70:
-                digit = c - 55
-            elif c >= 97 and c <= 102:
-                digit = c - 87
-            else:
+            var digit = hex_digit_value(Int(self.data[self.at]))
+            if digit < 0:
                 raise self.fail("a bad hexadecimal digit")
             value = value * 16 + digit
             self.at += 1

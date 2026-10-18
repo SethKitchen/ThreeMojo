@@ -21,6 +21,7 @@ that each wiki link names a page and a heading that exist. It prints one
 line per problem and exits with an error when there is at least one.
 """
 
+from loaders.bytes import hex_digit_value
 from std.os import listdir
 from std.pathlib import Path
 from std.sys import argv
@@ -4104,13 +4105,7 @@ def percent_decode(text: String) -> String:
 
 
 def _hex(byte: UInt8) -> Int:
-    if byte >= 48 and byte <= 57:
-        return Int(byte) - 48
-    if byte >= 65 and byte <= 70:
-        return Int(byte) - 55
-    if byte >= 97 and byte <= 102:
-        return Int(byte) - 87
-    return -1
+    return hex_digit_value(Int(byte))
 
 
 struct Document(Movable):

@@ -3,9 +3,10 @@
 # Noncommercial use is free; commercial use requires a paid license.
 # See LICENSE, LICENSE-COMMERCIAL.md and THIRD-PARTY-NOTICES.md.
 
-"""Whether an ASCII word sits at one byte.
+"""Shared checks on a byte.
 
-Several readers ask this question. They share one check.
+`bytes_match` asks whether an ASCII word sits at one byte.
+`hex_digit_value` reads one hexadecimal digit.
 """
 
 
@@ -32,3 +33,21 @@ def bytes_match(
         if bytes[at + offset] != expected[offset]:
             return False
     return True
+
+
+def hex_digit_value(byte: Int) -> Int:
+    """Return the value of one ASCII hexadecimal digit, or -1.
+
+    Args:
+        byte: A byte value. A value outside 0 through 255 is not a digit.
+
+    Returns:
+        0 through 15 for `0-9`, `A-F` and `a-f`. -1 for any other value.
+    """
+    if byte >= 48 and byte <= 57:
+        return byte - 48
+    if byte >= 65 and byte <= 70:
+        return byte - 55
+    if byte >= 97 and byte <= 102:
+        return byte - 87
+    return -1

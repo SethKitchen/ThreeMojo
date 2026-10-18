@@ -34,7 +34,7 @@ and prolog order are checked. DTD contents and namespace constraints are
 not validated. Encoding declarations do not change the input encoding.
 """
 
-from loaders.bytes import bytes_match
+from loaders.bytes import bytes_match, hex_digit_value
 from loaders.utf8 import append_utf8
 
 # What `XmlDocument.child` returns when there is no such child, and what
@@ -714,14 +714,9 @@ struct _Parser(Movable):
         var digits = word.as_bytes()
         var point = 0
         for index in range(first, len(digits)):
-            var byte = Int(digits[index])
-            var digit = -1
-            if byte >= 48 and byte <= 57:
-                digit = byte - 48
-            elif radix == 16 and byte >= 65 and byte <= 70:
-                digit = byte - 65 + 10
-            elif radix == 16 and byte >= 97 and byte <= 102:
-                digit = byte - 97 + 10
+            var digit = hex_digit_value(Int(digits[index]))
+            if radix != 16 and digit > 9:
+                digit = -1
             if digit < 0:
                 self.at = start
                 raise Error(self.where() + "a character reference is malformed")
