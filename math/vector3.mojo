@@ -681,11 +681,10 @@ struct Vector3(Equatable, ImplicitlyCopyable, PolylineVertex):
         Returns:
             The scale along x, y and z.
         """
-        ref e = matrix.elements
         return Vector3(
-            Vector3(e[0], e[1], e[2]).length(),
-            Vector3(e[4], e[5], e[6]).length(),
-            Vector3(e[8], e[9], e[10]).length(),
+            matrix.column_length(0),
+            matrix.column_length(1),
+            matrix.column_length(2),
         )
 
     @staticmethod
@@ -825,6 +824,23 @@ def weighted_sum3(
         `a * weight_a + b * weight_b + c * weight_c`.
     """
     return a * weight_a + b * weight_b + c * weight_c
+
+
+def require_nonzero_scale(scale: Vector3, message: String) raises:
+    """Refuse a scale whose components multiply to zero.
+
+    Args:
+        scale: The three axis scales.
+        message: The error text for this caller.
+
+    Returns:
+        Nothing. The call returns when the product is nonzero.
+
+    Raises:
+        Error: If the product is zero.
+    """
+    if scale.x * scale.y * scale.z == 0:
+        raise Error(message)
 
 
 def _ordinary_transform[
