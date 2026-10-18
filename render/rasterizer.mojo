@@ -3227,6 +3227,38 @@ def check_alpha_map(image: Texture) raises:
     check_data_map(image, "An alpha map")
 
 
+def require_data_descriptors(
+    linear: Bool, ignores_alpha: Bool, name: String
+) raises:
+    """Refuse a data map whose descriptors are not linear and ignored.
+
+    The host asks this of a texture. The GPU asks it of the descriptors it
+    uploaded. The words are the same.
+
+    Args:
+        linear: Whether the map is stored in linear color.
+        ignores_alpha: Whether the map ignores its alpha.
+        name: What to call it in the error: "An alpha map", say.
+
+    Returns:
+        Nothing. The call returns when both descriptors say the map is data.
+
+    Raises:
+        Error: If the map is not linear, or it reads its alpha as coverage.
+    """
+    if not linear:
+        raise Error(
+            name
+            + " holds data, not color; build the texture with"
+            " color_space=LINEAR"
+        )
+    if not ignores_alpha:
+        raise Error(
+            name
+            + " must ignore its own alpha; build the texture with alpha=IGNORED"
+        )
+
+
 def check_data_map(image: Texture, name: String) raises:
     """Refuse a map that holds data and is not stored as data.
 
@@ -3244,17 +3276,9 @@ def check_data_map(image: Texture, name: String) raises:
         Error: If the texture's color space is not `LINEAR`, or it reads its
             alpha as coverage.
     """
-    if image.color_space != LINEAR:
-        raise Error(
-            name
-            + " holds data, not color; build the texture with"
-            " color_space=LINEAR"
-        )
-    if image.alpha != IGNORED:
-        raise Error(
-            name
-            + " must ignore its own alpha; build the texture with alpha=IGNORED"
-        )
+    require_data_descriptors(
+        image.color_space == LINEAR, image.alpha == IGNORED, name
+    )
 
 
 # How far off the middle of a matcap a surface square-on to the camera is
