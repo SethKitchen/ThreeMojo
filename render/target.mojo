@@ -87,6 +87,7 @@ kernel keeps its running color the same way.
 from core.extent import positive_extent
 from core.ordinal import ordinal_valid
 
+from math.curve_checks import require_at_least_one
 from math.utils import clamp
 from math.vector2 import Vector2
 from math.vector3 import Vector3
@@ -1551,8 +1552,7 @@ struct RenderTarget(Movable, SampleSource):
                 eight, the exposure is negative or not finite, or the
                 framebuffer cannot be built.
         """
-        if workers < 1:
-            raise Error("Resolving needs at least one worker")
+        require_at_least_one(workers, "Resolving needs at least one worker")
         check_tone_mapping(tone_mapping, exposure)
         var count = self.width * self.height
         var pixels = List[UInt8](length=count * Framebuffer.CHANNELS, fill=0)

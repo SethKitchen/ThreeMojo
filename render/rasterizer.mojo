@@ -218,6 +218,7 @@ from render.pointrule import (
     last_covered,
     mip_level_of,
 )
+from math.curve_checks import require_at_least_one
 from math.finite import require_finite, require_positive_finite
 from std.math import ceil, floor, inf, isfinite, log2, max, min, sqrt
 
@@ -7405,8 +7406,7 @@ def _check_frame(
     `rasterize_frame`, on whole corners, with `splats` projected splats."""
     require_whole_triangles(len(corners))
     require_whole_segments(len(segments))
-    if workers < 1:
-        raise Error("Rasterizing needs at least one worker")
+    require_at_least_one(workers, "Rasterizing needs at least one worker")
     require_shade_mode(mode)
     # Refused here, before any band starts, for the reason the triangle
     # state is: whether or not a triangle is visible, and however many

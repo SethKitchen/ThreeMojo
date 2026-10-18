@@ -41,6 +41,7 @@ from core.buffer_geometry import (
 from core.geometry_store import GeometryId
 from core.scene import Scene
 from math.bounds import enclose_point
+from math.curve_checks import require_at_least_one
 from math.vector3 import Vector3
 from render.tasks import TaskGroup
 from std.collections import Dict
@@ -1131,10 +1132,8 @@ def fit_triangle_budget_result(
     """
     if not mode.is_valid():
         raise Error("The triangle budget mode must be best effort or strict")
-    if budget < 1:
-        raise Error("A triangle budget must be at least one")
-    if workers < 1:
-        raise Error("Simplifying needs at least one worker")
+    require_at_least_one(budget, "A triangle budget must be at least one")
+    require_at_least_one(workers, "Simplifying needs at least one worker")
     if first_mesh < 0 or first_mesh > len(scene.meshes):
         raise Error("The first mesh to simplify is not in the scene")
     var ids = List[GeometryId]()
