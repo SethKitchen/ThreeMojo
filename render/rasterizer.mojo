@@ -117,7 +117,11 @@ from render.texture import (
     anisotropic_footprint,
     mix_straight,
 )
-from render.screen_coord import pixel_frag_coord, screen_size_coord
+from render.screen_coord import (
+    pixel_frag_coord,
+    sampled_point_coord,
+    screen_size_coord,
+)
 from render.texture_store import NO_TEXTURE, TextureId, TextureStore
 from materials.nodes import (
     AO_NODE,
@@ -206,7 +210,6 @@ from render.pointrule import (
     coord as point_coord,
     covers as point_covers,
     first_covered,
-    gl_point_coord,
     last_covered,
     mip_level_of,
 )
@@ -6008,17 +6011,13 @@ struct _HostPointNodes[origin: Origin[mut=False]](NodeSource):
         Returns:
             The two numbers, then zeros.
         """
-        if context.is_corner():
-            return SIMD[DType.float32, 4](0.5, 0.5, 0, 0)
-        var x = self.x + (1 if context == AT_RIGHT else 0)
-        var y = self.y - (1 if context == AT_UP else 0)
-        var place = gl_point_coord(
+        return sampled_point_coord(
+            context,
+            self.x,
+            self.y,
             Vector2(self.point[].x, self.point[].y),
             self.point[].point_size,
-            x,
-            y,
         )
-        return SIMD[DType.float32, 4](place.x, place.y, 0, 0)
 
     def corner(self, context: NodeContext) -> NodeInputs:
         """Return the point's coordinates, world position, normal, color

@@ -5,10 +5,13 @@
 
 """Where a fragment is, for the CPU and GPU node evaluators.
 
-Both read GLSL's `gl_FragCoord` and the screen size from the same step.
+Both read GLSL's `gl_FragCoord`, `gl_PointCoord` and the screen size from
+the same step.
 """
 
 from materials.nodes import AT_RIGHT, AT_UP, NodeContext
+from math.vector2 import Vector2
+from render.pointrule import gl_point_coord
 
 
 def pixel_frag_coord(
@@ -39,6 +42,34 @@ def pixel_frag_coord(
         depth * 0.5 + 0.5,
         1,
     )
+
+
+def sampled_point_coord(
+    context: NodeContext,
+    x: Int,
+    y: Int,
+    center: Vector2,
+    size: Float32,
+) -> SIMD[DType.float32, 4]:
+    """Return `gl_PointCoord` for one sample.
+
+    Args:
+        context: Which sample. A corner is the center of the point.
+            `AT_RIGHT` and `AT_UP` step one pixel.
+        x: The pixel column.
+        y: The pixel row, counted down from the top.
+        center: Where the point projects, in pixels.
+        size: How many pixels across the point is.
+
+    Returns:
+        The coordinate, then two zeros. A corner is `(0.5, 0.5, 0, 0)`.
+    """
+    if context.is_corner():
+        return SIMD[DType.float32, 4](0.5, 0.5, 0, 0)
+    var sample_x = x + (1 if context == AT_RIGHT else 0)
+    var sample_y = y - (1 if context == AT_UP else 0)
+    var place = gl_point_coord(center, size, sample_x, sample_y)
+    return SIMD[DType.float32, 4](place.x, place.y, 0, 0)
 
 
 def screen_size_coord(width: Int, height: Int) -> SIMD[DType.float32, 4]:
