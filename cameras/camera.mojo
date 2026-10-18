@@ -37,9 +37,10 @@ quantities while the clipper wants bare meters.
 """
 
 from core.layers import Layers
-from core.object3d import NodeId
+from core.object3d import NO_PARENT, NodeId
 from core.scene import Scene
 from math.matrix4 import Matrix4
+from math.projection import look_at
 from math.vector3 import Vector3
 from std.math import isfinite
 
@@ -206,6 +207,59 @@ trait Camera(Copyable, Movable):
         `Renderer.prepare` skips a mesh whose node shares none of them.
         """
         ...
+
+
+def placed_view_matrix(
+    node: NodeId, position: Vector3, target: Vector3, up: Vector3
+) raises -> Matrix4:
+    """Return the view of a camera that was placed, not attached.
+
+    Args:
+        node: The node the camera rides, or `NO_PARENT`.
+        position: Where the camera is.
+        target: Where it looks.
+        up: Which way is up.
+
+    Returns:
+        The view matrix from `look_at`.
+
+    Raises:
+        Error: If the camera rides a node, or the placement is degenerate.
+    """
+    if node != NO_PARENT:
+        raise Error(
+            "An attached camera's view comes from its node; call"
+            " view_matrix_in(scene)"
+        )
+    return look_at(position, target, up)
+
+
+def scene_view_matrix(
+    scene: Scene,
+    node: NodeId,
+    position: Vector3,
+    target: Vector3,
+    up: Vector3,
+) raises -> Matrix4:
+    """Return the view of a placed camera, or of the node it rides.
+
+    Args:
+        scene: The scene, updated, when the camera rides a node.
+        node: The node, or `NO_PARENT`.
+        position: Where a placed camera is.
+        target: Where a placed camera looks.
+        up: Which way is up for a placed camera.
+
+    Returns:
+        The node's view if attached, else the placed view.
+
+    Raises:
+        Error: If the placement is degenerate, the node is not in the
+            scene, or the scene is stale.
+    """
+    if node == NO_PARENT:
+        return placed_view_matrix(node, position, target, up)
+    return node_view_matrix(scene, node)
 
 
 def node_view_matrix(scene: Scene, node: NodeId) raises -> Matrix4:
