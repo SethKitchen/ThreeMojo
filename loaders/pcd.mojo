@@ -49,6 +49,7 @@ that is not valid or does not fill its declared size. three.js reads
 past most of these and yields `NaN`, or throws a `RangeError`.
 """
 
+from core.binary import copy_byte_range, copy_bytes
 from core.buffer_attribute import BufferAttribute
 from core.search import first_match
 from loaders.bytes import ascii_space
@@ -487,7 +488,7 @@ def parse_pcd_header(bytes: List[UInt8]) raises -> PcdHeader:
             at += 1
             continue
         var text = String(
-            from_utf8_lossy=Span(List[UInt8](bytes[line_start:at]))
+            from_utf8_lossy=Span(copy_byte_range(bytes, line_start, at))
         )
         var hash = text.find("#")
         if hash >= 0:
@@ -537,7 +538,7 @@ def parse_pcd_header(bytes: List[UInt8]) raises -> PcdHeader:
     if word_end >= len(bytes):
         raise Error("PCD: the file ends on its `DATA` line")
     header.data = pcd_data_format(
-        String(from_utf8_lossy=Span(List[UInt8](bytes[word:word_end])))
+        String(from_utf8_lossy=Span(copy_byte_range(bytes, word, word_end)))
     )
     header.header_length = word_end + 1
     if not points_given:
@@ -764,7 +765,7 @@ def parse_pcd(bytes: List[UInt8]) raises -> PcdModel:
     var start = header.header_length
     if header.data == PCD_ASCII:
         var text = String(
-            from_utf8_lossy=Span(List[UInt8](bytes[start : len(bytes)]))
+            from_utf8_lossy=Span(copy_byte_range(bytes, start, len(bytes)))
         )
         # A split yields at least one piece: the loop always runs.
         for raw in text.split("\n"):  # pragma: no branch
@@ -780,7 +781,7 @@ def parse_pcd(bytes: List[UInt8]) raises -> PcdModel:
                 + String(header.points)
                 + " points"
             )
-        data = List[UInt8](bytes[start:end])
+        data = copy_byte_range(bytes, start, end)
     else:
         if start + 8 > len(bytes):
             raise Error("PCD: the file ends before its compressed sizes")
@@ -788,9 +789,7 @@ def parse_pcd(bytes: List[UInt8]) raises -> PcdModel:
         var size = Int(decode_pcd_value(bytes, start + 4, PCD_UNSIGNED, 4))
         if start + 8 + packed > len(bytes):
             raise Error("PCD: the file ends inside its compressed data")
-        data = decompress_lzf(
-            List[UInt8](bytes[start + 8 : start + 8 + packed]), size
-        )
+        data = decompress_lzf(copy_bytes(bytes, start + 8, packed), size)
         if len(data) < header.points * header.row_size:
             raise Error(
                 "PCD: the compressed data is too small for its "

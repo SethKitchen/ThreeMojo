@@ -65,6 +65,7 @@ See `docs/wiki/Norm-consumers.md` for the changed operations, retained
 limits, and explicit zero and nonfinite rules.
 """
 
+from core.binary import copy_byte_range
 from core.ordinal import ordinal_valid
 from loaders.bytes import bytes_match
 from loaders.text_number import file_line
@@ -346,7 +347,7 @@ def _text(bytes: List[UInt8], start: Int, end: Int) raises -> String:
     Raises:
         Error: If the bytes are not UTF-8.
     """
-    var part = List[UInt8](bytes[start:end])
+    var part = copy_byte_range(bytes, start, end)
     try:
         return String(from_utf8=Span(part))
     except:

@@ -23,6 +23,7 @@ from std.testing import (
     assert_true,
 )
 
+from core.binary import copy_byte_range, copy_bytes
 from loaders.json import parse_json
 from loaders.ultrahdr import (
     XMP_NAMESPACE,
@@ -112,9 +113,9 @@ def test_refusals() raises:
         _ = apply_gain_map(_image(2, 2, 0), _image(2, 2, 0), metadata)
     var good = Path("assets/ultrahdr/same.jpg").read_bytes()
     with assert_raises(contains="SOI"):
-        _ = parse_ultrahdr(List[UInt8](good[2:]))
+        _ = parse_ultrahdr(copy_byte_range(good, 2, len(good)))
     # A plain JPEG file: no version and no MPF index.
-    var plain = List[UInt8](good[0:2])
+    var plain = copy_bytes(good, 0, 2)
     plain.extend([UInt8(0xFF), 0xD9, 0, 0])
     with assert_raises(contains="no hdrgm:Version"):
         _ = parse_ultrahdr(plain)
