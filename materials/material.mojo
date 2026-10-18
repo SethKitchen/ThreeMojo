@@ -204,7 +204,7 @@ from render.blend import (
     is_valid_custom,
     pack_custom,
 )
-from render.framebuffer import Color, FloatColor
+from render.framebuffer import Color, FloatColor, rgb_is_black
 from render.packing import (
     BASIC_DEPTH_PACKING,
     DepthPacking,
@@ -2179,7 +2179,7 @@ struct Material(ImplicitlyCopyable):
             raise Error("An anisotropy map needs an anisotropy to turn")
         var layered = (
             sheen != 0
-            or not _is_black(sheen_color)
+            or not rgb_is_black(sheen_color)
             or sheen_roughness != 1
             or iridescence != 0
             or iridescence_ior != DEFAULT_IRIDESCENCE_IOR
@@ -3940,11 +3940,6 @@ def distance_material(
         near_distance=near_distance,
         far_distance=far_distance,
     )
-
-
-def _is_black(color: Color) -> Bool:
-    """Return True if a color has no red, green or blue, whatever its alpha."""
-    return color.r == 0 and color.g == 0 and color.b == 0
 
 
 def _has_volume(

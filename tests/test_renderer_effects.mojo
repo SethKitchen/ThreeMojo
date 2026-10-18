@@ -19,7 +19,7 @@ from materials.material import Material, MaterialId
 from math.matrix3 import Matrix3
 from math.vector3 import Vector3
 from objects.mesh import Mesh
-from render.framebuffer import Color, FloatColor, Framebuffer
+from render.framebuffer import Color, FloatColor, Framebuffer, rgb_is_black
 from renderers.ascii_effect import (
     ASCII_CHARACTERS,
     ASCII_COLOR_FALLBACK,
@@ -378,7 +378,7 @@ def count_black(image: Framebuffer) raises -> Int:
     for y in range(image.height):
         for x in range(image.width):
             var p = image.get_pixel(x, y)
-            if p.r == 0 and p.g == 0 and p.b == 0:
+            if rgb_is_black(p):
                 count += 1
     return count
 
