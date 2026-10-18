@@ -88,6 +88,8 @@ See `docs/wiki/Norm-consumers.md` for the changed operations, retained
 limits, and explicit zero and nonfinite rules.
 """
 
+from core.ordinal import ordinal_valid
+
 from math.arc_tangent import atan2_float32
 from math.euler import Euler
 from math.vector2 import Vector2
@@ -140,7 +142,7 @@ struct CubeLayout(Equatable, ImplicitlyCopyable, Writable):
 
     def is_valid(self) -> Bool:
         """Return True if this is `SEEN_FROM_INSIDE` or `SEEN_FROM_OUTSIDE`."""
-        return self == SEEN_FROM_INSIDE or self == SEEN_FROM_OUTSIDE
+        return ordinal_valid(self.value, SEEN_FROM_OUTSIDE.value)
 
 
 # Each face is what a camera at the center sees looking out: what a

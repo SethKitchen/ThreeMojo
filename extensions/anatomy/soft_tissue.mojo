@@ -48,6 +48,8 @@ elasticity.
     var mass = tissue.wet_density * volume
 """
 
+from core.ordinal import ordinal_valid
+
 from std.math import isfinite
 from units.si import (
     STANDARD_GRAVITY,
@@ -77,29 +79,7 @@ struct SoftTissueKind(Equatable, ImplicitlyCopyable, Writable):
 
     def is_valid(self) -> Bool:
         """Return True if this is a named hydrated tissue."""
-        if self == CARTILAGE:
-            return True
-        if self == LIGAMENT:
-            return True
-        if self == MENISCUS:
-            return True
-        if self == MUSCLE:
-            return True
-        if self == TENDON:
-            return True
-        if self == ARTERIAL:
-            return True
-        if self == VENOUS:
-            return True
-        if self == LYMPH:
-            return True
-        if self == NERVE:
-            return True
-        if self == SKIN:
-            return True
-        if self == HAIR:
-            return True
-        return self == ADIPOSE
+        return ordinal_valid(self.value, ADIPOSE.value)
 
 
 # Hyaline articular cartilage of the knee.

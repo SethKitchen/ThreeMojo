@@ -52,6 +52,8 @@ vertex, for Edgebreaker. A speed outside 0 to 10 and an encoder method or
 object kind that is not known are refused too.
 """
 
+from core.ordinal import ordinal_valid
+
 from core.buffer_geometry import COLOR, NORMAL, POSITION, UV, BufferGeometry
 from exporters.draco_connectivity import (
     EdgebreakerData,
@@ -131,9 +133,7 @@ struct DracoEncoderMethod(Equatable, ImplicitlyCopyable, Writable):
         Returns:
             True for the two methods three.js names.
         """
-        return self == DRACO_MESH_SEQUENTIAL_ENCODING or (
-            self == DRACO_MESH_EDGEBREAKER_ENCODING
-        )
+        return ordinal_valid(self.value, DRACO_MESH_EDGEBREAKER_ENCODING.value)
 
 
 # The triangles or the points in order.
@@ -158,7 +158,7 @@ struct DracoObjectKind(Equatable, ImplicitlyCopyable, Writable):
         Returns:
             True for the two objects three.js exports.
         """
-        return self == DRACO_EXPORT_MESH or self == DRACO_EXPORT_POINTS
+        return ordinal_valid(self.value, DRACO_EXPORT_POINTS.value)
 
 
 # Triangles: three.js's `Mesh`.

@@ -77,6 +77,8 @@ See `docs/wiki/Norm-consumers.md` for the changed operations, retained
 limits, and explicit zero and nonfinite rules.
 """
 
+from core.ordinal import ordinal_valid
+
 from math.norm import normalized2
 from core.buffer_attribute import BufferAttribute
 from core.geometry_store import GeometryId
@@ -114,7 +116,7 @@ struct LineMode(Equatable, ImplicitlyCopyable, Writable):
 
     def is_valid(self) -> Bool:
         """Return True if this is `STRIP`, `LOOP` or `SEGMENTS`."""
-        return self == STRIP or self == LOOP or self == SEGMENTS
+        return ordinal_valid(self.value, SEGMENTS.value)
 
 
 # One open path through every point in order: the three.js `Line`, and the

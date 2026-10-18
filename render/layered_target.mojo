@@ -35,6 +35,8 @@ side is a power of two, so that every level halves exactly. three.js keeps
 no chain on a 3D or an array target, and neither does this.
 """
 
+from core.ordinal import ordinal_valid
+
 from render.cube_texture import (
     FACE_COUNT,
     CubeTexture,
@@ -79,12 +81,7 @@ struct TargetKind(Equatable, ImplicitlyCopyable, Writable):
             True for `TARGET_2D`, `TARGET_3D`, `TARGET_ARRAY` and
             `TARGET_CUBE`.
         """
-        return (
-            self == TARGET_2D
-            or self == TARGET_3D
-            or self == TARGET_ARRAY
-            or self == TARGET_CUBE
-        )
+        return ordinal_valid(self.value, TARGET_CUBE.value)
 
 
 # One layer, and a mip chain: three.js's `WebGLRenderTarget` whose texture

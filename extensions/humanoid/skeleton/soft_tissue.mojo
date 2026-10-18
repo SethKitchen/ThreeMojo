@@ -11,6 +11,8 @@ humanoid path re-exports those same types, kinds and factories for callers
 that used it before the extraction.
 """
 
+from core.ordinal import ordinal_valid
+
 from extensions.anatomy.soft_tissue import (
     SoftTissueKind,
     CARTILAGE,
@@ -72,7 +74,7 @@ struct SoftOccupancy(Equatable, ImplicitlyCopyable, Writable):
 
     def is_valid(self) -> Bool:
         """Return True if this is empty or filled soft tissue."""
-        return self == SOFT_EMPTY or self == SOFT_FILL
+        return ordinal_valid(self.value, SOFT_FILL.value)
 
 
 # Outside the solid.

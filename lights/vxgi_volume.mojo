@@ -44,6 +44,8 @@ key of its numbers rounded to a few places. Here any change is detected.
 The directionally filtered radiance, `directionalRadiance`, is not ported.
 """
 
+from core.ordinal import ordinal_valid
+
 from core.assets import Assets
 from core.layers import Layers
 from core.object3d import NO_PARENT
@@ -118,9 +120,7 @@ struct VxgiLightType(Equatable, ImplicitlyCopyable, Writable):
 
     def is_valid(self) -> Bool:
         """Return True if this is one of the three kinds a volume injects."""
-        return (
-            self == VXGI_DIRECTIONAL or self == VXGI_POINT or self == VXGI_SPOT
-        )
+        return ordinal_valid(self.value, VXGI_SPOT.value)
 
 
 # A light infinitely far away, three.js's `0`.

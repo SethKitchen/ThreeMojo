@@ -111,6 +111,8 @@ first, and this port's glTF loader calls `normalize_skin_weights` the same
 way. Call it for a geometry built by hand whose weights do not sum to one.
 """
 
+from core.ordinal import ordinal_valid
+
 from core.buffer_geometry import BufferGeometry
 from core.geometry_store import GeometryId
 from core.morph import MorphInfluences
@@ -147,7 +149,7 @@ struct BindMode(Equatable, ImplicitlyCopyable, Writable):
 
     def is_valid(self) -> Bool:
         """Return True if this is `ATTACHED` or `DETACHED`."""
-        return self == ATTACHED or self == DETACHED
+        return ordinal_valid(self.value, DETACHED.value)
 
 
 # Undo the mesh node's world matrix as it stands this frame, so the rig

@@ -16,6 +16,8 @@ is a grid-sampled estimate under the chosen tissues. It is not a proven
 upper bound.
 """
 
+from core.ordinal import ordinal_valid
+
 from extensions.anatomy.tissue import BoneTissue
 from extensions.humanoid.skeleton.field import DistanceField
 from math.vector3 import Vector3
@@ -52,13 +54,7 @@ struct BoneOccupancy(Equatable, ImplicitlyCopyable, Writable):
 
     def is_valid(self) -> Bool:
         """Return True if this is one of the four named fills."""
-        if self == EMPTY:
-            return True
-        if self == CORTICAL_FILL:
-            return True
-        if self == TRABECULAR_FILL:
-            return True
-        return self == MARROW
+        return ordinal_valid(self.value, MARROW.value)
 
 
 # Outside the solid.

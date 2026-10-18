@@ -47,6 +47,8 @@ host and the device compute them from intrinsics both have, as `falloff`
 is.
 """
 
+from core.ordinal import ordinal_valid
+
 from materials.nodes import (
     OUTPUT_NODE,
     NodeContext,
@@ -74,16 +76,7 @@ struct ToneMapping(Equatable, ImplicitlyCopyable, Writable):
     def is_valid(self) -> Bool:
         """Return True if this is one of the seven named curves or the
         custom one."""
-        return (
-            self == NO_TONE_MAPPING
-            or self == LINEAR_TONE_MAPPING
-            or self == REINHARD_TONE_MAPPING
-            or self == CINEON_TONE_MAPPING
-            or self == ACES_FILMIC_TONE_MAPPING
-            or self == AGX_TONE_MAPPING
-            or self == NEUTRAL_TONE_MAPPING
-            or self == CUSTOM_TONE_MAPPING
-        )
+        return ordinal_valid(self.value, CUSTOM_TONE_MAPPING.value)
 
 
 # Light is clamped at the end and nothing else. three.js's `NoToneMapping`,

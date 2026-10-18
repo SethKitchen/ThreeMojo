@@ -23,6 +23,8 @@ at its node, and a `SkinnedMesh` where its bones hold it now, as
 three.js's `applyBoneTransform` carries it. See `exporters.common`.
 """
 
+from core.ordinal import ordinal_valid
+
 from core.assets import Assets
 from core.scene import Scene
 from exporters.common import (
@@ -47,7 +49,7 @@ struct StlFormat(Equatable, ImplicitlyCopyable, Writable):
 
     def is_valid(self) -> Bool:
         """Return True if this is one of the two encodings there are."""
-        return self == STL_ASCII or self == STL_BINARY
+        return ordinal_valid(self.value, STL_BINARY.value)
 
 
 # Text, three.js's default.

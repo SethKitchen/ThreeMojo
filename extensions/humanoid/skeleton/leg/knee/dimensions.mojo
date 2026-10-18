@@ -34,6 +34,8 @@ not rebuild landmarks. Call `knee_dimensions` to resolve a template.
 Call `validate` at every public consumer of an edited copy.
 """
 
+from core.ordinal import ordinal_valid
+
 from extensions.humanoid.sex import FEMALE, MALE, Sex
 from extensions.humanoid.side import LEFT, RIGHT, BodySide
 from extensions.humanoid.skeleton.field import (
@@ -86,15 +88,7 @@ struct KneePart(Equatable, ImplicitlyCopyable, Writable):
 
     def is_valid(self) -> Bool:
         """Return True if this is a named knee part."""
-        if self == ARTICULAR_CARTILAGE:
-            return True
-        if self == MEDIAL_MENISCUS:
-            return True
-        if self == LATERAL_MENISCUS:
-            return True
-        if self == MEDIAL_COLLATERAL:
-            return True
-        return self == LATERAL_COLLATERAL
+        return ordinal_valid(self.value, LATERAL_COLLATERAL.value)
 
 
 # Hyaline cartilage on the femoral condyles, the trochlea, the plateau

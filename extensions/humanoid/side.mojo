@@ -12,6 +12,8 @@ stops a bare integer at compile time. A value that is not `LEFT` or
 `RIGHT` is still constructible, and the boundary that reads it refuses it.
 """
 
+from core.ordinal import ordinal_valid
+
 
 @fieldwise_init
 struct BodySide(Equatable, ImplicitlyCopyable, Writable):
@@ -21,7 +23,7 @@ struct BodySide(Equatable, ImplicitlyCopyable, Writable):
 
     def is_valid(self) -> Bool:
         """Return True if this is `RIGHT` or `LEFT`."""
-        return self == RIGHT or self == LEFT
+        return ordinal_valid(self.value, LEFT.value)
 
 
 # The right limb. In the bone's frame plus x is lateral, minus x is medial.

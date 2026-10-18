@@ -30,6 +30,8 @@ extension's specification forbids is refused as well. meshoptimizer does
 not check those, and what it makes of them is unspecified.
 """
 
+from core.ordinal import ordinal_valid
+
 from std.math import sqrt
 from std.memory import bitcast
 
@@ -51,11 +53,7 @@ struct MeshoptMode(Equatable, ImplicitlyCopyable, Writable):
             Whether it is `MESHOPT_ATTRIBUTES`, `MESHOPT_TRIANGLES` or
             `MESHOPT_INDICES`.
         """
-        return (
-            self == MESHOPT_ATTRIBUTES
-            or self == MESHOPT_TRIANGLES
-            or self == MESHOPT_INDICES
-        )
+        return ordinal_valid(self.value, MESHOPT_INDICES.value)
 
 
 # Elements of any size, as byte deltas: the extension's `ATTRIBUTES`.
@@ -83,12 +81,7 @@ struct MeshoptFilter(Equatable, ImplicitlyCopyable, Writable):
             Whether it is `FILTER_NONE`, `FILTER_OCTAHEDRAL`,
             `FILTER_QUATERNION` or `FILTER_EXPONENTIAL`.
         """
-        return (
-            self == FILTER_NONE
-            or self == FILTER_OCTAHEDRAL
-            or self == FILTER_QUATERNION
-            or self == FILTER_EXPONENTIAL
-        )
+        return ordinal_valid(self.value, FILTER_EXPONENTIAL.value)
 
 
 # No filter: the elements are used as they are decoded.

@@ -27,6 +27,8 @@ own three corners is joined where the corners meet, to within
 each vertex. A vertex keeps its own texture coordinates.
 """
 
+from core.ordinal import ordinal_valid
+
 from core.assets import Assets
 from core.buffer_attribute import BufferAttribute
 from core.buffer_geometry import BufferGeometry, NORMAL, POSITION, UV
@@ -74,7 +76,7 @@ struct TriangleBudgetMode(Equatable, ImplicitlyCopyable, Writable):
             True for `BEST_EFFORT` or `STRICT`.
 
         """
-        return self == BEST_EFFORT or self == STRICT
+        return ordinal_valid(self.value, STRICT.value)
 
 
 comptime BEST_EFFORT = TriangleBudgetMode(0)
@@ -104,11 +106,7 @@ struct TriangleBudgetReason(Equatable, ImplicitlyCopyable, Writable):
             True for a minimum, small-source or safe-collapse limit.
 
         """
-        return (
-            self == MINIMUM_SHARES
-            or self == SMALL_WELDED_SOURCES
-            or self == SAFE_COLLAPSE_LIMIT
-        )
+        return ordinal_valid(self.value, SAFE_COLLAPSE_LIMIT.value)
 
 
 comptime MINIMUM_SHARES = TriangleBudgetReason(0)

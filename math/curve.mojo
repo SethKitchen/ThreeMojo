@@ -84,6 +84,8 @@ or a `u` outside zero through one, which three.js clamps silently and
 which here says the caller has computed something wrong.
 """
 
+from core.ordinal import ordinal_valid
+
 from math.curve_checks import (
     check_curve_parameter,
     curve_sample_count,
@@ -126,13 +128,7 @@ struct CurveKind(Equatable, ImplicitlyCopyable, Writable):
 
     def is_valid(self) -> Bool:
         """Return True if this is one of the four kinds there are."""
-        return (
-            self == LINE
-            or self == QUADRATIC
-            or self == CUBIC
-            or self == SPLINE
-            or self == ELLIPSE
-        )
+        return ordinal_valid(self.value, ELLIPSE.value)
 
     def control_count(self) -> Int:
         """Return how many points a curve of this kind takes, or zero for

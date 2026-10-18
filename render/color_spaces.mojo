@@ -61,7 +61,7 @@ struct ColorTransfer(Equatable, ImplicitlyCopyable, Writable):
         Returns:
             Whether the value names a transfer function.
         """
-        return self == LINEAR_TRANSFER or self == SRGB_TRANSFER
+        return ordinal_valid(self.value, SRGB_TRANSFER.value)
 
 
 # The number is the amount of light.

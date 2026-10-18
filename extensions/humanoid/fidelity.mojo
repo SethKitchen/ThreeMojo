@@ -12,6 +12,8 @@ correspondence or an asset's source. Visual realism never grants an engineering 
 A producer must change its revision when its geometry or mapping changes.
 """
 
+from core.ordinal import ordinal_valid
+
 from core.user_data import UserData, user_data_of
 from extensions.humanoid.athleticism import Athleticism
 from extensions.humanoid.genome import GENE_COUNT, Genome
@@ -92,7 +94,7 @@ struct HumanoidUse(Equatable, ImplicitlyCopyable, Writable):
             True for visual or engineering use.
 
         """
-        return self == VISUAL_USE or self == ENGINEERING_USE
+        return ordinal_valid(self.value, ENGINEERING_USE.value)
 
 
 comptime VISUAL_USE = HumanoidUse(0)

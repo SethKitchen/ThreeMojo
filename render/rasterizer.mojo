@@ -30,6 +30,8 @@ See `docs/wiki/Norm-consumers.md` for the changed operations, retained
 limits, and explicit zero and nonfinite rules.
 """
 
+from core.ordinal import ordinal_valid
+
 from math.scaled_products import (
     _Scaled,
     _sum_products as _scaled_products,
@@ -1880,12 +1882,7 @@ struct ShadeMode(Equatable, ImplicitlyCopyable, Writable):
 
     def is_valid(self) -> Bool:
         """Return True if this is one of the four modes there are."""
-        return (
-            self == SHADE_LIT
-            or self == SHADE_UV
-            or self == SHADE_TEXTURE
-            or self == SHADE_SHADOW
-        )
+        return ordinal_valid(self.value, SHADE_SHADOW.value)
 
 
 comptime SHADE_LIT = ShadeMode(0)
@@ -6900,12 +6897,7 @@ struct DrawKind(Equatable, ImplicitlyCopyable, Writable):
     def is_valid(self) -> Bool:
         """Return True if this is `DRAW_TRIANGLES`, `DRAW_SEGMENTS` or
         `DRAW_POINTS` or `DRAW_SPLATS`."""
-        return (
-            self == DRAW_TRIANGLES
-            or self == DRAW_SEGMENTS
-            or self == DRAW_POINTS
-            or self == DRAW_SPLATS
-        )
+        return ordinal_valid(self.value, DRAW_SPLATS.value)
 
     def stride(self) -> Int:
         """Return how many corners one primitive of this kind takes: three

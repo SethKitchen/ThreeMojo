@@ -66,6 +66,8 @@ See `docs/wiki/Norm-consumers.md` for the changed operations, retained
 limits, and explicit zero and nonfinite rules.
 """
 
+from core.ordinal import ordinal_valid
+
 from math.triangle_normal import polygon_normal
 
 from animation.animation_clip import AnimationClip
@@ -163,12 +165,7 @@ struct FbxMapping(Equatable, ImplicitlyCopyable, Writable):
 
     def is_valid(self) -> Bool:
         """Return True if this is one of the four mappings there are."""
-        return (
-            self == BY_POLYGON_VERTEX
-            or self == BY_POLYGON
-            or self == BY_VERTEX
-            or self == ALL_SAME
-        )
+        return ordinal_valid(self.value, ALL_SAME.value)
 
 
 # One value per corner of every polygon: `ByPolygonVertex`.
@@ -191,7 +188,7 @@ struct FbxReference(Equatable, ImplicitlyCopyable, Writable):
 
     def is_valid(self) -> Bool:
         """Return True if this is one of the two references there are."""
-        return self == DIRECT or self == INDEX_TO_DIRECT
+        return ordinal_valid(self.value, INDEX_TO_DIRECT.value)
 
 
 # The mapping picks a value: `Direct`.

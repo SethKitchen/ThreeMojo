@@ -43,6 +43,8 @@ action looping over it would divide by its length. A blend mode that is
 neither of the two.
 """
 
+from core.ordinal import ordinal_valid
+
 from animation.keyframe_track import KeyframeTrack, TrackTarget
 from core.user_data import UserData
 from std.math import isfinite
@@ -58,7 +60,7 @@ struct AnimationBlendMode(Equatable, ImplicitlyCopyable, Writable):
 
     def is_valid(self) -> Bool:
         """Return True if this is one of the two blend modes there are."""
-        return self == NORMAL_BLEND_MODE or self == ADDITIVE_BLEND_MODE
+        return ordinal_valid(self.value, ADDITIVE_BLEND_MODE.value)
 
 
 # Mix by weight with the other actions, three.js's

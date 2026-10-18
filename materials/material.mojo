@@ -189,6 +189,8 @@ rasterizers read them from `raster_state`. See
 `docs/wiki/Renderer-hooks-and-material-flags.md`.
 """
 
+from core.ordinal import ordinal_valid
+
 from render.cube_texture import check_rotation, is_turned
 from render.cube_texture_store import (
     NO_CUBE_TEXTURE,
@@ -366,7 +368,7 @@ struct Side(Equatable, ImplicitlyCopyable, Writable):
 
     def is_valid(self) -> Bool:
         """Return True if this is one of the three sides there are."""
-        return self == FRONT_SIDE or self == BACK_SIDE or self == DOUBLE_SIDE
+        return ordinal_valid(self.value, DOUBLE_SIDE.value)
 
 
 # Draw only surfaces turned towards the camera. three.js's default.
@@ -481,11 +483,7 @@ struct Combine(Equatable, ImplicitlyCopyable, Writable):
 
     def is_valid(self) -> Bool:
         """Return True if this is one of the three operations there are."""
-        return (
-            self == MULTIPLY_OPERATION
-            or self == MIX_OPERATION
-            or self == ADD_OPERATION
-        )
+        return ordinal_valid(self.value, ADD_OPERATION.value)
 
 
 # The surface's light times the reflection, faded in by the reflectivity:
@@ -577,9 +575,7 @@ struct NormalMapType(Equatable, ImplicitlyCopyable, Writable):
 
     def is_valid(self) -> Bool:
         """Return True if this is one of the two named frames."""
-        return (
-            self == TANGENT_SPACE_NORMAL_MAP or self == OBJECT_SPACE_NORMAL_MAP
-        )
+        return ordinal_valid(self.value, OBJECT_SPACE_NORMAL_MAP.value)
 
 
 # Normals relative to the surface's tangent frame: three.js's
@@ -729,21 +725,7 @@ struct MaterialKind(Equatable, ImplicitlyCopyable, Writable):
 
     def is_valid(self) -> Bool:
         """Return True if this is one of the thirteen kinds there are."""
-        return (
-            self == BASIC
-            or self == LAMBERT
-            or self == GOURAUD
-            or self == VOLUME
-            or self == NORMALS
-            or self == DEPTH
-            or self == PHONG
-            or self == TOON
-            or self == MATCAP
-            or self == STANDARD
-            or self == PHYSICAL
-            or self == SHADOW
-            or self == DISTANCE
-        )
+        return ordinal_valid(self.value, VOLUME.value)
 
     def is_unlit(self) -> Bool:
         """Return True if the scene's lights leave a surface of this kind

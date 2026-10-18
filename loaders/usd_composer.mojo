@@ -63,6 +63,8 @@ texture that reads `st2`, which the port has no set of coordinates for,
 and references that nest more than 64 deep.
 """
 
+from core.ordinal import ordinal_valid
+
 from core.assets import Assets
 from core.buffer_geometry import BufferGeometry
 from core.geometry_store import GeometryId
@@ -148,7 +150,7 @@ struct UsdAssetKind(Equatable, ImplicitlyCopyable, Writable):
 
     def is_valid(self) -> Bool:
         """Return True for `USD_IMAGE` and `USD_LAYER`."""
-        return self == USD_IMAGE or self == USD_LAYER
+        return ordinal_valid(self.value, USD_LAYER.value)
 
 
 # A PNG, a JPEG or an AVIF file.

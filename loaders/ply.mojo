@@ -65,6 +65,8 @@ See `docs/wiki/Norm-consumers.md` for the changed operations, retained
 limits, and explicit zero and nonfinite rules.
 """
 
+from core.ordinal import ordinal_valid
+
 from math.triangle_normal import _polygon_cross_wide, _triangle_cross_wide
 
 from core.buffer_attribute import BufferAttribute
@@ -89,11 +91,7 @@ struct PlyFormat(Equatable, ImplicitlyCopyable, Writable):
 
     def is_valid(self) -> Bool:
         """Return True if this is one of the three formats there are."""
-        return (
-            self == PLY_ASCII
-            or self == PLY_BINARY_LITTLE_ENDIAN
-            or self == PLY_BINARY_BIG_ENDIAN
-        )
+        return ordinal_valid(self.value, PLY_BINARY_BIG_ENDIAN.value)
 
 
 # Rows as lines of text, values split by white space.

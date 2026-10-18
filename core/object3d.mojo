@@ -45,6 +45,8 @@ says which. The two act the same; the type is kept so a scene written to
 JSON reads back as it was. See `objects.group`.
 """
 
+from core.ordinal import ordinal_valid
+
 from core.layers import Layers
 from core.user_data import UserData
 from math.euler import XYZ, Euler, EulerOrder
@@ -96,11 +98,7 @@ struct ObjectType(Equatable, ImplicitlyCopyable, Writable):
 
     def is_valid(self) -> Bool:
         """Return True if this is one of the three types there are."""
-        return (
-            self == OBJECT3D_TYPE
-            or self == GROUP_TYPE
-            or self == GYROSCOPE_TYPE
-        )
+        return ordinal_valid(self.value, GYROSCOPE_TYPE.value)
 
 
 comptime OBJECT3D_TYPE = ObjectType(0)

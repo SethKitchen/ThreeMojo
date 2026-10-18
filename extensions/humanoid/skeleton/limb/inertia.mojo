@@ -33,6 +33,8 @@ The results live in the leg frame. The origin is the tibiofemoral joint
 line. Plus y is proximal. Plus x is body-right. Plus z is anterior.
 """
 
+from core.ordinal import ordinal_valid
+
 from extensions.anatomy.inertia import InertiaTally, SegmentInertia
 from extensions.humanoid.side import RIGHT, BodySide
 from extensions.humanoid.spec import HumanoidSpec
@@ -130,7 +132,7 @@ struct LimbSegment(Equatable, ImplicitlyCopyable, Writable):
 
     def is_valid(self) -> Bool:
         """Return True if this is a named segment."""
-        return self == THIGH or self == SHANK or self == FOOT_SEGMENT
+        return ordinal_valid(self.value, FOOT_SEGMENT.value)
 
 
 # From the hip joint's center to the knee's.

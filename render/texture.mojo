@@ -94,6 +94,8 @@ See `docs/wiki/Norm-consumers.md` for the changed operations, retained
 limits, and explicit zero and nonfinite rules.
 """
 
+from core.ordinal import ordinal_valid
+
 from std.math import exp2
 from math.norm import length2, _ordinary_squared
 from math.matrix3 import Matrix3
@@ -130,7 +132,7 @@ struct Wrap(Equatable, ImplicitlyCopyable, Writable):
 
     def is_valid(self) -> Bool:
         """Return True if this is `REPEAT`, `CLAMP` or `MIRROR`."""
-        return self == REPEAT or self == CLAMP or self == MIRROR
+        return ordinal_valid(self.value, MIRROR.value)
 
 
 # Tile the image; 1.5 reads the same texel as 0.5. three.js's
@@ -327,7 +329,7 @@ struct Alpha(Equatable, ImplicitlyCopyable, Writable):
 
     def is_valid(self) -> Bool:
         """Return True if this is `COVERAGE` or `IGNORED`."""
-        return self == COVERAGE or self == IGNORED
+        return ordinal_valid(self.value, IGNORED.value)
 
 
 # Alpha is coverage: it weights every filter and every mip average, so a
@@ -357,7 +359,7 @@ struct TexelType(Equatable, ImplicitlyCopyable, Writable):
 
     def is_valid(self) -> Bool:
         """Return True if this is `UNSIGNED_BYTE_TYPE` or `FLOAT_TYPE`."""
-        return self == UNSIGNED_BYTE_TYPE or self == FLOAT_TYPE
+        return ordinal_valid(self.value, FLOAT_TYPE.value)
 
 
 # Eight bits a channel, in `Texture.pixels`: three.js's `UnsignedByteType`.
@@ -384,7 +386,7 @@ struct UvChannel(Equatable, ImplicitlyCopyable, Writable):
 
     def is_valid(self) -> Bool:
         """Return True if this is `UV_CHANNEL_0` or `UV_CHANNEL_1`."""
-        return self == UV_CHANNEL_0 or self == UV_CHANNEL_1
+        return ordinal_valid(self.value, UV_CHANNEL_1.value)
 
 
 # The geometry's `uv`: three.js's default channel.

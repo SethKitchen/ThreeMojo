@@ -38,6 +38,8 @@ The source is three.js's but for four things the subset asks:
   and the colors are three.js's.
 """
 
+from core.ordinal import ordinal_valid
+
 from materials.glsl import compile_shader_material
 from materials.nodes import NodeProgram
 from math.matrix4 import Matrix4
@@ -57,7 +59,7 @@ struct VolumeStyle(Equatable, ImplicitlyCopyable, Writable):
         Returns:
             Whether the value names a style.
         """
-        return self == VOLUME_MIP or self == VOLUME_ISO
+        return ordinal_valid(self.value, VOLUME_ISO.value)
 
 
 # The brightest texel along the ray, through the colormap.

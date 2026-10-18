@@ -66,6 +66,8 @@ coordinates, and the specular and ambient maps. `<polygons>` is read,
 which three.js does not read.
 """
 
+from core.ordinal import ordinal_valid
+
 from animation.animation_clip import AnimationClip
 from cameras.orthographic_camera import OrthographicCamera
 from cameras.perspective_camera import PerspectiveCamera
@@ -157,7 +159,7 @@ struct UpAxis(Equatable, ImplicitlyCopyable, Writable):
 
     def is_valid(self) -> Bool:
         """Return True if this is one of the three axes there are."""
-        return self == X_UP or self == Y_UP or self == Z_UP
+        return ordinal_valid(self.value, Z_UP.value)
 
 
 # `<up_axis>X_UP</up_axis>`. three.js reads it and does not turn the scene.

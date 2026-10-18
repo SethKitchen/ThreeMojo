@@ -48,6 +48,8 @@ three.js's plane does.
 and multiplied by `Scene.environment_intensity`. See `core.scene`.
 """
 
+from core.ordinal import ordinal_valid
+
 from render.cube_texture_store import NO_CUBE_TEXTURE, CubeTextureId
 from render.framebuffer import Color
 from render.texture_store import NO_TEXTURE, TextureId
@@ -66,12 +68,7 @@ struct BackgroundKind(Equatable, ImplicitlyCopyable, Writable):
 
     def is_valid(self) -> Bool:
         """Return True if this is one of the four kinds there are."""
-        return (
-            self == NO_BACKGROUND
-            or self == COLOR_BACKGROUND
-            or self == TEXTURE_BACKGROUND
-            or self == CUBE_BACKGROUND
-        )
+        return ordinal_valid(self.value, CUBE_BACKGROUND.value)
 
 
 # The scene says nothing: the renderer clears to its own color. What a

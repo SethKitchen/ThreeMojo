@@ -35,6 +35,8 @@ same order. The WebAssembly encoder runs out of memory where a symbol is
 near 2^31, and the port does not.
 """
 
+from core.ordinal import ordinal_valid
+
 from exporters.draco_log2 import musl_log2
 from loaders.draco_buffer import (
     MASK32,
@@ -74,7 +76,7 @@ struct DracoSymbolCoding(Equatable, ImplicitlyCopyable, Writable):
         Returns:
             True for the two codings there are.
         """
-        return self == DRACO_TAGGED_SYMBOLS or self == DRACO_RAW_SYMBOLS
+        return ordinal_valid(self.value, DRACO_RAW_SYMBOLS.value)
 
 
 # A bit length for each group of values, coded; then the raw bits.
