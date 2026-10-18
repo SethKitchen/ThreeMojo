@@ -60,6 +60,7 @@ from extensions.animals.warp import (
     legs_warp,
     scale_about_warp,
 )
+from math.sine import fraction
 from std.math import cos, floor, log, pi, pow, sin
 from extensions.sdf.distance import almond_distance
 
@@ -875,7 +876,7 @@ def _spot_layer(
     # out spot by spot rather than fading.
     var cell = 2.7 * radius
     var c = cells3(p * (1.0 / cell), seed)
-    var draw = c.id * 7.31 - floor(c.id * 7.31)
+    var draw = fraction(c.id * 7.31)
     if draw >= keep:
         return 0.0
     var r = (0.78 + 0.44 * c.id) * wob / 2.7 * 1.1

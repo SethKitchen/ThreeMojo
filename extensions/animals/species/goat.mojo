@@ -73,6 +73,7 @@ from extensions.animals.species.hoofed import (
     horn_parameter,
 )
 from extensions.animals.traits import Traits
+from math.sine import fraction
 from math.utils import rec709_luminance
 from extensions.sdf.vector import (
     V3,
@@ -2266,7 +2267,7 @@ def _paint_horn(pal: Palette, t: Traits, p: V3) -> Paint:
         var s0 = 0.012 + 0.5 * spacing
         var t_end = 0.62 if hb > 0.02 else 0.5
         var u = (hlen - s0) / spacing
-        var fr = u - floor(u)
+        var fr = fraction(u)
         var fade = (1.0 if u > -0.6 else 0.0) * (
             1.0 - smoothstep(0.55 * t_end, t_end + 0.08, bt)
         )

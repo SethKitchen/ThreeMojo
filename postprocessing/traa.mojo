@@ -40,6 +40,7 @@ limits, and explicit zero and nonfinite rules.
 
 from render.color_math import floor_channels
 from math.norm import length2
+from math.sine import fraction
 from cameras.camera import Camera
 from core.assets import Assets
 from core.scene import Scene
@@ -503,8 +504,8 @@ def subpixel_correction(
     """
     var tx = offset_u * Float32(width)
     var ty = offset_v * Float32(height)
-    var px = abs(tx - floor(tx))
-    var py = abs(ty - floor(ty))
+    var px = fraction(tx)
+    var py = fraction(ty)
     var wx = max(px, 1 - px)
     var wy = max(py, 1 - py)
     return (1 - wx * wy) / 0.75

@@ -143,7 +143,7 @@ def pick_building_color(seed: Int) -> Int:
     """
     var h = abs(sin(Float64(seed) * 12.9898) * 43758.5453)
     var palette = building_palette()
-    return palette[Int(floor((h - floor(h)) * Float64(len(palette))))]
+    return palette[Int(floor(fraction(h) * Float64(len(palette))))]
 
 
 @fieldwise_init

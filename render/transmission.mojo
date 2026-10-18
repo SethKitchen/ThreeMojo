@@ -35,6 +35,7 @@ three.js's Beer's law divides zero by zero for a black attenuation color.
 
 from lights.lighting import environment_brdf
 from math.matrix4 import Matrix4
+from math.sine import fraction
 from math.vector2 import Vector2
 from math.vector3 import Vector3
 from render.framebuffer import TRANSPARENT_BLACK, FloatColor
@@ -586,15 +587,15 @@ def texture_bicubic[
     var last = source.level_count() - 1
     var lower = min(Int(floor(lod)), last)
     var fine = bicubic(source, uv, lower)
-    var fraction = lod - floor(lod)
-    if fraction == 0:
+    var blend = fraction(lod)
+    if blend == 0:
         return fine
     var coarse = bicubic(source, uv, min(lower + 1, last))
     return FloatColor(
-        fine.r + (coarse.r - fine.r) * fraction,
-        fine.g + (coarse.g - fine.g) * fraction,
-        fine.b + (coarse.b - fine.b) * fraction,
-        fine.a + (coarse.a - fine.a) * fraction,
+        fine.r + (coarse.r - fine.r) * blend,
+        fine.g + (coarse.g - fine.g) * blend,
+        fine.b + (coarse.b - fine.b) * blend,
+        fine.a + (coarse.a - fine.a) * blend,
     )
 
 
