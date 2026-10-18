@@ -20,7 +20,7 @@ osteometric table.
 """
 
 from core.ordinal import ordinal_valid
-from extensions.humanoid.side import RIGHT, BodySide
+from extensions.humanoid.side import require_side, RIGHT, BodySide
 from extensions.humanoid.skeleton.arm.frame import ArmDimensions, ArmFrame
 from extensions.humanoid.skeleton.torso.sweep import (
     Dome,
@@ -105,8 +105,7 @@ def arm_bone_field(
     dimensions.validate()
     if not part.is_valid():
         raise Error("An arm bone must be the humerus, the radius or the ulna")
-    if not side.is_valid():
-        raise Error("An arm side must be RIGHT or LEFT")
+    require_side(side, "An arm")
     var f = dimensions.frame
     var sweeps = List[Sweep]()
     if part == HUMERUS:

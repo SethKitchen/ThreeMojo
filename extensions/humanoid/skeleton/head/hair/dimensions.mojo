@@ -22,7 +22,7 @@ centimeters. They are not a cited hair density table; see
 from core.ordinal import ordinal_valid
 from extensions.humanoid.genome import BROW_THICKNESS, HAIR_CURL, HAIR_LENGTH
 from extensions.humanoid.sex import MALE
-from extensions.humanoid.side import RIGHT, BodySide
+from extensions.humanoid.side import require_side, RIGHT, BodySide
 from extensions.humanoid.skeleton.head.frame import HeadMuscleDimensions
 from extensions.humanoid.skeleton.head.hair.styles import (
     GROWN,
@@ -140,8 +140,7 @@ def head_hair_field(
         return head_hair_field(
             dimensions, part, side, HeadSkinField(dimensions)
         )
-    if not side.is_valid():
-        raise Error("A head side must be RIGHT or LEFT")
+    require_side(side, "A head")
     return _scalp_field(dimensions)
 
 
@@ -169,8 +168,7 @@ def head_hair_field(
     """
     dimensions.validate()
     var paired = is_paired_head_hair(part)
-    if not side.is_valid():
-        raise Error("A head side must be RIGHT or LEFT")
+    require_side(side, "A head")
     if not paired:
         return _scalp_field(dimensions)
     var h = dimensions.head.copy()

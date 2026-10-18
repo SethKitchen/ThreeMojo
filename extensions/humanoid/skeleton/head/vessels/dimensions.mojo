@@ -24,7 +24,7 @@ authored in template centimeters. They are not a cited lumen table.
 """
 
 from core.ordinal import ordinal_valid
-from extensions.humanoid.side import BodySide
+from extensions.humanoid.side import require_side, BodySide
 from extensions.humanoid.skeleton.head.frame import HeadMuscleDimensions
 from extensions.humanoid.skeleton.torso.bones.dimensions import (
     append_template_tube,
@@ -134,8 +134,7 @@ def head_vessel_field(
     dimensions.validate()
     if not part.is_valid():
         raise Error("A head vessel must be a named artery or vein")
-    if not side.is_valid():
-        raise Error("A head side must be RIGHT or LEFT")
+    require_side(side, "A head")
     var f = dimensions.head.frame
     var sweeps = List[Sweep]()
     # fmt: off

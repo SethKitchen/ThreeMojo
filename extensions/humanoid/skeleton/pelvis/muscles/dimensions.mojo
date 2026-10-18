@@ -32,7 +32,7 @@ pelvic vessels, nerves and lymphatics run on to those points.
 
 from core.ordinal import ordinal_valid
 from extensions.humanoid.athleticism import Athleticism, radius_scale
-from extensions.humanoid.side import LEFT, RIGHT, BodySide
+from extensions.humanoid.side import require_side, LEFT, RIGHT, BodySide
 from extensions.humanoid.spec import HumanoidSpec
 from extensions.humanoid.skeleton.field import (
     Bounds,
@@ -226,8 +226,7 @@ struct PelvisMuscleDimensions(ImplicitlyCopyable):
         Raises:
             Error: If `side` is not valid.
         """
-        if not side.is_valid():
-            raise Error("A pelvis side must be RIGHT or LEFT")
+        require_side(side, "A pelvis")
         if side == LEFT:
             return flip_x(self.leg_origin)
         return self.leg_origin
@@ -263,8 +262,7 @@ struct PelvisMuscleField(DistanceField, ImplicitlyCopyable):
         dimensions.validate()
         if not part.is_valid():
             raise Error("A pelvic muscle must be a named muscle")
-        if not side.is_valid():
-            raise Error("A pelvis side must be RIGHT or LEFT")
+        require_side(side, "A pelvis")
         self.chains = _chains(dimensions, part)
         self.mirror = side == LEFT
         self.k = dimensions.k

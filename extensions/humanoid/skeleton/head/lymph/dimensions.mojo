@@ -22,7 +22,7 @@ not a cited node count or size table.
 """
 
 from core.ordinal import ordinal_valid
-from extensions.humanoid.side import BodySide
+from extensions.humanoid.side import require_side, BodySide
 from extensions.humanoid.skeleton.head.frame import HeadMuscleDimensions
 from extensions.humanoid.skeleton.torso.bones.dimensions import (
     template_points,
@@ -117,8 +117,7 @@ def head_lymph_field(
     dimensions.validate()
     if not part.is_valid():
         raise Error("A head lymph group must be a named group")
-    if not side.is_valid():
-        raise Error("A head side must be RIGHT or LEFT")
+    require_side(side, "A head")
     var f = dimensions.head.frame
     # Each node: x, y, z and its radius, in template cm.
     var nodes: List[Float32]

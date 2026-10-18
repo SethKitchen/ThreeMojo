@@ -21,7 +21,7 @@ minimum radius.
 """
 
 from core.ordinal import ordinal_valid
-from extensions.humanoid.side import BodySide
+from extensions.humanoid.side import require_side, BodySide
 from extensions.humanoid.skeleton.arm.frame import ArmMuscleDimensions
 from extensions.humanoid.skeleton.arm.muscles.dimensions import paths_field
 from extensions.humanoid.skeleton.hand.bones.dimensions import (
@@ -111,8 +111,7 @@ def hand_lymph_field(
     dimensions.validate()
     if not part.is_valid():
         raise Error("A hand lymphatic must be a named part")
-    if not side.is_valid():
-        raise Error("A hand side must be RIGHT or LEFT")
+    require_side(side, "A hand")
     var arm = dimensions.arm.copy()
     var f = arm.frame
     if part == DORSAL_LYMPHATICS:

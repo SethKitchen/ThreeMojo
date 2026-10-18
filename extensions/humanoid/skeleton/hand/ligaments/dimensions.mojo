@@ -23,7 +23,7 @@ authored in template centimeters. They are not a cited width table.
 """
 
 from core.ordinal import ordinal_valid
-from extensions.humanoid.side import BodySide
+from extensions.humanoid.side import require_side, BodySide
 from extensions.humanoid.skeleton.arm.frame import ArmDimensions
 from extensions.humanoid.skeleton.arm.ligaments.dimensions import joint_pad
 from extensions.humanoid.skeleton.field import cross
@@ -168,8 +168,7 @@ def hand_ligament_field(
     """
     dimensions.validate()
     _ = hand_ligament_tissue(part)
-    if not side.is_valid():
-        raise Error("A hand side must be RIGHT or LEFT")
+    require_side(side, "A hand")
     var f = dimensions.frame
     var up = f.hand_direction(0, 1, 0)
     var palm = f.hand_direction(0, 0, 1)

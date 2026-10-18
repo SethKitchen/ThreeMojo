@@ -24,7 +24,7 @@ authored in template centimeters. They are not a cited fascicle table.
 """
 
 from core.ordinal import ordinal_valid
-from extensions.humanoid.side import RIGHT, BodySide
+from extensions.humanoid.side import require_side, RIGHT, BodySide
 from extensions.humanoid.skeleton.head.frame import HeadMuscleDimensions
 from extensions.humanoid.skeleton.torso.bones.dimensions import (
     append_template_tube,
@@ -134,8 +134,7 @@ def head_nerve_field(
     """
     dimensions.validate()
     var paired = is_paired_head_nerve(part)
-    if not side.is_valid():
-        raise Error("A head side must be RIGHT or LEFT")
+    require_side(side, "A head")
     var h = dimensions.head.copy()
     var f = h.frame
     var sweeps = List[Sweep]()

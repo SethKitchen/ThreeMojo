@@ -25,7 +25,7 @@ a cited cross-section table.
 """
 
 from core.ordinal import ordinal_valid
-from extensions.humanoid.side import BodySide
+from extensions.humanoid.side import require_side, BodySide
 from extensions.humanoid.skeleton.arm.frame import (
     ArmDimensions,
     ArmMuscleDimensions,
@@ -599,8 +599,7 @@ def arm_muscle_field(
     """
     dimensions.validate()
     var paths = arm_muscle_paths(part)
-    if not side.is_valid():
-        raise Error("An arm side must be RIGHT or LEFT")
+    require_side(side, "An arm")
     return paths_field(dimensions.arm, paths, dimensions.scale, side, 0.4)
 
 

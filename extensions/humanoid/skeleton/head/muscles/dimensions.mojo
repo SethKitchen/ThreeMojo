@@ -26,7 +26,7 @@ parameters. They are not a cited cross-section table.
 """
 
 from core.ordinal import ordinal_valid
-from extensions.humanoid.side import RIGHT, BodySide
+from extensions.humanoid.side import require_side, RIGHT, BodySide
 from extensions.humanoid.skeleton.head.frame import (
     HeadDimensions,
     HeadMuscleDimensions,
@@ -352,8 +352,7 @@ def head_muscle_field(
     """
     dimensions.validate()
     var paths = head_muscle_paths(part)
-    if not side.is_valid():
-        raise Error("A head side must be RIGHT or LEFT")
+    require_side(side, "A head")
     var h = dimensions.head.copy()
     var placed = side
     if not is_paired_head_muscle(part):

@@ -35,7 +35,7 @@ from extensions.humanoid.genome import (
     check_genome,
 )
 from extensions.humanoid.sex import MALE, Sex
-from extensions.humanoid.side import LEFT, RIGHT, BodySide
+from extensions.humanoid.side import require_side, LEFT, RIGHT, BodySide
 from extensions.humanoid.skeleton.field import (
     check_spec,
     finite_point,
@@ -640,8 +640,7 @@ def torso_bone_field(
             not named, or if `side` is not valid.
     """
     dimensions.validate()
-    if not side.is_valid():
-        raise Error("A torso side must be RIGHT or LEFT")
+    require_side(side, "A torso")
     var placed = RIGHT
     if is_paired_bone(part):
         placed = side

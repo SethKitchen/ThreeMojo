@@ -19,7 +19,7 @@ cited width table.
 """
 
 from core.ordinal import ordinal_valid
-from extensions.humanoid.side import RIGHT, BodySide
+from extensions.humanoid.side import require_side, RIGHT, BodySide
 from extensions.humanoid.skeleton.field import mix_point
 from extensions.anatomy.soft_tissue import (
     SoftTissue,
@@ -92,8 +92,7 @@ def torso_ligament_field(
             not named, or if `side` is not valid.
     """
     dimensions.validate()
-    if not side.is_valid():
-        raise Error("A torso side must be RIGHT or LEFT")
+    require_side(side, "A torso")
     var paired = is_paired_ligament(part)
     var f = dimensions.frame
     var sweeps = List[Sweep]()

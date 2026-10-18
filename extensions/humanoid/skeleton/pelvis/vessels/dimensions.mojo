@@ -26,7 +26,7 @@ diagrammatic minimum radius so the current isosurface can show them.
 """
 
 from core.ordinal import ordinal_valid
-from extensions.humanoid.side import LEFT, BodySide
+from extensions.humanoid.side import require_side, LEFT, BodySide
 from extensions.humanoid.skeleton.field import (
     DistanceField,
     TubeChain,
@@ -112,8 +112,7 @@ struct PelvisVesselField(DistanceField, ImplicitlyCopyable):
         dimensions.validate()
         if not part.is_valid():
             raise Error("A pelvic vessel must be a named artery or vein")
-        if not side.is_valid():
-            raise Error("A pelvis side must be RIGHT or LEFT")
+        require_side(side, "A pelvis")
         self.chain = _chain(dimensions, part, side)
         self.mirror = side == LEFT and not _unpaired(part)
         self.k = Float32(0.00025)
