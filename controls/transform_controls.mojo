@@ -62,7 +62,7 @@ from cameras.camera import Camera
 from controls.input import (
     InputEvent,
     POINTER_DOWN,
-    refuse_invalid,
+    require_named,
     require_view_size,
     require_input,
     POINTER_MOVE,
@@ -183,8 +183,7 @@ struct TransformAxis(Equatable, ImplicitlyCopyable, Writable):
         Raises:
             Error: If the handle is invalid.
         """
-        if not self.is_valid():
-            refuse_invalid("transform axis", self.value)
+        require_named(self.is_valid(), "transform axis", self.value)
         var names: List[String] = [
             "",
             "X",
@@ -471,12 +470,11 @@ struct TransformControls(Copyable, Movable):
                 is not a handle of the mode, the size is not positive, or a
                 snap is set and not positive.
         """
-        if not self.mode.is_valid():
-            refuse_invalid("transform mode", self.mode.value)
-        if not self.space.is_valid():
-            refuse_invalid("transform space", self.space.value)
-        if not self.axis.is_valid():
-            refuse_invalid("transform axis", self.axis.value)
+        require_named(self.mode.is_valid(), "transform mode", self.mode.value)
+        require_named(
+            self.space.is_valid(), "transform space", self.space.value
+        )
+        require_named(self.axis.is_valid(), "transform axis", self.axis.value)
         if self.axis != NO_HANDLE and not _has_handle(self.mode, self.axis):
             raise Error("The mode has no handle ", self.axis.name())
         if not (self.size > 0):

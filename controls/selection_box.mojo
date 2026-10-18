@@ -44,7 +44,7 @@ center gives the corner, at a depth of one half, as in three.js's example.
 from cameras.camera import Camera, unproject_point
 from controls.input import (
     InputEvent,
-    refuse_invalid,
+    require_named,
     require_view_size,
     POINTER_DOWN,
     POINTER_MOVE,
@@ -167,10 +167,10 @@ struct SelectionBox(Copyable, Movable):
             Error: If the event's kind or button is invalid, the view has
                 no size, or for anything `select` raises for.
         """
-        if not event.kind.is_valid():
-            refuse_invalid("input kind", event.kind.value)
-        if not event.button.is_valid():
-            refuse_invalid("pointer button", event.button.value)
+        require_named(event.kind.is_valid(), "input kind", event.kind.value)
+        require_named(
+            event.button.is_valid(), "pointer button", event.button.value
+        )
         require_view_size(width, height)
         var corner = Vector3(
             (Float32(event.x) + 0.5) / Float32(width) * 2 - 1,

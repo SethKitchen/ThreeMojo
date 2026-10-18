@@ -297,6 +297,24 @@ def refuse_invalid(what: String, value: Int) raises:
     raise Error("Invalid " + what + ": ", value)
 
 
+def require_named(valid: Bool, what: String, value: Int) raises:
+    """Refuse a number that does not name its kind.
+
+    Args:
+        valid: Whether the number names a kind.
+        what: What was refused, the words after `Invalid`.
+        value: The number that was refused.
+
+    Returns:
+        Nothing. The call returns when `valid` is true.
+
+    Raises:
+        Error: If `valid` is false. The message is `Invalid <what>: <value>`.
+    """
+    if not valid:
+        refuse_invalid(what, value)
+
+
 def require_input(event: InputEvent) raises:
     """Refuse an event whose kind, button or key is not a named value.
 
@@ -309,12 +327,9 @@ def require_input(event: InputEvent) raises:
     Raises:
         Error: If the kind, button or key is invalid.
     """
-    if not event.kind.is_valid():
-        refuse_invalid("input kind", event.kind.value)
-    if not event.button.is_valid():
-        refuse_invalid("pointer button", event.button.value)
-    if not event.key.is_valid():
-        refuse_invalid("key", event.key.value)
+    require_named(event.kind.is_valid(), "input kind", event.kind.value)
+    require_named(event.button.is_valid(), "pointer button", event.button.value)
+    require_named(event.key.is_valid(), "key", event.key.value)
 
 
 def _is_final(byte: UInt8) -> Bool:

@@ -60,7 +60,7 @@ from cameras.perspective_camera import PerspectiveCamera
 from controls.input import (
     InputEvent,
     NO_BUTTON,
-    refuse_invalid,
+    require_named,
     require_viewport_size,
     require_input,
     POINTER_DOWN,
@@ -2675,12 +2675,9 @@ def _check_action(
     Raises:
         Error: If one is invalid.
     """
-    if not operation.is_valid():
-        refuse_invalid("arcball operation", operation.value)
-    if not mouse.is_valid():
-        refuse_invalid("arcball mouse input", mouse.value)
-    if not key.is_valid():
-        refuse_invalid("arcball modifier", key.value)
+    require_named(operation.is_valid(), "arcball operation", operation.value)
+    require_named(mouse.is_valid(), "arcball mouse input", mouse.value)
+    require_named(key.is_valid(), "arcball modifier", key.value)
 
 
 def _state_of(operation: ArcballOperation) -> ArcballState:
