@@ -17,7 +17,11 @@ runs on a `SurfaceField` and on a packed copy in device memory.
 """
 
 from extensions.water.field import ComplexField, fft2
-from extensions.water.filter import anisotropic_step
+from extensions.water.filter import (
+    anisotropic_step,
+    lod_blend,
+    major_axis_offset,
+)
 from extensions.water.resolution import SpectrumResolution
 from extensions.water.spectrum import (
     build_spectrum,
@@ -423,7 +427,7 @@ def sample_surface_filtered[
     var acc = SurfaceSample(0.0, 0.0, 0.0, 0.0)
     var count = step.taps
     for i in range(count):  # pragma: no branch
-        var o = (Float32(i) + 0.5) / Float32(count) - 0.5
+        var o = major_axis_offset(i, count)
         var sample = _trilinear_uv(
             surface, u + step.du * o, v + step.dv * o, step.lod
         )
@@ -435,11 +439,7 @@ def _trilinear_uv[
     S: SurfaceTexels
 ](surface: S, u: Float32, v: Float32, lod: Float32) -> SurfaceSample:
     var levels = surface.surface_levels()
-    var i0 = Int(floor(lod))
-    var i1 = i0 + 1
-    if i1 > levels:
-        i1 = levels
-    var frac = lod - Float32(i0)
+    var i0, i1, frac = lod_blend(lod, levels)
     var a = _sample_level(surface, i0, u, v)
     var b = _sample_level(surface, i1, u, v)
     return _mix_sample(a, b, frac)
