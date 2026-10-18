@@ -3441,6 +3441,8 @@ def _typed_boundary_bindings(root, *, _snapshots=None, _operation=None, _selecti
             if (type(_operation) is _InvariantInputs and _operation._state == 'active'
                     and not _operation._capturing):
                 pr760_stage.verify_stage_data()
+                typed_boundary.verify_authority()
+                conditioned_cubic.verify_authority()
                 require(_pr760_image_selected(_operation._raw), 'operation cohort changed')
                 return {path: sha(raw) for path, raw in _operation._raw.items()}
             candidate = _pr760_candidate_bindings(root, _snapshots=_snapshots, _operation=_operation)
@@ -4829,7 +4831,7 @@ def _pr760_candidate_bindings(root, *, _snapshots=None, _operation=None):
         require(executing_checker_bindings(root) == executing,
                 'PR760 executing checker changed during verification')
         return {'image': 'pr760-closed-candidate', 'public_admission': False,
-                'bindings': {path: sha(raw) for path, raw in image.items()},
+                'bindings': {path: sha(image[path]) for path in sorted(image)},
                 'predecessors': previous, 'typed_predecessors': typed_previous,
                 'shared_edges': shared_edges,
                 'closures': {name: frozenset(paths) for name, paths in found.items()},

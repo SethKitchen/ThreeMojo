@@ -4322,7 +4322,7 @@ _PR760_CHECKER_SOURCE_EDGES = {'coverage_loop_proofs.py': {'after_sha256': '08e8
              '**operation_args))\n',
              '            result.update(density760_loops(root, include_roots=include_roots, '
              '**operation_args))\n')))},
- 'full_audit_cleanup_contracts.py': {'after_sha256': '29824a7c4457046c59a0f7848cb370704fcd5d70452162da4645e584d6d53ea9',
+ 'full_audit_cleanup_contracts.py': {'after_sha256': 'da8e089d37944a811f30885720b178d3d5787c86b2be3588decaf61c3662b10b',
  'before_sha256': '6138ba2dcac394c716ea9ed32e74e0c6d15857d5c605fc82304d21d0c80fdc69',
  'edits': ((53, 54, (), ('        from . import pr760_arithmetic_stage as pr760_stage\n',)),
            (66, 67, (), ('        import pr760_arithmetic_stage as pr760_stage\n',)),
@@ -4694,13 +4694,15 @@ _PR760_CHECKER_SOURCE_EDGES = {'coverage_loop_proofs.py': {'after_sha256': '08e8
             ('def _typed_boundary_bindings(root, *, _snapshots=None, _operation=None, '
              '_selection=None):\n',)),
            (3439,
-            3450,
+            3452,
             (),
             ('        if _pr760_select(root, _snapshots=_snapshots, _operation=_operation):\n',
              '            if (type(_operation) is _InvariantInputs and _operation._state == '
              "'active'\n",
              '                    and not _operation._capturing):\n',
              '                pr760_stage.verify_stage_data()\n',
+             '                typed_boundary.verify_authority()\n',
+             '                conditioned_cubic.verify_authority()\n',
              "                require(_pr760_image_selected(_operation._raw), 'operation cohort "
              "changed')\n",
              '                return {path: sha(raw) for path, raw in _operation._raw.items()}\n',
@@ -4711,39 +4713,39 @@ _PR760_CHECKER_SOURCE_EDGES = {'coverage_loop_proofs.py': {'after_sha256': '08e8
              "selection output')\n",
              '                _selection.update(candidate)\n',
              "            return candidate['bindings']\n")),
-           (3514,
-            3516,
+           (3516,
+            3518,
             ('    edge = typed_boundary.EDGES.get(path)\n',),
             ('    edge = (pr760_stage.EDGES.get(path) if path in '
              'pr760_stage.CARLA_REGISTRY_PATHS\n',
              '            else typed_boundary.EDGES.get(path))\n')),
-           (3534,
-            3536,
+           (3536,
+            3538,
             ('        if not (typed_boundary.is_current(path, text) or\n',),
             ('        new_endpoint = path in pr760_stage.CARLA_REGISTRY_PATHS and '
              "source.token_sha256(text) == edge['after_token_sha256']\n",
              '        if not (new_endpoint or typed_boundary.is_current(path, text) or\n')),
-           (3540,
-            3541,
+           (3542,
+            3543,
             ('        require(typed_boundary.is_current(path, raw),\n',),
             ("        require((sha(raw) == edge['after_sha256']) if new_endpoint else "
              'typed_boundary.is_current(path, raw),\n',)),
-           (3559,
-            3563,
+           (3561,
+            3565,
             ('        return _historical_typed_text(path, physical_text)\n',),
             ('        if new_endpoint:\n',
              '            require(_pr760_select(root, _operation=_operation,\n',
              "                _inputs=_inputs, _input_owner=_input_owner), 'new endpoint lacks "
              "complete PR760 image')\n",
              '        return _historical_typed_text(path, physical_text, pr760=new_endpoint)\n')),
-           (3602,
-            3604,
+           (3604,
+            3606,
             ('        typed_bindings = _typed_boundary_bindings(root, _snapshots=snapshots,\n',),
             ('        pr760 = {}\n',
              '        typed_bindings = _typed_boundary_bindings(root, _snapshots=snapshots, '
              '_selection=pr760,\n')),
-           (3626,
-            3630,
+           (3628,
+            3632,
             ('        scaled_bindings = _scaled_float32_bindings(root, _snapshots=snapshots)\n',
              '        scaled_edges = scaled_float32.edges(tuple(name for name in '
              'scaled_float32.SOURCE_PATHS\n',
@@ -4758,19 +4760,19 @@ _PR760_CHECKER_SOURCE_EDGES = {'coverage_loop_proofs.py': {'after_sha256': '08e8
              '        helper_bindings = _shared_helper_bindings(root, _snapshots=snapshots, '
              '_pr760=pr760 or None)\n',
              '        helper_edges = _pr760_composed_edges(shared_helpers, helper_bindings)\n')),
-           (3637,
-            3639,
+           (3639,
+            3641,
             (),
             ('        if pr760:\n',
              "            resolver_paths |= set().union(*pr760['closures'].values())\n")),
-           (3645,
-            3646,
+           (3647,
+            3648,
             ('                    **_render_lookup_args(resolver_paths, '
              "record['entry_directories'])),\n",),
             ('                    **_image_lookup_args(resolver_paths, '
              "record['entry_directories'], snapshots)),\n",)),
-           (3647,
-            3665,
+           (3649,
+            3667,
             ("        known = {p.as_posix() for p in _sibling('cache_key').input_paths(root) if "
              "p.suffix == '.mojo'}\n",
              '        # #720 resolves from actual compiled entrypoint directories. Bind all\n',
@@ -4806,13 +4808,13 @@ _PR760_CHECKER_SOURCE_EDGES = {'coverage_loop_proofs.py': {'after_sha256': '08e8
              "            entries = _sibling('affected').entry_directories(live_sources)\n",
              "            require(entries == record['entry_directories'], 'maintained entrypoint "
              "directories changed')\n")),
-           (3669,
-            3670,
+           (3671,
+            3672,
             ('            stage_args = _render_lookup_args(resolver_paths, stage_entries)\n',),
             ('            stage_args = _image_lookup_args(resolver_paths, stage_entries, '
              'snapshots)\n',)),
-           (3673,
-            3702,
+           (3675,
+            3704,
             ('        require(dependency_inventory(root, roots=(*SOURCE_PATHS, '
              "*record['inventory']), entries=entries,\n",
              '                                     _known=known, _snapshots=snapshots)\n',
@@ -4889,8 +4891,8 @@ _PR760_CHECKER_SOURCE_EDGES = {'coverage_loop_proofs.py': {'after_sha256': '08e8
              '                                              '
              'set(typed_boundary.TYPED_PRODUCTION_CLOSURE)),\n',
              "                        'typed production import inventory changed')\n")),
-           (3736,
-            3741,
+           (3738,
+            3743,
             ('                historical = _historical_typed_text(path, '
              "raw.decode('utf-8')).encode('utf-8') if path in typed_boundary.EDGES and "
              'typed_bindings else raw\n',),
@@ -4901,8 +4903,8 @@ _PR760_CHECKER_SOURCE_EDGES = {'coverage_loop_proofs.py': {'after_sha256': '08e8
              '                if path in typed_boundary.EDGES and typed_bindings:\n',
              '                    historical = _historical_typed_text(path, '
              "historical.decode('utf-8')).encode('utf-8')\n")),
-           (3746,
-            3753,
+           (3748,
+            3755,
             ('        production = set() if _capture is not None or _public_admission is not None '
              'else None\n',
              '        observed_inventory = (inventory(root, _snapshots=snapshots) if production is '
@@ -4919,22 +4921,22 @@ _PR760_CHECKER_SOURCE_EDGES = {'coverage_loop_proofs.py': {'after_sha256': '08e8
              'production is None else\n',
              '                                  inventory(root, _snapshots=snapshots, '
              '_production=production))\n')),
-           (3768,
-            3771,
+           (3770,
+            3773,
             (),
             ('        if pr760:\n',
              '            require({path.relative_to(root).as_posix() for path in '
              'guard.production_mojo_paths(root)}\n',
              "                    == production, 'PR760 production path inventory changed during "
              "verification')\n")),
-           (3774,
-            3775,
+           (3776,
+            3777,
             ('                    **_render_lookup_args(resolver_paths, '
              "record['entry_directories']))\n",),
             ('                    **_image_lookup_args(resolver_paths, '
              "record['entry_directories'], snapshots))\n",)),
-           (3906,
-            3910,
+           (3908,
+            3912,
             ('    changed = {p for p, text in texts.items() if p in SOURCE_PATHS\n',
              '               and source.token_sha256(text) != BEFORE_TOKEN_SHA256[p]}\n'),
             ('    changed = {p for p, text in texts.items() if\n',
@@ -4943,40 +4945,40 @@ _PR760_CHECKER_SOURCE_EDGES = {'coverage_loop_proofs.py': {'after_sha256': '08e8
              '               or (p in pr760_stage.CARLA_REGISTRY_PATHS and\n',
              '                   source.token_sha256(text) == '
              "pr760_stage.EDGES[p]['after_token_sha256'])}\n")),
-           (3919, 3920, (), ('    pr760 = bool(_pr760_select(root))\n',)),
-           (3931,
-            3932,
+           (3921, 3922, (), ('    pr760 = bool(_pr760_select(root))\n',)),
+           (3933,
+            3934,
             ('        text = _historical_typed_text(path, _physical_text(physical))\n',),
             ('        text = _historical_typed_text(path, _physical_text(physical), '
              'pr760=pr760)\n',)),
-           (3939,
-            3940,
+           (3941,
+            3942,
             ('            require(raw == physical and source.token_sha256(text) == '
              'source.token_sha256(_historical_typed_text(path, _physical_text(raw))),\n',),
             ('            require(raw == physical and source.token_sha256(text) == '
              'source.token_sha256(_historical_typed_text(path, _physical_text(raw), '
              'pr760=pr760)),\n',)),
-           (4026,
-            4027,
+           (4028,
+            4029,
             (),
             ('        current_image = _pr760_select(root, _operation=_operation)\n',)),
-           (4031,
-            4034,
+           (4033,
+            4036,
             ('            require(typed_boundary.is_current(path, current),\n',),
             ('            projected = (pr760_stage.predecessor_source(path, '
              "current.decode('utf-8'))\n",
              '                if current_image and path in pr760_stage.EXAMPLE_PATHS else '
              "current.decode('utf-8'))\n",
              '            require(typed_boundary.is_current(path, projected),\n')),
-           (4036,
-            4039,
+           (4038,
+            4041,
             (),
             ('            if current_image and path in pr760_stage.EXAMPLE_PATHS:\n',
              '                edge.update(after_sha256=sha(current),\n',
              '                            '
              "after_token_sha256=source.token_sha256(current.decode('utf-8')))\n")),
-           (4130,
-            4849,
+           (4132,
+            4851,
             (),
             ('PR760_IMPLEMENTATION_PREDECESSORS = '
              "{'tools/carla_lane_oracle/pr760-border_parser-predecessor.txt': "
@@ -6049,7 +6051,7 @@ _PR760_CHECKER_SOURCE_EDGES = {'coverage_loop_proofs.py': {'after_sha256': '08e8
              '        require(executing_checker_bindings(root) == executing,\n',
              "                'PR760 executing checker changed during verification')\n",
              "        return {'image': 'pr760-closed-candidate', 'public_admission': False,\n",
-             "                'bindings': {path: sha(raw) for path, raw in image.items()},\n",
+             "                'bindings': {path: sha(image[path]) for path in sorted(image)},\n",
              "                'predecessors': previous, 'typed_predecessors': typed_previous,\n",
              "                'shared_edges': shared_edges,\n",
              "                'closures': {name: frozenset(paths) for name, paths in "

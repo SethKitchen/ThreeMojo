@@ -251,8 +251,15 @@ def check_generated_receipt_owner(stage, mojo, compiler, flags, *, mutable_sourc
             yield counts, owners, binding_maps
         finally:
             sys.setprofile(None)
+    # PR760 composes the historical scaled edge only after the complete
+    # physical gate admits the same owner. Historical endpoints retain their
+    # supplemental pending-only path. Neither path may borrow stage bytes.
+    current_cohort = audit._pr760_select(root)
     positives, observed_maps = [], []
-    for attempt in range(2):
+    # The supplemental derivation runs inside a profile callback, where
+    # nested calls are not profiled. Count two additional ordinary derivations
+    # independently, without recursive profiling or inferred counter values.
+    for attempt in range(3):
         supplements = []
         def pending_supplements(frame, event, value, owners):
             if attempt != 0 or event != 'return':
@@ -263,14 +270,16 @@ def check_generated_receipt_owner(stage, mojo, compiler, flags, *, mutable_sourc
                         'Supplemental control missed the pending generated owner')
                 owner = owners[0]
                 supplements.append('scaled')
-                scaled = audit.scaled_float32_proof_bindings(root, include_roots=(stage,), _operation=owner)
-                require(scaled and owner._state == 'pending'
+                scaled = audit.scaled_float32_proof_bindings(
+                    root, include_roots=(stage,), _operation=owner)
+                require(scaled and owner._state == ('active' if current_cohort else 'pending')
                         and owner._scaled_resolver_paths == audit.scaled_float32.NATIVE_CLOSURE,
-                        'Pending scaled admission lost its independent resolver context')
-                observed = {path for location, path, raw, mode in owner._receipt_observations
-                            if location == owner._root}
+                        'Scaled admission lost its cohort state or independent resolver context')
+                observed = (owner._raw.keys() if current_cohort else
+                    {path for location, path, raw, mode in owner._receipt_observations
+                     if location == owner._root})
                 require(scaled.keys() <= observed,
-                        'Pending scaled admission borrowed generated rather than source observations')
+                        'Scaled admission borrowed generated rather than source observations')
             elif (supplements == ['scaled'] and frame.f_code is
                     audit._InvariantInputs._receipt_bindings.__code__):
                 owner = owners[0]
@@ -291,20 +300,23 @@ def check_generated_receipt_owner(stage, mojo, compiler, flags, *, mutable_sourc
                 'Supplemental admission controls did not run exactly once')
         require(proofs.canonical(actual) == proofs.canonical(expected),
                 'Invocation-local ownership changed a genuine receipt')
-        require(dict(counts) == {'full': 1, 'typed': 1},
-                'Generated rows replayed source semantics or skipped initial admission')
+        if attempt > 0:
+            require(dict(counts) == {'full': 1, 'typed': 1},
+                    'Generated rows replayed source semantics or skipped initial admission')
         require(len(owners) == 1 and owners[0]._state == 'closed'
                 and not owners[0]._failed and owners[0]._owner_frame is None,
                 'Successful generated owner did not close')
         require(binding_maps, 'Receipt did not exercise current binding-map reuse')
         observed_maps.extend(binding_maps)
         positives.append(owners[0])
-    require(positives[0] is not positives[1], 'Independent receipts reused an admission')
+    require(len({id(owner) for owner in positives}) == 3,
+            'Independent receipts reused an admission')
     # A separately derived old path remains the exact dependency-map oracle.
     standalone = audit.proof_bindings(root, include_roots=(stage,))
     require(all(list(value.items()) == list(standalone.items()) for value in observed_maps),
             'Cached dependency keys or overwrite order differ from standalone admission')
-    print('Generated owner: two fresh receipts, one full and one typed admission each', flush=True)
+    print('Generated owner: supplemental receipt plus two fresh counted receipts; '
+          'one full and one typed admission per counted receipt', flush=True)
     # A restored live-table mutation must still poison this real active owner.
     # This uses no writable source fixture and runs in the maintained entrypoint.
     conditioned_refusals = []
@@ -355,7 +367,8 @@ def check_generated_receipt_owner(stage, mojo, compiler, flags, *, mutable_sourc
             'Conditioned mutation did not refuse, restore and close its real owner')
     print('Generated owner: transient conditioned authority refused and restored', flush=True)
     if mutable_source is None:
-        return {'fresh_receipts': 2, 'full_per_receipt': 1, 'typed_per_receipt': 1,
+        return {'fresh_receipts': 3, 'counted_receipts': 2,
+            'full_per_counted_receipt': 1, 'typed_per_counted_receipt': 1,
                 'conditioned_authority_refusal': True}
 
     # These mutations require only the separately admitted writable source and
@@ -514,7 +527,8 @@ def check_generated_receipt_owner(stage, mojo, compiler, flags, *, mutable_sourc
             'Current source mutation controls did not restore the fixture')
     proofs.check_capture_inputs({'receipt': expected}, root, stage)
     print('Generated owner current refusals:', ', '.join(completed), flush=True)
-    return {'fresh_receipts': 2, 'full_per_receipt': 1, 'typed_per_receipt': 1,
+    return {'fresh_receipts': 3, 'counted_receipts': 2,
+            'full_per_counted_receipt': 1, 'typed_per_counted_receipt': 1,
             'conditioned_authority_refusal': True, 'current_mutation_controls': completed}
 
 
@@ -656,8 +670,9 @@ def check_current_generated_include_root(stage, mojo, compiler, flags):
         shadow.unlink()
     require((stage/'manifest.txt').read_bytes() == original, 'Original denominator changed')
     owner_result = check_generated_receipt_owner(stage, mojo, compiler, flags)
-    require(owner_result == {'fresh_receipts': 2, 'full_per_receipt': 1,
-                             'typed_per_receipt': 1, 'conditioned_authority_refusal': True},
+    require(owner_result == {'fresh_receipts': 3, 'counted_receipts': 2,
+                             'full_per_counted_receipt': 1, 'typed_per_counted_receipt': 1,
+                             'conditioned_authority_refusal': True},
             'Maintained generated owner controls did not complete')
     # Reuse this genuine stage for root-only borrowing and final-stage guards.
     # Test-module import support is local to this explicit maintained entrypoint.
