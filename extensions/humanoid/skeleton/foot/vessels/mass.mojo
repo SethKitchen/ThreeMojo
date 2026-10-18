@@ -22,6 +22,7 @@ from extensions.humanoid.skeleton.foot.chain import tube_set_volume
 from extensions.humanoid.skeleton.foot.vessels.dimensions import (
     FootVessel,
     FootVesselField,
+    require_foot_vessel,
     is_artery,
     vessel_distance,
 )
@@ -98,8 +99,7 @@ def foot_vessel_mass_from_dimensions(
             not named, or `tissue` fails `validate`.
     """
     dimensions.validate()
-    if not part.is_valid():
-        raise Error("A foot vessel must be a named artery or vein")
+    require_foot_vessel(part)
     tissue.validate()
     var field = FootVesselField(dimensions, part)
     var volume = tube_set_volume(field.tubes)

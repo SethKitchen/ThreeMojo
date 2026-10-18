@@ -19,6 +19,7 @@ from extensions.humanoid.skeleton.foot.chain import tube_set_volume
 from extensions.humanoid.skeleton.foot.muscles.dimensions import (
     FootMuscle,
     FootMuscleDimensions,
+    require_foot_muscle,
     FootMuscleField,
     foot_muscle_dimensions,
     foot_muscle_distance,
@@ -102,8 +103,7 @@ def foot_muscle_mass_from_dimensions(
             not named, or `tissue` fails `validate`.
     """
     dimensions.validate()
-    if not part.is_valid():
-        raise Error("A foot muscle must be a named muscle or tendon")
+    require_foot_muscle(part)
     tissue.validate()
     var field = FootMuscleField(dimensions, part)
     var volume = tube_set_volume(field.tubes)

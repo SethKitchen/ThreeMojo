@@ -53,6 +53,22 @@ struct LymphPart(Equatable, ImplicitlyCopyable, Writable):
         return ordinal_valid(self.value, DEEP_LYMPHATICS.value)
 
 
+def require_lymph_part(part: LymphPart) raises:
+    """Refuse a lymph solid that is not named.
+
+    Args:
+        part: The lymph solid.
+
+    Returns:
+        Nothing. The call returns when the solid is named.
+
+    Raises:
+        Error: If the solid is not a named node group or trunk.
+    """
+    if not part.is_valid():
+        raise Error("A lymph part must be a named node group or trunk")
+
+
 comptime INGUINAL_NODES = LymphPart(0)
 comptime POPLITEAL_NODES = LymphPart(1)
 comptime SUPERFICIAL_LYMPHATICS = LymphPart(2)
@@ -98,8 +114,7 @@ struct LymphField(DistanceField, ImplicitlyCopyable):
                 is not named.
         """
         dimensions.validate()
-        if not part.is_valid():
-            raise Error("A lymph part must be a named node group or trunk")
+        require_lymph_part(part)
         var S = dimensions.stature.value
         var lat = Float32(1)
         if dimensions.side == LEFT:
@@ -420,8 +435,7 @@ def is_node_group(part: LymphPart) raises -> Bool:
     Raises:
         Error: If `part` is not named.
     """
-    if not part.is_valid():
-        raise Error("A lymph part must be a named node group or trunk")
+    require_lymph_part(part)
     if part == INGUINAL_NODES:
         return True
     return part == POPLITEAL_NODES

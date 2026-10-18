@@ -49,6 +49,22 @@ struct VesselPart(Equatable, ImplicitlyCopyable, Writable):
         return ordinal_valid(self.value, SMALL_SAPHENOUS_VEIN.value)
 
 
+def require_vessel_part(part: VesselPart) raises:
+    """Refuse a vessel that is not named.
+
+    Args:
+        part: The vessel.
+
+    Returns:
+        Nothing. The call returns when the vessel is named.
+
+    Raises:
+        Error: If the vessel is not a named artery or vein.
+    """
+    if not part.is_valid():
+        raise Error("A vessel part must be a named artery or vein")
+
+
 comptime FEMORAL_ARTERY = VesselPart(0)
 comptime POPLITEAL_ARTERY = VesselPart(1)
 comptime ANTERIOR_TIBIAL_ARTERY = VesselPart(2)
@@ -86,8 +102,7 @@ struct VesselField(DistanceField, ImplicitlyCopyable):
                 is not named.
         """
         dimensions.validate()
-        if not part.is_valid():
-            raise Error("A vessel part must be a named artery or vein")
+        require_vessel_part(part)
         var S = dimensions.stature.value
         var chain: TubeChain
         if part == FEMORAL_ARTERY:
@@ -213,8 +228,7 @@ def is_artery(part: VesselPart) raises -> Bool:
     Raises:
         Error: If `part` is not named.
     """
-    if not part.is_valid():
-        raise Error("A vessel part must be a named artery or vein")
+    require_vessel_part(part)
     return part.value <= FIBULAR_ARTERY.value
 
 

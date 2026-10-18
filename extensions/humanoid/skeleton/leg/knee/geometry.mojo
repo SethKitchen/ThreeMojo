@@ -27,6 +27,7 @@ from extensions.humanoid.skeleton.leg.knee.dimensions import (
     KneeDimensions,
     KneePart,
     MeniscusField,
+    require_knee_part,
     knee_dimensions,
     knee_part_label,
 )
@@ -178,8 +179,7 @@ def knee_from_dimensions(
             produces no surface.
     """
     dimensions.validate()
-    if not part.is_valid():
-        raise Error("A knee part must be cartilage, a meniscus or a collateral")
+    require_knee_part(part)
     var label = knee_part_label(part)
     if part == ARTICULAR_CARTILAGE:
         var cartilage = CartilageField(dimensions)

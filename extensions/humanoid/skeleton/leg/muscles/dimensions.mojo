@@ -90,6 +90,22 @@ struct MusclePart(Equatable, ImplicitlyCopyable, Writable):
         return ordinal_valid(self.value, EXTENSOR_HALLUCIS_LONGUS.value)
 
 
+def require_muscle_part(part: MusclePart) raises:
+    """Refuse a muscle that is not named.
+
+    Args:
+        part: The muscle, tract, or tendon.
+
+    Returns:
+        Nothing. The call returns when the part is named.
+
+    Raises:
+        Error: If the part is not a named muscle, tract, or tendon.
+    """
+    if not part.is_valid():
+        raise Error("A muscle part must be a named muscle, tract or tendon")
+
+
 comptime GLUTEUS_MAXIMUS = MusclePart(0)
 comptime GLUTEUS_MEDIUS = MusclePart(1)
 comptime TENSOR_FASCIAE_LATAE = MusclePart(2)
@@ -292,8 +308,7 @@ struct MuscleField(DistanceField, ImplicitlyCopyable):
                 is not named.
         """
         dimensions.validate()
-        if not part.is_valid():
-            raise Error("A muscle part must be a named muscle, tract or tendon")
+        require_muscle_part(part)
         var chain = _raw_chain(dimensions, part)
         var at = part.value * 12
         var packed = dimensions.bellies
@@ -749,8 +764,7 @@ def is_tendon(part: MusclePart) raises -> Bool:
     Raises:
         Error: If `part` is not named.
     """
-    if not part.is_valid():
-        raise Error("A muscle part must be a named muscle, tract or tendon")
+    require_muscle_part(part)
     if part == ILIOTIBIAL_TRACT:
         return True
     if part == ACHILLES_TENDON:

@@ -19,6 +19,7 @@ from extensions.humanoid.skeleton.isosurface import mesh_checked
 from extensions.humanoid.skeleton.leg.lymph.dimensions import (
     LymphPart,
     _display_lymph_field,
+    require_lymph_part,
     lymph_part_label,
 )
 from extensions.humanoid.skeleton.leg.muscles.dimensions import (
@@ -71,8 +72,7 @@ def lymph_from_dimensions(
             produces no surface.
     """
     dimensions.validate()
-    if not part.is_valid():
-        raise Error("A lymph part must be a named node group or trunk")
+    require_lymph_part(part)
     var label = lymph_part_label(part)
     var field = _display_lymph_field(dimensions, part)
     return mesh_checked(field, field.low, field.high, detail, label)

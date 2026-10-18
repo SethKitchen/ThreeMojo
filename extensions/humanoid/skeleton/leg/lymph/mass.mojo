@@ -19,6 +19,7 @@ from extensions.humanoid.skeleton.leg.lymph.dimensions import (
     LymphField,
     LymphPart,
     lymph_distance,
+    require_lymph_part,
 )
 from extensions.humanoid.skeleton.leg.muscles.dimensions import (
     MuscleDimensions,
@@ -101,8 +102,7 @@ def lymph_mass_from_dimensions(
             not named, or `tissue` fails `validate`.
     """
     dimensions.validate()
-    if not part.is_valid():
-        raise Error("A lymph part must be a named node group or trunk")
+    require_lymph_part(part)
     tissue.validate()
     var field = LymphField(dimensions, part)
     var volume: Float32

@@ -91,6 +91,22 @@ struct KneePart(Equatable, ImplicitlyCopyable, Writable):
         return ordinal_valid(self.value, LATERAL_COLLATERAL.value)
 
 
+def require_knee_part(part: KneePart) raises:
+    """Refuse a knee solid that is not named.
+
+    Args:
+        part: The knee solid.
+
+    Returns:
+        Nothing. The call returns when the solid is named.
+
+    Raises:
+        Error: If the solid is not cartilage, a meniscus, or a collateral.
+    """
+    if not part.is_valid():
+        raise Error("A knee part must be cartilage, a meniscus or a collateral")
+
+
 # Hyaline cartilage on the femoral condyles, the trochlea, the plateau
 # and the posterior patella.
 comptime ARTICULAR_CARTILAGE = KneePart(0)
@@ -940,8 +956,7 @@ def knee_distance(
             not a named knee part.
     """
     dimensions.validate()
-    if not part.is_valid():
-        raise Error("A knee part must be cartilage, a meniscus or a collateral")
+    require_knee_part(part)
     if part == ARTICULAR_CARTILAGE:
         return CartilageField(dimensions).distance(point)
     if part == MEDIAL_MENISCUS:

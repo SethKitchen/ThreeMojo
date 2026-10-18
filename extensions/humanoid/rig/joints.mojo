@@ -138,6 +138,22 @@ def joint_label(joint: Joint) -> String:
     return names[joint.value]
 
 
+def require_joint(joint: Joint) raises:
+    """Refuse a joint that is not named.
+
+    Args:
+        joint: The joint.
+
+    Returns:
+        Nothing. The call returns when the joint is named.
+
+    Raises:
+        Error: If the joint is not named.
+    """
+    if not joint.is_valid():
+        raise Error("A joint must be a named joint")
+
+
 def named_joints() -> List[Joint]:
     """Return every joint, each after its parent.
 
@@ -162,8 +178,7 @@ def joint_parent(joint: Joint) raises -> Joint:
     Raises:
         Error: If `joint` is not named.
     """
-    if not joint.is_valid():
-        raise Error("A joint must be a named joint")
+    require_joint(joint)
     var parents: List[Int] = [
         0,
         0,
@@ -231,8 +246,7 @@ struct HumanoidRig(Copyable, Movable):
         Raises:
             Error: If `joint` is not named.
         """
-        if not joint.is_valid():
-            raise Error("A joint must be a named joint")
+        require_joint(joint)
         return self.joints[joint.value]
 
     def local(self, joint: Joint) raises -> Vector3:

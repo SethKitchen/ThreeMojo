@@ -61,6 +61,22 @@ struct FootVessel(Equatable, ImplicitlyCopyable, Writable):
         return ordinal_valid(self.value, SMALL_SAPHENOUS_VEIN.value)
 
 
+def require_foot_vessel(part: FootVessel) raises:
+    """Refuse a foot vessel that is not named.
+
+    Args:
+        part: The vessel.
+
+    Returns:
+        Nothing. The call returns when the vessel is named.
+
+    Raises:
+        Error: If the vessel is not a named artery or vein.
+    """
+    if not part.is_valid():
+        raise Error("A foot vessel must be a named artery or vein")
+
+
 comptime DORSALIS_PEDIS_ARTERY = FootVessel(0)
 comptime ARCUATE_ARTERY = FootVessel(1)
 comptime POSTERIOR_TIBIAL_ARTERY = FootVessel(2)
@@ -93,8 +109,7 @@ struct FootVesselField(DistanceField, ImplicitlyCopyable):
                 is not named.
         """
         dimensions.validate()
-        if not part.is_valid():
-            raise Error("A foot vessel must be a named artery or vein")
+        require_foot_vessel(part)
         self.tubes = _tubes(dimensions, part)
         var S = dimensions.stature.value
         self.k = 0.00035 * S
@@ -179,8 +194,7 @@ def is_artery(part: FootVessel) raises -> Bool:
     Raises:
         Error: If `part` is not named.
     """
-    if not part.is_valid():
-        raise Error("A foot vessel must be a named artery or vein")
+    require_foot_vessel(part)
     return part.value <= PLANTAR_ARCH.value
 
 
