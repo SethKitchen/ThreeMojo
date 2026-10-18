@@ -107,28 +107,21 @@ def _count(
     doc: JsonDocument, item: Int, key: String, default: Int
 ) raises -> Int:
     """Return a whole number under `key`, or `default`."""
-    var found = doc.get(item, key)
-    if found == NO_NODE:
-        return default
-    return doc.integer(found)
+    return doc.optional_integer(item, key, default)
 
 
 def _flag(
     doc: JsonDocument, item: Int, key: String, default: Bool
 ) raises -> Bool:
     """Return a boolean under `key`, or `default`."""
-    var found = doc.get(item, key)
-    if found == NO_NODE:
-        return default
-    return doc.boolean(found)
+    return doc.optional_boolean(item, key, default)
 
 
 def _list(doc: JsonDocument, item: Int, key: String) raises -> Int:
     """Return an array under `key`, or `NO_NODE`."""
-    var found = doc.get(item, key)
-    if found != NO_NODE and doc.kind(found) != ARRAY:
-        raise Error("Geometry JSON: " + key + " must be an array")
-    return found
+    return doc.optional_kind(
+        item, key, ARRAY, "Geometry JSON: " + key + " must be an array"
+    )
 
 
 def _lathe_points(doc: JsonDocument, item: Int) raises -> List[Vector2]:
