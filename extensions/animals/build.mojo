@@ -279,12 +279,9 @@ def primitive_box(p: Primitive, outline: List[Float64]) -> Tuple[V3, V3]:
         reach = far * 1.5 + p.r.x * 2.0
     else:
         reach = p.r.x * 2.0 + max(abs(p.lo), abs(p.hi))
-    var low = V3(
-        min(c.x, d.x) - reach, min(c.y, d.y) - reach, min(c.z, d.z) - reach
-    )
-    var high = V3(
-        max(c.x, d.x) + reach, max(c.y, d.y) + reach, max(c.z, d.z) + reach
-    )
+    var span = V3(reach, reach, reach)
+    var low = c.min(d) - span
+    var high = c.max(d) + span
     return (low, high)
 
 
@@ -308,12 +305,8 @@ def part_box(model: SdfModel, part: List[Int]) -> Tuple[V3, V3]:
         if p.carve:
             continue
         var box = primitive_box(p, model.outline)
-        low = V3(
-            min(low.x, box[0].x), min(low.y, box[0].y), min(low.z, box[0].z)
-        )
-        high = V3(
-            max(high.x, box[1].x), max(high.y, box[1].y), max(high.z, box[1].z)
-        )
+        low = low.min(box[0])
+        high = high.max(box[1])
     var pad = V3(k, k, k)
     return (low - pad, high + pad)
 
