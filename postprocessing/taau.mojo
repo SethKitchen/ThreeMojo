@@ -410,12 +410,7 @@ def taau_pixel(
     var changed = abs(closest - then) > frame.depth_threshold
     var can_lock = inside and not changed
     var lock = thin if can_lock else Float32(0)
-    var locked = FloatColor(
-        clipped.r + (past.r - clipped.r) * lock,
-        clipped.g + (past.g - clipped.g) * lock,
-        clipped.b + (past.b - clipped.b) * lock,
-        clipped.a + (past.a - clipped.a) * lock,
-    )
+    var locked = clipped.mix(past, lock)
     var weight = Float32(1)
     if kept:
         weight = min(max(frame.current_frame_weight + motion, 0), 1)

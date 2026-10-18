@@ -587,12 +587,7 @@ def texture_bicubic[
     if blend == 0:
         return fine
     var coarse = bicubic(source, uv, min(lower + 1, last))
-    return FloatColor(
-        fine.r + (coarse.r - fine.r) * blend,
-        fine.g + (coarse.g - fine.g) * blend,
-        fine.b + (coarse.b - fine.b) * blend,
-        fine.a + (coarse.a - fine.a) * blend,
-    )
+    return fine.mix(coarse, blend)
 
 
 def _transmission_sample[

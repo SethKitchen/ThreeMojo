@@ -40,7 +40,7 @@ triangle shades and maps as though it were never cut.
 
 from math.bounds import Plane
 from math.utils import mix_delta
-from math.vector3 import Vector3
+from math.vector3 import Vector3, mix_delta3
 from render.framebuffer import FloatColor
 from std.math import isfinite
 
@@ -217,26 +217,14 @@ def _mix_vertex(a: ClipVertex, b: ClipVertex, t: Float32) -> ClipVertex:
     """Return the vertex a fraction `t` of the way from `a` to `b`, every
     varying interpolated with the position."""
     var mixed = ClipVertex(
-        Vector3(
-            _mix(a.position.x, b.position.x, t),
-            _mix(a.position.y, b.position.y, t),
-            _mix(a.position.z, b.position.z, t),
-        ),
+        _mix_vector(a.position, b.position, t),
         a.color.mix(b.color, t),
         # Not renormalized here: a cut vertex is about to be interpolated
         # across a triangle anyway, and the fragment normalizes what it gets.
-        Vector3(
-            _mix(a.normal.x, b.normal.x, t),
-            _mix(a.normal.y, b.normal.y, t),
-            _mix(a.normal.z, b.normal.z, t),
-        ),
+        _mix_vector(a.normal, b.normal, t),
         _mix(a.u, b.u, t),
         _mix(a.v, b.v, t),
-        Vector3(
-            _mix(a.world.x, b.world.x, t),
-            _mix(a.world.y, b.world.y, t),
-            _mix(a.world.z, b.world.z, t),
-        ),
+        _mix_vector(a.world, b.world, t),
         a.emissive.mix(b.emissive, t),
         _mix(a.line_distance, b.line_distance, t),
         _mix(a.u1, b.u1, t),
@@ -253,22 +241,14 @@ def _mix_vertex(a: ClipVertex, b: ClipVertex, t: Float32) -> ClipVertex:
     mixed.gouraud_back_indirect = _mix_vector(
         a.gouraud_back_indirect, b.gouraud_back_indirect, t
     )
-    mixed.current = Vector3(
-        _mix(a.current.x, b.current.x, t),
-        _mix(a.current.y, b.current.y, t),
-        _mix(a.current.z, b.current.z, t),
-    )
-    mixed.previous = Vector3(
-        _mix(a.previous.x, b.previous.x, t),
-        _mix(a.previous.y, b.previous.y, t),
-        _mix(a.previous.z, b.previous.z, t),
-    )
+    mixed.current = _mix_vector(a.current, b.current, t)
+    mixed.previous = _mix_vector(a.previous, b.previous, t)
     return mixed^
 
 
 def _mix_vector(a: Vector3, b: Vector3, t: Float32) -> Vector3:
     """Return a vector a fraction `t` of the way from `a` to `b`."""
-    return Vector3(_mix(a.x, b.x, t), _mix(a.y, b.y, t), _mix(a.z, b.z, t))
+    return mix_delta3(a, b, t)
 
 
 def _cross_at(a: ClipVertex, b: ClipVertex, plane_z: Float32) -> ClipVertex:

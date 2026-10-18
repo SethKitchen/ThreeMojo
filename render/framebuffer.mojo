@@ -507,10 +507,7 @@ struct FloatColor(Equatable, ImplicitlyCopyable):
             end: The color at an `alpha` of one.
             alpha: How far along.
         """
-        self.r = start.r + (end.r - start.r) * alpha
-        self.g = start.g + (end.g - start.g) * alpha
-        self.b = start.b + (end.b - start.b) * alpha
-        self.a = start.a + (end.a - start.a) * alpha
+        self = start.mix(end, alpha)
 
     def set_rgb(
         mut self, r: Float32, g: Float32, b: Float32, space: ColorSpace = LINEAR

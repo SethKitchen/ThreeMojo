@@ -3732,12 +3732,7 @@ def _between(a: ClipVertex, b: ClipVertex, t: Float32) -> ClipVertex:
     """
     return ClipVertex(
         a.position + (b.position - a.position) * t,
-        FloatColor(
-            a.color.r + (b.color.r - a.color.r) * t,
-            a.color.g + (b.color.g - a.color.g) * t,
-            a.color.b + (b.color.b - a.color.b) * t,
-            a.color.a + (b.color.a - a.color.a) * t,
-        ),
+        a.color.mix(b.color, t),
         Vector3(0, 0, 1),
         0,
         0,

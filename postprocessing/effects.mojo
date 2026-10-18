@@ -1488,12 +1488,8 @@ def lut_color[
         half_pixel_width + color.g * (1 - pixel_width),
         half_pixel_width + color.b * (1 - pixel_width),
     )
-    return FloatColor(
-        color.r + (looked.r - color.r) * intensity,
-        color.g + (looked.g - color.g) * intensity,
-        color.b + (looked.b - color.b) * intensity,
-        color.a,
-    )
+    var mixed = color.mix(looked, intensity)
+    return FloatColor(mixed.r, mixed.g, mixed.b, color.a)
 
 
 def lut_pixel[
@@ -1653,12 +1649,7 @@ def mip_sample(
     var high_h = max(height >> high, 1)
     var a = LightView(levels[low], low_w, low_h).sample(u, v)
     var b = LightView(levels[high], high_w, high_h).sample(u, v)
-    return FloatColor(
-        a.r + (b.r - a.r) * t,
-        a.g + (b.g - a.g) * t,
-        a.b + (b.b - a.b) * t,
-        a.a + (b.a - a.a) * t,
-    )
+    return a.mix(b, t)
 
 
 def dof_mipmap_light(

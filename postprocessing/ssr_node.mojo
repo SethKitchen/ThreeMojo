@@ -475,12 +475,8 @@ def ssr_node_light(
                 var b = LightView(
                     levels[high], sizes[high * 2], sizes[high * 2 + 1]
                 ).sample(u, v)
-                added = FloatColor(
-                    a.r + (b.r - a.r) * t,
-                    a.g + (b.g - a.g) * t,
-                    a.b + (b.b - a.b) * t,
-                    0,
-                )
+                var mixed = a.mix(b, t)
+                added = FloatColor(mixed.r, mixed.g, mixed.b, 0)
             else:
                 added = LightView(reflections, width, height).sample(u, v)
             var slot = y * w + x

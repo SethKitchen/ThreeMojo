@@ -24,9 +24,8 @@ def mix_opaque(a: FloatColor, b: FloatColor, t: Float32) -> FloatColor:
     Returns:
         The mixed color, with alpha one.
     """
-    return FloatColor(
-        a.r + (b.r - a.r) * t, a.g + (b.g - a.g) * t, a.b + (b.b - a.b) * t
-    )
+    var mixed = a.mix(b, t)
+    return FloatColor(mixed.r, mixed.g, mixed.b)
 
 
 def floor_channels(color: FloatColor) -> FloatColor:

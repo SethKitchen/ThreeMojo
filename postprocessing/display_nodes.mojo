@@ -792,14 +792,10 @@ def dof_light(
             var here = beauty_view.sample(u, v)
             var blend_near = min(near.a, 0.5) * 2
             var blend_far = min(far.a, 0.5) * 2
-            var r = here.r + (far.r - here.r) * blend_far
-            var g = here.g + (far.g - here.g) * blend_far
-            var b = here.b + (far.b - here.b) * blend_far
-            r = r + (near.r - r) * blend_near
-            g = g + (near.g - g) * blend_near
-            b = b + (near.b - b) * blend_near
+            var mid = here.mix(far, blend_far)
+            var rgb = mid.mix(near, blend_near)
             var slot = y * w + x
-            frame.colors[slot] = FloatColor(r, g, b, 1)
+            frame.colors[slot] = FloatColor(rgb.r, rgb.g, rgb.b, 1)
             frame.data[slot] = False
     _ = beauty^
     _ = near_field^
