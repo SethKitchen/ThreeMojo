@@ -320,7 +320,7 @@ struct Vector2(Equatable, ImplicitlyCopyable, PolylineVertex):
         Args:
             other: The other vector.
         """
-        self = Vector2(min(self.x, other.x), min(self.y, other.y))
+        self = component_min(self, other)
 
     def max(mut self, other: Self):
         """Keep the larger of each pair of components, three.js's `max`.
@@ -328,7 +328,7 @@ struct Vector2(Equatable, ImplicitlyCopyable, PolylineVertex):
         Args:
             other: The other vector.
         """
-        self = Vector2(max(self.x, other.x), max(self.y, other.y))
+        self = component_max(self, other)
 
     def clamp(mut self, low: Self, high: Self):
         """Hold each component between the two vectors' components,
@@ -422,3 +422,29 @@ struct Vector2(Equatable, ImplicitlyCopyable, PolylineVertex):
         var x = generator.float_in(0, 1)
         var y = generator.float_in(0, 1)
         return Vector2(x, y)
+
+
+def component_min(a: Vector2, b: Vector2) -> Vector2:
+    """Return the smaller of each component, three.js's `min`.
+
+    Args:
+        a: One vector.
+        b: The other vector.
+
+    Returns:
+        The smaller components.
+    """
+    return Vector2(min(a.x, b.x), min(a.y, b.y))
+
+
+def component_max(a: Vector2, b: Vector2) -> Vector2:
+    """Return the larger of each component, three.js's `max`.
+
+    Args:
+        a: One vector.
+        b: The other vector.
+
+    Returns:
+        The larger components.
+    """
+    return Vector2(max(a.x, b.x), max(a.y, b.y))

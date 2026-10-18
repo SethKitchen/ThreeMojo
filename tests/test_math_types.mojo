@@ -250,7 +250,7 @@ def test_box2() raises:
 
 
 def test_scalar_helpers() raises:
-    assert_equal(clamp(5, 0, 1), Float32(1))
+    assert_equal(clamp(Float32(5), Float32(0), Float32(1)), Float32(1))
     assert_equal(lerp(2, 4, 0.5), Float32(3))
     assert_equal(inverse_lerp(2, 4, 3), Float32(0.5))
     assert_equal(inverse_lerp(2, 2, 3), Float32(0))
