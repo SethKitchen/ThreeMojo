@@ -28,7 +28,7 @@ from extensions.humanoid.skeleton.field import (
     field_gradient,
     mirrored_tube_distance,
     mix_point,
-    tube_chain_bounds,
+    tube_root_bounds,
     widen_for_display,
 )
 from extensions.humanoid.skeleton.pelvis.bones.dimensions import (
@@ -106,7 +106,7 @@ struct PelvisNerveField(DistanceField, ImplicitlyCopyable):
         self.mirror = side == LEFT
         self.k = Float32(0.00025)
         self.epsilon = Float32(0.00015)
-        var box = tube_chain_bounds(self.chain, Float32(0.003) + self.chain.r0)
+        var box = tube_root_bounds(self.chain)
         var placed = sided_bounds(box.low, box.high, side)
         self.low = placed.low
         self.high = placed.high

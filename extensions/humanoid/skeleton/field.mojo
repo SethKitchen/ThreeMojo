@@ -554,6 +554,20 @@ def tube_chain_bounds(chain: TubeChain, pad: Float32) -> Bounds:
     return box.padded(pad)
 
 
+def tube_root_bounds(chain: TubeChain) -> Bounds:
+    """Return the chain's box grown by 3 mm plus the root radius.
+
+    The leg and pelvis vessels and nerves use this margin.
+
+    Args:
+        chain: Five stations.
+
+    Returns:
+        An axis-aligned box around the tube.
+    """
+    return tube_chain_bounds(chain, Float32(0.003) + chain.r0)
+
+
 def tube_chain_volume(chain: TubeChain) -> Float32:
     """Return the analytic volume of a tapered tube chain.
 
