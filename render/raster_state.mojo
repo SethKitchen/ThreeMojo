@@ -390,8 +390,18 @@ def _is_byte(value: Int) -> Bool:
     return value >= 0 and value <= STENCIL_MAX
 
 
-def _is_fraction(value: Float32) -> Bool:
-    """Return True if `value` is finite and from zero to one."""
+def is_unit_fraction(value: Float32) -> Bool:
+    """Return True when a value is finite and from zero to one.
+
+    Args:
+        value: The number.
+
+    Returns:
+        Whether the value is finite and within zero and one.
+
+    Raises:
+        Error: Never.
+    """
     return isfinite(value) and value >= 0 and value <= 1
 
 
@@ -580,10 +590,10 @@ struct RasterState(Equatable, ImplicitlyCopyable, Writable):
                 self.depth_mode != LOGARITHMIC_DEPTH
                 or (positive_finite(Float64(self.log_depth_scale)))
             )
-            and _is_fraction(self.blend_red)
-            and _is_fraction(self.blend_green)
-            and _is_fraction(self.blend_blue)
-            and _is_fraction(self.blend_alpha)
+            and is_unit_fraction(self.blend_red)
+            and is_unit_fraction(self.blend_green)
+            and is_unit_fraction(self.blend_blue)
+            and is_unit_fraction(self.blend_alpha)
         )
 
     def check(self) raises:

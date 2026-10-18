@@ -78,7 +78,6 @@ from materials.material import (
     OBJECT_SPACE_NORMAL_MAP,
     TANGENT_SPACE_NORMAL_MAP,
     combine_light,
-    _is_unit_fraction,
 )
 from render.cube_texture import (
     Basis3,
@@ -101,6 +100,7 @@ from render.raster_state import (
     REVERSED_DEPTH,
     RasterState,
     fragment_depth,
+    is_unit_fraction,
     shades,
 )
 from render.packing import (
@@ -745,11 +745,11 @@ struct LayerFactors(ImplicitlyCopyable):
         var darkest = min(min(color.x, color.y), color.z)
         if not isfinite(color.dot(color)) or darkest < 0:
             raise Error("A triangle's sheen color cannot be negative")
-        if not _is_unit_fraction(self.sheen_roughness):
+        if not is_unit_fraction(self.sheen_roughness):
             raise Error(
                 "A triangle's sheen roughness must be between zero and one"
             )
-        if not _is_unit_fraction(self.iridescence):
+        if not is_unit_fraction(self.iridescence):
             raise Error("A triangle's iridescence must be between zero and one")
         var ior = self.iridescence_ior
         if not isfinite(ior) or ior < MIN_IOR or ior > MAX_IOR:
@@ -2839,19 +2839,19 @@ def check_triangle_state(
         raise Error("A triangle's corners disagree about their frames")
     # The physical terms and the normal maps, asked as the rest are: the
     # numbers before their agreement checks, then the maps, then the kind.
-    if not _is_unit_fraction(a.roughness):
+    if not is_unit_fraction(a.roughness):
         raise Error("A triangle's roughness must be between zero and one")
-    if not _is_unit_fraction(a.metalness):
+    if not is_unit_fraction(a.metalness):
         raise Error("A triangle's metalness must be between zero and one")
     if not isfinite(a.env_map_intensity) or a.env_map_intensity < 0:
         raise Error("A triangle's env map intensity cannot be negative")
-    if not _is_unit_fraction(a.specular_intensity):
+    if not is_unit_fraction(a.specular_intensity):
         raise Error(
             "A triangle's specular intensity must be between zero and one"
         )
-    if not _is_unit_fraction(a.clearcoat):
+    if not is_unit_fraction(a.clearcoat):
         raise Error("A triangle's clearcoat must be between zero and one")
-    if not _is_unit_fraction(a.clearcoat_roughness):
+    if not is_unit_fraction(a.clearcoat_roughness):
         raise Error(
             "A triangle's clearcoat roughness must be between zero and one"
         )
@@ -2978,7 +2978,7 @@ def check_triangle_state(
         )
     # The volume, asked as the material asks it: the numbers first, since a
     # NaN never agrees, then the agreement, the ids and the kind.
-    if not _is_unit_fraction(a.transmission):
+    if not is_unit_fraction(a.transmission):
         raise Error("A triangle's transmission must be between zero and one")
     if not _is_depth(a.thickness):
         raise Error("A triangle's thickness cannot be negative")

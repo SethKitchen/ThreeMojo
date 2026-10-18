@@ -221,6 +221,7 @@ from render.raster_state import (
     RasterState,
     StencilFunc,
     StencilOp,
+    is_unit_fraction,
 )
 from render.texture_store import NO_TEXTURE, TextureId
 from materials.nodes import NO_NODES, NodeProgramId
@@ -2035,9 +2036,9 @@ struct Material(ImplicitlyCopyable):
         # The physical terms, refused where nothing reads them: only the
         # two physical shaders read a roughness or a metalness, and only
         # the physical one an index, a specular color or a clear coat.
-        if not _is_unit_fraction(roughness):
+        if not is_unit_fraction(roughness):
             raise Error("A roughness must be between zero and one")
-        if not _is_unit_fraction(metalness):
+        if not is_unit_fraction(metalness):
             raise Error("A metalness must be between zero and one")
         if roughness_map.value < 0 and roughness_map != NO_TEXTURE:
             raise Error("A material's roughness map id cannot be negative")
@@ -2066,11 +2067,11 @@ struct Material(ImplicitlyCopyable):
             )
         if not isfinite(ior) or ior < MIN_IOR or ior > MAX_IOR:
             raise Error("An index of refraction must be between one and 2.333")
-        if not _is_unit_fraction(specular_intensity):
+        if not is_unit_fraction(specular_intensity):
             raise Error("A specular intensity must be between zero and one")
-        if not _is_unit_fraction(clearcoat):
+        if not is_unit_fraction(clearcoat):
             raise Error("A clearcoat must be between zero and one")
-        if not _is_unit_fraction(clearcoat_roughness):
+        if not is_unit_fraction(clearcoat_roughness):
             raise Error("A clearcoat roughness must be between zero and one")
         if kind != PHYSICAL and (
             ior != DEFAULT_IOR
@@ -2097,7 +2098,7 @@ struct Material(ImplicitlyCopyable):
         # The volume, refused where nothing reads it: only the physical
         # shader transmits. An infinite attenuation distance is the
         # default and dims nothing; not-a-number is not above zero.
-        if not _is_unit_fraction(transmission):
+        if not is_unit_fraction(transmission):
             raise Error("A transmission must be between zero and one")
         var deep = thickness.to(METER)
         if not isfinite(deep) or deep < 0:
@@ -2133,11 +2134,11 @@ struct Material(ImplicitlyCopyable):
         # The three layers, refused where nothing reads them: only the
         # physical shader has a sheen, a film or a stretch, and a map with
         # no amount to multiply does nothing.
-        if not _is_unit_fraction(sheen):
+        if not is_unit_fraction(sheen):
             raise Error("A sheen must be between zero and one")
-        if not _is_unit_fraction(sheen_roughness):
+        if not is_unit_fraction(sheen_roughness):
             raise Error("A sheen roughness must be between zero and one")
-        if not _is_unit_fraction(iridescence):
+        if not is_unit_fraction(iridescence):
             raise Error("An iridescence must be between zero and one")
         if (
             not isfinite(iridescence_ior)
@@ -2152,7 +2153,7 @@ struct Material(ImplicitlyCopyable):
         var thickest = iridescence_thickness_maximum.to(NANOMETER)
         if not isfinite(thinnest + thickest) or min(thinnest, thickest) < 0:
             raise Error("A film thickness cannot be negative")
-        if not _is_unit_fraction(anisotropy):
+        if not is_unit_fraction(anisotropy):
             raise Error("An anisotropy must be between zero and one")
         if not isfinite(anisotropy_rotation.to(RADIAN)):
             raise Error("An anisotropy rotation must be finite")
@@ -3950,11 +3951,6 @@ def _is_origin(point: Vector3) -> Bool:
 def _is_black(color: Color) -> Bool:
     """Return True if a color has no red, green or blue, whatever its alpha."""
     return color.r == 0 and color.g == 0 and color.b == 0
-
-
-def _is_unit_fraction(value: Float32) -> Bool:
-    """Return True if `value` is finite and between zero and one."""
-    return isfinite(value) and value >= 0 and value <= 1
 
 
 def _has_volume(
