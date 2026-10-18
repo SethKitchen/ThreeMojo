@@ -1,0 +1,133 @@
+sizeof DLSSOptions=88 DLSSDOptions=224 Constants=456 float4x4=64 Boolean=1
+offsetof DLSSOptions: mode=32 outW=36 outH=40 sharp=44 pre=48 expScale=52 hdr=56 autoExp=84 alpha=85 dlaa=60 uq=80
+Constants defaults: depthInverted=2 minRelLinDepthSep=40 jitter=(3.40282e+38,3.40282e+38)
+slInit -> 0
+adapter: NVIDIA TITAN RTX
+D3D12CreateDevice -> 0x0
+slSetD3DDevice -> 0
+feature 0 supported=0 loaded=1 version sl=2.14.16 ngx=310.9.16  requires OS 10.0.26200 driver 610.88.0
+feature 1001 supported=0 loaded=1 version sl=2.14.16 ngx=310.9.16  requires OS 10.0.26200 driver 610.88.0
+requirements 0: flags=0x7 maxViewports=4 maxThreads=0 tags: 0 1 3 4
+requirements 1001: flags=0x7 maxViewports=4 maxThreads=0 tags: 0 1 3 4
+SR SetOptions mode=0 -> 0
+SR SetOptions mode=1 -> 0
+SR SetOptions mode=2 -> 0
+SR SetOptions mode=3 -> 0
+SR SetOptions mode=4 -> 0
+SR SetOptions mode=5 -> 0
+SR SetOptions mode=6 -> 0
+SR SetOptions mode=7 -> 0
+SR SetOptions qualityPreset=0 -> 0
+SR SetOptions qualityPreset=1 -> 0
+SR SetOptions qualityPreset=2 -> 0
+SR SetOptions qualityPreset=3 -> 0
+SR SetOptions qualityPreset=4 -> 0
+SR SetOptions qualityPreset=5 -> 0
+SR SetOptions qualityPreset=6 -> 0
+SR SetOptions qualityPreset=7 -> 0
+SR SetOptions qualityPreset=8 -> 0
+SR SetOptions qualityPreset=9 -> 0
+SR SetOptions qualityPreset=10 -> 0
+SR SetOptions qualityPreset=11 -> 0
+SR SetOptions qualityPreset=12 -> 0
+SR SetOptions qualityPreset=13 -> 0
+SR SetOptions qualityPreset=14 -> 0
+SR SetOptions qualityPreset=15 -> 0
+SR SetOptions qualityPreset=16 -> 0
+RR SetOptions mode=0 -> 0
+RR SetOptions mode=1 -> 0
+RR SetOptions mode=2 -> 0
+RR SetOptions mode=3 -> 0
+RR SetOptions mode=4 -> 0
+RR SetOptions mode=5 -> 0
+RR SetOptions mode=6 -> 0
+RR SetOptions mode=7 -> 0
+RR SetOptions qualityPreset=0 -> 0
+RR SetOptions qualityPreset=1 -> 0
+RR SetOptions qualityPreset=2 -> 0
+RR SetOptions qualityPreset=3 -> 0
+RR SetOptions qualityPreset=4 -> 0
+RR SetOptions qualityPreset=5 -> 0
+RR SetOptions qualityPreset=6 -> 0
+RR SetOptions qualityPreset=7 -> 0
+RR SetOptions qualityPreset=8 -> 0
+RR SetOptions qualityPreset=9 -> 0
+RR SetOptions qualityPreset=10 -> 0
+RR SetOptions qualityPreset=11 -> 0
+RR SetOptions qualityPreset=12 -> 0
+RR SetOptions qualityPreset=13 -> 0
+RR SetOptions qualityPreset=14 -> 0
+RR SetOptions qualityPreset=15 -> 0
+RR SetOptions qualityPreset=16 -> 0
+SR GetState -> 0 vram=0
+kind	mode	out_w	out_h	result	render_w	render_h	min_w	min_h	max_w	max_h	sharp
+SR	Off	3840	2160	25	0	0	0	0	0	0	0.35
+RR	Off	3840	2160	25	0	0	0	0	0	0	0.35
+SR	MaxPerformance	3840	2160	0	1920	1080	1920	1080	3840	2160	0.35
+RR	MaxPerformance	3840	2160	0	1920	1080	1920	1080	3840	2160	0.35
+SR	Balanced	3840	2160	0	2227	1253	1920	1080	3840	2160	0.35
+RR	Balanced	3840	2160	0	2227	1253	1920	1080	3840	2160	0.35
+SR	MaxQuality	3840	2160	0	2560	1440	1920	1080	3840	2160	0.35
+RR	MaxQuality	3840	2160	0	2560	1440	1920	1080	3840	2160	0.35
+SR	UltraPerformance	3840	2160	0	1280	720	1280	720	1280	720	0.35
+RR	UltraPerformance	3840	2160	0	1280	720	1280	720	1280	720	0.35
+SR	UltraQuality	3840	2160	25	0	0	0	0	0	0	0.35
+RR	UltraQuality	3840	2160	25	0	0	0	0	0	0	0.35
+SR	DLAA	3840	2160	0	3840	2160	3802	2138	3840	2160	0.35
+RR	DLAA	3840	2160	0	3840	2160	3802	2138	3840	2160	0.35
+SR	Off	2560	1440	25	0	0	0	0	0	0	0.35
+RR	Off	2560	1440	25	0	0	0	0	0	0	0.35
+SR	MaxPerformance	2560	1440	0	1280	720	1280	720	2560	1440	0.35
+RR	MaxPerformance	2560	1440	0	1280	720	1280	720	2560	1440	0.35
+SR	Balanced	2560	1440	0	1485	835	1280	720	2560	1440	0.35
+RR	Balanced	2560	1440	0	1485	835	1280	720	2560	1440	0.35
+SR	MaxQuality	2560	1440	0	1707	960	1280	720	2560	1440	0.35
+RR	MaxQuality	2560	1440	0	1707	960	1280	720	2560	1440	0.35
+SR	UltraPerformance	2560	1440	0	853	480	853	480	853	480	0.35
+RR	UltraPerformance	2560	1440	0	853	480	853	480	853	480	0.35
+SR	UltraQuality	2560	1440	25	0	0	0	0	0	0	0.35
+RR	UltraQuality	2560	1440	25	0	0	0	0	0	0	0.35
+SR	DLAA	2560	1440	0	2560	1440	2534	1426	2560	1440	0.35
+RR	DLAA	2560	1440	0	2560	1440	2534	1426	2560	1440	0.35
+SR	Off	1920	1080	25	0	0	0	0	0	0	0.35
+RR	Off	1920	1080	25	0	0	0	0	0	0	0.35
+SR	MaxPerformance	1920	1080	0	960	540	960	540	1920	1080	0.35
+RR	MaxPerformance	1920	1080	0	960	540	960	540	1920	1080	0.35
+SR	Balanced	1920	1080	0	1114	626	960	540	1920	1080	0.35
+RR	Balanced	1920	1080	0	1114	626	960	540	1920	1080	0.35
+SR	MaxQuality	1920	1080	0	1280	720	960	540	1920	1080	0.35
+RR	MaxQuality	1920	1080	0	1280	720	960	540	1920	1080	0.35
+SR	UltraPerformance	1920	1080	0	640	360	640	360	640	360	0.35
+RR	UltraPerformance	1920	1080	0	640	360	640	360	640	360	0.35
+SR	UltraQuality	1920	1080	25	0	0	0	0	0	0	0.35
+RR	UltraQuality	1920	1080	25	0	0	0	0	0	0	0.35
+SR	DLAA	1920	1080	0	1920	1080	1901	1069	1920	1080	0.35
+RR	DLAA	1920	1080	0	1920	1080	1901	1069	1920	1080	0.35
+SR	Off	1280	720	25	0	0	0	0	0	0	0.35
+RR	Off	1280	720	25	0	0	0	0	0	0	0.35
+SR	MaxPerformance	1280	720	0	640	360	640	360	1280	720	0.35
+RR	MaxPerformance	1280	720	0	640	360	640	360	1280	720	0.35
+SR	Balanced	1280	720	0	742	418	640	360	1280	720	0.35
+RR	Balanced	1280	720	0	742	418	640	360	1280	720	0.35
+SR	MaxQuality	1280	720	0	853	480	640	360	1280	720	0.35
+RR	MaxQuality	1280	720	0	853	480	640	360	1280	720	0.35
+SR	UltraPerformance	1280	720	0	427	240	427	240	427	240	0.35
+RR	UltraPerformance	1280	720	0	427	240	427	240	427	240	0.35
+SR	UltraQuality	1280	720	25	0	0	0	0	0	0	0.35
+RR	UltraQuality	1280	720	25	0	0	0	0	0	0	0.35
+SR	DLAA	1280	720	0	1280	720	1267	713	1280	720	0.35
+RR	DLAA	1280	720	0	1280	720	1267	713	1280	720	0.35
+SR	Off	1000	563	25	0	0	0	0	0	0	0.35
+RR	Off	1000	563	25	0	0	0	0	0	0	0.35
+SR	MaxPerformance	1000	563	0	500	282	500	282	1000	563	0.35
+RR	MaxPerformance	1000	563	0	500	282	500	282	1000	563	0.35
+SR	Balanced	1000	563	0	580	327	500	282	1000	563	0.35
+RR	Balanced	1000	563	0	580	327	500	282	1000	563	0.35
+SR	MaxQuality	1000	563	0	667	375	500	282	1000	563	0.35
+RR	MaxQuality	1000	563	0	667	375	500	282	1000	563	0.35
+SR	UltraPerformance	1000	563	0	333	188	333	188	333	188	0.35
+RR	UltraPerformance	1000	563	0	333	188	333	188	333	188	0.35
+SR	UltraQuality	1000	563	25	0	0	0	0	0	0	0.35
+RR	UltraQuality	1000	563	25	0	0	0	0	0	0	0.35
+SR	DLAA	1000	563	0	1000	563	990	557	1000	563	0.35
+RR	DLAA	1000	563	0	1000	563	990	557	1000	563	0.35

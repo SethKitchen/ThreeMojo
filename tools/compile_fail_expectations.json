@@ -229,6 +229,20 @@
     ],
     "notes": []
   },
+  "tests/compile_fail/a_buffer_kind_is_not_a_bare_int.mojo": {
+    "errors": [
+      {
+        "line": 12,
+        "column": 30,
+        "message": "no matching function in initialization"
+      }
+    ],
+    "notes": [
+      "candidate not viable: missing required argument: 'copy'",
+      "candidate not viable: missing required argument: 'move'",
+      "candidate not viable: value passed to 'kind' cannot be converted from 'IntLiteral[2]' to 'BufferKind'"
+    ]
+  },
   "tests/compile_fail/a_bvh_channel_is_not_a_bare_int.mojo": {
     "errors": [
       {
@@ -688,6 +702,16 @@
       "function declared here"
     ]
   },
+  "tests/compile_fail/a_denoiser_preset_is_not_a_bare_int.mojo": {
+    "errors": [
+      {
+        "line": 14,
+        "column": 30,
+        "message": "cannot implicitly convert 'IntLiteral[6]' value to 'DenoiserPreset'"
+      }
+    ],
+    "notes": []
+  },
   "tests/compile_fail/a_dentition_is_not_a_bare_int.mojo": {
     "errors": [
       {
@@ -822,6 +846,32 @@
     ],
     "notes": [
       "function declared here"
+    ]
+  },
+  "tests/compile_fail/a_dlss_feature_is_not_a_bare_int.mojo": {
+    "errors": [
+      {
+        "line": 12,
+        "column": 38,
+        "message": "invalid call to 'supports': value passed to 'feature' cannot be converted from 'IntLiteral[0]' to 'Feature'"
+      }
+    ],
+    "notes": [
+      "function declared here"
+    ]
+  },
+  "tests/compile_fail/a_dlss_mode_is_not_a_bare_int.mojo": {
+    "errors": [
+      {
+        "line": 12,
+        "column": 41,
+        "message": "no matching function in initialization"
+      }
+    ],
+    "notes": [
+      "candidate not viable: missing required argument: 'copy'",
+      "candidate not viable: missing required argument: 'move'",
+      "candidate not viable: value passed to 'mode' cannot be converted from 'IntLiteral[3]' to 'UpscaleMode'"
     ]
   },
   "tests/compile_fail/a_dof_is_not_a_bare_int.mojo": {
@@ -2161,6 +2211,18 @@
       "function declared here"
     ]
   },
+  "tests/compile_fail/a_motion_vector_space_is_not_a_bare_int.mojo": {
+    "errors": [
+      {
+        "line": 20,
+        "column": 59,
+        "message": "invalid call to 'frame_constants': value passed to 'motion' cannot be converted from 'IntLiteral[1]' to 'MotionVectorSpace'"
+      }
+    ],
+    "notes": [
+      "function declared here"
+    ]
+  },
   "tests/compile_fail/a_moved_texture_input_cannot_keep_a_writable_borrow.mojo": {
     "errors": [
       {
@@ -2401,6 +2463,16 @@
       "candidate not viable: missing required argument: 'move'",
       "candidate not viable: value passed to 'normal_map_type' cannot be converted from 'IntLiteral[1]' to 'NormalMapType'"
     ]
+  },
+  "tests/compile_fail/a_normal_roughness_mode_is_not_a_bare_int.mojo": {
+    "errors": [
+      {
+        "line": 14,
+        "column": 37,
+        "message": "cannot implicitly convert 'IntLiteral[1]' value to 'NormalRoughnessMode'"
+      }
+    ],
+    "notes": []
   },
   "tests/compile_fail/a_param_poly3_range_is_not_a_bare_int.mojo": {
     "errors": [
@@ -3388,6 +3460,16 @@
         "column": 22,
         "line": 12,
         "message": "cannot implicitly convert 'IntLiteral[0]' value to 'NodeId'"
+      }
+    ],
+    "notes": []
+  },
+  "tests/compile_fail/a_super_resolution_preset_is_not_a_bare_int.mojo": {
+    "errors": [
+      {
+        "line": 14,
+        "column": 30,
+        "message": "cannot implicitly convert 'IntLiteral[13]' value to 'SuperResolutionPreset'"
       }
     ],
     "notes": []
