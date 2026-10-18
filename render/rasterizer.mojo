@@ -39,9 +39,9 @@ from math.scaled_products import (
 )
 
 from math.norm import length2, normalized3, _ordinary_squared
-from math.vector2 import Vector2
+from math.vector2 import Vector2, weighted_sum2
 from math.utils import clamp, max3, min3
-from math.vector3 import Vector3
+from math.vector3 import Vector3, weighted_sum3
 from render.framebuffer import Color, FloatColor, Framebuffer
 from units.si import Length, METER
 from materials.material import (
@@ -1916,7 +1916,7 @@ def _coordinates_at(
     var share_b = shares[1]
     var share_c = shares[2]
     if second:
-        return _shared2(
+        return weighted_sum2(
             Vector2(a.u1, a.v1),
             Vector2(b.u1, b.v1),
             Vector2(c.u1, c.v1),
@@ -1924,7 +1924,7 @@ def _coordinates_at(
             share_b,
             share_c,
         )
-    return _shared2(
+    return weighted_sum2(
         Vector2(a.u, a.v),
         Vector2(b.u, b.v),
         Vector2(c.u, c.v),
@@ -1952,7 +1952,7 @@ def _world_at(
     var share_a = shares[0]
     var share_b = shares[1]
     var share_c = shares[2]
-    return _shared(a.world, b.world, c.world, share_a, share_b, share_c)
+    return weighted_sum3(a.world, b.world, c.world, share_a, share_b, share_c)
 
 
 def _cross(left: Vector3, right: Vector3) -> Vector3:
@@ -2133,7 +2133,9 @@ def mapped_normal(
     var map_x = (texel.r * 2 - 1) * scale.x
     var map_y = (texel.g * 2 - 1) * scale.y
     var map_z = texel.b * 2 - 1
-    var perturbed = _shared(tangent, bitangent, normal, map_x, map_y, map_z)
+    var perturbed = weighted_sum3(
+        tangent, bitangent, normal, map_x, map_y, map_z
+    )
     if perturbed.length() == 0:
         return normal
     perturbed.normalize()
@@ -2332,7 +2334,7 @@ def _normal_at(
     var share_a = shares[0]
     var share_b = shares[1]
     var share_c = shares[2]
-    var facing = _shared(
+    var facing = weighted_sum3(
         a.normal, b.normal, c.normal, share_a, share_b, share_c
     )
     if facing.length() != 0:
@@ -2490,11 +2492,7 @@ def _place(
 ) -> Vector3:
     """Return three clip positions interpolated as a varying: x, y and w,
     each by the fragment's weights corrected for perspective."""
-    return Vector3(
-        a.x * shares[0] + b.x * shares[1] + c.x * shares[2],
-        a.y * shares[0] + b.y * shares[1] + c.y * shares[2],
-        a.z * shares[0] + b.z * shares[1] + c.z * shares[2],
-    )
+    return weighted_sum3(a, b, c, shares[0], shares[1], shares[2])
 
 
 def fragment_velocity(
@@ -3804,45 +3802,6 @@ def check_alpha_data_map(image: Texture, name: String) raises:
         )
 
 
-def _shared(
-    a: Vector3,
-    b: Vector3,
-    c: Vector3,
-    share_a: Float32,
-    share_b: Float32,
-    share_c: Float32,
-) -> Vector3:
-    """Return three corners' values mixed by their shares, one component
-    at a time, in the order the kernel mixes them."""
-    return a * share_a + b * share_b + c * share_c
-
-
-def _shared2(
-    a: Vector2,
-    b: Vector2,
-    c: Vector2,
-    share_a: Float32,
-    share_b: Float32,
-    share_c: Float32,
-) -> Vector2:
-    """Return three corners' pairs mixed by their shares.
-
-    The products are formed in `_shared`'s order.
-
-    Args:
-        a: The first corner.
-        b: The second corner.
-        c: The third corner.
-        share_a: The first corner's weight.
-        share_b: The second corner's weight.
-        share_c: The third corner's weight.
-
-    Returns:
-        The mixed pair.
-    """
-    return a * share_a + b * share_b + c * share_c
-
-
 def check_light_map(image: Texture) raises:
     """Refuse a light map whose alpha is read as coverage.
 
@@ -4210,7 +4169,7 @@ def rasterize_shaded(
             # for a target that keeps them; zero for every other surface.
             var metal_rough = Vector2(0, 0)
 
-            var rgb = _shared(
+            var rgb = weighted_sum3(
                 Vector3(a.color.r, a.color.g, a.color.b),
                 Vector3(b.color.r, b.color.g, b.color.b),
                 Vector3(c.color.r, c.color.g, c.color.b),
@@ -4254,7 +4213,7 @@ def rasterize_shaded(
                 # the average of two unit vectors is shorter than either, so
                 # a normal interpolated and left alone dims the middle of
                 # every triangle.
-                facing = _shared(
+                facing = weighted_sum3(
                     a.normal, b.normal, c.normal, share_a, share_b, share_c
                 )
                 if facing.length() != 0:
@@ -4277,7 +4236,7 @@ def rasterize_shaded(
                 or catches
                 or noded
             ):
-                spot = _shared(
+                spot = weighted_sum3(
                     a.world, b.world, c.world, share_a, share_b, share_c
                 )
             # The raw texture coordinates, both pairs, for the two modes
@@ -4288,7 +4247,7 @@ def rasterize_shaded(
             var v = Float32(0)
             var uv1 = Vector2(0, 0)
             if mode != SHADE_LIT or noded:
-                var uv = _shared2(
+                var uv = weighted_sum2(
                     Vector2(a.u, a.v),
                     Vector2(b.u, b.v),
                     Vector2(c.u, c.v),
@@ -4298,7 +4257,7 @@ def rasterize_shaded(
                 )
                 u = uv.x
                 v = uv.y
-                uv1 = _shared2(
+                uv1 = weighted_sum2(
                     Vector2(a.u1, a.v1),
                     Vector2(b.u1, b.v1),
                     Vector2(c.u1, c.v1),
@@ -4522,7 +4481,7 @@ def rasterize_shaded(
                     if a.receives_shadow:
                         mask = lighting.shadow_mask(spot, facing)
                     var light = gouraud_light(
-                        _shared(
+                        weighted_sum3(
                             a.gouraud_direct,
                             b.gouraud_direct,
                             c.gouraud_direct,
@@ -4530,7 +4489,7 @@ def rasterize_shaded(
                             share_b,
                             share_c,
                         ),
-                        _shared(
+                        weighted_sum3(
                             a.gouraud_indirect,
                             b.gouraud_indirect,
                             c.gouraud_indirect,
@@ -4674,7 +4633,7 @@ def rasterize_shaded(
             if (bakes or occludes) and not physical:
                 var indirect = Vector3(arriving.r, arriving.g, arriving.b)
                 if a.kind == GOURAUD:
-                    indirect = _shared(
+                    indirect = weighted_sum3(
                         a.gouraud_indirect,
                         b.gouraud_indirect,
                         c.gouraud_indirect,

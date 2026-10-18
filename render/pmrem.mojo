@@ -38,7 +38,7 @@ layout breaks down. A mirror read of a prefiltered cube reads its faces
 rather than the sharpest copy, which holds the same image.
 """
 
-from math.vector3 import Vector3
+from math.vector3 import Vector3, weighted_sum3
 from render.framebuffer import FloatColor
 from render.cube_texture import (
     CubeTexture,
@@ -304,11 +304,7 @@ def _turned(
     var across = axis
     across.cross(direction)
     var along = dot * (1 - cosine)
-    return Vector3(
-        direction.x * cosine + across.x * sine + axis.x * along,
-        direction.y * cosine + across.y * sine + axis.y * along,
-        direction.z * cosine + across.z * sine + axis.z * along,
-    )
+    return weighted_sum3(direction, across, axis, cosine, sine, along)
 
 
 def _tap(

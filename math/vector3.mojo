@@ -793,6 +793,32 @@ def mix_delta3(start: Vector3, end: Vector3, t: Float32) -> Vector3:
     )
 
 
+def weighted_sum3(
+    a: Vector3,
+    b: Vector3,
+    c: Vector3,
+    weight_a: Float32,
+    weight_b: Float32,
+    weight_c: Float32,
+) -> Vector3:
+    """Return three vectors mixed by their weights.
+
+    Each product is formed, then added, in `a`, `b`, `c` order.
+
+    Args:
+        a: The first vector.
+        b: The second vector.
+        c: The third vector.
+        weight_a: The first weight.
+        weight_b: The second weight.
+        weight_c: The third weight.
+
+    Returns:
+        `a * weight_a + b * weight_b + c * weight_c`.
+    """
+    return a * weight_a + b * weight_b + c * weight_c
+
+
 def _ordinary_transform[
     size: Int
 ](source: Vector3, result: Vector3, e: Array[Float32, size]) -> Bool:
