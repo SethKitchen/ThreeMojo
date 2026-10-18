@@ -4,11 +4,12 @@
 # See LICENSE, LICENSE-COMMERCIAL.md and THIRD-PARTY-NOTICES.md.
 
 """Helpers the hoofed species share: the horse, the cow, the deer, the
-goat, the sheep and the pig.
+goat, the sheep, the pig and the boar.
 
 Their heads are modeled along their own axis, pitched nose down in the
 bind pose. `HeadFrame` is their `hl` and `hdir`. Their skeleton is the
-standard quadruped with a hoof bone below each pastern.
+standard quadruped with a hoof bone below each pastern. `add_cloven_hoof`
+builds the two-claw hoof the goat, the sheep and the boar share.
 """
 
 from extensions.sdf.ids import (
@@ -328,3 +329,110 @@ def lens_distance(
     var a = (u * u + (v + d) * (v + d)) ** 0.5 - big_r
     var b = (u * u + (v - d) * (v - d)) ** 0.5 - big_r
     return max(a, b)
+
+
+@fieldwise_init
+struct ClovenHoof(ImplicitlyCopyable):
+    """Sizes of a two-claw hoof, in meters when the foot width is one.
+
+    The shape is fixed: two claws, heel bulbs, a coronet, a cleft and a
+    flat sole. A species fills in its own sizes.
+    """
+
+    var spread: Float64
+    var toe_inset: Float64
+    var toe_height: Float64
+    var toe_back: Float64
+    var wall_root: Float64
+    var wall_tip: Float64
+    var heel_back: Float64
+    var heel_root: Float64
+    var heel_tip: Float64
+    var heel_forward: Float64
+    var bulb_height: Float64
+    var bulb_back: Float64
+    var bulb_radius: Float64
+    var coronet_radius: Float64
+    var cleft_forward: Float64
+    var cleft_length: Float64
+
+
+def add_cloven_hoof(
+    mut m: SdfModel,
+    bone: BoneId,
+    coronet: V3,
+    toe: V3,
+    width: Float64,
+    hoof: ClovenHoof,
+) raises:
+    """Add a two-claw hoof, flat on the ground.
+
+    Args:
+        m: The sculpt.
+        bone: The hoof bone.
+        coronet: The top of the hoof, where it meets the pastern.
+        toe: The toe joint, ahead of `coronet`.
+        width: The foot's width scale.
+        hoof: The species' sizes.
+
+    Raises:
+        Error: If the sculpt refuses a primitive.
+    """
+    var zc = (coronet.z + toe.z) * 0.5
+    for k in [1.0, -1.0]:  # pragma: no branch
+        var x = coronet.x + hoof.spread * k * width
+        var top = V3(x, coronet.y + 0.008, coronet.z - 0.004)
+        var tip = V3(
+            x - hoof.toe_inset * k, hoof.toe_height, toe.z - hoof.toe_back
+        )
+        var heel = V3(x, 0.008, coronet.z - hoof.heel_back)
+        _ = m.cone(
+            "hoof",
+            bone,
+            top,
+            tip,
+            hoof.wall_root * width,
+            hoof.wall_tip * width,
+            k=0.006,
+        )
+        _ = m.cone(
+            "hoof",
+            bone,
+            heel,
+            V3(tip.x, 0.006, zc + hoof.heel_forward),
+            hoof.heel_root * width,
+            hoof.heel_tip * width,
+            k=0.008,
+        )
+        _ = m.sphere(
+            "heelbulb",
+            bone,
+            V3(x, hoof.bulb_height, coronet.z - hoof.bulb_back),
+            hoof.bulb_radius * width,
+            k=0.008,
+        )
+    _ = m.cone(
+        "coronet",
+        bone,
+        coronet + V3(0, 0.012, -0.01),
+        coronet + V3(0, 0.006, 0.008),
+        hoof.coronet_radius * width,
+        hoof.coronet_radius * width,
+        k=0.008,
+    )
+    _ = m.ell(
+        "cleft",
+        bone,
+        V3(coronet.x, 0.006, zc + hoof.cleft_forward),
+        V3(0.0022, 0.02, hoof.cleft_length),
+        k=0.002,
+        carve=True,
+    )
+    _ = m.ell(
+        "sole",
+        bone,
+        V3(coronet.x, -0.1 + 0.001, zc),
+        V3(0.1, 0.1, 0.1),
+        k=0.002,
+        carve=True,
+    )
