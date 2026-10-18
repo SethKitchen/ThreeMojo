@@ -323,6 +323,132 @@ def clip_aabb(
     return history
 
 
+def sample_inside(history_u: Float32, history_v: Float32) -> Bool:
+    """Return True when a history coordinate lies inside the frame.
+
+    Args:
+        history_u: Across, zero at the left.
+        history_v: Down, zero at the top.
+
+    Returns:
+        Whether both coordinates are from zero through one.
+    """
+    return (
+        history_u >= 0 and history_v >= 0 and history_u <= 1 and history_v <= 1
+    )
+
+
+def history_is_kept(
+    history_u: Float32,
+    history_v: Float32,
+    closest: Float32,
+    farthest: Float32,
+    then: Float32,
+    edge_depth_diff: Float32,
+    depth_threshold: Float32,
+) -> Bool:
+    """Return True when the history sample may be mixed in.
+
+    It must lie inside the frame. An edge keeps it. Elsewhere it is kept
+    when the closest neighbor is not much nearer than the reprojected depth.
+
+    Args:
+        history_u: The history coordinate across.
+        history_v: The history coordinate down.
+        closest: The closest neighbor depth.
+        farthest: The farthest neighbor depth.
+        then: The reprojected depth.
+        edge_depth_diff: How far apart the neighbors are at an edge.
+        depth_threshold: How much nearer the last surface may be.
+
+    Returns:
+        Whether the history is kept.
+    """
+    var inside = sample_inside(history_u, history_v)
+    var edge = farthest - closest > edge_depth_diff
+    var uncovered = closest - then > depth_threshold
+    return inside and (edge or not uncovered)
+
+
+def sample_motion(
+    u: Float32,
+    history_u: Float32,
+    v_down: Float32,
+    history_v: Float32,
+    width: Float32,
+    height: Float32,
+    max_velocity_length: Float32,
+) -> Float32:
+    """Return how far the sample moved, as a share of the longest motion
+    that still mixes history.
+
+    Args:
+        u: This sample, across.
+        history_u: The history sample, across.
+        v_down: This sample, down.
+        history_v: The history sample, down.
+        width: The width the motion is measured in, in pixels.
+        height: The height the motion is measured in, in pixels.
+        max_velocity_length: The motion, in pixels, at which the new frame
+            takes over.
+
+    Returns:
+        Zero through one.
+    """
+    var moved_x = (u - history_u) * width
+    var moved_y = (v_down - history_v) * height
+    return min(max(length2(moved_x, moved_y) / max_velocity_length, 0), 1)
+
+
+def variance_gamma(motion: Float32) -> Float32:
+    """Return the variance scale: one when the sample is still, one half
+    at full motion.
+
+    Args:
+        motion: How far the sample moved, zero through one.
+
+    Returns:
+        The scale on the color box.
+    """
+    return 0.5 + 0.5 * (1 - motion) * (1 - motion)
+
+
+def variance_box(
+    mean: FloatColor, moment: FloatColor, count: Float32, gamma: Float32
+) -> Tuple[FloatColor, FloatColor]:
+    """Return the low and high corners of the color box around `mean`.
+
+    Args:
+        mean: The neighborhood's mean color.
+        moment: The sum of the squared colors.
+        count: How many colors were summed.
+        gamma: The scale on the standard deviation.
+
+    Returns:
+        The low corner, then the high corner.
+    """
+    var spread = FloatColor(
+        sqrt(max(moment.r / count - mean.r * mean.r, 0)) * gamma,
+        sqrt(max(moment.g / count - mean.g * mean.g, 0)) * gamma,
+        sqrt(max(moment.b / count - mean.b * mean.b, 0)) * gamma,
+        sqrt(max(moment.a / count - mean.a * mean.a, 0)) * gamma,
+    )
+    return (
+        FloatColor(
+            mean.r - spread.r,
+            mean.g - spread.g,
+            mean.b - spread.b,
+            mean.a - spread.a,
+        ),
+        FloatColor(
+            mean.r + spread.r,
+            mean.g + spread.g,
+            mean.b + spread.b,
+            mean.a + spread.a,
+        ),
+    )
+
+
 def flicker_reduction(
     current: FloatColor, history: FloatColor, weight: Float32
 ) -> FloatColor:
@@ -526,31 +652,34 @@ def traa_pixel(
         frame.previous_camera_world,
         frame.view,
     )
-    var valid_uv = (
-        history_u >= 0 and history_v >= 0 and history_u <= 1 and history_v <= 1
+    var kept = history_is_kept(
+        history_u,
+        history_v,
+        closest,
+        farthest,
+        then,
+        frame.edge_depth_diff,
+        frame.depth_threshold,
     )
-    var edge = farthest - closest > frame.edge_depth_diff
-    var uncovered = closest - then > frame.depth_threshold
-    var kept = valid_uv and (edge or not uncovered)
     var current = beauty.at(x, y)
     var past = history.tap(
         history_u * Float32(w) - 0.5, history_v * Float32(h) - 0.5
     )
-    var moved_x = (u - history_u) * Float32(w)
-    var moved_y = (v_down - history_v) * Float32(h)
-    var motion = min(
-        max(
-            length2(moved_x, moved_y) / frame.max_velocity_length,
-            0,
-        ),
-        1,
+    var motion = sample_motion(
+        u,
+        history_u,
+        v_down,
+        history_v,
+        Float32(w),
+        Float32(h),
+        frame.max_velocity_length,
     )
     var weight = Float32(0.05)
     if frame.use_subpixel_correction:
         weight += subpixel_correction(offset_u, offset_v, w, h) * 0.25
     weight = min(max(weight + motion, 0), 1) if kept else Float32(1)
     # Variance clipping, over the pixel and its eight neighbors.
-    var gamma = 0.5 + (1 - 0.5) * (1 - motion) * (1 - motion)
+    var gamma = variance_gamma(motion)
     var m1 = current
     var m2 = FloatColor(
         current.r * current.r,
@@ -578,24 +707,7 @@ def traa_pixel(
         )
     var n = Float32(9)
     var mean = FloatColor(m1.r / n, m1.g / n, m1.b / n, m1.a / n)
-    var spread = FloatColor(
-        sqrt(max(m2.r / n - mean.r * mean.r, 0)) * gamma,
-        sqrt(max(m2.g / n - mean.g * mean.g, 0)) * gamma,
-        sqrt(max(m2.b / n - mean.b * mean.b, 0)) * gamma,
-        sqrt(max(m2.a / n - mean.a * mean.a, 0)) * gamma,
-    )
-    var low = FloatColor(
-        mean.r - spread.r,
-        mean.g - spread.g,
-        mean.b - spread.b,
-        mean.a - spread.a,
-    )
-    var high = FloatColor(
-        mean.r + spread.r,
-        mean.g + spread.g,
-        mean.b + spread.b,
-        mean.a + spread.a,
-    )
+    var low, high = variance_box(mean, m2, n, gamma)
     # The mean clamped into the box is the mean: only its alpha is read.
     var clipped = clip_aabb(mean, past, low, high)
     return flicker_reduction(current, clipped, weight)

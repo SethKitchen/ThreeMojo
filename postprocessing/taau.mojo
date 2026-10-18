@@ -40,7 +40,6 @@ limits, and explicit zero and nonfinite rules.
 """
 
 from render.color_math import floor_channels
-from math.norm import length2
 from cameras.camera import Camera
 from core.assets import Assets
 from core.scene import Scene
@@ -56,9 +55,14 @@ from postprocessing.traa import (
     TRAA_JITTERS,
     clip_aabb,
     flicker_reduction,
+    history_is_kept,
+    sample_inside,
     neighborhood_motion,
     reproject_window_depth,
+    sample_motion,
     traa_jitter,
+    variance_box,
+    variance_gamma,
 )
 from render.framebuffer import FloatColor
 from render.target import (
@@ -69,7 +73,7 @@ from render.target import (
 )
 from renderers.renderer import Renderer
 from units.si import Length, METER
-from std.math import floor, isfinite, max, min, sqrt
+from std.math import floor, isfinite, max, min
 
 
 struct TaauSettings(Copyable, Movable):
@@ -314,12 +318,16 @@ def taau_pixel(
         frame.previous_camera_world,
         frame.view,
     )
-    var valid_uv = (
-        history_u >= 0 and history_v >= 0 and history_u <= 1 and history_v <= 1
+    var kept = history_is_kept(
+        history_u,
+        history_v,
+        closest,
+        farthest,
+        then,
+        frame.edge_depth_diff,
+        frame.depth_threshold,
     )
-    var edge = farthest - closest > frame.edge_depth_diff
-    var uncovered = closest - then > frame.depth_threshold
-    var kept = valid_uv and (edge or not uncovered)
+    var inside = sample_inside(history_u, history_v)
     # The nine taps, row by row, as three.js lists them.
     var sum_r = Float32(0)
     var sum_g = Float32(0)
@@ -373,34 +381,17 @@ def taau_pixel(
     )
     var n = Float32(9)
     var mean = FloatColor(m1.r / n, m1.g / n, m1.b / n, m1.a / n)
-    var moved_x = (u - history_u) * Float32(frame.in_width)
-    var moved_y = (v_down - history_v) * Float32(frame.in_height)
-    var motion = min(
-        max(
-            length2(moved_x, moved_y) / frame.max_velocity_length,
-            0,
-        ),
-        1,
+    var motion = sample_motion(
+        u,
+        history_u,
+        v_down,
+        history_v,
+        Float32(frame.in_width),
+        Float32(frame.in_height),
+        frame.max_velocity_length,
     )
-    var gamma = 0.5 + 0.5 * (1 - motion) * (1 - motion)
-    var spread = FloatColor(
-        sqrt(max(m2.r / n - mean.r * mean.r, 0)) * gamma,
-        sqrt(max(m2.g / n - mean.g * mean.g, 0)) * gamma,
-        sqrt(max(m2.b / n - mean.b * mean.b, 0)) * gamma,
-        sqrt(max(m2.a / n - mean.a * mean.a, 0)) * gamma,
-    )
-    var low = FloatColor(
-        mean.r - spread.r,
-        mean.g - spread.g,
-        mean.b - spread.b,
-        mean.a - spread.a,
-    )
-    var high = FloatColor(
-        mean.r + spread.r,
-        mean.g + spread.g,
-        mean.b + spread.b,
-        mean.a + spread.a,
-    )
+    var gamma = variance_gamma(motion)
+    var low, high = variance_box(mean, m2, n, gamma)
     var past = history.tap(
         history_u * Float32(history.width) - 0.5,
         history_v * Float32(history.height) - 0.5,
@@ -413,7 +404,7 @@ def taau_pixel(
         ratio = abs(current_luma - mean_luma) / mean_luma
     var thin = smoothstep(0, 0.2, ratio)
     var changed = abs(closest - then) > frame.depth_threshold
-    var can_lock = valid_uv and not changed
+    var can_lock = inside and not changed
     var lock = thin if can_lock else Float32(0)
     var locked = FloatColor(
         clipped.r + (past.r - clipped.r) * lock,
