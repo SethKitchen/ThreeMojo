@@ -34,6 +34,7 @@ from core.ordinal import ordinal_valid, require_valid, require_positive
 from render.color_spaces import srgb_to_linear_three
 from render.framebuffer import FloatColor
 from math.rounded_product import rounded_product
+from math.vector3 import vector3_from_float64
 from math.utils import clamp, js_round_int
 from math.finite import require_finite
 
@@ -298,9 +299,8 @@ struct Lut(Copyable, Movable):
                 )
                 if inside:
                     var c = _mix(stops[j], stops[j + 1], alpha)
-                    lut.append(
-                        FloatColor(Float32(c[0]), Float32(c[1]), Float32(c[2]))
-                    )
+                    var mixed = vector3_from_float64(c[0], c[1], c[2])
+                    lut.append(FloatColor(mixed.x, mixed.y, mixed.z))
         lut.append(_decoded(stops[len(stops) - 1].hex))
         self.lut = lut^
         self.map = stops^

@@ -550,10 +550,10 @@ struct Ray(ImplicitlyCopyable):
         var approach = _line_approach(self.origin, self.direction, point)
         if approach.parameter < 0:
             return self.origin
-        return Vector3(
-            Float32(Float64(point.x) - approach.offset_x),
-            Float32(Float64(point.y) - approach.offset_y),
-            Float32(Float64(point.z) - approach.offset_z),
+        return vector3_from_float64(
+            Float64(point.x) - approach.offset_x,
+            Float64(point.y) - approach.offset_y,
+            Float64(point.z) - approach.offset_z,
         )
 
     def distance_sq_to_point(self, point: Vector3) -> Float32:
@@ -1099,70 +1099,8 @@ struct Ray(ImplicitlyCopyable):
         var origin = endpoint.origin * endpoint.sign
         var inverse = 1 / direction
         if endpoint.axis == 0:
-            return Vector3(
-                Float32(face),
-                Float32(
-                    _plane_coordinate(
-                        origin,
-                        Float64(self.origin.y),
-                        direction,
-                        Float64(self.direction.y),
-                        face,
-                        Float64(box.min.y),
-                        inverse,
-                    )
-                ),
-                Float32(
-                    _plane_coordinate(
-                        origin,
-                        Float64(self.origin.z),
-                        direction,
-                        Float64(self.direction.z),
-                        face,
-                        Float64(box.min.z),
-                        inverse,
-                    )
-                ),
-            )
-        if endpoint.axis == 1:
-            return Vector3(
-                Float32(
-                    _plane_coordinate(
-                        origin,
-                        Float64(self.origin.x),
-                        direction,
-                        Float64(self.direction.x),
-                        face,
-                        Float64(box.min.x),
-                        inverse,
-                    )
-                ),
-                Float32(face),
-                Float32(
-                    _plane_coordinate(
-                        origin,
-                        Float64(self.origin.z),
-                        direction,
-                        Float64(self.direction.z),
-                        face,
-                        Float64(box.min.z),
-                        inverse,
-                    )
-                ),
-            )
-        return Vector3(
-            Float32(
-                _plane_coordinate(
-                    origin,
-                    Float64(self.origin.x),
-                    direction,
-                    Float64(self.direction.x),
-                    face,
-                    Float64(box.min.x),
-                    inverse,
-                )
-            ),
-            Float32(
+            return vector3_from_float64(
+                face,
                 _plane_coordinate(
                     origin,
                     Float64(self.origin.y),
@@ -1171,9 +1109,59 @@ struct Ray(ImplicitlyCopyable):
                     face,
                     Float64(box.min.y),
                     inverse,
-                )
+                ),
+                _plane_coordinate(
+                    origin,
+                    Float64(self.origin.z),
+                    direction,
+                    Float64(self.direction.z),
+                    face,
+                    Float64(box.min.z),
+                    inverse,
+                ),
+            )
+        if endpoint.axis == 1:
+            return vector3_from_float64(
+                _plane_coordinate(
+                    origin,
+                    Float64(self.origin.x),
+                    direction,
+                    Float64(self.direction.x),
+                    face,
+                    Float64(box.min.x),
+                    inverse,
+                ),
+                face,
+                _plane_coordinate(
+                    origin,
+                    Float64(self.origin.z),
+                    direction,
+                    Float64(self.direction.z),
+                    face,
+                    Float64(box.min.z),
+                    inverse,
+                ),
+            )
+        return vector3_from_float64(
+            _plane_coordinate(
+                origin,
+                Float64(self.origin.x),
+                direction,
+                Float64(self.direction.x),
+                face,
+                Float64(box.min.x),
+                inverse,
             ),
-            Float32(face),
+            _plane_coordinate(
+                origin,
+                Float64(self.origin.y),
+                direction,
+                Float64(self.direction.y),
+                face,
+                Float64(box.min.y),
+                inverse,
+            ),
+            face,
         )
 
     @always_inline

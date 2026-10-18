@@ -158,10 +158,10 @@ struct Triangle(Equatable, ImplicitlyCopyable):
                 var magnitude = length3(wide[0], wide[1], wide[2])
                 if magnitude == 0:
                     raise Error("A degenerate triangle has no normal")
-                return Vector3(
-                    Float32(wide[0] / magnitude),
-                    Float32(wide[1] / magnitude),
-                    Float32(wide[2] / magnitude),
+                return vector3_from_float64(
+                    wide[0] / magnitude,
+                    wide[1] / magnitude,
+                    wide[2] / magnitude,
                 )
         out.normalize()
         return out
