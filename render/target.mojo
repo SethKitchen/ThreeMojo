@@ -528,12 +528,7 @@ def resolve_block[
         var column = sample % factor
         var slot = (y * factor + row) * width + x * factor + column
         var sampled = source.light_at(slot)
-        total = FloatColor(
-            total.r + sampled.r,
-            total.g + sampled.g,
-            total.b + sampled.b,
-            total.a + sampled.a,
-        )
+        total = total + sampled
         var z = source.depth_in(slot)
         if is_nearer(depth_mode, z, nearest):
             nearest = z
@@ -542,9 +537,7 @@ def resolve_block[
         if normals:
             normal = normal + source.normal_in(slot)
     var share = 1 / Float32(factor * factor)
-    var color = FloatColor(
-        total.r * share, total.g * share, total.b * share, total.a * share
-    )
+    var color = total * share
     var data = datas == factor * factor
     # A data pixel is stored straight; see the module docstring.
     if data:
