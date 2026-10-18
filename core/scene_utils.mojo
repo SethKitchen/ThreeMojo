@@ -35,6 +35,7 @@ from core.buffer_geometry import BufferGeometry, POSITION
 from core.deform import morphed_positions, skin_carriers, skin_pose
 from core.morph import MorphInfluences
 from core.object3d import NO_PARENT, NodeId, Object3D
+from core.order import stable_rising_order
 from core.scene import Scene
 from geometries.attribute_utils import (
     MorphedAttributes,
@@ -192,18 +193,6 @@ def create_multi_material_object(
     return group
 
 
-def _sorted_order(keys: List[Float64]) -> List[Int]:
-    """Return the instances in order of their keys, rising, equal keys in
-    the order they came: JavaScript's stable `sort`."""
-    var order = List[Int]()
-    for item in range(len(keys)):
-        var at = len(order)
-        while at > 0 and keys[order[at - 1]] > keys[item]:
-            at -= 1
-        order.insert(at, item)
-    return order^
-
-
 def sort_instanced_mesh(
     mut scene: Scene, mut assets: Assets, index: Int, keys: List[Float64]
 ) raises:
@@ -238,7 +227,7 @@ def sort_instanced_mesh(
     var id = mesh.geometry.value
     if id >= assets.geometries.count():
         raise Error("An instanced mesh must name a stored geometry")
-    var order = _sorted_order(keys)
+    var order = stable_rising_order(keys)
     var matrices = mesh.matrices.copy()
     var colors = List[Color]()
     if len(mesh.colors) > 0:

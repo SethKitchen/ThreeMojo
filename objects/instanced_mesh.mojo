@@ -80,6 +80,7 @@ the scene's draws; see `renderers.renderer`.
 """
 
 from core.buffer_geometry import BufferGeometry
+from core.order import stable_rising_order
 from core.geometry_store import GeometryId
 from core.morph import MorphInfluences
 from core.object3d import NodeId
@@ -782,16 +783,10 @@ struct BatchedMesh(Copyable, Movable):
         """Close the gaps freed ranges left, three.js's `optimize`: every
         range in use moves down to follow the one before it, in the order
         they lie."""
-        var order = List[Int]()
+        var starts = List[Int]()
         for slot in range(len(self.geometries)):
-            var at = len(order)
-            while (
-                at > 0
-                and self.geometries[order[at - 1]].vertex_start
-                > self.geometries[slot].vertex_start
-            ):
-                at -= 1
-            order.insert(at, slot)
+            starts.append(self.geometries[slot].vertex_start)
+        var order = stable_rising_order(starts)
         var next_vertex = 0
         var next_index = 0
         for slot in order:
