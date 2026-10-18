@@ -629,14 +629,17 @@ struct Md2Model(Movable):
         self.animations = animations^
 
 
-struct _Reader:
-    """Reads little-endian values, refusing a read past the end."""
+struct _Reader[origin: Origin[mut=False]]:
+    """Reads little-endian values, refusing a read past the end.
 
-    var bytes: List[UInt8]
+    The caller keeps the bytes for the read.
+    """
 
-    def __init__(out self, var bytes: List[UInt8]):
-        """Hold the file."""
-        self.bytes = bytes^
+    var bytes: Span[UInt8, Self.origin]
+
+    def __init__(out self, bytes: Span[UInt8, Self.origin]):
+        """Hold the file. The caller keeps it."""
+        self.bytes = bytes
 
     def unsigned(self, at: Int, size: Int) raises -> Int:
         """Return an unsigned value of `size` bytes.
@@ -704,7 +707,7 @@ def parse_md2(bytes: List[UInt8]) raises -> Md2Model:
     Raises:
         Error: For anything the module docstring lists.
     """
-    var r = _Reader(bytes.copy())
+    var r = _Reader(Span(bytes))
     var header = List[Int]()
     for i in range(_HEADER_FIELD_COUNT):  # pragma: no branch
         header.append(r.signed(i * 4, 4))
