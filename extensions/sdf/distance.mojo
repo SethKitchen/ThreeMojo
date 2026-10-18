@@ -17,6 +17,7 @@ from extensions.sdf.vector import (
     frame_zy,
     length,
 )
+from math.norm import squared_length2
 from std.math import sqrt
 
 
@@ -59,7 +60,7 @@ def rect_distance(qx: Float64, qy: Float64) -> Float64:
     """
     var ox = max(qx, 0.0)
     var oy = max(qy, 0.0)
-    return sqrt(ox * ox + oy * oy) + min(max(qx, qy), 0.0)
+    return sqrt(squared_length2[DType.float64](ox, oy)) + min(max(qx, qy), 0.0)
 
 
 def segment_param(p: V3, a: V3, b: V3) -> Float64:

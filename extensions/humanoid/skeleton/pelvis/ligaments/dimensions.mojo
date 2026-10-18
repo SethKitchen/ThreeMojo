@@ -61,6 +61,7 @@ from extensions.anatomy.soft_tissue import (
     ligament_tissue,
     meniscus_tissue,
 )
+from math.norm import squared_length2
 from math.vector3 import Vector3
 from std.math import cos, max, pi, sqrt
 
@@ -201,7 +202,9 @@ struct PelvisLigamentField(DistanceField, ImplicitlyCopyable):
             var height = offset.dot(self.axis)
             var flat = offset - self.axis * height
             var radial = flat.length() - self.ring
-            return sqrt(radial * radial + height * height) - self.tube
+            return (
+                sqrt(squared_length2[DType.float32](radial, height)) - self.tube
+            )
         if self.part == ACETABULAR_CARTILAGE:
             var offset = local - self.hip
             var reach = offset.length()

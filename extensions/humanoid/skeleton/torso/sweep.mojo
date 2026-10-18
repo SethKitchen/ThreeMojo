@@ -28,6 +28,7 @@ from extensions.humanoid.skeleton.field import (
     smin,
 )
 from math.box_extent import box_exterior
+from math.norm import squared_length2
 from math.utils import clamp
 from math.vector3 import Vector3
 from std.math import max, min, pi, sqrt
@@ -130,7 +131,7 @@ struct Sweep(Copyable, Movable):
                 var ap = a.ap + (b.ap - a.ap) * t
                 var u = (point.x - center.x) / ml
                 var v = (point.z - center.z) / ap
-                var q = sqrt(u * u + v * v)
+                var q = sqrt(squared_length2[DType.float32](u, v))
                 var radial = -min(ml, ap)
                 if q > 0:
                     radial = (

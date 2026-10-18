@@ -35,6 +35,7 @@ from extensions.sdf.vector import (
     length,
     normalize,
 )
+from math.norm import squared_length2, squared_length3
 from std.collections import Dict
 from std.math import isfinite, sqrt
 
@@ -117,11 +118,11 @@ def _ellipsoid(p: Primitive, q: V3) -> Float64:
     var qx = dot(d, p.ax) / p.r.x
     var qy = dot(d, p.ay) / p.r.y
     var qz = dot(d, p.az) / p.r.z
-    var k0 = sqrt(qx * qx + qy * qy + qz * qz)
+    var k0 = sqrt(squared_length3[DType.float64](qx, qy, qz))
     var sx = qx / p.r.x
     var sy = qy / p.r.y
     var sz = qz / p.r.z
-    var k1 = sqrt(sx * sx + sy * sy + sz * sz)
+    var k1 = sqrt(squared_length3[DType.float64](sx, sy, sz))
     if k1 < 1e-12:
         return -min(p.r.x, min(p.r.y, p.r.z))
     return k0 * (k0 - 1.0) / k1
@@ -180,7 +181,7 @@ def outline_distance(
     var at = first * 2
     var dx = px - outline[at]
     var dy = py - outline[at + 1]
-    var best = dx * dx + dy * dy
+    var best = squared_length2[DType.float64](dx, dy)
     var s = 1.0
     var j = count - 1
     for i in range(count):
@@ -190,11 +191,11 @@ def outline_distance(
         var ey = outline[at + j * 2 + 1] - iy
         var wx = px - ix
         var wy = py - iy
-        var ee = ex * ex + ey * ey
+        var ee = squared_length2[DType.float64](ex, ey)
         var t = min(max((wx * ex + wy * ey) / max(ee, 1e-18), 0.0), 1.0)
         var bx = wx - ex * t
         var by = wy - ey * t
-        best = min(best, bx * bx + by * by)
+        best = min(best, squared_length2[DType.float64](bx, by))
         # The crossing test of the winding rule, as one count: the sign
         # flips when all three tests agree.
         var agree = Int(py >= iy) + Int(py < iy + ey) + Int(ex * wy > ey * wx)

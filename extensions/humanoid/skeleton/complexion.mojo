@@ -31,6 +31,7 @@ from extensions.humanoid.genome import (
     UNDERTONE,
     check_genome,
 )
+from math.norm import squared_length2
 from render.framebuffer import Color
 from render.srgb import LINEAR, SRGB
 from render.texture import IGNORED, REPEAT, Texture
@@ -332,7 +333,7 @@ def _spots(
             )
             var ex = x - px
             var ey = y - py
-            var d = sqrt(ex * ex + ey * ey) / radius
+            var d = sqrt(squared_length2[DType.float32](ex, ey)) / radius
             best = max(best, 1 - _smooth(0.55, 1.0, d))
     return best
 
