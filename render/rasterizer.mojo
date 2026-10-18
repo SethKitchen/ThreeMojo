@@ -2029,12 +2029,7 @@ def tangent_frame(
     var ax = [along_x.x, along_x.y, along_x.z]
     var ay = [along_y.x, along_y.y, along_y.z]
     var n = [normal.x, normal.y, normal.z]
-    var finite = (
-        isfinite(uv_along_x.x)
-        and isfinite(uv_along_x.y)
-        and isfinite(uv_along_y.x)
-        and isfinite(uv_along_y.y)
-    )
+    var finite = uv_along_x.is_finite() and uv_along_y.is_finite()
     for axis in range(3):  # pragma: no branch
         finite = (
             finite
@@ -2980,14 +2975,7 @@ def check_triangle_state(
 
 def _is_depth(value: Vector3) -> Bool:
     """Return True if every axis of `value` is finite and not negative."""
-    return (
-        isfinite(value.x)
-        and isfinite(value.y)
-        and isfinite(value.z)
-        and value.x >= 0
-        and value.y >= 0
-        and value.z >= 0
-    )
+    return value.is_finite() and value.x >= 0 and value.y >= 0 and value.z >= 0
 
 
 def _same_volume(a: RasterVertex, b: RasterVertex) -> Bool:

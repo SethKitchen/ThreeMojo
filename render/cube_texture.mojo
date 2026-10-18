@@ -782,11 +782,7 @@ def equirect_uv(direction: Vector3) -> Vector2:
         The coordinate, inside the unit square.
     """
     var unit = direction
-    if (
-        isfinite(direction.x)
-        and isfinite(direction.y)
-        and isfinite(direction.z)
-    ):
+    if direction.is_finite():
         unit.normalize()
     else:
         var magnitude = direction.length()

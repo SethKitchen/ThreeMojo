@@ -359,11 +359,7 @@ struct LightProbeGrid(Copyable, Movable):
             and depth > 0
         ):
             raise Error("A light probe grid's size must be positive lengths")
-        if not (
-            isfinite(self.position.x)
-            and isfinite(self.position.y)
-            and isfinite(self.position.z)
-        ):
+        if not self.position.is_finite():
             raise Error("A light probe grid's position must be finite")
         if not isfinite(self.intensity) or self.intensity < 0:
             raise Error(

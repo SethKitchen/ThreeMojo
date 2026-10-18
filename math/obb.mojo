@@ -57,9 +57,7 @@ def _check_half_size(half_size: Vector3) raises:
         Error: If a component is negative or not finite.
     """
     var good = (
-        isfinite(half_size.x)
-        and isfinite(half_size.y)
-        and isfinite(half_size.z)
+        half_size.is_finite()
         and half_size.x >= 0
         and half_size.y >= 0
         and half_size.z >= 0
