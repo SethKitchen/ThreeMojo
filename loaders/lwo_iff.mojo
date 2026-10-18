@@ -32,6 +32,7 @@ surface that is not there. And polygons before any points, which three.js
 reads as a mesh with no positions.
 """
 
+from core.search import first_match
 from loaders.js_text import js_units
 from loaders.three_mf import js_key_order
 from std.memory import bitcast
@@ -620,13 +621,6 @@ comptime _NODE_ATTRIBUTES: List[String] = [
 ]
 
 
-def _is(tag: String, names: List[String]) -> Bool:
-    for name in names:  # pragma: no branch
-        if tag == name:
-            return True
-    return False
-
-
 struct _Parser:
     """three.js's `IFFParser` and its block parsers, with their state."""
 
@@ -729,15 +723,15 @@ struct _Parser:
             length = self.r.u16()
         if id == "FORM":
             self.parse_form(length, lwo3)
-        elif _is(id, materialize[_SKIPPED]()) or (
-            not lwo3 and _is(id, materialize[_SKIPPED_LWO2]())
+        elif first_match(materialize[_SKIPPED](), id) >= 0 or (
+            not lwo3 and first_match(materialize[_SKIPPED_LWO2](), id) >= 0
         ):
             self.r.skip(length)
         elif not lwo3 and id == "SURF":
             self.surface_lwo2(length)
         elif not lwo3 and id == "CLIP":
             self.clip_lwo2(length)
-        elif _is(id, materialize[_NODE_INTEGERS]()):
+        elif first_match(materialize[_NODE_INTEGERS](), id) >= 0:
             if length == 4:
                 var v = self.r.i32()
                 self.tree.set(self.node(), id, _number(Float64(v)))
@@ -916,11 +910,11 @@ struct _Parser:
     def parse_form(mut self, length: Int, lwo3: Bool) raises:
         """three.js's `parseForm`."""
         var kind = self.r.tag()
-        if _is(kind, materialize[_SKIPPED_FORMS]()):
+        if first_match(materialize[_SKIPPED_FORMS](), kind) >= 0:
             self.r.skip(length - 4)
-        elif _is(kind, materialize[_OPEN_FORMS]()):
+        elif first_match(materialize[_OPEN_FORMS](), kind) >= 0:
             pass
-        elif _is(kind, materialize[_NODE_ATTRIBUTES]()):
+        elif first_match(materialize[_NODE_ATTRIBUTES](), kind) >= 0:
             self.node_attribute(kind)
         elif kind == "ENVL":
             self.r.skip(length - 4)

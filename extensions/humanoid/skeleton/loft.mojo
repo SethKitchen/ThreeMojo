@@ -382,7 +382,7 @@ def loft_distance(loft: Loft, point: Vector3) -> Float32:
     Returns:
         The signed distance, in meters.
     """
-    var off_box = _box_gap(loft.low, loft.high, point)
+    var off_box = box_exterior(loft.low, loft.high, point).length()
     if off_box > LOFT_SHORTCUT:
         return off_box
     var along = _along(point, loft.axis)
@@ -465,11 +465,6 @@ def _column(loft: Loft, index: Int, ray: Int) -> SIMD[DType.float32, 4]:
         loft.section_radius(index + 1, column),
         loft.section_radius(clamp(index + 2, 0, loft.count - 1), column),
     )
-
-
-def _box_gap(low: Vector3, high: Vector3, point: Vector3) -> Float32:
-    """Return how far `point` lies outside the box, or zero inside it."""
-    return box_exterior(low, high, point).length()
 
 
 def _reaches(

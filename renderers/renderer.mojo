@@ -4948,11 +4948,6 @@ def _panorama_seen(
     return picture.sample(at.x, at.y)
 
 
-def _kept_for(kept: List[ShadowMap], light: Int) -> Int:
-    """Return which of `kept` a light drew, or -1 for none."""
-    return index_of_light(kept, light)
-
-
 def _light_aim(scene: Scene, light: Light) raises -> Vector3:
     """Return where a directional or spot light's camera looks, in world
     space: its target's position, or the origin when it names none.
@@ -9562,7 +9557,7 @@ struct Renderer(Movable):
             if not scene.light_shown(light):
                 continue
             ref shadow = light.shadow
-            var reused = _kept_for(kept, index)
+            var reused = index_of_light(kept, index)
             if shadow.is_frozen() and reused >= 0:
                 maps.append(kept.pop(reused))
                 continue
