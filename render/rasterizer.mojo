@@ -106,6 +106,7 @@ from render.packing import (
     check_distance_range,
     packed_depth_fragment,
     packed_distance_fragment,
+    packed_normal,
 )
 from render.srgb import LINEAR
 from render.texture import (
@@ -2002,16 +2003,8 @@ def tangent_frame(
     """
     var q1_perp = _cross(along_y, normal)
     var q0_perp = _cross(normal, along_x)
-    var tangent = Vector3(
-        q1_perp.x * uv_along_x.x + q0_perp.x * uv_along_y.x,
-        q1_perp.y * uv_along_x.x + q0_perp.y * uv_along_y.x,
-        q1_perp.z * uv_along_x.x + q0_perp.z * uv_along_y.x,
-    )
-    var bitangent = Vector3(
-        q1_perp.x * uv_along_x.y + q0_perp.x * uv_along_y.y,
-        q1_perp.y * uv_along_x.y + q0_perp.y * uv_along_y.y,
-        q1_perp.z * uv_along_x.y + q0_perp.z * uv_along_y.y,
-    )
+    var tangent = q1_perp * uv_along_x.x + q0_perp * uv_along_y.x
+    var bitangent = q1_perp * uv_along_x.y + q0_perp * uv_along_y.y
     var extent = max(tangent.dot(tangent), bitangent.dot(bitangent))
     var position_scale = max(
         max(abs(along_x.x), max(abs(along_x.y), abs(along_x.z))),
@@ -2435,22 +2428,6 @@ def data_color(r: Float32, g: Float32, b: Float32, a: Float32) -> FloatColor:
     var bytes = FloatColor(r, g, b, 1.0).quantize()
     var decoded = FloatColor(srgb=bytes)
     return FloatColor(decoded.r, decoded.g, decoded.b, a)
-
-
-def packed_normal(facing: Vector3) -> Vector3:
-    """Return a unit normal mapped into zero to one per axis, three.js's
-    `packNormalToRGB`: each component halved and moved up by a half, so a
-    surface square-on to the camera is (0.5, 0.5, 1).
-
-    Args:
-        facing: The unit normal, in the space it is to be shown in.
-
-    Returns:
-        The three channels, before quantization.
-    """
-    return Vector3(
-        facing.x * 0.5 + 0.5, facing.y * 0.5 + 0.5, facing.z * 0.5 + 0.5
-    )
 
 
 def packed_depth(z: Float32) -> Float32:

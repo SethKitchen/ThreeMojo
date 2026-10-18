@@ -90,6 +90,7 @@ from core.ordinal import ordinal_valid
 from math.utils import clamp
 from math.vector2 import Vector2
 from math.vector3 import Vector3
+from render.packing import packed_normal
 from render.blend import NORMAL_MODE, Rgba, blend_fragment
 from render.color_spaces import OutputEncoding
 from render.float_image import FloatImage
@@ -1842,9 +1843,8 @@ struct RenderTarget(Movable, SampleSource):
                 if n.length() == 0:
                     value = TRANSPARENT_BLACK
                 elif packs:
-                    value = FloatColor(
-                        n.x * 0.5 + 0.5, n.y * 0.5 + 0.5, n.z * 0.5 + 0.5, 1
-                    )
+                    var shown = packed_normal(n)
+                    value = FloatColor(shown.x, shown.y, shown.z, 1)
             else:
                 value = self.straight_at(slot)
                 if self.data[slot]:

@@ -237,13 +237,13 @@ from render.rasterizer import (
     TextureFrames,
     matcap_fallback,
     matcap_uv,
-    packed_normal,
     tangent_frame,
 )
 from render.packing import (
     DepthPacking,
     packed_depth_fragment,
     packed_distance_fragment,
+    packed_normal,
 )
 from materials.material import (
     OPAQUE,

@@ -52,6 +52,7 @@ from math.matrix4 import Matrix4
 from math.sine import fraction, noise_scale, sin_float32
 from math.utils import SeededRandom
 from math.vector3 import Vector3, reciprocal_unit, reflect_vector
+from render.packing import packed_normal
 from postprocessing.sampling import sample, u_of, v_of
 from render.framebuffer import TRANSPARENT_BLACK, FloatColor
 from render.raster_state import (
@@ -432,10 +433,8 @@ def show_normals(mut frame: RenderTarget, normals: List[Vector3]):
         normals: One unit normal per pixel.
     """
     for slot in range(len(frame.colors)):  # pragma: no branch
-        var n = normals[slot]
-        frame.colors[slot] = FloatColor(
-            n.x * 0.5 + 0.5, n.y * 0.5 + 0.5, n.z * 0.5 + 0.5, 1
-        )
+        var n = packed_normal(normals[slot])
+        frame.colors[slot] = FloatColor(n.x, n.y, n.z, 1)
         frame.data[slot] = False
 
 
