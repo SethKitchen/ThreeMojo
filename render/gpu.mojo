@@ -8127,11 +8127,7 @@ def rasterize_kernel(
                             uv,
                             uv1,
                         ).r
-                        highlight = Vector3(
-                            highlight.x * specular_strength,
-                            highlight.y * specular_strength,
-                            highlight.z * specular_strength,
-                        )
+                        highlight = highlight * specular_strength
                     # The layers' maps, exactly as `rasterize_shaded`
                     # reads them: a color, an alpha, a red, a green, and a
                     # whole texel.
