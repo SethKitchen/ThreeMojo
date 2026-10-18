@@ -23,30 +23,17 @@ from core.scene import Scene
 from extensions.humanoid.side import RIGHT, BodySide
 from extensions.humanoid.spec import HumanoidSpec
 from extensions.humanoid.skeleton.leg.contents import BOTH, LegContents
-from extensions.humanoid.skeleton.leg.femur.dimensions import (
-    FemurDimensions,
-    femur_dimensions,
-)
+from extensions.humanoid.skeleton.leg.femur.dimensions import FemurDimensions
 from extensions.humanoid.skeleton.leg.femur.geometry import (
     femur_from_dimensions,
 )
-from extensions.humanoid.skeleton.leg.fibula.dimensions import (
-    FibulaDimensions,
-    fibula_dimensions,
-)
+from extensions.humanoid.skeleton.leg.fibula.dimensions import FibulaDimensions
 from extensions.humanoid.skeleton.leg.fibula.geometry import (
     fibula_from_dimensions,
 )
 from extensions.humanoid.skeleton.leg.hair.dimensions import named_hair_parts
 from extensions.humanoid.skeleton.leg.hair.geometry import hair_from_dimensions
-from extensions.humanoid.skeleton.leg.knee.dimensions import (
-    KneeDimensions,
-    femur_origin,
-    fibula_origin,
-    knee_dimensions_from_bones,
-    patella_origin,
-    tibia_origin,
-)
+from extensions.humanoid.skeleton.leg.knee.dimensions import KneeDimensions
 from extensions.humanoid.skeleton.leg.knee.geometry import (
     articular_cartilage,
     lateral_collateral,
@@ -60,6 +47,7 @@ from extensions.humanoid.skeleton.leg.lymph.geometry import (
 )
 from extensions.humanoid.skeleton.leg.muscles.dimensions import (
     MuscleDimensions,
+    _leg_bone_frame,
     is_tendon,
     muscle_dimensions_from_bones,
     named_muscle_parts,
@@ -73,16 +61,12 @@ from extensions.humanoid.skeleton.leg.nerves.geometry import (
 )
 from extensions.humanoid.skeleton.leg.patella.dimensions import (
     PatellaDimensions,
-    patella_dimensions,
 )
 from extensions.humanoid.skeleton.leg.patella.geometry import (
     patella_from_dimensions,
 )
 from extensions.humanoid.skeleton.leg.skin.geometry import skin_from_dimensions
-from extensions.humanoid.skeleton.leg.tibia.dimensions import (
-    TibiaDimensions,
-    tibia_dimensions,
-)
+from extensions.humanoid.skeleton.leg.tibia.dimensions import TibiaDimensions
 from extensions.humanoid.skeleton.leg.tibia.geometry import (
     tibia_from_dimensions,
 )
@@ -149,41 +133,31 @@ def assemble_leg(
     Raises:
         Error: If `spec` or `side` is refused by a bone or muscle template.
     """
-    var femur = femur_dimensions(spec.stature, spec.sex, side)
-    var tibia = tibia_dimensions(spec.stature, spec.sex, side)
-    var fibula = fibula_dimensions(spec.stature, spec.sex, side)
-    var patella = patella_dimensions(spec.stature, spec.sex, side)
-    var knee = knee_dimensions_from_bones(femur, tibia, fibula, patella)
-    var f_origin = femur_origin(femur, knee.femoral_thickness)
-    var t_origin = tibia_origin(tibia, knee.tibial_thickness)
-    var fi_origin = fibula_origin(tibia, t_origin, fibula)
-    var p_origin = patella_origin(
-        femur, f_origin, patella, knee.patellar_thickness
-    )
+    var frame = _leg_bone_frame(spec, side)
     var muscles = muscle_dimensions_from_bones(
         spec.athleticism,
-        femur,
-        tibia,
-        fibula,
-        patella,
-        f_origin,
-        t_origin,
-        fi_origin,
-        p_origin,
+        frame.femur,
+        frame.tibia,
+        frame.fibula,
+        frame.patella,
+        frame.femur_origin,
+        frame.tibia_origin,
+        frame.fibula_origin,
+        frame.patella_origin,
     )
     return LegAssembly(
         spec,
         side,
-        femur,
-        tibia,
-        fibula,
-        patella,
-        knee,
+        frame.femur,
+        frame.tibia,
+        frame.fibula,
+        frame.patella,
+        frame.knee,
         muscles,
-        f_origin,
-        t_origin,
-        fi_origin,
-        p_origin,
+        frame.femur_origin,
+        frame.tibia_origin,
+        frame.fibula_origin,
+        frame.patella_origin,
     )
 
 
