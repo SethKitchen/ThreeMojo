@@ -213,6 +213,22 @@ def _new_number(
     exponent = String()
 
 
+def _unexpected_svg(current: String, index: Int) raises:
+    """Refuse one unexpected SVG number character.
+
+    Args:
+        current: The character.
+        index: Its place in the text.
+
+    Returns:
+        Nothing. The call does not return.
+
+    Raises:
+        Error: The character cannot appear there.
+    """
+    raise Error("SVG: unexpected `" + current + "` at index " + String(index))
+
+
 def parse_floats(
     input: String, flags: List[Int] = List[Int](), stride: Int = 1
 ) raises -> List[Float64]:
@@ -295,12 +311,7 @@ def parse_floats(
                 var first = number.as_bytes()[0]
                 var doubled = first == 43 or first == 45
                 if doubled:
-                    raise Error(
-                        "SVG: unexpected `"
-                        + current
-                        + "` at index "
-                        + String(i)
-                    )
+                    _unexpected_svg(current, i)
         if state == FLOAT:
             if _is_digit(c):
                 number += current
@@ -323,12 +334,7 @@ def parse_floats(
                     var first = exponent.as_bytes()[0]
                     var doubled = first == 43 or first == 45
                     if doubled:
-                        raise Error(
-                            "SVG: unexpected `"
-                            + current
-                            + "` at index "
-                            + String(i)
-                        )
+                        _unexpected_svg(current, i)
         if is_space:
             _new_number(result, number, exponent)
             state = SEP

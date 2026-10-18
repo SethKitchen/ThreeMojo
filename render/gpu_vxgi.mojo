@@ -53,7 +53,7 @@ from postprocessing.vxgi_node import (
     require_vxgi_normals,
     vxgi_pixel,
 )
-from render.gpu import available
+from render.gpu import require_gpu
 from std.math import ceildiv
 from std.memory import unsafe_memcpy
 
@@ -330,8 +330,7 @@ struct GpuVxgi(Movable):
         Raises:
             Error: If no GPU is present.
         """
-        if not available():
-            raise Error("No GPU available")
+        require_gpu()
         self.context = DeviceContext()
 
     def _floats(

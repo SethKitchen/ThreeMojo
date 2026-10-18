@@ -122,6 +122,60 @@ def check_spec(stature: Length, sex: Sex, side: BodySide, bone: String) raises:
         raise Error("A " + bone + "'s stature cannot exceed 2.5 meters")
 
 
+def _finite_measure(value: Float32, name: String, bone: String) raises:
+    """Refuse a measure that is not finite.
+
+    Args:
+        value: The measure, in its SI unit.
+        name: What it measures.
+        bone: Name used in the error text.
+
+    Returns:
+        Nothing. The call returns when the measure is finite.
+
+    Raises:
+        Error: If the measure is not finite.
+    """
+    if not isfinite(value):
+        raise Error("A " + bone + " " + name + " must be finite")
+
+
+def _positive_measure(value: Float32, name: String, bone: String) raises:
+    """Refuse a measure that is not positive.
+
+    Args:
+        value: The measure, in its SI unit.
+        name: What it measures.
+        bone: Name used in the error text.
+
+    Returns:
+        Nothing. The call returns when the measure is positive.
+
+    Raises:
+        Error: If the measure is not positive.
+    """
+    if value <= 0:
+        raise Error("A " + bone + " " + name + " must be positive")
+
+
+def _non_negative_measure(value: Float32, name: String, bone: String) raises:
+    """Refuse a measure that is negative.
+
+    Args:
+        value: The measure, in its SI unit.
+        name: What it measures.
+        bone: Name used in the error text.
+
+    Returns:
+        Nothing. The call returns when the measure is zero or more.
+
+    Raises:
+        Error: If the measure is negative.
+    """
+    if value < 0:
+        raise Error("A " + bone + " " + name + " cannot be negative")
+
+
 def positive_length(value: Length, name: String, bone: String) raises:
     """Refuse a length that is not finite or not positive.
 
@@ -133,10 +187,8 @@ def positive_length(value: Length, name: String, bone: String) raises:
     Raises:
         Error: If `value` is not finite or is not positive.
     """
-    if not isfinite(value.value):
-        raise Error("A " + bone + " " + name + " must be finite")
-    if value.value <= 0:
-        raise Error("A " + bone + " " + name + " must be positive")
+    _finite_measure(value.value, name, bone)
+    _positive_measure(value.value, name, bone)
 
 
 def non_negative_length(value: Length, name: String, bone: String) raises:
@@ -150,10 +202,8 @@ def non_negative_length(value: Length, name: String, bone: String) raises:
     Raises:
         Error: If `value` is not finite or is negative.
     """
-    if not isfinite(value.value):
-        raise Error("A " + bone + " " + name + " must be finite")
-    if value.value < 0:
-        raise Error("A " + bone + " " + name + " cannot be negative")
+    _finite_measure(value.value, name, bone)
+    _non_negative_measure(value.value, name, bone)
 
 
 def finite_angle(value: Angle, name: String, bone: String) raises:
@@ -167,8 +217,7 @@ def finite_angle(value: Angle, name: String, bone: String) raises:
     Raises:
         Error: If `value` is not finite.
     """
-    if not isfinite(value.value):
-        raise Error("A " + bone + " " + name + " must be finite")
+    _finite_measure(value.value, name, bone)
 
 
 def open_angle(value: Angle, name: String, bone: String) raises:
@@ -183,8 +232,7 @@ def open_angle(value: Angle, name: String, bone: String) raises:
         Error: If `value` is not finite or is not between 0 and 180 degrees.
     """
     finite_angle(value, name, bone)
-    if value.value <= 0:
-        raise Error("A " + bone + " " + name + " must be positive")
+    _positive_measure(value.value, name, bone)
     if value.value >= pi:
         raise Error("A " + bone + " " + name + " must be less than 180 degrees")
 
@@ -201,8 +249,7 @@ def acute_angle(value: Angle, name: String, bone: String) raises:
         Error: If `value` is not finite, is negative, or is 90 degrees or more.
     """
     finite_angle(value, name, bone)
-    if value.value < 0:
-        raise Error("A " + bone + " " + name + " cannot be negative")
+    _non_negative_measure(value.value, name, bone)
     if value.value >= pi * Float32(0.5):
         raise Error("A " + bone + " " + name + " must be less than 90 degrees")
 
