@@ -29,13 +29,16 @@ differs by platform. The window never reads it: it asks the C library to
 fill it and to make it raw, in a buffer larger than any platform's.
 """
 
-from core.extent import positive_extent
 from controls.input import InputDecoder, InputEvent
 from render.framebuffer import Framebuffer
 from std.ffi import c_int, external_call
 from units.si import Duration
 from window.poll_timeout import poll_milliseconds
-from window.present import require_open, require_presented_frame
+from window.present import (
+    require_open,
+    require_presented_frame,
+    require_window_size,
+)
 
 comptime STANDARD_INPUT = 0
 comptime STANDARD_OUTPUT = 1
@@ -214,10 +217,7 @@ struct TerminalWindow(Movable):
             Error: If the size is not positive, the input is not a
                 terminal, or the terminal cannot be set or written.
         """
-        if not positive_extent(width, height):
-            raise Error(
-                "A window's size must be positive, got ", width, "x", height
-            )
+        require_window_size(width, height)
         self.width = width
         self.height = height
         self.input_fd = input_fd
@@ -321,10 +321,7 @@ struct TerminalWindow(Movable):
                 the terminal cannot be written.
         """
         require_open(self.is_open)
-        if not positive_extent(width, height):
-            raise Error(
-                "A window's size must be positive, got ", width, "x", height
-            )
+        require_window_size(width, height)
         self.width = width
         self.height = height
         _write_all(self.output_fd, CLEAR)

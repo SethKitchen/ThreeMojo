@@ -3,9 +3,29 @@
 # Noncommercial use is free; commercial use requires a paid license.
 # See LICENSE, LICENSE-COMMERCIAL.md and THIRD-PARTY-NOTICES.md.
 
-"""The checks a window makes before it draws a frame."""
+"""The checks a window makes before it opens or draws a frame."""
 
+from core.extent import positive_extent
 from render.framebuffer import Framebuffer
+
+
+def require_window_size(width: Int, height: Int) raises:
+    """Refuse a window whose size is not positive.
+
+    Args:
+        width: The width, in pixels.
+        height: The height, in pixels.
+
+    Returns:
+        Nothing. The call returns when both sizes are positive.
+
+    Raises:
+        Error: If the width or the height is not positive.
+    """
+    if not positive_extent(width, height):
+        raise Error(
+            "A window's size must be positive, got ", width, "x", height
+        )
 
 
 def require_open(is_open: Bool) raises:

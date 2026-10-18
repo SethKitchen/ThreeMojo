@@ -3,9 +3,49 @@
 # Noncommercial use is free; commercial use requires a paid license.
 # See LICENSE, LICENSE-COMMERCIAL.md and THIRD-PARTY-NOTICES.md.
 
-"""Shared parameter and count boundaries for curve sampling."""
+"""Shared kind, count, and parameter boundaries for curves."""
 
 from math.polyline import PolylineVertex
+
+
+def require_curve_kind(valid: Bool) raises:
+    """Refuse a curve kind that is not named.
+
+    Args:
+        valid: Whether the kind is one of the named kinds.
+
+    Returns:
+        Nothing. The call returns when the kind is named.
+
+    Raises:
+        Error: If the kind is not named.
+    """
+    if not valid:
+        raise Error("A curve needs a kind that exists")
+
+
+def require_control_count(wanted: Int, count: Int) raises:
+    """Refuse a control-point list that does not match a curve kind.
+
+    A wanted count of zero means a spline, which needs at least two
+    points. Any other wanted count must match exactly.
+
+    Args:
+        wanted: How many points the kind takes. Zero means a spline.
+        count: How many points the curve has.
+
+    Returns:
+        Nothing. The call returns when the count matches.
+
+    Raises:
+        Error: If a spline has fewer than two points, or another kind has
+            a different count.
+    """
+    if wanted == 0:
+        if count < 2:
+            raise Error("A spline needs at least two points")
+    elif count != wanted:
+        raise Error("A curve's points must match its kind")
 
 
 def check_curve_parameter(value: Float64) raises:

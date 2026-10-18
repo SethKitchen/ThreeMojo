@@ -24,7 +24,6 @@ visual on a little-endian machine takes; any other visual is refused.
 
 from loaders.bytes import ascii_letter
 from core.binary import little_endian_i32, little_endian_uint
-from core.extent import positive_extent
 from controls.input import (
     ARROW_DOWN,
     ARROW_LEFT,
@@ -50,7 +49,11 @@ from std.ffi import OwnedDLHandle, c_int, external_call
 from std.os.path import exists
 from units.si import Duration
 from window.poll_timeout import poll_milliseconds
-from window.present import require_open, require_presented_frame
+from window.present import (
+    require_open,
+    require_presented_frame,
+    require_window_size,
+)
 
 # Linux finds Xlib by its soname.
 comptime LIBRARY = "libX11.so.6"
@@ -290,10 +293,7 @@ struct X11Window(Movable):
             Error: If the size is not positive, Xlib cannot be loaded, the display cannot be opened, or its visual is not
                 24-bit TrueColor.
         """
-        if not positive_extent(width, height):
-            raise Error(
-                "A window's size must be positive, got ", width, "x", height
-            )
+        require_window_size(width, height)
         self.width = width
         self.height = height
         self.is_open = False
@@ -439,10 +439,7 @@ struct X11Window(Movable):
             Error: If the window is closed or the size is not positive.
         """
         require_open(self.is_open)
-        if not positive_extent(width, height):
-            raise Error(
-                "A window's size must be positive, got ", width, "x", height
-            )
+        require_window_size(width, height)
         self.width = width
         self.height = height
         self._pixels = List[UInt8](length=width * height * 4, fill=0)

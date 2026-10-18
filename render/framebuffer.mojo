@@ -822,6 +822,23 @@ def _encoded(bits: Int) -> UInt8:
     return _to_byte(linear_to_srgb(bitcast[DType.float32](UInt32(bits))))
 
 
+def require_framebuffer_size(width: Int, height: Int) raises:
+    """Refuse an image whose size is not positive.
+
+    Args:
+        width: The width, in pixels.
+        height: The height, in pixels.
+
+    Returns:
+        Nothing. The call returns when both sizes are positive.
+
+    Raises:
+        Error: If the width or the height is not positive.
+    """
+    if not positive_extent(width, height):
+        raise Error("Framebuffer dimensions must be positive")
+
+
 def pixel_slot(x: Int, y: Int, width: Int, height: Int) raises -> Int:
     """Return the index of pixel `(x, y)` in a row-major image.
 
@@ -857,8 +874,7 @@ struct Framebuffer(Movable):
 
     def __init__(out self, width: Int, height: Int, clear: Color) raises:
         """Create a buffer of the given size, filled with `clear`."""
-        if not positive_extent(width, height):
-            raise Error("Framebuffer dimensions must be positive")
+        require_framebuffer_size(width, height)
         self.width = width
         self.height = height
         self.pixels = List[UInt8](length=width * height * Self.CHANNELS, fill=0)
@@ -891,8 +907,7 @@ struct Framebuffer(Movable):
             Error: If the dimensions are not positive, or the buffer length
                 disagrees with them.
         """
-        if not positive_extent(width, height):
-            raise Error("Framebuffer dimensions must be positive")
+        require_framebuffer_size(width, height)
         if len(pixels) != width * height * Self.CHANNELS:
             raise Error("Pixel buffer length does not match the dimensions")
         self.width = width
@@ -928,8 +943,7 @@ struct Framebuffer(Movable):
             Error: If the dimensions are not positive, or either buffer's
                 length disagrees with them.
         """
-        if not positive_extent(width, height):
-            raise Error("Framebuffer dimensions must be positive")
+        require_framebuffer_size(width, height)
         if len(pixels) != width * height * Self.CHANNELS:
             raise Error("Pixel buffer length does not match the dimensions")
         if len(depth) != width * height:
