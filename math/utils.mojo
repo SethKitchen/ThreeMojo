@@ -186,6 +186,20 @@ def js_round(value: Float64) -> Float64:
     return whole + 1 if value - whole >= 0.5 else whole
 
 
+def nearest_distance(value: Float64) -> Float64:
+    """Return how far `value` lies from the nearest whole number.
+
+    The answer is zero at a whole number and one half halfway between.
+
+    Args:
+        value: The number.
+
+    Returns:
+        The distance, from zero to one half.
+    """
+    return abs(value - floor(value + 0.5))
+
+
 def glsl_mod(x: Float32, y: Float32) -> Float32:
     """Return GLSL's `mod`: `x` minus `y` times the floor of their ratio.
 

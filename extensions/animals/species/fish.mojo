@@ -61,6 +61,7 @@ from extensions.sdf.vector import (
 )
 from extensions.animals.warp import girth_warp, scale_about_warp
 from math.norm import squared_length2
+from math.utils import nearest_distance
 from std.math import cos, exp, floor, pi, pow, sin, sqrt
 
 # The fish's head origin moves with the variant, so the eye is placed
@@ -1573,7 +1574,7 @@ def _paint_fin(
         c, mix3(c, pal.get("back"), 0.4), smoothstep(0.5, 0.0, along) * 0.5
     )
     # The fin rays: faint darker lines between the clear membrane.
-    var ray_line = abs(rc.phase - floor(rc.phase + 0.5))
+    var ray_line = nearest_distance(rc.phase)
     c = c * (0.9 + 0.12 * smoothstep(0.0, 0.35, ray_line))
     if key == TROUT:
         var low_fin = tag == "pelvic" or tag == "anal"

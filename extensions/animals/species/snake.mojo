@@ -54,6 +54,7 @@ from extensions.sdf.vector import (
 )
 from math.norm import squared_length2
 from math.sine import fraction
+from math.utils import nearest_distance
 from std.math import atan2, floor, sin, sqrt
 from extensions.sdf.distance import rect_distance
 
@@ -1402,7 +1403,7 @@ def snake_paint(
             var lu = (p.z / hl - 0.12) / 0.11
             var labial = abs(p.x) > 0.3 * w and lu >= 0.0 and lu <= 8.0
             if labial:
-                var f = abs(lu - floor(lu + 0.5))
+                var f = nearest_distance(lu)
                 mk = min(mk, f * 0.11 * hl - 0.00008 * kh)
         # The palate, well inside the lips.
         var palate = (
