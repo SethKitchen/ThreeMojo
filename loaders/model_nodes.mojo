@@ -4,7 +4,8 @@
 # See LICENSE, LICENSE-COMMERCIAL.md and THIRD-PARTY-NOTICES.md.
 
 """What the Collada and FBX loaders share: a node set from a matrix, a
-color read as authored, and a texture read from an image file.
+color read as authored, a texture read from an image file, and a
+default material remembered by name.
 
 Both formats describe a node's transform as a matrix, one built from a
 list of steps. three.js keeps the matrix and splits it into a position,
@@ -22,7 +23,9 @@ limits, and explicit zero and nonfinite rules.
 """
 
 from math.norm import length3, normalized3, _ordinary_squared
+from core.assets import Assets
 from core.object3d import Object3D
+from materials.material import Material, MaterialId
 from loaders.gltf import decode_image
 from math.matrix4 import Matrix4
 from math.quaternion import Quaternion
@@ -171,3 +174,25 @@ def texture_from_file(
             `decode_image` reads.
     """
     return texture_from_bytes(Path(path).read_bytes(), space, wrap, alpha)
+
+
+def remember_material(
+    mut defaults: Dict[String, MaterialId],
+    key: String,
+    material: Material,
+    mut assets: Assets,
+) -> MaterialId:
+    """Return the material stored for `key`, making it the first time.
+
+    Args:
+        defaults: The names already made.
+        key: The name.
+        material: The material to store the first time.
+        assets: The scene's materials.
+
+    Returns:
+        The stored id.
+    """
+    if key not in defaults:
+        defaults[key] = assets.materials.add(material)
+    return defaults.get(key, MaterialId(0))

@@ -9,8 +9,8 @@ Each example builds its own scene. This file reads the path from the
 first argument, turns a node, and stores the frames. A full circle is
 one turn divided across the frames. An example that built its own frames
 can write them here. It can also copy one tile into a sheet, light a
-scene and spin it, hang a part on a turning node, or write a third
-of a turn.
+scene and spin it, hang a part on a turning node, stand a body on the
+floor, or write a third of a turn.
 """
 
 from cameras.perspective_camera import PerspectiveCamera
@@ -56,6 +56,28 @@ def hang_centered(
     var holder = Object3D()
     holder.set_position(-center.x, -center.y, -center.z)
     return (pivot_id, scene.attach(holder^, pivot_id))
+
+
+def stand_on_floor(
+    mut scene: Scene, parent: NodeId, x: Float32, ground: Float32
+) raises -> NodeId:
+    """Return a node that stands a body at `x` with its soles on the floor.
+
+    Args:
+        scene: The scene that receives the node.
+        parent: The parent that turns the body.
+        x: Position along the row, in meters.
+        ground: Height of the hip joint centers above the soles.
+
+    Returns:
+        The body's node.
+
+    Raises:
+        Error: If the scene refuses the node.
+    """
+    var holder = Object3D()
+    holder.set_position(x, ground, 0)
+    return scene.attach(holder^, parent)
 
 
 def example_destination(default_name: String) -> String:
