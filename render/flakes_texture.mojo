@@ -21,6 +21,7 @@ pixel moves toward the disc's color by that share. A canvas keeps bytes,
 so each channel is rounded after each disc.
 """
 
+from math.norm import squared_length2
 from math.utils import SeededRandom
 from render.srgb import LINEAR
 from render.texture import BILINEAR, REPEAT, Texture
@@ -49,7 +50,7 @@ def _coverage(
     of a pixel, is measured whole."""
     var dx = Float64(x) + 0.5 - center_x
     var dy = Float64(y) + 0.5 - center_y
-    var apart = sqrt(dx * dx + dy * dy)
+    var apart = sqrt(squared_length2[DType.float64](dx, dy))
     if apart + _REACH <= radius:
         return 1
     if apart - _REACH > radius:

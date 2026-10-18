@@ -26,6 +26,7 @@ The pass runs on the host. It reads the depth and the normals that
 `postprocessing.screen_space.DepthView` reads for SSAO.
 """
 
+from math.norm import squared_length2
 from math.noise import SimplexNoise
 from math.utils import SeededRandom, clamp
 from math.cross import cross_vectors
@@ -237,7 +238,7 @@ def gtao_noise(size: Int = GTAO_NOISE_SIZE) -> List[FloatColor]:
         var angle = 2 * pi * Float64(square[index]) / Float64(count)
         var x = cos(angle)
         var y = sin(angle)
-        var length = sqrt(x * x + y * y)
+        var length = sqrt(squared_length2[DType.float64](x, y))
         texels.append(
             FloatColor(
                 _byte((x / length * 0.5 + 0.5) * 255),

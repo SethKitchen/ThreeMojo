@@ -53,7 +53,13 @@ limits, and explicit zero and nonfinite rules.
 
 from math.norm import normalized_difference2
 
-from math.norm import length3, normalized2, normalized3, _ordinary_squared
+from math.norm import (
+    length3,
+    normalized2,
+    normalized3,
+    _ordinary_squared,
+    squared_length2,
+)
 from cameras.camera import Camera
 from core.assets import Assets
 from core.background import COLOR_BACKGROUND
@@ -258,7 +264,7 @@ def _expand(mut a: Vec, mut b: Vec, pixels: Float64):
     """Push two corners apart along their edge, three.js's `expand`."""
     var x = b[0] - a[0]
     var y = b[1] - a[1]
-    var det = x * x + y * y
+    var det = squared_length2[DType.float64](x, y)
     if _ordinary_squared(det):
         var idet = pixels / sqrt(det)
         x *= idet
