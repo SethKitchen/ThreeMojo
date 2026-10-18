@@ -27,6 +27,7 @@ from geometries.surface import (
 )
 from core.user_data import UserData
 from math.curve_checks import require_at_least_one
+from math.utils import clamp
 from math.norm import squared_length3
 from std.math import cos, pi, sin, sqrt
 from units.si import Length, METER
@@ -113,7 +114,7 @@ def capsule(
             profile_radius = r * cos(angle)
             normal_y = r * sin(angle)
             arc = cap_arc + height + progress * cap_arc
-        var v = max(Float64(0), min(Float64(1), arc / total))
+        var v = clamp(arc / total, Float64(0), Float64(1))
         # The poles' vertices sit half a step round, as three.js's do.
         var u_offset = Float64(0)
         if iy == 0:

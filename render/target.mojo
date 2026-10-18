@@ -292,7 +292,7 @@ def stored(value: Float32, type: TargetType) -> Float32:
         var held = clamp(value, 0, 1)
         return Float32(Int(held * 255 + 0.5)) / 255
     if type == HALF_FLOAT_TARGET:
-        var held = max(-HALF_MAX, min(HALF_MAX, value))
+        var held = clamp(value, -HALF_MAX, HALF_MAX)
         return held.cast[DType.float16]().cast[DType.float32]()
     return value
 

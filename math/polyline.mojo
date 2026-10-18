@@ -12,7 +12,7 @@ can hold its length between two bounds.
 
 from math.norm import _ordinary_squared
 from math.utils import clamp
-from std.math import acos, max, min, pi, sqrt
+from std.math import acos, pi, sqrt
 from units.si import Angle, RADIAN
 
 
@@ -142,7 +142,7 @@ def clamp_to_length[
         high: The longest.
     """
     var length = value.length()
-    var limit = max(low, min(high, length))
+    var limit = clamp(length, low, high)
     if _ordinary_squared(value.length_sq()):
         value = value / length * limit
         return

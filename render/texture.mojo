@@ -2415,7 +2415,7 @@ def anisotropic_footprint(
     # guard has a reachable second side. They are here against a rounding
     # that could put `ceil` one over the cap, which must not happen:
     # `Footprint.validate` refuses more taps than the cap allows.
-    var taps = max(1, min(Int(ceil(major / effective_minor)), allowed))
+    var taps = clamp(Int(ceil(major / effective_minor)), 1, allowed)
     if taps == 1:
         # One tap is the trilinear read, and the trilinear read of a round
         # footprint is the level the longer derivative wants: the same

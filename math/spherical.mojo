@@ -75,7 +75,7 @@ struct Spherical(ImplicitlyCopyable):
         """Keep `phi` a millionth of a radian away from each pole, where
         the azimuth is undefined."""
         var phi = self.phi.to(RADIAN)
-        phi = max(POLE_MARGIN, min(Float32(pi) - POLE_MARGIN, phi))
+        phi = clamp(phi, POLE_MARGIN, Float32(pi) - POLE_MARGIN)
         self.phi = Angle(phi, RADIAN)
 
 

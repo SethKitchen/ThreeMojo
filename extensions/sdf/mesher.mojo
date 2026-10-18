@@ -26,7 +26,7 @@ from extensions.sdf.vector import (
     lerp,
 )
 from math.norm import squared_length3
-from math.utils import max3, min3
+from math.utils import clamp, max3, min3
 from render.tasks import TaskGroup
 from std.math import ceil, isfinite, sqrt
 from std.sys import num_logical_cores, size_of
@@ -516,7 +516,7 @@ def _mesh_part(
     _ = _checked_count(count, 3 * size_of[Float32]())
     out.positions = List[Float32](length=count * 3, fill=0.0)
     out.normals = List[Float32](length=count * 3, fill=0.0)
-    var tasks = max(1, min(threads, count))
+    var tasks = clamp(threads, 1, count)
     var placers = TaskGroup()
     for task in range(tasks):  # pragma: no branch
         placers.create_task(
@@ -648,7 +648,7 @@ def _sample_blocks(
     var count = len(grid.active) - first
     for _ in range(count * per):
         grid.samples.append(UNSAMPLED)
-    var tasks = max(1, min(threads, count))
+    var tasks = clamp(threads, 1, count)
     var samplers = TaskGroup()
     for task in range(tasks):  # pragma: no branch
         samplers.create_task(

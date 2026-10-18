@@ -624,7 +624,7 @@ def sample_mass(
     )
     var blocks = grid.bx * grid.by * grid.bz
     var threads = workers if workers > 0 else num_logical_cores()
-    var tasks = max(1, min(threads, blocks))
+    var tasks = clamp(threads, 1, blocks)
     var bones = len(animal.rig.bones)
     var tallies = List[InertiaTally](capacity=tasks * bones)
     for _ in range(tasks * bones):  # pragma: no branch

@@ -48,6 +48,7 @@ reader past the end of its bytes reads zeros, as Binomial's does.
 """
 
 from core.binary import copy_bytes, little_endian_u16, little_endian_u32
+from math.utils import clamp
 
 # The largest Huffman code and the size of the code-length alphabet.
 comptime MAX_CODE_BITS = 16
@@ -700,9 +701,7 @@ def _write_block(
         for channel in range(3):  # pragma: no branch
             var five = global_data.endpoints[endpoint * 4 + channel]
             var value = (five << 3) | (five >> 2)
-            colors.append(
-                max(0, min(255, value + intensities[table * 4 + step]))
-            )
+            colors.append(clamp(value + intensities[table * 4 + step], 0, 255))
     for y in range(min(4, height - by * 4)):  # pragma: no branch
         var row = global_data.selectors[selector * 4 + y]
         for x in range(min(4, width - bx * 4)):  # pragma: no branch

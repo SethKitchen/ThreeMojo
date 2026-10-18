@@ -94,7 +94,7 @@ from extensions.sdf.vector import (
     smoothstep,
 )
 from extensions.animals.warp import scale_warp
-from math.utils import max3
+from math.utils import clamp, max3
 from materials.material import LAMBERT, PHONG, Material
 from render.framebuffer import Color
 from render.tasks import TaskGroup
@@ -524,7 +524,7 @@ def bake_occlusion(
             solids.append(i)
     var reach = 16.0 * unit
     var out = List[Float64](length=count, fill=1.0)
-    var tasks = max(1, min(workers, count))
+    var tasks = clamp(workers, 1, count)
     var group = TaskGroup()
     for task in range(tasks):  # pragma: no branch
         group.create_task(

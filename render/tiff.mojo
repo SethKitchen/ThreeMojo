@@ -55,6 +55,7 @@ the next code.
 """
 
 from core.binary import little_endian_u32
+from math.utils import clamp
 from core.extent import positive_extent
 from render.inflate import inflate
 from render.srgb import LINEAR
@@ -769,7 +770,7 @@ def _to_rgba8(ifd: _Ifd, var data: List[UInt8]) raises -> List[UInt8]:
                 var qi = i * 4
                 for c in range(smpls):  # pragma: no branch
                     var v = _float(data, i * smpls + c)
-                    var cv = max(0.0, min(1.0, v)) if not isnan(v) else 0.0
+                    var cv = clamp(v, 0.0, 1.0) if not isnan(v) else 0.0
                     var mapped = Float64(table[Int(trunc(0.5 + cv * 65535))])
                     img[qi + c] = _to_byte(0.5 + mapped * 255)
                 if smpls == 3:

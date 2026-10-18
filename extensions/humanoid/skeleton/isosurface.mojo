@@ -264,9 +264,9 @@ def _sampled_normals(
         var gx = (positions[vertex * 3] - low.x) / grid.dx
         var gy = (positions[vertex * 3 + 1] - low.y) / grid.dy
         var gz = (positions[vertex * 3 + 2] - low.z) / grid.dz
-        gx = max(Float32(0), min(Float32(grid.nx), gx))
-        gy = max(Float32(0), min(Float32(grid.ny), gy))
-        gz = max(Float32(0), min(Float32(grid.nz), gz))
+        gx = clamp(gx, Float32(0), Float32(grid.nx))
+        gy = clamp(gy, Float32(0), Float32(grid.ny))
+        gz = clamp(gz, Float32(0), Float32(grid.nz))
         var ix = min(Int(gx), grid.nx - 1)
         var iy = min(Int(gy), grid.ny - 1)
         var iz = min(Int(gz), grid.nz - 1)

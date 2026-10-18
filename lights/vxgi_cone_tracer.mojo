@@ -420,7 +420,7 @@ def sample_volume(
     Returns:
         The blend.
     """
-    var held = max(Float32(0), min(grid.max_level(), lod))
+    var held = clamp(lod, Float32(0), grid.max_level())
     var base = floor(held)
     var fraction = held - base
     var low = Int(base)

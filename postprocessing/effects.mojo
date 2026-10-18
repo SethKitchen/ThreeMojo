@@ -243,7 +243,7 @@ def bokeh_reach(
     var f = far.value
     var z = (n * f) / ((f - n) * depth - f)
     var factor = (focus.value + z) * aperture
-    return max(-max_blur, min(max_blur, factor))
+    return clamp(factor, -max_blur, max_blur)
 
 
 def bokeh_blur(
@@ -548,8 +548,8 @@ def nearest_texel(
         The texel.
     """
     var top = Float32(size - 1)
-    var column = Int(max(Float32(0), min(top, floor(u * Float32(size)))))
-    var row = Int(max(Float32(0), min(top, floor(v * Float32(size)))))
+    var column = Int(clamp(floor(u * Float32(size)), Float32(0), top))
+    var row = Int(clamp(floor(v * Float32(size)), Float32(0), top))
     return values[unsafe_offset=row * size + column]
 
 

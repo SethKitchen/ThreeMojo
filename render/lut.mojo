@@ -34,9 +34,8 @@ from core.ordinal import ordinal_valid
 from render.color_spaces import srgb_to_linear_three
 from render.framebuffer import FloatColor
 from math.rounded_product import rounded_product
-from math.utils import js_round_int
+from math.utils import clamp, js_round_int
 from math.finite import require_finite
-from std.math import max, min
 
 
 @fieldwise_init
@@ -353,7 +352,7 @@ struct Lut(Copyable, Movable):
             )
         if self.max_v == self.min_v:
             raise Error("A color table's range needs some width")
-        var clamped = max(self.min_v, min(self.max_v, alpha))
+        var clamped = clamp(alpha, self.min_v, self.max_v)
         var at = (clamped - self.min_v) / (self.max_v - self.min_v)
         return self.lut[js_round_int(at * Float64(self.n))]
 

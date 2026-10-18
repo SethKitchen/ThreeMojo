@@ -30,7 +30,7 @@ from generators.utils import (
     meters,
     radians,
 )
-from math.utils import SeededRandom, js_round_int, mix_delta
+from math.utils import SeededRandom, clamp, js_round_int, mix_delta
 from std.math import atan2, cos, floor, pi, pow, sin
 from units.si import (
     Angle,
@@ -258,7 +258,7 @@ def _ring_at(rings: List[TreeRing], t: Float64) raises -> TreeRing:
     `_grow` constructs a new perpendicular normal for every child tube.
     """
     check_finite(t, "A generated child fraction")
-    var f = max(0.0, min(0.999, t)) * Float64(len(rings) - 1)
+    var f = clamp(t, 0.0, 0.999) * Float64(len(rings) - 1)
     var i = Int(floor(f))
     var frac = f - Float64(i)
     ref a = rings[i]
@@ -306,7 +306,7 @@ def _grow(
     # Clamp in floating point before converting to Int. A finite length
     # and step can have a quotient far outside the integer range.
     var sections = js_round_int(
-        max(3.0, min(24.0, length / meters(p.section_length)))
+        clamp(length / meters(p.section_length), 3.0, 24.0)
     )
     var radial = max(3, p.radial_segments - level)
     var step = length / Float64(sections)

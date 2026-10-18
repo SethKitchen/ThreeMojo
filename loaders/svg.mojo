@@ -1030,7 +1030,7 @@ struct _Parser(Movable):
 
     def _clamp(self, value: String) raises -> Float64:
         """Return a number clamped to zero through one."""
-        return max(Float64(0), min(Float64(1), self.length(value)))
+        return clamp(self.length(value), Float64(0), Float64(1))
 
     def _merge(self, mut into: CssRule, selector: String):
         """Add the declarations of every rule for a selector."""
