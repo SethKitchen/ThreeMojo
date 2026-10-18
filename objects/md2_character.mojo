@@ -132,6 +132,48 @@ def _wear(mut scene: Scene, part: Md2Part, wireframe: Bool):
     ].material = part.wireframe if wireframe else part.textured
 
 
+def _set_wireframe(
+    mut scene: Scene,
+    body: Md2Part,
+    weapon: Int,
+    weapons: List[Md2Part],
+    wireframe: Bool,
+):
+    """Give the body and the shown weapon their wireframe or texture."""
+    _wear(scene, body, wireframe)
+    if weapon >= 0:
+        _wear(scene, weapons[weapon], wireframe)
+
+
+def _apply_skin(
+    scene: Scene,
+    mut assets: Assets,
+    body: Md2Part,
+    skins: List[TextureId],
+    index: Int,
+) raises -> Bool:
+    """Put a skin on the body unless it is a wireframe.
+
+    Args:
+        scene: The scene the body is in.
+        assets: Where the materials are.
+        body: The body part.
+        skins: The body's skins.
+        index: Which skin. Past the end is no skin.
+
+    Returns:
+        True when the skin is applied.
+
+    Raises:
+        Error: If the body's material is not in the assets.
+    """
+    var worn = scene.meshes[body.mesh].material
+    if assets.materials.get(worn).wireframe:
+        return False
+    assets.materials.materials[worn.value].map = _skin(skins, index)
+    return True
+
+
 struct MD2Character(Movable):
     """A character whose clips a mixer plays, three.js's `MD2Character`."""
 
@@ -258,9 +300,7 @@ struct MD2Character(Movable):
             scene: The scene the parts are in.
             wireframe: True for the wireframes.
         """
-        _wear(scene, self.body, wireframe)
-        if self.weapon >= 0:
-            _wear(scene, self.weapons[self.weapon], wireframe)
+        _set_wireframe(scene, self.body, self.weapon, self.weapons, wireframe)
 
     def set_skin(self, scene: Scene, mut assets: Assets, index: Int) raises:
         """Put a skin on the body, three.js's `setSkin`. Nothing changes
@@ -274,12 +314,7 @@ struct MD2Character(Movable):
         Raises:
             Error: If the body's material is not in the assets.
         """
-        var worn = scene.meshes[self.body.mesh].material
-        if assets.materials.get(worn).wireframe:
-            return
-        assets.materials.materials[worn.value].map = _skin(
-            self.skins_body, index
-        )
+        _ = _apply_skin(scene, assets, self.body, self.skins_body, index)
 
     def set_weapon(mut self, mut scene: Scene, index: Int) raises:
         """Show one weapon and hide the rest, three.js's `setWeapon`, and
@@ -637,9 +672,7 @@ struct MD2CharacterComplex(Movable):
             scene: The scene the parts are in.
             wireframe: True for the wireframes.
         """
-        _wear(scene, self.body, wireframe)
-        if self.weapon >= 0:
-            _wear(scene, self.weapons[self.weapon], wireframe)
+        _set_wireframe(scene, self.body, self.weapon, self.weapons, wireframe)
 
     def set_skin(mut self, scene: Scene, mut assets: Assets, index: Int) raises:
         """Put a skin on the body, three.js's `setSkin`. Nothing changes
@@ -653,13 +686,8 @@ struct MD2CharacterComplex(Movable):
         Raises:
             Error: If the body's material is not in the assets.
         """
-        var worn = scene.meshes[self.body.mesh].material
-        if assets.materials.get(worn).wireframe:
-            return
-        assets.materials.materials[worn.value].map = _skin(
-            self.skins_body, index
-        )
-        self.current_skin = index
+        if _apply_skin(scene, assets, self.body, self.skins_body, index):
+            self.current_skin = index
 
     def set_weapon(mut self, mut scene: Scene, index: Int) raises:
         """Show one weapon and hide the rest, three.js's `setWeapon`, and
