@@ -117,7 +117,7 @@ from render.texture import (
     anisotropic_footprint,
     mix_straight,
 )
-from render.screen_coord import pixel_frag_coord
+from render.screen_coord import pixel_frag_coord, screen_size_coord
 from render.texture_store import NO_TEXTURE, TextureId, TextureStore
 from materials.nodes import (
     AO_NODE,
@@ -5842,9 +5842,7 @@ struct _HostNodes[origin: Origin[mut=False]](Copyable, NodeSource):
 
     def screen_size(self) -> SIMD[DType.float32, 4]:
         """Return the target's width and height in pixels."""
-        return SIMD[DType.float32, 4](
-            Float32(self.width), Float32(self.height), 0, 0
-        )
+        return screen_size_coord(self.width, self.height)
 
     def behind(self, u: Float32, v: Float32) -> FloatColor:
         """Return the opaque scene behind at a place on the target: the
@@ -5997,9 +5995,7 @@ struct _HostPointNodes[origin: Origin[mut=False]](NodeSource):
 
     def screen_size(self) -> SIMD[DType.float32, 4]:
         """Return the target's width and height in pixels."""
-        return SIMD[DType.float32, 4](
-            Float32(self.width), Float32(self.height), 0, 0
-        )
+        return screen_size_coord(self.width, self.height)
 
     def point_coord(self, context: NodeContext) -> SIMD[DType.float32, 4]:
         """Return where the pixel is in the point, GLSL's `gl_PointCoord`:
@@ -6168,9 +6164,7 @@ struct _HostLineNodes[origin: Origin[mut=False]](NodeSource):
 
     def screen_size(self) -> SIMD[DType.float32, 4]:
         """Return the target's width and height in pixels."""
-        return SIMD[DType.float32, 4](
-            Float32(self.width), Float32(self.height), 0, 0
-        )
+        return screen_size_coord(self.width, self.height)
 
     def corner(self, context: NodeContext) -> NodeInputs:
         """Return one end's coordinates, world position, normal, color and

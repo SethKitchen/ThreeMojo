@@ -5,7 +5,7 @@
 
 """Where a fragment is, for the CPU and GPU node evaluators.
 
-Both read GLSL's `gl_FragCoord` from the same pixel step.
+Both read GLSL's `gl_FragCoord` and the screen size from the same step.
 """
 
 from materials.nodes import AT_RIGHT, AT_UP, NodeContext
@@ -39,3 +39,16 @@ def pixel_frag_coord(
         depth * 0.5 + 0.5,
         1,
     )
+
+
+def screen_size_coord(width: Int, height: Int) -> SIMD[DType.float32, 4]:
+    """Return the target size in pixels.
+
+    Args:
+        width: The target width in pixels.
+        height: The target height in pixels.
+
+    Returns:
+        The width and the height, then two zeros.
+    """
+    return SIMD[DType.float32, 4](Float32(width), Float32(height), 0, 0)

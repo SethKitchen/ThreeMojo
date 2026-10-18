@@ -291,7 +291,7 @@ from render.tonemap import (
     tone_map,
     tone_map_with,
 )
-from render.screen_coord import pixel_frag_coord
+from render.screen_coord import pixel_frag_coord, screen_size_coord
 from materials.nodes import (
     AO_NODE,
     BACKDROP_ALPHA_NODE,
@@ -5516,9 +5516,7 @@ struct _DeviceNodes[origin: Origin[mut=True]](Copyable, NodeSource):
 
     def screen_size(self) -> SIMD[DType.float32, 4]:
         """Return the target's width and height in pixels."""
-        return SIMD[DType.float32, 4](
-            Float32(self.width), Float32(self.height), 0, 0
-        )
+        return screen_size_coord(self.width, self.height)
 
     def behind(self, u: Float32, v: Float32) -> FloatColor:
         """Return the opaque scene behind at a place on the target, as
@@ -5875,9 +5873,7 @@ struct _DeviceLineNodes[origin: Origin[mut=True]](NodeSource):
 
     def screen_size(self) -> SIMD[DType.float32, 4]:
         """Return the target's width and height in pixels."""
-        return SIMD[DType.float32, 4](
-            Float32(self.width), Float32(self.height), 0, 0
-        )
+        return screen_size_coord(self.width, self.height)
 
     def corner(self, context: NodeContext) -> NodeInputs:
         """Return one end's coordinates, world position, normal, color and
@@ -6073,9 +6069,7 @@ struct _DevicePointNodes[origin: Origin[mut=True]](NodeSource):
 
     def screen_size(self) -> SIMD[DType.float32, 4]:
         """Return the target's width and height in pixels."""
-        return SIMD[DType.float32, 4](
-            Float32(self.width), Float32(self.height), 0, 0
-        )
+        return screen_size_coord(self.width, self.height)
 
     def point_coord(self, context: NodeContext) -> SIMD[DType.float32, 4]:
         """Return where the pixel is in the point, GLSL's `gl_PointCoord`,
