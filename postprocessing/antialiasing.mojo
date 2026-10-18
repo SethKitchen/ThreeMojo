@@ -81,11 +81,6 @@ def fxaa_luminance(color: FloatColor) -> Float32:
     return color.r * 0.3 + color.g * 0.59 + color.b * 0.11
 
 
-def _luma(source: LightView, u: Float32, v: Float32) -> Float32:
-    """Return `SampleLuminance`: the luminance of a bilinear read."""
-    return fxaa_luminance(source.sample(u, v))
-
-
 def fxaa_pixel(source: LightView, u: Float32, v: Float32) -> FloatColor:
     """Return `FXAAShader`'s `ApplyFXAA` at one texture coordinate.
 
@@ -100,15 +95,15 @@ def fxaa_pixel(source: LightView, u: Float32, v: Float32) -> FloatColor:
     var du = 1 / Float32(source.width)
     var dv = 1 / Float32(source.height)
     # `SampleLuminanceNeighborhood`. North is up, where `v` grows.
-    var m = _luma(source, u, v)
-    var n = _luma(source, u, v + dv)
-    var e = _luma(source, u + du, v)
-    var s = _luma(source, u, v - dv)
-    var w = _luma(source, u - du, v)
-    var ne = _luma(source, u + du, v + dv)
-    var nw = _luma(source, u - du, v + dv)
-    var se = _luma(source, u + du, v - dv)
-    var sw = _luma(source, u - du, v - dv)
+    var m = fxaa_luminance(source.sample(u, v))
+    var n = fxaa_luminance(source.sample(u, v + dv))
+    var e = fxaa_luminance(source.sample(u + du, v))
+    var s = fxaa_luminance(source.sample(u, v - dv))
+    var w = fxaa_luminance(source.sample(u - du, v))
+    var ne = fxaa_luminance(source.sample(u + du, v + dv))
+    var nw = fxaa_luminance(source.sample(u - du, v + dv))
+    var se = fxaa_luminance(source.sample(u + du, v - dv))
+    var sw = fxaa_luminance(source.sample(u - du, v - dv))
     var highest = max(max(max(max(n, e), s), w), m)
     var lowest = min(min(min(min(n, e), s), w), m)
     var contrast = highest - lowest
@@ -159,13 +154,13 @@ def fxaa_pixel(source: LightView, u: Float32, v: Float32) -> FloatColor:
     var gradient_threshold = gradient * 0.25
     var pu = edge_u + step_u * FXAA_EDGE_STEPS[0]
     var pv = edge_v + step_v * FXAA_EDGE_STEPS[0]
-    var p_delta = _luma(source, pu, pv) - edge_luminance
+    var p_delta = fxaa_luminance(source.sample(pu, pv)) - edge_luminance
     var p_at_end = abs(p_delta) >= gradient_threshold
     var index = 1
     while index < FXAA_EDGE_STEP_COUNT and not p_at_end:
         pu += step_u * FXAA_EDGE_STEPS[index]
         pv += step_v * FXAA_EDGE_STEPS[index]
-        p_delta = _luma(source, pu, pv) - edge_luminance
+        p_delta = fxaa_luminance(source.sample(pu, pv)) - edge_luminance
         p_at_end = abs(p_delta) >= gradient_threshold
         index += 1
     if not p_at_end:
@@ -173,13 +168,13 @@ def fxaa_pixel(source: LightView, u: Float32, v: Float32) -> FloatColor:
         pv += step_v * FXAA_EDGE_GUESS
     var nu = edge_u - step_u * FXAA_EDGE_STEPS[0]
     var nv = edge_v - step_v * FXAA_EDGE_STEPS[0]
-    var n_delta = _luma(source, nu, nv) - edge_luminance
+    var n_delta = fxaa_luminance(source.sample(nu, nv)) - edge_luminance
     var n_at_end = abs(n_delta) >= gradient_threshold
     index = 1
     while index < FXAA_EDGE_STEP_COUNT and not n_at_end:
         nu -= step_u * FXAA_EDGE_STEPS[index]
         nv -= step_v * FXAA_EDGE_STEPS[index]
-        n_delta = _luma(source, nu, nv) - edge_luminance
+        n_delta = fxaa_luminance(source.sample(nu, nv)) - edge_luminance
         n_at_end = abs(n_delta) >= gradient_threshold
         index += 1
     if not n_at_end:

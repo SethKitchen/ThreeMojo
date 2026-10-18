@@ -177,19 +177,6 @@ def _float(bytes: List[UInt8], at: Int, face: Int) raises -> Float32:
     return value
 
 
-def _channel(value: Int, scale: Float32) -> Float32:
-    """Return one sRGB channel as a linear one.
-
-    Args:
-        value: The channel as stored.
-        scale: The largest value it can have.
-
-    Returns:
-        The channel, from zero to one, in linear light.
-    """
-    return srgb_to_linear(Float32(value) / scale)
-
-
 def _parse_binary(bytes: List[UInt8]) raises -> StlModel:
     """Read a binary STL file.
 
@@ -232,9 +219,9 @@ def _parse_binary(bytes: List[UInt8]) raises -> StlModel:
     for at in range(_HEADER - 10):  # pragma: no branch
         if bytes_match(Span(bytes), at, len(bytes), "COLOR="):
             colored = True
-            default_r = _channel(Int(bytes[at + 6]), 255)
-            default_g = _channel(Int(bytes[at + 7]), 255)
-            default_b = _channel(Int(bytes[at + 8]), 255)
+            default_r = srgb_to_linear(Float32(bytes[at + 6]) / Float32(255))
+            default_g = srgb_to_linear(Float32(bytes[at + 7]) / Float32(255))
+            default_b = srgb_to_linear(Float32(bytes[at + 8]) / Float32(255))
             alpha = Float32(Int(bytes[at + 9])) / 255
     var positions = List[Float32](capacity=faces * 9)
     var normals = List[Float32](capacity=faces * 9)
@@ -249,9 +236,9 @@ def _parse_binary(bytes: List[UInt8]) raises -> StlModel:
         var b = default_b
         var packed = Int(bytes[start + 48]) | (Int(bytes[start + 49]) << 8)
         if packed & 0x8000 == 0:
-            r = _channel(packed & 0x1F, 31)
-            g = _channel((packed >> 5) & 0x1F, 31)
-            b = _channel((packed >> 10) & 0x1F, 31)
+            r = srgb_to_linear(Float32(packed & 0x1F) / Float32(31))
+            g = srgb_to_linear(Float32((packed >> 5) & 0x1F) / Float32(31))
+            b = srgb_to_linear(Float32((packed >> 10) & 0x1F) / Float32(31))
         # Three corners and three axes: both loops always run.
         for corner in range(1, 4):  # pragma: no branch
             for axis in range(3):  # pragma: no branch

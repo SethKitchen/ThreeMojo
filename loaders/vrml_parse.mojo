@@ -36,7 +36,7 @@ refused with the place where it happened. three.js logs chevrotain's
 errors and then throws.
 """
 
-from loaders.bytes import ascii_digit, bytes_match, hex_digit_value
+from loaders.bytes import ascii_digit, bytes_match, is_hex_digit
 from loaders.js_number import js_parse_float
 from math.finite import require_finite
 
@@ -185,11 +185,6 @@ struct VrmlToken(Copyable, Movable):
         self.kind = kind
         self.image = image^
         self.offset = offset
-
-
-def _is_hex_digit(byte: UInt8) -> Bool:
-    """Return True for `[0-9a-fA-F]`."""
-    return hex_digit_value(Int(byte)) >= 0
 
 
 def _excluded(byte: UInt8) -> Bool:
@@ -359,7 +354,7 @@ def _escape_length(bytes: Span[UInt8, _], at: Int) -> Int:
         return 0
     # Four hex digits. The loop always runs.
     for k in range(2, 6):  # pragma: no branch
-        var hex = at + k < len(bytes) and _is_hex_digit(bytes[at + k])
+        var hex = at + k < len(bytes) and is_hex_digit(Int(bytes[at + k]))
         if not hex:
             return 0
     return 6
@@ -379,12 +374,12 @@ def _hex_length(bytes: Span[UInt8, _], at: Int) -> Int:
         bytes[at] == 0x30
         and at + 2 < len(bytes)
         and (bytes[at + 1] | 32) == 0x78
-        and _is_hex_digit(bytes[at + 2])
+        and is_hex_digit(Int(bytes[at + 2]))
     )
     if not prefix:
         return 0
     var end = at + 2
-    while end < len(bytes) and _is_hex_digit(bytes[end]):
+    while end < len(bytes) and is_hex_digit(Int(bytes[end])):
         end += 1
     return end - at
 
