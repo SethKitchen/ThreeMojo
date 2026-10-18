@@ -433,10 +433,10 @@ def fin_ray_coords(rays: List[Float64], qu: Float64, qv: Float64) -> RayCoords:
             prev = si
     var i0 = min(n - 2, Int(floor(phase)))
     var f = phase - Float64(i0)
-    var bu = rays[i0 * 4] + (rays[i0 * 4 + 4] - rays[i0 * 4]) * f
-    var bv = rays[i0 * 4 + 1] + (rays[i0 * 4 + 5] - rays[i0 * 4 + 1]) * f
-    var tu = rays[i0 * 4 + 2] + (rays[i0 * 4 + 6] - rays[i0 * 4 + 2]) * f
-    var tv = rays[i0 * 4 + 3] + (rays[i0 * 4 + 7] - rays[i0 * 4 + 3]) * f
+    var bu = mix(rays[i0 * 4], rays[i0 * 4 + 4], f)
+    var bv = mix(rays[i0 * 4 + 1], rays[i0 * 4 + 5], f)
+    var tu = mix(rays[i0 * 4 + 2], rays[i0 * 4 + 6], f)
+    var tv = mix(rays[i0 * 4 + 3], rays[i0 * 4 + 7], f)
     var dx = tu - bu
     var dy = tv - bv
     var l2 = squared_length2[DType.float64](dx, dy)

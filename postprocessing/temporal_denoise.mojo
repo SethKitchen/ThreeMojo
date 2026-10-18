@@ -49,6 +49,7 @@ from math.vector2 import Vector2
 from math.utils import mix_delta
 from math.vector3 import Vector3, mix_delta3
 from postprocessing.display_nodes import exp_f, luminance_of
+from postprocessing.traa import variance_gamma
 from postprocessing.sampling import LightView
 from postprocessing.screen_space import DepthView
 from render.framebuffer import FloatColor
@@ -675,7 +676,7 @@ def temporal_reproject_pixel(
     var a = max(history.a, TSL_EPSILON)
     var stretch = stretch_confidence(inputs, x, y)
     confidence *= stretch * stretch
-    var gamma = 0.5 + 0.5 * (1 - motion) * (1 - motion)
+    var gamma = variance_gamma(motion)
     # `applyVarianceClipping`.
     var low = mean - deviation * gamma
     var high = mean + deviation * gamma

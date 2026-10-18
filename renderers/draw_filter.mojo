@@ -115,6 +115,19 @@ def kept_draws(
     return kept^
 
 
+def _from_center(value: Float32, half: Float32) -> Float32:
+    """Return one coordinate rounded to a whole pixel from the center.
+
+    Args:
+        value: The coordinate, in pixels.
+        half: Half the screen size on that axis, in pixels.
+
+    Returns:
+        The rounded coordinate.
+    """
+    return floor(value - half + 0.5) + half
+
+
 def snap_to_pixels(mut corners: List[RasterVertex], width: Int, height: Int):
     """Round each corner's place on the screen to a whole pixel from the
     screen's center: three.js's `RetroPassNode` vertex node, which rounds
@@ -128,8 +141,8 @@ def snap_to_pixels(mut corners: List[RasterVertex], width: Int, height: Int):
     var half_w = Float32(width) * 0.5
     var half_h = Float32(height) * 0.5
     for at in range(len(corners)):
-        corners[at].x = floor(corners[at].x - half_w + 0.5) + half_w
-        corners[at].y = floor(corners[at].y - half_h + 0.5) + half_h
+        corners[at].x = _from_center(corners[at].x, half_w)
+        corners[at].y = _from_center(corners[at].y, half_h)
 
 
 def snap_to_pixels(mut corners: List[Corner], width: Int, height: Int):
@@ -145,5 +158,5 @@ def snap_to_pixels(mut corners: List[Corner], width: Int, height: Int):
     var half_w = Float32(width) * 0.5
     var half_h = Float32(height) * 0.5
     for at in range(len(corners)):
-        corners[at].x = floor(corners[at].x - half_w + 0.5) + half_w
-        corners[at].y = floor(corners[at].y - half_h + 0.5) + half_h
+        corners[at].x = _from_center(corners[at].x, half_w)
+        corners[at].y = _from_center(corners[at].y, half_h)
