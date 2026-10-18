@@ -342,7 +342,7 @@ struct SculptorMesh(Movable):
             if referenced[i] == 0:
                 continue
             var p = position.vector3(i)
-            if not (isfinite(p.x) and isfinite(p.y) and isfinite(p.z)):
+            if not p.is_finite():
                 raise Error("SculptorMesh: Position values must be finite.")
             source[i * 3] = p.x
             source[i * 3 + 1] = p.y

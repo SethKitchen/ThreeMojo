@@ -192,16 +192,9 @@ def light_vector(
     var distance = offset.length()
     if _ordinary_squared(offset.dot(offset)):
         return offset, distance, distance
-    if not (
-        isfinite(target.x)
-        and isfinite(target.y)
-        and isfinite(target.z)
-        and isfinite(origin.x)
-        and isfinite(origin.y)
-        and isfinite(origin.z)
-    ):
+    if not (target.is_finite() and origin.is_finite()):
         return offset, distance, distance
-    if not (isfinite(offset.x) and isfinite(offset.y) and isfinite(offset.z)):
+    if not offset.is_finite():
         # A finite Float32 subtraction can overflow. Halve BEFORE subtracting;
         # the true distance is already known to be unrepresentable.
         offset = target * Float32(0.5) - origin * Float32(0.5)
