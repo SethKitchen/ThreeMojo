@@ -35,6 +35,7 @@ It reports the median, the 95th percentile and the slowest frame of each
 stage. The numbers describe the machine that runs it.
 """
 
+from bench.timing import _percentile, _sorted
 from cameras.perspective_camera import PerspectiveCamera
 from core.assets import Assets
 from core.object3d import Object3D
@@ -80,22 +81,6 @@ struct _Head(DistanceField, ImplicitlyCopyable):
 
     def distance(self, point: Vector3) -> Float32:
         return (point - self.center).length() - self.radius
-
-
-def _sorted(var times: List[Int]) -> List[Int]:
-    for i in range(1, len(times)):
-        var j = i
-        while j > 0 and times[j - 1] > times[j]:
-            times.swap_elements(j - 1, j)
-            j -= 1
-    return times^
-
-
-def _percentile(times: List[Int], fraction: Float64) -> Float64:
-    # Nearest rank on a sorted list.
-    var rank = Int(fraction * Float64(len(times)) + 0.999999) - 1
-    rank = max(0, min(rank, len(times) - 1))
-    return Float64(times[rank]) / 1e6
 
 
 def _report(label: String, var times: List[Int]) -> String:
