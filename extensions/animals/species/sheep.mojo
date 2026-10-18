@@ -36,6 +36,7 @@ from extensions.animals.parts import (
 )
 from extensions.sdf.sculpt import ell_y, cone_or_ball
 from extensions.animals.kit import (
+    fore_reach,
     EyeSpec,
     eye_frame_of,
     aperture_tilt_along,
@@ -1081,12 +1082,7 @@ def sheep_sculpt(mut m: SdfModel, rig: Rig, t: Traits) raises:
     var lk = 1.0 + 0.1 * heavy
     for side in [String("L"), String("R")]:  # pragma: no branch
         var s = 1.0 if side == "L" else -1.0
-        var lat = V3(s, 0, 0)
-        var sc = rig.j("scapTop" + side)
-        var sh = rig.j("shoulder" + side)
-        var e = rig.j("elbow" + side)
-        var w = rig.j("wrist" + side)
-        var mc = rig.j("mcp" + side)
+        var lat, sc, sh, e, w, mc = fore_reach(rig, side, s)
         var cf = rig.j("fcoffin" + side)
         var toe = rig.j("ftoe" + side)
         var scap = rig.bone("scapula" + side)

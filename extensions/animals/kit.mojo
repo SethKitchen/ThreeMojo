@@ -9,6 +9,7 @@ soft masks and the re-seeded random streams.
 The eye functions are procedural-animals' `core/sdf/eyeSocket.js`.
 """
 
+from extensions.animals.rig import Rig
 from extensions.sdf.ids import BoneId
 from extensions.animals.options import AnimalRandom
 from extensions.sdf.distance import almond_distance
@@ -532,3 +533,95 @@ def hashed_stream(seed: Int, add: Int, mul: Int, xor: Int) -> AnimalRandom:
         The stream.
     """
     return stream_of(imul32(seed + add, mul) ^ xor)
+
+
+def fore_reach(
+    rig: Rig, side: String, sign: Float64
+) raises -> Tuple[V3, V3, V3, V3, V3, V3]:
+    """Return one foreleg's lateral axis and its shoulder-to-cannon joints.
+
+    Args:
+        rig: The animal's rig.
+        side: `"L"` or `"R"`.
+        sign: One for the left, minus one for the right.
+
+    Returns:
+        The lateral axis, then the scapular top, shoulder, elbow, wrist
+        and metacarpophalangeal joint.
+
+    Raises:
+        Error: If the rig lacks one of those joints.
+    """
+    return (
+        V3(sign, 0, 0),
+        rig.j("scapTop" + side),
+        rig.j("shoulder" + side),
+        rig.j("elbow" + side),
+        rig.j("wrist" + side),
+        rig.j("mcp" + side),
+    )
+
+
+def digitigrade_fore(
+    rig: Rig, side: String, sign: Float64
+) raises -> Tuple[
+    V3, V3, V3, V3, V3, V3, V3, BoneId, BoneId, BoneId, BoneId, BoneId
+]:
+    """Return the stations of one digitigrade foreleg.
+
+    Args:
+        rig: The animal's rig.
+        side: `"L"` or `"R"`.
+        sign: One for the left, minus one for the right.
+
+    Returns:
+        The reach from `fore_reach`, then the toe joint and the scapula,
+        humerus, radius, metacarpus and front paw bones.
+
+    Raises:
+        Error: If the rig lacks one of those joints or bones.
+    """
+    var lat, sc, sh, e, w, mc = fore_reach(rig, side, sign)
+    return (
+        lat,
+        sc,
+        sh,
+        e,
+        w,
+        mc,
+        rig.j("ftoe" + side),
+        rig.bone("scapula" + side),
+        rig.bone("humerus" + side),
+        rig.bone("radius" + side),
+        rig.bone("metacarpus" + side),
+        rig.bone("fpaw" + side),
+    )
+
+
+def digitigrade_hind(
+    rig: Rig, side: String
+) raises -> Tuple[V3, V3, V3, V3, V3, BoneId, BoneId, BoneId, BoneId]:
+    """Return the stations of one digitigrade hind leg.
+
+    Args:
+        rig: The animal's rig.
+        side: `"L"` or `"R"`.
+
+    Returns:
+        The hip, knee, hock, metatarsophalangeal joint and hind toe, then
+        the femur, tibia, metatarsus and hind paw bones.
+
+    Raises:
+        Error: If the rig lacks one of those joints or bones.
+    """
+    return (
+        rig.j("hip" + side),
+        rig.j("knee" + side),
+        rig.j("hock" + side),
+        rig.j("mtp" + side),
+        rig.j("htoe" + side),
+        rig.bone("femur" + side),
+        rig.bone("tibia" + side),
+        rig.bone("metatarsus" + side),
+        rig.bone("hpaw" + side),
+    )

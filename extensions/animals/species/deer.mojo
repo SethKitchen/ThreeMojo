@@ -33,6 +33,7 @@ from extensions.animals.parts import (
 )
 from extensions.sdf.sculpt import ell_y
 from extensions.animals.kit import (
+    fore_reach,
     EyeSpec,
     eye_frame_of,
     sculpt_eye_socket,
@@ -774,12 +775,7 @@ def deer_sculpt(mut m: SdfModel, rig: Rig, t: Traits) raises:
 
 def _foreleg(mut m: SdfModel, rig: Rig, side: String) raises:
     var s = 1.0 if side == "L" else -1.0
-    var lat = V3(s, 0, 0)
-    var sc = rig.j("scapTop" + side)
-    var sh = rig.j("shoulder" + side)
-    var e = rig.j("elbow" + side)
-    var w = rig.j("wrist" + side)
-    var mc = rig.j("mcp" + side)
+    var lat, sc, sh, e, w, mc = fore_reach(rig, side, s)
     var scap = rig.bone("scapula" + side)
     var hum = rig.bone("humerus" + side)
     var rad = rig.bone("radius" + side)
