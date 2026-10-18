@@ -93,3 +93,72 @@ def _scale_elements[
     """
     for index in range(n * n):  # pragma: no branch
         elements[index] *= factor
+
+
+def append_elements[
+    count: Int
+](mut out: List[Float32], elements: Array[Float32, count]):
+    """Append every stored element, in order.
+
+    `count` is nine or sixteen, so the loop runs.
+
+    Parameters:
+        count: How many elements the matrix stores.
+
+    Args:
+        out: The list that receives the elements.
+        elements: The matrix storage.
+
+    Returns:
+        Nothing. The list grows by `count` numbers.
+
+    Raises:
+        Error: Never.
+    """
+    for index in range(count):  # pragma: no branch
+        out.append(elements[index])
+
+
+def copy_elements[count: Int](elements: Array[Float32, count]) -> List[Float32]:
+    """Return every stored element, in order.
+
+    Parameters:
+        count: How many elements the matrix stores. Nine or sixteen.
+
+    Args:
+        elements: The matrix storage.
+
+    Returns:
+        `count` numbers.
+
+    Raises:
+        Error: Never.
+    """
+    var values = List[Float32]()
+    append_elements(values, elements)
+    return values^
+
+
+def store_elements[
+    count: Int
+](mut dest: List[Float32], at: Int, elements: Array[Float32, count]):
+    """Write every stored element into a list, in order.
+
+    `count` is nine or sixteen, so the loop runs.
+
+    Parameters:
+        count: How many elements the matrix stores.
+
+    Args:
+        dest: The list. It already holds the slots.
+        at: The first slot.
+        elements: The matrix storage.
+
+    Returns:
+        Nothing. `count` slots are replaced.
+
+    Raises:
+        Error: Never.
+    """
+    for index in range(count):  # pragma: no branch
+        dest[at + index] = elements[index]
