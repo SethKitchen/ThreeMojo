@@ -3063,6 +3063,22 @@ def export_gltf(
     return files^
 
 
+def require_one_camera(has_camera: Bool) raises:
+    """Refuse a second camera on one node.
+
+    Args:
+        has_camera: Whether the node already carries a camera.
+
+    Returns:
+        Nothing. The call returns when the node carries no camera.
+
+    Raises:
+        Error: If the node already carries a camera.
+    """
+    if has_camera:
+        raise Error("glTF: a node carries one camera, and two ride one")
+
+
 def _carry(
     scene: Scene,
     cameras: CameraList,
@@ -3115,8 +3131,7 @@ def _carry(
         )
         if slot < 0:
             continue
-        if carried[slot].has_camera():
-            raise Error("glTF: a node carries one camera, and two ride one")
+        require_one_camera(carried[slot].has_camera())
         carried[slot].perspective = which
     for which in range(len(cameras.orthographic)):
         var slot = _written_slot(
@@ -3124,8 +3139,7 @@ def _carry(
         )
         if slot < 0:
             continue
-        if carried[slot].has_camera():
-            raise Error("glTF: a node carries one camera, and two ride one")
+        require_one_camera(carried[slot].has_camera())
         carried[slot].orthographic = which
 
 

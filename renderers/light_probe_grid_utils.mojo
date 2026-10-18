@@ -73,6 +73,22 @@ def fibonacci_direction(index: Int, sample_count: Int) -> Vector3:
     return Vector3(r * cos(phi), z, r * sin(phi))
 
 
+def require_probe_samples(sample_count: Int) raises:
+    """Refuse a probe bake that reads no direction.
+
+    Args:
+        sample_count: How many directions to read.
+
+    Returns:
+        Nothing. The call returns when the count is one or more.
+
+    Raises:
+        Error: If the count is below one.
+    """
+    if sample_count < 1:
+        raise Error("A probe bake reads one direction or more")
+
+
 def project_sh(
     cube: CubeTexture, sample_count: Int
 ) raises -> SphericalHarmonics3:
@@ -92,8 +108,7 @@ def project_sh(
         Error: If the sample count is below one, or the cube is refused by
             `CubeTexture.validate`.
     """
-    if sample_count < 1:
-        raise Error("A probe bake reads one direction or more")
+    require_probe_samples(sample_count)
     cube.validate()
     var sh = SphericalHarmonics3()
     for sample in range(sample_count):  # pragma: no branch
@@ -302,8 +317,7 @@ def bake_light_probe_grid(
         raise Error(
             "A light probe grid bakes every probe when the light bounces"
         )
-    if sample_count < 1:
-        raise Error("A probe bake reads one direction or more")
+    require_probe_samples(sample_count)
     if amount == 0:
         return
     var saved = replace_sun_lights(scene, assets)

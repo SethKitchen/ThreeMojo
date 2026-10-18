@@ -206,6 +206,22 @@ def _round(x: Float64) -> Int:
     return Int(js_round(x))
 
 
+def require_lut_bound(value: Float64) raises:
+    """Refuse a color-table bound that is not finite.
+
+    Args:
+        value: The bound.
+
+    Returns:
+        Nothing. The call returns when the bound is finite.
+
+    Raises:
+        Error: If the bound is not finite.
+    """
+    if not isfinite(value):
+        raise Error("A color table's range must be finite")
+
+
 struct Lut(Copyable, Movable):
     """A color map sampled at evenly spaced points. three.js: `Lut`."""
 
@@ -315,8 +331,7 @@ struct Lut(Copyable, Movable):
         Raises:
             Error: If it is not finite.
         """
-        if not isfinite(value):
-            raise Error("A color table's range must be finite")
+        require_lut_bound(value)
         self.min_v = value
 
     def set_max(mut self, value: Float64) raises:
@@ -328,8 +343,7 @@ struct Lut(Copyable, Movable):
         Raises:
             Error: If it is not finite.
         """
-        if not isfinite(value):
-            raise Error("A color table's range must be finite")
+        require_lut_bound(value)
         self.max_v = value
 
     def get_color(self, alpha: Float64) raises -> FloatColor:

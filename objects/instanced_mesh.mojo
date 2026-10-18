@@ -429,6 +429,38 @@ def _range_fits(start: Int, count: Int, limit: Int) -> Bool:
 comptime NO_LIMIT = Int.MAX
 
 
+def require_batched_geometry(id: GeometryId) raises:
+    """Refuse a negative id for a geometry in a batch.
+
+    Args:
+        id: The geometry's id in the store.
+
+    Returns:
+        Nothing. The call returns when the id is zero or more.
+
+    Raises:
+        Error: If the id is negative.
+    """
+    if id.value < 0:
+        raise Error("A batched geometry must name a geometry")
+
+
+def require_batched_instance(geometry: GeometryId) raises:
+    """Refuse a negative geometry id on a batched instance.
+
+    Args:
+        geometry: The instance's geometry id.
+
+    Returns:
+        Nothing. The call returns when the id is zero or more.
+
+    Raises:
+        Error: If the id is negative.
+    """
+    if geometry.value < 0:
+        raise Error("A batched instance must name a geometry")
+
+
 struct BatchedMesh(Copyable, Movable):
     """Many geometries drawn with one material at many transforms, each
     relative to one scene node: an instanced mesh whose instances each
@@ -596,8 +628,7 @@ struct BatchedMesh(Copyable, Movable):
                 an instance (see `check_placing`), or the batch holds
                 `max_instance_count` instances and none is free.
         """
-        if geometry.value < 0:
-            raise Error("A batched instance must name a geometry")
+        require_batched_instance(geometry)
         check_placing(matrix)
         var full = len(self.instances) >= self.max_instance_count
         if full and len(self.available_instances) == 0:
@@ -686,8 +717,7 @@ struct BatchedMesh(Copyable, Movable):
                 smaller than the geometry, or the range does not fit in
                 `max_vertex_count` and `max_index_count`.
         """
-        if id.value < 0:
-            raise Error("A batched geometry must name a geometry")
+        require_batched_geometry(id)
         if self._range_of(id) >= 0:
             raise Error("A batched geometry has a range already")
         var has_index = geometry.is_indexed()
@@ -751,8 +781,7 @@ struct BatchedMesh(Copyable, Movable):
         Raises:
             Error: If the id is negative.
         """
-        if id.value < 0:
-            raise Error("A batched geometry must name a geometry")
+        require_batched_geometry(id)
         for index in range(len(self.instances)):
             ref member = self.instances[index]
             if member.active and member.geometry == id:
@@ -911,8 +940,7 @@ struct BatchedMesh(Copyable, Movable):
             Error: If there is no such instance, or the id is negative.
         """
         self._check(index)
-        if geometry.value < 0:
-            raise Error("A batched instance must name a geometry")
+        require_batched_instance(geometry)
         self.instances[index].geometry = geometry
 
     def matrix_at(self, index: Int) raises -> Matrix4:

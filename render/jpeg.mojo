@@ -1079,6 +1079,23 @@ def _decode_sequential(
         index += 1
 
 
+def require_coefficient_band(index: Int, spectral_end: Int) raises:
+    """Refuse a coefficient past the scan's band.
+
+    Args:
+        index: The coefficient's zigzag index.
+        spectral_end: The last coefficient the scan reads.
+
+    Returns:
+        Nothing. The call returns when the index is inside the band.
+
+    Raises:
+        Error: If the index is past the band.
+    """
+    if index > spectral_end:
+        raise Error("A block's coefficients run past its band")
+
+
 def _decode_ac_first(
     mut reader: BitReader,
     mut component: Component,
@@ -1107,8 +1124,7 @@ def _decode_ac_first(
             index += 16
             continue
         index += run
-        if index > scan.spectral_end:
-            raise Error("A block's coefficients run past its band")
+        require_coefficient_band(index, scan.spectral_end)
         component.coefficients[base + index] = Int32(
             receive_extend(reader.bits(bits), bits) << scan.low_bit
         )
@@ -1177,8 +1193,7 @@ def _decode_ac_refine(
                     run -= 1
                 index += 1
             if value != 0:
-                if index > scan.spectral_end:
-                    raise Error("A block's coefficients run past its band")
+                require_coefficient_band(index, scan.spectral_end)
                 component.coefficients[base + index] = Int32(value)
             index += 1
     if eob_run > 0:

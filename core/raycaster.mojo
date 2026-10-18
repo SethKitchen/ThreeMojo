@@ -443,6 +443,23 @@ def _worn_vertex(
     return worn[vertex]
 
 
+def require_image_extent(width: Int, height: Int) raises:
+    """Refuse an image whose width or height is not positive.
+
+    Args:
+        width: The image width, in pixels.
+        height: The image height, in pixels.
+
+    Returns:
+        Nothing. The call returns when both sizes are positive.
+
+    Raises:
+        Error: If the width or the height is not positive.
+    """
+    if not positive_extent(width, height):
+        raise Error("An image has a positive width and height")
+
+
 struct Raycaster(ImplicitlyCopyable, RayQuery):
     """A ray with a range, that asks a scene what it meets."""
 
@@ -613,8 +630,7 @@ struct Raycaster(ImplicitlyCopyable, RayQuery):
             Error: If either dimension is not positive, or the camera's
                 view cannot be read.
         """
-        if not positive_extent(width, height):
-            raise Error("An image has a positive width and height")
+        require_image_extent(width, height)
         self.set_from_camera(
             Vector2(
                 x / Float32(width) * 2 - 1,
@@ -1396,8 +1412,7 @@ struct Raycaster(ImplicitlyCopyable, RayQuery):
         """
         if index < 0 or index >= len(scene.wide_lines):
             raise Error("No wide line has that index")
-        if not positive_extent(width, height):
-            raise Error("An image has a positive width and height")
+        require_image_extent(width, height)
         var hits = List[Hit]()
         ref line = scene.wide_lines[index]
         if not scene.shows(line.node, self.layers):

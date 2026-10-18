@@ -224,6 +224,23 @@ def decode_pcd_value(
     return Float64(value)
 
 
+def require_lzf_backref(at: Int, length: Int) raises:
+    """Refuse an LZF back reference that runs past the input.
+
+    Args:
+        at: The next byte to read.
+        length: How many bytes the input has.
+
+    Returns:
+        Nothing. The call returns when a byte remains.
+
+    Raises:
+        Error: If the read is past the input.
+    """
+    if at >= length:
+        raise Error("PCD: LZF data ends inside a back reference")
+
+
 def decompress_lzf(data: List[UInt8], out_length: Int) raises -> List[UInt8]:
     """Expand LZF data, three.js's `decompressLZF`.
 
@@ -261,13 +278,11 @@ def decompress_lzf(data: List[UInt8], out_length: Int) raises -> List[UInt8]:
             continue
         var length = control >> 5
         var back = len(out) - ((control & 0x1F) << 8) - 1
-        if at >= len(data):
-            raise Error("PCD: LZF data ends inside a back reference")
+        require_lzf_backref(at, len(data))
         if length == 7:
             length += Int(data[at])
             at += 1
-            if at >= len(data):
-                raise Error("PCD: LZF data ends inside a back reference")
+            require_lzf_backref(at, len(data))
         back -= Int(data[at])
         at += 1
         if len(out) + length + 2 > out_length:

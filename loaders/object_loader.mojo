@@ -884,6 +884,23 @@ struct _Sampling(ImplicitlyCopyable):
     var mipmapped: Bool
 
 
+def require_object_record(document: JsonDocument, item: Int) raises:
+    """Refuse an object JSON value that is not an object.
+
+    Args:
+        document: The JSON document.
+        item: The value.
+
+    Returns:
+        Nothing. The call returns when the value is an object.
+
+    Raises:
+        Error: If the value is not an object.
+    """
+    if document.kind(item) != OBJECT:
+        raise Error("Object JSON: an object must be an object")
+
+
 struct _Loader(Movable):
     """The document, the uuids of its libraries, and what is built."""
 
@@ -1991,8 +2008,7 @@ struct _Loader(Movable):
         mut self, item: Int, mut scene: Scene, mut assets: Assets
     ) raises:
         """Read the root object: a scene's children, or one object."""
-        if self.document.kind(item) != OBJECT:
-            raise Error("Object JSON: an object must be an object")
+        require_object_record(self.document, item)
         if self.text(item, "type", "") != "Scene":
             self.place(item, NO_PARENT, scene, assets)
             return
@@ -2108,8 +2124,7 @@ struct _Loader(Movable):
     ) raises:
         """Add one object as a node under its parent, what it carries, and
         then its children."""
-        if self.document.kind(item) != OBJECT:
-            raise Error("Object JSON: an object must be an object")
+        require_object_record(self.document, item)
         var uuid = self.uuid(item)
         if uuid in self.seen:
             raise Error("Object JSON: a uuid named twice: " + uuid)

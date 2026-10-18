@@ -3274,6 +3274,56 @@ def _checked_light_map(assets: Assets, map: TextureId) raises -> TextureId:
     return map
 
 
+def require_material_texture(map: TextureId, count: Int) raises:
+    """Refuse a material texture the store does not have.
+
+    Args:
+        map: The id the material names.
+        count: How many textures the store has.
+
+    Returns:
+        Nothing. The call returns when the id is absent or in the store.
+
+    Raises:
+        Error: If the id names a texture that is not there.
+    """
+    if map != NO_TEXTURE and map.value >= count:
+        raise Error("A material names a texture that is not there")
+
+
+def require_material_alpha(map: TextureId, count: Int) raises:
+    """Refuse a material alpha map the store does not have.
+
+    Args:
+        map: The id the material names.
+        count: How many textures the store has.
+
+    Returns:
+        Nothing. The call returns when the id is absent or in the store.
+
+    Raises:
+        Error: If the id names an alpha map that is not there.
+    """
+    if map != NO_TEXTURE and map.value >= count:
+        raise Error("A material names an alpha map that is not there")
+
+
+def require_renderer_workers(workers: Int) raises:
+    """Refuse a renderer with no worker.
+
+    Args:
+        workers: How many threads rasterize a frame.
+
+    Returns:
+        Nothing. The call returns when there is one worker or more.
+
+    Raises:
+        Error: If `workers` is below one.
+    """
+    if workers < 1:
+        raise Error("A renderer needs at least one worker")
+
+
 def _checked_maps(
     assets: Assets, material: Material, shading: ShadeMode
 ) raises -> Tuple[TextureId, TextureId]:
@@ -3299,13 +3349,11 @@ def _checked_maps(
             alpha map is not stored as data -- see `check_alpha_map`.
     """
     var map = material.map
-    if map != NO_TEXTURE and map.value >= assets.textures.count():
-        raise Error("A material names a texture that is not there")
+    require_material_texture(map, assets.textures.count())
     if shading != SHADE_TEXTURE:
         map = NO_TEXTURE
     var mask = material.alpha_map
-    if mask != NO_TEXTURE and mask.value >= assets.textures.count():
-        raise Error("A material names an alpha map that is not there")
+    require_material_alpha(mask, assets.textures.count())
     if mask != NO_TEXTURE:
         check_alpha_map(assets.textures.get(mask))
     if shading != SHADE_TEXTURE:
@@ -5950,8 +5998,7 @@ struct Renderer(Movable):
         """
         if not positive_extent(width, height):
             raise Error("Renderer dimensions must be positive")
-        if workers < 1:
-            raise Error("A renderer needs at least one worker")
+        require_renderer_workers(workers)
         self.width = width
         self.height = height
         self.background = Color(16, 18, 26)
@@ -6360,8 +6407,7 @@ struct Renderer(Movable):
         Raises:
             Error: If `workers` is less than one.
         """
-        if workers < 1:
-            raise Error("A renderer needs at least one worker")
+        require_renderer_workers(workers)
         self.workers = workers
 
     def set_background(mut self, color: Color):
@@ -6921,8 +6967,7 @@ struct Renderer(Movable):
             # naming nothing is only detectable once both are together. It is
             # checked before rasterization rather than during, so the answer
             # does not depend on which pixels the mesh happened to cover.
-            if map != NO_TEXTURE and map.value >= assets.textures.count():
-                raise Error("A material names a texture that is not there")
+            require_material_texture(map, assets.textures.count())
             if self.shading != SHADE_TEXTURE:
                 map = NO_TEXTURE
             # The emissive map, checked the same way. It multiplies the
@@ -6957,8 +7002,7 @@ struct Renderer(Movable):
             # means. Refused whatever the shading mode, as the emissive
             # map's alpha mode is: a wrong asset, not a wrong frame.
             var mask = material.alpha_map
-            if mask != NO_TEXTURE and mask.value >= assets.textures.count():
-                raise Error("A material names an alpha map that is not there")
+            require_material_alpha(mask, assets.textures.count())
             if mask != NO_TEXTURE:
                 check_alpha_map(assets.textures.get(mask))
             if self.shading != SHADE_TEXTURE:

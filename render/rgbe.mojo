@@ -219,6 +219,23 @@ def _is_scanline_start(bytes: List[UInt8], at: Int, width: Int) -> Bool:
     )
 
 
+def require_rgbe_byte(at: Int, length: Int) raises:
+    """Refuse an RGBE read past the file.
+
+    Args:
+        at: The next byte to read.
+        length: How many bytes the file has.
+
+    Returns:
+        Nothing. The call returns when a byte remains.
+
+    Raises:
+        Error: If the read is past the file.
+    """
+    if at >= length:
+        raise Error("RGBE: a scanline is cut short")
+
+
 def read_pixels(
     bytes: List[UInt8], start: Int, width: Int, height: Int
 ) raises -> List[UInt8]:
@@ -262,8 +279,7 @@ def read_pixels(
         at += 4
         var filled = 0
         while filled < line:
-            if at >= len(bytes):
-                raise Error("RGBE: a scanline is cut short")
+            require_rgbe_byte(at, len(bytes))
             var run = Int(bytes[at])
             at += 1
             var repeats = run > RUN_FLAG
@@ -272,8 +288,7 @@ def read_pixels(
             if run == 0 or filled + run > line:
                 raise Error("RGBE: a run is empty or overflows its scanline")
             if repeats:
-                if at >= len(bytes):
-                    raise Error("RGBE: a scanline is cut short")
+                require_rgbe_byte(at, len(bytes))
                 for _ in range(run):  # pragma: no branch
                     scan[filled] = bytes[at]
                     filled += 1

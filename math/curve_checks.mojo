@@ -112,6 +112,23 @@ def curve_sample_count(divisions: Int) raises -> Int:
     return curve_count_sum(divisions, 1)
 
 
+def require_curve_counts(first: Int, second: Int) raises:
+    """Refuse a negative curve count.
+
+    Args:
+        first: The first count.
+        second: The second count.
+
+    Returns:
+        Nothing. The call returns when both counts are zero or more.
+
+    Raises:
+        Error: If either count is negative.
+    """
+    if first < 0 or second < 0:
+        raise Error("Curve counts cannot be negative")
+
+
 def curve_count_sum(first: Int, second: Int) raises -> Int:
     """Add two nonnegative curve counts without signed overflow.
 
@@ -125,8 +142,7 @@ def curve_count_sum(first: Int, second: Int) raises -> Int:
     Raises:
         Error: If a count is negative or the sum cannot fit in Int.
     """
-    if first < 0 or second < 0:
-        raise Error("Curve counts cannot be negative")
+    require_curve_counts(first, second)
     if first > Int.MAX - second:
         raise Error("A curve sample count cannot fit in Int")
     return first + second
@@ -145,8 +161,7 @@ def curve_count_product(first: Int, second: Int) raises -> Int:
     Raises:
         Error: If a count is negative or the product cannot fit in Int.
     """
-    if first < 0 or second < 0:
-        raise Error("Curve counts cannot be negative")
+    require_curve_counts(first, second)
     if second != 0:
         if first > Int.MAX // second:
             raise Error("A curve sample count cannot fit in Int")
