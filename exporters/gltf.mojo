@@ -866,9 +866,9 @@ struct _Exporter(Movable):
                     low[lane] = min(low[lane], value)
                     high[lane] = max(high[lane], value)
             writer.key("min")
-            _write_numbers(writer, low)
+            writer.numbers(low)
             writer.key("max")
-            _write_numbers(writer, high)
+            writer.numbers(high)
         writer.end_object()
         self.accessors.append(writer.finish())
         return len(self.accessors) - 1
@@ -937,9 +937,9 @@ struct _Exporter(Movable):
                     low[lane] = min(low[lane], value)
                     high[lane] = max(high[lane], value)
             writer.key("min")
-            _write_integers(writer, low)
+            writer.integers(low)
             writer.key("max")
-            _write_integers(writer, high)
+            writer.integers(high)
         writer.end_object()
         self.accessors.append(writer.finish())
         if _is_quantized(semantic, type, attribute.is_normalized()):
@@ -1246,13 +1246,13 @@ struct _Exporter(Movable):
             writer.begin_object()
             if not _is_at(placed.offset, 0, 0):
                 writer.key("offset")
-                _write_numbers(writer, [placed.offset.x, placed.offset.y])
+                writer.numbers([placed.offset.x, placed.offset.y])
             if placed.rotation != 0:
                 writer.key("rotation")
                 writer.number(placed.rotation)
             if not _is_at(placed.scale, 1, 1):
                 writer.key("scale")
-                _write_numbers(writer, [placed.scale.x, placed.scale.y])
+                writer.numbers([placed.scale.x, placed.scale.y])
             writer.end_object()
             writer.end_object()
         writer.end_object()
@@ -1547,8 +1547,7 @@ struct _Exporter(Movable):
             self.open_extension(writer, MATERIALS_SHEEN)
             var tint = FloatColor(srgb=material.sheen_color)
             writer.key("sheenColorFactor")
-            _write_numbers(
-                writer,
+            writer.numbers(
                 [
                     tint.r * material.sheen,
                     tint.g * material.sheen,
@@ -1725,7 +1724,7 @@ struct _Exporter(Movable):
         writer.end_array()
         if morphs > 0:
             writer.key("weights")
-            _write_numbers(writer, weights)
+            writer.numbers(weights)
             ref first = assets.geometries.get(shapes[0])
             writer.key("extras")
             writer.begin_object()
@@ -1921,7 +1920,7 @@ struct _Exporter(Movable):
         writer.key("inverseBindMatrices")
         writer.integer(self.float_accessor(inverses, 16, "MAT4", False, False))
         writer.key("joints")
-        _write_integers(writer, joints)
+        writer.integers(joints)
         writer.key("skeleton")
         writer.integer(joints[0])
         writer.end_object()
@@ -2211,7 +2210,7 @@ struct _Exporter(Movable):
         writer.begin_object()
         if len(roots) > 0:
             writer.key("nodes")
-            _write_integers(writer, roots)
+            writer.integers(roots)
         if scene.extras != "":
             writer.key("extras")
             writer.raw(scene.extras)
@@ -2738,7 +2737,7 @@ def _has_volume(material: Material) -> Bool:
 def _write_color(mut writer: JsonWriter, color: Color) raises:
     """Write a color as glTF holds a factor: three linear numbers."""
     var linear = FloatColor(srgb=color)
-    _write_numbers(writer, [linear.r, linear.g, linear.b])
+    writer.numbers([linear.r, linear.g, linear.b])
 
 
 def _copy_channel(
@@ -2768,15 +2767,6 @@ def _copy_channel(
     # A texture `gltf_pixels` accepts has at least one texel.
     for texel in range(texture.width * texture.height):  # pragma: no branch
         pixels[texel * 4 + channel] = source[texel * 4 + channel]
-
-
-def _write_numbers(mut writer: JsonWriter, numbers: List[Float32]) raises:
-    """Write an array of numbers."""
-    writer.begin_array()
-    # Every caller writes at least one number.
-    for value in numbers:  # pragma: no branch
-        writer.number(value)
-    writer.end_array()
 
 
 def _gl_component(type: ComponentType) -> Int:
@@ -2817,15 +2807,6 @@ def _is_quantized(
     return False
 
 
-def _write_integers(mut writer: JsonWriter, numbers: List[Int]) raises:
-    """Write an array of whole numbers."""
-    writer.begin_array()
-    # Every caller writes at least one number.
-    for value in numbers:  # pragma: no branch
-        writer.integer(value)
-    writer.end_array()
-
-
 def _node_json(
     node: Object3D,
     mesh: Int,
@@ -2845,13 +2826,10 @@ def _node_json(
     if node.matrix_auto_update:
         if not _is_zero(node.position):
             writer.key("translation")
-            _write_numbers(
-                writer, [node.position.x, node.position.y, node.position.z]
-            )
+            writer.numbers([node.position.x, node.position.y, node.position.z])
         if not _is_identity_rotation(node.quaternion):
             writer.key("rotation")
-            _write_numbers(
-                writer,
+            writer.numbers(
                 [
                     node.quaternion.x,
                     node.quaternion.y,
@@ -2861,13 +2839,13 @@ def _node_json(
             )
         if not _is_one(node.scale):
             writer.key("scale")
-            _write_numbers(writer, [node.scale.x, node.scale.y, node.scale.z])
+            writer.numbers([node.scale.x, node.scale.y, node.scale.z])
     elif not _is_identity_matrix(node.matrix):
         var elements = List[Float32]()
         for index in range(16):  # pragma: no branch
             elements.append(node.matrix.elements[index])
         writer.key("matrix")
-        _write_numbers(writer, elements)
+        writer.numbers(elements)
     if extras != "":
         writer.key("extras")
         writer.raw(extras)
@@ -2882,7 +2860,7 @@ def _node_json(
         writer.integer(skin)
     if len(children) > 0:
         writer.key("children")
-        _write_integers(writer, children)
+        writer.integers(children)
     if extensions != "":
         writer.key("extensions")
         writer.raw(extensions)

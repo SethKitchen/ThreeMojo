@@ -547,10 +547,7 @@ def write_track(
     writer.key("name")
     writer.string(name)
     writer.key("times")
-    writer.begin_array()
-    for key in range(len(track.times)):  # pragma: no branch
-        writer.number(track.times[key])
-    writer.end_array()
+    writer.numbers(track.times)
     writer.key("values")
     writer.begin_array()
     if kind.is_string():
