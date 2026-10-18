@@ -15,8 +15,9 @@ index into the list is an index JavaScript's `slice`, `indexOf` and
 `is_js_space` is the white space that JavaScript's `\\s` and `trim` match:
 the ASCII spaces, the line terminators, and the Unicode spaces.
 `is_js_word` is a byte JavaScript's `\\w` matches: a letter, a digit or `_`.
-`split_fields` splits a line on white space. `latin1_units` reads each
-byte as one code unit.
+`split_fields` splits a line on white space. `text_lines` splits a text
+at a carriage return or a line feed and keeps an empty line. `latin1_units`
+reads each byte as one code unit.
 """
 
 
@@ -170,3 +171,24 @@ def split_fields(line: String) -> List[String]:
     for piece in line.split():
         fields.append(String(piece))
     return fields^
+
+
+def text_lines(text: String) -> List[String]:
+    """Return the lines of a text.
+
+    A carriage return becomes a line feed, then the text is split at each
+    line feed. An empty line is kept.
+
+    Args:
+        text: The text.
+
+    Returns:
+        The lines, in order.
+
+    Raises:
+        Error: Never.
+    """
+    var out = List[String]()
+    for line in text.replace("\r", "\n").split("\n"):  # pragma: no branch
+        out.append(String(line))
+    return out^
