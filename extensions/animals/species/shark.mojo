@@ -40,7 +40,7 @@ from extensions.animals.parts import (
     TEETH,
 )
 from extensions.animals.kit import EyeSpec, side_sign
-from extensions.animals.noise import cells3, fbm3
+from extensions.animals.noise import cells3, offset_fbm
 from extensions.animals.options import (
     ADULT,
     ANY_AGE,
@@ -1638,31 +1638,24 @@ def shark_paint(
         var lip = abs(p.y - g.lip_y(clamp(u, g.u_f, g.u_c)))
         if lip < 0.0022 * tl:
             return Paint(mix3(back * 0.22, pal.get("mouth"), 0.25), SKIN)
-    var m1 = (
-        fbm3(V3(p.x * 6.0 / tl + ox, p.y * 6.0 / tl, p.z * 6.0 / tl + oy), 3)
-        - 0.5
+    var m1 = offset_fbm(
+        V3(p.x * 6.0 / tl + ox, p.y * 6.0 / tl, p.z * 6.0 / tl + oy), 3
     )
-    var m2 = (
-        fbm3(
-            V3(
-                p.x * 22.0 / tl + oy,
-                p.y * 22.0 / tl + 4.1,
-                p.z * 22.0 / tl + ox,
-            ),
-            3,
-        )
-        - 0.5
+    var m2 = offset_fbm(
+        V3(
+            p.x * 22.0 / tl + oy,
+            p.y * 22.0 / tl + 4.1,
+            p.z * 22.0 / tl + ox,
+        ),
+        3,
     )
-    var m3 = (
-        fbm3(
-            V3(
-                p.x * 90.0 / tl + 7.7,
-                p.y * 90.0 / tl + ox,
-                p.z * 90.0 / tl + oy,
-            ),
-            2,
-        )
-        - 0.5
+    var m3 = offset_fbm(
+        V3(
+            p.x * 90.0 / tl + 7.7,
+            p.y * 90.0 / tl + ox,
+            p.z * 90.0 / tl + oy,
+        ),
+        2,
     )
     var up = smoothstep(-0.6, 1.0, e * 0.8 + n.y * 0.45)
     var c = mix3(flank, back, up)
@@ -1670,7 +1663,7 @@ def shark_paint(
     # at three scales.
     var wq = (
         (
-            fbm3(
+            offset_fbm(
                 V3(
                     p.x * 9.0 / tl + ox,
                     p.y * 9.0 / tl + 2.3,
@@ -1678,7 +1671,6 @@ def shark_paint(
                 ),
                 2,
             )
-            - 0.5
         )
         * 0.06
         * tl
@@ -1689,7 +1681,7 @@ def shark_paint(
     var rag = rag_k * (
         rag_a
         * (
-            fbm3(
+            offset_fbm(
                 V3(
                     q.x * 14.0 / tl + 3.1 + ox,
                     q.y * 14.0 / tl + oy,
@@ -1697,13 +1689,12 @@ def shark_paint(
                 ),
                 3,
             )
-            - 0.5
         )
         * 2.0
         + rag_a
         * 0.8
         * (
-            fbm3(
+            offset_fbm(
                 V3(
                     q.x * 38.0 / tl + oy,
                     q.y * 38.0 / tl + 1.7,
@@ -1711,12 +1702,11 @@ def shark_paint(
                 ),
                 3,
             )
-            - 0.5
         )
         + rag_a
         * 0.45
         * (
-            fbm3(
+            offset_fbm(
                 V3(
                     q.x * 95.0 / tl + 5.3,
                     q.y * 95.0 / tl + ox,
@@ -1724,7 +1714,6 @@ def shark_paint(
                 ),
                 2,
             )
-            - 0.5
         )
     )
     var b_shift = t.get("bndShift", 0.0)
@@ -1778,16 +1767,13 @@ def shark_paint(
         if white:
             # A few small dark dots along the upper lip, faint flecks on
             # the back.
-            var m4 = (
-                fbm3(
-                    V3(
-                        p.x * 160.0 / tl + oy,
-                        p.y * 160.0 / tl + 2.9,
-                        p.z * 160.0 / tl + ox,
-                    ),
-                    2,
-                )
-                - 0.5
+            var m4 = offset_fbm(
+                V3(
+                    p.x * 160.0 / tl + oy,
+                    p.y * 160.0 / tl + 2.9,
+                    p.z * 160.0 / tl + ox,
+                ),
+                2,
             )
             var lipz = (
                 (1.0 - smoothstep(0.07, 0.1, u))
