@@ -3,11 +3,12 @@
 # Noncommercial use is free; commercial use requires a paid license.
 # See LICENSE, LICENSE-COMMERCIAL.md and THIRD-PARTY-NOTICES.md.
 
-"""Read an example's output path, turn one node, and write its PNG.
+"""Read an example's output path, turn a node, and write its PNG.
 
 Each example builds its own scene. This file reads the path from the
-first argument, turns one node, and stores the frames. A full circle is
-one turn divided across the frames.
+first argument, turns a node, and stores the frames. A full circle is
+one turn divided across the frames. An example that built its own frames
+can write them here.
 """
 
 from cameras.perspective_camera import PerspectiveCamera
@@ -143,8 +144,7 @@ def spin_gallery(
     var frames = _collect_spins(
         renderer, camera, assets, scene, node, frame_count
     )
-    Path(destination).write_bytes(encode(frames, delay_ms=delay_ms))
-    print("Wrote", destination, "-", frame_count, "frames")
+    write_frames(frames, destination, delay_ms, frame_count)
 
 
 def spin_pair_gallery(
@@ -180,8 +180,7 @@ def spin_pair_gallery(
         frames.append(
             spin_pair(renderer, camera, assets, scene, left, right, step)
         )
-    Path(destination).write_bytes(encode(frames, delay_ms=delay_ms))
-    print("Wrote", destination, "-", frame_count, "frames")
+    write_frames(frames, destination, delay_ms, frame_count)
 
 
 def spin_clip(
@@ -244,5 +243,31 @@ def write_example(
         sep="",
         file=stderr,
     )
+    write_frames(frames, destination, delay_ms, frame_count)
+
+
+def write_frames(
+    frames: List[Framebuffer],
+    destination: String,
+    delay_ms: Int,
+    frame_count: Int,
+) raises:
+    """Write `frames` as an animated PNG.
+
+    Args:
+        frames: The rendered frames, in order.
+        destination: The path of the animated PNG.
+        delay_ms: How long each frame is shown, in milliseconds.
+        frame_count: How many frames the message reports.
+
+    Raises:
+        Error: If the frames cannot be encoded or the path cannot be
+            written.
+    """
     Path(destination).write_bytes(encode(frames, delay_ms=delay_ms))
     print("Wrote", destination, "-", frame_count, "frames")
+
+
+def main():
+    # The other examples import this file. This entry lets the build check it.
+    return
