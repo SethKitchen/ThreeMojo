@@ -189,6 +189,46 @@ def _sort_by(
         orders[slot] = order
 
 
+def _span_draw_order(spans: List[_Span]) -> List[Int]:
+    """Return span indexes, opaque nearest first, then blended furthest first.
+
+    An opaque span's depth is negated so one ascending sort puts the
+    nearest opaque span first. A blended span keeps its depth, so the
+    furthest blended span comes first. Render order sorts before depth.
+    Lines and points use this order, and `_draws` uses the same two rules
+    for meshes.
+
+    Args:
+        spans: The runs, in the order they were prepared.
+
+    Returns:
+        The indexes to draw, opaque runs and then blended runs.
+    """
+    var solid = List[Int]()
+    var solid_depths = List[Float32]()
+    var solid_orders = List[Int]()
+    var see_through = List[Int]()
+    var see_through_depths = List[Float32]()
+    var see_through_orders = List[Int]()
+    for position in range(len(spans)):
+        if spans[position].blends:
+            see_through.append(position)
+            see_through_depths.append(spans[position].depth)
+            see_through_orders.append(spans[position].order)
+        else:
+            solid.append(position)
+            solid_orders.append(spans[position].order)
+            solid_depths.append(-spans[position].depth)
+    _sort_by(solid, solid_depths, solid_orders)
+    _sort_by(see_through, see_through_depths, see_through_orders)
+    var order = List[Int]()
+    for position in range(len(solid)):
+        order.append(solid[position])
+    for position in range(len(see_through)):
+        order.append(see_through[position])
+    return order^
+
+
 def _after(
     order: Int, key: Float32, other_order: Int, other_key: Float32
 ) -> Bool:

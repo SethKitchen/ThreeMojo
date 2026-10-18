@@ -92,6 +92,7 @@ from renderers.render_list import (
     _Source,
     _Span,
     _sort_by,
+    _span_draw_order,
     _sort_with,
     _furthest_first,
     _add_run,
@@ -7919,30 +7920,7 @@ struct Renderer(Movable):
         # Into draw order: opaque runs nearest first, then blended runs
         # furthest first, lines and wireframes together. The same two
         # rules `_draws` applies to the meshes, for the same reasons.
-        var solid = List[Int]()
-        var solid_depths = List[Float32]()
-        var solid_orders = List[Int]()
-        var see_through = List[Int]()
-        var see_through_depths = List[Float32]()
-        var see_through_orders = List[Int]()
-        for position in range(len(unsorted)):
-            if unsorted[position].blends:
-                see_through.append(position)
-                see_through_depths.append(unsorted[position].depth)
-                see_through_orders.append(unsorted[position].order)
-            else:
-                solid.append(position)
-                solid_orders.append(unsorted[position].order)
-                # Negated so one ascending sort serves both lists, as in
-                # `_draws`: the nearest opaque line has the largest z.
-                solid_depths.append(-unsorted[position].depth)
-        _sort_by(solid, solid_depths, solid_orders)
-        _sort_by(see_through, see_through_depths, see_through_orders)
-        var order = List[Int]()
-        for position in range(len(solid)):
-            order.append(solid[position])
-        for position in range(len(see_through)):
-            order.append(see_through[position])
+        var order = _span_draw_order(unsorted)
         var ordered = List[RasterVertex]()
         ordered.reserve(len(corners))
         for position in range(len(order)):
@@ -8313,28 +8291,7 @@ struct Renderer(Movable):
             )
 
         # Into draw order, as `_prepared_lines` puts the lines.
-        var solid = List[Int]()
-        var solid_depths = List[Float32]()
-        var solid_orders = List[Int]()
-        var see_through = List[Int]()
-        var see_through_depths = List[Float32]()
-        var see_through_orders = List[Int]()
-        for position in range(len(unsorted)):
-            if unsorted[position].blends:
-                see_through.append(position)
-                see_through_depths.append(unsorted[position].depth)
-                see_through_orders.append(unsorted[position].order)
-            else:
-                solid.append(position)
-                solid_orders.append(unsorted[position].order)
-                solid_depths.append(-unsorted[position].depth)
-        _sort_by(solid, solid_depths, solid_orders)
-        _sort_by(see_through, see_through_depths, see_through_orders)
-        var order = List[Int]()
-        for position in range(len(solid)):
-            order.append(solid[position])
-        for position in range(len(see_through)):
-            order.append(see_through[position])
+        var order = _span_draw_order(unsorted)
         var ordered = List[RasterVertex]()
         ordered.reserve(len(corners))
         for position in range(len(order)):
