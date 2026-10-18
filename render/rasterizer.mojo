@@ -1908,17 +1908,12 @@ def _coordinates_at(
     `second` reads `u1` and `v1` rather than `u` and `v`: the coordinates
     a map on `UV_CHANNEL_1` is sampled at.
     """
-    var inv_w = (
-        weights.wa * a.inv_w + weights.wb * b.inv_w + weights.wc * c.inv_w
+    var shares = perspective_shares(
+        weights.wa, weights.wb, weights.wc, a.inv_w, b.inv_w, c.inv_w
     )
-    var share_a = weights.wa
-    var share_b = weights.wb
-    var share_c = weights.wc
-    if inv_w != 0:
-        var rcp = Float32(1) / inv_w
-        share_a = weights.wa * a.inv_w * rcp
-        share_b = weights.wb * b.inv_w * rcp
-        share_c = weights.wc * c.inv_w * rcp
+    var share_a = shares[0]
+    var share_b = shares[1]
+    var share_c = shares[2]
     if second:
         return Vector2(
             a.u1 * share_a + b.u1 * share_b + c.u1 * share_c,
@@ -1942,17 +1937,12 @@ def _world_at(
     tangent frame a normal map needs is measured from the positions at the
     pixels one over and one up, as their coordinates are.
     """
-    var inv_w = (
-        weights.wa * a.inv_w + weights.wb * b.inv_w + weights.wc * c.inv_w
+    var shares = perspective_shares(
+        weights.wa, weights.wb, weights.wc, a.inv_w, b.inv_w, c.inv_w
     )
-    var share_a = weights.wa
-    var share_b = weights.wb
-    var share_c = weights.wc
-    if inv_w != 0:
-        var rcp = Float32(1) / inv_w
-        share_a = weights.wa * a.inv_w * rcp
-        share_b = weights.wb * b.inv_w * rcp
-        share_c = weights.wc * c.inv_w * rcp
+    var share_a = shares[0]
+    var share_b = shares[1]
+    var share_c = shares[2]
     return Vector3(
         a.world.x * share_a + b.world.x * share_b + c.world.x * share_c,
         a.world.y * share_a + b.world.y * share_b + c.world.y * share_c,
@@ -2335,17 +2325,12 @@ def _normal_at(
     roughness needs it at the pixels one right and one up. A zero normal
     stays zero, as it does in the loop.
     """
-    var inv_w = (
-        weights.wa * a.inv_w + weights.wb * b.inv_w + weights.wc * c.inv_w
+    var shares = perspective_shares(
+        weights.wa, weights.wb, weights.wc, a.inv_w, b.inv_w, c.inv_w
     )
-    var share_a = weights.wa
-    var share_b = weights.wb
-    var share_c = weights.wc
-    if inv_w != 0:
-        var rcp = Float32(1) / inv_w
-        share_a = weights.wa * a.inv_w * rcp
-        share_b = weights.wb * b.inv_w * rcp
-        share_c = weights.wc * c.inv_w * rcp
+    var share_a = shares[0]
+    var share_b = shares[1]
+    var share_c = shares[2]
     var facing = Vector3(
         a.normal.x * share_a + b.normal.x * share_b + c.normal.x * share_c,
         a.normal.y * share_a + b.normal.y * share_b + c.normal.y * share_c,
@@ -4179,20 +4164,16 @@ def rasterize_shaded(
                 continue
             # Nothing in the renderer produces a zero here: clipping removes
             # everything at or in front of the near plane, and an
-            # *orthographic* camera leaves w at one, not zero — so its inv_w
-            # is one and the correction divides by one rather than needing
-            # this branch. The guard is for hand-built input, where the
-            # alternative is silent infinities.
-            var share_a = wa
-            var share_b = wb
-            var share_c = wc
-            if inv_w != 0:
-                # One reciprocal, three multiplies: the same arithmetic the
-                # GPU kernel does, so the two still round alike.
-                var rcp = Float32(1) / inv_w
-                share_a = wa * a.inv_w * rcp
-                share_b = wb * b.inv_w * rcp
-                share_c = wc * c.inv_w * rcp
+            # orthographic camera leaves w at one, not zero, so its inv_w
+            # is one and the correction divides by one. The guard is for
+            # hand-built input. `perspective_shares` is that correction,
+            # and the GPU kernel calls it, so the two still round alike.
+            var shares = perspective_shares(
+                wa, wb, wc, a.inv_w, b.inv_w, c.inv_w
+            )
+            var share_a = shares[0]
+            var share_b = shares[1]
+            var share_c = shares[2]
             var moved = Vector2(0, 0)
             if keeps_velocities:
                 moved = fragment_velocity(
