@@ -4382,7 +4382,7 @@ _TYPED_CHECKER_SOURCE_EDITS = {
    " 'tools/carla_lane_oracle/sum2_guard_contracts.py': "
    "'acbf385486e2b0dfe15a409d039cd31c8e9fed295704bc6adcb4289818b65f63',\n",
    " 'tools/carla_lane_oracle/typed_boundary_contracts.py': "
-   "'baf231cb640435f5b81e350f32e6a0d6203e4ae5d0d6fb9bccb0c6d4bdbfae8a',\n",
+   "'59cc73b325af897981a2d7299cf2d4ed3c61d3ea64d5f958f2b85aef51666362',\n",
    " 'tools/carla_lane_oracle/witness_format_contracts.py': "
    "'a76ba6d5bf18be80c151fd03ea7a7ebeb75af1c1ed8af1600037d5f75ac13cb3',\n",
    " 'tools/carla_lane_oracle/cache_key_contracts.py': "

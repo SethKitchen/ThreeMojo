@@ -39855,9 +39855,9 @@ EDGES_SHA256 = '1295951244421188500b05b80df16e2c8a7d03ffb4ad3ae20b36806e0a3e0bf7
 # One exact branch-specific four-record diagnostic extension.
 EXPECTATION_SUCCESSOR = {'path': 'tools/compile_fail_expectations.json',
  'before_sha256': '85020fb32ec96121aba108288eaabf41c4483e2f94e91b6beee4528af2206653',
- 'after_sha256': '7c96ffe1750ffee867b5b161529ed834cfa0d732780c5a2a8b5ef2f876cdb03e',
+ 'after_sha256': 'deee9f738d1387ee05ebc4a30e2c5bb1ab4cfbfda04dd2fa6c01aec124552a29',
  'before_count': 689,
- 'after_count': 697,
+ 'after_count': 704,
  'added_records': {'tests/compile_fail/a_body_region_is_not_a_bare_int.mojo': {'errors': [{'column': 24,
                                                                                            'line': 12,
                                                                                            'message': 'invalid '
@@ -39875,9 +39875,30 @@ EXPECTATION_SUCCESSOR = {'path': 'tools/compile_fail_expectations.json',
                                                                                                       "'IntLiteral[0]' "
                                                                                                       'to '
                                                                                                       "'BodyRegion'"}],
-                                                                               'notes': ['function '
-                                                                                         'declared '
+                                                                               'notes': ['function declared '
                                                                                          'here']},
+                   'tests/compile_fail/a_buffer_kind_is_not_a_bare_int.mojo': {'errors': [{'line': 12,
+                                                                                           'column': 30,
+                                                                                           'message': 'no '
+                                                                                                      'matching '
+                                                                                                      'function '
+                                                                                                      'in '
+                                                                                                      'initialization'}],
+                                                                               'notes': ['candidate not '
+                                                                                         'viable: missing '
+                                                                                         'required argument: '
+                                                                                         "'copy'",
+                                                                                         'candidate not '
+                                                                                         'viable: missing '
+                                                                                         'required argument: '
+                                                                                         "'move'",
+                                                                                         'candidate not '
+                                                                                         'viable: value '
+                                                                                         "passed to 'kind' "
+                                                                                         'cannot be '
+                                                                                         'converted from '
+                                                                                         "'IntLiteral[2]' to "
+                                                                                         "'BufferKind'"]},
                    'tests/compile_fail/a_canonical_tissue_is_not_a_bare_int.mojo': {'errors': [{'column': 24,
                                                                                                 'line': 12,
                                                                                                 'message': 'invalid '
@@ -39898,11 +39919,43 @@ EXPECTATION_SUCCESSOR = {'path': 'tools/compile_fail_expectations.json',
                                                                                     'notes': ['function '
                                                                                               'declared '
                                                                                               'here']},
+                   'tests/compile_fail/a_contact_mode_is_not_a_bare_int.mojo': {'errors': [{'line': 13,
+                                                                                            'column': 21,
+                                                                                            'message': 'no '
+                                                                                                       'matching '
+                                                                                                       'function '
+                                                                                                       'in '
+                                                                                                       'initialization'}],
+                                                                                'notes': ['candidate not '
+                                                                                          'viable: missing '
+                                                                                          'required '
+                                                                                          "argument: 'copy'",
+                                                                                          'candidate not '
+                                                                                          'viable: missing '
+                                                                                          'required '
+                                                                                          "argument: 'move'",
+                                                                                          'candidate not '
+                                                                                          'viable: value '
+                                                                                          "passed to 'mode' "
+                                                                                          'cannot be '
+                                                                                          'converted from '
+                                                                                          "'IntLiteral[0]' "
+                                                                                          'to '
+                                                                                          "'ContactMode'"]},
+                   'tests/compile_fail/a_denoiser_preset_is_not_a_bare_int.mojo': {'errors': [{'line': 14,
+                                                                                               'column': 30,
+                                                                                               'message': 'cannot '
+                                                                                                          'implicitly '
+                                                                                                          'convert '
+                                                                                                          "'IntLiteral[6]' "
+                                                                                                          'value '
+                                                                                                          'to '
+                                                                                                          "'DenoiserPreset'"}],
+                                                                                   'notes': []},
                    'tests/compile_fail/a_dentition_is_not_a_bare_int.mojo': {'errors': [{'column': 27,
                                                                                          'line': 12,
                                                                                          'message': 'invalid '
-                                                                                                    'call '
-                                                                                                    'to '
+                                                                                                    'call to '
                                                                                                     "'dentition_label': "
                                                                                                     'value '
                                                                                                     'passed '
@@ -39915,8 +39968,84 @@ EXPECTATION_SUCCESSOR = {'path': 'tools/compile_fail_expectations.json',
                                                                                                     "'IntLiteral[0]' "
                                                                                                     'to '
                                                                                                     "'Dentition'"}],
-                                                                             'notes': ['function '
-                                                                                       'declared '
+                                                                             'notes': ['function declared '
+                                                                                       'here']},
+                   'tests/compile_fail/a_dlss_feature_is_not_a_bare_int.mojo': {'errors': [{'line': 12,
+                                                                                            'column': 38,
+                                                                                            'message': 'invalid '
+                                                                                                       'call '
+                                                                                                       'to '
+                                                                                                       "'supports': "
+                                                                                                       'value '
+                                                                                                       'passed '
+                                                                                                       'to '
+                                                                                                       "'feature' "
+                                                                                                       'cannot '
+                                                                                                       'be '
+                                                                                                       'converted '
+                                                                                                       'from '
+                                                                                                       "'IntLiteral[0]' "
+                                                                                                       'to '
+                                                                                                       "'Feature'"}],
+                                                                                'notes': ['function declared '
+                                                                                          'here']},
+                   'tests/compile_fail/a_dlss_mode_is_not_a_bare_int.mojo': {'errors': [{'line': 12,
+                                                                                         'column': 41,
+                                                                                         'message': 'no '
+                                                                                                    'matching '
+                                                                                                    'function '
+                                                                                                    'in '
+                                                                                                    'initialization'}],
+                                                                             'notes': ['candidate not '
+                                                                                       'viable: missing '
+                                                                                       'required argument: '
+                                                                                       "'copy'",
+                                                                                       'candidate not '
+                                                                                       'viable: missing '
+                                                                                       'required argument: '
+                                                                                       "'move'",
+                                                                                       'candidate not '
+                                                                                       'viable: value passed '
+                                                                                       "to 'mode' cannot be "
+                                                                                       'converted from '
+                                                                                       "'IntLiteral[3]' to "
+                                                                                       "'UpscaleMode'"]},
+                   'tests/compile_fail/a_failure_mode_is_not_a_bare_int.mojo': {'errors': [{'line': 25,
+                                                                                            'column': 24,
+                                                                                            'message': 'invalid '
+                                                                                                       'call '
+                                                                                                       'to '
+                                                                                                       "'failure_motion': "
+                                                                                                       'value '
+                                                                                                       'passed '
+                                                                                                       'to '
+                                                                                                       "'mode' "
+                                                                                                       'cannot '
+                                                                                                       'be '
+                                                                                                       'converted '
+                                                                                                       'from '
+                                                                                                       "'IntLiteral[1]' "
+                                                                                                       'to '
+                                                                                                       "'FailureMode'"}],
+                                                                                'notes': ['function declared '
+                                                                                          'here']},
+                   'tests/compile_fail/a_load_kind_is_not_a_bare_int.mojo': {'errors': [{'line': 12,
+                                                                                         'column': 24,
+                                                                                         'message': 'invalid '
+                                                                                                    'call to '
+                                                                                                    "'of': "
+                                                                                                    'value '
+                                                                                                    'passed '
+                                                                                                    'to '
+                                                                                                    "'kind' "
+                                                                                                    'cannot '
+                                                                                                    'be '
+                                                                                                    'converted '
+                                                                                                    'from '
+                                                                                                    "'IntLiteral[4]' "
+                                                                                                    'to '
+                                                                                                    "'LoadKind'"}],
+                                                                             'notes': ['function declared '
                                                                                        'here']},
                    'tests/compile_fail/a_mapping_kind_is_not_a_bare_int.mojo': {'errors': [{'column': 25,
                                                                                             'line': 12,
@@ -39935,84 +40064,38 @@ EXPECTATION_SUCCESSOR = {'path': 'tools/compile_fail_expectations.json',
                                                                                                        "'IntLiteral[0]' "
                                                                                                        'to '
                                                                                                        "'MappingKind'"}],
-                                                                                'notes': ['function '
-                                                                                          'declared '
+                                                                                'notes': ['function declared '
                                                                                           'here']},
-                   'tests/compile_fail/a_contact_mode_is_not_a_bare_int.mojo': {'errors': [{'line': 13,
-                                                                                            'column': 21,
-                                                                                            'message': 'no '
-                                                                                                       'matching '
-                                                                                                       'function '
-                                                                                                       'in '
-                                                                                                       'initialization'}],
-                                                                                'notes': ['candidate '
-                                                                                          'not '
-                                                                                          'viable: '
-                                                                                          'missing '
-                                                                                          'required '
-                                                                                          'argument: '
-                                                                                          "'copy'",
-                                                                                          'candidate '
-                                                                                          'not '
-                                                                                          'viable: '
-                                                                                          'missing '
-                                                                                          'required '
-                                                                                          'argument: '
-                                                                                          "'move'",
-                                                                                          'candidate '
-                                                                                          'not '
-                                                                                          'viable: '
-                                                                                          'value '
-                                                                                          'passed '
-                                                                                          'to '
-                                                                                          "'mode' "
-                                                                                          'cannot '
-                                                                                          'be '
-                                                                                          'converted '
-                                                                                          'from '
-                                                                                          "'IntLiteral[0]' "
-                                                                                          'to '
-                                                                                          "'ContactMode'"]},
-                   'tests/compile_fail/a_failure_mode_is_not_a_bare_int.mojo': {'errors': [{'line': 25,
-                                                                                            'column': 24,
-                                                                                            'message': 'invalid '
-                                                                                                       'call '
-                                                                                                       'to '
-                                                                                                       "'failure_motion': "
-                                                                                                       'value '
-                                                                                                       'passed '
-                                                                                                       'to '
-                                                                                                       "'mode' "
-                                                                                                       'cannot '
-                                                                                                       'be '
-                                                                                                       'converted '
-                                                                                                       'from '
-                                                                                                       "'IntLiteral[1]' "
-                                                                                                       'to '
-                                                                                                       "'FailureMode'"}],
-                                                                                'notes': ['function '
-                                                                                          'declared '
-                                                                                          'here']},
-                   'tests/compile_fail/a_load_kind_is_not_a_bare_int.mojo': {'errors': [{'line': 12,
-                                                                                         'column': 24,
-                                                                                         'message': 'invalid '
-                                                                                                    'call '
-                                                                                                    'to '
-                                                                                                    "'of': "
-                                                                                                    'value '
-                                                                                                    'passed '
-                                                                                                    'to '
-                                                                                                    "'kind' "
-                                                                                                    'cannot '
-                                                                                                    'be '
-                                                                                                    'converted '
-                                                                                                    'from '
-                                                                                                    "'IntLiteral[4]' "
-                                                                                                    'to '
-                                                                                                    "'LoadKind'"}],
-                                                                             'notes': ['function '
-                                                                                       'declared '
-                                                                                       'here']},
+                   'tests/compile_fail/a_motion_vector_space_is_not_a_bare_int.mojo': {'errors': [{'line': 20,
+                                                                                                   'column': 59,
+                                                                                                   'message': 'invalid '
+                                                                                                              'call '
+                                                                                                              'to '
+                                                                                                              "'frame_constants': "
+                                                                                                              'value '
+                                                                                                              'passed '
+                                                                                                              'to '
+                                                                                                              "'motion' "
+                                                                                                              'cannot '
+                                                                                                              'be '
+                                                                                                              'converted '
+                                                                                                              'from '
+                                                                                                              "'IntLiteral[1]' "
+                                                                                                              'to '
+                                                                                                              "'MotionVectorSpace'"}],
+                                                                                       'notes': ['function '
+                                                                                                 'declared '
+                                                                                                 'here']},
+                   'tests/compile_fail/a_normal_roughness_mode_is_not_a_bare_int.mojo': {'errors': [{'line': 14,
+                                                                                                     'column': 37,
+                                                                                                     'message': 'cannot '
+                                                                                                                'implicitly '
+                                                                                                                'convert '
+                                                                                                                "'IntLiteral[1]' "
+                                                                                                                'value '
+                                                                                                                'to '
+                                                                                                                "'NormalRoughnessMode'"}],
+                                                                                         'notes': []},
                    'tests/compile_fail/a_pipe_run_is_not_a_bare_int.mojo': {'errors': [{'line': 14,
                                                                                         'column': 19,
                                                                                         'message': 'no '
@@ -40020,68 +40103,79 @@ EXPECTATION_SUCCESSOR = {'path': 'tools/compile_fail_expectations.json',
                                                                                                    'function '
                                                                                                    'in '
                                                                                                    'initialization'}],
-                                                                            'notes': ['candidate '
-                                                                                      'not '
-                                                                                      'viable: '
-                                                                                      'missing '
-                                                                                      'required '
-                                                                                      'argument: '
-                                                                                      "'copy'",
-                                                                                      'candidate '
-                                                                                      'not '
-                                                                                      'viable: '
-                                                                                      'missing '
-                                                                                      'required '
-                                                                                      'argument: '
-                                                                                      "'move'",
-                                                                                      'candidate '
-                                                                                      'not '
-                                                                                      'viable: '
-                                                                                      'value '
-                                                                                      'passed '
-                                                                                      'to '
-                                                                                      "'run' "
-                                                                                      'cannot '
-                                                                                      'be '
-                                                                                      'converted '
-                                                                                      'from '
-                                                                                      "'IntLiteral[1]' "
-                                                                                      'to '
-                                                                                      "'PipeRun'"]}},
- 'edits': [(117,
-            129,
+                                                                            'notes': ['candidate not viable: '
+                                                                                      'missing required '
+                                                                                      "argument: 'copy'",
+                                                                                      'candidate not viable: '
+                                                                                      'missing required '
+                                                                                      "argument: 'move'",
+                                                                                      'candidate not viable: '
+                                                                                      "value passed to 'run' "
+                                                                                      'cannot be converted '
+                                                                                      "from 'IntLiteral[1]' "
+                                                                                      "to 'PipeRun'"]},
+                   'tests/compile_fail/a_super_resolution_preset_is_not_a_bare_int.mojo': {'errors': [{'line': 14,
+                                                                                                       'column': 30,
+                                                                                                       'message': 'cannot '
+                                                                                                                  'implicitly '
+                                                                                                                  'convert '
+                                                                                                                  "'IntLiteral[13]' "
+                                                                                                                  'value '
+                                                                                                                  'to '
+                                                                                                                  "'SuperResolutionPreset'"}],
+                                                                                           'notes': []}},
+ 'edits': [(123,
+            135,
             (),
-            ('      }\n',
-             '    ],\n',
-             '    "notes": [\n',
-             '      "function declared here"\n',
-             '    ]\n',
-             '  },\n',
-             '  "tests/compile_fail/a_body_region_is_not_a_bare_int.mojo": {\n',
+            ('  "tests/compile_fail/a_body_region_is_not_a_bare_int.mojo": {\n',
              '    "errors": [\n',
              '      {\n',
              '        "column": 24,\n',
              '        "line": 12,\n',
-             '        "message": "invalid call to \'region_label\': value passed to \'region\' '
-             'cannot be converted from \'IntLiteral[0]\' to \'BodyRegion\'"\n')),
-           (259,
-            271,
-            (),
-            ('      }\n',
+             '        "message": "invalid call to \'region_label\': value passed to \'region\' cannot be '
+             'converted from \'IntLiteral[0]\' to \'BodyRegion\'"\n',
+             '      }\n',
              '    ],\n',
              '    "notes": [\n',
              '      "function declared here"\n',
              '    ]\n',
-             '  },\n',
-             '  "tests/compile_fail/a_canonical_tissue_is_not_a_bare_int.mojo": {\n',
+             '  },\n')),
+           (231,
+            245,
+            (),
+            ('  "tests/compile_fail/a_buffer_kind_is_not_a_bare_int.mojo": {\n',
+             '    "errors": [\n',
+             '      {\n',
+             '        "line": 12,\n',
+             '        "column": 30,\n',
+             '        "message": "no matching function in initialization"\n',
+             '      }\n',
+             '    ],\n',
+             '    "notes": [\n',
+             '      "candidate not viable: missing required argument: \'copy\'",\n',
+             '      "candidate not viable: missing required argument: \'move\'",\n',
+             '      "candidate not viable: value passed to \'kind\' cannot be converted from '
+             '\'IntLiteral[2]\' to \'BufferKind\'"\n',
+             '    ]\n',
+             '  },\n')),
+           (279,
+            291,
+            (),
+            ('  "tests/compile_fail/a_canonical_tissue_is_not_a_bare_int.mojo": {\n',
              '    "errors": [\n',
              '      {\n',
              '        "column": 24,\n',
              '        "line": 12,\n',
-             '        "message": "invalid call to \'tissue_label\': value passed to \'tissue\' '
-             'cannot be converted from \'IntLiteral[1]\' to \'CanonicalTissue\'"\n')),
-           (518,
-            532,
+             '        "message": "invalid call to \'tissue_label\': value passed to \'tissue\' cannot be '
+             'converted from \'IntLiteral[1]\' to \'CanonicalTissue\'"\n',
+             '      }\n',
+             '    ],\n',
+             '    "notes": [\n',
+             '      "function declared here"\n',
+             '    ]\n',
+             '  },\n')),
+           (532,
+            546,
             (),
             ('  "tests/compile_fail/a_contact_mode_is_not_a_bare_int.mojo": {\n',
              '    "errors": [\n',
@@ -40098,76 +40192,145 @@ EXPECTATION_SUCCESSOR = {'path': 'tools/compile_fail_expectations.json',
              '\'IntLiteral[0]\' to \'ContactMode\'"\n',
              '    ]\n',
              '  },\n')),
-           (684,
-            696,
+           (704,
+            726,
             (),
-            ('      }\n',
+            ('  "tests/compile_fail/a_denoiser_preset_is_not_a_bare_int.mojo": {\n',
+             '    "errors": [\n',
+             '      {\n',
+             '        "line": 14,\n',
+             '        "column": 30,\n',
+             '        "message": "cannot implicitly convert \'IntLiteral[6]\' value to \'DenoiserPreset\'"\n',
+             '      }\n',
              '    ],\n',
-             '    "notes": [\n',
-             '      "function declared here"\n',
-             '    ]\n',
+             '    "notes": []\n',
              '  },\n',
              '  "tests/compile_fail/a_dentition_is_not_a_bare_int.mojo": {\n',
              '    "errors": [\n',
              '      {\n',
              '        "column": 27,\n',
              '        "line": 12,\n',
-             '        "message": "invalid call to \'dentition_label\': value passed to '
-             '\'dentition\' cannot be converted from \'IntLiteral[0]\' to \'Dentition\'"\n')),
-           (1115,
-            1127,
-            (),
-            ('      }\n',
-             '    ],\n',
-             '    "notes": [\n',
-             '      "function declared here"\n',
-             '    ]\n',
-             '  },\n',
-             '  "tests/compile_fail/a_failure_mode_is_not_a_bare_int.mojo": {\n',
-             '    "errors": [\n',
-             '      {\n',
-             '        "line": 25,\n',
-             '        "column": 24,\n',
-             '        "message": "invalid call to \'failure_motion\': value passed to \'mode\' '
-             'cannot be converted from \'IntLiteral[1]\' to \'FailureMode\'"\n')),
-           (1955,
-            1967,
-            (),
-            ('  "tests/compile_fail/a_load_kind_is_not_a_bare_int.mojo": {\n',
-             '    "errors": [\n',
-             '      {\n',
-             '        "line": 12,\n',
-             '        "column": 24,\n',
-             '        "message": "invalid call to \'of\': value passed to \'kind\' cannot be '
-             'converted from \'IntLiteral[4]\' to \'LoadKind\'"\n',
+             '        "message": "invalid call to \'dentition_label\': value passed to \'dentition\' cannot '
+             'be converted from \'IntLiteral[0]\' to \'Dentition\'"\n',
              '      }\n',
              '    ],\n',
              '    "notes": [\n',
              '      "function declared here"\n',
              '    ]\n',
              '  },\n')),
-           (2011,
-            2023,
+           (850,
+            876,
             (),
-            ('      }\n',
+            ('  "tests/compile_fail/a_dlss_feature_is_not_a_bare_int.mojo": {\n',
+             '    "errors": [\n',
+             '      {\n',
+             '        "line": 12,\n',
+             '        "column": 38,\n',
+             '        "message": "invalid call to \'supports\': value passed to \'feature\' cannot be '
+             'converted from \'IntLiteral[0]\' to \'Feature\'"\n',
+             '      }\n',
              '    ],\n',
              '    "notes": [\n',
              '      "function declared here"\n',
              '    ]\n',
              '  },\n',
-             '  "tests/compile_fail/a_mapping_kind_is_not_a_bare_int.mojo": {\n',
+             '  "tests/compile_fail/a_dlss_mode_is_not_a_bare_int.mojo": {\n',
+             '    "errors": [\n',
+             '      {\n',
+             '        "line": 12,\n',
+             '        "column": 41,\n',
+             '        "message": "no matching function in initialization"\n',
+             '      }\n',
+             '    ],\n',
+             '    "notes": [\n',
+             '      "candidate not viable: missing required argument: \'copy\'",\n',
+             '      "candidate not viable: missing required argument: \'move\'",\n',
+             '      "candidate not viable: value passed to \'mode\' cannot be converted from '
+             '\'IntLiteral[3]\' to \'UpscaleMode\'"\n',
+             '    ]\n',
+             '  },\n')),
+           (1171,
+            1183,
+            (),
+            ('  "tests/compile_fail/a_failure_mode_is_not_a_bare_int.mojo": {\n',
+             '    "errors": [\n',
+             '      {\n',
+             '        "line": 25,\n',
+             '        "column": 24,\n',
+             '        "message": "invalid call to \'failure_motion\': value passed to \'mode\' cannot be '
+             'converted from \'IntLiteral[1]\' to \'FailureMode\'"\n',
+             '      }\n',
+             '    ],\n',
+             '    "notes": [\n',
+             '      "function declared here"\n',
+             '    ]\n',
+             '  },\n')),
+           (2005,
+            2017,
+            (),
+            ('  "tests/compile_fail/a_load_kind_is_not_a_bare_int.mojo": {\n',
+             '    "errors": [\n',
+             '      {\n',
+             '        "line": 12,\n',
+             '        "column": 24,\n',
+             '        "message": "invalid call to \'of\': value passed to \'kind\' cannot be converted from '
+             '\'IntLiteral[4]\' to \'LoadKind\'"\n',
+             '      }\n',
+             '    ],\n',
+             '    "notes": [\n',
+             '      "function declared here"\n',
+             '    ]\n',
+             '  },\n')),
+           (2067,
+            2079,
+            (),
+            ('  "tests/compile_fail/a_mapping_kind_is_not_a_bare_int.mojo": {\n',
              '    "errors": [\n',
              '      {\n',
              '        "column": 25,\n',
              '        "line": 12,\n',
-             '        "message": "invalid call to \'mapping_label\': value passed to \'kind\' '
-             'cannot be converted from \'IntLiteral[0]\' to \'MappingKind\'"\n')),
-           (2592,
-            2606,
+             '        "message": "invalid call to \'mapping_label\': value passed to \'kind\' cannot be '
+             'converted from \'IntLiteral[0]\' to \'MappingKind\'"\n',
+             '      }\n',
+             '    ],\n',
+             '    "notes": [\n',
+             '      "function declared here"\n',
+             '    ]\n',
+             '  },\n')),
+           (2213,
+            2225,
             (),
-            ('    ]\n',
-             '  },\n',
-             '  "tests/compile_fail/a_pipe_run_is_not_a_bare_int.mojo": {\n',
+            ('  "tests/compile_fail/a_motion_vector_space_is_not_a_bare_int.mojo": {\n',
+             '    "errors": [\n',
+             '      {\n',
+             '        "line": 20,\n',
+             '        "column": 59,\n',
+             '        "message": "invalid call to \'frame_constants\': value passed to \'motion\' cannot be '
+             'converted from \'IntLiteral[1]\' to \'MotionVectorSpace\'"\n',
+             '      }\n',
+             '    ],\n',
+             '    "notes": [\n',
+             '      "function declared here"\n',
+             '    ]\n',
+             '  },\n')),
+           (2466,
+            2476,
+            (),
+            ('  "tests/compile_fail/a_normal_roughness_mode_is_not_a_bare_int.mojo": {\n',
+             '    "errors": [\n',
+             '      {\n',
+             '        "line": 14,\n',
+             '        "column": 37,\n',
+             '        "message": "cannot implicitly convert \'IntLiteral[1]\' value to '
+             '\'NormalRoughnessMode\'"\n',
+             '      }\n',
+             '    ],\n',
+             '    "notes": []\n',
+             '  },\n')),
+           (2666,
+            2680,
+            (),
+            ('  "tests/compile_fail/a_pipe_run_is_not_a_bare_int.mojo": {\n',
              '    "errors": [\n',
              '      {\n',
              '        "line": 14,\n',
@@ -40179,11 +40342,27 @@ EXPECTATION_SUCCESSOR = {'path': 'tools/compile_fail_expectations.json',
              '      "candidate not viable: missing required argument: \'copy\'",\n',
              '      "candidate not viable: missing required argument: \'move\'",\n',
              '      "candidate not viable: value passed to \'run\' cannot be converted from '
-             '\'IntLiteral[1]\' to \'PipeRun\'"\n'))],
+             '\'IntLiteral[1]\' to \'PipeRun\'"\n',
+             '    ]\n',
+             '  },\n')),
+           (3466,
+            3476,
+            (),
+            ('  "tests/compile_fail/a_super_resolution_preset_is_not_a_bare_int.mojo": {\n',
+             '    "errors": [\n',
+             '      {\n',
+             '        "line": 14,\n',
+             '        "column": 30,\n',
+             '        "message": "cannot implicitly convert \'IntLiteral[13]\' value to '
+             '\'SuperResolutionPreset\'"\n',
+             '      }\n',
+             '    ],\n',
+             '    "notes": []\n',
+             '  },\n'))],
  'regression_path': 'tools/carla_lane_oracle/test_expectation_binding_successor.py',
- 'regression_sha256': '59fdf894d596242d6bc5b5bb5804652b158b7bbb60c7abe688bc6b45b47f6c2e'}
-BINDING_INPUTS = {**COMMON_BINDING_INPUTS, **{'tools/compile_fail_expectations.json': '7c96ffe1750ffee867b5b161529ed834cfa0d732780c5a2a8b5ef2f876cdb03e',
- 'tools/carla_lane_oracle/test_expectation_binding_successor.py': '59fdf894d596242d6bc5b5bb5804652b158b7bbb60c7abe688bc6b45b47f6c2e'}}
+ 'regression_sha256': '6f866d62d04370dad8eed28e7e6bd26c5b6ab804b00c407932624ba183cd9a08'}
+BINDING_INPUTS = {**COMMON_BINDING_INPUTS, **{'tools/compile_fail_expectations.json': 'deee9f738d1387ee05ebc4a30e2c5bb1ab4cfbfda04dd2fa6c01aec124552a29',
+ 'tools/carla_lane_oracle/test_expectation_binding_successor.py': '6f866d62d04370dad8eed28e7e6bd26c5b6ab804b00c407932624ba183cd9a08'}}
 # END REVIEWED TYPED BOUNDARY DATA
 
 
@@ -40377,8 +40556,8 @@ def expectation_predecessor(raw):
     additions = record['added_records']
     require(type(old) is dict and type(current) is dict and type(additions) is dict
             and len(old) == record['before_count'] == 689
-            and len(current) == record['after_count'] == 697
-            and len(additions) == 8 and not set(old).intersection(additions)
+            and len(current) == record['after_count'] == 704
+            and len(additions) == 15 and not set(old).intersection(additions)
             and set(current) == set(old).union(additions),
             'expectation successor key inventory changed')
     require({path: current[path] for path in old} == old
@@ -40444,4 +40623,4 @@ def verify_authority():
     extension = {'BINDING_INPUTS': BINDING_INPUTS,
                  'EXPECTATION_SUCCESSOR': EXPECTATION_SUCCESSOR}
     require(sha(json.dumps(extension, sort_keys=True, separators=(',', ':'))) ==
-            '2097bb66bb40c060d5f7152e6b3251c907720d4b4fa163d015eb90fd7b5d9107', 'expectation successor authority changed')
+            '235c6965afb3840e8921347eeff453953a10661efe85407876a670a2fd4f3c5f', 'expectation successor authority changed')
