@@ -14,7 +14,7 @@ and the foot. The surfaces are physically based, lit by a room
 environment and a lamp that casts soft shadows, and tone mapped.
 """
 
-from examples.output import example_destination
+from examples.output import example_destination, spin_frame
 
 from cameras.perspective_camera import PerspectiveCamera
 from core.assets import Assets
@@ -61,35 +61,6 @@ comptime DELAY_MS = 55
 comptime ANATOMY_DETAIL = 24
 comptime SKIN_DETAIL = 64
 comptime SPACING = Float32(0.42)
-
-
-def frame_at(
-    renderer: Renderer,
-    camera: PerspectiveCamera,
-    assets: Assets,
-    mut scene: Scene,
-    node: NodeId,
-    step: Angle,
-) raises -> Framebuffer:
-    """Turn both limbs by `step` and render one frame.
-
-    Args:
-        renderer: The renderer to draw with.
-        camera: The camera to view through.
-        assets: The geometry, materials and textures.
-        scene: The persistent scene, edited in place.
-        node: The parent of both limbs.
-        step: How much further to turn this frame.
-
-    Returns:
-        The rendered frame.
-
-    Raises:
-        Error: If the scene or the render is invalid.
-    """
-    scene.node(node).rotate_y(step)
-    scene.update()
-    return renderer.render(scene, assets, camera)
 
 
 def _stand(
@@ -227,7 +198,7 @@ def main() raises:
     var step = Angle(Float32(360) / Float32(FRAMES), DEGREE)
     var frames = List[Framebuffer]()
     for _ in range(FRAMES):
-        frames.append(frame_at(renderer, camera, assets, scene, pivot, step))
+        frames.append(spin_frame(renderer, camera, assets, scene, pivot, step))
 
     Path(destination).write_bytes(encode(frames, delay_ms=DELAY_MS))
     print("Wrote", destination, "-", FRAMES, "frames")

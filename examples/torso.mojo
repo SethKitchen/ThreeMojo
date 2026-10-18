@@ -19,7 +19,7 @@ The optional second argument is the mesh quality: `low`, `medium`,
 level below it. The default is `high`.
 """
 
-from examples.output import example_destination
+from examples.output import example_destination, spin_frame
 
 from cameras.perspective_camera import PerspectiveCamera
 from core.assets import Assets
@@ -90,35 +90,6 @@ comptime FRAMES = 36
 comptime DELAY_MS = 55
 comptime DEFAULT_QUALITY = "high"
 comptime SPACING = Float32(0.44)
-
-
-def frame_at(
-    renderer: Renderer,
-    camera: PerspectiveCamera,
-    assets: Assets,
-    mut scene: Scene,
-    node: NodeId,
-    step: Angle,
-) raises -> Framebuffer:
-    """Turn both bodies by `step` and render one frame.
-
-    Args:
-        renderer: The renderer to draw with.
-        camera: The camera to view through.
-        assets: The geometry, materials and textures.
-        scene: The persistent scene, edited in place.
-        node: The parent of both bodies.
-        step: How much further to turn this frame.
-
-    Returns:
-        The rendered frame.
-
-    Raises:
-        Error: If the scene or the render is invalid.
-    """
-    scene.node(node).rotate_y(step)
-    scene.update()
-    return renderer.render(scene, assets, camera)
 
 
 def _turned(v: Vector3, angle: Float32) -> Vector3:
@@ -322,7 +293,7 @@ def main() raises:
         )
         var camera_at = _turned(eye, -turned) - Vector3(SPACING, ground, 0)
         hair.shade(assets, lights, camera_at, Vector3(0.11, 0.11, 0.12))
-        frames.append(frame_at(renderer, camera, assets, scene, pivot, step))
+        frames.append(spin_frame(renderer, camera, assets, scene, pivot, step))
 
     Path(destination).write_bytes(encode(frames, delay_ms=DELAY_MS))
     print("Wrote", destination, "-", FRAMES, "frames")

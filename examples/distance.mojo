@@ -12,12 +12,12 @@ is from a reference point. The fraction is packed into four channels, so
 the sphere is banded rather than a smooth gray. It turns in place.
 """
 
-from examples.output import example_destination, write_example
+from examples.output import example_destination, spin_frame, write_example
 
 from cameras.perspective_camera import PerspectiveCamera
 from core.assets import Assets
 from core.clock import Clock
-from core.object3d import NodeId, Object3D
+from core.object3d import Object3D
 from core.scene import Scene
 from geometries.sphere import sphere
 from materials.material import distance_material
@@ -32,35 +32,6 @@ comptime WIDTH = 240
 comptime HEIGHT = 180
 comptime FRAMES = 36
 comptime DELAY_MS = 55
-
-
-def frame_at(
-    renderer: Renderer,
-    camera: PerspectiveCamera,
-    assets: Assets,
-    mut scene: Scene,
-    node: NodeId,
-    step: Angle,
-) raises -> Framebuffer:
-    """Turn the sphere by `step` and render one frame.
-
-    Args:
-        renderer: The renderer to draw with.
-        camera: The camera, placed in front of the sphere.
-        assets: The geometry and the distance material.
-        scene: The persistent scene, edited in place.
-        node: The node the sphere rides.
-        step: How much further the sphere turns this frame.
-
-    Returns:
-        The rendered frame.
-
-    Raises:
-        Error: If the scene or the render is invalid.
-    """
-    scene.node(node).rotate_y(step)
-    scene.update()
-    return renderer.render(scene, assets, camera)
 
 
 def main() raises:
@@ -95,6 +66,6 @@ def main() raises:
     frame_clock.start()
     var frames = List[Framebuffer]()
     for _ in range(FRAMES):
-        frames.append(frame_at(renderer, camera, assets, scene, node, step))
+        frames.append(spin_frame(renderer, camera, assets, scene, node, step))
 
     write_example(frames, destination, DELAY_MS, FRAMES, frame_clock)

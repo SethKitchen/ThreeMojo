@@ -12,12 +12,12 @@ encoded bytes would make that overlap too dark. Mixing in linear light
 makes it yellow.
 """
 
-from examples.output import example_destination, write_example
+from examples.output import example_destination, spin_frame, write_example
 
 from cameras.perspective_camera import PerspectiveCamera
 from core.assets import Assets
 from core.clock import Clock
-from core.object3d import NodeId, Object3D
+from core.object3d import Object3D
 from core.scene import Scene
 from geometries.sphere import sphere
 from lights.light import ambient_light, directional_light
@@ -33,35 +33,6 @@ comptime WIDTH = 240
 comptime HEIGHT = 180
 comptime FRAMES = 36
 comptime DELAY_MS = 55
-
-
-def frame_at(
-    renderer: Renderer,
-    camera: PerspectiveCamera,
-    assets: Assets,
-    mut scene: Scene,
-    node: NodeId,
-    step: Angle,
-) raises -> Framebuffer:
-    """Turn the sphere by `step` and render one frame.
-
-    Args:
-        renderer: The renderer to draw with.
-        camera: The camera to view through.
-        assets: The geometry and materials.
-        scene: The persistent scene, edited in place.
-        node: The sphere's node.
-        step: How much further to turn this frame.
-
-    Returns:
-        The rendered frame.
-
-    Raises:
-        Error: If the scene or the render is invalid.
-    """
-    scene.node(node).rotate_y(step)
-    scene.update()
-    return renderer.render(scene, assets, camera)
 
 
 def main() raises:
@@ -103,6 +74,6 @@ def main() raises:
     frame_clock.start()
     var frames = List[Framebuffer]()
     for _ in range(FRAMES):
-        frames.append(frame_at(renderer, camera, assets, scene, node, step))
+        frames.append(spin_frame(renderer, camera, assets, scene, node, step))
 
     write_example(frames, destination, DELAY_MS, FRAMES, frame_clock)
