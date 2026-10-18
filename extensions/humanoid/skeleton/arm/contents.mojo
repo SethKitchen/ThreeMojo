@@ -142,6 +142,22 @@ struct ArmContents(Equatable, ImplicitlyCopyable, Writable):
         )
 
 
+def require_arm_contents(contents: ArmContents) raises:
+    """Refuse an arm layer set that is not named.
+
+    Args:
+        contents: Which tissue layers an arm draws.
+
+    Returns:
+        Nothing. The call returns when the set is named.
+
+    Raises:
+        Error: If the set is not a named layer set.
+    """
+    if not contents.is_valid():
+        raise Error(_MESSAGE)
+
+
 # The humerus, the radius and the ulna.
 comptime BONES = ArmContents(1)
 # The shoulder and elbow capsules, the articular cartilages, the

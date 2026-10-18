@@ -52,6 +52,7 @@ from extensions.humanoid.skeleton.pelvis.contents import (
     BOTH,
     SKIN,
     PelvisContents,
+    require_pelvis_contents,
 )
 from extensions.humanoid.skeleton.pelvis.muscles.dimensions import (
     pelvis_muscle_dimensions,
@@ -257,8 +258,7 @@ def add_lower_body(
     Raises:
         Error: If the spec, a mesh, `contents` or the scene is invalid.
     """
-    if not contents.is_valid():
-        raise Error("Pelvis contents must be a named layer set")
+    require_pelvis_contents(contents)
     var artery = _resolved_paint(assets, artery_paint, artery_phong())
     var vein = _resolved_paint(assets, vein_paint, vein_phong())
     var lymph = _resolved_paint(assets, lymph_paint, lymph_phong())

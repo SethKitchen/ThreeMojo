@@ -36,7 +36,7 @@ from core.deform import morphed_positions, skin_carriers, skin_pose
 from core.morph import MorphInfluences
 from core.object3d import NO_PARENT, NodeId, Object3D
 from core.order import stable_rising_order
-from core.scene import Scene, require_instanced_mesh
+from core.scene import Scene, require_instanced_mesh, require_mesh
 from geometries.attribute_utils import (
     MorphedAttributes,
     compute_morphed_attributes,
@@ -131,8 +131,7 @@ def create_meshes_from_multi_material_mesh(
             a material the list does not have, or an index entry points
             past the last vertex.
     """
-    if index < 0 or index >= len(scene.meshes):
-        raise Error("No mesh has that index")
+    require_mesh(index, len(scene.meshes))
     var mesh = scene.meshes[index]
     if not mesh.is_multi_material():
         return mesh.node

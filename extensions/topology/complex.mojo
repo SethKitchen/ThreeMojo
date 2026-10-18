@@ -21,9 +21,9 @@ information modeling of buildings using non-manifold topology with ASM
 and DesignScript" (2013).
 """
 
-from std.math import isfinite, sqrt
+from std.math import sqrt
 from extensions.topology.ids import CellId, EdgeId, FaceId, VertexId
-from extensions.topology.weld import Welder
+from extensions.topology.weld import Welder, require_weld_tolerance
 from generators.utils import Vec3d
 
 
@@ -503,8 +503,7 @@ struct CellComplex(Movable):
         """
         # Public arrays can be edited after construction. Check every
         # reference before the closure walk indexes it.
-        if not (self.welder.tolerance > 0 and isfinite(self.welder.tolerance)):
-            raise Error("A weld tolerance must be positive and finite")
+        require_weld_tolerance(self.welder.tolerance)
         for i in range(len(self.welder.points)):
             var point = self.welder.points[i]
             if not point.is_finite():

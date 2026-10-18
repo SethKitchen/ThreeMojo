@@ -140,6 +140,23 @@ def require_skinned_mesh(index: Int, count: Int) raises:
         raise Error("No skinned mesh has that index")
 
 
+def require_mesh(index: Int, count: Int) raises:
+    """Refuse a mesh index the scene does not have.
+
+    Args:
+        index: Which mesh, as its position in the scene's list.
+        count: How many meshes the scene has.
+
+    Returns:
+        Nothing. The call returns when the index names a mesh.
+
+    Raises:
+        Error: If no mesh has that index.
+    """
+    if index < 0 or index >= count:
+        raise Error("No mesh has that index")
+
+
 def require_lod_index(index: Int, count: Int) raises:
     """Refuse an LOD index the scene does not have.
 

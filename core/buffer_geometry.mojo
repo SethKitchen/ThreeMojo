@@ -191,6 +191,22 @@ def require_stored_index(vertex: Int, count: Int) raises:
         _refuse_past_vertex()
 
 
+def require_nonnegative_index(vertex: Int) raises:
+    """Refuse an index entry that is negative.
+
+    Args:
+        vertex: The index entry.
+
+    Returns:
+        Nothing. The call returns when the entry is zero or more.
+
+    Raises:
+        Error: If the entry is negative.
+    """
+    if vertex < 0:
+        raise Error("An index entry cannot be negative")
+
+
 def _run_end(start: Int, count: Int, total: Int) -> Int:
     """Return a run's clamped end without adding unbounded integers.
 
@@ -1119,8 +1135,7 @@ struct BufferGeometry(Movable):
         if len(index) % 3 != 0:
             raise Error("An index buffer must hold whole triangles")
         for position in range(len(index)):
-            if index[position] < 0:
-                raise Error("An index entry cannot be negative")
+            require_nonnegative_index(index[position])
         self.index = index^
 
     def is_indexed(self) -> Bool:

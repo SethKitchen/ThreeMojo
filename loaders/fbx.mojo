@@ -103,6 +103,7 @@ from loaders.fbx_tree import (
     FbxDocument,
     FbxFormat,
     object_name,
+    require_fbx_format,
     parse_fbx,
 )
 from loaders.fbx_animation import FbxAnimatedModel, read_fbx_animations
@@ -890,8 +891,7 @@ def load_fbx(
             blend shape or an animation stack is malformed or names what
             is not there.
     """
-    if not document.format.is_valid():
-        raise Error("FBX: a format that is neither ASCII nor binary")
+    require_fbx_format(document.format)
     var objects = document.child(document.root(), "Objects")
     if objects == NO_FBX_NODE:
         raise Error("FBX: the file has no Objects")

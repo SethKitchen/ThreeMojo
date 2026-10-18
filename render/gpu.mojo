@@ -224,6 +224,7 @@ from render.rasterizer import (
     RasterVertex,
     ShadeMode,
     require_shade_mode,
+    require_whole_segments,
     require_whole_triangles,
     Triangle,
     TangentFrame,
@@ -508,6 +509,7 @@ from render.computation import (
     ComputeNodes,
     GPUComputationRenderer,
     compute_texel,
+    require_computation_ready,
 )
 from materials.compute_ids import ATOMIC_LOAD
 from materials.compute_nodes import (
@@ -10062,8 +10064,7 @@ struct GpuRenderer(Movable):
         """
         require_depth_mode(depth_mode)
         require_whole_triangles(len(corners))
-        if len(lines) % 2 != 0:
-            raise Error("Rasterizing needs whole segments")
+        require_whole_segments(len(lines))
         require_shade_mode(mode)
         if mode == SHADE_SHADOW:
             raise Error(
@@ -13281,8 +13282,9 @@ struct GpuComputation(Movable):
         Raises:
             Error: If `init` has not compiled the shaders.
         """
-        if len(computation.programs) != len(computation.variables):
-            raise Error("A computation must be initialized before it runs")
+        require_computation_ready(
+            len(computation.programs), len(computation.variables)
+        )
         var packed = computation.packed()
         var w = computation.size_x
         var h = computation.size_y

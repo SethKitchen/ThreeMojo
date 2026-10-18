@@ -22,7 +22,11 @@ from extensions.humanoid.skeleton.arm.bones.dimensions import named_arm_bones
 from extensions.humanoid.skeleton.arm.bones.geometry import (
     arm_bone_from_dimensions,
 )
-from extensions.humanoid.skeleton.arm.contents import BOTH, ArmContents
+from extensions.humanoid.skeleton.arm.contents import (
+    BOTH,
+    ArmContents,
+    require_arm_contents,
+)
 from extensions.humanoid.skeleton.arm.frame import arm_muscle_dimensions
 from extensions.humanoid.skeleton.arm.hair.dimensions import named_arm_hair
 from extensions.humanoid.skeleton.arm.hair.geometry import (
@@ -128,8 +132,7 @@ def add_arm(
         Error: If the spec, `side`, a mesh, `contents` or the scene is
             invalid.
     """
-    if not contents.is_valid():
-        raise Error("Arm contents must be a named layer set")
+    require_arm_contents(contents)
     require_side(side, "An arm")
     var dims = arm_muscle_dimensions(spec)
     var root = Object3D()

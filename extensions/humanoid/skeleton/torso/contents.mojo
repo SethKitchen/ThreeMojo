@@ -131,6 +131,22 @@ struct TorsoContents(Equatable, ImplicitlyCopyable, Writable):
         )
 
 
+def require_torso_contents(contents: TorsoContents) raises:
+    """Refuse a torso layer set that is not named.
+
+    Args:
+        contents: Which tissue layers a torso draws.
+
+    Returns:
+        Nothing. The call returns when the set is named.
+
+    Raises:
+        Error: If the set is not a named layer set.
+    """
+    if not contents.is_valid():
+        raise Error(_MESSAGE)
+
+
 # The vertebrae, the ribs and the sternum.
 comptime BONES = TorsoContents(1)
 # The intervertebral discs, the costal cartilages and the spinal
