@@ -135,7 +135,7 @@ from objects.line import SEGMENTS, Line
 from objects.mesh import Mesh
 from objects.points import Points
 from render.framebuffer import Color, FloatColor
-from render.srgb import SRGB, linear_to_srgb
+from render.srgb import SRGB
 from render.texture import BILINEAR, CLAMP, NEAREST, REPEAT, Texture, Wrap
 from render.texture_store import NO_TEXTURE, TextureId
 from std.collections import Dict
@@ -350,20 +350,20 @@ struct VrmlMaterial(Copyable, Movable):
         var material: Material
         if self.kind == PHONG:
             material = Material(
-                _authored(self.color),
+                self.color.encode_opaque(),
                 map=texture,
                 side=self.side,
                 opacity=Float32(self.opacity),
                 kind=PHONG,
-                emissive=_authored(self.emissive),
+                emissive=self.emissive.encode_opaque(),
                 vertex_colors=self.vertex_colors,
-                specular=_authored(self.specular),
+                specular=self.specular.encode_opaque(),
                 shininess=Float32(self.shininess),
                 transparent=self.transparent,
             )
         else:
             material = Material(
-                _authored(self.color),
+                self.color.encode_opaque(),
                 map=texture,
                 side=self.side,
                 opacity=Float32(self.opacity),
@@ -375,16 +375,6 @@ struct VrmlMaterial(Copyable, Movable):
         material.depth_write = self.depth_write
         material.depth_test = self.depth_test
         return material^
-
-
-def _authored(color: FloatColor) -> Color:
-    """Return linear light as the sRGB bytes a material holds."""
-    return FloatColor(
-        linear_to_srgb(color.r),
-        linear_to_srgb(color.g),
-        linear_to_srgb(color.b),
-        1,
-    ).quantize()
 
 
 def _linear(r: Float64, g: Float64, b: Float64) -> FloatColor:
@@ -1079,7 +1069,7 @@ struct _Builder(Movable):
         var built: Material
         if kind == VRML_POINTS:
             built = points_material(
-                _authored(drawn_with.color),
+                drawn_with.color.encode_opaque(),
                 opacity=Float32(drawn_with.opacity),
                 transparent=drawn_with.transparent,
                 vertex_colors=drawn_with.vertex_colors,

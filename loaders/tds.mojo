@@ -73,7 +73,7 @@ from math.vector2 import Vector2
 from math.vector3 import Vector3
 from objects.mesh import Mesh
 from render.framebuffer import Color, FloatColor
-from render.srgb import LINEAR, linear_to_srgb, srgb_to_linear
+from render.srgb import LINEAR, srgb_to_linear
 from render.texture import BILINEAR, CLAMP, COVERAGE, texture_from
 from render.texture_store import NO_TEXTURE, TextureId
 from std.memory import bitcast
@@ -300,14 +300,14 @@ struct TdsMaterial(Copyable, Movable):
                 zero.
         """
         return Material(
-            _authored(self.color),
+            self.color.encode_opaque(),
             map=_texture(self.map),
             side=DOUBLE_SIDE if self.double_sided else FRONT_SIDE,
             opacity=self.opacity,
             blending=Optional(ADDITIVE) if self.additive else None,
             kind=PHONG,
             alpha_map=_texture(self.alpha_map),
-            specular=_authored(self.specular),
+            specular=self.specular.encode_opaque(),
             shininess=self.shininess,
             transparent=self.transparent,
             bump_map=_texture(self.bump_map),
@@ -320,16 +320,6 @@ def _texture(map: Optional[TdsMap]) -> TextureId:
     if Bool(map):
         return map.value().texture
     return NO_TEXTURE
-
-
-def _authored(color: FloatColor) -> Color:
-    """Return linear light as the sRGB bytes a material holds."""
-    return FloatColor(
-        linear_to_srgb(color.r),
-        linear_to_srgb(color.g),
-        linear_to_srgb(color.b),
-        1,
-    ).quantize()
 
 
 struct TdsModel(Movable):

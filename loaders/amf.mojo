@@ -57,7 +57,6 @@ from loaders.zip import unzip
 from materials.material import PHONG, Material, MaterialId
 from objects.mesh import Mesh
 from render.framebuffer import Color, FloatColor
-from render.srgb import linear_to_srgb, srgb_to_linear
 from std.math import isfinite, sqrt
 from std.pathlib import Path
 
@@ -178,11 +177,8 @@ def _color(doc: XmlDocument, element: Int) raises -> AmfColor:
 def _authored(color: AmfColor) -> Color:
     """Return a linear color as the sRGB bytes a material holds."""
     return FloatColor(
-        linear_to_srgb(Float32(color.r)),
-        linear_to_srgb(Float32(color.g)),
-        linear_to_srgb(Float32(color.b)),
-        1,
-    ).quantize()
+        Float32(color.r), Float32(color.g), Float32(color.b)
+    ).encode_opaque()
 
 
 def amf_material(color: AmfColor) raises -> Material:
