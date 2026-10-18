@@ -69,6 +69,22 @@ from std.math import isfinite
 from std.memory import bitcast
 
 
+def require_finite_written_number(value: Float32) raises:
+    """Refuse a number that cannot be written.
+
+    Args:
+        value: The number.
+
+    Returns:
+        Nothing. The call returns when the number is finite.
+
+    Raises:
+        Error: If the number is not finite.
+    """
+    if not isfinite(value):
+        raise Error("A number to write must be finite: " + String(value))
+
+
 def format_float32(value: Float32) raises -> String:
     """Return the text of a number that reads back to the same `Float32`.
 
@@ -83,8 +99,7 @@ def format_float32(value: Float32) raises -> String:
     Raises:
         Error: If the number is not finite.
     """
-    if not isfinite(value):
-        raise Error("A number to write must be finite: " + String(value))
+    require_finite_written_number(value)
     var short = String(value)
     if Float32(Float64(short)) == value:
         return short
@@ -107,8 +122,7 @@ def format_js_float32(value: Float32) raises -> String:
     Raises:
         Error: If the number is not finite.
     """
-    if not isfinite(value):
-        raise Error("A number to write must be finite: " + String(value))
+    require_finite_written_number(value)
     return js_number_text(Float64(value))
 
 
@@ -139,8 +153,7 @@ def push_f32(mut out: List[UInt8], value: Float32, little: Bool) raises:
         Error: If the number is not finite. Every loader here refuses
             one, so no file is written with one.
     """
-    if not isfinite(value):
-        raise Error("A number to write must be finite: " + String(value))
+    require_finite_written_number(value)
     push_word(out, Int(bitcast[DType.uint32](value)), 4, little)
 
 

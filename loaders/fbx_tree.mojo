@@ -61,6 +61,22 @@ comptime MIN_BINARY_VERSION = 6400
 comptime WIDE_RECORD_VERSION = 7500
 
 
+def require_fbx_whole(value: Float64) raises:
+    """Refuse an FBX number that has a fraction.
+
+    Args:
+        value: The number.
+
+    Returns:
+        Nothing. The call returns when the number is a whole number.
+
+    Raises:
+        Error: If the number has a fraction.
+    """
+    if value != Float64(Int(value)):
+        raise Error("FBX: a whole number was expected, not " + String(value))
+
+
 @fieldwise_init
 struct FbxFormat(Equatable, ImplicitlyCopyable, Writable):
     """Which of its two forms an FBX file is written in, as a type rather
@@ -368,10 +384,7 @@ struct FbxDocument(Movable):
         if found.kind == FBX_INTEGER:
             return found.integer
         var value = self.number(node, index)
-        if value != Float64(Int(value)):
-            raise Error(
-                "FBX: a whole number was expected, not " + String(value)
-            )
+        require_fbx_whole(value)
         return Int(value)
 
     def number(self, node: Int, index: Int) raises -> Float64:
@@ -467,10 +480,7 @@ struct FbxDocument(Movable):
                 return only.integers.copy()
         var out = List[Int]()
         for value in self.numbers(node):
-            if value != Float64(Int(value)):
-                raise Error(
-                    "FBX: a whole number was expected, not " + String(value)
-                )
+            require_fbx_whole(value)
             out.append(Int(value))
         return out^
 

@@ -270,6 +270,25 @@ def line_geometry(
     return _geometry_of(pairs, tints)
 
 
+def require_unindexed_wide_line(geometry: BufferGeometry) raises:
+    """Refuse an indexed wide-line geometry.
+
+    Args:
+        geometry: The paired-point geometry.
+
+    Returns:
+        Nothing. The call returns when the geometry has no index.
+
+    Raises:
+        Error: If the geometry is indexed.
+    """
+    if geometry.is_indexed():
+        raise Error(
+            "A wide line geometry cannot be indexed: its points are paired"
+            " in the order they are given"
+        )
+
+
 def drawn_segments(geometry: BufferGeometry) raises -> Tuple[Int, Int]:
     """Return the first drawn point and the count of complete wide segments.
 
@@ -287,11 +306,7 @@ def drawn_segments(geometry: BufferGeometry) raises -> Tuple[Int, Int]:
         Error: If the geometry is indexed, has no positions, holds an odd
             number of points, or has an invalid draw range.
     """
-    if geometry.is_indexed():
-        raise Error(
-            "A wide line geometry cannot be indexed: its points are paired"
-            " in the order they are given"
-        )
+    require_unindexed_wide_line(geometry)
     _ = segment_count(SEGMENTS, geometry.vertex_count())
     var visible = geometry.drawn_vertices()
     return (visible[0], visible[1] // 2)

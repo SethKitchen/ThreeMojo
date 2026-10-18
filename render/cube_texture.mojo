@@ -104,7 +104,7 @@ from render.cube_uv import (
 )
 from render.framebuffer import FloatColor, Framebuffer
 from render.png import DecodedImage
-from render.srgb import SRGB, UNKNOWN_SPACE, ColorSpace
+from render.srgb import SRGB, ColorSpace, require_known_color_space
 from render.texture import (
     BILINEAR,
     CLAMP,
@@ -1070,11 +1070,7 @@ def cube_texture_from(
         var source = cube_image_index(index, layout == SEEN_FROM_OUTSIDE)
         ref image = images[source]
         var space = color_space.or_else(image.color_space)
-        if space == UNKNOWN_SPACE:
-            raise Error(
-                "This image declares a color space that cannot be interpreted;"
-                " pass SRGB or LINEAR to say how to read it"
-            )
+        require_known_color_space(space)
         faces.append(
             Texture(
                 image.width,

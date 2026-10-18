@@ -69,6 +69,25 @@ comptime LINEAR = ColorSpace(1)
 comptime UNKNOWN_SPACE = ColorSpace(2)
 
 
+def require_known_color_space(space: ColorSpace) raises:
+    """Refuse a color space a file left unknown.
+
+    Args:
+        space: The space to read the image in.
+
+    Returns:
+        Nothing. The call returns when the space is not unknown.
+
+    Raises:
+        Error: If the space is unknown.
+    """
+    if space == UNKNOWN_SPACE:
+        raise Error(
+            "This image declares a color space that cannot be interpreted;"
+            " pass SRGB or LINEAR to say how to read it"
+        )
+
+
 def srgb_to_linear(value: Float32) -> Float32:
     """Return an sRGB-encoded value as the amount of light it stands for.
 

@@ -157,6 +157,22 @@ def _second_word(units: List[Int]) -> String:
     return _word(units, 1).or_else("undefined")
 
 
+def require_vtk_polydata(dataset: String) raises:
+    """Refuse a VTK dataset that is not PolyData.
+
+    Args:
+        dataset: The DATASET word.
+
+    Returns:
+        Nothing. The call returns when the dataset is PolyData.
+
+    Raises:
+        Error: If the dataset is not PolyData.
+    """
+    if dataset != "POLYDATA":
+        raise Error("Unsupported DATASET type: " + dataset)
+
+
 def _decoded(bytes: Span[UInt8, _]) raises -> String:
     """Return a file as text, as `TextDecoder` decodes it: a leading byte
     order mark dropped.
@@ -612,8 +628,7 @@ def parse_vtk_ascii(text: String) raises -> BufferGeometry:
         number += 1
         if _starts(line, "DATASET"):
             var dataset = _second_word(line)
-            if dataset != "POLYDATA":
-                raise Error("Unsupported DATASET type: " + dataset)
+            require_vtk_polydata(dataset)
         elif in_points:
             while True:
                 var three = _three_floats(line, last_index)
@@ -857,8 +872,7 @@ def parse_vtk_binary(bytes: List[UInt8]) raises -> BufferGeometry:
         var next = end + 1
         if _starts(line, "DATASET"):
             var dataset = _second_word(line)
-            if dataset != "POLYDATA":
-                raise Error("Unsupported DATASET type: " + dataset)
+            require_vtk_polydata(dataset)
         elif _starts(line, "POINTS"):
             var n = _count(line, 1, "POINTS")
             _ = _to_index(Float64(n) * 3, "the points")

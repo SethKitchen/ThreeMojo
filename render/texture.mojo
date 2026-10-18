@@ -114,10 +114,10 @@ from render.png import DecodedImage
 from render.srgb import (
     LINEAR,
     SRGB,
-    UNKNOWN_SPACE,
     ColorSpace,
     decode_ramp,
     linear_to_srgb,
+    require_known_color_space,
 )
 from render.float_image import FloatImage
 from render.texture_buffer import TextureBuffer
@@ -2410,11 +2410,7 @@ def texture_from(
             and none was given.
     """
     var space = color_space.or_else(image.color_space)
-    if space == UNKNOWN_SPACE:
-        raise Error(
-            "This image declares a color space that cannot be interpreted;"
-            " pass SRGB or LINEAR to say how to read it"
-        )
+    require_known_color_space(space)
     return Texture(
         image.width,
         image.height,

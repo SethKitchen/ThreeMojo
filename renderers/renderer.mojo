@@ -199,6 +199,7 @@ from objects.line import (
 from objects.line_segments2 import (
     LineCoverage,
     require_line_coverage,
+    require_unindexed_wide_line,
     STRAND_LINE_COVERAGE,
     cap_steps,
     dash_spans,
@@ -4266,11 +4267,7 @@ def _emit_wide_line(
             "A wide line cannot be a wireframe: it is already its own lines"
         )
     ref geometry = assets.geometries.get(draw.geometry)
-    if geometry.is_indexed():
-        raise Error(
-            "A wide line geometry cannot be indexed: its points are paired"
-            " in the order they are given"
-        )
+    require_unindexed_wide_line(geometry)
     ref positions = geometry.attribute_view(String(POSITION))
     var count = positions.count()
     var visible = drawn_segments(geometry)
