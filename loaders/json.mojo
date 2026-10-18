@@ -31,6 +31,7 @@ from core.ordinal import ordinal_valid
 
 from loaders.bytes import ascii_digit, bytes_match, hex_digit_value
 from loaders.utf8 import append_utf8
+from math.finite import require_finite
 from std.math import isfinite
 
 comptime _HEX = "0123456789abcdef"
@@ -429,8 +430,7 @@ struct JsonDocument(Movable):
         if found == NO_NODE:
             return default
         var value = Float32(self.number(found))
-        if not isfinite(value):
-            raise Error(label + ": " + key + " must be finite")
+        require_finite(Float64(value), label + ": " + key + " must be finite")
         return value
 
     def finite_numbers(
@@ -451,8 +451,7 @@ struct JsonDocument(Movable):
         var out = List[Float32]()
         for index in range(self.length(array)):
             var value = Float32(self.number(self.at(array, index)))
-            if not isfinite(value):
-                raise Error(complaint)
+            require_finite(Float64(value), complaint)
             out.append(value)
         return out^
 
@@ -882,6 +881,7 @@ struct _Parser(Movable):
         for index in range(start, self.at):  # pragma: no branch
             text.append(self.bytes[index])
         var value = Float64(String(unsafe_from_utf8=text))
-        if not isfinite(value):
-            raise Error(self.where() + "a number beyond a Float64")
+        require_finite(
+            Float64(value), self.where() + "a number beyond a Float64"
+        )
         return value

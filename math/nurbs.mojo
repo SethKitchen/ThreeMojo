@@ -52,6 +52,7 @@ from math.curve_checks import check_curve_parameter
 from math.space_curve import Point3, SpaceCurve, normalized3, point3
 from math.vector3 import Vector3
 from math.vector4 import Vector4
+from math.finite import require_finite
 from std.math import inf, isfinite
 
 # A control point in homogeneous form: `x`, `y`, `z` and the weight `w`.
@@ -633,8 +634,7 @@ def _checked_knots(
         )
     for index in range(len(knots)):  # pragma: no branch
         # There is one knot at least, so this runs.
-        if not isfinite(knots[index]):
-            raise Error("A NURBS knot must be finite")
+        require_finite(Float64(knots[index]), "A NURBS knot must be finite")
         if index > 0 and knots[index] < knots[index - 1]:
             raise Error("NURBS knots cannot fall")
     if knots[degree] >= knots[points]:
@@ -656,8 +656,9 @@ def _checked_point(point: Vector4) raises -> Point4:
     """
     var out = point4(point)
     for axis in range(4):  # pragma: no branch
-        if not isfinite(out[axis]):
-            raise Error("A NURBS control point must be finite")
+        require_finite(
+            Float64(out[axis]), "A NURBS control point must be finite"
+        )
     return out
 
 
@@ -687,8 +688,9 @@ def _project(h: Point4) -> Point3:
 def _checked_finite(p: Point3) raises -> Point3:
     """Refuse a nonfinite projected point or derivative."""
     for axis in range(3):  # pragma: no branch
-        if not isfinite(p[axis]):
-            raise Error("A NURBS projected result must be finite")
+        require_finite(
+            Float64(p[axis]), "A NURBS projected result must be finite"
+        )
     return p
 
 

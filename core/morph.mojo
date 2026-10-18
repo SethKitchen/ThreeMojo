@@ -22,7 +22,7 @@ stays implicitly copyable: a scene adds one by value.
 """
 
 from core.ordinal import require_non_negative
-from std.math import isfinite
+from math.finite import require_finite
 
 
 def require_morph_target(target: Int) raises:
@@ -122,8 +122,7 @@ struct MorphInfluences(ImplicitlyCopyable, Sized):
             Error: If the target is negative or the weight is not a number.
         """
         require_morph_target(target)
-        if not isfinite(weight):
-            raise Error("A morph influence must be a number")
+        require_finite(Float64(weight), "A morph influence must be a number")
         while len(self.weights) <= target:
             self.weights.append(0)
         self.weights[target] = weight

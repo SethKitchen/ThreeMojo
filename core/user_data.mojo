@@ -41,7 +41,7 @@ from loaders.json import (
     parse_json,
     quote_json,
 )
-from std.math import isfinite
+from math.finite import require_finite
 
 # The largest number every whole `Float64` below it is exactly, two to the
 # fifty-three. Whole numbers below it are written as integers.
@@ -61,8 +61,9 @@ def json_number_text(value: Float64) raises -> String:
     Raises:
         Error: If the number is not finite.
     """
-    if not isfinite(value):
-        raise Error("User data: a number must be finite: " + String(value))
+    require_finite(
+        Float64(value), "User data: a number must be finite: " + String(value)
+    )
     if abs(value) < _EXACT and Float64(Int(value)) == value:
         return String(Int(value))
     return String(value)

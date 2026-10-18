@@ -44,6 +44,7 @@ from core.buffer_geometry import BufferGeometry, COLOR, NORMAL, POSITION, UV
 from core.geometry_store import GeometryId
 from math.norm import squared_length3
 from render.framebuffer import FloatColor
+from math.finite import require_finite
 from std.math import floor, isfinite, sqrt
 
 # three.js's `maxPolyCount` default.
@@ -385,8 +386,7 @@ struct MarchingCubes(Movable):
         Raises:
             Error: If the intensity is not finite.
         """
-        if not isfinite(intensity):
-            raise Error("A blur's intensity must be finite")
+        require_finite(Float64(intensity), "A blur's intensity must be finite")
         var copy = self.field.copy()
         var size = self.resolution
         var size2 = size * size

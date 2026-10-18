@@ -35,7 +35,8 @@ from render.color_spaces import srgb_to_linear_three
 from render.framebuffer import FloatColor
 from std.benchmark import black_box
 from math.utils import js_round
-from std.math import isfinite, max, min
+from math.finite import require_finite
+from std.math import max, min
 
 
 @fieldwise_init
@@ -218,8 +219,7 @@ def require_lut_bound(value: Float64) raises:
     Raises:
         Error: If the bound is not finite.
     """
-    if not isfinite(value):
-        raise Error("A color table's range must be finite")
+    require_finite(Float64(value), "A color table's range must be finite")
 
 
 struct Lut(Copyable, Movable):

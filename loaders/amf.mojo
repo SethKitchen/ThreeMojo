@@ -57,6 +57,7 @@ from loaders.zip import unzip
 from materials.material import PHONG, Material, MaterialId
 from objects.mesh import Mesh
 from render.framebuffer import Color, FloatColor
+from math.finite import require_finite
 from std.math import isfinite, sqrt
 from std.pathlib import Path
 
@@ -96,8 +97,9 @@ def _number(text: String, what: String) raises -> Float64:
         value = Float64(trimmed)
     except:
         raise Error("AMF: " + what + " is not a number: `" + text + "`")
-    if not isfinite(value):
-        raise Error("AMF: " + what + " is not a number: `" + text + "`")
+    require_finite(
+        Float64(value), "AMF: " + what + " is not a number: `" + text + "`"
+    )
     return value
 
 

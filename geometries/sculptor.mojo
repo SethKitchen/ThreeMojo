@@ -89,7 +89,7 @@ from geometries.sculptor_utils import (
 )
 from math.ray import Ray
 from math.vector3 import Vector3
-from math.finite import require_positive_finite
+from math.finite import require_finite, require_positive_finite
 from std.math import floor, inf, isfinite, sqrt
 from units.si import Length, METER
 
@@ -572,8 +572,10 @@ struct Sculptor(Movable):
         var world = scene.world_matrix(scene.meshes[self.mesh].node)
         var e = List[Float64](capacity=16)
         for i in range(16):  # pragma: no branch
-            if not isfinite(world.elements[i]):
-                raise Error("Sculptor: The mesh world matrix must be finite")
+            require_finite(
+                Float64(world.elements[i]),
+                "Sculptor: The mesh world matrix must be finite",
+            )
             e.append(Float64(world.elements[i]))
         var sx2 = e[0] * e[0] + e[1] * e[1] + e[2] * e[2]
         var sy2 = e[4] * e[4] + e[5] * e[5] + e[6] * e[6]

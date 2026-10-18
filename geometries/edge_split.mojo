@@ -39,7 +39,8 @@ from core.buffer_geometry import (
     require_vertex_index,
 )
 from geometries.utils import merge_vertices
-from std.math import cos, isfinite, sqrt
+from math.finite import require_finite
+from std.math import cos, sqrt
 from units.si import Angle
 
 
@@ -155,8 +156,10 @@ def edge_split(
             no positions of three numbers, a vertex is used by no
             triangle, or an index entry points past the last vertex.
     """
-    if not isfinite(cut_off_angle.value):
-        raise Error("An edge split needs a finite cut-off angle")
+    require_finite(
+        Float64(cut_off_angle.value),
+        "An edge split needs a finite cut-off angle",
+    )
     if geometry.instanced:
         raise Error("An instanced geometry is not split")
     var had_normals = geometry.has_attribute(String(NORMAL))

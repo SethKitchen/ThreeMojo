@@ -6,6 +6,7 @@
 """Validate serialized surface programs before either interpreter reads them."""
 
 from materials import nodes
+from math.finite import require_finite
 from std.math import floor, isfinite, max
 
 
@@ -21,8 +22,9 @@ def require_finite_node_code(value: Float32) raises:
     Raises:
         Error: If the word is not finite.
     """
-    if not isfinite(value):
-        raise Error("Object JSON: a node program needs finite code")
+    require_finite(
+        Float64(value), "Object JSON: a node program needs finite code"
+    )
 
 
 def _whole(value: Float32, limit: Int) raises -> Int:

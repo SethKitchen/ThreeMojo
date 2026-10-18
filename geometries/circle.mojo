@@ -46,7 +46,8 @@ from geometries.surface import (
 )
 from core.user_data import UserData
 from math.curve_checks import require_at_least_one
-from std.math import cos, isfinite, sin
+from math.finite import require_finite
+from std.math import cos, sin
 from units.si import Angle, Length, METER, RADIAN, TURN
 
 # A whole circle: the default sweep, and the most a sweep can be, because
@@ -67,8 +68,7 @@ def check_sweep(sweep: Angle) raises:
         Error: If the sweep is not finite, zero or negative, or more than
             one turn, which would lay the shape over itself.
     """
-    if not isfinite(sweep.value):
-        raise Error("A sweep must be finite")
+    require_finite(Float64(sweep.value), "A sweep must be finite")
     if sweep.value <= 0:
         raise Error("A sweep must be positive")
     if sweep.value > FULL_TURN.value:

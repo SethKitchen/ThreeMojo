@@ -64,7 +64,8 @@ from objects.skinned_mesh import (
 )
 from render.rasterizer import check_data_map
 from render.texture_store import NO_TEXTURE, TextureStore
-from std.math import floor, isfinite
+from math.finite import require_finite
+from std.math import floor
 from units.si import METER
 
 
@@ -278,8 +279,7 @@ def whole_bone(named: Float32, count: Int) raises -> Int:
         Error: If the component is not a number, is not whole, or is not a
             bone the skeleton has.
     """
-    if not isfinite(named):
-        raise Error("A bone index must be a number")
+    require_finite(Float64(named), "A bone index must be a number")
     if named != floor(named):
         raise Error("A bone index must be a whole number")
     var bone = Int(named)

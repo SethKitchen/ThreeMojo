@@ -44,6 +44,7 @@ from math.matrix_inverse import (
     _inverse_wide,
     adjugate3,
 )
+from math.finite import require_finite
 from std.math import cos, sin, isfinite
 from units.si import Angle
 
@@ -169,8 +170,9 @@ struct Matrix3(Equatable, ImplicitlyCopyable):
         # A Matrix3 always has nine entries.
         for index in range(9):  # pragma: no branch
             var value = out.elements[index]
-            if not isfinite(value):
-                raise Error("A normal matrix inverse must fit in Float32")
+            require_finite(
+                Float64(value), "A normal matrix inverse must fit in Float32"
+            )
             nonzero = nonzero or value != 0
         if not nonzero:
             raise Error(

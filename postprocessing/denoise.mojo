@@ -30,6 +30,7 @@ from postprocessing.sampling import LightView, u_of, v_of
 from postprocessing.screen_space import DepthView
 from render.framebuffer import FloatColor
 from render.target import RenderTarget
+from math.finite import require_finite
 from std.math import cos, isfinite, max, pow, sin
 
 
@@ -81,8 +82,9 @@ def check_denoise(settings: DenoiseSettings) raises:
         and settings.normal_phi > 0
     ):
         raise Error("A denoise pass's phis must be positive")
-    if not isfinite(settings.radius):
-        raise Error("A denoise pass's radius must be finite")
+    require_finite(
+        Float64(settings.radius), "A denoise pass's radius must be finite"
+    )
 
 
 def denoise_pixel(

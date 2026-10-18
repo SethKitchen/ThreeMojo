@@ -218,7 +218,7 @@ from render.pointrule import (
     last_covered,
     mip_level_of,
 )
-from math.finite import require_positive_finite
+from math.finite import require_finite, require_positive_finite
 from std.math import ceil, floor, inf, isfinite, log2, max, min, sqrt
 
 from render.tasks import TaskGroup
@@ -2850,8 +2850,9 @@ def check_triangle_state(
         )
     if not a.normal_scale.is_finite():
         raise Error("A triangle's normal scale must be finite")
-    if not isfinite(a.bump_scale):
-        raise Error("A triangle's bump scale must be finite")
+    require_finite(
+        Float64(a.bump_scale), "A triangle's bump scale must be finite"
+    )
     if (
         b.roughness != a.roughness
         or c.roughness != a.roughness

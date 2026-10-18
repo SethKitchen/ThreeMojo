@@ -11,7 +11,7 @@ a number names the parser's reason. A number that overflows a `Float32`
 is refused before it can become an infinity in a bound or a normal.
 """
 
-from std.math import isfinite
+from math.finite import require_finite
 
 
 def read_finite_float32(
@@ -40,6 +40,5 @@ def read_finite_float32(
             prefix + "not a number: " + field + " (" + String(reason) + ")"
         )
     var value = Float32(wide)
-    if not isfinite(value):
-        raise Error(prefix + finite + ": " + field)
+    require_finite(Float64(value), prefix + finite + ": " + field)
     return value

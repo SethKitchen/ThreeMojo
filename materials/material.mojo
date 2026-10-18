@@ -228,7 +228,7 @@ from lights.light import ALL_LIGHTS, LightMask
 from lights.physical_layers import specular_reflectance
 from math.bounds import Plane
 from math.euler import XYZ, Euler
-from math.finite import positive_finite
+from math.finite import positive_finite, require_finite
 from math.vector2 import Vector2
 from math.vector3 import Vector3
 from std.math import inf, isfinite, min
@@ -1929,8 +1929,7 @@ struct Material(ImplicitlyCopyable):
         var gap = gap_size.to(METER)
         require_dash_size(dash)
         require_gap_size(gap)
-        if not isfinite(dash_scale):
-            raise Error("A dash scale must be finite")
+        require_finite(Float64(dash_scale), "A dash scale must be finite")
         if gap > 0 and dash == 0:
             raise Error(
                 "A dashed line needs a dash: a gap with no dash before it"
@@ -2331,8 +2330,7 @@ struct Material(ImplicitlyCopyable):
             raise Error("A material's bump map id cannot be negative")
         if not normal_scale.is_finite():
             raise Error("A normal scale must be finite")
-        if not isfinite(bump_scale):
-            raise Error("A bump scale must be finite")
+        require_finite(Float64(bump_scale), "A bump scale must be finite")
         if normal_map != NO_TEXTURE and bump_map != NO_TEXTURE:
             raise Error(
                 "A material names a normal map or a bump map, not both:"

@@ -55,6 +55,7 @@ from render.framebuffer import Color
 from render.target import UNSIGNED_BYTE_TARGET
 from render.texture_store import TextureId
 from renderers.renderer import Renderer
+from math.finite import require_finite
 from std.math import isfinite
 from units.si import Duration, Length, METER, SECOND
 
@@ -264,8 +265,7 @@ struct Water(Movable):
             Error: If the time is not finite, or the program is gone.
         """
         var seconds = time.to(SECOND)
-        if not isfinite(seconds):
-            raise Error("A water's time must be finite")
+        require_finite(Float64(seconds), "A water's time must be finite")
         assets.programs.get(self.program).set_uniform("time", seconds)
 
     def update[
