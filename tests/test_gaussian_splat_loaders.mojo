@@ -14,7 +14,11 @@ precision, and the color and harmonics bytes exactly. Every way a file can
 be wrong is built byte by byte and refused.
 """
 
-from core.binary import copy_bytes
+from core.binary import (
+    append_little_endian,
+    copy_bytes,
+    store_little_endian,
+)
 from core.gaussian_splat_utils import GaussianSplatGeometry, write_covariance
 from loaders.gaussian_splat_ply import (
     detect_spherical_harmonics_degree,
@@ -136,14 +140,12 @@ def check_file(name: String, got: GaussianSplatGeometry) raises:
 
 def put_u16(mut bytes: List[UInt8], at: Int, value: Int):
     """Write a little-endian 16-bit integer."""
-    bytes[at] = UInt8(value & 255)
-    bytes[at + 1] = UInt8((value >> 8) & 255)
+    store_little_endian(bytes, at, value, 2)
 
 
 def put_u32(mut bytes: List[UInt8], at: Int, value: Int):
     """Write a little-endian 32-bit integer."""
-    put_u16(bytes, at, value & 0xFFFF)
-    put_u16(bytes, at + 2, (value >> 16) & 0xFFFF)
+    store_little_endian(bytes, at, value, 4)
 
 
 def put_f32(mut bytes: List[UInt8], at: Int, value: Float32):
@@ -704,8 +706,7 @@ struct Gltf(Movable):
         """Add an accessor of integers `width` bytes each."""
         var data = List[UInt8]()
         for value in values:
-            for byte in range(width):
-                data.append(UInt8((value >> (byte * 8)) & 255))
+            append_little_endian(data, value, width)
         var view = self.view(data^)
         var text = (
             '{"bufferView":'

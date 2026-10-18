@@ -5,6 +5,7 @@
 
 """Small synthetic inputs for the converted ICTF and THRS contract."""
 
+from core.binary import store_little_endian
 from extensions.humanoid.skeleton.head.face_model import FaceModel
 from extensions.humanoid.skeleton.head.hair.styles import HairStyleFile
 from std.pathlib import Path
@@ -13,8 +14,7 @@ from test_scratch import TestScratch, temporary_path
 
 
 def _put(mut bytes: List[UInt8], at: Int, value: Int, width: Int = 4):
-    for k in range(width):
-        bytes[at + k] = UInt8((value >> (k * 8)) & 255)
+    store_little_endian(bytes, at, value, width)
 
 
 def _face() -> List[UInt8]:

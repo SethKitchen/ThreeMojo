@@ -8,7 +8,7 @@ halves, and crates built here, one value type and one quirk of three.js
 r186's `USDCParser` at a time. `tests/test_usd.mojo` compares whole files
 with three.js."""
 
-from core.binary import append_little_endian
+from core.binary import append_little_endian, store_little_endian
 from loaders.usd_specs import (
     SPEC_PRIM,
     USD_BOOLEAN,
@@ -419,8 +419,7 @@ struct _Builder(Movable):
             out.extend(name^)
             _put(out, starts[k], 8)
             _put(out, self.fake_size if kept[k] == self.fake else sizes[k], 8)
-        for b in range(8):
-            out[toc_at + b] = UInt8((toc >> (8 * b)) & 0xFF)
+        store_little_endian(out, toc_at, toc, 8)
         return out^
 
 

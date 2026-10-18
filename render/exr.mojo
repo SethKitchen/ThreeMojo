@@ -55,6 +55,7 @@ from core.binary import (
     little_endian_i32,
     little_endian_u16,
     little_endian_u32,
+    store_little_endian,
 )
 from core.ordinal import ordinal_valid
 
@@ -1088,12 +1089,6 @@ def piz_decode(
     return out^
 
 
-def _store_word(mut out: List[UInt8], at: Int, bits: Int, width: Int):
-    """Store the low bytes of a word at an already checked output offset."""
-    for byte in range(width):
-        out[at + byte] = UInt8((bits >> (8 * byte)) & 255)
-
-
 def _channel_bytes(channels: List[ExrChannel]) raises -> Int:
     """Return a bounded number of bytes per full-resolution pixel."""
     var total = 0
@@ -1179,7 +1174,7 @@ def _pxr24_decode(
                 if channel.pixel_type == FLOAT_SAMPLES:
                     delta <<= 8
                 pixel += delta
-                _store_word(out, dst, Int(pixel), wide)
+                store_little_endian(out, dst, Int(pixel), wide)
                 dst += wide
             src += planes * width
     return out^
@@ -1276,7 +1271,7 @@ def _b44_decode(
                         var x = bx + i % 4
                         var y = by + i // 4
                         if x < width and y < lines:
-                            _store_word(
+                            store_little_endian(
                                 out,
                                 y * width * per + offset * width + x * 2,
                                 bits,
@@ -1665,7 +1660,7 @@ def _dwa_group(
                                     half_to_float(UInt16(bits))
                                 )
                             )
-                        _store_word(out, at, bits, wide)
+                        store_little_endian(out, at, bits, wide)
     dc_at += components * blocks
 
 

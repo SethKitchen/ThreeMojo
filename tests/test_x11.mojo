@@ -11,6 +11,7 @@ display of its own, so the suite needs Xvfb installed and nothing else:
 no screen and no window manager.
 """
 
+from core.binary import store_little_endian
 from controls.input import (
     ARROW_DOWN,
     ARROW_LEFT,
@@ -55,8 +56,7 @@ from window.x11 import (
 
 def _put32(mut bytes: List[UInt8], offset: Int, value: Int):
     """Write a little-endian 32-bit integer."""
-    for index in range(4):
-        bytes[offset + index] = UInt8((value >> (8 * index)) & 255)
+    store_little_endian(bytes, offset, value, 4)
 
 
 def _event(kind: Int, x: Int, y: Int, state: Int, detail: Int) -> List[UInt8]:
@@ -277,8 +277,7 @@ def _send(window: X11Window, bytes: List[UInt8]) raises:
     var lib = OwnedDLHandle(_xlib())
     var event = bytes.copy()
     # The window at 32, as every event names it.
-    for index in range(8):
-        event[32 + index] = UInt8((window._window >> (8 * index)) & 255)
+    store_little_endian(event, 32, window._window, 8)
     _ = lib.call["XSendEvent", c_int](
         window._display,
         window._window,
@@ -379,8 +378,7 @@ def test_a_window_reads_keys_buttons_resizes_and_a_close() raises:
     _send(window, message)
     _ = window.poll(Duration(300.0, MILLISECOND))
     assert_false(window.close_requested)
-    for index in range(8):
-        message[56 + index] = UInt8((window._delete >> (8 * index)) & 255)
+    store_little_endian(message, 56, window._delete, 8)
     _send(window, message)
     _ = window.poll(Duration(300.0, MILLISECOND))
     assert_true(window.close_requested)

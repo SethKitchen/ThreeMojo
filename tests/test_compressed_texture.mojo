@@ -6,6 +6,7 @@
 """Tests for `render.compressed_texture`: hand-built BC1 and BC3 blocks
 decoded against worked-out texels."""
 
+from core.binary import append_little_endian
 from render.compressed_texture import (
     MAX_DECODED_BYTES,
     RED_GREEN_RGTC2_FORMAT,
@@ -77,8 +78,7 @@ def alpha_block(a0: Int, a1: Int, indices: List[Int]) -> List[UInt8]:
     var bits = 0
     for texel in range(16):
         bits |= indices[texel] << (texel * 3)
-    for byte in range(6):
-        out.append(UInt8((bits >> (byte * 8)) & 0xFF))
+    append_little_endian(out, bits, 6)
     return out^
 
 
