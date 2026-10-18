@@ -38,6 +38,7 @@ from units.si import (
     PASCAL,
     Pressure64,
 )
+from core.ordinal import require_valid
 
 
 def require_gravity(acceleration: Float64) raises:
@@ -192,8 +193,7 @@ def require_dof(dof: Dof) raises:
     Raises:
         Error: If the degree of freedom is not valid.
     """
-    if not dof.is_valid():
-        raise Error("A degree of freedom must be from 0 to 5")
+    require_valid(dof.is_valid(), "A degree of freedom must be from 0 to 5")
 
 
 struct StructuralModel(Copyable, Movable):

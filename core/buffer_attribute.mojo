@@ -67,7 +67,7 @@ limits, and explicit zero and nonfinite rules.
 """
 
 from core.interleaved_buffer import InterleavedBuffer
-from core.ordinal import require_index_in_count
+from core.ordinal import require_index_in_count, require_valid
 from math.matrix3 import Matrix3
 from math.matrix4 import Matrix4
 from math.utils import (
@@ -99,8 +99,9 @@ def array_type_name(component: ComponentType) raises -> String:
     Raises:
         Error: If the component type is not valid.
     """
-    if not component.is_valid():
-        raise Error("A typed array needs a valid component type")
+    require_valid(
+        component.is_valid(), "A typed array needs a valid component type"
+    )
     var names: List[String] = [
         "Float32Array",
         "Uint32Array",
@@ -274,8 +275,9 @@ struct BufferAttribute(Copyable, Movable):
             Error: If the component type is not valid, `item_size` is not
                 positive, or the numbers do not divide evenly into items.
         """
-        if not component.is_valid():
-            raise Error("An attribute needs a valid component type")
+        require_valid(
+            component.is_valid(), "An attribute needs a valid component type"
+        )
         var floats = List[Float32](capacity=len(stored))
         for value in stored:
             floats.append(Float32(value))

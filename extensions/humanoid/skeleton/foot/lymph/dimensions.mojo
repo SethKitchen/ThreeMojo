@@ -20,7 +20,7 @@ Plus y is proximal. Plus x is body-right. Plus z is anterior.
     var d = lymph_distance(dims, DORSAL_LYMPHATICS, dims.mt2_head)
 """
 
-from core.ordinal import ordinal_valid
+from core.ordinal import ordinal_valid, require_valid
 from extensions.humanoid.skeleton.field import (
     DistanceField,
     field_gradient,
@@ -70,8 +70,7 @@ def require_foot_lymph(part: FootLymph) raises:
     Raises:
         Error: If the trunk is not named.
     """
-    if not part.is_valid():
-        raise Error("A foot lymph part must be a named trunk")
+    require_valid(part.is_valid(), "A foot lymph part must be a named trunk")
 
 
 comptime DORSAL_LYMPHATICS = FootLymph(0)

@@ -355,6 +355,7 @@ from std.pathlib import Path
 from units.si import Angle, DEGREE, InverseLength, Length, METER, NANOMETER
 from units.si import MILLIMETER
 from units.si import PER_METER, RADIAN
+from core.ordinal import require_valid
 
 # The format version `Object3D.toJSON` writes, and the one major version
 # this reads.
@@ -662,8 +663,9 @@ def stencil_op_code(op: StencilOp) raises -> Int:
     Raises:
         Error: If the operation is none of the eight.
     """
-    if not op.is_valid():
-        raise Error("Object JSON: a stencil operation that is none of eight")
+    require_valid(
+        op.is_valid(), "Object JSON: a stencil operation that is none of eight"
+    )
     return _stencil_op_codes()[op.value]
 
 
@@ -702,8 +704,9 @@ def bind_mode_name(mode: BindMode) raises -> String:
     Raises:
         Error: If the mode is neither of the two.
     """
-    if not mode.is_valid():
-        raise Error("Object JSON: a bind mode that is neither of the two")
+    require_valid(
+        mode.is_valid(), "Object JSON: a bind mode that is neither of the two"
+    )
     return "attached" if mode == ATTACHED else "detached"
 
 

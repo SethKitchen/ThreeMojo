@@ -31,7 +31,7 @@ not check those, and what it makes of them is unspecified.
 """
 
 from core.binary import little_endian_u32
-from core.ordinal import ordinal_valid
+from core.ordinal import ordinal_valid, require_valid
 
 from std.math import sqrt
 from std.memory import bitcast
@@ -763,10 +763,8 @@ def decode_gltf_buffer(
         indices, the stride or the count does not fit the mode or the
         filter, or the stream is malformed.
     """
-    if not mode.is_valid():
-        raise Error("meshopt: a mode that is not known")
-    if not filter.is_valid():
-        raise Error("meshopt: a filter that is not known")
+    require_valid(mode.is_valid(), "meshopt: a mode that is not known")
+    require_valid(filter.is_valid(), "meshopt: a filter that is not known")
     if mode == MESHOPT_TRIANGLES:
         require_meshopt_filter(filter)
         return decode_index_buffer(count, stride, source)

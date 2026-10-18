@@ -16,7 +16,7 @@ authored in template centimeters. They are not a cited width table.
     var d = head_ligament_distance(dims, LARYNX, RIGHT, p)
 """
 
-from core.ordinal import ordinal_valid
+from core.ordinal import ordinal_valid, require_valid
 from extensions.humanoid.side import require_side, RIGHT, BodySide
 from extensions.humanoid.skeleton.head.frame import CERVICAL, HeadDimensions
 from extensions.anatomy.soft_tissue import (
@@ -73,8 +73,7 @@ def require_head_ligament(part: HeadLigament) raises:
     Raises:
         Error: If the part is not named.
     """
-    if not part.is_valid():
-        raise Error("A head ligament must be a named part")
+    require_valid(part.is_valid(), "A head ligament must be a named part")
 
 
 def head_ligament_field(

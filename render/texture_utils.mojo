@@ -28,6 +28,7 @@ takes them and gives numbers that are not a size or a fit.
 
 from render.texture import Texture
 from math.finite import require_positive_finite
+from core.ordinal import require_valid
 
 
 @fieldwise_init
@@ -392,10 +393,13 @@ def byte_length(
     """
     if width < 0 or height < 0:
         raise Error("An image's width and height cannot be negative")
-    if not format.is_valid():
-        raise Error("Unable to determine texture byte length for this format")
-    if not type.is_valid():
-        raise Error("A texture's data type must be one of three.js's")
+    require_valid(
+        format.is_valid(),
+        "Unable to determine texture byte length for this format",
+    )
+    require_valid(
+        type.is_valid(), "A texture's data type must be one of three.js's"
+    )
     var bytes = _type_bytes(type)
     var components = _type_components(type)
     var texels = width * height

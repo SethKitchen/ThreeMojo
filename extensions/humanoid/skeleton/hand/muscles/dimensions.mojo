@@ -24,7 +24,7 @@ table.
     var d = hand_muscle_distance(dims, ADDUCTOR_POLLICIS, RIGHT, p)
 """
 
-from core.ordinal import ordinal_valid, ordinal_label
+from core.ordinal import ordinal_valid, ordinal_label, require_valid
 from extensions.humanoid.side import require_side, BodySide
 from extensions.humanoid.skeleton.arm.frame import (
     ArmDimensions,
@@ -141,8 +141,9 @@ def is_hand_tendon(part: HandMuscle) raises -> Bool:
     Raises:
         Error: If `part` is not named.
     """
-    if not part.is_valid():
-        raise Error("A hand muscle must be a named muscle or tendon group")
+    require_valid(
+        part.is_valid(), "A hand muscle must be a named muscle or tendon group"
+    )
     return part.value >= FLEXOR_TENDONS.value
 
 

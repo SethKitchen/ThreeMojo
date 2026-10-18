@@ -24,7 +24,7 @@ parameters. They are not a cited osteometric table.
     var d = head_bone_distance(dims, SKULL, dims.at(0, 84.0, -1.0))
 """
 
-from core.ordinal import ordinal_valid
+from core.ordinal import ordinal_valid, require_valid
 from extensions.humanoid.side import RIGHT
 from extensions.humanoid.skeleton.head.frame import HeadDimensions
 from extensions.humanoid.skeleton.torso.sweep import (
@@ -128,11 +128,13 @@ def head_bone_field(
             contain the authored articular pillar diameter.
     """
     dimensions.validate()
-    if not part.is_valid():
-        raise Error(
+    require_valid(
+        part.is_valid(),
+        (
             "A head bone must be a named cervical vertebra, the skull, the"
             " mandible, the teeth or the hyoid"
-        )
+        ),
+    )
     if part.value >= C2.value and part.value <= C7.value:
         if dimensions.heights[part.value] < 2 * dimensions.cm(0.45):
             raise Error(

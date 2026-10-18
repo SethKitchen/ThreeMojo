@@ -20,7 +20,7 @@ screen to a whole pixel from the center, in its vertex node. A renderer
 with `snap_vertices` on does the same to each corner of a frame before it
 is drawn.
 """
-from core.ordinal import ordinal_valid
+from core.ordinal import ordinal_valid, require_valid
 
 from materials.material import BLEND, Material
 from render.rasterizer import Corner, RasterVertex
@@ -63,8 +63,7 @@ def check_draw_filter(filter: DrawFilter, index: Int) raises:
     Raises:
         Error: If the filter is none of the three, or the index is negative.
     """
-    if not filter.is_valid():
-        raise Error("A draw filter must be one of the three")
+    require_valid(filter.is_valid(), "A draw filter must be one of the three")
     if index < 0:
         raise Error("An order-independent draw's index must not be negative")
 

@@ -5,7 +5,7 @@
 
 """The kinds of a building model: elements, openings, space uses, section
 shapes and furniture."""
-from core.ordinal import ordinal_valid, ordinal_label
+from core.ordinal import ordinal_valid, ordinal_label, require_valid
 
 
 @fieldwise_init
@@ -136,8 +136,7 @@ def require_space_use(use: SpaceUse) raises:
     Raises:
         Error: If the use is not named.
     """
-    if not use.is_valid():
-        raise Error("A space use is not valid")
+    require_valid(use.is_valid(), "A space use is not valid")
 
 
 @fieldwise_init

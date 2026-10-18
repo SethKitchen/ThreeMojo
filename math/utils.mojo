@@ -19,7 +19,7 @@ inputs before rounding. They avoid an overflowing period or add-divisor
 step, retain small phases, and clamp Euclidean endpoint rounding toward
 zero. See the Math wiki page for the finite and exceptional contracts.
 """
-from core.ordinal import ordinal_valid
+from core.ordinal import ordinal_valid, require_valid
 
 from math.quaternion import Quaternion
 from math.random import mulberry32_step
@@ -950,8 +950,10 @@ def quaternion_from_proper_euler(
         Error: If the order is not one of the six. three.js warns and
             leaves the quaternion unchanged.
     """
-    if not order.is_valid():
-        raise Error("A proper Euler order is XYX, YZY, ZXZ, XZX, YXY or ZYZ")
+    require_valid(
+        order.is_valid(),
+        "A proper Euler order is XYX, YZY, ZXZ, XZX, YXY or ZYZ",
+    )
     var c2 = cos(b.value / 2)
     var s2 = sin(b.value / 2)
     var c13 = cos((a.value + c.value) / 2)
@@ -1012,8 +1014,7 @@ def _component_scale(component: ComponentType) raises -> Float64:
     Raises:
         Error: If the component type is not one of the seven.
     """
-    if not component.is_valid():
-        raise Error("Invalid component type")
+    require_valid(component.is_valid(), "Invalid component type")
     var scales: List[Float64] = [
         1.0,
         4294967295.0,

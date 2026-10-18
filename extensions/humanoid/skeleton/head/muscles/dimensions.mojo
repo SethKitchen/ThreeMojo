@@ -25,7 +25,7 @@ parameters. They are not a cited cross-section table.
     var d = head_muscle_distance(dims, MASSETER, RIGHT, p)
 """
 
-from core.ordinal import ordinal_valid, ordinal_label
+from core.ordinal import ordinal_valid, ordinal_label, require_valid
 from extensions.humanoid.side import require_side, RIGHT, BodySide
 from extensions.humanoid.skeleton.head.frame import (
     HeadDimensions,
@@ -92,8 +92,7 @@ def require_head_muscle(part: HeadMuscle) raises:
     Raises:
         Error: If the muscle is not named.
     """
-    if not part.is_valid():
-        raise Error("A head muscle must be a named muscle")
+    require_valid(part.is_valid(), "A head muscle must be a named muscle")
 
 
 def head_muscle_label(part: HeadMuscle) -> String:

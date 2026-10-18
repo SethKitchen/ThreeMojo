@@ -37,7 +37,7 @@ other than the one its `*count` declares.
 """
 
 from core.binary import copy_bytes, little_endian_uint
-from core.ordinal import ordinal_valid, require_index_in_count
+from core.ordinal import ordinal_valid, require_index_in_count, require_valid
 
 from loaders.js_text import is_js_word
 from loaders.text_number import file_line
@@ -108,8 +108,9 @@ def require_fbx_format(format: FbxFormat) raises:
     Raises:
         Error: If the format is neither ASCII nor binary.
     """
-    if not format.is_valid():
-        raise Error("FBX: a format that is neither ASCII nor binary")
+    require_valid(
+        format.is_valid(), "FBX: a format that is neither ASCII nor binary"
+    )
 
 
 @fieldwise_init

@@ -25,7 +25,7 @@ separate diagrammatic minimum radius.
     var d = torso_vessel_distance(dims, THORACIC_AORTA, RIGHT, p)
 """
 
-from core.ordinal import ordinal_valid
+from core.ordinal import ordinal_valid, require_valid
 from extensions.humanoid.side import require_side, RIGHT, BodySide
 from extensions.humanoid.skeleton.torso.bones.dimensions import (
     along_path,
@@ -86,8 +86,9 @@ def require_torso_vessel(part: TorsoVessel) raises:
     Raises:
         Error: If the vessel is not named.
     """
-    if not part.is_valid():
-        raise Error("A torso vessel must be a named artery or vein")
+    require_valid(
+        part.is_valid(), "A torso vessel must be a named artery or vein"
+    )
 
 
 def is_torso_artery(part: TorsoVessel) raises -> Bool:

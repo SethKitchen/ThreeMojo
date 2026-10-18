@@ -48,7 +48,7 @@ elasticity.
     var mass = tissue.wet_density * volume
 """
 
-from core.ordinal import ordinal_valid
+from core.ordinal import ordinal_valid, require_valid
 
 from math.finite import require_finite
 from units.si import (
@@ -133,8 +133,9 @@ struct SoftTissue(ImplicitlyCopyable):
                 or not positive, if water fraction is outside 0 through
                 1, or if Poisson's ratio is outside 0 through 1.
         """
-        if not self.kind.is_valid():
-            raise Error("Soft tissue must be a named hydrated tissue")
+        require_valid(
+            self.kind.is_valid(), "Soft tissue must be a named hydrated tissue"
+        )
         require_finite(
             Float64(self.wet_density.value),
             "A soft tissue density must be finite",

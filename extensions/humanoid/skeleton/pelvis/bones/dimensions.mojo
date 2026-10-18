@@ -35,7 +35,7 @@ template. Call `validate` at every public consumer of an edited copy.
     var d = pelvis_bone_distance(dims, SACRUM, dims.promontory)
 """
 
-from core.ordinal import ordinal_valid
+from core.ordinal import ordinal_valid, require_valid
 from extensions.humanoid.sex import MALE, Sex
 from extensions.humanoid.side import require_side, LEFT, RIGHT, BodySide
 from extensions.humanoid.skeleton.field import (
@@ -144,8 +144,9 @@ def require_pelvis_bone(part: PelvisBone) raises:
     Raises:
         Error: If the bone is not one of the four.
     """
-    if not part.is_valid():
-        raise Error("A pelvic bone must be one of the four bones")
+    require_valid(
+        part.is_valid(), "A pelvic bone must be one of the four bones"
+    )
 
 
 comptime RIGHT_HIP_BONE = PelvisBone(0)

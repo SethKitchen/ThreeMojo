@@ -85,7 +85,7 @@ kernel keeps its running color the same way.
 """
 
 from core.extent import require_positive_extent
-from core.ordinal import ordinal_valid, require_index_in_count
+from core.ordinal import ordinal_valid, require_index_in_count, require_valid
 
 from math.curve_checks import require_at_least_one
 from math.utils import clamp
@@ -188,8 +188,9 @@ def require_target_type(type: TargetType) raises:
     Raises:
         Error: If the type is none of the three.
     """
-    if not type.is_valid():
-        raise Error("A render target type must be one of the three")
+    require_valid(
+        type.is_valid(), "A render target type must be one of the three"
+    )
 
 
 # The largest finite half: what a half float target holds for anything
@@ -266,8 +267,9 @@ def check_target(type: TargetType, outputs: List[TargetOutput]) raises:
         raise Error("A render target's first output must be the color")
     for index in range(1, len(outputs)):
         var output = outputs[index]
-        if not output.is_valid():
-            raise Error("A render target output must be one of the four")
+        require_valid(
+            output.is_valid(), "A render target output must be one of the four"
+        )
         # An output written twice is one attachment too many. `index` is
         # at least one, so this loop always runs.
         for earlier in range(index):  # pragma: no branch

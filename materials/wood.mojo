@@ -20,7 +20,7 @@ the two agree, and otherwise put the inverse of the mesh's world matrix in
 it. three.js darkens the color by the darkening of the preset it loads
 first, teak's raw one, which is one, whatever the finish; so does this.
 """
-from core.ordinal import ordinal_valid
+from core.ordinal import ordinal_valid, require_valid
 
 from materials.material import Material, PHYSICAL
 from materials.nodes import (
@@ -135,10 +135,10 @@ def wood_preset(genus: WoodGenus, finish: WoodFinish) raises -> WoodParams:
     Raises:
         Error: If the genus or the finish is none there is.
     """
-    if not genus.is_valid():
-        raise Error("A wood genus is one of the ten")
-    if not finish.is_valid():
-        raise Error("A wood finish is raw, matte, semigloss or gloss")
+    require_valid(genus.is_valid(), "A wood genus is one of the ten")
+    require_valid(
+        finish.is_valid(), "A wood finish is raw, matte, semigloss or gloss"
+    )
     # centerSize, largeWarpScale, largeGrainStretch, smallWarpStrength,
     # smallWarpScale, fineWarpStrength, fineWarpScale, 1 / ringThickness,
     # ringBias, ringSizeVariance, ringVarianceScale, barkThickness,

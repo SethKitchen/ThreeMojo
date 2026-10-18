@@ -39,7 +39,7 @@ it. three.js does this for a `Mesh`; here it takes the geometry, the
 weights and, for a skinned mesh, one matrix per vertex. `core.scene_utils`
 has the forms that take a mesh.
 """
-from core.ordinal import ordinal_valid, require_index_in_count
+from core.ordinal import ordinal_valid, require_index_in_count, require_valid
 
 from core.buffer_attribute import BufferAttribute
 from core.buffer_geometry import (
@@ -333,8 +333,9 @@ def to_triangles_draw_mode(
         Error: If the draw mode is not valid, the strip has fewer than
             three entries, or an entry is not a vertex of the geometry.
     """
-    if not draw_mode.is_valid():
-        raise Error("A draw mode must be one of the three there are")
+    require_valid(
+        draw_mode.is_valid(), "A draw mode must be one of the three there are"
+    )
     if draw_mode == TRIANGLES_DRAW_MODE:
         return geometry.clone()
     if len(strip) < 3:

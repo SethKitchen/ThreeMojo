@@ -33,7 +33,7 @@ The results live in the leg frame. The origin is the tibiofemoral joint
 line. Plus y is proximal. Plus x is body-right. Plus z is anterior.
 """
 
-from core.ordinal import ordinal_valid
+from core.ordinal import ordinal_valid, require_valid
 
 from extensions.anatomy.inertia import InertiaTally, SegmentInertia
 from extensions.humanoid.side import RIGHT, BodySide
@@ -251,8 +251,10 @@ def segment_estimate(
         Error: If the spec, side, segment or step is invalid, or the
             sampling box exceeds the bounded grid work limit.
     """
-    if not segment.is_valid():
-        raise Error("A limb segment must be the thigh, the shank or the foot")
+    require_valid(
+        segment.is_valid(),
+        "A limb segment must be the thigh, the shank or the foot",
+    )
     check_mass_step(step, "limb segment")
     var pose = assemble_leg(spec, side)
     var skin = LimbSkinField(spec, side)

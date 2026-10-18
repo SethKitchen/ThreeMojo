@@ -143,6 +143,7 @@ from std.collections import Dict
 from std.math import cos, pi, sin, sqrt, trunc
 from std.pathlib import Path
 from units.si import METER, RADIAN, Angle, Length
+from core.ordinal import require_valid
 
 # three.js's `Loader.DEFAULT_MATERIAL_NAME`.
 comptime VRML_DEFAULT_MATERIAL_NAME = "__DEFAULT"
@@ -483,8 +484,7 @@ struct VrmlModel(Movable):
         Raises:
             Error: If the kind is not valid.
         """
-        if not kind.is_valid():
-            raise Error("VRML: an object kind that is not valid")
+        require_valid(kind.is_valid(), "VRML: an object kind that is not valid")
         var total = 0
         for o in self.objects:
             if o.kind == kind:
@@ -766,8 +766,9 @@ struct _Builder(Movable):
         if self.building[node]:
             raise Error("VRML: a node that uses itself")
         for field in self.model.tree.nodes[node].fields:
-            if not field.kind.is_valid():
-                raise Error("VRML: a field whose kind is not valid")
+            require_valid(
+                field.kind.is_valid(), "VRML: a field whose kind is not valid"
+            )
         self.building[node] = True
         var result = self.build_node(node, scene, assets)
         self.building[node] = False

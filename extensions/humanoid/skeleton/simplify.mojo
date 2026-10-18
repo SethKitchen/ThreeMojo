@@ -27,7 +27,7 @@ own three corners is joined where the corners meet, to within
 each vertex. A vertex keeps its own texture coordinates.
 """
 
-from core.ordinal import ordinal_valid
+from core.ordinal import ordinal_valid, require_valid
 
 from core.assets import Assets
 from core.buffer_attribute import BufferAttribute
@@ -174,8 +174,10 @@ struct TriangleBudgetResult(ImplicitlyCopyable):
         Raises:
             Error: If the reason is not a named value.
         """
-        if not reason.is_valid():
-            raise Error("The triangle budget reason must be a named value")
+        require_valid(
+            reason.is_valid(),
+            "The triangle budget reason must be a named value",
+        )
         if self.target_met():
             return False
         if reason == SAFE_COLLAPSE_LIMIT:
@@ -1123,8 +1125,10 @@ def fit_triangle_budget_result(
             Strict mode also leaves assets unchanged on conversion failure.
             Best effort can replace earlier geometries before that error.
     """
-    if not mode.is_valid():
-        raise Error("The triangle budget mode must be best effort or strict")
+    require_valid(
+        mode.is_valid(),
+        "The triangle budget mode must be best effort or strict",
+    )
     require_at_least_one(budget, "A triangle budget must be at least one")
     require_at_least_one(workers, "Simplifying needs at least one worker")
     if first_mesh < 0 or first_mesh > len(scene.meshes):

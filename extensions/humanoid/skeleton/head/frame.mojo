@@ -39,6 +39,7 @@ from extensions.humanoid.skeleton.torso.sweep import floats
 from math.finite import require_positive_finite
 from math.vector3 import Vector3
 from units.si import Length
+from core.ordinal import require_valid
 
 # Cervical vertebrae, C1 to C7.
 comptime CERVICAL = 7
@@ -273,8 +274,10 @@ def require_head_athleticism(athleticism: Athleticism) raises:
     Raises:
         Error: If the athleticism is not named.
     """
-    if not athleticism.is_valid():
-        raise Error("A head muscle needs a toned or untoned athleticism")
+    require_valid(
+        athleticism.is_valid(),
+        "A head muscle needs a toned or untoned athleticism",
+    )
 
 
 struct HeadMuscleDimensions(Copyable, Movable):

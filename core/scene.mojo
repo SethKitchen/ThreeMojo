@@ -80,7 +80,7 @@ from core.object3d import (
     facing,
     scale_of,
 )
-from core.ordinal import require_index_in_count
+from core.ordinal import require_index_in_count, require_valid
 from lights.light import Light
 from materials.material import MaterialId
 from math.matrix4 import Matrix4, compose
@@ -1984,8 +1984,10 @@ def _copy_of(copies: List[Int], node: NodeId) -> Int:
 
 def _check_type(node: Object3D) raises:
     """Refuse a node whose `object_type` is none of the three there are."""
-    if not node.object_type.is_valid():
-        raise Error("A node must be an Object3D, a Group or a Gyroscope")
+    require_valid(
+        node.object_type.is_valid(),
+        "A node must be an Object3D, a Group or a Gyroscope",
+    )
 
 
 def _gyroscope_world(parent: Matrix4, local: Matrix4) raises -> Matrix4:

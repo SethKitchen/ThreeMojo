@@ -35,6 +35,7 @@ from loaders.json import ARRAY, parse_json
 from math.finite import require_finite
 from std.math import isfinite
 from units.si import Duration
+from core.ordinal import require_valid
 
 comptime SPEECH_MAPPING = "threemojo-arpabet-viseme-v1"
 comptime SPEECH_TIMING = "audio-clock-half-open-held-v1"
@@ -269,8 +270,9 @@ struct AlignedSpeech(Copyable, Movable):
         for item in intervals:
             _time(item.start)
             _time(item.end)
-            if not item.viseme.is_valid():
-                raise Error("Aligned speech requires a named viseme")
+            require_valid(
+                item.viseme.is_valid(), "Aligned speech requires a named viseme"
+            )
             if (
                 item.start.value < previous
                 or item.end.value <= item.start.value

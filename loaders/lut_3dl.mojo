@@ -50,6 +50,7 @@ from render.volume_texture import Data3DTexture, VolumeImage, _check_extent
 from math.finite import require_finite
 from std.math import ceil, log2
 from std.pathlib import Path
+from core.ordinal import require_valid
 
 
 struct Lut3dl(Movable):
@@ -179,8 +180,7 @@ def parse_lut_3dl(
             grid is not evenly spaced, a number is not one, or the largest
             number is not above zero.
     """
-    if not texel_type.is_valid():
-        raise Error("3DL: a texel type that is not valid")
+    require_valid(texel_type.is_valid(), "3DL: a texel type that is not valid")
     var lines = text_lines(text)
     var grid = List[Float64]()
     # A split gives at least one line: these loops always run.

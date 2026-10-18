@@ -87,6 +87,7 @@ from core.ordinal import (
     ordinal_valid,
     require_index_in_count,
     require_non_negative,
+    require_valid,
 )
 
 from math.matrix_determinant import _sum_products as _exact_products
@@ -313,8 +314,9 @@ def require_material_index(index: MaterialIndex) raises:
     Raises:
         Error: If the index is negative.
     """
-    if not index.is_valid():
-        raise Error("A group's material index cannot be negative")
+    require_valid(
+        index.is_valid(), "A group's material index cannot be negative"
+    )
 
 
 @fieldwise_init
@@ -485,8 +487,9 @@ def require_draw_range(range: DrawRange) raises:
     Raises:
         Error: If the start or the count is negative.
     """
-    if not range.is_valid():
-        raise Error("A draw range cannot start or run a negative distance")
+    require_valid(
+        range.is_valid(), "A draw range cannot start or run a negative distance"
+    )
 
 
 def require_stream_start(start: Int) raises:

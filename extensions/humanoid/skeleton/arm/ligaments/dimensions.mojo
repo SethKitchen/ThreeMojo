@@ -22,7 +22,7 @@ authored in template centimeters. They are not a cited width table.
     var d = arm_ligament_distance(dims, ANNULAR_LIGAMENT, RIGHT, p)
 """
 
-from core.ordinal import ordinal_valid, ordinal_label
+from core.ordinal import ordinal_valid, ordinal_label, require_valid
 from extensions.humanoid.side import require_side, BodySide
 from extensions.humanoid.skeleton.arm.frame import ArmDimensions
 from extensions.humanoid.skeleton.field import reject
@@ -119,8 +119,7 @@ def arm_ligament_tissue(part: ArmLigament) raises -> SoftTissue:
     Raises:
         Error: If `part` is not named.
     """
-    if not part.is_valid():
-        raise Error("An arm ligament must be a named part")
+    require_valid(part.is_valid(), "An arm ligament must be a named part")
     if part == GLENOID_LABRUM:
         return meniscus_tissue()
     if part == ARTICULAR_CARTILAGE:

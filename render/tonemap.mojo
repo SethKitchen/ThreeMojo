@@ -47,7 +47,7 @@ host and the device compute them from intrinsics both have, as `falloff`
 is.
 """
 
-from core.ordinal import ordinal_valid
+from core.ordinal import ordinal_valid, require_valid
 
 from materials.nodes import (
     OUTPUT_NODE,
@@ -124,8 +124,7 @@ def check_tone_mapping(mode: ToneMapping, exposure: Float32) raises:
         Error: If the curve is not a named one, or the exposure is
             negative or not finite.
     """
-    if not mode.is_valid():
-        raise Error("A tone mapping that is none of the eight")
+    require_valid(mode.is_valid(), "A tone mapping that is none of the eight")
     if not isfinite(exposure) or exposure < 0:
         raise Error("A tone mapping exposure must be finite and not negative")
 

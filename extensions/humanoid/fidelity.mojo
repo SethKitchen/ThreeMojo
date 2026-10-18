@@ -12,7 +12,7 @@ correspondence or an asset's source. Visual realism never grants an engineering 
 A producer must change its revision when its geometry or mapping changes.
 """
 
-from core.ordinal import ordinal_valid
+from core.ordinal import ordinal_valid, require_valid
 
 from core.user_data import UserData, user_data_of
 from extensions.humanoid.athleticism import Athleticism
@@ -110,8 +110,7 @@ def require_humanoid_use(use: HumanoidUse) raises:
     Raises:
         Error: If the capability is unnamed or engineering is requested.
     """
-    if not use.is_valid():
-        raise Error("Humanoid use must be a named capability")
+    require_valid(use.is_valid(), "Humanoid use must be a named capability")
     if use == ENGINEERING_USE:
         raise Error(
             "Engineering use is unsupported: visual identity, jaw, dental, "
@@ -141,12 +140,14 @@ def canonical_inputs(spec: HumanoidSpec) raises -> UserData:
         raise Error("Canonical inputs require stature in the software range")
     if spec.stature.value > MAX_STATURE.value:
         raise Error("Canonical inputs require stature in the software range")
-    if not spec.sex.is_valid():
-        raise Error("Canonical inputs require a named sex")
-    if not spec.athleticism.is_valid():
-        raise Error("Canonical inputs require named athleticism")
-    if not spec.genome.is_valid():
-        raise Error("Canonical inputs require a valid genome")
+    require_valid(spec.sex.is_valid(), "Canonical inputs require a named sex")
+    require_valid(
+        spec.athleticism.is_valid(),
+        "Canonical inputs require named athleticism",
+    )
+    require_valid(
+        spec.genome.is_valid(), "Canonical inputs require a valid genome"
+    )
     var data = UserData()
     data.set_number("schema_version", 1)
     data.set_number("stature_m", Float64(spec.stature.value))

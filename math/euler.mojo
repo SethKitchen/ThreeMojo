@@ -41,6 +41,7 @@ from math.quaternion import Quaternion
 from math.vector3 import Vector3
 from std.math import asin, atan2
 from units.si import Angle, RADIAN
+from core.ordinal import require_valid
 
 # The three axes, as the index each rotation helper answers to.
 comptime AXIS_X = 0
@@ -101,8 +102,9 @@ def _is_axis(axis: Int) -> Bool:
 
 def _check_order(order: EulerOrder) raises:
     """Refuse an order that does not name three different axes."""
-    if not order.is_valid():
-        raise Error("An Euler order must name three different axes")
+    require_valid(
+        order.is_valid(), "An Euler order must name three different axes"
+    )
 
 
 # The six orders three.js accepts. `XYZ` is its default and this port's.

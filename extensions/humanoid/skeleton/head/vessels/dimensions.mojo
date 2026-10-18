@@ -23,7 +23,7 @@ authored in template centimeters. They are not a cited lumen table.
     var d = head_vessel_distance(dims, COMMON_CAROTID_ARTERY, RIGHT, p)
 """
 
-from core.ordinal import ordinal_valid, ordinal_label
+from core.ordinal import ordinal_valid, ordinal_label, require_valid
 from extensions.humanoid.side import require_side, BodySide
 from extensions.humanoid.skeleton.head.frame import HeadMuscleDimensions
 from extensions.humanoid.skeleton.torso.bones.dimensions import (
@@ -74,8 +74,9 @@ def require_head_vessel(part: HeadVessel) raises:
     Raises:
         Error: If the vessel is not named.
     """
-    if not part.is_valid():
-        raise Error("A head vessel must be a named artery or vein")
+    require_valid(
+        part.is_valid(), "A head vessel must be a named artery or vein"
+    )
 
 
 def is_head_artery(part: HeadVessel) raises -> Bool:

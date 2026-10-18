@@ -17,7 +17,7 @@ line. Plus y is proximal. Plus x is body-right. Plus z is anterior.
     var d = hair_distance(dims, THIGH_HAIR, Vector3(0.04, 0.2, 0.06))
 """
 
-from core.ordinal import ordinal_valid
+from core.ordinal import ordinal_valid, require_valid
 from extensions.humanoid.side import LEFT
 from extensions.humanoid.skeleton.field import (
     DistanceField,
@@ -60,8 +60,7 @@ def require_hair_part(part: HairPart) raises:
     Raises:
         Error: If the group is not named.
     """
-    if not part.is_valid():
-        raise Error("A hair part must be a named hair group")
+    require_valid(part.is_valid(), "A hair part must be a named hair group")
 
 
 comptime THIGH_HAIR = HairPart(0)

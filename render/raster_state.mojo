@@ -47,7 +47,7 @@ three.js's shader for that primitive reads it; see
 triangle's corners before either backend sees it, so both receive the moved
 depths and agree without a device lane.
 """
-from core.ordinal import ordinal_valid
+from core.ordinal import ordinal_valid, require_valid
 
 from math.finite import positive_finite
 from math.vector3 import Vector3
@@ -132,8 +132,7 @@ def require_depth_mode(mode: DepthMode) raises:
     Raises:
         Error: If `mode` is none of the three.
     """
-    if not mode.is_valid():
-        raise Error("A depth mode that is none of the three")
+    require_valid(mode.is_valid(), "A depth mode that is none of the three")
 
 
 def log_depth_factor(far: Float32) -> Float32:

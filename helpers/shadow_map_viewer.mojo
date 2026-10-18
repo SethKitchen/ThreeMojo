@@ -60,6 +60,7 @@ from render.texture import CLAMP, NEAREST, Texture
 from renderers.renderer import Renderer
 from std.math import max, min
 from units.si import Length, METER
+from core.ordinal import require_valid
 
 # three.js's `frame`: where the viewer starts and the size of its plane.
 comptime SHADOW_VIEWER_X = 10
@@ -134,8 +135,9 @@ struct ShadowMapViewer(Copyable, Movable):
         Raises:
             Error: If the index is negative.
         """
-        if not light.is_valid():
-            raise Error("A shadow map viewer needs a light index")
+        require_valid(
+            light.is_valid(), "A shadow map viewer needs a light index"
+        )
         self.light = light
         self.enabled = True
         self.x = SHADOW_VIEWER_X

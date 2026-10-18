@@ -41,6 +41,7 @@ from math.utils import glsl_sign, max3, min3
 from math.finite import require_finite_group
 from std.collections import Dict
 from std.math import sqrt
+from core.ordinal import require_valid
 
 # The value of an empty field: far outside everything.
 comptime FAR = 1e9
@@ -323,8 +324,9 @@ struct SdfModel(Movable):
         part: SurfacePart,
         thin: Bool,
     ) raises -> Int:
-        if not bone.is_valid():
-            raise Error("A primitive's bone must not be negative")
+        require_valid(
+            bone.is_valid(), "A primitive's bone must not be negative"
+        )
         require_part(part)
         if not k >= 0.0:
             raise Error("A blend radius must not be negative")

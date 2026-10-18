@@ -66,7 +66,7 @@ coordinates, and the specular and ambient maps. `<polygons>` is read,
 which three.js does not read.
 """
 
-from core.ordinal import ordinal_valid, require_index_in_count
+from core.ordinal import ordinal_valid, require_index_in_count, require_valid
 
 from animation.animation_clip import AnimationClip
 from cameras.orthographic_camera import OrthographicCamera
@@ -192,8 +192,9 @@ def up_axis_rotation(axis: UpAxis) raises -> Quaternion:
     Raises:
         Error: If `axis` is none of `X_UP`, `Y_UP` and `Z_UP`.
     """
-    if not axis.is_valid():
-        raise Error("Collada: an up axis that is not X_UP, Y_UP or Z_UP")
+    require_valid(
+        axis.is_valid(), "Collada: an up axis that is not X_UP, Y_UP or Z_UP"
+    )
     if axis == Z_UP:
         return Quaternion.from_axis_angle(Vector3(1, 0, 0), Angle(-90, DEGREE))
     return Quaternion.identity()

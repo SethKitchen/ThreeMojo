@@ -51,6 +51,7 @@ from math.finite import require_finite
 from std.math import floor, isnan, nan
 from std.memory import bitcast
 from std.pathlib import Path
+from core.ordinal import require_valid
 
 comptime IES_WIDTH = 360
 comptime IES_HEIGHT = 180
@@ -446,8 +447,7 @@ def ies_texture(
     Raises:
         Error: If the type is not valid, or `ies_values` refuses the lamp.
     """
-    if not type.is_valid():
-        raise Error("IES: a type that is not valid")
+    require_valid(type.is_valid(), "IES: a type that is not valid")
     var values = ies_values(lamp)
     if type == IES_UNSIGNED_BYTE:
         var pixels = List[UInt8]()

@@ -22,7 +22,7 @@ car's paint as per-instance data.
 Every car stands on its wheels at y equals zero, centered in x and z, and
 faces +z. The material is not ported.
 """
-from core.ordinal import ordinal_valid
+from core.ordinal import ordinal_valid, require_valid
 
 from core.buffer_attribute import BufferAttribute
 from core.buffer_geometry import BufferGeometry, NORMAL, POSITION, UV
@@ -117,8 +117,9 @@ struct CarSpec(Copyable, Movable):
         Raises:
             Error: If the body is not one there is.
         """
-        if not body.is_valid():
-            raise Error("A car body must be the sedan, the SUV or the taxi")
+        require_valid(
+            body.is_valid(), "A car body must be the sedan, the SUV or the taxi"
+        )
         if body == SUV:
             self.body = [
                 2.30,

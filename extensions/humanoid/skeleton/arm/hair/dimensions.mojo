@@ -18,7 +18,7 @@ separate diagrammatic radius; see
     var d = arm_hair_distance(dims, FOREARM_HAIR, RIGHT, p)
 """
 
-from core.ordinal import ordinal_valid
+from core.ordinal import ordinal_valid, require_valid
 from extensions.humanoid.side import require_side, RIGHT, BodySide
 from extensions.humanoid.skeleton.arm.frame import ArmMuscleDimensions
 from extensions.humanoid.skeleton.arm.skin.dimensions import ArmSkinField
@@ -153,8 +153,9 @@ def arm_hair_field(
             not named, or if `side` is not valid.
     """
     dimensions.validate()
-    if not part.is_valid():
-        raise Error("An arm hair part must be a named hair group")
+    require_valid(
+        part.is_valid(), "An arm hair part must be a named hair group"
+    )
     require_side(side, "An arm")
     var f = dimensions.arm.frame
     var skin = ArmSkinField(dimensions, RIGHT)

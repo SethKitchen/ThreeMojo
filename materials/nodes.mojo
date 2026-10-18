@@ -128,7 +128,7 @@ level the surface's own coordinates pick. WebGPU instead measures the
 derivatives of the coordinate the node computes.
 """
 from core.extent import require_closed_count
-from core.ordinal import ordinal_valid, require_index_in_count
+from core.ordinal import ordinal_valid, require_index_in_count, require_valid
 from core.search import first_match
 
 from lights.shadow import ShadowShape
@@ -785,8 +785,9 @@ def require_node_output(output: NodeOutput) raises:
     Raises:
         Error: If the output is none of the twenty-five.
     """
-    if not output.is_valid():
-        raise Error("A node output that is none of the twenty-five")
+    require_valid(
+        output.is_valid(), "A node output that is none of the twenty-five"
+    )
 
 
 @fieldwise_init
@@ -4719,8 +4720,9 @@ struct NodeGraph(Copyable, Movable):
         Raises:
             Error: If `which` is not one of the numbers.
         """
-        if not which.is_valid():
-            raise Error("A compute builtin names no number there is")
+        require_valid(
+            which.is_valid(), "A compute builtin names no number there is"
+        )
         return self._add(
             NODE_COMPUTE_BUILTIN,
             NODE_FLOAT,
@@ -4772,8 +4774,9 @@ struct NodeGraph(Copyable, Movable):
             Error: If `buffer` is negative, `index` is not a `float` of this
                 graph, or `type` is not a `float` or a vector.
         """
-        if not buffer.is_valid():
-            raise Error("A storage element names no buffer there can be")
+        require_valid(
+            buffer.is_valid(), "A storage element names no buffer there can be"
+        )
         return self._storage_element(buffer.value, index, type)
 
     def storage_element(
@@ -4794,8 +4797,9 @@ struct NodeGraph(Copyable, Movable):
             Error: If `array` is negative, `index` is not a `float` of this
                 graph, or `type` is not a `float` or a vector.
         """
-        if not array.is_valid():
-            raise Error("A storage element names no array there can be")
+        require_valid(
+            array.is_valid(), "A storage element names no array there can be"
+        )
         return self._storage_element(-1 - array.value, index, type)
 
     def compute_result(
@@ -4816,8 +4820,10 @@ struct NodeGraph(Copyable, Movable):
             Error: If `statement` is negative, or `type` is not a `float`
                 or a vector.
         """
-        if not statement.is_valid():
-            raise Error("A compute result names no statement there can be")
+        require_valid(
+            statement.is_valid(),
+            "A compute result names no statement there can be",
+        )
         if not type.is_vector() or type.is_integer():
             raise Error("A compute result is a float or a vector")
         return self._add(

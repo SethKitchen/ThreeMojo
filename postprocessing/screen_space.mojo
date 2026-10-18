@@ -42,7 +42,7 @@ limits, and explicit zero and nonfinite rules.
 """
 
 from core.extent import require_positive_extent, require_texel_count
-from core.ordinal import ordinal_valid
+from core.ordinal import ordinal_valid, require_valid
 
 from postprocessing.sample_math import gaussian_pdf
 from math.norm import length2, squared_length2
@@ -469,8 +469,9 @@ def require_screen_output(output: ScreenSpaceOutput) raises:
     Raises:
         Error: If the output is none of the six.
     """
-    if not output.is_valid():
-        raise Error("A screen-space output must be one of the six named")
+    require_valid(
+        output.is_valid(), "A screen-space output must be one of the six named"
+    )
 
 
 def _screen_shown(

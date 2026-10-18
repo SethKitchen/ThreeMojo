@@ -18,7 +18,7 @@ line. Plus y is proximal. Plus x is body-right. Plus z is anterior.
     var d = lymph_distance(dims, INGUINAL_NODES, Vector3(0, 0.3, 0.02))
 """
 
-from core.ordinal import ordinal_valid
+from core.ordinal import ordinal_valid, require_valid
 from extensions.humanoid.side import LEFT
 from extensions.humanoid.skeleton.field import (
     Bounds,
@@ -65,8 +65,9 @@ def require_lymph_part(part: LymphPart) raises:
     Raises:
         Error: If the solid is not a named node group or trunk.
     """
-    if not part.is_valid():
-        raise Error("A lymph part must be a named node group or trunk")
+    require_valid(
+        part.is_valid(), "A lymph part must be a named node group or trunk"
+    )
 
 
 comptime INGUINAL_NODES = LymphPart(0)

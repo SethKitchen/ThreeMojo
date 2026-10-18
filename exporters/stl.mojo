@@ -23,7 +23,7 @@ at its node, and a `SkinnedMesh` where its bones hold it now, as
 three.js's `applyBoneTransform` carries it. See `exporters.common`.
 """
 
-from core.ordinal import ordinal_valid
+from core.ordinal import ordinal_valid, require_valid
 
 from core.assets import Assets
 from core.scene import Scene
@@ -95,8 +95,9 @@ def export_stl(
         Error: If the format is neither, or anything
             `exporters.common.world_meshes` raises.
     """
-    if not format.is_valid():
-        raise Error("STL: a format that is neither ASCII nor binary")
+    require_valid(
+        format.is_valid(), "STL: a format that is neither ASCII nor binary"
+    )
     var meshes = world_meshes(scene, assets, WorldOptions(posed=True))
     var faces = 0
     for mesh in meshes:

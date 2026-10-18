@@ -89,6 +89,7 @@ from units.si import (
     CUBIC_METER,
     METER_TO_THE_FOURTH,
 )
+from core.ordinal import require_valid
 
 
 def _check_space_measures(area: Float64, volume: Float64) raises:
@@ -218,8 +219,10 @@ struct Section(ImplicitlyCopyable):
                 finite, a used dimension is not positive, or an I-shape's
                 plates do not fit.
         """
-        if not self.shape.is_valid():
-            raise Error("A section shape must be a rectangle, an I or a circle")
+        require_valid(
+            self.shape.is_valid(),
+            "A section shape must be a rectangle, an I or a circle",
+        )
         var b = self.width.to(METER)
         var d = self.depth.to(METER)
         require_positive_finite(
@@ -730,8 +733,7 @@ def require_furniture_kind(kind: FurnitureKind) raises:
     Raises:
         Error: If the kind is not valid.
     """
-    if not kind.is_valid():
-        raise Error("A furniture kind is not valid")
+    require_valid(kind.is_valid(), "A furniture kind is not valid")
 
 
 def require_inside_space(inside: Bool) raises:
@@ -1053,8 +1055,9 @@ struct Building(Movable):
         before: Int,
     ) raises:
         """Check an opening against its host and earlier openings."""
-        if not kind.is_valid():
-            raise Error("An opening kind must be a door or a window")
+        require_valid(
+            kind.is_valid(), "An opening kind must be a door or a window"
+        )
         var frame = self.wall_frame(wall)
         var u0 = offset.to(METER)
         var v0 = sill.to(METER)
@@ -1510,8 +1513,9 @@ struct Building(Movable):
         for i in range(len(self.elements)):
             ref element = self.elements[i]
             self.check_storey(element.storey)
-            if not element.kind.is_valid():
-                raise Error("An element kind is not valid")
+            require_valid(
+                element.kind.is_valid(), "An element kind is not valid"
+            )
             if element.construction:
                 self.check_construction(element.construction.value())
             if element.material:

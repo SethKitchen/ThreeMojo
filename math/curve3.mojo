@@ -54,7 +54,7 @@ turns back. Frames where two steps point straight opposite ways, which
 leave no axis to turn about.
 """
 
-from core.ordinal import ordinal_valid
+from core.ordinal import ordinal_valid, require_valid
 
 from math.curve_checks import (
     check_curve_parameter,
@@ -221,8 +221,9 @@ def require_catmull_type(curve_type: CatmullRomType) raises:
     Raises:
         Error: If the type is not valid.
     """
-    if not curve_type.is_valid():
-        raise Error("A Catmull-Rom curve needs a type that exists")
+    require_valid(
+        curve_type.is_valid(), "A Catmull-Rom curve needs a type that exists"
+    )
 
 
 def require_closed_catmull(closed: Bool, kind: Curve3Kind) raises:

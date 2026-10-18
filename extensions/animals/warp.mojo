@@ -14,7 +14,7 @@ radii follow the warp's Jacobian there. The surface is then meshed from
 the warped field, so it stays a true distance field surface and its
 normals are exact.
 """
-from core.ordinal import ordinal_valid
+from core.ordinal import ordinal_valid, require_valid
 
 from extensions.sdf.ids import (
     CONE,
@@ -237,8 +237,7 @@ def check_warp(w: Warp) raises:
         Error: If the kind is not valid, a fade is empty or reversed, or
             a shift's segment is empty.
     """
-    if not w.kind.is_valid():
-        raise Error("Warp kind must be from 0 to 5")
+    require_valid(w.kind.is_valid(), "Warp kind must be from 0 to 5")
     if w.kind == SCALE_ABOUT and not w.b > w.a:
         raise Error("A scale-about warp must fade out over a positive width")
     if w.kind == LENGTH and not w.b > w.a:

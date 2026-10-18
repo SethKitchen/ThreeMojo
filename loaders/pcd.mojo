@@ -60,6 +60,7 @@ from math.finite import finite_float32
 from std.math import floor
 from std.memory import bitcast
 from std.pathlib import Path
+from core.ordinal import require_valid
 
 # The attribute `intensity` goes into.
 comptime INTENSITY = "intensity"
@@ -382,8 +383,9 @@ struct PcdHeader(Copyable, Movable):
                 number of fields, a type has not the size given, a count
                 is below one, or the points are negative.
         """
-        if not self.data.is_valid():
-            raise Error("PCD: a data format that is not valid")
+        require_valid(
+            self.data.is_valid(), "PCD: a data format that is not valid"
+        )
         var count = len(self.fields)
         if len(self.sizes) != count:
             raise Error("PCD: `SIZE` must give one size a field")

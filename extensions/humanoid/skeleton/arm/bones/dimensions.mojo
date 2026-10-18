@@ -19,7 +19,7 @@ osteometric table.
     var d = arm_bone_distance(dims, HUMERUS, RIGHT, dims.frame.elbow)
 """
 
-from core.ordinal import ordinal_valid
+from core.ordinal import ordinal_valid, require_valid
 from extensions.humanoid.side import require_side, RIGHT, BodySide
 from extensions.humanoid.skeleton.arm.frame import ArmDimensions, ArmFrame
 from extensions.humanoid.skeleton.torso.sweep import (
@@ -103,8 +103,10 @@ def arm_bone_field(
             not named, or if `side` is not valid.
     """
     dimensions.validate()
-    if not part.is_valid():
-        raise Error("An arm bone must be the humerus, the radius or the ulna")
+    require_valid(
+        part.is_valid(),
+        "An arm bone must be the humerus, the radius or the ulna",
+    )
     require_side(side, "An arm")
     var f = dimensions.frame
     var sweeps = List[Sweep]()

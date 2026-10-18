@@ -23,7 +23,7 @@ owned linear path. Tight mathematical half-ray bounds cannot safely cull
 every answer from the existing Float32 narrow kernels.
 """
 
-from core.ordinal import require_index_in_count
+from core.ordinal import require_index_in_count, require_valid
 from extensions.physics.body import BodyId
 from extensions.physics.collide import WorldShape
 from extensions.physics.shape import (
@@ -312,8 +312,10 @@ struct PhysicsQuerySnapshot(Movable):
         for i in range(len(world.bodies)):
             ref body = world.bodies[i]
             body.validate()
-            if not body.shape.kind.is_valid():
-                raise Error("A query snapshot requires a valid shape kind")
+            require_valid(
+                body.shape.kind.is_valid(),
+                "A query snapshot requires a valid shape kind",
+            )
             body.material.check()
             self._materials.append(body.material)
             self._enabled.append(body.collides)

@@ -88,7 +88,7 @@ See `docs/wiki/Norm-consumers.md` for the changed operations, retained
 limits, and explicit zero and nonfinite rules.
 """
 
-from core.ordinal import ordinal_valid, require_index_in_count
+from core.ordinal import ordinal_valid, require_index_in_count, require_valid
 
 from math.arc_tangent import atan2_float32
 from math.utils import clamp_unit
@@ -189,10 +189,10 @@ def require_cube_layout(layout: CubeLayout) raises:
         Error: If the layout is not `SEEN_FROM_INSIDE` or
             `SEEN_FROM_OUTSIDE`.
     """
-    if not layout.is_valid():
-        raise Error(
-            "A cube layout must be SEEN_FROM_INSIDE or SEEN_FROM_OUTSIDE"
-        )
+    require_valid(
+        layout.is_valid(),
+        "A cube layout must be SEEN_FROM_INSIDE or SEEN_FROM_OUTSIDE",
+    )
 
 
 def cube_image_index(index: Int, outside: Bool) -> Int:

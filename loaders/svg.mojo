@@ -89,6 +89,7 @@ from loaders.xml import XmlDocument, parse_xml
 from render.css_color import parse_style
 from std.math import fma, acos, cos, isnan, pi, sin, sqrt, tan
 from std.pathlib import Path
+from core.ordinal import require_valid
 
 # The namespace an `xlink:href` attribute is in.
 comptime XLINK_NAMESPACE = "http://www.w3.org/1999/xlink"
@@ -1413,8 +1414,9 @@ def parse_svg(
         Error: If the unit is not valid, the text is not well-formed XML,
             or for anything the module docstring lists.
     """
-    if not default_unit.is_valid():
-        raise Error("SVG: a default unit that is not valid")
+    require_valid(
+        default_unit.is_valid(), "SVG: a default unit that is not valid"
+    )
     var parser = _Parser(parse_xml(text), default_unit, default_dpi)
     parser.parse_node(parser.doc.root(), SvgStyle())
     return parser^.result()

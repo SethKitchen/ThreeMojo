@@ -44,7 +44,7 @@ key of its numbers rounded to a few places. Here any change is detected.
 The directionally filtered radiance, `directionalRadiance`, is not ported.
 """
 
-from core.ordinal import ordinal_valid
+from core.ordinal import ordinal_valid, require_valid
 
 from core.assets import Assets
 from core.layers import Layers
@@ -157,8 +157,9 @@ def light_record(
     Raises:
         Error: If the kind is none of the three.
     """
-    if not kind.is_valid():
-        raise Error("A VXGI light must be directional, point or spot")
+    require_valid(
+        kind.is_valid(), "A VXGI light must be directional, point or spot"
+    )
     var radiance = light.radiance()
     var distance = Float32(0)
     var decay = Float32(2)

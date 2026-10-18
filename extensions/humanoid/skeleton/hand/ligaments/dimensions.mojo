@@ -22,7 +22,7 @@ authored in template centimeters. They are not a cited width table.
     var d = hand_ligament_distance(dims, FLEXOR_RETINACULUM, RIGHT, p)
 """
 
-from core.ordinal import ordinal_valid, ordinal_label
+from core.ordinal import ordinal_valid, ordinal_label, require_valid
 from extensions.humanoid.side import require_side, BodySide
 from extensions.humanoid.skeleton.arm.frame import ArmDimensions
 from extensions.humanoid.skeleton.arm.ligaments.dimensions import joint_pad
@@ -122,8 +122,7 @@ def hand_ligament_tissue(part: HandLigament) raises -> SoftTissue:
     Raises:
         Error: If `part` is not named.
     """
-    if not part.is_valid():
-        raise Error("A hand ligament must be a named part")
+    require_valid(part.is_valid(), "A hand ligament must be a named part")
     if part == TRIANGULAR_FIBROCARTILAGE:
         return meniscus_tissue()
     if part == JOINT_CARTILAGE:

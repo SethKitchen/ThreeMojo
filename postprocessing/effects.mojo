@@ -71,6 +71,7 @@ from render.texture import Texture
 from render.volume_texture import Data3DTexture, VolumeSampler
 from std.math import cos, floor, fma, isfinite, pi, sin, sqrt
 from units.si import Angle, Length, METER, RADIAN
+from core.ordinal import require_valid
 
 # --- bokeh ------------------------------------------------------------------
 
@@ -805,10 +806,14 @@ def check_halftone(settings: HalftoneSettings) raises:
             setting is not finite, the radius is not positive, the scatter
             is negative, or the blending is outside zero to one.
     """
-    if not settings.shape.is_valid():
-        raise Error("A halftone shape must be one of the four named")
-    if not settings.blending_mode.is_valid():
-        raise Error("A halftone blending mode must be one of the five named")
+    require_valid(
+        settings.shape.is_valid(),
+        "A halftone shape must be one of the four named",
+    )
+    require_valid(
+        settings.blending_mode.is_valid(),
+        "A halftone blending mode must be one of the five named",
+    )
     if not (
         isfinite(settings.radius)
         and isfinite(settings.rotate_r.value)

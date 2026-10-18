@@ -72,7 +72,7 @@ one launch a step. Both backends call `run_statements` on a
 """
 
 from core.extent import require_positive_extent, require_texel_count
-from core.ordinal import require_index_in_count
+from core.ordinal import require_index_in_count, require_valid
 from materials.compute_ids import (
     ATOMIC_ADD,
     ATOMIC_AND,
@@ -659,8 +659,10 @@ struct ComputeKernel(Movable):
             Error: If the node names a buffer there cannot be, or names a
                 buffer the kernel names as another type.
         """
-        if not buffer.buffer.is_valid():
-            raise Error("A storage node names no buffer there can be")
+        require_valid(
+            buffer.buffer.is_valid(),
+            "A storage node names no buffer there can be",
+        )
         _ = _width(buffer.type)
         for index in range(len(self._buffers)):
             if self._buffers[index].buffer == buffer.buffer:
@@ -951,8 +953,9 @@ struct ComputeKernel(Movable):
                 `float`s, a node is not a `float` of the graph, or a
                 `graph.Loop` is open.
         """
-        if not op.is_valid():
-            raise Error("An atomic function names no function there is")
+        require_valid(
+            op.is_valid(), "An atomic function names no function there is"
+        )
         self._note(buffer)
         if buffer.type != NODE_FLOAT:
             raise Error("An atomic function reads a buffer of floats")

@@ -34,7 +34,7 @@ not rebuild landmarks. Call `knee_dimensions` to resolve a template.
 Call `validate` at every public consumer of an edited copy.
 """
 
-from core.ordinal import ordinal_valid
+from core.ordinal import ordinal_valid, require_valid
 
 from extensions.humanoid.sex import FEMALE, MALE, Sex
 from extensions.humanoid.side import LEFT, RIGHT, BodySide
@@ -103,8 +103,10 @@ def require_knee_part(part: KneePart) raises:
     Raises:
         Error: If the solid is not cartilage, a meniscus, or a collateral.
     """
-    if not part.is_valid():
-        raise Error("A knee part must be cartilage, a meniscus or a collateral")
+    require_valid(
+        part.is_valid(),
+        "A knee part must be cartilage, a meniscus or a collateral",
+    )
 
 
 # Hyaline cartilage on the femoral condyles, the trochlea, the plateau

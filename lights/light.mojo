@@ -83,7 +83,7 @@ for a rect area light. `Light.power` reads it and `Light.set_power` sets
 the intensity from it, as three.js's setter does.
 """
 
-from core.ordinal import ordinal_valid, require_index_in_count
+from core.ordinal import ordinal_valid, require_index_in_count, require_valid
 
 from core.layers import Layers
 from core.object3d import NO_PARENT, NodeId
@@ -509,8 +509,9 @@ struct Light(ImplicitlyCopyable):
         var mapped = self.map != NO_TEXTURE
         if mapped and self.kind != SPOT:
             raise Error("Only a spot light projects a map")
-        if not self.spot_shape.is_valid():
-            raise Error("A spot shape that is none of the three")
+        require_valid(
+            self.spot_shape.is_valid(), "A spot shape that is none of the three"
+        )
         if self.spot_shape != CONE_SPOT and self.kind != SPOT:
             raise Error("Only a spot light has an IES profile or a projector")
         if self.ies_map != NO_TEXTURE and self.spot_shape != IES_SPOT:

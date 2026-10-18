@@ -23,7 +23,7 @@ not rebuild the others. Call `muscle_dimensions` to resolve a template.
 Call `validate` at every public consumer of an edited copy.
 """
 
-from core.ordinal import ordinal_valid
+from core.ordinal import ordinal_valid, require_valid
 from extensions.humanoid.athleticism import TONED, Athleticism, radius_scale
 from extensions.humanoid.sex import Sex
 from extensions.humanoid.side import LEFT, RIGHT, BodySide
@@ -103,8 +103,9 @@ def require_muscle_part(part: MusclePart) raises:
     Raises:
         Error: If the part is not a named muscle, tract, or tendon.
     """
-    if not part.is_valid():
-        raise Error("A muscle part must be a named muscle, tract or tendon")
+    require_valid(
+        part.is_valid(), "A muscle part must be a named muscle, tract or tendon"
+    )
 
 
 comptime GLUTEUS_MAXIMUS = MusclePart(0)
@@ -226,8 +227,10 @@ struct MuscleDimensions(ImplicitlyCopyable):
                 is not positive, or if a landmark is not finite.
         """
         check_spec(self.stature, self.sex, self.side, "muscle")
-        if not self.athleticism.is_valid():
-            raise Error("A muscle needs a toned or untoned athleticism")
+        require_valid(
+            self.athleticism.is_valid(),
+            "A muscle needs a toned or untoned athleticism",
+        )
         require_positive_finite(
             Float64(self.scale), "A muscle radius scale must be positive"
         )

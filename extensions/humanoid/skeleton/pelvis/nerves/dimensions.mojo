@@ -20,7 +20,7 @@ separate diagrammatic minimum radius.
     var d = pelvis_nerve_distance(dims, PUDENDAL_NERVE, RIGHT, p)
 """
 
-from core.ordinal import ordinal_valid
+from core.ordinal import ordinal_valid, require_valid
 from extensions.humanoid.side import require_side, LEFT, BodySide
 from extensions.humanoid.skeleton.field import (
     DistanceField,
@@ -98,8 +98,7 @@ struct PelvisNerveField(DistanceField, ImplicitlyCopyable):
                 is not named, or if `side` is not valid.
         """
         dimensions.validate()
-        if not part.is_valid():
-            raise Error("A pelvic nerve must be a named nerve")
+        require_valid(part.is_valid(), "A pelvic nerve must be a named nerve")
         require_side(side, "A pelvis")
         self.chain = _chain(dimensions, part)
         self.mirror = side == LEFT

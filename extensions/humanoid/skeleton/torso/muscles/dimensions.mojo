@@ -23,7 +23,7 @@ parameters. They are not a cited cross-section table.
     var d = torso_muscle_distance(dims, ERECTOR_SPINAE, RIGHT, p)
 """
 
-from core.ordinal import ordinal_valid
+from core.ordinal import ordinal_valid, require_valid
 from extensions.humanoid.athleticism import Athleticism, radius_scale
 from extensions.humanoid.side import require_side, RIGHT, BodySide
 from extensions.humanoid.spec import HumanoidSpec
@@ -93,8 +93,10 @@ def require_torso_athleticism(athleticism: Athleticism) raises:
     Raises:
         Error: If the athleticism is not named.
     """
-    if not athleticism.is_valid():
-        raise Error("A torso muscle needs a toned or untoned athleticism")
+    require_valid(
+        athleticism.is_valid(),
+        "A torso muscle needs a toned or untoned athleticism",
+    )
 
 
 struct TorsoMuscleDimensions(Copyable, Movable):
@@ -165,8 +167,7 @@ def is_paired_muscle(part: TorsoMuscle) raises -> Bool:
     Raises:
         Error: If `part` is not named.
     """
-    if not part.is_valid():
-        raise Error("A torso muscle must be a named muscle")
+    require_valid(part.is_valid(), "A torso muscle must be a named muscle")
     return part != DIAPHRAGM
 
 

@@ -97,6 +97,7 @@ from math.norm import squared_length2
 from math.vector3 import Vector3
 from std.math import cos, fma, inf, isfinite, sin, sqrt
 from units.si import Duration, Length, METER, SECOND
+from core.ordinal import require_valid
 
 
 def _impact_exhausted(count: Int, limit: Int) raises:
@@ -357,8 +358,10 @@ struct PhysicsWorld(Movable):
         # Validate the complete batch before any body or pending force changes.
         for body in self.bodies:
             body.validate()
-        if not self.collision_detection.is_valid():
-            raise Error("Collision detection mode is not valid")
+        require_valid(
+            self.collision_detection.is_valid(),
+            "Collision detection mode is not valid",
+        )
         if self.collision_detection == DISCRETE:
             self._step(h)
             return

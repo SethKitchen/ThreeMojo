@@ -30,7 +30,7 @@ This is not a three.js port. See Extensions.
     var rig = humanoid_rig(spec, skin)
     var knee = rig.at(RIGHT_SHIN)
 """
-from core.ordinal import ordinal_valid, ordinal_label
+from core.ordinal import ordinal_valid, ordinal_label, require_valid
 
 from core.buffer_geometry import POSITION, BufferGeometry
 from extensions.humanoid.side import LEFT, RIGHT
@@ -148,8 +148,7 @@ def require_joint(joint: Joint) raises:
     Raises:
         Error: If the joint is not named.
     """
-    if not joint.is_valid():
-        raise Error("A joint must be a named joint")
+    require_valid(joint.is_valid(), "A joint must be a named joint")
 
 
 def named_joints() -> List[Joint]:

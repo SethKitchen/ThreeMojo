@@ -23,7 +23,7 @@ Plus y is proximal. Plus x is body-right. Plus z is anterior.
     var d = vessel_distance(dims, DORSALIS_PEDIS_ARTERY, Vector3(0, 0, 0.05))
 """
 
-from core.ordinal import ordinal_valid
+from core.ordinal import ordinal_valid, require_valid
 from extensions.humanoid.skeleton.field import (
     DistanceField,
     field_gradient,
@@ -73,8 +73,9 @@ def require_foot_vessel(part: FootVessel) raises:
     Raises:
         Error: If the vessel is not a named artery or vein.
     """
-    if not part.is_valid():
-        raise Error("A foot vessel must be a named artery or vein")
+    require_valid(
+        part.is_valid(), "A foot vessel must be a named artery or vein"
+    )
 
 
 comptime DORSALIS_PEDIS_ARTERY = FootVessel(0)

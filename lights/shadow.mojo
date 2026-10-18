@@ -75,7 +75,7 @@ was drawn. It is compared in the map's zero-to-one depth, as three.js
 compares `gl_FragCoord.z`, so a bias means the same number here as there.
 """
 
-from core.ordinal import ordinal_valid
+from core.ordinal import ordinal_valid, require_valid
 from lights.light_slot import LightSlot
 
 from math.smoothstep import smoothstep
@@ -139,8 +139,9 @@ def require_shadow_type(shadow_type: ShadowMapType) raises:
     Raises:
         Error: If `shadow_type` is none of the four.
     """
-    if not shadow_type.is_valid():
-        raise Error("A shadow map type that is none of the four")
+    require_valid(
+        shadow_type.is_valid(), "A shadow map type that is none of the four"
+    )
 
 
 def require_shadow_size(size: Int) raises:
@@ -875,8 +876,9 @@ struct ShadowCascade(ImplicitlyCopyable):
                 "A shadow cascade must start at zero or later and end no"
                 " sooner than it starts"
             )
-        if not self.blend.is_valid():
-            raise Error("A cascade blend that is none of the two")
+        require_valid(
+            self.blend.is_valid(), "A cascade blend that is none of the two"
+        )
         if self.blend == SUN_BLEND and (
             not isfinite(self.fade_start)
             or not isfinite(self.ramp_end)

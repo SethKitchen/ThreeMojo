@@ -25,7 +25,7 @@ diagrammatic minimum radius so the current isosurface can show them.
     var d = pelvis_vessel_distance(dims, EXTERNAL_ILIAC_ARTERY, RIGHT, p)
 """
 
-from core.ordinal import ordinal_valid
+from core.ordinal import ordinal_valid, require_valid
 from extensions.humanoid.side import require_side, LEFT, BodySide
 from extensions.humanoid.skeleton.field import (
     DistanceField,
@@ -94,8 +94,9 @@ def require_pelvis_vessel(part: PelvisVessel) raises:
     Raises:
         Error: If the vessel is not named.
     """
-    if not part.is_valid():
-        raise Error("A pelvic vessel must be a named artery or vein")
+    require_valid(
+        part.is_valid(), "A pelvic vessel must be a named artery or vein"
+    )
 
 
 struct PelvisVesselField(DistanceField, ImplicitlyCopyable):

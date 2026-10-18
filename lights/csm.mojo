@@ -40,7 +40,7 @@ fit in Float32. Component finiteness and true zero are checked separately.
 See `docs/wiki/Norm-consumers.md` for the consumer audit.
 """
 
-from core.ordinal import ordinal_valid, require_index_in_count
+from core.ordinal import ordinal_valid, require_index_in_count, require_valid
 
 from cameras.camera import Camera
 from core.object3d import NO_PARENT, NodeId, Object3D
@@ -353,8 +353,9 @@ struct CSM(Movable):
         """
         if cascades < 1:
             raise Error("A CSM needs at least one cascade")
-        if not mode.is_valid():
-            raise Error("A CSM split mode that is none of the four")
+        require_valid(
+            mode.is_valid(), "A CSM split mode that is none of the four"
+        )
         var direction = light_direction
         if not direction.is_finite() or (direction == Vector3(0, 0, 0)):
             raise Error("A CSM's light direction must be finite and not zero")

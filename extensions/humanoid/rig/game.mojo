@@ -100,6 +100,7 @@ from math.matrix4 import Matrix4
 from math.vector3 import Vector3, append_vector3
 from objects.skeleton import bind_skeleton
 from objects.skinned_mesh import SkinnedMesh
+from core.ordinal import require_valid
 
 # The share of a triangle budget the body's skin takes, and the hair's
 # shell; each hand takes half of the rest.
@@ -605,8 +606,9 @@ def game_build_settings(
         raise Error(
             "Facial triangle budgets do not support strand hair; use the shell"
         )
-    if not hair_style.is_valid():
-        raise Error("Game build settings require a named hair style")
+    require_valid(
+        hair_style.is_valid(), "Game build settings require a named hair style"
+    )
     var settings = UserData()
     if facial_animation:
         settings.set_string("facial_recipe", String(GAME_FACE_RECIPE))

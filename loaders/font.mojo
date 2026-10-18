@@ -57,7 +57,7 @@ is skipped. three.js keeps it, and its `getPoints` then drops the repeated
 point, so the shape is the same.
 """
 
-from core.ordinal import ordinal_valid
+from core.ordinal import ordinal_valid, require_valid
 
 from loaders.js_number import js_string_to_number
 from loaders.js_text import split_fields
@@ -130,8 +130,9 @@ struct OutlineStep(Copyable, Movable):
             Error: If the verb is not one of the four, or the count of
                 numbers does not match it.
         """
-        if not verb.is_valid():
-            raise Error("Font: an outline step has an unknown command")
+        require_valid(
+            verb.is_valid(), "Font: an outline step has an unknown command"
+        )
         if len(coordinates) != verb.point_count() * 2:
             raise Error("Font: an outline step has the wrong count of numbers")
         self.verb = verb

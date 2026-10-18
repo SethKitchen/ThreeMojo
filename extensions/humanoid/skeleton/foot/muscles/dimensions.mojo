@@ -19,7 +19,7 @@ Plus y is proximal. Plus x is body-right. Plus z is anterior.
     var d = foot_muscle_distance(dims, ABDUCTOR_HALLUCIS, dims.foot.heel)
 """
 
-from core.ordinal import ordinal_valid
+from core.ordinal import ordinal_valid, require_valid
 from extensions.humanoid.athleticism import Athleticism, radius_scale
 from extensions.humanoid.side import RIGHT, BodySide
 from extensions.humanoid.spec import HumanoidSpec
@@ -75,8 +75,9 @@ def require_foot_muscle(part: FootMuscle) raises:
     Raises:
         Error: If the part is not a named muscle or tendon.
     """
-    if not part.is_valid():
-        raise Error("A foot muscle must be a named muscle or tendon")
+    require_valid(
+        part.is_valid(), "A foot muscle must be a named muscle or tendon"
+    )
 
 
 comptime CALCANEAL_TENDON = FootMuscle(0)
@@ -117,8 +118,10 @@ def require_foot_athleticism(athleticism: Athleticism) raises:
     Raises:
         Error: If the athleticism is not named.
     """
-    if not athleticism.is_valid():
-        raise Error("A foot muscle needs a toned or untoned athleticism")
+    require_valid(
+        athleticism.is_valid(),
+        "A foot muscle needs a toned or untoned athleticism",
+    )
 
 
 @fieldwise_init

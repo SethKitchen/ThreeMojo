@@ -24,7 +24,7 @@ mass correction. `matched` describes reference identity, not validated
 anatomy. Source excerpts and derived DESIGN templates are distinct.
 """
 
-from core.ordinal import require_index_in_count
+from core.ordinal import require_index_in_count, require_valid
 from math.finite import positive_finite, require_positive_finite
 from extensions.anatomy.evidence import DESIGN, Evidence
 from extensions.anatomy.inertia import InertiaTally
@@ -81,8 +81,7 @@ def require_calibration_variant(variant: Variant) raises:
     Raises:
         Error: If the variant is not valid.
     """
-    if not variant.is_valid():
-        raise Error("A calibration variant must be named")
+    require_valid(variant.is_valid(), "A calibration variant must be named")
 
 
 @fieldwise_init

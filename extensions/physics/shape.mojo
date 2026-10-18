@@ -27,7 +27,7 @@ inside. That is the method of Blow and Binstock, "How to find the inertia
 tensor (or other mass properties) of a 3D solid body represented by a
 triangle mesh" (2004).
 """
-from core.ordinal import ordinal_valid, require_index_in_count
+from core.ordinal import ordinal_valid, require_index_in_count, require_valid
 
 from math.convex_hull import ConvexHull
 from math.cross import cross_vectors, wide_cross, wide_dot, widen_vector
@@ -657,8 +657,7 @@ struct Shape(Copyable, Movable):
                 symmetric positive-definite Float32 tensor.
         """
         _check_size(mass)
-        if not self.kind.is_valid():
-            raise Error("Shape kind is not valid")
+        require_valid(self.kind.is_valid(), "Shape kind is not valid")
         var props = MassProperties(Vector3(0, 0, 0), Matrix3())
         if self.kind == SPHERE:
             _check_size(self.radius)

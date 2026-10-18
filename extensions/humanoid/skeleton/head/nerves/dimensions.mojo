@@ -23,7 +23,7 @@ authored in template centimeters. They are not a cited fascicle table.
     var d = head_nerve_distance(dims, VAGUS_NERVE, RIGHT, p)
 """
 
-from core.ordinal import ordinal_valid, ordinal_label
+from core.ordinal import ordinal_valid, ordinal_label, require_valid
 from extensions.humanoid.side import require_side, RIGHT, BodySide
 from extensions.humanoid.skeleton.head.frame import HeadMuscleDimensions
 from extensions.humanoid.skeleton.torso.bones.dimensions import (
@@ -75,8 +75,7 @@ def is_paired_head_nerve(part: HeadNerve) raises -> Bool:
     Raises:
         Error: If `part` is not named.
     """
-    if not part.is_valid():
-        raise Error("A head nerve must be a named nerve")
+    require_valid(part.is_valid(), "A head nerve must be a named nerve")
     return part != CERVICAL_SPINAL_CORD
 
 

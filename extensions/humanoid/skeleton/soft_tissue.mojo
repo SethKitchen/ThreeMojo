@@ -11,7 +11,7 @@ humanoid path re-exports those same types, kinds and factories for callers
 that used it before the extraction.
 """
 
-from core.ordinal import ordinal_valid
+from core.ordinal import ordinal_valid, require_valid
 
 from extensions.anatomy.soft_tissue import (
     SoftTissueKind,
@@ -97,8 +97,7 @@ def filled_density(fill: SoftOccupancy, tissue: SoftTissue) raises -> Density:
         Error: If `fill` is none of the named occupancies, or `tissue`
             fails `validate`.
     """
-    if not fill.is_valid():
-        raise Error("A soft fill must be empty or filled")
+    require_valid(fill.is_valid(), "A soft fill must be empty or filled")
     tissue.validate()
     if fill == SOFT_FILL:
         return tissue.wet_density

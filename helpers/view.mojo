@@ -39,7 +39,7 @@ disks with a 2D canvas. This port has no canvas text. The disks are
 unlabeled, as three.js's are by default. `dispose` has no counterpart.
 """
 from core.extent import require_positive_extent
-from core.ordinal import ordinal_valid
+from core.ordinal import ordinal_valid, require_valid
 
 from cameras.orthographic_camera import OrthographicCamera
 from controls.camera_frame import CameraFrame
@@ -102,8 +102,7 @@ def require_view_axis(axis: ViewAxis) raises:
     Raises:
         Error: If the axis is none of the six.
     """
-    if not axis.is_valid():
-        raise Error("A view axis that is none of the six")
+    require_valid(axis.is_valid(), "A view axis that is none of the six")
 
 
 # How many pixels wide and tall the helper's square is, three.js's `dim`.

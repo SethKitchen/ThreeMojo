@@ -36,7 +36,7 @@ no chain on a 3D or an array target, and neither does this.
 """
 
 from core.extent import require_positive_extent
-from core.ordinal import ordinal_valid, require_index_in_count
+from core.ordinal import ordinal_valid, require_index_in_count, require_valid
 
 from render.cube_texture import (
     FACE_COUNT,
@@ -142,8 +142,9 @@ def require_layered_kind(kind: TargetKind) raises:
     Raises:
         Error: If the kind is not valid.
     """
-    if not kind.is_valid():
-        raise Error("A layered target's kind must be one of the four")
+    require_valid(
+        kind.is_valid(), "A layered target's kind must be one of the four"
+    )
 
 
 struct LayeredRenderTarget(Movable):

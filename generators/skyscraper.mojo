@@ -56,6 +56,7 @@ from math.utils import SeededRandom, js_round, min3
 from math.vector2 import Vector2
 from std.math import floor, pi, sin, sqrt
 from units.si import Angle, Length, METER, RADIAN
+from core.ordinal import require_valid
 
 # The zones of a skyscraper, three.js's `PartId`.
 comptime WALL = PartId(0)
@@ -438,8 +439,10 @@ struct SkyscraperStyle(Copyable, Movable):
         var arch_rise = 0.4 + random.next() * 0.5
         var style = ARCADE if random.next() < 0.22 else STOREFRONT
         self.base_style = p.base_style.value() if p.base_style else style
-        if not self.base_style.is_valid():
-            raise Error("A base style must be the arcade or the storefront")
+        require_valid(
+            self.base_style.is_valid(),
+            "A base style must be the arcade or the storefront",
+        )
         if abs(p.chamfer_corner_x) > 1 or abs(p.chamfer_corner_z) > 1:
             raise Error("A chamfer corner must be minus one, zero or one")
         self.footprint_width = _length_or(p.footprint_width, width)

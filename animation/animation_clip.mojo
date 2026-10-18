@@ -45,7 +45,7 @@ neither of the two.
 
 from loaders.bytes import ascii_digit, ascii_letter
 from core.order import stable_rising_order
-from core.ordinal import ordinal_valid
+from core.ordinal import ordinal_valid, require_valid
 
 from animation.keyframe_track import KeyframeTrack, TrackTarget
 from core.user_data import UserData
@@ -102,8 +102,9 @@ def require_blend_mode(blend_mode: AnimationBlendMode) raises:
     Raises:
         Error: If the mode is neither of the two.
     """
-    if not blend_mode.is_valid():
-        raise Error("A clip needs a blend mode that exists")
+    require_valid(
+        blend_mode.is_valid(), "A clip needs a blend mode that exists"
+    )
 
 
 def require_clip_duration(runs: Float32) raises:

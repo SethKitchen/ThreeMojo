@@ -19,7 +19,7 @@ keep the legacy `code` array. The reader accepts either encoding, never
 both.
 """
 
-from core.ordinal import require_index_in_count
+from core.ordinal import require_index_in_count, require_valid
 from exporters.json_writer import JsonWriter
 from loaders.json import ARRAY, JsonDocument
 from materials import nodes
@@ -201,8 +201,10 @@ def read_node_program(
     for index in range(document.length(uniforms)):
         var entry = document.at(uniforms, index)
         var type = ValueType(document.integer(document.get(entry, "type")))
-        if not type.is_valid():
-            raise Error("Object JSON: a node uniform's type is none there is")
+        require_valid(
+            type.is_valid(),
+            "Object JSON: a node uniform's type is none there is",
+        )
         program.uniform_names.append(
             document.string(document.get(entry, "name"))
         )

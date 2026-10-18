@@ -22,7 +22,7 @@ and mass. Geometry applies a separate diagrammatic minimum radius.
     var d = torso_nerve_distance(dims, SPINAL_CORD, RIGHT, p)
 """
 
-from core.ordinal import ordinal_valid
+from core.ordinal import ordinal_valid, require_valid
 from extensions.humanoid.side import require_side, RIGHT, BodySide
 from extensions.humanoid.skeleton.torso.bones.dimensions import (
     L1,
@@ -81,8 +81,7 @@ def is_paired_nerve(part: TorsoNerve) raises -> Bool:
     Raises:
         Error: If `part` is not named.
     """
-    if not part.is_valid():
-        raise Error("A torso nerve must be a named nerve")
+    require_valid(part.is_valid(), "A torso nerve must be a named nerve")
     return part != SPINAL_CORD
 
 
