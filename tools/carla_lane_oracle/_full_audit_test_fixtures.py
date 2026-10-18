@@ -10,6 +10,7 @@ import json
 import os
 from pathlib import Path
 import shutil
+import sys
 import tempfile
 
 if __package__:
@@ -161,6 +162,10 @@ def _historical_hair_predecessors(root):
     and strands are transported by exact source provenance, not new theorems.
     No original source is written until every endpoint and reread succeeds.
     """
+    # Coverage uses its real package namespace, as the operation tests do.
+    tools = str(Path(__file__).resolve().parents[1])
+    if tools not in sys.path:
+        sys.path.insert(0, tools)
     import coverage_loop_proofs as loops
     stage = cleanup.pr760_stage
     physical = {name: (root/name).read_bytes() for name in stage.HAIR_SOURCE_PATHS}
