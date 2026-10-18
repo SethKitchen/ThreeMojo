@@ -21,7 +21,7 @@ pixel moves toward the disc's color by that share. A canvas keeps bytes,
 so each channel is rounded after each disc.
 """
 
-from math.norm import squared_length2
+from math.norm import squared_length2, squared_length3
 from math.utils import SeededRandom
 from render.srgb import LINEAR
 from render.texture import BILINEAR, REPEAT, Texture
@@ -61,7 +61,7 @@ def _coverage(
         for j in range(_SAMPLES):  # pragma: no branch
             var dx = Float64(x) + (Float64(i) + 0.5) / _SAMPLES - center_x
             var dy = Float64(y) + (Float64(j) + 0.5) / _SAMPLES - center_y
-            if dx * dx + dy * dy <= squared:
+            if squared_length2[DType.float64](dx, dy) <= squared:
                 inside += 1
     return Float64(inside) / Float64(_SAMPLES * _SAMPLES)
 
@@ -100,7 +100,7 @@ def flakes_texture(
         var nx = random.next() * 2 - 1
         var ny = random.next() * 2 - 1
         var nz = 1.5
-        var length = sqrt(nx * nx + ny * ny + nz * nz)
+        var length = sqrt(squared_length3[DType.float64](nx, ny, nz))
         nx /= length
         ny /= length
         nz /= length

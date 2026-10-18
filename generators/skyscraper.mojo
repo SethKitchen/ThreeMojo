@@ -1059,7 +1059,7 @@ def _slab(
         var p = footprint[count - 1 - k] if area < 0 else footprint[k]
         var dx = cx - p.x
         var dz = cz - p.z
-        var d = sqrt(dx * dx + dz * dz)
+        var d = sqrt(squared_length2[DType.float64](dx, dz))
         var scale = inset / (d if d != 0 else 1.0)
         var point = Vector2(
             Float32(p.x + dx * scale), Float32(p.z + dz * scale)

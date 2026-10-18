@@ -1493,7 +1493,7 @@ def vsm_moments(
                 var average = bilinear(corners, 0, across, down)
                 var spread = bilinear(corners, 4, across, down)
                 mean += average
-                squared += spread * spread + average * average
+                squared += squared_length2[DType.float32](spread, average)
             mean *= weight
             squared *= weight
             moments[row * size + column] = mean
