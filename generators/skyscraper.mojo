@@ -50,6 +50,7 @@ from geometries.utils import merge_geometries
 from math.matrix4 import Matrix4
 from math.norm import squared_length2
 from math.path import Path, Shape
+from math.sine import fraction
 from math.utils import SeededRandom
 from math.vector2 import Vector2
 from std.math import floor, pi, sin, sqrt
@@ -590,12 +591,7 @@ def _floor_hash(f: Int, frame: FaceFrame, k: Float64) -> Float64:
         )
         * 43758.5453
     )
-    return s - floor(s)
-
-
-def _fraction(value: Float64) -> Float64:
-    """Return the part of a number past its floor."""
-    return value - floor(value)
+    return fraction(s)
 
 
 struct SkyscraperParts(Movable):
@@ -825,7 +821,7 @@ def _add_windows(
                     fh - 1,
                 )
             )
-            var r = _fraction(
+            var r = fraction(
                 sin(
                     Float64(f) * 41.3
                     + Float64(b) * 12.7
@@ -896,7 +892,7 @@ def _add_storefront(
         parts.mullions.append(
             frame.box(x0 + bays.width * 2 / 3, cy, 0, 0.08, glass_height, 0.16)
         )
-        var r = _fraction(
+        var r = fraction(
             sin(
                 Float64(i) * 23.7
                 + frame.origin.x * 0.21

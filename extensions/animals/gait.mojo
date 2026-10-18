@@ -29,8 +29,9 @@ from extensions.sdf.vector import (
     length,
 )
 from math.norm import squared_length2
+from math.sine import fraction
 from math.utils import clamp
-from std.math import atan2, acos, cos, floor, isfinite, pi, sin, sqrt
+from std.math import atan2, acos, cos, isfinite, pi, sin, sqrt
 from units.si import METER, SECOND, Duration, Length
 
 # Each foot's phase offset in the lateral-sequence walk: left fore, right
@@ -352,17 +353,17 @@ def walk_pose(
         return pose^
     if not isfinite(phase):
         raise Error("Walk phase must be finite")
-    var p = _wrap(phase)
+    var p = fraction(phase)
     var hip = rig.j("hipL").y
     var parameters = _walk_parameters(rig, froude)
     var stride = parameters[0]
     var bob = parameters[1] * cos(4.0 * pi * p)
     pose.root.t = V3(0.0, bob, 0.0)
     var lift = 0.11 * hip
-    _leg(pose, rig, "L", True, _wrap(p + WALK_FL), stride, lift)
-    _leg(pose, rig, "R", True, _wrap(p + WALK_FR), stride, lift)
-    _leg(pose, rig, "L", False, _wrap(p + WALK_HL), stride, lift)
-    _leg(pose, rig, "R", False, _wrap(p + WALK_HR), stride, lift)
+    _leg(pose, rig, "L", True, fraction(p + WALK_FL), stride, lift)
+    _leg(pose, rig, "R", True, fraction(p + WALK_FR), stride, lift)
+    _leg(pose, rig, "L", False, fraction(p + WALK_HL), stride, lift)
+    _leg(pose, rig, "R", False, fraction(p + WALK_HR), stride, lift)
     # The back bobs twice a stride, lowest as each hind foot takes the
     # weight, and the tail swings once.
     pose.turn(rig, "neck2", V3(1.0, 0.0, 0.0), 0.04 * sin(4.0 * pi * p))
@@ -371,10 +372,6 @@ def walk_pose(
         if name.startswith("tail"):
             pose.turn(rig, name, V3(0.0, 1.0, 0.0), 0.06 * sin(2.0 * pi * p))
     return pose^
-
-
-def _wrap(x: Float64) -> Float64:
-    return x - floor(x)
 
 
 def spine_count(rig: Rig) -> Int:

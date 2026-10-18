@@ -19,6 +19,7 @@ from extensions.water.filter import (
     major_axis_offset,
 )
 from render.png import DecodedImage
+from math.sine import fraction
 from render.srgb import srgb_to_linear
 from std.math import floor
 
@@ -242,16 +243,16 @@ def sample_pebble(bed: PebbleBed, u: Float32, v: Float32) -> PebbleSample:
     Returns:
         The filtered linear color.
     """
-    var fu = u - floor(u)
-    var fv = v - floor(v)
+    var fu = fraction(u)
+    var fv = fraction(v)
     var x = fu * Float32(bed.width) - 0.5
     var y = fv * Float32(bed.height) - 0.5
     var x0 = Int(floor(x)) % bed.width
     var y0 = Int(floor(y)) % bed.height
     var x1 = (x0 + 1) % bed.width
     var y1 = (y0 + 1) % bed.height
-    var tx = x - floor(x)
-    var ty = y - floor(y)
+    var tx = fraction(x)
+    var ty = fraction(y)
     var s00 = _texel(bed, x0, y0)
     var s10 = _texel(bed, x1, y0)
     var s01 = _texel(bed, x0, y1)
@@ -334,16 +335,16 @@ def _sample_level[
 ](bed: B, level: Int, u: Float32, v: Float32) -> PebbleSample:
     var w = bed.pebble_width(level)
     var h = bed.pebble_height(level)
-    var fu = u - floor(u)
-    var fv = v - floor(v)
+    var fu = fraction(u)
+    var fv = fraction(v)
     var x = fu * Float32(w) - 0.5
     var y = fv * Float32(h) - 0.5
     var x0 = Int(floor(x)) % w
     var y0 = Int(floor(y)) % h
     var x1 = (x0 + 1) % w
     var y1 = (y0 + 1) % h
-    var tx = x - floor(x)
-    var ty = y - floor(y)
+    var tx = fraction(x)
+    var ty = fraction(y)
     var s00 = bed.pebble_texel(level, x0, y0)
     var s10 = bed.pebble_texel(level, x1, y0)
     var s01 = bed.pebble_texel(level, x0, y1)

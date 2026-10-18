@@ -31,6 +31,7 @@ kernel points one at a device buffer. `render.gpu_vxgi` runs the same
 functions on the device, so the two agree.
 """
 
+from math.sine import fraction
 from math.utils import clamp
 from math.vector3 import Vector3
 from std.math import cos, exp2, floor, log2, pow, sin, sqrt
@@ -592,7 +593,7 @@ def fract(value: Float32) -> Float32:
     Returns:
         The fraction, zero to one.
     """
-    return value - floor(value)
+    return fraction(value)
 
 
 def interleaved_gradient_noise(x: Float32, y: Float32) -> Float32:

@@ -53,6 +53,7 @@ from core.assets import Assets
 from core.layers import Layers
 from core.scene import Scene
 from math.norm import squared_length2
+from math.sine import fraction
 from math.smoothstep import smoothstep
 from math.utils import SeededRandom
 from math.vector2 import Vector2
@@ -4670,11 +4671,6 @@ def bloom_light(
     _ = levels^
 
 
-def _fract(value: Float32) -> Float32:
-    """Return GLSL's `fract`: what is left above the floor."""
-    return value - floor(value)
-
-
 def film_pixel(
     color: FloatColor,
     x: Int,
@@ -4705,7 +4701,7 @@ def film_pixel(
     # the grain repeats each whole second, and `rand` takes its dot modulo
     # pi before the sine.
     var noise = glsl_rand(
-        _fract(u_of(x, width) + time), _fract(v_of(y, height) + time)
+        fraction(u_of(x, width) + time), fraction(v_of(y, height) + time)
     )
     var grain = noise + 0.1
     if grain > 1:

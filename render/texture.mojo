@@ -99,6 +99,7 @@ from core.ordinal import ordinal_valid
 
 from std.math import exp2
 from math.norm import length2, _ordinary_squared, squared_length2
+from math.sine import fraction
 from math.utils import mix_delta
 from math.matrix3 import Matrix3
 from math.vector2 import Vector2
@@ -1998,7 +1999,7 @@ def gradient_sample_coordinate(value: Float32, mode: Wrap) -> Float32:
     if mode == MIRROR:
         var half = value * Float32(0.5)
         return (half - floor(half)) * 2
-    return value - floor(value)
+    return fraction(value)
 
 
 @fieldwise_init
