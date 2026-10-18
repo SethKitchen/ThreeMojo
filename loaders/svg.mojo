@@ -60,7 +60,13 @@ limits, and explicit zero and nonfinite rules.
 
 from math.norm import normalized2, _ordinary_squared, squared_length2
 from math.utils import clamp
-from loaders.bytes import ascii_digit, ascii_digit_at, ascii_letter, ascii_space
+from loaders.bytes import (
+    ascii_digit,
+    ascii_digit_at,
+    ascii_letter,
+    ascii_space,
+    js_float_byte_at,
+)
 from loaders.svg_path import (
     SvgMatrix,
     SvgShapePath,
@@ -165,11 +171,6 @@ def svg_unit_scale(
     if default_unit == SVG_PX:
         return 1 / _inches(unit) * dpi
     return _inches(default_unit) / _inches(unit)
-
-
-def _in_number_at(bytes: Span[UInt8, _], i: Int) -> Bool:
-    """Return True if there is a byte a number can hold at `i`."""
-    return i < len(bytes) and _in_number(bytes[i])
 
 
 def _number(text: String) raises -> Float64:
@@ -347,17 +348,6 @@ def parse_floats(
     return result^
 
 
-def _in_number(byte: UInt8) -> Bool:
-    """Return True for a byte `[+-]?\\d*\\.?\\d+(?:e[+-]?\\d+)?` can hold."""
-    return (
-        ascii_digit(byte)
-        or byte == 46
-        or byte == 43
-        or byte == 45
-        or (byte == 101)
-    )
-
-
 def _number_end(bytes: Span[UInt8, _], start: Int) -> Int:
     """Return where the longest match of `[+-]?\\d*\\.?\\d+(?:e[+-]?\\d+)?`
     from `start` ends, or -1 for none."""
@@ -411,7 +401,7 @@ def svg_point_pairs(text: String) -> List[String]:
     var s = 0
     while s < n:
         var run = s
-        while _in_number_at(bytes, run):
+        while js_float_byte_at(bytes, run):
             run += 1
         var no_pair = (
             run == s

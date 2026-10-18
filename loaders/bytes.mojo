@@ -8,7 +8,9 @@
 `bytes_match` asks whether an ASCII word sits at one byte.
 `ascii_space`, `ascii_digit`, and `ascii_letter` name white space, a
 decimal digit, and a letter. `ascii_space_at` and `ascii_digit_at` ask
-the same of one index. `hex_digit_value` reads one hexadecimal digit.
+the same of one index. `js_float_byte` names a byte a JavaScript number
+can hold, and `js_float_byte_at` asks the same of one index.
+`hex_digit_value` reads one hexadecimal digit.
 `base64_digit` reads one letter or digit of the base64 alphabet.
 """
 
@@ -124,6 +126,45 @@ def ascii_digit_at(bytes: Span[UInt8, _], at: Int) -> Bool:
         Error: Never.
     """
     return at < len(bytes) and ascii_digit(bytes[at])
+
+
+def js_float_byte(byte: UInt8) -> Bool:
+    """Return True when `byte` can sit inside a JavaScript number.
+
+    The bytes are a digit, `.`, `e`, `+`, and `-`.
+
+    Args:
+        byte: The byte.
+
+    Returns:
+        Whether the byte is one of those.
+
+    Raises:
+        Error: Never.
+    """
+    return (
+        ascii_digit(byte)
+        or byte == 46
+        or byte == 43
+        or byte == 45
+        or byte == 101
+    )
+
+
+def js_float_byte_at(bytes: Span[UInt8, _], at: Int) -> Bool:
+    """Return True when `at` names a byte a JavaScript number can hold.
+
+    Args:
+        bytes: The bytes to read.
+        at: The index to read.
+
+    Returns:
+        Whether `at` is inside `bytes` and that byte can sit in a number.
+
+    Raises:
+        Error: Never.
+    """
+    return at < len(bytes) and js_float_byte(bytes[at])
 
 
 def ascii_letter(byte: Int) -> Bool:
