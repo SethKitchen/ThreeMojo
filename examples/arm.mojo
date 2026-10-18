@@ -23,12 +23,12 @@ from examples.output import (
     hang_centered,
     spin_pair_gallery,
 )
+from examples.studio import room_lit_scene, studio_renderer, tissue_materials
 
 from cameras.perspective_camera import PerspectiveCamera
 from core.assets import Assets
 from core.object3d import NodeId, Object3D
 from core.scene import Scene
-from environments.room_environment import room_environment
 from extensions.humanoid.athleticism import TONED
 from extensions.humanoid.quality import (
     anatomy_detail,
@@ -58,16 +58,10 @@ from extensions.humanoid.skeleton.arm.muscles.dimensions import (
     TRICEPS_BRACHII,
 )
 from extensions.humanoid.skeleton.arm.muscles.mass import arm_muscle_mass
-from extensions.humanoid.skeleton.bone import bone_albedo, bone_physical
 from extensions.humanoid.skeleton.look import (
-    cartilage_physical,
     hair_phong,
-    ligament_physical,
-    muscle_albedo,
-    muscle_physical,
     skin_albedo,
     skin_physical,
-    tendon_physical,
 )
 from extensions.humanoid.skeleton.torso.bones.dimensions import (
     CLAVICLE,
@@ -80,14 +74,11 @@ from extensions.humanoid.skeleton.torso.bones.geometry import (
 from extensions.humanoid.spec import HumanoidSpec
 from geometries.plane import plane
 from lights.light import directional_light
-from lights.shadow import PCF_SOFT_SHADOW_MAP
 from materials.material import standard_material
 from math.vector3 import Vector3
 from objects.mesh import Mesh
 from render.framebuffer import Color
-from render.tonemap import ACES_FILMIC_TONE_MAPPING
-from renderers.environment import pmrem_from_scene
-from renderers.renderer import Renderer, available_workers
+from renderers.renderer import available_workers
 from std.sys import argv
 from units.si import Angle, DEGREE, FOOT, GRAM, Length, METER
 
@@ -128,35 +119,19 @@ def main() raises:
         "g",
     )
 
-    var renderer = Renderer(WIDTH, HEIGHT, workers=available_workers())
-    renderer.set_background(Color(20, 21, 24))
-    renderer.tone_mapping = ACES_FILMIC_TONE_MAPPING
-    renderer.tone_mapping_exposure = 1.1
-    renderer.shadow_map_type = PCF_SOFT_SHADOW_MAP
-
+    var renderer = studio_renderer(WIDTH, HEIGHT)
     var assets = Assets()
-    var bone = assets.materials.add(
-        bone_physical(assets.textures.add(bone_albedo(64)))
-    )
-    var cartilage = assets.materials.add(cartilage_physical())
-    var ligament = assets.materials.add(ligament_physical())
-    var muscle = assets.materials.add(
-        muscle_physical(assets.textures.add(muscle_albedo(64)))
-    )
-    var tendon = assets.materials.add(tendon_physical())
+    var paints = tissue_materials(assets)
+    var bone = paints.bone
+    var cartilage = paints.cartilage
+    var ligament = paints.ligament
+    var muscle = paints.muscle
+    var tendon = paints.tendon
     var skin = assets.materials.add(
         skin_physical(assets.textures.add(skin_albedo(64)))
     )
     var hair = assets.materials.add(hair_phong())
-
-    # Image-based light: three.js's RoomEnvironment through a PMREM.
-    var room = room_environment(assets)
-    room.update()
-    var lighting = pmrem_from_scene(renderer, room, assets, size=64)
-
-    var scene = Scene()
-    scene.environment = assets.cube_textures.add(lighting^)
-    scene.environment_intensity = 0.55
+    var scene = room_lit_scene(renderer, assets)
 
     # The arm's middle: halfway from the shoulder to the fingertips.
     var f = arm_dimensions(person.stature, person.sex).frame
