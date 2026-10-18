@@ -19,10 +19,9 @@ turns every head about the vertical, in degrees; zero shows the faces.
 The default is 140.
 """
 
-from examples.output import example_destination
+from examples.output import example_destination, gallery_camera
 from examples.preview import turn_about_vertical
 
-from cameras.perspective_camera import PerspectiveCamera
 from core.assets import Assets
 from core.object3d import Object3D
 from core.scene import Scene
@@ -56,7 +55,7 @@ from renderers.environment import pmrem_from_scene
 from renderers.renderer import Renderer, available_workers
 from std.pathlib import Path
 from std.sys import argv
-from units.si import Angle, DEGREE, FOOT, Length, METER, RADIAN
+from units.si import Angle, FOOT, Length, METER, RADIAN
 
 comptime DEFAULT_OUTPUT = "out/hairstyles.png"
 comptime DEFAULT_QUALITY = "high"
@@ -189,13 +188,7 @@ def main() raises:
     var fill_node = scene.add(fill^)
     scene.add_light(directional_light(Color(210, 220, 255), fill_node, 0.9))
     var eye = Vector3(0.0, 0.05, 2.75)
-    var camera = PerspectiveCamera(
-        Angle(30.0, DEGREE),
-        Float32(WIDTH) / Float32(HEIGHT),
-        Length(0.05, METER),
-        Length(30.0, METER),
-    )
-    camera.place(eye, Vector3(0.0, 0.02, 0.0))
+    var camera = gallery_camera(WIDTH, HEIGHT, eye, Vector3(0.0, 0.02, 0.0))
     var key_toward = Vector3(-1.2, 1.6, -2.0)
     key_toward.normalize()
     var fill_toward = Vector3(1.0, 0.8, 2.0)

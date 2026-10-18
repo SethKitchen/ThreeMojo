@@ -19,10 +19,9 @@ The optional second argument is the mesh quality: `low`, `medium`,
 how many frames to draw, one or more. The default is 30.
 """
 
-from examples.output import example_destination
+from examples.output import example_destination, gallery_camera
 from examples.preview import turn_about_vertical
 
-from cameras.perspective_camera import PerspectiveCamera
 from core.assets import Assets
 from core.object3d import NodeId, Object3D
 from core.scene import Scene
@@ -258,13 +257,9 @@ def main() raises:
     var rim_node = scene.add(rim^)
     scene.add_light(directional_light(Color(200, 214, 255), rim_node, 0.8))
 
-    var camera = PerspectiveCamera(
-        Angle(30.0, DEGREE),
-        Float32(WIDTH) / Float32(HEIGHT),
-        Length(0.05, METER),
-        Length(30.0, METER),
+    var camera = gallery_camera(
+        WIDTH, HEIGHT, Vector3(0.0, 1.2, 4.6), Vector3(0.0, 0.95, 0.0)
     )
-    camera.place(Vector3(0.0, 1.2, 4.6), Vector3(0.0, 0.95, 0.0))
 
     var step = Angle(Float32(360) / Float32(count), DEGREE)
     # The lights as the hair sees them: toward each.

@@ -21,10 +21,9 @@ The optional second argument is the mesh quality: `low`, `medium`,
 how many frames to draw, one or more. The default is 24.
 """
 
-from examples.output import example_destination
+from examples.output import example_destination, gallery_camera
 from examples.preview import turn_about_vertical
 
-from cameras.perspective_camera import PerspectiveCamera
 from core.assets import Assets
 from core.object3d import NodeId, Object3D
 from core.scene import Scene
@@ -85,7 +84,7 @@ from renderers.renderer import Renderer, available_workers
 from std.math import sin
 from std.pathlib import Path
 from std.sys import argv
-from units.si import Angle, DEGREE, FOOT, Length, METER, RADIAN
+from units.si import Angle, FOOT, Length, METER, RADIAN
 
 # The hair's strands: guides per head, and followers per guide.
 # How hard the breeze blows, in Frostbitten's units, and how many steps
@@ -321,13 +320,9 @@ def main() raises:
     var rim_node = scene.add(rim^)
     scene.add_light(directional_light(Color(200, 214, 255), rim_node, 0.9))
 
-    var camera = PerspectiveCamera(
-        Angle(30.0, DEGREE),
-        Float32(WIDTH) / Float32(HEIGHT),
-        Length(0.05, METER),
-        Length(30.0, METER),
+    var camera = gallery_camera(
+        WIDTH, HEIGHT, Vector3(0.0, 0.36, 1.32), Vector3(0.0, 0.335, 0.0)
     )
-    camera.place(Vector3(0.0, 0.36, 1.32), Vector3(0.0, 0.335, 0.0))
 
     # The lights as the hair sees them: toward each, and how bright.
     var key_toward = Vector3(1.0, 1.6, 2.2)

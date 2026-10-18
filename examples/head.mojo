@@ -19,7 +19,12 @@ The optional second argument is the mesh quality: `low`, `medium`,
 level below it. The default is `xhigh`.
 """
 
-from examples.output import example_destination, hang_centered, spin_pair
+from examples.output import (
+    example_destination,
+    gallery_camera,
+    hang_centered,
+    spin_pair,
+)
 from examples.studio import (
     cast_received_shadows,
     room_lit_scene,
@@ -29,7 +34,6 @@ from examples.studio import (
 )
 from examples.preview import turn_about_vertical
 
-from cameras.perspective_camera import PerspectiveCamera
 from core.assets import Assets
 from core.object3d import NodeId, Object3D
 from core.scene import Scene
@@ -171,13 +175,9 @@ def main() raises:
     studio_floor(scene, assets, Length(12.0, METER))
     studio_sun(scene, 1.2, 2.2, 2.0, Length(0.6, METER))
 
-    var camera = PerspectiveCamera(
-        Angle(30.0, DEGREE),
-        Float32(WIDTH) / Float32(HEIGHT),
-        Length(0.05, METER),
-        Length(30.0, METER),
+    var camera = gallery_camera(
+        WIDTH, HEIGHT, Vector3(0.0, 0.26, 1.05), Vector3(0.0, 0.2, 0.0)
     )
-    camera.place(Vector3(0.0, 0.26, 1.05), Vector3(0.0, 0.2, 0.0))
 
     var step = Angle(Float32(360) / Float32(FRAMES), DEGREE)
     # The lamp as the hair sees it, and the camera.

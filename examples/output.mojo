@@ -10,7 +10,7 @@ first argument, turns a node, and stores the frames. A full circle is
 one turn divided across the frames. An example that built its own frames
 can write them here. It can also copy one tile into a sheet, light a
 scene and spin it, hang a part on a turning node, stand a body on the
-floor, or write a third of a turn.
+floor, place a 30 degree camera, or write a third of a turn.
 """
 
 from cameras.perspective_camera import PerspectiveCamera
@@ -27,7 +27,7 @@ from renderers.renderer import Renderer, available_workers
 from std.math import cos, pi, sin
 from std.pathlib import Path
 from std.sys import argv, stderr
-from units.si import MILLISECOND, Angle, DEGREE
+from units.si import MILLISECOND, METER, Angle, DEGREE, Length
 
 
 def hang_centered(
@@ -78,6 +78,35 @@ def stand_on_floor(
     var holder = Object3D()
     holder.set_position(x, ground, 0)
     return scene.attach(holder^, parent)
+
+
+def gallery_camera(
+    width: Int, height: Int, eye: Vector3, target: Vector3
+) raises -> PerspectiveCamera:
+    """Return a 30 degree camera looking from `eye` to `target`.
+
+    Near is 5 centimeters. Far is 30 meters.
+
+    Args:
+        width: Image width in pixels.
+        height: Image height in pixels.
+        eye: Where the camera stands, in meters.
+        target: Where it looks, in meters.
+
+    Returns:
+        The placed camera.
+
+    Raises:
+        Error: If the camera is not valid.
+    """
+    var camera = PerspectiveCamera(
+        Angle(30.0, DEGREE),
+        Float32(width) / Float32(height),
+        Length(0.05, METER),
+        Length(30.0, METER),
+    )
+    camera.place(eye, target)
+    return camera^
 
 
 def example_destination(default_name: String) -> String:
