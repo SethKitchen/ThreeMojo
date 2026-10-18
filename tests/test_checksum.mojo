@@ -59,9 +59,7 @@ def adler32_by_the_byte(bytes: List[UInt8]) -> UInt32:
 
 def ascii(text: String) -> List[UInt8]:
     """Return the bytes of an ASCII string."""
-    var bytes = List[UInt8]()
-    for byte in text.as_bytes():
-        bytes.append(byte)
+    var bytes = List[UInt8](text.as_bytes())
     return bytes^
 
 

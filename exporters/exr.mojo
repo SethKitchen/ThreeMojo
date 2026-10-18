@@ -61,9 +61,7 @@ from std.memory import bitcast
 
 def _push_string(mut out: List[UInt8], text: String):
     """Append a string and its zero byte."""
-    # Each name has letters. The loop always runs.
-    for b in text.as_bytes():  # pragma: no branch
-        out.append(b)
+    out.extend(text.as_bytes())
     out.append(0)
 
 

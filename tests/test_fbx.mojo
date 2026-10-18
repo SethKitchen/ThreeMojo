@@ -244,9 +244,7 @@ def le(value: Int, width: Int) -> List[UInt8]:
 
 def text_bytes(text: String) -> List[UInt8]:
     """Return a string's bytes."""
-    var out = List[UInt8]()
-    for byte in text.as_bytes():
-        out.append(byte)
+    var out = List[UInt8](text.as_bytes())
     return out^
 
 

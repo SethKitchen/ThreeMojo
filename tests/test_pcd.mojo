@@ -46,9 +46,7 @@ comptime TOLERANCE = Float64(1e-6)
 
 def text_bytes(text: String) -> List[UInt8]:
     """Return a text as the bytes of a file."""
-    var bytes = List[UInt8]()
-    for byte in text.as_bytes():
-        bytes.append(byte)
+    var bytes = List[UInt8](text.as_bytes())
     return bytes^
 
 

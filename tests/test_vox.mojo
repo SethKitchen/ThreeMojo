@@ -106,9 +106,7 @@ def u32(value: Int) -> List[UInt8]:
 
 def chunk(id: String, content: List[UInt8]) -> List[UInt8]:
     """Return a chunk with no children."""
-    var out = List[UInt8]()
-    for byte in id.as_bytes():
-        out.append(byte)
+    var out = List[UInt8](id.as_bytes())
     out.extend(u32(len(content)))
     out.extend(u32(0))
     out.extend(content.copy())
