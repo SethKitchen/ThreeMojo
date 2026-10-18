@@ -94,7 +94,7 @@ from render.texture import (
     texture_from,
 )
 from render.texture_store import NO_TEXTURE, TextureId
-from loaders.text_number import read_finite_float32
+from loaders.text_number import file_line, read_finite_float32
 from std.pathlib import Path
 from units.si import METER, Length
 
@@ -438,7 +438,7 @@ struct _TextureLine(Copyable, Movable):
 
 def _where(line: Int) -> String:
     """Return the prefix an error names its line with."""
-    return "MTL line " + String(line) + ": "
+    return file_line("MTL", line)
 
 
 def _number(field: String, line: Int) raises -> Float32:

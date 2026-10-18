@@ -67,6 +67,7 @@ limits, and explicit zero and nonfinite rules.
 
 from core.ordinal import ordinal_valid
 from loaders.bytes import bytes_match
+from loaders.text_number import file_line
 from loaders.js_text import split_fields
 
 from math.triangle_normal import _polygon_cross_wide, _triangle_cross_wide
@@ -354,7 +355,7 @@ def _text(bytes: List[UInt8], start: Int, end: Int) raises -> String:
 
 def _where(line: Int) -> String:
     """Return the prefix a header error names its line with."""
-    return "PLY header line " + String(line) + ": "
+    return file_line("PLY header", line)
 
 
 struct PlyOptions(Copyable, Movable):

@@ -3,12 +3,13 @@
 # Noncommercial use is free; commercial use requires a paid license.
 # See LICENSE, LICENSE-COMMERCIAL.md and THIRD-PARTY-NOTICES.md.
 
-"""A strict decimal read for a geometry coordinate.
+"""A strict decimal read for a geometry coordinate, and the line an error names.
 
-OBJ, MTL and STL read a field with Mojo's `Float64`, then keep it only
-when it is finite as the `Float32` a geometry stores. A text that is not
-a number names the parser's reason. A number that overflows a `Float32`
-is refused before it can become an infinity in a bound or a normal.
+OBJ, MTL, STL and a cube LUT read a field with Mojo's `Float64`, then keep
+it only when it is finite as the `Float32` a geometry stores. A text that
+is not a number names the parser's reason. A number that overflows a
+`Float32` is refused before it can become an infinity in a bound or a
+normal. `file_line` builds the `KIND line N: ` prefix those errors use.
 """
 
 from math.finite import require_finite
@@ -42,3 +43,19 @@ def read_finite_float32(
     var value = Float32(wide)
     require_finite(Float64(value), prefix + finite + ": " + field)
     return value
+
+
+def file_line(kind: String, line: Int) -> String:
+    """Return the prefix an error names a line with.
+
+    Args:
+        kind: The file kind, such as `OBJ` or `PLY header`.
+        line: The line number.
+
+    Returns:
+        `kind`, then ` line `, then the number, then `: `.
+
+    Raises:
+        Error: Never.
+    """
+    return kind + " line " + String(line) + ": "
