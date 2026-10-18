@@ -27,7 +27,7 @@ from core.object3d import Object3D, _place_decomposed
 from materials.material import Material, MaterialId
 from loaders.gltf import decode_image
 from math.matrix4 import Matrix4
-from math.finite import require_finite_group
+from math.finite import require_finite_group, require_unit_finite
 from render.framebuffer import Color, FloatColor
 from render.srgb import ColorSpace
 from render.texture import Alpha, BILINEAR, Texture, Wrap, texture_from
@@ -106,12 +106,12 @@ def authored_color(
         Error: If a number is not finite or is outside zero to one.
     """
     for channel in [r, g, b]:  # pragma: no branch
-        if not isfinite(channel) or channel < 0 or channel > 1:
-            raise Error(
-                what
-                + ": a color channel must be from zero to one, not "
-                + String(channel)
-            )
+        require_unit_finite(
+            Float64(channel),
+            what
+            + ": a color channel must be from zero to one, not "
+            + String(channel),
+        )
     return FloatColor(Float32(r), Float32(g), Float32(b), 1).quantize()
 
 

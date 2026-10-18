@@ -89,7 +89,11 @@ from geometries.sculptor_utils import (
 )
 from math.ray import Ray
 from math.vector3 import Vector3
-from math.finite import require_finite, require_positive_finite
+from math.finite import (
+    require_finite,
+    require_positive_finite,
+    require_unit_finite,
+)
 from std.math import floor, inf, isfinite, sqrt
 from units.si import Length, METER
 
@@ -210,10 +214,10 @@ def _tool_defaults() -> List[_ToolSettings]:
 def _validate_unit_interval(name: String, value: Float64) raises -> Float64:
     """Refuse a value outside zero to one, three.js's
     `validateUnitInterval`."""
-    if not isfinite(value) or value < 0 or value > 1:
-        raise Error(
-            "Sculptor: " + name + " must be a finite number between 0 and 1."
-        )
+    require_unit_finite(
+        Float64(value),
+        "Sculptor: " + name + " must be a finite number between 0 and 1.",
+    )
     return value
 
 

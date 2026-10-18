@@ -87,7 +87,11 @@ from render.color_math import rgb_channels
 from render.texture import Texture
 from render.texture_store import TextureId
 from math.sine import fraction
-from math.finite import require_positive_finite, require_non_negative_finite
+from math.finite import (
+    require_non_negative_finite,
+    require_positive_finite,
+    require_unit_finite,
+)
 from std.math import floor, isfinite, max, min, sqrt
 from units.si import Angle, Length, METER
 
@@ -382,12 +386,10 @@ struct LightShadow(ImplicitlyCopyable):
                 "A shadow camera's right edge must lie beyond its left and"
                 " its top above its bottom"
             )
-        if (
-            not isfinite(self.intensity)
-            or self.intensity < 0
-            or self.intensity > 1
-        ):
-            raise Error("A shadow's intensity must be between zero and one")
+        require_unit_finite(
+            Float64(self.intensity),
+            "A shadow's intensity must be between zero and one",
+        )
         require_positive_finite(
             Float64(self.focus),
             "A spot shadow's focus must be a positive number",

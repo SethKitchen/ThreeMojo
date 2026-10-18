@@ -227,7 +227,6 @@ from render.raster_state import (
     RasterState,
     StencilFunc,
     StencilOp,
-    is_unit_fraction,
 )
 from render.texture_store import NO_TEXTURE, TextureId
 from materials.nodes import NO_NODES, NodeProgramId
@@ -240,6 +239,7 @@ from math.finite import (
     require_finite,
     require_finite_group,
     require_non_negative_finite,
+    require_unit_finite,
 )
 from math.vector2 import Vector2
 from math.vector3 import Vector3
@@ -793,8 +793,10 @@ def require_strand_opacity(opacity: Float32) raises:
     Raises:
         Error: If the opacity is not finite or is outside zero through one.
     """
-    if not isfinite(opacity) or opacity < 0 or opacity > 1:
-        raise Error("Strand opacity must be finite and between zero and one")
+    require_unit_finite(
+        Float64(opacity),
+        "Strand opacity must be finite and between zero and one",
+    )
 
 
 @fieldwise_init
@@ -1857,8 +1859,9 @@ struct Material(ImplicitlyCopyable):
             raise Error("A material's emissive map id cannot be negative")
         if alpha_map.value < 0 and alpha_map != NO_TEXTURE:
             raise Error("A material's alpha map id cannot be negative")
-        if not isfinite(alpha_test) or alpha_test < 0 or alpha_test > 1:
-            raise Error("An alpha test must be between zero and one")
+        require_unit_finite(
+            Float64(alpha_test), "An alpha test must be between zero and one"
+        )
         require_non_negative_finite(
             Float64(shininess), "A shininess cannot be negative"
         )
@@ -2027,8 +2030,9 @@ struct Material(ImplicitlyCopyable):
             and env_map != SCENE_ENVIRONMENT
         ):
             raise Error("A material's env map id cannot be negative")
-        if not isfinite(reflectivity) or reflectivity < 0 or reflectivity > 1:
-            raise Error("A reflectivity must be between zero and one")
+        require_unit_finite(
+            Float64(reflectivity), "A reflectivity must be between zero and one"
+        )
         require_valid(
             combine.is_valid(),
             (
@@ -2056,10 +2060,12 @@ struct Material(ImplicitlyCopyable):
         # The physical terms, refused where nothing reads them: only the
         # two physical shaders read a roughness or a metalness, and only
         # the physical one an index, a specular color or a clear coat.
-        if not is_unit_fraction(roughness):
-            raise Error("A roughness must be between zero and one")
-        if not is_unit_fraction(metalness):
-            raise Error("A metalness must be between zero and one")
+        require_unit_finite(
+            Float64(roughness), "A roughness must be between zero and one"
+        )
+        require_unit_finite(
+            Float64(metalness), "A metalness must be between zero and one"
+        )
         if roughness_map.value < 0 and roughness_map != NO_TEXTURE:
             raise Error("A material's roughness map id cannot be negative")
         if metalness_map.value < 0 and metalness_map != NO_TEXTURE:
@@ -2089,12 +2095,17 @@ struct Material(ImplicitlyCopyable):
             )
         if not isfinite(ior) or ior < MIN_IOR or ior > MAX_IOR:
             raise Error("An index of refraction must be between one and 2.333")
-        if not is_unit_fraction(specular_intensity):
-            raise Error("A specular intensity must be between zero and one")
-        if not is_unit_fraction(clearcoat):
-            raise Error("A clearcoat must be between zero and one")
-        if not is_unit_fraction(clearcoat_roughness):
-            raise Error("A clearcoat roughness must be between zero and one")
+        require_unit_finite(
+            Float64(specular_intensity),
+            "A specular intensity must be between zero and one",
+        )
+        require_unit_finite(
+            Float64(clearcoat), "A clearcoat must be between zero and one"
+        )
+        require_unit_finite(
+            Float64(clearcoat_roughness),
+            "A clearcoat roughness must be between zero and one",
+        )
         if kind != PHYSICAL and (
             ior != DEFAULT_IOR
             or not _is_opaque_white(specular_color)
@@ -2120,8 +2131,9 @@ struct Material(ImplicitlyCopyable):
         # The volume, refused where nothing reads it: only the physical
         # shader transmits. An infinite attenuation distance is the
         # default and dims nothing; not-a-number is not above zero.
-        if not is_unit_fraction(transmission):
-            raise Error("A transmission must be between zero and one")
+        require_unit_finite(
+            Float64(transmission), "A transmission must be between zero and one"
+        )
         var deep = thickness.to(METER)
         require_non_negative_finite(
             Float64(deep), "A thickness cannot be negative"
@@ -2158,12 +2170,16 @@ struct Material(ImplicitlyCopyable):
         # The three layers, refused where nothing reads them: only the
         # physical shader has a sheen, a film or a stretch, and a map with
         # no amount to multiply does nothing.
-        if not is_unit_fraction(sheen):
-            raise Error("A sheen must be between zero and one")
-        if not is_unit_fraction(sheen_roughness):
-            raise Error("A sheen roughness must be between zero and one")
-        if not is_unit_fraction(iridescence):
-            raise Error("An iridescence must be between zero and one")
+        require_unit_finite(
+            Float64(sheen), "A sheen must be between zero and one"
+        )
+        require_unit_finite(
+            Float64(sheen_roughness),
+            "A sheen roughness must be between zero and one",
+        )
+        require_unit_finite(
+            Float64(iridescence), "An iridescence must be between zero and one"
+        )
         if (
             not isfinite(iridescence_ior)
             or iridescence_ior < MIN_IOR
@@ -2177,8 +2193,9 @@ struct Material(ImplicitlyCopyable):
         var thickest = iridescence_thickness_maximum.to(NANOMETER)
         if not isfinite(thinnest + thickest) or min(thinnest, thickest) < 0:
             raise Error("A film thickness cannot be negative")
-        if not is_unit_fraction(anisotropy):
-            raise Error("An anisotropy must be between zero and one")
+        require_unit_finite(
+            Float64(anisotropy), "An anisotropy must be between zero and one"
+        )
         require_finite(
             Float64(anisotropy_rotation.to(RADIAN)),
             "An anisotropy rotation must be finite",
