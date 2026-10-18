@@ -35,6 +35,7 @@ from render.framebuffer import Framebuffer
 from std.ffi import c_int, external_call
 from units.si import Duration
 from window.poll_timeout import poll_milliseconds
+from window.present import require_presented_frame
 
 comptime STANDARD_INPUT = 0
 comptime STANDARD_OUTPUT = 1
@@ -288,19 +289,7 @@ struct TerminalWindow(Movable):
             Error: If the window is closed, the frame is another size, or
                 the terminal cannot be written.
         """
-        if not self.is_open:
-            raise Error("The window is closed")
-        if frame.width != self.width or frame.height != self.height:
-            raise Error(
-                "A frame of ",
-                frame.width,
-                "x",
-                frame.height,
-                " does not fit a window of ",
-                self.width,
-                "x",
-                self.height,
-            )
+        require_presented_frame(self.is_open, frame, self.width, self.height)
         _write_all(self.output_fd, encode_frame(frame))
 
     def request_size(self) raises:
