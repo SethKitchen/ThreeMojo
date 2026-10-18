@@ -23,6 +23,7 @@ See `docs/wiki/Norm-consumers.md` for the changed operations, retained
 limits, and explicit zero and nonfinite rules.
 """
 
+from math.finite import stored_float32
 from std.math import isfinite
 from math.norm import _ordinary_squared, normalized3, normalized_cross3
 from geometries.earcut import triangulate_shape
@@ -107,7 +108,7 @@ def colors_to_linear(mut colors: List[Float64]):
         colors: Three channels a vertex.
     """
     for i in range(len(colors)):
-        colors[i] = srgb_to_linear(Float64(Float32(colors[i])))
+        colors[i] = srgb_to_linear(stored_float32(colors[i]))
 
 
 def triangulate_face_index(index: List[Float64], ccw: Bool) -> List[Float64]:
@@ -354,7 +355,7 @@ def to_non_indexed(
         var base = product(indices[i], Float64(item_size))
         # Two or three values. The loop always runs.
         for c in range(item_size):  # pragma: no branch
-            out.append(Float64(Float32(item(data, base + Float64(c)))))
+            out.append(stored_float32(item(data, base + Float64(c))))
     return out^
 
 
@@ -516,9 +517,9 @@ def normal_attribute(
             var n = _weighted(
                 face_normals, at_point[faces[face * 3 + k]], face, crease_angle
             )
-            out.append(Float64(Float32(n.x)))
-            out.append(Float64(Float32(n.y)))
-            out.append(Float64(Float32(n.z)))
+            out.append(stored_float32(n.x))
+            out.append(stored_float32(n.y))
+            out.append(stored_float32(n.z))
     return out^
 
 
@@ -861,20 +862,20 @@ def sphere_data(
             var normal = vertex.normalized()
             out.positions.extend(
                 [
-                    Float64(Float32(vertex.x)),
-                    Float64(Float32(vertex.y)),
-                    Float64(Float32(vertex.z)),
+                    stored_float32(vertex.x),
+                    stored_float32(vertex.y),
+                    stored_float32(vertex.z),
                 ]
             )
             out.normals.extend(
                 [
-                    Float64(Float32(normal.x)),
-                    Float64(Float32(normal.y)),
-                    Float64(Float32(normal.z)),
+                    stored_float32(normal.x),
+                    stored_float32(normal.y),
+                    stored_float32(normal.z),
                 ]
             )
-            out.uvs.append(Float64(Float32(u + u_offset)))
-            out.uvs.append(Float64(Float32(1 - v)))
+            out.uvs.append(stored_float32(u + u_offset))
+            out.uvs.append(stored_float32(1 - v))
     var row = width_segments + 1
     # At least two rows. The loop always runs.
     for iy in range(height_segments):  # pragma: no branch
@@ -949,7 +950,7 @@ def paint_faces(
             var from_color = at(colors, a * 3 + c)
             var to_color = at(colors, (a + 1) * 3 + c)
             var blend = from_color + product(to_color - from_color, t)
-            out[index * 3 + c] = Float64(Float32(srgb_to_linear(blend)))
+            out[index * 3 + c] = stored_float32(srgb_to_linear(blend))
     return out^
 
 
@@ -1028,7 +1029,7 @@ def box_data(width: Float64, height: Float64, depth: Float64) -> SurfaceData:
                 normal[w] = 1 if plane_depth > 0 else -1
                 # Three axes. The loop always runs.
                 for c in range(3):  # pragma: no branch
-                    out.positions.append(Float64(Float32(vertex[c])))
+                    out.positions.append(stored_float32(vertex[c]))
                     out.normals.append(normal[c])
                 out.uvs.append(Float64(ix))
                 out.uvs.append(Float64(1 - iy))
@@ -1072,14 +1073,14 @@ def cylinder_data(
             var theta = product(u, 2 * pi)
             var sine = sin(theta)
             var cosine = cos(theta)
-            out.positions.append(Float64(Float32(radius * sine)))
-            out.positions.append(Float64(Float32(product(-v, height) + half)))
-            out.positions.append(Float64(Float32(radius * cosine)))
+            out.positions.append(stored_float32(radius * sine))
+            out.positions.append(stored_float32(product(-v, height) + half))
+            out.positions.append(stored_float32(radius * cosine))
             var normal = _Vector(sine, slope, cosine).normalized()
-            out.normals.append(Float64(Float32(normal.x)))
-            out.normals.append(Float64(Float32(normal.y)))
-            out.normals.append(Float64(Float32(normal.z)))
-            out.uvs.append(Float64(Float32(u)))
+            out.normals.append(stored_float32(normal.x))
+            out.normals.append(stored_float32(normal.y))
+            out.normals.append(stored_float32(normal.z))
+            out.uvs.append(stored_float32(u))
             out.uvs.append(1 - v)
     # Sixteen segments. The loop always runs.
     for x in range(radial_segments):  # pragma: no branch
@@ -1112,7 +1113,7 @@ def _cap(
     var center = len(out.positions) // 3
     # Sixteen segments. The loop always runs.
     for _ in range(radial_segments):  # pragma: no branch
-        out.positions.extend([Float64(0), Float64(Float32(half * sign)), 0])
+        out.positions.extend([Float64(0), stored_float32(half * sign), 0])
         out.normals.extend([Float64(0), sign, 0])
         out.uvs.extend([0.5, 0.5])
     var ring = center + radial_segments
@@ -1122,14 +1123,12 @@ def _cap(
         var theta = product(u, 2 * pi)
         var cosine = cos(theta)
         var sine = sin(theta)
-        out.positions.append(Float64(Float32(radius * sine)))
-        out.positions.append(Float64(Float32(half * sign)))
-        out.positions.append(Float64(Float32(radius * cosine)))
+        out.positions.append(stored_float32(radius * sine))
+        out.positions.append(stored_float32(half * sign))
+        out.positions.append(stored_float32(radius * cosine))
         out.normals.extend([Float64(0), sign, 0])
-        out.uvs.append(Float64(Float32(product(cosine, 0.5) + 0.5)))
-        out.uvs.append(
-            Float64(Float32(product(product(sine, 0.5), sign) + 0.5))
-        )
+        out.uvs.append(stored_float32(product(cosine, 0.5) + 0.5))
+        out.uvs.append(stored_float32(product(product(sine, 0.5), sign) + 0.5))
     # Sixteen segments. The loop always runs.
     for x in range(radial_segments):  # pragma: no branch
         var c = center + x

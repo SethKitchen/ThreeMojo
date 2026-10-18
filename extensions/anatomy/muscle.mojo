@@ -38,6 +38,7 @@ and take and return `Float64`.
 """
 
 from math.finite import (
+    stored_float32,
     require_finite,
     require_finite_group,
     require_positive_finite,
@@ -311,7 +312,7 @@ struct MuscleArchitecture(ImplicitlyCopyable, Writable):
         """
         var area = self.volume_m3() / Float64(self.fiber_length.value)
         require_positive_finite(
-            Float64(Float32(area)),
+            stored_float32(area),
             "Muscle PCSA must fit a finite positive SI quantity",
         )
         return Area(Float32(area), SQUARE_METER)
@@ -493,7 +494,7 @@ def isometric_equilibrium(
         raise Error("Equilibrium force must fit a finite SI quantity")
     _ = _finite_force(Float64(force.value))
     require_positive_finite(
-        Float64(Float32(fiber)),
+        stored_float32(fiber),
         "Equilibrium fiber length must fit a positive finite SI length",
     )
     # The bisection bounds keep this at most the finite SI unit length.
@@ -570,7 +571,7 @@ def stored_moment_arm(
     """
     var arm = lever.cross(pull).dot(unit_axis)
     require_finite(
-        Float64(Float32(arm)), "A muscle moment arm must fit a finite SI length"
+        stored_float32(arm), "A muscle moment arm must fit a finite SI length"
     )
     return Length(Float32(arm), METER)
 

@@ -56,6 +56,7 @@ replacement characters. And an index past the points, which three.js
 keeps and draws from undefined positions.
 """
 
+from math.finite import stored_float32
 from core.binary import big_endian_u32, little_endian_u32
 from core.buffer_attribute import BufferAttribute
 from core.buffer_geometry import COLOR, NORMAL, POSITION, BufferGeometry
@@ -1294,7 +1295,7 @@ def _data_array(
             k += 1
         var number = js_string_to_number(js_string(text, start, k))
         if type == "Float32":
-            values.append(Float64(Float32(number)))
+            values.append(stored_float32(number))
         else:
             values.append(_to_int32(number))
     return values^
@@ -1362,7 +1363,7 @@ def _filled(
         raise Error("VTK: " + what + " hold more values than their count")
     var out = List[Float64](capacity=length)
     for value in values:
-        out.append(Float64(Float32(value)))
+        out.append(stored_float32(value))
     while len(out) < length:
         out.append(0)
     return out^

@@ -38,6 +38,7 @@ See `docs/wiki/Norm-consumers.md` for the changed operations, retained
 limits, and explicit zero and nonfinite rules.
 """
 
+from math.finite import stored_float32
 from math.scaled_products import (
     _grow_products,
     _Scaled,
@@ -793,14 +794,14 @@ def compute_vertex_normals(
                 ]
             )
             var unit = normalized3(scaled[0], scaled[1], scaled[2])
-            x = Float64(Float32(unit[0]))
-            y = Float64(Float32(unit[1]))
-            z = Float64(Float32(unit[2]))
+            x = stored_float32(unit[0])
+            y = stored_float32(unit[1])
+            z = stored_float32(unit[2])
         var length = sqrt(squared_length3[DType.float64](x, y, z))
         if length > 0:
-            x = Float64(Float32(x / length))
-            y = Float64(Float32(y / length))
-            z = Float64(Float32(z / length))
+            x = stored_float32(x / length)
+            y = stored_float32(y / length)
+            z = stored_float32(z / length)
         out.append(x)
         out.append(y)
         out.append(z)

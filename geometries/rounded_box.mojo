@@ -38,7 +38,7 @@ from core.buffer_geometry import (
 )
 from math.curve_checks import require_at_least_one
 from math.utils import glsl_sign
-from math.finite import require_finite
+from math.finite import stored_float32, require_finite
 from std.math import acos, pi, sqrt
 from units.si import Length, METER
 
@@ -129,7 +129,7 @@ def _unit_box(segments: Int) -> List[Float64]:
                 # on a face leans by a hair, and so which half of the face
                 # `getUv` puts it in.
                 for axis in range(3):  # pragma: no branch
-                    grid.append(Float64(Float32(vector[axis])))
+                    grid.append(stored_float32(vector[axis]))
         for iy in range(segments):  # pragma: no branch
             for ix in range(segments):  # pragma: no branch
                 var a = ix + row * iy
