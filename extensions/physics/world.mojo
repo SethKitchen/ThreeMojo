@@ -90,7 +90,7 @@ from math.cross import wide_cross, wide_dot, widen_vector
 from math.finite import require_positive_finite, require_non_negative_finite
 from math.matrix3 import Matrix3
 from math.octree import Octree
-from math.quaternion import Quaternion
+from math.quaternion import Quaternion, quaternion_from_float64
 from math.ray import Ray
 from math.triangle import Line3, Triangle
 from math.norm import squared_length2
@@ -2455,9 +2455,7 @@ def _ccd_turn(
         return rotation
     var half = size * h / 2
     var axis = spin * (sin(half) / size)
-    var turn = Quaternion(
-        Float32(axis[0]), Float32(axis[1]), Float32(axis[2]), Float32(cos(half))
-    )
+    var turn = quaternion_from_float64(axis[0], axis[1], axis[2], cos(half))
     var out = turn * rotation
     out.normalize()
     return out

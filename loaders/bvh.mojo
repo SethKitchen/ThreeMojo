@@ -39,7 +39,7 @@ from core.scene import Scene
 from loaders.js_number import js_parse_float, js_parse_int
 from loaders.js_text import split_fields, text_lines
 from math.matrix4 import Matrix4
-from math.vector3 import Vector3
+from math.vector3 import Vector3, vector3_from_float64
 from objects.skeleton import Bone, Skeleton
 from std.math import cos, isnan, pi, sin
 from std.pathlib import Path
@@ -393,9 +393,8 @@ def parse_bvh(
         var node = Object3D()
         node.name = joints[j].name
         ref offset = joints[j].offset
-        node.set_position(
-            Float32(offset[0]), Float32(offset[1]), Float32(offset[2])
-        )
+        var place = vector3_from_float64(offset[0], offset[1], offset[2])
+        node.set_position(place.x, place.y, place.z)
         var above = parent if joints[j].parent < 0 else nodes[joints[j].parent]
         var id = scene.attach(node^, above)
         nodes.append(id)

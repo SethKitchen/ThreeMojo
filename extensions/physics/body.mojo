@@ -36,7 +36,7 @@ from extensions.physics.shape import (
 from math.cross import wide_cross, wide_dot, widen_vector
 from math.finite import require_finite, require_positive_finite
 from math.matrix3 import Matrix3
-from math.quaternion import Quaternion
+from math.quaternion import Quaternion, quaternion_from_float64
 from math.vector3 import Vector3, vector3_from_float64
 from std.math import cos, isfinite, sin, sqrt
 from units.si import Mass
@@ -679,9 +679,7 @@ struct RigidBody(Copyable, Movable):
         _split_rotation(q, momentum, axis2, coefficient2, Float64(h))
         _split_rotation(q, momentum, axis1, coefficient1, half)
         _split_rotation(q, momentum, axis0, coefficient0, half)
-        self.rotation = Quaternion(
-            Float32(q[0]), Float32(q[1]), Float32(q[2]), Float32(q[3])
-        )
+        self.rotation = quaternion_from_float64(q[0], q[1], q[2], q[3])
         self.rotation.normalize()
         # Reconstruct from the final stored pose and the original world
         # momentum. A caller's latest omega, torque and contact impulses

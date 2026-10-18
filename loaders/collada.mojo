@@ -1189,9 +1189,8 @@ struct _Loader(Movable):
                 matrix.multiply(m)
             elif name == "translate":
                 var v = self.numbers(step, 3, "<translate>")
-                matrix.multiply(
-                    translation(Float32(v[0]), Float32(v[1]), Float32(v[2]))
-                )
+                var offset = vector3_from_float64(v[0], v[1], v[2])
+                matrix.multiply(translation(offset.x, offset.y, offset.z))
             elif name == "rotate":
                 var v = self.numbers(step, 4, "<rotate>")
                 matrix.multiply(
@@ -1202,9 +1201,8 @@ struct _Loader(Movable):
                 )
             elif name == "scale":
                 var v = self.numbers(step, 3, "<scale>")
-                matrix.multiply(
-                    scaling(Float32(v[0]), Float32(v[1]), Float32(v[2]))
-                )
+                var wide = vector3_from_float64(v[0], v[1], v[2])
+                matrix.multiply(scaling(wide.x, wide.y, wide.z))
         return matrix^
 
     def object_count(mut self, element: Int, mut assets: Assets) raises -> Int:

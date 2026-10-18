@@ -498,11 +498,11 @@ struct Quaternion(Equatable, ImplicitlyCopyable):
         var x0 = generator.next()
         var r1 = sqrt(1 - x0)
         var r2 = sqrt(x0)
-        return Quaternion(
-            Float32(r1 * sin(theta1)),
-            Float32(r1 * cos(theta1)),
-            Float32(r2 * sin(theta2)),
-            Float32(r2 * cos(theta2)),
+        return quaternion_from_float64(
+            r1 * sin(theta1),
+            r1 * cos(theta1),
+            r2 * sin(theta2),
+            r2 * cos(theta2),
         )
 
     def __eq__(self, other: Self) -> Bool:
@@ -589,6 +589,28 @@ struct Quaternion(Equatable, ImplicitlyCopyable):
         if angle == 0:
             return
         self = self.slerp(other, min(Float32(1), step.value / angle))
+
+
+def quaternion_from_float64(
+    x: Float64, y: Float64, z: Float64, w: Float64
+) -> Quaternion:
+    """Return a `Quaternion` from four `Float64` components.
+
+    Each component is rounded to `Float32`.
+
+    Args:
+        x: The first component.
+        y: The second component.
+        z: The third component.
+        w: The real component.
+
+    Returns:
+        The rounded quaternion.
+
+    Raises:
+        Error: Never.
+    """
+    return Quaternion(Float32(x), Float32(y), Float32(z), Float32(w))
 
 
 def append_quaternion(mut values: List[Float32], rotation: Quaternion):

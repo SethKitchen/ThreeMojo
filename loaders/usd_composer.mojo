@@ -110,7 +110,8 @@ from math.matrix4 import (
     scaling,
     translation,
 )
-from math.quaternion import Quaternion
+from math.quaternion import Quaternion, quaternion_from_float64
+from math.vector3 import vector3_from_float64
 from math.vector2 import Vector2, vector2_from_float64
 from objects.mesh import Mesh
 from render.framebuffer import Color, rgb_is_white
@@ -1393,7 +1394,8 @@ struct _Composer(Movable):
             if not self.layer.truthy(value):
                 return None
             var t = self.vector(value, op)
-            return translation(Float32(t[0]), Float32(t[1]), Float32(t[2]))
+            var offset = vector3_from_float64(t[0], t[1], t[2])
+            return translation(offset.x, offset.y, offset.z)
         if op == "xformOp:scale":
             if not self.layer.truthy(value):
                 return None
@@ -1408,7 +1410,8 @@ struct _Composer(Movable):
                 var n = self.layer.to_number(value)
                 s = [n, n, n]
             scale = s.copy()
-            return scaling(Float32(s[0]), Float32(s[1]), Float32(s[2]))
+            var wide = vector3_from_float64(s[0], s[1], s[2])
+            return scaling(wide.x, wide.y, wide.z)
         if op == "xformOp:rotateXYZ":
             if not self.layer.truthy(value):
                 return None
@@ -1449,11 +1452,11 @@ struct _Composer(Movable):
         Returns:
             The quaternion, as given.
         """
-        return Quaternion(
-            Float32(self.layer.element_number(id, 0)),
-            Float32(self.layer.element_number(id, 1)),
-            Float32(self.layer.element_number(id, 2)),
-            Float32(self.layer.element_number(id, 3)),
+        return quaternion_from_float64(
+            self.layer.element_number(id, 0),
+            self.layer.element_number(id, 1),
+            self.layer.element_number(id, 2),
+            self.layer.element_number(id, 3),
         )
 
     def apply_transform(
@@ -1495,7 +1498,8 @@ struct _Composer(Movable):
             if Bool(scale):
                 var s = scale.value().copy()
                 if s[0] < 0 and s[1] < 0 and s[2] < 0:
-                    node.set_scale(Float32(s[0]), Float32(s[1]), Float32(s[2]))
+                    var wide = vector3_from_float64(s[0], s[1], s[2])
+                    node.set_scale(wide.x, wide.y, wide.z)
                     var q = node.quaternion
                     node.quaternion = Quaternion(q.x, -q.y, q.z, -q.w)
             return
@@ -1503,15 +1507,17 @@ struct _Composer(Movable):
         var translate = self.data("xformOp:translate", spec, attrs)
         if self.layer.truthy(translate):
             var t = self.vector(translate, "xformOp:translate")
-            node.set_position(Float32(t[0]), Float32(t[1]), Float32(t[2]))
+            var place = vector3_from_float64(t[0], t[1], t[2])
+            node.set_position(place.x, place.y, place.z)
         var scale = self.data("xformOp:scale", spec, attrs)
         if self.layer.truthy(scale):
             if self.layer.is_array(scale):
-                node.set_scale(
-                    Float32(self.layer.element_number(scale, 0)),
-                    Float32(self.layer.element_number(scale, 1)),
-                    Float32(self.layer.element_number(scale, 2)),
+                var wide = vector3_from_float64(
+                    self.layer.element_number(scale, 0),
+                    self.layer.element_number(scale, 1),
+                    self.layer.element_number(scale, 2),
                 )
+                node.set_scale(wide.x, wide.y, wide.z)
             else:
                 var n = Float32(self.layer.to_number(scale))
                 node.set_scale(n, n, n)
