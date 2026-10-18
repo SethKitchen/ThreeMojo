@@ -16,6 +16,8 @@ from unittest.mock import patch
 import conditioned_cubic_contracts as conditioned
 import source_contracts as source
 import typed_boundary_contracts as typed
+import full_audit_cleanup_contracts as audit
+import _full_audit_test_fixtures as fixtures
 
 ROOT = Path(__file__).resolve().parents[2]
 
@@ -23,7 +25,9 @@ ROOT = Path(__file__).resolve().parents[2]
 class TypedBoundaryContracts(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
-        cls.current = {path: (ROOT/path).read_text() for path in typed.SOURCE_PATHS}
+        baseline = fixtures.common758_leaf_texts(ROOT)
+        cls.current = {path: baseline[path] for path in typed.SOURCE_PATHS}
+        typed.verify_sources(dict(cls.current))
 
     def test_translated_method_provenance_retains_all_original_pins(self):
         import ast
@@ -184,12 +188,17 @@ class TypedBoundaryContracts(unittest.TestCase):
         self.assertEqual(inputs & set(typed.EDGES), {fixture})
         self.assertEqual(typed.edge(fixture)['before_sha256'], helpers.TESTS[fixture])
         function = ast.parse(inspect.getsource(audit._shared_helper_bindings))
+        baseline = fixtures.common758_leaf_texts(ROOT)
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory).resolve()
             for name in inputs:
                 path = root/name
                 path.parent.mkdir(parents=True, exist_ok=True)
-                path.write_bytes((ROOT/name).read_bytes())
+                raw = (baseline[name].encode('utf-8') if name in baseline
+                       else (ROOT/name).read_bytes())
+                if name in ('tools/test_conditioned_coverage_loops.py', 'tools/carla_lane_oracle/test_typed_boundary_contracts.py', 'tools/carla_lane_oracle/test_shared_helper_contracts.py', 'tools/carla_lane_oracle/test_scaled_float32_contracts.py', 'tools/carla_lane_oracle/test_common758_current_successor.py'):
+                    raw = audit.qualification_predecessor_bytes(name, raw)
+                path.write_bytes(raw)
             physical = (root/fixture).read_bytes()
             events = []
             def observe(actual_root, path, raw, *, _operation=None):
@@ -432,7 +441,10 @@ class TypedBoundaryContracts(unittest.TestCase):
             with self.subTest(path=path):
                 target = ROOT/path
                 self.assertFalse(target.is_symlink())
-                self.assertEqual(hashlib.sha256(target.read_bytes()).hexdigest(), expected)
+                raw = target.read_bytes()
+                if path in ('tools/test_conditioned_coverage_loops.py', 'tools/carla_lane_oracle/test_typed_boundary_contracts.py', 'tools/carla_lane_oracle/test_shared_helper_contracts.py', 'tools/carla_lane_oracle/test_scaled_float32_contracts.py', 'tools/carla_lane_oracle/test_common758_current_successor.py'):
+                    raw = audit.qualification_predecessor_bytes(path, raw)
+                self.assertEqual(hashlib.sha256(raw).hexdigest(), expected)
         self.assertTrue(any(path.startswith('tests/compile_fail/') for path in typed.TESTS))
         self.assertIn('tests/test_carla_conditioned_polynomial.mojo', typed.TESTS)
         self.assertIn('extensions/carla/quantity_boundary.mojo', typed.NEW_INPUTS)

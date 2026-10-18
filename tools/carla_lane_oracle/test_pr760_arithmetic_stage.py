@@ -70,6 +70,7 @@ class StagedArithmeticControls(unittest.TestCase):
             'seed_count_contracts.py': 'pr760-seed_count-predecessor.txt',
             'border_parser_contracts.py': 'pr760-border_parser-predecessor.txt',
             'winner_sign_contracts.py': 'pr760-winner_sign-predecessor.txt',
+            'test_common758_current_successor.py': 'pr760-test_common758_current_successor-predecessor.txt',
         }
         executing = owner.executing_checker_bindings(ROOT)
         for path, expected in stage.PROTECTED_AUTHORITY_SHA256.items():
@@ -77,7 +78,11 @@ class StagedArithmeticControls(unittest.TestCase):
                 physical = ROOT/path
                 if physical.name in archives:
                     physical = ROOT/'tools/carla_lane_oracle'/archives[physical.name]
-                    self.assertEqual(executing[path], hashlib.sha256((ROOT/path).read_bytes()).hexdigest())
+                    if path == 'tools/carla_lane_oracle/test_common758_current_successor.py':
+                        self.assertEqual(owner.qualification_predecessor_bytes(
+                            path, (ROOT/path).read_bytes()), physical.read_bytes())
+                    else:
+                        self.assertEqual(executing[path], hashlib.sha256((ROOT/path).read_bytes()).hexdigest())
                 self.assertEqual(hashlib.sha256(physical.read_bytes()).hexdigest(), expected)
         typed.verify_authority()
 

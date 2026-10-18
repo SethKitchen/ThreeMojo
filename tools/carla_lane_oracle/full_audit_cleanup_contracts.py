@@ -145,9 +145,9 @@ NATIVE_SUPPORT_INPUTS = ('tools/native_test_support.py', 'tools/fixtures/carla_s
 NATIVE_SUPPORT_MAPPING = {'tests/test_carla_junction_endpoint_refusals.mojo': ['tools/fixtures/carla_sum2_fp_state.c'],
  'tests/test_carla_sum2_environment.mojo': ['tools/fixtures/carla_sum2_fp_state.c']}
 THEOREM_DOCUMENT = 'docs/validation/full-audit-711-invariants.md'
-PR760_STAGE_SHA256 = 'eae32f3f428f3015d6c4d193c23b3c460ff8f0b85f4f274b8694f4b92f2e642e'
+PR760_STAGE_SHA256 = '77d838415054e1fea54ede845bf70e8d98ed7243c3e74dbcef0283e4798b21cb'
 PR760_IMAGE = 'tools/carla_lane_oracle/pr760-source-image.json'
-PR760_IMAGE_SHA256 = '3c9732e85793021e78c2f6566a2132f83f4ba2f05261f4b32e34214a47096892'
+PR760_IMAGE_SHA256 = '2d9dabe923754c01ed178af0a2ced95ce28058bab38821dfdb25a8197889dc50'
 PR760_OWNER_PREDECESSOR = 'tools/carla_lane_oracle/pr760-owner-predecessor.txt'
 PR760_OWNER_PREDECESSOR_SHA256 = '6138ba2dcac394c716ea9ed32e74e0c6d15857d5c605fc82304d21d0c80fdc69'
 DEPENDENCY_TOOL_SHA256 = {'tools/carla_lane_oracle/winner_sign_contracts.py': 'f850902634073364fe2407b00d12e9fdfb2ecfc6cf2a03414269fbb7984a8a7f',
@@ -3170,6 +3170,8 @@ def _scaled_float32_bindings(root, *, paths=None, _snapshots=None, _inputs=None,
         _pr760_admit(root, _inputs=_inputs, _input_owner=_input_owner,
                     _operation=_operation, _selection=_pr760)
     def historical(name, raw):
+        if current and name == 'tools/carla_lane_oracle/test_scaled_float32_contracts.py':
+            return qualification_predecessor_bytes(name, raw).decode('utf-8')
         return (_pr760['predecessors'][name] if _pr760 and name in _pr760['predecessors']
                 else pr760_stage.predecessor_source(name, raw.decode('utf-8'))
                 if current and name in pr760_stage.CARLA_REGISTRY_PATHS else raw.decode('utf-8'))
@@ -4124,12 +4126,435 @@ PR760_IMPLEMENTATION_SUCCESSORS = {'tools/carla_lane_oracle/border_parser_contra
 def _pr760_authority_data():
     """Bind successor data selectors to literal executing-code constants."""
     require((PR760_STAGE_SHA256, PR760_IMAGE, PR760_IMAGE_SHA256, PR760_OWNER_PREDECESSOR, PR760_OWNER_PREDECESSOR_SHA256) == (
-        'eae32f3f428f3015d6c4d193c23b3c460ff8f0b85f4f274b8694f4b92f2e642e',
+        '77d838415054e1fea54ede845bf70e8d98ed7243c3e74dbcef0283e4798b21cb',
         'tools/carla_lane_oracle/pr760-source-image.json',
-        '3c9732e85793021e78c2f6566a2132f83f4ba2f05261f4b32e34214a47096892',
+        '2d9dabe923754c01ed178af0a2ced95ce28058bab38821dfdb25a8197889dc50',
         'tools/carla_lane_oracle/pr760-owner-predecessor.txt',
         '6138ba2dcac394c716ea9ed32e74e0c6d15857d5c605fc82304d21d0c80fdc69',
     ), 'PR760 authority selectors changed')
+
+
+def qualification_predecessor_bytes(path, raw):
+    """Pure exact comparison for five reviewed Python witness successors only.
+
+    Physical owners still consume and return actual bytes. This function grants
+    neither source-image admission nor a receipt, and never reads projected files.
+    """
+    executing_checker_bindings()
+    require(type(path) is str and type(raw) is bytes,
+            'qualification predecessor requires builtin source bytes')
+    rows = {'tools/carla_lane_oracle/test_common758_current_successor.py': ('010cd7008a96b80e0aea26734dafb7be0068f677c5dd73af8fb15db585e70b9f',
+                                                                     'bae8693bfbc3557a53e54f3dea90c5bf44583d5fde349a6c24c16045acec10e4',
+                                                                     ((13,
+                                                                       14,
+                                                                       (),
+                                                                       ('import _full_audit_test_fixtures as '
+                                                                        'fixtures\n',)),
+                                                                      (84,
+                                                                       90,
+                                                                       (),
+                                                                       ('    @classmethod\n',
+                                                                        '    def setUpClass(cls):\n',
+                                                                        '        baseline = '
+                                                                        'fixtures.common758_leaf_texts(ROOT)\n',
+                                                                        '        cls.current = {name: '
+                                                                        'baseline[name] for name in '
+                                                                        'typed.SOURCE_PATHS}\n',
+                                                                        '        '
+                                                                        'typed.verify_sources(dict(cls.current))\n',
+                                                                        '\n')),
+                                                                      (110,
+                                                                       111,
+                                                                       ('        '
+                                                                        'self.assertEqual(typed.BINDING_INPUTS[SELF], '
+                                                                        '_sha((ROOT/SELF).read_bytes()))\n',),
+                                                                       ('        '
+                                                                        'self.assertEqual(typed.BINDING_INPUTS[SELF], '
+                                                                        '_sha(audit.qualification_predecessor_bytes(SELF, '
+                                                                        '(ROOT/SELF).read_bytes())))\n',)),
+                                                                      (112,
+                                                                       113,
+                                                                       ('        '
+                                                                        'self.assertEqual(typed.BINDING_INPUTS[conditioned], '
+                                                                        '_sha((ROOT/conditioned).read_bytes()))\n',),
+                                                                       ('        '
+                                                                        'self.assertEqual(typed.BINDING_INPUTS[conditioned], '
+                                                                        '_sha(audit.qualification_predecessor_bytes(conditioned, '
+                                                                        '(ROOT/conditioned).read_bytes())))\n',)),
+                                                                      (121,
+                                                                       123,
+                                                                       ('        current = {p: '
+                                                                        '(ROOT/p).read_text() for p in '
+                                                                        'typed.SOURCE_PATHS}\n',),
+                                                                       ('        current = dict(self.current)\n',
+                                                                        '        '
+                                                                        'typed.verify_sources(current)\n')),
+                                                                      (135,
+                                                                       137,
+                                                                       ('        current = {p: '
+                                                                        '(ROOT/p).read_text() for p in '
+                                                                        'typed.SOURCE_PATHS}\n',),
+                                                                       ('        current = dict(self.current)\n',
+                                                                        '        '
+                                                                        'typed.verify_sources(current)\n')),
+                                                                      (184,
+                                                                       206,
+                                                                       ('        # Map is observed during source '
+                                                                        'admission, exact dependency binding,\n',
+                                                                        '        # and the final image reread. '
+                                                                        'Exercise the first and final '
+                                                                        'observations.\n',
+                                                                        '        for at_read in (1, 3):\n'),
+                                                                       ("        # PR760's exact candidate has "
+                                                                        'one first and one terminal map read.\n',
+                                                                        '        # Authenticate the actual '
+                                                                        'nested observer and establish a passing '
+                                                                        'image\n',
+                                                                        '        # with exactly those two reads '
+                                                                        'before injecting either returned '
+                                                                        'value.\n',
+                                                                        '        candidate = '
+                                                                        'audit._pr760_candidate_bindings\n',
+                                                                        '        observers = [code for code in '
+                                                                        'candidate.__code__.co_consts\n',
+                                                                        '                     if '
+                                                                        'isinstance(code, '
+                                                                        'type(candidate.__code__)) and '
+                                                                        "code.co_name == 'observe']\n",
+                                                                        '        '
+                                                                        'self.assertEqual(len(observers), 1)\n',
+                                                                        '        observed_code = observers[0]\n',
+                                                                        '        baseline_reads = []\n',
+                                                                        '        def observe(path, *args, '
+                                                                        '**kwargs):\n',
+                                                                        '            frame = sys._getframe(1)\n',
+                                                                        '            if path == target and '
+                                                                        'frame.f_code is observed_code:\n',
+                                                                        '                '
+                                                                        'self.assertIs(frame.f_globals, '
+                                                                        'vars(audit))\n',
+                                                                        '                '
+                                                                        'self.assertIs(frame.f_back.f_code, '
+                                                                        'candidate.__code__)\n',
+                                                                        '                '
+                                                                        "self.assertEqual(frame.f_back.f_locals['root'], "
+                                                                        'ROOT)\n',
+                                                                        '                '
+                                                                        "self.assertEqual(frame.f_locals['path'], "
+                                                                        "'extensions/carla/map.mojo')\n",
+                                                                        '                '
+                                                                        'baseline_reads.append(path)\n',
+                                                                        '            return original(path, '
+                                                                        '*args, **kwargs)\n',
+                                                                        '        with patch.object(Path, '
+                                                                        "'read_bytes', observe):\n",
+                                                                        '            '
+                                                                        'audit._typed_boundary_bindings(ROOT)\n',
+                                                                        '        '
+                                                                        'self.assertEqual(len(baseline_reads), '
+                                                                        '2)\n',
+                                                                        '        for at_read in (1, 2):\n')),
+                                                                      (209,
+                                                                       214,
+                                                                       ('                        '
+                                                                        'audit._typed_boundary_bindings.__code__):\n',),
+                                                                       ('                        '
+                                                                        'observed_code):\n',
+                                                                        '                    frame = '
+                                                                        'sys._getframe(1)\n',
+                                                                        '                    '
+                                                                        'self.assertIs(frame.f_globals, '
+                                                                        'vars(audit))\n',
+                                                                        '                    '
+                                                                        'self.assertIs(frame.f_back.f_code, '
+                                                                        'candidate.__code__)\n',
+                                                                        '                    '
+                                                                        "self.assertEqual(frame.f_back.f_locals['root'], "
+                                                                        'ROOT)\n')))),
+     'tools/carla_lane_oracle/test_scaled_float32_contracts.py': ('86cb083e302ec2f3b76beaa015bf5ec6b79bc9e2ea5058f76e80bec022649931',
+                                                                  'dfed575b3625ee6dab4257055023be20d60da8a20529f729e890df22679396a6',
+                                                                  ((22,
+                                                                    24,
+                                                                    ('        cls.after = {name: '
+                                                                     '(ROOT/name).read_text() for name in '
+                                                                     'scaled.SOURCE_PATHS}\n',),
+                                                                    ('        baseline = '
+                                                                     'fixtures.common758_leaf_texts(ROOT)\n',
+                                                                     '        cls.after = {name: baseline[name] '
+                                                                     'for name in scaled.SOURCE_PATHS}\n')),
+                                                                   (185,
+                                                                    186,
+                                                                    ('                with patch.object(Path, '
+                                                                     "'read_bytes', denied), "
+                                                                     'self.assertRaises(OSError) as caught:\n',),
+                                                                    ('                with patch.object(Path, '
+                                                                     "'read_bytes', denied), "
+                                                                     'self.assertRaises((OSError, ValueError)) '
+                                                                     'as caught:\n',)),
+                                                                   (187,
+                                                                    191,
+                                                                    ('                '
+                                                                     'self.assertIs(caught.exception, '
+                                                                     'failure)\n',),
+                                                                    ('                cause = caught.exception\n',
+                                                                     '                while cause.__cause__ is '
+                                                                     'not None:\n',
+                                                                     '                    cause = '
+                                                                     'cause.__cause__\n',
+                                                                     '                self.assertIs(cause, '
+                                                                     'failure)\n')),
+                                                                   (477,
+                                                                    483,
+                                                                    ('        self.original = {name: (ROOT / '
+                                                                     'name).read_bytes() for name in '
+                                                                     'self.paths}\n',),
+                                                                    ('        baseline = '
+                                                                     'fixtures.common758_leaf_texts(ROOT)\n',
+                                                                     '        self.original = {name: '
+                                                                     "(baseline[name].encode('utf-8') if name in "
+                                                                     'baseline\n',
+                                                                     '                         else '
+                                                                     '(ROOT/name).read_bytes()) for name in '
+                                                                     'self.paths}\n',
+                                                                     '        witness = '
+                                                                     "'tools/carla_lane_oracle/test_scaled_float32_contracts.py'\n",
+                                                                     '        self.original[witness] = '
+                                                                     'cleanup.qualification_predecessor_bytes(\n',
+                                                                     '            witness, '
+                                                                     'self.original[witness])\n')))),
+     'tools/carla_lane_oracle/test_shared_helper_contracts.py': ('c5f02d4424d7c497557991d1b08e4864dd0249158506beac08f601413a9648f2',
+                                                                 'e14bee90aaa9cc0f5a6a062890905c1bd772381d6351fe0198c5d677100adb78',
+                                                                 ((25,
+                                                                   27,
+                                                                   ('        cls.texts = {path: '
+                                                                    '(ROOT/path).read_text()\n',),
+                                                                   ('        baseline = '
+                                                                    'fixtures.common758_leaf_texts(ROOT)\n',
+                                                                    '        cls.texts = {path: '
+                                                                    'baseline[path]\n')),
+                                                                  (126,
+                                                                   130,
+                                                                   ('        '
+                                                                    "self.assertEqual(bindings['render/color_math.mojo'],\n",
+                                                                    '                         '
+                                                                    "cleanup.typed_boundary.CURRENT_DEPENDENCIES['render/color_math.mojo'])\n"),
+                                                                   ("        color = 'render/color_math.mojo'\n",
+                                                                    '        self.assertEqual(bindings[color], '
+                                                                    'cleanup.sha((self.root/color).read_bytes()))\n',
+                                                                    '        '
+                                                                    'self.assertEqual(cleanup.sha(cleanup.pr760_stage.predecessor_source(\n',
+                                                                    '            color, '
+                                                                    '(self.root/color).read_text())), '
+                                                                    'cleanup.typed_boundary.CURRENT_DEPENDENCIES[color])\n')),
+                                                                  (177,
+                                                                   179,
+                                                                   ('        for root, typed in ((self.root, '
+                                                                    'True), (historical, False)):\n',),
+                                                                   ('        common = '
+                                                                    'fixtures.copy_common758_boundary_root(self, '
+                                                                    'ROOT)\n',
+                                                                    '        for root, typed in ((common, True), '
+                                                                    '(historical, False)):\n')),
+                                                                  (196,
+                                                                   213,
+                                                                   (),
+                                                                   ('\n',
+                                                                    '    def '
+                                                                    'test_pr760_old_xml_cannot_borrow_the_current_provider_image(self):\n',
+                                                                    '        baseline = '
+                                                                    'fixtures.common758_leaf_texts(self.root)\n',
+                                                                    '        old = '
+                                                                    'helpers.predecessor_source(XML, '
+                                                                    "baseline[XML]).encode('utf-8')\n",
+                                                                    '        with self.changed(XML, old):\n',
+                                                                    '            with '
+                                                                    'self.assertRaises(ValueError):\n',
+                                                                    '                '
+                                                                    'cleanup.shared_helper_proof_bindings(self.root, '
+                                                                    'paths=helpers.SOURCE_PATHS)\n',
+                                                                    '            utf8 = self.root/UTF8\n',
+                                                                    '            raw = utf8.read_bytes()\n',
+                                                                    '            utf8.unlink()\n',
+                                                                    '            try:\n',
+                                                                    '                with '
+                                                                    'self.assertRaises(FileNotFoundError) as '
+                                                                    'caught:\n',
+                                                                    '                    '
+                                                                    'cleanup.shared_helper_proof_bindings(self.root, '
+                                                                    'paths=helpers.SOURCE_PATHS)\n',
+                                                                    '                '
+                                                                    'self.assertEqual(caught.exception.filename, '
+                                                                    'str(utf8))\n',
+                                                                    '            finally:\n',
+                                                                    '                utf8.write_bytes(raw)\n',
+                                                                    '        '
+                                                                    'cleanup.shared_helper_proof_bindings(self.root, '
+                                                                    'paths=helpers.SOURCE_PATHS)\n')),
+                                                                  (234,
+                                                                   235,
+                                                                   ('                with patch.object(Path, '
+                                                                    "'read_bytes', unreadable), "
+                                                                    'self.assertRaises(OSError) as caught:\n',),
+                                                                   ('                with patch.object(Path, '
+                                                                    "'read_bytes', unreadable), "
+                                                                    'self.assertRaises((OSError, ValueError)) as '
+                                                                    'caught:\n',)),
+                                                                  (236,
+                                                                   240,
+                                                                   ('                '
+                                                                    'self.assertIs(caught.exception, '
+                                                                    'failure)\n',),
+                                                                   ('                cause = caught.exception\n',
+                                                                    '                while cause.__cause__ is '
+                                                                    'not None:\n',
+                                                                    '                    cause = '
+                                                                    'cause.__cause__\n',
+                                                                    '                self.assertIs(cause, '
+                                                                    'failure)\n')),
+                                                                  (314,
+                                                                   318,
+                                                                   ('        '
+                                                                    "self.assertEqual(bindings['render/color_math.mojo'], "
+                                                                    "helpers.PROVIDERS['render/color_math.mojo'])\n",),
+                                                                   ("        color = 'render/color_math.mojo'\n",
+                                                                    '        self.assertEqual(bindings[color], '
+                                                                    'cleanup.sha((self.root/color).read_bytes()))\n',
+                                                                    '        '
+                                                                    'self.assertEqual(cleanup.sha(cleanup.pr760_stage.predecessor_source(\n',
+                                                                    '            color, '
+                                                                    '(self.root/color).read_text())), '
+                                                                    'helpers.PROVIDERS[color])\n')))),
+     'tools/carla_lane_oracle/test_typed_boundary_contracts.py': ('7181041aa06c10cade1c7c0512c6a130cb28d5baaad293ba24874c3e3e142dd5',
+                                                                  '62998e42c4e27f9e8c8bccddf585d2aecc8a7926c8089400f595e206c104a04c',
+                                                                  ((18,
+                                                                    20,
+                                                                    (),
+                                                                    ('import full_audit_cleanup_contracts as '
+                                                                     'audit\n',
+                                                                     'import _full_audit_test_fixtures as '
+                                                                     'fixtures\n')),
+                                                                   (27,
+                                                                    30,
+                                                                    ('        cls.current = {path: '
+                                                                     '(ROOT/path).read_text() for path in '
+                                                                     'typed.SOURCE_PATHS}\n',),
+                                                                    ('        baseline = '
+                                                                     'fixtures.common758_leaf_texts(ROOT)\n',
+                                                                     '        cls.current = {path: '
+                                                                     'baseline[path] for path in '
+                                                                     'typed.SOURCE_PATHS}\n',
+                                                                     '        '
+                                                                     'typed.verify_sources(dict(cls.current))\n')),
+                                                                   (190,
+                                                                    191,
+                                                                    (),
+                                                                    ('        baseline = '
+                                                                     'fixtures.common758_leaf_texts(ROOT)\n',)),
+                                                                   (196,
+                                                                    201,
+                                                                    ('                '
+                                                                     'path.write_bytes((ROOT/name).read_bytes())\n',),
+                                                                    ('                raw = '
+                                                                     "(baseline[name].encode('utf-8') if name in "
+                                                                     'baseline\n',
+                                                                     '                       else '
+                                                                     '(ROOT/name).read_bytes())\n',
+                                                                     '                if name in '
+                                                                     "('tools/test_conditioned_coverage_loops.py', "
+                                                                     "'tools/carla_lane_oracle/test_typed_boundary_contracts.py', "
+                                                                     "'tools/carla_lane_oracle/test_shared_helper_contracts.py', "
+                                                                     "'tools/carla_lane_oracle/test_scaled_float32_contracts.py', "
+                                                                     "'tools/carla_lane_oracle/test_common758_current_successor.py'):\n",
+                                                                     '                    raw = '
+                                                                     'audit.qualification_predecessor_bytes(name, '
+                                                                     'raw)\n',
+                                                                     '                path.write_bytes(raw)\n')),
+                                                                   (443,
+                                                                    447,
+                                                                    ('                '
+                                                                     'self.assertEqual(hashlib.sha256(target.read_bytes()).hexdigest(), '
+                                                                     'expected)\n',),
+                                                                    ('                raw = '
+                                                                     'target.read_bytes()\n',
+                                                                     '                if path in '
+                                                                     "('tools/test_conditioned_coverage_loops.py', "
+                                                                     "'tools/carla_lane_oracle/test_typed_boundary_contracts.py', "
+                                                                     "'tools/carla_lane_oracle/test_shared_helper_contracts.py', "
+                                                                     "'tools/carla_lane_oracle/test_scaled_float32_contracts.py', "
+                                                                     "'tools/carla_lane_oracle/test_common758_current_successor.py'):\n",
+                                                                     '                    raw = '
+                                                                     'audit.qualification_predecessor_bytes(path, '
+                                                                     'raw)\n',
+                                                                     '                '
+                                                                     'self.assertEqual(hashlib.sha256(raw).hexdigest(), '
+                                                                     'expected)\n')))),
+     'tools/test_conditioned_coverage_loops.py': ('633c30c126a0ccf535bea13c66e528ee78b95dd47cf55f01eccad4f9f67d22c9',
+                                                  '1c7a6f9f0f32ec579b0609c0cac7fec04dedd342c7e22ec9a9956d6c6042c2dc',
+                                                  ((167,
+                                                    169,
+                                                    ('        original = audit._InvariantInputs.finish\n',),
+                                                    ('        original = audit._CacheInputs.checkpoint\n',
+                                                     '        finish = audit._InvariantInputs.finish\n')),
+                                                   (171,
+                                                    181,
+                                                    ('        def finish(operation, root):\n',),
+                                                    ('        def checkpoint(operation, owner, root):\n',
+                                                     '            result = original(operation, owner, root)\n',
+                                                     '            frame = audit.sys._getframe(1)\n',
+                                                     '            if frame.f_code is not finish.__code__:\n',
+                                                     '                return result\n',
+                                                     '            self.assertIs(frame.f_globals, vars(audit))\n',
+                                                     "            self.assertIs(frame.f_locals['self'], "
+                                                     'operation)\n',
+                                                     '            self.assertIs(owner, operation._owner)\n',
+                                                     '            self.assertEqual(root, self.root)\n',
+                                                     '            self.assertEqual(operation._state, '
+                                                     "'active')\n")),
+                                                   (184,
+                                                    185,
+                                                    ('            self.assertNotIn(name, operation._raw)\n',),
+                                                    ('            self.assertEqual(operation._raw[name], '
+                                                     'physical)\n',)),
+                                                   (187,
+                                                    190,
+                                                    (),
+                                                    ('            # PR760 also observes checker copies as data. '
+                                                     'Mutate after the real\n',
+                                                     '            # data checkpoint so the unchanged later '
+                                                     'checker-receipt comparison\n',
+                                                     '            # retains its distinct finalization '
+                                                     'obligation.\n')),
+                                                   (191,
+                                                    192,
+                                                    ('            return original(operation, root)\n',),
+                                                    ('            return result\n',)),
+                                                   (193,
+                                                    194,
+                                                    ('            with patch.object(audit._InvariantInputs, '
+                                                     "'finish', finish):\n",),
+                                                    ('            with patch.object(audit._CacheInputs, '
+                                                     "'checkpoint', checkpoint):\n",))))}
+    require(path in rows, 'unregistered qualification witness: ' + path)
+    before_sha, after_sha, edits = rows[path]
+    expected = (scaled_float32.TESTS[path] if path ==
+        'tools/carla_lane_oracle/test_scaled_float32_contracts.py'
+        else typed_boundary.BINDING_INPUTS[path])
+    require(before_sha == expected, 'qualification historical authority changed: ' + path)
+    if sha(raw) == before_sha:
+        result = raw
+    else:
+        require(sha(raw) == after_sha, 'unreviewed qualification endpoint: ' + path)
+        lines = raw.decode('utf-8').splitlines(keepends=True)
+        previous = len(lines) + 1
+        for start, stop, before, after in reversed(edits):
+            require(0 <= start <= stop < previous and tuple(lines[start:stop]) == after,
+                    'qualification inverse span changed: ' + path)
+            lines[start:stop] = before
+            previous = start
+        result = ''.join(lines).encode('utf-8')
+        require(sha(result) == before_sha, 'qualification inverse misses predecessor: ' + path)
+    executing_checker_bindings()
+    return result
 
 
 def _pr760_candidate_bindings(root, *, _snapshots=None, _operation=None):
@@ -4188,6 +4613,9 @@ def _pr760_candidate_bindings(root, *, _snapshots=None, _operation=None):
         require(all(expected.get(path) == digest
                     for path, digest in pr760_stage.REGISTRY_INPUT_SHA256.items()),
                 'PR760 physical image misses reviewed registry input')
+        for path, archive in (('tools/test_conditioned_coverage_loops.py', 'tools/carla_lane_oracle/pr760-test_conditioned_coverage_loops-predecessor.txt'), ('tools/carla_lane_oracle/test_typed_boundary_contracts.py', 'tools/carla_lane_oracle/pr760-test_typed_boundary_contracts-predecessor.txt'), ('tools/carla_lane_oracle/test_shared_helper_contracts.py', 'tools/carla_lane_oracle/pr760-test_shared_helper_contracts-predecessor.txt'), ('tools/carla_lane_oracle/test_scaled_float32_contracts.py', 'tools/carla_lane_oracle/pr760-test_scaled_float32_contracts-predecessor.txt'), ('tools/carla_lane_oracle/test_common758_current_successor.py', 'tools/carla_lane_oracle/pr760-test_common758_current_successor-predecessor.txt')):
+            require(qualification_predecessor_bytes(path, image[path]) == image[archive],
+                    'PR760 qualification archive differs from exact predecessor: ' + path)
         # One complete fixed image, with no per-file old/new fallback.
         previous = pr760_stage.verify_registry_sources(
             {path: image[path] for path in pr760_stage.REGISTRY_INPUT_SHA256})
