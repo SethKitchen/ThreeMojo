@@ -17,7 +17,7 @@ from extensions.water.pebbles import (
 )
 from math.arc_tangent import atan2_float32
 from math.sine import fraction
-from math.utils import clamp
+from math.utils import clamp, mix_delta
 from math.norm import squared_length2, squared_length3
 from math.sine import sin_float32
 from math.vector3 import Vector3, mix_delta3
@@ -508,10 +508,12 @@ def bed_color[
         dy_x,
     )
     var mix_c = smoothstep(0.45, 0.62, fbm2(x * 0.21 + 40.0, z * 0.21 + 40.0))
-    var r = fine.r + (coarse.r - fine.r) * mix_c
-    var g = fine.g + (coarse.g - fine.g) * mix_c
-    var b = fine.b + (coarse.b - fine.b) * mix_c
-    var h = fine.height + (coarse.height - fine.height) * mix_c
+    var rgb = mix_delta3(
+        Vector3(fine.r, fine.g, fine.b),
+        Vector3(coarse.r, coarse.g, coarse.b),
+        mix_c,
+    )
+    var h = mix_delta(fine.height, coarse.height, mix_c)
     var zone = fbm2(x * 0.16 + 3.0, z * 0.16 + 3.0) + 0.10 * (
         value_noise(x * 2.5, z * 2.5) - 0.5
     )
@@ -526,10 +528,11 @@ def bed_color[
     sand_g = sand_g * sand_g * 1.4
     sand_b = sand_b * sand_b * 1.4
     var sand_m = smoothstep(h + 0.02, h + 0.16, (zone - 0.46) * 1.6)
-    r = r + (sand_r - r) * sand_m
-    g = g + (sand_g - g) * sand_m
-    b = b + (sand_b - b) * sand_m
-    h = h + (0.42 + 0.05 * marks - h) * sand_m
+    rgb = mix_delta3(rgb, Vector3(sand_r, sand_g, sand_b), sand_m)
+    h = mix_delta(h, 0.42 + 0.05 * marks, sand_m)
+    var r = rgb.x
+    var g = rgb.y
+    var b = rgb.z
     var lum = r * 0.3 + g * 0.55 + b * 0.15
     r = lum + (r - lum) * 0.8
     g = lum + (g - lum) * 0.8

@@ -59,6 +59,7 @@ from core.deform import skin_carriers, skin_pose
 from core.object3d import NodeId
 from materials.material import MaterialId
 from math.matrix4 import Matrix4
+from math.utils import mix_bilinear
 from core.scene import Scene
 from loaders.js_number import js_number_text
 from objects.line import LineMode, STRIP
@@ -557,7 +558,5 @@ def resized_image(
                 var b = Float64(pixels[(y0 * width + x1) * 4 + channel])
                 var c = Float64(pixels[(y1 * width + x0) * 4 + channel])
                 var d = Float64(pixels[(y1 * width + x1) * 4 + channel])
-                var top = a + (b - a) * tx
-                var bottom = c + (d - c) * tx
-                out.append(UInt8(Int(top + (bottom - top) * ty + 0.5)))
+                out.append(UInt8(Int(mix_bilinear(a, b, c, d, tx, ty) + 0.5)))
     return out^

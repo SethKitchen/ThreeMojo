@@ -21,6 +21,7 @@ from math.utils import (
     is_power_of_two,
     lerp,
     map_linear,
+    mix_bilinear,
     pingpong,
     smooth_step,
     smootherstep,
@@ -304,6 +305,12 @@ def test_the_seeded_generator_matches_three_js() raises:
     for _ in range(50):
         var n = other.int_in(1, 3)
         assert_true(n >= 1 and n <= 3)
+
+
+def test_a_bilinear_mix_goes_across_then_down() raises:
+    assert_equal(mix_bilinear(0, 10, 0, 0, 0.5, 0), 5)
+    assert_equal(mix_bilinear(0, 0, 8, 8, 0, 0.25), 2)
+    assert_equal(mix_bilinear(1, 3, 5, 9, 0.5, 0.5), 4.5)
 
 
 def main() raises:

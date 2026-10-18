@@ -202,6 +202,33 @@ def mix_delta(start: Float64, end: Float64, t: Float64) -> Float64:
     return start + (end - start) * t
 
 
+def mix_bilinear(
+    a: Float64,
+    b: Float64,
+    c: Float64,
+    d: Float64,
+    across: Float64,
+    down: Float64,
+) -> Float64:
+    """Return four samples blended, across then down.
+
+    Args:
+        a: The sample at the low column and low row.
+        b: The sample at the high column and low row.
+        c: The sample at the low column and high row.
+        d: The sample at the high column and high row.
+        across: How far from the low column toward the high column.
+        down: How far from the low row toward the high row.
+
+    Returns:
+        The blend. Each edge is mixed by `across`, then the two results
+        by `down`.
+    """
+    var top = mix_delta(a, b, across)
+    var bottom = mix_delta(c, d, across)
+    return mix_delta(top, bottom, down)
+
+
 def interleaved_gradient_noise(x: Float32, y: Float32) -> Float32:
     """Return Jimenez's interleaved gradient noise.
 
