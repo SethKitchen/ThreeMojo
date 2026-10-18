@@ -48,6 +48,7 @@ from core.scene import Scene
 from lights.light import DIRECTIONAL, directional_light
 from lights.shadow import ShadowCascade
 from math.matrix4 import Matrix4
+from math.utils import mix_delta
 from math.vector3 import Vector3, component_max, component_min
 from render.framebuffer import Color
 from std.math import floor, isfinite, max, min
@@ -153,7 +154,7 @@ def practical_split(
     var breaks = List[Float32]()
     for index in range(1, amount):
         var low = even[index - 1]
-        breaks.append(low + (ratio[index - 1] - low) * weight)
+        breaks.append(mix_delta(low, ratio[index - 1], weight))
     breaks.append(1)
     return breaks^
 

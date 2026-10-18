@@ -392,7 +392,7 @@ def sky_radiance(
     var cliff = smoothstep(0.42, 0.18, u + 0.25 * (tex - 0.5)) * smoothstep(
         0.35, 0.75, value_noise(azimuth * 18.0, 1.0)
     )
-    var land_r = pine + (rock - pine) * cliff
+    var land_r = mix_delta(pine, rock, cliff)
     var land_g = (
         0.070 * (0.6 + 0.8 * tex)
         + (
@@ -414,16 +414,16 @@ def sky_radiance(
     land_g *= shade
     land_b *= shade
     var aerial = 0.38 + 0.25 * back
-    land_r = land_r + (hor.x * 0.92 - land_r) * aerial
-    land_g = land_g + (hor.y * 0.92 - land_g) * aerial
-    land_b = land_b + (hor.z * 0.92 - land_b) * aerial
+    land_r = mix_delta(land_r, hor.x * 0.92, aerial)
+    land_g = mix_delta(land_g, hor.y * 0.92, aerial)
+    land_b = mix_delta(land_b, hor.z * 0.92, aerial)
     var cover = smoothstep(ridge + 2e-4, ridge - 2e-4, y)
     if y < -0.3:
         cover = 0.0
     return Vector3(
-        color.x + (land_r - color.x) * cover,
-        color.y + (land_g - color.y) * cover,
-        color.z + (land_b - color.z) * cover,
+        mix_delta(color.x, land_r, cover),
+        mix_delta(color.y, land_g, cover),
+        mix_delta(color.z, land_b, cover),
     )
 
 

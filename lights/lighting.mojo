@@ -88,7 +88,7 @@ from lights.ltc import (
 )
 from lights.spot_profile import SpotProfile, needs_profile
 from math.smoothstep import smoothstep
-from math.utils import clamp, saturate
+from math.utils import clamp, mix_delta, saturate
 from math.spherical_harmonics3 import SphericalHarmonics3
 from math.vector2 import Vector2
 from math.cross import cross_vectors
@@ -645,7 +645,7 @@ def physical_surface(
         angle.
     """
     var keep = 1 - metalness
-    var f90 = specular_intensity + (1 - specular_intensity) * metalness
+    var f90 = mix_delta(specular_intensity, Float32(1), metalness)
     return Reflected(
         base * keep,
         mix_delta3(f0, base, metalness),

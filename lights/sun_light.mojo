@@ -57,6 +57,7 @@ from lights.csm import CsmFrustum
 from lights.light import DIRECTIONAL, Light, directional_light
 from lights.shadow import LightShadow, SUN_BLEND, ShadowCascade
 from math.matrix4 import Matrix4
+from math.utils import mix_delta
 from math.vector3 import Vector3
 from render.framebuffer import Color
 from std.math import ceil, floor, isfinite, log, exp, max, min, sqrt
@@ -169,7 +170,7 @@ def sun_splits(near: Float32, far: Float32) -> List[Float32]:
     splits.append(near)
     for index in range(1, SUN_CASCADES):  # pragma: no branch
         var amount = Float32(index) / Float32(SUN_CASCADES)
-        var even = near + (far - near) * amount
+        var even = mix_delta(near, far, amount)
         var logarithmic = even
         if near > 0:
             logarithmic = near * exp(log(far / near) * amount)

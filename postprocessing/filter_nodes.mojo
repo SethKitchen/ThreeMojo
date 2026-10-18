@@ -37,6 +37,7 @@ from math.smoothstep import clamped_smoothstep
 from math.utils import (
     interleaved_gradient_noise as _gradient_noise,
     mix_bilinear,
+    mix_delta,
 )
 
 from postprocessing.display_nodes import (
@@ -859,10 +860,10 @@ def depth_aware_blend_pixel(
     var choice = sample_down(blend, su, sv).r
     var color = sample_down(base, u, v)
     return FloatColor(
-        color.r + (settings.blend_r - color.r) * choice,
-        color.g + (settings.blend_g - color.g) * choice,
-        color.b + (settings.blend_b - color.b) * choice,
-        color.a + (1 - color.a) * choice,
+        mix_delta(color.r, settings.blend_r, choice),
+        mix_delta(color.g, settings.blend_g, choice),
+        mix_delta(color.b, settings.blend_b, choice),
+        mix_delta(color.a, Float32(1), choice),
     )
 
 

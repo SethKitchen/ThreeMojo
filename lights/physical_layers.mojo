@@ -44,7 +44,7 @@ is scaled by `Lighting.scale` once, at the end.
 
 from lights.fresnel import schlick_weight
 from math.smoothstep import smoothstep
-from math.utils import saturate
+from math.utils import mix_delta, saturate
 from math.vector2 import Vector2
 from math.vector3 import Vector3, mix_delta3
 from std.math import cos, exp, exp2, log2, max, min, pi, sqrt
@@ -388,9 +388,7 @@ def iridescence_fresnel(
     Returns:
         The reflectance per channel, never below zero.
     """
-    var ior = outside_ior + (film_ior - outside_ior) * smoothstep(
-        0, 0.03, thickness
-    )
+    var ior = mix_delta(outside_ior, film_ior, smoothstep(0, 0.03, thickness))
     var ratio = outside_ior / ior
     var sin_theta2_sq = ratio * ratio * (1 - cos_theta1 * cos_theta1)
     var cos_theta2_sq = 1 - sin_theta2_sq
