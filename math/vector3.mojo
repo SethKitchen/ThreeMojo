@@ -846,6 +846,28 @@ def append_vector3(mut values: List[Float32], point: Vector3):
     values.append(point.z)
 
 
+def append_float64_xyz(
+    mut values: List[Float32], x: Float64, y: Float64, z: Float64
+):
+    """Append three `Float64` components as `Float32`.
+
+    Args:
+        values: The list that receives the components.
+        x: The first component.
+        y: The second component.
+        z: The third component.
+
+    Returns:
+        Nothing. Three numbers are appended.
+
+    Raises:
+        Error: Never.
+    """
+    values.append(Float32(x))
+    values.append(Float32(y))
+    values.append(Float32(z))
+
+
 def mix_delta3(start: Vector3, end: Vector3, t: Float32) -> Vector3:
     """Return `start` moved toward `end` by `t`.
 

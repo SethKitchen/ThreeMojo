@@ -19,7 +19,7 @@ from generators.utils import Vec3d
 from lights.light import ambient_light, directional_light
 from materials.material import Material
 from math.utils import clamp
-from math.vector3 import Vector3
+from math.vector3 import Vector3, append_float64_xyz
 from objects.mesh import Mesh
 from render.framebuffer import Color
 from std.math import cos, sin
@@ -57,9 +57,7 @@ struct Triangles(Movable):
             self.normals.append(Float32(n.x))
             self.normals.append(Float32(n.z))
             self.normals.append(Float32(-n.y))
-            self.colors.append(Float32(color.x))
-            self.colors.append(Float32(color.y))
-            self.colors.append(Float32(color.z))
+            append_float64_xyz(self.colors, color.x, color.y, color.z)
 
     def box(mut self, start: Vec3d, end: Vec3d, size: Float64, color: Vec3d):
         """Add a square bar from one point to another.

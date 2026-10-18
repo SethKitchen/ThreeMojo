@@ -41,6 +41,7 @@ limits, and explicit zero and nonfinite rules.
 """
 
 from math.norm import length2, length3, reciprocal_normalized3, squared_length3
+from math.vector3 import append_float64_xyz
 from geometries.sculptor_mesh import SculptorMesh
 from geometries.sculptor_utils import (
     Point3,
@@ -813,9 +814,7 @@ def laplacian_smooth(mesh: SculptorMesh, vertices: List[Int]) -> List[Float32]:
     var smooth = List[Float32](capacity=len(vertices) * 3)
     for vertex in vertices:
         var p = _smoothed(mesh, vertex)
-        smooth.append(Float32(p.x))
-        smooth.append(Float32(p.y))
-        smooth.append(Float32(p.z))
+        append_float64_xyz(smooth, p.x, p.y, p.z)
     return smooth^
 
 

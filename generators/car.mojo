@@ -45,7 +45,7 @@ from geometries.utils import merge_geometries
 from math.matrix4 import Matrix4
 from math.vector2 import Vector2
 from math.utils import mix_delta
-from math.vector3 import Vector3
+from math.vector3 import Vector3, append_float64_xyz
 from render.color_spaces import srgb_to_linear_three
 from std.math import cos, pi, sqrt
 
@@ -382,9 +382,7 @@ def panel(
             var lift = arch * v * 0.035 if curved else 0.0
             var bow = arch * 4 * v * (1 - v) * 0.025 if curved else 0.0
             p = Vec3d(p.x, p.y + lift, p.z) + normal * bow
-            positions.append(Float32(p.x))
-            positions.append(Float32(p.y))
-            positions.append(Float32(p.z))
+            append_float64_xyz(positions, p.x, p.y, p.z)
             uvs.append(Float32(u))
             uvs.append(Float32(v))
             if x < columns and y < rows:
