@@ -38,6 +38,7 @@ from loaders.bytes import (
 )
 from render.framebuffer import FloatColor
 from render.srgb import LINEAR, SRGB, ColorSpace, linear_to_srgb, srgb_to_linear
+from math.utils import js_round
 from std.math import floor
 
 # The CSS color names and their sRGB values, three.js's `Color.NAMES`, in
@@ -691,8 +692,7 @@ def _from_hex(value: Int, space: ColorSpace) raises -> FloatColor:
 def _round(value: Float64) -> Int:
     """Return `value` rounded to the nearest whole number, a half up, as
     JavaScript's `Math.round` rounds."""
-    var whole = floor(value)
-    return Int(whole) + (1 if value - whole >= 0.5 else 0)
+    return Int(js_round(value))
 
 
 def _fixed3(value: Float32) -> String:

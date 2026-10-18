@@ -17,8 +17,7 @@ from math.polyline import (
     lerp_in_place,
     scale_to_length,
 )
-from math.utils import SeededRandom
-from math.vector3 import _js_round
+from math.utils import SeededRandom, js_round
 from math.norm import dot2, length2, normalized2
 from std.math import (
     atan2,
@@ -390,7 +389,7 @@ struct Vector2(Equatable, ImplicitlyCopyable, PolylineVertex):
     def round(mut self):
         """Round each component to the nearest whole number, a half up,
         three.js's `round`."""
-        self = Vector2(_js_round(self.x), _js_round(self.y))
+        self = Vector2(js_round(self.x), js_round(self.y))
 
     def round_to_zero(mut self):
         """Drop each component's fraction, three.js's `roundToZero`."""

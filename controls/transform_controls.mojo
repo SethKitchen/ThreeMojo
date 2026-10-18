@@ -84,10 +84,11 @@ from math.euler import Euler, XYZ
 from math.matrix4 import Matrix4, scaling, translation
 from math.quaternion import Quaternion
 from math.ray import Ray
+from math.utils import js_round
 from math.vector2 import Vector2
 from math.vector3 import Vector3
 from render.framebuffer import Color, FloatColor
-from std.math import acos, atan2, cos, floor, inf, pi, sin, sqrt
+from std.math import acos, atan2, cos, inf, pi, sin, sqrt
 from units.si import Angle, Length, METER, RADIAN
 
 # An axis this close to the line of sight is hidden, and a plane this close
@@ -1041,7 +1042,7 @@ struct TransformControls(Copyable, Movable):
         self._rotation_axis = axis
         if Bool(self.rotation_snap):
             var step = self.rotation_snap.value().to(RADIAN)
-            angle = _js_round(angle / step) * step
+            angle = js_round(angle / step) * step
         var turned: Quaternion
         if local:
             turned = self._quaternion_start
@@ -1429,19 +1430,6 @@ def _divided(value: Vector3, by: Vector3) -> Vector3:
     return Vector3(value.x / by.x, value.y / by.y, value.z / by.z)
 
 
-def _js_round(value: Float32) -> Float32:
-    """Return the nearest whole number, halves up, as JavaScript's
-    `Math.round` rounds.
-
-    Args:
-        value: The number.
-
-    Returns:
-        The whole number.
-    """
-    return floor(value + 0.5)
-
-
 def _snapped(
     value: Vector3, step: Float32, axis: TransformAxis
 ) raises -> Vector3:
@@ -1460,9 +1448,9 @@ def _snapped(
         Error: If the handle is invalid.
     """
     return Vector3(
-        _js_round(value.x / step) * step if axis.has("X") else value.x,
-        _js_round(value.y / step) * step if axis.has("Y") else value.y,
-        _js_round(value.z / step) * step if axis.has("Z") else value.z,
+        js_round(value.x / step) * step if axis.has("X") else value.x,
+        js_round(value.y / step) * step if axis.has("Y") else value.y,
+        js_round(value.z / step) * step if axis.has("Z") else value.z,
     )
 
 
@@ -1477,7 +1465,7 @@ def _scale_step(value: Float32, step: Float32) -> Float32:
     Returns:
         The rounded scale, or `step` where it rounds to zero.
     """
-    var rounded = _js_round(value / step) * step
+    var rounded = js_round(value / step) * step
     return rounded if rounded != 0 else step
 
 

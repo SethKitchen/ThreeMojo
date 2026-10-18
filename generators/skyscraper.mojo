@@ -51,7 +51,7 @@ from math.matrix4 import Matrix4
 from math.norm import squared_length2
 from math.path import Path, Shape
 from math.sine import fraction
-from math.utils import SeededRandom
+from math.utils import SeededRandom, js_round
 from math.vector2 import Vector2
 from std.math import floor, pi, sin, sqrt
 from units.si import Angle, Length, METER, RADIAN
@@ -378,7 +378,7 @@ struct SkyscraperParameters(Copyable, Movable):
 
 def _js_round(value: Float64) -> Float64:
     """Return JavaScript's `Math.round`: halves go up."""
-    return floor(value + 0.5)
+    return js_round(value)
 
 
 def _length_or(value: Optional[Length], seeded: Float64) -> Float64:

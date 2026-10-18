@@ -155,6 +155,37 @@ def rec709_luminance(r: Float64, g: Float64, b: Float64) -> Float64:
     return 0.2126 * r + 0.7152 * g + 0.0722 * b
 
 
+def js_round(value: Float32) -> Float32:
+    """Return `value` rounded to the nearest whole number, a half up.
+
+    JavaScript's `Math.round`: -2.5 gives -2. The fraction is compared,
+    so a `Float32` just below a half does not round up.
+
+    Args:
+        value: The number.
+
+    Returns:
+        The whole number.
+    """
+    var whole = floor(value)
+    return whole + Float32(1) if value - whole >= 0.5 else whole
+
+
+def js_round(value: Float64) -> Float64:
+    """Return `value` rounded to the nearest whole number, a half up.
+
+    JavaScript's `Math.round`: -2.5 gives -2.
+
+    Args:
+        value: The number.
+
+    Returns:
+        The whole number.
+    """
+    var whole = floor(value)
+    return whole + 1 if value - whole >= 0.5 else whole
+
+
 def glsl_mod(x: Float32, y: Float32) -> Float32:
     """Return GLSL's `mod`: `x` minus `y` times the floor of their ratio.
 
