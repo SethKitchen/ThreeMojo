@@ -21,6 +21,7 @@ is not whole rows is refused.
 The little-endian readers here are shared by the other splat loaders.
 """
 
+from core.binary import little_endian_u16, little_endian_u32
 from core.gaussian_splat_utils import (
     GaussianSplatGeometry,
     create_gaussian_splat_geometry,
@@ -43,7 +44,7 @@ def le_u16(bytes: List[UInt8], at: Int) -> Int:
     Returns:
         The integer.
     """
-    return Int(bytes[at]) | (Int(bytes[at + 1]) << 8)
+    return little_endian_u16(bytes, at)
 
 
 def le_u32(bytes: List[UInt8], at: Int) -> Int:
@@ -56,7 +57,7 @@ def le_u32(bytes: List[UInt8], at: Int) -> Int:
     Returns:
         The integer.
     """
-    return le_u16(bytes, at) | (le_u16(bytes, at + 2) << 16)
+    return little_endian_u32(bytes, at)
 
 
 def le_f32(bytes: List[UInt8], at: Int) -> Float32:

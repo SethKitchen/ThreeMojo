@@ -48,6 +48,7 @@ The rows come out from the top, the first line of the data window first,
 as every other reader here returns them. three.js flips them and marks the
 texture `flipY = false`, which samples the same way.
 """
+from core.binary import little_endian_i32, little_endian_u16, little_endian_u32
 from core.ordinal import ordinal_valid
 
 from render.float_image import FloatImage
@@ -364,29 +365,6 @@ def _need(end: Int, at: Int, count: Int) raises:
         raise Error("EXR: the file is cut short")
 
 
-def _u16(bytes: List[UInt8], at: Int) -> Int:
-    """Return the little-endian unsigned 16-bit integer at `at`."""
-    return Int(bytes[at]) | (Int(bytes[at + 1]) << 8)
-
-
-def _u32(bytes: List[UInt8], at: Int) -> Int:
-    """Return the little-endian unsigned 32-bit integer at `at`."""
-    return (
-        Int(bytes[at])
-        | (Int(bytes[at + 1]) << 8)
-        | (Int(bytes[at + 2]) << 16)
-        | (Int(bytes[at + 3]) << 24)
-    )
-
-
-def _i32(bytes: List[UInt8], at: Int) -> Int:
-    """Return the little-endian signed 32-bit integer at `at`."""
-    var value = _u32(bytes, at)
-    if value >= 1 << 31:
-        return value - (1 << 32)
-    return value
-
-
 def _string(bytes: List[UInt8], mut at: Int, end: Int) raises -> String:
     """Return the null-terminated string at `at`, moving `at` past it.
 
@@ -429,14 +407,14 @@ def _channels(
         seen[name] = True
         if bytes[at + 4] > 1:
             raise Error("EXR: pLinear must be zero or one")
-        var kind = ExrPixelType(_i32(bytes, at))
+        var kind = ExrPixelType(little_endian_i32(bytes, at))
         _ = sample_bytes(kind)
         out.append(
             ExrChannel(
                 name,
                 kind,
-                _i32(bytes, at + 8),
-                _i32(bytes, at + 12),
+                little_endian_i32(bytes, at + 8),
+                little_endian_i32(bytes, at + 12),
                 bytes[at + 4] != 0,
             )
         )
@@ -466,7 +444,7 @@ def read_header(bytes: List[UInt8]) raises -> ExrHeader:
             pixels than any texture here.
     """
     _need(len(bytes), 0, 8)
-    if _u32(bytes, 0) != MAGIC:
+    if little_endian_u32(bytes, 0) != MAGIC:
         raise Error("EXR: not an OpenEXR file")
     if Int(bytes[4]) != VERSION:
         raise Error("EXR: only version 2 files are read")
@@ -483,7 +461,7 @@ def read_header(bytes: List[UInt8]) raises -> ExrHeader:
             break
         var kind = _string(bytes, at, len(bytes))
         _need(len(bytes), at, 4)
-        var size = _u32(bytes, at)
+        var size = little_endian_u32(bytes, at)
         at += 4
         _need(len(bytes), at, size)
         if name == "channels":
@@ -499,10 +477,10 @@ def read_header(bytes: List[UInt8]) raises -> ExrHeader:
         elif name == "dataWindow":
             if kind != "box2i" or size != 16:
                 raise Error("EXR: the dataWindow attribute is malformed")
-            header.x_min = _i32(bytes, at)
-            header.y_min = _i32(bytes, at + 4)
-            header.x_max = _i32(bytes, at + 8)
-            header.y_max = _i32(bytes, at + 12)
+            header.x_min = little_endian_i32(bytes, at)
+            header.y_min = little_endian_i32(bytes, at + 4)
+            header.x_max = little_endian_i32(bytes, at + 8)
+            header.y_max = little_endian_i32(bytes, at + 12)
             has_window = True
         at += size
     if not has_channels:
@@ -848,9 +826,9 @@ def huffman_decode(
     """
     var end = start + size
     _need(end, start, 20)
-    var first = _u32(bytes, start)
-    var last = _u32(bytes, start + 4)
-    var count = _u32(bytes, start + 12)
+    var first = little_endian_u32(bytes, start)
+    var last = little_endian_u32(bytes, start + 4)
+    var count = little_endian_u32(bytes, start + 12)
     if first >= HUF_ENCSIZE or last >= HUF_ENCSIZE:
         raise Error("EXR: a PIZ table names a symbol past sixteen bits")
     var bits = _Bits(start + 20, end)
@@ -1031,8 +1009,8 @@ def piz_decode(
     """
     var end = start + size
     _need(end, start, 4)
-    var smallest = _u16(bytes, start)
-    var largest = _u16(bytes, start + 2)
+    var smallest = little_endian_u16(bytes, start)
+    var largest = little_endian_u16(bytes, start + 2)
     var at = start + 4
     if largest >= BITMAP_SIZE:
         raise Error("EXR: a PIZ bitmap is larger than sixteen bits")
@@ -1052,7 +1030,7 @@ def piz_decode(
             filled += 1
     var top = filled - 1
     _need(end, at, 4)
-    var length = _u32(bytes, at)
+    var length = little_endian_u32(bytes, at)
     at += 4
     _need(end, at, length)
     var shorts = List[Int]()
@@ -1331,8 +1309,8 @@ struct _DwaRule(Copyable, Movable):
 
 def _dwa_counter(bytes: List[UInt8], at: Int, limit: Int) raises -> Int:
     """Read a little-endian counter only if it fits a derived size limit."""
-    var lo = _u32(bytes, at)
-    if _u32(bytes, at + 4) != 0 or lo > limit:
+    var lo = little_endian_u32(bytes, at)
+    if little_endian_u32(bytes, at + 4) != 0 or lo > limit:
         raise Error("EXR: a DWA counter exceeds its bounded layout")
     return lo
 
@@ -1380,7 +1358,7 @@ def _dwa_rules(
                     )
         return rules^
     _need(end, at, 2)
-    var size = _u16(bytes, at)
+    var size = little_endian_u16(bytes, at)
     if size < 2:
         raise Error("EXR: a DWA rule table is too short")
     _need(end, at, size)
@@ -1816,7 +1794,7 @@ def _dwa_decode(
             bytes, starts[1], ac_compressed, ac_count * 2
         )
         for i in range(ac_count):
-            ac.append(_u16(packed, i * 2))
+            ac.append(little_endian_u16(packed, i * 2))
     # Huffman requires exactly ac_count values. The deflate path receives
     # exactly twice that many bytes and appends one value for every pair.
     var dc_bytes = _reorder(
@@ -1824,7 +1802,7 @@ def _dwa_decode(
     )
     var dc = List[Int](capacity=dc_count)
     for i in range(dc_count):
-        dc.append(_u16(dc_bytes, i * 2))
+        dc.append(little_endian_u16(dc_bytes, i * 2))
     var rle_bytes = _inflate_exact(bytes, starts[3], rle_compressed, rle_size)
     var rle = run_length_decode(rle_bytes, 0, len(rle_bytes), rle_raw)
     if len(rle) != rle_raw:
@@ -2012,8 +1990,8 @@ def decode(bytes: List[UInt8]) raises -> FloatImage:
     # Positive validated height and block size produce at least one strip.
     for _ in range(blocks):  # pragma: no branch
         _need(len(bytes), probe, 8)
-        var first = _i32(bytes, probe) - header.y_min
-        var count = _u32(bytes, probe + 4)
+        var first = little_endian_i32(bytes, probe) - header.y_min
+        var count = little_endian_u32(bytes, probe + 4)
         if first < 0 or first >= height:
             raise Error("EXR: a block names a line outside the image")
         if first % per_block != 0 or seen[first // per_block]:
@@ -2029,8 +2007,8 @@ def decode(bytes: List[UInt8]) raises -> FloatImage:
     var pixels = List[Float32](length=width * height * 4, fill=fill)
     for _ in range(blocks):  # pragma: no branch
         _need(len(bytes), at, 8)
-        var line = _i32(bytes, at) - header.y_min
-        var size = _u32(bytes, at + 4)
+        var line = little_endian_i32(bytes, at) - header.y_min
+        var size = little_endian_u32(bytes, at + 4)
         at += 8
         # The immutable input's identical framing pass already validated
         # this scanline before any output storage was allocated.

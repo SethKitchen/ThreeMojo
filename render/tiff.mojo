@@ -54,6 +54,7 @@ on what was decoded before.
 the next code.
 """
 
+from core.binary import little_endian_u32
 from render.inflate import inflate
 from render.srgb import LINEAR
 from render.texture import BILINEAR, CLAMP, COVERAGE, Texture
@@ -596,13 +597,7 @@ def _float(data: List[UInt8], index: Int) -> Float64:
     Returns:
         The float.
     """
-    var at = index * 4
-    var bits = (
-        UInt32(data[at])
-        | (UInt32(data[at + 1]) << 8)
-        | (UInt32(data[at + 2]) << 16)
-        | (UInt32(data[at + 3]) << 24)
-    )
+    var bits = UInt32(little_endian_u32(data, index * 4))
     return Float64(bitcast[DType.float32](bits))
 
 

@@ -31,6 +31,8 @@ step is a write to stderr, that keeps the checksum of a ten-byte chunk as
 cheap as it always was.
 """
 
+from core.binary import little_endian_u32
+
 comptime CRC_POLYNOMIAL = UInt32(0xEDB88320)
 comptime ADLER_MODULUS = UInt32(65521)
 # The most bytes Adler-32's running sums can take before either can pass
@@ -96,12 +98,7 @@ def _crc_sliced(
     var index = 0
     var count = len(bytes)
     while index + CRC_SLICES <= count:
-        var word = running ^ (
-            UInt32(bytes[index])
-            | (UInt32(bytes[index + 1]) << 8)
-            | (UInt32(bytes[index + 2]) << 16)
-            | (UInt32(bytes[index + 3]) << 24)
-        )
+        var word = running ^ UInt32(little_endian_u32(bytes, index))
         running = (
             tables[7 * 256 + Int(word & 0xFF)]
             ^ tables[6 * 256 + Int((word >> 8) & 0xFF)]

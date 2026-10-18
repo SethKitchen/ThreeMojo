@@ -42,6 +42,7 @@ See `docs/wiki/Norm-consumers.md` for the changed operations, retained
 limits, and explicit zero and nonfinite rules.
 """
 
+from core.binary import little_endian_u32
 from math.norm import normalized4, _ordinary_squared
 from core.buffer_attribute import BufferAttribute
 from core.buffer_geometry import BufferGeometry, COLOR, POSITION
@@ -342,12 +343,7 @@ def band_words(bytes: List[UInt8]) raises -> List[UInt32]:
         raise Error("Gaussian splat: a band is not a whole number of words")
     var words = List[UInt32](capacity=len(bytes) // 4)
     for at in range(0, len(bytes), 4):
-        words.append(
-            UInt32(bytes[at])
-            | (UInt32(bytes[at + 1]) << 8)
-            | (UInt32(bytes[at + 2]) << 16)
-            | (UInt32(bytes[at + 3]) << 24)
-        )
+        words.append(UInt32(little_endian_u32(bytes, at)))
     return words^
 
 

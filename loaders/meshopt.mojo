@@ -30,6 +30,7 @@ extension's specification forbids is refused as well. meshoptimizer does
 not check those, and what it makes of them is unspecified.
 """
 
+from core.binary import little_endian_u32
 from core.ordinal import ordinal_valid
 
 from std.math import sqrt
@@ -525,16 +526,6 @@ def _i16(data: List[UInt8], at: Int) -> Int32:
     return Int32(Int16(UInt16(data[at]) | (UInt16(data[at + 1]) << 8)))
 
 
-def _u32(data: List[UInt8], at: Int) -> UInt32:
-    """Read a little-endian 32-bit word."""
-    return (
-        UInt32(data[at])
-        | (UInt32(data[at + 1]) << 8)
-        | (UInt32(data[at + 2]) << 16)
-        | (UInt32(data[at + 3]) << 24)
-    )
-
-
 def _put_u32(mut data: List[UInt8], at: Int, value: UInt32):
     """Write a little-endian 32-bit word."""
     for b in range(4):  # pragma: no branch
@@ -694,7 +685,7 @@ def decode_filter_exp(mut data: List[UInt8], count: Int, stride: Int) raises:
             " multiple of 4"
         )
     for i in range(count * (stride // 4)):
-        var v = _u32(data, i * 4)
+        var v = UInt32(little_endian_u32(data, i * 4))
         var e = Int(bitcast[DType.int32](v) >> 24)
         var power = bitcast[DType.float32](
             UInt32(((e + 127) << 23) & 0xFFFFFFFF)

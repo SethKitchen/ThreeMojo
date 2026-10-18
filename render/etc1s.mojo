@@ -47,7 +47,7 @@ a time with the first bit the code's highest, as DEFLATE reads them. A
 reader past the end of its bytes reads zeros, as Binomial's does.
 """
 
-from core.binary import little_endian_u32
+from core.binary import little_endian_u16, little_endian_u32
 
 # The largest Huffman code and the size of the code-length alphabet.
 comptime MAX_CODE_BITS = 16
@@ -247,11 +247,6 @@ def _read_table(mut bits: _Bits) raises -> _Huffman:
     return _Huffman(sizes)
 
 
-def _u16(bytes: List[UInt8], at: Int) -> Int:
-    """Return the little-endian half word at `at`."""
-    return Int(bytes[at]) | (Int(bytes[at + 1]) << 8)
-
-
 struct Etc1sGlobal(Movable):
     """A KTX 2.0 file's BasisLZ global data, decoded: the endpoint and
     selector codebooks, the slice tables and the image descriptors."""
@@ -312,8 +307,8 @@ struct Etc1sGlobal(Movable):
         self.images = List[Int]()
         if len(bytes) < GLOBAL_HEADER_BYTES:
             raise Error("ETC1S: the global data is shorter than its header")
-        var endpoint_count = _u16(bytes, 0)
-        var selector_count = _u16(bytes, 2)
+        var endpoint_count = little_endian_u16(bytes, 0)
+        var selector_count = little_endian_u16(bytes, 2)
         var endpoint_bytes = little_endian_u32(bytes, 4)
         var selector_bytes = little_endian_u32(bytes, 8)
         var table_bytes = little_endian_u32(bytes, 12)

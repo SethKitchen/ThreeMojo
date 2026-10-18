@@ -24,6 +24,8 @@ reference decodes it, and cut to its size. The payload holds two words
 across and down at least, as three.js's `PVRLoader` reads it.
 """
 
+from core.binary import little_endian_u32
+
 
 def pvrtc_bytes(width: Int, height: Int, two_bit: Bool) -> Int:
     """Return how many bytes a PVRTC level takes, as three.js's
@@ -312,13 +314,7 @@ def _word(data: List[UInt8], index: Int) -> Int:
     Returns:
         The word.
     """
-    var at = index * 4
-    return (
-        Int(data[at])
-        | (Int(data[at + 1]) << 8)
-        | (Int(data[at + 2]) << 16)
-        | (Int(data[at + 3]) << 24)
-    )
+    return little_endian_u32(data, index * 4)
 
 
 def decode_pvrtc(

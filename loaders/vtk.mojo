@@ -56,6 +56,7 @@ replacement characters. And an index past the points, which three.js
 keeps and draws from undefined positions.
 """
 
+from core.binary import little_endian_u32
 from core.buffer_attribute import BufferAttribute
 from core.buffer_geometry import COLOR, NORMAL, POSITION, BufferGeometry
 from loaders.js_text import (
@@ -1157,12 +1158,7 @@ def _typed(
         raise Error("VTK: " + what + " is not a whole number of values")
     var out = List[Float64](capacity=len(bytes) // 4)
     for k in range(0, len(bytes), 4):
-        var bits = (
-            UInt32(bytes[k])
-            | (UInt32(bytes[k + 1]) << 8)
-            | (UInt32(bytes[k + 2]) << 16)
-            | (UInt32(bytes[k + 3]) << 24)
-        )
+        var bits = UInt32(little_endian_u32(bytes, k))
         if type == "Float32":
             out.append(Float64(bitcast[DType.float32](bits)))
         else:
