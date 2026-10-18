@@ -67,6 +67,123 @@ def spin_frame(
     return renderer.render(scene, assets, camera)
 
 
+def spin_pair(
+    renderer: Renderer,
+    camera: PerspectiveCamera,
+    assets: Assets,
+    mut scene: Scene,
+    left: NodeId,
+    right: NodeId,
+    step: Angle,
+) raises -> Framebuffer:
+    """Turn two nodes about y by `step` and render one frame.
+
+    Args:
+        renderer: The renderer to draw with.
+        camera: The camera to view through.
+        assets: The geometry, materials and textures.
+        scene: The persistent scene, edited in place.
+        left: The first node to turn.
+        right: The second node to turn.
+        step: How much further to turn this frame.
+
+    Returns:
+        The rendered frame.
+
+    Raises:
+        Error: If the scene or the render is invalid.
+    """
+    scene.node(left).rotate_y(step)
+    scene.node(right).rotate_y(step)
+    scene.update()
+    return renderer.render(scene, assets, camera)
+
+
+def _collect_spins(
+    renderer: Renderer,
+    camera: PerspectiveCamera,
+    assets: Assets,
+    mut scene: Scene,
+    node: NodeId,
+    frame_count: Int,
+) raises -> List[Framebuffer]:
+    """Return one full circle of `node`, one frame per step."""
+    var step = Angle(Float32(360) / Float32(frame_count), DEGREE)
+    var frames = List[Framebuffer]()
+    for _ in range(frame_count):
+        frames.append(spin_frame(renderer, camera, assets, scene, node, step))
+    return frames^
+
+
+def spin_gallery(
+    renderer: Renderer,
+    camera: PerspectiveCamera,
+    assets: Assets,
+    mut scene: Scene,
+    node: NodeId,
+    frame_count: Int,
+    delay_ms: Int,
+    destination: String,
+) raises:
+    """Turn `node` through one circle and write the frames.
+
+    Args:
+        renderer: The renderer to draw with.
+        camera: The camera to view through.
+        assets: The geometry, materials and textures.
+        scene: The persistent scene, edited in place.
+        node: The node to turn about y.
+        frame_count: How many frames cover the circle.
+        delay_ms: How long each frame is shown, in milliseconds.
+        destination: The path of the animated PNG.
+
+    Raises:
+        Error: If the scene, the render, or the write is invalid.
+    """
+    var frames = _collect_spins(
+        renderer, camera, assets, scene, node, frame_count
+    )
+    Path(destination).write_bytes(encode(frames, delay_ms=delay_ms))
+    print("Wrote", destination, "-", frame_count, "frames")
+
+
+def spin_pair_gallery(
+    renderer: Renderer,
+    camera: PerspectiveCamera,
+    assets: Assets,
+    mut scene: Scene,
+    left: NodeId,
+    right: NodeId,
+    frame_count: Int,
+    delay_ms: Int,
+    destination: String,
+) raises:
+    """Turn two nodes through one circle and write the frames.
+
+    Args:
+        renderer: The renderer to draw with.
+        camera: The camera to view through.
+        assets: The geometry, materials and textures.
+        scene: The persistent scene, edited in place.
+        left: The first node to turn.
+        right: The second node to turn.
+        frame_count: How many frames cover the circle.
+        delay_ms: How long each frame is shown, in milliseconds.
+        destination: The path of the animated PNG.
+
+    Raises:
+        Error: If the scene, the render, or the write is invalid.
+    """
+    var step = Angle(Float32(360) / Float32(frame_count), DEGREE)
+    var frames = List[Framebuffer]()
+    for _ in range(frame_count):
+        frames.append(
+            spin_pair(renderer, camera, assets, scene, left, right, step)
+        )
+    Path(destination).write_bytes(encode(frames, delay_ms=delay_ms))
+    print("Wrote", destination, "-", frame_count, "frames")
+
+
 def spin_clip(
     renderer: Renderer,
     camera: PerspectiveCamera,
@@ -92,12 +209,11 @@ def spin_clip(
     Raises:
         Error: If the scene, the render, or the write is invalid.
     """
-    var step = Angle(Float32(360) / Float32(frame_count), DEGREE)
     var frame_clock = Clock()
     frame_clock.start()
-    var frames = List[Framebuffer]()
-    for _ in range(frame_count):
-        frames.append(spin_frame(renderer, camera, assets, scene, node, step))
+    var frames = _collect_spins(
+        renderer, camera, assets, scene, node, frame_count
+    )
     write_example(frames, destination, delay_ms, frame_count, frame_clock)
 
 

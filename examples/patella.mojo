@@ -13,7 +13,7 @@ authored fraction of stature. The surface is the cortical bone map. The
 program also prints each bone's tissue mass and Earth weight.
 """
 
-from examples.output import example_destination, spin_frame
+from examples.output import example_destination, spin_gallery
 
 from cameras.perspective_camera import PerspectiveCamera
 from core.assets import Assets
@@ -28,10 +28,8 @@ from lights.light import ambient_light, directional_light
 from materials.material import MaterialId
 from math.vector3 import Vector3
 from objects.mesh import Mesh
-from render.apng import encode
-from render.framebuffer import Color, Framebuffer
+from render.framebuffer import Color
 from renderers.renderer import Renderer, available_workers
-from std.pathlib import Path
 from units.si import (
     Angle,
     DEGREE,
@@ -165,10 +163,6 @@ def main() raises:
     )
     camera.place(Vector3(0.08, 0.01, 0.42), Vector3(0.0, 0.0, 0.0))
 
-    var step = Angle(Float32(360) / Float32(FRAMES), DEGREE)
-    var frames = List[Framebuffer]()
-    for _ in range(FRAMES):
-        frames.append(spin_frame(renderer, camera, assets, scene, pivot, step))
-
-    Path(destination).write_bytes(encode(frames, delay_ms=DELAY_MS))
-    print("Wrote", destination, "-", FRAMES, "frames")
+    spin_gallery(
+        renderer, camera, assets, scene, pivot, FRAMES, DELAY_MS, destination
+    )

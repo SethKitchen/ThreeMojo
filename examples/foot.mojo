@@ -12,7 +12,7 @@ ligaments and muscles. The program also prints tissue mass and Earth
 weight.
 """
 
-from examples.output import example_destination, spin_frame
+from examples.output import example_destination, spin_gallery
 
 from cameras.perspective_camera import PerspectiveCamera
 from core.assets import Assets
@@ -38,10 +38,8 @@ from extensions.humanoid.skeleton.look import (
 )
 from lights.light import ambient_light, directional_light
 from math.vector3 import Vector3
-from render.apng import encode
-from render.framebuffer import Color, Framebuffer
+from render.framebuffer import Color
 from renderers.renderer import Renderer, available_workers
-from std.pathlib import Path
 from units.si import (
     Angle,
     DEGREE,
@@ -131,10 +129,6 @@ def main() raises:
     )
     camera.place(Vector3(0.16, 0.05, 0.38), Vector3(0.0, -0.045, 0.04))
 
-    var step = Angle(Float32(360) / Float32(FRAMES), DEGREE)
-    var frames = List[Framebuffer]()
-    for _ in range(FRAMES):
-        frames.append(spin_frame(renderer, camera, assets, scene, pivot, step))
-
-    Path(destination).write_bytes(encode(frames, delay_ms=DELAY_MS))
-    print("Wrote", destination, "-", FRAMES, "frames")
+    spin_gallery(
+        renderer, camera, assets, scene, pivot, FRAMES, DELAY_MS, destination
+    )
