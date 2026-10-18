@@ -6,8 +6,12 @@
 """Length along a polyline, and the unit direction of one step.
 
 A 2D curve and a 3D curve sample different point types. Both points can
-be subtracted and measured, so the walk lives here once.
+be subtracted and measured, so the walk lives here once. The same point
+can hold its length between two bounds.
 """
+
+from math.norm import _ordinary_squared
+from std.math import max, min
 
 
 trait PolylineVertex(Deinitable, ImplicitlyCopyable, Movable):
@@ -34,6 +38,36 @@ trait PolylineVertex(Deinitable, ImplicitlyCopyable, Movable):
 
     def normalize(mut self):
         """Scale this step to unit length. A zero step stays zero."""
+        ...
+
+    def length_sq(self) -> Float32:
+        """Return the squared length of this step.
+
+        Returns:
+            The square of `length`.
+        """
+        ...
+
+    def __mul__(self, factor: Float32) -> Self:
+        """Return this step scaled by `factor`.
+
+        Args:
+            factor: The scale.
+
+        Returns:
+            The scaled step.
+        """
+        ...
+
+    def __truediv__(self, divisor: Float32) -> Self:
+        """Return this step divided by `divisor`.
+
+        Args:
+            divisor: The number to divide by.
+
+        Returns:
+            The divided step.
+        """
         ...
 
 
@@ -71,3 +105,22 @@ def unit_direction[T: PolylineVertex](var slope: T) raises -> T:
         raise Error("A curve has no direction where it turns back")
     slope.normalize()
     return slope^
+
+
+def clamp_to_length[
+    T: PolylineVertex
+](mut value: T, low: Float32, high: Float32):
+    """Hold `value`'s length between `low` and `high`.
+
+    Args:
+        value: The vector, changed in place.
+        low: The shortest length.
+        high: The longest.
+    """
+    var length = value.length()
+    var limit = max(low, min(high, length))
+    if _ordinary_squared(value.length_sq()):
+        value = value / length * limit
+        return
+    value.normalize()
+    value = value * limit

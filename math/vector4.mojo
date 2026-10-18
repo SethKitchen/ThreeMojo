@@ -24,9 +24,10 @@ thresholds and its fallback axes are three.js's.
 """
 
 from math.matrix4 import Matrix4
+from math.polyline import PolylineVertex, clamp_to_length
 from math.quaternion import Quaternion
 from math.vector3 import Vector3, _js_round
-from math.norm import length4, normalized4, _ordinary_squared
+from math.norm import length4, normalized4
 from std.math import acos, ceil, floor, pi, sqrt, trunc
 from units.si import Angle, RADIAN
 
@@ -72,7 +73,7 @@ def _is_largest(a: Float32, b: Float32, c: Float32) -> Bool:
 
 
 @fieldwise_init
-struct Vector4(Equatable, ImplicitlyCopyable):
+struct Vector4(Equatable, ImplicitlyCopyable, PolylineVertex):
     """A point or direction in homogeneous coordinates."""
 
     var x: Float32
@@ -462,12 +463,7 @@ struct Vector4(Equatable, ImplicitlyCopyable):
             low: The shortest length.
             high: The longest.
         """
-        var length = self.length()
-        if _ordinary_squared(self.length_sq()):
-            self = self / length * max(low, min(high, length))
-        else:
-            self.normalize()
-            self = self * max(low, min(high, length))
+        clamp_to_length(self, low, high)
 
     def floor(mut self):
         """Round each component down, three.js's `floor`."""

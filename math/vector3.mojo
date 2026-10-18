@@ -14,7 +14,7 @@ limits, and explicit zero and nonfinite rules.
 """
 
 from math.matrix_determinant import _sum_products
-from math.polyline import PolylineVertex
+from math.polyline import PolylineVertex, clamp_to_length
 
 from std.math import isfinite
 from math.euler import Euler
@@ -522,12 +522,7 @@ struct Vector3(Equatable, ImplicitlyCopyable, PolylineVertex):
             low: The shortest length.
             high: The longest.
         """
-        var length = self.length()
-        if _ordinary_squared(self.length_sq()):
-            self = self / length * max(low, min(high, length))
-        else:
-            self.normalize()
-            self = self * max(low, min(high, length))
+        clamp_to_length(self, low, high)
 
     def multiply(mut self, other: Self):
         """Multiply each component by `other`'s, three.js's `multiply`.
