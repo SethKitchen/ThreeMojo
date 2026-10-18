@@ -38,7 +38,7 @@ See `docs/wiki/Norm-consumers.md` for the changed operations, retained
 limits, and explicit zero and nonfinite rules.
 """
 
-from math.finite import require_finite_group
+from math.finite import require_finite_group, require_unit_range
 from math.norm import length2
 from core.layers import Layers
 from math.arc_tangent import atan2_float32
@@ -831,8 +831,9 @@ def check_halftone(settings: HalftoneSettings) raises:
     require_non_negative(
         settings.scatter, "A halftone scatter must not be negative"
     )
-    if settings.blending < 0 or settings.blending > 1:
-        raise Error("A halftone blending runs from zero to one")
+    require_unit_range(
+        settings.blending, "A halftone blending runs from zero to one"
+    )
 
 
 def dot_radius_distance(

@@ -49,7 +49,7 @@ from core.ordinal import (
     require_positive,
 )
 
-from math.finite import require_non_negative_finite
+from math.finite import require_non_negative_finite, require_unit_range
 from postprocessing.sample_math import gaussian_pdf
 from math.norm import length2, squared_length2
 
@@ -1263,8 +1263,7 @@ def check_ssr(settings: SsrSettings) raises:
         and isfinite(settings.thickness.value)
     ):
         raise Error("An SSR setting must be finite")
-    if settings.opacity < 0 or settings.opacity > 1:
-        raise Error("An SSR opacity runs from zero to one")
+    require_unit_range(settings.opacity, "An SSR opacity runs from zero to one")
     require_non_negative(
         settings.thickness.value, "An SSR thickness must not be negative"
     )

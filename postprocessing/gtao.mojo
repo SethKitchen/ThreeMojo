@@ -26,6 +26,7 @@ The pass runs on the host. It reads the depth and the normals that
 `postprocessing.screen_space.DepthView` reads for SSAO.
 """
 
+from math.finite import require_unit_range
 from math.norm import squared_length2
 from math.noise import SimplexNoise
 from math.utils import SeededRandom, clamp
@@ -160,8 +161,9 @@ def check_gtao(settings: GtaoSettings) raises:
         or settings.normal_phi <= 0
     ):
         raise Error("A GTAO radius, thickness, scale and phi must be positive")
-    if settings.distance_fall_off < 0 or settings.distance_fall_off > 1:
-        raise Error("A GTAO fall-off runs from zero to one")
+    require_unit_range(
+        settings.distance_fall_off, "A GTAO fall-off runs from zero to one"
+    )
     if (
         settings.blend_intensity < 0
         or settings.distance_exponent < 0
