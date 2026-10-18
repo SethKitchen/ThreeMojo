@@ -40,8 +40,8 @@ three.js's internal `_getMatrix` multiplies the two the other way round.
 """
 from core.ordinal import ordinal_valid
 
+from math.utils import rounded_product
 from render.framebuffer import Color, FloatColor, SrgbBytes
-from std.benchmark import black_box
 from std.math import pow
 
 
@@ -277,7 +277,11 @@ def _dot(row: Row3, r: Float64, g: Float64, b: Float64) -> Float64:
     Returns:
         `row[0] * r + row[1] * g + row[2] * b`.
     """
-    return black_box(row[0] * r) + black_box(row[1] * g) + black_box(row[2] * b)
+    return (
+        rounded_product(row[0], r)
+        + rounded_product(row[1], g)
+        + rounded_product(row[2], b)
+    )
 
 
 def _row_times(row: Row3, matrix: Matrix3x3) -> Row3:
@@ -471,7 +475,7 @@ def srgb_to_linear_three(c: Float64) -> Float64:
     """
     if c < 0.04045:
         return c * 0.0773993808
-    return pow(black_box(c * 0.9478672986) + 0.0521327014, 2.4)
+    return pow(rounded_product(c, 0.9478672986) + 0.0521327014, 2.4)
 
 
 def linear_to_srgb_three(c: Float64) -> Float64:
@@ -485,7 +489,7 @@ def linear_to_srgb_three(c: Float64) -> Float64:
     """
     if c < 0.0031308:
         return c * 12.92
-    return black_box(1.055 * pow(c, 0.41666)) - 0.055
+    return rounded_product(1.055, pow(c, 0.41666)) - 0.055
 
 
 def conversion_matrix(
