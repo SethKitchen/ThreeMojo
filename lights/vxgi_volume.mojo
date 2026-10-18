@@ -1185,8 +1185,7 @@ struct VXGIVolume(Movable):
         for index in range(self.grid.level_count(0)):  # pragma: no branch
             var texel = resolve_voxel(Int(self.occupancy[index]))
             _store(self.opacity, index, texel)
-        for level in range(1, self.grid.levels):
-            _fill_opacity_level(self.opacity, self.grid, level)
+        _fill_coarser_levels(self.opacity, self.grid, True)
 
     def _rasterize(mut self, setup: VoxelTriangle, triangle: Int):
         """Walk the columns of one triangle's box, three.js's loops."""
@@ -1343,7 +1342,7 @@ struct VXGIVolume(Movable):
             )
             _store(self.direct, index, texel)
             _store(self.radiance, index, texel)
-        _fill_radiance_levels(self.radiance, self.grid)
+        _fill_coarser_levels(self.radiance, self.grid, False)
         for _ in range(self.bounces):
             self.radiance = self._bounced()
 
@@ -1374,7 +1373,7 @@ struct VXGIVolume(Movable):
                 reach,
             )
             _store(next, index, texel)
-        _fill_radiance_levels(next, self.grid)
+        _fill_coarser_levels(next, self.grid, False)
         return next^
 
     def lighting_done(mut self):
@@ -1461,28 +1460,30 @@ def _store(mut volume: List[Float32], index: Int, texel: Lanes):
     volume[at + 3] = texel[3]
 
 
-def _fill_opacity_level(mut opacity: List[Float32], grid: VxgiGrid, level: Int):
-    """Fill one coarser opacity level from the one below."""
+def _fill_mip_level(
+    mut volume: List[Float32], grid: VxgiGrid, level: Int, opacity: Bool
+):
+    """Fill one coarser level from the one below.
+
+    `opacity` selects the opacity kernel. Otherwise the radiance kernel
+    runs.
+    """
     var wide = grid.level_x(level)
     var tall = grid.level_y(level)
     var start = grid.level_start(level)
     for index in range(grid.level_count(level)):  # pragma: no branch
         var at = voxel_coordinates(index, wide, tall)
         var texel = opacity_mip_voxel(
-            floats_of(opacity), grid, level, at[0], at[1], at[2]
+            floats_of(volume), grid, level, at[0], at[1], at[2]
+        ) if opacity else radiance_mip_voxel(
+            floats_of(volume), grid, level, at[0], at[1], at[2]
         )
-        _store(opacity, start + index, texel)
+        _store(volume, start + index, texel)
 
 
-def _fill_radiance_levels(mut radiance: List[Float32], grid: VxgiGrid):
-    """Fill every coarser radiance level, each from the one below."""
+def _fill_coarser_levels(
+    mut volume: List[Float32], grid: VxgiGrid, opacity: Bool
+):
+    """Fill every coarser level from the one below."""
     for level in range(1, grid.levels):
-        var wide = grid.level_x(level)
-        var tall = grid.level_y(level)
-        var start = grid.level_start(level)
-        for index in range(grid.level_count(level)):  # pragma: no branch
-            var at = voxel_coordinates(index, wide, tall)
-            var texel = radiance_mip_voxel(
-                floats_of(radiance), grid, level, at[0], at[1], at[2]
-            )
-            _store(radiance, start + index, texel)
+        _fill_mip_level(volume, grid, level, opacity)
