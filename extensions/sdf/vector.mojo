@@ -11,6 +11,7 @@ Coordinates are meters.
 """
 
 from generators.utils import Vec3d
+from math.smoothstep import hermite_fade
 from math.utils import mix_delta
 from std.math import cos, isfinite, sin, sqrt
 
@@ -160,7 +161,7 @@ def smoothstep(e0: Float64, e1: Float64, x: Float64) -> Float64:
         Zero at or below `e0`, one at or above `e1`, smooth between.
     """
     var t = clamp((x - e0) / (e1 - e0), 0.0, 1.0)
-    return t * t * (3.0 - 2.0 * t)
+    return hermite_fade(t)
 
 
 def mix(a: Float64, b: Float64, t: Float64) -> Float64:

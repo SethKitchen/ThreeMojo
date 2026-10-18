@@ -16,8 +16,8 @@ kernel, and the parity tests hold the two to the same numbers. It lives in
 `lights.lighting` can both import it without importing each other.
 
 `hermite_fade` is the cubic `t * t * (3 - 2 * t)`. A waist blend, a
-complexion lattice, and a jump clip call it. Water and the SDF keep a
-fade written with `3.0`.
+complexion lattice, a jump clip, water noise, the SDF step, animal
+noise, and the species fades call it.
 """
 
 

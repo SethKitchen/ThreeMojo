@@ -69,6 +69,7 @@ from extensions.sdf.vector import (
 )
 from extensions.animals.warp import scale_about_warp
 from math.norm import squared_length2
+from math.smoothstep import hermite_fade
 from math.sine import fraction
 from std.math import cos, exp, floor, pi, pow, sin, sqrt
 
@@ -416,8 +417,8 @@ struct _Geo(Movable):
     def wk(self, u: Float64) -> Float64:
         var t1 = clamp((u - 0.08) / 0.14, 0.0, 1.0)
         var t2 = clamp((u - 0.66) / 0.12, 0.0, 1.0)
-        var s1 = t1 * t1 * (3.0 - 2.0 * t1)
-        var s2 = t2 * t2 * (3.0 - 2.0 * t2)
+        var s1 = hermite_fade(t1)
+        var s2 = hermite_fade(t2)
         return 0.95 - 0.11 * s1 + 0.09 * s2
 
     def surf_x(self, u: Float64, y: Float64) -> Float64:
@@ -1426,7 +1427,7 @@ def _lerp_table(tbl: List[Float64], u: Float64) -> Float64:
     for i in range(1, n):
         if u <= tbl[i * 2]:
             var t = (u - tbl[i * 2 - 2]) / (tbl[i * 2] - tbl[i * 2 - 2])
-            var s = t * t * (3.0 - 2.0 * t)
+            var s = hermite_fade(t)
             return tbl[i * 2 - 1] + (tbl[i * 2 + 1] - tbl[i * 2 - 1]) * s
     return tbl[n * 2 - 1]
 
