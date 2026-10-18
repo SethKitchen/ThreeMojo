@@ -40,6 +40,7 @@ no texels, or data of the wrong length, is refused. three.js writes a
 file with a data window of minus one.
 """
 
+from core.extent import positive_extent
 from geometries.curve_modifier import to_half_float
 from render.deflate import zlib_deflate
 from render.exr import (
@@ -88,7 +89,7 @@ def _check(
 ) raises:
     """Refuse a size, a compression or a sample type that three.js does
     not write."""
-    if width < 1 or height < 1:
+    if not positive_extent(width, height):
         raise Error("EXR export: an image needs a width and a height")
     if count != width * height * 4:
         raise Error(

@@ -140,10 +140,10 @@ struct Background(ImplicitlyCopyable):
         """
         if not self.kind.is_valid():
             raise Error("A background's kind is none of the four")
-        if self.kind == TEXTURE_BACKGROUND and self.texture.value < 0:
-            raise Error("A texture background must name a texture")
-        if self.kind == CUBE_BACKGROUND and self.cube.value < 0:
-            raise Error("A cube background must name a cube texture")
+        if self.kind == TEXTURE_BACKGROUND:
+            require_texture_background(self.texture)
+        if self.kind == CUBE_BACKGROUND:
+            require_cube_background(self.cube)
 
 
 def no_background() -> Background:
@@ -169,6 +169,38 @@ def color_background(color: Color) -> Background:
     return Background(COLOR_BACKGROUND, color=color)
 
 
+def require_texture_background(id: TextureId) raises:
+    """Refuse a texture background that names no texture.
+
+    Args:
+        id: The texture.
+
+    Returns:
+        Nothing. The call returns when the id is not negative.
+
+    Raises:
+        Error: If the id is `NO_TEXTURE` or negative.
+    """
+    if id.value < 0:
+        raise Error("A texture background must name a texture")
+
+
+def require_cube_background(id: CubeTextureId) raises:
+    """Refuse a cube background that names no cube texture.
+
+    Args:
+        id: The cube texture.
+
+    Returns:
+        Nothing. The call returns when the id is not negative.
+
+    Raises:
+        Error: If the id is `NO_CUBE_TEXTURE` or negative.
+    """
+    if id.value < 0:
+        raise Error("A cube background must name a cube texture")
+
+
 def texture_background(texture: TextureId) raises -> Background:
     """Return a background that stretches a texture over the viewport,
     three.js's `scene.background = texture`.
@@ -183,8 +215,7 @@ def texture_background(texture: TextureId) raises -> Background:
         Error: If the id is `NO_TEXTURE` or negative: a texture background
             with no texture is `no_background`, and says so.
     """
-    if texture.value < 0:
-        raise Error("A texture background must name a texture")
+    require_texture_background(texture)
     return Background(TEXTURE_BACKGROUND, texture=texture)
 
 
@@ -202,6 +233,5 @@ def cube_background(cube: CubeTextureId) raises -> Background:
         Error: If the id is `NO_CUBE_TEXTURE`, `SCENE_ENVIRONMENT` or
             otherwise negative: a sky must name six images of its own.
     """
-    if cube.value < 0:
-        raise Error("A cube background must name a cube texture")
+    require_cube_background(cube)
     return Background(CUBE_BACKGROUND, cube=cube)
