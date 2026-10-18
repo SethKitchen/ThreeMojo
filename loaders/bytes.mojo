@@ -6,8 +6,9 @@
 """Shared checks on a byte.
 
 `bytes_match` asks whether an ASCII word sits at one byte.
-`ascii_space` and `ascii_digit` name white space and a decimal digit.
-`hex_digit_value` reads one hexadecimal digit.
+`ascii_space`, `ascii_digit`, and `ascii_letter` name white space, a
+decimal digit, and a letter. `hex_digit_value` reads one hexadecimal
+digit. `base64_digit` reads one letter or digit of the base64 alphabet.
 """
 
 
@@ -59,6 +60,40 @@ def ascii_digit(byte: Int) -> Bool:
         Whether it is `0` through `9`.
     """
     return byte >= 48 and byte <= 57
+
+
+def ascii_letter(byte: Int) -> Bool:
+    """Return True for an ASCII letter, either case.
+
+    Args:
+        byte: A byte value.
+
+    Returns:
+        Whether it is `A` through `Z` or `a` through `z`.
+    """
+    return (byte >= 65 and byte <= 90) or (byte >= 97 and byte <= 122)
+
+
+def base64_digit(byte: Int) -> Int:
+    """Return 0 through 61 for an ASCII letter or digit, or -1.
+
+    `A` is 0, `a` is 26, and `0` is 52. `+`, `/`, and the URL forms stay
+    with the caller.
+
+    Args:
+        byte: A byte value.
+
+    Returns:
+        The six-bit value, or -1 when `byte` is outside `A-Z`, `a-z`, and
+        `0-9`.
+    """
+    if ascii_digit(byte):
+        return byte + 4
+    if not ascii_letter(byte):
+        return -1
+    if byte <= 90:
+        return byte - 65
+    return byte - 71
 
 
 def hex_digit_value(byte: Int) -> Int:

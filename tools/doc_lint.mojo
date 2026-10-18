@@ -21,7 +21,7 @@ that each wiki link names a page and a heading that exist. It prints one
 line per problem and exits with an error when there is at least one.
 """
 
-from loaders.bytes import ascii_digit, hex_digit_value
+from loaders.bytes import ascii_digit, ascii_letter, hex_digit_value
 from std.os import listdir
 from std.pathlib import Path
 from std.sys import argv
@@ -405,7 +405,7 @@ def _is_punctuation(byte: UInt8) -> Bool:
 
 
 def _is_alpha(byte: UInt8) -> Bool:
-    return (byte >= 65 and byte <= 90) or (byte >= 97 and byte <= 122)
+    return ascii_letter(Int(byte))
 
 
 def _has(bytes: Span[UInt8, _], at: Int, text: String) -> Bool:
@@ -4049,7 +4049,7 @@ def _drops(ch: String) -> Bool:
         return False
     var byte = bytes[0]
     var digit = ascii_digit(Int(byte))
-    var letter = byte >= 97 and byte <= 122
+    var letter = ascii_letter(Int(byte)) and byte >= 97
     return not (digit or letter or byte == 45 or byte == 95 or byte == 32)
 
 

@@ -221,7 +221,7 @@ from loaders.draco import (
     DracoGeometry,
     decode_draco,
 )
-from loaders.bytes import ascii_digit
+from loaders.bytes import base64_digit
 from loaders.draco_attributes import DracoDataType
 from loaders.meshopt import (
     FILTER_NONE,
@@ -1070,22 +1070,17 @@ def decode_base64(text: String) raises -> List[UInt8]:
     var ended = False
     for byte in text.as_bytes():
         var value = Int(byte)
-        var digit: Int
-        if value >= 65 and value <= 90:
-            digit = value - 65
-        elif value >= 97 and value <= 122:
-            digit = value - 71
-        elif ascii_digit(value):
-            digit = value + 4
-        elif value == 43:
-            digit = 62
-        elif value == 47:
-            digit = 63
-        elif value == 61:
-            ended = True
-            continue
-        else:
-            raise Error("base64: a character outside the alphabet")
+        var digit = base64_digit(value)
+        if digit < 0:
+            if value == 43:
+                digit = 62
+            elif value == 47:
+                digit = 63
+            elif value == 61:
+                ended = True
+                continue
+            else:
+                raise Error("base64: a character outside the alphabet")
         if ended:
             raise Error("base64: a digit after the padding")
         held = (held << 6) | digit

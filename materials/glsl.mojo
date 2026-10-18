@@ -54,7 +54,7 @@ runtime-dependent exits. See the Node-materials wiki page for the proof
 subset and compatibility limits.
 """
 from core.ordinal import ordinal_valid
-from loaders.bytes import ascii_digit, hex_digit_value
+from loaders.bytes import ascii_digit, ascii_letter, hex_digit_value
 
 from render.cube_texture_store import NO_CUBE_TEXTURE
 from render.volume_texture_store import (
@@ -216,11 +216,7 @@ struct _Token(Copyable, Movable):
 
 def _is_letter(c: UInt8) -> Bool:
     """Return True for a letter or an underscore."""
-    return (
-        (c >= UInt8(ord("a")) and c <= UInt8(ord("z")))
-        or (c >= UInt8(ord("A")) and c <= UInt8(ord("Z")))
-        or c == UInt8(ord("_"))
-    )
+    return ascii_letter(Int(c)) or c == UInt8(ord("_"))
 
 
 def _is_digit(c: UInt8) -> Bool:

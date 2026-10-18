@@ -34,7 +34,12 @@ and prolog order are checked. DTD contents and namespace constraints are
 not validated. Encoding declarations do not change the input encoding.
 """
 
-from loaders.bytes import ascii_digit, bytes_match, hex_digit_value
+from loaders.bytes import (
+    ascii_digit,
+    ascii_letter,
+    bytes_match,
+    hex_digit_value,
+)
 from loaders.utf8 import append_utf8
 
 # What `XmlDocument.child` returns when there is no such child, and what
@@ -317,9 +322,8 @@ def _is_name_start(point: Int) -> Bool:
     """Check XML 1.0 fifth edition NameStartChar, production [4]."""
     return (
         point == 58
-        or (point >= 65 and point <= 90)
+        or ascii_letter(point)
         or point == 95
-        or (point >= 97 and point <= 122)
         or (point >= 0xC0 and point <= 0xD6)
         or (point >= 0xD8 and point <= 0xF6)
         or (point >= 0xF8 and point <= 0x2FF)
@@ -350,7 +354,7 @@ def _is_name_char(point: Int) -> Bool:
 
 def _is_letter(byte: Int) -> Bool:
     """Return True for an ASCII letter in an encoding name."""
-    return (byte >= 65 and byte <= 90) or (byte >= 97 and byte <= 122)
+    return ascii_letter(byte)
 
 
 def _is_digit(byte: Int) -> Bool:

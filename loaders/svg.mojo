@@ -59,7 +59,7 @@ limits, and explicit zero and nonfinite rules.
 """
 
 from math.norm import normalized2, _ordinary_squared
-from loaders.bytes import ascii_digit, ascii_space
+from loaders.bytes import ascii_digit, ascii_letter, ascii_space
 from loaders.svg_path import (
     SvgMatrix,
     SvgShapePath,
@@ -697,8 +697,7 @@ def parse_arc_command(
 def _command_start(byte: UInt8) -> Bool:
     """Return True for a letter that starts a path command: any ASCII
     letter but `e` and `E`."""
-    var lower = byte | 32
-    return lower >= 97 and lower <= 122 and lower != 101
+    return ascii_letter(Int(byte)) and (Int(byte) | 32) != 101
 
 
 def _check_stride(numbers: List[Float64], stride: Int, command: String) raises:
