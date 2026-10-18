@@ -33,6 +33,7 @@ from loaders.bytes import (
     ascii_digit,
     bytes_match,
     hex_digit_value,
+    is_exponent_mark,
     space_tab_line,
 )
 from loaders.utf8 import append_utf8
@@ -877,7 +878,7 @@ struct _Parser(Movable):
         if self.peek() == 46:
             self.at += 1
             _ = self.digits()
-        if self.peek() == 101 or self.peek() == 69:
+        if is_exponent_mark(self.peek()):
             self.at += 1
             if self.peek() == 43 or self.peek() == 45:
                 self.at += 1

@@ -57,6 +57,7 @@ from core.ordinal import ordinal_valid
 from loaders.bytes import (
     ascii_digit,
     ascii_letter,
+    is_exponent_mark,
     is_hex_digit,
     space_tab_return,
 )
@@ -223,11 +224,6 @@ struct _Token(Copyable, Movable):
 def _is_letter(c: UInt8) -> Bool:
     """Return True for a letter or an underscore."""
     return ascii_letter(Int(c)) or c == UInt8(ord("_"))
-
-
-def _is_exponent(c: UInt8) -> Bool:
-    """Return True for `e` or `E`."""
-    return c == UInt8(ord("e")) or c == UInt8(ord("E"))
 
 
 def _is_sign(c: UInt8) -> Bool:
@@ -422,7 +418,7 @@ struct _Lexer(Movable):
             end += 1
             while end < len(bytes) and ascii_digit(bytes[end]):
                 end += 1
-        if base == 10 and end < len(bytes) and _is_exponent(bytes[end]):
+        if base == 10 and end < len(bytes) and is_exponent_mark(bytes[end]):
             real = True
             end += 1
             if end < len(bytes) and _is_sign(bytes[end]):

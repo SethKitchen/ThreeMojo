@@ -36,7 +36,12 @@ refused with the place where it happened. three.js logs chevrotain's
 errors and then throws.
 """
 
-from loaders.bytes import ascii_digit, bytes_match, is_hex_digit
+from loaders.bytes import (
+    ascii_digit,
+    bytes_match,
+    is_exponent_mark,
+    is_hex_digit,
+)
 from loaders.js_number import js_parse_float
 from math.finite import require_finite
 
@@ -403,7 +408,7 @@ def _number_length(bytes: Span[UInt8, _], at: Int) -> Int:
         return 0
     else:
         end = whole
-    var exponent = end < len(bytes) and (bytes[end] | 32) == 0x65
+    var exponent = end < len(bytes) and is_exponent_mark(bytes[end])
     if exponent:
         var digits_at = end + 1
         var signed = digits_at < len(bytes) and (
