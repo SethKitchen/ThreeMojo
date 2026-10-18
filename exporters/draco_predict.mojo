@@ -56,6 +56,7 @@ from loaders.draco_attributes import (
     _limit_normal,
     _mirrored_values,
     _predicted_tex_sides,
+    _tex_neighbor,
     _rotate,
     _rotation_count,
     product32,
@@ -712,14 +713,7 @@ struct _Scheme(Movable):
                     return [to_int32(u0), to_int32(v0)]
                 self.orientations.append(False)
                 return [to_int32(u1), to_int32(v1)]
-        var offset: Int
-        if next < p:
-            offset = next * 2
-        elif p > 0:
-            offset = (p - 1) * 2
-        else:
-            return [0, 0]
-        return [values[offset], values[offset + 1]]
+        return _tex_neighbor(values, next, p)
 
     def _normals(
         mut self,

@@ -1090,16 +1090,7 @@ struct PredictionScheme(Copyable, Movable):
                 if self.orientations.pop():
                     return [to_int32(u0), to_int32(v0)]
                 return [to_int32(u1), to_int32(v1)]
-        # Draco first takes the previous vertex's value here, then always
-        # replaces it; that dead store is left out.
-        var offset: Int
-        if next < p:
-            offset = next * 2
-        elif p > 0:
-            offset = (p - 1) * 2
-        else:
-            return [0, 0]
-        return [values[offset], values[offset + 1]]
+        return _tex_neighbor(values, next, p)
 
     def _normals(
         mut self,
@@ -1223,6 +1214,22 @@ def _parallelogram(
     var n = data.vertex_values[data.table.vertex(data.table.next(opposite))]
     var r = data.vertex_values[data.table.vertex(data.table.previous(opposite))]
     return _mirrored_values(o, n, r, p, values, components)
+
+
+def _tex_neighbor(values: List[Int], next: Int, p: Int) -> List[Int]:
+    """Return the texture value used when the edge prediction is unset.
+
+    The next vertex's value is used when that vertex comes first. Otherwise
+    the previous value is used. The first value is zero. Draco's decoder
+    stores the previous value and then replaces it; this returns the value
+    that remains.
+    """
+    if next < p:
+        return [values[next * 2], values[next * 2 + 1]]
+    if p > 0:
+        var offset = (p - 1) * 2
+        return [values[offset], values[offset + 1]]
+    return [0, 0]
 
 
 def _predicted_tex_sides(
