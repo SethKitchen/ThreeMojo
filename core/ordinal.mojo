@@ -7,8 +7,9 @@
 
 A named id stores an integer. Zero is the first name. `last` is the
 last name. A value outside that range is not a name. Each id keeps its
-own type. `require_non_negative` refuses a value below zero. Callers
-keep their own error text.
+own type. `index_in_count` is true from zero through one below a count.
+`require_non_negative` refuses a value below zero. Callers keep their
+own error text.
 """
 
 
@@ -25,6 +26,22 @@ def ordinal_valid(value: Int, last: Int) -> Bool:
     if value < 0:
         return False
     return value <= last
+
+
+def index_in_count(index: Int, count: Int) -> Bool:
+    """Return True when `index` is from zero through one below `count`.
+
+    Args:
+        index: The place to test.
+        count: How many entries the list holds.
+
+    Returns:
+        True when `index` is at least zero and below `count`.
+
+    Raises:
+        Error: Never.
+    """
+    return index >= 0 and index < count
 
 
 def require_non_negative(value: Int, message: String) raises:

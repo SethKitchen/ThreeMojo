@@ -66,7 +66,7 @@ See `docs/wiki/Norm-consumers.md` for the changed operations, retained
 limits, and explicit zero and nonfinite rules.
 """
 
-from core.ordinal import ordinal_valid
+from core.ordinal import index_in_count, ordinal_valid
 
 from math.triangle_normal import polygon_normal
 
@@ -1980,7 +1980,7 @@ struct _Loader(Movable):
                 for at in range(len(cluster.indices)):
                     var vertex = cluster.indices[at]
                     # three.js looks up only the positions a polygon names.
-                    if _within(vertex, count):
+                    if index_in_count(vertex, count):
                         bones[vertex].append(bone)
                         shares[vertex].append(cluster.weights[at])
             for vertex in range(count):
@@ -2015,7 +2015,7 @@ struct _Loader(Movable):
                 raise Error("FBX: a shape needs three numbers per index")
             for at in range(len(indices)):
                 var vertex = indices[at]
-                if not _within(vertex, count):
+                if not index_in_count(vertex, count):
                     raise Error(
                         "FBX: a shape names a position that is not there"
                     )
@@ -2153,11 +2153,6 @@ struct _Loader(Movable):
         self.model.animations = read_fbx_animations(
             self.document, self.objects_node, models, self.rig.slots
         )
-
-
-def _within(index: Int, count: Int) -> Bool:
-    """Return True if an index is from zero to below a count."""
-    return index >= 0 and index < count
 
 
 def _four_largest(
