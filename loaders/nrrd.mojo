@@ -49,7 +49,13 @@ limits, and explicit zero and nonfinite rules.
 
 from math.norm import length3
 from loaders.js_number import js_parse_float, js_parse_int
-from loaders.js_text import is_js_space, js_part, js_string, js_trim
+from loaders.js_text import (
+    is_js_space,
+    js_part,
+    js_string,
+    js_trim,
+    latin1_units,
+)
 from math.matrix4 import Matrix4
 from objects.volume import Volume, volume_values
 from render.inflate import inflate
@@ -146,22 +152,6 @@ def _array_type(type: String) raises -> String:
             if row[k] == type:
                 return row[0]
     raise Error("Unsupported NRRD data type: " + type)
-
-
-def _latin1(bytes: Span[UInt8, _]) -> List[Int]:
-    """Return bytes as three.js's `_parseChars` reads each one: a code
-    unit each.
-
-    Args:
-        bytes: The bytes.
-
-    Returns:
-        The code units.
-    """
-    var out = List[Int](capacity=len(bytes))
-    for b in bytes:
-        out.append(Int(b))
-    return out^
 
 
 def _words(units: List[Int]) -> List[String]:
@@ -565,7 +555,7 @@ def parse_nrrd(bytes: List[UInt8]) raises -> Volume:
     if end < 0:
         raise Error("NRRD: no blank line ends the header")
     # three.js's `_parseChars( _bytes, 0, i - 2 )`: one character short.
-    var header = parse_nrrd_header(_latin1(Span(bytes)[: max(end - 2, 0)]))
+    var header = parse_nrrd_header(latin1_units(Span(bytes)[: max(end - 2, 0)]))
     var data = Span(bytes)[end + 1 :]
     if not Bool(header.encoding):
         raise Error("NRRD: the header has no encoding")

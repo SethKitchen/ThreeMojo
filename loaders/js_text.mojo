@@ -15,7 +15,8 @@ index into the list is an index JavaScript's `slice`, `indexOf` and
 `is_js_space` is the white space that JavaScript's `\\s` and `trim` match:
 the ASCII spaces, the line terminators, and the Unicode spaces.
 `is_js_word` is a byte JavaScript's `\\w` matches: a letter, a digit or `_`.
-`split_fields` splits a line on white space.
+`split_fields` splits a line on white space. `latin1_units` reads each
+byte as one code unit.
 """
 
 
@@ -142,6 +143,21 @@ def js_trim(units: List[Int]) -> List[Int]:
     while end > start and is_js_space(units[end - 1]):
         end -= 1
     return js_part(units, start, end)
+
+
+def latin1_units(bytes: Span[UInt8, _]) -> List[Int]:
+    """Return each byte as one code unit, as `String.fromCharCode` does.
+
+    Args:
+        bytes: The bytes.
+
+    Returns:
+        One code unit per byte.
+    """
+    var out = List[Int](capacity=len(bytes))
+    for b in bytes:
+        out.append(Int(b))
+    return out^
 
 
 def split_fields(line: String) -> List[String]:
