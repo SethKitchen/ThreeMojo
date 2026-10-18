@@ -234,6 +234,7 @@ from render.rasterizer import (
     check_output_kinds,
     check_transmission,
     check_triangle_state,
+    require_triangle_lighting,
     bumped_normal,
     interpolate_alpha,
     mapped_normal,
@@ -10119,10 +10120,7 @@ struct GpuRenderer(Movable):
                 corners[triangle * 3 + 2],
             )
             var named = corners[triangle * 3].lights
-            if named < 0 or named > len(lightings):
-                raise Error(
-                    "A triangle names a lighting the frame does not have"
-                )
+            require_triangle_lighting(named, len(lightings))
         # The frame's lights and each light mask's, a block each.
         var lit = flatten_frame_lights(lighting, lightings)
 

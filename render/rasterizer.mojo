@@ -2621,6 +2621,23 @@ def _same_range(a: RasterVertex, b: RasterVertex) -> Bool:
     )
 
 
+def require_triangle_lighting(named: Int, count: Int) raises:
+    """Refuse a triangle whose lighting is outside the frame.
+
+    Args:
+        named: The lighting index stored on the triangle.
+        count: How many lightings the frame holds.
+
+    Returns:
+        Nothing. The call returns when the index is in range.
+
+    Raises:
+        Error: If the index is outside the frame.
+    """
+    if named < 0 or named > count:
+        raise Error("A triangle names a lighting the frame does not have")
+
+
 def check_triangle_state(
     a: RasterVertex, b: RasterVertex, c: RasterVertex
 ) raises:
@@ -7270,8 +7287,7 @@ def _check_frame(
             arrays,
         )
         var named = corners[triangle * 3].lights
-        if named < 0 or named > len(lightings):
-            raise Error("A triangle names a lighting the frame does not have")
+        require_triangle_lighting(named, len(lightings))
     for segment in range(lines):
         check_line_state(segments[segment * 2], segments[segment * 2 + 1])
         check_program_maps(
