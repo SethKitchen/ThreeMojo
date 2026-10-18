@@ -1298,10 +1298,7 @@ struct _Loader(Movable):
 
     def text(self, node: Int, key: String) raises -> String:
         """Return an object's string under `key`, or empty."""
-        var found = self.document.get(node, key)
-        if found == NO_NODE:
-            return String()
-        return self.document.string(found)
+        return self.document.optional_string(node, key, String())
 
     def extras(self, node: Int) raises -> UserData:
         """Return an object's `extras` as user data, three.js's
@@ -1326,10 +1323,7 @@ struct _Loader(Movable):
 
     def flag(self, node: Int, key: String) raises -> Bool:
         """Return an object's boolean under `key`, or False."""
-        var found = self.document.get(node, key)
-        if found == NO_NODE:
-            return False
-        return self.document.boolean(found)
+        return self.document.optional_boolean(node, key, False)
 
     def extension(self, node: Int, name: String) raises -> Int:
         """Return the object an extension keeps under an object's
