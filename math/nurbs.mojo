@@ -47,6 +47,7 @@ curve given a start or an end knot has its tangents in the wrong place.
 This keeps that, because the tangent is what three.js gives.
 """
 
+from core.ordinal import require_index_in_count
 from geometries.parametric import ParametricSurface
 from math.curve_checks import check_curve_parameter
 from math.space_curve import Point3, SpaceCurve, normalized3, point3
@@ -771,10 +772,16 @@ struct NURBSCurve(SpaceCurve):
         self.control_points = points^
         self.start_knot = start_knot.or_else(0)
         self.end_knot = end_knot.or_else(len(knots) - 1)
-        if self.start_knot < 0 or self.start_knot >= len(knots):
-            raise Error("A NURBS start knot must be one of the knots")
-        if self.end_knot < 0 or self.end_knot >= len(knots):
-            raise Error("A NURBS end knot must be one of the knots")
+        require_index_in_count(
+            self.start_knot,
+            len(knots),
+            "A NURBS start knot must be one of the knots",
+        )
+        require_index_in_count(
+            self.end_knot,
+            len(knots),
+            "A NURBS end knot must be one of the knots",
+        )
 
     def point3(self, t: Float64) raises -> Point3:
         """Return the point of the curve at `t`, three.js's `getPoint`.

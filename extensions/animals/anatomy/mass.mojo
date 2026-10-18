@@ -18,6 +18,7 @@ and moves the tensor to the center of mass, so each bone's mass, center
 and inertia come from one pass. The whole body is the sum of its bones.
 """
 
+from core.ordinal import require_index_in_count
 from extensions.anatomy.inertia import InertiaTally, SegmentInertia
 from extensions.animals.anatomy.body import (
     BODY_LENGTH,
@@ -187,8 +188,9 @@ struct BodyMass(Movable):
         Raises:
             Error: If there is no such bone or it holds no flesh.
         """
-        if index < 0 or index >= len(self.bones):
-            raise Error("The body has no such bone")
+        require_index_in_count(
+            index, len(self.bones), "The body has no such bone"
+        )
         return self.bones[index].result(length)
 
 

@@ -83,7 +83,11 @@ Extreme finite results can differ from direct three.js r180 arithmetic.
 See `docs/wiki/Norm-consumers.md` for the changed operations, retained
 limits, and explicit zero and nonfinite rules.
 """
-from core.ordinal import ordinal_valid, require_non_negative
+from core.ordinal import (
+    ordinal_valid,
+    require_index_in_count,
+    require_non_negative,
+)
 
 from math.matrix_determinant import _sum_products as _exact_products
 
@@ -547,8 +551,7 @@ def require_morph_index(target: Int, count: Int) raises:
     Raises:
         Error: If the index is negative or past the last target.
     """
-    if target < 0 or target >= count:
-        raise Error("No morph target has that index")
+    require_index_in_count(target, count, "No morph target has that index")
 
 
 def require_morph_cover(held: Int, expected: Int) raises:
@@ -1008,8 +1011,11 @@ struct BufferGeometry(Movable):
             Error: If the targets carry no colors, if there is no such
                 target, or no such vertex.
         """
-        if target < 0 or target >= len(self.morph_colors):
-            raise Error("No morph target has that color")
+        require_index_in_count(
+            target,
+            len(self.morph_colors),
+            "No morph target has that color",
+        )
         ref colors = self.morph_colors[target]
         var alpha = Float32(1)
         if colors.item_size == 4:
@@ -1099,8 +1105,11 @@ struct BufferGeometry(Movable):
             Error: If the targets carry no normals, if there is no such
                 target, or no such vertex.
         """
-        if target < 0 or target >= len(self.morph_normals):
-            raise Error("No morph target has that normal")
+        require_index_in_count(
+            target,
+            len(self.morph_normals),
+            "No morph target has that normal",
+        )
         return self.morph_normals[target].vector3(vertex)
 
     def _slot(self, name: String) -> Int:
@@ -1276,8 +1285,11 @@ struct BufferGeometry(Movable):
             Error: If either index is out of range, or an index entry points
                 past the end of the position attribute.
         """
-        if triangle < 0 or triangle >= self.triangle_count():
-            raise Error("Triangle index out of range")
+        require_index_in_count(
+            triangle,
+            self.triangle_count(),
+            "Triangle index out of range",
+        )
         if corner < 0 or corner > 2:
             raise Error("A triangle has three corners")
 
@@ -1841,8 +1853,11 @@ struct BufferGeometry(Movable):
                 no positions, or if an index entry points past the last
                 vertex.
         """
-        if slot < 0 or slot >= self.stream_length():
-            raise Error("The triangle stream has no slot of that number")
+        require_index_in_count(
+            slot,
+            self.stream_length(),
+            "The triangle stream has no slot of that number",
+        )
         if not self.is_indexed():
             return slot
         var vertex = self.index[slot]

@@ -48,7 +48,7 @@ This is not a three.js port. See Extensions.
     var style = HairStyleFile(hair_style_path(LAYERED))
     var strand = style.strand(dims.head, 0)
 """
-from core.ordinal import ordinal_valid
+from core.ordinal import ordinal_valid, require_index_in_count
 
 from core.binary import little_endian_u32
 from extensions.humanoid.assets import humanoid_asset_path
@@ -345,8 +345,9 @@ struct HairStyleFile(Movable):
         Raises:
             Error: If `index` names no strand.
         """
-        if index < 0 or index >= self.count:
-            raise Error("The hair style has no such strand")
+        require_index_in_count(
+            index, self.count, "The hair style has no such strand"
+        )
         var q = self.roots[index]
         var root = h.at(
             q.x * CRANIUM_X_RADIUS,

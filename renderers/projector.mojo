@@ -49,7 +49,7 @@ Extreme finite results can differ from direct three.js r180 arithmetic.
 See `docs/wiki/Norm-consumers.md` for the changed operations, retained
 limits, and explicit zero and nonfinite rules.
 """
-from core.ordinal import ordinal_valid
+from core.ordinal import ordinal_valid, require_index_in_count
 
 from std.math import isfinite
 
@@ -855,10 +855,11 @@ def _faces_camera(a: _Vertex, b: _Vertex, c: _Vertex) -> Bool:
 
 def _corner(vertices: List[_Vertex], at: Int) raises -> _Vertex:
     """Return a vertex a face or a line names."""
-    if at < 0 or at >= len(vertices):
-        raise Error(
-            "A projected face or line must name a vertex its geometry has"
-        )
+    require_index_in_count(
+        at,
+        len(vertices),
+        "A projected face or line must name a vertex its geometry has",
+    )
     return vertices[at].copy()
 
 

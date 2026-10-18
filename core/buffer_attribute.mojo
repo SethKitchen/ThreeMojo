@@ -67,6 +67,7 @@ limits, and explicit zero and nonfinite rules.
 """
 
 from core.interleaved_buffer import InterleavedBuffer
+from core.ordinal import require_index_in_count
 from math.matrix3 import Matrix3
 from math.matrix4 import Matrix4
 from math.utils import (
@@ -182,8 +183,7 @@ def require_attribute_index(index: Int, count: Int) raises:
     Raises:
         Error: If the index is negative or past the last item.
     """
-    if index < 0 or index >= count:
-        raise Error("Attribute vertex index out of range")
+    require_index_in_count(index, count, "Attribute vertex index out of range")
 
 
 def require_item_size(item_size: Int) raises:
@@ -544,8 +544,11 @@ struct BufferAttribute(Copyable, Movable):
                 interleaved item has been made to reach past its run.
         """
         require_attribute_index(index, self.count())
-        if offset < 0 or offset >= self.item_size:
-            raise Error("Attribute component offset out of range")
+        require_index_in_count(
+            offset,
+            self.item_size,
+            "Attribute component offset out of range",
+        )
         var lane = self._offset + offset
         var stride = self.stride()
         if lane >= stride:

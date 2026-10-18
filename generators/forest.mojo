@@ -26,6 +26,7 @@ ported; `ForestInstances.keeps` answers the cull's question on the CPU.
 
 from core.buffer_attribute import BufferAttribute
 from core.buffer_geometry import BufferGeometry, NORMAL, POSITION
+from core.ordinal import require_index_in_count
 from generators.terrain import TerrainGenerator
 from generators.utils import (
     Instances,
@@ -262,8 +263,11 @@ struct ForestInstances(Movable):
         Raises:
             Error: If there is no such tree.
         """
-        if index < 0 or index >= self.instances.count():
-            raise Error("A forest has no tree at that index")
+        require_index_in_count(
+            index,
+            self.instances.count(),
+            "A forest has no tree at that index",
+        )
         var c = index * 4
         ref v = self.instances.values
         var d = Vec3d(

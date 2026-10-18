@@ -2445,8 +2445,11 @@ def require_morph_mesh(index: Int, count: Int) raises:
     Raises:
         Error: If the index is negative or past the last mesh.
     """
-    if index < 0 or index >= count:
-        raise Error("glTF: a morph track names a mesh that is not there")
+    require_index_in_count(
+        index,
+        count,
+        "glTF: a morph track names a mesh that is not there",
+    )
 
 
 def _morph_node(track: KeyframeTrack, scene: Scene) raises -> NodeId:

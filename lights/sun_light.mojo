@@ -52,6 +52,7 @@ limits, and explicit zero and nonfinite rules.
 
 from cameras.camera import Camera
 from core.object3d import NodeId, Object3D
+from core.ordinal import require_index_in_count
 from core.scene import Scene
 from lights.csm import CsmFrustum
 from lights.light import (
@@ -447,8 +448,11 @@ struct SunLight(Movable):
             raise Error("A sun needs two distinct cascade lights")
         for index in range(SUN_CASCADES):  # pragma: no branch
             var at = self.lights[index]
-            if at < 0 or at >= len(scene.lights):
-                raise Error("A sun's cascades are not in this scene")
+            require_index_in_count(
+                at,
+                len(scene.lights),
+                "A sun's cascades are not in this scene",
+            )
             ref light = scene.lights[at]
             if (
                 light.kind != DIRECTIONAL

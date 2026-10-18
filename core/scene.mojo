@@ -107,24 +107,6 @@ from objects.sprite import Sprite
 comptime ZERO_ANGLE = Angle(0.0, RADIAN)
 
 
-def _refuse_range(index: Int, count: Int, message: String) raises:
-    """Refuse an index outside zero through `count`.
-
-    Args:
-        index: The index.
-        count: How many entries the list has.
-        message: The error text.
-
-    Returns:
-        Nothing. The call returns when the index names an entry.
-
-    Raises:
-        Error: If the index is negative or past the last entry.
-    """
-    if index < 0 or index >= count:
-        raise Error(message)
-
-
 def require_instanced_mesh(index: Int, count: Int) raises:
     """Refuse an instanced-mesh index the scene does not have.
 
@@ -138,7 +120,7 @@ def require_instanced_mesh(index: Int, count: Int) raises:
     Raises:
         Error: If no instanced mesh has that index.
     """
-    _refuse_range(index, count, "No instanced mesh has that index")
+    require_index_in_count(index, count, "No instanced mesh has that index")
 
 
 def require_skinned_mesh(index: Int, count: Int) raises:
@@ -154,7 +136,7 @@ def require_skinned_mesh(index: Int, count: Int) raises:
     Raises:
         Error: If no skinned mesh has that index.
     """
-    _refuse_range(index, count, "No skinned mesh has that index")
+    require_index_in_count(index, count, "No skinned mesh has that index")
 
 
 def require_mesh(index: Int, count: Int) raises:
@@ -170,7 +152,7 @@ def require_mesh(index: Int, count: Int) raises:
     Raises:
         Error: If no mesh has that index.
     """
-    _refuse_range(index, count, "No mesh has that index")
+    require_index_in_count(index, count, "No mesh has that index")
 
 
 def require_lod_index(index: Int, count: Int) raises:
@@ -186,7 +168,7 @@ def require_lod_index(index: Int, count: Int) raises:
     Raises:
         Error: If no LOD has that index.
     """
-    _refuse_range(index, count, "No LOD has that index")
+    require_index_in_count(index, count, "No LOD has that index")
 
 
 struct _Links(Movable):
@@ -224,7 +206,7 @@ def require_scene_index(index: Int, count: Int) raises:
     Raises:
         Error: If the index is negative or past the last entry.
     """
-    _refuse_range(index, count, "Scene node index out of range")
+    require_index_in_count(index, count, "Scene node index out of range")
 
 
 def _require_scene_node(value: Int, count: Int, name: String) raises:

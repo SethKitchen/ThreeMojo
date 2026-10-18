@@ -27,6 +27,7 @@ coefficients it reads from the light buffer. Both rasterizers call them, so
 the two sum the same products in the same order.
 """
 
+from core.ordinal import require_index_in_count
 from math.vector3 import Vector3
 from std.math import isfinite
 
@@ -302,5 +303,8 @@ def sh_from_array(
 
 def _check_index(index: Int) raises:
     """Refuse an index that names none of the nine coefficients."""
-    if index < 0 or index >= SH_COUNT:
-        raise Error("Spherical harmonics hold nine coefficients, zero to eight")
+    require_index_in_count(
+        index,
+        SH_COUNT,
+        "Spherical harmonics hold nine coefficients, zero to eight",
+    )

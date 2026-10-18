@@ -42,6 +42,7 @@ track of the order, and three.js's silent answer to all of them is a
 shape with no area.
 """
 
+from core.ordinal import require_index_in_count
 from math.curve import (
     ELLIPSE,
     LINE,
@@ -549,6 +550,7 @@ struct Shape(Copyable, Movable):
             Error: If there is no such hole, or `divisions` is less than
                 one.
         """
-        if index < 0 or index >= len(self.holes):
-            raise Error("A shape has no hole at that index")
+        require_index_in_count(
+            index, len(self.holes), "A shape has no hole at that index"
+        )
         return self.holes[index].sample(divisions)

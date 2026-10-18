@@ -24,6 +24,7 @@ instance, or once per so many instances, and not once per vertex. See
 `BufferGeometry(instanced=True)`.
 """
 
+from core.ordinal import require_index_in_count
 from std.memory import ArcPointer
 
 
@@ -157,8 +158,9 @@ struct InterleavedBuffer(Copyable, Movable):
         Raises:
             Error: If the index is outside the array.
         """
-        if at < 0 or at >= self.length():
-            raise Error("Interleaved buffer index out of range")
+        require_index_in_count(
+            at, self.length(), "Interleaved buffer index out of range"
+        )
 
     def value(self, at: Int) raises -> Float32:
         """Return one number of the array.

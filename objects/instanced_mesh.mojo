@@ -84,7 +84,7 @@ from core.order import stable_rising_order
 from core.geometry_store import GeometryId
 from core.morph import MorphInfluences
 from core.object3d import NodeId
-from core.ordinal import require_non_negative
+from core.ordinal import require_index_in_count, require_non_negative
 from materials.material import MaterialId
 from math.matrix4 import Matrix4, require_affine
 from render.framebuffer import Color
@@ -129,8 +129,7 @@ def require_instance_index(index: Int, count: Int) raises:
     Raises:
         Error: If the index is negative or past the last instance.
     """
-    if index < 0 or index >= count:
-        raise Error("No instance has that index")
+    require_index_in_count(index, count, "No instance has that index")
 
 
 struct InstancedMesh(Copyable, Movable):

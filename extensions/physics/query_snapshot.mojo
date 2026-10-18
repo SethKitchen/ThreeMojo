@@ -23,6 +23,7 @@ owned linear path. Tight mathematical half-ray bounds cannot safely cull
 every answer from the existing Float32 narrow kernels.
 """
 
+from core.ordinal import require_index_in_count
 from extensions.physics.body import BodyId
 from extensions.physics.collide import WorldShape
 from extensions.physics.shape import (
@@ -163,8 +164,11 @@ def _polyhedron(poly: Polyhedron) raises:
             raise Error("A primitive solid has an invalid face")
     # Every validated face has three corners, and there are four faces.
     for corner in poly.face_corners:  # pragma: no branch
-        if corner < 0 or corner >= len(poly.vertices):
-            raise Error("A primitive solid corner is out of range")
+        require_index_in_count(
+            corner,
+            len(poly.vertices),
+            "A primitive solid corner is out of range",
+        )
     if len(poly.edge_a) != len(poly.edge_b):
         raise Error("A primitive solid has inconsistent edge lists")
     for e in range(len(poly.edge_a)):
@@ -350,8 +354,11 @@ struct PhysicsQuerySnapshot(Movable):
             raise Error("Registered mesh triangle owners are inconsistent")
         for i in range(len(world._triangles)):
             var owner = world._triangle_body[i]
-            if owner < 0 or owner >= len(world.bodies):
-                raise Error("A registered mesh owner is out of range")
+            require_index_in_count(
+                owner,
+                len(world.bodies),
+                "A registered mesh owner is out of range",
+            )
             if world.bodies[owner].shape.kind != MESH:
                 raise Error("A registered mesh owner is no longer a mesh")
             var triangle = world._triangles[i]

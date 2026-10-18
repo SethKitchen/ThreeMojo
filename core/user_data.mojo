@@ -30,6 +30,7 @@ lists such keys first, in numeric order. This keeps every key where it was
 first set.
 """
 
+from core.ordinal import require_index_in_count
 from loaders.json import (
     ARRAY,
     BOOLEAN,
@@ -152,8 +153,11 @@ struct UserData(Copyable, Movable):
         Raises:
             Error: If no key has that position.
         """
-        if index < 0 or index >= len(self._keys):
-            raise Error("User data: no key at position " + String(index))
+        require_index_in_count(
+            index,
+            len(self._keys),
+            "User data: no key at position " + String(index),
+        )
         return self._keys[index]
 
     def _find(self, key: String) -> Int:

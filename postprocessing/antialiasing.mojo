@@ -38,6 +38,7 @@ area with the formula SMAA's `AreaTex.py` fills the texture with. See
 from cameras.camera import Camera
 from core.extent import positive_extent
 from core.layers import Layers
+from core.ordinal import require_index_in_count
 from core.scene import Scene
 from math.matrix4 import Matrix4, translation
 from math.utils import edge_index, mix_delta
@@ -720,8 +721,9 @@ def require_sample_level(level: Int) raises:
     Raises:
         Error: If the level is outside zero through five.
     """
-    if level < 0 or level >= JITTER_LEVELS:
-        raise Error("A sample level runs from zero to five")
+    require_index_in_count(
+        level, JITTER_LEVELS, "A sample level runs from zero to five"
+    )
 
 
 # `SSAARenderPass`'s `_JitterVectors`, every level in order, each pair an

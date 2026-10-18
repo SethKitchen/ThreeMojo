@@ -31,6 +31,7 @@ the wrong sign, and repeats until nothing changes.
 The simulation is deterministic: it has no random input and no thread.
 """
 
+from core.ordinal import require_index_in_count
 from extensions.energy.conduction import (
     FaceCondition,
     LayeredWall,
@@ -187,8 +188,9 @@ struct SimulationResult(Movable):
 
     def _index(self, step: Int, zone: ZoneId) raises -> Int:
         self._check_zone(zone)
-        if step < 0 or step >= self.step_count():
-            raise Error("A step is out of range")
+        require_index_in_count(
+            step, self.step_count(), "A step is out of range"
+        )
         return step * self.zone_count + zone.value
 
     def _check_zone(self, zone: ZoneId) raises:

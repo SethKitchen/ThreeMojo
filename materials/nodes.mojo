@@ -1258,8 +1258,11 @@ struct NodeGraph(Copyable, Movable):
         Raises:
             Error: If the ref is negative or past the last node.
         """
-        if node.value < 0 or node.value >= self.count():
-            raise Error("A node graph has no node with that ref")
+        require_index_in_count(
+            node.value,
+            self.count(),
+            "A node graph has no node with that ref",
+        )
 
     def _add(
         mut self,
@@ -2802,13 +2805,14 @@ struct NodeGraph(Copyable, Movable):
         """
         self._square(m, "take a column of")
         var columns = self._columns(m)
-        if index < 0 or index >= len(columns):
-            raise Error(
-                "A "
-                + self._types[m.value].name()
-                + " has no column "
-                + String(index)
-            )
+        require_index_in_count(
+            index,
+            len(columns),
+            "A "
+            + self._types[m.value].name()
+            + " has no column "
+            + String(index),
+        )
         return columns[index]
 
     def transpose(mut self, m: NodeRef) raises -> NodeRef:
@@ -4358,13 +4362,14 @@ struct NodeGraph(Copyable, Movable):
         var scale = 1
         for index in range(len(letters)):  # pragma: no branch
             var lane = _lane_of(letters[index])
-            if lane < 0 or lane >= width:
-                raise Error(
-                    "A swizzle names a component a "
-                    + self._types[a.value].name()
-                    + " does not have: "
-                    + components
-                )
+            require_index_in_count(
+                lane,
+                width,
+                "A swizzle names a component a "
+                + self._types[a.value].name()
+                + " does not have: "
+                + components,
+            )
             packed += lane * scale
             scale *= 4
         return self._add(

@@ -38,6 +38,7 @@ filter are not ported. A shader's other uniforms are set on
 `programs[variable]` after `init`, which compiles the shaders.
 """
 
+from core.ordinal import require_index_in_count
 from materials.glsl import compile_shader_material
 from materials.nodes import (
     AT_RIGHT,
@@ -484,8 +485,11 @@ struct GPUComputationRenderer(Movable):
 
     def _check(self, variable: Int) raises:
         """Refuse a variable that is not there."""
-        if variable < 0 or variable >= len(self.variables):
-            raise Error("A computation has no variable " + String(variable))
+        require_index_in_count(
+            variable,
+            len(self.variables),
+            "A computation has no variable " + String(variable),
+        )
 
     def init(mut self) raises:
         """Compile each shader with its dependencies' samplers and the

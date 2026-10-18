@@ -41,6 +41,7 @@ See `docs/wiki/Norm-consumers.md` for the changed operations, retained
 limits, and explicit zero and nonfinite rules.
 """
 
+from core.ordinal import require_index_in_count
 from math.triangle_normal import normal_or_zero
 
 from core.buffer_attribute import BufferAttribute
@@ -331,8 +332,9 @@ struct MeshSurfaceSampler(Movable):
             Error: If there is no such triangle, or an attribute is too
                 short for it.
         """
-        if face < 0 or face >= self.face_count():
-            raise Error("No triangle has that index")
+        require_index_in_count(
+            face, self.face_count(), "No triangle has that index"
+        )
         var u = self.random.next()
         var v = self.random.next()
         if u + v > 1:

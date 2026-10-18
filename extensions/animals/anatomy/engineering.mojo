@@ -24,6 +24,7 @@ mass correction. `matched` describes reference identity, not validated
 anatomy. Source excerpts and derived DESIGN templates are distinct.
 """
 
+from core.ordinal import require_index_in_count
 from math.finite import positive_finite, require_positive_finite
 from extensions.anatomy.evidence import DESIGN, Evidence
 from extensions.anatomy.inertia import InertiaTally
@@ -194,8 +195,11 @@ struct Calibration(ImplicitlyCopyable, Writable):
         if animal.species != self.species:
             raise Error("The calibration is for another species")
         var variant = animal.traits.variant
-        if variant < 0 or variant >= len(species_variants(animal.species)):
-            raise Error("The animal's resolved variant must be named")
+        require_index_in_count(
+            variant,
+            len(species_variants(animal.species)),
+            "The animal's resolved variant must be named",
+        )
         if self.variant.value >= 0 and variant != self.variant.value:
             raise Error("The calibration is for another morph")
         if animal.traits.get("anatomy_calibration_scale", 0.0) != 0.0:

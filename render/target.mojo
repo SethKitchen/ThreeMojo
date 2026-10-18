@@ -85,7 +85,7 @@ kernel keeps its running color the same way.
 """
 
 from core.extent import positive_extent
-from core.ordinal import ordinal_valid
+from core.ordinal import ordinal_valid, require_index_in_count
 
 from math.curve_checks import require_at_least_one
 from math.utils import clamp
@@ -1834,8 +1834,11 @@ struct RenderTarget(Movable, SampleSource):
         Raises:
             Error: If the index is outside the attachments.
         """
-        if index < 0 or index >= self.count():
-            raise Error("A render target attachment index is out of range")
+        require_index_in_count(
+            index,
+            self.count(),
+            "A render target attachment index is out of range",
+        )
         var total = self.width * self.height
         var pixels = List[Float32](capacity=total * FloatImage.CHANNELS)
         var packs = self.type == UNSIGNED_BYTE_TARGET

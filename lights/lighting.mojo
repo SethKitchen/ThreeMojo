@@ -38,6 +38,7 @@ See `docs/wiki/Norm-consumers.md` for the changed operations, retained
 limits, and explicit zero and nonfinite rules.
 """
 
+from core.ordinal import require_index_in_count
 from std.math import isfinite
 from math.norm import _ordinary_squared
 from core.layers import Layers
@@ -1442,8 +1443,11 @@ struct Lighting(Movable):
         self.grid = probe_grid.scaled()
         for slot in range(len(self.spot_profiles)):
             var owner = self.spot_profiles[slot].light
-            if owner < 0 or owner >= len(scene.lights):
-                raise Error("A spot profile names a light that is not there")
+            require_index_in_count(
+                owner,
+                len(scene.lights),
+                "A spot profile names a light that is not there",
+            )
             ref shaped = scene.lights[owner]
             if (
                 shaped.kind != SPOT
@@ -1470,8 +1474,11 @@ struct Lighting(Movable):
                 )
         for slot in range(len(self.spot_maps)):
             var owner = self.spot_maps[slot].light
-            if owner < 0 or owner >= len(scene.lights):
-                raise Error("A spot light map names a light that is not there")
+            require_index_in_count(
+                owner,
+                len(scene.lights),
+                "A spot light map names a light that is not there",
+            )
             if scene.lights[owner].kind != SPOT:
                 raise Error("A spot light map names a light that is not a spot")
         for index in range(len(scene.lights)):

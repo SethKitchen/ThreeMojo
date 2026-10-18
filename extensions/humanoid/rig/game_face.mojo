@@ -14,6 +14,7 @@ from core.assets import Assets
 from core.buffer_attribute import BufferAttribute
 from core.buffer_geometry import POSITION, BufferGeometry
 from core.object3d import NodeId, Object3D
+from core.ordinal import require_index_in_count
 from core.scene import Scene
 from core.user_data import UserData, user_data_of
 from extensions.humanoid.skeleton.head.aligned_speech import (
@@ -79,8 +80,9 @@ def facial_correspondence(geometry: BufferGeometry) raises -> String:
     var count = geometry.vertex_count()
     # Validated facial topology has at least one indexed triangle.
     for index in geometry.index:  # pragma: no branch
-        if index < 0 or index >= count:
-            raise Error("Facial topology index is out of range")
+        require_index_in_count(
+            index, count, "Facial topology index is out of range"
+        )
         _mix(value, UInt64(index))
     # Validation requires the complete nonempty set of facial targets.
     for i in range(geometry.morph_count()):  # pragma: no branch
@@ -191,8 +193,9 @@ struct GameFace(Copyable, Movable):
         # The binding-size guard requires exactly three preserved meshes.
         for i in range(3):  # pragma: no branch
             var k = self.meshes[i]
-            if k < 0 or k >= len(scene.meshes):
-                raise Error("Game facial mesh is missing")
+            require_index_in_count(
+                k, len(scene.meshes), "Game facial mesh is missing"
+            )
             var mesh = scene.meshes[k]
             if scene.get(
                 mesh.node

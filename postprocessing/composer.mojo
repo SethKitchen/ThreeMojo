@@ -47,6 +47,7 @@ composer can run with its frame on the GPU; see
 `docs/wiki/GPU-backend.md`.
 """
 
+from core.ordinal import require_index_in_count
 from postprocessing.sample_math import gaussian_pdf
 from cameras.camera import Camera
 from core.assets import Assets
@@ -2858,8 +2859,9 @@ struct EffectComposer(Movable):
         Raises:
             Error: If the index is outside the passes.
         """
-        if index < 0 or index >= len(self.passes):
-            raise Error("There is no pass at that index")
+        require_index_in_count(
+            index, len(self.passes), "There is no pass at that index"
+        )
 
     def remove_pass(mut self, index: Int) raises:
         """Take a pass out: three.js's `removePass`.
@@ -3050,8 +3052,11 @@ struct EffectComposer(Movable):
                 `Renderer.render_into` raises, or if a texture or a table
                 a pass names is not in the assets or fails its `validate`.
         """
-        if index < 0 or index >= len(self.passes):
-            raise Error("A composer step must name one of its passes")
+        require_index_in_count(
+            index,
+            len(self.passes),
+            "A composer step must name one of its passes",
+        )
         # `passes` is open, so a pass appended since the last `render` has
         # no memory yet. `render` fits them too; a step run alone must.
         self.fit_memories()

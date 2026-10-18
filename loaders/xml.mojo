@@ -34,6 +34,7 @@ and prolog order are checked. DTD contents and namespace constraints are
 not validated. Encoding declarations do not change the input encoding.
 """
 
+from core.ordinal import require_index_in_count
 from core.search import first_match
 from loaders.bytes import (
     ascii_digit,
@@ -101,8 +102,11 @@ struct XmlDocument(Movable):
 
     def _check(self, element: Int) raises:
         """Refuse an index that names no element."""
-        if element < 0 or element >= len(self.elements):
-            raise Error("XML: no element at index " + String(element))
+        require_index_in_count(
+            element,
+            len(self.elements),
+            "XML: no element at index " + String(element),
+        )
 
     def name(self, element: Int) raises -> String:
         """Return an element's name, as written.

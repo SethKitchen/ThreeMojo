@@ -37,7 +37,7 @@ other than the one its `*count` declares.
 """
 
 from core.binary import copy_bytes, little_endian_uint
-from core.ordinal import ordinal_valid
+from core.ordinal import ordinal_valid, require_index_in_count
 
 from loaders.js_text import is_js_word
 from loaders.text_number import file_line
@@ -254,8 +254,11 @@ struct FbxDocument(Movable):
 
     def _check(self, node: Int) raises:
         """Refuse an index that names no node."""
-        if node < 0 or node >= len(self.nodes):
-            raise Error("FBX: no node at index " + String(node))
+        require_index_in_count(
+            node,
+            len(self.nodes),
+            "FBX: no node at index " + String(node),
+        )
 
     def name(self, node: Int) raises -> String:
         """Return a node's name.
@@ -357,13 +360,14 @@ struct FbxDocument(Movable):
         """
         self._check(node)
         ref found = self.nodes[node].properties
-        if index < 0 or index >= len(found):
-            raise Error(
-                "FBX: "
-                + self.nodes[node].name
-                + " has no property "
-                + String(index)
-            )
+        require_index_in_count(
+            index,
+            len(found),
+            "FBX: "
+            + self.nodes[node].name
+            + " has no property "
+            + String(index),
+        )
         if not found[index].kind.is_valid():
             raise Error("FBX: a property of a kind that is not known")
         return found[index].copy()

@@ -40,6 +40,7 @@ See `docs/wiki/Norm-consumers.md` for the changed operations, retained
 limits, and explicit zero and nonfinite rules.
 """
 
+from core.ordinal import require_index_in_count
 from math.box_extent import box_exterior
 from math.finite import require_finite_group, require_positive_finite
 from math.smoothstep import smoothstep
@@ -495,8 +496,9 @@ struct LightProbeGrid(Copyable, Movable):
         Raises:
             Error: If the index is outside the grid.
         """
-        if index < 0 or index >= self.count():
-            raise Error("A light probe grid has no probe there")
+        require_index_in_count(
+            index, self.count(), "A light probe grid has no probe there"
+        )
         var x = index % self.resolution_x
         var y = (index // self.resolution_x) % self.resolution_y
         var z = index // (self.resolution_x * self.resolution_y)

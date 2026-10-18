@@ -51,6 +51,7 @@ one is refused, with three.js's reasons.
 """
 
 from core.binary import copy_bytes
+from core.ordinal import require_index_in_count
 from loaders.gltf_layout import AccessorLayout, check_buffer_range
 
 from core.gaussian_splat_utils import (
@@ -338,8 +339,11 @@ def _read_accessor(
         document.integer(document.get(accessor, "bufferView")),
     )
     var buffer_index = document.integer(document.get(view, "buffer"))
-    if buffer_index < 0 or buffer_index >= len(buffers):
-        raise Error("glTF: a splat buffer view names a missing buffer")
+    require_index_in_count(
+        buffer_index,
+        len(buffers),
+        "glTF: a splat buffer view names a missing buffer",
+    )
     ref buffer = buffers[buffer_index]
     var view_offset = _offset(document, view)
     var length = document.integer(document.get(view, "byteLength"))
@@ -384,8 +388,11 @@ def _sparse_span(
         document.integer(document.get(part, "bufferView")),
     )
     var buffer = document.integer(document.get(view, "buffer"))
-    if buffer < 0 or buffer >= len(buffers):
-        raise Error("glTF: a sparse splat accessor names a missing buffer")
+    require_index_in_count(
+        buffer,
+        len(buffers),
+        "glTF: a sparse splat accessor names a missing buffer",
+    )
     var base = _offset(document, view)
     var length = document.integer(document.get(view, "byteLength"))
     check_buffer_range(len(buffers[buffer]), base, length)
@@ -988,8 +995,9 @@ def load_gltf_gaussian_splat_scene(
     while len(pending) > 0:
         var entry = pending.pop()
         var index = entry[0]
-        if index < 0 or index >= count:
-            raise Error("glTF: a splat node index is not there")
+        require_index_in_count(
+            index, count, "glTF: a splat node index is not there"
+        )
         if reached[index]:
             raise Error("glTF: a splat node is reached twice")
         reached[index] = True
@@ -1051,8 +1059,11 @@ def load_gltf_gaussian_splat_scene(
         if not document.has(node, "mesh"):
             continue
         var mesh = document.integer(document.get(node, "mesh"))
-        if mesh < 0 or mesh >= len(mesh_map):
-            raise Error("glTF: a splat node names a missing mesh")
+        require_index_in_count(
+            mesh,
+            len(mesh_map),
+            "glTF: a splat node names a missing mesh",
+        )
         if mesh_map[mesh] < 0:
             continue
         ref primitives = meshes[mesh_map[mesh]].primitives

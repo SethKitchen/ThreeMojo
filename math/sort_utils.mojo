@@ -16,6 +16,7 @@ key. Here the items are indices and the keys a list, so `get` is
 `keys[item]`. `radix_sort_keys` sorts the keys themselves.
 """
 
+from core.ordinal import require_index_in_count
 from std.math import min
 
 
@@ -209,8 +210,9 @@ def radix_sort(
         Error: If an item names no key.
     """
     for at in range(len(items)):
-        if items[at] < 0 or items[at] >= len(keys):
-            raise Error("A radix sort's item must name a key")
+        require_index_in_count(
+            items[at], len(keys), "A radix sort's item must name a key"
+        )
     var sorter = _Sorter(items^, keys.copy(), reversed)
     sorter.radix(0, 0, len(sorter.data[0]))
     items = sorter.data[0].copy()

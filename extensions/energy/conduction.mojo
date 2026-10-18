@@ -30,6 +30,7 @@ The wall is per square meter of area. The first node is on the outside
 face, the side of the first layer.
 """
 
+from core.ordinal import require_index_in_count
 from math.finite import require_finite, require_positive_finite
 from std.math import ceil, isfinite, sqrt
 from extensions.building.construction import Construction
@@ -162,8 +163,9 @@ struct LayeredWall(Copyable, Movable):
         return len(self.capacity)
 
     def _check_node(self, node: Int) raises:
-        if node < 0 or node >= len(self.capacity):
-            raise Error("A wall node is out of range")
+        require_index_in_count(
+            node, len(self.capacity), "A wall node is out of range"
+        )
 
     def node_depth(self, node: Int) raises -> Length64:
         """Return the depth of a node from the outside face.

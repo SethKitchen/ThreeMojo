@@ -49,7 +49,7 @@ Extreme finite results can differ from direct three.js r180 arithmetic.
 See `docs/wiki/Norm-consumers.md` for the changed operations, retained
 limits, and explicit zero and nonfinite rules.
 """
-from core.ordinal import ordinal_valid
+from core.ordinal import ordinal_valid, require_index_in_count
 
 from math.norm import (
     length2,
@@ -401,8 +401,11 @@ struct Sculptor(Movable):
                 material, its geometry is not in `assets`, or
                 `SculptorMesh.init_from_geometry` refuses the geometry.
         """
-        if mesh < 0 or mesh >= len(scene.meshes):
-            raise Error("Sculptor: mesh must be a Mesh with a BufferGeometry.")
+        require_index_in_count(
+            mesh,
+            len(scene.meshes),
+            "Sculptor: mesh must be a Mesh with a BufferGeometry.",
+        )
         if scene.meshes[mesh].is_multi_material():
             raise Error("Sculptor: Multi-material meshes are not supported.")
         self.mesh = mesh

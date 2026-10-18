@@ -11,6 +11,7 @@ center still approximates its curved boundary. The cells do not provide
 an error bound for that approximation.
 """
 
+from core.ordinal import require_index_in_count
 from math.vector3 import Vector3
 from math.finite import require_positive_finite
 from std.math import ceil, isfinite, min
@@ -88,12 +89,15 @@ struct SampleGrid(ImplicitlyCopyable):
         Raises:
             Error: If a cell index is outside the grid.
         """
-        if ix < 0 or ix >= self.nx:
-            raise Error("A sample x index must be inside the grid")
-        if iy < 0 or iy >= self.ny:
-            raise Error("A sample y index must be inside the grid")
-        if iz < 0 or iz >= self.nz:
-            raise Error("A sample z index must be inside the grid")
+        require_index_in_count(
+            ix, self.nx, "A sample x index must be inside the grid"
+        )
+        require_index_in_count(
+            iy, self.ny, "A sample y index must be inside the grid"
+        )
+        require_index_in_count(
+            iz, self.nz, "A sample z index must be inside the grid"
+        )
         return self._cell(ix, iy, iz)
 
     def _cell(self, ix: Int, iy: Int, iz: Int) -> Tuple[Vector3, Vector3]:

@@ -45,6 +45,7 @@ texture does not have, so a curve past the last clamps to the last row.
 """
 
 from core.buffer_attribute import BufferAttribute
+from core.ordinal import require_index_in_count
 from math.curve_checks import require_at_least_one
 from core.buffer_geometry import BufferGeometry, NORMAL, POSITION
 from math.matrix4 import Matrix4
@@ -164,8 +165,9 @@ struct Flow(Movable):
             Error: If there is no room for a curve of that index, or the
                 curve refuses a point.
         """
-        if index < 0 or index >= self.curve_count:
-            raise Error("A flow has no curve of that index")
+        require_index_in_count(
+            index, self.curve_count, "A flow has no curve of that index"
+        )
         var length = length_of(curve)
         self.spine_length = length
         self.curve_lengths[index] = length
@@ -212,10 +214,14 @@ struct Flow(Movable):
         Raises:
             Error: If the texel is not in the texture.
         """
-        if x < 0 or x >= TEXTURE_WIDTH:
-            raise Error("A spine texel must lie along the row")
-        if row < 0 or row >= TEXTURE_HEIGHT * self.curve_count:
-            raise Error("A spine texel must lie in a row of the texture")
+        require_index_in_count(
+            x, TEXTURE_WIDTH, "A spine texel must lie along the row"
+        )
+        require_index_in_count(
+            row,
+            TEXTURE_HEIGHT * self.curve_count,
+            "A spine texel must lie in a row of the texture",
+        )
         var at = self._at(x, row)
         return SIMD[DType.float32, 4](
             half_to_float(self.spine[at]),
@@ -370,8 +376,11 @@ struct InstancedFlow(Movable):
 
     def _check(self, index: Int) raises:
         """Refuse an instance that is not there."""
-        if index < 0 or index >= len(self.offsets):
-            raise Error("An instanced flow has no instance of that index")
+        require_index_in_count(
+            index,
+            len(self.offsets),
+            "An instanced flow has no instance of that index",
+        )
 
     def instance_matrix(self, index: Int) raises -> Matrix4:
         """Return the matrix three.js writes for an instance, its
@@ -422,8 +431,11 @@ struct InstancedFlow(Movable):
             Error: If there is no such instance or no such curve.
         """
         self._check(index)
-        if curve < 0 or curve >= self.flow.curve_count:
-            raise Error("An instanced flow has no curve of that index")
+        require_index_in_count(
+            curve,
+            self.flow.curve_count,
+            "An instanced flow has no curve of that index",
+        )
         self.which_curve[index] = curve
 
     def deform_instance(
