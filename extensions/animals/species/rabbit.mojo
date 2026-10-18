@@ -63,6 +63,7 @@ from extensions.animals.warp import (
     legs_warp,
     scale_about_warp,
 )
+from math.norm import squared_length2
 from std.math import cos, pi, sin
 from extensions.sdf.distance import ellipsoid_estimate, round_cone_estimate
 
@@ -1077,7 +1078,7 @@ def rabbit_paint(
         var face = normalize(cross(f[3], f[1]))
         var along = dot(q, f[1]) / (0.5 * f[4])
         var across = dot(q, x_axis) / (0.0158 * t.get("earWidth"))
-        var rim = 1.0 - (along * along + across * across) ** 0.5
+        var rim = 1.0 - squared_length2[DType.float64](along, across) ** 0.5
         var inner = (
             (0.0 if tag == "earbase" else 1.0)
             * smoothstep(0.1, 0.5, dot(n, face))

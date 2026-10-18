@@ -44,7 +44,7 @@ See `docs/wiki/Norm-consumers.md` for the changed operations, retained
 limits, and explicit zero and nonfinite rules.
 """
 
-from math.norm import normalized3, _ordinary_squared
+from math.norm import normalized3, _ordinary_squared, squared_length3
 from core.assets import Assets
 from core.buffer_attribute import BufferAttribute
 from core.buffer_geometry import NORMAL, POSITION, BufferGeometry
@@ -484,7 +484,7 @@ def _scaled_normal(
     var sz = z / scale
     var unit = normalized3(sx, sy, sz)
     if (
-        not _ordinary_squared(sx * sx + sy * sy + sz * sz)
+        not _ordinary_squared(squared_length3[DType.float64](sx, sy, sz))
         and isfinite(x)
         and isfinite(y)
         and isfinite(z)

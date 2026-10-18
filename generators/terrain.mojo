@@ -29,7 +29,7 @@ from core.buffer_attribute import BufferAttribute
 from core.buffer_geometry import BufferGeometry, NORMAL, POSITION
 from generators.utils import check_finite, generator_random, meters
 from math.noise import ImprovedNoise
-from math.norm import squared_length2
+from math.norm import squared_length2, squared_length3
 from std.math import floor, inf, pow, sqrt
 from units.si import (
     InverseLength,
@@ -460,7 +460,7 @@ struct TerrainGenerator(Movable):
         var e = meters(self.parameters.size) / Float64(self.parameters.segments)
         var hx = self._height_at(x + e, z) - self._height_at(x - e, z)
         var hz = self._height_at(x, z + e) - self._height_at(x, z - e)
-        return 2 * e / sqrt(hx * hx + 4 * e * e + hz * hz)
+        return 2 * e / sqrt(squared_length3[DType.float64](hx, 2 * e, hz))
 
 
 def _append_normal(

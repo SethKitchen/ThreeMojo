@@ -67,6 +67,7 @@ from extensions.animals.warp import (
     legs_warp,
     scale_about_warp,
 )
+from math.norm import squared_length2
 from std.math import atan2, cos, exp, pi, sin, sqrt
 
 comptime TAIL_SEGS = 10
@@ -1595,7 +1596,9 @@ def cat_paint(
         var ny_bot = -0.0232
         var nw = 0.0054
         var nh = ny_top - ny_bot
-        var d_side = (ax * nh - (h.y - ny_bot) * nw) / sqrt(nh * nh + nw * nw)
+        var d_side = (ax * nh - (h.y - ny_bot) * nw) / sqrt(
+            squared_length2[DType.float64](nh, nw)
+        )
         var d_tri = max(d_side, h.y - ny_top + 0.0015 * (ax / nw) ** 2)
         var on_nose = (
             (tag == "nose" or tag == "nostril" or tag == "philtrum")

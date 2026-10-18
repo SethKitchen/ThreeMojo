@@ -57,6 +57,7 @@ from extensions.sdf.vector import (
     smoothstep,
 )
 from extensions.animals.warp import legs_warp, length_warp, scale_about_warp
+from math.norm import squared_length2
 from std.math import atan2, cos, floor, pi, sin, sqrt
 
 # The head's origin: on the midline, level with the eye centers.
@@ -250,7 +251,9 @@ def _solve2(a: V3, c: V3, l1: Float64, l2: Float64, pole: V3) -> V3:
     var e1 = normalize(d)
     var e2 = normalize(pole - e1 * dot(pole, e1))
     var cos_a = clamp(
-        (l1 * l1 + dd * dd - l2 * l2) / (2.0 * l1 * dd), -1.0, 1.0
+        (squared_length2[DType.float64](l1, dd) - l2 * l2) / (2.0 * l1 * dd),
+        -1.0,
+        1.0,
     )
     return a + e1 * (cos_a * l1) + e2 * (sqrt(1.0 - cos_a * cos_a) * l1)
 

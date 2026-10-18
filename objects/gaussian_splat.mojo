@@ -46,6 +46,7 @@ from math.ray import (
 from math.bounds import Box3, Sphere
 from math.box_extent import _max_radius_encloses_box
 from math.matrix4 import Matrix4
+from math.norm import squared_length3
 from math.vector3 import Vector3
 from std.math import floor, inf, isfinite, max, min, sqrt
 from std.memory import bitcast
@@ -681,7 +682,7 @@ def _length(x: Float32, y: Float32, z: Float32) -> Float64:
     var fx = Float64(x)
     var fy = Float64(y)
     var fz = Float64(z)
-    return sqrt(fx * fx + fy * fy + fz * fz)
+    return sqrt(squared_length3[DType.float64](fx, fy, fz))
 
 
 def _weights(degree: Int, d: Vector3) -> List[Float32]:

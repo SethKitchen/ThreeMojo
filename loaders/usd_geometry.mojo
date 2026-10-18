@@ -346,7 +346,7 @@ def _project(
         var exact = normalized3(scaled[0], scaled[1], scaled[2])
         var direct = normalized3(nx, ny, nz)
         if (
-            not _ordinary_squared(nx * nx + ny * ny + nz * nz)
+            not _ordinary_squared(squared_length3[DType.float64](nx, ny, nz))
             or abs(direct[0] - exact[0]) > 1e-14
             or abs(direct[1] - exact[1]) > 1e-14
             or abs(direct[2] - exact[2]) > 1e-14

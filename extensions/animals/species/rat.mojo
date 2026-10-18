@@ -70,6 +70,7 @@ from extensions.animals.warp import (
     legs_warp,
     scale_about_warp,
 )
+from math.norm import squared_length2
 from std.math import atan2, cos, pi, pow, sin, sqrt
 
 comptime TAIL_SEGS = 12
@@ -1265,7 +1266,7 @@ def rat_paint(
         var x_axis = normalize(cross(f[1], face))
         var along = dot(q, f[1]) / (0.52 * f[4])
         var across = dot(q, x_axis) / (0.0086 * t.get("earWidth"))
-        var rim = 1.0 - (along * along + across * across) ** 0.5
+        var rim = 1.0 - squared_length2[DType.float64](along, across) ** 0.5
         var inner = smoothstep(0.0, 0.4, dot(n, face)) * smoothstep(
             0.02, 0.12, rim
         )
