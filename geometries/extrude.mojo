@@ -114,7 +114,7 @@ from geometries.shape import Contours, extract_points, is_clockwise
 from math.curve3 import Curve3, CurvePath3, FrenetFrames
 from math.norm import squared_length2
 from math.path import Shape
-from math.vector2 import Vector2, append_vector2
+from math.vector2 import Vector2, append_vector2, vector2_from_float64
 from math.vector3 import Vector3
 from std.math import cos, pi, sin, sqrt
 from units.si import Length, METER
@@ -146,9 +146,9 @@ def world_top_uv(
         The three coordinates, in the vertices' order.
     """
     return [
-        Vector2(Float32(vertices[a * 3]), Float32(vertices[a * 3 + 1])),
-        Vector2(Float32(vertices[b * 3]), Float32(vertices[b * 3 + 1])),
-        Vector2(Float32(vertices[c * 3]), Float32(vertices[c * 3 + 1])),
+        vector2_from_float64(vertices[a * 3], vertices[a * 3 + 1]),
+        vector2_from_float64(vertices[b * 3], vertices[b * 3 + 1]),
+        vector2_from_float64(vertices[c * 3], vertices[c * 3 + 1]),
     ]
 
 
@@ -178,9 +178,8 @@ def world_side_wall_uv(
     var out = List[Vector2](capacity=4)
     for corner in [a, b, c, d]:  # pragma: no branch
         out.append(
-            Vector2(
-                Float32(vertices[corner * 3 + lane]),
-                Float32(1 - vertices[corner * 3 + 2]),
+            vector2_from_float64(
+                vertices[corner * 3 + lane], 1 - vertices[corner * 3 + 2]
             )
         )
     return out^

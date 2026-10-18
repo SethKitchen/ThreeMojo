@@ -111,7 +111,7 @@ from math.matrix4 import (
     translation,
 )
 from math.quaternion import Quaternion
-from math.vector2 import Vector2
+from math.vector2 import Vector2, vector2_from_float64
 from objects.mesh import Mesh
 from render.framebuffer import Color, rgb_is_white
 from render.srgb import LINEAR, SRGB, ColorSpace
@@ -2073,8 +2073,8 @@ struct _Composer(Movable):
                 var v = s.value().copy()
                 var x = v[0] if len(v) > 0 else nan[DType.float64]()
                 var y = v[1] if len(v) > 1 else nan[DType.float64]()
-                built.materials[material].normal_scale = Vector2(
-                    Float32(x), Float32(y)
+                built.materials[material].normal_scale = vector2_from_float64(
+                    x, y
                 )
         var roughness = self.connected_texture(
             shader, "inputs:roughness", LINEAR, assets, built
@@ -2426,18 +2426,18 @@ struct _Composer(Movable):
         """
         var scale = attrs.get("inputs:scale")
         if self.layer.is_array(scale) and self.layer.length(scale) >= 2:
-            image.repeat = Vector2(
-                Float32(self.layer.element_number(scale, 0)),
-                Float32(self.layer.element_number(scale, 1)),
+            image.repeat = vector2_from_float64(
+                self.layer.element_number(scale, 0),
+                self.layer.element_number(scale, 1),
             )
         var translation = attrs.get("inputs:translation")
         if (
             self.layer.is_array(translation)
             and self.layer.length(translation) >= 2
         ):
-            image.offset = Vector2(
-                Float32(self.layer.element_number(translation, 0)),
-                Float32(self.layer.element_number(translation, 1)),
+            image.offset = vector2_from_float64(
+                self.layer.element_number(translation, 0),
+                self.layer.element_number(translation, 1),
             )
         var rotation = attrs.get("inputs:rotation")
         if self.layer.is_number(rotation):

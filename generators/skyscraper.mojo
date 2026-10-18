@@ -54,7 +54,7 @@ from math.norm import squared_length2
 from math.path import Path, Shape
 from math.sine import fraction
 from math.utils import SeededRandom, js_round, min3
-from math.vector2 import Vector2
+from math.vector2 import Vector2, vector2_from_float64
 from std.math import floor, pi, sin, sqrt
 from units.si import Angle, Length, METER, RADIAN
 from core.ordinal import require_valid
@@ -1005,7 +1005,7 @@ def _add_arcade(
         var hole = Path(Vector2(left, Float32(sill)))
         hole.line_to(Vector2(left, Float32(spring)))
         hole.quadratic_to(
-            Vector2(left, Float32(apex)), Vector2(Float32(cx), Float32(apex))
+            Vector2(left, Float32(apex)), vector2_from_float64(cx, apex)
         )
         hole.quadratic_to(
             Vector2(right, Float32(apex)), Vector2(right, Float32(spring))
@@ -1055,9 +1055,7 @@ def _slab(
         var dz = cz - p.z
         var d = sqrt(squared_length2[DType.float64](dx, dz))
         var scale = inset / (d if d != 0 else 1.0)
-        var point = Vector2(
-            Float32(p.x + dx * scale), Float32(p.z + dz * scale)
-        )
+        var point = vector2_from_float64(p.x + dx * scale, p.z + dz * scale)
         if k == 0:
             outline.move_to(point)
         else:

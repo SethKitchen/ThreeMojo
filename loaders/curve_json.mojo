@@ -59,7 +59,7 @@ from math.curve3 import (
     quadratic_bezier3,
 )
 from math.path import Path, Shape
-from math.vector2 import Vector2
+from math.vector2 import Vector2, vector2_from_float64
 from math.vector3 import Vector3, vector3_from_float64
 from units.si import Angle, Length, METER, RADIAN
 
@@ -419,9 +419,8 @@ def read_curve(doc: JsonDocument, node: Int) raises -> Curve:
             if doc.kind(xy) != ARRAY or doc.length(xy) != 2:
                 raise Error("Curve JSON: a spline point must be [x, y]")
             points.append(
-                Vector2(
-                    Float32(doc.number(doc.at(xy, 0))),
-                    Float32(doc.number(doc.at(xy, 1))),
+                vector2_from_float64(
+                    doc.number(doc.at(xy, 0)), doc.number(doc.at(xy, 1))
                 )
             )
         return spline(points^)

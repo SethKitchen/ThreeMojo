@@ -49,7 +49,7 @@ from core.buffer_geometry import BufferGeometry, COLOR, NORMAL, POSITION, UV
 from math.finite import require_finite, require_non_negative_finite
 from math.norm import squared_length3
 from math.utils import SeededRandom
-from math.vector2 import Vector2
+from math.vector2 import Vector2, vector2_from_float64
 from math.vector3 import Vector3
 from render.framebuffer import FloatColor
 from std.math import ceil, isfinite, sqrt
@@ -377,16 +377,12 @@ struct MeshSurfaceSampler(Movable):
         if self.geometry.has_attribute(UV):
             ref uvs = self.geometry.attribute_view(UV)
             var w = 1 - (u + v)
-            uv = Vector2(
-                Float32(
-                    Float64(uvs.component(corners[0], 0)) * u
-                    + Float64(uvs.component(corners[1], 0)) * v
-                    + Float64(uvs.component(corners[2], 0)) * w
-                ),
-                Float32(
-                    Float64(uvs.component(corners[0], 1)) * u
-                    + Float64(uvs.component(corners[1], 1)) * v
-                    + Float64(uvs.component(corners[2], 1)) * w
-                ),
+            uv = vector2_from_float64(
+                Float64(uvs.component(corners[0], 0)) * u
+                + Float64(uvs.component(corners[1], 0)) * v
+                + Float64(uvs.component(corners[2], 0)) * w,
+                Float64(uvs.component(corners[0], 1)) * u
+                + Float64(uvs.component(corners[1], 1)) * v
+                + Float64(uvs.component(corners[2], 1)) * w,
             )
         return SurfaceSample(face, position, normal, color, uv)

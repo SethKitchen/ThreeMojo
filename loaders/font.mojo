@@ -64,7 +64,7 @@ from loaders.js_text import split_fields
 from loaders.json import NO_NODE, OBJECT, STRING, JsonDocument, parse_json
 from math.path import Shape
 from math.shape_path import ShapePath
-from math.vector2 import Vector2
+from math.vector2 import Vector2, vector2_from_float64
 from std.collections import Dict
 from math.finite import (
     finite_float32,
@@ -526,9 +526,9 @@ def _glyph_path(
         var still = True
         for which in range(step.verb.point_count()):  # pragma: no branch
             var raw = step.point(which)
-            var placed = Vector2(
-                Float32(Float64(raw.x) * scale + offset_x),
-                Float32(Float64(raw.y) * scale + offset_y),
+            var placed = vector2_from_float64(
+                Float64(raw.x) * scale + offset_x,
+                Float64(raw.y) * scale + offset_y,
             )
             if placed != pen:
                 still = False

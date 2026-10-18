@@ -41,7 +41,7 @@ from math.norm import length2, _ordinary_squared
 from math.curve import CUBIC, ELLIPSE, LINE, QUADRATIC, Curve, CurveKind
 from math.curve_checks import require_at_least_one
 from math.path import Path, Shape
-from math.vector2 import Vector2
+from math.vector2 import Vector2, vector2_from_float64
 from render.framebuffer import FloatColor
 from std.math import atan2, cos, nan, pi, sin, sqrt
 from units.si import Angle, Length, METER, RADIAN
@@ -268,7 +268,7 @@ struct SvgCurve(Copyable, Movable):
         if self.kind == ELLIPSE:
             var center = self.points[0]
             return Curve(
-                center=Vector2(Float32(center[0]), Float32(center[1])),
+                center=vector2_from_float64(center[0], center[1]),
                 x_radius=Length(Float32(self.x_radius), METER),
                 y_radius=Length(Float32(self.y_radius), METER),
                 start=Angle(Float32(self.start_angle), RADIAN),
@@ -279,7 +279,7 @@ struct SvgCurve(Copyable, Movable):
         var points = List[Vector2]()
         # `check` has passed, so there are two points or more.
         for p in self.points:  # pragma: no branch
-            points.append(Vector2(Float32(p[0]), Float32(p[1])))
+            points.append(vector2_from_float64(p[0], p[1]))
         return Curve(self.kind, points^)
 
 

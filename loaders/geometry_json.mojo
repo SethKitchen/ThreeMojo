@@ -72,7 +72,7 @@ from loaders.curve_json import read_curve3, read_curve_path3
 from loaders.json import ARRAY, JsonDocument, NO_NODE, OBJECT, present
 from math.curve3 import quadratic_bezier3
 from math.path import Shape
-from math.vector2 import Vector2
+from math.vector2 import Vector2, vector2_from_float64
 from math.vector3 import Vector3
 from std.math import pi
 from units.si import Angle, Length, METER, RADIAN
@@ -133,9 +133,9 @@ def _lathe_points(doc: JsonDocument, item: Int) raises -> List[Vector2]:
         if doc.kind(point) != OBJECT:
             raise Error("Geometry JSON: a lathe point must be {x, y}")
         out.append(
-            Vector2(
-                Float32(doc.number(doc.get(point, "x"))),
-                Float32(doc.number(doc.get(point, "y"))),
+            vector2_from_float64(
+                doc.number(doc.get(point, "x")),
+                doc.number(doc.get(point, "y")),
             )
         )
     return out^

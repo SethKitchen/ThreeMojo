@@ -485,6 +485,24 @@ def weighted_sum2(
     return a * weight_a + b * weight_b + c * weight_c
 
 
+def vector2_from_float64(x: Float64, y: Float64) -> Vector2:
+    """Return a `Vector2` from two `Float64` components.
+
+    Each component is rounded to `Float32`.
+
+    Args:
+        x: The first component.
+        y: The second component.
+
+    Returns:
+        The rounded vector.
+
+    Raises:
+        Error: Never.
+    """
+    return Vector2(Float32(x), Float32(y))
+
+
 def append_vector2(mut values: List[Float32], point: Vector2):
     """Append `point`'s two components.
 
