@@ -651,6 +651,28 @@ struct OrbitControls(Copyable, Movable):
         """
         return Length((position - self.target).length(), METER)
 
+    def _remember(mut self, position: Vector3, zoom: Float32):
+        """Remember the target, `position` and `zoom` for `reset`."""
+        var saved: List[Vector3] = [self.target, position]
+        self._saved = saved^
+        self._saved_zoom = zoom
+
+    def _restore(mut self) raises -> Vector3:
+        """Put the target back and return the saved camera position.
+
+        Returns:
+            The saved camera position.
+
+        Raises:
+            Error: If no state was saved.
+        """
+        if not self._saved:
+            raise Error("OrbitControls: reset needs a state from save_state")
+        var saved = self._saved.value().copy()
+        self.target = saved[0]
+        self._action = NO_ACTION
+        return saved[1]
+
     def save_state(mut self, camera: PerspectiveCamera):
         """Remember the target, the camera's position and its zoom, three.js's
         `saveState`, for `reset`.
@@ -658,9 +680,7 @@ struct OrbitControls(Copyable, Movable):
         Args:
             camera: The camera the controls place.
         """
-        var saved: List[Vector3] = [self.target, camera.position]
-        self._saved = saved^
-        self._saved_zoom = camera.zoom
+        self._remember(camera.position, camera.zoom)
 
     def save_state(mut self, camera: OrthographicCamera):
         """Remember the target, the camera's position and its zoom.
@@ -668,9 +688,7 @@ struct OrbitControls(Copyable, Movable):
         Args:
             camera: The camera the controls place.
         """
-        var saved: List[Vector3] = [self.target, camera.position]
-        self._saved = saved^
-        self._saved_zoom = camera.zoom
+        self._remember(camera.position, camera.zoom)
 
     def reset(mut self, mut camera: PerspectiveCamera) raises:
         """Put the target and the camera back as `save_state` left them,
@@ -683,13 +701,9 @@ struct OrbitControls(Copyable, Movable):
             Error: If no state was saved. three.js saves one as it is made,
                 with the camera it is given; these controls are given none.
         """
-        if not self._saved:
-            raise Error("OrbitControls: reset needs a state from save_state")
-        var saved = self._saved.value().copy()
-        self.target = saved[0]
+        var position = self._restore()
         camera.zoom = self._saved_zoom
-        camera.place(saved[1], self.target)
-        self._action = NO_ACTION
+        camera.place(position, self.target)
 
     def reset(mut self, mut camera: OrthographicCamera) raises:
         """Put the target and the camera back as `save_state` left them.
@@ -700,13 +714,9 @@ struct OrbitControls(Copyable, Movable):
         Raises:
             Error: If no state was saved.
         """
-        if not self._saved:
-            raise Error("OrbitControls: reset needs a state from save_state")
-        var saved = self._saved.value().copy()
-        self.target = saved[0]
+        var position = self._restore()
         camera.zoom = self._saved_zoom
-        camera.place(saved[1], self.target)
-        self._action = NO_ACTION
+        camera.place(position, self.target)
 
     def update(
         mut self, mut camera: PerspectiveCamera, delta: Duration
