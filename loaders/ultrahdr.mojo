@@ -47,6 +47,7 @@ reads them at: the image sizes and offsets that libultrahdr writes.
   three.js gives an image of `NaN`s.
 """
 
+from loaders.bytes import bytes_match
 from loaders.js_number import js_log2, js_parse_float, js_pow
 from loaders.xml import XmlDocument, parse_xml
 from render.float_image import FloatImage
@@ -136,14 +137,7 @@ def _u32(bytes: List[UInt8], at: Int, little: Bool) -> Int:
 
 def _starts_with(bytes: List[UInt8], at: Int, end: Int, text: String) -> Bool:
     """Return True if the bytes from `at` start with `text`."""
-    var t = text.as_bytes()
-    if at + len(t) > end:
-        return False
-    # The texts are not empty. The loop always runs.
-    for i in range(len(t)):  # pragma: no branch
-        if bytes[at + i] != t[i]:
-            return False
-    return True
+    return bytes_match(Span(bytes), at, end, text)
 
 
 def _js_number(text: String) -> Float64:
