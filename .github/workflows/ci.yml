@@ -5,6 +5,10 @@
 
 # Runs checks on main pushes, manual runs and pull requests ready for review.
 # Draft pull-request events start no runner jobs until the PR is marked ready.
+# A change only to .oss-scanner/ starts no run at all: no check reads that
+# directory. A change that also touches another path runs as usual. No branch
+# rule requires "check required", so the skipped run leaves no pending status.
+# If a rule ever requires it, replace the paths filter with a planner rule.
 #
 # GitHub's hosted runners have no accelerator. The gpu-host job installs MAX,
 # compiles every GPU entry point for sm_80, and runs the host-only suites.
@@ -21,11 +25,13 @@ name: check
 on:
   push:
     branches: [main]
+    paths-ignore: [".oss-scanner/**"]
   pull_request:
     # Native stacks match this filter on their ultimate base. Each job
     # also checks the direct PR base, so intermediate layers stay idle.
     branches: [main]
     types: [opened, synchronize, reopened, ready_for_review]
+    paths-ignore: [".oss-scanner/**"]
   workflow_dispatch:
 
 permissions:

@@ -184,6 +184,8 @@ Each CI job runs the planner, `tools/ci_scope.mojo`, through `tools/tool.sh` too
 sh tools/tool.sh .venv/bin/mojo ci_scope plan --base origin/main
 ```
 
+A change only to `.oss-scanner/` starts no CI run, because no check reads that directory. A change to `.oss-scanner/` and to another path runs as usual.
+
 ## Measure the examples
 
 ```bash
