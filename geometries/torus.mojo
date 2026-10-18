@@ -39,7 +39,7 @@ from core.buffer_geometry import (
     TORUS_GEOMETRY,
     TORUS_KNOT_GEOMETRY,
 )
-from geometries.surface import indexed_surface
+from geometries.surface import indexed_surface, require_three_segments
 from core.user_data import UserData
 from geometries.circle import FULL_TURN, check_sweep
 from geometries.grid import grid_index
@@ -124,10 +124,12 @@ def torus(
             turn.
     """
     _require_tube_radii(radius.value, tube.value, "torus")
-    if radial_segments < 3:
-        raise Error("A torus needs at least three segments around its tube")
-    if tubular_segments < 3:
-        raise Error("A torus needs at least three segments along its tube")
+    require_three_segments(
+        radial_segments, "A torus needs at least three segments around its tube"
+    )
+    require_three_segments(
+        tubular_segments, "A torus needs at least three segments along its tube"
+    )
     check_sweep(arc)
 
     var big = radius.value
@@ -217,10 +219,12 @@ def torus_knot(
             less than three, or `p` or `q` is less than one.
     """
     _require_tube_radii(radius.value, tube.value, "torus knot")
-    if tubular_segments < 3:
-        raise Error("A torus knot needs at least three segments along it")
-    if radial_segments < 3:
-        raise Error("A torus knot needs at least three segments around it")
+    require_three_segments(
+        tubular_segments, "A torus knot needs at least three segments along it"
+    )
+    require_three_segments(
+        radial_segments, "A torus knot needs at least three segments around it"
+    )
     if p < 1 or q < 1:
         raise Error("A torus knot's p and q must be at least one")
 

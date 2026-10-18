@@ -34,6 +34,7 @@ See `docs/wiki/Norm-consumers.md` for the changed operations, retained
 limits, and explicit zero and nonfinite rules.
 """
 
+from geometries.surface import require_positive_radius
 from math.norm import length2
 from core.buffer_attribute import BufferAttribute
 from core.buffer_geometry import (
@@ -191,8 +192,7 @@ def polyhedron(
             vertices are not whole triples, the indices are not whole
             triangles, either list is empty, or an index names no vertex.
     """
-    if radius.value <= 0:
-        raise Error("A polyhedron needs a positive radius")
+    require_positive_radius(radius.value, "polyhedron")
     if detail < 0:
         raise Error("A polyhedron's detail cannot be negative")
     if len(vertices) == 0 or len(vertices) % 3 != 0:

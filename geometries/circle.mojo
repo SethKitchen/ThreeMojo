@@ -39,7 +39,11 @@ from core.buffer_geometry import (
     RING_GEOMETRY,
 )
 from geometries.grid import append_cell
-from geometries.surface import indexed_surface
+from geometries.surface import (
+    indexed_surface,
+    require_positive_radius,
+    require_three_segments,
+)
 from core.user_data import UserData
 from std.math import cos, isfinite, sin
 from units.si import Angle, Length, METER, RADIAN, TURN
@@ -117,10 +121,8 @@ def circle(
         Error: If the radius is not positive, there are fewer than three
             segments, or the sweep is not positive or is more than a turn.
     """
-    if radius.value <= 0:
-        raise Error("A circle needs a positive radius")
-    if segments < 3:
-        raise Error("A circle needs at least three segments")
+    require_positive_radius(radius.value, "circle")
+    require_three_segments(segments, "A circle needs at least three segments")
     check_sweep(theta_length)
 
     var r = radius.value
@@ -198,8 +200,9 @@ def ring(
         raise Error("A ring's inner radius cannot be negative")
     if outer_radius.value <= inner_radius.value:
         raise Error("A ring's outer radius must be more than its inner radius")
-    if theta_segments < 3:
-        raise Error("A ring needs at least three segments around")
+    require_three_segments(
+        theta_segments, "A ring needs at least three segments around"
+    )
     if phi_segments < 1:
         raise Error("A ring needs at least one segment across")
     check_sweep(theta_length)

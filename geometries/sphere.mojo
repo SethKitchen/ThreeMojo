@@ -24,7 +24,11 @@ disagree with the next face.
 """
 
 from core.buffer_geometry import BufferGeometry, SPHERE_GEOMETRY
-from geometries.surface import indexed_surface
+from geometries.surface import (
+    indexed_surface,
+    require_positive_radius,
+    require_three_segments,
+)
 from core.user_data import UserData
 from std.math import cos, isfinite, pi, sin
 from units.si import Angle, Length, METER, RADIAN
@@ -64,10 +68,10 @@ def sphere(
         Error: If the radius is not positive, either segment count is too
             small to close a surface, or an angle is not finite.
     """
-    if radius.value <= 0:
-        raise Error("A sphere needs a positive radius")
-    if width_segments < 3:
-        raise Error("A sphere needs at least three segments around")
+    require_positive_radius(radius.value, "sphere")
+    require_three_segments(
+        width_segments, "A sphere needs at least three segments around"
+    )
     if height_segments < 2:
         raise Error("A sphere needs at least two segments from pole to pole")
     var phi0 = phi_start.to(RADIAN)

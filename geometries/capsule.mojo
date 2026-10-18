@@ -20,7 +20,11 @@ has no height.
 """
 
 from core.buffer_geometry import BufferGeometry, CAPSULE_GEOMETRY
-from geometries.surface import indexed_surface
+from geometries.surface import (
+    indexed_surface,
+    require_positive_radius,
+    require_three_segments,
+)
 from core.user_data import UserData
 from math.norm import squared_length3
 from std.math import cos, pi, sin, sqrt
@@ -56,14 +60,14 @@ def capsule(
         Error: If the radius is not positive, the length is negative, or
             any segment count is too small.
     """
-    if radius.value <= 0:
-        raise Error("A capsule needs a positive radius")
+    require_positive_radius(radius.value, "capsule")
     if length.value < 0:
         raise Error("A capsule's length cannot be negative")
     if cap_segments < 1:
         raise Error("A capsule needs at least one segment on each cap")
-    if radial_segments < 3:
-        raise Error("A capsule needs at least three segments around")
+    require_three_segments(
+        radial_segments, "A capsule needs at least three segments around"
+    )
     if height_segments < 1:
         raise Error("A capsule needs at least one segment up its side")
 

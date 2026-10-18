@@ -37,7 +37,11 @@ transport made. three.js checks neither; here both raise.
 """
 
 from core.buffer_geometry import BufferGeometry, TUBE_GEOMETRY
-from geometries.surface import indexed_surface
+from geometries.surface import (
+    indexed_surface,
+    require_positive_radius,
+    require_three_segments,
+)
 from core.user_data import UserData
 from exporters.json_writer import JsonWriter
 from geometries.grid import grid_index
@@ -106,8 +110,7 @@ def require_tube_radius(radius: Length) raises:
     Raises:
         Error: If the radius is zero or negative.
     """
-    if radius.value <= 0:
-        raise Error("A tube needs a positive radius")
+    require_positive_radius(radius.value, "tube")
 
 
 def require_tube_segments(radial_segments: Int) raises:
@@ -122,8 +125,9 @@ def require_tube_segments(radial_segments: Int) raises:
     Raises:
         Error: If there are fewer than three.
     """
-    if radial_segments < 3:
-        raise Error("A tube needs at least three segments around")
+    require_three_segments(
+        radial_segments, "A tube needs at least three segments around"
+    )
 
 
 def tube(

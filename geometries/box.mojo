@@ -32,6 +32,7 @@ from core.buffer_geometry import (
     UV,
 )
 from core.user_data import UserData
+from geometries.surface import require_positive_extents
 from units.si import Length, METER
 
 
@@ -154,8 +155,7 @@ def box(
         Error: If any extent is not positive, or any segment count is
             below one. three.js floors a count and takes what it gets.
     """
-    if width.value <= 0 or height.value <= 0 or depth.value <= 0:
-        raise Error("A box needs positive extents")
+    require_positive_extents(width.value, height.value, depth.value, "box")
     if width_segments < 1 or height_segments < 1 or depth_segments < 1:
         raise Error("A box needs at least one segment a side")
     var x = width.value
