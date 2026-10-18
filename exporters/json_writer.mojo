@@ -9,7 +9,7 @@
 `JsonWriter` is a cursor over the text it builds. `begin_object` and
 `begin_array` open a container, `end_object` and `end_array` close it,
 `key` names the next value in an object, and `string`, `number`,
-`integer`, `boolean`, `null` and `raw` write a value. The commas and the
+`integer`, `boolean`, `null`, `raw` and `numbers` write a value. The commas and the
 colons are the writer's: a caller says what goes where, and the writer
 refuses what JSON has no place for -- a value in an object without a key,
 a key outside an object, a close that does not match the open, a second
@@ -237,6 +237,24 @@ struct JsonWriter(Movable):
         # Empty arrays return above, so this loop has an entry.
         for entry in entries:  # pragma: no branch
             self.raw(entry)
+        self.end_array()
+
+    def numbers(mut self, values: List[Float32]) raises:
+        """Write `values` as one JSON array.
+
+        Args:
+            values: The numbers, in order. An empty list writes `[]`.
+
+        Returns:
+            Nothing.
+
+        Raises:
+            Error: If one number is not finite, or an array has no place
+                here.
+        """
+        self.begin_array()
+        for value in values:
+            self.number(value)
         self.end_array()
 
     def finish(self) raises -> String:

@@ -258,20 +258,12 @@ def object_uuid(kind: Int, index: Int) -> String:
     return out + String(unsafe_from_utf8=digits)
 
 
-def _numbers(mut writer: JsonWriter, values: List[Float32]) raises:
-    """Write an array of numbers."""
-    writer.begin_array()
-    for value in values:
-        writer.number(value)
-    writer.end_array()
-
-
 def _matrix(mut writer: JsonWriter, matrix: Matrix4) raises:
     """Write a matrix's sixteen numbers, column by column."""
     var values = List[Float32]()
     for index in range(16):  # pragma: no branch
         values.append(matrix.elements[index])
-    _numbers(writer, values)
+    writer.numbers(values)
 
 
 def _attribute(
@@ -302,7 +294,7 @@ def _attribute(
             writer.integer(value)
         writer.end_array()
     else:
-        _numbers(writer, attribute.packed())
+        writer.numbers(attribute.packed())
     writer.key("normalized")
     writer.boolean(attribute.is_normalized())
     if attribute.is_instanced():
@@ -466,7 +458,7 @@ struct _Header(Copyable, Movable):
         writer.key("matrix")
         _matrix(writer, self.matrix)
         writer.key("up")
-        _numbers(writer, self.up)
+        writer.numbers(self.up)
         if not self.auto:
             writer.key("matrixAutoUpdate")
             writer.boolean(False)
@@ -709,11 +701,11 @@ struct _Library(Movable):
         writer.key("channel")
         writer.integer(texture.channel.value)
         writer.key("repeat")
-        _numbers(writer, [texture.repeat.x, texture.repeat.y])
+        writer.numbers([texture.repeat.x, texture.repeat.y])
         writer.key("offset")
-        _numbers(writer, [texture.offset.x, texture.offset.y])
+        writer.numbers([texture.offset.x, texture.offset.y])
         writer.key("center")
-        _numbers(writer, [texture.center.x, texture.center.y])
+        writer.numbers([texture.center.x, texture.center.y])
         writer.key("rotation")
         writer.number(texture.rotation.to(RADIAN))
         writer.key("wrap")
@@ -816,11 +808,11 @@ struct _Library(Movable):
         writer.key("channel")
         writer.integer(0)
         writer.key("repeat")
-        _numbers(writer, [1, 1])
+        writer.numbers([1, 1])
         writer.key("offset")
-        _numbers(writer, [0, 0])
+        writer.numbers([0, 0])
         writer.key("center")
-        _numbers(writer, [0, 0])
+        writer.numbers([0, 0])
         writer.key("rotation")
         writer.integer(0)
         writer.key("wrap")
@@ -939,11 +931,11 @@ struct _Library(Movable):
         writer.key("channel")
         writer.integer(0)
         writer.key("repeat")
-        _numbers(writer, [1, 1])
+        writer.numbers([1, 1])
         writer.key("offset")
-        _numbers(writer, [0, 0])
+        writer.numbers([0, 0])
         writer.key("center")
-        _numbers(writer, [0, 0])
+        writer.numbers([0, 0])
         writer.key("rotation")
         writer.integer(0)
         writer.key("wrap")
@@ -1199,7 +1191,7 @@ struct _Library(Movable):
             writer.key("normalMapType")
             writer.integer(material.normal_map_type.value)
             writer.key("normalScale")
-            _numbers(writer, [material.normal_scale.x, material.normal_scale.y])
+            writer.numbers([material.normal_scale.x, material.normal_scale.y])
         if material.bump_map != NO_TEXTURE:
             self.map(writer, "bumpMap", material.bump_map, assets)
             writer.key("bumpScale")
@@ -1235,7 +1227,7 @@ struct _Library(Movable):
             # material, so it writes them under their old names.
             ref point = material.reference_position
             writer.key("referencePosition")
-            _numbers(writer, [point.x, point.y, point.z])
+            writer.numbers([point.x, point.y, point.z])
             writer.key("nearDistance")
             writer.number(material.near_distance.to(METER))
             writer.key("farDistance")
@@ -1280,8 +1272,7 @@ struct _Library(Movable):
                 assets,
             )
             writer.key("clearcoatNormalScale")
-            _numbers(
-                writer,
+            writer.numbers(
                 [
                     material.clearcoat_normal_scale.x,
                     material.clearcoat_normal_scale.y,
@@ -1304,8 +1295,7 @@ struct _Library(Movable):
         writer.key("iridescenceIOR")
         writer.number(material.iridescence_ior)
         writer.key("iridescenceThicknessRange")
-        _numbers(
-            writer,
+        writer.numbers(
             [
                 material.iridescence_thickness_minimum.to(NANOMETER),
                 material.iridescence_thickness_maximum.to(NANOMETER),
@@ -1457,7 +1447,7 @@ def _clipping(mut writer: JsonWriter, material: Material) raises:
         for plane in planes:  # pragma: no branch
             writer.begin_object()
             writer.key("normal")
-            _numbers(writer, [plane.normal.x, plane.normal.y, plane.normal.z])
+            writer.numbers([plane.normal.x, plane.normal.y, plane.normal.z])
             writer.key("constant")
             writer.number(plane.constant)
             writer.end_object()
@@ -2015,7 +2005,7 @@ struct _Writer(Movable):
         var middle = center.x == 0.5 and center.y == 0.5
         if not middle:
             writer.key("center")
-            _numbers(writer, [center.x, center.y])
+            writer.numbers([center.x, center.y])
 
     def lod(
         mut self,
@@ -2427,7 +2417,7 @@ def object_to_json(
     tree.key("matrix")
     _matrix(tree, Matrix4())
     tree.key("up")
-    _numbers(tree, [0, 1, 0])
+    tree.numbers([0, 1, 0])
     if scene.background.kind == COLOR_BACKGROUND:
         tree.key("background")
         tree.integer(scene.background.color.hex())
