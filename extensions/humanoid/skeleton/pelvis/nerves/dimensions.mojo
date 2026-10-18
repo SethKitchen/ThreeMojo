@@ -24,6 +24,7 @@ from extensions.humanoid.side import LEFT, BodySide
 from extensions.humanoid.skeleton.field import (
     DistanceField,
     TubeChain,
+    enlarge_tube_chain,
     field_gradient,
     flip_x,
     mix_point,
@@ -39,7 +40,6 @@ from extensions.humanoid.skeleton.pelvis.muscles.dimensions import (
     PelvisMuscleDimensions,
 )
 from math.vector3 import Vector3
-from std.math import max
 
 
 @fieldwise_init
@@ -136,11 +136,7 @@ struct PelvisNerveField(DistanceField, ImplicitlyCopyable):
             A wider copy with a larger blend and box.
         """
         var field = self
-        field.chain.r0 = max(field.chain.r0, least)
-        field.chain.r1 = max(field.chain.r1, least)
-        field.chain.r2 = max(field.chain.r2, least)
-        field.chain.r3 = max(field.chain.r3, least)
-        field.chain.r4 = max(field.chain.r4, least)
+        field.chain = enlarge_tube_chain(field.chain, least)
         field.k = Float32(0.4) * least
         field.epsilon = Float32(0.25) * least
         field.low = field.low - Vector3(least, least, least)
