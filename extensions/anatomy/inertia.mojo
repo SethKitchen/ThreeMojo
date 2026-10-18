@@ -16,7 +16,7 @@ The humanoid's limb segments and the animals' body segments both use it.
 Sums are in `Float64`, so a million cells keep their precision.
 """
 
-from math.finite import positive_finite, require_finite
+from math.finite import require_finite, require_positive_finite
 from math.utils import min3
 from math.vector3 import Vector3
 from std.math import isfinite, sqrt
@@ -128,8 +128,9 @@ struct SegmentInertia(ImplicitlyCopyable):
             Error: If mass is not positive, length is negative, a value
                 is not finite, or the tensor cannot describe a body.
         """
-        if not (positive_finite(Float64(self.mass.value))):
-            raise Error("A segment must have finite positive mass")
+        require_positive_finite(
+            Float64(self.mass.value), "A segment must have finite positive mass"
+        )
         require_segment_length(Float64(self.length.value))
         var values: List[Float32] = [
             self.center.x,
@@ -300,8 +301,10 @@ struct InertiaTally(Copyable, Movable):
         if mass == 0.0:
             raise Error("A sampled segment must have finite positive mass")
         var mass_si = Float32(mass)
-        if not (positive_finite(Float64(mass_si))):
-            raise Error("A sampled segment mass must fit positive finite SI")
+        require_positive_finite(
+            Float64(mass_si),
+            "A sampled segment mass must fit positive finite SI",
+        )
         var c = self.first / mass
         # Second moments about the center, by the parallel-axis theorem.
         var sxx = _central_moment(self.second[0], mass * c[0] * c[0])

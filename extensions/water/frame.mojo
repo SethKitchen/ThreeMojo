@@ -70,7 +70,7 @@ from extensions.water.view import (
 from cameras.camera import Camera
 from core.extent import positive_extent
 from core.scene import Scene
-from math.finite import positive_finite, require_finite
+from math.finite import require_finite, require_positive_finite
 from math.utils import max3, rec709_luminance
 from math.norm import squared_length3
 from math.matrix4 import Matrix4
@@ -1378,8 +1378,9 @@ struct WaterScene(Movable):
         var length = sqrt(
             squared_length3[DType.float32](toward.x, toward.y, toward.z)
         )
-        if not (positive_finite(Float64(length))):
-            raise Error("A water sun direction must be finite and nonzero")
+        require_positive_finite(
+            Float64(length), "A water sun direction must be finite and nonzero"
+        )
         if not (toward.y > 0.0):
             raise Error("A water sun must be above the horizon")
         self.sun = Vector3(

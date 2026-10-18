@@ -28,7 +28,7 @@ frame element's.
 """
 
 from math.norm import squared_length2
-from math.finite import positive_finite, require_finite
+from math.finite import require_finite, require_positive_finite
 from extensions.building.material import BuildingMaterial
 from extensions.numerics.dense import DenseMatrix
 from extensions.structure.frame import LocalAxes
@@ -167,8 +167,9 @@ struct ShellElement(Copyable, Movable):
         """
         material.check()
         var t = thickness.to(METER)
-        if not positive_finite(t):
-            raise Error("A shell thickness must be positive and finite")
+        require_positive_finite(
+            t, "A shell thickness must be positive and finite"
+        )
         var values = [a.x, a.y, a.z, b.x, b.y, b.z, c.x, c.y, c.z]
         for i in range(len(values)):  # pragma: no branch
             require_finite(

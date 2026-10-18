@@ -24,7 +24,7 @@ mass correction. `matched` describes reference identity, not validated
 anatomy. Source excerpts and derived DESIGN templates are distinct.
 """
 
-from math.finite import positive_finite
+from math.finite import positive_finite, require_positive_finite
 from extensions.anatomy.evidence import DESIGN, Evidence
 from extensions.anatomy.inertia import InertiaTally
 from extensions.animals.anatomy.body import species_body
@@ -143,10 +143,10 @@ struct Calibration(ImplicitlyCopyable, Writable):
         )
         if not (positive_finite(Float64(self.scale)) and self.scale < 1e3):
             raise Error("A calibration scale must be positive and finite")
-        if not (positive_finite(Float64(self.density_factor))):
-            raise Error(
-                "A calibration density factor must be positive and finite"
-            )
+        require_positive_finite(
+            Float64(self.density_factor),
+            "A calibration density factor must be positive and finite",
+        )
         var values = [
             self.measured.value,
             self.published.value,
@@ -154,11 +154,10 @@ struct Calibration(ImplicitlyCopyable, Writable):
             self.published_mass.value,
         ]
         for value in values:  # pragma: no branch
-            if not (positive_finite(Float64(value))):
-                raise Error(
-                    "Calibration reference quantities must be positive and"
-                    " finite"
-                )
+            require_positive_finite(
+                Float64(value),
+                "Calibration reference quantities must be positive and finite",
+            )
         if (
             self.published != body.reference_length
             or self.published_mass != body.male_mass

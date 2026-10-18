@@ -37,7 +37,11 @@ Every input and output carries its unit. The curves are dimensionless
 and take and return `Float64`.
 """
 
-from math.finite import positive_finite, require_finite, require_finite_group
+from math.finite import (
+    require_finite,
+    require_finite_group,
+    require_positive_finite,
+)
 from math.norm import squared_length2
 from generators.utils import Vec3d
 from std.math import asin, cos, exp, isfinite, sin, sqrt
@@ -224,8 +228,9 @@ def require_fiber_length(length: Float64) raises:
     Raises:
         Error: If the length is not finite and positive.
     """
-    if not positive_finite(length):
-        raise Error("A fiber length must be finite and positive")
+    require_positive_finite(
+        length, "A fiber length must be finite and positive"
+    )
 
 
 @fieldwise_init
@@ -302,8 +307,10 @@ struct MuscleArchitecture(ImplicitlyCopyable, Writable):
             Error: If the architecture or the SI result is invalid.
         """
         var area = self.volume_m3() / Float64(self.fiber_length.value)
-        if not (positive_finite(Float64(Float32(area)))):
-            raise Error("Muscle PCSA must fit a finite positive SI quantity")
+        require_positive_finite(
+            Float64(Float32(area)),
+            "Muscle PCSA must fit a finite positive SI quantity",
+        )
         return Area(Float32(area), SQUARE_METER)
 
     def max_force(self) raises -> Force:
@@ -316,8 +323,10 @@ struct MuscleArchitecture(ImplicitlyCopyable, Writable):
             Error: If the architecture or the SI result is invalid.
         """
         var force = self.specific_tension * self.pcsa()
-        if not (positive_finite(Float64(force.value))):
-            raise Error("Maximum muscle force must be finite and positive")
+        require_positive_finite(
+            Float64(force.value),
+            "Maximum muscle force must be finite and positive",
+        )
         return force
 
     def thickness(self) raises -> Float64:
@@ -480,10 +489,10 @@ def isometric_equilibrium(
     if value != 0.0 and force.value == 0.0:
         raise Error("Equilibrium force must fit a finite SI quantity")
     _ = _finite_force(Float64(force.value))
-    if not (positive_finite(Float64(Float32(fiber)))):
-        raise Error(
-            "Equilibrium fiber length must fit a positive finite SI length"
-        )
+    require_positive_finite(
+        Float64(Float32(fiber)),
+        "Equilibrium fiber length must fit a positive finite SI length",
+    )
     # The bisection bounds keep this at most the finite SI unit length.
     # Cancellation can still collapse it to zero.
     if not (Float32(unit - reach) > 0.0):
@@ -528,10 +537,10 @@ def moment_arm(
     var line = origin - insertion
     var reach = line.length()
     var size = axis.length()
-    if not (positive_finite(Float64(reach))):
-        raise Error("A muscle's origin and insertion must differ")
-    if not (positive_finite(Float64(size))):
-        raise Error("A joint axis must have a direction")
+    require_positive_finite(
+        Float64(reach), "A muscle's origin and insertion must differ"
+    )
+    require_positive_finite(Float64(size), "A joint axis must have a direction")
     var lever = insertion - center
     var pull = line * (1.0 / reach)
     return stored_moment_arm(lever, pull, axis * (1.0 / size))

@@ -20,7 +20,7 @@ window without a layer-by-layer description.
 """
 from core.ordinal import ordinal_valid
 
-from math.finite import positive_finite
+from math.finite import require_positive_finite
 from extensions.building.ids import MaterialId
 from extensions.building.material import BuildingMaterial
 from units.si import (
@@ -128,8 +128,7 @@ struct Construction(Copyable, Movable):
             ):
                 raise Error("A layer's material id is out of range")
             var t = layer.thickness.to(METER)
-            if not positive_finite(t):
-                raise Error("A layer must be positive and finite")
+            require_positive_finite(t, "A layer must be positive and finite")
 
     def thickness(self) -> Length64:
         """Return the sum of the layer thicknesses.
@@ -236,8 +235,9 @@ struct Glazing(ImplicitlyCopyable):
                 outside zero to one.
         """
         var u = self.u_value.to(WATT_PER_SQUARE_METER_KELVIN)
-        if not positive_finite(u):
-            raise Error("A glazing U-value must be positive and finite")
+        require_positive_finite(
+            u, "A glazing U-value must be positive and finite"
+        )
         if not (self.solar_heat_gain >= 0 and self.solar_heat_gain <= 1):
             raise Error("A solar heat gain coefficient must be zero to one")
         if not (

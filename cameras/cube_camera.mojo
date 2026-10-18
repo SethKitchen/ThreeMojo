@@ -43,7 +43,7 @@ from core.object3d import NO_PARENT, NodeId
 from core.scene import Scene
 from math.vector3 import Vector3
 from render.cube_texture import face_forward, face_up, require_cube_face
-from math.finite import positive_finite
+from math.finite import require_positive_finite
 from std.math import isfinite
 from units.si import Angle, DEGREE, Length
 
@@ -82,8 +82,10 @@ struct CubeCamera(ImplicitlyCopyable):
         """
         if size <= 0:
             raise Error("A cube camera's faces need a positive size")
-        if not positive_finite(Float64(near.value)):
-            raise Error("The near plane must be in front of the camera")
+        require_positive_finite(
+            Float64(near.value),
+            "The near plane must be in front of the camera",
+        )
         if not (isfinite(far.value) and far.value > near.value):
             raise Error("The far plane must be beyond the near plane")
         self.near = near
