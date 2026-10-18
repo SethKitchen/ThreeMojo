@@ -12,8 +12,7 @@ render view draws the storeys up to the first shaft storey, so the plan,
 the doors and the furniture show.
 """
 
-from examples.output import example_destination, spin_gallery
-from examples.preview import add_sky_and_sun
+from examples.output import example_destination, spin_daylight
 
 from cameras.perspective_camera import PerspectiveCamera
 from core.assets import Assets
@@ -21,7 +20,6 @@ from core.object3d import NodeId
 from core.scene import Scene
 from math.vector3 import Vector3
 from render.framebuffer import Color
-from renderers.renderer import Renderer, available_workers
 from units.si import DEGREE, METER, Angle, Length
 from extensions.building.generate.plan import RESIDENTIAL_FLOOR
 from extensions.building.generate.tower import TowerOptions, generate_tower
@@ -77,21 +75,20 @@ def _camera() raises -> PerspectiveCamera:
 
 
 def main() raises:
-    var renderer = Renderer(WIDTH, HEIGHT, workers=available_workers())
-    renderer.set_background(Color(150, 182, 214))
     var assets = Assets()
     var scene = Scene()
     var root = _build(scene, assets)
-    add_sky_and_sun(scene, 0.5, 1.6)
-    var camera = _camera()
-    var destination = example_destination(String(DEFAULT_OUTPUT))
-    spin_gallery(
-        renderer,
-        camera,
-        assets,
+    spin_daylight(
+        WIDTH,
+        HEIGHT,
+        Color(150, 182, 214),
+        0.5,
+        1.6,
         scene,
+        assets,
         root,
+        _camera(),
         FRAMES,
         DELAY_MS,
-        destination,
+        example_destination(String(DEFAULT_OUTPUT)),
     )
