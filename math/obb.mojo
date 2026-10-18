@@ -37,8 +37,9 @@ from math.bounds import Box3, Plane, Sphere
 from math.matrix3 import Matrix3
 from math.matrix4 import Matrix4
 from math.ray import Ray
+from math.utils import clamp
 from math.vector3 import Vector3
-from std.math import isfinite, max, min, sqrt
+from std.math import isfinite, max, sqrt
 from std.memory import bitcast
 
 # three.js's default `epsilon` for `intersectsOBB`: JavaScript's
@@ -57,7 +58,7 @@ def _clamp(value: Float32, low: Float32, high: Float32) -> Float32:
     Returns:
         The clamped number.
     """
-    return max(low, min(high, value))
+    return clamp(value, low, high)
 
 
 def _check_half_size(half_size: Vector3) raises:

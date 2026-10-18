@@ -87,6 +87,7 @@ from helpers.segments import Segments
 from math.matrix4 import Matrix4, scaling, translation
 from math.projection import look_at
 from math.quaternion import Quaternion
+from math.utils import clamp
 from math.vector2 import Vector2
 from math.vector3 import Vector3
 from render.framebuffer import Color, FloatColor
@@ -322,7 +323,7 @@ def _clamp(value: Float32, low: Float32, high: Float32) -> Float32:
     Returns:
         The value within the range.
     """
-    return max(low, min(high, value))
+    return clamp(value, low, high)
 
 
 def _angle_to(a: Vector3, b: Vector3) -> Float32:
