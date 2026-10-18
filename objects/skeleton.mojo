@@ -56,7 +56,7 @@ taken as it is, as three.js's shader takes it; see
 """
 
 from core.object3d import NodeId
-from math.matrix4 import Matrix4
+from math.matrix4 import Matrix4, require_affine
 from std.math import isfinite
 
 
@@ -125,8 +125,10 @@ struct Skeleton(Copyable, Movable):
         for index in range(len(bones)):  # pragma: no branch
             if not bones[index].inverse_bind.is_finite():
                 raise Error("A bone's inverse bind must be a real transform")
-            if not bones[index].inverse_bind.is_affine():
-                raise Error("A bone's inverse bind must be affine")
+            require_affine(
+                bones[index].inverse_bind,
+                "A bone's inverse bind must be affine",
+            )
             # A matrix with no inverse is not the inverse of anything.
             # `bind_skeleton` refuses a bone bound at a scale of zero
             # before it inverts one; a caller handing the inverses in

@@ -86,7 +86,7 @@ from core.morph import MorphInfluences
 from core.object3d import NodeId
 from core.ordinal import require_non_negative
 from materials.material import MaterialId
-from math.matrix4 import Matrix4
+from math.matrix4 import Matrix4, require_affine
 from render.framebuffer import Color
 from std.math import isfinite
 
@@ -105,11 +105,13 @@ def check_placing(matrix: Matrix4) raises:
     """
     if not matrix.is_finite():
         raise Error("An instance matrix must hold finite numbers")
-    if not matrix.is_affine():
-        raise Error(
+    require_affine(
+        matrix,
+        (
             "An instance matrix must be affine: it moves, turns, scales or"
             " shears, and keeps w at one"
-        )
+        ),
+    )
 
 
 def require_instance_index(index: Int, count: Int) raises:

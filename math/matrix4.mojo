@@ -1001,6 +1001,23 @@ struct Matrix4(Equatable, ImplicitlyCopyable):
         return e[i] * e[j] + e[i + 1] * e[j + 1] + e[i + 2] * e[j + 2]
 
 
+def require_affine(matrix: Matrix4, message: String) raises:
+    """Refuse a matrix that is not affine.
+
+    Args:
+        matrix: The transform.
+        message: The error text for this caller.
+
+    Returns:
+        Nothing. The call returns when the matrix is affine.
+
+    Raises:
+        Error: If the matrix is not affine.
+    """
+    if not matrix.is_affine():
+        raise Error(message)
+
+
 def translation(x: Float32, y: Float32, z: Float32) -> Matrix4:
     """Return a matrix that moves a point by (x, y, z)."""
     var matrix = Matrix4()

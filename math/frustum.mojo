@@ -35,7 +35,7 @@ change the image, which is the one thing culling must not do.
 """
 
 from math.bounds import Box3, Plane, Sphere
-from math.matrix4 import Matrix4
+from math.matrix4 import Matrix4, require_affine
 from math.projection import require_far_beyond_near
 from math.vector3 import Vector3
 from std.math import isfinite
@@ -260,10 +260,9 @@ struct Frustum(Copyable, Movable):
         """
         if not clip.is_finite() or not view.is_finite():
             raise Error("Frustum clip and view matrices must be finite")
-        if not view.is_affine():
-            raise Error(
-                "A view matrix must be affine to place the depth planes"
-            )
+        require_affine(
+            view, "A view matrix must be affine to place the depth planes"
+        )
         if not isfinite(near) or not isfinite(far):
             raise Error("Frustum near and far distances must be finite")
         require_far_beyond_near(near, far)
