@@ -244,6 +244,7 @@ from loaders.json import (
     STRING,
     JsonDocument,
     parse_json,
+    present,
 )
 from materials.material import (
     ADDITIVE,
@@ -796,9 +797,9 @@ def read_object_json(
     loader.read_shapes()
     loader.read_geometries(assets)
     loader.read_materials(assets)
-    var top = loader.document.get(root, "object")
-    if top == NO_NODE:
-        raise Error("Object JSON: the document has no object")
+    var top = loader.document.required(
+        root, "object", "Object JSON: the document has no object"
+    )
     loader.object(top, scene, assets)
     loader.bind_targets(scene)
     loader.bind_skeletons(scene)
@@ -1016,18 +1017,19 @@ struct _Loader(Movable):
 
     def uuid(self, node: Int) raises -> String:
         """Return an entry's uuid, which must be there."""
-        var found = self.document.get(node, "uuid")
-        if found == NO_NODE:
-            raise Error("Object JSON: an entry has no uuid")
+        var found = self.document.required(
+            node, "uuid", "Object JSON: an entry has no uuid"
+        )
         return self.document.string(found)
 
     # --- the libraries ------------------------------------------------------
 
     def check_metadata(self) raises:
         """Refuse a document that is not an Object document of version 4."""
-        var metadata = self.entry(self.document.root(), "metadata")
-        if metadata == NO_NODE:
-            raise Error("Object JSON: the document has no metadata")
+        var metadata = present(
+            self.entry(self.document.root(), "metadata"),
+            "Object JSON: the document has no metadata",
+        )
         if self.text(metadata, "type", "") != "Object":
             raise Error("Object JSON: metadata.type must be Object")
         var version = Int(self.number(metadata, "version", 0))
@@ -1124,9 +1126,10 @@ struct _Loader(Movable):
                 self.integer(node, "offset", 0),
             )
         var component = component_of_array(self.text(node, "type", ""))
-        var list = self.array(node, "array")
-        if list == NO_NODE:
-            raise Error("Object JSON: an attribute has no array")
+        var list = present(
+            self.array(node, "array"),
+            "Object JSON: an attribute has no array",
+        )
         var normalized = self.flag(node, "normalized", False)
         if component != FLOAT32_COMPONENT:
             # A typed array of integers, as three.js's `getTypedArray`
@@ -1179,24 +1182,25 @@ struct _Loader(Movable):
         """
         if uuid in shared:
             return shared[uuid].copy()
-        if data == NO_NODE:
-            raise Error(
-                "Object JSON: an interleaved attribute outside a geometry"
-            )
-        var buffers = self.entry(data, "interleavedBuffers")
+        var source = present(
+            data, "Object JSON: an interleaved attribute outside a geometry"
+        )
+        var buffers = self.entry(source, "interleavedBuffers")
         var item = NO_NODE
         if buffers != NO_NODE:
             item = self.entry(buffers, uuid)
-        if item == NO_NODE:
-            raise Error("Object JSON: names no interleaved buffer: " + uuid)
+        item = present(
+            item, "Object JSON: names no interleaved buffer: " + uuid
+        )
         if self.text(item, "type", "") != "Float32Array":
             raise Error("Object JSON: only a Float32Array buffer is read")
-        var arrays = self.entry(data, "arrayBuffers")
+        var arrays = self.entry(source, "arrayBuffers")
         var words = NO_NODE
         if arrays != NO_NODE:
             words = self.array(arrays, self.text(item, "buffer", ""))
-        if words == NO_NODE:
-            raise Error("Object JSON: an interleaved buffer has no array")
+        words = present(
+            words, "Object JSON: an interleaved buffer has no array"
+        )
         var numbers = List[Float32]()
         for at in range(self.document.length(words)):
             var word = self.document.integer(self.document.at(words, at))
@@ -1234,9 +1238,10 @@ struct _Loader(Movable):
             if named != NO_NODE:
                 built.user_data = user_data_of(self.document, named)
             return built^
-        var data = self.entry(item, "data")
-        if data == NO_NODE:
-            raise Error("Object JSON: a BufferGeometry has no data")
+        var data = present(
+            self.entry(item, "data"),
+            "Object JSON: a BufferGeometry has no data",
+        )
         var geometry = BufferGeometry(
             instanced=self.flag(item, "isInstancedBufferGeometry", False)
         )
@@ -1267,9 +1272,10 @@ struct _Loader(Movable):
                 and kind_of_index != "Uint32Array"
             ):
                 raise Error("Object JSON: an index must be Uint16 or Uint32")
-            var list = self.array(index, "array")
-            if list == NO_NODE:
-                raise Error("Object JSON: an index has no array")
+            var list = present(
+                self.array(index, "array"),
+                "Object JSON: an index has no array",
+            )
             var entries = List[Int]()
             for at in range(self.document.length(list)):
                 entries.append(
@@ -1338,10 +1344,9 @@ struct _Loader(Movable):
         if uuid not in self.images:
             raise Error("Object JSON: a texture names no image: " + uuid)
         var item = self.document.at(self.library("images"), self.images[uuid])
-        var url = self.document.get(item, "url")
-        if url == NO_NODE:
-            raise Error("Object JSON: an image has no URL")
-        return url
+        return self.document.required(
+            item, "url", "Object JSON: an image has no URL"
+        )
 
     def is_cube(self, uuid: String) raises -> Bool:
         """Return True if a texture's image is six images, which makes it
@@ -2417,10 +2422,12 @@ struct _Loader(Movable):
             raise Error(
                 "Object JSON: a data texture's image must hold a Float32Array"
             )
-        var data = self.array(url, "data")
-        if data == NO_NODE:
-            raise Error("Object JSON: a data texture's image has no data")
-        return self.numbers_of(data)
+        return self.numbers_of(
+            present(
+                self.array(url, "data"),
+                "Object JSON: a data texture's image has no data",
+            )
+        )
 
     def geometry_named(self, item: Int) raises -> GeometryId:
         """Return the geometry an object's `geometry` uuid names."""
@@ -2483,9 +2490,10 @@ struct _Loader(Movable):
             cast_shadow=self.flag(item, "castShadow", False),
             receive_shadow=self.flag(item, "receiveShadow", False),
         )
-        var matrices = self.entry(item, "instanceMatrix")
-        if matrices == NO_NODE:
-            raise Error("Object JSON: an InstancedMesh has no instanceMatrix")
+        var matrices = present(
+            self.entry(item, "instanceMatrix"),
+            "Object JSON: an InstancedMesh has no instanceMatrix",
+        )
         var none = Dict[String, InterleavedBuffer]()
         var attribute = self.attribute(matrices, NO_NODE, none)
         if attribute.item_size != 16 or attribute.count() != count:
@@ -2903,9 +2911,10 @@ struct _Loader(Movable):
             if uuid not in skeletons:
                 raise Error("Object JSON: a SkinnedMesh names no skeleton")
             var entry = self.document.at(list, skeletons[uuid])
-            var bones = self.array(entry, "bones")
-            if bones == NO_NODE:
-                raise Error("Object JSON: a skeleton has no bones")
+            var bones = present(
+                self.array(entry, "bones"),
+                "Object JSON: a skeleton has no bones",
+            )
             var inverses = self.array(entry, "boneInverses")
             var count = self.document.length(bones)
             var given = 0

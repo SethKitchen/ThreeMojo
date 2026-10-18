@@ -343,10 +343,7 @@ def write_curve_path3(mut writer: JsonWriter, path: CurvePath3) raises:
 
 def _field(doc: JsonDocument, node: Int, key: String) raises -> Int:
     """Return a field that must be there."""
-    var found = doc.get(node, key)
-    if found == NO_NODE:
-        raise Error("Curve JSON: a curve has no " + key)
-    return found
+    return doc.required(node, key, "Curve JSON: a curve has no " + key)
 
 
 def _numbers(
