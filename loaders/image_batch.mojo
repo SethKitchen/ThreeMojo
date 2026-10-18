@@ -11,6 +11,7 @@ before its tasks join. A failure advances the atomic cursor to the end,
 so no later image can be claimed. Already-claimed images still finish.
 """
 
+from math.utils import clamp
 from render.texture import Texture
 from render.tasks import TaskGroup
 from std.atomic import Atomic
@@ -26,7 +27,7 @@ def decode_batch_size(remaining: Int, workers: Int) -> Int:
     Returns:
         No more than `max(0, remaining)` and `max(1, workers)` images.
     """
-    return min(max(0, remaining), max(1, workers))
+    return clamp(remaining, 0, max(1, workers))
 
 
 struct TextureDecodeBatch(Movable):

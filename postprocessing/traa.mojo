@@ -40,7 +40,7 @@ limits, and explicit zero and nonfinite rules.
 
 from render.color_math import floor_channels
 from math.norm import length2
-from math.utils import max3, saturate
+from math.utils import clamp, max3, saturate
 from math.sine import fraction
 from cameras.camera import Camera
 from core.assets import Assets
@@ -272,8 +272,8 @@ struct FloatPlane(ImplicitlyCopyable):
         Returns:
             The float.
         """
-        var cx = min(max(x, 0), self.width - 1)
-        var cy = min(max(y, 0), self.height - 1)
+        var cx = clamp(x, 0, self.width - 1)
+        var cy = clamp(y, 0, self.height - 1)
         return self.floats[
             unsafe_offset=(cy * self.width + cx) * self.lanes + lane
         ]
@@ -281,9 +281,7 @@ struct FloatPlane(ImplicitlyCopyable):
 
 def _load(view: LightView, x: Int, y: Int) -> FloatColor:
     """Return a pixel, the edge pixel's past the edge: `textureLoad`."""
-    return view.at(
-        min(max(x, 0), view.width - 1), min(max(y, 0), view.height - 1)
-    )
+    return view.at(clamp(x, 0, view.width - 1), clamp(y, 0, view.height - 1))
 
 
 def clip_aabb(
