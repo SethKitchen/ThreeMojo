@@ -289,14 +289,7 @@ def unzip(bytes: List[UInt8]) raises -> List[ZipEntry]:
         )
         var name = String(
             from_utf8_lossy=Span(
-                List[UInt8](
-                    bytes[
-                        at
-                        + _CENTRAL_LENGTH : at
-                        + _CENTRAL_LENGTH
-                        + name_length
-                    ]
-                )
+                copy_bytes(bytes, at + _CENTRAL_LENGTH, name_length)
             )
         )
         what = "entry `" + name + "`"

@@ -168,7 +168,7 @@ limits, and explicit zero and nonfinite rules.
 
 from core.ordinal import ordinal_valid
 
-from core.binary import little_endian_u16, little_endian_u32
+from core.binary import copy_bytes, little_endian_u16, little_endian_u32
 from loaders.gltf_layout import AccessorLayout, check_buffer_range
 from animation.animation_clip import AnimationClip
 from animation.keyframe_track import (
@@ -918,9 +918,7 @@ def split_glb(bytes: List[UInt8]) raises -> Tuple[String, List[UInt8]]:
         var start = at + GLB_CHUNK_HEADER_BYTES
         if start + length > len(bytes):
             raise Error("glTF: a chunk runs past the file")
-        var chunk = List[UInt8]()
-        for index in range(start, start + length):
-            chunk.append(bytes[index])
+        var chunk = copy_bytes(bytes, start, length)
         if kind == GLB_JSON_CHUNK:
             if seen_json:
                 raise Error("glTF: two JSON chunks")
@@ -1501,9 +1499,7 @@ struct _Loader(Movable):
             var filter = FILTER_NONE
             if self.document.has(found, "filter"):
                 filter = meshopt_filter(self.text(found, "filter"))
-            var source = List[UInt8](capacity=length)
-            for at in range(offset, offset + length):
-                source.append(self.buffers[buffer][at])
+            var source = copy_bytes(self.buffers[buffer], offset, length)
             var decoded = decode_gltf_buffer(
                 count, stride, source, mode, filter
             )
@@ -1834,7 +1830,7 @@ struct _Loader(Movable):
         if view_index < 0:
             raise Error("glTF: an image needs a uri or a bufferView")
         var view = self.view_bytes(view_index)
-        return List[UInt8](self.buffers[view[0]][view[1] : view[1] + view[2]])
+        return copy_bytes(self.buffers[view[0]], view[1], view[2])
 
     def texture(
         mut self,
@@ -2542,10 +2538,7 @@ struct _Loader(Movable):
         for slot in range(self.document.length(ids)):
             names.append(self.document.key(ids, slot))
             uids.append(self.document.integer(self.document.at(ids, slot)))
-        var data = List[UInt8](capacity=view[2])
-        ref bytes = self.buffers[view[0]]
-        for at in range(view[1], view[1] + view[2]):
-            data.append(bytes[at])
+        var data = copy_bytes(self.buffers[view[0]], view[1], view[2])
         return _DracoPrimitive(decode_draco(data), names^, uids^)
 
     def attribute_floats(

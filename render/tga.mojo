@@ -27,7 +27,7 @@ TGA carries no color space of its own. What a paint program writes is
 sRGB, and so does this reader assume: a decoded TGA is `SRGB`.
 """
 
-from core.binary import little_endian_u16
+from core.binary import copy_bytes, little_endian_u16
 from render.framebuffer import Color
 from render.png import DecodedImage, require_image_pixels
 from render.srgb import SRGB
@@ -160,10 +160,7 @@ def unpack_pixels(
     var size = count * pixel_bytes
     if not kind.is_run_length():
         require_tga_span(start, size, len(bytes))
-        var plain = List[UInt8](capacity=size)
-        for index in range(size):
-            plain.append(bytes[start + index])
-        return plain^
+        return copy_bytes(bytes, start, size)
     var out = List[UInt8](capacity=size)
     var at = start
     var done = 0

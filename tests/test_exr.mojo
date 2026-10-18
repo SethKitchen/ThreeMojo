@@ -15,6 +15,7 @@ reference encoder of OpenEXR's format, and the 16-bit wavelet is checked
 against a line-for-line port of three.js's `wav2Decode`.
 """
 
+from core.binary import copy_bytes
 from render.exr import (
     FLOAT_SAMPLES,
     HALF_SAMPLES,
@@ -1730,8 +1731,8 @@ def test_a_channel_list_is_checked() raises:
 def test_blocks_are_checked() raises:
     # Cut in a block's header, and in its data.
     var whole = half_rgb_file(0, [row_zero(), row_one()], [0, 1])
-    refused(List[UInt8](whole[: len(whole) - 18 - 4]), "cut short")
-    refused(List[UInt8](whole[: len(whole) - 1]), "cut short")
+    refused(copy_bytes(whole, 0, len(whole) - 18 - 4), "cut short")
+    refused(copy_bytes(whole, 0, len(whole) - 1), "cut short")
     # A line before the window, and one past it.
     refused(half_rgb_file(0, [row_zero(), row_one()], [0, -1]), "outside")
     refused(half_rgb_file(0, [row_zero(), row_one()], [0, 2]), "outside")
