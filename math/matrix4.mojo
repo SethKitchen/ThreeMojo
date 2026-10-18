@@ -1059,6 +1059,25 @@ def require_axis_extent(
         raise Error(message)
 
 
+def column_major_matrix(elements: List[Float32]) -> Matrix4:
+    """Return a matrix filled from sixteen column-major numbers.
+
+    Args:
+        elements: Sixteen numbers. The first four are the first column.
+
+    Returns:
+        The matrix.
+
+    Raises:
+        Error: Never.
+    """
+    var matrix = Matrix4()
+    # Sixteen entries, so the loop always runs.
+    for index in range(16):  # pragma: no branch
+        matrix.elements[index] = elements[index]
+    return matrix^
+
+
 def translation(x: Float32, y: Float32, z: Float32) -> Matrix4:
     """Return a matrix that moves a point by (x, y, z)."""
     var matrix = Matrix4()

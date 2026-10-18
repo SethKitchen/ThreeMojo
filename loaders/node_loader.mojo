@@ -74,7 +74,7 @@ from materials.nodes import (
     ValueType,
 )
 from math.matrix3 import Matrix3
-from math.matrix4 import Matrix4
+from math.matrix4 import column_major_matrix
 from math.vector2 import Vector2
 from math.vector3 import Vector3
 from math.vector4 import Vector4
@@ -682,10 +682,7 @@ struct NodeLoader(Movable):
             for index in range(9):  # pragma: no branch
                 matrix.elements[index] = numbers[index]
             return self.graph.uniform(name, matrix)
-        var matrix = Matrix4()
-        for index in range(16):  # pragma: no branch
-            matrix.elements[index] = numbers[index]
-        return self.graph.uniform(name, matrix)
+        return self.graph.uniform(name, column_major_matrix(numbers))
 
     def _attribute(
         mut self, document: JsonDocument, item: Int

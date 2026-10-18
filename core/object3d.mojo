@@ -50,7 +50,13 @@ from core.ordinal import ordinal_valid
 from core.layers import Layers
 from core.user_data import UserData
 from math.euler import XYZ, Euler, EulerOrder
-from math.matrix4 import Matrix4, scaling, translation
+from math.matrix4 import (
+    Matrix4,
+    column_major_matrix,
+    require_axis_extent,
+    scaling,
+    translation,
+)
 from math.quaternion import Quaternion
 from math.vector3 import Vector3, require_nonzero_scale
 from units.si import METER, Angle, Length
@@ -532,3 +538,57 @@ struct Object3D(ImplicitlyCopyable):
         combined.premultiply(matrix)
         self.set_from_matrix(combined)
         self.matrix = combined^
+
+
+def _place_decomposed(
+    mut node: Object3D, matrix: Matrix4, flat_axis: String
+) raises:
+    """Set a node's position, rotation and scale from a matrix.
+
+    The split is `Matrix4.decompose`. Each column's length is a scale,
+    the first negated when the determinant is negative, and the rotation
+    is what remains. A zero axis length raises `flat_axis` before that
+    split, so the caller names the file.
+
+    Args:
+        node: The node to set.
+        matrix: The transform relative to the node's parent.
+        flat_axis: The error when an axis has no length.
+
+    Returns:
+        Nothing. The node holds the three parts.
+
+    Raises:
+        Error: If an axis length is zero, an entry is not finite, or a
+            scale cannot fit in Float32.
+    """
+    var sx = matrix.column_length(0)
+    var sy = matrix.column_length(1)
+    var sz = matrix.column_length(2)
+    require_axis_extent(sx, sy, sz, flat_axis)
+    var position = Vector3(0, 0, 0)
+    var rotation = Quaternion.identity()
+    var scale = Vector3(0, 0, 0)
+    matrix.decompose(position, rotation, scale)
+    node.set_position(position.x, position.y, position.z)
+    node.set_quaternion(rotation)
+    node.set_scale(scale.x, scale.y, scale.z)
+
+
+def _place_from_column_major(
+    mut node: Object3D, elements: List[Float32], flat_axis: String
+) raises:
+    """Set a node from sixteen column-major numbers.
+
+    Args:
+        node: The node to set.
+        elements: Sixteen numbers, column by column.
+        flat_axis: The error when an axis has no length.
+
+    Returns:
+        Nothing. The node holds the decomposed transform.
+
+    Raises:
+        Error: Everything `_place_decomposed` raises.
+    """
+    _place_decomposed(node, column_major_matrix(elements), flat_axis)

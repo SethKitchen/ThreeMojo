@@ -23,12 +23,10 @@ limits, and explicit zero and nonfinite rules.
 """
 
 from core.assets import Assets
-from core.object3d import Object3D
+from core.object3d import Object3D, _place_decomposed
 from materials.material import Material, MaterialId
 from loaders.gltf import decode_image
-from math.matrix4 import Matrix4, require_axis_extent
-from math.quaternion import Quaternion
-from math.vector3 import Vector3
+from math.matrix4 import Matrix4
 from math.finite import require_finite_group
 from render.framebuffer import Color, FloatColor
 from render.srgb import ColorSpace
@@ -58,19 +56,9 @@ def decompose_onto(mut node: Object3D, matrix: Matrix4, what: String) raises:
         matrix.is_finite(),
         what + ": a node matrix that is not finite",
     )
-    var sx = matrix.column_length(0)
-    var sy = matrix.column_length(1)
-    var sz = matrix.column_length(2)
-    require_axis_extent(
-        sx, sy, sz, what + ": a node matrix that flattens an axis"
+    _place_decomposed(
+        node, matrix, what + ": a node matrix that flattens an axis"
     )
-    var position = Vector3(0, 0, 0)
-    var rotation = Quaternion.identity()
-    var scale = Vector3(0, 0, 0)
-    matrix.decompose(position, rotation, scale)
-    node.set_position(position.x, position.y, position.z)
-    node.set_quaternion(rotation)
-    node.set_scale(scale.x, scale.y, scale.z)
 
 
 def compose(node: Object3D) -> Matrix4:
