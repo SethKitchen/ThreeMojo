@@ -95,6 +95,7 @@ is split along is part of the surface. Both forms split it as three.js's
 """
 
 from core.buffer_attribute import BufferAttribute
+from geometries.surface import textured_surface
 from core.buffer_geometry import (
     BufferGeometry,
     EXTRUDE_GEOMETRY,
@@ -878,9 +879,7 @@ def _joined(parts: List[BufferGeometry]) raises -> BufferGeometry:
             counts.append(group.count)
             materials.append(group.material_index.value)
     var geometry = BufferGeometry()
-    geometry.set_attribute(String(POSITION), BufferAttribute(data^, 3))
-    geometry.set_attribute(String(NORMAL), BufferAttribute(normals^, 3))
-    geometry.set_attribute(String(UV), BufferAttribute(uvs^, 2))
+    textured_surface(geometry, data^, normals^, uvs^)
     for at in range(len(starts)):  # pragma: no branch
         geometry.add_group(starts[at], counts[at], MaterialIndex(materials[at]))
     return geometry^

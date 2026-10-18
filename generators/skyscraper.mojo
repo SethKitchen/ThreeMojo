@@ -42,6 +42,7 @@ from generators.utils import (
     meters,
 )
 from geometries.box import box
+from geometries.surface import textured_surface
 from geometries.extrude import extrude
 from geometries.lathe import lathe
 from geometries.plane import plane
@@ -968,9 +969,7 @@ def _arch_reveals(
         for i in range(len(points) - 1):  # pragma: no branch
             _reveal_quad(positions, normals, uvs, points[i], points[i + 1], d)
     var geometry = BufferGeometry()
-    geometry.set_attribute(String(POSITION), BufferAttribute(positions^, 3))
-    geometry.set_attribute(String(NORMAL), BufferAttribute(normals^, 3))
-    geometry.set_attribute(String(UV), BufferAttribute(uvs^, 2))
+    textured_surface(geometry, positions^, normals^, uvs^)
     return geometry^
 
 

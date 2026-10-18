@@ -45,11 +45,10 @@ from core.binary import little_endian_u32
 from core.buffer_attribute import BufferAttribute
 from core.buffer_geometry import (
     COLOR,
-    NORMAL,
-    POSITION,
     BufferGeometry,
     MaterialIndex,
 )
+from geometries.surface import position_normal_surface
 from loaders.bytes import bytes_match
 from loaders.js_text import split_fields
 from loaders.text_number import file_line, read_finite_float32
@@ -254,8 +253,7 @@ def _parse_binary(bytes: List[UInt8]) raises -> StlModel:
                 colors.append(g)
                 colors.append(b)
     var geometry = BufferGeometry()
-    geometry.set_attribute(String(POSITION), BufferAttribute(positions^, 3))
-    geometry.set_attribute(String(NORMAL), BufferAttribute(normals^, 3))
+    position_normal_surface(geometry, positions^, normals^)
     if colored:
         geometry.set_attribute(String(COLOR), BufferAttribute(colors^, 3))
     var solids = List[StlSolid]()
@@ -475,8 +473,7 @@ def parse_stl_text(text: String) raises -> StlModel:
     if len(solids) == 0:
         raise Error("STL: the text has no solid")
     var geometry = BufferGeometry()
-    geometry.set_attribute(String(POSITION), BufferAttribute(positions^, 3))
-    geometry.set_attribute(String(NORMAL), BufferAttribute(normals^, 3))
+    position_normal_surface(geometry, positions^, normals^)
     for index in range(len(solids)):  # pragma: no branch
         geometry.add_group(
             solids[index].start, solids[index].count, MaterialIndex(index)

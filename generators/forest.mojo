@@ -26,6 +26,7 @@ ported; `ForestInstances.keeps` answers the cull's question on the CPU.
 
 from core.buffer_attribute import BufferAttribute
 from core.buffer_geometry import BufferGeometry, NORMAL, POSITION
+from geometries.surface import position_normal_surface
 from core.ordinal import require_index_in_count
 from generators.terrain import TerrainGenerator
 from generators.utils import (
@@ -201,8 +202,7 @@ def blob_geometry(p: ForestParameters) raises -> BufferGeometry:
         normals.append(Float32(uz * inverse))
         ao.append(Float32(h))
     var geometry = BufferGeometry()
-    geometry.set_attribute(String(POSITION), BufferAttribute(positions^, 3))
-    geometry.set_attribute(String(NORMAL), BufferAttribute(normals^, 3))
+    position_normal_surface(geometry, positions^, normals^)
     geometry.set_attribute(String(AO), BufferAttribute(ao^, 1))
     geometry.set_index(welded.index.copy())
     return geometry^

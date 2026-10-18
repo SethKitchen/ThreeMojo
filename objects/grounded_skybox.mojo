@@ -20,8 +20,8 @@ arithmetic is three.js's, in doubles, on the sphere's float positions.
 """
 
 from core.assets import Assets
-from core.buffer_attribute import BufferAttribute
 from core.buffer_geometry import BufferGeometry, NORMAL, POSITION
+from geometries.surface import position_normal_surface
 from core.object3d import NodeId
 from geometries.sphere import sphere
 from materials.material import BASIC, Material
@@ -81,8 +81,7 @@ def grounded_skybox(
             positions[at] = Float32(Float64(positions[at]) * factor)
             positions[at + 1] = Float32(y * factor)
             positions[at + 2] = Float32(Float64(positions[at + 2]) * factor)
-    geometry.set_attribute(String(POSITION), BufferAttribute(positions^, 3))
-    geometry.set_attribute(String(NORMAL), BufferAttribute(normals^, 3))
+    position_normal_surface(geometry, positions^, normals^)
     return geometry^
 
 
