@@ -59,6 +59,7 @@ from core.buffer_geometry import (
     BufferGeometry,
     MaterialIndex,
 )
+from core.ordinal import require_index_in_count
 from loaders.js_text import split_fields
 from loaders.text_number import file_line, read_finite_float32
 from math.vector3 import Vector3
@@ -334,12 +335,11 @@ def _index(field: String, pool: Int, line: Int) raises -> Int:
         value += pool
     else:
         value -= 1
-    if value < 0 or value >= pool:
-        raise Error(
-            _where(line)
-            + "a face names an entry the file does not have: "
-            + field
-        )
+    require_index_in_count(
+        value,
+        pool,
+        _where(line) + "a face names an entry the file does not have: " + field,
+    )
     return value
 
 

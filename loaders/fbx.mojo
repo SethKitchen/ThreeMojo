@@ -66,7 +66,11 @@ See `docs/wiki/Norm-consumers.md` for the changed operations, retained
 limits, and explicit zero and nonfinite rules.
 """
 
-from core.ordinal import index_in_count, ordinal_valid
+from core.ordinal import (
+    index_in_count,
+    ordinal_valid,
+    require_index_in_count,
+)
 
 from math.triangle_normal import polygon_normal
 
@@ -268,8 +272,11 @@ struct FbxLayer(Copyable, Movable):
             if len(self.indices) > 0:
                 index = self.indices[0]
         if self.reference == INDEX_TO_DIRECT:
-            if index < 0 or index >= len(self.indices):
-                raise Error("FBX: a layer index outside its index array")
+            require_index_in_count(
+                index,
+                len(self.indices),
+                "FBX: a layer index outside its index array",
+            )
             index = self.indices[index]
         var begin = index * self.size
         if index < 0 or begin + self.size > len(self.values):
@@ -2016,10 +2023,11 @@ struct _Loader(Movable):
                 raise Error("FBX: a shape needs three numbers per index")
             for at in range(len(indices)):
                 var vertex = indices[at]
-                if not index_in_count(vertex, count):
-                    raise Error(
-                        "FBX: a shape names a position that is not there"
-                    )
+                require_index_in_count(
+                    vertex,
+                    count,
+                    "FBX: a shape names a position that is not there",
+                )
                 offsets[vertex] = Vector3(
                     Float32(moved[at * 3]),
                     Float32(moved[at * 3 + 1]),

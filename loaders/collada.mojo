@@ -66,7 +66,7 @@ coordinates, and the specular and ambient maps. `<polygons>` is read,
 which three.js does not read.
 """
 
-from core.ordinal import index_in_count, ordinal_valid
+from core.ordinal import ordinal_valid, require_index_in_count
 
 from animation.animation_clip import AnimationClip
 from cameras.orthographic_camera import OrthographicCamera
@@ -2130,13 +2130,17 @@ struct _Loader(Movable):
                     raise Error("Collada: <v> is shorter than <vcount> needs")
                 var bone = pairs[stride + joint_at]
                 var share = pairs[stride + weight_at]
-                if not index_in_count(bone, len(data.names)):
-                    raise Error(
-                        "Collada: a joint index outside the joints: "
-                        + String(bone)
-                    )
-                if not index_in_count(share, len(shares)):
-                    raise Error("Collada: a weight index outside the weights")
+                require_index_in_count(
+                    bone,
+                    len(data.names),
+                    "Collada: a joint index outside the joints: "
+                    + String(bone),
+                )
+                require_index_in_count(
+                    share,
+                    len(shares),
+                    "Collada: a weight index outside the weights",
+                )
                 # Largest first, equal weights keeping their order, as
                 # three.js's stable sort keeps them.
                 var at = _sorted_place(amounts, shares[share])

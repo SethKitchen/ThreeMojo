@@ -66,7 +66,7 @@ limits, and explicit zero and nonfinite rules.
 """
 
 from core.binary import copy_byte_range
-from core.ordinal import ordinal_valid
+from core.ordinal import ordinal_valid, require_index_in_count
 from loaders.bytes import bytes_match
 from loaders.text_number import file_line
 from loaders.js_text import split_fields
@@ -902,15 +902,16 @@ def parse_ply(
         # A face has three corners or more here, and makes a triangle or
         # more: this loop and the three below always run.
         for corner in range(first, first + count):  # pragma: no branch
-            if corners[corner] < 0 or corners[corner] >= vertex_count:
-                raise Error(
-                    "PLY face "
-                    + String(face)
-                    + ": it names vertex "
-                    + String(corners[corner])
-                    + ", and the file has "
-                    + String(vertex_count)
-                )
+            require_index_in_count(
+                corners[corner],
+                vertex_count,
+                "PLY face "
+                + String(face)
+                + ": it names vertex "
+                + String(corners[corner])
+                + ", and the file has "
+                + String(vertex_count),
+            )
         if count > 3:
             var points = List[Vector3]()
             for corner in range(first, first + count):  # pragma: no branch
