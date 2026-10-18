@@ -13,6 +13,7 @@ buffers through the same `LightView`; see `render.gpu.GpuComposer`.
 """
 
 from render.framebuffer import FloatColor
+from std.math import max, min
 
 
 # A view's pointer is not tracked by the compiler: whoever builds one keeps
@@ -232,3 +233,20 @@ def v_of(y: Int, height: Int) -> Float32:
         The `v` of the row's center.
     """
     return 1 - (Float32(y) + 0.5) / Float32(height)
+
+
+def clamped_texel(coordinate: Float32, count: Int) -> Float32:
+    """Return a unit coordinate as a pixel position, held on the image.
+
+    Pixel centers sit on the integers. Zero is the first pixel's center
+    and one is the last pixel's center. A position outside the image
+    stays on the edge pixel.
+
+    Args:
+        coordinate: Zero at the first pixel and one at the last.
+        count: How many pixels. It is at least one.
+
+    Returns:
+        The pixel position, from zero through `count - 1`.
+    """
+    return min(max(coordinate * Float32(count) - 0.5, 0), Float32(count - 1))
