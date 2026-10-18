@@ -1185,8 +1185,7 @@ def available() -> Bool:
 def require_gpu() raises:
     """Refuse a launch when this machine has no GPU.
 
-    Returns:
-        Nothing. The call returns when a GPU is present.
+    Nothing. The call returns when a GPU is present.
 
     Raises:
         Error: If no GPU is present.
@@ -1198,12 +1197,11 @@ def require_gpu() raises:
 def require_volume_address(used: Int, size: Int) raises:
     """Refuse a volume block that cannot be addressed as an Int32.
 
+    Nothing. The call returns when the block fits.
+
     Args:
         used: How many floats are already stored.
         size: How many floats the next block adds.
-
-    Returns:
-        Nothing. The call returns when the block fits.
 
     Raises:
         Error: If the block exceeds Int32 addressing.
@@ -1217,14 +1215,13 @@ def require_composer_frame(
 ) raises:
     """Refuse a composer frame that is not the composer's size.
 
+    Nothing. The call returns when the sizes match.
+
     Args:
         width: The composer's width in pixels.
         height: The composer's height in pixels.
         frame_width: The frame's width in pixels.
         frame_height: The frame's height in pixels.
-
-    Returns:
-        Nothing. The call returns when the sizes match.
 
     Raises:
         Error: If the frame is another size.
