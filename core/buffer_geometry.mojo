@@ -145,6 +145,52 @@ comptime COLOR = "color"
 comptime TANGENT = "tangent"
 
 
+def _refuse_past_vertex() raises:
+    """Raise the error an index entry past the last vertex gets.
+
+    Raises:
+        Error: Always. The entry does not name a vertex.
+    """
+    raise Error("An index entry points past the last vertex")
+
+
+def require_vertex_index(vertex: Int, count: Int) raises:
+    """Refuse an index entry that points past the last vertex.
+
+    A negative entry is a different check. Callers that refuse one do
+    that before they call this.
+
+    Args:
+        vertex: The index entry.
+        count: How many vertices there are.
+
+    Returns:
+        Nothing. The call returns when the entry names a vertex.
+
+    Raises:
+        Error: If the entry points past the last vertex.
+    """
+    if vertex >= count:
+        _refuse_past_vertex()
+
+
+def require_stored_index(vertex: Int, count: Int) raises:
+    """Refuse an index entry that is negative or past the last vertex.
+
+    Args:
+        vertex: The index entry.
+        count: How many vertices there are.
+
+    Returns:
+        Nothing. The call returns when the entry names a vertex.
+
+    Raises:
+        Error: If the entry is negative or points past the last vertex.
+    """
+    if vertex < 0 or vertex >= count:
+        _refuse_past_vertex()
+
+
 def _run_end(start: Int, count: Int, total: Int) -> Int:
     """Return a run's clamped end without adding unbounded integers.
 
@@ -1107,8 +1153,7 @@ struct BufferGeometry(Movable):
             return slot
 
         var vertex = self.index[slot]
-        if vertex >= self.vertex_count():
-            raise Error("An index entry points past the last vertex")
+        require_vertex_index(vertex, self.vertex_count())
         return vertex
 
     def corner(self, triangle: Int, corner: Int) raises -> Vector3:
@@ -1669,8 +1714,7 @@ struct BufferGeometry(Movable):
         if not self.is_indexed():
             return slot
         var vertex = self.index[slot]
-        if vertex >= self.vertex_count():
-            raise Error("An index entry points past the last vertex")
+        require_vertex_index(vertex, self.vertex_count())
         return vertex
 
     def _runs(self) raises -> List[GeometryGroup]:

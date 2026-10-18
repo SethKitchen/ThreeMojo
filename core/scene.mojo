@@ -106,6 +106,23 @@ from objects.sprite import Sprite
 comptime ZERO_ANGLE = Angle(0.0, RADIAN)
 
 
+def require_lod_index(index: Int, count: Int) raises:
+    """Refuse an LOD index the scene does not have.
+
+    Args:
+        index: Which LOD, as its position in the scene's list.
+        count: How many LODs the scene has.
+
+    Returns:
+        Nothing. The call returns when the index names an LOD.
+
+    Raises:
+        Error: If no LOD has that index.
+    """
+    if index < 0 or index >= count:
+        raise Error("No LOD has that index")
+
+
 struct _Links(Movable):
     """Every node's children, in order, and the roots, in order: the
     `children` arrays three.js keeps, worked out from the parent links."""
@@ -400,8 +417,7 @@ struct Scene(Movable):
                 or cannot go under the LOD's node, or for anything
                 `Lod.add_level` raises for.
         """
-        if index < 0 or index >= len(self.lods):
-            raise Error("No LOD has that index")
+        require_lod_index(index, len(self.lods))
         self._check(object)
         var holder = self.lods[index].node
         if object.value in self._chain(holder):
@@ -424,8 +440,7 @@ struct Scene(Movable):
         Raises:
             Error: If no LOD has that index.
         """
-        if index < 0 or index >= len(self.lods):
-            raise Error("No LOD has that index")
+        require_lod_index(index, len(self.lods))
         var removed = self.lods[index].remove_level(distance)
         if not removed:
             return False
@@ -1355,8 +1370,7 @@ struct Scene(Movable):
             Error: If no LOD has that index, the scene is stale, or the
                 LOD names a node that is not there.
         """
-        if index < 0 or index >= len(self.lods):
-            raise Error("No LOD has that index")
+        require_lod_index(index, len(self.lods))
         self._choose_level(index, self._lod_distance(index, eye))
         self.update()
 

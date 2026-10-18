@@ -32,7 +32,12 @@ targets are dropped, as in three.js.
 """
 
 from core.buffer_attribute import BufferAttribute
-from core.buffer_geometry import BufferGeometry, NORMAL, POSITION
+from core.buffer_geometry import (
+    BufferGeometry,
+    NORMAL,
+    POSITION,
+    require_vertex_index,
+)
 from geometries.utils import merge_vertices
 from std.math import cos, isfinite, sqrt
 from units.si import Angle
@@ -181,8 +186,7 @@ def edge_split(
         var p = List[SIMD[DType.float64, 4]]()
         for corner in range(3):  # pragma: no branch
             var vertex = indexes[first + corner]
-            if vertex >= count:
-                raise Error("An index entry points past the last vertex")
+            require_vertex_index(vertex, count)
             p.append(
                 SIMD[DType.float64, 4](
                     Float64(position.component(vertex, 0)),

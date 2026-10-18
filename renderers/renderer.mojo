@@ -130,6 +130,7 @@ from core.buffer_geometry import (
     UV1,
     BufferGeometry,
     GeometryGroup,
+    require_vertex_index,
     MaterialIndex,
 )
 from core.assets import Assets
@@ -7250,8 +7251,7 @@ struct Renderer(Movable):
             var indexed = geometry.is_indexed()
             ref indices = geometry.index
             for slot in range(len(indices)):
-                if indices[slot] >= vertex_count:
-                    raise Error("An index entry points past the last vertex")
+                require_vertex_index(indices[slot], vertex_count)
             # The run this draw fills: a group of a mesh that wears a
             # material list, or the whole stream, inside the geometry's
             # draw range. See `drawn_run`.

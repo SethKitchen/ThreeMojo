@@ -38,6 +38,7 @@ from core.buffer_attribute import BufferAttribute
 from core.buffer_geometry import (
     BufferGeometry,
     MaterialIndex,
+    require_vertex_index,
     NORMAL,
     POSITION,
 )
@@ -158,8 +159,7 @@ def merge_geometries(
         var count = geometry.vertex_count()
         # Runs no times for a part without an index.
         for entry in range(len(geometry.index)):
-            if geometry.index[entry] >= count:
-                raise Error("An index entry points past the last vertex")
+            require_vertex_index(geometry.index[entry], count)
             index.append(geometry.index[entry] + vertices)
         if use_groups:
             var span = geometry.stream_length()

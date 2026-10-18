@@ -36,6 +36,7 @@ change the image, which is the one thing culling must not do.
 
 from math.bounds import Box3, Plane, Sphere
 from math.matrix4 import Matrix4
+from math.projection import require_far_beyond_near
 from math.vector3 import Vector3
 from std.math import isfinite
 
@@ -251,8 +252,7 @@ struct Frustum(Copyable, Movable):
             )
         if not isfinite(near) or not isfinite(far):
             raise Error("Frustum near and far distances must be finite")
-        if far <= near:
-            raise Error("The far plane must be beyond the near plane")
+        require_far_beyond_near(near, far)
         ref c = clip.elements
         ref e = view.elements
         # Camera-space z is the view's third row dotted with a point:

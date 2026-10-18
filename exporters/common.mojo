@@ -54,6 +54,7 @@ from core.buffer_geometry import (
     UV,
     BufferGeometry,
     GeometryGroup,
+    require_vertex_index,
 )
 from core.deform import skin_carriers, skin_pose
 from core.object3d import NodeId
@@ -204,8 +205,7 @@ def check_geometry(
     for slot in range(len(geometry.index)):
         if geometry.index[slot] < 0:
             raise Error("An index entry cannot be negative")
-        if geometry.index[slot] >= count:
-            raise Error("An index entry points past the last vertex")
+        require_vertex_index(geometry.index[slot], count)
     if triangles and not geometry.is_indexed() and count % 3 != 0:
         raise Error(
             "A geometry without an index must hold whole triangles to be"

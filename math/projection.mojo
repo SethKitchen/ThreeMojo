@@ -29,6 +29,26 @@ from math.vector3 import Vector3
 from std.math import isfinite
 
 
+def require_far_beyond_near(near: Float32, far: Float32) raises:
+    """Refuse a far plane that is not beyond the near plane.
+
+    A NaN comparison is false, so a caller that must refuse a nonfinite
+    distance checks that before it calls this.
+
+    Args:
+        near: The near distance.
+        far: The far distance.
+
+    Returns:
+        Nothing. The call returns when `far` is beyond `near`.
+
+    Raises:
+        Error: If `far` is not beyond `near`.
+    """
+    if far <= near:
+        raise Error("The far plane must be beyond the near plane")
+
+
 def _check_finite_bounds(
     left: Float32,
     right: Float32,
@@ -96,8 +116,7 @@ def perspective(
     _check_finite_bounds(left, right, top, bottom, near, far)
     if near <= 0:
         raise Error("The near plane must be in front of the camera")
-    if far <= near:
-        raise Error("The far plane must be beyond the near plane")
+    require_far_beyond_near(near, far)
     if right <= left or top <= bottom:
         raise Error("The frustum must have positive width and height")
 
@@ -183,8 +202,7 @@ def orthographic(
             are not ordered.
     """
     _check_finite_bounds(left, right, top, bottom, near, far)
-    if far <= near:
-        raise Error("The far plane must be beyond the near plane")
+    require_far_beyond_near(near, far)
     if right <= left or top <= bottom:
         raise Error("The view volume must have positive width and height")
 
