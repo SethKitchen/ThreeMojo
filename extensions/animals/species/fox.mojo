@@ -38,7 +38,7 @@ from extensions.animals.kit import (
     eye_frame_of,
     head_local,
     reference_to_head_local,
-    is_limb,
+    coat_place,
     is_front_limb,
     hashed_stream,
     mirrored_ell_bottom,
@@ -1315,19 +1315,9 @@ def fox_paint(
     var nz2 = vnoise3(V3(p.x * 70.0 + n_off, p.y * 70.0, p.z * 70.0)) - 0.5
     var c: V3
     var agouti: Float64
-    var region = 0
+    var region, limb = coat_place(bone)
     var leg = 0.0
-    if bone == "head":
-        region = 2
-    elif bone == "jaw":
-        region = 6
-    elif bone.startswith("ear"):
-        region = 5
-    elif bone.startswith("tail"):
-        region = 4
-    elif bone == "neck1" or bone == "neck2":
-        region = 1
-    elif is_limb(bone):
+    if limb:
         leg = smoothstep(0.29, 0.17, p.y)
     if region <= 1:
         c = _body(pal, t, p, n, nz, region, leg, bone)

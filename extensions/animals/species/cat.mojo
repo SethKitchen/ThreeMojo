@@ -34,7 +34,7 @@ from extensions.animals.kit import (
     digitigrade_hind,
     EyeSpec,
     eye_frame_of,
-    is_limb,
+    coat_place,
     is_front_limb,
     mirrored_blob,
     hashed_stream,
@@ -1625,19 +1625,9 @@ def cat_paint(
     var look = pal.get("look")
     var tabby = v == MACKEREL or v == CLASSIC or v == GINGER
     var ghost = look.z > 0.5
-    var region = 0
+    var region, limb = coat_place(bone)
     var leg = 0.0
-    if bone == "head":
-        region = 2
-    elif bone == "jaw":
-        region = 6
-    elif bone.startswith("ear"):
-        region = 5
-    elif bone.startswith("tail"):
-        region = 4
-    elif bone == "neck1" or bone == "neck2":
-        region = 1
-    elif is_limb(bone):
+    if limb:
         leg = smoothstep(0.15, 0.09, p.y)
     var axl = _axial(p)
     var vt = axl.theta

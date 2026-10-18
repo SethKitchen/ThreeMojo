@@ -428,6 +428,31 @@ def is_limb(bone: String) -> Bool:
     return is_front_limb(bone) or is_hind_limb(bone)
 
 
+def coat_place(bone: String) -> Tuple[Int, Bool]:
+    """Return a coat region and whether a trunk bone is a leg.
+
+    The region is 2 for the head, 6 for the jaw, 5 for an ear, 4 for the
+    tail, 1 for the neck, and 0 for the trunk. A leg stays on the trunk.
+
+    Args:
+        bone: The bone's name.
+
+    Returns:
+        The region, and True when the bone is a leg that stayed on the trunk.
+    """
+    if bone == "head":
+        return (2, False)
+    if bone == "jaw":
+        return (6, False)
+    if bone.startswith("ear"):
+        return (5, False)
+    if bone.startswith("tail"):
+        return (4, False)
+    if bone == "neck1" or bone == "neck2":
+        return (1, False)
+    return (0, is_limb(bone))
+
+
 def is_upper_limb(bone: String) -> Bool:
     """Return whether a bone is a scapula, a humerus, or a femur.
 
