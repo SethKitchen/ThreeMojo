@@ -193,7 +193,7 @@ def _sub_fill_triangles(
 def _unit_or_x(n: Point3) -> Point3:
     """Return a normal made unit; a zero normal becomes (1, 0, 0), as
     three.js's `halfEdgeSplit` has it."""
-    if n.x == 0 and n.y == 0 and n.z == 0:
+    if n == Point3(0, 0, 0):
         return Point3(1, n.y, n.z)
     var unit = reciprocal_normalized3(n.x, n.y, n.z)
     return Point3(unit[0], unit[1], unit[2])
@@ -860,7 +860,7 @@ def smooth_tangent_verts(
         var vertex = vertices[i]
         var v = point_of(mesh.vertices, vertex)
         var n = mesh._normal_at(vertex)
-        if n.x == 0 and n.y == 0 and n.z == 0:
+        if n == Point3(0, 0, 0):
             continue
         var unit = reciprocal_normalized3(n.x, n.y, n.z)
         n = Point3(unit[0], unit[1], unit[2])
@@ -906,7 +906,7 @@ def area_normal(mesh: SculptorMesh, vertices: List[Int]) -> Optional[Point3]:
     for vertex in vertices:
         var n = mesh._normal_at(vertex)
         sum = sum + n
-    if sum.x == 0 and sum.y == 0 and sum.z == 0:
+    if sum == Point3(0, 0, 0):
         return None
     var unit = reciprocal_normalized3(sum.x, sum.y, sum.z)
     return Point3(unit[0], unit[1], unit[2])

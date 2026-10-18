@@ -43,7 +43,7 @@ comptime DOUBLE_EPSILON = 2.220446049250313e-16
 
 
 @fieldwise_init
-struct Point3(ImplicitlyCopyable, Writable):
+struct Point3(Equatable, ImplicitlyCopyable, Writable):
     """Three doubles: a point or a direction, three.js's `[ x, y, z ]`."""
 
     var x: Float64
@@ -114,6 +114,28 @@ struct Point3(ImplicitlyCopyable, Writable):
             True when `x`, `y`, and `z` are all finite.
         """
         return isfinite(self.x) and isfinite(self.y) and isfinite(self.z)
+
+    def __eq__(self, other: Self) -> Bool:
+        """Return True if every component is exactly equal.
+
+        Args:
+            other: The point to compare with.
+
+        Returns:
+            Whether the two are the same point.
+        """
+        return self.x == other.x and self.y == other.y and self.z == other.z
+
+    def __ne__(self, other: Self) -> Bool:
+        """Return True if any component differs.
+
+        Args:
+            other: The point to compare with.
+
+        Returns:
+            Whether the two differ.
+        """
+        return not self == other
 
 
 def point_of(values: List[Float32], vertex: Int) -> Point3:
