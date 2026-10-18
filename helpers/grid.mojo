@@ -20,6 +20,7 @@ are decoded to linear light on the way in; see `Why color is linear`.
 
 from core.buffer_attribute import BufferAttribute
 from core.buffer_geometry import BufferGeometry, COLOR, POSITION
+from math.curve_checks import require_at_least_one
 from render.framebuffer import Color, FloatColor
 from units.si import Length, METER
 
@@ -63,8 +64,7 @@ def grid_helper(
     var side = size.to(METER)
     if side <= 0:
         raise Error("A grid helper needs a positive size")
-    if divisions < 1:
-        raise Error("A grid helper needs at least one division")
+    require_at_least_one(divisions, "A grid helper needs at least one division")
     var half = side / 2
     var step = side / Float32(divisions)
     var middle = FloatColor(srgb=center_color)

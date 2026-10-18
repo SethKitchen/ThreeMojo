@@ -22,11 +22,11 @@ has no height.
 from core.buffer_geometry import BufferGeometry, CAPSULE_GEOMETRY
 from geometries.surface import (
     indexed_surface,
-    require_at_least_one,
     require_positive_radius,
     require_three_segments,
 )
 from core.user_data import UserData
+from math.curve_checks import require_at_least_one
 from math.norm import squared_length3
 from std.math import cos, pi, sin, sqrt
 from units.si import Length, METER

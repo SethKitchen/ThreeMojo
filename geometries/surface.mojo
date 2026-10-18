@@ -7,8 +7,9 @@
 
 A plane, a sphere, a tube and the other generated solids all finish the
 same way: positions, normals, texture coordinates and a triangle index.
-They also share the checks for a positive radius, three segments, one
-segment, and positive or finite box extents.
+They also share the checks for a positive radius, three segments, and
+positive or finite box extents. A count below one is
+`require_at_least_one` in `math.curve_checks`.
 """
 
 from core.buffer_attribute import BufferAttribute
@@ -118,20 +119,3 @@ def require_finite_extents(
     """
     if not isfinite(width) or not isfinite(height) or not isfinite(depth):
         raise Error("A " + name + " needs finite extents")
-
-
-def require_at_least_one(count: Int, message: String) raises:
-    """Refuse a count below one.
-
-    Args:
-        count: How many pieces the builder was given.
-        message: The error text for this solid.
-
-    Returns:
-        Nothing. The call returns when `count` is at least one.
-
-    Raises:
-        Error: If `count` is below one.
-    """
-    if count < 1:
-        raise Error(message)

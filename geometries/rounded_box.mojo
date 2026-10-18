@@ -27,7 +27,6 @@ texture is not squeezed where the surface bends.
 
 from core.buffer_attribute import BufferAttribute
 from geometries.surface import (
-    require_at_least_one,
     require_finite_extents,
     require_positive_extents,
 )
@@ -38,6 +37,7 @@ from core.buffer_geometry import (
     POSITION,
     UV,
 )
+from math.curve_checks import require_at_least_one
 from math.utils import glsl_sign
 from std.math import acos, isfinite, pi, sqrt
 from units.si import Length, METER

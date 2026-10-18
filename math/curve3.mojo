@@ -61,6 +61,7 @@ from math.curve_checks import (
     curve_sample_count,
     curve_count_product,
     parameter_samples,
+    require_at_least_one,
     require_control_count,
     require_curve_kind,
     require_distinct_points,
@@ -1008,8 +1009,9 @@ struct CurvePath3(Copyable, Movable):
                 is less than one, or a sample count cannot fit in Int.
         """
         self._need_curves()
-        if divisions < 1:
-            raise Error("A curve path needs at least one division")
+        require_at_least_one(
+            divisions, "A curve path needs at least one division"
+        )
         # Check every per-curve count before the first curve is sampled.
         for index in range(len(self.curves)):  # pragma: no branch
             self.curves[index]._validate()

@@ -56,6 +56,7 @@ from math.curve_checks import (
     curve_count_product,
     curve_count_sum,
     curve_sample_count,
+    require_at_least_one,
 )
 from math.vector2 import Vector2
 from units.si import Angle, Length, METER, RADIAN
@@ -73,8 +74,7 @@ def require_path_divisions(divisions: Int) raises:
     Raises:
         Error: If divisions is less than one.
     """
-    if divisions < 1:
-        raise Error("A path needs at least one division")
+    require_at_least_one(divisions, "A path needs at least one division")
 
 
 def resolution_of(curve: Curve, divisions: Int) raises -> Int:

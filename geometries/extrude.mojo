@@ -106,7 +106,7 @@ from core.buffer_geometry import (
 from core.user_data import UserData
 from exporters.json_writer import JsonWriter
 from geometries.earcut import triangulate_shape
-from geometries.surface import require_at_least_one
+from math.curve_checks import require_at_least_one
 from loaders.curve_json import write_curve3, write_curve_path3
 from geometries.shape import Contours, extract_points, is_clockwise
 from math.curve3 import Curve3, CurvePath3, FrenetFrames

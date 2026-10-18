@@ -29,7 +29,7 @@ numbers for its uuid; a geometry here has no uuid and takes none.
 """
 
 from core.assets import Assets
-from geometries.surface import require_at_least_one
+from math.curve_checks import require_at_least_one
 from core.buffer_attribute import BufferAttribute
 from core.buffer_geometry import BufferGeometry, COLOR, NORMAL, POSITION
 from core.raycaster import Raycaster

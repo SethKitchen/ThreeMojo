@@ -38,6 +38,7 @@ from std.math import isfinite
 from math.matrix_inverse import adjugate3
 from math.norm import length2, _ordinary_squared
 from math.curve import CUBIC, ELLIPSE, LINE, QUADRATIC, Curve, CurveKind
+from math.curve_checks import require_at_least_one
 from math.path import Path, Shape
 from math.vector2 import Vector2
 from render.framebuffer import FloatColor
@@ -242,8 +243,9 @@ struct SvgCurve(Copyable, Movable):
             Error: If `divisions` is below one, or `check` refuses the
                 curve.
         """
-        if divisions < 1:
-            raise Error("SVG: a curve needs at least one division")
+        require_at_least_one(
+            divisions, "SVG: a curve needs at least one division"
+        )
         var out = List[SvgVector]()
         for d in range(divisions + 1):  # pragma: no branch
             out.append(self.point(Float64(d) / Float64(divisions)))
