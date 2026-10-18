@@ -32,7 +32,7 @@ No composer pass reads this: three.js's SSR node reads it in its
 environment mode, which `postprocessing.ssr_node` does not port.
 """
 
-from core.extent import require_positive_extent
+from core.extent import require_positive_extent, require_texel_count
 from lights.ggx import ggx_base, ggx_smith_root
 from math.matrix4 import Matrix4
 from math.utils import mix_bilinear, mix_delta, rec709_luminance
@@ -144,8 +144,13 @@ struct EquirectEnvironment(Copyable, Movable):
         require_positive_extent(
             width, height, "An environment's size must be positive"
         )
-        if len(texels) != width * height:
-            raise Error("An environment needs one texel a texel")
+        require_texel_count(
+            len(texels),
+            width,
+            height,
+            1,
+            "An environment needs one texel a texel",
+        )
         self.width = width
         self.height = height
         self.texels = List[FloatColor](capacity=width * height)

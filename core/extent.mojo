@@ -7,6 +7,7 @@
 
 A size of zero is not an image, a view, or a window. Callers keep their
 own error text. `require_positive_extent` raises that text.
+`require_texel_count` refuses a buffer whose length is not one entry a texel.
 """
 
 
@@ -44,4 +45,31 @@ def require_positive_extent(
         Error: If `width`, `height`, or `depth` is not positive.
     """
     if not positive_extent(width, height, depth):
+        raise Error(message)
+
+
+def require_texel_count(
+    length: Int,
+    width: Int,
+    height: Int,
+    channels: Int,
+    message: String,
+) raises:
+    """Refuse a buffer whose length is not one entry a texel.
+
+    Args:
+        length: How many entries the buffer holds.
+        width: The width, in texels.
+        height: The height, in texels.
+        channels: How many entries one texel holds.
+        message: The error text for this caller.
+
+    Returns:
+        Nothing. The call returns when the length matches.
+
+    Raises:
+        Error: If `length` is not the width times the height times the
+            channels.
+    """
+    if length != width * height * channels:
         raise Error(message)

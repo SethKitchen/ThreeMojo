@@ -22,7 +22,7 @@ texture whose data does not fill it for any other shape, and this
 refuses it.
 """
 
-from core.extent import require_positive_extent
+from core.extent import require_positive_extent, require_texel_count
 from loaders.gltf import decode_image
 from render.png import DecodedImage
 from render.srgb import LINEAR
@@ -103,8 +103,13 @@ def lut_image_from(image: DecodedImage) raises -> LutImage:
     require_positive_extent(width, height, "LUT image: a size below one")
     if width > (Int.MAX // height) // 4:
         raise Error("LUT image: the image size cannot fit in Int")
-    if len(image.pixels) != width * height * 4:
-        raise Error("LUT image: pixel length does not match image dimensions")
+    require_texel_count(
+        len(image.pixels),
+        width,
+        height,
+        4,
+        "LUT image: pixel length does not match image dimensions",
+    )
     if width < height:
         if height != width * width:
             raise Error("LUT image: a column must be as many squares as wide")
