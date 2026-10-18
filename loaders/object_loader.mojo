@@ -1496,6 +1496,19 @@ struct _Loader(Movable):
             self.ignored[at] = id
         return id
 
+    def _stored_cube(
+        mut self, uuid: String, prefilter: Bool, mut assets: Assets
+    ) raises -> CubeTextureId:
+        """Return a cube already stored for `uuid`. Prefilter it the first
+        time a caller asks, and leave a filtered cube as it is."""
+        var id = CubeTextureId(self.cubes[uuid])
+        var bare = not assets.cube_textures.get(id).is_prefiltered()
+        if prefilter and bare:
+            assets.cube_textures.textures[id.value] = pmrem_from_cube(
+                assets.cube_textures.get(id)
+            )
+        return id
+
     def cube(
         mut self, uuid: String, prefilter: Bool, mut assets: Assets
     ) raises -> CubeTextureId:
@@ -1550,13 +1563,7 @@ struct _Loader(Movable):
                 built.faces[face].min_filter = sampling.min_filter
             built.validate()
             self.cubes[uuid] = assets.cube_textures.add(built^).value
-        var id = CubeTextureId(self.cubes[uuid])
-        var bare = not assets.cube_textures.get(id).is_prefiltered()
-        if prefilter and bare:
-            assets.cube_textures.textures[id.value] = pmrem_from_cube(
-                assets.cube_textures.get(id)
-            )
-        return id
+        return self._stored_cube(uuid, prefilter, assets)
 
     def is_panorama(self, uuid: String) raises -> Bool:
         """Return True if a flat texture's entry has an equirectangular
@@ -1621,13 +1628,7 @@ struct _Loader(Movable):
             var flat = self.texture(uuid, COVERAGE, assets)
             var built = cube_of_panorama(assets.textures.get(flat))
             self.cubes[uuid] = assets.cube_textures.add(built^).value
-        var id = CubeTextureId(self.cubes[uuid])
-        var bare = not assets.cube_textures.get(id).is_prefiltered()
-        if prefilter and bare:
-            assets.cube_textures.textures[id.value] = pmrem_from_cube(
-                assets.cube_textures.get(id)
-            )
-        return id
+        return self._stored_cube(uuid, prefilter, assets)
 
     def sampling(self, item: Int) raises -> _Sampling:
         """Return a texture entry's two filters, each checked, and whether
