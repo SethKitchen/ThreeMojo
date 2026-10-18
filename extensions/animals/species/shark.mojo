@@ -68,6 +68,7 @@ from extensions.sdf.vector import (
     smoothstep,
 )
 from extensions.animals.warp import scale_about_warp
+from math.norm import squared_length2
 from std.math import cos, exp, floor, pi, pow, sin, sqrt
 
 # The shark's head origin moves with the variant, so the eye is placed
@@ -782,7 +783,7 @@ def _taper_fin(
     # slabs of the outline shrunk toward the root, smoothly united: an
     # airfoil that thins toward its trailing edge.
     var stretch = along_a != 0.0 or along_b != 0.0
-    var al = sqrt(along_a * along_a + along_b * along_b)
+    var al = sqrt(squared_length2[DType.float64](along_a, along_b))
     var ex = along_a / al if stretch else 0.0
     var ey = along_b / al if stretch else 0.0
     for i in range(7):  # pragma: no branch
@@ -1456,11 +1457,11 @@ def _seg_dist(
     # The distance from a point to a segment, and where along it.
     var ex = bx - ax
     var ey = by - ay
-    var l2 = ex * ex + ey * ey
+    var l2 = squared_length2[DType.float64](ex, ey)
     var t = clamp(((px - ax) * ex + (py - ay) * ey) / max(l2, 1e-18), 0.0, 1.0)
     var dx = px - ax - ex * t
     var dy = py - ay - ey * t
-    return (sqrt(dx * dx + dy * dy), t)
+    return (sqrt(squared_length2[DType.float64](dx, dy)), t)
 
 
 def _line_dist(

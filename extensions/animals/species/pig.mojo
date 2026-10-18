@@ -79,6 +79,7 @@ from extensions.animals.warp import (
     length_warp,
     scale_about_warp,
 )
+from math.norm import squared_length2
 from std.math import asin, atan2, cos, exp, floor, pi, pow, sin, sqrt
 from extensions.sdf.distance import segment_distance
 
@@ -1740,7 +1741,10 @@ def _ear_vein_sd(u: Float64, w: Float64, seed: Int) -> Float64:
         var dx = u1 - u0
         var dy = w1 - w0
         var tt = clamp(
-            ((u - u0) * dx + (w - w0) * dy) / (dx * dx + dy * dy), 0.0, 1.0
+            ((u - u0) * dx + (w - w0) * dy)
+            / squared_length2[DType.float64](dx, dy),
+            0.0,
+            1.0,
         )
         var dd = sqrt((u - u0 - dx * tt) ** 2 + (w - w0 - dy * tt) ** 2)
         var r0 = veins[6 * i + 4]
