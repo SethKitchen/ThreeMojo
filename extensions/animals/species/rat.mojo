@@ -27,6 +27,7 @@ from extensions.animals.coat import (
     Paint,
     Palette,
     body_region,
+    channel_gain,
     grizzle,
     mix3,
     palette_of,
@@ -1352,8 +1353,6 @@ def rat_paint(
         d += (fbm3(p * 1200.0, 2) - 0.5) * 0.0006
         c = mix3(c, pal.get("hood"), smoothstep(0.0004, -0.0004, d))
     var cv = fbm3(p * 90.0, 3) - 0.5
-    c = V3(
-        c.x * (1.0 + 0.16 * cv), c.y * (1.0 + 0.13 * cv), c.z * (1.0 + 0.1 * cv)
-    )
+    c = channel_gain(c, cv, 0.16, 0.13, 0.1)
     c = grizzle(c, p, 1400.0, 0.06 + 0.3 * clamp(ag, 0.0, 1.0))
     return Paint(c, FUR)

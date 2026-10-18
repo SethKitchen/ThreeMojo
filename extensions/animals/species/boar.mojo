@@ -22,6 +22,7 @@ from extensions.animals.coat import (
     EyeLook,
     Paint,
     Palette,
+    channel_gain,
     grizzle,
     mix3,
     palette_of,
@@ -1535,9 +1536,7 @@ def boar_paint(
     if piglet:
         c = mix3(c, pal.get("stripe"), smoothstep(0.003, -0.003, pd))
     var cv = fbm3(p * 6.0, 3) - 0.5
-    c = V3(
-        c.x * (1.0 + 0.16 * cv), c.y * (1.0 + 0.13 * cv), c.z * (1.0 + 0.1 * cv)
-    )
+    c = channel_gain(c, cv, 0.16, 0.13, 0.1)
     # Coarse bristles: lock-to-lock streaks, then the pale tips.
     var st = vnoise3(V3(p.x * 160.0, p.y * 160.0, p.z * 25.0))
     c = c * (0.86 + 0.28 * st)
