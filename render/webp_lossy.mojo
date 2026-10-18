@@ -32,7 +32,7 @@ profile, a zero size or a first partition past its data, or runs out of
 data where libwebp checks for it, is refused.
 """
 
-from core.binary import copy_bytes
+from core.binary import copy_byte_range
 from render.webp_lossy_tables import (
     AC_TABLE,
     BMODES_PROBA,
@@ -721,11 +721,6 @@ struct LossyImage(Movable):
         self.rgba = rgba^
 
 
-def _slice(bytes: List[UInt8], start: Int, end: Int) -> List[UInt8]:
-    """Return a copy of bytes `start` to `end`."""
-    return copy_bytes(bytes, start, max(end - start, 0))
-
-
 def _clip(v: Int, m: Int) -> Int:
     return min(max(v, 0), m)
 
@@ -920,7 +915,7 @@ def decode_lossy(var data: List[UInt8]) raises -> LossyImage:
         raise Error("WebP: the first partition runs past the frame")
     var mb_w = (width + 15) >> 4
     var mb_h = (height + 15) >> 4
-    var br = _BoolReader(_slice(data, 10, 10 + partition_length))
+    var br = _BoolReader(copy_byte_range(data, 10, 10 + partition_length))
     _ = br.value_of(1)  # color space
     _ = br.value_of(1)  # clamping type
 
@@ -982,10 +977,14 @@ def decode_lossy(var data: List[UInt8]) raises -> LossyImage:
             Int(data[at]) | (Int(data[at + 1]) << 8) | (Int(data[at + 2]) << 16)
         )
         psize = min(psize, left)
-        parts.append(_BoolReader(_slice(data, part_start, part_start + psize)))
+        parts.append(
+            _BoolReader(copy_byte_range(data, part_start, part_start + psize))
+        )
         part_start += psize
         left -= psize
-    parts.append(_BoolReader(_slice(data, part_start, part_start + left)))
+    parts.append(
+        _BoolReader(copy_byte_range(data, part_start, part_start + left))
+    )
     if part_start >= size:
         raise Error("WebP: the last partition is empty")
 

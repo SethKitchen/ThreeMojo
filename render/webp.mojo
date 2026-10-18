@@ -34,7 +34,7 @@ WebP carries no color space here, so the samples are sRGB, as a browser
 takes them.
 """
 
-from core.binary import copy_bytes, little_endian_uint
+from core.binary import copy_byte_range, little_endian_uint
 from render.png import DecodedImage
 from render.srgb import SRGB
 from render.webp_lossless import decode_lossless, decode_lossless_stream
@@ -63,11 +63,6 @@ def _tag(bytes: List[UInt8], at: Int) -> String:
     for i in range(4):  # pragma: no branch
         out += chr(Int(bytes[at + i]))
     return out
-
-
-def _slice(bytes: List[UInt8], start: Int, end: Int) -> List[UInt8]:
-    """Return a copy of bytes `start` to `end`."""
-    return copy_bytes(bytes, start, end - start)
 
 
 def unfilter_alpha(
@@ -137,10 +132,10 @@ def decode_alpha(
     if method == 0:
         if len(chunk) - 1 < width * height:
             raise Error("WebP: the raw alpha is too short")
-        alpha = _slice(chunk, 1, 1 + width * height)
+        alpha = copy_byte_range(chunk, 1, 1 + width * height)
     else:
         var argb = decode_lossless_stream(
-            _slice(chunk, 1, len(chunk)), width, height
+            copy_byte_range(chunk, 1, len(chunk)), width, height
         )
         alpha = List[UInt8](capacity=len(argb))
         for pixel in argb:  # pragma: no branch
@@ -200,7 +195,7 @@ def decode(bytes: List[UInt8]) raises -> DecodedImage:
                 break
             # Within the RIFF size, so within the file.
             if tag == "ALPH":
-                alpha = _slice(bytes, at + 8, at + 8 + size)
+                alpha = copy_byte_range(bytes, at + 8, at + 8 + size)
                 has_alpha_chunk = True
             at += disk
     var tag = _tag(bytes, at)
@@ -210,7 +205,7 @@ def decode(bytes: List[UInt8]) raises -> DecodedImage:
     # Within the RIFF size, which fits the file, is within the file.
     if size > riff - 12:
         raise Error("WebP: the image chunk runs past the file")
-    var payload = _slice(bytes, at + 8, at + 8 + size)
+    var payload = copy_byte_range(bytes, at + 8, at + 8 + size)
     var width: Int
     var height: Int
     var rgba: List[UInt8]
