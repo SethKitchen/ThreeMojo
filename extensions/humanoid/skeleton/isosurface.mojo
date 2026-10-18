@@ -18,7 +18,7 @@ from core.buffer_geometry import BufferGeometry
 from geometries.surface import indexed_surface
 from extensions.humanoid.skeleton.field import DistanceField
 from math.utils import clamp
-from math.vector3 import Vector3
+from math.vector3 import Vector3, mix_delta3
 from std.math import atan2, max, min, pi
 
 comptime MIN_DETAIL = 8
@@ -424,11 +424,7 @@ def _lerp_ordered(a: Vector3, b: Vector3, da: Float32, db: Float32) -> Vector3:
             t = 0
         if t > 1:
             t = 1
-    return Vector3(
-        a.x + (b.x - a.x) * t,
-        a.y + (b.y - a.y) * t,
-        a.z + (b.z - a.z) * t,
-    )
+    return mix_delta3(a, b, t)
 
 
 def _emit_triangle(

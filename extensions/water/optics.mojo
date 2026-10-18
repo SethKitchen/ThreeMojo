@@ -20,7 +20,7 @@ from math.sine import fraction
 from math.utils import clamp
 from math.norm import squared_length2, squared_length3
 from math.sine import sin_float32
-from math.vector3 import Vector3
+from math.vector3 import Vector3, mix_delta3
 from std.math import cos, exp, floor, fma, log, pow, sin, sqrt
 from units.si import DEGREE, Angle
 
@@ -353,11 +353,7 @@ def sky_radiance(
     var zen = Vector3(0.11, 0.27, 0.62)
     var hor = Vector3(0.66, 0.78, 0.90)
     var t = pow(clamp01(y), Float32(0.42))
-    var color = Vector3(
-        hor.x + (zen.x - hor.x) * t,
-        hor.y + (zen.y - hor.y) * t,
-        hor.z + (zen.z - hor.z) * t,
-    )
+    var color = mix_delta3(hor, zen, t)
     var glow = Float32(0.0)
     if mu > 0.0:
         glow = (

@@ -16,7 +16,7 @@ from extensions.humanoid.spec import MAX_STATURE, MIN_STATURE
 from math.cross import cross_vectors
 from math.norm import squared_length3
 from math.utils import clamp
-from math.vector3 import Vector3
+from math.vector3 import Vector3, mix_delta3
 from std.math import isfinite, max, min, pi, sqrt
 from units.si import Angle, Length
 
@@ -425,9 +425,7 @@ def mix_point(a: Vector3, b: Vector3, t: Float32) -> Vector3:
     Returns:
         The interpolated point, in meters.
     """
-    return Vector3(
-        a.x + (b.x - a.x) * t, a.y + (b.y - a.y) * t, a.z + (b.z - a.z) * t
-    )
+    return mix_delta3(a, b, t)
 
 
 def ud_triangle(point: Vector3, a: Vector3, b: Vector3, c: Vector3) -> Float32:

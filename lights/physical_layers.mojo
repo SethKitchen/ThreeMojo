@@ -46,7 +46,7 @@ from lights.fresnel import schlick_weight
 from math.smoothstep import smoothstep
 from math.utils import saturate
 from math.vector2 import Vector2
-from math.vector3 import Vector3
+from math.vector3 import Vector3, mix_delta3
 from std.math import cos, exp, exp2, log2, max, min, pi, sqrt
 
 # The smallest sheen roughness three.js lets the Charlie lobe see:
@@ -533,11 +533,7 @@ def bent_normal(
     var fade = 1 - layers.anisotropy * (1 - roughness)
     fade = fade * fade
     fade = fade * fade
-    var bent = Vector3(
-        across.x + (normal.x - across.x) * fade,
-        across.y + (normal.y - across.y) * fade,
-        across.z + (normal.z - across.z) * fade,
-    )
+    var bent = mix_delta3(across, normal, fade)
     bent.normalize()
     return bent
 
