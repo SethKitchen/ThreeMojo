@@ -54,9 +54,9 @@ from math.space_curve import (
     length_of,
     spaced_points3,
 )
+from render.data_utils import to_half_float as half_bits
 from render.exr import half_to_float
-from std.math import floor, isnan
-from std.memory import bitcast
+from std.math import floor
 from units.si import Length, METER
 
 # Numbers a texel holds: red, green, blue and alpha.
@@ -69,17 +69,13 @@ comptime TEXTURE_HEIGHT = 4
 # How many runs measure the length a spine texture's points are spaced
 # by: three.js sets `arcLengthDivisions` to half the points.
 comptime SPINE_DIVISIONS = TEXTURE_WIDTH // 2
-# The largest half float, which three.js clamps to.
-comptime HALF_MAX = 65504.0
 
 
 def to_half_float(value: Float64) -> UInt16:
     """Return a number as the bits of a half float, three.js's
     `DataUtils.toHalfFloat`.
 
-    The number is clamped to the largest half and rounded to a float, and
-    the float's extra fraction bits are cut off, not rounded, as three.js's
-    tables do.
+    The conversion is `render.data_utils.to_half_float`.
 
     Args:
         value: The number.
@@ -87,31 +83,7 @@ def to_half_float(value: Float64) -> UInt16:
     Returns:
         The sixteen bits.
     """
-    # JavaScript's clamp lets a NaN through.
-    var clamped = value if isnan(value) else max(
-        -HALF_MAX, min(HALF_MAX, value)
-    )
-    var f = bitcast[DType.uint32](Float32(clamped))
-    var e = Int((f >> 23) & 0x1FF)
-    var exponent = (e & 0xFF) - 127
-    var sign = 0x8000 if e >= 0x100 else 0
-    var fraction = Int(f & 0x007FFFFF)
-    var base: Int
-    var shift: Int
-    if exponent < -27:
-        base = 0
-        shift = 24
-    elif exponent < -14:
-        base = 0x0400 >> (-exponent - 14)
-        shift = -exponent - 1
-    elif exponent <= 15:
-        base = (exponent + 15) << 10
-        shift = 13
-    else:
-        # Clamping leaves only a NaN out here, which keeps a fraction.
-        base = 0x7C00
-        shift = 13
-    return UInt16((base | sign) + (fraction >> shift))
+    return half_bits(value)
 
 
 def _half_row(x: Float32, y: Float32, z: Float32) -> SIMD[DType.uint16, 4]:
