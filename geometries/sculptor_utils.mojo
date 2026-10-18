@@ -50,6 +50,50 @@ struct Point3(ImplicitlyCopyable, Writable):
     var y: Float64
     var z: Float64
 
+    def __add__(self, other: Self) -> Self:
+        """Return the sum.
+
+        Args:
+            other: The point to add.
+
+        Returns:
+            The component-wise sum.
+        """
+        return Point3(self.x + other.x, self.y + other.y, self.z + other.z)
+
+    def __sub__(self, other: Self) -> Self:
+        """Return the difference.
+
+        Args:
+            other: The point to take away.
+
+        Returns:
+            The vector from `other` to this point.
+        """
+        return Point3(self.x - other.x, self.y - other.y, self.z - other.z)
+
+    def __mul__(self, factor: Float64) -> Self:
+        """Return this point scaled by a factor.
+
+        Args:
+            factor: The scale.
+
+        Returns:
+            Each component multiplied by `factor`.
+        """
+        return Point3(self.x * factor, self.y * factor, self.z * factor)
+
+    def __truediv__(self, divisor: Float64) -> Self:
+        """Return this point divided by a divisor.
+
+        Args:
+            divisor: The divisor.
+
+        Returns:
+            Each component divided by `divisor`.
+        """
+        return Point3(self.x / divisor, self.y / divisor, self.z / divisor)
+
 
 def point_of(values: List[Float32], vertex: Int) -> Point3:
     """Return one vertex of a packed list, widened to doubles.
@@ -125,15 +169,8 @@ def sqr_dist(a: Point3, b: Point3) -> Float64:
     Returns:
         The squared distance.
     """
-    var dx = a.x - b.x
-    var dy = a.y - b.y
-    var dz = a.z - b.z
-    return squared_length3[DType.float64](dx, dy, dz)
-
-
-def _sub(a: Point3, b: Point3) -> Point3:
-    """Return `a - b`."""
-    return Point3(a.x - b.x, a.y - b.y, a.z - b.z)
+    var d = a - b
+    return squared_length3[DType.float64](d.x, d.y, d.z)
 
 
 def _cross(a: Point3, b: Point3) -> Point3:
@@ -170,15 +207,15 @@ def intersection_ray_triangle(
         The distance along the ray, or -1 when it misses. The hit point is
         `origin + direction * distance`.
     """
-    var edge1 = _sub(v2, v1)
-    var edge2 = _sub(v3, v1)
+    var edge1 = v2 - v1
+    var edge2 = v3 - v1
     var pvec = _cross(direction, edge2)
     var det = _dot(edge1, pvec)
     var determinant_scale = _hypot(edge1) * _hypot(edge2) * _hypot(direction)
     if abs(det) <= RAY_EPSILON * determinant_scale:
         return -1.0
     var inv_det = 1.0 / det
-    var tvec = _sub(origin, v1)
+    var tvec = origin - v1
     var u = _dot(tvec, pvec) * inv_det
     if u < -RAY_EPSILON or u > 1.0 + RAY_EPSILON:
         return -1.0
@@ -204,11 +241,7 @@ def ray_point(origin: Point3, direction: Point3, distance: Float64) -> Point3:
     Returns:
         The point.
     """
-    return Point3(
-        origin.x + direction.x * distance,
-        origin.y + direction.y * distance,
-        origin.z + direction.z * distance,
-    )
+    return origin + direction * distance
 
 
 def distance_sq_to_segment(point: Point3, v1: Point3, v2: Point3) -> Float64:
@@ -273,20 +306,20 @@ def distance_sq_to_triangle(
         The squared distance. A triangle with no area is measured to its
         edges.
     """
-    var ab = _sub(v2, v1)
-    var ac = _sub(v3, v1)
-    var bc = _sub(v3, v2)
+    var ab = v2 - v1
+    var ac = v3 - v1
+    var bc = v3 - v2
     var normal = _cross(ab, ac)
     var area_squared = _dot(normal, normal)
     var max_edge_squared = max(max(_dot(ab, ab), _dot(ac, ac)), _dot(bc, bc))
     if area_squared <= DOUBLE_EPSILON * max_edge_squared * max_edge_squared:
         return _degenerate_distance(point, v1, v2, v3)
-    var ap = _sub(point, v1)
+    var ap = point - v1
     var d1 = _dot(ab, ap)
     var d2 = _dot(ac, ap)
     if d1 <= 0 and d2 <= 0:
         return _dot(ap, ap)
-    var bp = _sub(point, v2)
+    var bp = point - v2
     var d3 = _dot(ab, bp)
     var d4 = _dot(ac, bp)
     if d3 >= 0 and d4 <= d3:
@@ -295,7 +328,7 @@ def distance_sq_to_triangle(
     if vc <= 0 and d1 >= 0 and d3 <= 0:
         var v = d1 / (d1 - d3)
         return _dot(_edge_rest(ap, ab, v), _edge_rest(ap, ab, v))
-    var cp = _sub(point, v3)
+    var cp = point - v3
     var d5 = _dot(ab, cp)
     var d6 = _dot(ac, cp)
     if d6 >= 0 and d5 <= d6:
@@ -314,19 +347,13 @@ def distance_sq_to_triangle(
     var inverse = 1.0 / (va + vb + vc)
     var v = vb * inverse
     var w = vc * inverse
-    var dx = ap.x - ab.x * v - ac.x * w
-    var dy = ap.y - ab.y * v - ac.y * w
-    var dz = ap.z - ab.z * v - ac.z * w
-    return squared_length3[DType.float64](dx, dy, dz)
+    var gap = ap - ab * v - ac * w
+    return squared_length3[DType.float64](gap.x, gap.y, gap.z)
 
 
 def _edge_rest(offset: Point3, edge: Point3, share: Float64) -> Point3:
     """Return `offset - edge * share`, the gap to a point on an edge."""
-    return Point3(
-        offset.x - edge.x * share,
-        offset.y - edge.y * share,
-        offset.z - edge.z * share,
-    )
+    return offset - edge * share
 
 
 def triangle_inside_sphere(

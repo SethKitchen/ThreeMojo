@@ -1162,11 +1162,9 @@ def _weld_positions(
         if referenced[i] == 0:
             continue
         var p = point_of(source, i)
-        var grid = Point3(
-            (p.x - bounds[0]) * inverse_cell_size,
-            (p.y - bounds[1]) * inverse_cell_size,
-            (p.z - bounds[2]) * inverse_cell_size,
-        )
+        var grid = (
+            p - Point3(bounds[0], bounds[1], bounds[2])
+        ) * inverse_cell_size
         var cells: List[Int] = [
             Int(floor(grid.x)),
             Int(floor(grid.y)),

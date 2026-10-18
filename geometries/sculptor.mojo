@@ -746,11 +746,7 @@ struct Sculptor(Movable):
             var n1 = self._sculpt_mesh._normal_at(corners[0])
             var n2 = self._sculpt_mesh._normal_at(corners[1])
             var n3 = self._sculpt_mesh._normal_at(corners[2])
-            n = Point3(
-                (n1.x * w1 + n2.x * w2 + n3.x * w3) * inverse_sum,
-                (n1.y * w1 + n2.y * w2 + n3.y * w3) * inverse_sum,
-                (n1.z * w1 + n2.z * w2 + n3.z * w3) * inverse_sum,
-            )
+            n = (n1 * w1 + n2 * w2 + n3 * w3) * inverse_sum
         var unit = reciprocal_normalized3(n.x, n.y, n.z)
         self._hit_normal = Point3(unit[0], unit[1], unit[2])
 
@@ -828,11 +824,7 @@ struct Sculptor(Movable):
                     * CLAY_OFFSET_RATIO
                     * (-1.0 if negative else 1.0)
                 )
-                plane_point = Point3(
-                    plane_point.x + normal.x * offset,
-                    plane_point.y + normal.y * offset,
-                    plane_point.z + normal.z * offset,
-                )
+                plane_point = plane_point + normal * offset
             tool_flatten(
                 self._sculpt_mesh,
                 picked,
@@ -1303,14 +1295,8 @@ struct Sculptor(Movable):
         var projection = (
             d.x * px + d.y * py + d.z * pz
         ) / denominator if denominator > 0 else 0.0
-        var moved = Point3(
-            o.x + d.x * projection,
-            o.y + d.y * projection,
-            o.z + d.z * projection,
-        )
-        self._drag_direction = Point3(
-            moved.x - hit.x, moved.y - hit.y, moved.z - hit.z
-        )
+        var moved = o + d * projection
+        self._drag_direction = moved - hit
         self._hit_point = moved
         self._update_radii(camera, scene, scale2)
         return True
