@@ -50,7 +50,7 @@ from render.volume_texture import Data3DTexture, VolumeImage, _check_extent
 from math.finite import require_finite
 from std.math import ceil, log2
 from std.pathlib import Path
-from core.ordinal import require_valid
+from core.ordinal import require_valid, require_positive
 
 
 struct Lut3dl(Movable):
@@ -193,8 +193,7 @@ def parse_lut_3dl(
                 # string, and `Number( "" )` is zero.
                 grid.append(0)
             break
-    if len(grid) == 0:
-        raise Error("3DL: missing grid information")
+    require_positive(len(grid), "3DL: missing grid information")
     var size = len(grid)
     var step = grid[1] - grid[0] if size > 1 else Float64(0)
     for i in range(1, size):

@@ -19,7 +19,7 @@ surface, not the volume. Blocks are sampled and vertices are placed on
 several threads. The mesh is the same for any number of them.
 """
 
-from core.ordinal import require_index_in_count
+from core.ordinal import require_index_in_count, require_positive
 from extensions.sdf.field import SdfModel
 from extensions.sdf.vector import (
     V3,
@@ -489,8 +489,7 @@ def _mesh_part(
         raise Error("A mesh box must have finite coordinates")
     if not (high.x > low.x and high.y > low.y and high.z > low.z):
         raise Error("A mesh box must not be empty")
-    if len(part) == 0:
-        raise Error("A mesh part needs at least one primitive")
+    require_positive(len(part), "A mesh part needs at least one primitive")
     var kmax = 0.0
     for i in part:  # pragma: no branch
         require_index_in_count(

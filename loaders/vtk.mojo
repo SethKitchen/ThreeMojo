@@ -59,7 +59,7 @@ keeps and draws from undefined positions.
 from core.binary import big_endian_u32, little_endian_u32
 from core.buffer_attribute import BufferAttribute
 from core.buffer_geometry import COLOR, NORMAL, POSITION, BufferGeometry
-from core.ordinal import require_non_negative
+from core.ordinal import require_non_negative, require_positive
 from loaders.bytes import ascii_digit, ascii_letter, base64_digit, is_sign_mark
 from loaders.utf8 import leading_utf8_bom
 from loaders.js_text import (
@@ -1527,8 +1527,7 @@ def parse_vtk_xml(text: String) raises -> BufferGeometry:
         if appended == _MANY:
             raise Error("VTK: the appended data has no text")
         var all = js_trim(js_units(document.text(appended)))
-        if len(all) == 0:
-            raise Error("VTK: the appended data has no text")
+        require_positive(len(all), "VTK: the appended data has no text")
         var data = js_part(all, 1, len(all))
         require_non_negative(poly_data, "VTK: the file has no one PolyData")
         var piece = _only(document, poly_data, "Piece")

@@ -355,7 +355,7 @@ from std.pathlib import Path
 from units.si import Angle, DEGREE, InverseLength, Length, METER, NANOMETER
 from units.si import MILLIMETER
 from units.si import PER_METER, RADIAN
-from core.ordinal import require_valid, require_non_negative
+from core.ordinal import require_valid, require_non_negative, require_positive
 
 # The format version `Object3D.toJSON` writes, and the one major version
 # this reads.
@@ -1980,8 +1980,9 @@ struct _Loader(Movable):
                 if self.document.kind(entry) != OBJECT:
                     raise Error("Object JSON: a clipping plane is an object")
                 var normal = self.numbers(entry, "normal", 3)
-                if len(normal) == 0:
-                    raise Error("Object JSON: a clipping plane has no normal")
+                require_positive(
+                    len(normal), "Object JSON: a clipping plane has no normal"
+                )
                 planes.append(
                     Plane(
                         Vector3(normal[0], normal[1], normal[2]),

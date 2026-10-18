@@ -143,7 +143,7 @@ from std.collections import Dict
 from std.math import cos, pi, sin, sqrt, trunc
 from std.pathlib import Path
 from units.si import METER, RADIAN, Angle, Length
-from core.ordinal import require_valid
+from core.ordinal import require_valid, require_positive
 
 # three.js's `Loader.DEFAULT_MATERIAL_NAME`.
 comptime VRML_DEFAULT_MATERIAL_NAME = "__DEFAULT"
@@ -1315,8 +1315,9 @@ struct _Builder(Movable):
         for field in self.model.tree.nodes[node].fields:
             if field.name == "title":
                 var titles = _strings(field)
-                if len(titles) == 0:
-                    raise Error("VRML: field `title` needs a string")
+                require_positive(
+                    len(titles), "VRML: field `title` needs a string"
+                )
                 title = titles[0]
             elif field.name == "info":
                 info = _strings(field)
@@ -1340,8 +1341,10 @@ struct _Builder(Movable):
                 + field.name
                 + "` needs a Color, Coordinate, Normal or TextureCoordinate"
             )
-        if len(property.fields) == 0:
-            raise Error("VRML: a `" + property.name + "` with no values")
+        require_positive(
+            len(property.fields),
+            "VRML: a `" + property.name + "` with no values",
+        )
         return _numbers(property.fields[0])
 
     def geometry(
@@ -1786,8 +1789,9 @@ def _surface(
 
 def _first(field: VrmlField) raises -> VrmlValue:
     """Return the first value of a field."""
-    if len(field.values) == 0:
-        raise Error("VRML: field `" + field.name + "` needs a value")
+    require_positive(
+        len(field.values), "VRML: field `" + field.name + "` needs a value"
+    )
     return field.values[0].copy()
 
 

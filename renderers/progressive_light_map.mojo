@@ -331,8 +331,9 @@ struct ProgressiveLightMap(Movable):
             Error: If no mesh has been added yet: three.js warns and does
                 nothing.
         """
-        if len(self.meshes) == 0:
-            raise Error("Show the light map after adding the meshes")
+        require_positive(
+            len(self.meshes), "Show the light map after adding the meshes"
+        )
         # Spelled as a Bool, as the coverage probes take one.
         if not Bool(self.label):
             var shows = Material(

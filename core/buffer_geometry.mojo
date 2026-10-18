@@ -88,6 +88,7 @@ from core.ordinal import (
     require_index_in_count,
     require_non_negative,
     require_valid,
+    require_positive,
 )
 
 from math.matrix_determinant import _sum_products as _exact_products
@@ -980,8 +981,10 @@ struct BufferGeometry(Movable):
                 three or four numbers a vertex or does not cover every
                 vertex.
         """
-        if len(self.morph_positions) == 0:
-            raise Error("Only a geometry with morph targets has color targets")
+        require_positive(
+            len(self.morph_positions),
+            "Only a geometry with morph targets has color targets",
+        )
         if len(colors) != len(self.morph_positions):
             raise Error("Every morph target must carry a color, or none")
         var count = self.attribute_view(String(POSITION)).count()

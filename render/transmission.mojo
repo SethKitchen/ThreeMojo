@@ -34,6 +34,7 @@ three.js's Beer's law divides zero by zero for a black attenuation color.
 """
 
 from core.extent import require_texel_count
+from core.ordinal import require_positive
 from lights.lighting import environment_brdf
 from math.matrix4 import Matrix4
 from math.sine import fraction
@@ -313,8 +314,10 @@ struct TransmissionTarget(Movable):
         """
         if not requested:
             return
-        if len(self.volume_depth) == 0:
-            raise Error("A volume needs scene depth at the raster target size")
+        require_positive(
+            len(self.volume_depth),
+            "A volume needs scene depth at the raster target size",
+        )
         if (
             self.image.width != width
             or self.image.height != height

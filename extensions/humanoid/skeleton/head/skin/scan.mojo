@@ -31,6 +31,7 @@ This is not a three.js port. See Extensions.
 
 from core.buffer_attribute import BufferAttribute
 from core.buffer_geometry import POSITION, BufferGeometry
+from core.ordinal import require_positive
 from extensions.humanoid.assets import humanoid_asset_path
 from extensions.humanoid.genome import (
     EAR_LOBE,
@@ -764,8 +765,9 @@ def scan_skin_mesh[
                 points.append(p)
                 append_vector3(positions, p)
             indices.append(remap[v])
-    if len(indices) == 0:
-        raise Error("No part of the scanned head lies above the floor")
+    require_positive(
+        len(indices), "No part of the scanned head lies above the floor"
+    )
     var sums = List[Vector3](length=len(points), fill=Vector3(0, 0, 0))
     for t in range(0, len(indices), 3):  # pragma: no branch
         var a = points[indices[t]]

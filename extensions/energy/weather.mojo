@@ -32,6 +32,7 @@ cos theta_z) and I_d = C I_DN on the horizontal, with the monthly A, B
 and C of that model for the 21st day of each month.
 """
 
+from core.ordinal import require_positive
 from std.math import cos, exp, isfinite, pi
 from std.pathlib import Path
 from loaders.text_number import file_line
@@ -314,8 +315,7 @@ def parse_epw(text: String) raises -> Weather:
                 Velocity64(speed, METER_PER_SECOND),
             )
         )
-    if len(records) == 0:
-        raise Error("An EPW file needs a record")
+    require_positive(len(records), "An EPW file needs a record")
     return Weather(location^, Duration64(hours, HOUR), records^)
 
 

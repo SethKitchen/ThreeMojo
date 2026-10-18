@@ -34,6 +34,7 @@ This is not a three.js port. See Extensions.
 
 from core.buffer_attribute import BufferAttribute
 from core.buffer_geometry import BufferGeometry, POSITION
+from core.ordinal import require_positive
 from extensions.humanoid.genome import HAIR_CURL, HAIR_LENGTH
 from extensions.humanoid.side import RIGHT
 from extensions.humanoid.skeleton.field import DistanceField, smin
@@ -1418,8 +1419,7 @@ def groom_lines(groom: HairGroom) raises -> BufferGeometry:
     Raises:
         Error: If the groom has no strands.
     """
-    if len(groom) == 0:
-        raise Error("A groom with no strands has no lines")
+    require_positive(len(groom), "A groom with no strands has no lines")
     var positions = List[Float32]()
     for strand in range(len(groom)):  # pragma: no branch
         for index in range(

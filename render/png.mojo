@@ -24,6 +24,7 @@ from core.binary import (
     big_endian_u32,
 )
 from core.extent import require_positive_extent
+from core.ordinal import require_positive
 from render.checksum import Crc32, adler32
 from render.framebuffer import Color, Framebuffer, pixel_slot
 from render.srgb import LINEAR, SRGB, UNKNOWN_SPACE, ColorSpace
@@ -583,8 +584,9 @@ def decode(bytes: List[UInt8]) raises -> DecodedImage:
                     "A PNG with an alpha channel cannot also carry tRNS"
                 )
             if color_type == 3:
-                if len(palette) == 0:
-                    raise Error("A palette tRNS must follow its palette")
+                require_positive(
+                    len(palette), "A palette tRNS must follow its palette"
+                )
                 if length > len(palette) // 3:
                     raise Error("A PNG tRNS is longer than its palette")
                 alphas = body^

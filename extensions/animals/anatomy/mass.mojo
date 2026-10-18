@@ -22,6 +22,7 @@ from core.ordinal import (
     require_index_in_count,
     require_valid,
     require_non_negative,
+    require_positive,
 )
 from extensions.anatomy.inertia import InertiaTally, SegmentInertia
 from extensions.animals.anatomy.body import (
@@ -604,8 +605,7 @@ def sample_mass(
         high = high.max(box[1])
         input.erode.append(coat if _erodes(SurfacePart(part)) else 0.0)
         input.parts.append(ids^)
-    if len(input.parts) == 0:
-        raise Error("The sculpt has no flesh to weigh")
+    require_positive(len(input.parts), "The sculpt has no flesh to weigh")
     if len(input.coat) > 0:
         var box = part_box(posed, input.coat)
         low = low.min(box[0])

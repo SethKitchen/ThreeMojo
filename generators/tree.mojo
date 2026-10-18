@@ -173,12 +173,17 @@ struct TreeParameters(Copyable, Movable):
                 has no positive fraction, or a number is not finite.
         """
         require_positive(self.levels, "A tree needs one level at least")
-        if len(self.children) == 0:
-            raise Error("A tree needs a child count for one level at least")
-        if len(self.branch_angle) == 0:
-            raise Error("A tree needs a branch angle for one level at least")
-        if len(self.gnarl) == 0:
-            raise Error("A tree needs a gnarl for one level at least")
+        require_positive(
+            len(self.children),
+            "A tree needs a child count for one level at least",
+        )
+        require_positive(
+            len(self.branch_angle),
+            "A tree needs a branch angle for one level at least",
+        )
+        require_positive(
+            len(self.gnarl), "A tree needs a gnarl for one level at least"
+        )
         for level in range(len(self.children)):  # pragma: no branch
             if self.children[level] < 0:
                 raise Error("A child count must be zero or more")

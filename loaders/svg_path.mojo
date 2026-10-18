@@ -33,7 +33,7 @@ See `docs/wiki/Norm-consumers.md` for the changed operations, retained
 limits, and explicit zero and nonfinite rules.
 """
 
-from core.ordinal import require_non_negative
+from core.ordinal import require_non_negative, require_positive
 from std.math import isfinite
 
 from math.matrix_inverse import adjugate3
@@ -501,8 +501,9 @@ struct SvgSubPath(Copyable, Movable):
                 path.down = True
             path.last = made.point(1)
             path.curves.append(made^)
-        if len(path.curves) == 0:
-            raise Error("SVG: an outline with nothing drawn on it")
+        require_positive(
+            len(path.curves), "SVG: an outline with nothing drawn on it"
+        )
         if not path.is_closed():
             path.close_path()
         return path^

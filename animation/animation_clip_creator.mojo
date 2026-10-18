@@ -44,6 +44,7 @@ from animation.keyframe_track import (
     node_target,
 )
 from core.object3d import NodeId
+from core.ordinal import require_positive
 from materials.material import MaterialId
 from math.finite import require_finite
 from math.utils import SeededRandom
@@ -262,8 +263,7 @@ def create_material_color_animation(
     Raises:
         Error: If there is no color, or the duration is not above zero.
     """
-    if len(colors) == 0:
-        raise Error("A color animation needs at least one color")
+    require_positive(len(colors), "A color animation needs at least one color")
     var step = Float32(0)
     if len(colors) > 1:
         step = duration.to(SECOND) / Float32(len(colors) - 1)

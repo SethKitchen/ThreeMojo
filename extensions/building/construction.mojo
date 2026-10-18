@@ -18,7 +18,7 @@ gain coefficient and its visible transmittance. These are the three
 numbers of the simple glazing model that thermal programs use for a
 window without a layer-by-layer description.
 """
-from core.ordinal import ordinal_valid, require_valid
+from core.ordinal import ordinal_valid, require_valid, require_positive
 
 from math.finite import require_positive_finite
 from extensions.building.ids import MaterialId
@@ -121,8 +121,7 @@ struct Construction(Copyable, Movable):
             Error: If it has no layers, a layer names a material that is
                 not in the list, or a thickness is not positive and finite.
         """
-        if len(self.layers) == 0:
-            raise Error("A construction needs a layer")
+        require_positive(len(self.layers), "A construction needs a layer")
         for i in range(len(self.layers)):  # pragma: no branch
             ref layer = self.layers[i]
             if not layer.material.is_valid() or layer.material.value >= len(

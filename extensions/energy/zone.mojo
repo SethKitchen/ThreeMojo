@@ -72,7 +72,7 @@ from units.si import (
     WATT_PER_SQUARE_METER_KELVIN,
 )
 from units.temperature import Temperature64
-from core.ordinal import require_valid
+from core.ordinal import require_valid, require_positive
 
 # One air change per hour.
 comptime AIR_CHANGE_PER_HOUR = FrequencyUnit(1.0 / 3600.0, "1/h")
@@ -680,8 +680,7 @@ struct ZoneModel(Movable):
             Error: If it has no zone, or a zone, a surface or a window is
                 not valid. The lists are public, so this checks each again.
         """
-        if len(self.zones) == 0:
-            raise Error("A zone model needs a zone")
+        require_positive(len(self.zones), "A zone model needs a zone")
         for i in range(len(self.zones)):  # pragma: no branch
             self.zones[i].check()
         for i in range(len(self.surfaces)):

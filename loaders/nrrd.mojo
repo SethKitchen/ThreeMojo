@@ -47,7 +47,7 @@ See `docs/wiki/Norm-consumers.md` for the changed operations, retained
 limits, and explicit zero and nonfinite rules.
 """
 
-from core.ordinal import require_non_negative
+from core.ordinal import require_non_negative, require_positive
 from math.norm import length3
 from loaders.bytes import ascii_digit, hex_digit_value, is_sign_mark
 from loaders.js_number import js_parse_float, js_parse_int
@@ -308,8 +308,9 @@ def parse_nrrd_header(text: List[Int]) raises -> NrrdHeader:
                     vector.append(js_parse_float(String(word)))
                 vectors.append(vector^)
                 at = close + 1
-            if len(vectors) == 0:
-                raise Error("NRRD: the space directions have no ( )")
+            require_positive(
+                len(vectors), "NRRD: the space directions have no ( )"
+            )
             header.vectors = vectors^
         elif field == "spacings":
             var spacings = List[Float64]()

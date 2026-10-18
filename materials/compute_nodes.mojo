@@ -1545,8 +1545,9 @@ struct ComputeKernel(Movable):
                 + String(MAX_WORKGROUP_SIZE)
                 + " invocations"
             )
-        if len(self._statements) == 0:
-            raise Error("A compute kernel needs a statement")
+        require_positive(
+            len(self._statements), "A compute kernel needs a statement"
+        )
         var roots = List[NodeRef]()
         for at in range(len(self._statements)):  # pragma: no branch
             ref statement = self._statements[at]

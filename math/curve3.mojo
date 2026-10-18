@@ -54,7 +54,7 @@ turns back. Frames where two steps point straight opposite ways, which
 leave no axis to turn about.
 """
 
-from core.ordinal import ordinal_valid, require_valid
+from core.ordinal import ordinal_valid, require_valid, require_positive
 
 from math.curve_checks import (
     check_curve_parameter,
@@ -882,8 +882,9 @@ struct CurvePath3(Copyable, Movable):
         Raises:
             Error: If the path has no curves.
         """
-        if len(self.curves) == 0:
-            raise Error("A curve path with no curves has no points")
+        require_positive(
+            len(self.curves), "A curve path with no curves has no points"
+        )
 
     def close_path(mut self) raises:
         """Add the straight run from the end of the last curve back to the
