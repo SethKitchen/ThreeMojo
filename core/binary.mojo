@@ -3,13 +3,14 @@
 # Noncommercial use is free; commercial use requires a paid license.
 # See LICENSE, LICENSE-COMMERCIAL.md and THIRD-PARTY-NOTICES.md.
 
-"""Little-endian integers and byte copies shared by the file readers.
+"""Integers and byte copies shared by the file readers.
 
 The caller checks that the read lies inside the buffer. The integer
-readers do not allocate and do not raise. `little_endian_u16` and
-`little_endian_u32` read a fixed width. `little_endian_uint` reads zero
-through eight bytes. `copy_bytes` returns a new list and does not raise.
-`copy_byte_range` copies from one index up to another.
+readers do not allocate and do not raise. `little_endian_u16`,
+`little_endian_u32`, `big_endian_u16`, and `big_endian_u32` read a fixed
+width. `little_endian_uint` reads zero through eight bytes. `copy_bytes`
+returns a new list and does not raise. `copy_byte_range` copies from one
+index up to another.
 """
 
 
@@ -34,6 +35,22 @@ def little_endian_u16(bytes: List[UInt8], at: Int) -> Int:
     return _pack_u16(bytes[at], bytes[at + 1])
 
 
+def big_endian_u16(bytes: List[UInt8], at: Int) -> Int:
+    """Return the big-endian 16-bit word at `at`.
+
+    Args:
+        bytes: The buffer.
+        at: The index of the first byte.
+
+    Returns:
+        The word, with the first byte in the high eight bits.
+
+    Raises:
+        Error: Never.
+    """
+    return (Int(bytes[at]) << 8) | Int(bytes[at + 1])
+
+
 def little_endian_u32(bytes: List[UInt8], at: Int) -> Int:
     """Return the little-endian 32-bit word at `at`.
 
@@ -45,6 +62,27 @@ def little_endian_u32(bytes: List[UInt8], at: Int) -> Int:
         The word, with the first byte in the low eight bits.
     """
     return _pack_u32(bytes[at], bytes[at + 1], bytes[at + 2], bytes[at + 3])
+
+
+def big_endian_u32(bytes: List[UInt8], at: Int) -> Int:
+    """Return the big-endian 32-bit word at `at`.
+
+    Args:
+        bytes: The buffer.
+        at: The index of the first byte.
+
+    Returns:
+        The word, with the first byte in the high eight bits.
+
+    Raises:
+        Error: Never.
+    """
+    return (
+        (Int(bytes[at]) << 24)
+        | (Int(bytes[at + 1]) << 16)
+        | (Int(bytes[at + 2]) << 8)
+        | Int(bytes[at + 3])
+    )
 
 
 def little_endian_u32(bytes: Span[UInt8, _], at: Int) -> Int:

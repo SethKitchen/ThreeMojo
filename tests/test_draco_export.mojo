@@ -26,6 +26,7 @@ from std.testing import (
     assert_true,
 )
 
+from core.binary import little_endian_u32
 from core.buffer_attribute import BufferAttribute
 from core.buffer_geometry import COLOR, NORMAL, POSITION, UV, BufferGeometry
 from exporters.draco import (
@@ -94,13 +95,7 @@ struct _Reference(Movable):
         self.words = Path(_DIR + "three.bin").read_bytes()
 
     def word(self, i: Int) -> Int:
-        var at = 4 * i
-        return (
-            Int(self.words[at])
-            | (Int(self.words[at + 1]) << 8)
-            | (Int(self.words[at + 2]) << 16)
-            | (Int(self.words[at + 3]) << 24)
-        )
+        return little_endian_u32(self.words, 4 * i)
 
     def cases(self) raises -> Int:
         return self.doc.get(self.doc.root(), "cases")

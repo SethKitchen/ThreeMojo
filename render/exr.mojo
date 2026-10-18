@@ -49,7 +49,12 @@ as every other reader here returns them. three.js flips them and marks the
 texture `flipY = false`, which samples the same way.
 """
 from loaders.bytes import ascii_letter
-from core.binary import little_endian_i32, little_endian_u16, little_endian_u32
+from core.binary import (
+    big_endian_u16,
+    little_endian_i32,
+    little_endian_u16,
+    little_endian_u32,
+)
 from core.ordinal import ordinal_valid
 
 from render.float_image import FloatImage
@@ -1227,7 +1232,7 @@ def _b44_decode(
                 # A positive width includes the block at zero.
                 for bx in range(0, width, 4):  # pragma: no branch
                     _need(end, at, 3)
-                    block[0] = (Int(bytes[at]) << 8) | Int(bytes[at + 1])
+                    block[0] = big_endian_u16(bytes, at)
                     var shift = Int(bytes[at + 2]) >> 2
                     # OpenEXR uses the same reader for both compression
                     # tags. Every impossible shift denotes a flat block.

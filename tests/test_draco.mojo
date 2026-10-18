@@ -28,6 +28,7 @@ from std.testing import (
     assert_true,
 )
 
+from core.binary import little_endian_u32
 from core.assets import Assets
 from core.buffer_geometry import COLOR, NORMAL, POSITION, UV, UV1
 from core.scene import Scene
@@ -138,13 +139,7 @@ struct _Reference(Movable):
         var count = self.doc.integer(self.doc.at(node, 1))
         var out = List[Int](capacity=count)
         for i in range(start, start + count):
-            var at = 4 * i
-            out.append(
-                Int(self.words[at])
-                | (Int(self.words[at + 1]) << 8)
-                | (Int(self.words[at + 2]) << 16)
-                | (Int(self.words[at + 3]) << 24)
-            )
+            out.append(little_endian_u32(self.words, 4 * i))
         return out^
 
     def attribute_bits(self, name: String, attribute: Int) raises -> List[Int]:

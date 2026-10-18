@@ -18,6 +18,7 @@ Byte order is big-endian throughout, as PNG requires, except inside DEFLATE's
 own stored-block lengths, which are little-endian.
 """
 
+from core.binary import big_endian_u32
 from core.extent import positive_extent
 from render.checksum import Crc32, adler32
 from render.framebuffer import Color, Framebuffer, pixel_slot
@@ -279,22 +280,6 @@ struct DecodedImage(Movable):
         )
 
 
-def _be32(bytes: List[UInt8], at: Int) raises -> Int:
-    """Return the big-endian 32-bit integer at `at`.
-
-    The caller has already checked there are four bytes there: the chunk loop
-    will not start a chunk without eight bytes of header, and will not reach a
-    CRC it has not confirmed is present. A guard here would be a branch no
-    file could take -- coverage says so.
-    """
-    return (
-        Int(bytes[at]) << 24
-        | Int(bytes[at + 1]) << 16
-        | Int(bytes[at + 2]) << 8
-        | Int(bytes[at + 3])
-    )
-
-
 def _paeth(left: Int, above: Int, corner: Int) -> Int:
     """Return whichever neighbor the Paeth predictor picks.
 
@@ -529,7 +514,7 @@ def decode(bytes: List[UInt8]) raises -> DecodedImage:
         # a negative one would be a branch no file could take -- coverage says
         # so. What actually bounds it is the check below that the chunk fits
         # inside the file, which a four-billion-byte length fails at once.
-        var length = _be32(bytes, at)
+        var length = big_endian_u32(bytes, at)
         var kind = String()
         for index in range(4):  # pragma: no branch
             kind += chr(Int(bytes[at + 4 + index]))
@@ -545,7 +530,7 @@ def decode(bytes: List[UInt8]) raises -> DecodedImage:
         var checked = Crc32()
         checked.update(Span(bytes)[at + 4 : at + 8])
         checked.update(Span(body))
-        if UInt32(_be32(bytes, start + length)) != checked.finish():
+        if UInt32(big_endian_u32(bytes, start + length)) != checked.finish():
             raise Error("A PNG chunk failed its CRC")
 
         if kind == "IHDR":
@@ -553,8 +538,8 @@ def decode(bytes: List[UInt8]) raises -> DecodedImage:
                 raise Error("A PNG has more than one header chunk")
             if length != 13:
                 raise Error("A PNG header chunk is the wrong size")
-            width = _be32(body, 0)
-            height = _be32(body, 4)
+            width = big_endian_u32(body, 0)
+            height = big_endian_u32(body, 4)
             if not positive_extent(width, height):
                 raise Error("A PNG's dimensions must be positive")
             if width > MAX_DIMENSION or height > MAX_DIMENSION:
@@ -632,7 +617,7 @@ def decode(bytes: List[UInt8]) raises -> DecodedImage:
             # it, so a gamma that could override the profile turned every
             # profiled export with a gamma of 1/2.2 into a plain sRGB one.
             if not stated_srgb and not stated_profile:
-                color_space = _space_from_gamma(_be32(body, 0))
+                color_space = _space_from_gamma(big_endian_u32(body, 0))
         elif kind == "iCCP":
             if seen_data:
                 raise Error("A PNG iCCP chunk must come before its pixel data")
