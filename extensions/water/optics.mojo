@@ -612,7 +612,7 @@ def _pebbles[
         (first.r - second.r) + (first.g - second.g) + (first.b - second.b)
     )
     var mix = smoothstep(0.2, 0.8, blend - 0.1 * delta)
-    var color = _blend_pebble(first, second, mix)
+    var color = first.mix(second, mix)
     # The page blurs the height lookup by six times the color footprint.
     var wide_a = sample_pebble_grad(
         bed,
@@ -632,14 +632,9 @@ def _pebbles[
         du_dy * 6.0,
         dv_dy * 6.0,
     )
-    var wide = _blend_pebble(wide_a, wide_b, mix)
+    var wide = wide_a.mix(wide_b, mix)
     var height = wide.r * 0.3 + wide.g * 0.55 + wide.b * 0.15
     return BedColor(color.r, color.g, color.b, height)
-
-
-def _blend_pebble(a: PebbleSample, b: PebbleSample, t: Float32) -> PebbleSample:
-    var s = 1.0 - t
-    return PebbleSample(a.r * s + b.r * t, a.g * s + b.g * t, a.b * s + b.b * t)
 
 
 def max(a: Float32, b: Float32) -> Float32:

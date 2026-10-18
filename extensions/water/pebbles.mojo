@@ -38,6 +38,23 @@ struct PebbleSample(ImplicitlyCopyable):
         self.g = g
         self.b = b
 
+    def mix(self, other: Self, t: Float32) -> Self:
+        """Return this sample moved toward `other` by `t`.
+
+        Args:
+            other: The sample at `t` of one.
+            t: How far from this sample toward `other`.
+
+        Returns:
+            The blend.
+        """
+        var s = 1.0 - t
+        return Self(
+            self.r * s + other.r * t,
+            self.g * s + other.g * t,
+            self.b * s + other.b * t,
+        )
+
 
 trait PebbleTexels:
     """Read access to the pebble photograph and its mipmaps.
@@ -235,19 +252,14 @@ def sample_pebble(bed: PebbleBed, u: Float32, v: Float32) -> PebbleSample:
     var s10 = _texel(bed, x1, y0)
     var s01 = _texel(bed, x0, y1)
     var s11 = _texel(bed, x1, y1)
-    var top = _mix_sample(s00, s10, tx)
-    var bottom = _mix_sample(s01, s11, tx)
-    return _mix_sample(top, bottom, ty)
+    var top = s00.mix(s10, tx)
+    var bottom = s01.mix(s11, tx)
+    return top.mix(bottom, ty)
 
 
 def _texel(bed: PebbleBed, x: Int, y: Int) -> PebbleSample:
     var at = (y * bed.width + x) * 3
     return PebbleSample(bed.pixels[at], bed.pixels[at + 1], bed.pixels[at + 2])
-
-
-def _mix_sample(a: PebbleSample, b: PebbleSample, t: Float32) -> PebbleSample:
-    var s = 1.0 - t
-    return PebbleSample(a.r * s + b.r * t, a.g * s + b.g * t, a.b * s + b.b * t)
 
 
 def sample_pebble_grad[
@@ -314,7 +326,7 @@ def _trilinear[
     var frac = lod - Float32(i0)
     var a = _sample_level(bed, i0, u, v)
     var b = _sample_level(bed, i1, u, v)
-    return _mix_sample(a, b, frac)
+    return a.mix(b, frac)
 
 
 def _sample_level[
@@ -336,9 +348,9 @@ def _sample_level[
     var s10 = bed.pebble_texel(level, x1, y0)
     var s01 = bed.pebble_texel(level, x0, y1)
     var s11 = bed.pebble_texel(level, x1, y1)
-    var top = _mix_sample(s00, s10, tx)
-    var bottom = _mix_sample(s01, s11, tx)
-    return _mix_sample(top, bottom, ty)
+    var top = s00.mix(s10, tx)
+    var bottom = s01.mix(s11, tx)
+    return top.mix(bottom, ty)
 
 
 def _level_texel(bed: PebbleBed, level: Int, x: Int, y: Int) -> PebbleSample:
