@@ -40,7 +40,7 @@ See `docs/wiki/Norm-consumers.md` for the changed operations, retained
 limits, and explicit zero and nonfinite rules.
 """
 
-from math.cross import wide_cross
+from math.cross import wide_cross, wide_dot
 from math.norm import _ordinary_squared, length3, normalized3, normalized_cross3
 from core.assets import Assets
 from core.buffer_attribute import BufferAttribute
@@ -343,7 +343,7 @@ def _cross(a: Vec, b: Vec) -> Vec:
 
 
 def _dot(a: Vec, b: Vec) -> Float64:
-    return a[0] * b[0] + a[1] * b[1] + a[2] * b[2]
+    return wide_dot(a, b)
 
 
 def _stored_face_normal(vertices: List[Vec]) -> Vec:

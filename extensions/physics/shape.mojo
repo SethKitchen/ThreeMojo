@@ -30,7 +30,7 @@ triangle mesh" (2004).
 from core.ordinal import ordinal_valid
 
 from math.convex_hull import ConvexHull
-from math.cross import cross_vectors, wide_cross, widen_vector
+from math.cross import cross_vectors, wide_cross, wide_dot, widen_vector
 from math.finite import positive_finite
 from math.matrix3 import Matrix3
 from math.matrix_determinant import _determinant3_f32
@@ -175,7 +175,7 @@ def _wide_cross(
 
 
 def _wide_dot(a: SIMD[DType.float64, 4], b: SIMD[DType.float64, 4]) -> Float64:
-    return a[0] * b[0] + a[1] * b[1] + a[2] * b[2]
+    return wide_dot(a, b)
 
 
 def _finite_vector(v: Vector3) raises:
