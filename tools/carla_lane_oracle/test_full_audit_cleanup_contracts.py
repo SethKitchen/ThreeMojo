@@ -642,7 +642,10 @@ class FullAuditCleanupContracts(unittest.TestCase):
             raw = (self.root/path).read_bytes()
             prior = cleanup.qualification_predecessor_bytes(path, raw)
             self.assertEqual(cleanup.sha(prior), historical_supplemental[path])
-        self.assertEqual({path: image['inputs'][path]
+        stage_witness = 'tools/carla_lane_oracle/test_pr760_arithmetic_stage.py'
+        self.assertEqual({path: cleanup.sha(cleanup.stage_witness_predecessor_bytes(
+                              (self.root/path).read_bytes())) if path == stage_witness
+                          else image['inputs'][path]
                           for path in stage.REGISTRY_INPUT_SHA256},
                          stage.REGISTRY_INPUT_SHA256)
         # Every source used to classify entrypoints is a physical receipt input,

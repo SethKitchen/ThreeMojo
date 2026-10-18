@@ -150,7 +150,7 @@ NATIVE_SUPPORT_MAPPING = {'tests/test_carla_junction_endpoint_refusals.mojo': ['
 THEOREM_DOCUMENT = 'docs/validation/full-audit-711-invariants.md'
 PR760_STAGE_SHA256 = '03757bafb02fbb3908919839c18d5c2c443f46469aeb01393dee57ae22054359'
 PR760_IMAGE = 'tools/carla_lane_oracle/pr760-source-image.json'
-PR760_IMAGE_SHA256 = '8f470b0f1d38d2d56639646169d9af36cb0f132be6a2ac5ab134f89285740fc3'
+PR760_IMAGE_SHA256 = '18002c813c8338b7dfa321f822565dfd15f30627996c25339c05a2d4abf6e0d0'
 PR760_OWNER_PREDECESSOR = 'tools/carla_lane_oracle/pr760-owner-predecessor.txt'
 PR760_OWNER_PREDECESSOR_SHA256 = '6138ba2dcac394c716ea9ed32e74e0c6d15857d5c605fc82304d21d0c80fdc69'
 DEPENDENCY_TOOL_SHA256 = {'tools/carla_lane_oracle/winner_sign_contracts.py': 'f850902634073364fe2407b00d12e9fdfb2ecfc6cf2a03414269fbb7984a8a7f',
@@ -4187,7 +4187,7 @@ def _pr760_authority_data():
     require((PR760_STAGE_SHA256, PR760_IMAGE, PR760_IMAGE_SHA256, PR760_OWNER_PREDECESSOR, PR760_OWNER_PREDECESSOR_SHA256) == (
         '03757bafb02fbb3908919839c18d5c2c443f46469aeb01393dee57ae22054359',
         'tools/carla_lane_oracle/pr760-source-image.json',
-        '8f470b0f1d38d2d56639646169d9af36cb0f132be6a2ac5ab134f89285740fc3',
+        '18002c813c8338b7dfa321f822565dfd15f30627996c25339c05a2d4abf6e0d0',
         'tools/carla_lane_oracle/pr760-owner-predecessor.txt',
         '6138ba2dcac394c716ea9ed32e74e0c6d15857d5c605fc82304d21d0c80fdc69',
     ), 'PR760 authority selectors changed')
@@ -4665,20 +4665,22 @@ def qualification_predecessor_bytes(path, raw):
     "            with patch.object(cleanup, 'inventory', late), self.assertRaisesRegex(ValueError, "
     'reason):\n')))),
      'tools/carla_lane_oracle/test_coverage_invariant_contracts.py': ('8ec5dfed0b21c02a2104c4df8778fe1e11215cd67a9fa7d4808c30e4cc4e2841',
- '4e931058f7e2fa6f3fe171a5bf9db576d363e37b394c553dab5098cec3cd545c',
+ 'f1f5fba22e90180c5c68af113c15941e96b2b2d1cfdc3a7a9b2a01936a4735f2',
  ((82,
-   86,
+   88,
    ('            # Exact current direct/package commands completed in 40.007/40.211\n',
     '            # seconds on pinned Python 3.12.14. Keep a measured 60-second\n',
     '            # validation allowance; native cases retain their 5-second bound.\n'),
-   ('            # PR760 a2ada6b6 direct/package verification completed in\n',
-    '            # 152.775/147.161 seconds (152.407/147.147 CPU seconds) on pinned\n',
-    '            # Python 3.12.14. Allow 300 seconds for the expanded source proof;\n',
-    '            # historical imports and native cases retain their original bounds.\n')),
-  (88,
-   89,
+   ('            # On pinned Python 3.12.14, current 64ed89bf and pre-scope\n',
+    '            # 3dcb9f06 direct verification took 155.268/154.829 seconds\n',
+    '            # (155.172/154.799 CPU seconds), each with one complete gate and\n',
+    '            # one terminal checkpoint. Both import modes exceeded 300 seconds\n',
+    '            # in hosted parallel tooling CI. Allow 600 seconds for this current\n',
+    '            # integration only; historical and native bounds stay unchanged.\n')),
+  (90,
+   91,
    ('                               check=True, capture_output=True, text=True, timeout=60)\n',),
-   ('                               check=True, capture_output=True, text=True, timeout=300)\n',))))}
+   ('                               check=True, capture_output=True, text=True, timeout=600)\n',))))}
     require(path in rows, 'unregistered qualification witness: ' + path)
     before_sha, after_sha, edits = rows[path]
     expected = (typed_boundary.EDGES[path]['after_sha256'] if path ==
@@ -4700,6 +4702,45 @@ def qualification_predecessor_bytes(path, raw):
             previous = start
         result = ''.join(lines).encode('utf-8')
         require(sha(result) == before_sha, 'qualification inverse misses predecessor: ' + path)
+    executing_checker_bindings()
+    return result
+
+
+def stage_witness_predecessor_bytes(raw):
+    """Recover one fixed stage witness for pure historical registry comparison.
+
+    The physical owner still observes, pins, rereads and returns current bytes.
+    This exact inverse supplies no admission, filesystem or receipt authority.
+    """
+    executing_checker_bindings()
+    before_sha, after_sha, edits = ('b6d5ecc453ebe4c1f8d5f07e1f029b09f414dea887480fa6cf07ccd85bfacdb3',
+ '35efae78b6a95568760b4544428c511a5ee90beec4d86338fd2f717c0f1c7516',
+ ((74,
+   75,
+   (),
+   ("            'typed_boundary_contracts.py': 'pr760-typed_boundary-predecessor.txt',\n",)),
+  (155,
+   158,
+   (),
+   ('        import full_audit_cleanup_contracts as owner\n',
+    "        witness = 'tools/carla_lane_oracle/test_pr760_arithmetic_stage.py'\n",
+    '        inputs[witness] = owner.stage_witness_predecessor_bytes(inputs[witness])\n'))))
+    path = 'tools/carla_lane_oracle/test_pr760_arithmetic_stage.py'
+    require(before_sha == pr760_stage.REGISTRY_INPUT_SHA256[path],
+            'stage witness historical authority changed')
+    require(type(raw) is bytes and sha(raw) in (before_sha, after_sha),
+            'unreviewed stage witness endpoint')
+    if sha(raw) == before_sha:
+        return raw
+    lines = raw.decode('utf-8').splitlines(keepends=True)
+    previous = len(lines) + 1
+    for start, stop, before, after in reversed(edits):
+        require(0 <= start <= stop < previous and tuple(lines[start:stop]) == after,
+                'stage witness inverse span changed')
+        lines[start:stop] = before
+        previous = start
+    result = ''.join(lines).encode('utf-8')
+    require(sha(result) == before_sha, 'stage witness inverse misses predecessor')
     executing_checker_bindings()
     return result
 
@@ -4757,7 +4798,11 @@ def _pr760_candidate_bindings(root, *, _snapshots=None, _operation=None):
                 for path, digest in expected.items()), 'malformed PR760 source-image pins')
         for path, digest in expected.items():
             require(sha(observe(path)) == digest, 'PR760 physical input changed: ' + path)
-        require(all(expected.get(path) == digest
+        stage_witness = 'tools/carla_lane_oracle/test_pr760_arithmetic_stage.py'
+        stage_prior = stage_witness_predecessor_bytes(image[stage_witness])
+        require(stage_prior == image['tools/carla_lane_oracle/pr760-test_pr760_arithmetic_stage-predecessor.txt'],
+                'stage witness archive differs from exact predecessor')
+        require(all((sha(stage_prior) if path == stage_witness else expected.get(path)) == digest
                     for path, digest in pr760_stage.REGISTRY_INPUT_SHA256.items()),
                 'PR760 physical image misses reviewed registry input')
         for path, archive in (('tools/test_conditioned_coverage_loops.py', 'tools/carla_lane_oracle/pr760-test_conditioned_coverage_loops-predecessor.txt'), ('tools/carla_lane_oracle/test_typed_boundary_contracts.py', 'tools/carla_lane_oracle/pr760-test_typed_boundary_contracts-predecessor.txt'), ('tools/carla_lane_oracle/test_shared_helper_contracts.py', 'tools/carla_lane_oracle/pr760-test_shared_helper_contracts-predecessor.txt'), ('tools/carla_lane_oracle/test_scaled_float32_contracts.py', 'tools/carla_lane_oracle/pr760-test_scaled_float32_contracts-predecessor.txt'), ('tools/carla_lane_oracle/test_common758_current_successor.py', 'tools/carla_lane_oracle/pr760-test_common758_current_successor-predecessor.txt'), ('tools/carla_lane_oracle/test_witness_format_contracts.py', 'tools/carla_lane_oracle/pr760-test_witness_format_contracts-predecessor.txt'), ('tools/carla_lane_oracle/test_coverage_invariant_contracts.py', 'tools/carla_lane_oracle/pr760-test_coverage_invariant_contracts-predecessor.txt')):
@@ -4765,7 +4810,8 @@ def _pr760_candidate_bindings(root, *, _snapshots=None, _operation=None):
                     'PR760 qualification archive differs from exact predecessor: ' + path)
         # One complete fixed image, with no per-file old/new fallback.
         previous = pr760_stage.verify_registry_sources(
-            {path: image[path] for path in pr760_stage.REGISTRY_INPUT_SHA256})
+            {path: stage_prior if path == stage_witness else image[path]
+             for path in pr760_stage.REGISTRY_INPUT_SHA256})
         typed_texts = {path: (previous[path] if path in pr760_stage.EXAMPLE_PATHS
                               else qualification_predecessor_bytes(path, image[path]).decode('utf-8')
                               if path == 'tools/carla_lane_oracle/test_witness_format_contracts.py' else image[path].decode('utf-8'))

@@ -72,6 +72,7 @@ class StagedArithmeticControls(unittest.TestCase):
         # Named reviewed implementation successors retain exact old evidence.
         archives = {
             'full_audit_cleanup_contracts.py': 'pr760-owner-predecessor.txt',
+            'typed_boundary_contracts.py': 'pr760-typed_boundary-predecessor.txt',
             'source_contracts.py': 'pr760-source-adapter-predecessor.txt',
             'seed_count_contracts.py': 'pr760-seed_count-predecessor.txt',
             'border_parser_contracts.py': 'pr760-border_parser-predecessor.txt',
@@ -152,6 +153,9 @@ class StagedArithmeticControls(unittest.TestCase):
         self.assertIs(stage.REGISTRY_QUALIFICATION_READY, False)
         self.assertTrue(stage.REGISTRY_UNRESOLVED_CONDITIONS)
         inputs = {path: (ROOT/path).read_bytes() for path in stage.REGISTRY_INPUT_SHA256}
+        import full_audit_cleanup_contracts as owner
+        witness = 'tools/carla_lane_oracle/test_pr760_arithmetic_stage.py'
+        inputs[witness] = owner.stage_witness_predecessor_bytes(inputs[witness])
         predecessors = stage.verify_registry_sources(inputs)
         self.assertEqual(set(predecessors), set(stage.EDGES))
         for path, prior in predecessors.items():

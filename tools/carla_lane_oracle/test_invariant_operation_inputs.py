@@ -4397,7 +4397,7 @@ _PR760_CHECKER_SOURCE_EDGES = {'coverage_loop_proofs.py': {'after_sha256': '08e8
              '**operation_args))\n',
              '            result.update(density760_loops(root, include_roots=include_roots, '
              '**operation_args))\n')))},
- 'full_audit_cleanup_contracts.py': {'after_sha256': 'bef02a7a3764195fe12e740bc09dfd6c7bb9e70a564bf4360bcdcce169987a75',
+ 'full_audit_cleanup_contracts.py': {'after_sha256': 'c0712bd320a110155c6552f06c2be53790cec8dcd0f36e39cbead159fbda2caa',
  'before_sha256': '6138ba2dcac394c716ea9ed32e74e0c6d15857d5c605fc82304d21d0c80fdc69',
  'edits': ((10, 11, (), ('from contextlib import nullcontext\n',)),
            (45, 46, (), ('        from . import lane_order_contracts as lane_order\n',)),
@@ -4412,7 +4412,7 @@ _PR760_CHECKER_SOURCE_EDGES = {'coverage_loop_proofs.py': {'after_sha256': '08e8
              "'03757bafb02fbb3908919839c18d5c2c443f46469aeb01393dee57ae22054359'\n",
              "PR760_IMAGE = 'tools/carla_lane_oracle/pr760-source-image.json'\n",
              'PR760_IMAGE_SHA256 = '
-             "'8f470b0f1d38d2d56639646169d9af36cb0f132be6a2ac5ab134f89285740fc3'\n",
+             "'18002c813c8338b7dfa321f822565dfd15f30627996c25339c05a2d4abf6e0d0'\n",
              "PR760_OWNER_PREDECESSOR = 'tools/carla_lane_oracle/pr760-owner-predecessor.txt'\n",
              'PR760_OWNER_PREDECESSOR_SHA256 = '
              "'6138ba2dcac394c716ea9ed32e74e0c6d15857d5c605fc82304d21d0c80fdc69'\n",
@@ -4424,17 +4424,21 @@ _PR760_CHECKER_SOURCE_EDGES = {'coverage_loop_proofs.py': {'after_sha256': '08e8
              " 'tools/carla_lane_oracle/scaled_float32_contracts.py': "
              "'e3a59a9f8d5a9394007c03fab6ac696e04998812dad5843a22e721bfbe57c2a1',\n")),
            (167,
-            170,
+            171,
             (" 'tools/carla_lane_oracle/source_contracts.py': "
              "'83fdd35b61f0dc7739160c113ae6b4558ad07d45ffded22b7062bc9a209032d0',\n",
              " 'tools/carla_lane_oracle/sum2_guard_contracts.py': "
-             "'acbf385486e2b0dfe15a409d039cd31c8e9fed295704bc6adcb4289818b65f63',\n"),
+             "'acbf385486e2b0dfe15a409d039cd31c8e9fed295704bc6adcb4289818b65f63',\n",
+             " 'tools/carla_lane_oracle/typed_boundary_contracts.py': "
+             "'baf231cb640435f5b81e350f32e6a0d6203e4ae5d0d6fb9bccb0c6d4bdbfae8a',\n"),
             (" 'tools/carla_lane_oracle/source_contracts.py': "
              "'ebb6e75b90528b5456485433d470de36e6b33e4df98139dd0acadda75a57adf5',\n",
              " 'tools/carla_lane_oracle/sum2_guard_contracts.py': "
              "'8c1d646c1dd70e1e7c9453077b63060ca506f76d2493137af0dd0a9a68012570',\n",
              " 'tools/carla_lane_oracle/lane_order_contracts.py': "
-             "'314b1fae1f274c7223ab5dec50ad4cb97760c31926844ca92e1e6aa8560b4889',\n")),
+             "'314b1fae1f274c7223ab5dec50ad4cb97760c31926844ca92e1e6aa8560b4889',\n",
+             " 'tools/carla_lane_oracle/typed_boundary_contracts.py': "
+             "'59cc73b325af897981a2d7299cf2d4ed3c61d3ea64d5f958f2b85aef51666362',\n")),
            (174,
             175,
             (" 'tools/carla_lane_oracle/seed_count_contracts.py': "
@@ -5117,7 +5121,7 @@ _PR760_CHECKER_SOURCE_EDGES = {'coverage_loop_proofs.py': {'after_sha256': '08e8
              '                            '
              "after_token_sha256=source.token_sha256(current.decode('utf-8')))\n")),
            (4174,
-            4871,
+            4917,
             (),
             ('PR760_IMPLEMENTATION_PREDECESSORS = '
              "{'tools/carla_lane_oracle/pr760-border_parser-predecessor.txt': "
@@ -5145,7 +5149,7 @@ _PR760_CHECKER_SOURCE_EDGES = {'coverage_loop_proofs.py': {'after_sha256': '08e8
              'PR760_OWNER_PREDECESSOR, PR760_OWNER_PREDECESSOR_SHA256) == (\n',
              "        '03757bafb02fbb3908919839c18d5c2c443f46469aeb01393dee57ae22054359',\n",
              "        'tools/carla_lane_oracle/pr760-source-image.json',\n",
-             "        '8f470b0f1d38d2d56639646169d9af36cb0f132be6a2ac5ab134f89285740fc3',\n",
+             "        '18002c813c8338b7dfa321f822565dfd15f30627996c25339c05a2d4abf6e0d0',\n",
              "        'tools/carla_lane_oracle/pr760-owner-predecessor.txt',\n",
              "        '6138ba2dcac394c716ea9ed32e74e0c6d15857d5c605fc82304d21d0c80fdc69',\n",
              "    ), 'PR760 authority selectors changed')\n",
@@ -5845,28 +5849,31 @@ _PR760_CHECKER_SOURCE_EDGES = {'coverage_loop_proofs.py': {'after_sha256': '08e8
              "    'reason):\\n')))),\n",
              "     'tools/carla_lane_oracle/test_coverage_invariant_contracts.py': "
              "('8ec5dfed0b21c02a2104c4df8778fe1e11215cd67a9fa7d4808c30e4cc4e2841',\n",
-             " '4e931058f7e2fa6f3fe171a5bf9db576d363e37b394c553dab5098cec3cd545c',\n",
+             " 'f1f5fba22e90180c5c68af113c15941e96b2b2d1cfdc3a7a9b2a01936a4735f2',\n",
              ' ((82,\n',
-             '   86,\n',
+             '   88,\n',
              "   ('            # Exact current direct/package commands completed in "
              "40.007/40.211\\n',\n",
              "    '            # seconds on pinned Python 3.12.14. Keep a measured "
              "60-second\\n',\n",
              "    '            # validation allowance; native cases retain their 5-second "
              "bound.\\n'),\n",
-             "   ('            # PR760 a2ada6b6 direct/package verification completed in\\n',\n",
-             "    '            # 152.775/147.161 seconds (152.407/147.147 CPU seconds) on "
-             "pinned\\n',\n",
-             "    '            # Python 3.12.14. Allow 300 seconds for the expanded source "
-             "proof;\\n',\n",
-             "    '            # historical imports and native cases retain their original "
-             "bounds.\\n')),\n",
-             '  (88,\n',
-             '   89,\n',
+             "   ('            # On pinned Python 3.12.14, current 64ed89bf and pre-scope\\n',\n",
+             "    '            # 3dcb9f06 direct verification took 155.268/154.829 seconds\\n',\n",
+             "    '            # (155.172/154.799 CPU seconds), each with one complete gate "
+             "and\\n',\n",
+             "    '            # one terminal checkpoint. Both import modes exceeded 300 "
+             "seconds\\n',\n",
+             "    '            # in hosted parallel tooling CI. Allow 600 seconds for this "
+             "current\\n',\n",
+             "    '            # integration only; historical and native bounds stay "
+             "unchanged.\\n')),\n",
+             '  (90,\n',
+             '   91,\n',
              "   ('                               check=True, capture_output=True, text=True, "
              "timeout=60)\\n',),\n",
              "   ('                               check=True, capture_output=True, text=True, "
-             "timeout=300)\\n',))))}\n",
+             "timeout=600)\\n',))))}\n",
              "    require(path in rows, 'unregistered qualification witness: ' + path)\n",
              '    before_sha, after_sha, edits = rows[path]\n',
              "    expected = (typed_boundary.EDGES[path]['after_sha256'] if path ==\n",
@@ -5892,6 +5899,50 @@ _PR760_CHECKER_SOURCE_EDGES = {'coverage_loop_proofs.py': {'after_sha256': '08e8
              "        result = ''.join(lines).encode('utf-8')\n",
              "        require(sha(result) == before_sha, 'qualification inverse misses "
              "predecessor: ' + path)\n",
+             '    executing_checker_bindings()\n',
+             '    return result\n',
+             '\n',
+             '\n',
+             'def stage_witness_predecessor_bytes(raw):\n',
+             '    """Recover one fixed stage witness for pure historical registry comparison.\n',
+             '\n',
+             '    The physical owner still observes, pins, rereads and returns current bytes.\n',
+             '    This exact inverse supplies no admission, filesystem or receipt authority.\n',
+             '    """\n',
+             '    executing_checker_bindings()\n',
+             '    before_sha, after_sha, edits = '
+             "('b6d5ecc453ebe4c1f8d5f07e1f029b09f414dea887480fa6cf07ccd85bfacdb3',\n",
+             " '35efae78b6a95568760b4544428c511a5ee90beec4d86338fd2f717c0f1c7516',\n",
+             ' ((74,\n',
+             '   75,\n',
+             '   (),\n',
+             '   ("            \'typed_boundary_contracts.py\': '
+             '\'pr760-typed_boundary-predecessor.txt\',\\n",)),\n',
+             '  (155,\n',
+             '   158,\n',
+             '   (),\n',
+             "   ('        import full_audit_cleanup_contracts as owner\\n',\n",
+             '    "        witness = '
+             '\'tools/carla_lane_oracle/test_pr760_arithmetic_stage.py\'\\n",\n',
+             "    '        inputs[witness] = "
+             "owner.stage_witness_predecessor_bytes(inputs[witness])\\n'))))\n",
+             "    path = 'tools/carla_lane_oracle/test_pr760_arithmetic_stage.py'\n",
+             '    require(before_sha == pr760_stage.REGISTRY_INPUT_SHA256[path],\n',
+             "            'stage witness historical authority changed')\n",
+             '    require(type(raw) is bytes and sha(raw) in (before_sha, after_sha),\n',
+             "            'unreviewed stage witness endpoint')\n",
+             '    if sha(raw) == before_sha:\n',
+             '        return raw\n',
+             "    lines = raw.decode('utf-8').splitlines(keepends=True)\n",
+             '    previous = len(lines) + 1\n',
+             '    for start, stop, before, after in reversed(edits):\n',
+             '        require(0 <= start <= stop < previous and tuple(lines[start:stop]) == '
+             'after,\n',
+             "                'stage witness inverse span changed')\n",
+             '        lines[start:stop] = before\n',
+             '        previous = start\n',
+             "    result = ''.join(lines).encode('utf-8')\n",
+             "    require(sha(result) == before_sha, 'stage witness inverse misses predecessor')\n",
              '    executing_checker_bindings()\n',
              '    return result\n',
              '\n',
@@ -5956,7 +6007,13 @@ _PR760_CHECKER_SOURCE_EDGES = {'coverage_loop_proofs.py': {'after_sha256': '08e8
              '        for path, digest in expected.items():\n',
              "            require(sha(observe(path)) == digest, 'PR760 physical input changed: ' + "
              'path)\n',
-             '        require(all(expected.get(path) == digest\n',
+             "        stage_witness = 'tools/carla_lane_oracle/test_pr760_arithmetic_stage.py'\n",
+             '        stage_prior = stage_witness_predecessor_bytes(image[stage_witness])\n',
+             '        require(stage_prior == '
+             "image['tools/carla_lane_oracle/pr760-test_pr760_arithmetic_stage-predecessor.txt'],\n",
+             "                'stage witness archive differs from exact predecessor')\n",
+             '        require(all((sha(stage_prior) if path == stage_witness else '
+             'expected.get(path)) == digest\n',
              '                    for path, digest in '
              'pr760_stage.REGISTRY_INPUT_SHA256.items()),\n',
              "                'PR760 physical image misses reviewed registry input')\n",
@@ -5980,7 +6037,8 @@ _PR760_CHECKER_SOURCE_EDGES = {'coverage_loop_proofs.py': {'after_sha256': '08e8
              'path)\n',
              '        # One complete fixed image, with no per-file old/new fallback.\n',
              '        previous = pr760_stage.verify_registry_sources(\n',
-             '            {path: image[path] for path in pr760_stage.REGISTRY_INPUT_SHA256})\n',
+             '            {path: stage_prior if path == stage_witness else image[path]\n',
+             '             for path in pr760_stage.REGISTRY_INPUT_SHA256})\n',
              '        typed_texts = {path: (previous[path] if path in pr760_stage.EXAMPLE_PATHS\n',
              '                              else qualification_predecessor_bytes(path, '
              "image[path]).decode('utf-8')\n",
@@ -7176,7 +7234,7 @@ _TYPED_CHECKER_SOURCE_EDITS = {
    " 'tools/carla_lane_oracle/sum2_guard_contracts.py': "
    "'acbf385486e2b0dfe15a409d039cd31c8e9fed295704bc6adcb4289818b65f63',\n",
    " 'tools/carla_lane_oracle/typed_boundary_contracts.py': "
-   "'59cc73b325af897981a2d7299cf2d4ed3c61d3ea64d5f958f2b85aef51666362',\n",
+   "'baf231cb640435f5b81e350f32e6a0d6203e4ae5d0d6fb9bccb0c6d4bdbfae8a',\n",
    " 'tools/carla_lane_oracle/witness_format_contracts.py': "
    "'a76ba6d5bf18be80c151fd03ea7a7ebeb75af1c1ed8af1600037d5f75ac13cb3',\n",
    " 'tools/carla_lane_oracle/cache_key_contracts.py': "
