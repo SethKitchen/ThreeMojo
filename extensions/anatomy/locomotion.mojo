@@ -18,7 +18,7 @@ A walk at `Fr = 0.25` is a design choice: a comfortable walk below the
 transition for every size.
 """
 
-from math.finite import positive_finite
+from math.finite import positive_finite, require_finite
 from std.math import isfinite, pow, sqrt
 from units.si import (
     METER,
@@ -59,8 +59,7 @@ def froude(speed: Velocity, hip: Length) raises -> Float64:
     """
     var h = _height(hip)
     var u = Float64(speed.to(METER_PER_SECOND))
-    if not isfinite(u):
-        raise Error("A speed must be finite")
+    require_finite(Float64(u), "A speed must be finite")
     return u * u / (Float64(STANDARD_GRAVITY.value) * h)
 
 
@@ -129,6 +128,8 @@ def stride_frequency(fr: Float64, hip: Length) raises -> Frequency:
     var frequency = Float32(u / stride)
     # Accepted positive speed and stride share the same Froude/height
     # inputs; their ratio stays above the Float32 zero-rounding boundary.
-    if not isfinite(frequency):
-        raise Error("A stride frequency must fit a positive finite SI quantity")
+    require_finite(
+        Float64(frequency),
+        "A stride frequency must fit a positive finite SI quantity",
+    )
     return Frequency(frequency, PER_SECOND)

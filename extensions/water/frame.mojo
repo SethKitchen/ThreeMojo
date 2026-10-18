@@ -70,7 +70,7 @@ from extensions.water.view import (
 from cameras.camera import Camera
 from core.extent import positive_extent
 from core.scene import Scene
-from math.finite import positive_finite
+from math.finite import positive_finite, require_finite
 from math.utils import max3, rec709_luminance
 from math.norm import squared_length3
 from math.matrix4 import Matrix4
@@ -1333,8 +1333,9 @@ struct WaterScene(Movable):
         Raises:
             Error: If a resolution is not valid, or `start` is not finite.
         """
-        if not isfinite(start.value):
-            raise Error("A water start clock must be finite")
+        require_finite(
+            Float64(start.value), "A water start clock must be finite"
+        )
         self.ocean = ocean
         self.caustic_grid = caustic_grid
         self.caustic_resolution = caustic_resolution
@@ -1400,8 +1401,9 @@ struct WaterScene(Movable):
         if not (isfinite(dt.value) and dt.value >= 0):
             raise Error("A water time step must be finite and nonnegative")
         var next_clock = self.clock.value + dt.value
-        if not isfinite(next_clock):
-            raise Error("The next water clock must be finite")
+        require_finite(
+            Float64(next_clock), "The next water clock must be finite"
+        )
         var strength = Float32(0.07) if drop else Float32(0.0)
         step_ripple(self._ripples, 0.0, 0.0, 0.5, 0.5, 0.022, strength)
         self.clock = Duration(next_clock, SECOND)

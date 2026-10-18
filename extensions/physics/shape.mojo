@@ -31,7 +31,7 @@ from core.ordinal import ordinal_valid
 
 from math.convex_hull import ConvexHull
 from math.cross import cross_vectors, wide_cross, wide_dot, widen_vector
-from math.finite import positive_finite
+from math.finite import positive_finite, require_finite
 from math.matrix3 import Matrix3
 from math.matrix_determinant import _determinant3_f32
 from math.triangle import Triangle
@@ -186,16 +186,16 @@ def _finite_vector(v: Vector3) raises:
 
 def _narrow_finite(value: Float64) raises -> Float32:
     var out = Float32(value)
-    if not isfinite(out):
-        raise Error("A mass property must fit in Float32")
+    require_finite(Float64(out), "A mass property must fit in Float32")
     return out
 
 
 def _inertia_determinant(inertia: Matrix3) raises -> Float64:
     # Sylvester's criterion on the stored values, without a tolerance.
     for i in range(9):  # pragma: no branch
-        if not isfinite(inertia.elements[i]):
-            raise Error("An inertia tensor must be finite")
+        require_finite(
+            Float64(inertia.elements[i]), "An inertia tensor must be finite"
+        )
     for i in range(3):  # pragma: no branch
         for j in range(i + 1, 3):
             if inertia.elements[3 * i + j] != inertia.elements[3 * j + i]:

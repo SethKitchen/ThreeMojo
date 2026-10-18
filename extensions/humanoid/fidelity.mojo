@@ -20,7 +20,7 @@ from extensions.humanoid.genome import GENE_COUNT, Genome
 from extensions.humanoid.sex import Sex
 from extensions.humanoid.spec import MAX_STATURE, MIN_STATURE, HumanoidSpec
 from loaders.json import parse_json
-from std.math import isfinite
+from math.finite import require_finite
 from std.memory import bitcast
 from units.si import Length, METER
 
@@ -134,8 +134,9 @@ def canonical_inputs(spec: HumanoidSpec) raises -> UserData:
     Raises:
         Error: If the spec is outside its software input domain.
     """
-    if not isfinite(spec.stature.value):
-        raise Error("Canonical inputs require finite stature")
+    require_finite(
+        Float64(spec.stature.value), "Canonical inputs require finite stature"
+    )
     if spec.stature.value < MIN_STATURE.value:
         raise Error("Canonical inputs require stature in the software range")
     if spec.stature.value > MAX_STATURE.value:

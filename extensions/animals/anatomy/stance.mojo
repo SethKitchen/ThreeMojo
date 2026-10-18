@@ -40,6 +40,7 @@ from extensions.animals.anatomy.muscles import (
 from extensions.animals.build import Animal
 from extensions.physics.quantities import NEWTON_METER, Torque
 from extensions.sdf.vector import V3
+from math.finite import require_finite
 from std.math import cos, isfinite
 from units.si import (
     METER,
@@ -143,8 +144,7 @@ def _load(
     # activation is finite. A foot all but level with its joint can still
     # overflow the advantage.
     debug_assert(isfinite(activation), "The activation is finite")
-    if not isfinite(advantage):
-        raise Error("Standing load ratios must be finite")
+    require_finite(Float64(advantage), "Standing load ratios must be finite")
     return JointLoad(
         joint,
         Force(Float32(push), NEWTON),

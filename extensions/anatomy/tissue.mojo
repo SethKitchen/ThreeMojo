@@ -29,7 +29,7 @@ applied once. The Phong look lives in `bone.mojo`, not here.
 
 from core.ordinal import ordinal_valid
 
-from std.math import isfinite
+from math.finite import require_finite
 from units.si import (
     Density,
     GRAM_PER_CUBIC_CENTIMETER,
@@ -102,26 +102,32 @@ struct BoneTissue(ImplicitlyCopyable):
         """
         if not self.kind.is_valid():
             raise Error("Bone tissue must be cortical or trabecular")
-        if not isfinite(self.tissue_density.value):
-            raise Error("A bone tissue density must be finite")
+        require_finite(
+            Float64(self.tissue_density.value),
+            "A bone tissue density must be finite",
+        )
         if self.tissue_density.value <= 0:
             raise Error("A bone tissue density must be positive")
-        if not isfinite(self.porosity):
-            raise Error("A bone porosity must be finite")
+        require_finite(Float64(self.porosity), "A bone porosity must be finite")
         if self.porosity < 0:
             raise Error("A bone porosity cannot be negative")
         if self.porosity > 1:
             raise Error("A bone porosity cannot exceed one")
-        if not isfinite(self.elastic_modulus.value):
-            raise Error("A bone elastic modulus must be finite")
+        require_finite(
+            Float64(self.elastic_modulus.value),
+            "A bone elastic modulus must be finite",
+        )
         if self.elastic_modulus.value <= 0:
             raise Error("A bone elastic modulus must be positive")
-        if not isfinite(self.elastic_modulus_secondary.value):
-            raise Error("A bone secondary modulus must be finite")
+        require_finite(
+            Float64(self.elastic_modulus_secondary.value),
+            "A bone secondary modulus must be finite",
+        )
         if self.elastic_modulus_secondary.value <= 0:
             raise Error("A bone secondary modulus must be positive")
-        if not isfinite(self.poisson_ratio):
-            raise Error("A bone Poisson ratio must be finite")
+        require_finite(
+            Float64(self.poisson_ratio), "A bone Poisson ratio must be finite"
+        )
         if self.poisson_ratio < 0:
             raise Error("A bone Poisson ratio cannot be negative")
         if self.poisson_ratio > 1:

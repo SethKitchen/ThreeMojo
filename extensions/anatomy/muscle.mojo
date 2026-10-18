@@ -37,7 +37,7 @@ Every input and output carries its unit. The curves are dimensionless
 and take and return `Float64`.
 """
 
-from math.finite import positive_finite
+from math.finite import positive_finite, require_finite
 from math.norm import squared_length2
 from generators.utils import Vec3d
 from std.math import asin, cos, exp, isfinite, sin, sqrt
@@ -97,8 +97,9 @@ def _check_activation(value: Float64) raises:
 
 
 def _finite_force(value: Float64) raises -> Float64:
-    if not isfinite(value):
-        raise Error("The muscle force is outside the finite numeric range")
+    require_finite(
+        Float64(value), "The muscle force is outside the finite numeric range"
+    )
     return value
 
 
@@ -153,8 +154,7 @@ def force_velocity(v: Float64) raises -> Float64:
     Raises:
         Error: If the normalized velocity is not finite.
     """
-    if not isfinite(v):
-        raise Error("A normalized fiber velocity must be finite")
+    require_finite(Float64(v), "A normalized fiber velocity must be finite")
     if v <= -1.0:
         return 0.0
     if v <= 0.0:
@@ -175,8 +175,7 @@ def tendon_force(strain: Float64) raises -> Float64:
     Raises:
         Error: If the strain is not finite or the force overflows.
     """
-    if not isfinite(strain):
-        raise Error("A tendon strain must be finite")
+    require_finite(Float64(strain), "A tendon strain must be finite")
     if strain <= 0.0:
         return 0.0
     var toe = 0.609 * TENDON_STRAIN
@@ -264,8 +263,7 @@ struct MuscleArchitecture(ImplicitlyCopyable, Writable):
             self.density.value,
         ]
         for v in values:  # pragma: no branch
-            if not isfinite(v):
-                raise Error("A muscle's architecture must be finite")
+            require_finite(Float64(v), "A muscle's architecture must be finite")
         if self.mass.value <= 0.0:
             raise Error("A muscle's mass must be positive")
         if self.fiber_length.value <= 0.0:
@@ -376,8 +374,9 @@ struct MuscleArchitecture(ImplicitlyCopyable, Writable):
         self.check()
         _check_activation(activation)
         require_fiber_length(Float64(fiber.value))
-        if not isfinite(velocity.value):
-            raise Error("A fiber velocity must be finite")
+        require_finite(
+            Float64(velocity.value), "A fiber velocity must be finite"
+        )
         var l0 = Float64(self.fiber_length.value)
         var l = Float64(fiber.value) / l0
         var top = (0.25 + 0.75 * activation) * MAX_VELOCITY * l0

@@ -20,7 +20,7 @@ Structural Analysis", 1968, sections 5.6 and 11.3. The element has no
 shear deformation and no end releases.
 """
 
-from math.finite import positive_finite
+from math.finite import positive_finite, require_finite
 from std.math import isfinite
 from extensions.building.material import BuildingMaterial
 from extensions.building.model import Section
@@ -107,8 +107,9 @@ def member_axes(start: Vec3d, end: Vec3d, reference: Vec3d) raises -> LocalAxes:
         reference.z,
     ]
     for i in range(len(values)):  # pragma: no branch
-        if not isfinite(values[i]):
-            raise Error("A member's ends and reference must be finite")
+        require_finite(
+            Float64(values[i]), "A member's ends and reference must be finite"
+        )
     var axis = end - start
     var length = axis.length()
     if not (length > 0):

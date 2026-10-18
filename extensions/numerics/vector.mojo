@@ -11,7 +11,8 @@ the largest entry first, so a vector of very large or very small finite
 entries keeps a finite, accurate length.
 """
 
-from std.math import isfinite, sqrt
+from math.finite import require_finite
+from std.math import sqrt
 
 
 def require_row_count(length: Int, rows: Int) raises:
@@ -75,8 +76,7 @@ def check_finite(v: List[Float64]) raises:
         Error: If an entry is infinite or not a number.
     """
     for i in range(len(v)):
-        if not isfinite(v[i]):
-            raise Error("A vector entry must be a finite number")
+        require_finite(Float64(v[i]), "A vector entry must be a finite number")
 
 
 def dot(a: List[Float64], b: List[Float64]) raises -> Float64:

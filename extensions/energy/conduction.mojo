@@ -30,7 +30,7 @@ The wall is per square meter of area. The first node is on the outside
 face, the side of the first layer.
 """
 
-from math.finite import positive_finite
+from math.finite import positive_finite, require_finite
 from std.math import ceil, isfinite, sqrt
 from extensions.building.construction import Construction
 from extensions.building.material import BuildingMaterial
@@ -257,8 +257,10 @@ struct LayeredWall(Copyable, Movable):
             inside.absorbed.to(WATT_PER_SQUARE_METER),
         ]
         for i in range(len(forcing)):  # pragma: no branch
-            if not isfinite(forcing[i]):
-                raise Error("A face temperature and flux must be finite")
+            require_finite(
+                Float64(forcing[i]),
+                "A face temperature and flux must be finite",
+            )
         var n = len(self.capacity)
         var lower = List[Float64](length=n, fill=0.0)
         var diagonal = List[Float64](length=n, fill=0.0)

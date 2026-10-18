@@ -50,7 +50,7 @@ elasticity.
 
 from core.ordinal import ordinal_valid
 
-from std.math import isfinite
+from math.finite import require_finite
 from units.si import (
     STANDARD_GRAVITY,
     Acceleration,
@@ -135,22 +135,30 @@ struct SoftTissue(ImplicitlyCopyable):
         """
         if not self.kind.is_valid():
             raise Error("Soft tissue must be a named hydrated tissue")
-        if not isfinite(self.wet_density.value):
-            raise Error("A soft tissue density must be finite")
+        require_finite(
+            Float64(self.wet_density.value),
+            "A soft tissue density must be finite",
+        )
         if self.wet_density.value <= 0:
             raise Error("A soft tissue density must be positive")
-        if not isfinite(self.water_fraction):
-            raise Error("A soft tissue water fraction must be finite")
+        require_finite(
+            Float64(self.water_fraction),
+            "A soft tissue water fraction must be finite",
+        )
         if self.water_fraction < 0:
             raise Error("A soft tissue water fraction cannot be negative")
         if self.water_fraction > 1:
             raise Error("A soft tissue water fraction cannot exceed one")
-        if not isfinite(self.elastic_modulus.value):
-            raise Error("A soft tissue elastic modulus must be finite")
+        require_finite(
+            Float64(self.elastic_modulus.value),
+            "A soft tissue elastic modulus must be finite",
+        )
         if self.elastic_modulus.value <= 0:
             raise Error("A soft tissue elastic modulus must be positive")
-        if not isfinite(self.poisson_ratio):
-            raise Error("A soft tissue Poisson ratio must be finite")
+        require_finite(
+            Float64(self.poisson_ratio),
+            "A soft tissue Poisson ratio must be finite",
+        )
         if self.poisson_ratio < 0:
             raise Error("A soft tissue Poisson ratio cannot be negative")
         if self.poisson_ratio > 1:

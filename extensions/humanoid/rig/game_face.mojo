@@ -29,6 +29,7 @@ from extensions.humanoid.skeleton.head.expression import (
 from loaders.json import parse_json
 from materials.material import MaterialId
 from objects.mesh import Mesh
+from math.finite import require_finite
 from std.math import isfinite
 from std.memory import bitcast
 
@@ -50,8 +51,9 @@ def _attribute_hash(mut value: UInt64, attribute: BufferAttribute) raises:
         # A reached component loop has a positive attribute item size.
         for c in range(attribute.item_size):  # pragma: no branch
             var x = attribute.component(i, c)
-            if not isfinite(x):
-                raise Error("Facial geometry must have finite components")
+            require_finite(
+                Float64(x), "Facial geometry must have finite components"
+            )
             _mix(value, UInt64(bitcast[DType.uint32](x)))
 
 

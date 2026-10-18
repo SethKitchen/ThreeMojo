@@ -14,6 +14,7 @@ them all.
 Coordinates are meters, z up. Gravity acts along -z.
 """
 
+from math.finite import require_finite
 from std.math import isfinite
 from extensions.building.material import BuildingMaterial
 from extensions.building.model import Section
@@ -68,8 +69,7 @@ def require_finite_load(value: Float64) raises:
     Raises:
         Error: If the load is not finite.
     """
-    if not isfinite(value):
-        raise Error("A load must be finite")
+    require_finite(Float64(value), "A load must be finite")
 
 
 struct Member(Copyable, Movable):

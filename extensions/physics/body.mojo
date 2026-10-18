@@ -36,7 +36,7 @@ from extensions.physics.shape import (
     _wide_dot,
     _narrow_finite,
 )
-from math.finite import positive_finite
+from math.finite import positive_finite, require_finite
 from math.matrix3 import Matrix3
 from math.quaternion import Quaternion
 from math.vector3 import Vector3
@@ -422,8 +422,10 @@ struct RigidBody(Copyable, Movable):
         ):
             raise Error("The retained dynamic mass is invalid")
         for i in range(9):  # pragma: no branch
-            if not isfinite(inertia.elements[i]):
-                raise Error("The retained inverse inertia is not finite")
+            require_finite(
+                Float64(inertia.elements[i]),
+                "The retained inverse inertia is not finite",
+            )
 
     def set_mass(mut self, mass: Mass) raises:
         """Give a dynamic body a mass, and the inertia of its solid shape.
@@ -541,8 +543,7 @@ struct RigidBody(Copyable, Movable):
         _finite_vector(position)
         var turn = rotation
         for value in [turn.x, turn.y, turn.z, turn.w]:  # pragma: no branch
-            if not isfinite(value):
-                raise Error("A shape rotation must be finite")
+            require_finite(Float64(value), "A shape rotation must be finite")
         turn.normalize()
         if self._kind == DYNAMIC:
             var state = self._mass_state(self._mass, position, turn)
