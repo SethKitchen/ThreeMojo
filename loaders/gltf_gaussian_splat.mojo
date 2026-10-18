@@ -51,7 +51,7 @@ one is refused, with three.js's reasons.
 """
 
 from core.binary import copy_bytes
-from core.ordinal import require_index_in_count
+from core.ordinal import require_index_in_count, require_non_negative
 from loaders.gltf_layout import AccessorLayout, check_buffer_range
 
 from core.gaussian_splat_utils import (
@@ -511,8 +511,9 @@ def _buffers(
     for index in range(document.length(list)):
         var buffer = document.at(list, index)
         var length = document.integer(document.get(buffer, "byteLength"))
-        if length < 0:
-            raise Error("glTF: a splat buffer needs a nonnegative byteLength")
+        require_non_negative(
+            length, "glTF: a splat buffer needs a nonnegative byteLength"
+        )
         var data: List[UInt8]
         if not document.has(buffer, "uri"):
             if index != 0:

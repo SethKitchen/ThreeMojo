@@ -53,6 +53,7 @@ See `docs/wiki/Norm-consumers.md` for the changed operations, retained
 limits, and explicit zero and nonfinite rules.
 """
 
+from core.ordinal import require_non_negative
 from math.triangle_normal import normal_or_zero
 
 from core.buffer_attribute import BufferAttribute
@@ -421,8 +422,9 @@ def edges_geometry(
         Error: If the geometry has no positions, if an index entry points
             past the last vertex, or if the threshold is negative.
     """
-    if threshold.value < 0:
-        raise Error("An edge threshold cannot be a negative angle")
+    require_non_negative(
+        threshold.value, "An edge threshold cannot be a negative angle"
+    )
     var paired = _paired(geometry)
     # Widened by the slack, so an edge turning exactly as far as the
     # threshold is kept rather than lost to the rounding of a float32

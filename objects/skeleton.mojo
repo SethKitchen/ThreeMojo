@@ -56,7 +56,7 @@ taken as it is, as three.js's shader takes it; see
 """
 
 from core.object3d import NodeId
-from core.ordinal import require_index_in_count
+from core.ordinal import require_index_in_count, require_non_negative
 from math.matrix4 import Matrix4, require_affine
 from math.finite import require_finite, require_finite_group
 
@@ -264,8 +264,9 @@ def blend_bones(
         require_finite(
             Float64(weight), "A vertex's bone weights must be numbers"
         )
-        if weight < 0:
-            raise Error("A vertex's bone weights cannot be negative")
+        require_non_negative(
+            weight, "A vertex's bone weights cannot be negative"
+        )
         if weight == 0:
             continue
         var bone = bones[slot]

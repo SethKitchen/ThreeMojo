@@ -30,6 +30,7 @@ from core.buffer_geometry import (
     UV,
     UV1,
 )
+from core.ordinal import require_non_negative
 from math.norm import squared_length3
 from math.utils import mix_delta
 from std.math import isfinite
@@ -99,8 +100,9 @@ def tessellate(
     """
     if not (max_edge_length.value >= 0 and isfinite(max_edge_length.value)):
         raise Error("A tessellation edge limit must be finite and not negative")
-    if max_iterations < 0:
-        raise Error("A tessellation cannot make a negative number of passes")
+    require_non_negative(
+        max_iterations, "A tessellation cannot make a negative number of passes"
+    )
     var flat = geometry.to_non_indexed()
     var count = flat.vertex_count()
     if count % 3 != 0:

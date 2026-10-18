@@ -18,7 +18,11 @@ and moves the tensor to the center of mass, so each bone's mass, center
 and inertia come from one pass. The whole body is the sum of its bones.
 """
 
-from core.ordinal import require_index_in_count, require_valid
+from core.ordinal import (
+    require_index_in_count,
+    require_valid,
+    require_non_negative,
+)
 from extensions.anatomy.inertia import InertiaTally, SegmentInertia
 from extensions.animals.anatomy.body import (
     BODY_LENGTH,
@@ -293,8 +297,9 @@ def _require_nonnegative_candidate(candidate: Int) raises:
     The caller separately establishes the primitive-index upper bound.
     This validator does not read a model, pointer, or collection.
     """
-    if candidate < 0:
-        raise Error("A sampled field must have finite valid distances")
+    require_non_negative(
+        candidate, "A sampled field must have finite valid distances"
+    )
 
 
 @always_inline

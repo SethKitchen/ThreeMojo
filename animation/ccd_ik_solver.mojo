@@ -40,7 +40,7 @@ here has no order of its own, so the bound's order is used.
 """
 
 from core.object3d import NodeId
-from core.ordinal import require_index_in_count
+from core.ordinal import require_index_in_count, require_non_negative
 from core.scene import Scene, require_skinned_mesh
 from math.euler import Euler
 from math.utils import clamp_unit
@@ -170,8 +170,9 @@ struct CCDIKSolver(Movable):
             _check_bone(chain.effector, count)
             for link in chain.links:
                 _check_bone(link.index, count)
-            if chain.iteration < 0:
-                raise Error("An IK chain cannot iterate a negative number")
+            require_non_negative(
+                chain.iteration, "An IK chain cannot iterate a negative number"
+            )
             if Bool(chain.blend_factor):
                 var blend = chain.blend_factor.value()
                 require_ik_blend(blend)

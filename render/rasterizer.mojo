@@ -30,7 +30,12 @@ See `docs/wiki/Norm-consumers.md` for the changed operations, retained
 limits, and explicit zero and nonfinite rules.
 """
 
-from core.ordinal import ordinal_valid, require_index_in_count, require_valid
+from core.ordinal import (
+    ordinal_valid,
+    require_index_in_count,
+    require_valid,
+    require_non_negative,
+)
 
 from math.scaled_products import (
     _Scaled,
@@ -3693,16 +3698,16 @@ def require_program_uniform(
     Raises:
         Error: If `value` is negative.
     """
-    if value < 0:
-        raise Error(
-            "A node program reads "
-            + kind
-            + " uniform that names no "
-            + missing
-            + "; call "
-            + setter
-            + "() first"
-        )
+    require_non_negative(
+        value,
+        "A node program reads "
+        + kind
+        + " uniform that names no "
+        + missing
+        + "; call "
+        + setter
+        + "() first",
+    )
 
 
 def check_program_maps(

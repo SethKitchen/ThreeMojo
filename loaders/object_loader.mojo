@@ -355,7 +355,7 @@ from std.pathlib import Path
 from units.si import Angle, DEGREE, InverseLength, Length, METER, NANOMETER
 from units.si import MILLIMETER
 from units.si import PER_METER, RADIAN
-from core.ordinal import require_valid
+from core.ordinal import require_valid, require_non_negative
 
 # The format version `Object3D.toJSON` writes, and the one major version
 # this reads.
@@ -464,8 +464,7 @@ def euler_order_of(name: String) raises -> EulerOrder:
     """
     var orders = [XYZ, YXZ, ZXY, ZYX, YZX, XZY]
     var at = _position_of(["XYZ", "YXZ", "ZXY", "ZYX", "YZX", "XZY"], name)
-    if at < 0:
-        raise Error("Object JSON: no Euler order is named " + name)
+    require_non_negative(at, "Object JSON: no Euler order is named " + name)
     return orders[at]
 
 
@@ -686,8 +685,9 @@ def stencil_op_of(code: Int) raises -> StencilOp:
     for at in range(len(codes)):  # pragma: no branch
         if codes[at] == code:
             found = at
-    if found < 0:
-        raise Error("Object JSON: a stencil operation that is none of eight")
+    require_non_negative(
+        found, "Object JSON: a stencil operation that is none of eight"
+    )
     return StencilOp(found)
 
 
@@ -771,8 +771,7 @@ struct ObjectModel(Movable):
             Error: If no object read had that uuid.
         """
         var at = _position_of(self.uuids, uuid) if len(self.uuids) > 0 else -1
-        if at < 0:
-            raise Error("Object JSON: no object has the uuid " + uuid)
+        require_non_negative(at, "Object JSON: no object has the uuid " + uuid)
         return self.nodes[at]
 
 
@@ -2896,10 +2895,9 @@ struct _Loader(Movable):
                 slot = named.value()
             elif index != "":
                 slot = atol(index)
-                if slot < 0:
-                    raise Error(
-                        "Object JSON: a morph target index cannot be negative"
-                    )
+                require_non_negative(
+                    slot, "Object JSON: a morph target index cannot be negative"
+                )
             if self.meshes[at] >= 0:
                 return TrackTarget(MORPH_INFLUENCE, self.meshes[at], slot)
             if self.skins[at] >= 0:

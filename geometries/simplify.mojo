@@ -38,6 +38,7 @@ See `docs/wiki/Norm-consumers.md` for the changed operations, retained
 limits, and explicit zero and nonfinite rules.
 """
 
+from core.ordinal import require_non_negative
 from math.cross import wide_dot
 from math.norm import (
     _ordinary_squared,
@@ -417,8 +418,9 @@ def simplify(geometry: BufferGeometry, count: Int) raises -> BufferGeometry:
             number of numbers an item, or an index entry points past the
             last vertex.
     """
-    if count < 0:
-        raise Error("A simplification cannot take away a negative count")
+    require_non_negative(
+        count, "A simplification cannot take away a negative count"
+    )
     var kept = BufferGeometry()
     var names: List[String] = [
         String(POSITION),

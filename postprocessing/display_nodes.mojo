@@ -36,6 +36,7 @@ See `docs/wiki/Norm-consumers.md` for the changed operations, retained
 limits, and explicit zero and nonfinite rules.
 """
 
+from core.ordinal import require_non_negative
 from math.finite import require_finite_group
 from math.norm import length2
 from math.sine import fraction
@@ -176,16 +177,19 @@ def check_display(settings: DisplaySettings) raises:
         and isfinite(settings.bokeh_scale)
     )
     require_finite_group(finite, "A display pass setting must be finite")
-    if settings.sigma < 0:
-        raise Error("A Gaussian blur's sigma must not be negative")
+    require_non_negative(
+        settings.sigma, "A Gaussian blur's sigma must not be negative"
+    )
     if not (settings.resolution_scale > 0 and settings.down_sample_ratio > 0):
         raise Error("A display pass's scale and ratio must be positive")
     if settings.size < 0 or settings.separation < 0:
         raise Error("A box blur's size and separation must not be negative")
     if settings.repeats < 1 or settings.samples < 2:
         raise Error("A hash blur needs a repeat, an anamorphic two samples")
-    if settings.ghost_samples < 0:
-        raise Error("A lens flare's ghost count must not be negative")
+    require_non_negative(
+        settings.ghost_samples,
+        "A lens flare's ghost count must not be negative",
+    )
     if settings.motion_samples < 2:
         raise Error("A motion blur takes at least two samples")
     if settings.focal_length.value <= 0:

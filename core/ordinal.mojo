@@ -9,9 +9,9 @@ A named id stores an integer. Zero is the first name. `last` is the
 last name. A value outside that range is not a name. Each id keeps its
 own type. `index_in_count` is true from zero through one below a count.
 `require_index_in_count` refuses an index outside that range.
-`require_non_negative` refuses a value below zero. Callers keep their
-own error text. `require_draw_ids` refuses a negative node, geometry,
-and material, and builds the three messages from one label.
+`require_non_negative` refuses an integer, a Float32, or a Float64 below zero.
+Callers keep their own error text. `require_draw_ids` refuses a negative
+node, geometry, and material, and builds the three messages from one label.
 `ordinal_label` returns a name from a list, or a fallback when the
 value is not valid. `require_valid` refuses a false validity flag.
 """
@@ -71,6 +71,40 @@ def require_non_negative(value: Int, message: String) raises:
 
     Args:
         value: The stored integer.
+        message: The error text for this caller.
+
+    Returns:
+        Nothing. The call returns when `value` is zero or more.
+
+    Raises:
+        Error: If `value` is below zero.
+    """
+    if value < 0:
+        raise Error(message)
+
+
+def require_non_negative(value: Float32, message: String) raises:
+    """Refuse a Float32 below zero.
+
+    Args:
+        value: The stored number.
+        message: The error text for this caller.
+
+    Returns:
+        Nothing. The call returns when `value` is zero or more.
+
+    Raises:
+        Error: If `value` is below zero.
+    """
+    if value < 0:
+        raise Error(message)
+
+
+def require_non_negative(value: Float64, message: String) raises:
+    """Refuse a Float64 below zero.
+
+    Args:
+        value: The stored number.
         message: The error text for this caller.
 
     Returns:

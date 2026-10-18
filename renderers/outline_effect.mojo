@@ -37,6 +37,7 @@ world matrix cannot be inverted is not outlined either.
 
 from cameras.camera import Camera
 from core.assets import Assets
+from core.ordinal import require_non_negative
 from core.scene import Scene
 from materials.glsl import compile_shader_material
 from materials.material import BACK_SIDE, MaterialId, shader_material
@@ -123,8 +124,9 @@ def check_outline_parameters(parameters: OutlineParameters) raises:
     """
     if not (isfinite(parameters.thickness) and isfinite(parameters.alpha)):
         raise Error("An outline's thickness and alpha must be finite")
-    if parameters.thickness < 0:
-        raise Error("An outline's thickness must not be negative")
+    require_non_negative(
+        parameters.thickness, "An outline's thickness must not be negative"
+    )
     if parameters.alpha < 0 or parameters.alpha > 1:
         raise Error("An outline's alpha runs from zero to one")
 
@@ -181,8 +183,9 @@ struct OutlineEffect(Movable):
             Error: If the material id is negative, and everything
                 `check_outline_parameters` raises.
         """
-        if material.value < 0:
-            raise Error("Outline parameters must name a material")
+        require_non_negative(
+            material.value, "Outline parameters must name a material"
+        )
         check_outline_parameters(parameters)
         self._parameters[material.value] = parameters
 

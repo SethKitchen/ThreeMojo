@@ -132,8 +132,9 @@ struct Lod(Copyable, Movable):
         for level in self.levels:
             if level.object == object:
                 raise Error("A node is one level of an LOD at most")
-        if distance.value < 0:
-            raise Error("A level's distance cannot be negative")
+        require_non_negative(
+            distance.value, "A level's distance cannot be negative"
+        )
         if not (hysteresis >= 0 and hysteresis <= 1):
             raise Error("A level's hysteresis must be from zero to one")
         var slot = 0

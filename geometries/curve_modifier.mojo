@@ -45,7 +45,7 @@ texture does not have, so a curve past the last clamps to the last row.
 """
 
 from core.buffer_attribute import BufferAttribute
-from core.ordinal import require_index_in_count
+from core.ordinal import require_index_in_count, require_non_negative
 from math.curve_checks import require_at_least_one
 from core.buffer_geometry import BufferGeometry, NORMAL, POSITION
 from math.matrix4 import Matrix4
@@ -368,8 +368,9 @@ struct InstancedFlow(Movable):
             Error: If `count` is negative or `curve_count` is less than
                 one.
         """
-        if count < 0:
-            raise Error("An instanced flow cannot have a negative count")
+        require_non_negative(
+            count, "An instanced flow cannot have a negative count"
+        )
         self.flow = Flow(curve_count)
         self.offsets = List[Float32](length=count, fill=0)
         self.which_curve = List[Int](length=count, fill=0)

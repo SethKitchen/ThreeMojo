@@ -28,7 +28,7 @@ which tile.
 pixel or past the last, a transform named twice, and data that ends too
 soon are refused, as libwebp refuses them.
 """
-from core.ordinal import ordinal_valid, require_valid
+from core.ordinal import ordinal_valid, require_valid, require_non_negative
 from math.utils import clamp
 
 # The first byte of a VP8L stream.
@@ -298,8 +298,9 @@ struct _Code(Copyable, Movable):
         var open = 1
         for length in range(1, _MAX_LENGTH + 1):  # pragma: no branch
             open = open * 2 - self.counts[length]
-            if open < 0:
-                raise Error("WebP: a Huffman code is over-subscribed")
+            require_non_negative(
+                open, "WebP: a Huffman code is over-subscribed"
+            )
         if open != 0:
             raise Error("WebP: a Huffman code is not complete")
         for length in range(1, _MAX_LENGTH + 1):  # pragma: no branch

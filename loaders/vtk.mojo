@@ -59,6 +59,7 @@ keeps and draws from undefined positions.
 from core.binary import big_endian_u32, little_endian_u32
 from core.buffer_attribute import BufferAttribute
 from core.buffer_geometry import COLOR, NORMAL, POSITION, BufferGeometry
+from core.ordinal import require_non_negative
 from loaders.bytes import ascii_digit, ascii_letter, base64_digit, is_sign_mark
 from loaders.utf8 import leading_utf8_bom
 from loaders.js_text import (
@@ -241,8 +242,9 @@ def _to_index(value: Float64, what: String) raises -> Int:
     if isnan(value):
         return 0
     var length = trunc(value)
-    if length < 0:
-        raise Error("VTK: " + what + " cannot have a negative length")
+    require_non_negative(
+        length, "VTK: " + what + " cannot have a negative length"
+    )
     if length > Float64(MAX_VTK_ARRAY):
         raise Error("VTK: " + what + " is longer than this port makes")
     return Int(length)
@@ -1528,8 +1530,7 @@ def parse_vtk_xml(text: String) raises -> BufferGeometry:
         if len(all) == 0:
             raise Error("VTK: the appended data has no text")
         var data = js_part(all, 1, len(all))
-        if poly_data < 0:
-            raise Error("VTK: the file has no one PolyData")
+        require_non_negative(poly_data, "VTK: the file has no one PolyData")
         var piece = _only(document, poly_data, "Piece")
         require_vtk_piece(piece)
         if piece != _MANY:

@@ -27,7 +27,11 @@ needs -- a byte offset, a count, an index -- exactly, up to fifty-three
 bits. `integer` refuses a number with a fraction.
 """
 
-from core.ordinal import ordinal_valid, require_index_in_count
+from core.ordinal import (
+    ordinal_valid,
+    require_index_in_count,
+    require_non_negative,
+)
 
 from loaders.bytes import (
     ascii_digit,
@@ -728,8 +732,9 @@ struct _Parser(Movable):
             node.number = self.number()
             document.nodes.append(node^)
             return len(document.nodes) - 1
-        if byte < 0:
-            raise Error(self.where() + "expected a value, found the end")
+        require_non_negative(
+            byte, self.where() + "expected a value, found the end"
+        )
         raise Error(self.where() + "expected a value")
 
     def object(mut self, mut document: JsonDocument, depth: Int) raises -> Int:
@@ -800,8 +805,7 @@ struct _Parser(Movable):
     def hex_digit(mut self) raises -> Int:
         """Read one hex digit of a `\\u` escape."""
         var digit = hex_digit_value(self.peek())
-        if digit < 0:
-            raise Error(self.where() + "expected a hex digit")
+        require_non_negative(digit, self.where() + "expected a hex digit")
         self.at += 1
         return digit
 
@@ -818,8 +822,7 @@ struct _Parser(Movable):
         var out = List[UInt8]()
         while True:
             var byte = self.peek()
-            if byte < 0:
-                raise Error(self.where() + "unterminated string")
+            require_non_negative(byte, self.where() + "unterminated string")
             self.at += 1
             if byte == 34:
                 break

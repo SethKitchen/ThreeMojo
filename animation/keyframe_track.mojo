@@ -166,7 +166,11 @@ it was built can be edited afterward.
 """
 
 from core.morph import require_morph_target
-from core.ordinal import require_index_in_count, require_valid
+from core.ordinal import (
+    require_index_in_count,
+    require_valid,
+    require_non_negative,
+)
 from core.object3d import NodeId
 from materials.material import MaterialId
 from math.finite import require_finite, require_positive_finite
@@ -1052,8 +1056,7 @@ struct KeyframeTrack(Copyable, Movable):
         for index in range(len(times)):  # pragma: no branch
             var at = times[index].to(SECOND)
             require_finite(Float64(at), "A track's times must be numbers")
-            if at < 0:
-                raise Error("A track's times cannot be negative")
+            require_non_negative(at, "A track's times cannot be negative")
             if index > 0:
                 if at <= seconds[index - 1]:
                     raise Error("A track's times must rise")

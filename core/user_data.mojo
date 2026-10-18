@@ -30,7 +30,7 @@ lists such keys first, in numeric order. This keeps every key where it was
 first set.
 """
 
-from core.ordinal import require_index_in_count
+from core.ordinal import require_index_in_count, require_non_negative
 from loaders.json import (
     ARRAY,
     BOOLEAN,
@@ -191,8 +191,7 @@ struct UserData(Copyable, Movable):
             Error: If the map does not hold the key.
         """
         var index = self._find(key)
-        if index < 0:
-            raise Error("User data: no key " + quote_json(key))
+        require_non_negative(index, "User data: no key " + quote_json(key))
         return self._values[index]
 
     def kind(self, key: String) raises -> JsonKind:

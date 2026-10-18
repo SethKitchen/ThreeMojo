@@ -829,8 +829,7 @@ struct BatchedMesh(Copyable, Movable):
             Error: If the geometry has no span.
         """
         var slot = self._range_of(id)
-        if slot < 0:
-            raise Error("That geometry has no range in the batch")
+        require_non_negative(slot, "That geometry has no range in the batch")
         return self.geometries[slot]
 
     def optimize(mut self):

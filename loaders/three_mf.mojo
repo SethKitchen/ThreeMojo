@@ -98,7 +98,7 @@ from render.texture import (
     texture_from,
 )
 from render.texture_store import NO_TEXTURE, TextureId
-from core.ordinal import require_index_in_count
+from core.ordinal import require_index_in_count, require_non_negative
 from math.finite import finite_float32
 from std.math import isnan
 from std.pathlib import Path
@@ -1117,8 +1117,9 @@ def _hex_byte(display: String) raises -> Int:
     var value = 0
     for byte in display.as_bytes()[7:9]:  # pragma: no branch
         var digit = hex_digit_value(Int(byte))
-        if digit < 0:
-            raise Error("3MF: a color's alpha is not hex: " + display)
+        require_non_negative(
+            digit, "3MF: a color's alpha is not hex: " + display
+        )
         value = value * 16 + digit
     return value
 
@@ -1201,10 +1202,12 @@ def parse_3mf(
             models.append(index)
         elif role == 4:
             textures[loader.entries[index].name] = index
-    if rels < 0:
-        raise Error("3MF: the archive has no relationship file `_rels/.rels`")
-    if root_model < 0:
-        raise Error("3MF: the archive has no root model in `3D/`")
+    require_non_negative(
+        rels, "3MF: the archive has no relationship file `_rels/.rels`"
+    )
+    require_non_negative(
+        root_model, "3MF: the archive has no root model in `3D/`"
+    )
     models.append(root_model)
     var targets = loader.relationship_targets(rels)
     if model_rels >= 0:
@@ -1227,8 +1230,9 @@ def parse_3mf(
             for part in range(len(loader.parts)):  # pragma: no branch
                 if loader.parts[part].name == name:
                     start = part
-    if start < 0:
-        raise Error("3MF: `_rels/.rels` names no model part the archive has")
+    require_non_negative(
+        start, "3MF: `_rels/.rels` names no model part the archive has"
+    )
     loader.model.unit = loader.parts[start].unit
     loader.metadata(start)
     loader.model.first_mesh = len(scene.meshes)

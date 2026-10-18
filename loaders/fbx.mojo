@@ -70,6 +70,7 @@ from core.ordinal import (
     index_in_count,
     ordinal_valid,
     require_index_in_count,
+    require_non_negative,
 )
 
 from math.triangle_normal import polygon_normal
@@ -584,8 +585,7 @@ def _triangulate(points: List[Vector3]) raises -> List[Int]:
     var out = List[Int]()
     while len(ring) > 3:
         var ear = _find_ear(flat, ring)
-        if ear < 0:
-            raise Error("FBX: a polygon crosses itself")
+        require_non_negative(ear, "FBX: a polygon crosses itself")
         var size = len(ring)
         out.append(ring[(ear + size - 1) % size])
         out.append(ring[ear])
@@ -1781,8 +1781,7 @@ struct _Loader(Movable):
                 materials.append(
                     self.model.materials[self.material_at[link.id]]
                 )
-        if geometry < 0:
-            raise Error("FBX: a mesh model has no mesh geometry")
+        require_non_negative(geometry, "FBX: a mesh model has no mesh geometry")
         self.build_geometry(geometry, assets)
         var colored = self.colored[geometry]
         if len(materials) == 0:
@@ -1940,8 +1939,9 @@ struct _Loader(Movable):
                 if below.relation == "":
                     shape = below.id
                     break
-            if shape < 0:
-                raise Error("FBX: a blend shape channel has no shape")
+            require_non_negative(
+                shape, "FBX: a blend shape channel has no shape"
+            )
             # three.js adds the channel only when its shape is a geometry.
             if self.kind(shape) == "Geometry":
                 self.rig.shapes[link.id] = self.objects[shape]
@@ -2117,8 +2117,7 @@ struct _Loader(Movable):
                 for link in self.links(self.children, cluster.id):
                     if link.id in placed:
                         bone = link.id
-                if bone < 0:
-                    raise Error("FBX: a cluster has no bone")
+                require_non_negative(bone, "FBX: a cluster has no bone")
                 bones.append(Bone(placed[bone], _inverse(cluster.link)))
             var bind = Matrix4()
             if waiting.model in self.rig.poses:

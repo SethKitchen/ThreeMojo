@@ -24,6 +24,7 @@ physical key: `W` with Shift held is `w`.
 """
 
 from controls.input import Key
+from core.ordinal import require_non_negative
 from units.si import Duration, SECOND
 
 # How long a key counts as held after its last repeat, by default.
@@ -46,8 +47,7 @@ def require_frame_time(delta: Duration) raises:
     Raises:
         Error: If the time is negative.
     """
-    if delta.value < 0:
-        raise Error("A frame's time must not be negative")
+    require_non_negative(delta.value, "A frame's time must not be negative")
 
 
 def physical_key(key: Key) -> Key:

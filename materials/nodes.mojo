@@ -128,7 +128,12 @@ level the surface's own coordinates pick. WebGPU instead measures the
 derivatives of the coordinate the node computes.
 """
 from core.extent import require_closed_count
-from core.ordinal import ordinal_valid, require_index_in_count, require_valid
+from core.ordinal import (
+    ordinal_valid,
+    require_index_in_count,
+    require_valid,
+    require_non_negative,
+)
 from core.search import first_match
 
 from lights.shadow import ShadowShape
@@ -2255,8 +2260,7 @@ struct NodeGraph(Copyable, Movable):
             Error: If `map` is `NO_TEXTURE` or negative, or `uv` is not a
                 `vec2` of this graph.
         """
-        if map.value < 0:
-            raise Error("A texture node needs a texture")
+        require_non_negative(map.value, "A texture node needs a texture")
         self._check(uv)
         self._require_texture_uv(uv)
         return self._add(
@@ -6293,12 +6297,12 @@ def _allocate(reads: List[Int], mut layout: _Layout) raises:
             if free[candidate]:
                 register = candidate
                 break
-        if register < 0:
-            raise Error(
-                "A node output needs more than "
-                + String(MAX_REGISTERS)
-                + " values alive at once"
-            )
+        require_non_negative(
+            register,
+            "A node output needs more than "
+            + String(MAX_REGISTERS)
+            + " values alive at once",
+        )
         free[register] = False
         layout.dest[index] = register
         for slot in range(3):  # pragma: no branch
@@ -6327,8 +6331,7 @@ def _uniform_index(names: List[String], name: String) raises -> Int:
         Error: If no uniform has that name.
     """
     var index = first_match(names, name)
-    if index < 0:
-        raise Error("A node program has no uniform named " + name)
+    require_non_negative(index, "A node program has no uniform named " + name)
     return index
 
 
@@ -6663,8 +6666,7 @@ struct NodeProgram(Copyable, Movable):
             Error: If `map` is negative, no uniform has that name, or it is
                 not a 3D texture.
         """
-        if map.value < 0:
-            raise Error("A 3D texture uniform needs a texture")
+        require_non_negative(map.value, "A 3D texture uniform needs a texture")
         self.code[self._find(name, NODE_SAMPLER_3D)] = Float32(map.value)
         self._list_cubes()
 
@@ -6681,8 +6683,9 @@ struct NodeProgram(Copyable, Movable):
             Error: If `map` is negative, no uniform has that name, or it is
                 not an array texture.
         """
-        if map.value < 0:
-            raise Error("An array texture uniform needs a texture")
+        require_non_negative(
+            map.value, "An array texture uniform needs a texture"
+        )
         self.code[self._find(name, NODE_SAMPLER_ARRAY)] = Float32(map.value)
         self._list_cubes()
 
@@ -6698,8 +6701,7 @@ struct NodeProgram(Copyable, Movable):
             Error: If `map` is negative, no uniform has that name, or it is
                 not a cube texture.
         """
-        if map.value < 0:
-            raise Error("A cube uniform needs a cube")
+        require_non_negative(map.value, "A cube uniform needs a cube")
         var at = self._find(name, NODE_SAMPLER_CUBE)
         self.code[at] = Float32(map.value)
         self._list_cubes()
@@ -6717,8 +6719,7 @@ struct NodeProgram(Copyable, Movable):
             Error: If `map` is negative, no uniform has that name, or it is
                 not a texture.
         """
-        if map.value < 0:
-            raise Error("A texture uniform needs a texture")
+        require_non_negative(map.value, "A texture uniform needs a texture")
         var at = self._find(name, NODE_SAMPLER)
         self.code[at] = Float32(map.value)
         self._list_textures()

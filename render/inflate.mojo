@@ -37,6 +37,7 @@ is allocated per symbol, and a malformed stream runs out of lengths rather
 than reading off the end of anything.
 """
 
+from core.ordinal import require_non_negative
 from render.checksum import adler32
 
 # Let a stream produce whatever it likes. Only safe for one you wrote.
@@ -315,8 +316,7 @@ struct Huffman(Movable):
         for length in range(1, MAX_BITS + 1):  # pragma: no branch
             left <<= 1
             left -= self.counts[length]
-            if left < 0:
-                raise Error("Over-subscribed Huffman code")
+            require_non_negative(left, "Over-subscribed Huffman code")
 
         var offsets = List[Int](length=MAX_BITS + 2, fill=0)
         for length in range(1, MAX_BITS + 1):  # pragma: no branch

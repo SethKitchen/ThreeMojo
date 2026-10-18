@@ -49,6 +49,7 @@ from animation.keyframe_track import (
     node_target,
 )
 from core.object3d import NodeId
+from core.ordinal import require_non_negative
 from loaders.collada_id import collada_reference
 from loaders.collada_numbers import (
     collada_floats,
@@ -208,8 +209,9 @@ def read_collada_animations(
                     break
             if id == "":
                 found = -1
-            if found < 0:
-                raise Error("Collada: a clip names no animation: " + id)
+            require_non_negative(
+                found, "Collada: a clip names no animation: " + id
+            )
             _animation_tracks(
                 document, elements[found], nodes, placed, matrices, tracks
             )

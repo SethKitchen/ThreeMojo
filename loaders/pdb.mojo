@@ -28,6 +28,7 @@ geometry. A line that is not an atom or a bond is stepped over.
 
 from core.buffer_attribute import BufferAttribute
 from core.buffer_geometry import COLOR, POSITION, BufferGeometry
+from core.ordinal import require_non_negative
 from loaders.js_number import js_parse_float, js_parse_int
 from loaders.text_number import file_line
 from render.srgb import srgb_to_linear
@@ -681,12 +682,12 @@ def parse_pdb(text: String) raises -> PdbModel:
         for slot in range(len(serials)):  # pragma: no branch
             if serials[slot] == bonds[at]:
                 found = slot
-        if found < 0:
-            raise Error(
-                "PDB: a bond names atom "
-                + String(bonds[at] + 1)
-                + ", which no line gives"
-            )
+        require_non_negative(
+            found,
+            "PDB: a bond names atom "
+            + String(bonds[at] + 1)
+            + ", which no line gives",
+        )
         ends.append(Float32(atoms[found].x))
         ends.append(Float32(atoms[found].y))
         ends.append(Float32(atoms[found].z))

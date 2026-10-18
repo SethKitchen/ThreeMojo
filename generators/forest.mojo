@@ -27,7 +27,7 @@ ported; `ForestInstances.keeps` answers the cull's question on the CPU.
 from core.buffer_attribute import BufferAttribute
 from core.buffer_geometry import BufferGeometry, NORMAL, POSITION
 from geometries.surface import position_normal_surface
-from core.ordinal import require_index_in_count
+from core.ordinal import require_index_in_count, require_non_negative
 from generators.terrain import TerrainGenerator
 from generators.utils import (
     Instances,
@@ -111,10 +111,12 @@ struct ForestParameters(Copyable, Movable):
             Error: If the count or the detail is negative, the cull does
                 not end past where it starts, or a number is not finite.
         """
-        if self.count < 0:
-            raise Error("A forest's tree count must be zero or more")
-        if self.detail < 0:
-            raise Error("A forest's blob detail must be zero or more")
+        require_non_negative(
+            self.count, "A forest's tree count must be zero or more"
+        )
+        require_non_negative(
+            self.detail, "A forest's blob detail must be zero or more"
+        )
         if not meters(self.to_distance) > meters(self.from_distance):
             raise Error("A forest's cull must end past where it starts")
         check_finite(

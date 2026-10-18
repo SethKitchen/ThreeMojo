@@ -71,7 +71,7 @@ from render.texture import Texture
 from render.volume_texture import Data3DTexture, VolumeSampler
 from std.math import cos, floor, fma, isfinite, pi, sin, sqrt
 from units.si import Angle, Length, METER, RADIAN
-from core.ordinal import require_valid
+from core.ordinal import require_valid, require_non_negative
 
 # --- bokeh ------------------------------------------------------------------
 
@@ -404,8 +404,9 @@ def check_glitch(settings: GlitchSettings) raises:
         raise Error("A glitch map is one through 4096 texels a side")
     if settings.state < 0 or settings.state > GLITCH_STATE_MAX:
         raise Error("A glitch generator's state is 32 bits")
-    if settings.frame < 0:
-        raise Error("A glitch frame count must not be negative")
+    require_non_negative(
+        settings.frame, "A glitch frame count must not be negative"
+    )
     if settings.trigger < 1:
         raise Error("A glitch trigger must be positive")
 
@@ -829,8 +830,9 @@ def check_halftone(settings: HalftoneSettings) raises:
         raise Error("A halftone size must not be negative")
     if settings.radius <= 0:
         raise Error("A halftone radius must be positive")
-    if settings.scatter < 0:
-        raise Error("A halftone scatter must not be negative")
+    require_non_negative(
+        settings.scatter, "A halftone scatter must not be negative"
+    )
     if settings.blending < 0 or settings.blending > 1:
         raise Error("A halftone blending runs from zero to one")
 
@@ -1571,8 +1573,10 @@ def check_dof_mipmap(settings: DofMipMapSettings) raises:
     """
     if not (isfinite(settings.focus) and isfinite(settings.max_blur)):
         raise Error("A mip map depth of field's settings must be finite")
-    if settings.max_blur < 0:
-        raise Error("A mip map depth of field's blur must not be negative")
+    require_non_negative(
+        settings.max_blur,
+        "A mip map depth of field's blur must not be negative",
+    )
 
 
 def frame_mips(

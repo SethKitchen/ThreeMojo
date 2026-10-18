@@ -60,7 +60,7 @@ from math.finite import finite_float32
 from std.math import floor
 from std.memory import bitcast
 from std.pathlib import Path
-from core.ordinal import require_valid
+from core.ordinal import require_valid, require_non_negative
 
 # The attribute `intensity` goes into.
 comptime INTENSITY = "intensity"
@@ -306,8 +306,9 @@ def decompress_lzf(data: List[UInt8], out_length: Int) raises -> List[UInt8]:
         back -= Int(data[at])
         at += 1
         require_lzf_room(len(out), length + 2, out_length)
-        if back < 0:
-            raise Error("PCD: an LZF back reference before the start")
+        require_non_negative(
+            back, "PCD: an LZF back reference before the start"
+        )
         # A reference copies two bytes or more: the loop always runs.
         for _ in range(length + 2):  # pragma: no branch
             out.append(out[back])
@@ -407,8 +408,7 @@ struct PcdHeader(Copyable, Movable):
                     + self.fields[index]
                     + "` has a count below one"
                 )
-        if self.points < 0:
-            raise Error("PCD: a negative number of points")
+        require_non_negative(self.points, "PCD: a negative number of points")
 
 
 struct PcdModel(Movable):
@@ -459,8 +459,7 @@ def _whole(text: String, what: String) raises -> Int:
         value = Int(text)
     except:
         raise Error("PCD: `" + what + "` is not a whole number: " + text)
-    if value < 0:
-        raise Error("PCD: `" + what + "` is negative: " + text)
+    require_non_negative(value, "PCD: `" + what + "` is negative: " + text)
     return value
 
 
@@ -527,8 +526,7 @@ def parse_pcd_header(bytes: List[UInt8]) raises -> PcdHeader:
                 points_given = True
         at += 1
         line_start = at
-    if data_line < 0:
-        raise Error("PCD: the file has no `DATA` line")
+    require_non_negative(data_line, "PCD: the file has no `DATA` line")
     # `DATA`, one white space, the format word, one white space.
     var word = data_line + 4
     if word >= len(bytes) or not ascii_space(bytes[word]):

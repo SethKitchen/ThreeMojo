@@ -56,6 +56,7 @@ See `docs/wiki/Norm-consumers.md` for the changed operations, retained
 limits, and explicit zero and nonfinite rules.
 """
 
+from core.ordinal import require_non_negative
 from math.triangle_normal import _difference_product_wide
 
 from math.norm import normalized3, _ordinary_squared, squared_length3
@@ -575,10 +576,10 @@ struct _MaterialParser:
             if input_names.strings[i] == "Material":
                 var ref_name = _at(input_nodes, i)
                 material_node = _node(tree, nodes, ref_name)
-                if material_node < 0:
-                    raise Error(
-                        "LWO: the material node " + ref_name + " is not there"
-                    )
+                require_non_negative(
+                    material_node,
+                    "LWO: the material node " + ref_name + " is not there",
+                )
                 material_name = ref_name
                 has_material = True
         var node_attributes = -1
@@ -647,10 +648,9 @@ struct _MaterialParser:
         for k in order:
             var name = names[k]
             var node = nodes[k]
-            if node < 0:
-                raise Error(
-                    "LWO: the texture node for " + name + " is not there"
-                )
+            require_non_negative(
+                node, "LWO: the texture node for " + name + " is not there"
+            )
             var file = tree.get(node, "fileName")
             if not file.truthy():
                 raise Error(
@@ -1146,8 +1146,7 @@ def _normalize(mut normals: List[Float32]):
 def _geometry(tree: LwoTree, layer: Int, mut mesh: LwoMesh) raises:
     """three.js's `GeometryParser.parse`."""
     var geometry = tree.child(layer, "geometry")
-    if geometry < 0:
-        raise Error("LWO: a layer has no polygons")
+    require_non_negative(geometry, "LWO: a layer has no polygons")
     var points = _numbers(tree, geometry, "points")
     for p in points:  # pragma: no branch
         mesh.positions.append(Float32(p))

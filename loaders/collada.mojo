@@ -66,7 +66,12 @@ coordinates, and the specular and ambient maps. `<polygons>` is read,
 which three.js does not read.
 """
 
-from core.ordinal import ordinal_valid, require_index_in_count, require_valid
+from core.ordinal import (
+    ordinal_valid,
+    require_index_in_count,
+    require_valid,
+    require_non_negative,
+)
 
 from animation.animation_clip import AnimationClip
 from cameras.orthographic_camera import OrthographicCamera
@@ -1566,8 +1571,9 @@ struct _Loader(Movable):
         for at in range(len(self.model.material_ids)):
             if self.model.material_ids[at] == target:
                 index = at
-        if index < 0:
-            raise Error("Collada: a symbol is bound to no material: " + target)
+        require_non_negative(
+            index, "Collada: a symbol is bound to no material: " + target
+        )
         var found = self.model.materials[index]
         if not lines:
             return found
@@ -2231,8 +2237,7 @@ struct _Loader(Movable):
                 if self.document.attribute(found[at], "sid") == name:
                     hit = at
                     break
-            if hit < 0:
-                raise Error("Collada: a joint names no bone: " + name)
+            require_non_negative(hit, "Collada: a joint names no bone: " + name)
             used[hit] = True
             order.append(hit)
         for at in range(len(found)):

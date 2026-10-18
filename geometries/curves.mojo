@@ -17,6 +17,7 @@ cell are visited, as three.js's `v0` to `v7` do. The defaults are
 three.js's.
 """
 
+from core.ordinal import require_non_negative
 from math.vector3 import Vector3
 from std.math import cos, pi, sin
 from units.si import Length, METER
@@ -47,8 +48,9 @@ def require_hilbert_iterations(iterations: Int) raises:
     Raises:
         Error: If the count is negative.
     """
-    if iterations < 0:
-        raise Error("A Hilbert curve cannot have a negative iteration count")
+    require_non_negative(
+        iterations, "A Hilbert curve cannot have a negative iteration count"
+    )
 
 
 def hilbert2d(

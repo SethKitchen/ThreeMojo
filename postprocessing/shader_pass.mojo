@@ -31,6 +31,7 @@ keeps the pixel's own. A fragment the mask node or a `discard` throws away
 keeps the pixel as it was.
 """
 
+from core.ordinal import require_non_negative
 from materials.nodes import (
     COLOR_NODE,
     CORNER_A,
@@ -112,8 +113,9 @@ def check_shader(settings: ShaderSettings) raises:
         Error: If the program is `NO_NODES` or negative, or a saved
             sampler names no pass.
     """
-    if settings.program.value < 0:
-        raise Error("A shader pass needs a node program to run")
+    require_non_negative(
+        settings.program.value, "A shader pass needs a node program to run"
+    )
     if settings.saved.byte_length() > 0 and settings.saved_pass < 0:
         raise Error("A saved sampler must name a save pass")
 

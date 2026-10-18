@@ -62,6 +62,7 @@ sRGB, and so does this: a decoded JPEG is `SRGB`.
 """
 
 from core.binary import big_endian_u16
+from core.ordinal import require_non_negative
 from render.framebuffer import Color
 from render.png import DecodedImage, require_image_pixels
 from render.srgb import SRGB
@@ -1008,8 +1009,9 @@ def _read_scan(
         if dc >= TABLE_COUNT or ac >= TABLE_COUNT:
             raise Error("A Huffman table id must be zero through three")
         var slot = _slot_of(components, id)
-        if slot < 0:
-            raise Error("A scan names a component the frame does not have")
+        require_non_negative(
+            slot, "A scan names a component the frame does not have"
+        )
         for earlier in range(len(order)):
             if order[earlier] == slot:
                 raise Error("A scan names one component twice")

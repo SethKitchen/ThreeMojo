@@ -51,7 +51,7 @@ Extreme finite results can differ from direct three.js r180 arithmetic.
 See `docs/wiki/Norm-consumers.md` for the changed operations, retained
 limits, and explicit zero and nonfinite rules.
 """
-from core.ordinal import ordinal_valid
+from core.ordinal import ordinal_valid, require_non_negative
 
 from math.norm import length2
 from cameras.camera import Camera
@@ -2157,8 +2157,7 @@ struct ArcballControls(Copyable, Movable):
             Error: If the time is negative, a setting is refused, or the
                 camera's placement is refused.
         """
-        if delta.value < 0:
-            raise Error("A frame cannot take a negative time")
+        require_non_negative(delta.value, "A frame cannot take a negative time")
         self.check()
         self._now += Float64(delta.to(MILLISECOND))
         if self._frame:
@@ -2493,8 +2492,10 @@ struct ArcballControls(Copyable, Movable):
                 plane is not beyond the near, or its zoom is not positive.
                 Also if the camera rides a node.
         """
-        if snapshot.camera_near.value < 0:
-            raise Error("A snapshot's near plane cannot be behind the camera")
+        require_non_negative(
+            snapshot.camera_near.value,
+            "A snapshot's near plane cannot be behind the camera",
+        )
         var lens = _Lens(camera)
         self._paste_state(lens, snapshot)
         lens.put(camera, self.center())

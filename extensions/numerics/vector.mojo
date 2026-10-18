@@ -11,6 +11,7 @@ the largest entry first, so a vector of very large or very small finite
 entries keeps a finite, accurate length.
 """
 
+from core.ordinal import require_non_negative
 from math.finite import require_finite
 from std.math import sqrt
 
@@ -44,8 +45,7 @@ def zeros(size: Int) raises -> List[Float64]:
     Raises:
         Error: If the size is negative.
     """
-    if size < 0:
-        raise Error("A vector size must be zero or more")
+    require_non_negative(size, "A vector size must be zero or more")
     var out = List[Float64](capacity=size)
     for _ in range(size):
         out.append(0.0)

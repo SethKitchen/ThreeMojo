@@ -38,6 +38,7 @@ from core.buffer_geometry import (
     CIRCLE_GEOMETRY,
     RING_GEOMETRY,
 )
+from core.ordinal import require_non_negative
 from geometries.grid import append_cell
 from geometries.surface import (
     indexed_surface,
@@ -197,8 +198,9 @@ def ring(
             more than it, either segment count is too small, or the sweep
             is not positive or is more than a turn.
     """
-    if inner_radius.value < 0:
-        raise Error("A ring's inner radius cannot be negative")
+    require_non_negative(
+        inner_radius.value, "A ring's inner radius cannot be negative"
+    )
     if outer_radius.value <= inner_radius.value:
         raise Error("A ring's outer radius must be more than its inner radius")
     require_three_segments(
