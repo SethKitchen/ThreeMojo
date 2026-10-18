@@ -42,7 +42,7 @@ See `docs/wiki/Norm-consumers.md` for the changed operations, retained
 limits, and explicit zero and nonfinite rules.
 """
 
-from core.binary import little_endian_u32
+from core.binary import append_little_endian_u32, little_endian_u32
 from math.quaternion import quaternion_terms
 from math.norm import (
     dot3,
@@ -656,8 +656,7 @@ def gaussian_splat_geometry_of(
         if band <= degree:
             var name = "sphericalHarmonics" + String(band)
             for word in geometry.attribute_view(name).stored_values():
-                for shift in range(4):  # pragma: no branch
-                    bytes.append(UInt8((word >> (shift * 8)) & 255))
+                append_little_endian_u32(bytes, word)
         bands.append(bytes^)
     return create_gaussian_splat_geometry(
         position.packed(),

@@ -12,6 +12,7 @@ and every way a file can be wrong is given to the parser and refused.
 
 from cameras.perspective_camera import PerspectiveCamera
 from core.assets import Assets
+from core.binary import append_little_endian_u32
 from core.buffer_geometry import COLOR, NORMAL, POSITION
 from core.object3d import Object3D
 from core.scene import Scene
@@ -51,8 +52,7 @@ def assert_point(got: Vector3, x: Float32, y: Float32, z: Float32) raises:
 
 def put_u32(mut bytes: List[UInt8], value: Int):
     """Append a little-endian 32-bit word."""
-    for shift in range(4):
-        bytes.append(UInt8((value >> (shift * 8)) & 0xFF))
+    append_little_endian_u32(bytes, value)
 
 
 def put_f32(mut bytes: List[UInt8], value: Float32):

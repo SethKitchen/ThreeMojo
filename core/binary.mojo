@@ -9,6 +9,7 @@ The caller checks that the read lies inside the buffer. The integer
 readers do not allocate and do not raise. `little_endian_u16`,
 `little_endian_u32`, `big_endian_u16`, and `big_endian_u32` read a fixed
 width. `little_endian_uint` reads zero through eight bytes.
+`append_little_endian` appends a chosen width.
 `append_little_endian_u16` and `append_little_endian_u32` append a fixed
 width. `copy_bytes` returns a new list and does not raise.
 `copy_byte_range` copies from one index up to another.
@@ -135,6 +136,24 @@ def little_endian_uint(bytes: List[UInt8], at: Int, width: Int) -> Int:
     return value
 
 
+def append_little_endian(mut out: List[UInt8], value: Int, width: Int):
+    """Append the low `width` bytes of `value`, least significant byte first.
+
+    Args:
+        out: The buffer, extended in place.
+        value: The integer.
+        width: How many bytes to append. Zero appends nothing.
+
+    Returns:
+        Nothing.
+
+    Raises:
+        Error: Never.
+    """
+    for index in range(width):
+        out.append(UInt8((value >> (8 * index)) & 0xFF))
+
+
 def append_little_endian_u16(mut out: List[UInt8], value: Int):
     """Append the low sixteen bits of `value` as two little-endian bytes.
 
@@ -148,8 +167,7 @@ def append_little_endian_u16(mut out: List[UInt8], value: Int):
     Raises:
         Error: Never.
     """
-    out.append(UInt8(value & 0xFF))
-    out.append(UInt8((value >> 8) & 0xFF))
+    append_little_endian(out, value, 2)
 
 
 def append_little_endian_u32(mut out: List[UInt8], value: Int):
@@ -165,8 +183,7 @@ def append_little_endian_u32(mut out: List[UInt8], value: Int):
     Raises:
         Error: Never.
     """
-    append_little_endian_u16(out, value)
-    append_little_endian_u16(out, value >> 16)
+    append_little_endian(out, value, 4)
 
 
 def copy_bytes(bytes: List[UInt8], start: Int, count: Int) -> List[UInt8]:

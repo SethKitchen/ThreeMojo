@@ -12,6 +12,7 @@ palette.
 """
 
 from core.assets import Assets
+from core.binary import append_little_endian_u32
 from core.buffer_geometry import COLOR, NORMAL, POSITION
 from core.object3d import Object3D
 from core.scene import Scene
@@ -99,8 +100,7 @@ def test_the_fixture_matches_three_js() raises:
 def u32(value: Int) -> List[UInt8]:
     """Return a little-endian 32-bit value."""
     var out = List[UInt8]()
-    for k in range(4):
-        out.append(UInt8((value >> (8 * k)) & 0xFF))
+    append_little_endian_u32(out, value)
     return out^
 
 

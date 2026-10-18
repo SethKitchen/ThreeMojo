@@ -40,7 +40,11 @@ no texels, or data of the wrong length, is refused. three.js writes a
 file with a data window of minus one.
 """
 
-from core.binary import append_little_endian_u32, copy_byte_range
+from core.binary import (
+    append_little_endian,
+    append_little_endian_u32,
+    copy_byte_range,
+)
 from core.extent import positive_extent
 from geometries.curve_modifier import to_half_float
 from render.deflate import zlib_deflate
@@ -208,9 +212,7 @@ def _write(
     var offset = len(out) + blocks * 8
     # There is one block or more. The loop always runs.
     for chunk in chunks:  # pragma: no branch
-        # Eight bytes. The loop always runs.
-        for k in range(8):  # pragma: no branch
-            out.append(UInt8((offset >> (8 * k)) & 255))
+        append_little_endian(out, offset, 8)
         offset += len(chunk) + 8
     # There is one block or more. The loop always runs.
     for b in range(blocks):  # pragma: no branch

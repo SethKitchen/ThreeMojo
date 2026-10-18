@@ -35,6 +35,7 @@ same order. The WebAssembly encoder runs out of memory where a symbol is
 near 2^31, and the port does not.
 """
 
+from core.binary import append_little_endian
 from core.ordinal import ordinal_valid
 
 from exporters.draco_log2 import musl_log2
@@ -124,9 +125,7 @@ struct DracoWriter(Movable):
             value: The value. Its two's complement is written.
             size: The bytes to write.
         """
-        # Every value is one byte or more: the loop runs.
-        for k in range(size):  # pragma: no branch
-            self.bytes.append(UInt8((value >> (8 * k)) & 0xFF))
+        append_little_endian(self.bytes, value, size)
 
     def u8(mut self, value: Int):
         """Write a byte.

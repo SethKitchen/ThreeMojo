@@ -31,6 +31,7 @@ order they are held, as three.js writes a data texture's array.
 the primaries are always BT.709, three.js's for `LinearSRGBColorSpace`.
 """
 
+from core.binary import append_little_endian
 from geometries.curve_modifier import to_half_float
 from render.ktx2 import (
     VK_R8_SRGB,
@@ -65,12 +66,6 @@ comptime _SAMPLE_FLOAT = 128
 # Minus one and one as floats: a float sample's lower and upper values.
 comptime _FLOAT_LOWER = 0xBF800000
 comptime _FLOAT_UPPER = 0x3F800000
-
-
-def _push(mut out: List[UInt8], value: Int, size: Int):
-    """Append a little-endian number of `size` bytes."""
-    for k in range(size):
-        out.append(UInt8((value >> (8 * k)) & 255))
 
 
 def _format(channels: Int, size: Int, srgb: Bool) raises -> VkFormat:
@@ -137,24 +132,28 @@ def _write(
             if not floats:
                 level.append(pixels[t * 4 + c])
             elif half:
-                _push(level, Int(to_half_float(Float64(data[t * 4 + c]))), 2)
+                append_little_endian(
+                    level, Int(to_half_float(Float64(data[t * 4 + c]))), 2
+                )
             else:
-                _push(level, Int(bitcast[DType.uint32](data[t * 4 + c])), 4)
+                append_little_endian(
+                    level, Int(bitcast[DType.uint32](data[t * 4 + c])), 4
+                )
     # The data format descriptor: a basic block and a sample a channel.
     var transfer = _TRANSFER_SRGB if srgb else _TRANSFER_LINEAR
     var descriptor = List[UInt8]()
-    _push(descriptor, 28 + 16 * channels, 4)
-    _push(descriptor, 0, 2)
-    _push(descriptor, 0, 2)
-    _push(descriptor, 2, 2)
-    _push(descriptor, 24 + 16 * channels, 2)
+    append_little_endian(descriptor, 28 + 16 * channels, 4)
+    append_little_endian(descriptor, 0, 2)
+    append_little_endian(descriptor, 0, 2)
+    append_little_endian(descriptor, 2, 2)
+    append_little_endian(descriptor, 24 + 16 * channels, 2)
     descriptor.append(_MODEL_RGBSDA)
     descriptor.append(_PRIMARIES_BT709)
     descriptor.append(UInt8(transfer))
     descriptor.append(0)
-    _push(descriptor, 0, 4)
+    append_little_endian(descriptor, 0, 4)
     descriptor.append(UInt8(size * channels))
-    _push(descriptor, 0, 7)
+    append_little_endian(descriptor, 0, 7)
     # One channel or more. The loop always runs.
     for i in range(channels):  # pragma: no branch
         var channel = _CHANNEL_ALPHA if i == 3 else i
@@ -162,21 +161,21 @@ def _write(
             channel |= _SAMPLE_LINEAR
         if floats:
             channel |= _SAMPLE_FLOAT | _SAMPLE_SIGNED
-        _push(descriptor, i * size * 8, 2)
+        append_little_endian(descriptor, i * size * 8, 2)
         descriptor.append(UInt8(size * 8 - 1))
         descriptor.append(UInt8(channel))
-        _push(descriptor, 0, 4)
-        _push(descriptor, _FLOAT_LOWER if floats else 0, 4)
-        _push(descriptor, _FLOAT_UPPER if floats else 255, 4)
+        append_little_endian(descriptor, 0, 4)
+        append_little_endian(descriptor, _FLOAT_LOWER if floats else 0, 4)
+        append_little_endian(descriptor, _FLOAT_UPPER if floats else 255, 4)
     # The key and value data: `KTXwriter`, its value and a zero byte each.
     var key_values = List[UInt8]()
     var entry = "KTXwriter".byte_length() + 1 + writer.byte_length() + 1
-    _push(key_values, entry, 4)
+    append_little_endian(key_values, entry, 4)
     key_values.extend("KTXwriter".as_bytes())
     key_values.append(0)
     key_values.extend(writer.as_bytes())
     key_values.append(0)
-    _push(key_values, 0, (4 - entry % 4) % 4)
+    append_little_endian(key_values, 0, (4 - entry % 4) % 4)
     # Where each part goes: the identifier, the header, one level entry.
     var descriptor_at = 12 + 68 + 24
     var key_values_at = descriptor_at + len(descriptor)
@@ -189,27 +188,27 @@ def _write(
     var align = max(block, 4)
     var padding = (align - at % align) % align
     var out = identifier()
-    _push(out, Int(_format(channels, size, srgb).value), 4)
-    _push(out, size, 4)
-    _push(out, width, 4)
-    _push(out, height, 4)
-    _push(out, depth, 4)
-    _push(out, 0, 4)
-    _push(out, 1, 4)
-    _push(out, 1, 4)
-    _push(out, 0, 4)
-    _push(out, descriptor_at, 4)
-    _push(out, len(descriptor), 4)
-    _push(out, key_values_at, 4)
-    _push(out, len(key_values), 4)
-    _push(out, 0, 8)
-    _push(out, 0, 8)
-    _push(out, at + padding, 8)
-    _push(out, len(level), 8)
-    _push(out, len(level), 8)
+    append_little_endian(out, Int(_format(channels, size, srgb).value), 4)
+    append_little_endian(out, size, 4)
+    append_little_endian(out, width, 4)
+    append_little_endian(out, height, 4)
+    append_little_endian(out, depth, 4)
+    append_little_endian(out, 0, 4)
+    append_little_endian(out, 1, 4)
+    append_little_endian(out, 1, 4)
+    append_little_endian(out, 0, 4)
+    append_little_endian(out, descriptor_at, 4)
+    append_little_endian(out, len(descriptor), 4)
+    append_little_endian(out, key_values_at, 4)
+    append_little_endian(out, len(key_values), 4)
+    append_little_endian(out, 0, 8)
+    append_little_endian(out, 0, 8)
+    append_little_endian(out, at + padding, 8)
+    append_little_endian(out, len(level), 8)
+    append_little_endian(out, len(level), 8)
     out.extend(descriptor^)
     out.extend(key_values^)
-    _push(out, 0, padding)
+    append_little_endian(out, 0, padding)
     out.extend(level^)
     return out^
 

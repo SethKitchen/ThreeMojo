@@ -8,6 +8,7 @@ halves, and crates built here, one value type and one quirk of three.js
 r186's `USDCParser` at a time. `tests/test_usd.mojo` compares whole files
 with three.js."""
 
+from core.binary import append_little_endian
 from loaders.usd_specs import (
     SPEC_PRIM,
     USD_BOOLEAN,
@@ -89,8 +90,7 @@ def _put(mut out: List[UInt8], value: Int, width: Int):
         value: The integer.
         width: Its bytes.
     """
-    for b in range(width):
-        out.append(UInt8((value >> (8 * b)) & 0xFF))
+    append_little_endian(out, value, width)
 
 
 def _f32(mut out: List[UInt8], value: Float64):
