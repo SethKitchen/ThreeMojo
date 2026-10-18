@@ -24,6 +24,7 @@ these itself, as `examples/floor.mojo` does; three.js would reach for
 """
 
 from core.buffer_geometry import BufferGeometry, PLANE_GEOMETRY
+from geometries.grid import append_cell
 from geometries.surface import indexed_surface
 from core.user_data import UserData
 from units.si import Length, METER
@@ -94,12 +95,7 @@ def plane(
             # Two triangles per quad, each counter-clockwise from the front:
             # top-left, bottom-left, top-right, then bottom-left,
             # bottom-right, top-right.
-            index.append(a)
-            index.append(b)
-            index.append(d)
-            index.append(b)
-            index.append(c)
-            index.append(d)
+            append_cell(index, a, b, c, d)
 
     var geometry = BufferGeometry()
     indexed_surface(geometry, data^, normals^, uvs^, index^)

@@ -13,6 +13,27 @@ cell for cell.
 """
 
 
+def append_cell(mut index: List[Int], a: Int, b: Int, c: Int, d: Int):
+    """Append two triangles for one cell, `a b d` then `b c d`.
+
+    Args:
+        index: The index to extend.
+        a: The first corner of the first triangle.
+        b: The shared corner.
+        c: The corner diagonal from `a`.
+        d: The corner diagonal from `b`.
+
+    Returns:
+        Nothing. Six indices are appended.
+    """
+    index.append(a)
+    index.append(b)
+    index.append(d)
+    index.append(b)
+    index.append(c)
+    index.append(d)
+
+
 def grid_index(rows: Int, columns: Int, row_first: Bool) -> List[Int]:
     """Return the index of a grid of `rows + 1` by `columns + 1` vertices,
     two triangles per cell.
@@ -52,10 +73,5 @@ def grid_index(rows: Int, columns: Int, row_first: Bool) -> List[Int]:
                 b = here + column - 1
                 c = here + column
                 d = before + column
-            index.append(a)
-            index.append(b)
-            index.append(d)
-            index.append(b)
-            index.append(c)
-            index.append(d)
+            append_cell(index, a, b, c, d)
     return index^

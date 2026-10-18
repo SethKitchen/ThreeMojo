@@ -38,6 +38,7 @@ from core.buffer_geometry import (
     CIRCLE_GEOMETRY,
     RING_GEOMETRY,
 )
+from geometries.grid import append_cell
 from geometries.surface import indexed_surface
 from core.user_data import UserData
 from std.math import cos, isfinite, sin
@@ -237,12 +238,7 @@ def ring(
             var d = a + 1
             # Two triangles per cell, each counter-clockwise from the front:
             # inner, outer, next inner, then outer, next outer, next inner.
-            index.append(a)
-            index.append(b)
-            index.append(d)
-            index.append(b)
-            index.append(c)
-            index.append(d)
+            append_cell(index, a, b, c, d)
 
     var geometry = BufferGeometry()
     indexed_surface(geometry, data^, normals^, uvs^, index^)

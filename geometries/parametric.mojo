@@ -35,6 +35,7 @@ limits, and explicit zero and nonfinite rules.
 from math.triangle_normal import normal_or_zero
 
 from core.buffer_geometry import BufferGeometry
+from geometries.grid import append_cell
 from geometries.surface import indexed_surface
 from math.vector3 import Vector3
 from std.math import cos, isfinite, pi, sin
@@ -169,12 +170,7 @@ def parametric[
             var b = i * slice_count + j + 1
             var c = (i + 1) * slice_count + j + 1
             var d = (i + 1) * slice_count + j
-            index.append(a)
-            index.append(b)
-            index.append(d)
-            index.append(b)
-            index.append(c)
-            index.append(d)
+            append_cell(index, a, b, c, d)
 
     var geometry = BufferGeometry()
     indexed_surface(geometry, data^, normals^, uvs^, index^)
