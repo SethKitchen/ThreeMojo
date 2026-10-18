@@ -32,6 +32,7 @@ from generators.utils import (
     radians,
 )
 from math.utils import SeededRandom, clamp, js_round_int, mix_delta
+from math.vector3 import append_float64_xyz
 from std.math import atan2, cos, floor, pi, pow, sin
 from units.si import (
     Angle,
@@ -430,9 +431,7 @@ def _write_ring(
         positions.append(_position32(ring.position.x + nx * ring.radius))
         positions.append(_position32(ring.position.y + ny * ring.radius))
         positions.append(_position32(ring.position.z + nz * ring.radius))
-        normals.append(Float32(nx))
-        normals.append(Float32(ny))
-        normals.append(Float32(nz))
+        append_float64_xyz(normals, nx, ny, nz)
 
 
 def _join(mut index: List[Int], a: Int, radial: Int):

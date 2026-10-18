@@ -42,7 +42,7 @@ from geometries.utils import merge_vertices
 from math.noise import ImprovedNoise
 from math.smoothstep import clamped_smoothstep
 from math.utils import clamp
-from math.vector3 import Vector3
+from math.vector3 import Vector3, append_float64_xyz
 from std.math import pi, sin, sqrt
 from units.si import InverseLength, Length, METER, PER_METER
 
@@ -195,13 +195,11 @@ def blob_geometry(p: ForestParameters) raises -> BufferGeometry:
         var h = (uy + 1) / 2
         var taper = 1 - 0.62 * h
         var r = taper * (1 + p.distortion * blob_noise(ux, uy, uz))
-        positions.append(Float32(ux * r * radius))
-        positions.append(Float32(h * height))
-        positions.append(Float32(uz * r * radius))
+        append_float64_xyz(
+            positions, ux * r * radius, h * height, uz * r * radius
+        )
         var inverse = 1 / sqrt(ux * ux + 0.55 * 0.55 + uz * uz)
-        normals.append(Float32(ux * inverse))
-        normals.append(Float32(0.55 * inverse))
-        normals.append(Float32(uz * inverse))
+        append_float64_xyz(normals, ux * inverse, 0.55 * inverse, uz * inverse)
         ao.append(Float32(h))
     var geometry = BufferGeometry()
     position_normal_surface(geometry, positions^, normals^)
@@ -379,9 +377,7 @@ struct ForestGenerator(Movable):
             forest.instances.matrices.append(
                 euler_matrix(position, rx, ry, rz, Vec3d(sx, s, sz))
             )
-            forest.instances.values.append(Float32(x))
-            forest.instances.values.append(Float32(position.y))
-            forest.instances.values.append(Float32(z))
+            append_float64_xyz(forest.instances.values, x, position.y, z)
             forest.instances.values.append(Float32(cull_random.next()))
             var drift = perlin.noise(
                 x * 0.02 + region_x, z * 0.02 + region_z, region_slice
