@@ -38,6 +38,7 @@ from extensions.sdf.vector import (
     V3,
     clamp,
     cross,
+    cubic_bezier,
     dot,
     length,
     lerp,
@@ -567,13 +568,7 @@ def neck_chain(mut rig: Rig, segs: Int, t0: V3, t1: V3, bulge: Float64) raises:
     var pts = List[V3](capacity=N + 1)
     for i in range(N + 1):  # pragma: no branch
         var t = Float64(i) / Float64(N)
-        var u = 1.0 - t
-        pts.append(
-            a * (u * u * u)
-            + p1 * (3.0 * u * u * t)
-            + p2 * (3.0 * u * t * t)
-            + b * (t * t * t)
-        )
+        pts.append(cubic_bezier(a, p1, p2, b, t))
     var s: List[Float64] = [0.0]
     for i in range(1, N + 1):  # pragma: no branch
         s.append(s[i - 1] + length(pts[i] - pts[i - 1]))

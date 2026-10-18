@@ -110,6 +110,32 @@ def lerp(a: V3, b: V3, t: Float64) -> V3:
     return a.lerp(b, t)
 
 
+def cubic_bezier(p0: V3, p1: V3, p2: V3, p3: V3, t: Float64) -> V3:
+    """Return the point on a cubic Bezier at `t`.
+
+    The weights are `(1 - t)^3`, `3 (1 - t)^2 t`, `3 (1 - t) t^2` and
+    `t^3`. Each weight is one product, then the four scaled points are
+    added from the start to the end.
+
+    Args:
+        p0: The start.
+        p1: The control point that pulls the start.
+        p2: The control point that pulls the end.
+        p3: The end.
+        t: The fraction from the start to the end.
+
+    Returns:
+        The point.
+    """
+    var u = 1.0 - t
+    return (
+        p0 * (u * u * u)
+        + p1 * (3.0 * u * u * t)
+        + p2 * (3.0 * u * t * t)
+        + p3 * (t * t * t)
+    )
+
+
 def mirror(a: V3) -> V3:
     """Return the point mirrored to the animal's other side.
 
