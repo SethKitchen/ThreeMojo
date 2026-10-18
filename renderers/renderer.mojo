@@ -5665,6 +5665,20 @@ struct Frame(Movable):
         return out^
 
 
+@fieldwise_init
+struct _CameraFrame(Movable):
+    """The view, the clip and the culling planes for one camera."""
+
+    var view: Matrix4
+    var to_screen: Matrix4
+    var near: Float32
+    var far: Float32
+    var clip: Matrix4
+    var frustum: Frustum
+    var sides: List[Plane]
+    var global_planes: List[Plane]
+
+
 struct Renderer(Movable):
     """Renders a scene to a framebuffer of a fixed size."""
 
@@ -6173,6 +6187,49 @@ struct Renderer(Movable):
         )
         return to_screen^
 
+    def _camera_frame[
+        C: Camera
+    ](self, scene: Scene, camera: C) raises -> _CameraFrame:
+        """Return the view, the clip and the culling planes for one camera.
+
+        A camera riding a node looks from wherever the scene put that
+        node. The frustum is in world space, where the bounds are:
+        three.js's `_projScreenMatrix`, with the near and far distances
+        the clipper is given. The side planes are in camera space, where
+        the clipper cuts. With a viewport smaller than the target, off
+        the image is still on the target, and only a cut keeps it off.
+        The renderer's clipping planes are carried into camera space once.
+
+        Args:
+            scene: The transform hierarchy.
+            camera: The camera.
+
+        Returns:
+            The world-to-camera transform, the pixel transform, the near
+            and far distances, the clip matrix, the world-space frustum,
+            the camera-space side planes and the renderer's clipping
+            planes in camera space.
+
+        Raises:
+            Error: If a clipping plane cannot be carried into camera space.
+        """
+        var view = camera.view_matrix_in(scene)
+        var screen = self._to_screen(camera)
+        var near = camera.near_distance()
+        var far = camera.far_distance()
+        var clip = camera.projection_matrix()
+        clip.multiply(view)
+        return _CameraFrame(
+            view,
+            screen,
+            near,
+            far,
+            clip,
+            Frustum.from_camera(clip, view, near, far),
+            Frustum.side_planes(camera.projection_matrix()),
+            _planes_in_view(self.clipping_planes, view),
+        )
+
     def set_workers(mut self, workers: Int) raises:
         """Choose how many threads rasterize a frame.
 
@@ -6528,26 +6585,14 @@ struct Renderer(Movable):
                 camera's layers or frustum leave out is not read.
         """
         var corners = _Slim()
-        # Asked of the scene as well as the camera: a camera riding a node
-        # looks from wherever the scene put that node.
-        var view = camera.view_matrix_in(scene)
-        var to_screen = self._to_screen(camera)
-        var near = camera.near_distance()
-        var far = camera.far_distance()
-        # What the camera can see, in world space, where the meshes' bounds
-        # are: three.js's `_projScreenMatrix` read as four side planes, and
-        # the near and far distances the clipper below is given, as the
-        # two depth planes.
-        var clip = camera.projection_matrix()
-        clip.multiply(view)
-        var frustum = Frustum.from_camera(clip, view, near, far)
-        # The same four sides in camera space, where the clipper cuts.
-        # With a viewport smaller than the target, "off the image" is
-        # still on the target, and only a cut keeps it off; see
-        # `renderers.clip`.
-        var sides = Frustum.side_planes(camera.projection_matrix())
-        # The renderer's clipping planes, carried into camera space once.
-        var global_planes = _planes_in_view(self.clipping_planes, view)
+        var frame = self._camera_frame(scene, camera)
+        var view = frame.view
+        var to_screen = frame.to_screen
+        var near = frame.near
+        var far = frame.far
+        var frustum = frame.frustum.copy()
+        var sides = frame.sides.copy()
+        var global_planes = frame.global_planes.copy()
 
         # Worked out once, not once per draw, and already without what
         # the camera does not draw: every mesh and every instance, as one
@@ -7392,19 +7437,15 @@ struct Renderer(Movable):
         """
         if len(self.uv_space_meshes) > 0:
             return List[RasterVertex]()
-        var view = camera.view_matrix_in(scene)
-        var to_screen = self._to_screen(camera)
-        var near = camera.near_distance()
-        var far = camera.far_distance()
-        var clip = camera.projection_matrix()
-        clip.multiply(view)
-        var frustum = Frustum.from_camera(clip, view, near, far)
-        # The same four sides in camera space, where the clipper cuts.
-        # With a viewport smaller than the target, "off the image" is
-        # still on the target, and only a cut keeps it off; see
-        # `renderers.clip`.
-        var sides = Frustum.side_planes(camera.projection_matrix())
-        var global_planes = _planes_in_view(self.clipping_planes, view)
+        var frame = self._camera_frame(scene, camera)
+        var view = frame.view
+        var to_screen = frame.to_screen
+        var near = frame.near
+        var far = frame.far
+        var clip = frame.clip
+        var frustum = frame.frustum.copy()
+        var sides = frame.sides.copy()
+        var global_planes = frame.global_planes.copy()
         # One local bound per geometry, found the first time a line needs
         # it this frame, exactly as `_draws` keeps them for the meshes.
         var bounds = List[Sphere](
@@ -7896,15 +7937,14 @@ struct Renderer(Movable):
         """
         if len(self.uv_space_meshes) > 0:
             return List[RasterVertex]()
-        var view = camera.view_matrix_in(scene)
-        var to_screen = self._to_screen(camera)
-        var near = camera.near_distance()
-        var far = camera.far_distance()
-        var clip = camera.projection_matrix()
-        clip.multiply(view)
-        var frustum = Frustum.from_camera(clip, view, near, far)
-        var sides = Frustum.side_planes(camera.projection_matrix())
-        var global_planes = _planes_in_view(self.clipping_planes, view)
+        var frame = self._camera_frame(scene, camera)
+        var view = frame.view
+        var to_screen = frame.to_screen
+        var near = frame.near
+        var far = frame.far
+        var frustum = frame.frustum.copy()
+        var sides = frame.sides.copy()
+        var global_planes = frame.global_planes.copy()
         var perspective = not camera.projection_matrix().is_affine()
         # Half the height of the image the caller asked for: three.js's
         # `scale` uniform, which a point's size is measured against at a
