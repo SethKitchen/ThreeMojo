@@ -15,7 +15,12 @@ reflects that one, so the boxes go round in its surface as they go round
 the scene. The floor reflects the sky a little, mixed into its own gray.
 """
 
-from examples.output import example_destination, gallery_camera, write_example
+from examples.output import (
+    example_destination,
+    fill_and_key,
+    gallery_camera,
+    write_example,
+)
 
 from cameras.cube_camera import CubeCamera
 from core.assets import Assets
@@ -26,7 +31,6 @@ from core.scene import Scene
 from geometries.box import cube
 from geometries.plane import plane
 from geometries.sphere import sphere
-from lights.light import ambient_light, directional_light
 from materials.material import (
     BASIC,
     MIX_OPERATION,
@@ -156,11 +160,16 @@ def main() raises:
     )
     var second_node = scene.attach(second^, pivot_node)
     scene.add_mesh(Mesh(box, teal, second_node))
-    var lamp = Object3D()
-    lamp.set_position(2, 3, 2)
-    var lamp_node = scene.add(lamp^)
-    scene.add_light(ambient_light(Color(255, 255, 255), 0.7))
-    scene.add_light(directional_light(Color(255, 255, 255), lamp_node, 2.2))
+    fill_and_key(
+        scene,
+        2,
+        3,
+        2,
+        Color(255, 255, 255),
+        0.7,
+        Color(255, 255, 255),
+        2.2,
+    )
     scene.update()
 
     var camera = gallery_camera(

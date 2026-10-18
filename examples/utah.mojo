@@ -12,13 +12,17 @@ patches of the classic model. The body, the lid, the handle and the
 spout are one geometry.
 """
 
-from examples.output import example_destination, gallery_camera, spin_clip
+from examples.output import (
+    example_destination,
+    fill_and_key,
+    gallery_camera,
+    spin_clip,
+)
 
 from core.assets import Assets
 from core.object3d import Object3D
 from core.scene import Scene
 from geometries.teapot import teapot
-from lights.light import ambient_light, directional_light
 from materials.material import Material
 from math.vector3 import Vector3
 from objects.mesh import Mesh
@@ -47,11 +51,16 @@ def main() raises:
     stand.set_position(0, -0.15, 0)
     var node = scene.add(stand^)
     scene.add_mesh(Mesh(model, clay, node))
-    var lamp = Object3D()
-    lamp.set_position(1.4, 2.2, 1.6)
-    var lamp_node = scene.add(lamp^)
-    scene.add_light(ambient_light(Color(255, 255, 255), 0.35))
-    scene.add_light(directional_light(Color(255, 244, 230), lamp_node, 2.6))
+    fill_and_key(
+        scene,
+        1.4,
+        2.2,
+        1.6,
+        Color(255, 255, 255),
+        0.35,
+        Color(255, 244, 230),
+        2.6,
+    )
 
     var camera = gallery_camera(
         WIDTH,

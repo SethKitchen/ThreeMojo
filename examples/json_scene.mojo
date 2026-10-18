@@ -12,7 +12,7 @@ with `write_object_json` and read with `load_object_json`. The picture
 is the scene that came back, not the one that was written.
 """
 
-from examples.output import example_destination, write_example
+from examples.output import example_destination, fill_and_key, write_example
 
 from cameras.perspective_camera import PerspectiveCamera
 from core.assets import Assets
@@ -21,7 +21,6 @@ from core.object3d import Object3D
 from core.scene import Scene
 from exporters.object_json import write_object_json
 from geometries.box import cube
-from lights.light import ambient_light, directional_light
 from loaders.object_loader import ObjectCameras, load_object_json
 from materials.material import Material
 from objects.mesh import Mesh
@@ -47,11 +46,16 @@ def main() raises:
     var scene = Scene()
     var node = scene.add(Object3D())
     scene.add_mesh(Mesh(block, paint, node))
-    var lamp = Object3D()
-    lamp.set_position(0.9, 1.4, 1.2)
-    var lamp_node = scene.add(lamp^)
-    scene.add_light(ambient_light(Color(255, 255, 255), 0.45))
-    scene.add_light(directional_light(Color(255, 248, 236), lamp_node, 2.6))
+    fill_and_key(
+        scene,
+        0.9,
+        1.4,
+        1.2,
+        Color(255, 255, 255),
+        0.45,
+        Color(255, 248, 236),
+        2.6,
+    )
 
     var pivot = scene.add(Object3D())
     var eye = Object3D()

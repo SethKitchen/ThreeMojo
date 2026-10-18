@@ -12,7 +12,12 @@ writer stores that cube as the scene's environment, and the reader
 builds its PMREM again. The picture is the ball that came back.
 """
 
-from examples.output import example_destination, gallery_camera, write_example
+from examples.output import (
+    example_destination,
+    fill_and_key,
+    gallery_camera,
+    write_example,
+)
 
 from core.assets import Assets
 from core.background import cube_background
@@ -21,7 +26,6 @@ from core.object3d import Object3D
 from core.scene import Scene
 from exporters.object_json import write_object_json
 from geometries.sphere import sphere
-from lights.light import ambient_light, directional_light
 from loaders.object_loader import load_object_json
 from materials.material import physical_material
 from math.vector3 import Vector3
@@ -97,11 +101,16 @@ def main() raises:
     scene.environment = sky
     var node = scene.add(Object3D())
     scene.add_mesh(Mesh(ball, metal, node))
-    var lamp = Object3D()
-    lamp.set_position(1.0, 1.4, 1.6)
-    var lamp_node = scene.add(lamp^)
-    scene.add_light(ambient_light(Color(255, 255, 255), 0.15))
-    scene.add_light(directional_light(Color(255, 250, 240), lamp_node, 1.4))
+    fill_and_key(
+        scene,
+        1.0,
+        1.4,
+        1.6,
+        Color(255, 255, 255),
+        0.15,
+        Color(255, 250, 240),
+        1.4,
+    )
     scene.update()
     write_object_json(document, scene, assets)
 

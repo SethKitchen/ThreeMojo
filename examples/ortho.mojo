@@ -11,14 +11,13 @@ Parallel projection keeps the cube the same size at every depth. The
 camera is a scene node, the same way a mesh is.
 """
 
-from examples.output import example_destination, spin_clip
+from examples.output import example_destination, fill_and_key, spin_clip
 
 from cameras.orthographic_camera import OrthographicCamera
 from core.assets import Assets
 from core.object3d import Object3D
 from core.scene import Scene
 from geometries.box import cube
-from lights.light import ambient_light, directional_light
 from materials.material import Material
 from objects.mesh import Mesh
 from render.framebuffer import Color
@@ -50,11 +49,16 @@ def main() raises:
     var box = scene.add(tilted^)
     scene.add_mesh(Mesh(block, paint, box))
 
-    var lamp = Object3D()
-    lamp.set_position(0.45, 0.85, 0.55)
-    var lamp_node = scene.add(lamp^)
-    scene.add_light(ambient_light(Color(255, 255, 255), 0.69))
-    scene.add_light(directional_light(Color(255, 255, 255), lamp_node, 2.51))
+    fill_and_key(
+        scene,
+        0.45,
+        0.85,
+        0.55,
+        Color(255, 255, 255),
+        0.69,
+        Color(255, 255, 255),
+        2.51,
+    )
 
     var pivot = scene.add(Object3D())
     var eye = Object3D()

@@ -13,7 +13,7 @@ front of it as it goes. The second camera rides a node aimed at the cube,
 and its outline rides the same node.
 """
 
-from examples.output import example_destination, spin_clip
+from examples.output import example_destination, fill_and_key, spin_clip
 
 from cameras.perspective_camera import PerspectiveCamera
 from core.assets import Assets
@@ -25,7 +25,6 @@ from helpers.box import DEFAULT_BOX_COLOR, box_helper
 from helpers.camera import camera_helper
 from helpers.grid import grid_helper
 from helpers.material import helper_material
-from lights.light import ambient_light, directional_light
 from materials.material import BASIC, Material
 from math.vector3 import Vector3
 from objects.line import Line, SEGMENTS
@@ -86,11 +85,16 @@ def main() raises:
     var outline = assets.geometries.add(camera_helper(watched))
     scene.add_line(Line(outline, paint, perch_node, mode=SEGMENTS))
 
-    var lamp = Object3D()
-    lamp.set_position(0.5, 0.9, 0.8)
-    var lamp_node = scene.add(lamp^)
-    scene.add_light(ambient_light(Color(255, 255, 255), 0.79))
-    scene.add_light(directional_light(Color(255, 255, 255), lamp_node, 2.51))
+    fill_and_key(
+        scene,
+        0.5,
+        0.9,
+        0.8,
+        Color(255, 255, 255),
+        0.79,
+        Color(255, 255, 255),
+        2.51,
+    )
 
     # The camera that renders swings around a pivot at the origin.
     var pivot = scene.add(Object3D())

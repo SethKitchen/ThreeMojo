@@ -26,14 +26,13 @@ stay put -- so the lit face stays lit as the camera passes it, which a
 spinning cube under a fixed lamp cannot do.
 """
 
-from examples.output import spin_clip
+from examples.output import fill_and_key, spin_clip
 
 from cameras.perspective_camera import PerspectiveCamera
 from core.assets import Assets
 from core.object3d import Object3D
 from core.scene import Scene
 from geometries.box import cube
-from lights.light import ambient_light, directional_light
 from materials.material import Material
 from objects.mesh import Mesh
 from render.framebuffer import Color
@@ -84,11 +83,16 @@ def main() raises:
     var box = scene.add(tilted^)
     scene.add_mesh(Mesh(block, brick, box))
 
-    var lamp = Object3D()
-    lamp.set_position(0.4, 0.8, 0.5)
-    var lamp_node = scene.add(lamp^)
-    scene.add_light(ambient_light(Color(255, 255, 255), 0.79))
-    scene.add_light(directional_light(Color(255, 255, 255), lamp_node, 2.36))
+    fill_and_key(
+        scene,
+        0.4,
+        0.8,
+        0.5,
+        Color(255, 255, 255),
+        0.79,
+        Color(255, 255, 255),
+        2.36,
+    )
 
     # The camera rig: a pivot at the origin and an eye three meters out along
     # its +z, looking back down -z at the cube. Turning the pivot carries the

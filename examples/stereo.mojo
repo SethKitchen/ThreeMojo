@@ -14,18 +14,17 @@ ring stands in front of the box. The eyes are set wide apart for a
 scene this small, so the parallax shows at this size.
 """
 
-from examples.output import example_destination, write_example
+from examples.output import example_destination, fill_and_key, write_example
 
 from cameras.array_camera import ArrayCamera
 from cameras.perspective_camera import PerspectiveCamera
 from cameras.stereo_camera import StereoCamera
 from core.assets import Assets
 from core.clock import Clock
-from core.object3d import NodeId, Object3D
+from core.object3d import Object3D
 from core.scene import Scene
 from geometries.box import cube
 from geometries.torus import torus
-from lights.light import ambient_light, directional_light
 from materials.material import Material
 from math.vector3 import Vector3
 from objects.mesh import Mesh
@@ -66,11 +65,16 @@ def main() raises:
     var ring_node = scene.add(front^)
     scene.add_mesh(Mesh(ring, gold, ring_node))
 
-    var lamp = Object3D()
-    lamp.set_position(0.5, 0.9, 0.8)
-    var lamp_node = scene.add(lamp^)
-    scene.add_light(ambient_light(Color(255, 255, 255), 0.79))
-    scene.add_light(directional_light(Color(255, 255, 255), lamp_node, 2.51))
+    fill_and_key(
+        scene,
+        0.5,
+        0.9,
+        0.8,
+        Color(255, 255, 255),
+        0.79,
+        Color(255, 255, 255),
+        2.51,
+    )
 
     # The camera between the eyes rides a seat on a pivot and circles the
     # scene; each eye sees half the image, at half the aspect.

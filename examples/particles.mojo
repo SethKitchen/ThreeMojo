@@ -12,7 +12,12 @@ of up and itself, so the cloud orbits. The new positions are copied into
 the point geometry. One orbit brings every point home.
 """
 
-from examples.output import example_destination, gallery_camera, write_example
+from examples.output import (
+    example_destination,
+    fill_and_key,
+    gallery_camera,
+    write_example,
+)
 
 from cameras.perspective_camera import PerspectiveCamera
 from core.assets import Assets
@@ -23,7 +28,6 @@ from core.geometry_store import GeometryId
 from core.object3d import Object3D
 from core.scene import Scene
 from geometries.sphere import sphere
-from lights.light import ambient_light, directional_light
 from materials.compute_nodes import (
     ComputeKernel,
     ComputeNode,
@@ -161,11 +165,15 @@ def main() raises:
     var scene = Scene()
     scene.add_mesh(Mesh(core, paint, scene.add(Object3D())))
     scene.add_points(Points(shape, dots, scene.add(Object3D())))
-    var lamp = Object3D()
-    lamp.set_position(1.2, 1.8, 1.4)
-    scene.add_light(ambient_light(Color(200, 206, 220), 0.4))
-    scene.add_light(
-        directional_light(Color(255, 248, 236), scene.add(lamp^), 1.6)
+    fill_and_key(
+        scene,
+        1.2,
+        1.8,
+        1.4,
+        Color(200, 206, 220),
+        0.4,
+        Color(255, 248, 236),
+        1.6,
     )
 
     var camera = gallery_camera(

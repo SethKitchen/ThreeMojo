@@ -12,12 +12,15 @@ from the parts library beside it, and `load_ldraw` puts that model in the
 scene. The root turns one whole turn.
 """
 
-from examples.output import example_destination, gallery_camera, spin_clip
+from examples.output import (
+    example_destination,
+    fill_and_key,
+    gallery_camera,
+    spin_clip,
+)
 
 from core.assets import Assets
-from core.object3d import Object3D
 from core.scene import Scene
-from lights.light import ambient_light, directional_light
 from loaders.ldraw import load_ldraw, read_ldraw
 from loaders.ldraw_parse import LDrawLoader
 from math.vector3 import Vector3
@@ -45,11 +48,15 @@ def main() raises:
     load_ldraw(model, scene, assets)
     var root = model.scene_nodes[model.root]
 
-    var lamp = Object3D()
-    lamp.set_position(12, -16, 10)
-    scene.add_light(ambient_light(Color(255, 255, 255), 0.55))
-    scene.add_light(
-        directional_light(Color(255, 248, 236), scene.add(lamp^), 2.4)
+    fill_and_key(
+        scene,
+        12,
+        -16,
+        10,
+        Color(255, 255, 255),
+        0.55,
+        Color(255, 248, 236),
+        2.4,
     )
 
     var camera = gallery_camera(

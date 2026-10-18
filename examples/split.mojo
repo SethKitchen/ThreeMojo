@@ -12,7 +12,7 @@ target. Each half is cleared to its own background and drawn by its own
 camera, and neither touches the other. The target is resolved once.
 """
 
-from examples.output import example_destination, write_example
+from examples.output import example_destination, fill_and_key, write_example
 
 from cameras.orthographic_camera import OrthographicCamera, centered
 from cameras.perspective_camera import PerspectiveCamera
@@ -22,7 +22,6 @@ from core.object3d import NodeId, Object3D
 from core.scene import Scene
 from geometries.box import cube
 from geometries.torus import torus
-from lights.light import ambient_light, directional_light
 from materials.material import Material
 from math.vector3 import Vector3
 from objects.mesh import Mesh
@@ -111,11 +110,16 @@ def main() raises:
     var ring_node = scene.add(lying^)
     scene.add_mesh(Mesh(ring, gold, ring_node))
 
-    var lamp = Object3D()
-    lamp.set_position(0.5, 0.9, 0.8)
-    var lamp_node = scene.add(lamp^)
-    scene.add_light(ambient_light(Color(255, 255, 255), 0.79))
-    scene.add_light(directional_light(Color(255, 255, 255), lamp_node, 2.51))
+    fill_and_key(
+        scene,
+        0.5,
+        0.9,
+        0.8,
+        Color(255, 255, 255),
+        0.79,
+        Color(255, 255, 255),
+        2.51,
+    )
 
     # The circling camera rides a seat on a pivot, and sees its half at
     # the half's own aspect.

@@ -27,14 +27,13 @@ a `plane` laid flat: it is built facing +z, and a quarter turn about x makes
 that +y.
 """
 
-from examples.output import example_destination, gallery_camera
+from examples.output import example_destination, fill_and_key, gallery_camera
 
 from core.assets import Assets
 from core.clock import Clock
 from core.object3d import Object3D
 from core.scene import Scene
 from geometries.plane import plane
-from lights.light import ambient_light, directional_light
 from materials.material import Material
 from math.vector3 import Vector3
 from objects.mesh import Mesh
@@ -141,11 +140,16 @@ def main() raises:
     scene.add_mesh(Mesh(sheet, white, floor))
     # The lamp is a node like any other, so it could be parented to something
     # that moves.
-    var lamp = Object3D()
-    lamp.set_position(0.4, 0.8, 0.5)
-    var lamp_node = scene.add(lamp^)
-    scene.add_light(ambient_light(Color(255, 255, 255), 0.79))
-    scene.add_light(directional_light(Color(255, 255, 255), lamp_node, 2.36))
+    fill_and_key(
+        scene,
+        0.4,
+        0.8,
+        0.5,
+        Color(255, 255, 255),
+        0.79,
+        Color(255, 255, 255),
+        2.36,
+    )
     scene.update()
 
     # Low and close, so the far edge of the plane runs away to a vanishing

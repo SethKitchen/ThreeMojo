@@ -12,7 +12,7 @@ The marker is a small cube placed at `Hit.point`. That is what
 `Raycaster.set_from_pixel` is for.
 """
 
-from examples.output import example_destination, write_example
+from examples.output import example_destination, fill_and_key, write_example
 
 from cameras.perspective_camera import PerspectiveCamera
 from core.assets import Assets
@@ -22,7 +22,6 @@ from core.raycaster import Raycaster
 from core.scene import Scene
 from geometries.box import cube
 from geometries.sphere import sphere
-from lights.light import ambient_light, directional_light
 from materials.material import Material
 from math.vector3 import Vector3
 from objects.mesh import Mesh
@@ -100,11 +99,16 @@ def main() raises:
     var marker = scene.add(Object3D())
     scene.add_mesh(Mesh(tip, mark, marker))
 
-    var lamp = Object3D()
-    lamp.set_position(0.5, 0.9, 0.7)
-    var lamp_node = scene.add(lamp^)
-    scene.add_light(ambient_light(Color(255, 255, 255), 0.79))
-    scene.add_light(directional_light(Color(255, 255, 255), lamp_node, 2.51))
+    fill_and_key(
+        scene,
+        0.5,
+        0.9,
+        0.7,
+        Color(255, 255, 255),
+        0.79,
+        Color(255, 255, 255),
+        2.51,
+    )
 
     var pivot = scene.add(Object3D())
     var eye = Object3D()

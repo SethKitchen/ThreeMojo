@@ -13,14 +13,13 @@ sphere sets `allow_override` off and keeps its own color. The camera
 rides a pivot one whole turn, and the normals shift with it.
 """
 
-from examples.output import example_destination, spin_clip
+from examples.output import example_destination, fill_and_key, spin_clip
 
 from cameras.perspective_camera import PerspectiveCamera
 from core.assets import Assets
 from core.object3d import Object3D
 from core.scene import Scene
 from geometries.sphere import sphere
-from lights.light import ambient_light, directional_light
 from materials.material import Material, normal_material
 from objects.mesh import Mesh
 from render.framebuffer import Color
@@ -62,11 +61,15 @@ def main() raises:
             material = kept
         scene.add_mesh(Mesh(ball, material, scene.add(node^)))
 
-    var lamp = Object3D()
-    lamp.set_position(2.2, 3.4, 2.6)
-    scene.add_light(ambient_light(Color(210, 214, 224), 0.45))
-    scene.add_light(
-        directional_light(Color(255, 248, 236), scene.add(lamp^), 1.4)
+    fill_and_key(
+        scene,
+        2.2,
+        3.4,
+        2.6,
+        Color(210, 214, 224),
+        0.45,
+        Color(255, 248, 236),
+        1.4,
     )
 
     var pivot = scene.add(Object3D())

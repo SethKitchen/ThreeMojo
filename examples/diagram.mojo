@@ -12,7 +12,12 @@ This program fills those paths into a frame so the figure can be a PNG.
 The pair turns one whole turn.
 """
 
-from examples.output import example_destination, gallery_camera, write_example
+from examples.output import (
+    example_destination,
+    fill_and_key,
+    gallery_camera,
+    write_example,
+)
 
 from cameras.perspective_camera import PerspectiveCamera
 from core.assets import Assets
@@ -21,7 +26,6 @@ from core.object3d import NodeId, Object3D
 from core.scene import Scene
 from geometries.box import cube
 from geometries.polyhedron import icosahedron
-from lights.light import ambient_light, directional_light
 from loaders.svg import parse_path_data
 from loaders.svg_path import SvgVector
 from materials.material import Material
@@ -325,11 +329,15 @@ def main() raises:
     right.set_position(0.72, -0.18, 0.12)
     scene.add_mesh(Mesh(block, blue, scene.attach(right^, pivot)))
 
-    var lamp = Object3D()
-    lamp.set_position(1.5, 2.1, 1.7)
-    scene.add_light(ambient_light(Color(78, 84, 98), 1))
-    scene.add_light(
-        directional_light(Color(255, 246, 232), scene.add(lamp^), 1.7)
+    fill_and_key(
+        scene,
+        1.5,
+        2.1,
+        1.7,
+        Color(78, 84, 98),
+        1,
+        Color(255, 246, 232),
+        1.7,
     )
 
     var camera = gallery_camera(

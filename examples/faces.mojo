@@ -12,7 +12,12 @@ face. The mesh wears a list, and each group draws with the material its
 index names. The box turns so every face comes around.
 """
 
-from examples.output import example_destination, gallery_camera, write_example
+from examples.output import (
+    example_destination,
+    fill_and_key,
+    gallery_camera,
+    write_example,
+)
 
 from cameras.perspective_camera import PerspectiveCamera
 from core.assets import Assets
@@ -20,7 +25,6 @@ from core.clock import Clock
 from core.object3d import NodeId, Object3D
 from core.scene import Scene
 from geometries.box import cube
-from lights.light import ambient_light, directional_light
 from materials.material import Material, MaterialId
 from math.vector3 import Vector3
 from objects.mesh import Mesh
@@ -89,11 +93,16 @@ def main() raises:
     posed.rotate_x(Angle(22.0, DEGREE))
     var node = scene.add(posed^)
     scene.add_mesh(Mesh(block, faces^, node))
-    var lamp = Object3D()
-    lamp.set_position(1.2, 1.6, 1.8)
-    var lamp_node = scene.add(lamp^)
-    scene.add_light(ambient_light(Color(255, 255, 255), 0.4))
-    scene.add_light(directional_light(Color(255, 255, 255), lamp_node, 2.4))
+    fill_and_key(
+        scene,
+        1.2,
+        1.6,
+        1.8,
+        Color(255, 255, 255),
+        0.4,
+        Color(255, 255, 255),
+        2.4,
+    )
 
     var camera = gallery_camera(
         WIDTH,

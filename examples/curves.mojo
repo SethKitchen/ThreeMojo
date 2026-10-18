@@ -11,13 +11,17 @@ The curve is sampled, lifted into space, and given thickness. The page is
 Curves. This file draws that one path, not a set of kinds.
 """
 
-from examples.output import example_destination, gallery_camera, spin_clip
+from examples.output import (
+    example_destination,
+    fill_and_key,
+    gallery_camera,
+    spin_clip,
+)
 
 from core.assets import Assets
 from core.object3d import Object3D
 from core.scene import Scene
 from geometries.tube import tube
-from lights.light import ambient_light, directional_light
 from materials.material import Material
 from math.curve import cubic_bezier
 from math.vector2 import Vector2
@@ -59,11 +63,16 @@ def main() raises:
     var node = scene.add(Object3D())
     scene.add_mesh(Mesh(hose, paint, node))
 
-    var lamp = Object3D()
-    lamp.set_position(0.4, 0.8, 0.9)
-    var lamp_node = scene.add(lamp^)
-    scene.add_light(ambient_light(Color(255, 255, 255), 0.69))
-    scene.add_light(directional_light(Color(255, 255, 255), lamp_node, 2.67))
+    fill_and_key(
+        scene,
+        0.4,
+        0.8,
+        0.9,
+        Color(255, 255, 255),
+        0.69,
+        Color(255, 255, 255),
+        2.67,
+    )
 
     var camera = gallery_camera(
         WIDTH,

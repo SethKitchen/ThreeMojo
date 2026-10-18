@@ -12,7 +12,12 @@ the sine of `Renderer.time`. A `POSITION_NODE` pushes each vertex along
 its normal by the same wave. The lights still shade the sphere.
 """
 
-from examples.output import example_destination, gallery_camera, write_example
+from examples.output import (
+    example_destination,
+    fill_and_key,
+    gallery_camera,
+    write_example,
+)
 
 from cameras.perspective_camera import PerspectiveCamera
 from core.assets import Assets
@@ -20,7 +25,6 @@ from core.clock import Clock
 from core.object3d import NodeId, Object3D
 from core.scene import Scene
 from geometries.sphere import sphere
-from lights.light import ambient_light, directional_light
 from materials.material import STANDARD, Material
 from materials.nodes import COLOR_NODE, POSITION_NODE, NodeGraph
 from math.vector3 import Vector3
@@ -102,11 +106,16 @@ def main() raises:
     var scene = Scene()
     var node = scene.add(Object3D())
     scene.add_mesh(Mesh(ball, paint, node))
-    var lamp = Object3D()
-    lamp.set_position(0.8, 1.3, 1.6)
-    var lamp_node = scene.add(lamp^)
-    scene.add_light(ambient_light(Color(255, 255, 255), 0.35))
-    scene.add_light(directional_light(Color(255, 255, 255), lamp_node, 2.4))
+    fill_and_key(
+        scene,
+        0.8,
+        1.3,
+        1.6,
+        Color(255, 255, 255),
+        0.35,
+        Color(255, 255, 255),
+        2.4,
+    )
 
     var camera = gallery_camera(
         WIDTH,

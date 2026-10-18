@@ -10,10 +10,11 @@ first argument, turns a node, and stores the frames. A full circle is
 one turn divided across the frames. An example that built its own frames
 can write them here. It can also copy one tile into a sheet, light a
 scene and spin it, hang a part on a turning node, stand a body on the
-floor, place a gallery camera, add a warm lamp, or write a third of a
-turn.
+floor, place a gallery camera, add a fill and a key lamp, or write a
+third of a turn.
 """
 
+from cameras.camera import Camera
 from cameras.perspective_camera import PerspectiveCamera
 from core.assets import Assets
 from core.clock import Clock
@@ -121,6 +122,38 @@ def gallery_camera(
     return camera^
 
 
+def fill_and_key(
+    mut scene: Scene,
+    x: Float32,
+    y: Float32,
+    z: Float32,
+    fill: Color,
+    fill_intensity: Float32,
+    key: Color,
+    key_intensity: Float32,
+) raises:
+    """Add an ambient fill and one directional lamp.
+
+    Args:
+        scene: The scene.
+        x: The lamp's x, in meters.
+        y: The lamp's y, in meters.
+        z: The lamp's z, in meters.
+        fill: The ambient color.
+        fill_intensity: The ambient intensity.
+        key: The directional color.
+        key_intensity: The directional intensity.
+
+    Raises:
+        Error: If a light cannot be added.
+    """
+    var lamp = Object3D()
+    lamp.set_position(x, y, z)
+    var lamp_node = scene.add(lamp^)
+    scene.add_light(ambient_light(fill, fill_intensity))
+    scene.add_light(directional_light(key, lamp_node, key_intensity))
+
+
 def warm_lamp(mut scene: Scene, x: Float32, y: Float32, z: Float32) raises:
     """Add a warm ambient fill and one directional lamp.
 
@@ -133,11 +166,16 @@ def warm_lamp(mut scene: Scene, x: Float32, y: Float32, z: Float32) raises:
     Raises:
         Error: If a light cannot be added.
     """
-    var lamp = Object3D()
-    lamp.set_position(x, y, z)
-    var lamp_node = scene.add(lamp^)
-    scene.add_light(ambient_light(Color(255, 248, 235), 0.52))
-    scene.add_light(directional_light(Color(255, 244, 220), lamp_node, 2.55))
+    fill_and_key(
+        scene,
+        x,
+        y,
+        z,
+        Color(255, 248, 235),
+        0.52,
+        Color(255, 244, 220),
+        2.55,
+    )
 
 
 def example_destination(default_name: String) -> String:
@@ -155,9 +193,11 @@ def example_destination(default_name: String) -> String:
     return default_name
 
 
-def spin_frame(
+def spin_frame[
+    C: Camera
+](
     renderer: Renderer,
-    camera: PerspectiveCamera,
+    camera: C,
     assets: Assets,
     mut scene: Scene,
     node: NodeId,
@@ -216,9 +256,11 @@ def spin_pair(
     return renderer.render(scene, assets, camera)
 
 
-def _collect_spins(
+def _collect_spins[
+    C: Camera
+](
     renderer: Renderer,
-    camera: PerspectiveCamera,
+    camera: C,
     assets: Assets,
     mut scene: Scene,
     node: NodeId,
@@ -398,9 +440,11 @@ def spin_pair_gallery(
     write_frames(frames, destination, delay_ms, frame_count)
 
 
-def spin_clip(
+def spin_clip[
+    C: Camera
+](
     renderer: Renderer,
-    camera: PerspectiveCamera,
+    camera: C,
     assets: Assets,
     mut scene: Scene,
     node: NodeId,

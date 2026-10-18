@@ -12,7 +12,7 @@ transmission, thickness, attenuation and dispersion. The opaque boxes
 are drawn first, and the sphere bends and tints that picture.
 """
 
-from examples.output import example_destination, spin_clip
+from examples.output import example_destination, fill_and_key, spin_clip
 
 from cameras.perspective_camera import PerspectiveCamera
 from core.assets import Assets
@@ -20,7 +20,6 @@ from core.object3d import Object3D
 from core.scene import Scene
 from geometries.box import cube
 from geometries.sphere import sphere
-from lights.light import ambient_light, directional_light
 from materials.material import Material, physical_material
 from objects.mesh import Mesh
 from render.framebuffer import Color
@@ -70,11 +69,16 @@ def main() raises:
     scene.add_mesh(Mesh(block, blue, scene.add(right^)))
     scene.add_mesh(Mesh(ball, glass, scene.add(Object3D())))
 
-    var lamp = Object3D()
-    lamp.set_position(1.2, 1.6, 1.8)
-    var lamp_node = scene.add(lamp^)
-    scene.add_light(ambient_light(Color(255, 255, 255), 0.45))
-    scene.add_light(directional_light(Color(255, 248, 236), lamp_node, 2.4))
+    fill_and_key(
+        scene,
+        1.2,
+        1.6,
+        1.8,
+        Color(255, 255, 255),
+        0.45,
+        Color(255, 248, 236),
+        2.4,
+    )
 
     var pivot = scene.add(Object3D())
     var eye = Object3D()

@@ -12,14 +12,18 @@ rings whose radius swells and narrows. Both ends are capped. The vase
 turns one whole turn.
 """
 
-from examples.output import example_destination, gallery_camera, spin_clip
+from examples.output import (
+    example_destination,
+    fill_and_key,
+    gallery_camera,
+    spin_clip,
+)
 
 from core.assets import Assets
 from core.buffer_geometry import BufferGeometry
 from core.object3d import Object3D
 from core.scene import Scene
 from geometries.loft import loft
-from lights.light import ambient_light, directional_light
 from materials.material import Material
 from math.vector3 import Vector3
 from objects.mesh import Mesh
@@ -77,11 +81,15 @@ def main() raises:
     var scene = Scene()
     var node = scene.add(Object3D())
     scene.add_mesh(Mesh(shape, clay, node))
-    var lamp = Object3D()
-    lamp.set_position(1.2, 1.8, 1.6)
-    scene.add_light(ambient_light(Color(220, 214, 206), 0.36))
-    scene.add_light(
-        directional_light(Color(255, 246, 232), scene.add(lamp^), 1.9)
+    fill_and_key(
+        scene,
+        1.2,
+        1.8,
+        1.6,
+        Color(220, 214, 206),
+        0.36,
+        Color(255, 246, 232),
+        1.9,
     )
 
     var camera = gallery_camera(
