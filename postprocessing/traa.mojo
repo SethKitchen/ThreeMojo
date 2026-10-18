@@ -713,6 +713,93 @@ def traa_pixel(
     return flicker_reduction(current, clipped, weight)
 
 
+def render_jittered[
+    C: Camera, D: Camera
+](
+    renderer: Renderer,
+    mut target: RenderTarget,
+    scene: Scene,
+    assets: Assets,
+    velocity_camera: C,
+    draw_camera: D,
+) raises:
+    """Draw `draw_camera` and measure velocity from `velocity_camera`.
+
+    The velocity projection is cleared afterward, including when the draw
+    raises.
+
+    Args:
+        renderer: What the scene is drawn with.
+        target: Where the picture goes.
+        scene: The transform hierarchy, and the meshes and lights in it.
+        assets: The geometry, materials and textures the meshes name.
+        velocity_camera: The camera whose projection measures velocity,
+            before the jitter.
+        draw_camera: The jittered camera.
+
+    Raises:
+        Error: Everything `Renderer.render_into` raises.
+    """
+    renderer.set_velocity_projection(velocity_camera.projection_matrix())
+    try:
+        renderer.render_into(target, scene, assets, draw_camera)
+    finally:
+        renderer.set_velocity_projection(None)
+
+
+def remember_jitter_camera(
+    mut previous_world: Matrix4,
+    mut previous_projection_inverse: Matrix4,
+    mut camera_world: Matrix4,
+    mut projection_inverse: Matrix4,
+    view: Matrix4,
+    projection: Matrix4,
+):
+    """Store the last camera matrices, then this frame's.
+
+    `view` and `projection` are copied and inverted. The camera that owns
+    them is left as it was. The values that were current become the
+    previous ones.
+
+    Args:
+        previous_world: Where the last world matrix is stored.
+        previous_projection_inverse: Where the last projection inverse is
+            stored.
+        camera_world: The current world matrix, replaced.
+        projection_inverse: The current projection inverse, replaced.
+        view: This frame's view matrix.
+        projection: This frame's projection.
+    """
+    previous_world = camera_world
+    previous_projection_inverse = projection_inverse
+    var world = view
+    world.invert()
+    camera_world = world
+    var unprojects = projection
+    unprojects.invert()
+    projection_inverse = unprojects
+
+
+def read_drawn_frame(
+    drawn: RenderTarget,
+    mut beauty: List[FloatColor],
+    mut velocities: List[Float32],
+):
+    """Append a target's straight color and its velocity, x then y.
+
+    Args:
+        drawn: The picture just drawn. Its size is positive.
+        beauty: The colors, appended to.
+        velocities: Two velocity floats a pixel, appended to.
+    """
+    var count = drawn.width * drawn.height
+    # The size is positive, so the loop runs.
+    for slot in range(count):  # pragma: no branch
+        beauty.append(drawn.straight_at(slot))
+        velocities.append(drawn.velocities[slot].x)
+        velocities.append(drawn.velocities[slot].y)
+
+
 def traa_render[
     C: Camera
 ](
@@ -750,27 +837,19 @@ def traa_render[
     var drawn = RenderTarget(
         w, h, renderer.background, FLOAT_TARGET, [OUTPUT_COLOR, OUTPUT_VELOCITY]
     )
-    renderer.set_velocity_projection(camera.projection_matrix())
-    try:
-        renderer.render_into(drawn, scene, assets, moved)
-    finally:
-        renderer.set_velocity_projection(None)
+    render_jittered(renderer, drawn, scene, assets, camera, moved)
     # three.js's `updateBefore`: the last frame's matrices, then this one's.
-    settings.previous_camera_world = settings.camera_world
-    settings.previous_projection_inverse = settings.projection_inverse
-    var world = moved.view
-    world.invert()
-    settings.camera_world = world
-    var unprojects = moved.projection
-    unprojects.invert()
-    settings.projection_inverse = unprojects
+    remember_jitter_camera(
+        settings.previous_camera_world,
+        settings.previous_projection_inverse,
+        settings.camera_world,
+        settings.projection_inverse,
+        moved.view,
+        moved.projection,
+    )
     var beauty = List[FloatColor](capacity=w * h)
     var velocities = List[Float32](capacity=w * h * 2)
-    # The renderer's size is positive, so the loop runs.
-    for slot in range(w * h):  # pragma: no branch
-        beauty.append(drawn.straight_at(slot))
-        velocities.append(drawn.velocities[slot].x)
-        velocities.append(drawn.velocities[slot].y)
+    read_drawn_frame(drawn, beauty, velocities)
     # A new size starts the history over from this frame, as three.js
     # copies the beauty into it, and forgets the last depth.
     if settings.history_width != w or settings.history_height != h:
