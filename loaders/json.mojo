@@ -355,6 +355,29 @@ struct JsonDocument(Movable):
             raise Error(label + ": " + key + " must be finite")
         return value
 
+    def finite_numbers(
+        self, array: Int, complaint: String
+    ) raises -> List[Float32]:
+        """Return every number in an array as a finite `Float32`.
+
+        Args:
+            array: The array's index.
+            complaint: The error when a number is not finite.
+
+        Returns:
+            The numbers, in order.
+
+        Raises:
+            Error: If an entry is not a number, or a number is not finite.
+        """
+        var out = List[Float32]()
+        for index in range(self.length(array)):
+            var value = Float32(self.number(self.at(array, index)))
+            if not isfinite(value):
+                raise Error(complaint)
+            out.append(value)
+        return out^
+
     def string(self, node: Int) raises -> String:
         """Return a string.
 

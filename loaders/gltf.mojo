@@ -297,7 +297,7 @@ from render.texture import (
 )
 from loaders.image_batch import TextureDecodeSource, decode_textures
 from render.texture_store import TextureId
-from std.math import inf, isfinite, pi, sqrt
+from std.math import inf, pi, sqrt
 from std.memory import bitcast
 from std.pathlib import Path
 from units.si import Angle, Duration, Length, METER, NANOMETER, RADIAN, SECOND
@@ -1274,19 +1274,13 @@ struct _Loader(Movable):
         """Return an object's array of numbers under `key`, of any length,
         or an empty list when the key is absent."""
         var found = self.document.get(node, key)
-        var out = List[Float32]()
         if found == NO_NODE:
-            return out^
+            return List[Float32]()
         if self.document.kind(found) != ARRAY:
             raise Error("glTF: " + key + " must be an array of numbers")
-        for index in range(self.document.length(found)):
-            var value = Float32(
-                self.document.number(self.document.at(found, index))
-            )
-            if not isfinite(value):
-                raise Error("glTF: " + key + " must be finite")
-            out.append(value)
-        return out^
+        return self.document.finite_numbers(
+            found, "glTF: " + key + " must be finite"
+        )
 
     def object_at(self, array: Int, index: Int) raises -> Int:
         """Return one entry of an array, which must be an object."""
@@ -1356,9 +1350,8 @@ struct _Loader(Movable):
         """Return an object's array of `count` numbers under `key`, or an
         empty list when the key is absent."""
         var found = self.document.get(node, key)
-        var out = List[Float32]()
         if found == NO_NODE:
-            return out^
+            return List[Float32]()
         if (
             self.document.kind(found) != ARRAY
             or self.document.length(found) != count
@@ -1366,14 +1359,9 @@ struct _Loader(Movable):
             raise Error(
                 "glTF: " + key + " must hold " + String(count) + " numbers"
             )
-        for index in range(count):  # pragma: no branch
-            var value = Float32(
-                self.document.number(self.document.at(found, index))
-            )
-            if not isfinite(value):
-                raise Error("glTF: " + key + " must be finite")
-            out.append(value)
-        return out^
+        return self.document.finite_numbers(
+            found, "glTF: " + key + " must be finite"
+        )
 
     # --- buffers and accessors ----------------------------------------------
 

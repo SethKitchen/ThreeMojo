@@ -999,15 +999,9 @@ struct _Loader(Movable):
 
     def numbers_of(self, list: Int) raises -> List[Float32]:
         """Return every number of an array, each finite."""
-        var out = List[Float32]()
-        for at in range(self.document.length(list)):
-            var value = Float32(
-                self.document.number(self.document.at(list, at))
-            )
-            if not isfinite(value):
-                raise Error("Object JSON: an array holds a number not finite")
-            out.append(value)
-        return out^
+        return self.document.finite_numbers(
+            list, "Object JSON: an array holds a number not finite"
+        )
 
     def numbers(
         self, node: Int, key: String, count: Int
