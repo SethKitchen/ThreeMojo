@@ -939,6 +939,31 @@ def _reach(
     return length3(offset.x, offset.y, offset.z) / radius
 
 
+def _tenth_deform(
+    radius_sq: Float64, strength: Float64, negative: Bool
+) -> Tuple[Float64, Float64]:
+    """Return the brush radius and a signed tenth of that radius."""
+    var radius = sqrt(radius_sq)
+    var deform = strength * radius * 0.1
+    deform = -deform if negative else deform
+    return radius, deform
+
+
+def _brush_shift(
+    mesh: SculptorMesh,
+    vertex: Int,
+    center: Point3,
+    radius: Float64,
+    deform: Float64,
+) -> Tuple[Bool, Float64]:
+    """Return whether a vertex is inside the brush, and its falloff times
+    the deform. A vertex on the rim is outside."""
+    var dist = _reach(mesh, vertex, center, radius)
+    if dist >= 1.0:
+        return False, 0.0
+    return True, falloff(dist) * deform
+
+
 # --- tools -----------------------------------------------------------------
 
 
@@ -962,20 +987,15 @@ def tool_brush(
         strength: How far, from zero to one: a tenth of the radius at one.
         negative: Whether to lower instead.
     """
-    var radius = sqrt(radius_sq)
-    var deform = strength * radius * 0.1
-    deform = -deform if negative else deform
+    var radius, deform = _tenth_deform(radius_sq, strength, negative)
     for vertex in vertices:  # pragma: no branch
-        var dist = _reach(mesh, vertex, center, radius)
-        if dist >= 1.0:
-            continue
-        var fall_off = falloff(dist) * deform
-        var p = point_of(mesh.vertices, vertex)
-        _set_point(
-            mesh.vertices,
-            vertex,
-            p + normal * fall_off,
+        var inside, fall_off = _brush_shift(
+            mesh, vertex, center, radius, deform
         )
+        if not inside:
+            continue
+        var p = point_of(mesh.vertices, vertex)
+        _set_point(mesh.vertices, vertex, p + normal * fall_off)
 
 
 def tool_flatten(
@@ -1008,10 +1028,11 @@ def tool_flatten(
         var dist_to_plane = (p - plane_point).dot(normal)
         if dist_to_plane * comp > 0:
             continue
-        var dist = _reach(mesh, vertex, center, radius)
-        if dist >= 1.0:
+        var inside, fall_off = _brush_shift(
+            mesh, vertex, center, radius, dist_to_plane * strength
+        )
+        if not inside:
             continue
-        var fall_off = falloff(dist) * dist_to_plane * strength
         _set_point(
             mesh.vertices,
             vertex,
@@ -1037,14 +1058,13 @@ def tool_inflate(
         strength: How far, from zero to one: a tenth of the radius at one.
         negative: Whether to deflate instead.
     """
-    var radius = sqrt(radius_sq)
-    var deform = strength * radius * 0.1
-    deform = -deform if negative else deform
+    var radius, deform = _tenth_deform(radius_sq, strength, negative)
     for vertex in vertices:  # pragma: no branch
-        var dist = _reach(mesh, vertex, center, radius)
-        if dist >= 1.0:
+        var inside, fall_off = _brush_shift(
+            mesh, vertex, center, radius, deform
+        )
+        if not inside:
             continue
-        var fall_off = falloff(dist) * deform
         var n = mesh._normal_at(vertex)
         var n_len = length3(n.x, n.y, n.z)
         fall_off = fall_off / n_len if n_len > 0 else fall_off
