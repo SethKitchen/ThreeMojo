@@ -40,12 +40,12 @@ See `docs/wiki/Norm-consumers.md` for the changed operations, retained
 limits, and explicit zero and nonfinite rules.
 """
 
+from math.box_extent import box_exterior
 from math.finite import positive_finite
-from math.norm import length3
 from math.smoothstep import smoothstep
 from math.spherical_harmonics3 import SH_COUNT, SphericalHarmonics3
 from math.vector3 import Vector3
-from std.math import floor, isfinite, max, min, sqrt
+from std.math import floor, isfinite, max, min
 from units.si import Length, METER
 
 # Where a grid's size says to take its probe count from: three.js's
@@ -171,16 +171,8 @@ def grid_falloff(
     """
     if falloff <= 0:
         return 1
-    var dx = max(low.x - position.x, Float32(0)) + max(
-        position.x - high.x, Float32(0)
-    )
-    var dy = max(low.y - position.y, Float32(0)) + max(
-        position.y - high.y, Float32(0)
-    )
-    var dz = max(low.z - position.z, Float32(0)) + max(
-        position.z - high.z, Float32(0)
-    )
-    return 1 - smoothstep(0, falloff, length3(dx, dy, dz))
+    var outside = box_exterior(low, high, position)
+    return 1 - smoothstep(0, falloff, outside.length())
 
 
 def _default_probes(size: Length) raises -> Int:
