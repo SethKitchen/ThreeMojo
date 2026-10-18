@@ -50,6 +50,7 @@ from lights.physical_layers import (
     ibl_sheen,
     sheen_scaling,
 )
+from lights.light_slot import index_of_light
 from lights.shadow import (
     ShadowCascade,
     ShadowMap,
@@ -1705,24 +1706,15 @@ struct Lighting(Movable):
 
     def _shadow_of(self, light: Int) -> Int:
         """Return which of the shadow maps `light` drew, or -1 for none."""
-        for slot in range(len(self.shadows)):
-            if self.shadows[slot].light == light:
-                return slot
-        return -1
+        return index_of_light(self.shadows, light)
 
     def _map_of(self, light: Int) -> Int:
         """Return which of the spot light maps `light` projects, or -1."""
-        for slot in range(len(self.spot_maps)):
-            if self.spot_maps[slot].light == light:
-                return slot
-        return -1
+        return index_of_light(self.spot_maps, light)
 
     def _profile_of(self, light: Int) -> Int:
         """Return which of the spot profiles shapes `light`, or -1."""
-        for slot in range(len(self.spot_profiles)):
-            if self.spot_profiles[slot].light == light:
-                return slot
-        return -1
+        return index_of_light(self.spot_profiles, light)
 
     def spot_attenuation(
         self, index: Int, angle_cos: Float32, position: Vector3
