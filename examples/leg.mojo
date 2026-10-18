@@ -16,6 +16,7 @@ from examples.output import (
     example_destination,
     gallery_camera,
     gallery_renderer,
+    print_tissue_mass,
     spin_gallery,
     warm_lamp,
 )
@@ -67,73 +68,68 @@ comptime DELAY_MS = 55
 comptime DETAIL = 12
 
 
-def _print_mass(label: String, grams: Float32, newtons: Float32, lbf: Float32):
-    """Print one tissue mass line."""
-    print(label, "-", grams, "g,", newtons, "N,", lbf, "lbf on Earth")
-
-
 def main() raises:
     var destination = example_destination(String(DEFAULT_OUTPUT))
 
     var person = HumanoidSpec(Length(6.0, FOOT), MALE)
     var femur_report = femur_mass(person)
-    _print_mass(
+    print_tissue_mass(
         "femur",
         femur_report.mass.to(GRAM),
         femur_report.weight().to(NEWTON),
         femur_report.weight().to(POUND_FORCE),
     )
     var tibia_report = tibia_mass(person)
-    _print_mass(
+    print_tissue_mass(
         "tibia",
         tibia_report.mass.to(GRAM),
         tibia_report.weight().to(NEWTON),
         tibia_report.weight().to(POUND_FORCE),
     )
     var fibula_report = fibula_mass(person)
-    _print_mass(
+    print_tissue_mass(
         "fibula",
         fibula_report.mass.to(GRAM),
         fibula_report.weight().to(NEWTON),
         fibula_report.weight().to(POUND_FORCE),
     )
     var patella_report = patella_mass(person)
-    _print_mass(
+    print_tissue_mass(
         "patella",
         patella_report.mass.to(GRAM),
         patella_report.weight().to(NEWTON),
         patella_report.weight().to(POUND_FORCE),
     )
     var cartilage_report = articular_cartilage_mass(person)
-    _print_mass(
+    print_tissue_mass(
         "articular cartilage",
         cartilage_report.mass.to(GRAM),
         cartilage_report.weight().to(NEWTON),
         cartilage_report.weight().to(POUND_FORCE),
     )
     var med_report = medial_meniscus_mass(person)
-    _print_mass(
+    print_tissue_mass(
         "medial meniscus",
         med_report.mass.to(GRAM),
         med_report.weight().to(NEWTON),
         med_report.weight().to(POUND_FORCE),
     )
     var lat_report = lateral_meniscus_mass(person)
-    _print_mass(
+    print_tissue_mass(
         "lateral meniscus",
         lat_report.mass.to(GRAM),
         lat_report.weight().to(NEWTON),
         lat_report.weight().to(POUND_FORCE),
     )
     var mcl_report = medial_collateral_mass(person)
-    _print_mass(
+    print_tissue_mass(
         "MCL",
         mcl_report.mass.to(GRAM),
         mcl_report.weight().to(NEWTON),
         mcl_report.weight().to(POUND_FORCE),
     )
     var lcl_report = lateral_collateral_mass(person)
-    _print_mass(
+    print_tissue_mass(
         "LCL",
         lcl_report.mass.to(GRAM),
         lcl_report.weight().to(NEWTON),

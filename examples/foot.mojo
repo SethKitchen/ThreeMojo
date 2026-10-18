@@ -17,6 +17,7 @@ from examples.output import (
     fill_and_key,
     gallery_camera,
     gallery_renderer,
+    print_tissue_mass,
     spin_gallery,
 )
 
@@ -62,31 +63,26 @@ comptime DELAY_MS = 55
 comptime DETAIL = 8
 
 
-def _print_mass(label: String, grams: Float32, newtons: Float32, lbf: Float32):
-    """Print one tissue mass line."""
-    print(label, "-", grams, "g,", newtons, "N,", lbf, "lbf on Earth")
-
-
 def main() raises:
     var destination = example_destination(String(DEFAULT_OUTPUT))
 
     var person = HumanoidSpec(Length(6.0, FOOT), MALE)
     var bone = foot_bone_mass(person, CALCANEUS)
-    _print_mass(
+    print_tissue_mass(
         "calcaneus",
         bone.mass.to(GRAM),
         bone.weight().to(NEWTON),
         bone.weight().to(POUND_FORCE),
     )
     var band = ligament_mass(person, DELTOID)
-    _print_mass(
+    print_tissue_mass(
         "deltoid",
         band.mass.to(GRAM),
         band.weight().to(NEWTON),
         band.weight().to(POUND_FORCE),
     )
     var belly = foot_muscle_mass(person, ABDUCTOR_HALLUCIS)
-    _print_mass(
+    print_tissue_mass(
         "abductor hallucis",
         belly.mass.to(GRAM),
         belly.weight().to(NEWTON),
