@@ -29,6 +29,7 @@ from core.buffer_attribute import BufferAttribute
 from core.buffer_geometry import BufferGeometry, NORMAL, POSITION
 from generators.utils import check_finite, generator_random, meters
 from math.noise import ImprovedNoise
+from math.norm import squared_length2
 from std.math import floor, inf, pow, sqrt
 from units.si import (
     InverseLength,
@@ -168,7 +169,11 @@ struct _HeightField:
             var nz = self.perlin.noise(bx, bz + e, zr)
             dx += (nx - n) / e * freq
             dz += (nz - n) / e * freq
-            sum += amp * n / (1 + self.p.erosion * (dx * dx + dz * dz))
+            sum += (
+                amp
+                * n
+                / (1 + self.p.erosion * squared_length2[DType.float64](dx, dz))
+            )
             var rx = 0.8 * px - 0.6 * pz
             pz = 0.6 * px + 0.8 * pz
             px = rx

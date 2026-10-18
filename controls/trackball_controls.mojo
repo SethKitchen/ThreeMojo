@@ -43,7 +43,7 @@ limits, and explicit zero and nonfinite rules.
 """
 
 from core.extent import positive_extent
-from math.norm import length2
+from math.norm import length2, squared_length2
 from cameras.orthographic_camera import OrthographicCamera
 from cameras.perspective_camera import PerspectiveCamera
 from controls.held_keys import HOLD_TIMEOUT, HeldKeys, physical_key
@@ -609,7 +609,7 @@ struct TrackballControls(Copyable, Movable):
         """
         var change_x = self._pan_end_x - self._pan_start_x
         var change_y = self._pan_end_y - self._pan_start_y
-        if change_x * change_x + change_y * change_y == 0:
+        if squared_length2[DType.float32](change_x, change_y) == 0:
             return
         var reach = eye.length() * self.pan_speed
         var sideways = eye

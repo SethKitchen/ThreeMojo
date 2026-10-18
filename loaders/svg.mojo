@@ -58,7 +58,7 @@ See `docs/wiki/Norm-consumers.md` for the changed operations, retained
 limits, and explicit zero and nonfinite rules.
 """
 
-from math.norm import normalized2, _ordinary_squared
+from math.norm import normalized2, _ordinary_squared, squared_length2
 from math.utils import clamp
 from loaders.bytes import ascii_digit, ascii_letter, ascii_space
 from loaders.svg_path import (
@@ -602,8 +602,8 @@ def _reflection(a: Float64, b: Float64) -> Float64:
 def _svg_angle(ux: Float64, uy: Float64, vx: Float64, vy: Float64) -> Float64:
     """Return the signed angle from one vector to another, three.js's
     `svgAngle`."""
-    var first_squared = ux * ux + uy * uy
-    var second_squared = vx * vx + vy * vy
+    var first_squared = squared_length2[DType.float64](ux, uy)
+    var second_squared = squared_length2[DType.float64](vx, vy)
     var dot = ux * vx + uy * vy
     var length = sqrt(first_squared) * sqrt(second_squared)
     var cosine = dot / length

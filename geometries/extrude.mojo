@@ -109,6 +109,7 @@ from geometries.earcut import triangulate_shape
 from loaders.curve_json import write_curve3, write_curve_path3
 from geometries.shape import Contours, extract_points, is_clockwise
 from math.curve3 import Curve3, CurvePath3, FrenetFrames
+from math.norm import squared_length2
 from math.path import Shape
 from math.vector2 import Vector2
 from math.vector3 import Vector3
@@ -245,14 +246,14 @@ def bevel_vector(point: Vector2, before: Vector2, after: Vector2) -> _Offset:
     var prev_y = y - by
     var next_x = ax - x
     var next_y = ay - y
-    var prev_lensq = prev_x * prev_x + prev_y * prev_y
+    var prev_lensq = squared_length2[DType.float64](prev_x, prev_y)
     var collinear = prev_x * next_y - prev_y * next_x
     var trans_x: Float64
     var trans_y: Float64
     var shrink_by: Float64
     if abs(collinear) > _EPSILON:
         var prev_len = sqrt(prev_lensq)
-        var next_len = sqrt(next_x * next_x + next_y * next_y)
+        var next_len = sqrt(squared_length2[DType.float64](next_x, next_y))
         var prev_shift_x = bx - prev_y / prev_len
         var prev_shift_y = by + prev_x / prev_len
         var next_shift_x = ax - next_y / next_len
@@ -263,7 +264,7 @@ def bevel_vector(point: Vector2, before: Vector2, after: Vector2) -> _Offset:
         ) / (prev_x * next_y - prev_y * next_x)
         trans_x = prev_shift_x + prev_x * sf - x
         trans_y = prev_shift_y + prev_y * sf - y
-        var trans_lensq = trans_x * trans_x + trans_y * trans_y
+        var trans_lensq = squared_length2[DType.float64](trans_x, trans_y)
         if trans_lensq <= 2:
             return _Offset(trans_x, trans_y)
         shrink_by = sqrt(trans_lensq / 2)
@@ -327,7 +328,10 @@ def merge_overlapping_points(mut points: List[Vector2]):
             max(abs(Float64(here.x)), abs(Float64(here.y))),
             max(abs(Float64(before.x)), abs(Float64(before.y))),
         )
-        if dx * dx + dy * dy <= threshold_sq * scale * scale:
+        if (
+            squared_length2[DType.float64](dx, dy)
+            <= threshold_sq * scale * scale
+        ):
             _ = points.pop(at)
             continue
         before = here
