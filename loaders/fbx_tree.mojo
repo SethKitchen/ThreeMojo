@@ -799,11 +799,6 @@ def _scalar(var token: String) -> FbxProperty:
         return string_property(token^)
 
 
-def _le(bytes: List[UInt8], at: Int, count: Int) -> UInt64:
-    """Return `count` bytes at `at` as a little-endian unsigned number."""
-    return UInt64(little_endian_uint(bytes, at, count))
-
-
 def _signed(value: UInt64, bits: Int) -> Int:
     """Return an unsigned number of `bits` bits as the signed number it
     stores in two's complement."""
@@ -837,7 +832,7 @@ struct _BinaryReader(Movable):
     def unsigned(mut self, count: Int) raises -> UInt64:
         """Read a little-endian unsigned number of `count` bytes."""
         self.need(count)
-        var value = _le(self.bytes, self.at, count)
+        var value = UInt64(little_endian_uint(self.bytes, self.at, count))
         self.at += count
         return value
 
@@ -959,7 +954,9 @@ struct _BinaryReader(Movable):
         if code == 102 or code == 100:
             var out = FbxProperty(FBX_NUMBERS)
             for index in range(count):
-                var bits = _le(data, index * width, width)
+                var bits = UInt64(
+                    little_endian_uint(data, index * width, width)
+                )
                 if width == 4:
                     out.numbers.append(
                         Float64(bitcast[DType.float32](UInt32(bits)))
@@ -970,6 +967,9 @@ struct _BinaryReader(Movable):
         var out = FbxProperty(FBX_INTEGERS)
         for index in range(count):
             out.integers.append(
-                _signed(_le(data, index * width, width), width * 8)
+                _signed(
+                    UInt64(little_endian_uint(data, index * width, width)),
+                    width * 8,
+                )
             )
         return out^
