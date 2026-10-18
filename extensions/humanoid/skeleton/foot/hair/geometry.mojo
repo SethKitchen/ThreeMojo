@@ -26,7 +26,6 @@ from extensions.humanoid.skeleton.foot.muscles.dimensions import (
     foot_muscle_dimensions,
 )
 from extensions.humanoid.skeleton.hair_shafts import mesh_hair_shafts
-from extensions.humanoid.skeleton.isosurface import check_detail
 
 
 def foot_hair_mesh(
@@ -78,7 +77,6 @@ def hair_from_dimensions(
     if not part.is_valid():
         raise Error("A foot hair part must be a named hair group")
     var label = foot_hair_part_label(part)
-    check_detail(detail, label)
     var field = FootHairField(dimensions, part)
     var radius = 0.0015 * dimensions.foot.stature.value
     return mesh_hair_shafts(

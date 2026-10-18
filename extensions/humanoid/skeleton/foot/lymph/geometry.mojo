@@ -23,7 +23,7 @@ from extensions.humanoid.skeleton.foot.lymph.dimensions import (
     display_lymph_field,
     lymph_part_label,
 )
-from extensions.humanoid.skeleton.isosurface import check_detail, mesh_field
+from extensions.humanoid.skeleton.isosurface import mesh_checked
 
 
 def foot_lymph(
@@ -75,6 +75,5 @@ def lymph_from_dimensions(
     if not part.is_valid():
         raise Error("A foot lymph part must be a named trunk")
     var label = lymph_part_label(part)
-    check_detail(detail, label)
     var field = display_lymph_field(dimensions, part)
-    return mesh_field(field, field.low, field.high, detail, label)
+    return mesh_checked(field, field.low, field.high, detail, label)

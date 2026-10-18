@@ -15,7 +15,7 @@ marching tetrahedra. Connectivity comes from the field.
 from core.buffer_geometry import BufferGeometry
 from extensions.humanoid.side import RIGHT, BodySide
 from extensions.humanoid.spec import HumanoidSpec
-from extensions.humanoid.skeleton.isosurface import check_detail, mesh_field
+from extensions.humanoid.skeleton.isosurface import mesh_checked
 from extensions.humanoid.skeleton.leg.femur.dimensions import (
     FemurDimensions,
     FemurField,
@@ -66,6 +66,5 @@ def femur_from_dimensions(
             produces no surface.
     """
     dimensions.validate()
-    check_detail(detail, "femur")
     var field = FemurField(dimensions)
-    return mesh_field(field, field.low, field.high, detail, "femur")
+    return mesh_checked(field, field.low, field.high, detail, "femur")

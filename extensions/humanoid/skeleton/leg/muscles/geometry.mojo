@@ -15,7 +15,7 @@ marching tetrahedra. Connectivity comes from the field.
 from core.buffer_geometry import BufferGeometry
 from extensions.humanoid.side import RIGHT, BodySide
 from extensions.humanoid.spec import HumanoidSpec
-from extensions.humanoid.skeleton.isosurface import check_detail, mesh_field
+from extensions.humanoid.skeleton.isosurface import mesh_checked
 from extensions.humanoid.skeleton.leg.muscles.dimensions import (
     MuscleDimensions,
     MuscleField,
@@ -72,6 +72,5 @@ def muscle_from_dimensions(
     if not part.is_valid():
         raise Error("A muscle part must be a named muscle, tract or tendon")
     var label = muscle_part_label(part)
-    check_detail(detail, label)
     var field = MuscleField(dimensions, part)
-    return mesh_field(field, field.low, field.high, detail, label)
+    return mesh_checked(field, field.low, field.high, detail, label)

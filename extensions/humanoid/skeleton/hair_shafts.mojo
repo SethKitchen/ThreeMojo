@@ -17,7 +17,7 @@ from extensions.humanoid.skeleton.field import (
     empty_bounds,
     sd_segment,
 )
-from extensions.humanoid.skeleton.isosurface import mesh_field
+from extensions.humanoid.skeleton.isosurface import mesh_checked
 from math.vector3 import Vector3
 
 
@@ -67,12 +67,12 @@ def mesh_hair_shafts(
         One indexed geometry with position, normal and uv attributes.
 
     Raises:
-        Error: If a shaft produces no surface.
+        Error: If `detail` is out of range, or a shaft produces no surface.
     """
     var parts = List[BufferGeometry]()
     for index in range(len(starts)):  # pragma: no branch
         var field = _HairShaftField(starts[index], ends[index], radius)
-        parts.append(mesh_field(field, field.low, field.high, detail, label))
+        parts.append(mesh_checked(field, field.low, field.high, detail, label))
     return _merge_shafts(parts)
 
 

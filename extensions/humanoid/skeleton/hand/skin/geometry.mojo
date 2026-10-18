@@ -19,7 +19,6 @@ from extensions.humanoid.skeleton.arm.frame import (
     arm_muscle_dimensions,
 )
 from extensions.humanoid.skeleton.hand.skin.dimensions import HandSkinField
-from extensions.humanoid.skeleton.isosurface import check_detail
 from extensions.humanoid.skeleton.surface_nets import mesh_surface
 from extensions.humanoid.spec import HumanoidSpec
 
@@ -63,6 +62,5 @@ def hand_skin_from_dimensions(
             not valid, if `detail` is out of range, or if the field
             produces no surface.
     """
-    check_detail(detail, "hand skin")
     var field = HandSkinField(dimensions, side)
     return mesh_surface(field, field.low, field.high, detail, "hand skin")
