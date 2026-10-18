@@ -48,7 +48,7 @@ limits, and explicit zero and nonfinite rules.
 """
 
 from math.norm import length3
-from loaders.bytes import hex_digit_value
+from loaders.bytes import ascii_digit, hex_digit_value
 from loaders.js_number import js_parse_float, js_parse_int
 from loaders.js_text import (
     is_js_space,
@@ -207,7 +207,7 @@ def _is_nrrd_line(units: List[Int]) -> Bool:
         Whether `NRRD` and a digit are in it.
     """
     for k in range(len(units) - 4):
-        var digit = units[k + 4] >= 48 and units[k + 4] <= 57
+        var digit = ascii_digit(units[k + 4])
         if digit and js_string(units, k, k + 4) == "NRRD":
             return True
     return False

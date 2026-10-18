@@ -21,7 +21,7 @@ that each wiki link names a page and a heading that exist. It prints one
 line per problem and exits with an error when there is at least one.
 """
 
-from loaders.bytes import hex_digit_value
+from loaders.bytes import ascii_digit, hex_digit_value
 from std.os import listdir
 from std.pathlib import Path
 from std.sys import argv
@@ -632,7 +632,7 @@ def _html_start(bytes: Span[UInt8, _], at: Int) raises -> Int:
         name += 1
     var end = name
     while end < len(bytes) and (
-        _is_alpha(bytes[end]) or (bytes[end] >= 48 and bytes[end] <= 57)
+        _is_alpha(bytes[end]) or ascii_digit(Int(bytes[end]))
     ):
         end += 1
     if end == name:
@@ -2920,7 +2920,7 @@ def _entity(
     while (
         i < end
         and i - start < 32
-        and (_is_alpha(bytes[i]) or (bytes[i] >= 48 and bytes[i] <= 57))
+        and (_is_alpha(bytes[i]) or ascii_digit(Int(bytes[i])))
     ):
         i += 1
     if i == start or i >= end or bytes[i] != 59:
@@ -4048,7 +4048,7 @@ def _drops(ch: String) -> Bool:
                 return True
         return False
     var byte = bytes[0]
-    var digit = byte >= 48 and byte <= 57
+    var digit = ascii_digit(Int(byte))
     var letter = byte >= 97 and byte <= 122
     return not (digit or letter or byte == 45 or byte == 95 or byte == 32)
 
@@ -4347,7 +4347,7 @@ def _is_page(name: String) -> Bool:
         return False
     for i in range(len(bytes)):
         var byte = bytes[i]
-        var alnum = _is_alpha(byte) or (byte >= 48 and byte <= 57)
+        var alnum = _is_alpha(byte) or ascii_digit(Int(byte))
         if not (alnum or (i > 0 and (byte == 45 or byte == 95))):
             return False
     return True

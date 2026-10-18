@@ -51,6 +51,7 @@ past most of these and yields `NaN`, or throws a `RangeError`.
 
 from core.buffer_attribute import BufferAttribute
 from core.search import first_match
+from loaders.bytes import ascii_space
 from loaders.js_text import split_fields
 from core.buffer_geometry import COLOR, NORMAL, POSITION, BufferGeometry
 from render.srgb import srgb_to_linear
@@ -430,7 +431,7 @@ def _whole(text: String, what: String) raises -> Int:
 
 def _is_space(byte: UInt8) -> Bool:
     """Return True for the white space a regular expression's `\\s` takes."""
-    return byte == 32 or (byte >= 9 and byte <= 13)
+    return ascii_space(Int(byte))
 
 
 def parse_pcd_header(bytes: List[UInt8]) raises -> PcdHeader:

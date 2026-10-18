@@ -18,6 +18,7 @@ from examples.output import (
     gallery_camera,
     write_example,
 )
+from loaders.bytes import ascii_digit
 
 from cameras.perspective_camera import PerspectiveCamera
 from core.assets import Assets
@@ -92,7 +93,7 @@ def _rgb(style: String) -> Color:
         if c == 45:
             negative = True
             continue
-        if c >= 48 and c <= 57:
+        if ascii_digit(Int(c)):
             current = current * 10 + Int(c) - 48
             seen = True
             continue

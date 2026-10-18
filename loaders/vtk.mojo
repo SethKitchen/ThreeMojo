@@ -59,6 +59,7 @@ keeps and draws from undefined positions.
 from core.binary import little_endian_u32
 from core.buffer_attribute import BufferAttribute
 from core.buffer_geometry import COLOR, NORMAL, POSITION, BufferGeometry
+from loaders.bytes import ascii_digit
 from loaders.utf8 import leading_utf8_bom
 from loaders.js_text import (
     is_js_space,
@@ -99,7 +100,7 @@ def _is_digit(unit: Int) -> Bool:
     Returns:
         Whether it is a digit.
     """
-    return unit >= 48 and unit <= 57
+    return ascii_digit(unit)
 
 
 def _starts(units: List[Int], prefix: String) -> Bool:
@@ -1053,7 +1054,7 @@ def _look(units: List[Int], k: Int) -> Int:
         return u - 65
     if u >= 97 and u <= 122:
         return u - 71
-    if u >= 48 and u <= 57:
+    if ascii_digit(u):
         return u + 4
     if u == 43 or u == 45:
         return 62

@@ -20,6 +20,9 @@ byte as one code unit.
 """
 
 
+from loaders.bytes import ascii_digit, ascii_space
+
+
 def is_js_space(unit: Int) -> Bool:
     """Return True for a code unit JavaScript's `\\s` and `trim` match.
 
@@ -29,12 +32,11 @@ def is_js_space(unit: Int) -> Bool:
     Returns:
         Whether it is white space or a line terminator.
     """
-    if unit >= 9 and unit <= 13:
+    if ascii_space(unit):
         return True
     if unit >= 0x2000 and unit <= 0x200A:
         return True
     var spaces: List[Int] = [
-        32,
         0xA0,
         0x1680,
         0x2028,
@@ -57,7 +59,7 @@ def is_js_word(byte: UInt8) -> Bool:
         Whether it is a letter, a digit or `_`.
     """
     return (
-        (byte >= 0x30 and byte <= 0x39)
+        ascii_digit(Int(byte))
         or (byte >= 0x41 and byte <= 0x5A)
         or (byte >= 0x61 and byte <= 0x7A)
         or byte == 0x5F

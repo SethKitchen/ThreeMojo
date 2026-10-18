@@ -43,6 +43,7 @@ action looping over it would divide by its length. A blend mode that is
 neither of the two.
 """
 
+from loaders.bytes import ascii_digit
 from core.ordinal import ordinal_valid
 
 from animation.keyframe_track import KeyframeTrack, TrackTarget
@@ -343,7 +344,7 @@ def morph_sequence_name(name: String) -> Optional[String]:
     """
     var bytes = name.as_bytes()
     var cut = len(bytes)
-    while cut > 0 and bytes[cut - 1] >= 48 and bytes[cut - 1] <= 57:
+    while cut > 0 and ascii_digit(Int(bytes[cut - 1])):
         cut -= 1
     if cut == len(bytes):
         return None
@@ -352,7 +353,7 @@ def morph_sequence_name(name: String) -> Optional[String]:
         var word = (
             (byte >= 65 and byte <= 90)
             or (byte >= 97 and byte <= 122)
-            or (byte >= 48 and byte <= 57)
+            or ascii_digit(Int(byte))
             or byte == 95
             or byte == 45
         )

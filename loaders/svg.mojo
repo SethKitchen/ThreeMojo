@@ -59,6 +59,7 @@ limits, and explicit zero and nonfinite rules.
 """
 
 from math.norm import normalized2, _ordinary_squared
+from loaders.bytes import ascii_digit, ascii_space
 from loaders.svg_path import (
     SvgMatrix,
     SvgShapePath,
@@ -167,12 +168,12 @@ def svg_unit_scale(
 
 def _is_space(byte: UInt8) -> Bool:
     """Return True for an ASCII white space byte, as `\\s` takes it."""
-    return byte == 32 or (byte >= 9 and byte <= 13)
+    return ascii_space(Int(byte))
 
 
 def _is_digit(byte: UInt8) -> Bool:
     """Return True for `0` to `9`."""
-    return byte >= 48 and byte <= 57
+    return ascii_digit(Int(byte))
 
 
 def _digit_at(bytes: Span[UInt8, _], i: Int) -> Bool:

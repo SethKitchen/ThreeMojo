@@ -35,6 +35,7 @@ a number that is not one, where three.js reads `NaN`, and a table whose
 largest number is not above zero, which three.js divides by zero.
 """
 
+from loaders.bytes import ascii_digit
 from loaders.js_number import js_string_to_number
 from render.srgb import LINEAR
 from render.texture import (
@@ -109,7 +110,7 @@ def _is_grid(line: String) -> Bool:
         return False
     # Not empty, checked above: the loop always runs.
     for b in bytes:  # pragma: no branch
-        var allowed = (b >= 48 and b <= 57) or b == 32
+        var allowed = ascii_digit(Int(b)) or b == 32
         if not allowed:
             return False
     return True
@@ -152,7 +153,7 @@ def _space_at(bytes: Span[UInt8, _], i: Int) -> Bool:
 def _in_number(byte: UInt8) -> Bool:
     """Return True for a byte of `[\\d.e+-]`."""
     return (
-        (byte >= 48 and byte <= 57)
+        ascii_digit(Int(byte))
         or byte == 46
         or byte == 101
         or (byte == 43 or byte == 45)

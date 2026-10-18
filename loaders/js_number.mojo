@@ -20,7 +20,7 @@ integer past 2 to the 53 is summed a digit at a time, so it can round
 differently.
 """
 
-from loaders.bytes import hex_digit_value
+from loaders.bytes import ascii_digit, ascii_space, hex_digit_value
 from std.math import inf, isfinite, isnan, nan
 from std.ffi import external_call
 from std.memory import bitcast
@@ -28,12 +28,12 @@ from std.memory import bitcast
 
 def _is_space(byte: UInt8) -> Bool:
     """Return True for an ASCII white space byte."""
-    return byte == 32 or (byte >= 9 and byte <= 13)
+    return ascii_space(Int(byte))
 
 
 def _is_digit(byte: UInt8) -> Bool:
     """Return True for `0` to `9`."""
-    return byte >= 48 and byte <= 57
+    return ascii_digit(Int(byte))
 
 
 def is_decimal_text(text: String) -> Bool:

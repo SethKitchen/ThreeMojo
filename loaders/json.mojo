@@ -29,7 +29,7 @@ bits. `integer` refuses a number with a fraction.
 
 from core.ordinal import ordinal_valid
 
-from loaders.bytes import bytes_match, hex_digit_value
+from loaders.bytes import ascii_digit, bytes_match, hex_digit_value
 from loaders.utf8 import append_utf8
 from std.math import isfinite
 
@@ -694,7 +694,7 @@ struct _Parser(Movable):
             self.literal("null")
             document.nodes.append(JsonNode(NULL))
             return len(document.nodes) - 1
-        if byte == 45 or (byte >= 48 and byte <= 57):
+        if byte == 45 or ascii_digit(byte):
             var node = JsonNode(NUMBER)
             node.number = self.number()
             document.nodes.append(node^)
@@ -838,7 +838,7 @@ struct _Parser(Movable):
     def digits(mut self) raises -> Int:
         """Step over one or more digits and return how many."""
         var count = 0
-        while self.peek() >= 48 and self.peek() <= 57:
+        while ascii_digit(self.peek()):
             self.at += 1
             count += 1
         if count == 0:

@@ -54,7 +54,7 @@ runtime-dependent exits. See the Node-materials wiki page for the proof
 subset and compatibility limits.
 """
 from core.ordinal import ordinal_valid
-from loaders.bytes import hex_digit_value
+from loaders.bytes import ascii_digit, hex_digit_value
 
 from render.cube_texture_store import NO_CUBE_TEXTURE
 from render.volume_texture_store import (
@@ -225,7 +225,7 @@ def _is_letter(c: UInt8) -> Bool:
 
 def _is_digit(c: UInt8) -> Bool:
     """Return True for a decimal digit."""
-    return c >= UInt8(ord("0")) and c <= UInt8(ord("9"))
+    return ascii_digit(Int(c))
 
 
 def _is_hex(c: UInt8) -> Bool:

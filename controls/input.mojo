@@ -22,6 +22,7 @@ arrives. A sequence this decoder does not know is consumed and dropped.
 A position is a terminal cell: its column and its row, from zero. The
 window that reads the bytes converts a cell to the pixels it shows.
 """
+from loaders.bytes import ascii_digit
 from core.ordinal import ordinal_valid
 
 comptime ESCAPE_BYTE = 27
@@ -31,7 +32,6 @@ comptime BRACKET_BYTE = 91
 comptime LESS_BYTE = 60
 comptime SEMICOLON_BYTE = 59
 comptime ZERO_BYTE = 48
-comptime NINE_BYTE = 57
 # 'M' ends a mouse press, a drag or a wheel notch; 'm' ends a release.
 comptime PRESS_BYTE = 77
 comptime RELEASE_BYTE = 109
@@ -268,7 +268,7 @@ def require_input(event: InputEvent) raises:
 
 def _is_digit(byte: UInt8) -> Bool:
     """Return True if `byte` is an ASCII digit."""
-    return byte >= ZERO_BYTE and byte <= NINE_BYTE
+    return ascii_digit(Int(byte))
 
 
 def _is_final(byte: UInt8) -> Bool:

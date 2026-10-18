@@ -36,7 +36,7 @@ refused with the place where it happened. three.js logs chevrotain's
 errors and then throws.
 """
 
-from loaders.bytes import bytes_match, hex_digit_value
+from loaders.bytes import ascii_digit, bytes_match, hex_digit_value
 from loaders.js_number import js_parse_float
 from std.math import isfinite
 
@@ -189,7 +189,7 @@ struct VrmlToken(Copyable, Movable):
 
 def _is_digit(byte: UInt8) -> Bool:
     """Return True for `[0-9]`."""
-    return byte >= 48 and byte <= 57
+    return ascii_digit(Int(byte))
 
 
 def _is_hex_digit(byte: UInt8) -> Bool:

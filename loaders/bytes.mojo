@@ -6,6 +6,7 @@
 """Shared checks on a byte.
 
 `bytes_match` asks whether an ASCII word sits at one byte.
+`ascii_space` and `ascii_digit` name white space and a decimal digit.
 `hex_digit_value` reads one hexadecimal digit.
 """
 
@@ -35,6 +36,31 @@ def bytes_match(
     return True
 
 
+def ascii_space(byte: Int) -> Bool:
+    """Return True for an ASCII white space byte.
+
+    Args:
+        byte: A byte value.
+
+    Returns:
+        Whether it is a space, a tab, a line feed, a vertical tab, a form
+        feed, or a carriage return.
+    """
+    return byte == 32 or (byte >= 9 and byte <= 13)
+
+
+def ascii_digit(byte: Int) -> Bool:
+    """Return True for an ASCII decimal digit.
+
+    Args:
+        byte: A byte value.
+
+    Returns:
+        Whether it is `0` through `9`.
+    """
+    return byte >= 48 and byte <= 57
+
+
 def hex_digit_value(byte: Int) -> Int:
     """Return the value of one ASCII hexadecimal digit, or -1.
 
@@ -44,7 +70,7 @@ def hex_digit_value(byte: Int) -> Int:
     Returns:
         0 through 15 for `0-9`, `A-F` and `a-f`. -1 for any other value.
     """
-    if byte >= 48 and byte <= 57:
+    if ascii_digit(byte):
         return byte - 48
     if byte >= 65 and byte <= 70:
         return byte - 55

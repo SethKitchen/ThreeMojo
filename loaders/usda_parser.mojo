@@ -46,6 +46,7 @@ quaternion array whose length is not a multiple of four, which three.js
 pads with `undefined`.
 """
 
+from loaders.bytes import ascii_digit, ascii_space
 from loaders.js_number import js_parse_float
 from loaders.js_text import (
     is_js_space,
@@ -105,7 +106,7 @@ def _is_space(byte: UInt8) -> Bool:
         Whether it is a space, a tab, a line feed, a vertical tab, a form
         feed or a carriage return.
     """
-    return byte == 0x20 or (byte >= 0x09 and byte <= 0x0D)
+    return ascii_space(Int(byte))
 
 
 def _trim(text: String) -> String:
@@ -296,7 +297,7 @@ def _is_frame(key: String) -> Bool:
     """
     var bytes = key.as_bytes()
     for byte in bytes:
-        if not ((byte >= 0x30 and byte <= 0x39) or byte == 0x2E):
+        if not (ascii_digit(Int(byte)) or byte == 0x2E):
             return False
     return len(bytes) > 0
 

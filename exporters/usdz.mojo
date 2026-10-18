@@ -78,6 +78,7 @@ from core.geometry_store import GeometryId
 from core.object3d import NO_PARENT, NodeId, Object3D
 from core.scene import Scene
 from exporters.gltf import gltf_pixels
+from loaders.bytes import ascii_digit
 from loaders.js_number import (
     js_float32_text,
     js_number_text,
@@ -295,7 +296,7 @@ def usd_name(name: String, fallback: String) -> String:
         var keep = (
             (b >= 65 and b <= 90)
             or (b >= 97 and b <= 122)
-            or (b >= 48 and b <= 57)
+            or ascii_digit(Int(b))
             or b == 95
         )
         if keep:
