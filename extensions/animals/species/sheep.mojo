@@ -488,8 +488,7 @@ def _top_y(z: Float64, roman: Float64) -> Float64:
     return (
         0.046
         - 0.194 * z
-        + (0.004 + 0.011 * roman)
-        * sin(pi * max(0.0, min(1.0, (z + 0.02) / 0.21)))
+        + (0.004 + 0.011 * roman) * sin(pi * clamp((z + 0.02) / 0.21, 0.0, 1.0))
     )
 
 

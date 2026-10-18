@@ -380,5 +380,5 @@ struct ForestGenerator(Movable):
             var drift = perlin.noise(
                 x * 0.02 + region_x, z * 0.02 + region_z, region_slice
             )
-            forest.region.append(Float32(min(1.0, max(0.0, drift * 0.6 + 0.5))))
+            forest.region.append(Float32(clamp(drift * 0.6 + 0.5, 0.0, 1.0)))
         return forest^

@@ -189,7 +189,7 @@ def lion_traits(mut r: AnimalRandom, options: AnimalOptions) raises -> Traits:
             mane = min(1.0, 0.3 + 0.75 * prime * (0.8 + 0.2 * r.next()))
     var mane_dark = 0.0
     if male:
-        mane_dark = min(1.0, max(0.0, 0.1 + 0.65 * prime + 0.3 * _tri(r)))
+        mane_dark = clamp(0.1 + 0.65 * prime + 0.3 * _tri(r), 0.0, 1.0)
     var size = (
         (1.075 if male else 0.935)
         * (1.0 + 0.06 * _tri(r))
@@ -207,7 +207,7 @@ def lion_traits(mut r: AnimalRandom, options: AnimalOptions) raises -> Traits:
     var nose_dark = 0.0
     var leg_spots = 1.0
     if juv == 0.0:
-        nose_dark = min(1.0, max(0.0, 0.15 + 0.6 * prime + 0.15 * _tri(r)))
+        nose_dark = clamp(0.15 + 0.6 * prime + 0.15 * _tri(r), 0.0, 1.0)
         leg_spots = max(0.0, 0.15 + 0.2 * _tri(r))
     t.set("noseDark", nose_dark)
     t.set("legSpots", leg_spots)
