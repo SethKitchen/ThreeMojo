@@ -1133,15 +1133,8 @@ struct PredictionScheme(Copyable, Movable):
                 var prev = reader.position(
                     data.vertex_values[table.vertex(table.previous(c))]
                 )
-                var cross = _cross(_sub(next, center), _sub(prev, center))
-                for k in range(3):  # pragma: no branch
-                    normal[k] += cross[k]
-            var sum = _abs_sum(normal)
-            var upper = 1 << 29
-            if sum > upper:
-                var quotient = sum // upper
-                for k in range(3):  # pragma: no branch
-                    normal[k] = truncated_divide(normal[k], quotient)
+                _add_face_normal(normal, center, next, prev)
+            _limit_normal(normal)
             var canonical = o.canonicalize_vector(
                 to_int32(normal[0]), to_int32(normal[1]), to_int32(normal[2])
             )
@@ -1308,6 +1301,25 @@ def _cross(u: List[Int], v: List[Int]) -> List[Int]:
         u[2] * v[0] - u[0] * v[2],
         u[0] * v[1] - u[1] * v[0],
     ]
+
+
+def _add_face_normal(
+    mut normal: List[Int], center: List[Int], next: List[Int], prev: List[Int]
+):
+    """Add one corner's area to `normal`."""
+    var cross = _cross(_sub(next, center), _sub(prev, center))
+    for k in range(3):  # pragma: no branch
+        normal[k] += cross[k]
+
+
+def _limit_normal(mut normal: List[Int]):
+    """Scale `normal` so its absolute sum fits below 2^29."""
+    var sum = _abs_sum(normal)
+    var upper = 1 << 29
+    if sum > upper:
+        var quotient = sum // upper
+        for k in range(3):  # pragma: no branch
+            normal[k] = truncated_divide(normal[k], quotient)
 
 
 def _abs_sum(v: List[Int]) -> Int:

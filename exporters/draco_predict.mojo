@@ -52,13 +52,11 @@ from loaders.draco_attributes import (
     DracoPrediction,
     DracoTransform,
     Octahedron,
-    _abs_sum,
-    _cross,
-    _dot,
+    _add_face_normal,
+    _limit_normal,
     _predicted_tex_sides,
     _rotate,
     _rotation_count,
-    _sub,
     product32,
 )
 from loaders.draco_buffer import draco_require, to_int32, truncated_divide
@@ -761,15 +759,8 @@ struct _Scheme(Movable):
                 var prev = positions.at(
                     points[map[table.vertex(table.previous(c))]]
                 )
-                var cross = _cross(_sub(next, center), _sub(prev, center))
-                for k in range(3):  # pragma: no branch
-                    normal[k] += cross[k]
-            var sum = _abs_sum(normal)
-            var upper = 1 << 29
-            if sum > upper:
-                var quotient = sum // upper
-                for k in range(3):  # pragma: no branch
-                    normal[k] = truncated_divide(normal[k], quotient)
+                _add_face_normal(normal, center, next, prev)
+            _limit_normal(normal)
             var canonical = o.canonicalize_vector(
                 to_int32(normal[0]), to_int32(normal[1]), to_int32(normal[2])
             )
