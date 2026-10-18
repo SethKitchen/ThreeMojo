@@ -233,47 +233,6 @@ struct TaauFrame(ImplicitlyCopyable):
         self.current_frame_weight = settings.current_frame_weight
 
 
-def previous_window_depth(
-    previous: FloatPlane,
-    u: Float32,
-    v_down: Float32,
-    near: Float32,
-    far: Float32,
-    perspective: Bool,
-    previous_projection_inverse: Matrix4,
-    previous_camera_world: Matrix4,
-    view: Matrix4,
-) -> Float32:
-    """Return the last frame's depth at a place, moved into this frame's
-    view: three.js's `samplePreviousDepth`, reading the nearest texel.
-
-    Args:
-        previous: The last frame's window depth.
-        u: Across, zero at the left.
-        v_down: Down, zero at the top.
-        near: The camera's near distance, in meters.
-        far: Its far distance.
-        perspective: Whether the projection divides by distance.
-        previous_projection_inverse: The last frame's projection inverse.
-        previous_camera_world: The last frame's camera world matrix.
-        view: This frame's view matrix.
-
-    Returns:
-        The depth, in this frame's window depth.
-    """
-    return reproject_window_depth(
-        previous,
-        u,
-        v_down,
-        near,
-        far,
-        perspective,
-        previous_projection_inverse,
-        previous_camera_world,
-        view,
-    )
-
-
 def taau_pixel(
     beauty: LightView,
     history: LightView,
@@ -312,7 +271,7 @@ def taau_pixel(
     )
     var history_u = u - offset_u
     var history_v = v_down - offset_v
-    var then = previous_window_depth(
+    var then = reproject_window_depth(
         previous_depth,
         history_u,
         history_v,
