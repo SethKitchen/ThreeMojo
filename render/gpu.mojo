@@ -189,6 +189,7 @@ from lights.lighting import (
     floored_roughness,
     geometry_roughness,
     gouraud_light,
+    light_cosines,
     occluded_light,
     physical_light,
     scattering_through,
@@ -3962,17 +3963,12 @@ def _physical[
         var distance = Float32(0)
         var direction_length = Float32(1)
         var rim = Float32(1)
-        var lambert: Float32
-        var coat_lambert = Float32(0)
         if kind == _DIRECTIONAL:
             toward = Vector3(
                 lights[unsafe_offset=at],
                 lights[unsafe_offset=at + 1],
                 lights[unsafe_offset=at + 2],
             )
-            lambert = max(Float32(0), normal.dot(toward))
-            if clearcoat > 0:
-                coat_lambert = max(Float32(0), coat_normal.dot(toward))
         else:
             var ray = light_vector(
                 Vector3(
@@ -3998,11 +3994,9 @@ def _physical[
                 )
                 if rim <= 0:
                     continue
-            lambert = max(Float32(0), normal.dot(toward) / direction_length)
-            if clearcoat > 0:
-                coat_lambert = max(
-                    Float32(0), coat_normal.dot(toward) / direction_length
-                )
+        var lambert, coat_lambert = light_cosines(
+            normal, toward, coat_normal, clearcoat, direction_length
+        )
         if lambert == 0 and coat_lambert == 0:
             continue
         var bare = Float32(1)

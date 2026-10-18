@@ -205,6 +205,43 @@ def light_vector(
     return offset, distance, Float32(1)
 
 
+def light_cosines(
+    normal: Vector3,
+    toward: Vector3,
+    coat_normal: Vector3,
+    clearcoat: Float32,
+    direction_length: Float32,
+) -> Tuple[Float32, Float32]:
+    """Return the diffuse and clear-coat cosines of one light.
+
+    Each cosine is the dot with `toward`, divided by `direction_length`,
+    and held at zero from below. A clear coat of zero gives a coat cosine
+    of zero. A directional light passes a length of one, which leaves the
+    dot unchanged.
+
+    Args:
+        normal: The surface normal.
+        toward: The vector toward the light, before it is normalized.
+        coat_normal: The clear-coat normal.
+        clearcoat: How much clear coat there is. Zero skips the coat dot.
+        direction_length: The length of `toward`. One for a directional
+            light.
+
+    Returns:
+        The diffuse cosine, then the coat cosine.
+
+    Raises:
+        Error: Never.
+    """
+    var lambert = max(Float32(0), normal.dot(toward) / direction_length)
+    var coat_lambert = Float32(0)
+    if clearcoat > 0:
+        coat_lambert = max(
+            Float32(0), coat_normal.dot(toward) / direction_length
+        )
+    return lambert, coat_lambert
+
+
 def toward_eye_at(
     eye: Vector3, parallel: Vector3, position: Vector3
 ) -> Vector3:
@@ -2555,12 +2592,13 @@ struct Lighting(Movable):
             return none
         var sum = none
         for index in range(len(self.directions)):
-            var lambert = max(Float32(0), normal.dot(self.directions[index]))
-            var coat_lambert = Float32(0)
-            if clearcoat > 0:
-                coat_lambert = max(
-                    Float32(0), coat_normal.dot(self.directions[index])
-                )
+            var lambert, coat_lambert = light_cosines(
+                normal,
+                self.directions[index],
+                coat_normal,
+                clearcoat,
+                Float32(1),
+            )
             if lambert == 0 and coat_lambert == 0:
                 continue
             ref light = self.radiances[index]
@@ -2588,12 +2626,9 @@ struct Lighting(Movable):
             var direction_length = ray[2]
             if distance == 0:
                 continue
-            var lambert = max(Float32(0), normal.dot(toward) / direction_length)
-            var coat_lambert = Float32(0)
-            if clearcoat > 0:
-                coat_lambert = max(
-                    Float32(0), coat_normal.dot(toward) / direction_length
-                )
+            var lambert, coat_lambert = light_cosines(
+                normal, toward, coat_normal, clearcoat, direction_length
+            )
             if lambert == 0 and coat_lambert == 0:
                 continue
             var bare = falloff(
@@ -2631,12 +2666,9 @@ struct Lighting(Movable):
             var rim = self.spot_attenuation(index, angle_cos, position)
             if rim <= 0:
                 continue
-            var lambert = max(Float32(0), normal.dot(toward) / direction_length)
-            var coat_lambert = Float32(0)
-            if clearcoat > 0:
-                coat_lambert = max(
-                    Float32(0), coat_normal.dot(toward) / direction_length
-                )
+            var lambert, coat_lambert = light_cosines(
+                normal, toward, coat_normal, clearcoat, direction_length
+            )
             if lambert == 0 and coat_lambert == 0:
                 continue
             var bare = rim * falloff(
