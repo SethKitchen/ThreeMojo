@@ -80,6 +80,7 @@ limits, and explicit zero and nonfinite rules.
 from core.ordinal import (
     ordinal_valid,
     require_index_in_count,
+    require_draw_ids,
     require_non_negative,
 )
 
@@ -279,9 +280,7 @@ struct Line(ImplicitlyCopyable):
             Error: If any id is negative, the mode is not a named one, or
                 a conditional line's mode is not `SEGMENTS`.
         """
-        require_non_negative(node.value, "A line must name a scene node")
-        require_non_negative(geometry.value, "A line must name a geometry")
-        require_non_negative(material.value, "A line must name a material")
+        require_draw_ids(node.value, geometry.value, material.value, "A line")
         require_line_mode(mode)
         if conditional and not (mode == SEGMENTS):
             raise Error(

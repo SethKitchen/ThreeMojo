@@ -47,7 +47,7 @@ map. It is not morphed and not skinned, as a line is not.
 
 from core.geometry_store import GeometryId
 from core.object3d import NodeId
-from core.ordinal import require_non_negative
+from core.ordinal import require_draw_ids
 from materials.material import MaterialId
 
 
@@ -104,9 +104,7 @@ struct Points(ImplicitlyCopyable):
         Raises:
             Error: If any id is negative.
         """
-        require_non_negative(node.value, "Points must name a scene node")
-        require_non_negative(geometry.value, "Points must name a geometry")
-        require_non_negative(material.value, "Points must name a material")
+        require_draw_ids(node.value, geometry.value, material.value, "Points")
         self.geometry = geometry
         self.material = material
         self.node = node
