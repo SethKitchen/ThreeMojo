@@ -46,6 +46,7 @@ from extensions.animals.kit import (
     draw_u32,
     imul32,
     is_limb,
+    is_upper_limb,
     is_front_limb,
     pick_weighted,
     stream_of,
@@ -2107,12 +2108,7 @@ def sheep_paint(
         region = 1
     var legness = 0.0
     if is_limb(bone):
-        var upper = (
-            bone.startswith("scapula")
-            or bone.startswith("humerus")
-            or bone.startswith("femur")
-        )
-        legness = smoothstep(0.5, 0.36, p.y) if upper else 1.0
+        legness = smoothstep(0.5, 0.36, p.y) if is_upper_limb(bone) else 1.0
     var cv = fbm3(p * 6.0, 3) - 0.5
     var c: V3
     var surface = FUR

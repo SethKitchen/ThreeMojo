@@ -42,6 +42,7 @@ from extensions.animals.kit import (
     is_front_limb,
     imul32,
     is_limb,
+    is_upper_limb,
     stream_of,
     lid_distance,
 )
@@ -1822,12 +1823,7 @@ def pig_paint(
             region = 1
     var legness = 0.0
     if is_limb(bone):
-        var upper = (
-            bone.startswith("scapula")
-            or bone.startswith("humerus")
-            or bone.startswith("femur")
-        )
-        legness = smoothstep(0.45, 0.3, p.y) if upper else 1.0
+        legness = smoothstep(0.45, 0.3, p.y) if is_upper_limb(bone) else 1.0
     var ventral = 0.0
     var low_part = region <= 2 or region == 6
     if low_part:

@@ -427,6 +427,22 @@ def is_limb(bone: String) -> Bool:
     return is_front_limb(bone) or is_hind_limb(bone)
 
 
+def is_upper_limb(bone: String) -> Bool:
+    """Return whether a bone is a scapula, a humerus, or a femur.
+
+    Args:
+        bone: The bone's name.
+
+    Returns:
+        True when the name starts with `scapula`, `humerus`, or `femur`.
+    """
+    return (
+        bone.startswith("scapula")
+        or bone.startswith("humerus")
+        or bone.startswith("femur")
+    )
+
+
 def mirrored_blob(h: V3, c: V3, r: V3) -> Float64:
     """Return a soft Gaussian blob, mirrored across the midline.
 
