@@ -77,6 +77,22 @@ def _positive(value: Float32) -> Bool:
     return value > 0 and isfinite(value)
 
 
+def require_film_gauge(gauge: Float32) raises:
+    """Refuse a film gauge that is not positive.
+
+    Args:
+        gauge: The film width, in millimeters.
+
+    Returns:
+        Nothing. The call returns when the gauge is positive and finite.
+
+    Raises:
+        Error: If the gauge is not positive.
+    """
+    if not _positive(gauge):
+        raise Error("A film gauge must be positive")
+
+
 struct PerspectiveCamera(Camera, ImplicitlyCopyable):
     """A camera that renders with perspective, in meters and radians."""
 
@@ -189,8 +205,7 @@ struct PerspectiveCamera(Camera, ImplicitlyCopyable):
             raise Error("A view shift must be finite")
         if not _positive(self.zoom):
             raise Error("A camera's zoom must be positive, got ", self.zoom)
-        if not _positive(self.film_gauge.value):
-            raise Error("A film gauge must be positive")
+        require_film_gauge(self.film_gauge.value)
         if not isfinite(self.film_offset.value):
             raise Error("A film offset must be finite")
         if not _positive(self.focus.value):
@@ -289,8 +304,7 @@ struct PerspectiveCamera(Camera, ImplicitlyCopyable):
         """
         if not _positive(focal_length.value):
             raise Error("A focal length must be positive")
-        if not _positive(self.film_gauge.value):
-            raise Error("A film gauge must be positive")
+        require_film_gauge(self.film_gauge.value)
         var slope = 0.5 * self.get_film_height().value / focal_length.value
         self.fov = Angle(2 * atan(slope), RADIAN)
 

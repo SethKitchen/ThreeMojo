@@ -1541,6 +1541,21 @@ struct Texture(Movable):
         """Return True if `level` names an image this texture actually holds."""
         return level >= 0 and level < self.levels
 
+    def _require_level(self, level: Int) raises:
+        """Refuse a mip level this texture does not hold.
+
+        Args:
+            level: The mip level.
+
+        Returns:
+            Nothing. The call returns when the texture holds that level.
+
+        Raises:
+            Error: If the texture has no such level.
+        """
+        if not self._has_level(level):
+            raise Error("No such mip level")
+
     def wrapped_texel(
         self, x: Int, y: Int, level: Int = 0
     ) raises -> FloatColor:
@@ -1570,8 +1585,7 @@ struct Texture(Movable):
         """
         if self.is_blank():
             return OPAQUE_WHITE
-        if not self._has_level(level):
-            raise Error("No such mip level")
+        self._require_level(level)
         return self._wrapped_texel(x, y, level)
 
     def fetch(self, x: Int, y: Int, level: Int) -> FloatColor:
@@ -1659,8 +1673,7 @@ struct Texture(Movable):
         """
         if self.is_blank():
             return OPAQUE_WHITE
-        if not self._has_level(level):
-            raise Error("No such mip level")
+        self._require_level(level)
         return self._sample_at(u, v, level, self.filter_at(level))
 
     def filter_at(self, level: Int) -> Filter:

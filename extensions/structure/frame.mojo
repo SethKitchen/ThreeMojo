@@ -124,13 +124,28 @@ def member_axes(start: Vec3d, end: Vec3d, reference: Vec3d) raises -> LocalAxes:
     return LocalAxes(x, z.cross(x), z)
 
 
+def require_member_length(length: Float64) raises:
+    """Refuse a member length that is not positive and finite.
+
+    Args:
+        length: The length, in meters.
+
+    Returns:
+        Nothing. The call returns when the length is positive and finite.
+
+    Raises:
+        Error: If the length is not positive and finite.
+    """
+    if not (length > 0 and isfinite(length)):
+        raise Error("A member length must be positive and finite")
+
+
 def _check(
     length: Length64, section: Section, material: BuildingMaterial
 ) raises:
     """Refuse a member length, section or material that cannot be used."""
     var l = length.to(METER)
-    if not (l > 0 and isfinite(l)):
-        raise Error("A member length must be positive and finite")
+    require_member_length(l)
     section.check()
     material.check()
 
@@ -366,8 +381,7 @@ def uniform_load_vector(
             finite.
     """
     var l = length.to(METER)
-    if not (l > 0 and isfinite(l)):
-        raise Error("A member length must be positive and finite")
+    require_member_length(l)
     var x = wx.to(NEWTON_PER_METER)
     var y = wy.to(NEWTON_PER_METER)
     var z = wz.to(NEWTON_PER_METER)

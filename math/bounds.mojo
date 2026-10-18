@@ -160,6 +160,22 @@ def enclose_point(mut low: Vector3, mut high: Vector3, point: Vector3):
     high = component_max(high, point)
 
 
+def require_affine_bound(matrix: Matrix4) raises:
+    """Refuse a bound carried through a projecting matrix.
+
+    Args:
+        matrix: The transform.
+
+    Returns:
+        Nothing. The call returns when the matrix is affine.
+
+    Raises:
+        Error: If the matrix projects.
+    """
+    if not matrix.is_affine():
+        raise Error("A bound can only be carried through an affine matrix")
+
+
 @fieldwise_init
 struct Box3(Equatable, ImplicitlyCopyable):
     """An axis-aligned box: its smallest and largest corner."""
@@ -371,8 +387,7 @@ struct Box3(Equatable, ImplicitlyCopyable):
             Error: If the matrix projects. A corner crossing `w = 0` has no
                 finite image, and eight carried corners are no bound on it.
         """
-        if not matrix.is_affine():
-            raise Error("A bound can only be carried through an affine matrix")
+        require_affine_bound(matrix)
         if self.is_empty():
             return
         var corners = List[Vector3]()
@@ -764,8 +779,7 @@ struct Sphere(Equatable, ImplicitlyCopyable):
         Raises:
             Error: If the matrix projects; see `Box3.apply_matrix4`.
         """
-        if not matrix.is_affine():
-            raise Error("A bound can only be carried through an affine matrix")
+        require_affine_bound(matrix)
         if self.is_empty():
             return
         self.center = matrix.transform_point(self.center)

@@ -169,6 +169,22 @@ def typed_value(value: Float64, component: ComponentType) raises -> Int:
     return wrapped
 
 
+def require_item_size(item_size: Int) raises:
+    """Refuse an attribute item size that is not positive.
+
+    Args:
+        item_size: How many numbers one item holds.
+
+    Returns:
+        Nothing. The call returns when the size is positive.
+
+    Raises:
+        Error: If the size is not positive.
+    """
+    if item_size <= 0:
+        raise Error("An attribute's item size must be positive")
+
+
 struct BufferAttribute(Copyable, Movable):
     """A flat array of floats, grouped into per-vertex items, or a view of
     a shared interleaved array."""
@@ -204,8 +220,7 @@ struct BufferAttribute(Copyable, Movable):
             Error: If `item_size` is not positive, or the data does not divide
                 evenly into items, which would leave a partial vertex.
         """
-        if item_size <= 0:
-            raise Error("An attribute's item size must be positive")
+        require_item_size(item_size)
         if len(data) % item_size != 0:
             raise Error("Attribute data does not divide evenly into items")
         self.data = data^
@@ -303,8 +318,7 @@ struct BufferAttribute(Copyable, Movable):
             Error: If `item_size` is not positive, `offset` is negative, or
                 the item reaches past the end of its run.
         """
-        if item_size <= 0:
-            raise Error("An attribute's item size must be positive")
+        require_item_size(item_size)
         if offset < 0 or offset + item_size > buffer.stride():
             raise Error("An interleaved item must lie inside the stride")
         self.data = List[Float32]()
