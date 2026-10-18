@@ -57,11 +57,6 @@ from units.si import Length, METER
 comptime GOLDEN = Float32(1.618034)
 
 
-def _lerp(a: Vector3, b: Vector3, t: Float32) -> Vector3:
-    """Return the point a fraction `t` of the way from `a` to `b`."""
-    return mix_delta3(a, b, t)
-
-
 def _push(mut data: List[Float32], point: Vector3):
     """Append a point's three components."""
     data.append(point.x)
@@ -84,8 +79,8 @@ def _subdivide_face(
     var rows = List[List[Vector3]]()
     for i in range(columns + 1):  # pragma: no branch
         var fraction = Float32(i) / Float32(columns)
-        var along_a = _lerp(a, c, fraction)
-        var along_b = _lerp(b, c, fraction)
+        var along_a = mix_delta3(a, c, fraction)
+        var along_b = mix_delta3(b, c, fraction)
         var length = columns - i
         var row = List[Vector3]()
         for j in range(length + 1):  # pragma: no branch
@@ -93,7 +88,7 @@ def _subdivide_face(
                 row.append(along_a)
             else:
                 row.append(
-                    _lerp(along_a, along_b, Float32(j) / Float32(length))
+                    mix_delta3(along_a, along_b, Float32(j) / Float32(length))
                 )
         rows.append(row^)
     for i in range(columns):  # pragma: no branch

@@ -312,20 +312,6 @@ def _moved(offset: Vector3) -> Matrix4:
     return translation(offset.x, offset.y, offset.z)
 
 
-def _clamp(value: Float32, low: Float32, high: Float32) -> Float32:
-    """Return a value limited to a range. three.js: `MathUtils.clamp`.
-
-    Args:
-        value: The value.
-        low: The least it can be.
-        high: The most it can be.
-
-    Returns:
-        The value within the range.
-    """
-    return clamp(value, low, high)
-
-
 def _angle_to(a: Vector3, b: Vector3) -> Float32:
     """Return the angle between two vectors. three.js: `angleTo`.
 
@@ -1502,13 +1488,13 @@ struct ArcballControls(Copyable, Movable):
         """
         var center = self.center()
         var x = _distance(_position(self._camera_state), center)
-        var x_new = _clamp(
+        var x_new = clamp(
             x / size,
             self.min_distance.to(METER),
             self.max_distance.to(METER),
         )
         var y = x * tan(fov * 0.5)
-        var new_fov = _clamp(
+        var new_fov = clamp(
             atan(y / x_new) * 2,
             self.min_fov.to(RADIAN),
             self.max_fov.to(RADIAN),
@@ -1973,7 +1959,7 @@ struct ArcballControls(Copyable, Movable):
             lens: The camera, perspective.
             value: The field of view, in radians.
         """
-        lens.fov = _clamp(
+        lens.fov = clamp(
             value, self.min_fov.to(RADIAN), self.max_fov.to(RADIAN)
         )
 
@@ -2281,7 +2267,7 @@ struct ArcballControls(Copyable, Movable):
             self._current_target = target
         if not lens.perspective:
             if lens.zoom > self.max_zoom or lens.zoom < self.min_zoom:
-                var zoom = _clamp(lens.zoom, self.min_zoom, self.max_zoom)
+                var zoom = clamp(lens.zoom, self.min_zoom, self.max_zoom)
                 self._apply(
                     lens, self._scale(lens, zoom / lens.zoom, self.center())
                 )
@@ -2290,7 +2276,7 @@ struct ArcballControls(Copyable, Movable):
             var low = self.min_distance.to(METER)
             var high = self.max_distance.to(METER)
             if distance > high + EPSILON or distance < low - EPSILON:
-                var reach = _clamp(distance, low, high)
+                var reach = clamp(distance, low, high)
                 self._apply(
                     lens, self._scale(lens, reach / distance, self.center())
                 )

@@ -99,11 +99,6 @@ comptime DOLLY = OrbitAction(2)
 comptime PAN = OrbitAction(3)
 
 
-def _clamp(value: Float32, low: Float32, high: Float32) -> Float32:
-    """Return `value` limited to the range from `low` to `high`."""
-    return clamp(value, low, high)
-
-
 struct OrbitControls(Copyable, Movable):
     """Turns pointer, wheel and key input into a camera orbiting a target."""
 
@@ -736,7 +731,7 @@ struct OrbitControls(Copyable, Movable):
             # and the target follows along the view direction.
             var reach = placed[0] - placed[1]
             var before = reach.length()
-            var after = _clamp(
+            var after = clamp(
                 before * self._scale,
                 self.min_distance.to(METER),
                 self.max_distance.to(METER),
@@ -777,7 +772,7 @@ struct OrbitControls(Copyable, Movable):
         var cursor = self.zoom_to_cursor and self._cursor
         var placed = self._orbit(camera.position, camera.up, delta, False)
         var old_zoom = camera.zoom
-        var new_zoom = _clamp(
+        var new_zoom = clamp(
             old_zoom / self._scale, self.min_zoom, self.max_zoom
         )
         self._scale = 1
@@ -907,13 +902,13 @@ struct OrbitControls(Copyable, Movable):
             self.min_azimuth_angle.to(RADIAN),
             self.max_azimuth_angle.to(RADIAN),
         )
-        phi = _clamp(
+        phi = clamp(
             phi,
             self.min_polar_angle.to(RADIAN),
             self.max_polar_angle.to(RADIAN),
         )
         var factor = self._scale if scale_radius else Float32(1)
-        radius = _clamp(
+        radius = clamp(
             radius * factor,
             self.min_distance.to(METER),
             self.max_distance.to(METER),
@@ -923,7 +918,7 @@ struct OrbitControls(Copyable, Movable):
         # `target.sub( cursor ).clampLength( min, max ).add( cursor )`.
         var from_cursor = target - self.cursor
         var span = from_cursor.length()
-        var kept = _clamp(
+        var kept = clamp(
             span,
             self.min_target_radius.to(METER),
             self.max_target_radius.to(METER),
@@ -1127,7 +1122,7 @@ def _limit_azimuth(theta: Float32, low: Float32, high: Float32) -> Float32:
     var lower = _wrap(low)
     var upper = _wrap(high)
     if lower <= upper:
-        return _clamp(theta, lower, upper)
+        return clamp(theta, lower, upper)
     if theta > (lower + upper) / 2:
         return max(lower, theta)
     return min(upper, theta)

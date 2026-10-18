@@ -105,18 +105,6 @@ def _gap_sq(a: Vector3, b: Vector3) -> Float32:
     return d.dot(d)
 
 
-def _unit(value: Float32) -> Float32:
-    """Return a number limited to the range from zero to one.
-
-    Args:
-        value: The number.
-
-    Returns:
-        The limited number.
-    """
-    return clamp(value, 0, 1)
-
-
 @fieldwise_init
 struct _TrianglePlane(ImplicitlyCopyable):
     """The plane of a triangle, as three.js's `Triangle.getPlane` gives it.
@@ -202,7 +190,7 @@ def _closest_on_segment(
     var length_sq = start_end.dot(start_end)
     if length_sq == 0:
         return None
-    var t = _unit(start_end.dot(point - start) / length_sq)
+    var t = clamp(start_end.dot(point - start) / length_sq, 0, 1)
     return start_end * t + start
 
 

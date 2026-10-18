@@ -47,20 +47,6 @@ from std.memory import bitcast
 comptime OBB_EPSILON = Float32(2.220446049250313e-16)
 
 
-def _clamp(value: Float32, low: Float32, high: Float32) -> Float32:
-    """Return three.js's `MathUtils.clamp`, `max(low, min(high, value))`.
-
-    Args:
-        value: The number.
-        low: The smallest answer.
-        high: The largest answer.
-
-    Returns:
-        The clamped number.
-    """
-    return clamp(value, low, high)
-
-
 def _check_half_size(half_size: Vector3) raises:
     """Refuse a half size that is negative or not finite.
 
@@ -241,11 +227,11 @@ struct OBB(ImplicitlyCopyable):
         var z_axis = Vector3(e[6], e[7], e[8])
         var v1 = point - self.center
         var target = self.center
-        var x = _clamp(v1.dot(x_axis), -self.half_size.x, self.half_size.x)
+        var x = clamp(v1.dot(x_axis), -self.half_size.x, self.half_size.x)
         target.add(x_axis * x)
-        var y = _clamp(v1.dot(y_axis), -self.half_size.y, self.half_size.y)
+        var y = clamp(v1.dot(y_axis), -self.half_size.y, self.half_size.y)
         target.add(y_axis * y)
-        var z = _clamp(v1.dot(z_axis), -self.half_size.z, self.half_size.z)
+        var z = clamp(v1.dot(z_axis), -self.half_size.z, self.half_size.z)
         target.add(z_axis * z)
         return target
 
