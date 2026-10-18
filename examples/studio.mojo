@@ -5,11 +5,12 @@
 
 """The studio an anatomy example draws in.
 
-A soft shadow map, filmic tone mapping, the five tissue materials, and a
-room environment at intensity 0.55.
+A soft shadow map, filmic tone mapping, the five tissue materials, a
+room environment at intensity 0.55, a gray floor, and one sun.
 """
 
 from core.assets import Assets
+from core.object3d import Object3D
 from core.scene import Scene
 from environments.room_environment import room_environment
 from extensions.humanoid.skeleton.bone import bone_albedo, bone_physical
@@ -20,12 +21,16 @@ from extensions.humanoid.skeleton.look import (
     muscle_physical,
     tendon_physical,
 )
+from geometries.plane import plane
+from lights.light import directional_light
 from lights.shadow import PCF_SOFT_SHADOW_MAP
-from materials.material import MaterialId
+from materials.material import MaterialId, standard_material
+from objects.mesh import Mesh
 from render.framebuffer import Color
 from render.tonemap import ACES_FILMIC_TONE_MAPPING
 from renderers.environment import pmrem_from_scene
 from renderers.renderer import Renderer, available_workers
+from units.si import DEGREE, METER, Angle, Length
 
 
 @fieldwise_init
@@ -106,6 +111,68 @@ def room_lit_scene(renderer: Renderer, mut assets: Assets) raises -> Scene:
     scene.environment = assets.cube_textures.add(lighting^)
     scene.environment_intensity = 0.55
     return scene^
+
+
+def cast_received_shadows(mut scene: Scene):
+    """Make every mesh cast and receive shadows.
+
+    Args:
+        scene: The scene.
+    """
+    for index in range(len(scene.meshes)):
+        scene.meshes[index].cast_shadow = True
+        scene.meshes[index].receive_shadow = True
+
+
+def studio_floor(mut scene: Scene, mut assets: Assets, span: Length) raises:
+    """Add a gray floor under the scene.
+
+    Args:
+        scene: The scene.
+        assets: Receives the floor geometry and material.
+        span: The floor's width and depth.
+
+    Raises:
+        Error: If the floor cannot be stored.
+    """
+    var floor = Object3D()
+    floor.rotate_x(Angle(-90.0, DEGREE))
+    var ground_shape = assets.geometries.add(plane(span, span))
+    var ground_look = assets.materials.add(
+        standard_material(Color(92, 90, 86), roughness=0.85)
+    )
+    scene.add_mesh(
+        Mesh(ground_shape, ground_look, scene.add(floor^), receive_shadow=True)
+    )
+
+
+def studio_sun(
+    mut scene: Scene, x: Float32, y: Float32, z: Float32, extent: Length
+) raises:
+    """Add the studio's shadow-casting sun.
+
+    Args:
+        scene: The scene.
+        x: The lamp's x, in meters.
+        y: The lamp's y, in meters.
+        z: The lamp's z, in meters.
+        extent: How wide the shadow map is.
+
+    Raises:
+        Error: If the light cannot be added.
+    """
+    var lamp = Object3D()
+    lamp.set_position(x, y, z)
+    var lamp_node = scene.add(lamp^)
+    var sun = directional_light(Color(255, 244, 228), lamp_node, 2.2)
+    sun.cast_shadow = True
+    sun.shadow.map_size = 1024
+    sun.shadow.bias = -0.0005
+    sun.shadow.normal_bias = 0.01
+    sun.shadow.set_extent(extent)
+    sun.shadow.near = Length(0.5, METER)
+    sun.shadow.far = Length(8.0, METER)
+    scene.add_light(sun)
 
 
 def main():
