@@ -28,6 +28,24 @@ import coverage_loop_proofs as proofs
 
 
 ROOT = Path(__file__).resolve().parent.parent
+# Coverage tools import these shared leaves. Keep the small native fixture
+# isolated: do not copy all core sources or add the repository include root.
+NATIVE_TOOL_DEPENDENCIES = (
+    'core/__init__.mojo', 'core/search.mojo', 'core/binary.mojo',
+)
+
+
+def copy_native_tool_dependencies(root, destination):
+    """Copy the explicit coverage-tool leaf closure into the native fixture."""
+    for name in NATIVE_TOOL_DEPENDENCIES:
+        source = Path(root) / name
+        target = Path(destination) / name
+        target.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copyfile(source, target)
+        require(target.read_bytes() == source.read_bytes(),
+                'Native tool dependency copy changed: ' + name)
+
+
 RUNTIME_SECONDS = 5
 # This new finite harness-only bound includes compilation and capture setup.
 # It does not replace the runtime alarm or change production capture budgets.
@@ -736,9 +754,11 @@ def main():
                         ignore=shutil.ignore_patterns('build'))
         shutil.copytree(ROOT / 'tools', native / 'tools', dirs_exist_ok=True,
                         ignore=shutil.ignore_patterns('__pycache__'))
+        copy_native_tool_dependencies(ROOT, native)
         (native / 'fixture.mojo').write_text(SOURCE)
         reporter = work / 'report'
-        run([mojo, 'build', '-Werror', '-I', str(ROOT), str(ROOT / 'coverage/report_cli.mojo'), '-o', str(reporter)])
+        run([mojo, 'build', '-Werror', '-I', '.', 'coverage/report_cli.mojo',
+             '-o', str(reporter)], cwd=native)
         generate(native, rewritten, ['fixture.mojo'])
         full_manifest = (rewritten / 'manifest.txt').read_bytes()
         identities = {name: line_of(fragment) for name, fragment in {
