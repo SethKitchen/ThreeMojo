@@ -50,7 +50,7 @@ from math.norm import length2, squared_length2
 from core.layers import Layers
 from math.matrix4 import Matrix4
 from math.sine import fraction, noise_scale, sin_float32
-from math.utils import SeededRandom
+from math.utils import SeededRandom, edge_index
 from math.vector3 import Vector3, reciprocal_unit, reflect_vector
 from render.packing import packed_normal
 from postprocessing.sampling import sample, u_of, v_of
@@ -759,8 +759,8 @@ def ssao_blur(values: List[Float32], width: Int, height: Int) -> List[Float32]:
             while j <= SSAO_BLUR_REACH:
                 var i = -SSAO_BLUR_REACH
                 while i <= SSAO_BLUR_REACH:
-                    var column = max(0, min(width - 1, x + i))
-                    var row = max(0, min(height - 1, y + j))
+                    var column = edge_index(x + i, width)
+                    var row = edge_index(y + j, height)
                     sum += values[row * width + column]
                     i += 1
                 j += 1

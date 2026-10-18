@@ -54,6 +54,7 @@ from materials.nodes import (
     has_output,
     run_nodes,
 )
+from math.utils import edge_index
 from math.vector2 import Vector2
 from math.vector3 import Vector3
 from postprocessing.shader_pass import SCREEN_VERTEX_SHADER
@@ -103,7 +104,7 @@ def _wrapped(index: Int, size: Int, wrap: Int) -> Int:
         var period = 2 * size
         var kept = index % period
         return kept if kept < size else period - 1 - kept
-    return max(0, min(size - 1, index))
+    return edge_index(index, size)
 
 
 struct ComputeNodes(ImplicitlyCopyable, NodeSource):
