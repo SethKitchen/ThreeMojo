@@ -103,7 +103,7 @@ def _check_outline_area(
 
 def _check_face_area(area: Float64) raises:
     """Check a derived face area before view conversion."""
-    if not (area > 0 and isfinite(area)):
+    if not positive_finite(area):
         raise Error("A face must have positive finite area")
 
 
@@ -219,7 +219,7 @@ struct Section(ImplicitlyCopyable):
             raise Error("A section shape must be a rectangle, an I or a circle")
         var b = self.width.to(METER)
         var d = self.depth.to(METER)
-        if not (b > 0 and isfinite(b)):
+        if not positive_finite(b):
             raise Error("A section width must be positive and finite")
         if not isfinite(d):
             raise Error("A section depth must be finite")
@@ -1507,7 +1507,7 @@ struct Building(Movable):
                 if not (a.is_finite() and b.is_finite()):
                     raise Error("A member axis must be finite")
                 var length = a.distance_to(b)
-                if not (length > 0 and isfinite(length)):
+                if not positive_finite(length):
                     raise Error(
                         "A member axis must have positive finite length"
                     )
@@ -1655,7 +1655,7 @@ def assemble(
     var regions = List[List[Region]]()
     for s in range(len(plans)):
         var h = plans[s].height.to(METER)
-        if not (h > 0 and isfinite(h)):
+        if not positive_finite(h):
             raise Error("A storey height must be positive and finite")
         z = z + plans[s].height
         levels.append(z)
