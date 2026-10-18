@@ -105,6 +105,38 @@ def mix_delta(start: Float64, end: Float64, t: Float64) -> Float64:
     return start + (end - start) * t
 
 
+def rec709_luminance(r: Float32, g: Float32, b: Float32) -> Float32:
+    """Return rec. 709 luminance to four decimal places.
+
+    three.js's `colorToLuminance`. `luminance_of` uses the longer weights.
+
+    Args:
+        r: Red.
+        g: Green.
+        b: Blue.
+
+    Returns:
+        `0.2126 r + 0.7152 g + 0.0722 b`.
+    """
+    return 0.2126 * r + 0.7152 * g + 0.0722 * b
+
+
+def rec709_luminance(r: Float64, g: Float64, b: Float64) -> Float64:
+    """Return rec. 709 luminance to four decimal places.
+
+    three.js's `colorToLuminance`. `luminance_of` uses the longer weights.
+
+    Args:
+        r: Red.
+        g: Green.
+        b: Blue.
+
+    Returns:
+        `0.2126 r + 0.7152 g + 0.0722 b`.
+    """
+    return 0.2126 * r + 0.7152 * g + 0.0722 * b
+
+
 def glsl_mod(x: Float32, y: Float32) -> Float32:
     """Return GLSL's `mod`: `x` minus `y` times the floor of their ratio.
 

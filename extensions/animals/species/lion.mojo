@@ -31,6 +31,7 @@ from extensions.animals.parts import (
     TEETH,
 )
 from extensions.sdf.sculpt import ell_y
+from math.utils import rec709_luminance
 from extensions.animals.kit import (
     side_sign,
     ear_ends,
@@ -1541,7 +1542,7 @@ def lion_palette(t: Traits) -> Palette:
                 c.y * (1.0 + 0.04 * k + l),
                 c.z * (1.0 - 0.2 * k + l),
             )
-            var y = 0.2126 * c.x + 0.7152 * c.y + 0.0722 * c.z
+            var y = rec709_luminance(c.x, c.y, c.z)
             c = V3(
                 max(0.0, y + (c.x - y) * 1.15),
                 max(0.0, y + (c.y - y) * 1.15),

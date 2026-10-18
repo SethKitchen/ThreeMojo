@@ -73,6 +73,7 @@ from extensions.animals.species.hoofed import (
     horn_parameter,
 )
 from extensions.animals.traits import Traits
+from math.utils import rec709_luminance
 from extensions.sdf.vector import (
     V3,
     clamp,
@@ -2271,10 +2272,8 @@ def _paint_horn(pal: Palette, t: Traits, p: V3) -> Paint:
         )
         var groove = exp(-(((fr - 0.66) / 0.11) ** 2))
         var crest = exp(-((min(fr, 1.0 - fr) / 0.12) ** 2))
-        var lum = (
-            0.2126 * pal.get("horn").x
-            + 0.7152 * pal.get("horn").y
-            + 0.0722 * pal.get("horn").z
+        var lum = rec709_luminance(
+            pal.get("horn").x, pal.get("horn").y, pal.get("horn").z
         )
         var dark = 1.0 - smoothstep(0.12, 0.3, lum)
         c = c * (1.0 + fade * (0.06 * crest - mix(0.16, 0.3, dark) * groove))

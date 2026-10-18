@@ -34,7 +34,7 @@ environment mode, which `postprocessing.ssr_node` does not port.
 
 from core.extent import positive_extent
 from math.matrix4 import Matrix4
-from math.utils import mix_delta
+from math.utils import mix_delta, rec709_luminance
 from math.norm import squared_length2
 from math.vector2 import Vector2
 from math.vector3 import Vector3
@@ -70,7 +70,7 @@ def color_to_luminance(r: Float32, g: Float32, b: Float32) -> Float32:
     Returns:
         The luminance.
     """
-    return 0.2126 * r + 0.7152 * g + 0.0722 * b
+    return rec709_luminance(r, g, b)
 
 
 def closest_index(
