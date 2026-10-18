@@ -37,8 +37,8 @@ This is not a three.js port. See Extensions.
 """
 
 from core.binary import little_endian_u32
-from core.buffer_attribute import BufferAttribute
-from core.buffer_geometry import BufferGeometry, NORMAL, POSITION, UV
+from core.buffer_geometry import BufferGeometry
+from geometries.surface import indexed_surface
 from math.vector3 import Vector3
 from std.math import isfinite, min
 
@@ -844,10 +844,7 @@ struct FaceModel(Movable):
             normals.append(n.y)
             normals.append(n.z)
         var geometry = BufferGeometry()
-        geometry.set_attribute(String(POSITION), BufferAttribute(positions^, 3))
-        geometry.set_attribute(String(NORMAL), BufferAttribute(normals^, 3))
-        geometry.set_attribute(String(UV), BufferAttribute(uvs^, 2))
-        geometry.set_index(indices^)
+        indexed_surface(geometry, positions^, normals^, uvs^, indices^)
         return geometry^
 
 

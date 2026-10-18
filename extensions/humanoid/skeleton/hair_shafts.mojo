@@ -10,8 +10,8 @@ shaft on its own and merge the results. Add another bundle by passing
 its centerlines here.
 """
 
-from core.buffer_attribute import BufferAttribute
 from core.buffer_geometry import NORMAL, POSITION, UV, BufferGeometry
+from geometries.surface import indexed_surface
 from extensions.humanoid.skeleton.field import (
     DistanceField,
     empty_bounds,
@@ -85,10 +85,7 @@ def _merge_shafts(parts: List[BufferGeometry]) raises -> BufferGeometry:
     for index in range(len(parts)):  # pragma: no branch
         _append_geometry(positions, normals, uvs, indices, parts[index])
     var geometry = BufferGeometry()
-    geometry.set_attribute(String(POSITION), BufferAttribute(positions^, 3))
-    geometry.set_attribute(String(NORMAL), BufferAttribute(normals^, 3))
-    geometry.set_attribute(String(UV), BufferAttribute(uvs^, 2))
-    geometry.set_index(indices^)
+    indexed_surface(geometry, positions^, normals^, uvs^, indices^)
     return geometry^
 
 

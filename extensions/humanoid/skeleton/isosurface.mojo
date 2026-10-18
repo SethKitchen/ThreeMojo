@@ -14,8 +14,8 @@ y: `u` around, `v` up.
 Twenty-four is the default. Sixty-four is the most.
 """
 
-from core.buffer_attribute import BufferAttribute
-from core.buffer_geometry import BufferGeometry, NORMAL, POSITION, UV
+from core.buffer_geometry import BufferGeometry
+from geometries.surface import indexed_surface
 from extensions.humanoid.skeleton.field import DistanceField
 from math.vector3 import Vector3
 from std.math import atan2, max, min, pi
@@ -164,10 +164,7 @@ def mesh_samples(
         uvs.append(u)
         uvs.append(v)
     var geometry = BufferGeometry()
-    geometry.set_attribute(String(POSITION), BufferAttribute(positions^, 3))
-    geometry.set_attribute(String(NORMAL), BufferAttribute(normals^, 3))
-    geometry.set_attribute(String(UV), BufferAttribute(uvs^, 2))
-    geometry.set_index(indices^)
+    indexed_surface(geometry, positions^, normals^, uvs^, indices^)
     return geometry^
 
 
