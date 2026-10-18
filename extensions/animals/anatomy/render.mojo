@@ -70,6 +70,7 @@ from extensions.sdf.ids import CONE, BoneId, SURFACE_PART_COUNT, SurfacePart
 from extensions.sdf.mesher import SurfaceMesh, merge, mesh_part
 from extensions.sdf.vector import V3, length
 from materials.material import LAMBERT, PHONG, Material
+from math.vector3 import append_float64_xyz
 from render.framebuffer import Color
 from std.math import pi, sqrt
 from std.sys import num_logical_cores
@@ -253,9 +254,7 @@ def _layer_geometry(
             surface.vertex(v),
         )
         var c = tendon if model.prims[at].kind == CONE else tissue
-        colors.append(Float32(c[0]))
-        colors.append(Float32(c[1]))
-        colors.append(Float32(c[2]))
+        append_float64_xyz(colors, c[0], c[1], c[2])
     var g = BufferGeometry()
     g.set_attribute(
         String(POSITION), BufferAttribute(surface.positions.copy(), 3)

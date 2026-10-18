@@ -60,6 +60,7 @@ from materials.material import PHONG, Material, MaterialId
 from objects.mesh import Mesh
 from render.framebuffer import Color, opaque_from_linear
 from math.finite import require_finite
+from math.vector3 import append_float64_xyz
 from std.math import isfinite, sqrt
 from std.pathlib import Path
 
@@ -513,9 +514,7 @@ def _place_mesh(
         var unit = _scaled_normal(
             mesh.normals[k], mesh.normals[k + 1], mesh.normals[k + 2], scale
         )
-        normals.append(Float32(unit[0]))
-        normals.append(Float32(unit[1]))
-        normals.append(Float32(unit[2]))
+        append_float64_xyz(normals, unit[0], unit[1], unit[2])
     var count = len(mesh.vertices) // 3
     var mismatched = len(normals) > 0 and len(normals) != len(mesh.vertices)
     if mismatched:
