@@ -45,6 +45,7 @@ from animation.keyframe_track import (
 )
 from core.object3d import NodeId
 from materials.material import MaterialId
+from math.finite import require_finite
 from math.utils import SeededRandom
 from math.vector3 import Vector3
 from render.framebuffer import FloatColor
@@ -127,8 +128,10 @@ def _key_count(duration: Duration) raises -> Int:
     counts before generating keys or advancing the random generator.
     """
     var seconds = duration.to(SECOND)
-    if not isfinite(seconds):
-        raise Error("An animation needs a finite, representable key count")
+    require_finite(
+        Float64(seconds),
+        "An animation needs a finite, representable key count",
+    )
     if seconds <= 0:
         return 0
     var limit = seconds * KEYS_A_SECOND

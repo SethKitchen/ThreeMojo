@@ -3,10 +3,11 @@
 # Noncommercial use is free; commercial use requires a paid license.
 # See LICENSE, LICENSE-COMMERCIAL.md and THIRD-PARTY-NOTICES.md.
 
-"""Whether a real number is finite and greater than zero.
+"""Whether a real number is finite, and whether it is greater than zero.
 
 Every `Float32` value converts exactly to `Float64`, so one test covers
-both widths. `require_positive_finite` refuses a value that is not.
+both widths. `require_finite` refuses a value that is not finite.
+`require_positive_finite` refuses a value that is not positive and finite.
 `require_finite_group` refuses a caller-tested group that is not finite.
 Callers keep their own error text.
 """
@@ -56,6 +57,23 @@ def require_positive_finite(value: Float64, message: String) raises:
         Error: If `value` is not finite or is not greater than zero.
     """
     if not positive_finite(value):
+        raise Error(message)
+
+
+def require_finite(value: Float64, message: String) raises:
+    """Refuse a number that is not finite.
+
+    Args:
+        value: The number. A `Float32` converts exactly.
+        message: The error text for this caller.
+
+    Returns:
+        Nothing. The call returns when `value` is finite.
+
+    Raises:
+        Error: If `value` is not finite.
+    """
+    if not isfinite(value):
         raise Error(message)
 
 

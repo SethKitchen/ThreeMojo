@@ -9,7 +9,7 @@ The largest count marker exceeds every supported Int difference. A marker
 never becomes an event count. Finite repetitions can finish before conversion.
 """
 
-from std.math import isfinite
+from math.finite import require_finite
 from std.memory import bitcast
 
 comptime _COUNT_LIMIT = UInt128(1) << 65
@@ -78,8 +78,7 @@ def _stored_loop_phase(
     var lower = Float64(length) if second_leg else Float64(0)
     var upper = lower + Float64(length)
     var phase = Float32(lower + residual)
-    if not isfinite(phase):
-        raise Error("An action's reduced phase must fit Float32")
+    require_finite(Float64(phase), "An action's reduced phase must fit Float32")
     if Float64(phase) >= upper:
         phase = bitcast[DType.float32](bitcast[DType.uint32](phase) - 1)
     # The exact-multiple path has no direction-dependent signed zero.
