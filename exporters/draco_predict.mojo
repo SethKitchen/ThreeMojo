@@ -55,7 +55,7 @@ from loaders.draco_attributes import (
     _abs_sum,
     _cross,
     _dot,
-    _int_sqrt,
+    _predicted_tex_sides,
     _rotate,
     _rotation_count,
     _sub,
@@ -68,8 +68,6 @@ from std.math import ceil, floor, isinf, isnan
 
 # The most parallelograms the constrained prediction mixes.
 comptime _MAX_PARALLELOGRAMS = 4
-# The largest `Int`, as C++'s `int64_t`.
-comptime _INT64_MAX = 0x7FFFFFFFFFFFFFFF
 
 
 struct EncoderAttribute(Copyable, Movable):
@@ -709,46 +707,16 @@ struct _Scheme(Movable):
             if p_u == n_u and p_v == n_v:
                 return [p_u, p_v]
             ref points = data.order.points
-            var tip = positions.at(points[p])
-            var next_pos = positions.at(points[next])
-            var prev_pos = positions.at(points[prev])
-            var pn = _sub(prev_pos, next_pos)
-            var pn_norm2 = _dot(pn, pn)
-            if pn_norm2 != 0:
-                var cn = _sub(tip, next_pos)
-                var cn_dot_pn = _dot(pn, cn)
-                var pn_u = p_u - n_u
-                var pn_v = p_v - n_v
-                draco_require(
-                    max(abs(n_u), abs(n_v)) <= _INT64_MAX // pn_norm2,
-                    "a texture coordinate prediction overflows",
-                )
-                draco_require(
-                    cn_dot_pn <= _INT64_MAX // max(abs(pn_u), abs(pn_v)),
-                    "a texture coordinate prediction overflows",
-                )
-                var x_u = n_u * pn_norm2 + cn_dot_pn * pn_u
-                var x_v = n_v * pn_norm2 + cn_dot_pn * pn_v
-                var pn_max = max(max(abs(pn[0]), abs(pn[1])), abs(pn[2]))
-                draco_require(
-                    cn_dot_pn <= _INT64_MAX // pn_max,
-                    "a texture coordinate prediction overflows",
-                )
-                var x_pos = List[Int](capacity=3)
-                for k in range(3):  # pragma: no branch
-                    x_pos.append(
-                        next_pos[k]
-                        + truncated_divide(cn_dot_pn * pn[k], pn_norm2)
-                    )
-                var cx = _sub(tip, x_pos)
-                var cx_norm2 = _dot(cx, cx)
-                var norm = _int_sqrt(UInt64(cx_norm2) * UInt64(pn_norm2))
-                var cx_u = pn_v * norm
-                var cx_v = -pn_u * norm
-                var u0 = truncated_divide(x_u + cx_u, pn_norm2)
-                var v0 = truncated_divide(x_v + cx_v, pn_norm2)
-                var u1 = truncated_divide(x_u - cx_u, pn_norm2)
-                var v1 = truncated_divide(x_v - cx_v, pn_norm2)
+            var ready, u0, v0, u1, v1 = _predicted_tex_sides(
+                n_u,
+                n_v,
+                p_u,
+                p_v,
+                positions.at(points[p]),
+                positions.at(points[next]),
+                positions.at(points[prev]),
+            )
+            if ready:
                 var c_u = values[p * 2]
                 var c_v = values[p * 2 + 1]
                 var d0 = (c_u - u0) * (c_u - u0) + (c_v - v0) * (c_v - v0)
