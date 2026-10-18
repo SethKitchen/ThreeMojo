@@ -34,6 +34,7 @@ refuse. A file that cannot be read is refused too.
 from core.assets import Assets
 from core.object3d import NO_PARENT, NodeId
 from core.scene import Scene
+from loaders.utf8 import leading_utf8_bom
 from loaders.usd_composer import (
     USD_IMAGE,
     USD_LAYER,
@@ -74,15 +75,7 @@ def decode_text(bytes: List[UInt8]) -> String:
     Returns:
         The text.
     """
-    var start = 0
-    var marked = (
-        len(bytes) >= 3
-        and bytes[0] == 0xEF
-        and bytes[1] == 0xBB
-        and bytes[2] == 0xBF
-    )
-    if marked:
-        start = 3
+    var start = leading_utf8_bom(Span(bytes))
     var rest = List[UInt8](capacity=len(bytes) - start)
     for k in range(start, len(bytes)):
         rest.append(bytes[k])
