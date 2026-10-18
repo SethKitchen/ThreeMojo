@@ -241,12 +241,10 @@ def parse_raw_spz(bytes: List[UInt8]) raises -> GaussianSplatGeometry:
     var version = le_u32(bytes, 4)
     var count = le_u32(bytes, 8)
     var stored = Int(bytes[12])
-    if le_u32(bytes, 0) != SPZ_MAGIC:
-        raise Error("SPZ: invalid SPZ magic")
+    require_spz_magic(le_u32(bytes, 0))
     if version < 1 or version > 3:
         raise Error("SPZ: SPZ version " + String(version) + " is not supported")
-    if count > MAX_SPZ_SPLATS:
-        raise Error("SPZ: the file holds too many splats")
+    require_spz_count(count)
     var vectors = spz_vectors(stored)
     var positions = count * 3 * (2 if version == 1 else 3)
     var rotations = count * (4 if version == 3 else 3)
@@ -288,6 +286,38 @@ def _cut(bytes: List[UInt8], start: Int, length: Int) -> List[UInt8]:
     return copy_bytes(bytes, start, length)
 
 
+def require_spz_magic(magic: Int) raises:
+    """Refuse an SPZ file whose magic is not `NGSP`.
+
+    Args:
+        magic: The first four bytes, as a little-endian integer.
+
+    Returns:
+        Nothing. The call returns when the magic is `NGSP`.
+
+    Raises:
+        Error: If the magic is not `NGSP`.
+    """
+    if magic != SPZ_MAGIC:
+        raise Error("SPZ: invalid SPZ magic")
+
+
+def require_spz_count(count: Int) raises:
+    """Refuse an SPZ file that holds too many splats.
+
+    Args:
+        count: How many splats the file names.
+
+    Returns:
+        Nothing. The call returns when the count is within the limit.
+
+    Raises:
+        Error: If the count passes the limit.
+    """
+    if count > MAX_SPZ_SPLATS:
+        raise Error("SPZ: the file holds too many splats")
+
+
 def parse_raw_spz_v4(bytes: List[UInt8]) raises -> GaussianSplatGeometry:
     """Read a version 4 file, three.js's `parseRawSPZV4`.
 
@@ -306,16 +336,14 @@ def parse_raw_spz_v4(bytes: List[UInt8]) raises -> GaussianSplatGeometry:
     """
     if len(bytes) < 20:
         raise Error("SPZ: invalid SPZ header")
-    if le_u32(bytes, 0) != SPZ_MAGIC:
-        raise Error("SPZ: invalid SPZ magic")
+    require_spz_magic(le_u32(bytes, 0))
     if le_u32(bytes, 4) != 4:
         raise Error("SPZ: the raw SPZ parser requires version 4")
     var count = le_u32(bytes, 8)
     var stored = Int(bytes[12])
     var streams = Int(bytes[15])
     var table = le_u32(bytes, 16)
-    if count > MAX_SPZ_SPLATS:
-        raise Error("SPZ: the file holds too many splats")
+    require_spz_count(count)
     var sizes: List[Int] = [
         count * 9,
         count,

@@ -284,6 +284,25 @@ def cholesky(a: DenseMatrix) raises -> DenseMatrix:
     return l^
 
 
+def require_triangular_sizes(rows: Int, cols: Int, count: Int) raises:
+    """Refuse a triangular solve whose sizes do not match.
+
+    Args:
+        rows: How many rows the matrix has.
+        cols: How many columns the matrix has.
+        count: How many numbers the right-hand side has.
+
+    Returns:
+        Nothing. The call returns when the matrix is square and the
+            right-hand side matches.
+
+    Raises:
+        Error: If the sizes do not match.
+    """
+    if count != rows or rows != cols:
+        raise Error("A triangular solve needs matching sizes")
+
+
 def solve_lower(l: DenseMatrix, b: List[Float64]) raises -> List[Float64]:
     """Solve L y = b for a lower-triangular L with a nonzero diagonal.
 
@@ -297,8 +316,7 @@ def solve_lower(l: DenseMatrix, b: List[Float64]) raises -> List[Float64]:
     Raises:
         Error: If the sizes differ.
     """
-    if len(b) != l.rows or l.rows != l.cols:
-        raise Error("A triangular solve needs matching sizes")
+    require_triangular_sizes(l.rows, l.cols, len(b))
     var y = b.copy()
     for i in range(l.rows):
         var total = y[i]
@@ -323,8 +341,7 @@ def solve_lower_transposed(
     Raises:
         Error: If the sizes differ.
     """
-    if len(b) != l.rows or l.rows != l.cols:
-        raise Error("A triangular solve needs matching sizes")
+    require_triangular_sizes(l.rows, l.cols, len(b))
     var x = b.copy()
     var i = l.rows - 1
     while i >= 0:

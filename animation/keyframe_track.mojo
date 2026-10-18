@@ -1296,8 +1296,7 @@ struct KeyframeTrack(Copyable, Movable):
         var by = offset.to(SECOND)
         if not isfinite(by):
             raise Error("A track cannot shift by a time that is not a number")
-        if len(self.times) == 0:
-            raise Error("A track's keys were removed after it was built")
+        self._require_keys()
         if self.times[0] + by < 0:
             raise Error("A track's times cannot be negative")
         for key in range(len(self.times)):  # pragma: no branch
@@ -1653,6 +1652,18 @@ struct KeyframeTrack(Copyable, Movable):
             return [turned.x, turned.y, turned.z, turned.w]
         return out^
 
+    def _require_keys(self) raises:
+        """Refuse a track whose keys were removed after it was built.
+
+        Returns:
+            Nothing. The call returns when the track still holds a key.
+
+        Raises:
+            Error: If the track holds no keys.
+        """
+        if len(self.times) == 0:
+            raise Error("A track's keys were removed after it was built")
+
     def _check_lists(self) raises:
         """Refuse a track whose lists no longer agree with each other.
 
@@ -1660,8 +1671,7 @@ struct KeyframeTrack(Copyable, Movable):
             Error: If the track has no keys, if the values do not divide
                 into one a key, or if the tangents do not match the values.
         """
-        if len(self.times) == 0:
-            raise Error("A track's keys were removed after it was built")
+        self._require_keys()
         if (
             len(self.values)
             != len(self.times) * self.target.kind.component_count()

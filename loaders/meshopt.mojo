@@ -220,6 +220,54 @@ def _decode_bytes(
     return next
 
 
+def require_meshopt_count(count: Int) raises:
+    """Refuse a meshopt count that is negative.
+
+    Args:
+        count: How many items the buffer names.
+
+    Returns:
+        Nothing. The call returns when the count is zero or more.
+
+    Raises:
+        Error: If the count is negative.
+    """
+    if count < 0:
+        raise Error("meshopt: a count must not be negative")
+
+
+def require_meshopt_index_size(size: Int) raises:
+    """Refuse a meshopt index that is not two or four bytes.
+
+    Args:
+        size: How many bytes one index holds.
+
+    Returns:
+        Nothing. The call returns when the size is two or four.
+
+    Raises:
+        Error: If the size is neither two nor four.
+    """
+    if size != 2 and size != 4:
+        raise Error("meshopt: an index's size must be 2 or 4")
+
+
+def require_meshopt_filter(filter: MeshoptFilter) raises:
+    """Refuse a meshopt filter on a buffer that is not attributes.
+
+    Args:
+        filter: The filter the buffer names.
+
+    Returns:
+        Nothing. The call returns when the filter is none.
+
+    Raises:
+        Error: If the filter is not none.
+    """
+    if filter != FILTER_NONE:
+        raise Error("meshopt: only ATTRIBUTES can have a filter")
+
+
 def decode_vertex_buffer(
     count: Int, size: Int, source: List[UInt8]
 ) raises -> List[UInt8]:
@@ -242,8 +290,7 @@ def decode_vertex_buffer(
         raise Error(
             "meshopt: an element's size must be a multiple of 4 from 4 to 256"
         )
-    if count < 0:
-        raise Error("meshopt: a count must not be negative")
+    require_meshopt_count(count)
     var end = len(source)
     if end < 1 + size:
         raise _malformed(-2)
@@ -364,8 +411,7 @@ def decode_index_buffer(
         If the size or the count is not allowed, or the stream is
         malformed.
     """
-    if size != 2 and size != 4:
-        raise Error("meshopt: an index's size must be 2 or 4")
+    require_meshopt_index_size(size)
     if count < 0 or count % 3 != 0:
         raise Error("meshopt: a triangle list's count must be a multiple of 3")
     var length = len(source)
@@ -492,10 +538,8 @@ def decode_index_sequence(
         If the size or the count is not allowed, or the stream is
         malformed.
     """
-    if size != 2 and size != 4:
-        raise Error("meshopt: an index's size must be 2 or 4")
-    if count < 0:
-        raise Error("meshopt: a count must not be negative")
+    require_meshopt_index_size(size)
+    require_meshopt_count(count)
     var length = len(source)
     if length < 1 + count + 4:
         raise _malformed(-2)
@@ -724,12 +768,10 @@ def decode_gltf_buffer(
     if not filter.is_valid():
         raise Error("meshopt: a filter that is not known")
     if mode == MESHOPT_TRIANGLES:
-        if filter != FILTER_NONE:
-            raise Error("meshopt: only ATTRIBUTES can have a filter")
+        require_meshopt_filter(filter)
         return decode_index_buffer(count, stride, source)
     if mode == MESHOPT_INDICES:
-        if filter != FILTER_NONE:
-            raise Error("meshopt: only ATTRIBUTES can have a filter")
+        require_meshopt_filter(filter)
         return decode_index_sequence(count, stride, source)
     var out = decode_vertex_buffer(count, stride, source)
     if filter == FILTER_OCTAHEDRAL:

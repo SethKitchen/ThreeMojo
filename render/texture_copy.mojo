@@ -133,6 +133,22 @@ def _regenerate(mut texture: Texture, level: Int) raises:
         texture.regenerate_mipmaps()
 
 
+def require_flat_layer(layer: Int) raises:
+    """Refuse a layer on a 2D texture copy.
+
+    Args:
+        layer: The layer the copy names.
+
+    Returns:
+        Nothing. The call returns when the layer is zero.
+
+    Raises:
+        Error: If the layer is not zero.
+    """
+    if layer != 0:
+        raise Error("A 2D texture has no layers")
+
+
 def copy_texture_to_texture(
     source: Texture,
     mut destination: Texture,
@@ -163,8 +179,7 @@ def copy_texture_to_texture(
     _check_level(source, source_level)
     _check_level(destination, destination_level)
     require_copy_texel(source.texel_type, destination.texel_type)
-    if position.z != 0:
-        raise Error("A 2D texture has no layers")
+    require_flat_layer(position.z)
     var box = region.or_else(
         Rect(
             0,
@@ -401,8 +416,7 @@ def _copy_region_start(
     """Return the framebuffer rectangle a copy into `level` reads, and
     refuse a copy that reaches outside the framebuffer."""
     _check_level(texture, level)
-    if position.z != 0:
-        raise Error("A 2D texture has no layers")
+    require_flat_layer(position.z)
     var region = Rect(
         position.x,
         position.y,

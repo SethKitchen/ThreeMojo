@@ -145,6 +145,21 @@ struct InterleavedBuffer(Copyable, Movable):
         """Return True if the buffer advances per instance."""
         return self._shared[].mesh_per_attribute > 0
 
+    def _require_index(self, at: Int) raises:
+        """Refuse an index outside the interleaved array.
+
+        Args:
+            at: Where the number is, counted from the first.
+
+        Returns:
+            Nothing. The call returns when the index names a number.
+
+        Raises:
+            Error: If the index is outside the array.
+        """
+        if at < 0 or at >= self.length():
+            raise Error("Interleaved buffer index out of range")
+
     def value(self, at: Int) raises -> Float32:
         """Return one number of the array.
 
@@ -157,8 +172,7 @@ struct InterleavedBuffer(Copyable, Movable):
         Raises:
             Error: If `at` is outside the array.
         """
-        if at < 0 or at >= self.length():
-            raise Error("Interleaved buffer index out of range")
+        self._require_index(at)
         return self._shared[].array[at]
 
     def set_value(self, at: Int, value: Float32) raises:
@@ -172,8 +186,7 @@ struct InterleavedBuffer(Copyable, Movable):
         Raises:
             Error: If `at` is outside the array.
         """
-        if at < 0 or at >= self.length():
-            raise Error("Interleaved buffer index out of range")
+        self._require_index(at)
         self._shared[].array[at] = value
 
     def shares_with(self, other: InterleavedBuffer) -> Bool:
