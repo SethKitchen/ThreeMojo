@@ -28,7 +28,7 @@ each element. `USD_SAMPLES` is the `{ times, values }` object that
 `element_number` is `Number( value[ i ] )`, which is what a
 `Float32Array` stores.
 """
-from core.ordinal import ordinal_valid
+from core.ordinal import ordinal_valid, require_valid
 from core.search import first_match
 
 from loaders.js_number import js_string_to_number
@@ -290,8 +290,10 @@ struct UsdLayer(Copyable, Movable):
         Raises:
             Error: If its kind is not valid.
         """
-        if not value.kind.is_valid():
-            raise Error("USD: a value of no kind: " + String(value.kind.value))
+        require_valid(
+            value.kind.is_valid(),
+            "USD: a value of no kind: " + String(value.kind.value),
+        )
         self.values.append(value^)
         return len(self.values) - 1
 

@@ -1823,12 +1823,14 @@ struct Material(ImplicitlyCopyable):
             side.is_valid(),
             "A material's side must be FRONT_SIDE, BACK_SIDE or DOUBLE_SIDE",
         )
-        if not kind.is_valid():
-            raise Error(
+        require_valid(
+            kind.is_valid(),
+            (
                 "A material's kind must be BASIC, LAMBERT, NORMALS, DEPTH,"
                 " PHONG, TOON, MATCAP, STANDARD, PHYSICAL, SHADOW, DISTANCE,"
                 " GOURAUD or VOLUME"
-            )
+            ),
+        )
         if gradient_map.value < 0 and gradient_map != NO_TEXTURE:
             raise Error("A material's gradient map id cannot be negative")
         if kind != TOON and gradient_map != NO_TEXTURE:

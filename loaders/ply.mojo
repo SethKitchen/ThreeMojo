@@ -130,8 +130,10 @@ struct PlyScalar(Equatable, ImplicitlyCopyable, Writable):
         Raises:
             Error: If this is not one of the eight types.
         """
-        if not self.is_valid():
-            raise Error("PLY: a scalar type that is not known: " + String(self))
+        require_valid(
+            self.is_valid(),
+            "PLY: a scalar type that is not known: " + String(self),
+        )
         if self.value <= PLY_UINT8.value:
             return 1
         if self.value <= PLY_UINT16.value:

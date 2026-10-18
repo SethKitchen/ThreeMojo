@@ -40,7 +40,7 @@ from core.binary import (
     little_endian_u16,
     little_endian_u32,
 )
-from core.ordinal import require_index_in_count
+from core.ordinal import require_index_in_count, require_valid
 from render.checksum import crc32
 from render.inflate import inflate
 
@@ -308,14 +308,14 @@ def unzip(bytes: List[UInt8]) raises -> List[ZipEntry]:
             raise Error("ZIP: an archive split across disks is not read")
         if flags & 1 == 1:
             raise Error("ZIP: an encrypted " + what + " is not read")
-        if not method.is_valid():
-            raise Error(
-                "ZIP: "
-                + what
-                + " uses compression method "
-                + String(method.value)
-                + ", and only stored and deflated are read"
-            )
+        require_valid(
+            method.is_valid(),
+            "ZIP: "
+            + what
+            + " uses compression method "
+            + String(method.value)
+            + ", and only stored and deflated are read",
+        )
         _need(directory_start, local, _LOCAL_LENGTH, what)
         if little_endian_u32(bytes, local) != _LOCAL_HEADER:
             raise Error("ZIP: the local header of " + what + " is not one")

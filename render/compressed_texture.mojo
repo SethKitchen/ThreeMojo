@@ -61,7 +61,11 @@ texture. See `CompressedFormat.is_float`.
 the last row and column of blocks hang off the edge; the texels past the
 edge are decoded and dropped, as a GPU stores and never shows them.
 """
-from core.ordinal import ordinal_valid, require_index_in_count
+from core.ordinal import (
+    ordinal_valid,
+    require_index_in_count,
+    require_valid,
+)
 
 from render.bptc import BptcTables, bc6h_block, bc7_block
 from render.etc import (
@@ -652,11 +656,11 @@ def _check_payload(
             grid's.
     """
     require_texture_size(width, height)
-    if not format.is_valid():
-        raise Error(
-            "A compressed format must be one of the named formats, not "
-            + String(format)
-        )
+    require_valid(
+        format.is_valid(),
+        "A compressed format must be one of the named formats, not "
+        + String(format),
+    )
     check_decoded_size(width, height, format.is_float())
     if len(data) != level_bytes(width, height, format):
         raise Error("Compressed payload length does not match the dimensions")

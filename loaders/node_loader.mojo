@@ -48,7 +48,7 @@ well, as three.js's `vec4(colorNode)` does: the alpha multiplies the
 opacity node, or the material's `opacity`. Texture gather inputs are
 refused by name when reached. They are not ordinary RGBA samples.
 """
-from core.ordinal import ordinal_valid
+from core.ordinal import ordinal_valid, require_valid
 from core.search import first_match
 
 from loaders.json import (
@@ -1107,10 +1107,10 @@ struct NodeLoader(Movable):
         for index in range(document.length(inputs)):
             var property = document.key(inputs, index)
             var output = node_output_of(property)
-            if not output.is_valid():
-                raise Error(
-                    "Node JSON: a node material's " + property + " is not read"
-                )
+            require_valid(
+                output.is_valid(),
+                "Node JSON: a node material's " + property + " is not read",
+            )
             refs[output.value] = self.node(
                 document, document.string(document.at(inputs, index))
             ).value

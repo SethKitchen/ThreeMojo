@@ -18,7 +18,7 @@ The genes are authored controls. They are not a model of the loci that
 set the traits in people. Many small genes set each of these traits,
 and development and environment change them too.
 """
-from core.ordinal import ordinal_valid, ordinal_label
+from core.ordinal import ordinal_valid, ordinal_label, require_valid
 from math.utils import clamp_unit
 
 from std.math import isfinite
@@ -230,8 +230,7 @@ def require_named_gene(gene: Gene) raises:
     Raises:
         Error: If the gene is not named.
     """
-    if not gene.is_valid():
-        raise Error("A genome has no " + gene_label(gene))
+    require_valid(gene.is_valid(), "A genome has no " + gene_label(gene))
 
 
 struct Genome(Equatable, ImplicitlyCopyable, Writable):
@@ -284,10 +283,10 @@ struct Genome(Equatable, ImplicitlyCopyable, Writable):
                 or lies outside -1 through 1.
         """
         require_named_gene(gene)
-        if not expression.is_valid():
-            raise Error(
-                "The " + gene_label(gene) + " expression must lie in -1 to 1"
-            )
+        require_valid(
+            expression.is_valid(),
+            "The " + gene_label(gene) + " expression must lie in -1 to 1",
+        )
         var copy = self
         copy.expressions[gene.value] = expression.value
         return copy
@@ -332,8 +331,9 @@ def check_genome(genome: Genome, part: String) raises:
     Raises:
         Error: If an expression is not finite or lies outside -1 to 1.
     """
-    if not genome.is_valid():
-        raise Error("A " + part + " needs gene expressions in -1 to 1")
+    require_valid(
+        genome.is_valid(), "A " + part + " needs gene expressions in -1 to 1"
+    )
 
 
 def _mix(state: UInt64) -> UInt64:

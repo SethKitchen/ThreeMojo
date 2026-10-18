@@ -43,7 +43,7 @@ buckets do not hold a splat, is refused. A section that says it holds more
 splats than it has rows for is refused too, where three.js reads on into
 the next section.
 """
-from core.ordinal import ordinal_valid
+from core.ordinal import ordinal_valid, require_valid
 
 from core.gaussian_splat_utils import (
     GaussianSplatGeometry,
@@ -112,10 +112,10 @@ def ksplat_layout(level: KsplatCompressionLevel) raises -> KsplatLayout:
     Raises:
         Error: If the level is not 0, 1 or 2.
     """
-    if not level.is_valid():
-        raise Error(
-            "KSPLAT: unsupported compression level " + String(level.value)
-        )
+    require_valid(
+        level.is_valid(),
+        "KSPLAT: unsupported compression level " + String(level.value),
+    )
     if level == KSPLAT_UNCOMPRESSED:
         return KsplatLayout(12, 12, 16, 4, 4, 12, 24, 40, 1)
     var harmonic = 2
