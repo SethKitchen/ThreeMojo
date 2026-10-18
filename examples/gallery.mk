@@ -172,3 +172,5 @@ $(call gallery,genomes,genomes)
 $(call gallery,family,family)
 $(call gallery,talking,talking)
 $(call gallery,expressions,expressions)
+# The CPU fallback upscaler beside the full-size render. It is not DLSS, and no image of it is tracked.
+$(call gallery,streamline,streamline)
