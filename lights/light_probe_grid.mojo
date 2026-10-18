@@ -40,6 +40,7 @@ See `docs/wiki/Norm-consumers.md` for the changed operations, retained
 limits, and explicit zero and nonfinite rules.
 """
 
+from math.finite import positive_finite
 from math.norm import length3
 from math.smoothstep import smoothstep
 from math.spherical_harmonics3 import SH_COUNT, SphericalHarmonics3
@@ -185,7 +186,7 @@ def grid_falloff(
 def _default_probes(size: Length) raises -> Int:
     """Return three.js's default count, after checking the conversion."""
     var meters = size.to(METER)
-    if not (isfinite(meters) and meters > 0):
+    if not (positive_finite(Float64(meters))):
         raise Error("A light probe grid's size must be positive lengths")
     var rounded = floor(Float64(meters) + 0.5)
     if rounded >= Float64(MAX_GRID_AXIS):

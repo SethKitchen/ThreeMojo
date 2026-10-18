@@ -76,6 +76,7 @@ from lights.vxgi_scene_collector import (
     compute_scene_bounds,
 )
 from math.bounds import Box3
+from math.finite import positive_finite
 from math.smoothstep import smoothstep
 from math.vector3 import Vector3
 from std.math import ceil, cos, floor, isfinite, log2, pi, tan
@@ -1072,7 +1073,7 @@ struct VXGIVolume(Movable):
             raise Error("A VXGI volume's light count cannot be negative")
         if not isfinite(self.min_opacity):
             raise Error("A VXGI volume's minimum opacity must be finite")
-        if not (isfinite(self.step_scale) and self.step_scale > 0):
+        if not (positive_finite(Float64(self.step_scale))):
             raise Error("A VXGI volume's step scale must be positive")
         if not (
             isfinite(self.max_distance.value) and self.max_distance.value >= 0

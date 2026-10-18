@@ -13,6 +13,7 @@ The construction is covariant under a uniform scale. It avoids treating
 an under-resolved occupancy grid as dimensional validation.
 """
 
+from math.finite import positive_finite
 from extensions.animals.anatomy.body import (
     BODY_LENGTH,
     SHOULDER_HEIGHT,
@@ -129,6 +130,6 @@ def reference_length(animal: Animal) raises -> Length:
     var value = (
         withers - ground if body.reference == SHOULDER_HEIGHT else high - low
     )
-    if not (isfinite(Float32(value)) and Float32(value) > 0.0):
+    if not (positive_finite(Float64(Float32(value)))):
         raise Error("A reference landmark must fit a positive finite SI length")
     return Length(Float32(value), METER)

@@ -18,6 +18,7 @@ A walk at `Fr = 0.25` is a design choice: a comfortable walk below the
 transition for every size.
 """
 
+from math.finite import positive_finite
 from std.math import isfinite, pow, sqrt
 from units.si import (
     METER,
@@ -104,7 +105,7 @@ def stride_length(fr: Float64, hip: Length) raises -> Length:
     if not (fr > 0.0 and isfinite(fr)):
         raise Error("A stride needs a positive Froude number")
     var stride = Float32(2.3 * pow(fr, 0.3) * h)
-    if not (isfinite(stride) and stride > 0.0):
+    if not (positive_finite(Float64(stride))):
         raise Error("A stride must fit a positive finite SI quantity")
     return Length(stride, METER)
 
