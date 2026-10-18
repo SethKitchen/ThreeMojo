@@ -120,6 +120,30 @@ comptime SECONDARY = PointerButton(2)
 comptime NO_BUTTON = PointerButton(-1)
 
 
+def button_choice[
+    A: ImplicitlyCopyable
+](button: PointerButton, primary: A, middle: A, secondary: A, none: A) -> A:
+    """Return the value a pointer button maps to.
+
+    Args:
+        button: The button, or `NO_BUTTON`.
+        primary: The value for the left button.
+        middle: The value for the middle button.
+        secondary: The value for the right button.
+        none: The value when the button is none of those three.
+
+    Returns:
+        The value for that button.
+    """
+    if button == PRIMARY:
+        return primary
+    if button == MIDDLE:
+        return middle
+    if button == SECONDARY:
+        return secondary
+    return none
+
+
 @fieldwise_init
 struct Key(Equatable, ImplicitlyCopyable, Writable):
     """A key, as a type rather than a bare int.

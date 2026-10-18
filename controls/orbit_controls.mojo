@@ -44,15 +44,13 @@ from controls.input import (
     ARROW_UP,
     KEY_DOWN,
     InputEvent,
+    button_choice,
     require_input,
     Key,
-    MIDDLE,
     POINTER_DOWN,
     POINTER_MOVE,
     POINTER_UP,
-    PRIMARY,
     PointerButton,
-    SECONDARY,
     WHEEL,
 )
 from math.matrix4 import Matrix4
@@ -521,13 +519,13 @@ struct OrbitControls(Copyable, Movable):
         Raises:
             Error: If the action set for the button is invalid.
         """
-        var action = NO_ACTION
-        if button == PRIMARY:
-            action = self.primary_action
-        elif button == MIDDLE:
-            action = self.middle_action
-        elif button == SECONDARY:
-            action = self.secondary_action
+        var action = button_choice(
+            button,
+            self.primary_action,
+            self.middle_action,
+            self.secondary_action,
+            NO_ACTION,
+        )
         if not action.is_valid():
             raise Error("Invalid orbit action: ", action.value)
         return action
