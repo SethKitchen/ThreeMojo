@@ -29,8 +29,8 @@ from extensions.sdf.ids import BoneId
 from extensions.animals.parts import JAW
 from extensions.sdf.sculpt import ell_y
 from extensions.animals.kit import (
+    digitigrade_fore,
     digitigrade_hind,
-    fore_reach,
     EyeSpec,
     eye_frame_of,
     sculpt_eye_socket,
@@ -909,14 +909,10 @@ def horse_sculpt(mut m: SdfModel, rig: Rig, t: Traits) raises:
 
 def _foreleg(mut m: SdfModel, rig: Rig, side: String) raises:
     var s = 1.0 if side == "L" else -1.0
-    var lat, sc, sh, e, w, mc = fore_reach(rig, side, s)
+    var lat, sc, sh, e, w, mc, toe, scap, hum, rad, meta, fpaw = (
+        digitigrade_fore(rig, side, s)
+    )
     var c = rig.j("fcoffin" + side)
-    var toe = rig.j("ftoe" + side)
-    var scap = rig.bone("scapula" + side)
-    var hum = rig.bone("humerus" + side)
-    var rad = rig.bone("radius" + side)
-    var meta = rig.bone("metacarpus" + side)
-    var fpaw = rig.bone("fpaw" + side)
     _ = ell_y(
         m,
         "scapmuscle",

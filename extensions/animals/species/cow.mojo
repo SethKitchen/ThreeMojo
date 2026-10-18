@@ -37,8 +37,8 @@ from extensions.animals.parts import (
 )
 from extensions.sdf.sculpt import ell_y
 from extensions.animals.kit import (
+    digitigrade_fore,
     digitigrade_hind,
-    fore_reach,
     EyeSpec,
     eye_frame_of,
     sculpt_eye_socket,
@@ -1189,11 +1189,9 @@ def _foreleg(
     mut m: SdfModel, rig: Rig, side: String, leg_k: Float64, bull: Float64
 ) raises:
     var s = 1.0 if side == "L" else -1.0
-    var lat, sc, sh, e, w, mc = fore_reach(rig, side, s)
-    var scap = rig.bone("scapula" + side)
-    var hum = rig.bone("humerus" + side)
-    var rad = rig.bone("radius" + side)
-    var meta = rig.bone("metacarpus" + side)
+    var lat, sc, sh, e, w, mc, toe, scap, hum, rad, meta, fpaw = (
+        digitigrade_fore(rig, side, s)
+    )
     _ = ell_y(
         m,
         "scapmuscle",
@@ -1294,11 +1292,11 @@ def _foreleg(
     )
     _digits(
         m,
-        rig.bone("fpaw" + side),
+        fpaw,
         rig.bone("fhoof" + side),
         mc,
         rig.j("fcoffin" + side),
-        rig.j("ftoe" + side),
+        toe,
         leg_k,
     )
 
