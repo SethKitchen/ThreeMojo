@@ -927,8 +927,7 @@ struct TransformControls(Copyable, Movable):
         if local:
             turn = self._quaternion_start
         node.position = (
-            _divided(turn.rotate(offset), frame.parent.scale)
-            + self._position_start
+            turn.rotate(offset) / frame.parent.scale + self._position_start
         )
         if Bool(self.translation_snap):
             var step = self.translation_snap.value().to(METER)
@@ -1415,19 +1414,6 @@ def _masked(offset: Vector3, axis: TransformAxis) raises -> Vector3:
         offset.y if axis.has("Y") else 0,
         offset.z if axis.has("Z") else 0,
     )
-
-
-def _divided(value: Vector3, by: Vector3) -> Vector3:
-    """Return `value` divided by `by`, part by part.
-
-    Args:
-        value: The dividend.
-        by: The divisor.
-
-    Returns:
-        The quotient.
-    """
-    return Vector3(value.x / by.x, value.y / by.y, value.z / by.z)
 
 
 def _snapped(

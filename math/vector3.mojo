@@ -144,6 +144,19 @@ struct Vector3(Equatable, ImplicitlyCopyable, PolylineVertex):
         """
         return self * (1 / divisor)
 
+    def __truediv__(self, other: Self) -> Self:
+        """Return each component divided by `other`'s, three.js's `divide`.
+
+        A zero divisor gives an infinity or a not-a-number, as there.
+
+        Args:
+            other: The divisors.
+
+        Returns:
+            The quotient.
+        """
+        return Vector3(self.x / other.x, self.y / other.y, self.z / other.z)
+
     def __eq__(self, other: Self) -> Bool:
         """Return True if every component is exactly equal, three.js's
         `equals`.
@@ -532,7 +545,7 @@ struct Vector3(Equatable, ImplicitlyCopyable, PolylineVertex):
         Args:
             other: The divisors.
         """
-        self = Vector3(self.x / other.x, self.y / other.y, self.z / other.z)
+        self = self / other
 
     def floor(mut self):
         """Round each component down, three.js's `floor`."""
