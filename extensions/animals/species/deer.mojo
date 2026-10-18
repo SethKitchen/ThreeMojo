@@ -24,6 +24,7 @@ from extensions.animals.coat import (
     Palette,
     grizzle,
     mix3,
+    shade_swatch,
     srgb,
 )
 from extensions.sdf.ids import BoneId
@@ -1282,11 +1283,7 @@ def deer_palette(t: Traits) -> Palette:
         var c = srgb(hex[i])
         pal.set(
             names[i],
-            V3(
-                c.x * (1.0 + 0.07 * k + l),
-                c.y * (1.0 + 0.01 * k + l),
-                c.z * (1.0 - 0.08 * k + l),
-            ),
+            shade_swatch(c, k, l, 0.07, 0.01, -0.08),
         )
     pal.set("white", srgb(0xEFEAE0))
     pal.set("spot", srgb(0xEEE4D0))

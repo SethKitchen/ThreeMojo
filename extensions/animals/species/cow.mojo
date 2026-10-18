@@ -25,6 +25,7 @@ from extensions.animals.coat import (
     Palette,
     grizzle,
     mix3,
+    shade_swatch,
     srgb,
 )
 from extensions.sdf.ids import BoneId
@@ -1576,8 +1577,8 @@ def cow_palette(t: Traits) -> Palette:
     var pal = Palette()
     var tinted: List[String] = [String("body"), "dorsal", "belly", "head"]
     for i in range(4):  # pragma: no branch
-        pal.set(tinted[i], _tint(srgb(hex[i]), k, l))
-    pal.set("dark", _tint(srgb(hex[6]), k, l))
+        pal.set(tinted[i], shade_swatch(srgb(hex[i]), k, l, 0.08, 0.0, -0.08))
+    pal.set("dark", shade_swatch(srgb(hex[6]), k, l, 0.08, 0.0, -0.08))
     pal.set("white", srgb(hex[4]))
     pal.set("muzzleDark", srgb(hex[5]))
     pal.set("pink", srgb(0xD99A8E))
@@ -1604,14 +1605,6 @@ def cow_palette(t: Traits) -> Palette:
     pal.set("eyeY", ef.y)
     pal.set("eyeZ", ef.z)
     return pal^
-
-
-def _tint(c: V3, k: Float64, l: Float64) -> V3:
-    return V3(
-        c.x * (1.0 + 0.08 * k + l),
-        c.y * (1.0 + l),
-        c.z * (1.0 - 0.08 * k + l),
-    )
 
 
 def _pied(pal: Palette, t: Traits, p: V3) -> Float64:

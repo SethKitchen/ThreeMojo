@@ -24,6 +24,7 @@ from extensions.animals.coat import (
     Palette,
     grizzle,
     mix3,
+    shade_swatch,
     srgb,
 )
 from extensions.animals.parts import (
@@ -1537,11 +1538,7 @@ def lion_palette(t: Traits) -> Palette:
     for i in range(len(names)):  # pragma: no branch
         var c = srgb(hexes[i])
         if not _bare(i):
-            c = V3(
-                c.x * (1.0 + 0.18 * k + l),
-                c.y * (1.0 + 0.04 * k + l),
-                c.z * (1.0 - 0.2 * k + l),
-            )
+            c = shade_swatch(c, k, l, 0.18, 0.04, -0.2)
             var y = rec709_luminance(c.x, c.y, c.z)
             c = V3(
                 max(0.0, mix(y, c.x, 1.15)),

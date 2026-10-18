@@ -24,6 +24,7 @@ from extensions.animals.coat import (
     Palette,
     mix3,
     palette_of,
+    shade_swatch,
     srgb,
 )
 from extensions.sdf.ids import (
@@ -2009,11 +2010,7 @@ def sheep_palette(t: Traits) raises -> Palette:
         var c = base.get(name)
         out.set(
             name,
-            V3(
-                c.x * (1.0 + 0.05 * k + l),
-                c.y * (1.0 + l),
-                c.z * (1.0 - 0.06 * k + l),
-            ),
+            shade_swatch(c, k, l, 0.05, 0.0, -0.06),
         )
     out.set("horn", srgb(Int(t.get("hornColor", 0.0))))
     out.set("hornDark", srgb(0x6E5A42))

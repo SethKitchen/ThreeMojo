@@ -22,6 +22,7 @@ from extensions.animals.coat import (
     Palette,
     grizzle,
     mix3,
+    shade_swatch,
     srgb,
 )
 from extensions.sdf.ids import BoneId
@@ -1753,11 +1754,7 @@ def goat_palette(t: Traits) raises -> Palette:
         var c = srgb(hexes[i])
         out.set(
             names[i],
-            V3(
-                c.x * (1.0 + 0.06 * k + l),
-                c.y * (1.0 + l),
-                c.z * (1.0 - 0.06 * k + l),
-            ),
+            shade_swatch(c, k, l, 0.06, 0.0, -0.06),
         )
     out.set("mark", srgb(hexes[4]))
     out.set("horn", srgb(Int(t.get("hornColor", 0.0))))

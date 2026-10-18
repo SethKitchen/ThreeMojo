@@ -34,6 +34,7 @@ from extensions.animals.coat import (
     paint_eye,
     palette_of,
     shade,
+    shade_swatch,
     srgb,
 )
 from extensions.animals.gait import (
@@ -156,6 +157,10 @@ def test_surface_classes_and_palettes() raises:
     with assert_raises(contains="one color per name"):
         _ = palette_of(names, [0xFF0000])
     assert_equal(len(palette_of(List[String](), List[Int]()).names), 0)
+    var scaled = shade_swatch(V3(2, 3, 4), 0.5, 0.25, 0.1, 0.0, -0.2)
+    assert_equal(scaled.x, 2.0 * (1.0 + 0.1 * 0.5 + 0.25))
+    assert_equal(scaled.y, 3.0 * (1.0 + 0.25))
+    assert_equal(scaled.z, 4.0 * (1.0 - 0.2 * 0.5 + 0.25))
     assert_almost_equal(Palette().get("any").y, 0.18)
 
 

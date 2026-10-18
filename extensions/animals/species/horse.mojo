@@ -23,6 +23,7 @@ from extensions.animals.coat import (
     Palette,
     grizzle,
     mix3,
+    shade_swatch,
     srgb,
 )
 from extensions.sdf.ids import BoneId
@@ -1254,11 +1255,7 @@ def horse_palette(t: Traits) raises -> Palette:
         var c = srgb(hex[i])
         pal.set(
             tinted[i],
-            V3(
-                c.x * (1.0 + 0.08 * k + l),
-                c.y * (1.0 + l),
-                c.z * (1.0 - 0.08 * k + l),
-            ),
+            shade_swatch(c, k, l, 0.08, 0.0, -0.08),
         )
     pal.set("points", srgb(hex[4]))
     var flaxen = t.get("flaxen", 0.0) > 0.5

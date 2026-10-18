@@ -22,6 +22,7 @@ from extensions.animals.coat import (
     Paint,
     Palette,
     mix3,
+    shade_swatch,
     srgb,
 )
 from extensions.animals.parts import JAW
@@ -797,11 +798,7 @@ def cheetah_palette(t: Traits) -> Palette:
             or i == FACE
         )
         if tawny:
-            c = V3(
-                c.x * (1.0 + 0.1 * k + l),
-                c.y * (1.0 + 0.02 * k + l),
-                c.z * (1.0 - 0.12 * k + l),
-            )
+            c = shade_swatch(c, k, l, 0.1, 0.02, -0.12)
         pal.set(names[i], c)
     return pal^
 
