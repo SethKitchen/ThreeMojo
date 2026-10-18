@@ -65,6 +65,7 @@ from extensions.humanoid.skeleton.loft import (
     fit_loft,
     loft_distance,
 )
+from math.bounds import enclose_point
 from math.vector3 import Vector3
 from std.math import abs, max, min
 
@@ -221,14 +222,8 @@ def skin_distance(
 
 def _grow(mut low: Vector3, mut high: Vector3, loft: Loft):
     """Grow the box from `low` to `high` around one loft."""
-    low = Vector3(
-        min(low.x, loft.low.x), min(low.y, loft.low.y), min(low.z, loft.low.z)
-    )
-    high = Vector3(
-        max(high.x, loft.high.x),
-        max(high.y, loft.high.y),
-        max(high.z, loft.high.z),
-    )
+    enclose_point(low, high, loft.low)
+    enclose_point(low, high, loft.high)
 
 
 def _toe(

@@ -150,6 +150,23 @@ def _plane_coplanar_components_wide(
     )
 
 
+def enclose_point(mut low: Vector3, mut high: Vector3, point: Vector3):
+    """Grow a box that already holds a point so it also holds `point`.
+
+    An empty box is `Box3.expand_by_point`. This keeps the comparisons
+    a box makes once it holds something.
+
+    Args:
+        low: The box's low corner. It already holds a point.
+        high: The box's high corner.
+        point: The point to take in.
+    """
+    low = Vector3(min(low.x, point.x), min(low.y, point.y), min(low.z, point.z))
+    high = Vector3(
+        max(high.x, point.x), max(high.y, point.y), max(high.z, point.z)
+    )
+
+
 @fieldwise_init
 struct Box3(Equatable, ImplicitlyCopyable):
     """An axis-aligned box: its smallest and largest corner."""
@@ -207,16 +224,7 @@ struct Box3(Equatable, ImplicitlyCopyable):
             self.min = point
             self.max = point
             return
-        self.min = Vector3(
-            min(self.min.x, point.x),
-            min(self.min.y, point.y),
-            min(self.min.z, point.z),
-        )
-        self.max = Vector3(
-            max(self.max.x, point.x),
-            max(self.max.y, point.y),
-            max(self.max.z, point.z),
-        )
+        enclose_point(self.min, self.max, point)
 
     def union(mut self, other: Box3):
         """Grow this box to hold everything `other` holds, three.js's

@@ -74,6 +74,7 @@ from extensions.humanoid.skeleton.loft import (
     loft_distance,
 )
 from extensions.humanoid.skeleton.morph import smoothstep
+from math.bounds import enclose_point
 from math.vector3 import Vector3
 from std.math import max, min
 
@@ -223,16 +224,8 @@ struct HandSkinField(Copyable, DistanceField, Movable):
         var low = self.lofts[0].low
         var high = self.lofts[0].high
         for index in range(1, len(self.lofts)):  # pragma: no branch
-            low = Vector3(
-                min(low.x, self.lofts[index].low.x),
-                min(low.y, self.lofts[index].low.y),
-                min(low.z, self.lofts[index].low.z),
-            )
-            high = Vector3(
-                max(high.x, self.lofts[index].high.x),
-                max(high.y, self.lofts[index].high.y),
-                max(high.z, self.lofts[index].high.z),
-            )
+            enclose_point(low, high, self.lofts[index].low)
+            enclose_point(low, high, self.lofts[index].high)
         high.y = min(high.y, self.top + f.cm(JOIN_CLOSE))
         self.low = low
         self.high = high

@@ -34,6 +34,7 @@ from core.buffer_attribute import BufferAttribute
 from core.buffer_geometry import BufferGeometry, NORMAL, POSITION, UV
 from core.geometry_store import GeometryId
 from core.scene import Scene
+from math.bounds import enclose_point
 from math.vector3 import Vector3
 from render.tasks import TaskGroup
 from std.collections import Dict
@@ -487,12 +488,7 @@ def weld(mesh: WeldedMesh) -> WeldedMesh:
         high = mesh.positions[0]
     for vertex in range(count):
         var point = mesh.positions[vertex]
-        low = Vector3(
-            min(low.x, point.x), min(low.y, point.y), min(low.z, point.z)
-        )
-        high = Vector3(
-            max(high.x, point.x), max(high.y, point.y), max(high.z, point.z)
-        )
+        enclose_point(low, high, point)
     var span = max(high.x - low.x, max(high.y - low.y, high.z - low.z))
     # A mesh too wide for the step is welded more coarsely, so each
     # axis fits its bits of the key.

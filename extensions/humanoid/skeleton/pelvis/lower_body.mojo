@@ -59,8 +59,9 @@ from extensions.humanoid.skeleton.pelvis.muscles.dimensions import (
 from extensions.humanoid.skeleton.pelvis.skin.dimensions import PelvisSkinField
 from extensions.humanoid.skeleton.place import place_mesh
 from materials.material import MaterialId
+from math.bounds import enclose_point
 from math.vector3 import Vector3
-from std.math import max, min
+from std.math import max
 
 # The crotch, as shares of the stature: how far below the pubic
 # symphysis the thighs part, how wide the crease between them is, and
@@ -128,10 +129,10 @@ struct LowerBodySkinField(Copyable, DistanceField, Movable):
         self.epsilon = self.pelvis.epsilon
         var low = self.pelvis.low
         var high = self.pelvis.high
-        _grow(low, high, self.right.low + self.right_origin)
-        _grow(low, high, self.right.high + self.right_origin)
-        _grow(low, high, self.left.low + self.left_origin)
-        _grow(low, high, self.left.high + self.left_origin)
+        enclose_point(low, high, self.right.low + self.right_origin)
+        enclose_point(low, high, self.right.high + self.right_origin)
+        enclose_point(low, high, self.left.low + self.left_origin)
+        enclose_point(low, high, self.left.high + self.left_origin)
         self.low = low
         self.high = high
 
@@ -365,11 +366,3 @@ def _foot_bits(contents: PelvisContents) -> Int:
     the same bits as the pelvis's.
     """
     return contents.value & 63
-
-
-def _grow(mut low: Vector3, mut high: Vector3, point: Vector3):
-    """Grow a box to hold `point`."""
-    low = Vector3(min(low.x, point.x), min(low.y, point.y), min(low.z, point.z))
-    high = Vector3(
-        max(high.x, point.x), max(high.y, point.y), max(high.z, point.z)
-    )
