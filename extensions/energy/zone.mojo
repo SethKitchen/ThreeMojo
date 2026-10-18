@@ -27,7 +27,7 @@ and ISO 17772-1 Annex. They are typical values, not design values. A
 project must use its own.
 """
 
-from math.finite import positive_finite
+from math.finite import require_positive_finite
 from std.math import isfinite
 from extensions.building.construction import (
     Construction,
@@ -88,13 +88,10 @@ def _nonnegative(value: Float64, message: String) raises:
         raise Error(message)
 
 
-def _positive(value: Float64, message: String) raises:
-    if not positive_finite(value):
-        raise Error(message)
-
-
 def _check_normal(normal: Vec3d) raises:
-    _positive(normal.length(), "A normal must be nonzero and finite")
+    require_positive_finite(
+        normal.length(), "A normal must be nonzero and finite"
+    )
 
 
 @fieldwise_init
@@ -337,7 +334,9 @@ struct Zone(Copyable, Movable):
                 heating setpoint is above the cooling setpoint.
         """
         require_space_use(self.use)
-        _positive(self.volume.value, "A zone volume must be positive")
+        require_positive_finite(
+            self.volume.value, "A zone volume must be positive"
+        )
         _nonnegative(self.floor_area.value, "A floor area must be zero or more")
         _nonnegative(
             self.infiltration.value, "An infiltration must be zero or more"
@@ -557,14 +556,22 @@ struct ZoneModel(Movable):
             self.check_zone(surface.outside.value())
         elif surface.outside:
             raise Error("Only an interzone surface has an outside zone")
-        _positive(surface.area.value, "A surface area must be positive")
+        require_positive_finite(
+            surface.area.value, "A surface area must be positive"
+        )
         _check_normal(surface.normal)
-        _positive(surface.inside_film.value, "A film must be positive")
-        _positive(surface.outside_film.value, "A film must be positive")
+        require_positive_finite(
+            surface.inside_film.value, "A film must be positive"
+        )
+        require_positive_finite(
+            surface.outside_film.value, "A film must be positive"
+        )
 
     def _check_window(self, window: Window) raises:
         self.check_zone(window.zone)
-        _positive(window.area.value, "A window area must be positive")
+        require_positive_finite(
+            window.area.value, "A window area must be positive"
+        )
         window.glazing.check()
         _check_normal(window.normal)
 
