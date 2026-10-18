@@ -15,7 +15,7 @@ from core.buffer_geometry import BufferGeometry, COLOR
 from geometries.surface import position_normal_surface
 from core.object3d import NodeId, Object3D
 from core.scene import Scene
-from generators.utils import Vec3d
+from generators.utils import Vec3d, append_z_up_as_y_up
 from lights.light import ambient_light, directional_light
 from materials.material import Material
 from math.utils import clamp
@@ -51,12 +51,7 @@ struct Triangles(Movable):
         var corners = [a, b, c]
         for k in range(3):
             var p = corners[k]
-            self.positions.append(Float32(p.x))
-            self.positions.append(Float32(p.z))
-            self.positions.append(Float32(-p.y))
-            self.normals.append(Float32(n.x))
-            self.normals.append(Float32(n.z))
-            self.normals.append(Float32(-n.y))
+            append_z_up_as_y_up(self.positions, self.normals, p, n)
             append_float64_xyz(self.colors, color.x, color.y, color.z)
 
     def box(mut self, start: Vec3d, end: Vec3d, size: Float64, color: Vec3d):
