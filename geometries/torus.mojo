@@ -45,7 +45,7 @@ from geometries.circle import FULL_TURN, check_sweep
 from geometries.grid import grid_index
 from math.vector3 import Vector3, append_vector3
 from std.math import cos, pi, sin
-from units.si import Angle, Length, METER, RADIAN
+from units.si import Angle, Length
 
 # How far along the knot's parameter the second point is taken, to give the
 # frame a tangent. three.js's step, so the frames and therefore the vertices
@@ -164,11 +164,11 @@ def torus(
     )
     geometry.kind = TORUS_GEOMETRY
     geometry.parameters = UserData()
-    geometry.parameters.set_number("radius", Float64(radius.to(METER)))
-    geometry.parameters.set_number("tube", Float64(tube.to(METER)))
+    geometry.parameters.set_meters("radius", radius)
+    geometry.parameters.set_meters("tube", tube)
     geometry.parameters.set_number("radialSegments", Float64(radial_segments))
     geometry.parameters.set_number("tubularSegments", Float64(tubular_segments))
-    geometry.parameters.set_number("arc", Float64(arc.to(RADIAN)))
+    geometry.parameters.set_radians("arc", arc)
     return geometry^
 
 
@@ -289,8 +289,8 @@ def torus_knot(
     )
     geometry.kind = TORUS_KNOT_GEOMETRY
     geometry.parameters = UserData()
-    geometry.parameters.set_number("radius", Float64(radius.to(METER)))
-    geometry.parameters.set_number("tube", Float64(tube.to(METER)))
+    geometry.parameters.set_meters("radius", radius)
+    geometry.parameters.set_meters("tube", tube)
     geometry.parameters.set_number("tubularSegments", Float64(tubular_segments))
     geometry.parameters.set_number("radialSegments", Float64(radial_segments))
     geometry.parameters.set_number("p", Float64(p))

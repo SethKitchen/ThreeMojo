@@ -219,6 +219,6 @@ def lathe(
     geometry.parameters = UserData()
     geometry.parameters.set_json("points", _points_json(points))
     geometry.parameters.set_number("segments", Float64(segments))
-    geometry.parameters.set_number("phiStart", Float64(phi_start.to(RADIAN)))
-    geometry.parameters.set_number("phiLength", Float64(phi_length.to(RADIAN)))
+    geometry.parameters.set_radians("phiStart", phi_start)
+    geometry.parameters.set_radians("phiLength", phi_length)
     return geometry^

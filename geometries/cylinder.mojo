@@ -285,20 +285,14 @@ def cylinder(
         begin = runs[part]
     geometry.kind = CYLINDER_GEOMETRY
     geometry.parameters = UserData()
-    geometry.parameters.set_number("radiusTop", Float64(radius_top.to(METER)))
-    geometry.parameters.set_number(
-        "radiusBottom", Float64(radius_bottom.to(METER))
-    )
-    geometry.parameters.set_number("height", Float64(height.to(METER)))
+    geometry.parameters.set_meters("radiusTop", radius_top)
+    geometry.parameters.set_meters("radiusBottom", radius_bottom)
+    geometry.parameters.set_meters("height", height)
     geometry.parameters.set_number("radialSegments", Float64(radial_segments))
     geometry.parameters.set_number("heightSegments", Float64(height_segments))
     geometry.parameters.set_boolean("openEnded", open_ended)
-    geometry.parameters.set_number(
-        "thetaStart", Float64(theta_start.to(RADIAN))
-    )
-    geometry.parameters.set_number(
-        "thetaLength", Float64(theta_length.to(RADIAN))
-    )
+    geometry.parameters.set_radians("thetaStart", theta_start)
+    geometry.parameters.set_radians("thetaLength", theta_length)
     return geometry^
 
 
@@ -345,15 +339,11 @@ def cone(
     )
     geometry.kind = CONE_GEOMETRY
     geometry.parameters = UserData()
-    geometry.parameters.set_number("radius", Float64(radius.to(METER)))
-    geometry.parameters.set_number("height", Float64(height.to(METER)))
+    geometry.parameters.set_meters("radius", radius)
+    geometry.parameters.set_meters("height", height)
     geometry.parameters.set_number("radialSegments", Float64(radial_segments))
     geometry.parameters.set_number("heightSegments", Float64(height_segments))
     geometry.parameters.set_boolean("openEnded", open_ended)
-    geometry.parameters.set_number(
-        "thetaStart", Float64(theta_start.to(RADIAN))
-    )
-    geometry.parameters.set_number(
-        "thetaLength", Float64(theta_length.to(RADIAN))
-    )
+    geometry.parameters.set_radians("thetaStart", theta_start)
+    geometry.parameters.set_radians("thetaLength", theta_length)
     return geometry^

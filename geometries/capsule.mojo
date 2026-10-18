@@ -157,8 +157,8 @@ def capsule(
     indexed_surface(geometry, data^, normals^, uvs^, index^)
     geometry.kind = CAPSULE_GEOMETRY
     geometry.parameters = UserData()
-    geometry.parameters.set_number("radius", Float64(radius.to(METER)))
-    geometry.parameters.set_number("height", Float64(length.to(METER)))
+    geometry.parameters.set_meters("radius", radius)
+    geometry.parameters.set_meters("height", length)
     geometry.parameters.set_number("capSegments", Float64(cap_segments))
     geometry.parameters.set_number("radialSegments", Float64(radial_segments))
     geometry.parameters.set_number("heightSegments", Float64(height_segments))
