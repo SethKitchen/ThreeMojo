@@ -66,6 +66,7 @@ from loaders.fbx import sanitize_node_name
 from loaders.gltf import (
     _apply_matrix,
     decode_base64,
+    require_rising_sparse_index,
     require_sparse_indices,
     split_glb,
 )
@@ -441,10 +442,7 @@ def _apply_sparse_splat(
                 False,
             )
         )
-        if element <= last or element >= count:
-            raise Error(
-                "glTF: sparse indices must rise and stay inside the accessor"
-            )
+        require_rising_sparse_index(element, last, count)
         last = element
         for lane in range(width):  # pragma: no branch
             values[element * width + lane] = _component(

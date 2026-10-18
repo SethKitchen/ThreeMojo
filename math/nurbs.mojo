@@ -701,6 +701,23 @@ def _checked_project(h: Point4) raises -> Point3:
     return _checked_finite(_project(h))
 
 
+def require_nurbs_box(held: Int, expected: Int) raises:
+    """Refuse a NURBS volume whose control points leave a hole in the box.
+
+    Args:
+        held: How many points the row or plane holds.
+        expected: How many points that row or plane must hold.
+
+    Returns:
+        Nothing. The call returns when the two counts are equal.
+
+    Raises:
+        Error: If the counts differ.
+    """
+    if held != expected:
+        raise Error("A NURBS volume's control points must fill a box")
+
+
 def _checked_vector(p: Point3) raises -> Vector3:
     """Refuse coordinates outside Float32 before narrowing to a Vector3."""
     for axis in range(3):  # pragma: no branch
@@ -1002,14 +1019,10 @@ struct NURBSVolume(Copyable, Movable):
         self.control_points = List[List[List[Point4]]]()
         for i in range(n1):  # pragma: no branch
             # `_checked_knots` refused no points, so each loop runs.
-            if len(control_points[i]) != n2:
-                raise Error("A NURBS volume's control points must fill a box")
+            require_nurbs_box(len(control_points[i]), n2)
             var plane = List[List[Point4]]()
             for j in range(n2):  # pragma: no branch
-                if len(control_points[i][j]) != n3:
-                    raise Error(
-                        "A NURBS volume's control points must fill a box"
-                    )
+                require_nurbs_box(len(control_points[i][j]), n3)
                 var row = List[Point4]()
                 for k in range(n3):  # pragma: no branch
                     row.append(_checked_point(control_points[i][j][k]))

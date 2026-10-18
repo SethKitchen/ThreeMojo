@@ -343,6 +343,28 @@ def require_sparse_indices(index_type: Int) raises:
         raise Error("glTF: sparse indices must be unsigned integers")
 
 
+def require_rising_sparse_index(element: Int, last: Int, count: Int) raises:
+    """Refuse a glTF sparse index that does not rise, or that falls outside
+    the accessor.
+
+    Args:
+        element: The index just read.
+        last: The previous index, or -1 before the first.
+        count: How many elements the accessor has.
+
+    Returns:
+        Nothing. The call returns when the index is above `last` and below
+            `count`.
+
+    Raises:
+        Error: If the index is at or below `last`, or at or past `count`.
+    """
+    if element <= last or element >= count:
+        raise Error(
+            "glTF: sparse indices must rise and stay inside the accessor"
+        )
+
+
 def require_gltf_mesh(mesh: Int, count: Int) raises:
     """Refuse a glTF node mesh that the file does not have.
 
@@ -1662,11 +1684,7 @@ struct _Loader(Movable):
             )
             # The specification has them strictly rising, which also keeps
             # each one inside the accessor once the last is.
-            if element <= last or element >= count:
-                raise Error(
-                    "glTF: sparse indices must rise and stay inside the"
-                    " accessor"
-                )
+            require_rising_sparse_index(element, last, count)
             last = element
             for lane in range(width):  # pragma: no branch
                 out[element * width + lane] = _read_component[dtype](

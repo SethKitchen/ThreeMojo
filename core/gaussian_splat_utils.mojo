@@ -470,6 +470,28 @@ struct GaussianSplatGeometry(Copyable, Movable):
         return self.sh3.copy()
 
 
+def require_contiguous_harmonics(
+    higher_present: Bool, lower_missing: Bool
+) raises:
+    """Refuse a spherical-harmonics band that skips a lower band.
+
+    Args:
+        higher_present: Whether a higher band is present.
+        lower_missing: Whether a lower band is absent.
+
+    Returns:
+        Nothing. The call returns when the higher band is absent, or every
+            lower band is present.
+
+    Raises:
+        Error: If a higher band is present and a lower band is absent.
+    """
+    if higher_present and lower_missing:
+        raise Error(
+            "Gaussian splat: spherical harmonics bands must be contiguous"
+        )
+
+
 def create_gaussian_splat_geometry(
     var centers: List[Float32],
     var covariances: List[Float32],
@@ -510,15 +532,9 @@ def create_gaussian_splat_geometry(
     _check_band(sh3, count, 3)
     # three.js: `Spherical harmonics attributes must be contiguous.`
     var missing = len(sh1) == 0
-    if len(sh2) > 0 and missing:
-        raise Error(
-            "Gaussian splat: spherical harmonics bands must be contiguous"
-        )
+    require_contiguous_harmonics(len(sh2) > 0, missing)
     missing = missing or len(sh2) == 0
-    if len(sh3) > 0 and missing:
-        raise Error(
-            "Gaussian splat: spherical harmonics bands must be contiguous"
-        )
+    require_contiguous_harmonics(len(sh3) > 0, missing)
     var geometry = GaussianSplatGeometry()
     geometry.centers = centers^
     geometry.covariances = covariances^
@@ -585,10 +601,9 @@ def spherical_harmonics_degree(geometry: BufferGeometry) raises -> Int:
             )
         degree = band
     for band in range(degree + 1, MAX_SH_DEGREE + 1):
-        if geometry.has_attribute("sphericalHarmonics" + String(band)):
-            raise Error(
-                "Gaussian splat: spherical harmonics bands must be contiguous"
-            )
+        require_contiguous_harmonics(
+            geometry.has_attribute("sphericalHarmonics" + String(band)), True
+        )
     if not geometry.has_attribute(String(POSITION)):
         return degree
     var count = geometry.attribute_view(String(POSITION)).count()

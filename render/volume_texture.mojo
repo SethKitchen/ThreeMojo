@@ -95,6 +95,24 @@ def _check_extent(width: Int, height: Int, depth: Int, channels: Int) raises:
         length *= factor
 
 
+def require_volume_length(held: Int, expected: Int) raises:
+    """Refuse a volume whose texel list is a different length from its
+    dimensions.
+
+    Args:
+        held: How many numbers the list holds.
+        expected: How many numbers the dimensions require.
+
+    Returns:
+        Nothing. The call returns when the two lengths are equal.
+
+    Raises:
+        Error: If the lengths differ.
+    """
+    if held != expected:
+        raise Error("A volume texture's length does not match its dimensions")
+
+
 struct VolumeImage(Movable):
     """The texels of a `Data3DTexture` or a `DataArrayTexture`: three.js's
     `texture.image`, `{ data, width, height, depth }`.
@@ -184,10 +202,7 @@ struct VolumeImage(Movable):
         """
         _check_extent(width, height, depth, channels)
         var count = width * height * depth
-        if len(pixels) != count * channels:
-            raise Error(
-                "A volume texture's length does not match its dimensions"
-            )
+        require_volume_length(len(pixels), count * channels)
         var stored = List[UInt8]()
         stored.reserve(count * VOLUME_CHANNELS)
         # The dimensions are positive, so neither loop runs zero times.
@@ -241,10 +256,7 @@ struct VolumeImage(Movable):
         """
         _check_extent(width, height, depth, channels)
         var count = width * height * depth
-        if len(data) != count * channels:
-            raise Error(
-                "A volume texture's length does not match its dimensions"
-            )
+        require_volume_length(len(data), count * channels)
         var stored = List[Float32]()
         stored.reserve(count * VOLUME_CHANNELS)
         # The dimensions are positive, so neither loop runs zero times.
@@ -288,10 +300,7 @@ struct VolumeImage(Movable):
         var held = len(self.pixels)
         if self.texel_type == FLOAT_TYPE:
             held = len(self.data)
-        if held != length:
-            raise Error(
-                "A volume texture's length does not match its dimensions"
-            )
+        require_volume_length(held, length)
 
     def _offset(self, x: Int, y: Int, z: Int) -> Int:
         """Return where texel `(x, y, z)` starts, all three inside."""
