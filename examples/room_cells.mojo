@@ -12,7 +12,7 @@ Each cell is drawn shrunk toward its center and lifted by its storey, so
 the shared faces between cells show as gaps.
 """
 
-from examples.output import example_destination, spin_daylight
+from examples.output import build_and_spin, example_destination
 from examples.preview import Triangles
 
 from cameras.perspective_camera import PerspectiveCamera
@@ -144,19 +144,12 @@ def _camera() raises -> PerspectiveCamera:
 
 
 def main() raises:
-    var assets = Assets()
-    var scene = Scene()
-    var root = _build(scene, assets)
-    spin_daylight(
+    build_and_spin[_build, _camera](
         WIDTH,
         HEIGHT,
         Color(26, 30, 40),
         0.55,
         1.5,
-        scene,
-        assets,
-        root,
-        _camera(),
         FRAMES,
         DELAY_MS,
         example_destination(String(DEFAULT_OUTPUT)),

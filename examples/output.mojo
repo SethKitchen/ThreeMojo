@@ -197,6 +197,57 @@ def spin_daylight(
     )
 
 
+def build_and_spin[
+    build: def(mut Scene, mut Assets) raises thin -> NodeId,
+    camera: def() raises thin -> PerspectiveCamera,
+](
+    width: Int,
+    height: Int,
+    background: Color,
+    fill: Float32,
+    sun: Float32,
+    frame_count: Int,
+    delay_ms: Int,
+    destination: String,
+) raises:
+    """Build a scene, light it, turn its root, and write the frames.
+
+    Parameters:
+        build: Adds the model and returns the node to turn.
+        camera: Returns the placed camera.
+
+    Args:
+        width: The image width in pixels.
+        height: The image height in pixels.
+        background: The color behind the scene.
+        fill: The sky fill strength.
+        sun: The sun strength.
+        frame_count: How many frames cover the circle.
+        delay_ms: How long each frame is shown, in milliseconds.
+        destination: The path of the animated PNG.
+
+    Raises:
+        Error: If the build, the scene, the render, or the write is invalid.
+    """
+    var assets = Assets()
+    var scene = Scene()
+    var root = build(scene, assets)
+    spin_daylight(
+        width,
+        height,
+        background,
+        fill,
+        sun,
+        scene,
+        assets,
+        root,
+        camera(),
+        frame_count,
+        delay_ms,
+        destination,
+    )
+
+
 def spin_pair_gallery(
     renderer: Renderer,
     camera: PerspectiveCamera,
