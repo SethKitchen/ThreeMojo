@@ -458,6 +458,55 @@ struct JsonDocument(Movable):
             return default
         return self.boolean(found)
 
+    def optional_kind(
+        self, node: Int, key: String, kind: JsonKind, complaint: String
+    ) raises -> Int:
+        """Return an object's child under `key` when it has `kind`.
+
+        Args:
+            node: The object's index.
+            key: The key.
+            kind: The kind the child must have.
+            complaint: The error when the child has another kind.
+
+        Returns:
+            The child's index, or `NO_NODE` when the key is absent.
+
+        Raises:
+            Error: If the node is not an object, or the child has another
+                kind.
+        """
+        var found = self.get(node, key)
+        if found == NO_NODE:
+            return NO_NODE
+        if self.kind(found) != kind:
+            raise Error(complaint)
+        return found
+
+    def required_kind(
+        self, node: Int, key: String, kind: JsonKind, complaint: String
+    ) raises -> Int:
+        """Return an object's child under `key`, which must have `kind`.
+
+        Args:
+            node: The object's index.
+            key: The key.
+            kind: The kind the child must have.
+            complaint: The error when the key is absent or the child has
+                another kind.
+
+        Returns:
+            The child's index.
+
+        Raises:
+            Error: If the node is not an object, the key is absent, or
+                the child has another kind.
+        """
+        var found = self.optional_kind(node, key, kind, complaint)
+        if found == NO_NODE:
+            raise Error(complaint)
+        return found
+
     def is_null(self, node: Int) raises -> Bool:
         """Return True if a node is `null`.
 
