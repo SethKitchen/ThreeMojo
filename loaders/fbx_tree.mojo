@@ -537,7 +537,7 @@ def parse_fbx(bytes: List[UInt8]) raises -> FbxDocument:
             if bytes[index] != magic[index]:
                 binary = False
     if binary:
-        var reader = _BinaryReader(bytes)
+        var reader = _BinaryReader(Span(bytes))
         return reader.read()
     return parse_fbx_text(String(from_utf8=Span(bytes)))
 
@@ -805,15 +805,18 @@ def _signed(value: UInt64, bits: Int) -> Int:
     return raw
 
 
-struct _BinaryReader(Movable):
-    """The binary reader's cursor over the bytes."""
+struct _BinaryReader[origin: Origin[mut=False]](Movable):
+    """The binary reader's cursor over the bytes.
 
-    var bytes: List[UInt8]
+    The caller keeps the bytes for the read.
+    """
+
+    var bytes: Span[UInt8, Self.origin]
     var at: Int
     var version: Int
 
-    def __init__(out self, bytes: List[UInt8]):
-        self.bytes = bytes.copy()
+    def __init__(out self, bytes: Span[UInt8, Self.origin]):
+        self.bytes = bytes
         self.at = 0
         self.version = 0
 

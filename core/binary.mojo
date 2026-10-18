@@ -134,6 +134,29 @@ def little_endian_i32(bytes: List[UInt8], at: Int) -> Int:
     return value
 
 
+def little_endian_uint(bytes: Span[UInt8, _], at: Int, width: Int) -> Int:
+    """Return the little-endian unsigned integer of `width` bytes at `at`.
+
+    Args:
+        bytes: The buffer.
+        at: The index of the first byte.
+        width: How many bytes, zero through eight. Zero reads nothing.
+            The caller has checked that a positive width lies inside
+            `bytes`.
+
+    Returns:
+        The integer, with the first byte in the low eight bits. Zero
+        when `width` is zero. Eight bytes past 2^63 read as negative.
+
+    Raises:
+        Error: Never.
+    """
+    var value = 0
+    for index in range(width):
+        value |= Int(bytes[at + index]) << (8 * index)
+    return value
+
+
 def little_endian_uint(bytes: List[UInt8], at: Int, width: Int) -> Int:
     """Return the little-endian unsigned integer of `width` bytes at `at`.
 
@@ -148,10 +171,7 @@ def little_endian_uint(bytes: List[UInt8], at: Int, width: Int) -> Int:
         The integer, with the first byte in the low eight bits. Zero
         when `width` is zero. Eight bytes past 2^63 read as negative.
     """
-    var value = 0
-    for index in range(width):
-        value |= Int(bytes[at + index]) << (8 * index)
-    return value
+    return little_endian_uint(Span(bytes), at, width)
 
 
 def append_little_endian(mut out: List[UInt8], value: Int, width: Int):
@@ -269,6 +289,24 @@ def store_big_endian(mut bytes: List[UInt8], at: Int, value: Int, width: Int):
         bytes[at + index] = UInt8((value >> shift) & 0xFF)
 
 
+def copy_bytes(bytes: Span[UInt8, _], start: Int, count: Int) -> List[UInt8]:
+    """Return `count` bytes beginning at `start`.
+
+    Args:
+        bytes: The buffer.
+        start: The index of the first byte.
+        count: How many bytes. Zero returns an empty list. The caller
+            has checked that a positive count lies inside `bytes`.
+
+    Returns:
+        A copy of those bytes.
+
+    Raises:
+        Error: Never.
+    """
+    return List[UInt8](bytes[start : start + count])
+
+
 def copy_bytes(bytes: List[UInt8], start: Int, count: Int) -> List[UInt8]:
     """Return `count` bytes beginning at `start`.
 
@@ -281,7 +319,7 @@ def copy_bytes(bytes: List[UInt8], start: Int, count: Int) -> List[UInt8]:
     Returns:
         A copy of those bytes.
     """
-    return List[UInt8](bytes[start : start + count])
+    return copy_bytes(Span(bytes), start, count)
 
 
 def copy_byte_range(bytes: List[UInt8], start: Int, end: Int) -> List[UInt8]:
