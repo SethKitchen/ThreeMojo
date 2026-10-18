@@ -70,7 +70,7 @@ from extensions.humanoid.skeleton.leg.tibia.dimensions import (
     TibiaField,
     tibia_dimensions,
 )
-from math.vector3 import Vector3
+from math.vector3 import Vector3, midpoint
 from std.math import cos, max, pi, sin
 from units.si import Length
 
@@ -840,7 +840,7 @@ def femur_origin(femur: FemurDimensions, cartilage: Length) raises -> Vector3:
     """
     femur.validate()
     positive_length(cartilage, "femoral thickness", "knee")
-    var mid = _mid(femur.medial_condyle, femur.lateral_condyle)
+    var mid = midpoint(femur.medial_condyle, femur.lateral_condyle)
     var distal_y = -0.5 * femur.length.value
     return Vector3(-mid.x, cartilage.value - distal_y, -mid.z)
 
@@ -863,7 +863,7 @@ def tibia_origin(tibia: TibiaDimensions, cartilage: Length) raises -> Vector3:
     """
     tibia.validate()
     positive_length(cartilage, "tibial thickness", "knee")
-    var mid = _mid(tibia.medial_condyle, tibia.lateral_condyle)
+    var mid = midpoint(tibia.medial_condyle, tibia.lateral_condyle)
     return Vector3(-mid.x, -cartilage.value - tibia.eminence.y, -mid.z)
 
 
@@ -986,11 +986,6 @@ def knee_part_label(part: KneePart) -> String:
     if part == LATERAL_COLLATERAL:
         return "lateral collateral"
     return "knee"
-
-
-def _mid(a: Vector3, b: Vector3) -> Vector3:
-    """Return the midpoint of `a` and `b`."""
-    return Vector3(0.5 * (a.x + b.x), 0.5 * (a.y + b.y), 0.5 * (a.z + b.z))
 
 
 def _trochlea_local(femur: FemurDimensions) -> Vector3:

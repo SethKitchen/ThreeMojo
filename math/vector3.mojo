@@ -795,6 +795,22 @@ def reciprocal_unit(value: Vector3) -> Vector3:
     return Vector3(unit[0], unit[1], unit[2])
 
 
+def midpoint(a: Vector3, b: Vector3) -> Vector3:
+    """Return the point halfway from `a` to `b`.
+
+    Args:
+        a: One end.
+        b: The other end.
+
+    Returns:
+        Each component is the average of the two.
+
+    Raises:
+        Error: Never.
+    """
+    return (a + b) * Float32(0.5)
+
+
 def mix_delta3(start: Vector3, end: Vector3, t: Float32) -> Vector3:
     """Return `start` moved toward `end` by `t`.
 
