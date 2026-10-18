@@ -8,15 +8,16 @@
 Each example builds its own scene. This file reads the path from the
 first argument, turns a node, and stores the frames. A full circle is
 one turn divided across the frames. An example that built its own frames
-can write them here. It can also copy one tile into a sheet, or light a
-scene and spin it.
+can write them here. It can also copy one tile into a sheet, light a
+scene and spin it, or hang a part on a turning node.
 """
 
 from cameras.perspective_camera import PerspectiveCamera
 from core.assets import Assets
 from core.clock import Clock
-from core.object3d import NodeId
+from core.object3d import NodeId, Object3D
 from core.scene import Scene
+from math.vector3 import Vector3
 from examples.preview import add_sky_and_sun
 from render.apng import encode
 from render.framebuffer import Color, Framebuffer
@@ -24,6 +25,34 @@ from renderers.renderer import Renderer, available_workers
 from std.pathlib import Path
 from std.sys import argv, stderr
 from units.si import MILLISECOND, Angle, DEGREE
+
+
+def hang_centered(
+    mut scene: Scene, x: Float32, height: Float32, center: Vector3
+) raises -> Tuple[NodeId, NodeId]:
+    """Return a turning node at `x` and a child that cancels `center`.
+
+    The child sits so that `center`, in the part's frame, lands on the
+    turning node's axis.
+
+    Args:
+        scene: The scene that receives the nodes.
+        x: Position along the row, in meters.
+        height: Height of the part's middle above the floor.
+        center: The part's middle in its own frame, in meters.
+
+    Returns:
+        The turning node, then the child to attach the part to.
+
+    Raises:
+        Error: If the scene refuses a node.
+    """
+    var pivot = Object3D()
+    pivot.set_position(x, height, 0)
+    var pivot_id = scene.add(pivot^)
+    var holder = Object3D()
+    holder.set_position(-center.x, -center.y, -center.z)
+    return (pivot_id, scene.attach(holder^, pivot_id))
 
 
 def example_destination(default_name: String) -> String:
