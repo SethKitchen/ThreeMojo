@@ -3397,6 +3397,15 @@ class CacheInputViewCurrentControls(unittest.TestCase):
                     cache.verify(self.root)
             self.assertEqual(touched, [True])
 
+        self._check_protected_negative_namespace('pr760')
+
+    def test_common758_dynamic_negative_namespace_refuses_before_publication(self):
+        self.root = fixtures.copy_common758_boundary_root(self, ROOT)
+        self._check_protected_negative_namespace('common758')
+
+    def _check_protected_negative_namespace(self, cohort):
+        seed = self.seed
+        a = '# café: negative production input\r\n'.encode('utf-8')
         # The immutable resolver union protects tests, not tools. Both are
         # production census inputs; admitted tools is covered above, while the
         # recorded tests namespace must still refuse before publication.
@@ -3418,15 +3427,27 @@ class CacheInputViewCurrentControls(unittest.TestCase):
                 created.append(view)
             @wraps(resolver)
             def checked(root, paths, *, render_entries=None, typed_entries=None,
-                        math_entries=None):
+                        math_entries=None, example_entries=None):
                 result = resolver(root, paths, render_entries=render_entries,
-                                  typed_entries=typed_entries, math_entries=math_entries)
+                                  typed_entries=typed_entries, math_entries=math_entries,
+                                  example_entries=example_entries)
                 frame = sys._getframe(1)
                 if (root == self.root and frame.f_globals is vars(cleanup)
-                        and frame.f_code.co_name == 'verify'):
+                        and frame.f_code.co_name in ('verify', '_pr760_candidate_bindings')):
+                    origin = frame.f_code.co_name
+                    while frame is not None and not (frame.f_globals is vars(cleanup)
+                            and frame.f_code.co_name == 'verify'):
+                        frame = frame.f_back
+                    self.assertIsNotNone(frame)
                     pending = frame.f_locals['_capture']
                     self.assertIsNotNone(pending)
-                    resolver_results.append((result, pending._state))
+                    if cohort == 'pr760':
+                        self.assertIs(type(example_entries), frozenset)
+                        self.assertIn('.', example_entries)
+                        self.assertEqual(example_entries, math_entries)
+                    else:
+                        self.assertIsNone(example_entries)
+                    resolver_results.append((origin, result, pending._state))
                 return result
             @wraps(publish)
             def publication(view, *args, **kwargs):
@@ -3442,10 +3463,14 @@ class CacheInputViewCurrentControls(unittest.TestCase):
                 with patch.object(cleanup._CacheInputs, '__init__', initialized), patch.object(
                         cleanup, 'resolver_unshadowed', checked), patch.object(
                         cleanup._CacheInputs, '_publish', publication):
+                    refusal = ('PR760' if cohort == 'pr760' else 'unreviewed')
                     with self.assertRaisesRegex(ValueError,
-                            'unreviewed alternate, compiled, package, symlink or std resolver surface'):
+                            refusal + ' alternate, compiled, package, symlink or std resolver surface'):
                         cache.verify(self.root)
-                self.assertEqual(resolver_results, [(False, 'pending')])
+                # PR760's closed image refuses at its own resolver gate. The
+                # common758 predecessor retains the original verify gate.
+                origin = '_pr760_candidate_bindings' if cohort == 'pr760' else 'verify'
+                self.assertEqual(resolver_results, [(origin, False, 'pending')])
                 self.assertEqual(published, [])
                 self.assertEqual(len(created), 1)
                 self.assertEqual(created[0]._state, 'closed')
@@ -3509,10 +3534,19 @@ class CacheInputViewCurrentControls(unittest.TestCase):
                 cleanup.executing_checker_bindings()
 
     def test_public_alias_unknown_and_wrapped_callbacks_admit_fresh(self):
+        self._check_public_alias_unknown_and_wrapped_callbacks('pr760')
+
+    def test_common758_public_alias_unknown_and_wrapped_callbacks_admit_fresh(self):
+        self.root = fixtures.copy_common758_boundary_root(self, ROOT)
+        self._check_public_alias_unknown_and_wrapped_callbacks('common758')
+
+    def _check_public_alias_unknown_and_wrapped_callbacks(self, cohort):
         alias = self.public_alias()
-        other = fixtures.copy_current_root(self, ROOT)
+        copy_root = (fixtures.copy_current_root if cohort == 'pr760'
+                     else fixtures.copy_common758_boundary_root)
+        other = copy_root(self, ROOT)
         original, binding = alias.inventory, cleanup.executing_checker_bindings
-        calls, scopes = [], []
+        calls, scopes, image_origins = [], [], []
         path = 'extensions/carla/polynomial.mojo'
         text = (self.root/path).read_text(encoding='utf-8')
         expected = cleanup.typed_boundary.historical_source(path, text)
@@ -3520,7 +3554,11 @@ class CacheInputViewCurrentControls(unittest.TestCase):
         def admitted(*args, **kwargs):
             frame = sys._getframe(1)
             if frame.f_globals is vars(cleanup) and frame.f_code.co_name == 'verify' and 'executing' not in frame.f_locals:
-                calls.append(frame.f_locals['exact'])
+                origin = frame.f_back.f_code.co_name
+                calls.append((origin, frame.f_locals['exact'],
+                              frame.f_locals['root'], frame.f_locals['_capture']))
+                if origin == '_pr760_admit':
+                    image_origins.append(frame.f_back.f_back.f_code.co_name)
             return binding(*args, **kwargs)
         @wraps(source.historical_text)
         def decorated_callback():
@@ -3529,19 +3567,41 @@ class CacheInputViewCurrentControls(unittest.TestCase):
         @wraps(adapter)
         def installed_adapter(*args, **kwargs):
             return adapter(*args, **kwargs)
+        expected_inventory = [('reviewed_text', False, self.root, None)]
+        if cohort == 'pr760':
+            # Public shared/scaled helper owners each admit the complete PR760
+            # image freshly; the alias cannot borrow a canonical cache view.
+            expected_inventory += [('_pr760_admit', True, self.root, None)] * 2
+        expected_inventory.append(('verified_edges', True, self.root, None))
         @wraps(original)
         def observed(*args, **kwargs):
             scopes.append(kwargs['_admission'])
+            self.assertNotIn('_inputs', kwargs)
+            self.assertNotIn('_input_owner', kwargs)
+            self.assertEqual(calls, [('reviewed_text', False, self.root, None)])
             result = original(*args, **kwargs)
+            self.assertEqual(calls, expected_inventory)
+            self.assertEqual(image_origins, ['_shared_helper_bindings', '_scaled_float32_bindings']
+                             if cohort == 'pr760' else [])
+            before = len(calls)
             self.assertEqual(source.historical_text(self.root, path, text), expected)
+            self.assertEqual(calls[before:], [('reviewed_typed_text', True, self.root, None)])
+            before = len(calls)
             self.assertEqual(decorated_callback(), expected)
+            self.assertEqual(calls[before:], [('reviewed_typed_text', True, self.root, None)])
+            before = len(calls)
             with patch.object(source, 'historical_text', installed_adapter):
                 self.assertEqual(source.historical_text(self.root, path, text), expected)
+            self.assertEqual(calls[before:], [('reviewed_typed_text', True, self.root, None)])
+            before = len(calls)
             self.assertEqual(cleanup.verify(other, exact=True), cleanup.read_record(other))
+            self.assertEqual(calls[before:], [('observed', True, other, None)])
             return result
         with patch.object(alias, 'inventory', observed), patch.object(cleanup, 'executing_checker_bindings', admitted):
             self.assertEqual(alias.verify(self.root), self.cache_record)
-        self.assertEqual(calls, [False, True, True, True, True, True])
+        self.assertEqual(calls, expected_inventory
+                         + [('reviewed_typed_text', True, self.root, None)] * 3
+                         + [('observed', True, other, None)])
         self.assertEqual(len(scopes), 1)
         scope = scopes[0]
         self.assertEqual(scope._state, 'closed')

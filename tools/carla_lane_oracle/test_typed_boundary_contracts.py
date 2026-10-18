@@ -442,7 +442,7 @@ class TypedBoundaryContracts(unittest.TestCase):
                 target = ROOT/path
                 self.assertFalse(target.is_symlink())
                 raw = target.read_bytes()
-                if path in ('tools/test_conditioned_coverage_loops.py', 'tools/carla_lane_oracle/test_typed_boundary_contracts.py', 'tools/carla_lane_oracle/test_shared_helper_contracts.py', 'tools/carla_lane_oracle/test_scaled_float32_contracts.py', 'tools/carla_lane_oracle/test_common758_current_successor.py', 'tools/carla_lane_oracle/test_coverage_invariant_contracts.py'):
+                if path in ('tools/test_conditioned_coverage_loops.py', 'tools/carla_lane_oracle/test_typed_boundary_contracts.py', 'tools/carla_lane_oracle/test_shared_helper_contracts.py', 'tools/carla_lane_oracle/test_scaled_float32_contracts.py', 'tools/carla_lane_oracle/test_common758_current_successor.py', 'tools/carla_lane_oracle/test_coverage_invariant_contracts.py', 'tools/carla_lane_oracle/test_expectation_binding_successor.py'):
                     raw = audit.qualification_predecessor_bytes(path, raw)
                 self.assertEqual(hashlib.sha256(raw).hexdigest(), expected)
         self.assertTrue(any(path.startswith('tests/compile_fail/') for path in typed.TESTS))

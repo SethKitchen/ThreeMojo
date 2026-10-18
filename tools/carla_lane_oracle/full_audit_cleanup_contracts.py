@@ -150,7 +150,7 @@ NATIVE_SUPPORT_MAPPING = {'tests/test_carla_junction_endpoint_refusals.mojo': ['
 THEOREM_DOCUMENT = 'docs/validation/full-audit-711-invariants.md'
 PR760_STAGE_SHA256 = '03757bafb02fbb3908919839c18d5c2c443f46469aeb01393dee57ae22054359'
 PR760_IMAGE = 'tools/carla_lane_oracle/pr760-source-image.json'
-PR760_IMAGE_SHA256 = '18002c813c8338b7dfa321f822565dfd15f30627996c25339c05a2d4abf6e0d0'
+PR760_IMAGE_SHA256 = 'ef91b7edab2c8a597aeedc90f86e834d5227aad5770ebe39e0438944f246f7cf'
 PR760_OWNER_PREDECESSOR = 'tools/carla_lane_oracle/pr760-owner-predecessor.txt'
 PR760_OWNER_PREDECESSOR_SHA256 = '6138ba2dcac394c716ea9ed32e74e0c6d15857d5c605fc82304d21d0c80fdc69'
 DEPENDENCY_TOOL_SHA256 = {'tools/carla_lane_oracle/winner_sign_contracts.py': 'f850902634073364fe2407b00d12e9fdfb2ecfc6cf2a03414269fbb7984a8a7f',
@@ -934,7 +934,8 @@ def resolver_unshadowed(root, paths, *, render_entries=None, typed_entries=None,
     The default retains the historical conservative rule for every namespace.
     Exact consumed module/prefix coordinates still reject case, alternate
     suffix/package and symlink changes. Only three exact regular wiki files are
-    inert. Include roots receive structural checks only: maintained generation
+    inert; entry scoping preserves this wiki guard. Include roots receive
+    structural checks only: maintained generation
     origins and source/staged manifests bind instrumented coverage bytes.
     """
     root = Path(root)
@@ -1012,12 +1013,15 @@ def resolver_unshadowed(root, paths, *, render_entries=None, typed_entries=None,
                 coordinate_suffix = any(
                     (relative[:-len(name)] + name[:index]).casefold() in coordinates
                     for index, character in enumerate(name) if character == '.')
+                # Entry-scoped math still owes the historical wiki guard:
+                # only the exact regular Math.md file is an inert exception.
                 relevant = (coordinate_suffix or folded in stems or folded in prefixes or stem in stems
                             or stem in prefixes or (scoped_name in top
                                 and (scoped_name != 'render' or render_entries is None
                                      or relative_dir.casefold() in render_entries)
                                 and (scoped_name != 'math' or math_entries is None
-                                     or relative_dir.casefold() in math_entries)
+                                     or relative_dir.casefold() in math_entries
+                                     or relative_dir.casefold() == 'docs/wiki')
                                 and (scoped_name not in ('tools', 'examples', 'generators') or example_entries is None
                                      or relative_dir.casefold() in example_entries)
                                 and (scoped_name not in typed_families or typed_entries is None
@@ -4187,14 +4191,14 @@ def _pr760_authority_data():
     require((PR760_STAGE_SHA256, PR760_IMAGE, PR760_IMAGE_SHA256, PR760_OWNER_PREDECESSOR, PR760_OWNER_PREDECESSOR_SHA256) == (
         '03757bafb02fbb3908919839c18d5c2c443f46469aeb01393dee57ae22054359',
         'tools/carla_lane_oracle/pr760-source-image.json',
-        '18002c813c8338b7dfa321f822565dfd15f30627996c25339c05a2d4abf6e0d0',
+        'ef91b7edab2c8a597aeedc90f86e834d5227aad5770ebe39e0438944f246f7cf',
         'tools/carla_lane_oracle/pr760-owner-predecessor.txt',
         '6138ba2dcac394c716ea9ed32e74e0c6d15857d5c605fc82304d21d0c80fdc69',
     ), 'PR760 authority selectors changed')
 
 
 def qualification_predecessor_bytes(path, raw):
-    """Pure exact comparison for seven reviewed Python witness successors only.
+    """Pure exact comparison for eight reviewed Python witness successors only.
 
     Physical owners still consume and return actual bytes. This function grants
     neither source-image admission nor a receipt, and never reads projected files.
@@ -4472,7 +4476,7 @@ def qualification_predecessor_bytes(path, raw):
     '                finally: entry.unlink()\n',
     '                cleanup.shared_helper_proof_bindings(root, paths=helpers.SOURCE_PATHS)\n')))),
      'tools/carla_lane_oracle/test_typed_boundary_contracts.py': ('7181041aa06c10cade1c7c0512c6a130cb28d5baaad293ba24874c3e3e142dd5',
- '669918e650378100a340c9de225c0ceb5bcc2a1a826f6a7e7998c12e688e578d',
+ '7114f17cce33b84fe226d3559b4d08d1227a6c1cda1f83825441d22e48b51705',
  ((18,
    20,
    (),
@@ -4507,7 +4511,8 @@ def qualification_predecessor_bytes(path, raw):
     "'tools/carla_lane_oracle/test_shared_helper_contracts.py', "
     "'tools/carla_lane_oracle/test_scaled_float32_contracts.py', "
     "'tools/carla_lane_oracle/test_common758_current_successor.py', "
-    "'tools/carla_lane_oracle/test_coverage_invariant_contracts.py'):\n",
+    "'tools/carla_lane_oracle/test_coverage_invariant_contracts.py', "
+    "'tools/carla_lane_oracle/test_expectation_binding_successor.py'):\n",
     '                    raw = audit.qualification_predecessor_bytes(path, raw)\n',
     '                self.assertEqual(hashlib.sha256(raw).hexdigest(), expected)\n')))),
      'tools/test_conditioned_coverage_loops.py': ('633c30c126a0ccf535bea13c66e528ee78b95dd47cf55f01eccad4f9f67d22c9',
@@ -4680,7 +4685,86 @@ def qualification_predecessor_bytes(path, raw):
   (90,
    91,
    ('                               check=True, capture_output=True, text=True, timeout=60)\n',),
-   ('                               check=True, capture_output=True, text=True, timeout=600)\n',))))}
+   ('                               check=True, capture_output=True, text=True, timeout=600)\n',)))),
+     'tools/carla_lane_oracle/test_expectation_binding_successor.py': ('6f866d62d04370dad8eed28e7e6bd26c5b6ab804b00c407932624ba183cd9a08',
+ '112d9a22a78f4379fbdb932d57aea179a246251df63fb2778486903607e55050',
+ ((13, 14, (), ('import _full_audit_test_fixtures as fixtures\n',)),
+  (116,
+   123,
+   ('        target = ROOT/PATH\n', '        raw = target.read_bytes()\n'),
+   ('        historical = fixtures.copy_common758_boundary_root(self, ROOT)\n',
+    '        candidate = audit._pr760_candidate_bindings\n',
+    '        # The current candidate owns these reads in its exact nested observer;\n',
+    '        # the common758 cohort retains the original direct binding observer.\n',
+    '        observers = [code for code in candidate.__code__.co_consts\n',
+    '                     if isinstance(code, type(candidate.__code__)) and code.co_name == '
+    "'observe']\n",
+    '        self.assertEqual(len(observers), 1)\n')),
+  (124,
+   172,
+   ('        for at_read in (1, 2):\n',
+    '            reads = []\n',
+    '            def changed(path, *args, **kwargs):\n',
+    '                if (path == target and sys._getframe(1).f_code is\n',
+    '                        audit._typed_boundary_bindings.__code__):\n',
+    '                    reads.append(path)\n',
+    "                    return raw+b'\\n' if len(reads) == at_read else raw\n",
+    '                return original(path, *args, **kwargs)\n',
+    "            with self.subTest(at_read=at_read), patch.object(Path, 'read_bytes', changed):\n",
+    '                with self.assertRaises(ValueError):\n',
+    '                    audit._typed_boundary_bindings(ROOT)\n',
+    '            self.assertEqual(len(reads), at_read)\n',
+    '            self.assertEqual(target.read_bytes(), raw)\n'),
+   ('        for cohort, root, observed_code in (\n',
+    "                ('common758', historical, audit._typed_boundary_bindings.__code__),\n",
+    "                ('pr760', ROOT, observers[0])):\n",
+    '            target = root/PATH\n',
+    '            raw = target.read_bytes()\n',
+    '            def is_input_read(path, frame):\n',
+    '                if path != target or frame.f_code is not observed_code:\n',
+    '                    return False\n',
+    '                self.assertIs(frame.f_globals, vars(audit))\n',
+    "                self.assertEqual(frame.f_locals['path'], PATH)\n",
+    "                if cohort == 'pr760':\n",
+    '                    self.assertIs(frame.f_back.f_code, candidate.__code__)\n',
+    "                    self.assertEqual(frame.f_back.f_locals['root'], root)\n",
+    '                else:\n',
+    "                    self.assertEqual(frame.f_locals['root'], root)\n",
+    '                return True\n',
+    '\n',
+    '            baseline_reads = []\n',
+    '            def observe(path, *args, **kwargs):\n',
+    '                value = original(path, *args, **kwargs)\n',
+    '                if is_input_read(path, sys._getframe(1)):\n',
+    '                    self.assertEqual(value, raw)\n',
+    '                    baseline_reads.append(path)\n',
+    '                return value\n',
+    "            with self.subTest(cohort=cohort, baseline=True), patch.object(Path, 'read_bytes', "
+    'observe):\n',
+    '                result = audit._typed_boundary_bindings(root)\n',
+    '                self.assertEqual(result[PATH], hashlib.sha256(raw).hexdigest())\n',
+    '            self.assertEqual(len(baseline_reads), 2)\n',
+    '            for at_read in (1, 2):\n',
+    '                reads = []\n',
+    '                def changed(path, *args, **kwargs):\n',
+    '                    value = original(path, *args, **kwargs)\n',
+    '                    if is_input_read(path, sys._getframe(1)):\n',
+    '                        self.assertEqual(value, raw)\n',
+    '                        reads.append(path)\n',
+    "                        return raw+b'\\n' if len(reads) == at_read else value\n",
+    '                    return value\n',
+    '                with self.subTest(cohort=cohort, at_read=at_read), patch.object(Path, '
+    "'read_bytes', changed):\n",
+    '                    with self.assertRaises(ValueError) as caught:\n',
+    '                        audit._typed_boundary_bindings(root)\n',
+    "                    reason = ({1: 'PR760 physical input changed: ',\n",
+    "                               2: 'PR760 source changed after consumption: '}\n",
+    "                              if cohort == 'pr760' else\n",
+    "                              {1: 'typed boundary bound input changed: ',\n",
+    "                               2: 'typed input changed during admission: '})[at_read]\n",
+    '                    self.assertIn(reason+PATH, str(caught.exception))\n',
+    '                self.assertEqual(len(reads), at_read)\n',
+    '                self.assertEqual(target.read_bytes(), raw)\n'))))}
     require(path in rows, 'unregistered qualification witness: ' + path)
     before_sha, after_sha, edits = rows[path]
     expected = (typed_boundary.EDGES[path]['after_sha256'] if path ==
@@ -4805,7 +4889,7 @@ def _pr760_candidate_bindings(root, *, _snapshots=None, _operation=None):
         require(all((sha(stage_prior) if path == stage_witness else expected.get(path)) == digest
                     for path, digest in pr760_stage.REGISTRY_INPUT_SHA256.items()),
                 'PR760 physical image misses reviewed registry input')
-        for path, archive in (('tools/test_conditioned_coverage_loops.py', 'tools/carla_lane_oracle/pr760-test_conditioned_coverage_loops-predecessor.txt'), ('tools/carla_lane_oracle/test_typed_boundary_contracts.py', 'tools/carla_lane_oracle/pr760-test_typed_boundary_contracts-predecessor.txt'), ('tools/carla_lane_oracle/test_shared_helper_contracts.py', 'tools/carla_lane_oracle/pr760-test_shared_helper_contracts-predecessor.txt'), ('tools/carla_lane_oracle/test_scaled_float32_contracts.py', 'tools/carla_lane_oracle/pr760-test_scaled_float32_contracts-predecessor.txt'), ('tools/carla_lane_oracle/test_common758_current_successor.py', 'tools/carla_lane_oracle/pr760-test_common758_current_successor-predecessor.txt'), ('tools/carla_lane_oracle/test_witness_format_contracts.py', 'tools/carla_lane_oracle/pr760-test_witness_format_contracts-predecessor.txt'), ('tools/carla_lane_oracle/test_coverage_invariant_contracts.py', 'tools/carla_lane_oracle/pr760-test_coverage_invariant_contracts-predecessor.txt')):
+        for path, archive in (('tools/test_conditioned_coverage_loops.py', 'tools/carla_lane_oracle/pr760-test_conditioned_coverage_loops-predecessor.txt'), ('tools/carla_lane_oracle/test_typed_boundary_contracts.py', 'tools/carla_lane_oracle/pr760-test_typed_boundary_contracts-predecessor.txt'), ('tools/carla_lane_oracle/test_shared_helper_contracts.py', 'tools/carla_lane_oracle/pr760-test_shared_helper_contracts-predecessor.txt'), ('tools/carla_lane_oracle/test_scaled_float32_contracts.py', 'tools/carla_lane_oracle/pr760-test_scaled_float32_contracts-predecessor.txt'), ('tools/carla_lane_oracle/test_common758_current_successor.py', 'tools/carla_lane_oracle/pr760-test_common758_current_successor-predecessor.txt'), ('tools/carla_lane_oracle/test_witness_format_contracts.py', 'tools/carla_lane_oracle/pr760-test_witness_format_contracts-predecessor.txt'), ('tools/carla_lane_oracle/test_coverage_invariant_contracts.py', 'tools/carla_lane_oracle/pr760-test_coverage_invariant_contracts-predecessor.txt'), ('tools/carla_lane_oracle/test_expectation_binding_successor.py', 'tools/carla_lane_oracle/pr760-test_expectation_binding_successor-predecessor.txt')):
             require(qualification_predecessor_bytes(path, image[path]) == image[archive],
                     'PR760 qualification archive differs from exact predecessor: ' + path)
         # One complete fixed image, with no per-file old/new fallback.

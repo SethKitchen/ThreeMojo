@@ -11,6 +11,7 @@ import unittest
 from unittest.mock import patch
 
 import full_audit_cleanup_contracts as audit
+import _full_audit_test_fixtures as fixtures
 import typed_boundary_contracts as typed
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -113,22 +114,62 @@ class ExpectationBindingCurrentInputs(unittest.TestCase):
         self.assertNotEqual(result[PATH], BEFORE)
 
     def test_first_and_final_physical_input_changes_are_refused(self):
-        target = ROOT/PATH
-        raw = target.read_bytes()
+        historical = fixtures.copy_common758_boundary_root(self, ROOT)
+        candidate = audit._pr760_candidate_bindings
+        # The current candidate owns these reads in its exact nested observer;
+        # the common758 cohort retains the original direct binding observer.
+        observers = [code for code in candidate.__code__.co_consts
+                     if isinstance(code, type(candidate.__code__)) and code.co_name == 'observe']
+        self.assertEqual(len(observers), 1)
         original = Path.read_bytes
-        for at_read in (1, 2):
-            reads = []
-            def changed(path, *args, **kwargs):
-                if (path == target and sys._getframe(1).f_code is
-                        audit._typed_boundary_bindings.__code__):
-                    reads.append(path)
-                    return raw+b'\n' if len(reads) == at_read else raw
-                return original(path, *args, **kwargs)
-            with self.subTest(at_read=at_read), patch.object(Path, 'read_bytes', changed):
-                with self.assertRaises(ValueError):
-                    audit._typed_boundary_bindings(ROOT)
-            self.assertEqual(len(reads), at_read)
-            self.assertEqual(target.read_bytes(), raw)
+        for cohort, root, observed_code in (
+                ('common758', historical, audit._typed_boundary_bindings.__code__),
+                ('pr760', ROOT, observers[0])):
+            target = root/PATH
+            raw = target.read_bytes()
+            def is_input_read(path, frame):
+                if path != target or frame.f_code is not observed_code:
+                    return False
+                self.assertIs(frame.f_globals, vars(audit))
+                self.assertEqual(frame.f_locals['path'], PATH)
+                if cohort == 'pr760':
+                    self.assertIs(frame.f_back.f_code, candidate.__code__)
+                    self.assertEqual(frame.f_back.f_locals['root'], root)
+                else:
+                    self.assertEqual(frame.f_locals['root'], root)
+                return True
+
+            baseline_reads = []
+            def observe(path, *args, **kwargs):
+                value = original(path, *args, **kwargs)
+                if is_input_read(path, sys._getframe(1)):
+                    self.assertEqual(value, raw)
+                    baseline_reads.append(path)
+                return value
+            with self.subTest(cohort=cohort, baseline=True), patch.object(Path, 'read_bytes', observe):
+                result = audit._typed_boundary_bindings(root)
+                self.assertEqual(result[PATH], hashlib.sha256(raw).hexdigest())
+            self.assertEqual(len(baseline_reads), 2)
+            for at_read in (1, 2):
+                reads = []
+                def changed(path, *args, **kwargs):
+                    value = original(path, *args, **kwargs)
+                    if is_input_read(path, sys._getframe(1)):
+                        self.assertEqual(value, raw)
+                        reads.append(path)
+                        return raw+b'\n' if len(reads) == at_read else value
+                    return value
+                with self.subTest(cohort=cohort, at_read=at_read), patch.object(Path, 'read_bytes', changed):
+                    with self.assertRaises(ValueError) as caught:
+                        audit._typed_boundary_bindings(root)
+                    reason = ({1: 'PR760 physical input changed: ',
+                               2: 'PR760 source changed after consumption: '}
+                              if cohort == 'pr760' else
+                              {1: 'typed boundary bound input changed: ',
+                               2: 'typed input changed during admission: '})[at_read]
+                    self.assertIn(reason+PATH, str(caught.exception))
+                self.assertEqual(len(reads), at_read)
+                self.assertEqual(target.read_bytes(), raw)
 
 
 if __name__ == '__main__':

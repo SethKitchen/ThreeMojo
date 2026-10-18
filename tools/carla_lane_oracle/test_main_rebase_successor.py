@@ -42,10 +42,35 @@ class MainRebaseSuccessorControls(unittest.TestCase):
         image = json.loads((ROOT/owner.PR760_IMAGE).read_bytes())
         for path, digest in MAIN_INPUTS.items():
             with self.subTest(path=path):
-                self.assertEqual(owner.sha((ROOT/path).read_bytes()), digest)
+                raw = (ROOT/path).read_bytes()
+                if path == 'tools/carla_lane_oracle/test_expectation_binding_successor.py':
+                    # Preserve main's exact evidence through its one reviewed
+                    # inverse; physical admission still pins current bytes.
+                    self.assertEqual(owner.sha(raw), image['inputs'][path])
+                    raw = owner.qualification_predecessor_bytes(path, raw)
+                self.assertEqual(owner.sha(raw), digest)
                 if path.endswith('.mojo'):
                     self.assertEqual(image['inputs'][path], digest)
         self.assertEqual(sum(path.endswith('.mojo') for path in MAIN_INPUTS), 22)
+
+    def test_main_expectation_witness_keeps_exact_predecessor_and_physical_pin(self):
+        path = 'tools/carla_lane_oracle/test_expectation_binding_successor.py'
+        archive = 'tools/carla_lane_oracle/pr760-test_expectation_binding_successor-predecessor.txt'
+        image = json.loads((ROOT/owner.PR760_IMAGE).read_bytes())
+        raw, old = (ROOT/path).read_bytes(), (ROOT/archive).read_bytes()
+        self.assertEqual(owner.sha(old), MAIN_INPUTS[path])
+        self.assertEqual(owner.typed_boundary.BINDING_INPUTS[path], MAIN_INPUTS[path])
+        self.assertEqual(image['inputs'][archive], MAIN_INPUTS[path])
+        self.assertEqual(image['inputs'][path], owner.sha(raw))
+        self.assertEqual(image['qualification_successors'][path], {
+            'before_sha256': MAIN_INPUTS[path], 'after_sha256': owner.sha(raw),
+            'predecessor_archive': archive})
+        self.assertNotEqual(raw, old)
+        self.assertEqual(owner.qualification_predecessor_bytes(path, raw), old)
+        self.assertEqual(owner.qualification_predecessor_bytes(path, old), old)
+        for bad in (raw+b'\n', old+b'\n', bytearray(raw), b''):
+            with self.subTest(kind=type(bad).__name__), self.assertRaises(owner.ContractError):
+                owner.qualification_predecessor_bytes(path, bad)
 
     def test_historical_stage_and_typed_evidence_remain_exact(self):
         self.assertEqual(owner.sha((ROOT/'tools/carla_lane_oracle/pr760_arithmetic_stage.py').read_bytes()),

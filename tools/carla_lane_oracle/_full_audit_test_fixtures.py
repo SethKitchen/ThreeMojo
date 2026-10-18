@@ -86,7 +86,7 @@ def copy_shared_helper_inputs(root, source):
                 raw = cleanup.pr760_stage.predecessor_source(name, raw.decode('utf-8')).encode('utf-8')
                 if cleanup.sha(raw) != edge['before_sha256']:
                     raise AssertionError('historical helper predecessor changed: ' + name)
-        if name in ('tools/test_conditioned_coverage_loops.py', 'tools/carla_lane_oracle/test_typed_boundary_contracts.py', 'tools/carla_lane_oracle/test_shared_helper_contracts.py', 'tools/carla_lane_oracle/test_scaled_float32_contracts.py', 'tools/carla_lane_oracle/test_common758_current_successor.py', 'tools/carla_lane_oracle/test_witness_format_contracts.py', 'tools/carla_lane_oracle/test_coverage_invariant_contracts.py'):
+        if name in ('tools/test_conditioned_coverage_loops.py', 'tools/carla_lane_oracle/test_typed_boundary_contracts.py', 'tools/carla_lane_oracle/test_shared_helper_contracts.py', 'tools/carla_lane_oracle/test_scaled_float32_contracts.py', 'tools/carla_lane_oracle/test_common758_current_successor.py', 'tools/carla_lane_oracle/test_witness_format_contracts.py', 'tools/carla_lane_oracle/test_coverage_invariant_contracts.py', 'tools/carla_lane_oracle/test_expectation_binding_successor.py'):
             raw = cleanup.qualification_predecessor_bytes(name, raw)
         copied_bindings[name] = cleanup.sha(raw)
         target = Path(root)/name
@@ -218,7 +218,7 @@ def copy_common758_boundary_root(case, source, *, destination=None):
             if cleanup.sha(raw) != stage.EDGES[name]['after_sha256'] or cleanup.sha(previous) != stage.EDGES[name]['before_sha256']:
                 raise AssertionError('historical fixture PR760 endpoint changed: ' + name)
             (root/name).write_bytes(previous)
-    for name in ('tools/test_conditioned_coverage_loops.py', 'tools/carla_lane_oracle/test_typed_boundary_contracts.py', 'tools/carla_lane_oracle/test_shared_helper_contracts.py', 'tools/carla_lane_oracle/test_scaled_float32_contracts.py', 'tools/carla_lane_oracle/test_common758_current_successor.py', 'tools/carla_lane_oracle/test_witness_format_contracts.py', 'tools/carla_lane_oracle/test_coverage_invariant_contracts.py'):
+    for name in ('tools/test_conditioned_coverage_loops.py', 'tools/carla_lane_oracle/test_typed_boundary_contracts.py', 'tools/carla_lane_oracle/test_shared_helper_contracts.py', 'tools/carla_lane_oracle/test_scaled_float32_contracts.py', 'tools/carla_lane_oracle/test_common758_current_successor.py', 'tools/carla_lane_oracle/test_witness_format_contracts.py', 'tools/carla_lane_oracle/test_coverage_invariant_contracts.py', 'tools/carla_lane_oracle/test_expectation_binding_successor.py'):
         target = root/name
         raw = target.read_bytes()
         # A module fixture can already be pre-typed when a case copies it.

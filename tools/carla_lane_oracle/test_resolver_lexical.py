@@ -294,6 +294,68 @@ class ResolverLexicalTests(unittest.TestCase):
         self.write('docs/wiki/Math.txt')
         self.equivalent(False)
 
+    def test_scoped_math_preserves_the_historical_wiki_guard(self):
+        # A sparse physical resolver control, not complete source admission.
+        # Source and include roots owe the same historical wiki exception even
+        # when the current source census scopes bare math lookup elsewhere.
+        lookup = {'math_entries': frozenset(('.', 'tests', 'examples'))}
+        inert = ('docs/wiki/Math.md', 'docs/wiki/Units.md',
+                 'docs/wiki/Extensions.md')
+        alternatives = ('docs/wiki/Math.txt', 'docs/wiki/math.md',
+                        'docs/wiki/MATH.md', 'docs/wiki/Math.md.mojopkg',
+                        'docs/wiki/Math.mojo', 'docs/wiki/Math.mojoc',
+                        'docs/wiki/Math.mojopkg', 'docs/wiki/Math',
+                        'docs/Wiki/Math.md', 'Docs/wiki/Math.md')
+        target = self.write('ordinary/target.txt')
+        for label in ('source', 'include'):
+            paths = ALLOWED + (tuple(path + '.cov-origin' for path in ALLOWED)
+                               if label == 'include' else ())
+            for index, relative in enumerate(inert + alternatives):
+                for kind in ('file', 'directory', 'symlink', 'dangling-symlink'):
+                    with self.subTest(root=label, relative=relative, kind=kind):
+                        root = self.fixture(label + '-' + str(index) + '-' + kind)
+                        path = root/relative
+                        path.parent.mkdir(parents=True)
+                        if kind == 'file':
+                            path.write_text('Inert documentation.\n')
+                        elif kind == 'directory':
+                            path.mkdir()
+                        else:
+                            path.symlink_to(target if kind == 'symlink'
+                                            else self.root/'missing-target')
+                        expected = kind == 'file' and relative in inert
+                        self.assertEqual(HISTORICAL(root, paths), expected)
+                        self.assertEqual(BASELINE(root, paths), expected)
+                        self.assertEqual(cleanup.resolver_unshadowed(root, paths), expected)
+                        self.assertEqual(cleanup.resolver_unshadowed(
+                            root, paths, **lookup), expected)
+
+    def test_scoped_wiki_guard_keeps_lookup_and_coordinate_protection(self):
+        lookup = {'math_entries': frozenset(('.', 'tests', 'examples'))}
+        target = self.write('ordinary/target.txt')
+        cases = (
+            ('ordinary/Math.txt', True), ('ordinary/Math.md', True),
+            ('math.mojo', False), ('tests/Math.txt', False),
+            ('examples/Math.md', False), ('math/vector.mojo', True),
+            ('math/vector.mojopkg', False),
+            ('math/vector.mojo.cov-origin', False),
+            ('math/vector/__init__.mojo', False),
+        )
+        for index, (relative, regular_allowed) in enumerate(cases):
+            for kind in ('file', 'symlink'):
+                with self.subTest(relative=relative, kind=kind):
+                    root = self.fixture('scoped-' + str(index) + '-' + kind)
+                    path = root/relative
+                    path.parent.mkdir(parents=True, exist_ok=True)
+                    if kind == 'file':
+                        path.write_text('# resolver control\n')
+                    else:
+                        path.symlink_to(target)
+                    expected = regular_allowed and (kind == 'file'
+                               or relative.startswith('ordinary/'))
+                    self.assertEqual(cleanup.resolver_unshadowed(
+                        root, ALLOWED, **lookup), expected)
+
     def test_relevant_symlinks_and_root_aliases_are_refused(self):
         target = self.write('ordinary/target.txt')
         for index, (relative, destination, directory) in enumerate((
