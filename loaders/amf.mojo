@@ -56,7 +56,7 @@ from loaders.xml import NO_ELEMENT, XmlDocument, parse_xml
 from loaders.zip import unzip
 from materials.material import PHONG, Material, MaterialId
 from objects.mesh import Mesh
-from render.framebuffer import Color, FloatColor
+from render.framebuffer import Color, opaque_from_linear
 from math.finite import require_finite
 from std.math import isfinite, sqrt
 from std.pathlib import Path
@@ -176,13 +176,6 @@ def _color(doc: XmlDocument, element: Int) raises -> AmfColor:
     return color^
 
 
-def _authored(color: AmfColor) -> Color:
-    """Return a linear color as the sRGB bytes a material holds."""
-    return FloatColor(
-        Float32(color.r), Float32(color.g), Float32(color.b)
-    ).encode_opaque()
-
-
 def amf_material(color: AmfColor) raises -> Material:
     """Return the flat-shaded `PHONG` material of a color, as three.js
     makes one.
@@ -197,7 +190,7 @@ def amf_material(color: AmfColor) raises -> Material:
         Error: If `Material` refuses the opacity, such as one above one.
     """
     return Material(
-        _authored(color),
+        opaque_from_linear(color.r, color.g, color.b),
         opacity=Float32(color.a) if color.has_alpha else 1,
         kind=PHONG,
         specular=Color(17, 17, 17),

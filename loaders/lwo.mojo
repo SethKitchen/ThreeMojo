@@ -96,7 +96,7 @@ from math.vector2 import Vector2
 from objects.line import Line, SEGMENTS
 from objects.mesh import Mesh
 from objects.points import Points
-from render.framebuffer import Color, FloatColor
+from render.framebuffer import Color, opaque_from_linear
 from render.srgb import LINEAR, SRGB
 from render.texture import CLAMP, MIRROR, REPEAT, Wrap, texture_from
 from render.texture_store import NO_TEXTURE, TextureId
@@ -1366,13 +1366,6 @@ def lwo_resource_path(url: String) -> String:
 # --- into a scene ------------------------------------------------------------
 
 
-def _authored(color: Rgb) -> Color:
-    """Return linear light as the sRGB bytes a material holds."""
-    return FloatColor(
-        Float32(color[0]), Float32(color[1]), Float32(color[2])
-    ).encode_opaque()
-
-
 def _load(mut map: Optional[LwoMap], mut assets: Assets) raises -> TextureId:
     """Decode a map's file if it is there."""
     if not Bool(map):
@@ -1392,7 +1385,7 @@ def _load(mut map: Optional[LwoMap], mut assets: Assets) raises -> TextureId:
 
 def _material(mut made: LwoMaterial, mut assets: Assets) raises -> Material:
     """Return the `Material` of an LWO material."""
-    var color = _authored(made.color)
+    var color = opaque_from_linear(made.color[0], made.color[1], made.color[2])
     if made.type == "PointsMaterial":
         var out = points_material(color, PointSize(Float32(made.size)))
         out.map = _load(made.map, assets)
@@ -1410,11 +1403,15 @@ def _material(mut made: LwoMaterial, mut assets: Assets) raises -> Material:
         side=made.side,
         opacity=Float32(made.opacity),
         transparent=made.transparent,
-        emissive=_authored(made.emissive),
+        emissive=opaque_from_linear(
+            made.emissive[0], made.emissive[1], made.emissive[2]
+        ),
         emissive_intensity=Float32(made.emissive_intensity),
         flat_shading=made.flat_shading,
     )
-    out.specular = _authored(made.specular)
+    out.specular = opaque_from_linear(
+        made.specular[0], made.specular[1], made.specular[2]
+    )
     out.shininess = Float32(made.shininess)
     out.reflectivity = Float32(made.reflectivity)
     out.combine = made.combine
