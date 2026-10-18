@@ -17,7 +17,7 @@ from extensions.water.pebbles import (
 )
 from math.arc_tangent import atan2_float32
 from math.sine import fraction
-from math.utils import clamp, mix_delta
+from math.utils import clamp, mix_bilinear, mix_delta
 from math.norm import squared_length2, squared_length3
 from math.sine import sin_float32
 from math.vector3 import Vector3, mix_delta3
@@ -141,13 +141,14 @@ def value_noise(x: Float32, y: Float32) -> Float32:
     var fy = y - iy
     var ux = fx * fx * (3.0 - 2.0 * fx)
     var uy = fy * fy * (3.0 - 2.0 * fy)
-    var a = hash12(ix, iy)
-    var b = hash12(ix + 1.0, iy)
-    var c = hash12(ix, iy + 1.0)
-    var d = hash12(ix + 1.0, iy + 1.0)
-    var ab = a + (b - a) * ux
-    var cd = c + (d - c) * ux
-    return ab + (cd - ab) * uy
+    return mix_bilinear(
+        hash12(ix, iy),
+        hash12(ix + 1.0, iy),
+        hash12(ix, iy + 1.0),
+        hash12(ix + 1.0, iy + 1.0),
+        ux,
+        uy,
+    )
 
 
 def fbm2(x: Float32, y: Float32) -> Float32:

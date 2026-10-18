@@ -203,6 +203,33 @@ def mix_delta(start: Float64, end: Float64, t: Float64) -> Float64:
 
 
 def mix_bilinear(
+    a: Float32,
+    b: Float32,
+    c: Float32,
+    d: Float32,
+    across: Float32,
+    down: Float32,
+) -> Float32:
+    """Return four samples blended, across then down.
+
+    Args:
+        a: The sample at the low column and low row.
+        b: The sample at the high column and low row.
+        c: The sample at the low column and high row.
+        d: The sample at the high column and high row.
+        across: How far from the low column toward the high column.
+        down: How far from the low row toward the high row.
+
+    Returns:
+        The blend. Each edge is mixed by `across`, then the two results
+        by `down`.
+    """
+    var top = mix_delta(a, b, across)
+    var bottom = mix_delta(c, d, across)
+    return mix_delta(top, bottom, down)
+
+
+def mix_bilinear(
     a: Float64,
     b: Float64,
     c: Float64,
@@ -227,6 +254,53 @@ def mix_bilinear(
     var top = mix_delta(a, b, across)
     var bottom = mix_delta(c, d, across)
     return mix_delta(top, bottom, down)
+
+
+def mix_trilinear[
+    dtype: DType, width: Int
+](
+    c000: SIMD[dtype, width],
+    c100: SIMD[dtype, width],
+    c010: SIMD[dtype, width],
+    c110: SIMD[dtype, width],
+    c001: SIMD[dtype, width],
+    c101: SIMD[dtype, width],
+    c011: SIMD[dtype, width],
+    c111: SIMD[dtype, width],
+    x: SIMD[dtype, 1],
+    y: SIMD[dtype, 1],
+    z: SIMD[dtype, 1],
+) -> SIMD[dtype, width]:
+    """Return eight samples blended, across, then down, then deep.
+
+    Parameters:
+        dtype: The sample type.
+        width: How many lanes each sample holds.
+
+    Args:
+        c000: The sample at the low column, low row and low layer.
+        c100: The sample at the high column, low row and low layer.
+        c010: The sample at the low column, high row and low layer.
+        c110: The sample at the high column, high row and low layer.
+        c001: The sample at the low column, low row and high layer.
+        c101: The sample at the high column, low row and high layer.
+        c011: The sample at the low column, high row and high layer.
+        c111: The sample at the high column, high row and high layer.
+        x: How far from the low column toward the high column.
+        y: How far from the low row toward the high row.
+        z: How far from the low layer toward the high layer.
+
+    Returns:
+        The blend. Each edge is mixed by `x`, then those results by
+        `y`, then those results by `z`.
+    """
+    var x00 = c000 + (c100 - c000) * x
+    var x10 = c010 + (c110 - c010) * x
+    var x01 = c001 + (c101 - c001) * x
+    var x11 = c011 + (c111 - c011) * x
+    var y0 = x00 + (x10 - x00) * y
+    var y1 = x01 + (x11 - x01) * y
+    return y0 + (y1 - y0) * z
 
 
 def interleaved_gradient_noise(x: Float32, y: Float32) -> Float32:
