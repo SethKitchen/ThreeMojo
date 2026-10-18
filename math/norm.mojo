@@ -45,6 +45,90 @@ def _ordinary_product[
     )
 
 
+def dot2[
+    dtype: DType
+](
+    ax: SIMD[dtype, 1],
+    ay: SIMD[dtype, 1],
+    bx: SIMD[dtype, 1],
+    by: SIMD[dtype, 1],
+) -> SIMD[dtype, 1]:
+    """Return the dot product of two 2-component vectors.
+
+    The products are summed left to right. The width is the caller's.
+
+    Args:
+        ax: The first vector's x.
+        ay: The first vector's y.
+        bx: The second vector's x.
+        by: The second vector's y.
+
+    Returns:
+        The dot product.
+    """
+    return ax * bx + ay * by
+
+
+def dot3[
+    dtype: DType
+](
+    ax: SIMD[dtype, 1],
+    ay: SIMD[dtype, 1],
+    az: SIMD[dtype, 1],
+    bx: SIMD[dtype, 1],
+    by: SIMD[dtype, 1],
+    bz: SIMD[dtype, 1],
+) -> SIMD[dtype, 1]:
+    """Return the dot product of two 3-component vectors.
+
+    The products are summed left to right. The width is the caller's.
+
+    Args:
+        ax: The first vector's x.
+        ay: The first vector's y.
+        az: The first vector's z.
+        bx: The second vector's x.
+        by: The second vector's y.
+        bz: The second vector's z.
+
+    Returns:
+        The dot product.
+    """
+    return ax * bx + ay * by + az * bz
+
+
+def dot4[
+    dtype: DType
+](
+    ax: SIMD[dtype, 1],
+    ay: SIMD[dtype, 1],
+    az: SIMD[dtype, 1],
+    aw: SIMD[dtype, 1],
+    bx: SIMD[dtype, 1],
+    by: SIMD[dtype, 1],
+    bz: SIMD[dtype, 1],
+    bw: SIMD[dtype, 1],
+) -> SIMD[dtype, 1]:
+    """Return the dot product of two 4-component vectors.
+
+    The products are summed left to right. The width is the caller's.
+
+    Args:
+        ax: The first vector's x.
+        ay: The first vector's y.
+        az: The first vector's z.
+        aw: The first vector's w.
+        bx: The second vector's x.
+        by: The second vector's y.
+        bz: The second vector's z.
+        bw: The second vector's w.
+
+    Returns:
+        The dot product.
+    """
+    return ax * bx + ay * by + az * bz + aw * bw
+
+
 def length2[
     dtype: DType
 ](x: SIMD[dtype, 1], y: SIMD[dtype, 1]) -> SIMD[dtype, 1]:

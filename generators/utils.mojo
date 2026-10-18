@@ -28,7 +28,7 @@ from core.buffer_geometry import BufferGeometry
 from geometries.utils import merge_vertices
 from math.cross import cross_components
 from math.matrix4 import Matrix4
-from math.norm import length3, normalized3, _ordinary_squared
+from math.norm import dot3, length3, normalized3, _ordinary_squared
 from math.quaternion import quaternion_rotate
 from math.utils import SeededRandom
 from math.vector3 import Vector3
@@ -145,7 +145,9 @@ struct Vec3d(ImplicitlyCopyable):
         Returns:
             The dot product.
         """
-        return self.x * other.x + self.y * other.y + self.z * other.z
+        return dot3[DType.float64](
+            self.x, self.y, self.z, other.x, other.y, other.z
+        )
 
     def cross(self, other: Self) -> Self:
         """Return the cross product, three.js's `crossVectors(self, other)`.

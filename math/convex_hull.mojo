@@ -33,6 +33,7 @@ all three.
 """
 
 from math.cross import cross_components
+from math.norm import dot3
 from math.vector3 import Vector3
 from math.exact_predicates import (
     _collinear,
@@ -101,7 +102,9 @@ struct _Point(ImplicitlyCopyable):
 
     def dot(self, other: Self) -> Float64:
         """Return the dot product, summed in three.js's order."""
-        return self.x * other.x + self.y * other.y + self.z * other.z
+        return dot3[DType.float64](
+            self.x, self.y, self.z, other.x, other.y, other.z
+        )
 
     def __sub__(self, other: Self) -> Self:
         """Return the component-wise difference."""

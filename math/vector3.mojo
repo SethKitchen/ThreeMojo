@@ -32,7 +32,13 @@ from math.matrix3 import Matrix3
 from math.matrix4 import Matrix4
 from math.quaternion import Quaternion
 from math.utils import SeededRandom
-from math.norm import _ordinary_product, length3, normalized3, _ordinary_squared
+from math.norm import (
+    _ordinary_product,
+    dot3,
+    length3,
+    normalized3,
+    _ordinary_squared,
+)
 from std.math import ceil, cos, floor, pi, sin, sqrt, trunc
 from units.si import Angle, RADIAN
 
@@ -69,7 +75,9 @@ struct Vector3(Equatable, ImplicitlyCopyable, PolylineVertex):
 
     def dot(self, other: Self) -> Float32:
         """Return the dot product of `self` and `other`."""
-        return self.x * other.x + self.y * other.y + self.z * other.z
+        return dot3[DType.float32](
+            self.x, self.y, self.z, other.x, other.y, other.z
+        )
 
     def length(self) -> Float32:
         """Return the Euclidean length of the vector."""

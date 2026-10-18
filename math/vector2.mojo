@@ -19,7 +19,7 @@ from math.polyline import (
 )
 from math.utils import SeededRandom
 from math.vector3 import _js_round
-from math.norm import length2, normalized2
+from math.norm import dot2, length2, normalized2
 from std.math import (
     atan2,
     ceil,
@@ -51,7 +51,7 @@ struct Vector2(Equatable, ImplicitlyCopyable, PolylineVertex):
 
     def dot(self, other: Self) -> Float32:
         """Return the dot product of `self` and `other`."""
-        return self.x * other.x + self.y * other.y
+        return dot2[DType.float32](self.x, self.y, other.x, other.y)
 
     def cross(self, other: Self) -> Float32:
         """Return the z component of the cross product, which is the only
