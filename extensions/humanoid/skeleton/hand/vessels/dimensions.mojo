@@ -21,7 +21,7 @@ template parameters. They are not a cited caliber table.
     var d = hand_vessel_distance(dims, DEEP_PALMAR_ARCH, RIGHT, p)
 """
 
-from core.ordinal import ordinal_valid
+from core.ordinal import ordinal_valid, ordinal_label
 from extensions.humanoid.side import require_side, BodySide
 from extensions.humanoid.skeleton.arm.frame import (
     ArmDimensions,
@@ -97,15 +97,13 @@ def hand_vessel_label(part: HandVessel) -> String:
         A short American English label, or `"hand vessel"` when `part`
         is not named.
     """
-    if not part.is_valid():
-        return "hand vessel"
     var names = List[String]()
     names.append("superficial palmar arch")
     names.append("deep palmar arch")
     names.append("digital arteries")
     names.append("dorsal venous network")
     names.append("dorsal digital veins")
-    return names[part.value]
+    return ordinal_label(part.is_valid(), part.value, names, "hand vessel")
 
 
 def named_hand_vessels() -> List[HandVessel]:

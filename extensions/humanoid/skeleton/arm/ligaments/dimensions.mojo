@@ -22,7 +22,7 @@ authored in template centimeters. They are not a cited width table.
     var d = arm_ligament_distance(dims, ANNULAR_LIGAMENT, RIGHT, p)
 """
 
-from core.ordinal import ordinal_valid
+from core.ordinal import ordinal_valid, ordinal_label
 from extensions.humanoid.side import require_side, BodySide
 from extensions.humanoid.skeleton.arm.frame import ArmDimensions
 from extensions.humanoid.skeleton.field import reject
@@ -82,8 +82,6 @@ def arm_ligament_label(part: ArmLigament) -> String:
         A short American English label, or `"arm ligament"` when `part`
         is not named.
     """
-    if not part.is_valid():
-        return "arm ligament"
     var names = List[String]()
     names.append("glenoid labrum")
     names.append("articular cartilage")
@@ -93,7 +91,7 @@ def arm_ligament_label(part: ArmLigament) -> String:
     names.append("radial collateral ligament")
     names.append("annular ligament")
     names.append("interosseous membrane")
-    return names[part.value]
+    return ordinal_label(part.is_valid(), part.value, names, "arm ligament")
 
 
 def named_arm_ligaments() -> List[ArmLigament]:

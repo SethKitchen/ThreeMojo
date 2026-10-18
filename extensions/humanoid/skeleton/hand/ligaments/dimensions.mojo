@@ -22,7 +22,7 @@ authored in template centimeters. They are not a cited width table.
     var d = hand_ligament_distance(dims, FLEXOR_RETINACULUM, RIGHT, p)
 """
 
-from core.ordinal import ordinal_valid
+from core.ordinal import ordinal_valid, ordinal_label
 from extensions.humanoid.side import require_side, BodySide
 from extensions.humanoid.skeleton.arm.frame import ArmDimensions
 from extensions.humanoid.skeleton.arm.ligaments.dimensions import joint_pad
@@ -83,8 +83,6 @@ def hand_ligament_label(part: HandLigament) -> String:
         A short American English label, or `"hand ligament"` when
         `part` is not named.
     """
-    if not part.is_valid():
-        return "hand ligament"
     var names = List[String]()
     names.append("flexor retinaculum")
     names.append("extensor retinaculum")
@@ -93,7 +91,7 @@ def hand_ligament_label(part: HandLigament) -> String:
     names.append("volar plates")
     names.append("joint cartilage")
     names.append("triangular fibrocartilage")
-    return names[part.value]
+    return ordinal_label(part.is_valid(), part.value, names, "hand ligament")
 
 
 def named_hand_ligaments() -> List[HandLigament]:

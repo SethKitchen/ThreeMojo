@@ -24,7 +24,7 @@ table.
     var d = hand_muscle_distance(dims, ADDUCTOR_POLLICIS, RIGHT, p)
 """
 
-from core.ordinal import ordinal_valid
+from core.ordinal import ordinal_valid, ordinal_label
 from extensions.humanoid.side import require_side, BodySide
 from extensions.humanoid.skeleton.arm.frame import (
     ArmDimensions,
@@ -97,8 +97,6 @@ def hand_muscle_label(part: HandMuscle) -> String:
         A short American English label, or `"hand muscle"` when `part`
         is not named.
     """
-    if not part.is_valid():
-        return "hand muscle"
     var names = List[String]()
     names.append("abductor pollicis brevis")
     names.append("flexor pollicis brevis")
@@ -114,7 +112,7 @@ def hand_muscle_label(part: HandMuscle) -> String:
     names.append("flexor pollicis longus tendon")
     names.append("extensor tendons")
     names.append("thumb extensor tendons")
-    return names[part.value]
+    return ordinal_label(part.is_valid(), part.value, names, "hand muscle")
 
 
 def named_hand_muscles() -> List[HandMuscle]:

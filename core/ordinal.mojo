@@ -12,6 +12,8 @@ own type. `index_in_count` is true from zero through one below a count.
 `require_non_negative` refuses a value below zero. Callers keep their
 own error text. `require_draw_ids` refuses a negative node, geometry,
 and material, and builds the three messages from one label.
+`ordinal_label` returns a name from a list, or a fallback when the
+value is not valid.
 """
 
 
@@ -101,3 +103,25 @@ def require_draw_ids(
     require_non_negative(node, label + " must name a scene node")
     require_non_negative(geometry, label + " must name a geometry")
     require_non_negative(material, label + " must name a material")
+
+
+def ordinal_label(
+    valid: Bool, value: Int, names: List[String], fallback: String
+) -> String:
+    """Return the name at `value`, or `fallback` when `valid` is false.
+
+    Args:
+        valid: Whether `value` names an entry of `names`.
+        value: The index into `names` when `valid` is true.
+        names: The names, in order.
+        fallback: The name when `valid` is false.
+
+    Returns:
+        `names[value]` when `valid` is true, and `fallback` otherwise.
+
+    Raises:
+        Error: Never.
+    """
+    if not valid:
+        return fallback
+    return names[value]
