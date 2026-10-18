@@ -147,7 +147,7 @@ NATIVE_SUPPORT_MAPPING = {'tests/test_carla_junction_endpoint_refusals.mojo': ['
 THEOREM_DOCUMENT = 'docs/validation/full-audit-711-invariants.md'
 PR760_STAGE_SHA256 = '03757bafb02fbb3908919839c18d5c2c443f46469aeb01393dee57ae22054359'
 PR760_IMAGE = 'tools/carla_lane_oracle/pr760-source-image.json'
-PR760_IMAGE_SHA256 = '775775474cd8588290ad97248fc2e7e24ac1bf769e0e813ec011051f2fa19c11'
+PR760_IMAGE_SHA256 = '8f470b0f1d38d2d56639646169d9af36cb0f132be6a2ac5ab134f89285740fc3'
 PR760_OWNER_PREDECESSOR = 'tools/carla_lane_oracle/pr760-owner-predecessor.txt'
 PR760_OWNER_PREDECESSOR_SHA256 = '6138ba2dcac394c716ea9ed32e74e0c6d15857d5c605fc82304d21d0c80fdc69'
 DEPENDENCY_TOOL_SHA256 = {'tools/carla_lane_oracle/winner_sign_contracts.py': 'f850902634073364fe2407b00d12e9fdfb2ecfc6cf2a03414269fbb7984a8a7f',
@@ -2968,7 +2968,12 @@ def _shared_helper_bindings(root, *, paths=None, _snapshots=None, _inputs=None,
         and sha(raw) == pr760_stage.EDGES[name]['after_sha256']
         for name, raw in sources.items())
     if not current:
-        for name in {name for path in selected for name in shared_helpers.PROVIDER_PATHS[path]}:
+        # Exact pre-extraction sources do not import their helper provider.
+        # Probe only live edges; a current source still selects full PR760
+        # admission above, including every physical provider it requires.
+        for name in {name for path in selected
+                     if sha(sources[path]) != shared_helpers.BEFORE_SHA256[path]
+                     for name in shared_helpers.PROVIDER_PATHS[path]}:
             raw = observe(name)
             if name in pr760_stage.CARLA_REGISTRY_PATHS and sha(raw) == pr760_stage.EDGES[name]['after_sha256']:
                 current = True
@@ -4149,7 +4154,7 @@ def _pr760_authority_data():
     require((PR760_STAGE_SHA256, PR760_IMAGE, PR760_IMAGE_SHA256, PR760_OWNER_PREDECESSOR, PR760_OWNER_PREDECESSOR_SHA256) == (
         '03757bafb02fbb3908919839c18d5c2c443f46469aeb01393dee57ae22054359',
         'tools/carla_lane_oracle/pr760-source-image.json',
-        '775775474cd8588290ad97248fc2e7e24ac1bf769e0e813ec011051f2fa19c11',
+        '8f470b0f1d38d2d56639646169d9af36cb0f132be6a2ac5ab134f89285740fc3',
         'tools/carla_lane_oracle/pr760-owner-predecessor.txt',
         '6138ba2dcac394c716ea9ed32e74e0c6d15857d5c605fc82304d21d0c80fdc69',
     ), 'PR760 authority selectors changed')
@@ -4344,7 +4349,7 @@ def qualification_predecessor_bytes(path, raw):
                                                                      '            witness, '
                                                                      'self.original[witness])\n')))),
      'tools/carla_lane_oracle/test_shared_helper_contracts.py': ('c5f02d4424d7c497557991d1b08e4864dd0249158506beac08f601413a9648f2',
- '43145b8b250de9d6e89f13a3c9e8af0ac5562d03f1e49280231e9421940c09b8',
+ '63645797e8134e48b9a9bcfe01b33fcba83ac9c140e696af23937c43296ca494',
  ((25,
    27,
    ('        cls.texts = {path: (ROOT/path).read_text()\n',),
@@ -4366,7 +4371,7 @@ def qualification_predecessor_bytes(path, raw):
    ('        common = fixtures.copy_common758_boundary_root(self, ROOT)\n',
     '        for root, typed in ((common, True), (historical, False)):\n')),
   (196,
-   213,
+   214,
    (),
    ('\n',
     '    def test_pr760_old_xml_cannot_borrow_the_current_provider_image(self):\n',
@@ -4379,36 +4384,37 @@ def qualification_predecessor_bytes(path, raw):
     '            raw = utf8.read_bytes()\n',
     '            utf8.unlink()\n',
     '            try:\n',
-    '                with self.assertRaises(FileNotFoundError) as caught:\n',
+    '                with self.assertRaises(cleanup.ContractError) as caught:\n',
     '                    cleanup.shared_helper_proof_bindings(self.root, '
     'paths=helpers.SOURCE_PATHS)\n',
-    '                self.assertEqual(caught.exception.filename, str(utf8))\n',
+    '                self.assertIsInstance(caught.exception.__cause__, FileNotFoundError)\n',
+    '                self.assertEqual(caught.exception.__cause__.filename, str(utf8))\n',
     '            finally:\n',
     '                utf8.write_bytes(raw)\n',
     '        cleanup.shared_helper_proof_bindings(self.root, paths=helpers.SOURCE_PATHS)\n')),
-  (234,
-   235,
+  (235,
+   236,
    ("                with patch.object(Path, 'read_bytes', unreadable), self.assertRaises(OSError) "
     'as caught:\n',),
    ("                with patch.object(Path, 'read_bytes', unreadable), "
     'self.assertRaises((OSError, ValueError)) as caught:\n',)),
-  (236,
-   240,
+  (237,
+   241,
    ('                self.assertIs(caught.exception, failure)\n',),
    ('                cause = caught.exception\n',
     '                while cause.__cause__ is not None:\n',
     '                    cause = cause.__cause__\n',
     '                self.assertIs(cause, failure)\n')),
-  (314,
-   318,
+  (315,
+   319,
    ("        self.assertEqual(bindings['render/color_math.mojo'], "
     "helpers.PROVIDERS['render/color_math.mojo'])\n",),
    ("        color = 'render/color_math.mojo'\n",
     '        self.assertEqual(bindings[color], cleanup.sha((self.root/color).read_bytes()))\n',
     '        self.assertEqual(cleanup.sha(cleanup.pr760_stage.predecessor_source(\n',
     '            color, (self.root/color).read_text())), helpers.PROVIDERS[color])\n')),
-  (325,
-   341,
+  (326,
+   342,
    ("        entry = self.root/'extensions/animals/anatomy/helper_scope_entry.mojo'\n",
     "        entry.write_text('def main():\\n    pass\\n')\n",
     '        try:\n',

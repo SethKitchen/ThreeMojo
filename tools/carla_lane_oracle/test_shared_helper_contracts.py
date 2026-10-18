@@ -205,9 +205,10 @@ class SharedHelperIntegrationControls(unittest.TestCase):
             raw = utf8.read_bytes()
             utf8.unlink()
             try:
-                with self.assertRaises(FileNotFoundError) as caught:
+                with self.assertRaises(cleanup.ContractError) as caught:
                     cleanup.shared_helper_proof_bindings(self.root, paths=helpers.SOURCE_PATHS)
-                self.assertEqual(caught.exception.filename, str(utf8))
+                self.assertIsInstance(caught.exception.__cause__, FileNotFoundError)
+                self.assertEqual(caught.exception.__cause__.filename, str(utf8))
             finally:
                 utf8.write_bytes(raw)
         cleanup.shared_helper_proof_bindings(self.root, paths=helpers.SOURCE_PATHS)
