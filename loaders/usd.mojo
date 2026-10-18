@@ -94,7 +94,7 @@ def _layer(bytes: List[UInt8]) raises -> UsdLayer:
         Error: If the parser refuses it.
     """
     if is_crate(bytes):
-        return parse_usdc(bytes.copy())
+        return parse_usdc(Span(bytes))
     return parse_usda_layer(decode_text(bytes))
 
 
@@ -205,7 +205,7 @@ def parse_usd(
     """
     if is_crate(bytes):
         return compose_usd(
-            parse_usdc(bytes.copy()), UsdAssets(), path, scene, assets, parent
+            parse_usdc(Span(bytes)), UsdAssets(), path, scene, assets, parent
         )
     if len(bytes) >= 2 and bytes[0] == 0x50 and bytes[1] == 0x4B:
         return _archive(bytes, scene, assets, parent)
