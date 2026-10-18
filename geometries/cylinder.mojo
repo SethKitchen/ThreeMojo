@@ -37,16 +37,13 @@ The side and each cap are groups, three.js's `addGroup` in
 dresses each part in its own.
 """
 
-from core.buffer_attribute import BufferAttribute
 from core.buffer_geometry import (
     BufferGeometry,
     CONE_GEOMETRY,
     CYLINDER_GEOMETRY,
     MaterialIndex,
-    NORMAL,
-    POSITION,
-    UV,
 )
+from geometries.surface import indexed_surface
 from core.user_data import UserData
 from geometries.circle import FULL_TURN, check_sweep
 from math.norm import normalized2
@@ -271,10 +268,7 @@ def cylinder(
             dressed.append(2)
 
     var geometry = BufferGeometry()
-    geometry.set_attribute(String(POSITION), BufferAttribute(data^, 3))
-    geometry.set_attribute(String(NORMAL), BufferAttribute(normals^, 3))
-    geometry.set_attribute(String(UV), BufferAttribute(uvs^, 2))
-    geometry.set_index(index^)
+    indexed_surface(geometry, data^, normals^, uvs^, index^)
     # One group per part, each from where the last one ended. There is a
     # side, so this runs.
     var begin = 0

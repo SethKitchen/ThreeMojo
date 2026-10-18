@@ -34,15 +34,12 @@ limits, and explicit zero and nonfinite rules.
 
 from math.norm import normalized_cross3, _ordinary_squared
 
-from core.buffer_attribute import BufferAttribute
 from core.buffer_geometry import (
     BufferGeometry,
-    NORMAL,
-    POSITION,
     TORUS_GEOMETRY,
     TORUS_KNOT_GEOMETRY,
-    UV,
 )
+from geometries.surface import indexed_surface
 from core.user_data import UserData
 from geometries.circle import FULL_TURN, check_sweep
 from geometries.grid import grid_index
@@ -141,10 +138,13 @@ def torus(
             )
 
     var geometry = BufferGeometry()
-    geometry.set_attribute(String(POSITION), BufferAttribute(data^, 3))
-    geometry.set_attribute(String(NORMAL), BufferAttribute(normals^, 3))
-    geometry.set_attribute(String(UV), BufferAttribute(uvs^, 2))
-    geometry.set_index(grid_index(radial_segments, tubular_segments, True))
+    indexed_surface(
+        geometry,
+        data^,
+        normals^,
+        uvs^,
+        grid_index(radial_segments, tubular_segments, True),
+    )
     geometry.kind = TORUS_GEOMETRY
     geometry.parameters = UserData()
     geometry.parameters.set_number("radius", Float64(radius.to(METER)))
@@ -262,10 +262,13 @@ def torus_knot(
             )
 
     var geometry = BufferGeometry()
-    geometry.set_attribute(String(POSITION), BufferAttribute(data^, 3))
-    geometry.set_attribute(String(NORMAL), BufferAttribute(normals^, 3))
-    geometry.set_attribute(String(UV), BufferAttribute(uvs^, 2))
-    geometry.set_index(grid_index(tubular_segments, radial_segments, False))
+    indexed_surface(
+        geometry,
+        data^,
+        normals^,
+        uvs^,
+        grid_index(tubular_segments, radial_segments, False),
+    )
     geometry.kind = TORUS_KNOT_GEOMETRY
     geometry.parameters = UserData()
     geometry.parameters.set_number("radius", Float64(radius.to(METER)))

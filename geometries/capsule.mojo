@@ -19,14 +19,8 @@ capsule of no length keeps its two rims and the side between them, which
 has no height.
 """
 
-from core.buffer_attribute import BufferAttribute
-from core.buffer_geometry import (
-    BufferGeometry,
-    CAPSULE_GEOMETRY,
-    NORMAL,
-    POSITION,
-    UV,
-)
+from core.buffer_geometry import BufferGeometry, CAPSULE_GEOMETRY
+from geometries.surface import indexed_surface
 from core.user_data import UserData
 from std.math import cos, pi, sin, sqrt
 from units.si import Length, METER
@@ -151,10 +145,7 @@ def capsule(
                 index.append(i3)
 
     var geometry = BufferGeometry()
-    geometry.set_attribute(String(POSITION), BufferAttribute(data^, 3))
-    geometry.set_attribute(String(NORMAL), BufferAttribute(normals^, 3))
-    geometry.set_attribute(String(UV), BufferAttribute(uvs^, 2))
-    geometry.set_index(index^)
+    indexed_surface(geometry, data^, normals^, uvs^, index^)
     geometry.kind = CAPSULE_GEOMETRY
     geometry.parameters = UserData()
     geometry.parameters.set_number("radius", Float64(radius.to(METER)))
