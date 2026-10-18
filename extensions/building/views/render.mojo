@@ -56,7 +56,7 @@ from generators.utils import Vec3d
 from geometries.earcut import earcut
 from materials.material import standard_material
 from objects.mesh import Mesh
-from render.framebuffer import Color
+from render.framebuffer import Color, unit_byte
 from std.math import cos, pi, sin
 
 # The name of the per-vertex element attribute.
@@ -253,11 +253,6 @@ struct _Mesher(Movable):
                 var y = flat[2 * corner[k] + 1]
                 bucket.vertex(origin + e1 * x + e2 * y, n, x, y, id)
             t += 3
-
-
-def _color(value: Float32) -> UInt8:
-    """Return a look channel from zero to one as a byte."""
-    return UInt8(Int(value * 255 + 0.5))
 
 
 def _look(building: Building, look: Int) -> Look:
@@ -993,7 +988,9 @@ def add_building(
         var look = _look(building, bucket.look)
         var transparent = look.transmission > 0
         var material = standard_material(
-            Color(_color(look.red), _color(look.green), _color(look.blue)),
+            Color(
+                unit_byte(look.red), unit_byte(look.green), unit_byte(look.blue)
+            ),
             roughness=look.roughness,
             metalness=look.metalness,
             opacity=1 - look.transmission * 0.7,

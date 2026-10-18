@@ -109,6 +109,7 @@ from render.framebuffer import (
     FloatColor,
     Framebuffer,
     OPAQUE_WHITE,
+    unit_byte,
     require_depth_length,
 )
 from render.png import DecodedImage
@@ -2648,7 +2649,7 @@ def _fraction_byte(value: Float32) raises -> UInt8:
         held = 0
     if held > 1:
         held = 1
-    return UInt8(Int(held * 255 + 0.5))
+    return unit_byte(held)
 
 
 def texture_of(
