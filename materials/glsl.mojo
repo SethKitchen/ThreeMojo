@@ -56,10 +56,10 @@ subset and compatibility limits.
 from core.ordinal import ordinal_valid
 from loaders.bytes import (
     ascii_digit,
-    ascii_letter,
     is_exponent_mark,
     is_sign_mark,
     is_hex_digit,
+    letter_or_underscore,
     space_tab_return,
 )
 from loaders.js_text import is_js_word
@@ -222,11 +222,6 @@ struct _Token(Copyable, Movable):
     var line: Int
 
 
-def _is_letter(c: UInt8) -> Bool:
-    """Return True for a letter or an underscore."""
-    return ascii_letter(Int(c)) or c == UInt8(ord("_"))
-
-
 def _starts_number(c: UInt8, next: UInt8) -> Bool:
     """Return True if a number begins at `c`: a digit, or a point and a
     digit."""
@@ -353,7 +348,7 @@ struct _Lexer(Movable):
         var bytes = text.as_bytes()
         var c = bytes[at]
         var next = bytes[at + 1] if at + 1 < len(bytes) else UInt8(0)
-        if _is_letter(c):
+        if letter_or_underscore(c):
             var end = at
             while end < len(bytes) and is_js_word(bytes[end]):
                 end += 1
@@ -682,7 +677,9 @@ struct _Lexer(Movable):
             var wrapped = at < len(parts) and parts[at] == "("
             if wrapped:
                 at += 1
-            if at >= len(parts) or not _is_letter(parts[at].as_bytes()[0]):
+            if at >= len(parts) or not letter_or_underscore(
+                parts[at].as_bytes()[0]
+            ):
                 raise self.error(line, "defined names a macro")
             var holds = self.defined(parts[at])
             at += 1
@@ -699,7 +696,7 @@ struct _Lexer(Movable):
                         line, "an #if condition counts in whole numbers"
                     )
             return atol(part)
-        if not _is_letter(part.as_bytes()[0]):
+        if not letter_or_underscore(part.as_bytes()[0]):
             raise self.error(line, "an #if condition cannot hold " + part)
         for index in range(len(self.names)):
             if self.names[index] == part:

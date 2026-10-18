@@ -173,6 +173,21 @@ def ascii_digit_at(bytes: Span[UInt8, _], at: Int) -> Bool:
     return at < len(bytes) and ascii_digit(bytes[at])
 
 
+def letter_or_underscore(byte: UInt8) -> Bool:
+    """Return True for a letter or `_`.
+
+    Args:
+        byte: A byte value.
+
+    Returns:
+        Whether it is `A` through `Z`, `a` through `z`, or `_`.
+
+    Raises:
+        Error: Never.
+    """
+    return ascii_letter(Int(byte)) or byte == 95
+
+
 def is_sign_mark(byte: Int) -> Bool:
     """Return True for `+` or `-`.
 

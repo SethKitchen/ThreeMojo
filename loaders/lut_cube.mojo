@@ -43,7 +43,7 @@ Related loaders: `loaders.lut_3dl` reads `.3dl` files and
 `loaders.lut_image` reads image strips.
 """
 
-from loaders.bytes import ascii_letter
+from loaders.bytes import letter_or_underscore
 from math.vector3 import Vector3
 from render.texture import (
     BILINEAR,
@@ -200,13 +200,6 @@ def _title(text: String, line: Int) raises -> String:
     return String(text[byte = open + 1 : close])
 
 
-def _is_keyword(key: String) -> Bool:
-    """Return True if a field starts with a letter or an underscore, as a
-    keyword does and a number does not."""
-    var first = key.as_bytes()[0]
-    return ascii_letter(Int(first)) or first == 95
-
-
 def parse_lut_cube(
     text: String, texel_type: TexelType = UNSIGNED_BYTE_TYPE
 ) raises -> LutCube:
@@ -258,7 +251,7 @@ def parse_lut_cube(
             domain_min = _triple(fields, 1, line)
         elif key == "DOMAIN_MAX":
             domain_max = _triple(fields, 1, line)
-        elif _is_keyword(key):
+        elif letter_or_underscore(key.as_bytes()[0]):
             # Another keyword, such as `LUT_3D_INPUT_RANGE`: skipped, as
             # three.js skips any line its pattern does not match.
             continue
