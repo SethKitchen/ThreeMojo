@@ -15,9 +15,8 @@ mid-stride and the snake and the swimmers bend in an S. Each animal
 turns a whole turn.
 """
 
-from examples.output import blit, example_destination
+from examples.output import example_destination, blit, gallery_camera
 
-from cameras.perspective_camera import PerspectiveCamera
 from core.assets import Assets
 from core.object3d import Object3D
 from core.scene import Scene
@@ -134,14 +133,16 @@ def tiles(id: SpeciesId, renderer: Renderer) raises -> List[Framebuffer]:
             Color(221, 230, 242), Color(95, 90, 82), scene.add(sky^), 1.15
         )
     )
-    var camera = PerspectiveCamera(
-        Angle(30.0, DEGREE),
-        Float32(TILE_W) / Float32(TILE_H),
-        Length(reach * 0.05, METER),
-        Length(reach * 30.0, METER),
-    )
     var away = Vector3(1.05, 0.42, 1.25) * (reach * 1.15)
-    camera.place(center + away, center)
+    var camera = gallery_camera(
+        TILE_W,
+        TILE_H,
+        center + away,
+        center,
+        field_of_view=Angle(30.0, DEGREE),
+        near=Length(reach * 0.05, METER),
+        far=Length(reach * 30.0, METER),
+    )
     var out = List[Framebuffer]()
     var step = Angle(360.0 / Float32(FRAMES), DEGREE)
     for _ in range(FRAMES):

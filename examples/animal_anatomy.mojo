@@ -19,9 +19,8 @@ prints each animal's mass, center of mass, stride, and the static load
 on each joint of its standing limbs.
 """
 
-from examples.output import blit, example_destination
+from examples.output import example_destination, blit, gallery_camera
 
-from cameras.perspective_camera import PerspectiveCamera
 from core.assets import Assets
 from core.buffer_geometry import BufferGeometry
 from core.object3d import Object3D
@@ -211,14 +210,14 @@ def main() raises:
                 reach = max(size.x, max(size.y, size.z))
                 floor_y = box.min.y
             var layers = anatomy_layers(real, muscles, pose)
-            var camera = PerspectiveCamera(
-                Angle(30.0, DEGREE),
-                Float32(TILE_W) / Float32(TILE_H),
-                Length(reach * 0.05, METER),
-                Length(reach * 30.0, METER),
-            )
-            camera.place(
-                center + Vector3(1.35, 0.25, 0.35) * (reach * 1.4), center
+            var camera = gallery_camera(
+                TILE_W,
+                TILE_H,
+                center + Vector3(1.35, 0.25, 0.35) * (reach * 1.4),
+                center,
+                field_of_view=Angle(30.0, DEGREE),
+                near=Length(reach * 0.05, METER),
+                far=Length(reach * 30.0, METER),
             )
             var assets = Assets()
             var game_meshes: List[BufferGeometry] = [game^]

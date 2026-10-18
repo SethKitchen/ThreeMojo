@@ -27,9 +27,8 @@ a `plane` laid flat: it is built facing +z, and a quarter turn about x makes
 that +y.
 """
 
-from examples.output import example_destination
+from examples.output import example_destination, gallery_camera
 
-from cameras.perspective_camera import PerspectiveCamera
 from core.assets import Assets
 from core.clock import Clock
 from core.object3d import Object3D
@@ -151,13 +150,15 @@ def main() raises:
 
     # Low and close, so the far edge of the plane runs away to a vanishing
     # point and one triangle spans a great deal of perspective.
-    var camera = PerspectiveCamera(
-        Angle(55.0, DEGREE),
-        Float32(WIDTH) / Float32(HEIGHT),
-        Length(0.1, METER),
-        Length(100.0, METER),
+    var camera = gallery_camera(
+        WIDTH,
+        HEIGHT,
+        Vector3(0, 0.8, 3.4),
+        Vector3(0, 0, -1.5),
+        field_of_view=Angle(55.0, DEGREE),
+        near=Length(0.1, METER),
+        far=Length(100.0, METER),
     )
-    camera.place(Vector3(0, 0.8, 3.4), Vector3(0, 0, -1.5))
 
     var corners = renderer.prepare(scene, assets, camera)
 

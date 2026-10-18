@@ -12,9 +12,8 @@ from an interpolated unit normal. Shading only at the corners would crease
 every edge.
 """
 
-from examples.output import example_destination, spin_clip
+from examples.output import example_destination, gallery_camera, spin_clip
 
-from cameras.perspective_camera import PerspectiveCamera
 from core.assets import Assets
 from core.object3d import Object3D
 from core.scene import Scene
@@ -54,13 +53,15 @@ def main() raises:
     scene.add_light(ambient_light(Color(255, 255, 255), 0.38))
     scene.add_light(directional_light(Color(255, 255, 255), lamp_node, 3.3))
 
-    var camera = PerspectiveCamera(
-        Angle(32.0, DEGREE),
-        Float32(WIDTH) / Float32(HEIGHT),
-        Length(0.1, METER),
-        Length(100.0, METER),
+    var camera = gallery_camera(
+        WIDTH,
+        HEIGHT,
+        Vector3(0, 0.1, 2.35),
+        Vector3(0, 0, 0),
+        field_of_view=Angle(32.0, DEGREE),
+        near=Length(0.1, METER),
+        far=Length(100.0, METER),
     )
-    camera.place(Vector3(0, 0.1, 2.35), Vector3(0, 0, 0))
 
     spin_clip(
         renderer, camera, assets, scene, node, FRAMES, DELAY_MS, destination

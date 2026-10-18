@@ -12,9 +12,8 @@ the walk and meshes its sculpt again, so the elbows, the knees and the
 hocks keep their shape as they bend. The planted feet stay on the floor.
 """
 
-from examples.output import example_destination
+from examples.output import example_destination, gallery_camera
 
-from cameras.perspective_camera import PerspectiveCamera
 from core.assets import Assets
 from core.object3d import Object3D
 from core.scene import Scene
@@ -98,13 +97,15 @@ def frame_at(
             Color(221, 230, 242), Color(95, 90, 82), scene.add(sky^), 1.1
         )
     )
-    var camera = PerspectiveCamera(
-        Angle(32.0, DEGREE),
-        Float32(WIDTH) / Float32(HEIGHT),
-        Length(0.05, METER),
-        Length(30.0, METER),
+    var camera = gallery_camera(
+        WIDTH,
+        HEIGHT,
+        Vector3(2.6, 0.75, 0.6),
+        Vector3(0, 0.42, 0.0),
+        field_of_view=Angle(32.0, DEGREE),
+        near=Length(0.05, METER),
+        far=Length(30.0, METER),
     )
-    camera.place(Vector3(2.6, 0.75, 0.6), Vector3(0, 0.42, 0.0))
     scene.update()
     return renderer.render(scene, assets, camera)
 

@@ -12,9 +12,8 @@ inside. The sun position is a uniform. The sphere sits in the light so
 the sky has something to shine on.
 """
 
-from examples.output import example_destination, write_example
+from examples.output import example_destination, gallery_camera, write_example
 
-from cameras.perspective_camera import PerspectiveCamera
 from core.assets import Assets
 from core.clock import Clock
 from core.object3d import Object3D
@@ -63,13 +62,15 @@ def main() raises:
     scene.add_light(ambient_light(Color(180, 200, 230), 0.45))
     scene.add_light(directional_light(Color(255, 244, 220), lamp_node, 2.4))
 
-    var camera = PerspectiveCamera(
-        Angle(50.0, DEGREE),
-        Float32(WIDTH) / Float32(HEIGHT),
-        Length(0.1, METER),
-        Length(80.0, METER),
+    var camera = gallery_camera(
+        WIDTH,
+        HEIGHT,
+        Vector3(0, 0.25, 1.5),
+        Vector3(0, 0.45, -1.6),
+        field_of_view=Angle(50.0, DEGREE),
+        near=Length(0.1, METER),
+        far=Length(80.0, METER),
     )
-    camera.place(Vector3(0, 0.25, 1.5), Vector3(0, 0.45, -1.6))
 
     var frame_clock = Clock()
     frame_clock.start()

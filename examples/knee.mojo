@@ -11,9 +11,8 @@ The page is Knee. A six-foot male right knee shows articular cartilage,
 both menisci and both collateral ligaments on the assembled bones.
 """
 
-from examples.output import example_destination, spin_gallery
+from examples.output import example_destination, gallery_camera, spin_gallery
 
-from cameras.perspective_camera import PerspectiveCamera
 from core.assets import Assets
 from core.object3d import Object3D
 from core.scene import Scene
@@ -82,13 +81,15 @@ def main() raises:
     scene.add_light(ambient_light(Color(255, 248, 235), 0.55))
     scene.add_light(directional_light(Color(255, 244, 220), lamp_node, 2.70))
 
-    var camera = PerspectiveCamera(
-        Angle(38.0, DEGREE),
-        Float32(WIDTH) / Float32(HEIGHT),
-        Length(0.02, METER),
-        Length(8.0, METER),
+    var camera = gallery_camera(
+        WIDTH,
+        HEIGHT,
+        Vector3(0.04, 0.04, 0.28),
+        Vector3(0.0, 0.0, 0.01),
+        field_of_view=Angle(38.0, DEGREE),
+        near=Length(0.02, METER),
+        far=Length(8.0, METER),
     )
-    camera.place(Vector3(0.04, 0.04, 0.28), Vector3(0.0, 0.0, 0.01))
 
     spin_gallery(
         renderer, camera, assets, scene, pivot, FRAMES, DELAY_MS, destination

@@ -12,9 +12,8 @@ from the parts library beside it, and `load_ldraw` puts that model in the
 scene. The root turns one whole turn.
 """
 
-from examples.output import example_destination, spin_clip
+from examples.output import example_destination, gallery_camera, spin_clip
 
-from cameras.perspective_camera import PerspectiveCamera
 from core.assets import Assets
 from core.object3d import Object3D
 from core.scene import Scene
@@ -53,13 +52,15 @@ def main() raises:
         directional_light(Color(255, 248, 236), scene.add(lamp^), 2.4)
     )
 
-    var camera = PerspectiveCamera(
-        Angle(40.0, DEGREE),
-        Float32(WIDTH) / Float32(HEIGHT),
-        Length(0.1, METER),
-        Length(200.0, METER),
+    var camera = gallery_camera(
+        WIDTH,
+        HEIGHT,
+        Vector3(8, -7, 11),
+        Vector3(0, 1.5, 0),
+        field_of_view=Angle(40.0, DEGREE),
+        near=Length(0.1, METER),
+        far=Length(200.0, METER),
     )
-    camera.place(Vector3(8, -7, 11), Vector3(0, 1.5, 0))
 
     spin_clip(
         renderer, camera, assets, scene, root, FRAMES, DELAY_MS, destination

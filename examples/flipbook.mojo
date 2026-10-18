@@ -13,7 +13,7 @@ The red box turns with it. The blue box rides a `Gyroscope`, so it follows
 the bar and keeps its own turn.
 """
 
-from examples.output import example_destination, write_example
+from examples.output import example_destination, gallery_camera, write_example
 
 from animation.keyframe_track import MeshIndex
 from cameras.perspective_camera import PerspectiveCamera
@@ -222,13 +222,15 @@ def main() raises:
     scene.add_light(ambient_light(Color(255, 255, 255), 0.45))
     scene.add_light(directional_light(Color(255, 255, 255), lamp_id, 2.2))
 
-    var camera = PerspectiveCamera(
-        Angle(38.0, DEGREE),
-        Float32(WIDTH) / Float32(HEIGHT),
-        Length(0.1, METER),
-        Length(30.0, METER),
+    var camera = gallery_camera(
+        WIDTH,
+        HEIGHT,
+        Vector3(0.05, 0.55, 3.35),
+        Vector3(0, 0.05, 0),
+        field_of_view=Angle(38.0, DEGREE),
+        near=Length(0.1, METER),
+        far=Length(30.0, METER),
     )
-    camera.place(Vector3(0.05, 0.55, 3.35), Vector3(0, 0.05, 0))
 
     var step = Angle(Float32(360) / Float32(FRAMES), DEGREE)
     var frame_clock = Clock()

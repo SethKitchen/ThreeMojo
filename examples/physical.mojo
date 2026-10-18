@@ -14,9 +14,8 @@ reflects; the sky's faces carry a mip chain, which is what a rough
 sphere reads. The last sphere of each row has a clear coat over it.
 """
 
-from examples.output import example_destination
+from examples.output import example_destination, gallery_camera
 
-from cameras.perspective_camera import PerspectiveCamera
 from core.assets import Assets
 from core.background import cube_background
 from core.clock import Clock
@@ -144,13 +143,15 @@ def main() raises:
     scene.add_light(ambient_light(Color(255, 255, 255), 0.3))
     scene.update()
 
-    var camera = PerspectiveCamera(
-        Angle(32.0, DEGREE),
-        Float32(WIDTH) / Float32(HEIGHT),
-        Length(0.1, METER),
-        Length(100.0, METER),
+    var camera = gallery_camera(
+        WIDTH,
+        HEIGHT,
+        Vector3(0, 0.3, 6.2),
+        Vector3(0, 0, 0),
+        field_of_view=Angle(32.0, DEGREE),
+        near=Length(0.1, METER),
+        far=Length(100.0, METER),
     )
-    camera.place(Vector3(0, 0.3, 6.2), Vector3(0, 0, 0))
 
     var frame_clock = Clock()
     frame_clock.start()
