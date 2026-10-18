@@ -42,6 +42,7 @@ here has no order of its own, so the bound's order is used.
 from core.object3d import NodeId
 from core.scene import Scene
 from math.euler import Euler
+from math.utils import clamp
 from math.quaternion import Quaternion
 from math.vector3 import Vector3
 from std.math import acos, sqrt
@@ -232,9 +233,7 @@ struct CCDIKSolver(Movable):
                 to_target.apply_quaternion(facing)
                 to_target.normalize()
                 # Rounding can carry the dot of two unit vectors past one.
-                var cosine = max(
-                    Float32(-1), min(Float32(1), to_target.dot(to_effector))
-                )
+                var cosine = clamp(to_target.dot(to_effector), -1, 1)
                 var angle = acos(cosine)
                 if angle < SMALLEST_TURN:
                     continue

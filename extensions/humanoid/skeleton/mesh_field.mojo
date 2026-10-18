@@ -27,6 +27,7 @@ This is not a three.js port. See Extensions.
 
 from extensions.humanoid.skeleton.field import DistanceField, cross
 from math.box_extent import box_exterior
+from math.utils import clamp
 from math.bounds import enclose_point
 from math.vector3 import Vector3
 from std.collections import Dict
@@ -326,7 +327,7 @@ struct MeshTree(Movable):
                 var e2 = points[triangles[t * 3 + (c + 2) % 3]] - points[v]
                 e1.normalize()
                 e2.normalize()
-                var angle = acos(max(Float32(-1), min(Float32(1), e1.dot(e2))))
+                var angle = acos(clamp(e1.dot(e2), -1, 1))
                 self.normals[v] = self.normals[v] + n * angle
         # Each edge's two faces, found through a key of its two ends. An
         # edge with one face is an open edge: its normal is that face's.

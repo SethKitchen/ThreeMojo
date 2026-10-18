@@ -24,6 +24,7 @@ A time zone is the offset of local standard time from universal time,
 east positive.
 """
 
+from math.utils import clamp
 from std.math import acos, atan2, cos, isfinite, pi, sin
 from generators.utils import Vec3d
 from units.si import (
@@ -260,13 +261,13 @@ def sun_angles(
     var delta = declination.value
     var omega = hour_angle.value
     var cos_z = cos(phi) * cos(delta) * cos(omega) + sin(phi) * sin(delta)
-    cos_z = max(-1.0, min(1.0, cos_z))
+    cos_z = clamp(cos_z, -1.0, 1.0)
     var zenith = acos(cos_z)
     var below = sin(zenith) * cos(phi)
     var azimuth = 0.0
     if below > 1e-9:
         var c = (cos_z * sin(phi) - sin(delta)) / below
-        azimuth = acos(max(-1.0, min(1.0, c)))
+        azimuth = acos(clamp(c, -1.0, 1.0))
         if omega < 0:
             azimuth = -azimuth
     return SunPosition(Angle64(zenith), Angle64(azimuth))
@@ -335,7 +336,7 @@ def orientation(normal: Vec3d, north: Angle64) raises -> SurfaceOrientation:
     var a = north.value
     var east = n.x * cos(a) + n.y * sin(a)
     var northward = -n.x * sin(a) + n.y * cos(a)
-    var slope = acos(max(-1.0, min(1.0, n.z)))
+    var slope = acos(clamp(n.z, -1.0, 1.0))
     var azimuth = atan2(0.0 - east, 0.0 - northward)
     return SurfaceOrientation(Angle64(slope), Angle64(azimuth))
 

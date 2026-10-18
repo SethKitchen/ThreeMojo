@@ -59,6 +59,7 @@ limits, and explicit zero and nonfinite rules.
 """
 
 from math.norm import normalized2, _ordinary_squared
+from math.utils import clamp
 from loaders.bytes import ascii_digit, ascii_letter, ascii_space
 from loaders.svg_path import (
     SvgMatrix,
@@ -617,7 +618,7 @@ def _svg_angle(ux: Float64, uy: Float64, vx: Float64, vy: Float64) -> Float64:
             var v = normalized2(vx, vy)
             cosine = u[0] * v[0] + u[1] * v[1]
             cross = u[0] * v[1] - u[1] * v[0]
-    var ang = acos(max(Float64(-1), min(Float64(1), cosine)))
+    var ang = acos(clamp(cosine, Float64(-1), Float64(1)))
     if cross < 0:
         ang = -ang
     return ang

@@ -28,6 +28,7 @@ from extensions.sdf.vector import (
     smoothstep,
     length,
 )
+from math.utils import clamp
 from std.math import atan2, acos, cos, floor, isfinite, pi, sin, sqrt
 from units.si import METER, SECOND, Duration, Length
 
@@ -154,7 +155,7 @@ def solve_two_bone(
     if not denominator > 0.0:
         raise Error("A leg length ratio is outside the supported numeric range")
     var cos_root = (na * na + nr * nr - nb * nb) / denominator
-    var at_root = acos(max(-1.0, min(1.0, cos_root)))
+    var at_root = acos(clamp(cos_root, -1.0, 1.0))
     var upper = _angle(direction) - bend * at_root
     var upper_dir = V3(0.0, cos(upper), sin(upper))
     var new_mid = root + upper_dir * la
