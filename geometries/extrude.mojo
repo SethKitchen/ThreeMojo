@@ -96,7 +96,7 @@ is split along is part of the surface. Both forms split it as three.js's
 
 from core.buffer_attribute import BufferAttribute
 from core.ordinal import require_positive
-from geometries.surface import textured_surface
+from geometries.surface import record_kind, textured_surface
 from core.buffer_geometry import (
     BufferGeometry,
     EXTRUDE_GEOMETRY,
@@ -105,7 +105,6 @@ from core.buffer_geometry import (
     POSITION,
     UV,
 )
-from core.user_data import UserData
 from exporters.json_writer import JsonWriter
 from geometries.earcut import triangulate_shape
 from math.curve_checks import require_at_least_one
@@ -609,8 +608,7 @@ def _extruded(
     """Return `geometry` as three.js's `ExtrudeGeometry` of `shapes`, with
     its `options`, which this closes."""
     options.end_object()
-    geometry.kind = EXTRUDE_GEOMETRY
-    geometry.parameters = UserData()
+    record_kind(geometry, EXTRUDE_GEOMETRY)
     geometry.parameters.set_json("options", options.finish())
     geometry.shapes = shapes^
     return geometry^

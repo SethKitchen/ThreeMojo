@@ -39,10 +39,10 @@ transport made. three.js checks neither; here both raise.
 from core.buffer_geometry import BufferGeometry, TUBE_GEOMETRY
 from geometries.surface import (
     indexed_surface,
+    record_kind,
     require_positive_radius,
     require_three_segments,
 )
-from core.user_data import UserData
 from exporters.json_writer import JsonWriter
 from geometries.grid import grid_index
 from loaders.curve_json import write_curve3
@@ -236,8 +236,7 @@ def tube(
     var geometry = _sweep(centers, frames, us, radius.value, radial_segments)
     var path = JsonWriter()
     write_curve3(path, curve)
-    geometry.kind = TUBE_GEOMETRY
-    geometry.parameters = UserData()
+    record_kind(geometry, TUBE_GEOMETRY)
     geometry.parameters.set_json("path", path.finish())
     geometry.parameters.set_number("tubularSegments", Float64(tubular_segments))
     geometry.parameters.set_meters("radius", radius)

@@ -31,8 +31,7 @@ from core.buffer_geometry import (
     POSITION,
     UV,
 )
-from core.user_data import UserData
-from geometries.surface import require_positive_extents
+from geometries.surface import record_kind, require_positive_extents
 from units.si import Length
 
 
@@ -187,8 +186,7 @@ def box(
             groups[face * 3 + 1],
             MaterialIndex(groups[face * 3 + 2]),
         )
-    geometry.kind = BOX_GEOMETRY
-    geometry.parameters = UserData()
+    record_kind(geometry, BOX_GEOMETRY)
     geometry.parameters.set_meters("width", width)
     geometry.parameters.set_meters("height", height)
     geometry.parameters.set_meters("depth", depth)

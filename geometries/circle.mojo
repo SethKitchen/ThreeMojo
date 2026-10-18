@@ -42,10 +42,10 @@ from core.ordinal import require_non_negative, require_positive
 from geometries.grid import append_cell
 from geometries.surface import (
     indexed_surface,
+    record_kind,
     require_positive_radius,
     require_three_segments,
 )
-from core.user_data import UserData
 from math.curve_checks import require_at_least_one
 from math.finite import require_finite
 from std.math import cos, sin
@@ -153,8 +153,7 @@ def circle(
 
     var geometry = BufferGeometry()
     indexed_surface(geometry, data^, normals^, uvs^, index^)
-    geometry.kind = CIRCLE_GEOMETRY
-    geometry.parameters = UserData()
+    record_kind(geometry, CIRCLE_GEOMETRY)
     geometry.parameters.set_meters("radius", radius)
     geometry.parameters.set_number("segments", Float64(segments))
     geometry.parameters.set_radians("thetaStart", theta_start)
@@ -244,8 +243,7 @@ def ring(
 
     var geometry = BufferGeometry()
     indexed_surface(geometry, data^, normals^, uvs^, index^)
-    geometry.kind = RING_GEOMETRY
-    geometry.parameters = UserData()
+    record_kind(geometry, RING_GEOMETRY)
     geometry.parameters.set_meters("innerRadius", inner_radius)
     geometry.parameters.set_meters("outerRadius", outer_radius)
     geometry.parameters.set_number("thetaSegments", Float64(theta_segments))

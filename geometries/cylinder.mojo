@@ -46,9 +46,9 @@ from core.buffer_geometry import (
 from core.ordinal import require_positive
 from geometries.surface import (
     indexed_surface,
+    record_kind,
     require_three_segments,
 )
-from core.user_data import UserData
 from geometries.circle import FULL_TURN, check_sweep
 from math.curve_checks import require_at_least_one
 from math.norm import normalized2
@@ -283,8 +283,7 @@ def cylinder(
             begin, runs[part] - begin, MaterialIndex(dressed[part])
         )
         begin = runs[part]
-    geometry.kind = CYLINDER_GEOMETRY
-    geometry.parameters = UserData()
+    record_kind(geometry, CYLINDER_GEOMETRY)
     geometry.parameters.set_meters("radiusTop", radius_top)
     geometry.parameters.set_meters("radiusBottom", radius_bottom)
     geometry.parameters.set_meters("height", height)
@@ -337,8 +336,7 @@ def cone(
         theta_start,
         theta_length,
     )
-    geometry.kind = CONE_GEOMETRY
-    geometry.parameters = UserData()
+    record_kind(geometry, CONE_GEOMETRY)
     geometry.parameters.set_meters("radius", radius)
     geometry.parameters.set_meters("height", height)
     geometry.parameters.set_number("radialSegments", Float64(radial_segments))
