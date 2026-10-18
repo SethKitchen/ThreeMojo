@@ -86,6 +86,12 @@ which here says the caller has computed something wrong.
 
 from core.ordinal import ordinal_valid
 
+from math.bezier import (
+    cubic_bezier_slope,
+    cubic_bezier_weights,
+    quadratic_bezier_slope,
+    quadratic_bezier_weights,
+)
 from math.curve_checks import (
     check_curve_parameter,
     curve_sample_count,
@@ -531,19 +537,18 @@ struct Curve(Copyable, Movable):
             if t == 1:
                 return self.points[1]
             return (self.points[1] - self.points[0]) * t + self.points[0]
-        var rest = 1 - t
         if self.kind == QUADRATIC:
+            var w0, w1, w2 = quadratic_bezier_weights(t)
             return (
-                self.points[0] * (rest * rest)
-                + self.points[1] * (2 * rest * t)
-                + self.points[2] * (t * t)
+                self.points[0] * w0 + self.points[1] * w1 + self.points[2] * w2
             )
         if self.kind == CUBIC:
+            var w0, w1, w2, w3 = cubic_bezier_weights(t)
             return (
-                self.points[0] * (rest * rest * rest)
-                + self.points[1] * (3 * rest * rest * t)
-                + self.points[2] * (3 * rest * t * t)
-                + self.points[3] * (t * t * t)
+                self.points[0] * w0
+                + self.points[1] * w1
+                + self.points[2] * w2
+                + self.points[3] * w3
             )
         if self.kind == ELLIPSE:
             return self._ellipse_point(t)
@@ -603,16 +608,17 @@ struct Curve(Copyable, Movable):
         is made unit length. The caller has checked `t` is on the curve."""
         if self.kind == LINE:
             return self.points[1] - self.points[0]
-        var rest = 1 - t
         if self.kind == QUADRATIC:
-            return (self.points[1] - self.points[0]) * (2 * rest) + (
+            var s0, s1 = quadratic_bezier_slope(t)
+            return (self.points[1] - self.points[0]) * s0 + (
                 self.points[2] - self.points[1]
-            ) * (2 * t)
+            ) * s1
         if self.kind == CUBIC:
+            var s0, s1, s2 = cubic_bezier_slope(t)
             return (
-                (self.points[1] - self.points[0]) * (3 * rest * rest)
-                + (self.points[2] - self.points[1]) * (6 * rest * t)
-                + (self.points[3] - self.points[2]) * (3 * t * t)
+                (self.points[1] - self.points[0]) * s0
+                + (self.points[2] - self.points[1]) * s1
+                + (self.points[3] - self.points[2]) * s2
             )
         if self.kind == ELLIPSE:
             return self._ellipse_slope(t)
