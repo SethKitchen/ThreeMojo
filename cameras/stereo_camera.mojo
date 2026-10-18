@@ -54,8 +54,7 @@ from cameras.perspective_camera import PerspectiveCamera
 from core.scene import Scene
 from math.matrix4 import Matrix4
 from math.vector3 import Vector3
-from math.finite import require_positive_finite
-from std.math import isfinite
+from math.finite import require_positive_finite, require_non_negative_finite
 from units.si import Angle, DEGREE, Length, METER
 
 # three.js's `eyeSep`: the distance between two human eyes.
@@ -126,8 +125,9 @@ struct StereoCamera(Movable):
                 positive or not finite.
         """
         var separation = self.eye_separation.value
-        if not isfinite(separation) or separation < 0:
-            raise Error("An eye separation cannot be negative")
+        require_non_negative_finite(
+            Float64(separation), "An eye separation cannot be negative"
+        )
         var focus = self.focus.value
         require_positive_finite(
             Float64(focus), "A stereo focus must be in front of the camera"

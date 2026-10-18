@@ -235,7 +235,12 @@ from lights.light import ALL_LIGHTS, LightMask
 from lights.physical_layers import specular_reflectance
 from math.bounds import Plane
 from math.euler import XYZ, Euler
-from math.finite import positive_finite, require_finite, require_finite_group
+from math.finite import (
+    positive_finite,
+    require_finite,
+    require_finite_group,
+    require_non_negative_finite,
+)
 from math.vector2 import Vector2
 from math.vector3 import Vector3
 from std.math import inf, isfinite, min
@@ -732,8 +737,7 @@ def require_dash_size(size: Float32) raises:
     Raises:
         Error: If the length is negative or not finite.
     """
-    if not isfinite(size) or size < 0:
-        raise Error("A dash size cannot be negative")
+    require_non_negative_finite(Float64(size), "A dash size cannot be negative")
 
 
 def require_gap_size(size: Float32) raises:
@@ -749,8 +753,7 @@ def require_gap_size(size: Float32) raises:
     Raises:
         Error: If the length is negative or not finite.
     """
-    if not isfinite(size) or size < 0:
-        raise Error("A gap size cannot be negative")
+    require_non_negative_finite(Float64(size), "A gap size cannot be negative")
 
 
 def require_unmixed_data(is_data: Bool, mixes: Bool) raises:
@@ -1856,8 +1859,9 @@ struct Material(ImplicitlyCopyable):
             raise Error("A material's alpha map id cannot be negative")
         if not isfinite(alpha_test) or alpha_test < 0 or alpha_test > 1:
             raise Error("An alpha test must be between zero and one")
-        if not isfinite(shininess) or shininess < 0:
-            raise Error("A shininess cannot be negative")
+        require_non_negative_finite(
+            Float64(shininess), "A shininess cannot be negative"
+        )
         if kind != PHONG and (_gives_off_light(specular, 1.0) or shininess > 0):
             raise Error(
                 "Only a phong material has a highlight: give it kind=PHONG,"
@@ -2058,8 +2062,10 @@ struct Material(ImplicitlyCopyable):
             raise Error("A material's roughness map id cannot be negative")
         if metalness_map.value < 0 and metalness_map != NO_TEXTURE:
             raise Error("A material's metalness map id cannot be negative")
-        if not isfinite(env_map_intensity) or env_map_intensity < 0:
-            raise Error("An env map intensity cannot be negative")
+        require_non_negative_finite(
+            Float64(env_map_intensity),
+            "An env map intensity cannot be negative",
+        )
         if not kind.is_physical() and (
             roughness != 1
             or metalness != 0
@@ -2115,12 +2121,14 @@ struct Material(ImplicitlyCopyable):
         if not is_unit_fraction(transmission):
             raise Error("A transmission must be between zero and one")
         var deep = thickness.to(METER)
-        if not isfinite(deep) or deep < 0:
-            raise Error("A thickness cannot be negative")
+        require_non_negative_finite(
+            Float64(deep), "A thickness cannot be negative"
+        )
         if not (attenuation_distance.to(METER) > 0):
             raise Error("An attenuation distance must be above zero")
-        if not isfinite(dispersion) or dispersion < 0:
-            raise Error("A dispersion cannot be negative")
+        require_non_negative_finite(
+            Float64(dispersion), "A dispersion cannot be negative"
+        )
         if transmission_map.value < 0 and transmission_map != NO_TEXTURE:
             raise Error("A material's transmission map id cannot be negative")
         if thickness_map.value < 0 and thickness_map != NO_TEXTURE:
@@ -2295,8 +2303,9 @@ struct Material(ImplicitlyCopyable):
                 "Only a material that reflects an environment turns one:"
                 " basic, lambert, phong, standard or physical"
             )
-        if not isfinite(refraction_ratio) or refraction_ratio < 0:
-            raise Error("A refraction ratio cannot be negative")
+        require_non_negative_finite(
+            Float64(refraction_ratio), "A refraction ratio cannot be negative"
+        )
         var bends = kind.reflects() and not kind.is_physical()
         if not bends and refraction_ratio != DEFAULT_REFRACTION_RATIO:
             raise Error(
@@ -2384,10 +2393,13 @@ struct Material(ImplicitlyCopyable):
             raise Error("A material's ao map id cannot be negative")
         if light_map.value < 0 and light_map != NO_TEXTURE:
             raise Error("A material's light map id cannot be negative")
-        if not isfinite(ao_map_intensity) or ao_map_intensity < 0:
-            raise Error("An ao map intensity cannot be negative")
-        if not isfinite(light_map_intensity) or light_map_intensity < 0:
-            raise Error("A light map intensity cannot be negative")
+        require_non_negative_finite(
+            Float64(ao_map_intensity), "An ao map intensity cannot be negative"
+        )
+        require_non_negative_finite(
+            Float64(light_map_intensity),
+            "A light map intensity cannot be negative",
+        )
         if ao_map == NO_TEXTURE and ao_map_intensity != 1:
             raise Error("An ao map intensity needs an ao map to scale")
         if light_map == NO_TEXTURE and light_map_intensity != 1:

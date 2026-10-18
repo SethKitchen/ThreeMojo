@@ -87,7 +87,7 @@ from extensions.physics.shape import (
 )
 from math.bounds import Box3, Sphere
 from math.cross import wide_cross, wide_dot, widen_vector
-from math.finite import require_positive_finite
+from math.finite import require_positive_finite, require_non_negative_finite
 from math.matrix3 import Matrix3
 from math.octree import Octree
 from math.quaternion import Quaternion
@@ -446,19 +446,27 @@ struct PhysicsWorld(Movable):
             )
 
     def _validate_ccd(mut self) raises:
-        if not (isfinite(self.margin) and self.margin >= 0):
-            raise Error("CCD contact margin must be finite and nonnegative")
-        if not (isfinite(self.slop) and self.slop >= 0):
-            raise Error("CCD contact slop must be finite and nonnegative")
-        if not (isfinite(self.push_factor) and self.push_factor >= 0):
-            raise Error("CCD push factor must be finite and nonnegative")
+        require_non_negative_finite(
+            Float64(self.margin),
+            "CCD contact margin must be finite and nonnegative",
+        )
+        require_non_negative_finite(
+            Float64(self.slop),
+            "CCD contact slop must be finite and nonnegative",
+        )
+        require_non_negative_finite(
+            Float64(self.push_factor),
+            "CCD push factor must be finite and nonnegative",
+        )
         if self.ccd_max_impacts < 1 or self.ccd_max_impacts > 1024:
             raise Error("CCD impact limit must be between 1 and 1024")
         if self.ccd_max_substeps < 1 or self.ccd_max_substeps > 65536:
             raise Error("CCD sub-step limit must be between 1 and 65536")
         _finite_vector(self.gravity)
-        if not (isfinite(self.bounce_threshold) and self.bounce_threshold >= 0):
-            raise Error("CCD bounce threshold must be finite and nonnegative")
+        require_non_negative_finite(
+            Float64(self.bounce_threshold),
+            "CCD bounce threshold must be finite and nonnegative",
+        )
         for body in self.bodies:
             _ccd_coordinate(body.position)
             _ccd_rotation(body.rotation)

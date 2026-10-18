@@ -46,7 +46,7 @@ from math.triangle_normal import normal_or_zero
 
 from core.buffer_attribute import BufferAttribute
 from core.buffer_geometry import BufferGeometry, COLOR, NORMAL, POSITION, UV
-from math.finite import require_finite
+from math.finite import require_finite, require_non_negative_finite
 from math.norm import squared_length3
 from math.utils import SeededRandom
 from math.vector2 import Vector2
@@ -118,8 +118,9 @@ def _area(a: Vector3, b: Vector3, c: Vector3) -> Float64:
 def _vertex_weight(attribute: BufferAttribute, vertex: Int) raises -> Float64:
     """Read one used vertex's finite, nonnegative weight."""
     var value = Float64(attribute.component(vertex, 0))
-    if not isfinite(value) or value < 0:
-        raise Error("A vertex weight must be finite and nonnegative")
+    require_non_negative_finite(
+        Float64(value), "A vertex weight must be finite and nonnegative"
+    )
     return value
 
 

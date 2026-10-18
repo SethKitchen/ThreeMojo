@@ -87,7 +87,7 @@ from render.color_math import rgb_channels
 from render.texture import Texture
 from render.texture_store import TextureId
 from math.sine import fraction
-from math.finite import require_positive_finite
+from math.finite import require_positive_finite, require_non_negative_finite
 from std.math import floor, isfinite, max, min, sqrt
 from units.si import Angle, Length, METER
 
@@ -355,8 +355,9 @@ struct LightShadow(ImplicitlyCopyable):
             raise Error("A shadow map must be one to 8192 texels a side")
         if not isfinite(self.bias) or not isfinite(self.normal_bias):
             raise Error("A shadow bias must be finite")
-        if not isfinite(self.radius) or self.radius < 0:
-            raise Error("A shadow radius cannot be negative")
+        require_non_negative_finite(
+            Float64(self.radius), "A shadow radius cannot be negative"
+        )
         if self.blur_samples < 1 or self.blur_samples > MAX_BLUR_SAMPLES:
             raise Error("A shadow's blur takes one to 256 samples")
         var near = self.near.to(METER)
@@ -863,8 +864,9 @@ struct ShadowCascade(ImplicitlyCopyable):
         if not self.is_cascade():
             return
         var span = self.span.to(METER)
-        if not isfinite(span) or span < 0:
-            raise Error("A shadow cascade's span must be a positive length")
+        require_non_negative_finite(
+            Float64(span), "A shadow cascade's span must be a positive length"
+        )
         if (
             not isfinite(self.start)
             or not isfinite(self.end)

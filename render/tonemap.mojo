@@ -57,11 +57,12 @@ from materials.nodes import (
     has_output,
     run_nodes,
 )
+from math.finite import require_non_negative_finite
 from math.utils import max3, min3, mix_delta, saturate
 from math.vector3 import Vector3
 from render.color_math import rgb_channels
 from render.framebuffer import FloatColor, OPAQUE_WHITE
-from std.math import exp2, isfinite, log2, max, min
+from std.math import exp2, log2, max, min
 
 
 @fieldwise_init
@@ -125,8 +126,10 @@ def check_tone_mapping(mode: ToneMapping, exposure: Float32) raises:
             negative or not finite.
     """
     require_valid(mode.is_valid(), "A tone mapping that is none of the eight")
-    if not isfinite(exposure) or exposure < 0:
-        raise Error("A tone mapping exposure must be finite and not negative")
+    require_non_negative_finite(
+        Float64(exposure),
+        "A tone mapping exposure must be finite and not negative",
+    )
 
 
 def _pow(base: Float32, exponent: Float32) -> Float32:

@@ -228,6 +228,7 @@ from math.finite import (
     require_finite,
     require_positive_finite,
     require_finite_group,
+    require_non_negative_finite,
 )
 from std.math import ceil, floor, inf, isfinite, log2, max, min, sqrt
 
@@ -852,8 +853,9 @@ struct TextureFrames(Equatable, ImplicitlyCopyable):
             ),
         )
         var ratio = self.refraction_ratio
-        if not isfinite(ratio) or ratio < 0:
-            raise Error("A triangle's refraction ratio cannot be negative")
+        require_non_negative_finite(
+            Float64(ratio), "A triangle's refraction ratio cannot be negative"
+        )
 
 
 def env_direction(
@@ -2739,8 +2741,9 @@ def check_triangle_state(
         raise Error("A triangle's alpha test must be between zero and one")
     # Before its agreement check for the reason above: not a number is not
     # equal to itself.
-    if not isfinite(a.shininess) or a.shininess < 0:
-        raise Error("A triangle's shininess cannot be negative")
+    require_non_negative_finite(
+        Float64(a.shininess), "A triangle's shininess cannot be negative"
+    )
     if b.shininess != a.shininess or c.shininess != a.shininess:
         raise Error("A triangle's corners disagree about their shininess")
     if b.alpha_test != a.alpha_test or c.alpha_test != a.alpha_test:
@@ -2851,8 +2854,10 @@ def check_triangle_state(
         raise Error("A triangle's roughness must be between zero and one")
     if not is_unit_fraction(a.metalness):
         raise Error("A triangle's metalness must be between zero and one")
-    if not isfinite(a.env_map_intensity) or a.env_map_intensity < 0:
-        raise Error("A triangle's env map intensity cannot be negative")
+    require_non_negative_finite(
+        Float64(a.env_map_intensity),
+        "A triangle's env map intensity cannot be negative",
+    )
     if not is_unit_fraction(a.specular_intensity):
         raise Error(
             "A triangle's specular intensity must be between zero and one"
@@ -2937,10 +2942,14 @@ def check_triangle_state(
     # The two baked maps and their intensities, asked as the material asks
     # them: agreed, finite, not negative, and only where an indirect
     # diffuse term is read. The numbers first, since a NaN never agrees.
-    if not isfinite(a.ao_map_intensity) or a.ao_map_intensity < 0:
-        raise Error("A triangle's ao map intensity cannot be negative")
-    if not isfinite(a.light_map_intensity) or a.light_map_intensity < 0:
-        raise Error("A triangle's light map intensity cannot be negative")
+    require_non_negative_finite(
+        Float64(a.ao_map_intensity),
+        "A triangle's ao map intensity cannot be negative",
+    )
+    require_non_negative_finite(
+        Float64(a.light_map_intensity),
+        "A triangle's light map intensity cannot be negative",
+    )
     if (
         b.ao_map != a.ao_map
         or c.ao_map != a.ao_map
@@ -2995,8 +3004,9 @@ def check_triangle_state(
         raise Error("A triangle's attenuation color cannot be negative")
     if not (a.attenuation_distance > 0):
         raise Error("A triangle's attenuation distance must be above zero")
-    if not isfinite(a.dispersion) or a.dispersion < 0:
-        raise Error("A triangle's dispersion cannot be negative")
+    require_non_negative_finite(
+        Float64(a.dispersion), "A triangle's dispersion cannot be negative"
+    )
     if not isfinite(a.ior) or a.ior < MIN_IOR or a.ior > MAX_IOR:
         raise Error(
             "A triangle's index of refraction must be between one and 2.333"

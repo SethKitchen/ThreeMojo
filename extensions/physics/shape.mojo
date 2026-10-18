@@ -40,6 +40,7 @@ from math.finite import (
     finite_float32,
     require_finite,
     require_positive_finite,
+    require_non_negative_finite,
 )
 from math.matrix3 import Matrix3
 from math.matrix_determinant import _determinant3_f32
@@ -103,8 +104,9 @@ struct PhysicsMaterial(ImplicitlyCopyable):
             Error: If the friction is negative or not finite, or the
                 restitution is outside zero to one.
         """
-        if not (isfinite(self.friction) and self.friction >= 0):
-            raise Error("A friction must be zero or more and finite")
+        require_non_negative_finite(
+            Float64(self.friction), "A friction must be zero or more and finite"
+        )
         if not (self.restitution >= 0 and self.restitution <= 1):
             raise Error("A restitution must be from zero to one")
 
@@ -517,8 +519,9 @@ def require_capsule_half(half_height: Float64) raises:
     Raises:
         Error: If the half height is negative or not finite.
     """
-    if not (isfinite(half_height) and half_height >= 0):
-        raise Error("A capsule's half height must be zero or more")
+    require_non_negative_finite(
+        Float64(half_height), "A capsule's half height must be zero or more"
+    )
 
 
 struct Shape(Copyable, Movable):

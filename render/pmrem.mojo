@@ -38,6 +38,7 @@ layout breaks down. A mirror read of a prefiltered cube reads its faces
 rather than the sharpest copy, which holds the same image.
 """
 
+from math.finite import require_non_negative_finite
 from math.vector3 import Vector3, weighted_sum3
 from render.framebuffer import FloatColor
 from render.cube_texture import (
@@ -61,7 +62,7 @@ from render.texture import (
     Texture,
     float_texture,
 )
-from std.math import cos, exp, floor, isfinite, log2, pi, sin, sqrt
+from std.math import cos, exp, floor, log2, pi, sin, sqrt
 from units.si import Angle, RADIAN
 
 # The most taps either side of the center a blur takes: three.js's
@@ -505,8 +506,9 @@ def pmrem_from_faces(cube: CubeTexture, sigma: Angle) raises -> CubeTexture:
             sigma is negative or not finite.
     """
     var blur = sigma.to(RADIAN)
-    if not isfinite(blur) or blur < 0:
-        raise Error("A PMREM blur must be a finite angle, not negative")
+    require_non_negative_finite(
+        Float64(blur), "A PMREM blur must be a finite angle, not negative"
+    )
     cube.validate()
     var out = CubeTexture(copy=cube)
     out.cube_uv = _layout(

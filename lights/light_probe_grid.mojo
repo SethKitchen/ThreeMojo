@@ -42,7 +42,11 @@ limits, and explicit zero and nonfinite rules.
 
 from core.ordinal import require_index_in_count
 from math.box_extent import box_exterior
-from math.finite import require_finite_group, require_positive_finite
+from math.finite import (
+    require_finite_group,
+    require_positive_finite,
+    require_non_negative_finite,
+)
 from math.smoothstep import smoothstep
 from math.spherical_harmonics3 import SH_COUNT, SphericalHarmonics3
 from math.vector3 import Vector3, append_vector3
@@ -382,15 +386,15 @@ struct LightProbeGrid(Copyable, Movable):
             self.position.is_finite(),
             "A light probe grid's position must be finite",
         )
-        if not isfinite(self.intensity) or self.intensity < 0:
-            raise Error(
-                "A light probe grid's intensity must be finite and not negative"
-            )
+        require_non_negative_finite(
+            Float64(self.intensity),
+            "A light probe grid's intensity must be finite and not negative",
+        )
         var falloff = self.falloff.to(METER)
-        if not isfinite(falloff) or falloff < 0:
-            raise Error(
-                "A light probe grid's falloff must be finite and not negative"
-            )
+        require_non_negative_finite(
+            Float64(falloff),
+            "A light probe grid's falloff must be finite and not negative",
+        )
         return amount
 
     def count(self) -> Int:

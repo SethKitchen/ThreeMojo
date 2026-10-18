@@ -69,14 +69,18 @@ from extensions.water.view import (
 from cameras.camera import Camera
 from core.extent import require_positive_extent
 from core.scene import Scene
-from math.finite import require_finite, require_positive_finite
+from math.finite import (
+    require_finite,
+    require_positive_finite,
+    require_non_negative_finite,
+)
 from math.utils import max3, rec709_luminance, saturate
 from math.norm import squared_length3
 from math.matrix4 import Matrix4
 from math.vector3 import Vector3, mix_delta3
 from render.framebuffer import Color, FloatColor, Framebuffer
 from render.tasks import TaskGroup
-from std.math import cos, exp, isfinite, pow, sin, sqrt
+from std.math import cos, exp, pow, sin, sqrt
 from std.memory import bitcast
 from std.sys import num_logical_cores
 from units.si import SECOND, Angle, Duration, Length
@@ -1393,8 +1397,10 @@ struct WaterScene(Movable):
             Error: If `dt` is not finite or is negative, or the next clock
                 is not finite. The simulation does not change on refusal.
         """
-        if not (isfinite(dt.value) and dt.value >= 0):
-            raise Error("A water time step must be finite and nonnegative")
+        require_non_negative_finite(
+            Float64(dt.value),
+            "A water time step must be finite and nonnegative",
+        )
         var next_clock = self.clock.value + dt.value
         require_finite(
             Float64(next_clock), "The next water clock must be finite"

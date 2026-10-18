@@ -246,7 +246,7 @@ from render.texture_store import NO_TEXTURE, TextureId
 from render.tonemap import NO_TONE_MAPPING, ToneMapping, tone_map
 from render.volume_texture_store import NO_DATA_3D_TEXTURE, Data3DTextureId
 from renderers.renderer import Renderer
-from math.finite import require_positive_finite
+from math.finite import require_positive_finite, require_non_negative_finite
 from std.math import ceil, cos, exp, floor, isfinite, sin
 from units.si import Angle, Duration, Length, METER, RADIAN, SECOND
 
@@ -3426,8 +3426,9 @@ def check_frame_time(delta_time: Float32) raises:
     Raises:
         Error: If the time is negative or not finite.
     """
-    if not isfinite(delta_time) or delta_time < 0:
-        raise Error("A frame time is a non-negative number of seconds")
+    require_non_negative_finite(
+        Float64(delta_time), "A frame time is a non-negative number of seconds"
+    )
 
 
 def depth_view[

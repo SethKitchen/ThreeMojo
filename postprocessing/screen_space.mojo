@@ -49,6 +49,7 @@ from core.ordinal import (
     require_positive,
 )
 
+from math.finite import require_non_negative_finite
 from postprocessing.sample_math import gaussian_pdf
 from math.norm import length2, squared_length2
 
@@ -1633,8 +1634,9 @@ def check_outline(settings: OutlineSettings) raises:
     ]
     for value in channels:  # pragma: no branch
         # The list is built above with ten entries.
-        if not (isfinite(value) and value >= 0):
-            raise Error("An outline setting must be finite and not negative")
+        require_non_negative_finite(
+            Float64(value), "An outline setting must be finite and not negative"
+        )
     if settings.use_pattern_texture and settings.pattern_texture == NO_TEXTURE:
         raise Error("An outline with a pattern must name its texture")
     if not settings.edge_thickness > 0:

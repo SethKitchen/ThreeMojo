@@ -32,7 +32,7 @@ from extensions.humanoid.skeleton.head.expression import (
     Viseme,
 )
 from loaders.json import ARRAY, parse_json
-from math.finite import require_finite
+from math.finite import require_finite, require_non_negative_finite
 from std.math import isfinite
 from units.si import Duration
 from core.ordinal import require_valid
@@ -221,8 +221,9 @@ struct TimedPhoneme(Copyable, Movable):
 
 def _time(time: Duration) raises:
     """Require a finite, nonnegative number of seconds."""
-    if not isfinite(time.value) or time.value < 0:
-        raise Error("Audio time must be finite and nonnegative")
+    require_non_negative_finite(
+        Float64(time.value), "Audio time must be finite and nonnegative"
+    )
 
 
 struct AlignedSpeech(Copyable, Movable):
@@ -389,8 +390,9 @@ def aligned_phonemes(
 def _json_time(seconds: Float64) raises -> Duration:
     """Validate JSON precision before reducing to the media clock's precision.
     """
-    if not isfinite(seconds) or seconds < 0:
-        raise Error("JSON audio time must be finite and nonnegative")
+    require_non_negative_finite(
+        Float64(seconds), "JSON audio time must be finite and nonnegative"
+    )
     var clock = Float32(seconds)
     if not isfinite(clock) or (seconds > 0 and clock == 0):
         raise Error("JSON audio time exceeds the audio clock resolution")
