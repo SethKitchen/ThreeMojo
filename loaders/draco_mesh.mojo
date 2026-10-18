@@ -389,7 +389,24 @@ struct DracoAttributeConnectivity(Copyable, Movable):
         self.used = True
 
 
-struct DracoEncodingData(Copyable, Movable):
+trait CornerVisitor(Copyable, Movable):
+    """A traversal record that stores each vertex it reaches."""
+
+    def visit(mut self, vertex: Int, corner: Int, faces: List[Int]):
+        """Store the next value, reached at a corner.
+
+        Args:
+            vertex: The vertex of the table.
+            corner: The corner it was reached at.
+            faces: The point of each corner.
+
+        Returns:
+            Nothing. The record stores the vertex.
+        """
+        ...
+
+
+struct DracoEncodingData(Copyable, CornerVisitor, Movable):
     """The order in which the values of an attribute are stored.
 
     Draco's `MeshAttributeIndicesEncodingData`, filled by a traversal.
@@ -399,6 +416,8 @@ struct DracoEncodingData(Copyable, Movable):
     """For each stored value, the corner it was reached at."""
     var vertex_values: List[Int]
     """For each vertex, its value; zero for a vertex not reached."""
+    var points: List[Int]
+    """The point of each stored value."""
 
     def __init__(out self, vertices: Int):
         """Make the data for a table of `vertices` vertices.
@@ -408,14 +427,9 @@ struct DracoEncodingData(Copyable, Movable):
         """
         self.value_corners = List[Int]()
         self.vertex_values = List[Int](length=vertices, fill=0)
+        self.points = List[Int]()
 
-    def visit(
-        mut self,
-        vertex: Int,
-        corner: Int,
-        faces: List[Int],
-        mut points: List[Int],
-    ):
+    def visit(mut self, vertex: Int, corner: Int, faces: List[Int]):
         """Store the next value, reached at a corner.
 
         Draco's `MeshAttributeIndicesEncodingObserver::OnNewVertexVisited`.
@@ -424,9 +438,8 @@ struct DracoEncodingData(Copyable, Movable):
             vertex: The vertex of the attribute's table.
             corner: The corner it was reached at.
             faces: The points of the mesh's corners.
-            points: The points in the order their values are stored.
         """
-        points.append(faces[corner])
+        self.points.append(faces[corner])
         self.vertex_values[vertex] = len(self.value_corners)
         self.value_corners.append(corner)
 
@@ -1037,6 +1050,85 @@ def decode_edgebreaker(
     return out^
 
 
+def depth_first_walk[
+    V: CornerVisitor
+](
+    table: DracoCornerTable,
+    faces: List[Int],
+    starts: List[Int],
+    mut data: V,
+) raises:
+    """Visit vertices depth first from each start corner.
+
+    Draco's `DepthFirstTraverser`. A start whose face is already visited
+    is skipped. The decoder starts at the first corner of every face.
+    The encoder starts at the corners of its order.
+
+    Parameters:
+        V: The record that stores each new vertex.
+
+    Args:
+        table: The table to walk.
+        faces: The point of each corner.
+        starts: The corners to start from, in order.
+        data: The order of the values, filled as vertices are reached.
+
+    Returns:
+        Nothing. `data.visit` stores each new vertex.
+
+    Raises:
+        Error: If the table has a corner with no vertex.
+    """
+    var face_done = List[Bool](length=table.faces(), fill=False)
+    var vertex_done = List[Bool](length=table.vertices(), fill=False)
+    var stack = List[Int]()
+    for start in starts:
+        if face_done[start // 3]:
+            continue
+        stack.clear()
+        stack.append(start)
+        var ends: List[Int] = [table.next(start), table.previous(start)]
+        for corner in ends:  # pragma: no branch
+            var vertex = table.vertex(corner)
+            draco_require(vertex != NONE, "a corner has no vertex")
+            if not vertex_done[vertex]:
+                vertex_done[vertex] = True
+                data.visit(vertex, corner, faces)
+        while len(stack) > 0:
+            # Draco also pops an invalid corner here, but only corners of
+            # faces not yet visited are pushed.
+            var corner = stack[len(stack) - 1]
+            if face_done[corner // 3]:
+                _ = stack.pop()
+                continue
+            while True:
+                face_done[corner // 3] = True
+                var vertex = table.vertex(corner)
+                draco_require(vertex != NONE, "a corner has no vertex")
+                if not vertex_done[vertex]:
+                    var on_boundary = table.is_on_boundary(vertex)
+                    vertex_done[vertex] = True
+                    data.visit(vertex, corner, faces)
+                    if not on_boundary:
+                        corner = table.right_corner(corner)
+                        continue
+                var right = table.right_corner(corner)
+                var left = table.left_corner(corner)
+                var right_done = right == NONE or face_done[right // 3]
+                var left_done = left == NONE or face_done[left // 3]
+                if right_done:
+                    if left_done:
+                        _ = stack.pop()
+                        break
+                    corner = left
+                elif left_done:
+                    corner = right
+                else:
+                    stack[len(stack) - 1] = left
+                    stack.append(right)
+                    break
+
+
 def traverse_depth_first(
     table: DracoCornerTable,
     faces: List[Int],
@@ -1058,57 +1150,11 @@ def traverse_depth_first(
     Raises:
         Error: If the table has a corner with no vertex.
     """
-    var points = List[Int]()
-    var face_done = List[Bool](length=table.faces(), fill=False)
-    var vertex_done = List[Bool](length=table.vertices(), fill=False)
-    var stack = List[Int]()
+    var starts = List[Int]()
     for face in range(table.faces()):
-        var start = 3 * face
-        if face_done[face]:
-            continue
-        stack.clear()
-        stack.append(start)
-        var ends: List[Int] = [table.next(start), table.previous(start)]
-        for corner in ends:  # pragma: no branch
-            var vertex = table.vertex(corner)
-            draco_require(vertex != NONE, "a corner has no vertex")
-            if not vertex_done[vertex]:
-                vertex_done[vertex] = True
-                data.visit(vertex, corner, faces, points)
-        while len(stack) > 0:
-            # Draco also pops an invalid corner here, but only corners of
-            # faces not yet visited are pushed.
-            var corner = stack[len(stack) - 1]
-            if face_done[corner // 3]:
-                _ = stack.pop()
-                continue
-            while True:
-                face_done[corner // 3] = True
-                var vertex = table.vertex(corner)
-                draco_require(vertex != NONE, "a corner has no vertex")
-                if not vertex_done[vertex]:
-                    var on_boundary = table.is_on_boundary(vertex)
-                    vertex_done[vertex] = True
-                    data.visit(vertex, corner, faces, points)
-                    if not on_boundary:
-                        corner = table.right_corner(corner)
-                        continue
-                var right = table.right_corner(corner)
-                var left = table.left_corner(corner)
-                var right_done = right == NONE or face_done[right // 3]
-                var left_done = left == NONE or face_done[left // 3]
-                if right_done:
-                    if left_done:
-                        _ = stack.pop()
-                        break
-                    corner = left
-                elif left_done:
-                    corner = right
-                else:
-                    stack[len(stack) - 1] = left
-                    stack.append(right)
-                    break
-    return points^
+        starts.append(3 * face)
+    depth_first_walk(table, faces, starts, data)
+    return data.points.copy()
 
 
 def traverse_prediction_degree(
@@ -1132,13 +1178,12 @@ def traverse_prediction_degree(
     Raises:
         Error: If the table has a corner with no vertex.
     """
-    var points = List[Int]()
     var face_done = List[Bool](length=table.faces(), fill=False)
     var vertex_done = List[Bool](length=table.vertices(), fill=False)
     var degree = List[Int](length=table.vertices(), fill=0)
     var stacks: List[List[Int]] = [List[Int](), List[Int](), List[Int]()]
     if table.vertices() == 0:
-        return points^
+        return data.points.copy()
     for face in range(table.faces()):  # pragma: no branch
         var start = 3 * face
         stacks[0].append(start)
@@ -1149,7 +1194,7 @@ def traverse_prediction_degree(
             draco_require(vertex != NONE, "a corner has no vertex")
             if not vertex_done[vertex]:
                 vertex_done[vertex] = True
-                data.visit(vertex, corner, faces, points)
+                data.visit(vertex, corner, faces)
         while True:
             var corner = NONE
             # The best priority is 0, 1 or 2. The loop always runs.
@@ -1167,7 +1212,7 @@ def traverse_prediction_degree(
                 var vertex = table.vertex(corner)
                 if not vertex_done[vertex]:
                     vertex_done[vertex] = True
-                    data.visit(vertex, corner, faces, points)
+                    data.visit(vertex, corner, faces)
                 var right = table.right_corner(corner)
                 var left = table.left_corner(corner)
                 var right_done = right == NONE or face_done[right // 3]
@@ -1191,7 +1236,7 @@ def traverse_prediction_degree(
                     stacks[priority].append(right)
                     best = min(best, priority)
                 break
-    return points^
+    return data.points.copy()
 
 
 def corner_priority(

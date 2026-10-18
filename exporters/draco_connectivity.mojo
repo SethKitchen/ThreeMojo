@@ -38,8 +38,10 @@ from loaders.draco_mesh import (
     NONE,
     DracoCornerTable,
     DracoTraversalMethod,
+    CornerVisitor,
     attribute_connectivity,
     corner_priority,
+    depth_first_walk,
 )
 from std.collections import Dict
 
@@ -418,7 +420,7 @@ def seam_table(
     return SeamTable(connectivity.table.copy(), on_edge^, no_interior_seams)
 
 
-struct EncodingData(Copyable, Movable):
+struct EncodingData(Copyable, CornerVisitor, Movable):
     """The order in which the values of an attribute are stored.
 
     Draco's `MeshAttributeIndicesEncodingData`, filled by `traverse`.
@@ -495,53 +497,8 @@ def _depth_first(
 ) raises:
     """Draco's `DepthFirstTraverser::TraverseFromCorner`, from each corner
     of the order."""
-    var face_done = List[Bool](length=table.faces(), fill=False)
-    var vertex_done = List[Bool](length=table.vertices(), fill=False)
-    var stack = List[Int]()
-    # A mesh past the check has a triangle: the loop runs.
-    for start in order:  # pragma: no branch
-        if face_done[start // 3]:
-            continue
-        stack.clear()
-        stack.append(start)
-        var ends: List[Int] = [table.next(start), table.previous(start)]
-        for corner in ends:  # pragma: no branch
-            var vertex = table.vertex(corner)
-            draco_require(vertex != NONE, "a corner has no vertex")
-            if not vertex_done[vertex]:
-                vertex_done[vertex] = True
-                data.visit(vertex, corner, faces)
-        while len(stack) > 0:
-            var corner = stack[len(stack) - 1]
-            if face_done[corner // 3]:
-                _ = stack.pop()
-                continue
-            while True:
-                face_done[corner // 3] = True
-                var vertex = table.vertex(corner)
-                draco_require(vertex != NONE, "a corner has no vertex")
-                if not vertex_done[vertex]:
-                    var on_boundary = table.is_on_boundary(vertex)
-                    vertex_done[vertex] = True
-                    data.visit(vertex, corner, faces)
-                    if not on_boundary:
-                        corner = table.right_corner(corner)
-                        continue
-                var right = table.right_corner(corner)
-                var left = table.left_corner(corner)
-                var right_done = right == NONE or face_done[right // 3]
-                var left_done = left == NONE or face_done[left // 3]
-                if right_done:
-                    if left_done:
-                        _ = stack.pop()
-                        break
-                    corner = left
-                elif left_done:
-                    corner = right
-                else:
-                    stack[len(stack) - 1] = left
-                    stack.append(right)
-                    break
+    # A mesh past the check has a triangle, so `order` is not empty.
+    depth_first_walk(table, faces, order, data)
 
 
 def _prediction_degree(
