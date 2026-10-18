@@ -2472,16 +2472,31 @@ def _interpolation_name(how: Interpolation) -> String:
     return "LINEAR"
 
 
+def require_morph_mesh(index: Int, count: Int) raises:
+    """Refuse a morph track whose mesh is not in the scene.
+
+    Args:
+        index: The mesh index the track names.
+        count: How many meshes of that kind the scene holds.
+
+    Returns:
+        Nothing. The call returns when the index names a mesh.
+
+    Raises:
+        Error: If the index is negative or past the last mesh.
+    """
+    if index < 0 or index >= count:
+        raise Error("glTF: a morph track names a mesh that is not there")
+
+
 def _morph_node(track: KeyframeTrack, scene: Scene) raises -> NodeId:
     """Return the node of the mesh or the skinned mesh a morph track
     drives."""
     var index = track.target.index
     if track.target.kind == MORPH_INFLUENCE:
-        if index < 0 or index >= len(scene.meshes):
-            raise Error("glTF: a morph track names a mesh that is not there")
+        require_morph_mesh(index, len(scene.meshes))
         return scene.meshes[index].node
-    if index < 0 or index >= len(scene.skinned_meshes):
-        raise Error("glTF: a morph track names a mesh that is not there")
+    require_morph_mesh(index, len(scene.skinned_meshes))
     return scene.skinned_meshes[index].node
 
 

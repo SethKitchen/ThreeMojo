@@ -1459,6 +1459,22 @@ def _dwa_inverse_dct(mut data: List[Float32]):
             data[base + 7 * stride] = gamma0 - beta0
 
 
+def require_dwa_finite(bits: Int) raises:
+    """Refuse a DWA coefficient whose exponent is all ones.
+
+    Args:
+        bits: The half-float bits.
+
+    Returns:
+        Nothing. The call returns when the exponent is not all ones.
+
+    Raises:
+        Error: If the coefficient is not finite.
+    """
+    if bits & 0x7C00 == 0x7C00:
+        raise Error("EXR: a DWA coefficient is not finite")
+
+
 def _dwa_dct_block(
     ac: List[Int], mut at: Int, dc: Int, zigzag: List[Int]
 ) raises -> List[Float32]:
@@ -1480,13 +1496,11 @@ def _dwa_dct_block(
                 raise Error("EXR: a DWA AC run exceeds its block")
             pos += run
         else:
-            if token & 0x7C00 == 0x7C00:
-                raise Error("EXR: a DWA coefficient is not finite")
+            require_dwa_finite(token)
             data[zigzag[pos]] = half_to_float(UInt16(token))
             pos += 1
             nonzero = True
-    if dc & 0x7C00 == 0x7C00:
-        raise Error("EXR: a DWA coefficient is not finite")
+    require_dwa_finite(dc)
     if nonzero:
         _dwa_inverse_dct(data)
     else:

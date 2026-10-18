@@ -111,6 +111,23 @@ def check_placing(matrix: Matrix4) raises:
         )
 
 
+def require_instance_index(index: Int, count: Int) raises:
+    """Refuse an instance index outside the list.
+
+    Args:
+        index: Which instance.
+        count: How many instances the list holds.
+
+    Returns:
+        Nothing. The call returns when the index names an instance.
+
+    Raises:
+        Error: If the index is negative or past the last instance.
+    """
+    if index < 0 or index >= count:
+        raise Error("No instance has that index")
+
+
 struct InstancedMesh(Copyable, Movable):
     """One geometry drawn with one material at many transforms, each
     relative to one scene node."""
@@ -305,8 +322,7 @@ struct InstancedMesh(Copyable, Movable):
 
     def _check(self, index: Int) raises:
         """Refuse an instance index that names no instance."""
-        if index < 0 or index >= len(self.matrices):
-            raise Error("No instance has that index")
+        require_instance_index(index, len(self.matrices))
 
 
 struct BatchedInstance(ImplicitlyCopyable):
@@ -1004,8 +1020,7 @@ struct BatchedMesh(Copyable, Movable):
     def _check(self, index: Int) raises:
         """Refuse an instance index that names no instance, or a deleted
         one: three.js's `validateInstanceId`."""
-        if index < 0 or index >= len(self.instances):
-            raise Error("No instance has that index")
+        require_instance_index(index, len(self.instances))
         if not self.instances[index].active:
             raise Error("That instance has been deleted")
 

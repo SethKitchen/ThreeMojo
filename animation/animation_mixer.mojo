@@ -411,6 +411,22 @@ def require_action_weight(weight: Float32) raises:
         raise Error("An action's weight cannot be negative")
 
 
+def require_warp_scale(time_scale: Float32) raises:
+    """Refuse a warp whose action time scale is zero.
+
+    Args:
+        time_scale: How fast the action's clock runs.
+
+    Returns:
+        Nothing. The call returns when the time scale is not zero.
+
+    Raises:
+        Error: If the time scale is zero.
+    """
+    if time_scale == 0:
+        raise Error("An action with a time scale of zero cannot warp")
+
+
 def require_action_time_scale(time_scale: Float32) raises:
     """Refuse an action time scale that is not a number.
 
@@ -1973,8 +1989,7 @@ struct AnimationAction(Copyable, Movable):
         if not isfinite(start_time_scale) or not isfinite(end_time_scale):
             raise Error("A warp needs time scales that are numbers")
         var span = checked_span(duration, "A warp")
-        if self.time_scale == 0:
-            raise Error("An action with a time scale of zero cannot warp")
+        require_warp_scale(self.time_scale)
         self.warp_ramp = Ramp(
             self.now,
             self.now + span,
@@ -2591,11 +2606,8 @@ struct AnimationMixer(Movable):
             raise Error("An action cannot cross-fade from itself")
         _ = checked_span(duration, "A cross-fade")
         if warp:
-            if (
-                self.actions[index].time_scale == 0
-                or self.actions[from_index].time_scale == 0
-            ):
-                raise Error("An action with a time scale of zero cannot warp")
+            require_warp_scale(self.actions[index].time_scale)
+            require_warp_scale(self.actions[from_index].time_scale)
         self.actions[from_index].fade_out(duration)
         self.actions[index].fade_in(duration)
         if warp:
