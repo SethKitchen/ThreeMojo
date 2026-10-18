@@ -57,7 +57,7 @@ from materials.nodes import (
     has_output,
     run_nodes,
 )
-from math.utils import max3, min3, saturate
+from math.utils import max3, min3, mix_delta, saturate
 from math.vector3 import Vector3
 from render.framebuffer import FloatColor, OPAQUE_WHITE
 from std.math import exp2, isfinite, log2, max, min
@@ -340,9 +340,9 @@ def _neutral(
     eb *= scale
     var gray = 1 - 1 / (NEUTRAL_DESATURATION * (peak - new_peak) + 1)
     return FloatColor(
-        er + (new_peak - er) * gray,
-        eg + (new_peak - eg) * gray,
-        eb + (new_peak - eb) * gray,
+        mix_delta(er, new_peak, gray),
+        mix_delta(eg, new_peak, gray),
+        mix_delta(eb, new_peak, gray),
     )
 
 

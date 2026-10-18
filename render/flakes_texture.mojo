@@ -22,7 +22,7 @@ so each channel is rounded after each disc.
 """
 
 from math.norm import squared_length2, squared_length3
-from math.utils import SeededRandom
+from math.utils import SeededRandom, mix_delta
 from render.srgb import LINEAR
 from render.texture import BILINEAR, REPEAT, Texture
 from std.math import ceil, floor, sqrt
@@ -124,6 +124,6 @@ def flakes_texture(
                 for channel in range(3):  # pragma: no branch
                     var old = Float64(pixels[at + channel])
                     pixels[at + channel] = _byte(
-                        old + (color[channel] - old) * share
+                        mix_delta(old, color[channel], share)
                     )
     return Texture(width, height, pixels^, REPEAT, BILINEAR, LINEAR)

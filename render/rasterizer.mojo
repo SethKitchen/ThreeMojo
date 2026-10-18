@@ -40,7 +40,7 @@ from math.scaled_products import (
 
 from math.norm import length2, normalized3, _ordinary_squared
 from math.vector2 import Vector2, weighted_sum2
-from math.utils import clamp, max3, min3
+from math.utils import clamp, max3, min3, mix_delta
 from math.vector3 import Vector3, weighted_sum3
 from render.framebuffer import Color, FloatColor, Framebuffer
 from units.si import Length, METER
@@ -3300,7 +3300,7 @@ def matcap_fallback(v: Float32) -> Float32:
     Returns:
         How much light the surface shows, in every channel.
     """
-    return MATCAP_FLOOR + (MATCAP_CEILING - MATCAP_FLOOR) * v
+    return mix_delta(MATCAP_FLOOR, MATCAP_CEILING, v)
 
 
 def check_gradient_map(image: Texture) raises:
@@ -5051,9 +5051,9 @@ def rasterize_shaded(
                     if has_output(nodes, BACKDROP_ALPHA_NODE):
                         share = run_nodes(nodes, BACKDROP_ALPHA_NODE, given)[0]
                     shaded = FloatColor(
-                        shaded.r + (backdrop[0] - shaded.r) * share,
-                        shaded.g + (backdrop[1] - shaded.g) * share,
-                        shaded.b + (backdrop[2] - shaded.b) * share,
+                        mix_delta(shaded.r, backdrop[0], share),
+                        mix_delta(shaded.g, backdrop[1], share),
+                        mix_delta(shaded.b, backdrop[2], share),
                         shaded.a,
                     )
                 # Thrown away where the mask is zero, three.js's `maskNode`
@@ -6324,13 +6324,13 @@ def rasterize_line(
             continue
         # The depth the buffer tests and keeps, from the interpolated
         # `1 / w` as a triangle's is; see `rasterize_shaded`.
-        var stored_z = fragment_depth(a.state, a.z + (b.z - a.z) * share, total)
+        var stored_z = fragment_depth(
+            a.state, mix_delta(a.z, b.z, share), total
+        )
         var toward = far / total
         # The gap test comes before the depth test, as a discard does: a
         # pixel in a gap is not drawn and claims nothing.
-        var along = (
-            a.line_distance + (b.line_distance - a.line_distance) * toward
-        )
+        var along = mix_delta(a.line_distance, b.line_distance, toward)
         if not dash_covers(along, a.dash_size, a.gap_size):
             continue
         # Straight, as a varying is everywhere else in this file and
@@ -6340,7 +6340,7 @@ def rasterize_line(
         var color = mix_straight(a.color, b.color, toward)
         var veil = Float32(0)
         if fogged:
-            var depth = a.view_depth + (b.view_depth - a.view_depth) * toward
+            var depth = mix_delta(a.view_depth, b.view_depth, toward)
             veil = fog.factor_at(depth)
         # Everything above this line belongs to the step and not to the
         # pixel: the share, the depth, the dash and the color are the same
@@ -6368,7 +6368,7 @@ def rasterize_line(
             if noded:
                 nodes.x = x
                 nodes.y = y
-                nodes.depth = a.z + (b.z - a.z) * share
+                nodes.depth = mix_delta(a.z, b.z, share)
                 given = here_inputs(nodes, textured)
                 if has_output(nodes, COLOR_NODE):
                     var diffuse = run_nodes(nodes, COLOR_NODE, given)

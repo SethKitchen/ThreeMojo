@@ -413,9 +413,9 @@ struct FloatColor(Equatable, ImplicitlyCopyable):
         var here = self._to_hsl()
         var there = other._to_hsl()
         var mixed = FloatColor._from_hsl(
-            here.hue + (there.hue - here.hue) * alpha,
-            here.saturation + (there.saturation - here.saturation) * alpha,
-            here.lightness + (there.lightness - here.lightness) * alpha,
+            mix_delta(here.hue, there.hue, alpha),
+            mix_delta(here.saturation, there.saturation, alpha),
+            mix_delta(here.lightness, there.lightness, alpha),
         )
         self.r = mixed.r
         self.g = mixed.g
