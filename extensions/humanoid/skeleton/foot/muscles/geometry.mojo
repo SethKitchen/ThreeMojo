@@ -14,10 +14,7 @@ Tendon meshes use a diagrammatic minimum radius. Mass does not.
 from core.buffer_geometry import BufferGeometry
 from extensions.humanoid.side import RIGHT, BodySide
 from extensions.humanoid.spec import HumanoidSpec
-from extensions.humanoid.skeleton.foot.chain import (
-    enlarge_tube_set,
-    tube_set_bounds,
-)
+from extensions.humanoid.skeleton.foot.chain import display_tube_set
 from extensions.humanoid.skeleton.foot.muscles.dimensions import (
     FootMuscle,
     FootMuscleDimensions,
@@ -81,9 +78,12 @@ def muscle_from_dimensions(
     var field = FootMuscleField(dimensions, part)
     if is_tendon(part):
         var least = 0.0018 * dimensions.foot.stature.value
-        field.tubes = enlarge_tube_set(field.tubes, least)
-        field.k = 0.0012 * dimensions.foot.stature.value
-        var box = tube_set_bounds(field.tubes, 0.004)
-        field.low = box.low
-        field.high = box.high
+        display_tube_set(
+            field.tubes,
+            field.k,
+            field.low,
+            field.high,
+            least,
+            0.0012 * dimensions.foot.stature.value,
+        )
     return mesh_checked(field, field.low, field.high, detail, label)
