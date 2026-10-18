@@ -46,6 +46,12 @@ class StagedArithmeticControls(unittest.TestCase):
             expected[row['source']] = row['source_sha256']
         for row in records['core']['native_tests'].values():
             expected[row['source']] = row.get('current_formatted_source_sha256', row['source_sha256'])
+            if 'ci_repair_successor' in row:
+                repair = row['ci_repair_successor']
+                self.assertEqual(repair['source'], row['source'])
+                self.assertEqual(repair['before_sha256'], row['source_sha256'])
+                self.assertEqual(repair['schema'], 'pr760-cube-test-ci-repair-v1')
+                expected[row['source']] = repair['after_sha256']
         reader = records['reader_witness_successor']
         expected[reader['source']] = reader['after_sha256']
         self.assertEqual(reader['after_test_count'], 12)

@@ -476,6 +476,17 @@ class StandaloneTypedAdmissionControls(unittest.TestCase):
         self.assert_fresh_success()
 
     def test_standalone_adapters_reject_native_closure_competitor_then_recover(self):
+        current = self.root
+        try:
+            for cohort in ('pr760', 'common758'):
+                self.root = (current if cohort == 'pr760' else
+                             fixtures.copy_common758_boundary_root(self, ROOT))
+                with self.subTest(cohort=cohort):
+                    self._test_standalone_adapters_reject_native_closure_competitor_then_recover(cohort)
+        finally:
+            self.root = current
+
+    def _test_standalone_adapters_reject_native_closure_competitor_then_recover(self, cohort):
         self.assert_fresh_success()
         competitor = self.root / 'std.mojo'
         self.assertFalse(competitor.exists())
@@ -483,7 +494,9 @@ class StandaloneTypedAdmissionControls(unittest.TestCase):
             competitor.write_text('def main():\n    pass\n', encoding='utf-8')
             for name, call, _ in self.calls():
                 with self.subTest(adapter=name), self.assertRaisesRegex(
-                        cleanup.ContractError, '^full-audit cleanup successor: scaled native import closure changed$'):
+                        cleanup.ContractError, ('^full-audit cleanup successor: PR760 maintained entry directories changed$'
+                         if cohort == 'pr760' else
+                         '^full-audit cleanup successor: scaled native import closure changed$')):
                     call()
         finally:
             competitor.unlink(missing_ok=True)
@@ -855,6 +868,17 @@ class FullAuditCleanupContracts(unittest.TestCase):
                 cleanup.verify_center_correspondence(before, self.current, self.descriptor)
 
     def test_snapshot_a_b_a_and_stale_supplied_historical_view_reject(self):
+        current = self.root
+        try:
+            for cohort in ('pr760', 'common758'):
+                self.root = (current if cohort == 'pr760' else
+                             fixtures.copy_common758_boundary_root(self, ROOT))
+                with self.subTest(cohort=cohort):
+                    self._test_snapshot_a_b_a_and_stale_supplied_historical_view_reject(cohort)
+        finally:
+            self.root = current
+
+    def _test_snapshot_a_b_a_and_stale_supplied_historical_view_reject(self, cohort):
         # A remains on disk. A fake read returns B only during one consumed
         # stage, then A again. A final-only re-read would miss this mutation.
         name = 'extensions/carla/curve_interval.mojo'
@@ -889,8 +913,10 @@ class FullAuditCleanupContracts(unittest.TestCase):
         self.assertNotIn(bound_only, helper_inputs)
         self.assertNotIn(bound_only, cleanup.typed_boundary.EDGES)
         for name, refusal, last in (
-                (name, 'typed boundary bound input changed', 'B'),
-                (bound_only, 'bound input changed after consumption', 'A')):
+                (name, 'PR760 physical input changed' if cohort == 'pr760' else
+                 'typed boundary bound input changed', 'B'),
+                (bound_only, 'PR760 physical input changed' if cohort == 'pr760' else
+                 'bound input changed after consumption', 'B' if cohort == 'pr760' else 'A')):
             path = self.root/name
             original = path.read_bytes()
             self.assertIn(name, self.record['dependency_inventory'])
@@ -928,17 +954,33 @@ class FullAuditCleanupContracts(unittest.TestCase):
         cleanup.verify(self.root, exact=True)
 
     def test_native_batch_preserves_final_source_path_and_resolver_checks(self):
-        # Mutate after all dependency consumption and bound-source checks.
-        # Final checks must still reject, including an include-root shadow.
+        current = self.root
+        try:
+            for cohort in ('pr760', 'common758'):
+                self.root = (current if cohort == 'pr760' else
+                             fixtures.copy_common758_boundary_root(self, ROOT))
+                with self.subTest(cohort=cohort):
+                    self._test_native_batch_preserves_final_source_path_and_resolver_checks(cohort)
+        finally:
+            self.root = current
+
+    def _test_native_batch_preserves_final_source_path_and_resolver_checks(self, cohort):
+        # Mutate immediately after inventory consumption. The current image
+        # consumes it inside PR760 admission; common758 consumes it at the
+        # outer final boundary. Both must reject every mutation independently.
         with tempfile.TemporaryDirectory(
                 prefix='cleanup-final-resolver-', dir=Path(tempfile.gettempdir()).resolve()) as folder:
             include = Path(folder)
             cases = (
-                (self.root, cleanup.NATIVE_WITNESSES[0], 'input changed during verification'),
+                (self.root, cleanup.NATIVE_WITNESSES[0],
+                 'render entry source changed: ' + cleanup.NATIVE_WITNESSES[0]
+                 if cohort == 'pr760' else 'input changed during verification'),
                 (self.root, 'tests/fresh_native_batch_input.mojo',
+                 'render entry path census changed' if cohort == 'pr760' else
                  'source path inventory changed during verification'),
                 (self.root, 'tests/std.mojopkg', 'resolver surface changed during verification'),
-                (include, 'std.mojopkg', 'resolver surface changed during verification'),
+                (include, 'std.mojopkg', 'unreviewed include resolver surface'
+                 if cohort == 'pr760' else 'resolver surface changed during verification'),
             )
             inventory = cleanup.inventory
             for root, name, message in cases:
@@ -2169,9 +2211,11 @@ print('consumer-first accepted: ' + route)
     def test_selector_projection_separate_roots_explicit_contexts_and_failed_calls(self):
         from functools import wraps
         other = fixtures.copy_current_root(self, ROOT)
-        original, admissions = cleanup.verify, []
+        original, admissions, sites = cleanup.verify, [], []
         @wraps(original)
         def admitted(root, **kwargs):
+            caller = sys._getframe(1)
+            sites.append((caller.f_code.co_name, caller.f_back.f_code.co_name))
             admissions.append((root, kwargs))
             return original(root, **kwargs)
         with patch.object(cleanup, 'verify', admitted):
@@ -2196,7 +2240,14 @@ print('consumer-first accepted: ' + route)
             self.assertEqual(cleanup.verify(self.root, exact=True), self.record)
             self.assertIn(cleanup.MIGRATION, cleanup.proof_bindings(self.root))
         self.assertEqual([root for root, _ in admissions[:4]], [self.root, other, other, self.root])
-        self.assertEqual(len(admissions), 7)
+        self.assertEqual(len(admissions), 9)
+        # The receipt now separately admits current PR760 scaled/helper edges.
+        self.assertEqual(admissions[6:], [(self.root, {'exact': True, 'include_roots': ()}),
+                                         (self.root, {'exact': True}),
+                                         (self.root, {'exact': True})])
+        self.assertEqual(sites[6][0], 'proof_bindings')
+        self.assertEqual(sites[7:], [('_pr760_admit', '_scaled_float32_bindings'),
+                                    ('_pr760_admit', '_shared_helper_bindings')])
         self.assertTrue(admissions[-1][1]['exact'])
         for kwargs in ({'context': object()}, {'admitted': True}, {'path': LANE}):
             with self.assertRaises(TypeError):
@@ -3374,7 +3425,7 @@ class CacheInputViewCurrentControls(unittest.TestCase):
         spec = importlib.util.spec_from_file_location('_cache_input_public_alias_control', cache.__file__)
         alias = importlib.util.module_from_spec(spec)
         spec.loader.exec_module(alias)
-        calls, inventories = [], []
+        calls, inventories, origins = [], [], []
         binding, inventory = cleanup.executing_checker_bindings, alias.inventory
         @wraps(binding)
         def observed(*args, **kwargs):
@@ -3382,6 +3433,7 @@ class CacheInputViewCurrentControls(unittest.TestCase):
             if (frame.f_globals is vars(cleanup) and frame.f_code.co_name == 'verify'
                     and 'executing' not in frame.f_locals):
                 calls.append((frame.f_locals['exact'], frame.f_locals['_capture']))
+                origins.append(frame.f_back.f_code.co_name)
             return binding(*args, **kwargs)
         @wraps(inventory)
         def default_inventory(*args, **kwargs):
@@ -3396,7 +3448,12 @@ class CacheInputViewCurrentControls(unittest.TestCase):
         with patch.object(cleanup, 'executing_checker_bindings', observed), patch.object(
                 alias, 'inventory', default_inventory), patch.object(cleanup, '_cache_lane_inputs', forbidden_factory):
             self.assertEqual(alias.verify(self.root), self.cache_record)
-        self.assertEqual(calls, [(False, None), (True, None)])
+        # The alias still uses both original fresh public gates. PR760 adds
+        # two exact image admissions; none may borrow an owned input view.
+        self.assertEqual(origins, ['reviewed_text', '_pr760_admit',
+                                   '_pr760_admit', 'verified_edges'])
+        self.assertEqual(calls, [(False, None), (True, None),
+                                 (True, None), (True, None)])
         self.assertEqual(len(inventories), 1)
 
     def public_alias(self):
@@ -3693,7 +3750,7 @@ class PublicSeedScoreAdmissionControls(unittest.TestCase):
         self.root = fixtures.copy_current_root(self, ROOT)
 
     @contextmanager
-    def admissions(self, callback=None):
+    def admissions(self, callback=None, *, sites=None):
         binding = cleanup.executing_checker_bindings
         calls, scopes = [], []
         @wraps(binding)
@@ -3703,6 +3760,9 @@ class PublicSeedScoreAdmissionControls(unittest.TestCase):
                     and 'executing' not in frame.f_locals):
                 calls.append((frame.f_locals['root'], frame.f_locals['exact'],
                               frame.f_locals['_capture']))
+                if sites is not None:
+                    caller = frame.f_back
+                    sites.append((caller.f_code.co_name, caller.f_back.f_code.co_name))
                 scope = frame.f_locals['_public_admission']
                 scopes.append(scope)
                 if callback is not None:
@@ -3712,14 +3772,22 @@ class PublicSeedScoreAdmissionControls(unittest.TestCase):
             yield calls, scopes
 
     def test_direct_score_two_gates_are_fresh_and_closed(self):
-        with self.admissions() as (calls, scopes):
+        sites = []
+        with self.admissions(sites=sites) as (calls, scopes):
             first = self.seed.verify_score(self.root)
             self.assertEqual(self.seed.verify_score(self.root), first)
-        self.assertEqual(calls, [(self.root, True, None)] * 4)
-        self.assertIs(scopes[0], scopes[1])
-        self.assertIs(scopes[2], scopes[3])
-        self.assertIsNot(scopes[0], scopes[2])
-        for scope in (scopes[0], scopes[2]):
+        # PR760 adds complete shared/scaled admissions between the original
+        # typed-source and verified-edge gates. All four belong to this call.
+        self.assertEqual(calls, [(self.root, True, None)] * 8)
+        self.assertEqual([site[0] for site in sites],
+                         ['reviewed_typed_text', '_pr760_admit', '_pr760_admit', 'verified_edges'] * 2)
+        self.assertEqual([sites[index][1] for index in (1, 2, 5, 6)],
+                         ['_shared_helper_bindings', '_scaled_float32_bindings'] * 2)
+        for first_index in (0, 4):
+            for scope in scopes[first_index:first_index + 4]:
+                self.assertIs(scope, scopes[first_index])
+        self.assertIsNot(scopes[0], scopes[4])
+        for scope in (scopes[0], scopes[4]):
             self.assertEqual(scope._state, 'closed')
             self.assertFalse(scope._failed)
             self.assertFalse(scope._raw)
@@ -3765,18 +3833,28 @@ class PublicSeedScoreAdmissionControls(unittest.TestCase):
                 with concurrent.futures.ThreadPoolExecutor(max_workers=1) as pool:
                     self.assertEqual(pool.submit(self.seed.verify_score, other).result(), nested)
             return result
-        with patch.object(self.seed, 'verify_source', observed), self.admissions() as (calls, scopes):
+        sites = []
+        with patch.object(self.seed, 'verify_source', observed), self.admissions(sites=sites) as (calls, scopes):
             self.seed.verify_score(self.root)
         self.assertEqual(calls, [(root, True, None) for root in
-            (self.root, self.root, self.root, other, other, other, other, self.root)])
+            (self.root, self.root, self.root, *([other] * 8), *([self.root] * 3))])
+        self.assertEqual([site[0] for site in sites],
+            ['reviewed_typed_text'] * 4
+            + ['_pr760_admit', '_pr760_admit', 'verified_edges']
+            + ['reviewed_typed_text', '_pr760_admit', '_pr760_admit', 'verified_edges']
+            + ['_pr760_admit', '_pr760_admit', 'verified_edges'])
+        self.assertEqual([site[1] for site in sites if site[0] == '_pr760_admit'],
+                         ['_shared_helper_bindings', '_scaled_float32_bindings'] * 3)
         self.assertIsNone(scopes[1])
         self.assertIsNone(scopes[2])
-        self.assertIs(scopes[0], scopes[-1])
-        self.assertIs(scopes[3], scopes[4])
-        self.assertIs(scopes[5], scopes[6])
-        self.assertEqual(len({id(scopes[index]) for index in (0, 3, 5)}), 3)
+        for index in (11, 12, 13):
+            self.assertIs(scopes[0], scopes[index])
+        for first_index in (3, 7):
+            for scope in scopes[first_index:first_index + 4]:
+                self.assertIs(scope, scopes[first_index])
+        self.assertEqual(len({id(scopes[index]) for index in (0, 3, 7)}), 3)
         self.assertTrue(all(scope._state == 'closed' and not scope._failed
-                            for scope in (scopes[0], scopes[3], scopes[5])))
+                            for scope in (scopes[0], scopes[3], scopes[7])))
 
     def test_direct_score_post_gate_restore_is_sticky(self):
         read, fail = Path.read_bytes, cleanup._operation_fail
@@ -3925,6 +4003,53 @@ class ConsumerFirstTimeoutControls(unittest.TestCase):
             case.test_consumer_first_import_orders_normal_and_optimized()
         self.assertEqual(calls, [(optimized, route, slow.get(route, 600))
                                 for optimized in (False, True) for route in routes])
+
+
+class ResolverExactCoordinateControls(unittest.TestCase):
+    """Namespace scoping never exempts an exact consumed coordinate."""
+
+    def test_scoped_math_source_and_include_origin_coordinates(self):
+        name = 'extensions/carla/math.mojo'
+        origin = name + '.cov-origin'
+        paths = {name}
+        include_paths = paths | {origin}
+        lookup = {'math_entries': frozenset(('.', 'tests'))}
+        with tempfile.TemporaryDirectory(
+                dir=Path(tempfile.gettempdir()).resolve()) as directory:
+            root = Path(directory)
+            with physical_change(root, name, b'# consumed input\n'):
+                self.assertTrue(cleanup.resolver_unshadowed(root, paths, **lookup))
+                # An unrelated bare math leaf outside actual entry directories
+                # stays eligible; exact consumed coordinates do not inherit it.
+                with physical_change(root, 'unrelated/math.mojo', b'# unrelated\n'):
+                    self.assertTrue(cleanup.resolver_unshadowed(root, paths, **lookup))
+                with physical_change(root, origin, b'# opaque origin\n'):
+                    self.assertFalse(cleanup.resolver_unshadowed(root, paths, **lookup))
+                    self.assertTrue(cleanup.resolver_unshadowed(root, include_paths, **lookup))
+                for alternate in (origin + '.extra', origin + '.extra.mojopkg'):
+                    with self.subTest(source_alternate=alternate), physical_change(root, alternate, b'# competitor\n'):
+                        self.assertFalse(cleanup.resolver_unshadowed(root, paths, **lookup))
+                for alternate in ('extensions/carla/Math.mojo.cov-origin',
+                                  origin + '.mojopkg'):
+                    with self.subTest(alternate=alternate), physical_change(root, alternate, b'# competitor\n'):
+                        self.assertFalse(cleanup.resolver_unshadowed(root, paths, **lookup))
+                        self.assertFalse(cleanup.resolver_unshadowed(root, include_paths, **lookup))
+                target = root/origin
+                target.symlink_to(root/name)
+                try:
+                    self.assertFalse(cleanup.resolver_unshadowed(root, paths, **lookup))
+                    self.assertFalse(cleanup.resolver_unshadowed(root, include_paths, **lookup))
+                finally:
+                    target.unlink()
+                target.mkdir()
+                try:
+                    self.assertFalse(cleanup.resolver_unshadowed(root, paths, **lookup))
+                    self.assertFalse(cleanup.resolver_unshadowed(root, include_paths, **lookup))
+                finally:
+                    target.rmdir()
+                self.assertTrue(cleanup.resolver_unshadowed(root, paths, **lookup))
+
+
 
 if __name__ == '__main__':
     unittest.main()

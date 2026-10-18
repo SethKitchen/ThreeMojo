@@ -34690,7 +34690,7 @@ REGISTRY_INPUT_SHA256 = {'animation/animation_clip.mojo': '71842bfcf4a72c6c652a6
  'tests/test_cube_capture_sampling.mojo': '017d30dd5dc3be46f5aada2679ed270b16e57982b19156804f7af8e8c4fc2442',
  'tests/test_cube_capture_settings.mojo': 'd1dadffa8befa1e999cdd3e652507e207f937c0fc1fb87aaa66dd4eb7d387538',
  'tests/test_cube_depth_texture.mojo': '77d7ae1b8e9fc781a37da6e2cba24d012c313a82e54c1c54dc4d9d58b681441d',
- 'tests/test_cube_shadow_association.mojo': '27c59713abe6e6763549aada3a4b9a6805de91bf51e3855191dd194bdb08f383',
+ 'tests/test_cube_shadow_association.mojo': 'e5229dc7364a9e47e0bc339dab74876572cbc08076ccfb778e839b4a9005febc',
  'tests/test_curve.mojo': 'e201a849d56b5021adc702b640dd0a08662c47b4f16bf9cc31ae25ac30fccf11',
  'tests/test_curve3.mojo': 'c33cc9e72f53414996dd321fd82d23f769f15ef51025a7f2dba07867a2590093',
  'tests/test_curve_boundaries.mojo': '2b1e36d6e51979909363a87acf1ec7dcd61e2f019a4d90a0bc6c01d7b15abfc8',
@@ -34969,7 +34969,7 @@ REGISTRY_INPUT_SHA256 = {'animation/animation_clip.mojo': '71842bfcf4a72c6c652a6
  'tests/test_xml.mojo': '3e8f4193cee7fe65cbbf630cf70f33410e90eadbbf6f9af72f2ddbdc799486b6',
  'tools/_example_output.mojo': 'd9018dd09b73fb73396b180bee560bff5411d35fcae450a94dcc91c7bd6905c6',
  'tools/_example_preview.mojo': '60d44f82ef97a8917ffe7b8e9178d3de4ebcbbfe039a8a1258c1a8bb60e649bf',
- 'tools/carla_lane_oracle/test_pr760_arithmetic_stage.py': '16a8cdd276db7fc859d9cbe706eb31f083f80dffd5984119847c495d5be661f2',
+ 'tools/carla_lane_oracle/test_pr760_arithmetic_stage.py': 'b6d5ecc453ebe4c1f8d5f07e1f029b09f414dea887480fa6cf07ccd85bfacdb3',
  'units/measure.mojo': 'b7531458ae7a74d6b9213f55672073137dbac41c2634787f7d6a78a16b526b85',
  'units/si.mojo': 'd149a23f2ee4a9bde17875615e7251285cb56af535716b66c7d8959c80f48c02'}
 REGISTRY_PROVIDER_SHA256 = {'animation/keyframe_track.mojo': '88024d946b3aebe154c7419517432d83af3251b9b2dc4fe8aab4ff53d81223b9',
@@ -35164,7 +35164,7 @@ REGISTRY_TEST_SHA256 = {'tests/test_anatomy_shared.mojo': 'c48a9061b13acdb292a25
  'tests/test_cube_capture_sampling.mojo': '017d30dd5dc3be46f5aada2679ed270b16e57982b19156804f7af8e8c4fc2442',
  'tests/test_cube_capture_settings.mojo': 'd1dadffa8befa1e999cdd3e652507e207f937c0fc1fb87aaa66dd4eb7d387538',
  'tests/test_cube_depth_texture.mojo': '77d7ae1b8e9fc781a37da6e2cba24d012c313a82e54c1c54dc4d9d58b681441d',
- 'tests/test_cube_shadow_association.mojo': '27c59713abe6e6763549aada3a4b9a6805de91bf51e3855191dd194bdb08f383',
+ 'tests/test_cube_shadow_association.mojo': 'e5229dc7364a9e47e0bc339dab74876572cbc08076ccfb778e839b4a9005febc',
  'tests/test_curve.mojo': 'e201a849d56b5021adc702b640dd0a08662c47b4f16bf9cc31ae25ac30fccf11',
  'tests/test_curve3.mojo': 'c33cc9e72f53414996dd321fd82d23f769f15ef51025a7f2dba07867a2590093',
  'tests/test_curve_boundaries.mojo': '2b1e36d6e51979909363a87acf1ec7dcd61e2f019a4d90a0bc6c01d7b15abfc8',
@@ -35440,7 +35440,7 @@ REGISTRY_TEST_SHA256 = {'tests/test_anatomy_shared.mojo': 'c48a9061b13acdb292a25
  'tests/test_wide_lines.mojo': 'f72f98f16f8ba22c5437c4710bd4d8aae033db7d129c3ca1655c6f9200630f34',
  'tests/test_wood.mojo': '3442b8c28653a2cad0da08734fefa3a38df05bdb5dcfbf9daa9bc936bdb5a618',
  'tests/test_xml.mojo': '3e8f4193cee7fe65cbbf630cf70f33410e90eadbbf6f9af72f2ddbdc799486b6',
- 'tools/carla_lane_oracle/test_pr760_arithmetic_stage.py': '16a8cdd276db7fc859d9cbe706eb31f083f80dffd5984119847c495d5be661f2'}
+ 'tools/carla_lane_oracle/test_pr760_arithmetic_stage.py': 'b6d5ecc453ebe4c1f8d5f07e1f029b09f414dea887480fa6cf07ccd85bfacdb3'}
 REGISTRY_REVIEW_RECORDS = {'animation/animation_clip.mojo': {'admission_granted': False,
                                    'baseline_commit': '0ad03120447c3b01fbdfa545f37debfbcd1d23bc',
                                    'batch': 'typed_animation',
@@ -46472,7 +46472,70 @@ REGISTRY_QUALIFICATION_RECORDS = {'apng': {'admission_granted': False,
                                                                       '\n',
                                                             'run_log': 'test_cube_shadow_association.run.log',
                                                             'source': 'tests/test_cube_shadow_association.mojo',
-                                                            'source_sha256': '27c59713abe6e6763549aada3a4b9a6805de91bf51e3855191dd194bdb08f383'},
+                                                            'source_sha256': '27c59713abe6e6763549aada3a4b9a6805de91bf51e3855191dd194bdb08f383',
+                                                            'ci_repair_successor': {'after_sha256': 'e5229dc7364a9e47e0bc339dab74876572cbc08076ccfb778e839b4a9005febc',
+ 'before_sha256': '27c59713abe6e6763549aada3a4b9a6805de91bf51e3855191dd194bdb08f383',
+ 'change': 'Matching no_inline wrappers for reference and actual calls preserve all exact bit '
+           'comparisons, inputs and test counts.',
+ 'evidence': {'cube-baseline-supervised.gz': {'sha256': '638333b187aa74efb719e5da866e5803c9d781dd6da3bf7de1c8780f0c917efa'},
+              'cube-baseline-supervised.out': {'sha256': 'e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855'},
+              'cube-baseline-supervised.phases.jsonl': {'capture_command_sha256': '94d4352831ee7098e754c96b188d7583045deca7e269717d36b6e0954de7092d',
+                                                        'launched_commands': [['cc',
+                                                                               '-pthread',
+                                                                               '--version'],
+                                                                              ['../pr760-toolchain/bin/mojo',
+                                                                               'build',
+                                                                               '--num-threads',
+                                                                               '1',
+                                                                               '-I',
+                                                                               'coverage/build',
+                                                                               '--Werror',
+                                                                               '-DTHREEMOJO_COVERAGE_HIT_CACHE',
+                                                                               '-Xlinker',
+                                                                               '/workspace/scratch/c2bcdb1ca387/pr760-cube-fix/.cache/native-coverage/cbaee07e069a63599e90964d0afe3c7e560ce06be2414b3517d4681c39c271a1.o',
+                                                                               '-o',
+                                                                               '/workspace/scratch/c2bcdb1ca387/pr760-cube-fix/tmp/threemojo-test-mizjdlnx/threemojo-native-run-2ubmhtvg/suite',
+                                                                               'coverage/build/tests/test_cube_shadow_association.mojo'],
+                                                                              ['coverage/build/tests/test_cube_shadow_association.mojo']],
+                                                        'sha256': 'd8e4d6481b0ce52fc50c666b24c86b4569fec908416f7891f5a007090e66558d'},
+              'cube-clean-supervised.gz': {'sha256': 'dc84c060a1554a926cb69f76de2170a849d10cdbd11122f3ec46bd55d4d4613a'},
+              'cube-clean-supervised.out': {'sha256': 'cce72fc84279b7454a3868044cc00fd0eaeab5a8381d954e7c0f4c6c3a518104'},
+              'cube-clean-supervised.phases.jsonl': {'capture_command_sha256': '210f090e2bdb46760911dd80f99020bd38e0803c518114eb30401977fc253396',
+                                                     'launched_commands': [['cc',
+                                                                            '-pthread',
+                                                                            '--version'],
+                                                                           ['../pr760-recovery/real-cov-producer-20261017/clean-toolchain/bin/mojo',
+                                                                            'build',
+                                                                            '--num-threads',
+                                                                            '1',
+                                                                            '-I',
+                                                                            'coverage/build',
+                                                                            '--Werror',
+                                                                            '-DTHREEMOJO_COVERAGE_HIT_CACHE',
+                                                                            '-Xlinker',
+                                                                            '/workspace/scratch/c2bcdb1ca387/pr760-cube-fix/.cache/native-coverage/cbaee07e069a63599e90964d0afe3c7e560ce06be2414b3517d4681c39c271a1.o',
+                                                                            '-o',
+                                                                            '/workspace/scratch/c2bcdb1ca387/pr760-cube-fix/tmp/threemojo-test-7bt6fw19/threemojo-native-run-l6pdngat/suite',
+                                                                            'coverage/build/tests/test_cube_shadow_association.mojo'],
+                                                                           ['coverage/build/tests/test_cube_shadow_association.mojo']],
+                                                     'sha256': '946fa960093977d18209f5fbe34ff3363779a896a2dbfb6503ffbfe84418118b'},
+              'cube-final-gates.log': {'sha256': 'd6d0ad89df1c15bdacaab393f565c21cb37496be719c09b32a31a1c34cdb90b3'},
+              'cube-final-mutation.log': {'sha256': 'c15d50f4153da2c67cca76c3fa90755cb54cff3e209bdbe981d07e94b2771df9'},
+              'tmp/verify-final-mutation.sh': {'sha256': 'ee22fc2edf36441508c5d988ecd7b96987ebc2e45e700e420cadf6ec8bb2e011'}},
+ 'instrumented_production_sha256': '3af76021a2e9db173f95f0f153e16bd924d59f5950e9019db55d022459a643df',
+ 'mutation_production_sha256': '52befa58cadcd3a23031547a80aa0520ffd357712d18e25cffc21451b549988f',
+ 'outcomes': {'baseline_instrumented': 'FAIL: 1000216679 versus 1000216682',
+              'final_clean_supervised_aot_hits': 'PASS: 2/2',
+              'final_native_python_and_mojo_five_second_gates': 'PASS: 2/2 in each unchanged gate',
+              'final_wrong_association_mutation': 'FAIL: both tests, 1017424790 versus 1017424789 '
+                                                  'and 1000917822 versus 1000917819; production '
+                                                  'restored'},
+ 'production_sha256': 'e57aabcefe61cebaa8e57ae129f0cae3873215b7b1c0d2171c972d78d4015b81',
+ 'production_source': 'lights/shadow.mojo',
+ 'schema': 'pr760-cube-test-ci-repair-v1',
+ 'scope': 'Test-only symmetric runtime-argument adapters; historical qualification retained, no '
+          'production or theorem change; focused qualification only, not full-shard coverage.',
+ 'source': 'tests/test_cube_shadow_association.mojo'}},
                            'test_draco_traversal_reuse': {'build_flags': '--Werror --num-threads 1',
                                                           'build_log': 'test_draco_traversal_reuse.build.log',
                                                           'result': '\n'
@@ -47279,7 +47342,7 @@ DATA_NAMES = ('STATUS',
  'REGISTRY_QUALIFICATION_READY',
  'REGISTRY_UNRESOLVED_CONDITIONS',
  'REGISTRY_QUALIFICATION_RECORDS')
-DATA_SHA256 = '843e87592b5bcece65628c272b8264a7453fb36f0a03524dd6147c72eb9cb25b'
+DATA_SHA256 = '6ce909fa50d6932f2e58631b3c33569882ef119729ad59715bd3a3318686bb10'
 # END FIXED STAGING DATA
 
 
@@ -47296,8 +47359,8 @@ def sha(value):
 def verify_stage_data():
     """Authenticate fixed provenance data without granting root admission."""
     payload = {name: globals()[name] for name in DATA_NAMES}
-    require(DATA_SHA256 == '843e87592b5bcece65628c272b8264a7453fb36f0a03524dd6147c72eb9cb25b'
-            and sha(json.dumps(payload, sort_keys=True, separators=(',', ':'))) == '843e87592b5bcece65628c272b8264a7453fb36f0a03524dd6147c72eb9cb25b',
+    require(DATA_SHA256 == '6ce909fa50d6932f2e58631b3c33569882ef119729ad59715bd3a3318686bb10'
+            and sha(json.dumps(payload, sort_keys=True, separators=(',', ':'))) == '6ce909fa50d6932f2e58631b3c33569882ef119729ad59715bd3a3318686bb10',
             'fixed staging data changed')
     require(STATUS == 'staged-provenance-only' and len(OUTSTANDING_TYPED_PATHS) == 163
             and REGISTRY_QUALIFICATION_READY is False and REGISTRY_UNRESOLVED_CONDITIONS,

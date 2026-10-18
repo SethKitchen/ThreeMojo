@@ -145,9 +145,9 @@ NATIVE_SUPPORT_INPUTS = ('tools/native_test_support.py', 'tools/fixtures/carla_s
 NATIVE_SUPPORT_MAPPING = {'tests/test_carla_junction_endpoint_refusals.mojo': ['tools/fixtures/carla_sum2_fp_state.c'],
  'tests/test_carla_sum2_environment.mojo': ['tools/fixtures/carla_sum2_fp_state.c']}
 THEOREM_DOCUMENT = 'docs/validation/full-audit-711-invariants.md'
-PR760_STAGE_SHA256 = 'd9a3548f27899ff7ff202e2b467d5cae96c2e5946619cf7617a3ae8322322fc6'
+PR760_STAGE_SHA256 = '03757bafb02fbb3908919839c18d5c2c443f46469aeb01393dee57ae22054359'
 PR760_IMAGE = 'tools/carla_lane_oracle/pr760-source-image.json'
-PR760_IMAGE_SHA256 = '94204c37b84977309d67c06f6791f995e8089c3a2be52126ac4a91df0f5ec5cd'
+PR760_IMAGE_SHA256 = 'b3455603c0a4f881a6aba141d3a51ead282d7cd258912989d1d24972e3ecb078'
 PR760_OWNER_PREDECESSOR = 'tools/carla_lane_oracle/pr760-owner-predecessor.txt'
 PR760_OWNER_PREDECESSOR_SHA256 = '6138ba2dcac394c716ea9ed32e74e0c6d15857d5c605fc82304d21d0c80fdc69'
 DEPENDENCY_TOOL_SHA256 = {'tools/carla_lane_oracle/winner_sign_contracts.py': 'f850902634073364fe2407b00d12e9fdfb2ecfc6cf2a03414269fbb7984a8a7f',
@@ -960,6 +960,7 @@ def resolver_unshadowed(root, paths, *, render_entries=None, typed_entries=None,
     typed_families = ('animation', 'cameras', 'core', 'exporters', 'geometries',
                       'lights', 'materials', 'objects', 'postprocessing', 'renderers')
     allowed = set(paths)
+    coordinates = {path.casefold() for path in allowed}
     stems = {str(Path(p).with_suffix('')).casefold() for p in allowed}
     canonical_prefixes = {str(parent) for p in allowed for parent in Path(p).parents if str(parent) != '.'}
     prefixes = {prefix.casefold() for prefix in canonical_prefixes}
@@ -1000,7 +1001,14 @@ def resolver_unshadowed(root, paths, *, render_entries=None, typed_entries=None,
                 folded = relative.casefold()
                 # Namespace roots remain protected at every actual lookup root.
                 scoped_name = name.split('.')[0].casefold()
-                relevant = (folded in stems or folded in prefixes or stem in stems
+                # Appended suffixes of exact consumed coordinates remain
+                # guarded even when their bare namespace is entry-scoped.
+                # This includes origin sidecars, allowed only when explicitly
+                # enumerated for an include root.
+                coordinate_suffix = any(
+                    (relative[:-len(name)] + name[:index]).casefold() in coordinates
+                    for index, character in enumerate(name) if character == '.')
+                relevant = (coordinate_suffix or folded in stems or folded in prefixes or stem in stems
                             or stem in prefixes or (scoped_name in top
                                 and (scoped_name != 'render' or render_entries is None
                                      or relative_dir.casefold() in render_entries)
@@ -3394,7 +3402,14 @@ def _witness_format_bindings(root, *, _snapshots=None, _operation=None):
                                    **witness_format.BOUND_INPUTS}.items():
                 raw = _observe_bytes(root, path, _regular(root, path).read_bytes(),
                                      _operation=_operation)
-                require(type(raw) is bytes and sha(_historical_typed_text(path, raw.decode('utf-8'))) == expected,
+                require(type(raw) is bytes, 'witness-format input is not physical bytes: ' + path)
+                historical = raw
+                if (path == 'tools/carla_lane_oracle/test_witness_format_contracts.py'
+                        and sha(raw) != expected):
+                    # This one qualification edge joins the unchanged typed
+                    # endpoint. Observations, rereads and receipts stay physical.
+                    historical = qualification_predecessor_bytes(path, raw)
+                require(sha(_historical_typed_text(path, historical.decode('utf-8'))) == expected,
                         'witness-format proof input changed: ' + path)
                 if _snapshots is not None:
                     require(_snapshots.setdefault(path, raw) == raw,
@@ -4126,16 +4141,16 @@ PR760_IMPLEMENTATION_SUCCESSORS = {'tools/carla_lane_oracle/border_parser_contra
 def _pr760_authority_data():
     """Bind successor data selectors to literal executing-code constants."""
     require((PR760_STAGE_SHA256, PR760_IMAGE, PR760_IMAGE_SHA256, PR760_OWNER_PREDECESSOR, PR760_OWNER_PREDECESSOR_SHA256) == (
-        'd9a3548f27899ff7ff202e2b467d5cae96c2e5946619cf7617a3ae8322322fc6',
+        '03757bafb02fbb3908919839c18d5c2c443f46469aeb01393dee57ae22054359',
         'tools/carla_lane_oracle/pr760-source-image.json',
-        '94204c37b84977309d67c06f6791f995e8089c3a2be52126ac4a91df0f5ec5cd',
+        'b3455603c0a4f881a6aba141d3a51ead282d7cd258912989d1d24972e3ecb078',
         'tools/carla_lane_oracle/pr760-owner-predecessor.txt',
         '6138ba2dcac394c716ea9ed32e74e0c6d15857d5c605fc82304d21d0c80fdc69',
     ), 'PR760 authority selectors changed')
 
 
 def qualification_predecessor_bytes(path, raw):
-    """Pure exact comparison for five reviewed Python witness successors only.
+    """Pure exact comparison for six reviewed Python witness successors only.
 
     Physical owners still consume and return actual bytes. This function grants
     neither source-image admission nor a receipt, and never reads projected files.
@@ -4533,10 +4548,120 @@ def qualification_predecessor_bytes(path, raw):
                                                     ('            with patch.object(audit._InvariantInputs, '
                                                      "'finish', finish):\n",),
                                                     ('            with patch.object(audit._CacheInputs, '
-                                                     "'checkpoint', checkpoint):\n",))))}
+                                                     "'checkpoint', checkpoint):\n",)))),
+        'tools/carla_lane_oracle/test_witness_format_contracts.py': ('ad002f1255ae4f545a5cbfb3b8abf3f8e883a2637656248a232b297032b178de',
+ '82f7e13e72b4f99ccad63d5dfe55fc0a73c898120b43ed8416b0731489ea6f84',
+ ((154,
+   170,
+   ("        with patch.object(cleanup.guard, 'production_mojo_paths', "
+    "side_effect=AssertionError('extra census')):\n",),
+   ('        # Observe the real current checker without invalidating its code seal.\n',
+    '        census = cleanup.guard.production_mojo_paths\n',
+    '        calls = []\n',
+    '        def reject_census(frame, event, value):\n',
+    "            if event == 'call' and frame.f_code is census.__code__:\n",
+    '                calls.append(True)\n',
+    "                raise AssertionError('extra census')\n",
+    '        previous = sys.getprofile()\n',
+    '        try:\n',
+    '            sys.setprofile(reject_census)\n',
+    "            with self.assertRaisesRegex(AssertionError, 'extra census'):\n",
+    '                list(census(self.root))\n',
+    '            self.assertEqual(calls, [True])\n',
+    '            # Python disables a profile callback after it raises. Rearm it for\n',
+    '            # the actual positive; any real census call must still fail.\n',
+    '            sys.setprofile(reject_census)\n')),
+  (171,
+   174,
+   (),
+   ('            self.assertEqual(calls, [True])\n',
+    '        finally:\n',
+    '            sys.setprofile(previous)\n')),
+  (176,
+   189,
+   (),
+   ("        with patch.object(cleanup.guard, 'production_mojo_paths', "
+    "side_effect=AssertionError('extra census')):\n",
+    "            with self.assertRaisesRegex(cleanup.ContractError, 'executing function "
+    "changed'):\n",
+    '                cleanup._witness_format_bindings(self.root)\n',
+    '        # The original pre-typed leaf still accepts the original monkeypatch\n',
+    '        # control, proving its no-census behavior independently of this edge.\n',
+    '        historical = fixtures.copy_historical_boundary_root(self, ROOT)\n',
+    "        with patch.object(cleanup.guard, 'production_mojo_paths', "
+    "side_effect=AssertionError('extra census')):\n",
+    '            old_bindings = cleanup._witness_format_bindings(historical)\n',
+    '        self.assertEqual(set(old_bindings), set(self.paths))\n',
+    "        self.assertNotIn('math/scaled_products.mojo', old_bindings)\n",
+    '        for root, actual in ((self.root, bindings), (historical, old_bindings)):\n',
+    '            self.assertEqual(actual, {name: cleanup.sha((root/name).read_bytes())\n',
+    '                                      for name in self.paths})\n')),
+  (191,
+   202,
+   (),
+   ('        current = self.root\n',
+    '        try:\n',
+    "            for cohort in ('pr760', 'common758'):\n",
+    "                self.root = (current if cohort == 'pr760' else\n",
+    '                             fixtures.copy_common758_boundary_root(self, ROOT))\n',
+    '                with self.subTest(cohort=cohort):\n',
+    '                    self._check_alias_paths_and_native_module_shadows_refuse(cohort)\n',
+    '        finally:\n',
+    '            self.root = current\n',
+    '\n',
+    '    def _check_alias_paths_and_native_module_shadows_refuse(self, cohort):\n')),
+  (219,
+   224,
+   (),
+   ('        created = []\n',
+    '        parent = shadow.parent\n',
+    '        while not parent.exists():\n',
+    '            created.append(parent)\n',
+    '            parent = parent.parent\n')),
+  (226,
+   236,
+   ("        with self.assertRaisesRegex(ValueError, 'resolver'):\n",
+    '            cleanup.verify(self.root)\n'),
+   ('        try:\n',
+    "            reason = ('PR760 exact dependency closure changed' if cohort == 'pr760'\n",
+    "                      else 'resolver')\n",
+    '            with self.assertRaisesRegex(ValueError, reason):\n',
+    '                cleanup.verify(self.root)\n',
+    '        finally:\n',
+    '            shadow.unlink()\n',
+    '            for parent in created:\n',
+    '                parent.rmdir()\n',
+    '        cleanup.verify(self.root, exact=True)\n')),
+  (255,
+   266,
+   (),
+   ('        current = self.root\n',
+    '        try:\n',
+    "            for cohort in ('pr760', 'common758'):\n",
+    "                self.root = (current if cohort == 'pr760' else\n",
+    '                             fixtures.copy_common758_boundary_root(self, ROOT))\n',
+    '                with self.subTest(cohort=cohort):\n',
+    '                    self._check_full_gate_late_proof_input_mutation(cohort)\n',
+    '        finally:\n',
+    '            self.root = current\n',
+    '\n',
+    '    def _check_full_gate_late_proof_input_mutation(self, cohort):\n')),
+  (275,
+   280,
+   ("            with patch.object(cleanup, 'inventory', late), self.assertRaisesRegex(ValueError, "
+    "'input changed during verification'):\n",),
+   ('            # PR760 consumes inventory within its image admission; the same late\n',
+    '            # mutation meets its physical reread before the outer final sweep.\n',
+    "            reason = ('PR760 source changed after consumption: ' + "
+    'target.relative_to(self.root).as_posix()\n',
+    "                      if cohort == 'pr760' else 'input changed during verification')\n",
+    "            with patch.object(cleanup, 'inventory', late), self.assertRaisesRegex(ValueError, "
+    'reason):\n'))))}
     require(path in rows, 'unregistered qualification witness: ' + path)
     before_sha, after_sha, edits = rows[path]
-    expected = (scaled_float32.TESTS[path] if path ==
+    expected = (typed_boundary.EDGES[path]['after_sha256'] if path ==
+        'tools/carla_lane_oracle/test_witness_format_contracts.py' else
+        scaled_float32.TESTS[path] if path ==
         'tools/carla_lane_oracle/test_scaled_float32_contracts.py'
         else typed_boundary.BINDING_INPUTS[path])
     require(before_sha == expected, 'qualification historical authority changed: ' + path)
@@ -4613,14 +4738,15 @@ def _pr760_candidate_bindings(root, *, _snapshots=None, _operation=None):
         require(all(expected.get(path) == digest
                     for path, digest in pr760_stage.REGISTRY_INPUT_SHA256.items()),
                 'PR760 physical image misses reviewed registry input')
-        for path, archive in (('tools/test_conditioned_coverage_loops.py', 'tools/carla_lane_oracle/pr760-test_conditioned_coverage_loops-predecessor.txt'), ('tools/carla_lane_oracle/test_typed_boundary_contracts.py', 'tools/carla_lane_oracle/pr760-test_typed_boundary_contracts-predecessor.txt'), ('tools/carla_lane_oracle/test_shared_helper_contracts.py', 'tools/carla_lane_oracle/pr760-test_shared_helper_contracts-predecessor.txt'), ('tools/carla_lane_oracle/test_scaled_float32_contracts.py', 'tools/carla_lane_oracle/pr760-test_scaled_float32_contracts-predecessor.txt'), ('tools/carla_lane_oracle/test_common758_current_successor.py', 'tools/carla_lane_oracle/pr760-test_common758_current_successor-predecessor.txt')):
+        for path, archive in (('tools/test_conditioned_coverage_loops.py', 'tools/carla_lane_oracle/pr760-test_conditioned_coverage_loops-predecessor.txt'), ('tools/carla_lane_oracle/test_typed_boundary_contracts.py', 'tools/carla_lane_oracle/pr760-test_typed_boundary_contracts-predecessor.txt'), ('tools/carla_lane_oracle/test_shared_helper_contracts.py', 'tools/carla_lane_oracle/pr760-test_shared_helper_contracts-predecessor.txt'), ('tools/carla_lane_oracle/test_scaled_float32_contracts.py', 'tools/carla_lane_oracle/pr760-test_scaled_float32_contracts-predecessor.txt'), ('tools/carla_lane_oracle/test_common758_current_successor.py', 'tools/carla_lane_oracle/pr760-test_common758_current_successor-predecessor.txt'), ('tools/carla_lane_oracle/test_witness_format_contracts.py', 'tools/carla_lane_oracle/pr760-test_witness_format_contracts-predecessor.txt')):
             require(qualification_predecessor_bytes(path, image[path]) == image[archive],
                     'PR760 qualification archive differs from exact predecessor: ' + path)
         # One complete fixed image, with no per-file old/new fallback.
         previous = pr760_stage.verify_registry_sources(
             {path: image[path] for path in pr760_stage.REGISTRY_INPUT_SHA256})
         typed_texts = {path: (previous[path] if path in pr760_stage.EXAMPLE_PATHS
-                              else image[path].decode('utf-8'))
+                              else qualification_predecessor_bytes(path, image[path]).decode('utf-8')
+                              if path == 'tools/carla_lane_oracle/test_witness_format_contracts.py' else image[path].decode('utf-8'))
                        for path in typed_boundary.SOURCE_PATHS}
         typed_previous = typed_boundary.verify_sources(typed_texts)
         for path in pr760_stage.CARLA_REGISTRY_PATHS:

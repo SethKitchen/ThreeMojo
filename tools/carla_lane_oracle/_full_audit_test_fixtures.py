@@ -37,6 +37,8 @@ def common758_leaf_texts(source):
     selected = cleanup._pr760_image_selected(physical)
     texts = {name: (cleanup.pr760_stage.predecessor_source(name, raw.decode('utf-8'))
              if selected and name in cleanup.pr760_stage.CARLA_REGISTRY_PATHS
+             else cleanup.qualification_predecessor_bytes(name, raw).decode('utf-8')
+             if selected and name == 'tools/carla_lane_oracle/test_witness_format_contracts.py'
              else raw.decode('utf-8')) for name, raw in physical.items()}
     typed.verify_sources({name: texts[name] for name in typed.SOURCE_PATHS})
     shared.verify_correspondence({name: texts[name] for name in
@@ -84,7 +86,7 @@ def copy_shared_helper_inputs(root, source):
                 raw = cleanup.pr760_stage.predecessor_source(name, raw.decode('utf-8')).encode('utf-8')
                 if cleanup.sha(raw) != edge['before_sha256']:
                     raise AssertionError('historical helper predecessor changed: ' + name)
-        if name in ('tools/test_conditioned_coverage_loops.py', 'tools/carla_lane_oracle/test_typed_boundary_contracts.py', 'tools/carla_lane_oracle/test_shared_helper_contracts.py', 'tools/carla_lane_oracle/test_scaled_float32_contracts.py', 'tools/carla_lane_oracle/test_common758_current_successor.py'):
+        if name in ('tools/test_conditioned_coverage_loops.py', 'tools/carla_lane_oracle/test_typed_boundary_contracts.py', 'tools/carla_lane_oracle/test_shared_helper_contracts.py', 'tools/carla_lane_oracle/test_scaled_float32_contracts.py', 'tools/carla_lane_oracle/test_common758_current_successor.py', 'tools/carla_lane_oracle/test_witness_format_contracts.py'):
             raw = cleanup.qualification_predecessor_bytes(name, raw)
         copied_bindings[name] = cleanup.sha(raw)
         target = Path(root)/name
@@ -216,7 +218,7 @@ def copy_common758_boundary_root(case, source, *, destination=None):
             if cleanup.sha(raw) != stage.EDGES[name]['after_sha256'] or cleanup.sha(previous) != stage.EDGES[name]['before_sha256']:
                 raise AssertionError('historical fixture PR760 endpoint changed: ' + name)
             (root/name).write_bytes(previous)
-    for name in ('tools/test_conditioned_coverage_loops.py', 'tools/carla_lane_oracle/test_typed_boundary_contracts.py', 'tools/carla_lane_oracle/test_shared_helper_contracts.py', 'tools/carla_lane_oracle/test_scaled_float32_contracts.py', 'tools/carla_lane_oracle/test_common758_current_successor.py'):
+    for name in ('tools/test_conditioned_coverage_loops.py', 'tools/carla_lane_oracle/test_typed_boundary_contracts.py', 'tools/carla_lane_oracle/test_shared_helper_contracts.py', 'tools/carla_lane_oracle/test_scaled_float32_contracts.py', 'tools/carla_lane_oracle/test_common758_current_successor.py', 'tools/carla_lane_oracle/test_witness_format_contracts.py'):
         target = root/name
         target.write_bytes(cleanup.qualification_predecessor_bytes(name, target.read_bytes()))
     cleanup.verify(root, exact=True)

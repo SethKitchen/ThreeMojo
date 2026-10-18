@@ -1169,7 +1169,7 @@ DENSITY760_INPUTS = {'core/__init__.mojo': '5f3ace6c2d6162c4a542666c21a966d54d5b
  'render/volume_texture_store.mojo': '105a32971b5e88c613ec3a350d9b2c99c27d19080c6c66fb9d42bd4be546c8b0',
  'tests/test_hair_density_bounds_controls.mojo': '2cfb0de9ac61d170beaa7e47fbcaf5c51c7db139ed373f4ab4f07af2fae9e11c',
  'tests/test_reconciled_hair_density.mojo': '2e0c703b365bc98d3d6fc4c8796d4133edf004eafb753262ca89cd6d639be3c4',
- 'tools/carla_lane_oracle/pr760_arithmetic_stage.py': 'd9a3548f27899ff7ff202e2b467d5cae96c2e5946619cf7617a3ae8322322fc6',
+ 'tools/carla_lane_oracle/pr760_arithmetic_stage.py': '03757bafb02fbb3908919839c18d5c2c443f46469aeb01393dee57ae22054359',
  'units/__init__.mojo': '5f3ace6c2d6162c4a542666c21a966d54d5b98b8d4982794ea5bfbbcc4f52479',
  'units/measure.mojo': 'b7531458ae7a74d6b9213f55672073137dbac41c2634787f7d6a78a16b526b85',
  'units/quantity.mojo': 'bb77541cdb757cd63b59ac01134c6a6ebce88863bee69c84ff77b8c03aff6223',
@@ -1247,10 +1247,16 @@ def density760_loops(root, *, include_roots=(), _operation=None):
         if closure != paths - native_tests:
             return {}
         def resolver_ok():
-            return all(cleanup.resolver_unshadowed(location, paths,
+            # Source coordinates never allow origin sidecars, even when the
+            # same root is also listed as an include. Include-only sidecars
+            # correspond to observed staged Mojo coordinates; the generation
+            # owner authenticates their exact set and bytes before dispatch.
+            return all(cleanup.resolver_unshadowed(location,
+                paths if index == 0 else paths | {
+                    name + '.cov-origin' for name in paths if name in image},
                 **cleanup._render_lookup_args(paths, local_entries),
                 math_entries=frozenset(('.', *local_entries)))
-                for location, local_entries, _ in contexts)
+                for index, (location, local_entries, image) in enumerate(contexts))
         if not resolver_ok():
             return {}
         for name, value in snapshots.items():

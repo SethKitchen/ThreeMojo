@@ -72,6 +72,60 @@ class Density760ReceiptTests(unittest.TestCase):
             self.assertIn(f'R {DENSITY} {n} T ', masked)
         self.assertEqual(receipt['denominator']['proven_impossible'], 6)
 
+    def test_origins_are_include_only_exact_files_and_receipt_authenticated(self):
+        root, build = self.fixture.root, self.fixture.build
+        name = DENSITY + '.mojo.cov-origin'
+        source = root/name
+        origin = build/name
+        raw = origin.read_bytes()
+        expected = {131, 167, 178, 245}
+        self.assertEqual(set(loops.density760_loops(root, include_roots=(build,))), expected)
+        source.write_bytes(raw)
+        try:
+            for includes in ((), (build,), (root,), (root, build)):
+                with self.subTest(source_sidecar=True, includes=includes):
+                    self.assertEqual(loops.density760_loops(root, include_roots=includes), {})
+        finally:
+            source.unlink()
+        for suffix in ('.extra', '.extra.more', '.cov-origin'):
+            extra = build/(name + suffix)
+            extra.write_bytes(raw)
+            try:
+                with self.subTest(extra=suffix):
+                    self.assertEqual(loops.density760_loops(root, include_roots=(build,)), {})
+            finally:
+                extra.unlink()
+        origin.unlink()
+        try:
+            origin.mkdir()
+            self.assertEqual(loops.density760_loops(root, include_roots=(build,)), {})
+            origin.rmdir()
+            origin.symlink_to(root/(DENSITY + '.mojo'))
+            self.assertEqual(loops.density760_loops(root, include_roots=(build,)), {})
+        finally:
+            if origin.is_symlink():
+                origin.unlink()
+            elif origin.is_dir():
+                origin.rmdir()
+            origin.write_bytes(raw)
+        for fault in ('malformed', 'missing', 'extra'):
+            extra = build/'unregistered.mojo.cov-origin'
+            try:
+                if fault == 'malformed':
+                    origin.write_bytes(raw+b'corrupt')
+                elif fault == 'missing':
+                    origin.unlink()
+                else:
+                    extra.write_bytes(raw)
+                with self.subTest(receipt_origin=fault), self.assertRaises(ValueError):
+                    self.derive()
+            finally:
+                extra.unlink(missing_ok=True)
+                origin.write_bytes(raw)
+        self.assertEqual(set(loops.density760_loops(root, include_roots=(build,))), expected)
+        receipt = self.derive()
+        self.assertEqual(len([row for row in receipt['proofs'] if row['module'] == DENSITY]), 4)
+
     def test_standalone_historical_pairs_retain_exact_old_rows(self):
         density = self.fixture.root/loops.DENSITY_SOURCE
         groom_name = 'extensions/humanoid/skeleton/head/hair/groom.mojo'

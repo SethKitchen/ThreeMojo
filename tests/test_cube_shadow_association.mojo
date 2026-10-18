@@ -11,6 +11,11 @@ from std.memory import bitcast
 from std.testing import TestSuite, assert_equal
 
 
+# Keep both implementations behind runtime call boundaries. Coverage probes
+# prevent the production body from receiving the same call-site constant
+# specialization as an inlined reference. That difference can change Float32
+# rounding even when the source expressions are identical.
+@no_inline
 def _original_cube_stored(
     ndc_depth: Float32,
     column: Int,
@@ -31,8 +36,20 @@ def _original_cube_stored(
     )
 
 
+@no_inline
+def _actual_cube_stored(
+    ndc_depth: Float32,
+    column: Int,
+    row: Int,
+    size: Int,
+    near: Float32,
+    far: Float32,
+) -> Float32:
+    return cube_stored(ndc_depth, column, row, size, near, far)
+
+
 def test_known_five_texel_regression() raises:
-    var actual = cube_stored(0, 0, 0, 5, 1, 100)
+    var actual = _actual_cube_stored(0, 0, 0, 5, 1, 100)
     assert_equal(
         bitcast[DType.uint32](actual),
         bitcast[DType.uint32](_original_cube_stored(0, 0, 0, 5, 1, 100)),
@@ -44,7 +61,9 @@ def test_depth_range_and_texel_grid_match_original_bits() raises:
         for row in range(size):
             for column in range(size):
                 for depth in [Float32(-1), -0.5, 0, 0.5, 1, 2]:
-                    var actual = cube_stored(depth, column, row, size, 1, 100)
+                    var actual = _actual_cube_stored(
+                        depth, column, row, size, 1, 100
+                    )
                     var reference = _original_cube_stored(
                         depth, column, row, size, 1, 100
                     )

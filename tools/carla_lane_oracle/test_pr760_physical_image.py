@@ -222,6 +222,7 @@ class ClosedPhysicalImageControls(unittest.TestCase):
             'tools/carla_lane_oracle/test_typed_boundary_contracts.py',
             'tools/carla_lane_oracle/test_shared_helper_contracts.py',
             'tools/carla_lane_oracle/test_scaled_float32_contracts.py',
+            'tools/carla_lane_oracle/test_witness_format_contracts.py',
         }
         self.assertEqual(set(rows), paths)
         for path, row in rows.items():
@@ -231,6 +232,9 @@ class ClosedPhysicalImageControls(unittest.TestCase):
             self.assertEqual(owner.sha(old), row['before_sha256'])
             self.assertEqual(owner.qualification_predecessor_bytes(path, raw), old)
             self.assertEqual(owner.qualification_predecessor_bytes(path, old), old)
+            if path == 'tools/carla_lane_oracle/test_witness_format_contracts.py':
+                historical = owner.typed_boundary.predecessor_source(path, old.decode('utf-8'))
+                self.assertEqual(owner.sha(historical), owner.witness_format.BOUND_INPUTS[path])
             with self.subTest(path=path), self.changed(path, old):
                 with self.assertRaises(owner.ContractError):
                     owner.verify(self.root, exact=True)
@@ -251,6 +255,28 @@ class ClosedPhysicalImageControls(unittest.TestCase):
             moved.rename(target)
         with self.assertRaises(owner.ContractError):
             owner.qualification_predecessor_bytes('tools/unregistered.py', b'pass\n')
+        owner.verify(self.root, exact=True)
+
+    def test_sixth_witness_archive_and_exact_inverse_fail_closed(self):
+        path = 'tools/carla_lane_oracle/test_witness_format_contracts.py'
+        row = self.data['qualification_successors'][path]
+        raw = (self.root/path).read_bytes()
+        archive = row['predecessor_archive']
+        old = (self.root/archive).read_bytes()
+        for changed in (raw.replace(b'\n', b'\r\n'), raw[:-1], raw+b'# changed\n'):
+            with self.subTest(mutation=owner.sha(changed)), self.assertRaises(owner.ContractError):
+                owner.qualification_predecessor_bytes(path, changed)
+        with self.changed(archive, old+b'\n'):
+            with self.assertRaises(owner.ContractError):
+                owner.verify(self.root, exact=True)
+        target = self.root/archive
+        missing = target.with_suffix('.missing')
+        target.rename(missing)
+        try:
+            with self.assertRaises(owner.ContractError):
+                owner.verify(self.root, exact=True)
+        finally:
+            missing.rename(target)
         owner.verify(self.root, exact=True)
 
     def test_qualification_inverse_literals_and_builtin_inputs_are_authenticated(self):
