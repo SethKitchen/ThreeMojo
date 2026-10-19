@@ -595,9 +595,11 @@ def wijnendale() -> CastlePlan:
     Torhout in West Flanders at 51 deg 4' 44" N, 3 deg 3' 34" E. Felix
     Laureys designed the brick gatehouse and the keep in 1877 and 1878.
     The sources do not agree on the plan of the gatehouse, so the plan
-    takes it as square. Every dimension here is an estimate from an aerial
-    photograph, good to about 15 percent. Replace the numbers with a
-    survey to analyze the real walls.
+    takes it as square. Sources describe the castle as round, with a
+    circular moat around a round inner courtyard, so the moat is a circle:
+    the oval in the aerial photograph is foreshortening. Every dimension
+    here is an estimate from that photograph, good to about 15 percent.
+    Replace the numbers with a survey to analyze the real walls.
 
     Returns:
         The plan, with the keep, five round towers and the four corner
@@ -690,12 +692,12 @@ def wijnendale() -> CastlePlan:
         )
     )
     var moat = Moat(
-        PlanPoint(_m(3.0), _m(-2.5)),
-        _m(43.0),
+        PlanPoint(_m(4.0), _m(-3.0)),
+        _m(46.0),
+        _m(46.0),
+        PlanPoint(_m(4.0), _m(-3.0)),
         _m(33.0),
-        PlanPoint(_m(3.0), _m(-1.5)),
         _m(33.0),
-        _m(23.0),
         _m(1.6),
         _m(2.4),
     )

@@ -75,14 +75,14 @@ A plain wall needs more than three meters. A real wall of this height has a batt
 
 The weir is a sharp-crested rectangular weir, `Q = Cd (2/3) sqrt(2 g) b h^1.5`. It answers within hours. A daily step therefore passes the surplus of a day over the weir. A deficit lowers the level below the crest.
 
-`flanders_climate` holds monthly values typical of the Flemish lowland: 824 mm of rain and 608 mm of open water evaporation a year. They are assumptions. Replace them with data from a weather station.
+`flanders_climate` holds monthly values for the Flemish lowland. The rain is the 1991-2020 normal of the station at Uccle from the Royal Meteorological Institute: 837 mm a year. The evaporation, 608 mm a year, and the stream flow are assumptions. Replace them with data from the site.
 
-| Result for a moat of 2,073 m2 | Value |
+| Result for a moat of 3,226 m2 | Value |
 |---|---|
 | Normal year | The level stays at the crest. 147,000 m3 go over the weir. |
 | Dry year, 60 percent of the rain, stream failed | The level falls 74 cm below the crest. |
-| Days with more than 10 cm of drawdown | 275 |
-| Stream flow that holds the level in July | 0.09 L/s |
+| Days with more than 10 cm of drawdown | 272 |
+| Stream flow that holds the level in July | 0.14 L/s |
 
 ## The sun
 

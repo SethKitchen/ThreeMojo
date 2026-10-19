@@ -462,13 +462,20 @@ def test_plan_refuses_what_cannot_stand() raises:
         plan.check()
 
 
-def test_on_island_uses_the_ellipse() raises:
+def test_on_island_uses_the_circle() raises:
     var plan = wijnendale()
-    assert_true(plan.on_island(_at(3.0, -1.5)))
-    assert_false(plan.on_island(_at(3.0, 40.0)))
-    # Just inside and just outside the east end of the island.
-    assert_true(plan.on_island(_at(35.9, -1.5)))
-    assert_false(plan.on_island(_at(36.1, -1.5)))
+    assert_true(plan.on_island(_at(4.0, -3.0)))
+    assert_false(plan.on_island(_at(4.0, 40.0)))
+    # Just inside and just outside the east end of the round island.
+    assert_true(plan.on_island(_at(36.9, -3.0)))
+    assert_false(plan.on_island(_at(37.1, -3.0)))
+
+
+def test_the_moat_is_round() raises:
+    var moat = wijnendale().moat.copy()
+    assert_almost_equal(moat.semi_x.value, moat.semi_y.value)
+    assert_almost_equal(moat.island_semi_x.value, moat.island_semi_y.value)
+    assert_almost_equal(moat.water_area().value, pi * (46.0**2 - 33.0**2))
 
 
 def main() raises:

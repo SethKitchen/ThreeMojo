@@ -120,8 +120,9 @@ def test_the_typical_climate_has_the_stated_totals() raises:
     for month in range(12):
         rain += c.precipitation[month].to(MILLIMETER)
         evaporation += c.evaporation[month].to(MILLIMETER)
-    # Monthly values sum to 824 mm of rain and 608 mm of evaporation.
-    assert_almost_equal(rain, 824.0, atol=1e-9)
+    # The Uccle normals of 1991-2020 sum to 837.2 mm. The evaporation sums
+    # to 608 mm.
+    assert_almost_equal(rain, 837.2, atol=1e-9)
     assert_almost_equal(evaporation, 608.0, atol=1e-9)
     assert_true(c.inflow[0].value > c.inflow[7].value)
 

@@ -15,9 +15,10 @@ for a head h over the crest. The weir answers within hours. A daily step
 therefore passes the whole surplus of a day over the weir and reports the
 steady head for the mean flow. A deficit lowers the level below the crest.
 
-`flanders_climate` holds monthly values typical of the Flemish lowland:
-824 mm of rain and 608 mm of open water evaporation a year. They are
-assumptions, not station data. Replace them with measurements of the site.
+`flanders_climate` holds monthly values for the Flemish lowland. The rain is
+the 1991-2020 normal of the station at Uccle, 837 mm a year, from the Royal
+Meteorological Institute. The open water evaporation, 608 mm a year, and the
+stream are assumptions. Replace them with measurements of the site.
 """
 
 from extensions.castle.plan import Moat
@@ -109,26 +110,28 @@ def _mm(value: Float64) -> Length64:
 
 
 def flanders_climate() -> Climate:
-    """Return monthly values typical of the Flemish lowland.
+    """Return monthly values for the Flemish lowland.
 
     Returns:
-        Rain of 824 mm a year, open water evaporation of 608 mm and a
+        Rain of 837 mm a year, open water evaporation of 608 mm and a
         stream that carries 10 L/s in winter and under 1 L/s in late
-        summer. January comes first.
+        summer. January comes first. The rain is the 1991-2020 normal of
+        the station at Uccle. The evaporation and the stream are
+        assumptions.
     """
     var rain_mm: List[Float64] = [
-        73.0,
-        61.0,
-        54.0,
-        45.0,
-        62.0,
-        74.0,
-        78.0,
-        76.0,
-        63.0,
-        70.0,
-        82.0,
-        86.0,
+        75.5,
+        65.1,
+        59.3,
+        46.7,
+        59.7,
+        70.8,
+        76.9,
+        86.5,
+        65.3,
+        67.8,
+        76.2,
+        87.4,
     ]
     var evaporation_mm: List[Float64] = [
         8.0,

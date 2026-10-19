@@ -29,6 +29,7 @@ The plan states which facts are documented and which numbers are estimated. No p
 | Item | Value | Status |
 |---|---|---|
 | Place | Torhout, West Flanders, Belgium | Documented |
+| Moat and courtyard | A circular moat around a round inner courtyard | Documented |
 | Coordinates | 51°04′44″ N, 3°03′34″ E | Documented |
 | First castle | About 1085, built by Robert I, Count of Flanders | Documented |
 | North wing | Parts date from the 15th century | Documented |
@@ -39,7 +40,19 @@ The plan states which facts are documented and which numbers are estimated. No p
 | Stone dressings, dormers and window rows | From the aerial photograph | Estimated |
 | Dimensions of every part | From the aerial photograph, good to about 15 percent | Estimated |
 | Wall thickness, bridge arch, moat depth | Typical values for the building type | Estimated |
-| Wind, climate, soil and masonry strength | Typical values from the Eurocodes and the Flemish lowland | Assumed |
+| Monthly rain | The 1991-2020 normals of Uccle, 837 mm a year | Measured, at a station about 90 km away |
+| Wind, evaporation, soil and masonry strength | Typical values from the Eurocodes and the Flemish lowland | Assumed |
+
+## Sources and what is missing
+
+The documented facts come from these pages:
+
+- [Flemish heritage inventory, Kasteeldomein van Wijnendale](https://inventaris.onroerenderfgoed.be/erfgoedobjecten/87491) gives the work of Félix Laureys in 1877 and 1878, and the gatehouse and keep.
+- [Wijnendale Castle on Wikipedia](https://en.wikipedia.org/wiki/Wijnendale_Castle) gives the coordinates and the history.
+- [Eupedia](https://eupedia.com/belgium/wynendale.shtml) and [RTBF](https://www.rtbf.be/article/le-chateau-de-wijnendale-la-ou-leopold-iii-a-lance-la-question-royale-11329444) describe a circular moat.
+- [Brussels Environment, climate fact sheet](https://document.environnement.brussels/opac_css/elecfile/Clim_02) gives the Uccle rain normals of the Royal Meteorological Institute.
+
+No source that I could reach gives the height of a tower, the length of a wall or the size of the moat. I searched in Dutch, French and English. I could read only search summaries of these pages, not the pages themselves. The protection decree refers to a plan that I could not open. A survey or that plan would replace the estimates.
 
 ## The plan frame
 
@@ -51,7 +64,7 @@ A `CastlePlan` holds:
 |---|---|---|
 | Towers | `Tower` | A round or square shaft with a cone or a battlemented parapet |
 | Blocks | `Block` | A rectangle of wall with a gable roof, or a gatehouse with a parapet |
-| Moat | `Moat` | An ellipse of water around an elliptical island |
+| Moat | `Moat` | An ellipse of water around an elliptical island. A circle has equal axes. |
 | Bridge | `Bridge` | A row of equal segmental masonry arches on piers |
 
 `plan.check()` refuses a part that cannot stand. It refuses a wall as thick as its radius and a gable with no rise. It refuses an island outside the moat and a tower off the island. It refuses an arch that rises more than half its span.
@@ -69,7 +82,7 @@ A `CastlePlan` holds:
 | Rear range | Block | 30 by 9 | 11 | Gable, rise 7 |
 | Front range | Block | 34 by 9 | 11 | Gable, rise 6.5 |
 | Gatehouse | Block | 16 by 16 | 19 | Parapet |
-| Moat | Ellipse | Outer axes 43 and 33, island axes 33 and 23 | Water depth 1.6 | |
+| Moat | Circle | Outer radius 46, island radius 33 | Water depth 1.6 | |
 | Bridge | Three arches | Span 5, pier 1.4, rise 1.4, ring 0.4 | Length 20.6 | |
 
 ## Draw a plan

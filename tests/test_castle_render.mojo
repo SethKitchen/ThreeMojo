@@ -136,9 +136,9 @@ def test_the_water_ring_lies_between_the_island_and_the_bank() raises:
     for v in range(len(position.data) // 3):
         low_x = min(low_x, position.data[3 * v])
         high_x = max(high_x, position.data[3 * v])
-    # The outer ellipse is centered on x = 3 with a semi-axis of 43 m.
-    assert_almost_equal(high_x, 46.0, atol=0.05)
-    assert_almost_equal(low_x, -40.0, atol=0.05)
+    # The outer circle is centered on x = 4 with a radius of 46 m.
+    assert_almost_equal(high_x, 50.0, atol=0.05)
+    assert_almost_equal(low_x, -42.0, atol=0.05)
 
 
 def test_the_same_seed_gives_the_same_colors() raises:
