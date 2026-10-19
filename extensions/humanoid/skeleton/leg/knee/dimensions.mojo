@@ -34,6 +34,8 @@ not rebuild landmarks. Call `knee_dimensions` to resolve a template.
 Call `validate` at every public consumer of an edited copy.
 """
 
+from core.ordinal import ordinal_valid, require_valid
+
 from extensions.humanoid.sex import FEMALE, MALE, Sex
 from extensions.humanoid.side import LEFT, RIGHT, BodySide
 from extensions.humanoid.skeleton.field import (
@@ -68,7 +70,7 @@ from extensions.humanoid.skeleton.leg.tibia.dimensions import (
     TibiaField,
     tibia_dimensions,
 )
-from math.vector3 import Vector3
+from math.vector3 import Vector3, midpoint
 from std.math import cos, max, pi, sin
 from units.si import Length
 
@@ -86,15 +88,24 @@ struct KneePart(Equatable, ImplicitlyCopyable, Writable):
 
     def is_valid(self) -> Bool:
         """Return True if this is a named knee part."""
-        if self == ARTICULAR_CARTILAGE:
-            return True
-        if self == MEDIAL_MENISCUS:
-            return True
-        if self == LATERAL_MENISCUS:
-            return True
-        if self == MEDIAL_COLLATERAL:
-            return True
-        return self == LATERAL_COLLATERAL
+        return ordinal_valid(self.value, LATERAL_COLLATERAL.value)
+
+
+def require_knee_part(part: KneePart) raises:
+    """Refuse a knee solid that is not named.
+
+    Nothing. The call returns when the solid is named.
+
+    Args:
+        part: The knee solid.
+
+    Raises:
+        Error: If the solid is not cartilage, a meniscus, or a collateral.
+    """
+    require_valid(
+        part.is_valid(),
+        "A knee part must be cartilage, a meniscus or a collateral",
+    )
 
 
 # Hyaline cartilage on the femoral condyles, the trochlea, the plateau
@@ -830,7 +841,7 @@ def femur_origin(femur: FemurDimensions, cartilage: Length) raises -> Vector3:
     """
     femur.validate()
     positive_length(cartilage, "femoral thickness", "knee")
-    var mid = _mid(femur.medial_condyle, femur.lateral_condyle)
+    var mid = midpoint(femur.medial_condyle, femur.lateral_condyle)
     var distal_y = -0.5 * femur.length.value
     return Vector3(-mid.x, cartilage.value - distal_y, -mid.z)
 
@@ -853,7 +864,7 @@ def tibia_origin(tibia: TibiaDimensions, cartilage: Length) raises -> Vector3:
     """
     tibia.validate()
     positive_length(cartilage, "tibial thickness", "knee")
-    var mid = _mid(tibia.medial_condyle, tibia.lateral_condyle)
+    var mid = midpoint(tibia.medial_condyle, tibia.lateral_condyle)
     return Vector3(-mid.x, -cartilage.value - tibia.eminence.y, -mid.z)
 
 
@@ -946,8 +957,7 @@ def knee_distance(
             not a named knee part.
     """
     dimensions.validate()
-    if not part.is_valid():
-        raise Error("A knee part must be cartilage, a meniscus or a collateral")
+    require_knee_part(part)
     if part == ARTICULAR_CARTILAGE:
         return CartilageField(dimensions).distance(point)
     if part == MEDIAL_MENISCUS:
@@ -979,22 +989,13 @@ def knee_part_label(part: KneePart) -> String:
     return "knee"
 
 
-def _mid(a: Vector3, b: Vector3) -> Vector3:
-    """Return the midpoint of `a` and `b`."""
-    return Vector3(0.5 * (a.x + b.x), 0.5 * (a.y + b.y), 0.5 * (a.z + b.z))
-
-
 def _trochlea_local(femur: FemurDimensions) -> Vector3:
     """Return the trochlear-groove center in the femur frame."""
     var W = femur.bicondylar_width.value
     var condyle_ry = 0.32 * W
     var condyle_rz = 0.34 * W
-    return Vector3(
-        0.5 * (femur.medial_condyle.x + femur.lateral_condyle.x),
-        0.5 * (femur.medial_condyle.y + femur.lateral_condyle.y)
-        + 0.12 * condyle_ry,
-        0.5 * (femur.medial_condyle.z + femur.lateral_condyle.z)
-        + 0.58 * condyle_rz,
+    return midpoint(femur.medial_condyle, femur.lateral_condyle) + Vector3(
+        0, 0.12 * condyle_ry, 0.58 * condyle_rz
     )
 
 

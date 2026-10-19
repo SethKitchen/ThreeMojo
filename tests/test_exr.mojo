@@ -15,6 +15,7 @@ reference encoder of OpenEXR's format, and the 16-bit wavelet is checked
 against a line-for-line port of three.js's `wav2Decode`.
 """
 
+from core.binary import append_little_endian_u32, copy_bytes
 from render.exr import (
     FLOAT_SAMPLES,
     HALF_SAMPLES,
@@ -52,18 +53,9 @@ from std.testing import (
 # --- building files ---------------------------------------------------------
 
 
-def push32(mut out: List[UInt8], value: Int):
-    """Append a little-endian 32-bit integer."""
-    out.append(UInt8(value & 0xFF))
-    out.append(UInt8((value >> 8) & 0xFF))
-    out.append(UInt8((value >> 16) & 0xFF))
-    out.append(UInt8((value >> 24) & 0xFF))
-
-
 def push_text(mut out: List[UInt8], text: String):
     """Append a string and its null byte."""
-    for byte in text.as_bytes():
-        out.append(byte)
+    out.extend(text.as_bytes())
     out.append(0)
 
 
@@ -73,11 +65,11 @@ def channel(
     """Return one entry of a channel list."""
     var out = List[UInt8]()
     push_text(out, name)
-    push32(out, kind)
+    append_little_endian_u32(out, kind)
     for _ in range(4):
         out.append(0)
-    push32(out, x_sampling)
-    push32(out, y_sampling)
+    append_little_endian_u32(out, x_sampling)
+    append_little_endian_u32(out, y_sampling)
     return out^
 
 
@@ -85,7 +77,7 @@ def chlist(var entries: List[List[UInt8]]) -> List[UInt8]:
     """Return a channel list: the entries, then a null byte."""
     var out = List[UInt8]()
     for entry in entries:
-        out.extend(entry.copy())
+        out.extend(Span(entry))
     out.append(0)
     return out^
 
@@ -101,17 +93,17 @@ def attribute(
     """Append one header attribute."""
     push_text(out, name)
     push_text(out, kind)
-    push32(out, len(value))
-    out.extend(value.copy())
+    append_little_endian_u32(out, len(value))
+    out.extend(Span(value))
 
 
 def box(x_min: Int, y_min: Int, x_max: Int, y_max: Int) -> List[UInt8]:
     """Return a `box2i` value."""
     var out = List[UInt8]()
-    push32(out, x_min)
-    push32(out, y_min)
-    push32(out, x_max)
-    push32(out, y_max)
+    append_little_endian_u32(out, x_min)
+    append_little_endian_u32(out, y_min)
+    append_little_endian_u32(out, x_max)
+    append_little_endian_u32(out, y_max)
     return out^
 
 
@@ -150,15 +142,15 @@ def exr(
     out.append(0)
     var table_at = len(out)
     for _ in range(len(blocks)):
-        push32(out, 0)
-        push32(out, 0)
+        append_little_endian_u32(out, 0)
+        append_little_endian_u32(out, 0)
     for index in range(len(blocks)):
         var at = len(out)
         out[table_at + index * 8] = UInt8(at & 0xFF)
         out[table_at + index * 8 + 1] = UInt8((at >> 8) & 0xFF)
-        push32(out, lines[index])
-        push32(out, len(blocks[index]))
-        out.extend(blocks[index].copy())
+        append_little_endian_u32(out, lines[index])
+        append_little_endian_u32(out, len(blocks[index]))
+        out.extend(Span(blocks[index]))
     return out^
 
 
@@ -175,13 +167,13 @@ def floats(values: List[Float32]) -> List[UInt8]:
     """Return floats as little-endian bytes."""
     var out = List[UInt8]()
     for value in values:
-        push32(out, Int(bitcast[DType.uint32](value)))
+        append_little_endian_u32(out, Int(bitcast[DType.uint32](value)))
     return out^
 
 
 def plus(var bytes: List[UInt8], more: List[UInt8]) -> List[UInt8]:
     """Return `bytes` with `more` after them."""
-    bytes.extend(more.copy())
+    bytes.extend(Span(more))
     return bytes^
 
 
@@ -1730,8 +1722,8 @@ def test_a_channel_list_is_checked() raises:
 def test_blocks_are_checked() raises:
     # Cut in a block's header, and in its data.
     var whole = half_rgb_file(0, [row_zero(), row_one()], [0, 1])
-    refused(List[UInt8](whole[: len(whole) - 18 - 4]), "cut short")
-    refused(List[UInt8](whole[: len(whole) - 1]), "cut short")
+    refused(copy_bytes(whole, 0, len(whole) - 18 - 4), "cut short")
+    refused(copy_bytes(whole, 0, len(whole) - 1), "cut short")
     # A line before the window, and one past it.
     refused(half_rgb_file(0, [row_zero(), row_one()], [0, -1]), "outside")
     refused(half_rgb_file(0, [row_zero(), row_one()], [0, 2]), "outside")

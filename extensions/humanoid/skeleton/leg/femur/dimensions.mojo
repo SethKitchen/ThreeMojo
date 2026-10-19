@@ -63,7 +63,7 @@ from extensions.humanoid.skeleton.field import (
     smin,
 )
 from math.quaternion import Quaternion
-from math.vector3 import Vector3
+from math.vector3 import Vector3, midpoint
 from std.math import acos, cos, max, min, sin
 from units.si import (
     Angle,
@@ -272,17 +272,16 @@ struct FemurField(DistanceField, ImplicitlyCopyable):
         )
         self.lateral = dimensions.lateral_condyle
         self.lateral_r = Vector3(condyle_rx, condyle_ry, condyle_rz)
-        self.distal_metaphysis = Vector3(
-            0.5 * (self.medial.x + self.lateral.x),
-            0.5 * (self.medial.y + self.lateral.y) + 0.65 * condyle_ry,
-            0.5 * (self.medial.z + self.lateral.z),
+        self.distal_metaphysis = midpoint(self.medial, self.lateral) + Vector3(
+            0, 0.65 * condyle_ry, 0
         )
         self.distal_metaphysis_r = Vector3(
             0.36 * W, 0.42 * condyle_ry, 0.42 * condyle_rz
         )
-        var y0 = 0.5 * (self.medial.y + self.lateral.y) + 0.085 * L
+        var between = midpoint(self.medial, self.lateral)
+        var y0 = between.y + 0.085 * L
         var y4 = self.neck_base.y
-        var x0 = 0.5 * (self.medial.x + self.lateral.x)
+        var x0 = between.x
         var x4 = self.neck_base.x
         var distal = Vector3(x0, y0, 0)
         var proximal = Vector3(x4, y4, 0)
@@ -318,10 +317,8 @@ struct FemurField(DistanceField, ImplicitlyCopyable):
             self.lateral.z - 0.88 * condyle_rz,
         )
         self.notch_r = 0.10 * W
-        self.patella = Vector3(
-            0.5 * (self.medial.x + self.lateral.x),
-            0.5 * (self.medial.y + self.lateral.y) + 0.12 * condyle_ry,
-            0.5 * (self.medial.z + self.lateral.z) + 0.58 * condyle_rz,
+        self.patella = midpoint(self.medial, self.lateral) + Vector3(
+            0, 0.12 * condyle_ry, 0.58 * condyle_rz
         )
         self.patella_r = Vector3(0.34 * W, 0.55 * condyle_ry, 0.20 * condyle_rz)
         self.k = 0.010 * L
@@ -542,28 +539,21 @@ def femur_dimensions(
     var lateral = Vector3(
         0.24 * width, -0.5 * L + condyle_ry, 0.04 * condyle_rz
     )
-    var x0 = 0.5 * (medial.x + lateral.x)
-    var y0 = 0.5 * (medial.y + lateral.y) + 0.085 * L
+    var between = midpoint(medial, lateral)
+    var x0 = between.x
+    var y0 = between.y + 0.085 * L
     # Shaft first: proximal is more lateral by the bicondylar angle.
     var shaft_up = Vector3(sin(obliq.value), cos(obliq.value), 0)
-    var shaft_distal = Vector3(-shaft_up.x, -shaft_up.y, -shaft_up.z)
+    var shaft_distal = -shaft_up
     var medial_dir = Vector3(-cos(obliq.value), sin(obliq.value), 0)
-    var neck = Vector3(
-        shaft_distal.x * cos(ccd.value) + medial_dir.x * sin(ccd.value),
-        shaft_distal.y * cos(ccd.value) + medial_dir.y * sin(ccd.value),
-        shaft_distal.z * cos(ccd.value) + medial_dir.z * sin(ccd.value),
-    )
+    var neck = shaft_distal * cos(ccd.value) + medial_dir * sin(ccd.value)
     neck = Quaternion.from_axis_angle(shaft_up, ante).rotate(neck)
     neck.normalize()
     var head_center_y = 0.5 * L - head_r
     var neck_base_y = head_center_y - neck.y * neck_len
     var along = (neck_base_y - y0) / shaft_up.y
     var neck_base = Vector3(x0 + along * shaft_up.x, neck_base_y, 0)
-    var head_center = Vector3(
-        neck_base.x + neck.x * neck_len,
-        neck_base.y + neck.y * neck_len,
-        neck_base.z + neck.z * neck_len,
-    )
+    var head_center = neck_base + neck * neck_len
     var gt = Vector3(
         neck_base.x + 0.78 * gt_off,
         head_center.y - 0.70 * head_r,

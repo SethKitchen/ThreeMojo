@@ -299,9 +299,7 @@ comptime RELS = (
 
 def entry(name: String, text: String) -> ZipEntry:
     """Return a stored entry holding a text."""
-    var bytes = List[UInt8]()
-    for byte in text.as_bytes():
-        bytes.append(byte)
+    var bytes = List[UInt8](text.as_bytes())
     return ZipEntry(name, ZIP_STORED, bytes^)
 
 

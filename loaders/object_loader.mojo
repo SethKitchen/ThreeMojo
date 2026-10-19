@@ -157,8 +157,6 @@ See `docs/wiki/Norm-consumers.md` for the changed operations, retained
 limits, and explicit zero and nonfinite rules.
 """
 
-from math.norm import length3, normalized3, _ordinary_squared
-
 from core.assets import Assets
 from core.buffer_attribute import BufferAttribute, component_of_array
 from core.buffer_geometry import (
@@ -175,7 +173,13 @@ from core.background import (
 from core.fog import exp2_fog, linear_fog
 from core.geometry_store import GeometryId
 from core.layers import Layers
-from core.object3d import GROUP_TYPE, NO_PARENT, NodeId, Object3D
+from core.object3d import (
+    GROUP_TYPE,
+    NO_PARENT,
+    NodeId,
+    Object3D,
+    _place_from_column_major,
+)
 from core.scene import Scene
 from exporters.json_writer import JsonWriter
 from core.user_data import user_data_of
@@ -209,6 +213,7 @@ from cameras.camera_list import CameraList
 from cameras.orthographic_camera import OrthographicCamera
 from cameras.perspective_camera import PerspectiveCamera
 from loaders.curve_json import read_shape
+from loaders.file_path import path_directory
 from loaders.geometry_json import geometry_from_parameters
 from math.path import Shape
 from core.user_data import json_value_text
@@ -234,6 +239,7 @@ from loaders.gltf import decode_base64, decode_image
 from materials.node_json import read_node_program
 from loaders.node_loader import NodeLoader, plain_material_type
 from materials.nodes import NodeProgramId
+from loaders.js_number import is_decimal_text
 from loaders.json import (
     ARRAY,
     NO_NODE,
@@ -243,6 +249,7 @@ from loaders.json import (
     STRING,
     JsonDocument,
     parse_json,
+    present,
 )
 from materials.material import (
     ADDITIVE,
@@ -278,7 +285,7 @@ from materials.material import (
 )
 from math.euler import XYZ, XZY, YXZ, YZX, ZXY, ZYX, Euler, EulerOrder
 from math.bounds import Plane
-from math.matrix4 import Matrix4
+from math.matrix4 import Matrix4, column_major_matrix
 from math.quaternion import Quaternion
 from math.utils import FLOAT32_COMPONENT
 from math.spherical_harmonics3 import (
@@ -341,12 +348,14 @@ from render.texture import (
 )
 from render.texture_store import TextureId
 from std.collections import Dict
-from std.math import inf, isfinite, pi, sqrt
+from math.finite import require_finite
+from std.math import inf, pi, sqrt
 from std.memory import bitcast
 from std.pathlib import Path
 from units.si import Angle, DEGREE, InverseLength, Length, METER, NANOMETER
 from units.si import MILLIMETER
 from units.si import PER_METER, RADIAN
+from core.ordinal import require_valid, require_non_negative, require_positive
 
 # The format version `Object3D.toJSON` writes, and the one major version
 # this reads.
@@ -429,16 +438,6 @@ def light_type_names() -> List[String]:
         "RectAreaLight",
         "LightProbe",
     ]
-
-
-def _is_count(text: String) -> Bool:
-    """Return True if a text holds decimal digits and nothing else: an
-    index, not a name. Every caller has a text of one character or more."""
-    var bytes = text.as_bytes()
-    for at in range(len(bytes)):  # pragma: no branch
-        if bytes[at] < 48 or bytes[at] > 57:
-            return False
-    return True
 
 
 def _position_of(names: List[String], name: String) -> Int:
@@ -664,8 +663,9 @@ def stencil_op_code(op: StencilOp) raises -> Int:
     Raises:
         Error: If the operation is none of the eight.
     """
-    if not op.is_valid():
-        raise Error("Object JSON: a stencil operation that is none of eight")
+    require_valid(
+        op.is_valid(), "Object JSON: a stencil operation that is none of eight"
+    )
     return _stencil_op_codes()[op.value]
 
 
@@ -686,8 +686,9 @@ def stencil_op_of(code: Int) raises -> StencilOp:
     for at in range(len(codes)):  # pragma: no branch
         if codes[at] == code:
             found = at
-    if found < 0:
-        raise Error("Object JSON: a stencil operation that is none of eight")
+    require_non_negative(
+        found, "Object JSON: a stencil operation that is none of eight"
+    )
     return StencilOp(found)
 
 
@@ -704,8 +705,9 @@ def bind_mode_name(mode: BindMode) raises -> String:
     Raises:
         Error: If the mode is neither of the two.
     """
-    if not mode.is_valid():
-        raise Error("Object JSON: a bind mode that is neither of the two")
+    require_valid(
+        mode.is_valid(), "Object JSON: a bind mode that is neither of the two"
+    )
     return "attached" if mode == ATTACHED else "detached"
 
 
@@ -805,9 +807,9 @@ def read_object_json(
     loader.read_shapes()
     loader.read_geometries(assets)
     loader.read_materials(assets)
-    var top = loader.document.get(root, "object")
-    if top == NO_NODE:
-        raise Error("Object JSON: the document has no object")
+    var top = loader.document.required(
+        root, "object", "Object JSON: the document has no object"
+    )
     loader.object(top, scene, assets)
     loader.bind_targets(scene)
     loader.bind_skeletons(scene)
@@ -834,7 +836,7 @@ def load_object_json(
         Error: If the file cannot be read, or anything `read_object_json`
             raises.
     """
-    var directory = String(path[byte = 0 : path.rfind("/") + 1])
+    var directory = path_directory(path)
     return read_object_json(Path(path).read_text(), scene, assets, directory)
 
 
@@ -849,26 +851,9 @@ def decompose(mut node: Object3D, elements: List[Float32]) raises:
     Raises:
         Error: If the matrix flattens an axis, which leaves no rotation.
     """
-    var matrix = Matrix4()
-    for index in range(16):  # pragma: no branch
-        matrix.elements[index] = elements[index]
-    var sx = _column_length(elements, 0)
-    var sy = _column_length(elements, 4)
-    var sz = _column_length(elements, 8)
-    if sx == 0 or sy == 0 or sz == 0:
-        raise Error("Object JSON" + ": a matrix that flattens an axis")
-    var position = Vector3(0, 0, 0)
-    var rotation = Quaternion.identity()
-    var scale = Vector3(0, 0, 0)
-    matrix.decompose(position, rotation, scale)
-    node.set_position(position.x, position.y, position.z)
-    node.set_quaternion(rotation)
-    node.set_scale(scale.x, scale.y, scale.z)
-
-
-def _column_length(elements: List[Float32], start: Int) -> Float32:
-    """Return the length of a column's first three entries."""
-    return length3(elements[start], elements[start + 1], elements[start + 2])
+    _place_from_column_major(
+        node, elements, "Object JSON" + ": a matrix that flattens an axis"
+    )
 
 
 def _flip_rows(mut pixels: List[UInt8], width: Int, height: Int):
@@ -890,6 +875,22 @@ struct _Sampling(ImplicitlyCopyable):
     var mag_filter: Filter
     var min_filter: Filter
     var mipmapped: Bool
+
+
+def require_object_record(document: JsonDocument, item: Int) raises:
+    """Refuse an object JSON value that is not an object.
+
+    Nothing. The call returns when the value is an object.
+
+    Args:
+        document: The JSON document.
+        item: The value.
+
+    Raises:
+        Error: If the value is not an object.
+    """
+    if document.kind(item) != OBJECT:
+        raise Error("Object JSON: an object must be an object")
 
 
 struct _Loader(Movable):
@@ -967,34 +968,19 @@ struct _Loader(Movable):
         self, node: Int, key: String, default: Float32
     ) raises -> Float32:
         """Return an object's finite number under `key`, or `default`."""
-        var found = self.document.get(node, key)
-        if found == NO_NODE:
-            return default
-        var value = Float32(self.document.number(found))
-        if not isfinite(value):
-            raise Error("Object JSON: " + key + " must be finite")
-        return value
+        return self.document.optional_finite(node, key, default, "Object JSON")
 
     def integer(self, node: Int, key: String, default: Int) raises -> Int:
         """Return an object's whole number under `key`, or `default`."""
-        var found = self.document.get(node, key)
-        if found == NO_NODE:
-            return default
-        return self.document.integer(found)
+        return self.document.optional_integer(node, key, default)
 
     def text(self, node: Int, key: String, default: String) raises -> String:
         """Return an object's string under `key`, or `default`."""
-        var found = self.document.get(node, key)
-        if found == NO_NODE:
-            return default
-        return self.document.string(found)
+        return self.document.optional_string(node, key, default)
 
     def flag(self, node: Int, key: String, default: Bool) raises -> Bool:
         """Return an object's boolean under `key`, or `default`."""
-        var found = self.document.get(node, key)
-        if found == NO_NODE:
-            return default
-        return self.document.boolean(found)
+        return self.document.optional_boolean(node, key, default)
 
     def color(self, node: Int, key: String, default: Int) raises -> Color:
         """Return an object's color under `key`, a 24-bit number, or
@@ -1017,15 +1003,9 @@ struct _Loader(Movable):
 
     def numbers_of(self, list: Int) raises -> List[Float32]:
         """Return every number of an array, each finite."""
-        var out = List[Float32]()
-        for at in range(self.document.length(list)):
-            var value = Float32(
-                self.document.number(self.document.at(list, at))
-            )
-            if not isfinite(value):
-                raise Error("Object JSON: an array holds a number not finite")
-            out.append(value)
-        return out^
+        return self.document.finite_numbers(
+            list, "Object JSON: an array holds a number not finite"
+        )
 
     def numbers(
         self, node: Int, key: String, count: Int
@@ -1048,18 +1028,19 @@ struct _Loader(Movable):
 
     def uuid(self, node: Int) raises -> String:
         """Return an entry's uuid, which must be there."""
-        var found = self.document.get(node, "uuid")
-        if found == NO_NODE:
-            raise Error("Object JSON: an entry has no uuid")
+        var found = self.document.required(
+            node, "uuid", "Object JSON: an entry has no uuid"
+        )
         return self.document.string(found)
 
     # --- the libraries ------------------------------------------------------
 
     def check_metadata(self) raises:
         """Refuse a document that is not an Object document of version 4."""
-        var metadata = self.entry(self.document.root(), "metadata")
-        if metadata == NO_NODE:
-            raise Error("Object JSON: the document has no metadata")
+        var metadata = present(
+            self.entry(self.document.root(), "metadata"),
+            "Object JSON: the document has no metadata",
+        )
         if self.text(metadata, "type", "") != "Object":
             raise Error("Object JSON: metadata.type must be Object")
         var version = Int(self.number(metadata, "version", 0))
@@ -1156,9 +1137,10 @@ struct _Loader(Movable):
                 self.integer(node, "offset", 0),
             )
         var component = component_of_array(self.text(node, "type", ""))
-        var list = self.array(node, "array")
-        if list == NO_NODE:
-            raise Error("Object JSON: an attribute has no array")
+        var list = present(
+            self.array(node, "array"),
+            "Object JSON: an attribute has no array",
+        )
         var normalized = self.flag(node, "normalized", False)
         if component != FLOAT32_COMPONENT:
             # A typed array of integers, as three.js's `getTypedArray`
@@ -1211,32 +1193,35 @@ struct _Loader(Movable):
         """
         if uuid in shared:
             return shared[uuid].copy()
-        if data == NO_NODE:
-            raise Error(
-                "Object JSON: an interleaved attribute outside a geometry"
-            )
-        var buffers = self.entry(data, "interleavedBuffers")
+        var source = present(
+            data, "Object JSON: an interleaved attribute outside a geometry"
+        )
+        var buffers = self.entry(source, "interleavedBuffers")
         var item = NO_NODE
         if buffers != NO_NODE:
             item = self.entry(buffers, uuid)
-        if item == NO_NODE:
-            raise Error("Object JSON: names no interleaved buffer: " + uuid)
+        item = present(
+            item, "Object JSON: names no interleaved buffer: " + uuid
+        )
         if self.text(item, "type", "") != "Float32Array":
             raise Error("Object JSON: only a Float32Array buffer is read")
-        var arrays = self.entry(data, "arrayBuffers")
+        var arrays = self.entry(source, "arrayBuffers")
         var words = NO_NODE
         if arrays != NO_NODE:
             words = self.array(arrays, self.text(item, "buffer", ""))
-        if words == NO_NODE:
-            raise Error("Object JSON: an interleaved buffer has no array")
+        words = present(
+            words, "Object JSON: an interleaved buffer has no array"
+        )
         var numbers = List[Float32]()
         for at in range(self.document.length(words)):
             var word = self.document.integer(self.document.at(words, at))
             if word < 0 or word > 0xFFFFFFFF:
                 raise Error("Object JSON: an array buffer word is 32 bits")
             var value = bitcast[DType.float32](UInt32(word))
-            if not isfinite(value):
-                raise Error("Object JSON: an array holds a number not finite")
+            require_finite(
+                Float64(value),
+                "Object JSON: an array holds a number not finite",
+            )
             numbers.append(value)
         var stride = self.integer(item, "stride", 0)
         var buffer: InterleavedBuffer
@@ -1266,9 +1251,10 @@ struct _Loader(Movable):
             if named != NO_NODE:
                 built.user_data = user_data_of(self.document, named)
             return built^
-        var data = self.entry(item, "data")
-        if data == NO_NODE:
-            raise Error("Object JSON: a BufferGeometry has no data")
+        var data = present(
+            self.entry(item, "data"),
+            "Object JSON: a BufferGeometry has no data",
+        )
         var geometry = BufferGeometry(
             instanced=self.flag(item, "isInstancedBufferGeometry", False)
         )
@@ -1299,9 +1285,10 @@ struct _Loader(Movable):
                 and kind_of_index != "Uint32Array"
             ):
                 raise Error("Object JSON: an index must be Uint16 or Uint32")
-            var list = self.array(index, "array")
-            if list == NO_NODE:
-                raise Error("Object JSON: an index has no array")
+            var list = present(
+                self.array(index, "array"),
+                "Object JSON: an index has no array",
+            )
             var entries = List[Int]()
             for at in range(self.document.length(list)):
                 entries.append(
@@ -1367,19 +1354,58 @@ struct _Loader(Movable):
     def image_url(self, uuid: String) raises -> Int:
         """Return an image's `url`, a string or the array of a cube's six,
         which must be there."""
+        self._require_image(uuid)
+        var item = self.document.at(self.library("images"), self.images[uuid])
+        return self.document.required(
+            item, "url", "Object JSON: an image has no URL"
+        )
+
+    def _require_texture(self, uuid: String) raises:
+        """Refuse a uuid that names no texture.
+
+        Nothing. The call returns when the texture is in the file.
+
+        Args:
+            uuid: The texture uuid.
+
+        Raises:
+            Error: If the uuid names no texture.
+        """
+        if uuid not in self.textures:
+            raise Error("Object JSON: names no texture: " + uuid)
+
+    def _require_image(self, uuid: String) raises:
+        """Refuse a uuid that names no image.
+
+        Nothing. The call returns when the image is in the file.
+
+        Args:
+            uuid: The image uuid.
+
+        Raises:
+            Error: If the uuid names no image.
+        """
         if uuid not in self.images:
             raise Error("Object JSON: a texture names no image: " + uuid)
-        var item = self.document.at(self.library("images"), self.images[uuid])
-        var url = self.document.get(item, "url")
-        if url == NO_NODE:
-            raise Error("Object JSON: an image has no URL")
-        return url
+
+    def _require_material(self, uuid: String) raises:
+        """Refuse a uuid that names no material.
+
+        Nothing. The call returns when the material is in the file.
+
+        Args:
+            uuid: The material uuid.
+
+        Raises:
+            Error: If the uuid names no material.
+        """
+        if uuid not in self.materials:
+            raise Error("Object JSON: an object names no material: " + uuid)
 
     def is_cube(self, uuid: String) raises -> Bool:
         """Return True if a texture's image is six images, which makes it
         a `CubeTexture`, as `ObjectLoader.parseTextures` decides."""
-        if uuid not in self.textures:
-            raise Error("Object JSON: names no texture: " + uuid)
+        self._require_texture(uuid)
         var item = self.document.at(
             self.library("textures"), self.textures[uuid]
         )
@@ -1470,6 +1496,19 @@ struct _Loader(Movable):
             self.ignored[at] = id
         return id
 
+    def _stored_cube(
+        mut self, uuid: String, prefilter: Bool, mut assets: Assets
+    ) raises -> CubeTextureId:
+        """Return a cube already stored for `uuid`. Prefilter it the first
+        time a caller asks, and leave a filtered cube as it is."""
+        var id = CubeTextureId(self.cubes[uuid])
+        var bare = not assets.cube_textures.get(id).is_prefiltered()
+        if prefilter and bare:
+            assets.cube_textures.textures[id.value] = pmrem_from_cube(
+                assets.cube_textures.get(id)
+            )
+        return id
+
     def cube(
         mut self, uuid: String, prefilter: Bool, mut assets: Assets
     ) raises -> CubeTextureId:
@@ -1524,13 +1563,7 @@ struct _Loader(Movable):
                 built.faces[face].min_filter = sampling.min_filter
             built.validate()
             self.cubes[uuid] = assets.cube_textures.add(built^).value
-        var id = CubeTextureId(self.cubes[uuid])
-        var bare = not assets.cube_textures.get(id).is_prefiltered()
-        if prefilter and bare:
-            assets.cube_textures.textures[id.value] = pmrem_from_cube(
-                assets.cube_textures.get(id)
-            )
-        return id
+        return self._stored_cube(uuid, prefilter, assets)
 
     def is_panorama(self, uuid: String) raises -> Bool:
         """Return True if a flat texture's entry has an equirectangular
@@ -1595,13 +1628,7 @@ struct _Loader(Movable):
             var flat = self.texture(uuid, COVERAGE, assets)
             var built = cube_of_panorama(assets.textures.get(flat))
             self.cubes[uuid] = assets.cube_textures.add(built^).value
-        var id = CubeTextureId(self.cubes[uuid])
-        var bare = not assets.cube_textures.get(id).is_prefiltered()
-        if prefilter and bare:
-            assets.cube_textures.textures[id.value] = pmrem_from_cube(
-                assets.cube_textures.get(id)
-            )
-        return id
+        return self._stored_cube(uuid, prefilter, assets)
 
     def sampling(self, item: Int) raises -> _Sampling:
         """Return a texture entry's two filters, each checked, and whether
@@ -1954,8 +1981,9 @@ struct _Loader(Movable):
                 if self.document.kind(entry) != OBJECT:
                     raise Error("Object JSON: a clipping plane is an object")
                 var normal = self.numbers(entry, "normal", 3)
-                if len(normal) == 0:
-                    raise Error("Object JSON: a clipping plane has no normal")
+                require_positive(
+                    len(normal), "Object JSON: a clipping plane has no normal"
+                )
                 planes.append(
                     Plane(
                         Vector3(normal[0], normal[1], normal[2]),
@@ -2018,8 +2046,7 @@ struct _Loader(Movable):
         mut self, item: Int, mut scene: Scene, mut assets: Assets
     ) raises:
         """Read the root object: a scene's children, or one object."""
-        if self.document.kind(item) != OBJECT:
-            raise Error("Object JSON: an object must be an object")
+        require_object_record(self.document, item)
         if self.text(item, "type", "") != "Scene":
             self.place(item, NO_PARENT, scene, assets)
             return
@@ -2107,8 +2134,7 @@ struct _Loader(Movable):
             if node.matrix_auto_update:
                 decompose(node, matrix)
             else:
-                for index in range(16):  # pragma: no branch
-                    node.matrix.elements[index] = matrix[index]
+                node.matrix = column_major_matrix(matrix)
             return
         var position = self.numbers(item, "position", 3)
         if len(position) == 3:
@@ -2135,8 +2161,7 @@ struct _Loader(Movable):
     ) raises:
         """Add one object as a node under its parent, what it carries, and
         then its children."""
-        if self.document.kind(item) != OBJECT:
-            raise Error("Object JSON: an object must be an object")
+        require_object_record(self.document, item)
         var uuid = self.uuid(item)
         if uuid in self.seen:
             raise Error("Object JSON: a uuid named twice: " + uuid)
@@ -2433,14 +2458,12 @@ struct _Loader(Movable):
         if entry == NO_NODE:
             return List[Float32]()
         var uuid = self.uuid(entry)
-        if uuid not in self.textures:
-            raise Error("Object JSON: names no texture: " + uuid)
+        self._require_texture(uuid)
         var texture = self.document.at(
             self.library("textures"), self.textures[uuid]
         )
         var image = self.text(texture, "image", "")
-        if image not in self.images:
-            raise Error("Object JSON: a texture names no image: " + image)
+        self._require_image(image)
         var url = self.entry(
             self.document.at(self.library("images"), self.images[image]),
             "url",
@@ -2449,10 +2472,12 @@ struct _Loader(Movable):
             raise Error(
                 "Object JSON: a data texture's image must hold a Float32Array"
             )
-        var data = self.array(url, "data")
-        if data == NO_NODE:
-            raise Error("Object JSON: a data texture's image has no data")
-        return self.numbers_of(data)
+        return self.numbers_of(
+            present(
+                self.array(url, "data"),
+                "Object JSON: a data texture's image has no data",
+            )
+        )
 
     def geometry_named(self, item: Int) raises -> GeometryId:
         """Return the geometry an object's `geometry` uuid names."""
@@ -2476,15 +2501,14 @@ struct _Loader(Movable):
         """
         var list = List[MaterialId]()
         var found = self.document.get(item, "material")
-        if found == NO_NODE or self.document.kind(found) != ARRAY:
+        if not self.document.has_kind(found, ARRAY):
             return list^
         var count = self.document.length(found)
         if count == 0:
             raise Error("Object JSON: a mesh with an empty material list")
         for at in range(count):  # pragma: no branch
             var uuid = self.document.string(self.document.at(found, at))
-            if uuid not in self.materials:
-                raise Error("Object JSON: an object names no material: " + uuid)
+            self._require_material(uuid)
             list.append(MaterialId(self.materials[uuid]))
         return list^
 
@@ -2499,8 +2523,7 @@ struct _Loader(Movable):
                 "Object JSON: only a mesh can have more than one material"
             )
         var uuid = self.text(item, "material", "")
-        if uuid not in self.materials:
-            raise Error("Object JSON: an object names no material: " + uuid)
+        self._require_material(uuid)
         return MaterialId(self.materials[uuid])
 
     def instanced(self, item: Int, id: NodeId) raises -> InstancedMesh:
@@ -2515,9 +2538,10 @@ struct _Loader(Movable):
             cast_shadow=self.flag(item, "castShadow", False),
             receive_shadow=self.flag(item, "receiveShadow", False),
         )
-        var matrices = self.entry(item, "instanceMatrix")
-        if matrices == NO_NODE:
-            raise Error("Object JSON: an InstancedMesh has no instanceMatrix")
+        var matrices = present(
+            self.entry(item, "instanceMatrix"),
+            "Object JSON: an InstancedMesh has no instanceMatrix",
+        )
         var none = Dict[String, InterleavedBuffer]()
         var attribute = self.attribute(matrices, NO_NODE, none)
         if attribute.item_size != 16 or attribute.count() != count:
@@ -2833,7 +2857,7 @@ struct _Loader(Movable):
                 # three.js's `material[ index ]`: a mesh's list of
                 # materials, which a mesh with one material has not.
                 var listed = self.material_list(item)
-                if not _is_count(path.object_index):
+                if not is_decimal_text(path.object_index):
                     return None
                 var slot = atol(path.object_index)
                 if slot >= len(listed):
@@ -2855,7 +2879,7 @@ struct _Loader(Movable):
             var index = path.property_index
             if (
                 index != ""
-                and not _is_count(index)
+                and not is_decimal_text(index)
                 and not index.startswith("-")
             ):
                 # A target's name, three.js's `morphTargetDictionary`.
@@ -2873,10 +2897,9 @@ struct _Loader(Movable):
                 slot = named.value()
             elif index != "":
                 slot = atol(index)
-                if slot < 0:
-                    raise Error(
-                        "Object JSON: a morph target index cannot be negative"
-                    )
+                require_non_negative(
+                    slot, "Object JSON: a morph target index cannot be negative"
+                )
             if self.meshes[at] >= 0:
                 return TrackTarget(MORPH_INFLUENCE, self.meshes[at], slot)
             if self.skins[at] >= 0:
@@ -2935,9 +2958,10 @@ struct _Loader(Movable):
             if uuid not in skeletons:
                 raise Error("Object JSON: a SkinnedMesh names no skeleton")
             var entry = self.document.at(list, skeletons[uuid])
-            var bones = self.array(entry, "bones")
-            if bones == NO_NODE:
-                raise Error("Object JSON: a skeleton has no bones")
+            var bones = present(
+                self.array(entry, "bones"),
+                "Object JSON: a skeleton has no bones",
+            )
             var inverses = self.array(entry, "boneInverses")
             var count = self.document.length(bones)
             var given = 0
@@ -2969,14 +2993,14 @@ struct _Loader(Movable):
                     var numbers = self.numbers_of(inverse)
                     if len(numbers) != 16:
                         raise Error("Object JSON: a bone inverse is 16 numbers")
-                    built.append(Bone(node, _matrix_of(numbers)))
+                    built.append(Bone(node, column_major_matrix(numbers)))
             var skeleton = bind_skeleton(
                 nodes, placed
             ) if given == 0 else Skeleton(built^)
             var bind = Matrix4()
             var elements = self.numbers(item, "bindMatrix", 16)
             if len(elements) == 16:
-                bind = _matrix_of(elements)
+                bind = column_major_matrix(elements)
             var mesh = SkinnedMesh(
                 self.geometry_named(item),
                 self.material_named(item),
@@ -2992,14 +3016,6 @@ struct _Loader(Movable):
             scene.add_skinned_mesh(mesh^)
 
 
-def _matrix_of(elements: List[Float32]) -> Matrix4:
-    """Return the matrix of sixteen numbers, column by column."""
-    var matrix = Matrix4()
-    for index in range(16):  # pragma: no branch
-        matrix.elements[index] = elements[index]
-    return matrix^
-
-
 def _wrapped(
     doc: JsonDocument, node: Int, library: String, skip: List[String]
 ) raises -> String:
@@ -3008,13 +3024,7 @@ def _wrapped(
     the same names, such as a material's `textures`."""
     var writer = JsonWriter()
     writer.begin_object()
-    writer.key("metadata")
-    writer.begin_object()
-    writer.key("version")
-    writer.number(FORMAT_VERSION)
-    writer.key("type")
-    writer.string("Object")
-    writer.end_object()
+    writer.metadata(FORMAT_VERSION, "Object")
     writer.key(library)
     writer.begin_array()
     writer.begin_object()

@@ -152,12 +152,54 @@ class WitnessFormatPhysicalControls(unittest.TestCase):
                 cleanup._witness_format_bindings(self.root)
 
     def test_leaf_binding_does_not_acquire_whole_repository_context(self):
-        with patch.object(cleanup.guard, 'production_mojo_paths', side_effect=AssertionError('extra census')):
+        # Observe the real current checker without invalidating its code seal.
+        census = cleanup.guard.production_mojo_paths
+        calls = []
+        def reject_census(frame, event, value):
+            if event == 'call' and frame.f_code is census.__code__:
+                calls.append(True)
+                raise AssertionError('extra census')
+        previous = sys.getprofile()
+        try:
+            sys.setprofile(reject_census)
+            with self.assertRaisesRegex(AssertionError, 'extra census'):
+                list(census(self.root))
+            self.assertEqual(calls, [True])
+            # Python disables a profile callback after it raises. Rearm it for
+            # the actual positive; any real census call must still fail.
+            sys.setprofile(reject_census)
             bindings = cleanup._witness_format_bindings(self.root)
+            self.assertEqual(calls, [True])
+        finally:
+            sys.setprofile(previous)
         self.assertEqual(set(bindings), set(self.paths))
         self.assertNotIn('math/scaled_products.mojo', bindings)
+        with patch.object(cleanup.guard, 'production_mojo_paths', side_effect=AssertionError('extra census')):
+            with self.assertRaisesRegex(cleanup.ContractError, 'executing function changed'):
+                cleanup._witness_format_bindings(self.root)
+        # The original pre-typed leaf still accepts the original monkeypatch
+        # control, proving its no-census behavior independently of this edge.
+        historical = fixtures.copy_historical_boundary_root(self, ROOT)
+        with patch.object(cleanup.guard, 'production_mojo_paths', side_effect=AssertionError('extra census')):
+            old_bindings = cleanup._witness_format_bindings(historical)
+        self.assertEqual(set(old_bindings), set(self.paths))
+        self.assertNotIn('math/scaled_products.mojo', old_bindings)
+        for root, actual in ((self.root, bindings), (historical, old_bindings)):
+            self.assertEqual(actual, {name: cleanup.sha((root/name).read_bytes())
+                                      for name in self.paths})
 
     def test_alias_paths_and_native_module_shadows_refuse(self):
+        current = self.root
+        try:
+            for cohort in ('pr760', 'common758'):
+                self.root = (current if cohort == 'pr760' else
+                             fixtures.copy_common758_boundary_root(self, ROOT))
+                with self.subTest(cohort=cohort):
+                    self._check_alias_paths_and_native_module_shadows_refuse(cohort)
+        finally:
+            self.root = current
+
+    def _check_alias_paths_and_native_module_shadows_refuse(self, cohort):
         for name in (witness.SOURCE_PATHS[0], *witness.BOUND_INPUTS):
             target = self.root/name
             old = target.read_bytes()
@@ -175,10 +217,23 @@ class WitnessFormatPhysicalControls(unittest.TestCase):
             with self.assertRaises(ValueError): cleanup._witness_format_bindings(alias)
         finally: alias.unlink()
         shadow = self.root/'tests/extensions/carla/lane_refinement.mojo'
+        created = []
+        parent = shadow.parent
+        while not parent.exists():
+            created.append(parent)
+            parent = parent.parent
         shadow.parent.mkdir(parents=True)
         shadow.write_text('# unreviewed entry-local shadow\n')
-        with self.assertRaisesRegex(ValueError, 'resolver'):
-            cleanup.verify(self.root)
+        try:
+            reason = ('PR760 exact dependency closure changed' if cohort == 'pr760'
+                      else 'resolver')
+            with self.assertRaisesRegex(ValueError, reason):
+                cleanup.verify(self.root)
+        finally:
+            shadow.unlink()
+            for parent in created:
+                parent.rmdir()
+        cleanup.verify(self.root, exact=True)
 
     def test_each_bound_input_is_reread_after_consumption(self):
         read = Path.read_bytes
@@ -198,6 +253,17 @@ class WitnessFormatPhysicalControls(unittest.TestCase):
             self.assertEqual(read(target), read(ROOT/name))
 
     def test_full_gate_final_reread_catches_late_proof_input_mutation(self):
+        current = self.root
+        try:
+            for cohort in ('pr760', 'common758'):
+                self.root = (current if cohort == 'pr760' else
+                             fixtures.copy_common758_boundary_root(self, ROOT))
+                with self.subTest(cohort=cohort):
+                    self._check_full_gate_late_proof_input_mutation(cohort)
+        finally:
+            self.root = current
+
+    def _check_full_gate_late_proof_input_mutation(self, cohort):
         original = cleanup.inventory
         target = self.root/next(iter(witness.BOUND_INPUTS))
         old = target.read_bytes()
@@ -207,7 +273,11 @@ class WitnessFormatPhysicalControls(unittest.TestCase):
             target.write_bytes(old+b'\n# after witness admission\n')
             return value
         try:
-            with patch.object(cleanup, 'inventory', late), self.assertRaisesRegex(ValueError, 'input changed during verification'):
+            # PR760 consumes inventory within its image admission; the same late
+            # mutation meets its physical reread before the outer final sweep.
+            reason = ('PR760 source changed after consumption: ' + target.relative_to(self.root).as_posix()
+                      if cohort == 'pr760' else 'input changed during verification')
+            with patch.object(cleanup, 'inventory', late), self.assertRaisesRegex(ValueError, reason):
                 cleanup.verify(self.root)
         finally: target.write_bytes(old)
 

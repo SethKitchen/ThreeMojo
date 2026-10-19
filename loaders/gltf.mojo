@@ -166,9 +166,20 @@ See `docs/wiki/Norm-consumers.md` for the changed operations, retained
 limits, and explicit zero and nonfinite rules.
 """
 
-from core.binary import little_endian_u32
-from math.norm import length3, normalized3, _ordinary_squared
+from std.math import isfinite
 
+from core.ordinal import index_in_count
+
+from core.extent import require_closed_count
+from core.ordinal import (
+    ordinal_valid,
+    require_index_in_count,
+    require_valid,
+    require_non_negative,
+    require_positive,
+)
+
+from core.binary import copy_bytes, little_endian_u16, little_endian_u32
 from loaders.gltf_layout import AccessorLayout, check_buffer_range
 from animation.animation_clip import AnimationClip
 from animation.keyframe_track import (
@@ -210,15 +221,17 @@ from core.buffer_geometry import (
     BufferGeometry,
 )
 from core.geometry_store import GeometryId
-from core.object3d import NO_PARENT, NodeId, Object3D
+from core.object3d import NO_PARENT, NodeId, Object3D, _place_from_column_major
 from core.scene import Scene
 from core.user_data import UserData, user_data_of
 from lights.light import directional_light, point_light, spot_light
 from loaders.draco import (
     DRACO_TRIANGULAR_MESH,
     DracoGeometry,
-    decode_draco,
+    _decode_draco_owned,
 )
+from loaders.bytes import base64_digit
+from loaders.file_path import path_directory
 from loaders.draco_attributes import DracoDataType
 from loaders.meshopt import (
     FILTER_NONE,
@@ -234,6 +247,7 @@ from loaders.json import (
     STRING,
     JsonDocument,
     parse_json,
+    present,
 )
 from materials.material import (
     BASIC,
@@ -295,7 +309,7 @@ from render.texture import (
 )
 from loaders.image_batch import TextureDecodeSource, decode_textures
 from render.texture_store import TextureId
-from std.math import inf, isfinite, pi, sqrt
+from std.math import inf, pi, sqrt
 from std.memory import bitcast
 from std.pathlib import Path
 from units.si import Angle, Duration, Length, METER, NANOMETER, RADIAN, SECOND
@@ -316,6 +330,64 @@ comptime COMPONENT_SHORT = 5122
 comptime COMPONENT_UNSIGNED_SHORT = 5123
 comptime COMPONENT_UNSIGNED_INT = 5125
 comptime COMPONENT_FLOAT = 5126
+
+
+def require_sparse_indices(index_type: Int) raises:
+    """Refuse a glTF sparse index type that is not an unsigned integer.
+
+    Nothing. The call returns when the type is an unsigned byte, an
+    unsigned short, or an unsigned int.
+
+    Args:
+        index_type: The accessor component type.
+
+    Raises:
+        Error: If the type is not one of those three.
+    """
+    if (
+        index_type != COMPONENT_UNSIGNED_BYTE
+        and index_type != COMPONENT_UNSIGNED_SHORT
+        and index_type != COMPONENT_UNSIGNED_INT
+    ):
+        raise Error("glTF: sparse indices must be unsigned integers")
+
+
+def require_rising_sparse_index(element: Int, last: Int, count: Int) raises:
+    """Refuse a glTF sparse index that does not rise, or that falls outside
+    the accessor.
+
+    Nothing. The call returns when the index is above `last` and below
+    `count`.
+
+    Args:
+        element: The index just read.
+        last: The previous index, or -1 before the first.
+        count: How many elements the accessor has.
+
+    Raises:
+        Error: If the index is at or below `last`, or at or past `count`.
+    """
+    if element <= last or element >= count:
+        raise Error(
+            "glTF: sparse indices must rise and stay inside the accessor"
+        )
+
+
+def require_gltf_mesh(mesh: Int, count: Int) raises:
+    """Refuse a glTF node mesh that the file does not have.
+
+    Nothing. The call returns when the index names a mesh.
+
+    Args:
+        mesh: The mesh index the node names.
+        count: How many meshes the file has.
+
+    Raises:
+        Error: If the index is past the last mesh.
+    """
+    if mesh >= count:
+        raise Error("glTF: a node names a mesh that is not there")
+
 
 # The primitive modes that are read: points, the three kinds of line, and
 # triangles. glTF names them by their GL constants.
@@ -461,13 +533,27 @@ struct GltfCameraKind(Equatable, ImplicitlyCopyable, Writable):
 
     def is_valid(self) -> Bool:
         """Return True if this is `GLTF_PERSPECTIVE` or `GLTF_ORTHOGRAPHIC`."""
-        return self == GLTF_PERSPECTIVE or self == GLTF_ORTHOGRAPHIC
+        return ordinal_valid(self.value, GLTF_ORTHOGRAPHIC.value)
 
 
 # A camera of glTF's `perspective` type, three.js's `PerspectiveCamera`.
 comptime GLTF_PERSPECTIVE = GltfCameraKind(0)
 # A camera of glTF's `orthographic` type, three.js's `OrthographicCamera`.
 comptime GLTF_ORTHOGRAPHIC = GltfCameraKind(1)
+
+
+def require_gltf_camera(kind: GltfCameraKind) raises:
+    """Refuse a glTF camera kind that is not known.
+
+    Nothing. The call returns when the kind is named.
+
+    Args:
+        kind: The camera kind.
+
+    Raises:
+        Error: If the kind is not known.
+    """
+    require_valid(kind.is_valid(), "glTF: a camera kind that is not known")
 
 
 struct GltfCamera(Copyable, Movable):
@@ -536,8 +622,7 @@ struct GltfCamera(Copyable, Movable):
             Error: If the kind is not one there is, or it is not
                 `GLTF_PERSPECTIVE`, or no perspective camera is held.
         """
-        if not self.kind.is_valid():
-            raise Error("glTF: a camera kind that is not known")
+        require_gltf_camera(self.kind)
         if self.kind != GLTF_PERSPECTIVE:
             raise Error("glTF: the camera is not a perspective camera")
         if not Bool(self._perspective):
@@ -554,8 +639,7 @@ struct GltfCamera(Copyable, Movable):
             Error: If the kind is not one there is, or it is not
                 `GLTF_ORTHOGRAPHIC`, or no orthographic camera is held.
         """
-        if not self.kind.is_valid():
-            raise Error("glTF: a camera kind that is not known")
+        require_gltf_camera(self.kind)
         if self.kind != GLTF_ORTHOGRAPHIC:
             raise Error("glTF: the camera is not an orthographic camera")
         if not Bool(self._orthographic):
@@ -722,7 +806,7 @@ struct GltfModel(Copyable, Movable):
         Raises:
             Error: If the index names no mesh.
         """
-        if mesh < 0 or mesh >= len(self.first_primitives):
+        if not index_in_count(mesh, len(self.first_primitives)):
             raise Error("glTF: no mesh at index " + String(mesh))
         var found = List[GeometryId]()
         for offset in range(self.primitive_counts[mesh]):
@@ -791,8 +875,7 @@ def read_gltf(
             raises.
     """
     var bytes = Path(path).read_bytes()
-    # Up to and including the last slash, or nothing for a bare name.
-    var directory = _slice(path, 0, path.rfind("/") + 1)
+    var directory = path_directory(path)
     if len(bytes) >= 4 and little_endian_u32(bytes, 0) == GLB_MAGIC:
         var parts = split_glb(bytes)
         return load_gltf(parts[0], parts[1], directory, scene, assets, workers)
@@ -841,9 +924,7 @@ def split_glb(bytes: List[UInt8]) raises -> Tuple[String, List[UInt8]]:
         var start = at + GLB_CHUNK_HEADER_BYTES
         if start + length > len(bytes):
             raise Error("glTF: a chunk runs past the file")
-        var chunk = List[UInt8]()
-        for index in range(start, start + length):
-            chunk.append(bytes[index])
+        var chunk = copy_bytes(bytes, start, length)
         if kind == GLB_JSON_CHUNK:
             if seen_json:
                 raise Error("glTF: two JSON chunks")
@@ -966,8 +1047,9 @@ def select_variant(
             if model.variants[slot] == name.value():
                 which = slot
     for ref object in model.variant_objects:
-        if not object.kind.is_valid():
-            raise Error("glTF: an object kind that is not known")
+        require_valid(
+            object.kind.is_valid(), "glTF: an object kind that is not known"
+        )
         var material = object.original
         if which >= 0:
             material = object.materials[which]
@@ -983,10 +1065,11 @@ def select_variant(
             count = len(scene.lines)
         else:
             count = len(scene.points)
-        if index < 0 or index >= count:
-            raise Error(
-                "glTF: the scene no longer has an object that a variant maps"
-            )
+        require_index_in_count(
+            index,
+            count,
+            "glTF: the scene no longer has an object that a variant maps",
+        )
         if object.kind == GLTF_MESH:
             scene.meshes[index].material = material
         elif object.kind == GLTF_SKINNED_MESH:
@@ -1036,12 +1119,12 @@ def is_supported_extension(name: String) -> Bool:
 
 def _check_asset(document: JsonDocument, root: Int) raises:
     """Refuse a document that is not glTF 2.x."""
-    var asset = document.get(root, "asset")
-    if asset == NO_NODE or document.kind(asset) != OBJECT:
-        raise Error("glTF: no asset object")
-    var version = document.get(asset, "version")
-    if version == NO_NODE or document.kind(version) != STRING:
-        raise Error("glTF: no asset version")
+    var asset = document.required_kind(
+        root, "asset", OBJECT, "glTF: no asset object"
+    )
+    var version = document.required_kind(
+        asset, "version", STRING, "glTF: no asset version"
+    )
     if not document.string(version).startswith("2."):
         raise Error("glTF: only version 2 is read")
 
@@ -1066,22 +1149,17 @@ def decode_base64(text: String) raises -> List[UInt8]:
     var ended = False
     for byte in text.as_bytes():
         var value = Int(byte)
-        var digit: Int
-        if value >= 65 and value <= 90:
-            digit = value - 65
-        elif value >= 97 and value <= 122:
-            digit = value - 71
-        elif value >= 48 and value <= 57:
-            digit = value + 4
-        elif value == 43:
-            digit = 62
-        elif value == 47:
-            digit = 63
-        elif value == 61:
-            ended = True
-            continue
-        else:
-            raise Error("base64: a character outside the alphabet")
+        var digit = base64_digit(value)
+        if digit < 0:
+            if value == 43:
+                digit = 62
+            elif value == 47:
+                digit = 63
+            elif value == 61:
+                ended = True
+                continue
+            else:
+                raise Error("base64: a character outside the alphabet")
         if ended:
             raise Error("base64: a digit after the padding")
         held = (held << 6) | digit
@@ -1096,8 +1174,7 @@ def decode_base64(text: String) raises -> List[UInt8]:
 def _data_uri_bytes(uri: String) raises -> List[UInt8]:
     """Return the bytes of a `data:` URI, which must be base64."""
     var comma = uri.find(",")
-    if comma < 0:
-        raise Error("glTF: a data URI without a comma")
+    require_non_negative(comma, "glTF: a data URI without a comma")
     var header = _slice(uri, 0, comma)
     if not header.endswith(";base64"):
         raise Error("glTF: only a base64 data URI is read")
@@ -1247,10 +1324,7 @@ struct _Loader(Movable):
 
     def integer(self, node: Int, key: String, default: Int) raises -> Int:
         """Return an object's whole number under `key`, or `default`."""
-        var found = self.document.get(node, key)
-        if found == NO_NODE:
-            return default
-        return self.document.integer(found)
+        return self.document.optional_integer(node, key, default)
 
     def required_integer(self, node: Int, key: String) raises -> Int:
         """Return an object's whole number under `key`, which must be there."""
@@ -1263,13 +1337,7 @@ struct _Loader(Movable):
         self, node: Int, key: String, default: Float32
     ) raises -> Float32:
         """Return an object's number under `key`, or `default`."""
-        var found = self.document.get(node, key)
-        if found == NO_NODE:
-            return default
-        var value = Float32(self.document.number(found))
-        if not isfinite(value):
-            raise Error("glTF: " + key + " must be finite")
-        return value
+        return self.document.optional_finite(node, key, default, "glTF")
 
     def required_number(self, node: Int, key: String) raises -> Float32:
         """Return an object's number under `key`, which must be there."""
@@ -1311,17 +1379,14 @@ struct _Loader(Movable):
 
     def text(self, node: Int, key: String) raises -> String:
         """Return an object's string under `key`, or empty."""
-        var found = self.document.get(node, key)
-        if found == NO_NODE:
-            return String()
-        return self.document.string(found)
+        return self.document.optional_string(node, key, String())
 
     def extras(self, node: Int) raises -> UserData:
         """Return an object's `extras` as user data, three.js's
         `assignExtrasToUserData`: empty when there are none, and when they
         are not an object, which three.js ignores."""
         var found = self.document.get(node, "extras")
-        if found == NO_NODE or self.document.kind(found) != OBJECT:
+        if not self.document.has_kind(found, OBJECT):
             return UserData()
         return user_data_of(self.document, found)
 
@@ -1339,19 +1404,16 @@ struct _Loader(Movable):
 
     def flag(self, node: Int, key: String) raises -> Bool:
         """Return an object's boolean under `key`, or False."""
-        var found = self.document.get(node, key)
-        if found == NO_NODE:
-            return False
-        return self.document.boolean(found)
+        return self.document.optional_boolean(node, key, False)
 
     def extension(self, node: Int, name: String) raises -> Int:
         """Return the object an extension keeps under an object's
         `extensions`, or `NO_NODE` when it keeps none there."""
-        var all = self.document.get(node, "extensions")
+        var all = self.document.optional_kind(
+            node, "extensions", OBJECT, "glTF: extensions must be an object"
+        )
         if all == NO_NODE:
             return NO_NODE
-        if self.document.kind(all) != OBJECT:
-            raise Error("glTF: extensions must be an object")
         var found = self.document.get(all, name)
         if found != NO_NODE and self.document.kind(found) != OBJECT:
             raise Error("glTF: " + name + " must be an object")
@@ -1457,9 +1519,7 @@ struct _Loader(Movable):
             var filter = FILTER_NONE
             if self.document.has(found, "filter"):
                 filter = meshopt_filter(self.text(found, "filter"))
-            var source = List[UInt8](capacity=length)
-            for at in range(offset, offset + length):
-                source.append(self.buffers[buffer][at])
+            var source = copy_bytes(self.buffers[buffer], offset, length)
             var decoded = decode_gltf_buffer(
                 count, stride, source, mode, filter
             )
@@ -1477,8 +1537,11 @@ struct _Loader(Movable):
             # Checked against the decoded bytes when they were decoded.
             return (self.decoded_views[index], 0, length, stride)
         var buffer = self.required_integer(view, "buffer")
-        if buffer < 0 or buffer >= len(self.buffers):
-            raise Error("glTF: a buffer view names a buffer that is not there")
+        require_index_in_count(
+            buffer,
+            len(self.buffers),
+            "glTF: a buffer view names a buffer that is not there",
+        )
         if self.placeholders[buffer]:
             raise Error(
                 "glTF: only the first buffer of a .glb can have no URI, and"
@@ -1617,12 +1680,7 @@ struct _Loader(Movable):
         ):
             raise Error("glTF: sparse needs indices and values objects")
         var index_type = self.required_integer(indices, "componentType")
-        if (
-            index_type != COMPONENT_UNSIGNED_BYTE
-            and index_type != COMPONENT_UNSIGNED_SHORT
-            and index_type != COMPONENT_UNSIGNED_INT
-        ):
-            raise Error("glTF: sparse indices must be unsigned integers")
+        require_sparse_indices(index_type)
         var index_size = _component_size(index_type)
         var found = self.sparse_view(indices, changed * index_size, index_size)
         var occupied_size = offsets[width - 1] + _component_size(component)
@@ -1643,11 +1701,7 @@ struct _Loader(Movable):
             )
             # The specification has them strictly rising, which also keeps
             # each one inside the accessor once the last is.
-            if element <= last or element >= count:
-                raise Error(
-                    "glTF: sparse indices must rise and stay inside the"
-                    " accessor"
-                )
+            require_rising_sparse_index(element, last, count)
             last = element
             for lane in range(width):  # pragma: no branch
                 out[element * width + lane] = _read_component[dtype](
@@ -1796,10 +1850,11 @@ struct _Loader(Movable):
         if uri != "":
             return _uri_bytes(uri, self.directory)
         var view_index = self.integer(image, "bufferView", -1)
-        if view_index < 0:
-            raise Error("glTF: an image needs a uri or a bufferView")
+        require_non_negative(
+            view_index, "glTF: an image needs a uri or a bufferView"
+        )
         var view = self.view_bytes(view_index)
-        return List[UInt8](self.buffers[view[0]][view[1] : view[1] + view[2]])
+        return copy_bytes(self.buffers[view[0]], view[1], view[2])
 
     def texture(
         mut self,
@@ -1895,14 +1950,19 @@ struct _Loader(Movable):
         if self.document.kind(found) != OBJECT:
             raise Error("glTF: " + key + " must be an object")
         var set = self.texture_set(found)
-        if set < 0 or set > 1:
-            raise Error(
+        require_closed_count(
+            set,
+            0,
+            1,
+            (
                 "glTF: a texture reads only the first two sets of texture"
                 " coordinates"
-            )
+            ),
+        )
         var index = self.required_integer(found, "index")
-        if index < 0:
-            raise Error("glTF: a texture index must not be negative")
+        require_non_negative(
+            index, "glTF: a texture index must not be negative"
+        )
         return index
 
     def map_of(
@@ -2435,11 +2495,14 @@ struct _Loader(Movable):
                 var variant = self.document.integer(
                     self.document.at(variants, at)
                 )
-                if variant < 0 or variant >= len(materials):
-                    raise Error(
+                require_index_in_count(
+                    variant,
+                    len(materials),
+                    (
                         "glTF: a mapping names a material variant that is"
                         " not there"
-                    )
+                    ),
+                )
                 materials[variant] = chosen
         self.model.variant_objects.append(
             GltfVariantObject(kind, index, original, materials^)
@@ -2452,7 +2515,7 @@ struct _Loader(Movable):
         for index in range(self.count("meshes")):
             var mesh = self.entry("meshes", index)
             var primitives = self.document.get(mesh, "primitives")
-            if primitives == NO_NODE or self.document.kind(primitives) != ARRAY:
+            if not self.document.has_kind(primitives, ARRAY):
                 raise Error("glTF: a mesh needs a primitives array")
             self.model.first_primitives.append(len(self.model.geometries))
             var count = self.document.length(primitives)
@@ -2500,18 +2563,15 @@ struct _Loader(Movable):
             return None
         var view = self.view_bytes(self.required_integer(found, "bufferView"))
         var ids = self.document.get(found, "attributes")
-        if ids == NO_NODE or self.document.kind(ids) != OBJECT:
+        if not self.document.has_kind(ids, OBJECT):
             raise Error("glTF: KHR_draco_mesh_compression needs attributes")
         var names = List[String]()
         var uids = List[Int]()
         for slot in range(self.document.length(ids)):
             names.append(self.document.key(ids, slot))
             uids.append(self.document.integer(self.document.at(ids, slot)))
-        var data = List[UInt8](capacity=view[2])
-        ref bytes = self.buffers[view[0]]
-        for at in range(view[1], view[1] + view[2]):
-            data.append(bytes[at])
-        return _DracoPrimitive(decode_draco(data), names^, uids^)
+        var data = copy_bytes(self.buffers[view[0]], view[1], view[2])
+        return _DracoPrimitive(_decode_draco_owned(data^), names^, uids^)
 
     def attribute_floats(
         mut self,
@@ -2554,11 +2614,10 @@ struct _Loader(Movable):
             for slot in range(len(found.names)):
                 if found.names[slot] == name:
                     var index = found.geometry.unique_attribute(found.ids[slot])
-                    if index < 0:
-                        raise Error(
-                            "glTF: a Draco attribute id is not in the Draco"
-                            " data"
-                        )
+                    require_non_negative(
+                        index,
+                        "glTF: a Draco attribute id is not in the Draco data",
+                    )
                     width = found.geometry.attributes[index].components
                     stored = found.geometry.integer_values(
                         index, _draco_type_of(component)
@@ -2595,8 +2654,9 @@ struct _Loader(Movable):
         var normalized = self.flag(accessor, "normalized") and not raw
         ref geometry = draco.geometry
         var index = geometry.unique_attribute(draco.ids[slot])
-        if index < 0:
-            raise Error("glTF: a Draco attribute id is not in the Draco data")
+        require_non_negative(
+            index, "glTF: a Draco attribute id is not in the Draco data"
+        )
         var width = geometry.attributes[index].components
         if component == COMPONENT_FLOAT:
             return (geometry.float32_values(index), width)
@@ -2612,10 +2672,10 @@ struct _Loader(Movable):
         `morphTargetDictionary`, or none when it holds no such array."""
         var names = List[String]()
         var extras = self.document.get(mesh, "extras")
-        if extras == NO_NODE or self.document.kind(extras) != OBJECT:
+        if not self.document.has_kind(extras, OBJECT):
             return names^
         var found = self.document.get(extras, "targetNames")
-        if found == NO_NODE or self.document.kind(found) != ARRAY:
+        if not self.document.has_kind(found, ARRAY):
             return names^
         for slot in range(self.document.length(found)):
             names.append(self.document.string(self.document.at(found, slot)))
@@ -2628,12 +2688,11 @@ struct _Loader(Movable):
         with indices is read out in index order, since an index here is a
         triangle index."""
         var attributes = self.document.get(primitive, "attributes")
-        if attributes == NO_NODE or self.document.kind(attributes) != OBJECT:
+        if not self.document.has_kind(attributes, OBJECT):
             raise Error("glTF: a primitive needs attributes")
         var geometry = BufferGeometry()
         var position = self.integer(attributes, "POSITION", -1)
-        if position < 0:
-            raise Error("glTF: a primitive needs a POSITION")
+        require_non_negative(position, "glTF: a primitive needs a POSITION")
         var draco = self.draco_of(primitive)
         var positions = self.vertex_attribute("POSITION", position, draco)
         if positions.item_size != 3:
@@ -2834,8 +2893,11 @@ struct _Loader(Movable):
     ) raises:
         """Add one node under its parent, then its meshes and its camera,
         then its children. A skinned node's meshes wait for its joints."""
-        if index < 0 or index >= len(self.model.nodes):
-            raise Error("glTF: a node index that is not there")
+        require_index_in_count(
+            index,
+            len(self.model.nodes),
+            "glTF: a node index that is not there",
+        )
         # A hierarchy that loops reaches a node twice before it can go
         # deeper than there are nodes, so this is the one check needed.
         if self.model.nodes[index] != NO_PARENT:
@@ -2846,7 +2908,7 @@ struct _Loader(Movable):
         placed.user_data = self.node_user_data(node, index)
         var matrix = self.numbers(node, "matrix", 16)
         if len(matrix) == 16:
-            _apply_matrix(placed, matrix)
+            _place_from_column_major(placed, matrix, _FLAT_NODE_MATRIX)
         else:
             var translation = self.numbers(node, "translation", 3)
             if len(translation) == 3:
@@ -2949,8 +3011,7 @@ struct _Loader(Movable):
         node, a `Line` per primitive of lines and a `Points` per primitive
         of points, as three.js's `GLTFLoader.loadMesh` builds them."""
         # `place` asks only for a mesh the node named, zero or more.
-        if mesh >= len(self.model.first_primitives):
-            raise Error("glTF: a node names a mesh that is not there")
+        require_gltf_mesh(mesh, len(self.model.first_primitives))
         var weights = self.morph_weights(self.entry("nodes", index), mesh)
         var entry = self.entry("meshes", mesh)
         var primitives = self.document.get(entry, "primitives")
@@ -3039,6 +3100,21 @@ struct _Loader(Movable):
             )
         )
 
+    def _drawn_primitive(
+        self, primitives: Int, mesh: Int, slot: Int, refusal: String
+    ) raises -> Tuple[Int, GeometryId]:
+        """Return one primitive and its geometry when the primitive is
+        triangles.
+
+        An instanced node and a skinned node both ask this. Each one
+        passes the refusal that names its own kind.
+        """
+        var primitive = self.document.at(primitives, slot)
+        var at = self.model.first_primitives[mesh] + slot
+        if self.primitive_modes[at] != MODE_TRIANGLES:
+            raise Error(refusal)
+        return (primitive, self.model.geometries[at])
+
     def draw_instanced(
         mut self,
         mesh: Int,
@@ -3060,7 +3136,7 @@ struct _Loader(Movable):
         node draws plain meshes, as three.js draws them.
         """
         var attributes = self.document.get(instancing, "attributes")
-        if attributes == NO_NODE or self.document.kind(attributes) != OBJECT:
+        if not self.document.has_kind(attributes, OBJECT):
             raise Error("glTF: " + GPU_INSTANCING + " needs attributes")
         var count = -1
         var moves = List[Float32]()
@@ -3112,20 +3188,20 @@ struct _Loader(Movable):
                 )
             placings.append(placed.local_matrix())
         # `place` asks only for a mesh the node named, zero or more.
-        if mesh >= len(self.model.first_primitives):
-            raise Error("glTF: a node names a mesh that is not there")
+        require_gltf_mesh(mesh, len(self.model.first_primitives))
         var primitives = self.document.get(
             self.entry("meshes", mesh), "primitives"
         )
         for slot in range(self.model.primitive_counts[mesh]):
-            var primitive = self.document.at(primitives, slot)
-            var at = self.model.first_primitives[mesh] + slot
-            if self.primitive_modes[at] != MODE_TRIANGLES:
-                raise Error(
+            var primitive, geometry = self._drawn_primitive(
+                primitives,
+                mesh,
+                slot,
+                (
                     "glTF: an instanced node draws triangles only: an"
                     " instanced line or points is not ported"
-                )
-            var geometry = self.model.geometries[at]
+                ),
+            )
             var tinted = assets.geometries.get(geometry).has_attribute(
                 String(COLOR)
             )
@@ -3170,12 +3246,16 @@ struct _Loader(Movable):
         shines down the node's -z axis: toward a target node one meter down
         it, as three.js adds its `target` to the light.
         """
-        var root = self.extension(self.document.root(), LIGHTS_PUNCTUAL)
-        if root == NO_NODE:
-            raise Error("glTF: a node names a light and the file has none")
+        var root = present(
+            self.extension(self.document.root(), LIGHTS_PUNCTUAL),
+            "glTF: a node names a light and the file has none",
+        )
         var lights = self.array_of(root, "lights")
-        if index < 0 or index >= self.document.length(lights):
-            raise Error("glTF: a node names a light that is not there")
+        require_index_in_count(
+            index,
+            self.document.length(lights),
+            "glTF: a node names a light that is not there",
+        )
         var entry = self.object_at(lights, index)
         var color = Color(255, 255, 255)
         var hue = self.numbers(entry, "color", 3)
@@ -3202,7 +3282,7 @@ struct _Loader(Movable):
             scene.add_light(directional_light(color, node, intensity, target))
             return
         var cone = self.document.get(entry, "spot")
-        if cone == NO_NODE or self.document.kind(cone) != OBJECT:
+        if not self.document.has_kind(cone, OBJECT):
             raise Error("glTF: a spot light needs a spot object")
         var inner = self.number(cone, "innerConeAngle", 0)
         var outer = self.number(cone, "outerConeAngle", DEFAULT_OUTER_CONE)
@@ -3239,8 +3319,11 @@ struct _Loader(Movable):
         var bones = List[Bone]()
         for slot in range(count):
             var joint = self.document.integer(self.document.at(joints, slot))
-            if joint < 0 or joint >= len(self.model.nodes):
-                raise Error("glTF: a skin names a joint that is not there")
+            require_index_in_count(
+                joint,
+                len(self.model.nodes),
+                "glTF: a skin names a joint that is not there",
+            )
             var id = self.model.nodes[joint]
             if id == NO_PARENT:
                 raise Error(
@@ -3264,22 +3347,22 @@ struct _Loader(Movable):
         at the identity as three.js's `GLTFLoader` binds it."""
         var entry = self.entry("nodes", index)
         var mesh = self.required_integer(entry, "mesh")
-        if mesh >= len(self.model.first_primitives):
-            raise Error("glTF: a node names a mesh that is not there")
+        require_gltf_mesh(mesh, len(self.model.first_primitives))
         var skeleton = self.skeleton_of(self.required_integer(entry, "skin"))
         var weights = self.morph_weights(entry, mesh)
         var primitives = self.document.get(
             self.entry("meshes", mesh), "primitives"
         )
         for slot in range(self.model.primitive_counts[mesh]):
-            var primitive = self.document.at(primitives, slot)
-            var at = self.model.first_primitives[mesh] + slot
-            if self.primitive_modes[at] != MODE_TRIANGLES:
-                raise Error(
+            var primitive, geometry = self._drawn_primitive(
+                primitives,
+                mesh,
+                slot,
+                (
                     "glTF: a skinned node draws triangles only: a skinned"
                     " line or points is not ported"
-                )
-            var geometry = self.model.geometries[at]
+                ),
+            )
             ref shape = assets.geometries.get(geometry)
             var bones = shape.has_attribute(String(SKIN_INDEX))
             var shares = shape.has_attribute(String(SKIN_WEIGHT))
@@ -3317,7 +3400,7 @@ struct _Loader(Movable):
         var kind = self.text(entry, "type")
         if kind == "perspective":
             var lens = self.document.get(entry, "perspective")
-            if lens == NO_NODE or self.document.kind(lens) != OBJECT:
+            if not self.document.has_kind(lens, OBJECT):
                 raise Error("glTF: a perspective camera needs a perspective")
             var camera = PerspectiveCamera(
                 Angle(self.required_number(lens, "yfov"), RADIAN),
@@ -3329,7 +3412,7 @@ struct _Loader(Movable):
             return GltfCamera(index, name, node, camera)
         if kind == "orthographic":
             var box = self.document.get(entry, "orthographic")
-            if box == NO_NODE or self.document.kind(box) != OBJECT:
+            if not self.document.has_kind(box, OBJECT):
                 raise Error(
                     "glTF: an orthographic camera needs an orthographic"
                 )
@@ -3360,12 +3443,13 @@ struct _Loader(Movable):
             for slot in range(self.document.length(channels)):
                 var channel = self.object_at(channels, slot)
                 var sampler = self.required_integer(channel, "sampler")
-                if sampler < 0 or sampler >= self.document.length(samplers):
-                    raise Error(
-                        "glTF: a channel names a sampler that is not there"
-                    )
+                require_index_in_count(
+                    sampler,
+                    self.document.length(samplers),
+                    "glTF: a channel names a sampler that is not there",
+                )
                 var target = self.document.get(channel, "target")
-                if target == NO_NODE or self.document.kind(target) != OBJECT:
+                if not self.document.has_kind(target, OBJECT):
                     raise Error("glTF: a channel needs a target object")
                 self.channel_tracks(
                     self.object_at(samplers, sampler), target, tracks
@@ -3400,8 +3484,9 @@ struct _Loader(Movable):
         )
         if input[1] != 1:
             raise Error("glTF: a sampler's input must be a SCALAR")
-        if len(input[0]) == 0:
-            raise Error("glTF: a sampler needs at least one key")
+        require_positive(
+            len(input[0]), "glTF: a sampler needs at least one key"
+        )
         var times = List[Duration]()
         for key in range(len(input[0])):  # pragma: no branch
             times.append(Duration(input[0][key], SECOND))
@@ -3645,9 +3730,9 @@ def _read_component[
         if raw >= 128:
             raw -= 256
     elif component == COMPONENT_UNSIGNED_SHORT:
-        raw = Int(bytes[at]) | (Int(bytes[at + 1]) << 8)
+        raw = little_endian_u16(bytes, at)
     elif component == COMPONENT_SHORT:
-        raw = Int(bytes[at]) | (Int(bytes[at + 1]) << 8)
+        raw = little_endian_u16(bytes, at)
         if raw >= 32768:
             raw -= 65536
     else:
@@ -3820,28 +3905,5 @@ def decode_image(bytes: List[UInt8]) raises -> DecodedImage:
         )
 
 
-def _apply_matrix(mut node: Object3D, matrix: List[Float32]) raises:
-    """Set a node from a column-major matrix, decomposed as three.js's
-    `Matrix4.decompose` decomposes it: the scale is each column's
-    length, negated all three when the determinant is negative, and the
-    rotation is what is left once the columns are divided by it."""
-    var m = Matrix4()
-    for index in range(16):  # pragma: no branch
-        m.elements[index] = matrix[index]
-    var sx = _column_length(matrix, 0)
-    var sy = _column_length(matrix, 4)
-    var sz = _column_length(matrix, 8)
-    if sx == 0 or sy == 0 or sz == 0:
-        raise Error("glTF" + ": a node matrix that flattens an axis")
-    var position = Vector3(0, 0, 0)
-    var rotation = Quaternion.identity()
-    var scale = Vector3(0, 0, 0)
-    m.decompose(position, rotation, scale)
-    node.set_position(position.x, position.y, position.z)
-    node.set_quaternion(rotation)
-    node.set_scale(scale.x, scale.y, scale.z)
-
-
-def _column_length(matrix: List[Float32], start: Int) -> Float32:
-    """Return the length of a column's first three entries."""
-    return length3(matrix[start], matrix[start + 1], matrix[start + 2])
+# The error when a glTF node matrix has an axis of length zero.
+comptime _FLAT_NODE_MATRIX = "glTF: a node matrix that flattens an axis"

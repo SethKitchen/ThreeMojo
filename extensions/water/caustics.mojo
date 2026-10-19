@@ -12,9 +12,13 @@ The shader reads the texture through `CausticTexels`, so the same
 arithmetic runs on a `CausticField` and on a copy in device memory.
 """
 
+from core.ordinal import require_positive
 from extensions.water.optics import channel_ior, refract
+from extensions.water.spectrum import require_ocean_patch
 from extensions.water.surface import SurfaceField, sample_surface
+from math.utils import max3, min3
 from math.vector3 import Vector3
+from math.norm import squared_length3
 from std.math import abs, floor, hypot, sqrt
 from units.si import Length
 
@@ -110,10 +114,8 @@ struct CausticField(CausticTexels, Movable):
         Raises:
             Error: If `n` is not positive, or the patch is not positive.
         """
-        if n <= 0:
-            raise Error("Caustic resolution must be positive")
-        if patch.value <= 0.0:
-            raise Error("Ocean patch length must be positive")
+        require_positive(n, "Caustic resolution must be positive")
+        require_ocean_patch(patch.value)
         self.n = n
         self.patch = patch.value
         self.samples = List[Float32](length=n * n * 3, fill=0.0)
@@ -263,8 +265,7 @@ def render_caustics(
     Raises:
         Error: If a size or the depth is not positive.
     """
-    if grid <= 0:
-        raise Error("Caustic ray grid must be positive")
+    require_positive(grid, "Caustic ray grid must be positive")
     if depth.value <= 0.0:
         raise Error("Water depth must be positive")
     var image = CausticField(resolution, surface.patch)
@@ -285,7 +286,7 @@ def render_caustics(
             var nx = -sample.slope_x
             var ny = Float32(1.0)
             var nz = -sample.slope_z
-            var nl = sqrt(nx * nx + ny * ny + nz * nz)
+            var nl = sqrt(squared_length3[DType.float32](nx, ny, nz))
             nx /= nl
             ny /= nl
             nz /= nl
@@ -434,10 +435,10 @@ def _splat(
     var intensity = source_area / projected * norm
     if intensity > MAX_CAUSTIC_INTENSITY:
         intensity = MAX_CAUSTIC_INTENSITY
-    var min_x = _min3(ax, bx, cx)
-    var max_x = _max3(ax, bx, cx)
-    var min_y = _min3(ay, by, cy)
-    var max_y = _max3(ay, by, cy)
+    var min_x = min3(ax, bx, cx)
+    var max_x = max3(ax, bx, cx)
+    var min_y = min3(ay, by, cy)
+    var max_y = max3(ay, by, cy)
     var x0 = Int(floor(min_x))
     var x1 = Int(floor(max_x)) + 1
     var y0 = Int(floor(min_y))
@@ -509,24 +510,6 @@ def _edge_covers(weight: Float32, dx: Float32, dy: Float32) -> Bool:
     if weight < 0.0:
         return False
     return dy < 0.0 or (dy == 0.0 and dx > 0.0)
-
-
-def _min3(a: Float32, b: Float32, c: Float32) -> Float32:
-    var m = a
-    if b < m:
-        m = b
-    if c < m:
-        m = c
-    return m
-
-
-def _max3(a: Float32, b: Float32, c: Float32) -> Float32:
-    var m = a
-    if b > m:
-        m = b
-    if c > m:
-        m = c
-    return m
 
 
 def _build_caustic_mips(mut image: CausticField):

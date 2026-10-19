@@ -65,13 +65,26 @@ See `docs/wiki/Norm-consumers.md` for the changed operations, retained
 limits, and explicit zero and nonfinite rules.
 """
 
+from std.math import isfinite
+
+from core.ordinal import index_in_count
+
+from core.binary import copy_byte_range
+from core.ordinal import (
+    ordinal_valid,
+    require_valid,
+    require_non_negative,
+)
+from loaders.bytes import bytes_match
+from loaders.text_number import file_line
+from loaders.js_text import split_fields
+
 from math.triangle_normal import _polygon_cross_wide, _triangle_cross_wide
 
 from core.buffer_attribute import BufferAttribute
 from core.buffer_geometry import COLOR, NORMAL, POSITION, UV, BufferGeometry
 from math.vector3 import Vector3
 from render.srgb import srgb_to_linear
-from std.math import isfinite
 from std.memory import bitcast
 from std.pathlib import Path
 
@@ -89,11 +102,7 @@ struct PlyFormat(Equatable, ImplicitlyCopyable, Writable):
 
     def is_valid(self) -> Bool:
         """Return True if this is one of the three formats there are."""
-        return (
-            self == PLY_ASCII
-            or self == PLY_BINARY_LITTLE_ENDIAN
-            or self == PLY_BINARY_BIG_ENDIAN
-        )
+        return ordinal_valid(self.value, PLY_BINARY_BIG_ENDIAN.value)
 
 
 # Rows as lines of text, values split by white space.
@@ -323,15 +332,10 @@ def _find_bytes(bytes: List[UInt8], word: String) -> Int:
     Returns:
         Its first byte, or -1 when the file does not hold it.
     """
-    var text = word.as_bytes()
-    for at in range(len(bytes) - len(text) + 1):
-        var found = True
-        # The word is not empty: the loop always runs.
-        for index in range(len(text)):  # pragma: no branch
-            if bytes[at + index] != text[index]:
-                found = False
-                break
-        if found:
+    var count = word.byte_length()
+    var limit = len(bytes)
+    for at in range(limit - count + 1):
+        if bytes_match(Span(bytes), at, limit, word):
             return at
     return -1
 
@@ -350,7 +354,7 @@ def _text(bytes: List[UInt8], start: Int, end: Int) raises -> String:
     Raises:
         Error: If the bytes are not UTF-8.
     """
-    var part = List[UInt8](bytes[start:end])
+    var part = copy_byte_range(bytes, start, end)
     try:
         return String(from_utf8=Span(part))
     except:
@@ -359,15 +363,7 @@ def _text(bytes: List[UInt8], start: Int, end: Int) raises -> String:
 
 def _where(line: Int) -> String:
     """Return the prefix a header error names its line with."""
-    return "PLY header line " + String(line) + ": "
-
-
-def _fields(line: String) -> List[String]:
-    """Return a line split on white space."""
-    var fields = List[String]()
-    for piece in line.split():
-        fields.append(String(piece))
-    return fields^
+    return file_line("PLY header", line)
 
 
 struct PlyOptions(Copyable, Movable):
@@ -464,7 +460,7 @@ def _parse_header(
         raise Error("PLY: the file does not start with `ply`")
     var format = PlyFormat(-1)
     for index in range(1, len(lines)):
-        var fields = _fields(lines[index])
+        var fields = split_fields(lines[index])
         if len(fields) == 0:
             continue
         var line = index + 1
@@ -492,7 +488,7 @@ def _parse_header(
                     )
             elements.append(_Element(fields[1], rows, List[_Property]()))
         elif keyword == "property":
-            if len(elements) == 0:
+            if len(elements) <= 0:
                 raise Error(_where(line) + "a property before any element")
             if len(fields) == 5 and fields[1] == "list":
                 var count = ply_scalar(fields[2])
@@ -527,8 +523,7 @@ def _parse_header(
                 )
         else:
             raise Error(_where(line) + "not a header line: " + keyword)
-    if not format.is_valid():
-        raise Error("PLY: the header has no `format` line")
+    require_valid(format.is_valid(), "PLY: the header has no `format` line")
     return format
 
 
@@ -569,7 +564,7 @@ struct _Rows:
         if self.format != PLY_ASCII:
             return
         while self.line < len(self.lines):
-            self.fields = _fields(self.lines[self.line])
+            self.fields = split_fields(self.lines[self.line])
             self.line += 1
             self.field = 0
             if len(self.fields) > 0:
@@ -755,8 +750,7 @@ def parse_ply(
             names a property the vertex element has not got, or a list.
     """
     var end = _find_bytes(bytes, "end_header")
-    if end < 0:
-        raise Error("PLY: the file has no `end_header`")
+    require_non_negative(end, "PLY: the file has no `end_header`")
     var elements = List[_Element]()
     var format = _parse_header(_text(bytes, 0, end), elements, options)
     var body = end + 10  # the length of `end_header`
@@ -776,8 +770,7 @@ def parse_ply(
     for index in range(len(elements)):
         if elements[index].name == "vertex":
             vertices = index
-    if vertices < 0:
-        raise Error("PLY: the file has no `vertex` element")
+    require_non_negative(vertices, "PLY: the file has no `vertex` element")
     ref vertex = elements[vertices]
     var x = vertex.find(_names("x", "px", "posx"))
     var y = vertex.find(_names("y", "py", "posy"))
@@ -839,10 +832,9 @@ def parse_ply(
                     or property.name == "vertex_index"
                 ):
                     list = index
-            if list < 0:
-                raise Error(
-                    "PLY: a face must have `vertex_indices` or `vertex_index`"
-                )
+            require_non_negative(
+                list, "PLY: a face must have `vertex_indices` or `vertex_index`"
+            )
             if not element.properties[list].is_list:
                 raise Error("PLY: a face's vertex indices must be a list")
             if not element.properties[list].scalar.is_integer():
@@ -859,8 +851,9 @@ def parse_ply(
                         values.append(rows.value(bytes, property.scalar))
                         continue
                     var length = Int(rows.value(bytes, property.count))
-                    if length < 0:
-                        raise Error("a list with a negative length")
+                    require_non_negative(
+                        length, "a list with a negative length"
+                    )
                     values.append(Float64(length))
                     for _ in range(length):
                         var item = rows.value(bytes, property.scalar)
@@ -915,7 +908,7 @@ def parse_ply(
         # A face has three corners or more here, and makes a triangle or
         # more: this loop and the three below always run.
         for corner in range(first, first + count):  # pragma: no branch
-            if corners[corner] < 0 or corners[corner] >= vertex_count:
+            if not index_in_count(corners[corner], vertex_count):
                 raise Error(
                     "PLY face "
                     + String(face)

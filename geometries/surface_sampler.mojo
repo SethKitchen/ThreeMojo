@@ -41,13 +41,16 @@ See `docs/wiki/Norm-consumers.md` for the changed operations, retained
 limits, and explicit zero and nonfinite rules.
 """
 
+from core.ordinal import require_positive
 from math.triangle_normal import normal_or_zero
 
 from core.buffer_attribute import BufferAttribute
 from core.buffer_geometry import BufferGeometry, COLOR, NORMAL, POSITION, UV
+from math.finite import require_finite, require_non_negative_finite
+from math.norm import squared_length3
 from math.utils import SeededRandom
-from math.vector2 import Vector2
-from math.vector3 import Vector3
+from math.vector2 import Vector2, vector2_from_float64
+from math.vector3 import Vector3, vector3_from_float64
 from render.framebuffer import FloatColor
 from std.math import ceil, isfinite, sqrt
 
@@ -82,10 +85,10 @@ def _mix(a: Vector3, b: Vector3, c: Vector3, u: Float64, v: Float64) -> Vector3:
         The mixed value.
     """
     var w = 1 - (u + v)
-    return Vector3(
-        Float32(Float64(a.x) * u + Float64(b.x) * v + Float64(c.x) * w),
-        Float32(Float64(a.y) * u + Float64(b.y) * v + Float64(c.y) * w),
-        Float32(Float64(a.z) * u + Float64(b.z) * v + Float64(c.z) * w),
+    return vector3_from_float64(
+        Float64(a.x) * u + Float64(b.x) * v + Float64(c.x) * w,
+        Float64(a.y) * u + Float64(b.y) * v + Float64(c.y) * w,
+        Float64(a.z) * u + Float64(b.z) * v + Float64(c.z) * w,
     )
 
 
@@ -109,14 +112,15 @@ def _area(a: Vector3, b: Vector3, c: Vector3) -> Float64:
     var nx = ey * fz - ez * fy
     var ny = ez * fx - ex * fz
     var nz = ex * fy - ey * fx
-    return sqrt(nx * nx + ny * ny + nz * nz) * 0.5
+    return sqrt(squared_length3[DType.float64](nx, ny, nz)) * 0.5
 
 
 def _vertex_weight(attribute: BufferAttribute, vertex: Int) raises -> Float64:
     """Read one used vertex's finite, nonnegative weight."""
     var value = Float64(attribute.component(vertex, 0))
-    if not isfinite(value) or value < 0:
-        raise Error("A vertex weight must be finite and nonnegative")
+    require_non_negative_finite(
+        Float64(value), "A vertex weight must be finite and nonnegative"
+    )
     return value
 
 
@@ -247,10 +251,10 @@ struct MeshSurfaceSampler(Movable):
             # Each checked vertex weight is nonnegative, and _area is a
             # square root. Their product cannot be negative; nonfinite
             # positions can still make it NaN or infinite.
-            if not isfinite(weight):
-                raise Error(
-                    "A triangle's weight must be a number, not negative"
-                )
+            require_finite(
+                Float64(weight),
+                "A triangle's weight must be a number, not negative",
+            )
             var stored_weight = Float32(weight)
             if not isfinite(stored_weight) or (
                 weight > 0 and stored_weight == 0
@@ -308,8 +312,10 @@ struct MeshSurfaceSampler(Movable):
             Error: If the sampler is not built, or the surface has no
                 weight to choose by.
         """
-        if len(self.distribution) == 0:
-            raise Error("Build the sampler, over some triangles, first")
+        require_positive(
+            len(self.distribution),
+            "Build the sampler, over some triangles, first",
+        )
         var total = Float64(self.distribution[len(self.distribution) - 1])
         if total == 0:
             raise Error("No triangle has any weight to be chosen by")
@@ -329,6 +335,7 @@ struct MeshSurfaceSampler(Movable):
             Error: If there is no such triangle, or an attribute is too
                 short for it.
         """
+        # A negative face is refused before inspecting the geometry's shape.
         if face < 0 or face >= self.face_count():
             raise Error("No triangle has that index")
         var u = self.random.next()
@@ -370,16 +377,12 @@ struct MeshSurfaceSampler(Movable):
         if self.geometry.has_attribute(UV):
             ref uvs = self.geometry.attribute_view(UV)
             var w = 1 - (u + v)
-            uv = Vector2(
-                Float32(
-                    Float64(uvs.component(corners[0], 0)) * u
-                    + Float64(uvs.component(corners[1], 0)) * v
-                    + Float64(uvs.component(corners[2], 0)) * w
-                ),
-                Float32(
-                    Float64(uvs.component(corners[0], 1)) * u
-                    + Float64(uvs.component(corners[1], 1)) * v
-                    + Float64(uvs.component(corners[2], 1)) * w
-                ),
+            uv = vector2_from_float64(
+                Float64(uvs.component(corners[0], 0)) * u
+                + Float64(uvs.component(corners[1], 0)) * v
+                + Float64(uvs.component(corners[2], 0)) * w,
+                Float64(uvs.component(corners[0], 1)) * u
+                + Float64(uvs.component(corners[1], 1)) * v
+                + Float64(uvs.component(corners[2], 1)) * w,
             )
         return SurfaceSample(face, position, normal, color, uv)

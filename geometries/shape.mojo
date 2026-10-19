@@ -38,7 +38,6 @@ An outline that crosses itself is not refused. earcut fills it in, as
 three.js does, and the triangles follow the outline where it crosses.
 """
 
-from core.buffer_attribute import BufferAttribute
 from core.buffer_geometry import (
     BufferGeometry,
     MaterialIndex,
@@ -47,14 +46,15 @@ from core.buffer_geometry import (
     SHAPE_GEOMETRY,
     UV,
 )
-from core.user_data import UserData
+from core.ordinal import require_positive
 from geometries.earcut import triangulate_shape
+from geometries.surface import indexed_surface, record_kind
 from math.matrix_determinant import _determinant3_f32
 from math.path import Shape
 from math.polygon_area import signed_area64
 from math.sort_utils import stable_sort
-from math.vector2 import Vector2
-from std.math import isfinite
+from math.vector2 import Vector2, append_vector2, component_max, component_min
+from math.finite import require_finite_group
 
 
 def turn(origin: Vector2, first: Vector2, second: Vector2) -> Float32:
@@ -77,33 +77,16 @@ def turn(origin: Vector2, first: Vector2, second: Vector2) -> Float32:
     return (first - origin).cross(second - origin)
 
 
-# How much of a turn is just the arithmetic, as a share of the size of the
-# shape being measured. About eight times `Float32`'s own epsilon: three
-# points read off a contour that spans `s` meters carry a rounding error of
-# roughly `eps * s` in each coordinate, so the turn they make carries
-# roughly `eps * s` times the distance the turn is measured across, and a
-# threshold of that shape is the only one that separates a real corner from
-# the rounding at every size.
+# Noise floor for a contour turn, as a share of the shape's size. About
+# eight times Float32 epsilon: three points on a contour of size `s` carry
+# about `eps * s` of rounding, so a turn of that size is the smallest
+# corner that is not the arithmetic.
 #
-# Two fixed thresholds came before this one, and both were wrong in a way
-# worth writing down.
-#
-# The first was 1e-6 square meters flat, described in a comment as a square
-# micrometer; it is a square millimeter, and that was the smaller mistake.
-# The real one was that a square five millimeters on a side, sampled into
-# twelve runs an edge, has a true corner whose turn measures 1.7e-7. The
-# threshold called that corner flat and threw the whole shape away, and
-# sampling it more finely made more shapes vanish rather than fewer.
-#
-# The second scaled with the distance between a point's two neighbors,
-# which reads as "how flat, for a step this long". That drops a shallow
-# corner on a long edge: the point of a triangle ten meters long and a
-# millimeter thick stands 8e-5 meters off the line through its neighbors,
-# which is a real corner of a real shape and was called flat.
-#
-# What is left is a noise floor and nothing else. A point is dropped when
-# the turn it makes is no larger than the arithmetic could have invented,
-# and kept otherwise, however shallow the corner is.
+# A flat 1e-6 m^2 cut is a square millimeter, not a square micrometer, and
+# it drops a real 5 mm corner whose turn is 1.7e-7. A cut scaled by the
+# neighbor spacing drops a triangle 10 m long and 1 mm thick: its corner
+# stands 8e-5 m off the neighbor line. Drop a point only when its turn is
+# no larger than that rounding.
 comptime NOISE = Float32(1e-6)
 
 
@@ -123,8 +106,8 @@ def extent(points: List[Vector2], start: Int, count: Int) -> Float32:
     var high = points[start]
     for index in range(1, count):  # pragma: no branch
         var here = points[start + index]
-        low = Vector2(min(low.x, here.x), min(low.y, here.y))
-        high = Vector2(max(high.x, here.x), max(high.y, here.y))
+        low = component_min(low, here)
+        high = component_max(high, here)
     return (high - low).length()
 
 
@@ -358,8 +341,10 @@ def _corners(points: List[Vector2]) raises -> List[Vector2]:
         raise Error("A shape's closed contour needs three corners")
     # The short-contour refusal above proves this list is nonempty.
     for point in points:  # pragma: no branch
-        if not isfinite(point.x) or not isfinite(point.y):
-            raise Error("A shape boundary needs finite coordinates")
+        require_finite_group(
+            point.is_finite(),
+            "A shape boundary needs finite coordinates",
+        )
     var corners = _clean(points)
     var doubled = signed_area64(corners) * 2
     var span = extent(corners, 0, len(corners))
@@ -386,6 +371,21 @@ struct ShapePoints(Movable):
         """
         self.outline = outline^
         self.holes = holes^
+
+
+def require_separate_holes(inside: Bool) raises:
+    """Refuse a hole that lies inside another hole.
+
+    Nothing. The call returns when the point lies outside the other hole.
+
+    Args:
+        inside: Whether one hole's point lies inside the other hole.
+
+    Raises:
+        Error: If the point lies inside the other hole.
+    """
+    if inside:
+        raise Error("A shape's hole cannot lie inside another hole")
 
 
 def extract_points(shape: Shape, curve_segments: Int) raises -> ShapePoints:
@@ -424,11 +424,11 @@ def extract_points(shape: Shape, curve_segments: Int) raises -> ShapePoints:
             raise Error("A shape's hole must lie inside its outline")
         for other in range(hole):
             ref around = holes[other]
-            if _contains(around, 0, len(around) - 1, probe):
-                raise Error("A shape's hole cannot lie inside another hole")
+            require_separate_holes(_contains(around, 0, len(around) - 1, probe))
             ref current = holes[hole]
-            if _contains(current, 0, len(current) - 1, around[0]):
-                raise Error("A shape's hole cannot lie inside another hole")
+            require_separate_holes(
+                _contains(current, 0, len(current) - 1, around[0])
+            )
     return ShapePoints(outline^, holes^)
 
 
@@ -510,7 +510,7 @@ struct Contours(Movable):
         for at in range(len(holes)):
             self.starts.append(len(self.points))
             self.counts.append(len(holes[at]))
-            self.points.extend(holes[at].copy())
+            self.points.extend(Span(holes[at]))
 
     def contour_count(self) -> Int:
         """Return how many contours there are: the outline and its holes."""
@@ -556,6 +556,16 @@ def triangulate(shape: Shape, curve_segments: Int = 12) raises -> Contours:
     return Contours(outline^, holes^)
 
 
+def _record_shape(mut geometry: BufferGeometry, curve_segments: Int) raises:
+    """Name a flat shape and record how finely its curves were sampled.
+
+    One shape and a list of shapes both use this. Each one stores its
+    shapes afterward.
+    """
+    record_kind(geometry, SHAPE_GEOMETRY)
+    geometry.parameters.set_number("curveSegments", Float64(curve_segments))
+
+
 def shape_geometry(
     shape: Shape, curve_segments: Int = 12
 ) raises -> BufferGeometry:
@@ -581,23 +591,16 @@ def shape_geometry(
     var uvs = List[Float32]()
     for index in range(len(cut.points)):  # pragma: no branch
         var point = cut.points[index]
-        data.append(point.x)
-        data.append(point.y)
+        append_vector2(data, point)
         data.append(0)
         normals.append(0)
         normals.append(0)
         normals.append(1)
-        uvs.append(point.x)
-        uvs.append(point.y)
+        append_vector2(uvs, point)
 
     var geometry = BufferGeometry()
-    geometry.set_attribute(String(POSITION), BufferAttribute(data^, 3))
-    geometry.set_attribute(String(NORMAL), BufferAttribute(normals^, 3))
-    geometry.set_attribute(String(UV), BufferAttribute(uvs^, 2))
-    geometry.set_index(cut.index.copy())
-    geometry.kind = SHAPE_GEOMETRY
-    geometry.parameters = UserData()
-    geometry.parameters.set_number("curveSegments", Float64(curve_segments))
+    indexed_surface(geometry, data^, normals^, uvs^, cut.index.copy())
+    _record_shape(geometry, curve_segments)
     geometry.shapes = [shape.copy()]
     return geometry^
 
@@ -625,8 +628,7 @@ def shape_geometry(
         Error: If there is no shape, or a shape cannot be filled in; see
             `triangulate`.
     """
-    if len(shapes) == 0:
-        raise Error("A shape geometry needs at least one shape")
+    require_positive(len(shapes), "A shape geometry needs at least one shape")
     var data = List[Float32]()
     var normals = List[Float32]()
     var uvs = List[Float32]()
@@ -642,16 +644,11 @@ def shape_geometry(
             index.append(corner + offset)
         counts.append(len(part.index))
     var geometry = BufferGeometry()
-    geometry.set_attribute(String(POSITION), BufferAttribute(data^, 3))
-    geometry.set_attribute(String(NORMAL), BufferAttribute(normals^, 3))
-    geometry.set_attribute(String(UV), BufferAttribute(uvs^, 2))
-    geometry.set_index(index^)
+    indexed_surface(geometry, data^, normals^, uvs^, index^)
     var start = 0
     for at in range(len(counts)):  # pragma: no branch
         geometry.add_group(start, counts[at], MaterialIndex(at))
         start += counts[at]
-    geometry.kind = SHAPE_GEOMETRY
-    geometry.parameters = UserData()
-    geometry.parameters.set_number("curveSegments", Float64(curve_segments))
+    _record_shape(geometry, curve_segments)
     geometry.shapes = shapes.copy()
     return geometry^

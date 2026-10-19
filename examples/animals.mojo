@@ -15,7 +15,13 @@ mid-stride and the snake and the swimmers bend in an S. Each animal
 turns a whole turn.
 """
 
-from cameras.perspective_camera import PerspectiveCamera
+from tools._example_output import (
+    example_destination,
+    blit,
+    gallery_camera,
+    gallery_renderer,
+)
+
 from core.assets import Assets
 from core.object3d import Object3D
 from core.scene import Scene
@@ -38,14 +44,14 @@ from geometries.plane import plane
 from lights.light import directional_light, hemisphere_light
 from lights.shadow import PCF_SOFT_SHADOW_MAP
 from materials.material import Material, MaterialId
+from math.utils import max3
 from math.vector3 import Vector3
 from objects.mesh import Mesh
 from render.framebuffer import Color, Framebuffer
 from render.apng import encode
-from renderers.renderer import Renderer, available_workers
+from renderers.renderer import Renderer
 from std.math import max
 from std.pathlib import Path
-from std.sys import argv
 from units.si import DEGREE, METER, Angle, Length
 
 comptime DEFAULT_OUTPUT = "out/animals.png"
@@ -97,7 +103,7 @@ def tiles(id: SpeciesId, renderer: Renderer) raises -> List[Framebuffer]:
     var box = geometry.bounding_box()
     var size = box.max - box.min
     var center = (box.max + box.min) * 0.5
-    var reach = max(size.x, max(size.y, size.z))
+    var reach = max3(size.x, size.y, size.z)
     var assets = Assets()
     var shape = assets.geometries.add(geometry^)
     var materials = List[MaterialId]()
@@ -133,14 +139,16 @@ def tiles(id: SpeciesId, renderer: Renderer) raises -> List[Framebuffer]:
             Color(221, 230, 242), Color(95, 90, 82), scene.add(sky^), 1.15
         )
     )
-    var camera = PerspectiveCamera(
-        Angle(30.0, DEGREE),
-        Float32(TILE_W) / Float32(TILE_H),
-        Length(reach * 0.05, METER),
-        Length(reach * 30.0, METER),
-    )
     var away = Vector3(1.05, 0.42, 1.25) * (reach * 1.15)
-    camera.place(center + away, center)
+    var camera = gallery_camera(
+        TILE_W,
+        TILE_H,
+        center + away,
+        center,
+        field_of_view=Angle(30.0, DEGREE),
+        near=Length(reach * 0.05, METER),
+        far=Length(reach * 30.0, METER),
+    )
     var out = List[Framebuffer]()
     var step = Angle(360.0 / Float32(FRAMES), DEGREE)
     for _ in range(FRAMES):
@@ -150,32 +158,10 @@ def tiles(id: SpeciesId, renderer: Renderer) raises -> List[Framebuffer]:
     return out^
 
 
-def blit(mut sheet: Framebuffer, piece: Framebuffer, x0: Int, y0: Int):
-    """Copy a tile into the sheet.
-
-    Args:
-        sheet: The whole picture.
-        piece: One tile.
-        x0: The tile's left column in the sheet.
-        y0: The tile's top row in the sheet.
-    """
-    var channels = len(piece.pixels) // (piece.width * piece.height)
-    for y in range(piece.height):
-        for x in range(piece.width):
-            var src = (y * piece.width + x) * channels
-            var dst = ((y0 + y) * sheet.width + x0 + x) * channels
-            for c in range(channels):
-                sheet.pixels[dst + c] = piece.pixels[src + c]
-
-
 def main() raises:
-    var args = argv()
-    var destination = String(DEFAULT_OUTPUT)
-    if len(args) > 1:
-        destination = String(args[1])
+    var destination = example_destination(String(DEFAULT_OUTPUT))
     var rows = (SPECIES_COUNT + COLUMNS - 1) // COLUMNS
-    var renderer = Renderer(TILE_W, TILE_H, workers=available_workers())
-    renderer.set_background(Color(170, 190, 215))
+    var renderer = gallery_renderer(TILE_W, TILE_H, Color(170, 190, 215))
     renderer.shadow_map_type = PCF_SOFT_SHADOW_MAP
     var sheets = List[Framebuffer]()
     for _ in range(FRAMES):

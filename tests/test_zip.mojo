@@ -10,6 +10,7 @@ byte by byte to reach every refusal. `assets/3mf/fixture.3mf`, written by
 Python's `zipfile`, is the deflated archive read.
 """
 
+from core.binary import copy_byte_range, copy_bytes, store_little_endian
 from loaders.zip import (
     ZIP_DEFLATED,
     ZIP_STORED,
@@ -35,9 +36,7 @@ from std.testing import (
 
 def text_bytes(text: String) -> List[UInt8]:
     """Return a text as bytes."""
-    var bytes = List[UInt8]()
-    for byte in text.as_bytes():
-        bytes.append(byte)
+    var bytes = List[UInt8](text.as_bytes())
     return bytes^
 
 
@@ -57,8 +56,7 @@ def one() raises -> List[UInt8]:
 
 def poke(mut bytes: List[UInt8], at: Int, value: Int, size: Int):
     """Overwrite a little-endian value."""
-    for index in range(size):
-        bytes[at + index] = UInt8((value >> (index * 8)) & 0xFF)
+    store_little_endian(bytes, at, value, size)
 
 
 def refused(bytes: List[UInt8], message: String) raises:
@@ -347,9 +345,9 @@ def test_directory_counts_and_bounds_must_agree() raises:
 
 def test_central_extra_and_comment_fields_stay_inside_the_directory() raises:
     var original = one()
-    var bytes = List[UInt8](original[:91])
+    var bytes = copy_bytes(original, 0, 91)
     bytes.extend(text_bytes("extra"))
-    bytes.extend(List[UInt8](original[91:]))
+    bytes.extend(copy_byte_range(original, 91, len(original)))
     poke(bytes, 40 + 30, 2, 2)
     poke(bytes, 40 + 32, 3, 2)
     poke(bytes, 96 + 12, 56, 4)
@@ -395,9 +393,9 @@ def test_invalid_utf8_names_use_replacement_characters() raises:
 def with_directory_trailer(trailer: List[UInt8]) raises -> List[UInt8]:
     """Put a record after the one-entry directory and adjust its size."""
     var original = one()
-    var bytes = List[UInt8](original[:91])
-    bytes.extend(trailer.copy())
-    bytes.extend(List[UInt8](original[91:]))
+    var bytes = copy_bytes(original, 0, 91)
+    bytes.extend(Span(trailer))
+    bytes.extend(copy_byte_range(original, 91, len(original)))
     poke(bytes, 91 + len(trailer) + 12, 51 + len(trailer), 4)
     return bytes^
 

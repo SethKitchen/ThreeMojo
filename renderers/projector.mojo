@@ -49,6 +49,7 @@ Extreme finite results can differ from direct three.js r180 arithmetic.
 See `docs/wiki/Norm-consumers.md` for the changed operations, retained
 limits, and explicit zero and nonfinite rules.
 """
+from core.ordinal import ordinal_valid, require_index_in_count
 
 from std.math import isfinite
 
@@ -64,6 +65,7 @@ from math.norm import (
     length3,
     normalized3,
     _ordinary_squared,
+    squared_length3,
 )
 from core.assets import Assets
 from core.buffer_geometry import BufferGeometry, COLOR, NORMAL, POSITION, UV
@@ -72,6 +74,7 @@ from core.object3d import NO_PARENT, NodeId
 from core.scene import Scene
 from materials.material import DOUBLE_SIDE, Material, MaterialId
 from math.matrix4 import Matrix4
+from math.matrix_inverse import adjugate3
 from math.vector3 import Vector3
 from objects.line import SEGMENTS
 from std.math import nan, sqrt
@@ -115,7 +118,7 @@ struct RenderableKind(Equatable, ImplicitlyCopyable, Writable):
         Returns:
             Whether it is.
         """
-        return self.value >= 0 and self.value <= 2
+        return ordinal_valid(self.value, 2)
 
     def write_to(self, mut writer: Some[Writer]):
         """Write the kind's name.
@@ -340,24 +343,23 @@ struct Matrix(ImplicitlyCopyable):
         var n13 = self.e[8]
         var n23 = self.e[9]
         var n33 = self.e[10]
-        var t11 = n33 * n22 - n32 * n23
-        var t12 = n32 * n13 - n33 * n12
-        var t13 = n23 * n12 - n22 * n13
-        var det = n11 * t11 + n21 * t12 + n31 * t13
+        var c0, c1, c2, c3, c4, c5, c6, c7, c8, det = adjugate3[DType.float64](
+            n11, n21, n31, n12, n22, n32, n13, n23, n33
+        )
         if det == 0:
             return List[Float64](length=9, fill=0)
         var s = 1 / det
         # `invert`, column-major, then `transpose`.
         return [
-            t11 * s,
-            t12 * s,
-            t13 * s,
-            (n31 * n23 - n33 * n21) * s,
-            (n33 * n11 - n31 * n13) * s,
-            (n21 * n13 - n23 * n11) * s,
-            (n32 * n21 - n31 * n22) * s,
-            (n31 * n12 - n32 * n11) * s,
-            (n22 * n11 - n21 * n12) * s,
+            c0 * s,
+            c3 * s,
+            c6 * s,
+            c1 * s,
+            c4 * s,
+            c7 * s,
+            c2 * s,
+            c5 * s,
+            c8 * s,
         ]
 
     def max_scale(self) -> Float64:
@@ -389,7 +391,7 @@ def apply_normal(m: List[Float64], v: Vec) -> Vec:
     var x = m[0] * v[0] + m[3] * v[1] + m[6] * v[2]
     var y = m[1] * v[0] + m[4] * v[1] + m[7] * v[2]
     var z = m[2] * v[0] + m[5] * v[1] + m[8] * v[2]
-    var squared = x * x + y * y + z * z
+    var squared = squared_length3[DType.float64](x, y, z)
     var bound = Float64(0)
     var products_safe = True
     var finite = isfinite(v[0]) and isfinite(v[1]) and isfinite(v[2])
@@ -853,10 +855,11 @@ def _faces_camera(a: _Vertex, b: _Vertex, c: _Vertex) -> Bool:
 
 def _corner(vertices: List[_Vertex], at: Int) raises -> _Vertex:
     """Return a vertex a face or a line names."""
-    if at < 0 or at >= len(vertices):
-        raise Error(
-            "A projected face or line must name a vertex its geometry has"
-        )
+    require_index_in_count(
+        at,
+        len(vertices),
+        "A projected face or line must name a vertex its geometry has",
+    )
     return vertices[at].copy()
 
 

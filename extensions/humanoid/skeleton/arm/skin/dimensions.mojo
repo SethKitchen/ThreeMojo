@@ -23,7 +23,7 @@ inside the hand's skin, which reaches up over the lower forearm. See `extensions
 """
 
 from extensions.humanoid.sex import MALE, Sex
-from extensions.humanoid.side import LEFT, RIGHT, BodySide
+from extensions.humanoid.side import require_side, LEFT, RIGHT, BodySide
 from extensions.humanoid.skeleton.arm.bones.dimensions import (
     arm_bone_field,
     named_arm_bones,
@@ -39,7 +39,9 @@ from extensions.humanoid.skeleton.arm.muscles.dimensions import (
     arm_muscle_field,
     named_arm_muscles,
 )
+from extensions.humanoid.skeleton.dermis import dermal_shell_distance
 from extensions.humanoid.skeleton.field import (
+    Bounds,
     DistanceField,
     field_gradient,
     flip_x,
@@ -53,6 +55,7 @@ from extensions.humanoid.skeleton.loft import (
     loft_distance,
 )
 from extensions.humanoid.skeleton.torso.sweep import SweepField
+from math.utils import mix_delta
 from math.vector3 import Vector3
 from std.math import max, min
 
@@ -132,8 +135,7 @@ struct ArmSkinField(Copyable, DistanceField, Movable):
                 field refuses its inputs.
         """
         dimensions.validate()
-        if not side.is_valid():
-            raise Error("An arm side must be RIGHT or LEFT")
+        require_side(side, "An arm")
         var arm = dimensions.arm.copy()
         var f = arm.frame
         self.mirror = side == LEFT
@@ -164,7 +166,7 @@ struct ArmSkinField(Copyable, DistanceField, Movable):
         for section in range(ARM_SKIN_SECTIONS):  # pragma: no branch
             var y = bottom + spacing * Float32(section)
             var t = min(max((y - f.elbow.y) / f.cm(6.0) + 0.5, 0), 1)
-            covers.append(fore + (upper - fore) * t)
+            covers.append(mix_delta(fore, upper, t))
         # Two passes fill the dips; four round off each section that
         # stands proud, so the skin shows no bands.
         self.loft = fit_loft(
@@ -173,12 +175,9 @@ struct ArmSkinField(Copyable, DistanceField, Movable):
         self.low = self.loft.low
         self.high = self.loft.high
         if self.mirror:
-            self.low = Vector3(
-                -self.loft.high.x, self.loft.low.y, self.loft.low.z
-            )
-            self.high = Vector3(
-                -self.loft.low.x, self.loft.high.y, self.loft.high.z
-            )
+            var mirrored = Bounds(self.low, self.high).mirrored_on_x()
+            self.low = mirrored.low
+            self.high = mirrored.high
 
     def distance(self, point: Vector3) -> Float32:
         """Return distance to the anatomy-derived outer surface.
@@ -225,8 +224,7 @@ struct ArmSkinLayerField(Copyable, DistanceField, Movable):
         Negative is inside the dermis. Deep anatomy and exterior space
         are both outside this shell.
         """
-        var d = self.outer.distance(point)
-        return max(d, -d - self.thickness)
+        return dermal_shell_distance(self.outer.distance(point), self.thickness)
 
 
 def append_stations(

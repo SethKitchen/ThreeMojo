@@ -5,6 +5,7 @@
 
 """Tests for the morphable face model and its file."""
 
+from core.binary import append_little_endian_u32
 from core.buffer_geometry import NORMAL, POSITION, UV
 from extensions.humanoid.skeleton.head.face_model import (
     EYELASHES,
@@ -29,8 +30,7 @@ from std.testing import (
 
 def _u32(mut bytes: List[UInt8], value: Int):
     """Append `value` as a little-endian 32-bit integer."""
-    for k in range(4):  # pragma: no branch
-        bytes.append(UInt8((value >> (8 * k)) & 0xFF))
+    append_little_endian_u32(bytes, value)
 
 
 def _file(name: String, counts: List[Int], body: List[UInt8]) raises -> String:
@@ -43,7 +43,7 @@ def _file(name: String, counts: List[Int], body: List[UInt8]) raises -> String:
         header[10] = len(body)
     for count in header:  # pragma: no branch
         _u32(bytes, count)
-    bytes.extend(body.copy())
+    bytes.extend(Span(body))
     var path = temporary_path("threemojo_face_") + name + ".bin"
     Path(path).write_bytes(bytes)
     return path

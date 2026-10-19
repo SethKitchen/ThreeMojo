@@ -25,8 +25,10 @@ plans in Neufert, "Architects' Data" (5th edition, 2019), and the program
 splits of Merrell, Schkufza and Koltun, "Computer-generated residential
 building layouts" (2010), at a much simpler level.
 """
+from core.ordinal import ordinal_valid, require_valid
 
-from std.math import isfinite, sqrt
+from math.finite import require_positive_finite
+from std.math import sqrt
 from extensions.building.kinds import (
     BATHROOM,
     BEDROOM,
@@ -60,7 +62,7 @@ struct FloorProgram(Equatable, ImplicitlyCopyable, Writable):
         Returns:
             Whether the value is 0 to 2.
         """
-        return self.value >= 0 and self.value <= 2
+        return ordinal_valid(self.value, 2)
 
 
 # Offices and meeting rooms around a core.
@@ -95,8 +97,9 @@ struct PlanOptions(ImplicitlyCopyable):
             self.core_length.to(METER),
         ]
         for i in range(4):  # pragma: no branch
-            if not (sizes[i] > 0 and isfinite(sizes[i])):
-                raise Error("Plan sizes must be positive and finite")
+            require_positive_finite(
+                sizes[i], "Plan sizes must be positive and finite"
+            )
         if sizes[2] < sizes[1]:
             raise Error(
                 "The largest room must not be narrower than the smallest"
@@ -139,7 +142,7 @@ def clip_half(polygon: List[Point2], n: Point2, d: Float64) -> List[Point2]:
             out.append(p)
         if (dp < 0 and dq > 0) or (dp > 0 and dq < 0):
             var t = dp / (dp - dq)
-            out.append(Point2(p.x + t * (q.x - p.x), p.y + t * (q.y - p.y)))
+            out.append(p + (q - p) * t)
     return out^
 
 
@@ -191,7 +194,7 @@ def _frame(footprint: List[Point2]) -> _Frame:
         if length > best_length:
             best_length = length
             best = Point2(d.x / length, d.y / length)
-    return _Frame(best, Point2(-best.y, best.x))
+    return _Frame(best, best.perpendicular())
 
 
 def _cuts(
@@ -220,7 +223,7 @@ def _piece(
     band: List[Point2], frame: _Frame, start: Float64, end: Float64
 ) -> List[Point2]:
     """Return the part of a band between two positions along the frame."""
-    var neg_u = Point2(-frame.u.x, -frame.u.y)
+    var neg_u = -frame.u
     return clip_half(clip_half(band, frame.u, end), neg_u, -start)
 
 
@@ -246,8 +249,10 @@ def plan_floor(
             not convex or has no area, or it is too narrow for a corridor
             and two rooms deep, or too short for the core.
     """
-    if not program.is_valid():
-        raise Error("A floor program must be office, residential or lobby")
+    require_valid(
+        program.is_valid(),
+        "A floor program must be office, residential or lobby",
+    )
     options.check()
     if len(footprint) < 3 or abs(polygon_area(footprint)) <= 1e-9:
         raise Error("A footprint needs three corners and an area")
@@ -277,7 +282,7 @@ def plan_floor(
     var middle = (v_low + v_high) / 2
     var lower_line = middle - corridor / 2
     var upper_line = middle + corridor / 2
-    var neg_v = Point2(-frame.v.x, -frame.v.y)
+    var neg_v = -frame.v
     var out = List[SpacePlan]()
     # The corridor strip.
     var strip = clip_half(

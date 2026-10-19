@@ -27,7 +27,8 @@ chain rebuilds the chain, as three.js calls `generateMipmap` after a copy
 into level zero of a texture that generates mipmaps.
 """
 
-from render.framebuffer import Framebuffer
+from core.ordinal import require_index_in_count
+from render.framebuffer import Framebuffer, unit_byte
 from render.rect import Rect
 from render.srgb import LINEAR, SRGB, ColorSpace
 from render.target import UNSIGNED_BYTE_TARGET, RenderTarget
@@ -39,8 +40,26 @@ from render.texture import (
     TexelType,
     Texture,
     float_texture,
+    require_texel_type,
+    require_texture_size,
 )
 from render.volume_texture import VOLUME_CHANNELS, VolumeImage
+
+
+def require_copy_texel(source: TexelType, destination: TexelType) raises:
+    """Refuse a copy between two texel types.
+
+    Nothing. The call returns when the types match.
+
+    Args:
+        source: The source texel type.
+        destination: The destination texel type.
+
+    Raises:
+        Error: If the types differ.
+    """
+    if source != destination:
+        raise Error("A texture copy needs two textures of one texel type")
 
 
 @fieldwise_init
@@ -95,8 +114,11 @@ def _check_level(texture: Texture, level: Int) raises:
     texture.validate()
     if texture.is_blank():
         raise Error("A texture copy needs a texture that holds texels")
-    if level < 0 or level >= texture.levels:
-        raise Error("A texture copy names a level the texture does not hold")
+    require_index_in_count(
+        level,
+        texture.levels,
+        "A texture copy names a level the texture does not hold",
+    )
 
 
 def _texel_start(texture: Texture, level: Int, x: Int, row: Int) -> Int:
@@ -113,6 +135,21 @@ def _regenerate(mut texture: Texture, level: Int) raises:
     """Rebuild the chain of a texture whose first level was written."""
     if level == 0 and texture.levels > 1:
         texture.regenerate_mipmaps()
+
+
+def require_flat_layer(layer: Int) raises:
+    """Refuse a layer on a 2D texture copy.
+
+    Nothing. The call returns when the layer is zero.
+
+    Args:
+        layer: The layer the copy names.
+
+    Raises:
+        Error: If the layer is not zero.
+    """
+    if layer != 0:
+        raise Error("A 2D texture has no layers")
 
 
 def copy_texture_to_texture(
@@ -144,10 +181,8 @@ def copy_texture_to_texture(
     """
     _check_level(source, source_level)
     _check_level(destination, destination_level)
-    if source.texel_type != destination.texel_type:
-        raise Error("A texture copy needs two textures of one texel type")
-    if position.z != 0:
-        raise Error("A 2D texture has no layers")
+    require_copy_texel(source.texel_type, destination.texel_type)
+    require_flat_layer(position.z)
     var box = region.or_else(
         Rect(
             0,
@@ -214,8 +249,7 @@ def copy_texture_to_volume(
     """
     _check_level(source, source_level)
     destination.validate()
-    if source.texel_type != destination.texel_type:
-        raise Error("A texture copy needs two textures of one texel type")
+    require_copy_texel(source.texel_type, destination.texel_type)
     var box = region.or_else(
         Rect(
             0,
@@ -240,8 +274,11 @@ def copy_texture_to_volume(
         destination.width,
         destination.height,
     )
-    if position.z < 0 or position.z >= destination.depth:
-        raise Error("A texture copy must lie inside both images")
+    require_index_in_count(
+        position.z,
+        destination.depth,
+        "A texture copy must lie inside both images",
+    )
     var floats = source.texel_type == FLOAT_TYPE
     for row in range(box.height):  # pragma: no branch
         var read = _texel_start(source, source_level, box.x, box.y + row)
@@ -280,8 +317,7 @@ def copy_volume_to_volume(
     """
     source.validate()
     destination.validate()
-    if source.texel_type != destination.texel_type:
-        raise Error("A texture copy needs two textures of one texel type")
+    require_copy_texel(source.texel_type, destination.texel_type)
     var box = region.or_else(
         TexelBox(0, 0, 0, source.width, source.height, source.depth)
     )
@@ -353,12 +389,8 @@ def framebuffer_texture(
         Error: If a dimension is not positive, the texel type is none of
             the two, or `Texture.validate` refuses the color space.
     """
-    if width <= 0 or height <= 0:
-        raise Error("Texture dimensions must be positive")
-    if not texel_type.is_valid():
-        raise Error(
-            "A texture's texel type must be UNSIGNED_BYTE_TYPE or FLOAT_TYPE"
-        )
+    require_texture_size(width, height)
+    require_texel_type(texel_type)
     if texel_type == FLOAT_TYPE:
         var image = float_texture(
             width,
@@ -387,8 +419,7 @@ def _copy_region_start(
     """Return the framebuffer rectangle a copy into `level` reads, and
     refuse a copy that reaches outside the framebuffer."""
     _check_level(texture, level)
-    if position.z != 0:
-        raise Error("A 2D texture has no layers")
+    require_flat_layer(position.z)
     var region = Rect(
         position.x,
         position.y,
@@ -487,7 +518,7 @@ def copy_framebuffer_to_texture(
         for at in range(region.width * Texture.CHANNELS):  # pragma: no branch
             var value = light.pixels[read + at]
             if bytes:
-                texture.pixels[write + at] = UInt8(Int(value * 255 + 0.5))
+                texture.pixels[write + at] = unit_byte(value)
             else:
                 texture.data[write + at] = value
     _regenerate(texture, level)

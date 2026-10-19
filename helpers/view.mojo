@@ -38,6 +38,8 @@ camera, the first in three.js's order on a tie.
 disks with a 2D canvas. This port has no canvas text. The disks are
 unlabeled, as three.js's are by default. `dispose` has no counterpart.
 """
+from core.extent import require_positive_extent
+from core.ordinal import ordinal_valid, require_valid, require_non_negative
 
 from cameras.orthographic_camera import OrthographicCamera
 from controls.camera_frame import CameraFrame
@@ -47,6 +49,7 @@ from core.scene import Scene
 from geometries.cylinder import cylinder
 from materials.material import BASIC, Material, sprite_material
 from math.euler import Euler, XYZ
+from math.norm import squared_length2
 from math.quaternion import Quaternion
 from math.vector3 import Vector3
 from objects.mesh import Mesh
@@ -74,7 +77,7 @@ struct ViewAxis(Equatable, ImplicitlyCopyable, Writable):
         Returns:
             Whether it is `POSITIVE_X` through `NEGATIVE_Z`.
         """
-        return self.value >= 0 and self.value <= 5
+        return ordinal_valid(self.value, 5)
 
 
 # three.js's `posX`, `posY`, `posZ`, `negX`, `negY` and `negZ`, in the
@@ -85,6 +88,21 @@ comptime POSITIVE_Z = ViewAxis(2)
 comptime NEGATIVE_X = ViewAxis(3)
 comptime NEGATIVE_Y = ViewAxis(4)
 comptime NEGATIVE_Z = ViewAxis(5)
+
+
+def require_view_axis(axis: ViewAxis) raises:
+    """Refuse a view axis that is none of the six.
+
+    Nothing. The call returns when the axis is named.
+
+    Args:
+        axis: The disk.
+
+    Raises:
+        Error: If the axis is none of the six.
+    """
+    require_valid(axis.is_valid(), "A view axis that is none of the six")
+
 
 # How many pixels wide and tall the helper's square is, three.js's `dim`.
 comptime VIEW_HELPER_DIM = 128
@@ -115,8 +133,7 @@ def axis_direction(axis: ViewAxis) raises -> Vector3:
     Raises:
         Error: If the axis is none of the six.
     """
-    if not axis.is_valid():
-        raise Error("A view axis that is none of the six")
+    require_view_axis(axis)
     var directions: List[Vector3] = [
         Vector3(1, 0, 0),
         Vector3(0, 1, 0),
@@ -141,8 +158,7 @@ def axis_turn(axis: ViewAxis) raises -> Quaternion:
     Raises:
         Error: If the axis is none of the six.
     """
-    if not axis.is_valid():
-        raise Error("A view axis that is none of the six")
+    require_view_axis(axis)
     var half = Float32(pi * 0.5)
     var angles: List[Vector3] = [
         Vector3(0, half, 0),
@@ -194,7 +210,7 @@ def disk_image(color: Color) raises -> Texture:
                         + (Float32(j) + 0.5) / Float32(DISK_SAMPLES)
                         - DISK_CENTER
                     )
-                    if x * x + y * y <= reach:
+                    if squared_length2[DType.float32](x, y) <= reach:
                         inside += 1
             var alpha = UInt8(
                 (inside * 255 + DISK_SAMPLES * DISK_SAMPLES // 2)
@@ -417,8 +433,9 @@ struct ViewHelper(Movable):
         Raises:
             Error: If the image has no size.
         """
-        if width <= 0 or height <= 0:
-            raise Error("A view helper needs an image with a size")
+        require_positive_extent(
+            width, height, "A view helper needs an image with a size"
+        )
         self._orient(camera)
         var dim = Float32(VIEW_HELPER_DIM)
         # three.js's `mouse`, from the corner the helper is drawn in.
@@ -511,8 +528,9 @@ struct ViewHelper(Movable):
             Error: If `delta` is negative.
         """
         var seconds = delta.to(SECOND)
-        if seconds < 0:
-            raise Error("A view helper cannot turn by a negative time")
+        require_non_negative(
+            seconds, "A view helper cannot turn by a negative time"
+        )
         var step = Angle(seconds * VIEW_HELPER_TURN_RATE, RADIAN)
         var arrived = _turn_towards(self._q1, self._q2, step)
         camera.position = (

@@ -5,12 +5,20 @@
 
 """Adversarial controls for conservative sphere/mesh CCD candidates (#636)."""
 
-from extensions.physics.body import BodyId, DYNAMIC, STATIC, RigidBody
+from extensions.physics.body import (
+    BodyId,
+    DYNAMIC,
+    STATIC,
+    RigidBody,
+    locked_inverse_inertia,
+)
 from extensions.physics.ccd import DISCRETE, SPHERE_MESH_CCD, _sweep_domain
-from extensions.physics.ccd_index import _CCDIndex, _bounds, _down, _up
-from extensions.physics.shape import Shape, PhysicsMaterial, _wide
+from extensions.physics.ccd_index import _CCDIndex, _bounds, _down
+from math.next_float import next_binary64_up
+from extensions.physics.shape import Shape, PhysicsMaterial
+from core.search import first_match
+from math.cross import widen_vector
 from extensions.physics.world import PhysicsWorld
-from math.matrix3 import Matrix3
 from math.quaternion import Quaternion
 from math.triangle import Triangle
 from math.vector3 import Vector3
@@ -245,8 +253,8 @@ def test_equal_triangle_and_sphere_times_retain_insertion_order() raises:
     indexed._validate_ccd()
     var candidates = List[Int]()
     _ = indexed._ccd_index.query(
-        _wide(Vector3(0, 0, 0.15)),
-        _wide(Vector3(0, 0, -0.3)),
+        widen_vector(Vector3(0, 0, 0.15)),
+        widen_vector(Vector3(0, 0, -0.3)),
         Float64(indexed.bodies[1].shape.radius),
         candidates,
     )
@@ -670,11 +678,7 @@ def test_indexed_reach_refusal_restores_pending_force() raises:
         Vector3(0.5, 0, 0.5),
         Quaternion.identity(),
     )
-    var locked = Matrix3()
-    locked.elements[0] = 0
-    locked.elements[4] = 0
-    locked.elements[8] = 0
-    stationary.set_inverse_inertia(locked)
+    stationary.set_inverse_inertia(locked_inverse_inertia())
     _ = indexed.add_body(stationary.copy())
     _ = brute.add_body(stationary^)
     assert_equal(indexed._ccd_index.count, 17)
@@ -696,13 +700,6 @@ def test_indexed_reach_refusal_restores_pending_force() raises:
     assert_true(indexed.bodies[1].torque == Vector3(0, 0, 0))
 
 
-def _contains(found: List[Int], entry: Int) -> Bool:
-    for candidate in found:
-        if candidate == entry:
-            return True
-    return False
-
-
 def _assert_candidates(
     index: _CCDIndex,
     triangles: List[Triangle],
@@ -720,7 +717,7 @@ def _assert_candidates(
             assert_true(found[i] != found[j])
     for i in range(len(triangles)):
         if _sweep_domain(start, travel, 1, reach, triangles[i]):
-            assert_true(_contains(found, i))
+            assert_true(first_match(found, i) >= 0)
 
 
 def test_index_axis_splits_pruning_and_unique_candidates() raises:
@@ -753,31 +750,39 @@ def test_index_axis_splits_pruning_and_unique_candidates() raises:
             assert_true(index.nodes[i].escape > i)
             assert_true(index.nodes[i].escape <= len(index.nodes))
             if index.nodes[i].entry >= 0:
-                assert_false(_contains(leaves, index.nodes[i].entry))
+                assert_false(first_match(leaves, index.nodes[i].entry) >= 0)
                 leaves.append(index.nodes[i].entry)
         assert_equal(len(leaves), 33)
         for direction in [Float32(-1), Float32(0), Float32(1)]:
             _assert_candidates(
                 index,
                 triangles,
-                _wide(Vector3(0, 0, 0)),
-                _wide(Vector3(2 * direction, 3 * direction, 4 * direction)),
+                widen_vector(Vector3(0, 0, 0)),
+                widen_vector(
+                    Vector3(2 * direction, 3 * direction, 4 * direction)
+                ),
                 1,
             )
         var found = List[Int]()
         var visited = index.query(
-            _wide(Vector3(0, 0, 0)), _wide(Vector3(0, 0, 0)), 1, found
+            widen_vector(Vector3(0, 0, 0)),
+            widen_vector(Vector3(0, 0, 0)),
+            1,
+            found,
         )
         assert_equal(len(found), 1)
         assert_true(visited < len(index.nodes))
         visited = index.query(
-            _wide(Vector3(0, 0, 0)), _wide(Vector3(0, 0, 0)), 1000, found
+            widen_vector(Vector3(0, 0, 0)),
+            widen_vector(Vector3(0, 0, 0)),
+            1000,
+            found,
         )
         assert_equal(len(found), 33)
         assert_equal(visited, len(index.nodes))
         visited = index.query(
-            _wide(Vector3(1000000, 1000000, 1000000)),
-            _wide(Vector3(0, 0, 0)),
+            widen_vector(Vector3(1000000, 1000000, 1000000)),
+            widen_vector(Vector3(0, 0, 0)),
             0,
             found,
         )
@@ -794,7 +799,10 @@ def test_index_axis_splits_pruning_and_unique_candidates() raises:
         assert_equal(index.count, 0)
         found.append(999)
         visited = index.query(
-            _wide(Vector3(0, 0, 0)), _wide(Vector3(0, 0, 0)), 1, found
+            widen_vector(Vector3(0, 0, 0)),
+            widen_vector(Vector3(0, 0, 0)),
+            1,
+            found,
         )
         assert_equal(visited, 0)
         assert_equal(len(found), 0)
@@ -818,16 +826,22 @@ def test_equal_centroids_and_query_boundary_containment() raises:
     ]:
         var found = List[Int]()
         var visited = index.query(
-            _wide(start), _wide(Vector3(0, 0, 0)), 1, found
+            widen_vector(start), widen_vector(Vector3(0, 0, 0)), 1, found
         )
         assert_equal(visited, len(index.nodes))
         assert_equal(len(found), 9)
         _assert_candidates(
-            index, triangles, _wide(start), _wide(Vector3(0, 0, 0)), 1
+            index,
+            triangles,
+            widen_vector(start),
+            widen_vector(Vector3(0, 0, 0)),
+            1,
         )
     # No Float32 narrowing of sub-ULP endpoint travel or query inflation.
     var tiny = SIMD[DType.float64, 4](1e-16, -1e-16, 0, 0)
-    _assert_candidates(index, triangles, _wide(Vector3(-1, 2, 0)), tiny, 1)
+    _assert_candidates(
+        index, triangles, widen_vector(Vector3(-1, 2, 0)), tiny, 1
+    )
 
 
 def test_bounds_round_each_operation_outward() raises:
@@ -838,10 +852,10 @@ def test_bounds_round_each_operation_outward() raises:
         Float64(1),
         Float64(1000000),
     ]:
-        assert_true(_up(value) > value)
+        assert_true(next_binary64_up(value) > value)
         assert_true(_down(value) < value)
-        assert_equal(_down(value), -_up(-value))
-    assert_true(_up(Float64(-0.0)) > 0)
+        assert_equal(_down(value), -next_binary64_up(-value))
+    assert_true(next_binary64_up(Float64(-0.0)) > 0)
     assert_true(_down(Float64(-0.0)) < 0)
     var start = SIMD[DType.float64, 4](1, -1, 0, 0)
     var travel = SIMD[DType.float64, 4](1e-16, -1e-16, 0, 0)

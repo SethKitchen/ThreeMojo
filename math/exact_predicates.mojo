@@ -18,6 +18,7 @@ its active words. These helpers require finite inputs; callers validate at
 their public boundary. Tolerances must also be finite and nonnegative.
 """
 
+from math.next_float import next_binary64_up
 from math.scaled_products import _Scaled, _common_scale, _split
 from std.math import inf, isfinite, ldexp
 from std.memory import bitcast
@@ -233,18 +234,10 @@ struct _Interval(ImplicitlyCopyable):
         return _outward(min(min(a, b), min(c, d)), max(max(a, b), max(c, d)))
 
 
-def _up(value: Float64) -> Float64:
-    """Return the adjacent greater binary64, including subnormal values."""
-    if value == 0:
-        return bitcast[DType.float64](UInt64(1))
-    var bits = bitcast[DType.uint64](value)
-    return bitcast[DType.float64](bits + 1 if value > 0 else bits - 1)
-
-
 def _outward(low: Float64, high: Float64) -> _Interval:
     if not isfinite(low) or not isfinite(high):
         return _Interval(-inf[DType.float64](), inf[DType.float64]())
-    return _Interval(-_up(-low), _up(high))
+    return _Interval(-next_binary64_up(-low), next_binary64_up(high))
 
 
 def _interval_difference(a: _P, b: _P) -> Array[_Interval, 3]:
@@ -314,6 +307,25 @@ def _ordinary_range(value: _P) -> Bool:
 
 
 @always_inline
+def _cross_pairs(
+    u: _P, v: _P
+) -> Tuple[Float64, Float64, Float64, Float64, Float64, Float64]:
+    """Return the six products of a 3D cross, in component order.
+
+    They are `u.y * v.z`, `u.z * v.y`, `u.z * v.x`, `u.x * v.z`,
+    `u.x * v.y`, and `u.y * v.x`. A component is the first of a pair
+    minus the second.
+    """
+    return (
+        u[1] * v[2],
+        u[2] * v[1],
+        u[2] * v[0],
+        u[0] * v[2],
+        u[0] * v[1],
+        u[1] * v[0],
+    )
+
+
 def _fast_plane(a: _P, b: _P, c: _P, p: _P, tolerance: Float64) -> Int:
     """Certify a signed distance comparison, or return zero when uncertain.
 
@@ -349,12 +361,7 @@ def _fast_plane(a: _P, b: _P, c: _P, p: _P, tolerance: Float64) -> Int:
         or not _ordinary_range(w)
     ):
         return 0
-    var r0 = u[1] * v[2]
-    var r1 = u[2] * v[1]
-    var r2 = u[2] * v[0]
-    var r3 = u[0] * v[2]
-    var r4 = u[0] * v[1]
-    var r5 = u[1] * v[0]
+    var r0, r1, r2, r3, r4, r5 = _cross_pairs(u, v)
     var nx = r0 - r1
     var ny = r2 - r3
     var nz = r4 - r5
@@ -466,12 +473,7 @@ def _normal_estimate(a: _P, b: _P, c: _P) -> Array[Float64, 3]:
     var u = _P(b[0] - a[0], b[1] - a[1], b[2] - a[2], 0)
     var v = _P(c[0] - a[0], c[1] - a[1], c[2] - a[2], 0)
     if _ordinary_range(u) and _ordinary_range(v):
-        var r0 = u[1] * v[2]
-        var r1 = u[2] * v[1]
-        var r2 = u[2] * v[0]
-        var r3 = u[0] * v[2]
-        var r4 = u[0] * v[1]
-        var r5 = u[1] * v[0]
+        var r0, r1, r2, r3, r4, r5 = _cross_pairs(u, v)
         var nx = r0 - r1
         var ny = r2 - r3
         var nz = r4 - r5

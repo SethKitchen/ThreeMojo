@@ -77,12 +77,21 @@ See `docs/wiki/Norm-consumers.md` for the changed operations, retained
 limits, and explicit zero and nonfinite rules.
 """
 
+from core.ordinal import (
+    ordinal_valid,
+    require_index_in_count,
+    require_draw_ids,
+    require_non_negative,
+    require_valid,
+)
+
 from math.norm import normalized2
 from core.buffer_attribute import BufferAttribute
 from core.geometry_store import GeometryId
 from core.object3d import NodeId
 from materials.material import MaterialId
 from math.matrix4 import Matrix4
+from math.utils import glsl_sign
 from math.vector3 import Vector3
 from std.math import sqrt
 
@@ -114,7 +123,7 @@ struct LineMode(Equatable, ImplicitlyCopyable, Writable):
 
     def is_valid(self) -> Bool:
         """Return True if this is `STRIP`, `LOOP` or `SEGMENTS`."""
-        return self == STRIP or self == LOOP or self == SEGMENTS
+        return ordinal_valid(self.value, SEGMENTS.value)
 
 
 # One open path through every point in order: the three.js `Line`, and the
@@ -126,6 +135,20 @@ comptime LOOP = LineMode(1)
 # Points read two at a time as separate sticks: the three.js `LineSegments`,
 # and what `EdgesGeometry` and `WireframeGeometry` are drawn with.
 comptime SEGMENTS = LineMode(2)
+
+
+def require_line_mode(mode: LineMode) raises:
+    """Refuse a line mode that is not named.
+
+    Nothing. The call returns when the mode is named.
+
+    Args:
+        mode: The mode.
+
+    Raises:
+        Error: If the mode is not named.
+    """
+    require_valid(mode.is_valid(), "A line needs a mode that exists")
 
 
 def segment_count(mode: LineMode, vertices: Int) raises -> Int:
@@ -144,10 +167,8 @@ def segment_count(mode: LineMode, vertices: Int) raises -> Int:
             or if `SEGMENTS` is given an odd count, which leaves a point
             with nothing to join it to.
     """
-    if not mode.is_valid():
-        raise Error("A line needs a mode that exists")
-    if vertices < 0:
-        raise Error("A line cannot have fewer than no points")
+    require_line_mode(mode)
+    require_non_negative(vertices, "A line cannot have fewer than no points")
     if mode == SEGMENTS:
         if vertices % 2 != 0:
             raise Error("Line segments come in pairs of points")
@@ -182,8 +203,7 @@ def segment_ends(
             segment.
     """
     var count = segment_count(mode, vertices)
-    if segment < 0 or segment >= count:
-        raise Error("Line segment index out of range")
+    require_index_in_count(segment, count, "Line segment index out of range")
     if mode == SEGMENTS:
         return (segment * 2, segment * 2 + 1)
     # The closing segment of a loop is the only one that wraps, and taking
@@ -259,14 +279,8 @@ struct Line(ImplicitlyCopyable):
             Error: If any id is negative, the mode is not a named one, or
                 a conditional line's mode is not `SEGMENTS`.
         """
-        if node.value < 0:
-            raise Error("A line must name a scene node")
-        if geometry.value < 0:
-            raise Error("A line must name a geometry")
-        if material.value < 0:
-            raise Error("A line must name a material")
-        if not mode.is_valid():
-            raise Error("A line needs a mode that exists")
+        require_draw_ids(node.value, geometry.value, material.value, "A line")
+        require_line_mode(mode)
         if conditional and not (mode == SEGMENTS):
             raise Error(
                 "A conditional line is a list of sticks: its mode is SEGMENTS"
@@ -313,15 +327,6 @@ def _unit(v: SIMD[DType.float32, 2]) -> SIMD[DType.float32, 2]:
     return SIMD[DType.float32, 2](unit[0], unit[1])
 
 
-def _sign(x: Float32) -> Float32:
-    """Return GLSL's `sign`, and zero for NaN."""
-    if x > 0:
-        return 1
-    if x < 0:
-        return -1
-    return 0
-
-
 def conditional_discard(
     mvp: Matrix4,
     position: Vector3,
@@ -356,7 +361,7 @@ def conditional_discard(
     var c1 = _unit(_on_screen(mvp, control1) - p1)
     var d0 = norm[0] * c0[0] + norm[1] * c0[1]
     var d1 = norm[0] * c1[0] + norm[1] * c1[1]
-    return 1.0 if _sign(d0) != _sign(d1) else 0.0
+    return 1.0 if glsl_sign(d0) != glsl_sign(d1) else 0.0
 
 
 def line_distances(

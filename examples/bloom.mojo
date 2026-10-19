@@ -12,6 +12,13 @@ the light above a threshold bleed, darkens the corners, and applies the
 renderer's tone curve once at the end.
 """
 
+from tools._example_output import (
+    example_destination,
+    framed_camera,
+    gallery_renderer,
+    write_example,
+)
+
 from cameras.perspective_camera import PerspectiveCamera
 from core.assets import Assets
 from core.clock import Clock
@@ -30,13 +37,10 @@ from postprocessing.composer import (
     render_pass,
     vignette_pass,
 )
-from render.apng import encode
 from render.framebuffer import Color, Framebuffer
 from render.tonemap import ACES_FILMIC_TONE_MAPPING
-from renderers.renderer import Renderer, available_workers
-from std.pathlib import Path
-from std.sys import argv, stderr
-from units.si import Angle, DEGREE, Length, METER, MILLISECOND
+from renderers.renderer import Renderer
+from units.si import Angle, DEGREE, Length, METER
 
 comptime DEFAULT_OUTPUT = "out/postprocessing.png"
 comptime WIDTH = 240
@@ -79,13 +83,9 @@ def frame_at(
 
 
 def main() raises:
-    var args = argv()
-    var destination = String(DEFAULT_OUTPUT)
-    if len(args) > 1:
-        destination = String(args[1])
+    var destination = example_destination(String(DEFAULT_OUTPUT))
 
-    var renderer = Renderer(WIDTH, HEIGHT, workers=available_workers())
-    renderer.set_background(Color(8, 9, 14))
+    var renderer = gallery_renderer(WIDTH, HEIGHT, Color(8, 9, 14))
     renderer.set_tone_mapping(ACES_FILMIC_TONE_MAPPING, 1.1)
 
     var assets = Assets()
@@ -135,11 +135,12 @@ def main() raises:
     var eye = Object3D()
     eye.set_position(0, 0.35, 3.4)
     var eye_node = scene.attach(eye^, pivot)
-    var camera = PerspectiveCamera(
-        Angle(38.0, DEGREE),
-        Float32(WIDTH) / Float32(HEIGHT),
-        Length(0.1, METER),
-        Length(40.0, METER),
+    var camera = framed_camera(
+        WIDTH,
+        HEIGHT,
+        field_of_view=Angle(38.0, DEGREE),
+        near=Length(0.1, METER),
+        far=Length(40.0, METER),
     )
     camera.attach(eye_node)
 
@@ -155,12 +156,4 @@ def main() raises:
             )
         )
 
-    print(
-        '{"frames_ms": ',
-        frame_clock.elapsed().to(MILLISECOND),
-        "}",
-        sep="",
-        file=stderr,
-    )
-    Path(destination).write_bytes(encode(frames, delay_ms=DELAY_MS))
-    print("Wrote", destination, "-", FRAMES, "frames")
+    write_example(frames, destination, DELAY_MS, FRAMES, frame_clock)

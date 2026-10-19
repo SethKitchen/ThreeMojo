@@ -27,8 +27,10 @@ TGA carries no color space of its own. What a paint program writes is
 sRGB, and so does this reader assume: a decoded TGA is `SRGB`.
 """
 
+from core.binary import copy_bytes, little_endian_u16
+from core.ordinal import require_index_in_count, require_valid
 from render.framebuffer import Color
-from render.png import MAX_PIXELS, DecodedImage
+from render.png import DecodedImage, require_image_pixels
 from render.srgb import SRGB
 
 # How long the fixed header is.
@@ -108,10 +110,21 @@ comptime RLE_TRUE_COLOR = TgaImageType(10)
 comptime RLE_GRAYSCALE = TgaImageType(11)
 
 
-def _le16(bytes: List[UInt8], at: Int) -> Int:
-    """Return the little-endian sixteen-bit number at `at`, which the
-    header's length check has already found in the file."""
-    return Int(bytes[at]) | (Int(bytes[at + 1]) << 8)
+def require_tga_span(start: Int, count: Int, length: Int) raises:
+    """Refuse a TGA read that runs past the file.
+
+    Nothing. The call returns when the read stays inside the file.
+
+    Args:
+        start: The first byte to read.
+        count: How many bytes the read needs.
+        length: How many bytes the file has.
+
+    Raises:
+        Error: If the read runs past the file.
+    """
+    if start + count > length:
+        raise Error("A TGA file ended inside its pixels")
 
 
 def unpack_pixels(
@@ -142,16 +155,11 @@ def unpack_pixels(
         Error: If `kind` is not a type this reader reads, the file ends
             before the last pixel, or a packet runs past the image.
     """
-    if not kind.is_valid():
-        raise Error("A TGA image type this reader does not read")
+    require_valid(kind.is_valid(), "A TGA image type this reader does not read")
     var size = count * pixel_bytes
     if not kind.is_run_length():
-        if start + size > len(bytes):
-            raise Error("A TGA file ended inside its pixels")
-        var plain = List[UInt8](capacity=size)
-        for index in range(size):
-            plain.append(bytes[start + index])
-        return plain^
+        require_tga_span(start, size, len(bytes))
+        return copy_bytes(bytes, start, size)
     var out = List[UInt8](capacity=size)
     var at = start
     var done = 0
@@ -164,15 +172,13 @@ def unpack_pixels(
         if done + run > count:
             raise Error("A TGA run-length packet runs past the image")
         if header & REPEAT_PACKET != 0:
-            if at + pixel_bytes > len(bytes):
-                raise Error("A TGA file ended inside its pixels")
+            require_tga_span(at, pixel_bytes, len(bytes))
             for _ in range(run):  # pragma: no branch
                 for index in range(pixel_bytes):  # pragma: no branch
                     out.append(bytes[at + index])
             at += pixel_bytes
         else:
-            if at + run * pixel_bytes > len(bytes):
-                raise Error("A TGA file ended inside its pixels")
+            require_tga_span(at, run * pixel_bytes, len(bytes))
             for index in range(run * pixel_bytes):  # pragma: no branch
                 out.append(bytes[at + index])
             at += run * pixel_bytes
@@ -208,18 +214,20 @@ def decode(bytes: List[UInt8]) raises -> DecodedImage:
     var id_length = Int(bytes[0])
     var map_type = Int(bytes[1])
     var kind = TgaImageType(Int(bytes[2]))
-    var map_first = _le16(bytes, 3)
-    var map_length = _le16(bytes, 5)
+    var map_first = little_endian_u16(bytes, 3)
+    var map_length = little_endian_u16(bytes, 5)
     var map_bits = Int(bytes[7])
-    var width = _le16(bytes, 12)
-    var height = _le16(bytes, 14)
+    var width = little_endian_u16(bytes, 12)
+    var height = little_endian_u16(bytes, 14)
     var pixel_bits = Int(bytes[16])
     var descriptor = Int(bytes[17])
-    if not kind.is_valid():
-        raise Error(
-            "A TGA image type must be color-mapped, true color or gray,"
-            " plain or run-length encoded"
-        )
+    require_valid(
+        kind.is_valid(),
+        (
+            "A TGA image type must be color-mapped, true color or gray, plain"
+            " or run-length encoded"
+        ),
+    )
     if kind.is_color_mapped():
         if map_type != 1:
             raise Error("A color-mapped TGA must carry a color map")
@@ -242,8 +250,7 @@ def decode(bytes: List[UInt8]) raises -> DecodedImage:
             )
     if width == 0 or height == 0:
         raise Error("A TGA file must have a width and a height")
-    if width * height > MAX_PIXELS:
-        raise Error("Image has too many pixels")
+    require_image_pixels(width, height)
 
     var at = HEADER_SIZE + id_length
     var palette = List[Color]()
@@ -269,8 +276,11 @@ def decode(bytes: List[UInt8]) raises -> DecodedImage:
         var color: Color
         if kind.is_color_mapped():
             var entry = Int(data[source]) - map_first
-            if entry < 0 or entry >= map_length:
-                raise Error("A TGA pixel names an entry its map does not have")
+            require_index_in_count(
+                entry,
+                map_length,
+                "A TGA pixel names an entry its map does not have",
+            )
             color = palette[entry]
         elif kind.is_gray():
             var alpha = UInt8(255)

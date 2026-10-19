@@ -13,10 +13,17 @@ front of it as it goes. The second camera rides a node aimed at the cube,
 and its outline rides the same node.
 """
 
+from tools._example_output import (
+    example_destination,
+    fill_and_key,
+    framed_camera,
+    gallery_renderer,
+    spin_clip,
+)
+
 from cameras.perspective_camera import PerspectiveCamera
 from core.assets import Assets
-from core.clock import Clock
-from core.object3d import NodeId, Object3D
+from core.object3d import Object3D
 from core.scene import Scene
 from geometries.box import cube
 from helpers.axes import axes_helper
@@ -24,17 +31,12 @@ from helpers.box import DEFAULT_BOX_COLOR, box_helper
 from helpers.camera import camera_helper
 from helpers.grid import grid_helper
 from helpers.material import helper_material
-from lights.light import ambient_light, directional_light
 from materials.material import BASIC, Material
 from math.vector3 import Vector3
 from objects.line import Line, SEGMENTS
 from objects.mesh import Mesh
-from render.apng import encode
-from render.framebuffer import Color, Framebuffer
-from renderers.renderer import Renderer, available_workers
-from std.pathlib import Path
-from std.sys import argv, stderr
-from units.si import Angle, DEGREE, Length, METER, MILLISECOND
+from render.framebuffer import Color
+from units.si import Angle, DEGREE, Length, METER
 
 comptime DEFAULT_OUTPUT = "out/helpers.png"
 comptime WIDTH = 240
@@ -43,42 +45,9 @@ comptime FRAMES = 36
 comptime DELAY_MS = 55
 
 
-def frame_at(
-    renderer: Renderer,
-    camera: PerspectiveCamera,
-    assets: Assets,
-    mut scene: Scene,
-    pivot: NodeId,
-    step: Angle,
-) raises -> Framebuffer:
-    """Turn the camera's pivot by `step` and render one frame.
-
-    Args:
-        renderer: The renderer to draw with.
-        camera: The camera to view through, riding a child of the pivot.
-        assets: The geometries and materials.
-        scene: The persistent scene, edited in place.
-        pivot: The node the camera swings around.
-        step: How much further to turn this frame.
-
-    Returns:
-        The rendered frame.
-
-    Raises:
-        Error: If the scene or the render is invalid.
-    """
-    scene.node(pivot).rotate_y(step)
-    scene.update()
-    return renderer.render(scene, assets, camera)
-
-
 def main() raises:
-    var args = argv()
-    var destination = String(DEFAULT_OUTPUT)
-    if len(args) > 1:
-        destination = String(args[1])
-    var renderer = Renderer(WIDTH, HEIGHT, workers=available_workers())
-    renderer.set_background(Color(16, 18, 26))
+    var destination = example_destination(String(DEFAULT_OUTPUT))
+    var renderer = gallery_renderer(WIDTH, HEIGHT, Color(16, 18, 26))
     var assets = Assets()
     var scene = Scene()
     var root = scene.add(Object3D())
@@ -120,11 +89,16 @@ def main() raises:
     var outline = assets.geometries.add(camera_helper(watched))
     scene.add_line(Line(outline, paint, perch_node, mode=SEGMENTS))
 
-    var lamp = Object3D()
-    lamp.set_position(0.5, 0.9, 0.8)
-    var lamp_node = scene.add(lamp^)
-    scene.add_light(ambient_light(Color(255, 255, 255), 0.79))
-    scene.add_light(directional_light(Color(255, 255, 255), lamp_node, 2.51))
+    fill_and_key(
+        scene,
+        0.5,
+        0.9,
+        0.8,
+        Color(255, 255, 255),
+        0.79,
+        Color(255, 255, 255),
+        2.51,
+    )
 
     # The camera that renders swings around a pivot at the origin.
     var pivot = scene.add(Object3D())
@@ -133,25 +107,14 @@ def main() raises:
     var seat_node = scene.attach(seat^, pivot)
     scene.update()
     scene.look_at(seat_node, Vector3(0, 0.2, 0), camera=True)
-    var camera = PerspectiveCamera(
-        Angle(40.0, DEGREE),
-        Float32(WIDTH) / Float32(HEIGHT),
-        Length(0.1, METER),
-        Length(100.0, METER),
+    var camera = framed_camera(
+        WIDTH,
+        HEIGHT,
+        field_of_view=Angle(40.0, DEGREE),
+        near=Length(0.1, METER),
+        far=Length(100.0, METER),
     )
     camera.attach(seat_node)
-    var step = Angle(Float32(360) / Float32(FRAMES), DEGREE)
-    var frame_clock = Clock()
-    frame_clock.start()
-    var frames = List[Framebuffer]()
-    for _ in range(FRAMES):
-        frames.append(frame_at(renderer, camera, assets, scene, pivot, step))
-    print(
-        '{"frames_ms": ',
-        frame_clock.elapsed().to(MILLISECOND),
-        "}",
-        sep="",
-        file=stderr,
+    spin_clip(
+        renderer, camera, assets, scene, pivot, FRAMES, DELAY_MS, destination
     )
-    Path(destination).write_bytes(encode(frames, delay_ms=DELAY_MS))
-    print("Wrote", destination, "-", FRAMES, "frames")

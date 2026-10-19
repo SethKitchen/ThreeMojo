@@ -47,7 +47,9 @@ three.js's shader for that primitive reads it; see
 triangle's corners before either backend sees it, so both receive the moved
 depths and agree without a device lane.
 """
+from core.ordinal import ordinal_valid, require_valid
 
+from math.finite import positive_finite
 from math.vector3 import Vector3
 from render.blend import Rgba
 from std.math import inf, isfinite, log2, max, min
@@ -76,7 +78,7 @@ struct DepthFunc(Equatable, ImplicitlyCopyable, Writable):
         Returns:
             Whether the value names a depth function.
         """
-        return self.value >= 0 and self.value <= 7
+        return ordinal_valid(self.value, 7)
 
 
 comptime NEVER_DEPTH = DepthFunc(0)
@@ -103,7 +105,7 @@ struct DepthMode(Equatable, ImplicitlyCopyable, Writable):
         Returns:
             Whether the value names a depth mode.
         """
-        return self.value >= 0 and self.value <= 2
+        return ordinal_valid(self.value, 2)
 
 
 # The projection's own depth: -1 at the near plane, 1 at the far plane,
@@ -115,6 +117,20 @@ comptime LOGARITHMIC_DEPTH = DepthMode(1)
 # three.js's `reversedDepthBuffer`: 1 at the near plane, 0 at the far
 # plane, cleared to minus infinity, and every comparison turned round.
 comptime REVERSED_DEPTH = DepthMode(2)
+
+
+def require_depth_mode(mode: DepthMode) raises:
+    """Refuse a depth mode that is none of the three.
+
+    Nothing. The call returns when the mode is named.
+
+    Args:
+        mode: The mode to check.
+
+    Raises:
+        Error: If `mode` is none of the three.
+    """
+    require_valid(mode.is_valid(), "A depth mode that is none of the three")
 
 
 def log_depth_factor(far: Float32) -> Float32:
@@ -220,7 +236,7 @@ struct StencilFunc(Equatable, ImplicitlyCopyable, Writable):
         Returns:
             Whether the value names a stencil function.
         """
-        return self.value >= 0 and self.value <= 7
+        return ordinal_valid(self.value, 7)
 
 
 comptime NEVER_STENCIL_FUNC = StencilFunc(0)
@@ -247,7 +263,7 @@ struct StencilOp(Equatable, ImplicitlyCopyable, Writable):
         Returns:
             Whether the value names a stencil operation.
         """
-        return self.value >= 0 and self.value <= 7
+        return ordinal_valid(self.value, 7)
 
 
 comptime ZERO_STENCIL_OP = StencilOp(0)
@@ -372,8 +388,18 @@ def _is_byte(value: Int) -> Bool:
     return value >= 0 and value <= STENCIL_MAX
 
 
-def _is_fraction(value: Float32) -> Bool:
-    """Return True if `value` is finite and from zero to one."""
+def is_unit_fraction(value: Float32) -> Bool:
+    """Return True when a value is finite and from zero to one.
+
+    Error: Never.
+
+    Args:
+        value: The number.
+
+    Returns:
+        Whether the value is finite and within zero and one.
+
+    """
     return isfinite(value) and value >= 0 and value <= 1
 
 
@@ -560,12 +586,12 @@ struct RasterState(Equatable, ImplicitlyCopyable, Writable):
             and self.depth_mode.is_valid()
             and (
                 self.depth_mode != LOGARITHMIC_DEPTH
-                or (isfinite(self.log_depth_scale) and self.log_depth_scale > 0)
+                or (positive_finite(Float64(self.log_depth_scale)))
             )
-            and _is_fraction(self.blend_red)
-            and _is_fraction(self.blend_green)
-            and _is_fraction(self.blend_blue)
-            and _is_fraction(self.blend_alpha)
+            and is_unit_fraction(self.blend_red)
+            and is_unit_fraction(self.blend_green)
+            and is_unit_fraction(self.blend_blue)
+            and is_unit_fraction(self.blend_alpha)
         )
 
     def check(self) raises:
@@ -578,13 +604,15 @@ struct RasterState(Equatable, ImplicitlyCopyable, Writable):
                 is not finite and positive, or a channel of the blend
                 constant is not from zero to one.
         """
-        if not self.is_valid():
-            raise Error(
+        require_valid(
+            self.is_valid(),
+            (
                 "A depth or stencil state names a function, an operation or"
                 " a depth mode there is not, a stencil value outside 0 to"
                 " 255, a logarithmic depth without a positive factor, or a"
                 " blend color or alpha outside 0 to 1"
-            )
+            ),
+        )
 
     def writes_depth(self) -> Bool:
         """Return True if a fragment that passes writes its depth.

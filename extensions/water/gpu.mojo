@@ -32,6 +32,7 @@ from extensions.water.frame import (
     camera_look,
     grade_pixel,
     lit_radiance,
+    require_water_size,
 )
 from extensions.water.glare import (
     glare_cell_x,
@@ -445,8 +446,7 @@ struct GpuWater(Movable):
         Raises:
             Error: If a size is not positive, or a device step fails.
         """
-        if width <= 0 or height <= 0:
-            raise Error("Water image dimensions must be positive")
+        require_water_size(width, height)
         var surface = scene._surface()
         var caustics = scene._caustics(surface)
         return self._shade(scene, surface, caustics, look, width, height)
@@ -483,8 +483,7 @@ struct GpuWater(Movable):
             Error: If a size or the view is not valid, or a device step
                 fails.
         """
-        if width <= 0 or height <= 0:
-            raise Error("Water image dimensions must be positive")
+        require_water_size(width, height)
         require_view(view)
         if view == CAUSTICS:
             return scene.draw(width, height, view, sway, _no_bed(), pitch)

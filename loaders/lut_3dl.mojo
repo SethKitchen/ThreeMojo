@@ -35,7 +35,11 @@ a number that is not one, where three.js reads `NaN`, and a table whose
 largest number is not above zero, which three.js divides by zero.
 """
 
+from std.math import isfinite
+
+from loaders.bytes import ascii_digit, js_float_byte_at
 from loaders.js_number import js_string_to_number
+from loaders.js_text import split_fields, text_lines
 from render.srgb import LINEAR
 from render.texture import (
     BILINEAR,
@@ -45,8 +49,9 @@ from render.texture import (
     TexelType,
 )
 from render.volume_texture import Data3DTexture, VolumeImage, _check_extent
-from std.math import ceil, isfinite, log2
+from std.math import ceil, log2
 from std.pathlib import Path
+from core.ordinal import require_valid, require_positive
 
 
 struct Lut3dl(Movable):
@@ -88,18 +93,9 @@ def _number(text: String) raises -> Float64:
         Error: If it is not a finite number.
     """
     var value = js_string_to_number(text)
-    if not isfinite(value):
+    if not isfinite(Float64(value)):
         raise Error("3DL: `" + text + "` is not a number")
     return value
-
-
-def _lines(text: String) -> List[String]:
-    """Return the lines of a text, split at each line break, as a
-    multiline regular expression's `^` and `$` see them."""
-    var out = List[String]()
-    for line in text.replace("\r", "\n").split("\n"):  # pragma: no branch
-        out.append(String(line))
-    return out^
 
 
 def _is_grid(line: String) -> Bool:
@@ -109,7 +105,7 @@ def _is_grid(line: String) -> Bool:
         return False
     # Not empty, checked above: the loop always runs.
     for b in bytes:  # pragma: no branch
-        var allowed = (b >= 48 and b <= 57) or b == 32
+        var allowed = ascii_digit(Int(b)) or b == 32
         if not allowed:
             return False
     return True
@@ -123,7 +119,7 @@ def _entry(line: String) -> List[String]:
     var i = 0
     while i < len(bytes):
         var start = i
-        while _number_at(bytes, i):
+        while js_float_byte_at(bytes, i):
             i += 1
         if i == start:
             return List[String]()
@@ -139,24 +135,9 @@ def _entry(line: String) -> List[String]:
     return List[String]()
 
 
-def _number_at(bytes: Span[UInt8, _], i: Int) -> Bool:
-    """Return True if there is a byte of `[\\d.e+-]` at `i`."""
-    return i < len(bytes) and _in_number(bytes[i])
-
-
 def _space_at(bytes: Span[UInt8, _], i: Int) -> Bool:
     """Return True if there is a space at `i`."""
     return i < len(bytes) and bytes[i] == 32
-
-
-def _in_number(byte: UInt8) -> Bool:
-    """Return True for a byte of `[\\d.e+-]`."""
-    return (
-        (byte >= 48 and byte <= 57)
-        or byte == 46
-        or byte == 101
-        or (byte == 43 or byte == 45)
-    )
 
 
 def lut_3dl_byte(value: Float64) -> UInt8:
@@ -201,22 +182,20 @@ def parse_lut_3dl(
             grid is not evenly spaced, a number is not one, or the largest
             number is not above zero.
     """
-    if not texel_type.is_valid():
-        raise Error("3DL: a texel type that is not valid")
-    var lines = _lines(text)
+    require_valid(texel_type.is_valid(), "3DL: a texel type that is not valid")
+    var lines = text_lines(text)
     var grid = List[Float64]()
     # A split gives at least one line: these loops always run.
     for line in lines:  # pragma: no branch
         if _is_grid(line):
-            for field in line.split():
-                grid.append(_number(String(field)))
+            for field in split_fields(line):
+                grid.append(_number(field))
             if len(grid) == 0:
                 # A line of spaces: `"".split( /\s+/ )` is one empty
                 # string, and `Number( "" )` is zero.
                 grid.append(0)
             break
-    if len(grid) == 0:
-        raise Error("3DL: missing grid information")
+    require_positive(len(grid), "3DL: missing grid information")
     var size = len(grid)
     var step = grid[1] - grid[0] if size > 1 else Float64(0)
     for i in range(1, size):

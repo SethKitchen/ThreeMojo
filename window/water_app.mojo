@@ -314,14 +314,16 @@ struct WaterApp(Movable):
         var look = camera_look(
             self.water.clock, True, Angle(self.pitch, RADIAN)
         )
-        self.upload = FrameUpload(self.water, look)
+        var upload = FrameUpload(self.water, look)
+        var size = glare_grid(self.water, self.width, self.height)
+        # Neither preparation can fail after the published arrays change.
+        self.upload = upload^
         if not self.bed_packed:
             var packed = pack_pebbles(self.bed)
             self.pebble = packed[0].copy()
             self.pebble_table = packed[1].copy()
             self.bed_generation += 1
             self.bed_packed = True
-        var size = glare_grid(self.water, self.width, self.height)
         self.grid_width = size[0]
         self.grid_height = size[1]
         var floats = size[0] * size[1] * 3

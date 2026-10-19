@@ -22,6 +22,9 @@ arrives. A sequence this decoder does not know is consumed and dropped.
 A position is a terminal cell: its column and its row, from zero. The
 window that reads the bytes converts a cell to the pixels it shows.
 """
+from core.extent import require_positive_extent
+from loaders.bytes import ascii_digit
+from core.ordinal import ordinal_valid
 
 comptime ESCAPE_BYTE = 27
 # '[' opens a control sequence after an escape.
@@ -30,7 +33,6 @@ comptime BRACKET_BYTE = 91
 comptime LESS_BYTE = 60
 comptime SEMICOLON_BYTE = 59
 comptime ZERO_BYTE = 48
-comptime NINE_BYTE = 57
 # 'M' ends a mouse press, a drag or a wheel notch; 'm' ends a release.
 comptime PRESS_BYTE = 77
 comptime RELEASE_BYTE = 109
@@ -69,7 +71,7 @@ struct InputKind(Equatable, ImplicitlyCopyable, Writable):
         Returns:
             Whether the value names a kind.
         """
-        return self.value >= 0 and self.value <= 6
+        return ordinal_valid(self.value, 6)
 
 
 # A key went down. three.js: `keydown`.
@@ -119,6 +121,30 @@ comptime SECONDARY = PointerButton(2)
 comptime NO_BUTTON = PointerButton(-1)
 
 
+def button_choice[
+    A: ImplicitlyCopyable
+](button: PointerButton, primary: A, middle: A, secondary: A, none: A) -> A:
+    """Return the value a pointer button maps to.
+
+    Args:
+        button: The button, or `NO_BUTTON`.
+        primary: The value for the left button.
+        middle: The value for the middle button.
+        secondary: The value for the right button.
+        none: The value when the button is none of those three.
+
+    Returns:
+        The value for that button.
+    """
+    if button == PRIMARY:
+        return primary
+    if button == MIDDLE:
+        return middle
+    if button == SECONDARY:
+        return secondary
+    return none
+
+
 @fieldwise_init
 struct Key(Equatable, ImplicitlyCopyable, Writable):
     """A key, as a type rather than a bare int.
@@ -150,6 +176,13 @@ comptime ESCAPE = Key(27)
 comptime CTRL_C = Key(3)
 # No key: a pointer or a wheel event.
 comptime NO_KEY = Key(-1)
+# The letters a walker uses, as three.js's `event.code` names them.
+comptime KEY_W = Key(119)
+comptime KEY_A = Key(97)
+comptime KEY_S = Key(115)
+comptime KEY_D = Key(100)
+comptime KEY_R = Key(114)
+comptime KEY_F = Key(102)
 
 
 struct InputEvent(ImplicitlyCopyable):
@@ -214,9 +247,84 @@ struct InputEvent(ImplicitlyCopyable):
         self.ctrl = ctrl
 
 
-def _is_digit(byte: UInt8) -> Bool:
-    """Return True if `byte` is an ASCII digit."""
-    return byte >= ZERO_BYTE and byte <= NINE_BYTE
+def require_viewport_size(width: Int, height: Int) raises:
+    """Refuse a viewport whose size is not positive.
+
+    Nothing. The call returns when both sizes are positive.
+
+    Args:
+        width: The width, in pixels.
+        height: The height, in pixels.
+
+    Raises:
+        Error: If the width or the height is not positive.
+    """
+    require_positive_extent(width, height, "A viewport's size must be positive")
+
+
+def require_view_size(width: Int, height: Int) raises:
+    """Refuse a view whose size is not positive.
+
+    Nothing. The call returns when both sizes are positive.
+
+    Args:
+        width: The width, in pixels.
+        height: The height, in pixels.
+
+    Raises:
+        Error: If the width or the height is not positive.
+    """
+    require_positive_extent(
+        width, height, "A view must have a positive width and height"
+    )
+
+
+def refuse_invalid(what: String, value: Int) raises:
+    """Refuse a number that does not name its kind.
+
+    Nothing. The call raises.
+
+    Args:
+        what: What was refused, the words after `Invalid`.
+        value: The number that was refused.
+
+    Raises:
+        Error: Always. The message is `Invalid <what>: <value>`.
+    """
+    raise Error("Invalid " + what + ": ", value)
+
+
+def require_named(valid: Bool, what: String, value: Int) raises:
+    """Refuse a number that does not name its kind.
+
+    Nothing. The call returns when `valid` is true.
+
+    Args:
+        valid: Whether the number names a kind.
+        what: What was refused, the words after `Invalid`.
+        value: The number that was refused.
+
+    Raises:
+        Error: If `valid` is false. The message is `Invalid <what>: <value>`.
+    """
+    if not valid:
+        refuse_invalid(what, value)
+
+
+def require_input(event: InputEvent) raises:
+    """Refuse an event whose kind, button or key is not a named value.
+
+    Nothing. The call returns when the event is valid.
+
+    Args:
+        event: The event.
+
+    Raises:
+        Error: If the kind, button or key is invalid.
+    """
+    require_named(event.kind.is_valid(), "input kind", event.kind.value)
+    require_named(event.button.is_valid(), "pointer button", event.button.value)
+    require_named(event.key.is_valid(), "key", event.key.value)
 
 
 def _is_final(byte: UInt8) -> Bool:
@@ -244,7 +352,7 @@ def _parameters(bytes: List[UInt8], first: Int, end: Int) -> List[Int]:
         if byte == SEMICOLON_BYTE:
             numbers.append(current)
             current = 0
-        elif _is_digit(byte):
+        elif ascii_digit(byte):
             current = current * 10 + Int(byte - ZERO_BYTE)
         else:
             return List[Int]()

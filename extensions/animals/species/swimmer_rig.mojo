@@ -31,8 +31,11 @@ from extensions.sdf.vector import (
     V3,
     clamp,
     cross,
+    mix,
     normalize,
 )
+from math.norm import squared_length2
+from math.utils import edge_index
 from std.math import cos, floor, pi, sin, sqrt
 
 
@@ -158,7 +161,7 @@ struct Profile(Copyable, Movable):
             The cell.
         """
         var n = self.count()
-        var r = max(0, min(n - 1, i))
+        var r = edge_index(i, n)
         return self.rows[r * 4 + k]
 
     def at(self, u: Float64, k: Int) -> Float64:
@@ -231,9 +234,9 @@ def fan_rays(
     var rays = List[Float64](capacity=n * 4)
     for i in range(n):
         var t = 0.0 if n == 1 else Float64(i) / Float64(n - 1)
-        var bu = base0_u + (base1_u - base0_u) * t
-        var bv = base0_v + (base1_v - base0_v) * t
-        var a = (angle0 + (angle1 - angle0) * t) * pi / 180.0
+        var bu = mix(base0_u, base1_u, t)
+        var bv = mix(base0_v, base1_v, t)
+        var a = mix(angle0, angle1, t) * pi / 180.0
         rays.append(bu)
         rays.append(bv)
         rays.append(bu + cos(a) * lengths[i])
@@ -267,7 +270,7 @@ def fin_outline(
     var bnv = rays[(n - 1) * 4 + 1]
     var bdu = bnu - b0u
     var bdv = bnv - b0v
-    var bl = sqrt(bdu * bdu + bdv * bdv)
+    var bl = sqrt(squared_length2[DType.float64](bdu, bdv))
     bl = bl if bl > 0.0 else 1.0
     var nx = -bdv / bl
     var ny = bdu / bl
@@ -289,8 +292,8 @@ def fin_outline(
             var tmv = (rays[i * 4 + 3] + rays[i * 4 + 7]) / 2.0
             var bmu = (rays[i * 4] + rays[i * 4 + 4]) / 2.0
             var bmv = (rays[i * 4 + 1] + rays[i * 4 + 5]) / 2.0
-            poly.append(tmu + (bmu - tmu) * notch)
-            poly.append(tmv + (bmv - tmv) * notch)
+            poly.append(mix(tmu, bmu, notch))
+            poly.append(mix(tmv, bmv, notch))
     poly.append(bnu - nx * sink)
     poly.append(bnv - ny * sink)
     return poly^
@@ -384,7 +387,7 @@ def _side(rays: List[Float64], i: Int, qu: Float64, qv: Float64) -> Float64:
     var bv = rays[i * 4 + 1]
     var dx = rays[i * 4 + 2] - bu
     var dy = rays[i * 4 + 3] - bv
-    var l = sqrt(dx * dx + dy * dy)
+    var l = sqrt(squared_length2[DType.float64](dx, dy))
     l = l if l > 0.0 else 1.0
     return ((qu - bu) * -dy + (qv - bv) * dx) / l
 
@@ -431,13 +434,13 @@ def fin_ray_coords(rays: List[Float64], qu: Float64, qv: Float64) -> RayCoords:
             prev = si
     var i0 = min(n - 2, Int(floor(phase)))
     var f = phase - Float64(i0)
-    var bu = rays[i0 * 4] + (rays[i0 * 4 + 4] - rays[i0 * 4]) * f
-    var bv = rays[i0 * 4 + 1] + (rays[i0 * 4 + 5] - rays[i0 * 4 + 1]) * f
-    var tu = rays[i0 * 4 + 2] + (rays[i0 * 4 + 6] - rays[i0 * 4 + 2]) * f
-    var tv = rays[i0 * 4 + 3] + (rays[i0 * 4 + 7] - rays[i0 * 4 + 3]) * f
+    var bu = mix(rays[i0 * 4], rays[i0 * 4 + 4], f)
+    var bv = mix(rays[i0 * 4 + 1], rays[i0 * 4 + 5], f)
+    var tu = mix(rays[i0 * 4 + 2], rays[i0 * 4 + 6], f)
+    var tv = mix(rays[i0 * 4 + 3], rays[i0 * 4 + 7], f)
     var dx = tu - bu
     var dy = tv - bv
-    var l2 = dx * dx + dy * dy
+    var l2 = squared_length2[DType.float64](dx, dy)
     l2 = l2 if l2 > 0.0 else 1e-12
     var along = clamp(((qu - bu) * dx + (qv - bv) * dy) / l2, 0.0, 1.2)
     return RayCoords(phase, along)

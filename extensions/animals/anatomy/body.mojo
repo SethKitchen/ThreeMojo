@@ -28,6 +28,7 @@ The coat depth is how far the sculpt's surface stands off the skin: fur,
 wool under the explicit fleece, and contour plumage. It is a `DESIGN`
 estimate. No source we read gives it.
 """
+from core.ordinal import ordinal_valid, require_valid
 
 from extensions.anatomy.evidence import (
     DESIGN,
@@ -52,7 +53,7 @@ struct BodyPlan(Equatable, ImplicitlyCopyable, Writable):
         Returns:
             True for the seven plans.
         """
-        return self.value >= 0 and self.value <= 6
+        return ordinal_valid(self.value, 6)
 
 
 # A four-legged mammal: the quadruped rig and limb muscles.
@@ -71,6 +72,20 @@ comptime SERPENT = BodyPlan(5)
 comptime ARACHNID = BodyPlan(6)
 
 
+def require_body_plan(plan: BodyPlan) raises:
+    """Refuse a body plan that is not named.
+
+    Nothing. The call returns when the plan is named.
+
+    Args:
+        plan: The body plan.
+
+    Raises:
+        Error: If the plan is not named.
+    """
+    require_valid(plan.is_valid(), "A body plan must be named")
+
+
 @fieldwise_init
 struct ReferenceKind(Equatable, ImplicitlyCopyable, Writable):
     """Which length the reference length measures."""
@@ -83,7 +98,7 @@ struct ReferenceKind(Equatable, ImplicitlyCopyable, Writable):
         Returns:
             True for the three kinds.
         """
-        return self.value >= 0 and self.value <= 2
+        return ordinal_valid(self.value, 2)
 
 
 # Ground to the top of the withers.
@@ -184,6 +199,20 @@ def _table() -> List[SpeciesBody]:
     return t^
 
 
+def require_species(id: SpeciesId) raises:
+    """Refuse a species that is not named.
+
+    Nothing. The call returns when the species is named.
+
+    Args:
+        id: The species.
+
+    Raises:
+        Error: If the species is not named.
+    """
+    require_valid(id.is_valid(), "No such species")
+
+
 def species_body(id: SpeciesId) raises -> SpeciesBody:
     """Return selected reference sizes for a DESIGN species template.
 
@@ -196,6 +225,5 @@ def species_body(id: SpeciesId) raises -> SpeciesBody:
     Raises:
         Error: If the species is not named.
     """
-    if not id.is_valid():
-        raise Error("No such species")
+    require_species(id)
     return _table()[id.value].copy()

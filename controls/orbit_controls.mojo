@@ -33,6 +33,7 @@ does. `MapControls` in `controls.map_controls` pans that way.
 Differences from three.js: touch input and a target radius limit are not
 ported.
 """
+from core.ordinal import ordinal_valid
 
 from cameras.orthographic_camera import OrthographicCamera
 from cameras.perspective_camera import PerspectiveCamera
@@ -43,21 +44,23 @@ from controls.input import (
     ARROW_UP,
     KEY_DOWN,
     InputEvent,
+    button_choice,
+    require_named,
+    require_input,
     Key,
-    MIDDLE,
     POINTER_DOWN,
     POINTER_MOVE,
     POINTER_UP,
-    PRIMARY,
     PointerButton,
-    SECONDARY,
     WHEEL,
 )
 from math.matrix4 import Matrix4
+from math.utils import clamp
 from math.quaternion import Quaternion
 from math.spherical import Spherical
 from math.vector3 import Vector3
 from std.math import inf, isfinite, pi, tan
+from units.measure import angle_radians
 from units.si import Angle, Duration, Length, METER, RADIAN, SECOND
 
 # A change smaller than this, squared, is no change. three.js: `_EPS`.
@@ -89,7 +92,7 @@ struct OrbitAction(Equatable, ImplicitlyCopyable, Writable):
         Returns:
             Whether the value names an action.
         """
-        return self.value >= 0 and self.value <= 3
+        return ordinal_valid(self.value, 3)
 
 
 comptime NO_ACTION = OrbitAction(0)
@@ -98,9 +101,19 @@ comptime DOLLY = OrbitAction(2)
 comptime PAN = OrbitAction(3)
 
 
-def _clamp(value: Float32, low: Float32, high: Float32) -> Float32:
-    """Return `value` limited to the range from `low` to `high`."""
-    return max(low, min(high, value))
+def require_dolly_factor(scale: Float32) raises:
+    """Refuse a dolly factor outside zero to one.
+
+    Nothing. The call returns when the factor is in that range.
+
+    Args:
+        scale: The factor, between zero and one.
+
+    Raises:
+        Error: If the factor is not between zero and one.
+    """
+    if not (scale > 0 and scale <= 1):
+        raise Error("A dolly factor must be in (0, 1], got ", scale)
 
 
 struct OrbitControls(Copyable, Movable):
@@ -202,7 +215,7 @@ struct OrbitControls(Copyable, Movable):
         self.min_distance = Length(0.0, METER)
         self.max_distance = Length(inf[DType.float32](), METER)
         self.min_polar_angle = Angle(0.0, RADIAN)
-        self.max_polar_angle = Angle(Float32(pi), RADIAN)
+        self.max_polar_angle = angle_radians(pi)
         self.min_azimuth_angle = Angle(-inf[DType.float32](), RADIAN)
         self.max_azimuth_angle = Angle(inf[DType.float32](), RADIAN)
         self.enable_damping = False
@@ -274,8 +287,7 @@ struct OrbitControls(Copyable, Movable):
         Raises:
             Error: If the factor is not between zero and one.
         """
-        if not (scale > 0 and scale <= 1):
-            raise Error("A dolly factor must be in (0, 1], got ", scale)
+        require_dolly_factor(scale)
         self._scale *= scale
 
     def dolly_out(mut self, scale: Float32) raises:
@@ -288,8 +300,7 @@ struct OrbitControls(Copyable, Movable):
         Raises:
             Error: If the factor is not between zero and one.
         """
-        if not (scale > 0 and scale <= 1):
-            raise Error("A dolly factor must be in (0, 1], got ", scale)
+        require_dolly_factor(scale)
         self._scale /= scale
 
     def pan(
@@ -440,12 +451,7 @@ struct OrbitControls(Copyable, Movable):
             Error: If the event's kind, button or key is invalid, or an
                 action is invalid.
         """
-        if not event.kind.is_valid():
-            raise Error("Invalid input kind: ", event.kind.value)
-        if not event.button.is_valid():
-            raise Error("Invalid pointer button: ", event.button.value)
-        if not event.key.is_valid():
-            raise Error("Invalid key: ", event.key.value)
+        require_input(event)
         if not self.enabled:
             return
         if event.kind == POINTER_DOWN:
@@ -524,15 +530,14 @@ struct OrbitControls(Copyable, Movable):
         Raises:
             Error: If the action set for the button is invalid.
         """
-        var action = NO_ACTION
-        if button == PRIMARY:
-            action = self.primary_action
-        elif button == MIDDLE:
-            action = self.middle_action
-        elif button == SECONDARY:
-            action = self.secondary_action
-        if not action.is_valid():
-            raise Error("Invalid orbit action: ", action.value)
+        var action = button_choice(
+            button,
+            self.primary_action,
+            self.middle_action,
+            self.secondary_action,
+            NO_ACTION,
+        )
+        require_named(action.is_valid(), "orbit action", action.value)
         return action
 
     def _move(mut self, event: InputEvent, view: _View):
@@ -650,6 +655,28 @@ struct OrbitControls(Copyable, Movable):
         """
         return Length((position - self.target).length(), METER)
 
+    def _remember(mut self, position: Vector3, zoom: Float32):
+        """Remember the target, `position` and `zoom` for `reset`."""
+        var saved: List[Vector3] = [self.target, position]
+        self._saved = saved^
+        self._saved_zoom = zoom
+
+    def _restore(mut self) raises -> Vector3:
+        """Put the target back and return the saved camera position.
+
+        Returns:
+            The saved camera position.
+
+        Raises:
+            Error: If no state was saved.
+        """
+        if not self._saved:
+            raise Error("OrbitControls: reset needs a state from save_state")
+        var saved = self._saved.value().copy()
+        self.target = saved[0]
+        self._action = NO_ACTION
+        return saved[1]
+
     def save_state(mut self, camera: PerspectiveCamera):
         """Remember the target, the camera's position and its zoom, three.js's
         `saveState`, for `reset`.
@@ -657,9 +684,7 @@ struct OrbitControls(Copyable, Movable):
         Args:
             camera: The camera the controls place.
         """
-        var saved: List[Vector3] = [self.target, camera.position]
-        self._saved = saved^
-        self._saved_zoom = camera.zoom
+        self._remember(camera.position, camera.zoom)
 
     def save_state(mut self, camera: OrthographicCamera):
         """Remember the target, the camera's position and its zoom.
@@ -667,9 +692,7 @@ struct OrbitControls(Copyable, Movable):
         Args:
             camera: The camera the controls place.
         """
-        var saved: List[Vector3] = [self.target, camera.position]
-        self._saved = saved^
-        self._saved_zoom = camera.zoom
+        self._remember(camera.position, camera.zoom)
 
     def reset(mut self, mut camera: PerspectiveCamera) raises:
         """Put the target and the camera back as `save_state` left them,
@@ -682,13 +705,9 @@ struct OrbitControls(Copyable, Movable):
             Error: If no state was saved. three.js saves one as it is made,
                 with the camera it is given; these controls are given none.
         """
-        if not self._saved:
-            raise Error("OrbitControls: reset needs a state from save_state")
-        var saved = self._saved.value().copy()
-        self.target = saved[0]
+        var position = self._restore()
         camera.zoom = self._saved_zoom
-        camera.place(saved[1], self.target)
-        self._action = NO_ACTION
+        camera.place(position, self.target)
 
     def reset(mut self, mut camera: OrthographicCamera) raises:
         """Put the target and the camera back as `save_state` left them.
@@ -699,13 +718,9 @@ struct OrbitControls(Copyable, Movable):
         Raises:
             Error: If no state was saved.
         """
-        if not self._saved:
-            raise Error("OrbitControls: reset needs a state from save_state")
-        var saved = self._saved.value().copy()
-        self.target = saved[0]
+        var position = self._restore()
         camera.zoom = self._saved_zoom
-        camera.place(saved[1], self.target)
-        self._action = NO_ACTION
+        camera.place(position, self.target)
 
     def update(
         mut self, mut camera: PerspectiveCamera, delta: Duration
@@ -730,7 +745,7 @@ struct OrbitControls(Copyable, Movable):
             # and the target follows along the view direction.
             var reach = placed[0] - placed[1]
             var before = reach.length()
-            var after = _clamp(
+            var after = clamp(
                 before * self._scale,
                 self.min_distance.to(METER),
                 self.max_distance.to(METER),
@@ -771,7 +786,7 @@ struct OrbitControls(Copyable, Movable):
         var cursor = self.zoom_to_cursor and self._cursor
         var placed = self._orbit(camera.position, camera.up, delta, False)
         var old_zoom = camera.zoom
-        var new_zoom = _clamp(
+        var new_zoom = clamp(
             old_zoom / self._scale, self.min_zoom, self.max_zoom
         )
         self._scale = 1
@@ -901,13 +916,13 @@ struct OrbitControls(Copyable, Movable):
             self.min_azimuth_angle.to(RADIAN),
             self.max_azimuth_angle.to(RADIAN),
         )
-        phi = _clamp(
+        phi = clamp(
             phi,
             self.min_polar_angle.to(RADIAN),
             self.max_polar_angle.to(RADIAN),
         )
         var factor = self._scale if scale_radius else Float32(1)
-        radius = _clamp(
+        radius = clamp(
             radius * factor,
             self.min_distance.to(METER),
             self.max_distance.to(METER),
@@ -917,7 +932,7 @@ struct OrbitControls(Copyable, Movable):
         # `target.sub( cursor ).clampLength( min, max ).add( cursor )`.
         var from_cursor = target - self.cursor
         var span = from_cursor.length()
-        var kept = _clamp(
+        var kept = clamp(
             span,
             self.min_target_radius.to(METER),
             self.max_target_radius.to(METER),
@@ -1121,7 +1136,7 @@ def _limit_azimuth(theta: Float32, low: Float32, high: Float32) -> Float32:
     var lower = _wrap(low)
     var upper = _wrap(high)
     if lower <= upper:
-        return _clamp(theta, lower, upper)
+        return clamp(theta, lower, upper)
     if theta > (lower + upper) / 2:
         return max(lower, theta)
     return min(upper, theta)

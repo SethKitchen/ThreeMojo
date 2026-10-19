@@ -12,6 +12,8 @@ template. The scales are authored. They are not a cited CSA regression.
     var person = HumanoidSpec(Length(6.0, FOOT), MALE, TONED)
 """
 
+from core.ordinal import ordinal_valid, require_valid
+
 
 @fieldwise_init
 struct Athleticism(Equatable, ImplicitlyCopyable, Writable):
@@ -26,7 +28,7 @@ struct Athleticism(Equatable, ImplicitlyCopyable, Writable):
 
     def is_valid(self) -> Bool:
         """Return True if this is `UNTONED` or `TONED`."""
-        return self == UNTONED or self == TONED
+        return ordinal_valid(self.value, TONED.value)
 
 
 # Smaller adult muscle bellies. Authored radius scale 0.80.
@@ -51,8 +53,9 @@ def radius_scale(athleticism: Athleticism) raises -> Float32:
     Raises:
         Error: If `athleticism` is not named.
     """
-    if not athleticism.is_valid():
-        raise Error("Athleticism must be toned or untoned")
+    require_valid(
+        athleticism.is_valid(), "Athleticism must be toned or untoned"
+    )
     if athleticism == TONED:
         return TONED_RADIUS
     return UNTONED_RADIUS

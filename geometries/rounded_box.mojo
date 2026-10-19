@@ -15,31 +15,32 @@ a smaller box, shrunk by the radius, plus the radius along that normal. The
 cells nearest the edges bend round the corner, and the middle band stays
 flat, because every vertex in it points the same way.
 
-three.js's `BoxGeometry` with segments is not ported, so this builds the
-unit box itself, with three.js's `buildPlane` order and winding: the faces
-right, left, top, bottom, front, back, each a grid of cells, two triangles
-a cell. `box` here orders its faces differently and has no segments.
+This builds the unit box itself. Each triangle owns its corners, and each
+coordinate is rounded through `Float32` before the normal is taken. That
+rounding decides which texture half a flat face uses. The faces run right,
+left, top, bottom, front, back. Each face is a grid of cells, two triangles
+a cell.
 
 The texture coordinates are three.js's. Across each face, `u` and `v` are
 measured along the arc of the rounded edge and the flat band between, so a
 texture is not squeezed where the surface bends.
 """
 
-from core.buffer_attribute import BufferAttribute
+from core.ordinal import require_non_negative
+from geometries.surface import (
+    require_finite_extents,
+    require_positive_extents,
+    textured_surface,
+)
 from core.buffer_geometry import (
     BufferGeometry,
     MaterialIndex,
-    NORMAL,
-    POSITION,
-    UV,
 )
-from std.math import acos, isfinite, pi, sqrt
+from math.curve_checks import require_at_least_one
+from math.utils import glsl_sign
+from math.finite import stored_float32, require_finite
+from std.math import acos, pi, sqrt
 from units.si import Length, METER
-
-
-def _sign(value: Float64) -> Float64:
-    """Return JavaScript's `Math.sign`: one, minus one or zero."""
-    return 1.0 if value > 0 else (-1.0 if value < 0 else 0.0)
 
 
 def _length(v: List[Float64]) -> Float64:
@@ -87,7 +88,7 @@ def _get_uv(
         != 0 else pi / 2
     )
     var arc_angle_ratio = 1.0 - angle / half_arc
-    if _sign(flat[uv_axis]) == 1:
+    if glsl_sign(flat[uv_axis]) == 1:
         return arc_angle_ratio * arc_uv_ratio
     var length_uv = center_length / (total_arc_length + center_length)
     return length_uv + arc_uv_ratio + arc_uv_ratio * (1.0 - arc_angle_ratio)
@@ -128,7 +129,7 @@ def _unit_box(segments: Int) -> List[Float64]:
                 # on a face leans by a hair, and so which half of the face
                 # `getUv` puts it in.
                 for axis in range(3):  # pragma: no branch
-                    grid.append(Float64(Float32(vector[axis])))
+                    grid.append(stored_float32(vector[axis]))
         for iy in range(segments):  # pragma: no branch
             for ix in range(segments):  # pragma: no branch
                 var a = ix + row * iy
@@ -171,20 +172,19 @@ def rounded_box(
         Error: If an extent is not finite and positive, `segments` is less
             than one, or the radius is not finite or is negative.
     """
-    if (
-        not isfinite(width.value)
-        or not isfinite(height.value)
-        or not isfinite(depth.value)
-    ):
-        raise Error("A rounded box needs finite extents")
-    if not isfinite(radius.value):
-        raise Error("A rounded box needs a finite radius")
-    if width.value <= 0 or height.value <= 0 or depth.value <= 0:
-        raise Error("A rounded box needs positive extents")
-    if segments < 1:
-        raise Error("A rounded box needs one segment round each edge")
-    if radius.value < 0:
-        raise Error("A rounded box needs a radius of zero or more")
+    require_finite_extents(
+        width.value, height.value, depth.value, "rounded box"
+    )
+    require_finite(Float64(radius.value), "A rounded box needs a finite radius")
+    require_positive_extents(
+        width.value, height.value, depth.value, "rounded box"
+    )
+    require_at_least_one(
+        segments, "A rounded box needs one segment round each edge"
+    )
+    require_non_negative(
+        radius.value, "A rounded box needs a radius of zero or more"
+    )
 
     var sizes = [
         Float64(width.value),
@@ -224,13 +224,15 @@ def rounded_box(
         ]
         var normal = position.copy()
         for axis in range(3):  # pragma: no branch
-            normal[axis] -= _sign(normal[axis]) * half_segment
+            normal[axis] -= glsl_sign(normal[axis]) * half_segment
         var scale = 1.0 / _length(normal)
         for axis in range(3):  # pragma: no branch
             normal[axis] = normal[axis] * scale
         for axis in range(3):  # pragma: no branch
             data.append(
-                Float32(inner[axis] * _sign(position[axis]) + normal[axis] * r)
+                Float32(
+                    inner[axis] * glsl_sign(position[axis]) + normal[axis] * r
+                )
             )
             normals.append(Float32(normal[axis]))
         var side = vertex // per_side
@@ -256,9 +258,7 @@ def rounded_box(
         uvs.append(Float32(1.0 - v if v_flips[side] else v))
 
     var geometry = BufferGeometry()
-    geometry.set_attribute(String(POSITION), BufferAttribute(data^, 3))
-    geometry.set_attribute(String(NORMAL), BufferAttribute(normals^, 3))
-    geometry.set_attribute(String(UV), BufferAttribute(uvs^, 2))
+    textured_surface(geometry, data^, normals^, uvs^)
     for side in range(6):  # pragma: no branch
         geometry.add_group(side * per_side, per_side, MaterialIndex(side))
     return geometry^

@@ -23,6 +23,7 @@ Plus y is proximal. Plus x is body-right. Plus z is anterior.
     var d = skin_distance(dims, Vector3(0, 0, 0))
 """
 
+from extensions.humanoid.skeleton.dermis import dermal_shell_distance
 from extensions.humanoid.skeleton.field import (
     DistanceField,
     TubeChain,
@@ -64,6 +65,8 @@ from extensions.humanoid.skeleton.loft import (
     fit_loft,
     loft_distance,
 )
+from math.bounds import enclose_point
+from math.utils import mix_delta
 from math.vector3 import Vector3
 from std.math import abs, max, min
 
@@ -191,8 +194,7 @@ struct SkinLayerField(Copyable, DistanceField, Movable):
         Negative is inside the dermis. Deep anatomy and exterior space
         are both outside this shell.
         """
-        var d = self.outer.distance(point)
-        return max(d, -d - self.thickness)
+        return dermal_shell_distance(self.outer.distance(point), self.thickness)
 
     def gradient(self, point: Vector3) -> Vector3:
         """Return the unit outward normal of the dermal shell at `point`."""
@@ -221,14 +223,8 @@ def skin_distance(
 
 def _grow(mut low: Vector3, mut high: Vector3, loft: Loft):
     """Grow the box from `low` to `high` around one loft."""
-    low = Vector3(
-        min(low.x, loft.low.x), min(low.y, loft.low.y), min(low.z, loft.low.z)
-    )
-    high = Vector3(
-        max(high.x, loft.high.x),
-        max(high.y, loft.high.y),
-        max(high.z, loft.high.z),
-    )
+    enclose_point(low, high, loft.low)
+    enclose_point(low, high, loft.high)
 
 
 def _toe(
@@ -288,7 +284,7 @@ def _in_lane(
     """Return whether `point` lies within `lane` of the toe's line in x."""
     var run = max(tip.z - head.z, Float32(1.0e-6))
     var t = min(max((point.z - head.z) / run, Float32(0)), Float32(1))
-    var x = head.x + (tip.x - head.x) * t
+    var x = mix_delta(head.x, tip.x, t)
     return abs(point.x - x) <= lane
 
 
@@ -333,7 +329,7 @@ def _pads(
     # The lateral column, from the heel to the fifth metatarsal head.
     for k in range(1, 5):  # pragma: no branch
         var t = Float32(k) / Float32(5)
-        var z = foot.heel.z + (foot.mt5_head.z - foot.heel.z) * t
+        var z = mix_delta(foot.heel.z, foot.mt5_head.z, t)
         var x = lateral * (Float32(0.14) + Float32(0.14) * t) * W
         samples.append(LoftSample(Vector3(x, lift, z), r, r, r, False))
     # The ball of the foot, under every metatarsal head.

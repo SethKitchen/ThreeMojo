@@ -24,23 +24,36 @@ from extensions.animals.coat import (
     Palette,
     grizzle,
     mix3,
+    shade_swatch,
     srgb,
 )
 from extensions.sdf.ids import BoneId
 from extensions.animals.parts import JAW
 from extensions.sdf.sculpt import ell_y
 from extensions.animals.kit import (
+    side_sign,
+    ear_ends,
+    digitigrade_fore,
+    digitigrade_hind,
     EyeSpec,
     eye_frame_of,
     head_local,
+    reference_to_head_local,
     is_limb,
+    lid_unless_behind,
     mirrored_blob,
-    aperture_local,
 )
-from extensions.animals.noise import fbm3, vnoise3
+from extensions.animals.noise import (
+    fbm3,
+    vnoise3,
+    centered_fbm,
+    centered_value,
+    offset_fbm,
+)
 from extensions.animals.options import AnimalOptions, AnimalRandom
 from extensions.animals.rig import Rig, quadruped_bones, tail_chain
 from extensions.sdf.field import SdfModel
+from math.utils import rec709_luminance
 from extensions.animals.traits import Traits, pick_age, pick_sex
 from extensions.sdf.vector import (
     V3,
@@ -60,7 +73,6 @@ from extensions.animals.warp import (
     scale_about_warp,
 )
 from std.math import cos, exp, pi, pow, sin, sqrt
-from extensions.sdf.distance import almond_distance
 
 comptime TAIL_SEGS = 2
 # The head's origin, mid cranium between the eyes and the ears.
@@ -812,10 +824,7 @@ def _sculpt_ears(mut m: SdfModel, rig: Rig, t: Traits) raises:
     # Small, round, furred ears, set wide on the top corners of the head.
     var ek = t.get("ear")
     for side in [String("L"), String("R")]:  # pragma: no branch
-        var s = 1.0 if side == "L" else -1.0
-        var base = rig.j("earBase" + side)
-        var tip = rig.j("earTip" + side)
-        var up = normalize(tip - base)
+        var s, base, tip, up = ear_ends(rig, side)
         var facing = normalize(V3(0.6 * s, 0.05, 1))
         var lat = normalize(cross(up, facing))
         var eb = rig.bone("ear" + side)
@@ -878,19 +887,10 @@ def _sculpt_legs(mut m: SdfModel, rig: Rig) raises:
     var hx = _hind_x()
     var hz = _hind_z()
     for side in [String("L"), String("R")]:  # pragma: no branch
-        var s = 1.0 if side == "L" else -1.0
-        var lat = V3(s, 0, 0)
-        var sc = rig.j("scapTop" + side)
-        var sh = rig.j("shoulder" + side)
-        var e = rig.j("elbow" + side)
-        var w = rig.j("wrist" + side)
-        var mc = rig.j("mcp" + side)
-        var toe = rig.j("ftoe" + side)
-        var scap = rig.bone("scapula" + side)
-        var hum = rig.bone("humerus" + side)
-        var rad = rig.bone("radius" + side)
-        var meta = rig.bone("metacarpus" + side)
-        var fpaw = rig.bone("fpaw" + side)
+        var s = side_sign(side)
+        var lat, sc, sh, e, w, mc, toe, scap, hum, rad, meta, fpaw = (
+            digitigrade_fore(rig, side, s)
+        )
         _ = ell_y(
             m,
             "scapmuscle",
@@ -979,15 +979,9 @@ def _sculpt_legs(mut m: SdfModel, rig: Rig) raises:
                 k=0.012,
             )
 
-        var hp = rig.j("hip" + side)
-        var kn = rig.j("knee" + side)
-        var hk = rig.j("hock" + side)
-        var mt = rig.j("mtp" + side)
-        var tt = rig.j("htoe" + side)
-        var fem = rig.bone("femur" + side)
-        var tib = rig.bone("tibia" + side)
-        var mtar = rig.bone("metatarsus" + side)
-        var hpaw = rig.bone("hpaw" + side)
+        var hp, kn, hk, mt, tt, fem, tib, mtar, hpaw = digitigrade_hind(
+            rig, side
+        )
         _ = ell_y(
             m,
             "thigh",
@@ -1128,7 +1122,7 @@ def _claw_point(
     var y = 0.0
     for i in range(n):  # pragma: no branch
         var u = (Float64(i) + 0.5) / Float64(n) * t
-        var th = th0 + (th1 - th0) * u
+        var th = mix(th0, th1, u)
         x += cos(th) * span * t / Float64(n)
         y -= sin(th) * span * t / Float64(n)
     return root + V3(sin(yaw), 0, cos(yaw)) * x + V3(0, y, 0)
@@ -1145,7 +1139,7 @@ def _sculpt_claws(mut m: SdfModel, rig: Rig, t: Traits) raises:
     var hind_len: List[Float64] = [0.8, 0.95, 1.0, 0.97, 0.85]
     var segs = 8
     for side in [String("L"), String("R")]:  # pragma: no branch
-        var s = 1.0 if side == "L" else -1.0
+        var s = side_sign(side)
         for fore in [True, False]:  # pragma: no branch
             var dx = _fore_x() if fore else _hind_x()
             var dz = _fore_z() if fore else _hind_z()
@@ -1327,8 +1321,8 @@ def _agouti(coat: Int) -> V3:
 
 
 def _desat(c: V3, k: Float64) -> V3:
-    var y = 0.2126 * c.x + 0.7152 * c.y + 0.0722 * c.z
-    return V3(c.x + (y - c.x) * k, c.y + (y - c.y) * k, c.z + (y - c.z) * k)
+    var y = rec709_luminance(c.x, c.y, c.z)
+    return V3(mix(c.x, y, k), mix(c.y, y, k), mix(c.z, y, k))
 
 
 def bear_palette(t: Traits) -> Palette:
@@ -1362,11 +1356,7 @@ def bear_palette(t: Traits) -> Palette:
     for i in range(len(hexes)):  # pragma: no branch
         var c = srgb(hexes[i])
         if i != CLAW:
-            c = V3(
-                c.x * (1.0 + 0.1 * k + l),
-                c.y * (1.0 + 0.02 * k + l),
-                c.z * (1.0 - 0.12 * k + l),
-            )
+            c = shade_swatch(c, k, l, 0.1, 0.02, -0.12)
             var face = i == HEAD or i == FACE or i == MUZZLE
             var tan = coat == BLACK_COAT and i == MUZZLE
             var amount = _face_desat(coat) if (face and not tan) else 0.22
@@ -1383,13 +1373,10 @@ def bear_palette(t: Traits) -> Palette:
 
 
 def _head_local(t: Traits, p: V3) -> V3:
-    # A reference point in head-local meters: the head width and the
-    # muzzle stretch undone.
-    var x = (p.x - HEAD_O.x) / t.get("headW")
-    var y = p.y - HEAD_O.y
-    var z = p.z - HEAD_O.z
-    var mz = t.get("muzzle")
-    return V3(x, y, MUZZLE_Z0 + (z - MUZZLE_Z0) / mz if z > MUZZLE_Z0 else z)
+    # The bear's head is not scaled by a separate head size.
+    return reference_to_head_local(
+        HEAD_O, 1.0, MUZZLE_Z0, t.get("muzzle"), t.get("headW"), p
+    )
 
 
 def _lock(p: V3, scale: Float64, off: Float64) -> Float64:
@@ -1400,7 +1387,7 @@ def _lock(p: V3, scale: Float64, off: Float64) -> Float64:
         p.y * scale * 0.6 - p.z * 0.2 * scale,
         p.z * scale * 0.3,
     )
-    return fbm3(q, 2) - 0.5
+    return offset_fbm(q, 2)
 
 
 @fieldwise_init
@@ -1522,8 +1509,8 @@ def bear_paint(
     var ag3 = _agouti(coat)
     var juv = t.juvenile()
     var off = Float64(Int(t.get("coatSeed", 0.0)) % 997)
-    var nz = fbm3(V3(p.x * 5.0 + off, p.y * 5.0, p.z * 5.0), 3) - 0.5
-    var nz2 = vnoise3(V3(p.x * 30.0 + off, p.y * 30.0, p.z * 30.0)) - 0.5
+    var nz = centered_fbm(p, 5.0, 3, off)
+    var nz2 = centered_value(p, 30.0, off)
     var col: V3
     var ag: Float64
     if bone == "head" or bone == "jaw":
@@ -1546,7 +1533,7 @@ def bear_paint(
         # Clumped locks with pale tips.
         col = col * (1.0 + 0.35 * _lock(p, 40.0, 57.0 + off))
     ag *= 1.0 - 0.8 * juv
-    var cvh = fbm3(V3(p.x * 3.0 + 5.0 + off, p.y * 3.0, p.z * 3.0), 2) - 0.5
+    var cvh = offset_fbm(V3(p.x * 3.0 + 5.0 + off, p.y * 3.0, p.z * 3.0), 2)
     var sp = 0.2 if coat == GRIZZLED else 0.15
     col = V3(
         col.x * (1.0 + 0.18 * nz + 0.12 * cvh + sp * nz2),
@@ -1676,7 +1663,7 @@ def _paint_head(
     )
     col = mix3(col, mix3(c[HEAD], c[LEG], 0.6), 0.4 * b_side * (1.0 - eye_dark))
     # The lid margins: bare black skin round the aperture.
-    var lid = _lid_distance(t, p)
+    var lid = lid_unless_behind(bear_eye(t), HEAD_O, p, -0.3)
     if lid < 0.0018:
         return Paint(srgb(0x0B0908), SKIN)
     col = mix3(col, srgb(0x0B0908), smoothstep(0.0035, 0.0018, lid) * 0.7)
@@ -1730,14 +1717,3 @@ def _paint_head(
     if line * lip_f > 0.5:
         return Paint(srgb(0x1A1614), SKIN)
     return Paint(col, FUR)
-
-
-def _lid_distance(t: Traits, p: V3) -> Float64:
-    # The distance from a point to the nearer eye's aperture rim, in the
-    # aperture's plane, or far when the point is behind the eye.
-    var e = bear_eye(t)
-    var s = 1.0 if p.x > HEAD_O.x else -1.0
-    var ef = eye_frame_of(e, HEAD_O, s)
-    var q = aperture_local(e, ef, p)
-    var de = abs(almond_distance(q.x, q.y, e.big_r, e.d))
-    return de if q.z > -0.3 * e.r else 1.0

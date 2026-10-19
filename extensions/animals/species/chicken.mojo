@@ -35,6 +35,7 @@ from extensions.animals.coat import (
     EyeLook,
     Paint,
     Palette,
+    channel_gain,
     mix3,
     srgb,
 )
@@ -44,11 +45,12 @@ from extensions.animals.parts import (
 )
 from extensions.sdf.sculpt import ell_y
 from extensions.animals.kit import (
+    side_sign,
     EyeSpec,
     eye_frame_of,
     sculpt_eye_socket,
 )
-from extensions.animals.noise import fbm3
+from extensions.animals.noise import centered_fbm, fbm3, offset_fbm
 from extensions.animals.options import (
     ANY_AGE,
     ANY_SEX,
@@ -88,6 +90,7 @@ from extensions.animals.species.bird_rig import (
     vane_width,
     wing_fk,
     wing_joints,
+    wing_arm,
     wing_normal,
     wing_segment,
 )
@@ -109,6 +112,7 @@ from extensions.animals.warp import (
     legs_warp,
     scale_about_warp,
 )
+from math.utils import max3, min3
 from std.math import asin, cbrt, cos, floor, ceil, pi, pow, sin, sqrt
 
 comptime NECK_SEGS = 4
@@ -679,10 +683,10 @@ comptime _NY = 160
 
 
 def _tri(mut st: _Stack, a: V3, b: V3, c: V3):
-    var x0 = Int(floor(min(a.x, min(b.x, c.x)) - _X0))
-    var x1 = Int(ceil(max(a.x, max(b.x, c.x)) - _X0))
-    var y0 = Int(floor(min(a.y, min(b.y, c.y)) - _Y0))
-    var y1 = Int(ceil(max(a.y, max(b.y, c.y)) - _Y0))
+    var x0 = Int(floor(min3(a.x, b.x, c.x) - _X0))
+    var x1 = Int(ceil(max3(a.x, b.x, c.x) - _X0))
+    var y0 = Int(floor(min3(a.y, b.y, c.y) - _Y0))
+    var y1 = Int(ceil(max3(a.y, b.y, c.y) - _Y0))
     var den = (b.y - c.y) * (a.x - c.x) + (c.x - b.x) * (a.y - c.y)
     if abs(den) < 1e-9:
         return
@@ -793,7 +797,7 @@ def _wing_stack(t: Traits) -> _Stack:
                     ls.z,
                     1.0,
                     f,
-                    f.fold + (f.spread - f.fold) * e_h,
+                    mix(f.fold, f.spread, e_h),
                     False,
                 )
                 _raster(
@@ -822,7 +826,7 @@ def _wing_stack(t: Traits) -> _Stack:
                     ls.y,
                     1.0,
                     f,
-                    f.fold + (f.spread - f.fold) * e_u,
+                    mix(f.fold, f.spread, e_u),
                     True,
                 )
                 _raster(
@@ -1044,7 +1048,7 @@ struct _Plan(ImplicitlyCopyable):
 
 
 def _plan(rig: Rig, side: String) raises -> _Plan:
-    var s = 1.0 if side == "L" else -1.0
+    var s = side_sign(side)
     var n = wing_normal(rig, side)
     var wr = rig.j("wrist" + side)
     var d = normalize(wr - rig.j("elbow" + side))
@@ -1608,8 +1612,8 @@ def chicken_sculpt(mut m: SdfModel, rig: Rig, t: Traits) raises:
             rig.bone("neck" + String(i)),
             rig.j(a),
             rig.j(b),
-            r0 + (r1 - r0) * pow(u0, 0.75),
-            r0 + (r1 - r0) * pow(u1, 0.75),
+            mix(r0, r1, pow(u0, 0.75)),
+            mix(r0, r1, pow(u1, 0.75)),
             k=0.02,
         )
     if not juv:
@@ -1767,7 +1771,7 @@ def chicken_sculpt(mut m: SdfModel, rig: Rig, t: Traits) raises:
         _ = m.ell(
             "comb",
             h,
-            _comb(t, ho, V3(0.0, 0.0165, z0 + (z1 - z0) * 0.45)),
+            _comb(t, ho, V3(0.0, 0.0165, mix(z0, z1, 0.45))),
             V3(0.0021 * hk, 0.0075 * sqrt(ch) * hk, 0.024 * cb * hk),
             axis=normalize(V3(0.0, 0.08, 1.0)),
             k=0.004,
@@ -1778,7 +1782,7 @@ def chicken_sculpt(mut m: SdfModel, rig: Rig, t: Traits) raises:
         _ = m.ell(
             "comb",
             h,
-            _comb(t, ho, V3(0.0, 0.018 + 0.004 * ch, z0 + (z1 - z0) * 0.98)),
+            _comb(t, ho, V3(0.0, 0.018 + 0.004 * ch, mix(z0, z1, 0.98))),
             V3(0.0019 * hk, 0.0075 * ch * hk, 0.009 * cb * hk),
             axis=normalize(V3(0.0, 0.3, -1.0)),
             k=0.004,
@@ -1788,7 +1792,7 @@ def chicken_sculpt(mut m: SdfModel, rig: Rig, t: Traits) raises:
         for i in range(5):  # pragma: no branch
             var u = (Float64(i) + 0.5) / 5.0
             var ph = (0.012 + 0.009 * sin(pi * (0.15 + 0.8 * u))) * ch
-            var z = z0 + (z1 - z0) * (0.08 + 0.78 * u)
+            var z = mix(z0, z1, 0.08 + 0.78 * u)
             var tilt = -0.3 + 0.6 * u
             _ = m.ell(
                 "comb",
@@ -1832,7 +1836,7 @@ def chicken_sculpt(mut m: SdfModel, rig: Rig, t: Traits) raises:
     var toe_r = t.get("toeR")
     var spur = t.get("spur", 0.0)
     for side in [String("L"), String("R")]:  # pragma: no branch
-        var s = 1.0 if side == "L" else -1.0
+        var s = side_sign(side)
         var kn = rig.j("knee" + side)
         var an = rig.j("ankle" + side)
         var mt = rig.j("mtp" + side)
@@ -1922,14 +1926,7 @@ def chicken_sculpt(mut m: SdfModel, rig: Rig, t: Traits) raises:
     if not juv:
         shield = _shield(t)
     for side in [String("L"), String("R")]:  # pragma: no branch
-        var s = 1.0 if side == "L" else -1.0
-        var sh = rig.j("shoulder" + side)
-        var el = rig.j("elbow" + side)
-        var wr = rig.j("wrist" + side)
-        var tp = rig.j("handTip" + side)
-        var n = wing_normal(rig, side)
-        var ulna = rig.bone("ulna" + side)
-        var hand = rig.bone("hand" + side)
+        var s, sh, el, wr, tp, n, humerus, ulna, hand = wing_arm(rig, side)
         var th = 0.012 * wk * at
         wing_segment(
             m,
@@ -1937,7 +1934,7 @@ def chicken_sculpt(mut m: SdfModel, rig: Rig, t: Traits) raises:
             n,
             sh,
             el,
-            rig.bone("humerus" + side),
+            humerus,
             th,
             0.02 * wk,
             0.005 * wk,
@@ -2046,7 +2043,7 @@ def _comb(t: Traits, ho: V3, v: V3) -> V3:
     if flop > 0.0:
         var a = flop * max(0.0, y - 0.012) / 0.03
         x += sin(a) * (y - 0.012) * 0.9
-        y = 0.012 + (y - 0.012) * cos(a)
+        y = mix(0.012, y, cos(a))
     return _hl(ho, t.get("headK"), V3(x, y, v.z))
 
 
@@ -2352,7 +2349,7 @@ def chicken_paint(
     var juv = t.juvenile() > 0.0
     var male = t.male() and not juv
     var b = t.variant
-    var cv = fbm3(p * 30.0 + V3(t.get("coatSeed", 0.0), 0.0, 0.0), 3) - 0.5
+    var cv = offset_fbm(p * 30.0 + V3(t.get("coatSeed", 0.0), 0.0, 0.0), 3)
     var cond9 = tag == "bill" or tag == "nostril" or tag == "mandible"
     if cond9:
         return Paint(pal.get("bill") * (1.0 + 0.1 * cv), KERATIN)
@@ -2436,7 +2433,7 @@ def chicken_paint(
         flow = V3(hh.x * 10.0, -0.5, -1.0)
         tract = 1
         # Bare facial skin around the eye and the lores.
-        var cvh = fbm3(p * 700.0, 2) - 0.5
+        var cvh = centered_fbm(p, 700.0, 2)
         var bound = (
             0.0048
             - 60.0 * pow(max(0.0, hh.z - 0.006), 2.0)
@@ -2598,14 +2595,7 @@ def chicken_paint(
             c, pal.get("spangle"), spot * 0.8 * (0.5 if tract == 4 else 1.0)
         )
     var kv = 0.22
-    return Paint(
-        V3(
-            c.x * (1.0 + kv * cv),
-            c.y * (1.0 + kv * cv),
-            c.z * (1.0 + kv * 0.8 * cv),
-        ),
-        FEATHER,
-    )
+    return Paint(channel_gain(c, cv, kv, kv, kv * 0.8), FEATHER)
 
 
 def _index(bone: String) raises -> Float64:

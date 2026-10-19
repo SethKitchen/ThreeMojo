@@ -37,6 +37,7 @@ from core.object3d import NO_PARENT, NodeId, Object3D
 from core.scene import Scene
 from loaders.md2 import Md2Model, md2_clip
 from materials.material import LAMBERT, Material, MaterialId
+from math.utils import clamp
 from objects.mesh import Mesh
 from objects.morph_blend_mesh import MorphBlendMesh
 from render.framebuffer import Color
@@ -72,6 +73,22 @@ struct Md2Part(Copyable, Movable):
     var node: NodeId
     var textured: MaterialId
     var wireframe: MaterialId
+
+
+def require_weapon_names(names: Int, weapons: Int) raises:
+    """Refuse a character that does not name each weapon once.
+
+    Nothing. The call returns when the counts match.
+
+    Args:
+        names: How many weapon names were given.
+        weapons: How many weapon models were given.
+
+    Raises:
+        Error: If the counts differ.
+    """
+    if names != weapons:
+        raise Error("An MD2 character needs one name a weapon")
 
 
 def _lowest(model: Md2Model) raises -> Float32:
@@ -118,6 +135,32 @@ def _make_part(
     return Md2Part(index, at, textured_id, wire_id)
 
 
+def _add_root(
+    mut scene: Scene, model: Md2Model, scale: Float32, parent: NodeId
+) raises -> NodeId:
+    """Add the character root. It sits on the body's lowest point."""
+    var root = Object3D()
+    root.set_position(0, -scale * _lowest(model), 0)
+    if parent != NO_PARENT:
+        return scene.attach(root^, parent)
+    return scene.add(root^)
+
+
+def _add_model(
+    mut scene: Scene,
+    mut assets: Assets,
+    root: NodeId,
+    model: Md2Model,
+    skin: TextureId,
+    scale: Float32,
+    visible: Bool,
+    name: String,
+) raises -> Md2Part:
+    """Add one model's geometry under the root."""
+    var shape = assets.geometries.add(model.geometry.clone())
+    return _make_part(scene, assets, root, shape, skin, scale, visible, name)
+
+
 def _skin(skins: List[TextureId], index: Int) -> TextureId:
     """Return a skin, or no texture past the end, three.js's `undefined`."""
     if index < 0 or index >= len(skins):
@@ -130,6 +173,48 @@ def _wear(mut scene: Scene, part: Md2Part, wireframe: Bool):
     scene.meshes[
         part.mesh
     ].material = part.wireframe if wireframe else part.textured
+
+
+def _set_wireframe(
+    mut scene: Scene,
+    body: Md2Part,
+    weapon: Int,
+    weapons: List[Md2Part],
+    wireframe: Bool,
+):
+    """Give the body and the shown weapon their wireframe or texture."""
+    _wear(scene, body, wireframe)
+    if weapon >= 0:
+        _wear(scene, weapons[weapon], wireframe)
+
+
+def _apply_skin(
+    scene: Scene,
+    mut assets: Assets,
+    body: Md2Part,
+    skins: List[TextureId],
+    index: Int,
+) raises -> Bool:
+    """Put a skin on the body unless it is a wireframe.
+
+    Args:
+        scene: The scene the body is in.
+        assets: Where the materials are.
+        body: The body part.
+        skins: The body's skins.
+        index: Which skin. Past the end is no skin.
+
+    Returns:
+        True when the skin is applied.
+
+    Raises:
+        Error: If the body's material is not in the assets.
+    """
+    var worn = scene.meshes[body.mesh].material
+    if assets.materials.get(worn).wireframe:
+        return False
+    assets.materials.materials[worn.value].map = _skin(skins, index)
+    return True
 
 
 struct MD2Character(Movable):
@@ -191,24 +276,17 @@ struct MD2Character(Movable):
             Error: If there is not one name a weapon, or a model's clips
                 cannot be made.
         """
-        if len(weapon_names) != len(weapons):
-            raise Error("An MD2 character needs one name a weapon")
+        require_weapon_names(len(weapon_names), len(weapons))
         self.scale = scale
         self.animation_fps = 6
-        var root = Object3D()
-        root.set_position(0, -scale * _lowest(body), 0)
-        if parent != NO_PARENT:
-            self.root = scene.attach(root^, parent)
-        else:
-            self.root = scene.add(root^)
         self.skins_body = skins_body^
         self.skins_weapon = skins_weapon^
-        var shape = assets.geometries.add(body.geometry.clone())
-        self.body = _make_part(
+        self.root = _add_root(scene, body, scale, parent)
+        self.body = _add_model(
             scene,
             assets,
             self.root,
-            shape,
+            body,
             _skin(self.skins_body, 0),
             scale,
             True,
@@ -218,19 +296,18 @@ struct MD2Character(Movable):
         self.weapons = List[Md2Part]()
         self.weapon_clips = List[List[AnimationClip]]()
         for at in range(len(weapons)):
-            var held = assets.geometries.add(weapons[at].geometry.clone())
-            var part = _make_part(
+            var weapon = _add_model(
                 scene,
                 assets,
                 self.root,
-                held,
+                weapons[at],
                 _skin(self.skins_weapon, at),
                 scale,
                 False,
                 weapon_names[at],
             )
-            self.weapon_clips.append(_clips(weapons[at], part.mesh))
-            self.weapons.append(part^)
+            self.weapon_clips.append(_clips(weapons[at], weapon.mesh))
+            self.weapons.append(weapon^)
         self.weapon = len(self.weapons) - 1
         self.active_animation_clip_name = String()
         if len(self.body_clips) > 0:
@@ -258,9 +335,7 @@ struct MD2Character(Movable):
             scene: The scene the parts are in.
             wireframe: True for the wireframes.
         """
-        _wear(scene, self.body, wireframe)
-        if self.weapon >= 0:
-            _wear(scene, self.weapons[self.weapon], wireframe)
+        _set_wireframe(scene, self.body, self.weapon, self.weapons, wireframe)
 
     def set_skin(self, scene: Scene, mut assets: Assets, index: Int) raises:
         """Put a skin on the body, three.js's `setSkin`. Nothing changes
@@ -274,12 +349,7 @@ struct MD2Character(Movable):
         Raises:
             Error: If the body's material is not in the assets.
         """
-        var worn = scene.meshes[self.body.mesh].material
-        if assets.materials.get(worn).wireframe:
-            return
-        assets.materials.materials[worn.value].map = _skin(
-            self.skins_body, index
-        )
+        _ = _apply_skin(scene, assets, self.body, self.skins_body, index)
 
     def set_weapon(mut self, mut scene: Scene, index: Int) raises:
         """Show one weapon and hide the rest, three.js's `setWeapon`, and
@@ -455,11 +525,6 @@ def _ease_out(k: Float32) -> Float32:
     return -exp2(-10 * k) + 1
 
 
-def _clamp(value: Float32, low: Float32, high: Float32) -> Float32:
-    """Return three.js's `MathUtils.clamp`."""
-    return max(low, min(high, value))
-
-
 struct MD2CharacterComplex(Movable):
     """A character that walks, crouches, jumps and attacks, blending one
     animation into the next, three.js's `MD2CharacterComplex`."""
@@ -536,8 +601,7 @@ struct MD2CharacterComplex(Movable):
         Raises:
             Error: If there is not one name a weapon.
         """
-        if len(weapon_names) != len(weapons):
-            raise Error("An MD2 character needs one name a weapon")
+        require_weapon_names(len(weapon_names), len(weapons))
         self.scale = scale
         self.animation_fps = 6
         self.transition_frames = 15
@@ -557,20 +621,14 @@ struct MD2CharacterComplex(Movable):
         self.active_animation = String()
         self.old_animation = String()
         self.blend_counter = 0
-        var root = Object3D()
-        root.set_position(0, -scale * _lowest(body), 0)
-        if parent != NO_PARENT:
-            self.root = scene.attach(root^, parent)
-        else:
-            self.root = scene.add(root^)
         self.skins_body = skins_body^
         self.skins_weapon = skins_weapon^
-        var shape = assets.geometries.add(body.geometry.clone())
-        self.body = _make_part(
+        self.root = _add_root(scene, body, scale, parent)
+        self.body = _add_model(
             scene,
             assets,
             self.root,
-            shape,
+            body,
             _skin(self.skins_body, 0),
             scale,
             True,
@@ -580,19 +638,18 @@ struct MD2CharacterComplex(Movable):
         self.weapons = List[Md2Part]()
         self.weapon_blends = List[MorphBlendMesh]()
         for at in range(len(weapons)):
-            var held = assets.geometries.add(weapons[at].geometry.clone())
-            var part = _make_part(
+            var weapon = _add_model(
                 scene,
                 assets,
                 self.root,
-                held,
+                weapons[at],
                 _skin(self.skins_weapon, at),
                 scale,
                 False,
                 weapon_names[at],
             )
-            self.weapon_blends.append(_blend(scene, part, self.animation_fps))
-            self.weapons.append(part^)
+            self.weapon_blends.append(_blend(scene, weapon, self.animation_fps))
+            self.weapons.append(weapon^)
         self.weapon = len(self.weapons) - 1
 
     def enable_shadows(self, mut scene: Scene, enable: Bool):
@@ -637,9 +694,7 @@ struct MD2CharacterComplex(Movable):
             scene: The scene the parts are in.
             wireframe: True for the wireframes.
         """
-        _wear(scene, self.body, wireframe)
-        if self.weapon >= 0:
-            _wear(scene, self.weapons[self.weapon], wireframe)
+        _set_wireframe(scene, self.body, self.weapon, self.weapons, wireframe)
 
     def set_skin(mut self, scene: Scene, mut assets: Assets, index: Int) raises:
         """Put a skin on the body, three.js's `setSkin`. Nothing changes
@@ -653,13 +708,8 @@ struct MD2CharacterComplex(Movable):
         Raises:
             Error: If the body's material is not in the assets.
         """
-        var worn = scene.meshes[self.body.mesh].material
-        if assets.materials.get(worn).wireframe:
-            return
-        assets.materials.materials[worn.value].map = _skin(
-            self.skins_body, index
-        )
-        self.current_skin = index
+        if _apply_skin(scene, assets, self.body, self.skins_body, index):
+            self.current_skin = index
 
     def set_weapon(mut self, mut scene: Scene, index: Int) raises:
         """Show one weapon and hide the rest, three.js's `setWeapon`, and
@@ -837,22 +887,22 @@ struct MD2CharacterComplex(Movable):
         var turn = self.angular_speed.to(RADIAN_PER_SECOND)
         var facing = self.body_orientation.to(RADIAN)
         if controls.move_forward:
-            speed = _clamp(speed + dt * front, -top, top)
+            speed = clamp(speed + dt * front, -top, top)
         if controls.move_backward:
-            speed = _clamp(speed - dt * back, -top, top)
+            speed = clamp(speed - dt * back, -top, top)
         if controls.move_left:
             facing += dt * turn
-            speed = _clamp(speed + dt * front, -top, top)
+            speed = clamp(speed + dt * front, -top, top)
         if controls.move_right:
             facing -= dt * turn
-            speed = _clamp(speed + dt * front, -top, top)
+            speed = clamp(speed + dt * front, -top, top)
         if not (controls.move_forward or controls.move_backward):
             if speed > 0:
                 var k = _ease_out(speed / top)
-                speed = _clamp(speed - k * dt * slow, 0, top)
+                speed = clamp(speed - k * dt * slow, 0, top)
             else:
                 var k = _ease_out(speed / -top)
-                speed = _clamp(speed + k * dt * back, -top, 0)
+                speed = clamp(speed + k * dt * back, -top, 0)
         self.speed = Velocity(speed, METER_PER_SECOND)
         self.body_orientation = Angle(facing, RADIAN)
         var forward = speed * dt

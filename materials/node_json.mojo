@@ -19,10 +19,11 @@ keep the legacy `code` array. The reader accepts either encoding, never
 both.
 """
 
+from core.ordinal import require_index_in_count, require_valid
 from exporters.json_writer import JsonWriter
 from loaders.json import ARRAY, JsonDocument
 from materials import nodes
-from materials.nodes import PROGRAM_HEADER, NodeProgram, ValueType
+from materials.nodes import NodeProgram, ValueType, require_program_code
 from materials.node_validation import validate_surface_program
 from std.memory import bitcast
 
@@ -184,8 +185,7 @@ def read_node_program(
     var code = document.get(item, "codeBits" if exact else "code")
     if document.kind(code) != ARRAY:
         raise Error("Object JSON: a node program's code must be an array")
-    if document.length(code) < PROGRAM_HEADER:
-        raise Error("Object JSON: a node program's code is too short")
+    require_program_code(document.length(code))
     program.code = List[Float32](capacity=document.length(code))
     # At least a header, as asked above, so the loop runs.
     for index in range(document.length(code)):  # pragma: no branch
@@ -201,8 +201,10 @@ def read_node_program(
     for index in range(document.length(uniforms)):
         var entry = document.at(uniforms, index)
         var type = ValueType(document.integer(document.get(entry, "type")))
-        if not type.is_valid():
-            raise Error("Object JSON: a node uniform's type is none there is")
+        require_valid(
+            type.is_valid(),
+            "Object JSON: a node uniform's type is none there is",
+        )
         program.uniform_names.append(
             document.string(document.get(entry, "name"))
         )
@@ -247,8 +249,9 @@ def _offset(document: JsonDocument, entry: Int, size: Int) raises -> Int:
     """Return an entry's `offset`, once it is known to be inside a program
     of `size` floats."""
     var at = document.integer(document.get(entry, "offset"))
-    if at < 0 or at >= size:
-        raise Error("Object JSON: a node program's offset is outside it")
+    require_index_in_count(
+        at, size, "Object JSON: a node program's offset is outside it"
+    )
     return at
 
 

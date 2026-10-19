@@ -212,7 +212,7 @@ def verify(root):
             if path in successors:
                 require(expected == successors[path]['before_sha256'],
                         'cleanup predecessor differs from historical canonical record: '+path)
-                expected = successors[path]['after_sha256']
+                expected = full_audit.provenance_after_sha256(successors[path])
             require(hashlib.sha256(_typed_source.historical_bytes(root, path, full_audit._observe_bytes(root, path, (root/path).read_bytes(), _operation=_operation), _operation=_operation)).hexdigest() == expected,
                     'unreviewed canonical dependency: '+path)
         for name, expected in record['unchanged_public_methods'].items():

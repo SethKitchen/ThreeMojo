@@ -38,6 +38,9 @@ hexadecimal, an edge color that names no color, an alpha or luminance
 that is not a number, and a file that is not found.
 """
 
+from math.utils import clamp
+from loaders.bytes import hex_digit_value, is_sign_mark, space_tab_line
+from loaders.file_path import path_directory
 from loaders.js_number import js_parse_float
 from std.math import nan
 from std.pathlib import Path
@@ -60,10 +63,10 @@ def js_parse_int(text: String) -> Float64:
     """
     var b = text.as_bytes()
     var i = 0
-    while i < len(b) and (b[i] == 32 or b[i] == 9 or b[i] == 10 or b[i] == 13):
+    while i < len(b) and space_tab_line(b[i]):
         i += 1
     var negative = False
-    if i < len(b) and (b[i] == 43 or b[i] == 45):
+    if i < len(b) and is_sign_mark(b[i]):
         negative = b[i] == 45
         i += 1
     var radix = 10
@@ -73,14 +76,7 @@ def js_parse_int(text: String) -> Float64:
     var value = Float64(0)
     var digits = 0
     while i < len(b):
-        var c = Int(b[i])
-        var d = -1
-        if c >= 48 and c <= 57:
-            d = c - 48
-        elif c >= 97 and c <= 102:
-            d = c - 87
-        elif c >= 65 and c <= 70:
-            d = c - 55
+        var d = hex_digit_value(Int(b[i]))
         if d < 0 or d >= radix:
             break
         value = value * Float64(radix) + Float64(d)
@@ -242,14 +238,7 @@ def _style(style: String) -> Optional[Vec]:
         return None
     var digits = List[Int]()
     for k in range(1, len(b)):  # pragma: no branch
-        var c = Int(b[k])
-        var d = -1
-        if c >= 48 and c <= 57:
-            d = c - 48
-        elif c >= 97 and c <= 102:
-            d = c - 87
-        elif c >= 65 and c <= 70:
-            d = c - 55
+        var d = hex_digit_value(Int(b[k]))
         if d < 0:
             return None
         digits.append(d)
@@ -658,7 +647,7 @@ struct LDrawLoader(Movable):
                         + lp.where()
                         + "."
                     )
-                alpha = max(0.0, min(1.0, alpha / 255))
+                alpha = clamp(alpha / 255, 0.0, 1.0)
                 if alpha < 1:
                     transparent = True
             elif upper == "LUMINANCE":
@@ -806,8 +795,7 @@ struct LDrawLoader(Movable):
                 url = "models/" + url
                 state += 1
             elif state == 4:
-                var slash = file_name.rfind("/")
-                url = String(file_name[byte = 0 : slash + 1]) + url
+                url = path_directory(file_name) + url
                 state += 1
             else:
                 if lowered:
@@ -1044,4 +1032,4 @@ def _luminance(token: String) -> Float64:
         value = js_parse_int(token)
     if _is_nan(value):
         return value
-    return max(0.0, min(1.0, value / 255))
+    return clamp(value / 255, 0.0, 1.0)

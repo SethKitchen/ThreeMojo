@@ -19,6 +19,7 @@ Plus y is proximal. Plus x is body-right. Plus z is anterior.
     var d = foot_muscle_distance(dims, ABDUCTOR_HALLUCIS, dims.foot.heel)
 """
 
+from core.ordinal import ordinal_valid, require_valid
 from extensions.humanoid.athleticism import Athleticism, radius_scale
 from extensions.humanoid.side import RIGHT, BodySide
 from extensions.humanoid.spec import HumanoidSpec
@@ -42,8 +43,8 @@ from extensions.humanoid.skeleton.foot.chain import (
     tube_set_distance,
     two_tubes,
 )
+from math.finite import require_positive_finite
 from math.vector3 import Vector3
-from std.math import isfinite
 
 
 @fieldwise_init
@@ -59,9 +60,23 @@ struct FootMuscle(Equatable, ImplicitlyCopyable, Writable):
 
     def is_valid(self) -> Bool:
         """Return True if this is a named foot muscle or tendon."""
-        if self.value < 0:
-            return False
-        return self.value <= EXTENSOR_HALLUCIS_BREVIS.value
+        return ordinal_valid(self.value, EXTENSOR_HALLUCIS_BREVIS.value)
+
+
+def require_foot_muscle(part: FootMuscle) raises:
+    """Refuse a foot muscle that is not named.
+
+    Nothing. The call returns when the part is named.
+
+    Args:
+        part: The muscle or tendon.
+
+    Raises:
+        Error: If the part is not a named muscle or tendon.
+    """
+    require_valid(
+        part.is_valid(), "A foot muscle must be a named muscle or tendon"
+    )
 
 
 comptime CALCANEAL_TENDON = FootMuscle(0)
@@ -90,6 +105,23 @@ comptime PERONEUS_LONGUS_TENDON = FIBULARIS_LONGUS_TENDON
 comptime PERONEUS_BREVIS_TENDON = FIBULARIS_BREVIS_TENDON
 
 
+def require_foot_athleticism(athleticism: Athleticism) raises:
+    """Refuse a foot muscle whose athleticism is not named.
+
+    Nothing. The call returns when the athleticism is named.
+
+    Args:
+        athleticism: `UNTONED` or `TONED`.
+
+    Raises:
+        Error: If the athleticism is not named.
+    """
+    require_valid(
+        athleticism.is_valid(),
+        "A foot muscle needs a toned or untoned athleticism",
+    )
+
+
 @fieldwise_init
 struct FootMuscleDimensions(ImplicitlyCopyable):
     """Foot landmarks plus the athleticism scale for muscle bellies."""
@@ -109,14 +141,17 @@ struct FootMuscleDimensions(ImplicitlyCopyable):
                 not positive.
         """
         self.foot.validate()
-        if not self.athleticism.is_valid():
-            raise Error("A foot muscle needs a toned or untoned athleticism")
-        if not isfinite(self.scale) or self.scale <= 0:
-            raise Error("A foot muscle radius scale must be positive")
-        if not isfinite(self.k) or self.k <= 0:
-            raise Error("A foot muscle blend radius must be positive")
-        if not isfinite(self.epsilon) or self.epsilon <= 0:
-            raise Error("A foot muscle gradient step must be positive")
+        require_foot_athleticism(self.athleticism)
+        require_positive_finite(
+            Float64(self.scale), "A foot muscle radius scale must be positive"
+        )
+        require_positive_finite(
+            Float64(self.k), "A foot muscle blend radius must be positive"
+        )
+        require_positive_finite(
+            Float64(self.epsilon),
+            "A foot muscle gradient step must be positive",
+        )
 
 
 struct FootMuscleField(DistanceField, ImplicitlyCopyable):
@@ -142,8 +177,7 @@ struct FootMuscleField(DistanceField, ImplicitlyCopyable):
                 is not named.
         """
         dimensions.validate()
-        if not part.is_valid():
-            raise Error("A foot muscle must be a named muscle or tendon")
+        require_foot_muscle(part)
         self.tubes = _tubes(dimensions, part)
         self.k = dimensions.k
         self.epsilon = dimensions.epsilon
@@ -179,8 +213,7 @@ def foot_muscle_dimensions(
         Error: If `spec` or `side` is refused, or athleticism is not
             named.
     """
-    if not spec.athleticism.is_valid():
-        raise Error("A foot muscle needs a toned or untoned athleticism")
+    require_foot_athleticism(spec.athleticism)
     var foot = foot_dimensions(spec.stature, spec.sex, side)
     var scale = radius_scale(spec.athleticism)
     var S = spec.stature.value
@@ -223,8 +256,7 @@ def is_tendon(part: FootMuscle) raises -> Bool:
     Raises:
         Error: If `part` is not named.
     """
-    if not part.is_valid():
-        raise Error("A foot muscle must be a named muscle or tendon")
+    require_foot_muscle(part)
     return part.value <= FLEXOR_DIGITORUM_LONGUS_TENDON.value
 
 

@@ -12,6 +12,13 @@ target. Each half is cleared to its own background and drawn by its own
 camera, and neither touches the other. The target is resolved once.
 """
 
+from tools._example_output import (
+    example_destination,
+    fill_and_key,
+    framed_camera,
+    write_example,
+)
+
 from cameras.orthographic_camera import OrthographicCamera, centered
 from cameras.perspective_camera import PerspectiveCamera
 from core.assets import Assets
@@ -20,18 +27,14 @@ from core.object3d import NodeId, Object3D
 from core.scene import Scene
 from geometries.box import cube
 from geometries.torus import torus
-from lights.light import ambient_light, directional_light
 from materials.material import Material
 from math.vector3 import Vector3
 from objects.mesh import Mesh
-from render.apng import encode
 from render.framebuffer import Color, Framebuffer
 from render.rect import Rect
 from render.target import RenderTarget
 from renderers.renderer import Renderer, available_workers
-from std.pathlib import Path
-from std.sys import argv, stderr
-from units.si import Angle, DEGREE, Length, METER, MILLISECOND
+from units.si import Angle, DEGREE, Length, METER
 
 comptime DEFAULT_OUTPUT = "out/split.png"
 comptime WIDTH = 240
@@ -89,10 +92,7 @@ def frame_at(
 
 
 def main() raises:
-    var args = argv()
-    var destination = String(DEFAULT_OUTPUT)
-    if len(args) > 1:
-        destination = String(args[1])
+    var destination = example_destination(String(DEFAULT_OUTPUT))
     var renderer = Renderer(WIDTH, HEIGHT, workers=available_workers())
     renderer.set_scissor_test(True)
     var assets = Assets()
@@ -115,11 +115,16 @@ def main() raises:
     var ring_node = scene.add(lying^)
     scene.add_mesh(Mesh(ring, gold, ring_node))
 
-    var lamp = Object3D()
-    lamp.set_position(0.5, 0.9, 0.8)
-    var lamp_node = scene.add(lamp^)
-    scene.add_light(ambient_light(Color(255, 255, 255), 0.79))
-    scene.add_light(directional_light(Color(255, 255, 255), lamp_node, 2.51))
+    fill_and_key(
+        scene,
+        0.5,
+        0.9,
+        0.8,
+        Color(255, 255, 255),
+        0.79,
+        Color(255, 255, 255),
+        2.51,
+    )
 
     # The circling camera rides a seat on a pivot, and sees its half at
     # the half's own aspect.
@@ -129,11 +134,12 @@ def main() raises:
     var seat_node = scene.attach(seat^, pivot)
     scene.update()
     scene.look_at(seat_node, Vector3(0, 0, 0), camera=True)
-    var camera = PerspectiveCamera(
-        Angle(45.0, DEGREE),
-        Float32(WIDTH // 2) / Float32(HEIGHT),
-        Length(0.1, METER),
-        Length(100.0, METER),
+    var camera = framed_camera(
+        WIDTH // 2,
+        HEIGHT,
+        field_of_view=Angle(45.0, DEGREE),
+        near=Length(0.1, METER),
+        far=Length(100.0, METER),
     )
     camera.attach(seat_node)
     # The plan view looks straight down, and does not move.
@@ -153,12 +159,4 @@ def main() raises:
         frames.append(
             frame_at(renderer, camera, plan, assets, scene, pivot, step)
         )
-    print(
-        '{"frames_ms": ',
-        frame_clock.elapsed().to(MILLISECOND),
-        "}",
-        sep="",
-        file=stderr,
-    )
-    Path(destination).write_bytes(encode(frames, delay_ms=DELAY_MS))
-    print("Wrote", destination, "-", FRAMES, "frames")
+    write_example(frames, destination, DELAY_MS, FRAMES, frame_clock)

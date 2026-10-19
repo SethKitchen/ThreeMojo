@@ -14,6 +14,7 @@ from core.assets import Assets
 from core.buffer_attribute import BufferAttribute
 from core.buffer_geometry import POSITION, BufferGeometry
 from core.object3d import NodeId, Object3D
+from core.ordinal import require_index_in_count, require_non_negative
 from core.scene import Scene
 from core.user_data import UserData, user_data_of
 from extensions.humanoid.skeleton.head.aligned_speech import (
@@ -29,6 +30,7 @@ from extensions.humanoid.skeleton.head.expression import (
 from loaders.json import parse_json
 from materials.material import MaterialId
 from objects.mesh import Mesh
+from math.finite import require_finite
 from std.math import isfinite
 from std.memory import bitcast
 
@@ -50,8 +52,9 @@ def _attribute_hash(mut value: UInt64, attribute: BufferAttribute) raises:
         # A reached component loop has a positive attribute item size.
         for c in range(attribute.item_size):  # pragma: no branch
             var x = attribute.component(i, c)
-            if not isfinite(x):
-                raise Error("Facial geometry must have finite components")
+            require_finite(
+                Float64(x), "Facial geometry must have finite components"
+            )
             _mix(value, UInt64(bitcast[DType.uint32](x)))
 
 
@@ -77,8 +80,9 @@ def facial_correspondence(geometry: BufferGeometry) raises -> String:
     var count = geometry.vertex_count()
     # Validated facial topology has at least one indexed triangle.
     for index in geometry.index:  # pragma: no branch
-        if index < 0 or index >= count:
-            raise Error("Facial topology index is out of range")
+        require_index_in_count(
+            index, count, "Facial topology index is out of range"
+        )
         _mix(value, UInt64(index))
     # Validation requires the complete nonempty set of facial targets.
     for i in range(geometry.morph_count()):  # pragma: no branch
@@ -189,8 +193,9 @@ struct GameFace(Copyable, Movable):
         # The binding-size guard requires exactly three preserved meshes.
         for i in range(3):  # pragma: no branch
             var k = self.meshes[i]
-            if k < 0 or k >= len(scene.meshes):
-                raise Error("Game facial mesh is missing")
+            require_index_in_count(
+                k, len(scene.meshes), "Game facial mesh is missing"
+            )
             var mesh = scene.meshes[k]
             if scene.get(
                 mesh.node
@@ -375,8 +380,7 @@ def bind_game_face(
                 if found >= 0:
                     raise Error("Duplicate game facial mesh")
                 found = k
-        if found < 0:
-            raise Error("A preserved game facial mesh is missing")
+        require_non_negative(found, "A preserved game facial mesh is missing")
         meshes.append(found)
         signatures.append(record.string("part_" + String(part)))
     var face = GameFace(holder, meshes, signatures)

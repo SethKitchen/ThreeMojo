@@ -27,6 +27,21 @@ original environment. In particular, keep `three_version: null` for the
 historical sRGB generator. Its current verified dependency is recorded in
 `verified_runtime.dependencies` instead.
 
+## Reviewed sRGB source successor
+
+The #760 helper refactor changed `loaders/js_number.mojo` but kept all 256
+accepted sRGB words. The [source successor record](fixtures/srgb-source-successor-760.json)
+names both complete source hashes and the unchanged table digest.
+The digest matches the accepted and generated values in the preserved
+`srgb` entry of the October 3 runtime report. The default-pow diagnostic
+is not an accepted baseline.
+
+The manifest now binds the reviewed current source. It still rejects any
+other whole-file change, even when the table is unchanged. The fixture tests
+also check the fixed accepted word digest independently of the manifest.
+They reject table changes even when a test fixture's manifest is refreshed.
+No new Node run or number-format snapshot regeneration is claimed here.
+
 ## Reproduce the accepted results
 
 Use the exact Node release above on Linux x64. Start at the repository root.

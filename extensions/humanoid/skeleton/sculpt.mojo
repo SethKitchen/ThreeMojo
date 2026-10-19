@@ -26,7 +26,11 @@ from extensions.humanoid.skeleton.field import (
     smax,
     smin,
 )
-from math.vector3 import Vector3
+from math.box_extent import box_exterior
+from math.norm import squared_length3
+from math.cross import cross_vectors
+from math.utils import max3, min3
+from math.vector3 import Vector3, component_max, component_min, midpoint
 from std.math import max, min, sqrt
 
 # The piece kinds.
@@ -70,13 +74,13 @@ struct Piece(Copyable, Movable):
         var px = d.dot(self.u) / self.radii.x
         var py = d.dot(self.v) / self.radii.y
         var pz = d.dot(self.w) / self.radii.z
-        var k0 = sqrt(px * px + py * py + pz * pz)
+        var k0 = sqrt(squared_length3[DType.float32](px, py, pz))
         var qx = px / self.radii.x
         var qy = py / self.radii.y
         var qz = pz / self.radii.z
-        var k1 = sqrt(qx * qx + qy * qy + qz * qz)
+        var k1 = sqrt(squared_length3[DType.float32](qx, qy, qz))
         if k1 == 0:
-            return -min(self.radii.x, min(self.radii.y, self.radii.z))
+            return -min3(self.radii.x, self.radii.y, self.radii.z)
         return k0 * (k0 - 1) / k1
 
 
@@ -86,24 +90,15 @@ def _basis(forward: Vector3, up: Vector3) -> Tuple[Vector3, Vector3, Vector3]:
     w.normalize()
     var v = up - w * up.dot(w)
     v.normalize()
-    var u = Vector3(
-        v.y * w.z - v.z * w.y, v.z * w.x - v.x * w.z, v.x * w.y - v.y * w.x
-    )
+    var u = cross_vectors(v, w)
     return (u, v, w)
 
 
 def _hold(mut low: Vector3, mut high: Vector3, center: Vector3, reach: Float32):
     """Grow a box to hold a sphere."""
-    low = Vector3(
-        min(low.x, center.x - reach),
-        min(low.y, center.y - reach),
-        min(low.z, center.z - reach),
-    )
-    high = Vector3(
-        max(high.x, center.x + reach),
-        max(high.y, center.y + reach),
-        max(high.z, center.z + reach),
-    )
+    var span = Vector3(reach, reach, reach)
+    low = component_min(low, center - span)
+    high = component_max(high, center + span)
 
 
 def box_gap(low: Vector3, high: Vector3, point: Vector3) -> Float32:
@@ -117,10 +112,8 @@ def box_gap(low: Vector3, high: Vector3, point: Vector3) -> Float32:
     Returns:
         The distance in meters, zero inside the box.
     """
-    var dx = max(max(low.x - point.x, point.x - high.x), 0)
-    var dy = max(max(low.y - point.y, point.y - high.y), 0)
-    var dz = max(max(low.z - point.z, point.z - high.z), 0)
-    return sqrt(dx * dx + dy * dy + dz * dz)
+    var outside = box_exterior(low, high, point)
+    return sqrt(outside.length_sq())
 
 
 struct Sculpt(Copyable, DistanceField, Movable):
@@ -163,7 +156,7 @@ struct Sculpt(Copyable, DistanceField, Movable):
     ) -> Piece:
         """Return an ellipsoid piece turned to `forward` and `up`."""
         var axes = _basis(forward, up)
-        var reach = max(radii.x, max(radii.y, radii.z))
+        var reach = max3(radii.x, radii.y, radii.z)
         return Piece(
             _ELLIPSOID,
             center,
@@ -181,7 +174,7 @@ struct Sculpt(Copyable, DistanceField, Movable):
     @staticmethod
     def _capsule(a: Vector3, b: Vector3, ra: Float32, rb: Float32) -> Piece:
         """Return a tapered capsule piece."""
-        var center = (a + b) * Float32(0.5)
+        var center = midpoint(a, b)
         var reach = (b - a).length() * Float32(0.5) + max(ra, rb)
         return Piece(
             _CAPSULE,

@@ -40,14 +40,23 @@ fit in Float32. Component finiteness and true zero are checked separately.
 See `docs/wiki/Norm-consumers.md` for the consumer audit.
 """
 
+from core.ordinal import (
+    ordinal_valid,
+    require_index_in_count,
+    require_valid,
+    require_positive,
+)
+
 from cameras.camera import Camera
 from core.object3d import NO_PARENT, NodeId, Object3D
 from core.scene import Scene
 from lights.light import DIRECTIONAL, directional_light
 from lights.shadow import ShadowCascade
 from math.matrix4 import Matrix4
-from math.vector3 import Vector3
+from math.utils import mix_delta
+from math.vector3 import Vector3, component_max, component_min
 from render.framebuffer import Color
+from math.finite import require_positive_finite, require_finite
 from std.math import floor, isfinite, max, min
 from units.si import Length, METER
 
@@ -70,12 +79,7 @@ struct CsmMode(Equatable, ImplicitlyCopyable, Writable):
             Whether it is `UNIFORM_SPLIT`, `LOGARITHMIC_SPLIT`,
             `PRACTICAL_SPLIT` or `CUSTOM_SPLIT`.
         """
-        return (
-            self == UNIFORM_SPLIT
-            or self == LOGARITHMIC_SPLIT
-            or self == PRACTICAL_SPLIT
-            or self == CUSTOM_SPLIT
-        )
+        return ordinal_valid(self.value, CUSTOM_SPLIT.value)
 
 
 # three.js's `'uniform'`: breaks spaced evenly from the near plane.
@@ -156,7 +160,7 @@ def practical_split(
     var breaks = List[Float32]()
     for index in range(1, amount):
         var low = even[index - 1]
-        breaks.append(low + (ratio[index - 1] - low) * weight)
+        breaks.append(mix_delta(low, ratio[index - 1], weight))
     breaks.append(1)
     return breaks^
 
@@ -352,23 +356,22 @@ struct CSM(Movable):
                 breaks do not fit `CUSTOM_SPLIT`; or a light is refused by
                 `Light.validate`.
         """
-        if cascades < 1:
-            raise Error("A CSM needs at least one cascade")
-        if not mode.is_valid():
-            raise Error("A CSM split mode that is none of the four")
+        require_positive(cascades, "A CSM needs at least one cascade")
+        require_valid(
+            mode.is_valid(), "A CSM split mode that is none of the four"
+        )
         var direction = light_direction
-        if not (
-            isfinite(direction.x)
-            and isfinite(direction.y)
-            and isfinite(direction.z)
-        ) or (direction.x == 0 and direction.y == 0 and direction.z == 0):
+        if not direction.is_finite() or (direction == Vector3(0, 0, 0)):
             raise Error("A CSM's light direction must be finite and not zero")
         direction.normalize()
         var reach = max_far.to(METER)
-        if not isfinite(reach) or reach <= 0:
-            raise Error("A CSM's furthest depth must be a positive length")
-        if not isfinite(light_margin.to(METER)):
-            raise Error("A CSM's light margin must be finite")
+        require_positive_finite(
+            Float64(reach), "A CSM's furthest depth must be a positive length"
+        )
+        require_finite(
+            Float64(light_margin.to(METER)),
+            "A CSM's light margin must be finite",
+        )
         if mode == CUSTOM_SPLIT:
             _check_breaks(custom_breaks, cascades)
         self.cascades = cascades
@@ -525,8 +528,9 @@ struct CSM(Movable):
                 the camera's view is refused.
         """
         self._check_lights(scene)
-        if self.shadow_map_size < 1:
-            raise Error("A CSM shadow map size must be positive")
+        require_positive(
+            self.shadow_map_size, "A CSM shadow map size must be positive"
+        )
         if len(self.frustums) != self.cascades:
             raise Error("A CSM needs one frustum per cascade")
         # `_check_lights` requires cascades >= 1; lengths match above.
@@ -559,9 +563,11 @@ struct CSM(Movable):
             var high = seen.near[0]
             # Four corners, always.
             for corner in range(4):  # pragma: no branch
-                low = _lowest(_lowest(low, seen.near[corner]), seen.far[corner])
-                high = _highest(
-                    _highest(high, seen.near[corner]), seen.far[corner]
+                low = component_min(
+                    component_min(low, seen.near[corner]), seen.far[corner]
+                )
+                high = component_max(
+                    component_max(high, seen.near[corner]), seen.far[corner]
                 )
             var center = Vector3(
                 (low.x + high.x) * 0.5,
@@ -621,8 +627,11 @@ struct CSM(Movable):
             raise Error("A CSM needs one complete mapping per cascade")
         for index in range(self.cascades):  # pragma: no branch
             var at = self.lights[index]
-            if at < 0 or at >= len(scene.lights):
-                raise Error("A CSM's lights are not in this scene")
+            require_index_in_count(
+                at,
+                len(scene.lights),
+                "A CSM's lights are not in this scene",
+            )
             if (
                 scene.lights[at].kind != DIRECTIONAL
                 or scene.lights[at].node != self.nodes[index]
@@ -647,13 +656,3 @@ def _check_breaks(breaks: List[Float32], cascades: Int) raises:
                 "A custom CSM split's breaks must rise from zero to one"
             )
         before = at
-
-
-def _lowest(a: Vector3, b: Vector3) -> Vector3:
-    """Return the smaller of each component."""
-    return Vector3(min(a.x, b.x), min(a.y, b.y), min(a.z, b.z))
-
-
-def _highest(a: Vector3, b: Vector3) -> Vector3:
-    """Return the larger of each component."""
-    return Vector3(max(a.x, b.x), max(a.y, b.y), max(a.z, b.z))

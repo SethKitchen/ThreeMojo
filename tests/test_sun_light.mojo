@@ -434,13 +434,11 @@ def test_a_sun_refuses_changed_node_and_target_mappings() raises:
 
 
 def test_a_unit_direction_cannot_overflow_a_finite_cascade_position() raises:
-    from lights.sun_light import _finite_point
-
     var largest = bitcast[DType.float32](UInt32(0x7F7FFFFF))
     var edge = Vector3(largest, -largest, largest)
     var direction = Vector3(1, -1, 1)
     direction.normalize()
-    assert_true(_finite_point(edge + direction))
+    assert_true((edge + direction).is_finite())
     assert_at(edge + direction, edge.x, edge.y, edge.z)
 
 

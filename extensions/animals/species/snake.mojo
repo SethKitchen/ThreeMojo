@@ -25,7 +25,9 @@ from extensions.animals.coat import (
     EyeLook,
     Paint,
     Palette,
+    channel_gain,
     mix3,
+    shade_swatch,
     srgb,
 )
 from extensions.animals.parts import (
@@ -39,7 +41,7 @@ from extensions.animals.kit import (
     eye_frame_of,
     sculpt_eye_socket,
 )
-from extensions.animals.noise import fbm3, ihash
+from extensions.animals.noise import ihash, centered_fbm
 from extensions.animals.options import AnimalOptions, AnimalRandom
 from extensions.animals.rig import Rig
 from extensions.sdf.field import SdfModel
@@ -49,9 +51,13 @@ from extensions.sdf.vector import (
     clamp,
     length,
     lerp,
+    mix,
     normalize,
     smoothstep,
 )
+from math.norm import squared_length2
+from math.sine import fraction
+from math.utils import clamp_unit, nearest_distance
 from std.math import atan2, floor, sin, sqrt
 from extensions.sdf.distance import rect_distance
 
@@ -259,7 +265,7 @@ def _pchip_slopes(x: List[Float64], y: List[Float64]) -> List[Float64]:
             continue
         var a = m[i] / d[i]
         var b = m[i + 1] / d[i]
-        var s = a * a + b * b
+        var s = squared_length2[DType.float64](a, b)
         if s > 9.0:
             var k = 3.0 / sqrt(s)
             m[i] = k * a * d[i]
@@ -907,14 +913,6 @@ def _corn_mark(morph: Int) -> V3:
     return V3(0.012, 0.009, 0.008)
 
 
-def _tweak(c: V3, warm: Float64, light: Float64) -> V3:
-    return V3(
-        c.x * (1.0 + 0.1 * warm + light),
-        c.y * (1.0 + 0.02 * warm + light),
-        c.z * (1.0 - 0.1 * warm + light),
-    )
-
-
 def snake_palette(t: Traits) -> Palette:
     """Return one snake's palette: its morph, warmed, lightened and dulled.
 
@@ -957,8 +955,11 @@ def snake_palette(t: Traits) -> Palette:
             0xBFAE8C,
         ]
         for i in range(len(names)):  # pragma: no branch
-            out.set(names[i], _tweak(srgb(hexes[i]), warm, light))
-        var tone = clamp(t.get("tone", 0.0), -1.0, 1.0)
+            out.set(
+                names[i],
+                shade_swatch(srgb(hexes[i]), warm, light, 0.1, 0.02, -0.1),
+            )
+        var tone = clamp_unit(t.get("tone", 0.0))
         var tgt = srgb(0x8F8C86) if tone < 0.0 else srgb(0x9A6A4E)
         var k = abs(tone) * 0.75
         for key in [String("ground"), "flank", "center"]:  # pragma: no branch
@@ -998,7 +999,9 @@ def snake_palette(t: Traits) -> Palette:
     var hexes = _corn(pick)
     debug_assert(len(names) == len(hexes), "A palette needs one color per name")
     for i in range(len(names)):  # pragma: no branch
-        out.set(names[i], _tweak(srgb(hexes[i]), warm, light))
+        out.set(
+            names[i], shade_swatch(srgb(hexes[i]), warm, light, 0.1, 0.02, -0.1)
+        )
     var dulled = morph == NORMAL or morph == OKEETEE
     if dulled:
         var d = clamp(t.get("dull", 0.0), 0.0, 0.7)
@@ -1020,7 +1023,9 @@ def _feature(
     # A diamond, or a rounded box, `a` long and `bb` wide.
     if diamond:
         var l1 = abs(ds) / a + abs(du) / bb
-        return (l1 - 1.0) * (a * bb) / sqrt(a * a + bb * bb)
+        return (
+            (l1 - 1.0) * (a * bb) / sqrt(squared_length2[DType.float64](a, bb))
+        )
     var rr = min(a, bb) * 0.55
     return rect_distance(abs(ds) - (a - rr), abs(du) - (bb - rr)) - rr
 
@@ -1035,7 +1040,7 @@ def _seg2(px: Float64, py: Float64, pts: List[V3], w: List[Float64]) -> Float64:
         var ay = pts[i].y
         var bx = pts[i + 1].x - ax
         var by = pts[i + 1].y - ay
-        var l2 = bx * bx + by * by
+        var l2 = squared_length2[DType.float64](bx, by)
         var f = clamp(
             ((px - ax) * bx + (py - ay) * by) / (l2 if l2 > 0.0 else 1e-12),
             0.0,
@@ -1043,7 +1048,9 @@ def _seg2(px: Float64, py: Float64, pts: List[V3], w: List[Float64]) -> Float64:
         )
         var dx = px - ax - bx * f
         var dy = py - ay - by * f
-        var d = sqrt(dx * dx + dy * dy) - (w[i] + (w[i + 1] - w[i]) * f)
+        var d = sqrt(squared_length2[DType.float64](dx, dy)) - mix(
+            w[i], w[i + 1], f
+        )
         best = min(best, d)
     return best
 
@@ -1056,8 +1063,8 @@ def _scales(
     # adds a pale ridge down each scale.
     var q1 = (sg + across) / size
     var q2 = (sg - across) / size
-    var f1 = q1 - floor(q1)
-    var f2 = q2 - floor(q2)
+    var f1 = fraction(q1)
+    var f2 = fraction(q2)
     var seam = smoothstep(0.1, 0.0, min(min(f1, 1.0 - f1), min(f2, 1.0 - f2)))
     var rear = 0.5 * (f1 + f2)
     var ridge = smoothstep(0.12, 0.0, abs(f1 - f2)) * keel
@@ -1110,8 +1117,8 @@ def snake_paint(
     var w = plan.head_w * plan.kh
     var hh = plan.head_h * plan.kh
     var kh = plan.kh
-    var nz_f = fbm3(p * 60.0, 3) - 0.5
-    var n_lo = fbm3(p * 9.0, 3) - 0.5
+    var nz_f = centered_fbm(p, 60.0, 3)
+    var n_lo = centered_fbm(p, 9.0, 3)
     if bone == "jaw":
         # The lower jaw: pale labials outside, the mouth lining inside.
         var mouth = n.y > 0.6 and p.y > 0.32 * hh and abs(p.x) < 0.12 * w
@@ -1153,7 +1160,7 @@ def snake_paint(
         var rl = (total - s_vent) / 9.5
         var q = (sg - s_vent) / rl
         col = pal.get("ringW")
-        var f = q - floor(q)
+        var f = fraction(q)
         var odd = Int(floor(q)) % 2 == 1
         if odd:
             pat = -min(f, 1.0 - f) * rl
@@ -1290,7 +1297,7 @@ def snake_paint(
     var plated = not belly and sg < 1.2 * hl
     if plated:
         var plate = 0.0027 * kh if viper else 0.009 * kh
-        size = size + (plate - size) * (1.0 - hq)
+        size = mix(size, plate, 1.0 - hq)
         keel = keel * (0.5 + 0.5 * hq if viper else 1.0)
     var upper = n.y > -0.15 and p.y > 0.35 * hw
     var e = snake_eye(t)
@@ -1396,7 +1403,7 @@ def snake_paint(
             var lu = (p.z / hl - 0.12) / 0.11
             var labial = abs(p.x) > 0.3 * w and lu >= 0.0 and lu <= 8.0
             if labial:
-                var f = abs(lu - floor(lu + 0.5))
+                var f = nearest_distance(lu)
                 mk = min(mk, f * 0.11 * hl - 0.00008 * kh)
         # The palate, well inside the lips.
         var palate = (
@@ -1409,11 +1416,7 @@ def snake_paint(
         if palate:
             return Paint(srgb(0x8A5A58), SKIN)
     # Low-frequency mottling.
-    col = V3(
-        col.x * (1.0 + 0.1 * n_lo),
-        col.y * (1.0 + 0.1 * n_lo),
-        col.z * (1.0 + 0.08 * n_lo),
-    )
+    col = channel_gain(col, n_lo, 0.1, 0.1, 0.08)
     var spot = smoothstep(0.0008, -0.0008, pat)
     col = mix3(col, pcol, spot)
     var line = smoothstep(0.0005, -0.0005, mk)
@@ -1422,7 +1425,7 @@ def snake_paint(
     if belly:
         # Wide ventral scutes: one transverse plate after another.
         var q = sg / scute
-        var f = q - floor(q)
+        var f = fraction(q)
         col = col * (0.88 + 0.14 * f - 0.12 * smoothstep(0.08, 0.0, f))
     else:
         # The relief fades onto the smooth head plates.

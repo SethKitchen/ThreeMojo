@@ -24,6 +24,9 @@ reference decodes it, and cut to its size. The payload holds two words
 across and down at least, as three.js's `PVRLoader` reads it.
 """
 
+from core.binary import little_endian_u32
+from math.utils import is_power_of_two
+
 
 def pvrtc_bytes(width: Int, height: Int, two_bit: Bool) -> Int:
     """Return how many bytes a PVRTC level takes, as three.js's
@@ -40,18 +43,6 @@ def pvrtc_bytes(width: Int, height: Int, two_bit: Bool) -> Int:
     var across = max(width // (8 if two_bit else 4), 2)
     var down = max(height // 4, 2)
     return across * down * 8
-
-
-def _is_power_of_two(value: Int) -> Bool:
-    """Return True for a power of two.
-
-    Args:
-        value: The value.
-
-    Returns:
-        Whether it is one.
-    """
-    return value > 0 and (value & (value - 1)) == 0
 
 
 def _color_a(data: Int) -> List[Int]:
@@ -302,25 +293,6 @@ def _twiddle(x_size: Int, y_size: Int, x: Int, y: Int) -> Int:
     return twiddled | ((maximum >> shift) << (2 * shift))
 
 
-def _word(data: List[UInt8], index: Int) -> Int:
-    """Return a little-endian 32-bit word.
-
-    Args:
-        data: The payload.
-        index: Which word.
-
-    Returns:
-        The word.
-    """
-    var at = index * 4
-    return (
-        Int(data[at])
-        | (Int(data[at + 1]) << 8)
-        | (Int(data[at + 2]) << 16)
-        | (Int(data[at + 3]) << 24)
-    )
-
-
 def decode_pvrtc(
     width: Int, height: Int, data: List[UInt8], two_bit: Bool
 ) raises -> List[UInt8]:
@@ -340,7 +312,7 @@ def decode_pvrtc(
         Error: If a side is not a power of two, or the payload's length
             is not `pvrtc_bytes`.
     """
-    if not (_is_power_of_two(width) and _is_power_of_two(height)):
+    if not (is_power_of_two(width) and is_power_of_two(height)):
         raise Error("PVRTC: the width and the height must be powers of two")
     if len(data) != pvrtc_bytes(width, height, two_bit):
         raise Error("PVRTC: the payload's length does not match the size")
@@ -366,8 +338,8 @@ def decode_pvrtc(
             var color = List[Int]()
             for k in range(4):  # pragma: no branch
                 var at = _twiddle(words_x, words_y, xs[k], ys[k]) * 2
-                modulation.append(_word(data, at))
-                color.append(_word(data, at + 1))
+                modulation.append(little_endian_u32(data, 4 * at))
+                color.append(little_endian_u32(data, 4 * (at + 1)))
             var offsets_x: List[Int] = [0, word_width, 0, word_width]
             var offsets_y: List[Int] = [0, 0, word_height, word_height]
             for k in range(4):  # pragma: no branch

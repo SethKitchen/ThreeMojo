@@ -30,8 +30,11 @@ three.js warns and leaves the color unchanged for a string it cannot read.
 Here that string is refused.
 """
 
+from loaders.bytes import ascii_digit, ascii_space, hex_digit_value
+from loaders.js_text import is_js_word
 from render.framebuffer import FloatColor
 from render.srgb import LINEAR, SRGB, ColorSpace, linear_to_srgb, srgb_to_linear
+from math.utils import js_round_int
 from std.math import floor
 
 # The CSS color names and their sRGB values, three.js's `Color.NAMES`, in
@@ -357,34 +360,6 @@ def color_name_hex(name: String) -> Optional[Int]:
     return None
 
 
-def _is_space(byte: UInt8) -> Bool:
-    """Return True for an ASCII space, tab or line break."""
-    return byte == 32 or (byte >= 9 and byte <= 13)
-
-
-def _is_digit(byte: UInt8) -> Bool:
-    """Return True for an ASCII digit."""
-    return byte >= 48 and byte <= 57
-
-
-def _is_word(byte: UInt8) -> Bool:
-    """Return True for a letter, a digit or an underscore: a regular
-    expression's `\\w`."""
-    var letter = (byte >= 65 and byte <= 90) or (byte >= 97 and byte <= 122)
-    return letter or _is_digit(byte) or byte == 95
-
-
-def _hex_digit(byte: UInt8) -> Int:
-    """Return the value of a hexadecimal digit, or minus one."""
-    if _is_digit(byte):
-        return Int(byte) - 48
-    if byte >= 65 and byte <= 70:
-        return Int(byte) - 55
-    if byte >= 97 and byte <= 102:
-        return Int(byte) - 87
-    return -1
-
-
 struct _Scanner(Movable):
     """A cursor over the bytes of a string, for the few patterns a CSS
     color has."""
@@ -411,7 +386,7 @@ struct _Scanner(Movable):
 
     def skip_spaces(mut self):
         """Move past any spaces: a regular expression's `\\s*`."""
-        while not self.done() and _is_space(self.peek()):
+        while not self.done() and ascii_space(self.peek()):
             self.at += 1
 
     def eat(mut self, byte: UInt8) -> Bool:
@@ -436,10 +411,10 @@ struct _Scanner(Movable):
             The number, held at a million so that no string overflows it,
             or None if no digit is next.
         """
-        if not _is_digit(self.peek()):
+        if not ascii_digit(self.peek()):
             return None
         var value = 0
-        while _is_digit(self.peek()):
+        while ascii_digit(self.peek()):
             value = min(value * 10 + Int(self.peek()) - 48, 1000000)
             self.at += 1
         return value
@@ -453,15 +428,15 @@ struct _Scanner(Movable):
         """
         var whole = self.at
         var mantissa = Float64(0)
-        while _is_digit(self.peek()):
+        while ascii_digit(self.peek()):
             mantissa = mantissa * 10 + Float64(Int(self.peek()) - 48)
             self.at += 1
         var scale = Float64(1)
         if self.peek() == 46:
             self.at += 1
-            if not _is_digit(self.peek()):
+            if not ascii_digit(self.peek()):
                 return None
-            while _is_digit(self.peek()):
+            while ascii_digit(self.peek()):
                 mantissa = mantissa * 10 + Float64(Int(self.peek()) - 48)
                 scale *= 10
                 self.at += 1
@@ -575,7 +550,7 @@ def parse_style(style: String, space: ColorSpace = SRGB) raises -> FloatColor:
     """
     var bytes = style.as_bytes()
     var name_end = 0
-    while name_end < len(bytes) and _is_word(bytes[name_end]):
+    while name_end < len(bytes) and is_js_word(bytes[name_end]):
         name_end += 1
     var open = name_end
     var close = open + 1
@@ -647,7 +622,7 @@ def _parse_hex(style: String, space: ColorSpace) raises -> FloatColor:
     var bytes = style.as_bytes()
     var digits = List[Int]()
     for index in range(1, len(bytes)):  # pragma: no branch
-        var digit = _hex_digit(bytes[index])
+        var digit = hex_digit_value(Int(bytes[index]))
         if digit < 0:
             raise Error("A hex color holds hexadecimal digits: " + style)
         digits.append(digit)
@@ -688,13 +663,6 @@ def _from_hex(value: Int, space: ColorSpace) raises -> FloatColor:
     )
 
 
-def _round(value: Float64) -> Int:
-    """Return `value` rounded to the nearest whole number, a half up, as
-    JavaScript's `Math.round` rounds."""
-    var whole = floor(value)
-    return Int(whole) + (1 if value - whole >= 0.5 else 0)
-
-
 def _fixed3(value: Float32) -> String:
     """Return `value` with three decimals, as JavaScript's `toFixed(3)`
     writes it: a tie rounds away from zero, and a negative value keeps its
@@ -728,11 +696,11 @@ def format_style(color: FloatColor, space: ColorSpace = SRGB) raises -> String:
     if space == SRGB:
         return (
             "rgb("
-            + String(_round(Float64(linear_to_srgb(color.r)) * 255))
+            + String(js_round_int(Float64(linear_to_srgb(color.r)) * 255))
             + ","
-            + String(_round(Float64(linear_to_srgb(color.g)) * 255))
+            + String(js_round_int(Float64(linear_to_srgb(color.g)) * 255))
             + ","
-            + String(_round(Float64(linear_to_srgb(color.b)) * 255))
+            + String(js_round_int(Float64(linear_to_srgb(color.b)) * 255))
             + ")"
         )
     if space != LINEAR:

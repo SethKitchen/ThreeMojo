@@ -219,7 +219,7 @@ def total_light(frame: RenderTarget) -> Float32:
 
 def same(a: Color, b: Color) -> Bool:
     """Return True if two colors match in every channel."""
-    return a.r == b.r and a.g == b.g and a.b == b.b and a.a == b.a
+    return a == b
 
 
 def count_changed(a: RenderTarget, b: RenderTarget) -> Int:

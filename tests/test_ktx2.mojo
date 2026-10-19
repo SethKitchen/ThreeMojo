@@ -16,6 +16,7 @@ transcoder of three.js r186, `examples/jsm/libs/basis/basis_transcoder.wasm`,
 gives for its `RGBA32` target, or `RGBA_HALF` for UASTC HDR; the tests
 compare their XXH64 hash."""
 
+from core.binary import store_little_endian
 from render.compressed_texture import (
     RGB_S3TC_DXT1_FORMAT,
     RGBA_BPTC_FORMAT,
@@ -53,8 +54,7 @@ from std.testing import (
 
 def put(mut bytes: List[UInt8], at: Int, value: Int, count: Int = 4):
     """Write a little-endian number of `count` bytes."""
-    for byte in range(count):
-        bytes[at + byte] = UInt8((value >> (byte * 8)) & 0xFF)
+    store_little_endian(bytes, at, value, count)
 
 
 struct Ktx2(Movable):
@@ -122,7 +122,7 @@ struct Ktx2(Movable):
             put(out, entry, len(out), 8)
             put(out, entry + 8, len(self.levels[level]), 8)
             put(out, entry + 16, self.full[level], 8)
-            out.extend(self.levels[level].copy())
+            out.extend(Span(self.levels[level]))
         return out^
 
 
@@ -285,7 +285,7 @@ def zstd_frame(data: List[UInt8]) -> List[UInt8]:
     var out: List[UInt8] = [0x28, 0xB5, 0x2F, 0xFD, 0x00, 0x00]
     var header = 1 | (len(data) << 3)
     out.extend([UInt8(header & 0xFF), UInt8(header >> 8), 0])
-    out.extend(data.copy())
+    out.extend(Span(data))
     return out^
 
 
@@ -444,16 +444,16 @@ def with_key_values(var file: List[UInt8], entries: List[UInt8]) -> List[UInt8]:
         file.append(0)
     put(file, 56, len(file))
     put(file, 60, len(entries))
-    file.extend(entries.copy())
+    file.extend(Span(entries))
     return file^
 
 
 def entry(key: String, value: List[UInt8]) -> List[UInt8]:
     """Return one key and value entry, padded to four bytes."""
     var out = List[UInt8](length=4, fill=0)
-    out.extend(List[UInt8](key.as_bytes()))
+    out.extend(key.as_bytes())
     out.append(0)
-    out.extend(value.copy())
+    out.extend(Span(value))
     put(out, 0, len(out) - 4)
     while len(out) % 4 != 0:
         out.append(0)

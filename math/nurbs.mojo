@@ -47,15 +47,34 @@ curve given a start or an end knot has its tangents in the wrong place.
 This keeps that, because the tangent is what three.js gives.
 """
 
+from core.ordinal import (
+    require_index_in_count,
+    require_non_negative,
+    require_positive,
+)
 from geometries.parametric import ParametricSurface
 from math.curve_checks import check_curve_parameter
 from math.space_curve import Point3, SpaceCurve, normalized3, point3
-from math.vector3 import Vector3
+from math.vector3 import Vector3, vector3_from_float64
 from math.vector4 import Vector4
+from math.finite import require_finite
 from std.math import inf, isfinite
 
 # A control point in homogeneous form: `x`, `y`, `z` and the weight `w`.
 comptime Point4 = SIMD[DType.float64, 4]
+
+
+def _weighted(point: Point4) -> Point4:
+    """Return a control point with its position multiplied by its weight.
+
+    Args:
+        point: The control point. Its fourth component is the weight.
+
+    Returns:
+        `(w x, w y, w z, w)`. The weight stays.
+    """
+    var w = point[3]
+    return Point4(point[0] * w, point[1] * w, point[2] * w, w)
 
 
 def point4(v: Vector4) -> Point4:
@@ -293,11 +312,7 @@ def bspline_derivatives(
     var pw = List[Point4](capacity=len(points))
     for i in range(len(points)):  # pragma: no branch
         # A spline has one control point at least, so this runs.
-        var point = points[i]
-        var w = point[3]
-        point[0] *= w
-        point[1] *= w
-        point[2] *= w
+        var point = _weighted(points[i])
         pw.append(point)
     for k in range(du + 1):  # pragma: no branch
         # `du` is zero or more, so this runs.
@@ -514,11 +529,7 @@ def _surface_homogeneous(
         for k in range(p + 1):  # pragma: no branch
             # The degree is zero or more, so this runs.
             var point = points[uspan - p + k][vspan - q + l]
-            var w = point[3]
-            point[0] *= w
-            point[1] *= w
-            point[2] *= w
-            sum += point * nu[k]
+            sum += _weighted(point) * nu[k]
         temp.append(sum)
     var sw = Point4(0)
     for l in range(q + 1):  # pragma: no branch
@@ -590,11 +601,7 @@ def _volume_homogeneous(
             for k in range(p + 1):  # pragma: no branch
                 # The degree is zero or more, so this runs.
                 var point = points[uspan - p + k][vspan - q + l][wspan - r + m]
-                var weight = point[3]
-                point[0] *= weight
-                point[1] *= weight
-                point[2] *= weight
-                sum += point * nu[k]
+                sum += _weighted(point) * nu[k]
             sw += (sum * nw[m]) * nv[l]
     return sw
 
@@ -618,10 +625,8 @@ def _checked_knots(
             a knot is nonfinite, the knots fall, their count is incorrect,
             or the active knot interval has zero width.
     """
-    if degree < 0:
-        raise Error("A NURBS degree cannot be negative")
-    if points < 1:
-        raise Error("A NURBS spline needs one control point at least")
+    require_non_negative(degree, "A NURBS degree cannot be negative")
+    require_positive(points, "A NURBS spline needs one control point at least")
     if degree >= points:
         raise Error("A NURBS degree must be below its control point count")
     # Subtract from the existing length instead of adding caller counts.
@@ -632,8 +637,7 @@ def _checked_knots(
         )
     for index in range(len(knots)):  # pragma: no branch
         # There is one knot at least, so this runs.
-        if not isfinite(knots[index]):
-            raise Error("A NURBS knot must be finite")
+        require_finite(Float64(knots[index]), "A NURBS knot must be finite")
         if index > 0 and knots[index] < knots[index - 1]:
             raise Error("NURBS knots cannot fall")
     if knots[degree] >= knots[points]:
@@ -655,8 +659,9 @@ def _checked_point(point: Vector4) raises -> Point4:
     """
     var out = point4(point)
     for axis in range(4):  # pragma: no branch
-        if not isfinite(out[axis]):
-            raise Error("A NURBS control point must be finite")
+        require_finite(
+            Float64(out[axis]), "A NURBS control point must be finite"
+        )
     return out
 
 
@@ -686,8 +691,9 @@ def _project(h: Point4) -> Point3:
 def _checked_finite(p: Point3) raises -> Point3:
     """Refuse a nonfinite projected point or derivative."""
     for axis in range(3):  # pragma: no branch
-        if not isfinite(p[axis]):
-            raise Error("A NURBS projected result must be finite")
+        require_finite(
+            Float64(p[axis]), "A NURBS projected result must be finite"
+        )
     return p
 
 
@@ -700,12 +706,28 @@ def _checked_project(h: Point4) raises -> Point3:
     return _checked_finite(_project(h))
 
 
+def require_nurbs_box(held: Int, expected: Int) raises:
+    """Refuse a NURBS volume whose control points leave a hole in the box.
+
+    Nothing. The call returns when the two counts are equal.
+
+    Args:
+        held: How many points the row or plane holds.
+        expected: How many points that row or plane must hold.
+
+    Raises:
+        Error: If the counts differ.
+    """
+    if held != expected:
+        raise Error("A NURBS volume's control points must fill a box")
+
+
 def _checked_vector(p: Point3) raises -> Vector3:
     """Refuse coordinates outside Float32 before narrowing to a Vector3."""
     for axis in range(3):  # pragma: no branch
         if abs(p[axis]) > 3.4028234663852886e38:
             raise Error("A NURBS point must fit in Float32")
-    return Vector3(Float32(p[0]), Float32(p[1]), Float32(p[2]))
+    return vector3_from_float64(p[0], p[1], p[2])
 
 
 struct NURBSCurve(SpaceCurve):
@@ -751,10 +773,16 @@ struct NURBSCurve(SpaceCurve):
         self.control_points = points^
         self.start_knot = start_knot.or_else(0)
         self.end_knot = end_knot.or_else(len(knots) - 1)
-        if self.start_knot < 0 or self.start_knot >= len(knots):
-            raise Error("A NURBS start knot must be one of the knots")
-        if self.end_knot < 0 or self.end_knot >= len(knots):
-            raise Error("A NURBS end knot must be one of the knots")
+        require_index_in_count(
+            self.start_knot,
+            len(knots),
+            "A NURBS start knot must be one of the knots",
+        )
+        require_index_in_count(
+            self.end_knot,
+            len(knots),
+            "A NURBS end knot must be one of the knots",
+        )
 
     def point3(self, t: Float64) raises -> Point3:
         """Return the point of the curve at `t`, three.js's `getPoint`.
@@ -1001,14 +1029,10 @@ struct NURBSVolume(Copyable, Movable):
         self.control_points = List[List[List[Point4]]]()
         for i in range(n1):  # pragma: no branch
             # `_checked_knots` refused no points, so each loop runs.
-            if len(control_points[i]) != n2:
-                raise Error("A NURBS volume's control points must fill a box")
+            require_nurbs_box(len(control_points[i]), n2)
             var plane = List[List[Point4]]()
             for j in range(n2):  # pragma: no branch
-                if len(control_points[i][j]) != n3:
-                    raise Error(
-                        "A NURBS volume's control points must fill a box"
-                    )
+                require_nurbs_box(len(control_points[i][j]), n3)
                 var row = List[Point4]()
                 for k in range(n3):  # pragma: no branch
                     row.append(_checked_point(control_points[i][j][k]))

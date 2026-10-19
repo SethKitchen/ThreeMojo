@@ -107,6 +107,44 @@ def _at_exponent[
     return value.fraction * ldexp(SIMD[dtype, 1](1), Int32(remaining))
 
 
+@fieldwise_init
+struct _ProductPieces[dtype: DType](ImplicitlyCopyable):
+    """The four exact pieces of one three-factor product, and their exponent.
+
+    `last`, `tail`, `low`, and `high` are the order both sums consume.
+    """
+
+    var last: SIMD[Self.dtype, 1]
+    var tail: SIMD[Self.dtype, 1]
+    var low: SIMD[Self.dtype, 1]
+    var high: SIMD[Self.dtype, 1]
+    var exponent: Int
+
+
+def _product_pieces[
+    dtype: DType
+](a: SIMD[dtype, 1], b: SIMD[dtype, 1], c: SIMD[dtype, 1]) -> _ProductPieces[
+    dtype
+]:
+    """Return the four exact pieces of a three-factor product.
+
+    A factor of one stands for a two-factor product. The pieces stay in
+    the order `last`, `tail`, `low`, `high`.
+    """
+    comptime assert dtype.is_floating_point()
+    var sa = _split(a)
+    var sb = _split(b)
+    var sc = _split(c)
+    var exponent = sa.exponent + sb.exponent + sc.exponent
+    var product = fma(sa.fraction, sb.fraction, SIMD[dtype, 1](0))
+    var remainder = fma(sa.fraction, sb.fraction, -product)
+    var high = fma(product, sc.fraction, SIMD[dtype, 1](0))
+    var low = fma(product, sc.fraction, -high)
+    var tail = fma(remainder, sc.fraction, SIMD[dtype, 1](0))
+    var last = fma(remainder, sc.fraction, -tail)
+    return _ProductPieces(last, tail, low, high, exponent)
+
+
 def _sum_products[
     dtype: DType, terms: Int
 ](
@@ -124,18 +162,14 @@ def _sum_products[
     var expansion = Array[_Scaled[dtype], 4 * terms](fill=_Scaled[dtype](0, 0))
     var count = 0
     for term in range(terms):  # pragma: no branch
-        var sa = _split(a[term])
-        var sb = _split(b[term])
-        var sc = _split(c[term])
-        var exponent = sa.exponent + sb.exponent + sc.exponent
-        var product = fma(sa.fraction, sb.fraction, SIMD[dtype, 1](0))
-        var remainder = fma(sa.fraction, sb.fraction, -product)
-        var high = fma(product, sc.fraction, SIMD[dtype, 1](0))
-        var low = fma(product, sc.fraction, -high)
-        var tail = fma(remainder, sc.fraction, SIMD[dtype, 1](0))
-        var last = fma(remainder, sc.fraction, -tail)
-        for piece in [last, tail, low, high]:  # pragma: no branch
-            var total = _split(piece, exponent)
+        var pieces = _product_pieces(a[term], b[term], c[term])
+        for piece in [
+            pieces.last,
+            pieces.tail,
+            pieces.low,
+            pieces.high,
+        ]:  # pragma: no branch
+            var total = _split(piece, pieces.exponent)
             var parts = Array[_Scaled[dtype], 4 * terms](
                 fill=_Scaled[dtype](0, 0)
             )
@@ -226,15 +260,11 @@ def _grow_products[
     """Keep all exact product pieces through a host-side outer sum."""
     comptime assert dtype.is_floating_point()
     for term in range(terms):  # pragma: no branch
-        var sa = _split(a[term])
-        var sb = _split(b[term])
-        var sc = _split(c[term])
-        var exponent = sa.exponent + sb.exponent + sc.exponent
-        var product = fma(sa.fraction, sb.fraction, SIMD[dtype, 1](0))
-        var remainder = fma(sa.fraction, sb.fraction, -product)
-        var high = fma(product, sc.fraction, SIMD[dtype, 1](0))
-        var low = fma(product, sc.fraction, -high)
-        var tail = fma(remainder, sc.fraction, SIMD[dtype, 1](0))
-        var last = fma(remainder, sc.fraction, -tail)
-        for piece in [last, tail, low, high]:  # pragma: no branch
-            _grow_sum(expansion, _split(piece, exponent))
+        var pieces = _product_pieces(a[term], b[term], c[term])
+        for piece in [
+            pieces.last,
+            pieces.tail,
+            pieces.low,
+            pieces.high,
+        ]:  # pragma: no branch
+            _grow_sum(expansion, _split(piece, pieces.exponent))

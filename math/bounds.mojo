@@ -53,9 +53,10 @@ from math.box_extent import (
     _midpoint,
     _radius_up,
     _shrink_exceeds_extent,
+    require_nearest_box,
 )
 from math.matrix3 import Matrix3
-from math.matrix4 import Matrix4
+from math.matrix4 import Matrix4, require_affine
 from math.matrix_determinant import _determinant3_f32, _sum_products
 from math.triangle import Line3, Triangle
 from math.triangle_normal import (
@@ -64,7 +65,8 @@ from math.triangle_normal import (
     _ordinary_triangle_cross,
     _triangle_cross_wide,
 )
-from math.vector3 import Vector3
+from math.utils import max3, min3
+from math.vector3 import Vector3, component_max, component_min
 from math.norm import length3, _ordinary_squared
 from std.math import inf, isfinite, sqrt
 from std.memory import bitcast
@@ -108,14 +110,7 @@ def _plane_point_constant_wide(normal: Vector3, point: Vector3) -> Float32:
     var left = [Float64(normal.x), Float64(normal.y), Float64(normal.z)]
     var right = [Float64(point.x), Float64(point.y), Float64(point.z)]
     var product: Float64
-    if (
-        isfinite(normal.x)
-        and isfinite(normal.y)
-        and isfinite(normal.z)
-        and isfinite(point.x)
-        and isfinite(point.y)
-        and isfinite(point.z)
-    ):
+    if normal.is_finite() and point.is_finite():
         # Each widened Float32 product is exact in Float64. An expansion
         # also keeps a small middle term when the large terms cancel.
         product = _sum_products[3](left, right)
@@ -147,6 +142,37 @@ def _plane_coplanar_components_wide(
             Float32(wide[2] / magnitude),
         ),
         Float32(-determinant / magnitude),
+    )
+
+
+def enclose_point(mut low: Vector3, mut high: Vector3, point: Vector3):
+    """Grow a box that already holds a point so it also holds `point`.
+
+    An empty box is `Box3.expand_by_point`. This keeps the comparisons
+    a box makes once it holds something.
+
+    Args:
+        low: The box's low corner. It already holds a point.
+        high: The box's high corner.
+        point: The point to take in.
+    """
+    low = component_min(low, point)
+    high = component_max(high, point)
+
+
+def require_affine_bound(matrix: Matrix4) raises:
+    """Refuse a bound carried through a projecting matrix.
+
+    Nothing. The call returns when the matrix is affine.
+
+    Args:
+        matrix: The transform.
+
+    Raises:
+        Error: If the matrix projects.
+    """
+    require_affine(
+        matrix, "A bound can only be carried through an affine matrix"
     )
 
 
@@ -207,16 +233,7 @@ struct Box3(Equatable, ImplicitlyCopyable):
             self.min = point
             self.max = point
             return
-        self.min = Vector3(
-            min(self.min.x, point.x),
-            min(self.min.y, point.y),
-            min(self.min.z, point.z),
-        )
-        self.max = Vector3(
-            max(self.max.x, point.x),
-            max(self.max.y, point.y),
-            max(self.max.z, point.z),
-        )
+        enclose_point(self.min, self.max, point)
 
     def union(mut self, other: Box3):
         """Grow this box to hold everything `other` holds, three.js's
@@ -236,16 +253,8 @@ struct Box3(Equatable, ImplicitlyCopyable):
         if self.is_empty():
             self = other
             return
-        self.min = Vector3(
-            min(self.min.x, other.min.x),
-            min(self.min.y, other.min.y),
-            min(self.min.z, other.min.z),
-        )
-        self.max = Vector3(
-            max(self.max.x, other.max.x),
-            max(self.max.y, other.max.y),
-            max(self.max.z, other.max.z),
-        )
+        self.min = component_min(self.min, other.min)
+        self.max = component_max(self.max, other.max)
 
     def center(self) -> Vector3:
         """Return the middle of this box, or the origin for an empty one."""
@@ -305,8 +314,7 @@ struct Box3(Equatable, ImplicitlyCopyable):
             Error: If the box is empty. It has no points, so none is
                 nearest, and an inside-out corner is not an answer.
         """
-        if self.is_empty():
-            raise Error("An empty box has no nearest point")
+        require_nearest_box(self.is_empty())
         return self._nearest(point)
 
     def distance_to_point(self, point: Vector3) raises -> Float32:
@@ -379,8 +387,7 @@ struct Box3(Equatable, ImplicitlyCopyable):
             Error: If the matrix projects. A corner crossing `w = 0` has no
                 finite image, and eight carried corners are no bound on it.
         """
-        if not matrix.is_affine():
-            raise Error("A bound can only be carried through an affine matrix")
+        require_affine_bound(matrix)
         if self.is_empty():
             return
         var corners = List[Vector3]()
@@ -411,14 +418,7 @@ struct Box3(Equatable, ImplicitlyCopyable):
         if self.is_empty():
             return Sphere.empty()
         var middle = self.center()
-        if not (
-            isfinite(self.min.x)
-            and isfinite(self.min.y)
-            and isfinite(self.min.z)
-            and isfinite(self.max.x)
-            and isfinite(self.max.y)
-            and isfinite(self.max.z)
-        ):
+        if not (self.min.is_finite() and self.max.is_finite()):
             return Sphere(middle, self.size().length() * 0.5)
         var radius = _radius_up(
             _extent_about_center(self.min.x, self.max.x, middle.x),
@@ -779,8 +779,7 @@ struct Sphere(Equatable, ImplicitlyCopyable):
         Raises:
             Error: If the matrix projects; see `Box3.apply_matrix4`.
         """
-        if not matrix.is_affine():
-            raise Error("A bound can only be carried through an affine matrix")
+        require_affine_bound(matrix)
         if self.is_empty():
             return
         self.center = matrix.transform_point(self.center)
@@ -1260,4 +1259,4 @@ def _separates(
     var p0 = v0.dot(axis)
     var p1 = v1.dot(axis)
     var p2 = v2.dot(axis)
-    return max(-max(p0, max(p1, p2)), min(p0, min(p1, p2))) > reach
+    return max(-max3(p0, p1, p2), min3(p0, p1, p2)) > reach

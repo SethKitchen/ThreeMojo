@@ -64,7 +64,14 @@ uses the target's `samples`, independent of the renderer's `antialias`,
 and keeps the averaged light without a display conversion.
 """
 
-from render.framebuffer import Color, FloatColor, Framebuffer
+from render.framebuffer import (
+    TRANSPARENT_BLACK,
+    Color,
+    FloatColor,
+    Framebuffer,
+    append_color,
+    require_downsample_factor,
+)
 from render.raster_state import STANDARD_DEPTH, DepthMode, is_nearer
 
 # How many samples across and down each output pixel is drawn with when a
@@ -94,8 +101,7 @@ def downsample(
         Error: If the factor is less than one or does not divide both
             dimensions.
     """
-    if factor < 1:
-        raise Error("A downsample factor is at least one")
+    require_downsample_factor(factor)
     if image.width % factor != 0 or image.height % factor != 0:
         raise Error("A downsample factor must divide the image's size")
     var width = image.width // factor
@@ -108,7 +114,7 @@ def downsample(
     # Both dimensions are positive, so neither loop runs zero times.
     for y in range(height):  # pragma: no branch
         for x in range(width):  # pragma: no branch
-            var total = FloatColor(0.0, 0.0, 0.0, 0.0)
+            var total = TRANSPARENT_BLACK
             var nearest = image.depth_at(x * factor, y * factor)
             for row in range(factor):  # pragma: no branch
                 for column in range(factor):  # pragma: no branch
@@ -117,28 +123,11 @@ def downsample(
                     var sampled = FloatColor(
                         srgb=image.get_pixel(sx, sy)
                     ).premultiplied()
-                    total = FloatColor(
-                        total.r + sampled.r,
-                        total.g + sampled.g,
-                        total.b + sampled.b,
-                        total.a + sampled.a,
-                    )
+                    total = total + sampled
                     var z = image.depth_at(sx, sy)
                     if is_nearer(depth_mode, z, nearest):
                         nearest = z
-            var shown = (
-                FloatColor(
-                    total.r * share,
-                    total.g * share,
-                    total.b * share,
-                    total.a * share,
-                )
-                .unpremultiplied()
-                .encode()
-            )
-            pixels.append(shown.r)
-            pixels.append(shown.g)
-            pixels.append(shown.b)
-            pixels.append(shown.a)
+            var shown = (total * share).unpremultiplied().encode()
+            append_color(pixels, shown)
             depth.append(nearest)
     return Framebuffer(width, height, pixels^, depth^)

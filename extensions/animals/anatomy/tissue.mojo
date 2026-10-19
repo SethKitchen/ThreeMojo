@@ -11,12 +11,14 @@ coverts are solids like the trunk. Mass must not count them as flesh.
 body, coat, keratin, antler, tooth, eye or a foreign object. `segment_of`
 sorts each bone into the segment whose published density it takes.
 """
+from core.ordinal import ordinal_valid
 
 from extensions.animals.anatomy.body import (
     ANURAN,
     ARACHNID,
     MAMMAL,
     BodyPlan,
+    require_body_plan,
 )
 from extensions.animals.parts import EYEBALL, HORN, TEETH
 from extensions.sdf.ids import SurfacePart, require_part
@@ -34,7 +36,7 @@ struct BodyTissue(Equatable, ImplicitlyCopyable, Writable):
         Returns:
             True for the seven tissues.
         """
-        return self.value >= 0 and self.value <= 6
+        return ordinal_valid(self.value, 6)
 
 
 # Skin, muscle, bone and viscera: the segment's density.
@@ -65,7 +67,7 @@ struct Segment(Equatable, ImplicitlyCopyable, Writable):
         Returns:
             True for the fifteen segments.
         """
-        return self.value >= 0 and self.value < SEGMENT_COUNT
+        return ordinal_valid(self.value, SEGMENT_COUNT - 1)
 
 
 comptime HEAD = Segment(0)
@@ -228,8 +230,7 @@ def segment_of(plan: BodyPlan, bone: String) raises -> Segment:
     Raises:
         Error: If the plan is not named.
     """
-    if not plan.is_valid():
-        raise Error("A body plan must be named")
+    require_body_plan(plan)
     var b = _base(bone)
     if plan == ARACHNID:
         if b == "prosoma" or b == "pedicel":

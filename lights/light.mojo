@@ -83,15 +83,53 @@ for a rect area light. `Light.power` reads it and `Light.set_power` sets
 the intensity from it, as three.js's setter does.
 """
 
+from core.ordinal import ordinal_valid, require_index_in_count, require_valid
+
 from core.layers import Layers
 from core.object3d import NO_PARENT, NodeId
 from lights.shadow import LightShadow, ShadowCascade, ShadowMap
+from math.finite import require_non_negative_finite, require_unit_finite
 from math.spherical_harmonics3 import SphericalHarmonics3
 from render.framebuffer import Color, FloatColor
 from render.srgb import srgb_to_linear
 from render.texture_store import NO_TEXTURE, TextureId
 from std.math import cos, isfinite, pi
 from units.si import Angle, DEGREE, Length, METER, RADIAN
+
+
+def require_light_intensity(intensity: Float32) raises:
+    """Refuse a light intensity that is negative or not finite.
+
+    Nothing. The call returns when the intensity is finite and not
+    negative.
+
+    Args:
+        intensity: How bright, multiplying the color.
+
+    Raises:
+        Error: If the intensity is negative or not finite.
+    """
+    require_non_negative_finite(
+        Float64(intensity),
+        "A light's intensity must be finite and not negative",
+    )
+
+
+def require_shadow_light(index: Int, count: Int) raises:
+    """Refuse a shadow map whose light is not in the list.
+
+    Nothing. The call returns when the index names a light.
+
+    Args:
+        index: The light the map names.
+        count: How many lights the list has.
+
+    Raises:
+        Error: If the index is negative or past the last light.
+    """
+    require_index_in_count(
+        index, count, "A shadow map names a light that is not there"
+    )
 
 
 @fieldwise_init
@@ -109,15 +147,7 @@ struct LightKind(Equatable, ImplicitlyCopyable, Writable):
     def is_valid(self) -> Bool:
         """Return True if this is `AMBIENT`, `DIRECTIONAL`, `POINT`,
         `HEMISPHERE`, `SPOT`, `RECT_AREA` or `LIGHT_PROBE`."""
-        return (
-            self == AMBIENT
-            or self == DIRECTIONAL
-            or self == POINT
-            or self == HEMISPHERE
-            or self == SPOT
-            or self == RECT_AREA
-            or self == LIGHT_PROBE
-        )
+        return ordinal_valid(self.value, LIGHT_PROBE.value)
 
 
 # Fills every surface equally, whichever way it faces. No direction, no node.
@@ -204,8 +234,9 @@ def lights_of(indices: List[Int]) raises -> LightMask:
     """
     var bits = UInt64(0)
     for index in indices:
-        if index < 0 or index >= 64:
-            raise Error("A light mask names the first 64 lights alone")
+        require_index_in_count(
+            index, 64, "A light mask names the first 64 lights alone"
+        )
         bits |= UInt64(1) << UInt64(index)
     return LightMask(bits)
 
@@ -457,8 +488,7 @@ struct Light(ImplicitlyCopyable):
                 that is not an `IES_SPOT`; or a projector's aspect is
                 negative or not finite.
         """
-        if not isfinite(self.intensity) or self.intensity < 0:
-            raise Error("A light's intensity must be finite and not negative")
+        require_light_intensity(self.intensity)
         if self.kind == LIGHT_PROBE and not self.sh.is_finite():
             raise Error("A light probe's coefficients must be finite")
         self.cascade.validate()
@@ -480,8 +510,9 @@ struct Light(ImplicitlyCopyable):
         var mapped = self.map != NO_TEXTURE
         if mapped and self.kind != SPOT:
             raise Error("Only a spot light projects a map")
-        if not self.spot_shape.is_valid():
-            raise Error("A spot shape that is none of the three")
+        require_valid(
+            self.spot_shape.is_valid(), "A spot shape that is none of the three"
+        )
         if self.spot_shape != CONE_SPOT and self.kind != SPOT:
             raise Error("Only a spot light has an IES profile or a projector")
         if self.ies_map != NO_TEXTURE and self.spot_shape != IES_SPOT:
@@ -514,12 +545,14 @@ struct Light(ImplicitlyCopyable):
                     " plane: it is where the shadow camera's far plane goes"
                 )
         if self.kind == POINT or self.kind == SPOT:
-            if not isfinite(self.decay) or self.decay < 0:
-                raise Error("A light's decay must be finite and not negative")
-            if not isfinite(self.distance) or self.distance < 0:
-                raise Error(
-                    "A light's distance must be finite and not negative"
-                )
+            require_non_negative_finite(
+                Float64(self.decay),
+                "A light's decay must be finite and not negative",
+            )
+            require_non_negative_finite(
+                Float64(self.distance),
+                "A light's distance must be finite and not negative",
+            )
         if self.kind == SPOT:
             var half = self.angle.value
             if (
@@ -536,14 +569,10 @@ struct Light(ImplicitlyCopyable):
                     "A spot light's angle is too narrow to resolve: its"
                     " cosine rounds to one"
                 )
-            if (
-                not isfinite(self.penumbra)
-                or self.penumbra < 0
-                or self.penumbra > 1
-            ):
-                raise Error(
-                    "A spot light's penumbra must be between zero and one"
-                )
+            require_unit_finite(
+                Float64(self.penumbra),
+                "A spot light's penumbra must be between zero and one",
+            )
 
     def shadow_far(self) -> Length:
         """Return where this light's shadow camera puts its far plane:
@@ -876,6 +905,5 @@ def shadows_drawn(mut lights: List[Light], maps: List[ShadowMap]) raises:
     """
     for slot in range(len(maps)):
         var light = maps[slot].light
-        if light < 0 or light >= len(lights):
-            raise Error("A shadow map names a light that is not there")
+        require_shadow_light(light, len(lights))
         lights[light].shadow.needs_update = False

@@ -24,7 +24,8 @@ table.
     var d = hand_muscle_distance(dims, ADDUCTOR_POLLICIS, RIGHT, p)
 """
 
-from extensions.humanoid.side import BodySide
+from core.ordinal import ordinal_valid, ordinal_label, require_valid
+from extensions.humanoid.side import require_side, BodySide
 from extensions.humanoid.skeleton.arm.frame import (
     ArmDimensions,
     ArmMuscleDimensions,
@@ -44,7 +45,7 @@ from extensions.humanoid.skeleton.torso.sweep import (
     SweepField,
     floats,
 )
-from math.vector3 import Vector3
+from math.vector3 import Vector3, mix_delta3
 
 
 @fieldwise_init
@@ -60,9 +61,7 @@ struct HandMuscle(Equatable, ImplicitlyCopyable, Writable):
 
     def is_valid(self) -> Bool:
         """Return True if this is a named hand muscle or tendon group."""
-        if self.value < 0:
-            return False
-        return self.value <= THUMB_EXTENSOR_TENDONS.value
+        return ordinal_valid(self.value, THUMB_EXTENSOR_TENDONS.value)
 
 
 comptime ABDUCTOR_POLLICIS_BREVIS = HandMuscle(0)
@@ -98,8 +97,6 @@ def hand_muscle_label(part: HandMuscle) -> String:
         A short American English label, or `"hand muscle"` when `part`
         is not named.
     """
-    if not part.is_valid():
-        return "hand muscle"
     var names = List[String]()
     names.append("abductor pollicis brevis")
     names.append("flexor pollicis brevis")
@@ -115,7 +112,7 @@ def hand_muscle_label(part: HandMuscle) -> String:
     names.append("flexor pollicis longus tendon")
     names.append("extensor tendons")
     names.append("thumb extensor tendons")
-    return names[part.value]
+    return ordinal_label(part.is_valid(), part.value, names, "hand muscle")
 
 
 def named_hand_muscles() -> List[HandMuscle]:
@@ -144,8 +141,9 @@ def is_hand_tendon(part: HandMuscle) raises -> Bool:
     Raises:
         Error: If `part` is not named.
     """
-    if not part.is_valid():
-        raise Error("A hand muscle must be a named muscle or tendon group")
+    require_valid(
+        part.is_valid(), "A hand muscle must be a named muscle or tendon group"
+    )
     return part.value >= FLEXOR_TENDONS.value
 
 
@@ -283,8 +281,7 @@ def hand_muscle_field(
     """
     dimensions.validate()
     var tendon = is_hand_tendon(part)
-    if not side.is_valid():
-        raise Error("A hand side must be RIGHT or LEFT")
+    require_side(side, "A hand")
     var arm = dimensions.arm.copy()
     var f = arm.frame
     if part == LUMBRICALS or tendon:
@@ -366,7 +363,7 @@ def _digit_tendon(
         var clear = f.cm((0.75 - 0.08 * Float32(index)) * s)
         var fade = Float32(1) - Float32(0.18) * Float32(index)
         tendon.round(joints[index] + face * clear, f.cm(r * fade))
-    var last = joints[count - 2] + (joints[count - 1] - joints[count - 2]) * 0.3
+    var last = mix_delta3(joints[count - 2], joints[count - 1], Float32(0.3))
     tendon.round(last + face * f.cm(0.35 * s), f.cm(r * 0.4))
     return tendon^
 

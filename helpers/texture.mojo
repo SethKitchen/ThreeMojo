@@ -55,8 +55,8 @@ most positive, as three.js merges them.
 """
 
 from core.assets import Assets
-from core.buffer_attribute import BufferAttribute
 from core.buffer_geometry import BufferGeometry, NORMAL, POSITION, UV
+from geometries.surface import indexed_surface
 from core.geometry_store import GeometryId
 from core.object3d import NodeId
 from core.scene import Scene
@@ -67,8 +67,9 @@ from math.vector2 import Vector2
 from math.vector3 import Vector3
 from objects.mesh import Mesh
 from render.cube_texture_store import CubeTextureId
-from render.framebuffer import Color, FloatColor
+from render.framebuffer import Color, FloatColor, append_float_color
 from render.texture import (
+    CLAMP,
     IGNORED,
     UV_CHANNEL_0,
     UV_MAPPING,
@@ -78,6 +79,7 @@ from render.texture import (
     float_texture,
 )
 from render.texture_store import TextureId
+from render.volume_texture import VolumeTexels, filter_array, filter_volume
 from render.volume_texture_store import Data3DTextureId, DataArrayTextureId
 from std.math import max
 from units.si import Angle, Length, METER, RADIAN
@@ -233,14 +235,6 @@ def _baked(
     return map^
 
 
-def _push(mut data: List[Float32], color: FloatColor):
-    """Append one texel's four floats."""
-    data.append(color.r)
-    data.append(color.g)
-    data.append(color.b)
-    data.append(color.a)
-
-
 def texture_helper(
     texture: TextureId,
     mut assets: Assets,
@@ -287,6 +281,121 @@ def texture_helper(
     return helper^
 
 
+def _slice_maps[
+    T: VolumeTexels
+](
+    texels: T,
+    wide: Int,
+    tall: Int,
+    count: Int,
+    wrap_s: Wrap,
+    wrap_t: Wrap,
+    wrap_r: Wrap,
+    sampling: Filter,
+    layered: Bool,
+) raises -> List[Texture]:
+    """Read one map per slice of a volume or an array texture.
+
+    A volume is sampled with `filter_volume`, so neighbor slices blend
+    under `BILINEAR`. An array is sampled with `filter_array`, so each
+    map is one layer. `wrap_r` applies only to a volume.
+
+    Args:
+        texels: The volume or the array.
+        wide: Texels across.
+        tall: Texels up.
+        count: Slices, or layers.
+        wrap_s: How a column outside the image is resolved.
+        wrap_t: How a row outside the image is resolved.
+        wrap_r: How a slice outside a volume is resolved.
+        sampling: `NEAREST` or `BILINEAR`, as the texture filters.
+        layered: True when the third coordinate is a layer.
+
+    Returns:
+        The maps, the first slice first.
+
+    Raises:
+        Error: If a map cannot be built.
+    """
+    var maps = List[Texture]()
+    for index in range(count):  # pragma: no branch
+        var coordinate = _slice_coordinate(index, count, layered)
+        var data = List[Float32]()
+        for y in range(tall):  # pragma: no branch
+            for x in range(wide):  # pragma: no branch
+                var u = (Float32(x) + 0.5) / Float32(wide)
+                var v = (Float32(y) + 0.5) / Float32(tall)
+                if layered:
+                    append_float_color(
+                        data,
+                        filter_array(
+                            texels,
+                            wide,
+                            tall,
+                            count,
+                            wrap_s,
+                            wrap_t,
+                            sampling,
+                            u,
+                            v,
+                            coordinate,
+                        ),
+                    )
+                else:
+                    append_float_color(
+                        data,
+                        filter_volume(
+                            texels,
+                            wide,
+                            tall,
+                            count,
+                            wrap_s,
+                            wrap_t,
+                            wrap_r,
+                            sampling,
+                            u,
+                            v,
+                            coordinate,
+                        ),
+                    )
+        maps.append(_baked(data^, wide, tall, wrap_s, wrap_t, sampling, False))
+    return maps^
+
+
+def _planes_from_maps(
+    mut assets: Assets,
+    var maps: List[Texture],
+    width: Length,
+    height: Length,
+    depth: Length,
+) raises -> TextureHelper:
+    """Store one plane per map, the first at the most negative z.
+
+    Args:
+        assets: Where the parts are stored.
+        maps: The slices, the first slice first. Consumed.
+        width: How wide each plane is.
+        height: How tall each plane is.
+        depth: How far the first plane is from the last.
+
+    Returns:
+        The helper, one part per map.
+
+    Raises:
+        Error: If a plane cannot be stored.
+    """
+    var helper = TextureHelper()
+    var count = len(maps)
+    for index in range(count):  # pragma: no branch
+        helper._add(
+            assets,
+            _slice(width, height, depth, index, count, False),
+            maps.pop(0),
+            _slice_alpha(count),
+        )
+    return helper^
+
+
 def texture_helper(
     texture: Data3DTextureId,
     mut assets: Assets,
@@ -314,40 +423,26 @@ def texture_helper(
     _positive(width, "width")
     _positive(height, "height")
     _positive(depth, "depth")
-    var helper = TextureHelper()
-    var count = assets.data_3d_textures.get(texture).image.depth
-    for index in range(count):  # pragma: no branch
-        var r = _slice_coordinate(index, count, False)
-        var data = List[Float32]()
-        ref volume = assets.data_3d_textures.get(texture)
-        var wide = volume.image.width
-        var tall = volume.image.height
-        for y in range(tall):  # pragma: no branch
-            for x in range(wide):  # pragma: no branch
-                _push(
-                    data,
-                    volume.sample(
-                        (Float32(x) + 0.5) / Float32(wide),
-                        (Float32(y) + 0.5) / Float32(tall),
-                        r,
-                    ),
-                )
-        var map = _baked(
-            data^,
-            wide,
-            tall,
-            volume.wrap_s,
-            volume.wrap_t,
-            volume.filter,
-            False,
-        )
-        helper._add(
-            assets,
-            _slice(width, height, depth, index, count, False),
-            map^,
-            _slice_alpha(count),
-        )
-    return helper^
+    ref volume = assets.data_3d_textures.get(texture)
+    var wide = volume.image.width
+    var tall = volume.image.height
+    var count = volume.image.depth
+    var wrap_s = volume.wrap_s
+    var wrap_t = volume.wrap_t
+    var wrap_r = volume.wrap_r
+    var sampling = volume.filter
+    var maps = _slice_maps(
+        volume,
+        wide,
+        tall,
+        count,
+        wrap_s,
+        wrap_t,
+        wrap_r,
+        sampling,
+        False,
+    )
+    return _planes_from_maps(assets, maps^, width, height, depth)
 
 
 def texture_helper(
@@ -377,40 +472,17 @@ def texture_helper(
     _positive(width, "width")
     _positive(height, "height")
     _positive(depth, "depth")
-    var helper = TextureHelper()
-    var count = assets.data_array_textures.get(texture).layers()
-    for index in range(count):  # pragma: no branch
-        var layer = _slice_coordinate(index, count, True)
-        var data = List[Float32]()
-        ref stack = assets.data_array_textures.get(texture)
-        var wide = stack.image.width
-        var tall = stack.image.height
-        for y in range(tall):  # pragma: no branch
-            for x in range(wide):  # pragma: no branch
-                _push(
-                    data,
-                    stack.sample(
-                        (Float32(x) + 0.5) / Float32(wide),
-                        (Float32(y) + 0.5) / Float32(tall),
-                        layer,
-                    ),
-                )
-        var map = _baked(
-            data^,
-            wide,
-            tall,
-            stack.wrap_s,
-            stack.wrap_t,
-            stack.filter,
-            False,
-        )
-        helper._add(
-            assets,
-            _slice(width, height, depth, index, count, False),
-            map^,
-            _slice_alpha(count),
-        )
-    return helper^
+    ref stack = assets.data_array_textures.get(texture)
+    var wide = stack.image.width
+    var tall = stack.image.height
+    var count = stack.layers()
+    var wrap_s = stack.wrap_s
+    var wrap_t = stack.wrap_t
+    var sampling = stack.filter
+    var maps = _slice_maps(
+        stack, wide, tall, count, wrap_s, wrap_t, CLAMP, sampling, True
+    )
+    return _planes_from_maps(assets, maps^, width, height, depth)
 
 
 def _face_geometry(whole: BufferGeometry, face: Int) raises -> BufferGeometry:
@@ -428,15 +500,12 @@ def _face_geometry(whole: BufferGeometry, face: Int) raises -> BufferGeometry:
             normals.append(facing.component(vertex, axis))
         uvs.append(placed.component(vertex, 0))
         uvs.append(placed.component(vertex, 1))
-    var geometry = BufferGeometry()
-    geometry.set_attribute(String(POSITION), BufferAttribute(positions^, 3))
-    geometry.set_attribute(String(NORMAL), BufferAttribute(normals^, 3))
-    geometry.set_attribute(String(UV), BufferAttribute(uvs^, 2))
     # The face's two triangles, as the box winds them.
     var index = List[Int]()
     for corner in range(6):  # pragma: no branch
         index.append(whole.index[face * 6 + corner] - face * 4)
-    geometry.set_index(index^)
+    var geometry = BufferGeometry()
+    indexed_surface(geometry, positions^, normals^, uvs^, index^)
     return geometry^
 
 
@@ -487,7 +556,9 @@ def texture_helper(
                 # The first stored row is the top, at v near one.
                 var u = (Float32(column) + 0.5) / Float32(size)
                 var v = 1 - (Float32(row) + 0.5) / Float32(size)
-                _push(data, cube.sample(origin + across * u + up * v))
+                append_float_color(
+                    data, cube.sample(origin + across * u + up * v)
+                )
         ref first = cube.faces[0]
         var map = _baked(
             data^,

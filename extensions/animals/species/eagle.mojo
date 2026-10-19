@@ -39,7 +39,7 @@ from extensions.animals.kit import (
     EyeSpec,
     sculpt_eye_socket,
 )
-from extensions.animals.noise import fbm3
+from extensions.animals.noise import fbm3, centered_fbm
 from extensions.animals.options import (
     ANY_AGE,
     ADULT,
@@ -64,7 +64,7 @@ from extensions.animals.species.bird_rig import (
     rectrix,
     secondary,
     wing_joints,
-    wing_normal,
+    wing_arm,
     wing_segment,
 )
 from extensions.animals.traits import Traits, pick_sex
@@ -82,6 +82,7 @@ from extensions.animals.warp import (
     legs_warp,
     scale_about_warp,
 )
+from math.norm import squared_length2
 from std.math import cos, pi, pow, sin, sqrt
 
 comptime NECK_SEGS = 4
@@ -241,7 +242,9 @@ def _knee(hip: V3, ankle: V3, l1: Float64, l2: Float64, pole: V3) -> V3:
     var span = length(d)
     var e1 = d * (1.0 / span)
     var e2 = normalize(pole - e1 * dot(pole, e1))
-    var c = (l1 * l1 + span * span - l2 * l2) / (2.0 * l1 * span)
+    var c = (squared_length2[DType.float64](l1, span) - l2 * l2) / (
+        2.0 * l1 * span
+    )
     var sn = sqrt(max(0.0, 1.0 - c * c))
     return hip + e1 * (l1 * c) + e2 * (l1 * sn)
 
@@ -741,21 +744,14 @@ def eagle_sculpt(mut m: SdfModel, rig: Rig, t: Traits) raises:
 
     # WINGS: the arm. The flight feathers follow.
     for side in [String("L"), String("R")]:  # pragma: no branch
-        var s = 1.0 if side == "L" else -1.0
-        var sh = rig.j("shoulder" + side)
-        var el = rig.j("elbow" + side)
-        var wr = rig.j("wrist" + side)
-        var tp = rig.j("handTip" + side)
-        var n = wing_normal(rig, side)
-        var ulna = rig.bone("ulna" + side)
-        var hand = rig.bone("hand" + side)
+        var s, sh, el, wr, tp, n, humerus, ulna, hand = wing_arm(rig, side)
         wing_segment(
             m,
             s,
             n,
             sh,
             el,
-            rig.bone("humerus" + side),
+            humerus,
             0.019,
             0.05,
             0.018,
@@ -976,7 +972,7 @@ def eagle_paint(
     var h = p - HEAD_O
     var golden = t.variant == GOLDEN
     var juv = t.juvenile() > 0.0
-    var cv = fbm3(p * 18.0, 3) - 0.5
+    var cv = centered_fbm(p, 18.0, 3)
     var cond4 = tag == "mandible" or tag == "gonys"
     if cond4:
         if h.z < 0.012:
@@ -1055,7 +1051,7 @@ def eagle_paint(
             var tb = V3(0.0, _ax(-0.06, 0.05).y, _ax(-0.06, 0.05).z)
             var u = (
                 dot(p - tb, V3(0.0, -0.616, -0.788))
-                + (fbm3(p * 70.0, 2) - 0.5) * 0.012
+                + (centered_fbm(p, 70.0, 2)) * 0.012
             )
             c = mix3(c, pal.get("tail"), smoothstep(0.02, 0.036, u))
         else:
@@ -1072,7 +1068,7 @@ def eagle_paint(
         var occ = _hl(V3(0.0, -0.026, -0.058))
         var nd = occ - nb
         var ht = dot(p - nb, nd) / dot(nd, nd)
-        var jag = (fbm3(p * 60.0, 3) - 0.5) * 0.35
+        var jag = (centered_fbm(p, 60.0, 3)) * 0.35
         var cond9 = not golden and not juv
         if cond9:
             var hood_c = occ + V3(0.0, -0.008, 0.01)

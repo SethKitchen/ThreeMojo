@@ -46,9 +46,7 @@ comptime TOLERANCE = Float64(1e-6)
 
 def text_bytes(text: String) -> List[UInt8]:
     """Return a text as the bytes of a file."""
-    var bytes = List[UInt8]()
-    for byte in text.as_bytes():
-        bytes.append(byte)
+    var bytes = List[UInt8](text.as_bytes())
     return bytes^
 
 
@@ -411,7 +409,7 @@ def test_binary_compressed_counts() raises:
     var bytes = text_bytes(binary_head("binary_compressed", 2))
     put(bytes, UInt64(len(packed)), 4)
     put(bytes, UInt64(len(columns)), 4)
-    bytes.extend(packed.copy())
+    bytes.extend(Span(packed))
     var model = parse_pcd(bytes)
     assert_list(
         model.geometry.clone_attribute(String(POSITION)).packed(),
@@ -426,7 +424,7 @@ def test_binary_compressed_counts() raises:
     var cut = text_bytes(binary_head("binary_compressed", 2))
     put(cut, UInt64(len(packed) + 1), 4)
     put(cut, UInt64(len(columns)), 4)
-    cut.extend(packed.copy())
+    cut.extend(Span(packed))
     with assert_raises(contains="inside its compressed data"):
         _ = parse_pcd(cut)
     var small = text_bytes(binary_head("binary_compressed", 3))

@@ -69,7 +69,6 @@ from extensions.water.optics import (
     bed_color,
     beckmann,
     channel_ior,
-    clamp01,
     fbm2,
     floor_depth,
     fresnel,
@@ -122,6 +121,7 @@ from extensions.water.view import (
     WaterView,
     require_view,
 )
+from math.utils import saturate
 from math.vector3 import Vector3
 from std.math import cos, inf, isfinite, nan, sin, sqrt
 from std.memory import AddressSpace
@@ -270,9 +270,9 @@ def test_optics() raises:
     assert_almost_equal(channel_ior(1), 1.3335)
     assert_almost_equal(channel_ior(2), 1.3365)
     assert_almost_equal(channel_ior(5), 1.3335)
-    assert_almost_equal(clamp01(-1.0), 0.0)
-    assert_almost_equal(clamp01(2.0), 1.0)
-    assert_almost_equal(clamp01(0.25), 0.25)
+    assert_almost_equal(saturate(-1.0), 0.0)
+    assert_almost_equal(saturate(2.0), 1.0)
+    assert_almost_equal(saturate(0.25), 0.25)
     assert_almost_equal(fresnel(1.0, 1.3335), 0.02042566, atol=1e-5)
     assert_almost_equal(fresnel(0.0, 1.3335), 1.0, atol=1e-5)
     assert_almost_equal(fresnel(0.0, 0.5), 1.0)

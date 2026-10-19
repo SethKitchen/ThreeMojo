@@ -136,7 +136,7 @@ def decode_kd_tree(
         draco_require(split <= bit_length, "a KD-tree is split too deep")
         if split == bit_length:
             for _ in range(box.points):  # pragma: no branch
-                out.extend(base.copy())
+                out.extend(Span(base))
             continue
         if box.points <= 2:
             for _ in range(box.points):  # pragma: no branch

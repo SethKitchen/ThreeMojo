@@ -28,6 +28,7 @@ not ported.
 """
 
 from core.buffer_geometry import BufferGeometry
+from core.ordinal import require_index_in_count
 from generators.car import CarGenerator, CarPlacement
 from generators.person import PersonGenerator
 from generators.sidewalk import SidewalkGenerator, SidewalkInstances
@@ -595,8 +596,11 @@ struct City(Movable):
         Raises:
             Error: If there is no such tower.
         """
-        if index < 0 or index >= len(self.plan.towers):
-            raise Error("A city has no tower at that index")
+        require_index_in_count(
+            index,
+            len(self.plan.towers),
+            "A city has no tower at that index",
+        )
         var at = self.plan.towers[index].position
         return basis_matrix(Vec3d(1, 0, 0), Vec3d(0, 1, 0), Vec3d(0, 0, 1), at)
 

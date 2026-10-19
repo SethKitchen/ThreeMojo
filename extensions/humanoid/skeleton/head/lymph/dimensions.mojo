@@ -21,7 +21,8 @@ not a cited node count or size table.
     var d = head_lymph_distance(dims, DEEP_CERVICAL_NODES, RIGHT, p)
 """
 
-from extensions.humanoid.side import BodySide
+from core.ordinal import ordinal_valid, ordinal_label, require_valid
+from extensions.humanoid.side import require_side, BodySide
 from extensions.humanoid.skeleton.head.frame import HeadMuscleDimensions
 from extensions.humanoid.skeleton.torso.bones.dimensions import (
     template_points,
@@ -51,9 +52,7 @@ struct HeadLymph(Equatable, ImplicitlyCopyable, Writable):
 
     def is_valid(self) -> Bool:
         """Return True if this is a named group."""
-        if self.value < 0:
-            return False
-        return self.value <= SUPRACLAVICULAR_NODES.value
+        return ordinal_valid(self.value, SUPRACLAVICULAR_NODES.value)
 
 
 comptime DEEP_CERVICAL_NODES = HeadLymph(0)
@@ -80,9 +79,7 @@ def head_lymph_label(part: HeadLymph) -> String:
         "occipital nodes",
         "supraclavicular nodes",
     ]
-    if not part.is_valid():
-        return "head lymph"
-    return labels[part.value]
+    return ordinal_label(part.is_valid(), part.value, labels, "head lymph")
 
 
 def named_head_lymph() -> List[HeadLymph]:
@@ -116,10 +113,8 @@ def head_lymph_field(
             not named, or if `side` is not valid.
     """
     dimensions.validate()
-    if not part.is_valid():
-        raise Error("A head lymph group must be a named group")
-    if not side.is_valid():
-        raise Error("A head side must be RIGHT or LEFT")
+    require_valid(part.is_valid(), "A head lymph group must be a named group")
+    require_side(side, "A head")
     var f = dimensions.head.frame
     # Each node: x, y, z and its radius, in template cm.
     var nodes: List[Float32]

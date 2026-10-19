@@ -25,6 +25,8 @@ than zero, a depth, or an array is refused. The image's color space is
 `SRGB` when the internal format is an sRGB one, and `LINEAR` otherwise.
 """
 
+from core.binary import big_endian_u32, little_endian_u32
+from core.extent import require_positive_extent
 from render.compressed_texture import (
     R11_EAC_FORMAT,
     RED_GREEN_RGTC2_FORMAT,
@@ -54,6 +56,7 @@ from render.compressed_texture import (
     check_decoded_size,
     level_bytes,
 )
+from render.ktx_id import ktx_file_id
 from render.srgb import LINEAR, SRGB, ColorSpace
 
 # The identifier, then the endianness word and twelve more.
@@ -70,32 +73,15 @@ def identifier() -> List[UInt8]:
     Returns:
         The identifier.
     """
-    return [
-        0xAB,
-        0x4B,
-        0x54,
-        0x58,
-        0x20,
-        0x31,
-        0x31,
-        0xBB,
-        0x0D,
-        0x0A,
-        0x1A,
-        0x0A,
-    ]
+    return ktx_file_id(0x31, 0x31)
 
 
 def _word(bytes: List[UInt8], at: Int, big_endian: Bool) -> Int:
     """Return the word at `at` in the file's byte order; the caller has
     checked the length."""
-    var b0 = Int(bytes[at])
-    var b1 = Int(bytes[at + 1])
-    var b2 = Int(bytes[at + 2])
-    var b3 = Int(bytes[at + 3])
     if big_endian:
-        return (b0 << 24) | (b1 << 16) | (b2 << 8) | b3
-    return b0 | (b1 << 8) | (b2 << 16) | (b3 << 24)
+        return big_endian_u32(bytes, at)
+    return little_endian_u32(bytes, at)
 
 
 def format_of_gl(internal: Int) raises -> Tuple[CompressedFormat, ColorSpace]:
@@ -182,6 +168,23 @@ def format_of_gl(internal: Int) raises -> Tuple[CompressedFormat, ColorSpace]:
     )
 
 
+def require_ktx_tail(at: Int, length: Int, count: Int) raises:
+    """Refuse a KTX read that needs more bytes than the file still holds.
+
+    Nothing. The call returns when at least `count` bytes remain.
+
+    Args:
+        at: The next byte to read.
+        length: How many bytes the file has.
+        count: How many bytes the read needs.
+
+    Raises:
+        Error: If fewer than `count` bytes remain.
+    """
+    if length - at < count:
+        raise Error("KTX: the file ends before its last level")
+
+
 def read(bytes: List[UInt8]) raises -> CompressedImage:
     """Return every level of every face of a KTX 1 file, as block bytes.
 
@@ -220,10 +223,11 @@ def read(bytes: List[UInt8]) raises -> CompressedImage:
     var named = format_of_gl(_word(bytes, 28, big_endian))
     var width = _word(bytes, 36, big_endian)
     var height = _word(bytes, 40, big_endian)
-    if width <= 0 or height <= 0:
-        raise Error(
-            "KTX: only 2D textures are ported; the size must be positive"
-        )
+    require_positive_extent(
+        width,
+        height,
+        "KTX: only 2D textures are ported; the size must be positive",
+    )
     if _word(bytes, 44, big_endian) != 0:
         raise Error("KTX: only 2D textures are ported; this one has a depth")
     if _word(bytes, 48, big_endian) != 0:
@@ -242,8 +246,7 @@ def read(bytes: List[UInt8]) raises -> CompressedImage:
         image.mipmaps.append(List[UInt8]())
     var at = HEADER_BYTES + _word(bytes, 60, big_endian)
     for level in range(levels):  # pragma: no branch
-        if at > len(bytes) - 4:
-            raise Error("KTX: the file ends before its last level")
+        require_ktx_tail(at, len(bytes), 4)
         var size = _word(bytes, at, big_endian)
         at += 4
         var expected = level_bytes(
@@ -254,8 +257,7 @@ def read(bytes: List[UInt8]) raises -> CompressedImage:
                 "KTX: a level's stated size does not match its block grid"
             )
         for face in range(faces):  # pragma: no branch
-            if size > len(bytes) - at:
-                raise Error("KTX: the file ends before its last level")
+            require_ktx_tail(at, len(bytes), size)
             image.mipmaps[face * levels + level] = List[UInt8](
                 bytes[at : at + size]
             )

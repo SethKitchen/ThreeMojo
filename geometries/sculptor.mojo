@@ -50,9 +50,17 @@ See `docs/wiki/Norm-consumers.md` for the changed operations, retained
 limits, and explicit zero and nonfinite rules.
 """
 
-from math.norm import length2, length3, reciprocal_normalized3
+from math.finite import unit_finite
+from core.ordinal import ordinal_valid, require_index_in_count
+
+from math.norm import (
+    length2,
+    length3,
+    reciprocal_normalized3,
+    squared_length3,
+)
 from cameras.camera import Camera, project_point, unproject_point
-from controls.input import PRIMARY, PointerButton
+from controls.input import PRIMARY, PointerButton, require_named
 from core.assets import Assets
 from core.buffer_attribute import BufferAttribute
 from core.buffer_geometry import BufferGeometry, NORMAL, POSITION
@@ -77,13 +85,20 @@ from geometries.sculptor_tools import (
 from geometries.sculptor_utils import (
     Point3,
     intersection_ray_triangle,
+    point3_of,
     point_of,
     ray_point,
+    sqr_dist,
 )
 from math.ray import Ray
-from math.vector3 import Vector3
+from math.vector3 import Vector3, vector3_from_float64
+from math.finite import (
+    require_finite,
+    require_positive_finite,
+)
 from std.math import floor, inf, isfinite, sqrt
-from units.si import Length, METER
+from units.measure import length_meters
+from units.si import Length
 
 # The largest `Float32`, three.js's `MAX_FLOAT32`.
 comptime MAX_FLOAT32 = 3.4028234663852886e38
@@ -126,7 +141,7 @@ struct SculptTool(Equatable, ImplicitlyCopyable, Writable):
         Returns:
             Whether the value names a tool.
         """
-        return self.value >= 0 and self.value <= 8
+        return ordinal_valid(self.value, 8)
 
 
 # three.js's `'clay'`, the default: flattens toward a plane a little above
@@ -163,7 +178,7 @@ struct SculptorEventKind(Equatable, ImplicitlyCopyable, Writable):
         Returns:
             Whether the value names an event.
         """
-        return self.value >= 0 and self.value <= 2
+        return ordinal_valid(self.value, 2)
 
 
 # three.js's `'start'`: a stroke began.
@@ -202,7 +217,7 @@ def _tool_defaults() -> List[_ToolSettings]:
 def _validate_unit_interval(name: String, value: Float64) raises -> Float64:
     """Refuse a value outside zero to one, three.js's
     `validateUnitInterval`."""
-    if not isfinite(value) or value < 0 or value > 1:
+    if not unit_finite(Float64(value)):
         raise Error(
             "Sculptor: " + name + " must be a finite number between 0 and 1."
         )
@@ -321,24 +336,6 @@ def _prefix[T: Copyable](values: List[T], count: Int) -> List[T]:
     return out^
 
 
-def _point(v: Vector3) -> Point3:
-    """Return a vector widened to doubles."""
-    return Point3(Float64(v.x), Float64(v.y), Float64(v.z))
-
-
-def _vector(p: Point3) -> Vector3:
-    """Return a point rounded to a `Vector3`."""
-    return Vector3(Float32(p.x), Float32(p.y), Float32(p.z))
-
-
-def _dist2(a: Point3, b: Point3) -> Float64:
-    """Return the squared distance, three.js's `distanceToSquared`."""
-    var dx = a.x - b.x
-    var dy = a.y - b.y
-    var dz = a.z - b.z
-    return dx * dx + dy * dy + dz * dz
-
-
 struct Sculptor(Movable):
     """Sculpts one mesh of a scene with adaptive topology, three.js's
     `Sculptor`.
@@ -401,8 +398,11 @@ struct Sculptor(Movable):
                 material, its geometry is not in `assets`, or
                 `SculptorMesh.init_from_geometry` refuses the geometry.
         """
-        if mesh < 0 or mesh >= len(scene.meshes):
-            raise Error("Sculptor: mesh must be a Mesh with a BufferGeometry.")
+        require_index_in_count(
+            mesh,
+            len(scene.meshes),
+            "Sculptor: mesh must be a Mesh with a BufferGeometry.",
+        )
         if scene.meshes[mesh].is_multi_material():
             raise Error("Sculptor: Multi-material meshes are not supported.")
         self.mesh = mesh
@@ -507,10 +507,8 @@ struct Sculptor(Movable):
         var rect = self._get_rect()
         var x = ((client_x - rect[0]) / rect[2]) * 2 - 1
         var y = -((client_y - rect[1]) / rect[3]) * 2 + 1
-        return _point(
-            unproject_point(
-                Vector3(Float32(x), Float32(y), Float32(z)), camera, scene
-            )
+        return point3_of(
+            unproject_point(vector3_from_float64(x, y, z), camera, scene)
         )
 
     def _project[
@@ -518,7 +516,11 @@ struct Sculptor(Movable):
     ](self, camera: C, scene: Scene, point: Point3) raises -> Point3:
         """Return where a world point lands, in pixels and depth, three.js's
         `_project`."""
-        var ndc = _point(project_point(_vector(point), camera, scene))
+        var ndc = point3_of(
+            project_point(
+                vector3_from_float64(point.x, point.y, point.z), camera, scene
+            )
+        )
         var rect = self._get_rect()
         return Point3(
             (ndc.x * 0.5 + 0.5) * rect[2] + rect[0],
@@ -547,15 +549,11 @@ struct Sculptor(Movable):
             self._unproject(camera, scene, client_x, client_y, -0.8),
         )
         self._ray_origin = near
-        var dx = far.x - near.x
-        var dy = far.y - near.y
-        var dz = far.z - near.z
+        var offset = far - near
         # A finite direction remains usable even when its length cannot fit.
-        if not (isfinite(dx) and isfinite(dy) and isfinite(dz)) or (
-            dx == 0 and dy == 0 and dz == 0
-        ):
+        if not offset.is_finite() or (offset == Point3(0, 0, 0)):
             return False
-        var unit = reciprocal_normalized3(dx, dy, dz)
+        var unit = reciprocal_normalized3(offset.x, offset.y, offset.z)
         self._ray_direction = Point3(unit[0], unit[1], unit[2])
         return True
 
@@ -574,8 +572,10 @@ struct Sculptor(Movable):
         var world = scene.world_matrix(scene.meshes[self.mesh].node)
         var e = List[Float64](capacity=16)
         for i in range(16):  # pragma: no branch
-            if not isfinite(world.elements[i]):
-                raise Error("Sculptor: The mesh world matrix must be finite")
+            require_finite(
+                Float64(world.elements[i]),
+                "Sculptor: The mesh world matrix must be finite",
+            )
             e.append(Float64(world.elements[i]))
         var sx2 = e[0] * e[0] + e[1] * e[1] + e[2] * e[2]
         var sy2 = e[4] * e[4] + e[5] * e[5] + e[6] * e[6]
@@ -705,7 +705,7 @@ struct Sculptor(Movable):
         var radius_point = self._unproject(
             camera, scene, screen.x + self._size, screen.y, screen.z
         )
-        self._world_radius2 = _dist2(world_point, radius_point)
+        self._world_radius2 = sqr_dist(world_point, radius_point)
         self._local_radius2 = self._world_radius2 / scale2
 
     def _pick_vertices_in_sphere(mut self, radius2: Float64) -> List[Int]:
@@ -718,7 +718,7 @@ struct Sculptor(Movable):
         var picked = List[Int]()
         for vertex in in_cells:  # pragma: no branch
             var p = point_of(self._sculpt_mesh.vertices, vertex)
-            if _dist2(hit, p) < radius2:
+            if sqr_dist(hit, p) < radius2:
                 self._sculpt_mesh.vert_sculpt_flags[vertex] = flag
                 picked.append(vertex)
         return picked^
@@ -734,7 +734,7 @@ struct Sculptor(Movable):
             var vertex = self._sculpt_mesh.faces[self._hit_face * 3 + k]
             corners.append(vertex)
             var p = point_of(self._sculpt_mesh.vertices, vertex)
-            weights.append(sqrt(_dist2(hit, p)))
+            weights.append(sqrt(sqr_dist(hit, p)))
         var n: Point3
         if weights[0] == 0 or weights[1] == 0 or weights[2] == 0:
             var at = 0 if weights[0] == 0 else (1 if weights[1] == 0 else 2)
@@ -747,11 +747,7 @@ struct Sculptor(Movable):
             var n1 = self._sculpt_mesh._normal_at(corners[0])
             var n2 = self._sculpt_mesh._normal_at(corners[1])
             var n3 = self._sculpt_mesh._normal_at(corners[2])
-            n = Point3(
-                (n1.x * w1 + n2.x * w2 + n3.x * w3) * inverse_sum,
-                (n1.y * w1 + n2.y * w2 + n3.y * w3) * inverse_sum,
-                (n1.z * w1 + n2.z * w2 + n3.z * w3) * inverse_sum,
-            )
+            n = (n1 * w1 + n2 * w2 + n3 * w3) * inverse_sum
         var unit = reciprocal_normalized3(n.x, n.y, n.z)
         self._hit_normal = Point3(unit[0], unit[1], unit[2])
 
@@ -829,11 +825,7 @@ struct Sculptor(Movable):
                     * CLAY_OFFSET_RATIO
                     * (-1.0 if negative else 1.0)
                 )
-                plane_point = Point3(
-                    plane_point.x + normal.x * offset,
-                    plane_point.y + normal.y * offset,
-                    plane_point.z + normal.z * offset,
-                )
+                plane_point = plane_point + normal * offset
             tool_flatten(
                 self._sculpt_mesh,
                 picked,
@@ -886,7 +878,7 @@ struct Sculptor(Movable):
     def _mark_vertices_dirty(mut self, vertices: List[Int]):
         """Note the vertices to write back, three.js's
         `_markVerticesDirty`."""
-        self._dirty_vertices.extend(vertices.copy())
+        self._dirty_vertices.extend(Span(vertices))
 
     def _sync_geometry(mut self, mut assets: Assets) raises:
         """Write the positions, the normals and the index to the geometry,
@@ -970,24 +962,14 @@ struct Sculptor(Movable):
             Whether the ray meets the mesh.
         """
         var radius = Float64(world_radius.value)
-        if not isfinite(radius) or radius <= 0:
-            raise Error(
-                "Sculptor: worldRadius must be a finite number greater than 0."
-            )
-        var origin = _point(ray.origin)
-        var direction = _point(ray.direction)
-        var length_sq = (
-            direction.x * direction.x
-            + direction.y * direction.y
-            + direction.z * direction.z
+        require_positive_finite(
+            radius,
+            "Sculptor: worldRadius must be a finite number greater than 0.",
         )
-        if (
-            not isfinite(origin.x)
-            or not isfinite(origin.y)
-            or not isfinite(origin.z)
-            or not isfinite(length_sq)
-            or length_sq == 0
-        ):
+        var origin = point3_of(ray.origin)
+        var direction = point3_of(ray.direction)
+        var length_sq = direction.dot(direction)
+        if not origin.is_finite() or not isfinite(length_sq) or length_sq == 0:
             raise Error(
                 "Sculptor: origin and direction must contain finite values, and"
                 " direction must be non-zero."
@@ -1149,8 +1131,7 @@ struct Sculptor(Movable):
                 world matrix is outside the supported scale range or has
                 shear, or the camera cannot be read.
         """
-        if not button.is_valid():
-            raise Error("Invalid pointer button: ", button.value)
+        require_named(button.is_valid(), "pointer button", button.value)
         if (
             not self.enabled
             or button != PRIMARY
@@ -1300,18 +1281,12 @@ struct Sculptor(Movable):
         var px = hit.x - o.x
         var py = hit.y - o.y
         var pz = hit.z - o.z
-        var denominator = d.x * d.x + d.y * d.y + d.z * d.z
+        var denominator = squared_length3[DType.float64](d.x, d.y, d.z)
         var projection = (
             d.x * px + d.y * py + d.z * pz
         ) / denominator if denominator > 0 else 0.0
-        var moved = Point3(
-            o.x + d.x * projection,
-            o.y + d.y * projection,
-            o.z + d.z * projection,
-        )
-        self._drag_direction = Point3(
-            moved.x - hit.x, moved.y - hit.y, moved.z - hit.z
-        )
+        var moved = o + d * projection
+        self._drag_direction = moved - hit
         self._hit_point = moved
         self._update_radii(camera, scene, scale2)
         return True
@@ -1511,7 +1486,9 @@ struct Sculptor(Movable):
         Returns:
             The hit, or zero when there is none.
         """
-        return _vector(self._hit_point)
+        return vector3_from_float64(
+            self._hit_point.x, self._hit_point.y, self._hit_point.z
+        )
 
     def get_hit_normal(self) -> Vector3:
         """Return the surface's unit normal at the last hit, in the mesh's
@@ -1520,7 +1497,9 @@ struct Sculptor(Movable):
         Returns:
             The normal, or zero when there is none.
         """
-        return _vector(self._hit_normal)
+        return vector3_from_float64(
+            self._hit_normal.x, self._hit_normal.y, self._hit_normal.z
+        )
 
     def get_world_radius(self) -> Length:
         """Return the brush's radius in world units, three.js's
@@ -1529,7 +1508,7 @@ struct Sculptor(Movable):
         Returns:
             The radius, or zero when there is no hit.
         """
-        return Length(Float32(sqrt(self._world_radius2)), METER)
+        return length_meters(sqrt(self._world_radius2))
 
     def sculpt_mesh(self) -> ref[origin_of(self._sculpt_mesh)] SculptorMesh:
         """Return the welded mesh the tools change.

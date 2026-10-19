@@ -61,7 +61,10 @@ three.js finds no target for UASTC HDR with alpha, so this reader
 refuses them too.
 """
 
-from core.binary import little_endian_u32
+from core.ordinal import index_in_count
+from core.ordinal import ordinal_valid
+
+from core.binary import copy_bytes, little_endian_u32
 from render.compressed_texture import (
     R11_EAC_FORMAT,
     RED_GREEN_RGTC2_FORMAT,
@@ -89,6 +92,7 @@ from render.compressed_texture import (
 from render.etc1s import Etc1sGlobal, etc1s_image
 from render.exr import half_to_float
 from render.inflate import zlib_inflate
+from render.ktx_id import ktx_file_id
 from render.srgb import LINEAR, SRGB, ColorSpace
 from render.texture import (
     BILINEAR,
@@ -340,7 +344,7 @@ struct Supercompression(Equatable, ImplicitlyCopyable, Writable):
 
     def is_valid(self) -> Bool:
         """Return True if the specification defines the scheme."""
-        return self.value >= 0 and self.value <= 3
+        return ordinal_valid(self.value, 3)
 
     def write_to(self, mut writer: Some[Writer]):
         """Write the scheme's name.
@@ -367,20 +371,7 @@ def identifier() -> List[UInt8]:
     Returns:
         The identifier.
     """
-    return [
-        0xAB,
-        0x4B,
-        0x54,
-        0x58,
-        0x20,
-        0x32,
-        0x30,
-        0xBB,
-        0x0D,
-        0x0A,
-        0x1A,
-        0x0A,
-    ]
+    return ktx_file_id(0x32, 0x30)
 
 
 def _u64(bytes: List[UInt8], at: Int) raises -> Int:
@@ -642,11 +633,11 @@ struct KTX2Container(Movable):
                 ETC1S image is malformed; a video has a level past the
                 sixteenth; and everything `compressed_texture` raises.
         """
-        if face < 0 or face >= self.faces:
+        if not index_in_count(face, self.faces):
             raise Error("KTX2: this file has no face " + String(face))
-        if layer < 0 or layer >= self.layers:
+        if not index_in_count(layer, self.layers):
             raise Error("KTX2: this file has no layer " + String(layer))
-        if level < 0 or level >= self.levels:
+        if not index_in_count(level, self.levels):
             raise Error("KTX2: this file has no level " + String(level))
         var width = self.level_width(level)
         var height = self.level_height(level)
@@ -688,7 +679,7 @@ struct KTX2Container(Movable):
             )
         var size = self.image_bytes(level)
         var start = (layer * self.faces + face) * size
-        var bytes = List[UInt8](self.level_data[level][start : start + size])
+        var bytes = copy_bytes(self.level_data[level], start, size)
         if self.is_uastc_hdr():
             self._check_linear()
             return float_texture(
@@ -847,7 +838,7 @@ def _read_descriptor(bytes: List[UInt8], mut container: KTX2Container) raises:
 
 def _key_is(bytes: List[UInt8], at: Int, length: Int, key: String) -> Bool:
     """Return True if the `length` bytes at `at` spell `key`."""
-    return List[UInt8](bytes[at : at + length]) == List[UInt8](key.as_bytes())
+    return copy_bytes(bytes, at, length) == List[UInt8](key.as_bytes())
 
 
 def _has_animation_key(bytes: List[UInt8]) raises -> Bool:
@@ -980,14 +971,15 @@ def read(bytes: List[UInt8]) raises -> KTX2Container:
                 "KTX2: UASTC HDR with alpha is not ported: three.js finds no"
                 " format to transcode it to"
             )
-    elif not container.vk_format.is_valid():
-        raise Error(
-            "KTX2: "
-            + String(container.vk_format)
-            + " is not a format this reader decodes; other ASTC footprints,"
-            " PVRTC, ETC2 with punch-through alpha and the other Vulkan"
-            " formats are not ported"
-        )
+    else:
+        if not container.vk_format.is_valid():
+            raise Error(
+                "KTX2: "
+                + String(container.vk_format)
+                + " is not a format this reader decodes; other ASTC footprints,"
+                " PVRTC, ETC2 with punch-through alpha and the other Vulkan"
+                " formats are not ported"
+            )
     if not basis and container.vk_format.is_astc():
         if container.color_model != KHR_DF_MODEL_ASTC:
             raise Error(
@@ -1031,7 +1023,7 @@ def read(bytes: List[UInt8]) raises -> KTX2Container:
         var full = _u64(bytes, entry + 16)
         if _outside(offset, length, len(bytes)):
             raise Error("KTX2: a level lies outside the file")
-        var data = List[UInt8](bytes[offset : offset + length])
+        var data = copy_bytes(bytes, offset, length)
         if not etc1s:
             # Divided rather than multiplied, so a huge layer count cannot
             # overflow the check.
@@ -1052,7 +1044,7 @@ def read(bytes: List[UInt8]) raises -> KTX2Container:
         if _outside(offset, length, len(bytes)):
             raise Error("KTX2: the supercompression global data lies outside")
         container.etc1s = Etc1sGlobal(
-            List[UInt8](bytes[offset : offset + length]),
+            copy_bytes(bytes, offset, length),
             images * container.levels,
             container.has_alpha,
         )

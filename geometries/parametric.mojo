@@ -34,10 +34,12 @@ limits, and explicit zero and nonfinite rules.
 
 from math.triangle_normal import normal_or_zero
 
-from core.buffer_attribute import BufferAttribute
-from core.buffer_geometry import BufferGeometry, NORMAL, POSITION, UV
-from math.vector3 import Vector3
-from std.math import cos, isfinite, pi, sin
+from core.buffer_geometry import BufferGeometry
+from geometries.grid import append_cell
+from geometries.surface import indexed_surface
+from math.vector3 import Vector3, append_vector3
+from math.finite import require_finite_group
+from std.math import cos, pi, sin
 
 # The step the finite differences take, in units of `u` and `v`: three.js's
 # `EPS`.
@@ -95,8 +97,10 @@ struct SurfaceFunction[func: def(Float32, Float32) thin -> Vector3](
 
 def _check(point: Vector3) raises -> Vector3:
     """Return `point`, or raise if any of its numbers is not finite."""
-    if not (isfinite(point.x) and isfinite(point.y) and isfinite(point.z)):
-        raise Error("A parametric surface must give finite points")
+    require_finite_group(
+        point.is_finite(),
+        "A parametric surface must give finite points",
+    )
     return point
 
 
@@ -137,9 +141,7 @@ def parametric[
         for j in range(slices + 1):  # pragma: no branch
             var u = Float32(j) / Float32(slices)
             var p0 = _check(surface.point(u, v))
-            data.append(p0.x)
-            data.append(p0.y)
-            data.append(p0.z)
+            append_vector3(data, p0)
             var pu_point: Vector3
             var u_sign = Float32(1)
             if u - EPS >= 0:
@@ -155,9 +157,7 @@ def parametric[
             else:
                 pv_point = _check(surface.point(u, v + EPS))
             var pu = normal_or_zero(p0, pu_point, pv_point) * (u_sign * v_sign)
-            normals.append(pu.x)
-            normals.append(pu.y)
-            normals.append(pu.z)
+            append_vector3(normals, pu)
             uvs.append(u)
             uvs.append(v)
 
@@ -169,18 +169,10 @@ def parametric[
             var b = i * slice_count + j + 1
             var c = (i + 1) * slice_count + j + 1
             var d = (i + 1) * slice_count + j
-            index.append(a)
-            index.append(b)
-            index.append(d)
-            index.append(b)
-            index.append(c)
-            index.append(d)
+            append_cell(index, a, b, c, d)
 
     var geometry = BufferGeometry()
-    geometry.set_attribute(String(POSITION), BufferAttribute(data^, 3))
-    geometry.set_attribute(String(NORMAL), BufferAttribute(normals^, 3))
-    geometry.set_attribute(String(UV), BufferAttribute(uvs^, 2))
-    geometry.set_index(index^)
+    indexed_surface(geometry, data^, normals^, uvs^, index^)
     return geometry^
 
 

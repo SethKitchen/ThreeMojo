@@ -80,8 +80,10 @@ from core.object3d import (
     facing,
     scale_of,
 )
+from core.ordinal import require_index_in_count, require_valid
 from lights.light import Light
 from materials.material import MaterialId
+from math.finite import require_non_negative_finite, require_unit_finite
 from math.matrix4 import Matrix4, compose
 from math.quaternion import Quaternion
 from math.euler import XYZ, Euler
@@ -106,6 +108,66 @@ from objects.sprite import Sprite
 comptime ZERO_ANGLE = Angle(0.0, RADIAN)
 
 
+def require_instanced_mesh(index: Int, count: Int) raises:
+    """Refuse an instanced-mesh index the scene does not have.
+
+    Nothing. The call returns when the index names a mesh.
+
+    Args:
+        index: Which mesh, as its position in the scene's list.
+        count: How many instanced meshes the scene has.
+
+    Raises:
+        Error: If no instanced mesh has that index.
+    """
+    require_index_in_count(index, count, "No instanced mesh has that index")
+
+
+def require_skinned_mesh(index: Int, count: Int) raises:
+    """Refuse a skinned-mesh index the scene does not have.
+
+    Nothing. The call returns when the index names a mesh.
+
+    Args:
+        index: Which mesh, as its position in the scene's list.
+        count: How many skinned meshes the scene has.
+
+    Raises:
+        Error: If no skinned mesh has that index.
+    """
+    require_index_in_count(index, count, "No skinned mesh has that index")
+
+
+def require_mesh(index: Int, count: Int) raises:
+    """Refuse a mesh index the scene does not have.
+
+    Nothing. The call returns when the index names a mesh.
+
+    Args:
+        index: Which mesh, as its position in the scene's list.
+        count: How many meshes the scene has.
+
+    Raises:
+        Error: If no mesh has that index.
+    """
+    require_index_in_count(index, count, "No mesh has that index")
+
+
+def require_lod_index(index: Int, count: Int) raises:
+    """Refuse an LOD index the scene does not have.
+
+    Nothing. The call returns when the index names an LOD.
+
+    Args:
+        index: Which LOD, as its position in the scene's list.
+        count: How many LODs the scene has.
+
+    Raises:
+        Error: If no LOD has that index.
+    """
+    require_index_in_count(index, count, "No LOD has that index")
+
+
 struct _Links(Movable):
     """Every node's children, in order, and the roots, in order: the
     `children` arrays three.js keeps, worked out from the parent links."""
@@ -126,6 +188,38 @@ struct _Links(Movable):
         self.first = first^
         self.kids = kids^
         self.roots = roots^
+
+
+def require_scene_index(index: Int, count: Int) raises:
+    """Refuse a scene node index outside the array.
+
+    Nothing. The call returns when the index names an entry.
+
+    Args:
+        index: The node's index.
+        count: How many entries the array holds.
+
+    Raises:
+        Error: If the index is negative or past the last entry.
+    """
+    require_index_in_count(index, count, "Scene node index out of range")
+
+
+def _require_scene_node(value: Int, count: Int, name: String) raises:
+    """Refuse a draw whose node is past the scene.
+
+    Nothing. The call returns when the node is inside the scene.
+
+    Args:
+        value: The node's integer.
+        count: How many nodes the scene holds.
+        name: What to call the draw in the error.
+
+    Raises:
+        Error: If the node is past the last node.
+    """
+    if value >= count:
+        raise Error(name + " must name a node that is in the scene")
 
 
 struct Scene(Movable):
@@ -274,14 +368,18 @@ struct Scene(Movable):
                 either rotation is refused by `check_rotation`.
         """
         var blur = self.background_blurriness
-        if not isfinite(blur) or blur < 0 or blur > 1:
-            raise Error("A background blurriness must be between zero and one")
+        require_unit_finite(
+            Float64(blur),
+            "A background blurriness must be between zero and one",
+        )
         var shown = self.background_intensity
-        if not isfinite(shown) or shown < 0:
-            raise Error("A background intensity cannot be negative")
+        require_non_negative_finite(
+            Float64(shown), "A background intensity cannot be negative"
+        )
         var lit = self.environment_intensity
-        if not isfinite(lit) or lit < 0:
-            raise Error("An environment intensity cannot be negative")
+        require_non_negative_finite(
+            Float64(lit), "An environment intensity cannot be negative"
+        )
         check_rotation(self.background_rotation, "A background rotation")
         check_rotation(self.environment_rotation, "An environment rotation")
 
@@ -307,8 +405,7 @@ struct Scene(Movable):
         Raises:
             Error: If the mesh names a node the scene does not have.
         """
-        if mesh.node.value >= len(self._nodes):
-            raise Error("A mesh must name a node that is in the scene")
+        _require_scene_node(mesh.node.value, len(self._nodes), "A mesh")
         self.meshes.append(mesh)
 
     def add_instanced_mesh(mut self, var mesh: InstancedMesh) raises:
@@ -323,10 +420,9 @@ struct Scene(Movable):
         Raises:
             Error: If it names a node the scene does not have.
         """
-        if mesh.node.value >= len(self._nodes):
-            raise Error(
-                "An instanced mesh must name a node that is in the scene"
-            )
+        _require_scene_node(
+            mesh.node.value, len(self._nodes), "An instanced mesh"
+        )
         self.instanced_meshes.append(mesh^)
 
     def add_batched_mesh(mut self, var mesh: BatchedMesh) raises:
@@ -341,8 +437,7 @@ struct Scene(Movable):
         Raises:
             Error: If it names a node the scene does not have.
         """
-        if mesh.node.value >= len(self._nodes):
-            raise Error("A batched mesh must name a node that is in the scene")
+        _require_scene_node(mesh.node.value, len(self._nodes), "A batched mesh")
         self.batched_meshes.append(mesh^)
 
     def add_lod(mut self, var lod: Lod) raises:
@@ -361,18 +456,13 @@ struct Scene(Movable):
             Error: If it names a node the scene does not have, or a level
                 cannot go under the LOD's node: the LOD's node is under it.
         """
-        if lod.node.value >= len(self._nodes):
-            raise Error("An LOD must name a node that is in the scene")
+        _require_scene_node(lod.node.value, len(self._nodes), "An LOD")
         var above = self._chain(lod.node)
         for level in lod.levels:
-            if level.object.value >= len(self._nodes):
-                raise Error(
-                    "An LOD level must name a node that is in the scene"
-                )
-            if level.object.value in above:
-                raise Error(
-                    "A node cannot go under itself or its own descendant"
-                )
+            _require_scene_node(
+                level.object.value, len(self._nodes), "An LOD level"
+            )
+            self._refuse_listed(level.object.value, above)
         for level in lod.levels:
             self.add(level.object, parent=lod.node)
         self.lods.append(lod^)
@@ -400,12 +490,10 @@ struct Scene(Movable):
                 or cannot go under the LOD's node, or for anything
                 `Lod.add_level` raises for.
         """
-        if index < 0 or index >= len(self.lods):
-            raise Error("No LOD has that index")
+        require_lod_index(index, len(self.lods))
         self._check(object)
         var holder = self.lods[index].node
-        if object.value in self._chain(holder):
-            raise Error("A node cannot go under itself or its own descendant")
+        self._refuse_under(object.value, holder)
         self.lods[index].add_level(object, distance, hysteresis)
         self.add(object, parent=holder)
         self._show_level(index)
@@ -424,8 +512,7 @@ struct Scene(Movable):
         Raises:
             Error: If no LOD has that index.
         """
-        if index < 0 or index >= len(self.lods):
-            raise Error("No LOD has that index")
+        require_lod_index(index, len(self.lods))
         var removed = self.lods[index].remove_level(distance)
         if not removed:
             return False
@@ -460,12 +547,14 @@ struct Scene(Movable):
             Error: If it names a node the scene does not have, or one of
                 its bones does.
         """
-        if mesh.node.value >= len(self._nodes):
-            raise Error("A skinned mesh must name a node that is in the scene")
+        _require_scene_node(mesh.node.value, len(self._nodes), "A skinned mesh")
         for index in range(mesh.bone_count()):  # pragma: no branch
             var bone = mesh.skeleton.node(index)
-            if bone.value < 0 or bone.value >= len(self._nodes):
-                raise Error("A bone must name a node that is in the scene")
+            require_index_in_count(
+                bone.value,
+                len(self._nodes),
+                "A bone must name a node that is in the scene",
+            )
         self.skinned_meshes.append(mesh^)
 
     def add_line(mut self, line: Line) raises:
@@ -484,8 +573,7 @@ struct Scene(Movable):
         Raises:
             Error: If the line names a node the scene does not have.
         """
-        if line.node.value >= len(self._nodes):
-            raise Error("A line must name a node that is in the scene")
+        _require_scene_node(line.node.value, len(self._nodes), "A line")
         self.lines.append(line)
 
     def add_gaussian_splat(mut self, var splat: GaussianSplat) raises:
@@ -515,8 +603,7 @@ struct Scene(Movable):
         Raises:
             Error: If the points name a node the scene does not have.
         """
-        if points.node.value >= len(self._nodes):
-            raise Error("Points must name a node that is in the scene")
+        _require_scene_node(points.node.value, len(self._nodes), "Points")
         self.points.append(points)
 
     def add_sprite(mut self, sprite: Sprite) raises:
@@ -532,8 +619,7 @@ struct Scene(Movable):
         Raises:
             Error: If the sprite names a node the scene does not have.
         """
-        if sprite.node.value >= len(self._nodes):
-            raise Error("A sprite must name a node that is in the scene")
+        _require_scene_node(sprite.node.value, len(self._nodes), "A sprite")
         self.sprites.append(sprite)
 
     def add_wide_line(mut self, line: LineSegments2) raises:
@@ -550,8 +636,7 @@ struct Scene(Movable):
         Raises:
             Error: If the line names a node the scene does not have.
         """
-        if line.node.value >= len(self._nodes):
-            raise Error("A wide line must name a node that is in the scene")
+        _require_scene_node(line.node.value, len(self._nodes), "A wide line")
         self.wide_lines.append(line)
 
     def add_clipping_group(mut self, var group: ClippingGroup) raises:
@@ -568,10 +653,9 @@ struct Scene(Movable):
             Error: If the group names a node the scene does not have, or a
                 node that already holds a clipping group.
         """
-        if group.node.value >= len(self._nodes):
-            raise Error(
-                "A clipping group must name a node that is in the scene"
-            )
+        _require_scene_node(
+            group.node.value, len(self._nodes), "A clipping group"
+        )
         for index in range(len(self.clipping_groups)):
             if self.clipping_groups[index].node == group.node:
                 raise Error("A node holds one clipping group at most")
@@ -632,8 +716,7 @@ struct Scene(Movable):
         Raises:
             Error: If the index is out of range.
         """
-        if index.value < 0 or index.value >= len(self._nodes):
-            raise Error("Scene node index out of range")
+        self._check(index)
         self._stale = True
         return self._nodes[index.value]
 
@@ -716,8 +799,7 @@ struct Scene(Movable):
         """
         self._check(child)
         self._check_parent(parent)
-        if child.value in self._chain(parent):
-            raise Error("A node cannot go under itself or its own descendant")
+        self._refuse_under(child.value, parent)
         self._nodes[child.value].parent = parent
         self._removed[child.value] = False
         for at in range(len(self._sequence)):  # pragma: no branch
@@ -751,8 +833,7 @@ struct Scene(Movable):
         """
         self._check(child)
         self._check_parent(parent)
-        if child.value in self._chain(parent):
-            raise Error("A node cannot go under itself or its own descendant")
+        self._refuse_under(child.value, parent)
         var carry = self._world_now(parent)
         carry.invert()
         carry.multiply(self._world_now(self._nodes[child.value].parent))
@@ -891,8 +972,7 @@ struct Scene(Movable):
         _check_type(node)
         var parent = node.parent
         var moved = parent != self._nodes[index.value].parent
-        if index.value in self._chain(parent):
-            raise Error("A node cannot go under itself or its own descendant")
+        self._refuse_under(index.value, parent)
         var removed = self._removed[index.value]
         self._nodes[index.value] = node^
         if moved:
@@ -943,8 +1023,7 @@ struct Scene(Movable):
                 along up is not refused: `facing` settles both, as three.js
                 does.
         """
-        if index.value < 0 or index.value >= len(self._nodes):
-            raise Error("Scene node index out of range")
+        self._check(index)
         var eye = self.world_position(index)
         var desired = facing(eye, target, self._nodes[index.value].up, camera)
         var parent = self._nodes[index.value].parent
@@ -1056,8 +1135,7 @@ struct Scene(Movable):
         Raises:
             Error: If the index is out of range.
         """
-        if index.value < 0 or index.value >= len(self._nodes):
-            raise Error("Scene node index out of range")
+        self._check(index)
         return self._nodes[index.value].render_order
 
     def light_shown(self, light: Light) raises -> Bool:
@@ -1355,8 +1433,7 @@ struct Scene(Movable):
             Error: If no LOD has that index, the scene is stale, or the
                 LOD names a node that is not there.
         """
-        if index < 0 or index >= len(self.lods):
-            raise Error("No LOD has that index")
+        require_lod_index(index, len(self.lods))
         self._choose_level(index, self._lod_distance(index, eye))
         self.update()
 
@@ -1404,8 +1481,7 @@ struct Scene(Movable):
 
     def _check(self, index: NodeId) raises:
         """Refuse an index that names no node."""
-        if index.value < 0 or index.value >= len(self._nodes):
-            raise Error("Scene node index out of range")
+        require_scene_index(index.value, len(self._nodes))
 
     def _check_start(self, index: NodeId) raises:
         """Refuse a node to start from that is neither a node nor
@@ -1416,8 +1492,43 @@ struct Scene(Movable):
     def _check_parent(self, parent: NodeId) raises:
         """Refuse a parent that is neither a node nor `NO_PARENT`."""
         if parent != NO_PARENT:
-            if parent.value < 0 or parent.value >= len(self._nodes):
-                raise Error("A node's parent must already be in the scene")
+            require_index_in_count(
+                parent.value,
+                len(self._nodes),
+                "A node's parent must already be in the scene",
+            )
+
+    def _refuse_listed(self, child: Int, above: List[Int]) raises:
+        """Refuse a node that is already in a parent chain.
+
+        Nothing. The call returns when the child is not in that chain.
+
+        Args:
+            child: The node's index.
+            above: The parent and every node above it.
+
+        Raises:
+            Error: If the child would go under itself or its own
+                descendant.
+        """
+        if child in above:
+            raise Error("A node cannot go under itself or its own descendant")
+
+    def _refuse_under(self, child: Int, parent: NodeId) raises:
+        """Refuse a node placed under itself or its own descendant.
+
+        Nothing. The call returns when the parent is not the child
+        and is not under the child.
+
+        Args:
+            child: The node's index.
+            parent: The node it would go under.
+
+        Raises:
+            Error: If the child would go under itself or its own
+                descendant, or a parent link names no node or loops.
+        """
+        self._refuse_listed(child, self._chain(parent))
 
     def _chain(self, index: NodeId) raises -> List[Int]:
         """Return a node and every node above it, nearest first, or nothing
@@ -1430,8 +1541,11 @@ struct Scene(Movable):
         var chain = List[Int]()
         var current = index
         while current != NO_PARENT:
-            if current.value < 0 or current.value >= len(self._nodes):
-                raise Error("A node's parent must be a node in the scene")
+            require_index_in_count(
+                current.value,
+                len(self._nodes),
+                "A node's parent must be a node in the scene",
+            )
             if len(chain) == len(self._nodes):
                 raise Error("A node's parents must not loop back to it")
             chain.append(current.value)
@@ -1561,8 +1675,7 @@ struct Scene(Movable):
     def _check_current(self, index: NodeId) raises:
         """Refuse an index out of range, or a question asked of a stale
         scene."""
-        if index.value < 0 or index.value >= len(self._world):
-            raise Error("Scene node index out of range")
+        require_scene_index(index.value, len(self._world))
         if self._stale:
             raise Error(
                 "The scene has changed since update(); call scene.update()"
@@ -1868,8 +1981,10 @@ def _copy_of(copies: List[Int], node: NodeId) -> Int:
 
 def _check_type(node: Object3D) raises:
     """Refuse a node whose `object_type` is none of the three there are."""
-    if not node.object_type.is_valid():
-        raise Error("A node must be an Object3D, a Group or a Gyroscope")
+    require_valid(
+        node.object_type.is_valid(),
+        "A node must be an Object3D, a Group or a Gyroscope",
+    )
 
 
 def _gyroscope_world(parent: Matrix4, local: Matrix4) raises -> Matrix4:

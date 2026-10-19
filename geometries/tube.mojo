@@ -36,22 +36,21 @@ unturned would flip the binormal by a half turn, which is a choice no
 transport made. three.js checks neither; here both raise.
 """
 
-from core.buffer_attribute import BufferAttribute
-from core.buffer_geometry import (
-    BufferGeometry,
-    NORMAL,
-    POSITION,
-    TUBE_GEOMETRY,
-    UV,
+from core.buffer_geometry import BufferGeometry, TUBE_GEOMETRY
+from geometries.surface import (
+    indexed_surface,
+    record_kind,
+    require_positive_radius,
+    require_three_segments,
 )
-from core.user_data import UserData
 from exporters.json_writer import JsonWriter
 from geometries.grid import grid_index
 from loaders.curve_json import write_curve3
 from math.curve3 import Curve3, FrenetFrames, transport_frames
-from math.vector3 import Vector3
+from math.curve_checks import require_at_least_one
+from math.vector3 import Vector3, append_vector3
 from std.math import cos, pi, sin
-from units.si import Length, METER
+from units.si import Length
 
 
 def _tangents(path: List[Vector3], closed: Bool) raises -> List[Vector3]:
@@ -100,6 +99,36 @@ def _distances(path: List[Vector3], rings: Int) -> List[Float32]:
     return along^
 
 
+def require_tube_radius(radius: Length) raises:
+    """Refuse a tube radius that is not positive.
+
+    Nothing. The call returns when the radius is positive.
+
+    Args:
+        radius: The tube's radius.
+
+    Raises:
+        Error: If the radius is zero or negative.
+    """
+    require_positive_radius(radius.value, "tube")
+
+
+def require_tube_segments(radial_segments: Int) raises:
+    """Refuse a tube with fewer than three segments around.
+
+    Nothing. The call returns when there are at least three.
+
+    Args:
+        radial_segments: How many cells go around the tube.
+
+    Raises:
+        Error: If there are fewer than three.
+    """
+    require_three_segments(
+        radial_segments, "A tube needs at least three segments around"
+    )
+
+
 def tube(
     path: List[Vector3],
     radius: Length,
@@ -138,10 +167,8 @@ def tube(
             continue
         if (path[next] - path[index]).length() == 0:
             raise Error("A tube's path cannot repeat a point")
-    if radius.value <= 0:
-        raise Error("A tube needs a positive radius")
-    if radial_segments < 3:
-        raise Error("A tube needs at least three segments around")
+    require_tube_radius(radius)
+    require_tube_segments(radial_segments)
 
     var rings = count
     if not closed:
@@ -187,12 +214,11 @@ def tube(
             built: it stops at a ring, or two rings point straight
             opposite ways.
     """
-    if tubular_segments < 1:
-        raise Error("A tube needs at least one segment along it")
-    if radius.value <= 0:
-        raise Error("A tube needs a positive radius")
-    if radial_segments < 3:
-        raise Error("A tube needs at least three segments around")
+    require_at_least_one(
+        tubular_segments, "A tube needs at least one segment along it"
+    )
+    require_tube_radius(radius)
+    require_tube_segments(radial_segments)
     var frames = curve.frenet_frames(tubular_segments, closed)
     var centers = curve.spaced_points(tubular_segments)
     if closed:
@@ -208,11 +234,10 @@ def tube(
     var geometry = _sweep(centers, frames, us, radius.value, radial_segments)
     var path = JsonWriter()
     write_curve3(path, curve)
-    geometry.kind = TUBE_GEOMETRY
-    geometry.parameters = UserData()
+    record_kind(geometry, TUBE_GEOMETRY)
     geometry.parameters.set_json("path", path.finish())
     geometry.parameters.set_number("tubularSegments", Float64(tubular_segments))
-    geometry.parameters.set_number("radius", Float64(radius.to(METER)))
+    geometry.parameters.set_meters("radius", radius)
     geometry.parameters.set_number("radialSegments", Float64(radial_segments))
     geometry.parameters.set_boolean("closed", closed)
     return geometry^
@@ -248,18 +273,17 @@ def _sweep(
             var along_binormal = frames.binormals[ring] * sin(around)
             var outward = along_normal + along_binormal
             var vertex = center + outward * thickness
-            data.append(vertex.x)
-            data.append(vertex.y)
-            data.append(vertex.z)
-            normal_data.append(outward.x)
-            normal_data.append(outward.y)
-            normal_data.append(outward.z)
+            append_vector3(data, vertex)
+            append_vector3(normal_data, outward)
             uvs.append(u)
             uvs.append(v)
 
     var geometry = BufferGeometry()
-    geometry.set_attribute(String(POSITION), BufferAttribute(data^, 3))
-    geometry.set_attribute(String(NORMAL), BufferAttribute(normal_data^, 3))
-    geometry.set_attribute(String(UV), BufferAttribute(uvs^, 2))
-    geometry.set_index(grid_index(rings, radial_segments, False))
+    indexed_surface(
+        geometry,
+        data^,
+        normal_data^,
+        uvs^,
+        grid_index(rings, radial_segments, False),
+    )
     return geometry^

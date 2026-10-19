@@ -32,6 +32,8 @@ surface that is not there. And polygons before any points, which three.js
 reads as a mesh with no positions.
 """
 
+from core.ordinal import require_non_negative
+from core.search import first_match
 from loaders.js_text import js_units
 from loaders.three_mf import js_key_order
 from std.memory import bitcast
@@ -293,7 +295,7 @@ struct LwoTree(Movable):
         return js_key_order(self.objects[object].keys)
 
 
-def _decode(bytes: List[UInt8], start: Int, end: Int) -> String:
+def _decode(bytes: Span[UInt8, _], start: Int, end: Int) -> String:
     """Return bytes as `TextDecoder` reads them: UTF-8, a byte that does
     not fit read as U+FFFD."""
     var out = String()
@@ -350,14 +352,17 @@ def string_offset(text: String) -> Int:
     return n + n % 2
 
 
-struct _Reader:
-    """three.js's `DataViewReader`: big-endian values from the bytes."""
+struct _Reader[origin: Origin[mut=False]]:
+    """three.js's `DataViewReader`: big-endian values from the bytes.
 
-    var bytes: List[UInt8]
+    The caller keeps the bytes for the read.
+    """
+
+    var bytes: Span[UInt8, Self.origin]
     var offset: Int
 
-    def __init__(out self, var bytes: List[UInt8]):
-        self.bytes = bytes^
+    def __init__(out self, bytes: Span[UInt8, Self.origin]):
+        self.bytes = bytes
         self.offset = 0
 
     def need(self, size: Int) raises:
@@ -620,17 +625,13 @@ comptime _NODE_ATTRIBUTES: List[String] = [
 ]
 
 
-def _is(tag: String, names: List[String]) -> Bool:
-    for name in names:  # pragma: no branch
-        if tag == name:
-            return True
-    return False
+struct _Parser[origin: Origin[mut=False]]:
+    """three.js's `IFFParser` and its block parsers, with their state.
 
+    The caller keeps the bytes for the read.
+    """
 
-struct _Parser:
-    """three.js's `IFFParser` and its block parsers, with their state."""
-
-    var r: _Reader
+    var r: _Reader[Self.origin]
     var tree: LwoTree
     var materials: Int
     var current_layer: Int
@@ -644,8 +645,8 @@ struct _Parser:
     var points: List[Float64]
     var has_points: Bool
 
-    def __init__(out self, var bytes: List[UInt8]):
-        self.r = _Reader(bytes^)
+    def __init__(out self, bytes: Span[UInt8, Self.origin]):
+        self.r = _Reader(bytes)
         self.tree = LwoTree()
         self.materials = self.tree.add()
         self.tree.set(0, "materials", _object(self.materials))
@@ -668,18 +669,24 @@ struct _Parser:
     # --- where a chunk writes ----------------------------------------------
 
     def form(self) raises -> Int:
-        if self.current_form < 0:
-            raise Error("LWO: a chunk writes into a form that is not there")
+        require_non_negative(
+            self.current_form,
+            "LWO: a chunk writes into a form that is not there",
+        )
         return self.current_form
 
     def node(self) raises -> Int:
-        if self.current_node < 0:
-            raise Error("LWO: a chunk writes into a node that is not there")
+        require_non_negative(
+            self.current_node,
+            "LWO: a chunk writes into a node that is not there",
+        )
         return self.current_node
 
     def surface(self) raises -> Int:
-        if self.current_surface < 0:
-            raise Error("LWO: a chunk writes into a surface that is not there")
+        require_non_negative(
+            self.current_surface,
+            "LWO: a chunk writes into a surface that is not there",
+        )
         return self.current_surface
 
     def surface_attributes(self) raises -> Int:
@@ -729,15 +736,15 @@ struct _Parser:
             length = self.r.u16()
         if id == "FORM":
             self.parse_form(length, lwo3)
-        elif _is(id, materialize[_SKIPPED]()) or (
-            not lwo3 and _is(id, materialize[_SKIPPED_LWO2]())
+        elif first_match(materialize[_SKIPPED](), id) >= 0 or (
+            not lwo3 and first_match(materialize[_SKIPPED_LWO2](), id) >= 0
         ):
             self.r.skip(length)
         elif not lwo3 and id == "SURF":
             self.surface_lwo2(length)
         elif not lwo3 and id == "CLIP":
             self.clip_lwo2(length)
-        elif _is(id, materialize[_NODE_INTEGERS]()):
+        elif first_match(materialize[_NODE_INTEGERS](), id) >= 0:
             if length == 4:
                 var v = self.r.i32()
                 self.tree.set(self.node(), id, _number(Float64(v)))
@@ -916,11 +923,11 @@ struct _Parser:
     def parse_form(mut self, length: Int, lwo3: Bool) raises:
         """three.js's `parseForm`."""
         var kind = self.r.tag()
-        if _is(kind, materialize[_SKIPPED_FORMS]()):
+        if first_match(materialize[_SKIPPED_FORMS](), kind) >= 0:
             self.r.skip(length - 4)
-        elif _is(kind, materialize[_OPEN_FORMS]()):
+        elif first_match(materialize[_OPEN_FORMS](), kind) >= 0:
             pass
-        elif _is(kind, materialize[_NODE_ATTRIBUTES]()):
+        elif first_match(materialize[_NODE_ATTRIBUTES](), kind) >= 0:
             self.node_attribute(kind)
         elif kind == "ENVL":
             self.r.skip(length - 4)
@@ -1305,8 +1312,9 @@ struct _Parser:
             self.r.skip(length - 4)
             return
         var geometry = self.tree.child(self.current_layer, "geometry")
-        if geometry < 0:
-            raise Error("LWO: surface tags come before any polygons")
+        require_non_negative(
+            geometry, "LWO: surface tags come before any polygons"
+        )
         var indices = List[Float64]()
         while self.r.offset < final:
             indices.append(Float64(self.r.vx()))
@@ -1326,6 +1334,6 @@ def parse_lwo_tree(bytes: List[UInt8]) raises -> LwoTree:
     Raises:
         Error: For anything the module docstring lists.
     """
-    var parser = _Parser(bytes.copy())
+    var parser = _Parser(Span(bytes))
     parser.parse()
     return parser^.take()

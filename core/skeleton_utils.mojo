@@ -43,10 +43,10 @@ also takes a bare skeleton, which forces two of the options. three.js's
 """
 
 from core.object3d import NO_PARENT, NodeId
-from core.scene import Scene
+from core.scene import Scene, require_skinned_mesh
 from math.matrix4 import Matrix4, compose
 from math.quaternion import Quaternion
-from math.vector3 import Vector3
+from math.vector3 import Vector3, require_nonzero_scale
 from objects.skeleton import Skeleton
 
 
@@ -263,17 +263,6 @@ def _held_world(
     return world^
 
 
-def _column_lengths(matrix: Matrix4) -> Vector3:
-    """Return the lengths of the first three columns, three.js's
-    `setFromMatrixScale`: no sign for a mirror."""
-    ref e = matrix.elements
-    return Vector3(
-        Vector3(e[0], e[1], e[2]).length(),
-        Vector3(e[4], e[5], e[6]).length(),
-        Vector3(e[8], e[9], e[10]).length(),
-    )
-
-
 def retarget(
     mut scene: Scene,
     target: Int,
@@ -304,8 +293,7 @@ def retarget(
             the scene, the scene is stale, or a matrix flattens an axis and
             so has no rotation to read or set.
     """
-    if target < 0 or target >= len(scene.skinned_meshes):
-        raise Error("No skinned mesh has that index")
+    require_skinned_mesh(target, len(scene.skinned_meshes))
     var bones = scene.skinned_meshes[target].skeleton.copy()
     var mesh = scene.skinned_meshes[target].node
     var held = options.preserve_bone_matrix
@@ -327,9 +315,10 @@ def retarget(
                 var undo = _held_world(scene, mesh, mesh, held)
                 undo.invert()
                 relative.premultiply(undo)
-            var size = _column_lengths(relative)
-            if size.x * size.y * size.z == 0:
-                raise Error("A source bone that flattens an axis has no turn")
+            var size = Vector3.from_matrix_scale(relative)
+            require_nonzero_scale(
+                size, "A source bone that flattens an axis has no turn"
+            )
             relative.scale(Vector3(1 / size.x, 1 / size.y, 1 / size.z))
             placed = compose(
                 Vector3(0, 0, 0),

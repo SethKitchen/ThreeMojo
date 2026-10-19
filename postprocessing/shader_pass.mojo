@@ -31,6 +31,7 @@ keeps the pixel's own. A fragment the mask node or a `discard` throws away
 keeps the pixel as it was.
 """
 
+from core.ordinal import require_non_negative
 from materials.nodes import (
     COLOR_NODE,
     CORNER_A,
@@ -51,17 +52,14 @@ from materials.nodes import (
     has_output,
     run_nodes,
 )
+from math.utils import edge_index
 from math.vector2 import Vector2
 from math.vector3 import Vector3
 from postprocessing.sampling import LightView, Untracked, u_of, v_of
-from render.framebuffer import FloatColor
+from render.framebuffer import FloatColor, OPAQUE_WHITE, TRANSPARENT_BLACK
 from render.target import RenderTarget
 from render.texture_store import TextureStore
-from render.texture import (
-    CLAMP,
-    gradient_sample_coordinate,
-    texture_grad_finite,
-)
+from render.texture import CLAMP, gradient_place
 
 comptime Lanes = SIMD[DType.float32, 4]
 
@@ -115,8 +113,9 @@ def check_shader(settings: ShaderSettings) raises:
         Error: If the program is `NO_NODES` or negative, or a saved
             sampler names no pass.
     """
-    if settings.program.value < 0:
-        raise Error("A shader pass needs a node program to run")
+    require_non_negative(
+        settings.program.value, "A shader pass needs a node program to run"
+    )
     if settings.saved.byte_length() > 0 and settings.saved_pass < 0:
         raise Error("A saved sampler must name a save pass")
 
@@ -269,7 +268,7 @@ struct ScreenNodes(ImplicitlyCopyable, NodeSource):
                 .sample(u, v)
                 .unpremultiplied()
             )
-        return FloatColor(1, 1, 1, 1)
+        return OPAQUE_WHITE
 
     def _view(self, slot: Int) -> LightView:
         """Return the input image for `INPUT_SLOT` and the saved one for
@@ -319,13 +318,10 @@ struct ScreenNodes(ImplicitlyCopyable, NodeSource):
         Returns:
             The straight color; transparent black for nonfinite inputs.
         """
-        if not texture_grad_finite(u, v, dx, dy):
-            return FloatColor(0, 0, 0, 0)
-        return self.sample(
-            slot,
-            gradient_sample_coordinate(u, CLAMP),
-            gradient_sample_coordinate(v, CLAMP),
-        )
+        var placed = gradient_place(u, v, dx, dy, CLAMP, CLAMP)
+        if not placed.ready:
+            return TRANSPARENT_BLACK
+        return self.sample(slot, placed.u, placed.v)
 
     def fetch(self, slot: Int, x: Int, y: Int, level: Int) -> FloatColor:
         """Return a pixel of the input or the saved image by its column and
@@ -341,10 +337,10 @@ struct ScreenNodes(ImplicitlyCopyable, NodeSource):
             The straight color; opaque white for a texture in the assets.
         """
         if slot != INPUT_SLOT and slot != SAVED_SLOT:
-            return FloatColor(1, 1, 1, 1)
+            return OPAQUE_WHITE
         var view = self._view(slot)
-        var column = max(0, min(x, view.width - 1))
-        var row = max(0, min(y, view.height - 1))
+        var column = edge_index(x, view.width)
+        var row = edge_index(y, view.height)
         return view.at(column, view.height - 1 - row).unpremultiplied()
 
     def size(self, slot: Int, level: Int) -> Lanes:
@@ -617,6 +613,23 @@ def screen_pixel[
     return shown.premultiplied()
 
 
+def require_saved_frame(length: Int, pixels: Int) raises:
+    """Refuse a saved image that is neither empty nor the frame's size.
+
+    Nothing. The call returns when the image is empty or matches
+    the frame.
+
+    Args:
+        length: How many pixels the saved image holds.
+        pixels: How many pixels the frame holds.
+
+    Raises:
+        Error: If the image is present and a different size.
+    """
+    if length != 0 and length != pixels:
+        raise Error("A saved image must be the frame's size")
+
+
 def shader_light(
     mut frame: RenderTarget,
     program: NodeProgram,
@@ -642,8 +655,7 @@ def shader_light(
     var width = frame.width
     var height = frame.height
     var count = width * height
-    if len(saved) != 0 and len(saved) != count:
-        raise Error("A saved image must be the frame's size")
+    require_saved_frame(len(saved), count)
     for index in range(len(program.textures)):
         if program.textures[index].value >= textures.count():
             raise Error("A shader pass reads a texture that is not there")
@@ -655,7 +667,7 @@ def shader_light(
     var kept_colors = saved.copy()
     var kept = LightView(kept_colors, width, height)
     if len(saved) == 0:
-        kept_colors = [FloatColor(0, 0, 0, 0)]
+        kept_colors = [TRANSPARENT_BLACK]
         kept = LightView(kept_colors, 1, 1)
     var pointer = (
         code.unsafe_ptr()

@@ -32,8 +32,10 @@ from extensions.humanoid.skeleton.head.expression import (
     Viseme,
 )
 from loaders.json import ARRAY, parse_json
+from math.finite import require_finite, require_non_negative_finite
 from std.math import isfinite
 from units.si import Duration
+from core.ordinal import require_valid
 
 comptime SPEECH_MAPPING = "threemojo-arpabet-viseme-v1"
 comptime SPEECH_TIMING = "audio-clock-half-open-held-v1"
@@ -219,8 +221,9 @@ struct TimedPhoneme(Copyable, Movable):
 
 def _time(time: Duration) raises:
     """Require a finite, nonnegative number of seconds."""
-    if not isfinite(time.value) or time.value < 0:
-        raise Error("Audio time must be finite and nonnegative")
+    require_non_negative_finite(
+        Float64(time.value), "Audio time must be finite and nonnegative"
+    )
 
 
 struct AlignedSpeech(Copyable, Movable):
@@ -258,16 +261,19 @@ struct AlignedSpeech(Copyable, Movable):
         """
         _time(duration)
         _time(origin)
-        if not isfinite(origin.value + duration.value):
-            raise Error("Audio origin plus duration must be finite")
+        require_finite(
+            Float64(origin.value + duration.value),
+            "Audio origin plus duration must be finite",
+        )
         if utterance.byte_length() == 0:
             raise Error("An aligned utterance needs an audio label")
         var previous = Float32(0)
         for item in intervals:
             _time(item.start)
             _time(item.end)
-            if not item.viseme.is_valid():
-                raise Error("Aligned speech requires a named viseme")
+            require_valid(
+                item.viseme.is_valid(), "Aligned speech requires a named viseme"
+            )
             if (
                 item.start.value < previous
                 or item.end.value <= item.start.value
@@ -384,8 +390,9 @@ def aligned_phonemes(
 def _json_time(seconds: Float64) raises -> Duration:
     """Validate JSON precision before reducing to the media clock's precision.
     """
-    if not isfinite(seconds) or seconds < 0:
-        raise Error("JSON audio time must be finite and nonnegative")
+    require_non_negative_finite(
+        Float64(seconds), "JSON audio time must be finite and nonnegative"
+    )
     var clock = Float32(seconds)
     if not isfinite(clock) or (seconds > 0 and clock == 0):
         raise Error("JSON audio time exceeds the audio clock resolution")

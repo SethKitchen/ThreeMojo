@@ -51,10 +51,11 @@ from math.triangle_normal import polygon_normal
 from core.buffer_attribute import BufferAttribute
 from core.buffer_geometry import BufferGeometry, NORMAL, POSITION, UV
 from geometries.earcut import triangulate_shape
+from geometries.grid import append_cell
 from math.shape_path import is_clockwise
-from math.vector2 import Vector2
-from math.vector3 import Vector3
-from std.math import isfinite
+from math.vector2 import Vector2, component_max, component_min
+from math.vector3 import Vector3, append_vector3
+from math.finite import require_finite_group
 
 # JavaScript's `Number.EPSILON`, which keeps a cap's texture from dividing
 # by a width of zero.
@@ -80,10 +81,10 @@ def _check_sections(sections: List[List[Vector3]]) raises -> Int:
                 "Every loft section must hold the same number of points"
             )
         for point in sections[row]:  # pragma: no branch
-            if not (
-                isfinite(point.x) and isfinite(point.y) and isfinite(point.z)
-            ):
-                raise Error("A loft point must be finite")
+            require_finite_group(
+                point.is_finite(),
+                "A loft point must be finite",
+            )
     return columns
 
 
@@ -188,21 +189,15 @@ def _cap(
     for column in range(columns):  # pragma: no branch
         flat.append(Float64(contour[column].x))
         flat.append(Float64(contour[column].y))
-        low = Vector2(
-            min(low.x, contour[column].x), min(low.y, contour[column].y)
-        )
-        high = Vector2(
-            max(high.x, contour[column].x), max(high.y, contour[column].y)
-        )
+        low = component_min(low, contour[column])
+        high = component_max(high, contour[column])
     var faces = triangulate_shape(flat)
     var width = max(high.x - low.x, JS_EPSILON)
     var height = max(high.y - low.y, JS_EPSILON)
     # The cap's own vertices, so it shades flat with a hard edge.
     var first = len(vertices) // 3
     for column in range(columns):  # pragma: no branch
-        vertices.append(points[column].x)
-        vertices.append(points[column].y)
-        vertices.append(points[column].z)
+        append_vector3(vertices, points[column])
         uvs.append((contour[column].x - low.x) / width)
         uvs.append((contour[column].y - low.y) / height)
     for corner in range(len(faces)):
@@ -250,9 +245,7 @@ def loft(
         var total_v = column_v[per_row - 1]
         for column in range(per_row):  # pragma: no branch
             var point = sections[row][column % columns]
-            vertices.append(point.x)
-            vertices.append(point.y)
-            vertices.append(point.z)
+            append_vector3(vertices, point)
             uvs.append(_fraction(row_u[row], total_u, row, rows))
             uvs.append(_fraction(column_v[column], total_v, column, per_row))
     var indices = List[Int]()
@@ -262,12 +255,7 @@ def loft(
             var b = row * per_row + column + 1
             var c = (row + 1) * per_row + column + 1
             var d = (row + 1) * per_row + column
-            indices.append(a)
-            indices.append(b)
-            indices.append(d)
-            indices.append(b)
-            indices.append(c)
-            indices.append(d)
+            append_cell(indices, a, b, c, d)
     if cap_start:
         _cap(sections, 0, vertices, uvs, indices)
     if cap_end:

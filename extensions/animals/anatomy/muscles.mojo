@@ -90,6 +90,14 @@ The fish, shark, snake and spider muscles are in
 `extensions/animals/anatomy/axial.mojo`.
 """
 
+from core.ordinal import require_index_in_count
+from math.finite import (
+    stored_float32,
+    require_finite_group,
+    require_positive_finite,
+    require_non_negative_finite,
+)
+from extensions.animals.kit import side_sign
 from extensions.anatomy.evidence import (
     DESIGN,
     FROM_TEXT,
@@ -100,12 +108,15 @@ from extensions.anatomy.muscle import (
     MuscleArchitecture,
     default_tension,
     muscle_density,
+    stored_moment_arm,
 )
 from extensions.animals.anatomy.body import (
     ANURAN,
     BIRD,
     MAMMAL,
     BodyPlan,
+    require_body_plan,
+    require_species,
     species_body,
 )
 from extensions.animals.registry import (
@@ -119,9 +130,10 @@ from extensions.animals.registry import (
     SpeciesId,
 )
 from extensions.animals.rig import Pose, Rig
-from extensions.sdf.vector import V3, Rigid, cross, dot, length, lerp
-from std.math import cos, isfinite, pow
-from units.si import DEGREE, KILOGRAM, METER, Angle, Length, Mass
+from extensions.sdf.vector import V3, Rigid, length, lerp
+from std.math import cos, pow
+from units.measure import angle_degrees, length_meters
+from units.si import KILOGRAM, Length, Mass
 
 # The greyhound's biceps femoris share of body mass, a side.
 comptime BICEPS_FEMORIS_SHARE = 485.0 / 31800.0
@@ -204,25 +216,32 @@ struct MuscleSpec(Copyable, Movable):
                 source mass is invalid, the active fiber parameter is
                 invalid, or the result is not finite and positive.
         """
-        if not (isfinite(reach) and reach > 0.0):
-            raise Error("Fiber reach must be finite and positive")
-        if not (isfinite(body_kg) and body_kg > 0.0):
-            raise Error("Fiber body mass must be finite and positive")
-        if not (isfinite(self.source_kg) and self.source_kg >= 0.0):
-            raise Error("Fiber source mass must be finite and nonnegative")
+        require_positive_finite(
+            Float64(reach), "Fiber reach must be finite and positive"
+        )
+        require_positive_finite(
+            Float64(body_kg), "Fiber body mass must be finite and positive"
+        )
+        require_non_negative_finite(
+            Float64(self.source_kg),
+            "Fiber source mass must be finite and nonnegative",
+        )
         var fiber: Float64
         if self.source_kg > 0.0:
-            if not (isfinite(self.fiber_m) and self.fiber_m > 0.0):
-                raise Error(
-                    "Reference fiber length must be finite and positive"
-                )
+            require_positive_finite(
+                Float64(self.fiber_m),
+                "Reference fiber length must be finite and positive",
+            )
             fiber = self.fiber_m * pow(body_kg / self.source_kg, 1.0 / 3.0)
         else:
-            if not (isfinite(self.fiber_ratio) and self.fiber_ratio > 0.0):
-                raise Error("Fiber ratio must be finite and positive")
+            require_positive_finite(
+                Float64(self.fiber_ratio),
+                "Fiber ratio must be finite and positive",
+            )
             fiber = self.fiber_ratio * reach
-        if not (isfinite(fiber) and fiber > 0.0):
-            raise Error("Fiber result must be finite and positive")
+        require_positive_finite(
+            Float64(fiber), "Fiber result must be finite and positive"
+        )
         return fiber
 
 
@@ -412,8 +431,7 @@ def plan_muscles(plan: BodyPlan) raises -> List[MuscleSpec]:
     Raises:
         Error: If the plan is not named.
     """
-    if not plan.is_valid():
-        raise Error("A body plan must be named")
+    require_body_plan(plan)
     if plan == MAMMAL:
         return _mammal()
     if plan == BIRD:
@@ -472,8 +490,7 @@ def species_table(species: SpeciesId) raises -> List[MuscleRow]:
     Raises:
         Error: If the species is not named.
     """
-    if not species.is_valid():
-        raise Error("No such species")
+    require_species(species)
     var t = List[MuscleRow]()
     var f = FROM_TEXT
     var d = DESIGN
@@ -641,17 +658,22 @@ struct AnimalMuscle(Copyable, Movable):
         var out = List[V3](capacity=len(self.points))
         for k in range(len(self.points)):  # pragma: no branch
             var bone = self.bones[k]
-            if bone < 0 or bone >= len(world):
-                raise Error("A muscle path names a missing bone transform")
+            require_index_in_count(
+                bone,
+                len(world),
+                "A muscle path names a missing bone transform",
+            )
             var p = world[bone].apply(self.points[k])
-            if not (isfinite(p.x) and isfinite(p.y) and isfinite(p.z)):
-                raise Error("A muscle path must have finite points")
+            require_finite_group(
+                p.is_finite(),
+                "A muscle path must have finite points",
+            )
             if k > 0:
                 var span = length(p - out[k - 1])
-                if not (isfinite(span) and span > 0.0):
-                    raise Error(
-                        "A muscle path segment must have positive length"
-                    )
+                require_positive_finite(
+                    Float64(span),
+                    "A muscle path segment must have positive length",
+                )
             out.append(p)
         return out^
 
@@ -679,8 +701,9 @@ struct AnimalMuscle(Copyable, Movable):
         ):
             raise Error("Muscle joints need paired bones and spans")
         var axis_length = length(self.axis)
-        if not (isfinite(axis_length) and axis_length > 0.0):
-            raise Error("A muscle axis must be finite and nonzero")
+        require_positive_finite(
+            Float64(axis_length), "A muscle axis must be finite and nonzero"
+        )
         var expected_spans = spans_of(rig, self.bones, self.joint_bones)
         for n in range(len(self.spans)):
             if self.spans[n] != expected_spans[n]:
@@ -693,8 +716,9 @@ struct AnimalMuscle(Copyable, Movable):
             var joint = self.joints[n]
             var bone = self.joint_bones[n]
             var span = self.spans[n]
-            if joint < 0 or joint >= len(rig.joints):
-                raise Error("A muscle names a missing joint")
+            require_index_in_count(
+                joint, len(rig.joints), "A muscle names a missing joint"
+            )
             # `spans_of` above refused a joint bone the rig lacks, and the
             # world matches the rig.
             debug_assert(bone >= 0 and bone < len(world), "A joint bone exists")
@@ -716,10 +740,7 @@ struct AnimalMuscle(Copyable, Movable):
             var lever = p[k] - center
             var line = p[k - 1] - p[k]
             var pull = line * (1.0 / length(line))
-            var arm = dot(cross(lever, pull), axis)
-            if not isfinite(Float32(arm)):
-                raise Error("A muscle moment arm must fit a finite SI length")
-            out.append(Length(Float32(arm), METER))
+            out.append(stored_moment_arm(lever, pull, axis))
         return out^
 
     def unit_length(self, world: List[Rigid]) raises -> Length:
@@ -738,11 +759,11 @@ struct AnimalMuscle(Copyable, Movable):
         var unit = 0.0
         for k in range(1, len(p)):  # pragma: no branch
             unit += length(p[k] - p[k - 1])
-        if not (isfinite(Float32(unit)) and Float32(unit) > 0.0):
-            raise Error(
-                "A muscle path length must fit a positive finite SI length"
-            )
-        return Length(Float32(unit), METER)
+        require_positive_finite(
+            stored_float32(unit),
+            "A muscle path length must fit a positive finite SI length",
+        )
+        return length_meters(unit)
 
 
 def descends(rig: Rig, bone: Int, ancestor: Int) raises -> Bool:
@@ -759,10 +780,12 @@ def descends(rig: Rig, bone: Int, ancestor: Int) raises -> Bool:
     Raises:
         Error: If an index or the parent chain is invalid.
     """
-    if bone < 0 or bone >= len(rig.bones):
-        raise Error("A descendant must name a bone")
-    if ancestor < 0 or ancestor >= len(rig.bones):
-        raise Error("An ancestor must name a bone")
+    require_index_in_count(
+        bone, len(rig.bones), "A descendant must name a bone"
+    )
+    require_index_in_count(
+        ancestor, len(rig.bones), "An ancestor must name a bone"
+    )
     var b = bone
     while b >= 0:
         if b == ancestor:
@@ -814,7 +837,7 @@ def spans_of(
 def _point(rig: Rig, at: Attachment, side: String, scale: Float64) raises -> V3:
     var a = rig.j(_sided(at.a, side))
     var b = rig.j(_sided(at.b, side))
-    var mirror = 1.0 if side == "L" else -1.0
+    var mirror = side_sign(side)
     var o = at.offset
     # The rig's +x is the animal's left, so lateral is +x on the left.
     var lateral = V3(o.x * mirror, o.y, o.z)
@@ -833,8 +856,7 @@ def _build(
     rig: Rig, specs: List[MuscleSpec], body_mass: Mass
 ) raises -> List[AnimalMuscle]:
     var m = Float64(body_mass.to(KILOGRAM))
-    if not (isfinite(m) and m > 0.0):
-        raise Error("A body mass must be positive")
+    require_positive_finite(Float64(m), "A body mass must be positive")
     var out = List[AnimalMuscle]()
     for side in ["L", "R"]:  # pragma: no branch
         for spec in specs:
@@ -863,9 +885,9 @@ def _build(
                 )
             var arch = MuscleArchitecture(
                 Mass(Float32(spec.share * m), KILOGRAM),
-                Length(Float32(fiber), METER),
-                Angle(Float32(spec.pennation_degrees), DEGREE),
-                Length(Float32(slack), METER),
+                length_meters(fiber),
+                angle_degrees(spec.pennation_degrees),
+                length_meters(slack),
                 default_tension(),
                 muscle_density(),
             )
@@ -876,7 +898,7 @@ def _build(
                 var name = _sided(j, side)
                 joints.append(rig.find_joint(name))
                 joint_bones.append(_head_bone(rig, name))
-            var mirror = 1.0 if side == "L" else -1.0
+            var mirror = side_sign(side)
             # A mirrored axis keeps the right-hand rule's sense per side.
             var axis = V3(
                 spec.axis.x, spec.axis.y * mirror, spec.axis.z * mirror

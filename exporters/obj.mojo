@@ -54,6 +54,7 @@ from exporters.common import (
     world_meshes,
 )
 from loaders.js_number import js_number_text, js_pow
+from loaders.js_text import split_fields
 from objects.line import SEGMENTS, STRIP
 from std.pathlib import Path
 
@@ -62,10 +63,10 @@ def _is_readable_name(name: String) -> Bool:
     """Return True if `read_obj` reads a name back as it is: no `#`, and
     words split by single spaces."""
     var folded = String()
-    for word in name.split():
+    for word in split_fields(name):
         if folded != "":
             folded += " "
-        folded += String(word)
+        folded += word
     return name.find("#") < 0 and folded == name
 
 

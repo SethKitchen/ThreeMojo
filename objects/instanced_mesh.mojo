@@ -80,13 +80,19 @@ the scene's draws; see `renderers.renderer`.
 """
 
 from core.buffer_geometry import BufferGeometry
+from core.order import stable_rising_order
 from core.geometry_store import GeometryId
 from core.morph import MorphInfluences
 from core.object3d import NodeId
+from core.ordinal import (
+    require_draw_ids,
+    require_index_in_count,
+    require_non_negative,
+)
 from materials.material import MaterialId
-from math.matrix4 import Matrix4
+from math.matrix4 import Matrix4, require_affine
 from render.framebuffer import Color
-from std.math import isfinite
+from math.finite import require_finite, require_finite_group
 
 comptime WHITE = Color(255, 255, 255)
 
@@ -101,13 +107,32 @@ def check_placing(matrix: Matrix4) raises:
         Error: If an element is infinite or not a number, or the matrix
             projects rather than keeping `w` at one.
     """
-    if not matrix.is_finite():
-        raise Error("An instance matrix must hold finite numbers")
-    if not matrix.is_affine():
-        raise Error(
+    require_finite_group(
+        matrix.is_finite(),
+        "An instance matrix must hold finite numbers",
+    )
+    require_affine(
+        matrix,
+        (
             "An instance matrix must be affine: it moves, turns, scales or"
             " shears, and keeps w at one"
-        )
+        ),
+    )
+
+
+def require_instance_index(index: Int, count: Int) raises:
+    """Refuse an instance index outside the list.
+
+    Nothing. The call returns when the index names an instance.
+
+    Args:
+        index: Which instance.
+        count: How many instances the list holds.
+
+    Raises:
+        Error: If the index is negative or past the last instance.
+    """
+    require_index_in_count(index, count, "No instance has that index")
 
 
 struct InstancedMesh(Copyable, Movable):
@@ -169,14 +194,12 @@ struct InstancedMesh(Copyable, Movable):
         Raises:
             Error: If any id is negative, or the count is.
         """
-        if node.value < 0:
-            raise Error("An instanced mesh must name a scene node")
-        if geometry.value < 0:
-            raise Error("An instanced mesh must name a geometry")
-        if material.value < 0:
-            raise Error("An instanced mesh must name a material")
-        if count < 0:
-            raise Error("An instanced mesh cannot have a negative count")
+        require_draw_ids(
+            node.value, geometry.value, material.value, "An instanced mesh"
+        )
+        require_non_negative(
+            count, "An instanced mesh cannot have a negative count"
+        )
         self.geometry = geometry
         self.material = material
         self.node = node
@@ -296,16 +319,16 @@ struct InstancedMesh(Copyable, Movable):
         """
         self._check(index)
         for target in range(len(influences)):
-            if not isfinite(influences[target]):
-                raise Error("A morph weight must be a number")
+            require_finite(
+                Float64(influences[target]), "A morph weight must be a number"
+            )
         while len(self.morphs) < len(self.matrices):
             self.morphs.append(MorphInfluences())
         self.morphs[index] = MorphInfluences(copy=influences)
 
     def _check(self, index: Int) raises:
         """Refuse an instance index that names no instance."""
-        if index < 0 or index >= len(self.matrices):
-            raise Error("No instance has that index")
+        require_instance_index(index, len(self.matrices))
 
 
 struct BatchedInstance(ImplicitlyCopyable):
@@ -428,6 +451,36 @@ def _range_fits(start: Int, count: Int, limit: Int) -> Bool:
 comptime NO_LIMIT = Int.MAX
 
 
+def require_batched_geometry(id: GeometryId) raises:
+    """Refuse a negative id for a geometry in a batch.
+
+    Nothing. The call returns when the id is zero or more.
+
+    Args:
+        id: The geometry's id in the store.
+
+    Raises:
+        Error: If the id is negative.
+    """
+    require_non_negative(id.value, "A batched geometry must name a geometry")
+
+
+def require_batched_instance(geometry: GeometryId) raises:
+    """Refuse a negative geometry id on a batched instance.
+
+    Nothing. The call returns when the id is zero or more.
+
+    Args:
+        geometry: The instance's geometry id.
+
+    Raises:
+        Error: If the id is negative.
+    """
+    require_non_negative(
+        geometry.value, "A batched instance must name a geometry"
+    )
+
+
 struct BatchedMesh(Copyable, Movable):
     """Many geometries drawn with one material at many transforms, each
     relative to one scene node: an instanced mesh whose instances each
@@ -511,10 +564,12 @@ struct BatchedMesh(Copyable, Movable):
         Raises:
             Error: If either id is negative, or a count is.
         """
-        if node.value < 0:
-            raise Error("A batched mesh must name a scene node")
-        if material.value < 0:
-            raise Error("A batched mesh must name a material")
+        require_non_negative(
+            node.value, "A batched mesh must name a scene node"
+        )
+        require_non_negative(
+            material.value, "A batched mesh must name a material"
+        )
         if (
             max_instance_count < 0
             or max_vertex_count < 0
@@ -595,8 +650,7 @@ struct BatchedMesh(Copyable, Movable):
                 an instance (see `check_placing`), or the batch holds
                 `max_instance_count` instances and none is free.
         """
-        if geometry.value < 0:
-            raise Error("A batched instance must name a geometry")
+        require_batched_instance(geometry)
         check_placing(matrix)
         var full = len(self.instances) >= self.max_instance_count
         if full and len(self.available_instances) == 0:
@@ -685,8 +739,7 @@ struct BatchedMesh(Copyable, Movable):
                 smaller than the geometry, or the range does not fit in
                 `max_vertex_count` and `max_index_count`.
         """
-        if id.value < 0:
-            raise Error("A batched geometry must name a geometry")
+        require_batched_geometry(id)
         if self._range_of(id) >= 0:
             raise Error("A batched geometry has a range already")
         var has_index = geometry.is_indexed()
@@ -750,8 +803,7 @@ struct BatchedMesh(Copyable, Movable):
         Raises:
             Error: If the id is negative.
         """
-        if id.value < 0:
-            raise Error("A batched geometry must name a geometry")
+        require_batched_geometry(id)
         for index in range(len(self.instances)):
             ref member = self.instances[index]
             if member.active and member.geometry == id:
@@ -774,24 +826,17 @@ struct BatchedMesh(Copyable, Movable):
             Error: If the geometry has no span.
         """
         var slot = self._range_of(id)
-        if slot < 0:
-            raise Error("That geometry has no range in the batch")
+        require_non_negative(slot, "That geometry has no range in the batch")
         return self.geometries[slot]
 
     def optimize(mut self):
         """Close the gaps freed ranges left, three.js's `optimize`: every
         range in use moves down to follow the one before it, in the order
         they lie."""
-        var order = List[Int]()
+        var starts = List[Int]()
         for slot in range(len(self.geometries)):
-            var at = len(order)
-            while (
-                at > 0
-                and self.geometries[order[at - 1]].vertex_start
-                > self.geometries[slot].vertex_start
-            ):
-                at -= 1
-            order.insert(at, slot)
+            starts.append(self.geometries[slot].vertex_start)
+        var order = stable_rising_order(starts)
         var next_vertex = 0
         var next_index = 0
         for slot in order:
@@ -916,8 +961,7 @@ struct BatchedMesh(Copyable, Movable):
             Error: If there is no such instance, or the id is negative.
         """
         self._check(index)
-        if geometry.value < 0:
-            raise Error("A batched instance must name a geometry")
+        require_batched_instance(geometry)
         self.instances[index].geometry = geometry
 
     def matrix_at(self, index: Int) raises -> Matrix4:
@@ -981,8 +1025,7 @@ struct BatchedMesh(Copyable, Movable):
     def _check(self, index: Int) raises:
         """Refuse an instance index that names no instance, or a deleted
         one: three.js's `validateInstanceId`."""
-        if index < 0 or index >= len(self.instances):
-            raise Error("No instance has that index")
+        require_instance_index(index, len(self.instances))
         if not self.instances[index].active:
             raise Error("That instance has been deleted")
 

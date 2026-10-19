@@ -24,6 +24,8 @@ sidewalks and grass, an HDRI sky, and CARLA's own vehicle models. An asset
 the cache lacks is procedural, so the example runs without a download.
 """
 
+from tools._example_output import example_destination
+
 from extensions.carla.actor import ActorId
 from extensions.carla.assets import AssetRegistry
 from extensions.carla.camera_render import CarlaRenderer
@@ -42,7 +44,6 @@ from render.framebuffer import Color, Framebuffer
 from render.png import encode
 from renderers.renderer import available_workers
 from std.pathlib import Path
-from std.sys import argv
 from std.time import perf_counter_ns
 from units.si import (
     DEGREE,
@@ -169,10 +170,7 @@ def sibling(destination: String, suffix: String) -> String:
 
 
 def main() raises:
-    var args = argv()
-    var destination = String(DEFAULT_OUTPUT)
-    if len(args) > 1:
-        destination = String(args[1])
+    var destination = example_destination(String(DEFAULT_OUTPUT))
     var start = perf_counter_ns()
     var camera = ActorId(0)
     var cars = List[ActorId]()

@@ -13,6 +13,15 @@ skeleton, the ligaments and the muscles. `ALL` is every layer.
     _ = add_arm(..., contents=ALL)
 """
 
+from extensions.humanoid.skeleton.layer_set import (
+    layer_includes,
+    layer_set_valid,
+    layer_union,
+    require_layer_set,
+)
+
+comptime _MESSAGE = "Arm contents must be a named layer set"
+
 
 @fieldwise_init
 struct ArmContents(Equatable, ImplicitlyCopyable, Writable):
@@ -27,9 +36,7 @@ struct ArmContents(Equatable, ImplicitlyCopyable, Writable):
 
     def is_valid(self) -> Bool:
         """Return True if this is a non-empty set of named layers."""
-        if self.value <= 0:
-            return False
-        return self.value <= ALL.value
+        return layer_set_valid(self.value, ALL.value)
 
     def includes_bones(self) raises -> Bool:
         """Return True if this layer set draws the skeleton.
@@ -40,8 +47,7 @@ struct ArmContents(Equatable, ImplicitlyCopyable, Writable):
         Raises:
             Error: If this value is not a named layer set.
         """
-        self._require()
-        return (self.value & BONES.value) != 0
+        return layer_includes(self.value, BONES.value, ALL.value, _MESSAGE)
 
     def includes_ligaments(self) raises -> Bool:
         """Return True if this layer set draws the ligaments.
@@ -52,8 +58,7 @@ struct ArmContents(Equatable, ImplicitlyCopyable, Writable):
         Raises:
             Error: If this value is not a named layer set.
         """
-        self._require()
-        return (self.value & LIGAMENTS.value) != 0
+        return layer_includes(self.value, LIGAMENTS.value, ALL.value, _MESSAGE)
 
     def includes_muscles(self) raises -> Bool:
         """Return True if this layer set draws muscles and tendons.
@@ -64,8 +69,7 @@ struct ArmContents(Equatable, ImplicitlyCopyable, Writable):
         Raises:
             Error: If this value is not a named layer set.
         """
-        self._require()
-        return (self.value & MUSCLES.value) != 0
+        return layer_includes(self.value, MUSCLES.value, ALL.value, _MESSAGE)
 
     def includes_vessels(self) raises -> Bool:
         """Return True if this layer set draws the arteries and veins.
@@ -76,8 +80,7 @@ struct ArmContents(Equatable, ImplicitlyCopyable, Writable):
         Raises:
             Error: If this value is not a named layer set.
         """
-        self._require()
-        return (self.value & VESSELS.value) != 0
+        return layer_includes(self.value, VESSELS.value, ALL.value, _MESSAGE)
 
     def includes_lymph(self) raises -> Bool:
         """Return True if this layer set draws the lymphatic trunks.
@@ -88,8 +91,7 @@ struct ArmContents(Equatable, ImplicitlyCopyable, Writable):
         Raises:
             Error: If this value is not a named layer set.
         """
-        self._require()
-        return (self.value & LYMPH.value) != 0
+        return layer_includes(self.value, LYMPH.value, ALL.value, _MESSAGE)
 
     def includes_nerves(self) raises -> Bool:
         """Return True if this layer set draws the peripheral nerves.
@@ -100,8 +102,7 @@ struct ArmContents(Equatable, ImplicitlyCopyable, Writable):
         Raises:
             Error: If this value is not a named layer set.
         """
-        self._require()
-        return (self.value & NERVES.value) != 0
+        return layer_includes(self.value, NERVES.value, ALL.value, _MESSAGE)
 
     def includes_skin(self) raises -> Bool:
         """Return True if this layer set draws the skin envelope.
@@ -112,8 +113,7 @@ struct ArmContents(Equatable, ImplicitlyCopyable, Writable):
         Raises:
             Error: If this value is not a named layer set.
         """
-        self._require()
-        return (self.value & SKIN.value) != 0
+        return layer_includes(self.value, SKIN.value, ALL.value, _MESSAGE)
 
     def includes_hair(self) raises -> Bool:
         """Return True if this layer set draws the hair.
@@ -124,8 +124,7 @@ struct ArmContents(Equatable, ImplicitlyCopyable, Writable):
         Raises:
             Error: If this value is not a named layer set.
         """
-        self._require()
-        return (self.value & HAIR.value) != 0
+        return layer_includes(self.value, HAIR.value, ALL.value, _MESSAGE)
 
     def plus(self, other: ArmContents) raises -> ArmContents:
         """Return the union of this set and `other`.
@@ -139,15 +138,23 @@ struct ArmContents(Equatable, ImplicitlyCopyable, Writable):
         Raises:
             Error: If this value or `other` is not a named layer set.
         """
-        self._require()
-        if not other.is_valid():
-            raise Error("Arm contents must be a named layer set")
-        return ArmContents(self.value | other.value)
+        return ArmContents(
+            layer_union(self.value, other.value, ALL.value, _MESSAGE)
+        )
 
-    def _require(self) raises:
-        """Refuse a value that is not a named layer set."""
-        if not self.is_valid():
-            raise Error("Arm contents must be a named layer set")
+
+def require_arm_contents(contents: ArmContents) raises:
+    """Refuse an arm layer set that is not named.
+
+    Nothing. The call returns when the set is named.
+
+    Args:
+        contents: Which tissue layers an arm draws.
+
+    Raises:
+        Error: If the set is not a named layer set.
+    """
+    require_layer_set(contents.value, ALL.value, _MESSAGE)
 
 
 # The humerus, the radius and the ulna.

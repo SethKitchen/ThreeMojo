@@ -20,6 +20,7 @@ screen to a whole pixel from the center, in its vertex node. A renderer
 with `snap_vertices` on does the same to each corner of a frame before it
 is drawn.
 """
+from core.ordinal import ordinal_valid, require_valid, require_non_negative
 
 from materials.material import BLEND, Material
 from render.rasterizer import Corner, RasterVertex
@@ -40,7 +41,7 @@ struct DrawFilter(Equatable, ImplicitlyCopyable, Writable):
         Returns:
             Whether the value names a filter.
         """
-        return self.value >= 0 and self.value <= 2
+        return ordinal_valid(self.value, 2)
 
 
 # Every draw: what a renderer draws by default.
@@ -62,10 +63,10 @@ def check_draw_filter(filter: DrawFilter, index: Int) raises:
     Raises:
         Error: If the filter is none of the three, or the index is negative.
     """
-    if not filter.is_valid():
-        raise Error("A draw filter must be one of the three")
-    if index < 0:
-        raise Error("An order-independent draw's index must not be negative")
+    require_valid(filter.is_valid(), "A draw filter must be one of the three")
+    require_non_negative(
+        index, "An order-independent draw's index must not be negative"
+    )
 
 
 def oit_capable(material: Material) -> Bool:
@@ -114,6 +115,19 @@ def kept_draws(
     return kept^
 
 
+def _from_center(value: Float32, half: Float32) -> Float32:
+    """Return one coordinate rounded to a whole pixel from the center.
+
+    Args:
+        value: The coordinate, in pixels.
+        half: Half the screen size on that axis, in pixels.
+
+    Returns:
+        The rounded coordinate.
+    """
+    return floor(value - half + 0.5) + half
+
+
 def snap_to_pixels(mut corners: List[RasterVertex], width: Int, height: Int):
     """Round each corner's place on the screen to a whole pixel from the
     screen's center: three.js's `RetroPassNode` vertex node, which rounds
@@ -127,8 +141,8 @@ def snap_to_pixels(mut corners: List[RasterVertex], width: Int, height: Int):
     var half_w = Float32(width) * 0.5
     var half_h = Float32(height) * 0.5
     for at in range(len(corners)):
-        corners[at].x = floor(corners[at].x - half_w + 0.5) + half_w
-        corners[at].y = floor(corners[at].y - half_h + 0.5) + half_h
+        corners[at].x = _from_center(corners[at].x, half_w)
+        corners[at].y = _from_center(corners[at].y, half_h)
 
 
 def snap_to_pixels(mut corners: List[Corner], width: Int, height: Int):
@@ -144,5 +158,5 @@ def snap_to_pixels(mut corners: List[Corner], width: Int, height: Int):
     var half_w = Float32(width) * 0.5
     var half_h = Float32(height) * 0.5
     for at in range(len(corners)):
-        corners[at].x = floor(corners[at].x - half_w + 0.5) + half_w
-        corners[at].y = floor(corners[at].y - half_h + 0.5) + half_h
+        corners[at].x = _from_center(corners[at].x, half_w)
+        corners[at].y = _from_center(corners[at].y, half_h)

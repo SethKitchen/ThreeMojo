@@ -122,33 +122,34 @@ def inventory(root, *, verified_lane_predecessor=None, _operation=None):
 
 
 def verify(root, *, _operation=None):
-    if _operation is not None:
-        _check_operation(root, _operation)
-    root = Path(root)
-    operation_args = {} if _operation is None else {'_operation': _operation}
-    raw = _typed_source.historical_bytes(root, root / 'tools/carla_lane_oracle/lane-order-migration.json', (root / 'tools/carla_lane_oracle/lane-order-migration.json').read_bytes(), _operation=_operation)
-    require(hashlib.sha256(raw).hexdigest() == RECORD_SHA256, 'lane-order record changed')
-    record = json.loads(raw)
-    require(hashlib.sha256(record['before'].encode()).hexdigest() == record['before_sha256'] == PREDECESSOR_SHA256, 'lane-order predecessor changed')
-    require(hashlib.sha256(record['after'].encode()).hexdigest() == record['after_sha256'], 'lane-order successor record changed')
-    for rel, expected in record['immutable_predecessor_records'].items():
-        require(hashlib.sha256(_typed_source.historical_bytes(root, root / rel, (root / rel).read_bytes(), _operation=_operation)).hexdigest() == expected, 'lane-order predecessor record changed: ' + rel)
-    live = _observe_text(root, record['module'], (root / record['module']).read_text(), _operation=_operation)
-    current = cache_key.reviewed_text(root, record['module'], live, **operation_args)
-    require(source.token_sha256(current) == source.token_sha256(record['after']), 'lane-order successor module changed')
-    for rel, expected in record['premise_modules'].items():
-        require(source.token_sha256(_typed_source.historical_text(root, rel, _observe_text(root, rel, (root / rel).read_text(), _operation=_operation), _operation=_operation)) == source.token_sha256(expected), 'lane-order producer premise changed: ' + rel)
-    require(inventory(root, verified_lane_predecessor=current, **operation_args) == record['inventory'], 'lane-order production routing changed')
-    run = guard.declaration(current, '_run_lane_search', ())
-    insertions = [{'line_in_function': i + 1, 'operation': line.strip()} for i, line in enumerate(run.splitlines()) if any(word in line for word in ['pending.append(', 'closed.add(', 'terminal.append(', 'closed.recheck('])]
-    # Line positions are documentary. Token-bound complete function controls semantics.
-    require([x['operation'] for x in insertions] == [x['operation'] for x in record['insertions']], 'lane-order insertion scan changed')
-    test = _typed_source.historical_text(root, 'tests/test_carla_lane_order_successor.mojo', _observe_text(root, 'tests/test_carla_lane_order_successor.mojo',
-                         (root / 'tests/test_carla_lane_order_successor.mojo').read_text(),
-                         _operation=_operation), _operation=_operation)
-    for name, expected in record['references'].items():
-        require(source.token_sha256(guard.declaration(test, name, ())) == source.token_sha256(expected), 'lane-order frozen reference changed: ' + name)
-    return record
+    with _typed_source.typed_admission_scope(root) as _typed_admission:
+        if _operation is not None:
+            _check_operation(root, _operation)
+        root = Path(root)
+        operation_args = {} if _operation is None else {'_operation': _operation}
+        raw = _typed_source.historical_bytes(root, root / 'tools/carla_lane_oracle/lane-order-migration.json', (root / 'tools/carla_lane_oracle/lane-order-migration.json').read_bytes(), _operation=_operation)
+        require(hashlib.sha256(raw).hexdigest() == RECORD_SHA256, 'lane-order record changed')
+        record = json.loads(raw)
+        require(hashlib.sha256(record['before'].encode()).hexdigest() == record['before_sha256'] == PREDECESSOR_SHA256, 'lane-order predecessor changed')
+        require(hashlib.sha256(record['after'].encode()).hexdigest() == record['after_sha256'], 'lane-order successor record changed')
+        for rel, expected in record['immutable_predecessor_records'].items():
+            require(hashlib.sha256(_typed_source.historical_bytes(root, root / rel, (root / rel).read_bytes(), _operation=_operation)).hexdigest() == expected, 'lane-order predecessor record changed: ' + rel)
+        live = _observe_text(root, record['module'], (root / record['module']).read_text(), _operation=_operation)
+        current = cache_key.reviewed_text(root, record['module'], live, **operation_args)
+        require(source.token_sha256(current) == source.token_sha256(record['after']), 'lane-order successor module changed')
+        for rel, expected in record['premise_modules'].items():
+            require(source.token_sha256(_typed_source.historical_text(root, rel, _observe_text(root, rel, (root / rel).read_text(), _operation=_operation), _operation=_operation)) == source.token_sha256(expected), 'lane-order producer premise changed: ' + rel)
+        require(inventory(root, verified_lane_predecessor=current, **operation_args) == record['inventory'], 'lane-order production routing changed')
+        run = guard.declaration(current, '_run_lane_search', ())
+        insertions = [{'line_in_function': i + 1, 'operation': line.strip()} for i, line in enumerate(run.splitlines()) if any(word in line for word in ['pending.append(', 'closed.add(', 'terminal.append(', 'closed.recheck('])]
+        # Line positions are documentary. Token-bound complete function controls semantics.
+        require([x['operation'] for x in insertions] == [x['operation'] for x in record['insertions']], 'lane-order insertion scan changed')
+        test = _typed_source.historical_text(root, 'tests/test_carla_lane_order_successor.mojo', _observe_text(root, 'tests/test_carla_lane_order_successor.mojo',
+                             (root / 'tests/test_carla_lane_order_successor.mojo').read_text(),
+                             _operation=_operation), _operation=_operation)
+        for name, expected in record['references'].items():
+            require(source.token_sha256(guard.declaration(test, name, ())) == source.token_sha256(expected), 'lane-order frozen reference changed: ' + name)
+        return record
 
 
 def predecessor_source(root, *, _operation=None):

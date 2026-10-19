@@ -23,6 +23,7 @@ from extensions.humanoid.skeleton.leg.vessels.dimensions import (
     VesselField,
     VesselPart,
     is_artery,
+    require_vessel_part,
     vessel_distance,
 )
 from extensions.anatomy.soft_tissue import (
@@ -101,8 +102,7 @@ def vessel_mass_from_dimensions(
             not named, or `tissue` fails `validate`.
     """
     dimensions.validate()
-    if not part.is_valid():
-        raise Error("A vessel part must be a named artery or vein")
+    require_vessel_part(part)
     tissue.validate()
     var field = VesselField(dimensions, part)
     var volume = tube_chain_volume(field.chain)

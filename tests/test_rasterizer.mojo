@@ -81,6 +81,7 @@ from render.packing import (
     RGB_DEPTH_PACKING,
     RG_DEPTH_PACKING,
     DepthPacking,
+    packed_normal,
 )
 from render.srgb import LINEAR, SRGB, ColorSpace
 from render.rasterizer import (
@@ -121,7 +122,6 @@ from render.rasterizer import (
     edge,
     mip_level,
     packed_depth,
-    packed_normal,
     rasterize,
     rasterize_depth,
     rasterize_all,

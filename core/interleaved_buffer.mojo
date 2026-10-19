@@ -24,6 +24,7 @@ instance, or once per so many instances, and not once per vertex. See
 `BufferGeometry(instanced=True)`.
 """
 
+from core.ordinal import require_index_in_count, require_positive
 from std.memory import ArcPointer
 
 
@@ -68,8 +69,7 @@ def _checked(
         Error: If the stride is not positive, or the numbers do not divide
             into whole runs of it.
     """
-    if stride <= 0:
-        raise Error("An interleaved buffer's stride must be positive")
+    require_positive(stride, "An interleaved buffer's stride must be positive")
     if len(array) % stride != 0:
         raise Error("Interleaved data does not divide evenly into strides")
     return ArcPointer(_InterleavedArray(array^, stride, mesh_per_attribute))
@@ -119,8 +119,10 @@ struct InterleavedBuffer(Copyable, Movable):
             Error: If `stride` or `mesh_per_attribute` is not positive, or
                 the numbers do not divide evenly into runs of the stride.
         """
-        if mesh_per_attribute <= 0:
-            raise Error("An instanced buffer serves one instance a run or more")
+        require_positive(
+            mesh_per_attribute,
+            "An instanced buffer serves one instance a run or more",
+        )
         self._shared = _checked(array^, stride, mesh_per_attribute)
 
     def count(self) -> Int:
@@ -145,6 +147,21 @@ struct InterleavedBuffer(Copyable, Movable):
         """Return True if the buffer advances per instance."""
         return self._shared[].mesh_per_attribute > 0
 
+    def _require_index(self, at: Int) raises:
+        """Refuse an index outside the interleaved array.
+
+        Nothing. The call returns when the index names a number.
+
+        Args:
+            at: Where the number is, counted from the first.
+
+        Raises:
+            Error: If the index is outside the array.
+        """
+        require_index_in_count(
+            at, self.length(), "Interleaved buffer index out of range"
+        )
+
     def value(self, at: Int) raises -> Float32:
         """Return one number of the array.
 
@@ -157,8 +174,7 @@ struct InterleavedBuffer(Copyable, Movable):
         Raises:
             Error: If `at` is outside the array.
         """
-        if at < 0 or at >= self.length():
-            raise Error("Interleaved buffer index out of range")
+        self._require_index(at)
         return self._shared[].array[at]
 
     def set_value(self, at: Int, value: Float32) raises:
@@ -172,8 +188,7 @@ struct InterleavedBuffer(Copyable, Movable):
         Raises:
             Error: If `at` is outside the array.
         """
-        if at < 0 or at >= self.length():
-            raise Error("Interleaved buffer index out of range")
+        self._require_index(at)
         self._shared[].array[at] = value
 
     def shares_with(self, other: InterleavedBuffer) -> Bool:

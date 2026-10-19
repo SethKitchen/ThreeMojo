@@ -52,6 +52,8 @@ vertex, for Edgebreaker. A speed outside 0 to 10 and an encoder method or
 object kind that is not known are refused too.
 """
 
+from core.ordinal import ordinal_valid
+
 from core.buffer_geometry import COLOR, NORMAL, POSITION, UV, BufferGeometry
 from exporters.draco_connectivity import (
     EdgebreakerData,
@@ -131,9 +133,7 @@ struct DracoEncoderMethod(Equatable, ImplicitlyCopyable, Writable):
         Returns:
             True for the two methods three.js names.
         """
-        return self == DRACO_MESH_SEQUENTIAL_ENCODING or (
-            self == DRACO_MESH_EDGEBREAKER_ENCODING
-        )
+        return ordinal_valid(self.value, DRACO_MESH_EDGEBREAKER_ENCODING.value)
 
 
 # The triangles or the points in order.
@@ -158,7 +158,7 @@ struct DracoObjectKind(Equatable, ImplicitlyCopyable, Writable):
         Returns:
             True for the two objects three.js exports.
         """
-        return self == DRACO_EXPORT_MESH or self == DRACO_EXPORT_POINTS
+        return ordinal_valid(self.value, DRACO_EXPORT_POINTS.value)
 
 
 # Triangles: three.js's `Mesh`.
@@ -575,15 +575,72 @@ def _check_bits(geometry: _Geometry, options: DracoExportOptions) raises:
         )
 
 
+def _attribute_ids(count: Int) -> List[Int]:
+    """Return attribute indexes from zero up to `count`.
+
+    A geometry has a position attribute, so the loop runs.
+
+    Args:
+        count: How many attributes.
+
+    Returns:
+        The indexes, in order.
+    """
+    var ids = List[Int]()
+    # There is a position attribute: the loop runs.
+    for index in range(count):  # pragma: no branch
+        ids.append(index)
+    return ids^
+
+
+def _vertex_order(points: Int) -> List[Int]:
+    """Return vertex indexes from zero up to `points`.
+
+    A geometry has a vertex, so the loop runs.
+
+    Args:
+        points: How many vertices.
+
+    Returns:
+        The indexes, in order.
+    """
+    var order = List[Int](capacity=points)
+    # A geometry has a vertex: the loop runs.
+    for point in range(points):  # pragma: no branch
+        order.append(point)
+    return order^
+
+
+def _encode_identity(mut encoder: _Encoder, ids: List[Int], points: Int) raises:
+    """Encode attributes in vertex order with no prediction mesh.
+
+    A sequential mesh and a sequential point cloud write this after their
+    own header. The byte before the descriptions is one.
+
+    Args:
+        encoder: The encoder, written in place.
+        ids: The attributes to encode.
+        points: How many vertices.
+
+    Raises:
+        Error: If the encoder refuses an attribute.
+    """
+    encoder.out.u8(1)
+    encoder.write_descriptions(ids, True)
+    var order = _vertex_order(points)
+    var none = List[Optional[MeshData]]()
+    # An encoder has an attribute: the loop runs.
+    for _ in ids:  # pragma: no branch
+        none.append(None)
+    encoder.encode_values(ids, order, none)
+
+
 def _encode_mesh(
     var geometry: _Geometry, options: DracoExportOptions
 ) raises -> List[UInt8]:
     """Draco's `MeshEdgebreakerEncoder` and `MeshSequentialEncoder`."""
     var encoder = _Encoder(geometry^, options.copy())
-    var ids = List[Int]()
-    # There is a position attribute: the loop runs.
-    for i in range(len(encoder.geometry.attributes)):  # pragma: no branch
-        ids.append(i)
+    var ids = _attribute_ids(len(encoder.geometry.attributes))
     if options.encoder_method == DRACO_MESH_SEQUENTIAL_ENCODING:
         _header(encoder.out, DRACO_TRIANGULAR_MESH, DRACO_SEQUENTIAL)
         var faces = len(encoder.geometry.faces) // 3
@@ -594,17 +651,7 @@ def _encode_mesh(
         var width = sequential_index_width(points)
         for index in encoder.geometry.faces:
             write_sequential_index(encoder.out, index, width)
-        encoder.out.u8(1)
-        encoder.write_descriptions(ids, True)
-        var order = List[Int](capacity=points)
-        # A geometry has a vertex: the loop runs.
-        for p in range(points):  # pragma: no branch
-            order.append(p)
-        var none = List[Optional[MeshData]]()
-        # An encoder has an attribute: the loop runs.
-        for _ in ids:  # pragma: no branch
-            none.append(None)
-        encoder.encode_values(ids, order, none)
+        _encode_identity(encoder, ids, points)
         return encoder.out.bytes.copy()
     _header(encoder.out, DRACO_TRIANGULAR_MESH, DRACO_COMPRESSED)
     var speed = options.speed()
@@ -691,25 +738,12 @@ def _encode_points(
     """Draco's `PointCloudKdTreeEncoder` and
     `PointCloudSequentialEncoder`."""
     var encoder = _Encoder(geometry^, options.copy())
-    var ids = List[Int]()
-    # There is a position attribute: the loop runs.
-    for i in range(len(encoder.geometry.attributes)):  # pragma: no branch
-        ids.append(i)
+    var ids = _attribute_ids(len(encoder.geometry.attributes))
     var points = encoder.geometry.points
     if options.encoder_method == DRACO_MESH_SEQUENTIAL_ENCODING:
         _header(encoder.out, DRACO_POINT_CLOUD, DRACO_SEQUENTIAL)
         encoder.out.u32(points)
-        encoder.out.u8(1)
-        encoder.write_descriptions(ids, True)
-        var order = List[Int](capacity=points)
-        # A geometry has a vertex: the loop runs.
-        for p in range(points):  # pragma: no branch
-            order.append(p)
-        var none = List[Optional[MeshData]]()
-        # An encoder has an attribute: the loop runs.
-        for _ in ids:  # pragma: no branch
-            none.append(None)
-        encoder.encode_values(ids, order, none)
+        _encode_identity(encoder, ids, points)
         return encoder.out.bytes.copy()
     # There is a position attribute: the loop runs.
     for attribute in encoder.geometry.attributes:  # pragma: no branch
@@ -729,10 +763,7 @@ def _encode_points(
             quantization_of(attribute, options.bits(attribute.attribute_type))
         )
         dimension += attribute.components
-    var order = List[Int](capacity=points)
-    # A geometry has a vertex: the loop runs.
-    for p in range(points):  # pragma: no branch
-        order.append(p)
+    var order = _vertex_order(points)
     var coordinates = List[Int](length=points * dimension, fill=0)
     var offset = 0
     # There is a position attribute: the loop runs.

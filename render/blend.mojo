@@ -46,6 +46,8 @@ one, stored and straight are the same numbers, so every mode agrees with
 three.js there. The result's alpha is kept between zero and one and its
 color above zero; the color is light and has no ceiling.
 """
+from core.ordinal import ordinal_valid
+from math.utils import clamp
 
 # The first custom mode. Below it are the named modes.
 comptime CUSTOM_BASE = 1 << 24
@@ -75,7 +77,7 @@ struct BlendFactor(Equatable, ImplicitlyCopyable, Writable):
         Returns:
             Whether the value names a factor.
         """
-        return self.value >= 0 and self.value <= 14
+        return ordinal_valid(self.value, 14)
 
 
 comptime ZERO_FACTOR = BlendFactor(0)
@@ -110,7 +112,7 @@ struct BlendEquation(Equatable, ImplicitlyCopyable, Writable):
         Returns:
             Whether the value names an equation.
         """
-        return self.value >= 0 and self.value <= 4
+        return ordinal_valid(self.value, 4)
 
 
 comptime ADD_EQUATION = BlendEquation(0)
@@ -349,7 +351,7 @@ def blend_fragment(
         blend leaves it for the others. Its alpha is between zero and one
         and its color is at least zero.
     """
-    var share = max(Float32(0), min(Float32(1), src[3]))
+    var share = clamp(src[3], 0, 1)
     var fragment = Rgba(src[0], src[1], src[2], share)
     if premultiplied:
         fragment = Rgba(src[0] * share, src[1] * share, src[2] * share, share)
@@ -372,5 +374,5 @@ def blend_fragment(
         max(Float32(0), out[0]),
         max(Float32(0), out[1]),
         max(Float32(0), out[2]),
-        max(Float32(0), min(Float32(1), out[3])),
+        clamp(out[3], 0, 1),
     )

@@ -17,7 +17,7 @@ body-right. Plus z is anterior. Pass `ankle_center()` from a leg as
 
 from core.assets import Assets
 from extensions.humanoid.skeleton.look import resolved_paint as _resolved_paint
-from core.object3d import NodeId, Object3D
+from core.object3d import NodeId
 from core.scene import Scene
 from extensions.humanoid.side import RIGHT, BodySide
 from extensions.humanoid.spec import HumanoidSpec
@@ -28,7 +28,11 @@ from extensions.humanoid.skeleton.foot.bones.dimensions import (
 from extensions.humanoid.skeleton.foot.bones.geometry import (
     bone_from_dimensions,
 )
-from extensions.humanoid.skeleton.foot.contents import BOTH, FootContents
+from extensions.humanoid.skeleton.foot.contents import (
+    BOTH,
+    FootContents,
+    require_foot_contents,
+)
 from extensions.humanoid.skeleton.foot.hair.dimensions import named_foot_hair
 from extensions.humanoid.skeleton.foot.hair.geometry import hair_from_dimensions
 from extensions.humanoid.skeleton.foot.ligaments.dimensions import (
@@ -65,6 +69,7 @@ from extensions.humanoid.skeleton.foot.vessels.geometry import (
     vessel_from_dimensions,
 )
 from extensions.humanoid.skeleton.look import (
+    UNSET_PAINT,
     artery_phong,
     hair_phong,
     lymph_phong,
@@ -74,11 +79,7 @@ from extensions.humanoid.skeleton.look import (
 )
 from materials.material import MaterialId
 from math.vector3 import Vector3
-from extensions.humanoid.skeleton.place import place_mesh
-
-# Optional `add_foot` paint. A negative id asks the assembler to create
-# the default look for that layer.
-comptime UNSET_PAINT = MaterialId(-1)
+from extensions.humanoid.skeleton.place import place_mesh_node, place_root
 
 
 @fieldwise_init
@@ -163,17 +164,14 @@ def add_foot(
     Raises:
         Error: If the spec, a mesh, `contents` or the scene is invalid.
     """
-    if not contents.is_valid():
-        raise Error("Foot contents must be a named layer set")
+    require_foot_contents(contents)
     var pose = assemble_foot(spec, side)
-    var root = Object3D()
-    root.set_position(origin.x, origin.y, origin.z)
-    var root_id = scene.attach(root^, parent)
+    var root_id = place_root(scene, parent, origin)
     if contents.includes_bones():
         var bones = named_foot_bones()
         var b_index = 0
         while b_index < len(bones):
-            place_mesh(
+            _ = place_mesh_node(
                 scene,
                 assets,
                 root_id,
@@ -185,7 +183,7 @@ def add_foot(
         var bands = named_foot_ligaments()
         var g_index = 0
         while g_index < len(bands):
-            place_mesh(
+            _ = place_mesh_node(
                 scene,
                 assets,
                 root_id,
@@ -201,7 +199,7 @@ def add_foot(
             var paint = muscle_paint
             if is_tendon(part):
                 paint = tendon_paint
-            place_mesh(
+            _ = place_mesh_node(
                 scene,
                 assets,
                 root_id,
@@ -219,7 +217,7 @@ def add_foot(
             var paint = vein
             if is_artery(vessel):
                 paint = artery
-            place_mesh(
+            _ = place_mesh_node(
                 scene,
                 assets,
                 root_id,
@@ -232,7 +230,7 @@ def add_foot(
         var nodes = named_foot_lymph()
         var l_index = 0
         while l_index < len(nodes):
-            place_mesh(
+            _ = place_mesh_node(
                 scene,
                 assets,
                 root_id,
@@ -245,7 +243,7 @@ def add_foot(
         var trunks = named_foot_nerves()
         var n_index = 0
         while n_index < len(trunks):
-            place_mesh(
+            _ = place_mesh_node(
                 scene,
                 assets,
                 root_id,
@@ -257,7 +255,7 @@ def add_foot(
         var skin = _resolved_paint(
             assets, skin_paint, skin_phong(genome=spec.genome)
         )
-        place_mesh(
+        _ = place_mesh_node(
             scene,
             assets,
             root_id,
@@ -271,7 +269,7 @@ def add_foot(
         var groups = named_foot_hair()
         var h_index = 0
         while h_index < len(groups):
-            place_mesh(
+            _ = place_mesh_node(
                 scene,
                 assets,
                 root_id,

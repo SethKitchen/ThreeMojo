@@ -22,6 +22,7 @@ material; a corner never carries it, and both rasterizers refuse one that
 does. See `core.scene`.
 """
 
+from core.ordinal import require_index_in_count
 from render.cube_texture import CubeTexture
 
 
@@ -89,6 +90,7 @@ struct CubeTextureStore(Movable):
             Error: If no cube texture has that id. `NO_CUBE_TEXTURE` and
                 `SCENE_ENVIRONMENT` name none.
         """
-        if id.value < 0 or id.value >= len(self.textures):
-            raise Error("No cube texture has that id")
+        require_index_in_count(
+            id.value, len(self.textures), "No cube texture has that id"
+        )
         return self.textures[id.value]

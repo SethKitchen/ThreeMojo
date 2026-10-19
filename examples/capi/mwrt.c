@@ -361,6 +361,9 @@ float atan2f(float y, float x) { return (float)atan2_double((double)y, (double)x
 #define ENOENT 2
 static int errno_value = ENOENT;
 void *__error(void) { return &errno_value; }
+/* The host's libc names remain in retargeted IR. Linux uses this accessor
+ * instead of macOS's __error; neither host has files in this runtime. */
+void *__errno_location(void) { return &errno_value; }
 char *strerror(int code) {
   (void)code;
   return "No such file or directory";
@@ -386,6 +389,20 @@ int stat(const char *path, void *info) {
   return -1;
 }
 int lstat(const char *path, void *info) {
+  (void)path;
+  (void)info;
+  return -1;
+}
+/* Linux's versioned stat calls have one more argument than stat/lstat.
+ * They always fail here, so no host-specific stat layout is read or written. */
+int __xstat(int version, const char *path, void *info) {
+  (void)version;
+  (void)path;
+  (void)info;
+  return -1;
+}
+int __lxstat(int version, const char *path, void *info) {
+  (void)version;
   (void)path;
   (void)info;
   return -1;

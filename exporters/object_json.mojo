@@ -112,6 +112,7 @@ from animation.keyframe_track import ORTHOGRAPHIC_SLOT, TrackTarget
 from cameras.orthographic_camera import OrthographicCamera
 from cameras.perspective_camera import PerspectiveCamera
 from core.assets import Assets
+from core.search import last_match
 from core.background import (
     COLOR_BACKGROUND,
     CUBE_BACKGROUND,
@@ -124,6 +125,7 @@ from core.geometry_store import GeometryId
 from core.layers import Layers
 from core.morph import MorphInfluences
 from core.object3d import GROUP_TYPE, NO_PARENT, NodeId, Object3D
+from core.ordinal import require_index_in_count, require_valid
 from core.scene import Scene
 from exporters.gltf import encode_base64
 from exporters.json_writer import JsonWriter
@@ -187,9 +189,10 @@ from materials.material import (
 )
 from math.euler import Euler, EulerOrder
 from math.matrix4 import Matrix4
+from math.square_matrix import append_elements, copy_elements
 from math.vector2 import Vector2
 from objects.skeleton import Skeleton
-from render.cube_texture import NEGATIVE_X
+from render.cube_texture import cube_image_index
 from materials.node_json import write_node_program
 from materials.nodes import NO_NODES
 from render.cube_texture_store import (
@@ -257,20 +260,10 @@ def object_uuid(kind: Int, index: Int) -> String:
     return out + String(unsafe_from_utf8=digits)
 
 
-def _numbers(mut writer: JsonWriter, values: List[Float32]) raises:
-    """Write an array of numbers."""
-    writer.begin_array()
-    for value in values:
-        writer.number(value)
-    writer.end_array()
-
-
 def _matrix(mut writer: JsonWriter, matrix: Matrix4) raises:
     """Write a matrix's sixteen numbers, column by column."""
-    var values = List[Float32]()
-    for index in range(16):  # pragma: no branch
-        values.append(matrix.elements[index])
-    _numbers(writer, values)
+    var values = copy_elements(matrix.elements)
+    writer.numbers(values)
 
 
 def _attribute(
@@ -296,12 +289,9 @@ def _attribute(
     writer.string(array_type_name(attribute.component_type()))
     writer.key("array")
     if attribute.is_integer():
-        writer.begin_array()
-        for value in attribute.stored_values():
-            writer.integer(value)
-        writer.end_array()
+        writer.integers(attribute.stored_values())
     else:
-        _numbers(writer, attribute.packed())
+        writer.numbers(attribute.packed())
     writer.key("normalized")
     writer.boolean(attribute.is_normalized())
     if attribute.is_instanced():
@@ -396,11 +386,10 @@ struct _Header(Copyable, Movable):
     def __init__(out self, uuid: String, node: Object3D) raises:
         """Start from a node: its type, name, visibility, user data,
         layers and matrix. Refuse a node of neither type."""
-        if not node.object_type.is_valid():
-            raise Error(
-                "Object JSON: a node must be an Object3D, a Group or a"
-                " Gyroscope"
-            )
+        require_valid(
+            node.object_type.is_valid(),
+            "Object JSON: a node must be an Object3D, a Group or a Gyroscope",
+        )
         self.uuid = uuid
         self.type = "Group" if node.object_type == GROUP_TYPE else "Object3D"
         self.name = node.name
@@ -432,6 +421,19 @@ struct _Header(Copyable, Movable):
         self.matrix = Matrix4()
         self.auto = True
         self.up = [0, 1, 0]
+
+    def set_draw(
+        mut self,
+        type_name: String,
+        cast_shadow: Bool,
+        receive_shadow: Bool,
+        frustum_culled: Bool,
+    ):
+        """Set the type and the three draw flags a drawn object writes."""
+        self.type = type_name
+        self.cast_shadow = cast_shadow
+        self.receive_shadow = receive_shadow
+        self.frustum_culled = frustum_culled
 
     def write(self, mut writer: JsonWriter) raises:
         """Write the fields, as `Object3D.toJSON` writes them."""
@@ -465,10 +467,20 @@ struct _Header(Copyable, Movable):
         writer.key("matrix")
         _matrix(writer, self.matrix)
         writer.key("up")
-        _numbers(writer, self.up)
+        writer.numbers(self.up)
         if not self.auto:
             writer.key("matrixAutoUpdate")
             writer.boolean(False)
+
+
+def _begin_drawn(
+    mut writer: JsonWriter, header: _Header, geometry: String
+) raises:
+    """Write the header, then the geometry uuid and the material key."""
+    header.write(writer)
+    writer.key("geometry")
+    writer.string(geometry)
+    writer.key("material")
 
 
 def _named(mut writer: JsonWriter, geometry: BufferGeometry) raises:
@@ -526,7 +538,7 @@ struct _Library(Movable):
 
     def geometry(mut self, id: GeometryId, assets: Assets) raises -> String:
         """Write a geometry once, and return its uuid."""
-        var at = _find(self.geometry_keys, id.value)
+        var at = last_match(self.geometry_keys, id.value)
         if at < 0:
             at = self.add_geometry(assets.geometries.get(id), id.value)
         return object_uuid(_GEOMETRY_UUID, at)
@@ -537,7 +549,7 @@ struct _Library(Movable):
         var uuid = shape.uuid
         if uuid == "":
             uuid = object_uuid(_SHAPE_UUID, len(self.shapes))
-        if _find_text(self.shape_keys, uuid) < 0:
+        if last_match(self.shape_keys, uuid) < 0:
             var writer = JsonWriter()
             write_shape(writer, shape, uuid, metadata=False)
             self.shapes.append(writer.finish())
@@ -603,10 +615,7 @@ struct _Library(Movable):
             writer.key("type")
             writer.string(index_type(geometry.vertex_count()))
             writer.key("array")
-            writer.begin_array()
-            for entry in geometry.index:  # pragma: no branch
-                writer.integer(entry)
-            writer.end_array()
+            writer.integers(geometry.index)
             writer.end_object()
         if geometry.morph_count() > 0:
             writer.key("morphAttributes")
@@ -657,13 +666,130 @@ struct _Library(Movable):
 
     def texture(mut self, id: TextureId, assets: Assets) raises -> String:
         """Write a texture and its image once, and return its uuid."""
-        var at = _find(self.texture_keys, id.value)
+        var at = last_match(self.texture_keys, id.value)
         if at < 0:
             at = len(self.texture_keys)
             ref texture = assets.textures.get(id)
             self.flat(texture, at, texture.mapping)
             self.texture_keys.append(id.value)
         return object_uuid(_TEXTURE_UUID, at)
+
+    def _texture_entry(
+        mut self,
+        at: Int,
+        mapping: Int,
+        channel: Int,
+        repeat_x: Float32,
+        repeat_y: Float32,
+        offset_x: Float32,
+        offset_y: Float32,
+        center_x: Float32,
+        center_y: Float32,
+        rotation: Float32,
+        whole_rotation: Bool,
+        wrap_s: Int,
+        wrap_t: Int,
+        format: Int,
+        stored_type: Int,
+        color_space: String,
+        min_filter: Int,
+        mag_filter: Int,
+        anisotropy: Int,
+        flip_y: Bool,
+        mipmaps: Bool,
+        data: Bool,
+    ) raises -> String:
+        """Return one texture object in three.js's `Texture.toJSON` order.
+
+        A whole rotation is written as an integer. Any other rotation is
+        written as a `Float32`. A data texture also writes `internalFormat`,
+        `premultiplyAlpha`, and `unpackAlignment`.
+
+        Args:
+            at: The texture's place in this library.
+            mapping: The three.js mapping code.
+            channel: The texture-coordinate set.
+            repeat_x: How many times the image repeats across.
+            repeat_y: How many times the image repeats down.
+            offset_x: The image's offset across.
+            offset_y: The image's offset down.
+            center_x: The rotation center across.
+            center_y: The rotation center down.
+            rotation: The rotation, in radians.
+            whole_rotation: Whether `rotation` is written as an integer.
+            wrap_s: The horizontal wrap code.
+            wrap_t: The vertical wrap code.
+            format: The texel format code.
+            stored_type: The texel type code.
+            color_space: The color-space name, or empty.
+            min_filter: The minification filter code.
+            mag_filter: The magnification filter code.
+            anisotropy: The anisotropy.
+            flip_y: Whether `v` reads the rows from the bottom.
+            mipmaps: Whether the texture generates mipmaps.
+            data: Whether this is a `DataTexture`.
+
+        Returns:
+            The texture object's JSON text.
+
+        Raises:
+            Error: If a value has no place in the object, or `rotation` is
+                not finite when it is written as a `Float32`.
+        """
+        var writer = JsonWriter()
+        writer.begin_object()
+        writer.key("uuid")
+        writer.string(object_uuid(_TEXTURE_UUID, at))
+        writer.key("name")
+        writer.string("")
+        writer.key("image")
+        writer.string(object_uuid(_IMAGE_UUID, at))
+        writer.key("mapping")
+        writer.integer(mapping)
+        writer.key("channel")
+        writer.integer(channel)
+        writer.key("repeat")
+        writer.numbers([repeat_x, repeat_y])
+        writer.key("offset")
+        writer.numbers([offset_x, offset_y])
+        writer.key("center")
+        writer.numbers([center_x, center_y])
+        writer.key("rotation")
+        if whole_rotation:
+            writer.integer(Int(rotation))
+        else:
+            writer.number(rotation)
+        writer.key("wrap")
+        writer.begin_array()
+        writer.integer(wrap_s)
+        writer.integer(wrap_t)
+        writer.end_array()
+        writer.key("format")
+        writer.integer(format)
+        if data:
+            writer.key("internalFormat")
+            writer.null()
+        writer.key("type")
+        writer.integer(stored_type)
+        writer.key("colorSpace")
+        writer.string(color_space)
+        writer.key("minFilter")
+        writer.integer(min_filter)
+        writer.key("magFilter")
+        writer.integer(mag_filter)
+        writer.key("anisotropy")
+        writer.integer(anisotropy)
+        writer.key("flipY")
+        writer.boolean(flip_y)
+        writer.key("generateMipmaps")
+        writer.boolean(mipmaps)
+        if data:
+            writer.key("premultiplyAlpha")
+            writer.boolean(False)
+            writer.key("unpackAlignment")
+            writer.integer(1)
+        writer.end_object()
+        return writer.finish()
 
     def flat(mut self, texture: Texture, at: Int, mapping: Mapping) raises:
         """Write one flat texture and its image as entry `at`, with a
@@ -695,49 +821,32 @@ struct _Library(Movable):
         image.string("data:image/png;base64," + encode_base64(png))
         image.end_object()
         self.images.append(image.finish())
-        var writer = JsonWriter()
-        writer.begin_object()
-        writer.key("uuid")
-        writer.string(object_uuid(_TEXTURE_UUID, at))
-        writer.key("name")
-        writer.string("")
-        writer.key("image")
-        writer.string(object_uuid(_IMAGE_UUID, at))
-        writer.key("mapping")
-        writer.integer(mapping.value)
-        writer.key("channel")
-        writer.integer(texture.channel.value)
-        writer.key("repeat")
-        _numbers(writer, [texture.repeat.x, texture.repeat.y])
-        writer.key("offset")
-        _numbers(writer, [texture.offset.x, texture.offset.y])
-        writer.key("center")
-        _numbers(writer, [texture.center.x, texture.center.y])
-        writer.key("rotation")
-        writer.number(texture.rotation.to(RADIAN))
-        writer.key("wrap")
-        writer.begin_array()
-        writer.integer(wrap_code(texture.wrap_s))
-        writer.integer(wrap_code(texture.wrap_t))
-        writer.end_array()
-        writer.key("format")
-        writer.integer(RGBA_FORMAT)
-        writer.key("type")
-        writer.integer(UNSIGNED_BYTE_TYPE)
-        writer.key("colorSpace")
-        writer.string(SRGB_COLOR_SPACE if texture.color_space == SRGB else "")
-        writer.key("minFilter")
-        writer.integer(filter_code(texture.min_filter))
-        writer.key("magFilter")
-        writer.integer(filter_code(texture.mag_filter))
-        writer.key("anisotropy")
-        writer.integer(texture.anisotropy)
-        writer.key("flipY")
-        writer.boolean(texture.flip_y)
-        writer.key("generateMipmaps")
-        writer.boolean(texture.levels > 1)
-        writer.end_object()
-        self.textures.append(writer.finish())
+        self.textures.append(
+            self._texture_entry(
+                at,
+                mapping.value,
+                texture.channel.value,
+                texture.repeat.x,
+                texture.repeat.y,
+                texture.offset.x,
+                texture.offset.y,
+                texture.center.x,
+                texture.center.y,
+                texture.rotation.to(RADIAN),
+                False,
+                wrap_code(texture.wrap_s),
+                wrap_code(texture.wrap_t),
+                RGBA_FORMAT,
+                UNSIGNED_BYTE_TYPE,
+                SRGB_COLOR_SPACE if texture.color_space == SRGB else "",
+                filter_code(texture.min_filter),
+                filter_code(texture.mag_filter),
+                texture.anisotropy,
+                texture.flip_y,
+                texture.levels > 1,
+                False,
+            )
+        )
 
     def cube(mut self, id: CubeTextureId, assets: Assets) raises -> String:
         """Write a cube texture and its six images once, as three.js
@@ -752,7 +861,7 @@ struct _Library(Movable):
         # Refuses an id that names no cube before it becomes a key.
         ref cube = assets.cube_textures.get(id)
         var key = _CUBE_KEY - id.value
-        var at = _find(self.texture_keys, key)
+        var at = last_match(self.texture_keys, key)
         if at >= 0:
             return object_uuid(_TEXTURE_UUID, at)
         at = len(self.texture_keys)
@@ -772,11 +881,9 @@ struct _Library(Movable):
         image.begin_array()
         # A valid cube holds six faces, so this never runs zero times.
         for index in range(len(cube.faces)):  # pragma: no branch
-            var source = index
-            if index < NEGATIVE_X + 1:
-                # The px image is the face along -x, and the nx image the
-                # face along +x.
-                source = NEGATIVE_X - index
+            # The px image is the face along -x, and the nx image the
+            # face along +x.
+            var source = cube_image_index(index, True)
             ref face = cube.faces[source]
             if face.texel_type == FLOAT_TEXELS:
                 raise Error(
@@ -804,49 +911,32 @@ struct _Library(Movable):
         image.end_array()
         image.end_object()
         self.images.append(image.finish())
-        var writer = JsonWriter()
-        writer.begin_object()
-        writer.key("uuid")
-        writer.string(object_uuid(_TEXTURE_UUID, at))
-        writer.key("name")
-        writer.string("")
-        writer.key("image")
-        writer.string(object_uuid(_IMAGE_UUID, at))
-        writer.key("mapping")
-        writer.integer(cube.mapping.value)
-        writer.key("channel")
-        writer.integer(0)
-        writer.key("repeat")
-        _numbers(writer, [1, 1])
-        writer.key("offset")
-        _numbers(writer, [0, 0])
-        writer.key("center")
-        _numbers(writer, [0, 0])
-        writer.key("rotation")
-        writer.integer(0)
-        writer.key("wrap")
-        writer.begin_array()
-        writer.integer(CLAMP_TO_EDGE_WRAPPING)
-        writer.integer(CLAMP_TO_EDGE_WRAPPING)
-        writer.end_array()
-        writer.key("format")
-        writer.integer(RGBA_FORMAT)
-        writer.key("type")
-        writer.integer(UNSIGNED_BYTE_TYPE)
-        writer.key("colorSpace")
-        writer.string(SRGB_COLOR_SPACE if first.color_space == SRGB else "")
-        writer.key("minFilter")
-        writer.integer(filter_code(first.min_filter))
-        writer.key("magFilter")
-        writer.integer(filter_code(first.mag_filter))
-        writer.key("anisotropy")
-        writer.integer(1)
-        writer.key("flipY")
-        writer.boolean(False)
-        writer.key("generateMipmaps")
-        writer.boolean(first.levels > 1)
-        writer.end_object()
-        self.textures.append(writer.finish())
+        self.textures.append(
+            self._texture_entry(
+                at,
+                cube.mapping.value,
+                0,
+                1,
+                1,
+                0,
+                0,
+                0,
+                0,
+                0,
+                True,
+                CLAMP_TO_EDGE_WRAPPING,
+                CLAMP_TO_EDGE_WRAPPING,
+                RGBA_FORMAT,
+                UNSIGNED_BYTE_TYPE,
+                SRGB_COLOR_SPACE if first.color_space == SRGB else "",
+                filter_code(first.min_filter),
+                filter_code(first.mag_filter),
+                1,
+                False,
+                first.levels > 1,
+                False,
+            )
+        )
         self.texture_keys.append(key)
         return object_uuid(_TEXTURE_UUID, at)
 
@@ -927,55 +1017,30 @@ struct _Library(Movable):
         self.images.append(image.finish())
         # What a `DataTexture` is built with: nearest, clamped, not flipped
         # and with no mip chain.
-        var writer = JsonWriter()
-        writer.begin_object()
-        writer.key("uuid")
-        writer.string(object_uuid(_TEXTURE_UUID, at))
-        writer.key("name")
-        writer.string("")
-        writer.key("image")
-        writer.string(object_uuid(_IMAGE_UUID, at))
-        writer.key("mapping")
-        writer.integer(UV_MAPPING)
-        writer.key("channel")
-        writer.integer(0)
-        writer.key("repeat")
-        _numbers(writer, [1, 1])
-        writer.key("offset")
-        _numbers(writer, [0, 0])
-        writer.key("center")
-        _numbers(writer, [0, 0])
-        writer.key("rotation")
-        writer.integer(0)
-        writer.key("wrap")
-        writer.begin_array()
-        writer.integer(CLAMP_TO_EDGE_WRAPPING)
-        writer.integer(CLAMP_TO_EDGE_WRAPPING)
-        writer.end_array()
-        writer.key("format")
-        writer.integer(format)
-        writer.key("internalFormat")
-        writer.null()
-        writer.key("type")
-        writer.integer(type)
-        writer.key("colorSpace")
-        writer.string(color_space)
-        writer.key("minFilter")
-        writer.integer(NEAREST_FILTER)
-        writer.key("magFilter")
-        writer.integer(NEAREST_FILTER)
-        writer.key("anisotropy")
-        writer.integer(1)
-        writer.key("flipY")
-        writer.boolean(False)
-        writer.key("generateMipmaps")
-        writer.boolean(False)
-        writer.key("premultiplyAlpha")
-        writer.boolean(False)
-        writer.key("unpackAlignment")
-        writer.integer(1)
-        writer.end_object()
-        var text = writer.finish()
+        var text = self._texture_entry(
+            at,
+            UV_MAPPING,
+            0,
+            1,
+            1,
+            0,
+            0,
+            0,
+            0,
+            0,
+            True,
+            CLAMP_TO_EDGE_WRAPPING,
+            CLAMP_TO_EDGE_WRAPPING,
+            format,
+            type,
+            color_space,
+            NEAREST_FILTER,
+            NEAREST_FILTER,
+            1,
+            False,
+            False,
+            True,
+        )
         self.textures.append(text)
         self.texture_keys.append(-1)
         return text
@@ -1028,8 +1093,10 @@ struct _Library(Movable):
         """
         var material = assets.materials.get(id)
         var kind = material.kind
-        if not kind.is_valid():
-            raise Error("Object JSON: a material kind that is none of eleven")
+        require_valid(
+            kind.is_valid(),
+            "Object JSON: a material kind that is none of eleven",
+        )
         var type = material_type_names()[kind.value]
         if use == _LINE_USE:
             type = (
@@ -1038,7 +1105,7 @@ struct _Library(Movable):
         elif use != _SURFACE_USE:
             type = use
         var key = String(id.value) + " " + type
-        var at = _find_text(self.material_keys, key)
+        var at = last_match(self.material_keys, key)
         if at >= 0:
             return object_uuid(_MATERIAL_UUID, at)
         at = len(self.material_keys)
@@ -1200,7 +1267,7 @@ struct _Library(Movable):
             writer.key("normalMapType")
             writer.integer(material.normal_map_type.value)
             writer.key("normalScale")
-            _numbers(writer, [material.normal_scale.x, material.normal_scale.y])
+            writer.numbers([material.normal_scale.x, material.normal_scale.y])
         if material.bump_map != NO_TEXTURE:
             self.map(writer, "bumpMap", material.bump_map, assets)
             writer.key("bumpScale")
@@ -1236,7 +1303,7 @@ struct _Library(Movable):
             # material, so it writes them under their old names.
             ref point = material.reference_position
             writer.key("referencePosition")
-            _numbers(writer, [point.x, point.y, point.z])
+            writer.numbers([point.x, point.y, point.z])
             writer.key("nearDistance")
             writer.number(material.near_distance.to(METER))
             writer.key("farDistance")
@@ -1281,8 +1348,7 @@ struct _Library(Movable):
                 assets,
             )
             writer.key("clearcoatNormalScale")
-            _numbers(
-                writer,
+            writer.numbers(
                 [
                     material.clearcoat_normal_scale.x,
                     material.clearcoat_normal_scale.y,
@@ -1305,8 +1371,7 @@ struct _Library(Movable):
         writer.key("iridescenceIOR")
         writer.number(material.iridescence_ior)
         writer.key("iridescenceThicknessRange")
-        _numbers(
-            writer,
+        writer.numbers(
             [
                 material.iridescence_thickness_minimum.to(NANOMETER),
                 material.iridescence_thickness_maximum.to(NANOMETER),
@@ -1458,7 +1523,7 @@ def _clipping(mut writer: JsonWriter, material: Material) raises:
         for plane in planes:  # pragma: no branch
             writer.begin_object()
             writer.key("normal")
-            _numbers(writer, [plane.normal.x, plane.normal.y, plane.normal.z])
+            writer.numbers([plane.normal.x, plane.normal.y, plane.normal.z])
             writer.key("constant")
             writer.number(plane.constant)
             writer.end_object()
@@ -1485,24 +1550,6 @@ def _influences(
     for target in range(count):  # pragma: no branch
         writer.number(influences[target])
     writer.end_array()
-
-
-def _find(keys: List[Int], key: Int) -> Int:
-    """Return where a key is in a list, or -1."""
-    var found = -1
-    for at in range(len(keys)):
-        if keys[at] == key:
-            found = at
-    return found
-
-
-def _find_text(keys: List[String], key: String) -> Int:
-    """Return where a text is in a list, or -1."""
-    var found = -1
-    for at in range(len(keys)):
-        if keys[at] == key:
-            found = at
-    return found
 
 
 struct _Joined(Movable):
@@ -1662,11 +1709,14 @@ struct _Carried(Movable):
 
 def _node_of(node: NodeId, count: Int) raises -> Int:
     """Return a node's position, refusing one that is not in the scene."""
-    if node.value < 0 or node.value >= count:
-        raise Error(
+    require_index_in_count(
+        node.value,
+        count,
+        (
             "Object JSON: a thing names a node that is not in the scene;"
             " attach a camera to a node to write it"
-        )
+        ),
+    )
     return node.value
 
 
@@ -1728,14 +1778,15 @@ struct _Writer(Movable):
     ) raises:
         """Write a mesh's header and fields."""
         ref mesh = scene.meshes[which]
-        header.type = "Mesh"
-        header.cast_shadow = mesh.cast_shadow
-        header.receive_shadow = mesh.receive_shadow
-        header.frustum_culled = mesh.frustum_culled
-        header.write(writer)
-        writer.key("geometry")
-        writer.string(self.library.geometry(mesh.geometry, assets))
-        writer.key("material")
+        header.set_draw(
+            "Mesh",
+            mesh.cast_shadow,
+            mesh.receive_shadow,
+            mesh.frustum_culled,
+        )
+        _begin_drawn(
+            writer, header, self.library.geometry(mesh.geometry, assets)
+        )
         if mesh.is_multi_material():
             # three.js's `toJSON` writes a list of uuids for a list.
             writer.begin_array()
@@ -1764,14 +1815,15 @@ struct _Writer(Movable):
     ) raises:
         """Write an instanced mesh's header and fields."""
         ref mesh = scene.instanced_meshes[which]
-        header.type = "InstancedMesh"
-        header.cast_shadow = mesh.cast_shadow
-        header.receive_shadow = mesh.receive_shadow
-        header.frustum_culled = mesh.frustum_culled
-        header.write(writer)
-        writer.key("geometry")
-        writer.string(self.library.geometry(mesh.geometry, assets))
-        writer.key("material")
+        header.set_draw(
+            "InstancedMesh",
+            mesh.cast_shadow,
+            mesh.receive_shadow,
+            mesh.frustum_culled,
+        )
+        _begin_drawn(
+            writer, header, self.library.geometry(mesh.geometry, assets)
+        )
         writer.string(
             self.library.material(mesh.material, assets, _SURFACE_USE)
         )
@@ -1779,8 +1831,7 @@ struct _Writer(Movable):
         writer.integer(mesh.count())
         var data = List[Float32]()
         for matrix in mesh.matrices:
-            for index in range(16):  # pragma: no branch
-                data.append(matrix.elements[index])
+            append_elements(data, matrix.elements)
         writer.key("instanceMatrix")
         _attribute(writer, BufferAttribute(data^, 16))
 
@@ -1800,7 +1851,7 @@ struct _Writer(Movable):
         var chosen = List[Int]()
         var tinted = False
         for instance in batch.instances:
-            var at = _find(geometries, instance.geometry.value)
+            var at = last_match(geometries, instance.geometry.value)
             if at < 0:
                 at = len(geometries)
                 geometries.append(instance.geometry.value)
@@ -1809,14 +1860,13 @@ struct _Writer(Movable):
                 tinted = True
         var joined = _Joined(geometries, assets)
         var geometry = self.library.add_geometry(joined.geometry, -1)
-        header.type = "BatchedMesh"
-        header.frustum_culled = batch.frustum_culled
-        header.cast_shadow = batch.cast_shadow
-        header.receive_shadow = batch.receive_shadow
-        header.write(writer)
-        writer.key("geometry")
-        writer.string(object_uuid(_GEOMETRY_UUID, geometry))
-        writer.key("material")
+        header.set_draw(
+            "BatchedMesh",
+            batch.cast_shadow,
+            batch.receive_shadow,
+            batch.frustum_culled,
+        )
+        _begin_drawn(writer, header, object_uuid(_GEOMETRY_UUID, geometry))
         writer.string(
             self.library.material(batch.material, assets, _SURFACE_USE)
         )
@@ -1865,10 +1915,7 @@ struct _Writer(Movable):
             writer.end_object()
         writer.end_array()
         writer.key("availableInstanceIds")
-        writer.begin_array()
-        for free in batch.available_instances:
-            writer.integer(free)
-        writer.end_array()
+        writer.integers(batch.available_instances)
         writer.key("availableGeometryIds")
         writer.begin_array()
         writer.end_array()
@@ -1945,14 +1992,15 @@ struct _Writer(Movable):
         does."""
         ref mesh = scene.skinned_meshes[which]
         var mode = bind_mode_name(mesh.bind_mode)
-        header.type = "SkinnedMesh"
-        header.cast_shadow = mesh.cast_shadow
-        header.receive_shadow = mesh.receive_shadow
-        header.frustum_culled = mesh.frustum_culled
-        header.write(writer)
-        writer.key("geometry")
-        writer.string(self.library.geometry(mesh.geometry, assets))
-        writer.key("material")
+        header.set_draw(
+            "SkinnedMesh",
+            mesh.cast_shadow,
+            mesh.receive_shadow,
+            mesh.frustum_culled,
+        )
+        _begin_drawn(
+            writer, header, self.library.geometry(mesh.geometry, assets)
+        )
         writer.string(
             self.library.material(mesh.material, assets, _SURFACE_USE)
         )
@@ -1978,16 +2026,19 @@ struct _Writer(Movable):
     ) raises:
         """Write a line as the three.js class of its mode."""
         ref line = scene.lines[which]
-        if not line.mode.is_valid():
-            raise Error("Object JSON: a line mode that is none of the three")
-        header.type = line_type_names()[line.mode.value]
-        header.cast_shadow = line.cast_shadow
-        header.receive_shadow = line.receive_shadow
-        header.frustum_culled = line.frustum_culled
-        header.write(writer)
-        writer.key("geometry")
-        writer.string(self.library.geometry(line.geometry, assets))
-        writer.key("material")
+        require_valid(
+            line.mode.is_valid(),
+            "Object JSON: a line mode that is none of the three",
+        )
+        header.set_draw(
+            line_type_names()[line.mode.value],
+            line.cast_shadow,
+            line.receive_shadow,
+            line.frustum_culled,
+        )
+        _begin_drawn(
+            writer, header, self.library.geometry(line.geometry, assets)
+        )
         writer.string(self.library.material(line.material, assets, _LINE_USE))
 
     def points(
@@ -2000,14 +2051,15 @@ struct _Writer(Movable):
     ) raises:
         """Write points and their `PointsMaterial`."""
         ref points = scene.points[which]
-        header.type = "Points"
-        header.cast_shadow = points.cast_shadow
-        header.receive_shadow = points.receive_shadow
-        header.frustum_culled = points.frustum_culled
-        header.write(writer)
-        writer.key("geometry")
-        writer.string(self.library.geometry(points.geometry, assets))
-        writer.key("material")
+        header.set_draw(
+            "Points",
+            points.cast_shadow,
+            points.receive_shadow,
+            points.frustum_culled,
+        )
+        _begin_drawn(
+            writer, header, self.library.geometry(points.geometry, assets)
+        )
         writer.string(
             self.library.material(points.material, assets, "PointsMaterial")
         )
@@ -2034,7 +2086,7 @@ struct _Writer(Movable):
         var middle = center.x == 0.5 and center.y == 0.5
         if not middle:
             writer.key("center")
-            _numbers(writer, [center.x, center.y])
+            writer.numbers([center.x, center.y])
 
     def lod(
         mut self,
@@ -2097,10 +2149,7 @@ struct _Writer(Movable):
         if kind == LIGHT_PROBE:
             # three.js's `LightProbe.toJSON`: the 27 numbers, `sh.toArray`.
             writer.key("sh")
-            writer.begin_array()
-            for value in light.sh.to_array():  # pragma: no branch
-                writer.number(value)
-            writer.end_array()
+            writer.numbers(light.sh.to_array())
         if kind == RECT_AREA:
             writer.key("width")
             writer.number(light.width.to(METER))
@@ -2392,17 +2441,6 @@ def _track_name(
     return named[thing] + property_path(target)
 
 
-def _library(mut writer: JsonWriter, key: String, entries: List[String]) raises:
-    """Write a library under `key`, or nothing when it is empty."""
-    if len(entries) == 0:
-        return
-    writer.key(key)
-    writer.begin_array()
-    for entry in entries:  # pragma: no branch
-        writer.raw(entry)
-    writer.end_array()
-
-
 def object_to_json(
     scene: Scene,
     assets: Assets,
@@ -2457,7 +2495,7 @@ def object_to_json(
     tree.key("matrix")
     _matrix(tree, Matrix4())
     tree.key("up")
-    _numbers(tree, [0, 1, 0])
+    tree.numbers([0, 1, 0])
     if scene.background.kind == COLOR_BACKGROUND:
         tree.key("background")
         tree.integer(scene.background.color.hex())
@@ -2556,22 +2594,14 @@ def object_to_json(
     tree.end_object()
     var writer = JsonWriter()
     writer.begin_object()
-    writer.key("metadata")
-    writer.begin_object()
-    writer.key("version")
-    writer.number(FORMAT_VERSION)
-    writer.key("type")
-    writer.string("Object")
-    writer.key("generator")
-    writer.string("Object3D.toJSON")
-    writer.end_object()
-    _library(writer, "geometries", out.library.geometries)
-    _library(writer, "materials", out.library.materials)
-    _library(writer, "textures", out.library.textures)
-    _library(writer, "images", out.library.images)
-    _library(writer, "shapes", out.library.shapes)
-    _library(writer, "skeletons", out.library.skeletons)
-    _library(writer, "animations", clips)
+    writer.metadata(FORMAT_VERSION, "Object", "Object3D.toJSON")
+    writer.raw_array("geometries", out.library.geometries)
+    writer.raw_array("materials", out.library.materials)
+    writer.raw_array("textures", out.library.textures)
+    writer.raw_array("images", out.library.images)
+    writer.raw_array("shapes", out.library.shapes)
+    writer.raw_array("skeletons", out.library.skeletons)
+    writer.raw_array("animations", clips)
     writer.key("object")
     writer.raw(tree.finish())
     writer.end_object()
@@ -2612,23 +2642,15 @@ def _standalone(
     entry, then the textures and images it uses."""
     var writer = JsonWriter()
     writer.begin_object()
-    writer.key("metadata")
-    writer.begin_object()
-    writer.key("version")
-    writer.number(FORMAT_VERSION)
-    writer.key("type")
-    writer.string(kind)
-    writer.key("generator")
-    writer.string(kind + ".toJSON")
-    writer.end_object()
+    writer.metadata(FORMAT_VERSION, kind, kind + ".toJSON")
     var doc = parse_json(entry)
     var root = doc.root()
     for at in range(doc.length(root)):  # pragma: no branch
         var key = doc.key(root, at)
         writer.key(key)
         writer.raw(json_value_text(doc, doc.get(root, key)))
-    _library(writer, "textures", textures)
-    _library(writer, "images", images)
+    writer.raw_array("textures", textures)
+    writer.raw_array("images", images)
     writer.end_object()
     return writer.finish()
 

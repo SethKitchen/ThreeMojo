@@ -54,8 +54,12 @@ from extensions.humanoid.genome import (
     check_genome,
 )
 from extensions.humanoid.sex import MALE, Sex
+from math.norm import squared_length3
+from math.smoothstep import clamped_smoothstep
+from math.utils import mix_delta
 from math.vector3 import Vector3
-from std.math import cos, isfinite, max, min, sin
+from math.finite import require_finite
+from std.math import cos, max, min, sin
 
 # Where each feature sits on the template, in centimeters: x to the
 # right, y above the hip joint centers, z forward.
@@ -113,27 +117,6 @@ comptime _EYE_SHIFTS = SIMD[DType.float32, 32](
 )
 
 
-def _clamp01(value: Float32) -> Float32:
-    """Return `value` held to 0 through 1."""
-    return max(Float32(0), min(Float32(1), value))
-
-
-def smoothstep(edge0: Float32, edge1: Float32, x: Float32) -> Float32:
-    """Return the Hermite step from `edge0` to `edge1`.
-
-    Args:
-        edge0: Where the step starts, at zero.
-        edge1: Where it ends, at one.
-        x: The value to step.
-
-    Returns:
-        Zero below `edge0`, one above `edge1`, and a smooth curve
-        between.
-    """
-    var t = _clamp01((x - edge0) / (edge1 - edge0))
-    return t * t * (3 - 2 * t)
-
-
 def bump(point: Vector3, center: Vector3, radius: Float32) -> Float32:
     """Return a smooth weight that is one at `center` and zero at
     `radius` and beyond.
@@ -149,7 +132,7 @@ def bump(point: Vector3, center: Vector3, radius: Float32) -> Float32:
     var dx = point.x - center.x
     var dy = point.y - center.y
     var dz = point.z - center.z
-    var q = (dx * dx + dy * dy + dz * dz) / (radius * radius)
+    var q = squared_length3[DType.float32](dx, dy, dz) / (radius * radius)
     if q >= 1:
         return 0
     var w = 1 - q
@@ -226,11 +209,14 @@ struct HeadMorph(ImplicitlyCopyable):
             self.lip_fullness,
             self.neck_length,
         ]:  # pragma: no branch
-            if not isfinite(value):
-                raise Error("A head morph expression must be finite")
+            require_finite(
+                Float64(value), "A head morph expression must be finite"
+            )
         for index in range(FACE_SHAPES):  # pragma: no branch
-            if not isfinite(self.face_shapes[index]):
-                raise Error("A head face-shape expression must be finite")
+            require_finite(
+                Float64(self.face_shapes[index]),
+                "A head face-shape expression must be finite",
+            )
 
     def __init__(out self):
         """Make the identity morph of the template genome."""
@@ -506,13 +492,34 @@ struct HeadMorph(ImplicitlyCopyable):
         p = p + d
         # The whole head: breadth and length of the cranium, and the
         # height of the vault, fading out down the neck.
-        var head = smoothstep(59.0, 69.0, point.y)
+        var head = clamped_smoothstep(59.0, 69.0, point.y)
         if head > 0:
             var s = self.cranium_scale()
-            p.x = p.x * (1 + (s.x - 1) * head)
-            p.z = CRANIUM_Z + (p.z - CRANIUM_Z) * (1 + (s.z - 1) * head)
+            p.x = p.x * mix_delta(Float32(1), s.x, head)
+            p.z = mix_delta(CRANIUM_Z, p.z, mix_delta(Float32(1), s.z, head))
             if p.y > VAULT_Y:
-                p.y = VAULT_Y + (p.y - VAULT_Y) * s.y
+                p.y = mix_delta(VAULT_Y, p.y, s.y)
         # The neck stretches between its base and the skull.
-        p.y += NECK_STRETCH * self.neck_length * smoothstep(51.5, 64.0, point.y)
+        p.y += (
+            NECK_STRETCH
+            * self.neck_length
+            * clamped_smoothstep(51.5, 64.0, point.y)
+        )
         return p
+
+
+def smoothstep(edge0: Float32, edge1: Float32, x: Float32) -> Float32:
+    """Return the Hermite step from `edge0` to `edge1`.
+
+    Error: Never.
+
+    Args:
+        edge0: Where the step starts, at zero.
+        edge1: Where it ends, at one.
+        x: The value to step.
+
+    Returns:
+        The clamped cubic step, including the original reversed-edge behavior.
+
+    """
+    return clamped_smoothstep(edge0, edge1, x)

@@ -272,6 +272,72 @@ def add_sided(
         )
 
 
+def add_axial_bones(mut rig: Rig) raises:
+    """Add the pelvis, three spine bones, the chest, two neck bones and
+    the head.
+
+    Args:
+        rig: The rig, with its joints placed.
+
+    Raises:
+        Error: If a joint is missing.
+    """
+    _ = rig.add_bone("pelvis", "lumbosacral", "tailBase", "")
+    _ = rig.add_bone("spine1", "lumbosacral", "lumbarMid", "pelvis")
+    _ = rig.add_bone("spine2", "lumbarMid", "thoraxRear", "spine1")
+    _ = rig.add_bone("spine3", "thoraxRear", "chestMid", "spine2")
+    _ = rig.add_bone("chest", "chestMid", "neckBase", "spine3")
+    _ = rig.add_bone("neck1", "neckBase", "neckMid", "chest")
+    _ = rig.add_bone("neck2", "neckMid", "occiput", "neck1")
+    _ = rig.add_bone("head", "occiput", "nose", "neck2")
+
+
+def add_digitigrade_limbs(
+    mut rig: Rig, fore_tip: String, hind_tip: String
+) raises:
+    """Add both forelegs and both hind legs.
+
+    Args:
+        rig: The rig, with its joints placed and mirrored.
+        fore_tip: The joint pattern at the end of `fpaw`, such as
+            `ftoe{S}`.
+        hind_tip: The joint pattern at the end of `hpaw`, such as
+            `htoe{S}`.
+
+    Raises:
+        Error: If a joint is missing.
+    """
+    add_sided(rig, "scapula{S}", "scapTop{S}", "shoulder{S}", "chest")
+    add_sided(rig, "humerus{S}", "shoulder{S}", "elbow{S}", "scapula{S}")
+    add_sided(rig, "radius{S}", "elbow{S}", "wrist{S}", "humerus{S}")
+    add_sided(rig, "metacarpus{S}", "wrist{S}", "mcp{S}", "radius{S}")
+    add_sided(rig, "fpaw{S}", "mcp{S}", fore_tip, "metacarpus{S}")
+    add_sided(rig, "femur{S}", "hip{S}", "knee{S}", "pelvis")
+    add_sided(rig, "tibia{S}", "knee{S}", "hock{S}", "femur{S}")
+    add_sided(rig, "metatarsus{S}", "hock{S}", "mtp{S}", "tibia{S}")
+    add_sided(rig, "hpaw{S}", "mtp{S}", hind_tip, "metatarsus{S}")
+
+
+def add_tail_bones(mut rig: Rig, tail_segs: Int) raises:
+    """Add `tail0` onward. The first bone's parent is the pelvis.
+
+    Args:
+        rig: The rig, with its tail joints placed.
+        tail_segs: How many tail bones. Zero adds none.
+
+    Raises:
+        Error: If a joint is missing.
+    """
+    for i in range(tail_segs):
+        var parent = String("pelvis") if i == 0 else "tail" + String(i - 1)
+        _ = rig.add_bone(
+            "tail" + String(i),
+            "tail" + String(i),
+            "tail" + String(i + 1),
+            parent,
+        )
+
+
 def quadruped_bones(
     mut rig: Rig, tail_segs: Int, ears: Bool = True, jaw: Bool = True
 ) raises:
@@ -290,35 +356,13 @@ def quadruped_bones(
     Raises:
         Error: If a joint is missing.
     """
-    _ = rig.add_bone("pelvis", "lumbosacral", "tailBase", "")
-    _ = rig.add_bone("spine1", "lumbosacral", "lumbarMid", "pelvis")
-    _ = rig.add_bone("spine2", "lumbarMid", "thoraxRear", "spine1")
-    _ = rig.add_bone("spine3", "thoraxRear", "chestMid", "spine2")
-    _ = rig.add_bone("chest", "chestMid", "neckBase", "spine3")
-    _ = rig.add_bone("neck1", "neckBase", "neckMid", "chest")
-    _ = rig.add_bone("neck2", "neckMid", "occiput", "neck1")
-    _ = rig.add_bone("head", "occiput", "nose", "neck2")
+    add_axial_bones(rig)
     if jaw:
         _ = rig.add_bone("jaw", "jawHinge", "jawTip", "head")
     if ears:
         add_sided(rig, "ear{S}", "earBase{S}", "earTip{S}", "head")
-    add_sided(rig, "scapula{S}", "scapTop{S}", "shoulder{S}", "chest")
-    add_sided(rig, "humerus{S}", "shoulder{S}", "elbow{S}", "scapula{S}")
-    add_sided(rig, "radius{S}", "elbow{S}", "wrist{S}", "humerus{S}")
-    add_sided(rig, "metacarpus{S}", "wrist{S}", "mcp{S}", "radius{S}")
-    add_sided(rig, "fpaw{S}", "mcp{S}", "ftoe{S}", "metacarpus{S}")
-    add_sided(rig, "femur{S}", "hip{S}", "knee{S}", "pelvis")
-    add_sided(rig, "tibia{S}", "knee{S}", "hock{S}", "femur{S}")
-    add_sided(rig, "metatarsus{S}", "hock{S}", "mtp{S}", "tibia{S}")
-    add_sided(rig, "hpaw{S}", "mtp{S}", "htoe{S}", "metatarsus{S}")
-    for i in range(tail_segs):
-        var parent = String("pelvis") if i == 0 else "tail" + String(i - 1)
-        _ = rig.add_bone(
-            "tail" + String(i),
-            "tail" + String(i),
-            "tail" + String(i + 1),
-            parent,
-        )
+    add_digitigrade_limbs(rig, "ftoe{S}", "htoe{S}")
+    add_tail_bones(rig, tail_segs)
 
 
 struct Pose(Movable):
@@ -340,6 +384,20 @@ struct Pose(Movable):
         self.local = List[Rigid](length=bones, fill=identity())
         self.root = identity()
 
+    def _require_same_rig(self, rig: Rig) raises:
+        """Refuse a pose used on a rig with another bone count.
+
+        Nothing. The call returns when the pose matches the rig.
+
+        Args:
+            rig: The rig.
+
+        Raises:
+            Error: If the pose is for another rig.
+        """
+        if len(self.local) != len(rig.bones):
+            raise Error("The pose is for another rig")
+
     def turn(mut self, rig: Rig, bone: String, axis: V3, angle: Float64) raises:
         """Turn one bone about its head joint, after any earlier turn.
 
@@ -354,8 +412,7 @@ struct Pose(Movable):
                 with another bone count.
         """
         var id = rig.bone(bone)
-        if len(self.local) != len(rig.bones):
-            raise Error("The pose is for another rig")
+        self._require_same_rig(rig)
         var turn = rotation_about(rig.head_of(id), axis, angle)
         self.local[id.value] = self.local[id.value].then(turn)
 
@@ -372,8 +429,7 @@ struct Pose(Movable):
             Error: If the pose is for a rig with another bone count, or
                 a parent does not name an earlier bone.
         """
-        if len(self.local) != len(rig.bones):
-            raise Error("The pose is for another rig")
+        self._require_same_rig(rig)
         var out = List[Rigid](capacity=len(rig.bones))
         for i in range(len(rig.bones)):
             var parent = rig.bones[i].parent

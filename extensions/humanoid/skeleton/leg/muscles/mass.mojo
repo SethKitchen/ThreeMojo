@@ -20,6 +20,7 @@ from extensions.humanoid.skeleton.leg.muscles.dimensions import (
     MuscleField,
     MusclePart,
     is_tendon,
+    require_muscle_part,
     muscle_dimensions,
     muscle_distance,
     muscle_part_label,
@@ -109,8 +110,7 @@ def muscle_mass_from_dimensions(
             `validate`.
     """
     dimensions.validate()
-    if not part.is_valid():
-        raise Error("A muscle part must be a named muscle, tract or tendon")
+    require_muscle_part(part)
     var label = muscle_part_label(part)
     var field = MuscleField(dimensions, part)
     return sample_soft_mass(field, field.low, field.high, tissue, step, label)

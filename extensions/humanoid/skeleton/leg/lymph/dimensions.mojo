@@ -18,6 +18,7 @@ line. Plus y is proximal. Plus x is body-right. Plus z is anterior.
     var d = lymph_distance(dims, INGUINAL_NODES, Vector3(0, 0.3, 0.02))
 """
 
+from core.ordinal import ordinal_valid, require_valid
 from extensions.humanoid.side import LEFT
 from extensions.humanoid.skeleton.field import (
     Bounds,
@@ -49,9 +50,23 @@ struct LymphPart(Equatable, ImplicitlyCopyable, Writable):
 
     def is_valid(self) -> Bool:
         """Return True if this is a named lymph solid."""
-        if self.value < 0:
-            return False
-        return self.value <= DEEP_LYMPHATICS.value
+        return ordinal_valid(self.value, DEEP_LYMPHATICS.value)
+
+
+def require_lymph_part(part: LymphPart) raises:
+    """Refuse a lymph solid that is not named.
+
+    Nothing. The call returns when the solid is named.
+
+    Args:
+        part: The lymph solid.
+
+    Raises:
+        Error: If the solid is not a named node group or trunk.
+    """
+    require_valid(
+        part.is_valid(), "A lymph part must be a named node group or trunk"
+    )
 
 
 comptime INGUINAL_NODES = LymphPart(0)
@@ -99,8 +114,7 @@ struct LymphField(DistanceField, ImplicitlyCopyable):
                 is not named.
         """
         dimensions.validate()
-        if not part.is_valid():
-            raise Error("A lymph part must be a named node group or trunk")
+        require_lymph_part(part)
         var S = dimensions.stature.value
         var lat = Float32(1)
         if dimensions.side == LEFT:
@@ -421,8 +435,7 @@ def is_node_group(part: LymphPart) raises -> Bool:
     Raises:
         Error: If `part` is not named.
     """
-    if not part.is_valid():
-        raise Error("A lymph part must be a named node group or trunk")
+    require_lymph_part(part)
     if part == INGUINAL_NODES:
         return True
     return part == POPLITEAL_NODES

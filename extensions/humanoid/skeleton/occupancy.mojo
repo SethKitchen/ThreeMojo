@@ -16,6 +16,8 @@ is a grid-sampled estimate under the chosen tissues. It is not a proven
 upper bound.
 """
 
+from core.ordinal import ordinal_valid, require_valid
+
 from extensions.anatomy.tissue import BoneTissue
 from extensions.humanoid.skeleton.field import DistanceField
 from math.vector3 import Vector3
@@ -52,13 +54,7 @@ struct BoneOccupancy(Equatable, ImplicitlyCopyable, Writable):
 
     def is_valid(self) -> Bool:
         """Return True if this is one of the four named fills."""
-        if self == EMPTY:
-            return True
-        if self == CORTICAL_FILL:
-            return True
-        if self == TRABECULAR_FILL:
-            return True
-        return self == MARROW
+        return ordinal_valid(self.value, MARROW.value)
 
 
 # Outside the solid.
@@ -126,8 +122,10 @@ def apparent_density_of(
     Raises:
         Error: If `fill` is none of the named occupancies.
     """
-    if not fill.is_valid():
-        raise Error("A bone fill must be empty, cortical, trabecular or marrow")
+    require_valid(
+        fill.is_valid(),
+        "A bone fill must be empty, cortical, trabecular or marrow",
+    )
     if fill == CORTICAL_FILL:
         return cortical.apparent_density()
     if fill == TRABECULAR_FILL:
@@ -178,7 +176,7 @@ def check_mass_step(step: Length, bone: String) raises:
     Raises:
         Error: If `step` is not finite or is outside 2 mm through 20 mm.
     """
-    if not isfinite(step.value):
+    if not isfinite(Float64(step.value)):
         raise Error("A " + bone + " mass step must be finite")
     if step < MIN_STEP:
         raise Error("A " + bone + " mass step must be at least 2 millimeters")

@@ -31,6 +31,7 @@ The mapping follows the IFC4 schema of buildingSMART International,
 published as ISO 16739-1:2018.
 """
 
+from core.ordinal import require_non_negative
 from std.math import atan2, cos, isfinite, pi, sin, sqrt
 from extensions.building.construction import (
     Construction,
@@ -1750,11 +1751,9 @@ def _read_members(
         if kind != "IFCCOLUMN" and kind != "IFCBEAM":
             continue
         var s = storey_of.get(r.container.get(id, -1), -1)
-        if s < 0:
-            raise Error("A column or beam must be in a storey")
+        require_non_negative(s, "A column or beam must be in a storey")
         var material = material_index.get(r.material_of.get(id, -1), -1)
-        if material < 0:
-            raise Error("A column or beam needs a material")
+        require_non_negative(material, "A column or beam needs a material")
         var solid = r.solid(id)
         var at = r.solid_frame(id, solid)
         var section = _section(r, r.ref_arg(solid, 0))

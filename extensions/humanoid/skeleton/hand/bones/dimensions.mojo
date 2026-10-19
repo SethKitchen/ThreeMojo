@@ -22,7 +22,8 @@ not a cited osteometric table.
     var d = hand_bone_distance(dims, CAPITATE, RIGHT, dims.frame.wrist)
 """
 
-from extensions.humanoid.side import BodySide
+from core.ordinal import ordinal_valid, require_valid
+from extensions.humanoid.side import require_side, BodySide
 from extensions.humanoid.skeleton.arm.frame import ArmDimensions, ArmFrame
 from extensions.humanoid.skeleton.torso.sweep import (
     Dome,
@@ -30,7 +31,7 @@ from extensions.humanoid.skeleton.torso.sweep import (
     SweepField,
     floats,
 )
-from math.vector3 import Vector3
+from math.vector3 import Vector3, mix_delta3
 
 # Cortical shell, as a ratio of stature.
 comptime HAND_SHELL = Float32(0.0006)
@@ -54,9 +55,7 @@ struct HandBone(Equatable, ImplicitlyCopyable, Writable):
 
     def is_valid(self) -> Bool:
         """Return True if this is a named hand bone."""
-        if self.value < 0:
-            return False
-        return self.value <= DISTAL_PHALANX_5.value
+        return ordinal_valid(self.value, DISTAL_PHALANX_5.value)
 
 
 comptime SCAPHOID = HandBone(0)
@@ -102,9 +101,7 @@ struct Finger(Equatable, ImplicitlyCopyable, Writable):
 
     def is_valid(self) -> Bool:
         """Return True if this is one of the five digits."""
-        if self.value < 0:
-            return False
-        return self.value <= LITTLE.value
+        return ordinal_valid(self.value, LITTLE.value)
 
 
 comptime THUMB = Finger(0)
@@ -112,6 +109,22 @@ comptime INDEX = Finger(1)
 comptime MIDDLE = Finger(2)
 comptime RING = Finger(3)
 comptime LITTLE = Finger(4)
+
+
+def require_finger(finger: Finger) raises:
+    """Refuse a finger that is not the thumb or a named finger.
+
+    Nothing. The call returns when the digit is named.
+
+    Args:
+        finger: The digit.
+
+    Raises:
+        Error: If the digit is not named.
+    """
+    require_valid(
+        finger.is_valid(), "A finger must be the thumb or a named finger"
+    )
 
 
 def finger_label(finger: Finger) -> String:
@@ -210,8 +223,7 @@ def finger_bones(finger: Finger) raises -> List[HandBone]:
     Raises:
         Error: If `finger` is not named.
     """
-    if not finger.is_valid():
-        raise Error("A finger must be the thumb or a named finger")
+    require_finger(finger)
     var k = finger.value
     var out = List[HandBone]()
     out.append(HandBone(METACARPAL_1.value + k))
@@ -258,8 +270,7 @@ def finger_joints(
     Raises:
         Error: If `finger` is not named.
     """
-    if not finger.is_valid():
-        raise Error("A finger must be the thumb or a named finger")
+    require_finger(finger)
     var f = dimensions.frame
     var row = _digit_table(finger)
     var d = Vector3(row[3], row[4], row[5])
@@ -289,8 +300,7 @@ def finger_scale(finger: Finger) raises -> Float32:
     Raises:
         Error: If `finger` is not named.
     """
-    if not finger.is_valid():
-        raise Error("A finger must be the thumb or a named finger")
+    require_finger(finger)
     return _digit_table(finger)[10]
 
 
@@ -312,10 +322,11 @@ def hand_bone_field(
             not named, or if `side` is not valid.
     """
     dimensions.validate()
-    if not part.is_valid():
-        raise Error("A hand bone must be a named carpal, metacarpal or phalanx")
-    if not side.is_valid():
-        raise Error("A hand side must be RIGHT or LEFT")
+    require_valid(
+        part.is_valid(),
+        "A hand bone must be a named carpal, metacarpal or phalanx",
+    )
+    require_side(side, "A hand")
     var f = dimensions.frame
     var sweeps = List[Sweep]()
     if part.value < METACARPAL_1.value:
@@ -438,7 +449,7 @@ def _long_bone(
     var gap = f.cm(JOINT_GAP)
     var bone = Sweep(Vector3(1, 0, 0))
     bone.round(a + d * (base + gap), base)
-    bone.round(a + (b - a) * 0.5, shaft)
+    bone.round(mix_delta3(a, b, Float32(0.5)), shaft)
     var end = b - d * (head + gap)
     if part.value >= DISTAL_PHALANX_1.value:
         end = b - d * head

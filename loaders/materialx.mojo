@@ -30,6 +30,8 @@ node program's node that three.js's library maps it to.
 """
 
 from core.assets import Assets
+from core.ordinal import require_non_negative
+from loaders.file_path import path_directory
 from loaders.model_nodes import texture_from_file
 from loaders.xml import XmlDocument, parse_xml
 from materials.material import (
@@ -54,6 +56,7 @@ from render.srgb import LINEAR, SRGB, linear_to_srgb
 from render.texture import COVERAGE, IGNORED, REPEAT, Texture
 from render.texture_store import TextureId
 from std.collections import Dict
+from math.utils import clamp
 from std.math import max, min
 from std.pathlib import Path
 from units.si import Angle, DEGREE
@@ -70,7 +73,7 @@ struct MaterialXMaterials(Movable):
 
 def _byte(value: Float32) -> UInt8:
     """Return a linear channel as the sRGB byte a material keeps."""
-    var held = max(Float32(0), min(Float32(1), value))
+    var held = clamp(value, 0, 1)
     return UInt8(Int(linear_to_srgb(held) * 255 + 0.5))
 
 
@@ -391,8 +394,7 @@ struct _Reader(Movable):
     def image(mut self, element: Int, at: NodeRef) raises -> NodeRef:
         """Return an image read at a coordinate."""
         var file = self.child_named(element, "file")
-        if file < 0:
-            raise Error("MaterialX: an image needs its file")
+        require_non_negative(file, "MaterialX: an image needs its file")
         return self.graph.texture(self.texture(file), at)
 
     def library(
@@ -1077,8 +1079,4 @@ def load_materialx(
         Error: Everything `read_materialx` raises, and if the file cannot be
             read.
     """
-    var folder = String("")
-    var slash = path.rfind("/")
-    if slash >= 0:
-        folder = String(path[byte = 0 : slash + 1])
-    return read_materialx(Path(path).read_text(), assets, folder)
+    return read_materialx(Path(path).read_text(), assets, path_directory(path))

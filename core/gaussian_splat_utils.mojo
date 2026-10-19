@@ -42,7 +42,21 @@ See `docs/wiki/Norm-consumers.md` for the changed operations, retained
 limits, and explicit zero and nonfinite rules.
 """
 
-from math.norm import normalized4, _ordinary_squared
+from core.ordinal import index_in_count
+
+from core.binary import append_little_endian_u32, little_endian_u32
+from core.ordinal import (
+    require_non_negative,
+    require_positive,
+)
+from math.quaternion import quaternion_terms
+from math.norm import (
+    dot3,
+    dot4,
+    normalized4,
+    squared_length3,
+    _ordinary_squared,
+)
 from core.buffer_attribute import BufferAttribute
 from core.buffer_geometry import BufferGeometry, COLOR, POSITION
 from math.utils import FLOAT32_COMPONENT, UINT32_COMPONENT, UINT8_COMPONENT
@@ -202,12 +216,13 @@ def write_covariance(
         qz: The rotation's z.
         qw: The rotation's w.
     """
-    var length = sqrt(qx * qx + qy * qy + qz * qz + qw * qw)
+    var squared = dot4[DType.float64](qx, qy, qz, qw, qx, qy, qz, qw)
+    var length = sqrt(squared)
     var x = Float64(0)
     var y = Float64(0)
     var z = Float64(0)
     var w = Float64(1)
-    if _ordinary_squared(qx * qx + qy * qy + qz * qz + qw * qw):
+    if _ordinary_squared(squared):
         var inverse = 1 / length
         x = qx * inverse
         y = qy * inverse
@@ -219,18 +234,9 @@ def write_covariance(
         y = unit[1]
         z = unit[2]
         w = unit[3]
-    var x2 = x + x
-    var y2 = y + y
-    var z2 = z + z
-    var xx = x * x2
-    var xy = x * y2
-    var xz = x * z2
-    var yy = y * y2
-    var yz = y * z2
-    var zz = z * z2
-    var wx = w * x2
-    var wy = w * y2
-    var wz = w * z2
+    var xx, xy, xz, yy, yz, zz, wx, wy, wz = quaternion_terms[DType.float64](
+        x, y, z, w
+    )
     # The rows of M = R S: M[r][c] is Matrix4.compose's te[c * 4 + r].
     var m00 = (1 - (yy + zz)) * sx
     var m10 = (xy + wz) * sx
@@ -241,12 +247,18 @@ def write_covariance(
     var m02 = (xz + wy) * sz
     var m12 = (yz - wx) * sz
     var m22 = (1 - (xx + yy)) * sz
-    target[offset] = Float32(m00 * m00 + m01 * m01 + m02 * m02)
-    target[offset + 1] = Float32(m00 * m10 + m01 * m11 + m02 * m12)
-    target[offset + 2] = Float32(m00 * m20 + m01 * m21 + m02 * m22)
-    target[offset + 3] = Float32(m10 * m10 + m11 * m11 + m12 * m12)
-    target[offset + 4] = Float32(m10 * m20 + m11 * m21 + m12 * m22)
-    target[offset + 5] = Float32(m20 * m20 + m21 * m21 + m22 * m22)
+    target[offset] = Float32(squared_length3[DType.float64](m00, m01, m02))
+    target[offset + 1] = Float32(
+        dot3[DType.float64](m00, m01, m02, m10, m11, m12)
+    )
+    target[offset + 2] = Float32(
+        dot3[DType.float64](m00, m01, m02, m20, m21, m22)
+    )
+    target[offset + 3] = Float32(squared_length3[DType.float64](m10, m11, m12))
+    target[offset + 4] = Float32(
+        dot3[DType.float64](m10, m11, m12, m20, m21, m22)
+    )
+    target[offset + 5] = Float32(squared_length3[DType.float64](m20, m21, m22))
 
 
 def write_color_bytes(
@@ -316,10 +328,12 @@ def packed_band(count: Int, degree: Int) raises -> List[UInt8]:
     Raises:
         Error: If the degree is not 1 through 3, or the count is negative.
     """
-    if degree < 1:
-        raise Error("Gaussian splat: a packed band has a degree of 1 to 3")
-    if count < 0:
-        raise Error("Gaussian splat: a splat count cannot be negative")
+    require_positive(
+        degree, "Gaussian splat: a packed band has a degree of 1 to 3"
+    )
+    require_non_negative(
+        count, "Gaussian splat: a splat count cannot be negative"
+    )
     return List[UInt8](
         length=count * sh_band_words(degree) * 4, fill=SH_ZERO_BYTE
     )
@@ -342,12 +356,7 @@ def band_words(bytes: List[UInt8]) raises -> List[UInt32]:
         raise Error("Gaussian splat: a band is not a whole number of words")
     var words = List[UInt32](capacity=len(bytes) // 4)
     for at in range(0, len(bytes), 4):
-        words.append(
-            UInt32(bytes[at])
-            | (UInt32(bytes[at + 1]) << 8)
-            | (UInt32(bytes[at + 2]) << 16)
-            | (UInt32(bytes[at + 3]) << 24)
-        )
+        words.append(UInt32(little_endian_u32(bytes, at)))
     return words^
 
 
@@ -407,9 +416,9 @@ struct GaussianSplatGeometry(Copyable, Movable):
             raise Error(
                 "Gaussian splat: no spherical harmonics band " + String(degree)
             )
-        if splat < 0 or splat >= self.count():
+        if not index_in_count(splat, self.count()):
             raise Error("Gaussian splat: no splat " + String(splat))
-        if index < 0 or index >= sh_band_components(degree):
+        if not index_in_count(index, sh_band_components(degree)):
             raise Error("Gaussian splat: no band number " + String(index))
         var at = splat * sh_band_words(degree) * 4 + index
         if degree == 1:
@@ -469,6 +478,27 @@ struct GaussianSplatGeometry(Copyable, Movable):
         return self.sh3.copy()
 
 
+def require_contiguous_harmonics(
+    higher_present: Bool, lower_missing: Bool
+) raises:
+    """Refuse a spherical-harmonics band that skips a lower band.
+
+    Nothing. The call returns when the higher band is absent, or every
+    lower band is present.
+
+    Args:
+        higher_present: Whether a higher band is present.
+        lower_missing: Whether a lower band is absent.
+
+    Raises:
+        Error: If a higher band is present and a lower band is absent.
+    """
+    if higher_present and lower_missing:
+        raise Error(
+            "Gaussian splat: spherical harmonics bands must be contiguous"
+        )
+
+
 def create_gaussian_splat_geometry(
     var centers: List[Float32],
     var covariances: List[Float32],
@@ -509,15 +539,9 @@ def create_gaussian_splat_geometry(
     _check_band(sh3, count, 3)
     # three.js: `Spherical harmonics attributes must be contiguous.`
     var missing = len(sh1) == 0
-    if len(sh2) > 0 and missing:
-        raise Error(
-            "Gaussian splat: spherical harmonics bands must be contiguous"
-        )
+    require_contiguous_harmonics(len(sh2) > 0, missing)
     missing = missing or len(sh2) == 0
-    if len(sh3) > 0 and missing:
-        raise Error(
-            "Gaussian splat: spherical harmonics bands must be contiguous"
-        )
+    require_contiguous_harmonics(len(sh3) > 0, missing)
     var geometry = GaussianSplatGeometry()
     geometry.centers = centers^
     geometry.covariances = covariances^
@@ -584,10 +608,9 @@ def spherical_harmonics_degree(geometry: BufferGeometry) raises -> Int:
             )
         degree = band
     for band in range(degree + 1, MAX_SH_DEGREE + 1):
-        if geometry.has_attribute("sphericalHarmonics" + String(band)):
-            raise Error(
-                "Gaussian splat: spherical harmonics bands must be contiguous"
-            )
+        require_contiguous_harmonics(
+            geometry.has_attribute("sphericalHarmonics" + String(band)), True
+        )
     if not geometry.has_attribute(String(POSITION)):
         return degree
     var count = geometry.attribute_view(String(POSITION)).count()
@@ -640,8 +663,7 @@ def gaussian_splat_geometry_of(
         if band <= degree:
             var name = "sphericalHarmonics" + String(band)
             for word in geometry.attribute_view(name).stored_values():
-                for shift in range(4):  # pragma: no branch
-                    bytes.append(UInt8((word >> (shift * 8)) & 255))
+                append_little_endian_u32(bytes, word)
         bands.append(bytes^)
     return create_gaussian_splat_geometry(
         position.packed(),

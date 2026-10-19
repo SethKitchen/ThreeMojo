@@ -41,6 +41,7 @@ from core.buffer_geometry import BufferGeometry
 from core.object3d import NO_PARENT, facing
 from core.scene import Scene
 from helpers.segments import Segments
+from lights.aim import light_target_position
 from lights.light import (
     DIRECTIONAL,
     HEMISPHERE,
@@ -51,6 +52,7 @@ from lights.light import (
     SPOT,
 )
 from math.matrix4 import Matrix4, scaling, translation
+from math.utils import max3
 from math.vector3 import Vector3
 from render.framebuffer import Color, FloatColor
 from std.math import cos, pi, sin, tan
@@ -85,14 +87,6 @@ def _positive(size: Length, name: String) raises -> Float32:
     if meters <= 0:
         raise Error("A " + name + " helper needs a positive size")
     return meters
-
-
-def _target(light: Light, scene: Scene) raises -> Vector3:
-    """Return where a light's target is in world space: its node's world
-    position, or the origin for `NO_PARENT`."""
-    if light.target == NO_PARENT:
-        return Vector3(0, 0, 0)
-    return scene.world_position(light.target)
 
 
 def _aimed(position: Vector3, target: Vector3) raises -> Matrix4:
@@ -136,7 +130,7 @@ def directional_light_helper(
     var half = _positive(size, "directional light")
     var paint = _paint(light, color)
     var start = scene.world_position(light.node)
-    var end = _target(light, scene)
+    var end = light_target_position(scene, light)
     var place = _aimed(start, end)
     var square: List[Vector3] = [
         Vector3(-half, half, 0),
@@ -336,7 +330,7 @@ def spot_light_helper(
         reach = light.distance
     var width = reach * tan(light.angle.to(RADIAN))
     var start = scene.world_position(light.node)
-    var place = _aimed(start, _target(light, scene))
+    var place = _aimed(start, light_target_position(scene, light))
     place.multiply(scaling(width, width, reach))
     var apex = place.transform_point(Vector3(0, 0, 0))
     var spokes: List[Vector3] = [
@@ -388,7 +382,7 @@ def rect_area_light_helper(
     """
     _check(light, RECT_AREA, "rect area light")
     var paint = light.radiance()
-    var brightest = max(paint.r, max(paint.g, paint.b))
+    var brightest = max3(paint.r, paint.g, paint.b)
     if brightest > 1:
         paint = FloatColor(
             paint.r / brightest, paint.g / brightest, paint.b / brightest

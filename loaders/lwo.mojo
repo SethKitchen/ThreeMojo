@@ -56,11 +56,14 @@ See `docs/wiki/Norm-consumers.md` for the changed operations, retained
 limits, and explicit zero and nonfinite rules.
 """
 
+from core.ordinal import require_non_negative
 from math.triangle_normal import _difference_product_wide
 
-from math.norm import normalized3, _ordinary_squared
+from math.norm import normalized3, _ordinary_squared, squared_length3
+from math.utils import clamp
 
 from core.assets import Assets
+from core.search import first_match
 from core.buffer_attribute import BufferAttribute
 from core.buffer_geometry import (
     NORMAL,
@@ -90,12 +93,13 @@ from materials.material import (
     Side,
     points_material,
 )
-from math.vector2 import Vector2
+from math.vector2 import Vector2, vector2_from_float64
+from math.vector3 import vector3_from_float64
 from objects.line import Line, SEGMENTS
 from objects.mesh import Mesh
 from objects.points import Points
-from render.framebuffer import Color, FloatColor
-from render.srgb import LINEAR, SRGB, linear_to_srgb
+from render.framebuffer import Color, opaque_from_linear
+from render.srgb import LINEAR, SRGB
 from render.texture import CLAMP, MIRROR, REPEAT, Wrap, texture_from
 from render.texture_store import NO_TEXTURE, TextureId
 from std.math import sqrt
@@ -233,7 +237,7 @@ def _physical_reflectivity(value: Float64) -> Float64:
     """Return a physical material's reflectivity after three.js's setter
     and getter: through the index of refraction and back."""
     var ior = (1 + 0.4 * value) / (1 - 0.4 * value)
-    return max(0.0, min(1.0, 2.5 * (ior - 1) / (ior + 1)))
+    return clamp(2.5 * (ior - 1) / (ior + 1), 0.0, 1.0)
 
 
 struct LwoGroup(Copyable, Movable):
@@ -335,11 +339,26 @@ def _truthy(tree: LwoTree, object: Int, key: String) -> Bool:
     return tree.get(object, key).truthy()
 
 
+def _require_lwo_value(value: LwoValue, name: String) raises:
+    """Refuse an LWO attribute that has no value.
+
+    Nothing. The call returns when the value is present.
+
+    Args:
+        value: The attribute's value.
+        name: The attribute's name in the error.
+
+    Raises:
+        Error: If the value is missing.
+    """
+    if value.is_undefined():
+        raise Error("LWO: the attribute " + name + " has no value")
+
+
 def _scalar(tree: LwoTree, attribute: Int, name: String) raises -> Float64:
     """Return an attribute's value, a number."""
     var value = tree.get(attribute, "value")
-    if value.is_undefined():
-        raise Error("LWO: the attribute " + name + " has no value")
+    _require_lwo_value(value, name)
     if not value.is_number():
         raise Error("LWO: the attribute " + name + " is not a number")
     return value.number
@@ -349,8 +368,7 @@ def _triple(tree: LwoTree, attribute: Int, name: String) raises -> Rgb:
     """Return an attribute's value, three numbers: three.js's
     `fromArray`."""
     var value = tree.get(attribute, "value")
-    if value.is_undefined():
-        raise Error("LWO: the attribute " + name + " has no value")
+    _require_lwo_value(value, name)
     # A `vparam3` is always three numbers.
     if not value.is_numbers():
         raise Error("LWO: the attribute " + name + " is not three numbers")
@@ -368,13 +386,6 @@ def _wrap(value: LwoValue, what: String) raises -> Wrap:
     if mode == 2:
         return MIRROR
     return CLAMP
-
-
-def _in(names: List[String], key: String) -> Bool:
-    for name in names:
-        if name == key:
-            return True
-    return False
 
 
 def _without(names: List[String], key: String) -> List[String]:
@@ -401,21 +412,24 @@ struct _Params(Copyable, Movable):
 
     def has(self, key: String) -> Bool:
         """Whether either set it: what the material is built from."""
-        return _in(self.maps, key) or _in(self.attributes, key)
+        return (
+            first_match(self.maps, key) >= 0
+            or first_match(self.attributes, key) >= 0
+        )
 
     def has_map(self, key: String) -> Bool:
-        return _in(self.maps, key)
+        return first_match(self.maps, key) >= 0
 
     def has_attribute(self, key: String) -> Bool:
-        return _in(self.attributes, key)
+        return first_match(self.attributes, key) >= 0
 
     def mark(mut self, key: String):
         """Set by a map."""
-        if not _in(self.maps, key):
+        if first_match(self.maps, key) < 0:
             self.maps.append(key)
 
     def mark_attribute(mut self, key: String):
-        if not _in(self.attributes, key):
+        if first_match(self.attributes, key) < 0:
             self.attributes.append(key)
 
     def drop(mut self, key: String):
@@ -424,6 +438,67 @@ struct _Params(Copyable, Movable):
 
     def drop_attribute(mut self, key: String):
         self.attributes = _without(self.attributes, key)
+
+
+def _place_image(name: String, var map: LwoMap, mut params: _Params) -> Bool:
+    """Store `map` on the material channel `name` selects.
+
+    Args:
+        name: The LWO channel name.
+        map: The image. Consumed.
+        params: The material being built.
+
+    Returns:
+        True when `name` is a channel this stores.
+    """
+    ref m = params.material
+    if name == "Color":
+        map.srgb = True
+        m.map = map^
+        params.mark("map")
+        return True
+    if name == "Roughness":
+        m.roughness_map = map^
+        m.roughness = 1
+        params.mark("roughnessMap")
+        params.mark("roughness")
+        return True
+    if name == "Specular":
+        map.srgb = True
+        m.specular_map = map^
+        m.specular = _hex(0xFFFFFF)
+        params.mark("specularMap")
+        params.mark("specular")
+        return True
+    if name == "Luminous" or name == "Luminosity":
+        map.srgb = True
+        m.emissive_map = map^
+        m.emissive = _hex(0x808080)
+        params.mark("emissiveMap")
+        params.mark("emissive")
+        return True
+    if name == "Metallic":
+        m.metalness_map = map^
+        m.metalness = 1
+        params.mark("metalnessMap")
+        params.mark("metalness")
+        return True
+    if name == "Transparency" or name == "Alpha":
+        m.alpha_map = map^
+        m.transparent = True
+        params.mark("alphaMap")
+        params.mark("transparent")
+        return True
+    if name == "Normal":
+        m.normal_map = map^
+        params.mark("normalMap")
+        return True
+    if name == "Bump":
+        m.bump_map = map^
+        params.mark("bumpMap")
+        return True
+    _ = map^
+    return False
 
 
 struct _MaterialParser:
@@ -589,52 +664,16 @@ struct _MaterialParser:
             var height = tree.get(node, "heightWrappingMode")
             if not height.is_undefined():
                 map.wrap_t = _wrap(height, "height")
-            ref m = params.material
-            if name == "Color":
-                map.srgb = True
-                m.map = map^
-                params.mark("map")
-            elif name == "Roughness":
-                m.roughness_map = map^
-                m.roughness = 1
-                params.mark("roughnessMap")
-                params.mark("roughness")
-            elif name == "Specular":
-                map.srgb = True
-                m.specular_map = map^
-                m.specular = _hex(0xFFFFFF)
-                params.mark("specularMap")
-                params.mark("specular")
-            elif name == "Luminous":
-                map.srgb = True
-                m.emissive_map = map^
-                m.emissive = _hex(0x808080)
-                params.mark("emissiveMap")
+            if name == "Luminous Color":
+                _ = map^
+                params.material.emissive = _hex(0x808080)
                 params.mark("emissive")
-            elif name == "Luminous Color":
-                m.emissive = _hex(0x808080)
-                params.mark("emissive")
-            elif name == "Metallic":
-                m.metalness_map = map^
-                m.metalness = 1
-                params.mark("metalnessMap")
-                params.mark("metalness")
-            elif name == "Transparency" or name == "Alpha":
-                m.alpha_map = map^
-                m.transparent = True
-                params.mark("alphaMap")
-                params.mark("transparent")
-            elif name == "Normal":
-                m.normal_map = map^
-                params.mark("normalMap")
+            elif _place_image(name, map^, params) and name == "Normal":
                 var amplitude = tree.get(node, "amplitude")
                 if amplitude.is_number():
-                    m.normal_scale = Vector2(
-                        Float32(amplitude.number), Float32(amplitude.number)
+                    params.material.normal_scale = vector2_from_float64(
+                        amplitude.number, amplitude.number
                     )
-            elif name == "Bump":
-                m.bump_map = map^
-                params.mark("bumpMap")
         if params.has("roughnessMap") and params.has("specularMap"):
             params.material.specular_map = None
             params.drop("specularMap")
@@ -665,47 +704,11 @@ struct _MaterialParser:
             if wrap >= 0:
                 map.wrap_s = _wrap(tree.get(wrap, "w"), "width")
                 map.wrap_t = _wrap(tree.get(wrap, "h"), "height")
-            ref m = params.material
-            if name == "Color":
-                map.srgb = True
-                m.map = map^
-                params.mark("map")
-            elif name == "Diffuse":
-                m.ao_map = map^
+            if name == "Diffuse":
+                params.material.ao_map = map^
                 params.mark("aoMap")
-            elif name == "Roughness":
-                m.roughness_map = map^
-                m.roughness = 1
-                params.mark("roughnessMap")
-                params.mark("roughness")
-            elif name == "Specular":
-                map.srgb = True
-                m.specular_map = map^
-                m.specular = _hex(0xFFFFFF)
-                params.mark("specularMap")
-                params.mark("specular")
-            elif name == "Luminosity":
-                map.srgb = True
-                m.emissive_map = map^
-                m.emissive = _hex(0x808080)
-                params.mark("emissiveMap")
-                params.mark("emissive")
-            elif name == "Metallic":
-                m.metalness_map = map^
-                m.metalness = 1
-                params.mark("metalnessMap")
-                params.mark("metalness")
-            elif name == "Transparency" or name == "Alpha":
-                m.alpha_map = map^
-                m.transparent = True
-                params.mark("alphaMap")
-                params.mark("transparent")
-            elif name == "Normal":
-                m.normal_map = map^
-                params.mark("normalMap")
-            elif name == "Bump":
-                m.bump_map = map^
-                params.mark("bumpMap")
+            else:
+                _ = _place_image(name, map^, params)
 
     def attributes(
         self, tree: LwoTree, attributes: Int, mut params: _Params
@@ -1050,17 +1053,17 @@ def _set_name(
 def _lookup(names: List[String], values: List[Int], key: String) -> Int:
     """Return a key's value, or 0 when it is not there: three.js tests the
     value for truth, so 0 and absent are one."""
-    for k in range(len(names)):
-        if names[k] == key:
-            return values[k]
-    return 0
+    var at = first_match(names, key)
+    if at < 0:
+        return 0
+    return values[at]
 
 
 def _store(mut names: List[String], mut values: List[Int], key: String, v: Int):
-    for k in range(len(names)):
-        if names[k] == key:
-            values[k] = v
-            return
+    var at = first_match(names, key)
+    if at >= 0:
+        values[at] = v
+        return
     names.append(key)
     values.append(v)
 
@@ -1115,7 +1118,7 @@ def _vertex_normals(
         var x = normals[v * 3]
         var y = normals[v * 3 + 1]
         var z = normals[v * 3 + 2]
-        if not _ordinary_squared(x * x + y * y + z * z):
+        if not _ordinary_squared(squared_length3[DType.float32](x, y, z)):
             var unit = normalized3(
                 wide_normals[v * 3],
                 wide_normals[v * 3 + 1],
@@ -1134,7 +1137,7 @@ def _normalize(mut normals: List[Float32]):
         var x = Float64(normals[v * 3])
         var y = Float64(normals[v * 3 + 1])
         var z = Float64(normals[v * 3 + 2])
-        var length = sqrt(x * x + y * y + z * z)
+        var length = sqrt(squared_length3[DType.float64](x, y, z))
         var scale = 1 / (length if length != 0 and length == length else 1)
         normals[v * 3] = Float32(x * scale)
         normals[v * 3 + 1] = Float32(y * scale)
@@ -1144,8 +1147,7 @@ def _normalize(mut normals: List[Float32]):
 def _geometry(tree: LwoTree, layer: Int, mut mesh: LwoMesh) raises:
     """three.js's `GeometryParser.parse`."""
     var geometry = tree.child(layer, "geometry")
-    if geometry < 0:
-        raise Error("LWO: a layer has no polygons")
+    require_non_negative(geometry, "LWO: a layer has no polygons")
     var points = _numbers(tree, geometry, "points")
     for p in points:  # pragma: no branch
         mesh.positions.append(Float32(p))
@@ -1360,16 +1362,6 @@ def lwo_resource_path(url: String) -> String:
 # --- into a scene ------------------------------------------------------------
 
 
-def _authored(color: Rgb) -> Color:
-    """Return linear light as the sRGB bytes a material holds."""
-    return FloatColor(
-        linear_to_srgb(Float32(color[0])),
-        linear_to_srgb(Float32(color[1])),
-        linear_to_srgb(Float32(color[2])),
-        1,
-    ).quantize()
-
-
 def _load(mut map: Optional[LwoMap], mut assets: Assets) raises -> TextureId:
     """Decode a map's file if it is there."""
     if not Bool(map):
@@ -1389,7 +1381,7 @@ def _load(mut map: Optional[LwoMap], mut assets: Assets) raises -> TextureId:
 
 def _material(mut made: LwoMaterial, mut assets: Assets) raises -> Material:
     """Return the `Material` of an LWO material."""
-    var color = _authored(made.color)
+    var color = opaque_from_linear(made.color[0], made.color[1], made.color[2])
     if made.type == "PointsMaterial":
         var out = points_material(color, PointSize(Float32(made.size)))
         out.map = _load(made.map, assets)
@@ -1407,11 +1399,15 @@ def _material(mut made: LwoMaterial, mut assets: Assets) raises -> Material:
         side=made.side,
         opacity=Float32(made.opacity),
         transparent=made.transparent,
-        emissive=_authored(made.emissive),
+        emissive=opaque_from_linear(
+            made.emissive[0], made.emissive[1], made.emissive[2]
+        ),
         emissive_intensity=Float32(made.emissive_intensity),
         flat_shading=made.flat_shading,
     )
-    out.specular = _authored(made.specular)
+    out.specular = opaque_from_linear(
+        made.specular[0], made.specular[1], made.specular[2]
+    )
     out.shininess = Float32(made.shininess)
     out.reflectivity = Float32(made.reflectivity)
     out.combine = made.combine
@@ -1523,11 +1519,10 @@ def load_lwo(
         ref mesh = model.meshes[k]
         var node = Object3D()
         node.name = mesh.name
-        node.set_position(
-            Float32(mesh.position[0]),
-            Float32(mesh.position[1]),
-            Float32(mesh.position[2]),
+        var place = vector3_from_float64(
+            mesh.position[0], mesh.position[1], mesh.position[2]
         )
+        node.set_position(place.x, place.y, place.z)
         var above = parent if mesh.parent < 0 else model.nodes[mesh.parent]
         var id: NodeId
         if above == NO_PARENT:

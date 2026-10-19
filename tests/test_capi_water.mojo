@@ -11,6 +11,7 @@ swallow is forced here, so that each is seen to leave the app as it was.
 """
 
 from extensions.water.upload import FRAME_FLOATS
+from extensions.water.resolution import SpectrumResolution
 from extensions.water.view import FRAME
 from std.math import inf
 from std.memory import Layout
@@ -602,6 +603,50 @@ def test_a_frame_that_cannot_be_prepared_leaves_the_last_arrays() raises:
     assert_equal(
         Int(tm_gpu_part(app, Int32(GPU_SURFACE.value)).value()), address
     )
+    tm_destroy(app)
+
+
+def test_refused_glare_kernels_publish_nothing_on_the_first_prepare() raises:
+    var app = _plain()
+    _state(app)[].water.glare_resolution = SpectrumResolution(0)
+    assert_equal(tm_gpu_prepare(app), Int32(-1))
+    for which in range(GPU_GRID.value + 1):
+        assert_false(Bool(tm_gpu_part(app, Int32(which))))
+        assert_equal(_words(app, which), 0)
+    for which in range(GPU_INFO_GRID_HEIGHT.value + 1):
+        assert_equal(tm_gpu_info(app, Int32(which)), Int32(0))
+    assert_equal(_state(app)[].bed_generation, 0)
+    assert_false(_state(app)[].bed_packed)
+    _state(app)[].water.glare_resolution = SpectrumResolution(64)
+    assert_equal(tm_gpu_prepare(app), Int32(1))
+    tm_destroy(app)
+
+
+def test_refused_glare_kernels_keep_the_previous_frame_and_photograph() raises:
+    var app = _plain()
+    assert_equal(tm_gpu_prepare(app), Int32(1))
+    var surface = Int(tm_gpu_part(app, Int32(GPU_SURFACE.value)).value())
+    var pebble = Int(tm_gpu_part(app, Int32(GPU_PEBBLE.value)).value())
+    var values = _state(app)[].upload.value().values.copy()
+    var file = Path(BED).read_bytes()
+    var room = _room(file)
+    assert_equal(tm_asset(app, room, Int32(len(file))), Int32(0))
+    tm_free(room)
+    _step(app, 2)
+    _state(app)[].water._glare = None
+    _state(app)[].water.glare_resolution = SpectrumResolution(0)
+    assert_equal(tm_gpu_prepare(app), Int32(-1))
+    assert_equal(
+        Int(tm_gpu_part(app, Int32(GPU_SURFACE.value)).value()), surface
+    )
+    assert_equal(Int(tm_gpu_part(app, Int32(GPU_PEBBLE.value)).value()), pebble)
+    assert_equal(_state(app)[].upload.value().values, values)
+    assert_equal(_words(app, GPU_PEBBLE.value), 3)
+    assert_equal(_state(app)[].bed_generation, 1)
+    assert_false(_state(app)[].bed_packed)
+    _state(app)[].water.glare_resolution = SpectrumResolution(64)
+    assert_equal(tm_gpu_prepare(app), Int32(2))
+    assert_true(_words(app, GPU_PEBBLE.value) > 3)
     tm_destroy(app)
 
 

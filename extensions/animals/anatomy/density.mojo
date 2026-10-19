@@ -71,6 +71,7 @@ from extensions.animals.anatomy.tissue import (
 from extensions.animals.build import Animal
 from extensions.animals.registry import CHICKEN, SpeciesId
 from units.si import KILOGRAM_PER_CUBIC_METER, Density
+from core.ordinal import require_valid
 
 
 def _density(kg_m3: Float64) -> Density:
@@ -153,8 +154,7 @@ def tissue_density(tissue: BodyTissue) raises -> Density:
     Raises:
         Error: If the tissue is soft body or is not named.
     """
-    if not tissue.is_valid():
-        raise Error("A tissue must be named")
+    require_valid(tissue.is_valid(), "A tissue must be named")
     if tissue == COAT or tissue == FOREIGN:
         return _density(0)
     if tissue == KERATIN:

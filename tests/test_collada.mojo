@@ -386,7 +386,7 @@ def test_scene() raises:
     var linear: List[Float32] = [0.21404, 0.05088, 1, 0.5]
     var colors = List[Float32]()
     for _ in range(3):
-        colors.extend(linear.copy())
+        colors.extend(Span(linear))
     assert_list(values(assets, tri, COLOR), colors)
     assert_equal(scene.meshes[1].node, model.nodes[2])
     assert_equal(scene.meshes[1].material, model.materials[1])

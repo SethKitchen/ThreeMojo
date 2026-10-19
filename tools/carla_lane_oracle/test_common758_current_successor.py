@@ -11,6 +11,7 @@ import unittest
 from unittest.mock import patch
 
 import full_audit_cleanup_contracts as audit
+import _full_audit_test_fixtures as fixtures
 import typed_boundary_contracts as typed
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -81,6 +82,12 @@ def _previous_typed_text(path, historical_predecessor):
 
 
 class Common758CurrentSuccessor(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        baseline = fixtures.common758_leaf_texts(ROOT)
+        cls.current = {name: baseline[name] for name in typed.SOURCE_PATHS}
+        typed.verify_sources(dict(cls.current))
+
     def test_all_213_historical_edges_and_authority_remain_exact(self):
         payload = _historical_payload()
         self.assertEqual(_sha(json.dumps(payload, sort_keys=True, separators=(',', ':')).encode()),
@@ -101,9 +108,9 @@ class Common758CurrentSuccessor(unittest.TestCase):
                 self.assertEqual(set(current), set(old))
                 self.assertEqual({p for p in old if old[p] != current[p]}, paths)
         self.assertIn(SELF, typed.BINDING_INPUTS)
-        self.assertEqual(typed.BINDING_INPUTS[SELF], _sha((ROOT/SELF).read_bytes()))
+        self.assertEqual(typed.BINDING_INPUTS[SELF], _sha(audit.qualification_predecessor_bytes(SELF, (ROOT/SELF).read_bytes())))
         conditioned = 'tools/test_conditioned_coverage_loops.py'
-        self.assertEqual(typed.BINDING_INPUTS[conditioned], _sha((ROOT/conditioned).read_bytes()))
+        self.assertEqual(typed.BINDING_INPUTS[conditioned], _sha(audit.qualification_predecessor_bytes(conditioned, (ROOT/conditioned).read_bytes())))
         self.assertEqual(typed.HISTORICAL_BINDING_INPUTS['tools/compile_fail_expectations.json'],
                          EXPECTATIONS)
         # Merged admission checks the exact697 endpoint and eight additions.
@@ -112,7 +119,8 @@ class Common758CurrentSuccessor(unittest.TestCase):
         typed.verify_authority()
 
     def test_current_endpoints_join_the_exact_original_predecessors(self):
-        current = {p: (ROOT/p).read_text() for p in typed.SOURCE_PATHS}
+        current = dict(self.current)
+        typed.verify_sources(current)
         joined = typed.verify_sources(current)
         for path in sorted(REPAIRED):
             with self.subTest(path=path):
@@ -125,7 +133,8 @@ class Common758CurrentSuccessor(unittest.TestCase):
                 self.assertEqual(_sha(joined[path].encode()), typed.edge(path)['before_sha256'])
 
     def test_old_mixed_and_modified_current_endpoints_are_refused(self):
-        current = {p: (ROOT/p).read_text() for p in typed.SOURCE_PATHS}
+        current = dict(self.current)
+        typed.verify_sources(current)
         for path in sorted(REPAIRED):
             predecessor = typed.predecessor_source(path, current[path])
             old = _previous_typed_text(path, predecessor)
@@ -173,13 +182,36 @@ class Common758CurrentOwnedInputs(unittest.TestCase):
         target = ROOT/'extensions/carla/map.mojo'
         original = Path.read_bytes
         raw = target.read_bytes()
-        # Map is observed during source admission, exact dependency binding,
-        # and the final image reread. Exercise the first and final observations.
-        for at_read in (1, 3):
+        # PR760's exact candidate has one first and one terminal map read.
+        # Authenticate the actual nested observer and establish a passing image
+        # with exactly those two reads before injecting either returned value.
+        candidate = audit._pr760_candidate_bindings
+        observers = [code for code in candidate.__code__.co_consts
+                     if isinstance(code, type(candidate.__code__)) and code.co_name == 'observe']
+        self.assertEqual(len(observers), 1)
+        observed_code = observers[0]
+        baseline_reads = []
+        def observe(path, *args, **kwargs):
+            frame = sys._getframe(1)
+            if path == target and frame.f_code is observed_code:
+                self.assertIs(frame.f_globals, vars(audit))
+                self.assertIs(frame.f_back.f_code, candidate.__code__)
+                self.assertEqual(frame.f_back.f_locals['root'], ROOT)
+                self.assertEqual(frame.f_locals['path'], 'extensions/carla/map.mojo')
+                baseline_reads.append(path)
+            return original(path, *args, **kwargs)
+        with patch.object(Path, 'read_bytes', observe):
+            audit._typed_boundary_bindings(ROOT)
+        self.assertEqual(len(baseline_reads), 2)
+        for at_read in (1, 2):
             reads = []
             def changed(path, *args, **kwargs):
                 if (path == target and sys._getframe(1).f_code is
-                        audit._typed_boundary_bindings.__code__):
+                        observed_code):
+                    frame = sys._getframe(1)
+                    self.assertIs(frame.f_globals, vars(audit))
+                    self.assertIs(frame.f_back.f_code, candidate.__code__)
+                    self.assertEqual(frame.f_back.f_locals['root'], ROOT)
                     reads.append(path)
                     return raw+b'\n' if len(reads) == at_read else raw
                 return original(path, *args, **kwargs)

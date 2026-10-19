@@ -10,6 +10,7 @@ Bone pores are included in the apparent-density regions. Their fluid and
 marrow mass is not added separately. Unresolved soft tissue uses fat as
 an explicit density proxy.
 """
+from core.ordinal import ordinal_valid, require_valid
 
 
 @fieldwise_init
@@ -25,7 +26,7 @@ struct LimbRegion(Equatable, ImplicitlyCopyable, Writable):
         Returns:
             True for one of the seven named assignments.
         """
-        return self.value >= 0 and self.value < 7
+        return ordinal_valid(self.value, 7 - 1)
 
 
 comptime DERMIS_REGION = LimbRegion(0)
@@ -44,6 +45,20 @@ comptime FAT_PROXY_REGION = LimbRegion(6)
 """Unresolved interior assigned the named fat density proxy."""
 
 
+def require_limb_region(region: LimbRegion) raises:
+    """Refuse a limb region that is not named.
+
+    Nothing. The call returns when the region is named.
+
+    Args:
+        region: The density assignment.
+
+    Raises:
+        Error: If the region is not named.
+    """
+    require_valid(region.is_valid(), "A limb region must be named")
+
+
 def region_label(region: LimbRegion) raises -> String:
     """Return a stable machine-readable name for a density assignment.
 
@@ -56,8 +71,10 @@ def region_label(region: LimbRegion) raises -> String:
     Raises:
         Error: If `region` is not named.
     """
-    if not region.is_valid():
-        raise Error("A limb region must name an exclusive density assignment")
+    require_valid(
+        region.is_valid(),
+        "A limb region must name an exclusive density assignment",
+    )
     var names: List[String] = [
         "dermis",
         "cortical_apparent",

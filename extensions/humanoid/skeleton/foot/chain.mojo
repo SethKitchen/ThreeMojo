@@ -22,8 +22,8 @@ from extensions.humanoid.skeleton.field import (
     tube_chain_distance,
     tube_chain_volume,
 )
-from math.vector3 import Vector3
-from std.math import max, min, pi
+from math.vector3 import Vector3, component_max, component_min
+from std.math import pi
 
 
 @fieldwise_init
@@ -285,6 +285,20 @@ def tube_set_bounds(set: TubeSet, pad: Float32) -> Bounds:
     return box
 
 
+def tube_set_soft_bounds(set: TubeSet) -> Bounds:
+    """Return the tube set's box grown by 3 mm.
+
+    The foot vessels, nerves, and lymph use this margin.
+
+    Args:
+        set: One to four tubes.
+
+    Returns:
+        An axis-aligned box around the used tubes.
+    """
+    return tube_set_bounds(set, 0.003)
+
+
 def segment_volume(set: SegmentSet) -> Float32:
     """Return the analytic volume of `set`.
 
@@ -355,20 +369,36 @@ def enlarge_tube_set(set: TubeSet, least: Float32) -> TubeSet:
     )
 
 
+def display_tube_set(
+    mut tubes: TubeSet,
+    mut blend: Float32,
+    mut low: Vector3,
+    mut high: Vector3,
+    least: Float32,
+    blend_value: Float32,
+):
+    """Hold a tube set's radii up and box the result.
+
+    The box is the tubes' box plus `0.004`.
+
+    Args:
+        tubes: The tubes.
+        blend: The blend distance, the field's `k`.
+        low: The box's low corner.
+        high: The box's high corner.
+        least: The smallest radius to keep, in meters.
+        blend_value: The blend distance to store, in meters.
+    """
+    tubes = enlarge_tube_set(tubes, least)
+    blend = blend_value
+    var box = tube_set_bounds(tubes, 0.004)
+    low = box.low
+    high = box.high
+
+
 def _union(a: Bounds, b: Bounds) -> Bounds:
     """Return the box that holds both `a` and `b`."""
-    return Bounds(
-        Vector3(
-            min(a.low.x, b.low.x),
-            min(a.low.y, b.low.y),
-            min(a.low.z, b.low.z),
-        ),
-        Vector3(
-            max(a.high.x, b.high.x),
-            max(a.high.y, b.high.y),
-            max(a.high.z, b.high.z),
-        ),
-    )
+    return Bounds(component_min(a.low, b.low), component_max(a.high, b.high))
 
 
 def _frustum(a: Vector3, b: Vector3, ra: Float32, rb: Float32) -> Float32:

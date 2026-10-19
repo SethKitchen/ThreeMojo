@@ -177,6 +177,8 @@ struct SplatApp(Movable):
     """How many scans have been loaded."""
     var order_generation: Int
     """How many times `prepare` has made the order."""
+    var order_dirty: Bool
+    """Whether a CPU draw may have sorted since `prepare` copied the order."""
 
     def __init__(out self, width: Int, height: Int) raises:
         """Build an app with no scan and a black frame.
@@ -211,6 +213,7 @@ struct SplatApp(Movable):
         self.view = List[Float32](length=SPLAT_VIEW_FLOATS, fill=0)
         self.scan_generation = 0
         self.order_generation = 0
+        self.order_dirty = False
 
     def load(mut self, file: List[UInt8]) raises:
         """Replace the scan with an `.spz` file, and frame it.
@@ -229,7 +232,8 @@ struct SplatApp(Movable):
 
         The camera stands on the side of the scan's bounding sphere that
         `VIEW_FROM` names, and the controls orbit the sphere's center between
-        1.1 and 8 times its radius.
+        1.1 and 8 times its radius. Pending input and damping from the old
+        scan are cleared. The camera's automatic-turn pause is kept.
 
         Args:
             geometry: The splats.
@@ -249,13 +253,18 @@ struct SplatApp(Movable):
             Length(radius, METER),
             VIEW_FROM,
         )
-        self.controls.target = sphere.center
-        self.controls.min_distance = Length(radius * NEAREST_SHARE, METER)
-        self.controls.max_distance = Length(radius * FARTHEST_SHARE, METER)
-        _ = self.controls.update(self.camera, Duration(0.0, MILLISECOND))
+        var controls = OrbitControls(sphere.center)
+        controls.enable_damping = True
+        controls.auto_rotate = self.controls.auto_rotate
+        controls.auto_rotate_speed = TURN_SPEED
+        controls.min_distance = Length(radius * NEAREST_SHARE, METER)
+        controls.max_distance = Length(radius * FARTHEST_SHARE, METER)
+        _ = controls.update(self.camera, Duration(0.0, MILLISECOND))
+        self.controls = controls^
         self.splat = splat^
         self.loaded = True
         self.order = List[UInt32]()
+        self.order_dirty = False
         self.scan_generation += 1
 
     def load_path(mut self, path: String) -> Bool:
@@ -350,6 +359,14 @@ struct SplatApp(Movable):
         """
         var target = srgb_working_target(self.width, self.height, BACKGROUND)
         if self.loaded:
+            var world = self.scene.world_matrix(self.node)
+            var view = self.camera.view_matrix_in(self.scene)
+            if not self.splat.sort_initialized or self.splat.needs_sort(
+                view * world
+            ):
+                # The rasterizer can sort before a later projection fails.
+                # Keep the published GPU order until the next prepare.
+                self.order_dirty = True
             draw_gaussian_splat(target, self.scene, self.splat, self.camera)
         self.frame = resolve_srgb_working(target)
 
@@ -373,9 +390,6 @@ struct SplatApp(Movable):
             return 0
         var world = self.scene.world_matrix(self.node)
         var view = self.camera.view_matrix_in(self.scene)
-        var sorted = self.splat.update_sort(world, view, self.camera.near)
-        if sorted:
-            self._copy_order()
         var model_view = view * world
         var projection = self.camera.projection_matrix()
         var camera_world = view
@@ -385,6 +399,11 @@ struct SplatApp(Movable):
         var eye = local.transform_point(
             camera_world.transform_point(Vector3(0, 0, 0))
         )
+        # Validate the complete view before replacing any published arrays.
+        var sorted = self.splat.update_sort(world, view, self.camera.near)
+        if sorted or self.order_dirty:
+            self._copy_order()
+            self.order_dirty = False
         var at = 0
         while at < 16:
             self.view[VIEW_MODEL_VIEW + at] = model_view.elements[at]

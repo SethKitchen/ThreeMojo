@@ -22,8 +22,10 @@ from extensions.animals.coat import (
     EyeLook,
     Paint,
     Palette,
+    channel_gain,
     grizzle,
     mix3,
+    shade_swatch,
     srgb,
 )
 from extensions.sdf.ids import BoneId
@@ -33,6 +35,10 @@ from extensions.animals.parts import (
 )
 from extensions.sdf.sculpt import ell_y
 from extensions.animals.kit import (
+    side_sign,
+    ear_ends,
+    digitigrade_fore,
+    digitigrade_hind,
     EyeSpec,
     eye_frame_of,
     sculpt_eye_socket,
@@ -41,7 +47,12 @@ from extensions.animals.kit import (
     is_limb,
     pick_weighted,
 )
-from extensions.animals.noise import cells3, fbm3, vnoise3
+from extensions.animals.noise import (
+    cells3,
+    vnoise3,
+    centered_fbm,
+    centered_value,
+)
 from extensions.animals.options import (
     ADULT,
     JUVENILE,
@@ -65,6 +76,7 @@ from extensions.sdf.vector import (
     cross,
     dot,
     length,
+    catmull_rom,
     lerp,
     normalize,
     smoothstep,
@@ -76,6 +88,7 @@ from extensions.animals.warp import (
     length_warp,
     scale_about_warp,
 )
+from math.utils import clamp_unit
 from std.math import cos, floor, pi, sin
 from extensions.sdf.distance import oriented_ellipsoid_estimate
 
@@ -693,10 +706,7 @@ def deer_sculpt(mut m: SdfModel, rig: Rig, t: Traits) raises:
 
     # EARS: large, broad and cupped.
     for side in [String("L"), String("R")]:  # pragma: no branch
-        var s = 1.0 if side == "L" else -1.0
-        var base = rig.j("earBase" + side)
-        var tip = rig.j("earTip" + side)
-        var up = normalize(tip - base)
+        var s, base, tip, up = ear_ends(rig, side)
         var facing = normalize(hf.dir(V3(0, 0.3, 1)) * 0.8 + V3(0.5 * s, 0, 0))
         var lat = normalize(cross(up, facing))
         var eb = rig.bone("ear" + side)
@@ -773,17 +783,10 @@ def deer_sculpt(mut m: SdfModel, rig: Rig, t: Traits) raises:
 
 
 def _foreleg(mut m: SdfModel, rig: Rig, side: String) raises:
-    var s = 1.0 if side == "L" else -1.0
-    var lat = V3(s, 0, 0)
-    var sc = rig.j("scapTop" + side)
-    var sh = rig.j("shoulder" + side)
-    var e = rig.j("elbow" + side)
-    var w = rig.j("wrist" + side)
-    var mc = rig.j("mcp" + side)
-    var scap = rig.bone("scapula" + side)
-    var hum = rig.bone("humerus" + side)
-    var rad = rig.bone("radius" + side)
-    var meta = rig.bone("metacarpus" + side)
+    var s = side_sign(side)
+    var lat, sc, sh, e, w, mc, toe, scap, hum, rad, meta, fpaw = (
+        digitigrade_fore(rig, side, s)
+    )
     _ = ell_y(
         m,
         "scapmuscle",
@@ -875,25 +878,19 @@ def _foreleg(mut m: SdfModel, rig: Rig, side: String) raises:
     )
     _digit(
         m,
-        rig.bone("fpaw" + side),
+        fpaw,
         rig.bone("fhoof" + side),
         mc,
         rig.j("fcoffin" + side),
-        rig.j("ftoe" + side),
+        toe,
         1.0,
     )
 
 
 def _hind_leg(mut m: SdfModel, rig: Rig, side: String) raises:
-    var s = 1.0 if side == "L" else -1.0
+    var s = side_sign(side)
     var lat = V3(s, 0, 0)
-    var hp = rig.j("hip" + side)
-    var kn = rig.j("knee" + side)
-    var hk = rig.j("hock" + side)
-    var mt = rig.j("mtp" + side)
-    var fem = rig.bone("femur" + side)
-    var tib = rig.bone("tibia" + side)
-    var mtar = rig.bone("metatarsus" + side)
+    var hp, kn, hk, mt, tt, fem, tib, mtar, hpaw = digitigrade_hind(rig, side)
     _ = ell_y(
         m,
         "thigh",
@@ -996,11 +993,11 @@ def _hind_leg(mut m: SdfModel, rig: Rig, side: String) raises:
     )
     _digit(
         m,
-        rig.bone("hpaw" + side),
+        hpaw,
         rig.bone("hhoof" + side),
         mt,
         rig.j("hcoffin" + side),
-        rig.j("htoe" + side),
+        tt,
         0.95,
     )
 
@@ -1083,17 +1080,7 @@ def _catmull(pts: List[V3], n: Int) -> List[V3]:
         var p1 = pts[k]
         var p2 = pts[k + 1]
         var p3 = pts[min(seg, k + 2)]
-        var t2 = t * t
-        var t3 = t2 * t
-        out_pts.append(
-            (
-                p1 * 2.0
-                + (p2 - p0) * t
-                + (p0 * 2.0 - p1 * 5.0 + p2 * 4.0 - p3) * t2
-                + (p1 * 3.0 - p0 - p2 * 3.0 + p3) * t3
-            )
-            * 0.5
-        )
+        out_pts.append(catmull_rom(p0, p1, p2, p3, t))
     return out_pts^
 
 
@@ -1303,11 +1290,7 @@ def deer_palette(t: Traits) -> Palette:
         var c = srgb(hex[i])
         pal.set(
             names[i],
-            V3(
-                c.x * (1.0 + 0.07 * k + l),
-                c.y * (1.0 + 0.01 * k + l),
-                c.z * (1.0 - 0.08 * k + l),
-            ),
+            shade_swatch(c, k, l, 0.07, 0.01, -0.08),
         )
     pal.set("white", srgb(0xEFEAE0))
     pal.set("spot", srgb(0xEEE4D0))
@@ -1406,7 +1389,7 @@ def deer_paint(
     var n = s.n
     if s.part == HORN:
         return _paint_antler(pal, t, tag, p)
-    var jag = (fbm3(p * 70.0, 2) - 0.5) * 0.012
+    var jag = (centered_fbm(p, 70.0, 2)) * 0.012
     var leg = 1.0 if is_limb(bone) else 0.0
     var c: V3
     var wsdf = 1.0
@@ -1474,7 +1457,7 @@ def _fawn_spot(t: Traits, bone: String, p: V3, n: V3) -> Float64:
     if not keep:
         return 0.0
     var radius = 0.008 + 0.003 * cell.id
-    var wob = 0.15 * (vnoise3(p * 60.0) - 0.5)
+    var wob = 0.15 * (centered_value(p, 60.0))
     return smoothstep(
         radius * 1.15, radius * 0.85, cell.nearest * pitch * (1.0 + wob)
     )
@@ -1490,7 +1473,7 @@ def _paint_coat(
     leg: Float64,
 ) -> V3:
     # Countershading: dark along the spine, lighter low on the flanks.
-    var up = clamp(n.y, -1.0, 1.0)
+    var up = clamp_unit(n.y)
     var c = mix3(
         pal.get("body"), pal.get("dorsal"), smoothstep(0.35, 0.95, up) * 0.85
     )
@@ -1749,8 +1732,6 @@ def _paint_head(
 
 def _fur(c: V3, p: V3) -> V3:
     # Low-frequency color variation and a fine hair grain.
-    var cv = fbm3(p * 7.0, 3) - 0.5
-    var v = V3(
-        c.x * (1.0 + 0.14 * cv), c.y * (1.0 + 0.12 * cv), c.z * (1.0 + 0.1 * cv)
-    )
+    var cv = centered_fbm(p, 7.0, 3)
+    var v = channel_gain(c, cv, 0.14, 0.12, 0.1)
     return grizzle(v, p, 220.0, 0.06)

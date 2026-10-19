@@ -28,6 +28,8 @@ each element. `USD_SAMPLES` is the `{ times, values }` object that
 `element_number` is `Number( value[ i ] )`, which is what a
 `Float32Array` stores.
 """
+from core.ordinal import ordinal_valid
+from core.search import first_match
 
 from loaders.js_number import js_string_to_number
 from loaders.js_text import js_units
@@ -47,7 +49,7 @@ struct SpecType(Equatable, ImplicitlyCopyable, Writable):
 
     def is_valid(self) -> Bool:
         """Return True for the twelve spec types, zero to eleven."""
-        return self.value >= 0 and self.value <= 11
+        return ordinal_valid(self.value, 11)
 
 
 comptime SPEC_UNKNOWN = SpecType(0)
@@ -82,7 +84,7 @@ struct UsdKind(Equatable, ImplicitlyCopyable, Writable):
 
     def is_valid(self) -> Bool:
         """Return True for the ten kinds, zero to nine."""
-        return self.value >= 0 and self.value <= 9
+        return ordinal_valid(self.value, 9)
 
 
 # `undefined`.
@@ -231,10 +233,7 @@ struct UsdSpec(Copyable, Movable):
         Returns:
             Its place in `names`, or -1.
         """
-        for k in range(len(self.names)):
-            if self.names[k] == name:
-                return k
-        return -1
+        return first_match(self.names, name)
 
     def field(self, name: String) -> Int:
         """Return the place of a field's value.

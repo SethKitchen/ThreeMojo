@@ -29,7 +29,7 @@ from core.buffer_attribute import BufferAttribute
 from core.buffer_geometry import BufferGeometry, NORMAL, POSITION, UV
 from math.euler import Euler
 from math.matrix4 import Matrix4
-from math.vector3 import Vector3
+from math.vector3 import Vector3, append_vector3
 from units.si import Length
 
 
@@ -211,13 +211,9 @@ def decal(
         uvs.append(0.5 + vertex.position.x / size.x)
         uvs.append(0.5 + vertex.position.y / size.y)
         var world = projector.transform_point(vertex.position)
-        data.append(world.x)
-        data.append(world.y)
-        data.append(world.z)
+        append_vector3(data, world)
         if has_normals:
-            normals.append(vertex.normal.x)
-            normals.append(vertex.normal.y)
-            normals.append(vertex.normal.z)
+            append_vector3(normals, vertex.normal)
 
     var result = BufferGeometry()
     result.set_attribute(String(POSITION), BufferAttribute(data^, 3))

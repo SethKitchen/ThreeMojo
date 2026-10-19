@@ -22,9 +22,11 @@ from extensions.animals.coat import (
     EyeLook,
     Paint,
     Palette,
+    channel_gain,
     grizzle,
     mix3,
     palette_of,
+    shade_swatch,
     srgb,
 )
 from extensions.sdf.ids import (
@@ -38,16 +40,21 @@ from extensions.animals.parts import (
 )
 from extensions.sdf.sculpt import ell_y
 from extensions.animals.kit import (
+    side_sign,
+    ear_ends,
+    digitigrade_fore,
+    digitigrade_hind,
     EyeSpec,
     sculpt_eye_socket,
     is_limb,
+    is_upper_limb,
     pick_weighted,
     aperture_tilt_along,
     draw_u32,
     imul32,
     stream_of,
 )
-from extensions.animals.noise import fbm3, ihash, vnoise3
+from extensions.animals.noise import centered_fbm, ihash, offset_fbm, vnoise3
 from extensions.animals.options import (
     ADULT,
     JUVENILE,
@@ -56,6 +63,7 @@ from extensions.animals.options import (
     AnimalRandom,
 )
 from extensions.animals.rig import Rig, quadruped_bones, tail_chain
+from extensions.animals.species.hoofed import ClovenHoof, add_cloven_hoof
 from extensions.sdf.field import SdfModel
 from extensions.animals.traits import Traits, pick_sex
 from extensions.sdf.vector import (
@@ -76,6 +84,7 @@ from extensions.animals.warp import (
     legs_warp,
     scale_about_warp,
 )
+from math.utils import clamp_unit
 from std.math import asin, atan2, cos, pi, pow, sin, sqrt
 from extensions.sdf.distance import ellipsoid_estimate, round_cone_estimate
 
@@ -751,10 +760,7 @@ def boar_sculpt(mut m: SdfModel, rig: Rig, t: Traits) raises:
 
     # EARS: erect, pointed and hairy, the cup open forward and out.
     for side in [String("L"), String("R")]:  # pragma: no branch
-        var s = 1.0 if side == "L" else -1.0
-        var base = rig.j("earBase" + side)
-        var tip = rig.j("earTip" + side)
-        var up = normalize(tip - base)
+        var s, base, tip, up = ear_ends(rig, side)
         var ear_len = length(tip - base)
         var facing = normalize(HZ * 0.9 + V3(0.32 * s, -0.2, 0))
         var lat = normalize(cross(up, facing))
@@ -800,22 +806,15 @@ def boar_sculpt(mut m: SdfModel, rig: Rig, t: Traits) raises:
     # LEGS: short and slim, on the tips of the claws.
     var lk = 1.0 + 0.1 * shield
     for side in [String("L"), String("R")]:  # pragma: no branch
-        var s = 1.0 if side == "L" else -1.0
-        var lat = V3(s, 0, 0)
-        var sc = rig.j("scapTop" + side)
-        var sh = rig.j("shoulder" + side)
-        var e = rig.j("elbow" + side)
-        var w = rig.j("wrist" + side)
-        var mc = rig.j("mcp" + side)
+        var s = side_sign(side)
+        var lat, sc, sh, e, w, mc, toe, scap, hum, rad, meta, fpaw = (
+            digitigrade_fore(rig, side, s)
+        )
         var cf = rig.j("fcoffin" + side)
-        var toe = rig.j("ftoe" + side)
-        var hum = rig.bone("humerus" + side)
-        var rad = rig.bone("radius" + side)
-        var meta = rig.bone("metacarpus" + side)
         _ = ell_y(
             m,
             "scapmuscle",
-            rig.bone("scapula" + side),
+            scap,
             lerp(sc, sh, 0.45) + on_side(V3(0.035, 0, -0.01), s),
             sh - sc,
             V3(0.03 * lk, 0.11, 0.075),
@@ -901,20 +900,14 @@ def boar_sculpt(mut m: SdfModel, rig: Rig, t: Traits) raises:
             lateral=lat,
             k=0.01,
         )
-        var fpaw = rig.bone("fpaw" + side)
         _dewclaws(m, fpaw, mc, s)
         _ = m.cone("pastern", fpaw, mc, cf, 0.017, 0.017, k=0.01)
         _hoof(m, rig.bone("fhoof" + side), cf, toe, 1.0)
 
-        var hp = rig.j("hip" + side)
-        var kn = rig.j("knee" + side)
-        var hk = rig.j("hock" + side)
-        var mt = rig.j("mtp" + side)
+        var hp, kn, hk, mt, tt, fem, tib, mtar, hpaw = digitigrade_hind(
+            rig, side
+        )
         var ch = rig.j("hcoffin" + side)
-        var tt = rig.j("htoe" + side)
-        var fem = rig.bone("femur" + side)
-        var tib = rig.bone("tibia" + side)
-        var mtar = rig.bone("metatarsus" + side)
         _ = ell_y(
             m,
             "thigh",
@@ -1021,7 +1014,6 @@ def boar_sculpt(mut m: SdfModel, rig: Rig, t: Traits) raises:
             lateral=lat,
             k=0.01,
         )
-        var hpaw = rig.bone("hpaw" + side)
         _dewclaws(m, hpaw, mt, s)
         _ = m.cone("pastern", hpaw, mt, ch, 0.017, 0.017, k=0.01)
         _hoof(m, rig.bone("hhoof" + side), ch, tt, 0.95)
@@ -1151,51 +1143,30 @@ def _dewclaws(mut m: SdfModel, bone: BoneId, mc: V3, s: Float64) raises:
 
 
 def _hoof(mut m: SdfModel, bone: BoneId, cf: V3, toe: V3, w: Float64) raises:
-    # The cloven hoof: two pointed claws with a cleft between them, heel
-    # bulbs behind, flat on the ground.
-    var zc = (cf.z + toe.z) * 0.5
-    for k in [1.0, -1.0]:  # pragma: no branch
-        var x = cf.x + 0.0105 * k * w
-        var top = V3(x, cf.y + 0.008, cf.z - 0.004)
-        var tip = V3(x - 0.003 * k, 0.005, toe.z - 0.003)
-        var heel = V3(x, 0.008, cf.z - 0.014)
-        _ = m.cone("hoof", bone, top, tip, 0.0112 * w, 0.0045 * w, k=0.006)
-        _ = m.cone(
-            "hoof",
-            bone,
-            heel,
-            V3(tip.x, 0.006, zc + 0.006),
-            0.0105 * w,
-            0.008 * w,
-            k=0.008,
-        )
-        _ = m.sphere(
-            "heelbulb", bone, V3(x, 0.012, cf.z - 0.017), 0.0095 * w, k=0.008
-        )
-    _ = m.cone(
-        "coronet",
+    add_cloven_hoof(
+        m,
         bone,
-        cf + V3(0, 0.012, -0.01),
-        cf + V3(0, 0.006, 0.008),
-        0.0165 * w,
-        0.0165 * w,
-        k=0.008,
-    )
-    _ = m.ell(
-        "cleft",
-        bone,
-        V3(cf.x, 0.006, zc + 0.013),
-        V3(0.0022, 0.02, 0.03),
-        k=0.002,
-        carve=True,
-    )
-    _ = m.ell(
-        "sole",
-        bone,
-        V3(cf.x, -0.1 + 0.001, zc),
-        V3(0.1, 0.1, 0.1),
-        k=0.002,
-        carve=True,
+        cf,
+        toe,
+        w,
+        ClovenHoof(
+            spread=0.0105,
+            toe_inset=0.003,
+            toe_height=0.005,
+            toe_back=0.003,
+            wall_root=0.0112,
+            wall_tip=0.0045,
+            heel_back=0.014,
+            heel_root=0.0105,
+            heel_tip=0.008,
+            heel_forward=0.006,
+            bulb_height=0.012,
+            bulb_back=0.017,
+            bulb_radius=0.0095,
+            coronet_radius=0.0165,
+            cleft_forward=0.013,
+            cleft_length=0.03,
+        ),
     )
 
 
@@ -1332,11 +1303,7 @@ def boar_palette(t: Traits) raises -> Palette:
         var c = base.get(name)
         out.set(
             name,
-            V3(
-                c.x * (1.0 + 0.1 * k + l),
-                c.y * (1.0 + 0.03 * k + l),
-                c.z * (1.0 - 0.07 * k + l),
-            ),
+            shade_swatch(c, k, l, 0.1, 0.03, -0.07),
         )
     out.set("stripe", srgb(0xE4BF8E))
     out.set("disc", srgb(0x5A4038 if coat == PIGLET_COAT else 0x3A3440))
@@ -1363,7 +1330,7 @@ def _stripes(t: Traits, p: V3, face: Bool) -> Float64:
         var rr = sqrt(h.x * h.x + (h.y + 0.02) * (h.y + 0.02))
         var d = (abs(ay - 1.05) - 0.07) * rr
         var noise = (
-            fbm3(V3(h.x * 60.0 + seed, h.y * 60.0, h.z * 30.0), 2) - 0.5
+            offset_fbm(V3(h.x * 60.0 + seed, h.y * 60.0, h.z * 30.0), 2)
         ) * 0.008
         return max(d, max((h.z - 0.2) * 0.3, (-0.08 - h.z) * 0.3)) + noise
     var yc = mix(0.47, 0.45, smoothstep(0.2, -0.4, p.z))
@@ -1372,7 +1339,7 @@ def _stripes(t: Traits, p: V3, face: Bool) -> Float64:
     var zf = smoothstep(0.42, 0.3, p.z) * smoothstep(-0.6, -0.5, p.z)
     var angles: List[Float64] = [0.26, 0.52, 0.79, 1.06, 1.33, 1.62]
     var widths: List[Float64] = [0.06, 0.055, 0.055, 0.055, 0.06, 0.07]
-    var wob = (fbm3(V3(p.x * 9.0 + seed, p.y * 9.0, p.z * 5.0), 3) - 0.5) * 0.12
+    var wob = offset_fbm(V3(p.x * 9.0 + seed, p.y * 9.0, p.z * 5.0), 3) * 0.12
     var d = 1.0
     for i in range(6):  # pragma: no branch
         var a = angles[i] + wob + 0.05 * sin(p.z * 6.0 + Float64(i))
@@ -1522,7 +1489,7 @@ def boar_paint(
         if tag == "tassel":
             c = pal.get("mane")
     else:
-        var up = clamp(n.y, -1.0, 1.0)
+        var up = clamp_unit(n.y)
         c = mix3(
             pal.get("base"), pal.get("dorsal"), smoothstep(0.2, 0.95, up) * 0.8
         )
@@ -1533,12 +1500,7 @@ def boar_paint(
         var leg = 0.0
         if is_limb(bone):
             leg = 1.0
-            var upper = (
-                bone.startswith("scapula")
-                or bone.startswith("humerus")
-                or bone.startswith("femur")
-            )
-            if upper:
+            if is_upper_limb(bone):
                 leg = smoothstep(0.5, 0.36, p.y)
             var sd = 1.0 if p.x >= 0.0 else -1.0
             ventral = mix(
@@ -1574,10 +1536,8 @@ def boar_paint(
             agouti = min(1.0, agouti + 0.2)
     if piglet:
         c = mix3(c, pal.get("stripe"), smoothstep(0.003, -0.003, pd))
-    var cv = fbm3(p * 6.0, 3) - 0.5
-    c = V3(
-        c.x * (1.0 + 0.16 * cv), c.y * (1.0 + 0.13 * cv), c.z * (1.0 + 0.1 * cv)
-    )
+    var cv = centered_fbm(p, 6.0, 3)
+    c = channel_gain(c, cv, 0.16, 0.13, 0.1)
     # Coarse bristles: lock-to-lock streaks, then the pale tips.
     var st = vnoise3(V3(p.x * 160.0, p.y * 160.0, p.z * 25.0))
     c = c * (0.86 + 0.28 * st)

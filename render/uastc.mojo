@@ -32,6 +32,8 @@ the endpoints widen to sixteen bits, and the blend rounds back to eight.
 The first texel of each subset stores one weight bit fewer.
 """
 
+from core.binary import copy_bytes
+
 # The number of UASTC LDR modes; a prefix code of a higher number is
 # reserved.
 comptime UASTC_MODES = 19
@@ -318,7 +320,7 @@ struct _Reader(Movable):
     var position: Int
 
     def __init__(out self, data: List[UInt8], at: Int):
-        self.bytes = List[UInt8](data[at : at + UASTC_BLOCK_BYTES])
+        self.bytes = copy_bytes(data, at, UASTC_BLOCK_BYTES)
         self.position = 0
 
     def read(mut self, count: Int) -> Int:

@@ -27,12 +27,24 @@ own three corners is joined where the corners meet, to within
 each vertex. A vertex keeps its own texture coordinates.
 """
 
+from core.ordinal import ordinal_valid, require_valid, require_positive
+
 from core.assets import Assets
 from core.buffer_attribute import BufferAttribute
-from core.buffer_geometry import BufferGeometry, NORMAL, POSITION, UV
+from core.buffer_geometry import (
+    BufferGeometry,
+    NORMAL,
+    POSITION,
+    UV,
+    require_stored_index,
+)
 from core.geometry_store import GeometryId
 from core.scene import Scene
-from math.vector3 import Vector3
+from core.search import first_match
+from math.bounds import enclose_point
+from math.curve_checks import require_at_least_one
+from math.utils import clamp
+from math.vector3 import Vector3, append_vector3, vector3_from_float64
 from render.tasks import TaskGroup
 from std.collections import Dict
 from std.math import max, min
@@ -74,7 +86,7 @@ struct TriangleBudgetMode(Equatable, ImplicitlyCopyable, Writable):
             True for `BEST_EFFORT` or `STRICT`.
 
         """
-        return self == BEST_EFFORT or self == STRICT
+        return ordinal_valid(self.value, STRICT.value)
 
 
 comptime BEST_EFFORT = TriangleBudgetMode(0)
@@ -104,11 +116,7 @@ struct TriangleBudgetReason(Equatable, ImplicitlyCopyable, Writable):
             True for a minimum, small-source or safe-collapse limit.
 
         """
-        return (
-            self == MINIMUM_SHARES
-            or self == SMALL_WELDED_SOURCES
-            or self == SAFE_COLLAPSE_LIMIT
-        )
+        return ordinal_valid(self.value, SAFE_COLLAPSE_LIMIT.value)
 
 
 comptime MINIMUM_SHARES = TriangleBudgetReason(0)
@@ -166,8 +174,10 @@ struct TriangleBudgetResult(ImplicitlyCopyable):
         Raises:
             Error: If the reason is not a named value.
         """
-        if not reason.is_valid():
-            raise Error("The triangle budget reason must be a named value")
+        require_valid(
+            reason.is_valid(),
+            "The triangle budget reason must be a named value",
+        )
         if self.target_met():
             return False
         if reason == SAFE_COLLAPSE_LIMIT:
@@ -403,16 +413,12 @@ struct WeldedMesh(Movable):
         var normals = List[Float32](capacity=count * 3)
         for vertex in range(count):
             var point = self.positions[vertex]
-            positions.append(point.x)
-            positions.append(point.y)
-            positions.append(point.z)
+            append_vector3(positions, point)
             var normal = sums[vertex]
             if normal.length() == 0:
                 normal = Vector3(0, 1, 0)
             normal.normalize()
-            normals.append(normal.x)
-            normals.append(normal.y)
-            normals.append(normal.z)
+            append_vector3(normals, normal)
         var geometry = BufferGeometry()
         geometry.set_attribute(String(POSITION), BufferAttribute(positions^, 3))
         geometry.set_attribute(String(NORMAL), BufferAttribute(normals^, 3))
@@ -465,8 +471,7 @@ def _read_mesh(geometry: BufferGeometry) raises -> WeldedMesh:
     if len(faces) % 3 != 0:
         raise Error("A mesh to simplify must hold whole triangles")
     for slot in range(len(faces)):
-        if faces[slot] < 0 or faces[slot] >= count:
-            raise Error("An index entry points past the last vertex")
+        require_stored_index(faces[slot], count)
     return WeldedMesh(positions^, uvs^, faces^)
 
 
@@ -489,12 +494,7 @@ def weld(mesh: WeldedMesh) -> WeldedMesh:
         high = mesh.positions[0]
     for vertex in range(count):
         var point = mesh.positions[vertex]
-        low = Vector3(
-            min(low.x, point.x), min(low.y, point.y), min(low.z, point.z)
-        )
-        high = Vector3(
-            max(high.x, point.x), max(high.y, point.y), max(high.z, point.z)
-        )
+        enclose_point(low, high, point)
     var span = max(high.x - low.x, max(high.y - low.y, high.z - low.z))
     # A mesh too wide for the step is welded more coarsely, so each
     # axis fits its bits of the key.
@@ -777,12 +777,7 @@ struct _Collapser(Movable):
                 var other = self.faces[face * 3 + corner]
                 if other == vertex:
                     continue
-                var seen = False
-                for index in range(len(found)):
-                    if found[index] == other:
-                        seen = True
-                        break
-                if not seen:
+                if first_match(found, other) < 0:
                     found.append(other)
         return found^
 
@@ -845,9 +840,7 @@ struct _Collapser(Movable):
                     common += 1
         if common != shared:
             return False
-        var point = Vector3(
-            Float32(entry.x), Float32(entry.y), Float32(entry.z)
-        )
+        var point = vector3_from_float64(entry.x, entry.y, entry.z)
         if self._turns_over(u, v, point) or self._turns_over(v, u, point):
             return False
         self.positions[u] = point
@@ -948,8 +941,9 @@ def simplify(geometry: BufferGeometry, target: Int) raises -> BufferGeometry:
         Error: If `target` is less than one, or the geometry has no
             positions, holds a partial triangle, or carries morph targets.
     """
-    if target < 1:
-        raise Error("A simplified mesh must keep at least one triangle")
+    require_positive(
+        target, "A simplified mesh must keep at least one triangle"
+    )
     var welded = weld(_read_mesh(geometry))
     return simplify_welded(welded, target).to_geometry()
 
@@ -1130,12 +1124,12 @@ def fit_triangle_budget_result(
             Strict mode also leaves assets unchanged on conversion failure.
             Best effort can replace earlier geometries before that error.
     """
-    if not mode.is_valid():
-        raise Error("The triangle budget mode must be best effort or strict")
-    if budget < 1:
-        raise Error("A triangle budget must be at least one")
-    if workers < 1:
-        raise Error("Simplifying needs at least one worker")
+    require_valid(
+        mode.is_valid(),
+        "The triangle budget mode must be best effort or strict",
+    )
+    require_at_least_one(budget, "A triangle budget must be at least one")
+    require_at_least_one(workers, "Simplifying needs at least one worker")
     if first_mesh < 0 or first_mesh > len(scene.meshes):
         raise Error("The first mesh to simplify is not in the scene")
     var ids = List[GeometryId]()
@@ -1151,7 +1145,7 @@ def fit_triangle_budget_result(
         meshes.append(_read_mesh(assets.geometries.get(ids[index])))
     var count = len(meshes)
     var areas = List[Float64](length=count, fill=0)
-    var tasks = max(1, min(workers, count))
+    var tasks = clamp(workers, 1, count)
     var welds = TaskGroup()
     for task in range(tasks):  # pragma: no branch
         welds.create_task(

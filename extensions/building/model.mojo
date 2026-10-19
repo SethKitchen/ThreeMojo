@@ -19,10 +19,17 @@ Coordinates are meters, z up. The x axis points east and the y axis points
 north unless `Site.north` says otherwise.
 """
 
+from math.finite import (
+    require_finite,
+    require_finite_group,
+    require_positive_finite,
+)
+from math.utils import clamp
 from std.math import isfinite
 from extensions.building.construction import Construction, Glazing
 from extensions.building.ids import (
     ConstructionId,
+    require_construction,
     ElementId,
     FurnishingId,
     MaterialId,
@@ -45,6 +52,7 @@ from extensions.building.kinds import (
     SectionShape,
     SpaceUse,
     WALL,
+    require_space_use,
     WINDOW,
 )
 from extensions.building.material import BuildingMaterial
@@ -56,8 +64,15 @@ from extensions.topology.arrangement import (
     _check_region,
 )
 from extensions.topology.complex import HORIZONTAL, VERTICAL
-from extensions.topology.ids import CellId, FaceId, RegionId
+from extensions.topology.ids import (
+    CellId,
+    FaceId,
+    RegionId,
+    require_cell,
+    require_face,
+)
 from extensions.topology.storeys import StoreyComplex, build_storeys
+from extensions.energy.solar import require_latitude, require_longitude
 from generators.utils import Vec3d
 from std.math import cos, pi, sin
 from units.si import (
@@ -74,6 +89,7 @@ from units.si import (
     CUBIC_METER,
     METER_TO_THE_FOURTH,
 )
+from core.ordinal import require_valid
 
 
 def _check_space_measures(area: Float64, volume: Float64) raises:
@@ -92,8 +108,7 @@ def _check_outline_area(
 
 def _check_face_area(area: Float64) raises:
     """Check a derived face area before view conversion."""
-    if not (area > 0 and isfinite(area)):
-        raise Error("A face must have positive finite area")
+    require_positive_finite(area, "A face must have positive finite area")
 
 
 @fieldwise_init
@@ -116,10 +131,8 @@ struct Site(ImplicitlyCopyable):
         """
         var lat = self.latitude.to(DEGREE64)
         var lon = self.longitude.to(DEGREE64)
-        if not (lat >= -90 and lat <= 90):
-            raise Error("A latitude must be from -90 to 90 degrees")
-        if not (lon >= -180 and lon <= 180):
-            raise Error("A longitude must be from -180 to 180 degrees")
+        require_latitude(lat)
+        require_longitude(lon)
         if not (
             isfinite(self.elevation.to(METER))
             and isfinite(self.north.to(RADIAN))
@@ -206,14 +219,16 @@ struct Section(ImplicitlyCopyable):
                 finite, a used dimension is not positive, or an I-shape's
                 plates do not fit.
         """
-        if not self.shape.is_valid():
-            raise Error("A section shape must be a rectangle, an I or a circle")
+        require_valid(
+            self.shape.is_valid(),
+            "A section shape must be a rectangle, an I or a circle",
+        )
         var b = self.width.to(METER)
         var d = self.depth.to(METER)
-        if not (b > 0 and isfinite(b)):
-            raise Error("A section width must be positive and finite")
-        if not isfinite(d):
-            raise Error("A section depth must be finite")
+        require_positive_finite(
+            b, "A section width must be positive and finite"
+        )
+        require_finite(Float64(d), "A section depth must be finite")
         if not (
             isfinite(self.flange_thickness.value)
             and isfinite(self.web_thickness.value)
@@ -577,8 +592,8 @@ def _inside(outline: List[Point2], p: Point2, tolerance: Float64) -> Bool:
         var a = outline[i]
         var b = outline[(i + 1) % n]
         var d = b - a
-        var t = max(0.0, min(1.0, (p - a).dot(d) / d.dot(d)))
-        var foot = Point2(a.x + t * d.x, a.y + t * d.y)
+        var t = clamp((p - a).dot(d) / d.dot(d), 0.0, 1.0)
+        var foot = a + d * t
         var offset = p - foot
         if offset.dot(offset) <= tolerance * tolerance:
             return True
@@ -670,6 +685,82 @@ struct ConstructionSet(ImplicitlyCopyable):
     var ground_slab: ConstructionId
     var floor: ConstructionId
     var roof: ConstructionId
+
+
+def require_furnishing_place(center: Point2, rotation: Float64) raises:
+    """Refuse a furnishing whose place is not finite.
+
+    Nothing. The call returns when the center and the turn are finite.
+
+    Args:
+        center: The furnishing's center in plan, in meters.
+        rotation: Its turn about that center, in radians.
+
+    Raises:
+        Error: If the center or the turn is not finite.
+    """
+    if not (center.is_finite() and isfinite(rotation)):
+        raise Error("A furnishing's place must be finite")
+
+
+def require_furnishing_size(size: Float64) raises:
+    """Refuse a furnishing size that is not positive and finite.
+
+    Nothing. The call returns when the size is positive and finite.
+
+    Args:
+        size: One side of the furnishing, in meters.
+
+    Raises:
+        Error: If the size is not positive and finite.
+    """
+    require_positive_finite(
+        size, "A furnishing's size must be positive and finite"
+    )
+
+
+def require_furniture_kind(kind: FurnitureKind) raises:
+    """Refuse a furniture kind that is not named.
+
+    Nothing. The call returns when the kind is valid.
+
+    Args:
+        kind: Which furnishing.
+
+    Raises:
+        Error: If the kind is not valid.
+    """
+    require_valid(kind.is_valid(), "A furniture kind is not valid")
+
+
+def require_inside_space(inside: Bool) raises:
+    """Refuse a furnishing corner that leaves its space.
+
+    Nothing. The call returns when the corner is inside.
+
+    Args:
+        inside: Whether the corner stands inside the space.
+
+    Raises:
+        Error: If the corner leaves the space.
+    """
+    if not inside:
+        raise Error("A furnishing must stand inside its space")
+
+
+def require_furnishings_apart(apart: Bool) raises:
+    """Refuse two furnishings whose footprints overlap.
+
+    Nothing. The call returns when the footprints stay apart.
+
+    Args:
+        apart: Whether the footprints stay apart.
+
+    Raises:
+        Error: If the footprints overlap.
+    """
+    if not apart:
+        raise Error("Two furnishings must not overlap")
 
 
 struct Building(Movable):
@@ -800,8 +891,7 @@ struct Building(Movable):
         Raises:
             Error: If it is negative or past the last construction.
         """
-        if not id.is_valid() or id.value >= len(self.constructions):
-            raise Error("A construction id is out of range")
+        require_construction(id, len(self.constructions))
 
     # --- frame members and openings ----------------------------------------
 
@@ -830,8 +920,10 @@ struct Building(Movable):
         self.check_storey(storey)
         self.check_material(material)
         section.check()
-        if not (isfinite(at.x) and isfinite(at.y)):
-            raise Error("A column position must be finite")
+        require_finite_group(
+            at.is_finite(),
+            "A column position must be finite",
+        )
         ref s = self.storeys[storey.value]
         var z0 = s.elevation.to(METER)
         var z1 = z0 + s.height.to(METER)
@@ -880,12 +972,7 @@ struct Building(Movable):
         self.check_storey(storey)
         self.check_material(material)
         section.check()
-        if not (
-            isfinite(start.x)
-            and isfinite(start.y)
-            and isfinite(end.x)
-            and isfinite(end.y)
-        ):
+        if not (start.is_finite() and end.is_finite()):
             raise Error("A beam's ends must be finite")
         var d = end - start
         if d.dot(d) <= 1e-12:
@@ -963,8 +1050,9 @@ struct Building(Movable):
         before: Int,
     ) raises:
         """Check an opening against its host and earlier openings."""
-        if not kind.is_valid():
-            raise Error("An opening kind must be a door or a window")
+        require_valid(
+            kind.is_valid(), "An opening kind must be a door or a window"
+        )
         var frame = self.wall_frame(wall)
         var u0 = offset.to(METER)
         var v0 = sill.to(METER)
@@ -1076,19 +1164,12 @@ struct Building(Movable):
                 not finite, the footprint leaves the space, or it overlaps
                 another furnishing.
         """
-        if not kind.is_valid():
-            raise Error("A furniture kind is not valid")
+        require_furniture_kind(kind)
         self.check_space(space)
         var sizes = [width.to(METER), depth.to(METER), height.to(METER)]
         for i in range(3):  # pragma: no branch
-            if not (sizes[i] > 0 and isfinite(sizes[i])):
-                raise Error("A furnishing's size must be positive and finite")
-        if not (
-            isfinite(center.x)
-            and isfinite(center.y)
-            and isfinite(rotation.to(RADIAN))
-        ):
-            raise Error("A furnishing's place must be finite")
+            require_furnishing_size(sizes[i])
+        require_furnishing_place(center, rotation.to(RADIAN))
         var item = Furnishing(
             String(kind.name(), " ", len(self.furnishings)),
             kind,
@@ -1102,13 +1183,13 @@ struct Building(Movable):
         var corners = item.corners()
         ref outline = self.spaces[space.value].outline
         for i in range(4):  # pragma: no branch
-            if not _inside(outline, corners[i], 1e-9):
-                raise Error("A furnishing must stand inside its space")
+            require_inside_space(_inside(outline, corners[i], 1e-9))
         for i in range(len(self.furnishings)):
             if self.furnishings[i].space != space:
                 continue
-            if not quads_apart(corners, self.furnishings[i].corners()):
-                raise Error("Two furnishings must not overlap")
+            require_furnishings_apart(
+                quads_apart(corners, self.furnishings[i].corners())
+            )
         self.furnishings.append(item^)
         return FurnishingId(len(self.furnishings) - 1)
 
@@ -1126,8 +1207,7 @@ struct Building(Movable):
         Raises:
             Error: If the face id is out of range.
         """
-        if not face.is_valid() or face.value >= len(self.face_element):
-            raise Error("A face id is out of range")
+        require_face(face, len(self.face_element))
         var index = self.face_element[face.value]
         if index < 0:
             return None
@@ -1344,10 +1424,8 @@ struct Building(Movable):
         for i in range(len(self.spaces)):
             ref space = self.spaces[i]
             self.check_storey(space.storey)
-            if not space.use.is_valid():
-                raise Error("A space use is not valid")
-            if not space.cell.is_valid() or space.cell.value >= cells:
-                raise Error("A cell id is out of range")
+            require_space_use(space.use)
+            require_cell(space.cell, cells)
             if space.cell.value != i:
                 raise Error("Spaces must follow cell order")
             if self.topology.cell_storey[i] != space.storey.value:
@@ -1363,8 +1441,10 @@ struct Building(Movable):
             # The outline's minimum of three corners was checked above.
             for k in range(len(space.outline)):  # pragma: no branch
                 var point = space.outline[k]
-                if not (isfinite(point.x) and isfinite(point.y)):
-                    raise Error("A space outline must have finite coordinates")
+                require_finite_group(
+                    point.is_finite(),
+                    "A space outline must have finite coordinates",
+                )
             _check_region(Region(0, RegionId(0), space.outline.copy()), 1, tol)
             var boundaries = complex.faces_of(space.cell)
             for f in range(len(boundaries)):
@@ -1428,8 +1508,9 @@ struct Building(Movable):
         for i in range(len(self.elements)):
             ref element = self.elements[i]
             self.check_storey(element.storey)
-            if not element.kind.is_valid():
-                raise Error("An element kind is not valid")
+            require_valid(
+                element.kind.is_valid(), "An element kind is not valid"
+            )
             if element.construction:
                 self.check_construction(element.construction.value())
             if element.material:
@@ -1445,20 +1526,12 @@ struct Building(Movable):
                 element.section.value().check()
                 var a = element.start
                 var b = element.end
-                if not (
-                    isfinite(a.x)
-                    and isfinite(a.y)
-                    and isfinite(a.z)
-                    and isfinite(b.x)
-                    and isfinite(b.y)
-                    and isfinite(b.z)
-                ):
+                if not (a.is_finite() and b.is_finite()):
                     raise Error("A member axis must be finite")
                 var length = a.distance_to(b)
-                if not (length > 0 and isfinite(length)):
-                    raise Error(
-                        "A member axis must have positive finite length"
-                    )
+                require_positive_finite(
+                    length, "A member axis must have positive finite length"
+                )
                 ref storey = self.storeys[element.storey.value]
                 var bottom = storey.elevation.value
                 var top = bottom + storey.height.value
@@ -1485,8 +1558,7 @@ struct Building(Movable):
                 if len(element.faces) != 1:
                     raise Error("A surface element needs one face")
                 var id = element.faces[0]
-                if not id.is_valid() or id.value >= faces:
-                    raise Error("A face id is out of range")
+                require_face(id, faces)
                 if owner[id.value] >= 0:
                     raise Error("Two elements must not own one face")
                 owner[id.value] = i
@@ -1521,31 +1593,24 @@ struct Building(Movable):
         for i in range(len(self.furnishings)):
             ref item = self.furnishings[i]
             self.check_space(item.space)
-            if not item.kind.is_valid():
-                raise Error("A furniture kind is not valid")
+            require_furniture_kind(item.kind)
             var sizes = [item.width.value, item.depth.value, item.height.value]
             for k in range(3):  # pragma: no branch (three dimensions)
-                if not (sizes[k] > 0 and isfinite(sizes[k])):
-                    raise Error(
-                        "A furnishing's size must be positive and finite"
-                    )
-            if not (
-                isfinite(item.center.x)
-                and isfinite(item.center.y)
-                and isfinite(item.rotation.value)
-            ):
-                raise Error("A furnishing's place must be finite")
+                require_furnishing_size(sizes[k])
+            require_furnishing_place(item.center, item.rotation.value)
             var corners = item.corners()
             var space = item.space.value
             for k in range(4):  # pragma: no branch (four generated corners)
-                if not _inside(self.spaces[space].outline, corners[k], 1e-9):
-                    raise Error("A furnishing must stand inside its space")
+                require_inside_space(
+                    _inside(self.spaces[space].outline, corners[k], 1e-9)
+                )
             if space not in furnishings_in:
                 furnishings_in[space] = List[Int]()
             for k in range(len(furnishings_in[space])):
                 var other = furnishings_in[space][k]
-                if not quads_apart(corners, footprints[other]):
-                    raise Error("Two furnishings must not overlap")
+                require_furnishings_apart(
+                    quads_apart(corners, footprints[other])
+                )
             footprints.append(corners^)
             furnishings_in[space].append(i)
 
@@ -1608,14 +1673,14 @@ def assemble(
     var regions = List[List[Region]]()
     for s in range(len(plans)):
         var h = plans[s].height.to(METER)
-        if not (h > 0 and isfinite(h)):
-            raise Error("A storey height must be positive and finite")
+        require_positive_finite(
+            h, "A storey height must be positive and finite"
+        )
         z = z + plans[s].height
         levels.append(z)
         var plan = List[Region]()
         for r in range(len(plans[s].spaces)):
-            if not plans[s].spaces[r].use.is_valid():
-                raise Error("A space use is not valid")
+            require_space_use(plans[s].spaces[r].use)
             plan.append(
                 Region(0, RegionId(r), plans[s].spaces[r].outline.copy())
             )

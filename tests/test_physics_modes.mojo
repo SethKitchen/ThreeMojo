@@ -39,14 +39,6 @@ def _body() raises -> RigidBody:
     )
 
 
-def _tensor() -> Matrix3:
-    var out = Matrix3()
-    out.elements[0] = 2
-    out.elements[4] = 4
-    out.elements[8] = 8
-    return out
-
-
 def _vector_equal(a: Vector3, b: Vector3) raises:
     assert_equal(a.x, b.x)
     assert_equal(a.y, b.y)
@@ -69,7 +61,7 @@ def test_mode_chain_keeps_dynamic_configuration() raises:
         Quaternion.from_axis_angle(Vector3(0, 1, 0), Angle(30, DEGREE)),
     )
     var shape_rotation = body.shape_rotation
-    var configured = _tensor()
+    var configured = Matrix3.diagonal(2, 4, 8)
     configured.elements[1] = 0.5
     configured.elements[3] = 0.5
     configured.elements[2] = 0.25
@@ -116,7 +108,7 @@ def test_mode_chain_keeps_dynamic_configuration() raises:
 
 def test_restored_tensor_uses_the_new_world_orientation() raises:
     var body = _body()
-    body.set_inertia(_tensor())
+    body.set_inertia(Matrix3.diagonal(2, 4, 8))
     body.set_kind(KINEMATIC)
     body.rotation = Quaternion.from_axis_angle(
         Vector3(0, 0, 1), Angle(90, DEGREE)
@@ -153,7 +145,7 @@ def test_repeated_toggles_keep_locked_axes() raises:
 
 def test_disabled_configuration_edits_are_refused() raises:
     var body = _body()
-    body.set_inertia(_tensor())
+    body.set_inertia(Matrix3.diagonal(2, 4, 8))
     body.set_kind(KINEMATIC)
     with assert_raises():
         body.set_mass(Mass(10))
@@ -303,7 +295,7 @@ def test_invalid_retained_state_is_rejected_atomically() raises:
 
 def test_one_locked_axis_keeps_the_other_axis_response() raises:
     var body = _body()
-    body.set_inertia(_tensor())
+    body.set_inertia(Matrix3.diagonal(2, 4, 8))
     var locked = body.inverse_inertia()
     locked.elements[0] = 0
     body.set_inverse_inertia(locked)
@@ -325,7 +317,7 @@ def test_force_lifetime_is_one_world_step_across_modes() raises:
         var world = PhysicsWorld()
         world.gravity = Vector3(0, 0, 0)
         var body = _body()
-        body.set_inertia(_tensor())
+        body.set_inertia(Matrix3.diagonal(2, 4, 8))
         body.add_force(Vector3(6, 0, 0), Vector3(0, 1, 0))
         body.set_kind(KINEMATIC)
         body.set_kind(STATIC)

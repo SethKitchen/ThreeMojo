@@ -23,7 +23,7 @@ from extensions.humanoid.skeleton.head.vessels.dimensions import (
     head_vessel_field,
     head_vessel_label,
 )
-from extensions.humanoid.skeleton.isosurface import check_detail, mesh_field
+from extensions.humanoid.skeleton.isosurface import mesh_checked
 from extensions.humanoid.spec import HumanoidSpec
 
 
@@ -76,5 +76,4 @@ def head_vessel_from_dimensions(
     var S = dimensions.head.stature.value
     var field = head_vessel_field(dimensions, part, side).widened(0.0018 * S)
     var label = head_vessel_label(part)
-    check_detail(detail, label)
-    return mesh_field(field, field.low, field.high, detail, label)
+    return mesh_checked(field, field.low, field.high, detail, label)

@@ -44,6 +44,13 @@ key of its numbers rounded to a few places. Here any change is detected.
 The directionally filtered radiance, `directionalRadiance`, is not ported.
 """
 
+from core.ordinal import (
+    ordinal_valid,
+    require_valid,
+    require_non_negative,
+    require_positive,
+)
+
 from core.assets import Assets
 from core.layers import Layers
 from core.object3d import NO_PARENT
@@ -74,7 +81,9 @@ from lights.vxgi_scene_collector import (
     compute_scene_bounds,
 )
 from math.bounds import Box3
+from math.finite import require_finite, require_positive_finite
 from math.smoothstep import smoothstep
+from math.utils import glsl_sign, max3
 from math.vector3 import Vector3
 from std.math import ceil, cos, floor, isfinite, log2, pi, tan
 from units.si import Angle, DEGREE, Length, METER
@@ -118,9 +127,7 @@ struct VxgiLightType(Equatable, ImplicitlyCopyable, Writable):
 
     def is_valid(self) -> Bool:
         """Return True if this is one of the three kinds a volume injects."""
-        return (
-            self == VXGI_DIRECTIONAL or self == VXGI_POINT or self == VXGI_SPOT
-        )
+        return ordinal_valid(self.value, VXGI_SPOT.value)
 
 
 # A light infinitely far away, three.js's `0`.
@@ -155,8 +162,9 @@ def light_record(
     Raises:
         Error: If the kind is none of the three.
     """
-    if not kind.is_valid():
-        raise Error("A VXGI light must be directional, point or spot")
+    require_valid(
+        kind.is_valid(), "A VXGI light must be directional, point or spot"
+    )
     var radiance = light.radiance()
     var distance = Float32(0)
     var decay = Float32(2)
@@ -229,15 +237,6 @@ def _swizzled(
     if is_y:
         return (z, x, y)
     return (y, z, x)
-
-
-def _sign(value: Float32) -> Float32:
-    """Return minus one, zero or one: WGSL's `sign`."""
-    if value > 0:
-        return 1
-    if value < 0:
-        return -1
-    return 0
 
 
 struct VoxelTriangle(ImplicitlyCopyable):
@@ -343,7 +342,7 @@ struct VoxelTriangle(ImplicitlyCopyable):
         self.j0 = max(Int(floor(min_j)), 0)
         self.j1 = min(Int(floor(max_j)), Int(sd[1]) - 1)
         self.top_k = Int(sd[2]) - 1
-        var area_sign = _sign(n[2])
+        var area_sign = glsl_sign(n[2])
         self.e0 = _edge(q0[0], q0[1], q1[0], q1[1], area_sign)
         self.e1 = _edge(q1[0], q1[1], q2[0], q2[1], area_sign)
         self.e2 = _edge(q2[0], q2[1], q0[0], q0[1], area_sign)
@@ -1064,16 +1063,23 @@ struct VXGIVolume(Movable):
                 is negative or not finite, or a cone's aperture is not
                 between zero and a half turn.
         """
-        if self.resolution <= 0:
-            raise Error("A VXGI volume's resolution must be positive")
-        if self.bounces < 0:
-            raise Error("A VXGI volume's bounces cannot be negative")
-        if self.max_lights < 0:
-            raise Error("A VXGI volume's light count cannot be negative")
-        if not isfinite(self.min_opacity):
-            raise Error("A VXGI volume's minimum opacity must be finite")
-        if not (isfinite(self.step_scale) and self.step_scale > 0):
-            raise Error("A VXGI volume's step scale must be positive")
+        require_positive(
+            self.resolution, "A VXGI volume's resolution must be positive"
+        )
+        require_non_negative(
+            self.bounces, "A VXGI volume's bounces cannot be negative"
+        )
+        require_non_negative(
+            self.max_lights, "A VXGI volume's light count cannot be negative"
+        )
+        require_finite(
+            Float64(self.min_opacity),
+            "A VXGI volume's minimum opacity must be finite",
+        )
+        require_positive_finite(
+            Float64(self.step_scale),
+            "A VXGI volume's step scale must be positive",
+        )
         if not (
             isfinite(self.max_distance.value) and self.max_distance.value >= 0
         ):
@@ -1126,7 +1132,7 @@ struct VXGIVolume(Movable):
         var sy = Float64(size.y)
         var sz = Float64(size.z)
         var resolution = max(MIN_RESOLUTION, self.resolution)
-        var voxel = max(sx, max(sy, sz)) / Float64(resolution)
+        var voxel = max3(sx, sy, sz) / Float64(resolution)
         if not voxel > 0:
             raise Error("A VXGI volume's bounds must have a size")
         var levels = max(
@@ -1188,8 +1194,7 @@ struct VXGIVolume(Movable):
         for index in range(self.grid.level_count(0)):  # pragma: no branch
             var texel = resolve_voxel(Int(self.occupancy[index]))
             _store(self.opacity, index, texel)
-        for level in range(1, self.grid.levels):
-            _fill_opacity_level(self.opacity, self.grid, level)
+        _fill_coarser_levels(self.opacity, self.grid, True)
 
     def _rasterize(mut self, setup: VoxelTriangle, triangle: Int):
         """Walk the columns of one triangle's box, three.js's loops."""
@@ -1346,7 +1351,7 @@ struct VXGIVolume(Movable):
             )
             _store(self.direct, index, texel)
             _store(self.radiance, index, texel)
-        _fill_radiance_levels(self.radiance, self.grid)
+        _fill_coarser_levels(self.radiance, self.grid, False)
         for _ in range(self.bounces):
             self.radiance = self._bounced()
 
@@ -1377,7 +1382,7 @@ struct VXGIVolume(Movable):
                 reach,
             )
             _store(next, index, texel)
-        _fill_radiance_levels(next, self.grid)
+        _fill_coarser_levels(next, self.grid, False)
         return next^
 
     def lighting_done(mut self):
@@ -1464,28 +1469,30 @@ def _store(mut volume: List[Float32], index: Int, texel: Lanes):
     volume[at + 3] = texel[3]
 
 
-def _fill_opacity_level(mut opacity: List[Float32], grid: VxgiGrid, level: Int):
-    """Fill one coarser opacity level from the one below."""
+def _fill_mip_level(
+    mut volume: List[Float32], grid: VxgiGrid, level: Int, opacity: Bool
+):
+    """Fill one coarser level from the one below.
+
+    `opacity` selects the opacity kernel. Otherwise the radiance kernel
+    runs.
+    """
     var wide = grid.level_x(level)
     var tall = grid.level_y(level)
     var start = grid.level_start(level)
     for index in range(grid.level_count(level)):  # pragma: no branch
         var at = voxel_coordinates(index, wide, tall)
         var texel = opacity_mip_voxel(
-            floats_of(opacity), grid, level, at[0], at[1], at[2]
+            floats_of(volume), grid, level, at[0], at[1], at[2]
+        ) if opacity else radiance_mip_voxel(
+            floats_of(volume), grid, level, at[0], at[1], at[2]
         )
-        _store(opacity, start + index, texel)
+        _store(volume, start + index, texel)
 
 
-def _fill_radiance_levels(mut radiance: List[Float32], grid: VxgiGrid):
-    """Fill every coarser radiance level, each from the one below."""
+def _fill_coarser_levels(
+    mut volume: List[Float32], grid: VxgiGrid, opacity: Bool
+):
+    """Fill every coarser level from the one below."""
     for level in range(1, grid.levels):
-        var wide = grid.level_x(level)
-        var tall = grid.level_y(level)
-        var start = grid.level_start(level)
-        for index in range(grid.level_count(level)):  # pragma: no branch
-            var at = voxel_coordinates(index, wide, tall)
-            var texel = radiance_mip_voxel(
-                floats_of(radiance), grid, level, at[0], at[1], at[2]
-            )
-            _store(radiance, start + index, texel)
+        _fill_mip_level(volume, grid, level, opacity)

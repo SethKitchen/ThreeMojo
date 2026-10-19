@@ -21,15 +21,28 @@ attribute: one number per vertex that says which zone of the model the
 vertex belongs to. three.js's materials branch on it. `PartId` is that
 number as a type, and `part` tags a geometry with one.
 """
+from core.ordinal import ordinal_valid, require_valid
 
 from core.buffer_attribute import BufferAttribute
 from core.buffer_geometry import BufferGeometry
 from geometries.utils import merge_vertices
+from math.cross import cross_components
 from math.matrix4 import Matrix4
-from math.norm import length3, normalized3, _ordinary_squared
+from math.norm import (
+    dot3,
+    length3,
+    normalized3,
+    _ordinary_squared,
+    squared_length3,
+)
+from math.quaternion import quaternion_rotate, quaternion_terms
 from math.utils import SeededRandom
-from math.vector3 import Vector3
+from math.vector3 import Vector3, append_float64_xyz, vector3_from_float64
 from std.math import cos, isfinite, sin, sqrt
+from units.measure import (
+    angle_radians as _angle_radians,
+    length_meters as _length_meters,
+)
 from units.si import Angle, Length, METER, RADIAN
 
 # The name of the per-vertex part attribute, as three.js names it.
@@ -58,7 +71,7 @@ struct PartId(Equatable, ImplicitlyCopyable, Writable):
         Returns:
             Whether the code is from zero to eight.
         """
-        return self.value >= 0 and self.value < PART_ID_COUNT
+        return ordinal_valid(self.value, PART_ID_COUNT - 1)
 
 
 def generator_random(seed: Int) -> SeededRandom:
@@ -79,7 +92,7 @@ def generator_random(seed: Int) -> SeededRandom:
 
 
 @fieldwise_init
-struct Vec3d(ImplicitlyCopyable):
+struct Vec3d(Equatable, ImplicitlyCopyable):
     """A point or direction in `Float64`, for arithmetic that three.js does
     in `Float64`.
 
@@ -125,6 +138,28 @@ struct Vec3d(ImplicitlyCopyable):
         """
         return Vec3d(self.x * factor, self.y * factor, self.z * factor)
 
+    def __eq__(self, other: Self) -> Bool:
+        """Return True if every component is exactly equal.
+
+        Args:
+            other: The vector to compare with.
+
+        Returns:
+            Whether the two are the same vector.
+        """
+        return self.x == other.x and self.y == other.y and self.z == other.z
+
+    def __ne__(self, other: Self) -> Bool:
+        """Return True if any component differs.
+
+        Args:
+            other: The vector to compare with.
+
+        Returns:
+            Whether the two differ.
+        """
+        return not self == other
+
     def __neg__(self) -> Self:
         """Return the vector pointing the other way, three.js's `negate`.
 
@@ -132,6 +167,32 @@ struct Vec3d(ImplicitlyCopyable):
             The opposite vector.
         """
         return Vec3d(-self.x, -self.y, -self.z)
+
+    def min(self, other: Self) -> Self:
+        """Return the smaller of each component, three.js's `min`.
+
+        Args:
+            other: The other vector.
+
+        Returns:
+            The smaller components.
+        """
+        return Vec3d(
+            min(self.x, other.x), min(self.y, other.y), min(self.z, other.z)
+        )
+
+    def max(self, other: Self) -> Self:
+        """Return the larger of each component, three.js's `max`.
+
+        Args:
+            other: The other vector.
+
+        Returns:
+            The larger components.
+        """
+        return Vec3d(
+            max(self.x, other.x), max(self.y, other.y), max(self.z, other.z)
+        )
 
     def dot(self, other: Self) -> Float64:
         """Return the dot product.
@@ -142,7 +203,9 @@ struct Vec3d(ImplicitlyCopyable):
         Returns:
             The dot product.
         """
-        return self.x * other.x + self.y * other.y + self.z * other.z
+        return dot3[DType.float64](
+            self.x, self.y, self.z, other.x, other.y, other.z
+        )
 
     def cross(self, other: Self) -> Self:
         """Return the cross product, three.js's `crossVectors(self, other)`.
@@ -153,11 +216,10 @@ struct Vec3d(ImplicitlyCopyable):
         Returns:
             The cross product.
         """
-        return Vec3d(
-            self.y * other.z - self.z * other.y,
-            self.z * other.x - self.x * other.z,
-            self.x * other.y - self.y * other.x,
+        var x, y, z = cross_components[DType.float64](
+            self.x, self.y, self.z, other.x, other.y, other.z
         )
+        return Vec3d(x, y, z)
 
     def length(self) -> Float64:
         """Return the scale-safe length.
@@ -166,6 +228,14 @@ struct Vec3d(ImplicitlyCopyable):
             The length, or infinity if it exceeds the Float64 range.
         """
         return length3(self.x, self.y, self.z)
+
+    def is_finite(self) -> Bool:
+        """Return True if every component is finite.
+
+        Returns:
+            True when `x`, `y`, and `z` are all finite.
+        """
+        return isfinite(self.x) and isfinite(self.y) and isfinite(self.z)
 
     def distance_to(self, other: Self) -> Float64:
         """Return the distance to another point.
@@ -187,7 +257,7 @@ struct Vec3d(ImplicitlyCopyable):
         Returns:
             The unit vector, or the zero vector.
         """
-        var squared = self.x * self.x + self.y * self.y + self.z * self.z
+        var squared = squared_length3[DType.float64](self.x, self.y, self.z)
         # Keep three.js's reciprocal multiply for ordinary seeded fixtures.
         if _ordinary_squared(squared):
             return self * (1.0 / sqrt(squared))
@@ -205,11 +275,7 @@ struct Vec3d(ImplicitlyCopyable):
         Returns:
             The point.
         """
-        return Vec3d(
-            self.x + (other.x - self.x) * alpha,
-            self.y + (other.y - self.y) * alpha,
-            self.z + (other.z - self.z) * alpha,
-        )
+        return self + (other - self) * alpha
 
     def rotated(self, axis: Self, angle: Float64) -> Self:
         """Return the vector turned about a unit axis, three.js's
@@ -228,14 +294,10 @@ struct Vec3d(ImplicitlyCopyable):
         var qy = axis.y * s
         var qz = axis.z * s
         var qw = cos(half)
-        var tx = 2 * (qy * self.z - qz * self.y)
-        var ty = 2 * (qz * self.x - qx * self.z)
-        var tz = 2 * (qx * self.y - qy * self.x)
-        return Vec3d(
-            self.x + qw * tx + qy * tz - qz * ty,
-            self.y + qw * ty + qz * tx - qx * tz,
-            self.z + qw * tz + qx * ty - qy * tx,
+        var rx, ry, rz = quaternion_rotate[DType.float64](
+            qx, qy, qz, qw, self.x, self.y, self.z
         )
+        return Vec3d(rx, ry, rz)
 
     def vector3(self) -> Vector3:
         """Return the vector rounded to `Float32`.
@@ -243,7 +305,32 @@ struct Vec3d(ImplicitlyCopyable):
         Returns:
             The vector.
         """
-        return Vector3(Float32(self.x), Float32(self.y), Float32(self.z))
+        return vector3_from_float64(self.x, self.y, self.z)
+
+
+def append_z_up_as_y_up(
+    mut positions: List[Float32],
+    mut normals: List[Float32],
+    point: Vec3d,
+    normal: Vec3d,
+):
+    """Append a z-up point and normal as y-up.
+
+    `x` stays. `z` becomes `y`. `-y` becomes `z`.
+
+    Nothing. Six numbers are appended.
+
+    Error: Never.
+
+    Args:
+        positions: The position list.
+        normals: The normal list.
+        point: The point, with `z` up.
+        normal: The normal, with `z` up.
+
+    """
+    append_float64_xyz(positions, point.x, point.z, -point.y)
+    append_float64_xyz(normals, normal.x, normal.z, -normal.y)
 
 
 @fieldwise_init
@@ -266,14 +353,10 @@ struct Quat64(ImplicitlyCopyable):
         Returns:
             The turned vector.
         """
-        var tx = 2 * (self.y * v.z - self.z * v.y)
-        var ty = 2 * (self.z * v.x - self.x * v.z)
-        var tz = 2 * (self.x * v.y - self.y * v.x)
-        return Vec3d(
-            v.x + self.w * tx + self.y * tz - self.z * ty,
-            v.y + self.w * ty + self.z * tx - self.x * tz,
-            v.z + self.w * tz + self.x * ty - self.y * tx,
+        var rx, ry, rz = quaternion_rotate[DType.float64](
+            self.x, self.y, self.z, self.w, v.x, v.y, v.z
         )
+        return Vec3d(rx, ry, rz)
 
 
 def unit_vectors_quaternion(start: Vec3d, end: Vec3d) -> Quat64:
@@ -334,7 +417,7 @@ def length_meters(value: Float64) -> Length:
     Returns:
         The length.
     """
-    return Length(Float32(value), METER)
+    return _length_meters(value)
 
 
 def angle_radians(value: Float64) -> Angle:
@@ -346,7 +429,7 @@ def angle_radians(value: Float64) -> Angle:
     Returns:
         The angle.
     """
-    return Angle(Float32(value), RADIAN)
+    return _angle_radians(value)
 
 
 def check_finite(value: Float64, what: String) raises:
@@ -359,7 +442,7 @@ def check_finite(value: Float64, what: String) raises:
     Raises:
         Error: If the number is not finite.
     """
-    if not isfinite(value):
+    if not isfinite(Float64(value)):
         raise Error(what + " must be a finite number")
 
 
@@ -381,8 +464,7 @@ def part(geometry: BufferGeometry, id: PartId) raises -> BufferGeometry:
         Error: If the code is not one there is, or the geometry cannot be
             welded; see `merge_vertices`.
     """
-    if not id.is_valid():
-        raise Error("A part code must be from zero to eight")
+    require_valid(id.is_valid(), "A part code must be from zero to eight")
     var tagged = geometry.clone() if geometry.is_indexed() else merge_vertices(
         geometry
     )
@@ -476,18 +558,9 @@ def compose_matrix(
     Returns:
         The matrix, rounded to `Float32`.
     """
-    var x2 = qx + qx
-    var y2 = qy + qy
-    var z2 = qz + qz
-    var xx = qx * x2
-    var xy = qx * y2
-    var xz = qx * z2
-    var yy = qy * y2
-    var yz = qy * z2
-    var zz = qz * z2
-    var wx = qw * x2
-    var wy = qw * y2
-    var wz = qw * z2
+    var xx, xy, xz, yy, yz, zz, wx, wy, wz = quaternion_terms[DType.float64](
+        qx, qy, qz, qw
+    )
     return basis_matrix(
         Vec3d(
             (1 - (yy + zz)) * scale.x, (xy + wz) * scale.x, (xz - wy) * scale.x

@@ -68,7 +68,10 @@ from extensions.humanoid.skeleton.arm.frame import arm_muscle_dimensions
 from extensions.humanoid.skeleton.hand.skin.geometry import (
     hand_skin_from_dimensions,
 )
-from extensions.humanoid.skeleton.arm.assembly import place_mesh, resolved_paint
+from extensions.humanoid.skeleton.arm.assembly import (
+    place_mesh_node,
+    resolved_paint,
+)
 from extensions.humanoid.skeleton.complexion import iris_albedo
 from extensions.humanoid.skeleton.head.eyes import eyeball_mesh
 from extensions.humanoid.skeleton.head.frame import head_muscle_dimensions
@@ -97,9 +100,10 @@ from extensions.humanoid.skeleton.torso.body import (
 from extensions.humanoid.spec import HumanoidSpec
 from materials.material import MaterialId
 from math.matrix4 import Matrix4
-from math.vector3 import Vector3
+from math.vector3 import Vector3, append_vector3
 from objects.skeleton import bind_skeleton
 from objects.skinned_mesh import SkinnedMesh
+from core.ordinal import require_valid, require_non_negative
 
 # The share of a triangle budget the body's skin takes, and the hair's
 # shell; each hand takes half of the rest.
@@ -242,9 +246,7 @@ def _outline(mut points: List[Float32], mesh: BufferGeometry) raises:
     ref placed = mesh.attribute_view(String(POSITION))
     for v in range(placed.count()):  # pragma: no branch
         var p = placed.vector3(v)
-        points.append(p.x)
-        points.append(p.y)
-        points.append(p.z)
+        append_vector3(points, p)
 
 
 def _budgeted(
@@ -531,7 +533,7 @@ def add_game_humanoid(
     holder.set_position(-head.x, -head.y, -head.z)
     var holder_id = scene.attach(holder^, bones[HEAD.value])
     var hair = resolved_paint(assets, hair_paint, hair_phong(spec.genome))
-    place_mesh(scene, assets, holder_id, shell^, hair)
+    _ = place_mesh_node(scene, assets, holder_id, shell^, hair)
     var face = Optional[GameFace](None)
     if facial_animation:
         var paints = List[MaterialId]()
@@ -546,7 +548,7 @@ def add_game_humanoid(
         var iris = assets.textures.add(iris_albedo(64, spec.genome))
         eye = assets.materials.add(eye_physical(iris))
     for _ in range(2):  # pragma: no branch
-        place_mesh(scene, assets, holder_id, eyes.pop(0), eye)
+        _ = place_mesh_node(scene, assets, holder_id, eyes.pop(0), eye)
     var strands = List[HairStrands]()
     if guides > 0:
         strands.append(
@@ -601,14 +603,14 @@ def game_build_settings(
         Error: If the hair style is unnamed, the triangle budget is
             negative, or facial animation requests guide strands.
     """
-    if triangles < 0:
-        raise Error("Game triangle budget must be nonnegative")
+    require_non_negative(triangles, "Game triangle budget must be nonnegative")
     if facial_animation and guides > 0:
         raise Error(
             "Facial triangle budgets do not support strand hair; use the shell"
         )
-    if not hair_style.is_valid():
-        raise Error("Game build settings require a named hair style")
+    require_valid(
+        hair_style.is_valid(), "Game build settings require a named hair style"
+    )
     var settings = UserData()
     if facial_animation:
         settings.set_string("facial_recipe", String(GAME_FACE_RECIPE))

@@ -19,7 +19,8 @@ prints each animal's mass, center of mass, stride, and the static load
 on each joint of its standing limbs.
 """
 
-from cameras.perspective_camera import PerspectiveCamera
+from tools._example_output import example_destination, blit, gallery_camera
+
 from core.assets import Assets
 from core.buffer_geometry import BufferGeometry
 from core.object3d import Object3D
@@ -63,6 +64,7 @@ from extensions.animals.registry import species_name, species_of
 from geometries.plane import plane
 from lights.light import directional_light, hemisphere_light
 from materials.material import Material, MaterialId
+from math.utils import max3
 from math.vector3 import Vector3
 from objects.mesh import Mesh
 from render.apng import encode
@@ -70,7 +72,6 @@ from render.framebuffer import Color, Framebuffer
 from renderers.renderer import Renderer, available_workers
 from std.math import max
 from std.pathlib import Path
-from std.sys import argv
 from units.si import DEGREE, METER, SECOND, Angle, Duration, Length
 
 comptime DEFAULT_OUTPUT = "out/animal_anatomy.png"
@@ -134,29 +135,8 @@ def scene_of(
     return scene^
 
 
-def blit(mut sheet: Framebuffer, piece: Framebuffer, x0: Int, y0: Int):
-    """Copy a tile into the sheet.
-
-    Args:
-        sheet: The whole picture.
-        piece: One tile.
-        x0: The tile's left column in the sheet.
-        y0: The tile's top row in the sheet.
-    """
-    var channels = len(piece.pixels) // (piece.width * piece.height)
-    for y in range(piece.height):
-        for x in range(piece.width):
-            var src = (y * piece.width + x) * channels
-            var dst = ((y0 + y) * sheet.width + x0 + x) * channels
-            for c in range(channels):
-                sheet.pixels[dst + c] = piece.pixels[src + c]
-
-
 def main() raises:
-    var args = argv()
-    var destination = String(DEFAULT_OUTPUT)
-    if len(args) > 1:
-        destination = String(args[1])
+    var destination = example_destination(String(DEFAULT_OUTPUT))
     var names: List[String] = ["horse", "dog", "cheetah"]
     var renderer = Renderer(TILE_W, TILE_H, workers=available_workers())
     renderer.set_background(BACKGROUND)
@@ -228,17 +208,17 @@ def main() raises:
                 var box = game.bounding_box()
                 var size = box.max - box.min
                 center = (box.max + box.min) * 0.5
-                reach = max(size.x, max(size.y, size.z))
+                reach = max3(size.x, size.y, size.z)
                 floor_y = box.min.y
             var layers = anatomy_layers(real, muscles, pose)
-            var camera = PerspectiveCamera(
-                Angle(30.0, DEGREE),
-                Float32(TILE_W) / Float32(TILE_H),
-                Length(reach * 0.05, METER),
-                Length(reach * 30.0, METER),
-            )
-            camera.place(
-                center + Vector3(1.35, 0.25, 0.35) * (reach * 1.4), center
+            var camera = gallery_camera(
+                TILE_W,
+                TILE_H,
+                center + Vector3(1.35, 0.25, 0.35) * (reach * 1.4),
+                center,
+                field_of_view=Angle(30.0, DEGREE),
+                near=Length(reach * 0.05, METER),
+                far=Length(reach * 30.0, METER),
             )
             var assets = Assets()
             var game_meshes: List[BufferGeometry] = [game^]

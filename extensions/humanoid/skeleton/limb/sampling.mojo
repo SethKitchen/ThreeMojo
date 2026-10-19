@@ -11,7 +11,9 @@ center still approximates its curved boundary. The cells do not provide
 an error bound for that approximation.
 """
 
-from math.vector3 import Vector3
+from core.ordinal import require_index_in_count
+from math.vector3 import Vector3, vector3_from_float64
+from math.finite import require_positive_finite
 from std.math import ceil, isfinite, min
 from units.si import Length
 
@@ -51,8 +53,9 @@ struct SampleGrid(ImplicitlyCopyable):
                 the step is not finite and positive, or the work exceeds
                 `MAX_SAMPLE_CELLS`.
         """
-        if not isfinite(step.value) or step.value <= 0:
-            raise Error("A sample step must be finite and positive")
+        require_positive_finite(
+            Float64(step.value), "A sample step must be finite and positive"
+        )
         var counts = SIMD[DType.float64, 4](1)
         for axis in range(3):  # pragma: no branch
             var lo = Float64(low.get_component(axis))
@@ -86,12 +89,15 @@ struct SampleGrid(ImplicitlyCopyable):
         Raises:
             Error: If a cell index is outside the grid.
         """
-        if ix < 0 or ix >= self.nx:
-            raise Error("A sample x index must be inside the grid")
-        if iy < 0 or iy >= self.ny:
-            raise Error("A sample y index must be inside the grid")
-        if iz < 0 or iz >= self.nz:
-            raise Error("A sample z index must be inside the grid")
+        require_index_in_count(
+            ix, self.nx, "A sample x index must be inside the grid"
+        )
+        require_index_in_count(
+            iy, self.ny, "A sample y index must be inside the grid"
+        )
+        require_index_in_count(
+            iz, self.nz, "A sample z index must be inside the grid"
+        )
         return self._cell(ix, iy, iz)
 
     def _cell(self, ix: Int, iy: Int, iz: Int) -> Tuple[Vector3, Vector3]:
@@ -104,10 +110,8 @@ struct SampleGrid(ImplicitlyCopyable):
         var y1 = min(y0 + s, Float64(self.high.y))
         var z1 = min(z0 + s, Float64(self.high.z))
         return (
-            Vector3(
-                Float32((x0 + x1) * 0.5),
-                Float32((y0 + y1) * 0.5),
-                Float32((z0 + z1) * 0.5),
+            vector3_from_float64(
+                (x0 + x1) * 0.5, (y0 + y1) * 0.5, (z0 + z1) * 0.5
             ),
-            Vector3(Float32(x1 - x0), Float32(y1 - y0), Float32(z1 - z0)),
+            vector3_from_float64(x1 - x0, y1 - y0, z1 - z0),
         )

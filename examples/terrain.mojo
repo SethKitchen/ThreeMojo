@@ -12,25 +12,26 @@ the height sets the vertex color. The ground turns one whole turn. The
 field itself stays put, so the loop has no jump.
 """
 
-from cameras.perspective_camera import PerspectiveCamera
+from tools._example_output import (
+    example_destination,
+    fill_and_key,
+    gallery_camera,
+    gallery_renderer,
+    spin_clip,
+)
+
 from core.assets import Assets
 from core.buffer_attribute import BufferAttribute
 from core.buffer_geometry import COLOR, POSITION, BufferGeometry
-from core.clock import Clock
-from core.object3d import NodeId, Object3D
+from core.object3d import Object3D
 from core.scene import Scene
-from lights.light import ambient_light, directional_light
 from materials.material import Material
 from math.noise import SimplexNoise
 from math.utils import SeededRandom
 from math.vector3 import Vector3
 from objects.mesh import Mesh
-from render.apng import encode
-from render.framebuffer import Color, Framebuffer
-from renderers.renderer import Renderer, available_workers
-from std.pathlib import Path
-from std.sys import argv, stderr
-from units.si import DEGREE, METER, Angle, Length, MILLISECOND
+from render.framebuffer import Color
+from units.si import DEGREE, METER, Angle, Length
 
 comptime DEFAULT_OUTPUT = "out/mathaddons.png"
 comptime WIDTH = 240
@@ -111,43 +112,10 @@ def _roll(mut geometry: BufferGeometry, field: SimplexNoise) raises:
     geometry.compute_vertex_normals()
 
 
-def frame_at(
-    renderer: Renderer,
-    camera: PerspectiveCamera,
-    assets: Assets,
-    mut scene: Scene,
-    ground: NodeId,
-    step: Angle,
-) raises -> Framebuffer:
-    """Turn the ground by `step` and render one frame.
-
-    Args:
-        renderer: The renderer to draw with.
-        camera: The camera, placed above the ground.
-        assets: The geometry and the material.
-        scene: The persistent scene, edited in place.
-        ground: The ground's node.
-        step: How much further the ground turns.
-
-    Returns:
-        The rendered frame.
-
-    Raises:
-        Error: If the scene or the render is invalid.
-    """
-    scene.node(ground).rotate_y(step)
-    scene.update()
-    return renderer.render(scene, assets, camera)
-
-
 def main() raises:
-    var args = argv()
-    var destination = String(DEFAULT_OUTPUT)
-    if len(args) > 1:
-        destination = String(args[1])
+    var destination = example_destination(String(DEFAULT_OUTPUT))
 
-    var renderer = Renderer(WIDTH, HEIGHT, workers=available_workers())
-    renderer.set_background(Color(16, 18, 26))
+    var renderer = gallery_renderer(WIDTH, HEIGHT, Color(16, 18, 26))
 
     var random = SeededRandom(7)
     var field = SimplexNoise(random)
@@ -164,34 +132,27 @@ def main() raises:
     var ground = scene.add(Object3D())
     scene.add_mesh(Mesh(ground_shape, paint, ground))
 
-    var lamp = Object3D()
-    lamp.set_position(1.4, 2.2, 1.2)
-    scene.add_light(ambient_light(Color(255, 255, 255), 0.4))
-    scene.add_light(
-        directional_light(Color(255, 244, 230), scene.add(lamp^), 2.1)
+    fill_and_key(
+        scene,
+        1.4,
+        2.2,
+        1.2,
+        Color(255, 255, 255),
+        0.4,
+        Color(255, 244, 230),
+        2.1,
     )
 
-    var camera = PerspectiveCamera(
-        Angle(40.0, DEGREE),
-        Float32(WIDTH) / Float32(HEIGHT),
-        Length(0.1, METER),
-        Length(30.0, METER),
+    var camera = gallery_camera(
+        WIDTH,
+        HEIGHT,
+        Vector3(1.7, 1.25, 2.15),
+        Vector3(0, 0, 0),
+        field_of_view=Angle(40.0, DEGREE),
+        near=Length(0.1, METER),
+        far=Length(30.0, METER),
     )
-    camera.place(Vector3(1.7, 1.25, 2.15), Vector3(0, 0, 0))
 
-    var step = Angle(Float32(360) / Float32(FRAMES), DEGREE)
-    var frame_clock = Clock()
-    frame_clock.start()
-    var frames = List[Framebuffer]()
-    for _ in range(FRAMES):
-        frames.append(frame_at(renderer, camera, assets, scene, ground, step))
-
-    print(
-        '{"frames_ms": ',
-        frame_clock.elapsed().to(MILLISECOND),
-        "}",
-        sep="",
-        file=stderr,
+    spin_clip(
+        renderer, camera, assets, scene, ground, FRAMES, DELAY_MS, destination
     )
-    Path(destination).write_bytes(encode(frames, delay_ms=DELAY_MS))
-    print("Wrote", destination, "-", FRAMES, "frames")

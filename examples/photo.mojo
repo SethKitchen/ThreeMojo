@@ -26,23 +26,25 @@ stay put -- so the lit face stays lit as the camera passes it, which a
 spinning cube under a fixed lamp cannot do.
 """
 
-from cameras.perspective_camera import PerspectiveCamera
+from tools._example_output import (
+    fill_and_key,
+    framed_camera,
+    gallery_renderer,
+    spin_clip,
+)
+
 from core.assets import Assets
-from core.clock import Clock
-from core.object3d import NodeId, Object3D
+from core.object3d import Object3D
 from core.scene import Scene
 from geometries.box import cube
-from lights.light import ambient_light, directional_light
 from materials.material import Material
 from objects.mesh import Mesh
-from render.apng import encode
-from render.framebuffer import Color, Framebuffer
+from render.framebuffer import Color
 from render.png import decode
 from render.texture import BILINEAR, REPEAT, texture_from
-from renderers.renderer import Renderer, available_workers
 from std.pathlib import Path
-from std.sys import argv, stderr
-from units.si import Angle, DEGREE, Length, METER, MILLISECOND
+from std.sys import argv
+from units.si import Angle, DEGREE, Length, METER
 
 comptime DEFAULT_IMAGE = "assets/brick.png"
 comptime DEFAULT_OUTPUT = "out/photo.png"
@@ -50,35 +52,6 @@ comptime WIDTH = 260
 comptime HEIGHT = 200
 comptime FRAMES = 36
 comptime DELAY_MS = 60
-
-
-def frame_at(
-    renderer: Renderer,
-    camera: PerspectiveCamera,
-    assets: Assets,
-    mut scene: Scene,
-    pivot: NodeId,
-    step: Angle,
-) raises -> Framebuffer:
-    """Swing the camera on by `step` and render one frame.
-
-    Args:
-        renderer: The renderer to draw with.
-        camera: The camera to view through, riding a child of `pivot`.
-        assets: The geometry, materials and textures.
-        scene: The persistent scene, edited in place.
-        pivot: The node the camera swings about.
-        step: How much further round the camera goes this frame.
-
-    Returns:
-        The rendered frame.
-
-    Raises:
-        Error: If the scene or the render is invalid.
-    """
-    scene.node(pivot).rotate_y(step)
-    scene.update()
-    return renderer.render(scene, assets, camera)
 
 
 def main() raises:
@@ -94,8 +67,7 @@ def main() raises:
     var image = decode(Path(source).read_bytes())
     print("Read", source, "-", image.width, "x", image.height)
 
-    var renderer = Renderer(WIDTH, HEIGHT, workers=available_workers())
-    renderer.set_background(Color(14, 16, 22))
+    var renderer = gallery_renderer(WIDTH, HEIGHT, Color(14, 16, 22))
 
     var assets = Assets()
     var block = assets.geometries.add(cube(Length(1.2, METER)))
@@ -113,11 +85,16 @@ def main() raises:
     var box = scene.add(tilted^)
     scene.add_mesh(Mesh(block, brick, box))
 
-    var lamp = Object3D()
-    lamp.set_position(0.4, 0.8, 0.5)
-    var lamp_node = scene.add(lamp^)
-    scene.add_light(ambient_light(Color(255, 255, 255), 0.79))
-    scene.add_light(directional_light(Color(255, 255, 255), lamp_node, 2.36))
+    fill_and_key(
+        scene,
+        0.4,
+        0.8,
+        0.5,
+        Color(255, 255, 255),
+        0.79,
+        Color(255, 255, 255),
+        2.36,
+    )
 
     # The camera rig: a pivot at the origin and an eye three meters out along
     # its +z, looking back down -z at the cube. Turning the pivot carries the
@@ -127,28 +104,16 @@ def main() raises:
     eye.set_position(0, 0, 3.0)
     var eye_node = scene.attach(eye^, pivot)
 
-    var camera = PerspectiveCamera(
-        Angle(45.0, DEGREE),
-        Float32(WIDTH) / Float32(HEIGHT),
-        Length(0.1, METER),
-        Length(100.0, METER),
+    var camera = framed_camera(
+        WIDTH,
+        HEIGHT,
+        field_of_view=Angle(45.0, DEGREE),
+        near=Length(0.1, METER),
+        far=Length(100.0, METER),
     )
     camera.attach(eye_node)
 
     # One full circuit over the loop, so the animation repeats seamlessly.
-    var step = Angle(Float32(360) / Float32(FRAMES), DEGREE)
-    var frame_clock = Clock()
-    frame_clock.start()
-    var frames = List[Framebuffer]()
-    for _ in range(FRAMES):
-        frames.append(frame_at(renderer, camera, assets, scene, pivot, step))
-
-    print(
-        '{"frames_ms": ',
-        frame_clock.elapsed().to(MILLISECOND),
-        "}",
-        sep="",
-        file=stderr,
+    spin_clip(
+        renderer, camera, assets, scene, pivot, FRAMES, DELAY_MS, destination
     )
-    Path(destination).write_bytes(encode(frames, delay_ms=DELAY_MS))
-    print("Wrote", destination, "-", FRAMES, "frames")

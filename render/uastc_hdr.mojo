@@ -53,6 +53,9 @@ This does not promise identical texels from every hardware decode mode.
 when one block does not unpack, and three.js throws. Here the decode
 raises.
 """
+from core.extent import require_positive_extent
+from core.ordinal import ordinal_valid, require_valid, require_non_negative
+from math.utils import clamp
 
 from render.compressed_texture import check_decoded_size
 from render.exr import half_to_float
@@ -85,7 +88,7 @@ struct AstcProfile(Equatable, ImplicitlyCopyable, Writable):
         Returns:
             True for UNORM, sRGB or HDR; False for every other value.
         """
-        return self.value >= 0 and self.value <= 2
+        return ordinal_valid(self.value, 2)
 
     def write_to(self, mut writer: Some[Writer]):
         """Write the profile's number.
@@ -113,7 +116,7 @@ struct EndpointMode(Equatable, ImplicitlyCopyable, Writable):
 
     def is_valid(self) -> Bool:
         """Return True for one of the sixteen modes."""
-        return self.value >= 0 and self.value <= 15
+        return ordinal_valid(self.value, 15)
 
     def is_ldr(self) -> Bool:
         """Return True for an LDR mode, whose endpoints are eight bits."""
@@ -518,11 +521,6 @@ def _bit_transfer_signed(a: Int, b: Int) -> Tuple[Int, Int]:
     return (new_a - 0x40 if (new_a & 0x20) != 0 else new_a, new_b)
 
 
-def _clamp(value: Int, top: Int) -> Int:
-    """Return a value clamped to 0 to `top`."""
-    return max(0, min(top, value))
-
-
 def _sign_extend(value: Int, bits: Int) -> Int:
     """Return the low `bits` bits of a value as a signed number."""
     var low = value & ((1 << bits) - 1)
@@ -544,7 +542,7 @@ def _endpoint_pair(low: List[Int], high: List[Int]) -> List[Int]:
     """Return two RGBA endpoints as eight numbers, each channel's low
     endpoint at its index and its high one four past it."""
     var out = low.copy()
-    out.extend(high.copy())
+    out.extend(Span(high))
     return out^
 
 
@@ -552,7 +550,7 @@ def _clamped_pair(low: List[Int], high: List[Int]) -> List[Int]:
     """Return two RGBA endpoints clamped to eight bits."""
     var out = List[Int]()
     for value in _endpoint_pair(low, high):  # pragma: no branch
-        out.append(_clamp(value, 0xFF))
+        out.append(clamp(value, 0, 0xFF))
     return out^
 
 
@@ -618,13 +616,13 @@ def _hdr_rgb_base_scale(v: List[Int]) -> List[Int]:
     elif majcomp == 2:
         high = [blue, green, red]
     return [
-        _clamp(high[0] - scale, 0xFFF),
-        _clamp(high[1] - scale, 0xFFF),
-        _clamp(high[2] - scale, 0xFFF),
+        clamp(high[0] - scale, 0, 0xFFF),
+        clamp(high[1] - scale, 0, 0xFFF),
+        clamp(high[2] - scale, 0, 0xFFF),
         0x780,
-        _clamp(high[0], 0xFFF),
-        _clamp(high[1], 0xFFF),
-        _clamp(high[2], 0xFFF),
+        clamp(high[0], 0, 0xFFF),
+        clamp(high[1], 0, 0xFFF),
+        clamp(high[2], 0, 0xFFF),
         0x780,
     ]
 
@@ -684,14 +682,14 @@ def _hdr_rgb(v: List[Int]) -> List[Int]:
     vd0 *= scale
     vd1 *= scale
     var low: List[Int] = [
-        _clamp(va - vc, 0xFFF),
-        _clamp(va - vb0 - vc - vd0, 0xFFF),
-        _clamp(va - vb1 - vc - vd1, 0xFFF),
+        clamp(va - vc, 0, 0xFFF),
+        clamp(va - vb0 - vc - vd0, 0, 0xFFF),
+        clamp(va - vb1 - vc - vd1, 0, 0xFFF),
     ]
     var high: List[Int] = [
-        _clamp(va, 0xFFF),
-        _clamp(va - vb0, 0xFFF),
-        _clamp(va - vb1, 0xFFF),
+        clamp(va, 0, 0xFFF),
+        clamp(va - vb0, 0, 0xFFF),
+        clamp(va - vb1, 0, 0xFFF),
     ]
     # Swap the major component back into red's place.
     var order: List[Int] = [0, 1, 2]
@@ -724,7 +722,7 @@ def _hdr_alpha(v6: Int, v7: Int) -> Tuple[Int, Int]:
     high -= 0x20 >> mode
     low <<= 4 - mode
     high *= 1 << (4 - mode)
-    return (low, _clamp(high + low, 0xFFF))
+    return (low, clamp(high + low, 0, 0xFFF))
 
 
 def decode_endpoints(
@@ -947,6 +945,35 @@ def _bad_weight_count(count: Int, bits: Int) -> Bool:
     return count > MAX_GRID_WEIGHTS or bits < 24 or bits > 96
 
 
+def require_astc_profile(profile: AstcProfile) raises:
+    """Refuse an ASTC profile that is not one of the three.
+
+    Nothing. The call returns when the profile is valid.
+
+    Args:
+        profile: UNORM, sRGB, or HDR.
+
+    Raises:
+        Error: If the profile is not valid.
+    """
+    require_valid(profile.is_valid(), "ASTC: invalid profile")
+
+
+def require_astc_block(block_size: Int) raises:
+    """Refuse an ASTC block that is not 4x4 or 6x6.
+
+    Nothing. The call returns when the block is four or six.
+
+    Args:
+        block_size: The width and height of each block.
+
+    Raises:
+        Error: If the block is another size.
+    """
+    if block_size != 4 and block_size != 6:
+        raise Error("ASTC: only 4x4 and 6x6 blocks are supported")
+
+
 def astc_block(
     data: List[UInt8],
     at: Int,
@@ -976,10 +1003,8 @@ def astc_block(
             fit, or a malformed void extent. Also invalid sizes or profiles,
             a truncated block, or an HDR endpoint in an LDR profile.
     """
-    if not profile.is_valid():
-        raise Error("ASTC: invalid profile")
-    if block_size != 4 and block_size != 6:
-        raise Error("ASTC: only 4x4 and 6x6 blocks are supported")
+    require_astc_profile(profile)
+    require_astc_block(block_size)
     if at < 0 or at > len(data) or len(data) - at < UASTC_BLOCK_BYTES:
         raise Error("ASTC: a block is truncated")
     var bits = _Bits(data, at, False)
@@ -989,7 +1014,7 @@ def astc_block(
     if bits.get(0, 9) == 0x1FC:
         var color = _void_extent(bits, profile)
         for _ in range(block_size * block_size):  # pragma: no branch
-            out.extend(color.copy())
+            out.extend(Span(color))
         return out^
     var row = (
         _row_of_high_bits()[bits.get(5, 4)] if bits.get(0, 2)
@@ -1056,8 +1081,9 @@ def astc_block(
         selector = bits.get(128 - weight_bits - extra, 2)
     var config_bits = 17 if partitions == 1 else 29
     var remaining = 128 - config_bits - extra - weight_bits
-    if remaining < 0:
-        raise Error("UASTC HDR: a block's weights leave no room for colors")
+    require_non_negative(
+        remaining, "UASTC HDR: a block's weights leave no room for colors"
+    )
     var value_count = 0
     for mode in modes:  # pragma: no branch
         value_count += mode.values()
@@ -1175,12 +1201,9 @@ def _astc_image[
         Error: If dimensions, profile, footprint or payload are invalid,
             the decoded image exceeds its resource bound, or a block is malformed.
     """
-    if not profile.is_valid():
-        raise Error("ASTC: invalid profile")
-    if block_size != 4 and block_size != 6:
-        raise Error("ASTC: only 4x4 and 6x6 blocks are supported")
-    if width <= 0 or height <= 0:
-        raise Error("ASTC: dimensions must be positive")
+    require_astc_profile(profile)
+    require_astc_block(block_size)
+    require_positive_extent(width, height, "ASTC: dimensions must be positive")
     check_decoded_size(width, height, profile == ASTC_HDR)
     var across = (width + block_size - 1) // block_size
     var down = (height + block_size - 1) // block_size

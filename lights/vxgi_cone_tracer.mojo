@@ -31,6 +31,13 @@ kernel points one at a device buffer. `render.gpu_vxgi` runs the same
 functions on the device, so the two agree.
 """
 
+from math.sine import fraction
+from math.utils import (
+    clamp,
+    edge_index,
+    interleaved_gradient_noise as _gradient_noise,
+    mix_trilinear,
+)
 from math.vector3 import Vector3
 from std.math import cos, exp2, floor, log2, pow, sin, sqrt
 from std.memory import bitcast
@@ -339,13 +346,13 @@ def _axis(coordinate: Float32, extent: Int) -> Tuple[Int, Int, Float32]:
     clamped to the edge, and how far it is past the first."""
     # Past the volume the edge texel is read, so a far coordinate is held
     # first: an integer cannot hold every float.
-    var texel = max(Float32(-1), min(Float32(extent), coordinate))
+    var texel = clamp(coordinate, Float32(-1), Float32(extent))
     var low = floor(texel)
     var fraction = texel - low
     var first = Int(low)
     var second = first + 1
-    first = max(0, min(extent - 1, first))
-    second = max(0, min(extent - 1, second))
+    first = edge_index(first, extent)
+    second = edge_index(second, extent)
     return (first, second, fraction)
 
 
@@ -389,13 +396,9 @@ def sample_level(
     var fx = ax[2]
     var fy = ay[2]
     var fz = az[2]
-    var x00 = c000 + (c100 - c000) * fx
-    var x10 = c010 + (c110 - c010) * fx
-    var x01 = c001 + (c101 - c001) * fx
-    var x11 = c011 + (c111 - c011) * fx
-    var y0 = x00 + (x10 - x00) * fy
-    var y1 = x01 + (x11 - x01) * fy
-    return y0 + (y1 - y0) * fz
+    return mix_trilinear[DType.float32, 4](
+        c000, c100, c010, c110, c001, c101, c011, c111, fx, fy, fz
+    )
 
 
 def sample_volume(
@@ -417,7 +420,7 @@ def sample_volume(
     Returns:
         The blend.
     """
-    var held = max(Float32(0), min(grid.max_level(), lod))
+    var held = clamp(lod, Float32(0), grid.max_level())
     var base = floor(held)
     var fraction = held - base
     var low = Int(base)
@@ -550,7 +553,7 @@ def trace_cone(
             )
             var seen = sample_volume(opacity, grid, uvw, lod)
             var along = seen[0] * wx + seen[1] * wy + seen[2] * wz
-            along = max(Float32(0), min(Float32(1), along))
+            along = clamp(along, 0, 1)
             var a = 1 - pow(1 - along, grid.step_scale)
             var weight = a * (1 - alpha)
             if gathers:
@@ -591,7 +594,7 @@ def fract(value: Float32) -> Float32:
     Returns:
         The fraction, zero to one.
     """
-    return value - floor(value)
+    return fraction(value)
 
 
 def interleaved_gradient_noise(x: Float32, y: Float32) -> Float32:
@@ -605,10 +608,7 @@ def interleaved_gradient_noise(x: Float32, y: Float32) -> Float32:
     Returns:
         The noise, zero to one.
     """
-    return fract(
-        Float32(52.9829189)
-        * fract(x * Float32(0.06711056) + y * Float32(0.00583715))
-    )
+    return _gradient_noise(x, y)
 
 
 def tangent_frame(normal: Vector3) -> Tuple[Vector3, Vector3]:
@@ -675,7 +675,7 @@ def unorm8(value: Float32) -> Float32:
     Returns:
         The nearest of the 256 steps from zero to one.
     """
-    var held = max(Float32(0), min(Float32(1), value))
+    var held = clamp(value, 0, 1)
     return floor(held * 255 + 0.5) / 255
 
 

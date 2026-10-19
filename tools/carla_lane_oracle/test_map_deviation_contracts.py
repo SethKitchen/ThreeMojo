@@ -227,11 +227,15 @@ class DeviationIntegrationControls(unittest.TestCase):
                                    if current_typed else
                                    'reviewed seed-count successor: deviation correctness fixture changed: ')
                                   + name)
+                        pr760 = cleanup._pr760_select(self.root)
+                        if pr760:
+                            reason = 'full-audit cleanup successor: PR760 physical input changed: ' + name
                         with self.assertRaises(cleanup._OperationCoherenceError) as caught:
                             seed.verify(self.root)
                         self.assertIs(type(caught.exception), cleanup._OperationCoherenceError)
                         self.assertEqual(str(caught.exception), reason)
-                        self.assertIs(type(caught.exception.__cause__), ValueError)
+                        self.assertIs(type(caught.exception.__cause__),
+                                      cleanup.ContractError if pr760 else ValueError)
                         self.assertEqual(str(caught.exception.__cause__), reason)
                 finally: path.write_bytes(original)
                 read = Path.read_bytes
@@ -315,6 +319,21 @@ class DeviationCurrentIntegrationControls(DeviationIntegrationControls):
         for raw in (self.before, self.current + b'\n# forged\n'):
             with self.map_state(raw):
                 self.assertEqual(loops.reviewed_nonempty_loops(self.root, 'extensions/carla/map'), {})
+
+
+
+class DeviationCommon758IntegrationControls(unittest.TestCase):
+    """Keep the pre-PR760 typed endpoint refusal independently reachable."""
+
+    def setUp(self):
+        self.root = fixtures.copy_common758_boundary_root(self, ROOT)
+        self.current = (self.root/deviation.MODULE).read_bytes()
+        self.historical = cleanup.typed_boundary.historical_source(
+            deviation.MODULE, self.current.decode())
+        self.before = deviation.predecessor_source(self.historical).encode()
+
+    test_every_new_test_and_leaf_read_is_pinned_and_unreadable_fails = (
+        DeviationIntegrationControls.test_every_new_test_and_leaf_read_is_pinned_and_unreadable_fails)
 
 
 if __name__ == '__main__':

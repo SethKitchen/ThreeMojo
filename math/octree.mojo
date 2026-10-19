@@ -58,44 +58,14 @@ from math.bounds import Box3, Sphere
 from math.capsule import Capsule
 from math.ray import Ray, _RayProducts
 from math.triangle import Triangle, _segment_closest_points
-from math.vector3 import Vector3
+from math.utils import clamp, max3, min3
+from math.vector3 import Vector3, mix_delta3
 from std.math import inf, max, min, sqrt
-
-
-def _sat_axis(
-    axis: Vector3, v0: Vector3, v1: Vector3, v2: Vector3, extents: Vector3
-) -> Bool:
-    """Return whether an axis does not separate a triangle from a box at the
-    origin. One step of three.js's `satForAxes`.
-
-    Args:
-        axis: The axis.
-        v0: A corner, relative to the box's center.
-        v1: A corner.
-        v2: A corner.
-        extents: The box's half size.
-
-    Returns:
-        Whether the two overlap along the axis.
-    """
-    var r = (
-        extents.x * abs(axis.x)
-        + extents.y * abs(axis.y)
-        + extents.z * abs(axis.z)
-    )
-    var p0 = v0.dot(axis)
-    var p1 = v1.dot(axis)
-    var p2 = v2.dot(axis)
-    return not (max(-max(p0, max(p1, p2)), min(p0, min(p1, p2))) > r)
 
 
 def box_intersects_triangle(box: Box3, triangle: Triangle) -> Bool:
     """Return whether a triangle meets a box. three.js:
     `Box3.intersectsTriangle`.
-
-    The separating axis test of Akenine-Moller: the nine cross products of
-    the box's axes with the triangle's edges, the three axes of the box, and
-    the triangle's normal.
 
     Args:
         box: The box.
@@ -104,33 +74,7 @@ def box_intersects_triangle(box: Box3, triangle: Triangle) -> Bool:
     Returns:
         Whether no axis separates them. False for an empty box.
     """
-    if box.is_empty():
-        return False
-    var center = box.center()
-    var extents = box.max - center
-    var v0 = triangle.a - center
-    var v1 = triangle.b - center
-    var v2 = triangle.c - center
-    var f0 = v1 - v0
-    var f1 = v2 - v1
-    var f2 = v0 - v2
-    var normal = f0
-    normal.cross(f1)
-    return (
-        _sat_axis(Vector3(0, -f0.z, f0.y), v0, v1, v2, extents)
-        and _sat_axis(Vector3(0, -f1.z, f1.y), v0, v1, v2, extents)
-        and _sat_axis(Vector3(0, -f2.z, f2.y), v0, v1, v2, extents)
-        and _sat_axis(Vector3(f0.z, 0, -f0.x), v0, v1, v2, extents)
-        and _sat_axis(Vector3(f1.z, 0, -f1.x), v0, v1, v2, extents)
-        and _sat_axis(Vector3(f2.z, 0, -f2.x), v0, v1, v2, extents)
-        and _sat_axis(Vector3(-f0.y, f0.x, 0), v0, v1, v2, extents)
-        and _sat_axis(Vector3(-f1.y, f1.x, 0), v0, v1, v2, extents)
-        and _sat_axis(Vector3(-f2.y, f2.x, 0), v0, v1, v2, extents)
-        and _sat_axis(Vector3(1, 0, 0), v0, v1, v2, extents)
-        and _sat_axis(Vector3(0, 1, 0), v0, v1, v2, extents)
-        and _sat_axis(Vector3(0, 0, 1), v0, v1, v2, extents)
-        and _sat_axis(normal, v0, v1, v2, extents)
-    )
+    return box.intersects_triangle(triangle)
 
 
 def _normalized(vector: Vector3) -> Vector3:
@@ -159,18 +103,6 @@ def _gap_sq(a: Vector3, b: Vector3) -> Float32:
     """
     var d = a - b
     return d.dot(d)
-
-
-def _unit(value: Float32) -> Float32:
-    """Return a number limited to the range from zero to one.
-
-    Args:
-        value: The number.
-
-    Returns:
-        The limited number.
-    """
-    return max(Float32(0), min(Float32(1), value))
 
 
 @fieldwise_init
@@ -258,7 +190,7 @@ def _closest_on_segment(
     var length_sq = start_end.dot(start_end)
     if length_sq == 0:
         return None
-    var t = _unit(start_end.dot(point - start) / length_sq)
+    var t = clamp(start_end.dot(point - start) / length_sq, 0, 1)
     return start_end * t + start
 
 
@@ -352,7 +284,7 @@ def triangle_capsule_intersect(
     var span = abs(d1) + abs(d2)
     # Both endpoints can touch the radius-offset plane. Use either endpoint.
     var delta = abs(d1 / span) if span != 0 else Float32(0)
-    var crossing = capsule.start + (capsule.end - capsule.start) * delta
+    var crossing = mix_delta3(capsule.start, capsule.end, delta)
     if _contains_point(triangle, crossing):
         return Contact(plane.normal, crossing, abs(min(d1, d2)))
     var r2 = capsule.radius * capsule.radius
@@ -512,29 +444,29 @@ struct Octree(Movable):
         self.bounds.min = Vector3(
             min(
                 self.bounds.min.x,
-                min(triangle.a.x, min(triangle.b.x, triangle.c.x)),
+                min3(triangle.a.x, triangle.b.x, triangle.c.x),
             ),
             min(
                 self.bounds.min.y,
-                min(triangle.a.y, min(triangle.b.y, triangle.c.y)),
+                min3(triangle.a.y, triangle.b.y, triangle.c.y),
             ),
             min(
                 self.bounds.min.z,
-                min(triangle.a.z, min(triangle.b.z, triangle.c.z)),
+                min3(triangle.a.z, triangle.b.z, triangle.c.z),
             ),
         )
         self.bounds.max = Vector3(
             max(
                 self.bounds.max.x,
-                max(triangle.a.x, max(triangle.b.x, triangle.c.x)),
+                max3(triangle.a.x, triangle.b.x, triangle.c.x),
             ),
             max(
                 self.bounds.max.y,
-                max(triangle.a.y, max(triangle.b.y, triangle.c.y)),
+                max3(triangle.a.y, triangle.b.y, triangle.c.y),
             ),
             max(
                 self.bounds.max.z,
-                max(triangle.a.z, max(triangle.b.z, triangle.c.z)),
+                max3(triangle.a.z, triangle.b.z, triangle.c.z),
             ),
         )
         self._nodes[0].triangles.append(len(self.triangles))

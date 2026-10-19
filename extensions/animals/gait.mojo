@@ -28,7 +28,12 @@ from extensions.sdf.vector import (
     smoothstep,
     length,
 )
-from std.math import atan2, acos, cos, floor, isfinite, pi, sin, sqrt
+from math.norm import squared_length2
+from math.sine import fraction
+from math.utils import clamp_unit, max3
+from math.finite import require_finite, require_finite_group
+from std.math import atan2, acos, cos, isfinite, pi, sin, sqrt
+from units.measure import length_meters
 from units.si import METER, SECOND, Duration, Length
 
 # Each foot's phase offset in the lateral-sequence walk: left fore, right
@@ -120,8 +125,10 @@ def solve_two_bone(
             y-z plane, or the solution is outside the numeric range.
     """
     for p in [root, mid, end, target]:  # pragma: no branch
-        if not (isfinite(p.x) and isfinite(p.y) and isfinite(p.z)):
-            raise Error("A leg point must be finite")
+        require_finite_group(
+            p.is_finite(),
+            "A leg point must be finite",
+        )
     var a = mid - root
     var b = end - mid
     var la = length(V3(0.0, a.y, a.z))
@@ -130,8 +137,9 @@ def solve_two_bone(
         raise Error("A leg link must have finite positive planar length")
     var t = target - root
     var distance = length(V3(0.0, t.y, t.z))
-    if not isfinite(distance):
-        raise Error("A leg target displacement must be finite")
+    require_finite(
+        Float64(distance), "A leg target displacement must be finite"
+    )
     var reach = max(abs(la - lb), min(distance, la + lb))
     # Equal links can fold exactly onto their root. A small relative
     # radius selects a stable fold direction without dividing by zero.
@@ -142,7 +150,7 @@ def solve_two_bone(
     var projected = root + direction * reach
     # The bind bend: which side of the root-to-end line the middle lies.
     var e = end - root
-    var scale = max(la, max(lb, reach))
+    var scale = max3(la, lb, reach)
     var bend_cross = (e.y / scale) * (a.z / scale) - (e.z / scale) * (
         a.y / scale
     )
@@ -153,8 +161,10 @@ def solve_two_bone(
     var denominator = 2.0 * na * nr
     if not denominator > 0.0:
         raise Error("A leg length ratio is outside the supported numeric range")
-    var cos_root = (na * na + nr * nr - nb * nb) / denominator
-    var at_root = acos(max(-1.0, min(1.0, cos_root)))
+    var cos_root = (
+        squared_length2[DType.float64](na, nr) - nb * nb
+    ) / denominator
+    var at_root = acos(clamp_unit(cos_root))
     var upper = _angle(direction) - bend * at_root
     var upper_dir = V3(0.0, cos(upper), sin(upper))
     var new_mid = root + upper_dir * la
@@ -218,7 +228,7 @@ def _walk_parameters(
     # stance. The simple two-link rig cannot realize every target stride.
     var hip = rig.j("hipL").y
     var desired = DUTY * Float64(
-        stride_length(froude, Length(Float32(hip), METER)).to(METER)
+        stride_length(froude, length_meters(hip)).to(METER)
     )
     var bob = 0.012 * hip
     var lengths = List[Float64]()
@@ -286,7 +296,7 @@ def walk_stride(rig: Rig, froude: Float64 = WALK_FROUDE) raises -> Length:
     """
     if not is_quadruped(rig):
         return Length(0.0, METER)
-    return Length(Float32(_walk_parameters(rig, froude)[0] / DUTY), METER)
+    return length_meters(_walk_parameters(rig, froude)[0] / DUTY)
 
 
 def walk_pose_at(
@@ -310,11 +320,10 @@ def walk_pose_at(
         Error: If time is not finite or the walk parameters are invalid.
     """
     var seconds = Float64(elapsed.to(SECOND))
-    if not isfinite(seconds):
-        raise Error("Walk time must be finite")
+    require_finite(Float64(seconds), "Walk time must be finite")
     if not is_quadruped(rig):
         return Pose(len(rig.bones))
-    var hip = Length(Float32(rig.j("hipL").y), METER)
+    var hip = length_meters(rig.j("hipL").y)
     var frequency = Float64(stride_frequency(froude, hip).value)
     return walk_pose(rig, seconds * frequency, froude)
 
@@ -346,19 +355,18 @@ def walk_pose(
     var pose = Pose(len(rig.bones))
     if not is_quadruped(rig):
         return pose^
-    if not isfinite(phase):
-        raise Error("Walk phase must be finite")
-    var p = _wrap(phase)
+    require_finite(Float64(phase), "Walk phase must be finite")
+    var p = fraction(phase)
     var hip = rig.j("hipL").y
     var parameters = _walk_parameters(rig, froude)
     var stride = parameters[0]
     var bob = parameters[1] * cos(4.0 * pi * p)
     pose.root.t = V3(0.0, bob, 0.0)
     var lift = 0.11 * hip
-    _leg(pose, rig, "L", True, _wrap(p + WALK_FL), stride, lift)
-    _leg(pose, rig, "R", True, _wrap(p + WALK_FR), stride, lift)
-    _leg(pose, rig, "L", False, _wrap(p + WALK_HL), stride, lift)
-    _leg(pose, rig, "R", False, _wrap(p + WALK_HR), stride, lift)
+    _leg(pose, rig, "L", True, fraction(p + WALK_FL), stride, lift)
+    _leg(pose, rig, "R", True, fraction(p + WALK_FR), stride, lift)
+    _leg(pose, rig, "L", False, fraction(p + WALK_HL), stride, lift)
+    _leg(pose, rig, "R", False, fraction(p + WALK_HR), stride, lift)
     # The back bobs twice a stride, lowest as each hind foot takes the
     # weight, and the tail swings once.
     pose.turn(rig, "neck2", V3(1.0, 0.0, 0.0), 0.04 * sin(4.0 * pi * p))
@@ -367,10 +375,6 @@ def walk_pose(
         if name.startswith("tail"):
             pose.turn(rig, name, V3(0.0, 1.0, 0.0), 0.06 * sin(2.0 * pi * p))
     return pose^
-
-
-def _wrap(x: Float64) -> Float64:
-    return x - floor(x)
 
 
 def spine_count(rig: Rig) -> Int:

@@ -196,7 +196,7 @@ export function runWorker({ module, memory, stack }) {
  * Load a module made for many threads. `threads` counts the workers, and the
  * page's own thread works too, so a page that wants every core of an 8-core
  * machine asks for 7. `spawn` makes one worker and is for a host that is not
- * a page, such as Node. It returns an object with postMessage.
+ * a page, such as Node. It returns an object with postMessage and terminate.
  */
 export async function loadThreads(source, { threads, spawn = spawnWorker } = {}) {
   if (!(threads >= 1)) throw new Error("loadThreads needs threads of at least 1");
@@ -208,13 +208,21 @@ export async function loadThreads(source, { threads, spawn = spawnWorker } = {})
   // The count includes the page's thread, which runs tasks while it waits.
   // Set it before the runtime starts, which asks for the number of cores.
   exports.mw_set_threads(threads + 1);
-  for (let index = 0; index < threads; index++) {
-    // mw_stack returns the top of a block, where a stack starts.
-    const stack = exports.mw_stack(WORKER_STACK);
-    if (stack === 0) throw new Error("The module has no room for the stack of a worker");
-    const worker = spawn();
-    worker.postMessage({ module, memory, stack });
-    workers.push(worker);
+  try {
+    for (let index = 0; index < threads; index++) {
+      // mw_stack returns the top of a block, where a stack starts.
+      const stack = exports.mw_stack(WORKER_STACK);
+      if (stack === 0) throw new Error("The module has no room for the stack of a worker");
+      const worker = spawn();
+      // Keep it before posting, so a failed post also terminates this worker.
+      workers.push(worker);
+      worker.postMessage({ module, memory, stack });
+    }
+    return new Library(exports, memory, workers);
+  } catch (error) {
+    // A page can fall back to one thread. Do not leave a partial pool holding
+    // the shared memory alive after its library failed to start.
+    for (const worker of workers) worker.terminate();
+    throw error;
   }
-  return new Library(exports, memory, workers);
 }

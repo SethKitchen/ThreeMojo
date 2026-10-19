@@ -19,6 +19,7 @@ prove it. When deletion arrives, that is the moment to add one.
 this type: the absence of a texture is a fact about textures.
 """
 
+from core.ordinal import require_index_in_count
 from render.texture import Texture
 
 from std.memory import ArcPointer
@@ -89,6 +90,7 @@ struct TextureStore(Movable):
         Raises:
             Error: If no texture has that id.
         """
-        if id.value < 0 or id.value >= len(self.textures):
-            raise Error("No texture has that id")
+        require_index_in_count(
+            id.value, len(self.textures), "No texture has that id"
+        )
         return self.textures[id.value]

@@ -13,6 +13,8 @@ wrong color rather than as a small error.
 """
 
 from math.vector2 import Vector2
+from postprocessing.sampling import Untracked
+from render.computation import ComputeNodes
 from render.framebuffer import Color, FloatColor
 from render.srgb import LINEAR
 from render.texture import (
@@ -45,6 +47,7 @@ from render.texture import (
     plan_levels,
     row_coordinate,
 )
+from std.memory import bitcast
 from std.testing import (
     TestSuite,
     assert_almost_equal,
@@ -431,6 +434,78 @@ def test_the_constructors_take_three_js_defaults() raises:
     assert_equal(floats.min_filter, LINEAR_MIPMAP_LINEAR)
     assert_true(floats.flip_y)
     assert_equal(floats.alpha, COVERAGE)
+
+
+def test_finite_compute_gradients_keep_each_wrap_at_extreme_coordinates() raises:
+    var code = List[Float32]()
+    # Red and green identify the column and row of a 2 by 2 image.
+    var images: List[Float32] = [
+        0,
+        0,
+        0.75,
+        0.5,
+        1,
+        0,
+        0.75,
+        0.5,
+        0,
+        1,
+        0.75,
+        0.5,
+        1,
+        1,
+        0.75,
+        0.5,
+    ]
+    var modes = [CLAMP, REPEAT, MIRROR]
+    # At -0.25, the wrapped columns are 0, 1, 0. At 1.25, the rows
+    # are 1, 0, 1. These expectations do not call the placement helper.
+    var negative: List[Float32] = [0, 1, 0]
+    var positive: List[Float32] = [1, 0, 1]
+    var largest = bitcast[DType.float32](UInt32(0x7F7FFFFF))
+    var dx = Vector2(largest, -largest)
+    var dy = Vector2(-largest, largest)
+    for across in range(3):
+        for up in range(3):
+            var wraps: List[Int32] = [
+                Int32(modes[across].value),
+                Int32(modes[up].value),
+            ]
+            var source = ComputeNodes(
+                code.unsafe_ptr()
+                .unsafe_mut_cast[False]()
+                .unsafe_origin_cast[Untracked](),
+                images.unsafe_ptr()
+                .unsafe_mut_cast[False]()
+                .unsafe_origin_cast[Untracked](),
+                wraps.unsafe_ptr()
+                .unsafe_mut_cast[False]()
+                .unsafe_origin_cast[Untracked](),
+                2,
+                2,
+                0,
+                0,
+            )
+            var ordinary = source.sample_grad(0, -0.25, 1.25, dx, dy)
+            assert_equal(ordinary.r, negative[across])
+            assert_equal(ordinary.g, positive[up])
+            assert_equal(ordinary.b, 0.75)
+            assert_equal(ordinary.a, 0.5)
+            # The largest finite Float32 is an even integer. Repeat and
+            # mirror therefore return to zero; clamp retains the edge.
+            var far = source.sample_grad(0, largest, -largest, dx, dy)
+            assert_equal(far.r, Float32(Int(across == 0)))
+            assert_equal(far.g, 0)
+            assert_equal(far.b, 0.75)
+            assert_equal(far.a, 0.5)
+            var reverse = source.sample_grad(0, -largest, largest, dx, dy)
+            assert_equal(reverse.r, 0)
+            assert_equal(reverse.g, Float32(Int(up == 0)))
+            assert_equal(reverse.b, 0.75)
+            assert_equal(reverse.a, 0.5)
+            _ = wraps^
+    _ = code^
+    _ = images^
 
 
 def main() raises:

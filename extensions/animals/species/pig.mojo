@@ -21,7 +21,9 @@ from extensions.animals.coat import (
     EyeLook,
     Paint,
     Palette,
+    channel_gain,
     mix3,
+    shade_swatch,
     srgb,
 )
 from extensions.sdf.ids import BoneId
@@ -33,16 +35,20 @@ from extensions.animals.parts import (
 )
 from extensions.sdf.sculpt import cone_or_ball, ell_y
 from extensions.animals.kit import (
+    side_sign,
+    digitigrade_fore,
+    digitigrade_hind,
     EyeSpec,
     eye_frame_of,
     draw_u32,
     is_front_limb,
     imul32,
     is_limb,
+    is_upper_limb,
     stream_of,
     lid_distance,
 )
-from extensions.animals.noise import fbm3, vnoise3
+from extensions.animals.noise import fbm3, vnoise3, centered_fbm, offset_fbm
 from extensions.animals.options import (
     FEMALE,
     JUVENILE,
@@ -63,9 +69,11 @@ from extensions.sdf.vector import (
     V3,
     clamp,
     cross,
+    cubic_bezier,
     dot,
     length,
     lerp,
+    mix,
     normalize,
     smoothstep,
     rotate_about,
@@ -76,6 +84,8 @@ from extensions.animals.warp import (
     length_warp,
     scale_about_warp,
 )
+from math.norm import squared_length2
+from math.utils import clamp_unit, nearest_distance
 from std.math import asin, atan2, cos, exp, floor, pi, pow, sin, sqrt
 from extensions.sdf.distance import segment_distance
 
@@ -175,7 +185,7 @@ def pig_traits(mut r: AnimalRandom, options: AnimalOptions) raises -> Traits:
     var h1: List[Float64] = [0.9, 0.88, 0.92, 0.88, 0.82, 0.88]
     var mature = 0.0 if piglet else pow(R.next(), 1.4)
     var boar = 0.5 + 0.5 * mature if male and not piglet else 0.0
-    var href = h0[variant] + (h1[variant] - h0[variant]) * mature
+    var href = mix(h0[variant], h1[variant], mature)
     var size: Float64
     if piglet:
         size = 0.36 + 0.14 * R.next()
@@ -540,7 +550,7 @@ def _leaf_point(
             + f.wave * sin(2.0 * pi * 3.4 * u + wph) * smoothstep(0.1, 0.35, u)
         ),
     )
-    var cup = f.cup_root + (f.cup_tip - f.cup_root) * u
+    var cup = mix(f.cup_root, f.cup_tip, u)
     var kap = cup / w
     var x = a * w
     var q = p + l * (sin(kap * x) / kap) + h * ((1.0 - cos(kap * x)) / kap)
@@ -675,7 +685,7 @@ def pig_rig(t: Traits) raises -> Rig:
 
 def _sz(z: Float64, k: Float64) -> Float64:
     # The snout's length: the rostral end moves, the eyes stay.
-    return 0.06 + (z - 0.06) * k if z > 0.06 else z
+    return mix(0.06, z, k) if z > 0.06 else z
 
 
 # ---------------------------------------------------------------- SCULPT
@@ -712,26 +722,16 @@ def _tusk_cones(t: Traits, s: Float64) -> List[V3]:
     for i in range(8):  # pragma: no branch
         var t0 = Float64(i) / 8.0
         var t1 = Float64(i + 1) / 8.0
-        out.append(_bezier(p0, p1, p2, p3, t0))
-        out.append(_bezier(p0, p1, p2, p3, t1))
+        out.append(cubic_bezier(p0, p1, p2, p3, t0))
+        out.append(cubic_bezier(p0, p1, p2, p3, t1))
         out.append(
             V3(
-                r1 + (r0 - r1) * (1.0 - pow(t0, 1.3)),
-                r1 + (r0 - r1) * (1.0 - pow(t1, 1.3)),
+                mix(r1, r0, 1.0 - pow(t0, 1.3)),
+                mix(r1, r0, 1.0 - pow(t1, 1.3)),
                 0.0,
             )
         )
     return out^
-
-
-def _bezier(p0: V3, p1: V3, p2: V3, p3: V3, t: Float64) -> V3:
-    var u = 1.0 - t
-    return (
-        p0 * (u * u * u)
-        + p1 * (3.0 * u * u * t)
-        + p2 * (3.0 * u * t * t)
-        + p3 * (t * t * t)
-    )
 
 
 def _pig_eye(mut m: SdfModel, h: BoneId, e: EyeSpec, s: Float64) raises:
@@ -1158,28 +1158,21 @@ def pig_sculpt(mut m: SdfModel, rig: Rig, t: Traits) raises:
 
     # EARS: curved leaves tiled with slabs.
     for side in [String("L"), String("R")]:  # pragma: no branch
-        var s = 1.0 if side == "L" else -1.0
+        var s = side_sign(side)
         _ear_leaf(m, rig.bone("ear" + side), rig.j("earBase" + side), s, t)
 
     # LEGS: short and sunk in the body.
     var leg_k = (1.0 + 0.1 * boar) * (1.05 if piglet else 1.0)
     for side in [String("L"), String("R")]:  # pragma: no branch
-        var s = 1.0 if side == "L" else -1.0
-        var lat = V3(s, 0, 0)
-        var sc = rig.j("scapTop" + side)
-        var sh = rig.j("shoulder" + side)
-        var e = rig.j("elbow" + side)
-        var w = rig.j("wrist" + side)
-        var mc = rig.j("mcp" + side)
+        var s = side_sign(side)
+        var lat, sc, sh, e, w, mc, toe, scap, hum, rad, meta, fpaw = (
+            digitigrade_fore(rig, side, s)
+        )
         var cf = rig.j("fcoffin" + side)
-        var toe = rig.j("ftoe" + side)
-        var hum = rig.bone("humerus" + side)
-        var rad = rig.bone("radius" + side)
-        var meta = rig.bone("metacarpus" + side)
         _ = ell_y(
             m,
             "scapmuscle",
-            rig.bone("scapula" + side),
+            scap,
             lerp(sc, sh, 0.5) + V3(0.055 * s, 0, -0.01),
             sh - sc,
             V3(0.06 + 0.02 * boar, 0.15, 0.11),
@@ -1264,7 +1257,7 @@ def pig_sculpt(mut m: SdfModel, rig: Rig, t: Traits) raises:
         )
         _digits(
             m,
-            rig.bone("fpaw" + side),
+            fpaw,
             rig.bone("fhoof" + side),
             mc,
             cf,
@@ -1272,15 +1265,10 @@ def pig_sculpt(mut m: SdfModel, rig: Rig, t: Traits) raises:
             leg_k,
         )
 
-        var hp = rig.j("hip" + side)
-        var kn = rig.j("knee" + side)
-        var hk = rig.j("hock" + side)
-        var mt = rig.j("mtp" + side)
+        var hp, kn, hk, mt, tt, fem, tib, mtar, hpaw = digitigrade_hind(
+            rig, side
+        )
         var chf = rig.j("hcoffin" + side)
-        var tt = rig.j("htoe" + side)
-        var fem = rig.bone("femur" + side)
-        var tib = rig.bone("tibia" + side)
-        var mtar = rig.bone("metatarsus" + side)
         _ = ell_y(
             m,
             "thigh",
@@ -1382,7 +1370,7 @@ def pig_sculpt(mut m: SdfModel, rig: Rig, t: Traits) raises:
         )
         _digits(
             m,
-            rig.bone("hpaw" + side),
+            hpaw,
             rig.bone("hhoof" + side),
             mt,
             chf,
@@ -1648,11 +1636,7 @@ def pig_palette(t: Traits) raises -> Palette:
         var c = srgb(hexes[i])
         out.set(
             names[i],
-            V3(
-                c.x * (1.0 + 0.06 * k + l),
-                c.y * (1.0 + l),
-                c.z * (1.0 - 0.05 * k + l),
-            ),
+            shade_swatch(c, k, l, 0.06, 0.0, -0.05),
         )
     out.set("white", srgb(0xE8D6CC))
     out.set("spot", srgb(0x3A3436))
@@ -1719,7 +1703,7 @@ def pig_palette(t: Traits) raises -> Palette:
 
 
 def _rag(p: V3, off: V3, f: Float64, a: Float64) -> Float64:
-    return (fbm3(p * f + off, 2) - 0.5) * a
+    return (offset_fbm(p * f + off, 2)) * a
 
 
 def _ear_vein_sd(u: Float64, w: Float64, seed: Int) -> Float64:
@@ -1749,12 +1733,15 @@ def _ear_vein_sd(u: Float64, w: Float64, seed: Int) -> Float64:
         var dx = u1 - u0
         var dy = w1 - w0
         var tt = clamp(
-            ((u - u0) * dx + (w - w0) * dy) / (dx * dx + dy * dy), 0.0, 1.0
+            ((u - u0) * dx + (w - w0) * dy)
+            / squared_length2[DType.float64](dx, dy),
+            0.0,
+            1.0,
         )
         var dd = sqrt((u - u0 - dx * tt) ** 2 + (w - w0 - dy * tt) ** 2)
         var r0 = veins[6 * i + 4]
         var r1 = veins[6 * i + 5]
-        d = min(d, dd - 0.8 * (r0 + (r1 - r0) * tt))
+        d = min(d, dd - 0.8 * mix(r0, r1, tt))
     return d
 
 
@@ -1790,9 +1777,9 @@ def pig_paint(
     var f = _frame()
     var h = f.local(p)
     var off = pal.get("off")
-    var up = clamp(n.y, -1.0, 1.0)
+    var up = clamp_unit(n.y)
     var snout_k = t.get("snoutLen", 1.0) * SNOUT_K
-    var dz = 0.06 + (0.178 - 0.06) * snout_k
+    var dz = mix(0.06, 0.178, snout_k)
     var disc_w = smoothstep(dz - 0.02, dz - 0.002, h.z)
     if s.part == TEETH:
         var cones = _tusk_cones(t, 1.0 if p.x >= 0.0 else -1.0)
@@ -1827,12 +1814,7 @@ def pig_paint(
             region = 1
     var legness = 0.0
     if is_limb(bone):
-        var upper = (
-            bone.startswith("scapula")
-            or bone.startswith("humerus")
-            or bone.startswith("femur")
-        )
-        legness = smoothstep(0.45, 0.3, p.y) if upper else 1.0
+        legness = smoothstep(0.45, 0.3, p.y) if is_upper_limb(bone) else 1.0
     var ventral = 0.0
     var low_part = region <= 2 or region == 6
     if low_part:
@@ -1912,7 +1894,7 @@ def pig_paint(
             var lat = normalize(cross(evn, face))
             var q = p - eb
             var u = dot(q, evn) / le
-            var w = dot(q, lat) / le + 0.008 * (fbm3(p * 35.0 + off, 2) - 0.5)
+            var w = dot(q, lat) / le + 0.008 * (offset_fbm(p * 35.0 + off, 2))
             var vsd = _ear_vein_sd(u, w * sd, Int(t.get("coatSeed", 0.0))) * le
             var vein = smoothstep(0.0006, -0.0006, vsd)
             c = mix3(c, V3(c.x * 0.9, c.y * 0.74, c.z * 0.78), vein)
@@ -2014,8 +1996,8 @@ def pig_paint(
             var sn = (
                 1.0 - clamp(dot(p - nb, ax) / dot(ax, ax), 0.0, 1.0)
             ) * length(ax)
-            var ph = (sn + 0.012 * (fbm3(p * 25.0 + off, 2) - 0.5)) / 0.03
-            var fr = abs(ph - floor(ph + 0.5))
+            var ph = (sn + 0.012 * (offset_fbm(p * 25.0 + off, 2))) / 0.03
+            var fr = nearest_distance(ph)
             crease = (
                 exp(-(((fr * 0.03) / 0.0045) ** 2))
                 * smoothstep(0.015, 0.035, sn)
@@ -2027,8 +2009,8 @@ def pig_paint(
         var snout_top = region == 2 or (region == 7 and tag != "nostril")
         if snout_top:
             var ddz = dz - h.z + 6.0 * h.x * h.x
-            var ph = (ddz + 0.003 * (fbm3(p * 40.0 + off, 2) - 0.5)) / 0.0095
-            var fr = abs(ph - floor(ph + 0.5))
+            var ph = (ddz + 0.003 * (offset_fbm(p * 40.0 + off, 2))) / 0.0095
+            var fr = nearest_distance(ph)
             crease = (
                 exp(-(((fr * 0.0095) / 0.0018) ** 2))
                 * smoothstep(0.015, 0.025, ddz)
@@ -2057,13 +2039,9 @@ def pig_paint(
     var haze = 0.06 * smoothstep(0.55, 0.85, vnoise3(p * 700.0))
     c = mix3(c, bristle, haze)
     # A faint, broad warm variation of the skin.
-    var cv = fbm3(p * 3.0 + V3(off.z, 0.0, 0.0), 2) - 0.5
+    var cv = centered_fbm(p, 3.0, 2, off.z)
     if region != 7:
-        c = V3(
-            c.x * (1.0 + 0.035 * cv),
-            c.y * (1.0 + 0.012 * cv),
-            c.z * (1.0 + 0.012 * cv),
-        )
+        c = channel_gain(c, cv, 0.035, 0.012, 0.012)
     var muddy = region <= 1
     if muddy:
         c = _mud(t, c, p, off)
@@ -2076,7 +2054,7 @@ def _mud(t: Traits, c: V3, p: V3, off: V3) -> V3:
     if mud <= 0.0:
         return c
     var caked = smoothstep(
-        0.075, 0.035, p.y + 0.02 * (fbm3(p * 9.0 + off + V3(3, 0, -3), 3) - 0.5)
+        0.075, 0.035, p.y + 0.02 * offset_fbm(p * 9.0 + off + V3(3, 0, -3), 3)
     )
     var mk = clamp(caked * min(1.0, 1.6 * mud), 0.0, 0.85)
     var mc = mix3(

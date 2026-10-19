@@ -22,8 +22,9 @@ See Golub and Van Loan, "Matrix Computations" (4th edition, 2013),
 sections 3.4, 4.2 and 8.5.
 """
 
+from math.finite import require_finite, require_positive_finite
 from std.math import isfinite, sqrt
-from extensions.numerics.vector import zeros
+from extensions.numerics.vector import require_row_count, zeros
 
 # The cyclic Jacobi method stops after this many sweeps. Each sweep at
 # least squares the off-diagonal norm near convergence, so a few dozen
@@ -202,8 +203,7 @@ def solve(a: DenseMatrix, b: List[Float64]) raises -> List[Float64]:
     """
     if a.rows != a.cols:
         raise Error("Gaussian elimination needs a square matrix")
-    if len(b) != a.rows:
-        raise Error("The right-hand side must have one entry per row")
+    require_row_count(len(b), a.rows)
     var n = a.rows
     var m = a.copy()
     var x = b.copy()
@@ -273,8 +273,7 @@ def cholesky(a: DenseMatrix) raises -> DenseMatrix:
         var diagonal = a.get(j, j)
         for k in range(j):
             diagonal -= l.get(j, k) * l.get(j, k)
-        if not (diagonal > 0 and isfinite(diagonal)):
-            raise Error("The matrix is not positive definite")
+        require_positive_finite(diagonal, "The matrix is not positive definite")
         var root = sqrt(diagonal)
         l.set(j, j, root)
         for i in range(j + 1, n):
@@ -283,6 +282,24 @@ def cholesky(a: DenseMatrix) raises -> DenseMatrix:
                 total -= l.get(i, k) * l.get(j, k)
             l.set(i, j, total / root)
     return l^
+
+
+def require_triangular_sizes(rows: Int, cols: Int, count: Int) raises:
+    """Refuse a triangular solve whose sizes do not match.
+
+    Nothing. The call returns when the matrix is square and the
+    right-hand side matches.
+
+    Args:
+        rows: How many rows the matrix has.
+        cols: How many columns the matrix has.
+        count: How many numbers the right-hand side has.
+
+    Raises:
+        Error: If the sizes do not match.
+    """
+    if count != rows or rows != cols:
+        raise Error("A triangular solve needs matching sizes")
 
 
 def solve_lower(l: DenseMatrix, b: List[Float64]) raises -> List[Float64]:
@@ -298,8 +315,7 @@ def solve_lower(l: DenseMatrix, b: List[Float64]) raises -> List[Float64]:
     Raises:
         Error: If the sizes differ.
     """
-    if len(b) != l.rows or l.rows != l.cols:
-        raise Error("A triangular solve needs matching sizes")
+    require_triangular_sizes(l.rows, l.cols, len(b))
     var y = b.copy()
     for i in range(l.rows):
         var total = y[i]
@@ -324,8 +340,7 @@ def solve_lower_transposed(
     Raises:
         Error: If the sizes differ.
     """
-    if len(b) != l.rows or l.rows != l.cols:
-        raise Error("A triangular solve needs matching sizes")
+    require_triangular_sizes(l.rows, l.cols, len(b))
     var x = b.copy()
     var i = l.rows - 1
     while i >= 0:
@@ -376,8 +391,9 @@ def symmetric_eigen(a: DenseMatrix) raises -> EigenPairs:
     var n = a.rows
     var scale = Float64(0)
     for i in range(n * n):
-        if not isfinite(a.data[i]):
-            raise Error("An eigenproblem needs finite entries")
+        require_finite(
+            Float64(a.data[i]), "An eigenproblem needs finite entries"
+        )
         scale = max(scale, abs(a.data[i]))
     var m = a.copy()
     # Scaling preserves the eigenvectors and the relative stopping test.
@@ -464,8 +480,7 @@ def symmetric_eigen(a: DenseMatrix) raises -> EigenPairs:
     for c in range(n):
         var source = order[c]
         values[c] = m.data[source * n + source] * scale
-        if not isfinite(values[c]):
-            raise Error("The eigenvalues must be finite")
+        require_finite(Float64(values[c]), "The eigenvalues must be finite")
         var r = 0
         while r < n:
             vectors.data[r * n + c] = v.data[r * n + source]

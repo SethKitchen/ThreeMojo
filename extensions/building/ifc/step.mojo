@@ -25,8 +25,16 @@ backslash, `\\X\\hh` for a byte of ISO 8859-1, `\\X2\\hhhh...\\X0\\` for UTF-16
 and `\\X4\\hhhhhhhh...\\X0\\` for UTF-32 code points. The writer escapes
 every non-ASCII character as `\\X2\\` or `\\X4\\`.
 """
+from core.ordinal import ordinal_valid, require_index_in_count
+from loaders.bytes import (
+    ascii_digit,
+    ascii_letter,
+    bytes_match,
+    hex_digit_value,
+)
+from loaders.text_number import file_line
 
-from std.math import isfinite
+from math.finite import require_finite
 
 # Lists and typed values share one nesting budget. The outer attribute
 # list counts as one level, so each recursive call has a bounded stack.
@@ -45,7 +53,7 @@ struct StepKind(Equatable, ImplicitlyCopyable, Writable):
         Returns:
             Whether the value is 0 to 8.
         """
-        return self.value >= 0 and self.value <= 8
+        return ordinal_valid(self.value, 8)
 
 
 comptime INTEGER = StepKind(0)
@@ -118,6 +126,20 @@ struct StepEntity(Copyable, Movable):
         self.arguments = arguments^
 
 
+def require_step_real(value: Float64) raises:
+    """Refuse a STEP real that is not finite.
+
+    Nothing. The call returns when the real is finite.
+
+    Args:
+        value: The real.
+
+    Raises:
+        Error: If the real is not finite.
+    """
+    require_finite(Float64(value), "A STEP real must be finite")
+
+
 struct StepFile(Movable):
     """A STEP physical file: header entries, data entities and the values
     they hold."""
@@ -163,8 +185,7 @@ struct StepFile(Movable):
         Raises:
             Error: If the real is not finite.
         """
-        if not isfinite(value):
-            raise Error("A STEP real must be finite")
+        require_step_real(value)
         return self._push(StepValue(REAL, 0, value, "", List[Int]()))
 
     def string(mut self, text: String) -> Int:
@@ -356,10 +377,11 @@ struct StepFile(Movable):
             Error: If there is no such entity or attribute.
         """
         var e = self.entity(id)
-        if position < 0 or position >= len(e.arguments):
-            raise Error(
-                String("STEP entity #", id, " has no attribute ", position)
-            )
+        require_index_in_count(
+            position,
+            len(e.arguments),
+            String("STEP entity #", id, " has no attribute ", position),
+        )
         return e.arguments[position]
 
     def kind_of(self, value: Int) -> StepKind:
@@ -568,8 +590,7 @@ def format_real(value: Float64) raises -> String:
     Raises:
         Error: If the real is not finite.
     """
-    if not isfinite(value):
-        raise Error("A STEP real must be finite")
+    require_step_real(value)
     var parts = String(value).split("e")
     var mantissa = String(parts[0])
     var exponent = String("")
@@ -643,7 +664,7 @@ struct _Reader:
         self.line = 1
 
     def fail(self, message: String) -> Error:
-        return Error(String("STEP line ", self.line, ": ", message))
+        return Error(file_line("STEP", self.line) + message)
 
     def peek(self) -> Int:
         return Int(self.data[self.at]) if self.at < len(self.data) else -1
@@ -692,8 +713,8 @@ struct _Reader:
         var start = self.at
         while self.at < len(self.data):
             var c = Int(self.data[self.at])
-            var letter = (c >= 65 and c <= 90) or (c >= 97 and c <= 122)
-            var digit = c >= 48 and c <= 57
+            var letter = ascii_letter(c)
+            var digit = ascii_digit(c)
             if letter or digit or c == 95 or c == 45:
                 self.at += 1
             else:
@@ -709,7 +730,7 @@ struct _Reader:
         var start = self.at
         while self.at < len(self.data):
             var c = Int(self.data[self.at])
-            var digit = c >= 48 and c <= 57
+            var digit = ascii_digit(c)
             if digit or c == 43 or c == 45 or c == 46 or c == 69 or c == 101:
                 self.at += 1
             else:
@@ -724,28 +745,15 @@ struct _Reader:
         for _ in range(count):  # pragma: no branch
             if self.at >= len(self.data):
                 raise self.fail("a short hexadecimal escape")
-            var c = Int(self.data[self.at])
-            var digit: Int
-            if c >= 48 and c <= 57:
-                digit = c - 48
-            elif c >= 65 and c <= 70:
-                digit = c - 55
-            elif c >= 97 and c <= 102:
-                digit = c - 87
-            else:
+            var digit = hex_digit_value(Int(self.data[self.at]))
+            if digit < 0:
                 raise self.fail("a bad hexadecimal digit")
             value = value * 16 + digit
             self.at += 1
         return value
 
     def starts(self, text: String) -> Bool:
-        var bytes = text.as_bytes()
-        if self.at + len(bytes) > len(self.data):
-            return False
-        for i in range(len(bytes)):  # pragma: no branch
-            if self.data[self.at + i] != bytes[i]:
-                return False
-        return True
+        return bytes_match(Span(self.data), self.at, len(self.data), text)
 
     def string(mut self) raises -> String:
         """Read a quoted string, decoding its escapes."""
@@ -838,13 +846,13 @@ def _parse_value(
                 return file.list(children^)
             if next != 44:
                 raise reader.fail("expected a comma or a closing parenthesis")
-    var digit = c >= 48 and c <= 57
+    var digit = ascii_digit(c)
     if digit or c == 45 or c == 43:
         var text = reader.number_text()
         if text.find(".") >= 0 or text.find("E") >= 0 or text.find("e") >= 0:
             return file.real(atof(text))
         return file.integer(atol(text))
-    var letter = (c >= 65 and c <= 90) or (c >= 97 and c <= 122)
+    var letter = ascii_letter(c)
     if letter:
         var name = reader.keyword()
         reader.expect(40, "a parenthesis after a type name")

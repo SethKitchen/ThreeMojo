@@ -26,6 +26,7 @@ from render.packing import (
     pack_depth_to_rgba,
     packed_depth_fragment,
     packed_distance_fragment,
+    packed_normal,
     unpack_rg_to_depth,
     unpack_rgb_to_depth,
     unpack_rgba_to_depth,
@@ -45,6 +46,22 @@ from std.testing import (
 def byte(channel: Float32) -> Int:
     """Return the byte an eight-bit target stores for a channel."""
     return Int(channel * 255 + 0.5)
+
+
+def test_a_normal_is_packed_into_zero_to_one_per_axis() raises:
+    # three.js's `packNormalToRGB`: halved and moved up by a half.
+    var square = packed_normal(Vector3(0, 0, 1))
+    assert_equal(square.x, Float32(0.5))
+    assert_equal(square.y, Float32(0.5))
+    assert_equal(square.z, Float32(1.0))
+    var right = packed_normal(Vector3(1, 0, 0))
+    assert_equal(right.x, Float32(1.0))
+    assert_equal(right.y, Float32(0.5))
+    assert_equal(right.z, Float32(0.5))
+    var down = packed_normal(Vector3(0, -1, 0))
+    assert_equal(down.x, Float32(0.5))
+    assert_equal(down.y, Float32(0.0))
+    assert_equal(down.z, Float32(0.5))
 
 
 def test_the_four_packings_are_three_js_numbers() raises:

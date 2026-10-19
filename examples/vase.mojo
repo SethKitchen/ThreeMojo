@@ -12,24 +12,25 @@ rings whose radius swells and narrows. Both ends are capped. The vase
 turns one whole turn.
 """
 
-from cameras.perspective_camera import PerspectiveCamera
+from tools._example_output import (
+    example_destination,
+    fill_and_key,
+    gallery_camera,
+    gallery_renderer,
+    spin_clip,
+)
+
 from core.assets import Assets
 from core.buffer_geometry import BufferGeometry
-from core.clock import Clock
-from core.object3d import NodeId, Object3D
+from core.object3d import Object3D
 from core.scene import Scene
 from geometries.loft import loft
-from lights.light import ambient_light, directional_light
 from materials.material import Material
 from math.vector3 import Vector3
 from objects.mesh import Mesh
-from render.apng import encode
-from render.framebuffer import Color, Framebuffer
-from renderers.renderer import Renderer, available_workers
+from render.framebuffer import Color
 from std.math import cos, pi, sin
-from std.pathlib import Path
-from std.sys import argv, stderr
-from units.si import DEGREE, METER, Angle, Length, MILLISECOND
+from units.si import DEGREE, METER, Angle, Length
 
 comptime DEFAULT_OUTPUT = "out/lofts.png"
 comptime WIDTH = 240
@@ -67,43 +68,10 @@ def _vase() raises -> BufferGeometry:
     return loft(sections^, cap_start=True, cap_end=True)
 
 
-def frame_at(
-    renderer: Renderer,
-    camera: PerspectiveCamera,
-    assets: Assets,
-    mut scene: Scene,
-    node: NodeId,
-    step: Angle,
-) raises -> Framebuffer:
-    """Turn the vase by `step` and render one frame.
-
-    Args:
-        renderer: The renderer to draw with.
-        camera: The camera, placed in front of the vase.
-        assets: The geometry and the material.
-        scene: The persistent scene, edited in place.
-        node: The node the vase rides.
-        step: How much further the vase turns.
-
-    Returns:
-        The rendered frame.
-
-    Raises:
-        Error: If the scene or the render is invalid.
-    """
-    scene.node(node).rotate_y(step)
-    scene.update()
-    return renderer.render(scene, assets, camera)
-
-
 def main() raises:
-    var args = argv()
-    var destination = String(DEFAULT_OUTPUT)
-    if len(args) > 1:
-        destination = String(args[1])
+    var destination = example_destination(String(DEFAULT_OUTPUT))
 
-    var renderer = Renderer(WIDTH, HEIGHT, workers=available_workers())
-    renderer.set_background(Color(16, 18, 26))
+    var renderer = gallery_renderer(WIDTH, HEIGHT, Color(16, 18, 26))
 
     var assets = Assets()
     var shape = assets.geometries.add(_vase())
@@ -112,34 +80,27 @@ def main() raises:
     var scene = Scene()
     var node = scene.add(Object3D())
     scene.add_mesh(Mesh(shape, clay, node))
-    var lamp = Object3D()
-    lamp.set_position(1.2, 1.8, 1.6)
-    scene.add_light(ambient_light(Color(220, 214, 206), 0.36))
-    scene.add_light(
-        directional_light(Color(255, 246, 232), scene.add(lamp^), 1.9)
+    fill_and_key(
+        scene,
+        1.2,
+        1.8,
+        1.6,
+        Color(220, 214, 206),
+        0.36,
+        Color(255, 246, 232),
+        1.9,
     )
 
-    var camera = PerspectiveCamera(
-        Angle(38.0, DEGREE),
-        Float32(WIDTH) / Float32(HEIGHT),
-        Length(0.1, METER),
-        Length(20.0, METER),
+    var camera = gallery_camera(
+        WIDTH,
+        HEIGHT,
+        Vector3(1.15, 0.35, 2.7),
+        Vector3(0, 0.05, 0),
+        field_of_view=Angle(38.0, DEGREE),
+        near=Length(0.1, METER),
+        far=Length(20.0, METER),
     )
-    camera.place(Vector3(1.15, 0.35, 2.7), Vector3(0, 0.05, 0))
 
-    var step = Angle(Float32(360) / Float32(FRAMES), DEGREE)
-    var frame_clock = Clock()
-    frame_clock.start()
-    var frames = List[Framebuffer]()
-    for _ in range(FRAMES):
-        frames.append(frame_at(renderer, camera, assets, scene, node, step))
-
-    print(
-        '{"frames_ms": ',
-        frame_clock.elapsed().to(MILLISECOND),
-        "}",
-        sep="",
-        file=stderr,
+    spin_clip(
+        renderer, camera, assets, scene, node, FRAMES, DELAY_MS, destination
     )
-    Path(destination).write_bytes(encode(frames, delay_ms=DELAY_MS))
-    print("Wrote", destination, "-", FRAMES, "frames")

@@ -35,17 +35,18 @@ brings it up to date in three.js.
 Differences from three.js: touch input and the cursor style are not
 ported.
 """
+from core.ordinal import ordinal_valid
 
 from cameras.camera import Camera
 from controls.input import (
     InputEvent,
-    MIDDLE,
+    button_choice,
+    require_named,
+    require_view_size,
     POINTER_DOWN,
     POINTER_MOVE,
     POINTER_UP,
-    PRIMARY,
     PointerButton,
-    SECONDARY,
 )
 from core.assets import Assets
 from core.object3d import NO_PARENT, NodeId
@@ -72,7 +73,7 @@ struct DragAction(Equatable, ImplicitlyCopyable, Writable):
         Returns:
             Whether the value names an action.
         """
-        return self.value >= 0 and self.value <= 2
+        return ordinal_valid(self.value, 2)
 
 
 # The button picks an object and moves it nowhere. three.js: `STATE.NONE`.
@@ -97,7 +98,7 @@ struct DragEventKind(Equatable, ImplicitlyCopyable, Writable):
         Returns:
             Whether the value names a kind.
         """
-        return self.value >= 0 and self.value <= 4
+        return ordinal_valid(self.value, 4)
 
 
 # The pointer came over an object. three.js: `hoveron`.
@@ -218,17 +219,15 @@ struct DragControls(Copyable, Movable):
         Raises:
             Error: If the button, or the action it maps to, is invalid.
         """
-        if not button.is_valid():
-            raise Error("Invalid pointer button: ", button.value)
-        var action = NO_DRAG
-        if button == PRIMARY:
-            action = self.primary_action
-        elif button == MIDDLE:
-            action = self.middle_action
-        elif button == SECONDARY:
-            action = self.secondary_action
-        if not action.is_valid():
-            raise Error("Invalid drag action: ", action.value)
+        require_named(button.is_valid(), "pointer button", button.value)
+        var action = button_choice(
+            button,
+            self.primary_action,
+            self.middle_action,
+            self.secondary_action,
+            NO_DRAG,
+        )
+        require_named(action.is_valid(), "drag action", action.value)
         return action
 
     def handle[
@@ -263,16 +262,13 @@ struct DragControls(Copyable, Movable):
                 is not in the scene, or the camera or the scene cannot be
                 read.
         """
-        if not event.kind.is_valid():
-            raise Error("Invalid input kind: ", event.kind.value)
-        if not event.key.is_valid():
-            raise Error("Invalid key: ", event.key.value)
+        require_named(event.kind.is_valid(), "input kind", event.kind.value)
+        require_named(event.key.is_valid(), "key", event.key.value)
         var action = self.action_of(event.button)
         var events = List[DragEvent]()
         if not self.enabled:
             return events^
-        if width <= 0 or height <= 0:
-            raise Error("A view must have a positive width and height")
+        require_view_size(width, height)
         scene.update()
         for node in self.objects:
             _ = scene.get(node)

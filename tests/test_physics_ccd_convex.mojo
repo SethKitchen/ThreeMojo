@@ -8,11 +8,15 @@
 Each case has a hand-computed time of impact and normal.
 """
 
-from extensions.physics.body import DYNAMIC, STATIC, RigidBody
+from extensions.physics.body import (
+    DYNAMIC,
+    STATIC,
+    RigidBody,
+    locked_inverse_inertia,
+)
 from extensions.physics.ccd import SPHERE_MESH_CCD, _sweep_convex_triangle
 from extensions.physics.shape import PhysicsMaterial, Polyhedron, Shape
 from extensions.physics.world import PhysicsWorld
-from math.matrix3 import Matrix3
 from math.quaternion import Quaternion
 from math.triangle import Triangle
 from math.vector3 import Vector3
@@ -171,11 +175,7 @@ def _box(
         Vector3(0, 0, z),
         Quaternion.identity(),
     )
-    var locked = Matrix3()
-    locked.elements[0] = 0
-    locked.elements[4] = 0
-    locked.elements[8] = 0
-    body.set_inverse_inertia(locked)
+    body.set_inverse_inertia(locked_inverse_inertia())
     body.linear_velocity = velocity
     body.material = PhysicsMaterial(0.5, bounce)
     return body^
@@ -270,11 +270,7 @@ def test_a_hull_on_an_indexed_floor_matches_the_full_scan() raises:
             Vector3(0.25, 0.25, 0.75),
             Quaternion.identity(),
         )
-        var locked = Matrix3()
-        locked.elements[0] = 0
-        locked.elements[4] = 0
-        locked.elements[8] = 0
-        hull.set_inverse_inertia(locked)
+        hull.set_inverse_inertia(locked_inverse_inertia())
         hull.linear_velocity = Vector3(0, 0, -30)
         hull.material = PhysicsMaterial(0, 0)
         _ = world.add_body(hull^)

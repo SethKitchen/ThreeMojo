@@ -17,8 +17,34 @@ or third-party implementation is added by this module.
 """
 
 from extensions.humanoid.skeleton.head.hair.groom import HairGroom
+from math.bounds import enclose_point
+from math.finite import (
+    require_finite,
+    require_positive_finite,
+    require_finite_group,
+)
+from math.utils import max3
 from math.vector3 import Vector3
-from std.math import ceil, floor, isfinite, max, min
+
+
+def require_hair_direction(direction: Vector3) raises:
+    """Refuse a hair light direction that is not finite.
+
+    Nothing. The call returns when the direction is finite.
+
+    Args:
+        direction: The direction toward a distant light.
+
+    Raises:
+        Error: If the direction is not finite.
+    """
+    require_finite_group(
+        direction.is_finite(),
+        "Hair optical depth needs a finite light direction",
+    )
+
+
+from std.math import ceil, floor, isfinite, max
 from std.sys import size_of
 from units.si import Length, METER
 
@@ -28,8 +54,10 @@ comptime MAX_HAIR_DENSITY_RESOLUTION = 64
 
 def _checked_density_point(point: Vector3) raises -> Vector3:
     """Return the unchanged point after checking all three coordinates."""
-    if not isfinite(point.x) or not isfinite(point.y) or not isfinite(point.z):
-        raise Error("Hair density needs finite positions")
+    require_finite_group(
+        point.is_finite(),
+        "Hair density needs finite positions",
+    )
     return point
 
 
@@ -80,8 +108,10 @@ struct HairDensity(Movable):
         ):
             raise Error("Hair density needs four through 64 cells per axis")
         var diameter = self.diameter.to(METER)
-        if not isfinite(diameter) or diameter <= 0:
-            raise Error("Hair density needs a finite positive fiber diameter")
+        require_positive_finite(
+            Float64(diameter),
+            "Hair density needs a finite positive fiber diameter",
+        )
 
     def rebuild(mut self, groom: HairGroom) raises:
         """Replace the volume with the current strand positions.
@@ -114,10 +144,9 @@ struct HairDensity(Movable):
         var high = low
         for index in range(1, len(groom.points)):
             var p = _checked_density_point(groom.points[index])
-            low = Vector3(min(low.x, p.x), min(low.y, p.y), min(low.z, p.z))
-            high = Vector3(max(high.x, p.x), max(high.y, p.y), max(high.z, p.z))
+            enclose_point(low, high, p)
         var span = high - low
-        var longest = max(span.x, max(span.y, span.z))
+        var longest = max3(span.x, span.y, span.z)
         # Keep a clear boundary cell. Four cells use a single interior
         # cell, with the same finite floor.
         var cell = max(
@@ -199,18 +228,11 @@ struct HairDensity(Movable):
             Error: If the point or direction is not finite, or the current
                 resolution or diameter is outside its domain.
         """
-        if (
-            not isfinite(point.x)
-            or not isfinite(point.y)
-            or not isfinite(point.z)
-        ):
-            raise Error("Hair optical depth needs a finite point")
-        if (
-            not isfinite(direction.x)
-            or not isfinite(direction.y)
-            or not isfinite(direction.z)
-        ):
-            raise Error("Hair optical depth needs a finite light direction")
+        require_finite_group(
+            point.is_finite(),
+            "Hair optical depth needs a finite point",
+        )
+        require_hair_direction(direction)
         self.validate()
         if not self.populated or self._slot(point) < 0:
             return 0
@@ -243,8 +265,9 @@ def _checked_density_samples(ratio: Float32) raises -> Int:
     """
     comptime assert size_of[Int]() == 4 or size_of[Int]() == 8
     var rounded = ceil(ratio)
-    if not isfinite(rounded):
-        raise Error("Hair density sample count is not representable")
+    require_finite(
+        Float64(rounded), "Hair density sample count is not representable"
+    )
     if rounded <= 1:
         return 1
     # Int.MIN is exactly -2^(width-1) on the supported signed Int widths.

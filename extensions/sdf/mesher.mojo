@@ -19,11 +19,15 @@ surface, not the volume. Blocks are sampled and vertices are placed on
 several threads. The mesh is the same for any number of them.
 """
 
+from core.ordinal import require_index_in_count, require_positive
 from extensions.sdf.field import SdfModel
 from extensions.sdf.vector import (
     V3,
     length,
+    lerp,
 )
+from math.norm import squared_length3
+from math.utils import clamp, max3, min3
 from render.tasks import TaskGroup
 from std.math import ceil, isfinite, sqrt
 from std.sys import num_logical_cores, size_of
@@ -292,7 +296,7 @@ async def _vertex_task(
             var t = va / (va - vb)
             var pa = V3(Float64(a & 1), Float64((a >> 1) & 1), Float64(a >> 2))
             var pb = V3(Float64(b & 1), Float64((b >> 1) & 1), Float64(b >> 2))
-            sum = sum + pa + (pb - pa) * t
+            sum = sum + lerp(pa, pb, t)
             crossings += 1
         var local = sum * (1.0 / Float64(crossings))
         var low = lattice.point(gx, gy, gz)
@@ -395,7 +399,7 @@ struct _Grid:
             var i = min((gx - (n & 1)) // f, self.lattice.bx - 1)
             var j = min((gy - ((n >> 1) & 1)) // f, self.lattice.by - 1)
             var k = min((gz - (n >> 2)) // f, self.lattice.bz - 1)
-            if min(i, min(j, k)) < 0:
+            if min3(i, j, k) < 0:
                 continue
             var b = self.lattice.block_index(i, j, k)
             var slot = self.slot_of[b]
@@ -481,23 +485,16 @@ def _mesh_part(
 ) raises -> SurfaceMesh:
     # `mesh_part` with the first pass's margin, in half-diagonals.
     check_cell(cell, block)
-    if not (
-        isfinite(low.x)
-        and isfinite(low.y)
-        and isfinite(low.z)
-        and isfinite(high.x)
-        and isfinite(high.y)
-        and isfinite(high.z)
-    ):
+    if not (low.is_finite() and high.is_finite()):
         raise Error("A mesh box must have finite coordinates")
     if not (high.x > low.x and high.y > low.y and high.z > low.z):
         raise Error("A mesh box must not be empty")
-    if len(part) == 0:
-        raise Error("A mesh part needs at least one primitive")
+    require_positive(len(part), "A mesh part needs at least one primitive")
     var kmax = 0.0
     for i in part:  # pragma: no branch
-        if i < 0 or i >= len(model.prims):
-            raise Error("Mesh part index names no primitive")
+        require_index_in_count(
+            i, len(model.prims), "Mesh part index names no primitive"
+        )
         kmax = max(kmax, model.prims[i].k)
     var h = Float64(cell.to(METER))
     var threads = workers if workers > 0 else num_logical_cores()
@@ -520,7 +517,7 @@ def _mesh_part(
     _ = _checked_count(count, 3 * size_of[Float32]())
     out.positions = List[Float32](length=count * 3, fill=0.0)
     out.normals = List[Float32](length=count * 3, fill=0.0)
-    var tasks = max(1, min(threads, count))
+    var tasks = clamp(threads, 1, count)
     var placers = TaskGroup()
     for task in range(tasks):  # pragma: no branch
         placers.create_task(
@@ -652,7 +649,7 @@ def _sample_blocks(
     var count = len(grid.active) - first
     for _ in range(count * per):
         grid.samples.append(UNSAMPLED)
-    var tasks = max(1, min(threads, count))
+    var tasks = clamp(threads, 1, count)
     var samplers = TaskGroup()
     for task in range(tasks):  # pragma: no branch
         samplers.create_task(
@@ -694,7 +691,7 @@ def _share_faces(mut grid: _Grid):
             var lx = n % side
             var ly = (n // side) % side
             var lz = n // (side * side)
-            if max(lx, max(ly, lz)) < f:
+            if max3(lx, ly, lz) < f:
                 continue
             var at = grid.locate(bi * f + lx, bj * f + ly, bk * f + lz)
             # This block holds the point and is active: an owner exists.
@@ -729,7 +726,7 @@ def _spill(
             var ni = bi + (step if axis == 0 else 0)
             var nj = bj + (step if axis == 1 else 0)
             var nk = bk + (step if axis == 2 else 0)
-            var outside = min(ni, min(nj, nk)) < 0
+            var outside = min3(ni, nj, nk) < 0
             outside = outside or ni >= lt.bx or nj >= lt.by or nk >= lt.bz
             if outside:
                 continue
@@ -855,7 +852,7 @@ def _faces(grid: _Grid, cells: List[Int], mut mesh: SurfaceMesh):
             var qb = grid.vertex(gx + bx, gy + by, gz + bz)
             var qc = grid.vertex(gx + bx + cx, gy + by + cy, gz + bz + cz)
             var qd = grid.vertex(gx + cx, gy + cy, gz + cz)
-            if min(qb, min(qc, qd)) < 0:
+            if min3(qb, qc, qd) < 0:
                 continue
             _emit(mesh, v, qb, qc, qd, v0 < 0)
 
@@ -900,7 +897,7 @@ def _triangle(mut mesh: SurfaceMesh, a: Int, b: Int, c: Int):
 
 def _squared(mesh: SurfaceMesh, a: Int, b: Int) -> Float64:
     var d = mesh.vertex(a) - mesh.vertex(b)
-    return d.x * d.x + d.y * d.y + d.z * d.z
+    return squared_length3[DType.float64](d.x, d.y, d.z)
 
 
 def merge(mut into: SurfaceMesh, other: SurfaceMesh):

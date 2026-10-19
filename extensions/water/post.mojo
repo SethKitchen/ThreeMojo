@@ -17,6 +17,7 @@ use it after the last view read.
 """
 
 from math.vector3 import Vector3
+from math.utils import max3
 from std.memory import AddressSpace
 
 comptime _Untracked = UntrackedOrigin[mut=False]
@@ -96,7 +97,7 @@ def highlight_texel[
     r /= count
     g /= count
     b /= count
-    var l = max(r, max(g, b))
+    var l = max3(r, g, b)
     var k = l - threshold
     if k < 0.0:
         k = 0.0

@@ -504,7 +504,7 @@ A degenerate triangle has its corners on one line. It has no normal, no plane an
 
 ## MathUtils
 
-`math/utils.mojo`. The scalar helpers of three.js's `MathUtils`: `clamp`, `lerp`, `inverse_lerp`, `map_linear`, `damp`, `euclidean_modulo`, `pingpong`, `smootherstep`, `smooth_step`, `is_power_of_two`, `ceil_power_of_two` and `floor_power_of_two`.
+`math/utils.mojo`. The scalar helpers of three.js's `MathUtils`: `clamp`, `lerp`, `inverse_lerp`, `map_linear`, `damp`, `euclidean_modulo`, `pingpong`, `smootherstep`, `smooth_step`, `is_power_of_two`, `ceil_power_of_two` and `floor_power_of_two`. `clamp` holds a `Float32`, a `Float64`, or a whole number.
 
 `damp(x, y, rate, delta)` takes the frame time as a `Duration`. `smooth_step(x, low, high)` has three.js's argument order. The shaders read `smoothstep(edge0, edge1, x)` from `math/smoothstep.mojo`, in GLSL's order.
 

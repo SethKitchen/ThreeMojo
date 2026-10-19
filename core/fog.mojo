@@ -40,9 +40,8 @@ tone map and encode it. That newer order is the one kept here, where every
 other mix happens, in the linear working space, so that halfway into the
 fog really is half the light of each. The fog color is decoded from sRGB on
 the way in, as a light's is.
-The fog reaches every material, lit or not, since three.js's
-`Material.fog` defaults to on and is not ported. The uv debug view is not
-fogged: it shows coordinates, not light.
+`Material.fog` defaults to on, except on a data material. The uv debug
+view is not fogged: it shows coordinates, not light.
 
 **The mix is a weighted sum, not a lerp.** `surface + (fog - surface) * veil`
 is the textbook form and the wrong one for light that has no top: a
@@ -60,6 +59,9 @@ kernel as `lights.lighting.falloff` is, and held to the same numbers by the
 parity tests.
 """
 
+from core.ordinal import ordinal_valid, require_valid
+
+from math.finite import require_non_negative_finite
 from math.smoothstep import smoothstep
 from render.framebuffer import Color, FloatColor
 from std.math import exp, isfinite
@@ -79,7 +81,7 @@ struct FogKind(Equatable, ImplicitlyCopyable, Writable):
 
     def is_valid(self) -> Bool:
         """Return True if this is `NO_FOG`, `LINEAR_FOG` or `EXP2_FOG`."""
-        return self == NO_FOG or self == LINEAR_FOG or self == EXP2_FOG
+        return ordinal_valid(self.value, EXP2_FOG.value)
 
 
 # No fog at all: every fragment keeps its own color. What a scene starts with.
@@ -123,13 +125,12 @@ def _check_fog_numbers(
             not beyond its start; or an exponential fog's density is
             negative or not finite.
     """
-    if not kind.is_valid():
-        raise Error("A fog of an unknown kind cannot be drawn")
+    require_valid(kind.is_valid(), "A fog of an unknown kind cannot be drawn")
     if kind == LINEAR_FOG:
-        if not isfinite(near) or near < 0:
-            raise Error(
-                "A fog must start at a finite depth, not behind the camera"
-            )
+        require_non_negative_finite(
+            Float64(near),
+            "A fog must start at a finite depth, not behind the camera",
+        )
         if not isfinite(far) or far <= near:
             raise Error(
                 "A fog's far edge must be finite and beyond its near edge"

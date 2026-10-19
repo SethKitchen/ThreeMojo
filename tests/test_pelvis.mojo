@@ -125,7 +125,6 @@ from extensions.humanoid.skeleton.pelvis.muscles.dimensions import (
     PSOAS_MAJOR,
     PelvisMuscle,
     PelvisMuscleField,
-    max_f,
     named_pelvis_muscles,
     pelvis_muscle_dimensions,
     pelvis_muscle_distance,
@@ -524,8 +523,6 @@ def test_muscles_are_solid_on_both_sides() raises:
         _ = PelvisMuscleField(dims, PelvisMuscle(14), RIGHT)
     with assert_raises(contains="RIGHT or LEFT"):
         _ = PelvisMuscleField(dims, ILIACUS, BodySide(4))
-    assert_equal(max_f(1, 2), 2)
-    assert_equal(max_f(3, 2), 3)
     # The psoas and the iliacus meet in one tendon at the lesser
     # trochanter.
     var psoas = PelvisMuscleField(dims, PSOAS_MAJOR, RIGHT)

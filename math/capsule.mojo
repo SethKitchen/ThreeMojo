@@ -19,8 +19,8 @@ three.js accepts any number.
 """
 
 from math.bounds import Box3
+from math.finite import require_non_negative_finite
 from math.vector3 import Vector3
-from std.math import isfinite
 
 
 def _check_axis(
@@ -89,8 +89,10 @@ struct Capsule(ImplicitlyCopyable):
         Raises:
             Error: If the radius is negative or not finite.
         """
-        if not isfinite(radius) or radius < 0:
-            raise Error("A capsule's radius must be finite and not negative")
+        require_non_negative_finite(
+            Float64(radius),
+            "A capsule's radius must be finite and not negative",
+        )
         self.start = start
         self.end = end
         self.radius = radius

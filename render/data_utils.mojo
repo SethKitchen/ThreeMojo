@@ -26,6 +26,7 @@ Node on a desktop, and what `exporters.exr` writes for a NaN.
 use. Every half is a `Float32` exactly, so there is nothing to round.
 """
 
+from math.utils import clamp
 from render.exr import half_to_float
 from std.math import isnan
 from std.memory import bitcast
@@ -52,7 +53,7 @@ def to_half_float(value: Float64) -> UInt16:
         # three.js's clamp lets a NaN through as the processor's own NaN,
         # whose sign is set on x86-64. Its payload is a quiet bit.
         return NAN_HALF
-    var clamped = max(-HALF_MAX, min(HALF_MAX, value))
+    var clamped = clamp(value, -HALF_MAX, HALF_MAX)
     var bits = bitcast[DType.uint32](Float32(clamped))
     var sign = Int((bits >> 16) & 0x8000)
     var exponent = Int((bits >> 23) & 0xFF) - 127

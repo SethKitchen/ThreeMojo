@@ -15,6 +15,7 @@ writes the buffer as a base64 data URI.
 
 from cameras.perspective_camera import PerspectiveCamera
 from core.assets import Assets
+from core.binary import append_little_endian, append_little_endian_u32
 from core.buffer_geometry import POSITION, UV
 from core.object3d import NO_PARENT, Object3D
 from core.scene import Scene
@@ -207,9 +208,7 @@ def float_bytes(values: List[Float32]) -> List[UInt8]:
     """Return floats as little-endian bytes."""
     var out = List[UInt8]()
     for index in range(len(values)):
-        var bits = Int(bitcast[DType.uint32](values[index]))
-        for shift in range(4):
-            out.append(UInt8((bits >> (shift * 8)) & 0xFF))
+        append_little_endian_u32(out, Int(bitcast[DType.uint32](values[index])))
     return out^
 
 
@@ -217,8 +216,7 @@ def int_bytes(values: List[Int], size: Int) -> List[UInt8]:
     """Return whole numbers as little-endian bytes of `size` each."""
     var out = List[UInt8]()
     for index in range(len(values)):
-        for shift in range(size):
-            out.append(UInt8((values[index] >> (shift * 8)) & 0xFF))
+        append_little_endian(out, values[index], size)
     return out^
 
 

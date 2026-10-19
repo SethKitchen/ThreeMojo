@@ -45,6 +45,7 @@ divide it, since no camera here has one.
 """
 
 from core.object3d import NodeId
+from core.ordinal import require_index_in_count, require_non_negative
 from units.si import Length, METER
 
 
@@ -87,8 +88,7 @@ struct Lod(Copyable, Movable):
         Raises:
             Error: If the node index is negative.
         """
-        if node.value < 0:
-            raise Error("An LOD must name a scene node")
+        require_non_negative(node.value, "An LOD must name a scene node")
         self.node = node
         self.levels = List[LodLevel]()
         self.shown = 0
@@ -126,15 +126,15 @@ struct Lod(Copyable, Movable):
                 is a level already, the distance is negative, or the
                 hysteresis is not from zero to one.
         """
-        if object.value < 0:
-            raise Error("A level must name a scene node")
+        require_non_negative(object.value, "A level must name a scene node")
         if object == self.node:
             raise Error("An LOD cannot be its own level")
         for level in self.levels:
             if level.object == object:
                 raise Error("A node is one level of an LOD at most")
-        if distance.value < 0:
-            raise Error("A level's distance cannot be negative")
+        require_non_negative(
+            distance.value, "A level's distance cannot be negative"
+        )
         if not (hysteresis >= 0 and hysteresis <= 1):
             raise Error("A level's hysteresis must be from zero to one")
         var slot = 0
@@ -186,8 +186,9 @@ struct Lod(Copyable, Movable):
         Raises:
             Error: If there is no such level.
         """
-        if index < 0 or index >= len(self.levels):
-            raise Error("No level has that index")
+        require_index_in_count(
+            index, len(self.levels), "No level has that index"
+        )
         return self.levels[index]
 
     def level_for(self, distance: Length) -> Int:

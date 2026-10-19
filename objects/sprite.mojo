@@ -56,13 +56,19 @@ A sprite's bound is the sphere around its square, carried by its world
 matrix, as three.js's `Sprite` carries its geometry's bounding sphere. It
 is measured in the scene, so a sprite whose size is held on the image is
 culled by where its square would be with the attenuation on. Set
-`frustum_culled=False` on one that is left out wrongly.
+`frustum_culled=False` on one that is left out wrongly. The draw and
+the raycast both build that square with `sprite_span` and `sprite_place`.
 """
 
 from core.object3d import NodeId
+from core.ordinal import require_non_negative
 from materials.material import MaterialId
+from math.matrix4 import Matrix4
 from math.vector2 import Vector2
-from std.math import isfinite
+from math.vector3 import Vector3
+from math.finite import require_finite_group
+from std.math import cos, sin
+from units.si import Angle, RADIAN
 
 # The bounding sphere of the unit square, three.js's `Sprite` geometry
 # bound: half the square's diagonal.
@@ -109,13 +115,92 @@ struct Sprite(ImplicitlyCopyable):
         Raises:
             Error: If either id is negative, or the center is not finite.
         """
-        if node.value < 0:
-            raise Error("A sprite must name a scene node")
-        if material.value < 0:
-            raise Error("A sprite must name a material")
-        if not isfinite(center.x) or not isfinite(center.y):
-            raise Error("A sprite's center must be finite")
+        require_non_negative(node.value, "A sprite must name a scene node")
+        require_non_negative(material.value, "A sprite must name a material")
+        require_finite_group(
+            center.is_finite(),
+            "A sprite's center must be finite",
+        )
         self.material = material
         self.node = node
         self.center = center
         self.frustum_culled = frustum_culled
+
+
+def sprite_span(
+    world: Matrix4,
+    center: Vector3,
+    size_attenuation: Bool,
+    perspective: Bool,
+    rotation: Angle,
+) -> Tuple[Float32, Float32, Float32, Float32]:
+    """Return a sprite's camera-space width, height, and turn.
+
+    The width and height are the world matrix's x and y column lengths.
+    With attenuation off under a perspective camera, both are multiplied
+    by the camera-space depth, which the perspective divide is about to
+    divide by. The last two numbers are the cosine and the sine of the
+    material's rotation about the line of sight.
+
+    Error: Never.
+
+    Args:
+        world: The node's world matrix.
+        center: The node's origin in camera space.
+        size_attenuation: Whether the sprite shrinks with distance.
+        perspective: Whether the camera divides by depth.
+        rotation: The material's rotation about the line of sight.
+
+    Returns:
+        The width, the height, the cosine, and the sine.
+
+    """
+    var scale_x = world.column_length(0)
+    var scale_y = world.column_length(1)
+    if not size_attenuation and perspective:
+        scale_x *= -center.z
+        scale_y *= -center.z
+    var turn = rotation.to(RADIAN)
+    return scale_x, scale_y, cos(turn), sin(turn)
+
+
+def sprite_place(
+    center: Vector3,
+    anchor: Vector2,
+    unit_x: Float32,
+    unit_y: Float32,
+    scale_x: Float32,
+    scale_y: Float32,
+    turned_x: Float32,
+    turned_y: Float32,
+) -> Vector3:
+    """Return one corner of a sprite's square in camera space.
+
+    The corner starts on the unit square, moves so `anchor` sits on the
+    node, scales, and turns about the line of sight.
+
+    Error: Never.
+
+    Args:
+        center: The node's origin in camera space.
+        anchor: Which point of the square sits on the node.
+        unit_x: The corner's x on the unit square, from minus a half to a
+            half.
+        unit_y: The corner's y on the unit square, from minus a half to a
+            half.
+        scale_x: The camera-space width from `sprite_span`.
+        scale_y: The camera-space height from `sprite_span`.
+        turned_x: The cosine from `sprite_span`.
+        turned_y: The sine from `sprite_span`.
+
+    Returns:
+        The corner, in camera space.
+
+    """
+    var aligned_x = (unit_x - (anchor.x - 0.5)) * scale_x
+    var aligned_y = (unit_y - (anchor.y - 0.5)) * scale_y
+    return Vector3(
+        center.x + turned_x * aligned_x - turned_y * aligned_y,
+        center.y + turned_y * aligned_x + turned_x * aligned_y,
+        center.z,
+    )

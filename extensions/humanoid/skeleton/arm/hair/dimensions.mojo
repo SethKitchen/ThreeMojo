@@ -18,12 +18,13 @@ separate diagrammatic radius; see
     var d = arm_hair_distance(dims, FOREARM_HAIR, RIGHT, p)
 """
 
-from extensions.humanoid.side import RIGHT, BodySide
+from core.ordinal import ordinal_valid, require_valid
+from extensions.humanoid.side import require_side, RIGHT, BodySide
 from extensions.humanoid.skeleton.arm.frame import ArmMuscleDimensions
 from extensions.humanoid.skeleton.arm.skin.dimensions import ArmSkinField
 from extensions.humanoid.skeleton.field import DistanceField, mix_point
 from extensions.humanoid.skeleton.torso.sweep import Dome, Sweep, SweepField
-from math.vector3 import Vector3
+from math.vector3 import Vector3, midpoint
 
 # Representative shafts per group.
 comptime SHAFTS = 8
@@ -42,9 +43,7 @@ struct ArmHair(Equatable, ImplicitlyCopyable, Writable):
 
     def is_valid(self) -> Bool:
         """Return True if this is a named hair group."""
-        if self.value < 0:
-            return False
-        return self.value <= FOREARM_HAIR.value
+        return ordinal_valid(self.value, FOREARM_HAIR.value)
 
 
 comptime UPPER_ARM_HAIR = ArmHair(0)
@@ -99,7 +98,7 @@ def surface_root[
     var low = inside
     var high = inside + direction * reach
     for _ in range(18):  # pragma: no branch
-        var middle = (low + high) * Float32(0.5)
+        var middle = midpoint(low, high)
         if skin.distance(middle) < 0:
             low = middle
         else:
@@ -154,10 +153,10 @@ def arm_hair_field(
             not named, or if `side` is not valid.
     """
     dimensions.validate()
-    if not part.is_valid():
-        raise Error("An arm hair part must be a named hair group")
-    if not side.is_valid():
-        raise Error("An arm side must be RIGHT or LEFT")
+    require_valid(
+        part.is_valid(), "An arm hair part must be a named hair group"
+    )
+    require_side(side, "An arm")
     var f = dimensions.arm.frame
     var skin = ArmSkinField(dimensions, RIGHT)
     var S = dimensions.arm.stature.value

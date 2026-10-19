@@ -40,11 +40,12 @@ limits, and explicit zero and nonfinite rules.
 """
 
 from render.color_math import floor_channels
-from math.norm import length2
 from cameras.camera import Camera
 from core.assets import Assets
 from core.scene import Scene
 from math.matrix4 import Matrix4
+from math.utils import edge_index
+from math.norm import squared_length2
 from math.smoothstep import smoothstep
 from math.vector3 import Vector3
 from postprocessing.antialiasing import JitteredCamera
@@ -56,7 +57,17 @@ from postprocessing.traa import (
     TRAA_JITTERS,
     clip_aabb,
     flicker_reduction,
+    history_is_kept,
+    sample_inside,
+    neighborhood_motion,
+    read_drawn_frame,
+    remember_jitter_camera,
+    render_jittered,
+    reproject_window_depth,
+    sample_motion,
     traa_jitter,
+    variance_box,
+    variance_gamma,
 )
 from render.framebuffer import FloatColor
 from render.target import (
@@ -67,7 +78,7 @@ from render.target import (
 )
 from renderers.renderer import Renderer
 from units.si import Length, METER
-from std.math import floor, isfinite, max, min, sqrt
+from std.math import floor, isfinite, max, min
 
 
 struct TaauSettings(Copyable, Movable):
@@ -236,6 +247,8 @@ def previous_window_depth(
     """Return the last frame's depth at a place, moved into this frame's
     view: three.js's `samplePreviousDepth`, reading the nearest texel.
 
+    Error: Never.
+
     Args:
         previous: The last frame's window depth.
         u: Across, zero at the left.
@@ -249,17 +262,19 @@ def previous_window_depth(
 
     Returns:
         The depth, in this frame's window depth.
+
     """
-    var x = Int(floor(u * Float32(previous.width)))
-    var y = Int(floor(v_down * Float32(previous.height)))
-    var depth = previous.load(x, y, 0)
-    var clip = Vector3(u * 2 - 1, (1 - v_down) * 2 - 1, depth * 2 - 1)
-    var seen = previous_projection_inverse.transform_point(clip)
-    var world = previous_camera_world.transform_point(seen)
-    var view_z = view.transform_point(world).z
-    if perspective:
-        return ((near + view_z) * far) / ((far - near) * view_z)
-    return (view_z + near) / (near - far)
+    return reproject_window_depth(
+        previous,
+        u,
+        v_down,
+        near,
+        far,
+        perspective,
+        previous_projection_inverse,
+        previous_camera_world,
+        view,
+    )
 
 
 def taau_pixel(
@@ -294,25 +309,13 @@ def taau_pixel(
     # `round`: the nearest jittered input sample.
     var tap_x = Int(floor(p_x - (0.5 + frame.jitter_x) + 0.5))
     var tap_y = Int(floor(p_y - (0.5 + frame.jitter_y) + 0.5))
-    var closest = Float32(2)
-    var closest_x = tap_x
-    var closest_y = tap_y
-    var farthest = Float32(-1)
-    # Nine neighbors, fixed, across then down as three.js's loops run.
-    for dx in range(-1, 2):  # pragma: no branch
-        for dy in range(-1, 2):  # pragma: no branch
-            var d = depth.load(tap_x + dx, tap_y + dy, 0)
-            if d < closest:
-                closest = d
-                closest_x = tap_x + dx
-                closest_y = tap_y + dy
-            if d > farthest:
-                farthest = d
-    var offset_u = velocity.load(closest_x, closest_y, 0) * 0.5
-    var offset_v = velocity.load(closest_x, closest_y, 1) * -0.5
+    # A depth of at least 2 keeps the center tap.
+    var closest, farthest, offset_u, offset_v = neighborhood_motion(
+        depth, velocity, tap_x, tap_y, tap_x, tap_y
+    )
     var history_u = u - offset_u
     var history_v = v_down - offset_v
-    var then = previous_window_depth(
+    var then = reproject_window_depth(
         previous_depth,
         history_u,
         history_v,
@@ -323,12 +326,16 @@ def taau_pixel(
         frame.previous_camera_world,
         frame.view,
     )
-    var valid_uv = (
-        history_u >= 0 and history_v >= 0 and history_u <= 1 and history_v <= 1
+    var kept = history_is_kept(
+        history_u,
+        history_v,
+        closest,
+        farthest,
+        then,
+        frame.edge_depth_diff,
+        frame.depth_threshold,
     )
-    var edge = farthest - closest > frame.edge_depth_diff
-    var uncovered = closest - then > frame.depth_threshold
-    var kept = valid_uv and (edge or not uncovered)
+    var inside = sample_inside(history_u, history_v)
     # The nine taps, row by row, as three.js lists them.
     var sum_r = Float32(0)
     var sum_g = Float32(0)
@@ -354,11 +361,11 @@ def taau_pixel(
             var cy = Float32(ty) + 0.5 + frame.jitter_y
             var ddx = p_x - cx
             var ddy = p_y - cy
-            var w = exp_f((ddx * ddx + ddy * ddy) * -2.29)
+            var w = exp_f(squared_length2[DType.float32](ddx, ddy) * -2.29)
             var c = floor_channels(
                 beauty.at(
-                    min(max(tx, 0), beauty.width - 1),
-                    min(max(ty, 0), beauty.height - 1),
+                    edge_index(tx, beauty.width),
+                    edge_index(ty, beauty.height),
                 )
             )
             sum_r += c.r * w
@@ -382,34 +389,17 @@ def taau_pixel(
     )
     var n = Float32(9)
     var mean = FloatColor(m1.r / n, m1.g / n, m1.b / n, m1.a / n)
-    var moved_x = (u - history_u) * Float32(frame.in_width)
-    var moved_y = (v_down - history_v) * Float32(frame.in_height)
-    var motion = min(
-        max(
-            length2(moved_x, moved_y) / frame.max_velocity_length,
-            0,
-        ),
-        1,
+    var motion = sample_motion(
+        u,
+        history_u,
+        v_down,
+        history_v,
+        Float32(frame.in_width),
+        Float32(frame.in_height),
+        frame.max_velocity_length,
     )
-    var gamma = 0.5 + 0.5 * (1 - motion) * (1 - motion)
-    var spread = FloatColor(
-        sqrt(max(m2.r / n - mean.r * mean.r, 0)) * gamma,
-        sqrt(max(m2.g / n - mean.g * mean.g, 0)) * gamma,
-        sqrt(max(m2.b / n - mean.b * mean.b, 0)) * gamma,
-        sqrt(max(m2.a / n - mean.a * mean.a, 0)) * gamma,
-    )
-    var low = FloatColor(
-        mean.r - spread.r,
-        mean.g - spread.g,
-        mean.b - spread.b,
-        mean.a - spread.a,
-    )
-    var high = FloatColor(
-        mean.r + spread.r,
-        mean.g + spread.g,
-        mean.b + spread.b,
-        mean.a + spread.a,
-    )
+    var gamma = variance_gamma(motion)
+    var low, high = variance_box(mean, m2, n, gamma)
     var past = history.tap(
         history_u * Float32(history.width) - 0.5,
         history_v * Float32(history.height) - 0.5,
@@ -422,14 +412,9 @@ def taau_pixel(
         ratio = abs(current_luma - mean_luma) / mean_luma
     var thin = smoothstep(0, 0.2, ratio)
     var changed = abs(closest - then) > frame.depth_threshold
-    var can_lock = valid_uv and not changed
+    var can_lock = inside and not changed
     var lock = thin if can_lock else Float32(0)
-    var locked = FloatColor(
-        clipped.r + (past.r - clipped.r) * lock,
-        clipped.g + (past.g - clipped.g) * lock,
-        clipped.b + (past.b - clipped.b) * lock,
-        clipped.a + (past.a - clipped.a) * lock,
-    )
+    var locked = clipped.mix(past, lock)
     var weight = Float32(1)
     if kept:
         weight = min(max(frame.current_frame_weight + motion, 0), 1)
@@ -479,25 +464,18 @@ def taau_render[
         FLOAT_TARGET,
         [OUTPUT_COLOR, OUTPUT_VELOCITY],
     )
-    small.set_velocity_projection(camera.projection_matrix())
-    try:
-        small.render_into(drawn, scene, assets, moved)
-    finally:
-        small.set_velocity_projection(None)
-    settings.previous_camera_world = settings.camera_world
-    settings.previous_projection_inverse = settings.projection_inverse
-    var world = moved.view
-    world.invert()
-    settings.camera_world = world
-    var unprojects = moved.projection
-    unprojects.invert()
-    settings.projection_inverse = unprojects
+    render_jittered(small, drawn, scene, assets, camera, moved)
+    remember_jitter_camera(
+        settings.previous_camera_world,
+        settings.previous_projection_inverse,
+        settings.camera_world,
+        settings.projection_inverse,
+        moved.view,
+        moved.projection,
+    )
     var beauty = List[FloatColor](capacity=in_w * in_h)
     var velocities = List[Float32](capacity=in_w * in_h * 2)
-    for slot in range(in_w * in_h):  # pragma: no branch
-        beauty.append(drawn.straight_at(slot))
-        velocities.append(drawn.velocities[slot].x)
-        velocities.append(drawn.velocities[slot].y)
+    read_drawn_frame(drawn, beauty, velocities)
     var beauty_view = LightView(beauty, in_w, in_h)
     # A new output size seeds the history with the beauty read bilinear at
     # the output's pixels, as three.js's seed material does.

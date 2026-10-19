@@ -28,6 +28,7 @@ comptime GPU_ENTRIES = [
     "tests/test_gpu_water.mojo",
     "tests/test_gpu_layout.mojo",
     "tests/test_gpu_volume_packing.mojo",
+    "tests/test_capi_water_gpu.mojo",
     "bench/raster_bench.mojo",
     "bench/water_gpu_bench.mojo",
     "bench/hair_frame_bench.mojo",
@@ -39,6 +40,7 @@ comptime GPU_LIBRARIES = [
     "render/gpu.mojo",
     "render/gpu_vxgi.mojo",
     "extensions/water/gpu.mojo",
+    "window/capi_water_gpu.mojo",
 ]
 """The maintained GPU library modules."""
 
@@ -74,6 +76,40 @@ def _gpu_lists(source: String) -> String:
     return "\n".join(out)
 
 
+def _gpu_inputs(extra_entry: Bool) -> String:
+    """Supply source inventories for the Makefile's GPU naming filters."""
+    var libraries = List[String]()
+    for name in materialize[GPU_LIBRARIES]():
+        libraries.append(name)
+    libraries.extend(
+        [
+            "render/gpgpu_sort.mojo",
+            "render/gpu/helper.mojo",
+            "window/capi_gpu_host.mojo",
+        ]
+    )
+    var tests = List[String]()
+    for name in materialize[GPU_ENTRIES]():
+        if name.startswith("tests/"):
+            tests.append(name)
+    tests.extend(
+        [
+            "tests/test_cpu.mojo",
+            "tests/test_gpu_new_device.mojo",
+            "tests/test_new_device_gpu_helper.mojo",
+        ]
+    )
+    if extra_entry:
+        tests.append("tests/test_new_device_gpu.mojo")
+    return (
+        "LIB_SOURCES := "
+        + " ".join(libraries)
+        + "\nTESTS := "
+        + " ".join(tests)
+        + "\n"
+    )
+
+
 def run_recipe(
     targets: List[String],
     failed_source: String = "",
@@ -102,9 +138,9 @@ def run_recipe(
         + "COMPILE_GPU_STAMP := compile-gpu-stamp\n"
         + "LINT_GPU_STAMP := lint-gpu-stamp\n"
         + "stamp = touch $(1)-stamp\n"
+        + _gpu_inputs(extra_entry)
         + _gpu_lists(source)
         + "\n"
-        + ("GPU_ENTRY_POINTS += tests/new_device.mojo\n" if extra_entry else "")
         + recipe
         + "\n"
     )
@@ -152,7 +188,7 @@ def test_all_entries_build_with_explicit_target_without_running() raises:
     for call in outcome.calls:
         last.add(call[len(call) - 1])
     var expected = _entries()
-    expected.append("tests/new_device.mojo")
+    expected.append("tests/test_new_device_gpu.mojo")
     assert_true(last == _set(expected^))
     for call in outcome.calls:
         var head = List[String]()

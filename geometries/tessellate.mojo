@@ -30,6 +30,9 @@ from core.buffer_geometry import (
     UV,
     UV1,
 )
+from core.ordinal import require_non_negative
+from math.norm import squared_length3
+from math.utils import mix_delta
 from std.math import isfinite
 from units.si import Length, METER
 
@@ -57,7 +60,7 @@ def _lerped(data: List[Float64], size: Int, a: Int, b: Int) -> List[Float64]:
     for axis in range(size):  # pragma: no branch
         # An item size is two or three, so this runs.
         var start = data[a * size + axis]
-        out.append(start + (data[b * size + axis] - start) * 0.5)
+        out.append(mix_delta(start, data[b * size + axis], 0.5))
     return out^
 
 
@@ -66,7 +69,7 @@ def _distance_squared(p: List[Float64], a: Int, b: Int) -> Float64:
     var dx = p[a * 3] - p[b * 3]
     var dy = p[a * 3 + 1] - p[b * 3 + 1]
     var dz = p[a * 3 + 2] - p[b * 3 + 2]
-    return dx * dx + dy * dy + dz * dz
+    return squared_length3[DType.float64](dx, dy, dz)
 
 
 def tessellate(
@@ -97,8 +100,9 @@ def tessellate(
     """
     if not (max_edge_length.value >= 0 and isfinite(max_edge_length.value)):
         raise Error("A tessellation edge limit must be finite and not negative")
-    if max_iterations < 0:
-        raise Error("A tessellation cannot make a negative number of passes")
+    require_non_negative(
+        max_iterations, "A tessellation cannot make a negative number of passes"
+    )
     var flat = geometry.to_non_indexed()
     var count = flat.vertex_count()
     if count % 3 != 0:
@@ -163,7 +167,7 @@ def tessellate(
                 for corner in corners:  # pragma: no branch
                     # Three corners at least, so this runs.
                     if corner == 3:
-                        next[attribute].extend(middle.copy())
+                        next[attribute].extend(Span(middle))
                         continue
                     var item = a + corner
                     for axis in range(size):  # pragma: no branch

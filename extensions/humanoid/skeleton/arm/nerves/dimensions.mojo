@@ -26,7 +26,8 @@ are not a cited caliber table.
     var d = arm_nerve_distance(dims, MEDIAN_NERVE, RIGHT, p)
 """
 
-from extensions.humanoid.side import BodySide
+from core.ordinal import ordinal_valid, ordinal_label, require_valid
+from extensions.humanoid.side import require_side, BodySide
 from extensions.humanoid.skeleton.arm.frame import ArmMuscleDimensions
 from extensions.humanoid.skeleton.arm.muscles.dimensions import paths_field
 from extensions.humanoid.skeleton.torso.sweep import SweepField, floats
@@ -46,9 +47,7 @@ struct ArmNerve(Equatable, ImplicitlyCopyable, Writable):
 
     def is_valid(self) -> Bool:
         """Return True if this is a named nerve."""
-        if self.value < 0:
-            return False
-        return self.value <= ULNAR_NERVE.value
+        return ordinal_valid(self.value, ULNAR_NERVE.value)
 
 
 comptime AXILLARY_NERVE = ArmNerve(0)
@@ -68,15 +67,13 @@ def arm_nerve_label(part: ArmNerve) -> String:
         A short American English label, or `"arm nerve"` when `part` is
         not named.
     """
-    if not part.is_valid():
-        return "arm nerve"
     var names = List[String]()
     names.append("axillary nerve")
     names.append("musculocutaneous nerve")
     names.append("radial nerve")
     names.append("median nerve")
     names.append("ulnar nerve")
-    return names[part.value]
+    return ordinal_label(part.is_valid(), part.value, names, "arm nerve")
 
 
 def named_arm_nerves() -> List[ArmNerve]:
@@ -106,8 +103,7 @@ def arm_nerve_paths(part: ArmNerve) raises -> List[List[Float32]]:
     Raises:
         Error: If `part` is not named.
     """
-    if not part.is_valid():
-        raise Error("An arm nerve must be a named nerve")
+    require_valid(part.is_valid(), "An arm nerve must be a named nerve")
     var paths = List[List[Float32]]()
     # fmt: off
     if part == AXILLARY_NERVE:
@@ -207,8 +203,7 @@ def arm_nerve_field(
     """
     dimensions.validate()
     var paths = arm_nerve_paths(part)
-    if not side.is_valid():
-        raise Error("An arm side must be RIGHT or LEFT")
+    require_side(side, "An arm")
     return paths_field(dimensions.arm, paths, 1, side, 0.05)
 
 

@@ -5,8 +5,27 @@
 
 """Validate serialized surface programs before either interpreter reads them."""
 
+from core.extent import require_closed_count
+from core.search import first_match
 from materials import nodes
+from math.finite import require_finite
 from std.math import floor, isfinite, max
+
+
+def require_finite_node_code(value: Float32) raises:
+    """Refuse a node-program word that is not finite.
+
+    Nothing. The call returns when the word is finite.
+
+    Args:
+        value: One word of the program.
+
+    Raises:
+        Error: If the word is not finite.
+    """
+    require_finite(
+        Float64(value), "Object JSON: a node program needs finite code"
+    )
 
 
 def _whole(value: Float32, limit: Int) raises -> Int:
@@ -25,14 +44,6 @@ def _span(first: Int, count: Int, low: Int, size: Int) raises:
     """Check a span without overflowing its endpoint."""
     if first < low or first > size or count < 0 or count > size - first:
         raise Error("Object JSON: a node program span is outside its storage")
-
-
-def _contains(values: List[Int], value: Int) -> Bool:
-    """Return whether a list contains one address."""
-    for item in values:
-        if item == value:
-            return True
-    return False
 
 
 def _addresses(values: List[Int], low: Int, size: Int) raises:
@@ -140,10 +151,12 @@ def _integer_instruction(
         or kind == nodes.NODE_INT_SIGN
     )
     if width:
-        if immediate < 1 or immediate > 4:
-            raise Error(
-                "Object JSON: an integer instruction has an invalid immediate"
-            )
+        require_closed_count(
+            immediate,
+            1,
+            4,
+            "Object JSON: an integer instruction has an invalid immediate",
+        )
     elif immediate != 0:
         raise Error(
             "Object JSON: an integer instruction has an invalid immediate"
@@ -167,12 +180,10 @@ def validate_surface_program(program: nodes.NodeProgram) raises:
             operands. Only declared integer data can hold nonfinite bits.
     """
     var size = len(program.code)
-    if size < nodes.PROGRAM_HEADER:
-        raise Error("Object JSON: a node program's code is too short")
+    nodes.require_program_code(size)
     # Control words stay finite even when the pool contains integer bits.
     for index in range(nodes.PROGRAM_HEADER):  # pragma: no branch
-        if not isfinite(program.code[index]):
-            raise Error("Object JSON: a node program needs finite code")
+        require_finite_node_code(program.code[index])
     var starts = List[Int]()
     var counts = List[Int]()
     var pool = nodes.PROGRAM_HEADER
@@ -238,10 +249,12 @@ def validate_surface_program(program: nodes.NodeProgram) raises:
         raise Error("Object JSON: node attribute metadata lengths differ")
     for index in range(len(program.attribute_names)):
         var width = program.attribute_widths[index]
-        if width < 1 or width > 4:
-            raise Error(
-                "Object JSON: a node attribute width must be one through four"
-            )
+        require_closed_count(
+            width,
+            1,
+            4,
+            "Object JSON: a node attribute width must be one through four",
+        )
         _span(
             program.attribute_offsets[index],
             width,
@@ -272,8 +285,7 @@ def validate_surface_program(program: nodes.NodeProgram) raises:
         for instruction in range(counts[output]):
             var at = starts[output] + instruction * nodes.INSTRUCTION_FLOATS
             for slot in range(nodes.INSTRUCTION_FLOATS):  # pragma: no branch
-                if not isfinite(program.code[at + slot]):
-                    raise Error("Object JSON: a node program needs finite code")
+                require_finite_node_code(program.code[at + slot])
             var kind = nodes.NodeKind(
                 _whole(program.code[at], nodes.NODE_INT_LAST.value)
             )
@@ -326,8 +338,9 @@ def validate_surface_program(program: nodes.NodeProgram) raises:
             written[dest] = True
             if kind == nodes.NODE_CONSTANT or kind == nodes.NODE_UNIFORM:
                 _span(immediate, 4, pool, size)
-                if kind == nodes.NODE_UNIFORM and not _contains(
-                    program.uniform_offsets, immediate
+                if (
+                    kind == nodes.NODE_UNIFORM
+                    and first_match(program.uniform_offsets, immediate) < 0
                 ):
                     raise Error(
                         "Object JSON: a uniform instruction lacks its offset"
@@ -379,21 +392,23 @@ def validate_surface_program(program: nodes.NodeProgram) raises:
                 or kind == nodes.NODE_TEXEL_FETCH
                 or kind == nodes.NODE_TEXTURE_SIZE
             ):
-                if not _contains(program.texture_offsets, immediate):
+                if first_match(program.texture_offsets, immediate) < 0:
                     raise Error(
                         "Object JSON: a texture instruction lacks its offset"
                     )
             elif kind == nodes.NODE_TEXTURE_CUBE:
-                if not _contains(program.cube_offsets, immediate):
+                if first_match(program.cube_offsets, immediate) < 0:
                     raise Error(
                         "Object JSON: a cube instruction lacks its offset"
                     )
             elif kind == nodes.NODE_ATTRIBUTE:
                 var width = immediate // 8
-                if width < 1 or width > 4:
-                    raise Error(
-                        "Object JSON: invalid node attribute instruction width"
-                    )
+                require_closed_count(
+                    width,
+                    1,
+                    4,
+                    "Object JSON: invalid node attribute instruction width",
+                )
                 _span(immediate % 8, width, 0, nodes.MAX_ATTRIBUTE_FLOATS)
             elif kind == nodes.NODE_JOIN:
                 var a = immediate % 5
@@ -414,11 +429,12 @@ def validate_surface_program(program: nodes.NodeProgram) raises:
                 or kind == nodes.NODE_REFRACT
                 or kind == nodes.NODE_FACEFORWARD
             ):
-                if immediate < 1 or immediate > 4:
-                    raise Error(
-                        "Object JSON: a node vector width must be one through"
-                        " four"
-                    )
+                require_closed_count(
+                    immediate,
+                    1,
+                    4,
+                    "Object JSON: a node vector width must be one through four",
+                )
             elif kind == nodes.NODE_NOISE or kind == nodes.NODE_NOISE_VEC3:
                 if immediate != 2 and immediate != 3:
                     raise Error(
@@ -440,5 +456,5 @@ def validate_surface_program(program: nodes.NodeProgram) raises:
     # Unused words and gaps remain finite too. An integer declaration can
     # exempt only a checked four-word data span, never control or float data.
     for index in range(size):  # pragma: no branch
-        if payload_types[index] <= 0 and not isfinite(program.code[index]):
-            raise Error("Object JSON: a node program needs finite code")
+        if payload_types[index] <= 0:
+            require_finite_node_code(program.code[index])

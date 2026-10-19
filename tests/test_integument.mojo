@@ -70,7 +70,7 @@ from extensions.anatomy.soft_tissue import (
 )
 from extensions.humanoid.skeleton.soft_tissue import SOFT_FILL
 from materials.material import DOUBLE_SIDE, PHONG
-from math.vector3 import Vector3
+from math.vector3 import Vector3, midpoint
 from render.srgb import SRGB
 from render.texture_store import NO_TEXTURE, TextureStore
 from std.testing import (
@@ -304,7 +304,7 @@ def _outer_surface(
     var low = inside
     var high = inside + direction * Float32(0.50)
     for _ in range(18):
-        var middle = (low + high) * Float32(0.5)
+        var middle = midpoint(low, high)
         if field.distance(middle) < 0:
             low = middle
         else:

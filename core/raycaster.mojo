@@ -114,7 +114,8 @@ See `docs/wiki/Norm-consumers.md` for the changed operations, retained
 limits, and explicit zero and nonfinite rules.
 """
 
-from math.norm import length2
+from core.ordinal import require_index_in_count, require_non_negative
+from math.norm import length2, squared_length2
 
 from math.triangle_normal import normal_or_zero
 
@@ -128,6 +129,7 @@ from core.deform import (
     skin_pose,
     sphere_of,
 )
+from core.extent import require_positive_extent
 from core.layers import Layers
 from core.buffer_geometry import (
     BufferGeometry,
@@ -139,13 +141,19 @@ from core.buffer_geometry import (
     UV1,
 )
 from core.buffer_attribute import BufferAttribute
-from core.scene import Scene
+from core.scene import (
+    Scene,
+    require_instanced_mesh,
+    require_lod_index,
+    require_mesh,
+)
 from math.ray_query import RayQuery
 from math.bounds import Sphere
 from math.matrix4 import Matrix4
 from math.ray import Ray
 from math.triangle import Triangle
 from math.vector2 import Vector2
+from math.utils import mix_delta
 from math.vector3 import Vector3
 from math.sort_utils import radix_sort
 from core.geometry_store import GeometryId
@@ -153,9 +161,10 @@ from materials.material import BACK_SIDE, FRONT_SIDE, MaterialId
 from objects.line import SEGMENTS, segment_count, segment_ends
 from objects.line_segments2 import drawn_segments
 from objects.mesh import Mesh
-from std.math import cos, inf, isnan, max, min, sin
+from objects.sprite import sprite_place, sprite_span
+from std.math import inf, isnan, max, min
 from std.memory import bitcast
-from units.si import Length, METER, RADIAN
+from units.si import Length, METER
 
 
 @fieldwise_init
@@ -436,6 +445,23 @@ def _worn_vertex(
     return worn[vertex]
 
 
+def require_image_extent(width: Int, height: Int) raises:
+    """Refuse an image whose width or height is not positive.
+
+    Nothing. The call returns when both sizes are positive.
+
+    Args:
+        width: The image width, in pixels.
+        height: The image height, in pixels.
+
+    Raises:
+        Error: If the width or the height is not positive.
+    """
+    require_positive_extent(
+        width, height, "An image has a positive width and height"
+    )
+
+
 struct Raycaster(ImplicitlyCopyable, RayQuery):
     """A ray with a range, that asks a scene what it meets."""
 
@@ -492,8 +518,9 @@ struct Raycaster(ImplicitlyCopyable, RayQuery):
         """
         if isnan(near.value) or isnan(far.value):
             raise Error("A raycaster's range must be made of numbers")
-        if near.value < 0:
-            raise Error("A raycaster's near distance cannot be negative")
+        require_non_negative(
+            near.value, "A raycaster's near distance cannot be negative"
+        )
         if far.value < near.value:
             raise Error("A raycaster's far distance cannot be below its near")
         self.ray = Ray(origin, direction)
@@ -606,8 +633,7 @@ struct Raycaster(ImplicitlyCopyable, RayQuery):
             Error: If either dimension is not positive, or the camera's
                 view cannot be read.
         """
-        if width <= 0 or height <= 0:
-            raise Error("An image has a positive width and height")
+        require_image_extent(width, height)
         self.set_from_camera(
             Vector2(
                 x / Float32(width) * 2 - 1,
@@ -639,8 +665,7 @@ struct Raycaster(ImplicitlyCopyable, RayQuery):
                 flattens a dimension, which leaves no inverse to carry the
                 ray through.
         """
-        if index < 0 or index >= len(scene.meshes):
-            raise Error("No mesh has that index")
+        require_mesh(index, len(scene.meshes))
         var mesh = scene.meshes[index]
         return self._intersect_shape(
             scene,
@@ -672,8 +697,7 @@ struct Raycaster(ImplicitlyCopyable, RayQuery):
             Error: If no instanced mesh has that index, or for anything
                 `intersect_mesh` raises for, per instance.
         """
-        if index < 0 or index >= len(scene.instanced_meshes):
-            raise Error("No instanced mesh has that index")
+        require_instanced_mesh(index, len(scene.instanced_meshes))
         ref group = scene.instanced_meshes[index]
         var mesh = Mesh(group.geometry, group.material, group.node)
         var world = scene.world_matrix(group.node)
@@ -710,8 +734,11 @@ struct Raycaster(ImplicitlyCopyable, RayQuery):
             Error: If no batched mesh has that index, or for anything
                 `intersect_mesh` raises for, per instance.
         """
-        if index < 0 or index >= len(scene.batched_meshes):
-            raise Error("No batched mesh has that index")
+        require_index_in_count(
+            index,
+            len(scene.batched_meshes),
+            "No batched mesh has that index",
+        )
         ref batch = scene.batched_meshes[index]
         var world = scene.world_matrix(batch.node)
         var hits = List[Hit]()
@@ -757,8 +784,7 @@ struct Raycaster(ImplicitlyCopyable, RayQuery):
             Error: If no LOD has that index, or for anything
                 `intersect_mesh` raises for.
         """
-        if index < 0 or index >= len(scene.lods):
-            raise Error("No LOD has that index")
+        require_lod_index(index, len(scene.lods))
         ref lod = scene.lods[index]
         var world = scene.world_matrix(lod.node)
         var origin = world.transform_point(Vector3(0, 0, 0))
@@ -849,8 +875,9 @@ struct Raycaster(ImplicitlyCopyable, RayQuery):
                 indexed, the point count does not suit the mode, or the
                 threshold is negative or not a number.
         """
-        if index < 0 or index >= len(scene.lines):
-            raise Error("No line has that index")
+        require_index_in_count(
+            index, len(scene.lines), "No line has that index"
+        )
         var line = scene.lines[index]
         var reach = self._reach(self.line_threshold)
         var hits = List[Hit]()
@@ -927,8 +954,9 @@ struct Raycaster(ImplicitlyCopyable, RayQuery):
                 or is indexed, or the threshold is negative or not a
                 number.
         """
-        if index < 0 or index >= len(scene.points):
-            raise Error("No points object has that index")
+        require_index_in_count(
+            index, len(scene.points), "No points object has that index"
+        )
         var cloud = scene.points[index]
         var reach = self._reach(self.points_threshold)
         var hits = List[Hit]()
@@ -988,8 +1016,9 @@ struct Raycaster(ImplicitlyCopyable, RayQuery):
             Error: If no sprite has that index, it names a node or a
                 material that is not there, or no camera has been set.
         """
-        if index < 0 or index >= len(scene.sprites):
-            raise Error("No sprite has that index")
+        require_index_in_count(
+            index, len(scene.sprites), "No sprite has that index"
+        )
         if not self.has_camera:
             raise Error(
                 "A sprite faces a camera: set_from_camera must set one"
@@ -1006,28 +1035,30 @@ struct Raycaster(ImplicitlyCopyable, RayQuery):
         var center = view.transform_point(
             Vector3(world.elements[12], world.elements[13], world.elements[14])
         )
-        var scale_x = _column_length(world, 0)
-        var scale_y = _column_length(world, 1)
-        if not material.size_attenuation and self.camera_perspective:
-            scale_x *= -center.z
-            scale_y *= -center.z
-        var turn = material.rotation.to(RADIAN)
-        var turned_x = cos(turn)
-        var turned_y = sin(turn)
+        var scale_x, scale_y, turned_x, turned_y = sprite_span(
+            world,
+            center,
+            material.size_attenuation,
+            self.camera_perspective,
+            material.rotation,
+        )
         # The unit square's corners, counterclockwise from the bottom
         # left, carried to the world: three.js's `transformVertex`.
         var xs: List[Float32] = [-0.5, 0.5, 0.5, -0.5]
         var ys: List[Float32] = [-0.5, -0.5, 0.5, 0.5]
         var corners = List[Vector3]()
         for corner in range(4):  # pragma: no branch
-            var aligned_x = (xs[corner] - (sprite.center.x - 0.5)) * scale_x
-            var aligned_y = (ys[corner] - (sprite.center.y - 0.5)) * scale_y
             corners.append(
                 self.camera_world.transform_point(
-                    Vector3(
-                        center.x + turned_x * aligned_x - turned_y * aligned_y,
-                        center.y + turned_y * aligned_x + turned_x * aligned_y,
-                        center.z,
+                    sprite_place(
+                        center,
+                        sprite.center,
+                        xs[corner],
+                        ys[corner],
+                        scale_x,
+                        scale_y,
+                        turned_x,
+                        turned_y,
                     )
                 )
             )
@@ -1390,10 +1421,10 @@ struct Raycaster(ImplicitlyCopyable, RayQuery):
                 positions or an odd count of them, its draw range is
                 invalid, or the camera's view cannot be read.
         """
-        if index < 0 or index >= len(scene.wide_lines):
-            raise Error("No wide line has that index")
-        if width <= 0 or height <= 0:
-            raise Error("An image has a positive width and height")
+        require_index_in_count(
+            index, len(scene.wide_lines), "No wide line has that index"
+        )
+        require_image_extent(width, height)
         var hits = List[Hit]()
         ref line = scene.wide_lines[index]
         if not scene.shows(line.node, self.layers):
@@ -1585,7 +1616,7 @@ def _within_on_image(
         var by = Float64(far_end.y) * Float64(half_y)
         var sx = bx - ax
         var sy = by - ay
-        var squared = sx * sx + sy * sy
+        var squared = squared_length2[DType.float64](sx, sy)
         var fraction = Float64(0)
         if squared > 0:
             fraction = (
@@ -1605,7 +1636,7 @@ def _within_on_image(
         )
     share = min(max(share, Float32(0)), Float32(1))
     var closest = from_point + span * share
-    var depth = near_end.z + (far_end.z - near_end.z) * share
+    var depth = mix_delta(near_end.z, far_end.z, share)
     return depth >= -1 and depth <= 1 and (target - closest).length() < reach
 
 
@@ -1643,19 +1674,3 @@ def _sort_by_distance(mut hits: List[Hit]) raises:
             hits[slot] = hits[slot - 1]
             slot -= 1
         hits[slot] = hit
-
-
-def _column_length(matrix: Matrix4, axis: Int) -> Float32:
-    """Return the length of one of a matrix's three axis columns: how much
-    it scales along that axis, as the renderer measures a sprite.
-
-    Args:
-        matrix: The transform.
-        axis: Which column, zero for x through two for z.
-
-    Returns:
-        The length.
-    """
-    ref e = matrix.elements
-    var start = axis * 4
-    return Vector3(e[start], e[start + 1], e[start + 2]).length()

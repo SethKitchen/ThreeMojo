@@ -278,6 +278,13 @@ two. A clip of no length is refused where clips are built, which is what
 lets the looping divide by the length without asking.
 """
 
+from core.ordinal import (
+    ordinal_valid,
+    require_index_in_count,
+    require_valid,
+    require_non_negative,
+)
+
 from animation.loop_time import _split_loop_time, _stored_loop_phase
 from animation.animation_clip import (
     ADDITIVE_BLEND_MODE,
@@ -287,6 +294,7 @@ from animation.animation_clip import (
 from animation.animation_object_group import AnimationObjectGroup
 from animation.keyframe_track import (
     KeyframeTrack,
+    require_track_target,
     CAMERA_FAR,
     CAMERA_FOV,
     CAMERA_NEAR,
@@ -339,7 +347,9 @@ from core.object3d import NO_PARENT, NodeId
 from core.scene import Scene
 from materials.material import MAX_IOR, MIN_IOR
 from math.euler import Euler
+from math.finite import require_finite
 from math.quaternion import Quaternion
+from math.utils import mix_delta
 from math.vector2 import Vector2
 from math.vector3 import Vector3
 from render.framebuffer import Color, FloatColor
@@ -361,7 +371,7 @@ struct Loop(Equatable, ImplicitlyCopyable, Writable):
 
     def is_valid(self) -> Bool:
         """Return True if this is one of the three loop modes there are."""
-        return self == ONCE or self == REPEAT or self == PING_PONG
+        return ordinal_valid(self.value, PING_PONG.value)
 
 
 # Stop at the end and stay there: three.js's `LoopOnce`.
@@ -370,6 +380,67 @@ comptime ONCE = Loop(0)
 comptime REPEAT = Loop(1)
 # Run back the way it came: three.js's `LoopPingPong`.
 comptime PING_PONG = Loop(2)
+
+
+def require_loop(loop: Loop) raises:
+    """Refuse a loop mode that is not named.
+
+    Nothing. The call returns when the mode is named.
+
+    Args:
+        loop: The mode.
+
+    Raises:
+        Error: If the mode is none of the three.
+    """
+    require_valid(loop.is_valid(), "An action needs a loop mode that exists")
+
+
+def require_action_weight(weight: Float32) raises:
+    """Refuse an action weight that is negative or not a number.
+
+    Nothing. The call returns when the weight is a number and not
+        negative.
+
+    Args:
+        weight: How much of the action goes into the pose.
+
+    Raises:
+        Error: If the weight is not a number, or if it is negative.
+    """
+    require_finite(Float64(weight), "An action's weight must be a number")
+    require_non_negative(weight, "An action's weight cannot be negative")
+
+
+def require_warp_scale(time_scale: Float32) raises:
+    """Refuse a warp whose action time scale is zero.
+
+    Nothing. The call returns when the time scale is not zero.
+
+    Args:
+        time_scale: How fast the action's clock runs.
+
+    Raises:
+        Error: If the time scale is zero.
+    """
+    if time_scale == 0:
+        raise Error("An action with a time scale of zero cannot warp")
+
+
+def require_action_time_scale(time_scale: Float32) raises:
+    """Refuse an action time scale that is not a number.
+
+    Nothing. The call returns when the time scale is a number.
+
+    Args:
+        time_scale: How fast the action's clock runs.
+
+    Raises:
+        Error: If the time scale is not a number.
+    """
+    require_finite(
+        Float64(time_scale), "An action's time scale must be a number"
+    )
 
 
 @fieldwise_init
@@ -381,7 +452,7 @@ struct AnimationEventKind(Equatable, ImplicitlyCopyable, Writable):
 
     def is_valid(self) -> Bool:
         """Return True if this is one of the two event kinds there are."""
-        return self == LOOPED or self == FINISHED
+        return ordinal_valid(self.value, FINISHED.value)
 
 
 # The action ran past an end of its clip and went on: three.js's `loop`.
@@ -443,7 +514,7 @@ struct Ramp(Copyable, ImplicitlyCopyable, Movable):
         if time <= self.start:
             return self.from_value
         var part = (time - self.start) / (self.end - self.start)
-        return self.from_value + (self.to_value - self.from_value) * part
+        return mix_delta(self.from_value, self.to_value, part)
 
 
 def checked_span(duration: Duration, what: String) raises -> Float32:
@@ -461,7 +532,7 @@ def checked_span(duration: Duration, what: String) raises -> Float32:
         Error: If the span is not a number or is negative.
     """
     var seconds = duration.to(SECOND)
-    if not isfinite(seconds):
+    if not isfinite(Float64(seconds)):
         raise Error(what + " must last a time that is a number")
     if seconds < 0:
         raise Error(what + " cannot last less than no time")
@@ -577,8 +648,8 @@ def rest_into_pile(
         piles[at + 3] = mixed.w
         return
     for offset in range(PILE):  # pragma: no branch
-        piles[at + offset] = (
-            original[offset] + (piles[at + offset] - original[offset]) * total
+        piles[at + offset] = mix_delta(
+            original[offset], piles[at + offset], total
         )
 
 
@@ -975,8 +1046,11 @@ def _map_of(assets: Assets, target: TrackTarget) raises -> TextureId:
     var map = assets.materials.materials[target.index].map
     if map == NO_TEXTURE:
         raise Error("A map track needs a material with a map")
-    if map.value < 0 or map.value >= assets.textures.count():
-        raise Error("A map track's material names a texture that is not there")
+    require_index_in_count(
+        map.value,
+        assets.textures.count(),
+        "A map track's material names a texture that is not there",
+    )
     return map
 
 
@@ -1017,8 +1091,10 @@ def _write_camera(
     out when it is asked for, so it follows the track.
     """
     var kind = target.kind
-    if not isfinite(value):
-        raise Error("An animation drove a camera to a value it cannot hold")
+    require_finite(
+        Float64(value),
+        "An animation drove a camera to a value it cannot hold",
+    )
     if kind == CAMERA_ZOOM and value <= 0:
         raise Error("An animation drove a camera's zoom to zero or below")
     if target.slot == ORTHOGRAPHIC_SLOT:
@@ -1148,10 +1224,11 @@ def write_target(
         return
     if kind.is_string():
         var place = Int(values[at])
-        if place < 0 or place >= len(strings):
-            raise Error(
-                "An animation drove a name to a string it does not hold"
-            )
+        require_index_in_count(
+            place,
+            len(strings),
+            "An animation drove a name to a string it does not hold",
+        )
         scene.node(NodeId(target.index)).name = strings[place]
         return
     if kind.is_node():
@@ -1299,8 +1376,7 @@ def check_target(
             the list it indexes, or it drives a material and there are no
             assets, or a camera and there are no cameras.
     """
-    if not target.is_valid():
-        raise Error("A track needs a kind that exists and fits its slot")
+    require_track_target(target)
     var kind = target.kind
     var count = scene.count()
     if kind.is_camera():
@@ -1325,11 +1401,14 @@ def check_target(
                 " assets, delta)"
             )
         count = assets.materials.count()
-    if target.index < 0 or target.index >= count:
-        raise Error(
+    require_index_in_count(
+        target.index,
+        count,
+        (
             "A track must name a node, a mesh, a light, a material or a"
             " camera that is there"
-        )
+        ),
+    )
     if kind.is_map():
         _ = _map_of(assets, target)
 
@@ -1367,8 +1446,11 @@ def resolve_targets(
     var kind = target.kind
     for member in range(group.count()):
         var node = group.members[member].value
-        if node < 0 or node >= scene.count():
-            raise Error("A group member must be a node in the scene")
+        require_index_in_count(
+            node,
+            scene.count(),
+            "A group member must be a node in the scene",
+        )
         var reached = List[TrackTarget]()
         if kind.is_node():
             reached.append(TrackTarget(kind, node, target.slot))
@@ -1589,14 +1671,9 @@ struct AnimationAction(Copyable, Movable):
             Error: If the loop mode is none of the three, or the weight or
                 the time scale is negative or is not a number.
         """
-        if not loop.is_valid():
-            raise Error("An action needs a loop mode that exists")
-        if not isfinite(weight):
-            raise Error("An action's weight must be a number")
-        if weight < 0:
-            raise Error("An action's weight cannot be negative")
-        if not isfinite(time_scale):
-            raise Error("An action's time scale must be a number")
+        require_loop(loop)
+        require_action_weight(weight)
+        require_action_time_scale(time_scale)
         self.blend_mode = clip.blend_mode
         self.clip = clip^
         self.loop = loop
@@ -1727,8 +1804,7 @@ struct AnimationAction(Copyable, Movable):
             Error: If the loop mode is none of the three, or the
                 repetitions are below zero.
         """
-        if not loop.is_valid():
-            raise Error("An action needs a loop mode that exists")
+        require_loop(loop)
         if Bool(repetitions):
             if repetitions.value() < 0:
                 raise Error("An action cannot repeat fewer than zero times")
@@ -1803,10 +1879,7 @@ struct AnimationAction(Copyable, Movable):
         Raises:
             Error: If the weight is negative or is not a number.
         """
-        if not isfinite(weight):
-            raise Error("An action's weight must be a number")
-        if weight < 0:
-            raise Error("An action's weight cannot be negative")
+        require_action_weight(weight)
         self.weight = weight
 
     def set_effective_weight(mut self, weight: Float32) raises:
@@ -1843,8 +1916,7 @@ struct AnimationAction(Copyable, Movable):
         Raises:
             Error: If the time scale is not a number.
         """
-        if not isfinite(time_scale):
-            raise Error("An action's time scale must be a number")
+        require_action_time_scale(time_scale)
         self.time_scale = time_scale
         self.applied_time_scale = Float32(0) if self.paused else time_scale
         self.stop_warping()
@@ -1929,8 +2001,7 @@ struct AnimationAction(Copyable, Movable):
         if not isfinite(start_time_scale) or not isfinite(end_time_scale):
             raise Error("A warp needs time scales that are numbers")
         var span = checked_span(duration, "A warp")
-        if self.time_scale == 0:
-            raise Error("An action with a time scale of zero cannot warp")
+        require_warp_scale(self.time_scale)
         self.warp_ramp = Ramp(
             self.now,
             self.now + span,
@@ -1970,8 +2041,10 @@ struct AnimationAction(Copyable, Movable):
             Error: If `time` is not a number.
         """
         var seconds = time.to(SECOND)
-        if not isfinite(seconds):
-            raise Error("An action cannot start at a time that is not a number")
+        require_finite(
+            Float64(seconds),
+            "An action cannot start at a time that is not a number",
+        )
         self.start_time = seconds
         self.scheduled = True
 
@@ -1997,10 +2070,10 @@ struct AnimationAction(Copyable, Movable):
             Error: If the step or phase sum is not finite, or the loop
                 count or reduced phase does not fit its stored type.
         """
-        if not isfinite(seconds):
-            raise Error(
-                "An action cannot advance by a time that is not a number"
-            )
+        require_finite(
+            Float64(seconds),
+            "An action cannot advance by a time that is not a number",
+        )
         self._move(seconds * self.time_scale)
 
     def _set_endings(mut self, at_start: Bool, at_end: Bool, ping_pong: Bool):
@@ -2032,13 +2105,16 @@ struct AnimationAction(Copyable, Movable):
     ) raises -> _ActionMove:
         """Check a stored Float32 step, sum, count and phase without mutation.
         """
-        if not isfinite(moved_by):
-            raise Error("An action's scaled advance must be a finite number")
+        require_finite(
+            Float64(moved_by),
+            "An action's scaled advance must be a finite number",
+        )
         if moved_by == 0:
             return _ActionMove(phase, 0, self.loop_count, 0, 0, False)
         var moved = phase + moved_by
-        if not isfinite(moved):
-            raise Error("An action's advanced phase must be a finite number")
+        require_finite(
+            Float64(moved), "An action's advanced phase must be a finite number"
+        )
         if self.loop == ONCE:
             return _ActionMove(moved, 0, self.loop_count, 0, 0, False)
         var length = self.clip.duration().to(SECOND)
@@ -2340,8 +2416,11 @@ struct AnimationMixer(Movable):
 
     def _check_index(self, index: Int) raises:
         """Refuse an index that names no action, or an uncached one."""
-        if index < 0 or index >= len(self.actions):
-            raise Error("The mixer has no action at that index")
+        require_index_in_count(
+            index,
+            len(self.actions),
+            "The mixer has no action at that index",
+        )
         if self.uncached[index]:
             raise Error("The mixer uncached the action at that index")
 
@@ -2547,11 +2626,8 @@ struct AnimationMixer(Movable):
             raise Error("An action cannot cross-fade from itself")
         _ = checked_span(duration, "A cross-fade")
         if warp:
-            if (
-                self.actions[index].time_scale == 0
-                or self.actions[from_index].time_scale == 0
-            ):
-                raise Error("An action with a time scale of zero cannot warp")
+            require_warp_scale(self.actions[index].time_scale)
+            require_warp_scale(self.actions[from_index].time_scale)
         self.actions[from_index].fade_out(duration)
         self.actions[index].fade_in(duration)
         if warp:
@@ -2822,14 +2898,18 @@ struct AnimationMixer(Movable):
         self, delta: Duration, rewind: Bool = False
     ) raises -> _PreparedUpdate:
         """Stage every active clock before changing clocks, phases or events."""
-        if not isfinite(self.time_scale):
-            raise Error("A mixer's time scale must be a number")
+        require_finite(
+            Float64(self.time_scale), "A mixer's time scale must be a number"
+        )
         var seconds = delta.to(SECOND) * self.time_scale
-        if not isfinite(seconds):
-            raise Error("A mixer cannot advance by a time that is not a number")
+        require_finite(
+            Float64(seconds),
+            "A mixer cannot advance by a time that is not a number",
+        )
         var elapsed = seconds if rewind else self.elapsed + seconds
-        if not isfinite(elapsed):
-            raise Error("A mixer's advanced clock must be a finite number")
+        require_finite(
+            Float64(elapsed), "A mixer's advanced clock must be a finite number"
+        )
         var first = _ActionTick(0, 0, _ActionMove(0, 0, 0, 0, 0, False))
         var others = List[_ActionTick]()
         var count = 0

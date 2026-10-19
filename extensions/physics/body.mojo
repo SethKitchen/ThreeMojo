@@ -20,23 +20,24 @@ the velocity by one plus h times the damping, so the damping never
 reverses a velocity, however large the step. Both dampings are 0 by
 default, as in Box2D: a body keeps its speed unless something acts on it.
 """
+from core.ordinal import ordinal_valid, require_valid
 
 from extensions.physics.shape import (
     MESH,
     PhysicsMaterial,
     Shape,
+    ShapeKind,
     cross,
     _finite_vector,
     _inertia_inverse,
     _inertia_determinant,
-    _wide,
-    _wide_cross,
-    _wide_dot,
     _narrow_finite,
 )
+from math.cross import wide_cross, wide_dot, widen_vector
+from math.finite import require_finite, require_positive_finite
 from math.matrix3 import Matrix3
-from math.quaternion import Quaternion
-from math.vector3 import Vector3
+from math.quaternion import Quaternion, quaternion_from_float64
+from math.vector3 import Vector3, vector3_from_float64
 from std.math import cos, isfinite, sin, sqrt
 from units.si import Mass
 
@@ -68,12 +69,45 @@ struct BodyKind(Equatable, ImplicitlyCopyable, Writable):
         Returns:
             Whether the value is 0 to 2.
         """
-        return self.value >= 0 and self.value <= 2
+        return ordinal_valid(self.value, 2)
 
 
 comptime STATIC = BodyKind(0)
+
+
+def require_static_mesh(shape: ShapeKind, kind: BodyKind) raises:
+    """Refuse a mesh body that is not static.
+
+    Nothing. The call returns when the body is not a mesh, or it is
+    static.
+
+    Args:
+        shape: The collision shape.
+        kind: How the body moves.
+
+    Raises:
+        Error: If the shape is a mesh and the kind is not static.
+    """
+    if shape == MESH and kind != STATIC:
+        raise Error("A mesh body must be static")
+
+
 comptime DYNAMIC = BodyKind(1)
 comptime KINEMATIC = BodyKind(2)
+
+
+def require_body_kind(kind: BodyKind) raises:
+    """Refuse a body kind that is not named.
+
+    Nothing. The call returns when the kind is named.
+
+    Args:
+        kind: The kind.
+
+    Raises:
+        Error: If the kind is not named.
+    """
+    require_valid(kind.is_valid(), "Body kind is not valid")
 
 
 def rotation_matrix(q: Quaternion) -> Matrix3:
@@ -99,22 +133,22 @@ def _rotation_wide(q: Quaternion) -> SIMD[DType.float64, 4]:
     var out = SIMD[DType.float64, 4](
         Float64(q.x), Float64(q.y), Float64(q.z), Float64(q.w)
     )
-    return out / sqrt(_wide_dot(out, out) + out[3] * out[3])
+    return out / sqrt(wide_dot(out, out) + out[3] * out[3])
 
 
 def _rotation_product(
     a: SIMD[DType.float64, 4], b: SIMD[DType.float64, 4]
 ) -> SIMD[DType.float64, 4]:
-    var out = _wide_cross(a, b) + a * b[3] + b * a[3]
-    out[3] = a[3] * b[3] - _wide_dot(a, b)
+    var out = wide_cross(a, b) + a * b[3] + b * a[3]
+    out[3] = a[3] * b[3] - wide_dot(a, b)
     return out
 
 
 def _rotation_apply(
     q: SIMD[DType.float64, 4], v: SIMD[DType.float64, 4]
 ) -> SIMD[DType.float64, 4]:
-    var twice = 2 * _wide_cross(q, v)
-    return v + q[3] * twice + _wide_cross(q, twice)
+    var twice = 2 * wide_cross(q, v)
+    return v + q[3] * twice + wide_cross(q, twice)
 
 
 def _rotation_back(q: SIMD[DType.float64, 4]) -> SIMD[DType.float64, 4]:
@@ -143,11 +177,22 @@ def _split_rotation(
 ):
     # Exact flow of H = coefficient * (axis . momentum)^2 / 2.
     # This scalar projection is constant during this one subflow.
-    var half = h * coefficient * _wide_dot(axis, momentum) / 2
+    var half = h * coefficient * wide_dot(axis, momentum) / 2
     var turn = axis * sin(half)
     turn[3] = cos(half)
     q = _rotation_product(q, turn)
     momentum = _rotation_apply(_rotation_back(turn), momentum)
+
+
+def locked_inverse_inertia() -> Matrix3:
+    """Return an inverse inertia that refuses every turn.
+
+    A new matrix is the identity. Clearing its diagonal leaves nine zeros.
+
+    Returns:
+        A zero matrix.
+    """
+    return Matrix3.diagonal(0, 0, 0)
 
 
 struct RigidBody(Copyable, Movable):
@@ -217,17 +262,13 @@ struct RigidBody(Copyable, Movable):
             Error: If the kind is not valid, a mesh is not static, or a
                 dynamic body has no mass.
         """
-        if not kind.is_valid():
-            raise Error("Body kind is not valid")
-        if shape.kind == MESH and kind != STATIC:
-            raise Error("A mesh body must be static")
+        require_body_kind(kind)
+        require_static_mesh(shape.kind, kind)
         self._kind = kind
         self._has_dynamic_state = False
         self._dynamic_mass = 0
         self._dynamic_inverse_mass = 0
-        self._dynamic_inverse_inertia = Matrix3()
-        for i in range(9):  # pragma: no branch
-            self._dynamic_inverse_inertia.elements[i] = 0
+        self._dynamic_inverse_inertia = locked_inverse_inertia()
         self.shape = shape^
         self.shape_position = Vector3(0, 0, 0)
         self.shape_rotation = Quaternion.identity()
@@ -240,10 +281,7 @@ struct RigidBody(Copyable, Movable):
         self._mass = 0
         self._inverse_mass = 0
         self.center_of_mass = Vector3(0, 0, 0)
-        self._inverse_inertia = Matrix3()
-        self._inverse_inertia.elements[0] = 0
-        self._inverse_inertia.elements[4] = 0
-        self._inverse_inertia.elements[8] = 0
+        self._inverse_inertia = locked_inverse_inertia()
         self.linear_damping = 0
         self.angular_damping = 0
         self.gravity_scale = 1
@@ -305,10 +343,8 @@ struct RigidBody(Copyable, Movable):
                 finite inverse tensor is invalid. Disabled effective
                 mass and inverse inertia must be zero.
         """
-        if not self._kind.is_valid():
-            raise Error("Body kind is not valid")
-        if self.shape.kind == MESH and self._kind != STATIC:
-            raise Error("A mesh body must be static")
+        require_body_kind(self._kind)
+        require_static_mesh(self.shape.kind, self._kind)
         if self._kind == DYNAMIC:
             self._check_dynamic_state(
                 self._mass, self._inverse_mass, self._inverse_inertia
@@ -316,11 +352,7 @@ struct RigidBody(Copyable, Movable):
         else:
             if self._mass != 0 or self._inverse_mass != 0:
                 raise Error("A disabled body must have zero effective mass")
-            var zero = Matrix3()
-            zero.elements[0] = 0
-            zero.elements[4] = 0
-            zero.elements[8] = 0
-            if self._inverse_inertia != zero:
+            if self._inverse_inertia != locked_inverse_inertia():
                 raise Error("A disabled body must have zero inverse inertia")
             if self._has_dynamic_state:
                 self._check_dynamic_state(
@@ -347,10 +379,8 @@ struct RigidBody(Copyable, Movable):
                 before disabling it when later restoration is needed.
         """
         self.validate()
-        if not kind.is_valid():
-            raise Error("Body kind is not valid")
-        if self.shape.kind == MESH and kind != STATIC:
-            raise Error("A mesh body must be static")
+        require_body_kind(kind)
+        require_static_mesh(self.shape.kind, kind)
         if kind == self._kind:
             return
         if kind == DYNAMIC:
@@ -367,8 +397,7 @@ struct RigidBody(Copyable, Movable):
                 self._has_dynamic_state = True
             self._mass = 0
             self._inverse_mass = 0
-            for i in range(9):  # pragma: no branch
-                self._inverse_inertia.elements[i] = 0
+            self._inverse_inertia = locked_inverse_inertia()
             if kind == STATIC:
                 self.linear_velocity = Vector3(0, 0, 0)
                 self.angular_velocity = Vector3(0, 0, 0)
@@ -388,8 +417,10 @@ struct RigidBody(Copyable, Movable):
         ):
             raise Error("The retained dynamic mass is invalid")
         for i in range(9):  # pragma: no branch
-            if not isfinite(inertia.elements[i]):
-                raise Error("The retained inverse inertia is not finite")
+            require_finite(
+                Float64(inertia.elements[i]),
+                "The retained inverse inertia is not finite",
+            )
 
     def set_mass(mut self, mass: Mass) raises:
         """Give a dynamic body a mass, and the inertia of its solid shape.
@@ -417,8 +448,9 @@ struct RigidBody(Copyable, Movable):
     def _mass_state(
         self, mass: Float32, position: Vector3, rotation: Quaternion
     ) raises -> Tuple[Float32, Vector3, Matrix3]:
-        if not (isfinite(mass) and mass > 0):
-            raise Error("A dynamic body needs a mass more than zero")
+        require_positive_finite(
+            Float64(mass), "A dynamic body needs a mass more than zero"
+        )
         var inverse_mass = _narrow_finite(1 / Float64(mass))
         _finite_vector(position)
         var props = self.shape.mass_properties(mass)
@@ -507,8 +539,7 @@ struct RigidBody(Copyable, Movable):
         _finite_vector(position)
         var turn = rotation
         for value in [turn.x, turn.y, turn.z, turn.w]:  # pragma: no branch
-            if not isfinite(value):
-                raise Error("A shape rotation must be finite")
+            require_finite(Float64(value), "A shape rotation must be finite")
         turn.normalize()
         if self._kind == DYNAMIC:
             var state = self._mass_state(self._mass, position, turn)
@@ -602,7 +633,7 @@ struct RigidBody(Copyable, Movable):
         var minor = a * d - b * b
         var q = _rotation_wide(self.rotation)
         var omega = _rotation_apply(
-            _rotation_back(q), _wide(self.angular_velocity)
+            _rotation_back(q), widen_vector(self.angular_velocity)
         )
         # Invert only in wide arithmetic; a finite custom inverse can have
         # a reciprocal tensor outside Float32's range.
@@ -631,10 +662,10 @@ struct RigidBody(Copyable, Movable):
         # LDL^T gives three rank-one terms without an eigensolver. Scaling
         # the first two columns avoids dividing by a small pivot early.
         var axis0 = SIMD[DType.float64, 4](a, b, c, 0)
-        var square0 = _wide_dot(axis0, axis0)
+        var square0 = wide_dot(axis0, axis0)
         axis0 /= sqrt(square0)
         var axis1 = SIMD[DType.float64, 4](0, minor, a * e - b * c, 0)
-        var square1 = _wide_dot(axis1, axis1)
+        var square1 = wide_dot(axis1, axis1)
         axis1 /= sqrt(square1)
         var axis2 = SIMD[DType.float64, 4](0, 0, 1, 0)
         var coefficient0 = square0 / a
@@ -646,9 +677,7 @@ struct RigidBody(Copyable, Movable):
         _split_rotation(q, momentum, axis2, coefficient2, Float64(h))
         _split_rotation(q, momentum, axis1, coefficient1, half)
         _split_rotation(q, momentum, axis0, coefficient0, half)
-        self.rotation = Quaternion(
-            Float32(q[0]), Float32(q[1]), Float32(q[2]), Float32(q[3])
-        )
+        self.rotation = quaternion_from_float64(q[0], q[1], q[2], q[3])
         self.rotation.normalize()
         # Reconstruct from the final stored pose and the original world
         # momentum. A caller's latest omega, torque and contact impulses
@@ -656,8 +685,8 @@ struct RigidBody(Copyable, Movable):
         q = _rotation_wide(self.rotation)
         momentum = _rotation_apply(_rotation_back(q), world_momentum)
         omega = _rotation_apply(q, _tensor_apply(inverse, momentum))
-        self.angular_velocity = Vector3(
-            Float32(omega[0]), Float32(omega[1]), Float32(omega[2])
+        self.angular_velocity = vector3_from_float64(
+            omega[0], omega[1], omega[2]
         )
         return True
 

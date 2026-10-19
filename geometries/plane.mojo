@@ -19,20 +19,19 @@ exactly.
 Texture coordinates run once across the whole rectangle, (0, 0) at the bottom
 left and (1, 1) at the top right, which is what a texture expects and what
 `box` does per face. A floor that wants its image tiled every meter scales
-these itself, as `examples/floor.mojo` does; three.js would reach for
-`texture.repeat`, which is not ported yet.
+these itself, as `examples/floor.mojo` does. `Texture.repeat` tiles the
+image at sample time.
 """
 
-from core.buffer_attribute import BufferAttribute
-from core.buffer_geometry import (
-    BufferGeometry,
-    NORMAL,
-    PLANE_GEOMETRY,
-    POSITION,
-    UV,
+from core.buffer_geometry import BufferGeometry, PLANE_GEOMETRY
+from geometries.grid import append_cell
+from geometries.surface import (
+    indexed_surface,
+    record_grid_segments,
+    record_kind,
+    record_width_height,
 )
-from core.user_data import UserData
-from units.si import Length, METER
+from units.si import Length
 
 
 def plane(
@@ -100,22 +99,11 @@ def plane(
             # Two triangles per quad, each counter-clockwise from the front:
             # top-left, bottom-left, top-right, then bottom-left,
             # bottom-right, top-right.
-            index.append(a)
-            index.append(b)
-            index.append(d)
-            index.append(b)
-            index.append(c)
-            index.append(d)
+            append_cell(index, a, b, c, d)
 
     var geometry = BufferGeometry()
-    geometry.set_attribute(String(POSITION), BufferAttribute(data^, 3))
-    geometry.set_attribute(String(NORMAL), BufferAttribute(normals^, 3))
-    geometry.set_attribute(String(UV), BufferAttribute(uvs^, 2))
-    geometry.set_index(index^)
-    geometry.kind = PLANE_GEOMETRY
-    geometry.parameters = UserData()
-    geometry.parameters.set_number("width", Float64(width.to(METER)))
-    geometry.parameters.set_number("height", Float64(height.to(METER)))
-    geometry.parameters.set_number("widthSegments", Float64(width_segments))
-    geometry.parameters.set_number("heightSegments", Float64(height_segments))
+    indexed_surface(geometry, data^, normals^, uvs^, index^)
+    record_kind(geometry, PLANE_GEOMETRY)
+    record_width_height(geometry, width, height)
+    record_grid_segments(geometry, width_segments, height_segments)
     return geometry^

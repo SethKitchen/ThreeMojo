@@ -16,7 +16,6 @@ trabecular bone. Porosity is applied once through apparent density.
 """
 
 from extensions.humanoid.side import RIGHT, BodySide
-from extensions.humanoid.skeleton.arm.bones.mass import fill_at
 from extensions.humanoid.skeleton.arm.frame import (
     ArmDimensions,
     arm_dimensions,
@@ -28,17 +27,15 @@ from extensions.humanoid.skeleton.hand.bones.dimensions import (
     hand_bone_label,
 )
 from extensions.humanoid.skeleton.occupancy import (
-    CORTICAL_FILL,
     DEFAULT_STEP,
-    EMPTY,
-    TRABECULAR_FILL,
     BoneMass,
     BoneOccupancy,
-    Tally,
-    add_fill,
-    check_mass_step,
-    finish_mass,
-    grid_cells,
+    sample_bone_mass,
+)
+from extensions.humanoid.skeleton.shell_sample import (
+    ShelledSweep,
+    fill_at,
+    shelled_sweep_occupancy,
 )
 from extensions.anatomy.tissue import (
     BoneTissue,
@@ -126,27 +123,15 @@ def hand_bone_mass_from_dimensions(
             fails `validate`.
     """
     var field = hand_bone_field(dimensions, part, RIGHT)
-    check_mass_step(step, hand_bone_label(part))
-    cortical.validate()
-    trabecular.validate()
     var shell = HAND_SHELL * dimensions.stature.value
-    var dx = step.value
-    var nx = grid_cells(field.high.x - field.low.x, dx)
-    var ny = grid_cells(field.high.y - field.low.y, dx)
-    var nz = grid_cells(field.high.z - field.low.z, dx)
-    var cell = dx * dx * dx
-    var tally = Tally(0, 0, 0, 0, 0)
-    for iz in range(nz):  # pragma: no branch
-        var z = field.low.z + (Float32(iz) + Float32(0.5)) * dx
-        for iy in range(ny):  # pragma: no branch
-            var y = field.low.y + (Float32(iy) + Float32(0.5)) * dx
-            for ix in range(nx):  # pragma: no branch
-                var x = field.low.x + (Float32(ix) + Float32(0.5)) * dx
-                add_fill(
-                    tally,
-                    fill_at(field.distance(Vector3(x, y, z)), shell),
-                    cell,
-                    cortical,
-                    trabecular,
-                )
-    return finish_mass(tally)
+    var low = field.low
+    var high = field.high
+    return sample_bone_mass[shelled_sweep_occupancy](
+        ShelledSweep(field^, shell),
+        low,
+        high,
+        cortical,
+        trabecular,
+        step,
+        hand_bone_label(part),
+    )

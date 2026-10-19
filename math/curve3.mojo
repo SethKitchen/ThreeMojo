@@ -54,13 +54,28 @@ turns back. Frames where two steps point straight opposite ways, which
 leave no axis to turn about.
 """
 
+from core.ordinal import ordinal_valid, require_valid, require_positive
+
 from math.curve_checks import (
     check_curve_parameter,
     curve_sample_count,
     curve_count_product,
+    parameter_samples,
+    require_at_least_one,
+    require_control_count,
+    require_curve_kind,
+    require_distinct_points,
 )
-from math.curve import ARC_DIVISIONS, SEGMENT_SAMPLES, u_to_t
+from math.bezier import (
+    cubic_bezier_slope,
+    cubic_bezier_weights,
+    quadratic_bezier_slope,
+    quadratic_bezier_weights,
+)
+from math.curve import ARC_DIVISIONS, SEGMENT_SAMPLES, arc_samples, u_to_t
+from math.polyline import prefix_lengths, unit_direction
 from math.quaternion import Quaternion
+from math.utils import clamp, clamp_unit
 from math.vector3 import Vector3
 from std.math import acos, floor
 from units.si import Angle, Length, METER, RADIAN
@@ -89,12 +104,7 @@ struct Curve3Kind(Equatable, ImplicitlyCopyable, Writable):
         Returns:
             True for `LINE3`, `QUADRATIC3`, `CUBIC3` and `CATMULL_ROM3`.
         """
-        return (
-            self == LINE3
-            or self == QUADRATIC3
-            or self == CUBIC3
-            or self == CATMULL_ROM3
-        )
+        return ordinal_valid(self.value, CATMULL_ROM3.value)
 
     def control_count(self) -> Int:
         """Return how many points a curve of this kind takes, or zero for
@@ -138,7 +148,7 @@ struct CatmullRomType(Equatable, ImplicitlyCopyable, Writable):
         Returns:
             True for `CENTRIPETAL`, `CHORDAL` and `CATMULLROM`.
         """
-        return self == CENTRIPETAL or self == CHORDAL or self == CATMULLROM
+        return ordinal_valid(self.value, CATMULLROM.value)
 
 
 # Points spaced by the square root of the distance between them: three.js's
@@ -199,6 +209,39 @@ def _spacing(a: Vector3, b: Vector3, power: Float32) -> Float32:
     return gap.dot(gap) ** power
 
 
+def require_catmull_type(curve_type: CatmullRomType) raises:
+    """Refuse a Catmull-Rom type that is not named.
+
+    Nothing. The call returns when the type is valid.
+
+    Args:
+        curve_type: How the spline spaces its points.
+
+    Raises:
+        Error: If the type is not valid.
+    """
+    require_valid(
+        curve_type.is_valid(), "A Catmull-Rom curve needs a type that exists"
+    )
+
+
+def require_closed_catmull(closed: Bool, kind: Curve3Kind) raises:
+    """Refuse a closed curve that is not a Catmull-Rom spline.
+
+    Nothing. The call returns when the curve is open, or it is a
+    Catmull-Rom spline.
+
+    Args:
+        closed: Whether the curve joins its last point to its first.
+        kind: Which function the curve is.
+
+    Raises:
+        Error: If a curve that is not a Catmull-Rom spline is closed.
+    """
+    if closed and kind != CATMULL_ROM3:
+        raise Error("Only a Catmull-Rom curve can close")
+
+
 struct Curve3(Copyable, Movable):
     """One curve in space: a kind, the points that kind reads, and for a
     Catmull-Rom spline whether it closes, its type and its tension."""
@@ -234,26 +277,17 @@ struct Curve3(Copyable, Movable):
                 is the same point, or if a curve that is not a Catmull-Rom
                 spline is closed.
         """
-        if not kind.is_valid():
-            raise Error("A curve needs a kind that exists")
-        if not curve_type.is_valid():
-            raise Error("A Catmull-Rom curve needs a type that exists")
-        var wanted = kind.control_count()
-        if wanted == 0:
-            if len(points) < 2:
-                raise Error("A spline needs at least two points")
-        elif len(points) != wanted:
-            raise Error("A curve's points must match its kind")
-        if closed and kind != CATMULL_ROM3:
-            raise Error("Only a Catmull-Rom curve can close")
+        require_curve_kind(kind.is_valid())
+        require_catmull_type(curve_type)
+        require_control_count(kind.control_count(), len(points))
+        require_closed_catmull(closed, kind)
         var moved = False
         for index in range(1, len(points)):  # pragma: no branch
             # At least two points by the checks above, so this runs.
             var step = points[index] - points[0]
             if step.length() != 0:
                 moved = True
-        if not moved:
-            raise Error("A curve needs two points that differ")
+        require_distinct_points(moved)
         self.kind = kind
         self.points = points^
         self.closed = closed
@@ -350,18 +384,10 @@ struct Curve3(Copyable, Movable):
 
     def _validate(self) raises:
         """Check mutable dispatch and storage in constant time."""
-        if not self.kind.is_valid():
-            raise Error("A curve needs a kind that exists")
-        if not self.curve_type.is_valid():
-            raise Error("A Catmull-Rom curve needs a type that exists")
-        var wanted = self.kind.control_count()
-        if wanted == 0:
-            if len(self.points) < 2:
-                raise Error("A spline needs at least two points")
-        elif len(self.points) != wanted:
-            raise Error("A curve's points must match its kind")
-        if self.closed and self.kind != CATMULL_ROM3:
-            raise Error("Only a Catmull-Rom curve can close")
+        require_curve_kind(self.kind.is_valid())
+        require_catmull_type(self.curve_type)
+        require_control_count(self.kind.control_count(), len(self.points))
+        require_closed_catmull(self.closed, self.kind)
 
     def point(self, t: Float32) raises -> Vector3:
         """Return the point at `t` along this curve's own parameter.
@@ -385,19 +411,18 @@ struct Curve3(Copyable, Movable):
             if t == 1:
                 return self.points[1]
             return (self.points[1] - self.points[0]) * t + self.points[0]
-        var rest = 1 - t
         if self.kind == QUADRATIC3:
+            var w0, w1, w2 = quadratic_bezier_weights(t)
             return (
-                self.points[0] * (rest * rest)
-                + self.points[1] * (2 * rest * t)
-                + self.points[2] * (t * t)
+                self.points[0] * w0 + self.points[1] * w1 + self.points[2] * w2
             )
         if self.kind == CUBIC3:
+            var w0, w1, w2, w3 = cubic_bezier_weights(t)
             return (
-                self.points[0] * (rest * rest * rest)
-                + self.points[1] * (3 * rest * rest * t)
-                + self.points[2] * (3 * rest * t * t)
-                + self.points[3] * (t * t * t)
+                self.points[0] * w0
+                + self.points[1] * w1
+                + self.points[2] * w2
+                + self.points[3] * w3
             )
         return self._cubic(t).point()
 
@@ -406,16 +431,17 @@ struct Curve3(Copyable, Movable):
         is made unit length. The caller has checked `t` is on the curve."""
         if self.kind == LINE3:
             return self.points[1] - self.points[0]
-        var rest = 1 - t
         if self.kind == QUADRATIC3:
-            return (self.points[1] - self.points[0]) * (2 * rest) + (
+            var s0, s1 = quadratic_bezier_slope(t)
+            return (self.points[1] - self.points[0]) * s0 + (
                 self.points[2] - self.points[1]
-            ) * (2 * t)
+            ) * s1
         if self.kind == CUBIC3:
+            var s0, s1, s2 = cubic_bezier_slope(t)
             return (
-                (self.points[1] - self.points[0]) * (3 * rest * rest)
-                + (self.points[2] - self.points[1]) * (6 * rest * t)
-                + (self.points[3] - self.points[2]) * (3 * t * t)
+                (self.points[1] - self.points[0]) * s0
+                + (self.points[2] - self.points[1]) * s1
+                + (self.points[3] - self.points[2]) * s2
             )
         return self._cubic(t).slope()
 
@@ -436,11 +462,7 @@ struct Curve3(Copyable, Movable):
         """
         check_curve_parameter(Float64(t))
         self._validate()
-        var slope = self._slope(t)
-        if slope.length() == 0:
-            raise Error("A curve has no direction where it turns back")
-        slope.normalize()
-        return slope
+        return unit_direction(self._slope(t))
 
     def sample(self, divisions: Int) raises -> List[Vector3]:
         """Return `divisions + 1` points at equal steps in `t`, three.js's
@@ -456,12 +478,7 @@ struct Curve3(Copyable, Movable):
             Error: If `divisions` is less than one, its sample count cannot
                 fit in Int, or the mutable curve is not valid.
         """
-        var sample_count = curve_sample_count(divisions)
-        var out = List[Vector3]()
-        for index in range(sample_count):  # pragma: no branch
-            # At least one division, so this runs.
-            out.append(self.point(Float32(index) / Float32(divisions)))
-        return out^
+        return parameter_samples[Self.point](self, divisions)
 
     def lengths(self, divisions: Int) raises -> List[Float32]:
         """Return how far along the curve each sample is, from zero,
@@ -478,14 +495,7 @@ struct Curve3(Copyable, Movable):
             Error: If `divisions` is less than one, its sample count cannot
                 fit in Int, or the mutable curve is not valid.
         """
-        var samples = self.sample(divisions)
-        var out = List[Float32]()
-        out.append(0)
-        for index in range(1, len(samples)):  # pragma: no branch
-            # At least two samples, so this runs.
-            var step = (samples[index] - samples[index - 1]).length()
-            out.append(out[index - 1] + step)
-        return out^
+        return prefix_lengths(self.sample(divisions))
 
     def arc_divisions(self) raises -> Int:
         """Return how many straight runs stand in for this curve when its
@@ -582,14 +592,7 @@ struct Curve3(Copyable, Movable):
             Error: If `divisions` is less than one, its sample count cannot
                 fit in Int, or the mutable curve is not valid.
         """
-        var sample_count = curve_sample_count(divisions)
-        var table = self.arc_table()
-        var out = List[Vector3]()
-        for index in range(sample_count):  # pragma: no branch
-            # At least one division, so this runs.
-            var u = Float32(index) / Float32(divisions)
-            out.append(self.point(u_to_t(table, u)))
-        return out^
+        return arc_samples[Self.point](self, divisions, self.arc_table())
 
     def frenet_frames(self, segments: Int, closed: Bool) raises -> FrenetFrames:
         """Return a frame at each of `segments + 1` equal steps along the
@@ -609,13 +612,9 @@ struct Curve3(Copyable, Movable):
                 fit in Int, the curve is not valid or stops at a step, or
                 two steps point straight opposite ways.
         """
-        var sample_count = curve_sample_count(segments)
-        var table = self.arc_table()
-        var tangents = List[Vector3]()
-        for index in range(sample_count):  # pragma: no branch
-            # At least one segment, so this runs.
-            var u = Float32(index) / Float32(segments)
-            tangents.append(self.tangent(u_to_t(table, u)))
+        var tangents = arc_samples[Self.tangent](
+            self, segments, self.arc_table()
+        )
         return transport_frames(tangents, closed)
 
 
@@ -646,11 +645,6 @@ struct FrenetFrames(Copyable, Movable):
             The number of steps, one more than the segments.
         """
         return len(self.tangents)
-
-
-def _clamp_unit(value: Float32) -> Float32:
-    """Return `value` held to minus one through one, for `acos`."""
-    return max(Float32(-1), min(Float32(1), value))
 
 
 def _turned(v: Vector3, axis: Vector3, angle: Float32) -> Vector3:
@@ -725,9 +719,7 @@ def transport_frames(
         axis.cross(tangents[ring])
         if axis.length() > STRAIGHT:
             axis.normalize()
-            var angle = acos(
-                _clamp_unit(tangents[ring - 1].dot(tangents[ring]))
-            )
+            var angle = acos(clamp_unit(tangents[ring - 1].dot(tangents[ring])))
             normal = _turned(normal, axis, angle)
         elif tangents[ring - 1].dot(tangents[ring]) < 0:
             raise Error("A curve's frames cannot fold straight back")
@@ -738,7 +730,7 @@ def transport_frames(
 
     if closed:
         var twist = acos(
-            _clamp_unit(frames.normals[0].dot(frames.normals[last]))
+            clamp_unit(frames.normals[0].dot(frames.normals[last]))
         )
         twist /= Float32(last)
         var handed = frames.normals[0]
@@ -888,8 +880,9 @@ struct CurvePath3(Copyable, Movable):
         Raises:
             Error: If the path has no curves.
         """
-        if len(self.curves) == 0:
-            raise Error("A curve path with no curves has no points")
+        require_positive(
+            len(self.curves), "A curve path with no curves has no points"
+        )
 
     def close_path(mut self) raises:
         """Add the straight run from the end of the last curve back to the
@@ -959,7 +952,7 @@ struct CurvePath3(Copyable, Movable):
                 break
         var span = self.curves[curve].length().to(METER)
         var u = 1 - (lengths[curve] - target) / span
-        return _Place(curve, max(Float32(0), min(Float32(1), u)))
+        return _Place(curve, clamp(u, 0, 1))
 
     def point(self, t: Float32) raises -> Vector3:
         """Return the point `t` of the way along the path by distance,
@@ -1014,8 +1007,9 @@ struct CurvePath3(Copyable, Movable):
                 is less than one, or a sample count cannot fit in Int.
         """
         self._need_curves()
-        if divisions < 1:
-            raise Error("A curve path needs at least one division")
+        require_at_least_one(
+            divisions, "A curve path needs at least one division"
+        )
         # Check every per-curve count before the first curve is sampled.
         for index in range(len(self.curves)):  # pragma: no branch
             self.curves[index]._validate()
@@ -1052,12 +1046,7 @@ struct CurvePath3(Copyable, Movable):
                 is less than one, or a sample count cannot fit in Int.
         """
         self._need_curves()
-        var sample_count = curve_sample_count(divisions)
-        var out = List[Vector3]()
-        for index in range(sample_count):  # pragma: no branch
-            # At least one division, so this runs.
-            out.append(self.point(Float32(index) / Float32(divisions)))
-        return out^
+        return parameter_samples[Self.point](self, divisions)
 
     def frenet_frames(self, segments: Int, closed: Bool) raises -> FrenetFrames:
         """Return a frame at each of `segments + 1` equal steps along the
@@ -1077,9 +1066,5 @@ struct CurvePath3(Copyable, Movable):
                 sample count cannot fit in Int, a curve is not valid or
                 stops at a step, or two steps point straight opposite ways.
         """
-        var sample_count = curve_sample_count(segments)
-        var tangents = List[Vector3]()
-        for index in range(sample_count):  # pragma: no branch
-            # At least one segment, so this runs.
-            tangents.append(self.tangent(Float32(index) / Float32(segments)))
+        var tangents = parameter_samples[Self.tangent](self, segments)
         return transport_frames(tangents, closed)

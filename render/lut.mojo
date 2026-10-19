@@ -29,11 +29,14 @@ range of no width, a value that is not a number, and a custom map that does
 not run from zero to one in order are refused. three.js gives no color for
 them.
 """
+from core.ordinal import ordinal_valid, require_positive
 
 from render.color_spaces import srgb_to_linear_three
 from render.framebuffer import FloatColor
-from std.benchmark import black_box
-from std.math import floor, isfinite, max, min
+from math.rounded_product import rounded_product
+from math.vector3 import vector3_from_float64
+from math.utils import clamp, js_round_int
+from math.finite import require_finite
 
 
 @fieldwise_init
@@ -52,7 +55,7 @@ struct ColorMapName(Equatable, ImplicitlyCopyable, Writable):
         Returns:
             Whether the value names a preset.
         """
-        return self.value >= 0 and self.value <= 3
+        return ordinal_valid(self.value, 3)
 
 
 # Blue, cyan, green, yellow, red. three.js: `'rainbow'`.
@@ -185,24 +188,24 @@ def _mix(
     # rounds it. A fused multiply-add rounds once, and a channel on a
     # midpoint of `canvas_pixels` then rounds the other way.
     return (
-        a[0] + black_box((b[0] - a[0]) * t),
-        a[1] + black_box((b[1] - a[1]) * t),
-        a[2] + black_box((b[2] - a[2]) * t),
+        a[0] + rounded_product(b[0] - a[0], t),
+        a[1] + rounded_product(b[1] - a[1], t),
+        a[2] + rounded_product(b[2] - a[2], t),
     )
 
 
-def _round(x: Float64) -> Int:
-    """Return JavaScript's `Math.round`: to the nearest whole number, a half
-    up.
+def require_lut_bound(value: Float64) raises:
+    """Refuse a color-table bound that is not finite.
+
+    Nothing. The call returns when the bound is finite.
 
     Args:
-        x: The number.
+        value: The bound.
 
-    Returns:
-        The whole number.
+    Raises:
+        Error: If the bound is not finite.
     """
-    var whole = floor(x)
-    return Int(whole) + (1 if x - whole >= 0.5 else 0)
+    require_finite(Float64(value), "A color table's range must be finite")
 
 
 struct Lut(Copyable, Movable):
@@ -284,8 +287,7 @@ struct Lut(Copyable, Movable):
                 is below one.
         """
         check_color_map(stops)
-        if count < 1:
-            raise Error("A color table needs one step or more")
+        require_positive(count, "A color table needs one step or more")
         var step = 1.0 / Float64(count)
         var lut = List[FloatColor]()
         lut.append(_decoded(stops[0].hex))
@@ -297,9 +299,8 @@ struct Lut(Copyable, Movable):
                 )
                 if inside:
                     var c = _mix(stops[j], stops[j + 1], alpha)
-                    lut.append(
-                        FloatColor(Float32(c[0]), Float32(c[1]), Float32(c[2]))
-                    )
+                    var mixed = vector3_from_float64(c[0], c[1], c[2])
+                    lut.append(FloatColor(mixed.x, mixed.y, mixed.z))
         lut.append(_decoded(stops[len(stops) - 1].hex))
         self.lut = lut^
         self.map = stops^
@@ -314,8 +315,7 @@ struct Lut(Copyable, Movable):
         Raises:
             Error: If it is not finite.
         """
-        if not isfinite(value):
-            raise Error("A color table's range must be finite")
+        require_lut_bound(value)
         self.min_v = value
 
     def set_max(mut self, value: Float64) raises:
@@ -327,8 +327,7 @@ struct Lut(Copyable, Movable):
         Raises:
             Error: If it is not finite.
         """
-        if not isfinite(value):
-            raise Error("A color table's range must be finite")
+        require_lut_bound(value)
         self.max_v = value
 
     def get_color(self, alpha: Float64) raises -> FloatColor:
@@ -351,9 +350,9 @@ struct Lut(Copyable, Movable):
             )
         if self.max_v == self.min_v:
             raise Error("A color table's range needs some width")
-        var clamped = max(self.min_v, min(self.max_v, alpha))
+        var clamped = clamp(alpha, self.min_v, self.max_v)
         var at = (clamped - self.min_v) / (self.max_v - self.min_v)
-        return self.lut[_round(at * Float64(self.n))]
+        return self.lut[js_round_int(at * Float64(self.n))]
 
     def canvas_pixels(self) -> List[UInt8]:
         """Return the table as an image one pixel wide and `n` high, RGBA,
@@ -383,9 +382,9 @@ struct Lut(Copyable, Movable):
                 )
                 if inside:
                     var c = _mix(self.map[j - 1], self.map[j], i)
-                    data[k * 4] = UInt8(_round(c[0] * 255))
-                    data[k * 4 + 1] = UInt8(_round(c[1] * 255))
-                    data[k * 4 + 2] = UInt8(_round(c[2] * 255))
+                    data[k * 4] = UInt8(js_round_int(c[0] * 255))
+                    data[k * 4 + 1] = UInt8(js_round_int(c[1] * 255))
+                    data[k * 4 + 2] = UInt8(js_round_int(c[2] * 255))
                     k += 1
                 j -= 1
             i -= step

@@ -30,8 +30,9 @@ pelvic vessels, nerves and lymphatics run on to those points.
     var d = pelvis_muscle_distance(dims, PIRIFORMIS, RIGHT, dims.gt)
 """
 
+from core.ordinal import ordinal_valid, require_valid
 from extensions.humanoid.athleticism import Athleticism, radius_scale
-from extensions.humanoid.side import LEFT, RIGHT, BodySide
+from extensions.humanoid.side import require_side, LEFT, RIGHT, BodySide
 from extensions.humanoid.spec import HumanoidSpec
 from extensions.humanoid.skeleton.field import (
     Bounds,
@@ -71,7 +72,8 @@ from extensions.humanoid.skeleton.pelvis.bones.dimensions import (
     sided_bounds,
 )
 from math.vector3 import Vector3
-from std.math import isfinite, pi, sqrt
+from math.finite import require_positive_finite
+from std.math import max, pi, sqrt
 
 
 @fieldwise_init
@@ -87,9 +89,7 @@ struct PelvisMuscle(Equatable, ImplicitlyCopyable, Writable):
 
     def is_valid(self) -> Bool:
         """Return True if this is a named pelvic muscle."""
-        if self.value < 0:
-            return False
-        return self.value <= ERECTOR_SPINAE.value
+        return ordinal_valid(self.value, ERECTOR_SPINAE.value)
 
 
 comptime ILIACUS = PelvisMuscle(0)
@@ -159,6 +159,23 @@ struct PelvisChainSet(ImplicitlyCopyable):
     var c2: PelvisChain
 
 
+def require_pelvis_athleticism(athleticism: Athleticism) raises:
+    """Refuse a pelvic muscle whose athleticism is not named.
+
+    Nothing. The call returns when the athleticism is named.
+
+    Args:
+        athleticism: `UNTONED` or `TONED`.
+
+    Raises:
+        Error: If the athleticism is not named.
+    """
+    require_valid(
+        athleticism.is_valid(),
+        "A pelvic muscle needs a toned or untoned athleticism",
+    )
+
+
 @fieldwise_init
 struct PelvisMuscleDimensions(ImplicitlyCopyable):
     """Pelvis landmarks, femur landmarks, leg junctions and the scale.
@@ -195,14 +212,18 @@ struct PelvisMuscleDimensions(ImplicitlyCopyable):
                 positive, or if a landmark is not finite.
         """
         self.pelvis.validate()
-        if not self.athleticism.is_valid():
-            raise Error("A pelvic muscle needs a toned or untoned athleticism")
-        if not isfinite(self.scale) or self.scale <= 0:
-            raise Error("A pelvic muscle radius scale must be positive")
-        if not isfinite(self.k) or self.k <= 0:
-            raise Error("A pelvic muscle blend radius must be positive")
-        if not isfinite(self.epsilon) or self.epsilon <= 0:
-            raise Error("A pelvic muscle gradient step must be positive")
+        require_pelvis_athleticism(self.athleticism)
+        require_positive_finite(
+            Float64(self.scale),
+            "A pelvic muscle radius scale must be positive",
+        )
+        require_positive_finite(
+            Float64(self.k), "A pelvic muscle blend radius must be positive"
+        )
+        require_positive_finite(
+            Float64(self.epsilon),
+            "A pelvic muscle gradient step must be positive",
+        )
         finite_point(self.gt, "greater trochanter", "pelvic muscle")
         finite_point(self.lt, "lesser trochanter", "pelvic muscle")
         finite_point(self.neck, "femoral neck", "pelvic muscle")
@@ -227,8 +248,7 @@ struct PelvisMuscleDimensions(ImplicitlyCopyable):
         Raises:
             Error: If `side` is not valid.
         """
-        if not side.is_valid():
-            raise Error("A pelvis side must be RIGHT or LEFT")
+        require_side(side, "A pelvis")
         if side == LEFT:
             return flip_x(self.leg_origin)
         return self.leg_origin
@@ -262,10 +282,8 @@ struct PelvisMuscleField(DistanceField, ImplicitlyCopyable):
                 is not named, or if `side` is not valid.
         """
         dimensions.validate()
-        if not part.is_valid():
-            raise Error("A pelvic muscle must be a named muscle")
-        if not side.is_valid():
-            raise Error("A pelvis side must be RIGHT or LEFT")
+        require_valid(part.is_valid(), "A pelvic muscle must be a named muscle")
+        require_side(side, "A pelvis")
         self.chains = _chains(dimensions, part)
         self.mirror = side == LEFT
         self.k = dimensions.k
@@ -305,8 +323,7 @@ def pelvis_muscle_dimensions(
     Raises:
         Error: If `spec` is refused, or athleticism is not named.
     """
-    if not spec.athleticism.is_valid():
-        raise Error("A pelvic muscle needs a toned or untoned athleticism")
+    require_pelvis_athleticism(spec.athleticism)
     var pelvis = pelvis_dimensions(spec.stature, spec.sex)
     var femur = femur_dimensions(spec.stature, spec.sex, RIGHT)
     var S = spec.stature.value
@@ -598,21 +615,6 @@ def _include_chain(mut box: Bounds, c: PelvisChain):
     box.include_sphere(c.p2, max_f(c.ml2, c.ap2))
     box.include_sphere(c.p3, max_f(c.ml3, c.ap3))
     box.include_sphere(c.p4, max_f(c.ml4, c.ap4))
-
-
-def max_f(a: Float32, b: Float32) -> Float32:
-    """Return the larger of two radii.
-
-    Args:
-        a: A radius.
-        b: Another radius.
-
-    Returns:
-        The larger one.
-    """
-    if a > b:
-        return a
-    return b
 
 
 def _chain_volume(c: PelvisChain) -> Float32:
@@ -948,3 +950,21 @@ def _fan(
         radii,
         unit,
     )
+
+
+def max_f(a: Float32, b: Float32) -> Float32:
+    """Return the larger of two radii.
+
+    Error: Never.
+
+    Args:
+        a: A radius.
+        b: Another radius.
+
+    Returns:
+        `a` when it is greater than `b`, otherwise `b`.
+
+    """
+    if a > b:
+        return a
+    return b

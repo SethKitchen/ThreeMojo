@@ -35,13 +35,18 @@ same order. The WebAssembly encoder runs out of memory where a symbol is
 near 2^31, and the port does not.
 """
 
+from core.binary import append_little_endian
+from core.ordinal import ordinal_valid
+
 from exporters.draco_log2 import musl_log2
 from loaders.draco_buffer import (
     MASK32,
     draco_require,
     most_significant_bit,
+    rans_precision_bits,
     truncated_divide,
 )
+from math.utils import clamp
 from loaders.vrml_geometry import product
 from std.collections import Dict
 from std.math import ceil, floor
@@ -74,7 +79,7 @@ struct DracoSymbolCoding(Equatable, ImplicitlyCopyable, Writable):
         Returns:
             True for the two codings there are.
         """
-        return self == DRACO_TAGGED_SYMBOLS or self == DRACO_RAW_SYMBOLS
+        return ordinal_valid(self.value, DRACO_RAW_SYMBOLS.value)
 
 
 # A bit length for each group of values, coded; then the raw bits.
@@ -120,9 +125,7 @@ struct DracoWriter(Movable):
             value: The value. Its two's complement is written.
             size: The bytes to write.
         """
-        # Every value is one byte or more: the loop runs.
-        for k in range(size):  # pragma: no branch
-            self.bytes.append(UInt8((value >> (8 * k)) & 0xFF))
+        append_little_endian(self.bytes, value, size)
 
     def u8(mut self, value: Int):
         """Write a byte.
@@ -178,7 +181,7 @@ struct DracoWriter(Movable):
         Args:
             bytes: The bytes.
         """
-        self.bytes.extend(bytes.copy())
+        self.bytes.extend(Span(bytes))
 
 
 struct DracoBitWriter(Movable):
@@ -620,11 +623,6 @@ def entropy_table_bits(data: EntropyData) -> Int:
     return rans_table_bits(data.max_symbol + 1, data.unique)
 
 
-def _precision_bits(symbol_bits: Int) -> Int:
-    """Draco's `ComputeRAnsPrecisionFromUniqueSymbolsBitLength`."""
-    return min(max((3 * symbol_bits) // 2, 12), 20)
-
-
 struct RAnsSymbolEncoder(Movable):
     """A stream of symbols coded with rANS.
 
@@ -649,7 +647,7 @@ struct RAnsSymbolEncoder(Movable):
         Args:
             symbol_bits: The bits of the count of distinct symbols.
         """
-        self.precision = 1 << _precision_bits(symbol_bits)
+        self.precision = 1 << rans_precision_bits(symbol_bits)
         self.probabilities = List[Int]()
         self.starts = List[Int]()
         self.coded = List[UInt8]()
@@ -937,7 +935,7 @@ def _encode_raw(
         symbol_bits += 2
     elif level > 7:
         symbol_bits += 1
-    symbol_bits = min(max(1, symbol_bits), _MAX_RAW_BITS)
+    symbol_bits = clamp(symbol_bits, 1, _MAX_RAW_BITS)
     out.u8(symbol_bits)
     var largest = 0
     # Draco writes no stream of no symbols: the loop runs.

@@ -135,7 +135,7 @@ def _file(header: String, data: List[UInt8] = []) -> List[UInt8]:
         The bytes.
     """
     var out = List[UInt8](header.as_bytes())
-    out.extend(data.copy())
+    out.extend(Span(data))
     return out^
 
 
@@ -247,13 +247,13 @@ def test_words_are_read_as_parseint_and_parsefloat_read_them() raises:
         String("f: 1/ " + String("9") * 400 + " ").as_bytes()
     )
     data.append(0xA0)
-    data.extend(List[UInt8](String(" +").as_bytes()))
+    data.extend(String(" +").as_bytes())
     var words = parse_nrrd(_file(header, data))
     # `f:` is 15; `1/` is 1; four hundred nines are Infinity, stored as
     # zero; a no-break space alone, or a sign alone, is NaN, also zero.
     _same(words.data, [15, 1, 0, 0, 0])
     var floats_data: List[UInt8] = [0xA0]
-    floats_data.extend(List[UInt8](String("0.1 2 ").as_bytes()))
+    floats_data.extend(String("0.1 2 ").as_bytes())
     floats_data.append(0xA0)
     var floats = parse_nrrd(
         _file(
@@ -340,6 +340,24 @@ def test_text_is_read_as_three_js_reads_each_type() raises:
         )
     )
     _same(hex.data, [255, 65535, 0, 16])
+
+
+def test_decimal_words_stop_before_hexadecimal_digits() raises:
+    var words = List[UInt8](String("12a 12 12/").as_bytes())
+    var decimal = parse_nrrd(
+        _file(
+            "NRRD1\nsizes: 3\nencoding: ascii\ntype: ushort\nx: y\n\n",
+            words,
+        )
+    )
+    _same(decimal.data, [12, 12, 12])
+    var hexadecimal = parse_nrrd(
+        _file(
+            "NRRD1\nsizes: 3\nencoding: hex\ntype: ushort\nx: y\n\n",
+            words,
+        )
+    )
+    _same(hexadecimal.data, [298, 18, 18])
 
 
 def _same(got: List[Float64], want: List[Float64]) raises:

@@ -26,6 +26,7 @@ from extensions.animals.coat import (
     EyeLook,
     Paint,
     Palette,
+    channel_gain,
     mix3,
     srgb,
 )
@@ -35,7 +36,7 @@ from extensions.animals.kit import (
     EyeSpec,
     sculpt_eye_socket,
 )
-from extensions.animals.noise import fbm3
+from extensions.animals.noise import fbm3, centered_fbm
 from extensions.animals.options import AnimalOptions, AnimalRandom
 from extensions.animals.rig import Rig
 from extensions.sdf.field import SdfModel
@@ -54,7 +55,7 @@ from extensions.animals.species.bird_rig import (
     rectrix,
     secondary,
     wing_joints,
-    wing_normal,
+    wing_arm,
     wing_segment,
 )
 from extensions.animals.traits import Traits, pick_age, pick_sex
@@ -606,20 +607,14 @@ def crow_sculpt(mut m: SdfModel, rig: Rig, t: Traits) raises:
 
     # WINGS: the arm. The flight feathers follow as fins.
     for side in [String("L"), String("R")]:  # pragma: no branch
-        var s = 1.0 if side == "L" else -1.0
-        var sh = rig.j("shoulder" + side)
-        var el = rig.j("elbow" + side)
-        var wr = rig.j("wrist" + side)
-        var tp = rig.j("handTip" + side)
-        var n = wing_normal(rig, side)
-        var ulna = rig.bone("ulna" + side)
+        var s, sh, el, wr, tp, n, humerus, ulna, hand = wing_arm(rig, side)
         wing_segment(
             m,
             s,
             n,
             sh,
             el,
-            rig.bone("humerus" + side),
+            humerus,
             0.01,
             0.026,
             0.009,
@@ -633,7 +628,7 @@ def crow_sculpt(mut m: SdfModel, rig: Rig, t: Traits) raises:
             n,
             wr,
             tp,
-            rig.bone("hand" + side),
+            hand,
             0.0055,
             0.012,
             0.004,
@@ -654,7 +649,7 @@ def crow_sculpt(mut m: SdfModel, rig: Rig, t: Traits) raises:
             "patagium",
             0.009,
         )
-        _ = m.sphere("wrist", rig.bone("hand" + side), wr, 0.0065, k=0.006)
+        _ = m.sphere("wrist", hand, wr, 0.0065, k=0.006)
 
     # The flight feathers, their coverts and the tail, as fins.
     var feathers = _feathers()
@@ -753,21 +748,20 @@ def crow_paint(
     var p = s.p
     var n = s.n
     var h = p - HEAD_O
-    var cv = fbm3(p * 40.0, 3) - 0.5
-    var vary = V3(1.0 + 0.1 * cv, 1.0 + 0.1 * cv, 1.0 + 0.08 * cv)
+    var cv = centered_fbm(p, 40.0, 3)
     var cond1 = tag == "bill" or tag == "mandible" or tag == "gonys"
     if cond1:
         var gape = tag != "bill" and h.z > 0.02 and abs(h.y + 0.006) < 0.0012
         if gape:
             return Paint(pal.get("gape"), SKIN)
-        return Paint(_tint(pal.get("bill"), vary), KERATIN)
+        return Paint(channel_gain(pal.get("bill"), cv, 0.1, 0.1, 0.08), KERATIN)
     if tag == "claw":
         return Paint(pal.get("claw"), KERATIN)
     var bare_leg = (
         tag == "tarsus" or tag == "toe" or tag == "pad" or tag == "shank"
     )
     if bare_leg:
-        return Paint(_tint(pal.get("leg"), vary), SCALES)
+        return Paint(channel_gain(pal.get("leg"), cv, 0.1, 0.1, 0.08), SCALES)
     var cond2 = tag == "eyelid" or tag == "eyesocket"
     if cond2:
         return Paint(pal.get("ring"), SKIN)
@@ -791,7 +785,7 @@ def crow_paint(
         c = c * k
         shine = (0.7 if covert else 0.5) if top else 0.0
         c = _sheen(pal, c, shine * 1.6, n)
-        return Paint(_tint(c, vary), FEATHER)
+        return Paint(channel_gain(c, cv, 0.1, 0.1, 0.08), FEATHER)
     var cond4 = (
         bone.startswith("humerus")
         or bone.startswith("ulna")
@@ -827,8 +821,4 @@ def crow_paint(
             shine = mix(shine, 0.05, gw)
     c = c * _shingle(p, 260.0)
     c = _sheen(pal, c, shine, n)
-    return Paint(_tint(c, vary), FEATHER)
-
-
-def _tint(c: V3, k: V3) -> V3:
-    return V3(c.x * k.x, c.y * k.y, c.z * k.z)
+    return Paint(channel_gain(c, cv, 0.1, 0.1, 0.08), FEATHER)

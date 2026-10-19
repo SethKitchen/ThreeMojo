@@ -324,6 +324,45 @@ def test_a_second_scan_replaces_the_first() raises:
     tm_destroy(app)
 
 
+def test_a_new_scan_clears_pending_pan_and_keeps_the_turn_paused() raises:
+    var app = _loaded("v3.spz")
+    var center = _state(app)[].controls.target
+    var position = _state(app)[].camera.position
+    tm_event(app, Int32(KEY_DOWN), Int32(0), Int32(0), Int32(KEY_SPACE))
+    _drag(app, 2, 1024, 13)
+    assert_equal(_give(app, "v3.spz"), Int32(0))
+    assert_false(_state(app)[].controls.auto_rotate)
+    assert_true(_state(app)[].controls.target == center)
+    assert_true((_state(app)[].camera.position - position).length() < 1e-4)
+    _step(app, 3)
+    assert_true(_state(app)[].controls.target == center)
+    assert_true((_state(app)[].camera.position - position).length() < 1e-4)
+    tm_destroy(app)
+
+
+def test_a_new_scan_clears_old_damping_and_keeps_the_turn_running() raises:
+    var app = _loaded("v3.spz")
+    var fresh = _loaded("v3.spz")
+    _drag(app, 0, 224, 43)
+    _drag(app, 2, 1024, 13)
+    _step(app, 1)
+    assert_equal(_give(app, "v3.spz"), Int32(0))
+    assert_true(_state(app)[].controls.auto_rotate)
+    _step(app, 5)
+    _step(fresh, 5)
+    assert_true(
+        _state(app)[].controls.target == _state(fresh)[].controls.target
+    )
+    assert_true(
+        (
+            _state(app)[].camera.position - _state(fresh)[].camera.position
+        ).length()
+        < 1e-4
+    )
+    tm_destroy(app)
+    tm_destroy(fresh)
+
+
 def test_a_scan_that_cannot_be_read_leaves_the_app_alone() raises:
     var app = _loaded("v3.spz")
     var room = _room(List[UInt8](length=64, fill=7))
@@ -482,6 +521,69 @@ def test_a_new_scan_makes_its_own_order() raises:
     assert_false(Bool(tm_splat_part(app, Int32(SPLAT_ORDER.value))))
     assert_equal(tm_splat_prepare(app), Int32(0))
     assert_equal(_words(app, SPLAT_ORDER), 1)
+    tm_destroy(app)
+
+
+def test_a_cpu_frame_before_prepare_keeps_a_gpu_order_to_publish() raises:
+    var app = _plain()
+    _state(app)[].load_geometry(_line())
+    _ = tm_frame(app)
+    assert_false(Bool(tm_splat_part(app, Int32(SPLAT_ORDER.value))))
+    assert_equal(tm_splat_prepare(app), Int32(0))
+    assert_equal(_words(app, SPLAT_ORDER), 4)
+    assert_equal(_info(app, SPLAT_INFO_ORDER), 1)
+    var order = _indices(app)
+    for index in range(4):
+        assert_equal(
+            Int(order[unsafe_offset=index]), _state(app)[].splat.order[index]
+        )
+    tm_destroy(app)
+
+
+def test_a_cpu_resort_is_published_by_the_next_prepare() raises:
+    var app = _plain()
+    _state(app)[].load_geometry(_line())
+    assert_equal(tm_splat_prepare(app), Int32(0))
+    var first = _indices(app)[unsafe_offset=0]
+    var center = _state(app)[].controls.target
+    _state(app)[].camera.place(
+        center * 2 - _state(app)[].camera.position, center
+    )
+    _ = tm_frame(app)
+    # A CPU draw does not replace the arrays the host has already read.
+    assert_equal(_indices(app)[unsafe_offset=0], first)
+    assert_equal(_info(app, SPLAT_INFO_ORDER), 1)
+    assert_equal(tm_splat_prepare(app), Int32(0))
+    assert_equal(_info(app, SPLAT_INFO_ORDER), 2)
+    assert_true(_indices(app)[unsafe_offset=0] != first)
+    for index in range(4):
+        assert_equal(
+            Int(_indices(app)[unsafe_offset=index]),
+            _state(app)[].splat.order[index],
+        )
+    # Drawing the same view again does not need a new order upload.
+    _ = tm_frame(app)
+    assert_equal(tm_splat_prepare(app), Int32(0))
+    assert_equal(_info(app, SPLAT_INFO_ORDER), 2)
+    tm_destroy(app)
+
+
+def test_a_refused_cpu_frame_keeps_its_resort_pending() raises:
+    var app = _plain()
+    _state(app)[].load_geometry(_line())
+    assert_equal(tm_splat_prepare(app), Int32(0))
+    var first = _indices(app)[unsafe_offset=0]
+    var center = _state(app)[].controls.target
+    _state(app)[].camera.place(
+        center * 2 - _state(app)[].camera.position, center
+    )
+    _state(app)[].camera.fov = Angle(0.0, DEGREE)
+    _ = tm_frame(app)
+    assert_equal(_indices(app)[unsafe_offset=0], first)
+    _state(app)[].camera.fov = Angle(50.0, DEGREE)
+    assert_equal(tm_splat_prepare(app), Int32(0))
+    assert_equal(_info(app, SPLAT_INFO_ORDER), 2)
+    assert_true(_indices(app)[unsafe_offset=0] != first)
     tm_destroy(app)
 
 
@@ -698,6 +800,28 @@ def test_a_view_that_cannot_be_prepared_leaves_the_last_arrays() raises:
         Int(tm_splat_part(app, Int32(SPLAT_VIEW.value)).value()), address
     )
     assert_equal(_info(app, SPLAT_INFO_ORDER), generation)
+    tm_destroy(app)
+
+
+def test_a_refused_view_does_not_publish_a_new_order() raises:
+    var app = _plain()
+    _state(app)[].load_geometry(_line())
+    assert_equal(tm_splat_prepare(app), Int32(0))
+    var order = _state(app)[].order.copy()
+    var view = _state(app)[].view.copy()
+    var center = _state(app)[].controls.target
+    _state(app)[].camera.place(
+        center * 2 - _state(app)[].camera.position, center
+    )
+    _state(app)[].camera.fov = Angle(0.0, DEGREE)
+    assert_equal(tm_splat_prepare(app), Int32(1))
+    assert_equal(_info(app, SPLAT_INFO_ORDER), 1)
+    assert_equal(_state(app)[].order, order)
+    assert_equal(_state(app)[].view, view)
+    _state(app)[].camera.fov = Angle(50.0, DEGREE)
+    assert_equal(tm_splat_prepare(app), Int32(0))
+    assert_equal(_info(app, SPLAT_INFO_ORDER), 2)
+    assert_true(_state(app)[].order[0] != order[0])
     tm_destroy(app)
 
 

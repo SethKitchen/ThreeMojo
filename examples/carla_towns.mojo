@@ -20,6 +20,8 @@ and each is also written alone beside the page.
 The town must be in the cache: the example stops if its package is not.
 """
 
+from tools._example_output import example_destination
+
 from extensions.carla.actor import ActorId
 from extensions.carla.assets import AssetRegistry
 from extensions.carla.camera_render import CarlaRenderer
@@ -137,9 +139,7 @@ def sibling(destination: String, suffix: String) -> String:
 
 def main() raises:
     var args = argv()
-    var destination = String(DEFAULT_OUTPUT)
-    if len(args) > 1:
-        destination = String(args[1])
+    var destination = example_destination(String(DEFAULT_OUTPUT))
     var town = String(DEFAULT_TOWN)
     if len(args) > 2:
         town = String(args[2])

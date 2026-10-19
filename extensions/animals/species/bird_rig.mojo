@@ -22,6 +22,7 @@ procedural-animals renders flight and tail feathers as thin cards. Here
 so the folded wing and the tail have their silhouette.
 """
 
+from extensions.animals.kit import side_sign
 from extensions.sdf.ids import (
     BoneId,
     SurfacePart,
@@ -35,16 +36,20 @@ from extensions.animals.rig import Rig, add_sided
 from extensions.sdf.field import SdfModel
 from extensions.sdf.vector import (
     V3,
+    clamp,
     cross,
+    cubic_bezier,
     dot,
     length,
     lerp,
+    mix,
     mirror,
     normalize,
     rotate_about,
     smoothstep,
 )
 from extensions.animals.noise import ihash
+from math.smoothstep import hermite_fade
 from std.math import cos, floor, pi, sin, sqrt
 
 # Radians in one degree.
@@ -88,13 +93,13 @@ def lerp_pose(a: WingPose, b: WingPose, t: Float64) -> WingPose:
         The blend, key by key. The tilt is `a`'s.
     """
     return WingPose(
-        a.elev + (b.elev - a.elev) * t,
-        a.pitch + (b.pitch - a.pitch) * t,
-        a.alpha + (b.alpha - a.alpha) * t,
-        a.elbow + (b.elbow - a.elbow) * t,
-        a.wrist + (b.wrist - a.wrist) * t,
-        a.bend + (b.bend - a.bend) * t,
-        a.twist + (b.twist - a.twist) * t,
+        mix(a.elev, b.elev, t),
+        mix(a.pitch, b.pitch, t),
+        mix(a.alpha, b.alpha, t),
+        mix(a.elbow, b.elbow, t),
+        mix(a.wrist, b.wrist, t),
+        mix(a.bend, b.bend, t),
+        mix(a.twist, b.twist, t),
         a.tilt,
     )
 
@@ -183,7 +188,7 @@ def extension(
     """
     var t = (fold_flex - flex) / (fold_flex - spread_flex)
     var c = 0.0 if t < 0.0 else (1.0 if t > 1.0 else t)
-    return c * c * (3.0 - 2.0 * c)
+    return hermite_fade(c)
 
 
 @fieldwise_init
@@ -523,7 +528,7 @@ def vane_width(f: Feather, t: Float64, w: Float64) -> Tuple[Float64, Float64]:
     Returns:
         The outer and the inner half width.
     """
-    var base = f.base0 + (1.0 - f.base0) * smoothstep(0.0, 0.16, t)
+    var base = mix(f.base0, 1.0, smoothstep(0.0, 0.16, t))
     var tr = f.tip_round
     var tip = 1.0
     if t > 1.0 - tr:
@@ -564,13 +569,7 @@ def neck_chain(mut rig: Rig, segs: Int, t0: V3, t1: V3, bulge: Float64) raises:
     var pts = List[V3](capacity=N + 1)
     for i in range(N + 1):  # pragma: no branch
         var t = Float64(i) / Float64(N)
-        var u = 1.0 - t
-        pts.append(
-            a * (u * u * u)
-            + p1 * (3.0 * u * u * t)
-            + p2 * (3.0 * u * t * t)
-            + b * (t * t * t)
-        )
+        pts.append(cubic_bezier(a, p1, p2, b, t))
     var s: List[Float64] = [0.0]
     for i in range(1, N + 1):  # pragma: no branch
         s.append(s[i - 1] + length(pts[i] - pts[i - 1]))
@@ -583,7 +582,7 @@ def neck_chain(mut rig: Rig, segs: Int, t0: V3, t1: V3, bulge: Float64) raises:
             i += 1
         var span = s[i] - s[i - 1]
         var f = (target - s[i - 1]) / (span if span != 0.0 else 1.0)
-        rig.set("neck" + String(j), pts[i - 1] + (pts[i] - pts[i - 1]) * f)
+        rig.set("neck" + String(j), lerp(pts[i - 1], pts[i], f))
 
 
 def wing_joints(mut rig: Rig, lengths: V3, pose: WingPose) raises -> WingFrames:
@@ -674,7 +673,7 @@ def feather_frames(
                     lengths.z,
                     1.0,
                     f,
-                    f.fold + (f.spread - f.fold) * e_h,
+                    mix(f.fold, f.spread, e_h),
                     False,
                 )
             )
@@ -687,7 +686,7 @@ def feather_frames(
                     lengths.y,
                     1.0,
                     f,
-                    f.fold + (f.spread - f.fold) * e_u,
+                    mix(f.fold, f.spread, e_u),
                     True,
                 )
             )
@@ -700,7 +699,7 @@ def feather_frames(
                     lat,
                     1.0,
                     f,
-                    f.fold + (f.spread - f.fold) * fan,
+                    mix(f.fold, f.spread, fan),
                 )
             )
     return out^
@@ -840,6 +839,44 @@ def wing_normal(rig: Rig, side: String) raises -> V3:
     var wr = rig.j("wrist" + side)
     var n = normalize(cross(el - sh, wr - el))
     return -n if n.y < 0.0 else n
+
+
+def wing_arm(
+    rig: Rig, side: String
+) raises -> Tuple[Float64, V3, V3, V3, V3, V3, BoneId, BoneId, BoneId]:
+    """Return one wing's side sign, joints, normal and arm bones.
+
+    Args:
+        rig: The rig.
+        side: `L` or `R`.
+
+    Returns:
+        One for the left and minus one for the right, then the shoulder,
+        elbow, wrist and hand tip, the dorsal normal, and the humerus,
+        ulna and hand bones.
+
+    Raises:
+        Error: If a joint or bone is missing.
+    """
+    var sign = side_sign(side)
+    var shoulder = rig.j("shoulder" + side)
+    var elbow = rig.j("elbow" + side)
+    var wrist = rig.j("wrist" + side)
+    var tip = rig.j("handTip" + side)
+    var normal = normalize(cross(elbow - shoulder, wrist - elbow))
+    if normal.y < 0.0:
+        normal = -normal
+    return (
+        sign,
+        shoulder,
+        elbow,
+        wrist,
+        tip,
+        normal,
+        rig.bone("humerus" + side),
+        rig.bone("ulna" + side),
+        rig.bone("hand" + side),
+    )
 
 
 def wing_segment(
@@ -1099,7 +1136,7 @@ def feather_fins(
                     + String(Int(ln * 1e5))
                 )
                 for side in [String("L"), String("R")]:  # pragma: no branch
-                    var s = 1.0 if side == "L" else -1.0
+                    var s = side_sign(side)
                     var fr = frames[i]
                     var root = (
                         fr.root + fr.normal * card.lift + fr.axis * card.shift
@@ -1271,7 +1308,7 @@ def tail_fan(
     )
     var bone = feather_bone(feathers[ids[0]])
     for side in [String("L"), String("R")]:  # pragma: no branch
-        var s = 1.0 if side == "L" else -1.0
+        var s = side_sign(side)
         var oo = o
         var aa = a
         var nn = n
@@ -1339,7 +1376,7 @@ def card_point(tag: String, local: V3, right: Bool) raises -> CardPoint:
     var up = local.z * sgn if fin >= 0 else local.y
     return CardPoint(
         String(tag[byte=:at]),
-        min(1.0, max(0.0, (cx + along) / ln)),
+        clamp((cx + along) / ln, 0.0, 1.0),
         cy + across,
         up > 0.0,
     )

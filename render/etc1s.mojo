@@ -47,7 +47,8 @@ a time with the first bit the code's highest, as DEFLATE reads them. A
 reader past the end of its bytes reads zeros, as Binomial's does.
 """
 
-from core.binary import little_endian_u32
+from core.binary import copy_bytes, little_endian_u16, little_endian_u32
+from math.utils import clamp
 
 # The largest Huffman code and the size of the code-length alphabet.
 comptime MAX_CODE_BITS = 16
@@ -92,7 +93,7 @@ struct _Bits(Movable):
     var position: Int
 
     def __init__(out self, bytes: List[UInt8], start: Int, length: Int):
-        self.data = List[UInt8](bytes[start : start + length])
+        self.data = copy_bytes(bytes, start, length)
         self.position = 0
 
     def read(mut self, count: Int) -> Int:
@@ -247,11 +248,6 @@ def _read_table(mut bits: _Bits) raises -> _Huffman:
     return _Huffman(sizes)
 
 
-def _u16(bytes: List[UInt8], at: Int) -> Int:
-    """Return the little-endian half word at `at`."""
-    return Int(bytes[at]) | (Int(bytes[at + 1]) << 8)
-
-
 struct Etc1sGlobal(Movable):
     """A KTX 2.0 file's BasisLZ global data, decoded: the endpoint and
     selector codebooks, the slice tables and the image descriptors."""
@@ -312,8 +308,8 @@ struct Etc1sGlobal(Movable):
         self.images = List[Int]()
         if len(bytes) < GLOBAL_HEADER_BYTES:
             raise Error("ETC1S: the global data is shorter than its header")
-        var endpoint_count = _u16(bytes, 0)
-        var selector_count = _u16(bytes, 2)
+        var endpoint_count = little_endian_u16(bytes, 0)
+        var selector_count = little_endian_u16(bytes, 2)
         var endpoint_bytes = little_endian_u32(bytes, 4)
         var selector_bytes = little_endian_u32(bytes, 8)
         var table_bytes = little_endian_u32(bytes, 12)
@@ -705,9 +701,7 @@ def _write_block(
         for channel in range(3):  # pragma: no branch
             var five = global_data.endpoints[endpoint * 4 + channel]
             var value = (five << 3) | (five >> 2)
-            colors.append(
-                max(0, min(255, value + intensities[table * 4 + step]))
-            )
+            colors.append(clamp(value + intensities[table * 4 + step], 0, 255))
     for y in range(min(4, height - by * 4)):  # pragma: no branch
         var row = global_data.selectors[selector * 4 + y]
         for x in range(min(4, width - bx * 4)):  # pragma: no branch

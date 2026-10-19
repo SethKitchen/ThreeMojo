@@ -18,7 +18,7 @@ feeds an add is an explicit `fma`, which rounds once on both backends. So the CP
 give the same bits, and the noise is the same on both. The error against
 libm is a few units in the last place. `noise_scale` is the multiply by
 43758.5453, written so that no compiler fuses it with the subtraction that
-takes the fraction.
+takes the fraction. `fraction` is GLSL's `fract`.
 """
 
 from std.math import floor, fma
@@ -186,7 +186,21 @@ def noise_scale(s: Float32) -> Float32:
     return fma(s, Float32(43758.5453), Float32(0))
 
 
+@always_inline
 def fraction(s: Float32) -> Float32:
+    """Return GLSL's `fract`: `s` minus its floor.
+
+    Args:
+        s: Any finite number.
+
+    Returns:
+        A number from zero up to one.
+    """
+    return s - floor(s)
+
+
+@always_inline
+def fraction(s: Float64) -> Float64:
     """Return GLSL's `fract`: `s` minus its floor.
 
     Args:

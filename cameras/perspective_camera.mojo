@@ -36,12 +36,20 @@ Here the gauge and the offset are `Length`s, and only their ratio reaches
 the projection.
 """
 
-from cameras.camera import Camera, ViewOffset, node_view_matrix, view_offset
+from cameras.camera import (
+    Camera,
+    ViewOffset,
+    disable_view_offset,
+    placed_view_matrix,
+    scene_view_matrix,
+    view_offset,
+)
 from core.layers import Layers
 from core.object3d import NO_PARENT, NodeId
 from core.scene import Scene
+from math.finite import positive_finite, require_finite
 from math.matrix4 import Matrix4
-from math.projection import look_at, perspective, viewport
+from math.projection import perspective, viewport
 from math.vector2 import Vector2
 from math.vector3 import Vector3
 from std.math import pi, atan, isfinite, max, min, tan
@@ -65,9 +73,19 @@ struct ViewBounds(ImplicitlyCopyable):
     var max_corner: Vector2
 
 
-def _positive(value: Float32) -> Bool:
-    """Return True if a number is finite and above zero."""
-    return value > 0 and isfinite(value)
+def require_film_gauge(gauge: Float32) raises:
+    """Refuse a film gauge that is not positive.
+
+    Nothing. The call returns when the gauge is positive and finite.
+
+    Args:
+        gauge: The film width, in millimeters.
+
+    Raises:
+        Error: If the gauge is not positive.
+    """
+    if not positive_finite(Float64(gauge)):
+        raise Error("A film gauge must be positive")
 
 
 struct PerspectiveCamera(Camera, ImplicitlyCopyable):
@@ -168,25 +186,29 @@ struct PerspectiveCamera(Camera, ImplicitlyCopyable):
                 or focus is not positive and finite, or an enabled view
                 is refused by `ViewOffset.validate`.
         """
-        if not _positive(self.aspect):
+        if not positive_finite(Float64(self.aspect)):
             raise Error("The aspect ratio must be positive and finite")
-        if not (_positive(self.fov.value) and self.fov.value < Float32(pi)):
+        if not (
+            positive_finite(Float64(self.fov.value))
+            and self.fov.value < Float32(pi)
+        ):
             raise Error("The field of view must be between zero and pi")
-        if not _positive(self.near.value):
+        if not positive_finite(Float64(self.near.value)):
             raise Error("The near plane must be in front of the camera")
         if not (isfinite(self.far.value) and self.far.value > self.near.value):
             raise Error(
                 "The far plane must be finite and beyond the near plane"
             )
-        if not isfinite(self.view_shift.value):
-            raise Error("A view shift must be finite")
-        if not _positive(self.zoom):
+        require_finite(
+            Float64(self.view_shift.value), "A view shift must be finite"
+        )
+        if not positive_finite(Float64(self.zoom)):
             raise Error("A camera's zoom must be positive, got ", self.zoom)
-        if not _positive(self.film_gauge.value):
-            raise Error("A film gauge must be positive")
-        if not isfinite(self.film_offset.value):
-            raise Error("A film offset must be finite")
-        if not _positive(self.focus.value):
+        require_film_gauge(self.film_gauge.value)
+        require_finite(
+            Float64(self.film_offset.value), "A film offset must be finite"
+        )
+        if not positive_finite(Float64(self.focus.value)):
             raise Error("A focus distance must be positive")
         if self._tiled():
             self.view.value().validate()
@@ -226,7 +248,7 @@ struct PerspectiveCamera(Camera, ImplicitlyCopyable):
         """
         var view = view_offset(full_width, full_height, x, y, width, height)
         var aspect = full_width / full_height
-        if not _positive(aspect):
+        if not positive_finite(Float64(aspect)):
             raise Error("A view offset must give a positive finite aspect")
         self.aspect = aspect
         self.view = view
@@ -236,8 +258,7 @@ struct PerspectiveCamera(Camera, ImplicitlyCopyable):
 
         The tile is kept, disabled, as three.js keeps it.
         """
-        if Bool(self.view):
-            self.view.value().enabled = False
+        disable_view_offset(self.view)
 
     def get_film_width(self) -> Length:
         """Return how wide the film's image is, three.js's `getFilmWidth`.
@@ -281,10 +302,9 @@ struct PerspectiveCamera(Camera, ImplicitlyCopyable):
             Error: If the focal length or the film gauge is not positive
                 and finite.
         """
-        if not _positive(focal_length.value):
+        if not positive_finite(Float64(focal_length.value)):
             raise Error("A focal length must be positive")
-        if not _positive(self.film_gauge.value):
-            raise Error("A film gauge must be positive")
+        require_film_gauge(self.film_gauge.value)
         var slope = 0.5 * self.get_film_height().value / focal_length.value
         self.fov = Angle(2 * atan(slope), RADIAN)
 
@@ -424,12 +444,9 @@ struct PerspectiveCamera(Camera, ImplicitlyCopyable):
                 the view direction, or the camera rides a node -- the scene
                 has that answer, so ask `view_matrix_in`.
         """
-        if self.node != NO_PARENT:
-            raise Error(
-                "An attached camera's view comes from its node; call"
-                " view_matrix_in(scene)"
-            )
-        return look_at(self.position, self.target, self.up)
+        return placed_view_matrix(
+            self.node, self.position, self.target, self.up
+        )
 
     def view_matrix_in(self, scene: Scene) raises -> Matrix4:
         """Return the matrix taking world space to camera space.
@@ -445,9 +462,9 @@ struct PerspectiveCamera(Camera, ImplicitlyCopyable):
             Error: If the placement is degenerate, the node is not in the
                 scene, or the scene is stale.
         """
-        if self.node == NO_PARENT:
-            return self.view_matrix()
-        return node_view_matrix(scene, self.node)
+        return scene_view_matrix(
+            scene, self.node, self.position, self.target, self.up
+        )
 
     def view_projection_matrix(self) raises -> Matrix4:
         """Return projection * view: world space straight to NDC.

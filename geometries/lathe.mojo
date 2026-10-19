@@ -35,18 +35,14 @@ lathe is where a shape drawn by hand meets the scene, and the drawing is
 made of plain points.
 """
 
-from core.buffer_attribute import BufferAttribute
-from core.buffer_geometry import (
-    BufferGeometry,
-    LATHE_GEOMETRY,
-    NORMAL,
-    POSITION,
-    UV,
-)
-from core.user_data import UserData, json_number_text
+from core.buffer_geometry import BufferGeometry, LATHE_GEOMETRY
+from geometries.surface import indexed_surface, record_kind, record_phi
+from math.curve_checks import require_at_least_one
+from core.user_data import json_number_text
 from geometries.circle import FULL_TURN, check_sweep
+from math.finite import require_finite, require_finite_group
 from math.norm import normalized2
-from math.vector2 import Vector2
+from math.vector2 import Vector2, vector2_from_float64
 from std.math import cos, isfinite, sin
 from units.si import Angle, RADIAN
 
@@ -65,7 +61,7 @@ def _wide_unit(before: Vector2, after: Vector2) raises -> Vector2:
     if x == 0 and y == 0:
         raise Error("A lathe's profile cannot turn straight back")
     var direction = normalized2(x, y)
-    return Vector2(Float32(direction[0]), Float32(direction[1]))
+    return vector2_from_float64(direction[0], direction[1])
 
 
 def _profile_normals(points: List[Vector2]) raises -> List[Vector2]:
@@ -92,10 +88,10 @@ def _profile_normals(points: List[Vector2]) raises -> List[Vector2]:
         if index == len(points) - 1:
             # Checked radii are nonnegative Float32 values, so their
             # difference (previous.y) fits in Float32.
-            if not isfinite(previous.x):
-                raise Error(
-                    "A lathe's final profile normal must fit in Float32"
-                )
+            require_finite(
+                Float64(previous.x),
+                "A lathe's final profile normal must fit in Float32",
+            )
             normals.append(previous)
             continue
         var dx = points[index + 1].x - points[index].x
@@ -110,11 +106,7 @@ def _profile_normals(points: List[Vector2]) raises -> List[Vector2]:
                 normals.append(_wide_unit(points[0], points[1]))
         else:
             var summed = Vector2(ahead.x + previous.x, ahead.y + previous.y)
-            if (
-                not isfinite(summed.x)
-                or not isfinite(summed.y)
-                or (summed.x == 0 and summed.y == 0)
-            ):
+            if not summed.is_finite() or (summed.x == 0 and summed.y == 0):
                 # The two raw segment directions telescope to the outer
                 # endpoint difference. This also distinguishes an exact
                 # return from cancellation in rounded segment differences.
@@ -170,8 +162,10 @@ def lathe(
     if len(points) < 2:
         raise Error("A lathe needs a profile of at least two points")
     for index in range(len(points)):  # pragma: no branch
-        if not isfinite(points[index].x) or not isfinite(points[index].y):
-            raise Error("A lathe's profile points must be finite")
+        require_finite_group(
+            points[index].is_finite(),
+            "A lathe's profile points must be finite",
+        )
         if points[index].x < 0:
             raise Error("A lathe's profile lies on one side of the axis")
     for index in range(len(points) - 1):  # pragma: no branch
@@ -180,8 +174,7 @@ def lathe(
             and points[index].y == points[index + 1].y
         ):
             raise Error("A lathe's profile cannot repeat a point")
-    if segments < 1:
-        raise Error("A lathe needs at least one segment around")
+    require_at_least_one(segments, "A lathe needs at least one segment around")
     check_sweep(phi_length)
 
     var normals_2d = _profile_normals(points)
@@ -221,14 +214,9 @@ def lathe(
             index.append(b)
 
     var geometry = BufferGeometry()
-    geometry.set_attribute(String(POSITION), BufferAttribute(data^, 3))
-    geometry.set_attribute(String(NORMAL), BufferAttribute(normals^, 3))
-    geometry.set_attribute(String(UV), BufferAttribute(uvs^, 2))
-    geometry.set_index(index^)
-    geometry.kind = LATHE_GEOMETRY
-    geometry.parameters = UserData()
+    indexed_surface(geometry, data^, normals^, uvs^, index^)
+    record_kind(geometry, LATHE_GEOMETRY)
     geometry.parameters.set_json("points", _points_json(points))
     geometry.parameters.set_number("segments", Float64(segments))
-    geometry.parameters.set_number("phiStart", Float64(phi_start.to(RADIAN)))
-    geometry.parameters.set_number("phiLength", Float64(phi_length.to(RADIAN)))
+    record_phi(geometry, phi_start, phi_length)
     return geometry^

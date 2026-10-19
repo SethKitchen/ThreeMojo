@@ -32,6 +32,7 @@ The CPU stages need no GPU. The numbers describe the machine that runs
 the bench.
 """
 
+from tools._bench_timing import _sorted
 from cameras.perspective_camera import PerspectiveCamera
 from core.assets import Assets
 from core.object3d import Object3D
@@ -45,6 +46,7 @@ from extensions.humanoid.spec import HumanoidSpec
 from geometries.sphere import sphere
 from lights.light import ambient_light, directional_light
 from materials.material import Material
+from math.bounds import Box3
 from math.vector3 import Vector3
 from objects.mesh import Mesh
 from render.checksum import crc32
@@ -53,15 +55,6 @@ from renderers.renderer import Renderer
 from std.sys import argv, num_logical_cores
 from std.time import perf_counter_ns
 from units.si import DEGREE, FOOT, METER, Angle, Length
-
-
-def _sorted(var times: List[Int]) -> List[Int]:
-    for i in range(1, len(times)):
-        var j = i
-        while j > 0 and times[j - 1] > times[j]:
-            times.swap_elements(j - 1, j)
-            j -= 1
-    return times^
 
 
 def _median(var times: List[Int]) -> Float64:
@@ -89,12 +82,8 @@ def main() raises:
     var assets = Assets()
     var root = scene.add(Object3D())
     var hair = add_groom(scene, assets, root, person)
-    var low = Vector3(1e9, 1e9, 1e9)
-    var high = Vector3(-1e9, -1e9, -1e9)
-    for p in hair.groom.points:
-        low = Vector3(min(low.x, p.x), min(low.y, p.y), min(low.z, p.z))
-        high = Vector3(max(high.x, p.x), max(high.y, p.y), max(high.z, p.z))
-    var middle = (low + high) * 0.5
+    var box = Box3.from_points(hair.groom.points)
+    var middle = (box.min + box.max) * 0.5
     var skin = assets.materials.add(Material(Color(200, 160, 140)))
     # The body triangles: a head under the hair and a torso below it.
     var head = scene.add(Object3D())

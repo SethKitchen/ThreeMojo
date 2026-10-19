@@ -16,7 +16,10 @@ from extensions.sdf.vector import (
     dot,
     frame_zy,
     length,
+    lerp,
 )
+from math.norm import squared_length2
+from math.utils import min3, mix_delta
 from std.math import sqrt
 
 
@@ -59,7 +62,7 @@ def rect_distance(qx: Float64, qy: Float64) -> Float64:
     """
     var ox = max(qx, 0.0)
     var oy = max(qy, 0.0)
-    return sqrt(ox * ox + oy * oy) + min(max(qx, qy), 0.0)
+    return sqrt(squared_length2[DType.float64](ox, oy)) + min(max(qx, qy), 0.0)
 
 
 def segment_param(p: V3, a: V3, b: V3) -> Float64:
@@ -89,7 +92,7 @@ def segment_distance(p: V3, a: V3, b: V3) -> Float64:
         The distance. It is never negative.
     """
     var u = segment_param(p, a, b)
-    return length(p - (a + (b - a) * u))
+    return length(p - lerp(a, b, u))
 
 
 def round_cone_estimate(
@@ -111,7 +114,7 @@ def round_cone_estimate(
         The estimated distance. It is negative inside.
     """
     var u = segment_param(p, a, b)
-    return length(p - (a + (b - a) * u)) - (ra + (rb - ra) * u)
+    return length(p - lerp(a, b, u)) - mix_delta(ra, rb, u)
 
 
 def ellipsoid_estimate(p: V3, c: V3, r: V3) -> Float64:
@@ -129,7 +132,7 @@ def ellipsoid_estimate(p: V3, c: V3, r: V3) -> Float64:
         The estimated distance. It is negative inside.
     """
     var q = V3((p.x - c.x) / r.x, (p.y - c.y) / r.y, (p.z - c.z) / r.z)
-    return (length(q) - 1.0) * min(r.x, min(r.y, r.z))
+    return (length(q) - 1.0) * min3(r.x, r.y, r.z)
 
 
 def oriented_ellipsoid_estimate(
@@ -153,4 +156,4 @@ def oriented_ellipsoid_estimate(
     var f = frame_zy(z_dir, up)
     var d = p - c
     var u = V3(dot(d, f.x) / r.x, dot(d, f.y) / r.y, dot(d, f.z) / r.z)
-    return (length(u) - 1.0) * min(r.x, min(r.y, r.z))
+    return (length(u) - 1.0) * min3(r.x, r.y, r.z)

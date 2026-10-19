@@ -55,7 +55,15 @@ die() {
 
 mojo_build() { # mojo_build EMIT OUTPUT SOURCE
   # The compiler prints a crash-reporter banner that is not an error.
-  "$MOJO" build -I "$REPO" --emit "$1" -o "$2" "$3" 2>&1 | grep -v Crashpad || true
+  # Capture its status before filtering: an old or partial output must not
+  # make a failed compile look successful. This also works with macOS sh.
+  if build_log=$("$MOJO" build -I "$REPO" --emit "$1" -o "$2" "$3" 2>&1); then
+    build_status=0
+  else
+    build_status=$?
+  fi
+  printf '%s\n' "$build_log" | sed '/Crashpad/d'
+  [ "$build_status" -eq 0 ] || die "mojo build failed with status $build_status"
   [ -s "$2" ] || die "mojo did not write $2"
 }
 

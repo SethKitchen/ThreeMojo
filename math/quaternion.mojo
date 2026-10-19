@@ -23,8 +23,8 @@ as the matrices `a.to_matrix() * b.to_matrix()` would.
 
 from math.euler import Euler
 from math.matrix4 import Matrix4
-from math.norm import length4, normalized4
-from math.utils import SeededRandom
+from math.norm import dot4, length4, normalized4
+from math.utils import SeededRandom, clamp_unit
 from math.vector3 import Vector3
 from std.math import acos, atan2, cos, pi, sin, sqrt
 from units.si import Angle, RADIAN
@@ -38,6 +38,91 @@ comptime SLERP_EPSILON = Float32(1e-6)
 # How near to opposite two directions are before `from_unit_vectors`
 # picks a half turn. three.js: `Number.EPSILON`, scaled to Float32.
 comptime HALF_TURN_EPSILON = Float32(1e-6)
+
+
+def quaternion_rotate[
+    dtype: DType
+](
+    x: SIMD[dtype, 1],
+    y: SIMD[dtype, 1],
+    z: SIMD[dtype, 1],
+    w: SIMD[dtype, 1],
+    vx: SIMD[dtype, 1],
+    vy: SIMD[dtype, 1],
+    vz: SIMD[dtype, 1],
+) -> Tuple[SIMD[dtype, 1], SIMD[dtype, 1], SIMD[dtype, 1]]:
+    """Return a vector turned by the quaternion `(x, y, z, w)`.
+
+    This is three.js's `applyQuaternion`: the product `q * v * q^-1`
+    with the middle step written out. The width is the caller's.
+
+    Args:
+        x: The quaternion's x.
+        y: The quaternion's y.
+        z: The quaternion's z.
+        w: The quaternion's real part.
+        vx: The vector's x.
+        vy: The vector's y.
+        vz: The vector's z.
+
+    Returns:
+        The turned vector's three components.
+    """
+    var two = SIMD[dtype, 1](2)
+    var tx = two * (y * vz - z * vy)
+    var ty = two * (z * vx - x * vz)
+    var tz = two * (x * vy - y * vx)
+    return (
+        vx + w * tx + y * tz - z * ty,
+        vy + w * ty + z * tx - x * tz,
+        vz + w * tz + x * ty - y * tx,
+    )
+
+
+def quaternion_terms[
+    dtype: DType
+](
+    x: SIMD[dtype, 1],
+    y: SIMD[dtype, 1],
+    z: SIMD[dtype, 1],
+    w: SIMD[dtype, 1],
+) -> Tuple[
+    SIMD[dtype, 1],
+    SIMD[dtype, 1],
+    SIMD[dtype, 1],
+    SIMD[dtype, 1],
+    SIMD[dtype, 1],
+    SIMD[dtype, 1],
+    SIMD[dtype, 1],
+    SIMD[dtype, 1],
+    SIMD[dtype, 1],
+]:
+    """Return the nine products a quaternion writes into a matrix.
+
+    Args:
+        x: The quaternion's x.
+        y: The quaternion's y.
+        z: The quaternion's z.
+        w: The quaternion's real part.
+
+    Returns:
+        `xx`, `xy`, `xz`, `yy`, `yz`, `zz`, `wx`, `wy`, and `wz`. Each
+        product doubles one component first, as `Quaternion.to_matrix` does.
+    """
+    var x2 = x + x
+    var y2 = y + y
+    var z2 = z + z
+    return (
+        x * x2,
+        x * y2,
+        x * z2,
+        y * y2,
+        y * z2,
+        z * z2,
+        w * x2,
+        w * y2,
+        w * z2,
+    )
 
 
 @fieldwise_init
@@ -168,18 +253,9 @@ struct Quaternion(Equatable, ImplicitlyCopyable):
         Returns:
             The rotation matrix.
         """
-        var x2 = self.x + self.x
-        var y2 = self.y + self.y
-        var z2 = self.z + self.z
-        var xx = self.x * x2
-        var xy = self.x * y2
-        var xz = self.x * z2
-        var yy = self.y * y2
-        var yz = self.y * z2
-        var zz = self.z * z2
-        var wx = self.w * x2
-        var wy = self.w * y2
-        var wz = self.w * z2
+        var xx, xy, xz, yy, yz, zz, wx, wy, wz = quaternion_terms[
+            DType.float32
+        ](self.x, self.y, self.z, self.w)
         var matrix = Matrix4()
         matrix.set(
             1 - (yy + zz),
@@ -228,11 +304,15 @@ struct Quaternion(Equatable, ImplicitlyCopyable):
 
     def dot(self, other: Self) -> Float32:
         """Return the four-component dot product."""
-        return (
-            self.x * other.x
-            + self.y * other.y
-            + self.z * other.z
-            + self.w * other.w
+        return dot4[DType.float32](
+            self.x,
+            self.y,
+            self.z,
+            self.w,
+            other.x,
+            other.y,
+            other.z,
+            other.w,
         )
 
     def length(self) -> Float32:
@@ -263,6 +343,59 @@ struct Quaternion(Equatable, ImplicitlyCopyable):
             components[0], components[1], components[2], components[3]
         )
 
+    def __neg__(self) -> Self:
+        """Return this quaternion with each component negated.
+
+        Returns:
+            The quaternion `(-x, -y, -z, -w)`.
+        """
+        return Quaternion(-self.x, -self.y, -self.z, -self.w)
+
+    def __add__(self, other: Self) -> Self:
+        """Return the sum.
+
+        Args:
+            other: The quaternion to add.
+
+        Returns:
+            The component-wise sum.
+        """
+        return Quaternion(
+            self.x + other.x,
+            self.y + other.y,
+            self.z + other.z,
+            self.w + other.w,
+        )
+
+    def __sub__(self, other: Self) -> Self:
+        """Return the difference.
+
+        Args:
+            other: The quaternion to take away.
+
+        Returns:
+            The component-wise difference.
+        """
+        return Quaternion(
+            self.x - other.x,
+            self.y - other.y,
+            self.z - other.z,
+            self.w - other.w,
+        )
+
+    def __mul__(self, factor: Float32) -> Self:
+        """Return this quaternion scaled by a factor.
+
+        Args:
+            factor: The scale.
+
+        Returns:
+            Each component multiplied by `factor`.
+        """
+        return Quaternion(
+            self.x * factor, self.y * factor, self.z * factor, self.w * factor
+        )
+
     def conjugate(self) -> Self:
         """Return the opposite rotation, which for a unit quaternion is the
         inverse."""
@@ -274,14 +407,10 @@ struct Quaternion(Equatable, ImplicitlyCopyable):
         three.js's `Vector3.applyQuaternion`: the product `q * v * q^-1` with
         the middle step written out, rather than building the matrix first.
         """
-        var tx = 2 * (self.y * v.z - self.z * v.y)
-        var ty = 2 * (self.z * v.x - self.x * v.z)
-        var tz = 2 * (self.x * v.y - self.y * v.x)
-        return Vector3(
-            v.x + self.w * tx + self.y * tz - self.z * ty,
-            v.y + self.w * ty + self.z * tx - self.x * tz,
-            v.z + self.w * tz + self.x * ty - self.y * tx,
+        var rx, ry, rz = quaternion_rotate[DType.float32](
+            self.x, self.y, self.z, self.w, v.x, v.y, v.z
         )
+        return Vector3(rx, ry, rz)
 
     def slerp(self, other: Self, t: Float32) -> Self:
         """Return the rotation a fraction `t` of the way from self to `other`.
@@ -303,7 +432,7 @@ struct Quaternion(Equatable, ImplicitlyCopyable):
         var target = other
         var cos_half = self.dot(other)
         if cos_half < 0:
-            target = Quaternion(-other.x, -other.y, -other.z, -other.w)
+            target = -other
             cos_half = -cos_half
         # Already there, or as close as a Float32 can tell.
         if cos_half >= 1:
@@ -312,24 +441,14 @@ struct Quaternion(Equatable, ImplicitlyCopyable):
         # So close that the arc is a line: blend straight and renormalize,
         # because the sine we would divide by is nearly zero.
         if sin_half_squared <= SLERP_EPSILON:
-            var blend = Quaternion(
-                self.x + (target.x - self.x) * t,
-                self.y + (target.y - self.y) * t,
-                self.z + (target.z - self.z) * t,
-                self.w + (target.w - self.w) * t,
-            )
+            var blend = self + (target - self) * t
             blend.normalize()
             return blend
         var sin_half = sqrt(sin_half_squared)
         var half = atan2(sin_half, cos_half)
         var keep = sin((1 - t) * half) / sin_half
         var take = sin(t * half) / sin_half
-        return Quaternion(
-            self.x * keep + target.x * take,
-            self.y * keep + target.y * take,
-            self.z * keep + target.z * take,
-            self.w * keep + target.w * take,
-        )
+        return self * keep + target * take
 
     @staticmethod
     def slerp_quaternions(start: Self, end: Self, t: Float32) -> Self:
@@ -379,11 +498,11 @@ struct Quaternion(Equatable, ImplicitlyCopyable):
         var x0 = generator.next()
         var r1 = sqrt(1 - x0)
         var r2 = sqrt(x0)
-        return Quaternion(
-            Float32(r1 * sin(theta1)),
-            Float32(r1 * cos(theta1)),
-            Float32(r2 * sin(theta2)),
-            Float32(r2 * cos(theta2)),
+        return quaternion_from_float64(
+            r1 * sin(theta1),
+            r1 * cos(theta1),
+            r2 * sin(theta2),
+            r2 * cos(theta2),
         )
 
     def __eq__(self, other: Self) -> Bool:
@@ -455,7 +574,7 @@ struct Quaternion(Equatable, ImplicitlyCopyable):
         Returns:
             From zero to a half turn: the short way round.
         """
-        var cosine = max(Float32(-1), min(Float32(1), self.dot(other)))
+        var cosine = clamp_unit(self.dot(other))
         return Angle(2 * acos(abs(cosine)), RADIAN)
 
     def rotate_towards(mut self, other: Self, step: Angle):
@@ -470,3 +589,43 @@ struct Quaternion(Equatable, ImplicitlyCopyable):
         if angle == 0:
             return
         self = self.slerp(other, min(Float32(1), step.value / angle))
+
+
+def quaternion_from_float64(
+    x: Float64, y: Float64, z: Float64, w: Float64
+) -> Quaternion:
+    """Return a `Quaternion` from four `Float64` components.
+
+    Each component is rounded to `Float32`.
+
+    Error: Never.
+
+    Args:
+        x: The first component.
+        y: The second component.
+        z: The third component.
+        w: The real component.
+
+    Returns:
+        The rounded quaternion.
+
+    """
+    return Quaternion(Float32(x), Float32(y), Float32(z), Float32(w))
+
+
+def append_quaternion(mut values: List[Float32], rotation: Quaternion):
+    """Append `rotation`'s four components, x, y, z, then w.
+
+    Nothing. Four numbers are appended.
+
+    Error: Never.
+
+    Args:
+        values: The list that receives the components.
+        rotation: The quaternion.
+
+    """
+    values.append(rotation.x)
+    values.append(rotation.y)
+    values.append(rotation.z)
+    values.append(rotation.w)

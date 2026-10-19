@@ -56,8 +56,46 @@ taken as it is, as three.js's shader takes it; see
 """
 
 from core.object3d import NodeId
-from math.matrix4 import Matrix4
-from std.math import isfinite
+from core.ordinal import (
+    require_index_in_count,
+    require_non_negative,
+    require_positive,
+)
+from math.matrix4 import Matrix4, require_affine
+from math.finite import require_finite, require_finite_group
+
+
+def require_bone_index(bone: Int, count: Int) raises:
+    """Refuse a bone index the skeleton does not have.
+
+    Nothing. The call returns when the index names a bone.
+
+    Args:
+        bone: The bone a vertex names.
+        count: How many bones the skeleton has.
+
+    Raises:
+        Error: If the index is negative or past the last bone.
+    """
+    require_index_in_count(
+        bone, count, "A vertex names a bone the skeleton does not have"
+    )
+
+
+def require_bone_matrices(held: Int, expected: Int) raises:
+    """Refuse a bone binding whose lists have different lengths.
+
+    Nothing. The call returns when the two lengths are equal.
+
+    Args:
+        held: How many items one list holds.
+        expected: How many items the other list holds.
+
+    Raises:
+        Error: If the lengths differ.
+    """
+    if held != expected:
+        raise Error("Binding needs one world matrix for every bone")
 
 
 @fieldwise_init
@@ -86,13 +124,16 @@ struct Skeleton(Copyable, Movable):
             Error: If there are no bones, or one carries an inverse bind
                 that is not a finite affine transform.
         """
-        if len(bones) == 0:
-            raise Error("A skeleton needs at least one bone")
+        require_positive(len(bones), "A skeleton needs at least one bone")
         for index in range(len(bones)):  # pragma: no branch
-            if not bones[index].inverse_bind.is_finite():
-                raise Error("A bone's inverse bind must be a real transform")
-            if not bones[index].inverse_bind.is_affine():
-                raise Error("A bone's inverse bind must be affine")
+            require_finite_group(
+                bones[index].inverse_bind.is_finite(),
+                "A bone's inverse bind must be a real transform",
+            )
+            require_affine(
+                bones[index].inverse_bind,
+                "A bone's inverse bind must be affine",
+            )
             # A matrix with no inverse is not the inverse of anything.
             # `bind_skeleton` refuses a bone bound at a scale of zero
             # before it inverts one; a caller handing the inverses in
@@ -117,8 +158,11 @@ struct Skeleton(Copyable, Movable):
         Raises:
             Error: If the skeleton has no bone at that index.
         """
-        if index < 0 or index >= len(self.bones):
-            raise Error("The skeleton has no bone at that index")
+        require_index_in_count(
+            index,
+            len(self.bones),
+            "The skeleton has no bone at that index",
+        )
         return self.bones[index].node
 
     def calculate_inverses(mut self, placed: List[Matrix4]) raises:
@@ -137,8 +181,7 @@ struct Skeleton(Copyable, Movable):
                 inverse of such a matrix as all zeros, which no later pose
                 can measure against. Nothing changes when this raises.
         """
-        if len(placed) != len(self.bones):
-            raise Error("Binding needs one world matrix for every bone")
+        require_bone_matrices(len(placed), len(self.bones))
         var inverses = List[Matrix4]()
         for index in range(len(placed)):  # pragma: no branch
             var stood = Matrix4(copy=placed[index])
@@ -219,15 +262,16 @@ def blend_bones(
     var summed = Array[Float32, 16](fill=0.0)
     for slot in range(len(bones)):
         var weight = weights[slot]
-        if not isfinite(weight):
-            raise Error("A vertex's bone weights must be numbers")
-        if weight < 0:
-            raise Error("A vertex's bone weights cannot be negative")
+        require_finite(
+            Float64(weight), "A vertex's bone weights must be numbers"
+        )
+        require_non_negative(
+            weight, "A vertex's bone weights cannot be negative"
+        )
         if weight == 0:
             continue
         var bone = bones[slot]
-        if bone < 0 or bone >= len(palette):
-            raise Error("A vertex names a bone the skeleton does not have")
+        require_bone_index(bone, len(palette))
         for element in range(16):  # pragma: no branch
             summed[element] += palette[bone].elements[element] * weight
     var blended = Matrix4()
@@ -261,8 +305,7 @@ def bind_skeleton(
             bound at a scale of zero, which no later pose can measure
             against.
     """
-    if len(nodes) != len(placed):
-        raise Error("Binding needs one world matrix for every bone")
+    require_bone_matrices(len(nodes), len(placed))
     var bones = List[Bone]()
     for index in range(len(nodes)):  # pragma: no branch
         bones.append(Bone(nodes[index], Matrix4()))

@@ -23,7 +23,8 @@ authored in template centimeters. They are not a cited fascicle table.
     var d = head_nerve_distance(dims, VAGUS_NERVE, RIGHT, p)
 """
 
-from extensions.humanoid.side import RIGHT, BodySide
+from core.ordinal import ordinal_valid, ordinal_label, require_valid
+from extensions.humanoid.side import require_side, RIGHT, BodySide
 from extensions.humanoid.skeleton.head.frame import HeadMuscleDimensions
 from extensions.humanoid.skeleton.torso.bones.dimensions import (
     append_template_tube,
@@ -51,9 +52,7 @@ struct HeadNerve(Equatable, ImplicitlyCopyable, Writable):
 
     def is_valid(self) -> Bool:
         """Return True if this is a named nerve."""
-        if self.value < 0:
-            return False
-        return self.value <= FACIAL_NERVE.value
+        return ordinal_valid(self.value, FACIAL_NERVE.value)
 
 
 # On the midline.
@@ -76,8 +75,7 @@ def is_paired_head_nerve(part: HeadNerve) raises -> Bool:
     Raises:
         Error: If `part` is not named.
     """
-    if not part.is_valid():
-        raise Error("A head nerve must be a named nerve")
+    require_valid(part.is_valid(), "A head nerve must be a named nerve")
     return part != CERVICAL_SPINAL_CORD
 
 
@@ -98,9 +96,7 @@ def head_nerve_label(part: HeadNerve) -> String:
         "cervical plexus",
         "facial nerve",
     ]
-    if not part.is_valid():
-        return "head nerve"
-    return labels[part.value]
+    return ordinal_label(part.is_valid(), part.value, labels, "head nerve")
 
 
 def named_head_nerves() -> List[HeadNerve]:
@@ -135,8 +131,7 @@ def head_nerve_field(
     """
     dimensions.validate()
     var paired = is_paired_head_nerve(part)
-    if not side.is_valid():
-        raise Error("A head side must be RIGHT or LEFT")
+    require_side(side, "A head")
     var h = dimensions.head.copy()
     var f = h.frame
     var sweeps = List[Sweep]()

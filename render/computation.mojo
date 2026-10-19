@@ -38,6 +38,8 @@ filter are not ported. A shader's other uniforms are set on
 `programs[variable]` after `init`, which compiles the shaders.
 """
 
+from core.ordinal import index_in_count
+
 from materials.glsl import compile_shader_material
 from materials.nodes import (
     AT_RIGHT,
@@ -54,11 +56,12 @@ from materials.nodes import (
     has_output,
     run_nodes,
 )
+from math.utils import edge_index
 from math.vector2 import Vector2
 from math.vector3 import Vector3
 from postprocessing.shader_pass import SCREEN_VERTEX_SHADER
 from postprocessing.sampling import Untracked
-from render.framebuffer import FloatColor
+from render.framebuffer import FloatColor, TRANSPARENT_BLACK
 from render.texture_store import TextureId
 from render.texture import (
     CLAMP,
@@ -68,12 +71,28 @@ from render.texture import (
     Texture,
     Wrap,
     float_texture,
+    gradient_place,
     texture_grad_finite,
-    gradient_sample_coordinate,
 )
 from std.math import floor
 
 comptime Lanes = SIMD[DType.float32, 4]
+
+
+def require_computation_ready(programs: Int, variables: Int) raises:
+    """Refuse a computation that has not been initialized.
+
+    Nothing. The call returns when there is one program a variable.
+
+    Args:
+        programs: How many compiled programs the computation holds.
+        variables: How many variables it holds.
+
+    Raises:
+        Error: If `init` has not compiled the shaders.
+    """
+    if programs != variables:
+        raise Error("A computation must be initialized before it runs")
 
 
 def _wrapped(index: Int, size: Int, wrap: Int) -> Int:
@@ -87,7 +106,7 @@ def _wrapped(index: Int, size: Int, wrap: Int) -> Int:
         var period = 2 * size
         var kept = index % period
         return kept if kept < size else period - 1 - kept
-    return max(0, min(size - 1, index))
+    return edge_index(index, size)
 
 
 struct ComputeNodes(ImplicitlyCopyable, NodeSource):
@@ -208,16 +227,18 @@ struct ComputeNodes(ImplicitlyCopyable, NodeSource):
             The texel's four floats; transparent black for nonfinite inputs.
         """
         if not texture_grad_finite(u, v, dx, dy):
-            return FloatColor(0, 0, 0, 0)
-        return self.sample(
-            slot,
-            gradient_sample_coordinate(
-                u, Wrap(Int(self.wraps[unsafe_offset=slot * 2]))
-            ),
-            gradient_sample_coordinate(
-                v, Wrap(Int(self.wraps[unsafe_offset=slot * 2 + 1]))
-            ),
+            return TRANSPARENT_BLACK
+        var placed = gradient_place(
+            u,
+            v,
+            dx,
+            dy,
+            Wrap(Int(self.wraps[unsafe_offset=slot * 2])),
+            Wrap(Int(self.wraps[unsafe_offset=slot * 2 + 1])),
         )
+        # The same finite predicate above makes placement ready. Keep that
+        # check before reading the wrap pointers, including for empty backing.
+        return self.sample(slot, placed.u, placed.v)
 
     def fetch(self, slot: Int, x: Int, y: Int, level: Int) -> FloatColor:
         """Return a variable's texel by its column and row, wrapped by the
@@ -467,7 +488,7 @@ struct GPUComputationRenderer(Movable):
 
     def _check(self, variable: Int) raises:
         """Refuse a variable that is not there."""
-        if variable < 0 or variable >= len(self.variables):
+        if not index_in_count(variable, len(self.variables)):
             raise Error("A computation has no variable " + String(variable))
 
     def init(mut self) raises:
@@ -515,7 +536,7 @@ struct GPUComputationRenderer(Movable):
         var images = List[Float32]()
         var wraps = List[Int32]()
         for at in range(len(self.variables)):
-            images.extend(self.variables[at].images[self.current].copy())
+            images.extend(Span(self.variables[at].images[self.current]))
             wraps.append(Int32(self.variables[at].wrap_s.value))
             wraps.append(Int32(self.variables[at].wrap_t.value))
         return (images^, wraps^)
@@ -526,8 +547,7 @@ struct GPUComputationRenderer(Movable):
         Raises:
             Error: If `init` has not compiled the shaders.
         """
-        if len(self.programs) != len(self.variables):
-            raise Error("A computation must be initialized before it runs")
+        require_computation_ready(len(self.programs), len(self.variables))
         var packed = self.packed()
         var next = 1 - self.current
         for at in range(len(self.variables)):

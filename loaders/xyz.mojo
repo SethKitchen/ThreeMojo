@@ -25,6 +25,8 @@ makes a `color` attribute shorter than its `position` there.
 from core.buffer_attribute import BufferAttribute
 from core.buffer_geometry import COLOR, POSITION, BufferGeometry
 from loaders.js_number import js_parse_float
+from loaders.js_text import split_fields
+from loaders.text_number import file_line
 from render.srgb import srgb_to_linear
 from std.math import isnan
 from std.pathlib import Path
@@ -34,9 +36,7 @@ def _value(text: String, line: Int) raises -> Float64:
     """Return `parseFloat(text)`, refusing NaN."""
     var value = js_parse_float(text)
     if isnan(value):
-        raise Error(
-            "XYZ line " + String(line) + ": `" + text + "` is not a number"
-        )
+        raise Error(file_line("XYZ", line) + "`" + text + "` is not a number")
     return value
 
 
@@ -65,9 +65,7 @@ def parse_xyz(text: String) raises -> BufferGeometry:
         var line = String(String(raw).strip())
         if line.startswith("#"):
             continue
-        var values = List[String]()
-        for piece in line.split():
-            values.append(String(piece))
+        var values = split_fields(line)
         var count = len(values)
         if count == 3:
             plain += 1

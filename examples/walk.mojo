@@ -12,7 +12,12 @@ the walk and meshes its sculpt again, so the elbows, the knees and the
 hocks keep their shape as they bend. The planted feet stay on the floor.
 """
 
-from cameras.perspective_camera import PerspectiveCamera
+from tools._example_output import (
+    example_destination,
+    gallery_camera,
+    gallery_renderer,
+)
+
 from core.assets import Assets
 from core.object3d import Object3D
 from core.scene import Scene
@@ -34,9 +39,8 @@ from math.vector3 import Vector3
 from objects.mesh import Mesh
 from render.apng import encode
 from render.framebuffer import Color, Framebuffer
-from renderers.renderer import Renderer, available_workers
+from renderers.renderer import Renderer
 from std.pathlib import Path
-from std.sys import argv
 from units.si import DEGREE, METER, Angle, Length
 
 comptime DEFAULT_OUTPUT = "out/walk.png"
@@ -97,24 +101,22 @@ def frame_at(
             Color(221, 230, 242), Color(95, 90, 82), scene.add(sky^), 1.1
         )
     )
-    var camera = PerspectiveCamera(
-        Angle(32.0, DEGREE),
-        Float32(WIDTH) / Float32(HEIGHT),
-        Length(0.05, METER),
-        Length(30.0, METER),
+    var camera = gallery_camera(
+        WIDTH,
+        HEIGHT,
+        Vector3(2.6, 0.75, 0.6),
+        Vector3(0, 0.42, 0.0),
+        field_of_view=Angle(32.0, DEGREE),
+        near=Length(0.05, METER),
+        far=Length(30.0, METER),
     )
-    camera.place(Vector3(2.6, 0.75, 0.6), Vector3(0, 0.42, 0.0))
     scene.update()
     return renderer.render(scene, assets, camera)
 
 
 def main() raises:
-    var args = argv()
-    var destination = String(DEFAULT_OUTPUT)
-    if len(args) > 1:
-        destination = String(args[1])
-    var renderer = Renderer(WIDTH, HEIGHT, workers=available_workers())
-    renderer.set_background(Color(170, 190, 215))
+    var destination = example_destination(String(DEFAULT_OUTPUT))
+    var renderer = gallery_renderer(WIDTH, HEIGHT, Color(170, 190, 215))
     renderer.shadow_map_type = PCF_SOFT_SHADOW_MAP
     var wolf = create_animal(WOLF, animal_options(3, quality=MEDIUM))
     var frames = List[Framebuffer]()

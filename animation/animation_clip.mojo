@@ -43,10 +43,30 @@ action looping over it would divide by its length. A blend mode that is
 neither of the two.
 """
 
+from loaders.bytes import ascii_digit, ascii_letter
+from core.order import stable_rising_order
+from core.ordinal import ordinal_valid, require_valid, require_positive
+
 from animation.keyframe_track import KeyframeTrack, TrackTarget
 from core.user_data import UserData
-from std.math import isfinite
+from math.finite import require_finite, require_positive_finite
 from units.si import Duration, SECOND
+
+
+def require_frame_rate(fps: Float32) raises:
+    """Refuse a frame rate that is not a number above zero.
+
+    Nothing. The call returns when the rate is finite and above zero.
+
+    Args:
+        fps: Frames a second.
+
+    Raises:
+        Error: If the rate is not a number or is not above zero.
+    """
+    require_positive_finite(
+        Float64(fps), "A frame rate must be a number above zero"
+    )
 
 
 @fieldwise_init
@@ -58,7 +78,7 @@ struct AnimationBlendMode(Equatable, ImplicitlyCopyable, Writable):
 
     def is_valid(self) -> Bool:
         """Return True if this is one of the two blend modes there are."""
-        return self == NORMAL_BLEND_MODE or self == ADDITIVE_BLEND_MODE
+        return ordinal_valid(self.value, ADDITIVE_BLEND_MODE.value)
 
 
 # Mix by weight with the other actions, three.js's
@@ -67,6 +87,36 @@ comptime NORMAL_BLEND_MODE = AnimationBlendMode(0)
 # Add on top of what the normal actions make, three.js's
 # `AdditiveAnimationBlendMode`.
 comptime ADDITIVE_BLEND_MODE = AnimationBlendMode(1)
+
+
+def require_blend_mode(blend_mode: AnimationBlendMode) raises:
+    """Refuse a blend mode that is not one of the two named modes.
+
+    Nothing. The call returns when the mode is named.
+
+    Args:
+        blend_mode: The mode a clip uses.
+
+    Raises:
+        Error: If the mode is neither of the two.
+    """
+    require_valid(
+        blend_mode.is_valid(), "A clip needs a blend mode that exists"
+    )
+
+
+def require_clip_duration(runs: Float32) raises:
+    """Refuse a clip that lasts no time.
+
+    Nothing. The call returns when the length is above zero.
+
+    Args:
+        runs: The clip's length, in seconds.
+
+    Raises:
+        Error: If the length is zero or negative.
+    """
+    require_positive(runs, "A clip must last longer than no time")
 
 
 struct AnimationClip(Copyable, Movable):
@@ -110,17 +160,13 @@ struct AnimationClip(Copyable, Movable):
                 there is no duration and every track holds a single key,
                 which is a clip of no length.
         """
-        if not blend_mode.is_valid():
-            raise Error("A clip needs a blend mode that exists")
-        if len(tracks) == 0:
-            raise Error("A clip needs at least one track")
+        require_blend_mode(blend_mode)
+        require_positive(len(tracks), "A clip needs at least one track")
         var runs = _longest(tracks)
         if Bool(duration):
             runs = duration.value().to(SECOND)
-            if not isfinite(runs):
-                raise Error("A clip's duration must be a number")
-        if runs <= 0:
-            raise Error("A clip must last longer than no time")
+            require_finite(Float64(runs), "A clip's duration must be a number")
+        require_clip_duration(runs)
         self.name = name
         self.tracks = tracks^
         self.blend_mode = blend_mode
@@ -152,8 +198,7 @@ struct AnimationClip(Copyable, Movable):
                 leave a clip of no length.
         """
         var runs = _longest(self.tracks)
-        if runs <= 0:
-            raise Error("A clip must last longer than no time")
+        require_clip_duration(runs)
         self.length = runs
 
     def trim(mut self) raises:
@@ -225,14 +270,7 @@ def get_keyframe_order(times: List[Float32]) -> List[Int]:
         The key places, earliest first. Keys at one time keep the order
         they had, as JavaScript's sort keeps them.
     """
-    var order = List[Int]()
-    for index in range(len(times)):
-        # Insertion sort: stable, and a sequence has three keys.
-        var at = len(order)
-        while at > 0 and times[order[at - 1]] > times[index]:
-            at -= 1
-        order.insert(at, index)
-    return order^
+    return stable_rising_order(times)
 
 
 def sorted_array(
@@ -292,8 +330,7 @@ def create_from_morph_target_sequence(
         Error: If the sequence is empty or holds a target that is not a
             morph target, or the frame rate is not a number above zero.
     """
-    if not isfinite(fps) or fps <= 0:
-        raise Error("A frame rate must be a number above zero")
+    require_frame_rate(fps)
     var count = len(sequence)
     if count == 0:
         raise Error("A morph target sequence needs at least one target")
@@ -341,16 +378,15 @@ def morph_sequence_name(name: String) -> Optional[String]:
     """
     var bytes = name.as_bytes()
     var cut = len(bytes)
-    while cut > 0 and bytes[cut - 1] >= 48 and bytes[cut - 1] <= 57:
+    while cut > 0 and ascii_digit(Int(bytes[cut - 1])):
         cut -= 1
     if cut == len(bytes):
         return None
     for index in range(cut):
         var byte = bytes[index]
         var word = (
-            (byte >= 65 and byte <= 90)
-            or (byte >= 97 and byte <= 122)
-            or (byte >= 48 and byte <= 57)
+            ascii_letter(Int(byte))
+            or ascii_digit(Int(byte))
             or byte == 95
             or byte == 45
         )

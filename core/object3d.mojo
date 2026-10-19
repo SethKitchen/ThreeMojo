@@ -45,12 +45,20 @@ says which. The two act the same; the type is kept so a scene written to
 JSON reads back as it was. See `objects.group`.
 """
 
+from core.ordinal import ordinal_valid
+
 from core.layers import Layers
 from core.user_data import UserData
 from math.euler import XYZ, Euler, EulerOrder
-from math.matrix4 import Matrix4, scaling, translation
+from math.matrix4 import (
+    Matrix4,
+    column_major_matrix,
+    require_axis_extent,
+    scaling,
+    translation,
+)
 from math.quaternion import Quaternion
-from math.vector3 import Vector3
+from math.vector3 import Vector3, require_nonzero_scale
 from units.si import METER, Angle, Length
 
 
@@ -96,11 +104,7 @@ struct ObjectType(Equatable, ImplicitlyCopyable, Writable):
 
     def is_valid(self) -> Bool:
         """Return True if this is one of the three types there are."""
-        return (
-            self == OBJECT3D_TYPE
-            or self == GROUP_TYPE
-            or self == GYROSCOPE_TYPE
-        )
+        return ordinal_valid(self.value, GYROSCOPE_TYPE.value)
 
 
 comptime OBJECT3D_TYPE = ObjectType(0)
@@ -121,13 +125,10 @@ def scale_of(matrix: Matrix4) -> Vector3:
         The lengths of the first three columns. The x length is negative
         when the matrix mirrors, as in three.js.
     """
-    ref e = matrix.elements
-    var sx = Vector3(e[0], e[1], e[2]).length()
-    var sy = Vector3(e[4], e[5], e[6]).length()
-    var sz = Vector3(e[8], e[9], e[10]).length()
+    var scale = Vector3.from_matrix_scale(matrix)
     if matrix.determinant() < 0:
-        sx = -sx
-    return Vector3(sx, sy, sz)
+        scale.x = -scale.x
+    return scale
 
 
 def facing(
@@ -501,8 +502,9 @@ struct Object3D(ImplicitlyCopyable):
                 refuses and leaves the node as it was.
         """
         var scale = scale_of(matrix)
-        if scale.x * scale.y * scale.z == 0:
-            raise Error("A transform that flattens an axis has no rotation")
+        require_nonzero_scale(
+            scale, "A transform that flattens an axis has no rotation"
+        )
         ref e = matrix.elements
         var rotation = Matrix4()
         for row in range(3):  # pragma: no branch
@@ -536,3 +538,55 @@ struct Object3D(ImplicitlyCopyable):
         combined.premultiply(matrix)
         self.set_from_matrix(combined)
         self.matrix = combined^
+
+
+def _place_decomposed(
+    mut node: Object3D, matrix: Matrix4, flat_axis: String
+) raises:
+    """Set a node's position, rotation and scale from a matrix.
+
+    The split is `Matrix4.decompose`. Each column's length is a scale,
+    the first negated when the determinant is negative, and the rotation
+    is what remains. A zero axis length raises `flat_axis` before that
+    split, so the caller names the file.
+
+    Nothing. The node holds the three parts.
+
+    Args:
+        node: The node to set.
+        matrix: The transform relative to the node's parent.
+        flat_axis: The error when an axis has no length.
+
+    Raises:
+        Error: If an axis length is zero, an entry is not finite, or a
+            scale cannot fit in Float32.
+    """
+    var sx = matrix.column_length(0)
+    var sy = matrix.column_length(1)
+    var sz = matrix.column_length(2)
+    require_axis_extent(sx, sy, sz, flat_axis)
+    var position = Vector3(0, 0, 0)
+    var rotation = Quaternion.identity()
+    var scale = Vector3(0, 0, 0)
+    matrix.decompose(position, rotation, scale)
+    node.set_position(position.x, position.y, position.z)
+    node.set_quaternion(rotation)
+    node.set_scale(scale.x, scale.y, scale.z)
+
+
+def _place_from_column_major(
+    mut node: Object3D, elements: List[Float32], flat_axis: String
+) raises:
+    """Set a node from sixteen column-major numbers.
+
+    Nothing. The node holds the decomposed transform.
+
+    Args:
+        node: The node to set.
+        elements: Sixteen numbers, column by column.
+        flat_axis: The error when an axis has no length.
+
+    Raises:
+        Error: Everything `_place_decomposed` raises.
+    """
+    _place_decomposed(node, column_major_matrix(elements), flat_axis)

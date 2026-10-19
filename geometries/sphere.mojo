@@ -23,17 +23,18 @@ a box, where the four corners of a face deliberately agree with each other and
 disagree with the next face.
 """
 
-from core.buffer_attribute import BufferAttribute
-from core.buffer_geometry import (
-    BufferGeometry,
-    NORMAL,
-    POSITION,
-    SPHERE_GEOMETRY,
-    UV,
+from core.buffer_geometry import BufferGeometry, SPHERE_GEOMETRY
+from geometries.surface import (
+    indexed_surface,
+    record_grid_segments,
+    record_kind,
+    record_phi,
+    record_sweep,
+    require_positive_radius,
+    require_three_segments,
 )
-from core.user_data import UserData
 from std.math import cos, isfinite, pi, sin
-from units.si import Angle, Length, METER, RADIAN
+from units.si import Angle, Length, RADIAN
 
 
 def sphere(
@@ -70,10 +71,10 @@ def sphere(
         Error: If the radius is not positive, either segment count is too
             small to close a surface, or an angle is not finite.
     """
-    if radius.value <= 0:
-        raise Error("A sphere needs a positive radius")
-    if width_segments < 3:
-        raise Error("A sphere needs at least three segments around")
+    require_positive_radius(radius.value, "sphere")
+    require_three_segments(
+        width_segments, "A sphere needs at least three segments around"
+    )
     if height_segments < 2:
         raise Error("A sphere needs at least two segments from pole to pole")
     var phi0 = phi_start.to(RADIAN)
@@ -159,21 +160,10 @@ def sphere(
                 index.append(bottom_right)
 
     var geometry = BufferGeometry()
-    geometry.set_attribute(String(POSITION), BufferAttribute(data^, 3))
-    geometry.set_attribute(String(NORMAL), BufferAttribute(normals^, 3))
-    geometry.set_attribute(String(UV), BufferAttribute(uvs^, 2))
-    geometry.set_index(index^)
-    geometry.kind = SPHERE_GEOMETRY
-    geometry.parameters = UserData()
-    geometry.parameters.set_number("radius", Float64(radius.to(METER)))
-    geometry.parameters.set_number("widthSegments", Float64(width_segments))
-    geometry.parameters.set_number("heightSegments", Float64(height_segments))
-    geometry.parameters.set_number("phiStart", Float64(phi_start.to(RADIAN)))
-    geometry.parameters.set_number("phiLength", Float64(phi_length.to(RADIAN)))
-    geometry.parameters.set_number(
-        "thetaStart", Float64(theta_start.to(RADIAN))
-    )
-    geometry.parameters.set_number(
-        "thetaLength", Float64(theta_length.to(RADIAN))
-    )
+    indexed_surface(geometry, data^, normals^, uvs^, index^)
+    record_kind(geometry, SPHERE_GEOMETRY)
+    geometry.parameters.set_meters("radius", radius)
+    record_grid_segments(geometry, width_segments, height_segments)
+    record_phi(geometry, phi_start, phi_length)
+    record_sweep(geometry, theta_start, theta_length)
     return geometry^

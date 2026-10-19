@@ -29,6 +29,8 @@ when the bytes do not suffice or do not make sense. Each reader here
 raises an `Error` in the same places.
 """
 
+from core.binary import copy_bytes, little_endian_uint
+from math.utils import clamp
 from std.memory import bitcast
 
 # The low 32 bits of an `Int`.
@@ -38,6 +40,24 @@ comptime MASK32 = 0xFFFFFFFF
 comptime _L_BASE = 4096
 # The bytes the rANS coders read and write at a time.
 comptime _IO_BASE = 256
+
+
+def rans_precision_bits(symbol_bits: Int) -> Int:
+    """Return the rANS table precision, in bits.
+
+    Draco's `ComputeRAnsPrecisionFromUniqueSymbolsBitLength`. The answer
+    is `3 * symbol_bits / 2`, held from 12 to 20.
+
+    Error: Never.
+
+    Args:
+        symbol_bits: The bits of the widest symbol.
+
+    Returns:
+        The precision, in bits.
+
+    """
+    return clamp((3 * symbol_bits) // 2, 12, 20)
 
 
 def draco_require(ok: Bool, what: String) raises:
@@ -217,9 +237,7 @@ struct DracoBuffer(Copyable, Movable):
             Error: If fewer bytes are left.
         """
         self.need(size)
-        var value = 0
-        for k in range(size):
-            value |= Int(self.data[self.pos + k]) << (8 * k)
+        var value = little_endian_uint(self.data, self.pos, size)
         self.pos += size
         return value
 
@@ -305,9 +323,7 @@ struct DracoBuffer(Copyable, Movable):
             Error: If fewer bytes are left.
         """
         self.need(count)
-        var out = List[UInt8](capacity=count)
-        for k in range(count):
-            out.append(self.data[self.pos + k])
+        var out = copy_bytes(self.data, self.pos, count)
         self.pos += count
         return out^
 
@@ -450,7 +466,7 @@ struct RAnsSymbolDecoder(Copyable, Movable):
             symbol_bits: The bits of the widest symbol. The precision is
                 2 to the power `3 * symbol_bits / 2`, kept from 12 to 20.
         """
-        var bits = min(max((3 * symbol_bits) // 2, 12), 20)
+        var bits = rans_precision_bits(symbol_bits)
         self.precision = 1 << bits
         self.probabilities = List[Int]()
         self.starts = List[Int]()
@@ -522,9 +538,7 @@ struct RAnsSymbolDecoder(Copyable, Movable):
         var l_base = self.precision * 4
         draco_require(size > kind, "a rANS stream is too short")
         self.offset = size - 1 - kind
-        var state = 0
-        for k in range(kind + 1):  # pragma: no branch
-            state |= Int(self.coded[self.offset + k]) << (8 * k)
+        var state = little_endian_uint(self.coded, self.offset, kind + 1)
         var masks: List[Int] = [0x3F, 0x3FFF, 0x3FFFFF, 0x3FFFFFFF]
         self.state = (state & masks[kind]) + l_base
         draco_require(
@@ -665,9 +679,7 @@ struct RAnsBitDecoder(Copyable, Movable):
         var kind = last >> 6
         draco_require(kind < 3 and size > kind, "a bit stream is too short")
         self.offset = size - 1 - kind
-        var state = 0
-        for k in range(kind + 1):  # pragma: no branch
-            state |= Int(self.coded[self.offset + k]) << (8 * k)
+        var state = little_endian_uint(self.coded, self.offset, kind + 1)
         var masks: List[Int] = [0x3F, 0x3FFF, 0x3FFFFF]
         self.state = (state & masks[kind]) + _L_BASE
         draco_require(

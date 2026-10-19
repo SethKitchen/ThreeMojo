@@ -30,6 +30,7 @@ This is not a three.js port. See Extensions.
     var rig = humanoid_rig(spec, skin)
     var knee = rig.at(RIGHT_SHIN)
 """
+from core.ordinal import ordinal_valid, ordinal_label, require_valid
 
 from core.buffer_geometry import POSITION, BufferGeometry
 from extensions.humanoid.side import LEFT, RIGHT
@@ -38,7 +39,8 @@ from extensions.humanoid.skeleton.head.frame import head_muscle_dimensions
 from extensions.humanoid.skeleton.leg.assembly import assemble_leg
 from extensions.humanoid.skeleton.pelvis.assembly import assemble_pelvis
 from extensions.humanoid.spec import HumanoidSpec
-from math.vector3 import Vector3
+from math.utils import mix_delta
+from math.vector3 import Vector3, mix_delta3
 
 
 @fieldwise_init
@@ -54,7 +56,7 @@ struct Joint(Equatable, ImplicitlyCopyable, Writable):
 
     def is_valid(self) -> Bool:
         """Return True if this is a named joint."""
-        return self.value >= 0 and self.value < JOINT_COUNT
+        return ordinal_valid(self.value, JOINT_COUNT - 1)
 
     def side(self) -> Int:
         """Return plus one for a joint of the right side, minus one for
@@ -131,9 +133,21 @@ def joint_label(joint: Joint) -> String:
         "leftFoot",
         "leftToes",
     ]
-    if not joint.is_valid():
-        return "joint"
-    return names[joint.value]
+    return ordinal_label(joint.is_valid(), joint.value, names, "joint")
+
+
+def require_joint(joint: Joint) raises:
+    """Refuse a joint that is not named.
+
+    Nothing. The call returns when the joint is named.
+
+    Args:
+        joint: The joint.
+
+    Raises:
+        Error: If the joint is not named.
+    """
+    require_valid(joint.is_valid(), "A joint must be a named joint")
 
 
 def named_joints() -> List[Joint]:
@@ -160,8 +174,7 @@ def joint_parent(joint: Joint) raises -> Joint:
     Raises:
         Error: If `joint` is not named.
     """
-    if not joint.is_valid():
-        raise Error("A joint must be a named joint")
+    require_joint(joint)
     var parents: List[Int] = [
         0,
         0,
@@ -229,8 +242,7 @@ struct HumanoidRig(Copyable, Movable):
         Raises:
             Error: If `joint` is not named.
         """
-        if not joint.is_valid():
-            raise Error("A joint must be a named joint")
+        require_joint(joint)
         return self.joints[joint.value]
 
     def local(self, joint: Joint) raises -> Vector3:
@@ -314,8 +326,8 @@ def humanoid_rig(
     var atlas = head.centers[0]
     var hips = Vector3(0, 0, neck.z)
     joints[HIPS.value] = hips
-    joints[SPINE.value] = hips + (neck - hips) * Float32(1.0 / 3.0)
-    joints[CHEST.value] = hips + (neck - hips) * Float32(2.0 / 3.0)
+    joints[SPINE.value] = mix_delta3(hips, neck, Float32(1.0 / 3.0))
+    joints[CHEST.value] = mix_delta3(hips, neck, Float32(2.0 / 3.0))
     joints[NECK.value] = neck
     joints[HEAD.value] = atlas
     ends[HIPS.value] = joints[SPINE.value]
@@ -346,9 +358,9 @@ def humanoid_rig(
             if p.x * sign > 0 and p.y < ankle.y and p.z > tip.z:
                 tip = p
         var ball = Vector3(
-            ankle.x + (tip.x - ankle.x) * BALL_ALONG,
+            mix_delta(ankle.x, tip.x, BALL_ALONG),
             sole + BALL_RISE * cm,
-            ankle.z + (tip.z - ankle.z) * BALL_ALONG,
+            mix_delta(ankle.z, tip.z, BALL_ALONG),
         )
         joints[thigh] = pelvis.hip_center(side)
         joints[thigh + 1] = knee

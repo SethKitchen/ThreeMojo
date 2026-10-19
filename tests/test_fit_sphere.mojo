@@ -181,5 +181,62 @@ def test_the_fit_leaves_the_camera_alone_when_it_refuses() raises:
     assert_equal(camera.position.z, 9.0)
 
 
+def test_the_distance_refuses_finite_inputs_that_overflow() raises:
+    with assert_raises(contains="fit distance"):
+        _ = fit_distance(Length(3e38, METER), Angle(1, DEGREE))
+
+
+def test_the_fit_refuses_nonfinite_centers_without_changing_the_camera() raises:
+    for center in [
+        Vector3(nan[DType.float32](), 0, 0),
+        Vector3(0, inf[DType.float32](), 0),
+        Vector3(0, 0, -inf[DType.float32]()),
+    ]:
+        var camera = _camera(90)
+        camera.place(Vector3(7, 8, 9), Vector3(1, 2, 3))
+        with assert_raises(contains="center"):
+            _ = fit_sphere(camera, center, Length(1, METER), Vector3(0, 0, 1))
+        _assert_unchanged(camera)
+
+
+def _assert_unchanged(camera: PerspectiveCamera) raises:
+    assert_equal(camera.position.x, 7.0)
+    assert_equal(camera.position.y, 8.0)
+    assert_equal(camera.position.z, 9.0)
+    assert_equal(camera.target.x, 1.0)
+    assert_equal(camera.target.y, 2.0)
+    assert_equal(camera.target.z, 3.0)
+    assert_equal(camera.near.value, Float32(0.1))
+    assert_equal(camera.far.value, 100.0)
+
+
+def test_the_fit_checks_derived_values_before_changing_the_camera() raises:
+    var camera = _camera(90)
+    camera.place(Vector3(7, 8, 9), Vector3(1, 2, 3))
+    with assert_raises(contains="fit distance"):
+        _ = fit_sphere(
+            camera,
+            Vector3(0, 0, 0),
+            Length(2, METER),
+            Vector3(0, 0, 1),
+            margin=3e38,
+        )
+    _assert_unchanged(camera)
+    with assert_raises(contains="far plane"):
+        _ = fit_sphere(
+            camera, Vector3(0, 0, 0), Length(3e37, METER), Vector3(0, 0, 1)
+        )
+    _assert_unchanged(camera)
+    with assert_raises(contains="position"):
+        _ = fit_sphere(
+            camera,
+            Vector3(0, 0, 3e38),
+            Length(1e37, METER),
+            Vector3(0, 0, 1),
+            margin=10,
+        )
+    _assert_unchanged(camera)
+
+
 def main() raises:
     TestSuite.discover_tests[__functions_in_module()]().run()

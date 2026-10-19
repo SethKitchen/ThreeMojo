@@ -17,6 +17,7 @@ from geometries.box import box
 from geometries.plane import plane
 from lights.light import directional_light
 from materials.material import BASIC, Material
+from math.utils import glsl_sign
 from math.vector3 import Vector3
 from objects.mesh import Mesh
 from postprocessing.composer import (
@@ -36,7 +37,6 @@ from postprocessing.ssgi import (
     SssSettings,
     check_ssgi,
     check_sss,
-    glsl_sign,
     gtao_fast_acos,
     occluded_sectors,
     ssgi_composite,
@@ -76,9 +76,9 @@ def test_the_helpers_are_three_js_s() raises:
     assert_almost_equal(gtao_fast_acos(0), Float32(pi / 2), atol=1e-6)
     assert_almost_equal(gtao_fast_acos(-1), Float32(pi), atol=1e-6)
     assert_almost_equal(gtao_fast_acos(0.5), 1.0553, atol=1e-3)
-    assert_equal(glsl_sign(2), 1)
-    assert_equal(glsl_sign(-2), -1)
-    assert_equal(glsl_sign(0), 0)
+    assert_equal(glsl_sign(Float32(2)), Float32(1))
+    assert_equal(glsl_sign(Float32(-2)), Float32(-1))
+    assert_equal(glsl_sign(Float32(0)), Float32(0))
     assert_equal(occluded_sectors(0, 1), UInt32(0xFFFFFFFF))
     assert_equal(occluded_sectors(0.5, 0.25), UInt32(0xFF) << 16)
     assert_equal(occluded_sectors(0.3, 0), UInt32(0))

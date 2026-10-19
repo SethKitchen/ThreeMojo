@@ -906,7 +906,7 @@ A map's alpha cuts the surface out, as three.js's does. Its color is not read. G
 
 ### Depth packing
 
-A `DepthPacking` says how a `DEPTH` material writes its depth. A byte holds only 256 steps, so one gray keeps eight bits of the depth. The packings spread the window-space depth across two, three or four channels, eight bits each. `render/packing.mojo` holds the arithmetic, and both rasterizers call it.
+A `DepthPacking` says how a `DEPTH` material writes its depth. A byte holds only 256 steps, so one gray keeps eight bits of the depth. The packings spread the window-space depth across two, three or four channels, eight bits each. `render/packing.mojo` holds the arithmetic, and both rasterizers call it. `packed_normal` maps a unit normal into zero to one per axis.
 
 | Value | three.js | What the pixel holds |
 |---|---|---|

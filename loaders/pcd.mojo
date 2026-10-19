@@ -49,12 +49,19 @@ that is not valid or does not fill its declared size. three.js reads
 past most of these and yields `NaN`, or throws a `RangeError`.
 """
 
+from std.math import isfinite
+
+from core.binary import copy_byte_range, copy_bytes
 from core.buffer_attribute import BufferAttribute
+from core.search import first_match
+from loaders.bytes import ascii_space
+from loaders.js_text import split_fields
 from core.buffer_geometry import COLOR, NORMAL, POSITION, BufferGeometry
 from render.srgb import srgb_to_linear
-from std.math import floor, isfinite
+from std.math import floor
 from std.memory import bitcast
 from std.pathlib import Path
+from core.ordinal import require_valid, require_non_negative
 
 # The attribute `intensity` goes into.
 comptime INTENSITY = "intensity"
@@ -221,6 +228,39 @@ def decode_pcd_value(
     return Float64(value)
 
 
+def require_lzf_backref(at: Int, length: Int) raises:
+    """Refuse an LZF back reference that runs past the input.
+
+    Nothing. The call returns when a byte remains.
+
+    Args:
+        at: The next byte to read.
+        length: How many bytes the input has.
+
+    Raises:
+        Error: If the read is past the input.
+    """
+    if at >= length:
+        raise Error("PCD: LZF data ends inside a back reference")
+
+
+def require_lzf_room(used: Int, extra: Int, limit: Int) raises:
+    """Refuse an LZF expansion that would pass its declared size.
+
+    Nothing. The call returns when the run fits.
+
+    Args:
+        used: How many bytes are already written.
+        extra: How many bytes the next run would write.
+        limit: How many bytes the output may hold.
+
+    Raises:
+        Error: If the run would pass the declared size.
+    """
+    if used + extra > limit:
+        raise Error("PCD: LZF output is larger than its declared size")
+
+
 def decompress_lzf(data: List[UInt8], out_length: Int) raises -> List[UInt8]:
     """Expand LZF data, three.js's `decompressLZF`.
 
@@ -248,8 +288,7 @@ def decompress_lzf(data: List[UInt8], out_length: Int) raises -> List[UInt8]:
         at += 1
         if control < 32:
             var run = control + 1
-            if len(out) + run > out_length:
-                raise Error("PCD: LZF output is larger than its declared size")
+            require_lzf_room(len(out), run, out_length)
             if at + run > len(data):
                 raise Error("PCD: LZF data ends inside a run of literals")
             for _ in range(run):  # pragma: no branch
@@ -258,19 +297,17 @@ def decompress_lzf(data: List[UInt8], out_length: Int) raises -> List[UInt8]:
             continue
         var length = control >> 5
         var back = len(out) - ((control & 0x1F) << 8) - 1
-        if at >= len(data):
-            raise Error("PCD: LZF data ends inside a back reference")
+        require_lzf_backref(at, len(data))
         if length == 7:
             length += Int(data[at])
             at += 1
-            if at >= len(data):
-                raise Error("PCD: LZF data ends inside a back reference")
+            require_lzf_backref(at, len(data))
         back -= Int(data[at])
         at += 1
-        if len(out) + length + 2 > out_length:
-            raise Error("PCD: LZF output is larger than its declared size")
-        if back < 0:
-            raise Error("PCD: an LZF back reference before the start")
+        require_lzf_room(len(out), length + 2, out_length)
+        require_non_negative(
+            back, "PCD: an LZF back reference before the start"
+        )
         # A reference copies two bytes or more: the loop always runs.
         for _ in range(length + 2):  # pragma: no branch
             out.append(out[back])
@@ -336,10 +373,7 @@ struct PcdHeader(Copyable, Movable):
         Returns:
             Its position in `fields`, or -1.
         """
-        for index in range(len(self.fields)):
-            if self.fields[index] == name:
-                return index
-        return -1
+        return first_match(self.fields, name)
 
     def check(self) raises:
         """Refuse a header this loader cannot read.
@@ -349,8 +383,9 @@ struct PcdHeader(Copyable, Movable):
                 number of fields, a type has not the size given, a count
                 is below one, or the points are negative.
         """
-        if not self.data.is_valid():
-            raise Error("PCD: a data format that is not valid")
+        require_valid(
+            self.data.is_valid(), "PCD: a data format that is not valid"
+        )
         var count = len(self.fields)
         if len(self.sizes) != count:
             raise Error("PCD: `SIZE` must give one size a field")
@@ -372,8 +407,7 @@ struct PcdHeader(Copyable, Movable):
                     + self.fields[index]
                     + "` has a count below one"
                 )
-        if self.points < 0:
-            raise Error("PCD: a negative number of points")
+        require_non_negative(self.points, "PCD: a negative number of points")
 
 
 struct PcdModel(Movable):
@@ -406,14 +440,6 @@ struct PcdModel(Movable):
         self.labels = labels^
 
 
-def _fields(line: String) -> List[String]:
-    """Return a line split on white space."""
-    var fields = List[String]()
-    for piece in line.split():
-        fields.append(String(piece))
-    return fields^
-
-
 def _whole(text: String, what: String) raises -> Int:
     """Return a whole number of a header line.
 
@@ -435,11 +461,6 @@ def _whole(text: String, what: String) raises -> Int:
     if value < 0:
         raise Error("PCD: `" + what + "` is negative: " + text)
     return value
-
-
-def _is_space(byte: UInt8) -> Bool:
-    """Return True for the white space a regular expression's `\\s` takes."""
-    return byte == 32 or (byte >= 9 and byte <= 13)
 
 
 def parse_pcd_header(bytes: List[UInt8]) raises -> PcdHeader:
@@ -468,13 +489,13 @@ def parse_pcd_header(bytes: List[UInt8]) raises -> PcdHeader:
             at += 1
             continue
         var text = String(
-            from_utf8_lossy=Span(List[UInt8](bytes[line_start:at]))
+            from_utf8_lossy=Span(copy_byte_range(bytes, line_start, at))
         )
         var hash = text.find("#")
         if hash >= 0:
             var head = String(text[byte=:hash])
             text = head^
-        var fields = _fields(text)
+        var fields = split_fields(text)
         if len(fields) > 0:
             var keyword = fields[0].upper()
             if keyword.startswith("DATA"):
@@ -505,20 +526,19 @@ def parse_pcd_header(bytes: List[UInt8]) raises -> PcdHeader:
                 points_given = True
         at += 1
         line_start = at
-    if data_line < 0:
-        raise Error("PCD: the file has no `DATA` line")
+    require_non_negative(data_line, "PCD: the file has no `DATA` line")
     # `DATA`, one white space, the format word, one white space.
     var word = data_line + 4
-    if word >= len(bytes) or not _is_space(bytes[word]):
+    if word >= len(bytes) or not ascii_space(bytes[word]):
         raise Error("PCD: `DATA` must be followed by a space and a format")
     word += 1
     var word_end = word
-    while word_end < len(bytes) and not _is_space(bytes[word_end]):
+    while word_end < len(bytes) and not ascii_space(bytes[word_end]):
         word_end += 1
     if word_end >= len(bytes):
         raise Error("PCD: the file ends on its `DATA` line")
     header.data = pcd_data_format(
-        String(from_utf8_lossy=Span(List[UInt8](bytes[word:word_end])))
+        String(from_utf8_lossy=Span(copy_byte_range(bytes, word, word_end)))
     )
     header.header_length = word_end + 1
     if not points_given:
@@ -745,7 +765,7 @@ def parse_pcd(bytes: List[UInt8]) raises -> PcdModel:
     var start = header.header_length
     if header.data == PCD_ASCII:
         var text = String(
-            from_utf8_lossy=Span(List[UInt8](bytes[start : len(bytes)]))
+            from_utf8_lossy=Span(copy_byte_range(bytes, start, len(bytes)))
         )
         # A split yields at least one piece: the loop always runs.
         for raw in text.split("\n"):  # pragma: no branch
@@ -761,7 +781,7 @@ def parse_pcd(bytes: List[UInt8]) raises -> PcdModel:
                 + String(header.points)
                 + " points"
             )
-        data = List[UInt8](bytes[start:end])
+        data = copy_byte_range(bytes, start, end)
     else:
         if start + 8 > len(bytes):
             raise Error("PCD: the file ends before its compressed sizes")
@@ -769,9 +789,7 @@ def parse_pcd(bytes: List[UInt8]) raises -> PcdModel:
         var size = Int(decode_pcd_value(bytes, start + 4, PCD_UNSIGNED, 4))
         if start + 8 + packed > len(bytes):
             raise Error("PCD: the file ends inside its compressed data")
-        data = decompress_lzf(
-            List[UInt8](bytes[start + 8 : start + 8 + packed]), size
-        )
+        data = decompress_lzf(copy_bytes(bytes, start + 8, packed), size)
         if len(data) < header.points * header.row_size:
             raise Error(
                 "PCD: the compressed data is too small for its "
@@ -789,7 +807,7 @@ def parse_pcd(bytes: List[UInt8]) raises -> PcdModel:
     var normal_names: List[String] = ["normal_x", "normal_y", "normal_z"]
     for point in range(points):
         if header.data == PCD_ASCII:
-            reader.values = _fields(lines[point])
+            reader.values = split_fields(lines[point])
             if len(reader.values) < header.row_size:
                 raise Error(
                     "PCD point "

@@ -48,6 +48,7 @@ round under `REVERSED_DEPTH`.
 """
 
 from math.matrix4 import Matrix4
+from math.norm import squared_length2
 from math.vector3 import Vector3
 from render.raster_state import (
     DepthMode,
@@ -145,7 +146,7 @@ def splat_alpha(splat: ProjectedSplat, x: Int, y: Int) -> Float32:
     var dy = splat.y - (Float32(y) + 0.5)
     var u = (dx * splat.axis_x + dy * splat.axis_y) / splat.scale1
     var v = (dy * splat.axis_x - dx * splat.axis_y) / splat.scale2
-    var r2 = u * u + v * v
+    var r2 = squared_length2[DType.float32](u, v)
     if r2 > SPLAT_RADIUS_SQ:
         return 0
     return exp(r2 * -0.5) * splat.a
@@ -238,7 +239,7 @@ def _dot(a: Vector3, b: Vector3) -> Float32:
     Returns:
         The dot product.
     """
-    return a.x * b.x + a.y * b.y + a.z * b.z
+    return a.dot(b)
 
 
 def project_splat(
@@ -318,7 +319,9 @@ def project_splat(
     var alpha_scale = sqrt(max(det_base / max(det, 0.000001), 0))
     var half_trace = (a + c) * 0.5
     var half_gap = (a - c) * 0.5
-    var radius = sqrt(max(half_gap * half_gap + b * b, 0.0000001))
+    var radius = sqrt(
+        max(squared_length2[DType.float32](half_gap, b), 0.0000001)
+    )
     var lambda1 = max(half_trace + radius, 0.0000001)
     var lambda2 = max(half_trace - radius, 0.0000001)
     # three.js keeps the axis at (1, 0) for a radius of 0.00001 or less,

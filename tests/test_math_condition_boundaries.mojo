@@ -6,7 +6,7 @@
 from cameras.orthographic_camera import OrthographicCamera
 from math.projection import orthographic, perspective
 from math.vector2 import Vector2
-from math.vector3 import Vector3
+from math.vector3 import Vector3, reciprocal_unit
 from std.math import inf, pi
 from std.memory import bitcast
 from std.testing import (
@@ -54,6 +54,34 @@ def test_vector3_scaled_axis_angles_distinguish_each_nonzero_component() raises:
     assert_almost_equal(
         z.angle_to(Vector3(0, 0, -1e30)).value, Float32(pi), atol=1e-6
     )
+
+
+def test_reciprocal_unit_preserves_ordinary_reciprocal_rounding() raises:
+    var value = Vector3(2, -3, 6)
+    var got = reciprocal_unit(value)
+    # The exact length is seven. Keep the documented reciprocal multiply,
+    # which can round differently from a component divided by the length.
+    var inverse = Float32(1) / Float32(7)
+    assert_equal(got.x, Float32(2) * inverse)
+    assert_equal(got.y, Float32(-3) * inverse)
+    assert_equal(got.z, Float32(6) * inverse)
+    assert_equal(value.x, Float32(2))
+    assert_equal(value.y, Float32(-3))
+    assert_equal(value.z, Float32(6))
+
+
+def test_reciprocal_unit_preserves_zero_and_extreme_finite_directions() raises:
+    var zero = reciprocal_unit(Vector3(0, 0, 0))
+    assert_equal(zero.x, Float32(0))
+    assert_equal(zero.y, Float32(0))
+    assert_equal(zero.z, Float32(0))
+    # The squared lengths overflow or underflow, but the 1:-2:2 direction
+    # has the independent unit vector (1/3, -2/3, 2/3).
+    for scale in [Float32(1e30), Float32(1e-30)]:
+        var got = reciprocal_unit(Vector3(scale, -2 * scale, 2 * scale))
+        assert_almost_equal(got.x, Float32(1) / 3, atol=1e-7)
+        assert_almost_equal(got.y, Float32(-2) / 3, atol=1e-7)
+        assert_almost_equal(got.z, Float32(2) / 3, atol=1e-7)
 
 
 def test_perspective_isolates_each_underflowing_screen_scale() raises:

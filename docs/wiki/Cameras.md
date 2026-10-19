@@ -261,3 +261,7 @@ The two contracts differ, because `look_at` carries a facing into the parent's f
 ## Example
 
 `examples/ortho.mojo` orbits an attached `OrthographicCamera` around a cube. `examples/photo.mojo` does the same with a perspective camera and a decoded PNG.
+
+`fit_distance` and `fit_sphere` refuse a result outside the finite coordinate
+range. `fit_sphere` also refuses a nonfinite center. It checks the derived
+distance, far plane and position before changing the camera.

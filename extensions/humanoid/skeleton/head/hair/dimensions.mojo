@@ -19,15 +19,17 @@ centimeters. They are not a cited hair density table; see
     var d = head_hair_distance(dims, SCALP_HAIR, RIGHT, p)
 """
 
+from core.ordinal import ordinal_valid, require_valid
 from extensions.humanoid.genome import BROW_THICKNESS, HAIR_CURL, HAIR_LENGTH
 from extensions.humanoid.sex import MALE
-from extensions.humanoid.side import RIGHT, BodySide
+from extensions.humanoid.side import require_side, RIGHT, BodySide
 from extensions.humanoid.skeleton.head.frame import HeadMuscleDimensions
 from extensions.humanoid.skeleton.head.hair.styles import (
     GROWN,
     PIXIE,
     MOHAWK,
     HairStyle,
+    require_hair_style,
 )
 from extensions.humanoid.skeleton.head.skin.dimensions import HeadSkinField
 from extensions.humanoid.skeleton.field import (
@@ -41,6 +43,7 @@ from extensions.humanoid.skeleton.torso.sweep import (
     Sweep,
     SweepField,
 )
+from math.utils import clamp, mix_delta
 from math.vector3 import Vector3
 from std.math import exp, max, min
 
@@ -62,9 +65,7 @@ struct HeadHair(Equatable, ImplicitlyCopyable, Writable):
 
     def is_valid(self) -> Bool:
         """Return True if this is a named group."""
-        if self.value < 0:
-            return False
-        return self.value <= EYEBROWS.value
+        return ordinal_valid(self.value, EYEBROWS.value)
 
 
 # Across the midline.
@@ -113,8 +114,9 @@ def is_paired_head_hair(part: HeadHair) raises -> Bool:
     Raises:
         Error: If `part` is not named.
     """
-    if not part.is_valid():
-        raise Error("A head hair group must be the scalp's or the eyebrows")
+    require_valid(
+        part.is_valid(), "A head hair group must be the scalp's or the eyebrows"
+    )
     return part == EYEBROWS
 
 
@@ -140,8 +142,7 @@ def head_hair_field(
         return head_hair_field(
             dimensions, part, side, HeadSkinField(dimensions)
         )
-    if not side.is_valid():
-        raise Error("A head side must be RIGHT or LEFT")
+    require_side(side, "A head")
     return _scalp_field(dimensions)
 
 
@@ -169,8 +170,7 @@ def head_hair_field(
     """
     dimensions.validate()
     var paired = is_paired_head_hair(part)
-    if not side.is_valid():
-        raise Error("A head side must be RIGHT or LEFT")
+    require_side(side, "A head")
     if not paired:
         return _scalp_field(dimensions)
     var h = dimensions.head.copy()
@@ -363,8 +363,7 @@ struct HairShape(Copyable, DistanceField, Movable):
             Error: If `dimensions.validate` refuses the copy, if `part`
                 is not named, or if `side` or `style` is not valid.
         """
-        if not style.is_valid():
-            raise Error("A hair style must be a named style")
+        require_hair_style(style)
         self.group = head_hair_field(dimensions, part, side, skin)
         self.scalp = not is_paired_head_hair(part)
         self.skin = skin.copy()
@@ -470,8 +469,8 @@ struct HairShape(Copyable, DistanceField, Movable):
         if not self.scalp:
             return self.group.distance(point)
         var up = (point.y - self.ears) / (self.crown - self.ears)
-        up = max(Float32(0), min(Float32(1), up))
-        var depth = self.side_depth + (self.crown_depth - self.side_depth) * up
+        up = clamp(up, 0, 1)
+        var depth = mix_delta(self.side_depth, self.crown_depth, up)
         var skin = self.skin.distance(point)
         var d = max(skin - depth, -skin - self.bury)
         d = smax(d, self.nape - point.y, self.soft)

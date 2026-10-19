@@ -58,12 +58,14 @@ from animation.keyframe_track import (
     node_target,
 )
 from core.object3d import NodeId
+from core.ordinal import require_positive
 from loaders.fbx_tree import NO_FBX_NODE, FbxDocument, object_name
 from math.euler import ZYX, Euler, EulerOrder
-from math.quaternion import Quaternion
+from math.quaternion import Quaternion, append_quaternion
 from math.vector3 import Vector3
 from std.math import isnan, pi
-from units.si import RADIAN, SECOND, Angle, Duration
+from units.measure import angle_radians
+from units.si import SECOND, Angle, Duration
 
 # How many FBX ticks make one second: three.js's
 # `convertFBXTimeToSeconds`.
@@ -171,14 +173,14 @@ struct _Entry(Copyable, Movable):
 
 def _connections(
     document: FbxDocument,
-) raises -> Tuple[Dict[Int, List[_Link]], Dict[Int, List[_Link]]]:
-    """Return each object's parents and children, in file order, as
+    mut parents: Dict[Int, List[_Link]],
+    mut children: Dict[Int, List[_Link]],
+) raises:
+    """Fill each object's parents and children, in file order, as
     three.js's `parseConnections` joins them."""
-    var parents = Dict[Int, List[_Link]]()
-    var children = Dict[Int, List[_Link]]()
     var connections = document.child(document.root(), "Connections")
     if connections == NO_FBX_NODE:
-        return (parents^, children^)
+        return
     for link in document.children_named(connections, "C"):
         var child = document.integer(link, 1)
         var parent = document.integer(link, 2)
@@ -191,7 +193,6 @@ def _connections(
         if parent not in children:
             children[parent] = List[_Link]()
         children[parent].append(_Link(child, relation))
-    return (parents^, children^)
 
 
 def _links(table: Dict[Int, List[_Link]], id: Int) raises -> List[_Link]:
@@ -223,8 +224,9 @@ def _first_parent(parents: Dict[Int, List[_Link]], id: Int) raises -> Int:
         Error: If it has none, where three.js reads past the end.
     """
     var found = _links(parents, id)
-    if len(found) == 0:
-        raise Error("FBX: a blend shape channel is not connected to a model")
+    require_positive(
+        len(found), "FBX: a blend shape channel is not connected to a model"
+    )
     return found[0].id
 
 
@@ -286,9 +288,9 @@ def read_fbx_animations(
     var clips = List[AnimationClip]()
     if len(document.children_named(objects, "AnimationCurve")) == 0:
         return clips^
-    var joined = _connections(document)
-    ref parents = joined[0]
-    ref children = joined[1]
+    var parents = Dict[Int, List[_Link]]()
+    var children = Dict[Int, List[_Link]]()
+    _connections(document, parents, children)
     var nodes = Dict[Int, _CurveNode]()
     for node in document.children_named(objects, "AnimationCurveNode"):
         var attr = object_name(document.string(node, 1), document.format)
@@ -494,7 +496,7 @@ def _vector_track(
     var times = List[Float64]()
     for axis in ["x", "y", "z"]:  # pragma: no branch
         if axis in curves.curves:
-            times.extend(curves.curves[axis].times.copy())
+            times.extend(Span(curves.curves[axis].times))
     sort(times)
     var unique = List[Float64]()
     for at in times:  # pragma: no branch
@@ -524,7 +526,7 @@ def _vector_track(
 
 def _radians(degrees: Float64) -> Angle:
     """Return an angle in degrees as three.js's `degToRad` turns it."""
-    return Angle(Float32(degrees * pi / 180), RADIAN)
+    return angle_radians(degrees * pi / 180)
 
 
 def _turn(
@@ -532,9 +534,9 @@ def _turn(
 ) raises -> Quaternion:
     """Return the rotation three angles in radians make in an order."""
     return Euler(
-        Angle(Float32(x), RADIAN),
-        Angle(Float32(y), RADIAN),
-        Angle(Float32(z), RADIAN),
+        angle_radians(x),
+        angle_radians(y),
+        angle_radians(z),
         order,
     ).to_quaternion()
 
@@ -631,11 +633,8 @@ def _rotation_track(
         turned.multiply(post)
         # Unroll: the same rotation on the side of the key before.
         if _flips(key, previous, turned):
-            turned = Quaternion(-turned.x, -turned.y, -turned.z, -turned.w)
-        values.append(turned.x)
-        values.append(turned.y)
-        values.append(turned.z)
-        values.append(turned.w)
+            turned = -turned
+        append_quaternion(values, turned)
         previous = turned
     return KeyframeTrack(
         node_target(model.node, QUATERNION), _durations(times), values^

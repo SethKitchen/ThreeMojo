@@ -23,22 +23,27 @@ from extensions.animals.coat import (
     EyeLook,
     Paint,
     Palette,
+    channel_gain,
     grizzle,
     mix3,
+    body_region,
     palette_of,
+    shade_swatch,
     srgb,
 )
-from extensions.sdf.ids import SurfacePart
 from extensions.animals.parts import JAW
 from extensions.sdf.sculpt import ell_y
 from extensions.animals.kit import (
+    side_sign,
+    digitigrade_fore,
+    digitigrade_hind,
     EyeSpec,
     eye_frame_of,
     sculpt_eye_socket,
     is_limb,
     mirrored_blob,
 )
-from extensions.animals.noise import fbm3
+from extensions.animals.noise import centered_fbm
 from extensions.animals.options import AnimalOptions, AnimalRandom
 from extensions.animals.rig import Rig, quadruped_bones, tail_chain
 from extensions.sdf.field import SdfModel
@@ -60,6 +65,9 @@ from extensions.animals.warp import (
     legs_warp,
     scale_about_warp,
 )
+from math.norm import squared_length2
+from math.smoothstep import hermite_fade
+from math.utils import clamp_unit
 from std.math import cos, pi, sin
 from extensions.sdf.distance import ellipsoid_estimate, round_cone_estimate
 
@@ -235,8 +243,8 @@ def rabbit_eye(t: Traits) -> EyeSpec:
 
 
 def _rear_w(z: Float64) -> Float64:
-    var u = min(1.0, max(0.0, (0.03 - z) / 0.12))
-    return u * u * (3.0 - 2.0 * u)
+    var u = clamp((0.03 - z) / 0.12, 0.0, 1.0)
+    return hermite_fade(u)
 
 
 def _rl(p: V3) -> V3:
@@ -552,7 +560,7 @@ def rabbit_sculpt(mut m: SdfModel, rig: Rig, t: Traits) raises:
     # EARS: long, spoon-shaped and thin, the cup facing out and forward.
     var w = t.get("earWidth")
     for side in [String("L"), String("R")]:  # pragma: no branch
-        var s = 1.0 if side == "L" else -1.0
+        var s = side_sign(side)
         var base = rig.j("earBase" + side)
         var tip = rig.j("earTip" + side)
         var f = _ear_frame(t, s)
@@ -598,22 +606,14 @@ def rabbit_sculpt(mut m: SdfModel, rig: Rig, t: Traits) raises:
     # LEGS: short slim forelegs; long hind legs with a big haunch, a slim
     # shank and a long flat foot.
     for side in [String("L"), String("R")]:  # pragma: no branch
-        var s = 1.0 if side == "L" else -1.0
-        var lat = V3(s, 0, 0)
-        var sc = rig.j("scapTop" + side)
-        var sh = rig.j("shoulder" + side)
-        var e = rig.j("elbow" + side)
-        var wr = rig.j("wrist" + side)
-        var mc = rig.j("mcp" + side)
-        var toe = rig.j("ftoe" + side)
-        var hum = rig.bone("humerus" + side)
-        var rad = rig.bone("radius" + side)
-        var meta = rig.bone("metacarpus" + side)
-        var fpaw = rig.bone("fpaw" + side)
+        var s = side_sign(side)
+        var lat, sc, sh, e, wr, mc, toe, scap, hum, rad, meta, fpaw = (
+            digitigrade_fore(rig, side, s)
+        )
         _ = ell_y(
             m,
             "scapmuscle",
-            rig.bone("scapula" + side),
+            scap,
             lerp(sc, sh, 0.5) + on_side(V3(0.004, 0, 0), s),
             sh - sc,
             V3(0.012, 0.038, 0.026),
@@ -670,15 +670,9 @@ def rabbit_sculpt(mut m: SdfModel, rig: Rig, t: Traits) raises:
                 k=0.003,
             )
 
-        var hp = rig.j("hip" + side)
-        var kn = rig.j("knee" + side)
-        var hk = rig.j("hock" + side)
-        var mt = rig.j("mtp" + side)
-        var tt = rig.j("htoe" + side)
-        var fem = rig.bone("femur" + side)
-        var tib = rig.bone("tibia" + side)
-        var mtar = rig.bone("metatarsus" + side)
-        var hpaw = rig.bone("hpaw" + side)
+        var hp, kn, hk, mt, tt, fem, tib, mtar, hpaw = digitigrade_hind(
+            rig, side
+        )
         _ = ell_y(
             m,
             "haunch",
@@ -962,11 +956,7 @@ def rabbit_palette(t: Traits) raises -> Palette:
             or name == "claw"
         )
         if not fixed:
-            c = V3(
-                c.x * (1.0 + 0.16 * k + l),
-                c.y * (1.0 + 0.04 * k + l),
-                c.z * (1.0 - 0.16 * k + l),
-            )
+            c = shade_swatch(c, k, l, 0.16, 0.04, -0.16)
         out.set(name, c)
     out.set("dutchWhite", srgb(0xF2F0EA))
     return out^
@@ -998,19 +988,6 @@ def _dutch(p: V3, bone: String, region: Int) -> Float64:
     if _hind_foot(bone):
         d = min(d, -0.072 - p.z)
     return d
-
-
-def _region(part: SurfacePart, bone: String) -> Int:
-    # 0 torso, 1 neck, 2 head, 4 tail, 5 ear.
-    var head = part == JAW or bone == "head" or bone == "snout"
-    var neck = bone == "neck1" or bone == "neck2"
-    if head:
-        return 2
-    if bone.startswith("ear"):
-        return 5
-    if bone.startswith("tail"):
-        return 4
-    return 1 if neck else 0
 
 
 def _jaw_dist(h: V3) -> Float64:
@@ -1050,7 +1027,7 @@ def rabbit_paint(
     var ag = _agouti(color)
     var h = p - HEAD_O
     var c: V3
-    var region = _region(s.part, bone)
+    var region = body_region(s.part, bone)
     if region == 2:
         if tag == "nose":
             var leather = h.z > 0.0355 and h.y > -0.024
@@ -1101,7 +1078,7 @@ def rabbit_paint(
         var face = normalize(cross(f[3], f[1]))
         var along = dot(q, f[1]) / (0.5 * f[4])
         var across = dot(q, x_axis) / (0.0158 * t.get("earWidth"))
-        var rim = 1.0 - (along * along + across * across) ** 0.5
+        var rim = 1.0 - squared_length2[DType.float64](along, across) ** 0.5
         var inner = (
             (0.0 if tag == "earbase" else 1.0)
             * smoothstep(0.1, 0.5, dot(n, face))
@@ -1130,7 +1107,7 @@ def rabbit_paint(
         )
         ag *= 0.3
     else:
-        var up = clamp(n.y, -1.0, 1.0)
+        var up = clamp_unit(n.y)
         c = mix3(pal.get("low"), pal.get("flank"), smoothstep(-0.3, 0.3, up))
         c = mix3(c, pal.get("back"), smoothstep(0.3, 0.9, up))
         c = mix3(
@@ -1180,14 +1157,10 @@ def rabbit_paint(
     var dutch = t.get("dutch", 0.0) > 0.0
     if dutch:
         var d = _dutch(p, bone, region)
-        d += (fbm3(p * 900.0, 2) - 0.5) * 0.004
+        d += (centered_fbm(p, 900.0, 2)) * 0.004
         c = mix3(c, pal.get("dutchWhite"), smoothstep(0.0008, -0.0008, d))
         ag *= smoothstep(-0.001, 0.001, d)
-    var cv = fbm3(p * 40.0, 3) - 0.5
-    c = V3(
-        c.x * (1.0 + 0.14 * cv),
-        c.y * (1.0 + 0.12 * cv),
-        c.z * (1.0 + 0.09 * cv),
-    )
+    var cv = centered_fbm(p, 40.0, 3)
+    c = channel_gain(c, cv, 0.14, 0.12, 0.09)
     c = grizzle(c, p, 700.0, 0.06 + 0.22 * clamp(ag, 0.0, 1.0))
     return Paint(c, FUR)

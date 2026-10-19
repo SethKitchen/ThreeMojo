@@ -34,6 +34,16 @@ and prolog order are checked. DTD contents and namespace constraints are
 not validated. Encoding declarations do not change the input encoding.
 """
 
+from core.ordinal import index_in_count
+
+from core.search import first_match
+from loaders.bytes import (
+    ascii_digit,
+    ascii_letter,
+    bytes_match,
+    hex_digit_value,
+    space_tab_line,
+)
 from loaders.utf8 import append_utf8
 
 # What `XmlDocument.child` returns when there is no such child, and what
@@ -93,7 +103,7 @@ struct XmlDocument(Movable):
 
     def _check(self, element: Int) raises:
         """Refuse an index that names no element."""
-        if element < 0 or element >= len(self.elements):
+        if not index_in_count(element, len(self.elements)):
             raise Error("XML: no element at index " + String(element))
 
     def name(self, element: Int) raises -> String:
@@ -140,10 +150,7 @@ struct XmlDocument(Movable):
             Error: If the index names no element.
         """
         self._check(element)
-        for name in self.elements[element].attribute_names:
-            if name == key:
-                return True
-        return False
+        return first_match(self.elements[element].attribute_names, key) >= 0
 
     def attribute(
         self, element: Int, key: String, default: String = ""
@@ -164,10 +171,10 @@ struct XmlDocument(Movable):
         """
         self._check(element)
         ref found = self.elements[element]
-        for index in range(len(found.attribute_names)):
-            if found.attribute_names[index] == key:
-                return found.attribute_values[index]
-        return default
+        var index = first_match(found.attribute_names, key)
+        if index < 0:
+            return default
+        return found.attribute_values[index]
 
     def children(self, element: Int) raises -> List[Int]:
         """Return an element's child elements.
@@ -284,7 +291,7 @@ def parse_xml(text: String) raises -> XmlDocument:
     var raw = text.as_bytes()
     for index in range(len(raw)):
         var byte = raw[index]
-        var control = byte < 32 and not _is_space(Int(byte))
+        var control = byte < 32 and not space_tab_line(Int(byte))
         var noncharacter = (
             byte == 0xEF
             and index + 2 < len(raw)
@@ -316,9 +323,8 @@ def _is_name_start(point: Int) -> Bool:
     """Check XML 1.0 fifth edition NameStartChar, production [4]."""
     return (
         point == 58
-        or (point >= 65 and point <= 90)
+        or ascii_letter(point)
         or point == 95
-        or (point >= 97 and point <= 122)
         or (point >= 0xC0 and point <= 0xD6)
         or (point >= 0xD8 and point <= 0xF6)
         or (point >= 0xF8 and point <= 0x2FF)
@@ -340,21 +346,11 @@ def _is_name_char(point: Int) -> Bool:
         _is_name_start(point)
         or point == 45
         or point == 46
-        or (point >= 48 and point <= 57)
+        or ascii_digit(point)
         or point == 0xB7
         or (point >= 0x300 and point <= 0x36F)
         or (point >= 0x203F and point <= 0x2040)
     )
-
-
-def _is_letter(byte: Int) -> Bool:
-    """Return True for an ASCII letter in an encoding name."""
-    return (byte >= 65 and byte <= 90) or (byte >= 97 and byte <= 122)
-
-
-def _is_digit(byte: Int) -> Bool:
-    """Return True for an ASCII digit."""
-    return byte >= 48 and byte <= 57
 
 
 def _is_pubid_char(byte: Int) -> Bool:
@@ -363,15 +359,10 @@ def _is_pubid_char(byte: Int) -> Bool:
         byte == 32
         or byte == 13
         or byte == 10
-        or _is_letter(byte)
-        or _is_digit(byte)
+        or ascii_letter(byte)
+        or ascii_digit(byte)
         or chr(byte) in String("-'()+,./:=?;!*#@$_%")
     )
-
-
-def _is_space(byte: Int) -> Bool:
-    """Return True for the four bytes XML counts as white space."""
-    return byte == 32 or byte == 9 or byte == 10 or byte == 13
 
 
 def _is_character(point: Int) -> Bool:
@@ -413,18 +404,12 @@ struct _Parser(Movable):
 
     def starts_with(self, word: String) -> Bool:
         """Return True if the bytes at the cursor spell `word`."""
-        var expected = word.as_bytes()
-        if self.at + len(expected) > len(self.bytes):
-            return False
-        for offset in range(len(expected)):  # pragma: no branch
-            if self.bytes[self.at + offset] != expected[offset]:
-                return False
-        return True
+        return bytes_match(Span(self.bytes), self.at, len(self.bytes), word)
 
     def skip_space(mut self) -> Bool:
         """Step over white space and return True if there was any."""
         var start = self.at
-        while _is_space(self.peek()):
+        while space_tab_line(self.peek()):
             self.at += 1
         return self.at > start
 
@@ -530,7 +515,7 @@ struct _Parser(Movable):
         var digits = version.as_bytes()
         var index = 2
         while index < len(digits):
-            if not _is_digit(Int(digits[index])):
+            if not ascii_digit(Int(digits[index])):
                 raise Error(self.where() + "invalid XML version")
             index += 1
         var field_start = self.at
@@ -539,16 +524,16 @@ struct _Parser(Movable):
             self.at = field_start
             var encoding = self.declaration_value("encoding")
             var bytes = encoding.as_bytes()
-            if len(bytes) == 0:
+            if len(bytes) <= 0:
                 raise Error(self.where() + "empty encoding name")
-            if not _is_letter(Int(bytes[0])):
+            if not ascii_letter(Int(bytes[0])):
                 raise Error(self.where() + "invalid encoding name")
             var index = 0
             while index < len(bytes):
                 var byte = bytes[index]
                 if not (
-                    _is_letter(Int(byte))
-                    or _is_digit(Int(byte))
+                    ascii_letter(Int(byte))
+                    or ascii_digit(Int(byte))
                     or byte == 46
                     or byte == 95
                     or byte == 45
@@ -698,6 +683,34 @@ struct _Parser(Movable):
             self.at = start
             raise Error(self.where() + "an entity that is not known: " + word)
 
+    def _malformed_reference(mut self, start: Int) raises:
+        """Refuse a character reference whose digits are not digits.
+
+        Nothing. This call always raises.
+
+        Args:
+            start: Where the reference began.
+
+        Raises:
+            Error: Always. The reference is malformed.
+        """
+        self.at = start
+        raise Error(self.where() + "a character reference is malformed")
+
+    def _unnamed_reference(mut self, start: Int) raises:
+        """Refuse a character reference that names no character.
+
+        Nothing. This call always raises.
+
+        Args:
+            start: Where the reference began.
+
+        Raises:
+            Error: Always. The reference names nothing.
+        """
+        self.at = start
+        raise Error(self.where() + "a character reference names nothing")
+
     def code_point(mut self, word: String, start: Int) raises -> Int:
         """Return the character a `#nn` or `#xhh` reference names.
 
@@ -719,29 +732,18 @@ struct _Parser(Movable):
         var digits = word.as_bytes()
         var point = 0
         for index in range(first, len(digits)):
-            var byte = Int(digits[index])
-            var digit = -1
-            if byte >= 48 and byte <= 57:
-                digit = byte - 48
-            elif radix == 16 and byte >= 65 and byte <= 70:
-                digit = byte - 65 + 10
-            elif radix == 16 and byte >= 97 and byte <= 102:
-                digit = byte - 97 + 10
+            var digit = hex_digit_value(Int(digits[index]))
+            if radix != 16 and digit > 9:
+                digit = -1
             if digit < 0:
-                self.at = start
-                raise Error(self.where() + "a character reference is malformed")
+                self._malformed_reference(start)
             if point > (0x10FFFF - digit) // radix:
-                self.at = start
-                raise Error(
-                    self.where() + "a character reference names nothing"
-                )
+                self._unnamed_reference(start)
             point = point * radix + digit
         if first == len(digits):
-            self.at = start
-            raise Error(self.where() + "a character reference is malformed")
+            self._malformed_reference(start)
         if not _is_character(point):
-            self.at = start
-            raise Error(self.where() + "a character reference names nothing")
+            self._unnamed_reference(start)
         return point
 
     def attribute_value(mut self) raises -> String:
@@ -763,7 +765,7 @@ struct _Parser(Movable):
                 raise Error(self.where() + "'<' inside an attribute value")
             if byte == 38:
                 self.reference(out)
-            elif _is_space(byte):
+            elif space_tab_line(byte):
                 out.append(32)
                 self.at += 1
                 if byte == 13 and self.peek() == 10:
@@ -817,11 +819,8 @@ struct _Parser(Movable):
             self.expect(61, "'=' after an attribute name")
             _ = self.skip_space()
             var value = self.attribute_value()
-            for seen in element.attribute_names:
-                if seen == key:
-                    raise Error(
-                        self.where() + "an attribute given twice: " + key
-                    )
+            if first_match(element.attribute_names, key) >= 0:
+                raise Error(self.where() + "an attribute given twice: " + key)
             element.attribute_names.append(key^)
             element.attribute_values.append(value^)
         document.elements.append(element^)

@@ -62,6 +62,11 @@ the last row and column of blocks hang off the edge; the texels past the
 edge are decoded and dropped, as a GPU stores and never shows them.
 """
 
+from core.ordinal import index_in_count
+from core.ordinal import (
+    ordinal_valid,
+)
+
 from render.bptc import BptcTables, bc6h_block, bc7_block
 from render.etc import (
     EtcTables,
@@ -83,6 +88,7 @@ from render.texture import (
     Texture,
     Wrap,
     float_texture,
+    require_texture_size,
 )
 
 # The most bytes a decode may produce: one gibibyte, which is a 16384 by
@@ -109,7 +115,7 @@ struct CompressedFormat(Equatable, ImplicitlyCopyable, Writable):
     def is_valid(self) -> Bool:
         """Return True if this is one of the twenty-three formats there
         are."""
-        return self.value >= 0 and self.value <= 22
+        return ordinal_valid(self.value, 22)
 
     def is_pvrtc(self) -> Bool:
         """Return True for the four PVRTC1 formats, which `render.pvrtc`
@@ -125,7 +131,7 @@ struct CompressedFormat(Equatable, ImplicitlyCopyable, Writable):
     def is_s3tc(self) -> Bool:
         """Return True for BC1, BC2 and BC3, the formats `decode_s3tc`
         reads."""
-        return self.value >= 0 and self.value <= 3
+        return ordinal_valid(self.value, 3)
 
     def is_float(self) -> Bool:
         """Return True if a byte cannot hold this format's texels, so it
@@ -649,8 +655,7 @@ def _check_payload(
             the named ones, or the payload's length is not the block
             grid's.
     """
-    if width <= 0 or height <= 0:
-        raise Error("Texture dimensions must be positive")
+    require_texture_size(width, height)
     if not format.is_valid():
         raise Error(
             "A compressed format must be one of the named formats, not "
@@ -989,9 +994,9 @@ struct CompressedImage(Movable):
             Error: If there is no such face or level, and everything
                 `compressed_texture` raises.
         """
-        if face < 0 or face >= self.faces:
+        if not index_in_count(face, self.faces):
             raise Error("This image has no face " + String(face))
-        if level < 0 or level >= self.levels:
+        if not index_in_count(level, self.levels):
             raise Error("This image has no level " + String(level))
         return compressed_texture(
             self.level_width(level),

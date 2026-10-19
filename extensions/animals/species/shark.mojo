@@ -39,8 +39,8 @@ from extensions.animals.parts import (
     JAW,
     TEETH,
 )
-from extensions.animals.kit import EyeSpec
-from extensions.animals.noise import cells3, fbm3
+from extensions.animals.kit import EyeSpec, side_sign
+from extensions.animals.noise import cells3, offset_fbm
 from extensions.animals.options import (
     ADULT,
     ANY_AGE,
@@ -57,17 +57,22 @@ from extensions.animals.species.swimmer_rig import (
     spine_name,
     swimmer_bones,
 )
-from extensions.animals.traits import Traits, pick_sex
+from extensions.animals.traits import Traits, pick_sex, require_color_variant
 from extensions.sdf.vector import (
     V3,
     clamp,
     cross,
     dot,
     length,
+    mix,
     normalize,
     smoothstep,
 )
 from extensions.animals.warp import scale_about_warp
+from math.norm import squared_length2
+from math.smoothstep import hermite_fade
+from math.sine import fraction
+from math.utils import edge_index
 from std.math import cos, exp, floor, pi, pow, sin, sqrt
 
 # The shark's head origin moves with the variant, so the eye is placed
@@ -414,8 +419,8 @@ struct _Geo(Movable):
     def wk(self, u: Float64) -> Float64:
         var t1 = clamp((u - 0.08) / 0.14, 0.0, 1.0)
         var t2 = clamp((u - 0.66) / 0.12, 0.0, 1.0)
-        var s1 = t1 * t1 * (3.0 - 2.0 * t1)
-        var s2 = t2 * t2 * (3.0 - 2.0 * t2)
+        var s1 = hermite_fade(t1)
+        var s2 = hermite_fade(t2)
         return 0.95 - 0.11 * s1 + 0.09 * s2
 
     def surf_x(self, u: Float64, y: Float64) -> Float64:
@@ -443,22 +448,20 @@ struct _Geo(Movable):
 
     def lip_y(self, u: Float64) -> Float64:
         var t = clamp((u - self.u_f) / (self.u_c - self.u_f), 0.0, 1.0)
-        return (
-            self.y_f
-            + (self.y_c - self.y_f) * pow(t, 0.7)
-            - self.smile * 0.012 * self.tl * sin(pi * t)
-        )
+        return mix(
+            self.y_f, self.y_c, pow(t, 0.7)
+        ) - self.smile * 0.012 * self.tl * sin(pi * t)
 
     def lip_point(
         self, t: Float64, s: Float64, inset: Float64, dy: Float64 = 0.0
     ) -> V3:
-        var u = self.u_f + (self.u_c - self.u_f) * pow(t, 0.75)
+        var u = mix(self.u_f, self.u_c, pow(t, 0.75))
         var y = self.lip_y(u) + dy
         return V3(s * self.surf_x(u, y) * inset, y, self.z(u))
 
     def pick_parent(self, u: Float64) -> String:
         var i = Int(floor((u - self.occ) / (self.pc - self.occ) * 12.0))
-        return spine_name(max(0, min(11, i)))
+        return spine_name(edge_index(i, 12))
 
     def bone_at(self, u: Float64) -> String:
         return String("head") if u < self.occ else self.pick_parent(u)
@@ -509,8 +512,7 @@ def shark_traits(mut r: AnimalRandom, options: AnimalOptions) raises -> Traits:
     """
     var variant = WHITE
     if options.variant.value >= 0:
-        if options.variant.value >= 2:
-            raise Error("The species has no such color variant")
+        require_color_variant(options.variant.value, 2)
         variant = options.variant.value
     var sex = pick_sex(options.sex, r)
     var age = options.age
@@ -782,13 +784,13 @@ def _taper_fin(
     # slabs of the outline shrunk toward the root, smoothly united: an
     # airfoil that thins toward its trailing edge.
     var stretch = along_a != 0.0 or along_b != 0.0
-    var al = sqrt(along_a * along_a + along_b * along_b)
+    var al = sqrt(squared_length2[DType.float64](along_a, along_b))
     var ex = along_a / al if stretch else 0.0
     var ey = along_b / al if stretch else 0.0
     for i in range(7):  # pragma: no branch
         var f = Float64(i) / 6.0
         var sc = 1.0 - 0.72 * f
-        var th = t_edge + (t_root - t_edge) * pow(f, 1.2)
+        var th = mix(t_edge, t_root, pow(f, 1.2))
         var pts = List[Float64](capacity=len(poly))
         # The fin tables are literal outlines.
         for j in range(len(poly) // 2):
@@ -896,8 +898,9 @@ def _caudal_edge(
     # Its two callers ask for nine and six points.
     for i in range(1, n + 1):
         var f = Float64(i) / Float64(n)
-        var x = a.x + (b.x - a.x) * f
-        var y = a.y + (b.y - a.y) * f
+        var along = a.lerp(b, f)
+        var x = along.x
+        var y = along.y
         var s = sag * sin(pi * f)
         var notch = 0.0
         if from_tip and g.c_notch > 0.0:
@@ -1054,7 +1057,7 @@ def shark_sculpt(mut m: SdfModel, rig: Rig, t: Traits) raises:
 
     # PAIRED FINS: stiff hydrofoils, and the claspers of males.
     for side in [String("L"), String("R")]:  # pragma: no branch
-        var s = 1.0 if side == "L" else -1.0
+        var s = side_sign(side)
         var b = rig.j("pecBase" + side)
         var pd = _pec_dir(g.p_abduct, g.p_droop)
         var sp = V3(pd.x * s, pd.y, pd.z)
@@ -1158,7 +1161,7 @@ def shark_sculpt(mut m: SdfModel, rig: Rig, t: Traits) raises:
         k=0.002 * tl,
         carve=True,
     )
-    var cav_u = g.u_f + (g.u_c - g.u_f) * 0.55
+    var cav_u = mix(g.u_f, g.u_c, 0.55)
     var cav_c = V3(0.0, g.lip_y(cav_u) + 0.004 * tl, g.z(cav_u))
     var cav_r = V3(g.hw(cav_u) * 0.68, 0.014 * tl, (g.u_c - g.u_f) * 0.62 * tl)
     _ = m.ell("mouth", head, cav_c, cav_r, k=0.003 * tl, carve=True)
@@ -1206,11 +1209,11 @@ def shark_sculpt(mut m: SdfModel, rig: Rig, t: Traits) raises:
             var i1 = len(g.d1_poly) // 2 - 2
             var f = Float64(i1 - i0) * nt
             var j = min(i1 - 1, i0 + Int(floor(f)))
-            var fr = f - floor(f)
+            var fr = fraction(f)
             var pa = g.d1_poly[j * 2]
             var pb = g.d1_poly[j * 2 + 1]
-            var a = pa + (g.d1_poly[j * 2 + 2] - pa) * fr
-            var b = (pb + (g.d1_poly[j * 2 + 3] - pb) * fr) * g.dorsal_k
+            var a = mix(pa, g.d1_poly[j * 2 + 2], fr)
+            var b = mix(pb, g.d1_poly[j * 2 + 3], fr) * g.dorsal_k
             var uu = g.d1_u + a
             var y = g.top(min(uu, g.pc)) - 0.004 * tl + b * tl
             _ = m.sphere(
@@ -1423,8 +1426,8 @@ def _lerp_table(tbl: List[Float64], u: Float64) -> Float64:
     for i in range(1, n):
         if u <= tbl[i * 2]:
             var t = (u - tbl[i * 2 - 2]) / (tbl[i * 2] - tbl[i * 2 - 2])
-            var s = t * t * (3.0 - 2.0 * t)
-            return tbl[i * 2 - 1] + (tbl[i * 2 + 1] - tbl[i * 2 - 1]) * s
+            var s = hermite_fade(t)
+            return mix(tbl[i * 2 - 1], tbl[i * 2 + 1], s)
     return tbl[n * 2 - 1]
 
 
@@ -1456,11 +1459,11 @@ def _seg_dist(
     # The distance from a point to a segment, and where along it.
     var ex = bx - ax
     var ey = by - ay
-    var l2 = ex * ex + ey * ey
+    var l2 = squared_length2[DType.float64](ex, ey)
     var t = clamp(((px - ax) * ex + (py - ay) * ey) / max(l2, 1e-18), 0.0, 1.0)
     var dx = px - ax - ex * t
     var dy = py - ay - ey * t
-    return (sqrt(dx * dx + dy * dy), t)
+    return (sqrt(squared_length2[DType.float64](dx, dy)), t)
 
 
 def _line_dist(
@@ -1474,7 +1477,7 @@ def _line_dist(
         var r = _seg_dist(
             px, py, pts[i * 2], pts[i * 2 + 1], pts[i * 2 + 2], pts[i * 2 + 3]
         )
-        best = min(best, r[0] - (w[i] + (w[i + 1] - w[i]) * r[1]))
+        best = min(best, r[0] - mix(w[i], w[i + 1], r[1]))
     return best
 
 
@@ -1636,31 +1639,24 @@ def shark_paint(
         var lip = abs(p.y - g.lip_y(clamp(u, g.u_f, g.u_c)))
         if lip < 0.0022 * tl:
             return Paint(mix3(back * 0.22, pal.get("mouth"), 0.25), SKIN)
-    var m1 = (
-        fbm3(V3(p.x * 6.0 / tl + ox, p.y * 6.0 / tl, p.z * 6.0 / tl + oy), 3)
-        - 0.5
+    var m1 = offset_fbm(
+        V3(p.x * 6.0 / tl + ox, p.y * 6.0 / tl, p.z * 6.0 / tl + oy), 3
     )
-    var m2 = (
-        fbm3(
-            V3(
-                p.x * 22.0 / tl + oy,
-                p.y * 22.0 / tl + 4.1,
-                p.z * 22.0 / tl + ox,
-            ),
-            3,
-        )
-        - 0.5
+    var m2 = offset_fbm(
+        V3(
+            p.x * 22.0 / tl + oy,
+            p.y * 22.0 / tl + 4.1,
+            p.z * 22.0 / tl + ox,
+        ),
+        3,
     )
-    var m3 = (
-        fbm3(
-            V3(
-                p.x * 90.0 / tl + 7.7,
-                p.y * 90.0 / tl + ox,
-                p.z * 90.0 / tl + oy,
-            ),
-            2,
-        )
-        - 0.5
+    var m3 = offset_fbm(
+        V3(
+            p.x * 90.0 / tl + 7.7,
+            p.y * 90.0 / tl + ox,
+            p.z * 90.0 / tl + oy,
+        ),
+        2,
     )
     var up = smoothstep(-0.6, 1.0, e * 0.8 + n.y * 0.45)
     var c = mix3(flank, back, up)
@@ -1668,7 +1664,7 @@ def shark_paint(
     # at three scales.
     var wq = (
         (
-            fbm3(
+            offset_fbm(
                 V3(
                     p.x * 9.0 / tl + ox,
                     p.y * 9.0 / tl + 2.3,
@@ -1676,7 +1672,6 @@ def shark_paint(
                 ),
                 2,
             )
-            - 0.5
         )
         * 0.06
         * tl
@@ -1687,7 +1682,7 @@ def shark_paint(
     var rag = rag_k * (
         rag_a
         * (
-            fbm3(
+            offset_fbm(
                 V3(
                     q.x * 14.0 / tl + 3.1 + ox,
                     q.y * 14.0 / tl + oy,
@@ -1695,13 +1690,12 @@ def shark_paint(
                 ),
                 3,
             )
-            - 0.5
         )
         * 2.0
         + rag_a
         * 0.8
         * (
-            fbm3(
+            offset_fbm(
                 V3(
                     q.x * 38.0 / tl + oy,
                     q.y * 38.0 / tl + 1.7,
@@ -1709,12 +1703,11 @@ def shark_paint(
                 ),
                 3,
             )
-            - 0.5
         )
         + rag_a
         * 0.45
         * (
-            fbm3(
+            offset_fbm(
                 V3(
                     q.x * 95.0 / tl + 5.3,
                     q.y * 95.0 / tl + ox,
@@ -1722,7 +1715,6 @@ def shark_paint(
                 ),
                 2,
             )
-            - 0.5
         )
     )
     var b_shift = t.get("bndShift", 0.0)
@@ -1741,7 +1733,7 @@ def shark_paint(
         var belly_fin = fin_paint[2]
         mark = fin_paint[1]
         c = mix3(c, fin_paint[0], w_fin)
-        belly = belly + (belly_fin - belly) * w_fin
+        belly = mix(belly, belly_fin, w_fin)
         fin = w_fin > 0.5
     if not fin:
         # A thin shadow round the eye: the black eye stands out of the gray.
@@ -1776,16 +1768,13 @@ def shark_paint(
         if white:
             # A few small dark dots along the upper lip, faint flecks on
             # the back.
-            var m4 = (
-                fbm3(
-                    V3(
-                        p.x * 160.0 / tl + oy,
-                        p.y * 160.0 / tl + 2.9,
-                        p.z * 160.0 / tl + ox,
-                    ),
-                    2,
-                )
-                - 0.5
+            var m4 = offset_fbm(
+                V3(
+                    p.x * 160.0 / tl + oy,
+                    p.y * 160.0 / tl + 2.9,
+                    p.z * 160.0 / tl + ox,
+                ),
+                2,
             )
             var lipz = (
                 (1.0 - smoothstep(0.07, 0.1, u))

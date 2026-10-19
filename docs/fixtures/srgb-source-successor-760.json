@@ -1,0 +1,33 @@
+{
+  "schema_version": 1,
+  "issue": 760,
+  "scope": "Reviewed whole-file source successor with unchanged accepted sRGB words. Source comparison only; no new Node runtime execution.",
+  "source": "loaders/js_number.mojo",
+  "before_source_commit": "0ad03120447c3b01fbdfa545f37debfbcd1d23bc",
+  "before_source_sha256": "286770b03443ffd560185d6b543a50d9938d5cf6d548cf615b6ebe41d1ef5101",
+  "after_source_commit": "62fb44a754d6468aaf0c9efe59351424174ea545",
+  "after_source_sha256": "9d7d0dc7f0a7c526881e469ed2b7e918fbcfb8b27258641631515b6893c5905e",
+  "word_count": 256,
+  "word_encoding": "Unsigned 64-bit words in table order, eight big-endian bytes per word.",
+  "accepted_words_sha256": "86d793b05db766373a4f83920a752c31a7042749ed6d9f7ca3af917841dc595b",
+  "historical_runtime_report": "docs/fixtures/runtime-2026-10-03.json",
+  "historical_runtime_report_sha256": "c45b8ee4c2d08d1d7486985e1c9460d2b037e1816dc04571ccf192260f93494b",
+  "historical_runtime_entry": "srgb",
+  "historical_runtime_mode": "verify_accepted",
+  "historical_accepted_words_sha256": "86d793b05db766373a4f83920a752c31a7042749ed6d9f7ca3af917841dc595b",
+  "historical_generated_words_sha256": "86d793b05db766373a4f83920a752c31a7042749ed6d9f7ca3af917841dc595b",
+  "comparison": "The complete _SRGB_TO_LINEAR declaration and all 256 words are byte-identical between the exact before and after source files. The current word digest matches both accepted and generated word digests in the preserved srgb entry.",
+  "unchanged": [
+    "Generator source and SHA-256",
+    "Recorded Node, V8, dependency and pow-flag pins",
+    "Historical runtime observations",
+    "Historical generator-version uncertainty",
+    "assets/js_number/v8.json and its separate snapshot provenance"
+  ],
+  "limits": [
+    "The source comparison does not qualify unrelated numeric parser or extracted helper behavior.",
+    "The original generation environment remains partly unknown.",
+    "The separate v8.json number-format snapshot was not regenerated.",
+    "The default-pow diagnostic is not an accepted baseline."
+  ]
+}

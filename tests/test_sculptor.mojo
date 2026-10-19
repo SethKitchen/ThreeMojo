@@ -2793,5 +2793,15 @@ def test_a_brush_whose_edges_fit_changes_no_topology() raises:
         _ = sculptor.stroke_from_ray(scene, assets, _down(), Length(1.0, METER))
 
 
+def test_a_point_matches_when_every_component_matches() raises:
+    var origin = Point3(0, 0, 0)
+    assert_true(origin == Point3(0, 0, 0))
+    assert_false(origin != Point3(0, 0, 0))
+    assert_false(origin == Point3(1, 0, 0))
+    assert_true(origin != Point3(1, 0, 0))
+    assert_false(Point3(0, 1, 0) == origin)
+    assert_false(Point3(0, 0, 1) == origin)
+
+
 def main() raises:
     TestSuite.discover_tests[__functions_in_module()]().run()

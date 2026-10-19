@@ -10,7 +10,6 @@ from extensions.humanoid.sex import FEMALE, MALE, Sex
 from extensions.humanoid.side import LEFT, RIGHT, BodySide
 from extensions.humanoid.spec import MAX_STATURE, MIN_STATURE, HumanoidSpec
 from extensions.humanoid.skeleton.field import (
-    clamp_unit,
     empty_bounds,
     sd_ellipse_segment,
     sd_ellipsoid,
@@ -19,7 +18,6 @@ from extensions.humanoid.skeleton.field import (
 )
 from extensions.humanoid.skeleton.isosurface import (
     _axis_cells,
-    _clamp01,
     _clip_tetrahedron,
     _emit_triangle,
     _lerp_zero,
@@ -60,7 +58,8 @@ from extensions.humanoid.skeleton.leg.femur.mass import (
     femur_mass_from_dimensions,
     femur_occupancy,
 )
-from math.vector3 import Vector3
+from math.utils import clamp, clamp_unit
+from math.vector3 import Vector3, centroid
 from std.math import inf, nan
 from std.testing import (
     TestSuite,
@@ -310,6 +309,12 @@ def test_clamp_unit_holds_the_acos_domain() raises:
     assert_equal(clamp_unit(Float32(0.25)), Float32(0.25))
 
 
+def test_clamp_holds_the_unit_interval() raises:
+    assert_equal(clamp(Float32(-0.2), 0, 1), Float32(0))
+    assert_equal(clamp(Float32(1.2), 0, 1), Float32(1))
+    assert_equal(clamp(Float32(0.4), 0, 1), Float32(0.4))
+
+
 def test_lerp_zero_covers_midpoint_and_clamps() raises:
     var a = Vector3(0, 0, 0)
     var b = Vector3(1, 0, 0)
@@ -321,12 +326,6 @@ def test_lerp_zero_covers_midpoint_and_clamps() raises:
     assert_equal(lo.x, Float32(0))
     var hi = _lerp_zero(a, b, 2, 1)
     assert_equal(hi.x, Float32(1))
-
-
-def test_clamp01_holds_the_unit_interval() raises:
-    assert_equal(_clamp01(Float32(-0.2)), Float32(0))
-    assert_equal(_clamp01(Float32(1.2)), Float32(1))
-    assert_equal(_clamp01(Float32(0.4)), Float32(0.4))
 
 
 def test_grid_counts_honor_the_floor() raises:
@@ -848,12 +847,8 @@ def _max_positive_centroid(
         var a = pos.vector3(ia)
         var b = pos.vector3(ib)
         var c = pos.vector3(ic)
-        var centroid = Vector3(
-            (a.x + b.x + c.x) * Float32(1.0 / 3.0),
-            (a.y + b.y + c.y) * Float32(1.0 / 3.0),
-            (a.z + b.z + c.z) * Float32(1.0 / 3.0),
-        )
-        var d = field.distance(centroid)
+        var center = centroid(a, b, c)
+        var d = field.distance(center)
         if d > worst:
             worst = d
     return worst

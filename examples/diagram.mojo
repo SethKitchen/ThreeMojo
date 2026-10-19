@@ -12,6 +12,14 @@ This program fills those paths into a frame so the figure can be a PNG.
 The pair turns one whole turn.
 """
 
+from tools._example_output import (
+    example_destination,
+    fill_and_key,
+    gallery_camera,
+    write_example,
+)
+from loaders.bytes import ascii_digit
+
 from cameras.perspective_camera import PerspectiveCamera
 from core.assets import Assets
 from core.clock import Clock
@@ -19,19 +27,15 @@ from core.object3d import NodeId, Object3D
 from core.scene import Scene
 from geometries.box import cube
 from geometries.polyhedron import icosahedron
-from lights.light import ambient_light, directional_light
 from loaders.svg import parse_path_data
 from loaders.svg_path import SvgVector
 from materials.material import Material
 from math.vector3 import Vector3
 from objects.mesh import Mesh
-from render.apng import encode
 from render.framebuffer import Color, Framebuffer
 from renderers.svg_renderer import SVGRenderer, SvgImage
 from std.math import abs, ceil, floor
-from std.pathlib import Path
-from std.sys import argv, stderr
-from units.si import DEGREE, METER, Angle, Length, MILLISECOND
+from units.si import DEGREE, METER, Angle, Length
 
 comptime DEFAULT_OUTPUT = "out/svg.png"
 comptime WIDTH = 240
@@ -89,7 +93,7 @@ def _rgb(style: String) -> Color:
         if c == 45:
             negative = True
             continue
-        if c >= 48 and c <= 57:
+        if ascii_digit(Int(c)):
             current = current * 10 + Int(c) - 48
             seen = True
             continue
@@ -305,10 +309,7 @@ def frame_at(
 
 
 def main() raises:
-    var args = argv()
-    var destination = String(DEFAULT_OUTPUT)
-    if len(args) > 1:
-        destination = String(args[1])
+    var destination = example_destination(String(DEFAULT_OUTPUT))
 
     var svg = SVGRenderer(WIDTH, HEIGHT)
     svg.set_clear_color(Color(16, 18, 26))
@@ -329,20 +330,26 @@ def main() raises:
     right.set_position(0.72, -0.18, 0.12)
     scene.add_mesh(Mesh(block, blue, scene.attach(right^, pivot)))
 
-    var lamp = Object3D()
-    lamp.set_position(1.5, 2.1, 1.7)
-    scene.add_light(ambient_light(Color(78, 84, 98), 1))
-    scene.add_light(
-        directional_light(Color(255, 246, 232), scene.add(lamp^), 1.7)
+    fill_and_key(
+        scene,
+        1.5,
+        2.1,
+        1.7,
+        Color(78, 84, 98),
+        1,
+        Color(255, 246, 232),
+        1.7,
     )
 
-    var camera = PerspectiveCamera(
-        Angle(38.0, DEGREE),
-        Float32(WIDTH) / Float32(HEIGHT),
-        Length(0.1, METER),
-        Length(20.0, METER),
+    var camera = gallery_camera(
+        WIDTH,
+        HEIGHT,
+        Vector3(0.2, 0.7, 2.7),
+        Vector3(0.1, 0, 0),
+        field_of_view=Angle(38.0, DEGREE),
+        near=Length(0.1, METER),
+        far=Length(20.0, METER),
     )
-    camera.place(Vector3(0.2, 0.7, 2.7), Vector3(0.1, 0, 0))
 
     var step = Angle(Float32(360) / Float32(FRAMES), DEGREE)
     var frame_clock = Clock()
@@ -351,12 +358,4 @@ def main() raises:
     for _ in range(FRAMES):
         frames.append(frame_at(svg, camera, assets, scene, pivot, step))
 
-    print(
-        '{"frames_ms": ',
-        frame_clock.elapsed().to(MILLISECOND),
-        "}",
-        sep="",
-        file=stderr,
-    )
-    Path(destination).write_bytes(encode(frames, delay_ms=DELAY_MS))
-    print("Wrote", destination, "-", FRAMES, "frames")
+    write_example(frames, destination, DELAY_MS, FRAMES, frame_clock)

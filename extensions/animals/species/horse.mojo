@@ -21,14 +21,20 @@ from extensions.animals.coat import (
     EyeLook,
     Paint,
     Palette,
+    channel_gain,
     grizzle,
     mix3,
+    shade_swatch,
     srgb,
 )
 from extensions.sdf.ids import BoneId
 from extensions.animals.parts import JAW
 from extensions.sdf.sculpt import ell_y
 from extensions.animals.kit import (
+    side_sign,
+    ear_ends,
+    digitigrade_fore,
+    digitigrade_hind,
     EyeSpec,
     eye_frame_of,
     sculpt_eye_socket,
@@ -37,7 +43,13 @@ from extensions.animals.kit import (
     is_limb,
     pick_weighted,
 )
-from extensions.animals.noise import cells3, fbm3, vnoise3
+from extensions.animals.noise import (
+    cells3,
+    centered_fbm,
+    centered_value,
+    offset_fbm,
+    vnoise3,
+)
 from extensions.animals.options import MALE, AnimalOptions, AnimalRandom
 from extensions.animals.rig import Rig, tail_chain
 from extensions.sdf.field import SdfModel
@@ -68,6 +80,7 @@ from extensions.animals.warp import (
     length_warp,
     scale_about_warp,
 )
+from math.utils import clamp_unit
 from std.math import cos, pi, sin
 from extensions.sdf.distance import oriented_ellipsoid_estimate
 
@@ -722,10 +735,7 @@ def horse_sculpt(mut m: SdfModel, rig: Rig, t: Traits) raises:
 
     # EARS: long, cupped and pointed.
     for side in [String("L"), String("R")]:  # pragma: no branch
-        var s = 1.0 if side == "L" else -1.0
-        var base = rig.j("earBase" + side)
-        var tip = rig.j("earTip" + side)
-        var up = normalize(tip - base)
+        var s, base, tip, up = ear_ends(rig, side)
         var facing = normalize(hf.hz * 0.9 + V3(0.55 * s, 0, 0))
         var lat = normalize(cross(up, facing))
         var eb = rig.bone("ear" + side)
@@ -826,7 +836,7 @@ def horse_sculpt(mut m: SdfModel, rig: Rig, t: Traits) raises:
             var th = 0.0085
             # The hair leaves the crest over its top: the sheet starts on
             # the crest's far edge.
-            var depths: List[Float64] = [0.02, 0.02 + (ln - 0.02) * 0.5, ln]
+            var depths: List[Float64] = [0.02, mix(0.02, ln, 0.5), ln]
             var sk = List[V3]()
             for d in depths:  # pragma: no branch
                 sk.append(_skin_x(m, neck_ids, mane_side, p + down * d))
@@ -853,7 +863,7 @@ def horse_sculpt(mut m: SdfModel, rig: Rig, t: Traits) raises:
         var z1 = -0.035
         for i in range(count):  # pragma: no branch
             var u = Float64(i) / Float64(count - 1)
-            var z = z0 + (z1 - z0) * u
+            var z = mix(z0, z1, u)
             var zb = z + 0.3 * (z1 - z0) / Float64(count - 1)
             var y = _skin_y(m, head_ids, z)
             var yb = _skin_y(m, head_ids, zb)
@@ -906,20 +916,11 @@ def horse_sculpt(mut m: SdfModel, rig: Rig, t: Traits) raises:
 
 
 def _foreleg(mut m: SdfModel, rig: Rig, side: String) raises:
-    var s = 1.0 if side == "L" else -1.0
-    var lat = V3(s, 0, 0)
-    var sc = rig.j("scapTop" + side)
-    var sh = rig.j("shoulder" + side)
-    var e = rig.j("elbow" + side)
-    var w = rig.j("wrist" + side)
-    var mc = rig.j("mcp" + side)
+    var s = side_sign(side)
+    var lat, sc, sh, e, w, mc, toe, scap, hum, rad, meta, fpaw = (
+        digitigrade_fore(rig, side, s)
+    )
     var c = rig.j("fcoffin" + side)
-    var toe = rig.j("ftoe" + side)
-    var scap = rig.bone("scapula" + side)
-    var hum = rig.bone("humerus" + side)
-    var rad = rig.bone("radius" + side)
-    var meta = rig.bone("metacarpus" + side)
-    var fpaw = rig.bone("fpaw" + side)
     _ = ell_y(
         m,
         "scapmuscle",
@@ -1013,18 +1014,10 @@ def _foreleg(mut m: SdfModel, rig: Rig, side: String) raises:
 
 
 def _hind_leg(mut m: SdfModel, rig: Rig, side: String) raises:
-    var s = 1.0 if side == "L" else -1.0
+    var s = side_sign(side)
     var lat = V3(s, 0, 0)
-    var hp = rig.j("hip" + side)
-    var kn = rig.j("knee" + side)
-    var hk = rig.j("hock" + side)
-    var mt = rig.j("mtp" + side)
+    var hp, kn, hk, mt, tt, fem, tib, mtar, hpaw = digitigrade_hind(rig, side)
     var ch = rig.j("hcoffin" + side)
-    var tt = rig.j("htoe" + side)
-    var fem = rig.bone("femur" + side)
-    var tib = rig.bone("tibia" + side)
-    var mtar = rig.bone("metatarsus" + side)
-    var hpaw = rig.bone("hpaw" + side)
     # The thigh fills the quarter from the point of hip to the stifle.
     _ = ell_y(
         m,
@@ -1270,11 +1263,7 @@ def horse_palette(t: Traits) raises -> Palette:
         var c = srgb(hex[i])
         pal.set(
             tinted[i],
-            V3(
-                c.x * (1.0 + 0.08 * k + l),
-                c.y * (1.0 + l),
-                c.z * (1.0 - 0.08 * k + l),
-            ),
+            shade_swatch(c, k, l, 0.08, 0.0, -0.08),
         )
     pal.set("points", srgb(hex[4]))
     var flaxen = t.get("flaxen", 0.0) > 0.5
@@ -1357,10 +1346,8 @@ def _face_white(t: Traits, h: V3, n: V3, hf: HeadFrame) -> Float64:
 
 def _fur(c: V3, p: V3) -> V3:
     # Low-frequency color variation and a fine hair grain.
-    var cv = fbm3(p * 5.0, 3) - 0.5
-    var v = V3(
-        c.x * (1.0 + 0.14 * cv), c.y * (1.0 + 0.12 * cv), c.z * (1.0 + 0.1 * cv)
-    )
+    var cv = centered_fbm(p, 5.0, 3)
+    var v = channel_gain(c, cv, 0.14, 0.12, 0.1)
     return grizzle(v, p, 160.0, 0.05)
 
 
@@ -1399,7 +1386,7 @@ def horse_paint(
     var n = s.n
     var coat = t.variant
     var hf = _hf()
-    var jag = (fbm3(p * 60.0, 2) - 0.5) * 0.02
+    var jag = (centered_fbm(p, 60.0, 2)) * 0.02
     var black_points = (
         coat == BAY or coat == DARK_BAY or coat == DUN or coat == BUCKSKIN
     )
@@ -1445,7 +1432,7 @@ def _paint_head(
     var p = s.p
     var hf = _hf()
     var h = hf.local(p)
-    var jag = (fbm3(p * 60.0, 2) - 0.5) * 0.02
+    var jag = (centered_fbm(p, 60.0, 2)) * 0.02
     var wsdf = _face_white(t, h, s.n, hf) + jag
     var white = wsdf < 0.0 and t.variant != GRAY
     var c = pal.get("head")
@@ -1512,7 +1499,7 @@ def _paint_body(
     var neck = bone == "neck1" or bone == "neck2"
     var leg = 1.0 if is_limb(bone) else 0.0
     var front = is_front_limb(bone)
-    var up = clamp(n.y, -1.0, 1.0)
+    var up = clamp_unit(n.y)
     var side = 1.0 if p.x >= 0.0 else -1.0
     var ventral = (
         smoothstep(0.0, -0.7, n.y)
@@ -1544,7 +1531,7 @@ def _paint_body(
         var knee = 0.52 if front else 0.6
         if black_points:
             var wob = (
-                fbm3(V3(p.x * 20.0, p.y * 8.0, p.z * 20.0), 2) - 0.5
+                offset_fbm(V3(p.x * 20.0, p.y * 8.0, p.z * 20.0), 2)
             ) * 0.12
             c = mix3(
                 c,
@@ -1597,7 +1584,7 @@ def _paint_body(
     if dapples:
         # Light rounded dapples, the darker coat a network between them.
         var cell = cells3(p * 11.0, Int(t.get("coatSeed", 0.0)) % 997)
-        var wob = 0.14 * (vnoise3(p * 40.0) - 0.5)
+        var wob = 0.14 * (centered_value(p, 40.0))
         var weight = 0.75 * (1.0 - leg) * (1.0 - ventral)
         c = mix3(
             c * (1.0 - 0.12 * weight),

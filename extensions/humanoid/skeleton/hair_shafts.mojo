@@ -10,14 +10,14 @@ shaft on its own and merge the results. Add another bundle by passing
 its centerlines here.
 """
 
-from core.buffer_attribute import BufferAttribute
 from core.buffer_geometry import NORMAL, POSITION, UV, BufferGeometry
+from geometries.surface import indexed_surface
 from extensions.humanoid.skeleton.field import (
     DistanceField,
     empty_bounds,
     sd_segment,
 )
-from extensions.humanoid.skeleton.isosurface import mesh_field
+from extensions.humanoid.skeleton.isosurface import mesh_checked
 from math.vector3 import Vector3
 
 
@@ -67,12 +67,12 @@ def mesh_hair_shafts(
         One indexed geometry with position, normal and uv attributes.
 
     Raises:
-        Error: If a shaft produces no surface.
+        Error: If `detail` is out of range, or a shaft produces no surface.
     """
     var parts = List[BufferGeometry]()
     for index in range(len(starts)):  # pragma: no branch
         var field = _HairShaftField(starts[index], ends[index], radius)
-        parts.append(mesh_field(field, field.low, field.high, detail, label))
+        parts.append(mesh_checked(field, field.low, field.high, detail, label))
     return _merge_shafts(parts)
 
 
@@ -85,10 +85,7 @@ def _merge_shafts(parts: List[BufferGeometry]) raises -> BufferGeometry:
     for index in range(len(parts)):  # pragma: no branch
         _append_geometry(positions, normals, uvs, indices, parts[index])
     var geometry = BufferGeometry()
-    geometry.set_attribute(String(POSITION), BufferAttribute(positions^, 3))
-    geometry.set_attribute(String(NORMAL), BufferAttribute(normals^, 3))
-    geometry.set_attribute(String(UV), BufferAttribute(uvs^, 2))
-    geometry.set_index(indices^)
+    indexed_surface(geometry, positions^, normals^, uvs^, indices^)
     return geometry^
 
 

@@ -52,14 +52,22 @@ limits, and explicit zero and nonfinite rules.
 
 from cameras.camera import Camera
 from core.object3d import NodeId, Object3D
+from core.ordinal import require_index_in_count
 from core.scene import Scene
 from lights.csm import CsmFrustum
-from lights.light import DIRECTIONAL, Light, directional_light
+from lights.light import (
+    DIRECTIONAL,
+    Light,
+    directional_light,
+    require_light_intensity,
+)
 from lights.shadow import LightShadow, SUN_BLEND, ShadowCascade
 from math.matrix4 import Matrix4
+from math.utils import mix_delta
 from math.vector3 import Vector3
+from math.finite import require_finite_group
 from render.framebuffer import Color
-from std.math import ceil, floor, isfinite, log, exp, max, min, sqrt
+from std.math import ceil, floor, log, exp, max, min, sqrt
 from units.si import Length, METER
 
 # How many cascades a sun draws, three.js's `_cascadeCount`.
@@ -169,7 +177,7 @@ def sun_splits(near: Float32, far: Float32) -> List[Float32]:
     splits.append(near)
     for index in range(1, SUN_CASCADES):  # pragma: no branch
         var amount = Float32(index) / Float32(SUN_CASCADES)
-        var even = near + (far - near) * amount
+        var even = mix_delta(near, far, amount)
         var logarithmic = even
         if near > 0:
             logarithmic = near * exp(log(far / near) * amount)
@@ -202,9 +210,7 @@ def fit_sun[
             origin, or the camera's view or projection is refused.
     """
     shadow.validate()
-    if not (
-        isfinite(position.x) and isfinite(position.y) and isfinite(position.z)
-    ) or (position.x == 0 and position.y == 0 and position.z == 0):
+    if not position.is_finite() or (position == Vector3(0, 0, 0)):
         raise Error("A sun at the origin has no direction")
     var direction = -position
     direction.normalize()
@@ -346,8 +352,7 @@ struct SunLight(Movable):
         Raises:
             Error: If `Light.validate` refuses the intensity.
         """
-        if not isfinite(intensity) or intensity < 0:
-            raise Error("A light's intensity must be finite and not negative")
+        require_light_intensity(intensity)
         self.color = color
         self.intensity = intensity
         self.cast_shadow = False
@@ -415,8 +420,10 @@ struct SunLight(Movable):
             # fit_sun normalized the finite nonzero sun direction. Adding
             # that bounded direction cannot overflow a finite position:
             # near the largest finite Float32 they are below half an ULP.
-            if not _finite_point(cascade.position):
-                raise Error("A sun's cascade position must be finite")
+            require_finite_group(
+                cascade.position.is_finite(),
+                "A sun's cascade position must be finite",
+            )
             changes.append(light)
         # All lights and node references are valid before the first write.
         for index in range(SUN_CASCADES):  # pragma: no branch
@@ -441,8 +448,11 @@ struct SunLight(Movable):
             raise Error("A sun needs two distinct cascade lights")
         for index in range(SUN_CASCADES):  # pragma: no branch
             var at = self.lights[index]
-            if at < 0 or at >= len(scene.lights):
-                raise Error("A sun's cascades are not in this scene")
+            require_index_in_count(
+                at,
+                len(scene.lights),
+                "A sun's cascades are not in this scene",
+            )
             ref light = scene.lights[at]
             if (
                 light.kind != DIRECTIONAL
@@ -452,8 +462,3 @@ struct SunLight(Movable):
                 raise Error("A sun's cascades are not in this scene")
             _ = scene.get(self.nodes[index])
             _ = scene.get(self.targets[index])
-
-
-def _finite_point(point: Vector3) -> Bool:
-    """Return True if every coordinate is finite."""
-    return isfinite(point.x) and isfinite(point.y) and isfinite(point.z)

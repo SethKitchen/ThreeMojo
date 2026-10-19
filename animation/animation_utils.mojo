@@ -64,10 +64,14 @@ keeps one key of every track, or none, is refused. three.js returns a
 clip of no length and nothing can play it.
 """
 
-from animation.animation_clip import ADDITIVE_BLEND_MODE, AnimationClip
+from animation.animation_clip import (
+    ADDITIVE_BLEND_MODE,
+    AnimationClip,
+    require_frame_rate,
+)
 from animation.keyframe_track import CUBIC_SPLINE, KeyframeTrack, QUATERNION
+from core.ordinal import require_non_negative
 from math.quaternion import Quaternion
-from std.math import isfinite
 from units.si import Duration, SECOND
 
 
@@ -83,8 +87,7 @@ def checked_fps(fps: Float32) raises -> Float32:
     Raises:
         Error: If the rate is not a number or is not above zero.
     """
-    if not isfinite(fps) or fps <= 0:
-        raise Error("A frame rate must be a number above zero")
+    require_frame_rate(fps)
     return fps
 
 
@@ -119,8 +122,9 @@ def subclip(
             track keeps one key only.
     """
     var rate = checked_fps(fps)
-    if start_frame < 0:
-        raise Error("A subclip cannot start before frame zero")
+    require_non_negative(
+        start_frame, "A subclip cannot start before frame zero"
+    )
     if end_frame <= start_frame:
         raise Error("A subclip must end after it starts")
     var first = Float32(start_frame)
@@ -241,8 +245,9 @@ def make_clip_additive(
             is negative.
     """
     var rate = checked_fps(fps)
-    if reference_frame < 0:
-        raise Error("A reference frame cannot be before frame zero")
+    require_non_negative(
+        reference_frame, "A reference frame cannot be before frame zero"
+    )
     var at = Duration(Float32(reference_frame) / rate, SECOND)
     var made = AnimationClip(copy=target)
     for index in range(len(reference_clip.tracks)):  # pragma: no branch

@@ -14,6 +14,11 @@ precision, and the color and harmonics bytes exactly. Every way a file can
 be wrong is built byte by byte and refused.
 """
 
+from core.binary import (
+    append_little_endian,
+    copy_bytes,
+    store_little_endian,
+)
 from core.gaussian_splat_utils import GaussianSplatGeometry, write_covariance
 from loaders.gaussian_splat_ply import (
     detect_spherical_harmonics_degree,
@@ -135,14 +140,12 @@ def check_file(name: String, got: GaussianSplatGeometry) raises:
 
 def put_u16(mut bytes: List[UInt8], at: Int, value: Int):
     """Write a little-endian 16-bit integer."""
-    bytes[at] = UInt8(value & 255)
-    bytes[at + 1] = UInt8((value >> 8) & 255)
+    store_little_endian(bytes, at, value, 2)
 
 
 def put_u32(mut bytes: List[UInt8], at: Int, value: Int):
     """Write a little-endian 32-bit integer."""
-    put_u16(bytes, at, value & 0xFFFF)
-    put_u16(bytes, at + 2, (value >> 16) & 0xFFFF)
+    store_little_endian(bytes, at, value, 4)
 
 
 def put_f32(mut bytes: List[UInt8], at: Int, value: Float32):
@@ -438,7 +441,7 @@ def zstd_raw(bytes: List[UInt8]) -> List[UInt8]:
     out.append(UInt8(header & 255))
     out.append(UInt8((header >> 8) & 255))
     out.append(UInt8((header >> 16) & 255))
-    out.extend(bytes.copy())
+    out.extend(Span(bytes))
     return out^
 
 
@@ -488,7 +491,7 @@ def test_a_version_4_field_of_no_bytes_has_no_stream() raises:
 def test_version_4_that_is_wrong_is_refused() raises:
     var short = spz4(1, 0, one_splat_streams())
     with assert_raises(contains="invalid SPZ header"):
-        _ = parse_raw_spz_v4(List[UInt8](short[:19]))
+        _ = parse_raw_spz_v4(copy_bytes(short, 0, 19))
     var crowded = spz4(1, 0, one_splat_streams())
     put_u32(crowded, 8, 10000001)
     with assert_raises(contains="too many splats"):
@@ -703,8 +706,7 @@ struct Gltf(Movable):
         """Add an accessor of integers `width` bytes each."""
         var data = List[UInt8]()
         for value in values:
-            for byte in range(width):
-                data.append(UInt8((value >> (byte * 8)) & 255))
+            append_little_endian(data, value, width)
         var view = self.view(data^)
         var text = (
             '{"bufferView":'

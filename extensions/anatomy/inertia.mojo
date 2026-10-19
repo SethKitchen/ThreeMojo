@@ -16,8 +16,14 @@ The humanoid's limb segments and the animals' body segments both use it.
 Sums are in `Float64`, so a million cells keep their precision.
 """
 
-from math.vector3 import Vector3
-from std.math import isfinite, sqrt
+from math.finite import (
+    require_finite,
+    require_positive_finite,
+    require_non_negative_finite,
+)
+from math.utils import min3
+from math.vector3 import Vector3, vector3_from_float64
+from std.math import sqrt
 from units.si import (
     KILOGRAM,
     KILOGRAM_SQUARE_METER,
@@ -40,8 +46,7 @@ def _central_moment(raw: Float64, shift: Float64) raises -> Float64:
     # Sixteen least Float64 subnormals cover absolute rounding at zero.
     comptime UNDERFLOW = 7.9050503334599447e-323
     var central = raw - shift
-    if not isfinite(central):
-        raise Error("Central second moments must be finite")
+    require_finite(Float64(central), "Central second moments must be finite")
     # Multiply first so two finite raw moments cannot overflow the bound.
     var error = abs(raw) * ROUNDING + abs(shift) * ROUNDING + UNDERFLOW
     # Both signs are discarded: a smaller true moment is unresolved in
@@ -71,15 +76,31 @@ def _check_second_moments(
     var d = xy / scale
     var e = xz / scale
     var f = yz / scale
-    if min(a, min(b, c)) < -tolerance:
+    if min3(a, b, c) < -tolerance:
         raise Error("A sampled tensor must have nonnegative second moments")
-    if min(a * b - d * d, min(a * c - e * e, b * c - f * f)) < -tolerance:
+    if min3(a * b - d * d, a * c - e * e, b * c - f * f) < -tolerance:
         raise Error("A sampled tensor must be physically admissible")
     var determinant = (
         a * b * c + 2 * d * e * f - a * f * f - b * e * e - c * d * d
     )
     if determinant < -tolerance:
         raise Error("A sampled tensor must be physically admissible")
+
+
+def require_segment_length(length: Float64) raises:
+    """Refuse a segment length that is negative or not finite.
+
+    Nothing. The call returns when the length is finite and zero or more.
+
+    Args:
+        length: The segment length, in meters.
+
+    Raises:
+        Error: If the length is negative or not finite.
+    """
+    require_non_negative_finite(
+        Float64(length), "A segment length must be finite and nonnegative"
+    )
 
 
 @fieldwise_init
@@ -111,10 +132,10 @@ struct SegmentInertia(ImplicitlyCopyable):
             Error: If mass is not positive, length is negative, a value
                 is not finite, or the tensor cannot describe a body.
         """
-        if not (isfinite(self.mass.value) and self.mass.value > 0.0):
-            raise Error("A segment must have finite positive mass")
-        if not (isfinite(self.length.value) and self.length.value >= 0.0):
-            raise Error("A segment length must be finite and nonnegative")
+        require_positive_finite(
+            Float64(self.mass.value), "A segment must have finite positive mass"
+        )
+        require_segment_length(Float64(self.length.value))
         var values: List[Float32] = [
             self.center.x,
             self.center.y,
@@ -127,9 +148,10 @@ struct SegmentInertia(ImplicitlyCopyable):
             self.yz.value,
         ]
         comptime for axis in range(9):
-            if not isfinite(values[axis]):
-                raise Error("Segment mass properties must be finite")
-        if min(self.xx.value, min(self.yy.value, self.zz.value)) < 0.0:
+            require_finite(
+                Float64(values[axis]), "Segment mass properties must be finite"
+            )
+        if min3(self.xx.value, self.yy.value, self.zz.value) < 0.0:
             raise Error("An inertia diagonal must be nonnegative")
         var x = Float64(self.xx.value)
         var y = Float64(self.yy.value)
@@ -157,13 +179,16 @@ struct SegmentInertia(ImplicitlyCopyable):
             Error: If the mass properties, moment or SI result is invalid.
         """
         self.check()
-        if not (isfinite(moment.value) and moment.value >= 0.0):
-            raise Error("A gyration moment must be finite and nonnegative")
+        require_non_negative_finite(
+            Float64(moment.value),
+            "A gyration moment must be finite and nonnegative",
+        )
         var value = Float32(
             sqrt(Float64(moment.value) / Float64(self.mass.value))
         )
-        if not isfinite(value):
-            raise Error("A radius of gyration must fit a finite SI length")
+        require_finite(
+            Float64(value), "A radius of gyration must fit a finite SI length"
+        )
         return Length(value, METER)
 
 
@@ -192,14 +217,17 @@ struct InertiaTally(Copyable, Movable):
         Raises:
             Error: If a value is not finite, or a mass or width is negative.
         """
-        if not (isfinite(m) and m >= 0.0):
-            raise Error("A cell mass must be finite and nonnegative")
+        require_non_negative_finite(
+            Float64(m), "A cell mass must be finite and nonnegative"
+        )
         comptime for axis in range(3):
-            if not isfinite(p.get_component(axis)):
-                raise Error("A cell center must be finite")
+            require_finite(
+                Float64(p.get_component(axis)), "A cell center must be finite"
+            )
             var w = widths.get_component(axis)
-            if not (isfinite(w) and w >= 0.0):
-                raise Error("Cell widths must be finite and nonnegative")
+            require_non_negative_finite(
+                Float64(w), "Cell widths must be finite and nonnegative"
+            )
         self._add_cell(m, p, widths)
 
     def _add_cell(mut self, m: Float64, p: Vector3, widths: Vector3):
@@ -243,14 +271,18 @@ struct InertiaTally(Copyable, Movable):
         self.second += other.second
 
     def _check_sums(self) raises:
-        if not (isfinite(self.mass) and self.mass >= 0.0):
-            raise Error("A tally mass must be finite and nonnegative")
+        require_non_negative_finite(
+            Float64(self.mass), "A tally mass must be finite and nonnegative"
+        )
         comptime for axis in range(3):
-            if not isfinite(self.first[axis]):
-                raise Error("Tally first moments must be finite")
+            require_finite(
+                Float64(self.first[axis]), "Tally first moments must be finite"
+            )
         comptime for axis in range(6):
-            if not isfinite(self.second[axis]):
-                raise Error("Tally second moments must be finite")
+            require_finite(
+                Float64(self.second[axis]),
+                "Tally second moments must be finite",
+            )
         if self.mass == 0.0:
             comptime for axis in range(3):
                 if self.first[axis] != 0.0:
@@ -273,15 +305,16 @@ struct InertiaTally(Copyable, Movable):
                 admissible, or the SI output cannot represent it.
         """
         self._check_sums()
-        if not (isfinite(length) and length >= 0.0):
-            raise Error("A segment length must be finite and nonnegative")
+        require_segment_length(Float64(length))
         var mass = self.mass
         # _check_sums already established finite nonnegative mass.
         if mass == 0.0:
             raise Error("A sampled segment must have finite positive mass")
         var mass_si = Float32(mass)
-        if not (isfinite(mass_si) and mass_si > 0.0):
-            raise Error("A sampled segment mass must fit positive finite SI")
+        require_positive_finite(
+            Float64(mass_si),
+            "A sampled segment mass must fit positive finite SI",
+        )
         var c = self.first / mass
         # Second moments about the center, by the parallel-axis theorem.
         var sxx = _central_moment(self.second[0], mass * c[0] * c[0])
@@ -293,7 +326,7 @@ struct InertiaTally(Copyable, Movable):
         _check_second_moments(sxx, syy, szz, sxy, sxz, syz, 1e-10)
         var result = SegmentInertia(
             Mass(mass_si, KILOGRAM),
-            Vector3(Float32(c[0]), Float32(c[1]), Float32(c[2])),
+            vector3_from_float64(c[0], c[1], c[2]),
             MomentOfInertia(Float32(syy + szz), KILOGRAM_SQUARE_METER),
             MomentOfInertia(Float32(sxx + szz), KILOGRAM_SQUARE_METER),
             MomentOfInertia(Float32(sxx + syy), KILOGRAM_SQUARE_METER),

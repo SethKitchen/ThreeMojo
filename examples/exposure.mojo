@@ -11,24 +11,26 @@ Tone mapping runs once on the composited light of each pixel, after
 shading and fog. The curve stays put. Only the exposure changes.
 """
 
-from cameras.perspective_camera import PerspectiveCamera
+from tools._example_output import (
+    example_destination,
+    fill_and_key,
+    gallery_camera,
+    gallery_renderer,
+    write_example,
+)
+
 from core.assets import Assets
 from core.clock import Clock
 from core.object3d import Object3D
 from core.scene import Scene
 from geometries.sphere import sphere
-from lights.light import ambient_light, directional_light
 from materials.material import phong_material
 from math.vector3 import Vector3
 from objects.mesh import Mesh
-from render.apng import encode
 from render.framebuffer import Color, Framebuffer
 from render.tonemap import ACES_FILMIC_TONE_MAPPING
-from renderers.renderer import Renderer, available_workers
 from std.math import cos, pi
-from std.pathlib import Path
-from std.sys import argv, stderr
-from units.si import Angle, DEGREE, Length, METER, MILLISECOND
+from units.si import Angle, DEGREE, Length, METER
 
 comptime DEFAULT_OUTPUT = "out/exposure.png"
 comptime WIDTH = 240
@@ -38,13 +40,9 @@ comptime DELAY_MS = 55
 
 
 def main() raises:
-    var args = argv()
-    var destination = String(DEFAULT_OUTPUT)
-    if len(args) > 1:
-        destination = String(args[1])
+    var destination = example_destination(String(DEFAULT_OUTPUT))
 
-    var renderer = Renderer(WIDTH, HEIGHT, workers=available_workers())
-    renderer.set_background(Color(8, 9, 12))
+    var renderer = gallery_renderer(WIDTH, HEIGHT, Color(8, 9, 12))
 
     var assets = Assets()
     var ball = assets.geometries.add(sphere(Length(1.0, METER), 28, 18))
@@ -60,20 +58,27 @@ def main() raises:
     var node = scene.add(Object3D())
     scene.add_mesh(Mesh(ball, paint, node))
 
-    var lamp = Object3D()
-    lamp.set_position(0.4, 0.6, 1.0)
-    var lamp_node = scene.add(lamp^)
-    scene.add_light(ambient_light(Color(255, 255, 255), 0.25))
-    scene.add_light(directional_light(Color(255, 240, 210), lamp_node, 7.54))
+    fill_and_key(
+        scene,
+        0.4,
+        0.6,
+        1.0,
+        Color(255, 255, 255),
+        0.25,
+        Color(255, 240, 210),
+        7.54,
+    )
     scene.update()
 
-    var camera = PerspectiveCamera(
-        Angle(40.0, DEGREE),
-        Float32(WIDTH) / Float32(HEIGHT),
-        Length(0.1, METER),
-        Length(100.0, METER),
+    var camera = gallery_camera(
+        WIDTH,
+        HEIGHT,
+        Vector3(0, 0.15, 3.1),
+        Vector3(0, 0, 0),
+        field_of_view=Angle(40.0, DEGREE),
+        near=Length(0.1, METER),
+        far=Length(100.0, METER),
     )
-    camera.place(Vector3(0, 0.15, 3.1), Vector3(0, 0, 0))
 
     var frame_clock = Clock()
     frame_clock.start()
@@ -86,12 +91,4 @@ def main() raises:
         renderer.set_tone_mapping(ACES_FILMIC_TONE_MAPPING, exposure)
         frames.append(renderer.render(scene, assets, camera))
 
-    print(
-        '{"frames_ms": ',
-        frame_clock.elapsed().to(MILLISECOND),
-        "}",
-        sep="",
-        file=stderr,
-    )
-    Path(destination).write_bytes(encode(frames, delay_ms=DELAY_MS))
-    print("Wrote", destination, "-", FRAMES, "frames")
+    write_example(frames, destination, DELAY_MS, FRAMES, frame_clock)

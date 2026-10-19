@@ -21,7 +21,8 @@ template parameters. They are not a cited caliber table.
     var d = hand_vessel_distance(dims, DEEP_PALMAR_ARCH, RIGHT, p)
 """
 
-from extensions.humanoid.side import BodySide
+from core.ordinal import ordinal_valid, ordinal_label, require_valid
+from extensions.humanoid.side import require_side, BodySide
 from extensions.humanoid.skeleton.arm.frame import (
     ArmDimensions,
     ArmMuscleDimensions,
@@ -58,9 +59,7 @@ struct HandVessel(Equatable, ImplicitlyCopyable, Writable):
 
     def is_valid(self) -> Bool:
         """Return True if this is a named vessel."""
-        if self.value < 0:
-            return False
-        return self.value <= DORSAL_DIGITAL_VEINS.value
+        return ordinal_valid(self.value, DORSAL_DIGITAL_VEINS.value)
 
 
 comptime SUPERFICIAL_PALMAR_ARCH = HandVessel(0)
@@ -83,8 +82,9 @@ def is_hand_artery(part: HandVessel) raises -> Bool:
     Raises:
         Error: If `part` is not named.
     """
-    if not part.is_valid():
-        raise Error("A hand vessel must be a named artery or vein")
+    require_valid(
+        part.is_valid(), "A hand vessel must be a named artery or vein"
+    )
     return part.value <= DIGITAL_ARTERIES.value
 
 
@@ -98,15 +98,13 @@ def hand_vessel_label(part: HandVessel) -> String:
         A short American English label, or `"hand vessel"` when `part`
         is not named.
     """
-    if not part.is_valid():
-        return "hand vessel"
     var names = List[String]()
     names.append("superficial palmar arch")
     names.append("deep palmar arch")
     names.append("digital arteries")
     names.append("dorsal venous network")
     names.append("dorsal digital veins")
-    return names[part.value]
+    return ordinal_label(part.is_valid(), part.value, names, "hand vessel")
 
 
 def named_hand_vessels() -> List[HandVessel]:
@@ -140,8 +138,7 @@ def hand_vessel_field(
     """
     dimensions.validate()
     var artery = is_hand_artery(part)
-    if not side.is_valid():
-        raise Error("A hand side must be RIGHT or LEFT")
+    require_side(side, "A hand")
     var arm = dimensions.arm.copy()
     var f = arm.frame
     if part == DIGITAL_ARTERIES or part == DORSAL_DIGITAL_VEINS:

@@ -35,29 +35,17 @@ test reads its columns as the three unit axes of the box.
 
 from math.bounds import Box3, Plane, Sphere
 from math.matrix3 import Matrix3
-from math.matrix4 import Matrix4
+from math.matrix4 import Matrix4, require_affine
 from math.ray import Ray
+from math.utils import clamp
 from math.vector3 import Vector3
-from std.math import isfinite, max, min, sqrt
+from math.finite import require_finite, require_finite_group
+from std.math import max, sqrt
 from std.memory import bitcast
 
 # three.js's default `epsilon` for `intersectsOBB`: JavaScript's
 # `Number.EPSILON`, the gap between one and the next `Float64`.
 comptime OBB_EPSILON = Float32(2.220446049250313e-16)
-
-
-def _clamp(value: Float32, low: Float32, high: Float32) -> Float32:
-    """Return three.js's `MathUtils.clamp`, `max(low, min(high, value))`.
-
-    Args:
-        value: The number.
-        low: The smallest answer.
-        high: The largest answer.
-
-    Returns:
-        The clamped number.
-    """
-    return max(low, min(high, value))
 
 
 def _check_half_size(half_size: Vector3) raises:
@@ -70,9 +58,7 @@ def _check_half_size(half_size: Vector3) raises:
         Error: If a component is negative or not finite.
     """
     var good = (
-        isfinite(half_size.x)
-        and isfinite(half_size.y)
-        and isfinite(half_size.z)
+        half_size.is_finite()
         and half_size.x >= 0
         and half_size.y >= 0
         and half_size.z >= 0
@@ -240,11 +226,11 @@ struct OBB(ImplicitlyCopyable):
         var z_axis = Vector3(e[6], e[7], e[8])
         var v1 = point - self.center
         var target = self.center
-        var x = _clamp(v1.dot(x_axis), -self.half_size.x, self.half_size.x)
+        var x = clamp(v1.dot(x_axis), -self.half_size.x, self.half_size.x)
         target.add(x_axis * x)
-        var y = _clamp(v1.dot(y_axis), -self.half_size.y, self.half_size.y)
+        var y = clamp(v1.dot(y_axis), -self.half_size.y, self.half_size.y)
         target.add(y_axis * y)
-        var z = _clamp(v1.dot(z_axis), -self.half_size.z, self.half_size.z)
+        var z = clamp(v1.dot(z_axis), -self.half_size.z, self.half_size.z)
         target.add(z_axis * z)
         return target
 
@@ -535,10 +521,13 @@ struct OBB(ImplicitlyCopyable):
                 1e-6, a positive half size underflows, or a center, half size or
                 conservative bound overflows Float32. The box stays unchanged.
         """
-        if not matrix.is_affine():
-            raise Error("An OBB can only be carried through an affine matrix")
-        if not matrix.is_finite():
-            raise Error("An OBB transform must be finite")
+        require_affine(
+            matrix, "An OBB can only be carried through an affine matrix"
+        )
+        require_finite_group(
+            matrix.is_finite(),
+            "An OBB transform must be finite",
+        )
         _check_half_size(self.half_size)
         var center: Array[Float32, 3] = [
             self.center.x,
@@ -547,11 +536,12 @@ struct OBB(ImplicitlyCopyable):
         ]
         # Three center components and nine rotation entries are always present.
         for row in range(3):  # pragma: no branch
-            if not isfinite(center[row]):
-                raise Error("An OBB center must be finite")
+            require_finite(Float64(center[row]), "An OBB center must be finite")
         for index in range(9):  # pragma: no branch
-            if not isfinite(self.rotation.elements[index]):
-                raise Error("An OBB rotation must be finite")
+            require_finite(
+                Float64(self.rotation.elements[index]),
+                "An OBB rotation must be finite",
+            )
         # Widen before multiplication: even the largest finite Float32 axes
         # and their squared lengths fit in Float64. Tiny scales stay nonzero.
         var axes = Array[Float64, 9](fill=0)
@@ -634,8 +624,10 @@ struct OBB(ImplicitlyCopyable):
                 )
             exact_center[row] = value
             moved[row] = Float32(value)
-            if not isfinite(moved[row]):
-                raise Error("An OBB transformed center must fit in Float32")
+            require_finite(
+                Float64(moved[row]),
+                "An OBB transformed center must fit in Float32",
+            )
         # Keep geometry and rounding separate. A world point made from the
         # old center and local coordinates has a bounded formation error.
         # Carry it through the matrix, then bound center subtraction and the

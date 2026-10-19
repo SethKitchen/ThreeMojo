@@ -25,7 +25,9 @@ from extensions.animals.coat import (
     EyeLook,
     Paint,
     Palette,
+    channel_gain,
     mix3,
+    shade_swatch,
     srgb,
 )
 from extensions.sdf.ids import BoneId
@@ -35,10 +37,11 @@ from extensions.animals.parts import (
 )
 from extensions.sdf.sculpt import ell_y
 from extensions.animals.kit import (
+    side_sign,
     EyeSpec,
     eye_frame_of,
 )
-from extensions.animals.noise import fbm3
+from extensions.animals.noise import centered_fbm, offset_fbm
 from extensions.animals.options import (
     FEMALE,
     MALE,
@@ -60,6 +63,8 @@ from extensions.sdf.vector import (
     normalize,
     smoothstep,
 )
+from math.norm import squared_length2, squared_length3
+from math.utils import clamp_unit
 from std.math import asin, cos, pi, sin, sqrt
 
 # The builds, in procedural-animals' order.
@@ -375,7 +380,7 @@ def _chain(
         if k != free:
             drop += lens[k] * sin(el[k])
     var s = (y_tip - base.y - drop) / lens[free]
-    el[free] = asin(clamp(s, -1.0, 1.0))
+    el[free] = asin(clamp_unit(s))
     var out = List[V3]()
     var p = base
     out.append(p)
@@ -803,7 +808,7 @@ def spider_sculpt(mut m: SdfModel, rig: Rig, t: Traits) raises:
 
     # CHELICERAE AND FANGS.
     for side in [String("L"), String("R")]:  # pragma: no branch
-        var s = 1.0 if side == "L" else -1.0
+        var s = side_sign(side)
         var b0 = rig.j("cheBase" + side)
         var b1 = rig.j("cheTip" + side)
         var ft = rig.j("fangTip" + side)
@@ -1133,9 +1138,10 @@ def spider_palette(t: Traits) -> Palette:
                 or names[i] == "fang"
             )
             if not fixed:
-                var r = c.x * (1.0 + 0.12 * w + l)
-                var g = c.y * (1.0 + 0.03 * w + l)
-                var b = c.z * (1.0 - 0.12 * w + l)
+                var scaled = shade_swatch(c, w, l, 0.12, 0.03, -0.12)
+                var r = scaled.x
+                var g = scaled.y
+                var b = scaled.z
                 var y = 0.3 * r + 0.55 * g + 0.15 * b
                 c = V3(mix(r, y, gr), mix(g, y, gr), mix(b, y * 1.04, gr))
             out.set(names[i], c)
@@ -1199,7 +1205,7 @@ def _hair(p: V3, a: V3, axis: V3, mm: Float64) -> Float64:
         dot(dp, up) / (0.09 * mm),
         dot(dp, axis) / (0.9 * mm),
     )
-    return fbm3(h, 2) - 0.5
+    return offset_fbm(h, 2)
 
 
 def spider_paint(
@@ -1244,8 +1250,8 @@ def spider_paint(
         )
     if tag == "fang":
         return Paint(pal.get("fang"), KERATIN)
-    var noise = fbm3(p * (1.0 / (1.6 * mmu)), 3) - 0.5
-    var noise_f = fbm3(p * (1.0 / (0.45 * mmu)) + V3(7, 0, 0), 2) - 0.5
+    var noise = centered_fbm(p, (1.0 / (1.6 * mmu)), 3)
+    var noise_f = centered_fbm(p, (1.0 / (0.45 * mmu)), 2, 7)
     var col: V3
     var surface = CHITIN
     var pat = 1.0
@@ -1257,7 +1263,7 @@ def spider_paint(
     if bone.startswith("chelicera"):
         # Hair on the front face, bare glossy cuticle near the fang base.
         var side = "L" if bone.endswith("L") else "R"
-        var sgn = 1.0 if side == "L" else -1.0
+        var sgn = side_sign(side)
         var b0 = d.mm(d.chel_base)
         var b1 = d.mm(d.chel_tip)
         b0 = V3(b0.x * sgn, b0.y, b0.z)
@@ -1406,7 +1412,7 @@ def spider_paint(
                 var sz = (u - uz) * r.z
                 spots = min(
                     spots,
-                    sqrt(sx * sx + sz * sz)
+                    sqrt(squared_length2[DType.float64](sx, sz))
                     - 0.32 * mmu * (1.0 - 0.15 * Float64(k)),
                 )
                 var vz = uz + abs(p.x) / r.x * 0.25
@@ -1430,12 +1436,8 @@ def spider_paint(
             )
             pcol = pal.get("chevron")
             pint = dors * contrast * 0.8 * smoothstep(-0.35, 0.1, up)
-            col = V3(
-                col.x * (1.0 + 0.3 * noise_f),
-                col.y * (1.0 + 0.28 * noise_f),
-                col.z * (1.0 + 0.24 * noise_f),
-            )
-            hair = fbm3(p * (1.0 / (0.12 * mmu)), 2) - 0.5
+            col = channel_gain(col, noise_f, 0.3, 0.28, 0.24)
+            hair = centered_fbm(p, (1.0 / (0.12 * mmu)), 2)
         else:
             # Long reddish setae over black, strongest on the dorsum, and
             # sometimes a bald patch where the urticating hairs were
@@ -1448,7 +1450,7 @@ def spider_paint(
                 var bx = p.x / r.x
                 var by = (p.y - c.y - r.y * 0.7) / r.y
                 var bz = (p.z - c.z + r.z * 0.35) / r.z
-                var bd = sqrt(bx * bx + by * by + bz * bz)
+                var bd = sqrt(squared_length3[DType.float64](bx, by, bz))
                 var bare = 1.0 - smoothstep(0.28, 0.42, bd + 0.05 * noise)
                 pint *= 1.0 - bare
                 col = mix3(col, V3(0.004, 0.003, 0.003), bare * 0.6)
@@ -1531,15 +1533,11 @@ def spider_paint(
             col = mix3(
                 col, pal.get("ocular"), smoothstep(0.5 * mmu, 0.05 * mmu, eye_d)
             )
-        hair = (fbm3(p * (1.0 / (0.12 * mmu)), 2) - 0.5) * smoothstep(
+        hair = (centered_fbm(p, (1.0 / (0.12 * mmu)), 2)) * smoothstep(
             0.05 * mmu, 0.6 * mmu, eye_d
         )
     # Low-frequency color noise.
-    col = V3(
-        col.x * (1.0 + 0.22 * noise),
-        col.y * (1.0 + 0.2 * noise),
-        col.z * (1.0 + 0.16 * noise),
-    )
+    col = channel_gain(col, noise, 0.22, 0.2, 0.16)
     var spot = smoothstep(0.003, -0.003, pat) * max(pint, 0.0)
     col = mix3(col, pcol, clamp(spot, 0.0, 1.0))
     var line = smoothstep(0.002, -0.002, mk)

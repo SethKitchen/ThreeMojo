@@ -28,6 +28,7 @@ A group whose `enabled` is off adds nothing, and nor does a group without
 """
 
 from core.object3d import NodeId
+from core.ordinal import require_non_negative
 from math.bounds import Plane
 
 
@@ -75,8 +76,9 @@ struct ClippingGroup(Copyable, Movable):
         Raises:
             Error: If the node id is negative.
         """
-        if node.value < 0:
-            raise Error("A clipping group must name a scene node")
+        require_non_negative(
+            node.value, "A clipping group must name a scene node"
+        )
         self.node = node
         self.clipping_planes = clipping_planes^
         self.enabled = enabled

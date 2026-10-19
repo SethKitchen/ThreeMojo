@@ -23,6 +23,7 @@ from extensions.humanoid.genome import (
     NOSE_LENGTH,
     check_genome,
     gene_label,
+    genome_from_values,
     named_genes,
     offspring,
     random_genome,
@@ -85,6 +86,20 @@ def test_template_genome() raises:
     with assert_raises(contains="head"):
         check_genome(broken, "head")
     check_genome(changed, "head")
+
+
+def test_a_list_of_values_fills_genes_in_order() raises:
+    var empty = genome_from_values(List[Float32]())
+    assert_true(empty == Genome())
+    var filled = genome_from_values([Float32(0.25), Float32(-0.5)])
+    assert_equal(filled.get(MELANIN), Float32(0.25))
+    assert_equal(filled.get(Gene(1)), Float32(-0.5))
+    assert_equal(filled.get(FRECKLES), Float32(0))
+    with assert_raises(contains="melanin"):
+        _ = genome_from_values([Float32(2)])
+    var past = List[Float32](length=GENE_COUNT + 1, fill=0)
+    with assert_raises(contains="gene"):
+        _ = genome_from_values(past)
 
 
 def test_spec_carries_a_genome() raises:

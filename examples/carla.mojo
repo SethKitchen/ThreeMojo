@@ -17,6 +17,8 @@ logarithmic depth image. Each image is also written alone beside the
 page, as `_rgb`, `_semantic` and `_depth`. The page is CARLA.
 """
 
+from tools._example_output import example_destination
+
 from extensions.carla.camera_render import CarlaRenderer
 from extensions.carla.geometry import RoadGeometry, line, spiral
 from extensions.carla.lidar import LidarDescription, scan_lidar
@@ -43,7 +45,6 @@ from render.framebuffer import Color, Framebuffer
 from render.png import encode
 from renderers.renderer import available_workers
 from std.pathlib import Path
-from std.sys import argv
 from units.si import (
     DEGREE,
     InverseLength,
@@ -163,10 +164,7 @@ def sibling(destination: String, suffix: String) -> String:
 
 
 def main() raises:
-    var args = argv()
-    var destination = String(DEFAULT_OUTPUT)
-    if len(args) > 1:
-        destination = String(args[1])
+    var destination = example_destination(String(DEFAULT_OUTPUT))
 
     var world = World(build_map())
     var settings = EpisodeSettings()

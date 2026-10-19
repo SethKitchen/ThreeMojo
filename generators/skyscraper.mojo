@@ -37,22 +37,29 @@ from generators.utils import (
     PartId,
     Vec3d,
     basis_matrix,
+    angle_radians,
     check_finite,
     generator_random,
+    length_meters,
     meters,
 )
 from geometries.box import box
+from math.vector3 import append_float64_xyz
+from geometries.surface import textured_surface
 from geometries.extrude import extrude
 from geometries.lathe import lathe
 from geometries.plane import plane
 from geometries.shape import shape_geometry
 from geometries.utils import merge_geometries
 from math.matrix4 import Matrix4
+from math.norm import squared_length2
 from math.path import Path, Shape
-from math.utils import SeededRandom
-from math.vector2 import Vector2
+from math.sine import fraction
+from math.utils import SeededRandom, js_round, min3
+from math.vector2 import Vector2, vector2_from_float64
 from std.math import floor, pi, sin, sqrt
-from units.si import Angle, Length, METER, RADIAN
+from units.si import Length, METER
+from core.ordinal import require_valid
 
 # The zones of a skyscraper, three.js's `PartId`.
 comptime WALL = PartId(0)
@@ -141,7 +148,7 @@ def pick_building_color(seed: Int) -> Int:
     """
     var h = abs(sin(Float64(seed) * 12.9898) * 43758.5453)
     var palette = building_palette()
-    return palette[Int(floor((h - floor(h)) * Float64(len(palette))))]
+    return palette[Int(floor(fraction(h) * Float64(len(palette))))]
 
 
 @fieldwise_init
@@ -374,11 +381,6 @@ struct SkyscraperParameters(Copyable, Movable):
         self.base_style = None
 
 
-def _js_round(value: Float64) -> Float64:
-    """Return JavaScript's `Math.round`: halves go up."""
-    return floor(value + 0.5)
-
-
 def _length_or(value: Optional[Length], seeded: Float64) -> Float64:
     """Return a length the caller set, in meters, or the seeded value."""
     return meters(value.value()) if value else seeded
@@ -436,12 +438,14 @@ struct SkyscraperStyle(Copyable, Movable):
         var pier_depth = 0.3 + random.next() * 0.3
         var reveal = 0.12 + random.next() * 0.1
         var course = 0.5 + random.next() * 0.5
-        var arch_ratio = _js_round(1.5 + random.next() * 1.5)
+        var arch_ratio = js_round(1.5 + random.next() * 1.5)
         var arch_rise = 0.4 + random.next() * 0.5
         var style = ARCADE if random.next() < 0.22 else STOREFRONT
         self.base_style = p.base_style.value() if p.base_style else style
-        if not self.base_style.is_valid():
-            raise Error("A base style must be the arcade or the storefront")
+        require_valid(
+            self.base_style.is_valid(),
+            "A base style must be the arcade or the storefront",
+        )
         if abs(p.chamfer_corner_x) > 1 or abs(p.chamfer_corner_z) > 1:
             raise Error("A chamfer corner must be minus one, zero or one")
         self.footprint_width = _length_or(p.footprint_width, width)
@@ -489,19 +493,19 @@ struct SkyscraperStyle(Copyable, Movable):
         var v_module = BRICK_HEIGHT * 2
         self.floor_height = max(
             v_module * 3,
-            _js_round(meters(p.floor_height) / v_module) * v_module,
+            js_round(meters(p.floor_height) / v_module) * v_module,
         )
         self.window_height = (
-            _js_round(self.floor_height * WINDOW_HEIGHT_RATIO / v_module)
+            js_round(self.floor_height * WINDOW_HEIGHT_RATIO / v_module)
             * v_module
         )
         self.bay_width = max(
             BRICK_LENGTH * 3,
-            _js_round(meters(p.bay_width) / BRICK_LENGTH) * BRICK_LENGTH,
+            js_round(meters(p.bay_width) / BRICK_LENGTH) * BRICK_LENGTH,
         )
         self.pier_width = max(
             BRICK_LENGTH,
-            _js_round(_length_or(p.pier_width, pier_width) / BRICK_LENGTH)
+            js_round(_length_or(p.pier_width, pier_width) / BRICK_LENGTH)
             * BRICK_LENGTH,
         )
         self.total_height = meters(p.total_height)
@@ -530,7 +534,7 @@ def build_footprint(
     """
     var hw = width / 2
     var hd = depth / 2
-    var c = min(chamfer, min(hw, hd))
+    var c = min3(chamfer, hw, hd)
     var corners = [
         Vec3d(hw, 0, hd),
         Vec3d(-hw, 0, hd),
@@ -589,12 +593,7 @@ def _floor_hash(f: Int, frame: FaceFrame, k: Float64) -> Float64:
         )
         * 43758.5453
     )
-    return s - floor(s)
-
-
-def _fraction(value: Float64) -> Float64:
-    """Return the part of a number past its floor."""
-    return value - floor(value)
+    return fraction(s)
 
 
 struct SkyscraperParts(Movable):
@@ -686,7 +685,7 @@ struct SkyscraperParts(Movable):
             bottom: Its base.
             height: Its height.
         """
-        var key = Int(_js_round(height * 1000))
+        var key = Int(js_round(height * 1000))
         var slot = -1
         for i in range(len(self.pier_keys)):
             slot = i if self.pier_keys[i] == key else slot
@@ -727,7 +726,7 @@ def _add_spandrel_bands(
     """Place the bands at every floor line of a tier, three.js's
     `addSpandrelBands`. The end bands are clipped to the tier."""
     ref s = parts.style
-    var floors = max(1, Int(_js_round(height / s.floor_height)))
+    var floors = max(1, Int(js_round(height / s.floor_height)))
     var fh = height / Float64(floors)
     var band_height = s.floor_height - s.window_height
     var band_length = max(0.2, frame.length - 0.6)
@@ -789,7 +788,7 @@ def _add_windows(
     conditioners on some shaft windows, three.js's `addWindows`."""
     ref s = parts.style
     var bays = frame.bays(s.bay_width)
-    var floors = max(1, Int(_js_round(height / s.floor_height)))
+    var floors = max(1, Int(js_round(height / s.floor_height)))
     var fh = height / Float64(floors)
     var ac_w = min((s.bay_width - s.pier_width) * 0.55, 0.66)
     var ac_h = ac_w * 0.6
@@ -824,7 +823,7 @@ def _add_windows(
                     fh - 1,
                 )
             )
-            var r = _fraction(
+            var r = fraction(
                 sin(
                     Float64(f) * 41.3
                     + Float64(b) * 12.7
@@ -895,7 +894,7 @@ def _add_storefront(
         parts.mullions.append(
             frame.box(x0 + bays.width * 2 / 3, cy, 0, 0.08, glass_height, 0.16)
         )
-        var r = _fraction(
+        var r = fraction(
             sin(
                 Float64(i) * 23.7
                 + frame.origin.x * 0.21
@@ -931,7 +930,7 @@ def _reveal_quad(
     the wall's thickness, both facing into the opening."""
     var dx = Float64(b.x) - Float64(a.x)
     var dy = Float64(b.y) - Float64(a.y)
-    var length = sqrt(dx * dx + dy * dy)
+    var length = sqrt(squared_length2[DType.float64](dx, dy))
     var inverse = 1 / (length if length != 0 else 1.0)
     var corners: List[Float32] = [
         a.x,
@@ -976,9 +975,7 @@ def _arch_reveals(
         for i in range(len(points) - 1):  # pragma: no branch
             _reveal_quad(positions, normals, uvs, points[i], points[i + 1], d)
     var geometry = BufferGeometry()
-    geometry.set_attribute(String(POSITION), BufferAttribute(positions^, 3))
-    geometry.set_attribute(String(NORMAL), BufferAttribute(normals^, 3))
-    geometry.set_attribute(String(UV), BufferAttribute(uvs^, 2))
+    textured_surface(geometry, positions^, normals^, uvs^)
     return geometry^
 
 
@@ -1010,7 +1007,7 @@ def _add_arcade(
         var hole = Path(Vector2(left, Float32(sill)))
         hole.line_to(Vector2(left, Float32(spring)))
         hole.quadratic_to(
-            Vector2(left, Float32(apex)), Vector2(Float32(cx), Float32(apex))
+            Vector2(left, Float32(apex)), vector2_from_float64(cx, apex)
         )
         hole.quadratic_to(
             Vector2(right, Float32(apex)), Vector2(right, Float32(spring))
@@ -1025,7 +1022,7 @@ def _add_arcade(
     var wall = merge_geometries([front^, reveals^])
     parts.extras.append(_affine_geometry(wall^, frame.matrix(0, 0, 0)))
     var back = plane(
-        Length(length, METER), Length(Float32(height), METER)
+        Length(length, METER), length_meters(height)
     ).to_non_indexed()
     parts.extras.append(
         _affine_geometry(
@@ -1058,21 +1055,19 @@ def _slab(
         var p = footprint[count - 1 - k] if area < 0 else footprint[k]
         var dx = cx - p.x
         var dz = cz - p.z
-        var d = sqrt(dx * dx + dz * dz)
+        var d = sqrt(squared_length2[DType.float64](dx, dz))
         var scale = inset / (d if d != 0 else 1.0)
-        var point = Vector2(
-            Float32(p.x + dx * scale), Float32(p.z + dz * scale)
-        )
+        var point = vector2_from_float64(p.x + dx * scale, p.z + dz * scale)
         if k == 0:
             outline.move_to(point)
         else:
             outline.line_to(point)
     var start = outline.first
     outline.line_to(start)
-    var geometry = extrude(Shape(outline^), Length(Float32(thickness), METER))
-    geometry.rotate_x(Angle(Float32(pi / 2), RADIAN))
+    var geometry = extrude(Shape(outline^), length_meters(thickness))
+    geometry.rotate_x(angle_radians(pi / 2))
     geometry.translate(
-        Length(0, METER), Length(Float32(y - 0.2), METER), Length(0, METER)
+        Length(0, METER), length_meters(y - 0.2), Length(0, METER)
     )
     return geometry^
 
@@ -1087,15 +1082,9 @@ def _box_part(
 ) raises -> BufferGeometry:
     """Return a box of a size moved to a point, without an index."""
     var geometry = box(
-        Length(Float32(width), METER),
-        Length(Float32(height), METER),
-        Length(Float32(depth), METER),
+        length_meters(width), length_meters(height), length_meters(depth)
     )
-    geometry.translate(
-        Length(Float32(x), METER),
-        Length(Float32(y), METER),
-        Length(Float32(z), METER),
-    )
+    geometry.translate(length_meters(x), length_meters(y), length_meters(z))
     return geometry.to_non_indexed()
 
 
@@ -1144,15 +1133,11 @@ def _reveal_wall(
 ) raises -> BufferGeometry:
     """Return one reveal wall of a window opening, set back to the
     glazing."""
-    var wall = plane(
-        Length(Float32(width), METER), Length(Float32(height), METER)
-    )
-    wall.rotate_x(Angle(Float32(rx), RADIAN))
-    wall.rotate_y(Angle(Float32(ry), RADIAN))
+    var wall = plane(length_meters(width), length_meters(height))
+    wall.rotate_x(angle_radians(rx))
+    wall.rotate_y(angle_radians(ry))
     wall.translate(
-        Length(Float32(x), METER),
-        Length(Float32(y), METER),
-        Length(Float32(-depth / 2), METER),
+        length_meters(x), length_meters(y), length_meters(-depth / 2)
     )
     return wall.to_non_indexed()
 
@@ -1192,13 +1177,9 @@ def window_geometry(style: SkyscraperStyle) raises -> BufferGeometry:
     hole.line_to(Vector2(x, -y))
     hole.line_to(Vector2(-x, -y))
     shape.add_hole(hole^)
-    var transom = plane(
-        Length(Float32(iw * 2), METER), Length(Float32(0.05), METER)
-    )
+    var transom = plane(length_meters(iw * 2), length_meters(0.05))
     transom.translate(
-        Length(0, METER),
-        Length(Float32(h * 0.04), METER),
-        Length(Float32(-depth + 0.02), METER),
+        Length(0, METER), length_meters(h * 0.04), length_meters(-depth + 0.02)
     )
     return merge_geometries(
         [
@@ -1226,11 +1207,8 @@ def glass_geometry(style: SkyscraperStyle) raises -> BufferGeometry:
         Error: If the opening is too small for its frame.
     """
     return plane(
-        Length(
-            Float32(style.bay_width - style.pier_width - WINDOW_BORDER * 2),
-            METER,
-        ),
-        Length(Float32(style.window_height - WINDOW_BORDER * 2), METER),
+        length_meters(style.bay_width - style.pier_width - WINDOW_BORDER * 2),
+        length_meters(style.window_height - WINDOW_BORDER * 2),
     ).to_non_indexed()
 
 
@@ -1311,31 +1289,29 @@ struct _Baked:
                         Float64(n[v * 3 + 2]),
                     )
                 ).normalized()
-                self.positions.append(Float32(at.x))
-                self.positions.append(Float32(at.y))
-                self.positions.append(Float32(at.z))
-                self.normals.append(Float32(normal.x))
-                self.normals.append(Float32(normal.y))
-                self.normals.append(Float32(normal.z))
+                append_float64_xyz(self.positions, at.x, at.y, at.z)
+                append_float64_xyz(self.normals, normal.x, normal.y, normal.z)
                 self.uvs.append(uv[v * 2])
                 self.uvs.append(uv[v * 2 + 1])
                 self.part_ids.append(Float32(id.value))
-                self.room_centers.append(Float32(room.center.x))
-                self.room_centers.append(Float32(room.center.y))
-                self.room_centers.append(Float32(room.center.z))
+                append_float64_xyz(
+                    self.room_centers,
+                    room.center.x,
+                    room.center.y,
+                    room.center.z,
+                )
                 self.room_sizes.append(Float32(room.width))
                 self.room_sizes.append(Float32(room.height))
 
     def geometry(self) raises -> BufferGeometry:
         """Return the baked attributes as one geometry."""
         var geometry = BufferGeometry()
-        geometry.set_attribute(
-            String(POSITION), BufferAttribute(self.positions.copy(), 3)
+        textured_surface(
+            geometry,
+            self.positions.copy(),
+            self.normals.copy(),
+            self.uvs.copy(),
         )
-        geometry.set_attribute(
-            String(NORMAL), BufferAttribute(self.normals.copy(), 3)
-        )
-        geometry.set_attribute(String(UV), BufferAttribute(self.uvs.copy(), 2))
         geometry.set_attribute(
             String(PART_ID), BufferAttribute(self.part_ids.copy(), 1)
         )
@@ -1383,12 +1359,12 @@ struct SkyscraperGenerator(Movable):
         """
         var parts = SkyscraperParts(SkyscraperStyle(self.parameters))
         ref s = parts.style
-        var floors = max(3, Int(_js_round(s.total_height / s.floor_height)))
+        var floors = max(3, Int(js_round(s.total_height / s.floor_height)))
         var base_floors = max(
-            1, Int(_js_round(Float64(floors) * s.base_fraction))
+            1, Int(js_round(Float64(floors) * s.base_fraction))
         )
         var crown_floors = max(
-            1, Int(_js_round(Float64(floors) * s.crown_fraction))
+            1, Int(js_round(Float64(floors) * s.crown_fraction))
         )
         var shaft_floors = max(1, floors - base_floors - crown_floors)
         var base_height = Float64(base_floors) * s.floor_height

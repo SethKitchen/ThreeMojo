@@ -33,13 +33,27 @@ width and height about its center, and a view offset cuts one tile of a
 larger image out of the zoomed box, as `updateProjectionMatrix` cuts it.
 """
 
+from math.finite import positive_finite
+
+from math.finite import require_positive_finite
 from std.math import isfinite
-from cameras.camera import Camera, ViewOffset, node_view_matrix, view_offset
+from cameras.camera import (
+    Camera,
+    ViewOffset,
+    disable_view_offset,
+    placed_view_matrix,
+    scene_view_matrix,
+    view_offset,
+)
 from core.layers import Layers
 from core.object3d import NO_PARENT, NodeId
 from core.scene import Scene
 from math.matrix4 import Matrix4
-from math.projection import look_at, orthographic, viewport
+from math.projection import (
+    orthographic,
+    require_far_beyond_near,
+    viewport,
+)
 from math.vector3 import Vector3
 from units.si import Length, METER
 
@@ -128,11 +142,11 @@ struct OrthographicCamera(Camera):
             raise Error("The view volume needs right beyond left")
         if self.top.value <= self.bottom.value:
             raise Error("The view volume needs top above bottom")
-        if self.far.value <= self.near.value:
-            raise Error("The far plane must be beyond the near plane")
-        if not (self.zoom > 0 and isfinite(self.zoom)):
+        require_far_beyond_near(self.near.value, self.far.value)
+        if not positive_finite(Float64(self.zoom)):
             raise Error(
-                "An orthographic zoom must be positive, got ", self.zoom
+                "An orthographic zoom must be positive, got "
+                + String(self.zoom)
             )
 
     def set_view_offset(
@@ -169,8 +183,7 @@ struct OrthographicCamera(Camera):
 
         The tile is kept, disabled, as three.js keeps it.
         """
-        if Bool(self.view):
-            self.view.value().enabled = False
+        disable_view_offset(self.view)
 
     def visible_layers(self) -> Layers:
         """Return which layers this camera draws; see `core.layers`."""
@@ -252,12 +265,9 @@ struct OrthographicCamera(Camera):
                 the view direction, or the camera rides a node -- ask
                 `view_matrix_in`.
         """
-        if self.node != NO_PARENT:
-            raise Error(
-                "An attached camera's view comes from its node; call"
-                " view_matrix_in(scene)"
-            )
-        return look_at(self.position, self.target, self.up)
+        return placed_view_matrix(
+            self.node, self.position, self.target, self.up
+        )
 
     def view_matrix_in(self, scene: Scene) raises -> Matrix4:
         """Return the matrix taking world space to camera space.
@@ -273,9 +283,9 @@ struct OrthographicCamera(Camera):
             Error: If the placement is degenerate, the node is not in the
                 scene, or the scene is stale.
         """
-        if self.node == NO_PARENT:
-            return self.view_matrix()
-        return node_view_matrix(scene, self.node)
+        return scene_view_matrix(
+            scene, self.node, self.position, self.target, self.up
+        )
 
     def view_to_screen_matrix(self, width: Int, height: Int) raises -> Matrix4:
         """Return the transform from camera space to pixels.
@@ -324,10 +334,12 @@ def centered(
         Error: If the height or aspect is not positive, or the clipping
             planes are unusable.
     """
-    if not (height.value > 0 and isfinite(height.value)):
-        raise Error("The visible height must be positive")
-    if not (aspect > 0 and isfinite(aspect)):
-        raise Error("The aspect ratio must be positive")
+    require_positive_finite(
+        Float64(height.value), "The visible height must be positive"
+    )
+    require_positive_finite(
+        Float64(aspect), "The aspect ratio must be positive"
+    )
     var half = height.value / 2
     var wide = half * aspect
     return OrthographicCamera(

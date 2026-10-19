@@ -22,20 +22,24 @@ from extensions.animals.coat import (
     Paint,
     Palette,
     mix3,
+    shade_swatch,
     srgb,
 )
 from extensions.sdf.ids import BoneId
 from extensions.animals.parts import JAW
 from extensions.sdf.sculpt import ell_y
 from extensions.animals.kit import (
+    side_sign,
+    digitigrade_fore,
+    digitigrade_hind,
     EyeSpec,
     eye_frame_of,
-    is_limb,
+    coat_place,
     is_front_limb,
     mirrored_blob,
     hashed_stream,
 )
-from extensions.animals.noise import fbm3, vnoise3
+from extensions.animals.noise import fbm3, vnoise3, centered_fbm
 from extensions.animals.options import (
     FEMALE,
     Sex,
@@ -64,6 +68,7 @@ from extensions.animals.warp import (
     legs_warp,
     scale_about_warp,
 )
+from math.norm import squared_length2
 from std.math import atan2, cos, exp, pi, sin, sqrt
 
 comptime TAIL_SEGS = 10
@@ -768,7 +773,7 @@ def cat_sculpt(mut m: SdfModel, rig: Rig, t: Traits) raises:
 
     # EARS: tall triangular pinnae, thin, cupped forward.
     for side in [String("L"), String("R")]:  # pragma: no branch
-        var s = 1.0 if side == "L" else -1.0
+        var s = side_sign(side)
         var e = _ear_frame(rig.j("earBase" + side), rig.j("earTip" + side), s)
         var eb = rig.bone("ear" + side)
         var hk = e.h
@@ -827,7 +832,7 @@ def cat_sculpt(mut m: SdfModel, rig: Rig, t: Traits) raises:
     # LEGS: thick and short, on round paws.
     var lt = t.get("limb")
     for side in [String("L"), String("R")]:  # pragma: no branch
-        var s = 1.0 if side == "L" else -1.0
+        var s = side_sign(side)
         _fore_leg(m, rig, side, s, lt)
         _hind_leg(m, rig, side, s, lt, lh)
 
@@ -866,18 +871,9 @@ def _toes_z() -> List[Float64]:
 def _fore_leg(
     mut m: SdfModel, rig: Rig, side: String, s: Float64, lt: Float64
 ) raises:
-    var lat = V3(s, 0, 0)
-    var sc = rig.j("scapTop" + side)
-    var sh = rig.j("shoulder" + side)
-    var e = rig.j("elbow" + side)
-    var w = rig.j("wrist" + side)
-    var mc = rig.j("mcp" + side)
-    var toe = rig.j("ftoe" + side)
-    var scap = rig.bone("scapula" + side)
-    var hum = rig.bone("humerus" + side)
-    var rad = rig.bone("radius" + side)
-    var meta = rig.bone("metacarpus" + side)
-    var fpaw = rig.bone("fpaw" + side)
+    var lat, sc, sh, e, w, mc, toe, scap, hum, rad, meta, fpaw = (
+        digitigrade_fore(rig, side, s)
+    )
     _ = ell_y(
         m,
         "scapmuscle",
@@ -951,15 +947,7 @@ def _hind_leg(
     mut m: SdfModel, rig: Rig, side: String, s: Float64, lt: Float64, lh: Bool
 ) raises:
     var lat = V3(s, 0, 0)
-    var hp = rig.j("hip" + side)
-    var kn = rig.j("knee" + side)
-    var hk = rig.j("hock" + side)
-    var mt = rig.j("mtp" + side)
-    var tt = rig.j("htoe" + side)
-    var fem = rig.bone("femur" + side)
-    var tib = rig.bone("tibia" + side)
-    var mtar = rig.bone("metatarsus" + side)
-    var hpaw = rig.bone("hpaw" + side)
+    var hp, kn, hk, mt, tt, fem, tib, mtar, hpaw = digitigrade_hind(rig, side)
     # Meaty thighs rising into the flank and croup.
     _ = ell_y(
         m,
@@ -1297,11 +1285,7 @@ def cat_palette(t: Traits) raises -> Palette:
         var chin = name == "chin" and (v == BLACK or v == GRAY or v == TUXEDO)
         var warm = tone or calico_fur or stripe or chin
         if warm:
-            c = V3(
-                c.x * (1.0 + 0.08 * k + l),
-                c.y * (1.0 + 0.02 * k + l),
-                c.z * (1.0 - 0.08 * k + l),
-            )
+            c = shade_swatch(c, k, l, 0.08, 0.02, -0.08)
         out.set(name, c)
     var tabby = v == MACKEREL or v == CLASSIC
     if tabby:
@@ -1609,7 +1593,9 @@ def cat_paint(
         var ny_bot = -0.0232
         var nw = 0.0054
         var nh = ny_top - ny_bot
-        var d_side = (ax * nh - (h.y - ny_bot) * nw) / sqrt(nh * nh + nw * nw)
+        var d_side = (ax * nh - (h.y - ny_bot) * nw) / sqrt(
+            squared_length2[DType.float64](nh, nw)
+        )
         var d_tri = max(d_side, h.y - ny_top + 0.0015 * (ax / nw) ** 2)
         var on_nose = (
             (tag == "nose" or tag == "nostril" or tag == "philtrum")
@@ -1639,19 +1625,9 @@ def cat_paint(
     var look = pal.get("look")
     var tabby = v == MACKEREL or v == CLASSIC or v == GINGER
     var ghost = look.z > 0.5
-    var region = 0
+    var region, limb = coat_place(bone)
     var leg = 0.0
-    if bone == "head":
-        region = 2
-    elif bone == "jaw":
-        region = 6
-    elif bone.startswith("ear"):
-        region = 5
-    elif bone.startswith("tail"):
-        region = 4
-    elif bone == "neck1" or bone == "neck2":
-        region = 1
-    elif is_limb(bone):
+    if limb:
         leg = smoothstep(0.15, 0.09, p.y)
     var axl = _axial(p)
     var vt = axl.theta
@@ -1741,8 +1717,8 @@ def cat_paint(
             bone,
         )
     # Low-frequency color variation, and a black coat's rusty cast.
-    var cv = fbm3(V3(p.x * 30.0, p.y * 30.0, p.z * 30.0), 3) - 0.5
-    var cvh = fbm3(V3(p.x * 12.0 + 5.0, p.y * 12.0, p.z * 12.0), 2) - 0.5
+    var cv = centered_fbm(p, 30.0, 3)
+    var cvh = centered_fbm(p, 12.0, 2, 5.0)
     c = V3(
         c.x * (1.0 + 0.14 * cv + 0.08 * cvh),
         c.y * (1.0 + 0.12 * cv),

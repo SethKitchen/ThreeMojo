@@ -54,6 +54,7 @@ from loaders.svg_path import (
 )
 from math.path import Shape
 from std.math import fma, acos, cos, floor, isfinite, log10, pi, sin, sqrt
+from core.ordinal import require_valid, require_positive
 
 
 # three.js's `BIGNUMBER`.
@@ -642,8 +643,7 @@ def create_shapes_with_rule(
         Error: If the rule is not valid, or the scan line through an
             outline does not cross it.
     """
-    if not rule.is_valid():
-        raise Error("SVG: a fill rule that is not valid")
+    require_valid(rule.is_valid(), "SVG: a fill rule that is not valid")
     var min_x = BIG_NUMBER
     var max_x = -BIG_NUMBER
     var simple = List[_Simple]()
@@ -1085,8 +1085,9 @@ def points_to_stroke(
     var refused = not style.join.is_valid() or not style.cap.is_valid()
     if refused:
         raise Error("SVG: a stroke join or cap that is not valid")
-    if arc_divisions < 1:
-        raise Error("SVG: a stroke needs at least one arc division")
+    require_positive(
+        arc_divisions, "SVG: a stroke needs at least one arc division"
+    )
     var points = remove_duplicated_points(points_in, min_distance)
     var n = len(points)
     var s = _Stroker(style, arc_divisions)

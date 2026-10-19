@@ -19,6 +19,7 @@ sphere at the sides. three.js does the same.
 
 from cameras.perspective_camera import PerspectiveCamera
 from math.vector3 import Vector3
+from math.finite import require_positive_finite
 from std.math import isfinite, max, pi, sin
 from units.si import Angle, Length, METER, RADIAN
 
@@ -47,14 +48,19 @@ def fit_distance(radius: Length, fov: Angle) raises -> Length:
 
     Raises:
         Error: If the radius is not positive and finite, or the field of
-            view is not between zero and pi.
+            view is not between zero and pi, or the distance cannot be
+            represented as a positive finite length.
     """
     if not (isfinite(radius.value) and radius.value > 0):
         raise Error("The sphere's radius must be positive and finite")
     var angle = fov.to(RADIAN)
     if not (isfinite(angle) and angle > 0 and angle < Float32(pi)):
         raise Error("The field of view must be between zero and pi")
-    return Length(radius.value / sin(angle / 2), METER)
+    var distance = radius.value / sin(angle / 2)
+    require_positive_finite(
+        Float64(distance), "The fit distance must be positive and finite"
+    )
+    return Length(distance, METER)
 
 
 def fit_sphere(
@@ -72,7 +78,7 @@ def fit_sphere(
 
     Args:
         camera: The camera to place. Its field of view sets the distance.
-        center: The sphere's center.
+        center: The sphere's finite center.
         radius: The sphere's radius. It must be positive and finite.
         direction: Which way from the center the camera stands. Its length is
             not used, but it must not be zero.
@@ -85,7 +91,9 @@ def fit_sphere(
     Raises:
         Error: If the radius or the field of view is refused by
             `fit_distance`, the direction is zero or not finite, or the
-            margin is not positive and finite. The camera is not changed.
+            margin is not positive and finite. A nonfinite center or a
+            result outside the finite coordinate range is also refused.
+            The camera is not changed.
     """
     var tight = fit_distance(radius, camera.fov)
     if not (isfinite(margin) and margin > 0):
@@ -95,8 +103,21 @@ def fit_sphere(
     if not (isfinite(reach) and reach > 0):
         raise Error("The direction must be finite and not zero")
     side.normalize()
+    if not center.is_finite():
+        raise Error("The sphere's center must be finite")
     var distance = Length(tight.value * margin, METER)
-    camera.place(center + side * distance.value, center)
-    camera.near = Length(max(tight.value * NEAR_SHARE, NEAREST), METER)
-    camera.far = Length(max(tight.value * FAR_SHARE, FARTHEST), METER)
+    require_positive_finite(
+        Float64(distance.value), "The fit distance must be positive and finite"
+    )
+    var near = Length(max(tight.value * NEAR_SHARE, NEAREST), METER)
+    var far = Length(max(tight.value * FAR_SHARE, FARTHEST), METER)
+    require_positive_finite(
+        Float64(far.value), "The fit far plane must be positive and finite"
+    )
+    var position = center + side * distance.value
+    if not position.is_finite():
+        raise Error("The fit position must be finite")
+    camera.place(position, center)
+    camera.near = near
+    camera.far = far
     return distance

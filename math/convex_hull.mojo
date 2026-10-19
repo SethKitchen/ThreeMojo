@@ -32,7 +32,10 @@ broken one for points that are all on a line or a plane. This port refuses
 all three.
 """
 
-from math.vector3 import Vector3
+from core.ordinal import require_index_in_count
+from math.cross import cross_components
+from math.norm import dot3
+from math.vector3 import Vector3, vector3_from_float64
 from math.exact_predicates import (
     _collinear,
     _difference_compare,
@@ -45,6 +48,57 @@ from math.exact_predicates import (
     _segment_distance_compare,
 )
 from std.math import frexp, isfinite, ldexp, sqrt
+
+
+def require_hull_count(count: Int) raises:
+    """Refuse a convex hull with fewer than four points.
+
+    Nothing. The call returns when there are at least four points.
+
+    Args:
+        count: How many points the hull is given.
+
+    Raises:
+        Error: If there are fewer than four points.
+    """
+    if count < 4:
+        raise Error("A convex hull needs at least four points")
+
+
+def require_hull_finite(x: Float64, y: Float64, z: Float64) raises:
+    """Refuse a convex-hull point that is not finite.
+
+    Nothing. The call returns when all three coordinates are finite.
+
+    Args:
+        x: The first coordinate.
+        y: The second coordinate.
+        z: The third coordinate.
+
+    Raises:
+        Error: If any coordinate is not finite.
+    """
+    var x_bad = not isfinite(x)
+    var y_bad = not isfinite(y)
+    var z_bad = not isfinite(z)
+    if x_bad or y_bad or z_bad:
+        raise Error("A convex hull needs finite points")
+
+
+def require_hull_face(face: Int, count: Int) raises:
+    """Refuse a face index the hull does not have.
+
+    Nothing. The call returns when the index names a face.
+
+    Args:
+        face: Which face.
+        count: How many faces the hull has.
+
+    Raises:
+        Error: If the index is negative or past the last face.
+    """
+    require_index_in_count(face, count, "A face index is out of range")
+
 
 # JavaScript's `Number.EPSILON`: the gap between one and the next `Float64`.
 comptime DOUBLE_EPSILON = Float64(2.220446049250313e-16)
@@ -100,7 +154,9 @@ struct _Point(ImplicitlyCopyable):
 
     def dot(self, other: Self) -> Float64:
         """Return the dot product, summed in three.js's order."""
-        return self.x * other.x + self.y * other.y + self.z * other.z
+        return dot3[DType.float64](
+            self.x, self.y, self.z, other.x, other.y, other.z
+        )
 
     def __sub__(self, other: Self) -> Self:
         """Return the component-wise difference."""
@@ -116,11 +172,10 @@ struct _Point(ImplicitlyCopyable):
 
     def cross(self, other: Self) -> Self:
         """Return the cross product, three.js's `crossVectors`."""
-        return _Point(
-            self.y * other.z - self.z * other.y,
-            self.z * other.x - self.x * other.z,
-            self.x * other.y - self.y * other.x,
+        var x, y, z = cross_components[DType.float64](
+            self.x, self.y, self.z, other.x, other.y, other.z
         )
+        return _Point(x, y, z)
 
     def component(self, axis: Int) -> Float64:
         """Return x, y or z for an axis of zero, one or two."""
@@ -225,8 +280,7 @@ struct ConvexHull(Movable):
                 finite, or the points all lie on one point, one line or one
                 plane within the tolerance.
         """
-        if len(points) < 4:
-            raise Error("A convex hull needs at least four points")
+        require_hull_count(len(points))
         self.tolerance = -1
         self._scale_exponent = 0
         self.faces = List[Int]()
@@ -254,11 +308,7 @@ struct ConvexHull(Movable):
         self._new_faces = List[Int]()
         # Four points at least, checked above.
         for point in points:  # pragma: no branch
-            var x_bad = not isfinite(point[0])
-            var y_bad = not isfinite(point[1])
-            var z_bad = not isfinite(point[2])
-            if x_bad or y_bad or z_bad:
-                raise Error("A convex hull needs finite points")
+            require_hull_finite(point[0], point[1], point[2])
             self._points.append(_Point(point[0], point[1], point[2]))
             self._source_points.append(point)
             self._vertex_prev.append(-1)
@@ -293,8 +343,7 @@ struct ConvexHull(Movable):
         Raises:
             Error: If either number is out of range.
         """
-        if face < 0 or face >= len(self.faces):
-            raise Error("A face index is out of range")
+        require_hull_face(face, len(self.faces))
         if corner < 0 or corner > 2:
             raise Error("A face has three corners")
         return self._edge_vertex[self._edge(self.faces[face], corner)]
@@ -311,10 +360,9 @@ struct ConvexHull(Movable):
         Raises:
             Error: If `face` is out of range.
         """
-        if face < 0 or face >= len(self.faces):
-            raise Error("A face index is out of range")
+        require_hull_face(face, len(self.faces))
         var n = self._normal[self.faces[face]]
-        return Vector3(Float32(n.x), Float32(n.y), Float32(n.z))
+        return vector3_from_float64(n.x, n.y, n.z)
 
     def contains_point(self, point: Vector3) -> Bool:
         """Return whether a finite point is inside the hull or on it.

@@ -34,6 +34,8 @@ WebP carries no color space here, so the samples are sRGB, as a browser
 takes them.
 """
 
+from core.binary import copy_byte_range, little_endian_uint
+from math.utils import clamp
 from render.png import DecodedImage
 from render.srgb import SRGB
 from render.webp_lossless import decode_lossless, decode_lossless_stream
@@ -62,22 +64,6 @@ def _tag(bytes: List[UInt8], at: Int) -> String:
     for i in range(4):  # pragma: no branch
         out += chr(Int(bytes[at + i]))
     return out
-
-
-def _le(bytes: List[UInt8], at: Int, count: Int) -> Int:
-    """Return a little-endian number of `count` bytes."""
-    var value = 0
-    for i in range(count):  # pragma: no branch
-        value |= Int(bytes[at + i]) << (8 * i)
-    return value
-
-
-def _slice(bytes: List[UInt8], start: Int, end: Int) -> List[UInt8]:
-    """Return a copy of bytes `start` to `end`."""
-    var out = List[UInt8](capacity=end - start)
-    for i in range(start, end):
-        out.append(bytes[i])
-    return out^
 
 
 def unfilter_alpha(
@@ -113,7 +99,7 @@ def unfilter_alpha(
             var left = top_left
             for x in range(width):  # pragma: no branch
                 var top = Int(alpha[at + x - width])
-                var guess = min(max(left + top - top_left, 0), 255)
+                var guess = clamp(left + top - top_left, 0, 255)
                 left = (Int(alpha[at + x]) + guess) & 0xFF
                 top_left = top
                 alpha[at + x] = UInt8(left)
@@ -147,10 +133,10 @@ def decode_alpha(
     if method == 0:
         if len(chunk) - 1 < width * height:
             raise Error("WebP: the raw alpha is too short")
-        alpha = _slice(chunk, 1, 1 + width * height)
+        alpha = copy_byte_range(chunk, 1, 1 + width * height)
     else:
         var argb = decode_lossless_stream(
-            _slice(chunk, 1, len(chunk)), width, height
+            copy_byte_range(chunk, 1, len(chunk)), width, height
         )
         alpha = List[UInt8](capacity=len(argb))
         for pixel in argb:  # pragma: no branch
@@ -175,7 +161,7 @@ def decode(bytes: List[UInt8]) raises -> DecodedImage:
         raise Error("WebP: not a RIFF WEBP file")
     # libwebp's `ParseRIFF`, `ParseVP8X`, `ParseOptionalChunks` and
     # `ParseVP8Header`, with all of the file at hand.
-    var riff = _le(bytes, 4, 4)
+    var riff = little_endian_uint(bytes, 4, 4)
     if riff < 12 or riff > len(bytes) - 8:
         raise Error("WebP: the RIFF size does not fit the file")
     var at = 12
@@ -186,21 +172,21 @@ def decode(bytes: List[UInt8]) raises -> DecodedImage:
     # The RIFF size is at least 12 and fits the file, so a chunk header
     # follows `WEBP`.
     if _tag(bytes, at) == "VP8X":
-        if _le(bytes, at + 4, 4) != 10:
+        if little_endian_uint(bytes, at + 4, 4) != 10:
             raise Error("WebP: a VP8X chunk that is not ten bytes")
         if len(bytes) - at < 18:
             raise Error("WebP: the VP8X chunk runs past the file")
         if Int(bytes[at + 8]) & 0x02 != 0:
             raise Error("WebP: an animation is not decoded")
-        canvas_width = _le(bytes, at + 12, 3) + 1
-        canvas_height = _le(bytes, at + 15, 3) + 1
+        canvas_width = little_endian_uint(bytes, at + 12, 3) + 1
+        canvas_height = little_endian_uint(bytes, at + 15, 3) + 1
         at += 18
         # Chunks up to the image; the last alpha chunk counts.
         var total = 4 + 18
         while True:
             if len(bytes) - at < 8:
                 raise Error("WebP: the file has no image chunk")
-            var size = _le(bytes, at + 4, 4)
+            var size = little_endian_uint(bytes, at + 4, 4)
             var disk = (8 + size + 1) & ~1
             total += disk
             if total > riff:
@@ -210,17 +196,17 @@ def decode(bytes: List[UInt8]) raises -> DecodedImage:
                 break
             # Within the RIFF size, so within the file.
             if tag == "ALPH":
-                alpha = _slice(bytes, at + 8, at + 8 + size)
+                alpha = copy_byte_range(bytes, at + 8, at + 8 + size)
                 has_alpha_chunk = True
             at += disk
     var tag = _tag(bytes, at)
     if tag != "VP8 " and tag != "VP8L":
         raise Error("WebP: the image chunk is not VP8 or VP8L")
-    var size = _le(bytes, at + 4, 4)
+    var size = little_endian_uint(bytes, at + 4, 4)
     # Within the RIFF size, which fits the file, is within the file.
     if size > riff - 12:
         raise Error("WebP: the image chunk runs past the file")
-    var payload = _slice(bytes, at + 8, at + 8 + size)
+    var payload = copy_byte_range(bytes, at + 8, at + 8 + size)
     var width: Int
     var height: Int
     var rgba: List[UInt8]

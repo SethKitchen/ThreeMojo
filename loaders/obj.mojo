@@ -51,6 +51,10 @@ face with fewer than three corners or that is not convex, and an index
 that names nothing are refused, with the line they were found on.
 """
 
+from std.math import isfinite
+
+from core.ordinal import index_in_count
+
 from core.buffer_attribute import BufferAttribute
 from core.buffer_geometry import (
     NORMAL,
@@ -59,8 +63,9 @@ from core.buffer_geometry import (
     BufferGeometry,
     MaterialIndex,
 )
+from loaders.js_text import split_fields
+from loaders.text_number import file_line
 from math.vector3 import Vector3
-from std.math import isfinite
 from std.pathlib import Path
 
 
@@ -273,7 +278,7 @@ struct _Part(Movable):
 
 def _where(line: Int) -> String:
     """Return the prefix an error names its line with."""
-    return "OBJ line " + String(line) + ": "
+    return file_line("OBJ", line)
 
 
 def _number(field: String, line: Int) raises -> Float32:
@@ -348,7 +353,7 @@ def _index(field: String, pool: Int, line: Int) raises -> Int:
         value += pool
     else:
         value -= 1
-    if value < 0 or value >= pool:
+    if not index_in_count(value, pool):
         raise Error(
             _where(line)
             + "a face names an entry the file does not have: "
@@ -652,11 +657,8 @@ def parse_obj(text: String) raises -> ObjModel:
             stripped = data^
         if stripped == "":
             continue
-        var fields = List[String]()
-        # The line is not empty here, so it has a first field: the loop
-        # always runs.
-        for piece in stripped.split():  # pragma: no branch
-            fields.append(String(piece))
+        # The line is not empty here, so it has a first field.
+        var fields = split_fields(stripped)
         var keyword = fields[0]
         if keyword == "v":
             _read_coordinates(vertices, fields, 3, line)

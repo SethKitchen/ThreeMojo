@@ -51,7 +51,7 @@ from objects.line import SEGMENTS, Line
 from render.framebuffer import Color
 from std.math import pi
 from std.pathlib import Path
-from units.si import RADIAN, Angle
+from units.measure import angle_radians
 
 
 struct GCodeLayer(Copyable, Movable):
@@ -343,9 +343,7 @@ def gcode_scene(
     var path = assets.materials.add(Material(Color(255, 0, 0), kind=BASIC))
     var group = Object3D()
     group.name = "gcode"
-    group.set_rotation_from_axis_angle(
-        Vector3(1, 0, 0), Angle(Float32(-pi / 2), RADIAN)
-    )
+    group.set_rotation_from_axis_angle(Vector3(1, 0, 0), angle_radians(-pi / 2))
     var root = scene.attach(group, parent)
     var model = GCodeModel(root, layers^, extruded, path)
     var count = len(model.layers)
@@ -359,8 +357,8 @@ def gcode_scene(
         var vertex = List[Float64]()
         var path_vertex = List[Float64]()
         for layer in model.layers:
-            vertex.extend(layer.vertex.copy())
-            path_vertex.extend(layer.path_vertex.copy())
+            vertex.extend(Span(layer.vertex))
+            path_vertex.extend(Span(layer.path_vertex))
         _add_object(model, vertex, True, count, scene, assets)
         _add_object(model, path_vertex, False, count, scene, assets)
     return model^

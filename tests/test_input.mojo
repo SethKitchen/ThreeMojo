@@ -42,9 +42,7 @@ def _decode(mut decoder: InputDecoder, text: String) -> List[InputEvent]:
     Returns:
         The events.
     """
-    var bytes = List[UInt8]()
-    for byte in text.as_bytes():
-        bytes.append(byte)
+    var bytes = List[UInt8](text.as_bytes())
     return decoder.feed(bytes)
 
 

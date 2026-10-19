@@ -14,6 +14,7 @@ them all.
 Coordinates are meters, z up. Gravity acts along -z.
 """
 
+from math.finite import require_finite, require_finite_group
 from std.math import isfinite
 from extensions.building.material import BuildingMaterial
 from extensions.building.model import Section
@@ -37,6 +38,37 @@ from units.si import (
     PASCAL,
     Pressure64,
 )
+from core.ordinal import require_valid
+
+
+def require_gravity(acceleration: Float64) raises:
+    """Refuse a gravity that is negative or not finite.
+
+    Nothing. The call returns when the acceleration is zero or more
+    and finite.
+
+    Args:
+        acceleration: The acceleration, in meters per second squared.
+
+    Raises:
+        Error: If the acceleration is negative or not finite.
+    """
+    if not (acceleration >= 0 and isfinite(acceleration)):
+        raise Error("A gravity must be zero or more and finite")
+
+
+def require_finite_load(value: Float64) raises:
+    """Refuse a load that is not finite.
+
+    Nothing. The call returns when the load is finite.
+
+    Args:
+        value: The load, in its stored unit.
+
+    Raises:
+        Error: If the load is not finite.
+    """
+    require_finite(Float64(value), "A load must be finite")
 
 
 struct Member(Copyable, Movable):
@@ -147,6 +179,20 @@ struct GravityLoad(ImplicitlyCopyable):
     var acceleration: Float64
 
 
+def require_dof(dof: Dof) raises:
+    """Refuse a degree of freedom outside 0 to 5.
+
+    Nothing. The call returns when the degree of freedom is valid.
+
+    Args:
+        dof: The degree of freedom.
+
+    Raises:
+        Error: If the degree of freedom is not valid.
+    """
+    require_valid(dof.is_valid(), "A degree of freedom must be from 0 to 5")
+
+
 struct StructuralModel(Copyable, Movable):
     """Nodes, supports, members, shells, loads and added masses."""
 
@@ -248,8 +294,10 @@ struct StructuralModel(Copyable, Movable):
         Raises:
             Error: If the position is not finite.
         """
-        if not (isfinite(at.x) and isfinite(at.y) and isfinite(at.z)):
-            raise Error("A node position must be finite")
+        require_finite_group(
+            at.is_finite(),
+            "A node position must be finite",
+        )
         self.nodes.append(at)
         for _ in range(6):  # pragma: no branch
             self.fixed.append(False)
@@ -270,8 +318,7 @@ struct StructuralModel(Copyable, Movable):
         """
         self.check_node(node)
         for i in range(len(dofs)):
-            if not dofs[i].is_valid():
-                raise Error("A degree of freedom must be from 0 to 5")
+            require_dof(dofs[i])
         for i in range(len(dofs)):
             self.fixed[6 * node.value + dofs[i].value] = True
 
@@ -303,8 +350,7 @@ struct StructuralModel(Copyable, Movable):
                 is not valid.
         """
         self.check_node(node)
-        if not dof.is_valid():
-            raise Error("A degree of freedom must be from 0 to 5")
+        require_dof(dof)
         return self.fixed[6 * node.value + dof.value]
 
     def add_member(
@@ -462,8 +508,7 @@ struct StructuralModel(Copyable, Movable):
         if not dof.is_translation():
             raise Error("A force must act along a translation")
         var f = force.to(NEWTON)
-        if not isfinite(f):
-            raise Error("A load must be finite")
+        require_finite_load(f)
         self.nodal_loads.append(NodalLoad(load_case, node, dof, f))
 
     def add_moment(
@@ -490,8 +535,7 @@ struct StructuralModel(Copyable, Movable):
         if not dof.is_rotation():
             raise Error("A moment must act about a rotation")
         var m = moment.to(NEWTON_METER)
-        if not isfinite(m):
-            raise Error("A load must be finite")
+        require_finite_load(m)
         self.nodal_loads.append(NodalLoad(load_case, node, dof, m))
 
     def add_line_load(
@@ -521,8 +565,7 @@ struct StructuralModel(Copyable, Movable):
         if not dof.is_translation():
             raise Error("A line load must act along a translation")
         var w = load.to(NEWTON_PER_METER)
-        if not isfinite(w):
-            raise Error("A load must be finite")
+        require_finite_load(w)
         self.line_loads.append(LineLoad(load_case, member, dof, w))
 
     def add_pressure(
@@ -544,8 +587,7 @@ struct StructuralModel(Copyable, Movable):
         self.check_case(load_case)
         self.check_shell(shell)
         var p = pressure.to(PASCAL)
-        if not isfinite(p):
-            raise Error("A load must be finite")
+        require_finite_load(p)
         self.pressures.append(PressureLoad(load_case, shell, p))
 
     def add_self_weight(
@@ -566,6 +608,5 @@ struct StructuralModel(Copyable, Movable):
         """
         self.check_case(load_case)
         var g = acceleration.to(METER_PER_SECOND_SQUARED)
-        if not (g >= 0 and isfinite(g)):
-            raise Error("A gravity must be zero or more and finite")
+        require_gravity(g)
         self.gravity.append(GravityLoad(load_case, g))

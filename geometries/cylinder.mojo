@@ -37,18 +37,22 @@ The side and each cap are groups, three.js's `addGroup` in
 dresses each part in its own.
 """
 
-from core.buffer_attribute import BufferAttribute
 from core.buffer_geometry import (
     BufferGeometry,
     CONE_GEOMETRY,
     CYLINDER_GEOMETRY,
     MaterialIndex,
-    NORMAL,
-    POSITION,
-    UV,
 )
-from core.user_data import UserData
+from core.ordinal import require_positive
+from geometries.surface import (
+    indexed_surface,
+    record_kind,
+    record_shaft_segments,
+    record_sweep,
+    require_three_segments,
+)
 from geometries.circle import FULL_TURN, check_sweep
+from math.curve_checks import require_at_least_one
 from math.norm import normalized2
 from std.math import cos, isfinite, sin, sqrt
 from units.si import Angle, Length, METER, RADIAN
@@ -118,6 +122,26 @@ def _append_cap(
         index.append(center)
 
 
+def _record_body(
+    mut geometry: BufferGeometry,
+    height: Length,
+    radial_segments: Int,
+    height_segments: Int,
+    open_ended: Bool,
+    theta_start: Angle,
+    theta_length: Angle,
+) raises:
+    """Record the height, the segment counts, the open end, and the sweep.
+
+    A cylinder and a cone share these keys. Each one writes its own radius
+    keys first.
+    """
+    geometry.parameters.set_meters("height", height)
+    record_shaft_segments(geometry, radial_segments, height_segments)
+    geometry.parameters.set_boolean("openEnded", open_ended)
+    record_sweep(geometry, theta_start, theta_length)
+
+
 def cylinder(
     radius_top: Length,
     radius_bottom: Length,
@@ -159,12 +183,13 @@ def cylinder(
         raise Error("A cylinder's radii cannot be negative")
     if radius_top.value == 0 and radius_bottom.value == 0:
         raise Error("A cylinder needs a radius at one end or the other")
-    if height.value <= 0:
-        raise Error("A cylinder needs a positive height")
-    if radial_segments < 3:
-        raise Error("A cylinder needs at least three segments around")
-    if height_segments < 1:
-        raise Error("A cylinder needs at least one segment down its side")
+    require_positive(height.value, "A cylinder needs a positive height")
+    require_three_segments(
+        radial_segments, "A cylinder needs at least three segments around"
+    )
+    require_at_least_one(
+        height_segments, "A cylinder needs at least one segment down its side"
+    )
     check_sweep(theta_length)
 
     var top = radius_top.value
@@ -271,10 +296,7 @@ def cylinder(
             dressed.append(2)
 
     var geometry = BufferGeometry()
-    geometry.set_attribute(String(POSITION), BufferAttribute(data^, 3))
-    geometry.set_attribute(String(NORMAL), BufferAttribute(normals^, 3))
-    geometry.set_attribute(String(UV), BufferAttribute(uvs^, 2))
-    geometry.set_index(index^)
+    indexed_surface(geometry, data^, normals^, uvs^, index^)
     # One group per part, each from where the last one ended. There is a
     # side, so this runs.
     var begin = 0
@@ -283,21 +305,17 @@ def cylinder(
             begin, runs[part] - begin, MaterialIndex(dressed[part])
         )
         begin = runs[part]
-    geometry.kind = CYLINDER_GEOMETRY
-    geometry.parameters = UserData()
-    geometry.parameters.set_number("radiusTop", Float64(radius_top.to(METER)))
-    geometry.parameters.set_number(
-        "radiusBottom", Float64(radius_bottom.to(METER))
-    )
-    geometry.parameters.set_number("height", Float64(height.to(METER)))
-    geometry.parameters.set_number("radialSegments", Float64(radial_segments))
-    geometry.parameters.set_number("heightSegments", Float64(height_segments))
-    geometry.parameters.set_boolean("openEnded", open_ended)
-    geometry.parameters.set_number(
-        "thetaStart", Float64(theta_start.to(RADIAN))
-    )
-    geometry.parameters.set_number(
-        "thetaLength", Float64(theta_length.to(RADIAN))
+    record_kind(geometry, CYLINDER_GEOMETRY)
+    geometry.parameters.set_meters("radiusTop", radius_top)
+    geometry.parameters.set_meters("radiusBottom", radius_bottom)
+    _record_body(
+        geometry,
+        height,
+        radial_segments,
+        height_segments,
+        open_ended,
+        theta_start,
+        theta_length,
     )
     return geometry^
 
@@ -343,17 +361,15 @@ def cone(
         theta_start,
         theta_length,
     )
-    geometry.kind = CONE_GEOMETRY
-    geometry.parameters = UserData()
-    geometry.parameters.set_number("radius", Float64(radius.to(METER)))
-    geometry.parameters.set_number("height", Float64(height.to(METER)))
-    geometry.parameters.set_number("radialSegments", Float64(radial_segments))
-    geometry.parameters.set_number("heightSegments", Float64(height_segments))
-    geometry.parameters.set_boolean("openEnded", open_ended)
-    geometry.parameters.set_number(
-        "thetaStart", Float64(theta_start.to(RADIAN))
-    )
-    geometry.parameters.set_number(
-        "thetaLength", Float64(theta_length.to(RADIAN))
+    record_kind(geometry, CONE_GEOMETRY)
+    geometry.parameters.set_meters("radius", radius)
+    _record_body(
+        geometry,
+        height,
+        radial_segments,
+        height_segments,
+        open_ended,
+        theta_start,
+        theta_length,
     )
     return geometry^
