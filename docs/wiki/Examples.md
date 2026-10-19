@@ -95,6 +95,8 @@ mkdir -p out
 | `frame_modes.mojo` | `frame-analysis.png` | [Frame analysis](Frame-analysis) |
 | `plate.mojo` | `shell-analysis.png` | [Shell analysis](Shell-analysis) |
 | `heat.mojo` | `building-energy.png` | [Building energy](Building-energy) |
+| `wijnendale.mojo` | `castle.png` | [Castle](Castle) |
+| `wijnendale_simulation.mojo` | `castle-simulation.png` | [Castle analysis](Castle-analysis) |
 | `spring_modes.mojo` | `numerics.png` | [Numerics](Numerics) |
 | `audio_game_humanoid.mojo` | `audio-character.glb` | [Audio-aligned game faces](Audio-aligned-game-faces) |
 | `carla_towns.mojo` | `carla_towns.png` | [CARLA rendering](CARLA-rendering) |

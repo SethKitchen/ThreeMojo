@@ -98,6 +98,8 @@ Look something up.
   - [Frame analysis](Frame-analysis)
   - [Shell analysis](Shell-analysis)
   - [Building energy](Building-energy)
+- [Castle](Castle)
+  - [Castle analysis](Castle-analysis)
 - [CARLA](CARLA)
   - [CARLA geometry](CARLA-geometry)
   - [CARLA maps](CARLA-maps)

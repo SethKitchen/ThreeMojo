@@ -12,6 +12,8 @@ The building subject generates buildings for engineering analysis and for games 
 
 The geotech subject analyzes earth-retaining walls: earth and water pressure, LRFD stability and slip circles. The visual subject draws engineering results with meshes, labels and textures. See [Retaining walls](Retaining-walls) and [Engineering views](Engineering-views).
 
+The castle subject draws a moated brick castle from a plan and checks it as a structural engineer would. It finds wind on a tower and the line of thrust in a masonry arch. It checks a wall at the edge of the moat and the water balance of the moat. It draws the shadows of the sun. See [Castle](Castle) and [Castle analysis](Castle-analysis).
+
 The CARLA subject ports the CARLA driving simulator without its game engine and its network transport. It covers maps, physics, the world, sensors, traffic, agents, recording and rendering. See [CARLA](CARLA).
 
 The Streamline subject types NVIDIA's DLSS 4.5 Super Resolution and Ray Reconstruction: modes, presets, options, per-frame constants and buffer checks. It has a CPU fallback upscaler. It does not run DLSS yet. See [Streamline](Streamline).
@@ -113,6 +115,16 @@ extensions/
     agents*.mojo, navigation*.mojo               agents and walker navigation
     recorder*.mojo, replayer*.mojo               the recorder
     town.mojo, render_*.mojo, camera_render.mojo rendering
+  castle/
+    kinds.mojo         tower shapes, roof forms, surfaces and limit states
+    masonry.mojo       masonry weight, strength and stiffness
+    plan.mojo          towers, blocks, moat, bridge and the Wijnendale plan
+    render.mojo        the mesh view of a plan
+    wind.mojo          wind on a tower and its base check
+    arch.mojo          limit analysis of a masonry arch
+    wall.mojo          the gravity wall at the edge of the moat
+    water_balance.mojo the water balance of the moat
+    sun.mojo           the sun over the site and its shadows
   streamline/
     kinds.mojo      modes, presets and buffer kinds
     options.mojo    the options of Super Resolution and Ray Reconstruction

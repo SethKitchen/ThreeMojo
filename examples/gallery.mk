@@ -174,3 +174,7 @@ $(call gallery,talking,talking)
 $(call gallery,expressions,expressions)
 # The CPU fallback upscaler beside the full-size render. It is not DLSS, and no image of it is tracked.
 $(call gallery,streamline,streamline)
+# Wijnendale Castle in autumn, with the moat as a mirror and the sun of 15:30 on 19 October.
+$(call gallery,castle,wijnendale)
+# Wijnendale Castle from morning to evening, with the shadow of the keep on the moat.
+$(call gallery,castle-simulation,wijnendale_simulation)
