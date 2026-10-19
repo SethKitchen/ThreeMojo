@@ -663,6 +663,7 @@ class FullAuditCleanupContracts(unittest.TestCase):
             'tools/carla_lane_oracle/test_expectation_binding_successor.py',
             'tools/carla_lane_oracle/test_pr760_physical_image.py',
             'tools/carla_lane_oracle/test_pr760_arithmetic_stage.py',
+            'tools/carla_lane_oracle/test_typed_boundary_contracts.py',
         }
         self.assertEqual(set(cleanup._pr776_input_pins()), successor_paths)
         for path in successor_paths:

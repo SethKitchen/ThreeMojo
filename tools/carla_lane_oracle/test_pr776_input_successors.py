@@ -19,6 +19,7 @@ PATHS = (
     'tools/carla_lane_oracle/test_expectation_binding_successor.py',
     'tools/carla_lane_oracle/test_pr760_physical_image.py',
     'tools/carla_lane_oracle/test_pr760_arithmetic_stage.py',
+    'tools/carla_lane_oracle/test_typed_boundary_contracts.py',
 )
 ADDED = {f'tests/compile_fail/a_{kind}_{selector}_is_not_a_bare_int.mojo'
          for kind in ('gpu', 'splat') for selector in ('info', 'part')}
@@ -54,6 +55,25 @@ class ExactSuccessorControls(unittest.TestCase):
             self.assertEqual(len(record['errors']), 1)
             self.assertEqual(record['notes'], ['function declared here'])
             self.assertEqual((record['errors'][0]['line'], record['errors'][0]['column']), (12, 21))
+
+    def test_typed_witness_adds_only_the_exact_expectation_predecessor_join(self):
+        path = 'tools/carla_lane_oracle/test_typed_boundary_contracts.py'
+        raw = (ROOT/path).read_bytes()
+        prior = owner.pr776_predecessor_bytes(path, raw)
+        addition = (b"                if path == 'tools/compile_fail_expectations.json':\n"
+                    b'                    raw = audit.pr776_predecessor_bytes(path, raw)\n')
+        self.assertEqual(raw.count(addition), 1)
+        self.assertEqual(raw.replace(addition, b'', 1), prior)
+        archive = ROOT/'tools/carla_lane_oracle/pr760-test_typed_boundary_contracts-predecessor.txt'
+        historical = archive.read_bytes()
+        self.assertEqual(owner.qualification_predecessor_bytes(path, raw), historical)
+        self.assertEqual(owner.qualification_predecessor_bytes(path, prior), historical)
+        self.assertEqual(owner.sha(historical), owner.typed_boundary.BINDING_INPUTS[path])
+        changed = raw.replace(b'raw = audit.pr776_predecessor_bytes(path, raw)',
+                              b'raw = bytes(raw)', 1)
+        for endpoint in (changed, raw+b'\n'):
+            with self.subTest(digest=owner.sha(endpoint)), self.assertRaises(ValueError):
+                owner.qualification_predecessor_bytes(path, endpoint)
 
     def test_no_unreviewed_endpoint_or_mutable_input_can_be_projected(self):
         for path in PATHS:
