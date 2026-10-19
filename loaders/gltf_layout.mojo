@@ -23,6 +23,13 @@ def check_buffer_range(size: Int, offset: Int, length: Int) raises:
         raise Error("glTF: a buffer view runs past its buffer")
 
 
+# The most elements one accessor may declare. A bufferView-less accessor
+# is zero-filled element by element, so a corrupt count would otherwise
+# spin for billions of iterations; 2**26 elements is generous for any
+# real asset.
+comptime MAX_GLTF_ACCESSOR_COUNT = 1 << 26
+
+
 struct AccessorLayout(ImplicitlyCopyable):
     """An accessor's packed element, including matrix column padding."""
 
@@ -97,7 +104,11 @@ struct AccessorLayout(ImplicitlyCopyable):
         Raises:
             Error: If count, alignment, or output size is invalid.
         """
-        if count < 0 or count > 9223372036854775807 // self.width:
+        if (
+            count < 0
+            or count > MAX_GLTF_ACCESSOR_COUNT
+            or count > 9223372036854775807 // self.width
+        ):
             raise Error("glTF: an accessor's count is invalid")
         if offset < 0 or offset % self.size != 0:
             raise Error(

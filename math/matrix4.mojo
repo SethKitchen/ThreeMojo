@@ -34,6 +34,7 @@ from math.euler import Euler
 from math.square_matrix import (
     _elements_equal,
     _post_multiply,
+    _pre_multiply,
     _scale_elements,
     _transpose_square,
     fill_elements,
@@ -241,9 +242,7 @@ struct Matrix4(Equatable, ImplicitlyCopyable):
 
     def premultiply(mut self, other: Self):
         """Pre-multiply by `other`, giving `other * self`."""
-        var left = Matrix4(copy=other)
-        left.multiply(self)
-        self.elements = left.elements.copy()
+        _pre_multiply[4](self.elements, other.elements)
 
     def determinant(self) -> Float32:
         """Return this matrix's determinant."""

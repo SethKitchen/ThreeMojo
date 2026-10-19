@@ -297,6 +297,10 @@ def decode_vertex_buffer(
     for k in range(size):  # pragma: no branch
         last.append(source[end - size + k])
     var block = min((_BLOCK_BYTES // size) & ~(_GROUP - 1), _BLOCK_MAX)
+    # A corrupt count must not drive an unbounded preallocation: refuse an
+    # output larger than a gigabyte before allocating it.
+    if count > (1 << 30) // size:
+        raise Error("meshopt: a vertex buffer too large to decode")
     var out = List[UInt8](length=count * size, fill=0)
     var buffer = List[UInt8](length=_BLOCK_MAX, fill=0)
     var at = 1

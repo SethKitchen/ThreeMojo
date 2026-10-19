@@ -31,7 +31,7 @@ def bytes_match(
         Whether every byte of `word` is at `at`.
     """
     var expected = word.as_bytes()
-    if at + len(expected) > limit:
+    if at < 0 or at + len(expected) > limit:
         return False
     # The word is not empty: the loop always runs.
     for offset in range(len(expected)):  # pragma: no branch

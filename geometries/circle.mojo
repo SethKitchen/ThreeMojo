@@ -38,7 +38,7 @@ from core.buffer_geometry import (
     CIRCLE_GEOMETRY,
     RING_GEOMETRY,
 )
-from core.ordinal import require_non_negative, require_positive
+from core.ordinal import require_positive
 from geometries.grid import append_cell
 from geometries.surface import (
     indexed_surface,
@@ -188,14 +188,16 @@ def ring(
         rows from the inner edge outwards, `theta_segments + 1` to a row.
 
     Raises:
-        Error: If the inner radius is negative, the outer radius is not
-            more than it, either segment count is too small, or the sweep
-            is not positive or is more than a turn.
+        Error: If the inner radius is not finite or is negative, the outer
+            radius is not finite or not more than it, either segment count
+            is too small, or the sweep is not positive or is more than a
+            turn.
     """
-    require_non_negative(
-        inner_radius.value, "A ring's inner radius cannot be negative"
-    )
-    if outer_radius.value <= inner_radius.value:
+    # `not (x >= 0)`, not `x < 0`: NaN compares false both ways, so the
+    # < form would let it through.
+    if not (inner_radius.value >= 0):
+        raise Error("A ring's inner radius cannot be negative")
+    if not (outer_radius.value > inner_radius.value):
         raise Error("A ring's outer radius must be more than its inner radius")
     require_three_segments(
         theta_segments, "A ring needs at least three segments around"

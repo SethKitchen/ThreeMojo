@@ -253,7 +253,9 @@ def make_clip_additive(
     for index in range(len(reference_clip.tracks)):  # pragma: no branch
         ref reference = reference_clip.tracks[index]
         var kind = reference.target.kind
-        if kind.is_boolean():
+        # Discrete tracks (boolean and string) carry no mixable value, so
+        # there is nothing to make additive: three.js skips both.
+        if kind.is_discrete():
             continue
         var found = -1
         for which in range(len(made.tracks)):  # pragma: no branch

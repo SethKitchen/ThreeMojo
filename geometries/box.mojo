@@ -35,6 +35,7 @@ from geometries.surface import (
     record_grid_segments,
     record_kind,
     record_width_height,
+    require_finite_extents,
     require_positive_extents,
 )
 from units.si import Length
@@ -156,9 +157,11 @@ def box(
         -x, +y, -y, +z, -z.
 
     Raises:
-        Error: If any extent is not positive, or any segment count is
-            below one. three.js floors a count and takes what it gets.
+        Error: If any extent is not finite or not positive, or any segment
+            count is below one. three.js floors a count and takes what it
+            gets.
     """
+    require_finite_extents(width.value, height.value, depth.value, "box")
     require_positive_extents(width.value, height.value, depth.value, "box")
     if width_segments < 1 or height_segments < 1 or depth_segments < 1:
         raise Error("A box needs at least one segment a side")

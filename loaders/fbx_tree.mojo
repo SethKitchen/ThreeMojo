@@ -66,6 +66,10 @@ comptime MIN_ASCII_VERSION = 7000
 comptime MIN_BINARY_VERSION = 6400
 # From version 7500 a record's three sizes are 64 bits, not 32.
 comptime WIDE_RECORD_VERSION = 7500
+# The most bytes one binary array may expand to. The claimed element count
+# is the zlib limit, so a corrupt count would otherwise let a kilobyte of
+# input expand into tens of gigabytes.
+comptime MAX_FBX_ARRAY_BYTES = 1 << 30
 
 
 def require_fbx_whole(value: Float64) raises:
@@ -950,6 +954,8 @@ struct _BinaryReader[origin: Origin[mut=False]](Movable):
         if encoding == 0:
             data = self.take(count * width)
         elif encoding == 1:
+            if count > MAX_FBX_ARRAY_BYTES // width:
+                raise Error(self.where() + "a zlib array too large to expand")
             data = zlib_inflate(self.take(stored), count * width)
             if len(data) != count * width:
                 raise Error(self.where() + "a zlib array of the wrong length")

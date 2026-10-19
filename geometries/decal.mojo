@@ -160,12 +160,18 @@ def decal(
         index: each triangle owns its corners.
 
     Raises:
-        Error: If an extent is not positive, the geometry has no positions,
-            an index entry points past the last vertex, the orientation's
-            order is not valid, or the mesh has normals and its world matrix
-            flattens a dimension.
+        Error: If an extent is not finite or not positive, the geometry has
+            no positions, an index entry points past the last vertex, the
+            orientation's order is not valid, or the mesh has normals and
+            its world matrix flattens a dimension.
     """
-    if width.value <= 0 or height.value <= 0 or depth.value <= 0:
+    # `not (x > 0)`, not `x <= 0`: NaN compares false both ways, so the
+    # <= form would let it through.
+    if (
+        not (width.value > 0)
+        or not (height.value > 0)
+        or not (depth.value > 0)
+    ):
         raise Error("A decal needs a box with positive extents")
     var size = Vector3(width.value, height.value, depth.value)
 

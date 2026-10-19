@@ -53,6 +53,32 @@ def _post_multiply[
 
 
 @always_inline
+def _pre_multiply[
+    n: Int
+](mut left: Array[Float32, n * n], right: Array[Float32, n * n]):
+    """Replace `left` with `right * left`.
+
+    The left-hand matrix is applied to a point first. `n` is three or
+    four, so none of the loops can run zero times.
+
+    Parameters:
+        n: The side length.
+
+    Args:
+        left: The matrix applied second. It is replaced.
+        right: The matrix applied first.
+    """
+    var result = Array[Float32, n * n](fill=0.0)
+    for row in range(n):  # pragma: no branch
+        for column in range(n):  # pragma: no branch
+            var total = Float32(0)
+            for k in range(n):  # pragma: no branch
+                total += right[k * n + row] * left[column * n + k]
+            result[column * n + row] = total
+    left = result^
+
+
+@always_inline
 def _elements_equal[
     n: Int
 ](left: Array[Float32, n * n], right: Array[Float32, n * n]) -> Bool:

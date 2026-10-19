@@ -51,6 +51,12 @@ from render.texture import BILINEAR
 from render.volume_texture import Data3DTexture, VolumeImage
 from std.pathlib import Path
 
+# The largest SIZE dimension this loader accepts. MagicaVoxel itself caps
+# models at 126 voxels a side; 1024 is generous, and it keeps the
+# occupancy volume (at most a gigabyte) and its size product (at most 2**30)
+# far from any overflow.
+comptime MAX_VOX_DIM = 1024
+
 # three.js's `DEFAULT_PALETTE`: 256 colors, red in the low byte.
 comptime DEFAULT_PALETTE: List[UInt32] = [
     0x00000000,
@@ -386,13 +392,22 @@ def parse_vox(bytes: List[UInt8]) raises -> List[VoxModel]:
         if id == "SIZE":
             if content < 12:
                 raise Error("VOX: a SIZE chunk too short for its sizes")
-            models.append(
-                VoxModel(_u32(bytes, i), _u32(bytes, i + 4), _u32(bytes, i + 8))
-            )
+            var size_x = _u32(bytes, i)
+            var size_y = _u32(bytes, i + 4)
+            var size_z = _u32(bytes, i + 8)
+            if (
+                size_x > MAX_VOX_DIM
+                or size_y > MAX_VOX_DIM
+                or size_z > MAX_VOX_DIM
+            ):
+                raise Error("VOX: a SIZE chunk's dimensions are too large")
+            models.append(VoxModel(size_x, size_y, size_z))
             i += content
         elif id == "XYZI":
             require_positive(len(models), "VOX: voxels before any SIZE")
             var count = _u32(bytes, i)
+            if content < 4 + count * 4:
+                raise Error("VOX: an XYZI chunk too short for its voxels")
             i += 4
             if i + count * 4 > len(bytes):
                 raise Error("VOX: the file ends inside its voxels")
@@ -409,6 +424,8 @@ def parse_vox(bytes: List[UInt8]) raises -> List[VoxModel]:
             i += count * 4
         elif id == "RGBA":
             require_positive(len(models), "VOX: a palette before any SIZE")
+            if content < 1024:
+                raise Error("VOX: an RGBA chunk too short for its palette")
             var palette: List[UInt32] = [0]
             for j in range(256):  # pragma: no branch
                 palette.append(UInt32(_u32(bytes, i + j * 4)))

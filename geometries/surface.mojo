@@ -243,9 +243,11 @@ def require_positive_radius(radius: Float32, name: String) raises:
         name: The solid, such as `sphere` or `tube`.
 
     Raises:
-        Error: If the radius is zero or negative.
+        Error: If the radius is not finite, or is zero or negative.
     """
-    if radius <= 0:
+    # `not (radius > 0)`, not `radius <= 0`: NaN compares false both ways,
+    # so the <= form would let it through.
+    if not (radius > 0):
         raise Error("A " + name + " needs a positive radius")
 
 

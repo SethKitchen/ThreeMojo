@@ -86,9 +86,11 @@ def _require_tube_radii(radius: Float32, tube: Float32, name: String) raises:
         name: `torus` or `torus knot`.
 
     Raises:
-        Error: If either radius is not positive.
+        Error: If either radius is not finite or not positive.
     """
-    if radius <= 0 or tube <= 0:
+    # `not (x > 0)`, not `x <= 0`: NaN compares false both ways, so the
+    # <= form would let it through.
+    if not (radius > 0) or not (tube > 0):
         raise Error(
             "A " + name + " needs a positive radius and a positive tube"
         )

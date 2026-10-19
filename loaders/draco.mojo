@@ -135,6 +135,11 @@ struct DracoGeometryType(Equatable, ImplicitlyCopyable, Writable):
 comptime DRACO_POINT_CLOUD = DracoGeometryType(0)
 comptime DRACO_TRIANGULAR_MESH = DracoGeometryType(1)
 
+# The most points a point cloud may declare. Each attribute allocates
+# `points` elements up front, so an unbounded count is an out-of-memory
+# wait away; 2**26 points is generous for any real scan.
+comptime MAX_DRACO_POINTS = 1 << 26
+
 
 @fieldwise_init
 struct DracoEncoding(Equatable, ImplicitlyCopyable, Writable):
@@ -979,6 +984,9 @@ def _decode_draco_owned(var bytes: List[UInt8]) raises -> DracoGeometry:
     if geometry_type == DRACO_POINT_CLOUD:
         var points = decoder.buffer.i32()
         draco_require(points >= 0, "the point count is negative")
+        draco_require(
+            points <= MAX_DRACO_POINTS, "the point count is too large"
+        )
         decoder.geometry.points = points
     elif encoding == DRACO_SEQUENTIAL:
         decoder.read_sequential_mesh()

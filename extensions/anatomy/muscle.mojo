@@ -505,7 +505,9 @@ def isometric_equilibrium(
         force,
         length_meters(fiber),
         length_meters(unit - reach),
-        angle_radians(asin(arch.thickness() / fiber)),
+        # Clamp: rounding can push the ratio a ulp past one, and asin of
+        # that is NaN. `pennation_at` guards the same edge the same way.
+        angle_radians(asin(min(1.0, arch.thickness() / fiber))),
     )
 
 

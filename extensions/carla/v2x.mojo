@@ -111,6 +111,7 @@ from extensions.carla.vehicle import (
     LIGHT_RIGHT_BLINKER,
 )
 from extensions.carla.world import World
+from math.utils import clamp_unit
 from math.vector3 import Vector3
 from std.math import (
     acos,
@@ -1984,9 +1985,15 @@ struct CaService(Copyable, Movable):
         ).rotation.forward_vector()
         var a = self.last_cam_heading
         var b = self.vehicle_heading
-        var angle = acos(
-            Float64(a.dot(b)) / (Float64(a.length()) * Float64(b.length()))
-        )
+        var la = Float64(a.length())
+        var lb = Float64(b.length())
+        # No previous heading counts as changed, so the first CAM fires at
+        # once instead of waiting on an acos(NaN) that compares false.
+        if not (la > 0.0) or not (lb > 0.0):
+            return True
+        # Clamp: Float32 rounding can push the cosine of near-parallel unit
+        # vectors past 1 by an ulp, and acos of that is NaN.
+        var angle = acos(clamp_unit(Float64(a.dot(b)) / (la * lb)))
         return angle * 180.0 / pi > 4.0
 
     def _moved(mut self, world: World) raises -> Bool:

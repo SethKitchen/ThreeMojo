@@ -53,10 +53,12 @@ def plane(
         index buffer, wound counter-clockwise seen from +z.
 
     Raises:
-        Error: If either extent is not positive, or either segment count is
-            less than one.
+        Error: If either extent is not finite or not positive, or either
+            segment count is less than one.
     """
-    if width.value <= 0 or height.value <= 0:
+    # `not (x > 0)`, not `x <= 0`: NaN compares false both ways, so the
+    # <= form would let a NaN extent through.
+    if not (width.value > 0) or not (height.value > 0):
         raise Error("A plane needs positive extents")
     if width_segments < 1 or height_segments < 1:
         raise Error("A plane needs at least one segment each way")

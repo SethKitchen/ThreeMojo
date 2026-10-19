@@ -763,6 +763,10 @@ def _cmap[
             var first = data.u32(at + 16 + g * 12)
             var last = data.u32(at + 20 + g * 12)
             var glyph = data.u32(at + 24 + g * 12)
+            # A corrupt range must not hang the parser expanding billions
+            # of code points: 0x10FFFF is the largest Unicode scalar value.
+            if first > last or last > 0x10FFFF:
+                raise Error("TTF: a cmap group names code points out of range")
             for c in range(first, last + 1):  # pragma: no branch
                 map[c] = glyph
                 glyph += 1

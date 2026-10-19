@@ -31,7 +31,7 @@ from postprocessing.screen_space import DepthView
 from render.framebuffer import FloatColor
 from render.target import RenderTarget
 from math.finite import require_finite
-from std.math import cos, isfinite, max, pow, sin
+from std.math import cos, isfinite, max, pi, pow, sin
 
 
 # `generateDenoiseSamples( 16, 2, 1 )`: the disk's taps, turns and spread.
@@ -125,8 +125,9 @@ def denoise_pixel(
     var here = view.position(u, v, depth)
     var side = 64
     var turn = noise[((view.height - 1 - y) % side) * side + (x % side)]
-    var nx = sin(turn)
-    var ny = cos(turn)
+    # The noise is a turn fraction: a full circle, as `gtao` does.
+    var nx = sin(turn * 2 * Float32(pi))
+    var ny = cos(turn * 2 * Float32(pi))
     var total = Float32(1)
     var r = texel.r
     var g = texel.g
@@ -140,7 +141,7 @@ def denoise_pixel(
         # `mat2(n.x, -n.y, n.x, n.y)` times the offset, column-major, on
         # a texture coordinate that grows down.
         var su = u + nx * ox + nx * oy
-        var sv = v + ny * ox - ny * oy
+        var sv = v - ny * ox + ny * oy
         var neighbor = source.sample(su, sv)
         var there = view.position(su, sv, view.depth_at(su, sv))
         var normal_similarity = pow(

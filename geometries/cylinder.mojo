@@ -43,7 +43,6 @@ from core.buffer_geometry import (
     CYLINDER_GEOMETRY,
     MaterialIndex,
 )
-from core.ordinal import require_positive
 from geometries.surface import (
     indexed_surface,
     record_kind,
@@ -175,15 +174,19 @@ def cylinder(
         then each cap it has.
 
     Raises:
-        Error: If either radius is negative or both are zero, the height is
-            not positive, either segment count is too small, or the sweep
-            is not positive or is more than a turn.
+        Error: If either radius is not finite, is negative, or both are
+            zero, the height is not finite or not positive, either segment
+            count is too small, or the sweep is not positive or is more
+            than a turn.
     """
-    if radius_top.value < 0 or radius_bottom.value < 0:
+    # `not (x >= 0)`, not `x < 0`: NaN compares false both ways, so the
+    # < form would let it through.
+    if not (radius_top.value >= 0) or not (radius_bottom.value >= 0):
         raise Error("A cylinder's radii cannot be negative")
     if radius_top.value == 0 and radius_bottom.value == 0:
         raise Error("A cylinder needs a radius at one end or the other")
-    require_positive(height.value, "A cylinder needs a positive height")
+    if not (height.value > 0):
+        raise Error("A cylinder needs a positive height")
     require_three_segments(
         radial_segments, "A cylinder needs at least three segments around"
     )
