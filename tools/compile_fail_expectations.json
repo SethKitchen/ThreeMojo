@@ -1953,6 +1953,16 @@
       "function declared here"
     ]
   },
+  "tests/compile_fail/a_limit_state_is_not_a_bare_int.mojo": {
+    "errors": [
+      {
+        "line": 12,
+        "column": 26,
+        "message": "cannot implicitly convert 'IntLiteral[0]' value to 'LimitState'"
+      }
+    ],
+    "notes": []
+  },
   "tests/compile_fail/a_line_coverage_is_not_a_bare_int.mojo": {
     "errors": [
       {
@@ -2972,6 +2982,16 @@
       "candidate not viable: value passed to 'road_option' cannot be converted from 'IntLiteral[4]' to 'RoadOption'"
     ]
   },
+  "tests/compile_fail/a_roof_form_is_not_a_bare_int.mojo": {
+    "errors": [
+      {
+        "line": 12,
+        "column": 24,
+        "message": "cannot implicitly convert 'IntLiteral[0]' value to 'RoofForm'"
+      }
+    ],
+    "notes": []
+  },
   "tests/compile_fail/a_route_node_id_is_not_a_bare_int.mojo": {
     "errors": [
       {
@@ -3508,6 +3528,16 @@
     ],
     "notes": []
   },
+  "tests/compile_fail/a_surface_is_not_a_bare_int.mojo": {
+    "errors": [
+      {
+        "line": 12,
+        "column": 23,
+        "message": "cannot implicitly convert 'IntLiteral[0]' value to 'Surface'"
+      }
+    ],
+    "notes": []
+  },
   "tests/compile_fail/a_surface_kind_is_not_a_bare_int.mojo": {
     "errors": [
       {
@@ -3750,6 +3780,16 @@
     "notes": [
       "function declared here"
     ]
+  },
+  "tests/compile_fail/a_tower_shape_is_not_a_bare_int.mojo": {
+    "errors": [
+      {
+        "line": 12,
+        "column": 26,
+        "message": "cannot implicitly convert 'IntLiteral[0]' value to 'TowerShape'"
+      }
+    ],
+    "notes": []
   },
   "tests/compile_fail/a_track_target_is_not_a_bare_int.mojo": {
     "errors": [
