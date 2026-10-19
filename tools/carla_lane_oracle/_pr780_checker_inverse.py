@@ -1,11 +1,17 @@
 # Copyright (c) 2026 Seth Kitchen, PE
 # SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
-"""Test-only exact PR780 checker predecessor and current physical line map."""
+"""Test-only exact checker predecessor and current physical line map.
+
+The owner predecessor is deliberately the fixed 5e91dad source (f62dbe69...),
+which the retained invariant controls already authenticate. The complete exact
+inverse spans the later PR776 typed-witness repair and PR780 composition. It
+never replaces a production observation or grants a source admission.
+"""
 import hashlib
 import json
 
 EDGES = {'full_audit_cleanup_contracts.py': {'before_sha256': 'f62dbe69ddd5d15bd79aa4b0a8237d9475fe1a00cea06c2f7124c59af237c833',
-                                     'after_sha256': 'a086c1b776460f5a376319a622c33d33b338f7ac024abd34d25019b97d38f1ed',
+                                     'after_sha256': '0b3a21d64eb631a8d8cf418f060268a1fd9fd8b108060f9a081ac0d719a2bd7c',
                                      'edits': ((56,
                                                 57,
                                                 (),
@@ -21,7 +27,7 @@ EDGES = {'full_audit_cleanup_contracts.py': {'before_sha256': 'f62dbe69ddd5d15bd
                                                 (),
                                                 (' '
                                                  "'tools/carla_lane_oracle/pr780_source_successor.py': "
-                                                 "'5563c0c8d58989ab32b88a3c6ce058681f19deebb30cc9aba808a1291e107a7c',\n",)),
+                                                 "'bd70f8aba6c03e0359c2324cad6cf519ce423766037fe778f269def09a6b0c88',\n",)),
                                                (250,
                                                 252,
                                                 ('                 '
@@ -143,8 +149,39 @@ EDGES = {'full_audit_cleanup_contracts.py': {'before_sha256': 'f62dbe69ddd5d15bd
                                                 ('            if current_image and (path in '
                                                  'pr760_stage.EXAMPLE_PATHS or qualification or '
                                                  'current != retained):\n',)),
-                                               (4247,
-                                                4250,
+                                               (4223,
+                                                4226,
+                                                (' '
+                                                 "'tools/carla_lane_oracle/test_pr760_physical_image.py': "
+                                                 "'1c1565c05cb702df67319cb69641f83c8a761d38ccf06a11de91b037dfe5b1ce',\n",
+                                                 ' '
+                                                 "'tools/carla_lane_oracle/test_pr760_arithmetic_stage.py': "
+                                                 "'ac51eb5dd58c8e3768f2405108203351194d72d63f2b53f4e30d5b2d4d8c26ab'}\n"),
+                                                (' '
+                                                 "'tools/carla_lane_oracle/test_pr760_physical_image.py': "
+                                                 "'6df971f2bf09c710a4e6ababc6adeea8995fd2e86c3e6866e548d5b193ae3669',\n",
+                                                 ' '
+                                                 "'tools/carla_lane_oracle/test_pr760_arithmetic_stage.py': "
+                                                 "'ac51eb5dd58c8e3768f2405108203351194d72d63f2b53f4e30d5b2d4d8c26ab',\n",
+                                                 ' '
+                                                 "'tools/carla_lane_oracle/test_typed_boundary_contracts.py': "
+                                                 "'8dee4d9c4bf42214fb2f10fbdcf71a4ba04398095d8c62a16233ad6fc038fce7'}\n")),
+                                               (4230,
+                                                4231,
+                                                ('    return '
+                                                 "{'tools/carla_lane_oracle/test_pr776_input_successors.py': "
+                                                 "'af0d9aff27b4f06ce8b102979825d84c177ec78b349dbbb1de4a98423c03f132',\n",),
+                                                ('    return '
+                                                 "{'tools/carla_lane_oracle/test_pr776_input_successors.py': "
+                                                 "'148a021e1d8173122f231f4e6839d4dfd7bb2bb14d76d70e3725ff310620d2aa',\n",)),
+                                               (4239,
+                                                4240,
+                                                ('    """Recover exact earlier comparison bytes '
+                                                 'for five named PR776 inputs.\n',),
+                                                ('    """Recover exact earlier comparison bytes '
+                                                 'for six named PR776 inputs.\n',)),
+                                               (4248,
+                                                4251,
                                                 (),
                                                 ('    extension = '
                                                  "pr780_successor._data_snapshot()['edges'].get(path)\n",
@@ -152,8 +189,103 @@ EDGES = {'full_audit_cleanup_contracts.py': {'before_sha256': 'f62dbe69ddd5d15bd
                                                  "extension['after_sha256']:\n",
                                                  '        raw = '
                                                  'pr780_successor.predecessor_bytes(path, raw)\n')),
-                                               (5314,
-                                                5319,
+                                               (4632,
+                                                4633,
+                                                ('                                                          '
+                                                 "'1c1565c05cb702df67319cb69641f83c8a761d38ccf06a11de91b037dfe5b1ce',\n",),
+                                                ('                                                          '
+                                                 "'6df971f2bf09c710a4e6ababc6adeea8995fd2e86c3e6866e548d5b193ae3669',\n",)),
+                                               (4634,
+                                                4635,
+                                                ('                                                            '
+                                                 '128,\n',),
+                                                ('                                                            '
+                                                 '129,\n',)),
+                                               (4651,
+                                                4654,
+                                                ('                                                             '
+                                                 '"\'tools/carla_lane_oracle/test_pr760_arithmetic_stage.py\'):\\n",\n',),
+                                                ('                                                             '
+                                                 '"\'tools/carla_lane_oracle/test_pr760_arithmetic_stage.py\',\\n",\n',
+                                                 '                                                             '
+                                                 "'                        '\n",
+                                                 '                                                             '
+                                                 '"\'tools/carla_lane_oracle/test_typed_boundary_contracts.py\'):\\n",\n')),
+                                               (4660,
+                                                4662,
+                                                ('                                                           '
+                                                 '(239,\n',
+                                                 '                                                            '
+                                                 '243,\n'),
+                                                ('                                                           '
+                                                 '(240,\n',
+                                                 '                                                            '
+                                                 '245,\n')),
+                                               (4667,
+                                                4668,
+                                                ('                                                             '
+                                                 "'raw) if path ==\\n',\n",),
+                                                ('                                                             '
+                                                 "'raw) if path in (\\n',\n",)),
+                                               (4669,
+                                                4672,
+                                                ('                                                             '
+                                                 '"\'tools/carla_lane_oracle/test_expectation_binding_successor.py\' '
+                                                 '"\n',),
+                                                ('                                                             '
+                                                 '"\'tools/carla_lane_oracle/test_expectation_binding_successor.py\',\\n",\n',
+                                                 '                                                             '
+                                                 "'                        '\n",
+                                                 '                                                             '
+                                                 '"\'tools/carla_lane_oracle/test_typed_boundary_contracts.py\') '
+                                                 '"\n')),
+                                               (4688,
+                                                4699,
+                                                ('                                                               '
+                                                 "'inputs[water])\\n')),))}\n",),
+                                                ('                                                               '
+                                                 "'inputs[water])\\n')),)),\n",
+                                                 ' '
+                                                 "'tools/carla_lane_oracle/test_typed_boundary_contracts.py': "
+                                                 "('7114f17cce33b84fe226d3559b4d08d1227a6c1cda1f83825441d22e48b51705',\n",
+                                                 '                                                              '
+                                                 "'8dee4d9c4bf42214fb2f10fbdcf71a4ba04398095d8c62a16233ad6fc038fce7',\n",
+                                                 '                                                              '
+                                                 '((444,\n',
+                                                 '                                                                '
+                                                 '446,\n',
+                                                 '                                                                '
+                                                 '(),\n',
+                                                 '                                                                '
+                                                 "('                if path == '\n",
+                                                 '                                                                 '
+                                                 '"\'tools/compile_fail_expectations.json\':\\n",\n',
+                                                 '                                                                 '
+                                                 "'                    raw = '\n",
+                                                 '                                                                 '
+                                                 "'audit.pr776_predecessor_bytes(path, '\n",
+                                                 '                                                                 '
+                                                 "'raw)\\n')),))}\n")),
+                                               (4735,
+                                                4738,
+                                                (),
+                                                ('    extension = '
+                                                 "pr780_successor._data_snapshot()['edges'].get(path)\n",
+                                                 '    if extension is not None and sha(raw) == '
+                                                 "extension['after_sha256']:\n",
+                                                 '        raw = '
+                                                 'pr780_successor.predecessor_bytes(path, raw)\n')),
+                                               (4740,
+                                                4743,
+                                                (),
+                                                ('        raw = pr776_predecessor_bytes(path, '
+                                                 'raw)\n',
+                                                 '    if (path == '
+                                                 "'tools/carla_lane_oracle/test_typed_boundary_contracts.py'\n",
+                                                 '            and sha(raw) == '
+                                                 "'8dee4d9c4bf42214fb2f10fbdcf71a4ba04398095d8c62a16233ad6fc038fce7'):\n")),
+                                               (5335,
+                                                5340,
                                                 (),
                                                 ('    extension_path = '
                                                  "'tools/carla_lane_oracle/test_pr760_arithmetic_stage.py'\n",
@@ -165,13 +297,13 @@ EDGES = {'full_audit_cleanup_contracts.py': {'before_sha256': 'f62dbe69ddd5d15bd
                                                  '        raw = '
                                                  'pr780_successor.predecessor_bytes(extension_path, '
                                                  'raw)\n')),
-                                               (5406,
-                                                5407,
+                                               (5427,
+                                                5428,
                                                 (),
                                                 ('        extension_data = '
                                                  'pr780_successor._data_snapshot()\n',)),
-                                               (5408,
-                                                5416,
+                                               (5429,
+                                                5437,
                                                 (),
                                                 ('        extended_pins = {path: '
                                                  "edge['after_sha256']\n",
@@ -189,15 +321,15 @@ EDGES = {'full_audit_cleanup_contracts.py': {'before_sha256': 'f62dbe69ddd5d15bd
                                                  '_pr776_bound_inputs().get(path))),\n',
                                                  "                    'PR780 source successor "
                                                  "predecessor join changed: ' + path)\n")),
-                                               (5418,
-                                                5419,
+                                               (5439,
+                                                5440,
                                                 ('            require(sha(raw) == '
                                                  'successor_pins.get(path, digest),\n',),
                                                 ('            require(sha(raw) == '
                                                  'extended_pins.get(path, successor_pins.get(path, '
                                                  'digest)),\n',)),
-                                               (5420,
-                                                5425,
+                                               (5441,
+                                                5446,
                                                 ('            if path in successor_pins:\n',
                                                  '                prior_inputs[path] = '
                                                  'pr776_predecessor_bytes(path, raw)\n',
@@ -215,8 +347,8 @@ EDGES = {'full_audit_cleanup_contracts.py': {'before_sha256': 'f62dbe69ddd5d15bd
                                                  'digest,\n',
                                                  "                    'PR780/PR776 successor "
                                                  "misses fixed PR760 input: ' + path)\n")),
-                                               (5426,
-                                                5433,
+                                               (5447,
+                                                5454,
                                                 ('            require(sha(observe(path)) == '
                                                  "digest, 'PR776 bound input changed: ' + "
                                                  'path)\n',),
@@ -236,8 +368,8 @@ EDGES = {'full_audit_cleanup_contracts.py': {'before_sha256': 'f62dbe69ddd5d15bd
                                                  '            require(sha(observe(path)) == '
                                                  "digest, 'PR780 bound input changed: ' + "
                                                  'path)\n')),
-                                               (5449,
-                                                5451,
+                                               (5470,
+                                                5472,
                                                 ('                              if path == '
                                                  "'tools/carla_lane_oracle/test_witness_format_contracts.py' "
                                                  "else image[path].decode('utf-8'))\n",),
@@ -246,8 +378,8 @@ EDGES = {'full_audit_cleanup_contracts.py': {'before_sha256': 'f62dbe69ddd5d15bd
                                                  '                              else '
                                                  'prior_inputs.get(path, '
                                                  "image[path]).decode('utf-8'))\n")),
-                                               (5466,
-                                                5467,
+                                               (5487,
+                                                5488,
                                                 ('        helper_texts = {path: previous.get(path, '
                                                  "image[path].decode('utf-8'))\n",),
                                                 ('        helper_texts = {path: previous.get(path, '
@@ -370,10 +502,10 @@ EDGES = {'full_audit_cleanup_contracts.py': {'before_sha256': 'f62dbe69ddd5d15bd
 
 
 def predecessor(name, raw):
-    """Compose only the exact current owner; prior controls validate other inputs."""
+    """Compose exact current checkers into the retained 5e91dad comparison."""
     if type(raw) is not bytes:
         raise AssertionError('checker source must be physical builtin bytes')
-    if hashlib.sha256(json.dumps(EDGES, sort_keys=True, separators=(',', ':')).encode()).hexdigest() != '558565d57c04960ec31a3675feb897468c33740f2bd0c2ce782ef9dd3c84b61f':
+    if hashlib.sha256(json.dumps(EDGES, sort_keys=True, separators=(',', ':')).encode()).hexdigest() != 'e8bf2dcf6766ab9e8b11fc24dbe8494c4981c4d64bceadf2d6a2f4b3011273fb':
         raise AssertionError('PR780 checker inverse data changed')
     digest = hashlib.sha256(raw).hexdigest()
     edge = EDGES.get(name)

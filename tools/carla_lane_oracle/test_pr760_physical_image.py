@@ -124,7 +124,8 @@ class ClosedPhysicalImageControls(unittest.TestCase):
             if path in ('tests/test_water.mojo', 'tools/compile_fail_expectations.json',
                         'tools/carla_lane_oracle/test_expectation_binding_successor.py',
                         'tools/carla_lane_oracle/test_pr760_physical_image.py',
-                        'tools/carla_lane_oracle/test_pr760_arithmetic_stage.py'):
+                        'tools/carla_lane_oracle/test_pr760_arithmetic_stage.py',
+                        'tools/carla_lane_oracle/test_typed_boundary_contracts.py'):
                 raw = owner.pr776_predecessor_bytes(path, raw)
             self.assertEqual(owner.sha(raw), expected)
         for path in owner.CHECKER_PATHS:
@@ -238,8 +239,9 @@ class ClosedPhysicalImageControls(unittest.TestCase):
         for path, row in rows.items():
             raw = (self.root/path).read_bytes()
             old = (self.root/row['predecessor_archive']).read_bytes()
-            previous = (owner.pr776_predecessor_bytes(path, raw) if path ==
-                        'tools/carla_lane_oracle/test_expectation_binding_successor.py' else raw)
+            previous = (owner.pr776_predecessor_bytes(path, raw) if path in (
+                        'tools/carla_lane_oracle/test_expectation_binding_successor.py',
+                        'tools/carla_lane_oracle/test_typed_boundary_contracts.py') else raw)
             self.assertEqual(owner.sha(previous), row['after_sha256'])
             self.assertEqual(self.accepted['bindings'][path], owner.sha(raw))
             self.assertEqual(owner.sha(old), row['before_sha256'])

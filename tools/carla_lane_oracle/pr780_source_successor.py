@@ -1410,10 +1410,10 @@ EDGES = json.loads(r'''
     ]
   },
   "tools/carla_lane_oracle/test_pr760_physical_image.py": {
-    "before_sha256": "1c1565c05cb702df67319cb69641f83c8a761d38ccf06a11de91b037dfe5b1ce",
-    "after_sha256": "d23c66fc6c90babdf7072060a4d68e3548e2d8b7b67a8f20a289b43a981652be",
-    "before_token_sha256": "8679cc01efc5f133b6c59c9fe4f5e1c7132d0cd119054de274b77ef95b1d87a4",
-    "after_token_sha256": "db6676250cb26305433429abbdfe1e9cce344329cb37a49b8aa6e5c3dbf718cd",
+    "before_sha256": "6df971f2bf09c710a4e6ababc6adeea8995fd2e86c3e6866e548d5b193ae3669",
+    "after_sha256": "282ac67d6fc9eb9395282b15a9e7178b0b92ff52ee34cafc5fbfc72efe44e408",
+    "before_token_sha256": "74ca01c4b41870f5b83e81d83ac19063908258e12e2c58026092a958f05e45ec",
+    "after_token_sha256": "b17ea63a4a17c83a9d825528de80d8a4482f1591ca5772d8f545010a34712d38",
     "edits": [
       {
         "start": 122,
@@ -1424,14 +1424,46 @@ EDGES = json.loads(r'''
         ]
       }
     ]
+  },
+  "tools/carla_lane_oracle/test_pr776_input_successors.py": {
+    "before_sha256": "148a021e1d8173122f231f4e6839d4dfd7bb2bb14d76d70e3725ff310620d2aa",
+    "after_sha256": "0e69f25b38f18cef70ba7751aa45b7e434593a0a900fa9666029806db6e518e4",
+    "before_token_sha256": "a5fbfe1798ba77ac6154f228731a26c54c73174a159328422e2ae95b793c26a5",
+    "after_token_sha256": "10847c0ee458a0c5d32ab01194a460436127c7daff25279d6ddaf8af85586875",
+    "edits": [
+      {
+        "start": 61,
+        "stop": 62,
+        "before": [],
+        "after": [
+          "        raw = owner.pr780_successor.predecessor_bytes(path, raw)\n"
+        ]
+      }
+    ]
+  },
+  "tools/carla_lane_oracle/test_typed_boundary_contracts.py": {
+    "before_sha256": "8dee4d9c4bf42214fb2f10fbdcf71a4ba04398095d8c62a16233ad6fc038fce7",
+    "after_sha256": "829b1391edfbac1300ca194a7e9a12affab310cc0b257b3e5d23278a567526a5",
+    "before_token_sha256": "f71efcac558cf883d01cc2cf792879074f5275e36fd3cd8c2e2d43b2de380db3",
+    "after_token_sha256": "c0a5f42b729e60db397f12264b1bba380efb2162e4db12de06fe4a08a2c0dc43",
+    "edits": [
+      {
+        "start": 444,
+        "stop": 445,
+        "before": [],
+        "after": [
+          "                raw = audit.pr780_successor.predecessor_bytes(path, raw)\n"
+        ]
+      }
+    ]
   }
 }
 ''')
 BOUND_INPUTS = {'tests/test_anatomy_muscle.mojo': '3653d6056c1f9f639537eedb7cd80364baf80352b4aa984d39c0e737d8801401',
  'tests/test_animation_strings.mojo': 'f5103e3660a63d3d5d9d348a0d928fa106e5cef03059d432a31335bb7dd14184',
  'tests/test_loader_bounds.mojo': '6e0c1487f1ff21f4654c2790e4460c0adf934bf6b9273e826782eec1bfed2d83',
- 'tools/carla_lane_oracle/test_pr780_source_successor.py': '5ceb366ebcf3500a1b61cf6ddc330997cd8906cf8c52b0620e2d335bd324c430'}
-DATA_SHA256 = '365df60b88c6d641fbfdbc4986a4866aeb4d6e40ad53884987872de5bdad3d53'
+ 'tools/carla_lane_oracle/test_pr780_source_successor.py': 'b88cdc20f3a6dfb0b38c6e85ccbe9b5c80d8ba5700ee2d8cf1a982e8e43ceeb0'}
+DATA_SHA256 = '10bb384c53ec4fd411973c9e6b45984202db4548c38a83494ed0de1122c63d5f'
 # END FIXED PR780 SUCCESSOR DATA
 
 
@@ -1446,7 +1478,8 @@ def sha(raw):
 
 def _data_snapshot():
     """Authenticate and detach the full finite inverse data before consuming it."""
-    require(DATA_SHA256 == '365df60b88c6d641fbfdbc4986a4866aeb4d6e40ad53884987872de5bdad3d53', 'authority digest selector changed')
+    require(type(DATA_SHA256) is str, 'authority digest selector is not a builtin string')
+    require(DATA_SHA256 == '10bb384c53ec4fd411973c9e6b45984202db4548c38a83494ed0de1122c63d5f', 'authority digest selector changed')
     encoded = json.dumps({'edges': EDGES, 'bound_inputs': BOUND_INPUTS},
                          sort_keys=True, separators=(',', ':'))
     require(sha(encoded) == DATA_SHA256, 'fixed source inverse data changed')

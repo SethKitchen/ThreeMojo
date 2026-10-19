@@ -664,6 +664,7 @@ class FullAuditCleanupContracts(unittest.TestCase):
             'tools/carla_lane_oracle/test_expectation_binding_successor.py',
             'tools/carla_lane_oracle/test_pr760_physical_image.py',
             'tools/carla_lane_oracle/test_pr760_arithmetic_stage.py',
+            'tools/carla_lane_oracle/test_typed_boundary_contracts.py',
         }
         self.assertEqual(set(cleanup._pr776_input_pins()), successor_paths)
         for path in successor_paths:
@@ -687,7 +688,8 @@ class FullAuditCleanupContracts(unittest.TestCase):
             prior = cleanup.pr780_successor.predecessor_bytes(path, raw)
             self.assertEqual(cleanup.sha(prior), edge['before_sha256'])
             self.assertEqual(edge['before_sha256'],
-                             cleanup._pr776_input_pins().get(path, image['inputs'][path]))
+                             cleanup._pr776_input_pins().get(path, image['inputs'].get(
+                                 path, cleanup._pr776_bound_inputs().get(path))))
             physical[path] = cleanup.sha(raw)
         for path, digest in cleanup.pr780_successor.BOUND_INPUTS.items():
             self.assertEqual(cleanup.sha((self.root/path).read_bytes()), digest)

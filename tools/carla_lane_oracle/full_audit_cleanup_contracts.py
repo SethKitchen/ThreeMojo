@@ -158,7 +158,7 @@ PR760_OWNER_PREDECESSOR_SHA256 = '6138ba2dcac394c716ea9ed32e74e0c6d15857d5c605fc
 DEPENDENCY_TOOL_SHA256 = {'tools/carla_lane_oracle/winner_sign_contracts.py': 'f850902634073364fe2407b00d12e9fdfb2ecfc6cf2a03414269fbb7984a8a7f',
  'tools/carla_lane_oracle/border_parser_contracts.py': '734d7b24aaf4e9f537cd7f0d7c7b8094d9c29106770b66c4a7a24cab74604dd4',
  'tools/carla_lane_oracle/pr760_arithmetic_stage.py': PR760_STAGE_SHA256,
- 'tools/carla_lane_oracle/pr780_source_successor.py': '5563c0c8d58989ab32b88a3c6ce058681f19deebb30cc9aba808a1291e107a7c',
+ 'tools/carla_lane_oracle/pr780_source_successor.py': 'bd70f8aba6c03e0359c2324cad6cf519ce423766037fe778f269def09a6b0c88',
  'tools/carla_lane_oracle/scaled_float32_contracts.py': 'e3a59a9f8d5a9394007c03fab6ac696e04998812dad5843a22e721bfbe57c2a1',
  'tools/affected.py': 'a56194a3e722ad341a42f3defec282b8154f5e4db8340df855f0199ea9830ebb',
  'tools/cache_key.py': 'ec06247feb8fe079c30b6da19fc655ffec363f1ce8e3372d063bf728e8c804c4',
@@ -4221,13 +4221,14 @@ def _pr776_input_pins():
     return {'tests/test_water.mojo': '179f2cb6ef20a44c9f862453d56fdb967b5ba1c6978996ecc750f7da3a4e5d7a',
  'tools/compile_fail_expectations.json': 'cae00c1721392c75b10af5793e6de851d963350c8396e405ef0233c19af5b723',
  'tools/carla_lane_oracle/test_expectation_binding_successor.py': 'e4ad0a6a13196e4a2bf16dae76f78f01d103260c2644632ec36fa74f46dad846',
- 'tools/carla_lane_oracle/test_pr760_physical_image.py': '1c1565c05cb702df67319cb69641f83c8a761d38ccf06a11de91b037dfe5b1ce',
- 'tools/carla_lane_oracle/test_pr760_arithmetic_stage.py': 'ac51eb5dd58c8e3768f2405108203351194d72d63f2b53f4e30d5b2d4d8c26ab'}
+ 'tools/carla_lane_oracle/test_pr760_physical_image.py': '6df971f2bf09c710a4e6ababc6adeea8995fd2e86c3e6866e548d5b193ae3669',
+ 'tools/carla_lane_oracle/test_pr760_arithmetic_stage.py': 'ac51eb5dd58c8e3768f2405108203351194d72d63f2b53f4e30d5b2d4d8c26ab',
+ 'tools/carla_lane_oracle/test_typed_boundary_contracts.py': '8dee4d9c4bf42214fb2f10fbdcf71a4ba04398095d8c62a16233ad6fc038fce7'}
 
 
 def _pr776_bound_inputs():
     """Bind the new regression and four diagnostic fixtures to physical bytes."""
-    return {'tools/carla_lane_oracle/test_pr776_input_successors.py': 'af0d9aff27b4f06ce8b102979825d84c177ec78b349dbbb1de4a98423c03f132',
+    return {'tools/carla_lane_oracle/test_pr776_input_successors.py': '148a021e1d8173122f231f4e6839d4dfd7bb2bb14d76d70e3725ff310620d2aa',
  'tools/carla_lane_oracle/test_main_rebase_successor.py': '2ca5e9f72a38766945e182fbe004e3e64011efa897e22445ab7372102634a792',
  'tests/compile_fail/a_gpu_info_is_not_a_bare_int.mojo': '785b9a1746336fdea844b431f6a5ffd6812a623a72d1929c544eb9f107cf7819',
  'tests/compile_fail/a_gpu_part_is_not_a_bare_int.mojo': 'a8880f3e6f546bf30671147e5a75bf37b5bf5b294b0c239590cb258a8266199f',
@@ -4236,7 +4237,7 @@ def _pr776_bound_inputs():
 
 
 def pr776_predecessor_bytes(path, raw):
-    """Recover exact earlier comparison bytes for five named PR776 inputs.
+    """Recover exact earlier comparison bytes for six named PR776 inputs.
 
     No root is read or projected. This is provenance, not an admission receipt:
     the physical owner separately checks every endpoint and rereads actual bytes.
@@ -4629,9 +4630,9 @@ def pr776_predecessor_bytes(path, raw):
                                                                       'self.assertNotEqual(typed.BINDING_INPUTS[PATH], '
                                                                       'digest)\n')))),
  'tools/carla_lane_oracle/test_pr760_physical_image.py': ('110861c34786bff5eefcf9503e5c98eb5a53af138dba327e184ee7616e7d98f0',
-                                                          '1c1565c05cb702df67319cb69641f83c8a761d38ccf06a11de91b037dfe5b1ce',
+                                                          '6df971f2bf09c710a4e6ababc6adeea8995fd2e86c3e6866e548d5b193ae3669',
                                                           ((120,
-                                                            128,
+                                                            129,
                                                             ('            '
                                                              "self.assertEqual(self.accepted['bindings'][path], "
                                                              'expected)\n',),
@@ -4648,23 +4649,27 @@ def pr776_predecessor_bytes(path, raw):
                                                              '                        '
                                                              "'tools/carla_lane_oracle/test_pr760_physical_image.py',\n",
                                                              '                        '
-                                                             "'tools/carla_lane_oracle/test_pr760_arithmetic_stage.py'):\n",
+                                                             "'tools/carla_lane_oracle/test_pr760_arithmetic_stage.py',\n",
+                                                             '                        '
+                                                             "'tools/carla_lane_oracle/test_typed_boundary_contracts.py'):\n",
                                                              '                raw = '
                                                              'owner.pr776_predecessor_bytes(path, '
                                                              'raw)\n',
                                                              '            '
                                                              'self.assertEqual(owner.sha(raw), '
                                                              'expected)\n')),
-                                                           (239,
-                                                            243,
+                                                           (240,
+                                                            245,
                                                             ('            '
                                                              'self.assertEqual(owner.sha(raw), '
                                                              "row['after_sha256'])\n",),
                                                             ('            previous = '
                                                              '(owner.pr776_predecessor_bytes(path, '
-                                                             'raw) if path ==\n',
+                                                             'raw) if path in (\n',
                                                              '                        '
-                                                             "'tools/carla_lane_oracle/test_expectation_binding_successor.py' "
+                                                             "'tools/carla_lane_oracle/test_expectation_binding_successor.py',\n",
+                                                             '                        '
+                                                             "'tools/carla_lane_oracle/test_typed_boundary_contracts.py') "
                                                              'else raw)\n',
                                                              '            '
                                                              'self.assertEqual(owner.sha(previous), '
@@ -4681,7 +4686,17 @@ def pr776_predecessor_bytes(path, raw):
                                                                "'tests/test_water.mojo'\n",
                                                                '        inputs[water] = '
                                                                'owner.pr776_predecessor_bytes(water, '
-                                                               'inputs[water])\n')),))}
+                                                               'inputs[water])\n')),)),
+ 'tools/carla_lane_oracle/test_typed_boundary_contracts.py': ('7114f17cce33b84fe226d3559b4d08d1227a6c1cda1f83825441d22e48b51705',
+                                                              '8dee4d9c4bf42214fb2f10fbdcf71a4ba04398095d8c62a16233ad6fc038fce7',
+                                                              ((444,
+                                                                446,
+                                                                (),
+                                                                ('                if path == '
+                                                                 "'tools/compile_fail_expectations.json':\n",
+                                                                 '                    raw = '
+                                                                 'audit.pr776_predecessor_bytes(path, '
+                                                                 'raw)\n')),))}
     require(path in rows, 'unreviewed PR776 predecessor path: ' + path)
     before_sha, after_sha, edits = rows[path]
     require(sha(raw) == after_sha, 'unreviewed PR776 endpoint: ' + path)
@@ -4718,8 +4733,14 @@ def qualification_predecessor_bytes(path, raw):
     executing_checker_bindings()
     require(type(path) is str and type(raw) is bytes,
             'qualification predecessor requires builtin source bytes')
+    extension = pr780_successor._data_snapshot()['edges'].get(path)
+    if extension is not None and sha(raw) == extension['after_sha256']:
+        raw = pr780_successor.predecessor_bytes(path, raw)
     if (path == 'tools/carla_lane_oracle/test_expectation_binding_successor.py'
             and sha(raw) == 'e4ad0a6a13196e4a2bf16dae76f78f01d103260c2644632ec36fa74f46dad846'):
+        raw = pr776_predecessor_bytes(path, raw)
+    if (path == 'tools/carla_lane_oracle/test_typed_boundary_contracts.py'
+            and sha(raw) == '8dee4d9c4bf42214fb2f10fbdcf71a4ba04398095d8c62a16233ad6fc038fce7'):
         raw = pr776_predecessor_bytes(path, raw)
     rows = {'tools/carla_lane_oracle/test_common758_current_successor.py': ('010cd7008a96b80e0aea26734dafb7be0068f677c5dd73af8fb15db585e70b9f',
                                                                      'bae8693bfbc3557a53e54f3dea90c5bf44583d5fde349a6c24c16045acec10e4',

@@ -81,6 +81,26 @@ class ExactSourceSuccessorControls(unittest.TestCase):
         with patch.object(successor, 'BOUND_INPUTS', {}), self.assertRaises(ValueError):
             successor.verify_data()
 
+    def test_nonbuiltin_digest_selector_cannot_admit_changed_data(self):
+        class EqualString(str):
+            def __eq__(self, other):
+                return True
+        class EqualObject:
+            def __eq__(self, other):
+                return True
+        changed = dict(successor.BOUND_INPUTS)
+        changed['tests/test_loader_bounds.mojo'] = '0'*64
+        for selector in (EqualString(successor.DATA_SHA256), EqualObject()):
+            with self.subTest(kind=type(selector).__name__), patch.object(
+                    successor, 'DATA_SHA256', selector), patch.object(
+                    successor, 'BOUND_INPUTS', changed):
+                with self.assertRaisesRegex(ValueError, 'not a builtin string'):
+                    successor._data_snapshot()
+                with self.assertRaisesRegex(ValueError, 'not a builtin string'):
+                    owner.executing_checker_bindings(ROOT)
+        successor.verify_data()
+        owner.executing_checker_bindings(ROOT)
+
     def test_inverse_consumes_detached_exact_data(self):
         path = 'core/extent.mojo'
         raw = (ROOT/path).read_bytes()
