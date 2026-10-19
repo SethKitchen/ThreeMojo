@@ -131,7 +131,6 @@ class ReviewedAdditionalLoopTests(unittest.TestCase):
         cases = ((self.root, PRODUCER + '.mojo.cov-origin'),
                  (stage, PRODUCER + '.mojo.cov-origin.extra'),
                  (stage, PRODUCER + '.mojopkg'),
-                 (stage, PRODUCER + '.MOJO.cov-origin'),
                  (stage, 'extensions.mojo.cov-origin'))
         for location, name in cases:
             target = location/name
@@ -143,9 +142,24 @@ class ReviewedAdditionalLoopTests(unittest.TestCase):
                         self.root, AXES, include_roots=(stage,)), {})
                 finally:
                     target.unlink()
+        origin = stage/(PRODUCER + '.mojo.cov-origin')
+        original = origin.read_bytes()
+        case_variant = stage/(PRODUCER + '.MOJO.cov-origin')
+        # Remove the lowercase entry first: on case-insensitive filesystems,
+        # writing the variant while it exists only changes the valid sidecar.
+        origin.unlink()
+        try:
+            case_variant.write_bytes(b'unreviewed resolver competitor')
+            entries = {path.name for path in case_variant.parent.iterdir()}
+            self.assertIn(case_variant.name, entries)
+            self.assertNotIn(origin.name, entries)
+            self.assertEqual(loops.reviewed_nonempty_loops(
+                self.root, AXES, include_roots=(stage,)), {})
+        finally:
+            case_variant.unlink()
+            origin.write_bytes(original)
         self.assertEqual(set(loops.reviewed_nonempty_loops(
             self.root, AXES, include_roots=(stage,))), {50})
-        origin = stage/(PRODUCER + '.mojo.cov-origin')
         origin.unlink()
         origin.symlink_to(self.root/(PRODUCER + '.mojo'))
         self.assertEqual(loops.reviewed_nonempty_loops(
