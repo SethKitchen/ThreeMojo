@@ -44,6 +44,8 @@ from extensions.castle.kinds import (
     require_roof_form,
     require_surface,
     require_tower_shape,
+    roof_form_from_name,
+    tower_shape_from_name,
 )
 
 
@@ -125,6 +127,26 @@ def test_require_helpers_refuse_unnamed_values() raises:
         require_surface(Surface(-3))
     with assert_raises(contains="A limit state is not valid"):
         require_limit_state(LimitState(99))
+
+
+def test_names_read_back_as_kinds() raises:
+    assert_equal(tower_shape_from_name("round"), ROUND)
+    assert_equal(tower_shape_from_name("square"), SQUARE)
+    assert_equal(roof_form_from_name("cone"), CONE)
+    assert_equal(roof_form_from_name("gable"), GABLE)
+    assert_equal(roof_form_from_name("parapet"), PARAPET)
+    # Every named kind reads back from its own name.
+    for k in range(2):
+        assert_equal(tower_shape_from_name(TowerShape(k).name()).value, k)
+    for k in range(3):
+        assert_equal(roof_form_from_name(RoofForm(k).name()).value, k)
+
+
+def test_an_unknown_name_is_refused() raises:
+    with assert_raises(contains="round or square, not oval"):
+        _ = tower_shape_from_name("oval")
+    with assert_raises(contains="cone, gable or parapet, not flat"):
+        _ = roof_form_from_name("flat")
 
 
 def main() raises:

@@ -471,6 +471,74 @@ def test_on_island_uses_the_circle() raises:
     assert_false(plan.on_island(_at(37.1, -3.0)))
 
 
+def test_scaling_multiplies_every_length() raises:
+    var plan = wijnendale()
+    var big = plan.scaled(1.15)
+    big.check()
+    assert_equal(big.name, plan.name)
+    assert_equal(len(big.towers), len(plan.towers))
+    assert_equal(len(big.blocks), len(plan.blocks))
+    assert_almost_equal(big.tallest().value, plan.tallest().value * 1.15)
+    # An area scales by the square of the factor and a volume by its cube.
+    assert_almost_equal(
+        big.moat.water_area().value, plan.moat.water_area().value * 1.15**2
+    )
+    assert_almost_equal(
+        big.towers[0].shaft_volume().value,
+        plan.towers[0].shaft_volume().value * 1.15**3,
+    )
+    assert_almost_equal(
+        big.towers[0].center.x.value, plan.towers[0].center.x.value * 1.15
+    )
+    assert_almost_equal(
+        big.blocks[0].center.y.value, plan.blocks[0].center.y.value * 1.15
+    )
+    assert_almost_equal(
+        big.bridge.length().value, plan.bridge.length().value * 1.15
+    )
+    assert_almost_equal(
+        big.bridge.start.x.value, plan.bridge.start.x.value * 1.15
+    )
+    assert_almost_equal(
+        big.moat.island_center.x.value, plan.moat.island_center.x.value * 1.15
+    )
+    # Angles, counts and kinds do not change.
+    assert_almost_equal(
+        big.blocks[0].heading.value, plan.blocks[0].heading.value
+    )
+    assert_almost_equal(big.bridge.heading.value, plan.bridge.heading.value)
+    assert_equal(big.bridge.spans, plan.bridge.spans)
+    assert_equal(big.towers[0].roof, plan.towers[0].roof)
+    assert_equal(big.latitude.value, plan.latitude.value)
+
+
+def test_scaling_by_one_changes_nothing() raises:
+    var plan = wijnendale()
+    var same = plan.scaled(1.0)
+    assert_almost_equal(same.tallest().value, plan.tallest().value)
+    assert_almost_equal(
+        same.masonry_footprint().value, plan.masonry_footprint().value
+    )
+
+
+def test_a_plan_without_parts_scales() raises:
+    var plan = wijnendale()
+    plan.towers = List[Tower]()
+    plan.blocks = List[Block]()
+    var small = plan.scaled(0.85)
+    assert_equal(len(small.towers), 0)
+    assert_equal(len(small.blocks), 0)
+    assert_almost_equal(small.moat.depth.value, plan.moat.depth.value * 0.85)
+
+
+def test_scaling_refuses_a_factor_that_is_not_positive() raises:
+    var plan = wijnendale()
+    with assert_raises(contains="A scale factor must be positive"):
+        _ = plan.scaled(0.0)
+    with assert_raises(contains="A scale factor must be positive"):
+        _ = plan.scaled(nan[DType.float64]())
+
+
 def test_the_moat_is_round() raises:
     var moat = wijnendale().moat.copy()
     assert_almost_equal(moat.semi_x.value, moat.semi_y.value)

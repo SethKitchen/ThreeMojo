@@ -32,7 +32,7 @@ from std.math import cos, pi, sin, sqrt
 from units.si import (
     Angle64,
     Area64,
-    DEGREE,
+    DEGREE64,
     METER,
     Length64,
     Volume64,
@@ -52,6 +52,11 @@ struct PlanPoint(ImplicitlyCopyable):
     var x: Length64
     # North of the origin.
     var y: Length64
+
+
+def _scaled_point(point: PlanPoint, factor: Float64) -> PlanPoint:
+    """Return a point with both its distances multiplied by a factor."""
+    return PlanPoint(point.x.scaled(factor), point.y.scaled(factor))
 
 
 @fieldwise_init
@@ -520,6 +525,87 @@ struct CastlePlan(Movable):
         self.moat.check()
         self.bridge.check()
 
+    def scaled(self, factor: Float64) raises -> CastlePlan:
+        """Return the plan with every length multiplied by a factor.
+
+        The angles, the counts, the shapes and the roof forms stay. A
+        survey that differs from an estimate by a known ratio gives the
+        sensitivity of an analysis to the error of the estimate.
+
+        Args:
+            factor: The factor, above zero.
+
+        Returns:
+            The scaled plan. It is not checked.
+
+        Raises:
+            Error: If the factor is not positive and finite.
+        """
+        require_positive_finite(factor, "A scale factor must be positive")
+        var towers = List[Tower]()
+        for i in range(len(self.towers)):
+            ref t = self.towers[i]
+            towers.append(
+                Tower(
+                    t.name,
+                    t.shape,
+                    _scaled_point(t.center, factor),
+                    t.radius.scaled(factor),
+                    t.wall.scaled(factor),
+                    t.height.scaled(factor),
+                    t.roof,
+                    t.roof_rise.scaled(factor),
+                )
+            )
+        var blocks = List[Block]()
+        for i in range(len(self.blocks)):
+            ref b = self.blocks[i]
+            blocks.append(
+                Block(
+                    b.name,
+                    _scaled_point(b.center, factor),
+                    b.length.scaled(factor),
+                    b.width.scaled(factor),
+                    b.heading,
+                    b.wall.scaled(factor),
+                    b.height.scaled(factor),
+                    b.roof,
+                    b.roof_rise.scaled(factor),
+                )
+            )
+        var moat = Moat(
+            _scaled_point(self.moat.center, factor),
+            self.moat.semi_x.scaled(factor),
+            self.moat.semi_y.scaled(factor),
+            _scaled_point(self.moat.island_center, factor),
+            self.moat.island_semi_x.scaled(factor),
+            self.moat.island_semi_y.scaled(factor),
+            self.moat.depth.scaled(factor),
+            self.moat.freeboard.scaled(factor),
+        )
+        var bridge = Bridge(
+            _scaled_point(self.bridge.start, factor),
+            self.bridge.heading,
+            self.bridge.spans,
+            self.bridge.span.scaled(factor),
+            self.bridge.pier.scaled(factor),
+            self.bridge.rise.scaled(factor),
+            self.bridge.ring.scaled(factor),
+            self.bridge.width.scaled(factor),
+            self.bridge.fill.scaled(factor),
+            self.bridge.springing.scaled(factor),
+            self.bridge.parapet.scaled(factor),
+        )
+        return CastlePlan(
+            self.name,
+            self.latitude,
+            self.longitude,
+            towers^,
+            blocks^,
+            moat^,
+            bridge^,
+        )
+
     def on_island(self, point: PlanPoint) -> Bool:
         """Return True if a point lies on the island.
 
@@ -658,7 +744,7 @@ def wijnendale() -> CastlePlan:
             PlanPoint(_m(2.0), _m(9.0)),
             _m(30.0),
             _m(9.0),
-            Angle64(0.0, DEGREE),
+            Angle64(0.0, DEGREE64),
             _m(1.1),
             _m(11.0),
             GABLE,
@@ -671,7 +757,7 @@ def wijnendale() -> CastlePlan:
             PlanPoint(_m(-3.0), _m(-13.0)),
             _m(34.0),
             _m(9.0),
-            Angle64(0.0, DEGREE),
+            Angle64(0.0, DEGREE64),
             _m(1.1),
             _m(11.0),
             GABLE,
@@ -684,7 +770,7 @@ def wijnendale() -> CastlePlan:
             PlanPoint(_m(22.0), _m(-2.0)),
             _m(16.0),
             _m(16.0),
-            Angle64(0.0, DEGREE),
+            Angle64(0.0, DEGREE64),
             _m(1.6),
             _m(19.0),
             PARAPET,
@@ -703,7 +789,7 @@ def wijnendale() -> CastlePlan:
     )
     var bridge = Bridge(
         PlanPoint(_m(30.0), _m(-2.0)),
-        Angle64(-8.0, DEGREE),
+        Angle64(-8.0, DEGREE64),
         3,
         _m(5.0),
         _m(1.4),
@@ -716,8 +802,8 @@ def wijnendale() -> CastlePlan:
     )
     return CastlePlan(
         "Wijnendale Castle",
-        Angle64(51.0 + 4.0 / 60.0 + 44.0 / 3600.0, DEGREE),
-        Angle64(3.0 + 3.0 / 60.0 + 34.0 / 3600.0, DEGREE),
+        Angle64(51.0 + 4.0 / 60.0 + 44.0 / 3600.0, DEGREE64),
+        Angle64(3.0 + 3.0 / 60.0 + 34.0 / 3600.0, DEGREE64),
         towers^,
         blocks^,
         moat^,

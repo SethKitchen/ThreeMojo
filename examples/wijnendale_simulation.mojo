@@ -5,7 +5,7 @@
 
 """Wijnendale Castle through a day, and what an engineer reads from it.
 
-    mojo run -I . examples/wijnendale_simulation.mojo [path.png]
+    mojo run -I . examples/wijnendale_simulation.mojo [path.png [survey.json]]
 
 The page is Castle. The frames are 19 October from the morning to the
 evening. Each frame puts the sun where the equations of Duffie and Beckman
@@ -16,7 +16,12 @@ mirror of the moat follow the sun.
 The program prints what the analysis modules find for the same plan: the
 shadows of the keep, the wind on the keep, the line of thrust in a bridge
 arch, the wall at the edge of the moat and the water balance of the moat in
-a normal year and in a dry one.
+a normal year and in a dry one. It also prints how the keep and the arch
+answer when every length of the plan is 15 percent too small or too large.
+
+Every dimension of the built-in plan is an estimate. A second argument names a
+JSON file of surveyed dimensions, in the form of `plan_to_json`. The program
+then uses the survey in place of the estimate.
 """
 
 from tools._example_output import (
@@ -34,6 +39,7 @@ from core.scene import Scene
 from extensions.castle.arch import analyze_bridge
 from extensions.castle.masonry import clay_brick_masonry
 from extensions.castle.plan import CastlePlan, PlanPoint, wijnendale
+from extensions.castle.survey import plan_from_json
 from extensions.castle.render import CastleOptions, add_castle
 from extensions.castle.sun import (
     castle_sun,
@@ -68,6 +74,8 @@ from objects.sky import Sky
 from render.framebuffer import Color, Framebuffer
 from render.tonemap import ACES_FILMIC_TONE_MAPPING
 from std.math import floor
+from std.pathlib import Path
+from std.sys import argv
 from units.si import (
     Angle,
     Angle64,
@@ -162,7 +170,7 @@ def _report(plan: CastlePlan, day: Int) raises:
             )
         print(line)
 
-    var keep = plan.towers[0].copy()
+    var keep = plan.towers[_tallest_tower(plan)].copy()
     var masonry = clay_brick_masonry()
     var wind = flanders_wind()
     var load = tower_wind_load(wind, keep)
@@ -277,6 +285,52 @@ def _report(plan: CastlePlan, day: Int) raises:
     )
 
 
+def _tallest_tower(plan: CastlePlan) -> Int:
+    """Return the place of the tallest tower, the keep."""
+    var best = 0
+    for i in range(len(plan.towers)):
+        if plan.towers[i].apex() > plan.towers[best].apex():
+            best = i
+    return best
+
+
+def _plan() raises -> CastlePlan:
+    """Return the plan: a survey if a file is named, else the estimate."""
+    var args = argv()
+    if len(args) > 2:
+        return plan_from_json(Path(String(args[2])).read_text())
+    return wijnendale()
+
+
+def _sensitivity(plan: CastlePlan) raises:
+    """Print the keep and the arch with every length scaled by a factor."""
+    var masonry = clay_brick_masonry()
+    var wind = flanders_wind()
+    var fill = UnitWeight64(19.0, KILONEWTON_PER_CUBIC_METER)
+    print("  every length of the plan scaled, for the error of the estimate:")
+    for factor in [0.85, 1.0, 1.15]:
+        var scaled = plan.scaled(factor)
+        var keep = scaled.towers[_tallest_tower(scaled)].copy()
+        var base = check_tower_base(
+            keep, masonry, wind, Force64(300.0, KILONEWTON), 2.2
+        )
+        var arch = analyze_bridge(
+            scaled.bridge, masonry, fill, Pressure64(5.0, KILOPASCAL), 24
+        )
+        print(
+            "   x",
+            factor,
+            ": keep",
+            _round(keep.height.value, 1),
+            "m, use of the strength",
+            _round(base.utilization, 2),
+            ", equilibrium ratio",
+            _round(base.equ_ratio, 1),
+            "; arch geometric factor",
+            _round(arch.geometric_factor, 1),
+        )
+
+
 def _hour(frame: Int) -> Float64:
     """Return the clock time of a frame."""
     return _mix(FIRST_HOUR, LAST_HOUR, Float64(frame) / Float64(FRAMES - 1))
@@ -297,9 +351,10 @@ def _camera() raises -> PerspectiveCamera:
 
 def main() raises:
     var destination = example_destination(String(DEFAULT_OUTPUT))
-    var plan = wijnendale()
+    var plan = _plan()
     var day = day_of_year(10, 19)
     _report(plan, day)
+    _sensitivity(plan)
 
     var assets = Assets()
     var scene = Scene()

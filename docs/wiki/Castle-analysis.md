@@ -100,6 +100,18 @@ The weir is a sharp-crested rectangular weir, `Q = Cd (2/3) sqrt(2 g) b h^1.5`. 
 
 The day is 10.37 hours long. Azimuth is measured from south, and west is positive. Belgian clocks are two hours ahead of Greenwich until 25 October in 2026.
 
+## Sensitivity to the estimates
+
+Every length of the plan is an estimate, good to about 15 percent. `plan.scaled(factor)` multiplies every length by a factor. The simulation prints the keep and the arch for 0.85, 1 and 1.15.
+
+| Every length times | Keep height | Use of the strength | Equilibrium ratio | Arch geometric factor |
+|---|---|---|---|---|
+| 0.85 | 23.8 m | 0.24 | 8.6 | 9.7 |
+| 1.00 | 28.0 m | 0.27 | 9.6 | 10.1 |
+| 1.15 | 32.2 m | 0.31 | 10.6 | 10.4 |
+
+The conclusions do not change over this range. The keep uses under a third of the design strength, and the arch has a large margin. A survey can move the numbers inside this range. It does not change which check governs.
+
 ## How the checks are verified
 
 | Check | Reference |

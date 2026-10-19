@@ -5,13 +5,17 @@
 
 """Wijnendale Castle in autumn, seen from the air.
 
-    mojo run -I . examples/wijnendale.mojo [path.png]
+    mojo run -I . examples/wijnendale.mojo [path.png [survey.json]]
 
 The page is Castle. `wijnendale` is the plan: towers, ranges, a gatehouse,
 a moat and a bridge in meters. `add_castle` draws it. The sun stands where
 it stood over Torhout at 15:30 on 19 October, from the equations of Duffie
 and Beckman. The camera looks north from above the moat, as the aerial
 photograph does.
+
+Every dimension of the built-in plan is an estimate. A second argument names
+a JSON file of surveyed dimensions, in the form of `plan_to_json`. The picture
+then shows the survey in place of the estimate.
 """
 
 from tools._example_output import (
@@ -24,7 +28,8 @@ from core.assets import Assets
 from core.fog import linear_fog
 from core.object3d import Object3D
 from core.scene import Scene
-from extensions.castle.plan import PlanPoint, wijnendale
+from extensions.castle.plan import CastlePlan, PlanPoint, wijnendale
+from extensions.castle.survey import plan_from_json
 from extensions.castle.render import CastleOptions, add_castle
 from extensions.castle.sun import castle_sun, scene_direction
 from extensions.energy.solar import day_of_year
@@ -38,6 +43,7 @@ from render.framebuffer import Color
 from render.png import encode
 from render.tonemap import ACES_FILMIC_TONE_MAPPING
 from std.pathlib import Path
+from std.sys import argv
 from units.si import (
     DEGREE,
     HOUR,
@@ -53,9 +59,17 @@ comptime WIDTH = 480
 comptime HEIGHT = 600
 
 
+def _plan() raises -> CastlePlan:
+    """Return the plan: a survey if a file is named, else the estimate."""
+    var args = argv()
+    if len(args) > 2:
+        return plan_from_json(Path(String(args[2])).read_text())
+    return wijnendale()
+
+
 def main() raises:
     var destination = example_destination(String(DEFAULT_OUTPUT))
-    var plan = wijnendale()
+    var plan = _plan()
     var assets = Assets()
     var scene = Scene()
     var eye = Vector3(6, 50, 108)

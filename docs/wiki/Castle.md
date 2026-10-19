@@ -10,9 +10,10 @@
 
 | Module | What it gives |
 |---|---|
-| `kinds` | `TowerShape`, `RoofForm`, `Surface` and `LimitState` |
+| `kinds` | `TowerShape`, `RoofForm`, `Surface` and `LimitState`, and `tower_shape_from_name` and `roof_form_from_name` |
 | `masonry` | `Masonry`, `characteristic_strength`, `clay_brick_masonry` and `dressed_limestone` |
 | `plan` | `PlanPoint`, `Tower`, `Block`, `Moat`, `Bridge`, `CastlePlan` and `wijnendale` |
+| `survey` | `plan_to_json` and `plan_from_json`, which carry a surveyed plan in and out as JSON |
 | `render` | `CastleOptions`, `add_castle`, `surface_color` and `foliage_color` |
 | `wind` | `Wind`, `flanders_wind`, `peak_velocity_pressure`, `tower_wind_load`, `cantilever_frequency` and `check_tower_base` |
 | `arch` | `analyze_arch` and `analyze_bridge` |
@@ -53,6 +54,28 @@ The documented facts come from these pages:
 - [Brussels Environment, climate fact sheet](https://document.environnement.brussels/opac_css/elecfile/Clim_02) gives the Uccle rain normals of the Royal Meteorological Institute.
 
 No source that I could reach gives the height of a tower, the length of a wall or the size of the moat. I searched in Dutch, French and English. I could read only search summaries of these pages, not the pages themselves. The protection decree refers to a plan that I could not open. A survey or that plan would replace the estimates.
+
+## Replace the estimates with a survey
+
+A survey replaces the estimates without a change in the code. `plan_to_json(wijnendale())` writes the estimated plan as JSON. Edit the numbers in that text. `plan_from_json(text)` reads the plan back and runs `plan.check()`.
+
+All lengths are in meters. All angles are in degrees. The top-level keys are `name`, `latitude`, `longitude`, `towers`, `blocks`, `moat` and `bridge`.
+
+| Part | Keys |
+|---|---|
+| Tower | `name`, `shape` (`round` or `square`), `x`, `y`, `radius`, `wall`, `height`, `roof` (`cone` or `parapet`), `roof_rise` |
+| Block | `name`, `x`, `y`, `length`, `width`, `heading`, `wall`, `height`, `roof` (`gable` or `parapet`), `roof_rise` |
+| Moat | `x`, `y`, `semi_x`, `semi_y`, `island_x`, `island_y`, `island_semi_x`, `island_semi_y`, `depth`, `freeboard` |
+| Bridge | `x`, `y`, `heading`, `spans`, `span`, `pier`, `rise`, `ring`, `width`, `fill`, `springing`, `parapet` |
+
+A missing key, a value of the wrong kind, an unnamed shape and a plan that cannot stand are all refused with a message. Both examples take the survey as a second argument:
+
+```bash
+mojo run -I . examples/wijnendale.mojo out/castle.png survey.json
+mojo run -I . examples/wijnendale_simulation.mojo out/castle-simulation.png survey.json
+```
+
+`plan.scaled(factor)` multiplies every length of a plan by a factor. It gives the sensitivity of an analysis to the error of an estimate. See [Castle analysis](Castle-analysis#sensitivity-to-the-estimates).
 
 ## The plan frame
 

@@ -125,6 +125,7 @@ extensions/
     wall.mojo          the gravity wall at the edge of the moat
     water_balance.mojo the water balance of the moat
     sun.mojo           the sun over the site and its shadows
+    survey.mojo        a plan as JSON, so a survey can replace the estimates
   streamline/
     kinds.mojo      modes, presets and buffer kinds
     options.mojo    the options of Super Resolution and Ray Reconstruction

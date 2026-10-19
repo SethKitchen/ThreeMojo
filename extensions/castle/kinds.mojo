@@ -214,3 +214,43 @@ def require_limit_state(state: LimitState) raises:
         Error: If the state is not named.
     """
     require_valid(state.is_valid(), "A limit state is not valid")
+
+
+def tower_shape_from_name(name: String) raises -> TowerShape:
+    """Return the tower shape that a name says.
+
+    Args:
+        name: "round" or "square".
+
+    Returns:
+        The shape.
+
+    Raises:
+        Error: If the name is neither of them.
+    """
+    if name == "round":
+        return ROUND
+    if name == "square":
+        return SQUARE
+    raise Error("A tower shape is round or square, not " + name)
+
+
+def roof_form_from_name(name: String) raises -> RoofForm:
+    """Return the roof form that a name says.
+
+    Args:
+        name: "cone", "gable" or "parapet".
+
+    Returns:
+        The form.
+
+    Raises:
+        Error: If the name is none of them.
+    """
+    if name == "cone":
+        return CONE
+    if name == "gable":
+        return GABLE
+    if name == "parapet":
+        return PARAPET
+    raise Error("A roof form is cone, gable or parapet, not " + name)
