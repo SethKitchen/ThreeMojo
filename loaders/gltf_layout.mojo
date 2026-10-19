@@ -3,6 +3,10 @@
 
 """Checked byte layouts shared by ordinary and Gaussian splat glTF accessors.
 
+Each accessor is limited to 2**26 elements and 1 GiB of decoded component
+storage, counted at eight bytes per component. This bounds an individual
+accessor, including an implicit zero array, not the whole scene.
+
 Decoding stays with each loader: Float64 splats, exact integer attributes,
 and normalized Float32 attributes must not pass through one lossy type.
 """
@@ -28,6 +32,8 @@ def check_buffer_range(size: Int, offset: Int, length: Int) raises:
 # spin for billions of iterations; 2**26 elements is generous for any
 # real asset.
 comptime MAX_GLTF_ACCESSOR_COUNT = 1 << 26
+# Accessors can decode to Float64 or Int64, regardless of source width.
+comptime MAX_GLTF_ACCESSOR_BYTES = 1 << 30
 
 
 struct AccessorLayout(ImplicitlyCopyable):
@@ -107,7 +113,7 @@ struct AccessorLayout(ImplicitlyCopyable):
         if (
             count < 0
             or count > MAX_GLTF_ACCESSOR_COUNT
-            or count > 9223372036854775807 // self.width
+            or count > MAX_GLTF_ACCESSOR_BYTES // (self.width * 8)
         ):
             raise Error("glTF: an accessor's count is invalid")
         if offset < 0 or offset % self.size != 0:

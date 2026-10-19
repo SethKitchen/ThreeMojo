@@ -514,6 +514,12 @@ The loader refuses these, with a message that names the problem:
 - A file that ends inside a chunk, and voxels or a palette before any `SIZE`. three.js throws for these.
 - A `SIZE` whose content is shorter than its three sizes. three.js reads the file backward from there.
 - A voxel outside its model, and a color index past the palette.
+- Content or child chunks that cross their parent boundary. Known chunks
+  skip to the declared content end after their fields are read.
+- Dimensions outside zero through 1024. The combined declared cell count
+  of all models must fit within 1 GiB of one-byte volume storage. The
+  dimension check also applies to manually constructed models before
+  volume allocation. Meshes, palettes, and source bytes are additional.
 
 ### Example
 
@@ -810,6 +816,11 @@ var geometry = read_draco("out/model.drc")
 - A triangle of a sequential mesh that names a point that the mesh does not have is refused. three.js keeps an index past the end of the attributes.
 - A color of one or two components is refused. three.js reads past the end of each item.
 - The deprecated texture coordinate prediction and a geometric normal prediction with the wrap transform are refused. Draco decodes them.
+- A point cloud can declare at most 2^26 points. Before attribute decoding,
+  all attributes share a 1 GiB storage budget. Each component counts as
+  eight bytes. Each attribute also reserves eight bytes per point for
+  its point map. Connectivity, source bytes, and temporary copies are
+  additional storage. This is not a whole-process peak-memory guarantee.
 
 ### Errors
 

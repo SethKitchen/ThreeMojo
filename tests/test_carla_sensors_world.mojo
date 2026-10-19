@@ -119,7 +119,7 @@ from extensions.carla.world import (
 )
 from math.quaternion import Quaternion
 from math.vector3 import Vector3
-from std.math import inf, nan
+from std.math import inf, isfinite, nan
 from std.memory import bitcast
 from std.testing import (
     TestSuite,
@@ -930,6 +930,91 @@ def test_ca_service_fixed_rate_and_roadside_units() raises:
         world.blueprints.at("sensor.other.v2x").description()
     )
     assert_equal(noise.velocity_stddev, 0)
+
+
+def test_cam_snapshots_all_motion_after_a_heading_trigger() raises:
+    var world = _world()
+    var car = _car(world, 10, 1.75)
+    world.set_target_velocity(car, Vector3(2, 0, 0))
+    var service = CaService(
+        world, car, Duration(0.1), Duration(1), False, CamNoise()
+    )
+    var rng = SensorRandom(0)
+    var projection = world.map.geo_projection.copy()
+    var tick = Duration(0.05)
+    assert_true(Bool(service.trigger(world, projection, tick, rng)))
+    _near(service.last_cam_position, 10, 1.75, 0)
+    _near(service.last_cam_heading, 1, 0, 0)
+    assert_almost_equal(service.last_cam_speed, 2)
+    assert_equal(service.low_dynamics_counter, 0)
+    world.elapsed_seconds = 0.2
+    assert_false(Bool(service.trigger(world, projection, tick, rng)))
+    # A simultaneous turn, move and speed change takes the heading branch.
+    var pose = _pose(20, 1.75, 0, 30)
+    var heading = pose.rotation.forward_vector()
+    world.set_transform(car, pose)
+    world.set_target_velocity(car, heading * 4)
+    assert_true(Bool(service.trigger(world, projection, tick, rng)))
+    _near(service.last_cam_position, 20, 1.75, 0)
+    _near(service.last_cam_heading, heading.x, heading.y, heading.z)
+    assert_almost_equal(service.last_cam_speed, 4, atol=1e-6)
+    # No motion since that CAM must not trigger another minimum-gap CAM.
+    world.elapsed_seconds = 0.31
+    assert_false(Bool(service.trigger(world, projection, tick, rng)))
+
+
+def test_cam_heading_threshold_and_rounded_antiparallel_cosine() raises:
+    var world = _world()
+    var car = _car(world, 0, 0)
+    var service = CaService(
+        world, car, Duration(0.1), Duration(1), False, CamNoise()
+    )
+    assert_true(service._heading_changed(world))
+    service.last_cam_heading = Vector3(1, 0, 0)
+    world.set_transform(car, _pose(0, 0, 0, 3.9))
+    assert_false(service._heading_changed(world))
+    world.set_transform(car, _pose(0, 0, 0, 4.1))
+    assert_true(service._heading_changed(world))
+    world.set_transform(car, _pose(0, 0, 0, 180))
+    assert_true(service._heading_changed(world))
+    # At three degrees the Float32 dot and lengths round to a cosine
+    # greater than one. Negating one heading gives less than minus one,
+    # although the geometric angle is exactly pi, independently of yaw.
+    var pose = _pose(0, 0, 0, 3)
+    world.set_transform(car, pose)
+    var heading = pose.rotation.forward_vector()
+    var cosine = Float64(heading.dot(heading)) / (
+        Float64(heading.length()) * Float64(heading.length())
+    )
+    assert_true(cosine > 1)
+    service.last_cam_heading = heading
+    assert_false(service._heading_changed(world))
+    service.last_cam_heading = heading * -1
+    assert_true(service._heading_changed(world))
+    # World transforms remain mutable. A nonfinite current heading must
+    # conservatively count as changed, even with a valid previous sample.
+    service.last_cam_heading = Vector3(1, 0, 0)
+    world.set_transform(car, _pose(0, 0, 0, nan[DType.float32]()))
+    assert_true(service._heading_changed(world))
+    assert_false(isfinite(service.vehicle_heading.length()))
+
+
+def test_fixed_rate_cam_also_snapshots_motion() raises:
+    var world = _world()
+    var car = _car(world, 12, 1.75)
+    var pose = _pose(12, 1.75, 0, 90)
+    world.set_transform(car, pose)
+    var heading = pose.rotation.forward_vector()
+    world.set_target_velocity(car, heading * 3)
+    var service = CaService(
+        world, car, Duration(0.1), Duration(1), True, CamNoise()
+    )
+    var rng = SensorRandom(0)
+    var projection = world.map.geo_projection.copy()
+    assert_true(Bool(service.trigger(world, projection, Duration(0.05), rng)))
+    _near(service.last_cam_position, 12, 1.75, 0)
+    _near(service.last_cam_heading, heading.x, heading.y, heading.z)
+    assert_almost_equal(service.last_cam_speed, 3, atol=1e-6)
 
 
 def test_actor_records_in_events() raises:

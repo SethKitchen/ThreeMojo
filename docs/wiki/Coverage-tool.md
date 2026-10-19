@@ -67,7 +67,7 @@ and probe formats described on this page when they need structured records.
 
 ## Rules
 
-- The Makefile's `COVERED` list is every CPU module. `COVERAGE_EXCLUDE` names the GPU modules, `render/gpu.mojo`, `render/gpu_vxgi.mojo` and `extensions/water/gpu.mojo`, because a kernel has no `stderr`.
+- The Makefile's `COVERED` list is every CPU module. `COVERAGE_EXCLUDE` names the GPU modules. The Makefile finds them by name: `gpu.mojo`, `gpu_*.mojo` and `*_gpu.mojo`. They are `render/gpu.mojo`, `render/gpu_vxgi.mojo`, `extensions/water/gpu.mojo` and `window/capi_water_gpu.mojo`. They need MAX, and a kernel has no `stderr`.
 - `# pragma: no branch` opts one decision out. Use it only when the other outcome is provably unreachable.
 - Probes cannot reach compile-time code, and the instrumenter recognizes `def` and `async def` only.
 - The tool does not measure itself.

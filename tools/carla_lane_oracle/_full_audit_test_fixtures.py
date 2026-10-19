@@ -35,11 +35,13 @@ def common758_leaf_texts(source):
     if any(cleanup.sha(raw) != bindings[name] for name, raw in physical.items()):
         raise AssertionError('leaf fixture differs from admitted physical input')
     selected = cleanup._pr760_image_selected(physical)
+    retained = {name: cleanup.pr780_successor.predecessor_bytes(name, raw)
+                for name, raw in physical.items()}
     texts = {name: (cleanup.pr760_stage.predecessor_source(name, raw.decode('utf-8'))
              if selected and name in cleanup.pr760_stage.CARLA_REGISTRY_PATHS
              else cleanup.qualification_predecessor_bytes(name, raw).decode('utf-8')
              if selected and name == 'tools/carla_lane_oracle/test_witness_format_contracts.py'
-             else raw.decode('utf-8')) for name, raw in physical.items()}
+             else raw.decode('utf-8')) for name, raw in retained.items()}
     typed.verify_sources({name: texts[name] for name in typed.SOURCE_PATHS})
     shared.verify_correspondence({name: texts[name] for name in
                                   (*shared.SOURCE_PATHS, *shared.PROVIDERS)})
@@ -174,9 +176,11 @@ def _historical_hair_predecessors(root):
     for name, raw in physical.items():
         if cleanup.sha(raw) != stage.EDGES[name]['after_sha256']:
             raise AssertionError('historical hair fixture current endpoint changed: ' + name)
+    density_bindings = {name: cleanup.sha((root/name).read_bytes())
+                        for name in loops.DENSITY760_INPUTS}
     rows = loops.density760_loops(root)
     if (set(rows) != {131, 167, 178, 245}
-            or any(row['dependency_sha256'] != loops.DENSITY760_INPUTS
+            or any(row['dependency_sha256'] != density_bindings
                    for row in rows.values())):
         raise AssertionError('historical hair fixture lacks independent density admission')
     predecessors = {}
@@ -212,12 +216,20 @@ def copy_common758_boundary_root(case, source, *, destination=None):
         hair_predecessors = _historical_hair_predecessors(root)
         for name, previous in hair_predecessors.items():
             (root/name).write_bytes(previous)
+        for name in cleanup.pr780_successor.EDGES:
+            target = root/name
+            target.write_bytes(cleanup.pr780_successor.predecessor_bytes(
+                name, target.read_bytes()))
         for name in stage.CARLA_REGISTRY_PATHS:
             raw = (root/name).read_bytes()
             previous = stage.predecessor_source(name, raw.decode('utf-8')).encode('utf-8')
             if cleanup.sha(raw) != stage.EDGES[name]['after_sha256'] or cleanup.sha(previous) != stage.EDGES[name]['before_sha256']:
                 raise AssertionError('historical fixture PR760 endpoint changed: ' + name)
             (root/name).write_bytes(previous)
+    if selected:
+        for name in ('tools/compile_fail_expectations.json', 'tests/test_water.mojo'):
+            target = root/name
+            target.write_bytes(cleanup.pr776_predecessor_bytes(name, target.read_bytes()))
     for name in ('tools/test_conditioned_coverage_loops.py', 'tools/carla_lane_oracle/test_typed_boundary_contracts.py', 'tools/carla_lane_oracle/test_shared_helper_contracts.py', 'tools/carla_lane_oracle/test_scaled_float32_contracts.py', 'tools/carla_lane_oracle/test_common758_current_successor.py', 'tools/carla_lane_oracle/test_witness_format_contracts.py', 'tools/carla_lane_oracle/test_coverage_invariant_contracts.py', 'tools/carla_lane_oracle/test_expectation_binding_successor.py'):
         target = root/name
         raw = target.read_bytes()

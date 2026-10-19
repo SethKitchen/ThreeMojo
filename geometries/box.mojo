@@ -20,6 +20,12 @@ material index: +x is 0, -x is 1, +y is 2, -y is 3, +z is 4 and -z is 5. A
 mesh that wears a list of six materials gives each face its own, as in
 three.js. With one segment a side, a face is two triangles, so the face of
 triangle `t` is `t // 2`.
+
+## Input validation difference
+
+Shape dimensions must be finite before vertices are generated. NaN and
+either infinity raise an error. This differs from the unchecked three.js
+r186 input path. Finite supported inputs keep their existing behavior.
 """
 
 from core.buffer_attribute import BufferAttribute

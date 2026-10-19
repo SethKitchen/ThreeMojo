@@ -35,6 +35,12 @@ The side and each cap are groups, three.js's `addGroup` in
 `generateTorso` and `generateCap`: the side wears material 0, the top cap
 1 and the bottom cap 2. So a mesh that wears a list of three materials
 dresses each part in its own.
+
+## Input validation difference
+
+Shape dimensions must be finite before vertices are generated. NaN and
+either infinity raise an error. This differs from the unchecked three.js
+r186 input path. Finite supported inputs keep their existing behavior.
 """
 
 from core.buffer_geometry import (
@@ -44,6 +50,7 @@ from core.buffer_geometry import (
     MaterialIndex,
 )
 from geometries.surface import (
+    require_finite_extents,
     indexed_surface,
     record_kind,
     record_shaft_segments,
@@ -179,6 +186,9 @@ def cylinder(
             count is too small, or the sweep is not positive or is more
             than a turn.
     """
+    require_finite_extents(
+        radius_top.value, radius_bottom.value, height.value, "cylinder"
+    )
     # `not (x >= 0)`, not `x < 0`: NaN compares false both ways, so the
     # < form would let it through.
     if not (radius_top.value >= 0) or not (radius_bottom.value >= 0):

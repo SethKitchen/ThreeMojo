@@ -541,6 +541,14 @@ The color is linear in the file and sRGB in the `Light`. The intensity is one wh
 
 Each instance matrix is `TRANSLATION`, `ROTATION` and `SCALE` composed. An attribute that is not there is the identity's part. `_COLOR_0` colors the instances, as three.js reads it into `instanceColor`. The loader counts every other attribute but does not read it, because it is for a custom shader. A node with an empty `attributes` object draws plain meshes, as in three.js.
 
+#### Accessor storage limits
+
+Each accessor can contain at most 2^26 elements. Its decoded components
+must fit within 1 GiB, counted at eight bytes per component. A MAT4 therefore
+has a lower element limit than a scalar. The loader checks these limits
+before it allocates an implicit zero array. These are per-accessor limits,
+not a combined scene or process-memory limit.
+
 #### Draco primitives
 
 The loader decodes the buffer view that the extension names, as three.js's `DRACOLoader` decodes it. See [Draco](More-model-files#draco).
@@ -583,6 +591,11 @@ The loader tells a KTX 2.0 image by its identifier, `is_ktx2(bytes)`. `ktx2_text
 | `OCTAHEDRAL` | Unit vectors, from two octahedral coordinates. |
 | `QUATERNION` | Unit quaternions, from their three smallest components. |
 | `EXPONENTIAL` | Floats, from an 8-bit exponent and a 24-bit mantissa. |
+
+Each decoded meshopt buffer must fit within 1 GiB. This limit applies to
+attributes, triangle indices, and index sequences. The loader checks the
+count before it multiplies or allocates. An attribute stream must also have
+enough bytes for the minimum block headers before allocation.
 
 The decoder is a port of meshoptimizer 0.22, which three.js 0.180 ships. Its output is the same bytes as three.js's decoder, filters included. The filters round each product before they add to it, as WebAssembly does.
 
@@ -1014,6 +1027,9 @@ The reader raises for:
 - An ASCII node without `:`, a `{` that is not closed, or a `}` that closes nothing.
 - An ASCII string that is not closed, or a `*count` that does not match its `a`.
 - Nodes nested deeper than `MAX_FBX_DEPTH`.
+- Binary arrays whose combined decoded values exceed 1 GiB. Each value
+  counts as eight bytes, including one-byte source values. This applies
+  to raw and zlib arrays. Input and temporary buffers are additional storage.
 
 The loader raises for:
 
@@ -1081,6 +1097,13 @@ var font = read_ttf("assets/ttf/kenpixel.ttf")
 The numbers are scaled by `100000 / (unitsPerEm * 72)` and rounded. A glyph with no outline has no `x_min` or `x_max`. With `reversed`, three.js reverses a glyph's commands once for each code point that maps to it. So a glyph of two code points comes back in its first order, without its `z`. The reader keeps this.
 
 The reader refuses a font that is not TrueType, CFF outlines and WOFF. It also refuses a font with no `glyf` or `cmap` it can read, and a code point that is a surrogate. It does not write `original_font_information`: `FontLoader` does not read it. A lone surrogate in the full name becomes U+FFFD, because a Mojo string cannot hold one.
+
+Format 12 cmap groups must fit their declared subtable. Their ranges must
+be ascending, disjoint, and within U+0000 through U+10FFFF. The reader checks
+all groups before it expands any range. This bounds their combined
+expansion by the Unicode code space. Overlapping groups are refused even
+when each separate range is within that space. This follows the
+[OpenType format 12 group order](https://learn.microsoft.com/en-us/typography/opentype/spec/cmap#format-12-segmented-coverage).
 
 The tests compare six fonts with three.js 0.180, plain and reversed: `kenpixel.ttf` from three.js's examples, and five from `assets/ttf/make_fonts.py`. A font with Apple's `true` signature must read as its TrueType twin. The reader must refuse fourteen broken fonts.
 

@@ -34,6 +34,10 @@ type, an array encoding other than raw or zlib, or a zlib array that
 expands to the wrong length; an ASCII node without `:`, an unbalanced
 `{` or `}`, an unterminated string, or an array whose `a` holds a count
 other than the one its `*count` declares.
+
+**Where this port differs.** Binary array values have a combined 1 GiB
+storage limit per file. Raw and zlib arrays both count at eight bytes per
+value. Source bytes and temporary decompression buffers are additional.
 """
 
 from core.ordinal import index_in_count
@@ -66,9 +70,8 @@ comptime MIN_ASCII_VERSION = 7000
 comptime MIN_BINARY_VERSION = 6400
 # From version 7500 a record's three sizes are 64 bits, not 32.
 comptime WIDE_RECORD_VERSION = 7500
-# The most bytes one binary array may expand to. The claimed element count
-# is the zlib limit, so a corrupt count would otherwise let a kilobyte of
-# input expand into tens of gigabytes.
+# Combined decoded binary-array storage per file. Each value is stored as
+# an eight-byte Int or Float64, even when the source uses only one byte.
 comptime MAX_FBX_ARRAY_BYTES = 1 << 30
 
 
@@ -822,11 +825,15 @@ struct _BinaryReader[origin: Origin[mut=False]](Movable):
     var bytes: Span[UInt8, Self.origin]
     var at: Int
     var version: Int
+    var array_bytes: Int
+    var limit: Int
 
     def __init__(out self, bytes: Span[UInt8, Self.origin]):
         self.bytes = bytes
         self.at = 0
         self.version = 0
+        self.array_bytes = 0
+        self.limit = len(bytes)
 
     def where(self) -> String:
         """Return the prefix of an error: where the cursor stands."""
@@ -834,7 +841,7 @@ struct _BinaryReader[origin: Origin[mut=False]](Movable):
 
     def need(self, count: Int) raises:
         """Refuse to read `count` bytes past the end of the file."""
-        if self.at + count > len(self.bytes):
+        if count < 0 or count > self.limit - self.at:
             raise Error(self.where() + "the file ends inside a record")
 
     def unsigned(mut self, count: Int) raises -> UInt64:
@@ -892,8 +899,10 @@ struct _BinaryReader[origin: Origin[mut=False]](Movable):
         var name = String(from_utf8=Span(name_bytes))
         if end == 0:
             return
-        if end < self.at or end > len(self.bytes):
+        if end < self.at or end > self.limit:
             raise Error(self.where() + "a record ends outside the file")
+        var outer_limit = self.limit
+        self.limit = end
         document.nodes.append(FbxNode(name^))
         var index = len(document.nodes) - 1
         document.nodes[parent].children.append(index)
@@ -901,8 +910,7 @@ struct _BinaryReader[origin: Origin[mut=False]](Movable):
             document.nodes[index].properties.append(self.property())
         while self.at < end:
             self.record(document, index, depth + 1)
-        if self.at != end:
-            raise Error(self.where() + "a record's children run past its end")
+        self.limit = outer_limit
 
     def property(mut self) raises -> FbxProperty:
         """Read one typed property."""
@@ -936,6 +944,12 @@ struct _BinaryReader[origin: Origin[mut=False]](Movable):
             return raw^
         return self.array(code)
 
+    def reserve_array(mut self, count: Int) raises:
+        """Charge a binary array's eight-byte values before decoding it."""
+        if count > (MAX_FBX_ARRAY_BYTES - self.array_bytes) // 8:
+            raise Error(self.where() + "binary arrays too large to expand")
+        self.array_bytes += count * 8
+
     def array(mut self, code: Int) raises -> FbxProperty:
         """Read an array property: `f`, `d`, `l`, `i`, `b` or `c`."""
         var width: Int
@@ -950,12 +964,11 @@ struct _BinaryReader[origin: Origin[mut=False]](Movable):
         var count = Int(self.unsigned(4))
         var encoding = Int(self.unsigned(4))
         var stored = Int(self.unsigned(4))
+        self.reserve_array(count)
         var data: List[UInt8]
         if encoding == 0:
             data = self.take(count * width)
         elif encoding == 1:
-            if count > MAX_FBX_ARRAY_BYTES // width:
-                raise Error(self.where() + "a zlib array too large to expand")
             data = zlib_inflate(self.take(stored), count * width)
             if len(data) != count * width:
                 raise Error(self.where() + "a zlib array of the wrong length")

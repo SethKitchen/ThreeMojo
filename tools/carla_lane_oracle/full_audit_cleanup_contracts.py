@@ -54,6 +54,7 @@ try:
         from . import typed_boundary_contracts as typed_boundary
         from . import conditioned_cubic_contracts as conditioned_cubic
         from . import pr760_arithmetic_stage as pr760_stage
+        from . import pr780_source_successor as pr780_successor
     else:
         import source_contracts as source
         import sum2_guard_contracts as guard
@@ -68,6 +69,7 @@ try:
         import typed_boundary_contracts as typed_boundary
         import conditioned_cubic_contracts as conditioned_cubic
         import pr760_arithmetic_stage as pr760_stage
+        import pr780_source_successor as pr780_successor
 except ImportError as error:
     raise ContractError('full-audit cleanup successor: dependency import failed') from error
 
@@ -156,6 +158,7 @@ PR760_OWNER_PREDECESSOR_SHA256 = '6138ba2dcac394c716ea9ed32e74e0c6d15857d5c605fc
 DEPENDENCY_TOOL_SHA256 = {'tools/carla_lane_oracle/winner_sign_contracts.py': 'f850902634073364fe2407b00d12e9fdfb2ecfc6cf2a03414269fbb7984a8a7f',
  'tools/carla_lane_oracle/border_parser_contracts.py': '734d7b24aaf4e9f537cd7f0d7c7b8094d9c29106770b66c4a7a24cab74604dd4',
  'tools/carla_lane_oracle/pr760_arithmetic_stage.py': PR760_STAGE_SHA256,
+ 'tools/carla_lane_oracle/pr780_source_successor.py': '5563c0c8d58989ab32b88a3c6ce058681f19deebb30cc9aba808a1291e107a7c',
  'tools/carla_lane_oracle/scaled_float32_contracts.py': 'e3a59a9f8d5a9394007c03fab6ac696e04998812dad5843a22e721bfbe57c2a1',
  'tools/affected.py': 'a56194a3e722ad341a42f3defec282b8154f5e4db8340df855f0199ea9830ebb',
  'tools/cache_key.py': 'ec06247feb8fe079c30b6da19fc655ffec363f1ce8e3372d063bf728e8c804c4',
@@ -245,7 +248,8 @@ CHECKER_PATHS = ('tools/carla_lane_oracle/full_audit_cleanup_contracts.py',
                  'tools/carla_lane_oracle/typed_boundary_contracts.py',
                  'tools/carla_lane_oracle/conditioned_cubic_contracts.py',
                  'tools/carla_lane_oracle/scaled_float32_contracts.py',
-                 'tools/carla_lane_oracle/pr760_arithmetic_stage.py')
+                 'tools/carla_lane_oracle/pr760_arithmetic_stage.py',
+                 'tools/carla_lane_oracle/pr780_source_successor.py')
 
 
 def _center_require(ok, message):
@@ -716,7 +720,7 @@ _IMPORT_IDENTITIES[str(_SELF_PATH)] = sha(_SELF_RAW)
 _IMPORT_CODE[str(_SELF_PATH)] = _compiled_functions(_SELF_RAW, __file__)
 _IMPORT_MODULE_CODE[str(_SELF_PATH)] = sys._getframe().f_code
 _IMPORT_DEFAULTS[str(_SELF_PATH)] = _compiled_defaults(_SELF_RAW)
-for _module in (source, guard, _sibling('affected'), _sibling('cache_key'), consumer_ledger, station, shared_helpers, runtime_view, deviation, witness_format, typed_boundary, conditioned_cubic, scaled_float32, pr760_stage):
+for _module in (source, guard, _sibling('affected'), _sibling('cache_key'), consumer_ledger, station, shared_helpers, runtime_view, deviation, witness_format, typed_boundary, conditioned_cubic, scaled_float32, pr760_stage, pr780_successor):
     require(type(getattr(_module, '__file__', None)) is str, 'incomplete dependency module identity')
     _path = Path(_module.__file__).resolve()
     require(Path(__file__).resolve().parents[2] in _path.parents, 'dependency module came from another root')
@@ -769,7 +773,7 @@ def executing_checker_bindings(root=None):
     modules = (globals(), vars(source), vars(guard), vars(_sibling('affected')),
                vars(_sibling('cache_key')), vars(consumer_ledger), vars(station), vars(shared_helpers), vars(runtime_view),
                vars(deviation), vars(witness_format), vars(typed_boundary), vars(conditioned_cubic),
-               vars(scaled_float32), vars(pr760_stage))
+               vars(scaled_float32), vars(pr760_stage), vars(pr780_successor))
     result = {}
     for relative, namespace in zip(CHECKER_PATHS, modules, strict=True):
         path = base / relative
@@ -808,6 +812,7 @@ def executing_checker_bindings(root=None):
     conditioned_cubic.verify_authority()
     pr760_stage.verify_stage_data()
     _pr760_authority_data()
+    pr780_successor.verify_data()
     return result
 
 
@@ -3470,6 +3475,9 @@ def _witness_format_bindings(root, *, _snapshots=None, _operation=None):
 
 def _historical_typed_text(path, text, *, pr760=False):
     """Pure named provenance projection; never replace a captured input."""
+    extension = pr780_successor._data_snapshot()['edges'].get(path)
+    if extension is not None and sha(text) == extension['after_sha256']:
+        text = pr780_successor.predecessor_bytes(path, text.encode('utf-8')).decode('utf-8')
     if pr760 and path in pr760_stage.CARLA_REGISTRY_PATHS:
         text = pr760_stage.predecessor_source(path, text)
     return typed_boundary.historical_source(str(path), text)
@@ -3558,8 +3566,11 @@ def reviewed_typed_text(root, path, text, *, _operation=None, _inputs=None, _inp
     path = str(path)
     edge = (pr760_stage.EDGES.get(path) if path in pr760_stage.CARLA_REGISTRY_PATHS
             else typed_boundary.EDGES.get(path))
-    if edge is None:
+    extension = pr780_successor._data_snapshot()['edges'].get(path)
+    if edge is None and extension is None:
         return text
+    if edge is None:
+        edge = extension
     _public_admission = None
     try:
         if _inputs is None and _operation is None:
@@ -3576,13 +3587,17 @@ def reviewed_typed_text(root, path, text, *, _operation=None, _inputs=None, _inp
                 require(explicit_operation is None or explicit_operation is _operation,
                         'typed source operation differs from borrowed owner')
         require((_inputs is None) == (_input_owner is None), 'incomplete typed input owner')
-        new_endpoint = path in pr760_stage.CARLA_REGISTRY_PATHS and source.token_sha256(text) == edge['after_token_sha256']
-        if not (new_endpoint or typed_boundary.is_current(path, text) or
+        extended = (extension is not None and
+            source.token_sha256(text) == extension['after_token_sha256'])
+        new_endpoint = path in pr760_stage.CARLA_REGISTRY_PATHS and (extended or
+            source.token_sha256(text) == edge['after_token_sha256'])
+        if not (extended or new_endpoint or typed_boundary.is_current(path, text) or
                 source.token_sha256(text) == edge['after_token_sha256']):
             return text
         _operation_check(_operation, root)
         raw = _observe_bytes(root, path, _regular(root, path).read_bytes(), _operation=_operation)
-        require((sha(raw) == edge['after_sha256']) if new_endpoint else typed_boundary.is_current(path, raw),
+        require((sha(raw) == extension['after_sha256']) if extended else
+                (sha(raw) == edge['after_sha256']) if new_endpoint else typed_boundary.is_current(path, raw),
                 'typed physical input is not the exact reviewed endpoint: ' + path)
         physical_text = raw.decode('utf-8')
         require(type(text) is str and source.token_sha256(text) == source.token_sha256(physical_text),
@@ -3948,10 +3963,13 @@ def _reviewed_lane_observation(root, text, expected_raw, *, _operation=None):
 
 def reviewed_sources(root, texts):
     """Project one supplied operation; historical pass-through grants no admission."""
+    extensions = pr780_successor._data_snapshot()['edges']
     changed = {p for p, text in texts.items() if
                (p in SOURCE_PATHS and source.token_sha256(text) != BEFORE_TOKEN_SHA256[p])
                or (p in pr760_stage.CARLA_REGISTRY_PATHS and
-                   source.token_sha256(text) == pr760_stage.EDGES[p]['after_token_sha256'])}
+                   source.token_sha256(text) == pr760_stage.EDGES[p]['after_token_sha256'])
+               or (p in extensions and source.token_sha256(text) ==
+                   extensions[p]['after_token_sha256'])}
     if not changed:
         return dict(texts)
     physical_inputs = {}
@@ -4075,14 +4093,15 @@ def typed_successor_edges(root, *, _operation=None):
                                      _operation=_operation)
             qualification = (current_image and path ==
                 'tools/carla_lane_oracle/test_witness_format_contracts.py')
-            projected = (pr760_stage.predecessor_source(path, current.decode('utf-8'))
+            retained = pr780_successor.predecessor_bytes(path, current)
+            projected = (pr760_stage.predecessor_source(path, retained.decode('utf-8'))
                 if current_image and path in pr760_stage.EXAMPLE_PATHS else
                 qualification_predecessor_bytes(path, current).decode('utf-8')
-                if qualification else current.decode('utf-8'))
+                if qualification else retained.decode('utf-8'))
             require(typed_boundary.is_current(path, projected),
                     'typed successor physical endpoint changed: ' + path)
             edge = typed_boundary.edge(path)
-            if current_image and (path in pr760_stage.EXAMPLE_PATHS or qualification):
+            if current_image and (path in pr760_stage.EXAMPLE_PATHS or qualification or current != retained):
                 edge.update(after_sha256=sha(current),
                             after_token_sha256=source.token_sha256(current.decode('utf-8')))
             edge['scope'] = 'explicit historical provenance; current typed API admission'
@@ -4197,6 +4216,499 @@ def _pr760_authority_data():
     ), 'PR760 authority selectors changed')
 
 
+def _pr776_input_pins():
+    """Name only this complete reviewed successor cohort, never optional pins."""
+    return {'tests/test_water.mojo': '179f2cb6ef20a44c9f862453d56fdb967b5ba1c6978996ecc750f7da3a4e5d7a',
+ 'tools/compile_fail_expectations.json': 'cae00c1721392c75b10af5793e6de851d963350c8396e405ef0233c19af5b723',
+ 'tools/carla_lane_oracle/test_expectation_binding_successor.py': 'e4ad0a6a13196e4a2bf16dae76f78f01d103260c2644632ec36fa74f46dad846',
+ 'tools/carla_lane_oracle/test_pr760_physical_image.py': '1c1565c05cb702df67319cb69641f83c8a761d38ccf06a11de91b037dfe5b1ce',
+ 'tools/carla_lane_oracle/test_pr760_arithmetic_stage.py': 'ac51eb5dd58c8e3768f2405108203351194d72d63f2b53f4e30d5b2d4d8c26ab'}
+
+
+def _pr776_bound_inputs():
+    """Bind the new regression and four diagnostic fixtures to physical bytes."""
+    return {'tools/carla_lane_oracle/test_pr776_input_successors.py': 'af0d9aff27b4f06ce8b102979825d84c177ec78b349dbbb1de4a98423c03f132',
+ 'tools/carla_lane_oracle/test_main_rebase_successor.py': '2ca5e9f72a38766945e182fbe004e3e64011efa897e22445ab7372102634a792',
+ 'tests/compile_fail/a_gpu_info_is_not_a_bare_int.mojo': '785b9a1746336fdea844b431f6a5ffd6812a623a72d1929c544eb9f107cf7819',
+ 'tests/compile_fail/a_gpu_part_is_not_a_bare_int.mojo': 'a8880f3e6f546bf30671147e5a75bf37b5bf5b294b0c239590cb258a8266199f',
+ 'tests/compile_fail/a_splat_info_is_not_a_bare_int.mojo': 'c55c1951bf968f929fd3f5dfb9cebb9c49ce7ee1d3bf4a7259c37eeceb22af46',
+ 'tests/compile_fail/a_splat_part_is_not_a_bare_int.mojo': 'af4017aee6d8d7d3e23a30fa59da038925b618a5556cc3240b90d8092b2206ee'}
+
+
+def pr776_predecessor_bytes(path, raw):
+    """Recover exact earlier comparison bytes for five named PR776 inputs.
+
+    No root is read or projected. This is provenance, not an admission receipt:
+    the physical owner separately checks every endpoint and rereads actual bytes.
+    Original typed, PR760 image and stage pins remain immutable.
+    """
+    executing_checker_bindings()
+    require(type(path) is str and type(raw) is bytes,
+            'PR776 predecessor requires builtin path and immutable bytes')
+    extension = pr780_successor._data_snapshot()['edges'].get(path)
+    if extension is not None and sha(raw) == extension['after_sha256']:
+        raw = pr780_successor.predecessor_bytes(path, raw)
+    rows = {'tests/test_water.mojo': ('ffe2ab6e56ea73498bc8f2f65f5dd80bb02f6e6ac72024c082a6920878ddf86a',
+                           '179f2cb6ef20a44c9f862453d56fdb967b5ba1c6978996ecc750f7da3a4e5d7a',
+                           ((37, 39, (), ('    _quantize_rows,\n', '    _quantized_image,\n')),
+                            (47,
+                             60,
+                             ('from extensions.water.glare import aperture_open, apply_glare, '
+                              'glare_kernels\n',),
+                             ('from extensions.water.glare import (\n',
+                              '    aperture_open,\n',
+                              '    apply_glare,\n',
+                              '    glare_cell_x,\n',
+                              '    glare_cell_y,\n',
+                              '    glare_convolve,\n',
+                              '    glare_grid_size,\n',
+                              '    glare_kernels,\n',
+                              '    glare_sample_x,\n',
+                              '    glare_sample_y,\n',
+                              ')\n',
+                              'from extensions.water.post import RadianceView, blur_texel, '
+                              'highlight_texel\n',
+                              'from extensions.water.rows import row_tasks\n')),
+                            (126, 127, (), ('from std.memory import AddressSpace\n',)),
+                            (421,
+                             593,
+                             (),
+                             ('    # Spreading the glare over the image runs in parallel. One '
+                              'worker is the\n',
+                              '    # serial pass, and the result does not depend on the count.\n',
+                              '    var bright = List[Float32](length=37 * 29 * 3, fill=0.0)\n',
+                              '    for i in range(len(bright)):\n',
+                              '        bright[i] = Float32((i * 7919) % 97) * 0.001\n',
+                              '    var spread = apply_glare(bright, 37, 29, wide)\n',
+                              '    assert_true(apply_glare(bright, 37, 29, wide, 1) == spread)\n',
+                              '    assert_true(apply_glare(bright, 37, 29, wide, 3) == spread)\n',
+                              '    var lit = 0\n',
+                              '    for i in range(len(spread)):\n',
+                              '        if spread[i] > 0.0:\n',
+                              '            lit += 1\n',
+                              '    assert_true(lit > 0)\n',
+                              '\n',
+                              '\n',
+                              'def test_the_glare_grid_maps_the_image_and_back() raises:\n',
+                              '    # The image is fitted into three quarters of the kernel grid.\n',
+                              '    var size = glare_grid_size(64, 640, 360)\n',
+                              '    assert_equal(size[0], 48)\n',
+                              '    assert_equal(size[1], 27)\n',
+                              '    # A tall image fits by its height, and a thin one keeps one '
+                              'cell.\n',
+                              '    var tall = glare_grid_size(64, 100, 400)\n',
+                              '    assert_equal(tall[1], 48)\n',
+                              '    assert_true(tall[0] >= 1 and tall[0] < 48)\n',
+                              '    var thin = glare_grid_size(4, 1000, 1)\n',
+                              '    assert_equal(thin[1], 1)\n',
+                              '    # Every grid point samples a pixel inside the image, and every '
+                              'pixel reads\n',
+                              '    # a grid point inside the grid, at both ends of each axis.\n',
+                              '    for x in range(size[0]):\n',
+                              '        var ix = glare_sample_x(x, size[0], 640)\n',
+                              '        assert_true(ix >= 0 and ix < 640)\n',
+                              '    for y in range(size[1]):\n',
+                              '        var iy = glare_sample_y(y, size[1], 360)\n',
+                              '        assert_true(iy >= 0 and iy < 360)\n',
+                              '    for x in range(640):\n',
+                              '        var gx = glare_cell_x(x, 640, size[0])\n',
+                              '        assert_true(gx >= 0 and gx < size[0])\n',
+                              '    for y in range(360):\n',
+                              '        var gy = glare_cell_y(y, 360, size[1])\n',
+                              '        assert_true(gy >= 0 and gy < size[1])\n',
+                              '    assert_equal(glare_cell_x(0, 640, size[0]), 0)\n',
+                              '    assert_equal(glare_cell_x(639, 640, size[0]), size[0] - 1)\n',
+                              '    assert_equal(glare_cell_y(359, 360, size[1]), size[1] - 1)\n',
+                              '    # The convolution refuses a grid that does not fit its kernels, '
+                              'or samples\n',
+                              "    # that are not the grid's.\n",
+                              '    var kernels = glare_kernels(SpectrumResolution(8))\n',
+                              '    var samples = List[Float32](length=4 * 3 * 3, fill=0.0)\n',
+                              '    samples[0] = 2.0\n',
+                              '    var grid = glare_convolve(samples, 4, 3, kernels)\n',
+                              '    assert_equal(len(grid), 4 * 3 * 3)\n',
+                              '    for i in range(len(grid)):\n',
+                              '        assert_true(grid[i] >= 0.0)\n',
+                              '    with assert_raises(contains="does not fit"):\n',
+                              '        _ = glare_convolve(samples, 9, 3, kernels)\n',
+                              '    with assert_raises(contains="does not fit"):\n',
+                              '        _ = glare_convolve(samples, 4, 9, kernels)\n',
+                              '    with assert_raises(contains="does not fit"):\n',
+                              '        _ = glare_convolve(samples, 0, 3, kernels)\n',
+                              '    with assert_raises(contains="does not fit"):\n',
+                              '        _ = glare_convolve(samples, 4, 0, kernels)\n',
+                              '    with assert_raises(contains="do not match"):\n',
+                              '        _ = glare_convolve(samples, 3, 3, kernels)\n',
+                              '    # A frame is the grid read back through the image: each pixel '
+                              'is the cell\n',
+                              '    # that it maps to.\n',
+                              '    var wide = glare_kernels(SpectrumResolution(64))\n',
+                              '    var bright = List[Float32](length=37 * 29 * 3, fill=0.0)\n',
+                              '    for i in range(len(bright)):\n',
+                              '        bright[i] = Float32((i * 7919) % 97) * 0.001\n',
+                              '    var frame = apply_glare(bright, 37, 29, wide)\n',
+                              '    var fitted = glare_grid_size(64, 37, 29)\n',
+                              '    var picked = List[Float32](length=fitted[0] * fitted[1] * 3, '
+                              'fill=0.0)\n',
+                              '    for y in range(fitted[1]):\n',
+                              '        for x in range(fitted[0]):\n',
+                              '            var p = (\n',
+                              '                glare_sample_y(y, fitted[1], 29) * 37\n',
+                              '                + glare_sample_x(x, fitted[0], 37)\n',
+                              '            ) * 3\n',
+                              '            var o = (y * fitted[0] + x) * 3\n',
+                              '            picked[o] = bright[p]\n',
+                              '            picked[o + 1] = bright[p + 1]\n',
+                              '            picked[o + 2] = bright[p + 2]\n',
+                              '    var cells = glare_convolve(picked, fitted[0], fitted[1], '
+                              'wide)\n',
+                              '    for y in range(29):\n',
+                              '        for x in range(37):\n',
+                              '            var cell = (\n',
+                              '                glare_cell_y(y, 29, fitted[1]) * fitted[0]\n',
+                              '                + glare_cell_x(x, 37, fitted[0])\n',
+                              '            ) * 3\n',
+                              '            for channel in range(3):\n',
+                              '                assert_equal(\n',
+                              '                    frame[(y * 37 + x) * 3 + channel], cells[cell + '
+                              'channel]\n',
+                              '                )\n',
+                              '\n',
+                              '\n',
+                              'def test_bloom_pixels_read_their_neighbors_and_clip_at_the_edges() '
+                              'raises:\n',
+                              '    # A 4 by 3 frame, with one bright pixel in a corner.\n',
+                              '    var texels = List[Float32](length=4 * 3 * 3, fill=1.0)\n',
+                              '    texels[0] = 40.0\n',
+                              '    texels[1] = 20.0\n',
+                              '    texels[2] = 10.0\n',
+                              '    var image = RadianceView[AddressSpace.GENERIC](\n',
+                              '        texels.unsafe_ptr()\n',
+                              '        .unsafe_mut_cast[False]()\n',
+                              '        .unsafe_origin_cast[UntrackedOrigin[mut=False]](),\n',
+                              '        4,\n',
+                              '        3,\n',
+                              '    )\n',
+                              '    # The corner pixel averages four pixels: a 2 by 2 block, '
+                              'clipped at the\n',
+                              "    # frame's edge. Its brightest channel is over the limit, so "
+                              'some stays.\n',
+                              '    var corner = highlight_texel(image, 0, 0, 2.5, 1.0)\n',
+                              '    var mean_r = Float32((40.0 + 1.0 + 1.0 + 1.0) / 4.0)\n',
+                              '    var mean_g = Float32((20.0 + 3.0) / 4.0)\n',
+                              '    var keep = Float32((mean_r - 2.5) / mean_r)\n',
+                              '    assert_true(abs(corner.x - mean_r * keep) < 1e-4)\n',
+                              '    assert_true(abs(corner.y - mean_g * keep) < 1e-4)\n',
+                              '    # A scale applies last.\n',
+                              '    var scaled = highlight_texel(image, 0, 0, 2.5, 0.001)\n',
+                              '    assert_equal(scaled.x, corner.x * 0.001)\n',
+                              '    # Far from the glint, and under the limit, nothing stays.\n',
+                              '    var dim = highlight_texel(image, 3, 2, 2.5, 1.0)\n',
+                              '    assert_equal(dim.x, 0.0)\n',
+                              '    assert_equal(dim.y, 0.0)\n',
+                              '    assert_equal(dim.z, 0.0)\n',
+                              '    # A view holds a bare pointer, so the list must outlive every '
+                              'read.\n',
+                              '    _ = len(texels)\n',
+                              '    # The blur is a weighted sum along one axis, and its weights '
+                              'add to one.\n',
+                              '    var flat = List[Float32](length=7 * 5 * 3, fill=0.5)\n',
+                              '    var even = RadianceView[AddressSpace.GENERIC](\n',
+                              '        flat.unsafe_ptr()\n',
+                              '        .unsafe_mut_cast[False]()\n',
+                              '        .unsafe_origin_cast[UntrackedOrigin[mut=False]](),\n',
+                              '        7,\n',
+                              '        5,\n',
+                              '    )\n',
+                              '    for horizontal in [True, False]:\n',
+                              '        var blurred = blur_texel(even, 3, 2, horizontal)\n',
+                              '        assert_true(abs(blurred.x - 0.5) < 1e-5)\n',
+                              '    _ = len(flat)\n',
+                              '    # A lone glint spreads to the taps of its own row and not its '
+                              'column.\n',
+                              '    var spike = List[Float32](length=7 * 5 * 3, fill=0.0)\n',
+                              '    spike[(2 * 7 + 3) * 3] = 1.0\n',
+                              '    var lone = RadianceView[AddressSpace.GENERIC](\n',
+                              '        spike.unsafe_ptr()\n',
+                              '        .unsafe_mut_cast[False]()\n',
+                              '        .unsafe_origin_cast[UntrackedOrigin[mut=False]](),\n',
+                              '        7,\n',
+                              '        5,\n',
+                              '    )\n',
+                              '    assert_true(blur_texel(lone, 3, 2, True).x > 0.2)\n',
+                              '    assert_true(blur_texel(lone, 4, 2, True).x > 0.3)\n',
+                              '    assert_true(blur_texel(lone, 6, 2, True).x > 0.0)\n',
+                              '    assert_equal(blur_texel(lone, 3, 0, True).x, 0.0)\n',
+                              '    # Three pixels away, only the outer tap reaches the glint.\n',
+                              '    assert_true(abs(blur_texel(lone, 0, 2, True).x - 0.0702702703) '
+                              '< 1e-6)\n',
+                              '    assert_true(blur_texel(lone, 3, 3, False).x > 0.3)\n',
+                              '    assert_equal(blur_texel(lone, 4, 2, False).x, 0.0)\n',
+                              '    _ = len(spike)\n',
+                              '    # The edge repeats: a pixel beside the edge reads the edge '
+                              'pixel again.\n',
+                              '    var edge = List[Float32](length=7 * 1 * 3, fill=0.0)\n',
+                              '    edge[0] = 1.0\n',
+                              '    var rim = RadianceView[AddressSpace.GENERIC](\n',
+                              '        edge.unsafe_ptr()\n',
+                              '        .unsafe_mut_cast[False]()\n',
+                              '        .unsafe_origin_cast[UntrackedOrigin[mut=False]](),\n',
+                              '        7,\n',
+                              '        1,\n',
+                              '    )\n',
+                              '    assert_true(blur_texel(rim, 0, 0, True).x > 0.5)\n',
+                              '    assert_equal(blur_texel(rim, 6, 0, True).x, 0.0)\n',
+                              '    # Every tap of a one-row frame lands on the one row: the '
+                              'weights add to 1.\n',
+                              '    assert_true(abs(blur_texel(rim, 0, 0, False).x - 1.0) < 1e-6)\n',
+                              '    _ = len(edge)\n')),
+                            (1736,
+                             1742,
+                             (),
+                             ('        # A scale multiplies each rounded result, as a pass over '
+                              'the list does.\n',
+                              '        var scaled = _highlights(hdr, width, height, threshold, 0, '
+                              '0.001)\n',
+                              '        for i in range(len(serial)):\n',
+                              '            assert_equal(scaled[i], serial[i] * 0.001)\n',
+                              '        var one_task = _highlights(hdr, width, height, threshold, '
+                              '1, 0.001)\n',
+                              '        assert_true(one_task == scaled)\n')),
+                            (1811,
+                             1840,
+                             (),
+                             ('    # Clamping and quantizing a graded image, in parallel and in '
+                              'one pass.\n',
+                              '    var graded = List[Float32](length=width * height * 3, '
+                              'fill=0.0)\n',
+                              '    for i in range(len(graded)):\n',
+                              '        graded[i] = Float32((i * 53) % 131) / 100.0 - 0.15\n',
+                              '    var quantized = _quantized_image(graded, width, height)\n',
+                              '    var serial_quantized = Framebuffer(width, height, Color(0, 0, '
+                              '0))\n',
+                              '    _quantize_rows(\n',
+                              '        graded,\n',
+                              '        '
+                              'serial_quantized.pixels.unsafe_ptr().unsafe_origin_cast[MutAnyOrigin](),\n',
+                              '        width,\n',
+                              '        0,\n',
+                              '        height,\n',
+                              '    )\n',
+                              '    assert_true(quantized.pixels == serial_quantized.pixels)\n',
+                              '    assert_true(\n',
+                              '        _quantized_image(graded, width, height, 1).pixels == '
+                              'quantized.pixels\n',
+                              '    )\n',
+                              '    # Both ends of the range are clamped, and every pixel is '
+                              'opaque.\n',
+                              '    assert_equal(quantized.pixels[0], 0)\n',
+                              '    assert_equal(quantized.pixels[3], 255)\n',
+                              '    var low = 0\n',
+                              '    var high = 0\n',
+                              '    for i in range(0, len(quantized.pixels), 4):\n',
+                              '        if quantized.pixels[i] == 0:\n',
+                              '            low += 1\n',
+                              '        if quantized.pixels[i] == 255:\n',
+                              '            high += 1\n',
+                              '        assert_equal(quantized.pixels[i + 3], 255)\n',
+                              '    assert_true(low > 0 and high > 0)\n')),
+                            (1920,
+                             1937,
+                             (),
+                             ('def test_row_tasks_cut_the_rows_for_the_workers() raises:\n',
+                              '    # One worker is one task over every row: the serial pass.\n',
+                              '    assert_equal(row_tasks(1, 8, 100), 1)\n',
+                              '    assert_equal(row_tasks(1, 1, 0), 1)\n',
+                              '    # Each worker gets runs of rows, and never more tasks than '
+                              'rows.\n',
+                              '    assert_equal(row_tasks(4, 8, 100), 32)\n',
+                              '    assert_equal(row_tasks(4, 8, 20), 20)\n',
+                              '    assert_equal(row_tasks(4, 1, 100), 4)\n',
+                              '    assert_equal(row_tasks(4, 1, 0), 0)\n',
+                              '    # A huge count is clamped to the rows before it is '
+                              'multiplied.\n',
+                              '    assert_equal(row_tasks(1 << 61, 8, 50), 50)\n',
+                              '    # Zero or less means every logical core.\n',
+                              '    var cores = row_tasks(0, 1, 1000000)\n',
+                              '    assert_true(cores >= 1)\n',
+                              '    assert_equal(row_tasks(-3, 1, 1000000), cores)\n',
+                              '\n',
+                              '\n')))),
+ 'tools/compile_fail_expectations.json': ('deee9f738d1387ee05ebc4a30e2c5bb1ab4cfbfda04dd2fa6c01aec124552a29',
+                                          'cae00c1721392c75b10af5793e6de851d963350c8396e405ef0233c19af5b723',
+                                          ((1486,
+                                            1510,
+                                            (),
+                                            ('  },\n',
+                                             '  '
+                                             '"tests/compile_fail/a_gpu_info_is_not_a_bare_int.mojo": '
+                                             '{\n',
+                                             '    "errors": [\n',
+                                             '      {\n',
+                                             '        "line": 12,\n',
+                                             '        "column": 21,\n',
+                                             '        "message": "invalid call to \'info\': value '
+                                             "passed to 'which' cannot be converted from "
+                                             '\'IntLiteral[1]\' to \'GpuInfo\'"\n',
+                                             '      }\n',
+                                             '    ],\n',
+                                             '    "notes": [\n',
+                                             '      "function declared here"\n',
+                                             '    ]\n',
+                                             '  },\n',
+                                             '  '
+                                             '"tests/compile_fail/a_gpu_part_is_not_a_bare_int.mojo": '
+                                             '{\n',
+                                             '    "errors": [\n',
+                                             '      {\n',
+                                             '        "line": 12,\n',
+                                             '        "column": 21,\n',
+                                             '        "message": "invalid call to \'part\': value '
+                                             "passed to 'which' cannot be converted from "
+                                             '\'IntLiteral[3]\' to \'GpuPart\'"\n',
+                                             '      }\n',
+                                             '    ],\n',
+                                             '    "notes": [\n',
+                                             '      "function declared here"\n',
+                                             '    ]\n')),
+                                           (3367,
+                                            3391,
+                                            (),
+                                            ('      }\n',
+                                             '    ],\n',
+                                             '    "notes": [\n',
+                                             '      "function declared here"\n',
+                                             '    ]\n',
+                                             '  },\n',
+                                             '  '
+                                             '"tests/compile_fail/a_splat_info_is_not_a_bare_int.mojo": '
+                                             '{\n',
+                                             '    "errors": [\n',
+                                             '      {\n',
+                                             '        "line": 12,\n',
+                                             '        "column": 21,\n',
+                                             '        "message": "invalid call to \'info\': value '
+                                             "passed to 'which' cannot be converted from "
+                                             '\'IntLiteral[1]\' to \'SplatInfo\'"\n',
+                                             '      }\n',
+                                             '    ],\n',
+                                             '    "notes": [\n',
+                                             '      "function declared here"\n',
+                                             '    ]\n',
+                                             '  },\n',
+                                             '  '
+                                             '"tests/compile_fail/a_splat_part_is_not_a_bare_int.mojo": '
+                                             '{\n',
+                                             '    "errors": [\n',
+                                             '      {\n',
+                                             '        "line": 12,\n',
+                                             '        "column": 21,\n',
+                                             '        "message": "invalid call to \'part\': value '
+                                             "passed to 'which' cannot be converted from "
+                                             '\'IntLiteral[3]\' to \'SplatPart\'"\n')))),
+ 'tools/carla_lane_oracle/test_expectation_binding_successor.py': ('112d9a22a78f4379fbdb932d57aea179a246251df63fb2778486903607e55050',
+                                                                   'e4ad0a6a13196e4a2bf16dae76f78f01d103260c2644632ec36fa74f46dad846',
+                                                                   ((40,
+                                                                     41,
+                                                                     ('        self.raw = '
+                                                                      '(ROOT/PATH).read_bytes()\n',),
+                                                                     ('        self.raw = '
+                                                                      'audit.pr776_predecessor_bytes(PATH, '
+                                                                      '(ROOT/PATH).read_bytes())\n',)),
+                                                                    (112,
+                                                                     115,
+                                                                     ('        '
+                                                                      'self.assertEqual(typed.BINDING_INPUTS[PATH], '
+                                                                      'digest)\n',),
+                                                                     ('        '
+                                                                      'self.assertEqual(typed.BINDING_INPUTS[PATH],\n',
+                                                                      '                         '
+                                                                      'hashlib.sha256(audit.pr776_predecessor_bytes(PATH, '
+                                                                      'raw)).hexdigest())\n',
+                                                                      '        '
+                                                                      'self.assertNotEqual(typed.BINDING_INPUTS[PATH], '
+                                                                      'digest)\n')))),
+ 'tools/carla_lane_oracle/test_pr760_physical_image.py': ('110861c34786bff5eefcf9503e5c98eb5a53af138dba327e184ee7616e7d98f0',
+                                                          '1c1565c05cb702df67319cb69641f83c8a761d38ccf06a11de91b037dfe5b1ce',
+                                                          ((120,
+                                                            128,
+                                                            ('            '
+                                                             "self.assertEqual(self.accepted['bindings'][path], "
+                                                             'expected)\n',),
+                                                            ('            raw = '
+                                                             '(self.root/path).read_bytes()\n',
+                                                             '            '
+                                                             "self.assertEqual(self.accepted['bindings'][path], "
+                                                             'owner.sha(raw))\n',
+                                                             '            if path in '
+                                                             "('tests/test_water.mojo', "
+                                                             "'tools/compile_fail_expectations.json',\n",
+                                                             '                        '
+                                                             "'tools/carla_lane_oracle/test_expectation_binding_successor.py',\n",
+                                                             '                        '
+                                                             "'tools/carla_lane_oracle/test_pr760_physical_image.py',\n",
+                                                             '                        '
+                                                             "'tools/carla_lane_oracle/test_pr760_arithmetic_stage.py'):\n",
+                                                             '                raw = '
+                                                             'owner.pr776_predecessor_bytes(path, '
+                                                             'raw)\n',
+                                                             '            '
+                                                             'self.assertEqual(owner.sha(raw), '
+                                                             'expected)\n')),
+                                                           (239,
+                                                            243,
+                                                            ('            '
+                                                             'self.assertEqual(owner.sha(raw), '
+                                                             "row['after_sha256'])\n",),
+                                                            ('            previous = '
+                                                             '(owner.pr776_predecessor_bytes(path, '
+                                                             'raw) if path ==\n',
+                                                             '                        '
+                                                             "'tools/carla_lane_oracle/test_expectation_binding_successor.py' "
+                                                             'else raw)\n',
+                                                             '            '
+                                                             'self.assertEqual(owner.sha(previous), '
+                                                             "row['after_sha256'])\n",
+                                                             '            '
+                                                             "self.assertEqual(self.accepted['bindings'][path], "
+                                                             'owner.sha(raw))\n')))),
+ 'tools/carla_lane_oracle/test_pr760_arithmetic_stage.py': ('35efae78b6a95568760b4544428c511a5ee90beec4d86338fd2f717c0f1c7516',
+                                                            'ac51eb5dd58c8e3768f2405108203351194d72d63f2b53f4e30d5b2d4d8c26ab',
+                                                            ((158,
+                                                              160,
+                                                              (),
+                                                              ('        water = '
+                                                               "'tests/test_water.mojo'\n",
+                                                               '        inputs[water] = '
+                                                               'owner.pr776_predecessor_bytes(water, '
+                                                               'inputs[water])\n')),))}
+    require(path in rows, 'unreviewed PR776 predecessor path: ' + path)
+    before_sha, after_sha, edits = rows[path]
+    require(sha(raw) == after_sha, 'unreviewed PR776 endpoint: ' + path)
+    lines = raw.decode('utf-8').splitlines(keepends=True)
+    previous = len(lines) + 1
+    for start, stop, before, after in reversed(edits):
+        require(0 <= start <= stop < previous and tuple(lines[start:stop]) == after,
+                'PR776 predecessor span changed: ' + path)
+        lines[start:stop] = before
+        previous = start
+    prior = ''.join(lines).encode('utf-8')
+    require(sha(prior) == before_sha, 'PR776 predecessor bytes changed: ' + path)
+    if path == 'tools/compile_fail_expectations.json':
+        old, current = json.loads(prior), json.loads(raw)
+        added = {f'tests/compile_fail/a_{kind}_{selector}_is_not_a_bare_int.mojo'
+                 for kind in ('gpu', 'splat') for selector in ('info', 'part')}
+        require(type(old) is dict and type(current) is dict
+                and len(old) == 704 and len(current) == 708
+                and set(current)-set(old) == added
+                and {name: current[name] for name in old} == old,
+                'PR776 expectation extension changed an existing diagnostic')
+        # The preexisting 689-to-704 proof still owns every earlier record.
+        typed_boundary.verify_binding_successor(path, prior)
+    executing_checker_bindings()
+    return prior
+
+
 def qualification_predecessor_bytes(path, raw):
     """Pure exact comparison for eight reviewed Python witness successors only.
 
@@ -4206,6 +4718,9 @@ def qualification_predecessor_bytes(path, raw):
     executing_checker_bindings()
     require(type(path) is str and type(raw) is bytes,
             'qualification predecessor requires builtin source bytes')
+    if (path == 'tools/carla_lane_oracle/test_expectation_binding_successor.py'
+            and sha(raw) == 'e4ad0a6a13196e4a2bf16dae76f78f01d103260c2644632ec36fa74f46dad846'):
+        raw = pr776_predecessor_bytes(path, raw)
     rows = {'tools/carla_lane_oracle/test_common758_current_successor.py': ('010cd7008a96b80e0aea26734dafb7be0068f677c5dd73af8fb15db585e70b9f',
                                                                      'bae8693bfbc3557a53e54f3dea90c5bf44583d5fde349a6c24c16045acec10e4',
                                                                      ((13,
@@ -4797,6 +5312,13 @@ def stage_witness_predecessor_bytes(raw):
     This exact inverse supplies no admission, filesystem or receipt authority.
     """
     executing_checker_bindings()
+    extension_path = 'tools/carla_lane_oracle/test_pr760_arithmetic_stage.py'
+    extension = pr780_successor._data_snapshot()['edges'][extension_path]
+    if (type(raw) is bytes and
+            sha(raw) == extension['after_sha256']):
+        raw = pr780_successor.predecessor_bytes(extension_path, raw)
+    if type(raw) is bytes and sha(raw) == 'ac51eb5dd58c8e3768f2405108203351194d72d63f2b53f4e30d5b2d4d8c26ab':
+        raw = pr776_predecessor_bytes('tools/carla_lane_oracle/test_pr760_arithmetic_stage.py', raw)
     before_sha, after_sha, edits = ('b6d5ecc453ebe4c1f8d5f07e1f029b09f414dea887480fa6cf07ccd85bfacdb3',
  '35efae78b6a95568760b4544428c511a5ee90beec4d86338fd2f717c0f1c7516',
  ((74,
@@ -4880,8 +5402,35 @@ def _pr760_candidate_bindings(root, *, _snapshots=None, _operation=None):
         expected = data['inputs']
         require(type(expected) is dict and all(type(path) is str and type(digest) is str
                 for path, digest in expected.items()), 'malformed PR760 source-image pins')
+        successor_pins = _pr776_input_pins()
+        require(set(successor_pins) <= set(expected), 'PR776 successor misses fixed predecessor')
+        extension_data = pr780_successor._data_snapshot()
+        prior_inputs = {}
+        extended_pins = {path: edge['after_sha256']
+                         for path, edge in extension_data['edges'].items()}
+        require(set(extended_pins) <= set(expected) | set(_pr776_bound_inputs()),
+                'PR780 source successor misses a fixed predecessor')
+        for path, edge in extension_data['edges'].items():
+            require(edge['before_sha256'] == successor_pins.get(path,
+                    expected.get(path, _pr776_bound_inputs().get(path))),
+                    'PR780 source successor predecessor join changed: ' + path)
         for path, digest in expected.items():
-            require(sha(observe(path)) == digest, 'PR760 physical input changed: ' + path)
+            raw = observe(path)
+            require(sha(raw) == extended_pins.get(path, successor_pins.get(path, digest)),
+                    'PR760 physical input changed: ' + path)
+            retained = pr780_successor.predecessor_bytes(path, raw)
+            prior_inputs[path] = (pr776_predecessor_bytes(path, retained)
+                                  if path in successor_pins else retained)
+            require(sha(prior_inputs[path]) == digest,
+                    'PR780/PR776 successor misses fixed PR760 input: ' + path)
+        for path, digest in _pr776_bound_inputs().items():
+            raw = observe(path)
+            require(sha(raw) == extended_pins.get(path, digest), 'PR776 bound input changed: ' + path)
+            require(sha(pr780_successor.predecessor_bytes(path, raw)) == digest,
+                    'PR780 successor misses fixed PR776 input: ' + path)
+        pr780_successor.verify_sources({path: image[path] for path in extended_pins})
+        for path, digest in extension_data['bound_inputs'].items():
+            require(sha(observe(path)) == digest, 'PR780 bound input changed: ' + path)
         stage_witness = 'tools/carla_lane_oracle/test_pr760_arithmetic_stage.py'
         stage_prior = stage_witness_predecessor_bytes(image[stage_witness])
         require(stage_prior == image['tools/carla_lane_oracle/pr760-test_pr760_arithmetic_stage-predecessor.txt'],
@@ -4894,11 +5443,12 @@ def _pr760_candidate_bindings(root, *, _snapshots=None, _operation=None):
                     'PR760 qualification archive differs from exact predecessor: ' + path)
         # One complete fixed image, with no per-file old/new fallback.
         previous = pr760_stage.verify_registry_sources(
-            {path: stage_prior if path == stage_witness else image[path]
+            {path: stage_prior if path == stage_witness else prior_inputs.get(path, image[path])
              for path in pr760_stage.REGISTRY_INPUT_SHA256})
         typed_texts = {path: (previous[path] if path in pr760_stage.EXAMPLE_PATHS
                               else qualification_predecessor_bytes(path, image[path]).decode('utf-8')
-                              if path == 'tools/carla_lane_oracle/test_witness_format_contracts.py' else image[path].decode('utf-8'))
+                              if path == 'tools/carla_lane_oracle/test_witness_format_contracts.py'
+                              else prior_inputs.get(path, image[path]).decode('utf-8'))
                        for path in typed_boundary.SOURCE_PATHS}
         typed_previous = typed_boundary.verify_sources(typed_texts)
         for path in pr760_stage.CARLA_REGISTRY_PATHS:
@@ -4914,7 +5464,7 @@ def _pr760_candidate_bindings(root, *, _snapshots=None, _operation=None):
         # #738 sees its original exact source/provider bytes solely as pure
         # comparison inputs. Nothing is published as a synthetic filesystem.
         helper_paths = set(shared_helpers.SOURCE_PATHS) | set(shared_helpers.PROVIDERS)
-        helper_texts = {path: previous.get(path, image[path].decode('utf-8'))
+        helper_texts = {path: previous.get(path, prior_inputs.get(path, image[path]).decode('utf-8'))
                         for path in helper_paths}
         active = shared_helpers.verify_correspondence(helper_texts)
         require(set(active) == set(shared_helpers.SOURCE_PATHS),

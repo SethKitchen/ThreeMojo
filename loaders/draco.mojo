@@ -40,7 +40,11 @@ refuses a point that the mesh does not have, which would leave three.js
 an index past the end of its attributes. three.js reads a color of one or
 two components past the end of each item; this refuses it. Draco decodes
 the deprecated texture coordinate prediction and a geometric normal
-prediction with the wrap transform; this refuses both.
+prediction with the wrap transform; this refuses both. Point clouds are
+limited to 2**26 points. Before attribute decoding, all attributes share
+a 1 GiB storage budget, counted at eight bytes per component plus eight
+bytes per point map entry. Input, connectivity, and temporary copies are
+additional storage.
 
 **What is refused.** A file that does not start with `DRACO`; another
 bitstream version; an encoding, attribute decoder, prediction, transform
@@ -139,6 +143,7 @@ comptime DRACO_TRIANGULAR_MESH = DracoGeometryType(1)
 # `points` elements up front, so an unbounded count is an out-of-memory
 # wait away; 2**26 points is generous for any real scan.
 comptime MAX_DRACO_POINTS = 1 << 26
+comptime MAX_DRACO_ATTRIBUTE_BYTES = 1 << 30
 
 
 @fieldwise_init
@@ -367,6 +372,7 @@ struct _Decoder(Movable):
     var position_data: Int
     var position_encoding: DracoEncodingData
     var encodings: List[DracoEncodingData]
+    var attribute_bytes: Int
 
     def __init__(
         out self,
@@ -383,6 +389,7 @@ struct _Decoder(Movable):
         self.position_data = NONE
         self.position_encoding = DracoEncodingData(0)
         self.encodings = List[DracoEncodingData]()
+        self.attribute_bytes = 0
 
     def take(deinit self) -> DracoGeometry:
         """Give up the decoded geometry."""
@@ -474,6 +481,16 @@ struct _Decoder(Movable):
             decoder.method = method
         self.decoders.append(decoder^)
 
+    def reserve_attribute(mut self, components: Int) raises:
+        """Charge decoded components and point mappings before allocation."""
+        var per_point = (components + 1) * 8
+        draco_require(
+            self.geometry.points
+            <= (MAX_DRACO_ATTRIBUTE_BYTES - self.attribute_bytes) // per_point,
+            "the attributes are too large to decode",
+        )
+        self.attribute_bytes += self.geometry.points * per_point
+
     def read_decoder_data(mut self, index: Int) raises:
         """Draco's `DecodeAttributesDecoderData`."""
         var count = self.buffer.varint32()
@@ -492,6 +509,7 @@ struct _Decoder(Movable):
             )
             draco_require(data_type.is_valid(), "a data type is not known")
             draco_require(components > 0, "an attribute has no components")
+            self.reserve_attribute(components)
             var unique_id = self.buffer.varint32()
             self.decoders[index].ids.append(len(self.geometry.attributes))
             self.geometry.attributes.append(
@@ -579,14 +597,29 @@ struct _Decoder(Movable):
 
     def decode_attributes(mut self, index: Int) raises:
         """Draco's `SequentialAttributeDecodersController::DecodeAttributes`."""
-        var points = self.sequence(index)
         var ids = self.decoders[index].ids.copy()
         var codings = self.decoders[index].codings.copy()
+        if not self.edgebreaker() and self.geometry.points > 0:
+            var minimum = 0
+            for i in range(len(ids)):  # pragma: no branch
+                ref attribute = self.geometry.attributes[ids[i]]
+                if codings[i] == DRACO_RAW:
+                    minimum += (
+                        self.geometry.points
+                        * attribute.components
+                        * attribute.data_type.size()
+                    )
+                else:
+                    # Prediction and compression flags precede every stream.
+                    minimum += 2
+            self.buffer.need(minimum)
+        var points = self.sequence(index)
         for i in range(len(ids)):  # pragma: no branch
-            self.geometry.attributes[ids[i]].reset(len(points))
             if codings[i] == DRACO_RAW:
+                self.geometry.attributes[ids[i]].count = len(points)
                 self._read_raw(ids[i])
             else:
+                self.geometry.attributes[ids[i]].reset(len(points))
                 self._read_integers(index, ids[i], codings[i], points)
         var quantization = List[Tuple[List[Float32], Float32, Int]]()
         var normal_bits = List[Int]()
@@ -633,7 +666,9 @@ struct _Decoder(Movable):
     def _read_raw(mut self, id: Int) raises:
         """Draco's `SequentialAttributeDecoder::DecodeValues`."""
         ref attribute = self.geometry.attributes[id]
-        var size = len(attribute.bytes)
+        var size = (
+            attribute.count * attribute.components * attribute.data_type.size()
+        )
         attribute.bytes = self.buffer.bytes(size)
 
     def _read_integers(

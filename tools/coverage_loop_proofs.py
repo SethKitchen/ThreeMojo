@@ -1175,12 +1175,39 @@ DENSITY760_INPUTS = {'core/__init__.mojo': '5f3ace6c2d6162c4a542666c21a966d54d5b
  'units/measure.mojo': 'b7531458ae7a74d6b9213f55672073137dbac41c2634787f7d6a78a16b526b85',
  'units/quantity.mojo': 'bb77541cdb757cd63b59ac01134c6a6ebce88863bee69c84ff77b8c03aff6223',
  'units/si.mojo': 'd149a23f2ee4a9bde17875615e7251285cb56af535716b66c7d8959c80f48c02'}
+# PR780 changes six imported helpers, but leaves density, groom, their tests,
+# and every theorem coordinate unchanged. Retain the complete PR760 closure
+# above and admit only this exact local successor cohort. The broader CARLA
+# successor is not a premise for these four local domination theorems.
+DENSITY780_DEPENDENCY_SHA256 = {
+    'core/extent.mojo': '90490706baa17456a3ec99374c2a00f72768a0178b4e56436571ab4ca673f068',
+    'geometries/surface.mojo': 'deeba40777e10da75651f07b8d8f86abb609d4c916b098f1dc28be228f20d3cd',
+    'loaders/bytes.mojo': '139ca1cb876bdf7b0a7c258d1d3a40375d8f3b73c75af160e26e07e7c9ba062a',
+    'math/matrix4.mojo': '1e72ab51f9dbcee3af4c2bfe9da93946616736bf02f4b20e2160ee7b69b448fa',
+    'math/square_matrix.mojo': 'f1b2e67489949b53594b5f06604a0227260fd961df2fdebe5347d91c82d99a69',
+    'math/vector4.mojo': 'db774733a27a706e5d5c940c4533de2c567d7d6ece3c918215052bccfd87b9aa',
+}
+
+
 DENSITY760_RULES = (
     (131, 64, 262144, 'range(count)', 'density-validated-positive-cube-count'),
     (167, 1, None, 'range(len(groom))', 'density-partitioned-nonempty-groom'),
     (178, 1, None, 'range(samples)', 'density-checked-representable-positive-samples'),
     (245, 16, 256, 'range(self.resolution * 4)', 'density-query-validated-positive-step-count'),
 )
+
+
+def _density780_dependencies():
+    """Snapshot only the six exact local successor endpoints from live data."""
+    declared = globals().get('DENSITY780_DEPENDENCY_SHA256')
+    if type(declared) is not dict:
+        raise ValueError('Invalid density dependency successor namespace')
+    dependencies = dict(declared)
+    if (any(type(name) is not str or type(digest) is not str
+            for name, digest in dependencies.items())
+            or sha256(canonical(dependencies)) != 'e58c79dd871f936c9ec0ad0488408d0635d93d6b451a379e844b2ca07ead972b'):
+        raise ValueError('Unreviewed density dependency successor endpoints')
+    return dependencies
 
 
 def _density760_stage_identity(raw):
@@ -1220,13 +1247,38 @@ def density760_loops(root, *, include_roots=(), _operation=None):
         if sha256(raw) != DENSITY760_INPUTS[DENSITY_SOURCE]:
             return {}
         executing = cleanup.executing_checker_bindings()
-        snapshots = {}
+        # The generated receipt authenticates its direct producer, not every
+        # live helper. Bind this new authority reader to physical tool code.
+        filename = str(Path(__file__).resolve())
+        checker = Path(filename).read_bytes()
+        if sha256(checker) != ACTIVE_SOURCE_SHA256:
+            return {}
+        expected_reader = cleanup._compiled_functions(checker, filename)['_density780_dependencies']
+        def dependency_pins():
+            live = globals().get('_density780_dependencies')
+            cleanup.require(Path(filename).read_bytes() == checker
+                and type(live) is types.FunctionType
+                and live.__globals__ is globals() and live.__defaults__ is None
+                and live.__kwdefaults__ is None and '__wrapped__' not in live.__dict__
+                and cleanup._code_identity(live.__code__) == cleanup._code_identity(expected_reader),
+                'density dependency successor reader code changed')
+            return live()
+        successor_pins = dependency_pins()
+        snapshots, dependency_sha256, successor = {}, {}, []
         for name, expected in DENSITY760_INPUTS.items():
             value = _coverage_observe_bytes(root, name,
                 relative_source(root, name, **operation_args).read_bytes(), _operation=_operation)
-            if sha256(value) != expected:
+            digest = sha256(value)
+            if name in successor_pins:
+                if digest not in (expected, successor_pins[name]):
+                    return {}
+                successor.append(digest != expected)
+            elif digest != expected:
                 return {}
             snapshots[name] = value
+            dependency_sha256[name] = digest
+        if any(successor) and not all(successor):
+            return {}
         leaf = 'tools/carla_lane_oracle/pr760_arithmetic_stage.py'
         _density760_stage_identity(snapshots[leaf])
         groom = 'extensions/humanoid/skeleton/head/hair/groom.mojo'
@@ -1267,13 +1319,14 @@ def density760_loops(root, *, include_roots=(), _operation=None):
         _density760_stage_identity(snapshots[leaf])
         for location, _, image in contexts:
             cleanup._helper_entry_census_finish(location, image, **operation_args)
-        if cleanup.executing_checker_bindings() != executing or not resolver_ok():
+        if (cleanup.executing_checker_bindings() != executing or not resolver_ok()
+                or dependency_pins() != successor_pins):
             return {}
         return {line: {
             'line': line, 'kind': 'reviewed-nonempty-range', 'cardinality': 1,
             'minimum_cardinality': minimum, 'maximum_cardinality': maximum,
             'required': 'T', 'impossible': 'F', 'expression': expression,
-            'proof_id': proof_id, 'dependency_sha256': dict(DENSITY760_INPUTS),
+            'proof_id': proof_id, 'dependency_sha256': dict(dependency_sha256),
         } for line, minimum, maximum, expression, proof_id in DENSITY760_RULES}
     except (OSError, UnicodeError, ValueError, TypeError, KeyError, AttributeError) as error:
         if _operation is not None:

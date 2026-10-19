@@ -23,10 +23,17 @@ The result is in world space, because three.js's is. Put it on a mesh at
 the origin with no rotation or scale, and draw it a little in front of the
 surface it covers, with a polygon offset, or it fights that surface for
 depth.
+
+## Input validation difference
+
+Shape dimensions must be finite before vertices are generated. NaN and
+either infinity raise an error. This differs from the unchecked three.js
+r186 input path. Finite supported inputs keep their existing behavior.
 """
 
 from core.buffer_attribute import BufferAttribute
 from core.buffer_geometry import BufferGeometry, NORMAL, POSITION, UV
+from geometries.surface import require_finite_extents
 from math.euler import Euler
 from math.matrix4 import Matrix4
 from math.vector3 import Vector3, append_vector3
@@ -165,13 +172,10 @@ def decal(
             orientation's order is not valid, or the mesh has normals and
             its world matrix flattens a dimension.
     """
+    require_finite_extents(width.value, height.value, depth.value, "decal")
     # `not (x > 0)`, not `x <= 0`: NaN compares false both ways, so the
     # <= form would let it through.
-    if (
-        not (width.value > 0)
-        or not (height.value > 0)
-        or not (depth.value > 0)
-    ):
+    if not (width.value > 0) or not (height.value > 0) or not (depth.value > 0):
         raise Error("A decal needs a box with positive extents")
     var size = Vector3(width.value, height.value, depth.value)
 

@@ -75,14 +75,16 @@ def require_texel_count(
         Error: If `length` is not the width times the height times the
             channels, or the product cannot fit in Int.
     """
-    # Signed overflow traps, so divide before multiplying, as
-    # `curve_count_product` does.
-    if height != 0 and width > Int.MAX // height:
+    # Two Int factors fit exactly in Int128, including Int.MIN * -1.
+    # Check the last factor against the final sign's magnitude limit.
+    # A zero channel count can still make an oversized area fit.
+    var area = Int128(width) * Int128(height)
+    var factor = Int128(channels)
+    var negative = (area < 0) != (factor < 0)
+    var limit = Int128(Int.MAX) + Int128(negative)
+    if factor != 0 and abs(area) > limit // abs(factor):
         raise Error(message)
-    var area = width * height
-    if channels != 0 and area > Int.MAX // channels:
-        raise Error(message)
-    if length != area * channels:
+    if Int128(length) != area * factor:
         raise Error(message)
 
 

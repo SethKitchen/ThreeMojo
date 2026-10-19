@@ -165,6 +165,19 @@ The cost is memory. An integer attribute holds its numbers twice.
 
 `assets.geometries.add(geometry)` stores a geometry and returns a `GeometryId`. `get(id)` borrows it. Many meshes share one geometry. See [Meshes and assets](Meshes-and-assets).
 
+## Generated shape dimensions
+
+Box and plane extents, circle and sphere radii, ring radii, cylinder radii
+and height, torus radii, and decal projector extents must be finite.
+The shared positive-radius check also applies to capsule, tube, and
+polyhedron builders. NaN and either infinity raise before vertex generation.
+Zero and negative dimensions keep each builder's existing rules.
+
+This input check differs from three.js r186, which can produce nonfinite
+vertices from these dimensions. Finite supported inputs keep their vertex
+order, indices, and parameter records. Callers must handle the error for
+invalid dimensions instead of storing a geometry with invalid coordinates.
+
 ## Box
 
 ```mojo

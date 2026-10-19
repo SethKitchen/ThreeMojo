@@ -58,15 +58,15 @@ def _pre_multiply[
 ](mut left: Array[Float32, n * n], right: Array[Float32, n * n]):
     """Replace `left` with `right * left`.
 
-    The left-hand matrix is applied to a point first. `n` is three or
+    The matrix stored in `left` is applied to a point first. `n` is three or
     four, so none of the loops can run zero times.
 
     Parameters:
         n: The side length.
 
     Args:
-        left: The matrix applied second. It is replaced.
-        right: The matrix applied first.
+        left: The matrix applied first. It is replaced.
+        right: The matrix applied second.
     """
     var result = Array[Float32, n * n](fill=0.0)
     for row in range(n):  # pragma: no branch

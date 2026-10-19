@@ -22,8 +22,15 @@ from postprocessing.composer import (
     frame_outputs,
     render_pass,
 )
-from postprocessing.denoise import DenoiseSettings, check_denoise, denoise_light
+from postprocessing.denoise import (
+    DenoiseSettings,
+    check_denoise,
+    denoise_light,
+    denoise_pixel,
+)
+from postprocessing.sampling import LightView
 from postprocessing.screen_space import DepthView
+from math.matrix4 import Matrix4
 from render.framebuffer import Color, FloatColor
 from render.target import (
     FLOAT_TARGET,
@@ -40,6 +47,7 @@ from std.testing import (
     assert_raises,
     assert_true,
 )
+from std.math import cos, sin
 from units.si import Angle, DEGREE, Length, METER
 
 
@@ -174,6 +182,55 @@ def test_the_composer_runs_a_denoise_pass() raises:
     composer.add_pass(denoise_pass(radius=3))
     var image = composer.render(Renderer(8, 8), scene, assets, a_camera())
     assert_equal(image.width, 8)
+
+
+def test_node_offsets_match_independent_pixel_space_ramps() raises:
+    # r186 DenoiseNode.js uses sin(noise[0]), not sin(2*pi*noise[0]).
+    # Its column-major mat2 has columns (sin, -cos) and (sin, cos).
+    # Apply that matrix to a pixel offset before normalizing by resolution.
+    # An affine gray ramp has an exact bilinear sample at that pixel offset.
+    for size in [(8, 8), (12, 8), (8, 12)]:
+        var width = size[0]
+        var height = size[1]
+        var pixels = List[FloatColor]()
+        for y in range(height):
+            for x in range(width):
+                var gray = Float32(x) * 0.04 + Float32(y) * 0.07
+                pixels.append(FloatColor(gray, gray, gray, 0.3))
+        var surface = List[FloatColor](
+            length=width * height, fill=FloatColor(0, 0, 1, 1)
+        )
+        var depth = List[Float32](length=width * height, fill=0)
+        var view = DepthView(
+            depth, width, height, Matrix4(), Length(0.1), Length(10)
+        )
+        var source = LightView(pixels, width, height)
+        var normals = LightView(surface, width, height)
+        var settings = DenoiseSettings()
+        settings.radius = 1
+        settings.luma_phi = 1
+        for turn in [Float32(0), Float32(0.5), Float32(1)]:
+            var noise = List[Float32](length=64 * 64, fill=0)
+            # DenoiseNode flips only its noise coordinate, so the source
+            # row numbered three reads this row in the repeating noise.
+            noise[(height - 1 - 3) * 64 + 4] = turn
+            for tap in [Vector3(1, 0, 0), Vector3(0, 1, 0), Vector3(1, 2, 0)]:
+                var disk: List[Vector3] = [tap]
+                var dx = sin(Float64(turn)) * Float64(tap.x + tap.y)
+                var dy = cos(Float64(turn)) * Float64(tap.y - tap.x)
+                var center = 4.0 * 0.04 + 3.0 * 0.07
+                var neighbor = center + dx * 0.04 + dy * 0.07
+                var weight = 1.0 - abs(neighbor - center)
+                var expected = (center + neighbor * weight) / (1.0 + weight)
+                var actual = denoise_pixel(
+                    source, view, normals, noise, disk, 4, 3, settings
+                )
+                assert_almost_equal(Float64(actual.r), expected, atol=1e-6)
+                assert_almost_equal(Float64(actual.g), expected, atol=1e-6)
+                assert_almost_equal(Float64(actual.b), expected, atol=1e-6)
+                assert_almost_equal(actual.a, 0.3, atol=1e-7)
+        _ = pixels^
+        _ = surface^
 
 
 def main() raises:

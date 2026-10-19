@@ -129,6 +129,45 @@ argument of `GpuRenderer.draw` or `render_triangles`. These APIs keep splat
 runs between other transparent runs.
 
 
+## Three tomatoes
+
+`examples/tomatoes.mojo` draws a real scan: three tomatoes on a slate. It is the scan of the three.js example `webgpu_gaussian_splat`. The file is `assets/tomatoes/tomatoes.v4.spz`. It has 445,409 splats, with spherical harmonics of degree 3. Grail made the scan, and it is under CC BY 4.0. `assets/tomatoes/ATTRIBUTION.md` has the credit.
+
+![Three tomatoes on a slate, scanned as Gaussian splats, with the camera circling them](out/tomatoes.png)
+
+The example does what the three.js example does:
+
+1. It reads the file with `read_spz` and makes a `GaussianSplat`.
+2. It takes the bounding sphere of the scan.
+3. `fit_sphere` puts the camera on a side of the sphere. See [Fit a sphere](Cameras#fit-a-sphere).
+4. It draws in a working color space of sRGB. See below.
+5. It turns the camera around the scan, 36 frames for one turn, and writes an animated PNG.
+
+The render takes about 7 seconds on one Apple Silicon Mac. The file loads in about 170 milliseconds. The sort takes 3 milliseconds.
+
+### The working color space
+
+The renderer works in linear light. It decodes an authored color from sRGB when it makes a target, and it encodes the light to sRGB when it makes the image. A splat scan is different. Its colors look right when they blend as stored. The three.js example sets `ColorManagement.workingColorSpace` to `SRGBColorSpace` for this reason. Its background, its blending and its output are all sRGB values.
+
+`render/working_space.mojo` does the same:
+
+```mojo
+var target = srgb_working_target(640, 360, Color(7, 8, 15))
+draw_gaussian_splat(target, scene, splat, camera)
+var image = resolve_srgb_working(target)
+```
+
+`srgb_working_target` clears the target to the color as it is. `resolve_srgb_working` writes the target out with no transfer function. A color that goes in comes out unchanged. A frame in the renderer's own target gives (1, 1, 1) for the same background color.
+
+### In a window and in a browser
+
+The scan also runs in the C ABI hosts, and a host with a GPU draws it there. The library sorts the splats and keeps the camera. The GPU projects, shades and blends them. See [C ABI and hosts](C-ABI-and-hosts#splats).
+
+```bash
+examples/capi/run.sh native splat
+examples/capi/run.sh web splat
+```
+
 ## The file formats
 
 | Format | Reader | What it is |

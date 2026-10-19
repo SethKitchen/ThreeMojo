@@ -628,6 +628,10 @@ The near field's circle is blurred by `gaussianBlur(coc, 1, 2)` and halved in si
 
 The node's texture coordinate grows down the image, so its disk is upside down against the WebGL `PoissonDenoiseShader`. The node reads the noise as the angle itself, where the shader multiplies it by two pi. This port does both as the node does. The noise is seeded, as the [GTAO pass's](#gtao) is.
 
+The r186 node multiplies the tap offset by its matrix in pixel space. It then divides by the image size. The port keeps this order on rectangular frames. Earlier versions divided first, which stretched the cross-axis offsets when the width and height differed.
+
+A 12 by 8 frame now uses the same pixel offsets as a square frame. Existing rectangular renders can change. The analytic tests use separate row and column ramps to check each offset and the upward texture coordinate used by the port.
+
 The DoF and denoise passes, like the other display passes, run on the host in a `GpuComposer` frame.
 
 ### SSR node

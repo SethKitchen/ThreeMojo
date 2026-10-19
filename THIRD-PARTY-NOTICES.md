@@ -603,6 +603,24 @@ SOFTWARE.
 
 ---
 
+## Tomatoes scan
+
+<https://superspl.at/scene/2826d2c0>
+
+`assets/tomatoes/tomatoes.v4.spz` is a Gaussian splat scan of three tomatoes
+on a slate. Grail made it on a DIY automated rig and published it under the
+Creative Commons Attribution 4.0 license. The file is the one that three.js
+ships as `examples/models/spz/tomatoes.v4.spz`. It is not changed. The scan is
+separate from ThreeMojo's code and from three.js's MIT-licensed source.
+
+Credit Grail, link the [source](https://superspl.at/scene/2826d2c0) and the
+[CC BY 4.0 license](https://creativecommons.org/licenses/by/4.0/), and say if
+you change the file, when you share the scan or a render that uses it. The
+[asset credit](assets/tomatoes/ATTRIBUTION.md) holds the wording. ThreeMojo's
+code license does not replace or restrict this asset license.
+
+---
+
 ## Draco
 
 <https://github.com/google/draco>

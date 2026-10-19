@@ -118,7 +118,15 @@ class ClosedPhysicalImageControls(unittest.TestCase):
                           'TYPED_PRODUCTION_CLOSURE':369, 'TYPED_NATIVE_CLOSURE':769,
                           'EXAMPLE_CLOSURE':333})
         for path, expected in self.data['inputs'].items():
-            self.assertEqual(self.accepted['bindings'][path], expected)
+            raw = (self.root/path).read_bytes()
+            self.assertEqual(self.accepted['bindings'][path], owner.sha(raw))
+            raw = owner.pr780_successor.predecessor_bytes(path, raw)
+            if path in ('tests/test_water.mojo', 'tools/compile_fail_expectations.json',
+                        'tools/carla_lane_oracle/test_expectation_binding_successor.py',
+                        'tools/carla_lane_oracle/test_pr760_physical_image.py',
+                        'tools/carla_lane_oracle/test_pr760_arithmetic_stage.py'):
+                raw = owner.pr776_predecessor_bytes(path, raw)
+            self.assertEqual(owner.sha(raw), expected)
         for path in owner.CHECKER_PATHS:
             self.assertEqual(self.accepted['bindings'][path], hashlib.sha256((self.root/path).read_bytes()).hexdigest())
         xml = 'loaders/xml.mojo'
@@ -230,7 +238,10 @@ class ClosedPhysicalImageControls(unittest.TestCase):
         for path, row in rows.items():
             raw = (self.root/path).read_bytes()
             old = (self.root/row['predecessor_archive']).read_bytes()
-            self.assertEqual(owner.sha(raw), row['after_sha256'])
+            previous = (owner.pr776_predecessor_bytes(path, raw) if path ==
+                        'tools/carla_lane_oracle/test_expectation_binding_successor.py' else raw)
+            self.assertEqual(owner.sha(previous), row['after_sha256'])
+            self.assertEqual(self.accepted['bindings'][path], owner.sha(raw))
             self.assertEqual(owner.sha(old), row['before_sha256'])
             self.assertEqual(owner.qualification_predecessor_bytes(path, raw), old)
             self.assertEqual(owner.qualification_predecessor_bytes(path, old), old)

@@ -70,6 +70,7 @@ Look something up.
 - [Exporters](Exporters)
 - [Scene JSON](Scene-JSON)
 - [Windowing and controls](Windowing-and-controls)
+- [C ABI and hosts](C-ABI-and-hosts)
 - [Math](Math)
 - [Math addons](Math-addons)
 - [Units](Units)

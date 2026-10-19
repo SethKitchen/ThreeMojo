@@ -31,6 +31,12 @@ A ring with an inner radius of zero is a disk, as three.js's `RingGeometry`
 accepts it. Its inner row is then every vertex at the center, and the first
 triangle of each inner cell has two corners there and no area. A rasterizer
 draws nothing for such a triangle, so the disk looks as `circle` draws it.
+
+## Input validation difference
+
+Shape dimensions must be finite before vertices are generated. NaN and
+either infinity raise an error. This differs from the unchecked three.js
+r186 input path. Finite supported inputs keep their existing behavior.
 """
 
 from core.buffer_geometry import (
@@ -40,6 +46,7 @@ from core.buffer_geometry import (
 )
 from core.ordinal import require_positive
 from geometries.grid import append_cell
+from math.finite import require_finite
 from geometries.surface import (
     indexed_surface,
     record_kind,
@@ -193,6 +200,8 @@ def ring(
             is too small, or the sweep is not positive or is more than a
             turn.
     """
+    require_finite(Float64(inner_radius.value), "A ring needs finite radii")
+    require_finite(Float64(outer_radius.value), "A ring needs finite radii")
     # `not (x >= 0)`, not `x < 0`: NaN compares false both ways, so the
     # < form would let it through.
     if not (inner_radius.value >= 0):

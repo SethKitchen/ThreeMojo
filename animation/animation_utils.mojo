@@ -237,8 +237,8 @@ def make_clip_additive(
         A copy of `target` in `ADDITIVE_BLEND_MODE`, every track that
         matches a track of the reference made into changes from it. A
         number or a color has the reference taken off. A rotation is
-        multiplied by the reference's conjugate on the left. A flag, and a
-        track the reference does not drive, is kept as it is.
+        multiplied by the reference's conjugate on the left. A flag, a
+        string, and a track the reference does not drive are kept as they are.
 
     Raises:
         Error: If the frame rate is not a number above zero or the frame

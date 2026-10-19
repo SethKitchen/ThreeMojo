@@ -17,6 +17,8 @@ from core.extent import require_positive_extent, require_texel_count
 from extensions.water.field import ComplexField, complex_mul, fft2
 from extensions.water.random import Mulberry32
 from extensions.water.resolution import require_resolution, SpectrumResolution
+from extensions.water.rows import row_tasks
+from render.tasks import TaskGroup
 from math.norm import squared_length2
 from std.math import cos, hypot, sin
 
@@ -288,42 +290,21 @@ def _normalize_channels(mut spatial: List[Float32], n: Int):
         spatial[i * 3 + 2] /= sum_b
 
 
-def apply_glare(
-    bright: List[Float32],
-    width: Int,
-    height: Int,
-    kernels: GlareKernels,
-) raises -> List[Float32]:
-    """Convolve a bright RGB image with the diffraction kernels.
+def glare_grid_size(n: Int, width: Int, height: Int) -> Tuple[Int, Int]:
+    """Return the size of the grid that the glare is computed on.
+
+    The image is fitted into three quarters of the kernel's grid, so the star
+    of a glint has room to spread. The glare is smooth, so a grid this small
+    holds it, and the frame reads it with `glare_cell_x` and `glare_cell_y`.
 
     Args:
-        bright: Row-major RGB, `width * height * 3` floats. Values are the
-            thresholded highlights, already scaled by `1e-3` as the page does.
+        n: The side of the kernel grid, from `GlareKernels`.
         width: Image width. It must be positive.
         height: Image height. It must be positive.
-        kernels: The spectra from `glare_kernels`.
 
     Returns:
-        RGB glare, the page's output before the `1e3` gain, one value per
-        input pixel. The gain is applied by the grader.
-
-    Raises:
-        Error: If a dimension is not positive, or the image size does not
-            match `bright`.
+        The width and the height of the glare grid, each at least 1.
     """
-    require_positive_extent(
-        width, height, "Glare image dimensions must be positive"
-    )
-    require_texel_count(
-        len(bright),
-        width,
-        height,
-        3,
-        "Glare image length does not match its dimensions",
-    )
-    var n = kernels.red_green.n
-    var image = ComplexField(SpectrumResolution(n))
-    var blue_image = ComplexField(SpectrumResolution(n))
     var fit = Float32(n) * 0.75
     var scale = fit / Float32(width)
     var tall = fit / Float32(height)
@@ -335,17 +316,102 @@ def apply_glare(
         sw = 1
     if sh < 1:
         sh = 1
+    return (sw, sh)
+
+
+def glare_sample_x(x: Int, sw: Int, width: Int) -> Int:
+    """Return the image column that one glare grid column samples.
+
+    Args:
+        x: Column of the glare grid, in `0 .. sw`.
+        sw: The glare grid's width.
+        width: Image width.
+
+    Returns:
+        A column of the image.
+    """
+    var u = (Float32(x) + 0.5) / Float32(sw)
+    # `u` stays below 1, so the product stays inside the image.
+    return Int(u * Float32(width))
+
+
+def glare_sample_y(y: Int, sh: Int, height: Int) -> Int:
+    """Return the image row that one glare grid row samples.
+
+    Args:
+        y: Row of the glare grid, in `0 .. sh`.
+        sh: The glare grid's height.
+        height: Image height.
+
+    Returns:
+        A row of the image.
+    """
+    var v = (Float32(y) + 0.5) / Float32(sh)
+    return Int(v * Float32(height))
+
+
+def glare_cell_x(x: Int, width: Int, sw: Int) -> Int:
+    """Return the glare grid column that one image column reads.
+
+    Args:
+        x: Image column, in `0 .. width`.
+        width: Image width.
+        sw: The glare grid's width.
+
+    Returns:
+        A column of the glare grid.
+    """
+    # The last pixel still maps inside the fitted rectangle.
+    return Int(Float32(x) / Float32(width) * Float32(sw))
+
+
+def glare_cell_y(y: Int, height: Int, sh: Int) -> Int:
+    """Return the glare grid row that one image row reads.
+
+    Args:
+        y: Image row, in `0 .. height`.
+        height: Image height.
+        sh: The glare grid's height.
+
+    Returns:
+        A row of the glare grid.
+    """
+    return Int(Float32(y) / Float32(height) * Float32(sh))
+
+
+def glare_convolve(
+    samples: List[Float32], sw: Int, sh: Int, kernels: GlareKernels
+) raises -> List[Float32]:
+    """Convolve a small bright image with the diffraction kernels.
+
+    Args:
+        samples: Row-major RGB of the glare grid, `sw * sh * 3` floats. Each
+            value is a bright pixel scaled by `1e-3`, as the page does.
+        sw: The grid's width, from `glare_grid_size`.
+        sh: The grid's height, from `glare_grid_size`.
+        kernels: The spectra from `glare_kernels`.
+
+    Returns:
+        The glare on the same grid, before the page's `1e3` gain, and never
+        below zero.
+
+    Raises:
+        Error: If the grid does not fit the kernel's grid, or `samples` does
+            not match it.
+    """
+    var n = kernels.red_green.n
+    if sw < 1 or sh < 1 or sw > n or sh > n:
+        raise Error("The glare grid does not fit the kernels")
+    if len(samples) != sw * sh * 3:
+        raise Error("The glare samples do not match their grid")
+    var image = ComplexField(SpectrumResolution(n))
+    var blue_image = ComplexField(SpectrumResolution(n))
     for y in range(sh):  # pragma: no branch
         for x in range(sw):  # pragma: no branch
-            var u = (Float32(x) + 0.5) / Float32(sw)
-            var v = (Float32(y) + 0.5) / Float32(sh)
-            # `u` and `v` stay below 1, so the products stay inside the image.
-            var ix = Int(u * Float32(width))
-            var iy = Int(v * Float32(height))
-            var p = (iy * width + ix) * 3
-            image.put(x, y, 0, bright[p])
-            image.put(x, y, 2, bright[p + 1])
-            blue_image.put(x, y, 0, bright[p + 2])
+            var p = (y * sw + x) * 3
+            image.put(x, y, 0, samples[p])
+            image.put(x, y, 2, samples[p + 1])
+            blue_image.put(x, y, 0, samples[p + 2])
     var freq = fft2(image, -1.0)
     var freq_b = fft2(blue_image, -1.0)
     var mixed = ComplexField(SpectrumResolution(n))
@@ -378,23 +444,132 @@ def apply_glare(
             mixed_b.put(x, y, 1, b[1])
     var back = fft2(mixed, 1.0)
     var back_b = fft2(mixed_b, 1.0)
-    var out = List[Float32](length=width * height * 3, fill=0.0)
-    for y in range(height):  # pragma: no branch
-        for x in range(width):  # pragma: no branch
-            # The last pixel still maps inside the fitted rectangle.
-            var gx = Int(Float32(x) / Float32(width) * Float32(sw))
-            var gy = Int(Float32(y) / Float32(height) * Float32(sh))
-            var r = back.channel(gx, gy, 0)
-            var g = back.channel(gx, gy, 2)
-            var b = back_b.channel(gx, gy, 0)
+    var grid = List[Float32](length=sw * sh * 3, fill=0.0)
+    for y in range(sh):  # pragma: no branch
+        for x in range(sw):  # pragma: no branch
+            var r = back.channel(x, y, 0)
+            var g = back.channel(x, y, 2)
+            var b = back_b.channel(x, y, 0)
             if r < 0.0:
                 r = 0.0
             if g < 0.0:
                 g = 0.0
             if b < 0.0:
                 b = 0.0
-            var p = (y * width + x) * 3
-            out[p] = r
-            out[p + 1] = g
-            out[p + 2] = b
+            var p = (y * sw + x) * 3
+            grid[p] = r
+            grid[p + 1] = g
+            grid[p + 2] = b
+    return grid^
+
+
+def apply_glare(
+    bright: List[Float32],
+    width: Int,
+    height: Int,
+    kernels: GlareKernels,
+    workers: Int = 0,
+) raises -> List[Float32]:
+    """Convolve a bright RGB image with the diffraction kernels.
+
+    Args:
+        bright: Row-major RGB, `width * height * 3` floats. Values are the
+            thresholded highlights, already scaled by `1e-3` as the page does.
+        width: Image width. It must be positive.
+        height: Image height. It must be positive.
+        kernels: The spectra from `glare_kernels`.
+        workers: The threads that spread the result over the image. Zero or
+            less means every logical core. The result is the same for any
+            count.
+
+    Returns:
+        RGB glare, the page's output before the `1e3` gain, one value per
+        input pixel. The gain is applied by the grader.
+
+    Raises:
+        Error: If a dimension is not positive, or the image size does not
+            match `bright`.
+    """
+    require_positive_extent(
+        width, height, "Glare image dimensions must be positive"
+    )
+    require_texel_count(
+        len(bright),
+        width,
+        height,
+        3,
+        "Glare image length does not match its dimensions",
+    )
+    var size = glare_grid_size(kernels.red_green.n, width, height)
+    var sw = size[0]
+    var sh = size[1]
+    var samples = List[Float32](length=sw * sh * 3, fill=0.0)
+    for y in range(sh):  # pragma: no branch
+        for x in range(sw):  # pragma: no branch
+            var p = (
+                glare_sample_y(y, sh, height) * width
+                + glare_sample_x(x, sw, width)
+            ) * 3
+            var o = (y * sw + x) * 3
+            samples[o] = bright[p]
+            samples[o + 1] = bright[p + 1]
+            samples[o + 2] = bright[p + 2]
+    var grid = glare_convolve(samples, sw, sh, kernels)
+    # The grid is small and the image is large, so the pass that spreads the
+    # grid over the image runs in parallel. Each pixel has one writer.
+    var out = List[Float32](length=width * height * 3, fill=0.0)
+    var tasks = row_tasks(workers, 1, height)
+    var group = TaskGroup()
+    for task in range(tasks):  # pragma: no branch
+        group.create_task(
+            _spread_task(
+                Pointer(to=grid)
+                .unsafe_mut_cast[False]()
+                .unsafe_origin_cast[ImmutAnyOrigin](),
+                out.unsafe_ptr().unsafe_origin_cast[MutAnyOrigin](),
+                width,
+                height,
+                sw,
+                sh,
+                task * height // tasks,
+                (task + 1) * height // tasks,
+            )
+        )
+    group.wait()
+    # `grid` reaches the tasks only through a pointer, so Mojo would free it
+    # before the tasks run. Read it after the wait.
+    _ = len(grid)
     return out^
+
+
+async def _spread_task(
+    grid: Pointer[List[Float32], ImmutAnyOrigin],
+    result: MutPointer[Float32, MutAnyOrigin],
+    width: Int,
+    height: Int,
+    sw: Int,
+    sh: Int,
+    first: Int,
+    past: Int,
+):
+    _spread_rows(grid[], result, width, height, sw, sh, first, past)
+
+
+def _spread_rows(
+    grid: List[Float32],
+    result: MutPointer[Float32, MutAnyOrigin],
+    width: Int,
+    height: Int,
+    sw: Int,
+    sh: Int,
+    first: Int,
+    past: Int,
+):
+    for y in range(first, past):  # pragma: no branch
+        var gy = glare_cell_y(y, height, sh)
+        for x in range(width):  # pragma: no branch
+            var g = (gy * sw + glare_cell_x(x, width, sw)) * 3
+            var p = (y * width + x) * 3
+            result[unsafe_offset=p] = grid[g]
+            result[unsafe_offset=p + 1] = grid[g + 1]
+            result[unsafe_offset=p + 2] = grid[g + 2]

@@ -204,6 +204,61 @@ def test_multiplication_matches_a_worked_example() raises:
     assert_equal(a.get(0, 1), Float32(2))
 
 
+def test_premultiplication_matches_an_independent_dense_product() raises:
+    var a = Matrix4()
+    a.set(1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16)
+    var b = Matrix4()
+    b.set(2, 0, 1, 3, -1, 4, 2, 0, 5, 1, 0, -2, 0, 3, -1, 1)
+    var before = a
+    var other = b
+    a.premultiply(b)
+    # b*a, independently worked in row-major order with integer sums.
+    var expected = Matrix4()
+    expected.set(
+        50,
+        56,
+        62,
+        68,
+        37,
+        42,
+        47,
+        52,
+        -16,
+        -12,
+        -8,
+        -4,
+        19,
+        22,
+        25,
+        28,
+    )
+    assert_same(a, expected)
+    assert_same(b, other)
+    # Direct self-aliasing is refused by Mojo; an explicit copy squares it.
+    var squared = before
+    squared.premultiply(Matrix4(copy=squared))
+    var expected_square = Matrix4()
+    expected_square.set(
+        90,
+        100,
+        110,
+        120,
+        202,
+        228,
+        254,
+        280,
+        314,
+        356,
+        398,
+        440,
+        426,
+        484,
+        542,
+        600,
+    )
+    assert_same(squared, expected_square)
+
+
 def test_determinant_of_the_identity_is_one() raises:
     assert_equal(Matrix4().determinant(), Float32(1))
 
