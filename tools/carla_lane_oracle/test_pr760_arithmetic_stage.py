@@ -156,6 +156,8 @@ class StagedArithmeticControls(unittest.TestCase):
         import full_audit_cleanup_contracts as owner
         witness = 'tools/carla_lane_oracle/test_pr760_arithmetic_stage.py'
         inputs[witness] = owner.stage_witness_predecessor_bytes(inputs[witness])
+        water = 'tests/test_water.mojo'
+        inputs[water] = owner.pr776_predecessor_bytes(water, inputs[water])
         predecessors = stage.verify_registry_sources(inputs)
         self.assertEqual(set(predecessors), set(stage.EDGES))
         for path, prior in predecessors.items():

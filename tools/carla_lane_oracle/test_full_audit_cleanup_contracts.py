@@ -655,6 +655,33 @@ class FullAuditCleanupContracts(unittest.TestCase):
                     for path in cleanup._sibling('cache_key').input_paths(self.root)
                     if path.suffix == '.mojo'}
         physical.update(image['inputs'])
+        # The PR776 cohort has exact physical successors, each recovering the
+        # unchanged PR760 input before its live bytes enter the receipt.
+        successor_paths = {
+            'tests/test_water.mojo',
+            'tools/compile_fail_expectations.json',
+            'tools/carla_lane_oracle/test_expectation_binding_successor.py',
+            'tools/carla_lane_oracle/test_pr760_physical_image.py',
+            'tools/carla_lane_oracle/test_pr760_arithmetic_stage.py',
+            'tools/carla_lane_oracle/test_typed_boundary_contracts.py',
+        }
+        self.assertEqual(set(cleanup._pr776_input_pins()), successor_paths)
+        for path in successor_paths:
+            raw = (self.root/path).read_bytes()
+            prior = cleanup.pr776_predecessor_bytes(path, raw)
+            self.assertEqual(cleanup.sha(prior), image['inputs'][path])
+            physical[path] = cleanup.sha(raw)
+        bound_paths = {
+            'tools/carla_lane_oracle/test_pr776_input_successors.py',
+            'tools/carla_lane_oracle/test_main_rebase_successor.py',
+            'tests/compile_fail/a_gpu_info_is_not_a_bare_int.mojo',
+            'tests/compile_fail/a_gpu_part_is_not_a_bare_int.mojo',
+            'tests/compile_fail/a_splat_info_is_not_a_bare_int.mojo',
+            'tests/compile_fail/a_splat_part_is_not_a_bare_int.mojo',
+        }
+        self.assertEqual(set(cleanup._pr776_bound_inputs()), bound_paths)
+        for path in bound_paths:
+            physical[path] = cleanup.sha((self.root/path).read_bytes())
         physical.update(cleanup.PR760_IMPLEMENTATION_PREDECESSORS)
         physical.update(cleanup.PR760_IMPLEMENTATION_SUCCESSORS)
         physical.update({cleanup.PR760_IMAGE: cleanup.PR760_IMAGE_SHA256,

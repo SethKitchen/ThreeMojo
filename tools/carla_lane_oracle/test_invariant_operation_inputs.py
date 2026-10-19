@@ -4442,7 +4442,7 @@ _PR760_CHECKER_SOURCE_EDGES = {'coverage_loop_proofs.py': {'after_sha256': '21e3
              '**operation_args))\n',
              '            result.update(density760_loops(root, include_roots=include_roots, '
              '**operation_args))\n')))},
- 'full_audit_cleanup_contracts.py': {'after_sha256': '65fc5809c888bf07e2a8798cc3803de1757988e5cad5cd8766beb2e5fb2673cb',
+ 'full_audit_cleanup_contracts.py': {'after_sha256': 'fd21205ab24eb1361aaa8b95a51497e20ae54f229463fe1916f06e2806075924',
  'before_sha256': '6138ba2dcac394c716ea9ed32e74e0c6d15857d5c605fc82304d21d0c80fdc69',
  'edits': ((10, 11, (), ('from contextlib import nullcontext\n',)),
            (45, 46, (), ('        from . import lane_order_contracts as lane_order\n',)),
@@ -5175,7 +5175,7 @@ _PR760_CHECKER_SOURCE_EDGES = {'coverage_loop_proofs.py': {'after_sha256': '21e3
              '                            '
              "after_token_sha256=source.token_sha256(current.decode('utf-8')))\n")),
            (4178,
-            5001,
+            5525,
             (),
             ('PR760_IMPLEMENTATION_PREDECESSORS = '
              "{'tools/carla_lane_oracle/pr760-border_parser-predecessor.txt': "
@@ -5209,6 +5209,717 @@ _PR760_CHECKER_SOURCE_EDGES = {'coverage_loop_proofs.py': {'after_sha256': '21e3
              "    ), 'PR760 authority selectors changed')\n",
              '\n',
              '\n',
+             'def _pr776_input_pins():\n',
+             '    """Name only this complete reviewed successor cohort, never optional pins."""\n',
+             "    return {'tests/test_water.mojo': "
+             "'179f2cb6ef20a44c9f862453d56fdb967b5ba1c6978996ecc750f7da3a4e5d7a',\n",
+             " 'tools/compile_fail_expectations.json': "
+             "'cae00c1721392c75b10af5793e6de851d963350c8396e405ef0233c19af5b723',\n",
+             " 'tools/carla_lane_oracle/test_expectation_binding_successor.py': "
+             "'e4ad0a6a13196e4a2bf16dae76f78f01d103260c2644632ec36fa74f46dad846',\n",
+             " 'tools/carla_lane_oracle/test_pr760_physical_image.py': "
+             "'6df971f2bf09c710a4e6ababc6adeea8995fd2e86c3e6866e548d5b193ae3669',\n",
+             " 'tools/carla_lane_oracle/test_pr760_arithmetic_stage.py': "
+             "'ac51eb5dd58c8e3768f2405108203351194d72d63f2b53f4e30d5b2d4d8c26ab',\n",
+             " 'tools/carla_lane_oracle/test_typed_boundary_contracts.py': "
+             "'8dee4d9c4bf42214fb2f10fbdcf71a4ba04398095d8c62a16233ad6fc038fce7'}\n",
+             '\n',
+             '\n',
+             'def _pr776_bound_inputs():\n',
+             '    """Bind the new regression and four diagnostic fixtures to physical bytes."""\n',
+             "    return {'tools/carla_lane_oracle/test_pr776_input_successors.py': "
+             "'148a021e1d8173122f231f4e6839d4dfd7bb2bb14d76d70e3725ff310620d2aa',\n",
+             " 'tools/carla_lane_oracle/test_main_rebase_successor.py': "
+             "'2ca5e9f72a38766945e182fbe004e3e64011efa897e22445ab7372102634a792',\n",
+             " 'tests/compile_fail/a_gpu_info_is_not_a_bare_int.mojo': "
+             "'785b9a1746336fdea844b431f6a5ffd6812a623a72d1929c544eb9f107cf7819',\n",
+             " 'tests/compile_fail/a_gpu_part_is_not_a_bare_int.mojo': "
+             "'a8880f3e6f546bf30671147e5a75bf37b5bf5b294b0c239590cb258a8266199f',\n",
+             " 'tests/compile_fail/a_splat_info_is_not_a_bare_int.mojo': "
+             "'c55c1951bf968f929fd3f5dfb9cebb9c49ce7ee1d3bf4a7259c37eeceb22af46',\n",
+             " 'tests/compile_fail/a_splat_part_is_not_a_bare_int.mojo': "
+             "'af4017aee6d8d7d3e23a30fa59da038925b618a5556cc3240b90d8092b2206ee'}\n",
+             '\n',
+             '\n',
+             'def pr776_predecessor_bytes(path, raw):\n',
+             '    """Recover exact earlier comparison bytes for six named PR776 inputs.\n',
+             '\n',
+             '    No root is read or projected. This is provenance, not an admission receipt:\n',
+             '    the physical owner separately checks every endpoint and rereads actual bytes.\n',
+             '    Original typed, PR760 image and stage pins remain immutable.\n',
+             '    """\n',
+             '    executing_checker_bindings()\n',
+             '    require(type(path) is str and type(raw) is bytes,\n',
+             "            'PR776 predecessor requires builtin path and immutable bytes')\n",
+             "    rows = {'tests/test_water.mojo': "
+             "('ffe2ab6e56ea73498bc8f2f65f5dd80bb02f6e6ac72024c082a6920878ddf86a',\n",
+             '                           '
+             "'179f2cb6ef20a44c9f862453d56fdb967b5ba1c6978996ecc750f7da3a4e5d7a',\n",
+             "                           ((37, 39, (), ('    _quantize_rows,\\n', '    "
+             "_quantized_image,\\n')),\n",
+             '                            (47,\n',
+             '                             60,\n',
+             "                             ('from extensions.water.glare import aperture_open, "
+             "apply_glare, '\n",
+             "                              'glare_kernels\\n',),\n",
+             "                             ('from extensions.water.glare import (\\n',\n",
+             "                              '    aperture_open,\\n',\n",
+             "                              '    apply_glare,\\n',\n",
+             "                              '    glare_cell_x,\\n',\n",
+             "                              '    glare_cell_y,\\n',\n",
+             "                              '    glare_convolve,\\n',\n",
+             "                              '    glare_grid_size,\\n',\n",
+             "                              '    glare_kernels,\\n',\n",
+             "                              '    glare_sample_x,\\n',\n",
+             "                              '    glare_sample_y,\\n',\n",
+             "                              ')\\n',\n",
+             "                              'from extensions.water.post import RadianceView, "
+             "blur_texel, '\n",
+             "                              'highlight_texel\\n',\n",
+             "                              'from extensions.water.rows import row_tasks\\n')),\n",
+             "                            (126, 127, (), ('from std.memory import "
+             "AddressSpace\\n',)),\n",
+             '                            (421,\n',
+             '                             593,\n',
+             '                             (),\n',
+             "                             ('    # Spreading the glare over the image runs in "
+             "parallel. One '\n",
+             "                              'worker is the\\n',\n",
+             "                              '    # serial pass, and the result does not depend on "
+             "the count.\\n',\n",
+             "                              '    var bright = List[Float32](length=37 * 29 * 3, "
+             "fill=0.0)\\n',\n",
+             "                              '    for i in range(len(bright)):\\n',\n",
+             "                              '        bright[i] = Float32((i * 7919) % 97) * "
+             "0.001\\n',\n",
+             "                              '    var spread = apply_glare(bright, 37, 29, "
+             "wide)\\n',\n",
+             "                              '    assert_true(apply_glare(bright, 37, 29, wide, 1) "
+             "== spread)\\n',\n",
+             "                              '    assert_true(apply_glare(bright, 37, 29, wide, 3) "
+             "== spread)\\n',\n",
+             "                              '    var lit = 0\\n',\n",
+             "                              '    for i in range(len(spread)):\\n',\n",
+             "                              '        if spread[i] > 0.0:\\n',\n",
+             "                              '            lit += 1\\n',\n",
+             "                              '    assert_true(lit > 0)\\n',\n",
+             "                              '\\n',\n",
+             "                              '\\n',\n",
+             "                              'def test_the_glare_grid_maps_the_image_and_back() "
+             "raises:\\n',\n",
+             "                              '    # The image is fitted into three quarters of the "
+             "kernel grid.\\n',\n",
+             "                              '    var size = glare_grid_size(64, 640, 360)\\n',\n",
+             "                              '    assert_equal(size[0], 48)\\n',\n",
+             "                              '    assert_equal(size[1], 27)\\n',\n",
+             "                              '    # A tall image fits by its height, and a thin one "
+             "keeps one '\n",
+             "                              'cell.\\n',\n",
+             "                              '    var tall = glare_grid_size(64, 100, 400)\\n',\n",
+             "                              '    assert_equal(tall[1], 48)\\n',\n",
+             "                              '    assert_true(tall[0] >= 1 and tall[0] < 48)\\n',\n",
+             "                              '    var thin = glare_grid_size(4, 1000, 1)\\n',\n",
+             "                              '    assert_equal(thin[1], 1)\\n',\n",
+             "                              '    # Every grid point samples a pixel inside the "
+             "image, and every '\n",
+             "                              'pixel reads\\n',\n",
+             "                              '    # a grid point inside the grid, at both ends of "
+             "each axis.\\n',\n",
+             "                              '    for x in range(size[0]):\\n',\n",
+             "                              '        var ix = glare_sample_x(x, size[0], "
+             "640)\\n',\n",
+             "                              '        assert_true(ix >= 0 and ix < 640)\\n',\n",
+             "                              '    for y in range(size[1]):\\n',\n",
+             "                              '        var iy = glare_sample_y(y, size[1], "
+             "360)\\n',\n",
+             "                              '        assert_true(iy >= 0 and iy < 360)\\n',\n",
+             "                              '    for x in range(640):\\n',\n",
+             "                              '        var gx = glare_cell_x(x, 640, size[0])\\n',\n",
+             "                              '        assert_true(gx >= 0 and gx < size[0])\\n',\n",
+             "                              '    for y in range(360):\\n',\n",
+             "                              '        var gy = glare_cell_y(y, 360, size[1])\\n',\n",
+             "                              '        assert_true(gy >= 0 and gy < size[1])\\n',\n",
+             "                              '    assert_equal(glare_cell_x(0, 640, size[0]), "
+             "0)\\n',\n",
+             "                              '    assert_equal(glare_cell_x(639, 640, size[0]), "
+             "size[0] - 1)\\n',\n",
+             "                              '    assert_equal(glare_cell_y(359, 360, size[1]), "
+             "size[1] - 1)\\n',\n",
+             "                              '    # The convolution refuses a grid that does not "
+             "fit its kernels, '\n",
+             "                              'or samples\\n',\n",
+             '                              "    # that are not the grid\'s.\\n",\n',
+             "                              '    var kernels = "
+             "glare_kernels(SpectrumResolution(8))\\n',\n",
+             "                              '    var samples = List[Float32](length=4 * 3 * 3, "
+             "fill=0.0)\\n',\n",
+             "                              '    samples[0] = 2.0\\n',\n",
+             "                              '    var grid = glare_convolve(samples, 4, 3, "
+             "kernels)\\n',\n",
+             "                              '    assert_equal(len(grid), 4 * 3 * 3)\\n',\n",
+             "                              '    for i in range(len(grid)):\\n',\n",
+             "                              '        assert_true(grid[i] >= 0.0)\\n',\n",
+             '                              \'    with assert_raises(contains="does not '
+             'fit"):\\n\',\n',
+             "                              '        _ = glare_convolve(samples, 9, 3, "
+             "kernels)\\n',\n",
+             '                              \'    with assert_raises(contains="does not '
+             'fit"):\\n\',\n',
+             "                              '        _ = glare_convolve(samples, 4, 9, "
+             "kernels)\\n',\n",
+             '                              \'    with assert_raises(contains="does not '
+             'fit"):\\n\',\n',
+             "                              '        _ = glare_convolve(samples, 0, 3, "
+             "kernels)\\n',\n",
+             '                              \'    with assert_raises(contains="does not '
+             'fit"):\\n\',\n',
+             "                              '        _ = glare_convolve(samples, 4, 0, "
+             "kernels)\\n',\n",
+             '                              \'    with assert_raises(contains="do not '
+             'match"):\\n\',\n',
+             "                              '        _ = glare_convolve(samples, 3, 3, "
+             "kernels)\\n',\n",
+             "                              '    # A frame is the grid read back through the "
+             "image: each pixel '\n",
+             "                              'is the cell\\n',\n",
+             "                              '    # that it maps to.\\n',\n",
+             "                              '    var wide = "
+             "glare_kernels(SpectrumResolution(64))\\n',\n",
+             "                              '    var bright = List[Float32](length=37 * 29 * 3, "
+             "fill=0.0)\\n',\n",
+             "                              '    for i in range(len(bright)):\\n',\n",
+             "                              '        bright[i] = Float32((i * 7919) % 97) * "
+             "0.001\\n',\n",
+             "                              '    var frame = apply_glare(bright, 37, 29, "
+             "wide)\\n',\n",
+             "                              '    var fitted = glare_grid_size(64, 37, 29)\\n',\n",
+             "                              '    var picked = List[Float32](length=fitted[0] * "
+             "fitted[1] * 3, '\n",
+             "                              'fill=0.0)\\n',\n",
+             "                              '    for y in range(fitted[1]):\\n',\n",
+             "                              '        for x in range(fitted[0]):\\n',\n",
+             "                              '            var p = (\\n',\n",
+             "                              '                glare_sample_y(y, fitted[1], 29) * "
+             "37\\n',\n",
+             "                              '                + glare_sample_x(x, fitted[0], "
+             "37)\\n',\n",
+             "                              '            ) * 3\\n',\n",
+             "                              '            var o = (y * fitted[0] + x) * 3\\n',\n",
+             "                              '            picked[o] = bright[p]\\n',\n",
+             "                              '            picked[o + 1] = bright[p + 1]\\n',\n",
+             "                              '            picked[o + 2] = bright[p + 2]\\n',\n",
+             "                              '    var cells = glare_convolve(picked, fitted[0], "
+             "fitted[1], '\n",
+             "                              'wide)\\n',\n",
+             "                              '    for y in range(29):\\n',\n",
+             "                              '        for x in range(37):\\n',\n",
+             "                              '            var cell = (\\n',\n",
+             "                              '                glare_cell_y(y, 29, fitted[1]) * "
+             "fitted[0]\\n',\n",
+             "                              '                + glare_cell_x(x, 37, "
+             "fitted[0])\\n',\n",
+             "                              '            ) * 3\\n',\n",
+             "                              '            for channel in range(3):\\n',\n",
+             "                              '                assert_equal(\\n',\n",
+             "                              '                    frame[(y * 37 + x) * 3 + "
+             "channel], cells[cell + '\n",
+             "                              'channel]\\n',\n",
+             "                              '                )\\n',\n",
+             "                              '\\n',\n",
+             "                              '\\n',\n",
+             "                              'def "
+             "test_bloom_pixels_read_their_neighbors_and_clip_at_the_edges() '\n",
+             "                              'raises:\\n',\n",
+             "                              '    # A 4 by 3 frame, with one bright pixel in a "
+             "corner.\\n',\n",
+             "                              '    var texels = List[Float32](length=4 * 3 * 3, "
+             "fill=1.0)\\n',\n",
+             "                              '    texels[0] = 40.0\\n',\n",
+             "                              '    texels[1] = 20.0\\n',\n",
+             "                              '    texels[2] = 10.0\\n',\n",
+             "                              '    var image = "
+             "RadianceView[AddressSpace.GENERIC](\\n',\n",
+             "                              '        texels.unsafe_ptr()\\n',\n",
+             "                              '        .unsafe_mut_cast[False]()\\n',\n",
+             "                              '        "
+             ".unsafe_origin_cast[UntrackedOrigin[mut=False]](),\\n',\n",
+             "                              '        4,\\n',\n",
+             "                              '        3,\\n',\n",
+             "                              '    )\\n',\n",
+             "                              '    # The corner pixel averages four pixels: a 2 by 2 "
+             "block, '\n",
+             "                              'clipped at the\\n',\n",
+             '                              "    # frame\'s edge. Its brightest channel is over '
+             'the limit, so "\n',
+             "                              'some stays.\\n',\n",
+             "                              '    var corner = highlight_texel(image, 0, 0, 2.5, "
+             "1.0)\\n',\n",
+             "                              '    var mean_r = Float32((40.0 + 1.0 + 1.0 + 1.0) / "
+             "4.0)\\n',\n",
+             "                              '    var mean_g = Float32((20.0 + 3.0) / 4.0)\\n',\n",
+             "                              '    var keep = Float32((mean_r - 2.5) / "
+             "mean_r)\\n',\n",
+             "                              '    assert_true(abs(corner.x - mean_r * keep) < "
+             "1e-4)\\n',\n",
+             "                              '    assert_true(abs(corner.y - mean_g * keep) < "
+             "1e-4)\\n',\n",
+             "                              '    # A scale applies last.\\n',\n",
+             "                              '    var scaled = highlight_texel(image, 0, 0, 2.5, "
+             "0.001)\\n',\n",
+             "                              '    assert_equal(scaled.x, corner.x * 0.001)\\n',\n",
+             "                              '    # Far from the glint, and under the limit, "
+             "nothing stays.\\n',\n",
+             "                              '    var dim = highlight_texel(image, 3, 2, 2.5, "
+             "1.0)\\n',\n",
+             "                              '    assert_equal(dim.x, 0.0)\\n',\n",
+             "                              '    assert_equal(dim.y, 0.0)\\n',\n",
+             "                              '    assert_equal(dim.z, 0.0)\\n',\n",
+             "                              '    # A view holds a bare pointer, so the list must "
+             "outlive every '\n",
+             "                              'read.\\n',\n",
+             "                              '    _ = len(texels)\\n',\n",
+             "                              '    # The blur is a weighted sum along one axis, and "
+             "its weights '\n",
+             "                              'add to one.\\n',\n",
+             "                              '    var flat = List[Float32](length=7 * 5 * 3, "
+             "fill=0.5)\\n',\n",
+             "                              '    var even = "
+             "RadianceView[AddressSpace.GENERIC](\\n',\n",
+             "                              '        flat.unsafe_ptr()\\n',\n",
+             "                              '        .unsafe_mut_cast[False]()\\n',\n",
+             "                              '        "
+             ".unsafe_origin_cast[UntrackedOrigin[mut=False]](),\\n',\n",
+             "                              '        7,\\n',\n",
+             "                              '        5,\\n',\n",
+             "                              '    )\\n',\n",
+             "                              '    for horizontal in [True, False]:\\n',\n",
+             "                              '        var blurred = blur_texel(even, 3, 2, "
+             "horizontal)\\n',\n",
+             "                              '        assert_true(abs(blurred.x - 0.5) < "
+             "1e-5)\\n',\n",
+             "                              '    _ = len(flat)\\n',\n",
+             "                              '    # A lone glint spreads to the taps of its own row "
+             "and not its '\n",
+             "                              'column.\\n',\n",
+             "                              '    var spike = List[Float32](length=7 * 5 * 3, "
+             "fill=0.0)\\n',\n",
+             "                              '    spike[(2 * 7 + 3) * 3] = 1.0\\n',\n",
+             "                              '    var lone = "
+             "RadianceView[AddressSpace.GENERIC](\\n',\n",
+             "                              '        spike.unsafe_ptr()\\n',\n",
+             "                              '        .unsafe_mut_cast[False]()\\n',\n",
+             "                              '        "
+             ".unsafe_origin_cast[UntrackedOrigin[mut=False]](),\\n',\n",
+             "                              '        7,\\n',\n",
+             "                              '        5,\\n',\n",
+             "                              '    )\\n',\n",
+             "                              '    assert_true(blur_texel(lone, 3, 2, True).x > "
+             "0.2)\\n',\n",
+             "                              '    assert_true(blur_texel(lone, 4, 2, True).x > "
+             "0.3)\\n',\n",
+             "                              '    assert_true(blur_texel(lone, 6, 2, True).x > "
+             "0.0)\\n',\n",
+             "                              '    assert_equal(blur_texel(lone, 3, 0, True).x, "
+             "0.0)\\n',\n",
+             "                              '    # Three pixels away, only the outer tap reaches "
+             "the glint.\\n',\n",
+             "                              '    assert_true(abs(blur_texel(lone, 0, 2, True).x - "
+             "0.0702702703) '\n",
+             "                              '< 1e-6)\\n',\n",
+             "                              '    assert_true(blur_texel(lone, 3, 3, False).x > "
+             "0.3)\\n',\n",
+             "                              '    assert_equal(blur_texel(lone, 4, 2, False).x, "
+             "0.0)\\n',\n",
+             "                              '    _ = len(spike)\\n',\n",
+             "                              '    # The edge repeats: a pixel beside the edge reads "
+             "the edge '\n",
+             "                              'pixel again.\\n',\n",
+             "                              '    var edge = List[Float32](length=7 * 1 * 3, "
+             "fill=0.0)\\n',\n",
+             "                              '    edge[0] = 1.0\\n',\n",
+             "                              '    var rim = "
+             "RadianceView[AddressSpace.GENERIC](\\n',\n",
+             "                              '        edge.unsafe_ptr()\\n',\n",
+             "                              '        .unsafe_mut_cast[False]()\\n',\n",
+             "                              '        "
+             ".unsafe_origin_cast[UntrackedOrigin[mut=False]](),\\n',\n",
+             "                              '        7,\\n',\n",
+             "                              '        1,\\n',\n",
+             "                              '    )\\n',\n",
+             "                              '    assert_true(blur_texel(rim, 0, 0, True).x > "
+             "0.5)\\n',\n",
+             "                              '    assert_equal(blur_texel(rim, 6, 0, True).x, "
+             "0.0)\\n',\n",
+             "                              '    # Every tap of a one-row frame lands on the one "
+             "row: the '\n",
+             "                              'weights add to 1.\\n',\n",
+             "                              '    assert_true(abs(blur_texel(rim, 0, 0, False).x - "
+             "1.0) < 1e-6)\\n',\n",
+             "                              '    _ = len(edge)\\n')),\n",
+             '                            (1736,\n',
+             '                             1742,\n',
+             '                             (),\n',
+             "                             ('        # A scale multiplies each rounded result, as "
+             "a pass over '\n",
+             "                              'the list does.\\n',\n",
+             "                              '        var scaled = _highlights(hdr, width, height, "
+             "threshold, 0, '\n",
+             "                              '0.001)\\n',\n",
+             "                              '        for i in range(len(serial)):\\n',\n",
+             "                              '            assert_equal(scaled[i], serial[i] * "
+             "0.001)\\n',\n",
+             "                              '        var one_task = _highlights(hdr, width, "
+             "height, threshold, '\n",
+             "                              '1, 0.001)\\n',\n",
+             "                              '        assert_true(one_task == scaled)\\n')),\n",
+             '                            (1811,\n',
+             '                             1840,\n',
+             '                             (),\n',
+             "                             ('    # Clamping and quantizing a graded image, in "
+             "parallel and in '\n",
+             "                              'one pass.\\n',\n",
+             "                              '    var graded = List[Float32](length=width * height "
+             "* 3, '\n",
+             "                              'fill=0.0)\\n',\n",
+             "                              '    for i in range(len(graded)):\\n',\n",
+             "                              '        graded[i] = Float32((i * 53) % 131) / 100.0 - "
+             "0.15\\n',\n",
+             "                              '    var quantized = _quantized_image(graded, width, "
+             "height)\\n',\n",
+             "                              '    var serial_quantized = Framebuffer(width, height, "
+             "Color(0, 0, '\n",
+             "                              '0))\\n',\n",
+             "                              '    _quantize_rows(\\n',\n",
+             "                              '        graded,\\n',\n",
+             "                              '        '\n",
+             '                              '
+             "'serial_quantized.pixels.unsafe_ptr().unsafe_origin_cast[MutAnyOrigin](),\\n',\n",
+             "                              '        width,\\n',\n",
+             "                              '        0,\\n',\n",
+             "                              '        height,\\n',\n",
+             "                              '    )\\n',\n",
+             "                              '    assert_true(quantized.pixels == "
+             "serial_quantized.pixels)\\n',\n",
+             "                              '    assert_true(\\n',\n",
+             "                              '        _quantized_image(graded, width, height, "
+             "1).pixels == '\n",
+             "                              'quantized.pixels\\n',\n",
+             "                              '    )\\n',\n",
+             "                              '    # Both ends of the range are clamped, and every "
+             "pixel is '\n",
+             "                              'opaque.\\n',\n",
+             "                              '    assert_equal(quantized.pixels[0], 0)\\n',\n",
+             "                              '    assert_equal(quantized.pixels[3], 255)\\n',\n",
+             "                              '    var low = 0\\n',\n",
+             "                              '    var high = 0\\n',\n",
+             "                              '    for i in range(0, len(quantized.pixels), "
+             "4):\\n',\n",
+             "                              '        if quantized.pixels[i] == 0:\\n',\n",
+             "                              '            low += 1\\n',\n",
+             "                              '        if quantized.pixels[i] == 255:\\n',\n",
+             "                              '            high += 1\\n',\n",
+             "                              '        assert_equal(quantized.pixels[i + 3], "
+             "255)\\n',\n",
+             "                              '    assert_true(low > 0 and high > 0)\\n')),\n",
+             '                            (1920,\n',
+             '                             1937,\n',
+             '                             (),\n',
+             "                             ('def test_row_tasks_cut_the_rows_for_the_workers() "
+             "raises:\\n',\n",
+             "                              '    # One worker is one task over every row: the "
+             "serial pass.\\n',\n",
+             "                              '    assert_equal(row_tasks(1, 8, 100), 1)\\n',\n",
+             "                              '    assert_equal(row_tasks(1, 1, 0), 1)\\n',\n",
+             "                              '    # Each worker gets runs of rows, and never more "
+             "tasks than '\n",
+             "                              'rows.\\n',\n",
+             "                              '    assert_equal(row_tasks(4, 8, 100), 32)\\n',\n",
+             "                              '    assert_equal(row_tasks(4, 8, 20), 20)\\n',\n",
+             "                              '    assert_equal(row_tasks(4, 1, 100), 4)\\n',\n",
+             "                              '    assert_equal(row_tasks(4, 1, 0), 0)\\n',\n",
+             "                              '    # A huge count is clamped to the rows before it "
+             "is '\n",
+             "                              'multiplied.\\n',\n",
+             "                              '    assert_equal(row_tasks(1 << 61, 8, 50), "
+             "50)\\n',\n",
+             "                              '    # Zero or less means every logical core.\\n',\n",
+             "                              '    var cores = row_tasks(0, 1, 1000000)\\n',\n",
+             "                              '    assert_true(cores >= 1)\\n',\n",
+             "                              '    assert_equal(row_tasks(-3, 1, 1000000), "
+             "cores)\\n',\n",
+             "                              '\\n',\n",
+             "                              '\\n')))),\n",
+             " 'tools/compile_fail_expectations.json': "
+             "('deee9f738d1387ee05ebc4a30e2c5bb1ab4cfbfda04dd2fa6c01aec124552a29',\n",
+             '                                          '
+             "'cae00c1721392c75b10af5793e6de851d963350c8396e405ef0233c19af5b723',\n",
+             '                                          ((1486,\n',
+             '                                            1510,\n',
+             '                                            (),\n',
+             "                                            ('  },\\n',\n",
+             "                                             '  '\n",
+             '                                             '
+             '\'"tests/compile_fail/a_gpu_info_is_not_a_bare_int.mojo": \'\n',
+             "                                             '{\\n',\n",
+             '                                             \'    "errors": [\\n\',\n',
+             "                                             '      {\\n',\n",
+             '                                             \'        "line": 12,\\n\',\n',
+             '                                             \'        "column": 21,\\n\',\n',
+             '                                             \'        "message": "invalid call to '
+             "\\'info\\': value '\n",
+             '                                             "passed to \'which\' cannot be '
+             'converted from "\n',
+             "                                             '\\'IntLiteral[1]\\' to "
+             '\\\'GpuInfo\\\'"\\n\',\n',
+             "                                             '      }\\n',\n",
+             "                                             '    ],\\n',\n",
+             '                                             \'    "notes": [\\n\',\n',
+             '                                             \'      "function declared '
+             'here"\\n\',\n',
+             "                                             '    ]\\n',\n",
+             "                                             '  },\\n',\n",
+             "                                             '  '\n",
+             '                                             '
+             '\'"tests/compile_fail/a_gpu_part_is_not_a_bare_int.mojo": \'\n',
+             "                                             '{\\n',\n",
+             '                                             \'    "errors": [\\n\',\n',
+             "                                             '      {\\n',\n",
+             '                                             \'        "line": 12,\\n\',\n',
+             '                                             \'        "column": 21,\\n\',\n',
+             '                                             \'        "message": "invalid call to '
+             "\\'part\\': value '\n",
+             '                                             "passed to \'which\' cannot be '
+             'converted from "\n',
+             "                                             '\\'IntLiteral[3]\\' to "
+             '\\\'GpuPart\\\'"\\n\',\n',
+             "                                             '      }\\n',\n",
+             "                                             '    ],\\n',\n",
+             '                                             \'    "notes": [\\n\',\n',
+             '                                             \'      "function declared '
+             'here"\\n\',\n',
+             "                                             '    ]\\n')),\n",
+             '                                           (3367,\n',
+             '                                            3391,\n',
+             '                                            (),\n',
+             "                                            ('      }\\n',\n",
+             "                                             '    ],\\n',\n",
+             '                                             \'    "notes": [\\n\',\n',
+             '                                             \'      "function declared '
+             'here"\\n\',\n',
+             "                                             '    ]\\n',\n",
+             "                                             '  },\\n',\n",
+             "                                             '  '\n",
+             '                                             '
+             '\'"tests/compile_fail/a_splat_info_is_not_a_bare_int.mojo": \'\n',
+             "                                             '{\\n',\n",
+             '                                             \'    "errors": [\\n\',\n',
+             "                                             '      {\\n',\n",
+             '                                             \'        "line": 12,\\n\',\n',
+             '                                             \'        "column": 21,\\n\',\n',
+             '                                             \'        "message": "invalid call to '
+             "\\'info\\': value '\n",
+             '                                             "passed to \'which\' cannot be '
+             'converted from "\n',
+             "                                             '\\'IntLiteral[1]\\' to "
+             '\\\'SplatInfo\\\'"\\n\',\n',
+             "                                             '      }\\n',\n",
+             "                                             '    ],\\n',\n",
+             '                                             \'    "notes": [\\n\',\n',
+             '                                             \'      "function declared '
+             'here"\\n\',\n',
+             "                                             '    ]\\n',\n",
+             "                                             '  },\\n',\n",
+             "                                             '  '\n",
+             '                                             '
+             '\'"tests/compile_fail/a_splat_part_is_not_a_bare_int.mojo": \'\n',
+             "                                             '{\\n',\n",
+             '                                             \'    "errors": [\\n\',\n',
+             "                                             '      {\\n',\n",
+             '                                             \'        "line": 12,\\n\',\n',
+             '                                             \'        "column": 21,\\n\',\n',
+             '                                             \'        "message": "invalid call to '
+             "\\'part\\': value '\n",
+             '                                             "passed to \'which\' cannot be '
+             'converted from "\n',
+             "                                             '\\'IntLiteral[3]\\' to "
+             '\\\'SplatPart\\\'"\\n\')))),\n',
+             " 'tools/carla_lane_oracle/test_expectation_binding_successor.py': "
+             "('112d9a22a78f4379fbdb932d57aea179a246251df63fb2778486903607e55050',\n",
+             '                                                                   '
+             "'e4ad0a6a13196e4a2bf16dae76f78f01d103260c2644632ec36fa74f46dad846',\n",
+             '                                                                   ((40,\n',
+             '                                                                     41,\n',
+             "                                                                     ('        "
+             "self.raw = '\n",
+             '                                                                      '
+             "'(ROOT/PATH).read_bytes()\\n',),\n",
+             "                                                                     ('        "
+             "self.raw = '\n",
+             '                                                                      '
+             "'audit.pr776_predecessor_bytes(PATH, '\n",
+             '                                                                      '
+             "'(ROOT/PATH).read_bytes())\\n',)),\n",
+             '                                                                    (112,\n',
+             '                                                                     115,\n',
+             "                                                                     ('        '\n",
+             '                                                                      '
+             "'self.assertEqual(typed.BINDING_INPUTS[PATH], '\n",
+             '                                                                      '
+             "'digest)\\n',),\n",
+             "                                                                     ('        '\n",
+             '                                                                      '
+             "'self.assertEqual(typed.BINDING_INPUTS[PATH],\\n',\n",
+             '                                                                      '
+             "'                         '\n",
+             '                                                                      '
+             "'hashlib.sha256(audit.pr776_predecessor_bytes(PATH, '\n",
+             '                                                                      '
+             "'raw)).hexdigest())\\n',\n",
+             "                                                                      '        '\n",
+             '                                                                      '
+             "'self.assertNotEqual(typed.BINDING_INPUTS[PATH], '\n",
+             '                                                                      '
+             "'digest)\\n')))),\n",
+             " 'tools/carla_lane_oracle/test_pr760_physical_image.py': "
+             "('110861c34786bff5eefcf9503e5c98eb5a53af138dba327e184ee7616e7d98f0',\n",
+             '                                                          '
+             "'6df971f2bf09c710a4e6ababc6adeea8995fd2e86c3e6866e548d5b193ae3669',\n",
+             '                                                          ((120,\n',
+             '                                                            129,\n',
+             "                                                            ('            '\n",
+             '                                                             '
+             '"self.assertEqual(self.accepted[\'bindings\'][path], "\n',
+             "                                                             'expected)\\n',),\n",
+             "                                                            ('            raw = '\n",
+             '                                                             '
+             "'(self.root/path).read_bytes()\\n',\n",
+             "                                                             '            '\n",
+             '                                                             '
+             '"self.assertEqual(self.accepted[\'bindings\'][path], "\n',
+             "                                                             'owner.sha(raw))\\n',\n",
+             "                                                             '            if path in "
+             "'\n",
+             '                                                             '
+             '"(\'tests/test_water.mojo\', "\n',
+             '                                                             '
+             '"\'tools/compile_fail_expectations.json\',\\n",\n',
+             '                                                             '
+             "'                        '\n",
+             '                                                             '
+             '"\'tools/carla_lane_oracle/test_expectation_binding_successor.py\',\\n",\n',
+             '                                                             '
+             "'                        '\n",
+             '                                                             '
+             '"\'tools/carla_lane_oracle/test_pr760_physical_image.py\',\\n",\n',
+             '                                                             '
+             "'                        '\n",
+             '                                                             '
+             '"\'tools/carla_lane_oracle/test_pr760_arithmetic_stage.py\',\\n",\n',
+             '                                                             '
+             "'                        '\n",
+             '                                                             '
+             '"\'tools/carla_lane_oracle/test_typed_boundary_contracts.py\'):\\n",\n',
+             "                                                             '                raw = "
+             "'\n",
+             '                                                             '
+             "'owner.pr776_predecessor_bytes(path, '\n",
+             "                                                             'raw)\\n',\n",
+             "                                                             '            '\n",
+             '                                                             '
+             "'self.assertEqual(owner.sha(raw), '\n",
+             "                                                             'expected)\\n')),\n",
+             '                                                           (240,\n',
+             '                                                            245,\n',
+             "                                                            ('            '\n",
+             '                                                             '
+             "'self.assertEqual(owner.sha(raw), '\n",
+             '                                                             '
+             '"row[\'after_sha256\'])\\n",),\n',
+             "                                                            ('            previous = "
+             "'\n",
+             '                                                             '
+             "'(owner.pr776_predecessor_bytes(path, '\n",
+             "                                                             'raw) if path in "
+             "(\\n',\n",
+             '                                                             '
+             "'                        '\n",
+             '                                                             '
+             '"\'tools/carla_lane_oracle/test_expectation_binding_successor.py\',\\n",\n',
+             '                                                             '
+             "'                        '\n",
+             '                                                             '
+             '"\'tools/carla_lane_oracle/test_typed_boundary_contracts.py\') "\n',
+             "                                                             'else raw)\\n',\n",
+             "                                                             '            '\n",
+             '                                                             '
+             "'self.assertEqual(owner.sha(previous), '\n",
+             '                                                             '
+             '"row[\'after_sha256\'])\\n",\n',
+             "                                                             '            '\n",
+             '                                                             '
+             '"self.assertEqual(self.accepted[\'bindings\'][path], "\n',
+             '                                                             '
+             "'owner.sha(raw))\\n')))),\n",
+             " 'tools/carla_lane_oracle/test_pr760_arithmetic_stage.py': "
+             "('35efae78b6a95568760b4544428c511a5ee90beec4d86338fd2f717c0f1c7516',\n",
+             '                                                            '
+             "'ac51eb5dd58c8e3768f2405108203351194d72d63f2b53f4e30d5b2d4d8c26ab',\n",
+             '                                                            ((158,\n',
+             '                                                              160,\n',
+             '                                                              (),\n',
+             "                                                              ('        water = '\n",
+             '                                                               '
+             '"\'tests/test_water.mojo\'\\n",\n',
+             "                                                               '        "
+             "inputs[water] = '\n",
+             '                                                               '
+             "'owner.pr776_predecessor_bytes(water, '\n",
+             '                                                               '
+             "'inputs[water])\\n')),)),\n",
+             " 'tools/carla_lane_oracle/test_typed_boundary_contracts.py': "
+             "('7114f17cce33b84fe226d3559b4d08d1227a6c1cda1f83825441d22e48b51705',\n",
+             '                                                              '
+             "'8dee4d9c4bf42214fb2f10fbdcf71a4ba04398095d8c62a16233ad6fc038fce7',\n",
+             '                                                              ((444,\n',
+             '                                                                446,\n',
+             '                                                                (),\n',
+             "                                                                ('                if "
+             "path == '\n",
+             '                                                                 '
+             '"\'tools/compile_fail_expectations.json\':\\n",\n',
+             '                                                                 '
+             "'                    raw = '\n",
+             '                                                                 '
+             "'audit.pr776_predecessor_bytes(path, '\n",
+             "                                                                 'raw)\\n')),))}\n",
+             "    require(path in rows, 'unreviewed PR776 predecessor path: ' + path)\n",
+             '    before_sha, after_sha, edits = rows[path]\n',
+             "    require(sha(raw) == after_sha, 'unreviewed PR776 endpoint: ' + path)\n",
+             "    lines = raw.decode('utf-8').splitlines(keepends=True)\n",
+             '    previous = len(lines) + 1\n',
+             '    for start, stop, before, after in reversed(edits):\n',
+             '        require(0 <= start <= stop < previous and tuple(lines[start:stop]) == '
+             'after,\n',
+             "                'PR776 predecessor span changed: ' + path)\n",
+             '        lines[start:stop] = before\n',
+             '        previous = start\n',
+             "    prior = ''.join(lines).encode('utf-8')\n",
+             "    require(sha(prior) == before_sha, 'PR776 predecessor bytes changed: ' + path)\n",
+             "    if path == 'tools/compile_fail_expectations.json':\n",
+             '        old, current = json.loads(prior), json.loads(raw)\n',
+             "        added = {f'tests/compile_fail/a_{kind}_{selector}_is_not_a_bare_int.mojo'\n",
+             "                 for kind in ('gpu', 'splat') for selector in ('info', 'part')}\n",
+             '        require(type(old) is dict and type(current) is dict\n',
+             '                and len(old) == 704 and len(current) == 708\n',
+             '                and set(current)-set(old) == added\n',
+             '                and {name: current[name] for name in old} == old,\n',
+             "                'PR776 expectation extension changed an existing diagnostic')\n",
+             '        # The preexisting 689-to-704 proof still owns every earlier record.\n',
+             '        typed_boundary.verify_binding_successor(path, prior)\n',
+             '    executing_checker_bindings()\n',
+             '    return prior\n',
+             '\n',
+             '\n',
              'def qualification_predecessor_bytes(path, raw):\n',
              '    """Pure exact comparison for eight reviewed Python witness successors only.\n',
              '\n',
@@ -5218,6 +5929,14 @@ _PR760_CHECKER_SOURCE_EDGES = {'coverage_loop_proofs.py': {'after_sha256': '21e3
              '    executing_checker_bindings()\n',
              '    require(type(path) is str and type(raw) is bytes,\n',
              "            'qualification predecessor requires builtin source bytes')\n",
+             "    if (path == 'tools/carla_lane_oracle/test_expectation_binding_successor.py'\n",
+             '            and sha(raw) == '
+             "'e4ad0a6a13196e4a2bf16dae76f78f01d103260c2644632ec36fa74f46dad846'):\n",
+             '        raw = pr776_predecessor_bytes(path, raw)\n',
+             "    if (path == 'tools/carla_lane_oracle/test_typed_boundary_contracts.py'\n",
+             '            and sha(raw) == '
+             "'8dee4d9c4bf42214fb2f10fbdcf71a4ba04398095d8c62a16233ad6fc038fce7'):\n",
+             '        raw = pr776_predecessor_bytes(path, raw)\n',
              "    rows = {'tools/carla_lane_oracle/test_common758_current_successor.py': "
              "('010cd7008a96b80e0aea26734dafb7be0068f677c5dd73af8fb15db585e70b9f',\n",
              '                                                                     '
@@ -6060,6 +6779,11 @@ _PR760_CHECKER_SOURCE_EDGES = {'coverage_loop_proofs.py': {'after_sha256': '21e3
              '    This exact inverse supplies no admission, filesystem or receipt authority.\n',
              '    """\n',
              '    executing_checker_bindings()\n',
+             '    if type(raw) is bytes and sha(raw) == '
+             "'ac51eb5dd58c8e3768f2405108203351194d72d63f2b53f4e30d5b2d4d8c26ab':\n",
+             '        raw = '
+             "pr776_predecessor_bytes('tools/carla_lane_oracle/test_pr760_arithmetic_stage.py', "
+             'raw)\n',
              '    before_sha, after_sha, edits = '
              "('b6d5ecc453ebe4c1f8d5f07e1f029b09f414dea887480fa6cf07ccd85bfacdb3',\n",
              " '35efae78b6a95568760b4544428c511a5ee90beec4d86338fd2f717c0f1c7516',\n",
@@ -6154,8 +6878,20 @@ _PR760_CHECKER_SOURCE_EDGES = {'coverage_loop_proofs.py': {'after_sha256': '21e3
              'str\n',
              "                for path, digest in expected.items()), 'malformed PR760 source-image "
              "pins')\n",
+             '        successor_pins = _pr776_input_pins()\n',
+             "        require(set(successor_pins) <= set(expected), 'PR776 successor misses fixed "
+             "predecessor')\n",
+             '        prior_inputs = {}\n',
              '        for path, digest in expected.items():\n',
-             "            require(sha(observe(path)) == digest, 'PR760 physical input changed: ' + "
+             '            raw = observe(path)\n',
+             '            require(sha(raw) == successor_pins.get(path, digest),\n',
+             "                    'PR760 physical input changed: ' + path)\n",
+             '            if path in successor_pins:\n',
+             '                prior_inputs[path] = pr776_predecessor_bytes(path, raw)\n',
+             '                require(sha(prior_inputs[path]) == digest,\n',
+             "                        'PR776 successor misses fixed PR760 input: ' + path)\n",
+             '        for path, digest in _pr776_bound_inputs().items():\n',
+             "            require(sha(observe(path)) == digest, 'PR776 bound input changed: ' + "
              'path)\n',
              "        stage_witness = 'tools/carla_lane_oracle/test_pr760_arithmetic_stage.py'\n",
              '        stage_prior = stage_witness_predecessor_bytes(image[stage_witness])\n',
@@ -6189,7 +6925,8 @@ _PR760_CHECKER_SOURCE_EDGES = {'coverage_loop_proofs.py': {'after_sha256': '21e3
              'path)\n',
              '        # One complete fixed image, with no per-file old/new fallback.\n',
              '        previous = pr760_stage.verify_registry_sources(\n',
-             '            {path: stage_prior if path == stage_witness else image[path]\n',
+             '            {path: stage_prior if path == stage_witness else prior_inputs.get(path, '
+             'image[path])\n',
              '             for path in pr760_stage.REGISTRY_INPUT_SHA256})\n',
              '        typed_texts = {path: (previous[path] if path in pr760_stage.EXAMPLE_PATHS\n',
              '                              else qualification_predecessor_bytes(path, '

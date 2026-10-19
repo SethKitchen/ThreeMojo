@@ -1485,6 +1485,30 @@
     ],
     "notes": []
   },
+  "tests/compile_fail/a_gpu_info_is_not_a_bare_int.mojo": {
+    "errors": [
+      {
+        "line": 12,
+        "column": 21,
+        "message": "invalid call to 'info': value passed to 'which' cannot be converted from 'IntLiteral[1]' to 'GpuInfo'"
+      }
+    ],
+    "notes": [
+      "function declared here"
+    ]
+  },
+  "tests/compile_fail/a_gpu_part_is_not_a_bare_int.mojo": {
+    "errors": [
+      {
+        "line": 12,
+        "column": 21,
+        "message": "invalid call to 'part': value passed to 'which' cannot be converted from 'IntLiteral[3]' to 'GpuPart'"
+      }
+    ],
+    "notes": [
+      "function declared here"
+    ]
+  },
   "tests/compile_fail/a_hair_part_is_not_a_bare_int.mojo": {
     "errors": [
       {
@@ -3341,6 +3365,30 @@
         "column": 24,
         "line": 12,
         "message": "invalid call to 'require_resolution': value passed to 'resolution' cannot be converted from 'IntLiteral[4]' to 'SpectrumResolution'"
+      }
+    ],
+    "notes": [
+      "function declared here"
+    ]
+  },
+  "tests/compile_fail/a_splat_info_is_not_a_bare_int.mojo": {
+    "errors": [
+      {
+        "line": 12,
+        "column": 21,
+        "message": "invalid call to 'info': value passed to 'which' cannot be converted from 'IntLiteral[1]' to 'SplatInfo'"
+      }
+    ],
+    "notes": [
+      "function declared here"
+    ]
+  },
+  "tests/compile_fail/a_splat_part_is_not_a_bare_int.mojo": {
+    "errors": [
+      {
+        "line": 12,
+        "column": 21,
+        "message": "invalid call to 'part': value passed to 'which' cannot be converted from 'IntLiteral[3]' to 'SplatPart'"
       }
     ],
     "notes": [

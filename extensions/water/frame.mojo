@@ -48,6 +48,8 @@ from extensions.water.ripple import (
     sample_ripple,
     step_ripple,
 )
+from extensions.water.post import RadianceView, blur_texel, highlight_texel
+from extensions.water.rows import row_tasks
 from extensions.water.spectrum import build_spectrum, evolve_spectrum
 from extensions.water.surface import (
     SurfaceField,
@@ -74,15 +76,14 @@ from math.finite import (
     require_positive_finite,
     require_non_negative_finite,
 )
-from math.utils import max3, rec709_luminance, saturate
+from math.utils import rec709_luminance, saturate
 from math.norm import squared_length3
 from math.matrix4 import Matrix4
 from math.vector3 import Vector3, mix_delta3
 from render.framebuffer import Color, FloatColor, Framebuffer
 from render.tasks import TaskGroup
 from std.math import cos, exp, pow, sin, sqrt
-from std.memory import bitcast
-from std.sys import num_logical_cores
+from std.memory import AddressSpace, bitcast
 from units.si import SECOND, Angle, Duration, Length
 
 # The page's ocean patch, water depth and root-mean-square slope.
@@ -309,17 +310,6 @@ def _depth_rows(
             shown[unsafe_offset=slot] = True
 
 
-def _row_tasks(workers: Int, per_worker: Int, height: Int) -> Int:
-    # How many runs of rows a pass is cut into. Zero or fewer workers means
-    # every logical core. One worker runs one task over every row: the
-    # serial pass, which a test compares with the parallel one. Clamp to
-    # the rows before multiplying, so a huge count cannot overflow.
-    var threads = workers if workers > 0 else num_logical_cores()
-    if threads == 1:
-        return 1
-    return min(min(threads, height) * per_worker, height)
-
-
 def _radiance_image(
     look: CameraLook,
     aspect: Float32,
@@ -343,7 +333,7 @@ def _radiance_image(
     var hdr = List[Float32](length=width * height * 3, fill=0.0)
     # Sky rows cost far less than water rows, so small runs of rows balance
     # the threads. Each task gets at least one row, because tasks <= height.
-    var tasks = _row_tasks(workers, 8, height)
+    var tasks = row_tasks(workers, 8, height)
     var group = TaskGroup()
     for task in range(tasks):  # pragma: no branch
         group.create_task(
@@ -463,7 +453,7 @@ def _graded_image(
     var graded = List[Float32](length=width * height * 3, fill=0.0)
     # Sky rows cost far less than water rows, so small runs of rows balance
     # the threads. Each task gets at least one row, because tasks <= height.
-    var tasks = _row_tasks(workers, 8, height)
+    var tasks = row_tasks(workers, 8, height)
     var group = TaskGroup()
     for task in range(tasks):  # pragma: no branch
         group.create_task(
@@ -1552,7 +1542,7 @@ struct WaterScene(Movable):
         var width = image.width
         var height = image.height
         var shown = List[Bool](length=width * height, fill=False)
-        var tasks = _row_tasks(self.workers, 8, height)
+        var tasks = row_tasks(self.workers, 8, height)
         var group = TaskGroup()
         for task in range(tasks):  # pragma: no branch
             group.create_task(
@@ -1580,7 +1570,7 @@ struct WaterScene(Movable):
         # pixel has one writer, so disjoint runs of rows write in parallel.
         var width = image.width
         var height = image.height
-        var tasks = _row_tasks(self.workers, 1, height)
+        var tasks = row_tasks(self.workers, 1, height)
         var drawn = List[Int](length=tasks, fill=0)
         var group = TaskGroup()
         for task in range(tasks):  # pragma: no branch
@@ -1675,28 +1665,16 @@ struct WaterScene(Movable):
         if view == FRAME or view == GLARE:
             if not self._glare:
                 self._glare = glare_kernels(self.glare_resolution)
-            var sparks = _highlights(hdr, width, height, 14.0, self.workers)
-            for i in range(len(sparks)):  # pragma: no branch
-                sparks[i] *= 0.001
-            glare = apply_glare(sparks, width, height, self._glare.value())
+            var sparks = _highlights(
+                hdr, width, height, 14.0, self.workers, 0.001
+            )
+            glare = apply_glare(
+                sparks, width, height, self._glare.value(), self.workers
+            )
         var graded = _graded_image(
             hdr, glare, bloom, width, height, clock, view, self.workers
         )
-        var image = Framebuffer(width, height, Color(0, 0, 0))
-        for y in range(height):  # pragma: no branch
-            for x in range(width):  # pragma: no branch
-                var p = (y * width + x) * 3
-                image.set_pixel(
-                    x,
-                    y,
-                    FloatColor(
-                        saturate(graded[p]),
-                        saturate(graded[p + 1]),
-                        saturate(graded[p + 2]),
-                        1.0,
-                    ).quantize(),
-                )
-        return image^
+        return _quantized_image(graded, width, height, self.workers)
 
 
 @fieldwise_init
@@ -1817,17 +1795,79 @@ def _caustic_picture(
     return image^
 
 
+def _quantized_image(
+    graded: List[Float32], width: Int, height: Int, workers: Int = 0
+) raises -> Framebuffer:
+    # Clamp and quantize each pixel, as `Framebuffer.set_pixel` stores it.
+    # Each pixel has one writer, so disjoint runs of rows run in parallel. The
+    # frame adopts the bytes: clearing a frame writes every pixel twice, and
+    # costs milliseconds at 720p.
+    var pixels = List[UInt8](
+        length=width * height * Framebuffer.CHANNELS, fill=0
+    )
+    var tasks = row_tasks(workers, 1, height)
+    var group = TaskGroup()
+    for task in range(tasks):  # pragma: no branch
+        group.create_task(
+            _quantize_task(
+                Pointer(to=graded).unsafe_origin_cast[ImmutAnyOrigin](),
+                pixels.unsafe_ptr().unsafe_origin_cast[MutAnyOrigin](),
+                width,
+                task * height // tasks,
+                (task + 1) * height // tasks,
+            )
+        )
+    group.wait()
+    return Framebuffer(width, height, pixels^)
+
+
+async def _quantize_task(
+    graded: Pointer[List[Float32], ImmutAnyOrigin],
+    pixels: MutPointer[UInt8, MutAnyOrigin],
+    width: Int,
+    first: Int,
+    past: Int,
+):
+    _quantize_rows(graded[], pixels, width, first, past)
+
+
+def _quantize_rows(
+    graded: List[Float32],
+    pixels: MutPointer[UInt8, MutAnyOrigin],
+    width: Int,
+    first: Int,
+    past: Int,
+):
+    for y in range(first, past):  # pragma: no branch
+        for x in range(width):  # pragma: no branch
+            var p = (y * width + x) * 3
+            var color = FloatColor(
+                saturate(graded[p]),
+                saturate(graded[p + 1]),
+                saturate(graded[p + 2]),
+                1.0,
+            ).quantize()
+            var at = (y * width + x) * Framebuffer.CHANNELS
+            pixels[unsafe_offset=at] = color.r
+            pixels[unsafe_offset=at + 1] = color.g
+            pixels[unsafe_offset=at + 2] = color.b
+            pixels[unsafe_offset=at + 3] = color.a
+
+
 def _highlights(
     hdr: List[Float32],
     width: Int,
     height: Int,
     threshold: Float32,
     workers: Int = 0,
+    scale: Float32 = 1.0,
 ) -> List[Float32]:
     # Each output pixel reads fixed input neighbors, so disjoint runs of
-    # rows run in parallel and equal the serial pass bit for bit.
+    # rows run in parallel and equal the serial pass bit for bit. The scale
+    # multiplies each result after it is rounded, as a pass over the list
+    # would, so the 1e-3 of the sparks needs no serial loop.
     var out = List[Float32](length=width * height * 3, fill=0.0)
-    var tasks = _row_tasks(workers, 1, height)
+    var tasks = row_tasks(workers, 1, height)
     var group = TaskGroup()
     for task in range(tasks):  # pragma: no branch
         group.create_task(
@@ -1837,6 +1877,7 @@ def _highlights(
                 width,
                 height,
                 threshold,
+                scale,
                 task * height // tasks,
                 (task + 1) * height // tasks,
             )
@@ -1851,10 +1892,11 @@ async def _highlight_task(
     width: Int,
     height: Int,
     threshold: Float32,
+    scale: Float32,
     first: Int,
     past: Int,
 ):
-    _highlight_rows(hdr[], result, width, height, threshold, first, past)
+    _highlight_rows(hdr[], result, width, height, threshold, first, past, scale)
 
 
 def _highlight_rows(
@@ -1865,35 +1907,20 @@ def _highlight_rows(
     threshold: Float32,
     first: Int,
     past: Int,
+    scale: Float32 = 1.0,
 ):
+    var image = RadianceView[AddressSpace.GENERIC](
+        hdr.unsafe_ptr().unsafe_origin_cast[UntrackedOrigin[mut=False]](),
+        width,
+        height,
+    )
     for y in range(first, past):  # pragma: no branch
         for x in range(width):  # pragma: no branch
-            var r = Float32(0.0)
-            var g = Float32(0.0)
-            var b = Float32(0.0)
-            var count = Float32(0.0)
-            for oy in range(-1, 2):  # pragma: no branch
-                for ox in range(-1, 2):  # pragma: no branch
-                    var sx = x + ox
-                    var sy = y + oy
-                    if sx >= 0 and sy >= 0 and sx < width and sy < height:
-                        var p = (sy * width + sx) * 3
-                        r += hdr[p]
-                        g += hdr[p + 1]
-                        b += hdr[p + 2]
-                        count += 1.0
-            r /= count
-            g /= count
-            b /= count
-            var l = max3(r, g, b)
-            var k = l - threshold
-            if k < 0.0:
-                k = 0.0
-            # The brightest glint in this model stays under the page's 160 cap.
-            k /= max(l, Float32(1e-4))
-            result[unsafe_offset=(y * width + x) * 3] = r * k
-            result[unsafe_offset=(y * width + x) * 3 + 1] = g * k
-            result[unsafe_offset=(y * width + x) * 3 + 2] = b * k
+            var rgb = highlight_texel(image, x, y, threshold, scale)
+            var o = (y * width + x) * 3
+            result[unsafe_offset=o] = rgb.x
+            result[unsafe_offset=o + 1] = rgb.y
+            result[unsafe_offset=o + 2] = rgb.z
 
 
 def _blur(
@@ -1906,7 +1933,7 @@ def _blur(
     # Each output pixel reads fixed input taps, so disjoint runs of rows
     # run in parallel and equal the serial pass bit for bit.
     var out = List[Float32](length=width * height * 3, fill=0.0)
-    var tasks = _row_tasks(workers, 1, height)
+    var tasks = row_tasks(workers, 1, height)
     var group = TaskGroup()
     for task in range(tasks):  # pragma: no branch
         group.create_task(
@@ -1945,43 +1972,15 @@ def _blur_rows(
     first: Int,
     past: Int,
 ):
-    var offsets = List[Int](length=5, fill=0)
-    var weights = List[Float32](length=5, fill=0.0)
-    offsets[0] = 0
-    weights[0] = 0.2270270270
-    offsets[1] = 1
-    weights[1] = 0.3162162162
-    offsets[2] = -1
-    weights[2] = 0.3162162162
-    offsets[3] = 3
-    weights[3] = 0.0702702703
-    offsets[4] = -3
-    weights[4] = 0.0702702703
+    var image = RadianceView[AddressSpace.GENERIC](
+        src.unsafe_ptr().unsafe_origin_cast[UntrackedOrigin[mut=False]](),
+        width,
+        height,
+    )
     for y in range(first, past):  # pragma: no branch
         for x in range(width):  # pragma: no branch
-            var r = Float32(0.0)
-            var g = Float32(0.0)
-            var b = Float32(0.0)
-            for tap in range(5):  # pragma: no branch
-                var sx = x
-                var sy = y
-                if horizontal:
-                    sx = x + offsets[tap]
-                else:
-                    sy = y + offsets[tap]
-                if sx < 0:
-                    sx = 0
-                if sy < 0:
-                    sy = 0
-                if sx >= width:
-                    sx = width - 1
-                if sy >= height:
-                    sy = height - 1
-                var p = (sy * width + sx) * 3
-                r += src[p] * weights[tap]
-                g += src[p + 1] * weights[tap]
-                b += src[p + 2] * weights[tap]
+            var rgb = blur_texel(image, x, y, horizontal)
             var o = (y * width + x) * 3
-            result[unsafe_offset=o] = r
-            result[unsafe_offset=o + 1] = g
-            result[unsafe_offset=o + 2] = b
+            result[unsafe_offset=o] = rgb.x
+            result[unsafe_offset=o + 1] = rgb.y
+            result[unsafe_offset=o + 2] = rgb.z

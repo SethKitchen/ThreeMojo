@@ -30,6 +30,7 @@ from tools.ci_scope import (
     aggregate,
     changed_paths,
     inventories,
+    is_gpu,
     kind,
     main_with,
     make_command,
@@ -730,6 +731,58 @@ def test_a_quoted_gpu_asset_selects_its_quoting_module() raises:
     var value = _plan(_change(["assets/gpu/file with spaces\n雪.bin"]))
     assert_true(value.flag("gpu"))
     assert_false(value.flag("cpu") or value.flag("coverage"))
+
+
+def test_gpu_names_match_the_makefile_without_catching_cpu_lookalikes() raises:
+    for path in [
+        "render/gpu.mojo",
+        "extensions/future/gpu_shadow.mojo",
+        "window/capi_water_gpu.mojo",
+        "render/gpu_.mojo",
+        "render/_gpu.mojo",
+        "tests/test_new_device_gpu.mojo",
+        "tests/test__gpu.mojo",
+        "tests/test_gpu_layout.mojo",
+        "bench/water_gpu_bench.mojo",
+        "tools/gpu_status.mojo",
+    ]:
+        assert_true(is_gpu(path), path)
+    for path in [
+        "render/gpgpu_sort.mojo",
+        "render/gpu/helper.mojo",
+        "render/gpu_shadow.txt",
+        "render/shadow_gpu.mojo.bak",
+        "window/capi_gpu_host.mojo",
+        "examples/gpu.mojo",
+        "tools/gpu.mojo",
+        "tools/_gpu_status.mojo",
+        "unknown/gpu_shadow.mojo",
+        "gpu.mojo",
+        "tests/test_gpu_new_device.mojo",
+        "tests/test_new_device_gpu_helper.mojo",
+        "tests/test_new_device_gpu.txt",
+        "tests/new_device_gpu.mojo",
+        "tests/test_nested/device_gpu.mojo",
+    ]:
+        assert_false(is_gpu(path), path)
+
+
+def test_new_gpu_modules_and_suites_skip_cpu_checks_and_select_gpu() raises:
+    var sources = _sources()
+    var module = String("window/new_device_gpu.mojo")
+    var suite = String("tests/test_new_device_gpu.mojo")
+    sources[module] = "def device():\n    pass\n"
+    sources[suite] = "from window.new_device_gpu import device\n"
+    var value = _plan(_change([module]), sources)
+    assert_equal(_on(value), "gpu lint native tools")
+    assert_true(_has(value, "formatted", module))
+    var inventory = inventories(sources)
+    for name in ["cpu_docs", "covered"]:
+        assert_false(module in inventory[name], name)
+    for name in ["cpu_entries", "cpu_tests", "coverage_tests"]:
+        assert_false(suite in inventory[name], name)
+    assert_true(suite in inventory["formatted"])
+    assert_equal(_on(_plan(_change([suite]), sources)), "gpu lint native tools")
 
 
 def test_docs_and_empty_changes_skip_all_native_work() raises:

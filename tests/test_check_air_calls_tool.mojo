@@ -9,6 +9,7 @@ The command-line checks run no compiler: a shell script stands in for
 `mojo` and prints a fixed result.
 """
 
+from std.collections import Set
 from std.os.path import realpath
 from std.pathlib import Path
 from std.testing import (
@@ -198,17 +199,25 @@ def test_return_and_count_mismatches_are_found() raises:
 def test_kernels_are_found_from_launches() raises:
     var found = kernels(realpath("."), default_modules())
     var raster = False
-    var water = False
+    var water = Set[String]()
     for kernel in found:
         if kernel[0] == "render/gpu.mojo" and kernel[1] == "rasterize_kernel":
             raster = True
-        if (
-            kernel[0] == "extensions/water/gpu.mojo"
-            and kernel[1] == "water_kernel"
-        ):
-            water = True
-    assert_true(raster and water)
-    assert_equal(len(found), 38)
+        if kernel[0] == "extensions/water/gpu.mojo":
+            water.add(kernel[1])
+    assert_true(raster)
+    # The water frame's scene, sparks and three postprocessing stages must
+    # all reach the AIR checker; the two blur launches share one kernel.
+    for name in [
+        "water_kernel",
+        "sparks_kernel",
+        "bright_kernel",
+        "blur_kernel",
+        "grade_kernel",
+    ]:
+        assert_true(name in water, name)
+    assert_equal(len(water), 5)
+    assert_equal(len(found), 42)
 
 
 # --- discovery -------------------------------------------------------------------

@@ -210,6 +210,23 @@ The constructor refuses a size that is not positive. It refuses a near plane tha
 
 The projection goes in `projection_override`, and `projection_matrix()` returns it in place of the one it builds. Set `projection_override` to `None` to build the projection from the fields again. With `estimate_view_frustum=True`, the field of view is also set to three.js's estimate.
 
+## Fit a sphere
+
+`fit_sphere(camera, center, radius, direction)` in `cameras/fit_sphere.mojo` places a camera so that a sphere fills its view. The three.js splat example frames a scan this way. It returns the distance of a tight fit.
+
+The tight distance is `radius / sin(fov / 2)`. `fit_distance(radius, fov)` gives it alone. The camera stands at `center + normalize(direction) * distance * margin`. The default margin is 1.15, which is the example's. A larger margin gives more room around the sphere.
+
+The call also sets the planes. The near plane is the larger of one thousandth of the tight distance and 0.001 meter. The far plane is the larger of ten times the tight distance and 10 meters. The camera looks at the center. Use `OrbitControls` with the center as the target to orbit it.
+
+A sphere fits a square view. In a view that is wider than it is tall, the sphere has room at the sides. In a view that is taller than it is wide, the view cuts the sphere at the sides. three.js does the same.
+
+`radius` is a `Length` and `fov` is an `Angle`. The call raises in these cases, and the camera is then unchanged:
+
+- The radius is not finite and positive.
+- The field of view is not between 0 and 180 degrees.
+- The margin is not finite and positive.
+- The direction has no length. See [Gaussian splats](Gaussian-splats#three-tomatoes) for an example.
+
 ## Attach a camera to a node
 
 ```mojo
@@ -244,3 +261,7 @@ The two contracts differ, because `look_at` carries a facing into the parent's f
 ## Example
 
 `examples/ortho.mojo` orbits an attached `OrthographicCamera` around a cube. `examples/photo.mojo` does the same with a perspective camera and a decoded PNG.
+
+`fit_distance` and `fit_sphere` refuse a result outside the finite coordinate
+range. `fit_sphere` also refuses a nonfinite center. It checks the derived
+distance, far plane and position before changing the camera.

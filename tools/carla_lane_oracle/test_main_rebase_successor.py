@@ -46,8 +46,11 @@ class MainRebaseSuccessorControls(unittest.TestCase):
                 if path == 'tools/carla_lane_oracle/test_expectation_binding_successor.py':
                     # Preserve main's exact evidence through its one reviewed
                     # inverse; physical admission still pins current bytes.
-                    self.assertEqual(owner.sha(raw), image['inputs'][path])
+                    self.assertEqual(owner.sha(owner.pr776_predecessor_bytes(path, raw)),
+                                     image['inputs'][path])
                     raw = owner.qualification_predecessor_bytes(path, raw)
+                if path == 'tools/compile_fail_expectations.json':
+                    raw = owner.pr776_predecessor_bytes(path, raw)
                 self.assertEqual(owner.sha(raw), digest)
                 if path.endswith('.mojo'):
                     self.assertEqual(image['inputs'][path], digest)
@@ -61,9 +64,10 @@ class MainRebaseSuccessorControls(unittest.TestCase):
         self.assertEqual(owner.sha(old), MAIN_INPUTS[path])
         self.assertEqual(owner.typed_boundary.BINDING_INPUTS[path], MAIN_INPUTS[path])
         self.assertEqual(image['inputs'][archive], MAIN_INPUTS[path])
-        self.assertEqual(image['inputs'][path], owner.sha(raw))
+        previous = owner.pr776_predecessor_bytes(path, raw)
+        self.assertEqual(image['inputs'][path], owner.sha(previous))
         self.assertEqual(image['qualification_successors'][path], {
-            'before_sha256': MAIN_INPUTS[path], 'after_sha256': owner.sha(raw),
+            'before_sha256': MAIN_INPUTS[path], 'after_sha256': owner.sha(previous),
             'predecessor_archive': archive})
         self.assertNotEqual(raw, old)
         self.assertEqual(owner.qualification_predecessor_bytes(path, raw), old)
@@ -95,6 +99,7 @@ class MainRebaseSuccessorControls(unittest.TestCase):
     def test_all_seven_streamline_diagnostics_extend_original_expectations(self):
         typed = owner.typed_boundary
         raw = (ROOT/'tools/compile_fail_expectations.json').read_bytes()
+        raw = owner.pr776_predecessor_bytes('tools/compile_fail_expectations.json', raw)
         before = json.loads(typed.expectation_predecessor(raw))
         current = json.loads(raw)
         self.assertEqual((len(before), len(current)), (689, 704))

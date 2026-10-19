@@ -38,7 +38,7 @@ ADDED = {
 
 class ExpectationBindingSuccessor(unittest.TestCase):
     def setUp(self):
-        self.raw = (ROOT/PATH).read_bytes()
+        self.raw = audit.pr776_predecessor_bytes(PATH, (ROOT/PATH).read_bytes())
 
     def test_exact_byte_predecessor_keeps_all_689_records(self):
         before = typed.expectation_predecessor(self.raw)
@@ -110,7 +110,9 @@ class ExpectationBindingCurrentInputs(unittest.TestCase):
         result = audit.proof_bindings(ROOT)
         digest = hashlib.sha256(raw).hexdigest()
         self.assertEqual(result[PATH], digest)
-        self.assertEqual(typed.BINDING_INPUTS[PATH], digest)
+        self.assertEqual(typed.BINDING_INPUTS[PATH],
+                         hashlib.sha256(audit.pr776_predecessor_bytes(PATH, raw)).hexdigest())
+        self.assertNotEqual(typed.BINDING_INPUTS[PATH], digest)
         self.assertNotEqual(result[PATH], BEFORE)
 
     def test_first_and_final_physical_input_changes_are_refused(self):

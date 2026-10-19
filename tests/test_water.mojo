@@ -35,6 +35,8 @@ from extensions.water.frame import (
     _radiance_image,
     _highlight_rows,
     _highlights,
+    _quantize_rows,
+    _quantized_image,
     _radiance_rows,
     _write_rows,
     camera_look,
@@ -43,7 +45,19 @@ from extensions.water.frame import (
     render_water,
     water_radiance,
 )
-from extensions.water.glare import aperture_open, apply_glare, glare_kernels
+from extensions.water.glare import (
+    aperture_open,
+    apply_glare,
+    glare_cell_x,
+    glare_cell_y,
+    glare_convolve,
+    glare_grid_size,
+    glare_kernels,
+    glare_sample_x,
+    glare_sample_y,
+)
+from extensions.water.post import RadianceView, blur_texel, highlight_texel
+from extensions.water.rows import row_tasks
 from extensions.water.pebbles import (
     PebbleBed,
     pebble_bed,
@@ -110,6 +124,7 @@ from extensions.water.view import (
 from math.utils import saturate
 from math.vector3 import Vector3
 from std.math import cos, inf, isfinite, nan, sin, sqrt
+from std.memory import AddressSpace
 from render.framebuffer import Color, Framebuffer
 from render.png import SRGB, DecodedImage
 from std.testing import (
@@ -404,6 +419,178 @@ def test_glare() raises:
         _ = apply_glare(picture, 3, 3, small)
     with assert_raises():
         _ = apply_glare(picture, 2, 0, small)
+    # Spreading the glare over the image runs in parallel. One worker is the
+    # serial pass, and the result does not depend on the count.
+    var bright = List[Float32](length=37 * 29 * 3, fill=0.0)
+    for i in range(len(bright)):
+        bright[i] = Float32((i * 7919) % 97) * 0.001
+    var spread = apply_glare(bright, 37, 29, wide)
+    assert_true(apply_glare(bright, 37, 29, wide, 1) == spread)
+    assert_true(apply_glare(bright, 37, 29, wide, 3) == spread)
+    var lit = 0
+    for i in range(len(spread)):
+        if spread[i] > 0.0:
+            lit += 1
+    assert_true(lit > 0)
+
+
+def test_the_glare_grid_maps_the_image_and_back() raises:
+    # The image is fitted into three quarters of the kernel grid.
+    var size = glare_grid_size(64, 640, 360)
+    assert_equal(size[0], 48)
+    assert_equal(size[1], 27)
+    # A tall image fits by its height, and a thin one keeps one cell.
+    var tall = glare_grid_size(64, 100, 400)
+    assert_equal(tall[1], 48)
+    assert_true(tall[0] >= 1 and tall[0] < 48)
+    var thin = glare_grid_size(4, 1000, 1)
+    assert_equal(thin[1], 1)
+    # Every grid point samples a pixel inside the image, and every pixel reads
+    # a grid point inside the grid, at both ends of each axis.
+    for x in range(size[0]):
+        var ix = glare_sample_x(x, size[0], 640)
+        assert_true(ix >= 0 and ix < 640)
+    for y in range(size[1]):
+        var iy = glare_sample_y(y, size[1], 360)
+        assert_true(iy >= 0 and iy < 360)
+    for x in range(640):
+        var gx = glare_cell_x(x, 640, size[0])
+        assert_true(gx >= 0 and gx < size[0])
+    for y in range(360):
+        var gy = glare_cell_y(y, 360, size[1])
+        assert_true(gy >= 0 and gy < size[1])
+    assert_equal(glare_cell_x(0, 640, size[0]), 0)
+    assert_equal(glare_cell_x(639, 640, size[0]), size[0] - 1)
+    assert_equal(glare_cell_y(359, 360, size[1]), size[1] - 1)
+    # The convolution refuses a grid that does not fit its kernels, or samples
+    # that are not the grid's.
+    var kernels = glare_kernels(SpectrumResolution(8))
+    var samples = List[Float32](length=4 * 3 * 3, fill=0.0)
+    samples[0] = 2.0
+    var grid = glare_convolve(samples, 4, 3, kernels)
+    assert_equal(len(grid), 4 * 3 * 3)
+    for i in range(len(grid)):
+        assert_true(grid[i] >= 0.0)
+    with assert_raises(contains="does not fit"):
+        _ = glare_convolve(samples, 9, 3, kernels)
+    with assert_raises(contains="does not fit"):
+        _ = glare_convolve(samples, 4, 9, kernels)
+    with assert_raises(contains="does not fit"):
+        _ = glare_convolve(samples, 0, 3, kernels)
+    with assert_raises(contains="does not fit"):
+        _ = glare_convolve(samples, 4, 0, kernels)
+    with assert_raises(contains="do not match"):
+        _ = glare_convolve(samples, 3, 3, kernels)
+    # A frame is the grid read back through the image: each pixel is the cell
+    # that it maps to.
+    var wide = glare_kernels(SpectrumResolution(64))
+    var bright = List[Float32](length=37 * 29 * 3, fill=0.0)
+    for i in range(len(bright)):
+        bright[i] = Float32((i * 7919) % 97) * 0.001
+    var frame = apply_glare(bright, 37, 29, wide)
+    var fitted = glare_grid_size(64, 37, 29)
+    var picked = List[Float32](length=fitted[0] * fitted[1] * 3, fill=0.0)
+    for y in range(fitted[1]):
+        for x in range(fitted[0]):
+            var p = (
+                glare_sample_y(y, fitted[1], 29) * 37
+                + glare_sample_x(x, fitted[0], 37)
+            ) * 3
+            var o = (y * fitted[0] + x) * 3
+            picked[o] = bright[p]
+            picked[o + 1] = bright[p + 1]
+            picked[o + 2] = bright[p + 2]
+    var cells = glare_convolve(picked, fitted[0], fitted[1], wide)
+    for y in range(29):
+        for x in range(37):
+            var cell = (
+                glare_cell_y(y, 29, fitted[1]) * fitted[0]
+                + glare_cell_x(x, 37, fitted[0])
+            ) * 3
+            for channel in range(3):
+                assert_equal(
+                    frame[(y * 37 + x) * 3 + channel], cells[cell + channel]
+                )
+
+
+def test_bloom_pixels_read_their_neighbors_and_clip_at_the_edges() raises:
+    # A 4 by 3 frame, with one bright pixel in a corner.
+    var texels = List[Float32](length=4 * 3 * 3, fill=1.0)
+    texels[0] = 40.0
+    texels[1] = 20.0
+    texels[2] = 10.0
+    var image = RadianceView[AddressSpace.GENERIC](
+        texels.unsafe_ptr()
+        .unsafe_mut_cast[False]()
+        .unsafe_origin_cast[UntrackedOrigin[mut=False]](),
+        4,
+        3,
+    )
+    # The corner pixel averages four pixels: a 2 by 2 block, clipped at the
+    # frame's edge. Its brightest channel is over the limit, so some stays.
+    var corner = highlight_texel(image, 0, 0, 2.5, 1.0)
+    var mean_r = Float32((40.0 + 1.0 + 1.0 + 1.0) / 4.0)
+    var mean_g = Float32((20.0 + 3.0) / 4.0)
+    var keep = Float32((mean_r - 2.5) / mean_r)
+    assert_true(abs(corner.x - mean_r * keep) < 1e-4)
+    assert_true(abs(corner.y - mean_g * keep) < 1e-4)
+    # A scale applies last.
+    var scaled = highlight_texel(image, 0, 0, 2.5, 0.001)
+    assert_equal(scaled.x, corner.x * 0.001)
+    # Far from the glint, and under the limit, nothing stays.
+    var dim = highlight_texel(image, 3, 2, 2.5, 1.0)
+    assert_equal(dim.x, 0.0)
+    assert_equal(dim.y, 0.0)
+    assert_equal(dim.z, 0.0)
+    # A view holds a bare pointer, so the list must outlive every read.
+    _ = len(texels)
+    # The blur is a weighted sum along one axis, and its weights add to one.
+    var flat = List[Float32](length=7 * 5 * 3, fill=0.5)
+    var even = RadianceView[AddressSpace.GENERIC](
+        flat.unsafe_ptr()
+        .unsafe_mut_cast[False]()
+        .unsafe_origin_cast[UntrackedOrigin[mut=False]](),
+        7,
+        5,
+    )
+    for horizontal in [True, False]:
+        var blurred = blur_texel(even, 3, 2, horizontal)
+        assert_true(abs(blurred.x - 0.5) < 1e-5)
+    _ = len(flat)
+    # A lone glint spreads to the taps of its own row and not its column.
+    var spike = List[Float32](length=7 * 5 * 3, fill=0.0)
+    spike[(2 * 7 + 3) * 3] = 1.0
+    var lone = RadianceView[AddressSpace.GENERIC](
+        spike.unsafe_ptr()
+        .unsafe_mut_cast[False]()
+        .unsafe_origin_cast[UntrackedOrigin[mut=False]](),
+        7,
+        5,
+    )
+    assert_true(blur_texel(lone, 3, 2, True).x > 0.2)
+    assert_true(blur_texel(lone, 4, 2, True).x > 0.3)
+    assert_true(blur_texel(lone, 6, 2, True).x > 0.0)
+    assert_equal(blur_texel(lone, 3, 0, True).x, 0.0)
+    # Three pixels away, only the outer tap reaches the glint.
+    assert_true(abs(blur_texel(lone, 0, 2, True).x - 0.0702702703) < 1e-6)
+    assert_true(blur_texel(lone, 3, 3, False).x > 0.3)
+    assert_equal(blur_texel(lone, 4, 2, False).x, 0.0)
+    _ = len(spike)
+    # The edge repeats: a pixel beside the edge reads the edge pixel again.
+    var edge = List[Float32](length=7 * 1 * 3, fill=0.0)
+    edge[0] = 1.0
+    var rim = RadianceView[AddressSpace.GENERIC](
+        edge.unsafe_ptr()
+        .unsafe_mut_cast[False]()
+        .unsafe_origin_cast[UntrackedOrigin[mut=False]](),
+        7,
+        1,
+    )
+    assert_true(blur_texel(rim, 0, 0, True).x > 0.5)
+    assert_equal(blur_texel(rim, 6, 0, True).x, 0.0)
+    # Every tap of a one-row frame lands on the one row: the weights add to 1.
+    assert_true(abs(blur_texel(rim, 0, 0, False).x - 1.0) < 1e-6)
+    _ = len(edge)
 
 
 def test_grade_and_camera() raises:
@@ -1547,6 +1734,12 @@ def test_parallel_post_and_depth_equal_one_serial_pass() raises:
             height,
         )
         assert_true(_highlights(hdr, width, height, threshold) == serial)
+        # A scale multiplies each rounded result, as a pass over the list does.
+        var scaled = _highlights(hdr, width, height, threshold, 0, 0.001)
+        for i in range(len(serial)):
+            assert_equal(scaled[i], serial[i] * 0.001)
+        var one_task = _highlights(hdr, width, height, threshold, 1, 0.001)
+        assert_true(one_task == scaled)
     for horizontal in [True, False]:
         var serial = List[Float32](length=width * height * 3, fill=0.0)
         _blur_rows(
@@ -1616,6 +1809,35 @@ def test_parallel_post_and_depth_equal_one_serial_pass() raises:
     assert_equal(count, drawn)
     assert_equal(count, serial_count)
     assert_true(image.pixels == serial_pixels)
+    # Clamping and quantizing a graded image, in parallel and in one pass.
+    var graded = List[Float32](length=width * height * 3, fill=0.0)
+    for i in range(len(graded)):
+        graded[i] = Float32((i * 53) % 131) / 100.0 - 0.15
+    var quantized = _quantized_image(graded, width, height)
+    var serial_quantized = Framebuffer(width, height, Color(0, 0, 0))
+    _quantize_rows(
+        graded,
+        serial_quantized.pixels.unsafe_ptr().unsafe_origin_cast[MutAnyOrigin](),
+        width,
+        0,
+        height,
+    )
+    assert_true(quantized.pixels == serial_quantized.pixels)
+    assert_true(
+        _quantized_image(graded, width, height, 1).pixels == quantized.pixels
+    )
+    # Both ends of the range are clamped, and every pixel is opaque.
+    assert_equal(quantized.pixels[0], 0)
+    assert_equal(quantized.pixels[3], 255)
+    var low = 0
+    var high = 0
+    for i in range(0, len(quantized.pixels), 4):
+        if quantized.pixels[i] == 0:
+            low += 1
+        if quantized.pixels[i] == 255:
+            high += 1
+        assert_equal(quantized.pixels[i + 3], 255)
+    assert_true(low > 0 and high > 0)
 
 
 def test_parallel_water_rows_equal_one_serial_pass() raises:
@@ -1694,6 +1916,23 @@ def test_parallel_water_rows_equal_one_serial_pass() raises:
     )
     for i in range(len(serial)):
         assert_equal(parallel[i], serial[i])
+
+
+def test_row_tasks_cut_the_rows_for_the_workers() raises:
+    # One worker is one task over every row: the serial pass.
+    assert_equal(row_tasks(1, 8, 100), 1)
+    assert_equal(row_tasks(1, 1, 0), 1)
+    # Each worker gets runs of rows, and never more tasks than rows.
+    assert_equal(row_tasks(4, 8, 100), 32)
+    assert_equal(row_tasks(4, 8, 20), 20)
+    assert_equal(row_tasks(4, 1, 100), 4)
+    assert_equal(row_tasks(4, 1, 0), 0)
+    # A huge count is clamped to the rows before it is multiplied.
+    assert_equal(row_tasks(1 << 61, 8, 50), 50)
+    # Zero or less means every logical core.
+    var cores = row_tasks(0, 1, 1000000)
+    assert_true(cores >= 1)
+    assert_equal(row_tasks(-3, 1, 1000000), cores)
 
 
 def test_one_worker_draws_and_composes_what_every_core_does() raises:

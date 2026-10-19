@@ -89,9 +89,6 @@ comptime LIB_DIRS = [
 """The top-level directories of the library."""
 
 comptime GPU = [
-    "render/gpu.mojo",
-    "render/gpu_vxgi.mojo",
-    "extensions/water/gpu.mojo",
     "tests/test_gpu.mojo",
     "tests/test_gpu_water.mojo",
     "tests/test_gpu_layout.mojo",
@@ -101,7 +98,8 @@ comptime GPU = [
     "bench/hair_frame_bench.mojo",
     "tools/gpu_status.mojo",
 ]
-"""The files that need MAX."""
+"""GPU entry points with explicit names in the Makefile. Library modules and
+new device suites follow the naming rules in `is_gpu`."""
 
 comptime BUILD_TOOLS = [
     "tools/affected.mojo",
@@ -209,9 +207,22 @@ def is_gpu(path: String) -> Bool:
         path: A repository path.
 
     Returns:
-        True for the files in `GPU`.
+        True for the Makefile's GPU library modules and entry points.
     """
-    return _contains(materialize[GPU](), path)
+    if _contains(materialize[GPU](), path):
+        return True
+    if library(path):
+        var name = String(path[byte = path.rfind("/") + 1 :])
+        return (
+            name == "gpu.mojo"
+            or name.startswith("gpu_")
+            or name.endswith("_gpu.mojo")
+        )
+    return (
+        path.startswith("tests/test_")
+        and path.endswith("_gpu.mojo")
+        and path.count("/") == 1
+    )
 
 
 def library(path: String) -> Bool:

@@ -121,7 +121,7 @@ Underwater absorption and ripple lookup follow the refracted sun direction. The 
 
 Make one with the pebble photograph, which it copies to the device once. Then use the same calls as `WaterScene`:
 
-- `draw(scene, width, height, view, sway, pitch)` draws a whole picture. Bloom, glare and grading run on the CPU.
+- `draw(scene, width, height, view, sway, pitch)` draws a whole picture. For a `FRAME`, the shading, the bloom and the grading run on the device, and only the bytes come back. The glare is one small FFT, and it runs on the CPU. The other views finish on the CPU.
 - `compose(scene, image, world, camera, water_level)` composes water into a rendered scene. It shades on the GPU before it changes the image, so a failed frame leaves the image whole. The depth test and the write run on the CPU.
 - `radiance(scene, look, width, height)` returns the linear radiance, three floats a pixel.
 
@@ -129,9 +129,15 @@ Each frame copies the surface, the ripple window and the caustics to the device.
 
 The GPU result is not bit-identical to the CPU result. The device fuses multiplies and adds, and its math functions round differently. A last-bit change can flip an anisotropic tap count, a mip clamp or a noise band. `tests/test_gpu_water.mojo` requires every value to be finite. It requires 98 percent of values within 1 percent of the CPU, 99.5 percent within 10 percent, and none beyond 2.
 
-See [the GPU water report](https://github.com/SethKitchen/ThreeMojo/blob/main/docs/validation/water-gpu-300.md). On that GPU a 1920 x 1080 shade takes about 41 to 76 milliseconds. A whole water frame takes about 255 milliseconds, because bloom, glare and grading take about 154 on the CPU. A composed scene takes about 247. The depth pass, the highlight and blur passes, and the grade and write run on every logical core.
+See [the GPU water report](https://github.com/SethKitchen/ThreeMojo/blob/main/docs/validation/water-gpu-300.md). It measured the GPU before the bloom and the grading moved to the device. On that GPU a 1920 x 1080 shade takes about 41 to 76 milliseconds. A whole water frame then took about 255 milliseconds, because bloom, glare and grading took about 154 on the CPU. A composed scene took about 247. In `compose`, the depth pass, the highlight and blur passes, and the grade and write still run on every logical core.
 
-On an Apple M4 Max with Metal, a 1920 x 1080 shade takes about 71 milliseconds. A whole water frame takes about 168, and a composed scene about 174.
+On an Apple M4 Max with Metal, a whole 1920 x 1080 frame of `draw` now takes about 29 milliseconds. A composed scene takes about 174. [C ABI and hosts](C-ABI-and-hosts#speed) has the frame times at other sizes.
+
+### Shade it in a browser
+
+A browser's GPU is not reachable from Mojo. So a `FrameUpload` in `extensions/water/upload.mojo` keeps the arrays that the shader reads. They are the surface, the ripple window and the caustics. It also keeps 23 frame values from `frame_values`. A web page copies them to its WebGPU device and runs `examples/capi/web/water.wgsl`, a port of the same shader. The glare's FFT stays in the module.
+
+`GpuWater` and the page use the same `frame_values`, so both shaders get the same numbers. `upload.mojo` imports no GPU library, so it builds for WebAssembly. See [C ABI and hosts](C-ABI-and-hosts#the-webgpu-path).
 
 ## Shader storage
 

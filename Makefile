@@ -77,7 +77,10 @@ FORMATTED    := $(SOURCES) $(COMPILE_FAIL)
 # imports `max.gpu.host`, and what imports it inherits the dependency. Leaving
 # them in the default lists meant CPU-only development could not be checked
 # without MAX, and the claim could rot without anything noticing.
-GPU_LIB_SOURCES  := render/gpu.mojo render/gpu_vxgi.mojo extensions/water/gpu.mojo
+# A library source that needs MAX is named gpu.mojo, gpu_*.mojo or *_gpu.mojo,
+# and a new one needs no edit here. Today they are render/gpu.mojo,
+# render/gpu_vxgi.mojo, extensions/water/gpu.mojo and window/capi_water_gpu.mojo.
+GPU_LIB_SOURCES  := $(foreach f,$(LIB_SOURCES),$(if $(filter gpu.mojo gpu_%.mojo %_gpu.mojo,$(notdir $(f))),$(f)))
 # The suites that import render/gpu.mojo but open no device: they flatten
 # vertices, state tables, textures and lights on the host and read the
 # layout back. They need MAX installed and no GPU, so CI runs them with
@@ -87,7 +90,9 @@ GPU_LIB_SOURCES  := render/gpu.mojo render/gpu_vxgi.mojo extensions/water/gpu.mo
 # assertions among two hundred device failures were not seen.
 GPU_HOST_TESTS   := tests/test_gpu_layout.mojo \
                     tests/test_gpu_volume_packing.mojo
-GPU_TESTS        := tests/test_gpu.mojo tests/test_gpu_water.mojo $(GPU_HOST_TESTS)
+# A suite that opens a device and is not listed above is named test_*_gpu.mojo.
+GPU_TESTS        := tests/test_gpu.mojo tests/test_gpu_water.mojo $(GPU_HOST_TESTS) \
+                    $(filter tests/test_%_gpu.mojo,$(TESTS))
 GPU_ENTRY_POINTS := $(GPU_TESTS) bench/raster_bench.mojo bench/water_gpu_bench.mojo bench/hair_frame_bench.mojo \
                     tools/gpu_status.mojo
 

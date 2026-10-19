@@ -9,9 +9,9 @@ SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
 [![mojo](https://img.shields.io/badge/Mojo-1.1.0-fe5c1c)](https://mojolang.org)
 [![coverage requirement](https://img.shields.io/badge/coverage_requirement-100%25%20line%20%7C%20branch%20%7C%20condition%20%7C%20MC%2FDC-blue)](https://github.com/SethKitchen/ThreeMojo/wiki/Coverage-tool)
 
-![A brick-textured cube, lit by a lamp, with the camera circling it](out/photo.png)
+![Three tomatoes on a slate, scanned as Gaussian splats, with the camera circling them](out/tomatoes.png)
 
-Rendered by `examples/photo.mojo`: a PNG decoded by this project, on a cube, seen from a camera that rides the scene graph.
+Rendered by `examples/tomatoes.mojo`: a scan of three tomatoes, 445,409 Gaussian splats, that this project decodes from an SPZ file and draws on the CPU. The scan is ["Scan was created on my DIY automated rig."](https://superspl.at/scene/2826d2c0) by [Grail](https://superspl.at/user?id=grail), under [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/). The scene is the one in the three.js example `webgpu_gaussian_splat`. The [C ABI and hosts](https://github.com/SethKitchen/ThreeMojo/wiki/C-ABI-and-hosts) page shows how to run it at a high frame rate in a window and in a browser.
 
 ThreeMojo is a port of [three.js](https://threejs.org) to [Mojo](https://mojolang.org). It renders 3D scenes in software on the CPU, or on a GPU, and writes PNG files. The core CPU renderer uses the Mojo standard library. The optional GPU backend needs MAX.
 

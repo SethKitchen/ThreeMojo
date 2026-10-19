@@ -174,3 +174,5 @@ $(call gallery,talking,talking)
 $(call gallery,expressions,expressions)
 # The CPU fallback upscaler beside the full-size render. It is not DLSS, and no image of it is tracked.
 $(call gallery,streamline,streamline)
+# Three tomatoes, scanned as 445,409 Gaussian splats, with the camera circling.
+$(call gallery,tomatoes,tomatoes,assets/tomatoes/tomatoes.v4.spz)
