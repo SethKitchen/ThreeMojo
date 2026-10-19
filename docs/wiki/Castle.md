@@ -36,7 +36,8 @@ The plan states which facts are documented and which numbers are estimated. No p
 | North wing | Parts date from the 15th century | Documented |
 | Present form | Neo-Gothic, mainly of the 19th century | Documented |
 | Gatehouse and keep | Designed by Félix Laureys, 1877 and 1878 | Documented |
-| Walls | Red brick | Documented |
+| Walls | Red brick; the right wing has a round keep, and the left wing stands on a base of yellow or white brick | Documented |
+| Enclosure | A square brick wall with gate turrets and battlements, protected with the castle on 22 September 1982 | Documented |
 | Gatehouse plan | Square, because the sources I could reach disagree on its plan | Estimated |
 | Stone dressings, dormers and window rows | From the aerial photograph | Estimated |
 | Dimensions of every part | From the aerial photograph, good to about 15 percent | Estimated |
@@ -54,6 +55,14 @@ The documented facts come from these pages:
 - [Brussels Environment, climate fact sheet](https://document.environnement.brussels/opac_css/elecfile/Clim_02) gives the Uccle rain normals of the Royal Meteorological Institute.
 
 No source that I could reach gives the height of a tower, the length of a wall or the size of the moat. I searched in Dutch, French and English. I could read only search summaries of these pages, not the pages themselves. The protection decree refers to a plan that I could not open. A survey or that plan would replace the estimates.
+
+The measured footprint is in three records. The container could not reach any of them. Direct fetches failed at name resolution, and the egress gateway denied the same hosts with 403.
+
+- The protection file DW000432 of Onroerend Erfgoed, with the decree and its plan.
+- [The plan record of the castle](https://plannen.onroerenderfgoed.be/plannen/1671), which gives boundary geometry in Belgian Lambert 72 (EPSG:31370).
+- The Flemish building footprints of Geopunt, which have the outline of every wing and tower.
+
+To use them, allow the hosts in the environment settings and ask for a second run. Read the outlines, write them as a survey JSON file and pass that file to both examples.
 
 ## Replace the estimates with a survey
 
