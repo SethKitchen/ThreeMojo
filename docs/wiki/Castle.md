@@ -56,6 +56,8 @@ The documented facts come from these pages:
 
 No source that I could reach gives the height of a tower, the length of a wall or the size of the moat. I searched in Dutch, French and English. I could read only search summaries of these pages, not the pages themselves. The protection decree refers to a plan that I could not open. A survey or that plan would replace the estimates.
 
+The sources also disagree on the shape of the building. One inventory entry says it is an inverted T. Another says it is a semicircle with the buildings on the east side. The plan follows the photograph: two ranges and a gatehouse around a courtyard. A survey would settle the layout as well as the sizes.
+
 The measured footprint is in three records. The container could not reach any of them. Direct fetches failed at name resolution, and the egress gateway denied the same hosts with 403.
 
 - The protection file DW000432 of Onroerend Erfgoed, with the decree and its plan.
