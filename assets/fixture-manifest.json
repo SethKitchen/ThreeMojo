@@ -630,6 +630,48 @@
       }
     },
     {
+      "family": "sog",
+      "generator": "assets/sog/make_sog.mjs",
+      "generator_sha256": "60b6ccfa83aaebc2833d7b6763b4db7580ff97d0dffcccc42f11bec6e5d43625",
+      "three_version": null,
+      "version_evidence": "Generator header: @playcanvas/splat-transform 3.10.1 writes each SOG file and reads it back into a PLY file.",
+      "cwd": "assets/sog",
+      "commands": [
+        "npm install --no-save --package-lock=false @playcanvas/splat-transform@3.10.1",
+        "node make_sog.mjs ."
+      ],
+      "notes": [
+        "Artifact hashes cover the committed family inputs and expected results. They do not prove a fresh regeneration matches.",
+        "The harmonics palette's k-means starts at random, so a fresh run writes other palettes. The reader is checked against the PLY files that splat-transform wrote from the same SOG files."
+      ],
+      "artifacts": {
+        "assets/sog/flat.sog": "4914b22d03df814ce596792bbc690e35db2caef103a1a0816ec9433771bd188d",
+        "assets/sog/flat/means_l.webp": "a1ac99f6f49db3397a8a60e2d4efd41669f8ab495428acca9be324d49adca951",
+        "assets/sog/flat/means_u.webp": "efc9253f19a89cbd684af91b4aa00ccc4c681791ba0bae942fefe2099521027b",
+        "assets/sog/flat/meta.json": "e797b89a07558acdef067cb96a125d1cdbd2294c84d11d4dfb0eef13ea5bcef3",
+        "assets/sog/flat/quats.webp": "6a3a1ccac85d69d62131843a51b38b65896e7f79d95cb359e74adf863dffd9b8",
+        "assets/sog/flat/scales.webp": "45993c163db238f12103f49cdd938e6ea0e8319f593a117239af2dfa40fb30ff",
+        "assets/sog/flat/sh0.webp": "e634eb6b9ed614b3f8e8499d5bf735a650a7301de0c1f5ec6c5027c3ec2c322d",
+        "assets/sog/flat_folder_restored.ply": "87b7cabce7b6c7c900405e4b43f7c94fb75b6403b3c4aeda47acbc379422d86f",
+        "assets/sog/flat_restored.ply": "87b7cabce7b6c7c900405e4b43f7c94fb75b6403b3c4aeda47acbc379422d86f",
+        "assets/sog/sh1.sog": "be8d38466943f6537d3661b8d781c600068df1438eedd54c3f87549639c5e987",
+        "assets/sog/sh1_restored.ply": "34fb55e2c395ffb731d65de38da9c4cbdb31c22329d8cfc1ded025c32c4d9b57",
+        "assets/sog/sh2.sog": "c2c17fc45df9d370251f135cc7706d11aae1ff3d54f55c026152e5ecd82034c3",
+        "assets/sog/sh2_restored.ply": "db1f0b58aceb43a0fba14a4c700af6dac5a03592447fb4303b080e826a262631",
+        "assets/sog/sh3.sog": "c605c86c5853e60b1619632d578534837e0dca42a9dd263733bcf0333d672337",
+        "assets/sog/sh3/means_l.webp": "9d78e6690bf6ab5e4b5bf16776ebbbd67f144d63f0f255ab877aacf2fb2ed8b4",
+        "assets/sog/sh3/means_u.webp": "b6c53c8739de5dc16fc35eeb95ee400a717a0899a77435a117e8d36eacbae511",
+        "assets/sog/sh3/meta.json": "5c2359f6ac8bf9298659d766323c713edd26eedbe58a62ff7cdd5649bfd409f9",
+        "assets/sog/sh3/quats.webp": "feb4782bf4a31f84d8f198051778f59f1df9d648a7f1e4a946027558bfaaf9a2",
+        "assets/sog/sh3/scales.webp": "2a2efb2fdb5d334640e27696e1a853394536ee4733eade6cfb4c6ec6432ccb3c",
+        "assets/sog/sh3/sh0.webp": "812ba9fe775b5141daecb5e7d9593137b66a0ba51a8c8a47bcb322c63dc7ac7e",
+        "assets/sog/sh3/shN_centroids.webp": "8db72581cc51d9de0578e77191649d134c0cdefb590ca2d529b9a00a5bbed190",
+        "assets/sog/sh3/shN_labels.webp": "27b5f340c5fc548a3fe226c6cb7a23997a4fd4b159f585c6b2a5951dea0e3054",
+        "assets/sog/sh3_folder_restored.ply": "4b59ce54eb85646f6c537b0b9122edf916fee77cb33f31aa88b5c07851ab4779",
+        "assets/sog/sh3_restored.ply": "e9b5a10bff69c50d487408f550a6ec888cc3b9859ecdfbf31d9167113b750673"
+      }
+    },
+    {
       "family": "sort",
       "generator": "assets/sort/three_sort.mjs",
       "generator_sha256": "bc51494a80275390f5eab5bbf22332e75576ea0ad8e215e37c7471a8ab78acfd",

@@ -21,6 +21,7 @@ Get a task done.
 - [Measure coverage](How-to-measure-coverage)
 - [Measure examples](How-to-measure-examples)
 - [Add a feature](How-to-add-a-feature)
+- [Add a scanned building](How-to-add-a-scanned-building)
 - [Write documentation](How-to-write-documentation)
 
 ## Reference
@@ -99,6 +100,10 @@ Look something up.
   - [Frame analysis](Frame-analysis)
   - [Shell analysis](Shell-analysis)
   - [Building energy](Building-energy)
+  - [Construction kits](Construction-kits)
+  - [Bearing walls](Bearing-walls)
+  - [Scanned buildings](Scanned-buildings)
+  - [SOG files](SOG-files)
 - [CARLA](CARLA)
   - [CARLA geometry](CARLA-geometry)
   - [CARLA maps](CARLA-maps)
@@ -157,6 +162,7 @@ Understand why.
 - [Why the CPU renderer uses bands](Why-the-CPU-renderer-uses-bands)
 - [Why the PNG reader checks structure](Why-the-PNG-reader-checks-structure)
 - [Why extensions sit beside the port](Why-extensions-sit-beside-the-port)
+- [Why scans become building models](Why-scans-become-building-models)
 - [The CUDA teardown hang](The-CUDA-teardown-hang)
 - [The Mojo compiler hang](The-Mojo-compiler-hang)
 

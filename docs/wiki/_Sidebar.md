@@ -11,6 +11,7 @@
 - [Coverage](How-to-measure-coverage)
 - [Measure examples](How-to-measure-examples)
 - [Add a feature](How-to-add-a-feature)
+- [Add a scanned building](How-to-add-a-scanned-building)
 - [Write documentation](How-to-write-documentation)
 
 **Reference**
@@ -87,6 +88,10 @@
   - [Frame analysis](Frame-analysis)
   - [Shell analysis](Shell-analysis)
   - [Building energy](Building-energy)
+  - [Construction kits](Construction-kits)
+  - [Bearing walls](Bearing-walls)
+  - [Scanned buildings](Scanned-buildings)
+  - [SOG files](SOG-files)
 - [CARLA](CARLA)
   - [CARLA geometry](CARLA-geometry)
   - [CARLA maps](CARLA-maps)
@@ -142,5 +147,6 @@
 - [Bands and threads](Why-the-CPU-renderer-uses-bands)
 - [PNG structure](Why-the-PNG-reader-checks-structure)
 - [Extensions beside the port](Why-extensions-sit-beside-the-port)
+- [Scans as building models](Why-scans-become-building-models)
 - [CUDA teardown hang](The-CUDA-teardown-hang)
 - [Mojo compiler hang](The-Mojo-compiler-hang)

@@ -1,0 +1,46 @@
+{
+  "format": 1,
+  "about": "Scanned buildings as Gaussian splats, for extensions/building/scan. Each entry is one SuperSplat scene under CC BY 4.0 or CC0. The files are downloaded into .cache/building-scans/ by tools/building_scans.mojo; an entry with no files is resolved from its scene page by 'fetch --pin'. The kit, the use and the frame say how extensions/building/scan reads the scan.",
+  "entries": [
+    {
+      "id": "reading-room",
+      "title": "Reading Room (No Lidar， Only Photos)",
+      "author": "ethan3111",
+      "author_url": "https://superspl.at/user?id=ethan3111",
+      "license": "CC-BY-4.0",
+      "source": "https://superspl.at/scene/9d370db9",
+      "scene": "9d370db9",
+      "provenance": "The scene page says the room was captured from photos only, with no lidar, and trained in MipMap Desktop. Its listing advertised a 62.65 MB CC BY 4.0 download on 2026-10-20. A comment on the page says the scene is larger than one unit to the meter, so the scale stays declared. Confirm the author and the license on the scene page before you publish a render.",
+      "changes": "None. ThreeMojo reads the published SOG files as they are.",
+      "kit": "concrete",
+      "use": "meeting",
+      "frame": {
+        "up": "-y",
+        "north": "-z",
+        "unit_m": 1,
+        "scale": "declared"
+      },
+      "files": []
+    },
+    {
+      "id": "studio-11",
+      "title": "Studio 11",
+      "author": "milanoski",
+      "author_url": "https://superspl.at/user?id=milanoski",
+      "license": "CC-BY-4.0",
+      "source": "https://superspl.at/scene/c37cb759",
+      "scene": "c37cb759",
+      "provenance": "The scene page says this small furnished studio apartment was made in Unreal Engine 5, reconstructed with the Unreal to Colmap plugin and trained in LichtFeld Studio, so it is a synthetic scan. Its listing advertised a 54.69 MB CC BY 4.0 download on 2026-10-20. Confirm the author and the license on the scene page before you publish a render.",
+      "changes": "None. ThreeMojo reads the published SOG files as they are.",
+      "kit": "concrete",
+      "use": "living",
+      "frame": {
+        "up": "-y",
+        "north": "-z",
+        "unit_m": 1,
+        "scale": "declared"
+      },
+      "files": []
+    }
+  ]
+}

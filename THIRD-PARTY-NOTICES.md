@@ -1013,3 +1013,49 @@ AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
 LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
+
+## splat-transform
+
+<https://github.com/playcanvas/splat-transform>
+
+`extensions/scan/sog.mojo` reads the SOG format as `readSog` in
+`@playcanvas/splat-transform` 3.10.1 reads it, and decodes each field with
+the same arithmetic. `assets/sog/make_sog.mjs` runs that package to write
+the SOG test files. splat-transform is distributed under the MIT License,
+reproduced below.
+
+```
+Copyright (c) 2011-2026 PlayCanvas Ltd.
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+```
+
+## Scanned buildings
+
+The scanned buildings are not in the repository. `tools/building_scans.mojo`
+downloads them from SuperSplat into `.cache/building-scans/`.
+`assets/building_scans/manifest.json` records each scan's author, scene
+page, license and changes. The tool refuses any license other than CC BY 4.0
+and CC0 1.0. Each scan is separate from ThreeMojo's code.
+
+Credit the author, link the scene page and the license, and say what you
+changed, when you share a scan or a render that uses it. The
+[asset credit](assets/building_scans/ATTRIBUTION.md) holds the wording, and
+`building_scans credits` prints it for the scans in a cache. ThreeMojo's code
+license does not replace or restrict these asset licenses.
