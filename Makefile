@@ -919,11 +919,17 @@ clean-images:
 # The #333 oracle modules each copy whole roots and replay proofs; one after
 # another they exceed a CI job's time limit, so they run a module per process.
 # TOOLS_SHARD=I/N splits the oracle tests over N runners; the first runner
-# also runs the two quick discoveries and the read-only spiral check.
+# also runs the read-only spiral and repository checks.
 TOOLS_SHARD ?=
+# Serial discovery adds about 94 minutes on macOS to the first oracle shard,
+# which already takes about 138 minutes before its final checks. Put discovery
+# on the shorter fifth shard (about 80 minutes) without changing any tests or
+# deadlines. With fewer than five shards retain owner 1; unsharded runs run all.
+TOOLS_SERIAL_SHARD := $(if $(filter 1 2 3 4,$(word 2,$(subst /, ,$(TOOLS_SHARD)))),1,5)
+
 test-tools:
-	@$(if $(filter-out 1/%,$(TOOLS_SHARD)),:,python3 -m unittest discover -s tools -p 'test_*.py')
-	@$(if $(filter-out 1/%,$(TOOLS_SHARD)),:,python3 -m unittest discover -s assets/carla/tools -p 'test_*.py')
+	@$(if $(filter-out $(TOOLS_SERIAL_SHARD)/%,$(TOOLS_SHARD)),:,python3 -m unittest discover -s tools -p 'test_*.py')
+	@$(if $(filter-out $(TOOLS_SERIAL_SHARD)/%,$(TOOLS_SHARD)),:,python3 -m unittest discover -s assets/carla/tools -p 'test_*.py')
 	@python3 tools/parallel_unittest.py --jobs $(JOBS) $(if $(TOOLS_SHARD),--shard $(TOOLS_SHARD)) tools/carla_lane_oracle
 	@$(if $(filter-out 1/%,$(TOOLS_SHARD)),:,python3 tools/carla_lane_oracle/spiral_moments.py --check)
 	@$(if $(filter-out 1/%,$(TOOLS_SHARD)),:,$(MAKE) --no-print-directory repository-check)
