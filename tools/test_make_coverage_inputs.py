@@ -5,6 +5,7 @@
 import os
 import hashlib
 import inspect
+import json
 import shutil
 from pathlib import Path
 import subprocess
@@ -89,6 +90,40 @@ class CoverageInputTests(unittest.TestCase):
         return subprocess.run(['make', '-s', *arguments, 'coverage-instrument'],
                               cwd=self.root, text=True, capture_output=True,
                               env=self.environment, timeout=5)
+
+    def test_generation_order_is_independent_of_filesystem_enumeration(self):
+        # Full CI uses find's filesystem order, unlike the sorted scoped plan.
+        # Exercise the actual Make recipe, not a separately sorted test model.
+        names = ['math/measured.mojo', 'math/unmeasured.mojo']
+        contents = {name: (self.root / name).read_bytes() for name in names}
+        receipts = []
+        for order in (names, list(reversed(names))):
+            for name in names:
+                (self.root / name).unlink()
+            for name in order:
+                (self.root / name).write_bytes(contents[name])
+            found = subprocess.run(['find', 'math', '-name', '*.mojo'],
+                                   cwd=self.root, check=True, text=True,
+                                   capture_output=True, timeout=5).stdout.splitlines()
+            self.assertEqual(set(found), set(names))
+            # Some filesystems already return canonical order. Supplying each
+            # known order also covers that platform without a flaky premise.
+            result = self.make('COVERED=' + ' '.join(order))
+            self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+            build = self.root / 'build'
+            checkpoint = json.loads((build / 'generation-inputs.json').read_text())
+            self.assertEqual(checkpoint['sources'], sorted(names))
+            self.assertEqual((build / 'manifest.txt').read_text(),
+                             ''.join('L ' + name.removesuffix('.mojo') + ' 1\n'
+                                     for name in sorted(names)))
+            receipts.append((build / 'loop-proofs.json').read_bytes())
+        self.assertEqual(receipts[0], receipts[1])
+
+    def test_duplicate_measurement_sources_still_fail(self):
+        result = self.make('COVERED=math/measured.mojo math/measured.mojo')
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn('distinct source identities', result.stdout + result.stderr)
+        self.assertFalse((self.root / 'build/loop-proofs.json').exists())
 
     def test_import_helpers_copy_without_expanding_measurement(self):
         result = self.make()

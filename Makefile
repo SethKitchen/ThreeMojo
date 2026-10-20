@@ -623,12 +623,16 @@ coverage-instrument:
 ifeq ($(strip $(COVERED)),)
 	@echo "No measured module is affected; coverage not measured."
 else
-	@for f in $(COVERED); do mkdir -p "$(COV_DIR)/$$(dirname $$f)"; done
+	@# Full CI discovers sources with find; its filesystem order is not stable.
+	@# Keep duplicate-input rejection before make's canonical sort deduplicates.
+	@[ "$(words $(COVERED))" -eq "$(words $(sort $(COVERED)))" ] || \
+	  { echo "Coverage requires distinct source identities."; exit 1; }
+	@for f in $(sort $(COVERED)); do mkdir -p "$(COV_DIR)/$$(dirname $$f)"; done
 	@python3 tools/coverage_loop_proofs.py begin --root . --build $(COV_DIR) \
 	  --compiler=$(call quote,$(TOOLCHAIN)) --flags=$(call quote,$(MOJOFLAGS)) \
-	  --mojo=$(call quote,$(MOJO)) --sources $(COVERED)
+	  --mojo=$(call quote,$(MOJO)) --sources $(sort $(COVERED))
 	@$(call run,$(MOJO) run $(MOJOFLAGS) coverage/build_cli.mojo \
-	  $(COV_DIR) $(COVERED)); \
+	  $(COV_DIR) $(sort $(COVERED))); \
 	[ $$rc -eq 0 ] || exit 1
 	@# Unmeasured modules are copied through unchanged. Without them the
 	@# build tree is an incomplete package and imports fail to resolve,
