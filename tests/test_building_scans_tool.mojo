@@ -20,7 +20,9 @@ from std.testing import (
     assert_true,
 )
 
+from extensions.scan.files import read_scan
 from extensions.scan.sog import read_sog
+from std.os.path import realpath
 from test_scratch import TestScratch, temporary_path
 from tests._carla_tool_files import get_text, put, put_bytes, runs, stub_curl
 from tools._building_scans import (
@@ -139,11 +141,7 @@ def test_the_repository_manifest_keeps_the_rules() raises:
     for entry in entries:
         var license = doc.text(doc.get(entry, "license"))
         assert_true(license == "CC-BY-4.0" or license == "CC0-1.0")
-        assert_true(
-            doc.text(doc.get(entry, "source")).startswith(
-                "https://superspl.at/scene/"
-            )
-        )
+        assert_true(doc.text(doc.get(entry, "source")).startswith("https://"))
 
 
 def test_a_pinning_fetch_resolves_downloads_and_records() raises:
@@ -398,7 +396,11 @@ def test_the_manifest_rules() raises:
     )
     _refused(
         _manifest(good.replace('"scene": "abc123"', '"scene": "a/b"')),
-        "scene must be a scene id",
+        "scene must be a scene id, or null",
+    )
+    _refused(
+        _manifest(good.replace('"scene": "abc123"', '"scene": 3')),
+        "scene must be a non-empty string",
     )
     _refused(_manifest(_entry("x", frame="3")), "frame must be an object")
     _refused(
@@ -512,7 +514,44 @@ def test_the_manifest_rules() raises:
         _manifest(_entry("x", files="[" + file + ", " + file + "]")),
         "duplicate path 'x/a.webp'",
     )
-    var hosted = file.replace('"file:///a.webp"', "null").replace(
+    var meta = file.replace('"image"', '"meta"').replace("a.webp", "m.json")
+    var splat = file.replace('"image"', '"splat"').replace("a.webp", "s.ply")
+    _refused(
+        _manifest(_entry("x", files="[" + file + "]")),
+        "files must be one splat file, or one meta file and its images",
+    )
+    _refused(
+        _manifest(_entry("x", files="[" + meta + ", " + splat + "]")),
+        "files must be one splat file",
+    )
+    _refused(
+        _manifest(
+            _entry(
+                "x",
+                files="["
+                + splat
+                + ", "
+                + splat.replace("s.ply", "t.ply")
+                + "]",
+            )
+        ),
+        "files must be one splat file",
+    )
+    for files in [
+        "[" + meta + ", " + file + "]",
+        "[" + splat + "]",
+    ]:
+        var valid = read_json_text(
+            List[UInt8](
+                _manifest(
+                    _entry("x", files=files).replace(
+                        '"scene": "abc123"', '"scene": null'
+                    )
+                ).as_bytes()
+            )
+        )
+        check_scan_manifest(valid, valid.root)
+    var hosted = splat.replace('"file:///s.ply"', "null").replace(
         'null, "path"', '"' + "0" * 64 + '", "path"'
     )
     var doc = read_json_text(
@@ -520,7 +559,7 @@ def test_the_manifest_rules() raises:
     )
     check_scan_manifest(doc, doc.root)
     # A file put in the cache by hand has no URL, and no sum until pinned.
-    var placed = file.replace('"file:///a.webp"', "null")
+    var placed = splat.replace('"file:///s.ply"', "null")
     doc = read_json_text(
         List[UInt8](_manifest(_entry("x", files="[" + placed + "]")).as_bytes())
     )
@@ -561,6 +600,47 @@ def test_a_file_put_in_the_cache_by_hand_is_pinned() raises:
     var item = doc.item(doc.get(entries_of(doc, doc.root)[0], "files"), 0)
     assert_equal(doc.text(doc.get(item, "sha256")), _source_sum("meta.json"))
     assert_true("kept  flat-room/meta.json" in site.run(["fetch"]).output)
+    assert_equal(runs(site.net), 0)
+
+
+def test_a_scan_in_one_file_is_fetched_and_read() raises:
+    """A `splat` file is pinned, its path is the scan's, and it reads."""
+    var site = _Site("splat")
+    var source = "assets/compressed_ply/sh1.compressed.ply"
+    var record = (
+        '[{"role": "splat", "url": "file://'
+        + realpath(source)
+        + '", "sha256": null, "path": "flat-room/sh1.compressed.ply"}]'
+    )
+    put(
+        site.manifest,
+        _manifest(
+            _entry("flat-room", files=record).replace(
+                '"scene": "abc123"', '"scene": null'
+            )
+        ),
+    )
+    var pinned = site.run(["fetch", "--pin"])
+    assert_equal(pinned.status, 0)
+    assert_true("pinned  flat-room/sh1.compressed.ply" in pinned.output)
+    var path = site.cache + "/flat-room/sh1.compressed.ply"
+    assert_true(path in site.run(["status"]).output)
+    assert_equal(read_scan(path).geometry.count(), 30)
+    assert_equal(runs(site.net), 0)
+
+
+def test_an_entry_with_no_files_and_no_scene_is_an_error() raises:
+    """There is no page to resolve it from."""
+    var site = _Site("sceneless")
+    put(
+        site.manifest,
+        _manifest(
+            _entry("flat-room").replace('"scene": "abc123"', '"scene": null')
+        ),
+    )
+    var outcome = site.run(["fetch", "--pin"])
+    assert_equal(outcome.status, 1)
+    assert_true("no files and no scene page" in outcome.errors)
     assert_equal(runs(site.net), 0)
 
 

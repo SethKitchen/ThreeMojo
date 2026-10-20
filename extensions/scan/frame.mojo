@@ -154,7 +154,7 @@ comptime SCALE_DECLARED = ScaleSource(0)
 comptime SCALE_MEASURED = ScaleSource(1)
 """A person measured a length in the place and in the scan."""
 comptime SCALE_ASSUMED = ScaleSource(2)
-"""A storey height was assumed and matched to the scan."""
+"""A length was assumed, such as a storey height or a published size, and matched to the scan."""
 
 
 def scale_source(name: String) raises -> ScaleSource:

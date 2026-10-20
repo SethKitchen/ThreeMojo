@@ -10,7 +10,7 @@ The animals subject ports procedural-animals: 24 species sculpted as distance fi
 
 The building subject generates buildings for engineering analysis and for games from one canonical model. It has shared numerics, a cell complex, the building model, IFC exchange and procedural towers and interiors. Frame, shell and energy analysis read the same model. See [Why buildings have one canonical model](Why-buildings-have-one-canonical-model).
 
-The scan subject reads splat scans of real places from SOG files and puts them in meters with z up. It fills an occupancy grid that gives a static collider. The building subject fits a building model of a reusable construction kit to the grid, and takes the gravity load down its walls. A pinned manifest downloads the scans. See [Scanned buildings](Scanned-buildings).
+The scan subject reads splat scans of real places in SOG, compressed PLY and the other splat formats. It puts them in meters with z up. It fills an occupancy grid that gives a static collider, and cuts the grid into parts to weigh, simulate and use again. The building subject fits a building model of a reusable construction kit to the grid, and takes the gravity load down its walls. A pinned manifest downloads the scans. See [Scanned buildings](Scanned-buildings) and [Scan parts](Scan-parts).
 
 The geotech subject analyzes earth-retaining walls: earth and water pressure, LRFD stability and slip circles. The visual subject draws engineering results with meshes, labels and textures. See [Retaining walls](Retaining-walls) and [Engineering views](Engineering-views).
 

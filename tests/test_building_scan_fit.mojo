@@ -190,7 +190,7 @@ def test_an_outside_scan_is_one_storey_to_the_top() raises:
         fit.building.gross_floor_area().to(SQUARE_METER), 4.3 * 5.3, atol=1e-6
     )
     assert_true("outside view" in fit.notes[1])
-    assert_true("assumed storey height" in fit.notes[2])
+    assert_true("assumed length" in fit.notes[2])
 
 
 def test_a_fit_needs_a_valid_kit_scale_and_storeys() raises:

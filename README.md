@@ -585,6 +585,12 @@ Procedural buildings for engineering analysis and for games share one canonical 
 - [x] [Bearing walls](https://github.com/SethKitchen/ThreeMojo/wiki/Bearing-walls): the gravity load down a building's walls, storey by storey, and the mass of each element [#784](https://github.com/SethKitchen/ThreeMojo/issues/784)
 - [x] [Scanned buildings](https://github.com/SethKitchen/ThreeMojo/wiki/Scanned-buildings): CC BY splat scans from SuperSplat fitted as building models, with static colliders and a pinned download tool [#782](https://github.com/SethKitchen/ThreeMojo/issues/782)
 - [x] [SOG files](https://github.com/SethKitchen/ThreeMojo/wiki/SOG-files): PlayCanvas's compressed Gaussian splats, read as splat-transform 3.10.1 reads them [#781](https://github.com/SethKitchen/ThreeMojo/issues/781)
+- [x] [Compressed PLY files](https://github.com/SethKitchen/ThreeMojo/wiki/Compressed-PLY-files): SuperSplat's packed splats, bit-identical to splat-transform 3.10.1, and one reader for every scan format [#785](https://github.com/SethKitchen/ThreeMojo/issues/785)
+- [x] [Splats on every core](https://github.com/SethKitchen/ThreeMojo/wiki/Gaussian-splats#the-draw): the CPU sorts, projects and fills splats on all cores, and fills only each splat's disc. The picture is the same to the bit [#787](https://github.com/SethKitchen/ThreeMojo/issues/787)
+- [x] [Splat level of detail](https://github.com/SethKitchen/ThreeMojo/wiki/Splat-level-of-detail): merged splats draw a large scan in real time on the CPU [#790](https://github.com/SethKitchen/ThreeMojo/issues/790)
+- [x] [Scanned buildings on the GPU](https://github.com/SethKitchen/ThreeMojo/wiki/C-ABI-and-hosts): the C ABI splat app draws a scanned building with WebGPU or Metal. Its WebAssembly module builds on Linux [#788](https://github.com/SethKitchen/ThreeMojo/issues/788)
+- [x] [Scan parts](https://github.com/SethKitchen/ThreeMojo/wiki/Scan-parts): a scanned place cut into parts with mass, inertia, bearing pressure and tip angle. Each is a rigid body and splats to place again [#786](https://github.com/SethKitchen/ThreeMojo/issues/786)
+- [x] [Scan parts on terrain](https://github.com/SethKitchen/ThreeMojo/wiki/Scan-parts#find-the-ground-of-a-slope): a hillside's ground as a surface. A scanned site cuts into buildings that bear on the slope [#789](https://github.com/SethKitchen/ThreeMojo/issues/789)
 
 ### Earth retaining
 

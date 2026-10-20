@@ -13,76 +13,27 @@ file: the same centers, covariances, color bytes and harmonics bytes.
 Every way a text can be wrong is made from a real text and refused.
 """
 
-from core.gaussian_splat_utils import GaussianSplatGeometry
+from extensions.scan.scene import SPLAT_ANTIALIASED, SPLAT_DEFAULT
 from extensions.scan.sog import (
-    SOG_2DGS,
-    SOG_ANTIALIASED,
-    SOG_DEFAULT,
     SogFile,
-    SogModel,
     _quaternion,
     parse_sog,
     parse_sog_bundle,
     read_sog,
     sog_file_names,
-    sog_model,
 )
 from loaders.gaussian_splat_ply import read_gaussian_splat_ply
 from loaders.zip import ZIP_STORED, ZipEntry, zip_archive
 from std.pathlib import Path
+from tests._splat_same import same_bytes, same_floats, same_splats
 from std.testing import (
     TestSuite,
     assert_equal,
-    assert_false,
     assert_raises,
     assert_true,
 )
 
 comptime DIR = "assets/sog/"
-
-
-def _same_floats(
-    found: List[Float32], expected: List[Float32], what: String
-) raises:
-    """Assert two float arrays are equal, naming the first difference."""
-    assert_equal(len(found), len(expected), what + " length")
-    for index in range(len(found)):
-        if found[index] != expected[index]:
-            raise Error(
-                what
-                + " differ at "
-                + String(index)
-                + ": "
-                + String(found[index])
-                + " and "
-                + String(expected[index])
-            )
-
-
-def _same_bytes(found: List[UInt8], expected: List[UInt8], what: String) raises:
-    """Assert two byte arrays are equal, naming the first difference."""
-    assert_equal(len(found), len(expected), what + " length")
-    for index in range(len(found)):
-        if found[index] != expected[index]:
-            raise Error(
-                what
-                + " differ at "
-                + String(index)
-                + ": "
-                + String(found[index])
-                + " and "
-                + String(expected[index])
-            )
-
-
-def _same(found: GaussianSplatGeometry, expected: GaussianSplatGeometry) raises:
-    """Assert two geometries hold the same splats."""
-    _same_floats(found.centers, expected.centers, "centers")
-    _same_floats(found.covariances, expected.covariances, "covariances")
-    _same_bytes(found.colors, expected.colors, "colors")
-    _same_bytes(found.sh1, expected.sh1, "band 1")
-    _same_bytes(found.sh2, expected.sh2, "band 2")
-    _same_bytes(found.sh3, expected.sh3, "band 3")
 
 
 def _folder(name: String) raises -> List[SogFile]:
@@ -137,18 +88,18 @@ def test_every_bundle_makes_the_splats_of_its_restored_ply() raises:
     """Each bundle, read here, holds what splat-transform read from it."""
     for name in ["sh3", "sh2", "sh1", "flat"]:
         var scene = read_sog(DIR + name + ".sog")
-        _same(
+        same_splats(
             scene.geometry,
             read_gaussian_splat_ply(DIR + name + "_restored.ply"),
         )
-        assert_true(scene.model == SOG_DEFAULT)
+        assert_true(scene.model == SPLAT_DEFAULT)
 
 
 def test_every_folder_makes_the_splats_of_its_restored_ply() raises:
     """A folder scene is read from the files beside its text."""
     for name in ["sh3", "flat"]:
         var scene = read_sog(DIR + name + "/meta.json")
-        _same(
+        same_splats(
             scene.geometry,
             read_gaussian_splat_ply(DIR + name + "_folder_restored.ply"),
         )
@@ -186,31 +137,18 @@ def test_a_text_names_its_images() raises:
     assert_equal(full[6], "shN_labels.webp")
 
 
-def test_the_models_have_their_names() raises:
-    """Each model reads back from its name, and no other name is one."""
-    assert_equal(SOG_DEFAULT.name(), "default")
-    assert_equal(SOG_ANTIALIASED.name(), "antialiased")
-    assert_equal(SOG_2DGS.name(), "2dgs")
-    assert_equal(SogModel(3).name(), "unknown")
-    assert_false(SogModel(-1).is_valid())
-    assert_true(sog_model("antialiased") == SOG_ANTIALIASED)
-    assert_true(sog_model("2dgs") == SOG_2DGS)
-    with assert_raises(contains="unknown model 'mip'"):
-        _ = sog_model("mip")
-
-
 def test_a_text_can_name_its_model() raises:
     """A `model` entry is kept with the splats."""
     var meta = _meta("flat").replace(
         '"count":', '"model":"antialiased","count":'
     )
     var scene = parse_sog(meta, _folder("flat"))
-    assert_true(scene.model == SOG_ANTIALIASED)
-    _same(
+    assert_true(scene.model == SPLAT_ANTIALIASED)
+    same_splats(
         scene.geometry,
         read_gaussian_splat_ply(DIR + "flat_folder_restored.ply"),
     )
-    with assert_raises(contains="unknown model"):
+    with assert_raises(contains="unknown splat model"):
         _ = parse_sog(
             _meta("flat").replace('"count":', '"model":"mip","count":'),
             _folder("flat"),
@@ -332,8 +270,8 @@ def test_no_bands_keeps_no_harmonics() raises:
     )
     assert_equal(scene.geometry.spherical_harmonics_degree(), 0)
     var plain = read_sog(DIR + "sh3/meta.json")
-    _same_floats(scene.geometry.centers, plain.geometry.centers, "centers")
-    _same_bytes(scene.geometry.colors, plain.geometry.colors, "colors")
+    same_floats(scene.geometry.centers, plain.geometry.centers, "centers")
+    same_bytes(scene.geometry.colors, plain.geometry.colors, "colors")
 
 
 def test_a_label_past_the_palette_gives_zero_coefficients() raises:

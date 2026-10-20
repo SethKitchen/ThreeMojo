@@ -13,9 +13,10 @@ reads them, and refuses an entry whose kit, use or frame
 `extensions.building` and `extensions.scan` would refuse.
 
 A scan's files are in the cache under its id: `.cache/building-scans/`,
-the id, and `meta.json` beside its images. `scene` gives that path when
-the text is there. The catalog does not check the files' sums; the tool's
-`verify` does.
+the id, and either its one `splat` file or `meta.json` beside its images.
+`ScanEntry.file` is that path in the cache, and `scene` gives the whole
+path when the file is there. `extensions.scan.files.read_scan` reads it.
+The catalog does not check the files' sums; the tool's `verify` does.
 """
 
 from extensions.building.kinds import SpaceUse
@@ -75,6 +76,8 @@ struct ScanEntry(Copyable, Movable):
     """What a fitted model's spaces are used for."""
     var frame: ScanFrame
     """How the scan's coordinates map to the building's."""
+    var file: String
+    """The file that `read_scan` reads, in the cache: the `splat` file's path, or the id and `/meta.json`."""
 
 
 def _string(document: JsonDocument, node: Int, key: String) raises -> String:
@@ -94,6 +97,31 @@ def _string(document: JsonDocument, node: Int, key: String) raises -> String:
     return document.string(
         document.required(node, key, "Scan catalog: an entry has no " + key)
     )
+
+
+def _scan_file(document: JsonDocument, entry: Int, id: String) raises -> String:
+    """Return the file that reads an entry's scan, in the cache.
+
+    Args:
+        document: The manifest.
+        entry: The entry.
+        id: Its id.
+
+    Returns:
+        The path of its `splat` file, or the id and `/meta.json` when it
+        has none or no `files`.
+
+    Raises:
+        Error: If a file has no role or no path.
+    """
+    var files = document.get(entry, "files")
+    if files == NO_NODE:
+        return id + "/meta.json"
+    for index in range(document.length(files)):
+        var item = document.at(files, index)
+        if _string(document, item, "role") == "splat":
+            return _string(document, item, "path")
+    return id + "/meta.json"
 
 
 def _frame(document: JsonDocument, entry: Int) raises -> ScanFrame:
@@ -177,9 +205,10 @@ struct ScanCatalog(Movable):
         var entries = List[ScanEntry]()
         for index in range(document.length(list)):
             var entry = document.at(list, index)
+            var id = _string(document, entry, "id")
             entries.append(
                 ScanEntry(
-                    _string(document, entry, "id"),
+                    id,
                     _string(document, entry, "title"),
                     _string(document, entry, "author"),
                     _string(document, entry, "license"),
@@ -187,6 +216,7 @@ struct ScanCatalog(Movable):
                     kit_kind(_string(document, entry, "kit")),
                     space_use(_string(document, entry, "use")),
                     _frame(document, entry),
+                    _scan_file(document, entry, id),
                 )
             )
         return ScanCatalog(entries^, cache)
@@ -225,19 +255,19 @@ struct ScanCatalog(Movable):
         raise Error("Scan catalog: no scan '" + id + "'")
 
     def scene(self, id: String) raises -> Optional[String]:
-        """Return the path of a scan's `meta.json`, when it is cached.
+        """Return the path of the file that reads a scan, when it is cached.
 
         Args:
             id: The scan's id.
 
         Returns:
-            The path, or nothing when the file is not in the cache.
+            The path of its `file` in the cache, or nothing when the file
+            is not there.
 
         Raises:
             Error: If no entry has the id.
         """
-        _ = self.find(id)
-        var path = self.cache + id + "/meta.json"
+        var path = self.cache + self.find(id).file
         if isfile(path):
             return path
         return None

@@ -1,6 +1,6 @@
 # SOG files
 
-`extensions/scan/sog.mojo` reads SOG files, PlayCanvas's compressed Gaussian splats, into a `GaussianSplatGeometry`. SuperSplat publishes its scenes in this format. The reader decodes each field as `readSog` in `@playcanvas/splat-transform` 3.10.1 does. So a SOG scene gives the splats of the PLY file that splat-transform writes from it.
+`extensions/scan/sog.mojo` reads SOG files, PlayCanvas's compressed Gaussian splats, into a `ScanScene`: a `GaussianSplatGeometry` and the scene's `SplatModel`. SuperSplat publishes its scenes in this format. The reader decodes each field as `readSog` in `@playcanvas/splat-transform` 3.10.1 does. So a SOG scene gives the splats of the PLY file that splat-transform writes from it.
 
 ![A building model fitted to a scan of a two-storey room, turning](out/scanned-buildings.png)
 
@@ -12,7 +12,7 @@ The reader is the first step of [Scanned buildings](Scanned-buildings). A `Gauss
 var scene = read_sog("scan.sog")                  # a bundle
 var other = read_sog("scan/meta.json")           # a folder
 var splats = scene.geometry.copy()
-var model = scene.model                          # SOG_DEFAULT, SOG_ANTIALIASED or SOG_2DGS
+var model = scene.model                          # SPLAT_DEFAULT, SPLAT_ANTIALIASED or SPLAT_2DGS
 ```
 
 `read_sog` reads a `.sog` bundle when the path ends in `.sog`. It reads any other path as a `meta.json` text, with the images beside it. `parse_sog(meta, files)` reads a text and a list of `SogFile` records. `parse_sog_bundle(bytes)` reads the bytes of a bundle. `sog_file_names(meta)` gives the names of the images that a text needs.
@@ -46,8 +46,8 @@ The reader rounds each field to `Float32` where splat-transform does. It then bu
 - A file name with a folder in it, so a downloaded text cannot read outside its folder.
 - A missing file, and anything that `render.webp.decode` and `loaders.zip.unzip` refuse.
 
-ThreeMojo draws every model as a 3D Gaussian. `SogScene.model` keeps the text's model, so a caller can tell an antialiased or a 2D Gaussian scene apart.
+ThreeMojo draws every model as a 3D Gaussian. `ScanScene.model` keeps the text's model, so a caller can tell an antialiased or a 2D Gaussian scene apart. `extensions/scan/scene.mojo` holds `SplatModel` and `ScanScene`, which every scan reader gives; see [Compressed PLY files](Compressed-PLY-files).
 
 ## Test files
 
-`assets/sog/make_sog.mjs` writes the test files with splat-transform 3.10.1. It writes degree 3 harmonics as a bundle and as a folder, and degree 1 and 2 as bundles. It also writes a degree 0 folder whose z has no range. It reads each one back with the same tool into a `_restored.ply` file. `tests/test_scan_sog.mojo` requires the same centers, covariances, color bytes and harmonics bytes from both. `assets/fixture-manifest.json` records the files' sums and the commands that write them.
+`assets/sog/make_sog.mjs` writes the test files with splat-transform 3.10.1. It writes degree 3 harmonics as a bundle and as a folder, and degree 1 and 2 as bundles. It also writes a degree 0 folder whose z has no range. It reads each one back with the same tool into a `_restored.ply` file. `tests/test_scan_sog.mojo` requires the same centers, covariances, color bytes and harmonics bytes from both, with the helpers of `tests/_splat_same.mojo`. `assets/fixture-manifest.json` records the files' sums and the commands that write them.

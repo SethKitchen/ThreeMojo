@@ -30,7 +30,8 @@ A host that has its own GPU draws the scan with it. `tm_splat_prepare` sorts
 the splats and writes the view, `tm_splat_part` and `tm_splat_words` say where
 the scan, the order and the view are in the module's memory, and the host
 projects, shades and blends the splats on its GPU. A CPU frame of the same
-view is 0.2 s. These four functions are not in every library either.
+view takes tens of milliseconds on every core. These four functions are not
+in every library either.
 
 A host that is not a Mojo program must call `tm_init` once, before any other
 function.
@@ -46,8 +47,8 @@ from window.capi_abi import (
 )
 from window.splat_app import SCAN, SplatApp
 
-comptime MAX_ASSET = 67108864
-"""The most bytes that `tm_alloc` gives: 64 MiB."""
+comptime MAX_ASSET = 134217728
+"""The most bytes that `tm_alloc` gives: 128 MiB, room for the largest scanned building."""
 
 
 def _app(
@@ -149,13 +150,15 @@ def tm_asset(
 
     Args:
         handle: A handle from `tm_create`.
-        bytes: An `.spz` file, which the app copies before it returns.
+        bytes: A scan file that `SplatApp.load` reads: an `.spz` file, a
+            splat PLY, a compressed PLY or a SOG bundle. The app copies it
+            before it returns.
         length: The file's size, in bytes.
 
     Returns:
         0 if the app has the scan, and the camera frames it. 1 if `length` is
-        not positive, or the bytes are not an `.spz` file that the app can
-        read. The scan is not changed then.
+        not positive, or the bytes are not a scan that the app can read. The
+        scan is not changed then.
     """
     if length <= 0:
         return 1

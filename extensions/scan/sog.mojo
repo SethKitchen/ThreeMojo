@@ -59,7 +59,11 @@ from core.gaussian_splat_utils import (
     write_color_bytes_from_sh0,
     write_covariance,
 )
-from core.ordinal import ordinal_label, ordinal_valid
+from extensions.scan.scene import (
+    SPLAT_DEFAULT,
+    ScanScene,
+    splat_model,
+)
 from loaders.json import JsonDocument, NO_NODE, parse_json
 from loaders.zip import unzip
 from render.png import DecodedImage
@@ -79,57 +83,6 @@ comptime SOG_QUAT_TAG = 252
 
 
 @fieldwise_init
-struct SogModel(Equatable, ImplicitlyCopyable, Writable):
-    """Which kind of Gaussian a SOG scene's `model` says it holds."""
-
-    var value: Int
-    """The stored ordinal."""
-
-    def is_valid(self) -> Bool:
-        """Return True if this names one of the 3 models.
-
-        Returns:
-            Whether the value is 0 to 2.
-        """
-        return ordinal_valid(self.value, 3 - 1)
-
-    def name(self) -> String:
-        """Return the model's name, as `meta.json` writes it.
-
-        Returns:
-            The name, or "unknown" for a value that is not valid.
-        """
-        var names: List[String] = ["default", "antialiased", "2dgs"]
-        return ordinal_label(self.is_valid(), self.value, names, "unknown")
-
-
-comptime SOG_DEFAULT = SogModel(0)
-"""A 3D Gaussian, as the 3DGS training code makes it. A text with no `model` holds these."""
-comptime SOG_ANTIALIASED = SogModel(1)
-"""A 3D Gaussian trained with a screen-space filter, as Mip-Splatting does."""
-comptime SOG_2DGS = SogModel(2)
-"""A flat 2D Gaussian, as 2DGS makes it."""
-
-
-def sog_model(name: String) raises -> SogModel:
-    """Return the model that a `meta.json` name gives.
-
-    Args:
-        name: The text's `model` value.
-
-    Returns:
-        The model.
-
-    Raises:
-        Error: If the name is not `default`, `antialiased` or `2dgs`.
-    """
-    for value in range(3):
-        if SogModel(value).name() == name:
-            return SogModel(value)
-    raise Error("SOG: unknown model '" + name + "'")
-
-
-@fieldwise_init
 struct SogFile(Copyable, Movable):
     """One file of a SOG scene: its name and its bytes."""
 
@@ -137,27 +90,6 @@ struct SogFile(Copyable, Movable):
     """The name that `meta.json` gives it."""
     var data: List[UInt8]
     """The whole file."""
-
-
-struct SogScene(Movable):
-    """The splats of a SOG scene, and the model that its text gives."""
-
-    var geometry: GaussianSplatGeometry
-    """The splats, in the order of the texels."""
-    var model: SogModel
-    """Which kind of Gaussian the splats are."""
-
-    def __init__(
-        out self, var geometry: GaussianSplatGeometry, model: SogModel
-    ):
-        """Hold a scene's splats.
-
-        Args:
-            geometry: The splats.
-            model: Their model.
-        """
-        self.geometry = geometry^
-        self.model = model
 
 
 def _require_file_name(name: String) raises:
@@ -529,7 +461,7 @@ def sog_file_names(meta: String) raises -> List[String]:
     return names^
 
 
-def parse_sog(meta: String, files: List[SogFile]) raises -> SogScene:
+def parse_sog(meta: String, files: List[SogFile]) raises -> ScanScene:
     """Read a SOG scene from its text and its images.
 
     Args:
@@ -553,10 +485,10 @@ def parse_sog(meta: String, files: List[SogFile]) raises -> SogScene:
             + String(document.integer(version))
             + " is not read; version 2 is"
         )
-    var model = SOG_DEFAULT
+    var model = SPLAT_DEFAULT
     var model_node = document.get(root, "model")
     if model_node != NO_NODE:
-        model = sog_model(document.string(model_node))
+        model = splat_model(document.string(model_node))
     var count = document.integer(
         document.required(root, "count", "SOG: meta.json has no count")
     )
@@ -649,7 +581,7 @@ def parse_sog(meta: String, files: List[SogFile]) raises -> SogScene:
         bands[1].copy(),
         bands[2].copy(),
     )
-    return SogScene(geometry^, model)
+    return ScanScene(geometry^, model)
 
 
 def _text(bytes: List[UInt8]) raises -> String:
@@ -667,7 +599,7 @@ def _text(bytes: List[UInt8]) raises -> String:
     return String(from_utf8=Span(bytes))
 
 
-def parse_sog_bundle(bytes: List[UInt8]) raises -> SogScene:
+def parse_sog_bundle(bytes: List[UInt8]) raises -> ScanScene:
     """Read a `.sog` bundle: a ZIP file of `meta.json` and its images.
 
     Args:
@@ -693,7 +625,7 @@ def parse_sog_bundle(bytes: List[UInt8]) raises -> SogScene:
     return parse_sog(meta.value(), files)
 
 
-def read_sog(path: String) raises -> SogScene:
+def read_sog(path: String) raises -> ScanScene:
     """Read a SOG scene from a `.sog` bundle or a `meta.json` file.
 
     A path that ends in `.sog` is a bundle. Any other path is the text,

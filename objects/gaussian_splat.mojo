@@ -25,7 +25,9 @@ places it. It keeps what three.js's object keeps beside its GPU buffers:
   fallback's sort. It sorts again only when the object's view direction
   turns by more than `SORT_DIRECTION_THRESHOLD` of a cosine, as three.js's
   `_needsSort` decides. `order` holds the result: the splat indices,
-  furthest first.
+  furthest first. Workers share a large sort out in runs of the splats;
+  each run counts its bins, and places its splats after the earlier runs'
+  in each bin. So the order is the same for any count of workers.
 - **The view-dependent color.** `spherical_harmonics_colors` evaluates the
   higher bands for a camera, as three.js's compute pass does; the renderer
   adds the result to each splat's color.
@@ -50,6 +52,7 @@ from math.matrix4 import Matrix4
 from math.norm import squared_length3
 from math.utils import max3
 from math.vector3 import Vector3, append_vector3, vector3_from_float64
+from render.tasks import TaskGroup
 from std.math import floor, inf, max, min, sqrt
 from std.memory import bitcast
 from units.si import Length, METER
@@ -67,6 +70,141 @@ comptime BIN_COUNT = 4096
 comptime SORT_DIRECTION_THRESHOLD = Float32(0.9995)
 # The narrowest depth range the sort divides into bins.
 comptime MIN_SORT_RANGE = Float64(0.0001)
+comptime SORT_RUN = 16384
+"""The fewest splats a sort worker takes: a shorter run is not worth a task."""
+
+
+@fieldwise_init
+struct _SortKey(ImplicitlyCopyable):
+    """What `sort_bin` reads of the view, so that a worker reads no splat
+    object."""
+
+    var m2: Float64
+    """The sort matrix's element 2."""
+    var m6: Float64
+    """Its element 6."""
+    var m10: Float64
+    """Its element 10."""
+    var m14: Float64
+    """Its element 14."""
+    var near: Float64
+    """The nearest depth the bins span."""
+    var scale: Float64
+    """Bins a unit of depth."""
+
+    def bin(self, x: Float32, y: Float32, z: Float32) -> Int:
+        """Return the bin of a center; see `GaussianSplat.sort_bin`.
+
+        Args:
+            x: The center's x, in the object's space.
+            y: Its y.
+            z: Its z.
+
+        Returns:
+            0 for the furthest depths up to `BIN_COUNT - 1` for the
+            nearest.
+        """
+        var depth = -(
+            self.m2 * Float64(x)
+            + self.m6 * Float64(y)
+            + self.m10 * Float64(z)
+            + self.m14
+        )
+        var bin = min(
+            Float64(BIN_COUNT - 1),
+            max(Float64(0), floor((depth - self.near) * self.scale)),
+        )
+        return BIN_COUNT - 1 - Int(bin)
+
+
+def _count_bins(
+    centers: MutPointer[Float32, MutAnyOrigin],
+    key: _SortKey,
+    bins: MutPointer[UInt16, MutAnyOrigin],
+    counts: MutPointer[Int, MutAnyOrigin],
+    first: Int,
+    past: Int,
+):
+    """Find the bins of a run of splats, and count them.
+
+    Args:
+        centers: The splats' centers, three floats a splat.
+        key: The view.
+        bins: Each splat's bin, written for the run.
+        counts: The run's count of each bin.
+        first: The run's first splat.
+        past: One past its last.
+    """
+    for index in range(first, past):
+        var bin = key.bin(
+            centers[unsafe_offset=index * 3],
+            centers[unsafe_offset=index * 3 + 1],
+            centers[unsafe_offset=index * 3 + 2],
+        )
+        bins[unsafe_offset=index] = UInt16(bin)
+        counts[unsafe_offset=bin] += 1
+
+
+async def _count_task(
+    centers: MutPointer[Float32, MutAnyOrigin],
+    key: _SortKey,
+    bins: MutPointer[UInt16, MutAnyOrigin],
+    counts: MutPointer[Int, MutAnyOrigin],
+    first: Int,
+    past: Int,
+):
+    """`_count_bins` as a task of `GaussianSplat.sort_cpu`.
+
+    Args:
+        centers: The splats' centers.
+        key: The view.
+        bins: Each splat's bin.
+        counts: The run's counts.
+        first: The run's first splat.
+        past: One past its last.
+    """
+    _count_bins(centers, key, bins, counts, first, past)
+
+
+def _place_bins(
+    order: MutPointer[Int, MutAnyOrigin],
+    bins: MutPointer[UInt16, MutAnyOrigin],
+    offsets: MutPointer[Int, MutAnyOrigin],
+    first: Int,
+    past: Int,
+):
+    """Place a run of splats in the order, each at its bin's next place.
+
+    Args:
+        order: The draw order.
+        bins: Each splat's bin.
+        offsets: The run's next place in each bin.
+        first: The run's first splat.
+        past: One past its last.
+    """
+    for index in range(first, past):
+        var bin = Int(bins[unsafe_offset=index])
+        order[unsafe_offset=offsets[unsafe_offset=bin]] = index
+        offsets[unsafe_offset=bin] += 1
+
+
+async def _place_task(
+    order: MutPointer[Int, MutAnyOrigin],
+    bins: MutPointer[UInt16, MutAnyOrigin],
+    offsets: MutPointer[Int, MutAnyOrigin],
+    first: Int,
+    past: Int,
+):
+    """`_place_bins` as a task of `GaussianSplat.sort_cpu`.
+
+    Args:
+        order: The draw order.
+        bins: Each splat's bin.
+        offsets: The run's next places.
+        first: The run's first splat.
+        past: One past its last.
+    """
+    _place_bins(order, bins, offsets, first, past)
 
 
 def _sqrt_bound(variance: Float64) -> Float64:
@@ -526,7 +664,11 @@ struct GaussianSplat(Copyable, Movable):
         )
 
     def update_sort(
-        mut self, world: Matrix4, view: Matrix4, near: Length
+        mut self,
+        world: Matrix4,
+        view: Matrix4,
+        near: Length,
+        workers: Int = 1,
     ) raises -> Bool:
         """Sort the splats back to front when the view needs it, three.js's
         `updateSort` on the CPU.
@@ -536,6 +678,7 @@ struct GaussianSplat(Copyable, Movable):
             view: The camera's view matrix, three.js's
                 `matrixWorldInverse`.
             near: The camera's near distance.
+            workers: How many threads sort; see `sort_cpu`.
 
         Returns:
             Whether the splats were sorted.
@@ -548,7 +691,7 @@ struct GaussianSplat(Copyable, Movable):
         if self.sort_initialized and not needs:
             return False
         self._update_sort_range(world, view, model_view, near)
-        self.sort_cpu()
+        self.sort_cpu(workers)
         self.sort_initialized = True
         self.last_sort_direction = self.sort_direction(model_view)
         return True
@@ -599,40 +742,94 @@ struct GaussianSplat(Copyable, Movable):
             0 for the furthest depths up to `BIN_COUNT - 1` for the
             nearest.
         """
-        ref m = self.sort_matrix.elements
         ref c = self.splat_geometry.centers
-        var depth = -(
-            Float64(m[2]) * Float64(c[index * 3])
-            + Float64(m[6]) * Float64(c[index * 3 + 1])
-            + Float64(m[10]) * Float64(c[index * 3 + 2])
-            + Float64(m[14])
+        return self._sort_key().bin(
+            c[index * 3], c[index * 3 + 1], c[index * 3 + 2]
         )
-        var span = max(self.sort_far - self.sort_near, MIN_SORT_RANGE)
-        var scale = Float64(BIN_COUNT - 1) / span
-        var bin = min(
-            Float64(BIN_COUNT - 1),
-            max(Float64(0), floor((depth - self.sort_near) * scale)),
-        )
-        return BIN_COUNT - 1 - Int(bin)
 
-    def sort_cpu(mut self):
+    def _sort_key(self) -> _SortKey:
+        """Return what `sort_bin` reads of the view.
+
+        Returns:
+            The sort matrix's depth row, and the bins' near depth and scale.
+        """
+        ref m = self.sort_matrix.elements
+        var span = max(self.sort_far - self.sort_near, MIN_SORT_RANGE)
+        return _SortKey(
+            Float64(m[2]),
+            Float64(m[6]),
+            Float64(m[10]),
+            Float64(m[14]),
+            self.sort_near,
+            Float64(BIN_COUNT - 1) / span,
+        )
+
+    def sort_cpu(mut self, workers: Int = 1):
         """Sort the splats by `sort_bin`, stably, into `order`: three.js's
-        `CountingSort.computeCPU`."""
+        `CountingSort.computeCPU`.
+
+        Args:
+            workers: How many threads sort. Each takes a run of at least
+                `SORT_RUN` splats. The order is the same for any count.
+        """
         var count = self.count()
-        var bins = List[Int](capacity=count)
-        var counts = List[Int](length=BIN_COUNT, fill=0)
-        for index in range(count):
-            var bin = self.sort_bin(index)
-            bins.append(bin)
-            counts[bin] += 1
-        var offsets = List[Int](length=BIN_COUNT, fill=0)
+        var runs = max(1, min(workers, count // SORT_RUN))
+        var key = self._sort_key()
+        var bins = List[UInt16](length=count, fill=0)
+        var counts = List[Int](length=runs * BIN_COUNT, fill=0)
+        var centers = (
+            self.splat_geometry.centers.unsafe_ptr().unsafe_origin_cast[
+                MutAnyOrigin
+            ]()
+        )
+        var bin_at = bins.unsafe_ptr().unsafe_origin_cast[MutAnyOrigin]()
+        var count_at = counts.unsafe_ptr().unsafe_origin_cast[MutAnyOrigin]()
+        if runs == 1:
+            _count_bins(centers, key, bin_at, count_at, 0, count)
+        else:
+            var group = TaskGroup()
+            for run in range(runs):  # pragma: no branch
+                group.create_task(
+                    _count_task(
+                        centers,
+                        key,
+                        bin_at,
+                        count_at.unsafe_offset(run * BIN_COUNT),
+                        run * count // runs,
+                        (run + 1) * count // runs,
+                    )
+                )
+            group.wait()
+        # Each run's first place in each bin: bin by bin, run by run.
         var sum = 0
         for bin in range(BIN_COUNT):  # pragma: no branch
-            offsets[bin] = sum
-            sum += counts[bin]
-        for index in range(count):
-            self.order[offsets[bins[index]]] = index
-            offsets[bins[index]] += 1
+            for run in range(runs):  # pragma: no branch
+                var here = counts[run * BIN_COUNT + bin]
+                counts[run * BIN_COUNT + bin] = sum
+                sum += here
+        var order_at = self.order.unsafe_ptr().unsafe_origin_cast[
+            MutAnyOrigin
+        ]()
+        if runs == 1:
+            _place_bins(order_at, bin_at, count_at, 0, count)
+        else:
+            var group = TaskGroup()
+            for run in range(runs):  # pragma: no branch
+                group.create_task(
+                    _place_task(
+                        order_at,
+                        bin_at,
+                        count_at.unsafe_offset(run * BIN_COUNT),
+                        run * count // runs,
+                        (run + 1) * count // runs,
+                    )
+                )
+            group.wait()
+        # The tasks reach the lists through pointers the compiler cannot
+        # see. These reads keep them alive until every task has finished.
+        _ = len(bins)
+        _ = len(counts)
+        _ = len(self.splat_geometry.centers)
 
     def spherical_harmonics_colors(self, camera: Vector3) -> List[Float32]:
         """Return each splat's view-dependent color, three.js's
@@ -651,16 +848,34 @@ struct GaussianSplat(Copyable, Movable):
             return out^
         out.reserve(self.count() * 3)
         for index in range(self.count()):  # pragma: no branch
-            var direction = self._center(index) - camera
-            direction.normalize()
-            ref g = self.splat_geometry
-            var rgb = _band_sum(g.sh1, index, 1, direction)
-            if degree >= 2:
-                rgb = rgb + _band_sum(g.sh2, index, 2, direction)
-            if degree >= 3:
-                rgb = rgb + _band_sum(g.sh3, index, 3, direction)
-            append_vector3(out, rgb)
+            append_vector3(
+                out, self.spherical_harmonics_color(index, camera, degree)
+            )
         return out^
+
+    def spherical_harmonics_color(
+        self, index: Int, camera: Vector3, degree: Int
+    ) -> Vector3:
+        """Return one splat's view-dependent color, as
+        `spherical_harmonics_colors` gives it.
+
+        Args:
+            index: Which splat.
+            camera: The camera's position, in the object's space.
+            degree: The splats' degree, 1 through 3.
+
+        Returns:
+            The three floats added to the splat's color.
+        """
+        var direction = self._center(index) - camera
+        direction.normalize()
+        ref g = self.splat_geometry
+        var rgb = _band_sum(g.sh1, index, 1, direction)
+        if degree >= 2:
+            rgb = rgb + _band_sum(g.sh2, index, 2, direction)
+        if degree >= 3:
+            rgb = rgb + _band_sum(g.sh3, index, 3, direction)
+        return rgb
 
 
 def _length(x: Float32, y: Float32, z: Float32) -> Float64:
@@ -680,43 +895,47 @@ def _length(x: Float32, y: Float32, z: Float32) -> Float64:
     return sqrt(squared_length3[DType.float64](fx, fy, fz))
 
 
-def _weights(degree: Int, d: Vector3) -> List[Float32]:
+def _weights(degree: Int, d: Vector3) -> SIMD[DType.float32, 8]:
     """Return the weights of one band's coefficients for a direction, as
     three.js's `applySphericalHarmonics` writes them.
+
+    The weights are lanes of one vector, so that no splat allocates.
 
     Args:
         degree: The band, 1 through 3.
         d: The unit direction from the camera to the splat.
 
     Returns:
-        `2 degree + 1` weights.
+        `2 degree + 1` weights in the first lanes, and zeros after them.
     """
     var x = d.x
     var y = d.y
     var z = d.z
+    var w = SIMD[DType.float32, 8](0)
     if degree == 1:
-        return [y * -0.4886025, z * 0.4886025, x * -0.4886025]
+        w[0] = y * -0.4886025
+        w[1] = z * 0.4886025
+        w[2] = x * -0.4886025
+        return w
     var xx = x * x
     var yy = y * y
     var zz = z * z
     if degree == 2:
-        return [
-            x * y * 1.0925484,
-            y * z * -1.0925484,
-            (zz * 2 - xx - yy) * 0.3153915,
-            x * z * -1.0925484,
-            (xx - yy) * 0.5462742,
-        ]
+        w[0] = x * y * 1.0925484
+        w[1] = y * z * -1.0925484
+        w[2] = (zz * 2 - xx - yy) * 0.3153915
+        w[3] = x * z * -1.0925484
+        w[4] = (xx - yy) * 0.5462742
+        return w
     var xy = x * y
-    return [
-        y * (xx * 3 - yy) * -0.5900436,
-        xy * z * 2.8906114,
-        y * (zz * 4 - xx - yy) * -0.4570458,
-        z * (zz * 2 - xx * 3 - yy * 3) * 0.3731763,
-        x * (zz * 4 - xx - yy) * -0.4570458,
-        z * (xx - yy) * 1.4453057,
-        x * (xx - yy * 3) * -0.5900436,
-    ]
+    w[0] = y * (xx * 3 - yy) * -0.5900436
+    w[1] = xy * z * 2.8906114
+    w[2] = y * (zz * 4 - xx - yy) * -0.4570458
+    w[3] = z * (zz * 2 - xx * 3 - yy * 3) * 0.3731763
+    w[4] = x * (zz * 4 - xx - yy) * -0.4570458
+    w[5] = z * (xx - yy) * 1.4453057
+    w[6] = x * (xx - yy * 3) * -0.5900436
+    return w
 
 
 def _band_sum(
@@ -735,13 +954,15 @@ def _band_sum(
         times their weights.
     """
     var weights = _weights(degree, d)
+    var coefficients = degree * 2 + 1
     # Each splat takes whole four-byte words: `sh_band_words`.
-    var words = (len(weights) * 3 + 3) // 4
-    var start = index * words * 4
+    var words = (coefficients * 3 + 3) // 4
+    # The caller's index is a splat of `band`, so its bytes are in range.
+    var bytes = band.unsafe_ptr().unsafe_offset(index * words * 4)
     var sum = Vector3(0, 0, 0)
-    for k in range(len(weights)):  # pragma: no branch
-        var at = start + k * 3
-        sum.x += (Float32(band[at]) - 128) / 128 * weights[k]
-        sum.y += (Float32(band[at + 1]) - 128) / 128 * weights[k]
-        sum.z += (Float32(band[at + 2]) - 128) / 128 * weights[k]
+    for k in range(coefficients):  # pragma: no branch
+        var at = k * 3
+        sum.x += (Float32(bytes[unsafe_offset=at]) - 128) / 128 * weights[k]
+        sum.y += (Float32(bytes[unsafe_offset=at + 1]) - 128) / 128 * weights[k]
+        sum.z += (Float32(bytes[unsafe_offset=at + 2]) - 128) / 128 * weights[k]
     return sum

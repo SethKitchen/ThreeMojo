@@ -343,7 +343,7 @@ def fit_building(
         )
     elif scale == SCALE_ASSUMED:
         notes.append(
-            "The scale comes from an assumed storey height: every length,"
+            "The scale comes from an assumed length: every length,"
             " load and mass follows that assumption."
         )
     notes.append(

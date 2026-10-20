@@ -8,7 +8,9 @@
     mojo run -I . examples/building_scan.mojo [path.png] [SCAN]
 
 SCAN is the id of a scan in `assets/building_scans/manifest.json`, such as
-`studio-11`, or the path of a `.sog` bundle or a `meta.json`. Fetch a scan
+`studio-11`, or the path of a scan file of any format that
+`extensions.scan.files` reads, such as a `.sog` bundle or a `meta.json`.
+Fetch a scan
 first:
 
     sh tools/tool.sh .venv/bin/mojo building_scans fetch studio-11 --pin
@@ -69,7 +71,7 @@ from extensions.scan.occupancy import (
     occupancy_grid,
     trimmed_region,
 )
-from extensions.scan.sog import read_sog
+from extensions.scan.files import read_scan
 from generators.utils import Vec3d
 from math.quaternion import Quaternion
 from math.vector3 import Vector3
@@ -207,15 +209,18 @@ def _scan(words: List[String]) raises -> _Scan:
             "demo room",
         )
     var wanted = words[2]
-    if wanted.endswith(".sog") or wanted.endswith(".json"):
+    var catalog = ScanCatalog.open(CATALOG_MANIFEST, CATALOG_CACHE)
+    var named = False
+    for entry in catalog.entries:
+        named = named or entry.id == wanted
+    if not named:
         return _Scan(
-            read_sog(wanted).geometry.copy(),
+            read_scan(wanted).geometry.copy(),
             supersplat_frame(),
             construction_kit(MASONRY_KIT),
             LIVING,
             wanted,
         )
-    var catalog = ScanCatalog.open(CATALOG_MANIFEST, CATALOG_CACHE)
     var entry = catalog.find(wanted)
     var path = catalog.scene(wanted)
     if path:
@@ -229,7 +234,7 @@ def _scan(words: List[String]) raises -> _Scan:
             file=stderr,
         )
         return _Scan(
-            read_sog(path.value()).geometry.copy(),
+            read_scan(path.value()).geometry.copy(),
             entry.frame,
             construction_kit(entry.kit),
             entry.use,

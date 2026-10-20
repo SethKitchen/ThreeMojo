@@ -8401,6 +8401,7 @@ struct Renderer(Movable):
                 self.height,
                 self.depth_mode_for(camera),
                 self.viewport,
+                self.workers,
             )
             if len(prepared) == 0:
                 continue

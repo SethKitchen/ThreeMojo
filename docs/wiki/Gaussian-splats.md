@@ -107,6 +107,20 @@ the whole target. Call it in the order required by other transparent draws.
 
 `prepare_gaussian_splat` sorts the splats when `auto_sort` is on. It adds the spherical harmonics to the colors. Then it projects each splat with `render/splatrule.mojo`. `rasterize_splats` blends the projected splats in draw order.
 
+Each of the three takes a count of `workers`, one by default. `Renderer` passes its own. The sort counts its bins in runs of the splats. Then each run puts its splats after the earlier runs' splats in each bin, so the order is the order of one thread. The projection reads the splats in their own order, front to back, and then gathers them in draw order.
+
+The fill shares the rows out in bands, eight to a worker. It sorts the splats by the bands that their rows reach, in draw order, and each band blends its own splats. So each pixel takes the same blends in the same order as on one thread, and the picture is the same to the bit. `tests/test_splat_workers.mojo` checks it.
+
+A splat visits only the rows of its disc. `splat_disc_rows` keeps the rows where the quadratic of the next step has a root. A tiny splat takes one row, where its box takes five.
+
+A row of a splat visits only the columns of its disc. `splat_row_span` solves `u^2 + v^2 <= 4` along the row, for a disc wider by `SPLAT_SPAN_SLACK`, and takes the pixels whose centers are inside it. `splat_alpha` still decides each pixel, so the span draws what the whole box draws. The span skips the corners of the box, where a splat has no opacity.
+
+`splat_alphas` gives the opacities of eight pixels of a row at once. It runs the expression of `splat_alpha`, whose fused products round once in any width. So each lane is `splat_alpha` of its pixel to the bit. `blend_splat_pixel` blends source over with fused products too. So the fill gives a pixel the same bits in any band, and on any count of workers. It can differ from `RenderTarget.blend` in the last bit.
+
+The projection takes the ellipse's axis from the half-angle formulas, with two square roots, where three.js calls `atan2`, `cos` and `sin`. A round splat keeps the axis (1, 0), as `atan2(0, 0)` gives it.
+
+On four cores, the tomatoes at 640 by 360 take about 46 milliseconds a frame, and 145 on one thread. To draw a larger scan in real time, draw it with [levels of detail](Splat-level-of-detail).
+
 The projection is the vertex shader of three.js. The 3D covariance goes into view space, and the Jacobian of the perspective divide takes it onto the screen. The 2D covariance gets 0.3 pixels squared on its diagonal. The opacity is scaled by `sqrt(det / det')`, so the filter does not make a splat brighter. The axes of the ellipse are the eigenvectors of the 2D covariance.
 
 The fragment is the fragment shader of three.js. A pixel center has an offset of `u` and `v` standard deviations along the two axes. The pixel is discarded where `u^2 + v^2` is more than 4. Other pixels get the opacity `a exp(-(u^2 + v^2) / 2)`.
@@ -177,6 +191,10 @@ examples/capi/run.sh web splat
 | `.spz` | `loaders/spz.mojo`: `read_spz`, `parse_spz` | Niantic's format: gzip for versions 1 to 3, Zstandard streams for version 4. |
 | `.ply` | `loaders/gaussian_splat_ply.mojo`: `read_gaussian_splat_ply` | The GraphDECO and INRIA splat PLY, with `f_rest` harmonics up to degree 3. |
 | glTF | `loaders/gltf_gaussian_splat.mojo`: `read_gltf_gaussian_splats` | Meshes with the `KHR_gaussian_splatting` extension, from `.gltf` or `.glb`. |
+| `.sog` | `extensions/scan/sog.mojo`: `read_sog` | PlayCanvas's SOG files; see [SOG files](SOG-files). |
+| `.compressed.ply` | `extensions/scan/compressed_ply.mojo`: `read_compressed_ply` | PlayCanvas's compressed PLY; see [Compressed PLY files](Compressed-PLY-files). |
+
+`extensions/scan/files.mojo` reads a file of any of these formats but glTF by its first bytes or its name: `read_scan(path)`. See [Compressed PLY files](Compressed-PLY-files#scan-files).
 
 `KsplatCompressionLevel` is a type with `is_valid`. `ksplat_layout` refuses a level that is not 0, 1 or 2.
 
