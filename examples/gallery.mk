@@ -178,3 +178,5 @@ $(call gallery,streamline,streamline)
 $(call gallery,tomatoes,tomatoes,assets/tomatoes/tomatoes.v4.spz)
 # A pad of the web backend in one fixed state: sticks, triggers and buttons.
 $(call gallery,gamepad,gamepad)
+# A building model fitted to a scan of a two-storey room, turning.
+$(call gallery,scanned-buildings,building_scan)

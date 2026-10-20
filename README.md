@@ -581,6 +581,10 @@ Procedural buildings for engineering analysis and for games share one canonical 
 - [x] [Frame analysis](https://github.com/SethKitchen/ThreeMojo/wiki/Frame-analysis): 3D frames, static and modal [#648](https://github.com/SethKitchen/ThreeMojo/issues/648)
 - [x] [Shell analysis](https://github.com/SethKitchen/ThreeMojo/wiki/Shell-analysis): flat-shell slabs and walls [#649](https://github.com/SethKitchen/ThreeMojo/issues/649)
 - [x] [Building energy](https://github.com/SethKitchen/ThreeMojo/wiki/Building-energy): zones, transient conduction and a heat balance [#650](https://github.com/SethKitchen/ThreeMojo/issues/650)
+- [x] [Construction kits](https://github.com/SethKitchen/ThreeMojo/wiki/Construction-kits): masonry, stone, concrete and timber materials and constructions that any building model reuses [#783](https://github.com/SethKitchen/ThreeMojo/issues/783)
+- [x] [Bearing walls](https://github.com/SethKitchen/ThreeMojo/wiki/Bearing-walls): the gravity load down a building's walls, storey by storey, and the mass of each element [#784](https://github.com/SethKitchen/ThreeMojo/issues/784)
+- [x] [Scanned buildings](https://github.com/SethKitchen/ThreeMojo/wiki/Scanned-buildings): CC BY splat scans from SuperSplat fitted as building models, with static colliders and a pinned download tool [#782](https://github.com/SethKitchen/ThreeMojo/issues/782)
+- [x] [SOG files](https://github.com/SethKitchen/ThreeMojo/wiki/SOG-files): PlayCanvas's compressed Gaussian splats, read as splat-transform 3.10.1 reads them [#781](https://github.com/SethKitchen/ThreeMojo/issues/781)
 
 ### Earth retaining
 
