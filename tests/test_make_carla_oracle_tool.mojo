@@ -78,9 +78,10 @@ struct Project(Movable):
             + "    raise SystemExit(7)\n"
         )
         var source = Path("Makefile").read_text()
+        # Copy the shard defaults and ownership rule with the recipe.
         var recipe = section(
             source,
-            "test-tools:\n",
+            "TOOLS_SHARD ?=\n",
             "\n# The negative-fixture manifest names exactly",
         )
         # The nested stage runs through the real parallel runner.
@@ -101,7 +102,13 @@ struct Project(Movable):
             "PYTHONDONTWRITEBYTECODE=1",
             "ORACLE_WIRING_EVENTS=" + self.events,
         ]
-        var command: List[String] = ["env", "-u", "ORACLE_WIRING_FAIL"]
+        var command: List[String] = [
+            "env",
+            "-u",
+            "ORACLE_WIRING_FAIL",
+            "-u",
+            "TOOLS_SHARD",
+        ]
         if fail:
             command.append("ORACLE_WIRING_FAIL=" + fail)
         command.extend(["make", "-s", "test-tools"])
@@ -238,6 +245,30 @@ def test_groups_together_run_every_stage_once() raises:
             for name in ["tools", "assets", "check", "repository"]:
                 for event in run[1]:
                     assert_true(event != name, name)
+        seen.extend(run[1].copy())
+    sort(seen)
+    assert_equal(_words(seen^), "assets check nested repository tools")
+    project.close()
+
+
+def test_six_groups_keep_serial_checks_on_their_actual_owners() raises:
+    var project = Project()
+    var seen = List[String]()
+    for index in range(1, 7):
+        var run = project.make(shard=String(index) + "/6")
+        assert_equal(run[0].status, 0, run[0].output + run[0].errors)
+        for name in ["tools", "assets"]:
+            var count = 0
+            for event in run[1]:
+                if event == name:
+                    count += 1
+            assert_equal(count, 1 if index == 5 else 0, name)
+        for name in ["check", "repository"]:
+            var count = 0
+            for event in run[1]:
+                if event == name:
+                    count += 1
+            assert_equal(count, 1 if index == 1 else 0, name)
         seen.extend(run[1].copy())
     sort(seen)
     assert_equal(_words(seen^), "assets check nested repository tools")
