@@ -58,6 +58,31 @@ def modules(directory, pattern='test_*.py'):
 # Tests that share set-up run this many to a process; the set-up repeats.
 CHUNK = 4
 
+# This proof has a fixed subprocess deadline and needs an uncontended worker.
+# Keep its existing unit (and shared set-up), commands and deadline unchanged.
+_EXCLUSIVE_TEST = (
+    'test_coverage_invariant_contracts.CoverageInvariantContracts.'
+    'test_historical_direct_and_qualified_package_verification'
+)
+
+
+def _exclusive(command):
+    """Select the bounded proof, including its whole-module fallback."""
+    return (_EXCLUSIVE_TEST in command[3:]
+            or (command[3:4] == ['discover']
+                and command[-2:] == ['-p', _EXCLUSIVE_TEST.split('.')[0] + '.py']))
+
+
+def _run_scheduled(pool, directory, work):
+    """Finish exclusive units before submitting the remaining parallel work."""
+    parallel = []
+    for unit in work:
+        if _exclusive(unit[1]):
+            yield run_unit(directory, *unit)
+        else:
+            parallel.append(unit)
+    yield from pool.map(lambda u: run_unit(directory, *u), parallel)
+
 
 def units(directory, name, python=sys.executable):
     """Return the commands that together run every test of one module."""
@@ -127,7 +152,7 @@ def main(argv=None):
         # Whole-module units are the long ones; start them first.
         work.sort(key=lambda unit: unit[1][2] != 'discover')
         failed = []
-        for label, code, seconds, output in pool.map(lambda u: run_unit(directory, *u), work):
+        for label, code, seconds, output in _run_scheduled(pool, directory, work):
             if code != 0:
                 failed.append(label)
                 print(f'== {label} ({seconds:.0f} s, exit {code})', flush=True)
