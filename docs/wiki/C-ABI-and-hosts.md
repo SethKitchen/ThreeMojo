@@ -28,7 +28,13 @@ The splats are Gaussian splats, a scan of three tomatoes. The window draws them 
 examples/capi/run.sh native splat
 ```
 
-`--cpu` draws on the CPU instead. The CPU draws at the size that you give, and it takes about 200 milliseconds for a frame at 640 by 360.
+`--scan FILE` gives the app another scan, such as a [scanned building](Scanned-buildings) that `tools/building_scans.mojo` fetched:
+
+```bash
+examples/capi/run.sh native splat --scan path/to/scan.compressed.ply
+```
+
+`--cpu` draws on the CPU instead. The CPU draws at the size that you give, on every core. A frame of the tomatoes at 640 by 360 takes about 80 milliseconds on four cores.
 
 Run the web build in a browser:
 
@@ -37,7 +43,7 @@ examples/capi/run.sh web water
 examples/capi/run.sh web splat
 ```
 
-The script serves `out/capi/web` on `localhost` and opens the page. The label in the corner shows the same numbers. It also shows `WebGPU`, or the number of threads.
+The script serves `out/capi/web` on `localhost` and opens the page. Copy a scan into `out/capi/web` and add `?scan=NAME` to the splat page's address to draw it in place of the tomatoes. The label in the corner shows the same numbers. It also shows `WebGPU`, or the number of threads.
 
 A browser that has WebGPU draws the water and the splats on its GPU, at 1280 by 720 pixels. Add `?gpu=0` to the address to draw on the CPU instead. The page also draws on the CPU when the browser has no WebGPU adapter, or when its device does not take the shader. The label then says why. See [The WebGPU path](#the-webgpu-path).
 
@@ -68,11 +74,11 @@ Give `run.sh` one of five names. Each name is a library that exports the same fu
 | `scene` | `window/capi_scene.mojo` | Two cubes, with `OrbitControls`. The whole renderer runs. | No |
 | `water` | `window/capi_water.mojo` | The Clearwater [Water](Water) over a pebble bed. | Yes, on the CPU or on WebGPU |
 | `water-gpu` | `window/capi_water_gpu.mojo` | The same water. A GPU shades the pixels. | No. Use `water`. |
-| `splat` | `window/capi_splat.mojo` | Three tomatoes, 445,409 [Gaussian splats](Gaussian-splats#three-tomatoes). | Yes, on WebGPU or on the CPU |
+| `splat` | `window/capi_splat.mojo` | Three tomatoes, 445,409 [Gaussian splats](Gaussian-splats#three-tomatoes), or a scanned building. | Yes, on WebGPU or on the CPU |
 
 Options follow the app name, as in `run.sh native water 640 360 --frames 300`. The width and the height come first. `--frames N` quits after N frames. `--dump file.ppm` writes the last frame. `--headless` opens no window and steps with a fixed 1/60 second.
 
-`--cpu` draws the splats on the CPU. A window that draws on Metal shows its frames on a layer. So `--dump` and the frame hash work only with `--headless`.
+`--cpu` draws the splats on the CPU. `--scan FILE` gives the app a file with `tm_asset`; `examples/capi/host_scan.h` reads it. A window that draws on Metal shows its frames on a layer. So `--dump` and the frame hash work only with `--headless`.
 
 Controls of `core`: move the pointer, and press the space bar to pause.
 
@@ -110,7 +116,11 @@ The `splat` rows on Metal are the time of a whole headless run divided by its fr
 
 The smaller frames are not faster on this GPU: 640 by 360 gives 345 frames a second and 3840 by 2160 gives 738. The cause is not known.
 
-The `splat` row on WebGPU is the mean of 120 frames in a headless Chrome, with the device idle at the end of each. Its median is 2.6 milliseconds. The CPU rows use one thread.
+The `splat` row on WebGPU is the mean of 120 frames in a headless Chrome, with the device idle at the end of each. Its median is 2.6 milliseconds. The CPU rows use one thread. The native CPU now draws on every core; see below.
+
+The next numbers come from a Linux machine with four cores and no GPU. At 640 by 360, the native CPU draws the tomatoes in about 80 milliseconds a frame. One thread took about 215 milliseconds.
+
+A headless Chrome there has only SwiftShader, a GPU in software. It takes seconds for a frame. So it shows that the WebGPU path draws a scan, and not how fast a GPU draws it.
 
 In the macOS window, `splat` ran at 118 frames a second at 1920 by 1080 pixels, which is the 120 Hz refresh of this display. The GPU took 3.7 to 5.3 milliseconds for a frame, and the library took 0.8. In a browser page the rate is the refresh rate of the display, 60 frames a second here.
 
@@ -201,6 +211,8 @@ The splat library keeps the scan, the camera and the controls, and it sorts the 
 | `tm_splat_words(app, which)` | Return the size of one array in 32-bit words. |
 | `tm_splat_info(app, which)` | Return one number: the splats, the degree, the scan's generation or the order's generation. |
 
+`tm_asset` gives the app a scan file of up to 128 MiB. The first bytes of the file must name its format: `.spz`, splat PLY, compressed PLY or SOG bundle. A format that holds y down, as every one but SPZ does, stands up: the app turns the scan's node half a turn about x. See [Compressed PLY files](Compressed-PLY-files#scan-files).
+
 The parts are the centers, the covariances, the colors, the three bands of spherical harmonics, the draw order and the view. The view is 48 floats: the model-view matrix, the projection matrix, the size of the frame, the eye, the degree, the count and the background. The header `window/threemojo.h` has the numbers.
 
 One frame goes like this. The host calls `tm_step`, then `tm_splat_prepare`. When the scan's generation changes, it copies the scan's arrays to the GPU. When the order's generation changes, it copies the order. It copies the view every frame. Then the GPU projects and shades each splat, blends the quads in the draw order and shows the picture.
@@ -250,6 +262,13 @@ The blend goes into a half-float picture, as on the web. A last pass writes the 
 
 Mojo returns an optional pointer through a slot of 64 bits. A pointer on wasm32 has 4 bytes, so the upper half of the slot held stack garbage. After the first step, `tm_alloc` returned an address like `0x2000000000...`. `retarget.py` clears each such slot before the pointer goes in. The page also keeps the low 32 bits of every address that it reads. `check.mjs` tests that `tm_alloc` and `tm_gpu_part` give addresses with no upper half.
 
+Mojo's LLVM is newer than any release of clang, so `retarget.py` also rewrites what an older reader refuses:
+
+- A floating-point constant in a new form. It can be a decimal that is not exactly a float, or a float's or a double's bits (`f0x...`). It can also be `+inf`, `-qnan`, or a NaN with a payload. Each becomes the hexadecimal double of the same number.
+- A call to `llvm.x86.ssse3.pshuf.b.128`, the byte shuffle of the standard library's UTF-8 check. It becomes a call to a function that does the same with WebAssembly's swizzle.
+
+`mwrt.c` also gives `__multi3`, the 128-bit product that the float parser and the dictionaries use. The splat module needs clang 22 or later: Ubuntu 24.04's clang 18 refuses `getelementptr inbounds nuw`. Set `CLANG` to a newer one. `examples/capi/yowasp_clang.sh` runs `@yowasp/clang`, clang 22 built for WebAssembly, as `CLANG`: install it with `npm install --prefix out/capi/yowasp @yowasp/clang`.
+
 `run.sh check` tests the result. The core module must give the same three frame hashes as `tests/test_capi_core.mojo`. The water module cannot match the native build bit for bit. WebAssembly has no fused multiply-add, and its sine is another implementation. In one test 99.4 percent of the channel values were within one level of the native frame.
 
 ### The WebGPU path
@@ -282,7 +301,7 @@ A WebGPU device has limits that set the design:
 - A vertex shader can only read a storage buffer. The project pass writes the projected splats, so the draw pass binds the same buffer again, read only.
 - The projected splats take 48 bytes each. A device that allows 128 MiB for one binding takes up to about 2.79 million splats. `GpuSplat` refuses a larger scan with an error that names the limit.
 
-`check_splat_gpu.mjs` draws a frame of 480 by 270 pixels on the device and on the CPU. The mean difference was 0.078 of 255, and the largest was 14. No value differed by more than 20.
+`check_splat_gpu.mjs` draws a frame of 480 by 270 pixels on the device and on the CPU. The mean difference was 0.078 of 255, and the largest was 14. No value differed by more than 20. `SCAN=NAME` checks another scan in the folder, and `FRAMES` sets the frames of the timed run.
 
 The page changes the size of the frame with `tm_resize`, so the scan stays on the device when the size changes.
 
@@ -307,7 +326,8 @@ The page gets a copy of each frame from the threaded module. `ImageData` does no
 - The water in the browser restarts when the page changes the size of the frame. Only the splat library has `tm_resize`.
 - The splats have no GPU path on Linux. The Metal code is macOS only, and `window/x11.mojo` has no splat host. A Linux host can use the CPU.
 - A window that draws the splats on Metal has no frame hash and no `--dump`. Use `--headless` for them.
-- The CPU splat is slow: about 200 milliseconds for a frame natively at 640 by 360, and 861 in a browser. The sort is small, and the draw takes the time.
+- The CPU splat is slow in a browser: 861 milliseconds for a frame at 640 by 360, on one thread. Natively it draws on every core.
+- The WebAssembly build reads `.spz` and compressed PLY scans. A SOG bundle and a plain splat PLY need strings, which its runtime does not have, so the page cannot take them.
 - The Metal splats and the WebGPU splats are ports of the Mojo shader. They agree closely and not to the bit.
 - Mojo is pinned at 1.2.0. A later Mojo with WebAssembly output can replace `retarget.py` and `mwrt.c`. The C functions then stay as they are.
 

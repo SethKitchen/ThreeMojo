@@ -12,12 +12,18 @@ files with the same rules: a file is written to the cache only after its
 sum matches, a verified file is never overwritten, and an unpinned file is
 fetched only with `--pin`.
 
-An entry names one SuperSplat scene. Before its files are pinned, it has
-no files. `resolve` then reads the scene page, `https://superspl.at/s?id=`
-and the scene id, and finds the `contentUrl` that the page's viewer loads:
-the scene's `meta.json`. The text names the SOG images, which lie beside
-it. Each becomes a file of the entry, with its URL and no sum, so the
-pinning fetch that follows downloads it and records its sum.
+An entry is one scan. Its files are one `splat` file, in any format that
+`extensions.scan.files` reads, or a SOG folder: one `meta` file, the
+`meta.json` text, and the `image` files it names.
+
+An entry can name a SuperSplat scene in `scene`, or have a null `scene`.
+Before the files of a scene are pinned, the entry can have no files.
+`resolve` then reads the scene page, `https://superspl.at/s?id=` and the
+scene id, and finds the `contentUrl` that the page's viewer loads: the
+scene's `meta.json`. The text names the SOG images, which lie beside it.
+Each becomes a file of the entry, with its URL and no sum, so the pinning
+fetch that follows downloads it and records its sum. An entry with no
+files and no scene cannot be resolved.
 
 **The licenses.** Only CC BY 4.0 and CC0 1.0 are allowed. A scene under a
 license that forbids changes or commercial use, such as CC BY-ND or CC
@@ -114,8 +120,9 @@ comptime ENTRY_KEYS: List[String] = [
     "files",
 ]
 """The keys every entry has."""
-comptime ROLES: List[String] = ["meta", "image"]
-"""What a file of an entry is."""
+comptime ROLES: List[String] = ["meta", "image", "splat"]
+"""What a file of an entry is: a SOG text, one of its images, or a whole
+scan in one file."""
 
 
 def default_manifest() raises -> String:
@@ -363,13 +370,17 @@ def check_scan_manifest(doc: PyJson, manifest: Int) raises:
         _ = _one_of(doc, entry, "license", materialize[LICENSES](), place)
         _ = _one_of(doc, entry, "kit", materialize[KITS](), place)
         _ = _one_of(doc, entry, "use", materialize[USES](), place)
-        if not is_file_name(_text(doc, entry, "scene", place)):
-            raise _manifest_error(place + ": scene must be a scene id")
+        if not doc.is_none(doc.get(entry, "scene")) and not is_file_name(
+            _text(doc, entry, "scene", place)
+        ):
+            raise _manifest_error(place + ": scene must be a scene id, or null")
         _check_frame(doc, entry, place)
         var files = doc.get(entry, "files")
         if doc.kind(files) != PY_LIST:
             raise _manifest_error(place + ": files must be a list")
         var paths = List[String]()
+        var metas = 0
+        var splats = 0
         for at in range(doc.length(files)):
             var item = doc.item(files, at)
             var spot = place + " file " + String(at)
@@ -382,6 +393,20 @@ def check_scan_manifest(doc: PyJson, manifest: Int) raises:
                     spot + ": duplicate path " + py_repr(path)
                 )
             paths.append(path)
+            var role = doc.text(doc.get(item, "role"))
+            if role == "meta":
+                metas += 1
+            elif role == "splat":
+                splats += 1
+        var count = doc.length(files)
+        var one_file = splats == 1 and count == 1
+        var folder = splats == 0 and metas == 1
+        if count > 0 and not one_file and not folder:
+            raise _manifest_error(
+                place
+                + ": files must be one splat file, or one meta file and its"
+                " images"
+            )
 
 
 def load_scan_manifest(path: String) raises -> PyJson:
@@ -601,13 +626,18 @@ def resolve(
         How many files the entry got: zero when it already had some.
 
     Raises:
-        Error: `FetchError` text if the page, the text or a name is
-            refused, or a download fails.
+        Error: `FetchError` text if the entry has no scene, the page, the
+            text or a name is refused, or a download fails.
     """
     var files = doc.get(entry, "files")
     if doc.length(files) > 0:
         return 0
     var entry_id = doc.text(doc.get(entry, "id"))
+    if doc.is_none(doc.get(entry, "scene")):
+        raise _fetch_error(
+            py_repr(entry_id)
+            + " has no files and no scene page to read them from"
+        )
     var page = page_text(
         SCENE_PAGE + doc.text(doc.get(entry, "scene")), cache, transport
     )
@@ -634,7 +664,7 @@ def resolve(
 
 
 def scene_path(doc: PyJson, entry: Int, cache: String) raises -> String:
-    """Return where an entry's `meta.json` is in the cache.
+    """Return where the file that reads an entry's scan is in the cache.
 
     Args:
         doc: The document.
@@ -642,11 +672,17 @@ def scene_path(doc: PyJson, entry: Int, cache: String) raises -> String:
         cache: The cache root.
 
     Returns:
-        The path, whether or not the file is there.
+        The path of its `splat` file, or else of its `meta.json`, whether
+        or not the file is there.
 
     Raises:
         Error: Never for a checked manifest.
     """
+    var files = doc.get(entry, "files")
+    for index in range(doc.length(files)):
+        var item = doc.item(files, index)
+        if doc.text(doc.get(item, "role")) == "splat":
+            return join_path(cache, doc.text(doc.get(item, "path")))
     return join_path(cache, doc.text(doc.get(entry, "id")) + "/meta.json")
 
 

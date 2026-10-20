@@ -1,6 +1,6 @@
 {
   "format": 1,
-  "about": "Scanned buildings as Gaussian splats, for extensions/building/scan. Each entry is one SuperSplat scene under CC BY 4.0 or CC0. The files are downloaded into .cache/building-scans/ by tools/building_scans.mojo; an entry with no files is resolved from its scene page by 'fetch --pin'. The kit, the use and the frame say how extensions/building/scan reads the scan.",
+  "about": "Scanned buildings as Gaussian splats, for extensions/building/scan. Each entry is one scan under CC BY 4.0 or CC0: one splat file, or a SuperSplat scene's SOG folder. tools/building_scans.mojo downloads the files into .cache/building-scans/ and checks their sums; a SuperSplat entry with no files is resolved from its scene page by 'fetch --pin'. The kit, the use and the frame say how extensions/building/scan reads the scan.",
   "entries": [
     {
       "id": "reading-room",

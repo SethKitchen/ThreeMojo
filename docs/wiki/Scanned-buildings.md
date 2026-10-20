@@ -1,16 +1,34 @@
 # Scanned buildings
 
-`extensions/scan/` and `extensions/building/scan/` turn a Gaussian splat scan of a real building into a canonical building model with a static collider. The model has storeys, walls, slabs and a roof of a reusable [construction kit](Construction-kits). The structural, [bearing](Bearing-walls), thermal and render views and the IFC writer then read the scan as they read a procedural tower. `tools/building_scans.mojo` downloads the scans from SuperSplat, because they are too large for git.
+`extensions/scan/` and `extensions/building/scan/` turn a Gaussian splat scan of a real building into a canonical building model with a static collider. They also cut it into [parts](Scan-parts) to weigh, simulate and use again. The model has storeys, walls, slabs and a roof of a reusable [construction kit](Construction-kits). The structural, [bearing](Bearing-walls), thermal and render views and the IFC writer then read the scan as they read a procedural tower. `tools/building_scans.mojo` downloads the scans, from SuperSplat and from any other URL, because they are too large for git.
 
 ![A building model fitted to a scan of a two-storey room, turning](out/scanned-buildings.png)
 
 The picture comes from `examples/building_scan.mojo` with no scan argument: a scan of a two-storey room that the example makes. Give it the id of a cached scan to fit that scan.
 
+![A hillside site of splats with a hall and a tower, drawn with levels of detail, and a copy of the hall beside it](out/scan-parts.png)
+
+`examples/scan_parts.mojo` finds the ground of a scanned site, cuts the scan into [parts](Scan-parts) and weighs them. It stands the largest part on its bed in a physics world. Then it draws the scan on every core, with [levels of detail](Splat-level-of-detail), and a copy of the part beside it. With no scan, it makes a hillside site with a hall and a tower. The C ABI's splat app draws a scan on a GPU; see [C ABI and hosts](C-ABI-and-hosts).
+
+## The scans
+
+| Id | Place | Source |
+|---|---|---|
+| `reading-room` | A reading room | SuperSplat scene `9d370db9` |
+| `studio-11` | A studio apartment, made in Unreal Engine 5 | SuperSplat scene `c37cb759` |
+
+The SuperSplat scenes are not pinned yet: their scene pages could not be read from where the manifest was made. Pin one with `building_scans fetch ID --pin` on a machine that can reach `superspl.at`. To add another scan, see [How to add a scanned building](How-to-add-a-scanned-building).
+
 ## Modules
 
 | Module | What it gives |
 |---|---|
-| `scan/sog` | `read_sog`, `parse_sog`, `parse_sog_bundle`, `SogScene` and `SogModel`; see [SOG files](SOG-files) |
+| `scan/scene` | `ScanScene`, `SplatModel` and `splat_model_from_comments` |
+| `scan/files` | `read_scan`, `parse_scan`, `scan_format` and `ScanFormat`; see [Compressed PLY files](Compressed-PLY-files#scan-files) |
+| `scan/sog` | `read_sog`, `parse_sog` and `parse_sog_bundle`; see [SOG files](SOG-files) |
+| `scan/compressed_ply` | `read_compressed_ply`, `parse_compressed_ply` and `is_compressed_ply`; see [Compressed PLY files](Compressed-PLY-files) |
+| `scan/parts` | `scan_parts`, `scan_parts_on`, `part_mass`, `part_footing`, `part_body`, `part_bed` and `part_splats`; see [Scan parts](Scan-parts) |
+| `scan/terrain` | `terrain_ground`, `TerrainOptions`, `GroundSurface`, `flat_ground` and `ground_grid`; see [Scan parts](Scan-parts#find-the-ground-of-a-slope) |
 | `scan/frame` | `ScanFrame`, `ScanAxis`, `ScaleSource`, `supersplat_frame`, `estimate_heading` and `AxisMap` |
 | `scan/occupancy` | `OccupancyGrid`, `OccupancyOptions`, `ScanRegion`, `trimmed_region` and `occupancy_grid` |
 | `scan/colliders` | `collision_triangles`, `scan_collider` and `add_scan_collider` |
@@ -27,7 +45,7 @@ Read the splats and the frame. Turn the frame by the walls' heading. Fill a grid
 ```mojo
 var catalog = ScanCatalog.open(CATALOG_MANIFEST, CATALOG_CACHE)
 var entry = catalog.find("studio-11")
-var splats = read_sog(catalog.scene("studio-11").value()).geometry.copy()
+var splats = read_scan(catalog.scene("studio-11").value()).geometry.copy()
 var frame = entry.frame
 frame.heading = estimate_heading(splats, frame)
 var options = default_occupancy_options()
@@ -71,7 +89,7 @@ A photo scan has no scale of its own. `scale` is a `ScaleSource`:
 |---|---|
 | `SCALE_DECLARED` | A publisher's convention, such as one unit to the meter, that nobody checked |
 | `SCALE_MEASURED` | A person measured a length in the place and in the scan |
-| `SCALE_ASSUMED` | A storey height was assumed and matched to the scan |
+| `SCALE_ASSUMED` | A length was assumed, such as a storey height or a published size, and matched to the scan |
 
 `fit_building` writes a note for a declared or assumed scale. A load or a mass grows with the cube of a scale error.
 
@@ -121,7 +139,9 @@ Furniture hides the floor under it, so the rectangle is the floor and not only w
 
 ## The catalog and the tool
 
-`assets/building_scans/manifest.json` names each scan: its SuperSplat scene, credit, license, kit, use and frame. `ScanCatalog.open` reads it as typed entries. It refuses a kit, a use or a frame that the kits and frames refuse. `catalog.scene(id)` gives the path of the cached `meta.json`, or nothing.
+`assets/building_scans/manifest.json` names each scan: its source, credit, license, kit, use, frame and files. A scan's files are one `splat` file of any format that `read_scan` reads, or a SOG folder: one `meta` file and its `image` files.
+
+`scene` is a SuperSplat scene id, or null for a scan from elsewhere. `ScanCatalog.open` reads the manifest as typed entries. It refuses a kit, a use or a frame that the kits and frames refuse. `ScanEntry.file` is the file that reads the scan. `catalog.scene(id)` gives its path in the cache, or nothing.
 
 `tools/building_scans.mojo` downloads and checks the files, with the rules of `tools/carla_assets.mojo`:
 
@@ -133,7 +153,7 @@ sh tools/tool.sh .venv/bin/mojo building_scans verify [ID ...] [--strict]
 sh tools/tool.sh .venv/bin/mojo building_scans credits [--all]
 ```
 
-- An entry with no files is resolved only with `--pin`. The tool reads the scene page, finds the `contentUrl` that its viewer loads, and adds the scene's `meta.json` and images as files.
+- An entry with no files is resolved only with `--pin`. The tool reads its SuperSplat scene page, finds the `contentUrl` that its viewer loads, and adds the scene's `meta.json` and images as files. An entry with no files and no scene is an error.
 - A file is written to the cache only after its SHA-256 matches. A verified file is never overwritten.
 - A file with no sum is fetched only with `--pin`, which writes the sum into the manifest.
 - A file whose URL is null is not hosted. Put it in the cache by hand, and the next fetch verifies it.
@@ -142,7 +162,7 @@ The tool refuses every license other than CC BY 4.0 and CC0 1.0. A CC BY-ND scen
 
 ## Credits
 
-`building_scans credits` prints the credit of each cached scan. `assets/building_scans/ATTRIBUTION.md` holds the credit of every entry. Credit the author, link the scene and the license, and say what you changed, when you share a scan or a render of it.
+`building_scans credits` prints the credit of each cached scan. `assets/building_scans/ATTRIBUTION.md` holds the credit of every entry. Credit the author, link the source and the license, and say what you changed, when you share a scan or a render of it.
 
 ## Limits
 
@@ -150,7 +170,7 @@ The tool refuses every license other than CC BY 4.0 and CC0 1.0. A CC BY-ND scen
 - A sloped roof, a dome or a vault is the top of a storey, not a roof shape.
 - The constructions come from the kit. They are assumed, not measured.
 - The scale of a scan is only as good as its source. See the table of scale sources.
-- An outside scan gives one storey from the ground to the top.
+- An outside scan gives one storey from the ground to the top. A hillside has no flat ground layer: find its ground with `terrain_ground` and cut its parts with `scan_parts_on`, as `examples/scan_parts.mojo` does.
 - The grid is dense, so a large scan needs a larger voxel.
 
 See [Why scans become building models](Why-scans-become-building-models) for the reasons behind the design.

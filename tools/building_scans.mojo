@@ -5,11 +5,12 @@
 
 """Fetch, verify and credit the scanned buildings.
 
-The scans are too large to keep in git: 15 MB to over 1 GB each. The
+The scans are too large to keep in git: 12 MB to over 1 GB each. The
 manifest, `assets/building_scans/manifest.json`, names each one: its
-SuperSplat scene, its author, its CC BY 4.0 or CC0 license, the
-construction kit and the frame that `extensions.building.scan` reads it
-with, and its files with their URLs and SHA-256 sums. This tool downloads
+source, its author, its CC BY 4.0 or CC0 license, the construction kit
+and the frame that `extensions.building.scan` reads it with, and its
+files with their URLs and SHA-256 sums. A scan is one splat file, or a
+SuperSplat scene's SOG folder. This tool downloads
 the files into a cache that git ignores, `.cache/building-scans/`, and
 checks each sum, as `tools/carla_assets.mojo` does for the CARLA town.
 
@@ -26,8 +27,8 @@ Commands, from the repository root:
 Rules the fetch keeps:
 
 - An entry with no files is resolved only with `--pin`: the tool reads
-  its scene page, finds the scene's `meta.json`, and adds the text and
-  each image it names as files with no sum. The pinning fetch then
+  its SuperSplat scene page, finds the scene's `meta.json`, and adds the
+  text and each image it names as files with no sum. The pinning fetch then
   downloads them and writes their sums into the manifest.
 - A file is written to the cache only after its sum matches, and a
   verified file is never overwritten. A cached file whose sum does not

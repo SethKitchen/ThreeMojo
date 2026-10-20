@@ -1,6 +1,6 @@
 # How to add a scanned building
 
-This guide adds a SuperSplat scene to the scanned buildings, pins its files and fits it. You need a machine that can reach `superspl.at`. See [Scanned buildings](Scanned-buildings) for what each step does.
+This guide adds a SuperSplat scene to the scanned buildings, pins its files and fits it. You need a machine that can reach `superspl.at`. To add a scan that is one file at a URL, such as a release on GitHub, see [Add a scan in one file](#add-a-scan-in-one-file). See [Scanned buildings](Scanned-buildings) for what each step does.
 
 ## 1. Choose a scene
 
@@ -70,3 +70,38 @@ Read the report. Check that each storey's height and plan match the place. Check
 ## 6. Commit
 
 Commit the manifest and `ATTRIBUTION.md`. Do not commit the cache: `.cache/` is ignored, and each person fetches the files with the pinned sums.
+
+## Add a scan in one file
+
+A scan in one file can be in any format that `extensions/scan/files.mojo` reads, such as a compressed PLY file. Give it one `splat` file with its URL, no sum, and a null `scene`:
+
+```json
+{
+  "id": "stone-chapel",
+  "title": "The scan's title",
+  "author": "the author's name",
+  "author_url": "https://github.com/the-author",
+  "license": "CC-BY-4.0",
+  "source": "https://github.com/the-author/scans/releases/tag/1.0",
+  "scene": null,
+  "provenance": "What the release says about the capture, and where the scale comes from.",
+  "changes": "None. ThreeMojo reads the published file as it is.",
+  "kit": "stone",
+  "use": "meeting",
+  "frame": {"up": "-y", "north": "-z", "unit_m": 1, "scale": "assumed"},
+  "files": [
+    {
+      "role": "splat",
+      "url": "https://github.com/the-author/scans/releases/download/1.0/chapel.compressed.ply",
+      "sha256": null,
+      "path": "stone-chapel/chapel.compressed.ply"
+    }
+  ]
+}
+```
+
+1. Read the license in the source. It must be CC BY 4.0 or CC0 1.0.
+2. Run `building_scans fetch stone-chapel --pin`. It downloads the file and writes its sum into the manifest.
+3. Draw the scan from a few sides, for example with `examples/scan_parts.mojo` and the file's path. Correct `up` if it stands on its side or upside down.
+4. Measure one length in the scan whose size you know, such as a door or a published dome. Set `unit_m` to the meters in one scan unit, and say where the length comes from in `provenance`.
+5. Update the credits and commit, as above.

@@ -60,6 +60,7 @@ def test_the_repository_manifest_reads() raises:
     assert_true(room.frame.scale == SCALE_DECLARED)
     assert_equal(room.license, "CC-BY-4.0")
     assert_true(catalog.find("studio-11").use == LIVING)
+    assert_equal(catalog.find("studio-11").file, "studio-11/meta.json")
     assert_false(Bool(catalog.scene("studio-11")))
     assert_equal(catalog.cache, ".cache/no-such-cache/")
     assert_equal(CATALOG_CACHE, ".cache/building-scans/")
@@ -83,6 +84,38 @@ def test_a_cached_scene_is_found_by_its_text() raises:
     assert_equal(entry.frame.unit.to(METER), 2)
     with assert_raises(contains="no scan 'nope'"):
         _ = catalog.scene("nope")
+
+
+def test_a_splat_file_is_the_scan() raises:
+    """An entry's `splat` file is the file that reads it."""
+    var entry = String(ENTRY).replace(
+        "}}",
+        (
+            '}, "files": [{"role": "meta", "path": "flat-room/m.json"},'
+            ' {"role": "splat", "path": "flat-room/flat.ply"}]}'
+        ),
+    )
+    var cache = temporary_path("catalog_splat/")
+    var catalog = ScanCatalog.parse(_manifest(entry), cache)
+    assert_equal(catalog.find("flat-room").file, "flat-room/flat.ply")
+    from std.os import makedirs
+
+    makedirs(cache + "flat-room")
+    Path(cache + "flat-room/flat.ply").write_text("ply")
+    assert_equal(
+        catalog.scene("flat-room").value(), cache + "flat-room/flat.ply"
+    )
+    var folder = String(ENTRY).replace(
+        "}}", '}, "files": [{"role": "meta", "path": "flat-room/meta.json"}]}'
+    )
+    assert_equal(
+        ScanCatalog.parse(_manifest(folder), cache).find("flat-room").file,
+        "flat-room/meta.json",
+    )
+    with assert_raises(contains="an entry has no role"):
+        _ = ScanCatalog.parse(
+            _manifest(String(ENTRY).replace("}}", '}, "files": [{}]}')), cache
+        )
 
 
 def test_a_manifest_with_no_entries_has_no_scan() raises:

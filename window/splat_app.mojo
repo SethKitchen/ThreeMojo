@@ -13,10 +13,18 @@ by a 50 degree camera that stands where `cameras.fit_sphere` puts it, and
 turned with the orbit controls and damping. The camera also turns by itself
 until the space bar stops it.
 
+A host gives the app a scan file of any format whose first bytes name it, as
+`extensions.scan.files.scan_format` reads them: an `.spz` file, a splat PLY, a
+compressed PLY or a SOG bundle. Every format but SPZ holds y down, as the
+Gaussian splatting training code writes it, so the app turns such a scan half
+a turn about x, and it stands up. That is the turn that three.js's examples
+give a PLY scan.
+
 A host can draw a frame in two ways.
 
-- `draw` draws on the CPU, with `draw_gaussian_splat`, as the examples do.
-  It takes about 0.2 s a frame for 445,409 splats.
+- `draw` draws on the CPU, with `draw_gaussian_splat` on every core, as the
+  examples do. It takes about 80 ms a frame at 640 by 360 pixels for the
+  445,409 splats of the tomatoes on four cores.
 - `prepare` makes what a host's GPU needs and the host draws. The scan stays
   where it is in memory, and `part` says where. `prepare` sorts the splats
   back to front on the CPU when the view has turned far enough, which is a few
@@ -44,13 +52,15 @@ from controls.orbit_controls import OrbitControls
 from core.gaussian_splat_utils import GaussianSplatGeometry
 from core.object3d import NodeId, Object3D
 from core.scene import Scene
-from loaders.spz import parse_spz
+from extensions.scan.files import parse_scan, scan_format
+from math.quaternion import Quaternion
 from math.vector3 import Vector3
 from objects.gaussian_splat import GaussianSplat
 from render.framebuffer import Color, Framebuffer
 from render.splat_raster import draw_gaussian_splat
 from render.working_space import resolve_srgb_working, srgb_working_target
 from std.pathlib import Path
+from std.sys import num_logical_cores
 from units.si import DEGREE, METER, MILLISECOND, Angle, Duration, Length
 from window.capi_abi import (
     KEY_DOWN,
@@ -216,18 +226,25 @@ struct SplatApp(Movable):
         self.order_dirty = False
 
     def load(mut self, file: List[UInt8]) raises:
-        """Replace the scan with an `.spz` file, and frame it.
+        """Replace the scan with a scan file, and frame it.
 
         Args:
-            file: The bytes of an `.spz` file.
+            file: The bytes of an `.spz` file, a splat PLY, a compressed PLY
+                or a SOG bundle. A format that holds y down stands up; see
+                the module docstring.
 
         Raises:
-            Error: If the file is not one that `parse_spz` reads, or it holds
-                no splats. The app is not changed then.
+            Error: If the first bytes name no format, the format's reader
+                refuses the file, or it holds no splats. The app is not
+                changed then.
         """
-        self.load_geometry(parse_spz(file))
+        var format = scan_format("", file)
+        var scene = parse_scan(file, format)
+        self.load_geometry(scene.geometry.copy(), format.y_down())
 
-    def load_geometry(mut self, var geometry: GaussianSplatGeometry) raises:
+    def load_geometry(
+        mut self, var geometry: GaussianSplatGeometry, y_down: Bool = False
+    ) raises:
         """Replace the scan with splats, and frame them as the example does.
 
         The camera stands on the side of the scan's bounding sphere that
@@ -237,6 +254,8 @@ struct SplatApp(Movable):
 
         Args:
             geometry: The splats.
+            y_down: Whether the splats hold y down. The scan's node then
+                turns half a turn about x, so that the scan stands up.
 
         Raises:
             Error: If there are no splats. The app is not changed then.
@@ -247,13 +266,23 @@ struct SplatApp(Movable):
         splat.compute_bounding_sphere()
         var sphere = splat.bounding_sphere.value()
         var radius = max(sphere.radius, SMALLEST_RADIUS)
+        # Half a turn about x keeps x and negates y and z.
+        var center = sphere.center
+        var turn = Quaternion(0, 0, 0, 1)
+        if y_down:
+            center = Vector3(center.x, -center.y, -center.z)
+            turn = Quaternion(1, 0, 0, 0)
         _ = fit_sphere(
             self.camera,
-            sphere.center,
+            center,
             Length(radius, METER),
             VIEW_FROM,
         )
-        var controls = OrbitControls(sphere.center)
+        var node = self.scene.get(self.node)
+        node.set_quaternion(turn)
+        self.scene.set(self.node, node^)
+        self.scene.update()
+        var controls = OrbitControls(center)
         controls.enable_damping = True
         controls.auto_rotate = self.controls.auto_rotate
         controls.auto_rotate_speed = TURN_SPEED
@@ -271,7 +300,7 @@ struct SplatApp(Movable):
         """Load the scan from a file, if the file can be read.
 
         Args:
-            path: The `.spz` file.
+            path: A scan file that `load` reads.
 
         Returns:
             Whether the scan is loaded. The app is not changed when it is not.
@@ -367,7 +396,14 @@ struct SplatApp(Movable):
                 # The rasterizer can sort before a later projection fails.
                 # Keep the published GPU order until the next prepare.
                 self.order_dirty = True
-            draw_gaussian_splat(target, self.scene, self.splat, self.camera)
+            draw_gaussian_splat(
+                target,
+                self.scene,
+                self.splat,
+                self.camera,
+                None,
+                num_logical_cores(),
+            )
         self.frame = resolve_srgb_working(target)
 
     def prepare(mut self) raises -> Int:
@@ -400,7 +436,9 @@ struct SplatApp(Movable):
             camera_world.transform_point(Vector3(0, 0, 0))
         )
         # Validate the complete view before replacing any published arrays.
-        var sorted = self.splat.update_sort(world, view, self.camera.near)
+        var sorted = self.splat.update_sort(
+            world, view, self.camera.near, num_logical_cores()
+        )
         if sorted or self.order_dirty:
             self._copy_order()
             self.order_dirty = False

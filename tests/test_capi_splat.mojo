@@ -363,6 +363,54 @@ def test_a_new_scan_clears_old_damping_and_keeps_the_turn_running() raises:
     tm_destroy(fresh)
 
 
+def _give_file(app: Handle, path: String) raises -> Int32:
+    """Give an app a scan file of any format, as a host does."""
+    var file = Path(path).read_bytes()
+    var room = _room(file)
+    var status = tm_asset(app, room, Int32(len(file)))
+    tm_free(room)
+    return status
+
+
+def test_a_scan_that_holds_y_down_stands_up() raises:
+    """A compressed PLY turns half a turn about x, and an SPZ does not."""
+    var app = _plain()
+    assert_equal(
+        _give_file(app, "assets/compressed_ply/sh1.compressed.ply"), Int32(0)
+    )
+    assert_equal(_info(app, SPLAT_INFO_COUNT), 30)
+    assert_equal(_info(app, SPLAT_INFO_DEGREE), 1)
+    ref state = _state(app)[]
+    var world = state.scene.world_matrix(state.node)
+    assert_almost_equal(world.elements[0], 1)
+    assert_almost_equal(world.elements[5], -1)
+    assert_almost_equal(world.elements[10], -1)
+    state.splat.compute_bounding_sphere()
+    var center = state.splat.bounding_sphere.value().center
+    assert_almost_equal(state.controls.target.x, center.x)
+    assert_almost_equal(state.controls.target.y, -center.y)
+    assert_almost_equal(state.controls.target.z, -center.z)
+    assert_equal(_give(app, "v3.spz"), Int32(0))
+    var upright = _state(app)[].scene.world_matrix(_state(app)[].node)
+    assert_almost_equal(upright.elements[5], 1)
+    assert_almost_equal(upright.elements[10], 1)
+    tm_destroy(app)
+
+
+def test_a_host_can_give_any_marked_format() raises:
+    """A SOG bundle and a splat PLY are read as an SPZ is."""
+    var app = _plain()
+    assert_equal(_give_file(app, "assets/sog/sh2.sog"), Int32(0))
+    assert_equal(_info(app, SPLAT_INFO_COUNT), 40)
+    assert_equal(_info(app, SPLAT_INFO_DEGREE), 2)
+    assert_equal(
+        _give_file(app, "assets/compressed_ply/sh0_restored.ply"), Int32(0)
+    )
+    assert_equal(_info(app, SPLAT_INFO_COUNT), 9)
+    assert_equal(_info(app, SPLAT_INFO_SCAN), 2)
+    tm_destroy(app)
+
+
 def test_a_scan_that_cannot_be_read_leaves_the_app_alone() raises:
     var app = _loaded("v3.spz")
     var room = _room(List[UInt8](length=64, fill=7))

@@ -27,3 +27,17 @@ A fitted model carries notes, because its numbers carry the scan's uncertainty. 
 ## Downloads, not commits
 
 The scans are 15 MB to over 1 GB each. Git is the wrong store for them. The manifest pins each file's SHA-256 instead, as the CARLA assets do. Each person downloads the same bytes, and a changed file is refused. The manifest also holds each scan's credit and license, and the tool refuses a license that forbids changes or commercial use.
+
+No scan is kept in git. An example that gets no scan makes a scan of its own. So the gallery and the tests run with no download, the same way on every machine.
+
+## Parts, not only a model
+
+A fitted model answers questions about a building as a whole: storeys, walls, loads. Many questions are about a piece: what a dome weighs, whether a statue stands, how a fallen block moves. [Scan parts](Scan-parts) answers them. A part is what stands apart from the ground in the grid, so it needs no labels and no training. Faces join voxels and edges do not. So a gap of one voxel splits two parts, and a scan's blur across one edge does not merge them.
+
+A hillside has no ground layer, so the ground is a surface. A wall is a step that a slope does not make, and a roof is smaller than a hillside. Those two facts find the ground with no labels either. The scan does not see the ground under a building. That ground takes the lowest of the nearest ground, and a foot within one step of it bears.
+
+A convex body cannot stand on rough ground that its hull holds. So the body stands on a bed: the ground less what the hull overlaps.
+
+A part's mass rests on what the scan saw. A scan sees surfaces, so the default weighs a shell, and a solid fill is a choice for a solid object. The footing gives the tip angle from the base's convex hull and the center of mass. The physics test leans a pillar to each side of that angle, so the engineering number and the simulation agree.
+
+A part's splats are copied with their harmonics, in the scan's coordinates. A node places the copy. The renderer evaluates the harmonics in the node's space, so a turned copy keeps its view-dependent colors. Moving the splats themselves would need the harmonics turned too.

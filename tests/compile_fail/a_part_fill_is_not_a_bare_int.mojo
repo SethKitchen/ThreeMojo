@@ -3,11 +3,11 @@
 # Noncommercial use is free; commercial use requires a paid license.
 # See LICENSE, LICENSE-COMMERCIAL.md and THIRD-PARTY-NOTICES.md.
 
-"""A SOG model must be a `SogModel`, not a bare integer."""
+"""A part fill must be a `PartFill`, not a bare integer."""
 
-from extensions.scan.sog import SogModel
+from extensions.scan.parts import PartFill
 
 
 def main():
-    var kind: SogModel = 0
+    var kind: PartFill = 0
     _ = kind.is_valid()

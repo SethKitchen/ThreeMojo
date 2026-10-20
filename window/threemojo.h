@@ -85,13 +85,15 @@ int32_t tm_height(const tm_app *app);
  * which has no files, the host gives it the bytes. */
 
 /* Make room for size bytes in the library's memory. Returns NULL if size is
- * outside 1..64 MiB. Give the room back with tm_free. */
+ * outside 1 to the library's most: 64 MiB for the water, 128 MiB for the
+ * splats. Give the room back with tm_free. */
 uint8_t *tm_alloc(int32_t size);
 
 /* Give back room from tm_alloc. */
 void tm_free(uint8_t *room);
 
-/* Give the app a file: for the water, its pebble photograph, a JPEG. The app
+/* Give the app a file: for the water, its pebble photograph, a JPEG, and for
+ * the splats, a scan in any format whose first bytes name it. The app
  * copies the bytes before it returns. Returns 0 on success, and 1 if the
  * length is not positive or the bytes are not a file that the app can read.
  * The app is unchanged then. */

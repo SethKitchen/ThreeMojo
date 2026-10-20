@@ -176,5 +176,8 @@ $(call gallery,expressions,expressions)
 $(call gallery,streamline,streamline)
 # Three tomatoes, scanned as 445,409 Gaussian splats, with the camera circling.
 $(call gallery,tomatoes,tomatoes,assets/tomatoes/tomatoes.v4.spz)
-# A building model fitted to a scan of a two-storey room, turning.
+# A building model fitted to a scan of a two-story room, turning.
 $(call gallery,scanned-buildings,building_scan)
+# A demonstration site of splats on a hillside, cut into parts, with a copy of
+# its largest part beside it, drawn with levels of detail on every core.
+$(call gallery,scan-parts,scan_parts)
