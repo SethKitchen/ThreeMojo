@@ -11,7 +11,7 @@ import hashlib
 import json
 
 EDGES = {'full_audit_cleanup_contracts.py': {'before_sha256': 'f62dbe69ddd5d15bd79aa4b0a8237d9475fe1a00cea06c2f7124c59af237c833',
-                                     'after_sha256': '0b3a21d64eb631a8d8cf418f060268a1fd9fd8b108060f9a081ac0d719a2bd7c',
+                                     'after_sha256': '2542c8ff7d8ed131ec78d70d4b53077d6195ff087e8cf4ec8533c991e72a4f59',
                                      'edits': ((56,
                                                 57,
                                                 (),
@@ -36,8 +36,85 @@ EDGES = {'full_audit_cleanup_contracts.py': {'before_sha256': 'f62dbe69ddd5d15bd
                                                  "'tools/carla_lane_oracle/pr760_arithmetic_stage.py',\n",
                                                  '                 '
                                                  "'tools/carla_lane_oracle/pr780_source_successor.py')\n")),
-                                               (722,
-                                                723,
+                                               (675,
+                                                727,
+                                                (),
+                                                ('def _code_equal(left, right):\n',
+                                                 '    """Compare complete code data without '
+                                                 'building two recursive images."""\n',
+                                                 '    def constant_equal(first, second):\n',
+                                                 '        kind = type(first)\n',
+                                                 '        if kind is not type(second):\n',
+                                                 '            # Both sides must still reject '
+                                                 'unsupported data after a mismatch.\n',
+                                                 '            return _code_constant(first) == '
+                                                 '_code_constant(second)\n',
+                                                 '        if kind is types.CodeType:\n',
+                                                 '            return code_equal(first, second)\n',
+                                                 '        if kind is tuple:\n',
+                                                 '            if len(first) != len(second):\n',
+                                                 '                return _code_constant(first) == '
+                                                 '_code_constant(second)\n',
+                                                 '            equal = True\n',
+                                                 '            for one, two in zip(first, second, '
+                                                 'strict=True):\n',
+                                                 '                equal = constant_equal(one, two) '
+                                                 'and equal\n',
+                                                 '            return equal\n',
+                                                 '        if kind is frozenset:\n',
+                                                 '            # Preserve typed elements, float '
+                                                 'bits and canonical NaN collapse.\n',
+                                                 '            return _code_constant(first) == '
+                                                 '_code_constant(second)\n',
+                                                 '        if kind is float:\n',
+                                                 "            return struct.pack('>d', first) == "
+                                                 "struct.pack('>d', second)\n",
+                                                 '        if kind is complex:\n',
+                                                 "            return (struct.pack('>dd', "
+                                                 'first.real, first.imag)\n',
+                                                 "                    == struct.pack('>dd', "
+                                                 'second.real, second.imag))\n',
+                                                 '        if first is Ellipsis:\n',
+                                                 '            return True\n',
+                                                 '        if kind is slice:\n',
+                                                 '            return constant_equal((first.start, '
+                                                 'first.stop, first.step),\n',
+                                                 '                                  (second.start, '
+                                                 'second.stop, second.step))\n',
+                                                 '        if kind is str or kind is bytes or kind '
+                                                 'is int or kind is bool or kind is type(None):\n',
+                                                 '            return first == second\n',
+                                                 '        return _code_constant(first) == '
+                                                 '_code_constant(second)\n',
+                                                 '\n',
+                                                 '    def code_equal(first, second):\n',
+                                                 '        if type(first) is not types.CodeType or '
+                                                 'type(second) is not types.CodeType:\n',
+                                                 '            return _code_identity(first) == '
+                                                 '_code_identity(second)\n',
+                                                 '        equal = True\n',
+                                                 '        for name in sorted(dir(first)):\n',
+                                                 "            if name.startswith('co_') and name "
+                                                 "!= 'co_filename':\n",
+                                                 '                value = getattr(first, name)\n',
+                                                 '                if not callable(value):\n',
+                                                 '                    # Visit every field: later '
+                                                 'unsupported constants must fail.\n',
+                                                 '                    equal = '
+                                                 'constant_equal(value, getattr(second, name)) and '
+                                                 'equal\n',
+                                                 '        return equal\n',
+                                                 '\n',
+                                                 '    try:\n',
+                                                 '        return code_equal(left, right)\n',
+                                                 '    finally:\n',
+                                                 '        # Release the recursive closures without '
+                                                 'waiting for cyclic collection.\n',
+                                                 '        del code_equal, constant_equal\n',
+                                                 '\n',
+                                                 '\n')),
+                                               (774,
+                                                775,
                                                 ('for _module in (source, guard, '
                                                  "_sibling('affected'), _sibling('cache_key'), "
                                                  'consumer_ledger, station, shared_helpers, '
@@ -51,18 +128,55 @@ EDGES = {'full_audit_cleanup_contracts.py': {'before_sha256': 'f62dbe69ddd5d15bd
                                                  'typed_boundary, conditioned_cubic, '
                                                  'scaled_float32, pr760_stage, '
                                                  'pr780_successor):\n',)),
-                                               (775,
-                                                776,
+                                               (823,
+                                                834,
+                                                (),
+                                                ("    compare = globals().get('_code_equal')\n",
+                                                 '    require(type(compare) is types.FunctionType '
+                                                 'and compare.__globals__ is globals()\n',
+                                                 '            and compare.__defaults__ is None and '
+                                                 'compare.__kwdefaults__ is None\n',
+                                                 "            and '__wrapped__' not in "
+                                                 'compare.__dict__,\n',
+                                                 "            'executing code comparison helper "
+                                                 "changed')\n",
+                                                 '    compare_code = compare.__code__\n',
+                                                 '    require(_code_identity(compare_code) == '
+                                                 '_code_identity(\n',
+                                                 '                '
+                                                 "_IMPORT_CODE[str(_SELF_PATH)]['_code_equal']),\n",
+                                                 "            'executing code comparison helper "
+                                                 "changed')\n",
+                                                 '    # Later mutation of the live function must '
+                                                 'not replace this captured code.\n',
+                                                 '    compare = types.FunctionType(compare_code, '
+                                                 'globals())\n')),
+                                               (838,
+                                                839,
                                                 ('               vars(scaled_float32), '
                                                  'vars(pr760_stage))\n',),
                                                 ('               vars(scaled_float32), '
                                                  'vars(pr760_stage), vars(pr780_successor))\n',)),
-                                               (814,
-                                                815,
+                                               (859,
+                                                860,
+                                                ('                    require(actual is not None '
+                                                 'and _code_identity(actual) == '
+                                                 '_code_identity(code),\n',),
+                                                ('                    require(actual is not None '
+                                                 'and compare(actual, code),\n',)),
+                                               (866,
+                                                867,
+                                                ('                require(actual is not None and '
+                                                 '_code_identity(actual) == '
+                                                 '_code_identity(expected),\n',),
+                                                ('                require(actual is not None and '
+                                                 'compare(actual, expected),\n',)),
+                                               (877,
+                                                878,
                                                 (),
                                                 ('    pr780_successor.verify_data()\n',)),
-                                               (3477,
-                                                3480,
+                                               (3540,
+                                                3543,
                                                 (),
                                                 ('    extension = '
                                                  "pr780_successor._data_snapshot()['edges'].get(path)\n",
@@ -71,19 +185,19 @@ EDGES = {'full_audit_cleanup_contracts.py': {'before_sha256': 'f62dbe69ddd5d15bd
                                                  '        text = '
                                                  'pr780_successor.predecessor_bytes(path, '
                                                  "text.encode('utf-8')).decode('utf-8')\n")),
-                                               (3568,
-                                                3571,
+                                               (3631,
+                                                3634,
                                                 (),
                                                 ('    extension = '
                                                  "pr780_successor._data_snapshot()['edges'].get(path)\n",
                                                  '    if edge is None and extension is None:\n',
                                                  '        return text\n')),
-                                               (3572,
-                                                3573,
+                                               (3635,
+                                                3636,
                                                 ('        return text\n',),
                                                 ('        edge = extension\n',)),
-                                               (3589,
-                                                3594,
+                                               (3652,
+                                                3657,
                                                 ('        new_endpoint = path in '
                                                  'pr760_stage.CARLA_REGISTRY_PATHS and '
                                                  'source.token_sha256(text) == '
@@ -100,8 +214,8 @@ EDGES = {'full_audit_cleanup_contracts.py': {'before_sha256': 'f62dbe69ddd5d15bd
                                                  "edge['after_token_sha256'])\n",
                                                  '        if not (extended or new_endpoint or '
                                                  'typed_boundary.is_current(path, text) or\n')),
-                                               (3598,
-                                                3600,
+                                               (3661,
+                                                3663,
                                                 ('        require((sha(raw) == '
                                                  "edge['after_sha256']) if new_endpoint else "
                                                  'typed_boundary.is_current(path, raw),\n',),
@@ -110,13 +224,13 @@ EDGES = {'full_audit_cleanup_contracts.py': {'before_sha256': 'f62dbe69ddd5d15bd
                                                  '                (sha(raw) == '
                                                  "edge['after_sha256']) if new_endpoint else "
                                                  'typed_boundary.is_current(path, raw),\n')),
-                                               (3965,
-                                                3966,
+                                               (4028,
+                                                4029,
                                                 (),
                                                 ('    extensions = '
                                                  "pr780_successor._data_snapshot()['edges']\n",)),
-                                               (3969,
-                                                3972,
+                                               (4032,
+                                                4035,
                                                 ('                   source.token_sha256(text) == '
                                                  "pr760_stage.EDGES[p]['after_token_sha256'])}\n",),
                                                 ('                   source.token_sha256(text) == '
@@ -125,8 +239,8 @@ EDGES = {'full_audit_cleanup_contracts.py': {'before_sha256': 'f62dbe69ddd5d15bd
                                                  'source.token_sha256(text) ==\n',
                                                  '                   '
                                                  "extensions[p]['after_token_sha256'])}\n")),
-                                               (4095,
-                                                4097,
+                                               (4158,
+                                                4160,
                                                 ('            projected = '
                                                  '(pr760_stage.predecessor_source(path, '
                                                  "current.decode('utf-8'))\n",),
@@ -136,21 +250,21 @@ EDGES = {'full_audit_cleanup_contracts.py': {'before_sha256': 'f62dbe69ddd5d15bd
                                                  '            projected = '
                                                  '(pr760_stage.predecessor_source(path, '
                                                  "retained.decode('utf-8'))\n")),
-                                               (4099,
-                                                4100,
+                                               (4162,
+                                                4163,
                                                 ('                if qualification else '
                                                  "current.decode('utf-8'))\n",),
                                                 ('                if qualification else '
                                                  "retained.decode('utf-8'))\n",)),
-                                               (4103,
-                                                4104,
+                                               (4166,
+                                                4167,
                                                 ('            if current_image and (path in '
                                                  'pr760_stage.EXAMPLE_PATHS or qualification):\n',),
                                                 ('            if current_image and (path in '
                                                  'pr760_stage.EXAMPLE_PATHS or qualification or '
                                                  'current != retained):\n',)),
-                                               (4223,
-                                                4226,
+                                               (4286,
+                                                4289,
                                                 (' '
                                                  "'tools/carla_lane_oracle/test_pr760_physical_image.py': "
                                                  "'1c1565c05cb702df67319cb69641f83c8a761d38ccf06a11de91b037dfe5b1ce',\n",
@@ -166,22 +280,22 @@ EDGES = {'full_audit_cleanup_contracts.py': {'before_sha256': 'f62dbe69ddd5d15bd
                                                  ' '
                                                  "'tools/carla_lane_oracle/test_typed_boundary_contracts.py': "
                                                  "'8dee4d9c4bf42214fb2f10fbdcf71a4ba04398095d8c62a16233ad6fc038fce7'}\n")),
-                                               (4230,
-                                                4231,
+                                               (4293,
+                                                4294,
                                                 ('    return '
                                                  "{'tools/carla_lane_oracle/test_pr776_input_successors.py': "
                                                  "'af0d9aff27b4f06ce8b102979825d84c177ec78b349dbbb1de4a98423c03f132',\n",),
                                                 ('    return '
                                                  "{'tools/carla_lane_oracle/test_pr776_input_successors.py': "
                                                  "'148a021e1d8173122f231f4e6839d4dfd7bb2bb14d76d70e3725ff310620d2aa',\n",)),
-                                               (4239,
-                                                4240,
+                                               (4302,
+                                                4303,
                                                 ('    """Recover exact earlier comparison bytes '
                                                  'for five named PR776 inputs.\n',),
                                                 ('    """Recover exact earlier comparison bytes '
                                                  'for six named PR776 inputs.\n',)),
-                                               (4248,
-                                                4251,
+                                               (4311,
+                                                4314,
                                                 (),
                                                 ('    extension = '
                                                  "pr780_successor._data_snapshot()['edges'].get(path)\n",
@@ -189,20 +303,20 @@ EDGES = {'full_audit_cleanup_contracts.py': {'before_sha256': 'f62dbe69ddd5d15bd
                                                  "extension['after_sha256']:\n",
                                                  '        raw = '
                                                  'pr780_successor.predecessor_bytes(path, raw)\n')),
-                                               (4632,
-                                                4633,
+                                               (4695,
+                                                4696,
                                                 ('                                                          '
                                                  "'1c1565c05cb702df67319cb69641f83c8a761d38ccf06a11de91b037dfe5b1ce',\n",),
                                                 ('                                                          '
                                                  "'6df971f2bf09c710a4e6ababc6adeea8995fd2e86c3e6866e548d5b193ae3669',\n",)),
-                                               (4634,
-                                                4635,
+                                               (4697,
+                                                4698,
                                                 ('                                                            '
                                                  '128,\n',),
                                                 ('                                                            '
                                                  '129,\n',)),
-                                               (4651,
-                                                4654,
+                                               (4714,
+                                                4717,
                                                 ('                                                             '
                                                  '"\'tools/carla_lane_oracle/test_pr760_arithmetic_stage.py\'):\\n",\n',),
                                                 ('                                                             '
@@ -211,8 +325,8 @@ EDGES = {'full_audit_cleanup_contracts.py': {'before_sha256': 'f62dbe69ddd5d15bd
                                                  "'                        '\n",
                                                  '                                                             '
                                                  '"\'tools/carla_lane_oracle/test_typed_boundary_contracts.py\'):\\n",\n')),
-                                               (4660,
-                                                4662,
+                                               (4723,
+                                                4725,
                                                 ('                                                           '
                                                  '(239,\n',
                                                  '                                                            '
@@ -221,14 +335,14 @@ EDGES = {'full_audit_cleanup_contracts.py': {'before_sha256': 'f62dbe69ddd5d15bd
                                                  '(240,\n',
                                                  '                                                            '
                                                  '245,\n')),
-                                               (4667,
-                                                4668,
+                                               (4730,
+                                                4731,
                                                 ('                                                             '
                                                  "'raw) if path ==\\n',\n",),
                                                 ('                                                             '
                                                  "'raw) if path in (\\n',\n",)),
-                                               (4669,
-                                                4672,
+                                               (4732,
+                                                4735,
                                                 ('                                                             '
                                                  '"\'tools/carla_lane_oracle/test_expectation_binding_successor.py\' '
                                                  '"\n',),
@@ -239,8 +353,8 @@ EDGES = {'full_audit_cleanup_contracts.py': {'before_sha256': 'f62dbe69ddd5d15bd
                                                  '                                                             '
                                                  '"\'tools/carla_lane_oracle/test_typed_boundary_contracts.py\') '
                                                  '"\n')),
-                                               (4688,
-                                                4699,
+                                               (4751,
+                                                4762,
                                                 ('                                                               '
                                                  "'inputs[water])\\n')),))}\n",),
                                                 ('                                                               '
@@ -266,8 +380,8 @@ EDGES = {'full_audit_cleanup_contracts.py': {'before_sha256': 'f62dbe69ddd5d15bd
                                                  "'audit.pr776_predecessor_bytes(path, '\n",
                                                  '                                                                 '
                                                  "'raw)\\n')),))}\n")),
-                                               (4735,
-                                                4738,
+                                               (4798,
+                                                4801,
                                                 (),
                                                 ('    extension = '
                                                  "pr780_successor._data_snapshot()['edges'].get(path)\n",
@@ -275,8 +389,8 @@ EDGES = {'full_audit_cleanup_contracts.py': {'before_sha256': 'f62dbe69ddd5d15bd
                                                  "extension['after_sha256']:\n",
                                                  '        raw = '
                                                  'pr780_successor.predecessor_bytes(path, raw)\n')),
-                                               (4740,
-                                                4743,
+                                               (4803,
+                                                4806,
                                                 (),
                                                 ('        raw = pr776_predecessor_bytes(path, '
                                                  'raw)\n',
@@ -284,8 +398,8 @@ EDGES = {'full_audit_cleanup_contracts.py': {'before_sha256': 'f62dbe69ddd5d15bd
                                                  "'tools/carla_lane_oracle/test_typed_boundary_contracts.py'\n",
                                                  '            and sha(raw) == '
                                                  "'8dee4d9c4bf42214fb2f10fbdcf71a4ba04398095d8c62a16233ad6fc038fce7'):\n")),
-                                               (5335,
-                                                5340,
+                                               (5398,
+                                                5403,
                                                 (),
                                                 ('    extension_path = '
                                                  "'tools/carla_lane_oracle/test_pr760_arithmetic_stage.py'\n",
@@ -297,13 +411,13 @@ EDGES = {'full_audit_cleanup_contracts.py': {'before_sha256': 'f62dbe69ddd5d15bd
                                                  '        raw = '
                                                  'pr780_successor.predecessor_bytes(extension_path, '
                                                  'raw)\n')),
-                                               (5427,
-                                                5428,
+                                               (5490,
+                                                5491,
                                                 (),
                                                 ('        extension_data = '
                                                  'pr780_successor._data_snapshot()\n',)),
-                                               (5429,
-                                                5437,
+                                               (5492,
+                                                5500,
                                                 (),
                                                 ('        extended_pins = {path: '
                                                  "edge['after_sha256']\n",
@@ -321,15 +435,15 @@ EDGES = {'full_audit_cleanup_contracts.py': {'before_sha256': 'f62dbe69ddd5d15bd
                                                  '_pr776_bound_inputs().get(path))),\n',
                                                  "                    'PR780 source successor "
                                                  "predecessor join changed: ' + path)\n")),
-                                               (5439,
-                                                5440,
+                                               (5502,
+                                                5503,
                                                 ('            require(sha(raw) == '
                                                  'successor_pins.get(path, digest),\n',),
                                                 ('            require(sha(raw) == '
                                                  'extended_pins.get(path, successor_pins.get(path, '
                                                  'digest)),\n',)),
-                                               (5441,
-                                                5446,
+                                               (5504,
+                                                5509,
                                                 ('            if path in successor_pins:\n',
                                                  '                prior_inputs[path] = '
                                                  'pr776_predecessor_bytes(path, raw)\n',
@@ -347,8 +461,8 @@ EDGES = {'full_audit_cleanup_contracts.py': {'before_sha256': 'f62dbe69ddd5d15bd
                                                  'digest,\n',
                                                  "                    'PR780/PR776 successor "
                                                  "misses fixed PR760 input: ' + path)\n")),
-                                               (5447,
-                                                5454,
+                                               (5510,
+                                                5517,
                                                 ('            require(sha(observe(path)) == '
                                                  "digest, 'PR776 bound input changed: ' + "
                                                  'path)\n',),
@@ -368,8 +482,8 @@ EDGES = {'full_audit_cleanup_contracts.py': {'before_sha256': 'f62dbe69ddd5d15bd
                                                  '            require(sha(observe(path)) == '
                                                  "digest, 'PR780 bound input changed: ' + "
                                                  'path)\n')),
-                                               (5470,
-                                                5472,
+                                               (5533,
+                                                5535,
                                                 ('                              if path == '
                                                  "'tools/carla_lane_oracle/test_witness_format_contracts.py' "
                                                  "else image[path].decode('utf-8'))\n",),
@@ -378,8 +492,8 @@ EDGES = {'full_audit_cleanup_contracts.py': {'before_sha256': 'f62dbe69ddd5d15bd
                                                  '                              else '
                                                  'prior_inputs.get(path, '
                                                  "image[path]).decode('utf-8'))\n")),
-                                               (5487,
-                                                5488,
+                                               (5550,
+                                                5551,
                                                 ('        helper_texts = {path: previous.get(path, '
                                                  "image[path].decode('utf-8'))\n",),
                                                 ('        helper_texts = {path: previous.get(path, '
@@ -505,7 +619,7 @@ def predecessor(name, raw):
     """Compose exact current checkers into the retained 5e91dad comparison."""
     if type(raw) is not bytes:
         raise AssertionError('checker source must be physical builtin bytes')
-    if hashlib.sha256(json.dumps(EDGES, sort_keys=True, separators=(',', ':')).encode()).hexdigest() != 'e8bf2dcf6766ab9e8b11fc24dbe8494c4981c4d64bceadf2d6a2f4b3011273fb':
+    if hashlib.sha256(json.dumps(EDGES, sort_keys=True, separators=(',', ':')).encode()).hexdigest() != 'f3eba1aca18c351e17ced3cc450abd3c2f70d191a5babf43de662d1a5e452172':
         raise AssertionError('PR780 checker inverse data changed')
     digest = hashlib.sha256(raw).hexdigest()
     edge = EDGES.get(name)

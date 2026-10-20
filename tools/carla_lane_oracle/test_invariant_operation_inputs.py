@@ -1003,7 +1003,7 @@ class BoundedOwnerCurrentControls(unittest.TestCase):
                 current_changed.add(path)
             # The current owner has completed before historical reporting is
             # inspected. These views never replace the physical fixture.
-            historical = typed.historical_source(path, raw.decode('utf-8')).encode('utf-8')
+            historical = typed.historical_source(path, cleanup.pr780_successor.predecessor_bytes(path, raw).decode('utf-8')).encode('utf-8')
             if hashlib.sha256(historical).hexdigest() != digest:
                 historical_changed.add(path)
         self.assertEqual(historical_changed, prior | fixtures.WINNER_SHARED_HELPER_SUCCESSORS)

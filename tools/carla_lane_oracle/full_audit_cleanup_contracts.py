@@ -673,6 +673,58 @@ def _code_identity(code):
                  and not callable(getattr(code, name)))
 
 
+def _code_equal(left, right):
+    """Compare complete code data without building two recursive images."""
+    def constant_equal(first, second):
+        kind = type(first)
+        if kind is not type(second):
+            # Both sides must still reject unsupported data after a mismatch.
+            return _code_constant(first) == _code_constant(second)
+        if kind is types.CodeType:
+            return code_equal(first, second)
+        if kind is tuple:
+            if len(first) != len(second):
+                return _code_constant(first) == _code_constant(second)
+            equal = True
+            for one, two in zip(first, second, strict=True):
+                equal = constant_equal(one, two) and equal
+            return equal
+        if kind is frozenset:
+            # Preserve typed elements, float bits and canonical NaN collapse.
+            return _code_constant(first) == _code_constant(second)
+        if kind is float:
+            return struct.pack('>d', first) == struct.pack('>d', second)
+        if kind is complex:
+            return (struct.pack('>dd', first.real, first.imag)
+                    == struct.pack('>dd', second.real, second.imag))
+        if first is Ellipsis:
+            return True
+        if kind is slice:
+            return constant_equal((first.start, first.stop, first.step),
+                                  (second.start, second.stop, second.step))
+        if kind is str or kind is bytes or kind is int or kind is bool or kind is type(None):
+            return first == second
+        return _code_constant(first) == _code_constant(second)
+
+    def code_equal(first, second):
+        if type(first) is not types.CodeType or type(second) is not types.CodeType:
+            return _code_identity(first) == _code_identity(second)
+        equal = True
+        for name in sorted(dir(first)):
+            if name.startswith('co_') and name != 'co_filename':
+                value = getattr(first, name)
+                if not callable(value):
+                    # Visit every field: later unsupported constants must fail.
+                    equal = constant_equal(value, getattr(second, name)) and equal
+        return equal
+
+    try:
+        return code_equal(left, right)
+    finally:
+        # Release the recursive closures without waiting for cyclic collection.
+        del code_equal, constant_equal
+
+
 def _compiled_functions(raw, filename):
     module_code = compile(raw, filename, 'exec', dont_inherit=True, optimize=sys.flags.optimize)
     return {item.co_name: item for item in module_code.co_consts if isinstance(item, types.CodeType)}
@@ -769,6 +821,17 @@ _LIVE_FUNCTION_CODE_CODE = _live_function_code.__code__
 
 
 def executing_checker_bindings(root=None):
+    compare = globals().get('_code_equal')
+    require(type(compare) is types.FunctionType and compare.__globals__ is globals()
+            and compare.__defaults__ is None and compare.__kwdefaults__ is None
+            and '__wrapped__' not in compare.__dict__,
+            'executing code comparison helper changed')
+    compare_code = compare.__code__
+    require(_code_identity(compare_code) == _code_identity(
+                _IMPORT_CODE[str(_SELF_PATH)]['_code_equal']),
+            'executing code comparison helper changed')
+    # Later mutation of the live function must not replace this captured code.
+    compare = types.FunctionType(compare_code, globals())
     base = Path(__file__).resolve().parents[2]
     modules = (globals(), vars(source), vars(guard), vars(_sibling('affected')),
                vars(_sibling('cache_key')), vars(consumer_ledger), vars(station), vars(shared_helpers), vars(runtime_view),
@@ -794,14 +857,14 @@ def executing_checker_bindings(root=None):
                 for method, code in expected_methods.items():
                     actual = _live_function_code(getattr(live, method, None))
                     _check_defaults(getattr(live, method, None), _IMPORT_DEFAULTS[key].get(name + '.' + method), relative + ':' + name + '.' + method)
-                    require(actual is not None and _code_identity(actual) == _code_identity(code),
+                    require(actual is not None and compare(actual, code),
                             'executing class method changed: ' + relative + ':' + name + '.' + method)
             elif name.startswith('<'):
                 continue
             else:
                 actual = _live_function_code(live)
                 _check_defaults(live, _IMPORT_DEFAULTS[key].get(name), relative + ':' + name)
-                require(actual is not None and _code_identity(actual) == _code_identity(expected),
+                require(actual is not None and compare(actual, expected),
                         'executing function changed: ' + relative + ':' + name)
         if root is not None:
             supplied = _regular(root, relative)
