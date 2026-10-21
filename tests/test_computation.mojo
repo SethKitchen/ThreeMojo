@@ -274,6 +274,8 @@ def test_a_computation_of_nothing_steps_nothing() raises:
 def test_a_computation_refuses_what_it_cannot_run() raises:
     with assert_raises(contains="need a size"):
         _ = GPUComputationRenderer(0, 2)
+    with assert_raises(contains="larger than this port"):
+        _ = GPUComputationRenderer(1 << 31, 1 << 31)
     with assert_raises(contains="need a size"):
         _ = GPUComputationRenderer(2, 0)
     var computation = GPUComputationRenderer(SIZE_X, SIZE_Y)

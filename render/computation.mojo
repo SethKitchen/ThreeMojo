@@ -424,10 +424,17 @@ struct GPUComputationRenderer(Movable):
             size_y: How many texels up.
 
         Raises:
-            Error: If either size is not positive.
+            Error: If either size is not positive, or the texel buffer
+                does not fit in an integer.
         """
         if size_x <= 0 or size_y <= 0:
             raise Error("A computation's images need a size")
+        # Four floats a texel. A side of 2^31 wraps that product to zero,
+        # so an empty image looks like the right size.
+        if size_x > (Int.MAX // 4) // size_y:
+            raise Error(
+                "A computation's images are larger than this port builds"
+            )
         self.size_x = size_x
         self.size_y = size_y
         self.variables = List[ComputeVariable]()
