@@ -53,6 +53,25 @@ def _blend(
     )
 
 
+def _pixel_index(value: Float64) -> Int:
+    """Return the floor of a pixel coordinate.
+
+    A value that does not fit in an integer is past every pixel. `Int` of
+    such a float is not that coordinate.
+
+    Args:
+        value: The coordinate, in pixels.
+
+    Returns:
+        The floor, or `Int.MAX` or `Int.MIN` when `value` does not fit.
+    """
+    if not (value < Float64(Int.MAX)):
+        return Int.MAX
+    if value <= -Float64(Int.MAX):
+        return Int.MIN
+    return Int(floor(value))
+
+
 def fill_polygons(
     mut frame: Framebuffer,
     rings: List[List[Tuple[Float64, Float64]]],
@@ -84,10 +103,10 @@ def fill_polygons(
             y_hi = max(y_hi, p[1])
     if x_hi < x_lo:
         return
-    var px0 = max(Int(floor(x_lo)), 0)
-    var px1 = min(Int(floor(x_hi)), frame.width - 1)
-    var py0 = max(Int(floor(y_lo)), 0)
-    var py1 = min(Int(floor(y_hi)), frame.height - 1)
+    var px0 = max(_pixel_index(x_lo), 0)
+    var px1 = min(_pixel_index(x_hi), frame.width - 1)
+    var py0 = max(_pixel_index(y_lo), 0)
+    var py1 = min(_pixel_index(y_hi), frame.height - 1)
     if px1 < px0 or py1 < py0:
         return
     var span = px1 - px0 + 1
@@ -120,8 +139,8 @@ def fill_polygons(
             while k + 1 < len(xs):
                 var xa = xs[k]
                 var xb = xs[k + 1]
-                var first = max(Int(floor(xa)), px0)
-                var last = min(Int(floor(xb)), px1)
+                var first = max(_pixel_index(xa), px0)
+                var last = min(_pixel_index(xb), px1)
                 for px in range(first, last + 1):
                     for c in range(_SUB):  # pragma: no branch
                         var sx = Float64(px) + (Float64(c) + 0.5) / Float64(

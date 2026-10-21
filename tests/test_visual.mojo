@@ -531,6 +531,18 @@ def test_fill_edge_cases() raises:
     assert_equal(Int(fb.get_pixel(0, 11).g), 0)
 
 
+def test_an_overlay_past_an_integer_lies_past_the_frame() raises:
+    var fb = Framebuffer(4, 4, Color(0, 0, 0))
+    # Entirely to the right of every frame.
+    fill_rect(fb, 1e20, 0, 1e20, 2, Color(255, 0, 0))
+    assert_equal(Int(fb.get_pixel(0, 0).r), 0)
+    # A rectangle from past the left to past the right covers the frame.
+    # A floor of 1e20 is not a column, so the old box could miss it.
+    fill_rect(fb, -1e20, -1e20, 1e20, 1e20, Color(0, 180, 0))
+    assert_equal(Int(fb.get_pixel(0, 0).g), 180)
+    assert_equal(Int(fb.get_pixel(3, 3).g), 180)
+
+
 def test_text() raises:
     var ov = Overlay.from_ttf(FONT)
     var fb = Framebuffer(120, 40, Color(0, 0, 0))
