@@ -1026,6 +1026,7 @@ The reader raises for:
 - A binary record or property that runs past the file, or children that run past their record. An unknown property type. An array encoding that is not 0 or 1. A zlib array of the wrong length.
 - An ASCII node without `:`, a `{` that is not closed, or a `}` that closes nothing.
 - An ASCII string that is not closed, or a `*count` that does not match its `a`.
+- A number used as a whole integer that does not fit in an integer.
 - Nodes nested deeper than `MAX_FBX_DEPTH`.
 - Binary arrays whose combined decoded values exceed 1 GiB. Each value
   counts as eight bytes, including one-byte source values. This applies

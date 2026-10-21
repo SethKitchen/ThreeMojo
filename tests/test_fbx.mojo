@@ -978,6 +978,9 @@ def test_document() raises:
     # Accessors of the wrong kind or out of range.
     with assert_raises():
         _ = document.integer(top, 1)
+    var huge = parse_fbx_text("; FBX\nFBXVersion: 7400\nNode: 1e20\n")
+    with assert_raises(contains="whole number"):
+        _ = huge.integer(huge.child(huge.root(), "Node"), 0)
     with assert_raises():
         _ = document.number(top, 2)
     with assert_raises():

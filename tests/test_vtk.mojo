@@ -196,6 +196,14 @@ def test_what_three_js_throws_on_in_binary_is_refused() raises:
         _ = parse_vtk_binary(_binary(["DATASET X\n"], [], []))
     with assert_raises(contains="POINTS line has no count"):
         _ = parse_vtk_binary(_binary(["POINTS x float\n"], [], []))
+    with assert_raises(contains="POINTS line has no count"):
+        _ = parse_vtk_binary(
+            _binary(["POINTS 10000000000000000000 float\n"], [], [])
+        )
+    with assert_raises(contains="POINTS line has no count"):
+        _ = parse_vtk_binary(
+            _binary(["POINTS -10000000000000000000 float\n"], [], [])
+        )
     with assert_raises(contains="POINT_DATA line has no count"):
         _ = parse_vtk_binary(_binary(["POINT_DATA\n"], [], []))
     with assert_raises(contains="negative length"):

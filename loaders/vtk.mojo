@@ -822,13 +822,16 @@ def _count(line: List[Int], word: Int, what: String) raises -> Int:
         The count.
 
     Raises:
-        Error: If it is not a number, where three.js reads for ever.
+        Error: If it is not a number, where three.js reads for ever, or
+            it does not fit in an integer.
     """
     var text = _word(line, word)
     var value = nan[DType.float64]()
     if Bool(text):
         value = js_parse_int(text.value())
-    if isnan(value):
+    # `Float64(Int.MAX)` rounds up to 2^63. A count at either end does
+    # not fit, and `Int` of it is not the number.
+    if isnan(value) or value <= -Float64(Int.MAX) or value >= Float64(Int.MAX):
         raise Error("VTK: a " + what + " line has no count")
     return Int(value)
 
