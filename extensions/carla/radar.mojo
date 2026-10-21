@@ -47,7 +47,7 @@ from extensions.carla.sensor_noise import SensorRandom
 from extensions.carla.sensor_rays import RayScene
 from extensions.carla.transform import CarlaTransform
 from math.vector3 import Vector3
-from std.math import atan2, cos, sin, sqrt, tan
+from std.math import atan2, cos, isfinite, sin, sqrt, tan
 from units.si import DEGREE, RADIAN, SECOND, Angle, Duration, Length, METER
 
 # CARLA's `Math::Pi2<float>()`.
@@ -122,16 +122,32 @@ struct RadarDescription(ImplicitlyCopyable):
         d.validate()
         return d
 
-    def points_in(self, tick: Duration) -> Int:
+    def points_in(self, tick: Duration) raises -> Int:
         """Return how many rays one tick fires.
+
+        The product is a `Float64`. A `Float32` point count drops whole
+        points past 2^24.
 
         Args:
             tick: The time since the last measurement.
 
         Returns:
             The points per second times the tick, truncated.
+
+        Raises:
+            Error: If the product is not finite or does not fit in an
+                integer.
         """
-        return Int(Float32(self.points_per_second) * tick.to(SECOND))
+        var count = Float64(self.points_per_second) * Float64(tick.to(SECOND))
+        # `Float64(Int.MAX)` is 2^63. `Int` of a float at or past it is not
+        # a count. A float below `-2^63` is not one either.
+        if (
+            not isfinite(count)
+            or count < -Float64(Int.MAX)
+            or count >= Float64(Int.MAX)
+        ):
+            raise Error("A radar point count does not fit in an integer")
+        return Int(count)
 
 
 struct RadarDetection(Equatable, ImplicitlyCopyable, Writable):
@@ -291,7 +307,8 @@ struct Radar(Copyable, Movable):
 
         Raises:
             Error: If the tick is not positive, the range is not positive,
-                or the scene cannot be tested.
+                the point count does not fit in an integer, or the scene
+                cannot be tested.
         """
         if not (tick.value > 0):
             raise Error("A radar tick must be positive")

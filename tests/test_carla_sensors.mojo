@@ -663,6 +663,17 @@ def test_radar_settings() raises:
     assert_equal(d.points_per_second, 1500)
     assert_equal(d.noise_seed, 0)
     assert_equal(d.points_in(_s(0.05)), 75)
+    d.points_per_second = 16777217
+    assert_equal(d.points_in(_s(1)), 16777217)
+    d.points_per_second = 1500
+    with assert_raises(contains="does not fit"):
+        _ = d.points_in(_s(Float32(1e20)))
+    d.points_per_second = -6000000000000000000
+    with assert_raises(contains="does not fit"):
+        _ = d.points_in(_s(2))
+    d.points_per_second = 1500
+    with assert_raises(contains="does not fit"):
+        _ = d.points_in(_s(nan[DType.float32]()))
 
 
 def test_accelerometer_is_the_parabolas_curvature() raises:

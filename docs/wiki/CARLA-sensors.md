@@ -125,7 +125,7 @@ A tick with no ray to fire sends the last measurement again, as CARLA does.
 
 ### Radar
 
-The radar fires the points per second times the tick, truncated. Each ray draws a radius and an angle inside the two fields of view. A hit gives the depth, the azimuth, the altitude and the velocity toward the radar. That velocity is the hit actor's velocity less the radar's own, along the ray.
+The radar fires the points per second times the tick, truncated. The product is a `Float64`, and a product that is not finite or does not fit in an integer is refused. Each ray draws a radius and an angle inside the two fields of view. A hit gives the depth, the azimuth, the altitude and the velocity toward the radar. That velocity is the hit actor's velocity less the radar's own, along the ray.
 
 ### IMU
 
