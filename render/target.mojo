@@ -743,13 +743,17 @@ struct RenderTarget(Movable, SampleSource):
                 default, takes one.
 
         Raises:
-            Error: If either dimension is not positive, `check_target`
-                refuses the type or the outputs, or `check_samples`
-                refuses the sample count.
+            Error: If either dimension is not positive, the pixel count
+                does not fit, `check_target` refuses the type or the
+                outputs, or `check_samples` refuses the sample count.
         """
         require_positive_extent(
             width, height, "Render target dimensions must be positive"
         )
+        # Divide before multiplying. A wrapped product would allocate the
+        # wrong number of pixels.
+        if width > Int.MAX // height:
+            raise Error("A render target is larger than this port draws")
         check_target(type, outputs)
         check_samples(samples)
         self.samples = samples

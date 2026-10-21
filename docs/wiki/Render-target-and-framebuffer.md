@@ -72,6 +72,8 @@ This port differs from three.js in three ways:
 
 ## RenderTarget
 
+A width or a height below one is refused. A pixel count that does not fit in an integer is refused.
+
 | Member | Meaning |
 |---|---|
 | `RenderTarget(width, height, clear, type=UNSIGNED_BYTE_TARGET, outputs=color_only(), samples=0)` | A target cleared to a color. See [Float render targets](#float-render-targets), [Multiple render targets](#multiple-render-targets) and [Multisampled render targets](#multisampled-render-targets). |
@@ -356,7 +358,7 @@ Bit-for-bit equality with another implementation is not promised, because `exp2`
 
 The pixel layout is row-major RGBA from the top, the same as a `Texture`. An image this renderer produces can be fed back in as a texture.
 
-Every accessor raises for a coordinate outside the image.
+A width or a height below one is refused. A byte count that does not fit in an integer is refused. Every accessor raises for a coordinate outside the image.
 
 ## Why
 

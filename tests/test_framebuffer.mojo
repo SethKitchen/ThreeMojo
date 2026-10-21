@@ -121,6 +121,9 @@ def test_rows_are_stored_top_down() raises:
 def test_zero_width_is_rejected() raises:
     with assert_raises():
         _ = Framebuffer(0, 3, Color(0, 0, 0))
+    # Four bytes a pixel at this side length does not fit in an integer.
+    with assert_raises(contains="larger than this port"):
+        _ = Framebuffer(3037000500, 3037000500, Color(0, 0, 0))
 
 
 def test_negative_height_is_rejected() raises:

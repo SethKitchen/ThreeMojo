@@ -1014,11 +1014,16 @@ def require_framebuffer_size(width: Int, height: Int) raises:
         height: The height, in pixels.
 
     Raises:
-        Error: If the width or the height is not positive.
+        Error: If the width or the height is not positive, or four bytes
+            a pixel does not fit in an integer.
     """
     require_positive_extent(
         width, height, "Framebuffer dimensions must be positive"
     )
+    # Four bytes a pixel is the larger product. A wrapped count would
+    # allocate the wrong buffer.
+    if width > (Int.MAX // 4) // height:
+        raise Error("A framebuffer is larger than this port stores")
 
 
 def require_depth_length(length: Int, width: Int, height: Int) raises:
