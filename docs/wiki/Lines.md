@@ -130,7 +130,7 @@ A line lights the pixel each of its ends lands in, both ends included. So a line
 | `other_at(a, b, major)` | The minor-axis pixel it lights there. |
 | `covers(a, b, x, y)` | Whether it lights one pixel. |
 
-The CPU walks the major axis and asks `other_at` for the minor one. The kernel asks `covers` whether this pixel is the one. The two loops are shaped differently and cannot disagree, because both get the answer from one expression. See [Shared CPU and GPU code](Why-the-CPU-and-GPU-share-code).
+The CPU walks the major axis and asks `other_at` for the minor one. The kernel asks `covers` whether this pixel is the one. The two loops are shaped differently and cannot disagree, because both get the answer from one expression. See [Shared CPU and GPU code](Why-the-CPU-and-GPU-share-code). An endpoint that does not fit in an integer lies past the image.
 
 ### Why not a distance from the line
 

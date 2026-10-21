@@ -89,11 +89,56 @@ def major_is_x(a: Vector2, b: Vector2) -> Bool:
     return abs(b.x - a.x) >= abs(b.y - a.y)
 
 
+# Far enough past any image a render target can name, and far enough from
+# either end of `Int` that a step count can subtract it. 2^62.
+comptime _AXIS_FAR = 1 << 62
+
+
+def _axis_index(value: Float32) -> Int:
+    """Return the floor of one screen coordinate.
+
+    A value that is not finite, or that does not fit in an integer, is
+    not a stable pixel index. It is held at `±2^62`, past the image, where
+    a later subtraction still fits.
+
+    Args:
+        value: The coordinate, in pixels.
+
+    Returns:
+        The floor, or `±_AXIS_FAR` when `value` does not fit.
+    """
+    var limit = Float32(Int.MAX)
+    if not (value < limit):
+        return _AXIS_FAR
+    if value <= -limit:
+        return -_AXIS_FAR
+    return Int(floor(value))
+
+
+def _step_count(start: Int, end: Int) -> Int:
+    """Return how many steps lie from `start` through `end`, inclusive.
+
+    Args:
+        start: The first major-axis index.
+        end: The last major-axis index.
+
+    Returns:
+        The count, or `Int.MAX` when the distance does not fit.
+    """
+    var low = min(start, end)
+    var high = max(start, end)
+    if low < 0 and high > Int.MAX + low:
+        return Int.MAX
+    return high - low + 1
+
+
 def span_of(a: Vector2, b: Vector2) -> Int:
     """Return how many pixels the line lights.
 
     One per step along the major axis, both ends included. A line whose
-    two ends land on one pixel lights that pixel.
+    two ends land on one pixel lights that pixel. An end that does not fit
+    in an integer lies past the image, and a span that does not fit is
+    `Int.MAX`.
 
     Args:
         a: One end, in pixels.
@@ -103,12 +148,14 @@ def span_of(a: Vector2, b: Vector2) -> Int:
         The count, never less than one.
     """
     if major_is_x(a, b):
-        return Int(abs(floor(b.x) - floor(a.x))) + 1
-    return Int(abs(floor(b.y) - floor(a.y))) + 1
+        return _step_count(_axis_index(a.x), _axis_index(b.x))
+    return _step_count(_axis_index(a.y), _axis_index(b.y))
 
 
 def major_at(a: Vector2, b: Vector2, step: Int) -> Int:
     """Return the major-axis pixel the line reaches at one step.
+
+    An end that does not fit in an integer lies past the image.
 
     Args:
         a: The end the walk starts from, in pixels.
@@ -119,11 +166,11 @@ def major_at(a: Vector2, b: Vector2, step: Int) -> Int:
         The column, or the row for a line walked down its y axis.
     """
     if major_is_x(a, b):
-        var start = Int(floor(a.x))
+        var start = _axis_index(a.x)
         if b.x >= a.x:
             return start + step
         return start - step
-    var start = Int(floor(a.y))
+    var start = _axis_index(a.y)
     if b.y >= a.y:
         return start + step
     return start - step
@@ -200,7 +247,7 @@ def other_at(a: Vector2, b: Vector2, major: Int) -> Int:
     Returns:
         The row, or the column for a line walked down its y axis.
     """
-    return Int(floor(minor_at(a, b, major)))
+    return _axis_index(minor_at(a, b, major))
 
 
 def first_other_at(a: Vector2, b: Vector2, major: Int, width: Int) -> Int:
@@ -229,7 +276,7 @@ def first_other_at(a: Vector2, b: Vector2, major: Int, width: Int) -> Int:
         The first row, or the first column for a line walked down its y
         axis.
     """
-    return Int(floor(minor_at(a, b, major) - Float32(width - 1) / 2))
+    return _axis_index(minor_at(a, b, major) - Float32(width - 1) / 2)
 
 
 def covers(a: Vector2, b: Vector2, x: Int, y: Int, width: Int = 1) -> Bool:
@@ -254,11 +301,11 @@ def covers(a: Vector2, b: Vector2, x: Int, y: Int, width: Int = 1) -> Bool:
     var major = y
     if horizontal:
         major = x
-    var first = Int(floor(a.y))
-    var last = Int(floor(b.y))
+    var first = _axis_index(a.y)
+    var last = _axis_index(b.y)
     if horizontal:
-        first = Int(floor(a.x))
-        last = Int(floor(b.x))
+        first = _axis_index(a.x)
+        last = _axis_index(b.x)
     if major < min(first, last) or major > max(first, last):
         return False
     var lowest = first_other_at(a, b, major, width)
