@@ -25,7 +25,7 @@ from core.buffer_attribute import BufferAttribute
 from core.buffer_geometry import BufferGeometry, UV
 from math.vector2 import Vector2
 from render.framebuffer import Color, Framebuffer
-from std.math import floor
+from std.math import floor, isfinite
 
 # three.js's colors: the background, the lines and the triangle numbers,
 # and the corner labels.
@@ -73,9 +73,97 @@ struct UVsDebug(Movable):
 
 def _wrap(x: Float32) -> Float32:
     """Return JavaScript's `x % 1`, for the labels of a triangle across
-    the right edge."""
-    var whole = Float32(Int(x))
+    the right edge.
+
+    A coordinate that is not finite, or that does not fit in an integer,
+    is zero.
+
+    Args:
+        x: The coordinate.
+
+    Returns:
+        The fractional part, from zero up to but not including one.
+    """
+    if not isfinite(x) or not (x < Float32(Int.MAX)):
+        return 0
+    var whole = floor(x)
     return x - whole
+
+
+def _outcode(x: Float32, y: Float32, right: Float32, bottom: Float32) -> Int:
+    """Return which sides of the image a point is outside.
+
+    Args:
+        x: The column, in pixels.
+        y: The row, in pixels.
+        right: The last column.
+        bottom: The last row.
+
+    Returns:
+        A bit for the left, right, top and bottom, or zero inside.
+    """
+    var code = 0
+    if x < 0:
+        code |= 1
+    elif x > right:
+        code |= 2
+    if y < 0:
+        code |= 4
+    elif y > bottom:
+        code |= 8
+    return code
+
+
+def _clip_segment(
+    start: Vector2, end: Vector2, width: Int, height: Int
+) -> Tuple[Bool, Vector2, Vector2]:
+    """Return the part of a segment that lies on the image.
+
+    Args:
+        start: One end, in pixels.
+        end: The other end, in pixels.
+        width: The image width in pixels.
+        height: The image height in pixels.
+
+    Returns:
+        Whether any of the segment lies on the image, and that part.
+    """
+    if not (
+        isfinite(start.x)
+        and isfinite(start.y)
+        and isfinite(end.x)
+        and isfinite(end.y)
+    ):
+        return False, start, end
+    var x0 = start.x
+    var y0 = start.y
+    var x1 = end.x
+    var y1 = end.y
+    var right = Float32(width - 1)
+    var bottom = Float32(height - 1)
+    # Each step clips one end to one side. An accept or a reject ends it.
+    while True:
+        var c0 = _outcode(x0, y0, right, bottom)
+        var c1 = _outcode(x1, y1, right, bottom)
+        if (c0 | c1) == 0:
+            return True, Vector2(x0, y0), Vector2(x1, y1)
+        if (c0 & c1) != 0:
+            return False, start, end
+        var code = c0 if c0 != 0 else c1
+        # The left side is the remaining case, so this value is that crossing.
+        var hit = Vector2(0, y0 + (y1 - y0) * (0 - x0) / (x1 - x0))
+        if (code & 8) != 0:
+            hit = Vector2(x0 + (x1 - x0) * (bottom - y0) / (y1 - y0), bottom)
+        elif (code & 4) != 0:
+            hit = Vector2(x0 + (x1 - x0) * (0 - y0) / (y1 - y0), 0)
+        elif (code & 2) != 0:
+            hit = Vector2(right, y0 + (y1 - y0) * (right - x0) / (x1 - x0))
+        if code == c0:
+            x0 = hit.x
+            y0 = hit.y
+        else:
+            x1 = hit.x
+            y1 = hit.y
 
 
 def uvs_debug(geometry: BufferGeometry, size: Int = 1024) raises -> UVsDebug:
@@ -179,12 +267,15 @@ def _face(
 def _line(mut image: Framebuffer, start: Vector2, end: Vector2) raises:
     """Mark the pixels a one-pixel pen crosses from one point to another,
     those on the image."""
-    var dx = end.x - start.x
-    var dy = end.y - start.y
+    var kept = _clip_segment(start, end, image.width, image.height)
+    if not kept[0]:
+        return
+    var dx = kept[2].x - kept[1].x
+    var dy = kept[2].y - kept[1].y
     var steps = Int(max(abs(dx), abs(dy))) + 1
     for step in range(steps + 1):  # pragma: no branch
         var t = Float32(step) / Float32(steps)
-        var x = Int(floor(start.x + dx * t))
-        var y = Int(floor(start.y + dy * t))
+        var x = Int(floor(kept[1].x + dx * t))
+        var y = Int(floor(kept[1].y + dy * t))
         if x >= 0 and x < image.width and y >= 0 and y < image.height:
             image.set_pixel(x, y, UVS_LINE)

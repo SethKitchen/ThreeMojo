@@ -373,6 +373,8 @@ three.js's helper is a group that copies the camera's position, rotation and sca
 
 three.js also writes each triangle's number and each corner's letter on the image. This port has no canvas text. So `labels` holds each label: its text, its place, its size and its color. `outlines` holds each triangle's corners in pixels. A canvas antialiases its lines. Here a line is the pixels that a one-pixel pen crosses.
 
+A coordinate that does not fit in an integer is left off the image.
+
 ## Members
 
 | Function | Returns |
