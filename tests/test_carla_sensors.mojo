@@ -537,6 +537,25 @@ def test_ray_cast_lidar_drops_as_carla_does() raises:
     )
 
 
+def test_a_lidar_keeps_every_point_past_2_24() raises:
+    var d = LidarDescription()
+    d.channels = 32
+    assert_equal(d.points_per_laser(_s(0.05)), 88)
+    d.channels = 1
+    d.points_per_second = 16777217
+    assert_equal(d.points_per_laser(_s(1)), 16777217)
+    d.points_per_second = 56000
+    with assert_raises(contains="does not fit"):
+        _ = d.points_per_laser(_s(Float32(1e20)))
+    d.channels = 0
+    with assert_raises(contains="does not fit"):
+        _ = d.points_per_laser(_s(0.05))
+    d.channels = 1
+    d.points_per_second = -6000000000000000000
+    with assert_raises(contains="does not fit"):
+        _ = d.points_per_laser(_s(2))
+
+
 def test_hss_lidar_fixed_sweep() raises:
     var scene = _Planes(True, 10)
     var d = _lidar()

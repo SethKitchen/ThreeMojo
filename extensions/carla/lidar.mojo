@@ -26,7 +26,7 @@ from extensions.carla.capture import nearest_hit
 from extensions.carla.sensor_attributes import validate_sensor_float
 from extensions.carla.transform import CarlaTransform
 from math.vector3 import Vector3
-from std.math import cos, exp, log, sin, sqrt, trunc
+from std.math import cos, exp, isfinite, log, sin, sqrt, trunc
 from units.si import (
     DEGREE,
     PER_METER,
@@ -165,8 +165,11 @@ struct LidarDescription(ImplicitlyCopyable):
             out.append(Angle(upper - Float32(i) * delta, DEGREE))
         return out^
 
-    def points_per_laser(self, tick: Duration) -> Int:
+    def points_per_laser(self, tick: Duration) raises -> Int:
         """Return how many rays one laser fires in one tick.
+
+        The quotient is a `Float64`. A `Float32` point count drops whole
+        points past 2^24.
 
         Args:
             tick: The simulation step.
@@ -174,13 +177,26 @@ struct LidarDescription(ImplicitlyCopyable):
         Returns:
             The points per second times the tick over the channels,
             rounded half away from zero.
+
+        Raises:
+            Error: If the rounded count is not finite or does not fit in
+                an integer.
         """
         var exact = (
-            Float32(self.points_per_second)
-            * tick.to(SECOND)
-            / Float32(self.channels)
+            Float64(self.points_per_second)
+            * Float64(tick.to(SECOND))
+            / Float64(self.channels)
         )
-        return Int(exact + 0.5)
+        var scaled = exact + 0.5
+        # `Float64(Int.MAX)` is 2^63. `Int` of a float at or past it is not
+        # a count. A float below `-2^63` is not one either.
+        if (
+            not isfinite(scaled)
+            or scaled < -Float64(Int.MAX)
+            or scaled >= Float64(Int.MAX)
+        ):
+            raise Error("A LiDAR point count does not fit in an integer")
+        return Int(scaled)
 
     def intensity(self, distance: Length) -> Float32:
         """Return a hit's intensity, `ComputeIntensity`.
@@ -272,7 +288,8 @@ def scan_lidar(
 
     Raises:
         Error: If the description is not valid, `tick` is not positive,
-            or a mesh cannot be tested.
+            the point count does not fit in an integer, or a mesh cannot
+            be tested.
     """
     description.validate()
     if not (tick.value > 0.0):
