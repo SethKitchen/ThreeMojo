@@ -50,7 +50,7 @@ from math.vector2 import Vector2, append_vector2
 from math.vector3 import Vector3
 from postprocessing.antialiasing import JitteredCamera
 from postprocessing.display_nodes import luminance_of
-from postprocessing.sampling import LightView, Untracked
+from postprocessing.sampling import LightView, Untracked, nearest_held_index
 from postprocessing.screen_space import DepthView
 from render.framebuffer import FloatColor
 from render.target import (
@@ -61,7 +61,7 @@ from render.target import (
 )
 from renderers.renderer import Renderer
 from units.si import Length, METER
-from std.math import floor, isfinite, max, min, sqrt
+from std.math import isfinite, max, min, sqrt
 
 
 # How many offsets the jitter walks through, three.js's
@@ -535,8 +535,8 @@ def reproject_window_depth(
     Returns:
         The depth, in this frame's window depth.
     """
-    var x = Int(floor(u * Float32(previous.width)))
-    var y = Int(floor(v_down * Float32(previous.height)))
+    var x = nearest_held_index(u, previous.width)
+    var y = nearest_held_index(v_down, previous.height)
     var depth = previous.load(x, y, 0)
     # three.js's `getViewPosition`, in WebGL's clip space.
     var clip = Vector3(u * 2 - 1, (1 - v_down) * 2 - 1, depth * 2 - 1)

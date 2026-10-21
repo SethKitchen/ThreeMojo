@@ -14,6 +14,7 @@ buffers through the same `LightView`; see `render.gpu.GpuComposer`.
 
 from render.framebuffer import FloatColor
 from math.utils import edge_index, texel_center, texel_center_from_end
+from std.math import floor, isfinite
 
 
 # A view's pointer is not tracked by the compiler: whoever builds one keeps
@@ -185,6 +186,31 @@ struct LightView(ImplicitlyCopyable):
             u * Float32(self.width) - 0.5,
             (1 - v) * Float32(self.height) - 0.5,
         )
+
+
+def nearest_held_index(unit: Float32, count: Int) -> Int:
+    """Return the nearest pixel of a coordinate, held at the edges.
+
+    A coordinate that is not finite, or one below zero, reads the first
+    pixel. A coordinate at or past one reads the last. A coordinate
+    inside the image is `floor` of the scaled coordinate.
+
+    Args:
+        unit: Across or down, zero at the first edge and one at the far
+            edge.
+        count: How many pixels there are. One or more.
+
+    Returns:
+        The pixel, from zero through `count - 1`.
+
+    Raises:
+        Error: Never.
+    """
+    if not isfinite(unit) or unit <= 0:
+        return 0
+    if unit >= 1:
+        return count - 1
+    return Int(floor(unit * Float32(count)))
 
 
 def sample(

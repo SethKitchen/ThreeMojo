@@ -51,7 +51,7 @@ from math.utils import clamped_texel, edge_index, mix_delta
 from math.vector3 import Vector3, mix_delta3
 from postprocessing.display_nodes import exp_f, luminance_of
 from postprocessing.traa import variance_gamma
-from postprocessing.sampling import LightView
+from postprocessing.sampling import LightView, nearest_held_index
 from postprocessing.screen_space import DepthView
 from render.framebuffer import FloatColor
 from std.math import atan, cos, floor, isfinite, max, min, pi, pow, sin
@@ -958,10 +958,11 @@ struct DenoiseInputs(Movable):
             v: Down.
 
         Returns:
-            The depth.
+            The depth. A coordinate at or past the far edge reads the last
+            pixel. A coordinate that is not finite reads the first.
         """
-        var x = edge_index(Int(floor(u * Float32(self.width))), self.width)
-        var y = edge_index(Int(floor(v * Float32(self.height))), self.height)
+        var x = nearest_held_index(u, self.width)
+        var y = nearest_held_index(v, self.height)
         return self.depth[y * self.width + x]
 
     def normal(self, u: Float32, v: Float32) -> Vector3:

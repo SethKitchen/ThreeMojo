@@ -734,7 +734,7 @@ three.js's example mixes the AO and the light with the scene and its diffuse col
 
 ### The SSGI denoiser
 
-`ssgi_pass(denoise=True)` runs the raw signal through three.js's `TemporalReprojectNode` and then its `RecurrentDenoiseNode`, in their diffuse mode. The composer draws its frame with a velocity attachment too. The denoised result is the next frame's history, as the example's `setHistoryTexture` makes it. The AO stays the raw signal's. A frame below one pixel, or whose pixel count does not fit in an integer, is refused.
+`ssgi_pass(denoise=True)` runs the raw signal through three.js's `TemporalReprojectNode` and then its `RecurrentDenoiseNode`, in their diffuse mode. The composer draws its frame with a velocity attachment too. The denoised result is the next frame's history, as the example's `setHistoryTexture` makes it. The AO stays the raw signal's. A frame below one pixel, or whose pixel count does not fit in an integer, is refused. A denoise depth coordinate that does not fit in an integer reads the edge.
 
 1. The reprojection reads the history where the velocity says that the pixel was, from four texels. Each texel weighs by how well its surface matches the pixel's plane and normal.
 2. It clips the history toward the neighbors' box in YCoCg. The confidence falls with the clip, with motion and where the reprojection stretches the image. Its alpha is one over the frames that it holds.
