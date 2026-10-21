@@ -462,6 +462,13 @@ def test_the_glare_grid_maps_the_image_and_back() raises:
     assert_equal(glare_cell_x(0, 640, size[0]), 0)
     assert_equal(glare_cell_x(639, 640, size[0]), size[0] - 1)
     assert_equal(glare_cell_y(359, 360, size[1]), size[1] - 1)
+    # A width past 2^24 is not a whole `Float32`. The last column and the
+    # last pixel must stay inside the image and the grid.
+    assert_equal(glare_sample_x(16777216, 16777217, 100), 99)
+    assert_equal(glare_sample_y(16777216, 16777217, 100), 99)
+    assert_equal(glare_sample_x(2, 3, 16777217), 13981014)
+    assert_equal(glare_cell_x(16777216, 16777217, 48), 47)
+    assert_equal(glare_cell_y(16777216, 16777217, 48), 47)
     # The convolution refuses a grid that does not fit its kernels, or samples
     # that are not the grid's.
     var kernels = glare_kernels(SpectrumResolution(8))

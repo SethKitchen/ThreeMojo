@@ -330,9 +330,10 @@ def glare_sample_x(x: Int, sw: Int, width: Int) -> Int:
     Returns:
         A column of the image.
     """
-    var u = (Float32(x) + 0.5) / Float32(sw)
-    # `u` stays below 1, so the product stays inside the image.
-    return Int(u * Float32(width))
+    # A `Float32` width past 2^24 makes the last column's coordinate one,
+    # and the sample lands past the image. The division is a `Float64`.
+    var u = (Float64(x) + 0.5) / Float64(sw)
+    return Int(u * Float64(width))
 
 
 def glare_sample_y(y: Int, sh: Int, height: Int) -> Int:
@@ -346,8 +347,8 @@ def glare_sample_y(y: Int, sh: Int, height: Int) -> Int:
     Returns:
         A row of the image.
     """
-    var v = (Float32(y) + 0.5) / Float32(sh)
-    return Int(v * Float32(height))
+    var v = (Float64(y) + 0.5) / Float64(sh)
+    return Int(v * Float64(height))
 
 
 def glare_cell_x(x: Int, width: Int, sw: Int) -> Int:
@@ -361,8 +362,9 @@ def glare_cell_x(x: Int, width: Int, sw: Int) -> Int:
     Returns:
         A column of the glare grid.
     """
-    # The last pixel still maps inside the fitted rectangle.
-    return Int(Float32(x) / Float32(width) * Float32(sw))
+    # The last pixel still maps inside the fitted rectangle. A `Float32`
+    # width past 2^24 makes that ratio one, which is past the grid.
+    return Int(Float64(x) / Float64(width) * Float64(sw))
 
 
 def glare_cell_y(y: Int, height: Int, sh: Int) -> Int:
@@ -376,7 +378,7 @@ def glare_cell_y(y: Int, height: Int, sh: Int) -> Int:
     Returns:
         A row of the glare grid.
     """
-    return Int(Float32(y) / Float32(height) * Float32(sh))
+    return Int(Float64(y) / Float64(height) * Float64(sh))
 
 
 def glare_convolve(
