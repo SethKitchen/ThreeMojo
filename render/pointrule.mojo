@@ -179,6 +179,29 @@ def gl_point_coord(center: Vector2, size: Float32, x: Int, y: Int) -> Vector2:
     )
 
 
+def _covered_index(edge: Float32, round_up: Bool) -> Int:
+    """Return the pixel index of one edge of a point.
+
+    An edge that is not finite, or that does not fit in an integer, is
+    past every pixel. `Int` of such a float is not that coordinate.
+
+    Args:
+        edge: The edge, in pixels.
+        round_up: True to round toward positive infinity.
+
+    Returns:
+        The index, or `Int.MAX` or `Int.MIN` when `edge` does not fit.
+    """
+    var limit = Float32(Int.MAX)
+    if not (edge < limit):
+        return Int.MAX
+    if edge <= -limit:
+        return Int.MIN
+    if round_up:
+        return Int(ceil(edge))
+    return Int(floor(edge))
+
+
 def first_covered(center: Float32, size: Float32) -> Int:
     """Return a column or row at or before the first the point covers
     along one axis.
@@ -188,16 +211,18 @@ def first_covered(center: Float32, size: Float32) -> Int:
     and `covers` is asked of every pixel between the bounds. That is what
     keeps the walk on the rule the kernel reads, whatever a rounding does
     to the bound. It is never more than one pixel early, so the walk
-    visits at most two pixels per axis it need not.
+    visits at most two pixels per axis it need not. An edge that does not
+    fit in an integer lies past the image.
 
     Args:
         center: The point's center along the axis, in pixels.
         size: How many pixels across the point is.
 
     Returns:
-        The column or row.
+        The column or row, or `Int.MAX` or `Int.MIN` when the edge does
+        not fit.
     """
-    return Int(floor(center - size / 2 - 0.5))
+    return _covered_index(center - size / 2 - 0.5, False)
 
 
 def last_covered(center: Float32, size: Float32) -> Int:
@@ -205,16 +230,18 @@ def last_covered(center: Float32, size: Float32) -> Int:
     one axis.
 
     See `first_covered`. Rounded outward the same way, so it is never
-    more than one pixel late.
+    more than one pixel late. An edge that does not fit in an integer
+    lies past the image.
 
     Args:
         center: The point's center along the axis, in pixels.
         size: How many pixels across the point is.
 
     Returns:
-        The column or row.
+        The column or row, or `Int.MAX` or `Int.MIN` when the edge does
+        not fit.
     """
-    return Int(ceil(center + size / 2 - 0.5))
+    return _covered_index(center + size / 2 - 0.5, True)
 
 
 def mip_level_of(size: Float32, width: Int, height: Int) -> Float32:

@@ -68,7 +68,7 @@ A point is a square of pixels, `size` across, centered on where the point projec
 | `first_covered(center, size)`, `last_covered(center, size)` | The bounds the CPU walks between, rounded outward. |
 | `mip_level_of(size, width, height)` | Which level of a map a point reads. |
 
-The CPU walks the square's bounding box and asks `covers` of every pixel. The kernel asks `covers` whether this pixel is inside. Both get the answer from one expression. See [Shared CPU and GPU code](Why-the-CPU-and-GPU-share-code).
+The CPU walks the square's bounding box and asks `covers` of every pixel. The kernel asks `covers` whether this pixel is inside. Both get the answer from one expression. See [Shared CPU and GPU code](Why-the-CPU-and-GPU-share-code). A center that does not fit in an integer lies past the image.
 
 A point is a square and not a disc, and it is not anti-aliased. That is what `gl_PointSize` draws. A round point is a square point with a round alpha map.
 
