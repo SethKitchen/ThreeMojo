@@ -586,7 +586,8 @@ def texture_bicubic[
     `textureBicubic`.
 
     The level below `lod` and the one above, each read bicubically, mixed
-    by the fraction. A level past the chain reads the last level.
+    by the fraction. A level past the chain, or one that is not finite,
+    reads the last level. A level below zero reads the first.
 
     Args:
         source: Where the chain is read.
@@ -597,7 +598,15 @@ def texture_bicubic[
         The filtered color.
     """
     var last = source.level_count() - 1
-    var lower = min(Int(floor(lod)), last)
+    # `Int` of a level past 2^63 is not that level. It used to become an
+    # index into the chain and the read fell off the texture.
+    if not isfinite(lod):
+        return bicubic(source, uv, last)
+    var lower = last
+    if lod <= 0:
+        lower = 0
+    elif lod < Float32(last):
+        lower = Int(floor(lod))
     var fine = bicubic(source, uv, lower)
     var blend = fraction(lod)
     if blend == 0:
