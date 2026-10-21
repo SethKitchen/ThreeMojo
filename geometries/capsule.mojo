@@ -17,10 +17,16 @@ along the radius of whichever cap a point is on, and straight out on the
 side. `v` is the distance along the profile, over its whole length. A
 capsule of no length keeps its two rims and the side between them, which
 has no height.
+
+## Input validation difference
+
+The radius and the length must be finite before vertices are generated.
+NaN and either infinity raise an error. This differs from the unchecked
+three.js r186 input path. Finite supported inputs keep their existing
+behavior. A length of zero stays a sphere.
 """
 
 from core.buffer_geometry import BufferGeometry, CAPSULE_GEOMETRY
-from core.ordinal import require_non_negative
 from geometries.surface import (
     indexed_surface,
     record_kind,
@@ -29,6 +35,7 @@ from geometries.surface import (
     require_three_segments,
 )
 from math.curve_checks import require_at_least_one
+from math.finite import require_finite
 from math.utils import clamp
 from math.norm import squared_length3
 from std.math import cos, pi, sin, sqrt
@@ -61,11 +68,15 @@ def capsule(
         to a row.
 
     Raises:
-        Error: If the radius is not positive, the length is negative, or
-            any segment count is too small.
+        Error: If the radius is not finite or not positive, the length is
+            not finite or is negative, or any segment count is too small.
     """
     require_positive_radius(radius.value, "capsule")
-    require_non_negative(length.value, "A capsule's length cannot be negative")
+    require_finite(Float64(length.value), "A capsule needs a finite length")
+    # `not (x >= 0)`, not `x < 0`: NaN compares false both ways, so the
+    # < form would let it through.
+    if not (length.value >= 0):
+        raise Error("A capsule's length cannot be negative")
     require_at_least_one(
         cap_segments, "A capsule needs at least one segment on each cap"
     )

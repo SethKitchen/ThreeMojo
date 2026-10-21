@@ -34,6 +34,9 @@ folds straight back on itself, so two consecutive tangents point opposite
 ways: there is no axis to turn the frame about, and carrying it across
 unturned would flip the binormal by a half turn, which is a choice no
 transport made. three.js checks neither; here both raise.
+
+A path point must be finite. NaN and either infinity raise before a frame
+is built. This differs from the unchecked three.js r186 input path.
 """
 
 from core.buffer_geometry import BufferGeometry, TUBE_GEOMETRY
@@ -153,15 +156,17 @@ def tube(
         distance and `v` around the tube.
 
     Raises:
-        Error: If the path is too short, two consecutive points coincide,
-            the path returns to the point before the last or folds straight
-            back on itself, the radius is not positive, or there are fewer
-            than three segments around.
+        Error: If the path is too short, a point is not finite, two
+            consecutive points coincide, the path returns to the point
+            before the last or folds straight back on itself, the radius
+            is not positive, or there are fewer than three segments around.
     """
     var count = len(path)
     if count < 2 or (closed and count < 3):
         raise Error("A tube needs at least two points, or three to close")
     for index in range(count):  # pragma: no branch
+        if not path[index].is_finite():
+            raise Error("A tube's path points must be finite")
         var next = (index + 1) % count
         if next == 0 and not closed:
             continue

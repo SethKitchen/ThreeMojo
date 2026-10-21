@@ -77,7 +77,7 @@ def text_geometry(
 
     Raises:
         Error: If an option is refused by `check_extrusion`, if the size is
-            not positive or a character has no glyph (see
+            not positive and finite or a character has no glyph (see
             `Font.generate_shapes`), or if a glyph's shape cannot be filled
             in (see `geometries.shape.triangulate`).
     """
@@ -89,6 +89,7 @@ def text_geometry(
         bevel_thickness,
         bevel_size,
         bevel_segments,
+        bevel_offset,
     )
     var shapes = font.generate_shapes(text, size)
     if len(shapes) == 0:

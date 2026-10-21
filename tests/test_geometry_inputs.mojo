@@ -8,13 +8,16 @@
 from core.buffer_geometry import BufferGeometry, POSITION
 from geometries.box import box
 from geometries.box_line import box_line
+from geometries.capsule import capsule
 from geometries.circle import FULL_TURN, check_sweep, circle, ring
 from geometries.cylinder import cylinder
 from geometries.decal import decal
+from geometries.extrude import check_extrusion
 from geometries.plane import plane
 from geometries.sphere import sphere
 from geometries.surface import require_positive_radius
 from geometries.torus import torus, torus_knot
+from geometries.tube import tube
 from math.euler import Euler, XYZ
 from math.matrix4 import Matrix4
 from math.vector3 import Vector3
@@ -187,6 +190,73 @@ def test_nonfinite_dimensions_fail_before_topology_or_source_reads() raises:
             one,
             bad,
         )
+
+
+def _bad_lengths() -> List[Float32]:
+    return [
+        nan[DType.float32](),
+        inf[DType.float32](),
+        -inf[DType.float32](),
+    ]
+
+
+def test_capsule_length_refuses_nonfinite_values_before_generation() raises:
+    var one = Length(1, METER)
+    for bad in _bad_lengths():
+        with assert_raises(contains="finite"):
+            _ = capsule(one, Length(bad, METER), 1, 3, 1)
+    var built = capsule(one, Length(0, METER), 1, 3, 1)
+    assert_true(built.vertex_count() > 0)
+
+
+def test_tube_path_points_refuse_nonfinite_values_before_frames() raises:
+    var radius = Length(0.2, METER)
+    var origin = Vector3(0, 0, 0)
+    var ahead = Vector3(1, 0, 0)
+    for bad in _bad_lengths():
+        for axis in range(3):
+            var point = Vector3(1, 0, 0)
+            if axis == 0:
+                point.x = bad
+            elif axis == 1:
+                point.y = bad
+            else:
+                point.z = bad
+            with assert_raises(contains="finite"):
+                _ = tube([origin, point], radius, 3)
+            with assert_raises(contains="finite"):
+                _ = tube([point, ahead, origin], radius, 3, closed=True)
+    var built = tube([origin, ahead], radius, 3)
+    assert_true(built.vertex_count() > 0)
+
+
+def test_extrusion_refuses_nonfinite_depth_and_bevel_amounts() raises:
+    var one = Length(1, METER)
+    var zero = Length(0, METER)
+    for bad in _bad_lengths():
+        var bad_length = Length(bad, METER)
+        with assert_raises(contains="finite depth"):
+            check_extrusion(bad_length, 1, 1, False, one, one, 1, zero)
+        with assert_raises(contains="finite thickness"):
+            check_extrusion(one, 1, 1, True, bad_length, one, 1, zero)
+        with assert_raises(contains="finite size"):
+            check_extrusion(one, 1, 1, True, one, bad_length, 1, zero)
+        with assert_raises(contains="finite offset"):
+            check_extrusion(one, 1, 1, True, one, zero, 1, bad_length)
+        # A bevel that is off does not read those amounts.
+        check_extrusion(one, 1, 1, False, bad_length, bad_length, 1, bad_length)
+    with assert_raises(contains="positive depth"):
+        check_extrusion(zero, 1, 1, False, one, one, 1, zero)
+    with assert_raises(contains="positive thickness"):
+        check_extrusion(one, 1, 1, True, zero, one, 1, zero)
+    with assert_raises(contains="negative distance"):
+        check_extrusion(one, 1, 1, True, one, Length(-1, METER), 1, zero)
+    with assert_raises(contains="one band"):
+        check_extrusion(
+            one, 1, 1, True, Length(nan[DType.float32](), METER), one, 0, zero
+        )
+    # A negative offset is a lip inward, and a size of zero is square.
+    check_extrusion(one, 1, 1, True, one, zero, 1, Length(-0.25, METER))
 
 
 def main() raises:

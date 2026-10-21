@@ -170,8 +170,11 @@ The cost is memory. An integer attribute holds its numbers twice.
 Box and plane extents, circle and sphere radii, ring radii, cylinder radii
 and height, torus radii, and decal projector extents must be finite.
 The shared positive-radius check also applies to capsule, tube, and
-polyhedron builders. NaN and either infinity raise before vertex generation.
-Zero and negative dimensions keep each builder's existing rules.
+polyhedron builders. A capsule length, tube path points, and an
+extrusion depth must be finite. A bevel thickness, size, and offset
+must be finite when the bevel is on. NaN and either infinity raise
+before vertex generation. Zero and negative dimensions keep each
+builder's existing rules.
 
 This input check differs from three.js r186, which can produce nonfinite
 vertices from these dimensions. Finite supported inputs keep their vertex
@@ -935,9 +938,9 @@ A per-instance `position`, `normal`, `uv` or `tangent` is refused when drawn. Th
 - A torus needs positive radii and three segments each way.
 - A torus knot needs positive radii, three segments each way, and `p` and `q` of at least one.
 - A polyhedron needs a positive radius, a detail of zero or more, whole vertices and faces, and faces that name vertices it has.
-- A capsule needs a positive radius, a length of zero or more, one cap row, three segments around and one row up its side.
+- A capsule needs a finite positive radius, finite length of zero or more, one cap row, three segments around and one side row.
 - A lathe needs at least two points, one segment, and a sweep of at most one turn. No point can have a negative `x`, and no two consecutive points can be the same. A profile that turns straight back to the point before raises, because that corner has no normal.
-- A tube needs at least two points, or three when closed, no two consecutive the same, a positive radius and three segments around. A path that returns to the point before the last raises, because that tangent is zero. A path that folds straight back on itself raises, because there is no axis to turn the frame about.
+- A tube needs at least two finite points, or three when closed, no two consecutive the same, a positive radius and three segments around. A path that returns to the point before the last raises, because that tangent is zero. A path that folds straight back on itself raises, because there is no axis to turn the frame about.
 - A sweep must be finite, positive and at most one turn.
 - A morph target must cover every vertex, three numbers each, and a geometry holds at most eight.
 - Either every morph target carries normals or none does.
@@ -945,7 +948,7 @@ A per-instance `position`, `normal`, `uv` or `tangent` is refused when drawn. Th
 - A shape's contour needs three corners and an area. A contour drawn in a line, or out and back, has neither.
 - A shape's hole must lie strictly inside its outline and outside every other hole. Sampled boundaries must not cross or touch.
 - An outline that crosses itself raises, because it has no inside and runs out of ears.
-- An extrusion needs a positive depth, one step and one curve segment. A bevel needs a positive thickness, a size that is not negative, and one band.
+- An extrusion needs a finite positive depth, one step and one curve segment. A bevel needs a finite positive thickness, a finite size that is not negative, a finite offset, and one band.
 - A text needs the same options as an extrusion and a positive size. Every character needs a glyph, or the font needs a `?` glyph.
 - An extrusion along a path needs one step, one curve segment and a curve path with one curve. The curve must have a frame at each step.
 - A parametric surface needs one slice and one stack, and its function must give finite points.
