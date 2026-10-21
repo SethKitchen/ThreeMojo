@@ -58,7 +58,7 @@ from render.texture import (
     Wrap,
 )
 from render.texture_store import TextureId
-from std.math import inf
+from std.math import inf, nan
 from std.testing import (
     TestSuite,
     assert_almost_equal,
@@ -489,6 +489,19 @@ def test_a_texture_is_read_where_its_wrap_puts_the_coordinate() raises:
     var moved = quadrants()
     moved.offset.x = 0.5
     assert_equal(sample_texture(moved, 0.25, 0.25).a, Float32(128) / 255)
+    # A coordinate that is not finite, or past an integer, is read at zero.
+    assert_equal(
+        sample_texture(repeat, nan[DType.float32](), 0.25).r,
+        sample_texture(repeat, 0, 0.25).r,
+    )
+    assert_equal(
+        sample_texture(mirror, Float32(1e20), 0.25).b,
+        sample_texture(mirror, 0, 0.25).b,
+    )
+    assert_equal(
+        sample_texture(mirror, Float32(-1e20), 0.25).b,
+        sample_texture(mirror, 0, 0.25).b,
+    )
 
 
 def test_a_triangle_outside_the_bounds_or_of_no_size_is_skipped() raises:

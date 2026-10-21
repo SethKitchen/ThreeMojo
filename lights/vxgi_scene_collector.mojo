@@ -72,7 +72,7 @@ from render.texture import (
     row_coordinate,
 )
 from render.texture_store import NO_TEXTURE, TextureId
-from std.math import ceil, floor
+from std.math import ceil, floor, isfinite
 
 
 # Floats a triangle record holds: three corners, the albedo and side, and
@@ -155,14 +155,20 @@ def _wrapped(coordinate: Float32, mode: Wrap) -> Float32:
     """Return a coordinate kept inside zero to one by a wrap mode, as
     three.js's `Texture.transformUv` keeps it: only a coordinate outside
     is moved."""
+    if not isfinite(coordinate):
+        return 0
     if coordinate >= 0 and coordinate <= 1:
         return coordinate
     if mode == REPEAT:
         return fraction(coordinate)
     if mode == CLAMP:
         return 0 if coordinate < 0 else 1
-    # A mirrored repeat: an odd tile runs backward.
-    var tile = Int(floor(coordinate))
+    # A mirrored repeat: an odd tile runs backward. A coordinate past an
+    # integer has no stable tile, so it is read at zero.
+    var wide = Float64(coordinate)
+    if not (wide < Float64(Int.MAX)) or wide <= -Float64(Int.MAX):
+        return 0
+    var tile = Int(floor(wide))
     if abs(tile) % 2 == 1:
         return ceil(coordinate) - coordinate
     return fraction(coordinate)
@@ -179,7 +185,8 @@ def sample_texture(texture: Texture, u: Float32, v: Float32) -> FloatColor:
         v: Up.
 
     Returns:
-        The texel's linear color and its alpha.
+        The texel's linear color and its alpha. A coordinate that is not
+        finite, or that does not fit in an integer, is read at zero.
     """
     if texture.is_blank():
         return FloatColor(1, 1, 1, 1)

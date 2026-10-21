@@ -50,6 +50,7 @@ A volume is a flat list of four floats a voxel. Level zero comes first, then eac
 - A lit material glows with `emissive` times `emissive_intensity`, times its `emissive_map`.
 - A triangle that is too faint, of no size, or outside the bounds is skipped.
 - A triangle with an edge longer than 16 sub-voxels is split at the middle of that edge.
+- A texture coordinate that is not finite, or that does not fit in an integer, is read at zero.
 
 ## Voxelization
 
