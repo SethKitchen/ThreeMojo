@@ -161,6 +161,24 @@ def require_shadow_size(size: Int) raises:
     require_positive(size, "A shadow map must be at least one texel a side")
 
 
+def _map_texels(size: Int, factor: Int) raises -> Int:
+    """Return `factor * size * size`, or refuse a product that does not fit.
+
+    Args:
+        size: Texels a side. The caller has checked that it is positive.
+        factor: How many squares. One or more.
+
+    Returns:
+        The texel count.
+
+    Raises:
+        Error: If the product does not fit in an integer.
+    """
+    if size > (Int.MAX // factor) // size:
+        raise Error("A shadow map is larger than this port reads")
+    return factor * size * size
+
+
 # three.js's `LightShadow` defaults: a map five hundred and twelve texels
 # a side, no bias, one texel of blur, and eight blur samples for a
 # variance map.
@@ -481,18 +499,19 @@ struct ShadowMap(Copyable, LightSlot, Movable):
                 texel from the top; empty for none.
 
         Raises:
-            Error: If the size is not positive, the type is none of the
-                four, the depths do not fill the square, or two squares
-                under `VSM_SHADOW_MAP`, or the colors fill no square.
+            Error: If the size is not positive, the texel count does not
+                fit, the type is none of the four, the depths do not fill
+                the square, or two squares under `VSM_SHADOW_MAP`, or the
+                colors fill no square.
         """
         require_shadow_size(size)
         require_shadow_type(shadow_type)
         var squares = 1
         if shadow_type == VSM_SHADOW_MAP:
             squares = 2
-        if len(depths) != squares * size * size:
+        if len(depths) != _map_texels(size, squares):
             raise Error("A shadow map's depths must fill its square")
-        if len(colors) != 0 and len(colors) != 4 * size * size:
+        if len(colors) != 0 and len(colors) != _map_texels(size, 4):
             raise Error("A shadow map's colors must fill its square")
         self.light = light
         self.size = size
@@ -549,15 +568,18 @@ struct ShadowMap(Copyable, LightSlot, Movable):
                 texel, face by face as the depths are; empty for none.
 
         Raises:
-            Error: If the size is not positive, the type is none of the
-                four, the depths or the colors do not fill six squares, or
-                the far plane does not lie beyond the near plane.
+            Error: If the size is not positive, the texel count does not
+                fit, the type is none of the four, the depths or the colors
+                do not fill six squares, or the far plane does not lie
+                beyond the near plane.
         """
         require_shadow_size(size)
         require_shadow_type(shadow_type)
-        if len(depths) != CUBE_FACES * size * size:
+        if len(depths) != _map_texels(size, CUBE_FACES):
             raise Error("A point light's shadow must fill six square faces")
-        if len(colors) != 0 and len(colors) != 4 * CUBE_FACES * size * size:
+        if len(colors) != 0 and len(colors) != _map_texels(
+            size, 4 * CUBE_FACES
+        ):
             raise Error("A point light's shadow colors must fill six faces")
         if not (far > near):
             raise Error(

@@ -309,6 +309,9 @@ def test_a_map_holds_a_square_of_depths() raises:
         _ = ShadowMap(0, 0, flat_frame(), List[Float32](), 0, 0, 1)
     with assert_raises():
         _ = ShadowMap(0, 2, flat_frame(), [Float32(0), 0, 0], 0, 0, 1)
+    # 3037000500 squared does not fit in a signed integer.
+    with assert_raises(contains="larger than this port"):
+        _ = ShadowMap(0, 3037000500, flat_frame(), List[Float32](), 0, 0, 1)
 
 
 def test_a_world_position_lands_on_the_map_by_the_frame() raises:
