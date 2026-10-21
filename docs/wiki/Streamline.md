@@ -141,7 +141,7 @@ Each buffer must have the size of its kind, the number of channels that the guid
 
 `Upscaler` is the trait a program draws through. `SpatialUpscaler` implements it on the CPU with the EASU and RCAS passes of [FSR1](Post-processing). It runs where DLSS cannot.
 
-It is not DLSS. It reads the color only, so it adds no detail that the render lacks. It does not denoise, so `supports` is false for Ray Reconstruction. A program that wants a denoised path-traced frame without DLSS must denoise it first with the passes in [Post-processing](Post-processing).
+It is not DLSS. It reads the color only, so it adds no detail that the render lacks. It does not denoise, so `supports` is false for Ray Reconstruction. A program that wants a denoised path-traced frame without DLSS must denoise it first with the passes in [Post-processing](Post-processing). A render or an output whose pixel count does not fit in an integer is refused.
 
 `examples/streamline.mojo` shows the fallback. It renders a scene at the Balanced render size. It puts three images side by side. The first is the render, stretched with the nearest texel. The second is the same render through `SpatialUpscaler`. The third is the scene rendered at the output size.
 

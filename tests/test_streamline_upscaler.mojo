@@ -162,6 +162,20 @@ def test_the_fallback_refuses_a_bad_feature_size_or_image() raises:
         _ = upscaler.evaluate(
             SUPER_RESOLUTION, ramp(2, 1), FrameSize(2, 2), FrameSize(4, 4)
         )
+    with assert_raises(contains="larger than this port"):
+        _ = upscaler.evaluate(
+            SUPER_RESOLUTION,
+            List[FloatColor](),
+            FrameSize(1 << 32, 1 << 32),
+            FrameSize(1 << 32, 1 << 32),
+        )
+    with assert_raises(contains="larger than this port"):
+        _ = upscaler.evaluate(
+            SUPER_RESOLUTION,
+            ramp(2, 2),
+            FrameSize(2, 2),
+            FrameSize(1 << 32, 1 << 32),
+        )
 
 
 def test_the_output_may_be_the_render_size() raises:
