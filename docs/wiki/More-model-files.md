@@ -93,6 +93,7 @@ The loader refuses these, with a message that names the problem:
 - An `rgb` field that is not four bytes.
 - A text row with fewer values than its fields, or a value that is not a number.
 - A coordinate that is not finite as a `Float32`, or a label that is not a whole number in range.
+- A text `rgb` value that does not fit in an integer.
 - A file that ends early, and LZF data that is not valid or does not fill its declared size.
 - A width, field, or point product that does not fit in an integer.
 
@@ -603,6 +604,8 @@ three.js multiplies each candela value by itself and by the multiplier. Then it 
 
 `ies_values` gives 360 rows of 180 values. There is one row for each whole horizontal degree, and one value for each whole vertical degree. A profile of one quadrant or one half fills only the rows that its angles reach, as in three.js. The other rows are NaN.
 
+A byte texture stores each value times 255, cut toward zero and wrapped modulo 256. A product at or past 2^63 is zero.
+
 ### Differences from three.js
 
 - three.js gives its `DataTexture` a width of 180 and a height of one, but 64800 values. The texture here is 180 wide and 360 high.
@@ -647,7 +650,7 @@ var floats = read_lut_3dl("assets/lut/table.3dl", FLOAT_TYPE)
 
 The first line of only digits and spaces is the grid. Each line of exactly three numbers is an entry. Blue changes fastest, then green, then red. A grid of three values is an entry too, as in three.js.
 
-The loader finds the largest number. It divides each number by the power of two at or above it. `UNSIGNED_BYTE_TYPE` is the default. It stores each value times 255, cut to a whole number. `FLOAT_TYPE` stores the value. Alpha is one.
+The loader finds the largest number. It divides each number by the power of two at or above it. `UNSIGNED_BYTE_TYPE` is the default. It stores each value times 255, cut to a whole number, and a magnitude at or past 2^63 wraps to zero. `FLOAT_TYPE` stores the value. Alpha is one.
 
 Entries past `size` cubed wrap around and write over the first ones, as in three.js. Missing entries are zero.
 

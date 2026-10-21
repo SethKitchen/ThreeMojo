@@ -42,8 +42,9 @@ known; a `SIZE`, `TYPE` or `COUNT` line whose length is not the number of
 fields; a type other than `F`, `I` and `U`, or a size its type does not
 have; a count below one; a `WIDTH`, `HEIGHT` or `POINTS` that is not a
 whole number of zero or more; `x`, `y` and `z`, or the three normals,
-not all given; an `rgb` of other than four bytes; a text row with fewer
-values than its fields, or a value that is not a number; a coordinate
+not all given; an `rgb` of other than four bytes, or a text `rgb` that
+does not fit in an integer; a text row with fewer values than its
+fields, or a value that is not a number; a coordinate
 that is not finite as a `Float32`; a file that ends early; and LZF data
 that is not valid or does not fill its declared size. A product that does
 not fit in an integer is refused before allocation. three.js reads past
@@ -770,8 +771,8 @@ struct _Reader:
             The value, with red in bits 16 to 23.
 
         Raises:
-            Error: If the data ends first, or a text value is not a
-                number.
+            Error: If the data ends first, a text value is not a number,
+                or a text integer does not fit in `Int`.
         """
         if self.header.data != PCD_ASCII:
             var at = self.at(field, point, 0)
@@ -782,6 +783,15 @@ struct _Reader:
         var value = self.number(field, point)
         if self.header.types[field] == PCD_FLOAT:
             return Int(bitcast[DType.int32](Float32(value)))
+        # `Float64(Int.MAX)` is 2^63. `Int` of a float at or past it is
+        # not the number. A uint32 text color is below that.
+        if not (value > -Float64(Int.MAX) and value < Float64(Int.MAX)):
+            raise Error(
+                "PCD point "
+                + String(point)
+                + ": `rgb` does not fit in an integer: "
+                + String(value)
+            )
         return Int(value)
 
 

@@ -425,6 +425,10 @@ def ies_byte(value: Float64) -> UInt8:
     `Math.min( v * 0xFF, 0xFF )` into a `Uint8Array`, which cuts it toward
     zero and wraps it modulo 256.
 
+    NaN and negative infinity are zero. A positive product is held at 255
+    before the cut. A finite magnitude at or past 2^63 is a multiple of
+    2048, so its byte is zero. `Int` of that magnitude is not the number.
+
     Args:
         value: The value; NaN, an empty row, is zero.
 
@@ -434,6 +438,10 @@ def ies_byte(value: Float64) -> UInt8:
     if isnan(value):
         return 0
     var scaled = min(value * 255, 255)
+    # The positive side is held at 255. Only a large negative product, or
+    # negative infinity, sits at or past 2^63.
+    if scaled < -Float64(Int.MAX):
+        return 0
     var whole = Int(scaled)
     return UInt8(((whole % 256) + 256) % 256)
 

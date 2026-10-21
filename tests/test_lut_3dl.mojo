@@ -24,6 +24,7 @@ from loaders.lut_image import lut_image_from, parse_lut_image, read_lut_image
 from render.png import DecodedImage
 from render.srgb import SRGB
 from render.texture import FLOAT_TYPE, UNSIGNED_BYTE_TYPE, TexelType
+from std.math import inf, nan
 from std.pathlib import Path
 from std.testing import (
     TestSuite,
@@ -75,6 +76,15 @@ def test_3dl_edges_and_refusals() raises:
     assert_equal(Int(single.texture.image.pixels[0]), 255)
     assert_equal(lut_3dl_byte(-1.5), 255)
     assert_equal(lut_3dl_byte(256.7), 0)
+    # A magnitude at or past 2^63 is a multiple of 2048, so the byte is
+    # zero. A non-finite number is zero, as a `Uint8Array` stores it.
+    assert_equal(lut_3dl_byte(1e20), 0)
+    assert_equal(lut_3dl_byte(-1e20), 0)
+    assert_equal(lut_3dl_byte(inf[DType.float64]()), 0)
+    assert_equal(lut_3dl_byte(nan[DType.float64]()), 0)
+    var wide = parse_lut_3dl("0 1\n-1e20 1 0\n")
+    assert_equal(Int(wide.texture.image.pixels[0]), 0)
+    assert_equal(Int(wide.texture.image.pixels[1]), 255)
     with assert_raises(contains="not valid"):
         _ = parse_lut_3dl("0 1\n", TexelType(5))
     with assert_raises(contains="missing grid"):

@@ -144,12 +144,24 @@ def lut_3dl_byte(value: Float64) -> UInt8:
     """Return a number as a `Uint8Array` stores it: cut toward zero and
     wrapped modulo 256.
 
+    A non-finite number is zero. A finite magnitude at or past 2^63 is a
+    multiple of 2048, so its byte is zero. `Int` of that magnitude is not
+    the number.
+
     Args:
         value: The number.
 
     Returns:
         The byte.
     """
+    # `Float64(Int.MAX)` is 2^63. A float at or past it does not fit in
+    # `Int`, and every such finite value is a multiple of 2048.
+    if (
+        not isfinite(value)
+        or value < -Float64(Int.MAX)
+        or value >= Float64(Int.MAX)
+    ):
+        return 0
     var whole = Int(value)
     return UInt8(((whole % 256) + 256) % 256)
 
