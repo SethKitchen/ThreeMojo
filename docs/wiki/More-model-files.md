@@ -749,6 +749,7 @@ The other nodes are read but not built, as in three.js. These are the lights, th
 - An `ImageTexture` is decoded at once, when its file is there.
 - A number too big for a double is refused.
 - A pixel image whose byte count does not fit is refused.
+- An elevation grid whose index length does not fit is refused.
 
 ### Example
 

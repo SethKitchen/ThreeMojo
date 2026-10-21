@@ -1659,8 +1659,12 @@ struct _Builder(Movable):
         x_dimension: Int,
         z_dimension: Int,
         indices: List[Float64],
-    ) -> List[Float64]:
-        """Return an elevation grid's colors or normals, a vertex each."""
+    ) raises -> List[Float64]:
+        """Return an elevation grid's colors or normals, a vertex each.
+
+        Raises:
+            Error: If the grid's index length does not fit in an integer.
+        """
         var values = grid_values(data, x_dimension, z_dimension, per_vertex)
         if per_vertex:
             return to_non_indexed(indices, values, 3)

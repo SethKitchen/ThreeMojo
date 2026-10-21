@@ -491,6 +491,23 @@ def test_refusals() raises:
         ),
         "larger than this port",
     )
+    # 3037000500 * 3037000500 wraps in Int. The old index length was a
+    # short loop, so the grid looked small enough to build.
+    refuses(
+        (
+            "Shape { geometry ElevationGrid { xDimension 3037000500"
+            " zDimension 3037000500 } }"
+        ),
+        "larger than this port",
+    )
+    # 2^31 points on a side: the point count fits, and `index * 3` does not.
+    refuses(
+        (
+            "Shape { geometry ElevationGrid { xDimension 2147483648"
+            " zDimension 2147483648 } }"
+        ),
+        "larger than this port",
+    )
     # A zero height makes no bytes. It is not an overflow.
     var empty = Scene()
     var empty_assets = Assets()
