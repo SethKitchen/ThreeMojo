@@ -276,6 +276,14 @@ def test_repeat_tiles_the_image() raises:
     assert_equal(image.sample(1.25, 0.75).r, image.sample(0.25, 0.75).r)
     assert_equal(image.sample(-0.75, 0.75).r, image.sample(0.25, 0.75).r)
     assert_equal(image.sample(0.25, 1.75).r, image.sample(0.25, 0.75).r)
+    # Past an integer the coordinate is reduced before the texel index.
+    assert_equal(image.sample(Float32(1e20), 0.75).r, image.sample(0, 0.75).r)
+    assert_equal(
+        image.sample(nan[DType.float32](), 0.75).r, image.sample(0, 0.75).r
+    )
+    assert_equal(
+        image.sample(0.25, nan[DType.float32]()).r, image.sample(0.25, 0).r
+    )
 
 
 def test_clamp_holds_the_edge_texel() raises:
@@ -285,6 +293,10 @@ def test_clamp_holds_the_edge_texel() raises:
     assert_equal(image.sample(9.0, 0.75).r, Float32(0))
     # Far off to the left stays in the left-hand one.
     assert_equal(image.sample(-9.0, 0.75).r, Float32(1))
+    assert_equal(image.sample(Float32(1e20), 0.75).g, image.sample(1, 0.75).g)
+    assert_equal(
+        image.sample(nan[DType.float32](), 0.75).r, image.sample(0, 0.75).r
+    )
 
 
 def test_negative_coordinates_rely_on_floored_modulo() raises:
@@ -328,6 +340,8 @@ def test_mirror_alternates_direction_every_tile() raises:
     assert_equal(image.sample(1.25, 0.75).r, Float32(0))
     # And the third tile is the right way round again.
     assert_equal(image.sample(2.25, 0.75).r, image.sample(0.25, 0.75).r)
+    assert_equal(image.sample(Float32(1e20), 0.75).r, image.sample(0, 0.75).r)
+    assert_equal(image.sample(Float32(-1e20), 0.75).r, image.sample(0, 0.75).r)
 
 
 def test_the_ends_of_the_range_meet_under_repeat() raises:

@@ -1806,20 +1806,30 @@ struct Texture(Movable):
         """
         if self.is_blank():
             return OPAQUE_WHITE
+        var su = u
+        var sv = v
+        if not isfinite(su):
+            su = 0
+        else:
+            su = gradient_sample_coordinate(su, self.wrap_s)
+        if not isfinite(sv):
+            sv = 0
+        else:
+            sv = gradient_sample_coordinate(sv, self.wrap_t)
         var wide = self.level_width(level)
         var tall = self.level_height(level)
-        var from_top = row_coordinate(v, self.flip_y)
+        var from_top = row_coordinate(sv, self.flip_y)
 
         if filter == NEAREST:
             return self._wrapped_texel(
-                _nearest_texel(u, wide),
+                _nearest_texel(su, wide),
                 _nearest_texel(from_top, tall),
                 level,
             )
 
         # Texel centers are at half-integers, so shift the sample into a space
         # where they are at integers, and blend between the two either side.
-        var across = _bilinear_place(u, wide)
+        var across = _bilinear_place(su, wide)
         var down = _bilinear_place(from_top, tall)
         var column = Int(floor(across))
         var row = Int(floor(down))
