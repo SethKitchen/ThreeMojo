@@ -1217,6 +1217,15 @@ def test_the_sixteen_soft_taps_surround_the_nearest_corner() raises:
     var high = Vector3(1, 1, 0.5)
     assert_equal(soft_texel(high, 15, 4), 15)
     assert_equal(soft_texel(high, 0, 4), 2 * 4 + 2)
+    # Past an integer, still the edge. The cast is not that texel.
+    var far = Vector3(Float32(1e20), 0.5, 0.5)
+    assert_equal(soft_texel(far, 0, 4), 3)
+    var behind = Vector3(Float32(-1e20), 0.5, 0.5)
+    assert_equal(soft_texel(behind, 15, 4), 12)
+    var missing = Vector3(nan[DType.float32](), 0.5, 0.5)
+    assert_equal(soft_texel(missing, 0, 4), 3)
+    assert_equal(soft_fraction(Float32(1e20), 4), Float32(0))
+    assert_equal(soft_fraction(nan[DType.float32](), 4), Float32(0))
     assert_equal(SOFT_TAPS, 16)
 
 
@@ -1279,6 +1288,10 @@ def test_a_linear_read_takes_the_four_nearest_centers() raises:
     # Past an edge, the edge.
     assert_equal(bilinear_texel(0.2, 0.2, 0, 4), 0)
     assert_equal(bilinear_texel(3.9, 3.9, 3, 4), 15)
+    assert_equal(bilinear_texel(Float32(1e20), 2.5, 0, 4), 2 * 4 + 3)
+    assert_equal(bilinear_texel(0.2, Float32(-1e20), 0, 4), 0)
+    assert_equal(bilinear_fraction(Float32(1e20)), Float32(0))
+    assert_equal(bilinear_fraction(nan[DType.float32]()), Float32(0))
     var corners = SIMD[DType.float32, 8](0, 1, 2, 3, 10, 10, 10, 10)
     assert_almost_equal(
         bilinear(corners, 0, 1.75, 2.5), Float32(0.25), atol=1e-6

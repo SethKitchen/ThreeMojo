@@ -315,7 +315,11 @@ sun.shadow.blur_samples = 8
 
 **PCF soft.** `soft_texel` finds the texel corner nearest to the fragment and reads a four-by-four block around it. `soft_shadow` adds the four middle taps whole. It mixes the outer taps by `soft_fraction`, the distance of the fragment past that corner. The sum divided by nine is the lit fraction of a box three texels wide. This is three.js's `getShadow` under `SHADOWMAP_TYPE_PCF_SOFT`, tap for tap.
 
+A coordinate that does not fit in an integer reads the edge.
+
 **Variance shadow maps.** A variance map keeps two numbers for each texel: the mean of the depth and its standard deviation. `vsm_moments` makes them from the drawn depths with three.js's two `VSMPass` passes. The first pass reads `blur_samples` depths down each column, from `radius` texels before to `radius` texels after. The second pass reads the result across each row. Each read is linear between the four nearest texel centers: `bilinear_texel` and `bilinear`.
+
+A coordinate that does not fit in an integer reads the edge.
 
 A side below one, a side whose square does not fit, a short depth list, or no sample is refused.
 

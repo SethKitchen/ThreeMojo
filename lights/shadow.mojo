@@ -1285,6 +1285,42 @@ def _texel_at(column: Int, row: Int, size: Int) -> Int:
     return clamped_texel(column, row, size, size)
 
 
+def _shadow_index(value: Float32) -> Int:
+    """Return the floor of a shadow-map coordinate.
+
+    A value that is not finite, or that does not fit in an integer, lies
+    past the map. `Int` of such a float is not that texel.
+
+    Args:
+        value: The coordinate, in texels.
+
+    Returns:
+        The floor, or `Int.MAX` or `Int.MIN` when `value` does not fit.
+    """
+    var wide = Float64(value)
+    if not isfinite(wide) or wide >= Float64(Int.MAX):
+        return Int.MAX
+    if wide <= -Float64(Int.MAX):
+        return Int.MIN
+    return Int(floor(wide))
+
+
+def _shifted_shadow_index(value: Float32, shift: Int) -> Int:
+    """Return `_shadow_index` moved by `shift` without wrapping.
+
+    Args:
+        value: The coordinate, in texels.
+        shift: Texels to add. A sentinel is left where it is.
+
+    Returns:
+        The shifted index, held at `Int.MAX` or `Int.MIN`.
+    """
+    var index = _shadow_index(value)
+    if index == Int.MAX or index == Int.MIN:
+        return index
+    return index + shift
+
+
 def soft_texel(place: Vector3, tap: Int, size: Int) -> Int:
     """Return which texel one of `PCF_SOFT_SHADOW_MAP`'s sixteen taps reads.
 
@@ -1303,8 +1339,10 @@ def soft_texel(place: Vector3, tap: Int, size: Int) -> Int:
     Returns:
         The texel's index, row-major from the top.
     """
-    var column = Int(floor(place.x * Float32(size) + 0.5)) + tap % 4 - 2
-    var row = Int(floor(place.y * Float32(size) + 0.5)) + tap // 4 - 2
+    var column = _shifted_shadow_index(
+        place.x * Float32(size) + 0.5, tap % 4 - 2
+    )
+    var row = _shifted_shadow_index(place.y * Float32(size) + 0.5, tap // 4 - 2)
     return _texel_at(column, row, size)
 
 
@@ -1320,6 +1358,8 @@ def soft_fraction(coordinate: Float32, size: Int) -> Float32:
         Zero up to one.
     """
     var texels = coordinate * Float32(size) + 0.5
+    if not isfinite(texels):
+        return Float32(0)
     return fraction(texels)
 
 
@@ -1378,8 +1418,8 @@ def bilinear_texel(
     Returns:
         The texel's index, row-major from the top.
     """
-    var column = Int(floor(across - 0.5)) + corner % 2
-    var row = Int(floor(down - 0.5)) + corner // 2
+    var column = _shifted_shadow_index(across - 0.5, corner % 2)
+    var row = _shifted_shadow_index(down - 0.5, corner // 2)
     return _texel_at(column, row, size)
 
 
@@ -1393,7 +1433,10 @@ def bilinear_fraction(at: Float32) -> Float32:
     Returns:
         Zero up to one.
     """
-    return fraction(at - 0.5)
+    var past = at - 0.5
+    if not isfinite(past):
+        return Float32(0)
+    return fraction(past)
 
 
 def bilinear(
