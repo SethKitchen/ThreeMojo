@@ -321,7 +321,7 @@ The loader refuses these, with a message that names the problem:
 - A joint with no name, no `{`, no `OFFSET` or no `CHANNELS`. An end site with a joint under it.
 - An `OFFSET` that does not have three numbers.
 - A `CHANNELS` count that is not the number of names after it, and a channel that is not known.
-- A number of frames or a frame time that is not a number.
+- A number of frames or a frame time that is not a number. A frame count that does not fit in an integer.
 - A frame with too few values, or a value that is not a number.
 - A file that ends early, and joints nested more than 256 deep.
 
@@ -615,7 +615,7 @@ The loader refuses these, with a message that names the problem:
 - A file with no `TILT` line, and a file that ends early.
 - A value that is not a number. three.js reads it as `NaN`. An empty line is zero, as in JavaScript.
 - A line with more numbers than its array needs. three.js reads past it until the file ends, and then throws.
-- A number of angles that is not a whole number.
+- A number of angles that is not a whole number, or that does not fit in an integer.
 
 ### Example
 

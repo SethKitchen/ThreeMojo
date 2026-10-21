@@ -157,6 +157,8 @@ def test_refusals() raises:
         _ = parse_ies(head + "0 1e999\n")
     with assert_raises(contains="vertical angles is not a whole number"):
         _ = parse_ies("TILT=NONE\n1 1 1 2.5 1 1 1 0 0 0\n1 1 1\n")
+    with assert_raises(contains="vertical angles is not a whole number"):
+        _ = parse_ies("TILT=NONE\n1 1 1 1e20 1 1 1 0 0 0\n1 1 1\n")
     with assert_raises(contains="horizontal angles is not a whole number"):
         _ = parse_ies("TILT=NONE\n1 1 1 2 -1 1 1 0 0 0\n1 1 1\n")
     with assert_raises(contains="tilt angles is not a whole number"):

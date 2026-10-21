@@ -217,9 +217,14 @@ def _count(value: Float64, what: String) raises -> Int:
     """Return a count read as a number.
 
     Raises:
-        Error: If it is not a whole number of zero or more.
+        Error: If it is not a whole number of zero or more, or it does
+            not fit in an integer.
     """
-    var whole = value >= 0 and floor(value) == value
+    # `Float64(Int.MAX)` rounds up to 2^63. A value at or above it does
+    # not fit, and `Int` of it is not the number.
+    var whole = (
+        value >= 0 and value < Float64(Int.MAX) and floor(value) == value
+    )
     if not whole:
         raise Error("IES: " + what + " is not a whole number")
     return Int(value)
