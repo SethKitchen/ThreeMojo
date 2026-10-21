@@ -250,6 +250,35 @@ def _to_index(value: Float64, what: String) raises -> Int:
     return Int(length)
 
 
+def _index_length(size: Int, cells: Int) raises -> Int:
+    """Return `3 * size - 9 * cells`, three.js's polygon index length.
+
+    The products are checked before they are made. An `Int` product
+    wraps, so a huge size can look like a short index.
+
+    Args:
+        size: The connectivity count, including each cell's count word.
+        cells: How many cells.
+
+    Returns:
+        The index length.
+
+    Raises:
+        Error: If the length is negative or longer than `MAX_VTK_ARRAY`.
+    """
+    if cells > Int.MAX // 3 or cells < Int.MIN // 3:
+        if cells > 0:
+            return _to_index(Float64(-1), "the index")
+        raise Error("VTK: the index is longer than this port makes")
+    var triple = 3 * cells
+    if size < triple:
+        return _to_index(Float64(-1), "the index")
+    var span = size - triple
+    if span > Int.MAX // 3:
+        raise Error("VTK: the index is longer than this port makes")
+    return _to_index(Float64(3 * span), "the index")
+
+
 def _geometry(
     positions: List[Float64],
     normals: List[Float64],
@@ -878,7 +907,7 @@ def parse_vtk_binary(bytes: List[UInt8]) raises -> BufferGeometry:
             var strip_kind = _starts(line, "TRIANGLE_STRIPS")
             var cells = _count(line, 1, "cell")
             var size = _count(line, 2, "cell")
-            var length = _to_index(Float64(3 * size - 9 * cells), "the index")
+            var length = _index_length(size, cells)
             indices = List[Float64](length=length, fill=0)
             has_index = True
             var slot = 0
@@ -1422,7 +1451,7 @@ def _cells(
         ends.append(Int(_to_int32(value)))
     var n = Int(min(count, Float64(1 << 40)))
     var size = n + len(conn)
-    var length = _to_index(Float64(3 * size - 9 * n), "the index")
+    var length = _index_length(size, n)
     var out = List[Float64](length=length, fill=0)
     var slot = 0
     # A cell past the offsets reads undefined, and its loops do not run.

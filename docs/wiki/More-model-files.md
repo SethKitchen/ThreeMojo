@@ -1049,6 +1049,7 @@ The loader refuses these, with a message that names the problem. three.js throws
 - An XML file with no cells or no points, or a part that three.js reads but the file does not have.
 - A binary line with no end, and a count that is not a number. three.js reads these for ever.
 - A binary count that does not fit in an integer.
+- An index length that wraps in an integer is refused.
 - A zlib block that expands past the size in its header.
 - An index past the points. three.js keeps it and draws from undefined positions.
 - A text or XML file that is not UTF-8.

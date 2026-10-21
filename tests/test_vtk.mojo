@@ -10,6 +10,7 @@ from core.binary import append_big_endian
 from core.buffer_geometry import COLOR, NORMAL, POSITION, BufferGeometry
 from loaders.json import JsonDocument, NULL, parse_json
 from loaders.vtk import (
+    _index_length,
     parse_vtk,
     parse_vtk_ascii,
     parse_vtk_binary,
@@ -187,6 +188,20 @@ def _binary(
     for value in floats:
         append_big_endian(out, Int(bitcast[DType.uint32](value)), 4)
     return out^
+
+
+def test_a_wrapped_index_length_is_refused() raises:
+    assert_equal(_index_length(4, 1), 3)
+    assert_equal(_index_length(10, 2), 12)
+    assert_equal(_index_length(0, 0), 0)
+    with assert_raises(contains="negative length"):
+        _ = _index_length(2, 1)
+    with assert_raises(contains="negative length"):
+        _ = _index_length(0, Int.MAX // 3 + 1)
+    with assert_raises(contains="longer"):
+        _ = _index_length(6148914691236518912, 0)
+    with assert_raises(contains="longer"):
+        _ = _index_length(0, Int.MIN)
 
 
 def test_what_three_js_throws_on_in_binary_is_refused() raises:
