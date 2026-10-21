@@ -27,8 +27,8 @@ there too. `value_at` reads so.
 **What is refused.** Where three.js throws: faces with no corner indices,
 and a mesh with neither normals nor corners to compute them from. And
 where this port holds less: points or attributes that are not whole
-vertices, face counts whose triangle count is not whole, and a face of
-more than 2^24 corners.
+vertices, face counts whose triangle count is not whole or does not fit,
+and a face of more than 2^24 corners.
 
 ## Numerical range correction
 
@@ -1002,7 +1002,11 @@ def _triangle_count(
     if total != total:
         # `new Int32Array( NaN )` is empty.
         total = 0
-    if total < 0 or total != Float64(Int(total)):
+    # `Float64(Int.MAX)` rounds up to 2^63. A total at or above it does
+    # not fit, and `Int` of it is not the number.
+    if total < 0 or total >= Float64(Int.MAX):
+        raise Error("USD: face counts whose triangle count is not whole")
+    if total != Float64(Int(total)):
         raise Error("USD: face counts whose triangle count is not whole")
     return (Int(total), starts^)
 

@@ -466,6 +466,12 @@ def test_subset_holes() raises:
         half.indices = UsdArray([0, 1, 2, 3])
         half.counts = UsdArray([3.5])
         _ = build_usd_geometry_with_subsets(half, [[0]])
+    with assert_raises(contains="not whole"):
+        var huge = UsdMeshArrays()
+        huge.points = UsdArray(_square())
+        huge.indices = UsdArray([0, 1, 2])
+        huge.counts = UsdArray([1e20])
+        _ = build_usd_geometry_with_subsets(huge, [[0]])
     # A NaN count of triangles is none, as `new Int32Array( NaN )` is
     # empty; the hole of no corners is then refused, as three.js throws.
     with assert_raises():
