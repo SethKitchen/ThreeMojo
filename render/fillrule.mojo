@@ -41,10 +41,25 @@ from std.math import floor
 # a 32-bit one.
 comptime SUBPIXEL_BITS = 4
 comptime SUBPIXEL = 1 << SUBPIXEL_BITS
+# The edge function multiplies two coordinate deltas. A snap at ±2^29 keeps
+# the widest difference of those products inside an integer. That is a
+# screen coordinate of ±2^25 pixels.
+comptime _GUARD_PIXELS = 1 << 25
+comptime _GUARD_SNAP = _GUARD_PIXELS * SUBPIXEL
 
 
 def snap(value: Float32) -> Int:
-    """Return a screen coordinate on the subpixel grid, as an integer."""
+    """Return a screen coordinate on the subpixel grid, as an integer.
+
+    A coordinate at or past 2^25 pixels is held on that guard band. Past
+    it, the edge function's product does not fit in an integer, and `Int`
+    of a float past 2^63 is not that coordinate.
+    """
+    var guard = Float32(_GUARD_PIXELS)
+    if not (value < guard):
+        return _GUARD_SNAP
+    if value <= -guard:
+        return -_GUARD_SNAP
     return Int(floor(value * Float32(SUBPIXEL) + 0.5))
 
 

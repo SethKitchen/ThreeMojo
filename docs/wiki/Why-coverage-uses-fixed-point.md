@@ -12,7 +12,7 @@ That left one-pixel cracks along the diagonal of a quad: two in a large quad, fo
 
 ## The fix
 
-With coordinates snapped to a grid, the edge function is exact integer arithmetic. Reversing an edge negates the value exactly. No pixel can be missed.
+With coordinates snapped to a grid, the edge function is exact integer arithmetic. Reversing an edge negates the value exactly. No pixel can be missed. A coordinate past 2^25 pixels is held on that guard band, so the product still fits.
 
 ## The top-left rule
 
