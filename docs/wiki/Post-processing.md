@@ -595,6 +595,7 @@ composer.add_pass(god_rays_pass(Vector3(0, 1000, -1000)))
 
 - `check_effect` refuses an effect or a mirror side that is not named, and a uniform that is not finite. It refuses a contrast of one or more, where the shader divides by zero. It refuses a saturation above one and sides that are not positive.
 - `check_god_rays` refuses a setting that is not finite, a negative intensity and a filter length that is not positive. It refuses a resolution scale outside above zero to one.
+- `god_rays_size` multiplies the frame side by the scale in `Float64` and cuts toward zero. It refuses a product that is not finite or does not fit in an integer.
 
 `ShaderEffect` and `MirrorSide` are types. A bare number does not compile. `tests/compile_fail/` proves it.
 

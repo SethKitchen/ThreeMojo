@@ -894,6 +894,14 @@ def test_effect_light_runs_over_the_frame_as_it_was() raises:
 def test_the_god_ray_sizes_steps_and_sun() raises:
     assert_equal(god_rays_size(100, 0.25), 25)
     assert_equal(god_rays_size(3, 0.25), 1)
+    # A Float32 product of 16777217 is 16777216, one pixel short.
+    assert_equal(god_rays_size(16777217, 1), 16777217)
+    with assert_raises(contains="does not fit"):
+        _ = god_rays_size(Int.MAX, 1)
+    with assert_raises(contains="does not fit"):
+        _ = god_rays_size(Int.MIN, 1.5)
+    with assert_raises(contains="does not fit"):
+        _ = god_rays_size(1, nan[DType.float32]())
     near(god_rays_step(1, 1), 1.0 / 6.0)
     near(god_rays_step(2, 3), 2.0 / 216.0)
     # Straight ahead of an identity camera, at the center.
