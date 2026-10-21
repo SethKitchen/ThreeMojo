@@ -91,6 +91,8 @@ def test_a_resolution_must_be_positive() raises:
     var assets = Assets()
     with assert_raises(contains="resolution must be positive"):
         _ = ProgressiveLightMap(assets, 0)
+    with assert_raises(contains="larger than this port"):
+        _ = ProgressiveLightMap(assets, 1 << 31)
 
 
 def test_the_maps_start_black_and_the_second_reads_uv1() raises:
