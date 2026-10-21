@@ -38,7 +38,7 @@ from math.vector3 import Vector3, mix_delta3
 from render.tasks import TaskGroup
 from std.collections import Dict
 from std.sys import num_logical_cores
-from std.math import atan2, ceil, max, min, pi, sqrt
+from std.math import atan2, ceil, isfinite, max, min, pi, sqrt
 
 # Fine cells per unit of `detail` along the long axis.
 comptime REFINE = 4
@@ -77,9 +77,25 @@ struct _Grid(ImplicitlyCopyable):
         return i + self.nx * (j + self.ny * k)
 
 
-def _blocks(span: Float32, cell: Float32) -> Int:
-    """Return how many whole blocks hold `span` at `cell`, at least one."""
-    return max(1, Int(ceil(span / (cell * Float32(BLOCK)))))
+def _blocks(span: Float32, cell: Float32) raises -> Int:
+    """Return how many whole blocks hold `span` at `cell`, at least one.
+
+    Args:
+        span: The length to cover, in the field's units.
+        cell: The fine cell size. It must be positive.
+
+    Returns:
+        The block count.
+
+    Raises:
+        Error: If the count is not a positive finite integer this port
+            stores, including after the block is widened to fine cells.
+    """
+    var count = ceil(Float64(span) / (Float64(cell) * Float64(BLOCK)))
+    # `Int.MAX // BLOCK` keeps `blocks * BLOCK` inside an integer.
+    if not isfinite(count) or count <= 0 or count > Float64(Int.MAX // BLOCK):
+        raise Error("A surface net is larger than this port builds")
+    return Int(count)
 
 
 def surface_gradient[
@@ -441,8 +457,9 @@ def mesh_surface[
         A geometry with `position`, `normal` and `uv` attributes.
 
     Raises:
-        Error: If `detail` is out of range, or the field makes no
-            surface in the box.
+        Error: If `detail` is out of range, the box's block count does
+            not fit in an integer, or the field makes no surface in the
+            box.
     """
     check_detail(detail, name)
     var threads = workers
@@ -456,8 +473,13 @@ def mesh_surface[
     var bx = _blocks(high.x - low.x + 2 * pad, cell)
     var by = _blocks(span_y + 2 * pad, cell)
     var bz = _blocks(high.z - low.z + 2 * pad, cell)
+    var nx = bx * BLOCK + 1
+    var ny = by * BLOCK + 1
+    var nz = bz * BLOCK + 1
+    if nx > Int.MAX // ny or nx * ny > Int.MAX // nz:
+        raise Error("A surface net is larger than this port builds")
     var grid = _Grid(start, cell, bx * BLOCK, by * BLOCK, bz * BLOCK)
-    var total = (grid.nx + 1) * (grid.ny + 1) * (grid.nz + 1)
+    var total = nx * ny * nz
     var values = List[Float32](length=total, fill=UNSAMPLED)
     # The coarse pass: every block corner.
     for k in range(bz + 1):  # pragma: no branch
