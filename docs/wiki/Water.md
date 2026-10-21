@@ -103,7 +103,7 @@ The water shades the pebble bed under the surface, not the scene's geometry unde
 
 `SpectrumResolution` is a power of two from 4 through 256. The still uses 256, the same ocean grid as the page. The patch is 4.6 meters. The mean depth is 1.6 meters. The root-mean-square slope is 0.078. Mipmaps and anisotropy filter the ocean, the caustics and the pebbles.
 
-The caustic grid in the still is 64. The page uses 256.
+The caustic grid in the still is 64. The page uses 256. A side whose texel buffer does not fit in an integer is refused.
 
 ## Frame
 

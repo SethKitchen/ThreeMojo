@@ -348,6 +348,8 @@ def test_caustics() raises:
     _ = flat_shift(Vector3(0.0, 1.0, 0.0), 1.6)
     with assert_raises():
         _ = CausticField(0, Length(4.6))
+    with assert_raises(contains="larger than this port"):
+        _ = CausticField(1 << 31, Length(4.6))
     with assert_raises():
         _ = CausticField(4, Length(-1.0))
     var flat = _filled(0.0, 0.0, 0.0)

@@ -112,10 +112,15 @@ struct CausticField(CausticTexels, Movable):
             patch: The ocean patch length.
 
         Raises:
-            Error: If `n` is not positive, or the patch is not positive.
+            Error: If `n` is not positive, the patch is not positive, or
+                the texel buffer does not fit in an integer.
         """
         require_positive(n, "Caustic resolution must be positive")
         require_ocean_patch(patch.value)
+        # Three floats a texel. A side past 2^31 wraps that product, so
+        # the texture looks empty.
+        if n > (Int.MAX // 3) // n:
+            raise Error("A caustic texture is larger than this port builds")
         self.n = n
         self.patch = patch.value
         self.samples = List[Float32](length=n * n * 3, fill=0.0)
