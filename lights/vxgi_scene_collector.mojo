@@ -31,7 +31,9 @@ or below its material's `alpha_test`. The opacity is the material's
 
 **Subdivision.** A triangle with an edge longer than `max_edge` sub-voxels
 is split at the middle of its longest edge, again and again, so that no
-record covers more than a few voxels.
+record covers more than a few voxels. The triangle is cut to the bounds,
+grown by that edge, before the split. A corner that is not finite is
+dropped.
 """
 
 from core.assets import Assets
@@ -208,12 +210,78 @@ def sample_texture(texture: Texture, u: Float32, v: Float32) -> FloatColor:
     return texture.fetch(column, fetch_row(row, height, texture.flip_y), 0)
 
 
+def _clip_half(
+    points: List[Vector3], normal: Vector3, offset: Float32
+) -> List[Vector3]:
+    """Return the part of a polygon on the inner side of one plane.
+
+    The plane is `normal` dot `x` = `offset`. The inner side is that dot
+    at most `offset`. This is one step of Sutherland-Hodgman.
+
+    Args:
+        points: The corners, in order. It can be empty.
+        normal: The plane's normal, a unit axis.
+        offset: The plane's offset.
+
+    Returns:
+        The corners that stay, with a new corner where an edge crosses.
+
+    Raises:
+        Error: Never.
+    """
+    var out = List[Vector3]()
+    var count = len(points)
+    for i in range(count):
+        var p = points[i]
+        var q = points[(i + 1) % count]
+        var dp = normal.dot(p) - offset
+        var dq = normal.dot(q) - offset
+        if dp <= 0:
+            out.append(p)
+        if (dp <= 0) != (dq <= 0):
+            out.append(p + (q - p) * (dp / (dp - dq)))
+    return out^
+
+
+def _clip_triangle(
+    a: Vector3, b: Vector3, c: Vector3, low: Vector3, high: Vector3
+) -> List[Vector3]:
+    """Return `a b c` cut to the box from `low` to `high`.
+
+    Args:
+        a: The first corner.
+        b: The second.
+        c: The third.
+        low: The box's low corner.
+        high: The box's high corner.
+
+    Returns:
+        The clipped polygon, in order. Empty when the triangle misses
+        the box.
+
+    Raises:
+        Error: Never.
+    """
+    var polygon = List[Vector3]()
+    polygon.append(a)
+    polygon.append(b)
+    polygon.append(c)
+    polygon = _clip_half(polygon^, Vector3(-1, 0, 0), -low.x)
+    polygon = _clip_half(polygon^, Vector3(1, 0, 0), high.x)
+    polygon = _clip_half(polygon^, Vector3(0, -1, 0), -low.y)
+    polygon = _clip_half(polygon^, Vector3(0, 1, 0), high.y)
+    polygon = _clip_half(polygon^, Vector3(0, 0, -1), -low.z)
+    polygon = _clip_half(polygon^, Vector3(0, 0, 1), high.z)
+    return polygon^
+
+
 struct _Collector(Movable):
     """The records being written, and what every triangle is tested
     against."""
 
     var records: List[Float32]
     var bounds: Box3
+    var edge_limit: Float32
     var max_edge_sq: Float32
     var min_opacity: Float32
 
@@ -228,6 +296,7 @@ struct _Collector(Movable):
         self.records = List[Float32]()
         self.bounds = bounds
         var edge = Float32(max_edge) * sub_voxel_size
+        self.edge_limit = edge
         self.max_edge_sq = edge * edge
         self.min_opacity = min_opacity
 
@@ -241,8 +310,25 @@ struct _Collector(Movable):
         side: Float32,
     ):
         """Write one triangle, split along its longest edge until every
-        edge is short enough: three.js's `emit`, with its stack."""
-        var stack: List[Vector3] = [a, b, c]
+        edge is short enough: three.js's `emit`, with its stack.
+
+        A corner that is not finite is dropped. The triangle is cut to
+        the bounds, grown by the longest edge a record may have, before
+        the split, so an edge past the volume does not keep splitting.
+        """
+        if not (a.is_finite() and b.is_finite() and c.is_finite()):
+            return
+        var pad = Vector3(self.edge_limit, self.edge_limit, self.edge_limit)
+        var polygon = _clip_triangle(
+            a, b, c, self.bounds.min - pad, self.bounds.max + pad
+        )
+        var stack = List[Vector3]()
+        var index = 1
+        while index + 1 < len(polygon):
+            stack.append(polygon[0])
+            stack.append(polygon[index])
+            stack.append(polygon[index + 1])
+            index += 1
         while len(stack) > 0:
             var pc = stack.pop()
             var pb = stack.pop()

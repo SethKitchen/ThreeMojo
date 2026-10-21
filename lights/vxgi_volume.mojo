@@ -239,13 +239,39 @@ def _swizzled(
     return (y, z, x)
 
 
+def _grid_index(value: Float32) -> Int:
+    """Return the sub-voxel a coordinate falls in.
+
+    A coordinate that is not finite, or that does not fit in an integer,
+    lies past the high side of the grid. A coordinate past the low side
+    of an integer lies past the low side. A coordinate inside the grid is
+    `floor` of that coordinate.
+
+    Args:
+        value: A sub-voxel coordinate.
+
+    Returns:
+        The index, or `Int.MAX` / `Int.MIN` when the coordinate lies past
+        the grid.
+
+    Raises:
+        Error: Never.
+    """
+    if not (isfinite(value) and value < Float32(Int.MAX)):
+        return Int.MAX
+    if value <= -Float32(Int.MAX):
+        return Int.MIN
+    return Int(floor(value))
+
+
 struct VoxelTriangle(ImplicitlyCopyable):
     """One triangle record set up for conservative voxelization, in
     sub-voxel space and turned so its dominant axis is `k`: the first half
     of three.js's `VXGI.Voxelize` kernel.
 
     The host walks its columns, three.js's loops. A kernel asks it of the
-    eight sub-voxels of its own voxel. Both decide with `column`.
+    eight sub-voxels of its own voxel. Both decide with `column`. A
+    coordinate that does not fit in an integer lies past the grid.
     """
 
     # Whether the triangle covers anything: its plane has a dominant axis.
@@ -337,10 +363,10 @@ struct VoxelTriangle(ImplicitlyCopyable):
         var max_j = max(q0[1], max(q1[1], q2[1]))
         self.low_k = min(q0[2], min(q1[2], q2[2]))
         self.high_k = max(q0[2], max(q1[2], q2[2]))
-        self.i0 = max(Int(floor(min_i)), 0)
-        self.i1 = min(Int(floor(max_i)), Int(sd[0]) - 1)
-        self.j0 = max(Int(floor(min_j)), 0)
-        self.j1 = min(Int(floor(max_j)), Int(sd[1]) - 1)
+        self.i0 = max(_grid_index(min_i), 0)
+        self.i1 = min(_grid_index(max_i), Int(sd[0]) - 1)
+        self.j0 = max(_grid_index(min_j), 0)
+        self.j1 = min(_grid_index(max_j), Int(sd[1]) - 1)
         self.top_k = Int(sd[2]) - 1
         var area_sign = glsl_sign(n[2])
         self.e0 = _edge(q0[0], q0[1], q1[0], q1[1], area_sign)
@@ -375,9 +401,9 @@ struct VoxelTriangle(ImplicitlyCopyable):
             self.q0z
             - (self.nx * (cx - self.q0x) + self.ny * (cy - self.q0y)) / self.nz
         )
-        var k0 = max(Int(floor(max(depth - self.half_extent, self.low_k))), 0)
+        var k0 = max(_grid_index(max(depth - self.half_extent, self.low_k)), 0)
         var k1 = min(
-            Int(floor(min(depth + self.half_extent, self.high_k))), self.top_k
+            _grid_index(min(depth + self.half_extent, self.high_k)), self.top_k
         )
         return (inside, k0, k1)
 

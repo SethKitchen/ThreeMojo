@@ -52,9 +52,11 @@ A volume is a flat list of four floats a voxel. Level zero comes first, then eac
 - A triangle with an edge longer than 16 sub-voxels is split at the middle of that edge.
 - A texture coordinate that is not finite, or that does not fit in an integer, is read at zero.
 
+A triangle is cut to the bounds before it is split, so an edge past the volume does not keep splitting. A corner that is not finite is dropped.
+
 ## Voxelization
 
-Each voxel has two by two by two sub-voxels. A triangle is projected along its dominant axis and rasterized conservatively. A sub-voxel column is covered when its center is within half a sub-voxel of each edge. The triangle's plane then fills the column's depth range. A voxel keeps a bit for each covered sub-voxel, and the last triangle that covers it.
+Each voxel has two by two by two sub-voxels. A triangle is projected along its dominant axis and rasterized conservatively. A sub-voxel column is covered when its center is within half a sub-voxel of each edge. The triangle's plane then fills the column's depth range. A voxel keeps a bit for each covered sub-voxel, and the last triangle that covers it. A coordinate that does not fit in an integer lies past the grid.
 
 The opacity along an axis is a quarter for each of the four sub-voxel columns on that axis that has a bit. The occupancy is an eighth for each bit. A coarser level combines two children along each axis, `1 - (1 - a)(1 - b)`, and averages the pairs across it. The opacity is stored in eight-bit texels, as three.js stores it.
 

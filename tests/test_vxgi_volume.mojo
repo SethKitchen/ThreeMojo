@@ -22,6 +22,7 @@ from lights.light import (
 from lights.lighting import falloff
 from lights.vxgi_cone_tracer import (
     UNBOUNDED,
+    VxgiGrid,
     floats_of,
     half_rounded,
     unorm8,
@@ -154,6 +155,137 @@ def bits(volume: VXGIVolume, x: Int, y: Int, z: Int) -> Int32:
     return volume.occupancy[
         x + volume.grid.size_x * (y + volume.grid.size_y * z)
     ]
+
+
+def _record(
+    ax: Float32,
+    ay: Float32,
+    az: Float32,
+    bx: Float32,
+    by: Float32,
+    bz: Float32,
+    cx: Float32,
+    cy: Float32,
+    cz: Float32,
+) -> List[Float32]:
+    """Return one triangle record in the collector's layout."""
+    var values = List[Float32]()
+    values.extend([ax, ay, az, 0, bx, by, bz, 0, cx, cy, cz, 0])
+    values.extend([1, 1, 1, 0, 0, 0, 0, 0])
+    return values^
+
+
+def _small_grid() -> VxgiGrid:
+    """Return an 8-voxel grid of voxel size 1/8."""
+    return VxgiGrid(Vector3(0, 0, 0), Vector3(1, 1, 1), 0.125, 8, 8, 8, 1, 1)
+
+
+def _setup(grid: VxgiGrid, values: List[Float32]) -> VoxelTriangle:
+    """Set up one record while `values` is still alive."""
+    return VoxelTriangle(floats_of(values), 0, grid)
+
+
+def test_a_triangle_past_an_integer_lies_past_the_grid() raises:
+    var grid = _small_grid()
+    var near = _setup(
+        grid, _record(0.1, 0.1, 0.1, 0.2, 0.1, 0.1, 0.1, 0.2, 0.15)
+    )
+    assert_equal(near.i0, 1)
+    assert_equal(near.i1, 3)
+    assert_equal(near.j0, 1)
+    assert_equal(near.j1, 3)
+    assert_true(near.usable)
+    var far = _setup(
+        grid,
+        _record(
+            Float32(1e20),
+            0.2,
+            0.2,
+            Float32(1e20),
+            0.4,
+            0.2,
+            Float32(1e20),
+            0.2,
+            0.4,
+        ),
+    )
+    assert_equal(far.i0, 3)
+    assert_equal(far.i1, 6)
+    var far_column = far.column(4, 4)
+    assert_true(far_column[1] > far_column[2])
+    assert_false(far.covers(4, 4, 0))
+    var past = _setup(
+        grid,
+        _record(
+            Float32(1e20),
+            Float32(1e20),
+            Float32(1e20),
+            Float32(1e20),
+            Float32(2e20),
+            Float32(1e20),
+            Float32(1e20),
+            Float32(1e20),
+            Float32(2e20),
+        ),
+    )
+    assert_true(past.i0 > past.i1)
+    assert_false(past.covers(0, 0, 0))
+    var under = _setup(
+        grid,
+        _record(
+            Float32(-1e20),
+            Float32(-1e20),
+            Float32(-1e20),
+            Float32(-1e20),
+            Float32(-2e20),
+            Float32(-1e20),
+            Float32(-1e20),
+            Float32(-1e20),
+            Float32(-2e20),
+        ),
+    )
+    assert_true(under.i0 > under.i1)
+    assert_false(under.covers(0, 0, 0))
+    var below = _setup(
+        grid,
+        _record(
+            Float32(-1e20),
+            0.2,
+            0.2,
+            Float32(-1e20),
+            0.4,
+            0.2,
+            Float32(-1e20),
+            0.2,
+            0.4,
+        ),
+    )
+    assert_equal(below.i0, 3)
+    assert_equal(below.i1, 6)
+    var below_column = below.column(4, 4)
+    assert_true(below_column[1] > below_column[2])
+    assert_false(below.covers(4, 4, 0))
+    var deep = _setup(
+        grid,
+        _record(
+            0.2,
+            0.2,
+            Float32(1e20),
+            0.4,
+            0.2,
+            Float32(1e20),
+            0.2,
+            0.4,
+            Float32(1e20),
+        ),
+    )
+    assert_true(deep.i0 <= deep.i1)
+    assert_false(deep.covers(3, 3, 0))
+    var missing = _setup(
+        grid,
+        _record(nan[DType.float32](), 0.2, 0.2, 0.3, 0.2, 0.2, 0.2, 0.4, 0.3),
+    )
+    assert_false(missing.covers(3, 3, 3))
 
 
 def test_a_light_type_is_one_of_three() raises:

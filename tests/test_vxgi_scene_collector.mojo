@@ -17,6 +17,7 @@ from core.scene import Scene
 from geometries.plane import plane
 from lights.vxgi_scene_collector import (
     TRIANGLE_STRIDE,
+    _clip_triangle,
     collect_scene_triangles,
     compute_scene_bounds,
     sample_texture,
@@ -558,6 +559,60 @@ def test_a_long_triangle_is_split_along_its_longest_edge() raises:
             if records[base] == 2 and records[base + 1] == 0:
                 middles += 1
         assert_equal(middles, 2)
+
+
+def test_an_edge_past_the_volume_does_not_keep_splitting() raises:
+    var bounds = Box3(Vector3(-1, -1, -1), Vector3(1, 1, 1))
+    var assets = Assets()
+    var scene = Scene()
+    _ = placed(
+        assets,
+        scene,
+        one_triangle(
+            Vector3(0, 0, 0), Vector3(0.5, 0, 0), Vector3(Float32(1e20), 0.2, 0)
+        ),
+        Material(WHITE),
+    )
+    scene.update()
+    var records = collect(scene, assets, max_edge=3, bounds=bounds)
+    assert_true(len(records) > 0)
+    assert_true(len(records) < 32 * TRIANGLE_STRIDE)
+    assert_equal(len(records) % TRIANGLE_STRIDE, 0)
+    var corner = 0
+    while corner < len(records):
+        if corner % TRIANGLE_STRIDE < 12:
+            assert_true(records[corner] < 8)
+            assert_true(records[corner] > -8)
+        corner += 1
+    for shift in range(3):
+        var corners = List[Vector3]()
+        corners.append(Vector3(0, 0, 0))
+        corners.append(Vector3(0.5, 0, 0))
+        corners.append(Vector3(0, 0.5, 0))
+        if shift == 0:
+            corners[0] = Vector3(nan[DType.float32](), 0, 0)
+        elif shift == 1:
+            corners[1] = Vector3(0.5, nan[DType.float32](), 0)
+        else:
+            corners[2] = Vector3(0, 0.5, inf[DType.float32]())
+        var gone = Assets()
+        var empty = Scene()
+        _ = placed(
+            gone,
+            empty,
+            one_triangle(corners[0], corners[1], corners[2]),
+            Material(WHITE),
+        )
+        empty.update()
+        assert_equal(len(collect(empty, gone, bounds=bounds)), 0)
+    var missed = _clip_triangle(
+        Vector3(10, 10, 10),
+        Vector3(11, 10, 10),
+        Vector3(10, 11, 10),
+        Vector3(-1, -1, -1),
+        Vector3(1, 1, 1),
+    )
+    assert_equal(len(missed), 0)
 
 
 def test_a_mesh_on_a_hidden_node_or_another_layer_is_skipped() raises:
