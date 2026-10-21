@@ -231,6 +231,8 @@ def test_refusals() raises:
     var four: List[Float32] = [1, 2, 3, 4]
     with assert_raises(contains="a width and a height"):
         _ = export_exr(0, 1, List[Float32]())
+    with assert_raises(contains="larger than this port"):
+        _ = export_exr(1 << 31, 1 << 31, List[Float32]())
     with assert_raises(contains="a width and a height"):
         _ = export_exr(1, 0, List[Float32]())
     with assert_raises(contains="not 4 values"):

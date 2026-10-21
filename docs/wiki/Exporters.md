@@ -351,7 +351,7 @@ three.js writes two kinds of block that its own `EXRLoader` reads wrong values f
 - The last block of a `ZIP_COMPRESSION` file, when the height is not a multiple of 16. three.js compresses it at the size of a full block, with bytes of the block before it. This port compresses only the real lines.
 - A block that zlib does not make smaller, for example in a small image. A reader takes such a block as raw lines. three.js writes the zlib stream. This port writes the raw lines.
 
-Every other block, and the header, are the bytes that three.js writes. A NaN is written as three.js writes it on x86-64: `0xFE00` as a half, and `0x7FC00000` as a float. An image with no texels, or data of the wrong length, is refused.
+Every other block, and the header, are the bytes that three.js writes. A NaN is written as three.js writes it on x86-64: `0xFE00` as a half, and `0x7FC00000` as a float. An image with no texels, or data of the wrong length, is refused. An image whose byte buffer does not fit in an integer is refused.
 
 ## KTX2
 

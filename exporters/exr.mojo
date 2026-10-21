@@ -89,6 +89,10 @@ def _check(
     require_positive_extent(
         width, height, "EXR export: an image needs a width and a height"
     )
+    # Four channels, and four bytes a float sample. A side of 2^31 wraps
+    # `width * height * 4` to zero, so an empty buffer looks complete.
+    if width > (Int.MAX // 16) // height:
+        raise Error("EXR export: the image is larger than this port writes")
     if count != width * height * 4:
         raise Error(
             "EXR export: the data must hold four values for each of the "
@@ -244,8 +248,9 @@ def export_exr(
         The file.
 
     Raises:
-        Error: If the image has no texels, the data is not four values a
-            texel, or the compression or the type is not one of these.
+        Error: If the image has no texels, its byte buffer does not fit,
+            the data is not four values a texel, or the compression or
+            the type is not one of these.
     """
     _check(width, height, len(data), compression, type)
     var values = List[Float64](capacity=len(data))
@@ -280,8 +285,9 @@ def export_exr_half(
         The file.
 
     Raises:
-        Error: If the image has no texels, the data is not four values a
-            texel, or the compression or the type is not one of these.
+        Error: If the image has no texels, its byte buffer does not fit,
+            the data is not four values a texel, or the compression or
+            the type is not one of these.
     """
     _check(width, height, len(data), compression, type)
     var values = List[Float64](capacity=len(data))
@@ -309,8 +315,9 @@ def export_exr_image(
         The file.
 
     Raises:
-        Error: If the image has no texels, its pixels are not four values
-            a texel, or the compression or the type is not one of these.
+        Error: If the image has no texels, its byte buffer does not fit,
+            its pixels are not four values a texel, or the compression
+            or the type is not one of these.
     """
     _check(
         image.width,
