@@ -692,6 +692,17 @@ def test_the_ssao_blur_averages_five_by_five() raises:
     )
 
 
+def test_a_screen_space_frame_must_fit() raises:
+    with assert_raises(contains="at least one pixel"):
+        _ = ssao_blur(List[Float32](), 0, 1)
+    with assert_raises(contains="at least one pixel"):
+        _ = ssr_blur(List[FloatColor](), 1, 0)
+    with assert_raises(contains="larger than this port"):
+        _ = ssao_blur(List[Float32](), 1 << 32, 1 << 32)
+    with assert_raises(contains="larger than this port"):
+        _ = ssr_blur(List[FloatColor](), 1 << 32, 1 << 32)
+
+
 def test_ssao_light_leaves_each_output() raises:
     var camera = a_camera()
     var target = drawn(camera)

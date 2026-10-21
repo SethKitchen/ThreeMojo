@@ -746,7 +746,28 @@ def _ssao_pixel(
     return 1 - min(Float32(1), Float32(occluded) / Float32(len(kernel)))
 
 
-def ssao_blur(values: List[Float32], width: Int, height: Int) -> List[Float32]:
+def require_screen_extent(width: Int, height: Int) raises:
+    """Refuse a screen-space frame that is empty or whose pixel count wraps.
+
+    Nothing. The call returns when both sides are at least one and their
+    product fits in an integer.
+
+    Args:
+        width: The frame's width in pixels.
+        height: The frame's height in pixels.
+
+    Raises:
+        Error: If a side is below one, or the pixel count does not fit.
+    """
+    if width < 1 or height < 1:
+        raise Error("A screen-space frame must be at least one pixel each way")
+    if width > Int.MAX // height:
+        raise Error("A screen-space frame is larger than this port builds")
+
+
+def ssao_blur(
+    values: List[Float32], width: Int, height: Int
+) raises -> List[Float32]:
     """Return each value averaged with the five by five around it, held at
     the edges: three.js's `SSAOBlurShader`.
 
@@ -757,7 +778,11 @@ def ssao_blur(values: List[Float32], width: Int, height: Int) -> List[Float32]:
 
     Returns:
         The averages.
+
+    Raises:
+        Error: If a side is below one, or the pixel count does not fit.
     """
+    require_screen_extent(width, height)
     var out = List[Float32](length=width * height, fill=0)
     var taps = Float32((2 * SSAO_BLUR_REACH + 1) * (2 * SSAO_BLUR_REACH + 1))
     var y = 0
@@ -1452,7 +1477,7 @@ def _ssr_pixel(
 
 def ssr_blur(
     source: List[FloatColor], width: Int, height: Int
-) -> List[FloatColor]:
+) raises -> List[FloatColor]:
     """Return the reflections blurred with their four neighbors, each
     weighed by its strength: three.js's `SSRBlurShader`.
 
@@ -1464,7 +1489,11 @@ def ssr_blur(
     Returns:
         The blurred reflections. Where no neighbor reflects anything, the
         light is black, which three.js leaves divided by zero.
+
+    Raises:
+        Error: If a side is below one, or the pixel count does not fit.
     """
+    require_screen_extent(width, height)
     var out = List[FloatColor](length=width * height, fill=TRANSPARENT_BLACK)
     var y = 0
     while y < height:

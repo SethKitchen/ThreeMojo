@@ -216,7 +216,7 @@ A pixel with no normal in the attachment takes one from the depth. So does every
 1. `ssao_kernel(size, seed)` is `generateSampleKernel`. Each sample is a random direction above the surface. The `i`th of `n` samples has a length of 0.1 + 0.9 (i / n)².
 2. `ssao_noise(seed)` is `generateRandomKernelRotations`. It gives 16 values that repeat over the frame every four pixels. Each value turns the kernel about the normal.
 3. `ssao_occlusion` is `SSAOShader`. The kernel is scaled by `kernel_radius` and set on the surface. A sample occludes when the frame's linear depth where it lands is in front of it. The difference must be more than `min_distance` and less than `max_distance`.
-4. `ssao_blur` is `SSAOBlurShader`. It averages the five by five pixels around each pixel.
+4. `ssao_blur` is `SSAOBlurShader`. It averages the five by five pixels around each pixel. A frame whose pixel count does not fit in an integer is refused.
 
 The blurred value multiplies the light of each pixel. Alpha is kept. `kernel_radius` is a `Length`. `min_distance` and `max_distance` are fractions of the camera's near-to-far range, as in three.js.
 
@@ -238,7 +238,7 @@ The pass walks the ray across the screen one pixel at a time. The first surface 
 
 The longest walk is the frame's diagonal. Its square is a `Float64`, so a wide frame does not wrap.
 
-The strength of a reflection starts at `opacity`. With `distance_attenuation` on, it fades with the square of the distance. With `fresnel` on, it fades as the view meets the surface square on. With `blur` on, `ssr_blur` is `SSRBlurShader`, applied twice. The pass lays each reflection over the light by its strength, as three.js's `NormalBlending` does.
+The strength of a reflection starts at `opacity`. With `distance_attenuation` on, it fades with the square of the distance. With `fresnel` on, it fades as the view meets the surface square on. With `blur` on, `ssr_blur` is `SSRBlurShader`, applied twice. The pass lays each reflection over the light by its strength, as three.js's `NormalBlending` does. A frame whose pixel count does not fit in an integer is refused.
 
 With `selective` on, only the objects on the `selects` layers reflect. three.js takes a list of objects and draws a metalness mask. This port draws the selected layers alone, as the outline pass does, and a pixel that they do not cover reflects nothing.
 
