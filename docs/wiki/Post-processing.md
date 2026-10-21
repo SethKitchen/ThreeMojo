@@ -408,6 +408,8 @@ A mask pass has `clear` on, as three.js's has. With `clear` off, the stencil is 
 
 `texture_pass(texture, opacity)` is three.js's `TexturePass`. The texture is a `TextureId` in the assets that `render` is given. `texture_light` scales the texture by `opacity` and draws it over the frame, alpha included. Below an opacity of one, the frame keeps one minus the scaled alpha of its color. At an opacity of one, the texture replaces the frame. That is `CopyShader` with three.js's premultiplied normal blending, which is on only below an opacity of one.
 
+A frame below one pixel, or whose pixel count does not fit, is refused.
+
 ### LUT
 
 `lut_pass(lut, intensity)` is three.js's `LUTPass`. It grades the frame through a color lookup table, a [3D texture](Textures#3d-textures) in the assets. `read_lut_cube` in `loaders/lut_cube.mojo` reads the table from a `.cube` file, as three.js's `LUTCubeLoader` does.
@@ -508,7 +510,7 @@ With a texture, a threshold sweeps across the texture's red channel as the ratio
 
 ### Cube texture
 
-`cube_texture_pass(cube, opacity)` is three.js's `CubeTexturePass`. `cube_overlay` reads the cube in the direction of each pixel's ray. The camera's position does not change it. `cube_texture_light` draws it over the frame as the texture pass draws.
+`cube_texture_pass(cube, opacity)` is three.js's `CubeTexturePass`. `cube_overlay` reads the cube in the direction of each pixel's ray. The camera's position does not change it. `cube_texture_light` draws it over the frame as the texture pass draws. A frame below one pixel, or whose pixel count does not fit, is refused.
 
 ### Save and shader
 
@@ -648,7 +650,7 @@ Each pixel with a surface and some metalness sends a ray along its reflection. T
 
 A hit reads the frame's color there. The color is scaled by the metalness, by the square of the part of `max_distance` that is left, and by three.js's Fresnel term, `(dot(incident, reflected) + 1) / 2`. The light is capped at `max_luminance` and scaled by `intensity`.
 
-With `use_roughness` on, the reflections go into a chain of five levels. Each level after the first is a box blur, a level's number of pixels apart. The frame reads the chain at the level that its roughness squared, times four, gives. This is how the example reads the node through its `roughnessNode`.
+With `use_roughness` on, the reflections go into a chain of five levels. Each level after the first is a box blur, a level's number of pixels apart. The frame reads the chain at the level that its roughness squared, times four, gives. This is how the example reads the node through its `roughnessNode`. A blur whose pixel count does not fit in an integer is refused.
 
 The node's stochastic mode, its environment sampling, its history and its binary refinement are not ported. The example leaves all four off. The pass runs on the host in a `GpuComposer` frame.
 

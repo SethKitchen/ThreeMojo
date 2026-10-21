@@ -577,6 +577,14 @@ def test_a_cube_texture_pass_draws_the_cube_the_camera_faces() raises:
     var half = RenderTarget(4, 4, BLACK)
     cube_texture_light(half, overlay, 0.5)
     same_color(half.colors[5], FloatColor(0.5, 0, 0.5, 1), 1e-3)
+    with assert_raises(contains="at least one pixel"):
+        _ = cube_overlay(assets.cube_textures.get(sky), camera, scene, 0, 1)
+    with assert_raises(contains="at least one pixel"):
+        _ = cube_overlay(assets.cube_textures.get(sky), camera, scene, 1, 0)
+    with assert_raises(contains="larger than this port"):
+        _ = cube_overlay(
+            assets.cube_textures.get(sky), camera, scene, 1 << 32, 1 << 32
+        )
     var step = cube_texture_pass(sky, 0.5)
     assert_true(step.kind == CUBE_TEXTURE)
     near(step.strength, 0.5)

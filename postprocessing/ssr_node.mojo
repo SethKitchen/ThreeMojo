@@ -320,7 +320,7 @@ def ssr_node_pixel(
 
 def ssr_node_blur(
     source: LightView, width: Int, height: Int, size: Int, separation: Int
-) -> List[FloatColor]:
+) raises -> List[FloatColor]:
     """Return three.js's `boxBlur` of raw values at another size: the mean
     of a square of `2 * size + 1` taps a side, `separation` of the
     source's pixels apart, at least one.
@@ -334,7 +334,14 @@ def ssr_node_blur(
 
     Returns:
         The blur, row by row from the top.
+
+    Raises:
+        Error: If a side is below one, or the pixel count does not fit.
     """
+    if width < 1 or height < 1:
+        raise Error("An SSR blur must be at least one pixel each way")
+    if width > Int.MAX // height:
+        raise Error("An SSR blur is larger than this port builds")
     var sep = Float32(max(separation, 1))
     var step_u = sep / Float32(source.width)
     var step_v = sep / Float32(source.height)

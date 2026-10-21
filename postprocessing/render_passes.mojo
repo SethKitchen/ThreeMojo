@@ -420,8 +420,13 @@ def cube_overlay[
         One texel per pixel, row by row from the top.
 
     Raises:
-        Error: If the camera's matrices cannot be built.
+        Error: If a side is below one, the pixel count does not fit, or
+            the camera's matrices cannot be built.
     """
+    if width < 1 or height < 1:
+        raise Error("A cube overlay must be at least one pixel each way")
+    if width > Int.MAX // height:
+        raise Error("A cube overlay is larger than this port builds")
     var unproject = camera.projection_matrix()
     unproject.invert()
     var to_world = camera.view_matrix_in(scene)

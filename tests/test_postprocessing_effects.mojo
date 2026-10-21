@@ -96,6 +96,7 @@ from postprocessing.effects import (
     reference_cell,
     sine_hash,
     texture_light,
+    texture_overlay,
 )
 from postprocessing.sampling import LightView
 from postprocessing.screen_space import DepthView
@@ -924,6 +925,16 @@ def test_the_texture_is_blended_over_by_its_opacity() raises:
         assert_almost_equal(under.colors[slot].g, Float32(0.4), atol=0.01)
         assert_almost_equal(under.colors[slot].b, Float32(0.0), atol=0.01)
         assert_almost_equal(under.colors[slot].a, Float32(0.5), atol=0.01)
+
+
+def test_a_texture_overlay_must_fit() raises:
+    var texture = data_texture(1, 1, [1.0, 0.0, 0.0, 1.0])
+    with assert_raises(contains="at least one pixel"):
+        _ = texture_overlay(texture, 0, 1)
+    with assert_raises(contains="at least one pixel"):
+        _ = texture_overlay(texture, 1, 0)
+    with assert_raises(contains="larger than this port"):
+        _ = texture_overlay(texture, 1 << 32, 1 << 32)
 
 
 # --- in the composer ---------------------------------------------------------

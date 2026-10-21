@@ -1358,7 +1358,7 @@ def clear_light(mut frame: RenderTarget, color: Color):
 
 def texture_overlay(
     texture: Texture, width: Int, height: Int
-) -> List[FloatColor]:
+) raises -> List[FloatColor]:
     """Return a texture sampled at the center of every pixel of a frame,
     through its own wrap and filter: what a texture pass adds.
 
@@ -1372,7 +1372,14 @@ def texture_overlay(
 
     Returns:
         One texel per pixel, row by row from the top.
+
+    Raises:
+        Error: If a side is below one, or the pixel count does not fit.
     """
+    if width < 1 or height < 1:
+        raise Error("A texture overlay must be at least one pixel each way")
+    if width > Int.MAX // height:
+        raise Error("A texture overlay is larger than this port builds")
     var texels = List[FloatColor](capacity=width * height)
     var y = 0
     while y < height:
@@ -1423,7 +1430,9 @@ def texture_pixel(
     )
 
 
-def texture_light(mut frame: RenderTarget, texture: Texture, opacity: Float32):
+def texture_light(
+    mut frame: RenderTarget, texture: Texture, opacity: Float32
+) raises:
     """Draw a texture over the frame: three.js's `TexturePass`, which
     draws `CopyShader` with premultiplied normal blending.
 
@@ -1435,6 +1444,10 @@ def texture_light(mut frame: RenderTarget, texture: Texture, opacity: Float32):
         frame: The frame, changed in place.
         texture: The image, sampled through its own wrap and filter.
         opacity: What the texture is scaled by.
+
+    Raises:
+        Error: If the frame is below one pixel, or its pixel count does
+            not fit.
     """
     var texels = texture_overlay(texture, frame.width, frame.height)
     for slot in range(len(frame.colors)):  # pragma: no branch
