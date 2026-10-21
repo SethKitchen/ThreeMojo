@@ -309,7 +309,7 @@ if gizmo.animating:
 | `update(delta, camera)` | Turn the camera by a `Duration`, a full turn in a second at most. It clears `animating` when the turn ends. |
 | `center` | The point the camera turns around. The origin by default. |
 
-`x` and `y` are pixels from the top left corner of the image, as the `clientX` and `clientY` of three.js are. The click finds the disk nearest to the camera of the helper, as the `Raycaster` of three.js does.
+`x` and `y` are pixels from the top left corner of the image, as the `clientX` and `clientY` of three.js are. The click finds the disk nearest to the camera of the helper, as the `Raycaster` of three.js does. A side above 16777216 pixels measures the helper's corner in `Float64`.
 
 The helper draws into a target of its own, cleared to transparent black. Then it blends that image over the corner of your image. Each translucent disk then looks the same as when it is drawn over your image directly. A target smaller than 128 pixels gets the part of the corner that fits.
 
