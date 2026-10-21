@@ -94,6 +94,7 @@ The loader refuses these, with a message that names the problem:
 - A text row with fewer values than its fields, or a value that is not a number.
 - A coordinate that is not finite as a `Float32`, or a label that is not a whole number.
 - A file that ends early, and LZF data that is not valid or does not fill its declared size.
+- A width, field, or point product that does not fit in an integer.
 
 three.js reads past most of these problems and gives `NaN`, or throws a `RangeError`.
 

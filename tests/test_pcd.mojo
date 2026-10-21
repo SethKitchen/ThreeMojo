@@ -435,5 +435,31 @@ def test_binary_compressed_counts() raises:
         _ = parse_pcd(small)
 
 
+def test_pcd_products_that_do_not_fit_are_refused() raises:
+    # 3037000500 squared is past the largest Int. The header must fail
+    # before it multiplies the dimensions.
+    var wide = (
+        "FIELDS x y z\nSIZE 4 4 4\nTYPE F F F\nCOUNT 1 1 1\n"
+        "WIDTH 3037000500\nHEIGHT 3037000500\nDATA binary\n"
+    )
+    with assert_raises(contains="not fit"):
+        _ = parse_pcd(text_bytes(wide))
+    var points = (
+        "FIELDS x y z\nSIZE 4 4 4\nTYPE F F F\nCOUNT 1 1 1\n"
+        "POINTS 9223372036854775807\nDATA binary\n"
+    )
+    with assert_raises(contains="not fit"):
+        _ = parse_pcd(text_bytes(points))
+    var field = (
+        "FIELDS x\nSIZE 4\nTYPE F\nCOUNT 9223372036854775807\n"
+        "POINTS 1\nDATA binary\n"
+    )
+    with assert_raises(contains="not fit"):
+        _ = parse_pcd_header(text_bytes(field))
+    var empty = "POINTS 1000000\nDATA binary\n"
+    with assert_raises(contains="not fit"):
+        _ = parse_pcd(text_bytes(empty))
+
+
 def main() raises:
     TestSuite.discover_tests[__functions_in_module()]().run()
