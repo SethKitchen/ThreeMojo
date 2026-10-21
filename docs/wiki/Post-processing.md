@@ -494,6 +494,8 @@ var image = composer.render(renderer, scene, assets, camera)
 3. `gtao_denoise` is `PoissonDenoiseShader`. It averages sixteen taps on a Poisson disk, each weighed by how like the pixel it is.
 4. With the default output, the frame is multiplied by the result, mixed toward one by `blend_intensity`. The other five outputs are the SSAO pass's. See [Outputs](#outputs).
 
+The noise grid's side is the greatest integer square that fits in the list. A length of no texels is refused.
+
 ### Transition
 
 `render_transition_pass(first, second, texture, mix_ratio)` is three.js's `RenderTransitionPass`. Put it where a `render_pass` goes. It draws the objects on the `first` layers and then on the `second` layers, through the composer's camera. `transition_pixel` mixes the two views. A `mix_ratio` of one shows the first view, and zero shows the second.

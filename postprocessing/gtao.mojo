@@ -345,6 +345,27 @@ def _horizon(
     return horizon + max(Float32(0), (cosine - horizon) * weight)
 
 
+def gtao_grid_side(count: Int) raises -> Int:
+    """Return the side of a square noise grid that fits in `count` texels.
+
+    The side is the greatest integer whose square is at most `count`.
+    A `Float32` square root rounds some lengths up, and the last read is
+    then past the list.
+
+    Args:
+        count: How many noise texels there are.
+
+    Returns:
+        The side, at least one.
+
+    Raises:
+        Error: If `count` is below one.
+    """
+    if count < 1:
+        raise Error("GTAO noise needs a texel")
+    return Int(floor(sqrt(Float64(count))))
+
+
 def gtao_occlusion(
     view: DepthView,
     normals: List[Vector3],
@@ -352,7 +373,7 @@ def gtao_occlusion(
     x: Int,
     y: Int,
     settings: GtaoSettings,
-) -> Float32:
+) raises -> Float32:
     """Return one pixel of `GTAOShader`: the ambient light that reaches
     it, one for none blocked.
 
@@ -367,6 +388,9 @@ def gtao_occlusion(
     Returns:
         The visibility, zero to one, raised to `scale`. A pixel with no
         surface gives one, as three.js's cleared target holds.
+
+    Raises:
+        Error: If a surface pixel reads noise that has no texel.
     """
     var slot = y * view.width + x
     var depth = view.depth[slot]
@@ -381,7 +405,7 @@ def gtao_occlusion(
         radius *= view.position(
             0.5 + SCREEN_SPACE_RADIUS_SCALE / Float32(view.width), 0, depth
         ).x
-    var side = Int(sqrt(Float32(len(noise))))
+    var side = gtao_grid_side(len(noise))
     var texel = noise[(_row_up(y, view.height) % side) * side + (x % side)]
     var tangent = _unit(Vector3(texel.r * 2 - 1, texel.g * 2 - 1, 0))
     var bitangent = Vector3(-tangent.y, tangent.x, 0)
@@ -454,7 +478,7 @@ def gtao_denoise(
     x: Int,
     y: Int,
     settings: GtaoSettings,
-) -> Float32:
+) raises -> Float32:
     """Return one pixel of `PoissonDenoiseShader` over the occlusion.
 
     Args:
@@ -470,6 +494,9 @@ def gtao_denoise(
     Returns:
         The denoised occlusion. A pixel with no surface, or no normal,
         gives one, as three.js's cleared target holds.
+
+    Raises:
+        Error: If a surface pixel reads noise that has no texel.
     """
     var slot = y * view.width + x
     var depth = view.depth[slot]
@@ -480,7 +507,7 @@ def gtao_denoise(
     var v = v_of(y, view.height)
     var center = ao.sample(u, v).r
     var here = view.position(u, v, depth)
-    var side = Int(sqrt(Float32(len(noise))))
+    var side = gtao_grid_side(len(noise))
     var turn = noise[(_row_up(y, view.height) % side) * side + (x % side)]
     var nx = sin(turn * 2 * Float32(pi))
     var ny = cos(turn * 2 * Float32(pi))

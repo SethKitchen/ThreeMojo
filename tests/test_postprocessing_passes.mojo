@@ -68,6 +68,7 @@ from postprocessing.gtao import (
     denoise_disk,
     denoise_noise,
     gtao_denoise,
+    gtao_grid_side,
     gtao_light,
     gtao_noise,
     gtao_occlusion,
@@ -800,6 +801,36 @@ def test_gtao_denoise_is_one_without_a_surface() raises:
         meters(20),
     )
     near(gtao_denoise(ao_view, sky, normals, noise, disk, 4, 6, settings), 1)
+    _ = ao^
+
+
+def test_gtao_noise_side_fits_the_list() raises:
+    var wall = DepthView(
+        List[Float32](length=1, fill=-0.5),
+        1,
+        1,
+        Matrix4(),
+        meters(0.1),
+        meters(20),
+    )
+    var up = List[Vector3](length=1, fill=Vector3(0, 0, 1))
+    var settings = GtaoSettings()
+    with assert_raises(contains="needs a texel"):
+        _ = gtao_occlusion(wall, up, List[FloatColor](), 0, 0, settings)
+    var ao = List[FloatColor](length=1, fill=FloatColor(0.5, 0.5, 0.5, 1))
+    with assert_raises(contains="needs a texel"):
+        _ = gtao_denoise(
+            LightView(ao, 1, 1),
+            wall,
+            up,
+            List[Float32](),
+            List[Vector3](),
+            0,
+            0,
+            settings,
+        )
+    # `Float32` of this length rounds up to a square one texel past it.
+    assert_equal(gtao_grid_side(16785408), 4096)
     _ = ao^
 
 
