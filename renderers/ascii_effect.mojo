@@ -59,10 +59,14 @@ def ascii_brightness(color: Color) -> Float32:
     ) / 255
 
 
-def ascii_index(brightness: Float32, count: Int, invert: Bool) -> Int:
+def ascii_index(brightness: Float32, count: Int, invert: Bool) raises -> Int:
     """Return which character of a set a brightness picks:
     `Math.floor((1 - brightness) * (count - 1))`, the other way round
     when `invert` is on.
+
+    The product is a `Float64`, as JavaScript's number is. A `Float32`
+    product drops whole counts past 2^24, and can name a character the
+    set does not have.
 
     Args:
         brightness: The pixel's brightness, zero to one.
@@ -70,9 +74,24 @@ def ascii_index(brightness: Float32, count: Int, invert: Bool) -> Int:
         invert: Whether a bright pixel picks from the end of the set.
 
     Returns:
-        The index, zero through `count - 1`.
+        The index. For a brightness from zero to one it runs from zero
+        through `count - 1`.
+
+    Raises:
+        Error: If the index is not finite or does not fit in an integer.
     """
-    var index = Int(floor((1 - brightness) * Float32(count - 1)))
+    var scaled = floor(
+        (Float64(1) - Float64(brightness)) * (Float64(count) - 1)
+    )
+    # `Float64(Int.MAX)` is 2^63. `Int` of a float at or past it is not
+    # the index. A float below `-2^63` is not one either.
+    if (
+        not isfinite(scaled)
+        or scaled < -Float64(Int.MAX)
+        or scaled >= Float64(Int.MAX)
+    ):
+        raise Error("An ASCII character index does not fit in an integer")
+    var index = Int(scaled)
     if invert:
         return count - index - 1
     return index

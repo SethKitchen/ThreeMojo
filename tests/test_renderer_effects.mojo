@@ -234,6 +234,15 @@ def test_the_brightness_and_the_character_it_picks() raises:
     assert_equal(ascii_index(0.5, 10, False), 4)
     assert_equal(ascii_index(0, 10, True), 0)
     assert_equal(ascii_index(1, 10, True), 9)
+    # A `Float32` count of 16777218 loses a character. The dark pixel
+    # must name the last one, and a count past an integer is refused.
+    assert_equal(ascii_index(0, 16777218, False), 16777217)
+    with assert_raises(contains="does not fit"):
+        _ = ascii_index(0, Int.MAX, False)
+    with assert_raises(contains="does not fit"):
+        _ = ascii_index(Float32(1e20), 10, False)
+    with assert_raises(contains="does not fit"):
+        _ = ascii_index(nan[DType.float32](), 10, False)
 
 
 def test_a_character_set_splits_and_falls_back() raises:

@@ -821,6 +821,7 @@ The outline meshes, their materials and their programs are added to the scene an
 - `StereoEffect.render` refuses a renderer narrower than two pixels. `set_eye_separation` refuses a negative separation and keeps the old one.
 - `AsciiEffect` refuses a resolution that is not finite, or not above zero and at most one. `asciify` refuses an image that shrinks to nothing.
 - `ascii_size` multiplies in `Float64`, as `Math.floor` does. It refuses a product that does not fit in an integer.
+- `ascii_index` multiplies in `Float64`, as `Math.floor` does. It refuses an index that does not fit in an integer.
 - `check_outline_parameters` refuses a thickness or an alpha that is not finite, a negative thickness, and an alpha outside zero to one. `set_parameters` refuses a negative material id.
 
 ### How the renderer effects differ from three.js
