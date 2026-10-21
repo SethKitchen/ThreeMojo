@@ -49,7 +49,7 @@ from math.vector3 import Vector3, append_vector3
 from objects.line import SEGMENTS, segment_count
 from render.framebuffer import FloatColor, append_float_rgb
 from render.linerule import dash_covers
-from std.math import ceil, floor, max, min, pi, sqrt
+from std.math import ceil, floor, isfinite, max, min, pi, sqrt
 
 # How many dashes one segment may be cut into. A pattern much finer than
 # the segment would build a triangle pair per dash, and a pattern of a
@@ -347,9 +347,13 @@ def dash_spans(
         drawn part, the smaller first.
 
     Raises:
-        Error: If the pattern repeats more than `MAX_DASHES_PER_SEGMENT`
-            times along the segment.
+        Error: If a distance is not finite, the dash pattern is not a
+            positive finite length, or the pattern repeats more than
+            `MAX_DASHES_PER_SEGMENT` times along the segment. A repeat
+            count that does not fit in an integer is that refusal.
     """
+    if not isfinite(start) or not isfinite(end):
+        raise Error("A wide line's distance must be finite")
     var spans = List[Float32]()
     if start == end or gap <= 0:
         if dash_covers(start, dash, gap):
@@ -357,15 +361,28 @@ def dash_spans(
             spans.append(1)
         return spans^
     var period = dash + gap
+    if not isfinite(period) or period <= 0:
+        raise Error("A wide line's dash pattern must be finite")
     var low = min(start, end)
     var high = max(start, end)
-    var first = Int(floor(low / period))
-    var last = Int(floor(high / period))
-    if last - first >= MAX_DASHES_PER_SEGMENT:
+    # Count the repeats in `Float64` before they become integers. A
+    # difference past 2^63 overflows the subtraction, and the old check
+    # then lets the walk run without end. A quotient past 2^63 is not a
+    # repeat index either, and two different distances that far apart are
+    # more than 4096 periods.
+    var low_q = floor(Float64(low) / Float64(period))
+    var high_q = floor(Float64(high) / Float64(period))
+    if (
+        not (high_q < Float64(Int.MAX))
+        or not (low_q > -Float64(Int.MAX))
+        or high_q - low_q >= Float64(MAX_DASHES_PER_SEGMENT)
+    ):
         raise Error(
             "A wide line's dash pattern is too fine for its length: one"
             " segment would be cut into more than 4096 dashes"
         )
+    var first = Int(low_q)
+    var last = Int(high_q)
     var span = end - start
     for repeat in range(first, last + 1):  # pragma: no branch
         var on = max(Float32(repeat) * period, low)

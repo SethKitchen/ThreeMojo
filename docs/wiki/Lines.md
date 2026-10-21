@@ -262,7 +262,7 @@ A width in the world is measured in the world. A width in pixels is measured on 
 ### What is not ported, and what differs
 
 - **The caps are fans, not discs.** three.js cuts a half disc out of a square for each fragment. Here the cap is a fan of triangles within an eighth of a pixel of the circle. `cap_steps` sets the count.
-- **The dashes are cut, not discarded.** three.js discards each fragment in a gap. Here the segment is cut at the dash boundaries, so both rasterizers need no rule of their own. A segment cut into more than 4096 dashes raises.
+- **The dashes are cut, not discarded.** three.js discards each fragment in a gap. Here the segment is cut at the dash boundaries, so both rasterizers need no rule of their own. A segment cut into more than 4096 dashes raises. A distance that does not fit in an integer raises the same way. A distance that is not finite is refused.
 - **A width in the world is a flat ribbon.** three.js traces a capsule for each fragment. Here the ribbon faces the camera, and its outline matches the capsule's outline. Where the ribbon passes through another surface, the two cross along a different curve.
 - **A segment with no length is a round dot.** three.js normalizes a zero vector there, and GLSL leaves the result undefined.
 - **A hit outside `near` and `far` is dropped.** three.js's `LineSegments2.raycast` keeps it. A mesh hit is dropped in both.
