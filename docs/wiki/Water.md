@@ -111,7 +111,7 @@ The caustic grid in the still is 64. The page uses 256. A side whose texel buffe
 
 ## Sampling and light transport
 
-Texture coordinates name texel centers at `(i + 0.5) / n`, as in WebGL. Bilinear, cubic and mip samples use the same convention. Caustic triangles use a half-open edge rule, so a shared edge receives light once. A flat surface under a vertical sun has unit caustic intensity. An image side above 8388608 pixels measures that center in `Float64`.
+Texture coordinates name texel centers at `(i + 0.5) / n`, as in WebGL. Bilinear, cubic and mip samples use the same convention. Caustic triangles use a half-open edge rule, so a shared edge receives light once. A flat surface under a vertical sun has unit caustic intensity. An image side above 8388608 pixels measures that center in `Float64`. A surface position that does not fit in an integer repeats, and one that is not finite is flat.
 
 Underwater absorption and ripple lookup follow the refracted sun direction. The sun is not treated as vertical when it is near the horizon. Invalid spectrum and glare sizes are refused before their grids are allocated.
 

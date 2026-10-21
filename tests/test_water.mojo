@@ -1062,6 +1062,28 @@ def test_water_samples_use_texture_texel_centers() raises:
     )
     # Repeat sampling wraps the half-texel on the left, rather than shifting it.
     assert_almost_equal(sample_surface(surface, 0, 2.5).height, Float32(3.5))
+    # 2^63 meters is not a texel index. The patch is 8 m, so it repeats
+    # onto the same sample as the origin.
+    var origin = sample_surface(surface, 0, 2.5)
+    var spun = sample_surface(surface, Float32(9223372036854775808.0), 2.5)
+    assert_almost_equal(spun.height, origin.height)
+    var down = sample_surface(surface, 2.5, Float32(-9223372036854775808.0))
+    assert_almost_equal(down.height, sample_surface(surface, 2.5, 0).height)
+    var missing = sample_surface(surface, nan[DType.float32](), 2.5)
+    assert_almost_equal(missing.height, 0)
+    assert_almost_equal(missing.slope_x, 0)
+    assert_almost_equal(
+        sample_surface_smooth(
+            surface, Float32(9223372036854775808.0), 2.5
+        ).height,
+        sample_surface_smooth(surface, 0, 2.5).height,
+    )
+    assert_almost_equal(
+        sample_surface_filtered(
+            surface, nan[DType.float32](), 2.5, 0, 0, 0, 0, False
+        ).height,
+        0,
+    )
     var pixels: List[Float32] = [1, 0, 0, 0, 1, 0]
     var bed = PebbleBed(2, 1, pixels^)
     assert_almost_equal(sample_pebble(bed, 0.25, 0.5).r, Float32(1))
