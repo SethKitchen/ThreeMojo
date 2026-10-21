@@ -353,11 +353,13 @@ struct TrackballControls(Copyable, Movable):
             Right and up from the middle, as parts of half the width, in x
             and y.
         """
-        var width = Float32(self._width)
-        var height = Float32(self._height)
+        # A `Float32` side past 2^24 loses the half pixel at the middle,
+        # so the last pixel reads as the edge.
+        var width = Float64(self._width)
+        var height = Float64(self._height)
         return Vector3(
-            (Float32(event.x) - width * 0.5) / (width * 0.5),
-            (height - 2 * Float32(event.y)) / width,
+            Float32((Float64(event.x) - width * 0.5) / (width * 0.5)),
+            Float32((height - 2 * Float64(event.y)) / width),
             0,
         )
 
@@ -372,8 +374,8 @@ struct TrackballControls(Copyable, Movable):
             Right and down from the top left, in x and y.
         """
         return Vector3(
-            Float32(event.x) / Float32(self._width),
-            Float32(event.y) / Float32(self._height),
+            Float32(Float64(event.x) / Float64(self._width)),
+            Float32(Float64(event.y) / Float64(self._height)),
             0,
         )
 
@@ -525,9 +527,14 @@ struct TrackballControls(Copyable, Movable):
         if not self.no_pan:
             var wide = (camera.right.value - camera.left.value) / camera.zoom
             var tall = (camera.top.value - camera.bottom.value) / camera.zoom
-            # three.js divides both by the view's width.
-            var width = Float32(self._width)
-            self._pan(eye, up, wide / width, tall / width)
+            # three.js divides both by the view's width. A `Float32`
+            # width past 2^24 drops a pixel of that division.
+            self._pan(
+                eye,
+                up,
+                Float32(Float64(wide) / Float64(self._width)),
+                Float32(Float64(tall) / Float64(self._width)),
+            )
         var position = self.target + eye
         camera.up = up
         camera.place(position, self.target)

@@ -352,7 +352,7 @@ three.js leaves the keys to its example. Here `update(camera, delta)` walks by t
 | `primary_action`, `middle_action`, `secondary_action` | `ROTATE`, `DOLLY`, `PAN` | three.js: `mouseButtons`. |
 | `key_timeout` | 0.3 s | See [Held keys](#held-keys). |
 
-The arithmetic is three.js's. A position is read on a circle as wide as the view. A turn is the distance the pointer moved on that circle, times `rotate_speed`. A zoom scales the distance by one plus the part of the view the drag covered, times `zoom_speed`. A wheel notch is 0.025 of the view.
+The arithmetic is three.js's. A position is read on a circle as wide as the view. A turn is the distance the pointer moved on that circle, times `rotate_speed`. A zoom scales the distance by one plus the part of the view the drag covered, times `zoom_speed`. A wheel notch is 0.025 of the view. The pointer and an orthographic pan are measured in `Float64`.
 
 Unless `static_moving` is set, each frame keeps `1 - dynamic_damping_factor` of a pan or a zoom. A turn keeps the square root of it. `reset(camera)` puts the camera and the target back. A turn that is dying away goes on after a reset, as in three.js.
 

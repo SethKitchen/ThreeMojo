@@ -36,6 +36,7 @@ from std.math import inf
 from std.testing import (
     TestSuite,
     assert_almost_equal,
+    assert_equal,
     assert_false,
     assert_raises,
     assert_true,
@@ -169,6 +170,23 @@ def test_the_defaults_are_three_js() raises:
     assert_true(controls.primary_action == ROTATE)
     assert_true(controls.middle_action == DOLLY)
     assert_true(controls.secondary_action == PAN)
+
+
+def test_a_wide_view_keeps_the_last_pixel_on_the_circle() raises:
+    var controls = TrackballControls(_camera())
+    var wide = 16777217
+    controls.handle(InputEvent(RESIZE), wide, wide)
+    var at = controls._on_circle(
+        InputEvent(POINTER_MOVE, x=wide - 1, y=wide // 2)
+    )
+    var half = Float64(wide) * 0.5
+    var across = Float32((Float64(wide - 1) - half) / half)
+    assert_equal(at.x, across)
+    assert_true(across < 1)
+    var screen = controls._on_screen(InputEvent(POINTER_MOVE, x=wide - 1, y=0))
+    var part = Float32(Float64(wide - 1) / Float64(wide))
+    assert_equal(screen.x, part)
+    assert_true(part < 1)
 
 
 def test_a_drag_rotates_and_coasts_as_three_js_does() raises:
