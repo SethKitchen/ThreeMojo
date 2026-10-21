@@ -155,6 +155,67 @@ void main() {
                 )
 
 
+def _read(wrap: Int, u: Float32, v: Float32) -> Float32:
+    """Return the red of a 2 by 2 image whose red is `x + 2y + 1`."""
+    var code = List[Float32](length=4, fill=0)
+    var images = List[Float32]()
+    for y in range(2):
+        for x in range(2):
+            images.append(Float32(x + 2 * y + 1))
+            images.append(0)
+            images.append(0)
+            images.append(1)
+    var wraps = List[Int32]()
+    wraps.append(Int32(wrap))
+    wraps.append(Int32(wrap))
+    var source = ComputeNodes(
+        code.unsafe_ptr()
+        .unsafe_mut_cast[False]()
+        .unsafe_origin_cast[Untracked](),
+        images.unsafe_ptr()
+        .unsafe_mut_cast[False]()
+        .unsafe_origin_cast[Untracked](),
+        wraps.unsafe_ptr()
+        .unsafe_mut_cast[False]()
+        .unsafe_origin_cast[Untracked](),
+        2,
+        2,
+        0,
+        0,
+    )
+    var red = source.sample(0, u, v).r
+    _ = code^
+    _ = images^
+    _ = wraps^
+    return red
+
+
+def test_a_coordinate_past_1048576_is_reduced_before_the_index() raises:
+    assert_equal(
+        _read(CLAMP.value, Float32(1e20), 0.25), _read(CLAMP.value, 1, 0.25)
+    )
+    assert_equal(
+        _read(CLAMP.value, Float32(-1e20), 0.25), _read(CLAMP.value, 0, 0.25)
+    )
+    assert_equal(
+        _read(CLAMP.value, nan[DType.float32](), 0.25),
+        _read(CLAMP.value, 0, 0.25),
+    )
+    assert_equal(
+        _read(CLAMP.value, 0.25, nan[DType.float32]()),
+        _read(CLAMP.value, 0.25, 0),
+    )
+    assert_equal(
+        _read(REPEAT.value, Float32(1e20), 0.25), _read(REPEAT.value, 0, 0.25)
+    )
+    assert_equal(
+        _read(MIRROR.value, Float32(1e20), 0.25), _read(MIRROR.value, 0, 0.25)
+    )
+    assert_equal(
+        _read(MIRROR.value, Float32(-1e20), 0.25), _read(MIRROR.value, 0, 0.25)
+    )
+
+
 def test_a_neighbor_is_read_across_a_wrapped_edge() raises:
     var computation = GPUComputationRenderer(SIZE_X, SIZE_Y)
     var shift = computation.add_variable(

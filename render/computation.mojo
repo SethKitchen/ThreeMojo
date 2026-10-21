@@ -72,9 +72,10 @@ from render.texture import (
     Wrap,
     float_texture,
     gradient_place,
+    gradient_sample_coordinate,
     texture_grad_finite,
 )
-from std.math import floor
+from std.math import floor, isfinite
 
 comptime Lanes = SIMD[DType.float32, 4]
 
@@ -178,14 +179,26 @@ struct ComputeNodes(ImplicitlyCopyable, NodeSource):
             v: Up, from zero to one.
 
         Returns:
-            The texel's four floats, as they are.
+            The texel's four floats, as they are. A coordinate past
+            1048576 is reduced by its wrap mode first. A coordinate that
+            is not finite is read at zero.
         """
-        var ix = Int(floor(u * Float32(self.size_x)))
-        var iy = Int(floor(v * Float32(self.size_y)))
-        ix = _wrapped(ix, self.size_x, Int(self.wraps[unsafe_offset=slot * 2]))
-        iy = _wrapped(
-            iy, self.size_y, Int(self.wraps[unsafe_offset=slot * 2 + 1])
-        )
+        var su = u
+        var sv = v
+        var wrap_s = Wrap(Int(self.wraps[unsafe_offset=slot * 2]))
+        var wrap_t = Wrap(Int(self.wraps[unsafe_offset=slot * 2 + 1]))
+        if not isfinite(su):
+            su = 0
+        else:
+            su = gradient_sample_coordinate(su, wrap_s)
+        if not isfinite(sv):
+            sv = 0
+        else:
+            sv = gradient_sample_coordinate(sv, wrap_t)
+        var ix = Int(floor(su * Float32(self.size_x)))
+        var iy = Int(floor(sv * Float32(self.size_y)))
+        ix = _wrapped(ix, self.size_x, wrap_s.value)
+        iy = _wrapped(iy, self.size_y, wrap_t.value)
         var at = (slot * self.size_x * self.size_y + iy * self.size_x + ix) * 4
         return FloatColor(
             self.images[unsafe_offset=at],

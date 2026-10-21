@@ -41,6 +41,8 @@ void main() {
 
 All four numbers are kept as they are. They are not clamped and not premultiplied. A read gets the texel that its coordinate falls in, as three.js's `NearestFilter` does. The variable's `wrap_s` and `wrap_t` say what a coordinate past an edge reads. They are `CLAMP` unless set. A texel that the shader throws away with `discard` keeps its value.
 
+A coordinate past 1048576, or one that is not finite, is reduced before it becomes a texel index.
+
 ## A step
 
 `compute()` runs each variable's shader once, at every texel. Each variable reads the images as they were before the step. So a variable that runs after another in the same step reads the other's old image, as in three.js.
