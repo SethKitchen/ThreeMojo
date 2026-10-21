@@ -627,7 +627,7 @@ Each pass keeps its settings in `display`, a `DisplaySettings`, with three.js's 
 
 The near field's circle is blurred by `gaussianBlur(coc, 1, 2)` and halved in size. Then each field blurs the frame at half size with 64 taps on a golden-angle spiral, spread by its circle. It spreads the brightest of 16 more taps of that. The composite mixes the far blur over the frame and the near blur over that, each by twice its circle, at most one.
 
-`denoise_pass` is three.js r186's `DenoiseNode` over the frame. The composer draws its frame with a normal attachment while the pass is on. Each pixel that holds a surface averages 16 taps on a disk, which a noise texture turns. Each tap weighs by how like the pixel it is in luminance, in depth along the normal, and in normal.
+`denoise_pass` is three.js r186's `DenoiseNode` over the frame. The composer draws its frame with a normal attachment while the pass is on. Each pixel that holds a surface averages 16 taps on a disk, which a noise texture turns. Each tap weighs by how like the pixel it is in luminance, in depth along the normal, and in normal. The noise is a 64 by 64 grid. A shorter list is refused.
 
 The node's texture coordinate grows down the image, so its disk is upside down against the WebGL `PoissonDenoiseShader`. The node reads the noise as the angle itself, where the shader multiplies it by two pi. This port does both as the node does. The noise is seeded, as the [GTAO pass's](#gtao) is.
 
