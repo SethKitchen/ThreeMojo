@@ -229,9 +229,37 @@ def _add(a: FloatColor, b: FloatColor, weight: Float32) -> FloatColor:
     )
 
 
-def scaled_size(size: Int, scale: Float32) -> Int:
+def _rounded_side(value: Float64) raises -> Int:
+    """Return `Math.max(Math.round(value), 1)`.
+
+    Args:
+        value: The side before rounding.
+
+    Returns:
+        The side, at least one.
+
+    Raises:
+        Error: If the rounded side is not finite or does not fit in an
+            integer.
+    """
+    var scaled = floor(value + 0.5)
+    # `Float64(Int.MAX)` is 2^63. `Int` of a float at or past it is not
+    # the side. A float below `-2^63` is not one either.
+    if (
+        not isfinite(scaled)
+        or scaled < -Float64(Int.MAX)
+        or scaled >= Float64(Int.MAX)
+    ):
+        raise Error("A scaled size does not fit in an integer")
+    return max(Int(scaled), 1)
+
+
+def scaled_size(size: Int, scale: Float32) raises -> Int:
     """Return a target's side at a resolution scale, three.js's
     `Math.max( Math.round( size * scale ), 1 )`.
+
+    The product is a `Float64`, as JavaScript's number is. A `Float32`
+    product drops whole sizes past 2^24.
 
     Args:
         size: The frame's side, in pixels.
@@ -239,8 +267,12 @@ def scaled_size(size: Int, scale: Float32) -> Int:
 
     Returns:
         The side, at least one.
+
+    Raises:
+        Error: If the rounded side is not finite or does not fit in an
+            integer.
     """
-    return max(Int(floor(Float32(size) * scale + 0.5)), 1)
+    return _rounded_side(Float64(size) * Float64(scale))
 
 
 def _read_back(
@@ -321,7 +353,9 @@ def _gaussian_along(
     return out^
 
 
-def gaussian_blur_light(mut frame: RenderTarget, settings: DisplaySettings):
+def gaussian_blur_light(
+    mut frame: RenderTarget, settings: DisplaySettings
+) raises:
     """Blur the frame across and then down, three.js's `GaussianBlurNode`,
     at its resolution scale, and read the result back at the frame's size.
 
@@ -329,6 +363,9 @@ def gaussian_blur_light(mut frame: RenderTarget, settings: DisplaySettings):
         frame: The frame, replaced.
         settings: The sigma, the direction, the resolution scale and
             whether the blur is premultiplied.
+
+    Raises:
+        Error: If the scaled side does not fit in an integer.
     """
     var width = scaled_size(frame.width, settings.resolution_scale)
     var height = scaled_size(frame.height, settings.resolution_scale)
@@ -714,7 +751,7 @@ def dof_spread(
 
 def dof_light(
     mut frame: RenderTarget, view: DepthView, settings: DisplaySettings
-):
+) raises:
     """Run three.js's `DepthOfFieldNode` over the frame.
 
     The circle of confusion is worked out at every pixel from its view
@@ -728,6 +765,9 @@ def dof_light(
         view: The frame's depth, which gives each pixel's view distance.
         settings: The focus distance, the focal length and the bokeh's
             scale.
+
+    Raises:
+        Error: If a halved side does not fit in an integer.
     """
     var w = frame.width
     var h = frame.height
@@ -893,7 +933,7 @@ def luminance_of(r: Float32, g: Float32, b: Float32) -> Float32:
     return 0.2126729 * r + 0.7151522 * g + 0.0721750 * b
 
 
-def anamorphic_light(mut frame: RenderTarget, settings: DisplaySettings):
+def anamorphic_light(mut frame: RenderTarget, settings: DisplaySettings) raises:
     """Add three.js's `AnamorphicNode` to the frame: the light above a
     luminance threshold, smeared along the row and tinted blue, at the
     node's resolution scale.
@@ -906,6 +946,9 @@ def anamorphic_light(mut frame: RenderTarget, settings: DisplaySettings):
         frame: The frame, changed in place.
         settings: The threshold, the scale, the samples and the resolution
             scale.
+
+    Raises:
+        Error: If the scaled side does not fit in an integer.
     """
     var width = scaled_size(frame.width, settings.resolution_scale)
     var height = scaled_size(frame.height, settings.resolution_scale)
@@ -953,7 +996,7 @@ def anamorphic_light(mut frame: RenderTarget, settings: DisplaySettings):
 # --- LensflareNode -----------------------------------------------------------
 
 
-def lensflare_light(mut frame: RenderTarget, settings: DisplaySettings):
+def lensflare_light(mut frame: RenderTarget, settings: DisplaySettings) raises:
     """Add three.js's `LensflareNode` to the frame: ghosts of the light
     above a threshold, mirrored through the center, at a smaller size.
 
@@ -966,12 +1009,15 @@ def lensflare_light(mut frame: RenderTarget, settings: DisplaySettings):
         frame: The frame, changed in place.
         settings: The ghosts' tint, threshold, count, spacing and
             attenuation, and the down sample ratio.
+
+    Raises:
+        Error: If the flare's side does not fit in an integer.
     """
-    var width = max(
-        Int(floor(Float32(frame.width) / settings.down_sample_ratio + 0.5)), 1
+    var width = _rounded_side(
+        Float64(frame.width) / Float64(settings.down_sample_ratio)
     )
-    var height = max(
-        Int(floor(Float32(frame.height) / settings.down_sample_ratio + 0.5)), 1
+    var height = _rounded_side(
+        Float64(frame.height) / Float64(settings.down_sample_ratio)
     )
     var before = frame.colors.copy()
     var view = LightView(before, frame.width, frame.height)

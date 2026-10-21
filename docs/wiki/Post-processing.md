@@ -616,6 +616,7 @@ Each pass keeps its settings in `display`, a `DisplaySettings`, with three.js's 
 - A blur and the chromatic aberration replace the frame, as a node set as the output does.
 - The anamorphic streak and the lens flare are added to the frame, as three.js's examples add them to the scene pass.
 - A node that draws into a smaller target is worked out at that size and read back bilinear.
+- `scaled_size` rounds in `Float64`, as `Math.round` does. A side past 2^24 keeps its whole pixels. A product that does not fit in an integer is refused.
 - The three blurs take `premultiplied_alpha`, three.js's `premultipliedAlpha`. Off, they blur straight color, as three.js's texture holds it. The alpha is blurred too, so the stored light is scaled by it.
 
 `GaussianBlurNode`'s weights are not normalized, as three.js leaves them. So a blur of an even frame is a little darker than the frame. `hashBlur` turns each tap's angle into degrees and takes the cosine of that, as the node does.

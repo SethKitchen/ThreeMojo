@@ -557,7 +557,7 @@ def taau_render[
     settings.jitter_index = (settings.jitter_index + 1) % TRAA_JITTERS
 
 
-def taau_input_size(size: Int, scale: Float32) -> Int:
+def taau_input_size(size: Int, scale: Float32) raises -> Int:
     """Return the input's side for an output side, as three.js's scene
     pass rounds it at its resolution scale.
 
@@ -567,5 +567,8 @@ def taau_input_size(size: Int, scale: Float32) -> Int:
 
     Returns:
         The input's side, at least one.
+
+    Raises:
+        Error: If the rounded side does not fit in an integer.
     """
     return scaled_size(size, scale)

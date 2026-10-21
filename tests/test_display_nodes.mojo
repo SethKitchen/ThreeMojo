@@ -44,6 +44,7 @@ from render.framebuffer import Color, FloatColor
 from renderers.renderer import Renderer
 from units.si import Angle, DEGREE, Length, METER
 from render.target import RenderTarget
+from std.math import nan
 from std.testing import (
     TestSuite,
     assert_almost_equal,
@@ -96,6 +97,14 @@ def test_the_gaussian_weights_are_three_js_s() raises:
     gaussian_blur_light(spread, settings)
     assert_true(spread.colors[4 * W + 8].r > 0)
     assert_equal(scaled_size(W, 0.5), 6)
+    # A `Float32` product of 16777217 is 16777216. JavaScript keeps it.
+    assert_equal(scaled_size(16777217, 1), 16777217)
+    with assert_raises(contains="does not fit"):
+        _ = scaled_size(Int.MAX, 1)
+    with assert_raises(contains="does not fit"):
+        _ = scaled_size(Int.MIN, 1.5)
+    with assert_raises(contains="does not fit"):
+        _ = scaled_size(1, nan[DType.float32]())
     # A sigma of zero is one weight: the frame times it.
     var sharp = DisplaySettings()
     sharp.sigma = 0
