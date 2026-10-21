@@ -335,6 +335,25 @@ def clip_to_aabb(history: Vector3, low: Vector3, high: Vector3) -> Vector3:
 # --- TemporalReprojectNode ---------------------------------------------------
 
 
+def require_denoise_extent(width: Int, height: Int) raises:
+    """Refuse a denoise frame that is empty or whose pixel count would wrap.
+
+    Nothing. The call returns when both sides are at least one and their
+    product fits in an integer.
+
+    Args:
+        width: The frame's width in pixels.
+        height: The frame's height in pixels.
+
+    Raises:
+        Error: If a side is below one, or the pixel count does not fit.
+    """
+    if width < 1 or height < 1:
+        raise Error("A denoise frame must be at least one pixel each way")
+    if width > Int.MAX // height:
+        raise Error("A denoise frame is larger than this port builds")
+
+
 struct ReprojectInputs(Movable):
     """What one frame's reprojection reads: the raw signal, the depth, the
     normals and the velocity, this frame's and the last's."""
@@ -375,8 +394,10 @@ struct ReprojectInputs(Movable):
             velocities: This frame's velocities.
 
         Raises:
-            Error: If a list does not have one entry a pixel.
+            Error: If a side is below one, the pixel count does not fit,
+                or a list does not have one entry a pixel.
         """
+        require_denoise_extent(width, height)
         var count = width * height
         var complete = (
             len(signal) == count
@@ -879,9 +900,11 @@ struct DenoiseInputs(Movable):
             projection: Its projection.
 
         Raises:
-            Error: If a list does not have one entry a pixel, or the
-                projection cannot be inverted.
+            Error: If a side is below one, the pixel count does not fit, a
+                list does not have one entry a pixel, or the projection
+                cannot be inverted.
         """
+        require_denoise_extent(width, height)
         var count = width * height
         var complete = (
             len(history) == count

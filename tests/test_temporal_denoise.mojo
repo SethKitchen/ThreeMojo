@@ -372,6 +372,55 @@ def test_a_newer_neighbor_smooths_the_frame_count() raises:
         )
 
 
+def test_a_denoise_frame_must_fit() raises:
+    with assert_raises(contains="at least one pixel"):
+        _ = ReprojectInputs(
+            0,
+            1,
+            List[FloatColor](),
+            List[FloatColor](),
+            List[Float32](),
+            List[Float32](),
+            List[Vector3](),
+            List[Vector3](),
+            List[Vector2](),
+        )
+    with assert_raises(contains="at least one pixel"):
+        _ = DenoiseInputs(
+            1,
+            0,
+            List[FloatColor](),
+            List[FloatColor](),
+            List[Float32](),
+            List[Vector3](),
+            Matrix4(),
+            Matrix4(),
+        )
+    with assert_raises(contains="larger than this port"):
+        _ = ReprojectInputs(
+            1 << 32,
+            1 << 32,
+            List[FloatColor](),
+            List[FloatColor](),
+            List[Float32](),
+            List[Float32](),
+            List[Vector3](),
+            List[Vector3](),
+            List[Vector2](),
+        )
+    with assert_raises(contains="larger than this port"):
+        _ = DenoiseInputs(
+            1 << 32,
+            1 << 32,
+            List[FloatColor](),
+            List[FloatColor](),
+            List[Float32](),
+            List[Vector3](),
+            Matrix4(),
+            Matrix4(),
+        )
+
+
 def test_the_loop_keeps_its_history() raises:
     var camera = PerspectiveCamera(
         Angle(50.0, DEGREE), 1, Length(0.1, METER), Length(20.0, METER)
