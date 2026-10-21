@@ -317,6 +317,8 @@ sun.shadow.blur_samples = 8
 
 **Variance shadow maps.** A variance map keeps two numbers for each texel: the mean of the depth and its standard deviation. `vsm_moments` makes them from the drawn depths with three.js's two `VSMPass` passes. The first pass reads `blur_samples` depths down each column, from `radius` texels before to `radius` texels after. The second pass reads the result across each row. Each read is linear between the four nearest texel centers: `bilinear_texel` and `bilinear`.
 
+A side below one, a side whose square does not fit, a short depth list, or no sample is refused.
+
 `vsm_shadow` reads the map at the fragment, linearly. A fragment no deeper than the mean is lit. Beyond the mean, Chebyshev's inequality bounds the lit fraction by the variance over the variance plus the squared distance. three.js maps that bound from 0.3 to 0.95 onto zero to one, to cut the light that leaks between casters. This port does the same.
 
 Under `VSM_SHADOW_MAP`, every mesh that receives a shadow is also drawn into the maps, as three.js does. A texel where nothing was drawn holds a depth of one, as three.js clears its map to white.

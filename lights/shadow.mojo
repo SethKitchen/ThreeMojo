@@ -1481,7 +1481,7 @@ def vsm_offset(sample: Int, samples: Int) -> Float32:
 
 def vsm_moments(
     depths: List[Float32], size: Int, radius: Float32, samples: Int
-) -> List[Float32]:
+) raises -> List[Float32]:
     """Return a variance map's blurred mean and spread from its depths:
     three.js's `VSMPass`.
 
@@ -1502,10 +1502,19 @@ def vsm_moments(
 
     Returns:
         `size * size` means, then `size * size` standard deviations.
+
+    Raises:
+        Error: If the size is below one, two squares do not fit, the
+            depths do not fill one square, or there is no sample.
     """
-    # `LightShadow.validate` holds the size and the samples at one or
-    # more, so no loop below runs zero times.
+    require_shadow_size(size)
+    if samples < 1:
+        raise Error("A variance map takes at least one sample")
+    # Two squares are stored: the means and the spreads.
+    _ = _map_texels(size, 2)
     var square = size * size
+    if len(depths) != square:
+        raise Error("A variance map's depths must fill its square")
     var stored = List[Float32](capacity=square)
     for texel in range(square):  # pragma: no branch
         stored.append(vsm_depth(depths[texel]))

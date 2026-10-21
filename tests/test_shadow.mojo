@@ -1317,6 +1317,17 @@ def test_the_blur_reads_its_samples_from_minus_to_plus_one() raises:
     assert_equal(vsm_depth(inf[DType.float32]()), Float32(1))
 
 
+def test_a_variance_map_refuses_a_size_that_does_not_fit() raises:
+    with assert_raises(contains="at least one texel"):
+        _ = vsm_moments(List[Float32](), 0, 1, 1)
+    with assert_raises(contains="larger than this port"):
+        _ = vsm_moments(List[Float32](), 3037000500, 1, 1)
+    with assert_raises(contains="must fill its square"):
+        _ = vsm_moments([Float32(0)], 2, 1, 1)
+    with assert_raises(contains="at least one sample"):
+        _ = vsm_moments([Float32(0)], 1, 1, 0)
+
+
 def test_the_moments_are_the_blurred_mean_and_spread() raises:
     var depths = half_map(4).depths.copy()
     # One sample reads each texel's own center: the depth, no spread.
