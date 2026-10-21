@@ -269,6 +269,8 @@ The default `key_timeout` is 0.3 seconds, a `Duration`. A keyboard repeats a hel
 | `auto_forward` | `False` | Move forward with nothing held. |
 | `key_timeout` | 0.3 s | See [Held keys](#held-keys). |
 
+The pointer's distance from the middle of the view is a `Float64`.
+
 A turn is three.js's quaternion `(x, y, z, 1)`, normalized. Here `x`, `y` and `z` are the pitch, yaw and roll held, times half of `roll_speed` and the time. three.js's `rollSpeed` is that half. Its default of 0.005 is 0.01 radians a second here, the same turn.
 
 A roll changes the camera's `up`. The target stays ahead of the camera at the same distance. `update` returns `True` when the camera moved or turned past three.js's threshold.
