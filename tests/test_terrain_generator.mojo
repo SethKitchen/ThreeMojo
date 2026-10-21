@@ -18,7 +18,7 @@ from generators.terrain import (
     TerrainParameters,
     thermal_erode,
 )
-from std.math import nan
+from std.math import inf, nan
 from std.testing import (
     TestSuite,
     assert_almost_equal,
@@ -216,6 +216,14 @@ def test_terrain_parameters_are_checked() raises:
     p = _terrain()
     p.gain = nan[DType.float64]()
     _refused(p^, "noise parameter")
+    for bad in [
+        nan[DType.float32](),
+        inf[DType.float32](),
+        -inf[DType.float32](),
+    ]:
+        p = _terrain()
+        p.size = Length(bad, METER)
+        _refused(p^, "finite")
 
 
 def main() raises:

@@ -104,6 +104,7 @@ struct TerrainParameters(Copyable, Movable):
                 octave or pass count is negative, or a number is not
                 finite.
         """
+        check_finite(meters(self.size), "A terrain size")
         if not meters(self.size) > 0:
             raise Error("A terrain's size must be positive")
         require_positive(

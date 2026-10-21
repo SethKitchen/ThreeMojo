@@ -117,6 +117,8 @@ struct ForestParameters(Copyable, Movable):
         require_non_negative(
             self.detail, "A forest's blob detail must be zero or more"
         )
+        check_finite(meters(self.from_distance), "A cull distance")
+        check_finite(meters(self.to_distance), "A cull distance")
         if not meters(self.to_distance) > meters(self.from_distance):
             raise Error("A forest's cull must end past where it starts")
         check_finite(

@@ -36,7 +36,7 @@ from generators.person import (
 )
 from generators.utils import PART_ID, Vec3d
 from math.matrix4 import Matrix4
-from std.math import pi
+from std.math import inf, nan, pi
 from std.testing import (
     TestSuite,
     assert_almost_equal,
@@ -156,6 +156,13 @@ def test_a_bad_pose_or_height_is_refused() raises:
         _ = person_geometry(Pose(-1), Length(1.75, METER))
     with assert_raises(contains="height"):
         _ = person_geometry(WALK, Length(0, METER))
+    for bad in [
+        nan[DType.float32](),
+        inf[DType.float32](),
+        -inf[DType.float32](),
+    ]:
+        with assert_raises(contains="finite"):
+            _ = person_geometry(WALK, Length(bad, METER))
 
 
 def main() raises:

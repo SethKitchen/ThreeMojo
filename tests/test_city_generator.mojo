@@ -27,6 +27,7 @@ from generators.city import (
 )
 from generators.utils import generator_random
 from math.matrix4 import Matrix4
+from std.math import inf, nan
 from std.testing import (
     TestSuite,
     assert_almost_equal,
@@ -405,6 +406,23 @@ def test_street_and_sidewalk_cannot_be_negative() raises:
     p.sidewalk_width = Length(-1, METER)
     with assert_raises(contains="lot must be positive"):
         _ = city_layout(p)
+    for bad in [
+        nan[DType.float32](),
+        inf[DType.float32](),
+        -inf[DType.float32](),
+    ]:
+        p = CityParameters()
+        p.lot = Length(bad, METER)
+        with assert_raises(contains="finite"):
+            _ = city_layout(p)
+        p = CityParameters()
+        p.street = Length(bad, METER)
+        with assert_raises(contains="finite"):
+            _ = city_layout(p)
+        p = CityParameters()
+        p.sidewalk_width = Length(bad, METER)
+        with assert_raises(contains="finite"):
+            _ = city_layout(p)
 
 
 def main() raises:

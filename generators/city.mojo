@@ -46,6 +46,7 @@ from generators.utils import (
     Instances,
     Vec3d,
     basis_matrix,
+    check_finite,
     generator_random,
     length_meters as _len,
     meters,
@@ -196,13 +197,17 @@ def city_layout(p: CityParameters) raises -> CityLayout:
         The layout.
 
     Raises:
-        Error: If a count is below one, or a length is not positive.
+        Error: If a count is below one, or a length is not finite or not
+            in range.
     """
     if p.lots_x < 1 or p.lots_z < 1 or p.blocks_x < 1 or p.blocks_z < 1:
         raise Error("A city needs one block and one lot at least each way")
     var lot = meters(p.lot)
     var street = meters(p.street)
     var sidewalk = meters(p.sidewalk_width)
+    check_finite(lot, "A city lot")
+    check_finite(street, "A city street")
+    check_finite(sidewalk, "A city walk")
     if not (lot > 0 and street >= 0 and sidewalk >= 0):
         raise Error(
             "A city's lot must be positive, its street and walk not less"
