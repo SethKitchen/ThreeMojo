@@ -191,6 +191,7 @@ A V2X sensor writes a copy of CARLA's C++ record for each message that it heard.
 - A CAM's generation time counts from a start that the caller gives, not from the wall clock.
 - The event camera sorts events that tie in time in their order. CARLA's sort is not stable.
 - A CAM's size fields keep CARLA's units: the box in centimeters, times ten.
+- CAM heading comparisons clamp the cosine before `acos`. An unset previous heading counts as changed after the minimum interval. In CARLA at `1360bb9`, a zero previous heading gives an undefined angle, and rounding can put a half turn's cosine below minus one. The port detects the half turn. It also stores the current heading, position and speed for every generated CAM. CARLA's short-circuit trigger checks can leave the position or speed sample stale after a heading change. A stationary vehicle can then send an extra CAM. The port avoids that extra message, so scenario replay can contain fewer messages.
 - The V2X bytes have zero in each padding byte and in each field that CARLA does not set. CARLA leaves some of these bytes undefined.
 - The obstacle detector's sweep is a sphere trace, the conservative-advancement pattern. It stops at a gap of 0.1 mm or after 512 steps.
 

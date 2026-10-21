@@ -21,10 +21,17 @@ left and (1, 1) at the top right, which is what a texture expects and what
 `box` does per face. A floor that wants its image tiled every meter scales
 these itself, as `examples/floor.mojo` does. `Texture.repeat` tiles the
 image at sample time.
+
+## Input validation difference
+
+Shape dimensions must be finite before vertices are generated. NaN and
+either infinity raise an error. This differs from the unchecked three.js
+r186 input path. Finite supported inputs keep their existing behavior.
 """
 
 from core.buffer_geometry import BufferGeometry, PLANE_GEOMETRY
 from geometries.grid import append_cell
+from math.finite import require_finite
 from geometries.surface import (
     indexed_surface,
     record_grid_segments,
@@ -53,10 +60,14 @@ def plane(
         index buffer, wound counter-clockwise seen from +z.
 
     Raises:
-        Error: If either extent is not positive, or either segment count is
-            less than one.
+        Error: If either extent is not finite or not positive, or either
+            segment count is less than one.
     """
-    if width.value <= 0 or height.value <= 0:
+    require_finite(Float64(width.value), "A plane needs finite extents")
+    require_finite(Float64(height.value), "A plane needs finite extents")
+    # `not (x > 0)`, not `x <= 0`: NaN compares false both ways, so the
+    # <= form would let a NaN extent through.
+    if not (width.value > 0) or not (height.value > 0):
         raise Error("A plane needs positive extents")
     if width_segments < 1 or height_segments < 1:
         raise Error("A plane needs at least one segment each way")

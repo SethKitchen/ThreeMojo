@@ -7,7 +7,9 @@ import io
 from pathlib import Path
 import tempfile
 import textwrap
+import threading
 import unittest
+from unittest import mock
 
 import parallel_unittest as runner
 
@@ -169,6 +171,185 @@ class ParallelUnittest(unittest.TestCase):
                 directory, 'x', [runner.sys.executable, '-c', 'print("done", end="")'])
         self.assertEqual((label, code, output), ('x', 0, 'done'))
         self.assertGreaterEqual(seconds, 0.0)
+
+    def test_exclusive_selection_uses_exact_command_not_label(self):
+        target = runner._EXCLUSIVE_TEST
+        self.assertTrue(runner._exclusive(
+            ['python', '-m', 'unittest', 'test_other.T.test_a', target]))
+        self.assertTrue(runner._exclusive(
+            ['python', '-m', 'unittest', 'discover', '-s', '/tmp/tests',
+             '-p', 'test_coverage_invariant_contracts.py']))
+        for tests in ([target + '_other'], [target.replace('test_historical', 'test_other')],
+                      ['discover', '-s', '/tmp/tests', '-p', 'test_other.py']):
+            with self.subTest(tests=tests):
+                self.assertFalse(runner._exclusive(['python', '-m', 'unittest', *tests]))
+
+    def test_exclusive_unit_finishes_before_other_units_still_run_in_parallel(self):
+        target = runner._EXCLUSIVE_TEST
+        # The target is not the label or first test in its shared set-up group.
+        first = target.rsplit('.', 1)[0] + '.test_first'
+        grouped = (first + ' (+1)', ['python', '-m', 'unittest', first, target])
+        fallback = ('test_coverage_invariant_contracts.py',
+                    ['python', '-m', 'unittest', 'discover', '-s', '/tmp/tests',
+                     '-p', 'test_coverage_invariant_contracts.py'])
+        for exclusive in (grouped, fallback):
+            with self.subTest(exclusive=exclusive[0]):
+                work = [
+                    ('test_other.py', ['python', '-m', 'unittest', 'discover',
+                                       '-s', '/tmp/tests', '-p', 'test_other.py']),
+                    exclusive,
+                    ('test_a.T.test_one', ['python', '-m', 'unittest', 'test_a.T.test_one']),
+                ]
+                finished = threading.Event()
+                together = threading.Barrier(2)
+                seen = []
+
+                def run(directory, label, command):
+                    seen.append((label, command))
+                    if (label, command) == exclusive:
+                        self.assertEqual(seen, [exclusive])
+                        finished.set()
+                    else:
+                        self.assertTrue(finished.is_set())
+                        together.wait(timeout=3)
+                    return label, 0, 0, ''
+
+                with mock.patch.object(runner, 'modules', return_value=['test_fixture.py']), \
+                        mock.patch.object(runner, 'units', return_value=work) as listing, \
+                        mock.patch.object(runner, 'run_unit', side_effect=run):
+                    code, out, err = self.run_main('--jobs', '2', '/tmp/tests')
+                listing.assert_called_once()
+                self.assertEqual(code, 0)
+                self.assertCountEqual(seen, work)
+                self.assertIn('3 of 3 units passed (1 modules)', out)
+                self.assertEqual(err, '')
+
+    def test_exclusive_scheduling_preserves_shards_inventory_and_failure(self):
+        target = runner._EXCLUSIVE_TEST
+        work = [(name, ['python', '-m', 'unittest', name])
+                for name in ('test_a.T.test_one', target, 'test_z.T.test_one')]
+        seen = []
+        for index in (1, 2, 3, 4):
+            shard_seen = []
+
+            def run(directory, label, command):
+                shard_seen.append((label, command))
+                return label, int(label == target), 1, 'proof failed\n' if label == target else ''
+
+            with mock.patch.object(runner, 'modules', return_value=['test_fixture.py']), \
+                    mock.patch.object(runner, 'units', return_value=work) as listing, \
+                    mock.patch.object(runner, 'run_unit', side_effect=run):
+                code, out, err = self.run_main('--jobs', '2', '--shard', f'{index}/4',
+                                               '/tmp/tests')
+            listing.assert_called_once()
+            self.assertEqual(shard_seen, work[index - 1::4])
+            self.assertEqual(code, int(index == 2))
+            if index == 2:
+                self.assertIn('proof failed', out)
+                self.assertIn('failed: ' + target, err)
+            seen.extend(shard_seen)
+        self.assertCountEqual(seen, work)
+
+    def test_exclusive_failure_does_not_skip_remaining_work(self):
+        target = runner._EXCLUSIVE_TEST
+        work = [(name, ['python', '-m', 'unittest', name])
+                for name in ('test_a.T.test_one', target)]
+        with mock.patch.object(runner, 'modules', return_value=['test_fixture.py']), \
+                mock.patch.object(runner, 'units', return_value=work), \
+                mock.patch.object(runner, 'run_unit', side_effect=[
+                    (target, 1, 1, 'proof failed'), ('test_a.T.test_one', 0, 1, '')
+                ]) as run:
+            code, out, err = self.run_main('--jobs', '2', '/tmp/tests')
+        self.assertEqual([call.args[1:] for call in run.call_args_list], [work[1], work[0]])
+        self.assertEqual(code, 1)
+        self.assertIn('1 of 2 units passed', out)
+        self.assertIn('proof failed\n', out)
+        self.assertIn('failed: ' + target, err)
+
+
+    def test_all_bounded_full_gate_methods_and_fallbacks_are_selected(self):
+        targets = (
+            'test_coverage_invariant_contracts.CoverageInvariantContracts.'
+            'test_historical_direct_and_qualified_package_verification',
+            'test_coverage_invariant_contracts.CoverageInvariantContracts.'
+            'test_direct_and_qualified_package_verification',
+            'test_full_audit_cleanup_contracts.FullAuditCleanupContracts.'
+            'test_consumer_first_import_orders_normal_and_optimized',
+            'test_invariant_operation_inputs.OperationReachedBindingControls.'
+            'test_current_cold_routes_preserve_consumed_value_bindings',
+        )
+        self.assertEqual(runner._EXCLUSIVE_TESTS, targets)
+        for target in targets:
+            with self.subTest(target=target):
+                self.assertTrue(runner._exclusive(
+                    ['python', '-m', 'unittest', 'test_other.T.test_first', target]))
+                self.assertTrue(runner._exclusive(
+                    ['python', '-m', 'unittest', 'discover', '-s', '/tmp/tests',
+                     '-p', target.split('.')[0] + '.py']))
+                self.assertFalse(runner._exclusive(
+                    ['python', '-m', 'unittest', target + '_other']))
+
+    def test_all_exclusive_groups_finish_before_parallel_work_after_failure(self):
+        grouped = [(target + ' (+1)', ['python', '-m', 'unittest',
+                    'test_other.T.test_shared', target])
+                   for target in runner._EXCLUSIVE_TESTS]
+        fallbacks = [(module, ['python', '-m', 'unittest', 'discover',
+                               '-s', '/tmp/tests', '-p', module])
+                     for module in sorted({test.split('.')[0] + '.py'
+                                           for test in runner._EXCLUSIVE_TESTS})]
+        for exclusive in (grouped, fallbacks):
+            with self.subTest(exclusive=exclusive):
+                parallel = [(name, ['python', '-m', 'unittest', name])
+                            for name in ('test_a.T.test_one', 'test_z.T.test_one')]
+                work = [parallel[0], *exclusive, parallel[1]]
+                seen = []
+                together = threading.Barrier(2)
+
+                def run(directory, label, command):
+                    unit = (label, command)
+                    seen.append(unit)
+                    if unit in exclusive:
+                        self.assertEqual(seen, exclusive[:len(seen)])
+                    else:
+                        self.assertEqual(seen[:len(exclusive)], exclusive)
+                        together.wait(timeout=3)
+                    failed = unit == exclusive[0]
+                    return label, int(failed), 1, 'proof failed' if failed else ''
+
+                with mock.patch.object(runner, 'modules', return_value=['test_fixture.py']), \
+                        mock.patch.object(runner, 'units', return_value=work), \
+                        mock.patch.object(runner, 'run_unit', side_effect=run):
+                    code, out, err = self.run_main('--jobs', '2', '/tmp/tests')
+                self.assertCountEqual(seen, work)
+                self.assertEqual(code, 1)
+                self.assertIn(f'{len(work) - 1} of {len(work)} units passed', out)
+                self.assertIn('proof failed', out)
+                self.assertIn('failed: ' + exclusive[0][0], err)
+
+    def test_expanded_exclusive_set_preserves_every_shard_command(self):
+        targets = runner._EXCLUSIVE_TESTS
+        names = ['test_a.T.test_one', targets[2], 'test_b.T.test_one', targets[0],
+                 'test_c.T.test_one', targets[1], targets[3], 'test_z.T.test_one']
+        work = [(name, ['python', '-m', 'unittest', name]) for name in names]
+        for count in (1, 2, 3, 6, 8):
+            all_seen = []
+            for index in range(1, count + 1):
+                seen = []
+
+                def run(directory, label, command):
+                    seen.append((label, command))
+                    return label, int(label in targets), 1, 'proof failed'
+
+                with mock.patch.object(runner, 'modules', return_value=['test_fixture.py']), \
+                        mock.patch.object(runner, 'units', return_value=work), \
+                        mock.patch.object(runner, 'run_unit', side_effect=run):
+                    code, out, err = self.run_main('--jobs', '2', '--shard',
+                                                  f'{index}/{count}', '/tmp/tests')
+                expected = work[index - 1::count]
+                self.assertCountEqual(seen, expected)
+                self.assertEqual(code, int(any(label in targets for label, _ in expected)))
+                all_seen.extend(seen)
+            self.assertCountEqual(all_seen, work)
 
 
 def sys_executable_that_prints_nothing():

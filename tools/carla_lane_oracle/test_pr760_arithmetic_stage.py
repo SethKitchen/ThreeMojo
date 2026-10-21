@@ -10,6 +10,7 @@ import unittest
 from unittest.mock import patch
 
 import pr760_arithmetic_stage as stage
+import pr780_source_successor as successor
 import shared_helper_contracts as shared
 import typed_boundary_contracts as typed
 
@@ -19,7 +20,8 @@ ROOT = Path(__file__).resolve().parents[2]
 class StagedArithmeticControls(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
-        cls.inputs = {path: (ROOT/path).read_bytes() for path in stage.INPUT_SHA256}
+        cls.inputs = {path: successor.predecessor_bytes(path, (ROOT/path).read_bytes())
+                      for path in stage.INPUT_SHA256}
         cls.current = {path: raw.decode('utf-8') for path, raw in cls.inputs.items()}
         cls.predecessors = stage.verify_staged_sources(cls.inputs)
 
@@ -152,7 +154,8 @@ class StagedArithmeticControls(unittest.TestCase):
                           'example_apng': 1, 'example_generator': 1})
         self.assertIs(stage.REGISTRY_QUALIFICATION_READY, False)
         self.assertTrue(stage.REGISTRY_UNRESOLVED_CONDITIONS)
-        inputs = {path: (ROOT/path).read_bytes() for path in stage.REGISTRY_INPUT_SHA256}
+        inputs = {path: successor.predecessor_bytes(path, (ROOT/path).read_bytes())
+                  for path in stage.REGISTRY_INPUT_SHA256}
         import full_audit_cleanup_contracts as owner
         witness = 'tools/carla_lane_oracle/test_pr760_arithmetic_stage.py'
         inputs[witness] = owner.stage_witness_predecessor_bytes(inputs[witness])

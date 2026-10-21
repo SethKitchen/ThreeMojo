@@ -3,11 +3,21 @@
 # Noncommercial use is free; commercial use requires a paid license.
 # See LICENSE, LICENSE-COMMERCIAL.md and THIRD-PARTY-NOTICES.md.
 
-"""Finite input contracts for builders without a JSON parameter backstop."""
+"""Finite input contracts checked before generated shape allocation."""
 
-from core.buffer_geometry import POSITION
+from core.buffer_geometry import BufferGeometry, POSITION
+from geometries.box import box
 from geometries.box_line import box_line
-from geometries.circle import FULL_TURN, check_sweep
+from geometries.circle import FULL_TURN, check_sweep, circle, ring
+from geometries.cylinder import cylinder
+from geometries.decal import decal
+from geometries.plane import plane
+from geometries.sphere import sphere
+from geometries.surface import require_positive_radius
+from geometries.torus import torus, torus_knot
+from math.euler import Euler, XYZ
+from math.matrix4 import Matrix4
+from math.vector3 import Vector3
 from geometries.rounded_box import rounded_box
 from std.math import inf, isfinite, nan
 from std.testing import TestSuite, assert_equal, assert_raises, assert_true
@@ -83,6 +93,100 @@ def test_finite_box_boundaries_keep_their_geometry() raises:
         for component in rounded.attribute_view(String(POSITION)).packed():
             assert_true(isfinite(component))
             assert_true(abs(component) <= 1.000001)
+
+
+def test_shapes_refuse_each_nonfinite_dimension_before_generation() raises:
+    var geometry = box(Length(1, METER), Length(1, METER), Length(1, METER))
+    for bad in [
+        nan[DType.float32](),
+        inf[DType.float32](),
+        -inf[DType.float32](),
+    ]:
+        with assert_raises(contains="finite"):
+            require_positive_radius(bad, "test")
+        with assert_raises(contains="finite"):
+            _ = circle(Length(bad, METER))
+        with assert_raises(contains="finite"):
+            _ = sphere(Length(bad, METER))
+        for axis in range(3):
+            var values = [Float32(1), Float32(1), Float32(1)]
+            values[axis] = bad
+            with assert_raises(contains="finite"):
+                _ = box(
+                    Length(values[0], METER),
+                    Length(values[1], METER),
+                    Length(values[2], METER),
+                )
+            with assert_raises(contains="finite"):
+                _ = cylinder(
+                    Length(values[0], METER),
+                    Length(values[1], METER),
+                    Length(values[2], METER),
+                )
+            with assert_raises(contains="finite"):
+                _ = decal(
+                    geometry,
+                    Matrix4(),
+                    Vector3(0, 0, 0),
+                    Euler(
+                        Angle(0, RADIAN),
+                        Angle(0, RADIAN),
+                        Angle(0, RADIAN),
+                        XYZ,
+                    ),
+                    Length(values[0], METER),
+                    Length(values[1], METER),
+                    Length(values[2], METER),
+                )
+        for axis in range(2):
+            var values = [Float32(1), Float32(2)]
+            values[axis] = bad
+            with assert_raises(contains="finite"):
+                _ = plane(Length(values[0], METER), Length(values[1], METER))
+            with assert_raises(contains="finite"):
+                _ = ring(Length(values[0], METER), Length(values[1], METER))
+            with assert_raises(contains="finite"):
+                _ = torus(Length(values[0], METER), Length(values[1], METER))
+            with assert_raises(contains="finite"):
+                _ = torus_knot(
+                    Length(values[0], METER), Length(values[1], METER)
+                )
+
+
+def test_finite_shared_radius_validation_keeps_zero_and_negative_errors() raises:
+    require_positive_radius(Float32(1), "test")
+    for value in [Float32(0), Float32(-1)]:
+        with assert_raises(contains="positive"):
+            require_positive_radius(value, "test")
+
+
+def test_nonfinite_dimensions_fail_before_topology_or_source_reads() raises:
+    var bad = Length(inf[DType.float32](), METER)
+    var one = Length(1, METER)
+    with assert_raises(contains="finite"):
+        _ = box(bad, one, one, 0)
+    with assert_raises(contains="finite"):
+        _ = plane(bad, one, 0)
+    with assert_raises(contains="finite"):
+        _ = circle(bad, 0)
+    with assert_raises(contains="finite"):
+        _ = ring(one, bad, 0)
+    with assert_raises(contains="finite"):
+        _ = cylinder(one, bad, one, 0)
+    with assert_raises(contains="finite"):
+        _ = torus(one, bad, 0)
+    with assert_raises(contains="finite"):
+        _ = torus_knot(one, bad, 0)
+    with assert_raises(contains="finite"):
+        _ = decal(
+            BufferGeometry(),
+            Matrix4(),
+            Vector3(0, 0, 0),
+            Euler(Angle(0, RADIAN), Angle(0, RADIAN), Angle(0, RADIAN), XYZ),
+            one,
+            one,
+            bad,
+        )
 
 
 def main() raises:

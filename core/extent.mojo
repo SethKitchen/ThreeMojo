@@ -59,7 +59,8 @@ def require_texel_count(
 
     Check positive sizes separately with `require_positive_extent`.
     This check only compares the length with the product; it does not
-    validate the sizes or guard against an overflowing product.
+    validate the sizes. A product that cannot fit in Int raises the
+    caller's error instead of trapping on signed overflow.
 
     Nothing. The call returns when the length matches.
 
@@ -72,9 +73,18 @@ def require_texel_count(
 
     Raises:
         Error: If `length` is not the width times the height times the
-            channels.
+            channels, or the product cannot fit in Int.
     """
-    if length != width * height * channels:
+    # Two Int factors fit exactly in Int128, including Int.MIN * -1.
+    # Check the last factor against the final sign's magnitude limit.
+    # A zero channel count can still make an oversized area fit.
+    var area = Int128(width) * Int128(height)
+    var factor = Int128(channels)
+    var negative = (area < 0) != (factor < 0)
+    var limit = Int128(Int.MAX) + Int128(negative)
+    if factor != 0 and abs(area) > limit // abs(factor):
+        raise Error(message)
+    if Int128(length) != area * factor:
         raise Error(message)
 
 

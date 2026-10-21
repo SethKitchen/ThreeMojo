@@ -3527,6 +3527,7 @@ def gradient_ramp(image: Texture) raises -> List[Float32]:
         Error: If a texel cannot be read.
     """
     var tones = List[Float32]()
+    tones.reserve(image.width)
     # A checked map holds at least one texel, so this never runs zero times.
     for x in range(image.width):  # pragma: no branch
         tones.append(Float32(image.texel(x, 0).r) / 255)

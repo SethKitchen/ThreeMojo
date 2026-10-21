@@ -25,7 +25,7 @@ from extensions.anatomy.muscle import (
     tendon_force,
 )
 from generators.utils import Vec3d
-from std.math import cos, exp, inf, nan, sin
+from std.math import cos, exp, inf, isfinite, nan, pi, sin
 from std.testing import (
     TestSuite,
     assert_almost_equal,
@@ -211,6 +211,21 @@ def test_isometric_equilibrium_refuses_bad_input() raises:
     broken.mass = Mass(0)
     with assert_raises(contains="mass"):
         _ = isometric_equilibrium(broken, 1.0, unit)
+
+
+def test_nearly_transverse_equilibrium_keeps_a_finite_pennation() raises:
+    var arch = _arch(60)
+    # One Float32 step above the tendon slack leaves almost zero reach.
+    # Constant thickness then gives the independent geometric limit pi/2.
+    var unit = Length(0.050000004)
+    var equilibrium = isometric_equilibrium(arch, 1, unit)
+    assert_true(isfinite(equilibrium.pennation.value))
+    assert_almost_equal(
+        Float64(equilibrium.pennation.value), Float64(pi) / 2, atol=1e-6
+    )
+    assert_almost_equal(
+        Float64(equilibrium.fiber_length.value), arch.thickness(), atol=1e-8
+    )
 
 
 def test_moment_arm_is_the_lever_across_the_pull() raises:

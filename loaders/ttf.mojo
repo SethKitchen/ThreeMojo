@@ -38,6 +38,11 @@ and a composite glyph that names a glyph past the font or nests past
 `MAX_TTF_NESTING`, and a code point that is a surrogate, which a string
 here cannot hold. `original_font_information`, the `name` table as
 opentype.js holds it, is not written: `FontLoader` does not read it.
+
+**Bounded cmap expansion.** Format 12 groups must fit their declared
+subtable and contain ascending, disjoint ranges through U+10FFFF. All
+ranges are checked before any map entries are allocated. Their combined
+expansion cannot exceed the Unicode code space.
 """
 
 from core.ordinal import require_non_negative
@@ -758,8 +763,22 @@ def _cmap[
     var format = data.u16(at)
     var map = Dict[Int, Int]()
     if format == 12:
+        var length = data.u32(at + 4)
         var groups = data.u32(at + 12)
-        for g in range(groups):  # pragma: no branch
+        if length < 16 or length > len(data.bytes) - at:
+            raise Error("TTF: a cmap subtable runs past its bounds")
+        if groups > (length - 16) // 12:
+            raise Error("TTF: cmap groups run past their subtable")
+        var previous = -1
+        for g in range(groups):
+            var first = data.u32(at + 16 + g * 12)
+            var last = data.u32(at + 20 + g * 12)
+            if first > last or last > 0x10FFFF:
+                raise Error("TTF: a cmap group names code points out of range")
+            if first <= previous:
+                raise Error("TTF: cmap groups overlap or are out of order")
+            previous = last
+        for g in range(groups):
             var first = data.u32(at + 16 + g * 12)
             var last = data.u32(at + 20 + g * 12)
             var glyph = data.u32(at + 24 + g * 12)

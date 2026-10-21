@@ -30,6 +30,12 @@ Finite norm-dependent directions and lengths use scale-safe arithmetic.
 Extreme finite results can differ from direct three.js r180 arithmetic.
 See `docs/wiki/Norm-consumers.md` for the changed operations, retained
 limits, and explicit zero and nonfinite rules.
+
+## Input validation difference
+
+Shape dimensions must be finite before vertices are generated. NaN and
+either infinity raise an error. This differs from the unchecked three.js
+r186 input path. Finite supported inputs keep their existing behavior.
 """
 
 from math.norm import normalized_cross3, _ordinary_squared
@@ -49,6 +55,7 @@ from geometries.circle import FULL_TURN, check_sweep
 from geometries.grid import grid_index
 from math.vector3 import Vector3, append_vector3, vector3_from_float64
 from std.math import cos, pi, sin
+from math.finite import require_finite
 from units.si import Angle, Length
 
 # How far along the knot's parameter the second point is taken, to give the
@@ -86,9 +93,13 @@ def _require_tube_radii(radius: Float32, tube: Float32, name: String) raises:
         name: `torus` or `torus knot`.
 
     Raises:
-        Error: If either radius is not positive.
+        Error: If either radius is not finite or not positive.
     """
-    if radius <= 0 or tube <= 0:
+    require_finite(Float64(radius), "A " + name + " needs finite radii")
+    require_finite(Float64(tube), "A " + name + " needs finite radii")
+    # `not (x > 0)`, not `x <= 0`: NaN compares false both ways, so the
+    # <= form would let it through.
+    if not (radius > 0) or not (tube > 0):
         raise Error(
             "A " + name + " needs a positive radius and a positive tube"
         )

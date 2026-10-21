@@ -75,5 +75,46 @@ def test_positive_size_error_precedes_length_error() raises:
         require_texel_count(15, 4, 4, 1, "length mismatch")
 
 
+def test_texel_count_keeps_signed_and_zero_products() raises:
+    for width in [-3, 0, 3]:
+        for height in [-5, 0, 5]:
+            for channels in [-7, 0, 7]:
+                var count = width * height * channels
+                require_texel_count(count, width, height, channels, "signed")
+                with assert_raises(contains="signed"):
+                    require_texel_count(
+                        count + 1, width, height, channels, "signed"
+                    )
+    # The final product fits even when a partial signed product does not.
+    require_texel_count(Int.MIN, Int.MIN, -1, -1, "signed")
+    require_texel_count(Int.MIN, -1, Int.MIN, -1, "signed")
+    require_texel_count(Int.MIN, -1, -1, Int.MIN, "signed")
+    require_texel_count(Int.MIN, Int.MIN // 2, 2, 1, "signed")
+    require_texel_count(Int.MAX, Int.MAX, 1, 1, "signed")
+    require_texel_count(-Int.MAX, Int.MAX, -1, 1, "signed")
+    require_texel_count(0, Int.MIN, Int.MIN, 0, "signed")
+    require_texel_count(0, Int.MIN, 0, Int.MIN, "signed")
+    require_texel_count(0, 0, Int.MIN, Int.MIN, "signed")
+
+
+def test_texel_count_refuses_overflow_with_the_callers_error() raises:
+    for factors in [
+        (Int.MAX, 2, 1),
+        (Int.MAX, 1, 2),
+        (Int.MIN, -1, 1),
+        (Int.MIN, 1, -1),
+        (Int.MIN, 2, 1),
+        (Int.MIN, 1, 2),
+        (Int.MIN, Int.MIN, 1),
+        (Int.MIN, Int.MIN, Int.MIN),
+        (Int.MIN // 2, -2, 1),
+        (Int.MIN // 2, -1, 2),
+    ]:
+        with assert_raises(contains="too many texels"):
+            require_texel_count(
+                0, factors[0], factors[1], factors[2], "too many texels"
+            )
+
+
 def main() raises:
     TestSuite.discover_tests[__functions_in_module()]().run()

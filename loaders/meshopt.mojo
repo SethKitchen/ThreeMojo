@@ -28,6 +28,9 @@ end where its tail begins is refused with meshoptimizer's code, as
 three.js's `Malformed buffer data`. A size, a count or a filter that the
 extension's specification forbids is refused as well. meshoptimizer does
 not check those, and what it makes of them is unspecified.
+
+**Where this port differs.** Each decoded buffer is limited to 1 GiB.
+The limit is checked before allocation for all three modes.
 """
 
 from core.binary import little_endian_u32
@@ -234,6 +237,20 @@ def require_meshopt_count(count: Int) raises:
     require_non_negative(count, "meshopt: a count must not be negative")
 
 
+def require_meshopt_output(count: Int, size: Int) raises:
+    """Check decoded storage after the mode validates count and size.
+
+    Args:
+        count: The nonnegative element count.
+        size: The positive bytes per element.
+
+    Raises:
+        Error: If the decoded buffer would exceed 1 GiB.
+    """
+    if count > (1 << 30) // size:
+        raise Error("meshopt: a buffer too large to decode")
+
+
 def require_meshopt_index_size(size: Int) raises:
     """Refuse a meshopt index that is not two or four bytes.
 
@@ -287,6 +304,7 @@ def decode_vertex_buffer(
             "meshopt: an element's size must be a multiple of 4 from 4 to 256"
         )
     require_meshopt_count(count)
+    require_meshopt_output(count, size)
     var end = len(source)
     if end < 1 + size:
         raise _malformed(-2)
@@ -297,6 +315,14 @@ def decode_vertex_buffer(
     for k in range(size):  # pragma: no branch
         last.append(source[end - size + k])
     var block = min((_BLOCK_BYTES // size) & ~(_GROUP - 1), _BLOCK_MAX)
+    # Even an all-zero block needs one header per four 16-byte groups.
+    # Check this lower bound before allocating the decoded buffer.
+    var full_headers = (block // _GROUP + 3) // 4
+    var remainder = count % block
+    var tail_headers = ((remainder + _GROUP - 1) // _GROUP + 3) // 4
+    var headers = (count // block * full_headers + tail_headers) * size
+    if count > 0 and headers > end - 1 - max(size, _TAIL_MIN):
+        raise _malformed(-2)
     var out = List[UInt8](length=count * size, fill=0)
     var buffer = List[UInt8](length=_BLOCK_MAX, fill=0)
     var at = 1
@@ -410,6 +436,7 @@ def decode_index_buffer(
     require_meshopt_index_size(size)
     if count < 0 or count % 3 != 0:
         raise Error("meshopt: a triangle list's count must be a multiple of 3")
+    require_meshopt_output(count, size)
     var length = len(source)
     if length < 1 + count // 3 + 16:
         raise _malformed(-2)
@@ -536,6 +563,7 @@ def decode_index_sequence(
     """
     require_meshopt_index_size(size)
     require_meshopt_count(count)
+    require_meshopt_output(count, size)
     var length = len(source)
     if length < 1 + count + 4:
         raise _malformed(-2)

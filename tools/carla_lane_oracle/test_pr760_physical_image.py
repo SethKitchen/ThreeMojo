@@ -120,6 +120,7 @@ class ClosedPhysicalImageControls(unittest.TestCase):
         for path, expected in self.data['inputs'].items():
             raw = (self.root/path).read_bytes()
             self.assertEqual(self.accepted['bindings'][path], owner.sha(raw))
+            raw = owner.pr780_successor.predecessor_bytes(path, raw)
             if path in ('tests/test_water.mojo', 'tools/compile_fail_expectations.json',
                         'tools/carla_lane_oracle/test_expectation_binding_successor.py',
                         'tools/carla_lane_oracle/test_pr760_physical_image.py',

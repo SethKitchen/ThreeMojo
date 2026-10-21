@@ -11,6 +11,7 @@ from animation.animation_clip import (
     NORMAL_BLEND_MODE,
 )
 from animation.animation_mixer import AnimationAction, AnimationMixer
+from animation.animation_utils import make_clip_additive
 from animation.keyframe_track import KeyframeTrack, NODE_NAME, node_target
 from core.object3d import NodeId, Object3D
 from core.scene import Scene
@@ -49,6 +50,49 @@ def add_name(
     var index = mixer.add(AnimationAction(clip^, weight=weight))
     mixer.action(index).play()
     return index
+
+
+def test_make_clip_additive_keeps_string_keys_and_tables() raises:
+    var target = AnimationClip(
+        "names",
+        [
+            KeyframeTrack(
+                node_target(NodeId(0), NODE_NAME),
+                [Duration(0), Duration(1)],
+                ["first", "second"],
+            )
+        ],
+    )
+    var reference = AnimationClip(
+        "reference names",
+        [
+            KeyframeTrack(
+                node_target(NodeId(0), NODE_NAME),
+                [Duration(0), Duration(1)],
+                ["reference first", "reference second"],
+            )
+        ],
+    )
+    # Reference key one is an interned-string index, not a numeric pose.
+    var made = make_clip_additive(target, 30, reference, 30)
+    assert_equal(made.blend_mode, ADDITIVE_BLEND_MODE)
+    assert_equal(target.blend_mode, NORMAL_BLEND_MODE)
+    for index in range(2):
+        assert_equal(
+            made.tracks[0].values[index], target.tracks[0].values[index]
+        )
+        assert_equal(
+            made.tracks[0].strings[index], target.tracks[0].strings[index]
+        )
+        assert_equal(
+            made.tracks[0].sample_string(Duration(Float32(index))),
+            target.tracks[0].sample_string(Duration(Float32(index))),
+        )
+    assert_equal(made.tracks[0].sample_string(Duration(0)), "first")
+    assert_equal(made.tracks[0].sample_string(Duration(1)), "second")
+    assert_equal(
+        reference.tracks[0].sample_string(Duration(1)), "reference second"
+    )
 
 
 def test_a_name_fade_selects_the_original_at_half_weight() raises:

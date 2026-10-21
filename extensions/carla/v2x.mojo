@@ -55,6 +55,11 @@ vehicle's role and exterior lights follows every 0.5 s.
   them in a map ordered by address.
 - A CAM's vehicle length and width are CARLA's: the box in centimeters,
   times ten.
+- Heading comparisons clamp the cosine before `acos`. An unset previous
+  heading counts as changed. Every generated CAM stores the current
+  heading, position and speed, even when one trigger skips the others.
+  CARLA at `1360bb9` leaves skipped values at their old samples. These
+  changes prevent missed half turns and extra messages after a turn.
 """
 
 from extensions.carla.actor import (
@@ -111,6 +116,7 @@ from extensions.carla.vehicle import (
     LIGHT_RIGHT_BLINKER,
 )
 from extensions.carla.world import World
+from math.utils import clamp_unit
 from math.vector3 import Vector3
 from std.math import (
     acos,
@@ -1984,9 +1990,14 @@ struct CaService(Copyable, Movable):
         ).rotation.forward_vector()
         var a = self.last_cam_heading
         var b = self.vehicle_heading
-        var angle = acos(
-            Float64(a.dot(b)) / (Float64(a.length()) * Float64(b.length()))
-        )
+        var la = Float64(a.length())
+        var lb = Float64(b.length())
+        # An unset heading counts as changed after the minimum interval.
+        if not (la > 0.0) or not (lb > 0.0):
+            return True
+        # Clamp: Float32 rounding can push the cosine of near-parallel unit
+        # vectors past 1 by an ulp, and acos of that is NaN.
+        var angle = acos(clamp_unit(Float64(a.dot(b)) / (la * lb)))
         return angle * 180.0 / pi > 4.0
 
     def _moved(mut self, world: World) raises -> Bool:
@@ -2004,6 +2015,14 @@ struct CaService(Copyable, Movable):
         tick: Duration,
         mut rng: SensorRandom,
     ) raises -> CAM:
+        # A heading trigger short-circuits the position and speed checks.
+        # Save the whole current state so the next tick compares against
+        # this CAM, including the first and fixed-rate messages.
+        self.vehicle_position = world.get_location(self.owner)
+        self.vehicle_speed = self._forward_speed(world)
+        self.vehicle_heading = world.get_transform(
+            self.owner
+        ).rotation.forward_vector()
         var cam = self._message(world, projection, tick, rng)
         self.last_cam_position = self.vehicle_position
         self.last_cam_speed = self.vehicle_speed

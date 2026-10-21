@@ -58,6 +58,43 @@ def modules(directory, pattern='test_*.py'):
 # Tests that share set-up run this many to a process; the set-up repeats.
 CHUNK = 4
 
+# Full-gate positive verification has fixed subprocess deadlines; retained
+# cold-route identity proofs also have high peak memory use. Run these units
+# without competing test processes. Keep groups, retention and limits unchanged.
+_EXCLUSIVE_TEST = (
+    'test_coverage_invariant_contracts.CoverageInvariantContracts.'
+    'test_historical_direct_and_qualified_package_verification'
+)
+
+_EXCLUSIVE_TESTS = (
+    _EXCLUSIVE_TEST,
+    'test_coverage_invariant_contracts.CoverageInvariantContracts.'
+    'test_direct_and_qualified_package_verification',
+    'test_full_audit_cleanup_contracts.FullAuditCleanupContracts.'
+    'test_consumer_first_import_orders_normal_and_optimized',
+    'test_invariant_operation_inputs.OperationReachedBindingControls.'
+    'test_current_cold_routes_preserve_consumed_value_bindings',
+)
+
+
+def _exclusive(command):
+    """Select deadline/memory-sensitive proofs and whole-module fallbacks."""
+    return any(test in command[3:]
+               or (command[3:4] == ['discover']
+                   and command[-2:] == ['-p', test.split('.')[0] + '.py'])
+               for test in _EXCLUSIVE_TESTS)
+
+
+def _run_scheduled(pool, directory, work):
+    """Finish exclusive units before submitting the remaining parallel work."""
+    parallel = []
+    for unit in work:
+        if _exclusive(unit[1]):
+            yield run_unit(directory, *unit)
+        else:
+            parallel.append(unit)
+    yield from pool.map(lambda u: run_unit(directory, *u), parallel)
+
 
 def units(directory, name, python=sys.executable):
     """Return the commands that together run every test of one module."""
@@ -127,7 +164,7 @@ def main(argv=None):
         # Whole-module units are the long ones; start them first.
         work.sort(key=lambda unit: unit[1][2] != 'discover')
         failed = []
-        for label, code, seconds, output in pool.map(lambda u: run_unit(directory, *u), work):
+        for label, code, seconds, output in _run_scheduled(pool, directory, work):
             if code != 0:
                 failed.append(label)
                 print(f'== {label} ({seconds:.0f} s, exit {code})', flush=True)

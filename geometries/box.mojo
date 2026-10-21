@@ -20,6 +20,12 @@ material index: +x is 0, -x is 1, +y is 2, -y is 3, +z is 4 and -z is 5. A
 mesh that wears a list of six materials gives each face its own, as in
 three.js. With one segment a side, a face is two triangles, so the face of
 triangle `t` is `t // 2`.
+
+## Input validation difference
+
+Shape dimensions must be finite before vertices are generated. NaN and
+either infinity raise an error. This differs from the unchecked three.js
+r186 input path. Finite supported inputs keep their existing behavior.
 """
 
 from core.buffer_attribute import BufferAttribute
@@ -35,6 +41,7 @@ from geometries.surface import (
     record_grid_segments,
     record_kind,
     record_width_height,
+    require_finite_extents,
     require_positive_extents,
 )
 from units.si import Length
@@ -156,9 +163,11 @@ def box(
         -x, +y, -y, +z, -z.
 
     Raises:
-        Error: If any extent is not positive, or any segment count is
-            below one. three.js floors a count and takes what it gets.
+        Error: If any extent is not finite or not positive, or any segment
+            count is below one. three.js floors a count and takes what it
+            gets.
     """
+    require_finite_extents(width.value, height.value, depth.value, "box")
     require_positive_extents(width.value, height.value, depth.value, "box")
     if width_segments < 1 or height_segments < 1 or depth_segments < 1:
         raise Error("A box needs at least one segment a side")

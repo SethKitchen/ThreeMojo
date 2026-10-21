@@ -256,7 +256,8 @@ class HostedIdentitySetupTests(unittest.TestCase):
 
     def test_hosted_tooling_uses_an_upstream_test_interpreter(self):
         jobs = self.workflow_jobs()
-        for name in ('lint', 'lint-macos', 'tools', 'tools-macos', 'cpu-macos'):
+        for name in ('lint', 'lint-macos', 'tools', 'tools-macos',
+                     'tools-discovery', 'tools-discovery-macos', 'cpu-macos'):
             with self.subTest(job=name):
                 job = jobs[name]
                 self.assertIn('uv python install --no-bin 3.12.14', job)

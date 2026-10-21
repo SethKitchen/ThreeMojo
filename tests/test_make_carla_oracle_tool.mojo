@@ -78,33 +78,44 @@ struct Project(Movable):
             + "    raise SystemExit(7)\n"
         )
         var source = Path("Makefile").read_text()
+        # Copy the shard defaults and ownership rule with the recipe.
         var recipe = section(
             source,
-            "test-tools:\n",
+            "TOOLS_SHARD ?=\n",
             "\n# The negative-fixture manifest names exactly",
         )
         # The nested stage runs through the real parallel runner.
         var runner = "tools/parallel_unittest.py"
         Path(self.root + "/" + runner).write_bytes(Path(runner).read_bytes())
         Path(self.root + "/Makefile").write_text(
-            ".PHONY: test-tools repository-check\nJOBS ?= 2\n"
+            ".PHONY: test-tools test-tools-discovery test-tools-oracle"
+            " repository-check\nJOBS ?= 2\n"
             + recipe
             + "\nrepository-check:\n"
             + '\t@echo repository >> "$$ORACLE_WIRING_EVENTS"\n'
         )
 
     def make(
-        self, fail: String = "", shard: String = ""
+        self,
+        fail: String = "",
+        shard: String = "",
+        target: String = "test-tools",
     ) raises -> Tuple[ProcessResult, List[String]]:
         Path(self.events).write_text("")
         var settings: List[String] = [
             "PYTHONDONTWRITEBYTECODE=1",
             "ORACLE_WIRING_EVENTS=" + self.events,
         ]
-        var command: List[String] = ["env", "-u", "ORACLE_WIRING_FAIL"]
+        var command: List[String] = [
+            "env",
+            "-u",
+            "ORACLE_WIRING_FAIL",
+            "-u",
+            "TOOLS_SHARD",
+        ]
         if fail:
             command.append("ORACLE_WIRING_FAIL=" + fail)
-        command.extend(["make", "-s", "test-tools"])
+        command.extend(["make", "-s", target])
         if shard:
             command.append("TOOLS_SHARD=" + shard)
         var result = run_program(
@@ -214,7 +225,7 @@ def test_linux_and_macos_ci_invoke_the_official_tool_target() raises:
         var end = job.find("]", start)
         var count = len(String(job[byte = start + 8 : end]).split(","))
         var expected = (
-            "sh tools/tool.sh .venv/bin/mojo ci_scope run -- test-tools "
+            "sh tools/tool.sh .venv/bin/mojo ci_scope run -- test-tools-oracle "
             + "TOOLS_SHARD=${{ matrix.shard }}/"
             + String(count)
         )
@@ -241,6 +252,65 @@ def test_groups_together_run_every_stage_once() raises:
         seen.extend(run[1].copy())
     sort(seen)
     assert_equal(_words(seen^), "assets check nested repository tools")
+    project.close()
+
+
+def test_six_groups_keep_serial_checks_on_their_actual_owners() raises:
+    var project = Project()
+    var seen = List[String]()
+    for index in range(1, 7):
+        var run = project.make(shard=String(index) + "/6")
+        assert_equal(run[0].status, 0, run[0].output + run[0].errors)
+        for name in ["tools", "assets"]:
+            var count = 0
+            for event in run[1]:
+                if event == name:
+                    count += 1
+            assert_equal(count, 1 if index == 5 else 0, name)
+        for name in ["check", "repository"]:
+            var count = 0
+            for event in run[1]:
+                if event == name:
+                    count += 1
+            assert_equal(count, 1 if index == 1 else 0, name)
+        seen.extend(run[1].copy())
+    sort(seen)
+    assert_equal(_words(seen^), "assets check nested repository tools")
+    project.close()
+
+
+def test_dedicated_ci_targets_together_run_every_stage_once() raises:
+    var project = Project()
+    var discovery = project.make(target="test-tools-discovery")
+    assert_equal(
+        discovery[0].status, 0, discovery[0].output + discovery[0].errors
+    )
+    assert_equal(_words(discovery[1].copy()), "tools assets")
+    var seen = discovery[1].copy()
+    for index in range(1, 7):
+        var run = project.make(
+            shard=String(index) + "/6", target="test-tools-oracle"
+        )
+        assert_equal(run[0].status, 0, run[0].output + run[0].errors)
+        for event in run[1]:
+            assert_true(event != "tools" and event != "assets", event)
+            if index > 1:
+                assert_true(event != "check" and event != "repository", event)
+        seen.extend(run[1].copy())
+    sort(seen)
+    assert_equal(_words(seen^), "assets check nested repository tools")
+    project.close()
+
+
+def test_dedicated_discovery_failure_keeps_later_stages_unrun() raises:
+    var project = Project()
+    for stage in ["tools", "assets"]:
+        var run = project.make(fail=stage, target="test-tools-discovery")
+        assert_true(run[0].status != 0, run[0].output + run[0].errors)
+        assert_equal(
+            _words(run[1].copy()),
+            "tools" if stage == "tools" else "tools assets",
+        )
     project.close()
 
 

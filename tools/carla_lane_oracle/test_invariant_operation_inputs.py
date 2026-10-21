@@ -30,6 +30,7 @@ import source_contracts as source
 import sum2_guard_contracts as guard
 import test_paired_pin_contracts as paired_helpers
 import test_owner_frame_lexical as owner_helpers
+import _pr780_checker_inverse as pr780_checker_inverse
 
 LANE = 'extensions/carla/lane_refinement.mojo'
 ROAD = 'extensions/carla/road.mojo'
@@ -1002,7 +1003,7 @@ class BoundedOwnerCurrentControls(unittest.TestCase):
                 current_changed.add(path)
             # The current owner has completed before historical reporting is
             # inspected. These views never replace the physical fixture.
-            historical = typed.historical_source(path, raw.decode('utf-8')).encode('utf-8')
+            historical = typed.historical_source(path, cleanup.pr780_successor.predecessor_bytes(path, raw).decode('utf-8')).encode('utf-8')
             if hashlib.sha256(historical).hexdigest() != digest:
                 historical_changed.add(path)
         self.assertEqual(historical_changed, prior | fixtures.WINNER_SHARED_HELPER_SUCCESSORS)
@@ -4442,7 +4443,7 @@ _PR760_CHECKER_SOURCE_EDGES = {'coverage_loop_proofs.py': {'after_sha256': '21e3
              '**operation_args))\n',
              '            result.update(density760_loops(root, include_roots=include_roots, '
              '**operation_args))\n')))},
- 'full_audit_cleanup_contracts.py': {'after_sha256': 'fd21205ab24eb1361aaa8b95a51497e20ae54f229463fe1916f06e2806075924',
+ 'full_audit_cleanup_contracts.py': {'after_sha256': 'f62dbe69ddd5d15bd79aa4b0a8237d9475fe1a00cea06c2f7124c59af237c833',
  'before_sha256': '6138ba2dcac394c716ea9ed32e74e0c6d15857d5c605fc82304d21d0c80fdc69',
  'edits': ((10, 11, (), ('from contextlib import nullcontext\n',)),
            (45, 46, (), ('        from . import lane_order_contracts as lane_order\n',)),
@@ -5175,7 +5176,7 @@ _PR760_CHECKER_SOURCE_EDGES = {'coverage_loop_proofs.py': {'after_sha256': '21e3
              '                            '
              "after_token_sha256=source.token_sha256(current.decode('utf-8')))\n")),
            (4178,
-            5525,
+            5507,
             (),
             ('PR760_IMPLEMENTATION_PREDECESSORS = '
              "{'tools/carla_lane_oracle/pr760-border_parser-predecessor.txt': "
@@ -5218,17 +5219,15 @@ _PR760_CHECKER_SOURCE_EDGES = {'coverage_loop_proofs.py': {'after_sha256': '21e3
              " 'tools/carla_lane_oracle/test_expectation_binding_successor.py': "
              "'e4ad0a6a13196e4a2bf16dae76f78f01d103260c2644632ec36fa74f46dad846',\n",
              " 'tools/carla_lane_oracle/test_pr760_physical_image.py': "
-             "'6df971f2bf09c710a4e6ababc6adeea8995fd2e86c3e6866e548d5b193ae3669',\n",
+             "'1c1565c05cb702df67319cb69641f83c8a761d38ccf06a11de91b037dfe5b1ce',\n",
              " 'tools/carla_lane_oracle/test_pr760_arithmetic_stage.py': "
-             "'ac51eb5dd58c8e3768f2405108203351194d72d63f2b53f4e30d5b2d4d8c26ab',\n",
-             " 'tools/carla_lane_oracle/test_typed_boundary_contracts.py': "
-             "'8dee4d9c4bf42214fb2f10fbdcf71a4ba04398095d8c62a16233ad6fc038fce7'}\n",
+             "'ac51eb5dd58c8e3768f2405108203351194d72d63f2b53f4e30d5b2d4d8c26ab'}\n",
              '\n',
              '\n',
              'def _pr776_bound_inputs():\n',
              '    """Bind the new regression and four diagnostic fixtures to physical bytes."""\n',
              "    return {'tools/carla_lane_oracle/test_pr776_input_successors.py': "
-             "'148a021e1d8173122f231f4e6839d4dfd7bb2bb14d76d70e3725ff310620d2aa',\n",
+             "'af0d9aff27b4f06ce8b102979825d84c177ec78b349dbbb1de4a98423c03f132',\n",
              " 'tools/carla_lane_oracle/test_main_rebase_successor.py': "
              "'2ca5e9f72a38766945e182fbe004e3e64011efa897e22445ab7372102634a792',\n",
              " 'tests/compile_fail/a_gpu_info_is_not_a_bare_int.mojo': "
@@ -5242,7 +5241,7 @@ _PR760_CHECKER_SOURCE_EDGES = {'coverage_loop_proofs.py': {'after_sha256': '21e3
              '\n',
              '\n',
              'def pr776_predecessor_bytes(path, raw):\n',
-             '    """Recover exact earlier comparison bytes for six named PR776 inputs.\n',
+             '    """Recover exact earlier comparison bytes for five named PR776 inputs.\n',
              '\n',
              '    No root is read or projected. This is provenance, not an admission receipt:\n',
              '    the physical owner separately checks every endpoint and rereads actual bytes.\n',
@@ -5783,9 +5782,9 @@ _PR760_CHECKER_SOURCE_EDGES = {'coverage_loop_proofs.py': {'after_sha256': '21e3
              " 'tools/carla_lane_oracle/test_pr760_physical_image.py': "
              "('110861c34786bff5eefcf9503e5c98eb5a53af138dba327e184ee7616e7d98f0',\n",
              '                                                          '
-             "'6df971f2bf09c710a4e6ababc6adeea8995fd2e86c3e6866e548d5b193ae3669',\n",
+             "'1c1565c05cb702df67319cb69641f83c8a761d38ccf06a11de91b037dfe5b1ce',\n",
              '                                                          ((120,\n',
-             '                                                            129,\n',
+             '                                                            128,\n',
              "                                                            ('            '\n",
              '                                                             '
              '"self.assertEqual(self.accepted[\'bindings\'][path], "\n',
@@ -5814,11 +5813,7 @@ _PR760_CHECKER_SOURCE_EDGES = {'coverage_loop_proofs.py': {'after_sha256': '21e3
              '                                                             '
              "'                        '\n",
              '                                                             '
-             '"\'tools/carla_lane_oracle/test_pr760_arithmetic_stage.py\',\\n",\n',
-             '                                                             '
-             "'                        '\n",
-             '                                                             '
-             '"\'tools/carla_lane_oracle/test_typed_boundary_contracts.py\'):\\n",\n',
+             '"\'tools/carla_lane_oracle/test_pr760_arithmetic_stage.py\'):\\n",\n',
              "                                                             '                raw = "
              "'\n",
              '                                                             '
@@ -5828,8 +5823,8 @@ _PR760_CHECKER_SOURCE_EDGES = {'coverage_loop_proofs.py': {'after_sha256': '21e3
              '                                                             '
              "'self.assertEqual(owner.sha(raw), '\n",
              "                                                             'expected)\\n')),\n",
-             '                                                           (240,\n',
-             '                                                            245,\n',
+             '                                                           (239,\n',
+             '                                                            243,\n',
              "                                                            ('            '\n",
              '                                                             '
              "'self.assertEqual(owner.sha(raw), '\n",
@@ -5839,16 +5834,11 @@ _PR760_CHECKER_SOURCE_EDGES = {'coverage_loop_proofs.py': {'after_sha256': '21e3
              "'\n",
              '                                                             '
              "'(owner.pr776_predecessor_bytes(path, '\n",
-             "                                                             'raw) if path in "
-             "(\\n',\n",
+             "                                                             'raw) if path ==\\n',\n",
              '                                                             '
              "'                        '\n",
              '                                                             '
-             '"\'tools/carla_lane_oracle/test_expectation_binding_successor.py\',\\n",\n',
-             '                                                             '
-             "'                        '\n",
-             '                                                             '
-             '"\'tools/carla_lane_oracle/test_typed_boundary_contracts.py\') "\n',
+             '"\'tools/carla_lane_oracle/test_expectation_binding_successor.py\' "\n',
              "                                                             'else raw)\\n',\n",
              "                                                             '            '\n",
              '                                                             '
@@ -5875,23 +5865,7 @@ _PR760_CHECKER_SOURCE_EDGES = {'coverage_loop_proofs.py': {'after_sha256': '21e3
              '                                                               '
              "'owner.pr776_predecessor_bytes(water, '\n",
              '                                                               '
-             "'inputs[water])\\n')),)),\n",
-             " 'tools/carla_lane_oracle/test_typed_boundary_contracts.py': "
-             "('7114f17cce33b84fe226d3559b4d08d1227a6c1cda1f83825441d22e48b51705',\n",
-             '                                                              '
-             "'8dee4d9c4bf42214fb2f10fbdcf71a4ba04398095d8c62a16233ad6fc038fce7',\n",
-             '                                                              ((444,\n',
-             '                                                                446,\n',
-             '                                                                (),\n',
-             "                                                                ('                if "
-             "path == '\n",
-             '                                                                 '
-             '"\'tools/compile_fail_expectations.json\':\\n",\n',
-             '                                                                 '
-             "'                    raw = '\n",
-             '                                                                 '
-             "'audit.pr776_predecessor_bytes(path, '\n",
-             "                                                                 'raw)\\n')),))}\n",
+             "'inputs[water])\\n')),))}\n",
              "    require(path in rows, 'unreviewed PR776 predecessor path: ' + path)\n",
              '    before_sha, after_sha, edits = rows[path]\n',
              "    require(sha(raw) == after_sha, 'unreviewed PR776 endpoint: ' + path)\n",
@@ -5932,10 +5906,6 @@ _PR760_CHECKER_SOURCE_EDGES = {'coverage_loop_proofs.py': {'after_sha256': '21e3
              "    if (path == 'tools/carla_lane_oracle/test_expectation_binding_successor.py'\n",
              '            and sha(raw) == '
              "'e4ad0a6a13196e4a2bf16dae76f78f01d103260c2644632ec36fa74f46dad846'):\n",
-             '        raw = pr776_predecessor_bytes(path, raw)\n',
-             "    if (path == 'tools/carla_lane_oracle/test_typed_boundary_contracts.py'\n",
-             '            and sha(raw) == '
-             "'8dee4d9c4bf42214fb2f10fbdcf71a4ba04398095d8c62a16233ad6fc038fce7'):\n",
              '        raw = pr776_predecessor_bytes(path, raw)\n',
              "    rows = {'tools/carla_lane_oracle/test_common758_current_successor.py': "
              "('010cd7008a96b80e0aea26734dafb7be0068f677c5dd73af8fb15db585e70b9f',\n",
@@ -7120,7 +7090,9 @@ def _checker_source_predecessor(name, raw):
     """
     if type(raw) is not bytes:
         raise AssertionError('checker source must be physical builtin bytes')
+    raw, extension_mapping = pr780_checker_inverse.predecessor(name, raw)
     raw, current_mapping = _pr760_checker_source_predecessor(name, raw)
+    current_mapping = pr780_checker_inverse.compose(current_mapping, extension_mapping)
     lines = raw.decode('utf-8').splitlines(keepends=True)
     result, mapping, cursor = [], {}, 0
     for start, stop, before, after in _TYPED_CHECKER_SOURCE_EDITS[name]:

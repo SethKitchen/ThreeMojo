@@ -442,6 +442,7 @@ class TypedBoundaryContracts(unittest.TestCase):
                 target = ROOT/path
                 self.assertFalse(target.is_symlink())
                 raw = target.read_bytes()
+                raw = audit.pr780_successor.predecessor_bytes(path, raw)
                 if path == 'tools/compile_fail_expectations.json':
                     raw = audit.pr776_predecessor_bytes(path, raw)
                 if path in ('tools/test_conditioned_coverage_loops.py', 'tools/carla_lane_oracle/test_typed_boundary_contracts.py', 'tools/carla_lane_oracle/test_shared_helper_contracts.py', 'tools/carla_lane_oracle/test_scaled_float32_contracts.py', 'tools/carla_lane_oracle/test_common758_current_successor.py', 'tools/carla_lane_oracle/test_coverage_invariant_contracts.py', 'tools/carla_lane_oracle/test_expectation_binding_successor.py'):

@@ -59,6 +59,7 @@ class ExactSuccessorControls(unittest.TestCase):
     def test_typed_witness_adds_only_the_exact_expectation_predecessor_join(self):
         path = 'tools/carla_lane_oracle/test_typed_boundary_contracts.py'
         raw = (ROOT/path).read_bytes()
+        raw = owner.pr780_successor.predecessor_bytes(path, raw)
         prior = owner.pr776_predecessor_bytes(path, raw)
         addition = (b"                if path == 'tools/compile_fail_expectations.json':\n"
                     b'                    raw = audit.pr776_predecessor_bytes(path, raw)\n')

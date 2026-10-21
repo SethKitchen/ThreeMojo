@@ -33,7 +33,13 @@ is not `VOX ` or not version 150. Where it throws a `RangeError` or a
 `TypeError`: a file that ends inside a chunk, and voxels before any
 `SIZE`. Also a `SIZE` whose content is less than its three sizes, which
 three.js reads backward, and a voxel outside its model, which three.js
-writes past its volume.
+writes past its volume. A chunk must stay inside its parent. Chunk content
+is skipped to its declared end after the known fields are read.
+
+**Storage limits.** Each dimension must be from zero through 1024. The
+combined declared cell count of all models is limited to 1 GiB of one-byte
+volume storage. These checks run before volume allocation. Voxel records,
+palettes, meshes, and source bytes are additional storage.
 """
 
 from core.assets import Assets
@@ -50,6 +56,10 @@ from render.srgb import srgb_to_linear
 from render.texture import BILINEAR
 from render.volume_texture import Data3DTexture, VolumeImage
 from std.pathlib import Path
+
+# Bound each dimension before multiplying them for one-byte volume storage.
+comptime MAX_VOX_DIM = 1024
+comptime MAX_VOX_VOLUME_BYTES = 1 << 30
 
 # three.js's `DEFAULT_PALETTE`: 256 colors, red in the low byte.
 comptime DEFAULT_PALETTE: List[UInt32] = [
@@ -354,6 +364,20 @@ def _u32(bytes: List[UInt8], at: Int) raises -> Int:
     return little_endian_u32(bytes, at)
 
 
+def _vox_cells(size_x: Int, size_y: Int, size_z: Int) raises -> Int:
+    """Check volume dimensions before their product or any allocation."""
+    if (
+        size_x < 0
+        or size_x > MAX_VOX_DIM
+        or size_y < 0
+        or size_y > MAX_VOX_DIM
+        or size_z < 0
+        or size_z > MAX_VOX_DIM
+    ):
+        raise Error("VOX: a SIZE chunk's dimensions are out of range")
+    return size_x * size_y * size_z
+
+
 def parse_vox(bytes: List[UInt8]) raises -> List[VoxModel]:
     """Read a VOX file's models, three.js's `VOXLoader.parse`.
 
@@ -374,28 +398,50 @@ def parse_vox(bytes: List[UInt8]) raises -> List[VoxModel]:
     if version != 150:
         raise Error("VOX: version " + String(version) + " is not supported")
     var models = List[VoxModel]()
+    var volume_bytes = 0
+    var ends: List[Int] = [len(bytes)]
     var i = 8
     while i < len(bytes):
+        while len(ends) > 1 and i == ends[len(ends) - 1]:
+            _ = ends.pop()
+        var limit = ends[len(ends) - 1]
+        if limit - i < 12:
+            raise Error("VOX: the file ends inside a chunk header")
         _ = _u32(bytes, i)
         var id = String()
         for k in range(4):  # pragma: no branch
             id += chr(Int(bytes[i + k]))
         var content = _u32(bytes, i + 4)
-        _ = _u32(bytes, i + 8)
+        var children = _u32(bytes, i + 8)
         i += 12
+        if content > limit - i:
+            raise Error("VOX: the file ends inside a chunk's content")
+        var end = i + content
+        if children > limit - end:
+            raise Error("VOX: a chunk's children run past its parent")
+        if children > 0:
+            ends.append(end + children)
         if id == "SIZE":
             if content < 12:
                 raise Error("VOX: a SIZE chunk too short for its sizes")
-            models.append(
-                VoxModel(_u32(bytes, i), _u32(bytes, i + 4), _u32(bytes, i + 8))
-            )
-            i += content
+            var size_x = _u32(bytes, i)
+            var size_y = _u32(bytes, i + 4)
+            var size_z = _u32(bytes, i + 8)
+            var cells = _vox_cells(size_x, size_y, size_z)
+            if cells > MAX_VOX_VOLUME_BYTES - volume_bytes:
+                raise Error("VOX: the models' volumes are too large")
+            volume_bytes += cells
+            models.append(VoxModel(size_x, size_y, size_z))
         elif id == "XYZI":
             require_positive(len(models), "VOX: voxels before any SIZE")
+            if content < 4:
+                raise Error("VOX: an XYZI chunk too short for its count")
             var count = _u32(bytes, i)
             i += 4
-            if i + count * 4 > len(bytes):
+            if count > (len(bytes) - i) // 4:
                 raise Error("VOX: the file ends inside its voxels")
+            if count > (end - i) // 4:
+                raise Error("VOX: an XYZI chunk too short for its voxels")
             ref model = models[len(models) - 1]
             model.data = copy_bytes(bytes, i, count * 4)
             for v in range(count):
@@ -406,16 +452,15 @@ def parse_vox(bytes: List[UInt8]) raises -> List[VoxModel]:
                 )
                 if outside:
                     raise Error("VOX: a voxel outside its model")
-            i += count * 4
         elif id == "RGBA":
             require_positive(len(models), "VOX: a palette before any SIZE")
+            if content < 1024:
+                raise Error("VOX: an RGBA chunk too short for its palette")
             var palette: List[UInt32] = [0]
             for j in range(256):  # pragma: no branch
                 palette.append(UInt32(_u32(bytes, i + j * 4)))
             models[len(models) - 1].palette = palette^
-            i += 1024
-        else:
-            i += content
+        i = end
     return models^
 
 
@@ -429,11 +474,11 @@ comptime _PZ: List[Int] = [0, 1, 1, 1, 1, 1, 0, 1, 0, 1, 1, 0, 0, 1, 0, 1, 1, 1]
 comptime _NZ: List[Int] = [0, 0, 1, 0, 0, 0, 1, 0, 1, 1, 0, 0, 1, 0, 1, 0, 0, 0]
 
 
-def _occupancy(model: VoxModel) -> List[UInt8]:
+def _occupancy(model: VoxModel) raises -> List[UInt8]:
     """Return 255 for each cell a voxel fills and zero for the others,
     `x` fastest, then `y`, then `z`."""
     var cells = List[UInt8](
-        length=model.size_x * model.size_y * model.size_z, fill=0
+        length=_vox_cells(model.size_x, model.size_y, model.size_z), fill=0
     )
     for v in range(model.voxel_count()):
         var x = Int(model.data[v * 4])

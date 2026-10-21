@@ -54,6 +54,7 @@ try:
         from . import typed_boundary_contracts as typed_boundary
         from . import conditioned_cubic_contracts as conditioned_cubic
         from . import pr760_arithmetic_stage as pr760_stage
+        from . import pr780_source_successor as pr780_successor
     else:
         import source_contracts as source
         import sum2_guard_contracts as guard
@@ -68,6 +69,7 @@ try:
         import typed_boundary_contracts as typed_boundary
         import conditioned_cubic_contracts as conditioned_cubic
         import pr760_arithmetic_stage as pr760_stage
+        import pr780_source_successor as pr780_successor
 except ImportError as error:
     raise ContractError('full-audit cleanup successor: dependency import failed') from error
 
@@ -156,6 +158,7 @@ PR760_OWNER_PREDECESSOR_SHA256 = '6138ba2dcac394c716ea9ed32e74e0c6d15857d5c605fc
 DEPENDENCY_TOOL_SHA256 = {'tools/carla_lane_oracle/winner_sign_contracts.py': 'f850902634073364fe2407b00d12e9fdfb2ecfc6cf2a03414269fbb7984a8a7f',
  'tools/carla_lane_oracle/border_parser_contracts.py': '734d7b24aaf4e9f537cd7f0d7c7b8094d9c29106770b66c4a7a24cab74604dd4',
  'tools/carla_lane_oracle/pr760_arithmetic_stage.py': PR760_STAGE_SHA256,
+ 'tools/carla_lane_oracle/pr780_source_successor.py': 'bd70f8aba6c03e0359c2324cad6cf519ce423766037fe778f269def09a6b0c88',
  'tools/carla_lane_oracle/scaled_float32_contracts.py': 'e3a59a9f8d5a9394007c03fab6ac696e04998812dad5843a22e721bfbe57c2a1',
  'tools/affected.py': 'a56194a3e722ad341a42f3defec282b8154f5e4db8340df855f0199ea9830ebb',
  'tools/cache_key.py': 'ec06247feb8fe079c30b6da19fc655ffec363f1ce8e3372d063bf728e8c804c4',
@@ -245,7 +248,8 @@ CHECKER_PATHS = ('tools/carla_lane_oracle/full_audit_cleanup_contracts.py',
                  'tools/carla_lane_oracle/typed_boundary_contracts.py',
                  'tools/carla_lane_oracle/conditioned_cubic_contracts.py',
                  'tools/carla_lane_oracle/scaled_float32_contracts.py',
-                 'tools/carla_lane_oracle/pr760_arithmetic_stage.py')
+                 'tools/carla_lane_oracle/pr760_arithmetic_stage.py',
+                 'tools/carla_lane_oracle/pr780_source_successor.py')
 
 
 def _center_require(ok, message):
@@ -669,6 +673,58 @@ def _code_identity(code):
                  and not callable(getattr(code, name)))
 
 
+def _code_equal(left, right):
+    """Compare complete code data without building two recursive images."""
+    def constant_equal(first, second):
+        kind = type(first)
+        if kind is not type(second):
+            # Both sides must still reject unsupported data after a mismatch.
+            return _code_constant(first) == _code_constant(second)
+        if kind is types.CodeType:
+            return code_equal(first, second)
+        if kind is tuple:
+            if len(first) != len(second):
+                return _code_constant(first) == _code_constant(second)
+            equal = True
+            for one, two in zip(first, second, strict=True):
+                equal = constant_equal(one, two) and equal
+            return equal
+        if kind is frozenset:
+            # Preserve typed elements, float bits and canonical NaN collapse.
+            return _code_constant(first) == _code_constant(second)
+        if kind is float:
+            return struct.pack('>d', first) == struct.pack('>d', second)
+        if kind is complex:
+            return (struct.pack('>dd', first.real, first.imag)
+                    == struct.pack('>dd', second.real, second.imag))
+        if first is Ellipsis:
+            return True
+        if kind is slice:
+            return constant_equal((first.start, first.stop, first.step),
+                                  (second.start, second.stop, second.step))
+        if kind is str or kind is bytes or kind is int or kind is bool or kind is type(None):
+            return first == second
+        return _code_constant(first) == _code_constant(second)
+
+    def code_equal(first, second):
+        if type(first) is not types.CodeType or type(second) is not types.CodeType:
+            return _code_identity(first) == _code_identity(second)
+        equal = True
+        for name in sorted(dir(first)):
+            if name.startswith('co_') and name != 'co_filename':
+                value = getattr(first, name)
+                if not callable(value):
+                    # Visit every field: later unsupported constants must fail.
+                    equal = constant_equal(value, getattr(second, name)) and equal
+        return equal
+
+    try:
+        return code_equal(left, right)
+    finally:
+        # Release the recursive closures without waiting for cyclic collection.
+        del code_equal, constant_equal
+
+
 def _compiled_functions(raw, filename):
     module_code = compile(raw, filename, 'exec', dont_inherit=True, optimize=sys.flags.optimize)
     return {item.co_name: item for item in module_code.co_consts if isinstance(item, types.CodeType)}
@@ -716,7 +772,7 @@ _IMPORT_IDENTITIES[str(_SELF_PATH)] = sha(_SELF_RAW)
 _IMPORT_CODE[str(_SELF_PATH)] = _compiled_functions(_SELF_RAW, __file__)
 _IMPORT_MODULE_CODE[str(_SELF_PATH)] = sys._getframe().f_code
 _IMPORT_DEFAULTS[str(_SELF_PATH)] = _compiled_defaults(_SELF_RAW)
-for _module in (source, guard, _sibling('affected'), _sibling('cache_key'), consumer_ledger, station, shared_helpers, runtime_view, deviation, witness_format, typed_boundary, conditioned_cubic, scaled_float32, pr760_stage):
+for _module in (source, guard, _sibling('affected'), _sibling('cache_key'), consumer_ledger, station, shared_helpers, runtime_view, deviation, witness_format, typed_boundary, conditioned_cubic, scaled_float32, pr760_stage, pr780_successor):
     require(type(getattr(_module, '__file__', None)) is str, 'incomplete dependency module identity')
     _path = Path(_module.__file__).resolve()
     require(Path(__file__).resolve().parents[2] in _path.parents, 'dependency module came from another root')
@@ -765,11 +821,22 @@ _LIVE_FUNCTION_CODE_CODE = _live_function_code.__code__
 
 
 def executing_checker_bindings(root=None):
+    compare = globals().get('_code_equal')
+    require(type(compare) is types.FunctionType and compare.__globals__ is globals()
+            and compare.__defaults__ is None and compare.__kwdefaults__ is None
+            and '__wrapped__' not in compare.__dict__,
+            'executing code comparison helper changed')
+    compare_code = compare.__code__
+    require(_code_identity(compare_code) == _code_identity(
+                _IMPORT_CODE[str(_SELF_PATH)]['_code_equal']),
+            'executing code comparison helper changed')
+    # Later mutation of the live function must not replace this captured code.
+    compare = types.FunctionType(compare_code, globals())
     base = Path(__file__).resolve().parents[2]
     modules = (globals(), vars(source), vars(guard), vars(_sibling('affected')),
                vars(_sibling('cache_key')), vars(consumer_ledger), vars(station), vars(shared_helpers), vars(runtime_view),
                vars(deviation), vars(witness_format), vars(typed_boundary), vars(conditioned_cubic),
-               vars(scaled_float32), vars(pr760_stage))
+               vars(scaled_float32), vars(pr760_stage), vars(pr780_successor))
     result = {}
     for relative, namespace in zip(CHECKER_PATHS, modules, strict=True):
         path = base / relative
@@ -790,14 +857,14 @@ def executing_checker_bindings(root=None):
                 for method, code in expected_methods.items():
                     actual = _live_function_code(getattr(live, method, None))
                     _check_defaults(getattr(live, method, None), _IMPORT_DEFAULTS[key].get(name + '.' + method), relative + ':' + name + '.' + method)
-                    require(actual is not None and _code_identity(actual) == _code_identity(code),
+                    require(actual is not None and compare(actual, code),
                             'executing class method changed: ' + relative + ':' + name + '.' + method)
             elif name.startswith('<'):
                 continue
             else:
                 actual = _live_function_code(live)
                 _check_defaults(live, _IMPORT_DEFAULTS[key].get(name), relative + ':' + name)
-                require(actual is not None and _code_identity(actual) == _code_identity(expected),
+                require(actual is not None and compare(actual, expected),
                         'executing function changed: ' + relative + ':' + name)
         if root is not None:
             supplied = _regular(root, relative)
@@ -808,6 +875,7 @@ def executing_checker_bindings(root=None):
     conditioned_cubic.verify_authority()
     pr760_stage.verify_stage_data()
     _pr760_authority_data()
+    pr780_successor.verify_data()
     return result
 
 
@@ -3470,6 +3538,9 @@ def _witness_format_bindings(root, *, _snapshots=None, _operation=None):
 
 def _historical_typed_text(path, text, *, pr760=False):
     """Pure named provenance projection; never replace a captured input."""
+    extension = pr780_successor._data_snapshot()['edges'].get(path)
+    if extension is not None and sha(text) == extension['after_sha256']:
+        text = pr780_successor.predecessor_bytes(path, text.encode('utf-8')).decode('utf-8')
     if pr760 and path in pr760_stage.CARLA_REGISTRY_PATHS:
         text = pr760_stage.predecessor_source(path, text)
     return typed_boundary.historical_source(str(path), text)
@@ -3558,8 +3629,11 @@ def reviewed_typed_text(root, path, text, *, _operation=None, _inputs=None, _inp
     path = str(path)
     edge = (pr760_stage.EDGES.get(path) if path in pr760_stage.CARLA_REGISTRY_PATHS
             else typed_boundary.EDGES.get(path))
-    if edge is None:
+    extension = pr780_successor._data_snapshot()['edges'].get(path)
+    if edge is None and extension is None:
         return text
+    if edge is None:
+        edge = extension
     _public_admission = None
     try:
         if _inputs is None and _operation is None:
@@ -3576,13 +3650,17 @@ def reviewed_typed_text(root, path, text, *, _operation=None, _inputs=None, _inp
                 require(explicit_operation is None or explicit_operation is _operation,
                         'typed source operation differs from borrowed owner')
         require((_inputs is None) == (_input_owner is None), 'incomplete typed input owner')
-        new_endpoint = path in pr760_stage.CARLA_REGISTRY_PATHS and source.token_sha256(text) == edge['after_token_sha256']
-        if not (new_endpoint or typed_boundary.is_current(path, text) or
+        extended = (extension is not None and
+            source.token_sha256(text) == extension['after_token_sha256'])
+        new_endpoint = path in pr760_stage.CARLA_REGISTRY_PATHS and (extended or
+            source.token_sha256(text) == edge['after_token_sha256'])
+        if not (extended or new_endpoint or typed_boundary.is_current(path, text) or
                 source.token_sha256(text) == edge['after_token_sha256']):
             return text
         _operation_check(_operation, root)
         raw = _observe_bytes(root, path, _regular(root, path).read_bytes(), _operation=_operation)
-        require((sha(raw) == edge['after_sha256']) if new_endpoint else typed_boundary.is_current(path, raw),
+        require((sha(raw) == extension['after_sha256']) if extended else
+                (sha(raw) == edge['after_sha256']) if new_endpoint else typed_boundary.is_current(path, raw),
                 'typed physical input is not the exact reviewed endpoint: ' + path)
         physical_text = raw.decode('utf-8')
         require(type(text) is str and source.token_sha256(text) == source.token_sha256(physical_text),
@@ -3948,10 +4026,13 @@ def _reviewed_lane_observation(root, text, expected_raw, *, _operation=None):
 
 def reviewed_sources(root, texts):
     """Project one supplied operation; historical pass-through grants no admission."""
+    extensions = pr780_successor._data_snapshot()['edges']
     changed = {p for p, text in texts.items() if
                (p in SOURCE_PATHS and source.token_sha256(text) != BEFORE_TOKEN_SHA256[p])
                or (p in pr760_stage.CARLA_REGISTRY_PATHS and
-                   source.token_sha256(text) == pr760_stage.EDGES[p]['after_token_sha256'])}
+                   source.token_sha256(text) == pr760_stage.EDGES[p]['after_token_sha256'])
+               or (p in extensions and source.token_sha256(text) ==
+                   extensions[p]['after_token_sha256'])}
     if not changed:
         return dict(texts)
     physical_inputs = {}
@@ -4075,14 +4156,15 @@ def typed_successor_edges(root, *, _operation=None):
                                      _operation=_operation)
             qualification = (current_image and path ==
                 'tools/carla_lane_oracle/test_witness_format_contracts.py')
-            projected = (pr760_stage.predecessor_source(path, current.decode('utf-8'))
+            retained = pr780_successor.predecessor_bytes(path, current)
+            projected = (pr760_stage.predecessor_source(path, retained.decode('utf-8'))
                 if current_image and path in pr760_stage.EXAMPLE_PATHS else
                 qualification_predecessor_bytes(path, current).decode('utf-8')
-                if qualification else current.decode('utf-8'))
+                if qualification else retained.decode('utf-8'))
             require(typed_boundary.is_current(path, projected),
                     'typed successor physical endpoint changed: ' + path)
             edge = typed_boundary.edge(path)
-            if current_image and (path in pr760_stage.EXAMPLE_PATHS or qualification):
+            if current_image and (path in pr760_stage.EXAMPLE_PATHS or qualification or current != retained):
                 edge.update(after_sha256=sha(current),
                             after_token_sha256=source.token_sha256(current.decode('utf-8')))
             edge['scope'] = 'explicit historical provenance; current typed API admission'
@@ -4227,6 +4309,9 @@ def pr776_predecessor_bytes(path, raw):
     executing_checker_bindings()
     require(type(path) is str and type(raw) is bytes,
             'PR776 predecessor requires builtin path and immutable bytes')
+    extension = pr780_successor._data_snapshot()['edges'].get(path)
+    if extension is not None and sha(raw) == extension['after_sha256']:
+        raw = pr780_successor.predecessor_bytes(path, raw)
     rows = {'tests/test_water.mojo': ('ffe2ab6e56ea73498bc8f2f65f5dd80bb02f6e6ac72024c082a6920878ddf86a',
                            '179f2cb6ef20a44c9f862453d56fdb967b5ba1c6978996ecc750f7da3a4e5d7a',
                            ((37, 39, (), ('    _quantize_rows,\n', '    _quantized_image,\n')),
@@ -4711,6 +4796,9 @@ def qualification_predecessor_bytes(path, raw):
     executing_checker_bindings()
     require(type(path) is str and type(raw) is bytes,
             'qualification predecessor requires builtin source bytes')
+    extension = pr780_successor._data_snapshot()['edges'].get(path)
+    if extension is not None and sha(raw) == extension['after_sha256']:
+        raw = pr780_successor.predecessor_bytes(path, raw)
     if (path == 'tools/carla_lane_oracle/test_expectation_binding_successor.py'
             and sha(raw) == 'e4ad0a6a13196e4a2bf16dae76f78f01d103260c2644632ec36fa74f46dad846'):
         raw = pr776_predecessor_bytes(path, raw)
@@ -5308,6 +5396,11 @@ def stage_witness_predecessor_bytes(raw):
     This exact inverse supplies no admission, filesystem or receipt authority.
     """
     executing_checker_bindings()
+    extension_path = 'tools/carla_lane_oracle/test_pr760_arithmetic_stage.py'
+    extension = pr780_successor._data_snapshot()['edges'][extension_path]
+    if (type(raw) is bytes and
+            sha(raw) == extension['after_sha256']):
+        raw = pr780_successor.predecessor_bytes(extension_path, raw)
     if type(raw) is bytes and sha(raw) == 'ac51eb5dd58c8e3768f2405108203351194d72d63f2b53f4e30d5b2d4d8c26ab':
         raw = pr776_predecessor_bytes('tools/carla_lane_oracle/test_pr760_arithmetic_stage.py', raw)
     before_sha, after_sha, edits = ('b6d5ecc453ebe4c1f8d5f07e1f029b09f414dea887480fa6cf07ccd85bfacdb3',
@@ -5395,17 +5488,33 @@ def _pr760_candidate_bindings(root, *, _snapshots=None, _operation=None):
                 for path, digest in expected.items()), 'malformed PR760 source-image pins')
         successor_pins = _pr776_input_pins()
         require(set(successor_pins) <= set(expected), 'PR776 successor misses fixed predecessor')
+        extension_data = pr780_successor._data_snapshot()
         prior_inputs = {}
+        extended_pins = {path: edge['after_sha256']
+                         for path, edge in extension_data['edges'].items()}
+        require(set(extended_pins) <= set(expected) | set(_pr776_bound_inputs()),
+                'PR780 source successor misses a fixed predecessor')
+        for path, edge in extension_data['edges'].items():
+            require(edge['before_sha256'] == successor_pins.get(path,
+                    expected.get(path, _pr776_bound_inputs().get(path))),
+                    'PR780 source successor predecessor join changed: ' + path)
         for path, digest in expected.items():
             raw = observe(path)
-            require(sha(raw) == successor_pins.get(path, digest),
+            require(sha(raw) == extended_pins.get(path, successor_pins.get(path, digest)),
                     'PR760 physical input changed: ' + path)
-            if path in successor_pins:
-                prior_inputs[path] = pr776_predecessor_bytes(path, raw)
-                require(sha(prior_inputs[path]) == digest,
-                        'PR776 successor misses fixed PR760 input: ' + path)
+            retained = pr780_successor.predecessor_bytes(path, raw)
+            prior_inputs[path] = (pr776_predecessor_bytes(path, retained)
+                                  if path in successor_pins else retained)
+            require(sha(prior_inputs[path]) == digest,
+                    'PR780/PR776 successor misses fixed PR760 input: ' + path)
         for path, digest in _pr776_bound_inputs().items():
-            require(sha(observe(path)) == digest, 'PR776 bound input changed: ' + path)
+            raw = observe(path)
+            require(sha(raw) == extended_pins.get(path, digest), 'PR776 bound input changed: ' + path)
+            require(sha(pr780_successor.predecessor_bytes(path, raw)) == digest,
+                    'PR780 successor misses fixed PR776 input: ' + path)
+        pr780_successor.verify_sources({path: image[path] for path in extended_pins})
+        for path, digest in extension_data['bound_inputs'].items():
+            require(sha(observe(path)) == digest, 'PR780 bound input changed: ' + path)
         stage_witness = 'tools/carla_lane_oracle/test_pr760_arithmetic_stage.py'
         stage_prior = stage_witness_predecessor_bytes(image[stage_witness])
         require(stage_prior == image['tools/carla_lane_oracle/pr760-test_pr760_arithmetic_stage-predecessor.txt'],
@@ -5422,7 +5531,8 @@ def _pr760_candidate_bindings(root, *, _snapshots=None, _operation=None):
              for path in pr760_stage.REGISTRY_INPUT_SHA256})
         typed_texts = {path: (previous[path] if path in pr760_stage.EXAMPLE_PATHS
                               else qualification_predecessor_bytes(path, image[path]).decode('utf-8')
-                              if path == 'tools/carla_lane_oracle/test_witness_format_contracts.py' else image[path].decode('utf-8'))
+                              if path == 'tools/carla_lane_oracle/test_witness_format_contracts.py'
+                              else prior_inputs.get(path, image[path]).decode('utf-8'))
                        for path in typed_boundary.SOURCE_PATHS}
         typed_previous = typed_boundary.verify_sources(typed_texts)
         for path in pr760_stage.CARLA_REGISTRY_PATHS:
@@ -5438,7 +5548,7 @@ def _pr760_candidate_bindings(root, *, _snapshots=None, _operation=None):
         # #738 sees its original exact source/provider bytes solely as pure
         # comparison inputs. Nothing is published as a synthetic filesystem.
         helper_paths = set(shared_helpers.SOURCE_PATHS) | set(shared_helpers.PROVIDERS)
-        helper_texts = {path: previous.get(path, image[path].decode('utf-8'))
+        helper_texts = {path: previous.get(path, prior_inputs.get(path, image[path]).decode('utf-8'))
                         for path in helper_paths}
         active = shared_helpers.verify_correspondence(helper_texts)
         require(set(active) == set(shared_helpers.SOURCE_PATHS),

@@ -47,8 +47,9 @@ comptime _SYMMETRY_EPSILON = Float32(0.01)
 # three.js's `epsilon2`.
 comptime _IDENTITY_EPSILON = Float32(0.1)
 # The component three.js gives a half turn's axis when the largest
-# diagonal entry is too small to divide by: its literal, not the exact
-# square root of a half.
+# diagonal entry is too small to divide by. three.js writes the literal
+# 0.7071; this port keeps a closer approximation of the exact square
+# root of a half instead.
 comptime _HALF_ROOT_TWO = Float32(0.707106781)
 
 

@@ -17,6 +17,12 @@ radii. `record_width_height` writes a rectangle's width and height.
 checks for a positive radius, three segments, and positive or finite box
 extents. A count below one is `require_at_least_one` in
 `math.curve_checks`.
+
+## Input validation difference
+
+Shape dimensions must be finite before vertices are generated. NaN and
+either infinity raise an error. This differs from the unchecked three.js
+r186 input path. Finite supported inputs keep their existing behavior.
 """
 
 from core.buffer_attribute import BufferAttribute
@@ -28,6 +34,7 @@ from core.buffer_geometry import (
     GeometryType,
 )
 from core.user_data import UserData
+from math.finite import require_finite
 from std.math import isfinite
 from units.si import Angle, Length
 
@@ -243,9 +250,12 @@ def require_positive_radius(radius: Float32, name: String) raises:
         name: The solid, such as `sphere` or `tube`.
 
     Raises:
-        Error: If the radius is zero or negative.
+        Error: If the radius is not finite, or is zero or negative.
     """
-    if radius <= 0:
+    require_finite(Float64(radius), "A " + name + " needs a finite radius")
+    # `not (radius > 0)`, not `radius <= 0`: NaN compares false both ways,
+    # so the <= form would let it through.
+    if not (radius > 0):
         raise Error("A " + name + " needs a positive radius")
 
 

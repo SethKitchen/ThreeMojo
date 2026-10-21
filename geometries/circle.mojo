@@ -31,6 +31,12 @@ A ring with an inner radius of zero is a disk, as three.js's `RingGeometry`
 accepts it. Its inner row is then every vertex at the center, and the first
 triangle of each inner cell has two corners there and no area. A rasterizer
 draws nothing for such a triangle, so the disk looks as `circle` draws it.
+
+## Input validation difference
+
+Shape dimensions must be finite before vertices are generated. NaN and
+either infinity raise an error. This differs from the unchecked three.js
+r186 input path. Finite supported inputs keep their existing behavior.
 """
 
 from core.buffer_geometry import (
@@ -38,8 +44,9 @@ from core.buffer_geometry import (
     CIRCLE_GEOMETRY,
     RING_GEOMETRY,
 )
-from core.ordinal import require_non_negative, require_positive
+from core.ordinal import require_positive
 from geometries.grid import append_cell
+from math.finite import require_finite
 from geometries.surface import (
     indexed_surface,
     record_kind,
@@ -188,14 +195,18 @@ def ring(
         rows from the inner edge outwards, `theta_segments + 1` to a row.
 
     Raises:
-        Error: If the inner radius is negative, the outer radius is not
-            more than it, either segment count is too small, or the sweep
-            is not positive or is more than a turn.
+        Error: If the inner radius is not finite or is negative, the outer
+            radius is not finite or not more than it, either segment count
+            is too small, or the sweep is not positive or is more than a
+            turn.
     """
-    require_non_negative(
-        inner_radius.value, "A ring's inner radius cannot be negative"
-    )
-    if outer_radius.value <= inner_radius.value:
+    require_finite(Float64(inner_radius.value), "A ring needs finite radii")
+    require_finite(Float64(outer_radius.value), "A ring needs finite radii")
+    # `not (x >= 0)`, not `x < 0`: NaN compares false both ways, so the
+    # < form would let it through.
+    if not (inner_radius.value >= 0):
+        raise Error("A ring's inner radius cannot be negative")
+    if not (outer_radius.value > inner_radius.value):
         raise Error("A ring's outer radius must be more than its inner radius")
     require_three_segments(
         theta_segments, "A ring needs at least three segments around"

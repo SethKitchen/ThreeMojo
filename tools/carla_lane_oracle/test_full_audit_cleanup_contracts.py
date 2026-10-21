@@ -623,7 +623,8 @@ class FullAuditCleanupContracts(unittest.TestCase):
         self.assertEqual(image['status'], 'closed-candidate')
         self.assertIs(image['public_admission'], False)
         for path in set(historical_supplemental) & set(stage.CARLA_REGISTRY_PATHS):
-            raw = (self.root/path).read_bytes()
+            raw = cleanup.pr780_successor.predecessor_bytes(
+                path, (self.root/path).read_bytes())
             prior = stage.predecessor_source(path, raw.decode('utf-8'))
             self.assertEqual(cleanup.sha(raw), stage.EDGES[path]['after_sha256'])
             self.assertEqual(cleanup.sha(prior), historical_supplemental[path])
@@ -682,6 +683,17 @@ class FullAuditCleanupContracts(unittest.TestCase):
         self.assertEqual(set(cleanup._pr776_bound_inputs()), bound_paths)
         for path in bound_paths:
             physical[path] = cleanup.sha((self.root/path).read_bytes())
+        for path, edge in cleanup.pr780_successor.EDGES.items():
+            raw = (self.root/path).read_bytes()
+            prior = cleanup.pr780_successor.predecessor_bytes(path, raw)
+            self.assertEqual(cleanup.sha(prior), edge['before_sha256'])
+            self.assertEqual(edge['before_sha256'],
+                             cleanup._pr776_input_pins().get(path, image['inputs'].get(
+                                 path, cleanup._pr776_bound_inputs().get(path))))
+            physical[path] = cleanup.sha(raw)
+        for path, digest in cleanup.pr780_successor.BOUND_INPUTS.items():
+            self.assertEqual(cleanup.sha((self.root/path).read_bytes()), digest)
+            physical[path] = digest
         physical.update(cleanup.PR760_IMPLEMENTATION_PREDECESSORS)
         physical.update(cleanup.PR760_IMPLEMENTATION_SUCCESSORS)
         physical.update({cleanup.PR760_IMAGE: cleanup.PR760_IMAGE_SHA256,
@@ -3177,10 +3189,11 @@ class CacheInputViewCurrentControls(unittest.TestCase):
         expected_paths = {seed.MODULE, *self.seed_record['unchanged_inputs'], utf8}
         physical = {name: (self.root/name).read_bytes() for name in expected_paths}
         def retained(name):
-            text = physical[name].decode('utf-8')
+            raw = cleanup.pr780_successor.predecessor_bytes(name, physical[name])
+            text = raw.decode('utf-8')
             if name in stage.CARLA_REGISTRY_PATHS:
                 edge = stage.EDGES[name]
-                self.assertEqual(cleanup.sha(physical[name]), edge['after_sha256'])
+                self.assertEqual(cleanup.sha(raw), edge['after_sha256'])
                 text = stage.predecessor_source(name, text)
                 self.assertEqual(cleanup.sha(text), edge['before_sha256'])
             return cleanup.typed_boundary.historical_source(name, text)
