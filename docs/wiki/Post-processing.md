@@ -717,7 +717,7 @@ A thin feature locks the history against the clip where the depth did not change
 
 `bilateral_blur_pass` is three.js's `BilateralBlurNode`: the Gaussian taps of `gaussian_coefficients`, across and then down. Each tap is weighed down by how unlike the center its luminance is, by `sigma_color`.
 
-`depth_aware_blur_pass` is three.js's `depthAwareBlur`: five Gaussian taps along a step. Each tap is weighed down by its distance in depth from the center, relative to `radius`. three.js filters the red channel alone. The pass runs it across and then down over red, green and blue alike.
+`depth_aware_blur_pass` is three.js's `depthAwareBlur`: five Gaussian taps along a step. Each tap is weighed down by its distance in depth from the center, relative to `radius`. three.js filters the red channel alone. The pass runs it across and then down over red, green and blue alike. A side above 16777216 pixels scales a bilinear sample in `Float64`.
 
 `depth_aware_blend_pass` is three.js's `depthAwareBlend`. It reads its blend texture from the assets, as a texture pass does. Eight Poisson taps find the neighbors that share the pixel's depth. Their mean offset pushes the read of the blend texture. three.js calls `normalize` on the mean and does not keep the result. So the push is the mean offset, and this port keeps that.
 
