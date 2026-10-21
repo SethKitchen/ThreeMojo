@@ -304,7 +304,7 @@ three.js sets a speed multiplier on Shift and never reads it. The port leaves it
 | `vertical_min`, `vertical_max` | 0, a half turn | That range, as an `Angle`. |
 | `key_timeout` | 0.3 s | See [Held keys](#held-keys). |
 
-The direction is a latitude and a longitude, as in three.js. The latitude stays within 85 degrees of level. `look_at(camera, point)` turns the camera and reads the new direction. The camera keeps its `up`.
+The direction is a latitude and a longitude, as in three.js. The latitude stays within 85 degrees of level. `look_at(camera, point)` turns the camera and reads the new direction. The camera keeps its `up`. The pixels from the middle of the view are a `Float64`.
 
 A terminal reports the pointer only while a button is held. The camera keeps turning toward where the pointer last was. A browser's camera does the same while the pointer rests.
 

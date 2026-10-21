@@ -36,6 +36,7 @@ from math.vector3 import Vector3
 from std.testing import (
     TestSuite,
     assert_almost_equal,
+    assert_equal,
     assert_false,
     assert_raises,
     assert_true,
@@ -210,6 +211,23 @@ def test_the_defaults_are_three_js() raises:
         controls.latitude().to(DEGREE), Float32(0), atol=TOLERANCE
     )
     _same_direction(controls.longitude(), 180)
+
+
+def test_a_wide_view_keeps_the_center_pixel_off_center() raises:
+    var controls = FirstPersonControls(_camera())
+    var wide = 16777217
+    var middle = wide // 2
+    controls.handle(InputEvent(POINTER_MOVE, x=middle, y=middle), wide, wide)
+    var from_middle = Float32(Float64(middle) - Float64(wide) / 2)
+    assert_equal(controls._pointer_x, from_middle)
+    assert_equal(controls._pointer_y, from_middle)
+    assert_true(from_middle < 0)
+    controls.handle(InputEvent(POINTER_MOVE, x=wide - 1, y=0), wide, wide)
+    assert_equal(
+        controls._pointer_x,
+        Float32(Float64(wide - 1) - Float64(wide) / 2),
+    )
+    assert_equal(controls._pointer_y, Float32(-Float64(wide) / 2))
 
 
 def test_the_pointer_and_a_key_move_as_three_js_does() raises:
