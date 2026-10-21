@@ -22,7 +22,7 @@ from extensions.water.filter import (
 from render.png import DecodedImage
 from math.sine import fraction
 from render.srgb import srgb_to_linear
-from std.math import floor
+from std.math import floor, isfinite
 
 
 struct PebbleSample(ImplicitlyCopyable):
@@ -179,11 +179,16 @@ struct PebbleBed(Movable, PebbleTexels):
             pixels: `width * height * 3` linear channels, row-major.
 
         Raises:
-            Error: If a dimension is not positive, or the buffer length
-                does not match the dimensions.
+            Error: If a dimension is not positive, the texel buffer does
+                not fit in an integer, or the buffer length does not match
+                the dimensions.
         """
         require_pebble_width(width)
         require_pebble_height(height)
+        # Three floats a texel. A side of 2^31 wraps that product, so an
+        # empty buffer looks complete.
+        if width > (Int.MAX // 3) // height:
+            raise Error("A pebble image is larger than this port builds")
         require_pebble_length(len(pixels), width * height * 3)
         self.width = width
         self.height = height
@@ -283,8 +288,10 @@ def sample_pebble(bed: PebbleBed, u: Float32, v: Float32) -> PebbleSample:
         v: Vertical texture coordinate. It repeats every 1.
 
     Returns:
-        The filtered linear color.
+        The filtered linear color. A coordinate that is not finite is black.
     """
+    if not isfinite(u) or not isfinite(v):
+        return PebbleSample(0, 0, 0)
     var fu = fraction(u)
     var fv = fraction(v)
     var x = fu * Float32(bed.width) - 0.5
@@ -377,6 +384,8 @@ def _sample_level[
 ](bed: B, level: Int, u: Float32, v: Float32) -> PebbleSample:
     var w = bed.pebble_width(level)
     var h = bed.pebble_height(level)
+    if not isfinite(u) or not isfinite(v):
+        return PebbleSample(0, 0, 0)
     var fu = fraction(u)
     var fv = fraction(v)
     var x = fu * Float32(w) - 0.5

@@ -103,7 +103,7 @@ The water shades the pebble bed under the surface, not the scene's geometry unde
 
 `SpectrumResolution` is a power of two from 4 through 256. The still uses 256, the same ocean grid as the page. The patch is 4.6 meters. The mean depth is 1.6 meters. The root-mean-square slope is 0.078. Mipmaps and anisotropy filter the ocean, the caustics and the pebbles.
 
-The caustic grid in the still is 64. The page uses 256. A side whose texel buffer does not fit in an integer is refused. A ray grid whose vertex buffer does not fit in an integer is refused. A caustic triangle that does not fit in an integer lies past the texture.
+The caustic grid in the still is 64. The page uses 256. A side whose texel buffer does not fit in an integer is refused. A ray grid whose vertex buffer does not fit in an integer is refused. A caustic triangle that does not fit in an integer lies past the texture. A pebble image whose texel buffer does not fit in an integer is refused.
 
 ## Frame
 
@@ -112,6 +112,8 @@ The caustic grid in the still is 64. The page uses 256. A side whose texel buffe
 ## Sampling and light transport
 
 Texture coordinates name texel centers at `(i + 0.5) / n`, as in WebGL. Bilinear, cubic and mip samples use the same convention. Caustic triangles use a half-open edge rule, so a shared edge receives light once. A flat surface under a vertical sun has unit caustic intensity. An image side above 8388608 pixels measures that center in `Float64`. A surface position that does not fit in an integer repeats, and one that is not finite is flat.
+
+A pebble coordinate that is not finite is black.
 
 Underwater absorption and ripple lookup follow the refracted sun direction. The sun is not treated as vertical when it is near the horizon. Invalid spectrum and glare sizes are refused before their grids are allocated.
 

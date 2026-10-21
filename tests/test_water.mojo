@@ -1088,9 +1088,23 @@ def test_water_samples_use_texture_texel_centers() raises:
     var bed = PebbleBed(2, 1, pixels^)
     assert_almost_equal(sample_pebble(bed, 0.25, 0.5).r, Float32(1))
     assert_almost_equal(sample_pebble(bed, 0.25, 0.5).g, Float32(0))
+    var missing_u = sample_pebble(bed, nan[DType.float32](), 0.5)
+    assert_almost_equal(missing_u.r, 0)
+    var missing_v = sample_pebble(bed, 0.25, nan[DType.float32]())
+    assert_almost_equal(missing_v.g, 0)
     assert_almost_equal(
         sample_pebble_grad(bed, 0.75, 0.5, 0, 0, 0, 0).g, Float32(1)
     )
+    var missing_grad = sample_pebble_grad(
+        bed, inf[DType.float32](), 0.5, 0, 0, 0, 0
+    )
+    assert_almost_equal(missing_grad.b, 0)
+    var missing_grad_v = sample_pebble_grad(
+        bed, 0.25, nan[DType.float32](), 0, 0, 0, 0
+    )
+    assert_almost_equal(missing_grad_v.r, 0)
+    with assert_raises(contains="larger than this port"):
+        _ = PebbleBed(1 << 31, 1 << 31, List[Float32]())
 
 
 def test_underwater_sun_keeps_its_incident_direction() raises:
