@@ -853,6 +853,51 @@ def row_coordinate(v: Float32, flip_y: Bool) -> Float32:
     return v
 
 
+@always_inline
+def _nearest_texel(unit: Float32, count: Int) -> Int:
+    """Return the texel a nearest sample reads.
+
+    A count past 2^24 is not that count in `Float32`, so the product is
+    made in `Float64` and cut there. A smaller count keeps the `Float32`
+    product.
+
+    Args:
+        unit: The coordinate, in image fractions.
+        count: The texels on that side.
+
+    Returns:
+        The texel index, before wrapping.
+
+    Raises:
+        Error: Never.
+    """
+    if count > 16777216:
+        return Int(floor(Float64(unit) * Float64(count)))
+    return Int(floor(unit * Float32(count)))
+
+
+@always_inline
+def _bilinear_place(unit: Float32, count: Int) -> Float32:
+    """Return `unit * count - 0.5`, where texel centers are integers.
+
+    A count past 2^24 is scaled in `Float64` before the half is taken
+    off. Casting the product first rounds the center onto the neighbor.
+
+    Args:
+        unit: The coordinate, in image fractions.
+        count: The texels on that side.
+
+    Returns:
+        The place, in texels from a center.
+
+    Raises:
+        Error: Never.
+    """
+    if count > 16777216:
+        return Float32(Float64(unit) * Float64(count) - 0.5)
+    return unit * Float32(count) - 0.5
+
+
 def fetch_row(y: Int, height: Int, flip_y: Bool) -> Int:
     """Return the stored row, from the top, that GLSL's `texelFetch` reads
     for row `y`: the row `texture` reads at `v = (y + 0.5) / height`. Pure,
@@ -1717,6 +1762,7 @@ struct Texture(Movable):
         rejected rather than clamped. `sample_level` is the other interface:
         it takes a fractional level of the kind a footprint produces, where
         landing outside the chain is ordinary and clamping is the answer.
+        A side above 16777216 texels is scaled in `Float64`.
 
         Args:
             u: Horizontal coordinate, 0 at the left edge.
@@ -1766,15 +1812,15 @@ struct Texture(Movable):
 
         if filter == NEAREST:
             return self._wrapped_texel(
-                Int(floor(u * Float32(wide))),
-                Int(floor(from_top * Float32(tall))),
+                _nearest_texel(u, wide),
+                _nearest_texel(from_top, tall),
                 level,
             )
 
         # Texel centers are at half-integers, so shift the sample into a space
         # where they are at integers, and blend between the two either side.
-        var across = u * Float32(wide) - 0.5
-        var down = from_top * Float32(tall) - 0.5
+        var across = _bilinear_place(u, wide)
+        var down = _bilinear_place(from_top, tall)
         var column = Int(floor(across))
         var row = Int(floor(down))
         # The four texels are two columns and two rows, so each is wrapped

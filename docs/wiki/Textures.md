@@ -19,7 +19,7 @@ float_texture(width, height, floats, wrap=CLAMP, filter=BILINEAR, mipmapped=Fals
 float_texture_from(hdr_image, wrap=CLAMP, filter=BILINEAR, mipmapped=False, alpha=COVERAGE)
 ```
 
-Every texture clamps its edges by default, as three.js's `ClampToEdgeWrapping` does. Pass `REPEAT` to tile a texture. The glTF, OBJ, FBX and Collada loaders repeat by default, as their three.js loaders do.
+Every texture clamps its edges by default, as three.js's `ClampToEdgeWrapping` does. Pass `REPEAT` to tile a texture. The glTF, OBJ, FBX and Collada loaders repeat by default, as their three.js loaders do. A side above 16777216 texels is scaled in `Float64`.
 
 `checkerboard` builds a test pattern. `texture_from` takes a `DecodedImage` from the PNG reader. `Texture` takes row-major RGBA bytes from the top. The next three are below. The float textures are in [HDR images](#hdr-images).
 

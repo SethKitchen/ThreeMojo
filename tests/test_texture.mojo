@@ -400,6 +400,29 @@ def smooth_quad() raises -> Texture:
     return Texture(2, 2, pixels^, CLAMP, BILINEAR)
 
 
+def test_a_wide_texture_reads_its_center_texel() raises:
+    var count = 16777217
+    var wide = List[UInt8](length=count * 4, fill=0)
+    var slot = 8388608 * 4
+    wide[slot - 4 + 3] = 255
+    wide[slot] = 255
+    wide[slot + 3] = 255
+    var row = Texture(count, 1, wide^, CLAMP, BILINEAR, LINEAR, mipmapped=False)
+    assert_equal(row.sample_at(0.5, 0.5, 0).r, 1)
+    row.mag_filter = NEAREST
+    _ = row.sample_at(0.5, 0.5, 0)
+    var tall_pixels = List[UInt8](length=count * 4, fill=0)
+    tall_pixels[slot - 4 + 3] = 255
+    tall_pixels[slot] = 255
+    tall_pixels[slot + 3] = 255
+    var column = Texture(
+        1, count, tall_pixels^, CLAMP, BILINEAR, LINEAR, mipmapped=False
+    )
+    assert_equal(column.sample_at(0.5, 0.5, 0).r, 1)
+    column.mag_filter = NEAREST
+    _ = column.sample_at(0.5, 0.5, 0)
+
+
 def test_a_bilinear_sample_on_a_texel_center_is_that_texel() raises:
     # Texel centers sit at 0.25 and 0.75 on a 2x2 image. Landing exactly on
     # one must give it back unblended, or every image is offset.
