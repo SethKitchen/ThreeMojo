@@ -552,7 +552,9 @@ struct Curve(Copyable, Movable):
         curve instead of one point past its end.
         """
         var last = len(self.points) - 1
-        var segment = Int(floor(Float32(last) * t))
+        # `Float64`, as JavaScript's number is. A `Float32` product drops
+        # whole segments past 2^24, so `t` of one misses the last point.
+        var segment = Int(floor(Float64(last) * Float64(t)))
         if segment > last - 1:
             segment = last - 1
         return segment
@@ -566,8 +568,9 @@ struct Curve(Copyable, Movable):
         stored points stand in where the spline has nothing beyond them.
         """
         var last = len(self.points) - 1
+        var span = Float64(last) * Float64(t)
         var segment = self._spline_segment(t)
-        var weight = Float32(last) * t - Float32(segment)
+        var weight = Float32(span - Float64(segment))
         var before = self.points[max(segment - 1, 0)]
         var start = self.points[segment]
         var end = self.points[segment + 1]

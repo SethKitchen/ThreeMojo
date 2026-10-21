@@ -318,9 +318,11 @@ struct Curve3(Copyable, Movable):
         """Return the Catmull-Rom segment `t` falls in, as a cubic, three.js's
         `CatmullRomCurve3.getPoint` up to its last line."""
         var count = len(self.points)
-        var p = Float32(self.segments()) * t
+        # `Float64`, as JavaScript's number is. A `Float32` product drops
+        # whole segments past 2^24, so `t` of one misses the last point.
+        var p = Float64(self.segments()) * Float64(t)
         var index = Int(floor(p))
-        var weight = p - Float32(index)
+        var weight = Float32(p - Float64(index))
         var p0: Vector3
         var p1: Vector3
         var p2: Vector3

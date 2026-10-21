@@ -208,6 +208,15 @@ def test_spline_passes_through_its_points() raises:
     assert_point(through.point(1), 3, 1)
 
 
+def test_a_long_spline_ends_on_its_last_point() raises:
+    # A `Float32` count of 16777217 is 16777216, so `t` of one used to
+    # stop on the point before the last.
+    var count = 16777218
+    var points = List[Vector2](length=count, fill=Vector2(0, 0))
+    points[count - 1] = Vector2(1, 0)
+    assert_point(spline(points^).point(1), 1, 0)
+
+
 def test_spline_of_two_points_is_the_run_between_them() raises:
     var through = spline([Vector2(0, 0), Vector2(2, 0)])
     assert_point(through.point(0.5), 1, 0)

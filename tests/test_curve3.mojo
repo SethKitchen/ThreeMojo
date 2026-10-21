@@ -205,6 +205,15 @@ def test_a_spline_of_two_points_is_the_run_between_them() raises:
     assert_xyz(run.tangent(0.5), 1, 0, 0, CLOSE)
 
 
+def test_a_long_spline_ends_on_its_last_point() raises:
+    # A `Float32` count of 16777217 is 16777216, so `t` of one used to
+    # stop on the point before the last.
+    var count = 16777218
+    var points = List[Vector3](length=count, fill=Vector3(0, 0, 0))
+    points[count - 1] = Vector3(1, 0, 0)
+    assert_xyz(catmull_rom3(points^).point(1), 1, 0, 0, CLOSE)
+
+
 def test_arc_length_matches_three_js() raises:
     var open = catmull_rom3(four())
     assert_almost_equal(open.length().to(METER), Float32(7.066615), atol=1e-3)

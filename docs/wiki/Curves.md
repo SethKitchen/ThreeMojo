@@ -61,7 +61,7 @@ three.js uses 200 for every curve. A Bezier has one arc and 200 runs follow it c
 
 Bounded `t` and `u` parameters must be finite and in the closed interval from zero to one. NaN, infinity and values outside that interval raise an error. `SpaceCurve3` checks its double parameter before conversion to a float. Tangent helpers check the parameter before they clamp the two chord samples.
 
-Evaluation checks mutable curve kinds, Catmull-Rom types and control-point counts before dispatch or indexing. These checks take constant time. They do not scan all control points for each sample.
+Evaluation checks mutable curve kinds, Catmull-Rom types and control-point counts before dispatch or indexing. These checks take constant time. They do not scan all control points for each sample. A spline splits `t` in `Float64`, so a curve past 2^24 points still ends on its last point.
 
 Sample counts must fit in `Int`. The APIs check additions and per-segment products before iteration or allocation. This includes arc tables, path resolutions, spaced points and Frenet frames. There is no fixed resolution limit. A path made only of lines still uses one run per line.
 
