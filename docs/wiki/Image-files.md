@@ -46,7 +46,7 @@ Path("out/turn.png").write_bytes(encode(frames, delay_ms=60))
 mojo run -I . tools/optimize_png.mojo out/NAME.png
 ```
 
-The tool decodes each image stream and encodes it again at DEFLATE level 9. A stream is a run of `IDAT` chunks, or a run of `fdAT` chunks after one `fcTL` chunk. The new stream goes into the first chunk of the run. The other chunks of the run become empty.
+The tool decodes each image stream and encodes it again at DEFLATE level 9. A stream is a run of `IDAT` chunks, or a run of `fdAT` chunks after one `fcTL` chunk. The new stream goes into the first chunk of the run. The other chunks of the run become empty. A stream that expands past the image is refused before the extra bytes are stored.
 
 The tool keeps the position of each chunk. The metadata, frame delays, blend and disposal operations, APNG sequence numbers and filtered scanlines do not change. The tool replaces the file only when the new file is smaller. It writes a temporary file, gives it the mode of the old file, and renames it over the old file.
 
