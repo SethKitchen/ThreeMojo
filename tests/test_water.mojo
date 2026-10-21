@@ -24,7 +24,7 @@ from extensions.water.caustics import (
     render_caustics,
 )
 from extensions.water.field import ComplexField, complex_mul, fft2
-from extensions.water.filter import anisotropic_step
+from extensions.water.filter import anisotropic_step, lod_blend
 from extensions.water.frame import (
     CameraLook,
     WaterScene,
@@ -853,6 +853,56 @@ def test_texture_filter() raises:
     )
     assert_equal(mid.taps, 1)
     assert_almost_equal(mid.lod, 2.0, atol=1e-4)
+    var values = List[Float32]()
+    values.append(0)
+    values.append(0)
+    values.append(0)
+    values.append(0)
+    values.append(8)
+    values.append(8)
+    values.append(8)
+    values.append(0)
+    values.append(2)
+    for slot in range(9):
+        var trial = values.copy()
+        trial[slot] = nan[DType.float32]()
+        var broken = anisotropic_step(
+            trial[0],
+            trial[1],
+            trial[2],
+            trial[3],
+            trial[4],
+            trial[5],
+            trial[6],
+            trial[7],
+            trial[8],
+        )
+        assert_equal(broken.taps, 1)
+        assert_equal(broken.lod, 0)
+    var capped = anisotropic_step(
+        1.0, 0.0, 0.0, 0.0001, 64.0, 64.0, Float32(1e20), 1.0, 2.0
+    )
+    assert_equal(capped.taps, 4096)
+    var none = lod_blend(0, 0)
+    assert_equal(none[0], 0)
+    assert_equal(none[1], 0)
+    var blend = lod_blend(1.5, 4)
+    assert_equal(blend[0], 1)
+    assert_equal(blend[1], 2)
+    assert_almost_equal(blend[2], 0.5)
+    var top = lod_blend(4, 4)
+    assert_equal(top[0], 4)
+    assert_equal(top[1], 4)
+    var huge = lod_blend(Float32(1e20), 4)
+    assert_equal(huge[0], 4)
+    assert_equal(huge[1], 4)
+    assert_equal(huge[2], 0)
+    var missing = lod_blend(nan[DType.float32](), 4)
+    assert_equal(missing[0], 4)
+    assert_equal(missing[1], 4)
+    var below = lod_blend(-1, 4)
+    assert_equal(below[0], 0)
+    assert_equal(below[1], 1)
     var stones = _stones()
     var sharp = sample_pebble_grad(stones, 0.25, 0.25, 0.0, 0.0, 0.0, 0.0)
     var plain = sample_pebble(stones, 0.25, 0.25)

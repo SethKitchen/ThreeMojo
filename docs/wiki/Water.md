@@ -115,6 +115,8 @@ Texture coordinates name texel centers at `(i + 0.5) / n`, as in WebGL. Bilinear
 
 A pebble coordinate that is not finite is black.
 
+A footprint that is not finite reads the base level. A mip level that does not fit in an integer reads the coarsest level.
+
 Underwater absorption and ripple lookup follow the refracted sun direction. The sun is not treated as vertical when it is near the horizon. Invalid spectrum and glare sizes are refused before their grids are allocated.
 
 ## Shade it on a GPU
