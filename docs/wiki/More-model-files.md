@@ -1065,7 +1065,7 @@ var value = volume.get_data(1, 0, 1)
 | `read_nrrd(path) -> Volume` | Read a file. |
 | `parse_nrrd(bytes) -> Volume` | Read the bytes of one. |
 | `parse_nrrd_header(text) -> NrrdHeader` | Read a header only. |
-| `gunzip(bytes) -> List[UInt8]` | Expand gzip data, as fflate's `gunzipSync` does. |
+| `gunzip(bytes, limit) -> List[UInt8]` | Expand gzip data, as fflate's `gunzipSync` does. `limit` defaults to the longest NRRD data. |
 
 ### Volume
 
@@ -1105,6 +1105,7 @@ The loader refuses these, with a message that names the problem. three.js throws
 ### Differences from three.js
 
 - The port does not have `extractSlice`, `repaintAllSlices` or `VolumeSlice`. They draw on a canvas, which this port does not have.
+- Gzip data that expands past the limit is refused before the extra bytes are stored.
 
 ### Example
 

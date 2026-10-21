@@ -180,7 +180,7 @@ examples/capi/run.sh web splat
 
 `KsplatCompressionLevel` is a type with `is_valid`. `ksplat_layout` refuses a level that is not 0, 1 or 2.
 
-The SPZ reader uses `loaders.nrrd.gunzip` for gzip and `render.zstd` for Zstandard. A version 4 file needs no other decoder.
+The SPZ reader uses `loaders.nrrd.gunzip` for gzip and `render.zstd` for Zstandard. A version 4 file needs no other decoder. Gzip output stops at the most bytes a supported file can hold.
 
 `read_gltf_gaussian_splat_scene(path, scene)` places splat meshes on the selected
 scene's nodes. It reads matrix or TRS transforms, node names and extras.

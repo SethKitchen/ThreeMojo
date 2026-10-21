@@ -36,8 +36,8 @@ does not know reads the whole file, header and all, as the data. The
 after the header, or that is not NRRD; a `bz2` or `bzip2` encoding; a
 type it does not know, or none; no encoding; a `space origin` with no
 `(`; `space directions` with no `( )`, or fewer than three of them;
-gzip data that is not gzip; and data that is not whole values of its
-type.
+gzip data that is not gzip; data that is not whole values of its
+type; and gzip data whose trailer length or expansion passes the limit.
 
 ## Numerical range correction
 
@@ -48,6 +48,7 @@ limits, and explicit zero and nonfinite rules.
 """
 
 from math.finite import stored_float32
+from core.binary import copy_bytes
 from core.ordinal import require_non_negative, require_positive
 from math.norm import length3
 from loaders.bytes import ascii_digit, hex_digit_value, is_sign_mark
@@ -339,12 +340,17 @@ def parse_nrrd_header(text: List[Int]) raises -> NrrdHeader:
     return header^
 
 
-def gunzip(bytes: Span[UInt8, _]) raises -> List[UInt8]:
+def gunzip(
+    bytes: Span[UInt8, _], limit: Int = MAX_NRRD_VALUES
+) raises -> List[UInt8]:
     """Return fflate's `gunzipSync`: the first member of a gzip file,
     made as long as its trailer says.
 
     Args:
         bytes: The gzip file.
+        limit: The most bytes the member may expand to. The default is
+            `MAX_NRRD_VALUES`. A caller with a larger honest file passes
+            its own limit.
 
     Returns:
         The bytes, cut or padded with zeros to the trailer's length, as
@@ -352,8 +358,8 @@ def gunzip(bytes: Span[UInt8, _]) raises -> List[UInt8]:
 
     Raises:
         Error: If the header is not gzip's, the file is too short for its
-            header and trailer, the stream is malformed, or the trailer's
-            length is past `MAX_NRRD_VALUES`.
+            header and trailer, the stream is malformed, the trailer's
+            length is past `limit`, or the stream expands past `limit`.
     """
     var n = len(bytes)
     var bad = n < 3 or bytes[0] != 31 or bytes[1] != 139 or bytes[2] != 8
@@ -381,12 +387,12 @@ def gunzip(bytes: Span[UInt8, _]) raises -> List[UInt8]:
         | (Int(bytes[n - 2]) << 16)
         | (Int(bytes[n - 1]) << 24)
     )
-    if length > MAX_NRRD_VALUES:
-        raise Error("NRRD: the gzip data is longer than this port makes")
-    var stream = List[UInt8](capacity=n - 8 - start)
-    for k in range(start, n - 8):
-        stream.append(bytes[k])
-    var out = inflate(stream)
+    if length > limit:
+        if limit == MAX_NRRD_VALUES:
+            raise Error("NRRD: the gzip data is longer than this port makes")
+        raise Error("The gzip data is longer than the limit")
+    var stream = copy_bytes(bytes, start, n - 8 - start)
+    var out = inflate(stream, limit=limit)
     while len(out) > length:
         _ = out.pop()
     while len(out) < length:
