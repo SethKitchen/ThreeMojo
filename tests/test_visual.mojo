@@ -436,6 +436,16 @@ def test_heightfield() raises:
         mb.heightfield(
             Vec3d(0, 0, 0), 1.0, 1.0, 1, 2, [0.0, 0.0], List[Vec3d]()
         )
+    with assert_raises(contains="larger than this port"):
+        mb.heightfield(
+            Vec3d(0, 0, 0),
+            1.0,
+            1.0,
+            1 << 32,
+            1 << 32,
+            List[Float64](),
+            List[Vec3d](),
+        )
     with assert_raises(contains="2 by 2"):
         mb.heightfield(
             Vec3d(0, 0, 0), 1.0, 1.0, 2, 1, [0.0, 0.0], List[Vec3d]()
