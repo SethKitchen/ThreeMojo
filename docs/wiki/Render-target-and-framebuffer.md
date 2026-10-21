@@ -68,7 +68,7 @@ This port differs from three.js in three ways:
 - The alpha of `rgba` and `hsla` is read and then dropped, as in three.js. The color is opaque.
 - A space is an ASCII space, tab or line break. JavaScript also accepts the Unicode spaces.
 
-`format_style(color, space=SRGB)` and `hex_string(color)` write a color back. `format_style` does not clamp a channel above one or below zero, as three.js does not.
+`format_style(color, space=SRGB)` and `hex_string(color)` write a color back. `format_style` does not clamp a channel above one or below zero, as three.js does not. A channel whose rounded value does not fit in an integer is written as `toFixed` writes it.
 
 ## RenderTarget
 
