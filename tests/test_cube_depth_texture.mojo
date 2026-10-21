@@ -75,6 +75,8 @@ def five_and(var last: Framebuffer) raises -> List[Framebuffer]:
 def test_a_cube_depth_texture_refuses_what_is_not_six_square_faces() raises:
     with assert_raises(contains="one texel"):
         _ = cube_depth_texture(0, List[Float32]())
+    with assert_raises(contains="larger than this port"):
+        _ = cube_depth_texture(1 << 32, List[Float32]())
     with assert_raises(contains="six square"):
         _ = cube_depth_texture(2, List[Float32](length=5, fill=0))
     with assert_raises():

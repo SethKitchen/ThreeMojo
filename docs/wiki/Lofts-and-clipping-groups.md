@@ -140,7 +140,7 @@ var depth = cube_depth_texture_of(faces)
 var seen = depth.sample(Vector3(1, 0, 0)).r
 ```
 
-Each face holds the window depth: zero at the near plane and one at the far plane. A texel is read nearest, as three.js's `NearestFilter` reads it. `cube_depth_texture(size, depths, mode)` builds the cube from six depth buffers in one list.
+Each face holds the window depth: zero at the near plane and one at the far plane. A texel is read nearest, as three.js's `NearestFilter` reads it. `cube_depth_texture(size, depths, mode)` builds the cube from six depth buffers in one list. A face whose six depth buffers do not fit in an integer is refused.
 
 ## What is not ported
 
