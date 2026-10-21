@@ -61,7 +61,7 @@ The sources also disagree on the shape of the building. One inventory entry says
 The measured footprint is in three records. The container could not reach any of them. Direct fetches failed at name resolution, and the egress gateway denied the same hosts with 403.
 
 - The protection file DW000432 of Onroerend Erfgoed, with the decree and its plan.
-- [The plan record of the castle](https://plannen.onroerenderfgoed.be/plannen/1671), which gives boundary geometry in Belgian Lambert 72 (EPSG:31370).
+- [The plan record of the castle](https://plannen.onroerenderfgoed.be/plannen/1671), which gives boundary geometry in Belgian Lambert 72 (EPSG:31370). It also lists an approved heritage management plan for the castle and its outbuildings, as PDF files. That plan is the most likely source of surveyed drawings.
 - The Flemish building footprints of Geopunt, which have the outline of every wing and tower.
 
 To use them, allow the hosts in the environment settings and ask for a second run. Read the outlines, write them as a survey JSON file and pass that file to both examples.
