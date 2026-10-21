@@ -699,7 +699,7 @@ A texel with fewer than four channels fills red first. A color channel that it d
 | `texel_fetch(x, y, z) -> FloatColor` | `texelFetch(sampler3D, ivec3, 0)` | The texel at an index. |
 | `validate()` | | Refuse a field edited into nonsense. |
 
-Under `NEAREST`, `sample` returns the texel that the coordinate lands in. Under `BILINEAR`, three.js's `LinearFilter`, it blends the eight texels around the coordinate. Texel centers are at half-integers. Each index is wrapped on its own axis by `wrap_s`, `wrap_t` or `wrap_r`.
+Under `NEAREST`, `sample` returns the texel that the coordinate lands in. Under `BILINEAR`, three.js's `LinearFilter`, it blends the eight texels around the coordinate. Texel centers are at half-integers. Each index is wrapped on its own axis by `wrap_s`, `wrap_t` or `wrap_r`. A coordinate past 1048576, or one that is not finite, is reduced before it becomes a texel index.
 
 A byte is read as a fraction of 255. With `SRGB`, the three color channels are decoded through the sRGB curve, and alpha is not. A float is read as it is.
 
@@ -732,6 +732,8 @@ The image is a `VolumeImage`. Its `depth` is the number of layers. `DataArrayTex
 | `validate()` | | Refuse a field edited into nonsense. |
 
 `array_layer(layer, depth)` finds the layer that `sample` reads. It rounds the coordinate to the nearest whole number, and a half rounds up. Then it holds the result inside the stack. That is the OpenGL rule. A sample never blends two layers. Within the layer, the filter and the wrap modes work as they do for a [3D texture](#3d-textures).
+
+A layer that is not a number reads the first layer.
 
 ### The stores
 
