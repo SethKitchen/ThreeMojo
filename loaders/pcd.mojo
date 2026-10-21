@@ -888,7 +888,8 @@ def parse_pcd(bytes: List[UInt8]) raises -> PcdModel:
             )
         if label >= 0:
             var value = reader.number(label, point)
-            if value != floor(value):
+            var fits = value > -Float64(Int.MAX) and value < Float64(Int.MAX)
+            if value != floor(value) or not fits:
                 raise Error(
                     "PCD point "
                     + String(point)

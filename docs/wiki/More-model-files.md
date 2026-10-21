@@ -92,7 +92,7 @@ The loader refuses these, with a message that names the problem:
 - Some of `x`, `y` and `z` without the others. The same for the three normals.
 - An `rgb` field that is not four bytes.
 - A text row with fewer values than its fields, or a value that is not a number.
-- A coordinate that is not finite as a `Float32`, or a label that is not a whole number.
+- A coordinate that is not finite as a `Float32`, or a label that is not a whole number in range.
 - A file that ends early, and LZF data that is not valid or does not fill its declared size.
 - A width, field, or point product that does not fit in an integer.
 
@@ -463,7 +463,7 @@ The loader refuses these, with a message that names the problem:
 - An archive with no files, a file that is not XML, and a root that is not `<amf>`.
 - An object or a material with no `id`.
 - A coordinate, a normal or a vertex index that is missing or not a number. An empty value is zero, as in JavaScript.
-- A vertex index that is not a whole number, or that is past the last vertex.
+- A vertex index that is not a whole number, does not fit, or is past the last vertex.
 - A mesh with normals for only some of its vertices.
 
 three.js logs a root that is not `<amf>` and returns nothing. It throws a `TypeError` for a missing `id` or value, and it reads `NaN` for a value that is not a number.

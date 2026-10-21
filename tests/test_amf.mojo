@@ -247,6 +247,8 @@ def test_refusals() raises:
         _ = load(object_with("<v1>0</v1>", "<v1>0.5</v1>"))
     with assert_raises(contains="not a whole number"):
         _ = load(object_with("<v1>0</v1>", "<v1>-1</v1>"))
+    with assert_raises(contains="not a whole number"):
+        _ = load(object_with("<v1>0</v1>", "<v1>1e20</v1>"))
     with assert_raises(contains="not there"):
         _ = load(object_with("<v1>0</v1>", "<v1>3</v1>"))
     with assert_raises(contains="normals for some vertices only"):

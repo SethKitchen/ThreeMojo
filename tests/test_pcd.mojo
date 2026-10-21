@@ -345,6 +345,10 @@ def test_ascii_refusals() raises:
         _ = parse_pcd(
             text_bytes("FIELDS label\nSIZE 4\nTYPE F\nDATA ascii\n2.5\n")
         )
+    with assert_raises(contains="whole number"):
+        _ = parse_pcd(
+            text_bytes("FIELDS label\nSIZE 4\nTYPE F\nDATA ascii\n1e20\n")
+        )
 
 
 def test_an_empty_cloud_has_no_attributes() raises:
