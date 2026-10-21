@@ -415,6 +415,8 @@ def test_normal_map() raises:
         _ = normal_map([Float32(0)], 2, 1)
     with assert_raises(contains="at least one texel"):
         _ = normal_map(List[Float32](), 0, 1)
+    with assert_raises(contains="larger than this port"):
+        _ = normal_map(List[Float32](), 1 << 32, 1)
 
 
 def test_surface_maps() raises:

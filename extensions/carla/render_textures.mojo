@@ -29,7 +29,7 @@ differences, which wrap as the texture does.
   windows are smooth dark glass, and an emissive map marks which windows
   are lit at night.
 
-The sizes and colors are this port's own choices.
+The sizes and colors are this port's own choices. A side whose texel buffer does not fit in an integer is refused.
 """
 
 from math.smoothstep import smoothstep
@@ -158,8 +158,8 @@ def normal_map(
         each from -1 to 1 stored from 0 to 255.
 
     Raises:
-        Error: If `size` is less than one, or the heights are not
-            `size * size`.
+        Error: If `size` is less than one, its texel buffer does not fit,
+            or the heights are not `size * size`.
     """
     _check_size(size)
     if len(heights) != size * size:
@@ -229,7 +229,7 @@ def asphalt_maps(size: Int, seed: Int = 1) raises -> SurfaceMaps:
         The maps; the emissive map is black.
 
     Raises:
-        Error: If `size` is less than one.
+        Error: If `size` is less than one, or its texel buffer does not fit.
     """
     _check_size(size)
     var color = List[UInt8](capacity=size * size * 4)
@@ -281,7 +281,8 @@ def concrete_maps(
         The maps; the emissive map is black.
 
     Raises:
-        Error: If `size` or `slabs` is less than one.
+        Error: If `size` is less than one, its texel buffer does not fit,
+            or `slabs` is less than one.
     """
     _check_size(size)
     if slabs < 1:
@@ -335,7 +336,7 @@ def grass_maps(size: Int, seed: Int = 5) raises -> SurfaceMaps:
         The maps; the emissive map is black.
 
     Raises:
-        Error: If `size` is less than one.
+        Error: If `size` is less than one, or its texel buffer does not fit.
     """
     _check_size(size)
     var color = List[UInt8](capacity=size * size * 4)
@@ -372,7 +373,7 @@ def foliage_maps(size: Int, seed: Int = 6) raises -> SurfaceMaps:
         The maps; the emissive map is black.
 
     Raises:
-        Error: If `size` is less than one.
+        Error: If `size` is less than one, or its texel buffer does not fit.
     """
     _check_size(size)
     var color = List[UInt8](capacity=size * size * 4)
@@ -637,6 +638,18 @@ def puddle_roughness(
 
 
 def _check_size(size: Int) raises:
-    """Refuse a texture of no texels."""
+    """Refuse a texture of no texels, or one whose texel buffer wraps.
+
+    Four bytes a texel is the largest product these builders allocate.
+
+    Args:
+        size: Texels on a side.
+
+    Raises:
+        Error: If `size` is less than one, or `4 * size * size` does not
+            fit in an integer.
+    """
     if size < 1:
         raise Error("A texture needs at least one texel on a side")
+    if size > (Int.MAX // 4) // size:
+        raise Error("A texture is larger than this port builds")
