@@ -128,10 +128,12 @@ def pmrem_lod_max(size: Int) -> Int:
 
     Returns:
         The base-two logarithm, rounded down, and at least four: a source
-        smaller than sixteen texels is read at sixteen.
+        smaller than sixteen texels is read at sixteen. A source past the
+        sizes an integer can name is read at sixty-two.
     """
     var lod = CUBE_UV_MIN_MIP
-    while (2 << lod) <= size:
+    # `2 << 62` wraps, so a larger shift is not a larger size.
+    while lod < 62 and (2 << lod) <= size:
         lod += 1
     return lod
 

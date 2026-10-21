@@ -641,7 +641,7 @@ A physical surface asks `CubeTexture.sample_rough(direction, roughness)`. It rea
 
 ### How it is built
 
-The sharpest copy reads the source in the direction of each texel. Each copy after it is the one before, blurred by a Gaussian on the sphere. The blurs add up to each copy's own width: `1 / size` for the halving copies, and three.js's `extra_lod_sigma()` for the six others. three.js chose those widths to follow the GGX lobe at each roughness.
+The sharpest copy reads the source in the direction of each texel. Each copy after it is the one before, blurred by a Gaussian on the sphere. The blurs add up to each copy's own width: `1 / size` for the halving copies, and three.js's `extra_lod_sigma()` for the six others. three.js chose those widths to follow the GGX lobe at each roughness. A source past the sizes an integer can name is read at the largest power of two that fits.
 
 Each blur is two passes. The first turns about a pole and the second turns toward it. The pole changes each time among ten axes of a dodecahedron, `pole_axis`. This is three.js's `SphericalGaussianBlur`, run on the host once.
 

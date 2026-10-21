@@ -216,6 +216,11 @@ def test_the_generator_sizes_as_three_js_does() raises:
     assert_equal(pmrem_lod_max(16), 4)
     # Smaller than sixteen reads at sixteen.
     assert_equal(pmrem_lod_max(2), 4)
+    # `2 << 62` wraps. The search stops at the last size that fits.
+    assert_equal(pmrem_lod_max(2 << 61), 62)
+    assert_equal(pmrem_lod_max(Int.MAX), 62)
+    assert_equal(cube_uv_lod_max(2 << 61), 60)
+    assert_equal(cube_uv_lod_max(Int.MAX), 60)
     assert_equal(len(extra_lod_sigma()), 6)
     assert_equal(extra_lod_sigma()[5], 0.582)
 
