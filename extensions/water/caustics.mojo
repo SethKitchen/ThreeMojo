@@ -19,7 +19,7 @@ from extensions.water.surface import SurfaceField, sample_surface
 from math.utils import max3, min3
 from math.vector3 import Vector3
 from math.norm import squared_length3
-from std.math import abs, floor, hypot, sqrt
+from std.math import abs, floor, hypot, isfinite, sqrt
 from units.si import Length
 
 # Clearwater caps unresolved point focusing rather than emitting infinite light.
@@ -268,16 +268,24 @@ def render_caustics(
         The additive caustic image and the flat-surface shift.
 
     Raises:
-        Error: If a size or the depth is not positive.
+        Error: If a size or the depth is not positive, or the ray grid's
+            vertex buffer does not fit in an integer.
     """
     require_positive(grid, "Caustic ray grid must be positive")
     if depth.value <= 0.0:
         raise Error("Water depth must be positive")
+    # One vertex past the last cell, three floats a color. A side of 2^31
+    # wraps that product, so the ray buffer looks short and the walk does
+    # not finish.
+    if grid > Int.MAX - 1:
+        raise Error("A caustic ray grid is larger than this port builds")
+    var verts = grid + 1
+    if verts > (Int.MAX // 3) // verts:
+        raise Error("A caustic ray grid is larger than this port builds")
     var image = CausticField(resolution, surface.patch)
     var shift = flat_shift(sun, depth.value)
     image.shift_x = shift[0]
     image.shift_z = shift[1]
-    var verts = grid + 1
     var count = verts * verts
     var floor_x = List[Float32](length=count * 3, fill=0.0)
     var floor_z = List[Float32](length=count * 3, fill=0.0)
@@ -444,10 +452,10 @@ def _splat(
     var max_x = max3(ax, bx, cx)
     var min_y = min3(ay, by, cy)
     var max_y = max3(ay, by, cy)
-    var x0 = Int(floor(min_x))
-    var x1 = Int(floor(max_x)) + 1
-    var y0 = Int(floor(min_y))
-    var y1 = Int(floor(max_y)) + 1
+    var x0 = _caustic_low(min_x)
+    var x1 = _caustic_high(max_x)
+    var y0 = _caustic_low(min_y)
+    var y1 = _caustic_high(max_y)
     if x0 < 0:
         x0 = 0
     if y0 < 0:
@@ -462,6 +470,47 @@ def _splat(
             var py = Float32(y) + 0.5
             if caustic_covers(px, py, ax, ay, bx, by, cx, cy, area2):
                 image.samples[(y * n + x) * 3 + channel] += intensity
+
+
+def _caustic_low(value: Float32) -> Int:
+    """Return the first texel at or before a caustic edge.
+
+    A value that is not finite, or that does not fit in an integer, is
+    past every texel. `Int` of such a float is not that coordinate.
+
+    Args:
+        value: The near edge, in texels.
+
+    Returns:
+        The floor, or `Int.MAX` or `Int.MIN` when `value` does not fit.
+    """
+    var wide = Float64(value)
+    if not isfinite(wide) or wide >= Float64(Int.MAX):
+        return Int.MAX
+    if wide <= -Float64(Int.MAX):
+        return Int.MIN
+    return Int(floor(wide))
+
+
+def _caustic_high(value: Float32) -> Int:
+    """Return the texel just past a caustic edge.
+
+    See `_caustic_low`. The walk is half-open, so the far edge moves one
+    texel outward when that step still fits.
+
+    Args:
+        value: The far edge, in texels.
+
+    Returns:
+        The floor plus one, or `Int.MAX` or `Int.MIN` when `value` does
+        not fit.
+    """
+    var wide = Float64(value)
+    if not isfinite(wide) or wide >= Float64(Int.MAX):
+        return Int.MAX
+    if wide <= -Float64(Int.MAX):
+        return Int.MIN
+    return Int(floor(wide)) + 1
 
 
 def caustic_covers(

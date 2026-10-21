@@ -15,6 +15,8 @@ from materials.material import BASIC, Material
 from objects.mesh import Mesh
 from renderers.renderer import Renderer
 from extensions.water.caustics import (
+    _caustic_high,
+    _caustic_low,
     _splat,
     CausticField,
     caustic_covers,
@@ -369,6 +371,22 @@ def test_caustics() raises:
         _ = render_caustics(flat, sun, Length(1.6), 0, 4)
     with assert_raises():
         _ = render_caustics(flat, sun, Length(0.0), 2, 4)
+    with assert_raises(contains="larger than this port"):
+        _ = render_caustics(flat, sun, Length(1.6), Int.MAX, 4)
+    with assert_raises(contains="larger than this port"):
+        _ = render_caustics(flat, sun, Length(1.6), 1 << 31, 4)
+    # A bed 1e20 meters down sends the refracted triangles past every texel.
+    var far = render_caustics(flat, Vector3(0.6, 0.8, 0.0), Length(1e20), 2, 8)
+    assert_equal(far.channel(0, 0, 0), 0.0)
+    assert_equal(far.channel(4, 4, 1), 0.0)
+    assert_equal(_caustic_low(Float32(1.2)), 1)
+    assert_equal(_caustic_high(Float32(3.8)), 4)
+    assert_equal(_caustic_low(Float32(1e20)), Int.MAX)
+    assert_equal(_caustic_high(Float32(1e20)), Int.MAX)
+    assert_equal(_caustic_low(Float32(-1e20)), Int.MIN)
+    assert_equal(_caustic_high(Float32(-1e20)), Int.MIN)
+    assert_equal(_caustic_low(nan[DType.float32]()), Int.MAX)
+    assert_equal(_caustic_high(nan[DType.float32]()), Int.MAX)
     var inside = 0
     var outside = 0
     for y in range(-1, 4):
