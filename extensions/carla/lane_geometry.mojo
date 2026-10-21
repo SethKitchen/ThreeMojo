@@ -51,7 +51,8 @@ def _lane_geometry_pos_at(
         The point and heading, with z zero.
 
     Raises:
-        Error: If a SPIRAL uses an unsupported arithmetic mode.
+        Error: If a SPIRAL uses an unsupported arithmetic mode, or its
+            piece count passes the query work limit.
     """
     var d = min(max(dist, 0.0), geometry.length)
     if geometry.kind == LINE:
@@ -129,7 +130,11 @@ def _lane_spiral(geometry: RoadGeometry, d: Float64) raises -> DirectedPoint:
         geometry.curvature_end - geometry.curvature_start
     ) / geometry.length
     var reach = max(abs(k0), abs(k0 + rate * d))
-    var pieces = 1 + Int(ceil(d * (1.0 + reach)))
+    # The public geometry query refuses this estimate before `Int` conversion.
+    var work = ceil(d * (1.0 + reach))
+    if not isfinite(work) or work >= 9223372036854775807.0 or work >= 4194304.0:
+        raise Error("Geometry query exceeds its spiral work limit")
+    var pieces = 1 + Int(work)
     var step = d / Float64(pieces)
     var nodes = materialize[_GL_NODES]()
     var weights = materialize[_GL_WEIGHTS]()

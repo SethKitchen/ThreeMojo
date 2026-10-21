@@ -23,6 +23,7 @@ from extensions.carla.geometry import (
     with_poly3_si,
     with_spiral_si,
 )
+from extensions.carla.lane_geometry import _lane_geometry_pos_at
 from extensions.carla.polynomial import CubicPolynomial
 from math.vector3 import Vector3
 from std.testing import (
@@ -120,6 +121,19 @@ def test_spiral_query_work_limits_refuse() raises:
     )
     with assert_raises(contains="spiral work limit"):
         _ = short.pos_at_meters(10.0, max_steps=2)
+    var lane = with_spiral_si(
+        RoadGeometry.from_meters(SPIRAL, 0.0, 0.0, 0.0, 0.0, 1.0), 0.0, 0.0
+    )
+    lane.curvature_start = Float64(1) / Float64(0)
+    with assert_raises(contains="spiral work limit"):
+        _ = _lane_geometry_pos_at(lane, 1.0)
+    var past = with_spiral_si(
+        RoadGeometry.from_meters(SPIRAL, 0.0, 0.0, 0.0, 0.0, 1e19), 1000.0, 0.0
+    )
+    with assert_raises(contains="spiral work limit"):
+        _ = _lane_geometry_pos_at(past, 1e19)
+    with assert_raises(contains="spiral work limit"):
+        _ = _lane_geometry_pos_at(long, 1e19)
 
 
 def test_poly3_sampling_refuses_a_length_that_cannot_advance() raises:
