@@ -66,6 +66,7 @@ from postprocessing.screen_space import (
     ssao_light,
     ssao_noise,
     ssao_occlusion,
+    _ssr_max_step,
     ssr_blur,
     ssr_light,
     ssr_reflections,
@@ -988,6 +989,16 @@ def test_a_hit_farther_from_the_surface_than_the_reach_is_not_reflected() raises
     settings.max_distance = meters(100)
     var far = ssr_reflections(view, colors, normals, settings)
     assert_true(far[0].a > 0)
+
+
+def test_a_wide_frame_keeps_its_diagonal() raises:
+    # Two by two is `floor(sqrt(8))`.
+    assert_equal(_ssr_max_step(2, 2), Float32(2))
+    # `4000000000` squared does not fit in an integer. The diagonal is the
+    # width itself.
+    assert_equal(_ssr_max_step(4000000000, 1), Float32(4000000000))
+    # Two sides of `Int.MAX` have a diagonal past 2^63.
+    assert_true(_ssr_max_step(Int.MAX, Int.MAX) > Float32(1e19))
 
 
 def test_ssr_reflects_only_the_selected_and_bounces_off_the_last_frame() raises:

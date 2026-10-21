@@ -1324,6 +1324,33 @@ def ssr_reflections(
     return out^
 
 
+def _ssr_max_step(width: Int, height: Int) -> Float32:
+    """Return the frame's diagonal in pixels, three.js's `MAX_STEP`.
+
+    The squares are `Float64`. An `Int` product wraps a wide frame, and
+    `Int` of the square root is then not the diagonal.
+
+    Args:
+        width: The frame's width, in pixels.
+        height: The frame's height, in pixels.
+
+    Returns:
+        The diagonal, cut toward zero. A diagonal past what an integer
+        holds is the `Float32` of that square root.
+
+    Error: Never.
+    """
+    var span = Float64(width) * Float64(width) + Float64(height) * Float64(
+        height
+    )
+    var steps = floor(sqrt(span))
+    # `Float64(Int.MAX)` is 2^63. `Int` of a float at or past it is not
+    # the step count.
+    if steps >= Float64(Int.MAX):
+        return Float32(steps)
+    return Float32(Int(steps))
+
+
 def _ssr_pixel(
     view: DepthView,
     colors: List[FloatColor],
@@ -1375,7 +1402,7 @@ def _ssr_pixel(
     var y_span = y_len / total_step
     # three.js's `MAX_STEP`, the frame's diagonal, and its break once the
     # walk reaches the end.
-    var max_step = Float32(Int(sqrt(Float32(width * width + height * height))))
+    var max_step = _ssr_max_step(width, height)
     var steps = min(total_step, max_step)
     var i = Float32(0)
     while i < steps:

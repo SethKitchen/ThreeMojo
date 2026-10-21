@@ -236,6 +236,8 @@ One minus the occlusion multiplies the light of each pixel. `kernel_radius` is i
 
 The pass walks the ray across the screen one pixel at a time. The first surface that the ray passes behind is a hit. The surface must be within `thickness` of the ray, or within three pixels' width. With `infinite_thick` on, every surface behind the ray is a hit. A hit surface must face the ray. A hit farther than `max_distance` from the plane ends the walk with no reflection.
 
+The longest walk is the frame's diagonal. Its square is a `Float64`, so a wide frame does not wrap.
+
 The strength of a reflection starts at `opacity`. With `distance_attenuation` on, it fades with the square of the distance. With `fresnel` on, it fades as the view meets the surface square on. With `blur` on, `ssr_blur` is `SSRBlurShader`, applied twice. The pass lays each reflection over the light by its strength, as three.js's `NormalBlending` does.
 
 With `selective` on, only the objects on the `selects` layers reflect. three.js takes a list of objects and draws a metalness mask. This port draws the selected layers alone, as the outline pass does, and a pixel that they do not cover reflects nothing.
