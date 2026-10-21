@@ -125,7 +125,8 @@ struct MarchingCubes(Movable):
             max_poly_count: How many triangles `update` may make.
 
         Raises:
-            Error: If the resolution or the triangle count is not positive.
+            Error: If the resolution or the triangle count is not positive,
+                or the field's normal buffer does not fit in an integer.
         """
         require_positive(
             resolution, "A marching cubes field needs a positive resolution"
@@ -133,6 +134,12 @@ struct MarchingCubes(Movable):
         require_positive(
             max_poly_count, "A marching cubes field needs room for a triangle"
         )
+        # Three floats a cell, for the normal cache and the palette. A
+        # resolution near 2^21 wraps that product, so the field looks small.
+        if resolution > (Int.MAX // 3) // resolution // resolution:
+            raise Error(
+                "A marching cubes field is larger than this port builds"
+            )
         self.resolution = resolution
         self.isolation = DEFAULT_ISOLATION
         self.enable_uvs = enable_uvs

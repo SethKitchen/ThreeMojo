@@ -200,6 +200,8 @@ def test_a_full_buffer_raises() raises:
 def test_a_field_refuses_what_it_cannot_hold() raises:
     with assert_raises(contains="positive resolution"):
         _ = MarchingCubes(0)
+    with assert_raises(contains="larger than this port"):
+        _ = MarchingCubes(1 << 21)
     with assert_raises(contains="room for a triangle"):
         _ = MarchingCubes(4, max_poly_count=0)
     var cubes = MarchingCubes(4)
