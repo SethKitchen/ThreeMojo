@@ -304,14 +304,17 @@ def glare_grid_size(n: Int, width: Int, height: Int) -> Tuple[Int, Int]:
 
     Returns:
         The width and the height of the glare grid, each at least 1.
+
+    The fit is a `Float64`. A `Float32` image side past 2^24 changes which
+    side limits the grid, and the rounded side with it.
     """
-    var fit = Float32(n) * 0.75
-    var scale = fit / Float32(width)
-    var tall = fit / Float32(height)
+    var fit = Float64(n) * 0.75
+    var scale = fit / Float64(width)
+    var tall = fit / Float64(height)
     if tall < scale:
         scale = tall
-    var sw = Int(Float32(width) * scale + 0.5)
-    var sh = Int(Float32(height) * scale + 0.5)
+    var sw = Int(Float64(width) * scale + 0.5)
+    var sh = Int(Float64(height) * scale + 0.5)
     if sw < 1:
         sw = 1
     if sh < 1:

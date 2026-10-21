@@ -445,6 +445,10 @@ def test_the_glare_grid_maps_the_image_and_back() raises:
     assert_true(tall[0] >= 1 and tall[0] < 48)
     var thin = glare_grid_size(4, 1000, 1)
     assert_equal(thin[1], 1)
+    # A Float32 height of 2^25 + 1 is 2^25, so the wide side rounds to 2.
+    var odd = glare_grid_size(4, 16777216, 33554433)
+    assert_equal(odd[0], 1)
+    assert_equal(odd[1], 3)
     # Every grid point samples a pixel inside the image, and every pixel reads
     # a grid point inside the grid, at both ends of each axis.
     for x in range(size[0]):
