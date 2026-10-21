@@ -133,7 +133,7 @@ Otherwise the pass finds the edge through the pixel. It walks along the edge in 
 
 ### SMAA
 
-`smaa_pass` is three.js's `SMAAPass` in its three stages. Each stage is a function that you can call on its own.
+`smaa_pass` is three.js's `SMAAPass` in its three stages. Each stage is a function that you can call on its own. A frame below one pixel, or whose pixel count does not fit in an integer, is refused.
 
 1. `smaa_edges` marks an edge on the left or the top of a pixel. The step to that neighbor must be at least 0.1 in some channel. It must also be at least half the largest step to the four neighbors and to the pixels two to the left and two above.
 2. `smaa_weights` walks each edge to its two ends and reads the edges that cross it there. `smaa_area` turns that pattern and the two distances into two weights. A vertical edge is a horizontal edge on the transposed map.
