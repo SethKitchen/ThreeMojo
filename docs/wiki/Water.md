@@ -57,7 +57,7 @@ for frame in range(60):
     var image = scene.draw(320, 180, FRAME, True, bed, Angle(-0.72, RADIAN))
 ```
 
-`advance` steps the ripple equation once, then moves the clock. Its `Bool` taps the middle of the ripple window. The step must be finite and nonnegative. The resulting clock must also be finite. A refused step leaves the ripples, clock and step count unchanged.
+`advance` steps the ripple equation once, then moves the clock. Its `Bool` taps the middle of the ripple window. The step must be finite and nonnegative. The resulting clock must also be finite. A refused step leaves the ripples, clock and step count unchanged. A ripple sample that is not finite reads as outside the window.
 
 `draw` makes a picture at the scene's clock and does not change the simulation. Equal steps give equal pictures.
 

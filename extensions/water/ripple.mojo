@@ -16,7 +16,7 @@ from extensions.water.resolution import require_resolution, SpectrumResolution
 from math.norm import squared_length2
 from math.smoothstep import hermite_fade
 from math.utils import edge_index, mix_bilinear
-from std.math import cos, floor, sqrt
+from std.math import cos, floor, isfinite, sqrt
 from units.si import Length
 
 
@@ -177,8 +177,19 @@ struct RippleSample(ImplicitlyCopyable):
 def _sample_height(
     field: RippleField, u: Float32, v: Float32
 ) -> _HeightVelocity:
-    """Bilinear height and velocity. Coordinates outside the window are zero."""
-    if u < 0.0 or v < 0.0 or u > 1.0 or v > 1.0:
+    """Bilinear height and velocity. Coordinates outside the window are zero.
+
+    A coordinate that is not finite is outside the window. `Int` of that
+    float is not a texel.
+    """
+    if (
+        not isfinite(u)
+        or not isfinite(v)
+        or u < 0.0
+        or v < 0.0
+        or u > 1.0
+        or v > 1.0
+    ):
         return _HeightVelocity(0.0, 0.0)
     var n = field.n
     var px = u * Float32(n) - 0.5
@@ -267,7 +278,14 @@ def step_ripple(
             var fade = _smooth_border(edge)
             h *= fade
             vel *= fade
-            if su < 0.0 or sv < 0.0 or su > 1.0 or sv > 1.0:
+            if (
+                not isfinite(su)
+                or not isfinite(sv)
+                or su < 0.0
+                or sv < 0.0
+                or su > 1.0
+                or sv > 1.0
+            ):
                 h = 0.0
                 vel = 0.0
             var i = y * n + x
@@ -333,12 +351,19 @@ def sample_ripple[
         z: World z, in meters.
 
     Returns:
-        Height, `∂h/∂x`, `∂h/∂z` and Laplacian. Outside the window every
-        channel is zero.
+        Height, `∂h/∂x`, `∂h/∂z` and Laplacian. Outside the window, and
+        where a coordinate is not finite, every channel is zero.
     """
     var u = (x - field.ripple_center_x()) / field.ripple_size() + 0.5
     var v = (z - field.ripple_center_z()) / field.ripple_size() + 0.5
-    if u < 0.0 or v < 0.0 or u > 1.0 or v > 1.0:
+    if (
+        not isfinite(u)
+        or not isfinite(v)
+        or u < 0.0
+        or v < 0.0
+        or u > 1.0
+        or v > 1.0
+    ):
         return RippleSample(0.0, 0.0, 0.0, 0.0)
     var n = field.ripple_side()
     var px = u * Float32(n) - 0.5

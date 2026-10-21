@@ -264,6 +264,15 @@ def test_ripples() raises:
     assert_almost_equal(down.height, 0.0)
     var up = sample_ripple(field, 0.0, 40.0)
     assert_almost_equal(up.height, 0.0)
+    var missing_x = sample_ripple(field, nan[DType.float32](), 0.0)
+    assert_almost_equal(missing_x.height, 0.0)
+    assert_almost_equal(missing_x.slope_x, 0.0)
+    var missing_z = sample_ripple(field, 0.0, nan[DType.float32]())
+    assert_almost_equal(missing_z.height, 0.0)
+    step_ripple(field, nan[DType.float32](), 0.0, 0.5, 0.5, 0.08, 0.07)
+    assert_almost_equal(sample_ripple(field, 0.0, 0.0).height, 0.0)
+    step_ripple(field, 0.0, nan[DType.float32](), 0.5, 0.5, 0.08, 0.07)
+    assert_almost_equal(sample_ripple(field, 0.0, 0.0).slope_z, 0.0)
 
 
 def test_optics() raises:
