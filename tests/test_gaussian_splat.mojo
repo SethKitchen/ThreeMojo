@@ -55,6 +55,8 @@ from render.raster_state import (
     log_depth_factor,
 )
 from render.splat_raster import (
+    _splat_high,
+    _splat_low,
     draw_gaussian_splat,
     prepare_gaussian_splat,
     rasterize_splats,
@@ -817,6 +819,20 @@ def test_splats_blend_into_a_target_behind_what_is_nearer() raises:
     rasterize_splats(target, List[ProjectedSplat]())
     rasterize_splats(target, [unit_splat(4, -100), unit_splat(-100, 4)])
     assert_equal(target.color_at(4, 0).r, 0)
+    rasterize_splats(target, [unit_splat(Float32(1e20), 4)])
+    rasterize_splats(target, [unit_splat(Float32(-1e20), 4)])
+    rasterize_splats(target, [unit_splat(nan[DType.float32](), 4)])
+    assert_equal(target.color_at(4, 0).r, 0)
+    assert_equal(target.color_at(0, 4).r, 0)
+    # The bounds themselves, so a center past an integer is not scanned.
+    assert_equal(_splat_low(Float32(1e20), 0), Int.MAX)
+    assert_equal(_splat_high(Float32(1e20), 7), 7)
+    assert_equal(_splat_low(Float32(-1e20), 0), 0)
+    assert_equal(_splat_high(Float32(-1e20), 7), Int.MIN)
+    assert_equal(_splat_low(2, 0), 1)
+    assert_equal(_splat_high(6, 7), 7)
+    assert_equal(_splat_low(nan[DType.float32](), 0), Int.MAX)
+    assert_equal(_splat_high(nan[DType.float32](), 7), 7)
     target.depth_mode = DepthMode(7)
     with assert_raises(contains="valid depth mode"):
         rasterize_splats(target, List[ProjectedSplat]())

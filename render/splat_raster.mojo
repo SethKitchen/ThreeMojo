@@ -17,7 +17,7 @@ A splat blends with the normal mode, source over, with straight alpha, as
 three.js's transparent splat material does. It tests depth against what
 is drawn and writes none. The target keeps its depth mode, so a splat
 drawn after `Renderer.render_into` is hidden by the opaque surfaces in
-front of it.
+front of it. A center that does not fit in an integer lies past the image.
 
 Draw a scene with splats in three steps:
 
@@ -47,7 +47,7 @@ from render.splatrule import (
 )
 from render.target import RenderTarget
 from render.rect import Rect
-from std.math import ceil, floor, max, min
+from std.math import ceil, floor, isfinite, max, min
 from units.si import Length, METER
 from core.ordinal import require_valid
 
@@ -178,6 +178,65 @@ def rasterize_splats(
         rasterize_splat(target, splats[index], 0, target.height - 1)
 
 
+def _splat_index(value: Float32, round_up: Bool) -> Int:
+    """Return the pixel index of a splat edge.
+
+    A value that is not finite, or that does not fit in an integer, is
+    past every pixel. `Int` of such a float is not that coordinate.
+
+    Args:
+        value: The edge, in pixels.
+        round_up: True to round toward positive infinity.
+
+    Returns:
+        The index, or `Int.MAX` or `Int.MIN` when `value` does not fit.
+    """
+    var wide = Float64(value)
+    if not isfinite(wide) or wide >= Float64(Int.MAX):
+        return Int.MAX
+    if wide <= -Float64(Int.MAX):
+        return Int.MIN
+    if round_up:
+        return Int(ceil(wide))
+    return Int(floor(wide))
+
+
+def _splat_low(value: Float32, floor_at: Int) -> Int:
+    """Return the first pixel at or before `value`, held at `floor_at`.
+
+    Args:
+        value: The near edge, in pixels.
+        floor_at: The first pixel the band may touch.
+
+    Returns:
+        The column or row the walk starts at, or past the image.
+    """
+    var index = _splat_index(value, False)
+    if index == Int.MIN:
+        return floor_at
+    if index == Int.MAX:
+        return Int.MAX
+    return max(index - 1, floor_at)
+
+
+def _splat_high(value: Float32, ceil_at: Int) -> Int:
+    """Return the last pixel at or after `value`, held at `ceil_at`.
+
+    Args:
+        value: The far edge, in pixels.
+        ceil_at: The last pixel the band may touch.
+
+    Returns:
+        The column or row the walk ends at, or before the image.
+    """
+    var index = _splat_index(value, True)
+    if index == Int.MAX:
+        return ceil_at
+    if index == Int.MIN:
+        return Int.MIN
+    return min(index + 1, ceil_at)
+
+
 def rasterize_splat(
     mut target: RenderTarget,
     splat: ProjectedSplat,
@@ -196,12 +255,14 @@ def rasterize_splat(
         Error: If a target blend is refused.
     """
     var reach = splat_reach(splat)
-    var left = max(Int(floor(splat.x - reach[0])) - 1, 0)
-    var right = min(Int(ceil(splat.x + reach[0])) + 1, target.width - 1)
-    var top = max(Int(floor(splat.y - reach[1])) - 1, max(0, first_row))
-    var bottom = min(
-        Int(ceil(splat.y + reach[1])) + 1, min(target.height - 1, last_row)
+    var left = _splat_low(splat.x - reach[0], 0)
+    var right = _splat_high(splat.x + reach[0], target.width - 1)
+    var top = _splat_low(splat.y - reach[1], max(0, first_row))
+    var bottom = _splat_high(
+        splat.y + reach[1], min(target.height - 1, last_row)
     )
+    if left > right or top > bottom:
+        return
     for y in range(top, bottom + 1):
         _blend_row(target, splat, y, left, right)
 

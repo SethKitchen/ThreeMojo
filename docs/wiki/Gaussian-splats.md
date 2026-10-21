@@ -105,7 +105,7 @@ The standalone `draw_gaussian_splat` API still draws into an existing target.
 Pass its optional `viewport` to project into a rectangle. By default, it uses
 the whole target. Call it in the order required by other transparent draws.
 
-`prepare_gaussian_splat` sorts the splats when `auto_sort` is on. It adds the spherical harmonics to the colors. Then it projects each splat with `render/splatrule.mojo`. `rasterize_splats` blends the projected splats in draw order.
+`prepare_gaussian_splat` sorts the splats when `auto_sort` is on. It adds the spherical harmonics to the colors. Then it projects each splat with `render/splatrule.mojo`. `rasterize_splats` blends the projected splats in draw order. A center that does not fit in an integer lies past the image.
 
 The projection is the vertex shader of three.js. The 3D covariance goes into view space, and the Jacobian of the perspective divide takes it onto the screen. The 2D covariance gets 0.3 pixels squared on its diagonal. The opacity is scaled by `sqrt(det / det')`, so the filter does not make a splat brighter. The axes of the ellipse are the eigenvectors of the 2D covariance.
 
