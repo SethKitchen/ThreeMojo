@@ -111,6 +111,8 @@ The window manager's close button does not close the window. It sets `close_requ
 ### What is refused
 
 - A size that is not positive.
+- A size that does not fit in a native integer.
+- A size whose four bytes a pixel do not fit in an integer.
 - A display that cannot be opened.
 - A display whose visual is not 24-bit TrueColor with red in the high byte.
 - A frame of another size.

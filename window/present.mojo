@@ -8,6 +8,9 @@
 from core.extent import positive_extent
 from render.framebuffer import Framebuffer
 
+# `XCreateSimpleWindow` takes a `c_int` for each side.
+comptime NATIVE_WINDOW_MAX = Int(Int32.MAX)
+
 
 def require_window_size(width: Int, height: Int) raises:
     """Refuse a window whose size is not positive.
@@ -25,6 +28,27 @@ def require_window_size(width: Int, height: Int) raises:
         raise Error(
             "A window's size must be positive, got ", width, "x", height
         )
+
+
+def require_native_window_size(width: Int, height: Int) raises:
+    """Refuse a size Xlib cannot pass, or whose pixel buffer would wrap.
+
+    Nothing. The call returns when both sizes are positive, fit in a
+    native `c_int`, and four bytes a pixel fit in an integer.
+
+    Args:
+        width: The width, in pixels.
+        height: The height, in pixels.
+
+    Raises:
+        Error: If the size is not positive, a side does not fit in a
+            native integer, or four bytes a pixel do not fit.
+    """
+    require_window_size(width, height)
+    if width > NATIVE_WINDOW_MAX or height > NATIVE_WINDOW_MAX:
+        raise Error("A window's size does not fit in a native integer")
+    if width > (Int.MAX // 4) // height:
+        raise Error("A window is larger than this port stores")
 
 
 def require_open(is_open: Bool) raises:

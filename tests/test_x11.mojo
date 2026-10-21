@@ -44,6 +44,7 @@ from std.testing import (
 )
 from units.si import Duration, MILLISECOND, SECOND
 from std.os import setenv
+from window.present import NATIVE_WINDOW_MAX
 from window.x11 import (
     X11Window,
     event_of,
@@ -410,6 +411,12 @@ def test_a_window_is_refused_what_it_cannot_do() raises:
         _ = X11Window(0, 4)
     with assert_raises(contains="must be positive"):
         _ = X11Window(4, 0)
+    with assert_raises(contains="native integer"):
+        _ = X11Window(NATIVE_WINDOW_MAX + 1, 1)
+    with assert_raises(contains="native integer"):
+        _ = X11Window(1, NATIVE_WINDOW_MAX + 1)
+    with assert_raises(contains="larger than this port"):
+        _ = X11Window(NATIVE_WINDOW_MAX, NATIVE_WINDOW_MAX)
     with assert_raises(contains="Could not open"):
         _ = X11Window(4, 4, display=":999")
     var shallow = Server(depth=16)
