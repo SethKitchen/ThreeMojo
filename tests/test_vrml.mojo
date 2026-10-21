@@ -484,6 +484,24 @@ def test_refusals() raises:
         ),
         "needs a hex number",
     )
+    refuses(
+        (
+            "Shape { appearance Appearance { texture PixelTexture { image"
+            " 2000000000 2000000000 1 } } }"
+        ),
+        "larger than this port",
+    )
+    # A zero height makes no bytes. It is not an overflow.
+    var empty = Scene()
+    var empty_assets = Assets()
+    _ = parse_vrml(
+        (
+            "#VRML V2.0 utf8\nShape { appearance Appearance { texture"
+            " PixelTexture { image 1 0 1 } } }"
+        ),
+        empty,
+        empty_assets,
+    )
     # A material refuses an opacity above one.
     refuses(
         (

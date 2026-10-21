@@ -1843,6 +1843,10 @@ def _pixels(field: VrmlField, name: String) raises -> VrmlTexture:
         and (components >= 1 and components <= 4) else 0
     )
     record.pending_type = kind
+    # Divide before multiplying. A width and a height under `1e15` can
+    # still wrap the byte count.
+    if record.height != 0 and record.width > (Int.MAX // 4) // record.height:
+        raise Error("VRML: an image is larger than this port reads")
     var size = 4 * record.width * record.height
     record.data = List[UInt8](length=size, fill=0)
     var rgba: List[UInt8] = [0, 0, 0, 0]
