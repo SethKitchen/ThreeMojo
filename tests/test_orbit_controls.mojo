@@ -11,6 +11,7 @@ the view covers ten meters top to bottom, so a pixel of pan is a tenth of
 a meter, and a drag of 25 pixels is a quarter turn.
 """
 
+from cameras.orthographic_camera import OrthographicCamera
 from cameras.perspective_camera import PerspectiveCamera
 from controls.input import (
     ARROW_DOWN,
@@ -38,9 +39,12 @@ from controls.orbit_controls import (
     OrbitControls,
     PAN,
     ROTATE,
+    _orthographic_view,
+    _perspective_view,
+    _pixel_ndc,
 )
 from math.vector3 import Vector3
-from std.math import cos, inf, pi, sin, sqrt
+from std.math import cos, inf, nan, pi, sin, sqrt, tan
 from std.testing import (
     TestSuite,
     assert_almost_equal,
@@ -605,6 +609,58 @@ def test_dolly_by_a_factor() raises:
         controls.dolly_out(0)
     with assert_raises(contains="dolly factor"):
         controls.dolly_out(2)
+
+
+def test_a_tall_view_keeps_its_width_and_its_pan() raises:
+    var camera = _camera()
+    # An odd height at 2^23 rounds up in Float32 before the cut to an integer.
+    var view = _perspective_view(camera, Vector3(0, 0, 0), 8388609)
+    assert_equal(view.width, 8388609)
+    var wide = _perspective_view(camera, Vector3(0, 0, 0), 16777217)
+    assert_equal(wide.width, 16777217)
+    var covered = Float32(5) * tan(camera.fov.to(RADIAN) / 2)
+    var expected = Float32(Float64(2 * covered) / Float64(16777217))
+    assert_equal(wide.per_y, expected)
+    assert_true(wide.per_y != 2 * covered / Float32(16777217))
+    camera.aspect = Float32(1e20)
+    with assert_raises(contains="does not fit"):
+        _ = _perspective_view(camera, Vector3(0, 0, 0), 10)
+    camera.aspect = Float32(-1e20)
+    with assert_raises(contains="does not fit"):
+        _ = _perspective_view(camera, Vector3(0, 0, 0), 10)
+    camera.aspect = nan[DType.float32]()
+    with assert_raises(contains="does not fit"):
+        _ = _perspective_view(camera, Vector3(0, 0, 0), 10)
+    camera.aspect = 1
+    with assert_raises(contains="does not fit"):
+        _ = _perspective_view(camera, Vector3(0, 0, 0), Int.MAX)
+
+
+def test_a_wide_pixel_center_stays_on_its_pixel() raises:
+    var small = _pixel_ndc(50, 100)
+    assert_equal(small, (Float32(50) + 0.5) / Float32(100) * 2 - 1)
+    assert_true(small != Float32((Float64(50) + 0.5) / Float64(100) * 2 - 1))
+    var count = 8388609
+    var center = Float32((Float64(count - 1) + 0.5) / Float64(count) * 2 - 1)
+    assert_equal(_pixel_ndc(count - 1, count), center)
+    assert_true(center != (Float32(count - 1) + 0.5) / Float32(count) * 2 - 1)
+
+
+def test_an_orthographic_pan_divides_a_wide_view_in_full() raises:
+    var camera = OrthographicCamera(
+        Length(-5.0, METER),
+        Length(5.0, METER),
+        Length(5.0, METER),
+        Length(-5.0, METER),
+        Length(0.1, METER),
+        Length(100.0, METER),
+    )
+    camera.place(Vector3(0, 0, 5), Vector3(0, 0, 0))
+    var view = _orthographic_view(camera, Vector3(0, 0, 0), 16777217, 100)
+    var expected = Float32(Float64(10) / Float64(16777217))
+    assert_equal(view.per_x, expected)
+    assert_true(view.per_x != Float32(10) / Float32(16777217))
+    assert_equal(view.per_y, Float32(10) / Float32(100))
 
 
 def test_invalid_input_is_refused() raises:

@@ -194,17 +194,19 @@ Every event also carries `shift`, `alt` and `ctrl`. The window gives `x` and `y`
 
 The camera's offset from the target is a radius and two angles, as three.js's `Spherical` holds them. `theta` turns about y from +z. `phi` goes down from +y. A rotation adds to the angles, and a dolly scales the radius. A pan moves the target and the camera together.
 
+The width is the height times the aspect, rounded in `Float64`. A rounded width that is not finite or does not fit in an integer is refused. The meters one pixel of pan moves are divided in `Float64`.
+
 The polar angle stays a millionth of a radian away from each pole. At a pole, the camera's right is undefined. A range about y with its low limit above its high limit passes through a half turn. An angle outside it goes to the nearer limit, as in three.js.
 
 With damping, `damping_factor` of each pending rotation and pan applies each frame. The rest waits. A dolly is not damped, as in three.js.
 
 ### Orthographic cameras
 
-`handle(event, camera, width, height)`, `update(camera, delta)` and `pan(dx, dy, camera, width, height)` take an `OrthographicCamera` too. A dolly changes the camera's `zoom` rather than its distance, kept between `min_zoom` and `max_zoom`. A pan moves by the extent the volume covers at that zoom, over the view's size, as three.js's `pan` measures it.
+`handle(event, camera, width, height)`, `update(camera, delta)` and `pan(dx, dy, camera, width, height)` take an `OrthographicCamera` too. A dolly changes the camera's `zoom` rather than its distance, kept between `min_zoom` and `max_zoom`. A pan moves by the extent the volume covers at that zoom, over the view's size, as three.js's `pan` measures it. That division is a `Float64`.
 
 ### Zoom to the cursor
 
-With `zoom_to_cursor` set, a wheel notch or a dolly drag goes toward the point under the pointer. A perspective camera moves down the ray through the pointer by what the dolly takes off the distance. An orthographic camera moves so that the point under the pointer stays under it as the zoom changes. The target then sits straight ahead of the camera at the new distance, as in three.js.
+With `zoom_to_cursor` set, a wheel notch or a dolly drag goes toward the point under the pointer. A perspective camera moves down the ray through the pointer by what the dolly takes off the distance. An orthographic camera moves so that the point under the pointer stays under it as the zoom changes. The target then sits straight ahead of the camera at the new distance, as in three.js. A pixel center on a side above 8388608 pixels is measured in `Float64`.
 
 ### The camera's up
 
