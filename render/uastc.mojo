@@ -33,6 +33,8 @@ The first texel of each subset stores one weight bit fewer.
 """
 
 from core.binary import copy_bytes
+from core.extent import require_positive_extent
+from render.compressed_texture import check_decoded_size
 
 # The number of UASTC LDR modes; a prefix code of a higher number is
 # reserved.
@@ -484,9 +486,13 @@ def uastc_image(
         column are dropped.
 
     Raises:
-        Error: If `data` is not one block per four by four texels, or a
-            block is malformed; see `uastc_block`.
+        Error: If the size is not positive, the image would decode to
+            more than `MAX_DECODED_BYTES`, `data` is not one block per
+            four by four texels, or a block is malformed; see
+            `uastc_block`.
     """
+    require_positive_extent(width, height, "UASTC: dimensions must be positive")
+    check_decoded_size(width, height, False)
     var across = (width + 3) // 4
     var down = (height + 3) // 4
     if len(data) != across * down * UASTC_BLOCK_BYTES:

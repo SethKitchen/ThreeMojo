@@ -212,6 +212,10 @@ def test_malformed_blocks_are_refused() raises:
         _ = uastc_hdr_block(block([(tight, 13), (0, 10), (16, 6)]), 0, tables)
     with assert_raises(contains="one block per 4x4 texels"):
         _ = uastc_hdr_image(5, 4, List[UInt8](length=16, fill=0))
+    with assert_raises(contains="dimensions must be positive"):
+        _ = uastc_hdr_image(0, 1, List[UInt8]())
+    with assert_raises(contains="MAX_DECODED_BYTES"):
+        _ = uastc_hdr_image(1 << 30, 1, List[UInt8]())
 
 
 def main() raises:

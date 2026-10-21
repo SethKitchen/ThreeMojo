@@ -302,6 +302,7 @@ The tests decode frames that libzstd 1.5.7 wrote at levels -5 to 19. Frames buil
 
 - Each container refuses a wrong identifier or magic, a size that is not positive, and a file that ends early.
 - A size that decodes to more than `MAX_DECODED_BYTES` is refused before any allocation. A float format counts sixteen bytes a texel.
+- `uastc_image` and `uastc_hdr_image` refuse a size that is not positive, or that decodes past `MAX_DECODED_BYTES`.
 - A KTX2 file refuses a descriptor or a level outside the file, and a level whose length is not its size.
 - A KTX2 half or float format with the sRGB transfer function is refused.
 - A KTX2 file with ETC1S data must use BasisLZ, and BasisLZ must hold ETC1S. UASTC and ETC1S data must name no Vulkan format. UASTC HDR data must name no Vulkan format or ASTC 4x4 SFLOAT.
