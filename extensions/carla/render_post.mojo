@@ -501,6 +501,9 @@ def lens_falloff(lens: LensSettings, u: Float32, v: Float32) -> Float32:
 def apply_lens(mut frame: RenderTarget, lens: LensSettings):
     """Bend and darken a frame as the lens does.
 
+    A side above 8388608 pixels measures each pixel's center in
+    `Float64`.
+
     Args:
         frame: The frame, changed in place.
         lens: The lens.
@@ -514,8 +517,8 @@ def apply_lens(mut frame: RenderTarget, lens: LensSettings):
     # A frame has at least one pixel.
     for y in range(frame.height):  # pragma: no branch
         for x in range(frame.width):  # pragma: no branch
-            var u = (Float32(x) + 0.5) / w * 2 - 1
-            var v = (Float32(y) + 0.5) / h * 2 - 1
+            var u = texel_ndc(x, frame.width)
+            var v = texel_ndc(y, frame.height)
             var seen = before[y * frame.width + x]
             if bends:
                 var from_ = lens_source(lens, u, v)

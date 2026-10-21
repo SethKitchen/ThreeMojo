@@ -209,7 +209,7 @@ One unit of the renderer's light is `pi` times 4000 lux, so a white wall under o
 | `lens_circle_falloff`, `lens_circle_multiplier` | The darkening of the rim. |
 | `camera_model` and the fisheye attributes | The fisheye lens, through `cameras.WideAngleLens`. |
 
-The depth of field, the filmic curve's shape and the adaptation speeds are read and kept. ThreeMojo's passes have no place for them.
+The depth of field, the filmic curve's shape and the adaptation speeds are read and kept. ThreeMojo's passes have no place for them. A side above 8388608 pixels measures a lens pixel's center in `Float64`.
 
 A fisheye camera draws a cube of the scene around the camera, then reads each pixel's ray through its lens. The cube has no depth. The fog is then the renderer's exponential fog, and the rain and the reflections are left out.
 

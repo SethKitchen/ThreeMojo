@@ -88,6 +88,7 @@ from extensions.carla.render_weather import (
 )
 from extensions.carla.weather import WeatherParameters, weather_preset
 from math.matrix4 import Matrix4
+from math.utils import texel_ndc
 from math.projection import perspective
 from math.vector2 import Vector2
 from math.vector3 import Vector3
@@ -720,6 +721,18 @@ def test_lens() raises:
     assert_almost_equal(frame.colors[0].r, 1, atol=1e-6)
     apply_lens(frame, dark)
     assert_true(frame.colors[0].r < frame.colors[5].r)
+
+
+def test_a_wide_lens_keeps_the_pixel_center_inside() raises:
+    var width = 8388609
+    var frame = RenderTarget(width, 1, Color(0, 0, 0))
+    frame.colors[width - 1] = FloatColor(1, 1, 1)
+    var dark = LensSettings(0, 0, 0, 0, 2, 1)
+    apply_lens(frame, dark)
+    var center = texel_ndc(width - 1, width)
+    var edge = (Float32(width - 1) + 0.5) / Float32(width) * 2 - 1
+    assert_equal(frame.colors[width - 1].r, lens_falloff(dark, center, 0))
+    assert_true(frame.colors[width - 1].r != lens_falloff(dark, edge, 0))
 
 
 def main() raises:
