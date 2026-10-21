@@ -242,6 +242,14 @@ def test_a_face_texel_direction_is_where_face_uv_reads_it() raises:
                 )
 
 
+def test_a_wide_face_keeps_its_last_texel_inside() raises:
+    var size = 16777217
+    var direction = face_direction(POSITIVE_X, size - 1, 0, size)
+    var across = Float32((Float64(size - 1) + 0.5) / Float64(size) * 2 - 1)
+    assert_equal(direction.z, across)
+    assert_true(across < 1)
+
+
 def banded(height: Int) raises -> Texture:
     """Return a float panorama twice as wide as tall whose rows hold their
     own row number as red and whose columns hold theirs as green."""

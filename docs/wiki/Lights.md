@@ -143,7 +143,7 @@ A probe of a uniform sky of radiance one gives an irradiance of pi. A white matt
 
 ### How a probe is measured
 
-`sh_from_cube` reads every texel of the six faces in linear light. It weights each texel by the solid angle it covers and projects it onto the nine terms. This is three.js's arithmetic. The direction of a texel is `face_direction`, this project's one cube convention. three.js walks the faces of an image cube in its own layout instead, with the px image toward -x.
+`sh_from_cube` reads every texel of the six faces in linear light. It weights each texel by the solid angle it covers and projects it onto the nine terms. This is three.js's arithmetic. The direction of a texel is `face_direction`, this project's one cube convention. three.js walks the faces of an image cube in its own layout instead, with the px image toward -x. A face above 8388608 texels measures a texel center in `Float64`.
 
 ### The GPU
 
