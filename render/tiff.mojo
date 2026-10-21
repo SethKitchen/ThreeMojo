@@ -48,7 +48,9 @@ YCbCr. Strips that cover fewer rows than the image: UTIF cuts the data
 short, and each photometric form reads the missing bytes differently.
 And an LZW code past the table right after a clear code, which UTIF
 reads from a table it shares between decodes, so that its output depends
-on what was decoded before.
+on what was decoded before. An image whose pixel count or sample buffer
+does not fit is refused. A tile with no positive width or height is
+refused.
 
 **Where UTIF is followed.** Any other LZW code past the table is read as
 the next code.
@@ -65,6 +67,8 @@ from std.memory import bitcast
 
 # The largest image this port decodes, in pixels.
 comptime MAX_TIFF_PIXELS = 1 << 26
+# Four 32-bit samples, the widest pixel `toRGBA8` keeps, times that many.
+comptime MAX_TIFF_BYTES = MAX_TIFF_PIXELS * 16
 
 
 struct _Reader[origin: Origin[mut=False]]:
@@ -432,10 +436,18 @@ def _decompress[
         var stream = List[UInt8](capacity=max(length - 6, 0))
         for k in range(offset + 2, offset + length - 4):  # pragma: no branch
             stream.append(UInt8(data.byte(k)))
-        var out = inflate(stream)
-        if start + len(out) <= len(target):
+        # Stop at the bytes that fit. A longer member is dropped, as a
+        # member that does not fit was dropped after it had expanded.
+        try:
+            var out = inflate(stream, limit=len(target) - start)
             for k in range(len(out)):  # pragma: no branch
                 target[start + k] = out[k]
+        except e:
+            if (
+                String(e)
+                != "A compressed stream expands to more than was expected"
+            ):
+                raise e
     elif compression == 32773:
         _pack_bits(data, offset, length, target, start)
     else:
@@ -481,6 +493,41 @@ def _decompress[
                     target[row + j] = target[row + j] + target[row + j - pixel]
 
 
+def _checked_mul(left: Int, right: Int) raises -> Int:
+    """Return `left * right`, or refuse a product that does not fit.
+
+    Args:
+        left: One factor. A TIFF size is never negative.
+        right: The other factor.
+
+    Returns:
+        The product. A zero factor gives zero.
+
+    Raises:
+        Error: If the product does not fit in an integer.
+    """
+    if right != 0 and left > Int.MAX // right:
+        raise Error("TIFF: the image is larger than this port decodes")
+    return left * right
+
+
+def _limit_bytes(count: Int) raises -> Int:
+    """Return a buffer length that this port will allocate.
+
+    Args:
+        count: The byte count.
+
+    Returns:
+        `count`, when it is within `MAX_TIFF_BYTES`.
+
+    Raises:
+        Error: If `count` is past that limit.
+    """
+    if count > MAX_TIFF_BYTES:
+        raise Error("TIFF: the image is larger than this port decodes")
+    return count
+
+
 def _decode_image[
     origin: Origin[mut=False]
 ](ifd: _Ifd, data: _Reader[origin]) raises -> List[UInt8]:
@@ -496,20 +543,25 @@ def _decode_image[
     Raises:
         Error: If the image has no size, no strips or tiles, planar
             configuration 2, or strips that cover fewer rows than the
-            image; and for anything `_decompress` refuses.
+            image; if its pixel count or sample buffer does not fit; if
+            a tile has no positive size; and for anything `_decompress`
+            refuses.
     """
     var width = ifd.first(256, -1)
     var height = ifd.first(257, -1)
     require_positive_extent(width, height, "TIFF: the image has no size")
-    if width * height > MAX_TIFF_PIXELS:
+    # Divide before multiplying. A wrapped product is smaller than the
+    # limit and would allocate the wrong buffer.
+    if width > MAX_TIFF_PIXELS // height:
         raise Error("TIFF: the image is larger than this port decodes")
     var compression = ifd.first(259, 1)
     if ifd.first(284, 1) == 2:
         raise Error("TIFF: planar configuration 2 is not read")
     var samples = ifd.first(277, 1)
     var bits = ifd.first(258, 1)
-    var per_pixel = bits * samples
-    var line_bits = (width * per_pixel + 7) // 8 * 8
+    var per_pixel = _checked_mul(bits, samples)
+    var line_bits = (_checked_mul(width, per_pixel) + 7) // 8 * 8
+    var byte_count = _limit_bytes(_checked_mul(height, line_bits >> 3))
     var tiled = Bool(ifd.get(322))
     var offsets = ifd.get(324) if tiled else ifd.get(273)
     if not Bool(offsets):
@@ -518,16 +570,23 @@ def _decode_image[
     var counts = List[Int]()
     var stated = ifd.get(325) if tiled else ifd.get(279)
     if compression == 1 and len(starts) == 1:
-        counts = [height * (line_bits >> 3)]
+        counts = [byte_count]
     elif Bool(stated):
         counts = stated.value().copy()
-    var bytes = List[UInt8](length=height * (line_bits >> 3), fill=0)
+    var bytes = List[UInt8](length=byte_count, fill=0)
     if tiled:
         var tile_width = ifd.first(322, 1)
         var tile_height = ifd.first(323, 1)
+        if tile_width <= 0:
+            raise Error("TIFF: a tile has no size")
+        if tile_height <= 0:
+            raise Error("TIFF: a tile has no size")
         var across = (width + tile_width - 1) // tile_width
         var down = (height + tile_height - 1) // tile_height
-        var tile_bytes = (tile_width * tile_height * per_pixel + 7) // 8
+        var tile_pixels = _checked_mul(tile_width, tile_height)
+        var tile_bytes = _limit_bytes(
+            (_checked_mul(tile_pixels, per_pixel) + 7) // 8
+        )
         var tile_line = (tile_width * per_pixel + 7) // 8
         var image_line = (width * per_pixel + 7) // 8
         for y in range(down):  # pragma: no branch

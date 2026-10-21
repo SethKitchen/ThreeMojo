@@ -205,6 +205,8 @@ The decoder refuses these, with a message that names the problem:
 - An LZW code past the table right after a clear code. UTIF reads it from a table that it shares between decodes, so its output depends on what it decoded before.
 - Strips that cover fewer rows than the image. UTIF cuts the data short, and each photometric form reads the missing bytes in its own way.
 - An image of no width or no height, and a file that starts with neither `II` nor `MM`. Also a tile with no offset or no byte count. three.js gives an empty image for the first two. For such a tile, UTIF reads what it can, differently for each compression.
+- An image whose pixel count or sample buffer does not fit.
+- A tile whose width or height is not positive.
 
 The tests read 96 files that `assets/tiff/make_tiff.py` wrote, with Pillow and by hand. Each one must have the bytes that three.js 0.180 gives, or be one of the seven that the decoder refuses on purpose.
 
