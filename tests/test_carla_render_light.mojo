@@ -35,6 +35,7 @@ from extensions.carla.render_weather import height_fog
 from extensions.carla.weather import weather_preset
 from lights.shadow import ShadowMap
 from math.matrix4 import Matrix4
+from math.utils import texel_ndc, texel_ndc_up
 from math.noise import ImprovedNoise
 from math.vector3 import Vector3
 from postprocessing.screen_space import DepthView
@@ -190,6 +191,15 @@ def test_a_shaft_of_no_steps_lets_the_sun_through() raises:
             stride=1,
             steps=0,
         )
+
+
+def test_a_wide_view_keeps_the_last_pixel_inside() raises:
+    var wide = 16777217
+    var rays = ViewRays(wide, 4, Matrix4(), Matrix4())
+    var point = rays.view_point(wide - 1, 0, 0)
+    assert_equal(point.x, texel_ndc(wide - 1, wide))
+    assert_true(point.x < 1)
+    assert_equal(point.y, texel_ndc_up(0, 4))
 
 
 def main() raises:

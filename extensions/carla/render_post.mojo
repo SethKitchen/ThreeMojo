@@ -32,7 +32,7 @@ The sizes and gains are this port's own choices.
 
 from extensions.carla.render_weather import HeightFog, RainSettings
 from math.matrix4 import Matrix4
-from math.utils import SeededRandom
+from math.utils import SeededRandom, texel_ndc, texel_ndc_up
 from math.vector3 import Vector3
 from render.cube_texture import CubeTexture
 from render.framebuffer import FloatColor
@@ -130,13 +130,14 @@ struct ViewRays(ImplicitlyCopyable):
             x: The column.
             y: The row, down from the top.
             depth: The depth a render target stores: the NDC depth, -1 at
-                the near plane and 1 at the far.
+                the near plane and 1 at the far. A side above 2^23
+                measures the pixel center in `Float64`.
 
         Returns:
             The point, minus z in front of the camera.
         """
-        var u = (Float32(x) + 0.5) / Float32(self.width) * 2 - 1
-        var v = 1 - (Float32(y) + 0.5) / Float32(self.height) * 2
+        var u = texel_ndc(x, self.width)
+        var v = texel_ndc_up(y, self.height)
         return self.unproject.transform_point(Vector3(u, v, depth))
 
     def world_point(self, x: Int, y: Int, depth: Float32) -> Vector3:

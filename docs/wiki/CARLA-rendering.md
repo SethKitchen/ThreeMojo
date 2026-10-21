@@ -168,7 +168,7 @@ Each mapping is a pure function in `render_weather`. The tests check each one ag
 | `dust_storm` | More fog and a more turbid sky. |
 | Sun below the horizon | The street lamps, the lit windows and the car lamps. |
 
-The fog takes the sky's color just above the horizon in each ray's direction. It glows warm toward a low sun and stays blue away from it. The haze dims far surfaces but not the sky.
+The fog takes the sky's color just above the horizon in each ray's direction. It glows warm toward a low sun and stays blue away from it. The haze dims far surfaces but not the sky. A side above 8388608 pixels measures the ray's pixel center in `Float64`.
 
 ## Light
 
