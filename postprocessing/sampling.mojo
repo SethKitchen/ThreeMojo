@@ -253,6 +253,9 @@ def clamped_texel(coordinate: Float32, count: Int) -> Float32:
     and one is the last pixel's center. A position outside the image
     stays on the edge pixel.
 
+    A count past 2^24 is not a whole `Float32`. That count is multiplied
+    in `Float64`, so one still names the last pixel.
+
     Args:
         coordinate: Zero at the first pixel and one at the last.
         count: How many pixels. It is at least one.
@@ -260,4 +263,17 @@ def clamped_texel(coordinate: Float32, count: Int) -> Float32:
     Returns:
         The pixel position, from zero through `count - 1`.
     """
-    return min(max(coordinate * Float32(count) - 0.5, 0), Float32(count - 1))
+    # Every integer through 2^24 is a `Float32`. The bit-exact clamps for
+    # those counts stay in `Float32`.
+    if count <= 16777216:
+        return min(
+            max(coordinate * Float32(count) - 0.5, Float32(0)),
+            Float32(count - 1),
+        )
+    var span = Float64(coordinate) * Float64(count) - 0.5
+    var limit = Float64(count) - 1
+    if span < 0:
+        span = 0
+    if span > limit:
+        span = limit
+    return Float32(span)

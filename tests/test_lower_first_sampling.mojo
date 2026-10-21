@@ -196,5 +196,14 @@ def test_color_summands_keep_original_order() raises:
                 )
 
 
+def test_a_wide_image_clamps_one_to_its_last_pixel() raises:
+    # `Float32` of 16777217 is 16777216, so one used to stop a pixel early.
+    assert_equal(clamped_texel(1, 16777217), Float32(16777216))
+    assert_equal(clamped_texel(0, 16777217), Float32(0))
+    assert_equal(clamped_texel(2, 16777217), Float32(16777216))
+    assert_equal(clamped_texel(-1, 16777217), Float32(0))
+    assert_equal(clamped_texel(0.5, 16777217), Float32(8388608))
+
+
 def main() raises:
     TestSuite.discover_tests[__functions_in_module()]().run()
