@@ -423,6 +423,22 @@ def test_what_three_js_throws_on_in_xml_is_refused() raises:
         _ = parse_vtk_xml(_vtp(root, String(whole) + whole, data))
 
 
+def test_a_zlib_block_past_its_header_size_is_refused() raises:
+    # One stored block of four bytes, and a header that allows one.
+    with assert_raises(contains="more than was expected"):
+        _ = parse_vtk_xml(
+            _vtp(
+                ' header_type="UInt32" compressor="z"',
+                _PIECE
+                + '<Points><DataArray type="Float32" NumberOfComponents="3"'
+                + ' format="binary">AQAAAAQAAAABAAAACwAAAAAAeAEBBAD7/wECAwQ='
+                + "</DataArray></Points>"
+                + _POLYS
+                + "</Piece>",
+            )
+        )
+
+
 def test_text_edges_are_read_as_three_js_reads_them() raises:
     var points = "POINTS 3 float\n0 0 0 1 0 0 0 1 0\n"
     # An index of four hundred nines is Infinity, which a typed array

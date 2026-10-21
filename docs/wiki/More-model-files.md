@@ -1044,6 +1044,7 @@ The loader refuses these, with a message that names the problem. three.js throws
 - A value past the end of the file, base64 that is not a multiple of four characters, and zlib data that is not zlib.
 - An XML file with no cells or no points, or a part that three.js reads but the file does not have.
 - A binary line with no end, and a count that is not a number. three.js reads these for ever.
+- A zlib block that expands past the size in its header.
 - An index past the points. three.js keeps it and draws from undefined positions.
 - A text or XML file that is not UTF-8.
 

@@ -53,7 +53,8 @@ three.js reads but the file does not have. A binary line with no end and
 a count that is not a number, which three.js never finishes reading. A
 text or XML file that is not UTF-8, which three.js decodes with
 replacement characters. And an index past the points, which three.js
-keeps and draws from undefined positions.
+keeps and draws from undefined positions. A zlib block that expands
+past the size in its header is refused.
 """
 
 from math.finite import stored_float32
@@ -1190,19 +1191,21 @@ def _header_value(bytes: List[UInt8], at: Int, width: Int) -> Int:
     return value
 
 
-def _inflated(block: Span[UInt8, _]) raises -> List[UInt8]:
+def _inflated(block: Span[UInt8, _], limit: Int) raises -> List[UInt8]:
     """Return fflate's `unzlibSync`: the zlib header checked, the adler
     left unread.
 
     Args:
         block: The zlib stream.
+        limit: The most bytes the block may expand to. A header size is
+            already a signed 32-bit value, as three.js reads it.
 
     Returns:
         The bytes.
 
     Raises:
-        Error: If the header is not zlib's, names a dictionary, or the
-            stream is malformed.
+        Error: If the header is not zlib's, names a dictionary, the
+            stream is malformed, or it expands past `limit`.
     """
     var bad = (
         len(block) < 2
@@ -1214,7 +1217,7 @@ def _inflated(block: Span[UInt8, _]) raises -> List[UInt8]:
         raise Error("invalid zlib data")
     if (block[1] & 32) != 0:
         raise Error("invalid zlib data: preset dictionaries not supported")
-    return inflate(block, 2)
+    return inflate(block, 2, limit)
 
 
 def _data_array(
@@ -1262,10 +1265,15 @@ def _data_array(
         for i in range(blocks):
             var size = _header_value(bytes, i * width + 3 * width, width)
             offsets.append(offsets[len(offsets) - 1] + size)
+        # Word one is every full block's uncompressed size. Word two is
+        # the last block's. Both are read as three.js reads the header.
+        var block_size = _header_value(bytes, width, width)
+        var last_size = _header_value(bytes, width * 2, width)
         for i in range(len(offsets) - 1):
             var a = _relative(Float64(offsets[i]), len(bytes))
             var b = _relative(Float64(offsets[i + 1]), len(bytes))
-            var data = _inflated(Span(bytes)[a : max(a, b)])
+            var room = last_size if i == len(offsets) - 2 else block_size
+            var data = _inflated(Span(bytes)[a : max(a, b)], room)
             values.extend(_typed(data, type, "a compressed block"))
         if type == "Int64":
             return _low_halves(values)
