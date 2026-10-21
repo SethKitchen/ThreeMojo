@@ -1596,6 +1596,8 @@ def test_header_and_images_bytes() raises:
         _hex(optical_flow_data(0, 0, 90, List[Float32]())),
         "00000000000000000000b442",
     )
+    with assert_raises(contains="larger than this port"):
+        _ = optical_flow_data(1 << 31, 1 << 32, 90, List[Float32]())
     assert_equal(
         _hex(dvs_data(0, 0, 90, List[DVSEvent]())), "00000000000000000000b442"
     )

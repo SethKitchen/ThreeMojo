@@ -160,6 +160,7 @@ A ground-truth camera casts one ray through the center of each pixel.
 - Instance segmentation writes the tag in red and the low 16 bits of the actor id in green and blue.
 - Normals write the normal in the view frame: x right, y up and z toward the camera.
 - Optical flow gives the move of each pixel's point since the last frame, in normalized device units.
+- An optical flow image whose pixel count does not fit in an integer is refused.
 - RGB is a shaded stand-in: the tag's CityScapes color times the light on the surface. The [rendering tier](CARLA) draws the real image.
 
 The event camera compares the log intensity of each pixel with the last frame. Each crossing of the threshold gives an event with a time inside the tick.

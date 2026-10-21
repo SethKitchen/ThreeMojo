@@ -457,7 +457,8 @@ def optical_flow_data(
         The CARLA bytes, with the angle stored in degrees.
 
     Raises:
-        Error: If the angle or flow length is invalid.
+        Error: If the angle or flow length is invalid, or the image is
+            larger than this port writes.
     """
     return optical_flow_data_degrees(width, height, fov.to(DEGREE), flow)
 
@@ -477,9 +478,12 @@ def optical_flow_data_degrees(
         The 12-byte header, then the numbers as `float`s.
 
     Raises:
-        Error: If `flow` does not hold two numbers a pixel.
+        Error: If the field of view is invalid, `flow` does not hold two
+            numbers a pixel, or the pixel count does not fit.
     """
     _ = _nonnegative_si(Float64(fov))
+    if width > 0 and height > (Int.MAX // 2) // width:
+        raise Error("An optical flow image is larger than this port writes")
     if len(flow) != 2 * width * height:
         raise Error("An optical flow image needs two numbers a pixel")
     var w = ByteWriter()
