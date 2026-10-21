@@ -313,7 +313,7 @@ A 2D source region is a `Rect`. A volume source region is a `TexelBox`: a corner
 
 A copy into level zero of a texture with a chain rebuilds the chain with `Texture.regenerate_mipmaps`. three.js calls `generateMipmap` in the same case.
 
-`copy_framebuffer_to_texture` copies a rectangle the size of the texture's level. From a `Framebuffer` it copies the sRGB bytes into a byte texture. The default `SRGB` color space of `framebuffer_texture` reads them back as the light they show. From a `RenderTarget` it copies `attachment(0)`: a byte target fills a byte texture, and a half float or float target fills a float texture.
+`copy_framebuffer_to_texture` copies a rectangle the size of the texture's level. From a `Framebuffer` it copies the sRGB bytes into a byte texture. The default `SRGB` color space of `framebuffer_texture` reads them back as the light they show. From a `RenderTarget` it copies `attachment(0)`: a byte target fills a byte texture, and a half float or float target fills a float texture. A byte target's channel is held from zero to one and rounded to a byte. NaN and positive infinity are 255, and negative infinity is zero.
 
 `GpuRenderer.copy_framebuffer_to_texture(texture, position, level)` does the same copy from the device's image. See [GPU backend](GPU-backend#gpurenderer).
 
