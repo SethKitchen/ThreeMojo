@@ -289,7 +289,28 @@ def _slice(bytes: List[UInt8], offset: Int, size: Int) raises -> List[UInt8]:
     return copy_bytes(bytes, offset, size)
 
 
-def scale_gain_map(gain: DecodedImage, width: Int, height: Int) -> List[UInt8]:
+def _require_ultrahdr_extent(width: Int, height: Int) raises:
+    """Refuse an image below one pixel, or whose bytes do not fit.
+
+    Args:
+        width: The image width.
+        height: The image height.
+
+    Returns:
+        Nothing. The call returns when the image fits.
+
+    Raises:
+        Error: If a side is below one, or four bytes a pixel do not fit.
+    """
+    if width < 1 or height < 1:
+        raise Error("An UltraHDR image must be at least one pixel each way")
+    if width > (Int.MAX // 4) // height:
+        raise Error("An UltraHDR image is larger than this port scales")
+
+
+def scale_gain_map(
+    gain: DecodedImage, width: Int, height: Int
+) raises -> List[UInt8]:
     """Return a gain map scaled to the SDR image's size: bilinear, from
     the centers of the texels, as a canvas scales an image.
 
@@ -301,7 +322,11 @@ def scale_gain_map(gain: DecodedImage, width: Int, height: Int) -> List[UInt8]:
     Returns:
         RGBA bytes, `width * height * 4` of them. A gain map of the same
         size comes back as it is.
+
+    Raises:
+        Error: If a side is below one, or four bytes a pixel do not fit.
     """
+    _require_ultrahdr_extent(width, height)
     if gain.width == width and gain.height == height:
         return gain.pixels.copy()
     var out = List[UInt8](length=width * height * 4, fill=0)
@@ -353,9 +378,11 @@ def apply_gain_map(
         Linear RGBA floats, from the top row down, with an alpha of one.
 
     Raises:
-        Error: If the two images' aspect ratios differ, a number of the
-            metadata is not finite, or the HDR capacity range is zero.
+        Error: If a side is below one, four bytes a pixel do not fit, the
+            two images' aspect ratios differ, a number of the metadata is
+            not finite, or the HDR capacity range is zero.
     """
+    _require_ultrahdr_extent(sdr.width, sdr.height)
     if Float64(sdr.width) / Float64(sdr.height) != Float64(
         gain.width
     ) / Float64(gain.height):

@@ -434,6 +434,7 @@ An UltraHDR file holds two JPEG files: the SDR image and a gain map. The SDR ima
 - `parse_ultrahdr(bytes)` reads the bytes of a file. `apply_gain_map(sdr, gain, metadata)` applies a gain map to decoded images.
 - `render.jpeg` decodes the two JPEG files. It agrees with libjpeg to one level. A browser decodes them in three.js.
 - A gain map of another size is scaled bilinearly by `scale_gain_map`. A browser's canvas scales it in three.js, with a filter of its own.
+- An image below one pixel, or whose pixel count does not fit in an integer, is refused.
 - The alpha is one. three.js fills each alpha with 255.
 - An APP1 segment that is not XMP, such as EXIF data, is read past. three.js throws a `TypeError`.
 - A number in the metadata that is not finite, or an HDR capacity range of zero, is refused. three.js gives an image of `NaN`s.
