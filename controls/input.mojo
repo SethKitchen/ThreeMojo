@@ -25,6 +25,7 @@ window that reads the bytes converts a cell to the pixels it shows.
 from core.extent import require_positive_extent
 from loaders.bytes import ascii_digit
 from core.ordinal import ordinal_valid
+from math.utils import texel_ndc
 
 comptime ESCAPE_BYTE = 27
 # '[' opens a control sequence after an escape.
@@ -295,9 +296,7 @@ def pixel_center_ndc(pixel: Int, count: Int) -> Float32:
     Returns:
         The center, from minus one to one.
     """
-    if count > 8388608:
-        return Float32((Float64(pixel) + 0.5) / Float64(count) * 2 - 1)
-    return (Float32(pixel) + 0.5) / Float32(count) * 2 - 1
+    return texel_ndc(pixel, count)
 
 
 def refuse_invalid(what: String, value: Int) raises:

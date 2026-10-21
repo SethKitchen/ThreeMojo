@@ -24,7 +24,7 @@ from postprocessing.sampling import LightView
 from render.framebuffer import FloatColor
 from postprocessing.effects import _smoothstep
 from postprocessing.filter_nodes import circle
-from postprocessing.sampling import clamped_texel
+from postprocessing.sampling import clamped_texel, u_of, v_of
 from postprocessing.traa import sample_motion
 from postprocessing.upscaling import _clamp4
 from extensions.humanoid.skeleton.head.hair.shading import _saturate
@@ -203,6 +203,21 @@ def test_a_wide_image_clamps_one_to_its_last_pixel() raises:
     assert_equal(clamped_texel(2, 16777217), Float32(16777216))
     assert_equal(clamped_texel(-1, 16777217), Float32(0))
     assert_equal(clamped_texel(0.5, 16777217), Float32(8388608))
+
+
+def test_a_wide_frame_keeps_the_texel_center_inside() raises:
+    assert_equal(u_of(1, 4), (Float32(1) + 0.5) / Float32(4))
+    assert_equal(v_of(1, 4), 1 - (Float32(1) + 0.5) / Float32(4))
+    var wide = 8388609
+    assert_equal(
+        u_of(wide - 1, wide),
+        Float32((Float64(wide - 1) + 0.5) / Float64(wide)),
+    )
+    var count = 16777217
+    assert_equal(
+        v_of(count - 1, count),
+        Float32(1 - (Float64(count - 1) + 0.5) / Float64(count)),
+    )
 
 
 def main() raises:

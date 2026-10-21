@@ -27,6 +27,10 @@ from math.utils import (
     pingpong,
     smooth_step,
     smootherstep,
+    texel_center,
+    texel_center_from_end,
+    texel_ndc,
+    texel_ndc_up,
 )
 from math.vector2 import Vector2
 from math.vector3 import Vector3
@@ -396,6 +400,36 @@ def test_a_trilinear_mix_goes_across_then_down_then_deep() raises:
     )
     assert_equal(lanes[0], 2)
     assert_equal(lanes[3], 1)
+
+
+def test_a_wide_texel_center_stays_inside_the_image() raises:
+    assert_equal(texel_center(1, 4), (Float32(1) + 0.5) / Float32(4))
+    assert_equal(
+        texel_center_from_end(1, 4), 1 - (Float32(1) + 0.5) / Float32(4)
+    )
+    assert_equal(texel_ndc(1, 4), (Float32(1) + 0.5) / Float32(4) * 2 - 1)
+    assert_equal(texel_ndc_up(1, 4), 1 - (Float32(1) + 0.5) / Float32(4) * 2)
+    # Just above 2^23 the fraction still fits in `Float32`, and it differs
+    # from the `Float32` quotient.
+    var wide = 8388609
+    var mid = wide - 1
+    var center = Float32((Float64(mid) + 0.5) / Float64(wide))
+    assert_equal(texel_center(mid, wide), center)
+    assert_true(center < 1)
+    assert_true(center != (Float32(mid) + 0.5) / Float32(wide))
+    # Past 2^24 the fraction rounds to one. The distance from the far
+    # edge, and the normalized coordinate, still name the last pixel.
+    var count = 16777217
+    var last = count - 1
+    var from_end = Float32(1 - (Float64(last) + 0.5) / Float64(count))
+    assert_equal(texel_center_from_end(last, count), from_end)
+    assert_true(from_end > 0)
+    var ndc = Float32((Float64(last) + 0.5) / Float64(count) * 2 - 1)
+    assert_equal(texel_ndc(last, count), ndc)
+    assert_true(ndc < 1)
+    var up = Float32(1 - (Float64(last) + 0.5) / Float64(count) * 2)
+    assert_equal(texel_ndc_up(last, count), up)
+    assert_true(up > -1)
 
 
 def main() raises:

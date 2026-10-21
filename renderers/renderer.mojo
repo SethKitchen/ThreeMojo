@@ -184,7 +184,13 @@ from render.splat_raster import prepare_gaussian_splat
 from render.rasterizer import DRAW_SPLATS
 from math.matrix4 import Matrix4, translation
 from math.vector3 import Vector3, mix_delta3
-from math.utils import mix_delta
+from math.utils import (
+    mix_delta,
+    texel_center,
+    texel_center_from_end,
+    texel_ndc,
+    texel_ndc_up,
+)
 from objects.instanced_mesh import BatchedDrawItem, BatchedMesh, check_placing
 from geometries.edges import triangle_edges
 from objects.line import (
@@ -4852,15 +4858,8 @@ struct _BackdropRays(ImplicitlyCopyable):
                     x, y, self.height
                 ) or not self.viewport.contains_pixel(x, y, self.height):
                     continue
-                var ndc_x = (Float32(x - self.viewport.x) + 0.5) / Float32(
-                    self.viewport.width
-                ) * 2 - 1
-                var ndc_y = (
-                    1
-                    - (Float32(y - self.top) + 0.5)
-                    / Float32(self.viewport.height)
-                    * 2
-                )
+                var ndc_x = texel_ndc(x - self.viewport.x, self.viewport.width)
+                var ndc_y = texel_ndc_up(y - self.top, self.viewport.height)
                 var near = self.unproject.transform_point(
                     Vector3(ndc_x, ndc_y, -1)
                 )
@@ -10007,12 +10006,8 @@ struct Renderer(Movable):
                             continue
                         # Stretched over the viewport: the pixel's center
                         # as a fraction of the rectangle, `v` counting up.
-                        var u = (Float32(x - viewport.x) + 0.5) / Float32(
-                            viewport.width
-                        )
-                        var v = 1 - (Float32(y - top) + 0.5) / Float32(
-                            viewport.height
-                        )
+                        var u = texel_center(x - viewport.x, viewport.width)
+                        var v = texel_center_from_end(y - top, viewport.height)
                         _set_backdrop(
                             image,
                             x,

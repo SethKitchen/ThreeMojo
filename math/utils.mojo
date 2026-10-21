@@ -153,6 +153,92 @@ def clamped_texel(column: Int, row: Int, width: Int, height: Int) -> Int:
     return edge_index(row, height) * width + edge_index(column, width)
 
 
+def texel_center(pixel: Int, count: Int) -> Float32:
+    """Return the center of a pixel as a fraction of its side.
+
+    A count above 2^23 is not a side a `Float32` can address by halves, so
+    the last pixel reads as the edge. That center is measured in
+    `Float64`. A smaller count keeps the `Float32` quotient.
+
+    Args:
+        pixel: The column or the row.
+        count: The side, in pixels. It must be positive.
+
+    Returns:
+        The center, from just above zero through just below one.
+
+    Raises:
+        Error: Never.
+    """
+    if count > 8388608:
+        return Float32((Float64(pixel) + 0.5) / Float64(count))
+    return (Float32(pixel) + 0.5) / Float32(count)
+
+
+def texel_center_from_end(pixel: Int, count: Int) -> Float32:
+    """Return one minus a pixel's center, as a fraction of its side.
+
+    The subtraction is in `Float64` when the count is above 2^23. Doing
+    it after the `Float32` cast sends the last pixel to zero.
+
+    Args:
+        pixel: The column or the row.
+        count: The side, in pixels. It must be positive.
+
+    Returns:
+        One minus the center.
+
+    Raises:
+        Error: Never.
+    """
+    if count > 8388608:
+        return Float32(1 - (Float64(pixel) + 0.5) / Float64(count))
+    return 1 - (Float32(pixel) + 0.5) / Float32(count)
+
+
+def texel_ndc(pixel: Int, count: Int) -> Float32:
+    """Return a pixel's center in normalized device space, from minus one
+    to one.
+
+    The whole quotient is a `Float64` when the count is above 2^23.
+    Scaling a `Float32` fraction sends the last pixel to one.
+
+    Args:
+        pixel: The column or the row.
+        count: The side, in pixels. It must be positive.
+
+    Returns:
+        The center, from just above minus one through just below one.
+
+    Raises:
+        Error: Never.
+    """
+    if count > 8388608:
+        return Float32((Float64(pixel) + 0.5) / Float64(count) * 2 - 1)
+    return (Float32(pixel) + 0.5) / Float32(count) * 2 - 1
+
+
+def texel_ndc_up(pixel: Int, count: Int) -> Float32:
+    """Return a pixel's center in normalized device space, y up.
+
+    One is the top of the image. The subtraction is in `Float64` when the
+    count is above 2^23.
+
+    Args:
+        pixel: The row, down from the top.
+        count: The side, in pixels. It must be positive.
+
+    Returns:
+        The center, from just below one through just above minus one.
+
+    Raises:
+        Error: Never.
+    """
+    if count > 8388608:
+        return Float32(1 - (Float64(pixel) + 0.5) / Float64(count) * 2)
+    return 1 - (Float32(pixel) + 0.5) / Float32(count) * 2
+
+
 def min3(x: Float32, y: Float32, z: Float32) -> Float32:
     """Return the smallest of three numbers.
 

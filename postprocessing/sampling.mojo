@@ -13,7 +13,7 @@ buffers through the same `LightView`; see `render.gpu.GpuComposer`.
 """
 
 from render.framebuffer import FloatColor
-from math.utils import edge_index
+from math.utils import edge_index, texel_center, texel_center_from_end
 
 
 # A view's pointer is not tracked by the compiler: whoever builds one keeps
@@ -223,6 +223,9 @@ def mix(a: FloatColor, b: FloatColor, t: Float32) -> FloatColor:
 def u_of(x: Int, width: Int) -> Float32:
     """Return a column's texture coordinate, at its center.
 
+    A width above 2^23 is measured in `Float64`, so the last column stays
+    inside the image. A smaller width keeps the `Float32` quotient.
+
     Args:
         x: The column.
         width: The frame's width in pixels.
@@ -230,11 +233,14 @@ def u_of(x: Int, width: Int) -> Float32:
     Returns:
         The `u` of the column's center.
     """
-    return (Float32(x) + 0.5) / Float32(width)
+    return texel_center(x, width)
 
 
 def v_of(y: Int, height: Int) -> Float32:
     """Return a row's texture coordinate, at its center, up from the bottom.
+
+    A height above 2^23 subtracts in `Float64`, so the last row stays
+    above zero. A smaller height keeps the `Float32` quotient.
 
     Args:
         y: The row, down from the top.
@@ -243,7 +249,7 @@ def v_of(y: Int, height: Int) -> Float32:
     Returns:
         The `v` of the row's center.
     """
-    return 1 - (Float32(y) + 0.5) / Float32(height)
+    return texel_center_from_end(y, height)
 
 
 def clamped_texel(coordinate: Float32, count: Int) -> Float32:

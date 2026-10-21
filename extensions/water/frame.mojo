@@ -76,7 +76,13 @@ from math.finite import (
     require_positive_finite,
     require_non_negative_finite,
 )
-from math.utils import rec709_luminance, saturate
+from math.utils import (
+    rec709_luminance,
+    saturate,
+    texel_center,
+    texel_ndc,
+    texel_ndc_up,
+)
 from math.norm import squared_length3
 from math.matrix4 import Matrix4
 from math.vector3 import Vector3, mix_delta3
@@ -292,8 +298,8 @@ def _depth_rows(
     var look = plan.look
     for y in range(first, past):  # pragma: no branch
         for x in range(width):  # pragma: no branch
-            var ndc_x = ((Float32(x) + 0.5) / Float32(width)) * 2.0 - 1.0
-            var ndc_y = 1.0 - ((Float32(y) + 0.5) / Float32(height)) * 2.0
+            var ndc_x = texel_ndc(x, width)
+            var ndc_y = texel_ndc_up(y, height)
             if _ray(look, ndc_x, ndc_y, plan.aspect).y > -0.0015:
                 continue
             var hit = _surface_hit(
@@ -414,8 +420,8 @@ def _radiance_rows(
         for x in range(width):  # pragma: no branch
             if not every and not shown[y * width + x]:
                 continue
-            var ndc_x = ((Float32(x) + 0.5) / Float32(width)) * 2.0 - 1.0
-            var ndc_y = 1.0 - ((Float32(y) + 0.5) / Float32(height)) * 2.0
+            var ndc_x = texel_ndc(x, width)
+            var ndc_y = texel_ndc_up(y, height)
             var rgb = lit_radiance(
                 look,
                 ndc_x,
@@ -1231,8 +1237,8 @@ def grade_pixel(
     cr *= 0.63
     cg *= 0.63
     cb *= 0.63
-    var u = (Float32(x) + 0.5) / Float32(width) - 0.5
-    var v = (Float32(y) + 0.5) / Float32(height) - 0.5
+    var u = texel_center(x, width) - 0.5
+    var v = texel_center(y, height) - 0.5
     var vig = 1.0 - 0.22 * (u * u + (v * 0.8) * (v * 0.8)) * 2.2
     cr *= vig
     cg *= vig
@@ -1779,8 +1785,8 @@ def _caustic_picture(
     var image = Framebuffer(width, height, Color(0, 0, 0))
     for y in range(height):  # pragma: no branch
         for x in range(width):  # pragma: no branch
-            var u = (Float32(x) + 0.5) / Float32(width)
-            var v = (Float32(y) + 0.5) / Float32(height)
+            var u = texel_center(x, width)
+            var v = texel_center(y, height)
             var sample = _caustic_at(field, u, v)
             image.set_pixel(
                 x,
