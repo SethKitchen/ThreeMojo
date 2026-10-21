@@ -275,6 +275,23 @@ def scaled_size(size: Int, scale: Float32) raises -> Int:
     return _rounded_side(Float64(size) * Float64(scale))
 
 
+def require_scaled_extent(width: Int, height: Int) raises:
+    """Refuse a scaled frame whose pixel count would wrap.
+
+    Both sides are already at least one. Nothing. The call returns when
+    their product fits in an integer.
+
+    Args:
+        width: The scaled width in pixels.
+        height: The scaled height in pixels.
+
+    Raises:
+        Error: If the pixel count does not fit.
+    """
+    if width > Int.MAX // height:
+        raise Error("A scaled frame is larger than this port builds")
+
+
 def _read_back(
     small: List[FloatColor], width: Int, height: Int, frame: RenderTarget
 ) -> List[FloatColor]:
@@ -365,10 +382,12 @@ def gaussian_blur_light(
             whether the blur is premultiplied.
 
     Raises:
-        Error: If the scaled side does not fit in an integer.
+        Error: If a scaled side does not fit in an integer, or the scaled
+            pixel count does not fit.
     """
     var width = scaled_size(frame.width, settings.resolution_scale)
     var height = scaled_size(frame.height, settings.resolution_scale)
+    require_scaled_extent(width, height)
     var weights = gaussian_coefficients(settings.sigma)
     var premultiplied = settings.premultiplied_alpha
     var source = frame.colors.copy()
@@ -948,10 +967,12 @@ def anamorphic_light(mut frame: RenderTarget, settings: DisplaySettings) raises:
             scale.
 
     Raises:
-        Error: If the scaled side does not fit in an integer.
+        Error: If a scaled side does not fit in an integer, or the scaled
+            pixel count does not fit.
     """
     var width = scaled_size(frame.width, settings.resolution_scale)
     var height = scaled_size(frame.height, settings.resolution_scale)
+    require_scaled_extent(width, height)
     var before = frame.colors.copy()
     var view = LightView(before, frame.width, frame.height)
     var half = settings.samples // 2
@@ -1011,7 +1032,8 @@ def lensflare_light(mut frame: RenderTarget, settings: DisplaySettings) raises:
             attenuation, and the down sample ratio.
 
     Raises:
-        Error: If the flare's side does not fit in an integer.
+        Error: If a flare side does not fit in an integer, or the flare's
+            pixel count does not fit.
     """
     var width = _rounded_side(
         Float64(frame.width) / Float64(settings.down_sample_ratio)
@@ -1019,6 +1041,7 @@ def lensflare_light(mut frame: RenderTarget, settings: DisplaySettings) raises:
     var height = _rounded_side(
         Float64(frame.height) / Float64(settings.down_sample_ratio)
     )
+    require_scaled_extent(width, height)
     var before = frame.colors.copy()
     var view = LightView(before, frame.width, frame.height)
     var flare = List[FloatColor](capacity=width * height)

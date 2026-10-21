@@ -114,6 +114,20 @@ def test_the_gaussian_weights_are_three_js_s() raises:
     assert_equal(scaled_size(1, 0.1), 1)
 
 
+def test_a_scaled_frame_must_fit() raises:
+    var settings = DisplaySettings()
+    settings.resolution_scale = Float32(1 << 31)
+    var frame = RenderTarget(2, 2, Color(0, 0, 0))
+    with assert_raises(contains="larger than this port"):
+        gaussian_blur_light(frame, settings)
+    with assert_raises(contains="larger than this port"):
+        anamorphic_light(frame, settings)
+    settings.resolution_scale = 1
+    settings.down_sample_ratio = Float32(1) / Float32(1 << 31)
+    with assert_raises(contains="larger than this port"):
+        lensflare_light(frame, settings)
+
+
 def test_the_box_and_hash_blurs_keep_an_even_frame() raises:
     var color = FloatColor(0.25, 0.5, 0.75, 1)
     var boxed = even(color)
