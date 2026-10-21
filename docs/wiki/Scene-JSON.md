@@ -112,6 +112,8 @@ A skeleton entry can leave out `boneInverses`, or give an empty list. Then the r
 
 A batched mesh joins its geometries into one `BufferGeometry`, as three.js's `BatchedMesh` holds them. Each `geometryInfo` entry gives the `vertexStart`, `vertexCount`, `indexStart` and `indexCount` of one geometry. Each `instanceInfo` entry gives the `geometryIndex` of one instance. The instance matrices are in `matricesTexture`, and the instance colors are in `colorsTexture`. Both are `DataTexture` entries with a `Float32Array` image. The colors are linear, as three.js keeps them.
 
+A count past 9007199254740992 instances is refused.
+
 The writer also writes the `indirectTexture` that three.js reads.
 
 The reader splits the joined geometry back into its parts. It adds each part to the assets. It leaves out an instance that is not `active` or not `visible`, because three.js does not draw it.

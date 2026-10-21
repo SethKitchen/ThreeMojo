@@ -19,7 +19,12 @@ from core.geometry_store import GeometryId
 from core.object3d import NodeId, Object3D
 from core.scene import Scene
 from exporters.gltf import encode_base64
-from exporters.object_json import object_to_json, object_uuid
+from exporters.object_json import (
+    _instance_texture_side,
+    _matrix_texture_side,
+    object_to_json,
+    object_uuid,
+)
 from geometries.box import box
 from lights.light import ambient_light, directional_light
 from loaders.json import parse_json
@@ -933,6 +938,21 @@ def test_an_lod_as_three_js_writes_it() raises:
         '"material":"m"}]}',
         "must be an object",
     )
+
+
+def test_a_batch_texture_side_matches_three_js_and_fits() raises:
+    assert_equal(_matrix_texture_side(0), 4)
+    assert_equal(_matrix_texture_side(1), 4)
+    assert_equal(_matrix_texture_side(3), 4)
+    assert_equal(_matrix_texture_side(5), 8)
+    assert_equal(_instance_texture_side(0), 0)
+    assert_equal(_instance_texture_side(1), 1)
+    assert_equal(_instance_texture_side(3), 2)
+    assert_equal(_instance_texture_side(5), 3)
+    with assert_raises(contains="does not fit"):
+        _ = _matrix_texture_side(9007199254740993)
+    with assert_raises(contains="does not fit"):
+        _ = _instance_texture_side(Int.MAX)
 
 
 def test_a_batch_round_trips_as_three_js_writes_it() raises:
