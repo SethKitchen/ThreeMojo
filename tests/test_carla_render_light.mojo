@@ -30,6 +30,7 @@ from extensions.carla.render_sky import (
     cloud_shadow_density,
     hdri_sun_azimuth,
     hemisphere_illuminance,
+    texel_solid_angle,
 )
 from extensions.carla.render_weather import height_fog
 from extensions.carla.weather import weather_preset
@@ -45,6 +46,7 @@ from render.png import DecodedImage, decode as decode_png
 from render.srgb import LINEAR
 from render.target import RenderTarget
 from render.texture import BILINEAR, IGNORED, REPEAT, Texture
+from std.math import pow
 from std.pathlib import Path
 from std.testing import (
     TestSuite,
@@ -142,6 +144,27 @@ def test_a_fog_with_nothing_in_it_lets_the_sun_through() raises:
         4,
     )
     assert_almost_equal(share, 1, atol=1e-6)
+
+
+def test_a_wide_sky_texel_stays_inside_its_face() raises:
+    var small = texel_solid_angle(0, 0, 4)
+    var place = (Float32(0) + 0.5) / Float32(4) * 2 - 1
+    var side = Float32(2) / Float32(4)
+    assert_equal(
+        small,
+        side * side / pow(1 + place * place + place * place, Float32(1.5)),
+    )
+    var size = 16777217
+    var wide = texel_solid_angle(size - 1, 0, size)
+    var edge = (Float32(size - 1) + 0.5) / Float32(size) * 2 - 1
+    var across = (Float32(0) + 0.5) / Float32(size) * 2 - 1
+    var wide_side = Float32(2) / Float32(size)
+    assert_true(
+        wide
+        != wide_side
+        * wide_side
+        / pow(1 + edge * edge + across * across, Float32(1.5))
+    )
 
 
 def test_the_sky_readers_refuse_byte_textures() raises:
