@@ -170,10 +170,12 @@ comptime FLAGS = [
 comptime JOBS = [
     ("lint", "lint"),
     ("tools", "tools"),
+    ("tools-discovery", "tools"),
     ("cpu", "cpu"),
     ("cpu-macos", "cpu"),
     ("lint-macos", "lint"),
     ("tools-macos", "tools"),
+    ("tools-discovery-macos", "tools"),
     ("coverage-capture", "coverage"),
     ("coverage", "coverage"),
     ("gpu-host", "gpu"),

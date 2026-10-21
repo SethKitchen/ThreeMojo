@@ -299,7 +299,8 @@ mkdir -p $(CACHE_DIR) && rm -f $(CACHE_DIR)/$(1)-* \
 endef
 
 .PHONY: test-gpu-device help check check-cpu check-gpu ci test test-cpu test-gpu test-gpu-host check-gpu-air \
-        docs-check wiki-publish test-tools test-coverage-tool test-portability \
+        docs-check wiki-publish test-tools test-tools-discovery test-tools-oracle \
+        test-coverage-tool test-portability \
         coverage-instrument coverage-capture coverage-report \
         lint lint-cpu lint-gpu compile-gpu gpu-status docstrings fmt fmt-check coverage \
         compile-fail example animation viewer bench bench-scene bench-examples \
@@ -918,18 +919,25 @@ clean-images:
 # Parser and cache regressions run without the Mojo compiler.
 # The #333 oracle modules each copy whole roots and replay proofs; one after
 # another they exceed a CI job's time limit, so they run a module per process.
-# TOOLS_SHARD=I/N splits the oracle tests over N runners; the first runner
-# also runs the read-only spiral and repository checks.
+# CI runs test-tools-discovery separately from the six test-tools-oracle
+# shards. Discovery keeps its process-wide fixtures without adding its runtime
+# to any oracle shard. TOOLS_SHARD=I/N splits only the oracle units; the first
+# shard also runs the read-only spiral and repository checks.
 TOOLS_SHARD ?=
-# Serial discovery adds about 94 minutes on macOS to the first oracle shard,
-# which already takes about 138 minutes before its final checks. Put discovery
-# on the shorter fifth shard (about 80 minutes) without changing any tests or
-# deadlines. With fewer than five shards retain owner 1; unsharded runs run all.
+# Keep the original test-tools interface, including its discovery owner for
+# sharded local calls. CI uses the two component targets instead. Unsharded
+# test-tools still runs every command in its original order and stops on error.
 TOOLS_SERIAL_SHARD := $(if $(filter 1 2 3 4,$(word 2,$(subst /, ,$(TOOLS_SHARD)))),1,5)
 
 test-tools:
-	@$(if $(filter-out $(TOOLS_SERIAL_SHARD)/%,$(TOOLS_SHARD)),:,python3 -m unittest discover -s tools -p 'test_*.py')
-	@$(if $(filter-out $(TOOLS_SERIAL_SHARD)/%,$(TOOLS_SHARD)),:,python3 -m unittest discover -s assets/carla/tools -p 'test_*.py')
+	@$(if $(filter-out $(TOOLS_SERIAL_SHARD)/%,$(TOOLS_SHARD)),:,$(MAKE) --no-print-directory test-tools-discovery)
+	@$(MAKE) --no-print-directory test-tools-oracle
+
+test-tools-discovery:
+	@python3 -m unittest discover -s tools -p 'test_*.py'
+	@python3 -m unittest discover -s assets/carla/tools -p 'test_*.py'
+
+test-tools-oracle:
 	@python3 tools/parallel_unittest.py --jobs $(JOBS) $(if $(TOOLS_SHARD),--shard $(TOOLS_SHARD)) tools/carla_lane_oracle
 	@$(if $(filter-out 1/%,$(TOOLS_SHARD)),:,python3 tools/carla_lane_oracle/spiral_moments.py --check)
 	@$(if $(filter-out 1/%,$(TOOLS_SHARD)),:,$(MAKE) --no-print-directory repository-check)

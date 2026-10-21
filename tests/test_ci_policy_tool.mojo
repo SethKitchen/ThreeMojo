@@ -39,8 +39,10 @@ comptime WIKI_GUARD = (
 comptime CHECK_JOBS = [
     "lint",
     "tools",
+    "tools-discovery",
     "lint-macos",
     "tools-macos",
+    "tools-discovery-macos",
     "cpu",
     "cpu-macos",
     "coverage-capture",
@@ -423,6 +425,7 @@ def test_tool_regressions_run_in_every_group_on_both_platforms() raises:
         var groups = _shard_list(job)
         assert_true(groups.__bool__())
         var count = len(groups.value().split(","))
+        assert_equal(count, 6)
         var expected = String()
         for index in range(1, count + 1):
             if index > 1:
@@ -433,11 +436,40 @@ def test_tool_regressions_run_in_every_group_on_both_platforms() raises:
         assert_equal(len(commands), 1)
         assert_equal(
             commands[0],
-            RUN + "test-tools TOOLS_SHARD=${{ matrix.shard }}/" + String(count),
+            RUN
+            + "test-tools-oracle TOOLS_SHARD=${{ matrix.shard }}/"
+            + String(count),
         )
         assert_true(job.find("fail-fast: false") >= 0)
     assert_true(_has_line(jobs["tools"], "    runs-on: ubuntu-latest"))
     assert_true(_has_line(jobs["tools-macos"], "    runs-on: macos-latest"))
+
+
+def test_general_and_asset_discovery_have_dedicated_required_jobs() raises:
+    var jobs = _jobs()
+    for pair in [
+        ("tools-discovery", "ubuntu-latest"),
+        ("tools-discovery-macos", "macos-latest"),
+    ]:
+        var job = jobs[pair[0]]
+        assert_true(_has_line(job, "    timeout-minutes: 240"), pair[0])
+        assert_true(_has_line(job, "    runs-on: " + pair[1]), pair[0])
+        assert_false(_shard_list(job).__bool__())
+        assert_equal(job.find("strategy:"), -1)
+        assert_false(_has_step_guard(job))
+        var commands = _commands(job, RUN)
+        assert_equal(len(commands), 1)
+        assert_equal(commands[0], RUN + "test-tools-discovery")
+        assert_true(job.find("uv python install --no-bin 3.12.14") >= 0)
+        assert_true(
+            job.find('"$PYTHON" -m venv --without-pip --prompt ThreeMojo .venv')
+            >= 0
+        )
+        assert_true(
+            job.find('uv pip install --python .venv/bin/python "mojo==1.1.0"')
+            >= 0
+        )
+        assert_equal(job.find("TOOLS_SHARD="), -1)
 
 
 def test_macos_lint_preserves_name_and_serializes_compilers() raises:
@@ -642,8 +674,9 @@ def test_required_check_has_all_results_and_no_ignored_failures() raises:
     var job = jobs_of(text)["required"]
     assert_true(
         job.find(
-            "needs: [scope, lint, tools, cpu, lint-macos, tools-macos,"
-            " cpu-macos, coverage-capture, coverage, gpu-host]"
+            "needs: [scope, lint, tools, tools-discovery, cpu, lint-macos,"
+            " tools-macos, tools-discovery-macos, cpu-macos,"
+            " coverage-capture, coverage, gpu-host]"
         )
         >= 0
     )

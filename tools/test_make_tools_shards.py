@@ -17,11 +17,9 @@ MAKE_ENVIRONMENT = {'MAKEFLAGS', 'MFLAGS', 'MAKEOVERRIDES', 'MAKELEVEL',
 
 
 class ToolsShardTests(unittest.TestCase):
-    def run_recipe(self, shard=None, fail=None):
+    def run_recipe(self, shard=None, fail=None, target='test-tools'):
         source = (ROOT / 'Makefile').read_text()
-        owner = next(line for line in source.splitlines()
-                     if line.startswith('TOOLS_SERIAL_SHARD :='))
-        start = source.index('test-tools:\n')
+        start = source.index('TOOLS_SHARD ?=\n')
         recipe = source[start:source.index('\n# The negative-fixture', start)]
         with tempfile.TemporaryDirectory(prefix='tools shard ') as directory:
             root = Path(directory)
@@ -37,7 +35,8 @@ class ToolsShardTests(unittest.TestCase):
                 '    raise SystemExit(7)\n')
             command.chmod(0o700)
             (root / 'Makefile').write_text(
-                'JOBS := 3\n' + owner + '\n' + recipe +
+                '.PHONY: test-tools test-tools-discovery test-tools-oracle repository-check\n'
+                'JOBS := 3\n' + recipe +
                 '\nrepository-check:\n\t@python3 repository-check\n')
             env = {key: value for key, value in os.environ.items()
                    if key not in MAKE_ENVIRONMENT}
@@ -46,7 +45,7 @@ class ToolsShardTests(unittest.TestCase):
                 env['FAIL_COMMAND'] = fail
             else:
                 env.pop('FAIL_COMMAND', None)
-            args = ['make', '-s', 'test-tools']
+            args = ['make', '-s', target]
             if shard is not None:
                 args.append('TOOLS_SHARD=' + shard)
             result = subprocess.run(args, cwd=root, env=env, text=True,
@@ -105,6 +104,58 @@ class ToolsShardTests(unittest.TestCase):
             result, calls = self.run_recipe(f'{index}/6', fail='tools/parallel_unittest.py')
             self.assertNotEqual(result.returncode, 0)
             self.assertEqual(calls[-1][0], 'tools/parallel_unittest.py')
+
+    def test_dedicated_discovery_runs_only_the_original_plain_discoveries(self):
+        for shard in (None, '1/6', '5/6'):
+            with self.subTest(shard=shard):
+                result, calls = self.run_recipe(shard, target='test-tools-discovery')
+                self.assertEqual(result.returncode, 0, result.stderr)
+                self.assertEqual(calls, [
+                    ['-m', 'unittest', 'discover', '-s', 'tools', '-p', 'test_*.py'],
+                    ['-m', 'unittest', 'discover', '-s', 'assets/carla/tools', '-p', 'test_*.py'],
+                ])
+
+    def test_dedicated_discovery_and_six_oracle_shards_partition_every_command(self):
+        result, all_calls = self.run_recipe(target='test-tools-discovery')
+        self.assertEqual(result.returncode, 0, result.stderr)
+        expected = all_calls.copy()
+        for index in range(1, 7):
+            shard = f'{index}/6'
+            result, calls = self.run_recipe(shard, target='test-tools-oracle')
+            self.assertEqual(result.returncode, 0, result.stderr)
+            oracle = ['tools/parallel_unittest.py', '--jobs', '3', '--shard',
+                      shard, 'tools/carla_lane_oracle']
+            expected.append(oracle)
+            self.assertEqual(calls, [oracle] + ([
+                ['tools/carla_lane_oracle/spiral_moments.py', '--check'],
+                ['repository-check'],
+            ] if index == 1 else []))
+            all_calls.extend(calls)
+        expected.extend([
+            ['tools/carla_lane_oracle/spiral_moments.py', '--check'],
+            ['repository-check'],
+        ])
+        self.assertEqual(sorted(all_calls), sorted(expected))
+
+    def test_each_component_failure_stops_and_fails_its_target(self):
+        cases = [('test-tools-discovery', None, 'tools'),
+                 ('test-tools-discovery', None, 'assets/carla/tools'),
+                 ('test-tools-oracle', '1/6', 'tools/carla_lane_oracle/spiral_moments.py'),
+                 ('test-tools-oracle', '1/6', 'repository-check')]
+        cases.extend(('test-tools-oracle', f'{index}/6', 'tools/parallel_unittest.py')
+                     for index in range(1, 7))
+        for target, shard, failed in cases:
+            with self.subTest(target=target, shard=shard, failed=failed):
+                result, calls = self.run_recipe(shard, fail=failed, target=target)
+                self.assertNotEqual(result.returncode, 0)
+                self.assertIn(failed, calls[-1])
+
+    def test_component_targets_are_phony_in_the_real_makefile(self):
+        source = (ROOT / 'Makefile').read_text()
+        start = source.index('.PHONY:')
+        phony = source[start:source.index('\n\n', start)].replace('\\\n', ' ').split()
+        for target in ('test-tools', 'test-tools-discovery', 'test-tools-oracle'):
+            self.assertIn(target, phony)
 
 
 if __name__ == '__main__':

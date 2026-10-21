@@ -1070,6 +1070,15 @@ def _needs(
     return text + "}"
 
 
+def test_dedicated_discovery_jobs_use_the_tools_selection_flag() raises:
+    var found = Set[String]()
+    for job in materialize[JOBS]():
+        if job[0] == "tools-discovery" or job[0] == "tools-discovery-macos":
+            assert_equal(job[1], "tools")
+            found.add(job[0])
+    assert_equal(len(found), 2)
+
+
 def test_aggregate_requires_success_only_for_applicable_jobs() raises:
     for value in [
         _plan(_change(["tools/test_build_tools.py"])),
@@ -1191,6 +1200,8 @@ def test_tool_targets_get_no_list_overrides() raises:
     var value = _plan(_change(["tools/test_build_tools.py"]))
     for target in [
         "test-tools",
+        "test-tools-discovery",
+        "test-tools-oracle",
         "test-coverage-tool",
         "test-portability",
         "docs-check",

@@ -178,7 +178,7 @@ jobs:
 
   # The #333 oracle proofs take hours of processor time, more than one
   # lint job holds, so the tool regressions run over several runners.
-  # The first group also runs the quick discoveries; see the Makefile.
+  # General and asset discovery runs in a separate job on each platform.
   tools:
     needs: scope
     if: needs.scope.outputs.run_tools == 'true'
@@ -221,7 +221,47 @@ jobs:
           .venv/bin/mojo --version
 
       - name: Python tooling regressions
-        run: sh tools/tool.sh .venv/bin/mojo ci_scope run -- test-tools TOOLS_SHARD=${{ matrix.shard }}/6
+        run: sh tools/tool.sh .venv/bin/mojo ci_scope run -- test-tools-oracle TOOLS_SHARD=${{ matrix.shard }}/6
+
+  tools-discovery:
+    needs: scope
+    if: needs.scope.outputs.run_tools == 'true'
+    env:
+      CI_SELECTION_SHA256: ${{ needs.scope.outputs.selection }}
+    name: test-tools discovery
+    runs-on: ubuntu-latest
+    timeout-minutes: 240
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Restore exact check selection
+        uses: actions/download-artifact@v4
+        with:
+          name: ci-selection
+          path: .cache/
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+
+      - name: Install the pinned Python interpreter
+        run: |
+          # Use upstream CPython without distro hooks or loader overrides.
+          uv python install --no-bin 3.12.14
+          PYTHON="$(uv python find --managed-python --no-project 3.12.14)"
+          echo "$(dirname "$PYTHON")" >> "$GITHUB_PATH"
+          # uv venv installs an import hook; proof-bearing environments cannot.
+          "$PYTHON" -m venv --without-pip --prompt ThreeMojo .venv
+
+      # The tool tests compile nothing, but some read the pinned launcher.
+      - name: Install Mojo
+        run: |
+          uv pip install --python .venv/bin/python "mojo==1.1.0"
+          .venv/bin/mojo --version
+
+      - name: General and asset tooling regressions
+        run: sh tools/tool.sh .venv/bin/mojo ci_scope run -- test-tools-discovery
 
   cpu:
     needs: scope
@@ -354,8 +394,6 @@ jobs:
           uv pip install --python .venv-carla-export/bin/python --only-binary :all: "numpy==2.3.5" "Pillow==12.3.0"
           .venv-carla-export/bin/python -m unittest discover -s assets/carla/tools/export -p 'test_build_towns.py'
 
-  # Each macOS group compiles one suite at a time (JOBS=1). Two groups ran
-  # to within seconds of the 150-minute timeout, so the suites split three ways.
   tools-macos:
     needs: scope
     if: needs.scope.outputs.run_tools == 'true'
@@ -398,8 +436,50 @@ jobs:
           .venv/bin/mojo --version
 
       - name: Python tooling regressions
-        run: sh tools/tool.sh .venv/bin/mojo ci_scope run -- test-tools TOOLS_SHARD=${{ matrix.shard }}/6
+        run: sh tools/tool.sh .venv/bin/mojo ci_scope run -- test-tools-oracle TOOLS_SHARD=${{ matrix.shard }}/6
 
+  tools-discovery-macos:
+    needs: scope
+    if: needs.scope.outputs.run_tools == 'true'
+    env:
+      CI_SELECTION_SHA256: ${{ needs.scope.outputs.selection }}
+    name: check-cpu (macOS, Apple Silicon) test-tools discovery
+    runs-on: macos-latest
+    timeout-minutes: 240
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Restore exact check selection
+        uses: actions/download-artifact@v4
+        with:
+          name: ci-selection
+          path: .cache/
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+
+      - name: Install the pinned Python interpreter
+        run: |
+          # Use upstream CPython without distro hooks or loader overrides.
+          uv python install --no-bin 3.12.14
+          PYTHON="$(uv python find --managed-python --no-project 3.12.14)"
+          echo "$(dirname "$PYTHON")" >> "$GITHUB_PATH"
+          # uv venv installs an import hook; proof-bearing environments cannot.
+          "$PYTHON" -m venv --without-pip --prompt ThreeMojo .venv
+
+      # The tool tests compile nothing, but some read the pinned launcher.
+      - name: Install Mojo
+        run: |
+          uv pip install --python .venv/bin/python "mojo==1.1.0"
+          .venv/bin/mojo --version
+
+      - name: General and asset tooling regressions
+        run: sh tools/tool.sh .venv/bin/mojo ci_scope run -- test-tools-discovery
+
+  # Each macOS group compiles one suite at a time (JOBS=1). Two groups ran
+  # to within seconds of the 150-minute timeout, so the suites split three ways.
   cpu-macos:
     needs: scope
     if: needs.scope.outputs.run_cpu == 'true'
@@ -626,7 +706,7 @@ jobs:
   required:
     name: check required
     if: always() && (github.event_name != 'pull_request' || (github.event.pull_request.draft == false && github.event.pull_request.base.ref == 'main'))
-    needs: [scope, lint, tools, cpu, lint-macos, tools-macos, cpu-macos, coverage-capture, coverage, gpu-host]
+    needs: [scope, lint, tools, tools-discovery, cpu, lint-macos, tools-macos, tools-discovery-macos, cpu-macos, coverage-capture, coverage, gpu-host]
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:

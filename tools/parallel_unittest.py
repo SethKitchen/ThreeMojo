@@ -58,19 +58,31 @@ def modules(directory, pattern='test_*.py'):
 # Tests that share set-up run this many to a process; the set-up repeats.
 CHUNK = 4
 
-# This proof has a fixed subprocess deadline and needs an uncontended worker.
-# Keep its existing unit (and shared set-up), commands and deadline unchanged.
+# Full-gate positive verification has fixed subprocess deadlines; retained
+# cold-route identity proofs also have high peak memory use. Run these units
+# without competing test processes. Keep groups, retention and limits unchanged.
 _EXCLUSIVE_TEST = (
     'test_coverage_invariant_contracts.CoverageInvariantContracts.'
     'test_historical_direct_and_qualified_package_verification'
 )
 
+_EXCLUSIVE_TESTS = (
+    _EXCLUSIVE_TEST,
+    'test_coverage_invariant_contracts.CoverageInvariantContracts.'
+    'test_direct_and_qualified_package_verification',
+    'test_full_audit_cleanup_contracts.FullAuditCleanupContracts.'
+    'test_consumer_first_import_orders_normal_and_optimized',
+    'test_invariant_operation_inputs.OperationReachedBindingControls.'
+    'test_current_cold_routes_preserve_consumed_value_bindings',
+)
+
 
 def _exclusive(command):
-    """Select the bounded proof, including its whole-module fallback."""
-    return (_EXCLUSIVE_TEST in command[3:]
-            or (command[3:4] == ['discover']
-                and command[-2:] == ['-p', _EXCLUSIVE_TEST.split('.')[0] + '.py']))
+    """Select deadline/memory-sensitive proofs and whole-module fallbacks."""
+    return any(test in command[3:]
+               or (command[3:4] == ['discover']
+                   and command[-2:] == ['-p', test.split('.')[0] + '.py'])
+               for test in _EXCLUSIVE_TESTS)
 
 
 def _run_scheduled(pool, directory, work):
