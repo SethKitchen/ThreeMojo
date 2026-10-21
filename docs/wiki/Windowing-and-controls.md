@@ -527,7 +527,7 @@ A focus moves the center to the point that a double click hits on a mesh. A line
 
 The camera is read at each call and written back. Its `up` is always its own y axis. After a turn, three.js sets `up` to the first `up` turned by the camera. That is the same for a first `up` of +y. For another first `up`, three.js's `up` can point along the view.
 
-The controls read time from `update`. An event happens at the time of the last `update`. A pointer is read at the center of its pixel. A camera that rides a scene node is refused, as three.js requires.
+The controls read time from `update`. An event happens at the time of the last `update`. A pointer is read at the center of its pixel. On a side above 8388608 pixels that center is a `Float64`. A camera that rides a scene node is refused, as three.js requires.
 
 `enable_gizmos` hides the gizmo, as three.js documents. three.js has the member but does not read it. three.js works out the grid's cells in floating point, and here they are 60.
 

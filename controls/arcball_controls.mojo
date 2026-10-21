@@ -272,8 +272,8 @@ struct ArcballSnapshot(ImplicitlyCopyable):
 struct _Down(ImplicitlyCopyable):
     """A press of the primary button: where, and when in milliseconds."""
 
-    var x: Float32
-    var y: Float32
+    var x: Float64
+    var y: Float64
     var time: Float64
 
 
@@ -653,8 +653,8 @@ struct ArcballControls(Copyable, Movable):
     # The view's size, and where the pointer is, from the last event.
     var _width: Int
     var _height: Int
-    var _center_x: Float32
-    var _center_y: Float32
+    var _center_x: Float64
+    var _center_y: Float64
 
     def __init__(
         out self,
@@ -1147,8 +1147,10 @@ struct ArcballControls(Copyable, Movable):
         self.check()
         self._width = width
         self._height = height
-        var x = Float32(event.x) + 0.5
-        var y = Float32(event.y) + 0.5
+        # A `Float32` pixel at or above 2^23 cannot add the half that
+        # marks its center. The center is kept in `Float64`.
+        var x = Float64(event.x) + 0.5
+        var y = Float64(event.y) + 0.5
         if event.kind == POINTER_DOWN:
             self._pointer_down(event, lens, x, y)
         elif event.kind == POINTER_MOVE:
@@ -1180,7 +1182,7 @@ struct ArcballControls(Copyable, Movable):
         return NO_MODIFIER
 
     def _pointer_down(
-        mut self, event: InputEvent, mut lens: _Lens, x: Float32, y: Float32
+        mut self, event: InputEvent, mut lens: _Lens, x: Float64, y: Float64
     ):
         """Start the operation of the button pressed. three.js:
         `onPointerDown`.
@@ -1209,7 +1211,7 @@ struct ArcballControls(Copyable, Movable):
         self._single_pan_start(lens, x, y, operation)
 
     def _pointer_move(
-        mut self, event: InputEvent, mut lens: _Lens, x: Float32, y: Float32
+        mut self, event: InputEvent, mut lens: _Lens, x: Float64, y: Float64
     ):
         """Go on with the operation of the button held. three.js:
         `onPointerMove`.
@@ -1230,7 +1232,7 @@ struct ArcballControls(Copyable, Movable):
             if _apart(last.x, last.y, x, y) > MOVEMENT_THRESHOLD:
                 self._down_valid = False
 
-    def _pointer_up(mut self, mut lens: _Lens, x: Float32, y: Float32) -> Bool:
+    def _pointer_up(mut self, mut lens: _Lens, x: Float64, y: Float64) -> Bool:
         """End the operation, and count the click. three.js: `onPointerUp`.
 
         Args:
@@ -1276,8 +1278,8 @@ struct ArcballControls(Copyable, Movable):
     def _single_pan_start(
         mut self,
         mut lens: _Lens,
-        x: Float32,
-        y: Float32,
+        x: Float64,
+        y: Float64,
         operation: ArcballOperation,
     ):
         """Start an operation where the pointer is. three.js:
@@ -1350,8 +1352,8 @@ struct ArcballControls(Copyable, Movable):
     def _single_pan_move(
         mut self,
         mut lens: _Lens,
-        x: Float32,
-        y: Float32,
+        x: Float64,
+        y: Float64,
         op_state: ArcballState,
     ):
         """Go on with an operation, or switch to another. three.js:
@@ -1414,7 +1416,7 @@ struct ArcballControls(Copyable, Movable):
                     self._vertigo(lens, self._drag_size(), self._fov_state)
         self._changed = True
 
-    def _rotate_to(mut self, mut lens: _Lens, x: Float32, y: Float32):
+    def _rotate_to(mut self, mut lens: _Lens, x: Float64, y: Float64):
         """Turn the camera from where the drag started to the pointer.
 
         Args:
@@ -1447,7 +1449,7 @@ struct ArcballControls(Copyable, Movable):
             )
 
     def _restart_zoom(
-        mut self, mut lens: _Lens, state: ArcballState, x: Float32, y: Float32
+        mut self, mut lens: _Lens, state: ArcballState, x: Float64, y: Float64
     ):
         """Switch to a zoom or a change of the field of view.
 
@@ -1571,7 +1573,7 @@ struct ArcballControls(Copyable, Movable):
         self._frame_first = first
 
     def _wheel(
-        mut self, event: InputEvent, mut lens: _Lens, x: Float32, y: Float32
+        mut self, event: InputEvent, mut lens: _Lens, x: Float64, y: Float64
     ):
         """Zoom, or change the field of view, by a wheel notch. three.js:
         `onWheel`.
@@ -1626,22 +1628,42 @@ struct ArcballControls(Copyable, Movable):
 
     # --- the trackball -------------------------------------------------------
 
-    def _ndc(self, x: Float32, y: Float32) -> Vector2:
+    def _ndc(self, x: Float64, y: Float64) -> Vector2:
         """Return a place in the view in normalized device coordinates.
         three.js: `getCursorNDC`.
 
+        A side above 2^23, or a pixel center `Float32` cannot hold, is
+        divided in `Float64`. A smaller place keeps the `Float32` quotient.
+
         Args:
-            x: Across, in pixels.
-            y: Down, in pixels.
+            x: Across, a pixel center.
+            y: Down, a pixel center.
 
         Returns:
             The place, from -1 to 1 each way, y up.
         """
-        var width = Float32(self._width)
-        var height = Float32(self._height)
-        return Vector2(x / width * 2 - 1, (height - y) / height * 2 - 1)
+        if (
+            self._width <= 8388608
+            and self._height <= 8388608
+            and x > -8388608
+            and x < 8388608
+            and y > -8388608
+            and y < 8388608
+        ):
+            var width = Float32(self._width)
+            var height = Float32(self._height)
+            return Vector2(
+                Float32(x) / width * 2 - 1,
+                (height - Float32(y)) / height * 2 - 1,
+            )
+        return Vector2(
+            Float32(x / Float64(self._width) * 2 - 1),
+            Float32(
+                (Float64(self._height) - y) / Float64(self._height) * 2 - 1
+            ),
+        )
 
-    def _cursor_position(self, lens: _Lens, x: Float32, y: Float32) -> Vector2:
+    def _cursor_position(self, lens: _Lens, x: Float64, y: Float64) -> Vector2:
         """Return a place in an orthographic camera's view, from its middle.
         three.js: `getCursorPosition`.
 
@@ -1659,7 +1681,7 @@ struct ArcballControls(Copyable, Movable):
             ndc.y * (lens.top - lens.bottom) * 0.5,
         )
 
-    def _on_tb_surface(self, lens: _Lens, x: Float32, y: Float32) -> Vector3:
+    def _on_tb_surface(self, lens: _Lens, x: Float64, y: Float64) -> Vector3:
         """Return where the pointer meets the trackball, in the camera's axes
         from the center. three.js: `unprojectOnTbSurface`.
 
@@ -1710,7 +1732,7 @@ struct ArcballControls(Copyable, Movable):
         var py = m * px + q
         return _along(ray, px, py, reach)
 
-    def _on_tb_plane(self, lens: _Lens, x: Float32, y: Float32) -> Vector3:
+    def _on_tb_plane(self, lens: _Lens, x: Float64, y: Float64) -> Vector3:
         """Return where the pointer meets the plane through the center that
         faces the camera, in the camera's axes from the center. three.js:
         `unprojectOnTbPlane`.
@@ -2717,9 +2739,12 @@ def _has_face(kind: HitKind) -> Bool:
     )
 
 
-def _apart(ax: Float32, ay: Float32, bx: Float32, by: Float32) -> Float32:
+def _apart(ax: Float64, ay: Float64, bx: Float64, by: Float64) -> Float32:
     """Return the distance between two places in the view. three.js:
     `calculatePointersDistance`.
+
+    Places a `Float32` can hold keep that distance. A pixel center at or
+    above 2^23 is measured in `Float64`.
 
     Args:
         ax: One place's x.
@@ -2730,7 +2755,18 @@ def _apart(ax: Float32, ay: Float32, bx: Float32, by: Float32) -> Float32:
     Returns:
         The distance, in pixels.
     """
-    return length2(bx - ax, by - ay)
+    if (
+        ax > -8388608
+        and ax < 8388608
+        and ay > -8388608
+        and ay < 8388608
+        and bx > -8388608
+        and bx < 8388608
+        and by > -8388608
+        and by < 8388608
+    ):
+        return length2(Float32(bx) - Float32(ax), Float32(by) - Float32(ay))
+    return Float32(length2[DType.float64](bx - ax, by - ay))
 
 
 def _angular_speed(
