@@ -100,9 +100,12 @@ def ascii_characters(characters: String, color: Bool) -> List[String]:
     return split^
 
 
-def ascii_size(size: Int, resolution: Float32) -> Int:
+def ascii_size(size: Int, resolution: Float32) raises -> Int:
     """Return the small image's width or height: three.js's
     `Math.floor(size * resolution)`.
+
+    The product is a `Float64`, as JavaScript's number is. A `Float32`
+    product drops whole sizes past 2^24.
 
     Args:
         size: The renderer's width or height.
@@ -110,8 +113,20 @@ def ascii_size(size: Int, resolution: Float32) -> Int:
 
     Returns:
         The size in pixels, which can be zero.
+
+    Raises:
+        Error: If the product is not finite or does not fit in an integer.
     """
-    return Int(floor(Float32(size) * resolution))
+    var scaled = floor(Float64(size) * Float64(resolution))
+    # `Float64(Int.MAX)` is 2^63. `Int` of a float at or past it is not
+    # the size. A float below `-2^63` is not one either.
+    if (
+        not isfinite(scaled)
+        or scaled < -Float64(Int.MAX)
+        or scaled >= Float64(Int.MAX)
+    ):
+        raise Error("An ASCII size does not fit in an integer")
+    return Int(scaled)
 
 
 def _first_center(edge: Int, size: Int, small: Int) -> Int:

@@ -248,6 +248,15 @@ def test_a_character_set_splits_and_falls_back() raises:
     assert_equal(len(ascii_characters(" ░█", False)), 3)
     assert_equal(ascii_size(100, 0.15), 15)
     assert_equal(ascii_size(3, 0.15), 0)
+    # A `Float32` product of 16777217 is 16777216. JavaScript keeps the
+    # extra pixel. A product at 2^63, below `-2^63`, or not finite is refused.
+    assert_equal(ascii_size(16777217, 1), 16777217)
+    with assert_raises(contains="does not fit"):
+        _ = ascii_size(Int.MAX, 1)
+    with assert_raises(contains="does not fit"):
+        _ = ascii_size(Int.MIN, 1.5)
+    with assert_raises(contains="does not fit"):
+        _ = ascii_size(1, nan[DType.float32]())
 
 
 def test_shrink_averages_by_alpha() raises:
