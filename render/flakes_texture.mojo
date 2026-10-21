@@ -78,11 +78,14 @@ def flakes_texture(
         The texture, rows from the top, as a canvas's are.
 
     Raises:
-        Error: If a side is not at least one pixel.
+        Error: If a side is not at least one pixel, or four bytes a pixel
+            do not fit in an integer.
     """
     require_positive_extent(
         width, height, "A flakes texture is at least one pixel on each side"
     )
+    if width > (Int.MAX // 4) // height:
+        raise Error("A flakes texture is larger than this port builds")
     var pixels = List[UInt8](capacity=width * height * 4)
     for _ in range(width * height):  # pragma: no branch
         pixels.append(127)

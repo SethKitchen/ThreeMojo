@@ -472,7 +472,7 @@ Each reader refuses a file that three.js reads wrongly. three.js reads every EXR
 
 ## Flakes
 
-`flakes_texture(width, height, seed)` in `render.flakes_texture` is three.js's `FlakesTexture`: a normal map of small discs, each with a random normal. Use it as a car paint's normal map, as three.js's `webgl_materials_car` example does. The texture holds data, not color, and it repeats.
+`flakes_texture(width, height, seed)` in `render.flakes_texture` is three.js's `FlakesTexture`: a normal map of small discs, each with a random normal. Use it as a car paint's normal map, as three.js's `webgl_materials_car` example does. The texture holds data, not color, and it repeats. A side whose texel buffer does not fit in an integer is refused.
 
 ```mojo
 var flakes = assets.textures.add(flakes_texture(512, 512, seed=7))
