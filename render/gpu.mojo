@@ -12770,8 +12770,15 @@ struct GpuComposer(Movable):
             self._per_pixel(LUMINOSITY)
         elif kind == AFTERIMAGE:
             # The trail is kept on the host, in the composer, so both
-            # backends share it and `reset` forgets it.
-            if len(composer.memories[index]) == count:
+            # backends share it and `reset` forgets it. The same list is
+            # read back into: `_put_colors` has already copied it to the
+            # device, and a new frame-sized list every frame dominates the
+            # pass.
+            if len(composer.memories[index]) != count:
+                composer.memories[index] = List[FloatColor](
+                    length=count, fill=TRANSPARENT_BLACK
+                )
+            else:
                 self._put_colors(composer.memories[index])
                 self.context.enqueue_function[afterimage_kernel](
                     self.light.unsafe_ptr(),
@@ -12782,14 +12789,13 @@ struct GpuComposer(Movable):
                     grid_dim=grid,
                     block_dim=(TILE, TILE),
                 )
-            var trail = List[FloatColor](length=count, fill=TRANSPARENT_BLACK)
+            ref trail = composer.memories[index]
             with self.light.map_to_host() as host:
                 unsafe_memcpy(
                     dest=trail.unsafe_ptr().unsafe_bitcast[Float32](),
                     src=host.unsafe_ptr(),
                     count=count * 4,
                 )
-            composer.memories[index] = trail^
         elif kind == OUTPUT:
             var curve = renderer.tone_curve()
             if curve != NO_TONE_MAPPING:
