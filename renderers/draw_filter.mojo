@@ -115,8 +115,11 @@ def kept_draws(
     return kept^
 
 
-def _from_center(value: Float32, half: Float32) -> Float32:
+def _from_center(value: Float32, half: Float64) -> Float32:
     """Return one coordinate rounded to a whole pixel from the center.
+
+    The half is a `Float64`. A `Float32` half of a side past 2^24 drops
+    the half pixel at the center.
 
     Args:
         value: The coordinate, in pixels.
@@ -125,7 +128,7 @@ def _from_center(value: Float32, half: Float32) -> Float32:
     Returns:
         The rounded coordinate.
     """
-    return floor(value - half + 0.5) + half
+    return Float32(floor(Float64(value) - half + 0.5) + half)
 
 
 def snap_to_pixels(mut corners: List[RasterVertex], width: Int, height: Int):
@@ -138,8 +141,8 @@ def snap_to_pixels(mut corners: List[RasterVertex], width: Int, height: Int):
         width: The target's width in pixels.
         height: The target's height in pixels.
     """
-    var half_w = Float32(width) * 0.5
-    var half_h = Float32(height) * 0.5
+    var half_w = Float64(width) * 0.5
+    var half_h = Float64(height) * 0.5
     for at in range(len(corners)):
         corners[at].x = _from_center(corners[at].x, half_w)
         corners[at].y = _from_center(corners[at].y, half_h)
@@ -155,8 +158,8 @@ def snap_to_pixels(mut corners: List[Corner], width: Int, height: Int):
         width: The target's width in pixels.
         height: The target's height in pixels.
     """
-    var half_w = Float32(width) * 0.5
-    var half_h = Float32(height) * 0.5
+    var half_w = Float64(width) * 0.5
+    var half_h = Float64(height) * 0.5
     for at in range(len(corners)):
         corners[at].x = _from_center(corners[at].x, half_w)
         corners[at].y = _from_center(corners[at].y, half_h)

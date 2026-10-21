@@ -271,6 +271,15 @@ def test_the_snap_rounds_to_whole_pixels_from_the_center() raises:
     renderer.render_into(target, scene, assets, a_camera())
 
 
+def test_a_wide_frame_snaps_from_its_real_center() raises:
+    var corners = List[RasterVertex]()
+    corners.append(RasterVertex(0, 1, 0, 1, FloatColor(0, 0, 0, 1)))
+    corners.append(RasterVertex(1.5, 1, 0, 1, FloatColor(0, 0, 0, 1)))
+    snap_to_pixels(corners, 16777217, 4)
+    assert_equal(corners[0].x, 0.5)
+    assert_equal(corners[1].x, 1.5)
+
+
 def test_a_resized_renderer_keeps_the_settings() raises:
     var renderer = Renderer(8, 8)
     renderer.set_background(Color(1, 2, 3))

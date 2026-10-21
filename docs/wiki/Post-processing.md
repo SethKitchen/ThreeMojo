@@ -756,7 +756,7 @@ three.js blends every fragment of an object into its targets. This port draws ea
 
 ### Retro
 
-`retro_pass` is three.js's `RetroPassNode`. It draws the scene at a quarter of the frame's size, with the renderer's `snap_vertices` on. Each corner is then rounded to a whole pixel from the center of the screen, as three.js's vertex node rounds it. The small image is kept in eight bits and shown with nearest filtering.
+`retro_pass` is three.js's `RetroPassNode`. It draws the scene at a quarter of the frame's size, with the renderer's `snap_vertices` on. Each corner is then rounded to a whole pixel from the center of the screen, as three.js's vertex node rounds it. The center of a side above 16777216 pixels is a `Float64`. The small image is kept in eight bits and shown with nearest filtering.
 
 ### Importance-sampled environment
 
