@@ -1220,7 +1220,7 @@ The loader also refuses these, where the port holds less than three.js:
 - A crate with an LZ4 chunk past the end of its input, or a path tree that does not end.
 - A crate count past what the file can hold.
 - An array attribute that is not an array, points that are not whole vertices, and faces with no corner indices.
-- A face count whose triangle count does not fit in an integer.
+- A face count whose triangle count does not fit in an integer, or whose corner buffer would wrap, is refused.
 - A material value that is not a number, and a color outside zero to one.
 - A texture that reads `st2`. The port has no third set of texture coordinates.
 - References that nest more than 64 deep.

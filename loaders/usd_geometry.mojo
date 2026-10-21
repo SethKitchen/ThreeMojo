@@ -1008,7 +1008,12 @@ def _triangle_count(
         raise Error("USD: face counts whose triangle count is not whole")
     if total != Float64(Int(total)):
         raise Error("USD: face counts whose triangle count is not whole")
-    return (Int(total), starts^)
+    var triangles = Int(total)
+    # Each triangle is stored as nine floats. A count that fits in `Int`
+    # can still wrap that product, and the wrapped length looks small.
+    if triangles > Int.MAX // 9:
+        raise Error("USD: face counts whose triangle count is not whole")
+    return (triangles, starts^)
 
 
 def build_usd_geometry_with_subsets(
