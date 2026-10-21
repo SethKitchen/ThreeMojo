@@ -37,7 +37,7 @@ After an update, `world_bounds` is the box the grid covers. `opacity_at` and `ra
 
 ## The grid
 
-The longest axis of the bounds gets `resolution` voxels. The resolution is at least 8. Each axis gets one more voxel on each side. Each axis is then rounded up to a multiple of the coarsest level's step. The chain has two levels fewer than the powers of two in the resolution, from one to eight.
+The longest axis of the bounds gets `resolution` voxels. The resolution is at least 8. Each axis gets one more voxel on each side. Each axis is then rounded up to a multiple of the coarsest level's step. The chain has two levels fewer than the powers of two in the resolution, from one to eight. A grid whose voxel count does not fit in an integer is refused.
 
 A volume is a flat list of four floats a voxel. Level zero comes first, then each smaller level. `VxgiGrid` in `lights/vxgi_cone_tracer.mojo` gives the size and the start of each level.
 

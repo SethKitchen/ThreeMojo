@@ -44,7 +44,7 @@ from math.bounds import Box3
 from math.vector3 import Vector3
 from objects.mesh import Mesh
 from render.framebuffer import Color
-from std.math import cos, nan, sqrt
+from std.math import cos, inf, nan, sqrt
 from std.testing import (
     TestSuite,
     assert_almost_equal,
@@ -244,6 +244,16 @@ def test_a_volume_refuses_settings_it_cannot_use() raises:
         with assert_raises(contains="bounce cone"):
             volume.validate()
     VXGIVolume().validate()
+    var scene = Scene()
+    var assets = Assets()
+    var huge = VXGIVolume(1 << 22)
+    huge.bounds = Box3(Vector3(-1, -1, -1), Vector3(1, 1, 1))
+    with assert_raises(contains="larger than this port"):
+        huge.prepare_voxels(scene, assets)
+    var open = VXGIVolume(8)
+    open.bounds = Box3(Vector3(0, 0, 0), Vector3(inf[DType.float32](), 1, 1))
+    with assert_raises(contains="larger than this port"):
+        open.prepare_voxels(scene, assets)
 
 
 def test_the_grid_fits_the_floor_as_three_js_fits_it() raises:

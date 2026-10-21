@@ -1119,7 +1119,8 @@ struct VXGIVolume(Movable):
 
         Raises:
             Error: If the settings are refused by `validate`, the bounds
-                have no size, or anything the collector raises.
+                have no size, the voxel count does not fit in an integer,
+                or anything the collector raises.
         """
         self.validate()
         var bounds = self.bounds
@@ -1142,6 +1143,10 @@ struct VXGIVolume(Movable):
         var gx = _padded(sx, voxel, multiple)
         var gy = _padded(sy, voxel, multiple)
         var gz = _padded(sz, voxel, multiple)
+        # The chain is under twice the base grid, and each voxel stores
+        # four floats. Eight times the base count has to fit.
+        if gx > (Int.MAX // 8 // gy) // gz:
+            raise Error("A VXGI volume is larger than this port builds")
         levels = min(levels, Int(floor(log2(Float64(max(gx, gy))))) + 1)
         var low = Vector3(
             Float32(Float64(bounds.min.x) - voxel),
@@ -1453,11 +1458,28 @@ def _check_aperture(angle: Angle, what: String) raises:
         )
 
 
-def _padded(size: Float64, voxel: Float64, multiple: Int) -> Int:
+def _padded(size: Float64, voxel: Float64, multiple: Int) raises -> Int:
     """Return an axis's voxel count: its size, one voxel each side, rounded
-    up to the coarsest level's step."""
+    up to the coarsest level's step.
+
+    Args:
+        size: The axis length, in meters.
+        voxel: The voxel edge, in meters.
+        multiple: The coarsest level's step. It is at least one.
+
+    Returns:
+        The voxel count.
+
+    Raises:
+        Error: If the count does not fit in an integer.
+    """
     var cells = ceil(size / voxel) + 2
-    return Int(ceil(cells / Float64(multiple))) * multiple
+    if not (isfinite(cells) and cells < Float64(Int.MAX)):
+        raise Error("A VXGI volume is larger than this port builds")
+    var groups = ceil(cells / Float64(multiple))
+    if not (isfinite(groups) and groups < Float64(Int.MAX // multiple)):
+        raise Error("A VXGI volume is larger than this port builds")
+    return Int(groups) * multiple
 
 
 def _store(mut volume: List[Float32], index: Int, texel: Lanes):
