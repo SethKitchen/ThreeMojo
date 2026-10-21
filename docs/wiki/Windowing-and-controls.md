@@ -134,7 +134,7 @@ The window manager's close button does not close the window. It sets `close_requ
 | `WHEEL` | `wheel` | `wheel`: 1 a notch toward the user, -1 away |
 | `RESIZE` | the window's `resize` | `x` and `y`: the size of the largest frame that fits |
 
-Every event also carries `shift`, `alt` and `ctrl`. The window gives `x` and `y` in the frame's pixels. The decoder gives a cell's column and row, from zero.
+Every event also carries `shift`, `alt` and `ctrl`. The window gives `x` and `y` in the frame's pixels. The decoder gives a cell's column and row, from zero. `pixel_center_ndc` reads a pixel's center. A side above 8388608 pixels is measured in `Float64`.
 
 `InputKind`, `PointerButton` and `Key` are types, not bare integers. A `Key` is an ASCII code from 0 to 127, one of `ARROW_UP`, `ARROW_DOWN`, `ARROW_LEFT` and `ARROW_RIGHT`, or `NO_KEY`. The buttons are `PRIMARY`, `MIDDLE` and `SECONDARY`, with the browser's numbers.
 

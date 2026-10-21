@@ -41,8 +41,8 @@ from controls.orbit_controls import (
     ROTATE,
     _orthographic_view,
     _perspective_view,
-    _pixel_ndc,
 )
+from controls.input import pixel_center_ndc
 from math.vector3 import Vector3
 from std.math import cos, inf, nan, pi, sin, sqrt, tan
 from std.testing import (
@@ -637,12 +637,12 @@ def test_a_tall_view_keeps_its_width_and_its_pan() raises:
 
 
 def test_a_wide_pixel_center_stays_on_its_pixel() raises:
-    var small = _pixel_ndc(50, 100)
+    var small = pixel_center_ndc(50, 100)
     assert_equal(small, (Float32(50) + 0.5) / Float32(100) * 2 - 1)
     assert_true(small != Float32((Float64(50) + 0.5) / Float64(100) * 2 - 1))
     var count = 8388609
     var center = Float32((Float64(count - 1) + 0.5) / Float64(count) * 2 - 1)
-    assert_equal(_pixel_ndc(count - 1, count), center)
+    assert_equal(pixel_center_ndc(count - 1, count), center)
     assert_true(center != (Float32(count - 1) + 0.5) / Float32(count) * 2 - 1)
 
 

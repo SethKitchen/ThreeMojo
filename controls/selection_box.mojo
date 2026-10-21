@@ -46,6 +46,7 @@ from controls.input import (
     InputEvent,
     require_named,
     require_view_size,
+    pixel_center_ndc,
     POINTER_DOWN,
     POINTER_MOVE,
     POINTER_UP,
@@ -173,8 +174,8 @@ struct SelectionBox(Copyable, Movable):
         )
         require_view_size(width, height)
         var corner = Vector3(
-            (Float32(event.x) + 0.5) / Float32(width) * 2 - 1,
-            1 - (Float32(event.y) + 0.5) / Float32(height) * 2,
+            pixel_center_ndc(event.x, width),
+            -pixel_center_ndc(event.y, height),
             DRAG_DEPTH,
         )
         if event.kind == POINTER_DOWN and event.button == PRIMARY:

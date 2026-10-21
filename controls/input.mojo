@@ -279,6 +279,27 @@ def require_view_size(width: Int, height: Int) raises:
     )
 
 
+def pixel_center_ndc(pixel: Int, count: Int) -> Float32:
+    """Return a pixel's center in normalized device space, from minus one
+    to one.
+
+    A `Float32` side above 2^23 cannot add the half that marks the center,
+    so the last pixel reads as the edge. The center is measured in
+    `Float64` from there and stored as `Float32`. A smaller side keeps the
+    `Float32` quotient.
+
+    Args:
+        pixel: The column or row, in pixels.
+        count: The side, in pixels. It must be positive.
+
+    Returns:
+        The center, from minus one to one.
+    """
+    if count > 8388608:
+        return Float32((Float64(pixel) + 0.5) / Float64(count) * 2 - 1)
+    return (Float32(pixel) + 0.5) / Float32(count) * 2 - 1
+
+
 def refuse_invalid(what: String, value: Int) raises:
     """Refuse a number that does not name its kind.
 

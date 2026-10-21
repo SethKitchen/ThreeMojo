@@ -43,6 +43,7 @@ from controls.input import (
     button_choice,
     require_named,
     require_view_size,
+    pixel_center_ndc,
     POINTER_DOWN,
     POINTER_MOVE,
     POINTER_UP,
@@ -273,8 +274,8 @@ struct DragControls(Copyable, Movable):
         for node in self.objects:
             _ = scene.get(node)
         var pointer = Vector2(
-            (Float32(event.x) + 0.5) / Float32(width) * 2 - 1,
-            1 - (Float32(event.y) + 0.5) / Float32(height) * 2,
+            pixel_center_ndc(event.x, width),
+            -pixel_center_ndc(event.y, height),
         )
         self.raycaster.set_from_camera(pointer, camera, scene)
         if event.kind == POINTER_DOWN:

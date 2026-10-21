@@ -47,6 +47,7 @@ from controls.input import (
     button_choice,
     require_named,
     require_input,
+    pixel_center_ndc,
     Key,
     POINTER_DOWN,
     POINTER_MOVE,
@@ -482,8 +483,8 @@ struct OrbitControls(Copyable, Movable):
         if not self.zoom_to_cursor:
             return
         self._cursor = True
-        self._cursor_x = _pixel_ndc(event.x, view.width)
-        self._cursor_y = -_pixel_ndc(event.y, view.height)
+        self._cursor_x = pixel_center_ndc(event.x, view.width)
+        self._cursor_y = -pixel_center_ndc(event.y, view.height)
         var through = view.inverse.transform_point(
             Vector3(self._cursor_x, self._cursor_y, 0.5)
         )
@@ -954,26 +955,6 @@ struct OrbitControls(Copyable, Movable):
         self._delta_phi *= keep
         self._pan = self._pan * keep
         return [moved_to, target]
-
-
-def _pixel_ndc(pixel: Int, count: Int) -> Float32:
-    """Return a pixel's center in normalized device space, from minus one
-    to one.
-
-    A `Float32` side above 2^23 cannot add the half that marks the
-    center. The center is measured in `Float64` from there and stored as
-    `Float32`. A smaller side keeps the `Float32` quotient.
-
-    Args:
-        pixel: The column or row, in pixels.
-        count: The side, in pixels.
-
-    Returns:
-        The center, from minus one to one.
-    """
-    if count > 8388608:
-        return Float32((Float64(pixel) + 0.5) / Float64(count) * 2 - 1)
-    return (Float32(pixel) + 0.5) / Float32(count) * 2 - 1
 
 
 def _per_pixel(span: Float32, pixels: Int) -> Float32:
