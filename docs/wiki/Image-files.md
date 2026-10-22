@@ -119,6 +119,8 @@ The decoder checks the order of the scans. A coefficient's first bits must come 
 
 The inverse cosine transform is the separable float one, the standard's own definition, rounded once at the end. A chroma component stored at half size is read through a triangle filter. The standard leaves the reconstruction filter to the decoder, and this one uses the filter libjpeg calls fancy upsampling so that the two agree. At the right and bottom edges, the filter repeats the component's last real sample, as libjpeg does. It does not read the encoder's padding.
 
+A sample at 1e20 is byte 255. A sample at -1e20 is byte zero. A sample that is not a number is byte zero.
+
 Two decoders agree on a JPEG to within a level or two and never to the bit. `tests/test_jpeg.mojo` holds this one to two levels of libjpeg's output. One checkered test picture with sharp chroma edges is held to three levels.
 
 ### Speed

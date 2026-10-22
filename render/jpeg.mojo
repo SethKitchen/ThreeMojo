@@ -275,18 +275,21 @@ def inverse_dct(
 def clamp_sample(value: Float32) -> UInt8:
     """Return a sample rounded to the nearest byte and held to the range.
 
+    A value below -0.5, or one that is not a number, is zero. A value at
+    255.5 or past it is 255. `Int` of a sample past 2^63 is not that
+    sample, so the range is checked before the cast.
+
     Args:
         value: The unrounded sample.
 
     Returns:
         The byte.
     """
-    var rounded = Int(floor(value + 0.5))
-    if rounded < 0:
+    if not (value >= -0.5):
         return 0
-    if rounded > 255:
+    if not (value < 255.5):
         return 255
-    return UInt8(rounded)
+    return UInt8(Int(floor(value + 0.5)))
 
 
 def ycbcr_to_rgb(y: UInt8, cb: UInt8, cr: UInt8) -> Color:
