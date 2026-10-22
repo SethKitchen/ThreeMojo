@@ -219,6 +219,10 @@ def test_forest_parameters_are_checked() raises:
     with assert_raises(contains="count"):
         _ = ForestGenerator(p^).build(terrain)
     p = ForestParameters()
+    p.count = Int.MAX
+    with assert_raises(contains="does not fit"):
+        _ = ForestGenerator(p^).build(terrain)
+    p = ForestParameters()
     p.detail = -1
     with assert_raises(contains="detail"):
         _ = ForestGenerator(p^).build(terrain)

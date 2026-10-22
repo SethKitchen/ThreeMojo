@@ -66,7 +66,7 @@ A zero child count stops branching. A level past the end of a parameter list reu
 
 - The blob is an icosahedron welded to twelve vertices. It is squashed into a lumpy teardrop, and its `ao` attribute runs from zero at the base to one at the crown.
 - A tree stands only in the altitude band, on ground flatter than `min_slope`, and inside a density mask of slow noise.
-- The draw stops after fourteen tries a tree.
+- The draw stops after fourteen tries a tree. A tree count whose fourteen tries do not fit in an integer is refused.
 - `instances.values` holds three.js's `cull` attribute, and `region` holds its color drift.
 
 The forest material culls far trees in a shader. `keeps(index, camera)` answers the same question on the CPU. A tree is drawn while its random threshold is at least its place in the band from `from_distance` to `to_distance`.

@@ -108,12 +108,15 @@ struct ForestParameters(Copyable, Movable):
         """Refuse parameters that plant nothing sensible.
 
         Raises:
-            Error: If the count or the detail is negative, the cull does
+            Error: If the count or the detail is negative, the count's
+                fourteen tries do not fit in an integer, the cull does
                 not end past where it starts, or a number is not finite.
         """
         require_non_negative(
             self.count, "A forest's tree count must be zero or more"
         )
+        if self.count > Int.MAX // 14:
+            raise Error("A forest's tree count does not fit")
         require_non_negative(
             self.detail, "A forest's blob detail must be zero or more"
         )
