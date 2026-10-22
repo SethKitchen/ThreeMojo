@@ -265,6 +265,8 @@ def test_plan_floor_refuses() raises:
         _ = plan_floor(_rect(0, 0, 36, 7), OFFICE_FLOOR, 1, options)
     with assert_raises(contains="short"):
         _ = plan_floor(_rect(0, 0, 16, 15), OFFICE_FLOOR, 1, options)
+    with assert_raises(contains="larger than this port"):
+        _ = plan_floor(_rect(0, 0, 1e20, 20), OFFICE_FLOOR, 1, options)
 
 
 # --- doors and windows -----------------------------------------------------------
@@ -471,6 +473,13 @@ def test_furniture_in_bare_rooms() raises:
         ):
             shallow_chairs += 1
     assert_equal(shallow_chairs, 0)
+
+
+def test_furniture_refuses_a_room_it_cannot_walk() raises:
+    var b = _one_storey([SpacePlan("office", OFFICE, _rect(0, 0, 4, 4))])
+    b.spaces[0].outline = _rect(0, 0, 1e20, 4)
+    with assert_raises(contains="larger than this port"):
+        _ = furnish(b, 1)
 
 
 def test_a_tiny_room_gets_no_furniture() raises:

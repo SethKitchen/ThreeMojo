@@ -8,7 +8,8 @@
 `plan_floor` lays out one storey as a double-loaded corridor. The corridor
 is a strip along the footprint's longest edge, through the footprint's
 middle. A band of rooms lies on each side of it. Cuts across each band at
-seeded widths make the rooms. Every room spans its band from the corridor
+seeded widths make the rooms. A run of more than 16777216 rooms is
+refused. Every room spans its band from the corridor
 to the outside wall, so every room has a wall on the corridor and every
 room on the outside has a window wall.
 
@@ -247,7 +248,8 @@ def plan_floor(
     Raises:
         Error: If the program or options are not valid, the footprint is
             not convex or has no area, or it is too narrow for a corridor
-            and two rooms deep, or too short for the core.
+            and two rooms deep, or too short for the core, or it needs more
+            rooms than this port walks.
     """
     require_valid(
         program.is_valid(),
@@ -279,6 +281,9 @@ def plan_floor(
         raise Error("The footprint is too narrow for a corridor and two rooms")
     if u_high - u_low < core_length + 2 * min_room:
         raise Error("The footprint is too short for the core")
+    # The cuts step by at least one minimum room.
+    if not ((u_high - u_low) / min_room < Float64(16777216)):
+        raise Error("A floor plan is larger than this port walks")
     var middle = (v_low + v_high) / 2
     var lower_line = middle - corridor / 2
     var upper_line = middle + corridor / 2

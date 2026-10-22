@@ -33,6 +33,8 @@ The core is a run of rooms at the middle of one band. `PlanOptions` sets the cor
 
 `plan_floor` refuses a footprint that is not convex. It also refuses one narrower than a corridor and two rooms, or shorter than the core and two rooms.
 
+A floor whose room count passes 16777216 is refused. A furniture walk of more than 16777216 places is refused.
+
 ## Cut doors and windows
 
 Call `add_doors` before `add_windows`, so that windows stay clear of doors.
