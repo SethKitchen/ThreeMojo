@@ -661,7 +661,7 @@ The node's stochastic mode, its environment sampling, its history and its binary
 
 The motion blur reads the frame's [velocity attachment](Render-target-and-framebuffer#velocity). The composer draws its frame with one while a motion blur pass is on. The pass scales each velocity by `amount`, three.js's example's `blurAmount`.
 
-Then it sums the taps as three.js's node sums them. The first tap is the pixel. Each other tap is `i / (samples - 1) - 0.5` of the velocity along, for `i` from one to `samples`. The sum is divided by `samples`, one less than the taps, as three.js divides it. The node adds the velocity to a texture coordinate that grows down the image, so the vertical taps go against the velocity, as three.js's do.
+Then it sums the taps as three.js's node sums them. The first tap is the pixel. Each other tap is `i / (samples - 1) - 0.5` of the velocity along, for `i` from one to `samples`. The sum is divided by `samples`, one less than the taps, as three.js divides it. The node adds the velocity to a texture coordinate that grows down the image, so the vertical taps go against the velocity, as three.js's do. A sample count above 16777216 is refused.
 
 The camera and the objects move between two calls to `render`. So the first frame is sharp.
 

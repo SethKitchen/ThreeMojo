@@ -139,6 +139,11 @@ struct DisplaySettings(ImplicitlyCopyable):
         self.bokeh_scale = 1
 
 
+# A motion-blur tap index is a `Float32`. Past 16777216 it is no longer
+# that index, and one more than the maximum integer wraps the loop bound.
+comptime MAX_MOTION_SAMPLES = 16777216
+
+
 def check_display(settings: DisplaySettings) raises:
     """Refuse settings no display pass could run.
 
@@ -150,7 +155,8 @@ def check_display(settings: DisplaySettings) raises:
             resolution scale or the down sample ratio is not positive; a
             size, a separation, a repeat count, a sample count, a ghost
             count or a motion blur's sample count is below what each
-            needs; or a depth of field's focal length is not positive.
+            needs; a motion blur has more than 16777216 samples; or a
+            depth of field's focal length is not positive.
     """
     var finite = (
         isfinite(settings.sigma)
@@ -192,6 +198,10 @@ def check_display(settings: DisplaySettings) raises:
     )
     if settings.motion_samples < 2:
         raise Error("A motion blur takes at least two samples")
+    if settings.motion_samples > MAX_MOTION_SAMPLES:
+        raise Error(
+            "A motion blur's sample count is larger than this port takes"
+        )
     require_positive(
         settings.focal_length.value,
         "A depth of field's focal length must be positive",
@@ -588,13 +598,17 @@ def motion_blur_pixel(
         velocity: The pixel's velocity, scaled by the pass's amount, in
             texture coordinates: three.js adds it to the uv as it is, and
             its uv grows down.
-        samples: `numSamples`, at least two.
+        samples: `numSamples`, at least two. A count above 16777216
+            returns the pixel.
 
     Returns:
-        The mean, as the frame holds it.
+        The mean, as the frame holds it. The pixel alone when `samples`
+        is above 16777216.
     """
     var u = u_of(x, source.width)
     var v = v_of(y, source.height)
+    if samples > MAX_MOTION_SAMPLES:
+        return _stored(_tap(source, u, v, False), False)
     var count = Float32(samples)
     var sum = _tap(source, u, v, False)
     # At least two samples, so the loop runs.
