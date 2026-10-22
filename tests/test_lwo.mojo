@@ -413,6 +413,26 @@ def test_a_polygon_corner_count_that_does_not_fit_is_refused() raises:
     wide.append(5)
     with assert_raises(contains="past its indices"):
         _ = _split_indices(indices, wide)
+    # A vertex index of 1e20 is not a point. `Int` of it is the minimum
+    # integer, which the later range check keeps.
+    var named = List[Float64]()
+    named.append(1e20)
+    named.append(1)
+    named.append(2)
+    with assert_raises(contains="index does not fit"):
+        _ = _split_indices(named, triangle)
+    var backwards = List[Float64]()
+    backwards.append(-1)
+    backwards.append(0)
+    backwards.append(1)
+    with assert_raises(contains="index does not fit"):
+        _ = _split_indices(backwards, triangle)
+    var half = List[Float64]()
+    half.append(1.5)
+    half.append(0)
+    half.append(1)
+    with assert_raises(contains="index must be a whole number"):
+        _ = _split_indices(half, triangle)
 
 
 def main() raises:

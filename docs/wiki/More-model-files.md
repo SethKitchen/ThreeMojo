@@ -1306,7 +1306,7 @@ The loader also refuses these, which three.js reads in a way that the port does 
 - Polygons before any points. three.js makes a mesh with no positions.
 - Fewer surface tags than polygons.
 - A polygon or a UV that names a point that the layer does not have.
-- A polygon corner count that is not a whole number, or that does not fit.
+- A polygon corner count or index that is not a whole number, or that does not fit.
 - A surface value of the wrong shape, and an attribute with no value.
 - A texture wrap mode that is not 0 to 3. three.js leaves the wrap undefined.
 
