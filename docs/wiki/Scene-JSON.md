@@ -2,6 +2,8 @@
 
 `exporters/object_json.mojo` writes a scene and its assets as three.js JSON. `loaders/object_loader.mojo` reads that JSON back into a scene and its assets. The format is version 4 of three.js's JSON Object format. three.js: `Object3D.toJSON` and `ObjectLoader`.
 
+A version outside 4 inclusive and 5 exclusive is refused.
+
 ![A cube written as JSON and read back turns under its lamp](out/scenejson.png)
 
 `examples/json_scene.mojo` writes the scene, reads it back, and draws that.

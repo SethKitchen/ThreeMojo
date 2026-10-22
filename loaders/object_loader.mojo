@@ -1067,8 +1067,11 @@ struct _Loader(Movable):
         )
         if self.text(metadata, "type", "") != "Object":
             raise Error("Object JSON: metadata.type must be Object")
-        var version = Int(self.number(metadata, "version", 0))
-        if version != FORMAT_MAJOR:
+        # Major version 4 includes 4.5. `Int` of 1e20 is not that major.
+        var version = self.number(metadata, "version", 0)
+        if not (version >= Float32(FORMAT_MAJOR)) or not (
+            version < Float32(FORMAT_MAJOR + 1)
+        ):
             raise Error("Object JSON: only version 4 of the format is read")
 
     def library(self, key: String) raises -> Int:

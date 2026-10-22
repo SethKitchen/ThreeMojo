@@ -2048,6 +2048,14 @@ def test_document_refusals() raises:
         _ = read_object_json(
             '{"metadata":{"version":3,"type":"Object"}}', scene, assets
         )
+    with assert_raises(contains="version 4"):
+        _ = read_object_json(
+            '{"metadata":{"version":5,"type":"Object"}}', scene, assets
+        )
+    with assert_raises(contains="version 4"):
+        _ = read_object_json(
+            '{"metadata":{"version":1e20,"type":"Object"}}', scene, assets
+        )
     with assert_raises(contains="no object"):
         _ = read_object_json(
             '{"metadata":{"version":4.5,"type":"Object"}}', scene, assets
