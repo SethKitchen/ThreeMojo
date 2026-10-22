@@ -235,6 +235,7 @@ from lights.light import (
     light_probe,
     spot_light,
 )
+from lights.shadow import MAX_MAP_SIZE
 from loaders.gltf import decode_base64, decode_image
 from materials.node_json import read_node_program
 from loaders.node_loader import NodeLoader, plain_material_type
@@ -525,6 +526,28 @@ def wrap_code(wrap: Wrap) -> Int:
     if wrap == MIRROR:
         return MIRRORED_REPEAT_WRAPPING
     return REPEAT_WRAPPING
+
+
+def shadow_map_size(value: Float32) raises -> Int:
+    """Return a shadow map's side from one number of `mapSize`.
+
+    Args:
+        value: One side, in texels.
+
+    Returns:
+        That side, a whole number from 1 to 8192.
+
+    Raises:
+        Error: If `value` is not a whole number in that range. A float
+            past 2^24 is not a stable integer, so the range is checked
+            before the cast.
+    """
+    if not (value >= Float32(1)) or not (value <= Float32(MAX_MAP_SIZE)):
+        raise Error("A shadow map must be one to 8192 texels a side")
+    var side = Int(value)
+    if Float32(side) != value:
+        raise Error("A shadow map must be one to 8192 texels a side")
+    return side
 
 
 def is_mipmap_filter(code: Int) -> Bool:
@@ -2644,7 +2667,7 @@ struct _Loader(Movable):
             if len(size) == 2:
                 if size[0] != size[1]:
                     raise Error("Object JSON: a shadow map must be square")
-                built.shadow.map_size = Int(size[0])
+                built.shadow.map_size = shadow_map_size(size[0])
             var camera = self.entry(shadow, "camera")
             if camera != NO_NODE:
                 built.shadow.near = Length(
