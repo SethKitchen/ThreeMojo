@@ -41,4 +41,5 @@ The overlay fills every contour of a glyph by the even-odd rule. It does not sor
 - The overlay draws in sRGB bytes. It does not tone map.
 - Text is one line per call. `label` stacks lines.
 - A heightfield whose point count does not fit in an integer is refused.
+- A tube of more than 16777216 segments is refused.
 - An overlay coordinate that does not fit in an integer lies past the frame.

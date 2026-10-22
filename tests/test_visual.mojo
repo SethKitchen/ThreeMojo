@@ -365,6 +365,37 @@ def test_tube() raises:
         Vec3d(0, 0, 0),
     )
     assert_equal(rod.count(), 6 * 4)
+    var fine = MeshBuilder()
+    fine.tube(
+        Vec3d(0, 0, 0),
+        Vec3d(0, 0, 1),
+        1.0,
+        0.0,
+        64,
+        Vec3d(1, 1, 1),
+        Vec3d(0, 0, 0),
+    )
+    assert_equal(fine.count(), 64 * 4)
+    with assert_raises(contains="larger than this port"):
+        rod.tube(
+            Vec3d(0, 0, 0),
+            Vec3d(1, 0, 0),
+            1.0,
+            0.0,
+            16777217,
+            Vec3d(1, 1, 1),
+            Vec3d(0, 0, 0),
+        )
+    with assert_raises(contains="larger than this port"):
+        rod.tube(
+            Vec3d(0, 0, 0),
+            Vec3d(1, 0, 0),
+            1.0,
+            0.0,
+            Int.MAX,
+            Vec3d(1, 1, 1),
+            Vec3d(0, 0, 0),
+        )
     with assert_raises(contains="three segments"):
         rod.tube(
             Vec3d(0, 0, 0),

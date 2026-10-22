@@ -363,11 +363,15 @@ struct MeshBuilder(Movable):
             inside_color: The bore's color.
 
         Raises:
-            Error: If the radii or the segments are not valid, or the ends
-                are the same point.
+            Error: If the radii or the segments are not valid, the segment
+                count is above 16777216, or the ends are the same point.
         """
         if segments < 3:
             raise Error("A tube needs at least three segments")
+        if segments > 16777216:
+            raise Error(
+                "A tube's segment count is larger than this port builds"
+            )
         if not (outer > 0 and inner >= 0 and inner < outer):
             raise Error("A tube's radii must have 0 <= inner < outer")
         var axis = end - start
