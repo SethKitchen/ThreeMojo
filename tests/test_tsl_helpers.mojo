@@ -134,6 +134,10 @@ def test_a_march_refuses_a_count_or_a_matrix_it_cannot_run() raises:
         _ = RaymarchingBox(g, 0, to_local)
     with assert_raises(contains="not 600 steps"):
         _ = RaymarchingBox(g, 600, to_local)
+    # `Int` of `sqrt(3)` times a step count past 2^63 is not that count.
+    assert_equal(raymarch_count(Int.MAX), Int.MAX)
+    with assert_raises(contains="from one step to 1024 times"):
+        _ = RaymarchingBox(g, Int.MAX, to_local)
     with assert_raises(contains="matrix reads a mat4, not a vec3"):
         _ = RaymarchingBox(g, 4, g.vec3(1, 2, 3))
 

@@ -120,6 +120,8 @@ A fragment whose ray misses the box is thrown away. The ray starts where it ente
 
 The bytecode has no jumps, so the loop runs `raymarch_count(steps)` times: `ceil(sqrt(3) * steps) + 1`. That is enough for the diagonal of the box at the shortest step. A `Break` stops the loop where the ray leaves the box, where three.js's loop ends. A count past `MAX_LOOP_COUNT` is refused.
 
+A step count whose product does not fit in an integer is refused.
+
 ## Soft particles
 
 `soft_particles(g, viewport_depth, near, far, opacity, distance, contrast)` fades a particle where it nears the scene behind it. The gap is the particle's view `z` less the scene's, over `distance`. `contrast_curve` makes the gap an S curve, and the opacity multiplies it.
