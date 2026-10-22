@@ -8,6 +8,8 @@ It does not use sorted alpha blending. Issue [298](https://github.com/SethKitche
 
 Use `add_groom` to grow and attach a humanoid groom. Use `add_strands` to attach a `HairGroom` that already exists. Both return `HairStrands` and create one geometry, one material and one child node. The child starts on its parent's current layers. A hair step that is not a positive length is refused. A step count above 16777216 is refused.
 
+A guide count outside one through 20000 is refused. A follower count outside zero through 64 is refused. A root try count below zero is refused. A root try count above 16777216 is refused.
+
 Its layers can then be set separately.
 
 Pass a `LineWidth` to `add_strands`. It can name pixels or a physical length. The default is one output pixel with opacity 0.65. Opacity must be finite and between zero and one.

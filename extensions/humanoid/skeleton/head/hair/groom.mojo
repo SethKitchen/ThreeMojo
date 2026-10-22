@@ -84,6 +84,8 @@ comptime MAX_GUIDES = 20000
 comptime MAX_FOLLOWERS = 64
 # How many roots are tried for each guide before it is given up.
 comptime ROOT_TRIES = 8
+# A larger try count does not finish. Each try walks the scalp.
+comptime MAX_ROOT_TRIES = 16777216
 # How many points a guide takes over one turn of its curl.
 comptime CURL_POINTS = Float32(8)
 # The designed styles, in template centimeters: the middle of the
@@ -384,10 +386,7 @@ struct GroomSpec(ImplicitlyCopyable):
         Raises:
             Error: If a count is out of range or the genome is not valid.
         """
-        if guides < 1 or guides > MAX_GUIDES:
-            raise Error("A groom's guides number one through 20000")
-        if followers < 0 or followers > MAX_FOLLOWERS:
-            raise Error("A guide's followers number zero through 64")
+        require_groom_counts(guides, followers, ROOT_TRIES)
         var h = dimensions.head.copy()
         var length = h.torso.genome.get(HAIR_LENGTH)
         var grow = max(Float32(0), length)
@@ -745,6 +744,36 @@ def _grow_guide(
         levels.append(lift)
 
 
+def require_groom_counts(guides: Int, followers: Int, root_tries: Int) raises:
+    """Refuse a groom count this port cannot grow.
+
+    Nothing. The call returns when the guides are one through 20000,
+    the followers are zero through 64, and the root tries are zero
+    through 16777216.
+
+    Args:
+        guides: How many guide strands.
+        followers: How many follow strands round each guide.
+        root_tries: How many roots are tried for each guide.
+
+    Returns:
+        Nothing.
+
+    Raises:
+        Error: If a guide count is outside one through 20000, a follower
+            count is outside zero through 64, or a root try count is
+            below zero or above 16777216.
+    """
+    if guides < 1 or guides > MAX_GUIDES:
+        raise Error("A groom's guides number one through 20000")
+    if followers < 0 or followers > MAX_FOLLOWERS:
+        raise Error("A guide's followers number zero through 64")
+    if root_tries < 0:
+        raise Error("A groom's root tries must be zero or more")
+    if root_tries > MAX_ROOT_TRIES:
+        raise Error("A groom's root try count is larger than this port grows")
+
+
 def require_hair_steps(step: Float32, span: Float32) raises:
     """Refuse a hair step this port cannot walk.
 
@@ -804,9 +833,11 @@ def groom_hair(
     Raises:
         Error: If `dimensions.validate` refuses the copy, if `style` is
             not named or its file cannot be read, if no guide finds a
-            root, or if a step is not a positive length or asks for more
+            root, if a guide, follower, or root try count is out of
+            range, or if a step is not a positive length or asks for more
             than 16777216 samples.
     """
+    require_groom_counts(spec.guides, spec.followers, spec.root_tries)
     require_hair_style(style)
     require_hair_steps(spec.step, spec.longest)
     if spec.curl > 0:
