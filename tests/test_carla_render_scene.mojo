@@ -187,7 +187,7 @@ from postprocessing.composer import (
 )
 from render.color_utils import kelvin_color
 from render.framebuffer import Color, FloatColor
-from std.math import atan, log2, pi, pow, sqrt
+from std.math import atan, inf, log2, pi, pow, sqrt
 from std.os import makedirs
 from test_scratch import TestScratch, temporary_path
 from std.pathlib import Path
@@ -331,6 +331,23 @@ def test_lots_and_lamps() raises:
     assert_almost_equal(first.inward.y, -1, atol=1e-5)
     with assert_raises(contains="positive spacing"):
         _ = lamp_posts(map, Length(0, METER))
+    with assert_raises(contains="finite"):
+        _ = lamp_posts(map, Length(inf[DType.float32](), METER))
+    for i in range(len(map.roads)):
+        map.roads[i].length = 1e20
+    with assert_raises(contains="larger than this port"):
+        _ = lamp_posts(map, Length(1, METER))
+    with assert_raises(contains="larger than this port"):
+        _ = building_lots(map, _small())
+    var long: List[Vector3] = [
+        Vector3(0, 0, 0),
+        Vector3(2e7, 0, 0),
+        Vector3(2e7, 3, 0),
+        Vector3(0, 3, 0),
+        Vector3(0, 0, 0),
+    ]
+    with assert_raises(contains="larger than this port"):
+        _ = crosswalk_stripes(long)
 
 
 def test_skyline() raises:

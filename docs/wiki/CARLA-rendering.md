@@ -100,6 +100,8 @@ The road comes from CARLA's mesh factory. Its mesh has one group per surface kin
 
 Buildings stand on lots beside each road, outside the junctions. A lot that comes near a lane or another lot stays empty. A ring of tall buildings far out gives the skyline.
 
+A street lamp spacing must be a finite distance more than zero. A road whose lamp count passes 16777216 is refused. A crosswalk whose stripe count passes 16777216 is refused. A road whose building lots pass 16777216 is refused.
+
 ## The town package
 
 A CARLA town can be drawn from CARLA's own content: its buildings, streets, plants, poles, props and parked vehicles, each where CARLA puts them. Set `TownSettings.package` to the town's name, such as `Town02`, and load its OpenDRIVE map. When the registry's cache holds `town.Town02`, the package stands in for the procedural roads, lane marks, ground, buildings, trees and lamps. See [CARLA assets](CARLA-assets) for what a package holds.
