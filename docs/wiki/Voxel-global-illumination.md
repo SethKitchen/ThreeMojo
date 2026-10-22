@@ -33,7 +33,7 @@ vxgi_light(frame, gathered, diffuse)
 
 After an update, `world_bounds` is the box the grid covers. `opacity_at` and `radiance_at` read one texel of a level.
 
-`validate` refuses a resolution that is not positive and negative bounces or lights. It refuses a step scale or a distance that is not usable, and an aperture that is not between 0° and 180°.
+`validate` refuses a resolution that is not positive and negative bounces or lights. It refuses a step scale or a distance that is not usable, and an aperture that is not between 0 and 180 degrees. A bounce count above 16777216 is refused.
 
 ## The grid
 

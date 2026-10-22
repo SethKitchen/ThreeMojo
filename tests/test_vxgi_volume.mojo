@@ -344,6 +344,16 @@ def test_a_volume_refuses_settings_it_cannot_use() raises:
     with assert_raises(contains="bounces"):
         volume.validate()
     volume = VXGIVolume()
+    volume.bounces = 16777217
+    with assert_raises(contains="larger than this port"):
+        volume.validate()
+    volume = VXGIVolume()
+    volume.bounces = Int.MAX
+    with assert_raises(contains="larger than this port"):
+        volume.validate()
+    with assert_raises(contains="larger than this port"):
+        volume.update_lighting()
+    volume = VXGIVolume()
     volume.max_lights = -1
     with assert_raises(contains="light count"):
         volume.validate()

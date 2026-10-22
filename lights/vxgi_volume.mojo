@@ -101,6 +101,9 @@ comptime SHADOW_STEPS = 256
 
 # The steps of any other cone, three.js's `maxSteps` default.
 comptime CONE_STEPS = 128
+# The most bounces a volume caches. Each bounce walks every voxel, and
+# `range` of `Int.MAX` never ends.
+comptime MAX_VXGI_BOUNCES = 16777216
 
 # How far a cone starts from its voxel, in voxels, three.js's `1.5`.
 comptime ORIGIN_OFFSET = Float32(1.5)
@@ -113,6 +116,22 @@ comptime MIN_RESOLUTION = 8
 
 # three.js's `PI`, which the irradiance is divided by.
 comptime VXGI_PI = Float32(3.141592653589793)
+
+
+def require_vxgi_bounces(bounces: Int) raises:
+    """Refuse a bounce count this port cannot cache.
+
+    Nothing. The call returns when the count is in range. A negative
+    count is refused separately, as "cannot be negative".
+
+    Args:
+        bounces: How many bounces the volume caches.
+
+    Raises:
+        Error: If the count is above 16777216.
+    """
+    if bounces > MAX_VXGI_BOUNCES:
+        raise Error("A VXGI bounce count is larger than this port caches")
 
 
 @fieldwise_init
@@ -1084,10 +1103,11 @@ struct VXGIVolume(Movable):
 
         Raises:
             Error: If the resolution is not positive, the bounces or the
-                lights are negative, the minimum opacity or the step scale
-                is not finite, the step scale is not positive, the distance
-                is negative or not finite, or a cone's aperture is not
-                between zero and a half turn.
+                lights are negative, the bounce count is above 16777216,
+                the minimum opacity or the step scale is not finite, the
+                step scale is not positive, the distance is negative or
+                not finite, or a cone's aperture is not between zero and
+                a half turn.
         """
         require_positive(
             self.resolution, "A VXGI volume's resolution must be positive"
@@ -1095,6 +1115,7 @@ struct VXGIVolume(Movable):
         require_non_negative(
             self.bounces, "A VXGI volume's bounces cannot be negative"
         )
+        require_vxgi_bounces(self.bounces)
         require_non_negative(
             self.max_lights, "A VXGI volume's light count cannot be negative"
         )
@@ -1346,11 +1367,15 @@ struct VXGIVolume(Movable):
         """
         return tan(self.bounce_cone_angle.value * 0.5)
 
-    def update_lighting(mut self):
+    def update_lighting(mut self) raises:
         """Inject the light and cache the bounces on the host: three.js's
         `_updateLighting`, with its `VXGI.Inject`, `VXGI.RadianceMip` and
         `VXGI.Bounce` kernels. The volume must be voxelized.
+
+        Raises:
+            Error: If the bounce count is above 16777216.
         """
+        require_vxgi_bounces(self.bounces)
         var count = self.grid.level_count(0)
         var records = floats_of(self.triangles)
         var shining = floats_of(self.lights)
