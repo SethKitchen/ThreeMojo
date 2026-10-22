@@ -232,7 +232,8 @@ def traffic_light_boxes(map: Map, id: SignalId) raises -> List[TriggerBox]:
         The boxes.
 
     Raises:
-        Error: If the id is not valid.
+        Error: If the id is not valid, or a lane range is larger than
+            this port walks.
     """
     var out = List[TriggerBox]()
     for reference in signal_references(map, id):
@@ -359,7 +360,8 @@ def give_way_boxes(map: Map, id: SignalId) raises -> SignBoxes:
         The boxes.
 
     Raises:
-        Error: If the id is not valid.
+        Error: If the id is not valid, or a lane range is larger than
+            this port walks.
     """
     var out = SignBoxes()
     for reference in signal_references(map, id):
@@ -405,7 +407,8 @@ def speed_limit_boxes(map: Map, id: SignalId) raises -> List[TriggerBox]:
         The boxes.
 
     Raises:
-        Error: If the id is not valid.
+        Error: If the id is not valid, or a lane range is larger than
+            this port walks.
     """
     var out = List[TriggerBox]()
     for reference in signal_references(map, id):

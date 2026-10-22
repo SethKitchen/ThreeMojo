@@ -200,6 +200,7 @@ The sun's angles are `Angle`s and the fog distance is a `Length`. The other fiel
 - An actor's box is a `bounding_box.BoundingBox`. A pose is a `transform.CarlaTransform`.
 - A color attribute reads as a `render.framebuffer.Color`, and a semantic tag is a `sensor.SemanticTag`.
 - `math.generate_range` walks a signal's lanes, as CARLA's `Math::GenerateRange` does.
+- A generated range of more than 16777216 numbers is refused.
 
 ## Differences from CARLA
 

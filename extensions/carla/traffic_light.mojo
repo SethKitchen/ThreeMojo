@@ -55,6 +55,7 @@ from extensions.carla.actor import (
 )
 from extensions.carla.bounding_box import BoundingBox
 from extensions.carla.map import Map, Waypoint, is_traffic_light
+from extensions.carla.math import generate_range
 from extensions.carla.road_info import LaneId, SignalId
 from extensions.carla.traffic_sign import TriggerBox, traffic_light_boxes
 from extensions.carla.transform import CarlaRotation, CarlaTransform
@@ -669,27 +670,14 @@ def affected_lane_waypoints(
         waypoint as null; this list leaves it out.
 
     Raises:
-        Error: If the id is not valid.
+        Error: If the id is not valid, or a lane range is larger than
+            this port walks.
     """
     var out = List[Waypoint]()
     for landmark in map.landmarks_from_id(sign_id):
         ref r = landmark.reference
         for v in r.validities:
-            var lanes = List[Int]()
-            if v.from_lane.value < v.to_lane.value:
-                # from < to, so the range holds two lanes at least.
-                for lane in range(
-                    v.from_lane.value, v.to_lane.value + 1
-                ):  # pragma: no branch
-                    lanes.append(lane)
-            else:
-                # from >= to, so the range holds one lane at least.
-                for lane in range(
-                    v.from_lane.value, v.to_lane.value - 1, -1
-                ):  # pragma: no branch
-                    lanes.append(lane)
-            # Either range above holds one lane at least.
-            for lane in lanes:  # pragma: no branch
+            for lane in generate_range(v.from_lane.value, v.to_lane.value):
                 if lane == 0:
                     continue
                 var w = map.waypoint_xodr_float32(
