@@ -523,6 +523,7 @@ from render.computation import (
     GPUComputationRenderer,
     compute_texel,
     require_computation_ready,
+    require_computation_size,
 )
 from materials.compute_ids import ATOMIC_LOAD
 from materials.compute_nodes import (
@@ -13284,8 +13285,11 @@ struct GpuComputation(Movable):
                 written back to it.
 
         Raises:
-            Error: If `init` has not compiled the shaders.
+            Error: If either size is not positive, the texel buffer does
+                not fit in an integer, or `init` has not compiled the
+                shaders.
         """
+        require_computation_size(computation.size_x, computation.size_y)
         require_computation_ready(
             len(computation.programs), len(computation.variables)
         )

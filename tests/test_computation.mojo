@@ -59,7 +59,9 @@ def _texel(image: List[Float32], x: Int, y: Int, lane: Int) -> Float32:
     return image[(y * SIZE_X + x) * 4 + lane]
 
 
-def _starting_positions(computation: GPUComputationRenderer) -> List[Float32]:
+def _starting_positions(
+    computation: GPUComputationRenderer,
+) raises -> List[Float32]:
     """Return an image whose texel (x, y) holds (x, y, 0, 1)."""
     var image = computation.create_texture()
     for y in range(SIZE_Y):
@@ -351,6 +353,32 @@ def test_a_computation_refuses_what_it_cannot_run() raises:
         computation.compute()
     with assert_raises(contains="no variable"):
         _ = computation.current_image(3)
+
+
+def test_a_changed_computation_size_is_refused() raises:
+    var computation = GPUComputationRenderer(4, 4)
+    computation.size_x = 0
+    with assert_raises(contains="need a size"):
+        _ = computation.create_texture()
+    computation.size_x = 4
+    computation.size_y = -1
+    with assert_raises(contains="need a size"):
+        _ = computation.create_texture()
+    computation.size_x = 1 << 31
+    computation.size_y = 1 << 31
+    with assert_raises(contains="larger than this port"):
+        _ = computation.create_texture()
+    with assert_raises(contains="larger than this port"):
+        _ = computation.add_variable("a", SLOW, List[Float32]())
+    assert_equal(len(computation.variables), 0)
+    computation.size_x = 4
+    computation.size_y = Int.MAX
+    with assert_raises(contains="larger than this port"):
+        computation.compute()
+    with assert_raises(contains="larger than this port"):
+        _ = computation.current_texture(0)
+    computation.size_y = 4
+    assert_equal(len(computation.create_texture()), 64)
 
 
 def test_explicit_compute_gradients_fail_closed_before_sampling() raises:

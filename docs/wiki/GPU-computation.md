@@ -1,6 +1,6 @@
 # GPU computation
 
-`render/computation.mojo` steps float images with GLSL fragment shaders. It is three.js's `GPUComputationRenderer` from `examples/jsm/misc/`. A simulation keeps its state in the images, for example the positions and velocities of a flock, and runs one step a frame. An image whose texel buffer does not fit in an integer is refused.
+`render/computation.mojo` steps float images with GLSL fragment shaders. It is three.js's `GPUComputationRenderer` from `examples/jsm/misc/`. A simulation keeps its state in the images, for example the positions and velocities of a flock, and runs one step a frame. An image whose texel buffer does not fit in an integer is refused. A later size that is not positive, or whose texel buffer does not fit, is refused.
 
 ![A ripple field steps across a turning sphere](out/computation.png)
 
