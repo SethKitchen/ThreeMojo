@@ -713,16 +713,24 @@ def subsurface_scattering(
     return scattering
 
 
+# One ray of more steps than this does not finish a fragment. The
+# default is 25.
+comptime MAX_VOLUME_STEPS = 4096
+
+
 def check_steps(steps: Int) raises:
-    """Refuse a number of ray steps that marches nothing.
+    """Refuse a number of ray steps this port does not march.
 
     Args:
         steps: How many steps a `VOLUME` surface's ray takes.
 
     Raises:
-        Error: If `steps` is below one: three.js divides the ray by it.
+        Error: If `steps` is below one, or above 4096. three.js divides
+            the ray by the count.
     """
     require_positive(steps, "A volume's ray takes at least one step")
+    if steps > MAX_VOLUME_STEPS:
+        raise Error("A volume's step count is larger than this port marches")
 
 
 def require_dash_size(size: Float32) raises:
@@ -2855,8 +2863,8 @@ struct Material(ImplicitlyCopyable):
             steps: The number of steps, from one.
 
         Raises:
-            Error: If the material is not `VOLUME`, or `steps` is below one;
-                see `check_steps`.
+            Error: If the material is not `VOLUME`, or `steps` is below one
+                or above 4096; see `check_steps`.
         """
         if self.kind != VOLUME:
             raise Error(

@@ -160,6 +160,20 @@ def test_a_ray_of_no_steps_gathers_nothing() raises:
     assert_equal(ray.x, 0)
     assert_equal(ray.y, 0)
     assert_equal(ray.z, 0)
+    # A step count past the march limit gathers nothing. It does not walk.
+    var huge = volumetric_light(
+        AboveHalf(),
+        ProgramSource(Pointer(to=program)),
+        False,
+        at_surface(),
+        Vector3(0, 0, 2),
+        0.5,
+        Int.MAX,
+        0,
+    )
+    assert_equal(huge.x, 0)
+    assert_equal(huge.y, 0)
+    assert_equal(huge.z, 0)
 
 
 def test_the_scattering_node_reads_the_step_s_position() raises:
@@ -274,6 +288,11 @@ def test_the_material_is_three_js_s() raises:
 def test_a_volume_refuses_what_it_cannot_use() raises:
     with assert_raises(contains="at least one step"):
         _ = volume_node_material(steps=0)
+    with assert_raises(contains="larger than this port"):
+        _ = volume_node_material(steps=4097)
+    with assert_raises(contains="larger than this port"):
+        _ = volume_node_material(steps=Int.MAX)
+    assert_equal(volume_node_material(steps=4096).steps, 4096)
     var lambert = Material(Color(200, 200, 200), kind=LAMBERT)
     with assert_raises(contains="Only a VOLUME material marches a ray"):
         lambert.set_steps(4)
