@@ -780,6 +780,11 @@ struct RoadGeometry(Copyable, Movable):
             var work = ceil(d * (1.0 + reach))
             if not isfinite(work) or work >= 9223372036854775807.0:
                 raise Error("Spiral derivative work is not representable")
+            # A finite count past the query budget does not finish this loop.
+            if work >= 4194304.0:
+                raise Error(
+                    "Spiral derivative work exceeds its spiral work limit"
+                )
             var pieces = 1 + Int(work)
             var step = d / Float64(pieces)
             var dstep = 1.0 / Float64(pieces)
