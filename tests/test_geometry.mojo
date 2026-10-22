@@ -813,6 +813,19 @@ def test_a_plane_needs_positive_extents_and_segments() raises:
         _ = plane(Length(1.0, METER), Length(1.0, METER), 0, 1)
     with assert_raises():
         _ = plane(Length(1.0, METER), Length(1.0, METER), 1, 0)
+    var strip = plane(Length(2.0, METER), Length(1.0, METER), 4096, 1)
+    assert_equal(strip.vertex_count(), 4097 * 2)
+    assert_equal(strip.triangle_count(), 4096 * 2)
+    with assert_raises(contains="larger than this port"):
+        _ = plane(Length(1.0, METER), Length(1.0, METER), 16777217, 1)
+    with assert_raises(contains="larger than this port"):
+        _ = plane(Length(1.0, METER), Length(1.0, METER), 1, 16777217)
+    with assert_raises(contains="larger than this port"):
+        _ = plane(Length(1.0, METER), Length(1.0, METER), 4097, 4096)
+    with assert_raises(contains="larger than this port"):
+        _ = plane(Length(1.0, METER), Length(1.0, METER), Int.MAX, 1)
+    with assert_raises(contains="larger than this port"):
+        _ = plane(Length(1.0, METER), Length(1.0, METER), 1, Int.MAX)
 
 
 # --- circle -----------------------------------------------------------------

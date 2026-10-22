@@ -217,7 +217,7 @@ var sheet = plane(Length(2.0, METER), Length(1.0, METER))        # one quad
 var grid = plane(Length(20.0, METER), Length(20.0, METER), 4, 4)  # sixteen quads
 ```
 
-A rectangle in the xy plane, facing +z, centered on the origin. The vertex order, winding and texture coordinates match three.js. Turn the node a quarter turn about x to make a floor.
+A rectangle in the xy plane, facing +z, centered on the origin. The vertex order, winding and texture coordinates match three.js. Turn the node a quarter turn about x to make a floor. A grid of more than 16777216 cells is refused.
 
 The texture coordinates run once across the rectangle. To tile an image, rewrite the `uv` attribute, as `examples/floor.mojo` does.
 
@@ -931,6 +931,7 @@ A per-instance `position`, `normal`, `uv` or `tangent` is refused when drawn. Th
 - A negative or zero extent raises.
 - A sphere with too few segments or rings raises.
 - A plane with fewer than one segment raises.
+- A plane grid of more than 16777216 cells is refused.
 - A circle needs a positive radius and at least three segments.
 - A ring needs an inner radius of zero or more, a larger outer radius, three segments around and one across.
 - A cylinder needs a positive height, radii that are not negative and not both zero, three segments around and one down the side.
