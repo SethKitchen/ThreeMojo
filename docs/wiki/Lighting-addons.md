@@ -127,7 +127,7 @@ three.js: `new LightProbeGrid( width, height, depth, widthProbes, heightProbes, 
 
 ### The bake
 
-`bake_light_probe_grid` is three.js's `LightProbeGrid.bake`. For each probe it draws the scene into a cube with `scene_cube`. Then `project_sh` reads the cube in `sample_count` directions on an equal-area Fibonacci sphere. Each sample is multiplied by the basis, and the sum by `4 pi / sample_count`.
+`bake_light_probe_grid` is three.js's `LightProbeGrid.bake`. For each probe it draws the scene into a cube with `scene_cube`. Then `project_sh` reads the cube in `sample_count` directions on an equal-area Fibonacci sphere. Each sample is multiplied by the basis, and the sum by `4 pi / sample_count`. A bounce count above 16777216 is refused. A sample count above 16777216 is refused.
 
 | Option | Default | Meaning |
 |---|---|---|
@@ -183,6 +183,7 @@ The grid follows the profiles, as `LightProbeGrid.flatten` lays it out: the two 
 - `SpotProfile` refuses a shape that is not `IES_SPOT` or `PROJECTOR_SPOT`, and an IES profile with no texture or a blank one.
 - `LightProbeGrid.validate` refuses a count below one, a size that is not a positive length and a position that is not finite. It refuses an intensity or a falloff that is negative or not finite, and a coefficient that is not finite.
 - `bake_light_probe_grid` refuses a range outside the grid, negative bounces, bounces over part of the grid, and a sample count below one.
+- A bounce count or a sample count above 16777216 is refused.
 - `SunLight.update` refuses a scene that does not hold the sun's cascades, a sun at the origin, and a shadow that `LightShadow.validate` refuses.
 - `ShadowCascade.validate` refuses a `CascadeBlend` that is none of the two. It refuses a `SUN_BLEND` cascade that fades after it ends or ramps in before it starts.
 

@@ -565,6 +565,18 @@ def test_a_bake_refuses_what_three_js_refuses() raises:
         bake_light_probe_grid(grid, renderer, room, assets, count=-2)
     with assert_raises(contains="negative"):
         bake_light_probe_grid(grid, renderer, room, assets, bounces=-1)
+    with assert_raises(contains="larger than this port"):
+        bake_light_probe_grid(grid, renderer, room, assets, bounces=16777217)
+    with assert_raises(contains="larger than this port"):
+        bake_light_probe_grid(grid, renderer, room, assets, bounces=Int.MAX)
+    with assert_raises(contains="larger than this port"):
+        bake_light_probe_grid(
+            grid, renderer, room, assets, sample_count=16777217
+        )
+    with assert_raises(contains="larger than this port"):
+        bake_light_probe_grid(
+            grid, renderer, room, assets, sample_count=Int.MAX
+        )
     with assert_raises(contains="every probe"):
         bake_light_probe_grid(grid, renderer, room, assets, bounces=1, count=1)
     with assert_raises(contains="one direction"):
@@ -572,6 +584,10 @@ def test_a_bake_refuses_what_three_js_refuses() raises:
     var cube = scene_cube(renderer, room, assets, size=2)
     with assert_raises(contains="one direction"):
         _ = project_sh(cube, 0)
+    with assert_raises(contains="larger than this port"):
+        _ = project_sh(cube, 16777217)
+    with assert_raises(contains="larger than this port"):
+        _ = project_sh(cube, Int.MAX)
     var wrong = LightProbeGrid.none()
     with assert_raises(contains="one probe or more"):
         bake_light_probe_grid(wrong, renderer, room, assets)
