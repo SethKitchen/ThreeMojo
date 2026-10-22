@@ -362,6 +362,8 @@ def test_skyline() raises:
         assert_true(lot.height.to(METER) >= 20)
     with assert_raises(contains="at least one"):
         _ = skyline_lots(bounds, 0, 3)
+    with assert_raises(contains="larger than this port"):
+        _ = skyline_lots(bounds, 16777217, 3)
 
 
 def test_crosswalk_stripes() raises:

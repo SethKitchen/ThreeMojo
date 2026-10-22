@@ -100,7 +100,7 @@ The road comes from CARLA's mesh factory. Its mesh has one group per surface kin
 
 Buildings stand on lots beside each road, outside the junctions. A lot that comes near a lane or another lot stays empty. A ring of tall buildings far out gives the skyline.
 
-A street lamp spacing must be a finite distance more than zero. A road whose lamp count passes 16777216 is refused. A crosswalk whose stripe count passes 16777216 is refused. A road whose building lots pass 16777216 is refused.
+A street lamp spacing must be a finite distance more than zero. A road whose lamp count passes 16777216 is refused. A crosswalk whose stripe count passes 16777216 is refused. A road whose building lots pass 16777216 is refused. A skyline of more than 16777216 buildings is refused.
 
 ## The town package
 

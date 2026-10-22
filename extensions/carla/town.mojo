@@ -27,6 +27,7 @@ dressing, placed from the map's lanes:
   16777216 lots is refused. Each building has a row of shops on its
   ground floor, a cornice above it, floors of windows, and a parapet
   round its roof. A ring of tall buildings far out makes the skyline.
+  A ring of more than 16777216 buildings is refused.
 - **Street lamps** stand at the outer edge of each road's outermost lanes,
   with an arm over the road and a lamp that is a spot light. They light at
   night. The spacing must be a finite positive distance. A road that needs
@@ -594,10 +595,12 @@ def skyline_lots(bounds: Box3, count: Int, seed: Int) raises -> List[Lot]:
         The lots.
 
     Raises:
-        Error: If the count is less than one.
+        Error: If the count is less than one, or more than this port builds.
     """
     if count < 1:
         raise Error("A skyline needs at least one building")
+    if count > 16777216:
+        raise Error("A skyline count is larger than this port builds")
     var middle = (bounds.min + bounds.max) * Float32(0.5)
     var corner = Vector3(
         bounds.max.x - middle.x, bounds.max.y - middle.y, 0
