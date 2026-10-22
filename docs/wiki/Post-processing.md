@@ -368,12 +368,12 @@ These three passes run on the host in a `GpuComposer` frame, as the other passes
 
 `glitch_pass(size, seed)` is three.js's `GlitchPass`. Each frame that `render` draws advances it. The draws come from `SeededRandom`, in three.js's order.
 
-1. `GlitchSettings(size, seed)` is the constructor. It draws the displacement map, then the first trigger from 120 to 240.
+1. `GlitchSettings(size, seed)` is the constructor. It draws the displacement map, then the first trigger from 120 to 240. A side below zero or above 4096 leaves the map undrawn.
 2. `glitch_uniforms` is the start of `render`. A frame whose count is a multiple of the trigger is wild: a large shift, a wide tear and a new trigger. With `go_wild` on, every frame is wild.
 3. The frames in the first fifth after a wild frame glitch a little. The other frames are not changed.
 4. `glitch_light` is `DigitalGlitch`. It tears a row band and a column band, and pushes the frame by the map. It moves red and blue apart and adds snow.
 
-`glitch_heightmap(size, seed)` returns the displacement map. It is read with the nearest texel, held at the edges.
+`glitch_heightmap(size, seed)` returns the displacement map. It is read with the nearest texel, held at the edges. A side below zero or above 4096 is refused.
 
 ### Halftone
 

@@ -254,6 +254,12 @@ def test_the_builders_refuse_what_no_pass_could_run() raises:
         _ = bokeh_pass(meters(-1))
     with assert_raises(contains="glitch map"):
         _ = glitch_pass(0)
+    with assert_raises(contains="glitch map"):
+        _ = glitch_pass(-1)
+    with assert_raises(contains="glitch map"):
+        _ = glitch_pass(4097)
+    with assert_raises(contains="glitch map"):
+        _ = glitch_pass(Int.MAX)
     with assert_raises(contains="halftone radius"):
         _ = halftone_pass(0)
     with assert_raises(contains="must name a texture"):
@@ -410,6 +416,21 @@ def test_the_glitch_starts_as_three_js_s_constructor_draws() raises:
     assert_equal(settings.state, Int(random.state))
     assert_true(settings.trigger >= 120 and settings.trigger <= 240)
     assert_equal(len(glitch_heightmap(0, 7)), 0)
+    var huge = GlitchSettings(Int.MAX, 3)
+    assert_equal(huge.trigger, 120)
+    assert_equal(huge.state, 0)
+    with assert_raises(contains="glitch map"):
+        check_glitch(huge)
+    var negative = GlitchSettings(-1, 3)
+    assert_equal(negative.state, 0)
+    with assert_raises(contains="glitch map"):
+        check_glitch(negative)
+    with assert_raises(contains="glitch map"):
+        _ = glitch_heightmap(-1, 7)
+    with assert_raises(contains="glitch map"):
+        _ = glitch_heightmap(4097, 7)
+    with assert_raises(contains="glitch map"):
+        _ = glitch_heightmap(Int.MAX, 7)
 
 
 def test_the_glitch_draws_wild_then_small_then_bypasses() raises:

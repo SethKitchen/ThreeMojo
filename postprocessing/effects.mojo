@@ -371,13 +371,20 @@ struct GlitchSettings(ImplicitlyCopyable):
         first trigger, from one generator seeded with `seed`.
 
         Args:
-            size: The map's texels a side, three.js's `dt_size`.
+            size: The map's texels a side, three.js's `dt_size`. A side
+                below zero or above 4096 leaves the map undrawn.
             seed: The generator's seed.
         """
         self.size = size
         self.seed = seed
         self.go_wild = False
         self.frame = 0
+        # A negative side, or one past 4096, makes a square that wraps or
+        # does not finish. The pass check still refuses that side.
+        if size < 0 or size > GLITCH_MAX_SIZE:
+            self.trigger = GLITCH_TRIGGER_LOW
+            self.state = 0
+            return
         var random = SeededRandom(seed)
         var index = 0
         while index < size * size:
@@ -408,19 +415,24 @@ def check_glitch(settings: GlitchSettings) raises:
     require_positive(settings.trigger, "A glitch trigger must be positive")
 
 
-def glitch_heightmap(size: Int, seed: Int) -> List[Float32]:
+def glitch_heightmap(size: Int, seed: Int) raises -> List[Float32]:
     """Return the displacement map `GlitchPass.generateHeightmap` draws:
     one number from zero to one per texel, row by row from the bottom.
 
     Args:
-        size: Texels a side.
+        size: Texels a side, zero through 4096. Zero returns an empty map.
         seed: The generator's seed.
 
     Returns:
         The map, `size` squared values.
+
+    Raises:
+        Error: If `size` is negative or above 4096.
     """
+    if size < 0 or size > GLITCH_MAX_SIZE:
+        raise Error("A glitch map is one through 4096 texels a side")
     var random = SeededRandom(seed)
-    var values = List[Float32](capacity=max(size * size, 0))
+    var values = List[Float32](capacity=size * size)
     var index = 0
     while index < size * size:
         values.append(Float32(random.next()))
