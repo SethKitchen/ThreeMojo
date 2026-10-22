@@ -509,7 +509,7 @@ var sheet = parametric(SurfaceFunction[my_function](), 24, 12)
 var dome = parametric(Dome(Float32(2)), 24, 12)              # a struct that holds a radius
 ```
 
-A grid sampled from a function of `u` and `v`, each from zero to one. The function returns a point in meters. There are `slices` cells along `u` and `stacks` cells along `v`, and each cell is two triangles. The texture coordinate of a vertex is its `(u, v)`.
+A grid sampled from a function of `u` and `v`, each from zero to one. The function returns a point in meters. There are `slices` cells along `u` and `stacks` cells along `v`, and each cell is two triangles. The texture coordinate of a vertex is its `(u, v)`. A grid of more than 16777216 cells is refused.
 
 The surface is a type, not a closure. Any struct that implements `ParametricSurface` is a surface: it has `point(self, u, v) -> Vector3`. `SurfaceFunction[f]` makes a surface from a plain function `def f(u: Float32, v: Float32) -> Vector3`. A surface that needs its own numbers is a struct that holds them.
 
@@ -955,10 +955,11 @@ A per-instance `position`, `normal`, `uv` or `tangent` is refused when drawn. Th
 - A shape's contour needs three corners and an area. A contour drawn in a line, or out and back, has neither.
 - A shape's hole must lie strictly inside its outline and outside every other hole. Sampled boundaries must not cross or touch.
 - An outline that crosses itself raises, because it has no inside and runs out of ears.
-- An extrusion needs a finite positive depth, one step and one curve segment. A bevel needs a finite positive thickness, a finite size that is not negative, a finite offset, and one band.
+- An extrusion needs a finite positive depth, one step and one curve segment. A bevel needs a finite positive thickness, a finite size that is not negative, a finite offset, and one band. A step count, a bevel band count, or a curve segment count above 16777216 is refused.
 - A text needs the same options as an extrusion and a positive size. Every character needs a glyph, or the font needs a `?` glyph.
 - An extrusion along a path needs one step, one curve segment and a curve path with one curve. The curve must have a frame at each step.
 - A parametric surface needs one slice and one stack, and its function must give finite points.
+- A parametric grid of more than 16777216 cells is refused.
 - A convex hull needs four finite points, not all on one point, one line or one plane.
 - A decal needs positive extents. A mesh with normals needs a world matrix that does not flatten a dimension.
 - A rounded box needs positive extents, one segment and a radius that is not negative.

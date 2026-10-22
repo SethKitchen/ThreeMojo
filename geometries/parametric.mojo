@@ -36,7 +36,7 @@ from math.triangle_normal import normal_or_zero
 
 from core.buffer_geometry import BufferGeometry
 from geometries.grid import append_cell
-from geometries.surface import indexed_surface
+from geometries.surface import indexed_surface, require_grid_cells
 from math.vector3 import Vector3, append_vector3
 from math.finite import require_finite_group
 from std.math import cos, pi, sin
@@ -126,11 +126,16 @@ def parametric[
         buffer.
 
     Raises:
-        Error: If either count is less than one, or the surface gives a point
-            that is not finite.
+        Error: If either count is less than one, the grid has more than
+            16777216 cells, or the surface gives a point that is not finite.
     """
     if slices < 1 or stacks < 1:
         raise Error("A parametric surface needs one slice and one stack")
+    require_grid_cells(
+        slices,
+        stacks,
+        "A parametric surface's segment count is larger than this port builds",
+    )
 
     var data = List[Float32]()
     var normals = List[Float32]()

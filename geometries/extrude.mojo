@@ -96,7 +96,7 @@ is split along is part of the surface. Both forms split it as three.js's
 
 from core.buffer_attribute import BufferAttribute
 from core.ordinal import require_positive
-from geometries.surface import record_kind, textured_surface
+from geometries.surface import record_kind, require_grid_cells, textured_surface
 from core.buffer_geometry import (
     BufferGeometry,
     EXTRUDE_GEOMETRY,
@@ -622,8 +622,23 @@ def _extruded(
 
 
 def _check_sweep(steps: Int) raises:
-    """Refuse a sweep of fewer than one step."""
+    """Refuse a sweep this port does not build.
+
+    Nothing. The call returns when there is at least one step and the
+    step count fits in the cell budget.
+
+    Args:
+        steps: How many equal runs the extrusion is cut into.
+
+    Raises:
+        Error: If `steps` is less than one, or above 16777216.
+    """
     require_at_least_one(steps, "An extrusion needs at least one step")
+    require_grid_cells(
+        steps,
+        1,
+        "An extrusion's step count is larger than this port builds",
+    )
 
 
 def require_extrusion_shapes(count: Int) raises:
@@ -847,6 +862,11 @@ def check_extrusion(
     if bevel_enabled and bevel_segments < 1:
         raise Error("A bevel needs at least one band")
     if bevel_enabled:
+        require_grid_cells(
+            bevel_segments,
+            1,
+            "A bevel's band count is larger than this port builds",
+        )
         require_finite(
             Float64(bevel_thickness.value), "A bevel needs a finite thickness"
         )

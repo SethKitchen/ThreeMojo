@@ -250,6 +250,14 @@ def test_a_parametric_surface_needs_cells_and_finite_points() raises:
         _ = parametric(SurfaceFunction[klein](), 0, 8)
     with assert_raises():
         _ = parametric(SurfaceFunction[klein](), 8, 0)
+    var strip = parametric(SurfaceFunction[parametric_plane](), 4096, 1)
+    assert_equal(strip.vertex_count(), 4097 * 2)
+    with assert_raises(contains="larger than this port"):
+        _ = parametric(SurfaceFunction[parametric_plane](), 16777217, 1)
+    with assert_raises(contains="larger than this port"):
+        _ = parametric(SurfaceFunction[parametric_plane](), 1, Int.MAX)
+    with assert_raises(contains="larger than this port"):
+        _ = parametric(SurfaceFunction[parametric_plane](), 4097, 4096)
     for axis in range(3):
         with assert_raises():
             _ = parametric(Broken(axis))
