@@ -15,6 +15,10 @@ from core.ordinal import require_non_negative
 from math.finite import require_finite
 from std.math import sqrt
 
+# The most entries a fill walks, and the largest matrix order. A longer
+# fill does not finish: `range` of `Int.MAX` never ends.
+comptime MAX_VECTOR_ENTRIES = 16777216
+
 
 def require_row_count(length: Int, rows: Int) raises:
     """Refuse a right-hand side that does not match the row count.
@@ -42,9 +46,11 @@ def zeros(size: Int) raises -> List[Float64]:
         The vector.
 
     Raises:
-        Error: If the size is negative.
+        Error: If the size is negative, or above 16777216.
     """
     require_non_negative(size, "A vector size must be zero or more")
+    if size > MAX_VECTOR_ENTRIES:
+        raise Error("A vector is larger than this port stores")
     var out = List[Float64](capacity=size)
     for _ in range(size):
         out.append(0.0)

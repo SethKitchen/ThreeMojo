@@ -16,7 +16,7 @@ matrices of an analysis are square.
 
 from core.ordinal import require_non_negative
 from math.finite import require_finite
-from extensions.numerics.vector import zeros
+from extensions.numerics.vector import MAX_VECTOR_ENTRIES, zeros
 
 
 def require_matrix_index(row: Int, col: Int, size: Int) raises:
@@ -51,9 +51,13 @@ struct SparseBuilder(Movable):
             size: The number of rows and columns. Zero or more.
 
         Raises:
-            Error: If the size is negative.
+            Error: If the size is negative or above 16777216.
         """
         require_non_negative(size, "A matrix size must be zero or more")
+        # `build` walks `range(size)`. `range` of `Int.MAX` never ends,
+        # and `size + 1` wraps the row-count buffer.
+        if size > MAX_VECTOR_ENTRIES:
+            raise Error("A matrix is larger than this port stores")
         self.size = size
         self._rows = List[Int]()
         self._cols = List[Int]()
@@ -161,7 +165,7 @@ struct CsrMatrix(Copyable, Movable):
         var row_start: List[Int],
         var columns: List[Int],
         var values: List[Float64],
-    ):
+    ) raises:
         """Hold compressed rows. `SparseBuilder.build` makes these.
 
         Args:
@@ -169,7 +173,13 @@ struct CsrMatrix(Copyable, Movable):
             row_start: Where each row starts, plus the end of the last.
             columns: The column of each entry.
             values: The value of each entry.
+
+        Raises:
+            Error: If the order is above 16777216. `is_symmetric` walks
+                every row, and that walk does not finish at `Int.MAX`.
         """
+        if size > MAX_VECTOR_ENTRIES:
+            raise Error("A matrix is larger than this port stores")
         self.size = size
         self.row_start = row_start^
         self.columns = columns^

@@ -90,6 +90,7 @@ Every function raises `Error` for input it cannot use. The table gives the cases
 | A matrix is not positive definite | `cholesky`, `conjugate_gradient`, `lowest_modes` |
 | An iteration does not converge | `symmetric_eigen`, `lowest_modes` |
 | An order is not a permutation | `SkylineFactor`, `profile` |
+| A vector or a matrix is too large | `zeros`, `DenseMatrix`, `SparseBuilder`, `CsrMatrix` |
 
 ## Limits
 
@@ -98,6 +99,9 @@ Every function raises `Error` for input it cannot use. The table gives the cases
 - `SkylineFactor` does not pivot. A symmetric indefinite matrix factors only when no pivot is zero.
 - `lowest_modes` needs a positive-definite stiffness. Apply the supports first. A free structure has zero eigenvalues and is refused.
 - `symmetric_eigen` is for small matrices. Its cost grows with the cube of the size.
+- A vector above 16777216 entries is refused.
+- A matrix order above 16777216 is refused.
+- A dense matrix with more than 16777216 entries is refused.
 
 ## References
 

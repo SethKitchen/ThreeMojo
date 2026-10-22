@@ -24,7 +24,11 @@ sections 3.4, 4.2 and 8.5.
 
 from math.finite import require_finite, require_positive_finite
 from std.math import isfinite, sqrt
-from extensions.numerics.vector import require_row_count, zeros
+from extensions.numerics.vector import (
+    MAX_VECTOR_ENTRIES,
+    require_row_count,
+    zeros,
+)
 
 # The cyclic Jacobi method stops after this many sweeps. Each sweep at
 # least squares the off-diagonal norm near convergence, so a few dozen
@@ -47,10 +51,17 @@ struct DenseMatrix(Copyable, Movable):
             cols: The number of columns. Zero or more.
 
         Raises:
-            Error: If a dimension is negative.
+            Error: If a dimension is negative, a side is above 16777216,
+                or the entry count is above 16777216.
         """
         if rows < 0 or cols < 0:
             raise Error("A matrix dimension must be zero or more")
+        # A side is a loop bound. `range` of `Int.MAX` never ends. A
+        # product that wraps is a short buffer with huge dimensions.
+        if rows > MAX_VECTOR_ENTRIES or cols > MAX_VECTOR_ENTRIES:
+            raise Error("A matrix is larger than this port stores")
+        if cols > 0 and rows > MAX_VECTOR_ENTRIES // cols:
+            raise Error("A matrix is larger than this port stores")
         self.rows = rows
         self.cols = cols
         self.data = zeros(rows * cols)
@@ -66,7 +77,8 @@ struct DenseMatrix(Copyable, Movable):
             The identity.
 
         Raises:
-            Error: If the size is negative.
+            Error: If the size is negative or its square is above
+                16777216.
         """
         var out = DenseMatrix(size, size)
         for i in range(size):

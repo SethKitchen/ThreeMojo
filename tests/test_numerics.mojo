@@ -129,6 +129,10 @@ def test_vector_operations() raises:
 def test_vector_checks_refuse_bad_input() raises:
     with assert_raises(contains="zero or more"):
         _ = zeros(-1)
+    with assert_raises(contains="larger than this port"):
+        _ = zeros(16777217)
+    with assert_raises(contains="larger than this port"):
+        _ = zeros(Int.MAX)
     var a: List[Float64] = [1, 2]
     var c: List[Float64] = [1]
     with assert_raises(contains="same length"):
@@ -177,6 +181,14 @@ def test_dense_products_and_transpose() raises:
         _ = DenseMatrix(-1, 2)
     with assert_raises(contains="zero or more"):
         _ = DenseMatrix(2, -1)
+    # A side is a loop bound. Each side of the `or` refuses on its own.
+    with assert_raises(contains="larger than this port"):
+        _ = DenseMatrix(16777217, 0)
+    with assert_raises(contains="larger than this port"):
+        _ = DenseMatrix(0, 16777217)
+    # 16777216 by 2 is past the entry cap. Neither side is past the cap.
+    with assert_raises(contains="larger than this port"):
+        _ = DenseMatrix(16777216, 2)
 
 
 def test_gaussian_elimination_pivots() raises:
@@ -405,6 +417,15 @@ def test_sparse_builder_sums_duplicates_and_sorts() raises:
 def test_sparse_refuses_and_detects_asymmetry() raises:
     with assert_raises(contains="zero or more"):
         _ = SparseBuilder(-1)
+    with assert_raises(contains="larger than this port"):
+        _ = SparseBuilder(16777217)
+    with assert_raises(contains="larger than this port"):
+        _ = SparseBuilder(Int.MAX)
+    var rows = List[Int]()
+    var columns = List[Int]()
+    var values = List[Float64]()
+    with assert_raises(contains="larger than this port"):
+        _ = CsrMatrix(Int.MAX, rows^, columns^, values^)
     var b = SparseBuilder(2)
     with assert_raises(contains="out of range"):
         b.add(-1, 0, 1)
