@@ -496,8 +496,8 @@ var image = composer.render(renderer, scene, assets, camera)
 `gtao_pass` is three.js's `GTAOPass`. Put it after a `render_pass`. It draws the depth and the normals itself. The fields of `GtaoSettings` are three.js's parameters, with its defaults.
 
 1. `gtao_occlusion` is `GTAOShader`. It cuts the hemisphere above each surface into three slices, or five for thirty samples or more. In each slice it finds the highest horizon both ways, and it integrates the visible arc against the normal. A sample count above 16777216 is refused.
-2. `gtao_noise` turns the slices from pixel to pixel by a five by five magic square, as `generateMagicSquareNoise` does.
-3. `gtao_denoise` is `PoissonDenoiseShader`. It averages sixteen taps on a Poisson disk, each weighed by how like the pixel it is.
+2. `gtao_noise` turns the slices from pixel to pixel by a five by five magic square, as `generateMagicSquareNoise` does. A side above 4095 is refused.
+3. `gtao_denoise` is `PoissonDenoiseShader`. It averages sixteen taps on a Poisson disk, each weighed by how like the pixel it is. A noise texture above 4096 texels a side is refused.
 4. With the default output, the frame is multiplied by the result, mixed toward one by `blend_intensity`. The other five outputs are the SSAO pass's. See [Outputs](#outputs).
 
 The noise grid's side is the greatest integer square that fits in the list. A length of no texels is refused.

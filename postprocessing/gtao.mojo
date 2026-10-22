@@ -190,20 +190,33 @@ def check_gtao(settings: GtaoSettings) raises:
         raise Error("A GTAO denoise radius is at least one pixel")
 
 
-def magic_square(size: Int) -> List[Int]:
+# An even side is made the odd side above it. 4095 squared is 16769025.
+# The next odd side is past 16777216 cells. A side near three billion
+# never leaves the placement loop. The maximum integer wraps the cell
+# count to one, and one below that wraps the rounded side.
+comptime MAX_MAGIC_SIDE = 4095
+
+
+def magic_square(size: Int) raises -> List[Int]:
     """Return three.js's `generateMagicSquare`: the numbers one to `size`
     squared, laid out by the Siamese method, row by row. An even size is
     made the odd size above it.
 
     Args:
-        size: The side, positive.
+        size: The side. Zero becomes one. An even side becomes the odd
+            side above it, through 4095.
 
     Returns:
         The square's entries.
+
+    Raises:
+        Error: If the odd side is below one or above 4095.
     """
     var n = size
     if n % 2 == 0:
         n += 1
+    if n < 1 or n > MAX_MAGIC_SIDE:
+        raise Error("A magic square's side is larger than this port builds")
     var count = n * n
     var square = List[Int](length=count, fill=0)
     var i = n // 2
@@ -235,17 +248,21 @@ def _byte(value: Float64) -> Float32:
     return Float32(Int(value)) / 255
 
 
-def gtao_noise(size: Int = GTAO_NOISE_SIZE) -> List[FloatColor]:
+def gtao_noise(size: Int = GTAO_NOISE_SIZE) raises -> List[FloatColor]:
     """Return three.js's `generateMagicSquareNoise`: one unit direction in
     the plane per texel, turned by the magic square, stored in bytes.
 
     Args:
-        size: The side, positive; an even size is made odd.
+        size: The side. Zero becomes one. An even size is made odd, and
+            the odd side must be from one through 4095.
 
     Returns:
         The texels, row by row from the bottom, as a `DataTexture` holds
         them: the direction's x and y packed from zero to one, then 127
         and 255, over 255.
+
+    Raises:
+        Error: Everything `magic_square` raises.
     """
     var square = magic_square(size)
     var count = len(square)
@@ -266,6 +283,12 @@ def gtao_noise(size: Int = GTAO_NOISE_SIZE) -> List[FloatColor]:
     return texels^
 
 
+# One texel a cell. 4096 squared is 16777216. The next side is a longer
+# walk, and the maximum integer wraps the cell count and then never
+# leaves the row loop.
+comptime MAX_DENOISE_NOISE_SIDE = 4096
+
+
 def denoise_noise(
     seed: Int, size: Int = DENOISE_NOISE_SIZE
 ) raises -> List[Float32]:
@@ -274,14 +297,17 @@ def denoise_noise(
 
     Args:
         seed: The seed of the noise's permutation.
-        size: The side.
+        size: The side, at most 4096.
 
     Returns:
         The texels, row by row from the bottom.
 
     Raises:
-        Error: Everything `SimplexNoise.noise` raises.
+        Error: If `size` is above 4096, and everything `SimplexNoise.noise`
+            raises.
     """
+    if size > MAX_DENOISE_NOISE_SIDE:
+        raise Error("A denoise noise side is larger than this port builds")
     var random = SeededRandom(seed)
     var simplex = SimplexNoise(random)
     var texels = List[Float32](capacity=size * size)

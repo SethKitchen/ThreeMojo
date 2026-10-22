@@ -720,6 +720,19 @@ def test_the_magic_square_and_the_noises() raises:
         )
     # An even size is made the odd size above it.
     assert_equal(len(magic_square(4)), 25)
+    assert_equal(len(magic_square(0)), 1)
+    with assert_raises(contains="larger than this port"):
+        _ = magic_square(-1)
+    with assert_raises(contains="larger than this port"):
+        _ = magic_square(4096)
+    with assert_raises(contains="larger than this port"):
+        _ = magic_square(Int.MAX - 1)
+    with assert_raises(contains="larger than this port"):
+        _ = magic_square(Int.MAX)
+    with assert_raises(contains="larger than this port"):
+        _ = gtao_noise(4096)
+    with assert_raises(contains="larger than this port"):
+        _ = gtao_noise(Int.MAX)
     var noise = gtao_noise()
     assert_equal(len(noise), 25)
     for index in range(25):
@@ -727,6 +740,10 @@ def test_the_magic_square_and_the_noises() raises:
         var y = noise[index].g * 2 - 1
         near(sqrt(x * x + y * y), 1, 0.02)
         near(noise[index].b, Float32(127) / 255)
+    with assert_raises(contains="larger than this port"):
+        _ = denoise_noise(1, 4097)
+    with assert_raises(contains="larger than this port"):
+        _ = denoise_noise(1, Int.MAX)
     var denoise = denoise_noise(3, 4)
     assert_equal(len(denoise), 16)
     for index in range(16):
