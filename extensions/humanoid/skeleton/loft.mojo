@@ -567,9 +567,12 @@ def _add_segment(
             )
     var run = (b.center - a.center).length() * (t1 - t0)
     var finest = max(min(min(a.ml, a.ap), min(b.ml, b.ap)), Float32(1.0e-4))
-    var steps = Int(run / (Float32(0.5) * finest)) + 2
-    if steps > 16:
-        steps = 16
+    # Sixteen slices is the cap. A ratio of fifteen or more, or one that
+    # is not a number, is not a count `Int` can hold.
+    var ratio = run / (Float32(0.5) * finest)
+    var steps = 16
+    if ratio < Float32(15):
+        steps = Int(ratio) + 2
     var k = 0
     while k < steps:
         var t = t0 + (t1 - t0) * Float32(k) / Float32(steps - 1)
