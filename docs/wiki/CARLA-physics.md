@@ -194,6 +194,8 @@ One step of `PhysicsWorld` does this:
 6. Split impulses push overlapping bodies apart without adding energy.
 7. The velocities move the bodies.
 
+A velocity or position iteration count above 16777216 is refused.
+
 A contact can have a gap of up to 2 cm. The solver lets the bodies close the gap and no more, so a fast body stops at a surface and not in it. Two materials use the geometric mean of the frictions and the larger restitution, as Box2D mixes them. The default material is Box2D's: a friction of 0.6 and a restitution of 0. The damping is Box2D's implicit damping, and it is 0 by default. The gravity is 9.8 m/s², standard gravity rounded.
 
 ## Ray casts
