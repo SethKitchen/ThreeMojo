@@ -47,7 +47,7 @@ A triangle with two corners in one place is dropped, as in three.js. three.js ra
 
 ## Tessellate
 
-`tessellate(geometry, max_edge_length, max_iterations)` cuts every triangle in two across its longest edge until no edge is longer than the limit. The passes stop after `max_iterations`, so an edge can stay long.
+`tessellate(geometry, max_edge_length, max_iterations)` cuts every triangle in two across its longest edge until no edge is longer than the limit. The passes stop after `max_iterations`, so an edge can stay long. A pass count above 20 is refused.
 
 The midpoint takes the average position, normal, color and both texture coordinates. Only `position`, `normal`, `color`, `uv` and `uv1` are kept. The result has no index.
 

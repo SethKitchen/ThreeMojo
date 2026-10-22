@@ -72,6 +72,12 @@ def _distance_squared(p: List[Float64], a: Int, b: Int) -> Float64:
     return squared_length3[DType.float64](dx, dy, dz)
 
 
+# Each pass can double the triangles. Past this many passes a single
+# triangle does not finish, and a pass count of `Int.MAX` wraps the
+# counter so the walk never ends.
+comptime MAX_TESSELLATION_PASSES = 20
+
+
 def tessellate(
     geometry: BufferGeometry,
     max_edge_length: Length = Length(0.1, METER),
@@ -94,15 +100,17 @@ def tessellate(
 
     Raises:
         Error: If the limit is negative or not finite, the pass count is
-            negative, the surface has no positions, an attribute it keeps
-            holds the wrong number of numbers an item, or its vertices do
-            not make whole triangles.
+            negative or above 20, the surface has no positions, an
+            attribute it keeps holds the wrong number of numbers an item,
+            or its vertices do not make whole triangles.
     """
     if not (max_edge_length.value >= 0 and isfinite(max_edge_length.value)):
         raise Error("A tessellation edge limit must be finite and not negative")
     require_non_negative(
         max_iterations, "A tessellation cannot make a negative number of passes"
     )
+    if max_iterations > MAX_TESSELLATION_PASSES:
+        raise Error("A tessellation's pass count is larger than this port runs")
     var flat = geometry.to_non_indexed()
     var count = flat.vertex_count()
     if count % 3 != 0:
