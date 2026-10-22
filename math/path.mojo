@@ -430,7 +430,8 @@ struct Path(Copyable, Movable):
 
         Raises:
             Error: If the path has no curves, a curve is not valid, divisions
-                is less than one, or a sample count cannot fit in Int.
+                is less than one, one curve asks for more than 16777216
+                runs, or a sample count cannot fit in Int.
         """
         require_positive(
             len(self.curves), "A path with no curves has no points"

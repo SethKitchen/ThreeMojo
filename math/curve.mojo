@@ -343,9 +343,9 @@ def arc_samples[
         The values, first to last.
 
     Raises:
-        Error: If `divisions` is less than one, the sample count cannot
-            fit in Int, the table has fewer than two entries, or `take`
-            raises.
+        Error: If `divisions` is less than one, above 16777216, the sample
+            count cannot fit in Int, the table has fewer than two entries,
+            or `take` raises.
     """
     var sample_count = curve_sample_count(divisions)
     var out = List[T]()
@@ -663,8 +663,9 @@ struct Curve(Copyable, Movable):
             The points, first to last, in meters.
 
         Raises:
-            Error: If `divisions` is less than one, its sample count cannot
-                fit in Int, or the mutable curve is not valid.
+            Error: If `divisions` is less than one, above 16777216, its
+                sample count cannot fit in Int, or the mutable curve is
+                not valid.
         """
         return parameter_samples[Self.point](self, divisions)
 
@@ -679,8 +680,9 @@ struct Curve(Copyable, Movable):
             last the curve's whole length.
 
         Raises:
-            Error: If `divisions` is less than one, its sample count cannot
-                fit in Int, or the mutable curve is not valid.
+            Error: If `divisions` is less than one, above 16777216, its
+                sample count cannot fit in Int, or the mutable curve is
+                not valid.
         """
         return prefix_lengths(self.sample(divisions))
 
@@ -770,8 +772,9 @@ struct Curve(Copyable, Movable):
             The points, first to last, in meters.
 
         Raises:
-            Error: If `divisions` is less than one, its sample count cannot
-                fit in Int, or the mutable curve is not valid.
+            Error: If `divisions` is less than one, above 16777216, its
+                sample count cannot fit in Int, or the mutable curve is
+                not valid.
         """
         # One table for the whole call. `point_at` builds its own, and
         # asking it once per point rebuilt the same hundreds of samples for

@@ -247,8 +247,8 @@ def lengths_of[
         length.
 
     Raises:
-        Error: If `divisions` is less than one, its sample count cannot
-            fit in Int, or the curve refuses a point.
+        Error: If `divisions` is less than one, above 16777216, its sample
+            count cannot fit in Int, or the curve refuses a point.
     """
     var sample_count = curve_sample_count(divisions)
     var out = List[Float64](capacity=sample_count)
@@ -280,8 +280,8 @@ def length_of[
         The length across the runs, an approximation from below.
 
     Raises:
-        Error: If `divisions` is less than one, its sample count cannot
-            fit in Int, or the curve refuses a point.
+        Error: If `divisions` is less than one, above 16777216, its sample
+            count cannot fit in Int, or the curve refuses a point.
     """
     var table = lengths_of(curve, divisions)
     return length_meters(table[len(table) - 1])
@@ -344,8 +344,8 @@ def points_of[
         The points, first to last.
 
     Raises:
-        Error: If `divisions` is less than one, its sample count cannot
-            fit in Int, or the curve refuses a point.
+        Error: If `divisions` is less than one, above 16777216, its sample
+            count cannot fit in Int, or the curve refuses a point.
     """
     var sample_count = curve_sample_count(divisions)
     var out = List[Vector3](capacity=sample_count)
@@ -377,8 +377,8 @@ def point_at[
 
     Raises:
         Error: If u is not finite or outside zero to one, arc_divisions is
-            less than one, a sample count overflows, or the curve refuses
-            a point.
+            less than one, above 16777216, a sample count overflows, or
+            the curve refuses a point.
     """
     check_curve_parameter(u)
     var table = lengths_of(curve, arc_divisions)
@@ -406,8 +406,8 @@ def tangent_at[
 
     Raises:
         Error: If u is not finite or outside zero to one, arc_divisions is
-            less than one, a sample count overflows, or the curve refuses
-            a point.
+            less than one, above 16777216, a sample count overflows, or
+            the curve refuses a point.
     """
     check_curve_parameter(u)
     var table = lengths_of(curve, arc_divisions)
@@ -434,8 +434,8 @@ def spaced_points3[
         The points, first to last.
 
     Raises:
-        Error: If either count is less than one, a sample count cannot
-            fit in Int, or the curve refuses a point.
+        Error: If either count is less than one, above 16777216, a sample
+            count cannot fit in Int, or the curve refuses a point.
     """
     var sample_count = curve_sample_count(divisions)
     var table = lengths_of(curve, arc_divisions)
@@ -468,8 +468,8 @@ def spaced_points_of[
         The points, first to last.
 
     Raises:
-        Error: If either count is less than one, a sample count cannot
-            fit in Int, or the curve refuses a point.
+        Error: If either count is less than one, above 16777216, a sample
+            count cannot fit in Int, or the curve refuses a point.
     """
     var spaced = spaced_points3(curve, divisions, arc_divisions)
     var out = List[Vector3](capacity=len(spaced))
@@ -568,8 +568,9 @@ def frames3_of[
         The frames.
 
     Raises:
-        Error: If `segments` or `arc_divisions` is less than one, a sample
-            count cannot fit in Int, or the curve refuses a point.
+        Error: If `segments` or `arc_divisions` is less than one, above
+            16777216, a sample count cannot fit in Int, or the curve
+            refuses a point.
     """
     var sample_count = curve_sample_count(segments)
     var table = lengths_of(curve, arc_divisions)
@@ -654,8 +655,9 @@ def frames_of[
         The frames, rounded to floats.
 
     Raises:
-        Error: If `segments` or `arc_divisions` is less than one, a sample
-            count cannot fit in Int, or the curve refuses a point.
+        Error: If `segments` or `arc_divisions` is less than one, above
+            16777216, a sample count cannot fit in Int, or the curve
+            refuses a point.
     """
     return frames3_of(curve, segments, closed, arc_divisions).to_frenet_frames()
 

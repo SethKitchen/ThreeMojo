@@ -63,7 +63,7 @@ Bounded `t` and `u` parameters must be finite and in the closed interval from ze
 
 Evaluation checks mutable curve kinds, Catmull-Rom types and control-point counts before dispatch or indexing. These checks take constant time. They do not scan all control points for each sample. A spline splits `t` in `Float64`, so a curve past 2^24 points still ends on its last point.
 
-Sample counts must fit in `Int`. The APIs check additions and per-segment products before iteration or allocation. This includes arc tables, path resolutions, spaced points and Frenet frames. There is no fixed resolution limit. A path made only of lines still uses one run per line.
+Sample counts must fit in `Int`. The APIs check additions and per-segment products before iteration or allocation. This includes arc tables, path resolutions, spaced points and Frenet frames. A division count above 16777216 is refused. A path made only of lines still uses one run per line.
 
 `ExtraCurve.point3` keeps its unbounded parameter policy. Its mutable kind must be valid. Its tangent and distance helpers use bounded parameters.
 
@@ -317,6 +317,7 @@ A curve writes `arcLengthDivisions` as 200, three.js's default. The reader ignor
 | `t` or `u` outside zero through one. | An error. |
 | A tangent where the curve turns back. | An error. |
 | Fewer than one division. | An error. |
+| More than 16777216 divisions. | An error. |
 | Drawing before the pen is down. | An error. |
 | Moving the pen after it has drawn. | An error. |
 | Closing an empty or a closed path. | An error. |
