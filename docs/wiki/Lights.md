@@ -414,7 +414,7 @@ csm.update(scene, camera)
 var frame = renderer.render(scene, assets, camera)
 ```
 
-The constructor adds one casting directional light for each cascade to the scene, each with a node and a target node under `parent`. `update` moves each light behind its slice and snaps it to whole texels of its map, so the shadow does not crawl. Call `update_frustums` after the camera's projection, `mode` or `fade` changes. `remove` takes the lights off their parent. `dispose` makes them plain directional lights.
+The constructor adds one casting directional light for each cascade to the scene, each with a node and a target node under `parent`. `update` moves each light behind its slice and snaps it to whole texels of its map, so the shadow does not crawl. Call `update_frustums` after the camera's projection, `mode` or `fade` changes. `remove` takes the lights off their parent. `dispose` makes them plain directional lights. A cascade count above 16777216 is refused.
 
 | Mode | three.js | Breaks |
 |---|---|---|
