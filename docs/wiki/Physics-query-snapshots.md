@@ -62,7 +62,7 @@ Build a new `PhysicsQuerySnapshot(world)` to capture another state. A failed con
 
 The API has no mutation or refit method. It cannot update bounds without updating narrow geometry and materials. Rebuilding means constructing a complete new capture with a new owner identity. Independent captures share no geometry, materials, index storage, or query scratch.
 
-Mojo 1.1 does not enforce field privacy. Underscore fields mark implementation storage by convention. They do not enforce invalidation. Callers must use the documented API and must not edit that storage. Source-world mutation safety comes from owned copies, not an add-body counter or naming convention.
+Mojo 1.2 does not enforce field privacy. Underscore fields mark implementation storage by convention. They do not enforce invalidation. Callers must use the documented API and must not edit that storage. Source-world mutation safety comes from owned copies, not an add-body counter or naming convention.
 
 ## Registered static meshes
 

@@ -14,7 +14,7 @@ The objects of a scene live in lists of plain values, such as `scene.meshes`. A 
 
 ## Why a trait object does not work
 
-A language with trait objects stores a pointer and a table of functions, and calls through the table. Mojo 1.1 has no such type. A trait in Mojo is a bound on a generic parameter. The compiler makes one copy of the function for each type that it is called with.
+A language with trait objects stores a pointer and a table of functions, and calls through the table. Mojo 1.2 has no such type. A trait in Mojo is a bound on a generic parameter. The compiler makes one copy of the function for each type that it is called with.
 
 ## What the port does
 

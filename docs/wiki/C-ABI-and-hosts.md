@@ -219,7 +219,7 @@ No function raises. A call that fails does nothing. An event that the app refuse
 
 ## How it works
 
-Mojo 1.1 has no windows and no WebAssembly output. So the host owns the window, the loop and the clock. The library only draws. This is the shape of a Flutter embedder. A thin host in the platform's own toolkit gives the engine a surface, events and the time.
+Mojo 1.2 has no windows and no WebAssembly output. So the host owns the window, the loop and the clock. The library only draws. This is the shape of a Flutter embedder. A thin host in the platform's own toolkit gives the engine a surface, events and the time.
 
 The macOS host is `examples/capi/macos_host.m`. It loads a library with `dlopen`. It shows each frame as a `CGImage` in the layer of an `NSView`. The library runs on a thread of its own, with a stack of 64 MiB.
 
@@ -309,6 +309,6 @@ The page gets a copy of each frame from the threaded module. `ImageData` does no
 - A window that draws the splats on Metal has no frame hash and no `--dump`. Use `--headless` for them.
 - The CPU splat is slow: about 200 milliseconds for a frame natively at 640 by 360, and 861 in a browser. The sort is small, and the draw takes the time.
 - The Metal splats and the WebGPU splats are ports of the Mojo shader. They agree closely and not to the bit.
-- Mojo is pinned at 1.1.0. A later Mojo with WebAssembly output can replace `retarget.py` and `mwrt.c`. The C functions then stay as they are.
+- Mojo is pinned at 1.2.0. A later Mojo with WebAssembly output can replace `retarget.py` and `mwrt.c`. The C functions then stay as they are.
 
 See also [Windowing and controls](Windowing-and-controls) and [Water](Water).

@@ -14,9 +14,9 @@ This is original work with no three.js lineage.
 
 ### Why the run happens inside the build tree
 
-Mojo 1.1 resolves a module beside the file being compiled before it looks at any `-I` path. A suite run from the repository root therefore imports the *real* library, whatever the search path says.
+Mojo 1.1 and 1.2 resolve a module beside the file being compiled before they look at any `-I` path. A suite run from the repository root therefore imports the *real* library, whatever the search path says.
 
-The suites used to run with `-I coverage/build -I .` and the first `-I` decided. Under 1.1 that arrangement measured nothing at all and reported a clean zero, which is the worst way for a coverage tool to fail. Copying the suites in makes the instrumented copies the ones beside them.
+The suites used to run with `-I coverage/build -I .` and the first `-I` decided. Under 1.1 and 1.2 that arrangement measured nothing at all. It reported a clean zero, which is the worst way for a coverage tool to fail. Copying the suites in makes the instrumented copies the ones beside them.
 
 The repository coverage run copies the tool without instrumentation. Separate diagnostic runs can instrument the tool, but those results cannot independently validate the instrumenter.
 

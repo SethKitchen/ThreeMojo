@@ -108,7 +108,7 @@ Use `--update-expectations` only after you review a changed or new negative fixt
 Normal checks read the manifest without changing it.
 CI never regenerates expectations.
 
-1. Use the pinned Mojo `1.1.0` (`8189361e`) toolchain from [How to install](How-to-install).
+1. Use the pinned Mojo `1.2.0` (`2016d0cd`) toolchain from [How to install](How-to-install).
 2. Run these commands from the repository root.
 3. Name each fixture you intend to update. Do not use a wildcard for an unrelated subset.
 

@@ -55,7 +55,7 @@ Nine samples rotate the three strategy orders.
 
 Measurements ran on October 3, 2026, in a Linux x86-64 container.
 The host reports an AMD EPYC 9V74 processor, with nine available logical CPUs.
-Mojo is pinned to `1.1.0 (8189361e)`; builds use `--Werror`.
+Mojo is pinned to `1.2.0 (2016d0cd)`; builds use `--Werror`.
 All Mojo processes set `MODULAR_TELEMETRY_ENABLED=false`.
 
 No other project compiler or benchmark ran during the timing window.

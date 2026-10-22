@@ -30,7 +30,7 @@ git clone https://github.com/SethKitchen/ThreeMojo.git
 cd ThreeMojo
 uv python install --no-bin 3.12.14
 "$(uv python find --managed-python --no-project 3.12.14)" -m venv --without-pip --prompt ThreeMojo .venv
-uv pip install "mojo==1.1.0"
+uv pip install "mojo==1.2.0"
 ```
 
 ## Linux
@@ -51,7 +51,7 @@ git clone https://github.com/SethKitchen/ThreeMojo.git
 cd ThreeMojo
 uv python install --no-bin 3.12.14
 "$(uv python find --managed-python --no-project 3.12.14)" -m venv --without-pip --prompt ThreeMojo .venv
-uv pip install "mojo==1.1.0"
+uv pip install "mojo==1.2.0"
 ```
 
 ## Windows
@@ -73,13 +73,13 @@ The environment uses an upstream CPython that uv manages. `make coverage` refuse
 
 ```bash
 python3 -m venv .venv
-.venv/bin/pip install "mojo==1.1.0"
+.venv/bin/pip install "mojo==1.2.0"
 ```
 
 ## Verify
 
 ```bash
-.venv/bin/mojo --version    # Mojo 1.1.0 (8189361e)
+.venv/bin/mojo --version    # Mojo 1.2.0 (2016d0cd)
 make check-cpu
 ```
 
@@ -89,14 +89,16 @@ make check-cpu
 
 | Component | Version | Needed for |
 |---|---|---|
-| Mojo | `1.1.0` (`8189361e`) | Everything |
-| MAX | `26.6.0` | `render/gpu.mojo` and its tests only |
+| Mojo | `1.2.0` (`2016d0cd`) | Everything |
+| MAX | `26.7.0` | `render/gpu.mojo` and its tests only |
 | Metal toolchain | Xcode component | GPU kernels on macOS |
 | Xvfb | Any | `tests/test_x11.mojo` |
 
 The toolchain version is part of the build cache key. An upgrade invalidates every cached result.
 
-The pin is exact, not a floor. Mojo 1.1 moved the async task runtime behind an underscore, and moved `gpu` out of `std` into `max`. So one source cannot serve both 1.0 and 1.1: 1.0 has no `std.runtime._asyncrt`, and 1.1 has no `std.runtime.asyncrt`. See [Rasterization](Rasterization#threads) and [GPU backend](GPU-backend).
+The pin is exact, not a floor. Mojo 1.1 moved the async task runtime behind an underscore, and moved `gpu` out of `std` into `max`. Mojo 1.2 renamed the `async` and `await` keywords to `__async` and `__await`, and renamed `std.hashlib` to `std.hash`. So one source cannot serve two releases.
+
+Mojo 1.1 cannot parse `__async def`. Mojo 1.2 cannot find `std.hashlib`. Mojo 1.0 has no `std.runtime._asyncrt`. See [Rasterization](Rasterization#threads) and [GPU backend](GPU-backend).
 
 ## Agent skills
 

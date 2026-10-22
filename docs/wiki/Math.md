@@ -576,7 +576,7 @@ CPU evidence does not verify GPU runtime behavior.
 #### Differences from three.js
 
 The upstream baseline is three.js 0.180.0, `src/math/MathUtils.js`. Its
-Euclidean formula is `((n % m) + m) % m`. In Mojo 1.1.0, Float32 bits
+Euclidean formula is `((n % m) + m) % m`. In Mojo 1.1.0 and 1.2.0, Float32 bits
 `0x71800000` are exactly `2^100`. Both native Float32 and widened Float64 `%`
 return zero for a divisor of `1.5`. Exact rational arithmetic gives one.
 The shared primitive returns one.

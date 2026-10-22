@@ -176,7 +176,11 @@ The direction toward the camera is measured from where the camera stands, under 
 
 `rasterize_frame` splits the image into horizontal bands and runs one task per band. Every draw is offered to every band, and a primitive whose rows miss the band is skipped on two integer compares. A band owns its rows outright, so no two threads touch the same pixel and the depth test needs no atomics.
 
-The tasks come from `TaskGroup`. Mojo 1.1 moved that behind an underscore. `std.runtime` keeps only `parallelism_level` and `initialize_runtime` in public view, and nothing public in `std` runs work on a thread pool. So `from std.runtime._asyncrt import TaskGroup` is the one place this project reaches past a leading underscore, and it is what pins the toolchain to an exact version. Mojo 1.0 has no `_asyncrt` and 1.1 has no `asyncrt`, so one source cannot serve both.
+The tasks come from `TaskGroup`. Mojo 1.1 moved that behind an underscore. `std.runtime` keeps only `parallelism_level` and `initialize_runtime` in public view, and nothing public in `std` runs work on a thread pool. So `from std.runtime._asyncrt import TaskGroup` is the one place this project reaches past a leading underscore, and it is what pins the toolchain to an exact version.
+
+Mojo 1.0 has no `_asyncrt`. Mojo 1.1 and 1.2 have no `asyncrt`. So one source cannot serve 1.0 and a later release.
+
+Mojo 1.2 also renamed the keywords. A band task is `__async def`, and Mojo 1.1 cannot parse that.
 
 
 ### Slim corners
