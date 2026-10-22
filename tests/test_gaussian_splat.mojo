@@ -165,6 +165,10 @@ def test_a_packed_band_is_zero_coefficients() raises:
         _ = packed_band(2, 0)
     with assert_raises(contains="cannot be negative"):
         _ = packed_band(-1, 1)
+    with assert_raises(contains="larger than this port"):
+        _ = packed_band(Int.MAX // 12 + 1, 1)
+    with assert_raises(contains="larger than this port"):
+        _ = packed_band(Int.MAX // 24 + 1, 3)
     var words = band_words([1, 2, 3, 4, 128, 128, 128, 128])
     assert_equal(words[0], 0x04030201)
     assert_equal(words[1], 0x80808080)

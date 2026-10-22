@@ -28,7 +28,7 @@ var image = target.resolve()
 | `colors` | Four bytes: red, green, blue and opacity. A byte `b` is `b / 255`. |
 | `sh1`, `sh2`, `sh3` | The bytes of the higher spherical harmonics bands. A byte `b` is `(b - 128) / 128`. |
 
-A band of degree `d` has `2d + 1` coefficients, with three channels each. The bytes of one splat hold one coefficient after the other, and red, green and blue in each. `sh_band_words(d)` gives the 32-bit words of one splat in a band: 3, 4 or 6. `band_words` gives the words as three.js packs them.
+A band of degree `d` has `2d + 1` coefficients, with three channels each. The bytes of one splat hold one coefficient after the other, and red, green and blue in each. `sh_band_words(d)` gives the 32-bit words of one splat in a band: 3, 4 or 6. `band_words` gives the words as three.js packs them. A band whose byte count does not fit in an integer is refused.
 
 `create_gaussian_splat_geometry` checks the lengths. It refuses a band that has no band below it. `to_buffer_geometry` and `gaussian_splat_geometry_of` convert to and from three.js's splat `BufferGeometry`.
 
