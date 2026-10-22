@@ -13339,7 +13339,8 @@ class StandaloneSeedFrameControls(unittest.TestCase):
         source_root = Path(cleanup.__file__).resolve().parents[2]
         typed = cleanup.typed_boundary
         historical_map = typed.predecessor_source(
-            seed.MODULE, (source_root/seed.MODULE).read_text(encoding='utf-8'))
+            seed.MODULE, cleanup.pr780_successor.predecessor_bytes(
+                seed.MODULE, (source_root/seed.MODULE).read_bytes()).decode('utf-8'))
         self.assertEqual(cleanup.sha(historical_map), typed.EDGES[seed.MODULE]['before_sha256'])
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory).resolve()

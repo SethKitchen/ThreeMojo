@@ -128,7 +128,7 @@ class StagedArithmeticControls(unittest.TestCase):
         self.assertFalse(set(stage.HAIR_SOURCE_PATHS) & set(stage.SOURCE_PATHS))
         self.assertFalse(set(stage.HAIR_SOURCE_PATHS) & set(stage.OUTSTANDING_TYPED_PATHS))
         for path in stage.HAIR_SOURCE_PATHS:
-            current = (ROOT/path).read_bytes().decode('utf-8')
+            current = successor.predecessor_bytes(path, (ROOT/path).read_bytes()).decode('utf-8')
             prior = stage.predecessor_source(path, current)
             edge = stage.EDGES[path]
             self.assertEqual(stage.sha(prior), edge['before_sha256'])

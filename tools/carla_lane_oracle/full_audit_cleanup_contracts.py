@@ -158,9 +158,9 @@ PR760_OWNER_PREDECESSOR_SHA256 = '6138ba2dcac394c716ea9ed32e74e0c6d15857d5c605fc
 DEPENDENCY_TOOL_SHA256 = {'tools/carla_lane_oracle/winner_sign_contracts.py': 'f850902634073364fe2407b00d12e9fdfb2ecfc6cf2a03414269fbb7984a8a7f',
  'tools/carla_lane_oracle/border_parser_contracts.py': '734d7b24aaf4e9f537cd7f0d7c7b8094d9c29106770b66c4a7a24cab74604dd4',
  'tools/carla_lane_oracle/pr760_arithmetic_stage.py': PR760_STAGE_SHA256,
- 'tools/carla_lane_oracle/pr780_source_successor.py': 'bd70f8aba6c03e0359c2324cad6cf519ce423766037fe778f269def09a6b0c88',
+ 'tools/carla_lane_oracle/pr780_source_successor.py': 'ec739a06d2937b4ccf78a855e12823b589a201dafdd8e7dd32c01544c7685975',
  'tools/carla_lane_oracle/scaled_float32_contracts.py': 'e3a59a9f8d5a9394007c03fab6ac696e04998812dad5843a22e721bfbe57c2a1',
- 'tools/affected.py': 'a56194a3e722ad341a42f3defec282b8154f5e4db8340df855f0199ea9830ebb',
+ 'tools/affected.py': 'dcf533b9cd995902f53578aa93b98a32ca732643ccfa6ab7e30f95fd8b321eb3',
  'tools/cache_key.py': 'ec06247feb8fe079c30b6da19fc655ffec363f1ce8e3372d063bf728e8c804c4',
  'tools/carla_lane_oracle/conditioned_cubic_contracts.py': 'df99ea0826d5efa936c56e4ece9aa79b41806b60e52121c4f564a8de5d5b0198',
  'tools/carla_lane_oracle/consumer_successor_ledger.py': 'ce9a639084dfcc1442c6ac7535060cf5a123c2eb96683d2f35816ec26b0599ed',
@@ -5602,7 +5602,12 @@ def _pr760_candidate_bindings(root, *, _snapshots=None, _operation=None):
         require(resolver_unshadowed(root, resolver_paths, **lookup),
                 'PR760 alternate, compiled, package, symlink or std resolver surface')
         production = set()
-        observed = inventory(root, _snapshots=image, _production=production)
+        # The fixed PR760 inventory binds retained predecessor tokens, so a
+        # successor source contributes the tokens of its exact predecessor.
+        observed = {
+            path: ({'tokens_sha256': source.token_sha256(prior_inputs[path].decode('utf-8'))}
+                   if path in prior_inputs else row)
+            for path, row in inventory(root, _snapshots=image, _production=production).items()}
         require(observed == typed_boundary.INVENTORY,
                 'PR760 production caller/use inventory changed')
         # Fresh physical reads close both all source-classifying reads and every
