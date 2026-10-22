@@ -469,6 +469,30 @@ def euler_order_of(name: String) raises -> EulerOrder:
     return orders[at]
 
 
+def wrap_number(value: Float32) raises -> Int:
+    """Return the three.js wrapping constant a finite number names.
+
+    Args:
+        value: The number from a texture's `wrap` array.
+
+    Returns:
+        `RepeatWrapping`, `ClampToEdgeWrapping` or
+        `MirroredRepeatWrapping`.
+
+    Raises:
+        Error: If the number is not one of those three whole values. A
+            value past 2^24 is not a stable integer.
+    """
+    if not (value >= Float32(REPEAT_WRAPPING)) or not (
+        value <= Float32(MIRRORED_REPEAT_WRAPPING)
+    ):
+        raise Error("Object JSON: a wrap that is none of the three")
+    var code = Int(value)
+    if Float32(code) != value:
+        raise Error("Object JSON: a wrap that is none of the three")
+    return code
+
+
 def wrap_of(code: Int) raises -> Wrap:
     """Return the `Wrap` a three.js wrapping constant names.
 
@@ -1458,8 +1482,8 @@ struct _Loader(Movable):
         var wrap_s = CLAMP
         var wrap_t = CLAMP
         if len(wraps) == 2:
-            wrap_s = wrap_of(Int(wraps[0]))
-            wrap_t = wrap_of(Int(wraps[1]))
+            wrap_s = wrap_of(wrap_number(wraps[0]))
+            wrap_t = wrap_of(wrap_number(wraps[1]))
         var sampling = self.sampling(item)
         var image = decode_image(self.image_bytes(self.text(item, "image", "")))
         var built = texture_from(

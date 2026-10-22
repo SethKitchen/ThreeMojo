@@ -72,6 +72,7 @@ from loaders.object_loader import (
     load_object_json,
     read_object_json,
     wrap_code,
+    wrap_number,
     wrap_of,
 )
 from materials.material import (
@@ -1485,6 +1486,11 @@ def test_texture_refusals() raises:
     _refuses(_textured(',"channel":2'))
     _refuses(_textured(',"wrap":[1000,999]'))
     _refuses(_textured(',"wrap":[999,999]'))
+    # `Int` of 1e20 is not that number. The cast used to run before the
+    # range check.
+    _refuses(_textured(',"wrap":[1e20,1000]'))
+    _refuses(_textured(',"wrap":[2000,1000]'))
+    _refuses(_textured(',"wrap":[1000.5,1000]'))
     _refuses(_textured(',"magFilter":1008'))
     _refuses(_textured(',"minFilter":1002'))
     _refuses(_textured(',"minFilter":1009'))
@@ -1648,7 +1654,14 @@ def test_a_mesh_reads_and_writes_a_material_list() raises:
 
 def test_the_helpers() raises:
     """The constant tables map three.js's numbers both ways."""
+    assert_equal(wrap_number(1000), 1000)
     assert_equal(wrap_of(1002), MIRROR)
+    with assert_raises(contains="wrap"):
+        _ = wrap_number(Float32(1e20))
+    with assert_raises(contains="wrap"):
+        _ = wrap_number(2000)
+    with assert_raises(contains="wrap"):
+        _ = wrap_number(1000.5)
     assert_equal(wrap_code(MIRROR), 1002)
     assert_equal(wrap_code(CLAMP), 1001)
     assert_equal(wrap_code(REPEAT), 1000)

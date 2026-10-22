@@ -224,6 +224,8 @@ The writer writes each texture with its two wraps, its two filters, its `flipY` 
 
 The reader decodes a PNG, a JPEG or a TGA image from a `data:` URL or from a file beside the document. `wrap` gives `wrap_s` and `wrap_t`. `magFilter` and `minFilter` give the two filters, and a mipmap `minFilter` with `generateMipmaps` builds the chain. `flipY` gives `flip_y`, and the rows stay as the file has them. `mapping` is `UVMapping` or an equirectangular one on a flat texture.
 
+A wrap that is not one of the three whole numbers is refused.
+
 `colorSpace` `srgb` is `SRGB`. `srgb-linear` and the empty `NoColorSpace` are `LINEAR`.
 
 A `channel` of 1 reads the second set of texture coordinates, `uv1`.
