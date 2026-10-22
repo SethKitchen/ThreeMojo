@@ -508,6 +508,22 @@ def test_refusals() raises:
         ),
         "larger than this port",
     )
+    # 1e20 is a multiple of 2048, so the byte is zero. 257 keeps its remainder.
+    var model = parse_vrml(
+        (
+            "#VRML V2.0 utf8\nShape { appearance Appearance { texture"
+            " PixelTexture { image 5 1 1 255 257 1e20 -1e20 -1 } } }"
+        ),
+        scene,
+        assets,
+    )
+    ref pixels = model.textures[0].data
+    assert_equal(Int(pixels[0]), 255)
+    assert_equal(Int(pixels[4]), 1)
+    assert_equal(Int(pixels[8]), 0)
+    assert_equal(Int(pixels[12]), 0)
+    assert_equal(Int(pixels[16]), 255)
+    assert_equal(Int(pixels[19]), 1)
     # A zero height makes no bytes. It is not an overflow.
     var empty = Scene()
     var empty_assets = Assets()

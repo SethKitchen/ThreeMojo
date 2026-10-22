@@ -740,6 +740,7 @@ The other nodes are read but not built, as in three.js. These are the lights, th
 - A `texture` field that holds a `USE` is not read.
 - A texture transform with no `scale` gives a repeat of zero.
 - A `PixelTexture` of one or three components has an alpha of one, not 255.
+- A pixel value at 2^63 is stored as byte zero. That magnitude is a multiple of 2048.
 
 ### Differences from three.js
 

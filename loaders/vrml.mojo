@@ -632,7 +632,20 @@ def _hex_pair(hex: String, start: Int) -> UInt8:
 
 def _intensity(value: VrmlValue) raises -> UInt8:
     """Return three.js's `parseInt( hex )` of an intensity, as a
-    `Uint8Array` stores it: modulo 256."""
+    `Uint8Array` stores it: modulo 256.
+
+    A magnitude at 2^63 is a multiple of 2048, so the byte is zero.
+    `Int` of that magnitude is not the number.
+
+    Args:
+        value: A hex field or a number.
+
+    Returns:
+        The byte, from zero to 255.
+
+    Raises:
+        Error: If a number is one three.js reads by its exponent.
+    """
     if value.kind == VRML_HEX_VALUE:
         var bytes = value.text.as_bytes()
         var low = 0
@@ -644,6 +657,9 @@ def _intensity(value: VrmlValue) raises -> UInt8:
     var plain = v == 0 or (abs(v) >= 1e-6 and abs(v) < 1e21)
     if not plain:
         raise Error("VRML: a pixel value that three.js reads by its exponent")
+    # A magnitude at 2^63 is a multiple of 2048, so the byte is zero.
+    if not (abs(v) < Float64(Int.MAX)):
+        return UInt8(0)
     var whole = Int(trunc(v))
     return UInt8(((whole % 256) + 256) % 256)
 
