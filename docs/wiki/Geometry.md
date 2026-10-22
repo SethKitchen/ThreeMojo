@@ -626,7 +626,7 @@ var pill = rounded_box(Length(1, METER), Length(1, METER), Length(1, METER), 4, 
 
 A box with rounded edges and corners, centered on the origin: three.js's `RoundedBoxGeometry` addon. `segments` is the number of cells round each edge. `radius` is the radius of the edges. A radius larger than half the shortest side is cut down to that half. The extents and radius must be finite.
 
-The builder starts from a unit box with `2 * segments + 1` cells each way on every face. Each vertex gets a normal from the center of that box, pulled half a cell in on each axis. The vertex moves to the corner of a box smaller by the radius, plus the radius along the normal. The middle band of each face stays flat.
+The builder starts from a unit box with `2 * segments + 1` cells each way on every face. Each vertex gets a normal from the center of that box, pulled half a cell in on each axis. The vertex moves to the corner of a box smaller by the radius, plus the radius along the normal. The middle band of each face stays flat. A face of more than 16777216 cells is refused.
 
 The texture coordinates are three.js's. They measure the arc of each rounded edge and the flat band between, so a texture is not squeezed where the surface bends.
 
@@ -962,6 +962,7 @@ A per-instance `position`, `normal`, `uv` or `tangent` is refused when drawn. Th
 - A convex hull needs four finite points, not all on one point, one line or one plane.
 - A decal needs positive extents. A mesh with normals needs a world matrix that does not flatten a dimension.
 - A rounded box needs positive extents, one segment and a radius that is not negative.
+- A rounded box face of more than 16777216 cells is refused.
 - An index entry beyond the last vertex raises.
 - A group needs a start and a count that are not negative, and a material index of zero or more.
 - A draw range needs a start and a count that are not negative.

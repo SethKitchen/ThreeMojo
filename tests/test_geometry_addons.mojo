@@ -1019,6 +1019,10 @@ def test_a_rounded_box_needs_extents_segments_and_a_radius() raises:
         _ = rounded_box(one, one, one, 0)
     with assert_raises():
         _ = rounded_box(one, one, one, 2, meters(-0.1))
+    with assert_raises(contains="larger than this port"):
+        _ = rounded_box(one, one, one, 2048)
+    with assert_raises(contains="larger than this port"):
+        _ = rounded_box(one, one, one, Int.MAX)
 
 
 def main() raises:

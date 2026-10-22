@@ -18,7 +18,11 @@ face by a rounding error, as in three.js.
 """
 
 from core.buffer_attribute import BufferAttribute
-from geometries.surface import require_finite_extents, require_positive_extents
+from geometries.surface import (
+    require_finite_extents,
+    require_grid_cells,
+    require_positive_extents,
+)
 from core.buffer_geometry import BufferGeometry, POSITION
 from units.si import Length, METER
 
@@ -53,8 +57,9 @@ def box_line(
         each ring. The rings across x come first, then y, then z.
 
     Raises:
-        Error: If an extent is not finite and positive, or a segment count is less
-            than one. three.js divides by zero for no segments.
+        Error: If an extent is not finite and positive, a segment count is
+            less than one, or one side has more than 16777216 segments.
+            three.js divides by zero for no segments.
     """
     require_finite_extents(
         width.value, height.value, depth.value, "box of lines"
@@ -64,6 +69,21 @@ def box_line(
     )
     if width_segments < 1 or height_segments < 1 or depth_segments < 1:
         raise Error("A box of lines needs one segment each way")
+    require_grid_cells(
+        width_segments,
+        1,
+        "A box of lines has a segment count larger than this port builds",
+    )
+    require_grid_cells(
+        height_segments,
+        1,
+        "A box of lines has a segment count larger than this port builds",
+    )
+    require_grid_cells(
+        depth_segments,
+        1,
+        "A box of lines has a segment count larger than this port builds",
+    )
     var w = Float64(width.value)
     var h = Float64(height.value)
     var d = Float64(depth.value)

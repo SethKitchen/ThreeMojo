@@ -25,7 +25,7 @@ The geometry addons of three.js's `examples/jsm/`: two more geometries, four mod
 
 ## Teapot
 
-`teapot(size, segments, bottom, lid, body, fit_lid, blinn)` is the Utah teapot. It has 32 bicubic Bezier patches. Each patch is a grid of `segments + 1` by `segments + 1` vertices.
+`teapot(size, segments, bottom, lid, body, fit_lid, blinn)` is the Utah teapot. It has 32 bicubic Bezier patches. Each patch is a grid of `segments + 1` by `segments + 1` vertices. A patch of more than 16777216 cells is refused.
 
 ![The Utah teapot turns under a lamp](out/teapot.png)
 
@@ -43,7 +43,7 @@ A triangle with two corners in one place is dropped, as in three.js. three.js ra
 
 ## Box lines
 
-`box_line(width, height, depth, width_segments, height_segments, depth_segments)` is a box as line segments. Draw it with a `LineSegments`. Each segment boundary gives a ring of four sticks round the box. The three extents must be finite and positive.
+`box_line(width, height, depth, width_segments, height_segments, depth_segments)` is a box as line segments. Draw it with a `LineSegments`. Each segment boundary gives a ring of four sticks round the box. The three extents must be finite and positive. More than 16777216 segments on one side is refused.
 
 ## Tessellate
 
