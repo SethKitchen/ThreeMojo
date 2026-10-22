@@ -517,7 +517,7 @@ def test_a_hull_is_closed_and_holds_every_point() raises:
     var mirrored = List[Vector3]()
     for point in twelve_points():
         mirrored.append(Vector3(point.x, point.y, -point.z))
-    _ = check_hull(mirrored^)
+    _ = check_hull(mirrored)
 
 
 def test_the_hull_of_a_cube_and_its_inside_is_the_cube() raises:

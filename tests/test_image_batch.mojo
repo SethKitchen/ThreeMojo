@@ -72,7 +72,7 @@ def test_results_move_with_their_mip_buffers() raises:
     assert_equal(len(batch.textures), 0)
 
 
-async def _tracked_task(
+__async def _tracked_task(
     counters: MutPointer[Int32, MutAnyOrigin],
     errors: MutPointer[String, MutAnyOrigin],
     index: Int,

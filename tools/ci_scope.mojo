@@ -1443,7 +1443,7 @@ def main_with(root: String, arguments: List[String]) raises -> Int:
         var changes: Optional[Dict[String, Bool]] = None
         if not full and base:
             changes = changed_paths(root, base)
-        write_plan(root, plan(root, changes^, base, None, source_tree(root)))
+        write_plan(root, plan(root, changes, base, None, source_tree(root)))
         return 0
     if action == "aggregate":
         aggregate(stored_plan(root), getenv("CI_NEEDS"))

@@ -357,7 +357,7 @@ def skin_pose(scene: Scene, index: Int) raises -> SkinPose:
     if undo.determinant() == 0:
         raise Error("A skinned mesh has no inverse to undo its bind")
     undo.invert()
-    return SkinPose(skinned.skeleton.pose(placed), skinned.bind_matrix, undo^)
+    return SkinPose(skinned.skeleton.pose(placed), skinned.bind_matrix, undo)
 
 
 def skin_carriers(

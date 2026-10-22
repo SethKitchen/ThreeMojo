@@ -466,7 +466,7 @@ def test_general_and_asset_discovery_have_dedicated_required_jobs() raises:
             >= 0
         )
         assert_true(
-            job.find('uv pip install --python .venv/bin/python "mojo==1.1.0"')
+            job.find('uv pip install --python .venv/bin/python "mojo==1.2.0"')
             >= 0
         )
         assert_equal(job.find("TOOLS_SHARD="), -1)
@@ -752,7 +752,7 @@ def test_gpu_job_compiles_before_running_only_host_suites() raises:
 
 def test_gpu_job_keeps_pinned_toolchain_and_timeout() raises:
     var job = _jobs()["gpu-host"]
-    assert_true(job.find('uv pip install "mojo==1.1.0" "max==26.6.0"') >= 0)
+    assert_true(job.find('uv pip install "mojo==1.2.0" "max==26.7.0"') >= 0)
     assert_true(_has_line(job, "    name: test-gpu-host (MAX, no GPU)"))
     assert_true(_has_line(job, "    runs-on: ubuntu-latest"))
     assert_true(_has_line(job, "    timeout-minutes: 30"))

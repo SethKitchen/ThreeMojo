@@ -16,7 +16,7 @@ here, and the call then does nothing: an event the controls refuse is
 dropped, and a frame that cannot be drawn is the last one that could.
 
 This module builds for the host only. The renderer uses lists, strings,
-errors and threads, and Mojo 1.1 has no WebAssembly backend for them. Never
+errors and threads, and Mojo 1.2 has no WebAssembly backend for them. Never
 import this module and `window.capi_core` into one program.
 
 A host that is not a Mojo program must call `tm_init` once, before any

@@ -86,7 +86,7 @@ def _scene(
     )
     # A surface field the long line does not share.
     lead_style.alpha_test = 0.25
-    var lead_material = assets.materials.add(lead_style^)
+    var lead_material = assets.materials.add(lead_style)
     scene.add_wide_line(LineSegments2(lead, lead_material, node))
     var geometry = assets.geometries.add(
         line_segments_geometry(_points(long_last, hidden_first))

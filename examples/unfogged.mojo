@@ -50,7 +50,7 @@ def main() raises:
     var block = assets.geometries.add(cube(Length(0.7, METER)))
     var faded = assets.materials.add(Material(Color(230, 140, 40)))
     var clear = Material(Color(230, 140, 40), fog=False)
-    var kept = assets.materials.add(clear^)
+    var kept = assets.materials.add(clear)
 
     var scene = Scene()
     scene.fog = linear_fog(fog_color, Length(2.2, METER), Length(9.0, METER))

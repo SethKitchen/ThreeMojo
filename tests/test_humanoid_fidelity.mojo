@@ -535,7 +535,7 @@ def test_gltf_retains_node_and_scene_contracts() raises:
     _ = scene.add(root^)
     var options = GltfExportOptions()
     options.scene_user_data.set_json(String(FIDELITY_KEY), record.to_json())
-    var files = export_gltf(scene, assets, GLTF_EMBEDDED, options=options^)
+    var files = export_gltf(scene, assets, GLTF_EMBEDDED, options=options)
     var loaded_scene = Scene()
     var loaded_assets = Assets()
     var model = load_gltf(

@@ -197,7 +197,7 @@ struct _SurfaceHit(ImplicitlyCopyable):
     var height: Float32
 
 
-async def _write_task(
+__async def _write_task(
     hdr: Pointer[List[Float32], ImmutAnyOrigin],
     shown: Pointer[List[Bool], ImmutAnyOrigin],
     pixels: MutPointer[UInt8, MutAnyOrigin],
@@ -260,7 +260,7 @@ def _write_rows(
     return drawn
 
 
-async def _depth_task(
+__async def _depth_task(
     plan: _ComposePlan,
     surface: Pointer[SurfaceField, ImmutAnyOrigin],
     ripples: Pointer[RippleField, ImmutAnyOrigin],
@@ -358,7 +358,7 @@ def _radiance_image(
     return hdr^
 
 
-async def _radiance_task(
+__async def _radiance_task(
     look: CameraLook,
     aspect: Float32,
     surface: Pointer[SurfaceField, ImmutAnyOrigin],
@@ -474,7 +474,7 @@ def _graded_image(
     return graded^
 
 
-async def _grade_task(
+__async def _grade_task(
     hdr: Pointer[List[Float32], ImmutAnyOrigin],
     glare: Pointer[List[Float32], ImmutAnyOrigin],
     bloom: Pointer[List[Float32], ImmutAnyOrigin],
@@ -1821,7 +1821,7 @@ def _quantized_image(
     return Framebuffer(width, height, pixels^)
 
 
-async def _quantize_task(
+__async def _quantize_task(
     graded: Pointer[List[Float32], ImmutAnyOrigin],
     pixels: MutPointer[UInt8, MutAnyOrigin],
     width: Int,
@@ -1886,7 +1886,7 @@ def _highlights(
     return out^
 
 
-async def _highlight_task(
+__async def _highlight_task(
     hdr: Pointer[List[Float32], ImmutAnyOrigin],
     result: MutPointer[Float32, MutAnyOrigin],
     width: Int,
@@ -1951,7 +1951,7 @@ def _blur(
     return out^
 
 
-async def _blur_task(
+__async def _blur_task(
     src: Pointer[List[Float32], ImmutAnyOrigin],
     result: MutPointer[Float32, MutAnyOrigin],
     width: Int,

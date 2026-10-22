@@ -67,6 +67,7 @@ comptime GUARD_RAIL = SemanticTag(28)
 comptime ROCK = SemanticTag(29)
 
 # `CITYSCAPES_PALETTE_MAP`, red, green and blue per tag.
+# fmt: off
 comptime _PALETTE: Array[Int, 90] = [
     0, 0, 0,
     128, 64, 128,
@@ -98,7 +99,8 @@ comptime _PALETTE: Array[Int, 90] = [
     230, 150, 140,
     180, 165, 180,
     180, 130, 70,
-]  # fmt: skip
+]
+# fmt: on
 
 
 def cityscapes_color(tag: SemanticTag) raises -> Color:

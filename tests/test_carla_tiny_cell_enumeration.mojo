@@ -72,7 +72,7 @@ def _road(plateau: Bool = False, sample_end: Float64 = 1.0) raises -> Road:
     road.sections[0].lanes[0].info.widths.append(
         RoadInfoLaneWidth._from_si(0.0, CubicPolynomial._constant_si(4.0))
     )
-    road.info.geometries.append(RoadInfoGeometry._from_si(0.0, geometry^))
+    road.info.geometries.append(RoadInfoGeometry._from_si(0.0, geometry))
     road.info.elevations.append(
         RoadInfoElevation._from_si(0.0, CubicPolynomial._constant_si(0.0))
     )

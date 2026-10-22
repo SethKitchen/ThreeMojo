@@ -300,7 +300,7 @@ def test_adjacent_join_refuses_either_unresolved_endpoint_count() raises:
     var geometry = RoadGeometry.from_meters(SPIRAL, 0.5, 10.0, 0.0, 0.0, 3.5)
     geometry.curvature_start = inf[DType.float64]()
     geometry.curvature_end = inf[DType.float64]()
-    road.info.geometries.append(RoadInfoGeometry._from_si(0.5, geometry^))
+    road.info.geometries.append(RoadInfoGeometry._from_si(0.5, geometry))
     result = _subdivided_lane_box(road, 0, 0, low, 0.5, 100, max_nodes=1)
     assert_false(result[0][0].is_finite())
     assert_equal(result[1], 0)

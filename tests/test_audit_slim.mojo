@@ -97,7 +97,7 @@ def test_renderer_selects_surface_for_each_face_in_one_draw() raises:
     )
     surface.normal_scale = Vector2(2, 3)
     surface.bump_scale = 4
-    var material = assets.materials.add(surface^)
+    var material = assets.materials.add(surface)
     scene.add_mesh(Mesh(geometry, material, node))
     scene.update()
     var frame = Renderer(16, 16).prepare_frame(scene, assets, camera())

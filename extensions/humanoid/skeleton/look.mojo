@@ -723,7 +723,7 @@ def add_complexion(
         tinted=True,
     )
     look.nodes = assets.programs.add(skin_scatter(genome))
-    var skin = assets.materials.add(look^)
+    var skin = assets.materials.add(look)
     var hair = assets.materials.add(
         hair_physical(genome, assets.textures.add(strands^), HAIR_DEPTH)
     )
@@ -755,4 +755,4 @@ def resolved_paint(
     """
     if paint.value >= 0:
         return paint
-    return assets.materials.add(material^)
+    return assets.materials.add(material)

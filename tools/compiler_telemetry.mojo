@@ -781,7 +781,7 @@ struct ProcReader(Movable):
         var failed = False
         while got < want:
             var count = external_call["read", Int](
-                fd,
+                Int32(fd),
                 OpaquePointer[MutAnyOrigin](
                     unsafe_from_address=Int(raw.unsafe_ptr()) + got
                 ),
@@ -1620,7 +1620,7 @@ def emit(fd: Int, suite: String, mut doc: PyJson, payload: Int) raises:
         else:
             return
     _ = external_call["write", Int](
-        fd,
+        Int32(fd),
         OpaquePointer[MutAnyOrigin](unsafe_from_address=Int(data.unsafe_ptr())),
         data.byte_length(),
     )

@@ -63,7 +63,7 @@ def _road(
     # reach the consumer's own validation of mutable records.
     geometry.x = x
     geometry.y = y
-    road.info.geometries.append(RoadInfoGeometry._from_si(0.0, geometry^))
+    road.info.geometries.append(RoadInfoGeometry._from_si(0.0, geometry))
     road.info.elevations.append(
         RoadInfoElevation._from_si(0.0, CubicPolynomial._constant_si(z))
     )

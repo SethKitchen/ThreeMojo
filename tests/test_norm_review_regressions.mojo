@@ -303,7 +303,7 @@ def test_amf_positive_unit_conversion_cannot_erase_a_tiny_normal() raises:
     var bytes = List[UInt8](source.as_bytes())
     var scene = Scene()
     var assets = Assets()
-    var model = parse_amf(bytes^, scene, assets)
+    var model = parse_amf(bytes, scene, assets)
     var normal = (
         assets.geometries.get(model.geometries[0])
         .attribute_view(String(NORMAL))

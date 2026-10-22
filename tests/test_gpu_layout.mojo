@@ -678,12 +678,12 @@ def test_joining_on_many_threads_matches_whole_corners() raises:
     var shiny = Material(Color(200, 40, 10), kind=PHYSICAL, side=DOUBLE_SIDE)
     shiny.roughness = 0.25
     scene.add_mesh(
-        Mesh(geometry, assets.materials.add(shiny^), scene.add(Object3D()))
+        Mesh(geometry, assets.materials.add(shiny), scene.add(Object3D()))
     )
     var dull = Material(Color(10, 40, 200), kind=PHYSICAL)
     dull.roughness = 0.75
     scene.add_mesh(
-        Mesh(geometry, assets.materials.add(dull^), scene.add(Object3D()))
+        Mesh(geometry, assets.materials.add(dull), scene.add(Object3D()))
     )
     scene.update()
     var camera = PerspectiveCamera(

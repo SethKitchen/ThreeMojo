@@ -561,7 +561,7 @@ struct SceneOptimizer(Movable):
             indices += len(geometry.index)
         var material = assets.materials.get(first.material)
         material.color = Color(255, 255, 255, material.color.a)
-        var paint = assets.materials.add(material^)
+        var paint = assets.materials.add(material)
         var parent = scene.get(first.node).parent
         var holder = Object3D()
         var source = scene.get(first.node)

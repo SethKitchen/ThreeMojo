@@ -384,7 +384,7 @@ def test_a_translucent_surface_casts_a_whole_shadow() raises:
         )
         var glass = assets.materials.get(scene.meshes[1].material)
         glass.depth_write = False
-        scene.meshes[1].material = assets.materials.add(glass^)
+        scene.meshes[1].material = assets.materials.add(glass)
         assert_true(
             same_depths(renderer.shadow_maps(scene, assets)[0], reference[0])
         )
@@ -429,8 +429,8 @@ def test_a_translucent_surface_writes_its_depth_in_the_frame() raises:
         var back = Material(
             Color(0, 0, 255), kind=BASIC, opacity=0.5, transparent=True
         )
-        scene.add_mesh(Mesh(pane, assets.materials.add(front^), near_node))
-        scene.add_mesh(Mesh(pane, assets.materials.add(back^), far_node))
+        scene.add_mesh(Mesh(pane, assets.materials.add(front), near_node))
+        scene.add_mesh(Mesh(pane, assets.materials.add(back), far_node))
         scene.update()
         var image = renderer.render(scene, assets, camera)
         results.append(image.get_pixel(WIDTH // 2, HEIGHT // 2))
@@ -514,7 +514,7 @@ def line_scene(
         scene.add_mesh(
             Mesh(
                 assets.geometries.add(cube(Length(1.0, METER))),
-                assets.materials.add(wire^),
+                assets.materials.add(wire),
                 node,
                 cast_shadow=cast,
                 receive_shadow=receive,
@@ -554,7 +554,7 @@ def line_scene(
         scene.add_line(
             Line(
                 row,
-                assets.materials.add(paint^),
+                assets.materials.add(paint),
                 node,
                 mode=SEGMENTS,
                 cast_shadow=cast,

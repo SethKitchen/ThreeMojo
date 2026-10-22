@@ -250,7 +250,7 @@ struct HairStrands(Movable):
             self._installed = True
 
 
-async def _depth_task(
+__async def _depth_task(
     density: Pointer[HairDensity, MutAnyOrigin],
     points: Pointer[List[Vector3], MutAnyOrigin],
     lights: Pointer[List[HairLight], ImmutAnyOrigin],

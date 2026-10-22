@@ -1382,7 +1382,7 @@ struct MapBuilder(Movable):
     def _geometry(mut self, road: Int, var geometry: RoadGeometry):
         var s = geometry.s
         self.roads[road].info.geometries.append(
-            RoadInfoGeometry._from_si(s, geometry^)
+            RoadInfoGeometry._from_si(s, geometry)
         )
 
     def _base(

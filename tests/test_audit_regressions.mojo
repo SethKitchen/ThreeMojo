@@ -513,7 +513,7 @@ def test_optimizer_keeps_nodes_with_children_other_objects_or_dynamic_state() ra
             var object = scene.get(first)
             object.user_data.set_string("keep", "metadata")
             scene.set(first, object^)
-        scene.add_mesh(mesh^)
+        scene.add_mesh(mesh)
         scene.add_mesh(Mesh(geometry, material, second))
         _ = SceneOptimizer().to_batched_mesh(scene, assets)
         assert_true(scene.in_scene(first))
@@ -539,7 +539,7 @@ def test_optimizer_keeps_parent_and_node_render_state() raises:
             mesh.frustum_culled = False
             mesh.cast_shadow = True
             mesh.receive_shadow = True
-            scene.add_mesh(mesh^)
+            scene.add_mesh(mesh)
     var stats = SceneOptimizer().to_batched_mesh(scene, assets)
     assert_equal(stats.batched_meshes, 2)
     for batch in scene.batched_meshes:

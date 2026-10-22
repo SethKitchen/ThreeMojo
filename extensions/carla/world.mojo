@@ -160,7 +160,7 @@ from math.obb import OBB
 from math.quaternion import Quaternion
 from math.triangle import Triangle
 from math.vector3 import Vector3
-from std.hashlib import Hasher
+from std.hash import Hasher
 from std.collections import Set
 from std.math import ceil, isfinite
 from std.time import perf_counter_ns

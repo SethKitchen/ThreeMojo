@@ -231,7 +231,7 @@ def test_a_struct_implementing_a_trait_is_still_measured() raises:
 
 def test_an_async_def_body_is_executable() raises:
     var scanner = Scanner()
-    assert_false(scanner.is_executable("async def band(index: Int):"))
+    assert_false(scanner.is_executable("__async def band(index: Int):"))
     assert_true(scanner.is_executable("    print(index)"))
 
 

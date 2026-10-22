@@ -66,7 +66,7 @@ def _first_road() raises -> Road:
     road.sections[0].lanes[0].info.widths.append(
         RoadInfoLaneWidth._from_si(-1.0, CubicPolynomial._constant_si(2.0))
     )
-    road.info.geometries.append(RoadInfoGeometry._from_si(-1.0, geometry^))
+    road.info.geometries.append(RoadInfoGeometry._from_si(-1.0, geometry))
     road.info.elevations.append(
         RoadInfoElevation._from_si(
             -1.0, CubicPolynomial._from_coefficients(2.0, 1.0, 0.0, 0.0, 0.0)
@@ -165,7 +165,7 @@ def _last_road() raises -> Road:
     road.sections[0].lanes[0].info.widths.append(
         RoadInfoLaneWidth._from_si(0.0, CubicPolynomial._constant_si(2.0))
     )
-    road.info.geometries.append(RoadInfoGeometry._from_si(0.0, geometry^))
+    road.info.geometries.append(RoadInfoGeometry._from_si(0.0, geometry))
     road.info.elevations.append(
         RoadInfoElevation._from_si(
             0.0, CubicPolynomial._from_coefficients(2.0, 1.0, 0.0, 0.0, 0.0)

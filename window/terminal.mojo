@@ -162,7 +162,7 @@ def _write_all(fd: Int, text: String) raises:
     # runs at least once.
     while done < total:  # pragma: no branch
         var written = external_call["write", Int](
-            fd,
+            Int32(fd),
             base.unsafe_offset(done).unsafe_bitcast[NoneType](),
             total - done,
         )
@@ -359,7 +359,7 @@ struct TerminalWindow(Movable):
             return List[InputEvent]()
         var buffer = List[UInt8](length=READ_BYTES, fill=0)
         var count = external_call["read", Int](
-            self.input_fd,
+            Int32(self.input_fd),
             buffer.unsafe_ptr().unsafe_bitcast[NoneType](),
             READ_BYTES,
         )

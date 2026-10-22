@@ -65,7 +65,7 @@ def _vase() raises -> BufferGeometry:
                 Vector3(sin(angle) * radius * 1.35, y, cos(angle) * radius)
             )
         sections.append(ring^)
-    return loft(sections^, cap_start=True, cap_end=True)
+    return loft(sections, cap_start=True, cap_end=True)
 
 
 def main() raises:

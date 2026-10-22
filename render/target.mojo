@@ -629,7 +629,7 @@ def _encode_run(
         pixels[unsafe_offset=at + 3] = shown.a
 
 
-async def _encode_band(
+__async def _encode_band(
     colors: Pointer[FloatColor, ImmutAnyOrigin],
     data: Pointer[Bool, ImmutAnyOrigin],
     pixels: MutPointer[UInt8, MutAnyOrigin],

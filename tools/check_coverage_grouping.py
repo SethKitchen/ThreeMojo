@@ -959,7 +959,7 @@ def worker(index: Int, iteration: Int) -> Bool:
     return result
 
 
-async def task(index: Int, totals: MutPointer[Int, MutAnyOrigin]):
+__async def task(index: Int, totals: MutPointer[Int, MutAnyOrigin]):
     var total = 0
     for iteration in range(64):
         total += Int(worker(index, iteration))

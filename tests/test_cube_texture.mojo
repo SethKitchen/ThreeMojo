@@ -460,7 +460,7 @@ def test_six_images_are_needed_and_a_known_layout() raises:
     var five = six_images(RED, GREEN)
     _ = five.pop()
     with assert_raises():
-        _ = cube_texture_from(five^)
+        _ = cube_texture_from(five)
     with assert_raises():
         _ = cube_texture_from(six_images(RED, GREEN), CubeLayout(7))
     assert_true(SEEN_FROM_INSIDE.is_valid())

@@ -415,7 +415,7 @@ def _sample_task_checked(
         stats[unsafe_offset=task * STATS + n] = s[n]
 
 
-async def _sample_task(
+__async def _sample_task(
     model: Pointer[SdfModel, ImmutAnyOrigin],
     input: Pointer[_Input, ImmutAnyOrigin],
     grid: _Grid,

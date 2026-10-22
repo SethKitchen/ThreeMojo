@@ -1435,7 +1435,7 @@ def _hidden(mut hidden_id: MaterialId, mut assets: Assets) raises -> MaterialId:
     if hidden_id.value < 0:
         var hidden = Material(Color(255, 255, 255), kind=BASIC)
         hidden.visible = False
-        hidden_id = assets.materials.add(hidden^)
+        hidden_id = assets.materials.add(hidden)
     return hidden_id
 
 

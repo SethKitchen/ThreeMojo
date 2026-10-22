@@ -204,7 +204,7 @@ def check_cell(cell: Length, block: Int) raises:
         raise Error("A mesh block must be from 2 to 16 cells")
 
 
-async def _sample_task(
+__async def _sample_task(
     model: Pointer[SdfModel, ImmutAnyOrigin],
     lattice: Lattice,
     active: MutPointer[Int, MutAnyOrigin],
@@ -240,7 +240,7 @@ async def _sample_task(
             )
 
 
-async def _vertex_task(
+__async def _vertex_task(
     model: Pointer[SdfModel, ImmutAnyOrigin],
     lattice: Lattice,
     cells: MutPointer[Int, MutAnyOrigin],

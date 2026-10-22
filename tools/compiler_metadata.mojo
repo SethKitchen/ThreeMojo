@@ -490,7 +490,7 @@ def read_command(
             if ready == 0:
                 continue
             var count = external_call["read", Int](
-                read_end,
+                Int32(read_end),
                 OpaquePointer[MutAnyOrigin](
                     unsafe_from_address=Int(chunk.unsafe_ptr())
                 ),

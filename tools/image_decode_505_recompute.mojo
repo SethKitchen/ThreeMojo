@@ -108,12 +108,12 @@ def parse_csv(text: String) raises -> List[List[String]]:
             quoted = True
             started = True
         elif byte == ord(","):
-            record.append(String(unsafe_from_utf8=field^))
+            record.append(String(unsafe_from_utf8=field))
             field = List[UInt8]()
             started = True
         elif byte == ord("\n") or byte == ord("\r"):
             if started or len(field) > 0:
-                record.append(String(unsafe_from_utf8=field^))
+                record.append(String(unsafe_from_utf8=field))
                 records.append(record^)
             field = List[UInt8]()
             record = List[String]()
@@ -131,7 +131,7 @@ def parse_csv(text: String) raises -> List[List[String]]:
     if quoted:
         raise Error("unexpected end of data")
     if started or len(field) > 0:
-        record.append(String(unsafe_from_utf8=field^))
+        record.append(String(unsafe_from_utf8=field))
         records.append(record^)
     return records^
 

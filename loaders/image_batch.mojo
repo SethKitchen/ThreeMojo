@@ -95,7 +95,7 @@ def _stop_decode(next: MutPointer[UInt64, MutAnyOrigin], count: Int):
     _ = Atomic[UInt64].max(next, UInt64(count))
 
 
-async def _decode_worker[
+__async def _decode_worker[
     Source: TextureDecodeSource
 ](
     source: Pointer[Source, ImmutAnyOrigin],

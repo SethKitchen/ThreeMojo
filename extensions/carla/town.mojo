@@ -1395,7 +1395,7 @@ struct Town(Movable):
         mut self, mut scene: Scene, tag: SemanticTag, var mesh: Mesh
     ) raises:
         """Add a mesh to the scene and remember its tag."""
-        scene.add_mesh(mesh^)
+        scene.add_mesh(mesh)
         self.tags.append(tag)
 
     def _add_ground(

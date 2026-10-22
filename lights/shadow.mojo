@@ -189,6 +189,7 @@ comptime CENTER_TAP = 8
 comptime POINT_SHADOW_TAPS = 9
 # Each PCF tap's offset across and down, in units of the radius, in the
 # order three.js's `getShadow` sums them. Padded to a power of two.
+# fmt: off
 comptime _PCF_ACROSS = SIMD[DType.float32, 32](
     -1, 0, 1,
     -0.5, 0, 0.5,
@@ -196,7 +197,9 @@ comptime _PCF_ACROSS = SIMD[DType.float32, 32](
     -0.5, 0, 0.5,
     -1, 0, 1,
     0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-)  # fmt: skip
+)
+# fmt: on
+# fmt: off
 comptime _PCF_DOWN = SIMD[DType.float32, 32](
     -1, -1, -1,
     -0.5, -0.5, -0.5,
@@ -204,7 +207,8 @@ comptime _PCF_DOWN = SIMD[DType.float32, 32](
     0.5, 0.5, 0.5,
     1, 1, 1,
     0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-)  # fmt: skip
+)
+# fmt: on
 # How many comparisons `soft_shadow` weighs, four by four.
 comptime SOFT_TAPS = 16
 # The two ends of three.js's `VSMShadow` ramp: a Chebyshev bound below

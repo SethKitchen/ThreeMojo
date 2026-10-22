@@ -187,7 +187,7 @@ from extensions.carla.rtree import (
 from extensions.carla.transform import CarlaRotation, CarlaTransform
 from math.bounds import Box3
 from math.vector3 import Vector3
-from std.hashlib import Hasher
+from std.hash import Hasher
 from std.math import ceil, floor, inf, isfinite, sin, sqrt
 from std.memory import bitcast
 from extensions.carla.quantity_boundary import (

@@ -312,7 +312,7 @@ def test_sealed_bake_round_trip_in_each_container() raises:
             bake.assets,
             record,
             container,
-            options=options^,
+            options=options,
         )
         var scene = Scene()
         var assets = Assets()
@@ -391,7 +391,7 @@ def test_unsealed_and_missing_records_are_not_verified() raises:
     var path = temporary_path("unsealed.glb")
     var options = GltfExportOptions()
     options.scene_user_data.set_json(String(FIDELITY_KEY), _record().to_json())
-    write_gltf(path, bake.scene, bake.assets, GLB, options=options^)
+    write_gltf(path, bake.scene, bake.assets, GLB, options=options)
     var scene = Scene()
     var assets = Assets()
     var extras = _load(path, scene, assets)

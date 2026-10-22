@@ -71,7 +71,7 @@ struct PseudoTerminal(Movable):
             text: The bytes.
         """
         _ = external_call["write", Int](
-            Int(self.user),
+            self.user,
             text.unsafe_ptr().unsafe_bitcast[NoneType](),
             text.byte_length(),
         )
@@ -117,7 +117,7 @@ def _read_ready(fd: c_int) -> String:
         return String()
     var buffer = List[UInt8](length=4096, fill=0)
     var count = external_call["read", Int](
-        Int(fd), buffer.unsafe_ptr().unsafe_bitcast[NoneType](), 4096
+        Int32(fd), buffer.unsafe_ptr().unsafe_bitcast[NoneType](), 4096
     )
     buffer.resize(max(count, 0), 0)
     return String(unsafe_from_utf8=buffer)

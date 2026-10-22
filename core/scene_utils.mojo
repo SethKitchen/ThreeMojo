@@ -89,7 +89,7 @@ def create_meshes_from_instanced_mesh(
         var id = scene.attach(node^, group_id)
         var mesh = Mesh(instanced.geometry, instanced.material, id)
         mesh.morph_influences = instanced.morph_at(instance)
-        scene.add_mesh(mesh^)
+        scene.add_mesh(mesh)
     return group_id
 
 

@@ -82,7 +82,7 @@ def test_optimizer_leaves_worn_morphs_and_start_only_draw_ranges() raises:
             var mesh = Mesh(geometry, material, scene.add(Object3D()))
             if morph:
                 mesh.set_morph_influence(0, 0.5)
-            scene.add_mesh(mesh^)
+            scene.add_mesh(mesh)
         _ = SceneOptimizer().to_batched_mesh(scene, assets)
         assert_equal(len(scene.batched_meshes), 0)
         assert_equal(len(scene.traverse()), 2)

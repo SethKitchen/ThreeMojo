@@ -60,8 +60,8 @@ def _road(first_refuses: Bool, last_refuses: Bool) raises -> Road:
     )
     last.curvature_start = 2e9
     last.curvature_end = 2e9
-    road.info.geometries.append(RoadInfoGeometry._from_si(0.0, first^))
-    road.info.geometries.append(RoadInfoGeometry._from_si(2.0, last^))
+    road.info.geometries.append(RoadInfoGeometry._from_si(0.0, first))
+    road.info.geometries.append(RoadInfoGeometry._from_si(2.0, last))
     var validation = _MapBuildWork(MapBuildBudget())
     _preflight_road_records(road, validation)
     assert_false(validation.exhausted)

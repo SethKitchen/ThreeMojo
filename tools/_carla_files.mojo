@@ -633,7 +633,7 @@ def read_some(fd: Int, size: Int) raises -> List[UInt8]:
     var out = List[UInt8](length=size, fill=0)
     while True:
         var count = external_call["read", Int](
-            fd, _at(Int(out.unsafe_ptr())), size
+            Int32(fd), _at(Int(out.unsafe_ptr())), size
         )
         if count >= 0:
             out.resize(count, 0)
@@ -683,7 +683,7 @@ def write_all(fd: Int, data: Span[UInt8, _]) raises:
     var base = Int(data.unsafe_ptr())
     while done < len(data):
         var count = external_call["write", Int](
-            fd, _at(base + done), len(data) - done
+            Int32(fd), _at(base + done), len(data) - done
         )
         if count < 0:
             var number = errno()

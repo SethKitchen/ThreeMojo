@@ -45,7 +45,7 @@ def test_direct_road_translated_grid_and_exact_tie() raises:
     road.sections[0].lanes[0].info.widths.append(
         RoadInfoLaneWidth._from_si(base, CubicPolynomial._constant_si(0.0002))
     )
-    road.info.geometries.append(RoadInfoGeometry._from_si(base, geometry^))
+    road.info.geometries.append(RoadInfoGeometry._from_si(base, geometry))
     road.info.elevations.append(
         RoadInfoElevation._from_si(0.0, CubicPolynomial._constant_si(0.0))
     )

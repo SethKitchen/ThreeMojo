@@ -1461,7 +1461,7 @@ def _write_all(descriptor: c_int, data: List[UInt8]) raises:
     var base = data.unsafe_ptr()
     while done < len(data):
         var written = external_call["write", Int](
-            Int(descriptor),
+            descriptor,
             base.unsafe_offset(done).unsafe_bitcast[NoneType](),
             len(data) - done,
         )

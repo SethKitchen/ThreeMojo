@@ -224,7 +224,7 @@ def write_sealed_bake(
         assets,
         container,
         animations=animations,
-        options=written^,
+        options=written,
     )
 
 

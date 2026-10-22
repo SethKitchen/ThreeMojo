@@ -1331,7 +1331,7 @@ def join_corners(frame: Frame, workers: Int = 0) -> List[RasterVertex]:
     return whole^
 
 
-async def _join_band(
+__async def _join_band(
     corners: Pointer[Corner, ImmutAnyOrigin],
     surfaces: Pointer[Surface, ImmutAnyOrigin],
     whole: MutPointer[RasterVertex, MutAnyOrigin],
@@ -1352,7 +1352,7 @@ async def _join_band(
 comptime _FLATTEN_GRAIN = 4096
 
 
-async def _flatten_band(
+__async def _flatten_band(
     corners: Pointer[RasterVertex, ImmutAnyOrigin],
     dest: MutPointer[Float32, MutAnyOrigin],
     first: Int,
@@ -11187,7 +11187,7 @@ def render(
     corners.append(RasterVertex(triangle.a.x, triangle.a.y, 0, 1, tint, 0, 0))
     corners.append(RasterVertex(triangle.b.x, triangle.b.y, 0, 1, tint, 0, 0))
     corners.append(RasterVertex(triangle.c.x, triangle.c.y, 0, 1, tint, 0, 0))
-    return render_triangles(corners^, width, height, background)
+    return render_triangles(corners, width, height, background)
 
 
 # --- post-processing ---------------------------------------------------------

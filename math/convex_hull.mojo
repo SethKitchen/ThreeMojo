@@ -110,7 +110,8 @@ def _exponent(value: Float64) -> Int:
     if value == 0:
         return 0
     if value < Float64(2.2250738585072014e-308):
-        # Mojo 1.1 frexp does not normalize a subnormal significand.
+        # Mojo 1.1 frexp did not normalize a subnormal significand, and
+        # Mojo 1.2 does. The scaled form is exact on both.
         return Int(frexp(value * ldexp(Float64(1), 512))[1]) - 512
     return Int(frexp(value)[1])
 
@@ -118,7 +119,7 @@ def _exponent(value: Float64) -> Int:
 def _scale(value: Float64, exponent: Int) -> Float64:
     """Scale through finite powers of two, including subnormal results.
 
-    Mojo 1.1 ldexp forms a power of two before multiplication. Exponents
+    Mojo 1.1 and 1.2 ldexp form a power of two before multiplication. Exponents
     outside the normal range therefore need bounded, exact steps.
     """
     var result = value

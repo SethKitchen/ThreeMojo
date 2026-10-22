@@ -1486,7 +1486,7 @@ def repeat_model(
         holder.set_from_matrix(relatives[k])
         var mesh = scene.meshes[m].copy()
         mesh.node = scene.attach(holder^, node)
-        scene.add_mesh(mesh^)
+        scene.add_mesh(mesh)
     scene.update()
     return ModelPlacement(
         node,

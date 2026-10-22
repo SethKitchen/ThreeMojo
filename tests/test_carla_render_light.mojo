@@ -154,7 +154,7 @@ def test_the_sky_readers_refuse_byte_textures() raises:
     var faces = List[DecodedImage]()
     for _ in range(6):
         faces.append(decode_png(Path("assets/gltf/checker.png").read_bytes()))
-    var cube = cube_texture_from(faces^)
+    var cube = cube_texture_from(faces)
     with assert_raises(contains="float textures"):
         _ = hemisphere_illuminance(cube)
     var texel: List[UInt8] = [0, 0, 0, 255]

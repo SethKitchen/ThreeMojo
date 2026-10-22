@@ -695,7 +695,7 @@ def spawn(
         _close_from(3, pipe[1])
         report[0] = Int32(plan.run())
         _ = external_call["write", Int](
-            pipe[1], _at(Int(report.unsafe_ptr())), 4
+            Int32(pipe[1]), _at(Int(report.unsafe_ptr())), 4
         )
         external_call["_exit", NoneType](c_int(255))
     var fork_error = errno()
@@ -708,7 +708,7 @@ def spawn(
     var got = 0
     while True:
         var count = external_call["read", Int](
-            pipe[0], _at(Int(report.unsafe_ptr()) + got), 4 - got
+            Int32(pipe[0]), _at(Int(report.unsafe_ptr()) + got), 4 - got
         )
         if count > 0:
             got += count

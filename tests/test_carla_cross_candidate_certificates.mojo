@@ -79,7 +79,7 @@ def _sampled_road(scale: Float64) raises -> Road:
     geometry.samples.append(_Sample(-scale, 2.0 * scale, 0.0, 1.0, 0.0))
     geometry.samples.append(_Sample(scale, 2.0 * scale, 1.0, 1.0, 0.0))
     road.length = 1.0
-    road.info.geometries[0] = RoadInfoGeometry._from_si(0.0, geometry^)
+    road.info.geometries[0] = RoadInfoGeometry._from_si(0.0, geometry)
     return road^
 
 

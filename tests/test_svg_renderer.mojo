@@ -549,7 +549,7 @@ def test_a_face_past_the_far_plane_or_of_one_point_is_skipped() raises:
     scene.add_mesh(
         Mesh(
             assets.geometries.add(shape^),
-            assets.materials.add(paint^),
+            assets.materials.add(paint),
             scene.add(Object3D()),
         )
     )
@@ -596,7 +596,7 @@ def test_a_crisp_path_an_empty_scene_and_a_near_corner() raises:
     scene.add_mesh(
         Mesh(
             assets.geometries.add(close^),
-            assets.materials.add(both^),
+            assets.materials.add(both),
             scene.add(Object3D()),
         )
     )

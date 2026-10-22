@@ -279,7 +279,7 @@ def test_a_map_is_laid_as_three_js_lays_it() raises:
     var map = assets.textures.add(Texture())
     var paint = Material(Color(255, 255, 255))
     paint.map = map
-    var worn = assets.materials.add(paint^)
+    var worn = assets.materials.add(paint)
     var times = _seconds([0, 1])
     var tracks: List[KeyframeTrack] = [
         KeyframeTrack(
@@ -352,10 +352,10 @@ def test_a_map_track_needs_a_map() raises:
     var bare = assets.materials.add(Material(Color(255, 255, 255)))
     var lost = Material(Color(255, 255, 255))
     lost.map = TextureId(4)
-    var missing = assets.materials.add(lost^)
+    var missing = assets.materials.add(lost)
     var below = Material(Color(255, 255, 255))
     below.map = TextureId(-3)
-    var negative = assets.materials.add(below^)
+    var negative = assets.materials.add(below)
     for material in [bare, missing, negative]:
         var tracks: List[KeyframeTrack] = [
             KeyframeTrack(

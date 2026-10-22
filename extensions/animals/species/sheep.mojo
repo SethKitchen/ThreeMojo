@@ -1627,7 +1627,7 @@ def _fgrad(m: SdfModel, list: List[Int], p: V3) -> V3:
     )
 
 
-async def _project_task(
+__async def _project_task(
     model: Pointer[SdfModel, MutAnyOrigin],
     fleece: Pointer[List[Int], ImmutAnyOrigin],
     starts: Pointer[List[V3], MutAnyOrigin],

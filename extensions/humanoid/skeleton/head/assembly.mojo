@@ -360,4 +360,4 @@ def place_rigged(
     var shape = assets.geometries.add(geometry^)
     var mesh = Mesh(shape, paint, nid)
     mesh.update_morph_targets(assets.geometries.get(shape))
-    scene.add_mesh(mesh^)
+    scene.add_mesh(mesh)

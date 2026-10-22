@@ -161,7 +161,7 @@ def _check_file(ref_: _Reference, name: String) raises:
     var bytes = Path("assets/draco/" + name).read_bytes()
     if doc.has(expected, "error"):
         with assert_raises():
-            _ = decode_draco(bytes^)
+            _ = decode_draco(bytes)
         return
     var geometry = decode_draco(bytes.copy())
     assert_equal(
@@ -194,7 +194,7 @@ def _check_file(ref_: _Reference, name: String) raises:
             ref_.array(doc.get(want, "bits")), geometry.float32_values(a)
         )
     var three = doc.get(expected, "three")
-    var built = parse_draco(bytes^)
+    var built = parse_draco(bytes)
     var names: List[String] = [
         String(POSITION),
         String(NORMAL),
@@ -242,15 +242,15 @@ def test_header_refusals() raises:
     var bad = cube.copy()
     bad[6] = 3
     with assert_raises(contains="bitstream 2.3 is not supported"):
-        _ = decode_draco(bad^)
+        _ = decode_draco(bad)
     bad = cube.copy()
     bad[7] = 7
     with assert_raises(contains="a geometry type is not known"):
-        _ = decode_draco(bad^)
+        _ = decode_draco(bad)
     bad = cube.copy()
     bad[8] = 2
     with assert_raises(contains="an encoding is not known"):
-        _ = decode_draco(bad^)
+        _ = decode_draco(bad)
 
 
 def test_geometry_lookups() raises:

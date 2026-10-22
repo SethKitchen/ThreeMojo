@@ -2810,7 +2810,7 @@ struct _Paint(ImplicitlyCopyable):
             corner.z = 0
             corner.inv_w = 1
             corner.fog = False
-            corners.append(corner^)
+            corners.append(corner)
 
     def emit(
         self,
@@ -4496,7 +4496,7 @@ struct _WideRun(Movable):
         self.paint = paint
 
 
-async def _wide_task(
+__async def _wide_task(
     setup: Pointer[_WideRun, MutAnyOrigin],
     corners: MutPointer[_Slim, MutAnyOrigin],
     failure: MutPointer[String, MutAnyOrigin],
@@ -4886,7 +4886,7 @@ struct _BackdropRays(ImplicitlyCopyable):
                 _set_backdrop(image, x, y, _brightened(seen, self.shown), bytes)
 
 
-async def _backdrop_band(
+__async def _backdrop_band(
     rays: Pointer[_BackdropRays, ImmutAnyOrigin],
     image: MutPointer[Framebuffer, MutAnyOrigin],
     assets: Pointer[Assets, ImmutAnyOrigin],
@@ -5462,7 +5462,7 @@ struct _Piece(ImplicitlyCopyable):
     var past: Int
 
 
-async def _emit_pieces(
+__async def _emit_pieces(
     jobs: MutPointer[_TriangleJob, MutAnyOrigin],
     pieces: MutPointer[_Piece, MutAnyOrigin],
     first_piece: Int,
@@ -5504,7 +5504,7 @@ async def _emit_pieces(
         ends[unsafe_offset=index] = len(corners[])
 
 
-async def _place_corners(
+__async def _place_corners(
     source: MutPointer[Corner, MutAnyOrigin],
     destination: MutPointer[Corner, MutAnyOrigin],
     count: Int,
@@ -5554,7 +5554,7 @@ def _adopt(mut corners: _Slim, run: _Slim, own: Int) -> Int:
     return surface
 
 
-async def _place_renamed(
+__async def _place_renamed(
     source: MutPointer[Corner, MutAnyOrigin],
     destination: MutPointer[Corner, MutAnyOrigin],
     count: Int,

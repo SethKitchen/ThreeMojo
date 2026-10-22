@@ -73,7 +73,7 @@ from geometries.sphere import sphere
 from math.matrix4 import translation, scaling
 from math.vector2 import Vector2
 from std.math import cos, inf, isinf, max, pi, sin
-from std.sys import has_apple_gpu_accelerator
+from std.sys import default_accelerator
 from math.vector3 import Vector3
 from objects.instanced_mesh import InstancedMesh
 from materials.material import (
@@ -10040,7 +10040,7 @@ def test_both_backends_draw_wood_and_a_post_processing_material_alike() raises:
                 assets.geometries.add(
                     plane(Length(1.2, METER), Length(0.9, METER), 2, 2)
                 ),
-                assets.materials.add(material^),
+                assets.materials.add(material),
                 node,
             )
         )
@@ -10406,7 +10406,7 @@ def test_both_backends_read_transmitted_shadows_alike() raises:
     for paint in paints():
         var assets = Assets()
         var block = casting(assets, 1, 0)
-        var scene = shaped_scene(assets, paint.copy(), block^)
+        var scene = shaped_scene(assets, paint.copy(), block)
         var camera = shadow_camera()
         var renderer = Renderer(48, 36)
         renderer.set_background(BACKGROUND)
@@ -12455,7 +12455,7 @@ def a_gpu_stack() raises -> VolumeImage:
                 texels.append(UInt8(30 + 50 * y))
                 texels.append(UInt8(60 + 80 * z))
                 texels.append(255)
-    return VolumeImage.of_bytes(4, 4, 3, texels^)
+    return VolumeImage.of_bytes(4, 4, 3, texels)
 
 
 def a_stack_program(
@@ -13836,7 +13836,7 @@ def test_both_backends_draw_the_texture_and_probe_helpers_alike() raises:
                 texels.append(UInt8(60 + 80 * z))
                 texels.append(255)
     var volume = assets.data_3d_textures.add(
-        Data3DTexture(VolumeImage.of_bytes(4, 4, 3, texels^), filter=BILINEAR)
+        Data3DTexture(VolumeImage.of_bytes(4, 4, 3, texels), filter=BILINEAR)
     )
     var stack = texture_helper(volume, assets)
     var sh = SphericalHarmonics3()
@@ -15486,7 +15486,7 @@ def test_shared_norms_preserve_tiny_and_large_directions() raises:
     var f64: List[Float64] = [0, 1e-200, 1, 1e200]
     check_norm_parity(f32, 1e-6)
     # Metal has no Float64, so the Float64 kernel cannot even be built.
-    comptime if has_apple_gpu_accelerator():
+    comptime if default_accelerator().is_apple_gpu():
         print("SKIP (Apple GPU has no Float64): shared Float64 norms")
     else:
         check_norm_parity(f64, 1e-13)

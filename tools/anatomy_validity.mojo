@@ -36,7 +36,7 @@ from tools._text import split_lines
 
 comptime ROUNDING_TOLERANCE = 5e-6
 """The relative roundoff tolerance of the tensor checks."""
-comptime PINNED_TOOLCHAIN = "Mojo 1.1.0 (8189361e)"
+comptime PINNED_TOOLCHAIN = "Mojo 1.2.0 (2016d0cd)"
 """The compiler version the report requires."""
 comptime BINDING_VERSION = "anatomy-binding-v4"
 """The binding rule. Bump it when the rule changes. Version 4 binds the Mojo
@@ -2145,7 +2145,7 @@ def prepare_probe(
         run_checked([mojo, "--version"], 600, String(), output, errors)
         var version = _strip(output)
         if version != PINNED_TOOLCHAIN:
-            raise Error("the report requires pinned Mojo 1.1.0 (8189361e)")
+            raise Error("the report requires pinned Mojo 1.2.0 (2016d0cd)")
         var parent = _parent(probe)
         if parent.byte_length() > 0:
             makedirs(parent, exist_ok=True)

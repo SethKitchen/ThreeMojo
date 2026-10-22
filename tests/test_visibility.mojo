@@ -282,7 +282,7 @@ def test_render_order_decides_which_translucent_surface_is_on_top() raises:
         Color(255, 0, 0), kind=BASIC, opacity=0.5, transparent=True
     )
     glass.depth_write = False
-    var red = assets.materials.add(glass^)
+    var red = assets.materials.add(glass)
     var blue = assets.materials.add(
         Material(Color(0, 0, 255), kind=BASIC, opacity=0.5, transparent=True)
     )

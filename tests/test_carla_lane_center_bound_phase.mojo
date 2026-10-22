@@ -88,7 +88,7 @@ def _phase_road(middle: Float64) raises -> Road:
     road.sections[0].lanes[0].info.widths.append(
         RoadInfoLaneWidth._from_si(-1.0, CubicPolynomial._constant_si(2.0))
     )
-    road.info.geometries.append(RoadInfoGeometry._from_si(-1.0, spiral^))
+    road.info.geometries.append(RoadInfoGeometry._from_si(-1.0, spiral))
     road.info.geometries.append(
         RoadInfoGeometry._from_si(
             1.0, RoadGeometry.from_meters(LINE, 1.0, 4.0, 0.0, 0.0, 1.0)
