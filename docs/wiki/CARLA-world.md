@@ -162,7 +162,7 @@ The world places a stop sign for each signal of type 206, except the painted "St
 - A yield sign checks at once, and again after 0.5 s.
 - A vehicle that leaves a check box starts a check after 0.5 s.
 
-The check boxes cover each junction road that crosses the sign's road and does not come from the same road. They are cubes 0.9 of a lane wide, along the road. They also reach back along the lanes before it, for 0.1 s at the road's speed. A walk that repeats its lane is refused.
+The check boxes cover each junction road that crosses the sign's road and does not come from the same road. They are cubes 0.9 of a lane wide, along the road. They also reach back along the lanes before it, for 0.1 s at the road's speed. A walk that repeats its lane is refused. A speed that does not shorten the anticipation time is refused.
 
 The delayed checks are a scheduled-callback queue in each sign. A timer fires on the first tick that brings it to zero or below.
 

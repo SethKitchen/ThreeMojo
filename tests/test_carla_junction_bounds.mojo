@@ -333,6 +333,42 @@ def test_a_sign_check_refuses_a_lane_it_would_walk_twice() raises:
     var loop = List[TriggerBox]()
     with assert_raises(contains="more than once"):
         _check_boxes(map, RoadId(1), List[Int](), loop)
+    # One billion meters a second does not change the anticipation time.
+    var fast = MapBuilder()
+    for id in [1, 2]:
+        var r = _road(fast, id, 90, 1)
+        fast.add_road_geometry_arc_si(
+            r, 0, 0, -20.0 * Float64(id - 1), 0, 90, PI / 90.0
+        )
+        if id == 2:
+            fast.create_road_speed_opendrive(r, 0.0, "Town", 1e9, "m/s")
+            var sec = fast.add_road_section_si(r, SectionId(1), 45.0)
+            _ = fast.add_road_section_lane(
+                r, sec, LaneId(1), LANE_DRIVING, False, LaneId(1), LaneId(1)
+            )
+            fast.create_lane_width_si(
+                fast.lane_si(RoadId(2), LaneId(1), 45.0), 45.0, 3.5, 0, 0, 0
+            )
+    _connect(fast, [1, 2])
+    var fast_map = fast.build()
+    ref fast_road = fast_map.road(RoadId(2))
+    var fast_last = len(fast_road.sections) - 1
+    fast_road.sections[0].lanes[0].prev_lanes.clear()
+    fast_road.sections[fast_last].lanes[0].prev_lanes.append(
+        LaneKey(
+            RoadId(2),
+            fast_road.sections[0].id,
+            fast_road.sections[0].lanes[0].id,
+        )
+    )
+    var ahead = List[TriggerBox]()
+    with assert_raises(contains="against its lane"):
+        _check_boxes(fast_map, RoadId(1), List[Int](), ahead)
+    # The same predecessor at 40 m/s still shortens the anticipation time.
+    fast_road.info.speeds[0].speed = 40.0
+    var ordinary = List[TriggerBox]()
+    _check_boxes(fast_map, RoadId(1), List[Int](), ordinary)
+    assert_true(len(ordinary) > 0)
 
 
 def test_parametric_tail_and_singular_tangent_fallback() raises:

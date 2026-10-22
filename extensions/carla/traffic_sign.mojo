@@ -318,6 +318,12 @@ def _check_boxes(
                 var remaining = Float32(0)
                 if speed > 0:
                     remaining = item[0] - size / speed
+                    # A huge speed leaves this time unchanged, so a ring
+                    # of predecessors never ends.
+                    if not (remaining < item[0]):
+                        raise Error(
+                            "A sign check cannot advance against its lane"
+                        )
                 if remaining > 0:
                     for before in map.previous_meters(item[1], step):
                         queue.append((remaining, before))
