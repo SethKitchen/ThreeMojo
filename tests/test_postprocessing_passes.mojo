@@ -683,6 +683,23 @@ def test_gtao_settings_are_three_js_s_and_checked() raises:
     few.denoise_samples = 1
     with assert_raises(contains="two samples"):
         check_gtao(few)
+    var wide = GtaoSettings()
+    wide.samples = 16777217
+    with assert_raises(contains="larger than this port"):
+        check_gtao(wide)
+    wide.samples = Int.MAX
+    with assert_raises(contains="larger than this port"):
+        check_gtao(wide)
+    wide = GtaoSettings()
+    wide.denoise_samples = 16777217
+    with assert_raises(contains="larger than this port"):
+        check_gtao(wide)
+    wide.denoise_samples = Int.MAX
+    with assert_raises(contains="larger than this port"):
+        check_gtao(wide)
+    wide.samples = 16777216
+    wide.denoise_samples = 16777216
+    check_gtao(wide)
     var tight = GtaoSettings()
     tight.denoise_radius = 0.5
     with assert_raises(contains="one pixel"):
@@ -718,6 +735,10 @@ def test_the_magic_square_and_the_noises() raises:
     near(same[7], denoise[7])
     var disk = denoise_disk(4, 1, 1)
     assert_equal(len(disk), 4)
+    with assert_raises(contains="larger than this port"):
+        _ = denoise_disk(Int.MAX, 2, 1)
+    with assert_raises(contains="larger than this port"):
+        _ = denoise_disk(16777217, 1, 1)
     near(disk[0].z, 0)
     near(disk[3].z, 1)
     near(disk[1].x, 0, 1e-5)
@@ -766,6 +787,9 @@ def test_gtao_occlusion_is_one_on_the_sky_and_below_one_in_a_corner() raises:
     )
     var up = List[Vector3](length=4, fill=Vector3(0, 0, 1))
     near(gtao_occlusion(sky, up, noise, 0, 0, settings), 1)
+    var huge = settings
+    huge.samples = Int.MAX
+    near(gtao_occlusion(sky, up, noise, 0, 0, huge), 1)
     # A noise texel of 0.5, 0.5 names no direction. three.js normalizes a
     # zero vector there and reads NaN; the port samples the pixel itself,
     # which raises no horizon, so only the normal's cosine is left. An
@@ -783,6 +807,8 @@ def test_gtao_occlusion_is_one_on_the_sky_and_below_one_in_a_corner() raises:
     var facing = (-center).dot(Vector3(0, 0, 1)) / center.length()
     assert_true(facing > 0.5)
     near(gtao_occlusion(wall, up, still, 0, 0, GtaoSettings()), facing)
+    with assert_raises(contains="larger than this port"):
+        _ = gtao_occlusion(wall, up, still, 0, 0, huge)
 
 
 def test_gtao_denoise_is_one_without_a_surface() raises:

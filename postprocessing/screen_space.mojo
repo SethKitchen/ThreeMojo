@@ -900,6 +900,12 @@ struct SaoSettings(ImplicitlyCopyable):
         self.output = DEFAULT_OUTPUT
 
 
+# A blur tap index is a `Float32`. Past 16777216 it is no longer that
+# index. One more than the maximum integer wraps the weight count, so
+# the center weight is missing, and one below that does not finish.
+comptime MAX_SAO_BLUR_RADIUS = 16777216
+
+
 def check_sao(settings: SaoSettings) raises:
     """Refuse SAO settings no pass could run.
 
@@ -909,8 +915,8 @@ def check_sao(settings: SaoSettings) raises:
     Raises:
         Error: If the output is none of the six, a setting is not finite,
             the intensity, minimum resolution, blur radius or depth cutoff
-            is negative, or the scale, kernel radius or standard deviation
-            is not positive.
+            is negative, the blur radius is above 16777216, or the scale,
+            kernel radius or standard deviation is not positive.
     """
     require_screen_output(settings.output)
     if not (
@@ -930,6 +936,8 @@ def check_sao(settings: SaoSettings) raises:
         or settings.blur_depth_cutoff < 0
     ):
         raise Error("An SAO setting must not be negative")
+    if settings.blur_radius > MAX_SAO_BLUR_RADIUS:
+        raise Error("An SAO blur radius is larger than this port takes")
     if not (
         settings.scale > 0
         and settings.kernel_radius > 0
@@ -1074,17 +1082,23 @@ def _sao_pixel(
     return 1 - sum * (settings.intensity / weight)
 
 
-def blur_weights(radius: Int, std_dev: Float32) -> List[Float32]:
+def blur_weights(radius: Int, std_dev: Float32) raises -> List[Float32]:
     """Return the Gaussian weights of taps zero through `radius` pixels
     out: three.js's `BlurShaderUtils.createSampleWeights`.
 
     Args:
-        radius: The farthest tap.
-        std_dev: The standard deviation, in pixels.
+        radius: The farthest tap. Zero through 16777216.
 
     Returns:
         One weight per tap, the center first.
+
+    Raises:
+        Error: If `radius` is negative or above 16777216.
     """
+    if radius < 0:
+        raise Error("An SAO blur radius must not be negative")
+    if radius > MAX_SAO_BLUR_RADIUS:
+        raise Error("An SAO blur radius is larger than this port takes")
     var weights = List[Float32](capacity=radius + 1)
     for tap in range(radius + 1):  # pragma: no branch
         # A radius is never negative, so the center tap is always there.

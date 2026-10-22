@@ -122,6 +122,15 @@ struct GtaoSettings(ImplicitlyCopyable):
         self.seed = 1
 
 
+# A sample index is a `Float32` in the occlusion and a `Float64` in the
+# denoise disk. Past 16777216 the occlusion step is no longer that index
+# once the slices are counted in. The maximum integer wraps
+# `samples + directions`, and a count just below that does not finish.
+# The denoise disk walks one tap per sample and does not finish at the
+# maximum integer.
+comptime MAX_GTAO_SAMPLES = 16777216
+
+
 def check_gtao(settings: GtaoSettings) raises:
     """Refuse GTAO settings no pass could use.
 
@@ -133,8 +142,8 @@ def check_gtao(settings: GtaoSettings) raises:
             six; the radius, the thickness, the scale or a phi is not
             positive; the fall-off is outside zero to one, where a horizon
             could pass straight up; the intensity or the exponent is
-            negative; a sample count is below two, or the denoise's radius
-            below one.
+            negative; a sample count is below two or above 16777216, or
+            the denoise's radius below one.
     """
     require_screen_output(settings.output)
     if not (
@@ -172,6 +181,11 @@ def check_gtao(settings: GtaoSettings) raises:
         raise Error("A GTAO intensity or exponent must not be negative")
     if settings.samples < 2 or settings.denoise_samples < 2:
         raise Error("A GTAO pass needs at least two samples")
+    if (
+        settings.samples > MAX_GTAO_SAMPLES
+        or settings.denoise_samples > MAX_GTAO_SAMPLES
+    ):
+        raise Error("A GTAO sample count is larger than this port takes")
     if settings.denoise_radius < 1:
         raise Error("A GTAO denoise radius is at least one pixel")
 
@@ -280,19 +294,24 @@ def denoise_noise(
 
 def denoise_disk(
     samples: Int, rings: Float32, radius_exponent: Float32
-) -> List[Vector3]:
+) raises -> List[Vector3]:
     """Return `generateDenoiseSamples`: `samples` directions turning
     `rings` times, each with its distance from the center, zero to one,
     raised to `radius_exponent`.
 
     Args:
-        samples: How many, at least two.
+        samples: How many, at least two, and at most 16777216.
         rings: How many turns.
         radius_exponent: How the distances crowd toward the center.
 
     Returns:
         The cosine and the sine of each direction, and its distance.
+
+    Raises:
+        Error: If `samples` is above 16777216.
     """
+    if samples > MAX_GTAO_SAMPLES:
+        raise Error("A GTAO sample count is larger than this port takes")
     var disk = List[Vector3](capacity=samples)
     for i in range(samples):  # pragma: no branch
         var angle = 2 * pi * Float64(rings) * Float64(i) / Float64(samples)
@@ -390,12 +409,15 @@ def gtao_occlusion(
         surface gives one, as three.js's cleared target holds.
 
     Raises:
-        Error: If a surface pixel reads noise that has no texel.
+        Error: If a surface pixel reads noise that has no texel, or its
+            sample count is above 16777216.
     """
     var slot = y * view.width + x
     var depth = view.depth[slot]
     if depth >= 1:
         return 1
+    if settings.samples > MAX_GTAO_SAMPLES:
+        raise Error("A GTAO sample count is larger than this port takes")
     var u = u_of(x, view.width)
     var v = v_of(y, view.height)
     var center = view.position(u, v, depth)
@@ -566,7 +588,8 @@ def gtao_light(
         settings: The settings.
 
     Raises:
-        Error: Everything `denoise_noise` raises.
+        Error: Everything `gtao_occlusion`, `denoise_noise` and
+            `denoise_disk` raise.
     """
     var width = frame.width
     var height = frame.height

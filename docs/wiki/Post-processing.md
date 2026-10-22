@@ -226,7 +226,7 @@ The blurred value multiplies the light of each pixel. Alpha is kept. `kernel_rad
 
 - `sao_sample_occlusion` is `getOcclusion`. It returns the slope toward the sample, less `bias`, over the scaled distance. The result is divided by one plus that distance squared.
 - The occlusion is the average of the samples that land on a surface, scaled by `intensity`. A pixel with no such sample keeps its light.
-- With `blur` on, `depth_limited_blur` is `DepthLimitedBlurShader`. It blurs down, then across, over `blur_radius` pixels with `blur_std_dev`. `blur_weights` is `BlurShaderUtils.createSampleWeights`. On each side, the blur stops at the first neighbor whose distance differs by more than `blur_depth_cutoff` of the range.
+- With `blur` on, `depth_limited_blur` is `DepthLimitedBlurShader`. It blurs down, then across, over `blur_radius` pixels with `blur_std_dev`. `blur_weights` is `BlurShaderUtils.createSampleWeights`. On each side, the blur stops at the first neighbor whose distance differs by more than `blur_depth_cutoff` of the range. A blur radius above 16777216 is refused.
 
 One minus the occlusion multiplies the light of each pixel. `kernel_radius` is in pixels, as in three.js.
 
@@ -295,7 +295,7 @@ With `use_pattern_texture` on, the selected objects are filled with a pattern. T
 
 - Every check refuses a setting that is not finite, and an output that is none of the six.
 - `check_ssao` refuses a negative radius or distance, and a kernel of no samples.
-- `check_sao` refuses a negative intensity, minimum resolution, blur radius or cutoff. It refuses a scale, kernel radius or deviation that is not positive.
+- `check_sao` refuses a negative intensity, minimum resolution, blur radius or cutoff. It refuses a scale, kernel radius or deviation that is not positive. It refuses a blur radius above 16777216.
 - `check_ssr` refuses an opacity outside zero to one, a negative thickness, and a reach that is not positive.
 - `check_outline` refuses a negative color channel, strength, glow or period, and a thickness that is not positive.
 - `DepthView` refuses a size that is not positive and a depth of the wrong length. It refuses a list of normals of the wrong length. It refuses a near distance that is not before the far distance, and a projection with no inverse.
@@ -495,7 +495,7 @@ var image = composer.render(renderer, scene, assets, camera)
 
 `gtao_pass` is three.js's `GTAOPass`. Put it after a `render_pass`. It draws the depth and the normals itself. The fields of `GtaoSettings` are three.js's parameters, with its defaults.
 
-1. `gtao_occlusion` is `GTAOShader`. It cuts the hemisphere above each surface into three slices, or five for thirty samples or more. In each slice it finds the highest horizon both ways, and it integrates the visible arc against the normal.
+1. `gtao_occlusion` is `GTAOShader`. It cuts the hemisphere above each surface into three slices, or five for thirty samples or more. In each slice it finds the highest horizon both ways, and it integrates the visible arc against the normal. A sample count above 16777216 is refused.
 2. `gtao_noise` turns the slices from pixel to pixel by a five by five magic square, as `generateMagicSquareNoise` does.
 3. `gtao_denoise` is `PoissonDenoiseShader`. It averages sixteen taps on a Poisson disk, each weighed by how like the pixel it is.
 4. With the default output, the frame is multiplied by the result, mixed toward one by `blend_intensity`. The other five outputs are the SSAO pass's. See [Outputs](#outputs).
@@ -539,7 +539,7 @@ composer.add_pass(step^)
 ### Validation of the scene and shader passes
 
 - `check_pixelated` refuses a pixel size below one, and an edge strength that is negative or not finite.
-- `check_gtao` refuses an output that is not named and a setting that is not finite. It refuses a radius, thickness, scale or phi that is not positive, and a fall-off outside zero to one. It refuses a negative intensity or exponent, fewer than two samples, and a denoise radius below one pixel.
+- `check_gtao` refuses an output that is not named and a setting that is not finite. It refuses a radius, thickness, scale or phi that is not positive, and a fall-off outside zero to one. It refuses a negative intensity or exponent, fewer than two samples, and a denoise radius below one pixel. It refuses more than 16777216 samples.
 - `check_transition` refuses a setting that is not finite, and a threshold that is not positive.
 - `check_shader` refuses `NO_NODES`, and a saved sampler that names no pass.
 - `check_pass` refuses a cube texture pass with `NO_CUBE_TEXTURE`, and a transition pass that reads a texture with `NO_TEXTURE`.

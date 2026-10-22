@@ -375,6 +375,15 @@ def test_sao_settings_no_pass_could_run_are_refused() raises:
     with assert_raises():
         check_sao(bad)
     bad = SaoSettings()
+    bad.blur_radius = 16777217
+    with assert_raises(contains="larger than this port"):
+        check_sao(bad)
+    bad.blur_radius = Int.MAX
+    with assert_raises(contains="larger than this port"):
+        check_sao(bad)
+    bad.blur_radius = 16777216
+    check_sao(bad)
+    bad = SaoSettings()
     bad.blur_depth_cutoff = -1
     with assert_raises():
         check_sao(bad)
@@ -798,6 +807,12 @@ def test_blur_weights_are_three_js_gaussian() raises:
         var expected = exp(-(x * x) / 8) / (sqrt(Float32(2 * pi)) * 2)
         assert_almost_equal(weights[tap], expected, atol=TOLERANCE)
     assert_equal(len(blur_weights(0, 1)), 1)
+    with assert_raises(contains="negative"):
+        _ = blur_weights(-1, 1)
+    with assert_raises(contains="larger than this port"):
+        _ = blur_weights(16777217, 1)
+    with assert_raises(contains="larger than this port"):
+        _ = blur_weights(Int.MAX, 1)
 
 
 def test_the_depth_limited_blur_stops_at_a_step() raises:
