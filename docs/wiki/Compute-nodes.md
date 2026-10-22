@@ -105,7 +105,7 @@ A subgroup is one invocation. `subgroup_size()` is one. Each subgroup function g
 
 `BitonicSort(store, data, workgroup_size)` sorts a buffer of floats in place, the smallest value first. The count must be a power of two. `sort.compute(runner, store)` runs every step. `sort.compute_step(runner, store)` runs one step.
 
-`CountingSort(store, count, bin_count, workgroup_size)` orders the places `0` to `count - 1` by a bin. Set the bin with `set_bin_node(bin_node)`. The bin node is a function that builds the bin from the kernel. `sort.order` holds the sorted places after `compute`. `compute_cpu(store, bins)` gives the same order without a compute program.
+`CountingSort(store, count, bin_count, workgroup_size)` orders the places `0` to `count - 1` by a bin. Set the bin with `set_bin_node(bin_node)`. The bin node is a function that builds the bin from the kernel. `sort.order` holds the sorted places after `compute`. `compute_cpu(store, bins)` gives the same order without a compute program. A place count or a bin count above 16777216 is refused.
 
 The prefix pass of a counting sort is one invocation with two statements for each bin. The default of 4096 bins takes a few seconds to build.
 
