@@ -560,6 +560,16 @@ def test_a_sphere_needs_enough_segments_to_close() raises:
         _ = sphere(Length(1.0, METER), 2, 4)
     with assert_raises():
         _ = sphere(Length(1.0, METER), 8, 1)
+    var belt = sphere(Length(1.0, METER), 4096, 2)
+    assert_equal(belt.vertex_count(), 4097 * 3)
+    with assert_raises(contains="larger than this port"):
+        _ = sphere(Length(1.0, METER), 16777217, 2)
+    with assert_raises(contains="larger than this port"):
+        _ = sphere(Length(1.0, METER), 3, 5592406)
+    with assert_raises(contains="larger than this port"):
+        _ = sphere(Length(1.0, METER), Int.MAX, 16)
+    with assert_raises(contains="larger than this port"):
+        _ = sphere(Length(1.0, METER), 32, Int.MAX)
 
 
 def test_cloning_an_attribute_gives_an_independent_copy() raises:
@@ -939,6 +949,13 @@ def test_a_circle_with_no_radius_is_rejected() raises:
 def test_a_circle_needs_three_segments() raises:
     with assert_raises():
         _ = circle(Length(1.0, METER), 2)
+    var disk = circle(Length(1.0, METER), 4096)
+    assert_equal(disk.vertex_count(), 4098)
+    assert_equal(disk.triangle_count(), 4096)
+    with assert_raises(contains="larger than this port"):
+        _ = circle(Length(1.0, METER), 16777217)
+    with assert_raises(contains="larger than this port"):
+        _ = circle(Length(1.0, METER), Int.MAX)
 
 
 def test_a_sweep_must_be_positive_and_at_most_a_turn() raises:
@@ -1103,6 +1120,15 @@ def test_a_ring_needs_enough_segments() raises:
         _ = ring(Length(1.0, METER), Length(2.0, METER), 2, 1)
     with assert_raises():
         _ = ring(Length(1.0, METER), Length(2.0, METER), 8, 0)
+    var washer = ring(Length(1.0, METER), Length(2.0, METER), 4096, 1)
+    assert_equal(washer.vertex_count(), 4097 * 2)
+    assert_equal(washer.triangle_count(), 4096 * 2)
+    with assert_raises(contains="larger than this port"):
+        _ = ring(Length(1.0, METER), Length(2.0, METER), 16777217, 1)
+    with assert_raises(contains="larger than this port"):
+        _ = ring(Length(1.0, METER), Length(2.0, METER), 8, 2097153)
+    with assert_raises(contains="larger than this port"):
+        _ = ring(Length(1.0, METER), Length(2.0, METER), Int.MAX, 1)
 
 
 # --- cylinder ---------------------------------------------------------------
@@ -1310,6 +1336,17 @@ def test_a_cylinder_needs_a_radius_a_height_and_enough_segments() raises:
         _ = cylinder(
             one, one, one, 8, 1, False, Angle(0.0, DEGREE), Angle(2.0, TURN)
         )
+    var pipe = cylinder(one, one, Length(2.0, METER), 4096, 1, True)
+    assert_equal(pipe.vertex_count(), 4097 * 2)
+    assert_equal(pipe.triangle_count(), 4096 * 2)
+    with assert_raises(contains="larger than this port"):
+        _ = cylinder(one, one, one, 16777217, 1)
+    with assert_raises(contains="larger than this port"):
+        _ = cylinder(one, one, one, 8, 2097153)
+    with assert_raises(contains="larger than this port"):
+        _ = cylinder(one, one, one, Int.MAX, 1)
+    with assert_raises(contains="larger than this port"):
+        _ = cone(one, one, Int.MAX, 1)
 
 
 # --- cone -------------------------------------------------------------------

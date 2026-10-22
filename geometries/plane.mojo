@@ -37,13 +37,9 @@ from geometries.surface import (
     record_grid_segments,
     record_kind,
     record_width_height,
+    require_grid_cells,
 )
 from units.si import Length
-
-# A grid past this many cells does not finish. A side past 2^24 also
-# collapses in `Float32`, so the last column lands on the edge. 4096 by
-# 4096 is this many cells, and so is one row of 16777216.
-comptime MAX_PLANE_CELLS = 16777216
 
 
 def plane(
@@ -77,10 +73,11 @@ def plane(
         raise Error("A plane needs positive extents")
     if width_segments < 1 or height_segments < 1:
         raise Error("A plane needs at least one segment each way")
-    # `width_segments` is at least one, so the division stands. A side of
-    # `Int.MAX` used to wrap `columns` and then walk `range(Int.MAX)`.
-    if height_segments > MAX_PLANE_CELLS // width_segments:
-        raise Error("A plane's segment count is larger than this port builds")
+    require_grid_cells(
+        width_segments,
+        height_segments,
+        "A plane's segment count is larger than this port builds",
+    )
 
     var half_width = width.value / 2
     var half_height = height.value / 2

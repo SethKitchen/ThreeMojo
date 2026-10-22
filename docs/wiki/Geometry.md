@@ -206,7 +206,7 @@ var band = sphere(
 )
 ```
 
-A latitude and longitude sphere, three.js's `SphereGeometry`. Each normal points away from the center, so shading is smooth. `u` runs once around the part drawn. `v` runs from one at the top of the part to zero at its bottom. It needs at least three segments and two rings.
+A latitude and longitude sphere, three.js's `SphereGeometry`. Each normal points away from the center, so shading is smooth. `u` runs once around the part drawn. `v` runs from one at the top of the part to zero at its bottom. It needs at least three segments and two rings. A grid of more than 16777216 cells is refused.
 
 `phi_start` and `phi_length` say where the surface starts around the y axis and how far it runs, a whole turn by default. `theta_start` and `theta_length` say where it starts down from the north pole and how far it runs, pole to pole by default. As in three.js, a part that reaches a pole ends in a point there. A part that stops short of a pole has a full ring of triangles at its edge. An angle that is not finite is refused.
 
@@ -228,7 +228,7 @@ var disk = circle(Length(1.0, METER), 32)                                       
 var slice = circle(Length(1.0, METER), 8, Angle(90.0, DEGREE), Angle(180.0, DEGREE))  # a pie slice
 ```
 
-A disk in the xy plane, facing +z, centered on the origin. Vertex zero is the center. The rim follows it, one vertex per segment and one more to close the seam. Each triangle runs from a rim vertex to the next one and back to the center.
+A disk in the xy plane, facing +z, centered on the origin. Vertex zero is the center. The rim follows it, one vertex per segment and one more to close the seam. Each triangle runs from a rim vertex to the next one and back to the center. More than 16777216 segments is refused.
 
 The third argument is where the rim starts, counter-clockwise from +x. The fourth is how far it sweeps. A full turn is the default. A shorter sweep makes a pie slice.
 
@@ -243,7 +243,7 @@ var arc = ring(Length(0.5, METER), Length(1.0, METER), 16, 1, Angle(0.0, DEGREE)
 
 A flat ring in the xy plane, facing +z, centered on the origin. The first radius is the hole. The second is the outer edge. Vertices run in rows from the inner edge outwards, one per segment around and one more for the seam. The start angle and the sweep work as they do for the circle. A shorter sweep makes an arc.
 
-The texture coordinates map the square around the outer edge onto the image, as the circle's do.
+The texture coordinates map the square around the outer edge onto the image, as the circle's do. A grid of more than 16777216 cells is refused.
 
 An inner radius of zero makes a disk, as in three.js. The inner row is then every vertex at the center.
 
@@ -257,7 +257,7 @@ var pipe = cylinder(Length(1.0, METER), Length(1.0, METER), Length(2.0, METER), 
 
 A cylinder stands on the y axis, centered on the origin. The first radius is at the top and the second at the bottom. Different radii make a frustum. The side comes first, in rows from the top down, one vertex per segment around and one more for the seam. A cap follows at each end unless `open_ended` is true. Each cap has one center vertex per segment, as in three.js.
 
-The side's triangles come column by column, in three.js's order. The caps are the only closing faces. A partial sweep leaves its two cut faces open, as in three.js.
+The side's triangles come column by column, in three.js's order. The caps are the only closing faces. A partial sweep leaves its two cut faces open, as in three.js. A grid of more than 16777216 cells is refused.
 
 Side normals lean with the side, so a frustum shades smoothly. Cap normals point along the axis. `u` runs once around the side. `v` runs from one at the top to zero at the bottom. Each cap maps the square around it onto the image.
 
@@ -930,11 +930,15 @@ A per-instance `position`, `normal`, `uv` or `tangent` is refused when drawn. Th
 
 - A negative or zero extent raises.
 - A sphere with too few segments or rings raises.
+- A sphere grid of more than 16777216 cells is refused.
 - A plane with fewer than one segment raises.
 - A plane grid of more than 16777216 cells is refused.
 - A circle needs a positive radius and at least three segments.
+- A circle of more than 16777216 segments is refused.
 - A ring needs an inner radius of zero or more, a larger outer radius, three segments around and one across.
+- A ring grid of more than 16777216 cells is refused.
 - A cylinder needs a positive height, radii that are not negative and not both zero, three segments around and one down the side.
+- A cylinder or a cone grid of more than 16777216 cells is refused.
 - A cone needs a positive radius and a positive height.
 - A torus needs positive radii and three segments each way.
 - A torus knot needs positive radii, three segments each way, and `p` and `q` of at least one.
