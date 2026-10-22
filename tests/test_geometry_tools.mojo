@@ -117,6 +117,14 @@ def test_a_hilbert_curve_refuses_a_bad_order() raises:
         _ = hilbert2d(iterations=-1)
     with assert_raises(contains="negative iteration"):
         _ = hilbert3d(iterations=-1)
+    with assert_raises(contains="larger than this port"):
+        _ = hilbert2d(iterations=12)
+    with assert_raises(contains="larger than this port"):
+        _ = hilbert2d(iterations=Int.MAX)
+    with assert_raises(contains="larger than this port"):
+        _ = hilbert3d(iterations=8)
+    with assert_raises(contains="larger than this port"):
+        _ = hilbert3d(iterations=Int.MAX)
     with assert_raises(contains="every corner"):
         _ = hilbert2d(order=[0, 1, 2])
     with assert_raises(contains="each corner once"):
