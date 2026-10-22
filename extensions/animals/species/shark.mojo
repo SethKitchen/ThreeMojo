@@ -57,7 +57,12 @@ from extensions.animals.species.swimmer_rig import (
     spine_name,
     swimmer_bones,
 )
-from extensions.animals.traits import Traits, pick_sex, require_color_variant
+from extensions.animals.traits import (
+    Traits,
+    pick_sex,
+    require_color_variant,
+    trait_repeats,
+)
 from extensions.sdf.vector import (
     V3,
     clamp,
@@ -943,7 +948,8 @@ def shark_sculpt(mut m: SdfModel, rig: Rig, t: Traits) raises:
 
     Raises:
         Error: If the rig lacks a joint or a bone, or the sculpt refuses
-            a primitive.
+            a primitive. A nick count that is not finite, or above
+            16777216, is refused.
     """
     var g = _geo(t)
     var tl = g.tl
@@ -1186,7 +1192,8 @@ def shark_sculpt(mut m: SdfModel, rig: Rig, t: Traits) raises:
         )
 
     # NICKS: old bites carved out of the trailing edges.
-    for i in range(Int(t.get("nicks", 0.0))):
+    var nicks = trait_repeats(t.get("nicks", 0.0))
+    for i in range(nicks):
         var key = "nick" + String(i)
         var nt = t.get(key + "t")
         var nr = t.get(key + "r")

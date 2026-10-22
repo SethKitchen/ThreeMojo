@@ -69,7 +69,7 @@ from extensions.animals.species.hoofed import (
     lens_distance,
     pitched_head,
 )
-from extensions.animals.traits import Traits, pick_sex
+from extensions.animals.traits import Traits, pick_sex, trait_repeats
 from extensions.sdf.vector import (
     V3,
     clamp,
@@ -414,7 +414,8 @@ def deer_sculpt(mut m: SdfModel, rig: Rig, t: Traits) raises:
 
     Raises:
         Error: If the rig lacks a joint or a bone, or the sculpt refuses
-            a primitive.
+            a primitive. When antlers are sculpted, a tine count that is
+            not finite, or above 16777216, is refused.
     """
     var neck_k = t.get("neck", 0.0)
     var hf = _hf()
@@ -1099,7 +1100,7 @@ def _sculpt_antlers(mut m: SdfModel, h: BoneId, t: Traits) raises:
     var spike = t.get("spike", 0.0) > 0.0
     var r0 = t.get("antlerBase", 0.018)
     var seed = Int(t.get("antlerSeed", 1.0))
-    var count = Int(t.get("tines", 0.0))
+    var count = trait_repeats(t.get("tines", 0.0))
     for s in [1.0, -1.0]:  # pragma: no branch
         var rr = AnimalRandom(
             (seed if seed != 0 else 1) * 31 + (7 if s > 0.0 else 13), 1, 0

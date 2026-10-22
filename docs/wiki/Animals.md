@@ -153,4 +153,4 @@ Each animal also has a skeleton, Hill-type muscles, segment mass and inertia, an
 
 ## Types and checks
 
-Each id, kind and mode is a type with `is_valid`: `SpeciesId`, `PrimitiveKind`, `BoneId`, `TagId`, `SurfacePart`, `SurfaceClass`, `WarpKind`, `Quality`, `Sex`, `Age` and `Variant`. `create_animal`, `check_options`, `require_species`, `require_part` and `require_kind` refuse a value that is not valid. The files in `tests/compile_fail/` prove that a bare integer does not compile.
+Each id, kind and mode is a type with `is_valid`: `SpeciesId`, `PrimitiveKind`, `BoneId`, `TagId`, `SurfacePart`, `SurfaceClass`, `WarpKind`, `Quality`, `Sex`, `Age` and `Variant`. `create_animal`, `check_options`, `require_species`, `require_part` and `require_kind` refuse a value that is not valid. The files in `tests/compile_fail/` prove that a bare integer does not compile. A shark nick, rattle segment, teat or tine count above 16777216 is refused. A nick, rattle, teat or tine count that is not finite is refused. A negative nick, rattle, teat or tine count repeats nothing.

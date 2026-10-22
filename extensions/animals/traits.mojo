@@ -7,7 +7,8 @@
 
 Each species draws its own named numbers, such as `muzzle` or `ear`,
 from the seed. A missing name reads as its default, as `params.muzzle
-|| 1` does in the original.
+|| 1` does in the original. A count that a sculpt repeats is finite and
+at most 16777216.
 """
 
 from extensions.animals.options import (
@@ -20,6 +21,7 @@ from extensions.animals.options import (
     Sex,
 )
 from extensions.animals.warp import Warps
+from std.math import isfinite
 
 
 struct Traits(Movable):
@@ -179,3 +181,30 @@ def pick_variant(
             return i
         x -= weights[i]
     return 0
+
+
+# A sculpt repeats a trait this many times at most. A larger count does
+# not finish, and `Int` of a non-finite value is undefined.
+comptime MAX_TRAIT_REPEATS = 16777216
+
+
+def trait_repeats(value: Float64) raises -> Int:
+    """Return how many times a drawn trait repeats.
+
+    A negative value repeats nothing. The count is the whole part of a
+    finite value, so `3.7` repeats three times.
+
+    Args:
+        value: The stored trait.
+
+    Returns:
+        The repeat count.
+
+    Raises:
+        Error: If the value is not finite or is above 16777216.
+    """
+    if not isfinite(value) or not (value < Float64(MAX_TRAIT_REPEATS + 1)):
+        raise Error("A trait count is larger than this port builds")
+    if not (value >= 0.0):
+        return 0
+    return Int(value)

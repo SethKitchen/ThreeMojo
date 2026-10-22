@@ -64,7 +64,7 @@ from extensions.animals.species.hoofed import (
     head_frame,
     hoofed_bones,
 )
-from extensions.animals.traits import Traits
+from extensions.animals.traits import Traits, trait_repeats
 from extensions.sdf.vector import (
     V3,
     clamp,
@@ -798,7 +798,8 @@ def pig_sculpt(mut m: SdfModel, rig: Rig, t: Traits) raises:
 
     Raises:
         Error: If the rig lacks a joint or a bone, or the sculpt refuses
-            a primitive.
+            a primitive. A teat count that is not finite, or above
+            16777216, is refused.
     """
     var piglet = t.juvenile() > 0.0
     var boar = t.get("boar", 0.0)
@@ -1380,14 +1381,14 @@ def pig_sculpt(mut m: SdfModel, rig: Rig, t: Traits) raises:
 
     # TEATS: two rows along the belly.
     # Six, seven or eight pairs.
-    var pairs = Int(t.get("teats", 7.0))
+    var pairs = trait_repeats(t.get("teats", 7.0))
     var teat_k = 0.45 if boar >= 0.5 else (0.5 if piglet else 0.8 + 0.6 * belly)
+    # One pair has no gap, so the row still has a defined spacing.
+    var gaps = max(1, pairs - 1)
     for i in range(pairs):
-        var z = 0.2 + (-0.34 - 0.2) * Float64(i) / Float64(max(1, pairs - 1))
+        var z = 0.2 + (-0.34 - 0.2) * Float64(i) / Float64(gaps)
         var yb = 0.3 - 0.03 * belly + 0.008 * abs(z + 0.08) * 4.0 * 0.3 + tuck
-        var x = 0.052 + 0.01 * cos(
-            (Float64(i) / Float64(pairs - 1) - 0.5) * 2.0
-        )
+        var x = 0.052 + 0.01 * cos((Float64(i) / Float64(gaps) - 0.5) * 2.0)
         var bone = "spine3" if z > 0.05 else (
             "spine1" if z < -0.2 else "spine2"
         )
