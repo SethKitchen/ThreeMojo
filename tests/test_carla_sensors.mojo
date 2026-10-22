@@ -485,6 +485,20 @@ def test_semantic_lidar_edges() raises:
     assert_equal(round_half_from_zero(-2.4), -2)
 
 
+def test_a_lidar_channel_count_this_port_cannot_cast_is_refused() raises:
+    var d = LidarDescription()
+    d.channels = 16777217
+    with assert_raises(contains="larger than this port"):
+        d.validate()
+    with assert_raises(contains="larger than this port"):
+        _ = d.laser_angles()
+    d.channels = Int.MAX
+    with assert_raises(contains="larger than this port"):
+        _ = d.laser_angles()
+    d.channels = 1
+    assert_equal(len(d.laser_angles()), 1)
+
+
 def test_ray_cast_lidar_drops_as_carla_does() raises:
     var scene = _Planes(True, 10)
     var d = _lidar()
