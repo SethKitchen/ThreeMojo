@@ -54,6 +54,8 @@ An agent keeps the id of its vehicle. Each call takes the world, so the agent re
 3. A piece that leads to a lane with no piece gets an extra edge to a loose end. A loose end has a negative id.
 4. Where a lane mark lets a vehicle cross to a driving lane of the same road, an edge of weight zero joins the two pieces.
 
+The sampling resolution must be a finite distance more than zero. A step that does not move a waypoint is refused. A lane whose sample count passes 16777216 is refused.
+
 `trace_route` finds a minimum-cost route between the pieces under the two points. The cost is the sum of the graph's sample counts. Lane changes cost zero. This objective does not measure meters, travel time, or the number of lane changes. Changing the sampling resolution can change the preferred route.
 
 The search uses Dijkstra's algorithm, which is A* with a zero heuristic. CARLA's Euclidean heuristic is in meters. It can exceed the remaining sample-count cost, especially across zero-cost lane changes. It can therefore select a more costly route. This port deliberately removes that heuristic, while it keeps the graph costs.

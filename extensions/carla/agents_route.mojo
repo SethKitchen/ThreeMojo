@@ -10,7 +10,9 @@ finds routes on it.
 
 1. **Topology.** Each pair of the map's topology is a lane piece from an
    entry waypoint to an exit waypoint. The planner samples the piece every
-   `sampling_resolution`, and stops one resolution short of the exit.
+   `sampling_resolution`, and stops one resolution short of the exit. The
+   resolution must be a finite distance that moves a waypoint. A lane that
+   needs more than 16777216 samples is refused.
 2. **Graph.** Each entry and exit location, rounded to whole meters, is a
    node. Each piece is an edge whose weight is its number of samples plus
    one. An edge keeps the forward vectors at its ends, the unit vector
@@ -70,7 +72,7 @@ from extensions.carla.agents_misc import (
     OPTION_VOID,
     RoadOption,
 )
-from extensions.carla.map import Map, Waypoint
+from extensions.carla.map import EPSILON, Map, Waypoint
 from extensions.carla.road_info import CHANGE_LEFT, CHANGE_RIGHT, LANE_DRIVING
 from extensions.carla.search_queue import _MinCostQueue
 from extensions.carla.navigation_search import (
@@ -81,7 +83,7 @@ from extensions.carla.navigation_search import (
 )
 from math.vector3 import Vector3
 from std.ffi import external_call
-from std.math import floor, sqrt
+from std.math import floor, isfinite, sqrt
 from units.si import DEGREE, METER, RADIAN, Angle, Length
 
 # `math.radians(35)`.
@@ -90,6 +92,7 @@ comptime _INT32_MIN = -2147483648
 comptime _INT32_MAX = 2147483647
 comptime _MAX_ROUTE_COST = 9223372036854775807
 comptime _ROUTE_OVERFLOW = 9223372036854775808
+comptime _MAX_ROUTE_SAMPLES = 16777216
 
 
 @fieldwise_init
@@ -250,6 +253,12 @@ def _distance(a: Vector3, b: Vector3) -> Float64:
     return Float64(a.distance_to(b))
 
 
+def _require_route_samples(span: Float64, resolution: Float64) raises:
+    # The walk takes one sample about every resolution along the lane.
+    if not (span / resolution < Float64(_MAX_ROUTE_SAMPLES)):
+        raise Error("A route sample count is larger than this port drives")
+
+
 def _cross_z(a: Vector3, b: Vector3) -> Float64:
     return Float64(a.x) * Float64(b.y) - Float64(a.y) * Float64(b.x)
 
@@ -318,11 +327,18 @@ struct GlobalRoutePlanner(Movable):
             sampling_resolution: The spacing of the samples.
 
         Raises:
-            Error: If the resolution is not more than zero, or a map query
-                fails.
+            Error: If the resolution is not a finite distance more than
+                zero, does not move a waypoint, a lane needs more samples
+                than this port drives, or a map query fails.
         """
-        if not (sampling_resolution.value > 0.0):
-            raise Error("The sampling resolution must be more than zero")
+        var spacing = Float64(sampling_resolution.value)
+        if not isfinite(spacing) or not (spacing > 0.0):
+            raise Error(
+                "The sampling resolution must be a finite distance more than"
+                " zero"
+            )
+        if not (spacing > EPSILON):
+            raise Error("A route sample step must move the waypoint")
         self.sampling_resolution = sampling_resolution
         self._topology = List[_Segment]()
         self._nodes = List[_Node]()
@@ -357,6 +373,7 @@ struct GlobalRoutePlanner(Movable):
             if _distance(l1, l2) > res:
                 # The exit is more than one resolution away along the lane,
                 # so the first step stays on it.
+                _require_route_samples(map.road(pair[0].road_id).length, res)
                 var w = first[0]
                 while _distance(map.compute_transform(w).location, l2) > res:
                     segment.path.append(w)
@@ -448,6 +465,7 @@ struct GlobalRoutePlanner(Movable):
             self._road_id_to_edge[key] = (n1, n2)
             var path = List[Waypoint]()
             var nexts = map.next_meters(end, res)
+            _require_route_samples(map.road(end.road_id).length, res)
             while (
                 len(nexts) > 0
                 and nexts[0].road_id == end.road_id
