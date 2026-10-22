@@ -732,7 +732,7 @@ A count above 16777216 is refused.
 
 ### SSGI
 
-`ssgi_pass` is three.js's `SSGINode`. The composer draws its frame with a normal attachment while the pass is on. Each pixel with a surface cuts the hemisphere over it into `slice_count` slices. It walks `step_count` taps each way along each slice.
+`ssgi_pass` is three.js's `SSGINode`. The composer draws its frame with a normal attachment while the pass is on. Each pixel with a surface cuts the hemisphere over it into `slice_count` slices. It walks `step_count` taps each way along each slice. A slice count or a step count above 16777216 is refused.
 
 The angles to each tap's front and back cover some of 32 sectors. The sectors that a tap covers first occlude the pixel and send it the tap's light. The AO is the share of the sectors covered, to the power of `ao_intensity`. The light is scaled by `gi_intensity` and held at a luminance of seven. The temporal filter turns the slices and offsets the taps each frame, as three.js's `frameId` does.
 

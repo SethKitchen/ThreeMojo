@@ -123,6 +123,11 @@ struct SsgiSettings(ImplicitlyCopyable):
         self.denoise = False
 
 
+# A slice or a step index is a `Float32`. Past 16777216 it is no longer
+# that index, and a count of the maximum integer does not finish the march.
+comptime MAX_SSGI_TAPS = 16777216
+
+
 def check_ssgi(settings: SsgiSettings) raises:
     """Refuse settings no SSGI pass could run.
 
@@ -131,11 +136,18 @@ def check_ssgi(settings: SsgiSettings) raises:
 
     Raises:
         Error: If a count is below one, a number is not finite, the radius
-            or the step's growth is not positive, or the frame count is
-            negative.
+            or the step's growth is not positive, the frame count is
+            negative, or a slice or step count is above 16777216.
     """
     if settings.slice_count < 1 or settings.step_count < 1:
         raise Error("An SSGI pass needs a slice and a step")
+    if (
+        settings.slice_count > MAX_SSGI_TAPS
+        or settings.step_count > MAX_SSGI_TAPS
+    ):
+        raise Error(
+            "An SSGI slice or step count is larger than this port marches"
+        )
     var finite = (
         isfinite(settings.ao_intensity)
         and isfinite(settings.gi_intensity)
@@ -453,7 +465,8 @@ def ssgi_pixel(
     Returns:
         The indirect light in red, green and blue and the ambient
         occlusion in alpha: white with no light where the pixel holds no
-        surface, as three.js's target is cleared.
+        surface, as three.js's target is cleared. A slice or step count
+        above 16777216 returns no indirect light.
     """
     var w = inputs.width
     var h = inputs.height
@@ -462,6 +475,11 @@ def ssgi_pixel(
     var depth = inputs.depth(u, v)
     if depth >= 1:
         return FloatColor(1, 1, 1, 1)
+    if (
+        settings.slice_count > MAX_SSGI_TAPS
+        or settings.step_count > MAX_SSGI_TAPS
+    ):
+        return FloatColor(0, 0, 0, stored(1, UNSIGNED_BYTE_TARGET))
     var here = inputs.position(u, v, depth)
     var normal = inputs.normal(u, v)
     var view_dir = -here

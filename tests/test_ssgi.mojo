@@ -143,6 +143,18 @@ def test_the_settings_are_checked() raises:
         check_sss(off)
     with assert_raises(contains="a slice and a step"):
         _ = ssgi_pass(slice_count=0)
+    with assert_raises(contains="larger than this port"):
+        _ = ssgi_pass(slice_count=16777217)
+    with assert_raises(contains="larger than this port"):
+        _ = ssgi_pass(step_count=Int.MAX)
+    bad = SsgiSettings()
+    bad.step_count = 16777217
+    with assert_raises(contains="larger than this port"):
+        check_ssgi(bad)
+    bad = SsgiSettings()
+    bad.slice_count = Int.MAX
+    with assert_raises(contains="larger than this port"):
+        check_ssgi(bad)
     assert_true(ssgi_pass().kind == SSGI)
     assert_true(sss_pass().kind == SSS)
     # The frame carries normals for an SSGI, and velocities too when it
@@ -247,6 +259,21 @@ def test_the_crease_is_darkened_and_lit() raises:
     assert_true(lit > 0)
     # The sky has no surface: white, with no light.
     assert_equal(ssgi_pixel(inputs, 0, 0, settings).a, 1)
+    # A count the march cannot finish returns the unoccluded pixel.
+    var surface = -1
+    for slot in range(SIZE * SIZE):
+        if signal[slot].a < 1:
+            surface = slot
+            break
+    assert_true(surface >= 0)
+    var huge = SsgiSettings()
+    huge.step_count = Int.MAX
+    var stopped = ssgi_pixel(inputs, surface % SIZE, surface // SIZE, huge)
+    assert_equal(stopped.r, 0)
+    huge.step_count = 12
+    huge.slice_count = 16777217
+    stopped = ssgi_pixel(inputs, surface % SIZE, surface // SIZE, huge)
+    assert_equal(stopped.r, 0)
     # Every variant three.js has runs, and keeps the AO a share.
     var variants = List[SsgiSettings]()
     var world = SsgiSettings()
