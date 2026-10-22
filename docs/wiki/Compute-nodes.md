@@ -62,7 +62,7 @@ A `ComputeKernel` holds a `NodeGraph`, `kernel.graph`, and the statements built 
 | `workgroup_barrier()`, `storage_barrier()`, `texture_barrier()` | The three barriers |
 | `compute(count, workgroup_size)` | `.compute( count, [ workgroupSize ] )` |
 
-`compute` compiles the kernel to a `ComputeNode`. The workgroup size is 64 unless you set it. A node runs `count` invocations in workgroups along x. Change the count with `set_count`. Set a uniform with `node.program.set_uniform`.
+`compute` compiles the kernel to a `ComputeNode`. The workgroup size is 64 unless you set it. A node runs `count` invocations in workgroups along x. Change the count with `set_count`. Set a uniform with `node.program.set_uniform`. A count or a workgroup size that does not fit the dispatch is refused when the node runs.
 
 ## Statements
 

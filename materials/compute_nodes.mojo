@@ -460,6 +460,46 @@ def require_invocation_count(count: Int) raises:
     require_positive(count, "A compute node runs one invocation or more")
 
 
+def require_compute_dispatch(
+    count: Int, workgroup_size: Int, results: Int
+) raises:
+    """Refuse a compute dispatch this port cannot run.
+
+    Nothing. The call returns when the count is positive, the workgroup
+    holds one through 1024 invocations, the workgroup count fits, and the
+    kept values fit.
+
+    Args:
+        count: How many invocations run.
+        workgroup_size: How many invocations a workgroup has.
+        results: How many values each invocation keeps.
+
+    Returns:
+        Nothing.
+
+    Raises:
+        Error: If the count is not positive, the workgroup size is out of
+            range, or the dispatch does not fit in an integer.
+    """
+    require_invocation_count(count)
+    if workgroup_size <= 0 or workgroup_size > MAX_WORKGROUP_SIZE:
+        raise Error(
+            "A workgroup has one to "
+            + String(MAX_WORKGROUP_SIZE)
+            + " invocations"
+        )
+    # Rounding up wraps when the count sits in the last workgroup-sized
+    # span of the integer range, and the run then never finishes.
+    if count > Int.MAX - (workgroup_size - 1):
+        raise Error("A compute run is larger than this port runs")
+    if results < 0:
+        raise Error("A compute run is larger than this port runs")
+    if results > 0:
+        var stride = results * 4
+        if stride <= 0 or count > Int.MAX // stride:
+            raise Error("A compute run is larger than this port runs")
+
+
 struct ComputeKernel(Movable):
     """A compute program being built, three.js's `Fn( () => { ... } )`
     before `.compute( count )`: a `NodeGraph` for the values and the
@@ -2252,9 +2292,10 @@ def run_compute(mut store: StorageBufferStore, node: ComputeNode) raises:
         node: The node.
 
     Raises:
-        Error: If the store has no buffer the node names, or holds it as
-            another type.
+        Error: If the dispatch does not fit, or the store has no buffer
+            the node names, or holds it as another type.
     """
+    require_compute_dispatch(node.count, node.workgroup_size, node.results)
     var packed = pack_storage(store, node)
     var memory = packed[0].copy()
     var kept = List[Float32](

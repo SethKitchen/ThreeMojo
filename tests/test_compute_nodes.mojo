@@ -323,6 +323,41 @@ def test_the_latest_store_wins_and_a_barrier_starts_no_empty_step() raises:
     assert_equal(_floats(store, echo)[0], 2)
 
 
+def test_a_compute_dispatch_this_port_cannot_run_is_refused() raises:
+    var store = StorageBufferStore()
+    var data = store.instanced_array(1, NODE_FLOAT)
+    var kernel = ComputeKernel()
+    kernel.assign(data, kernel.graph.float(0), kernel.graph.float(1))
+    var node = kernel.compute(4, 64)
+    node.count = 0
+    with assert_raises(contains="one invocation"):
+        run_compute(store, node)
+    node.count = Int.MAX
+    with assert_raises(contains="larger than this port"):
+        run_compute(store, node)
+    node.count = Int.MAX // 4 + 1
+    node.results = 1
+    with assert_raises(contains="larger than this port"):
+        run_compute(store, node)
+    node.count = 4
+    node.workgroup_size = 0
+    with assert_raises(contains="workgroup"):
+        run_compute(store, node)
+    node.workgroup_size = 1025
+    with assert_raises(contains="workgroup"):
+        run_compute(store, node)
+    node.workgroup_size = 64
+    node.results = -1
+    with assert_raises(contains="larger than this port"):
+        run_compute(store, node)
+    node.results = 1 << 62
+    with assert_raises(contains="larger than this port"):
+        run_compute(store, node)
+    node.results = 1
+    run_compute(store, node)
+    assert_equal(_floats(store, data)[0], 1)
+
+
 def test_a_store_in_a_branch_is_kept_where_the_branch_runs() raises:
     var store = StorageBufferStore()
     var data = store.instanced_array([5, 5, 5, 5], NODE_FLOAT)

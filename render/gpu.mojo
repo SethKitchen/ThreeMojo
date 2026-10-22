@@ -535,6 +535,7 @@ from materials.compute_nodes import (
     StorageMemory,
     atomic_result,
     pack_storage,
+    require_compute_dispatch,
     run_statements,
     unpack_storage,
 )
@@ -13761,9 +13762,10 @@ struct GpuCompute(ComputeRunner, Movable):
             node: The node.
 
         Raises:
-            Error: If the store has no buffer the node names, or holds it
-                as another type.
+            Error: If the dispatch does not fit, or the store has no buffer
+                the node names, or holds it as another type.
         """
+        require_compute_dispatch(node.count, node.workgroup_size, node.results)
         var packed = pack_storage(store, node)
         ref memory = packed[0]
         ref regions = packed[1]
