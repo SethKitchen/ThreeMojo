@@ -18,7 +18,8 @@ crown's setback. It then writes a building model instead of a mesh:
   share a plan, so their walls stand on each other.
 - Outside walls get a window per bay, and rooms get doors.
 - A concrete frame stands on one column grid for every storey: columns
-  along the outside and the corridor lines, joined by beams.
+  along the outside and the corridor lines, joined by beams. A frame that
+  needs more than 16777216 columns along a line is refused.
 - Rooms get furniture from `furnish`.
 
 The skyscraper generator is a port of three.js and keeps its own output.
@@ -250,10 +251,16 @@ def generate_tower(options: TowerOptions) raises -> Building:
 
     Raises:
         Error: If the style or the plan options are not valid, the shaft's
-            program is not valid, or the footprint is too small for a plan.
+            program is not valid, the footprint is too small for a plan, or
+            the frame needs more columns than this port builds.
     """
     var p = options.parameters.copy()
     var style = SkyscraperStyle(p)
+    if options.frame:
+        var span = max(style.footprint_width, style.footprint_depth)
+        var step = 3 * style.bay_width
+        if not (span / step < Float64(16777216)):
+            raise Error("A tower frame is larger than this port builds")
     var corners = build_footprint(
         style.footprint_width,
         style.footprint_depth,

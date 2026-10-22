@@ -623,6 +623,18 @@ def _small(seed: Int, height: Float32) -> SkyscraperParameters:
     return p^
 
 
+def test_a_tower_frame_refuses_a_grid_it_cannot_build() raises:
+    var parameters = _small(1, 0.2)
+    parameters.floor_height = Length(Float32(1.8), METER)
+    parameters.bay_width = Length(Float32(1.8), METER)
+    parameters.footprint_width = Length(Float32(2e8), METER)
+    parameters.footprint_depth = Length(Float32(40), METER)
+    var options = TowerOptions(parameters^)
+    options.furnished = False
+    with assert_raises(contains="tower frame"):
+        _ = generate_tower(options)
+
+
 def test_a_small_tower_is_a_full_building() raises:
     var b = generate_tower(TowerOptions(_small(35, 16)))
     b.validate()
