@@ -5,7 +5,7 @@
 
 """Measure bounded search work and peak requested allocation bytes.
 
-Linux/ELF with pinned Mojo 1.1.0 for allocation measurements. Build navigation_allocations.c
+Linux/ELF with the pinned Mojo for allocation measurements. Build navigation_allocations.c
 as a shared library, load it with LD_PRELOAD, and pass its path here.
 Graph construction is outside each measurement. Assertions check work bounds.
 The allocation hook excludes allocator metadata and other threads.

@@ -541,7 +541,7 @@ def _parent(path: String) -> String:
 def _stride_worker() -> String:
     """Return the experimental fixed-stride worker's source."""
     return (
-        "async def _decode_worker[\n"
+        "__async def _decode_worker[\n"
         + "    Source: TextureDecodeSource\n"
         + "](\n"
         + "    source: Pointer[Source, ImmutAnyOrigin],\n"

@@ -40,13 +40,14 @@ from tools.bench_examples import (
     measure_command,
     measurement_label,
     merge_measurements,
-    mojo10_table,
     parse_arguments,
+    previous_table,
     py_strip,
     python_error,
     python_round,
     read_payload,
     refused_reason,
+    release_labels,
     replace_span,
     require_same_measurement_host,
     rss_line,
@@ -56,14 +57,22 @@ from tools.bench_examples import (
     this_platform,
     usage_text,
     help_text,
+    version_label,
     winner_name,
 )
 
 comptime HOST = (
-    '{"cpu": "Fixture CPU", "os": "Fixture OS", "mojo_1_1": "Mojo 1.1",'
-    ' "mojo_1_0": "", "python": "3.12", "node": "v22"}'
+    '{"cpu": "Fixture CPU", "os": "Fixture OS", "mojo_pinned": "Mojo 1.1",'
+    ' "mojo_previous": "", "python": "3.12", "node": "v22"}'
 )
-comptime HOST_KEYS = ["cpu", "os", "mojo_1_1", "mojo_1_0", "python", "node"]
+comptime HOST_KEYS = [
+    "cpu",
+    "os",
+    "mojo_pinned",
+    "mojo_previous",
+    "python",
+    "node",
+]
 comptime METRIC = (
     '{"ok": true, "seconds": 1.0, "rss_kib": 16, "status": 0, "output": ""}'
 )
@@ -134,8 +143,8 @@ struct FakeMachine(Machine):
         mut self,
         mut tree: JsonTree,
         mut state: State,
-        mojo11: String,
-        mojo10: String,
+        pinned: String,
+        previous: String,
     ) raises -> Int:
         """Return the fixture host."""
         return tree.parse(self.host_text)
@@ -161,7 +170,7 @@ def _example_text(name: String) -> String:
         + METRIC
         + '}, "threejs_flat": '
         + METRIC
-        + ', "threejs_webgl": null, "mojo10": null}'
+        + ', "threejs_webgl": null, "previous": null}'
     )
 
 
@@ -175,7 +184,7 @@ def _payload_text(date: String, rows: List[String]) -> String:
         + ', "examples": ['
         + ", ".join(rows)
         + '], "probe": {}, "baselines": {}, "threejs_webgl": false,'
-        + ' "mojo10_total": 0, "mojo10_refused": 0}'
+        + ' "previous_total": 0, "previous_refused": 0}'
     )
 
 
@@ -237,7 +246,7 @@ def test_host_and_toolchain_changes_or_missing_metadata_are_refused() raises:
 
 def test_unknown_identity_is_not_an_established_host_match() raises:
     var tree = JsonTree()
-    for key in ["cpu", "os", "mojo_1_1"]:
+    for key in ["cpu", "os", "mojo_pinned"]:
         for value in ["unknown", "missing", "not installed", " "]:
             var host = tree.parse(HOST)
             tree.set_text(host, key, value)
@@ -291,7 +300,7 @@ def test_aggregate_counts_follow_retained_and_replaced_rows() raises:
     var old = tree.parse(_payload_text("2026-09-01", [_example_text("cube")]))
     tree.set(
         _row(tree, old, 0),
-        "mojo10",
+        "previous",
         tree.parse('{"compile": ' + METRIC + ', "run": ' + METRIC + "}"),
     )
     tree.set_flag(old, "threejs_webgl", True)
@@ -299,11 +308,13 @@ def test_aggregate_counts_follow_retained_and_replaced_rows() raises:
         _payload_text("2026-10-01", [_example_text("triangle")])
     )
     tree.set(
-        _row(tree, fresh, 0), "mojo10", tree.parse('{"compile": {"ok": false}}')
+        _row(tree, fresh, 0),
+        "previous",
+        tree.parse('{"compile": {"ok": false}}'),
     )
     var merged = merge_measurements(tree, catalog, old, fresh)
-    assert_equal(tree.int_value(tree.item(merged, "mojo10_total")), 2)
-    assert_equal(tree.int_value(tree.item(merged, "mojo10_refused")), 1)
+    assert_equal(tree.int_value(tree.item(merged, "previous_total")), 2)
+    assert_equal(tree.int_value(tree.item(merged, "previous_refused")), 1)
     assert_false(tree.flag(tree.item(merged, "threejs_webgl")))
 
 
@@ -346,7 +357,7 @@ def test_draw_winner_uses_frame_time_and_refused_compiles_stay_out() raises:
     var refused = tree.parse(_example_text("spin"))
     tree.set(
         refused,
-        "mojo10",
+        "previous",
         tree.parse(
             '{"compile": {"ok": false, "seconds": 1.0}, "run": {"ok": false}}'
         ),
@@ -354,8 +365,12 @@ def test_draw_winner_uses_frame_time_and_refused_compiles_stay_out() raises:
     var refused_rows = tree.array()
     tree.append(refused_rows, refused)
     var probe = '{"compile": ' + METRIC + ', "run": ' + METRIC + "}"
-    var version = mojo10_table(
-        tree, tree.parse(probe), tree.parse(probe), refused_rows
+    var version = previous_table(
+        tree,
+        tree.parse(probe),
+        tree.parse(probe),
+        refused_rows,
+        ["1.2.0", "1.1.0"],
     )
     assert_true(version.find("`spin`") < 0)
     assert_true(version.find("Refused catalog rows: 1") >= 0)
@@ -445,7 +460,7 @@ def _run_main(incompatible: Bool) raises:
         "--only",
         "triangle",
         "--merge",
-        "--skip-mojo10",
+        "--skip-previous",
         "--skip-threejs",
         "--no-write-wiki",
     ]
@@ -560,7 +575,7 @@ def test_help_and_errors_match_argparse() raises:
         usage_text("bench_examples", 198),
         (
             "usage: bench_examples [-h] [--only ONLY] [--merge]"
-            " [--skip-threejs] [--skip-webgl] [--skip-mojo10] [--write-wiki]"
+            " [--skip-threejs] [--skip-webgl] [--skip-previous] [--write-wiki]"
             " [--no-write-wiki] [--from-results] [--platform {linux,macos}]\n"
         ),
     )
@@ -568,7 +583,7 @@ def test_help_and_errors_match_argparse() raises:
         parse_arguments(["--sk"]).error,
         (
             "ambiguous option: --sk could match --skip-threejs, --skip-webgl,"
-            " --skip-mojo10"
+            " --skip-previous"
         ),
     )
     assert_equal(
@@ -727,6 +742,34 @@ def test_spans_are_replaced_without_reading_backslashes() raises:
     )
 
 
+def test_release_labels_come_from_the_host_record() raises:
+    assert_equal(version_label("Mojo 1.2.0 (2016d0cd)", "pinned"), "1.2.0")
+    assert_equal(
+        version_label("Mojo 1.3.0.dev2026102205 (2016d0cd)", "pinned"),
+        "1.3.0.dev2026102205",
+    )
+    assert_equal(version_label("", "previous"), "previous")
+    assert_equal(version_label("unknown", "previous"), "previous")
+    var tree = JsonTree()
+    var named = release_labels(
+        tree,
+        tree.parse(
+            '{"host": {"mojo_pinned": "Mojo 1.2.0 (2016d0cd)",'
+            ' "mojo_previous": "Mojo 1.1.0 (8189361e)"}}'
+        ),
+    )
+    assert_equal(named[0], "1.2.0")
+    assert_equal(named[1], "1.1.0")
+    var unnamed = release_labels(
+        tree, tree.parse('{"host": {"mojo_pinned": null, "mojo_previous": ""}}')
+    )
+    assert_equal(unnamed[0], "pinned")
+    assert_equal(unnamed[1], "previous")
+    var bare = release_labels(tree, tree.parse("{}"))
+    assert_equal(bare[0], "pinned")
+    assert_equal(bare[1], "previous")
+
+
 # --- golden texts from tools/bench_examples.py ---------------------------------
 
 
@@ -737,8 +780,8 @@ comptime LINUX_RESULTS = (
     '    "os": "Linux 6",\n'
     '    "cpu": "Fixture CPU",\n'
     '    "python": "3.12.3",\n'
-    '    "mojo_1_1": "Mojo 1.1.0",\n'
-    '    "mojo_1_0": "",\n'
+    '    "mojo_pinned": "Mojo 1.2.0",\n'
+    '    "mojo_previous": "Mojo 1.1.0",\n'
     '    "node": "v22"\n'
     "  },\n"
     '  "threejs_webgl": true,\n'
@@ -756,10 +799,10 @@ comptime LINUX_RESULTS = (
     '      "status": 0\n'
     "    }\n"
     "  },\n"
-    '  "mojo10_refused": 1,\n'
-    '  "mojo10_total": 2,\n'
+    '  "previous_refused": 1,\n'
+    '  "previous_total": 2,\n'
     '  "probe": {\n'
-    '    "v11": {\n'
+    '    "pinned": {\n'
     '      "compile": {\n'
     '        "ok": true,\n'
     '        "seconds": 2.5,\n'
@@ -773,7 +816,7 @@ comptime LINUX_RESULTS = (
     '        "status": 0\n'
     "      }\n"
     "    },\n"
-    '    "v10": {\n'
+    '    "previous": {\n'
     '      "compile": {\n'
     '        "ok": true,\n'
     '        "seconds": 5.0,\n'
@@ -827,7 +870,7 @@ comptime LINUX_RESULTS = (
     '        "frames_seconds": 0.0021,\n'
     '        "backend": "webgl"\n'
     "      },\n"
-    '      "mojo10": {\n'
+    '      "previous": {\n'
     '        "compile": {\n'
     '          "ok": true,\n'
     '          "seconds": 13.4,\n'
@@ -876,7 +919,7 @@ comptime LINUX_RESULTS = (
     '        "status": 1,\n'
     '        "error": "no context"\n'
     "      },\n"
-    '      "mojo10": {\n'
+    '      "previous": {\n'
     '        "compile": {\n'
     '          "ok": false,\n'
     '          "seconds": 1.0,\n'
@@ -896,8 +939,8 @@ comptime MACOS_RESULTS = (
     '    "os": "Linux 6",\n'
     '    "cpu": "Fixture CPU",\n'
     '    "python": "3.12.3",\n'
-    '    "mojo_1_1": "Mojo 1.1.0",\n'
-    '    "mojo_1_0": "",\n'
+    '    "mojo_pinned": "Mojo 1.2.0",\n'
+    '    "mojo_previous": "Mojo 1.1.0",\n'
     '    "node": "v22"\n'
     "  },\n"
     '  "threejs_webgl": true,\n'
@@ -915,10 +958,10 @@ comptime MACOS_RESULTS = (
     '      "status": 0\n'
     "    }\n"
     "  },\n"
-    '  "mojo10_refused": 1,\n'
-    '  "mojo10_total": 2,\n'
+    '  "previous_refused": 1,\n'
+    '  "previous_total": 2,\n'
     '  "probe": {\n'
-    '    "v11": {\n'
+    '    "pinned": {\n'
     '      "compile": {\n'
     '        "ok": true,\n'
     '        "seconds": 2.5,\n'
@@ -932,7 +975,7 @@ comptime MACOS_RESULTS = (
     '        "status": 0\n'
     "      }\n"
     "    },\n"
-    '    "v10": {\n'
+    '    "previous": {\n'
     '      "compile": {\n'
     '        "ok": true,\n'
     '        "seconds": 5.0,\n'
@@ -986,7 +1029,7 @@ comptime MACOS_RESULTS = (
     '        "frames_seconds": 0.0021,\n'
     '        "backend": "webgl"\n'
     "      },\n"
-    '      "mojo10": {\n'
+    '      "previous": {\n'
     '        "compile": {\n'
     '          "ok": true,\n'
     '          "seconds": 13.4,\n'
@@ -1035,7 +1078,7 @@ comptime MACOS_RESULTS = (
     '        "status": 1,\n'
     '        "error": "no context"\n'
     "      },\n"
-    '      "mojo10": {\n'
+    '      "previous": {\n'
     '        "compile": {\n'
     '          "ok": false,\n'
     '          "seconds": 1.0,\n'
@@ -1058,8 +1101,8 @@ comptime WIKI_BEFORE = (
     "<!-- /BENCH:CROSS -->\n"
     "<!-- BENCH:HOST:linux -->x<!-- /BENCH:HOST:linux -->\n"
     "<!-- BENCH:EXAMPLES:linux --><!-- /BENCH:EXAMPLES:linux -->\n"
-    "<!-- BENCH:MOJO10:linux -->\n"
-    "<!-- /BENCH:MOJO10:linux -->\n"
+    "<!-- BENCH:PREVIOUS:linux -->\n"
+    "<!-- /BENCH:PREVIOUS:linux -->\n"
     "end\n"
 )
 comptime TABLES = (
@@ -1072,10 +1115,10 @@ comptime TABLES = (
     " per-row measurement date is unknown.\n\nDraw time is the frame loop"
     " inside the process.\nA gap under 10% is a tie.\ncpu-flat is a flat color"
     " fill with a depth test.\nWebGL is the three.js draw used for the language"
-    " comparison.\n\n| Program | 1.1 compile (s) | 1.0 compile (s) | Compile"
-    " winner | 1.1 run (s) | 1.0 run (s) | Run winner"
-    " |\n|---|---|---|---|---|---|---|\n| `probe` | 2.50 | 5.00 | 1.1 | 0.25 |"
-    " 0.26 | tie |\n| `triangle` | 4.50 | 13.4 | 1.1 | 0.013 | 0.013 | tie"
+    " comparison.\n\n| Program | 1.2.0 compile (s) | 1.1.0 compile (s) |"
+    " Compile winner | 1.2.0 run (s) | 1.1.0 run (s) | Run winner"
+    " |\n|---|---|---|---|---|---|---|\n| `probe` | 2.50 | 5.00 | 1.2.0 | 0.25"
+    " | 0.26 | tie |\n| `triangle` | 4.50 | 13.4 | 1.2.0 | 0.013 | 0.013 | tie"
     " |\n\nPrograms in this table: 2.\nRefused catalog rows: 1.\nA refused"
     " compile is not a faster compile.\nThose rows stay out of this"
     " table.\n\nUpdated docs/wiki/Benchmarks.md\n"
@@ -1090,49 +1133,50 @@ comptime WIKI_AFTER = (
     " WebGL.\n\nWhole-process time includes startup and writing the image.\nThe"
     " median ThreeMojo process takes 0.26 s.\nThe median WebGL process takes"
     " 0.090 s.\nA Mojo program that does nothing takes 0.012 s.\nA Node process"
-    " that does nothing takes 0.040 s.\nThe median Mojo 1.1 compile takes 8.25"
-    " s.\n\nMojo 1.0 runs 2 programs.\nRefused programs: 1.\nA refused compile"
-    " is not a faster compile.\nOn those programs, Mojo 1.1 compiles faster on"
-    " 2 of 2.\n\n2 runs are within 10%.\n\nThe catalog lists 3 examples.\nThis"
-    " host measures 2 of them.\n<!-- /BENCH:SCORE:linux -->\n<!-- BENCH:CROSS"
-    " -->\nFor these saved runs, the median Linux/macOS whole-process time"
-    " ratio is 0.75.\nThe median Linux/macOS compile-time ratio is 2.0.\nEach"
-    " ratio is Linux time divided by macOS time.\n\nThe Linux date is"
-    " 2026-10-01. The macOS date is 2026-09-01.\nThe source and software can"
-    " differ between these snapshots.\nThese ratios do not isolate hardware"
-    " speed.\nThe comparison uses 2 shared examples.\n<!-- /BENCH:CROSS"
-    " -->\n<!-- BENCH:HOST:linux -->\n- Latest refresh: `2026-10-01`\n- OS:"
-    " Linux 6\n- CPU: Fixture CPU\n- Mojo 1.1: `Mojo 1.1.0`\n- Mojo 1.0: `not"
-    " installed`\n- Node: `v22`\n- three.js backends: `cpu-flat` and `webgl`\n-"
-    " A Mojo program that does nothing: `0.012` s\n- A Node process that does"
-    " nothing: `0.040` s\n<!-- /BENCH:HOST:linux -->\n<!-- BENCH:EXAMPLES:linux"
-    " -->\n| Example | Size | Frames | Compile (s) | Mojo draw (s) | cpu-flat"
-    " draw (s) | WebGL draw (s) | Draw winner | Mojo RSS (MiB) | Measured"
-    " |\n|---|---|---|---|---|---|---|---|---|---|\n| `triangle` | 32×24 | 2 |"
-    " 4.50 | 0.002 | 0.009 | 0.002 | tie | 2 | 2026-10-01 |\n| `cube` | 32×24 |"
-    " 2 | 12.0 | 0.40 | 0.050 | unavailable | cpu-flat | 98 | unknown (legacy:"
-    " 2026-10-01) |\n\nA legacy date is from an older aggregate file; its"
-    " per-row measurement date is unknown.\n\nDraw time is the frame loop"
-    " inside the process.\nA gap under 10% is a tie.\ncpu-flat is a flat color"
-    " fill with a depth test.\nWebGL is the three.js draw used for the language"
-    " comparison.\n<!-- /BENCH:EXAMPLES:linux -->\n<!-- BENCH:MOJO10:linux"
-    " -->\n| Program | 1.1 compile (s) | 1.0 compile (s) | Compile winner | 1.1"
-    " run (s) | 1.0 run (s) | Run winner |\n|---|---|---|---|---|---|---|\n|"
-    " `probe` | 2.50 | 5.00 | 1.1 | 0.25 | 0.26 | tie |\n| `triangle` | 4.50 |"
-    " 13.4 | 1.1 | 0.013 | 0.013 | tie |\n\nPrograms in this table: 2.\nRefused"
+    " that does nothing takes 0.040 s.\nThe median Mojo 1.2.0 compile takes"
+    " 8.25 s.\n\nMojo 1.1.0 runs 2 programs.\nRefused programs: 1.\nA refused"
+    " compile is not a faster compile.\nOn those programs, Mojo 1.2.0 compiles"
+    " faster on 2 of 2.\n\n2 runs are within 10%.\n\nThe catalog lists 3"
+    " examples.\nThis host measures 2 of them.\n<!-- /BENCH:SCORE:linux"
+    " -->\n<!-- BENCH:CROSS -->\nFor these saved runs, the median Linux/macOS"
+    " whole-process time ratio is 0.75.\nThe median Linux/macOS compile-time"
+    " ratio is 2.0.\nEach ratio is Linux time divided by macOS time.\n\nThe"
+    " Linux date is 2026-10-01. The macOS date is 2026-09-01.\nThe source and"
+    " software can differ between these snapshots.\nThese ratios do not isolate"
+    " hardware speed.\nThe comparison uses 2 shared examples.\n<!--"
+    " /BENCH:CROSS -->\n<!-- BENCH:HOST:linux -->\n- Latest refresh:"
+    " `2026-10-01`\n- OS: Linux 6\n- CPU: Fixture CPU\n- Mojo: `Mojo 1.2.0`\n-"
+    " Previous Mojo: `Mojo 1.1.0`\n- Node: `v22`\n- three.js backends:"
+    " `cpu-flat` and `webgl`\n- A Mojo program that does nothing: `0.012` s\n-"
+    " A Node process that does nothing: `0.040` s\n<!-- /BENCH:HOST:linux"
+    " -->\n<!-- BENCH:EXAMPLES:linux -->\n| Example | Size | Frames | Compile"
+    " (s) | Mojo draw (s) | cpu-flat draw (s) | WebGL draw (s) | Draw winner |"
+    " Mojo RSS (MiB) | Measured |\n|---|---|---|---|---|---|---|---|---|---|\n|"
+    " `triangle` | 32×24 | 2 | 4.50 | 0.002 | 0.009 | 0.002 | tie | 2 |"
+    " 2026-10-01 |\n| `cube` | 32×24 | 2 | 12.0 | 0.40 | 0.050 | unavailable |"
+    " cpu-flat | 98 | unknown (legacy: 2026-10-01) |\n\nA legacy date is from"
+    " an older aggregate file; its per-row measurement date is unknown.\n\nDraw"
+    " time is the frame loop inside the process.\nA gap under 10% is a"
+    " tie.\ncpu-flat is a flat color fill with a depth test.\nWebGL is the"
+    " three.js draw used for the language comparison.\n<!--"
+    " /BENCH:EXAMPLES:linux -->\n<!-- BENCH:PREVIOUS:linux -->\n| Program |"
+    " 1.2.0 compile (s) | 1.1.0 compile (s) | Compile winner | 1.2.0 run (s) |"
+    " 1.1.0 run (s) | Run winner |\n|---|---|---|---|---|---|---|\n| `probe` |"
+    " 2.50 | 5.00 | 1.2.0 | 0.25 | 0.26 | tie |\n| `triangle` | 4.50 | 13.4 |"
+    " 1.2.0 | 0.013 | 0.013 | tie |\n\nPrograms in this table: 2.\nRefused"
     " catalog rows: 1.\nA refused compile is not a faster compile.\nThose rows"
-    " stay out of this table.\n<!-- /BENCH:MOJO10:linux -->\nend\n"
+    " stay out of this table.\n<!-- /BENCH:PREVIOUS:linux -->\nend\n"
 )
 
 comptime HELP_60 = (
     "usage: bench_examples [-h] [--only ONLY] [--merge]\n"
     "                      [--skip-threejs] [--skip-webgl]\n"
-    "                      [--skip-mojo10] [--write-wiki]\n"
+    "                      [--skip-previous] [--write-wiki]\n"
     "                      [--no-write-wiki] [--from-results]\n"
     "                      [--platform {linux,macos}]\n"
     "\n"
     "Time cataloged examples against three.js and, when\n"
-    "present, Mojo 1.0.\n"
+    "present, the previous Mojo.\n"
     "\n"
     "options:\n"
     "  -h, --help            show this help message and exit\n"
@@ -1143,7 +1187,7 @@ comptime HELP_60 = (
     "  --skip-threejs        Skip the three.js runner\n"
     "  --skip-webgl          Time cpu-flat only. Use this when\n"
     "                        the host has no GPU.\n"
-    "  --skip-mojo10         Skip the Mojo 1.0 comparison\n"
+    "  --skip-previous       Skip the previous Mojo comparison\n"
     "  --write-wiki          Update docs/wiki/Benchmarks.md\n"
     "                        tables\n"
     "  --no-write-wiki\n"

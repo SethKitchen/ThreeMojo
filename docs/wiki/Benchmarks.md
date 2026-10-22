@@ -2,7 +2,7 @@
 
 This page records CPU compile time, draw time and peak memory for `bench/catalog.json`.
 The same size and frame count run in three.js.
-Mojo 1.0 is compared when that compiler is installed.
+The previous Mojo release is compared when that compiler is installed.
 
 The draw column names the faster frame loop.
 Whole-process time is summarized, because startup can hide the draw.
@@ -49,16 +49,16 @@ The median ThreeMojo process takes 0.16 s.
 The median cpu-flat process takes 0.100 s.
 A Mojo program that does nothing takes 0.009 s.
 A Node process that does nothing takes 0.021 s.
-The median Mojo 1.1 compile takes 46.2 s.
+The median Mojo 1.1.0 compile takes 46.2 s.
 
-Mojo 1.0 runs 6 programs.
+Mojo 1.0.0 runs 6 programs.
 Refused programs: 71.
 A refused compile is not a faster compile.
-On those programs, Mojo 1.1 compiles faster on 5 of 6.
+On those programs, Mojo 1.1.0 compiles faster on 5 of 6.
 1 compile is within 10%.
 
-Mojo 1.1 runs faster on 1 of 6.
-Mojo 1.0 runs faster on 1 of 6.
+Mojo 1.1.0 runs faster on 1 of 6.
+Mojo 1.0.0 runs faster on 1 of 6.
 4 runs are within 10%.
 
 The catalog lists 76 examples.
@@ -79,14 +79,14 @@ The median ThreeMojo process takes 0.058 s.
 The median WebGL process takes 0.099 s.
 A Mojo program that does nothing takes 0.010 s.
 A Node process that does nothing takes 0.023 s.
-The median Mojo 1.1 compile takes 8.79 s.
+The median Mojo 1.1.0 compile takes 8.79 s.
 
-Mojo 1.0 runs 5 programs.
+Mojo 1.0.0 runs 5 programs.
 Refused programs: 57.
 A refused compile is not a faster compile.
-On those programs, Mojo 1.1 compiles faster on 5 of 5.
+On those programs, Mojo 1.1.0 compiles faster on 5 of 5.
 
-Mojo 1.1 runs faster on 4 of 5.
+Mojo 1.1.0 runs faster on 4 of 5.
 1 run is within 10%.
 
 The catalog lists 76 examples.
@@ -114,8 +114,8 @@ The comparison uses 61 shared examples.
 - Latest refresh: `2026-10-07`
 - OS: Linux 6.12.94+
 - CPU: Intel(R) Xeon(R) Processor
-- Mojo 1.1: `Mojo 1.1.0 (8189361e)`
-- Mojo 1.0: `Mojo 1.0.0 (ed45d567)`
+- Mojo: `Mojo 1.1.0 (8189361e)`
+- Previous Mojo: `Mojo 1.0.0 (ed45d567)`
 - Node: `v22.14.0`
 - three.js backends: `cpu-flat` (`webgl` did not run)
 - A Mojo program that does nothing: `0.009` s
@@ -128,8 +128,8 @@ The comparison uses 61 shared examples.
 - Latest refresh: `2026-09-26`
 - OS: macOS 26.7 (arm64)
 - CPU: Apple M4 Max, 16 cores
-- Mojo 1.1: `Mojo 1.1.0 (8189361e)`
-- Mojo 1.0: `Mojo 1.0.0 (ed45d567)`
+- Mojo: `Mojo 1.1.0 (8189361e)`
+- Previous Mojo: `Mojo 1.0.0 (ed45d567)`
 - Node: `v24.20.0`
 - three.js backends: `cpu-flat` and `webgl`
 - A Mojo program that does nothing: `0.010` s
@@ -318,45 +318,46 @@ cpu-flat is a flat color fill with a depth test.
 WebGL is the three.js draw used for the language comparison.
 <!-- /BENCH:EXAMPLES:macos -->
 
-## Mojo 1.1 against Mojo 1.0
+## The pinned Mojo against the previous release
 
 The table lists only programs both compilers run.
+The column names give the version of each compiler on that host.
 A refused compile is not a faster compile.
 
 ### Linux
 
-<!-- BENCH:MOJO10:linux -->
-| Program | 1.1 compile (s) | 1.0 compile (s) | Compile winner | 1.1 run (s) | 1.0 run (s) | Run winner |
+<!-- BENCH:PREVIOUS:linux -->
+| Program | 1.1.0 compile (s) | 1.0.0 compile (s) | Compile winner | 1.1.0 run (s) | 1.0.0 run (s) | Run winner |
 |---|---|---|---|---|---|---|
 | `probe` | 3.22 | 3.31 | tie | 0.059 | 0.058 | tie |
-| `triangle` | 5.03 | 13.4 | 1.1 | 0.013 | 0.013 | tie |
-| `spin` | 4.93 | 11.1 | 1.1 | 0.025 | 0.027 | 1.1 |
-| `cube` | 7.15 | 12.0 | 1.1 | 0.057 | 0.061 | tie |
-| `edges` | 6.10 | 19.1 | 1.1 | 0.16 | 0.10 | 1.0 |
-| `diagram` | 12.8 | 16.9 | 1.1 | 0.069 | 0.072 | tie |
+| `triangle` | 5.03 | 13.4 | 1.1.0 | 0.013 | 0.013 | tie |
+| `spin` | 4.93 | 11.1 | 1.1.0 | 0.025 | 0.027 | 1.1.0 |
+| `cube` | 7.15 | 12.0 | 1.1.0 | 0.057 | 0.061 | tie |
+| `edges` | 6.10 | 19.1 | 1.1.0 | 0.16 | 0.10 | 1.0.0 |
+| `diagram` | 12.8 | 16.9 | 1.1.0 | 0.069 | 0.072 | tie |
 
 Programs in this table: 6.
 Refused catalog rows: 71.
 A refused compile is not a faster compile.
 Those rows stay out of this table.
-<!-- /BENCH:MOJO10:linux -->
+<!-- /BENCH:PREVIOUS:linux -->
 
 ### macOS
 
-<!-- BENCH:MOJO10:macos -->
-| Program | 1.1 compile (s) | 1.0 compile (s) | Compile winner | 1.1 run (s) | 1.0 run (s) | Run winner |
+<!-- BENCH:PREVIOUS:macos -->
+| Program | 1.1.0 compile (s) | 1.0.0 compile (s) | Compile winner | 1.1.0 run (s) | 1.0.0 run (s) | Run winner |
 |---|---|---|---|---|---|---|
-| `probe` | 0.34 | 3.19 | 1.1 | 0.025 | 0.029 | 1.1 |
-| `triangle` | 1.39 | 6.53 | 1.1 | 0.012 | 0.011 | tie |
-| `spin` | 1.37 | 6.65 | 1.1 | 0.014 | 0.018 | 1.1 |
-| `cube` | 2.33 | 7.65 | 1.1 | 0.026 | 0.034 | 1.1 |
-| `edges` | 1.30 | 6.25 | 1.1 | 0.030 | 0.042 | 1.1 |
+| `probe` | 0.34 | 3.19 | 1.1.0 | 0.025 | 0.029 | 1.1.0 |
+| `triangle` | 1.39 | 6.53 | 1.1.0 | 0.012 | 0.011 | tie |
+| `spin` | 1.37 | 6.65 | 1.1.0 | 0.014 | 0.018 | 1.1.0 |
+| `cube` | 2.33 | 7.65 | 1.1.0 | 0.026 | 0.034 | 1.1.0 |
+| `edges` | 1.30 | 6.25 | 1.1.0 | 0.030 | 0.042 | 1.1.0 |
 
 Programs in this table: 5.
 Refused catalog rows: 57.
 A refused compile is not a faster compile.
 Those rows stay out of this table.
-<!-- /BENCH:MOJO10:macos -->
+<!-- /BENCH:PREVIOUS:macos -->
 
 ## PMREM and the coverage run
 

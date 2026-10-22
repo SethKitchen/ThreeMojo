@@ -4,7 +4,7 @@
 # Mojo toolchain, installed per-checkout by `uv pip install mojo`.
 # The README covers recreating it; it must never be committed.
 .venv/
-.venv-mojo10/
+.venv-previous/
 
 # Instrumented copies of the sources, plus the manifest and captured probe
 # records. Regenerated from scratch by every `make coverage`.

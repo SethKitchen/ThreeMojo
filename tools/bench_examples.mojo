@@ -3,10 +3,10 @@
 # Noncommercial use is free; commercial use requires a paid license.
 # See LICENSE, LICENSE-COMMERCIAL.md and THIRD-PARTY-NOTICES.md.
 
-"""Time cataloged examples against three.js and, when present, Mojo 1.0.
+"""Time cataloged examples against three.js and the previous Mojo release.
 
     sh tools/tool.sh .venv/bin/mojo bench_examples [--only NAMES] [--merge]
-        [--skip-threejs] [--skip-webgl] [--skip-mojo10] [--no-write-wiki]
+        [--skip-threejs] [--skip-webgl] [--skip-previous] [--no-write-wiki]
         [--from-results] [--platform {linux,macos}]
 
 The tool replaces `tools/bench_examples.py`. It reads `bench/catalog.json`
@@ -60,7 +60,8 @@ comptime HOST_MISMATCH = (
 )
 """The refusal of a merge across hosts or toolchains."""
 comptime DESCRIPTION = (
-    "Time cataloged examples against three.js and, when present, Mojo 1.0."
+    "Time cataloged examples against three.js and, when present, the"
+    " previous Mojo."
 )
 """The help description, as the Python tool's `argparse` showed it."""
 
@@ -798,7 +799,7 @@ struct Pair(Copyable, Movable):
     """Two times, each of which can be missing."""
 
     var left: Optional[Float64]
-    """The ThreeMojo or Mojo 1.1 time."""
+    """The ThreeMojo or pinned Mojo time."""
     var right: Optional[Float64]
     """The other time."""
 
@@ -1504,16 +1505,16 @@ trait Machine:
         mut self,
         mut tree: JsonTree,
         mut state: State,
-        mojo11: String,
-        mojo10: String,
+        pinned: String,
+        previous: String,
     ) raises -> Int:
         """Return the host and toolchain record.
 
         Args:
             tree: The tree for the record.
             state: The run's paths and caches.
-            mojo11: The Mojo 1.1 compiler, or empty.
-            mojo10: The Mojo 1.0 compiler, or empty.
+            pinned: The pinned Mojo compiler, or empty.
+            previous: The previous release's compiler, or empty.
 
         Returns:
             The record dict.
@@ -1660,16 +1661,16 @@ struct System(Machine):
         mut self,
         mut tree: JsonTree,
         mut state: State,
-        mojo11: String,
-        mojo10: String,
+        pinned: String,
+        previous: String,
     ) raises -> Int:
         """Return the host and toolchain record.
 
         Args:
             tree: The tree for the record.
             state: The run's paths and caches.
-            mojo11: The Mojo 1.1 compiler, or empty.
-            mojo10: The Mojo 1.0 compiler, or empty.
+            pinned: The pinned Mojo compiler, or empty.
+            previous: The previous release's compiler, or empty.
 
         Returns:
             The record dict.
@@ -1677,7 +1678,7 @@ struct System(Machine):
         Raises:
             Error: If a version query cannot start.
         """
-        return host_info(self, tree, state, mojo11, mojo10)
+        return host_info(self, tree, state, pinned, previous)
 
     def out(mut self, text: String):
         """Write text to the standard output.
@@ -1734,7 +1735,7 @@ def _home() -> String:
 
 
 def which_mojo(default: String) -> String:
-    """Return the Mojo 1.1 compiler, or empty.
+    """Return the pinned Mojo compiler, or empty.
 
     Args:
         default: The pinned compiler in `.venv/`.
@@ -1971,6 +1972,52 @@ def mojo_version[M: Machine](mut machine: M, binary: String) raises -> String:
     )
 
 
+def version_label(version: String, fallback: String) -> String:
+    """Return the number in a compiler version line.
+
+    Args:
+        version: The line that `mojo --version` prints, such as
+            `Mojo 1.2.0 (2016d0cd)`, or empty.
+        fallback: The label when the line holds no number.
+
+    Returns:
+        The first word that starts with a digit, such as `1.2.0`, else the
+        fallback.
+    """
+    for word in version.split():
+        var bytes = word.as_bytes()
+        if bytes[0] >= 48 and bytes[0] <= 57:
+            return String(word)
+    return fallback
+
+
+def release_labels(mut tree: JsonTree, payload: Int) raises -> List[String]:
+    """Return the labels of the pinned and the previous Mojo release.
+
+    Args:
+        tree: The tree.
+        payload: The results.
+
+    Returns:
+        Two labels, the pinned release first. A release that the host record
+        does not name gets `pinned` or `previous`.
+
+    Raises:
+        Error: If the host record is malformed.
+    """
+    var host = _or_empty(tree, tree.get(payload, "host"))
+    var labels = List[String]()
+    for key in ["mojo_pinned", "mojo_previous"]:
+        var version = tree.get(host, key)
+        labels.append(
+            version_label(
+                tree.text(version) if tree.kind(version) == STRING else "",
+                "pinned" if key == "mojo_pinned" else "previous",
+            )
+        )
+    return labels^
+
+
 def _uname() -> List[String]:
     """Return `uname` as system, node, release, version and machine."""
     var buffer = List[UInt8](length=2048, fill=0)
@@ -2099,8 +2146,8 @@ def host_info[
     mut machine: M,
     mut tree: JsonTree,
     mut state: State,
-    mojo11: String,
-    mojo10: String,
+    pinned: String,
+    previous: String,
 ) raises -> Int:
     """Return the host and toolchain record.
 
@@ -2111,11 +2158,11 @@ def host_info[
         machine: The host.
         tree: The tree for the record.
         state: The run's paths and caches.
-        mojo11: The Mojo 1.1 compiler, or empty.
-        mojo10: The Mojo 1.0 compiler, or empty.
+        pinned: The pinned Mojo compiler, or empty.
+        previous: The previous release's compiler, or empty.
 
     Returns:
-        `os`, `cpu`, `python`, `mojo_1_1`, `mojo_1_0` and `node`.
+        `os`, `cpu`, `python`, `mojo_pinned`, `mojo_previous` and `node`.
 
     Raises:
         Error: If a version query cannot start.
@@ -2134,34 +2181,34 @@ def host_info[
     tree.set_text(record, "python", python_version(machine))
     tree.set_text(
         record,
-        "mojo_1_1",
-        mojo_version(machine, mojo11) if mojo11.byte_length() > 0 else "",
+        "mojo_pinned",
+        mojo_version(machine, pinned) if pinned.byte_length() > 0 else "",
     )
     tree.set_text(
         record,
-        "mojo_1_0",
-        mojo_version(machine, mojo10) if mojo10.byte_length() > 0 else "",
+        "mojo_previous",
+        mojo_version(machine, previous) if previous.byte_length() > 0 else "",
     )
     tree.set_text(record, "node", node_ver)
     return record
 
 
-def find_mojo10(root: String) -> String:
-    """Return the Mojo 1.0 compiler, or empty.
+def find_previous(root: String) -> String:
+    """Return the previous release's compiler, or empty.
 
     Args:
         root: The repository root.
 
     Returns:
-        `MOJO_1_0`, `.venv-mojo10/bin/mojo` or `~/.venvs/mojo10/bin/mojo`,
-        whichever is a file first.
+        `MOJO_PREVIOUS`, `.venv-previous/bin/mojo` or
+        `~/.venvs/previous/bin/mojo`, whichever is a file first.
     """
     var candidates = List[String]()
-    var env = environment_value("MOJO_1_0")
+    var env = environment_value("MOJO_PREVIOUS")
     if env and env.value().byte_length() > 0:
         candidates.append(_normalize(env.value()))
-    candidates.append(root + "/.venv-mojo10/bin/mojo")
-    candidates.append(_join(_home(), ".venvs/mojo10/bin/mojo"))
+    candidates.append(root + "/.venv-previous/bin/mojo")
+    candidates.append(_join(_home(), ".venvs/previous/bin/mojo"))
     for path in candidates:
         if isfile(path):
             return path
@@ -2680,8 +2727,8 @@ def same_measurement_host(
         host: The new host record.
 
     Returns:
-        True when the old host names its CPU, OS and Mojo 1.1, and equals
-        the new host.
+        True when the old host names its CPU, OS and pinned Mojo, and
+        equals the new host.
 
     Raises:
         Error: If a value is not in the tree.
@@ -2691,7 +2738,7 @@ def same_measurement_host(
         old = tree.get(previous, "host")
     if tree.kind(old) != OBJECT:
         return False
-    for key in ["cpu", "os", "mojo_1_1"]:
+    for key in ["cpu", "os", "mojo_pinned"]:
         var value = tree.get(old, key)
         if tree.kind(value) != STRING:
             return False
@@ -2793,7 +2840,7 @@ def merge_measurements(
     var total = 0
     var refused = 0
     for row in tree.items(examples):
-        var version = tree.get(row, "mojo10")
+        var version = tree.get(row, "previous")
         if not tree.truthy(version):
             continue
         total += 1
@@ -2802,8 +2849,8 @@ def merge_measurements(
             compiled = version
         if not _truthy_get(tree, compiled, "ok"):
             refused += 1
-    tree.set(merged, "mojo10_total", tree.integer(total))
-    tree.set(merged, "mojo10_refused", tree.integer(refused))
+    tree.set(merged, "previous_total", tree.integer(total))
+    tree.set(merged, "previous_refused", tree.integer(refused))
     return merged
 
 
@@ -2956,10 +3003,14 @@ def _both_ran(mut tree: JsonTree, left: Int, right: Int) raises -> Bool:
     return left_ok and right_ok
 
 
-def _mojo10_row(
-    mut tree: JsonTree, name: String, left: Int, right: Int
+def _previous_row(
+    mut tree: JsonTree,
+    name: String,
+    left: Int,
+    right: Int,
+    labels: List[String],
 ) raises -> String:
-    """Return one row of the Mojo 1.0 table."""
+    """Return one row of the previous-release table."""
     var l = _or_empty(tree, left)
     var r = _or_empty(tree, right)
     var left_c = good_seconds(tree, tree.get(l, "compile"))
@@ -2974,27 +3025,32 @@ def _mojo10_row(
         + " | "
         + fmt_s(right_c)
         + " | "
-        + winner_name(left_c, right_c, "1.1", "1.0")
+        + winner_name(left_c, right_c, labels[0], labels[1])
         + " | "
         + fmt_s(left_r)
         + " | "
         + fmt_s(right_r)
         + " | "
-        + winner_name(left_r, right_r, "1.1", "1.0")
+        + winner_name(left_r, right_r, labels[0], labels[1])
         + " |"
     )
 
 
-def mojo10_table(
-    mut tree: JsonTree, probe11: Int, probe10: Int, examples: Int
+def previous_table(
+    mut tree: JsonTree,
+    probe_pinned: Int,
+    probe_previous: Int,
+    examples: Int,
+    labels: List[String],
 ) raises -> String:
-    """Return the Mojo 1.1 against Mojo 1.0 table.
+    """Return the pinned Mojo against previous release table.
 
     Args:
         tree: The tree.
-        probe11: The Mojo 1.1 probe.
-        probe10: The Mojo 1.0 probe, or `None`.
+        probe_pinned: The pinned Mojo probe.
+        probe_previous: The previous release's probe, or `None`.
         examples: The example rows.
+        labels: The pinned and previous release labels.
 
     Returns:
         The Markdown table and its counts.
@@ -3004,29 +3060,39 @@ def mojo10_table(
     """
     var lines: List[String] = [
         (
-            "| Program | 1.1 compile (s) | 1.0 compile (s) | Compile winner |"
-            " 1.1 run (s) | 1.0 run (s) | Run winner |"
+            "| Program | "
+            + labels[0]
+            + " compile (s) | "
+            + labels[1]
+            + " compile (s) | Compile winner | "
+            + labels[0]
+            + " run (s) | "
+            + labels[1]
+            + " run (s) | Run winner |"
         ),
         "|---|---|---|---|---|---|---|",
     ]
     var ran = 0
     var refused = 0
-    if _both_ran(tree, probe11, probe10):
-        lines.append(_mojo10_row(tree, "probe", probe11, probe10))
+    if _both_ran(tree, probe_pinned, probe_previous):
+        lines.append(
+            _previous_row(tree, "probe", probe_pinned, probe_previous, labels)
+        )
         ran += 1
-    elif tree.is_null(probe10):
+    elif tree.is_null(probe_previous):
         lines.append("| `probe` | — | not installed | — | — | — | — |")
     else:
         refused += 1
     for row in _list(tree, examples):
-        var version = tree.get(row, "mojo10")
+        var version = tree.get(row, "previous")
         if _both_ran(tree, tree.get(row, "threemojo"), version):
             lines.append(
-                _mojo10_row(
+                _previous_row(
                     tree,
                     py_str(tree, tree.item(row, "name")),
                     tree.item(row, "threemojo"),
                     version,
+                    labels,
                 )
             )
             ran += 1
@@ -3080,6 +3146,7 @@ def score_report(
     if not tree.truthy(rows):
         rows = tree.array()
     var lines: List[String] = ["### " + platform_title(platform_key), ""]
+    var labels = release_labels(tree, payload)
     var webgl_ok = _truthy_get(tree, payload, "threejs_webgl")
     var language_key = "threejs_webgl" if webgl_ok else "threejs_flat"
     var language_name = "WebGL" if webgl_ok else "cpu-flat"
@@ -3233,22 +3300,26 @@ def score_report(
     var compile_med = median(compiles)
     if compile_med:
         lines.append(
-            "The median Mojo 1.1 compile takes " + fmt_s(compile_med) + " s."
+            "The median Mojo "
+            + labels[0]
+            + " compile takes "
+            + fmt_s(compile_med)
+            + " s."
         )
     lines.append("")
     var version_c = List[Pair]()
     var version_r = List[Pair]()
     var refused = 0
     var probes = _or_empty(tree, tree.get(payload, "probe"))
-    var probe10 = tree.get(probes, "v10")
-    var probe11 = tree.get(probes, "v11")
+    var probe_previous = tree.get(probes, "previous")
+    var probe_pinned = tree.get(probes, "pinned")
     var lefts = List[Int]()
     var rights = List[Int]()
-    if tree.truthy(probe11) or tree.truthy(probe10):
-        lefts.append(probe11)
-        rights.append(probe10)
+    if tree.truthy(probe_pinned) or tree.truthy(probe_previous):
+        lefts.append(probe_pinned)
+        rights.append(probe_previous)
     for row in _list(tree, rows):
-        var version = tree.get(row, "mojo10")
+        var version = tree.get(row, "previous")
         if tree.truthy(version):
             lefts.append(tree.get(row, "threemojo"))
             rights.append(version)
@@ -3257,7 +3328,7 @@ def score_report(
         if tree.truthy(right):
             any_installed = True
     if not any_installed:
-        lines.append("Mojo 1.0 is not installed on this host.")
+        lines.append("The previous Mojo is not installed on this host.")
     else:
         for index in range(len(lefts)):
             var left = lefts[index]
@@ -3280,7 +3351,11 @@ def score_report(
         var compile_tally = tally(version_c)
         var run_tally = tally(version_r)
         lines.append(
-            "Mojo 1.0 runs " + String(compile_tally.count) + " programs."
+            "Mojo "
+            + labels[1]
+            + " runs "
+            + String(compile_tally.count)
+            + " programs."
         )
         lines.append("Refused programs: " + String(refused) + ".")
         lines.append("A refused compile is not a faster compile.")
@@ -3288,13 +3363,17 @@ def score_report(
             var of = " of " + String(compile_tally.count) + "."
             if compile_tally.mojo:
                 lines.append(
-                    "On those programs, Mojo 1.1 compiles faster on "
+                    "On those programs, Mojo "
+                    + labels[0]
+                    + " compiles faster on "
                     + String(compile_tally.mojo)
                     + of
                 )
             if compile_tally.other:
                 lines.append(
-                    "Mojo 1.0 compiles faster on "
+                    "Mojo "
+                    + labels[1]
+                    + " compiles faster on "
                     + String(compile_tally.other)
                     + of
                 )
@@ -3308,11 +3387,17 @@ def score_report(
             var run_of = " of " + String(run_tally.count) + "."
             if run_tally.mojo:
                 lines.append(
-                    "Mojo 1.1 runs faster on " + String(run_tally.mojo) + run_of
+                    "Mojo "
+                    + labels[0]
+                    + " runs faster on "
+                    + String(run_tally.mojo)
+                    + run_of
                 )
             if run_tally.other:
                 lines.append(
-                    "Mojo 1.0 runs faster on "
+                    "Mojo "
+                    + labels[1]
+                    + " runs faster on "
                     + String(run_tally.other)
                     + run_of
                 )
@@ -3542,8 +3627,8 @@ def slim_payload(mut tree: JsonTree, payload: Int) raises -> Int:
     for index in range(len(values)):
         tree.set(baselines, names[index], slim_metric(tree, values[index]))
     tree.set(slim, "baselines", baselines)
-    tree.set(slim, "mojo10_refused", tree.item(payload, "mojo10_refused"))
-    tree.set(slim, "mojo10_total", tree.item(payload, "mojo10_total"))
+    tree.set(slim, "previous_refused", tree.item(payload, "previous_refused"))
+    tree.set(slim, "previous_total", tree.item(payload, "previous_total"))
     var probe = tree.object()
     tree.set(slim, "probe", probe)
     var examples = tree.array()
@@ -3594,7 +3679,7 @@ def slim_payload(mut tree: JsonTree, payload: Int) raises -> Int:
             "threejs_webgl",
             slim_metric(tree, _or_empty(tree, tree.get(row, "threejs_webgl"))),
         )
-        var version = tree.get(row, "mojo10")
+        var version = tree.get(row, "previous")
         if tree.truthy(version) and _contains(
             tree, _or_empty(tree, version), "compile"
         ):
@@ -3609,10 +3694,12 @@ def slim_payload(mut tree: JsonTree, payload: Int) raises -> Int:
                 "run",
                 slim_metric(tree, tree.get(version, "run")),
             )
-            tree.set(entry, "mojo10", version_entry)
+            tree.set(entry, "previous", version_entry)
         else:
             tree.set(
-                entry, "mojo10", version if version != NOTHING else tree.null()
+                entry,
+                "previous",
+                version if version != NOTHING else tree.null(),
             )
         tree.append(examples, entry)
     return slim
@@ -3654,13 +3741,13 @@ def write_wiki(
     lines.append("- OS: " + py_str(tree, tree.item(host, "os")))
     lines.append("- CPU: " + py_str(tree, tree.item(host, "cpu")))
     lines.append(
-        "- Mojo 1.1: `"
-        + _truthy_text(tree, tree.item(host, "mojo_1_1"), "missing")
+        "- Mojo: `"
+        + _truthy_text(tree, tree.item(host, "mojo_pinned"), "missing")
         + "`"
     )
     lines.append(
-        "- Mojo 1.0: `"
-        + _truthy_text(tree, tree.item(host, "mojo_1_0"), "not installed")
+        "- Previous Mojo: `"
+        + _truthy_text(tree, tree.item(host, "mojo_previous"), "not installed")
         + "`"
     )
     lines.append(
@@ -3718,12 +3805,13 @@ def write_wiki(
     var probes = tree.item(payload, "probe")
     text = replace_span(
         text,
-        "MOJO10:" + platform_key,
-        mojo10_table(
+        "PREVIOUS:" + platform_key,
+        previous_table(
             tree,
-            _or_empty(tree, tree.get(probes, "v11")),
-            tree.get(probes, "v10"),
+            _or_empty(tree, tree.get(probes, "pinned")),
+            tree.get(probes, "previous"),
             tree.item(payload, "examples"),
+            release_labels(tree, payload),
         ),
     )
     Path(path).write_text(text)
@@ -3769,11 +3857,12 @@ def emit_tables[
     machine.out("\n")
     var probes = tree.item(payload, "probe")
     machine.out(
-        mojo10_table(
+        previous_table(
             tree,
-            tree.item(probes, "v11"),
-            tree.get(probes, "v10"),
+            tree.item(probes, "pinned"),
+            tree.get(probes, "previous"),
             tree.item(payload, "examples"),
+            release_labels(tree, payload),
         )
         + "\n"
     )
@@ -3791,7 +3880,7 @@ comptime _OPTION_STRINGS = [
     "--merge",
     "--skip-threejs",
     "--skip-webgl",
-    "--skip-mojo10",
+    "--skip-previous",
     "--write-wiki",
     "--no-write-wiki",
     "--from-results",
@@ -3804,7 +3893,7 @@ comptime _ACTION_NAMES = [
     "--merge",
     "--skip-threejs",
     "--skip-webgl",
-    "--skip-mojo10",
+    "--skip-previous",
     "--write-wiki",
     "--no-write-wiki",
     "--from-results",
@@ -3820,7 +3909,7 @@ def _invocations() -> List[String]:
         "--merge",
         "--skip-threejs",
         "--skip-webgl",
-        "--skip-mojo10",
+        "--skip-previous",
         "--write-wiki",
         "--no-write-wiki",
         "--from-results",
@@ -3836,7 +3925,7 @@ def _usage_parts() -> List[String]:
         "[--merge]",
         "[--skip-threejs]",
         "[--skip-webgl]",
-        "[--skip-mojo10]",
+        "[--skip-previous]",
         "[--write-wiki]",
         "[--no-write-wiki]",
         "[--from-results]",
@@ -3864,9 +3953,11 @@ def _description_chunks() -> List[String]:
         " ",
         "present,",
         " ",
-        "Mojo",
+        "the",
         " ",
-        "1.0.",
+        "previous",
+        " ",
+        "Mojo.",
     ]
 
 
@@ -3961,16 +4052,16 @@ def _help_webgl() -> List[String]:
     ]
 
 
-def _help_mojo10() -> List[String]:
-    """Return the `_HELP_MOJO10` texts."""
+def _help_previous() -> List[String]:
+    """Return the `_HELP_PREVIOUS` texts."""
     return [
         "Skip",
         " ",
         "the",
         " ",
-        "Mojo",
+        "previous",
         " ",
-        "1.0",
+        "Mojo",
         " ",
         "comparison",
     ]
@@ -4037,7 +4128,7 @@ def _help_chunks(action: Int) -> List[String]:
     if action == 4:
         return _help_webgl()
     if action == 5:
-        return _help_mojo10()
+        return _help_previous()
     if action == 6:
         return _help_wiki()
     if action == 8:
@@ -4401,8 +4492,8 @@ struct Arguments(Copyable, Movable):
     """`--skip-threejs`."""
     var skip_webgl: Bool
     """`--skip-webgl`."""
-    var skip_mojo10: Bool
-    """`--skip-mojo10`."""
+    var skip_previous: Bool
+    """`--skip-previous`."""
     var write_wiki: Bool
     """True unless `--no-write-wiki` came last."""
     var from_results: Bool
@@ -4418,7 +4509,7 @@ struct Arguments(Copyable, Movable):
         self.merge = False
         self.skip_threejs = False
         self.skip_webgl = False
-        self.skip_mojo10 = False
+        self.skip_previous = False
         self.write_wiki = True
         self.from_results = False
         self.platform = this_platform()
@@ -4442,7 +4533,7 @@ def _take(mut result: Arguments, action: Int, value: String) -> String:
     elif action == 4:
         result.skip_webgl = True
     elif action == 5:
-        result.skip_mojo10 = True
+        result.skip_previous = True
     elif action == 6:
         result.write_wiki = True
     elif action == 7:
@@ -4680,11 +4771,11 @@ def run[
         machine.err("--platform only applies with --from-results.\n")
         return 2
     ensure_dirs(state)
-    var mojo11 = which_mojo(root + "/.venv/bin/mojo")
-    if mojo11.byte_length() == 0:
-        machine.err("Mojo 1.1 is missing. Create .venv/ first.\n")
+    var pinned = which_mojo(root + "/.venv/bin/mojo")
+    if pinned.byte_length() == 0:
+        machine.err("Mojo is missing. Create .venv/ first.\n")
         return 1
-    var mojo10 = String() if args.skip_mojo10 else find_mojo10(root)
+    var previous_mojo = String() if args.skip_previous else find_previous(root)
     var items = catalog_items.copy()
     if args.only and args.only.value().byte_length() > 0:
         var wanted = List[String]()
@@ -4718,13 +4809,14 @@ def run[
 
     var payload = tree.object()
     tree.set_text(payload, "generated_at", machine.today())
-    tree.set(payload, "host", machine.host(tree, state, mojo11, mojo10))
+    tree.set(payload, "host", machine.host(tree, state, pinned, previous_mojo))
+    var labels = release_labels(tree, payload)
     tree.set(payload, "examples", tree.array())
     tree.set_flag(payload, "threejs_webgl", False)
     tree.set(payload, "baselines", tree.object())
     tree.set(payload, "probe", tree.object())
-    tree.set(payload, "mojo10_refused", tree.integer(0))
-    tree.set(payload, "mojo10_total", tree.integer(0))
+    tree.set(payload, "previous_refused", tree.integer(0))
+    tree.set(payload, "previous_total", tree.integer(0))
 
     var previous = NOTHING
     if args.merge and isfile(results):
@@ -4738,7 +4830,7 @@ def run[
             return 2
 
     machine.out("== baselines ==\n")
-    var baselines = bench_baselines(machine, tree, state, mojo11)
+    var baselines = bench_baselines(machine, tree, state, pinned)
     tree.set(payload, "baselines", baselines)
     machine.out(
         "  mojo noop "
@@ -4748,33 +4840,35 @@ def run[
         + "s\n"
     )
 
-    machine.out("== probe (Mojo 1.1) ==\n")
+    machine.out("== probe (Mojo " + labels[0] + ") ==\n")
     var probes = tree.item(payload, "probe")
-    var probe11 = bench_probe(
+    var probe_pinned = bench_probe(
         machine,
         tree,
         state,
-        mojo11,
+        pinned,
         root + "/bench/probe.mojo",
-        state.build() + "/probe11",
+        state.build() + "/probe_pinned",
     )
-    tree.set(probes, "v11", probe11)
-    _print_probe(machine, tree, probe11)
+    tree.set(probes, "pinned", probe_pinned)
+    _print_probe(machine, tree, probe_pinned)
 
-    if mojo10.byte_length() > 0:
-        machine.out("== probe (Mojo 1.0) ==\n")
-        var probe10 = bench_probe(
+    if previous_mojo.byte_length() > 0:
+        machine.out("== probe (Mojo " + labels[1] + ") ==\n")
+        var probe_previous = bench_probe(
             machine,
             tree,
             state,
-            mojo10,
-            root + "/bench/mojo10/probe.mojo",
-            state.build() + "/probe10",
+            previous_mojo,
+            root + "/bench/probe.mojo",
+            state.build() + "/probe_previous",
         )
-        tree.set(probes, "v10", probe10)
-        _print_probe(machine, tree, probe10)
+        tree.set(probes, "previous", probe_previous)
+        _print_probe(machine, tree, probe_previous)
     else:
-        machine.out("== probe (Mojo 1.0) skipped: compiler not installed ==\n")
+        machine.out(
+            "== probe (previous Mojo) skipped: compiler not installed ==\n"
+        )
 
     for item in items:
         var name = tree.text(tree.item(item, "name"))
@@ -4783,10 +4877,12 @@ def run[
         var dest = state.scratch() + "/" + name + ".png"
         var src = _join(root, tree.text(tree.item(item, "src")))
         var compile_result = bench_compile(
-            machine, tree, state, mojo11, src, binary
+            machine, tree, state, pinned, src, binary
         )
         machine.out(
-            "  1.1 compile "
+            "  "
+            + labels[0]
+            + " compile "
             + fmt_s(_num(tree, tree.item(compile_result, "seconds")))
             + "s\n"
         )
@@ -4801,7 +4897,9 @@ def run[
             tree.set(run_result, "status", tree.item(compile_result, "status"))
             tree.set(run_result, "output", tree.item(compile_result, "output"))
         machine.out(
-            "  1.1 run "
+            "  "
+            + labels[0]
+            + " run "
             + fmt_s(_num(tree, tree.item(run_result, "seconds")))
             + "s  rss "
             + fmt_mib(_num(tree, tree.item(run_result, "rss_kib")))
@@ -4837,49 +4935,72 @@ def run[
                 + "\n"
             )
 
-        var mojo10_example = tree.null()
-        if mojo10.byte_length() > 0:
+        var previous_example = tree.null()
+        if previous_mojo.byte_length() > 0:
             tree.set(
                 payload,
-                "mojo10_total",
+                "previous_total",
                 tree.integer(
-                    tree.int_value(tree.item(payload, "mojo10_total")) + 1
+                    tree.int_value(tree.item(payload, "previous_total")) + 1
                 ),
             )
-            var binary10 = state.build() + "/" + name + "10"
-            var compiled10 = bench_compile(
-                machine, tree, state, mojo10, src, binary10
+            var binary_previous = state.build() + "/" + name + "_previous"
+            var compiled_previous = bench_compile(
+                machine, tree, state, previous_mojo, src, binary_previous
             )
-            var ran10: Int
-            if _truthy_get(tree, compiled10, "ok") and isfile(binary10):
-                var dest10 = state.scratch() + "/" + name + "10.png"
-                var run_args10 = example_run_args(tree, state, item, dest10)
-                var cwd10 = run_args10[1]
+            var ran_previous: Int
+            if _truthy_get(tree, compiled_previous, "ok") and isfile(
+                binary_previous
+            ):
+                var dest_previous = (
+                    state.scratch() + "/" + name + "_previous.png"
+                )
+                var run_args_previous = example_run_args(
+                    tree, state, item, dest_previous
+                )
+                var cwd_previous = run_args_previous[1]
                 if _truthy_get(tree, item, "hardcoded_out"):
-                    cwd10 = state.scratch() + "/" + name + "10"
-                    makedirs(cwd10 + "/out", exist_ok=True)
-                ran10 = bench_run(machine, tree, binary10, run_args10[0], cwd10)
+                    cwd_previous = state.scratch() + "/" + name + "_previous"
+                    makedirs(cwd_previous + "/out", exist_ok=True)
+                ran_previous = bench_run(
+                    machine,
+                    tree,
+                    binary_previous,
+                    run_args_previous[0],
+                    cwd_previous,
+                )
             else:
                 tree.set(
                     payload,
-                    "mojo10_refused",
+                    "previous_refused",
                     tree.integer(
-                        tree.int_value(tree.item(payload, "mojo10_refused")) + 1
+                        tree.int_value(tree.item(payload, "previous_refused"))
+                        + 1
                     ),
                 )
-                ran10 = _failure(tree, 0)
-                tree.set(ran10, "status", tree.item(compiled10, "status"))
-                tree.set(ran10, "output", tree.item(compiled10, "output"))
-            mojo10_example = tree.object()
-            tree.set(mojo10_example, "compile", compiled10)
-            tree.set(mojo10_example, "run", ran10)
+                ran_previous = _failure(tree, 0)
+                tree.set(
+                    ran_previous,
+                    "status",
+                    tree.item(compiled_previous, "status"),
+                )
+                tree.set(
+                    ran_previous,
+                    "output",
+                    tree.item(compiled_previous, "output"),
+                )
+            previous_example = tree.object()
+            tree.set(previous_example, "compile", compiled_previous)
+            tree.set(previous_example, "run", ran_previous)
             machine.out(
-                "  1.0 compile "
-                + fmt_s(_num(tree, tree.item(compiled10, "seconds")))
+                "  "
+                + labels[1]
+                + " compile "
+                + fmt_s(_num(tree, tree.item(compiled_previous, "seconds")))
                 + "s  run "
-                + fmt_s(_num(tree, tree.item(ran10, "seconds")))
+                + fmt_s(_num(tree, tree.item(ran_previous, "seconds")))
                 + "s  rss "
-                + fmt_mib(_num(tree, tree.item(ran10, "rss_kib")))
+                + fmt_mib(_num(tree, tree.item(ran_previous, "rss_kib")))
                 + " MiB\n"
             )
 
@@ -4896,7 +5017,7 @@ def run[
         tree.set(row, "threemojo", tm)
         tree.set(row, "threejs_flat", flat)
         tree.set(row, "threejs_webgl", web)
-        tree.set(row, "mojo10", mojo10_example)
+        tree.set(row, "previous", previous_example)
         tree.append(tree.item(payload, "examples"), row)
         _write_results(tree, results, slim_payload(tree, payload))
 

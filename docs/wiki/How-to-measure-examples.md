@@ -2,7 +2,7 @@
 
 `make bench-examples` times the examples listed in `bench/catalog.json`. It records compile time, run time and peak memory for ThreeMojo and for a three.js scene of the same size.
 
-It also times a standalone probe on Mojo 1.0 when that compiler is present.
+It also times the same programs and a standalone probe on the previous Mojo release when that compiler is present.
 
 ```bash
 make bench-examples
@@ -18,16 +18,18 @@ sh tools/tool.sh .venv/bin/mojo bench_examples --from-results --platform macos
 
 ## What you need
 
-You need the Mojo 1.1 pin in `.venv/`. You need Node.js for the three.js scenes.
+You need the Mojo pin in `.venv/`. You need Node.js for the three.js scenes.
 
-To compare Mojo 1.0, install that compiler in a second venv. Put it in `.venv-mojo10/` or `$HOME/.venvs/mojo10/`.
+To compare the previous Mojo release, install that compiler in a second venv. Put it in `.venv-previous/` or `$HOME/.venvs/previous/`.
 
 ```bash
-python3 -m venv $HOME/.venvs/mojo10
-$HOME/.venvs/mojo10/bin/pip install mojo==1.0.0
+python3 -m venv $HOME/.venvs/previous
+$HOME/.venvs/previous/bin/pip install mojo==1.1.0
 ```
 
-Or set `MOJO_1_0` to the Mojo 1.0 binary.
+Or set `MOJO_PREVIOUS` to the binary of the previous release. Pass `--skip-previous` to leave that comparison out.
+
+The results file and the tables name each compiler by the version that `mojo --version` prints. A new Mojo release needs no change in the runner.
 
 `make bench-examples` installs `bench/threejs` packages when `node_modules` is missing.
 
@@ -54,7 +56,7 @@ The runner always times a `cpu-flat` fill. It also times WebGL 2 when `webgl-nod
 On macOS, `webgl-node` opens the context with no extra package.
 Pass `--skip-webgl` on a host with no GPU.
 
-The pin is Mojo 1.1. A second venv at `.venv-mojo10/` compiles the same sources with Mojo 1.0. The probe is a standalone triangle fill that imports nothing from ThreeMojo.
+The pin is the Mojo release in `.venv/`. A second venv at `.venv-previous/` compiles the same sources with the previous release. A release that does not accept the sources is a refused compile. The probe is a standalone triangle fill that imports nothing from ThreeMojo.
 
 The draw winner names the faster frame loop.
 A gap under 10% is a tie.
