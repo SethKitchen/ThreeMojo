@@ -888,6 +888,23 @@ def floor_power_of_two(value: Int) raises -> Int:
     return power
 
 
+def _difference_fits(high: Int, low: Int) -> Bool:
+    """Return whether `high - low` fits in an integer.
+
+    Args:
+        high: The end that is subtracted from.
+        low: The end that is subtracted.
+
+    Returns:
+        Whether the difference fits.
+    """
+    if low > 0:
+        return high >= Int.MIN + low
+    if low < 0:
+        return high <= Int.MAX + low
+    return True
+
+
 struct SeededRandom(Copyable, Movable):
     """The Mulberry32 generator of three.js's `seededRandom`.
 
@@ -963,14 +980,26 @@ struct SeededRandom(Copyable, Movable):
         """Return a whole number in a range, both ends included.
         three.js: `randInt`.
 
+        A width that does not fit in an integer is drawn in `Float64` and
+        held inside the range. Widths that fit keep the integer product.
+
         Args:
             low: The smallest.
             high: The largest.
 
         Returns:
-            The number.
+            The number. It lies in the range when `low` is at most `high`.
         """
-        return low + Int(floor(self.next() * Float64(high - low + 1)))
+        var unit = self.next()
+        if _difference_fits(high, low):
+            var diff = high - low
+            if diff < Int.MAX:
+                return low + Int(floor(unit * Float64(diff + 1)))
+        if high < low:
+            return low
+        var width = Float64(high) - Float64(low)
+        var value = Float64(low) + floor(unit * (width + 1))
+        return Int(value)
 
 
 def generate_uuid(mut generator: SeededRandom) -> String:
