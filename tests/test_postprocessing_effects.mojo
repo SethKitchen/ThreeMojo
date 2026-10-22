@@ -1082,6 +1082,15 @@ def test_bokeh2_keeps_its_focus_sharp_and_blurs_the_rest() raises:
     # Seven meters off it, the rings of taps average the columns.
     var soft = bokeh2_pixel(view, depth, 12, 5, settings)
     assert_true(abs(soft.r - frame.colors[5 * WIDTH + 12].r) > 1e-4)
+    # A count the rings cannot finish keeps the pixel.
+    var huge = settings
+    huge.rings = Int.MAX
+    var held = bokeh2_pixel(view, depth, 12, 5, huge)
+    assert_almost_equal(held.r, frame.colors[5 * WIDTH + 12].r, atol=1e-5)
+    huge.rings = 3
+    huge.samples = 16777217
+    held = bokeh2_pixel(view, depth, 12, 5, huge)
+    assert_almost_equal(held.r, frame.colors[5 * WIDTH + 12].r, atol=1e-5)
     # Focused on the far half by the depth at a point, the near half
     # blurs instead; with a pentagon, a blurred depth, the focus shown
     # and the vignette, every branch of the shader runs.
@@ -1142,6 +1151,21 @@ def test_bokeh2_settings_are_checked() raises:
     sampleless.samples = 0
     with assert_raises(contains="a ring"):
         check_bokeh2(sampleless)
+    var wide = Bokeh2Settings()
+    wide.rings = Int.MAX
+    with assert_raises(contains="larger than this port"):
+        check_bokeh2(wide)
+    wide.rings = 3
+    wide.samples = Int.MAX
+    with assert_raises(contains="larger than this port"):
+        check_bokeh2(wide)
+    wide.rings = 100
+    wide.samples = 10000
+    with assert_raises(contains="larger than this port"):
+        check_bokeh2(wide)
+    wide.rings = 1
+    wide.samples = 16777216
+    check_bokeh2(wide)
     assert_true(bokeh2_pass().kind == BOKEH2)
     with assert_raises(contains="a ring"):
         _ = bokeh2_pass(empty)

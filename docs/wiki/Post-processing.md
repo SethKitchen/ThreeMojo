@@ -347,7 +347,7 @@ That is three.js's masking example. The texture fills only the pixels that the o
 
 - The blur comes from the lens: the focal length, the f-stop and the distance to the focal plane. With `manual_dof`, it comes from the fixed near and far ranges of the shader instead.
 - With `shader_focus`, the focal plane is the depth at `focus_u`, `focus_v`. Otherwise it is `focal_depth`, in meters.
-- Each ring of taps holds `samples` times its number of taps. A tap is fringed by `fringe`, and a bright tap is raised by `threshold` and `gain`.
+- Each ring of taps holds `samples` times its number of taps. A tap is fringed by `fringe`, and a bright tap is raised by `threshold` and `gain`. A ring and sample count of more than 16777216 taps is refused.
 - `pentagon`, `depth_blur`, `show_focus` and `vignetting` are the shader's own switches.
 
 `texture_width` and `texture_height` of zero read the frame's size. three.js starts them at one and has the caller set them. The shader's `bdepth` spells one offset `vec2( wh.x -wh.y )`, and the port keeps that.

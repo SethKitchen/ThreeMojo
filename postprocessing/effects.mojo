@@ -1798,8 +1798,9 @@ def check_bokeh2(settings: Bokeh2Settings) raises:
 
     Raises:
         Error: If a number is not finite; a texture size is negative; the
-            near plane is not in front of the far one; or there are fewer
-            than one ring or one sample.
+            near plane is not in front of the far one; there are fewer
+            than one ring or one sample; or the rings' taps pass
+            16777216.
     """
     var finite = (
         isfinite(settings.texture_width)
@@ -1825,6 +1826,36 @@ def check_bokeh2(settings: Bokeh2Settings) raises:
         raise Error("A bokeh 2 near plane must lie in front of its far plane")
     if settings.rings < 1 or settings.samples < 1:
         raise Error("A bokeh 2 needs a ring and a sample at least")
+    if not _bokeh2_taps_fit(settings.rings, settings.samples):
+        raise Error(
+            "A bokeh 2 ring or sample count is larger than this port takes"
+        )
+
+
+# One ring of `samples` taps, the next of twice that, through `rings`.
+# The sum is `samples * rings * (rings + 1) / 2`. Past 16777216 taps the
+# index is no longer a `Float32` integer, and the maximum integer does
+# not finish the walk. `rings + 1` also wraps at the maximum integer.
+comptime MAX_BOKEH2_TAPS = 16777216
+
+
+def _bokeh2_taps_fit(rings: Int, samples: Int) -> Bool:
+    """Return whether a bokeh's rings stay within 16777216 taps.
+
+    Args:
+        rings: How many rings.
+        samples: How many taps the first ring takes.
+
+    Returns:
+        Whether the walk fits. A count below one fits, because that loop
+        does not run.
+    """
+    if rings > MAX_BOKEH2_TAPS or samples > MAX_BOKEH2_TAPS:
+        return False
+    if rings < 1 or samples < 1:
+        return True
+    var pairs = rings * (rings + 1) // 2
+    return samples <= MAX_BOKEH2_TAPS // pairs
 
 
 def bokeh2_penta(pw: Float32, ph: Float32, rings: Int) -> Float32:
@@ -1961,7 +1992,7 @@ def bokeh2_pixel(
     var h = 1 / th * blur * settings.max_blur + noise_y
     var here = source.sample(u, v)
     var col = Vector3(here.r, here.g, here.b)
-    if blur >= 0.05:
+    if blur >= 0.05 and _bokeh2_taps_fit(settings.rings, settings.samples):
         var s = Float32(1)
         var rings = Float32(settings.rings)
         for i in range(1, settings.rings + 1):  # pragma: no branch
