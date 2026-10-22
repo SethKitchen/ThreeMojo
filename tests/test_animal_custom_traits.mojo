@@ -51,6 +51,7 @@ from extensions.animals.species.deer import _catmull
 from extensions.animals.species.fish import GOLDFISH, fish_paint
 from extensions.animals.species.frog import HEAD_O, frog_paint
 from extensions.animals.species.goat import ALPINE, M_EARS, _hl, _mark_sd
+from extensions.animals.species.pig import SPOTTED, _markings
 from extensions.animals.species.shark import _scaled, _trail_dist
 from extensions.animals.species.snake import RATTLESNAKE, _segments
 from extensions.animals.traits import Traits, trait_repeats
@@ -294,6 +295,27 @@ def test_a_trait_repeat_count_this_port_cannot_build_is_refused() raises:
     deer.set("tines", Float64(16777217))
     with assert_raises(contains="larger than this port"):
         _ = _sculpt(DEER, deer)
+
+
+def test_a_mark_count_this_port_cannot_paint_is_refused() raises:
+    var t = Traits(FEMALE, ADULT, SPOTTED)
+    var pal = Palette()
+    var c = V3(0.8, 0.6, 0.5)
+    var o = V3(0, 0, 0)
+    pal.set("spots", V3(Float64(16777217), 0, 0))
+    with assert_raises(contains="larger than this port"):
+        _ = _markings(pal, t, 0, "body", "spine1", 0.0, o, V3(0, 0.6, 0), c, o)
+    pal.set("spots", V3(nan[DType.float64](), 0, 0))
+    with assert_raises(contains="larger than this port"):
+        _ = _markings(pal, t, 0, "body", "spine1", 0.0, o, V3(0, 0.6, 0), c, o)
+    var goat = Traits(FEMALE, ADULT, ALPINE)
+    var n = V3(0, 1, 0)
+    pal.set("patches", V3(Float64(16777217), 0, 0))
+    with assert_raises(contains="larger than this port"):
+        _ = _mark_sd(pal, goat, 0, 0, "body", "spine1", 0.0, o, o, n)
+    pal.set("patches", V3(nan[DType.float64](), 0, 0))
+    with assert_raises(contains="larger than this port"):
+        _ = _mark_sd(pal, goat, 0, 0, "body", "spine1", 0.0, o, o, n)
 
 
 def test_empty_helpers_keep_their_existing_empty_results() raises:

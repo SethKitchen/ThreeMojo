@@ -102,7 +102,7 @@ The box coordinates must be finite and each upper bound must exceed its lower bo
 
 ### The coat
 
-A painter reads one vertex at a time. It gets the tag and the bone of the nearest solid. It gets the position and normal in the reference bind pose. A mark therefore stays on the skin when the animal moves. The painter returns a linear color and a `SurfaceClass`.
+A painter reads one vertex at a time. It gets the tag and the bone of the nearest solid. It gets the position and normal in the reference bind pose. A mark therefore stays on the skin when the animal moves. The painter returns a linear color and a `SurfaceClass`. A goat patch count or a pig spot count above 16777216, or one that is not finite, is refused.
 
 | Class | Material |
 |---|---|

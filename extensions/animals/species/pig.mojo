@@ -1748,7 +1748,7 @@ def _ear_vein_sd(u: Float64, w: Float64, seed: Int) -> Float64:
 
 def pig_paint(
     pal: Palette, t: Traits, tag: String, bone: String, s: CoatSample
-) -> Paint:
+) raises -> Paint:
     """Paint one vertex of a pig.
 
     Bare skin per breed: pink with flushed ears, snout and belly in the
@@ -1768,6 +1768,9 @@ def pig_paint(
 
     Returns:
         The paint.
+
+    Raises:
+        Error: If a spot count is not finite or is above 16777216.
     """
     var p = s.p
     var n = s.n
@@ -2077,7 +2080,7 @@ def _markings(
     p: V3,
     c: V3,
     off: V3,
-) -> V3:
+) raises -> V3:
     var v = t.variant
     if v == SPOTTED:
         var none = region == 7 or region == 6 or region == 5 or tag == "teat"
@@ -2085,7 +2088,7 @@ def _markings(
         if none or snout:
             return c
         var d = 1.0
-        var count = Int(pal.get("spots").x)
+        var count = trait_repeats(pal.get("spots").x)
         for i in range(count):
             var q = pal.get("spot" + String(i))
             d = min(d, length(p - q) - pal.get("spotr" + String(i)).x)
