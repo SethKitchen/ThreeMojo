@@ -66,7 +66,7 @@ A segment count above 4096 is refused. An octave count above 32 is refused. More
 
 `ForestGenerator(parameters).build(terrain)` scatters trees over a built terrain. It returns a `ForestInstances`: one blob geometry and one matrix a tree. Cull distances and the other parameters must be finite.
 
-- The blob is an icosahedron welded to twelve vertices. It is squashed into a lumpy teardrop, and its `ao` attribute runs from zero at the base to one at the crown.
+- The blob is an icosahedron welded to twelve vertices. It is squashed into a lumpy teardrop, and its `ao` attribute runs from zero at the base to one at the crown. A blob detail above 256 is refused.
 - A tree stands only in the altitude band, on ground flatter than `min_slope`, and inside a density mask of slow noise.
 - The draw stops after fourteen tries a tree. A tree count whose fourteen tries do not fit in an integer is refused.
 - `instances.values` holds three.js's `cull` attribute, and `region` holds its color drift.

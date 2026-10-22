@@ -1982,6 +1982,12 @@ def test_a_polyhedron_needs_a_radius_a_detail_and_whole_faces() raises:
         _ = polyhedron(vertices, beyond, one)
     with assert_raises():
         _ = icosahedron(one, -1)
+    var fine = polyhedron(vertices, indices, one, 256)
+    assert_equal(fine.vertex_count(), 257 * 257 * 3)
+    with assert_raises(contains="larger than this port"):
+        _ = polyhedron(vertices, indices, one, 257)
+    with assert_raises(contains="larger than this port"):
+        _ = icosahedron(one, Int.MAX)
 
 
 # --- capsule ----------------------------------------------------------------

@@ -227,6 +227,14 @@ def test_forest_parameters_are_checked() raises:
     with assert_raises(contains="detail"):
         _ = ForestGenerator(p^).build(terrain)
     p = ForestParameters()
+    p.detail = 257
+    with assert_raises(contains="larger than this port"):
+        _ = ForestGenerator(p^).build(terrain)
+    p = ForestParameters()
+    p.detail = Int.MAX
+    with assert_raises(contains="larger than this port"):
+        _ = ForestGenerator(p^).build(terrain)
+    p = ForestParameters()
     p.to_distance = Length(300, METER)
     with assert_raises(contains="cull"):
         _ = ForestGenerator(p^).build(terrain)

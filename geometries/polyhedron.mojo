@@ -59,6 +59,12 @@ from units.si import Length
 # dodecahedron are built on.
 comptime GOLDEN = Float32(1.618034)
 
+# Each face becomes `(detail + 1)` squared triangles, and the row loop is
+# one longer than that. A detail of `Int.MAX` wraps that count and the
+# solid comes back with no vertices. A detail just below it never leaves
+# the row loop. This is the finest solid this port builds.
+comptime MAX_POLYHEDRON_DETAIL = 256
+
 
 def _subdivide_face(
     a: Vector3, b: Vector3, c: Vector3, detail: Int, mut data: List[Float32]
@@ -183,12 +189,15 @@ def polyhedron(
         the radius otherwise.
 
     Raises:
-        Error: If the radius is not positive, the detail is negative, the
-            vertices are not whole triples, the indices are not whole
-            triangles, either list is empty, or an index names no vertex.
+        Error: If the radius is not positive, the detail is negative or
+            above 256, the vertices are not whole triples, the indices are
+            not whole triangles, either list is empty, or an index names
+            no vertex.
     """
     require_positive_radius(radius.value, "polyhedron")
     require_non_negative(detail, "A polyhedron's detail cannot be negative")
+    if detail > MAX_POLYHEDRON_DETAIL:
+        raise Error("A polyhedron's detail is larger than this port builds")
     if len(vertices) == 0 or len(vertices) % 3 != 0:
         raise Error("A polyhedron's vertices come three floats at a time")
     if len(indices) == 0 or len(indices) % 3 != 0:
@@ -295,7 +304,8 @@ def tetrahedron(radius: Length, detail: Int = 0) raises -> BufferGeometry:
         The geometry, four faces at a detail of zero.
 
     Raises:
-        Error: If the radius is not positive or the detail is negative.
+        Error: If the radius is not positive, or the detail is negative
+            or above 256.
     """
     var vertices: List[Float32] = [1, 1, 1, -1, -1, 1, -1, 1, -1, 1, -1, -1]
     var indices: List[Int] = [2, 1, 0, 0, 3, 2, 1, 3, 0, 2, 3, 1]
@@ -315,7 +325,8 @@ def octahedron(radius: Length, detail: Int = 0) raises -> BufferGeometry:
         The geometry, eight faces at a detail of zero.
 
     Raises:
-        Error: If the radius is not positive or the detail is negative.
+        Error: If the radius is not positive, or the detail is negative
+            or above 256.
     """
     var vertices: List[Float32] = [
         1,
@@ -381,7 +392,8 @@ def icosahedron(radius: Length, detail: Int = 0) raises -> BufferGeometry:
         The geometry, twenty faces at a detail of zero.
 
     Raises:
-        Error: If the radius is not positive or the detail is negative.
+        Error: If the radius is not positive, or the detail is negative
+            or above 256.
     """
     var t = GOLDEN
     var vertices: List[Float32] = [
@@ -501,7 +513,8 @@ def dodecahedron(radius: Length, detail: Int = 0) raises -> BufferGeometry:
         of zero.
 
     Raises:
-        Error: If the radius is not positive or the detail is negative.
+        Error: If the radius is not positive, or the detail is negative
+            or above 256.
     """
     var t = GOLDEN
     var r = 1 / t

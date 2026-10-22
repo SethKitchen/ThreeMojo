@@ -300,7 +300,7 @@ var dome = dodecahedron(Length(1.0, METER))
 var own = polyhedron(vertices, indices, Length(1.0, METER), detail)
 ```
 
-A polyhedron is a list of vertices and a list of triangles over them. Every vertex is pushed out to the radius. `detail` cuts each edge that many times, so each face becomes `(detail + 1)` squared triangles, on the way to a sphere. The four regular solids have three.js's vertices and faces in three.js's order.
+A polyhedron is a list of vertices and a list of triangles over them. Every vertex is pushed out to the radius. `detail` cuts each edge that many times, so each face becomes `(detail + 1)` squared triangles, on the way to a sphere. The four regular solids have three.js's vertices and faces in three.js's order. A detail above 256 is refused.
 
 The geometry is not indexed. Each triangle owns its three vertices. At a detail of zero the normals are flat, one per face. At a detail of one or more each normal points away from the center.
 
@@ -938,6 +938,7 @@ A per-instance `position`, `normal`, `uv` or `tangent` is refused when drawn. Th
 - A torus needs positive radii and three segments each way.
 - A torus knot needs positive radii, three segments each way, and `p` and `q` of at least one.
 - A polyhedron needs a positive radius, a detail of zero or more, whole vertices and faces, and faces that name vertices it has.
+- A polyhedron detail above 256 is refused.
 - A capsule needs a finite positive radius, finite length of zero or more, one cap row, three segments around and one side row.
 - A lathe needs at least two points, one segment, and a sweep of at most one turn. No point can have a negative `x`, and no two consecutive points can be the same. A profile that turns straight back to the point before raises, because that corner has no normal.
 - A tube needs at least two finite points, or three when closed, no two consecutive the same, a positive radius and three segments around. A path that returns to the point before the last raises, because that tangent is zero. A path that folds straight back on itself raises, because there is no axis to turn the frame about.
