@@ -182,13 +182,17 @@ struct StorageBuffer(Copyable, Movable):
             type: What an element is: a `float` or a vector.
 
         Raises:
-            Error: If `count` is not positive or `type` is not a `float` or
-                a vector.
+            Error: If `count` is not positive, `type` is not a `float` or
+                a vector, or `count` times the floats in an element does
+                not fit in Int.
         """
+        var width = _width(type)
         require_positive(count, "A storage buffer needs one element or more")
+        if count > Int.MAX // width:
+            raise Error("A storage buffer is larger than this port stores")
         self.type = type
         self.count = count
-        self.array = List[Float32](length=count * _width(type), fill=0)
+        self.array = List[Float32](length=count * width, fill=0)
 
     def __init__(out self, var array: List[Float32], type: ValueType) raises:
         """Hold floats as a buffer, three.js's `new StorageBufferAttribute(
@@ -332,9 +336,12 @@ struct StorageBufferStore(Movable):
             The texture.
 
         Raises:
-            Error: If a size is not positive.
+            Error: If a size is not positive, or the texel count does not
+                fit in Int.
         """
         require_positive_extent(width, height, "A storage texture needs a size")
+        if width > Int.MAX // height:
+            raise Error("A storage texture is larger than this port stores")
         var texels = self.instanced_array(width * height, NODE_VEC4)
         return StorageTexture(texels, width, height)
 
@@ -2146,7 +2153,7 @@ def pack_storage(
 
     Raises:
         Error: If the store has no buffer the node names, or holds it as
-            another type.
+            another type, or a workgroup array's copy does not fit in Int.
     """
     for at in range(len(node.buffers)):
         store._check(node.buffers[at])
@@ -2160,15 +2167,16 @@ def pack_storage(
         memory.extend(Span(buffer.array))
     for at in range(len(node.array_types)):
         var width = node.array_types[at].value
+        var elements = node.array_counts[at]
+        var groups = node.workgroups()
+        # The copy is one a workgroup. The product wraps to a negative
+        # length, and that list is built.
+        if elements > Int.MAX // width or elements * width > Int.MAX // groups:
+            raise Error("A workgroup array is larger than this port stores")
         regions.append(Int32(len(memory)))
-        regions.append(Int32(node.array_counts[at]))
+        regions.append(Int32(elements))
         regions.append(Int32(width))
-        memory.extend(
-            List[Float32](
-                length=node.array_counts[at] * width * node.workgroups(),
-                fill=0,
-            )
-        )
+        memory.extend(List[Float32](length=elements * width * groups, fill=0))
     return (memory^, regions^)
 
 

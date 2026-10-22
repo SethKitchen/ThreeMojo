@@ -37,7 +37,7 @@ A `StorageBufferStore` owns the buffers. A `StorageBufferNode` names one buffer,
 | `store.set_array(node, floats)` | `attribute.array.set( floats )` |
 | `store.texture(storage_texture)` | The storage texture as a material reads it |
 
-An element is a `float` or a vector of two, three or four floats. A `uint` element holds a whole number as a float. It is exact up to 2 ** 24.
+An element is a `float` or a vector of two, three or four floats. A `uint` element holds a whole number as a float. It is exact up to 2 ** 24. A count or a texture whose floats do not fit in an integer is refused. A workgroup array whose copy does not fit is refused.
 
 A material reads a buffer after a run. Copy `store.array(node)` into a geometry attribute, or read `store.texture(texture)` as a float texture.
 
