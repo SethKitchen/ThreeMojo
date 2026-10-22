@@ -278,21 +278,35 @@ def occluded_sectors(start: Float32, span: Float32) -> UInt32:
     already are masked off: three.js's `angleHorizonBitfield` shifted by
     `startHorizonInt`.
 
+    A count past 32 covers only the 32 sectors of the slice. `Int` of a
+    count past 2^63 is not that count. A span that is not a positive
+    number covers nothing.
+
     Args:
         start: The span's first sector, as a share of the slice.
         span: How much of the slice it covers.
 
     Returns:
-        The bits.
+        The bits that fall inside the 32 sectors.
     """
-    var first = UInt32(Int(start * Float32(SSGI_SECTORS)))
-    var count = Int(ceil(span * Float32(SSGI_SECTORS)))
-    if count <= 0:
+    var wide = ceil(Float64(span) * Float64(SSGI_SECTORS))
+    if not (wide > 0):
         return 0
-    # A span that covers a sector starts inside the slice, so the shift is
-    # below 32.
-    var field = UInt32(0xFFFFFFFF) >> UInt32(SSGI_SECTORS - count)
-    return field << first
+    var count = SSGI_SECTORS
+    if wide < Float64(SSGI_SECTORS):
+        count = Int(wide)
+    var begin = Float64(start) * Float64(SSGI_SECTORS)
+    var end = begin + Float64(count)
+    if not (end > 0) or not (begin < Float64(SSGI_SECTORS)):
+        return 0
+    if begin < 0:
+        begin = 0
+    if end > Float64(SSGI_SECTORS):
+        end = Float64(SSGI_SECTORS)
+    var first = Int(begin)
+    var covered = Int(end) - first
+    var field = UInt32(0xFFFFFFFF) >> UInt32(SSGI_SECTORS - covered)
+    return field << UInt32(first)
 
 
 struct SsgiFrame(ImplicitlyCopyable):

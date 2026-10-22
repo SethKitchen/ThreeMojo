@@ -732,6 +732,8 @@ A thin feature locks the history against the clip where the depth did not change
 
 The angles to each tap's front and back cover some of 32 sectors. The sectors that a tap covers first occlude the pixel and send it the tap's light. The AO is the share of the sectors covered, to the power of `ao_intensity`. The light is scaled by `gi_intensity` and held at a luminance of seven. The temporal filter turns the slices and offsets the taps each frame, as three.js's `frameId` does.
 
+A sector span past the 32 sectors covers the whole slice. A span that is not a positive number covers none. A start past the slice covers none.
+
 three.js's example mixes the AO and the light with the scene and its diffuse color. The frame has no diffuse color attachment, so the pass takes the frame's own color for it: `frame * ao + frame * gi`. The AO is kept in eight bits, as three.js's `RedFormat` target keeps it.
 
 ### The SSGI denoiser

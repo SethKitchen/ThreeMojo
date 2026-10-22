@@ -83,6 +83,13 @@ def test_the_helpers_are_three_js_s() raises:
     assert_equal(occluded_sectors(0.5, 0.25), UInt32(0xFF) << 16)
     assert_equal(occluded_sectors(0.3, 0), UInt32(0))
     assert_equal(occluded_sectors(0.3, -0.1), UInt32(0))
+    # A span of 1.1 used to shift by a negative count and keep four bits.
+    assert_equal(occluded_sectors(0, 1.1), UInt32(0xFFFFFFFF))
+    assert_equal(occluded_sectors(0, Float32(1e20)), UInt32(0xFFFFFFFF))
+    assert_equal(occluded_sectors(0.5, 1), UInt32(0xFFFF) << 16)
+    assert_equal(occluded_sectors(Float32(1e20), 0.25), UInt32(0))
+    assert_equal(occluded_sectors(-1, 0.1), UInt32(0))
+    assert_equal(occluded_sectors(-0.125, 0.25), UInt32(0xF))
     var still = SsgiSettings()
     still.use_temporal_filtering = False
     var fixed = ssgi_temporal(still)
