@@ -88,7 +88,7 @@ Each bounce traces eight cosine-weighted cones from every occupied voxel through
 
 `render(view, camera_world, scene, assets, frame_id)` updates the volume. Then it gathers a `VxgiFrame`: one occlusion and one irradiance for each pixel. These are three.js's AO and GI textures.
 
-For each pixel, the cones leave the surface one and a half voxels along the normal. Interleaved gradient noise turns them. With temporal filtering on, the noise moves with `frame_id` over a cycle of 64 frames. The mean radiance of the cones times pi is the irradiance. A pixel with no surface keeps the pass's white clear.
+For each pixel, the cones leave the surface one and a half voxels along the normal. Interleaved gradient noise turns them. With temporal filtering on, the noise moves with `frame_id` over a cycle of 64 frames. The mean radiance of the cones times pi is the irradiance. A pixel with no surface keeps the pass's white clear. A cone count above 16777216 is refused, and a stored count outside that range keeps the white clear.
 
 The debug view `VXGI_DEBUG_RADIANCE` shows the first voxel with radiance along the view. `VXGI_DEBUG_OPACITY` shows the first voxel with opacity.
 
