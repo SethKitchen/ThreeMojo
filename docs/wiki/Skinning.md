@@ -159,7 +159,7 @@ Each step turns one link so that the effector swings toward the target around it
 
 A blend below one slerps each link from where it started toward the solved turn. A chain's own `blend_factor` wins over the solver's. The solver updates the scene after each turn. three.js updates one link's world matrix, which gives the same numbers.
 
-The solver refuses a bone index the skeleton does not have, a negative `iteration`, and a blend outside zero to one. three.js warns when a link is not the parent of the one before it, and solves anyway. This checks nothing about the parents. `CCDIKHelper` is not ported.
+The solver refuses a bone index the skeleton does not have, a negative `iteration`, and a blend outside zero to one. An iteration count above 16777216 is refused. three.js warns when a link is not the parent of the one before it, and solves anyway. This checks nothing about the parents. `CCDIKHelper` is not ported.
 
 ## Both backends agree by construction
 

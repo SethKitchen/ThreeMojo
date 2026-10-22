@@ -52,6 +52,9 @@ from units.si import Angle, RADIAN
 # A turn smaller than this, in radians, is skipped, so that a link already
 # on target does not tremble: three.js's `1e-5`.
 comptime SMALLEST_TURN = Float32(1e-5)
+# The most passes one solve walks. A link that stays short of the target
+# keeps turning, and `range` of `Int.MAX` never ends.
+comptime MAX_IK_ITERATIONS = 16777216
 
 
 @fieldwise_init
@@ -121,6 +124,21 @@ struct IkChain(Copyable, Movable):
         self.blend_factor = None
 
 
+def require_ik_iterations(iteration: Int) raises:
+    """Refuse an IK pass count this port cannot finish.
+
+    Nothing. The call returns when the count is in range.
+
+    Args:
+        iteration: How many passes over the links, at most.
+
+    Raises:
+        Error: If the count is above 16777216.
+    """
+    if iteration > MAX_IK_ITERATIONS:
+        raise Error("An IK iteration count is larger than this port solves")
+
+
 def require_ik_blend(blend: Float32) raises:
     """Refuse an IK blend outside zero through one.
 
@@ -160,7 +178,8 @@ struct CCDIKSolver(Movable):
         Raises:
             Error: If no skinned mesh has that index, a chain names a bone
                 the skeleton does not have, a chain's iteration count is
-                negative, or its blend factor is not from zero to one.
+                negative or above 16777216, or its blend factor is not
+                from zero to one.
         """
         require_skinned_mesh(mesh, len(scene.skinned_meshes))
         var count = scene.skinned_meshes[mesh].bone_count()
@@ -172,6 +191,7 @@ struct CCDIKSolver(Movable):
             require_non_negative(
                 chain.iteration, "An IK chain cannot iterate a negative number"
             )
+            require_ik_iterations(chain.iteration)
             if Bool(chain.blend_factor):
                 var blend = chain.blend_factor.value()
                 require_ik_blend(blend)
@@ -208,8 +228,9 @@ struct CCDIKSolver(Movable):
 
         Raises:
             Error: If there is no such chain, the blend is not from zero to
-                one, the mesh or a bone is no longer there, the scene is
-                stale, or a link's world matrix flattens an axis.
+                one, the iteration count is above 16777216, the mesh or a
+                bone is no longer there, the scene is stale, or a link's
+                world matrix flattens an axis.
         """
         require_index_in_count(
             chain, len(self.iks), "No IK chain has that index"
@@ -218,6 +239,7 @@ struct CCDIKSolver(Movable):
         if self.mesh >= len(scene.skinned_meshes):
             raise Error("The IK solver's skinned mesh is not there")
         ref ik = self.iks[chain]
+        require_ik_iterations(ik.iteration)
         var bones = scene.skinned_meshes[self.mesh].skeleton.copy()
         var share = ik.blend_factor.or_else(blend)
         var effector = bones.node(ik.effector)
