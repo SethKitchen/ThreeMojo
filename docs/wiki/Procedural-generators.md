@@ -100,6 +100,8 @@ The bake transforms normals as directions. A rigid placement rotates the normal 
 - The seed fills each style field that is left empty: the footprint, the tier split, the piers, the reveals and the arches.
 - The floor and the bay snap to the brick module, three tenths of a meter high and six tenths long.
 
+A face whose bay count passes 16777216 is refused. A tower whose floors times its bays passes 16777216 is refused.
+
 ## Street furniture
 
 Each piece is one merged geometry with a `partId`. `build(placements)` returns it as `Instances`, one matrix an instance. Each model stands on y equals zero and faces +z.
