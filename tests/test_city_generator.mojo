@@ -423,6 +423,52 @@ def test_street_and_sidewalk_cannot_be_negative() raises:
         p.sidewalk_width = Length(bad, METER)
         with assert_raises(contains="finite"):
             _ = city_layout(p)
+    p = CityParameters()
+    p.lot = Length(1e20, METER)
+    with assert_raises(contains="larger than this port lays out"):
+        _ = city_layout(p)
+    p = CityParameters()
+    p.street = Length(2000, METER)
+    with assert_raises(contains="larger than this port lays out"):
+        _ = city_layout(p)
+    p = CityParameters()
+    p.sidewalk_width = Length(2000, METER)
+    with assert_raises(contains="larger than this port lays out"):
+        _ = city_layout(p)
+    p = CityParameters()
+    p.lots_x = 17
+    with assert_raises(contains="more blocks or lots"):
+        _ = city_layout(p)
+    p = CityParameters()
+    p.lots_z = 17
+    with assert_raises(contains="more blocks or lots"):
+        _ = city_layout(p)
+    p = CityParameters()
+    p.blocks_x = 17
+    with assert_raises(contains="more blocks or lots"):
+        _ = city_layout(p)
+    p = CityParameters()
+    p.blocks_z = 17
+    with assert_raises(contains="more blocks or lots"):
+        _ = city_layout(p)
+    p = CityParameters()
+    p.lots_x = 16
+    p.lot = Length(200, METER)
+    with assert_raises(contains="block is larger"):
+        _ = city_layout(p)
+    p = CityParameters()
+    p.lots_z = 16
+    p.lot = Length(200, METER)
+    with assert_raises(contains="block is larger"):
+        _ = city_layout(p)
+    p = CityParameters()
+    p.lots_x = 16
+    p.lots_z = 1
+    p.blocks_x = 1
+    p.blocks_z = 1
+    p.lot = Length(100, METER)
+    var wide = city_layout(p)
+    assert_equal(wide.block_w, 1600)
 
 
 def main() raises:

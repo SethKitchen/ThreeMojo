@@ -59,6 +59,11 @@ from math.utils import SeededRandom
 from std.math import floor, pi
 from units.si import Length, METER
 
+# A longer curb walk does not finish: parked cars step about six meters.
+comptime MAX_CITY_METERS = 2000.0
+# One axis of blocks or lots. The furniture walk runs once a block.
+comptime MAX_CITY_COUNT = 16
+
 
 def car_colors() -> List[Int]:
     """Return the paints of the parked fleet, three.js's `CAR_COLORS`,
@@ -197,11 +202,19 @@ def city_layout(p: CityParameters) raises -> CityLayout:
         The layout.
 
     Raises:
-        Error: If a count is below one, or a length is not finite or not
-            in range.
+        Error: If a count is below one or above 16; a length is not finite
+            or not positive as required; a lot, street, or sidewalk is
+            2000 meters or more; or a block side is 2000 meters or more.
     """
     if p.lots_x < 1 or p.lots_z < 1 or p.blocks_x < 1 or p.blocks_z < 1:
         raise Error("A city needs one block and one lot at least each way")
+    if (
+        p.lots_x > MAX_CITY_COUNT
+        or p.lots_z > MAX_CITY_COUNT
+        or p.blocks_x > MAX_CITY_COUNT
+        or p.blocks_z > MAX_CITY_COUNT
+    ):
+        raise Error("A city has more blocks or lots than this port lays out")
     var lot = meters(p.lot)
     var street = meters(p.street)
     var sidewalk = meters(p.sidewalk_width)
@@ -212,8 +225,16 @@ def city_layout(p: CityParameters) raises -> CityLayout:
         raise Error(
             "A city's lot must be positive, its street and walk not less"
         )
+    if (
+        not (lot < MAX_CITY_METERS)
+        or not (street < MAX_CITY_METERS)
+        or not (sidewalk < MAX_CITY_METERS)
+    ):
+        raise Error("A city measure is larger than this port lays out")
     var block_w = Float64(p.lots_x) * lot
     var block_d = Float64(p.lots_z) * lot
+    if not (block_w < MAX_CITY_METERS) or not (block_d < MAX_CITY_METERS):
+        raise Error("A city block is larger than this port dresses")
     return CityLayout(
         street,
         p.lots_x,

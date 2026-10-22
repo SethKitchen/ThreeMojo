@@ -75,6 +75,8 @@ The forest material culls far trees in a shader. `keeps(index, camera)` answers 
 
 `CityGenerator(parameters).plan()` lays the city out. It gives every tower's parameters and every placement of the furniture, and builds nothing. `build()` builds everything. It returns a `City` with one geometry a tower, the sidewalk, and the furniture as `Instances`. A lot, a street, and a sidewalk width must be finite.
 
+A lot, a street, or a sidewalk of 2000 meters or more is refused. More than 16 blocks or lots along one axis is refused. A block side of 2000 meters or more is refused.
+
 - The city is a grid of blocks. A block is cut into lots inside a sidewalk strip.
 - Each lot takes a skyscraper of its own seed, height and footprint. Only the four corner lots of a block cut a chamfer, toward their own corner.
 - The furniture walks each curb edge: streetlights, street trees, a hydrant, sometimes a bench, pedestrians, parked cars and a few cars in the lanes. Two corners take a traffic signal, and every corner takes a litter basket.
