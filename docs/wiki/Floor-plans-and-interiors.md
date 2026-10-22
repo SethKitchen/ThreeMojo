@@ -48,6 +48,8 @@ _ = add_windows(building, WindowOptions(bay, pier, sill, height, double_glazing(
 
 `add_windows` cuts a row of windows in every outside wall. The wall is divided evenly into the fewest bays no wider than the bay width. Each window is its bay less the pier. A window that would cut a door is left out. A row taller than the wall cuts nothing.
 
+A wall whose bay count passes 16777216 is refused.
+
 ## Furnish rooms
 
 `furnish(building, seed)` places furniture room by room, by rules:

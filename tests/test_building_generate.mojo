@@ -390,6 +390,11 @@ def test_windows_fill_outside_walls_by_bay() raises:
     var tall = WindowOptions(_m(2.5), _m(0.4), _m(0.9), _m(3), double_glazing())
     var c = _one_storey([SpacePlan("room", OFFICE, _rect(0, 0, 6, 4))])
     assert_equal(add_windows(c, tall), 0)
+    var fine = WindowOptions(
+        _m(1e-7), _m(1e-8), _m(0.9), _m(1.5), double_glazing()
+    )
+    with assert_raises(contains="larger than this port"):
+        _ = add_windows(c, fine)
 
 
 def test_window_options_refuse() raises:
