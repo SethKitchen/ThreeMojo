@@ -713,6 +713,8 @@ The library is three.js's: the math, the adjustments, the mix, the channels, the
 - `emission_color` multiplies `emission`, as the specification says. three.js reads `emissionColor`, which no document names.
 - A `gltf_pbr` surface is left as a plain physical material, as three.js leaves it.
 - `normalmap`, `heighttonormal`, `tangent`, `frame`, the unified noises and the matrix nodes are refused. The program has no tangents, no frame count and no matrices of those types.
+- An extract index that is not a whole number from zero to three is refused.
+- A fractal octave count that is not a whole number from zero to 1024 is refused.
 
 ## In a file
 

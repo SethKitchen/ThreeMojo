@@ -44,6 +44,7 @@ from materials.material import (
 from materials.nodes import (
     COLOR_NODE,
     EMISSIVE_NODE,
+    MAX_LOOP_COUNT,
     METALNESS_NODE,
     NORMAL_NODE,
     OPACITY_NODE,
@@ -130,6 +131,31 @@ def mtlx_numbers(text: String) raises -> List[Float32]:
         else:
             word += chr(byte)
     return found^
+
+
+def _counted(value: Float32, limit: Int, what: String) raises -> Int:
+    """Return a whole count from zero through `limit`.
+
+    Args:
+        value: The number from an input.
+        limit: The largest count, inclusive.
+        what: The error when the number is outside that range or has a
+            fraction.
+
+    Returns:
+        The count.
+
+    Raises:
+        Error: If `value` is not a whole number from zero to `limit`. A
+            float past 2^24 is not a stable integer, so the range is
+            checked before the cast.
+    """
+    if not (value >= Float32(0)) or not (value <= Float32(limit)):
+        raise Error(what)
+    var count = Int(value)
+    if Float32(count) != value:
+        raise Error(what)
+    return count
 
 
 struct _Reader(Movable):
@@ -620,11 +646,11 @@ struct _Reader(Movable):
                 component = "w"
             return self.graph.swizzle(whole, component)
         if tag == "extract":
-            var index = Int(self.input_value(element, "index", 0))
-            if index < 0 or index > 3:
-                raise Error(
-                    "MaterialX: extract reads a component zero to three"
-                )
+            var index = _counted(
+                self.input_value(element, "index", 0),
+                3,
+                "MaterialX: extract reads a component zero to three",
+            )
             return self.graph.swizzle(
                 self.needed(element, "in"),
                 String(String("xyzw")[byte = index : index + 1]),
@@ -705,7 +731,15 @@ struct _Reader(Movable):
             return self.graph.mul(
                 self.graph.mx_fractal_noise_float(
                     self._point(element, "position"),
-                    Int(self.input_value(element, "octaves", 3)),
+                    _counted(
+                        self.input_value(element, "octaves", 3),
+                        MAX_LOOP_COUNT,
+                        (
+                            "MaterialX: fractal noise takes from zero to "
+                            + String(MAX_LOOP_COUNT)
+                            + " whole octaves"
+                        ),
+                    ),
                     self.input_value(element, "lacunarity", 2),
                     self.input_value(element, "diminish", 0.5),
                 ),
