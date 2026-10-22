@@ -62,6 +62,8 @@ Two waypoints are equal when the road, the section and the lane match and `floor
 
 Right and left are as the lane's traffic sees them. A lane that runs against s faces the other way, so its yaw gains 180 degrees.
 
+A generated waypoint walk refuses a spacing that is not a positive finite distance. A road whose station count passes 16777216 is refused.
+
 `closest_waypoint_on_road` and `waypoint` are CARLA's queries. They search CARLA's own segment partition, so they are fast. They step from the segment's start by the foot's plan fraction of the segment times the segment's road-s span. CARLA steps by the plan distance along the chord instead. The two steps differ when a lane offset, a lane width or a curve changes the lane's plan speed. Inside one curved segment, the step keeps the chord's linear approximation of road s.
 
 `certified_closest_waypoint_on_road` and `certified_waypoint` prove lane selection with bounds on the stored Float64 lane centers.
