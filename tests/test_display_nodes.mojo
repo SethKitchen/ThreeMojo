@@ -105,6 +105,15 @@ def test_the_gaussian_weights_are_three_js_s() raises:
         _ = scaled_size(Int.MIN, 1.5)
     with assert_raises(contains="does not fit"):
         _ = scaled_size(1, nan[DType.float32]())
+    # A kernel past 2^24 is not a stable weight index, and the walk does
+    # not finish.
+    with assert_raises(contains="kernel"):
+        _ = gaussian_coefficients(Float32(1e20))
+    var wide = DisplaySettings()
+    wide.sigma = Float32(1e20)
+    var held = even(FloatColor(0.5, 0.5, 0.5, 1))
+    with assert_raises(contains="kernel"):
+        gaussian_blur_light(held, wide)
     # A sigma of zero is one weight: the frame times it.
     var sharp = DisplaySettings()
     sharp.sigma = 0

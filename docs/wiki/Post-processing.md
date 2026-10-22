@@ -627,7 +627,7 @@ Each pass keeps its settings in `display`, a `DisplaySettings`, with three.js's 
 - A scaled width times height that does not fit in an integer is refused.
 - The three blurs take `premultiplied_alpha`, three.js's `premultipliedAlpha`. Off, they blur straight color, as three.js's texture holds it. The alpha is blurred too, so the stored light is scaled by it.
 
-`GaussianBlurNode`'s weights are not normalized, as three.js leaves them. So a blur of an even frame is a little darker than the frame. `hashBlur` turns each tap's angle into degrees and takes the cosine of that, as the node does.
+`GaussianBlurNode`'s weights are not normalized, as three.js leaves them. So a blur of an even frame is a little darker than the frame. `hashBlur` turns each tap's angle into degrees and takes the cosine of that, as the node does. A kernel of more than 16777216 weights is refused.
 
 `dof_pass` is three.js r186's `DepthOfFieldNode`, in its five stages. Each pixel's circle of confusion is `smoothstep(0, focal_length, abs(distance - focus_distance))`, from its view distance. The circle is kept apart for the near field and the far field.
 

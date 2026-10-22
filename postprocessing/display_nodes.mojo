@@ -308,17 +308,25 @@ def _read_back(
 # --- GaussianBlurNode --------------------------------------------------------
 
 
-def gaussian_coefficients(sigma: Float32) -> List[Float32]:
+def gaussian_coefficients(sigma: Float32) raises -> List[Float32]:
     """Return `GaussianBlurNode`'s weights: `3 + 2 * sigma` of them, of a
     Gaussian of a third of that, not normalized, as three.js leaves them.
+
+    The loop index is a `Float32`. Past 16777216 that index is no longer
+    the integer it counts, and a kernel of that size does not finish.
 
     Args:
         sigma: The node's `sigma`.
 
     Returns:
         The center weight, then one per step out.
+
+    Raises:
+        Error: If the kernel has more than 16777216 weights.
     """
     var kernel_size = 3 + 2 * sigma
+    if kernel_size > Float32(16777216):
+        raise Error("A Gaussian blur's kernel is larger than this port builds")
     var spread = kernel_size / 3
     var out = List[Float32]()
     var i = 0
@@ -382,8 +390,9 @@ def gaussian_blur_light(
             whether the blur is premultiplied.
 
     Raises:
-        Error: If a scaled side does not fit in an integer, or the scaled
-            pixel count does not fit.
+        Error: If a scaled side does not fit in an integer, the scaled
+            pixel count does not fit, or the kernel has more than
+            16777216 weights.
     """
     var width = scaled_size(frame.width, settings.resolution_scale)
     var height = scaled_size(frame.height, settings.resolution_scale)

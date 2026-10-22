@@ -553,13 +553,18 @@ def bilateral_pixel(
     return FloatColor(r / share, g / share, b / share, a / share)
 
 
-def bilateral_blur_light(mut frame: RenderTarget, settings: FilterSettings):
+def bilateral_blur_light(
+    mut frame: RenderTarget, settings: FilterSettings
+) raises:
     """Run `BilateralBlurNode` over the frame: across, then down over what
     the first pass wrote.
 
     Args:
         frame: The frame, replaced.
         settings: The direction and the two sigmas.
+
+    Raises:
+        Error: If the Gaussian kernel has more than 16777216 weights.
     """
     var w = frame.width
     var h = frame.height
