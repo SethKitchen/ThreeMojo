@@ -45,6 +45,13 @@ from units.si import (
     PER_METER,
 )
 
+# A side past this bakes a vertex grid the erosion and the index cannot
+# finish. The grid has one more vertex a side than this.
+comptime MAX_TERRAIN_SEGMENTS = 4096
+# How many noise octaves and erosion passes a bake sums.
+comptime MAX_TERRAIN_OCTAVES = 32
+comptime MAX_TERRAIN_PASSES = 64
+
 
 struct TerrainParameters(Copyable, Movable):
     """The parameters of a terrain, three.js's
@@ -101,8 +108,9 @@ struct TerrainParameters(Copyable, Movable):
 
         Raises:
             Error: If the size or the segment count is not positive, the
-                octave or pass count is negative, or a number is not
-                finite.
+                segment count is above 4096, the octave count is negative
+                or above 32, the pass count is negative or above 64, or a
+                number is not finite.
         """
         check_finite(meters(self.size), "A terrain size")
         if not meters(self.size) > 0:
@@ -110,13 +118,25 @@ struct TerrainParameters(Copyable, Movable):
         require_positive(
             self.segments, "A terrain needs one segment a side at least"
         )
+        if self.segments > MAX_TERRAIN_SEGMENTS:
+            raise Error(
+                "A terrain's segment count is larger than this port bakes"
+            )
         require_non_negative(
             self.octaves, "A terrain's octave count must be zero or more"
         )
+        if self.octaves > MAX_TERRAIN_OCTAVES:
+            raise Error(
+                "A terrain's octave count is larger than this port sums"
+            )
         require_non_negative(
             self.talus_passes,
             "A terrain's erosion pass count must be zero or more",
         )
+        if self.talus_passes > MAX_TERRAIN_PASSES:
+            raise Error(
+                "A terrain's erosion pass count is larger than this port runs"
+            )
         check_finite(meters(self.height_scale), "A height scale")
         check_finite(Float64(self.frequency.to(PER_METER)), "A frequency")
         check_finite(

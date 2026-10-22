@@ -53,6 +53,8 @@ A zero child count stops branching. A level past the end of a parameter list reu
 
 `TerrainGenerator(parameters).build()` bakes a mountain range into one indexed geometry in the ground plane, y up. The generator keeps the height grid. Then `sample_height` and `sample_slope` read the surface. The size and every other parameter must be finite.
 
+A segment count above 4096 is refused. An octave count above 32 is refused. More than 64 erosion passes is refused.
+
 - The height is a sum of Perlin octaves from `ImprovedNoise`. A steep running slope damps each octave, so ridges stay sharp and valleys stay smooth.
 - A slow noise warps the sample point first, so the ridges wander.
 - Thermal erosion then relaxes each slope past the angle of repose, `talus`, over `talus_passes` passes.
