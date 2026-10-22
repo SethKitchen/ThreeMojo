@@ -43,6 +43,7 @@ from core.buffer_geometry import BufferGeometry, TUBE_GEOMETRY
 from geometries.surface import (
     indexed_surface,
     record_kind,
+    require_grid_cells,
     require_positive_radius,
     require_three_segments,
 )
@@ -159,7 +160,8 @@ def tube(
         Error: If the path is too short, a point is not finite, two
             consecutive points coincide, the path returns to the point
             before the last or folds straight back on itself, the radius
-            is not positive, or there are fewer than three segments around.
+            is not positive, there are fewer than three segments around,
+            or the grid has more than 16777216 cells.
     """
     var count = len(path)
     if count < 2 or (closed and count < 3):
@@ -178,6 +180,11 @@ def tube(
     var rings = count
     if not closed:
         rings = count - 1
+    require_grid_cells(
+        radial_segments,
+        rings,
+        "A tube's segment count is larger than this port builds",
+    )
     var frames = transport_frames(_tangents(path, closed), closed)
     var along = _distances(path, rings)
     var centers = List[Vector3]()
@@ -215,15 +222,20 @@ def tube(
 
     Raises:
         Error: If there are fewer than one segment along or three around,
-            the radius is not positive, or the curve's frames cannot be
-            built: it stops at a ring, or two rings point straight
-            opposite ways.
+            the grid has more than 16777216 cells, the radius is not
+            positive, or the curve's frames cannot be built: it stops at a
+            ring, or two rings point straight opposite ways.
     """
     require_at_least_one(
         tubular_segments, "A tube needs at least one segment along it"
     )
     require_tube_radius(radius)
     require_tube_segments(radial_segments)
+    require_grid_cells(
+        radial_segments,
+        tubular_segments,
+        "A tube's segment count is larger than this port builds",
+    )
     var frames = curve.frenet_frames(tubular_segments, closed)
     var centers = curve.spaced_points(tubular_segments)
     if closed:

@@ -447,6 +447,15 @@ def test_a_box_with_no_extent_is_rejected() raises:
         _ = box(Length(1.0, METER), Length(-1.0, METER), Length(1.0, METER))
     with assert_raises():
         _ = box(Length(1.0, METER), Length(1.0, METER), Length(0.0, METER))
+    var one = Length(1.0, METER)
+    var strip = box(one, one, one, 4096, 1, 1)
+    assert_equal(strip.vertex_count(), 32784)
+    with assert_raises(contains="larger than this port"):
+        _ = box(one, one, one, Int.MAX, 1, 1)
+    with assert_raises(contains="larger than this port"):
+        _ = box(one, one, one, 1, 1, Int.MAX)
+    with assert_raises(contains="larger than this port"):
+        _ = box(one, one, one, 1, 4097, 4096)
 
 
 def test_a_box_carries_a_normal_per_vertex() raises:
@@ -1592,6 +1601,12 @@ def test_a_torus_needs_radii_and_segments_and_an_arc() raises:
         _ = torus(two, half, 8, 12, Angle(0.0, TURN))
     with assert_raises():
         _ = torus(two, half, 8, 12, Angle(2.0, TURN))
+    var hoop = torus(two, half, 3, 4096)
+    assert_equal(hoop.vertex_count(), 4 * 4097)
+    with assert_raises(contains="larger than this port"):
+        _ = torus(two, half, Int.MAX, 12)
+    with assert_raises(contains="larger than this port"):
+        _ = torus(two, half, 3, 5592406)
 
 
 # --- torus knot -------------------------------------------------------------
@@ -2180,6 +2195,14 @@ def test_a_capsule_needs_a_radius_and_enough_segments() raises:
         _ = capsule(one, one, 4, 2)
     with assert_raises():
         _ = capsule(one, one, 4, 8, 0)
+    var pill = capsule(one, one, 1, 4096, 1)
+    assert_equal(pill.vertex_count(), 4 * 4097)
+    with assert_raises(contains="larger than this port"):
+        _ = capsule(one, one, Int.MAX, 8, 1)
+    with assert_raises(contains="larger than this port"):
+        _ = capsule(one, one, 1, Int.MAX, 1)
+    with assert_raises(contains="larger than this port"):
+        _ = capsule(one, one, 1, 8, 2097153)
 
 
 # --- lathe ------------------------------------------------------------------
@@ -2305,6 +2328,12 @@ def test_a_lathe_needs_a_profile_a_segment_and_a_sweep() raises:
         )
     # The same x at different heights is a side, not a repeat.
     _ = lathe(profile([1, 0, 1, 1]), 1)
+    var turned = lathe(profile([1, 0, 1, 1]), 4096)
+    assert_equal(turned.vertex_count(), 4097 * 2)
+    with assert_raises(contains="larger than this port"):
+        _ = lathe(profile([1, 0, 1, 1]), Int.MAX)
+    with assert_raises(contains="larger than this port"):
+        _ = lathe(profile([1, 0, 1, 1]), 16777217)
 
 
 def test_flat_cone_normals_keep_their_direction_at_extreme_heights() raises:
@@ -2607,6 +2636,12 @@ def test_a_tube_needs_a_path_a_radius_and_segments() raises:
         _ = tube(straight_path(3), Length(0.0, METER))
     with assert_raises():
         _ = tube(straight_path(3), thin, 2)
+    var pipe = tube(straight_path(2), thin, 4096)
+    assert_equal(pipe.vertex_count(), 2 * 4097)
+    with assert_raises(contains="larger than this port"):
+        _ = tube(straight_path(2), thin, Int.MAX)
+    with assert_raises(contains="larger than this port"):
+        _ = tube(straight_path(2), thin, 16777217)
 
 
 def test_a_torus_knot_needs_radii_segments_and_windings() raises:
@@ -2624,6 +2659,12 @@ def test_a_torus_knot_needs_radii_segments_and_windings() raises:
         _ = torus_knot(two, tenth, 48, 8, 0, 3)
     with assert_raises():
         _ = torus_knot(two, tenth, 48, 8, 2, 0)
+    var knot = torus_knot(two, tenth, 4096, 3)
+    assert_equal(knot.vertex_count(), 4097 * 4)
+    with assert_raises(contains="larger than this port"):
+        _ = torus_knot(two, tenth, Int.MAX, 8)
+    with assert_raises(contains="larger than this port"):
+        _ = torus_knot(two, tenth, 5592406, 3)
 
 
 def test_lathe_radial_cancellation_keeps_a_horizontal_corner_normal() raises:

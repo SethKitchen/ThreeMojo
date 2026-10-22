@@ -42,6 +42,7 @@ from geometries.surface import (
     record_kind,
     record_width_height,
     require_finite_extents,
+    require_grid_cells,
     require_positive_extents,
 )
 from units.si import Length
@@ -163,14 +164,29 @@ def box(
         -x, +y, -y, +z, -z.
 
     Raises:
-        Error: If any extent is not finite or not positive, or any segment
-            count is below one. three.js floors a count and takes what it
-            gets.
+        Error: If any extent is not finite or not positive, any segment
+            count is below one, or a face has more than 16777216 cells.
+            three.js floors a count and takes what it gets.
     """
     require_finite_extents(width.value, height.value, depth.value, "box")
     require_positive_extents(width.value, height.value, depth.value, "box")
     if width_segments < 1 or height_segments < 1 or depth_segments < 1:
         raise Error("A box needs at least one segment a side")
+    require_grid_cells(
+        width_segments,
+        height_segments,
+        "A box's segment count is larger than this port builds",
+    )
+    require_grid_cells(
+        width_segments,
+        depth_segments,
+        "A box's segment count is larger than this port builds",
+    )
+    require_grid_cells(
+        depth_segments,
+        height_segments,
+        "A box's segment count is larger than this port builds",
+    )
     var x = width.value
     var y = height.value
     var z = depth.value

@@ -31,6 +31,7 @@ from geometries.surface import (
     indexed_surface,
     record_kind,
     record_shaft_segments,
+    require_grid_cells,
     require_positive_radius,
     require_three_segments,
 )
@@ -69,7 +70,8 @@ def capsule(
 
     Raises:
         Error: If the radius is not finite or not positive, the length is
-            not finite or is negative, or any segment count is too small.
+            not finite or is negative, any segment count is too small, or
+            the grid has more than 16777216 cells.
     """
     require_positive_radius(radius.value, "capsule")
     require_finite(Float64(length.value), "A capsule needs a finite length")
@@ -85,6 +87,15 @@ def capsule(
     )
     require_at_least_one(
         height_segments, "A capsule needs at least one segment up its side"
+    )
+    # `2 * cap + height` is the row count. A cap of `Int.MAX` wraps it,
+    # and the walk then does not finish.
+    if cap_segments > (Int.MAX - height_segments) // 2:
+        raise Error("A capsule's segment count is larger than this port builds")
+    require_grid_cells(
+        radial_segments,
+        cap_segments * 2 + height_segments,
+        "A capsule's segment count is larger than this port builds",
     )
 
     var r = Float64(radius.to(METER))

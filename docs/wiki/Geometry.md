@@ -189,7 +189,7 @@ var brick = box(Length(2.0, METER), Length(1.0, METER), Length(0.5, METER))
 var grid = box(Length(2.0, METER), Length(1.0, METER), Length(0.5, METER), 4, 2, 1)
 ```
 
-The box is three.js's `BoxGeometry`, built by its `buildPlane`. The three counts after the sizes are `width_segments`, `height_segments` and `depth_segments`, one each by default. Each face is a grid of segments, with its own normal and texture coordinates, and the whole image covers each face once.
+The box is three.js's `BoxGeometry`, built by its `buildPlane`. The three counts after the sizes are `width_segments`, `height_segments` and `depth_segments`, one each by default. Each face is a grid of segments, with its own normal and texture coordinates, and the whole image covers each face once. A face of more than 16777216 cells is refused.
 
 The faces come in three.js's order: +x, -x, +y, -y, +z, -z. Each face is a group, with material indices 0 to 5 in that order. The vertices, the triangles and the texture coordinates are three.js's, in three.js's order. So a hit's `triangle` is three.js's `faceIndex`, and an exported box matches three.js's.
 
@@ -280,7 +280,7 @@ var bend = torus(Length(2.0, METER), Length(0.5, METER), 12, 48, Angle(90.0, DEG
 
 A tube bent around a circle in the xy plane, centered on the origin. The first radius runs from the center to the middle of the tube. The second is the tube's own. Vertices run in rows, one row per step around the tube, one vertex per step along it and one more for the seam. Each normal points away from the middle of the tube, so the shading is smooth. `u` runs along the tube and `v` around it.
 
-The arc runs from +x toward +y. A full turn is the default. A shorter arc makes a bent pipe with open ends.
+The arc runs from +x toward +y. A full turn is the default. A shorter arc makes a bent pipe with open ends. A grid of more than 16777216 cells is refused.
 
 ## Torus knot
 
@@ -288,7 +288,7 @@ The arc runs from +x toward +y. A full turn is the default. A shorter arc makes 
 var trefoil = torus_knot(Length(2.0, METER), Length(0.4, METER), 64, 8, 2, 3)   # radius, tube, along, around, p, q
 ```
 
-A tube bent around a knot that winds `p` times around the axis and `q` times through the hole. The curve is three.js's. It lies between half and one and a half of the radius from the axis. Vertices run in rings along the curve, one vertex per step around the tube and one more for the seam. Each ring is built in three.js's frame, so a texture lands as it does there.
+A tube bent around a knot that winds `p` times around the axis and `q` times through the hole. The curve is three.js's. It lies between half and one and a half of the radius from the axis. Vertices run in rings along the curve, one vertex per step around the tube and one more for the seam. Each ring is built in three.js's frame, so a texture lands as it does there. A grid of more than 16777216 cells is refused.
 
 ## Polyhedra
 
@@ -314,7 +314,7 @@ var pill = capsule(Length(0.5, METER), Length(2.0, METER), 4, 16)   # radius, le
 
 A cylinder with a hemisphere on each end, standing on the y axis and centered on the origin. The length is the straight side between the caps, three.js's `height`. The builder is three.js's `CapsuleGeometry`, number for number.
 
-Vertices run in rows from the bottom pole to the top, one vertex per step around and one more for the seam. The sweep starts at -x. A capsule of no length keeps both rims and a side of no height between them.
+Vertices run in rows from the bottom pole to the top, one vertex per step around and one more for the seam. The sweep starts at -x. A capsule of no length keeps both rims and a side of no height between them. A grid of more than 16777216 cells is refused.
 
 `u` runs around, and a pole's vertices sit half a step round, as in three.js. `v` runs up the profile by distance along it, from zero at the bottom pole to one at the top. A texture stays put when the segment counts change.
 
@@ -327,7 +327,7 @@ var vase = lathe(points, 24)                                        # a profile 
 var half = lathe(points, 24, Angle(0.0, DEGREE), Angle(180.0, DEGREE))
 ```
 
-A profile revolved around the y axis. Each point has `x` out from the axis and `y` along it, in meters. Vertices run in columns, one per step around, one vertex per point.
+A profile revolved around the y axis. Each point has `x` out from the axis and `y` along it, in meters. Vertices run in columns, one per step around, one vertex per point. A grid of more than 16777216 cells is refused.
 
 The normals come from the profile's segments, as in three.js. A corner faces the sum of its two segments' normals, each as long as its segment, made unit length. A longer segment pulls the corner its way. The first point faces the way its segment does.
 
@@ -345,7 +345,7 @@ var loop = tube(path, Length(0.2, METER), 8, closed=True)
 var bent = tube(curve, Length(0.2, METER), 64, 8)                   # a Curve3, cells along, cells around
 ```
 
-A tube of one radius swept along a path of points. Each point gets a ring, built in a frame that follows the path. The frames are three.js's parallel transport, so the tube does not twist where the path only bends. A closed path is given without repeating its first point. Its last ring repeats its first, and the twist the path built up is spread evenly back along it.
+A tube of one radius swept along a path of points. Each point gets a ring, built in a frame that follows the path. The frames are three.js's parallel transport, so the tube does not twist where the path only bends. A closed path is given without repeating its first point. Its last ring repeats its first, and the twist the path built up is spread evenly back along it. A grid of more than 16777216 cells is refused.
 
 With a list of points, the path is the points. `u` runs along the path by distance, the closing segment included. `v` runs around the tube.
 
@@ -939,6 +939,7 @@ A per-instance `position`, `normal`, `uv` or `tangent` is refused when drawn. Th
 - A ring grid of more than 16777216 cells is refused.
 - A cylinder needs a positive height, radii that are not negative and not both zero, three segments around and one down the side.
 - A cylinder or a cone grid of more than 16777216 cells is refused.
+- A box face, a torus, a torus knot, a capsule, a lathe, or a tube of more than 16777216 cells is refused.
 - A cone needs a positive radius and a positive height.
 - A torus needs positive radii and three segments each way.
 - A torus knot needs positive radii, three segments each way, and `p` and `q` of at least one.

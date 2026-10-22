@@ -389,6 +389,10 @@ def test_a_tube_along_a_curve_refuses_what_it_cannot_build() raises:
         _ = tube(curve, Length(0, METER))
     with assert_raises():
         _ = tube(curve, Length(0.1, METER), 8, 2)
+    with assert_raises(contains="larger than this port"):
+        _ = tube(curve, Length(0.1, METER), Int.MAX, 8)
+    with assert_raises(contains="larger than this port"):
+        _ = tube(curve, Length(0.1, METER), 8, 2097153)
     # The default is three.js's: 64 along and 8 around.
     assert_equal(tube(curve, Length(0.1, METER)).vertex_count(), 65 * 9)
 
