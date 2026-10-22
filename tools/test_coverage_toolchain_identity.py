@@ -264,7 +264,7 @@ class HostedIdentitySetupTests(unittest.TestCase):
                 self.assertIn('uv python find --managed-python --no-project 3.12.14', job)
                 self.assertIn('echo "$(dirname "$PYTHON")" >> "$GITHUB_PATH"', job)
                 self.assertIn('"$PYTHON" -m venv --without-pip --prompt ThreeMojo .venv', job)
-                self.assertIn('uv pip install --python .venv/bin/python "mojo==1.1.0"', job)
+                self.assertIn('uv pip install --python .venv/bin/python "mojo==1.2.0"', job)
                 self.assertNotIn('uses: actions/setup-python', job)
                 self.assertNotIn('uv venv --prompt ThreeMojo', job)
                 self.assertNotIn('LD_LIBRARY_PATH', job)
