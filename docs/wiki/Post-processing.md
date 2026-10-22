@@ -360,6 +360,8 @@ That is three.js's masking example. The texture fills only the pixels that the o
 
 `classic_bloom_pass` is three.js's `BloomPass`. `bloom_pass` is `UnrealBloomPass`. The frame is blurred across and then up by `ConvolutionShader`, with `kernel_size` taps 1/512 of the texture apart. The kernel is `buildKernel( sigma )`, at most 25 taps, and the uniforms past it are zero. The blur, times `strength`, is added with three.js's additive blend, so the added light is the blur times the strength twice.
 
+A sigma of 1e20 is cut at 25 taps.
+
 These three passes run on the host in a `GpuComposer` frame, as the other passes that draw depth do.
 
 ### Glitch

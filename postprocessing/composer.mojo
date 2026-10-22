@@ -4473,7 +4473,8 @@ def glow_pixel(color: FloatColor, glow: FloatColor) -> FloatColor:
 def bloom_kernel(sigma: Float32, size: Int) -> List[Float32]:
     """Return `BloomPass`'s `buildKernel`: a Gaussian of `sigma` taps,
     at most 25 wide and summing to one, laid in `size` uniforms, the ones
-    past the kernel zero as a shader's unset uniforms are.
+    past the kernel zero as a shader's unset uniforms are. A ceil past
+    2^63 uses that cap.
 
     Args:
         sigma: How far the Gaussian spreads, in taps.
@@ -4482,9 +4483,17 @@ def bloom_kernel(sigma: Float32, size: Int) -> List[Float32]:
     Returns:
         `size` weights.
     """
-    var built = 2 * Int(ceil(sigma * 3)) + 1
-    if built > MAX_BLOOM_KERNEL:
+    # `2 * ceil(sigma * 3) + 1` is 25 at a ceil of 12, and three.js cuts a
+    # wider kernel there. A ceil past 2^63 is not that product: `Int` of
+    # it is a garbage index, so the old cap compared the wrong number.
+    var wide = ceil(sigma * 3)
+    var built: Int
+    if not (wide < Float32((MAX_BLOOM_KERNEL - 1) // 2)) or not (
+        wide > -Float32(Int.MAX)
+    ):
         built = MAX_BLOOM_KERNEL
+    else:
+        built = 2 * Int(wide) + 1
     var half = Float32(built - 1) * 0.5
     var values = List[Float32]()
     var total = Float32(0)
