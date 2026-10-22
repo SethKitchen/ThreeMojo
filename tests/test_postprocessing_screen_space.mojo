@@ -327,6 +327,14 @@ def test_ssao_settings_no_pass_could_run_are_refused() raises:
     bad.kernel_size = 0
     with assert_raises():
         check_ssao(bad)
+    bad.kernel_size = 16777217
+    with assert_raises(contains="larger than this port"):
+        check_ssao(bad)
+    bad.kernel_size = Int.MAX
+    with assert_raises(contains="larger than this port"):
+        check_ssao(bad)
+    bad.kernel_size = 16777216
+    check_ssao(bad)
     # The composer asks too.
     var step = ssao_pass()
     step.ssao.kernel_size = 0
@@ -643,6 +651,10 @@ def test_the_ssao_kernel_crowds_toward_the_surface_above_it() raises:
     assert_true(ssao_kernel(16, 8)[5].x != kernel[5].x)
     with assert_raises():
         _ = ssao_kernel(0, 7)
+    with assert_raises(contains="larger than this port"):
+        _ = ssao_kernel(16777217, 1)
+    with assert_raises(contains="larger than this port"):
+        _ = ssao_kernel(Int.MAX, 1)
     var noise = ssao_noise(3)
     assert_equal(len(noise), 16)
     for value in noise:

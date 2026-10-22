@@ -213,7 +213,7 @@ A pixel with no normal in the attachment takes one from the depth. So does every
 
 `ssao_pass` is three.js's `SSAOPass`. The pass draws the scene. Then, for each pixel that holds a surface, it tests a kernel of samples in the hemisphere above the surface.
 
-1. `ssao_kernel(size, seed)` is `generateSampleKernel`. Each sample is a random direction above the surface. The `i`th of `n` samples has a length of 0.1 + 0.9 (i / n)².
+1. `ssao_kernel(size, seed)` is `generateSampleKernel`. Each sample is a random direction above the surface. The `i`th of `n` samples has a length of 0.1 + 0.9 (i / n)². A kernel above 16777216 samples is refused.
 2. `ssao_noise(seed)` is `generateRandomKernelRotations`. It gives 16 values that repeat over the frame every four pixels. Each value turns the kernel about the normal.
 3. `ssao_occlusion` is `SSAOShader`. The kernel is scaled by `kernel_radius` and set on the surface. A sample occludes when the frame's linear depth where it lands is in front of it. The difference must be more than `min_distance` and less than `max_distance`.
 4. `ssao_blur` is `SSAOBlurShader`. It averages the five by five pixels around each pixel. A frame whose pixel count does not fit in an integer is refused.
@@ -294,7 +294,7 @@ With `use_pattern_texture` on, the selected objects are filled with a pattern. T
 `check_ssao`, `check_sao`, `check_ssr` and `check_outline` refuse settings that no pass can use. `check_pass` calls all four, so `add_pass` and `render` call them too.
 
 - Every check refuses a setting that is not finite, and an output that is none of the six.
-- `check_ssao` refuses a negative radius or distance, and a kernel of no samples.
+- `check_ssao` refuses a negative radius or distance, and a kernel of no samples. It refuses a kernel above 16777216 samples.
 - `check_sao` refuses a negative intensity, minimum resolution, blur radius or cutoff. It refuses a scale, kernel radius or deviation that is not positive. It refuses a blur radius above 16777216.
 - `check_ssr` refuses an opacity outside zero to one, a negative thickness, and a reach that is not positive.
 - `check_outline` refuses a negative color channel, strength, glow or period, and a thickness that is not positive.

@@ -548,18 +548,28 @@ struct SsaoSettings(ImplicitlyCopyable):
         self.output = DEFAULT_OUTPUT
 
 
-def require_ssao_samples(size: Int) raises:
-    """Refuse an SSAO kernel that holds no sample.
+# The sample index is a `Float32`, and the loop adds one each sample.
+# Past 16777216 the index is no longer that sample. The maximum integer
+# wraps the counter, so the walk never ends.
+comptime MAX_SSAO_SAMPLES = 16777216
 
-    Nothing. The call returns when the kernel holds at least one sample.
+
+def require_ssao_samples(size: Int) raises:
+    """Refuse an SSAO kernel that holds no sample, or more than this
+    port walks.
+
+    Nothing. The call returns when the kernel holds from one sample
+    through 16777216.
 
     Args:
         size: How many samples the kernel holds.
 
     Raises:
-        Error: If `size` is below one.
+        Error: If `size` is below one or above 16777216.
     """
     require_positive(size, "An SSAO kernel holds at least one sample")
+    if size > MAX_SSAO_SAMPLES:
+        raise Error("An SSAO kernel is larger than this port takes")
 
 
 def check_ssao(settings: SsaoSettings) raises:
@@ -570,7 +580,8 @@ def check_ssao(settings: SsaoSettings) raises:
 
     Raises:
         Error: If the output is none of the six, the radius or a distance
-            is negative or not finite, or the kernel is empty.
+            is negative or not finite, or the kernel is empty or above
+            16777216.
     """
     require_screen_output(settings.output)
     if not (
@@ -604,7 +615,7 @@ def ssao_kernel(size: Int, seed: Int) raises -> List[Vector3]:
         The samples, in the surface's tangent space, `z` along the normal.
 
     Raises:
-        Error: If the size is not positive.
+        Error: If the size is below one or above 16777216.
     """
     require_ssao_samples(size)
     var random = SeededRandom(seed)
