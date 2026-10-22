@@ -477,6 +477,12 @@ def test_the_glare_grid_maps_the_image_and_back() raises:
     # A Float32 height of 2^25 + 1 is 2^25, so the wide side rounds to 2.
     var odd = glare_grid_size(4, 16777216, 33554433)
     assert_equal(odd[0], 1)
+    # A side of zero makes the fit infinite. `Int` of that was not below
+    # one, so the grid width stayed zero.
+    with assert_raises(contains="positive"):
+        _ = glare_grid_size(4, 0, 10)
+    with assert_raises(contains="positive"):
+        _ = glare_grid_size(4, 10, 0)
     assert_equal(odd[1], 3)
     # Every grid point samples a pixel inside the image, and every pixel reads
     # a grid point inside the grid, at both ends of each axis.

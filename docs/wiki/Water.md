@@ -117,7 +117,7 @@ A pebble coordinate that is not finite is black.
 
 A footprint that is not finite reads the base level. A mip level that does not fit in an integer reads the coarsest level.
 
-Underwater absorption and ripple lookup follow the refracted sun direction. The sun is not treated as vertical when it is near the horizon. Invalid spectrum and glare sizes are refused before their grids are allocated.
+Underwater absorption and ripple lookup follow the refracted sun direction. The sun is not treated as vertical when it is near the horizon. Invalid spectrum and glare sizes are refused before their grids are allocated. A glare image below one pixel is refused.
 
 ## Shade it on a GPU
 

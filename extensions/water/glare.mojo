@@ -290,7 +290,7 @@ def _normalize_channels(mut spatial: List[Float32], n: Int):
         spatial[i * 3 + 2] /= sum_b
 
 
-def glare_grid_size(n: Int, width: Int, height: Int) -> Tuple[Int, Int]:
+def glare_grid_size(n: Int, width: Int, height: Int) raises -> Tuple[Int, Int]:
     """Return the size of the grid that the glare is computed on.
 
     The image is fitted into three quarters of the kernel's grid, so the star
@@ -307,7 +307,13 @@ def glare_grid_size(n: Int, width: Int, height: Int) -> Tuple[Int, Int]:
 
     The fit is a `Float64`. A `Float32` image side past 2^24 changes which
     side limits the grid, and the rounded side with it.
+
+    Raises:
+        Error: If the image is below one pixel either way. A side of zero
+            makes the fit infinite, and `Int` of that is not a grid size.
     """
+    if width < 1 or height < 1:
+        raise Error("A glare grid needs a positive image")
     var fit = Float64(n) * 0.75
     var scale = fit / Float64(width)
     var tall = fit / Float64(height)
