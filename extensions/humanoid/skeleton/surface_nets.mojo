@@ -42,6 +42,8 @@ from std.math import atan2, ceil, isfinite, max, min, pi, sqrt
 
 # Fine cells per unit of `detail` along the long axis.
 comptime REFINE = 4
+# Each pass walks every vertex. The maximum integer never finishes.
+comptime MAX_SMOOTH_PASSES = 16777216
 # Fine cells along each side of a coarse block.
 comptime BLOCK = 4
 # How many Newton steps walk a vertex onto the surface.
@@ -457,11 +459,16 @@ def mesh_surface[
         A geometry with `position`, `normal` and `uv` attributes.
 
     Raises:
-        Error: If `detail` is out of range, the box's block count does
-            not fit in an integer, or the field makes no surface in the
-            box.
+        Error: If `detail` is out of range, `smoothing` is above
+            16777216, the box's block count does not fit in an integer,
+            or the field makes no surface in the box.
     """
     check_detail(detail, name)
+    if smoothing > MAX_SMOOTH_PASSES:
+        raise Error(
+            "A surface net's smoothing count is larger than this port"
+            + " smooths"
+        )
     var threads = workers
     if threads < 1:
         threads = num_logical_cores()

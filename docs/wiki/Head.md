@@ -108,6 +108,8 @@ The skin's mesh is the scan's own mesh, not a mesh extracted from the field. Eac
 
 A box whose block count does not fit in an integer is refused.
 
+A smoothing count above 16777216 is refused.
+
 `tools/ict_face_model.mojo` converts the model's OBJ files into `assets/face/ict_face.bin`. `FaceModel` reads it. The file keeps the mean head, its mesh, sixty identity modes and fifty-seven expressions, with the left and the right side apart. `FaceModel` reads only what you ask for, so a head that needs no expression loads in a few milliseconds.
 
 | Function | Returns |
