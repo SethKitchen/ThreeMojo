@@ -508,6 +508,20 @@ def test_the_glare_grid_maps_the_image_and_back() raises:
     assert_equal(glare_sample_x(2, 3, 16777217), 13981014)
     assert_equal(glare_cell_x(16777216, 16777217, 48), 47)
     assert_equal(glare_cell_y(16777216, 16777217, 48), 47)
+    # Past 2^53 the last column's ratio is one, so it used to read one
+    # past the image and one past the grid. A zero side is not a column.
+    assert_equal(glare_sample_x(Int.MAX - 1, Int.MAX, 100), 99)
+    assert_equal(glare_sample_y(Int.MAX - 1, Int.MAX, 100), 99)
+    assert_equal(glare_cell_x(Int.MAX - 1, Int.MAX, 48), 47)
+    assert_equal(glare_cell_y(Int.MAX - 1, Int.MAX, 48), 47)
+    assert_equal(glare_sample_x(0, 0, 100), 0)
+    assert_equal(glare_sample_x(0, 2, 0), 0)
+    assert_equal(glare_sample_y(0, 0, 100), 0)
+    assert_equal(glare_sample_y(0, 2, 0), 0)
+    assert_equal(glare_cell_x(0, 0, 4), 0)
+    assert_equal(glare_cell_x(3, 10, 0), 0)
+    assert_equal(glare_cell_y(0, 0, 4), 0)
+    assert_equal(glare_cell_y(3, 10, 0), 0)
     # The convolution refuses a grid that does not fit its kernels, or samples
     # that are not the grid's.
     var kernels = glare_kernels(SpectrumResolution(8))
