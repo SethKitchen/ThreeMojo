@@ -74,7 +74,7 @@ These values are sourced or named research metadata. This extension does not imp
 
 ## Mass and weight
 
-`articular_cartilage_mass(spec)` samples the field. Each cell is empty or filled. The default step is 2 mm.
+`articular_cartilage_mass(spec)` samples the field. Each cell is empty or filled. The default step is 2 mm. A box that is not finite and ordered is refused. A span whose cell count does not fit in an integer is refused.
 
 ```mojo
 from extensions.humanoid.skeleton.leg.knee.mass import articular_cartilage_mass
