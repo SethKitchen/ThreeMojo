@@ -195,6 +195,7 @@ The decoder keeps these UTIF behaviors:
 - CMYK with four samples reads a fifth sample anyway, times zero. Past the end of the data that is NaN, so the last pixel is transparent.
 - An uncompressed image of one strip is read as long as the image, whatever its byte count says. A Deflate strip that does not fit is dropped.
 - An LZW code past the table is read as the next code.
+- A 32-bit float gray sample at 2^63, or one that is not finite, is byte zero. That magnitude is a multiple of 2048.
 
 ### Errors
 

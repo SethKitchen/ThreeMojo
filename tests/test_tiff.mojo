@@ -9,6 +9,8 @@ from `three_tiff.mjs`."""
 
 from loaders.json import parse_json
 from render.tiff import read_tiff
+from std.math import inf, nan
+from std.memory import bitcast
 from std.pathlib import Path
 from std.testing import TestSuite, assert_equal, assert_raises, assert_true
 
@@ -139,6 +141,32 @@ def test_a_tile_needs_a_positive_size() raises:
     )
     with assert_raises(contains="no size"):
         _ = read_tiff(thin)
+
+
+def _f32(mut bytes: List[UInt8], value: Float32):
+    """Append a little-endian float."""
+    _push32(bytes, Int(bitcast[DType.uint32](value)))
+
+
+def test_a_float_gray_sample_past_2_63_is_byte_zero() raises:
+    """A sample of 1e20 is a multiple of 2048, so its byte is zero."""
+    var chunk = List[UInt8]()
+    _f32(chunk, 1)
+    _f32(chunk, Float32(1e20))
+    _f32(chunk, inf[DType.float32]())
+    _f32(chunk, nan[DType.float32]())
+    _f32(chunk, -1)
+    var file = _tiff(5, 1, [258, 32, 262, 1, 339, 3], chunk, False)
+    var texture = read_tiff(file)
+    assert_equal(texture.width, 5)
+    assert_equal(texture.height, 1)
+    var want = [255, 0, 0, 0, 2]
+    for pixel in range(5):
+        var at = pixel * 4
+        assert_equal(Int(texture.pixels[at]), want[pixel])
+        assert_equal(Int(texture.pixels[at + 1]), want[pixel])
+        assert_equal(Int(texture.pixels[at + 2]), want[pixel])
+        assert_equal(Int(texture.pixels[at + 3]), 255)
 
 
 def test_a_deflate_strip_that_is_not_deflate_is_refused() raises:

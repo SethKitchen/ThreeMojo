@@ -62,7 +62,7 @@ from core.extent import require_positive_extent
 from render.inflate import inflate
 from render.srgb import LINEAR
 from render.texture import BILINEAR, CLAMP, COVERAGE, Texture
-from std.math import floor, isnan, trunc
+from std.math import floor, isfinite, isnan, trunc
 from std.memory import bitcast
 
 # The largest image this port decodes, in pixels.
@@ -655,8 +655,10 @@ def _gamma(x: Float64) -> Float64:
 
 
 def _to_byte(value: Float64) -> UInt8:
-    """Return `~~value` stored in a `Uint8Array`: truncated, wrapped, NaN
-    zero.
+    """Return `~~value` stored in a `Uint8Array`: truncated, wrapped.
+
+    NaN and the infinities are zero. A magnitude at 2^63 is a multiple of
+    2048, so the byte is zero. `Int` of that magnitude is not the number.
 
     Args:
         value: The value.
@@ -664,7 +666,7 @@ def _to_byte(value: Float64) -> UInt8:
     Returns:
         The byte.
     """
-    if isnan(value):
+    if not isfinite(value) or not (abs(value) < Float64(Int.MAX)):
         return 0
     var t = Int(trunc(value))
     return UInt8(t & 255)
