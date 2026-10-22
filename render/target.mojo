@@ -313,10 +313,12 @@ def sample_grid(samples: Int) -> Int:
 
     Returns:
         The side of the grid: one for zero or one sample, two for four,
-        three for nine and four for sixteen.
+        three for nine and four for sixteen. A larger count is still four.
     """
     var side = 1
-    while (side + 1) * (side + 1) <= samples:
+    # Stop at a side of four. Past that, `(side + 1)` squared wraps and
+    # the walk does not finish.
+    while side * side < MAX_SAMPLES and (side + 1) * (side + 1) <= samples:
         side += 1
     return side
 

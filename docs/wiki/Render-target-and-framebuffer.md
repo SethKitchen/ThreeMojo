@@ -230,7 +230,7 @@ var target = RenderTarget(WIDTH, HEIGHT, Color(0, 0, 0), FLOAT_TARGET, samples=4
 renderer.render_into(target, scene, assets, camera)
 ```
 
-The samples lie on a regular grid inside each pixel. So the count must be zero, one, or a square: 4, 9 or 16. `check_samples` refuses any other count, and `MAX_SAMPLES` is 16. `sample_grid(samples)` gives the side of the grid.
+The samples lie on a regular grid inside each pixel. So the count must be zero, one, or a square: 4, 9 or 16. `check_samples` refuses any other count, and `MAX_SAMPLES` is 16. `sample_grid(samples)` gives the side of the grid. A count past sixteen still gives a side of four.
 
 `render_into` draws the frame with `Renderer.multisampled(samples)`, a renderer `sample_grid(samples)` times the size. It draws into `multisample_buffer()`, then calls `resolve_samples`. Each sample of that buffer starts as its pixel. Only the pixels inside the scissor are resolved, so a scissored draw keeps the other pixels.
 

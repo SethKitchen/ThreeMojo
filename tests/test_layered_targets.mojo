@@ -72,6 +72,8 @@ def test_a_sample_count_is_a_square_grid() raises:
     assert_equal(sample_grid(4), 2)
     assert_equal(sample_grid(9), 3)
     assert_equal(sample_grid(MAX_SAMPLES), 4)
+    assert_equal(sample_grid(25), 4)
+    assert_equal(sample_grid(Int.MAX), 4)
     check_samples(0)
     check_samples(1)
     check_samples(16)
