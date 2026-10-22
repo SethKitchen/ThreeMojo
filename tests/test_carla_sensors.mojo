@@ -587,6 +587,15 @@ def test_hss_lidar_fixed_sweep() raises:
     assert_equal(hss_points_per_laser(d, _deg(0.456)), 196)
     d.horizontal_fov = _deg(-10)
     assert_false(Bool(scan_hss_lidar(scene, _pose(0, 0, 2), d, _deg(1), rng)))
+    var wide = _lidar()
+    wide.channels = 1
+    wide.horizontal_fov = Angle(Float32(1e20), DEGREE)
+    with assert_raises(contains="does not fit"):
+        _ = hss_points_per_laser(wide, _deg(0.01))
+    wide.channels = 16777216
+    wide.horizontal_fov = Angle(Float32(1e10), DEGREE)
+    with assert_raises(contains="larger than this port"):
+        _ = scan_hss_lidar(scene, _pose(0, 0, 2), wide, _deg(0.01), rng)
     # A limit of zero turns the intensity drop-off into beta alone.
     var zero = _lidar()
     zero.dropoff_general_rate = 0

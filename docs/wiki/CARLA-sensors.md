@@ -115,7 +115,7 @@ Each sensor has its own `SensorRandom`, seeded with its `noise_seed`. The engine
 
 ### LiDARs
 
-Each laser of a rotating LiDAR fires the points per second times the tick over the channels, rounded half away from zero. The quotient is a `Float64`, and a quotient that is not finite or does not fit in an integer is refused. The rays sweep the angle that the rotation covers in the tick, from where the last tick stopped. A channel count above 16777216 is refused.
+Each laser of a rotating LiDAR fires the points per second times the tick over the channels, rounded half away from zero. The quotient is a `Float64`, and a quotient that is not finite or does not fit in an integer is refused. The rays sweep the angle that the rotation covers in the tick, from where the last tick stopped. A channel count above 16777216 is refused. An HSS ray count that does not fit in an integer is refused. A channel count times the rays of one laser that does not fit is refused.
 
 - The semantic LiDAR keeps each hit. A hit holds the point in the sensor's frame, the cosine between the normal and the way back, the actor id and the tag.
 - The ray-cast LiDAR draws a drop-off for each ray before the cast. Each hit then gets exp(-a d), noise along its direction and a drop-off by intensity.
