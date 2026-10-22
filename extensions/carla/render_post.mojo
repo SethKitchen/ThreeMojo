@@ -288,7 +288,7 @@ def draw_rain(
     rain: RainSettings,
     light: FloatColor,
     seed: Int,
-):
+) raises:
     """Draw rain streaks over a frame.
 
     Each streak falls at a random pixel and a random depth from
@@ -302,6 +302,9 @@ def draw_rain(
         rain: The rain.
         light: The light a streak catches, before its opacity.
         seed: Which streaks.
+
+    Raises:
+        Error: Everything `RainSettings.streaks` raises.
     """
     var count = rain.streaks(frame.width, frame.height)
     var random = SeededRandom(seed)

@@ -65,7 +65,7 @@ from math.smoothstep import smoothstep
 from math.vector3 import Vector3
 from render.color_utils import kelvin_color
 from render.framebuffer import FloatColor
-from std.math import cos, exp, pow, sin, sqrt
+from std.math import cos, exp, isfinite, pow, sin, sqrt
 from units.si import (
     DEGREE,
     METER,
@@ -124,6 +124,9 @@ comptime PUDDLE_ROUGHNESS = Float32(0.04)
 comptime WET_DARKENING = Float32(0.55)
 # Rain streaks per million pixels at a precipitation of 100 percent.
 comptime RAIN_STREAKS = Float32(6000)
+# The most streaks one image draws. A larger count does not finish, and
+# `Int` of a count past 2^63 is not that count.
+comptime MAX_RAIN_STREAKS = 16777216
 # How far a streak leans at full wind.
 comptime RAIN_LEAN = Angle(18, DEGREE)
 # CARLA's default Rayleigh and Mie scales, which give the sky's defaults.
@@ -610,7 +613,7 @@ struct RainSettings(ImplicitlyCopyable, Writable):
         """
         return self.density > 0
 
-    def streaks(self, width: Int, height: Int) -> Int:
+    def streaks(self, width: Int, height: Int) raises -> Int:
         """Return how many streaks an image of a size gets.
 
         Args:
@@ -618,9 +621,24 @@ struct RainSettings(ImplicitlyCopyable, Writable):
             height: Its height in pixels.
 
         Returns:
-            The density times the pixels, in millions, rounded down.
+            The density times the pixels, in millions, rounded down. Zero
+            when a side is below one.
+
+        Raises:
+            Error: If the density is not a finite number that is not
+                negative, or the streak count is above 16777216.
         """
-        return Int(self.density * Float32(width * height) / 1e6)
+        if not isfinite(self.density) or not (self.density >= 0):
+            raise Error(
+                "A rain density must be a finite number that is not negative"
+            )
+        if width < 1 or height < 1:
+            return 0
+        var pixels = Float64(width) * Float64(height)
+        var count = pixels * Float64(self.density) / 1e6
+        if not (count < Float64(MAX_RAIN_STREAKS + 1)):
+            raise Error("A rain streak count is larger than this port draws")
+        return Int(count)
 
     def write_to(self, mut writer: Some[Writer]):
         """Write the rain.

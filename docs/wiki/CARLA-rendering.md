@@ -230,5 +230,5 @@ With the Town02 package, an 800 by 600 view on Town02's roads takes about 2.2 se
 
 - Without a town package, the buildings are boxes with textured facades, and the trees are noise-shaped spheres or the cached tree model.
 - A vehicle is CARLA's own model when the cache holds it, and a procedural shape when it does not. The walkers are procedural shapes.
-- The rain is streaks over the image. It does not wet the camera lens.
+- The rain is streaks over the image. It does not wet the camera lens. A streak count above 16777216 is refused.
 - The clouds are one flat layer. Their shadows are a screen-space effect, not a volume.

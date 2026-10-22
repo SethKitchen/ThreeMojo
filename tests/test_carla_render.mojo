@@ -368,6 +368,20 @@ def test_rain_settings() raises:
     assert_almost_equal(rain.opacity, 0.45, atol=1e-6)
     # 3000 per million pixels over 800 by 600 pixels.
     assert_equal(rain.streaks(800, 600), 1440)
+    assert_equal(rain.streaks(0, 600), 0)
+    var heavy = rain
+    heavy.density = Float32(1e20)
+    with assert_raises(contains="larger than this port"):
+        _ = heavy.streaks(1000, 1000)
+    heavy.density = inf[DType.float32]()
+    with assert_raises(contains="finite"):
+        _ = heavy.streaks(1000, 1000)
+    heavy.density = nan[DType.float32]()
+    with assert_raises(contains="finite"):
+        _ = heavy.streaks(8, 8)
+    heavy.density = -1
+    with assert_raises(contains="not negative"):
+        _ = heavy.streaks(8, 8)
     assert_true("RainSettings" in String(rain))
 
 
