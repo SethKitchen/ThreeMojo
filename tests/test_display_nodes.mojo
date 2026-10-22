@@ -247,6 +247,29 @@ def test_the_display_settings_and_builders_are_checked() raises:
     assert_true(lensflare_pass(0.2).kind == LENSFLARE)
     with assert_raises(contains="repeat"):
         _ = hash_blur_pass(repeats=0)
+    with assert_raises(contains="larger than this port"):
+        _ = hash_blur_pass(repeats=16777217)
+    with assert_raises(contains="larger than this port"):
+        _ = hash_blur_pass(repeats=Int.MAX)
+    with assert_raises(contains="larger than this port"):
+        _ = anamorphic_pass(0.9, 3, Int.MAX)
+    with assert_raises(contains="larger than this port"):
+        _ = lensflare_pass(ghost_samples=16777217)
+    var kept = even(FloatColor(0.25, 0.5, 0.75, 1))
+    var heavy = DisplaySettings()
+    heavy.repeats = Int.MAX
+    hash_blur_light(kept, heavy)
+    assert_almost_equal(kept.colors[20].b, Float32(0.75), atol=1e-5)
+    var streak = RenderTarget(2, 2, Color(0, 0, 0))
+    var wide = DisplaySettings()
+    wide.samples = 16777217
+    with assert_raises(contains="larger than this port"):
+        anamorphic_light(streak, wide)
+    wide.samples = 32
+    wide.ghost_samples = Int.MAX
+    wide.down_sample_ratio = 1
+    with assert_raises(contains="larger than this port"):
+        lensflare_light(streak, wide)
 
 
 def test_each_display_pass_runs_in_the_composer() raises:

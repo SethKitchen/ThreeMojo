@@ -139,9 +139,10 @@ struct DisplaySettings(ImplicitlyCopyable):
         self.bokeh_scale = 1
 
 
-# A motion-blur tap index is a `Float32`. Past 16777216 it is no longer
-# that index, and one more than the maximum integer wraps the loop bound.
-comptime MAX_MOTION_SAMPLES = 16777216
+# A display tap index is a `Float32`. Past 16777216 it is no longer that
+# index. A count of the maximum integer does not finish the walk, and one
+# more than it wraps a motion blur's loop bound.
+comptime MAX_DISPLAY_TAPS = 16777216
 
 
 def check_display(settings: DisplaySettings) raises:
@@ -155,8 +156,9 @@ def check_display(settings: DisplaySettings) raises:
             resolution scale or the down sample ratio is not positive; a
             size, a separation, a repeat count, a sample count, a ghost
             count or a motion blur's sample count is below what each
-            needs; a motion blur has more than 16777216 samples; or a
-            depth of field's focal length is not positive.
+            needs; a hash blur, an anamorphic streak, a lens flare, or a
+            motion blur has more than 16777216 taps; or a depth of field's
+            focal length is not positive.
     """
     var finite = (
         isfinite(settings.sigma)
@@ -198,7 +200,15 @@ def check_display(settings: DisplaySettings) raises:
     )
     if settings.motion_samples < 2:
         raise Error("A motion blur takes at least two samples")
-    if settings.motion_samples > MAX_MOTION_SAMPLES:
+    if settings.repeats > MAX_DISPLAY_TAPS:
+        raise Error("A hash blur's repeat count is larger than this port takes")
+    if settings.samples > MAX_DISPLAY_TAPS:
+        raise Error(
+            "An anamorphic streak's sample count is larger than this port takes"
+        )
+    if settings.ghost_samples > MAX_DISPLAY_TAPS:
+        raise Error("A lens flare's ghost count is larger than this port takes")
+    if settings.motion_samples > MAX_DISPLAY_TAPS:
         raise Error(
             "A motion blur's sample count is larger than this port takes"
         )
@@ -492,13 +502,19 @@ def hash_blur_pixel(
         x: The column.
         y: The row, down from the top.
         settings: The blur amount, the repeats and whether the blur is
-            premultiplied.
+            premultiplied. More than 16777216 repeats returns the pixel.
 
     Returns:
-        The mean, as the frame holds it.
+        The mean, as the frame holds it. The pixel alone when the repeat
+        count is above 16777216.
     """
     var u = u_of(x, source.width)
     var v = v_of(y, source.height)
+    if settings.repeats > MAX_DISPLAY_TAPS:
+        return _stored(
+            _tap(source, u, v, settings.premultiplied_alpha),
+            settings.premultiplied_alpha,
+        )
     var repeats = Float32(settings.repeats)
     var amount = settings.blur_amount
     var sum = TRANSPARENT_BLACK
@@ -607,7 +623,7 @@ def motion_blur_pixel(
     """
     var u = u_of(x, source.width)
     var v = v_of(y, source.height)
-    if samples > MAX_MOTION_SAMPLES:
+    if samples > MAX_DISPLAY_TAPS:
         return _stored(_tap(source, u, v, False), False)
     var count = Float32(samples)
     var sum = _tap(source, u, v, False)
@@ -990,9 +1006,13 @@ def anamorphic_light(mut frame: RenderTarget, settings: DisplaySettings) raises:
             scale.
 
     Raises:
-        Error: If a scaled side does not fit in an integer, or the scaled
-            pixel count does not fit.
+        Error: If there are more than 16777216 samples, a scaled side does
+            not fit in an integer, or the scaled pixel count does not fit.
     """
+    if settings.samples > MAX_DISPLAY_TAPS:
+        raise Error(
+            "An anamorphic streak's sample count is larger than this port takes"
+        )
     var width = scaled_size(frame.width, settings.resolution_scale)
     var height = scaled_size(frame.height, settings.resolution_scale)
     require_scaled_extent(width, height)
@@ -1055,9 +1075,11 @@ def lensflare_light(mut frame: RenderTarget, settings: DisplaySettings) raises:
             attenuation, and the down sample ratio.
 
     Raises:
-        Error: If a flare side does not fit in an integer, or the flare's
-            pixel count does not fit.
+        Error: If there are more than 16777216 ghosts, a flare side does
+            not fit in an integer, or the flare's pixel count does not fit.
     """
+    if settings.ghost_samples > MAX_DISPLAY_TAPS:
+        raise Error("A lens flare's ghost count is larger than this port takes")
     var width = _rounded_side(
         Float64(frame.width) / Float64(settings.down_sample_ratio)
     )
