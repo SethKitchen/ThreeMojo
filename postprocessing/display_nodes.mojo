@@ -144,6 +144,11 @@ struct DisplaySettings(ImplicitlyCopyable):
 # more than it wraps a motion blur's loop bound.
 comptime MAX_DISPLAY_TAPS = 16777216
 
+# A box blur is a square of `2 * size + 1` taps. Size 2047 is 4095 taps
+# on a side. One more side is more than 16777216 taps, and the maximum
+# integer wraps `size + 1`, so the square is empty.
+comptime MAX_BOX_BLUR_SIZE = 2047
+
 
 def check_display(settings: DisplaySettings) raises:
     """Refuse settings no display pass could run.
@@ -157,8 +162,8 @@ def check_display(settings: DisplaySettings) raises:
             size, a separation, a repeat count, a sample count, a ghost
             count or a motion blur's sample count is below what each
             needs; a hash blur, an anamorphic streak, a lens flare, or a
-            motion blur has more than 16777216 taps; or a depth of field's
-            focal length is not positive.
+            motion blur has more than 16777216 taps; a box blur's size is
+            above 2047; or a depth of field's focal length is not positive.
     """
     var finite = (
         isfinite(settings.sigma)
@@ -192,6 +197,8 @@ def check_display(settings: DisplaySettings) raises:
         raise Error("A display pass's scale and ratio must be positive")
     if settings.size < 0 or settings.separation < 0:
         raise Error("A box blur's size and separation must not be negative")
+    if settings.size > MAX_BOX_BLUR_SIZE:
+        raise Error("A box blur's size is larger than this port takes")
     if settings.repeats < 1 or settings.samples < 2:
         raise Error("A hash blur needs a repeat, an anamorphic two samples")
     require_non_negative(
@@ -462,13 +469,20 @@ def box_blur_pixel(
         x: The column.
         y: The row, down from the top.
         settings: The size, the separation and whether the blur is
-            premultiplied.
+            premultiplied. A size above 2047, or below zero, returns the
+            pixel.
 
     Returns:
-        The mean, as the frame holds it.
+        The mean, as the frame holds it. The pixel alone when the size is
+        below zero or above 2047.
     """
     var u = u_of(x, source.width)
     var v = v_of(y, source.height)
+    if settings.size < 0 or settings.size > MAX_BOX_BLUR_SIZE:
+        return _stored(
+            _tap(source, u, v, settings.premultiplied_alpha),
+            settings.premultiplied_alpha,
+        )
     var sep = Float32(max(settings.separation, 1))
     var step_u = 1 / Float32(source.width) * sep
     var step_v = 1 / Float32(source.height) * sep

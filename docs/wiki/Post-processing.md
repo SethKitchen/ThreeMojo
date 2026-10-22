@@ -631,6 +631,8 @@ Each pass keeps its settings in `display`, a `DisplaySettings`, with three.js's 
 
 `GaussianBlurNode`'s weights are not normalized, as three.js leaves them. So a blur of an even frame is a little darker than the frame. `hashBlur` turns each tap's angle into degrees and takes the cosine of that, as the node does. A kernel of more than 16777216 weights is refused. A hash blur above 16777216 repeats is refused. An anamorphic sample count or a ghost count above 16777216 is refused.
 
+A box blur above 2047 taps from the center is refused.
+
 `dof_pass` is three.js r186's `DepthOfFieldNode`, in its five stages. Each pixel's circle of confusion is `smoothstep(0, focal_length, abs(distance - focus_distance))`, from its view distance. The circle is kept apart for the near field and the far field.
 
 The near field's circle is blurred by `gaussianBlur(coc, 1, 2)` and halved in size. Then each field blurs the frame at half size with 64 taps on a golden-angle spiral, spread by its circle. It spreads the brightest of 16 more taps of that. The composite mixes the far blur over the frame and the near blur over that, each by twice its circle, at most one.
@@ -653,7 +655,7 @@ Each pixel with a surface and some metalness sends a ray along its reflection. T
 
 A hit reads the frame's color there. The color is scaled by the metalness, by the square of the part of `max_distance` that is left, and by three.js's Fresnel term, `(dot(incident, reflected) + 1) / 2`. The light is capped at `max_luminance` and scaled by `intensity`.
 
-With `use_roughness` on, the reflections go into a chain of five levels. Each level after the first is a box blur, a level's number of pixels apart. The frame reads the chain at the level that its roughness squared, times four, gives. This is how the example reads the node through its `roughnessNode`. A blur whose pixel count does not fit in an integer is refused.
+With `use_roughness` on, the reflections go into a chain of five levels. Each level after the first is a box blur, a level's number of pixels apart. The frame reads the chain at the level that its roughness squared, times four, gives. This is how the example reads the node through its `roughnessNode`. A blur whose pixel count does not fit in an integer is refused. A blur reach above 2047 taps is refused.
 
 The node's stochastic mode, its environment sampling, its history and its binary refinement are not ported. The example leaves all four off. The pass runs on the host in a `GpuComposer` frame.
 
@@ -719,6 +721,8 @@ A thin feature locks the history against the clip where the depth did not change
 ### Radial, bilateral and depth-aware blurs
 
 `radial_blur_pass` is three.js's `radialBlur`. Each pixel walks `count` taps toward the center. Each tap weighs `weight` times `decay` to the power of its number. The walk starts a share of a step along, from `interleaved_gradient_noise`. The sum over `count`, times `exposure`, is mixed with twice the pixel. An alpha above one is shown as one.
+
+A count above 16777216 is refused.
 
 `bilateral_blur_pass` is three.js's `BilateralBlurNode`: the Gaussian taps of `gaussian_coefficients`, across and then down. Each tap is weighed down by how unlike the center its luminance is, by `sigma_color`.
 

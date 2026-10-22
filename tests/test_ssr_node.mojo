@@ -119,6 +119,13 @@ def test_the_settings_are_checked() raises:
     bad.blur_quality = -1
     with assert_raises(contains="negative"):
         check_ssr_node(bad)
+    bad = SsrNodeSettings()
+    bad.blur_quality = 2048
+    with assert_raises(contains="larger than this port"):
+        check_ssr_node(bad)
+    bad.blur_quality = Int.MAX
+    with assert_raises(contains="larger than this port"):
+        check_ssr_node(bad)
     with assert_raises(contains="positive"):
         _ = ssr_node_pass(max_distance=Length(-1, METER))
     assert_true(ssr_node_pass().kind == SSR_NODE)
@@ -442,6 +449,10 @@ def test_an_ssr_blur_must_fit() raises:
         _ = ssr_node_blur(source, 1, 0, 1, 1)
     with assert_raises(contains="larger than this port"):
         _ = ssr_node_blur(source, 1 << 32, 1 << 32, 1, 1)
+    with assert_raises(contains="larger than this port"):
+        _ = ssr_node_blur(source, 1, 1, 2048, 1)
+    with assert_raises(contains="larger than this port"):
+        _ = ssr_node_blur(source, 1, 1, Int.MAX, 1)
     _ = colors^
 
 

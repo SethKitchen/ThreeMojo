@@ -128,6 +128,11 @@ struct FilterSettings(ImplicitlyCopyable):
         self.edge_strength = 2
 
 
+# A radial tap index is a `Float32`. Past 16777216 it is no longer that
+# index, and a count of the maximum integer does not finish the walk.
+comptime MAX_RADIAL_TAPS = 16777216
+
+
 def check_filters(settings: FilterSettings) raises:
     """Refuse settings no filter pass could run.
 
@@ -169,6 +174,8 @@ def check_filters(settings: FilterSettings) raises:
     if settings.curvature >= 0.5:
         raise Error("A CRT's curvature must be below a half")
     require_positive(settings.count, "A radial blur takes at least one tap")
+    if settings.count > MAX_RADIAL_TAPS:
+        raise Error("A radial blur's tap count is larger than this port takes")
     if not (settings.sigma > 0 and settings.sigma_color > 0):
         raise Error("A bilateral blur's sigmas must be positive")
     if not (settings.radius.value > 0):
@@ -441,12 +448,20 @@ def radial_blur_pixel(
             the blur works on premultiplied light.
 
     Returns:
-        The pixel, premultiplied.
+        The pixel, premultiplied. The pixel alone when the count is
+        above 16777216.
     """
     var u = u_of(x, source.width)
     var v = u_of(y, source.height)
     var premultiplied = settings.premultiplied_alpha
     var base = _radial_tap(source, u, v, premultiplied)
+    if settings.count > MAX_RADIAL_TAPS:
+        var held = base
+        if premultiplied:
+            held = held.unpremultiplied()
+        return FloatColor(
+            held.r, held.g, held.b, min(held.a, 1)
+        ).premultiplied()
     var count = Float32(settings.count)
     var step_u = (settings.center_u - u) / count
     var step_v = (settings.center_v - v) / count

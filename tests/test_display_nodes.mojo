@@ -248,6 +248,15 @@ def test_the_display_settings_and_builders_are_checked() raises:
     with assert_raises(contains="repeat"):
         _ = hash_blur_pass(repeats=0)
     with assert_raises(contains="larger than this port"):
+        _ = box_blur_pass(2048, 1)
+    with assert_raises(contains="larger than this port"):
+        _ = box_blur_pass(Int.MAX, 1)
+    var boxed = even(FloatColor(0.25, 0.5, 0.75, 1))
+    var broad = DisplaySettings()
+    broad.size = Int.MAX
+    box_blur_light(boxed, broad)
+    assert_almost_equal(boxed.colors[20].g, Float32(0.5), atol=1e-5)
+    with assert_raises(contains="larger than this port"):
         _ = hash_blur_pass(repeats=16777217)
     with assert_raises(contains="larger than this port"):
         _ = hash_blur_pass(repeats=Int.MAX)

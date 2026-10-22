@@ -136,6 +136,16 @@ def test_the_settings_are_checked() raises:
         _ = crt_pass(curvature=0.7)
     assert_true(crt_pass().kind == CRT)
     assert_true(radial_blur_pass().kind == RADIAL_BLUR)
+    with assert_raises(contains="larger than this port"):
+        _ = radial_blur_pass(count=16777217)
+    with assert_raises(contains="larger than this port"):
+        _ = radial_blur_pass(count=Int.MAX)
+    var frame = RenderTarget(2, 2, Color(0, 0, 0), FLOAT_TARGET)
+    frame.colors[0] = FloatColor(0.25, 0.5, 0.75, 1)
+    var heavy = FilterSettings()
+    heavy.count = Int.MAX
+    radial_blur_light(frame, heavy)
+    assert_almost_equal(frame.colors[0].g, Float32(0.5), atol=1e-5)
     assert_true(bilateral_blur_pass().kind == BILATERAL_BLUR)
     assert_true(depth_aware_blur_pass().kind == DEPTH_AWARE_BLUR)
     var blend = depth_aware_blend_pass(TextureId(0), Color(255, 0, 0))
