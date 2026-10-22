@@ -1673,6 +1673,57 @@ def test_models() raises:
     assert_equal(scene.lights[3].kind, DIRECTIONAL)
     assert_true(scene.lights[3].cast_shadow)
     # What is refused.
+    var bad_order = Scene()
+    var bad_assets = Assets()
+    with assert_raises(contains="whole number"):
+        _ = load_text(
+            objects(
+                '\tModel: 1, "Model::A", "Null" {\n\t\tProperties70:  {\n'
+                + '\t\t\tP: "RotationOrder", "enum", "", "",1e20\n\t\t}\n\t}\n'
+            ),
+            bad_order,
+            bad_assets,
+        )
+    var fraction = Scene()
+    var fraction_assets = Assets()
+    with assert_raises(contains="whole number"):
+        _ = load_text(
+            objects(
+                '\tModel: 1, "Model::A", "Null" {\n\t\tProperties70:  {\n'
+                + '\t\t\tP: "InheritType", "enum", "", "",1.5\n\t\t}\n\t}\n'
+            ),
+            fraction,
+            fraction_assets,
+        )
+    var bad_light = Scene()
+    var light_assets = Assets()
+    with assert_raises(contains="whole number"):
+        _ = load_text(
+            objects(
+                '\tModel: 1, "Model::Lamp", "Light" {\n\t}\n'
+                + '\tNodeAttribute: 2, "NodeAttribute::L", "Light"'
+                + " {\n\t\tProperties70:  {\n"
+                + '\t\t\tP: "LightType", "enum", "", "",1e20\n\t\t}\n\t}\n',
+                '\tC: "OO",2,1\n',
+            ),
+            bad_light,
+            light_assets,
+        )
+    var bad_camera = Scene()
+    var camera_assets = Assets()
+    with assert_raises(contains="whole number"):
+        _ = load_text(
+            objects(
+                '\tModel: 1, "Model::Cam", "Camera" {\n\t}\n'
+                + '\tNodeAttribute: 2, "NodeAttribute::C", "Camera"'
+                + " {\n\t\tProperties70:  {\n"
+                + '\t\t\tP: "CameraProjectionType", "enum", "", "",1.5\n'
+                + "\t\t}\n\t}\n",
+                '\tC: "OO",2,1\n',
+            ),
+            bad_camera,
+            camera_assets,
+        )
     refused(
         objects(
             (
