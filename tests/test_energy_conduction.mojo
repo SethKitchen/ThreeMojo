@@ -125,6 +125,16 @@ def test_mesh_follows_the_fourier_criterion() raises:
         Temperature64(0, CELSIUS),
     )
     assert_equal(fine.node_count(), 3 * MAX_ELEMENTS_PER_LAYER + 1)
+    # A layer of 1e20 m asks for more elements than an integer can name.
+    # The cast used to come back small, so the cap kept one element.
+    var thick = LayeredWall(
+        _concrete(1, 1e20),
+        materials,
+        Duration64(1, SECOND),
+        1.0,
+        Temperature64(20, CELSIUS),
+    )
+    assert_equal(thick.node_count(), MAX_ELEMENTS_PER_LAYER + 1)
     # Every mesh has the layers' resistance.
     assert_almost_equal(
         fine.resistance().to(SQUARE_METER_KELVIN_PER_WATT),
