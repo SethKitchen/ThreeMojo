@@ -90,6 +90,7 @@ var helper = add_animation_path_helper(scene, assets, clip, node)
 ```
 
 - The line follows the node's position track. It is sampled `divisions + 1` times from the start of the clip to its end. The default is 100 divisions.
+- A division count above 16777216 is refused.
 - A point marks the value of each key. Set `show_markers=False` to leave the points out.
 - The line is green and the points are red, five pixels across at any distance. Neither is tone mapped.
 - The helper's node is under the node's parent, so the path is in the parent's space.

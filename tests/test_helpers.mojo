@@ -215,6 +215,10 @@ def test_the_grid_helper_refuses_a_grid_that_is_not_one() raises:
         _ = grid_helper(Length(0.0, METER))
     with assert_raises(contains="at least one division"):
         _ = grid_helper(Length(1.0, METER), 0)
+    with assert_raises(contains="larger than this port"):
+        _ = grid_helper(Length(1.0, METER), 16777217)
+    with assert_raises(contains="larger than this port"):
+        _ = grid_helper(Length(1.0, METER), Int.MAX)
 
 
 def test_a_grid_is_drawn_by_a_line_with_the_helper_material() raises:

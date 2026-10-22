@@ -243,6 +243,12 @@ def test_the_polar_grid_refuses_a_grid_that_is_not_one() raises:
         _ = polar_grid_helper(meters(1), 2, -1)
     with assert_raises(contains="negative count"):
         _ = polar_grid_helper(meters(1), 2, 2, -1)
+    with assert_raises(contains="larger than this port"):
+        _ = polar_grid_helper(meters(1), 16777217, 0, 0)
+    with assert_raises(contains="larger than this port"):
+        _ = polar_grid_helper(meters(1), 0, 16777217, 0)
+    with assert_raises(contains="larger than this port"):
+        _ = polar_grid_helper(meters(1), 0, 0, Int.MAX)
 
 
 # --- plane -------------------------------------------------------------------

@@ -29,7 +29,7 @@ numbers for its uuid; a geometry here has no uuid and takes none.
 """
 
 from core.assets import Assets
-from math.curve_checks import require_at_least_one
+from math.curve_checks import MAX_CURVE_DIVISIONS, require_at_least_one
 from core.buffer_attribute import BufferAttribute
 from core.buffer_geometry import BufferGeometry, COLOR, NORMAL, POSITION
 from core.raycaster import Raycaster
@@ -88,10 +88,21 @@ def _tangent_at[
 
 
 def _check(divisions: Int) raises:
-    """Refuse fewer than one division."""
+    """Refuse fewer than one division, or more than this port builds.
+
+    Args:
+        divisions: How many steps along the track.
+
+    Raises:
+        Error: If `divisions` is below one or above 16777216.
+    """
     require_at_least_one(
         divisions, "A roller coaster needs one division or more"
     )
+    if divisions > MAX_CURVE_DIVISIONS:
+        raise Error(
+            "A roller coaster's division count is larger than this port builds"
+        )
 
 
 def _ring(sides: Int, radius: Float64) -> List[Point3]:
@@ -204,7 +215,8 @@ def roller_coaster_geometry[
         A geometry of triangles with `position`, `normal` and `color`.
 
     Raises:
-        Error: If there is no division, or the curve refuses a point.
+        Error: If `divisions` is below one or above 16777216, or the
+            curve refuses a point.
     """
     _check(divisions)
     var lengths = lengths_of(curve, ARC_LENGTH_DIVISIONS)
@@ -283,7 +295,8 @@ def roller_coaster_lifters_geometry[
         A geometry of triangles with `position` and `normal`.
 
     Raises:
-        Error: If there is no division, or the curve refuses a point.
+        Error: If `divisions` is below one or above 16777216, or the
+            curve refuses a point.
     """
     _check(divisions)
     var lengths = lengths_of(curve, ARC_LENGTH_DIVISIONS)
@@ -365,7 +378,8 @@ def roller_coaster_shadow_geometry[
         A geometry of triangles with `position` only, at y = 0.
 
     Raises:
-        Error: If there is no division, or the curve refuses a point.
+        Error: If `divisions` is below one or above 16777216, or the
+            curve refuses a point.
     """
     _check(divisions)
     var lengths = lengths_of(curve, ARC_LENGTH_DIVISIONS)

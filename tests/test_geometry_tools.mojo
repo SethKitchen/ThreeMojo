@@ -306,6 +306,12 @@ def test_a_roller_coaster_track_matches_three_js() raises:
     )
     with assert_raises(contains="one division"):
         _ = roller_coaster_geometry(_Track(), 0)
+    with assert_raises(contains="larger than this port"):
+        _ = roller_coaster_geometry(_Track(), Int.MAX - 1)
+    with assert_raises(contains="larger than this port"):
+        _ = roller_coaster_lifters_geometry(_Track(), 16777217)
+    with assert_raises(contains="larger than this port"):
+        _ = roller_coaster_shadow_geometry(_Track(), Int.MAX)
 
 
 def test_a_sky_and_trees_match_three_js() raises:

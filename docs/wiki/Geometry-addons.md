@@ -183,7 +183,7 @@ A named curve and a NURBS curve are each a `SpaceCurve`. The functions of `math/
 
 ## Roller coaster
 
-`geometries/roller_coaster.mojo` builds three.js's roller coaster example. Each function takes a `SpaceCurve` and a number of divisions, and samples the curve at even steps of its length.
+`geometries/roller_coaster.mojo` builds three.js's roller coaster example. Each function takes a `SpaceCurve` and a number of divisions, and samples the curve at even steps of its length. A division count above 16777216 is refused.
 
 | Function | What it builds |
 |---|---|

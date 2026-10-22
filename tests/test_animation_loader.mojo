@@ -277,6 +277,10 @@ def test_the_path_is_threes_samples() raises:
     assert_almost_equal(keys.data[7], 4)
     with assert_raises(contains="division"):
         _ = animation_path(clip, NodeId(1), 0)
+    with assert_raises(contains="larger than this port"):
+        _ = animation_path(clip, NodeId(1), 16777217)
+    with assert_raises(contains="larger than this port"):
+        _ = animation_path(clip, NodeId(1), Int.MAX)
     with assert_raises(contains="no position track"):
         _ = animation_path(clip, NodeId(3))
     with assert_raises(contains="no position track"):

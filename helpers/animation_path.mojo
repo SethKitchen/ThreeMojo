@@ -30,7 +30,7 @@ from core.buffer_attribute import BufferAttribute
 from core.buffer_geometry import BufferGeometry, POSITION as POSITION_ATTRIBUTE
 from core.object3d import NodeId, Object3D
 from core.ordinal import require_non_negative
-from math.curve_checks import require_at_least_one
+from math.curve_checks import MAX_CURVE_DIVISIONS, require_at_least_one
 from math.vector3 import append_vector3
 from core.scene import Scene
 from materials.material import BASIC, Material, PointSize, points_material
@@ -82,12 +82,17 @@ def animation_path(
         The points, in the parent's space, for a `Line` in `STRIP` mode.
 
     Raises:
-        Error: If `divisions` is below one, the clip has no position track
-            for the node, or the track cannot be read.
+        Error: If `divisions` is below one, above 16777216, the clip has
+            no position track for the node, or the track cannot be read.
     """
     require_at_least_one(
         divisions, "An animation path needs one division at least"
     )
+    if divisions > MAX_CURVE_DIVISIONS:
+        raise Error(
+            "An animation path's division count is larger than this port"
+            " samples"
+        )
     var track = position_track(clip, object)
     require_position_track(track)
     var numbers = List[Float32]()

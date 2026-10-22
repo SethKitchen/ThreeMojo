@@ -47,7 +47,7 @@ three.js's helper materials are not tone mapped. Tone mapping here is applied on
 
 The colors are authored bytes, as three.js's `Color(0x444444)` is, and are decoded to linear light on the way in. See [Why color is linear](Why-color-is-linear).
 
-An odd division count has no center line. three.js compares the step to `divisions / 2`, a float that no integer step reaches when the count is odd. The lines straddle the origin, and none takes the center color. That is what three.js draws.
+An odd division count has no center line. three.js compares the step to `divisions / 2`, a float that no integer step reaches when the count is odd. The lines straddle the origin, and none takes the center color. That is what three.js draws. A division count above 16777216 is refused.
 
 ## PolarGridHelper
 
@@ -62,7 +62,7 @@ An odd division count has no center line. three.js compares the step to `divisio
 | `color1` | `Color(0x44, 0x44, 0x44)` | The odd spokes and rings. |
 | `color2` | `Color(0x88, 0x88, 0x88)` | The even spokes and rings, the first included. |
 
-A count must not be negative. A count of zero draws nothing of that part, so the result can be empty.
+A count must not be negative. A count of zero draws nothing of that part, so the result can be empty. A count above 16777216 is refused.
 
 ## BoxHelper
 
