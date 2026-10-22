@@ -925,13 +925,42 @@ def _numbers(tree: LwoTree, object: Int, key: String) -> List[Float64]:
     return value.numbers.copy() if value.is_numbers() else List[Float64]()
 
 
-def _split_indices(indices: List[Float64], dims: List[Float64]) -> List[Int]:
+def _polygon_corners(value: Float64) raises -> Int:
+    """Return a polygon's corner count.
+
+    Args:
+        value: The count from the file.
+
+    Returns:
+        The count, when it is a whole number that fits.
+
+    Raises:
+        Error: If the count is not a whole number, or does not fit.
+    """
+    if not (value >= 0) or not (value < Float64(Int.MAX)):
+        raise Error("LWO: a polygon's corner count does not fit")
+    var whole = Int(value)
+    if Float64(whole) != value:
+        raise Error("LWO: a polygon's corner count must be a whole number")
+    return whole
+
+
+def _split_indices(
+    indices: List[Float64], dims: List[Float64]
+) raises -> List[Int]:
     """three.js's `splitIndices`: quads into two triangles, and polygons of
-    more sides into a fan."""
+    more sides into a fan.
+
+    Raises:
+        Error: If a corner count does not fit, or the corners run past
+            the index list.
+    """
     var out = List[Int]()
     var i = 0
     for d in dims:
-        var dim = Int(d)
+        var dim = _polygon_corners(d)
+        if len(indices) - i < dim:
+            raise Error("LWO: a polygon runs past its indices")
         if dim < 4:
             for k in range(dim):
                 out.append(Int(indices[i + k]))
@@ -957,7 +986,7 @@ def _split_material_indices(
         if i * 2 + 1 >= len(indices):
             raise Error("LWO: fewer surface tags than polygons")
         var repeat = 1
-        var dim = Int(dims[i])
+        var dim = _polygon_corners(dims[i])
         if dim == 4:
             repeat = 2
         elif dim > 4:
