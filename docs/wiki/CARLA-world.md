@@ -135,7 +135,7 @@ A stage changes on the first tick that takes the elapsed time past the stage's t
 
 `set_traffic_light_state` sets one light. The controller does not know, and its next stage sets the light again. `freeze` stops every light, as in CARLA.
 
-`get_traffic_lights_from_waypoint` finds the lights within a distance ahead of a waypoint. The distance is a `Length64`, so a long search keeps its Float64 meters. It must be finite and nonnegative.
+`get_traffic_lights_from_waypoint` finds the lights within a distance ahead of a waypoint. The distance is a `Length64`, so a long search keeps its Float64 meters. It must be finite and nonnegative. A stop walk refuses an extent that does not advance one meter. An extent whose one-meter steps pass 16777216 is refused.
 
 ### A light's boxes
 

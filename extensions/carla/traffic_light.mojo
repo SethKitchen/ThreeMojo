@@ -59,6 +59,7 @@ from extensions.carla.road_info import LaneId, SignalId
 from extensions.carla.traffic_sign import TriggerBox, traffic_light_boxes
 from extensions.carla.transform import CarlaRotation, CarlaTransform
 from math.vector3 import Vector3
+from std.math import isfinite
 from units.si import DEGREE, SECOND, Angle, Duration, Length, METER
 
 
@@ -717,13 +718,23 @@ def stop_waypoints(
         The waypoints.
 
     Raises:
-        Error: If a map query fails.
+        Error: If the trigger extent is not finite, its one-meter steps
+            do not finish, or a map query fails.
     """
     var out = List[Waypoint]()
     var middle = transform.transform_point(trigger_volume.location)
     var along = transform.rotation.forward_vector()
-    var x = Float32(-0.9) * trigger_volume.extent.x
-    var end = Float32(0.9) * trigger_volume.extent.x
+    var half = trigger_volume.extent.x
+    if not isfinite(half):
+        raise Error("A traffic light trigger extent must be finite")
+    var x = Float32(-0.9) * half
+    var end = Float32(0.9) * half
+    # A step of one meter that does not move never leaves the trigger.
+    if x < end and not (x + 1 > x):
+        raise Error("A traffic light trigger is larger than this port walks")
+    var span = Float64(end) - Float64(x)
+    if x < end and not (span < Float64(16777216)):
+        raise Error("A traffic light trigger is larger than this port walks")
     while x < end:
         var found = map.closest_waypoint_on_road(middle + along * x)
         x += 1
