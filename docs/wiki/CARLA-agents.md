@@ -160,6 +160,8 @@ A walker that moves less than 0.5 m in 4 s gets a new random route, as in CARLA.
 - The agents take the world at each call. CARLA's agents keep a reference to the world.
 - The random choices use a seeded minimal-standard generator, not Python's `random` module.
 - A lane change takes `OPTION_CHANGE_LANE_LEFT` or `OPTION_CHANGE_LANE_RIGHT` in place of the strings "left" and "right".
+- A lane plan refuses more than 16777216 steps or lane changes.
+- A step that does not move the plan is a dead end.
 - The constant velocity agent reads its collisions with a `CollisionSensor` at each step. CARLA spawns a sensor actor.
 - The mesh comes from the map, not from a baked file. The crowd's steering and its constants are this port's own.
 - A walker keeps its body in the world. The navigation turns off its gravity and sets its pose at each tick.

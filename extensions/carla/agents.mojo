@@ -44,6 +44,7 @@ where CARLA takes the strings "left" and "right".
 """
 
 from extensions.carla.actor import ActorId, RED
+from std.math import isfinite
 from extensions.carla.agents_local_planner import (
     LocalPlanner,
     LocalPlannerOptions,
@@ -812,7 +813,9 @@ struct BasicAgent(Movable):
             The plan.
 
         Raises:
-            Error: If the direction is not a valid road option, or a map
+            Error: If the direction is not a valid road option, the step
+                is not a finite positive distance, the plan or the lane
+                change count is larger than this port drives, or a map
                 query fails.
         """
         if not direction.is_valid():
@@ -821,6 +824,14 @@ struct BasicAgent(Movable):
         var other = max(Float64(distance_other_lane.value), 0.1)
         var across = max(Float64(lane_change_distance.value), 0.1)
         var step = Float64(step_distance.value)
+        if not isfinite(step) or not (step > 0):
+            raise Error("A lane plan step must be a finite positive distance")
+        if lane_changes > 16777216:
+            raise Error("A lane change count is larger than this port drives")
+        if not (same / step < Float64(16777216)) or not (
+            other / step < Float64(16777216)
+        ):
+            raise Error("A lane plan is larger than this port drives")
         var empty = List[PlanItem]()
         var plan = List[PlanItem]()
         plan.append(plan_item(map, waypoint, OPTION_LANE_FOLLOW))
@@ -864,8 +875,12 @@ def _drive_on(
         if len(nexts) == 0:
             return False
         var item = plan_item(map, nexts[0], OPTION_LANE_FOLLOW)
-        distance += Float64(
+        var moved = Float64(
             item.transform.location.distance_to(last.transform.location)
         )
+        # A step that stays put never covers the distance.
+        if not (moved > 0):
+            return False
+        distance += moved
         plan.append(item)
     return True
