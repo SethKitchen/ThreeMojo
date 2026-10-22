@@ -425,6 +425,10 @@ def test_refusals() raises:
         _ = Lut(ColorMapName(4), 8)
     with assert_raises(contains="one step"):
         _ = Lut(RAINBOW, 0)
+    with assert_raises(contains="larger than this port"):
+        _ = Lut(RAINBOW, 16777217)
+    with assert_raises(contains="larger than this port"):
+        _ = Lut(RAINBOW, Int.MAX)
     var lut = Lut(RAINBOW, 8)
     with assert_raises(contains="finite"):
         lut.set_min(nan[DType.float64]())

@@ -142,7 +142,7 @@ Positive triangle weights must keep finite, nonzero intervals in the `Float32` d
 
 ## Color maps
 
-`Lut(name, count)` samples a color map at `count + 1` points. `get_color(value)` gives the nearest sample for a value between `min_v` and `max_v`.
+`Lut(name, count)` samples a color map at `count + 1` points. `get_color(value)` gives the nearest sample for a value between `min_v` and `max_v`. A step count above 16777216 is refused.
 
 | Member | Meaning |
 |---|---|

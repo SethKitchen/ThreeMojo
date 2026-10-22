@@ -208,6 +208,11 @@ def require_lut_bound(value: Float64) raises:
     require_finite(Float64(value), "A color table's range must be finite")
 
 
+# The sample loop walks one step at a time. The maximum integer does not
+# finish, and one more than the largest integer wraps the canvas byte count.
+comptime MAX_LUT_STEPS = 16777216
+
+
 struct Lut(Copyable, Movable):
     """A color map sampled at evenly spaced points. three.js: `Lut`."""
 
@@ -232,7 +237,8 @@ struct Lut(Copyable, Movable):
             count: How many steps; the table holds one more sample.
 
         Raises:
-            Error: If the value names no preset or the count is below one.
+            Error: If the value names no preset, or the count is below one
+                or above 16777216.
         """
         self.lut = List[FloatColor]()
         self.map = List[ColorStop]()
@@ -251,7 +257,7 @@ struct Lut(Copyable, Movable):
 
         Raises:
             Error: If the map is refused by `check_color_map`, or the count
-                is below one.
+                is below one or above 16777216.
         """
         self.lut = List[FloatColor]()
         self.map = List[ColorStop]()
@@ -268,7 +274,8 @@ struct Lut(Copyable, Movable):
             count: How many steps.
 
         Raises:
-            Error: If the value names no preset or the count is below one.
+            Error: If the value names no preset, or the count is below one
+                or above 16777216.
         """
         self.set_custom_map(color_map(name), count)
 
@@ -284,10 +291,14 @@ struct Lut(Copyable, Movable):
 
         Raises:
             Error: If the map is refused by `check_color_map`, or the count
-                is below one.
+                is below one or above 16777216.
         """
         check_color_map(stops)
         require_positive(count, "A color table needs one step or more")
+        if count > MAX_LUT_STEPS:
+            raise Error(
+                "A color table's step count is larger than this port samples"
+            )
         var step = 1.0 / Float64(count)
         var lut = List[FloatColor]()
         lut.append(_decoded(stops[0].hex))
