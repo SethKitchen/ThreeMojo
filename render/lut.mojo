@@ -213,6 +213,27 @@ def require_lut_bound(value: Float64) raises:
 comptime MAX_LUT_STEPS = 16777216
 
 
+def require_lut_steps(count: Int) raises:
+    """Refuse a color table step count this port cannot sample.
+
+    Nothing. The call returns when `count` is one through 16777216.
+
+    Args:
+        count: How many steps.
+
+    Returns:
+        Nothing.
+
+    Raises:
+        Error: If `count` is below one or above 16777216.
+    """
+    require_positive(count, "A color table needs one step or more")
+    if count > MAX_LUT_STEPS:
+        raise Error(
+            "A color table's step count is larger than this port samples"
+        )
+
+
 struct Lut(Copyable, Movable):
     """A color map sampled at evenly spaced points. three.js: `Lut`."""
 
@@ -294,11 +315,7 @@ struct Lut(Copyable, Movable):
                 is below one or above 16777216.
         """
         check_color_map(stops)
-        require_positive(count, "A color table needs one step or more")
-        if count > MAX_LUT_STEPS:
-            raise Error(
-                "A color table's step count is larger than this port samples"
-            )
+        require_lut_steps(count)
         var step = 1.0 / Float64(count)
         var lut = List[FloatColor]()
         lut.append(_decoded(stops[0].hex))
@@ -353,7 +370,9 @@ struct Lut(Copyable, Movable):
             The color.
 
         Raises:
-            Error: If the value is not a number, or the range has no width.
+            Error: If the value is not a number, the range has no width,
+                the step count is below one or above 16777216, or the
+                step count does not match the samples.
         """
         if alpha != alpha:
             raise Error(
@@ -361,11 +380,15 @@ struct Lut(Copyable, Movable):
             )
         if self.max_v == self.min_v:
             raise Error("A color table's range needs some width")
+        require_lut_steps(self.n)
         var clamped = clamp(alpha, self.min_v, self.max_v)
         var at = (clamped - self.min_v) / (self.max_v - self.min_v)
-        return self.lut[js_round_int(at * Float64(self.n))]
+        var index = js_round_int(at * Float64(self.n))
+        if index >= len(self.lut):
+            raise Error("A color table's step count does not match its samples")
+        return self.lut[index]
 
-    def canvas_pixels(self) -> List[UInt8]:
+    def canvas_pixels(self) raises -> List[UInt8]:
         """Return the table as an image one pixel wide and `n` high, RGBA,
         top row first. three.js: `createCanvas` and `updateCanvas`.
 
@@ -375,7 +398,11 @@ struct Lut(Copyable, Movable):
 
         Returns:
             `4 * n` bytes.
+
+        Raises:
+            Error: If the step count is below one or above 16777216.
         """
+        require_lut_steps(self.n)
         var data = List[UInt8](length=self.n * 4, fill=0)
         # `n` is one or more.
         for row in range(self.n):  # pragma: no branch
