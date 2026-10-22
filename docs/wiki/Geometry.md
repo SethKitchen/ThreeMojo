@@ -831,7 +831,7 @@ A target's name is three.js's `name` on its morph attribute. A target without a 
 
 ### Any number of targets
 
-A geometry carries any number of targets, and a mesh wears any number. three.js on WebGL2 passes its targets in a texture and has no cap. This port had a cap of eight until a mesh held its weights in a list. `MorphInfluences` is that list. A weight past its end reads as zero, and `set` grows it with zeros.
+A geometry carries any number of targets, and a mesh wears any number. three.js on WebGL2 passes its targets in a texture and has no cap. This port had a cap of eight until a mesh held its weights in a list. `MorphInfluences` is that list. A weight past its end reads as zero, and `set` grows it with zeros. A weight list above 16777216, or an index that would grow it that far, is refused.
 
 ### What is drawn is what is picked
 
@@ -949,9 +949,9 @@ A per-instance `position`, `normal`, `uv` or `tangent` is refused when drawn. Th
 - A lathe needs at least two points, one segment, and a sweep of at most one turn. No point can have a negative `x`, and no two consecutive points can be the same. A profile that turns straight back to the point before raises, because that corner has no normal.
 - A tube needs at least two finite points, or three when closed, no two consecutive the same, a positive radius and three segments around. A path that returns to the point before the last raises, because that tangent is zero. A path that folds straight back on itself raises, because there is no axis to turn the frame about.
 - A sweep must be finite, positive and at most one turn.
-- A morph target must cover every vertex, three numbers each, and a geometry holds at most eight.
+- A morph target must cover every vertex, three numbers each.
 - Either every morph target carries normals or none does.
-- A morph influence must be a number, and there are eight of them.
+- A morph influence must be a number. A weight list above 16777216, or an index that would grow it that far, is refused.
 - A shape's contour needs three corners and an area. A contour drawn in a line, or out and back, has neither.
 - A shape's hole must lie strictly inside its outline and outside every other hole. Sampled boundaries must not cross or touch.
 - An outline that crosses itself raises, because it has no inside and runs out of ears.
