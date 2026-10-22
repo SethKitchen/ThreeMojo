@@ -108,7 +108,7 @@ The size that `slDLSSGetOptimalSettings` returns is the size to render at. `Opti
 
 DLSS needs a camera moved by a fraction of a pixel each frame. `jitter_offset` gives the Halton offsets in bases two and three, less a half, in render pixels. They are the offsets that `JitteredCamera` takes.
 
-`jitter_phase_count` gives eight samples for every output pixel that one render pixel covers. That is this port's rule. Streamline requires no count.
+`jitter_phase_count` gives eight samples for every output pixel that one render pixel covers. That is this port's rule. Streamline requires no count. A count that does not fit in an integer is refused.
 
 Streamline does not say which way its `jitterOffset` points. A running `sl.dlss` answered. The `jitterOffset` is the negative of the offset that `JitteredCamera` takes, in render pixels, with x across and y down. `frame_constants` negates the offset that it gets.
 
