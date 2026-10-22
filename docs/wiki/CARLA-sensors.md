@@ -163,7 +163,7 @@ A ground-truth camera casts one ray through the center of each pixel.
 - An optical flow image whose pixel count does not fit in an integer is refused.
 - RGB is a shaded stand-in: the tag's CityScapes color times the light on the surface. The [rendering tier](CARLA) draws the real image.
 
-The event camera compares the log intensity of each pixel with the last frame. Each crossing of the threshold gives an event with a time inside the tick.
+The event camera compares the log intensity of each pixel with the last frame. Each crossing of the threshold gives an event with a time inside the tick. A step that does not change either gray level is refused.
 
 `DVSCamera.simulate` takes the frame time as a `Duration64`, so a short tick late in a run keeps its Float64 digits. The time must be finite, nonnegative and at most 9.2e9 seconds, about 291 years. The interpolation inside a tick uses `Float32` nanoseconds, as CARLA does, and can overshoot the tick slightly. Below that cap every event time still fits in an `Int`.
 

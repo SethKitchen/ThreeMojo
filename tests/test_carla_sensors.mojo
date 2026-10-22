@@ -1202,6 +1202,26 @@ def test_event_camera_refractory_period() raises:
     assert_almost_equal(Float64(up[1].t), 1090009000.9, atol=8)
 
 
+def test_event_camera_refuses_a_step_that_does_not_move() raises:
+    # A threshold changed to zero is refused before the frame is stored.
+    var dvs = DVSCamera(_linear(30), 1, 1, 0)
+    _ = dvs.simulate(_frame([100]), Duration64(1.0))
+    dvs.config.positive_threshold = 0
+    with assert_raises(contains="must be positive"):
+        _ = dvs.simulate(_frame([200]), Duration64(1.1))
+    assert_equal(dvs.current_time, 1000000000)
+    # A dark pixel that becomes bright never leaves the crossing walk.
+    var dark = DVSCamera(_linear(Float32(1e-20)), 1, 1, 0)
+    _ = dark.simulate(_frame([0]), Duration64(0.0))
+    with assert_raises(contains="larger than this port"):
+        _ = dark.simulate(_frame([255]), Duration64(0.1))
+    # The previous level itself does not move.
+    var mid = DVSCamera(_linear(Float32(1e-20)), 1, 1, 0)
+    _ = mid.simulate(_frame([100]), Duration64(0.0))
+    with assert_raises(contains="larger than this port"):
+        _ = mid.simulate(_frame([110]), Duration64(0.1))
+
+
 def test_event_camera_time_going_back() raises:
     # A frame from before the last event: its crossings fall before that
     # event and give none, though the reference still moves.
