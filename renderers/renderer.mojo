@@ -2427,7 +2427,8 @@ def _clip_sets(
         any_of: Set to the planes of which one is enough.
 
     Raises:
-        Error: If the view cannot be inverted.
+        Error: If the view cannot be inverted, or a material's plane
+            count is below zero or above eight.
     """
     cut = sides.copy()
     any_of = List[Plane]()

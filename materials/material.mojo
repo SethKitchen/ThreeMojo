@@ -3007,8 +3007,14 @@ struct Material(ImplicitlyCopyable):
             The planes `set_clipping_planes` was given, in order.
 
         Raises:
-            Error: Never for planes that were set: each was a plane.
+            Error: If the plane count is below zero or above eight.
         """
+        if self.clip_plane_count < 0:
+            raise Error("A clipping plane count must be zero or more")
+        if self.clip_plane_count > MAX_CLIPPING_PLANES:
+            raise Error(
+                "A clipping plane count is larger than this port stores"
+            )
         var planes = List[Plane]()
         for index in range(self.clip_plane_count):
             planes.append(

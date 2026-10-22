@@ -156,6 +156,22 @@ def test_a_material_holds_at_most_eight_planes() raises:
     assert_equal(len(material.clipping_planes()), 0)
 
 
+def test_a_changed_clipping_plane_count_is_refused() raises:
+    var material = Material(Color(255, 0, 0))
+    material.set_clipping_planes([Plane(Vector3(1, 0, 0), 0)])
+    material.clip_plane_count = -1
+    with assert_raises(contains="zero or more"):
+        _ = material.clipping_planes()
+    material.clip_plane_count = MAX_CLIPPING_PLANES + 1
+    with assert_raises(contains="larger than this port"):
+        _ = material.clipping_planes()
+    material.clip_plane_count = Int.MAX
+    with assert_raises(contains="larger than this port"):
+        _ = material.clipping_planes()
+    material.clip_plane_count = 1
+    assert_equal(len(material.clipping_planes()), 1)
+
+
 def _camera() raises -> PerspectiveCamera:
     """Return a camera looking at the origin from +z.
 
