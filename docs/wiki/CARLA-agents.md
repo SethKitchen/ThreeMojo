@@ -141,6 +141,8 @@ CARLA bakes its pedestrian mesh offline with a third-party library. This port bu
 - **The funnel algorithm.** The path is pulled tight through the portals. A point is added where the path goes into another area kind.
 - **Area-weighted random points.** A random point is uniform over the area of the polygons that the filter allows.
 
+The mesh resolution must be a finite distance more than zero. A lane section whose station count passes 16777216 is refused.
+
 CARLA's filters decide where a walker can go. Filter 0 keeps a walker off the roads, so it crosses only at crosswalks. Filter 1 lets it cross anywhere, at a cost of 10 a meter on a road. `set_pedestrians_cross_factor` sets the chance that a new walker gets filter 1.
 
 ## The crowd and the routes
