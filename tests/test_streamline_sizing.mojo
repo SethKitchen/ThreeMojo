@@ -73,6 +73,14 @@ def test_a_4k_output_renders_at_the_known_sizes() raises:
         _ = estimated_render_size(MODE_ULTRA_QUALITY, output)
     assert_equal(estimated_render_size(MODE_DLAA, output), output)
     assert_equal(estimated_render_size(MODE_OFF, output), output)
+    # `Float64` of a side at 2^63 rounds up. Adding a half then cast that
+    # to zero. A scale of one is the side itself.
+    var wide = FrameSize(Int.MAX, 8)
+    assert_equal(estimated_render_size(MODE_DLAA, wide), wide)
+    assert_equal(
+        estimated_render_size(MODE_OFF, FrameSize(1 << 62, 4)),
+        FrameSize(1 << 62, 4),
+    )
 
 
 def test_a_tiny_output_still_renders_one_pixel() raises:

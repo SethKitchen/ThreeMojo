@@ -96,7 +96,7 @@ DLSS 4.5 is the second-generation transformer model. NVIDIA names its Super Reso
 
 ## Render size
 
-`estimated_render_size` gives the size to plan an allocation with before a device exists. It uses NVIDIA's published ratios, rounded to the nearest pixel. A 4K output gives 2560 by 1440 in Quality, 2227 by 1253 in Balanced and 1920 by 1080 in Performance.
+`estimated_render_size` gives the size to plan an allocation with before a device exists. It uses NVIDIA's published ratios, rounded to the nearest pixel. A 4K output gives 2560 by 1440 in Quality, 2227 by 1253 in Balanced and 1920 by 1080 in Performance. A scale of one keeps the side, including one past 2^53.
 
 `estimated_optimal_settings` also gives the range that dynamic resolution can use. The smallest size is half the output in Quality, Balanced and Performance, and 0.99 of it in DLAA. The largest size is the output. Ultra Performance has one size.
 
