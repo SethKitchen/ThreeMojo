@@ -62,7 +62,7 @@ The existing `HairLook.shadows` limit still bounds the darkness. The scalp-facin
 
 ## Motion fields
 
-`HairSimulation.step` reuses its particle arrays. It does not allocate a work list for each strand on every step. By default every follower has its own simulated particles. With `guides_only=True` the step lays each follower from its moved guide. No GPU dynamics are used.
+`HairSimulation.step` reuses its particle arrays. It does not allocate a work list for each strand on every step. By default every follower has its own simulated particles. With `guides_only=True` the step lays each follower from its moved guide. No GPU dynamics are used. A settle count above 16777216 is refused.
 
 `write` checks the strand topology before changing the groom. It rotates each rest normal with the shortest rotation of the local tangent. A reversed tangent uses a deterministic half-turn axis. The scalp-depth value is a rest-surface proxy: outward displacement reduces it, and inward displacement increases it.
 

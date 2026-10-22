@@ -79,6 +79,26 @@ struct HairWind(ImplicitlyCopyable):
         self.phase = Float32(0.45)
 
 
+# The most settles one step runs on a strand. `range` of `Int.MAX`
+# never ends, and a larger count is not an exact `Float32` divisor.
+comptime MAX_HAIR_ITERATIONS = 16777216
+
+
+def require_hair_iterations(iterations: Int) raises:
+    """Refuse a hair settle count this port cannot run.
+
+    Nothing. The call returns when the count is in range.
+
+    Args:
+        iterations: How many times a step settles each strand.
+
+    Raises:
+        Error: If the count is above 16777216.
+    """
+    if iterations > MAX_HAIR_ITERATIONS:
+        raise Error("A hair settle count is larger than this port runs")
+
+
 struct HairPhysics(ImplicitlyCopyable):
     """How the strands move: Frostbitten's defaults."""
 
@@ -243,7 +263,7 @@ struct HairSimulation(Movable):
         self.physics = physics
         self.frame = 0
 
-    def step[F: DistanceField](mut self, collider: F, wind: HairWind):
+    def step[F: DistanceField](mut self, collider: F, wind: HairWind) raises:
         """Move every strand one step, and settle it.
 
         Parameters:
@@ -253,7 +273,11 @@ struct HairSimulation(Movable):
             collider: What the hair falls against, baked: a `HairBody`
                 or a `HairCollider`.
             wind: The wind.
+
+        Raises:
+            Error: If the settle count is above 16777216.
         """
+        require_hair_iterations(self.physics.iterations)
         # Strands are independent. Each task owns a disjoint run of them,
         # so the points equal the serial arithmetic bit for bit.
         var strands = len(self.starts) - 1

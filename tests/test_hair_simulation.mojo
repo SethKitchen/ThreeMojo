@@ -80,6 +80,19 @@ def test_the_collider_is_the_field_baked() raises:
     assert_equal(collider.distance(Vector3(0, 0, 0.2)), FAR_AWAY)
 
 
+def test_a_settle_count_this_port_cannot_run_is_refused() raises:
+    var too_many = HairPhysics()
+    too_many.iterations = 16777217
+    var hair = HairSimulation(_hanging(0), too_many)
+    with assert_raises(contains="larger than this port"):
+        hair.step(_collider(), HairWind(Vector3(1, 0, 0), 0))
+    var maximum = HairPhysics()
+    maximum.iterations = Int.MAX
+    var hung = HairSimulation(_hanging(0), maximum)
+    with assert_raises(contains="larger than this port"):
+        hung.step(_collider(), HairWind(Vector3(1, 0, 0), 0))
+
+
 def test_the_defaults_are_frostbittens() raises:
     var physics = HairPhysics()
     assert_equal(physics.iterations, 7)
