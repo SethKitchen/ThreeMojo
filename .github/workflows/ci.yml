@@ -76,7 +76,7 @@ jobs:
       - name: Install the pinned Mojo toolchain
         run: |
           uv venv --prompt ThreeMojo
-          uv pip install "mojo==1.1.0"
+          uv pip install "mojo==1.2.0"
           .venv/bin/mojo --version
       - name: Select relevant checks
         id: plan
@@ -145,7 +145,7 @@ jobs:
       - name: Install Mojo only for selected native checks
         if: needs.scope.outputs.run_native == 'true' || needs.scope.outputs.run_docs == 'true' || needs.scope.outputs.run_coverage_tools == 'true' || needs.scope.outputs.run_portability == 'true'
         run: |
-          uv pip install --python .venv/bin/python "mojo==1.1.0"
+          uv pip install --python .venv/bin/python "mojo==1.2.0"
           .venv/bin/mojo --version
 
       - name: lint
@@ -217,7 +217,7 @@ jobs:
       # The tool tests compile nothing, but some read the pinned launcher.
       - name: Install Mojo
         run: |
-          uv pip install --python .venv/bin/python "mojo==1.1.0"
+          uv pip install --python .venv/bin/python "mojo==1.2.0"
           .venv/bin/mojo --version
 
       - name: Python tooling regressions
@@ -257,7 +257,7 @@ jobs:
       # The tool tests compile nothing, but some read the pinned launcher.
       - name: Install Mojo
         run: |
-          uv pip install --python .venv/bin/python "mojo==1.1.0"
+          uv pip install --python .venv/bin/python "mojo==1.2.0"
           .venv/bin/mojo --version
 
       - name: General and asset tooling regressions
@@ -292,7 +292,7 @@ jobs:
       - name: Install the pinned Mojo toolchain
         run: |
           uv venv --prompt ThreeMojo
-          uv pip install "mojo==1.1.0"
+          uv pip install "mojo==1.2.0"
           .venv/bin/mojo --version
 
       - name: Compiler identity and effective target
@@ -363,7 +363,7 @@ jobs:
       - name: Install Mojo only for selected native checks
         if: needs.scope.outputs.run_native == 'true' || needs.scope.outputs.run_docs == 'true' || needs.scope.outputs.run_coverage_tools == 'true' || needs.scope.outputs.run_portability == 'true'
         run: |
-          uv pip install --python .venv/bin/python "mojo==1.1.0"
+          uv pip install --python .venv/bin/python "mojo==1.2.0"
           .venv/bin/mojo --version
 
       - name: lint
@@ -432,7 +432,7 @@ jobs:
       # The tool tests compile nothing, but some read the pinned launcher.
       - name: Install Mojo
         run: |
-          uv pip install --python .venv/bin/python "mojo==1.1.0"
+          uv pip install --python .venv/bin/python "mojo==1.2.0"
           .venv/bin/mojo --version
 
       - name: Python tooling regressions
@@ -472,7 +472,7 @@ jobs:
       # The tool tests compile nothing, but some read the pinned launcher.
       - name: Install Mojo
         run: |
-          uv pip install --python .venv/bin/python "mojo==1.1.0"
+          uv pip install --python .venv/bin/python "mojo==1.2.0"
           .venv/bin/mojo --version
 
       - name: General and asset tooling regressions
@@ -520,7 +520,7 @@ jobs:
           echo "$(dirname "$PYTHON")" >> "$GITHUB_PATH"
           # uv venv installs an import hook; proof-bearing environments cannot.
           "$PYTHON" -m venv --without-pip --prompt ThreeMojo .venv
-          uv pip install --python .venv/bin/python "mojo==1.1.0"
+          uv pip install --python .venv/bin/python "mojo==1.2.0"
           .venv/bin/mojo --version
 
       # Homebrew's X server brings Xvfb and the Xlib the window loads.
@@ -583,7 +583,7 @@ jobs:
       - name: Install the pinned Mojo toolchain
         run: |
           python3 -m venv --prompt ThreeMojo .venv
-          .venv/bin/python -m pip install "mojo==1.1.0"
+          .venv/bin/python -m pip install "mojo==1.2.0"
           .venv/bin/mojo --version
 
       # The native window's suite runs under coverage too.
@@ -645,7 +645,7 @@ jobs:
       - name: Install the pinned Mojo toolchain
         run: |
           python3 -m venv --prompt ThreeMojo .venv
-          .venv/bin/python -m pip install "mojo==1.1.0"
+          .venv/bin/python -m pip install "mojo==1.2.0"
           .venv/bin/mojo --version
 
       # The same tree the groups instrumented, then every group's captures
@@ -691,7 +691,7 @@ jobs:
       - name: Install the pinned Mojo toolchain and MAX
         run: |
           uv venv --prompt ThreeMojo
-          uv pip install "mojo==1.1.0" "max==26.6.0"
+          uv pip install "mojo==1.2.0" "max==26.7.0"
           .venv/bin/mojo --version
 
       - name: compile-gpu (sm_80, no execution)
@@ -721,7 +721,7 @@ jobs:
       - name: Install the pinned Mojo toolchain
         run: |
           uv venv --prompt ThreeMojo
-          uv pip install "mojo==1.1.0"
+          uv pip install "mojo==1.2.0"
           .venv/bin/mojo --version
       - name: Require every applicable check
         env:
