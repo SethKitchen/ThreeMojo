@@ -1937,6 +1937,317 @@ def check_lifetime(mojo: String) raises:
         _ = run_program(["rm", "-rf", work], 30)
 
 
+def identity_source(expression: String) -> String:
+    """Return one retained-identity fixture.
+
+    Args:
+        expression: The condition to test.
+
+    Returns:
+        The Mojo source.
+    """
+    var text = """@fieldwise_init
+struct Identity(ImplicitlyCopyable, Boolable):
+    var payload: Int
+    var expected: Int
+
+    @inline(.never)
+    def __bool__(self) -> Bool:
+        var original = Int(Pointer(to=self.payload)) == self.expected
+        print("CONVERT", original)
+        return original
+
+
+def main():
+    comptime assert Identity.__copy_ctor_is_trivial
+    comptime assert Identity.__move_ctor_is_trivial
+    comptime assert Identity.__del__is_trivial
+    var kept = Identity(7, 0)
+    kept.expected = Int(Pointer(to=kept.payload))
+    print("DIRECT", kept.__bool__())
+"""
+    if expression.find("flag") >= 0:
+        text += "    var flag = False\n"
+    if expression.find("choose_kept") >= 0:
+        text += "    var choose_kept = True\n"
+    text += "    if " + expression + ":\n"
+    text += '        print("BRANCH T")\n'
+    text += "    else:\n"
+    text += '        print("BRANCH F")\n'
+    text += '    print("RETAINED", kept.payload)\n'
+    text += (
+        '    print("ADDRESS", Int(Pointer(to=kept.payload)) == kept.expected)\n'
+    )
+    return text
+
+
+def _identity_output(conversions: Int, outcome: Bool) -> String:
+    """Return the native stdout of one identity case."""
+    var text = "CONVERT True\nDIRECT True\n"
+    var index = 0
+    while index < conversions:
+        text += "CONVERT True\n"
+        index += 1
+    text += "BRANCH T\n" if outcome else "BRANCH F\n"
+    text += "RETAINED 7\nADDRESS True\n"
+    return text
+
+
+def _origin_text(path: String) raises -> Tuple[String, String]:
+    """Return the header and body of one origin file."""
+    var raw = String(from_utf8_lossy=Path(path).read_bytes())
+    var cut = raw.find("\n")
+    if cut < 0:
+        raise Error("truncated origin " + path)
+    var header = String(raw[byte=:cut])
+    var body = String(raw[byte = cut + 1 :])
+    return (header, body)
+
+
+def _require_origin(rewritten: String, name: String, source: String) raises:
+    """Require the builder origin to bind this exact source."""
+    var encoded = source
+    var generated = String(
+        from_utf8_lossy=Path(rewritten + "/" + name + ".mojo").read_bytes()
+    )
+    var manifest = String(
+        from_utf8_lossy=Path(rewritten + "/manifest.txt").read_bytes()
+    )
+    var origin = _origin_text(rewritten + "/" + name + ".mojo.cov-origin")
+    var parts = List[String]()
+    parts.append(name + ".mojo")
+    parts.append(encoded)
+    parts.append(generated)
+    parts.append(manifest)
+    var header = "COVORIGIN1"
+    for part in parts:
+        header += " " + String(part.byte_length())
+    if origin[0] != header:
+        raise Error(name + " origin header " + origin[0])
+    if origin[1] != parts[0] + parts[1] + parts[2] + parts[3]:
+        raise Error(name + " origin body differs")
+    var index = _origin_text(rewritten + "/origins.ready")
+    var expected_index = (
+        "COVORIGIN_INDEX2 1 " + String(manifest.byte_length()) + " 0"
+    )
+    if index[0] != expected_index:
+        raise Error(name + " origin index " + index[0])
+    var name_bytes = name + ".mojo"
+    if (
+        index[1]
+        != manifest + String(name_bytes.byte_length()) + "\n" + name_bytes
+    ):
+        raise Error(name + " origin index body differs")
+
+
+def _decision_line(source: String, expression: String) raises -> Int:
+    """Return the 1-based line of `if expression:`."""
+    var wanted = "if " + expression + ":"
+    var number = 1
+    for line in source.splitlines():
+        if String(line).strip() == wanted:
+            return number
+        number += 1
+    raise Error("missing decision " + wanted)
+
+
+def _identity_records(
+    name: String, decision: Int, outcome: Bool, vector: String
+) -> String:
+    """Return the expected trace lines joined by newlines."""
+    var truth = "T" if outcome else "F"
+    var text = String()
+    var index = 0
+    var raw = vector.as_bytes()
+    while index < len(raw):
+        var state = String(vector[byte = index : index + 1])
+        if state != "-":
+            text += (
+                "COVLINE:"
+                + name
+                + ":"
+                + String(decision)
+                + "."
+                + String(index)
+                + ":"
+                + state
+                + "\n"
+            )
+        index += 1
+    text += "COVLINE:" + name + ":" + String(decision) + ":" + truth + "\n"
+    text += (
+        "COVEVAL2:"
+        + name
+        + ":"
+        + String(decision)
+        + ":"
+        + truth
+        + ":"
+        + vector
+        + ";\n"
+    )
+    return text
+
+
+def check_identity(mojo: String) raises:
+    """Keep original-object truth for the retained identity controls.
+
+    Args:
+        mojo: The Mojo compiler.
+
+    Raises:
+        Error: If native output, the origin, or a trace differs.
+    """
+    var root = absolute_path(".")
+    var compiler = absolute_path(mojo)
+    var expressions = List[String]()
+    var conversions = List[Int]()
+    var outcomes = List[Bool]()
+    var vectors = List[String]()
+    expressions.append("not kept or False")
+    conversions.append(1)
+    outcomes.append(False)
+    vectors.append("TF")
+    expressions.append("not not kept and True")
+    conversions.append(1)
+    outcomes.append(True)
+    vectors.append("TT")
+    expressions.append("flag or not kept")
+    conversions.append(1)
+    outcomes.append(False)
+    vectors.append("FT")
+    expressions.append("not (kept if choose_kept else kept) or False")
+    conversions.append(1)
+    outcomes.append(False)
+    vectors.append("TF")
+    expressions.append("(not kept) or (not not kept)")
+    conversions.append(2)
+    outcomes.append(True)
+    vectors.append("TT")
+    expressions.append("flag and not kept")
+    conversions.append(0)
+    outcomes.append(False)
+    vectors.append("F-")
+    var work = mkdtemp(prefix="threemojo-identity-")
+    try:
+        var native = work + "/native"
+        var rewritten = work + "/rewritten"
+        _ = _must(["mkdir", "-p", native, rewritten], 10)
+        _ = _must(["cp", "-a", root + "/coverage", native + "/coverage"], 30)
+        _ = _must(["cp", "-a", root + "/coverage", rewritten + "/coverage"], 30)
+        for folder in [native, rewritten]:
+            var built = folder + "/coverage/build"
+            if Path(built).exists():
+                _ = _must(["rm", "-rf", built], 10)
+        var build = work + "/build_cli"
+        _ = _must(
+            [
+                compiler,
+                "build",
+                "-Werror",
+                "-I",
+                root,
+                root + "/coverage/build_cli.mojo",
+                "-o",
+                build,
+            ],
+            180,
+        )
+        var number = 0
+        while number < len(expressions):
+            var expression = expressions[number]
+            var name = "identity-positive-" + String(number)
+            var source = identity_source(expression)
+            var expected = _identity_output(
+                conversions[number], outcomes[number]
+            )
+            Path(native + "/" + name + ".mojo").write_text(source)
+            var native_binary = work + "/" + name + "-native"
+            _ = _must(
+                [
+                    compiler,
+                    "build",
+                    "-Werror",
+                    "-I",
+                    native,
+                    native + "/" + name + ".mojo",
+                    "-o",
+                    native_binary,
+                ],
+                180,
+            )
+            var actual = _must([native_binary], 5)
+            if actual.output != expected:
+                raise Error(name + "\n" + actual.output)
+            _ = _must([build, rewritten, name + ".mojo"], 60, native)
+            var decision = _decision_line(source, expression)
+            var manifest = Path(rewritten + "/manifest.txt").read_text()
+            var manifest_rows = List[String]()
+            for line in manifest.splitlines():
+                var row = String(line)
+                var parts = row.split(" ")
+                if (
+                    len(parts) >= 2
+                    and String(parts[1]) == name
+                    and (
+                        String(parts[0]) == "B"
+                        or String(parts[0]) == "C"
+                        or String(parts[0]) == "M"
+                    )
+                ):
+                    manifest_rows.append(row)
+            var wanted_manifest = List[String]()
+            wanted_manifest.append("B " + name + " " + String(decision))
+            wanted_manifest.append("C " + name + " " + String(decision) + " 0")
+            wanted_manifest.append("M " + name + " " + String(decision) + " 0")
+            wanted_manifest.append("C " + name + " " + String(decision) + " 1")
+            wanted_manifest.append("M " + name + " " + String(decision) + " 1")
+            sort(manifest_rows)
+            sort(wanted_manifest)
+            if not _same(manifest_rows, wanted_manifest):
+                raise Error(name + " manifest changed")
+            _require_origin(rewritten, name, source)
+            var instrumented_binary = work + "/" + name + "-instrumented"
+            _ = _must(
+                [
+                    compiler,
+                    "build",
+                    "-Werror",
+                    "-I",
+                    rewritten,
+                    rewritten + "/" + name + ".mojo",
+                    "-o",
+                    instrumented_binary,
+                ],
+                180,
+            )
+            var instrumented = _must([instrumented_binary], 5)
+            if instrumented.output != actual.output:
+                raise Error(name + " stdout differs\n" + instrumented.output)
+            var wanted = _identity_records(
+                name, decision, outcomes[number], vectors[number]
+            )
+            var prefix_hit = "COVLINE:" + name + ":" + String(decision)
+            var prefix_vector = (
+                "COVEVAL2:" + name + ":" + String(decision) + ":"
+            )
+            var seen = String()
+            for line in instrumented.errors.splitlines():
+                var row = String(line)
+                if (
+                    row.startswith(prefix_hit + ":")
+                    or row.startswith(prefix_hit + ".")
+                    or row.startswith(prefix_vector)
+                ):
+                    seen += row + "\n"
+            if seen != wanted:
+                raise Error(name + "\n" + seen + "\n" + wanted)
+            number += 1
+        print("PASS: 6 immediate retained-identity controls with exact traces")
+    finally:
+        _ = run_program(["rm", "-rf", work], 30)
+
+
 def main() raises:
     """Compare the Boolean grouping fixture from the command line."""
     var mojo = ".venv/bin/mojo"
@@ -1961,6 +2272,7 @@ def main() raises:
         check_compile_time_names(mojo)
         check_repeated_truth(mojo)
         check_lifetime(mojo)
+        check_identity(mojo)
     except error:
         print(String(error), file=stderr)
         exit(1)

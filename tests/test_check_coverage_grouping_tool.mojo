@@ -13,6 +13,7 @@ from tools.check_coverage_grouping import (
     expected_records,
     expected_rows,
     fixture_source,
+    identity_source,
     lifetime_source,
     reduce_text,
     repeated_truth_source,
@@ -75,6 +76,13 @@ def test_repeated_records_reduce_to_the_first_copy() raises:
     assert_equal(
         reduce_text(raw),
         "COVLINE:fixture:1:T\nCOVEVAL2:fixture:1:T:T;\nhello\n",
+    )
+
+
+def test_the_identity_fixture_matches_the_pinned_text() raises:
+    assert_equal(
+        sha256_hex(identity_source("not kept or False").as_bytes()),
+        "c5d35a3906009b2f70c7a5cba999dcb97a5be75bc0a35b67253a06d7c5252a7a",
     )
 
 
