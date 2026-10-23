@@ -8,7 +8,8 @@ import coverage_loop_proofs as loops
 
 ROOT = Path(__file__).resolve().parents[1]
 MODULE = 'renderers/renderer'
-CURRENT_RENDERER_SHA256 = '990d94c815315c910b12c1b126c076183fc35cdeb9f64a26d1f7e574f424bccd'
+CURRENT_RENDERER_SHA256 = 'c08275ccfea2f32dd84dc5ad54205052f6dfd216104836c858ff259224426332'
+FORMATTED_RENDERER_SHA256 = '990d94c815315c910b12c1b126c076183fc35cdeb9f64a26d1f7e574f424bccd'
 CURRENT_CAP_LINE = 4049
 
 
@@ -28,7 +29,7 @@ class RendererCapLoopTests(unittest.TestCase):
         row = proof[CURRENT_CAP_LINE]
         self.assertEqual((row['required'], row['impossible']), ('T', 'F'))
         self.assertEqual((row['minimum_cardinality'], row['maximum_cardinality']), (2, 64))
-        self.assertEqual(row['dependency_sha256'], loops.STRAND_CAP_FORMATTED_SUCCESSOR[0])
+        self.assertEqual(row['dependency_sha256'], loops.STRAND_CAP_SPLAT_WORKERS_SUCCESSOR[0])
         self.assertEqual(loops.reviewed_nonempty_loops(self.root, 'other/renderer'), {})
 
     def test_exact_endpoint_table_preserves_the_historical_theorem(self):
@@ -43,7 +44,7 @@ class RendererCapLoopTests(unittest.TestCase):
 
     def test_endpoint_selection_never_admits_mixed_pairs(self):
         from unittest.mock import patch
-        current, line = loops.STRAND_CAP_FORMATTED_SUCCESSOR
+        current, line = loops.STRAND_CAP_SPLAT_WORKERS_SUCCESSOR
         self.assertEqual(line, CURRENT_CAP_LINE)
         self.assertEqual(current['renderers/renderer.mojo'], CURRENT_RENDERER_SHA256)
         # Isolate descriptor selection. These mocked hashes are not receipt evidence.
@@ -69,6 +70,16 @@ class RendererCapLoopTests(unittest.TestCase):
                          '2491b99a982cd4bc49b3573d3c6db8313bfdd47372e693e932c03c27d0ff127d')
         def digest(path, **kwargs):
             return first[path.relative_to(self.root).as_posix()]
+        with patch.object(loops, 'file_sha256', digest):
+            self.assertEqual(set(loops.strand_cap_loops(self.root)), {line})
+
+    def test_formatted_pair_remains_unchanged(self):
+        from unittest.mock import patch
+        formatted, line = loops.STRAND_CAP_FORMATTED_SUCCESSOR
+        self.assertEqual(formatted['renderers/renderer.mojo'], FORMATTED_RENDERER_SHA256)
+        self.assertEqual(line, CURRENT_CAP_LINE)
+        def digest(path, **kwargs):
+            return formatted[path.relative_to(self.root).as_posix()]
         with patch.object(loops, 'file_sha256', digest):
             self.assertEqual(set(loops.strand_cap_loops(self.root)), {line})
 
