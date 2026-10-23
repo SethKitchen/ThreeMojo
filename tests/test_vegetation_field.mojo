@@ -24,6 +24,7 @@ from extensions.vegetation.kinds import (
     DRY_GRASS,
     GRASS,
     POPPY,
+    SEED_HEAD,
 )
 from extensions.vegetation.wind import Wind, still_air
 from math.frustum import Frustum
@@ -123,6 +124,9 @@ def test_each_field_parameter_is_refused_out_of_range() raises:
     p = _small()
     p.poppy_share = -1
     _refused(p^, "poppy share")
+    p = _small()
+    p.seed_share = 2
+    _refused(p^, "seed share")
 
 
 def test_the_levels_are_checked_one_by_one_and_in_order() raises:
@@ -243,16 +247,17 @@ def test_kept_is_a_rounded_share_of_the_stream() raises:
 
 
 def test_the_stream_grows_each_kind_and_skips_bare_tufts() raises:
-    """With every tuft a poppy's chance and half the blades dry, the
-    stream grows grass, dry grass and poppies, and skips some tufts where
+    """With every tuft a poppy's chance, half the blades dry and some
+    stalks, the stream grows every kind, and skips some tufts where
     the ground is bare. The same blade grows the same way twice."""
     var p = _small()
     p.span = Length(60.0, METER)
     p.tuft_blades = 1
     p.poppy_share = 1
     p.dry_share = 0.5
+    p.seed_share = 0.3
     var field = GrassField(p^, Ground())
-    var kinds = List[Int](length=3, fill=0)
+    var kinds = List[Int](length=4, fill=0)
     var skipped = 0
     var thick_stems = 0
     for index in range(len(field.clusters)):
@@ -269,6 +274,7 @@ def test_the_stream_grows_each_kind_and_skips_bare_tufts() raises:
     assert_true(kinds[GRASS.value] > 0)
     assert_true(kinds[DRY_GRASS.value] > 0)
     assert_true(kinds[POPPY.value] > 0)
+    assert_true(kinds[SEED_HEAD.value] > 0)
     assert_true(skipped > 0)
     assert_equal(thick_stems, 0)
     var again = field.grow(3, 7)

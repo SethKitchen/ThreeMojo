@@ -29,22 +29,22 @@ from extensions.vegetation.checks import (
 )
 from extensions.vegetation.noise import layered_noise, value_noise
 from math.vector3 import Vector3
-from std.math import abs, cos, pi, sin
+from std.math import abs, cos, pi, pow, sin
 from units.si import METER, Length
 
 # The linear color of grass seen from far away.
-comptime FAR_GRASS = Vector3(0.050, 0.120, 0.016)
+comptime FAR_GRASS = Vector3(0.065, 0.115, 0.020)
 # The linear color of dry grass seen from far away.
 comptime FAR_STRAW = Vector3(0.150, 0.130, 0.045)
 # The linear color of a poppy patch seen from far away.
 comptime FAR_POPPY = Vector3(0.200, 0.040, 0.012)
-# The linear color of bare soil.
-comptime SOIL = Vector3(0.060, 0.045, 0.028)
+# The linear color of the ground where the grass is short or thin.
+comptime SOIL = Vector3(0.070, 0.074, 0.030)
 # The linear color of the mountains.
-comptime STONE = Vector3(0.110, 0.115, 0.120)
+comptime STONE = Vector3(0.050, 0.056, 0.062)
 # The radius, in lattice units, of the circle a ridge reads its noise on.
-# About six ridges a radian.
-comptime RIDGE_LOBES = Float32(6)
+# About thirteen ridges a radian.
+comptime RIDGE_LOBES = Float32(13)
 
 
 struct Ground(ImplicitlyCopyable):
@@ -352,7 +352,12 @@ def ridge_ring(
         var detail = value_noise(
             c * RIDGE_LOBES * 3, s * RIDGE_LOBES * 3 + 50, seed + 1
         )
-        peak = peak * peak * (0.4 + 0.6 * detail)
+        var crag = value_noise(
+            c * RIDGE_LOBES * 9 + 20, s * RIDGE_LOBES * 9, seed + 2
+        )
+        peak = 0.15 + 0.85 * pow(peak, Float32(1.5)) * (
+            0.4 + 0.45 * detail + 0.15 * crag
+        )
         var mid = (inner + outer) * 0.5
         var rows: List[Vector3] = [
             Vector3(c * inner, 0, s * inner),

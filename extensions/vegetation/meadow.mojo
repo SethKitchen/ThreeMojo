@@ -3,7 +3,8 @@
 # Noncommercial use is free; commercial use requires a paid license.
 # See LICENSE, LICENSE-COMMERCIAL.md and THIRD-PARTY-NOTICES.md.
 
-"""A summer meadow: grass, poppies, a treeline, boulders, sky and sun.
+"""A summer grassland: grass, poppies, trees and bushes, boulders, sky and
+sun.
 
 `Meadow` puts the whole scene into a `Scene` and its stores, and
 `update` prepares one frame. The frame runs in this order:
@@ -16,20 +17,27 @@
    geometry. A culled or far cluster is hidden, and costs nothing more.
 3. **Pick each tree's crown.** Each tree wears the crown of the first
    `CrownLevel` whose reach holds it: every leaf near, and fewer, larger
-   leaves and leaner wood further away.
+   leaves further away.
 4. **Fit the sun.** `SunLight.update` fits its two shadow cascades to the
-   view. The trees and the boulders cast. The grass only receives, which
-   halves the shadow work, and the dark roots of each blade stand in for
-   the grass's shadow on itself.
+   view. The trees, the bushes and the boulders cast. The grass only
+   receives. The dark roots of each blade stand in for its shadow on
+   itself.
+
+**The layout.** `MeadowParameters.crowns` lists the kinds of tree and
+bush, and `plantings` says where each one stands and how large it is.
+The default layout is open grassland: a lone tree near the camera,
+trees and round bushes scattered at every distance, a woodland along the
+horizon, and a bush with broad leaves a few meters away.
 
 **The light.** The sun is a `SunLight`. The sky's light is a hemisphere
 light, blue from above and green from below, which is the light that the
-sky and the sunlit grass bounce back. The blades and the leaves are lit
-from both sides: `two_sided_program` turns a back face's normal to the
-front again, so a blade with the sun behind it glows as a thin leaf does,
-and does not go dark. `paint_sky` bakes Preetham's sky and its clouds
-into the background cube. Fog of the sky's haze color veils the treeline
-a little and the mountains a lot.
+sky and the sunlit grass bounce back. The blades are lit from both
+sides: `two_sided_program` turns a back face's normal to the front again,
+so a blade with the sun behind it glows as a thin leaf does. The leaves
+use `foliage_program`, which also takes their baked light. The sun's
+direction is baked into each crown, so a planting is never turned.
+`paint_sky` bakes Preetham's sky and its clouds into the background cube.
+Fog of the sky's haze color veils the far woodland and the mountains.
 """
 
 from cameras.perspective_camera import PerspectiveCamera
@@ -46,6 +54,7 @@ from extensions.vegetation.checks import (
 from extensions.vegetation.crown import (
     CrownLevel,
     CrownParameters,
+    broad_tree,
     bush_parameters,
     crown_level_for,
     default_crown_levels,
@@ -57,6 +66,7 @@ from extensions.vegetation.field import (
     GrassField,
     no_stats,
 )
+from extensions.vegetation.foliage import foliage_program
 from extensions.vegetation.ground import Ground, ridge_ring
 from extensions.vegetation.kinds import DRAWN
 from extensions.vegetation.noise import hash01
@@ -64,18 +74,17 @@ from extensions.vegetation.rock import boulder
 from extensions.vegetation.sky import SkyDome, SkyLook, paint_sky
 from extensions.vegetation.wind import Wind
 from lights.light import ambient_light, hemisphere_light
+from lights.shadow import PCF_SOFT_SHADOW_MAP
 from lights.sun_light import SunLight
 from materials.material import DOUBLE_SIDE, Material, MaterialId
 from materials.nodes import NORMAL_NODE, NodeGraph, NodeProgram
 from math.frustum import Frustum
-from math.vector2 import Vector2
 from math.vector3 import Vector3
 from objects.mesh import Mesh
-from lights.shadow import PCF_SOFT_SHADOW_MAP
 from render.framebuffer import Color
 from render.tonemap import ACES_FILMIC_TONE_MAPPING
 from renderers.renderer import Renderer, available_workers
-from std.math import cos, pi, sin
+from std.math import cos, pi, pow, sin
 from units.si import (
     DEGREE,
     METER,
@@ -93,7 +102,7 @@ comptime FARTHEST = Float32(1.7)
 # What the light is multiplied by before ACES filmic tone mapping.
 comptime EXPOSURE = Float32(0.8)
 # How high above the ground the camera's eye is.
-comptime EYE_HEIGHT = Float32(1.05)
+comptime EYE_HEIGHT = Float32(1.6)
 
 
 def two_sided_program() raises -> NodeProgram:
@@ -163,14 +172,14 @@ def meadow_renderer(width: Int, height: Int) raises -> Renderer:
 def meadow_camera(
     parameters: MeadowParameters, width: Int, height: Int, walk: Length
 ) raises -> PerspectiveCamera:
-    """Return a camera at head height in the grass, looking up the slope
-    to the treeline.
+    """Return a camera at head height in the grass, looking out over the
+    grassland toward -z.
 
     Args:
         parameters: The meadow; its ground and mountains are read.
         width: Image width in pixels.
         height: Image height in pixels.
-        walk: How far the camera has walked toward the trees.
+        walk: How far the camera has walked toward -z.
 
     Returns:
         The placed camera. It sees as far as the mountains.
@@ -185,13 +194,144 @@ def meadow_camera(
         Length(parameters.mountain_radius.to(METER) * FARTHEST, METER),
     )
     ref ground = parameters.ground
-    var z = 22 - walk.to(METER)
-    var ahead = z - 52
+    var z = 30 - walk.to(METER)
+    var ahead = z - 70
     camera.place(
-        Vector3(2, ground.height_at(2, z) + EYE_HEIGHT, z),
-        Vector3(-3, ground.height_at(-3, ahead) + 4, ahead),
+        Vector3(0, ground.height_at(0, z) + EYE_HEIGHT, z),
+        Vector3(-4, ground.height_at(-4, ahead) + 4.5, ahead),
     )
     return camera^
+
+
+@fieldwise_init
+struct Planting(ImplicitlyCopyable):
+    """One tree or bush: which crown it wears, where it stands, and how
+    large it is."""
+
+    # The entry of `MeadowParameters.crowns` it wears.
+    var crown: Int
+    # Where it stands, in meters.
+    var x: Float32
+    var z: Float32
+    # What its crown is scaled by.
+    var size: Float32
+
+
+def scatter_plantings(
+    count: Int,
+    first: Int,
+    kinds: Int,
+    near: Length,
+    far: Length,
+    smallest: Float32,
+    largest: Float32,
+    seed: Int,
+) -> List[Planting]:
+    """Return plantings scattered across the view toward -z.
+
+    Each planting stands between `near` and `far` from the origin, toward
+    -z, and as far to each side as the view reaches there. More of them
+    stand toward `far`, where the view is wider. They cycle through
+    `kinds` crowns from `first`.
+
+    Args:
+        count: How many plantings.
+        first: The first crown they wear.
+        kinds: How many crowns, from `first`, they cycle through.
+        near: The nearest a planting stands.
+        far: The furthest a planting stands.
+        smallest: The smallest size.
+        largest: The largest size.
+        seed: Which places to pick.
+
+    Returns:
+        The plantings.
+    """
+    var plantings = List[Planting]()
+    var low = near.to(METER)
+    var high = far.to(METER)
+    for index in range(count):
+        var depth = low + (high - low) * pow(
+            hash01(index, 0, seed), Float32(0.7)
+        )
+        var across = (hash01(index, 1, seed) - 0.5) * (2.2 * depth + 20)
+        var size = smallest + (largest - smallest) * hash01(index, 2, seed)
+        plantings.append(
+            Planting(first + index % max(kinds, 1), across, -depth, size)
+        )
+    return plantings^
+
+
+def default_crowns() -> List[CrownParameters]:
+    """Return the seven crowns of the grassland.
+
+    Returns:
+        Three slender trees, two broad trees and two bushes, each of its
+        own seed.
+    """
+    var crowns = List[CrownParameters]()
+    for index in range(7):  # pragma: no branch
+        var crown = CrownParameters()
+        if index >= 5:
+            crown = bush_parameters()
+        elif index >= 3:
+            crown = broad_tree()
+        crown.seed = 11 + 7 * index
+        crown.tree.seed = 3 + 5 * index
+        crowns.append(crown^)
+    return crowns^
+
+
+def default_plantings() -> List[Planting]:
+    """Return the layout of the grassland.
+
+    Returns:
+        A lone tree and a bush near the camera, a second lone tree, trees
+        scattered from 45 to 250 meters, round bushes from 12 to 120
+        meters, and a woodland of broad trees from 260 to 420 meters.
+    """
+    var plantings: List[Planting] = [
+        Planting(0, -9.0, -8.0, 1.15),
+        Planting(1, 34.0, -44.0, 1.0),
+        Planting(5, -3.4, 25.8, 0.85),
+    ]
+    plantings.extend(
+        scatter_plantings(
+            22,
+            0,
+            5,
+            Length(45.0, METER),
+            Length(250.0, METER),
+            0.7,
+            1.2,
+            21,
+        )
+    )
+    plantings.extend(
+        scatter_plantings(
+            26,
+            5,
+            2,
+            Length(12.0, METER),
+            Length(120.0, METER),
+            0.8,
+            1.6,
+            22,
+        )
+    )
+    plantings.extend(
+        scatter_plantings(
+            90,
+            3,
+            2,
+            Length(260.0, METER),
+            Length(420.0, METER),
+            0.8,
+            1.3,
+            23,
+        )
+    )
+    return plantings^
 
 
 struct MeadowParameters(Copyable, Movable):
@@ -201,21 +341,9 @@ struct MeadowParameters(Copyable, Movable):
     var field: FieldParameters
     var ground: Ground
     var wind: Wind
-    # The trees: the crown of each kind, how many kinds, and how many
-    # trees stand in the treeline.
-    var crown: CrownParameters
-    var tree_kinds: Int
-    var trees: Int
-    # The bushes under the treeline: their crown, and how many.
-    var bush: CrownParameters
-    var bushes: Int
-    # Where a lone tree stands in the meadow, as x and z in meters.
-    var solitary: List[Vector2]
-    # How far behind the origin, toward -z, the treeline starts and ends,
-    # and how wide it is.
-    var treeline_near: Length
-    var treeline_far: Length
-    var treeline_width: Length
+    # The kinds of tree and bush, and where each stands.
+    var crowns: List[CrownParameters]
+    var plantings: List[Planting]
     # The levels of detail of every crown, nearest first.
     var crown_levels: List[CrownLevel]
     # How many boulders lie in the field.
@@ -231,31 +359,24 @@ struct MeadowParameters(Copyable, Movable):
     var ground_cells: Int
     # Where the ring of mountains starts.
     var mountain_radius: Length
-    # Which trees and boulders to place.
+    # Which boulders to place.
     var seed: Int
 
     def __init__(out self) raises:
-        """Create a meadow that rises to a treeline, with a high sun.
+        """Create open grassland under a high sun behind the camera.
 
         Raises:
             Error: Never; the defaults are in range.
         """
         self.field = FieldParameters()
-        self.ground = Ground(climb=0.035)
+        self.ground = Ground()
         self.wind = Wind()
-        self.crown = CrownParameters()
-        self.tree_kinds = 3
-        self.trees = 56
-        self.bush = bush_parameters()
-        self.bushes = 110
-        self.solitary = [Vector2(-10.0, -9.0), Vector2(27.0, -21.0)]
-        self.treeline_near = Length(40.0, METER)
-        self.treeline_far = Length(80.0, METER)
-        self.treeline_width = Length(200.0, METER)
+        self.crowns = default_crowns()
+        self.plantings = default_plantings()
         self.crown_levels = default_crown_levels()
-        self.rocks = 5
-        self.sun_elevation = Angle(44.0, DEGREE)
-        self.sun_azimuth = Angle(160.0, DEGREE)
+        self.rocks = 6
+        self.sun_elevation = Angle(42.0, DEGREE)
+        self.sun_azimuth = Angle(35.0, DEGREE)
         self.sky = SkyLook()
         self.sky_size = 512
         self.ground_span = Length(1400.0, METER)
@@ -268,70 +389,58 @@ struct MeadowParameters(Copyable, Movable):
 
         Raises:
             Error: If the field, the ground, the wind, a crown or the sky
-                is refused; there are not from 1 to 16 tree kinds, from 0
-                to 10,000 trees or bushes, from 0 to 1,000 lone trees or
-                from 0 to 1,000 boulders; a lone tree is not within 10
-                kilometers; the treeline does not lie from 0 to 10
-                kilometers away with its far edge past its near edge; the
-                crowns have not from 1 to 8 levels or a level is refused;
-                the sun is not from 1 to 90 degrees high; the ground is not
-                from 10 meters to 100 kilometers across; or the mountains
-                are not from 10 meters to 100 kilometers away.
+                is refused; there are not from 1 to 64 crowns, from 0 to
+                100,000 plantings or from 0 to 1,000 boulders; a planting
+                names no crown, stands further than 10 kilometers, or is
+                not from 0.05 to 20 times its crown's size; the crowns
+                have not from 1 to 8 levels or a level is refused; the sun
+                is not from 1 to 90 degrees high; the ground is not from 10
+                meters to 100 kilometers across; or the mountains are not
+                from 10 meters to 100 kilometers away.
         """
         self.field.check()
         self.ground.check()
         self.wind.check()
-        self.crown.check()
-        self.bush.check()
         self.sky.check()
         require_count_between(
-            self.tree_kinds, 1, 16, "A meadow must have from 1 to 16 tree kinds"
+            len(self.crowns), 1, 64, "A meadow must have from 1 to 64 crowns"
         )
+        for index in range(len(self.crowns)):  # pragma: no branch
+            self.crowns[index].check()
         require_count_between(
-            self.trees, 0, 10000, "A meadow must have from 0 to 10,000 trees"
-        )
-        require_count_between(
-            self.bushes, 0, 10000, "A meadow must have from 0 to 10,000 bushes"
-        )
-        require_count_between(
-            len(self.solitary),
+            len(self.plantings),
             0,
-            1000,
-            "A meadow must have from 0 to 1,000 lone trees",
+            100000,
+            "A meadow must have from 0 to 100,000 plantings",
         )
-        for index in range(len(self.solitary)):
-            require_between(
-                self.solitary[index].x,
-                -1.0e4,
-                1.0e4,
-                "A lone tree must stand within 10 kilometers",
+        for index in range(len(self.plantings)):
+            ref planting = self.plantings[index]
+            require_count_between(
+                planting.crown,
+                0,
+                len(self.crowns) - 1,
+                "A planting must wear one of the meadow's crowns",
             )
             require_between(
-                self.solitary[index].y,
+                planting.x,
                 -1.0e4,
                 1.0e4,
-                "A lone tree must stand within 10 kilometers",
+                "A planting must stand within 10 kilometers",
+            )
+            require_between(
+                planting.z,
+                -1.0e4,
+                1.0e4,
+                "A planting must stand within 10 kilometers",
+            )
+            require_between(
+                planting.size,
+                0.05,
+                20,
+                "A planting must be from 0.05 to 20 times its crown's size",
             )
         require_count_between(
             self.rocks, 0, 1000, "A meadow must have from 0 to 1,000 boulders"
-        )
-        require_between(
-            self.treeline_near.to(METER),
-            0,
-            1.0e4,
-            "A treeline must start from 0 to 10 kilometers away",
-        )
-        require_between(
-            self.treeline_far.to(METER),
-            self.treeline_near.to(METER) + 0.01,
-            1.0e4,
-            "A treeline must end past its start, within 10 kilometers",
-        )
-        require_between(
-            self.treeline_width.to(METER),
-            0,
-            1.0e4,
-            "A treeline must be from 0 to 10 kilometers wide",
         )
         require_count_between(
             len(self.crown_levels),
@@ -369,65 +478,12 @@ struct MeadowParameters(Copyable, Movable):
 
 @fieldwise_init
 struct _Tree(ImplicitlyCopyable):
-    """One tree of the treeline: where it stands, which kind it is, and
-    its wood's mesh. Its leaves' mesh is the next one."""
+    """One planted tree or bush: where it stands, which crown it wears,
+    and its wood's mesh. Its leaves' mesh is the next one."""
 
     var place: Vector3
-    var kind: Int
+    var crown: Int
     var wood: Int
-
-
-def _plant(
-    mut scene: Scene,
-    woods: List[GeometryId],
-    leaves: List[GeometryId],
-    levels: Int,
-    wood: MaterialId,
-    foliage: MaterialId,
-    ground: Ground,
-    x: Float32,
-    z: Float32,
-    kind: Int,
-    turn: Float32,
-    size: Float32,
-) raises -> _Tree:
-    """Stand one tree or bush of a kind on the ground, at full detail.
-
-    Args:
-        scene: The scene. The tree's node and two meshes are added.
-        woods: The wood of each crown kind at each level.
-        leaves: The leaves of each crown kind at each level.
-        levels: How many levels each kind has.
-        wood: The bark's material.
-        foliage: The leaves' material.
-        ground: The ground it stands on.
-        x: Where it stands, in meters.
-        z: Where it stands, in meters.
-        kind: Which crown kind it wears.
-        turn: How far it turns about +y, as a fraction of a turn.
-        size: What it is scaled by.
-
-    Returns:
-        The tree, for `Meadow.update` to pick its crown.
-
-    Raises:
-        Error: If the scene refuses a mesh.
-    """
-    var place = Vector3(x, ground.height_at(x, z) - 0.2, z)
-    var stand = Object3D()
-    stand.set_position(place.x, place.y, place.z)
-    stand.rotate_y(Angle(turn * 360, DEGREE))
-    stand.set_scale(size, size, size)
-    var node = scene.add(stand^)
-    var first = kind * levels
-    scene.add_mesh(
-        Mesh(woods[first], wood, node, cast_shadow=True, receive_shadow=True)
-    )
-    # A crown does not take the sun's shadow on itself: thin cards
-    # shadow each other into a noise. Its outward normals and its baked
-    # occlusion give it its volume instead.
-    scene.add_mesh(Mesh(leaves[first], foliage, node, cast_shadow=True))
-    return _Tree(place, kind, len(scene.meshes) - 2)
 
 
 struct Meadow(Movable):
@@ -442,8 +498,8 @@ struct Meadow(Movable):
     var cluster_mesh: List[Optional[Int]]
     var cluster_node: List[NodeId]
     var cluster_geometry: List[GeometryId]
-    # The crown levels, and the wood and the leaves of each crown kind at
-    # each level: entry `kind * len(levels) + level`.
+    # The crown levels, and the wood and the leaves of each crown at each
+    # level: entry `crown * len(levels) + level`.
     var levels: List[CrownLevel]
     var woods: List[GeometryId]
     var leaves: List[GeometryId]
@@ -476,11 +532,17 @@ struct Meadow(Movable):
         self.field = GrassField(parameters.field.copy(), parameters.ground)
         self.wind = parameters.wind
         self.levels = parameters.crown_levels.copy()
-        var two_sided = assets.programs.add(two_sided_program())
         var white = Color(255, 255, 255)
+        var two_sided = assets.programs.add(two_sided_program())
         self.grass = assets.materials.add(
             Material(
                 white, side=DOUBLE_SIDE, vertex_colors=True, nodes=two_sided
+            )
+        )
+        var lit_leaves = assets.programs.add(foliage_program())
+        var foliage = assets.materials.add(
+            Material(
+                white, side=DOUBLE_SIDE, vertex_colors=True, nodes=lit_leaves
             )
         )
         var painted = assets.materials.add(Material(white, vertex_colors=True))
@@ -515,7 +577,7 @@ struct Meadow(Movable):
         var ridge = ridge_ring(
             parameters.mountain_radius,
             Length(parameters.mountain_radius.to(METER) * 0.6, METER),
-            Length(parameters.mountain_radius.to(METER) * 0.24, METER),
+            Length(parameters.mountain_radius.to(METER) * 0.3, METER),
             480,
             parameters.seed,
         )
@@ -528,83 +590,58 @@ struct Meadow(Movable):
             )
         )
 
-        # The crown kinds: the tree kinds, then the bush. Each is a crown
-        # in full and a crown with fewer, larger leaves.
+        var toward = sun_direction(
+            parameters.sun_elevation, parameters.sun_azimuth
+        )
+        # Each crown at each level, with the sun baked into its leaves.
         self.woods = List[GeometryId]()
         self.leaves = List[GeometryId]()
-        for kind in range(parameters.tree_kinds + 1):  # pragma: no branch
-            var crown = parameters.bush.copy()
-            if kind < parameters.tree_kinds:
-                crown = parameters.crown.copy()
-            crown.tree.seed = crown.tree.seed + kind * 17
-            crown.seed = crown.seed + kind * 31
+        for crown in range(len(parameters.crowns)):  # pragma: no branch
             for level in range(len(self.levels)):  # pragma: no branch
                 var grown = leafy_tree(
-                    crown, self.levels[level].detail, lean_wood=level > 0
+                    parameters.crowns[crown], self.levels[level], toward
                 )
                 self.woods.append(assets.geometries.add(grown.wood.clone()))
                 self.leaves.append(assets.geometries.add(grown.leaves.clone()))
         self.trees = List[_Tree]()
-        var seed = parameters.seed * 6151
-        var near = parameters.treeline_near.to(METER)
-        var deep = parameters.treeline_far.to(METER) - near
-        var wide = parameters.treeline_width.to(METER)
-        var plants = parameters.trees + parameters.bushes
-        for t in range(plants):
-            # Trees fill the band from its near edge to its far edge. The
-            # bushes stand in two rows along the near edge, under the
-            # first crowns.
-            var bush = t >= parameters.trees
-            var row = t
-            var count = parameters.trees
-            if bush:
-                row = t - parameters.trees
-                count = parameters.bushes
-            var x = (
-                (Float32(row) + hash01(t, 0, seed)) / Float32(count) - 0.5
-            ) * wide
-            var z = -(near + deep * hash01(t, 1, seed))
-            var kind = t % parameters.tree_kinds
-            var size = 0.8 + 0.45 * hash01(t, 3, seed)
-            if bush:
-                z = -(near - 4 + 9 * hash01(t, 1, seed))
-                kind = parameters.tree_kinds
-                size = 1.3 + 0.9 * hash01(t, 3, seed)
-            self.trees.append(
-                _plant(
-                    scene,
-                    self.woods,
-                    self.leaves,
-                    len(self.levels),
+        var first_level = len(self.levels)
+        for index in range(len(parameters.plantings)):
+            ref planting = parameters.plantings[index]
+            var place = Vector3(
+                planting.x,
+                ground.height_at(planting.x, planting.z) - 0.1,
+                planting.z,
+            )
+            var stand = Object3D()
+            stand.set_position(place.x, place.y, place.z)
+            stand.set_scale(planting.size, planting.size, planting.size)
+            var node = scene.add(stand^)
+            var entry = planting.crown * first_level
+            scene.add_mesh(
+                Mesh(
+                    self.woods[entry],
                     painted,
-                    self.grass,
-                    ground,
-                    x,
-                    z,
-                    kind,
-                    hash01(t, 2, seed),
-                    size,
+                    node,
+                    cast_shadow=True,
+                    receive_shadow=True,
                 )
             )
-        for t in range(len(parameters.solitary)):
-            ref spot = parameters.solitary[t]
-            self.trees.append(
-                _plant(
-                    scene,
-                    self.woods,
-                    self.leaves,
-                    len(self.levels),
-                    painted,
-                    self.grass,
-                    ground,
-                    spot.x,
-                    spot.y,
-                    t % parameters.tree_kinds,
-                    hash01(t, 4, seed),
-                    1.05 + 0.2 * hash01(t, 5, seed),
+            # The leaves receive so that `foliage_program` can replace the
+            # shadow with their baked sunlight.
+            scene.add_mesh(
+                Mesh(
+                    self.leaves[entry],
+                    foliage,
+                    node,
+                    cast_shadow=True,
+                    receive_shadow=True,
                 )
+            )
+            self.trees.append(
+                _Tree(place, planting.crown, len(scene.meshes) - 2)
             )
 
+        var seed = parameters.seed * 6151
         var span = parameters.field.span.to(METER) * 0.4
         for r in range(parameters.rocks):
             var x = (hash01(r, 10, seed) - 0.5) * 2 * span
@@ -625,19 +662,16 @@ struct Meadow(Movable):
                 )
             )
 
-        var toward = sun_direction(
-            parameters.sun_elevation, parameters.sun_azimuth
-        )
         self.dome = paint_sky(
             renderer, assets, toward, parameters.sky, parameters.sky_size
         )
         scene.background = cube_background(self.dome.cube)
         self.sun = SunLight(scene, Color(255, 241, 222), 4.4)
         self.sun.cast_shadow = True
-        self.sun.shadow.map_size = 2048
+        self.sun.shadow.map_size = 4096
         self.sun.shadow.bias = -0.0004
         self.sun.shadow.normal_bias = 0.04
-        # The cascades cover the meadow and the treeline, not the
+        # The cascades cover the meadow and the near trees, not the
         # mountains: they would spread the same texels over 1.5 km.
         self.sun.shadow.far = Length(150.0, METER)
         scene.node(self.sun.node).set_position(
@@ -651,9 +685,7 @@ struct Meadow(Movable):
             )
         )
         scene.add_light(ambient_light(Color(200, 215, 240), 0.08))
-        scene.fog = exp2_fog(
-            self.dome.haze(), InverseLength(0.00075, PER_METER)
-        )
+        scene.fog = exp2_fog(self.dome.haze(), InverseLength(0.0008, PER_METER))
         scene.update()
 
     def update(
@@ -702,7 +734,7 @@ struct Meadow(Movable):
             var level = crown_level_for(
                 self.levels, (tree.place - eye).length()
             )
-            var entry = tree.kind * len(self.levels) + level
+            var entry = tree.crown * len(self.levels) + level
             scene.meshes[tree.wood].geometry = self.woods[entry]
             scene.meshes[tree.wood + 1].geometry = self.leaves[entry]
         scene.update()

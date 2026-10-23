@@ -3,12 +3,13 @@
 # Noncommercial use is free; commercial use requires a paid license.
 # See LICENSE, LICENSE-COMMERCIAL.md and THIRD-PARTY-NOTICES.md.
 
-"""A summer meadow at head height: tall grass, poppies and a treeline.
+"""Summer grassland at head height: tall grass, a lone tree, scattered
+trees and bushes, and mountains.
 
     mojo run -I . examples/meadow.mojo [path.png]
 
-The page is Vegetation. The camera stands in the grass and looks up the
-slope to the trees. The field holds ten million blades in clusters. Only
+The page is Vegetation. The camera stands in the grass and looks out over
+the grassland. The field holds ten million blades in clusters. Only
 the clusters in view are grown, each at the level of detail its distance
 picks, so a few percent of the blades are drawn. The program prints, as
 JSON, how long each step took and what the frame drew.

@@ -30,7 +30,8 @@ the renderer does not compute. `shade` mixes between two tip colors, so
 neighbors differ.
 
 **A poppy** is a thin stem, built as a blade, with a cup of five red
-petals at its tip.
+petals at its tip. **A seed head** is a tall thin stalk with a spike of
+two crossed strips at its tip, which stands above the grass.
 """
 
 from core.buffer_attribute import BufferAttribute
@@ -39,6 +40,7 @@ from extensions.vegetation.checks import require_between
 from extensions.vegetation.kinds import (
     DRY_GRASS,
     POPPY,
+    SEED_HEAD,
     PlantKind,
     require_plant_kind,
 )
@@ -57,6 +59,9 @@ comptime MAX_SEGMENTS = 8
 comptime PETALS = 5
 # The radius of a poppy's cup at a shade of zero.
 comptime CUP_RADIUS = Float32(0.025)
+# The length and the width of a seed head.
+comptime SPIKE_LENGTH = Float32(0.075)
+comptime SPIKE_WIDTH = Float32(0.01)
 # The most a segment can tilt from upright, in radians: 83 degrees. A
 # segment never lies flat, so a blade never folds into the ground.
 comptime MAX_TILT = Float32(1.45)
@@ -94,9 +99,13 @@ def blade_colors(kind: PlantKind, shade: Float32) raises -> BladeColors:
         return BladeColors(
             Vector3(0.012, 0.030, 0.006), Vector3(0.060, 0.150, 0.025)
         )
+    if kind == SEED_HEAD:
+        return BladeColors(
+            Vector3(0.010, 0.020, 0.004), Vector3(0.120, 0.150, 0.045)
+        )
     return BladeColors(
-        Vector3(0.006, 0.018, 0.003),
-        Vector3(0.060 + 0.11 * shade, 0.210 + 0.10 * shade, 0.018),
+        Vector3(0.008, 0.016, 0.003),
+        Vector3(0.090 + 0.11 * shade, 0.190 + 0.07 * shade, 0.030),
     )
 
 
@@ -319,6 +328,7 @@ struct BladeMesh(Movable):
         var step = blade.height.to(METER) / Float32(segments)
         var half = blade.width.to(METER) * widen * 0.5
         var point = blade.root
+        var top = Vector3(0, 1, 0)
         var base = self.vertex_count()
         for k in range(segments + 1):  # pragma: no branch
             var s = Float32(k) / Float32(segments)
@@ -336,6 +346,7 @@ struct BladeMesh(Movable):
             var hx = tx * keep
             var hz = tz * keep
             var dy = cos(lean)
+            top = Vector3(hx, dy, hz)
             var normal = Vector3(dy * az, hz * ax - hx * az, -dy * ax)
             normal.y += UP_BIAS
             var color = colors.root + (colors.tip - colors.root) * s
@@ -356,6 +367,36 @@ struct BladeMesh(Movable):
         self._triangle(last, last + 1, last + 2)
         if blade.kind == POPPY:
             self._cup(point, face, blade.shade, sqrt(widen))
+        if blade.kind == SEED_HEAD:
+            self._spike(point, top, face, sqrt(widen))
+
+    def _spike(
+        mut self, tip: Vector3, heading: Vector3, face: Float32, grow: Float32
+    ):
+        """Append a seed head at a stalk's tip: two crossed strips that
+        taper along the stalk's last direction.
+
+        Each strip is two triangles with four vertices of its own.
+        """
+        var length = SPIKE_LENGTH * grow
+        var half = SPIKE_WIDTH * grow * 0.5
+        var low = Vector3(0.090, 0.090, 0.035)
+        var high = Vector3(0.170, 0.150, 0.070)
+        var end = tip + heading * length
+        var sides: List[Vector3] = [
+            Vector3(cos(face), 0, sin(face)),
+            Vector3(-sin(face), 0, cos(face)),
+        ]
+        for strip in range(2):  # pragma: no branch
+            var side = sides[strip]
+            var facing = sides[1 - strip] + Vector3(0, UP_BIAS, 0)
+            var first = self.vertex_count()
+            self._vertex(tip - side * half, facing, low)
+            self._vertex(tip + side * half, facing, low)
+            self._vertex(end - side * (half * 0.5), facing, high)
+            self._vertex(end + side * (half * 0.5), facing, high)
+            self._triangle(first, first + 1, first + 3)
+            self._triangle(first, first + 3, first + 2)
 
     def _cup(
         mut self, center: Vector3, face: Float32, shade: Float32, grow: Float32
