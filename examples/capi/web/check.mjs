@@ -89,7 +89,7 @@ for (let frame = 0; frame < 20; frame++) {
 expect("water: twenty more frames take no more memory", water.exports.memory.buffer.byteLength, memory);
 
 // Mojo returns a pointer that it wraps in a struct through a 64-bit slot, and
-// retarget.py must clear the upper half of that slot. After a step it held
+// retarget.mojo must clear the upper half of that slot. After a step it held
 // stack garbage, so an address was 0x2000000000...
 const wide = (value) => BigInt.asUintN(64, BigInt(value));
 const room = water.exports.tm_alloc(1000);
