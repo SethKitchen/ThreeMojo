@@ -311,7 +311,7 @@ def _project_span(
             shown[unsafe_offset=index] = True
 
 
-async def _project_task(
+__async def _project_task(
     projected: MutPointer[ProjectedSplat, MutAnyOrigin],
     shown: MutPointer[Bool, MutAnyOrigin],
     splat: MutPointer[GaussianSplat, MutAnyOrigin],
@@ -359,7 +359,7 @@ def _shown_count(
     return count
 
 
-async def _count_task(
+__async def _count_task(
     count: MutPointer[Int, MutAnyOrigin],
     order: MutPointer[Int, MutAnyOrigin],
     shown: MutPointer[Bool, MutAnyOrigin],
@@ -405,7 +405,7 @@ def _gather(
             at += 1
 
 
-async def _gather_task(
+__async def _gather_task(
     drawn: MutPointer[ProjectedSplat, MutAnyOrigin],
     order: MutPointer[Int, MutAnyOrigin],
     shown: MutPointer[Bool, MutAnyOrigin],
@@ -572,7 +572,7 @@ def _band_reach(
             counts[unsafe_offset=band] += 1
 
 
-async def _band_reach_task(
+__async def _band_reach_task(
     splats: Pointer[ProjectedSplat, ImmutAnyOrigin],
     band_of: MutPointer[Int, MutAnyOrigin],
     height: Int,
@@ -620,7 +620,7 @@ def _band_place(
             next[unsafe_offset=band] += 1
 
 
-async def _band_place_task(
+__async def _band_place_task(
     members: MutPointer[Int, MutAnyOrigin],
     reach: MutPointer[Int32, MutAnyOrigin],
     next: MutPointer[Int, MutAnyOrigin],
@@ -639,7 +639,7 @@ async def _band_place_task(
     _band_place(members, reach, next, first, past)
 
 
-async def _splat_band(
+__async def _splat_band(
     target: MutPointer[RenderTarget, MutAnyOrigin],
     splats: Pointer[ProjectedSplat, ImmutAnyOrigin],
     members: MutPointer[Int, MutAnyOrigin],

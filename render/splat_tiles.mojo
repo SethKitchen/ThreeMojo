@@ -183,7 +183,7 @@ def _count_run(
                 counts[unsafe_offset=ty * tiles_x + tx] += 1
 
 
-async def _count_task(
+__async def _count_task(
     splats: Pointer[ProjectedSplat, ImmutAnyOrigin],
     boxes: MutPointer[Int32, MutAnyOrigin],
     width: Int,
@@ -240,7 +240,7 @@ def _place_run(
                 next[unsafe_offset=tile] += 1
 
 
-async def _place_task(
+__async def _place_task(
     items: MutPointer[Int32, MutAnyOrigin],
     boxes: MutPointer[Int32, MutAnyOrigin],
     tiles_x: Int,

@@ -145,7 +145,7 @@ def _count_bins(
         counts[unsafe_offset=bin] += 1
 
 
-async def _count_task(
+__async def _count_task(
     centers: MutPointer[Float32, MutAnyOrigin],
     key: _SortKey,
     bins: MutPointer[UInt16, MutAnyOrigin],
@@ -188,7 +188,7 @@ def _place_bins(
         offsets[unsafe_offset=bin] += 1
 
 
-async def _place_task(
+__async def _place_task(
     order: MutPointer[Int, MutAnyOrigin],
     bins: MutPointer[UInt16, MutAnyOrigin],
     offsets: MutPointer[Int, MutAnyOrigin],
