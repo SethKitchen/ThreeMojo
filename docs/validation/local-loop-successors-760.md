@@ -79,3 +79,17 @@ The format-only successor is
 The wrapped generic signature adds two lines before the unchanged cap body.
 The same exact producer pairs with its loop at line 4049. Both earlier PR760
 pairs remain separate descriptors; no source or receipt control is removed.
+
+## Splat workers successor
+
+The scan renderer adds one more exact renderer endpoint:
+`c08275ccfea2f32dd84dc5ad54205052f6dfd216104836c858ff259224426332`.
+The change passes `self.workers` to `prepare_gaussian_splat`. That call lies
+far below the cap loop, so the cap body, the producer and the loop at line
+4049 are unchanged. The earlier pairs remain separate descriptors. The pair
+must be exact, and a mixed pair is refused.
+
+The density proof also names the new Gaussian splat object as a thirteenth
+local dependency. The object keeps its imports inside the original closure.
+The cohort rule is unchanged: all thirteen sources must be historical, or
+all thirteen must be current.
