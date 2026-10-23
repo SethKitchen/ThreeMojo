@@ -1,0 +1,10 @@
+from coverage.mcdc import parse_traces
+from std.pathlib import Path
+from std.sys import argv
+
+def main() raises:
+    var traces = parse_traces(Path(String(argv()[1])).read_text())
+    for trace in traces:
+        print(trace.id)
+        for evaluation in trace.evaluations:
+            print(evaluation.values, evaluation.outcome)

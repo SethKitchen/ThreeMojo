@@ -3,7 +3,7 @@
 """Check phase, argv and complete-vector contracts of compiled coverage.
 
 Every native test keeps its five-second limit. Raw protocol checks remain in
-check_coverage_protocol.py; the Linux private profile additionally checks the
+check_coverage_protocol.mojo; the Linux private profile additionally checks the
 exact transport implementation with deterministic syscall faults.
 """
 import argparse
