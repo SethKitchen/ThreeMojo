@@ -18,6 +18,7 @@ from tools.check_coverage_grouping import (
     lifetime_source,
     reduce_text,
     repeated_truth_source,
+    temporary_identity_source,
 )
 
 
@@ -93,6 +94,16 @@ def test_the_last_use_fixture_drops_the_trailing_reads() raises:
     assert_equal(
         sha256_hex(source.as_bytes()),
         "064262fd3be99a794b8d0e497f6c3a978bc9e7c4a2b4b34937eca21460523e3d",
+    )
+
+
+def test_the_temporary_identity_fixture_matches_the_pinned_text() raises:
+    var source = temporary_identity_source(
+        "Anchored", "not Anchored(7) or False"
+    )
+    assert_equal(
+        sha256_hex(source.as_bytes()),
+        "8159a7f5605c3ae2ee16987901c8bbd69bc540058f6a2837a309faaf8a366891",
     )
 
 

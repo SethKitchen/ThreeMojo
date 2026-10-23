@@ -2408,6 +2408,254 @@ def check_last_use(mojo: String) raises:
         _ = run_program(["rm", "-rf", work], 30)
 
 
+def temporary_identity_source(kind: String, expression: String) -> String:
+    """Return one temporary-identity fixture.
+
+    Args:
+        kind: `Anchored`, `MoveOnly`, or `Moving`.
+        expression: The condition, with `{kind}` already replaced.
+
+    Returns:
+        The Mojo source.
+    """
+    var move = ""
+    if kind == "Moving":
+        move = "not "
+    var text = """struct Anchored(ImplicitlyCopyable, Boolable):
+    var payload: Int
+    var expected: Int
+
+    @inline(.never)
+    def __init__(out self, payload: Int):
+        self.payload = payload
+        self.expected = Int(Pointer(to=self.payload))
+
+    @inline(.never)
+    def __bool__(self) -> Bool:
+        var original = Int(Pointer(to=self.payload)) == self.expected
+        print("CONVERT Anchored", original)
+        return original
+
+
+struct MoveOnly(Movable, Boolable):
+    var payload: Int
+    var expected: Int
+
+    @inline(.never)
+    def __init__(out self, payload: Int):
+        self.payload = payload
+        self.expected = Int(Pointer(to=self.payload))
+
+    @inline(.never)
+    def __bool__(self) -> Bool:
+        var original = Int(Pointer(to=self.payload)) == self.expected
+        print("CONVERT MoveOnly", original)
+        return original
+
+
+struct Moving(Movable, Boolable):
+    var payload: Int
+    var expected: Int
+
+    @inline(.never)
+    def __init__(out self, payload: Int):
+        self.payload = payload
+        self.expected = Int(Pointer(to=self.payload))
+
+    @inline(.never)
+    def __init__(out self, *, deinit move: Self):
+        self.payload = move.payload
+        self.expected = move.expected
+        print("MOVE Moving")
+
+    @inline(.never)
+    def __bool__(self) -> Bool:
+        var original = Int(Pointer(to=self.payload)) == self.expected
+        print("CONVERT Moving", original)
+        return original
+
+
+"""
+    text += "\ndef main():\n"
+    text += "    comptime assert " + move + kind + ".__move_ctor_is_trivial\n"
+    text += "    comptime assert " + kind + ".__del__is_trivial\n"
+    text += '    print("DIRECT", ' + kind + "(7).__bool__())\n"
+    if expression.find("flag") >= 0:
+        text += "    var flag = False\n"
+    text += "    if " + expression + ":\n"
+    text += '        print("BRANCH T")\n'
+    text += "    else:\n"
+    text += '        print("BRANCH F")\n'
+    return text
+
+
+def check_temporary_identity(mojo: String) raises:
+    """Preserve constructor-to-truth identity for every admitted temporary.
+
+    Args:
+        mojo: The Mojo compiler.
+
+    Raises:
+        Error: If native output, the origin, or a trace differs.
+    """
+    var root = absolute_path(".")
+    var compiler = absolute_path(mojo)
+    var work = mkdtemp(prefix="threemojo-temporary-")
+    try:
+        var native = work + "/native"
+        var rewritten = work + "/rewritten"
+        _ = _must(["mkdir", "-p", native, rewritten], 10)
+        _ = _must(["cp", "-a", root + "/coverage", native + "/coverage"], 30)
+        _ = _must(["cp", "-a", root + "/coverage", rewritten + "/coverage"], 30)
+        for folder in [native, rewritten]:
+            var built = folder + "/coverage/build"
+            if Path(built).exists():
+                _ = _must(["rm", "-rf", built], 10)
+        var build = work + "/build_cli"
+        _ = _must(
+            [
+                compiler,
+                "build",
+                "-Werror",
+                "-I",
+                root,
+                root + "/coverage/build_cli.mojo",
+                "-o",
+                build,
+            ],
+            180,
+        )
+        var templates = List[String]()
+        var outcomes = List[Bool]()
+        var vectors = List[String]()
+        templates.append("not {kind}(7) or False")
+        outcomes.append(False)
+        vectors.append("TF")
+        templates.append("flag or not {kind}(7)")
+        outcomes.append(False)
+        vectors.append("FT")
+        templates.append("not not {kind}(7) and True")
+        outcomes.append(True)
+        vectors.append("TT")
+        for kind in ["Anchored", "MoveOnly", "Moving"]:
+            var number = 0
+            while number < len(templates):
+                var expression = templates[number].replace("{kind}", kind)
+                var name = (
+                    "identity-temporary-"
+                    + String(kind).lower()
+                    + "-"
+                    + String(number)
+                )
+                var source = temporary_identity_source(kind, expression)
+                var branch = "BRANCH F\n"
+                if outcomes[number]:
+                    branch = "BRANCH T\n"
+                var expected = (
+                    "CONVERT "
+                    + kind
+                    + " True\nDIRECT True\nCONVERT "
+                    + kind
+                    + " True\n"
+                    + branch
+                )
+                Path(native + "/" + name + ".mojo").write_text(source)
+                var native_binary = work + "/" + name + "-native"
+                _ = _must(
+                    [
+                        compiler,
+                        "build",
+                        "-Werror",
+                        "-I",
+                        native,
+                        native + "/" + name + ".mojo",
+                        "-o",
+                        native_binary,
+                    ],
+                    180,
+                )
+                var actual = _must([native_binary], 5)
+                if actual.output != expected:
+                    raise Error(name + "\n" + actual.output + "\n" + expected)
+                _ = _must([build, rewritten, name + ".mojo"], 60, native)
+                var decision = _decision_line(source, expression)
+                var manifest = Path(rewritten + "/manifest.txt").read_text()
+                var manifest_rows = List[String]()
+                for line in manifest.splitlines():
+                    var row = String(line)
+                    var parts = row.split(" ")
+                    if (
+                        len(parts) >= 2
+                        and String(parts[1]) == name
+                        and (
+                            String(parts[0]) == "B"
+                            or String(parts[0]) == "C"
+                            or String(parts[0]) == "M"
+                        )
+                    ):
+                        manifest_rows.append(row)
+                var wanted_manifest = List[String]()
+                wanted_manifest.append("B " + name + " " + String(decision))
+                wanted_manifest.append(
+                    "C " + name + " " + String(decision) + " 0"
+                )
+                wanted_manifest.append(
+                    "M " + name + " " + String(decision) + " 0"
+                )
+                wanted_manifest.append(
+                    "C " + name + " " + String(decision) + " 1"
+                )
+                wanted_manifest.append(
+                    "M " + name + " " + String(decision) + " 1"
+                )
+                sort(manifest_rows)
+                sort(wanted_manifest)
+                if not _same(manifest_rows, wanted_manifest):
+                    raise Error(name + " manifest changed")
+                _require_origin(rewritten, name, source)
+                var instrumented_binary = work + "/" + name + "-instrumented"
+                _ = _must(
+                    [
+                        compiler,
+                        "build",
+                        "-Werror",
+                        "-I",
+                        rewritten,
+                        rewritten + "/" + name + ".mojo",
+                        "-o",
+                        instrumented_binary,
+                    ],
+                    180,
+                )
+                var instrumented = _must([instrumented_binary], 5)
+                if instrumented.output != actual.output:
+                    raise Error(
+                        name + " stdout differs\n" + instrumented.output
+                    )
+                var wanted = _identity_records(
+                    name, decision, outcomes[number], vectors[number]
+                )
+                var prefix_hit = "COVLINE:" + name + ":" + String(decision)
+                var prefix_vector = (
+                    "COVEVAL2:" + name + ":" + String(decision) + ":"
+                )
+                var seen = String()
+                for line in instrumented.errors.splitlines():
+                    var row = String(line)
+                    if (
+                        row.startswith(prefix_hit + ":")
+                        or row.startswith(prefix_hit + ".")
+                        or row.startswith(prefix_vector)
+                    ):
+                        seen += row + "\n"
+                if seen != wanted:
+                    raise Error(name + "\n" + seen + "\n" + wanted)
+                number += 1
+        print("PASS: 9 immediate temporary-identity controls with exact traces")
+    finally:
+        _ = run_program(["rm", "-rf", work], 30)
+
+
 def main() raises:
     """Compare the Boolean grouping fixture from the command line."""
     var mojo = ".venv/bin/mojo"
@@ -2434,6 +2682,7 @@ def main() raises:
         check_lifetime(mojo)
         check_identity(mojo)
         check_last_use(mojo)
+        check_temporary_identity(mojo)
     except error:
         print(String(error), file=stderr)
         exit(1)
