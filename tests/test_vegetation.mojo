@@ -26,6 +26,7 @@ from extensions.vegetation.kinds import (
     DRY_GRASS,
     GRASS,
     POPPY,
+    SEED_HEAD,
     ClusterFate,
     PlantKind,
     require_cluster_fate,
@@ -97,10 +98,12 @@ def test_plant_kinds_are_named_and_checked() raises:
     assert_equal(GRASS.name(), "grass")
     assert_equal(DRY_GRASS.name(), "dry grass")
     assert_equal(POPPY.name(), "poppy")
-    assert_equal(PlantKind(3).name(), "unknown")
+    assert_equal(SEED_HEAD.name(), "seed head")
+    assert_equal(PlantKind(4).name(), "unknown")
     assert_true(GRASS.is_valid())
+    assert_true(SEED_HEAD.is_valid())
     assert_false(PlantKind(-1).is_valid())
-    assert_false(PlantKind(3).is_valid())
+    assert_false(PlantKind(4).is_valid())
     require_plant_kind(POPPY)
     with assert_raises(contains="plant kind"):
         require_plant_kind(PlantKind(7))
@@ -199,6 +202,8 @@ def test_blade_colors_differ_by_kind() raises:
     var green = blade_colors(GRASS, 0.5)
     var dry = blade_colors(DRY_GRASS, 0.5)
     var stem = blade_colors(POPPY, 0.5)
+    var stalk = blade_colors(SEED_HEAD, 0.5)
+    assert_true(stalk.tip.x > stem.tip.x)
     assert_true(green.tip.y > green.tip.x)
     assert_true(dry.tip.x > green.tip.x)
     assert_true(stem.tip.y > stem.root.y)
@@ -352,6 +357,17 @@ def test_a_poppy_carries_a_red_cup() raises:
     var rim = 3 * (mesh.vertex_count() - 1)
     assert_true(mesh.colors[rim] > 10 * mesh.colors[rim + 1])
     assert_true(mesh.positions[rim + 1] > 0.4)
+
+
+def test_a_seed_head_tops_its_stalk_with_a_spike() raises:
+    """A seed head adds two crossed strips, four vertices and two
+    triangles each, above the stalk's tip."""
+    var mesh = BladeMesh()
+    mesh.add(_blade(SEED_HEAD), 3, Vector2(0, 0), 1.0)
+    assert_equal(mesh.vertex_count(), 7 + 8)
+    assert_equal(mesh.triangle_count(), 5 + 4)
+    var top = 3 * (mesh.vertex_count() - 1)
+    assert_almost_equal(mesh.positions[top + 1], 0.4 + 0.075, atol=1e-4)
 
 
 def test_add_refuses_bad_segments_widen_and_glint() raises:

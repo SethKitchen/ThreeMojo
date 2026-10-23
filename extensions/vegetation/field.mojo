@@ -48,6 +48,7 @@ from extensions.vegetation.kinds import (
     DRY_GRASS,
     GRASS,
     POPPY,
+    SEED_HEAD,
     ClusterFate,
     PlantKind,
 )
@@ -65,8 +66,10 @@ comptime COVER_EXPONENT = Float32(0.7)
 comptime MAX_CLUSTERS = 1 << 20
 # The width of a poppy's stem.
 comptime STEM_WIDTH = Length(0.003, METER)
-# How much taller than the grass round it a poppy stands.
+# How much taller than the grass round it a poppy stands, and a stalk
+# with a seed head.
 comptime POPPY_LIFT = Float32(1.15)
+comptime SEED_LIFT = Float32(1.45)
 # How much a full gust brightens a blade's tip.
 comptime GUST_GLINT = Float32(0.8)
 # How far a blade's curl can turn from straight out of its tuft, in
@@ -171,6 +174,8 @@ struct FieldParameters(Copyable, Movable):
     var dry_share: Float32
     # The fraction of the tufts that hold a poppy, in a poppy drift.
     var poppy_share: Float32
+    # The fraction of the blades that are stalks with seed heads.
+    var seed_share: Float32
     # The levels of detail, nearest first.
     var bands: List[LodBand]
 
@@ -188,6 +193,7 @@ struct FieldParameters(Copyable, Movable):
         self.curl = Angle(52.0, DEGREE)
         self.dry_share = 0.08
         self.poppy_share = 0.45
+        self.seed_share = 0.012
         self.bands = default_bands()
 
     def check(self) raises:
@@ -263,6 +269,9 @@ struct FieldParameters(Copyable, Movable):
         )
         require_between(
             self.poppy_share, 0, 1, "The poppy share must be from 0 to 1"
+        )
+        require_between(
+            self.seed_share, 0, 1, "The seed share must be from 0 to 1"
         )
         require_count_between(
             len(self.bands), 1, 16, "A field must have from 1 to 16 levels"
@@ -443,7 +452,7 @@ struct GrassField(Movable):
         return (
             self.parameters.height.to(METER)
             * (1 + self.parameters.height_spread)
-            * POPPY_LIFT
+            * max(POPPY_LIFT, SEED_LIFT)
         )
 
     def band_for(self, distance: Length) -> Optional[Int]:
@@ -592,6 +601,11 @@ struct GrassField(Movable):
             curl *= 0.3
         elif pick > 1 - p.dry_share * (0.3 + 1.4 * self.ground.dryness(x, z)):
             kind = DRY_GRASS
+        elif hash01(index, key + 9, seed + 5) < p.seed_share:
+            kind = SEED_HEAD
+            height *= SEED_LIFT
+            width = STEM_WIDTH.to(METER)
+            curl *= 0.25
         # The blade curls out of its tuft, as the blades of a real tuft
         # fan out from the crown: its face turns a quarter turn back from
         # the way out, give or take `SPLAY_JITTER`.
