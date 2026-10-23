@@ -3273,9 +3273,9 @@ EDGES = json.loads(r'''
   },
   "tools/carla_lane_oracle/test_witness_format_contracts.py": {
     "before_sha256": "82f7e13e72b4f99ccad63d5dfe55fc0a73c898120b43ed8416b0731489ea6f84",
-    "after_sha256": "ac1dcd518c3a6681ca0e161081b9bb26ccdf2a3e4217266d5a5ecd1c52f3e203",
+    "after_sha256": "0f6f81acd262946a8b84fd100f0522d2973325cf712f480eb6476e63e4f0b282",
     "before_token_sha256": "919de972f5e315164ceb6eb6b81a139c388e3749edc5103cfe7f2c9f1206a327",
-    "after_token_sha256": "1a71f2a5b784e89be03f1e4a9ae7ee63fe0e5652f71c1c6482c369a67d6b9174",
+    "after_token_sha256": "88c1bc33b8807403edda21c8cc8a0507957b2881c0aee3198a6f50bc0eae2b6f",
     "edits": [
       {
         "start": 109,
@@ -3288,6 +3288,19 @@ EDGES = json.loads(r'''
           "                self.assertEqual(bindings[path], cleanup.sha(physical))\n",
           "                self.assertEqual(cleanup.sha(fixtures.typed_current_bytes(path, physical)),\n",
           "                                 edge['after_sha256'])\n"
+        ]
+      },
+      {
+        "start": 114,
+        "stop": 118,
+        "before": [
+          "                self.assertEqual(bindings[path], witness.AFTER_SHA256[path])\n"
+        ],
+        "after": [
+          "                physical = (self.root/path).read_bytes()\n",
+          "                self.assertEqual(bindings[path], cleanup.sha(physical))\n",
+          "                self.assertEqual(cleanup.sha(fixtures.typed_current_bytes(path, physical)),\n",
+          "                                 witness.AFTER_SHA256[path])\n"
         ]
       }
     ]
@@ -3336,7 +3349,7 @@ BOUND_INPUTS = {'tests/test_anatomy_muscle.mojo': '3653d6056c1f9f639537eedb7cd80
  'tests/test_animation_strings.mojo': 'f5103e3660a63d3d5d9d348a0d928fa106e5cef03059d432a31335bb7dd14184',
  'tests/test_loader_bounds.mojo': '6e0c1487f1ff21f4654c2790e4460c0adf934bf6b9273e826782eec1bfed2d83',
  'tools/carla_lane_oracle/test_pr780_source_successor.py': 'b88cdc20f3a6dfb0b38c6e85ccbe9b5c80d8ba5700ee2d8cf1a982e8e43ceeb0'}
-DATA_SHA256 = '99846e6bfa666c3b9a92bc2cb0f0f9e7704bd0fb549d1e96ec61c81b79ece191'
+DATA_SHA256 = 'a8a9be7b1adcadcaa6ca836d6c7e78e5d2e5183cfdd558eb68ba753d769d1f06'
 # END FIXED PR780 SUCCESSOR DATA
 
 
@@ -3352,7 +3365,7 @@ def sha(raw):
 def _data_snapshot():
     """Authenticate and detach the full finite inverse data before consuming it."""
     require(type(DATA_SHA256) is str, 'authority digest selector is not a builtin string')
-    require(DATA_SHA256 == '99846e6bfa666c3b9a92bc2cb0f0f9e7704bd0fb549d1e96ec61c81b79ece191', 'authority digest selector changed')
+    require(DATA_SHA256 == 'a8a9be7b1adcadcaa6ca836d6c7e78e5d2e5183cfdd558eb68ba753d769d1f06', 'authority digest selector changed')
     encoded = json.dumps({'edges': EDGES, 'bound_inputs': BOUND_INPUTS},
                          sort_keys=True, separators=(',', ':'))
     require(sha(encoded) == DATA_SHA256, 'fixed source inverse data changed')

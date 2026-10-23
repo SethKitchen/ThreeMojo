@@ -11,7 +11,7 @@ import hashlib
 import json
 
 EDGES = {'full_audit_cleanup_contracts.py': {'before_sha256': 'f62dbe69ddd5d15bd79aa4b0a8237d9475fe1a00cea06c2f7124c59af237c833',
-                                             'after_sha256': '683571ad5453d39d4b30622f16d64a27220f4e6a54ed49715570350fed68190d',
+                                             'after_sha256': '6aeb51f67f61b5459fd979268f3845358f80117de3c670023acaf268d73b0dc5',
                                              'edits': ((56,
                                                         57,
                                                         (),
@@ -27,7 +27,7 @@ EDGES = {'full_audit_cleanup_contracts.py': {'before_sha256': 'f62dbe69ddd5d15bd
                                                         (),
                                                         (' '
                                                          "'tools/carla_lane_oracle/pr780_source_successor.py': "
-                                                         "'b4a827370f11f054627e639087bb457b0e82a4540e40fa93d22a4d41ddd114f8',\n",)),
+                                                         "'9f723d6215b1f62bc1573b052cc8a7afd0d18ac5488f31feb65b96d65bdd2c0d',\n",)),
                                                        (162,
                                                         163,
                                                         (" 'tools/affected.py': "
@@ -898,7 +898,7 @@ def predecessor(name, raw):
     """Compose exact current checkers into the retained 5e91dad comparison."""
     if type(raw) is not bytes:
         raise AssertionError('checker source must be physical builtin bytes')
-    if hashlib.sha256(json.dumps(EDGES, sort_keys=True, separators=(',', ':')).encode()).hexdigest() != '9dc06e08eff8da8a3c61ef337c623c0cacad4885d64255c610f5f1eedebd9c03':
+    if hashlib.sha256(json.dumps(EDGES, sort_keys=True, separators=(',', ':')).encode()).hexdigest() != 'de7147ddf5c84600698e508f9cbe33a280aed0543bec7a01296d47c5107efeac':
         raise AssertionError('PR780 checker inverse data changed')
     digest = hashlib.sha256(raw).hexdigest()
     edge = EDGES.get(name)
