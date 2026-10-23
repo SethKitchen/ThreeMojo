@@ -65,7 +65,7 @@ Put the credits section at the end of `assets/building_scans/ATTRIBUTION.md`, in
 .venv/bin/mojo run -I . examples/building_scan.mojo out/stone-chapel.png stone-chapel
 ```
 
-Read the report. Check that each storey's height and plan match the place. Check the notes, and correct the frame in the manifest if the model stands on its side.
+Read the report. Check that each storey's height and plan match the place. Check the notes, and correct the frame in the manifest if the model stands on its side. To see the scan itself, draw it from all sides with `examples/scan_view.mojo out/view.png stone-chapel`. Add `auto` after the id to let [`estimate_up`](Cleaning-and-orienting-scans#find-the-up-axis) find the up axis. Most scenes on SuperSplat have up along -y.
 
 ## 6. Commit
 

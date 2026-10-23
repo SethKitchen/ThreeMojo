@@ -41,12 +41,11 @@ Each part has:
 
 from core.gaussian_splat_utils import (
     GaussianSplatGeometry,
-    create_gaussian_splat_geometry,
-    sh_band_words,
 )
 from core.ordinal import ordinal_label, ordinal_valid
 from extensions.physics.body import DYNAMIC, RigidBody
 from extensions.physics.shape import PhysicsMaterial, Shape
+from extensions.scan.clean import splat_subset
 from extensions.scan.frame import ScanFrame
 from extensions.scan.occupancy import OccupancyGrid, ScanRegion
 from extensions.scan.terrain import GroundSurface, flat_ground, ground_grid
@@ -1086,50 +1085,4 @@ def part_splats(
             kept.append(index)
     if len(kept) == 0:
         raise Error("Scan parts: no splat is part " + String(label) + "'s")
-    var centers = List[Float32](capacity=len(kept) * 3)
-    var covariances = List[Float32](capacity=len(kept) * 6)
-    var colors = List[UInt8](capacity=len(kept) * 4)
-    for index in kept:  # pragma: no branch
-        for n in range(3):  # pragma: no branch
-            centers.append(c[index * 3 + n])
-        for n in range(6):  # pragma: no branch
-            covariances.append(geometry.covariances[index * 6 + n])
-        for n in range(4):  # pragma: no branch
-            colors.append(geometry.colors[index * 4 + n])
-    var degree = geometry.spherical_harmonics_degree()
-    return create_gaussian_splat_geometry(
-        centers^,
-        covariances^,
-        colors^,
-        _band_of(geometry.sh1, kept, 1, degree),
-        _band_of(geometry.sh2, kept, 2, degree),
-        _band_of(geometry.sh3, kept, 3, degree),
-    )
-
-
-def _band_of(
-    source: List[UInt8], kept: List[Int], band: Int, degree: Int
-) raises -> List[UInt8]:
-    """Return the bytes of one band of the kept splats.
-
-    Args:
-        source: The band's bytes for every splat.
-        kept: The splats kept, in order.
-        band: The band, 1 to 3.
-        degree: The scan's degree.
-
-    Returns:
-        The kept splats' bytes of the band, or none above the degree.
-
-    Raises:
-        Error: Never, for a band of 1 to 3.
-    """
-    var out = List[UInt8]()
-    if band > degree:
-        return out^
-    var words = sh_band_words(band) * 4
-    out.reserve(len(kept) * words)
-    for index in kept:  # pragma: no branch
-        for n in range(words):  # pragma: no branch
-            out.append(source[index * words + n])
-    return out^
+    return splat_subset(geometry, kept)

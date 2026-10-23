@@ -16,8 +16,14 @@ The picture comes from `examples/building_scan.mojo` with no scan argument: a sc
 |---|---|---|
 | `reading-room` | A reading room | SuperSplat scene `9d370db9` |
 | `studio-11` | A studio apartment, made in Unreal Engine 5 | SuperSplat scene `c37cb759` |
+| `pantheon` | The inside of the Pantheon in Rome | SuperSplat scene `dac6e508` |
+| `seem-church` | A brick church in Denmark, from a drone | SuperSplat scene `e832997f` |
+| `roxby-church` | St Nicholas Church, Roxby, in the North York Moors | SuperSplat scene `4c2fbd16` |
+| `front-house` | The front of a timber house with a lawn | SuperSplat scene `6ec0c97a` |
 
-The SuperSplat scenes are not pinned yet: their scene pages could not be read from where the manifest was made. Pin one with `building_scans fetch ID --pin` on a machine that can reach `superspl.at`. To add another scan, see [How to add a scanned building](How-to-add-a-scanned-building).
+The manifest pins the SHA-256 of every file of these scans. `building_scans fetch` downloads them into `.cache/building-scans/`, about 330 MB in all. Each scan's page on SuperSplat offers it for download under CC BY 4.0, and the tool refuses every other license. Seem Kirke and Roxby give the best pictures of a building from outside, and the Pantheon, the Reading Room and Studio 11 are inside. All six have up along -y, as SuperSplat's frame says. To add another scan, see [How to add a scanned building](How-to-add-a-scanned-building).
+
+Many newer scenes on SuperSplat are streamed levels of detail, with a `lod-meta.json` and a folder for each chunk. ThreeMojo does not read them yet. The tool refuses such a scene and says so.
 
 ## Modules
 
@@ -30,6 +36,8 @@ The SuperSplat scenes are not pinned yet: their scene pages could not be read fr
 | `scan/parts` | `scan_parts`, `scan_parts_on`, `part_mass`, `part_footing`, `part_body`, `part_bed` and `part_splats`; see [Scan parts](Scan-parts) |
 | `scan/terrain` | `terrain_ground`, `TerrainOptions`, `GroundSurface`, `flat_ground` and `ground_grid`; see [Scan parts](Scan-parts#find-the-ground-of-a-slope) |
 | `scan/frame` | `ScanFrame`, `ScanAxis`, `ScaleSource`, `supersplat_frame`, `estimate_heading` and `AxisMap` |
+| `scan/clean`, `scan/orient`, `scan/place` | `clean_scan`, `estimate_up` and `scan_placement`; see [Cleaning and orienting scans](Cleaning-and-orienting-scans) |
+| `scan/walk` | `Walker`, `walk_ends` and `WalkOptions`; see [Walking through a scan](Walking-through-a-scan) |
 | `scan/occupancy` | `OccupancyGrid`, `OccupancyOptions`, `ScanRegion`, `trimmed_region` and `occupancy_grid` |
 | `scan/colliders` | `collision_triangles`, `scan_collider` and `add_scan_collider` |
 | `building/scan/levels` | `detect_levels`, `ScanLevels`, `LevelOptions` and `is_floor_face` |
