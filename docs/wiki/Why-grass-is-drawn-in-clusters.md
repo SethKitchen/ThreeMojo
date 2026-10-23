@@ -49,10 +49,10 @@ A blade is thin. Light that reaches one face shows through on the other, so a bl
 
 `two_sided_program` adds `2 * (front_facing - 1) * normal` to the normal. The offset is zero on a front face. On a back face, it turns the normal to the front again. The leaves of the trees use the same program.
 
-## Why a crown faces out
+## Why a crown is lit by its clumps
 
-A crown is thousands of small cards turned every way. Lit by their own normals, the cards are a noise of light and dark. Each leaf's normal is mostly the direction from the crown's center to the leaf. The crown is then lit as one round volume, bright on the sun's side.
+A crown is tens of thousands of small leaves turned every way. Lit by their own normals and the sun's shadow map, the leaves are a noise of light and dark, and thin leaves shadow themselves. Real crowns read as clumps: bright where the sun reaches a clump's top, and dark under it and inside the crown.
 
-A leaf deep in the crown, or low in it, is darker. That stands in for the light that the crown blocks. The crowns do not receive the sun's shadow, because thin cards shadow each other into a noise.
+So the leaves hang in clumps, and the clumps are spheres. The light that reaches a leaf through spheres is exact and cheap: the sum of a few chords, and Beer's law. The sun's share dims only the sun, and the sky's share dims only the sky, as the light of a real crown does. A leaf in the shade then keeps the blue light of the sky.
 
-A far crown keeps fewer leaves and makes each larger. It stays geometry, so it is lit and it casts a shadow as a near crown does.
+A far crown keeps fewer leaves and makes each larger, and the farthest uses cards. It stays geometry, so it is lit and it casts a shadow as a near crown does.

@@ -1,12 +1,12 @@
 # Vegetation
 
-`Meadow` builds a summer meadow: tall grass, poppies, a treeline, boulders, a sky with clouds, and a sun with soft shadows.
+`Meadow` builds open summer grassland: tall grass, poppies, trees and bushes of real leaves, mountains, a clouded sky and a sun with soft shadows.
 
-![Tall grass and red poppies rise to a treeline under a summer sky](out/meadow.png)
+![A lone pale-trunked tree stands in tall grass, with scattered trees and hazy mountains beyond](out/meadow.png)
 
 `examples/meadow.mojo` draws this picture. The modules live in `extensions/vegetation/`. See [Extensions](Extensions). [Why grass is drawn in clusters](Why-grass-is-drawn-in-clusters) explains the design.
 
-The field holds about ten million blades. A frame grows and draws only the clusters that it can see, each at the level of detail that its distance picks. The frame above draws 443,000 blades as 1.5 million triangles.
+The field holds about ten million blades. A frame grows and draws only the clusters that it can see, each at the level of detail that its distance picks. The frame above draws 474,000 blades as 1.6 million triangles. The lone tree near the camera has 135,000 leaves.
 
 ## Draw one frame
 
@@ -31,9 +31,9 @@ var stats = meadow.update(scene, assets, camera, Duration(2.0, SECOND))
 var image = renderer.render(scene, assets, camera)
 ```
 
-`Meadow` adds the ground, the mountains, the trees, the boulders, the sky, the sun, the hemisphere light and the fog to the scene. It adds no grass. `update` grows the grass for one camera and one time. Call `update` before each `render`.
+`Meadow` adds the ground, the mountains, the trees and bushes, the boulders, the sky, the sun, the hemisphere light and the fog to the scene. It adds no grass. `update` grows the grass for one camera and one time. Call `update` before each `render`.
 
-`meadow_renderer` uses every worker, ACES filmic tone mapping at an exposure of 0.8, soft shadows and four samples a pixel. `meadow_camera` stands the camera 1.05 meters above the ground and looks up the slope to the trees. Its last argument walks the camera toward the trees.
+`meadow_renderer` uses every worker, ACES filmic tone mapping at an exposure of 0.8, soft shadows and four samples a pixel. `meadow_camera` stands the camera 1.6 meters above the ground and looks out over the grassland toward -z. Its last argument walks the camera toward -z.
 
 ## Animate the wind
 
@@ -61,7 +61,7 @@ for index in range(16):
 | `blades` | The blades that the drawn clusters read from their streams. |
 | `triangles` | The grass triangles of the drawn clusters. |
 
-`examples/meadow.mojo` prints these counts and the time of each step as JSON. On a four-core Linux host, the meadow builds in 0.23 seconds. `update` takes 0.18 seconds, and the render takes 5.5 seconds at 1280 by 720. The render time grows with the triangle count. It changes little with the image size or the four samples a pixel.
+`examples/meadow.mojo` prints these counts and the time of each step as JSON. On a four-core Linux host, the meadow builds in 12 seconds, most of it the 21 crowns. `update` takes 0.23 seconds, and the render takes 19 seconds at 1280 by 720. The render time grows with the triangle count. It changes little with the image size or the four samples a pixel.
 
 ## The parts
 
@@ -74,10 +74,11 @@ for index in range(16):
 | `blade.mojo` | `Blade`, and `BladeMesh`, which bakes blades into one geometry. |
 | `ground.mojo` | `Ground`: hills, the grass masks, the ground mesh and the mountain ring. |
 | `field.mojo` | `GrassField`: clusters, levels of detail and the blade stream. |
-| `crown.mojo` | `leafy_tree`: branches from `TreeGenerator`, and a crown of leaf cards. |
+| `foliage.mojo` | `Clump`, the light through clumps, `LeafMesh` and `foliage_program`. |
+| `crown.mojo` | `leafy_tree`: branches from `TreeGenerator`, clumps on the twigs, and leaves with their light. |
 | `rock.mojo` | `boulder`: a stone pushed out by noise, with moss on top. |
 | `sky.mojo` | `paint_sky`: Preetham's sky with clouds, baked into a cube. |
-| `meadow.mojo` | `Meadow`, its parameters, its camera and its renderer. |
+| `meadow.mojo` | `Meadow`, its parameters and plantings, its camera and its renderer. |
 
 ## Grass
 
@@ -94,6 +95,7 @@ The blades of a tuft curl out from its middle. A tuft has `tuft_blades` blades a
 | `GRASS` | Dark green at the root and yellow-green at the tip. |
 | `DRY_GRASS` | Straw at the tip. More of them grow where the ground is dry. |
 | `POPPY` | A thin stem with a cup of five red petals. They grow in drifts. |
+| `SEED_HEAD` | A tall thin stalk with a spike of two crossed strips. It stands above the grass. `seed_share` of the blades are stalks. |
 
 ### Levels of detail
 
@@ -118,13 +120,41 @@ A gust also brightens the tips it reaches by up to 80 percent. The field then sh
 
 ## Trees
 
-`leafy_tree` grows the branches with `TreeGenerator`. It puts `leaves_per_ring` leaf cards on each ring that is thinner than `twig_radius`. A leaf card is a diamond of two triangles.
+`leafy_tree` grows the branches with `TreeGenerator`. A twig is a tube thinner than `twig_radius` at its tip. Each twig carries a clump of leaves at its tip, and one more every `clump_spacing` back along its thin end. A clump is a sphere of about `clump_radius`.
 
-Each leaf's normal points mostly out from the crown's center. A leaf deep in the crown, or low in it, is darker. `bush_parameters` returns a bush of three levels with a short trunk.
+A clump holds up to `leaves_per_clump` leaves. They crowd its shell, and the shell is lumpy, so a clump has a ragged edge. Each leaf faces out of its clump and up, and its midrib hangs a little. A near leaf is `OVATE`: a base, three pairs of edge vertices and a tip, six triangles. Its halves tilt their normals apart, so it is lit as if it were folded.
 
-`default_crown_levels` returns three levels. Every leaf is kept to 28 meters, 30 percent to 60 meters, and 11 percent past that. A kept leaf grows by the inverse square root of the fraction. A far level also has lean wood: one level of branches fewer, and three vertices round each ring.
+| Crown | Looks |
+|---|---|
+| `CrownParameters()` | A slender tree 14 meters tall. The pale trunk is bare for half its height, and long limbs spread a crown of separate clumps. |
+| `broad_tree()` | A broad tree 12 meters tall that forks low, with more and larger clumps. |
+| `bush_parameters()` | A bush 1.3 meters tall that forks from the ground, with leaves 12 centimeters long. |
 
-The treeline is `trees` trees in a band behind the field, and `bushes` bushes along its near edge. `solitary` lists the lone trees in the meadow.
+The bark is pale with dark patches, and darker near the ground.
+
+### The light in a crown
+
+`sun_through` follows the ray from a leaf toward the sun and adds the length of each clump that it crosses. The light that comes through is `exp(-density * length)`. `sky_through` averages the same over seven directions of the open sky. Both are exact for spheres.
+
+Each leaf keeps the two numbers as its `sunlit` and `skylit` attributes. `foliage_program` uses the first as the leaf's shadow, so it dims only the sun. It uses the second as the ambient occlusion, so it dims only the sky. A leaf that sees neither is left out. A planting is never turned, because the sun's direction is baked into its leaves.
+
+### Levels of detail
+
+`default_crown_levels` returns three levels.
+
+| Reach | Keeps | Leaves | Wood |
+|---|---|---|---|
+| 40 meters | every leaf | ovate | full |
+| 110 meters | 40 percent | ovate | full |
+| past that | 16 percent | cards | lean |
+
+A kept leaf grows by the inverse square root of the fraction, so the crown keeps its cover. A card is a diamond of two triangles. Lean wood has one level of branches fewer, and three vertices round each ring.
+
+## Layout
+
+`MeadowParameters.crowns` lists the kinds of tree and bush. `plantings` lists each tree and bush: the crown it wears, where it stands, and its size. `scatter_plantings` scatters plantings across the view toward -z, between two distances.
+
+`default_crowns` returns three slender trees, two broad trees and two bushes, each of its own seed. `default_plantings` places a lone tree and a bush near the camera, and a second lone tree. It scatters 22 trees from 45 to 250 meters and 26 bushes from 12 to 120 meters. A woodland of 90 broad trees stands from 260 to 420 meters.
 
 ## Ground, sky and light
 
@@ -132,13 +162,15 @@ The treeline is `trees` trees in a band behind the field, and `bushes` bushes al
 
 `paint_sky` draws Preetham's sky into a small cube and reads it into a large cube. It then paints the clouds. `gain` scales the sky's light, and `saturation` and `tint` deepen its blue. The cube is the scene's background. Its mean color near the horizon is the fog's color.
 
-The sun is a `SunLight` with two cascades that reach 150 meters. The trees and the boulders cast shadows. The grass and the ground receive them. A hemisphere light gives the blue light of the sky and the green light that the grass sends back. The blades and the leaves are lit from both sides: `two_sided_program` turns the normal of a back face to the front.
+The sun is a `SunLight` with two cascades of 4,096 texels that reach 150 meters. The trees, the bushes and the boulders cast shadows. The grass, the ground and the wood receive them. A hemisphere light gives the blue light of the sky and the green light that the grass sends back. The blades and the leaves are lit from both sides: `two_sided_program` and `foliage_program` turn the normal of a back face to the front.
+
+The mountains are `ridge_ring`, a ring of rugged peaks 900 meters away. The fog veils them to a hazy blue.
 
 ## Types
 
 | Type | Values |
 |---|---|
-| `PlantKind` | `GRASS`, `DRY_GRASS`, `POPPY` |
+| `PlantKind` | `GRASS`, `DRY_GRASS`, `POPPY`, `SEED_HEAD` |
 | `ClusterFate` | `DRAWN`, `CULLED`, `BEYOND` |
 
 ## Limits
@@ -147,5 +179,5 @@ The sun is a `SunLight` with two cascades that reach 150 meters. The trees and t
 - Culling tests each cluster's bound against the view only. A cluster behind a hill is still drawn.
 - There is no visibility buffer. The rasterizer shades each fragment as it draws it.
 - The grass does not cast shadows. The dark roots stand in for its shadow on itself.
-- The crowns do not receive shadows. Thin cards shadow each other into a noise.
+- A crown is shadowed by its own clumps only. The shadow of another tree does not fall on its leaves.
 - The indirect light is a hemisphere light and baked occlusion. The voxel and screen-space passes of the renderer are not used.
