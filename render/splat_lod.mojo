@@ -728,7 +728,7 @@ def _select_from(
                     stack.append(child)
 
 
-async def _select_task(
+__async def _select_task(
     found: MutPointer[List[Int], MutAnyOrigin],
     lod: Pointer[SplatLod, ImmutAnyOrigin],
     selector: _Selector,
@@ -943,7 +943,7 @@ def _project_selected(
             counts[unsafe_offset=bin] += 1
 
 
-async def _project_task(
+__async def _project_task(
     projected: MutPointer[ProjectedSplat, MutAnyOrigin],
     bins: MutPointer[Int32, MutAnyOrigin],
     counts: MutPointer[Int, MutAnyOrigin],
@@ -999,7 +999,7 @@ def _place_selected(
         next[unsafe_offset=bin] += 1
 
 
-async def _place_task(
+__async def _place_task(
     drawn: MutPointer[ProjectedSplat, MutAnyOrigin],
     projected: MutPointer[ProjectedSplat, MutAnyOrigin],
     bins: MutPointer[Int32, MutAnyOrigin],
