@@ -36,7 +36,7 @@ All 51 measured modules are at 100 percent. The total is 27,451 of 27,451 requir
 
 The obligations of issue #721 were closed by the source changes and witness tests that `docs/validation/full-audit-711-invariants.md` describes. This run confirms that each of them is now hit:
 
-- `speed_limits`: the parse-failure line after the syntax check (`tests/test_carla_speed_parser_exceptions.mojo`).
+- `speed_limits`: the parse-failure line after the syntax check (`tests/test_carla_speed_parser_exceptions.mojo`). Mojo 1.2 reads every token that the syntax check admits, so the port removed this line and the test now checks a long token. The counts in the table are from Mojo 1.1.0.
 - `lane_value_bounds` and `curve_bounds`: the nonnegative stored blend allowance.
 - `junction_bounds`: the endpoint refusals after full-cell admission (`tests/test_carla_junction_endpoint_refusals.mojo`) and the strict cut order.
 - `lane_refinement`: the finite-width admission, the post-local natural exclusion, the center refusal (`tests/test_carla_lane_center_bound_phase.mojo`) and the chord endpoint refusals (`tests/test_carla_chord_endpoint_refusals.mojo`).

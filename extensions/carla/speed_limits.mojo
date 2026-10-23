@@ -143,11 +143,7 @@ def read_speed_number(text: String) raises -> Float64:
     # Float64 also accepts non-XML syntax, including f/F and repeated points.
     if not _speed_decimal_syntax(number):
         raise Error("OpenDRIVE speed needs a numeric max value")
-    var value: Float64
-    try:
-        value = Float64(number)
-    except:
-        raise Error("OpenDRIVE speed needs a numeric max value")
+    var value = Float64(number)
     if not isfinite(value) or value < 0:
         raise Error("OpenDRIVE speed must be finite and nonnegative")
     if value == 0:

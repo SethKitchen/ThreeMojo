@@ -311,8 +311,8 @@ def test_js_parse_float() raises:
     assert_true(isnan(js_parse_float(".")))
     assert_true(isnan(js_parse_float("-")))
     assert_true(isnan(js_parse_float("abc")))
-    # A number longer than Mojo's parser reads.
-    assert_true(isnan(js_parse_float("0" * 60 + "1")))
+    # A number of many digits is read and rounded.
+    near(js_parse_float("0" * 60 + "1"), 1)
 
 
 def check_floats(text: String, want: List[Float64]) raises:

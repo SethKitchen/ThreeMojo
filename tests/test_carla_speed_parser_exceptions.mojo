@@ -1,11 +1,11 @@
 # Copyright (c) 2026 Seth Kitchen, PE
 # SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
 
-"""Fresh source control for the maintained SDK's real converter exception.
+"""Fresh source control for the speed number converter.
 
-The decimal grammar admits the long token. The installed Float64 converter
-must independently raise, and read_speed_number must translate that actual
-exception. No injected parser or synthetic coverage trace is used.
+The decimal grammar admits a token of any length. The installed Float64
+converter reads that token and rounds it. It has no failure for a text that
+the grammar admits, so `read_speed_number` has no parse-failure line.
 """
 
 from extensions.carla.speed_limits import (
@@ -15,16 +15,12 @@ from extensions.carla.speed_limits import (
 from std.testing import TestSuite, assert_equal, assert_raises, assert_true
 
 
-def test_valid_decimal_converter_exception_is_translated() raises:
+def test_a_long_decimal_is_read_and_rounded() raises:
     var number = String("123456789012345678901234567890")
     assert_equal(number.byte_length(), 30)
     assert_true(_speed_decimal_syntax(number))
-    # Assert the underlying cause separately, so lexical/range rejection
-    # cannot masquerade as execution of the converter exception handler.
-    with assert_raises(contains="too long"):
-        _ = Float64(number)
-    with assert_raises(contains="OpenDRIVE speed needs a numeric max value"):
-        _ = read_speed_number(number)
+    assert_equal(Float64(number), Float64(1.2345678901234568e29))
+    assert_equal(read_speed_number(number), Float64(1.2345678901234568e29))
 
 
 def test_short_decimal_and_range_neighbors_remain_distinct() raises:
