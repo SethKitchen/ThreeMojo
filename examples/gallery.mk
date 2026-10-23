@@ -160,6 +160,10 @@ $(call gallery,hand,hand)
 # A neck and a head, with skin and without.
 $(call gallery,head,head)
 $(call gallery,water,water,assets/pebbles.jpg)
+# Tall grass and poppies rise to a treeline under a summer sky.
+$(call gallery,meadow,meadow)
+# Gusts sweep across the meadow and bend the tall grass.
+$(call gallery,meadow-wind,meadow_wind)
 # Every procedural animal, one to a tile, turning.
 $(call gallery,animals,animals)
 # A wolf walks one stride, re-meshed in each pose.
