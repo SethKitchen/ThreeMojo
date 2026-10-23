@@ -522,7 +522,7 @@ EDGES = {'full_audit_cleanup_contracts.py': {'before_sha256': 'f62dbe69ddd5d15bd
                                                          '_snapshots=image, '
                                                          '_production=production).items()}\n')))},
          'coverage_loop_proofs.py': {'before_sha256': '21e3a9637a69c6abbf27e9c8dd193a1addf7ed8537dd8f2734c35ff1a468304d',
-                                     'after_sha256': '0c4751d3e3b5a9db853ab4b77d5ee533010cb64fbf4558ac1e315614fa78e357',
+                                     'after_sha256': 'd40b457270a4ac4a4d868cb6fdd0e38296216d8412a63bade5ebf88c6ae0ee4d',
                                      'edits': ((283,
                                                 286,
                                                 ("        if words[0] in {'def', 'struct', 'trait'} or "
@@ -634,16 +634,17 @@ EDGES = {'full_audit_cleanup_contracts.py': {'before_sha256': 'f62dbe69ddd5d15bd
                                                 ('        '
                                                  "'81d104e6b65fe1539bf9c244330ae53b6d337ad081529cb0c5f7bcde27887db5',\n",)),
                                                (1222,
-                                                1242,
+                                                1243,
                                                 (),
-                                                ('# PR780 changes six imported helpers, but leaves '
-                                                 'density, groom, their tests,\n',
-                                                 '# and every theorem coordinate unchanged. Retain the '
-                                                 'complete PR760 closure\n',
-                                                 '# above and admit only this exact local successor '
-                                                 'cohort. The broader CARLA\n',
-                                                 '# successor is not a premise for these four local '
-                                                 'domination theorems.\n',
+                                                ('# PR780 and the Mojo 1.2 port change twelve imported '
+                                                 'helpers, but leave\n',
+                                                 '# density, groom, their tests, and every theorem '
+                                                 'coordinate unchanged. Retain\n',
+                                                 '# the complete PR760 closure above and admit only this '
+                                                 'exact local successor\n',
+                                                 '# cohort. The broader CARLA successor is not a premise '
+                                                 'for these four local\n',
+                                                 '# domination theorems.\n',
                                                  'DENSITY780_DEPENDENCY_SHA256 = {\n',
                                                  "    'core/extent.mojo': "
                                                  "'90490706baa17456a3ec99374c2a00f72768a0178b4e56436571ab4ca673f068',\n",
@@ -672,8 +673,8 @@ EDGES = {'full_audit_cleanup_contracts.py': {'before_sha256': 'f62dbe69ddd5d15bd
                                                  '}\n',
                                                  '\n',
                                                  '\n')),
-                                               (1248,
-                                                1261,
+                                               (1249,
+                                                1262,
                                                 (),
                                                 ('\n',
                                                  '\n',
@@ -694,8 +695,8 @@ EDGES = {'full_audit_cleanup_contracts.py': {'before_sha256': 'f62dbe69ddd5d15bd
                                                  "        raise ValueError('Unreviewed density dependency "
                                                  "successor endpoints')\n",
                                                  '    return dependencies\n')),
-                                               (1300,
-                                                1318,
+                                               (1301,
+                                                1319,
                                                 ('        snapshots = {}\n',),
                                                 ('        # The generated receipt authenticates its direct '
                                                  'producer, not every\n',
@@ -727,8 +728,8 @@ EDGES = {'full_audit_cleanup_contracts.py': {'before_sha256': 'f62dbe69ddd5d15bd
                                                  '        successor_pins = dependency_pins()\n',
                                                  '        snapshots, dependency_sha256, successor = {}, '
                                                  '{}, []\n')),
-                                               (1321,
-                                                1327,
+                                               (1322,
+                                                1328,
                                                 ('            if sha256(value) != expected:\n',),
                                                 ('            digest = sha256(value)\n',
                                                  '            if name in successor_pins:\n',
@@ -737,67 +738,67 @@ EDGES = {'full_audit_cleanup_contracts.py': {'before_sha256': 'f62dbe69ddd5d15bd
                                                  '                    return {}\n',
                                                  '                successor.append(digest != expected)\n',
                                                  '            elif digest != expected:\n')),
-                                               (1329,
-                                                1332,
+                                               (1330,
+                                                1333,
                                                 (),
                                                 ('            dependency_sha256[name] = digest\n',
                                                  '        if any(successor) and not all(successor):\n',
                                                  '            return {}\n')),
-                                               (1372,
-                                                1374,
+                                               (1373,
+                                                1375,
                                                 ('        if cleanup.executing_checker_bindings() != '
                                                  'executing or not resolver_ok():\n',),
                                                 ('        if (cleanup.executing_checker_bindings() != '
                                                  'executing or not resolver_ok()\n',
                                                  '                or dependency_pins() != '
                                                  'successor_pins):\n')),
-                                               (1379,
-                                                1380,
+                                               (1380,
+                                                1381,
                                                 ("            'proof_id': proof_id, 'dependency_sha256': "
                                                  'dict(DENSITY760_INPUTS),\n',),
                                                 ("            'proof_id': proof_id, 'dependency_sha256': "
                                                  'dict(dependency_sha256),\n',)),
-                                               (1443,
-                                                1444,
+                                               (1444,
+                                                1445,
                                                 ('        '
                                                  "'5cc066092d9b0302c60a6676459efc855e220dc319d1f88b5eb84df768f489f9',\n",),
                                                 ('        '
                                                  "'990d94c815315c910b12c1b126c076183fc35cdeb9f64a26d1f7e574f424bccd',\n",)),
-                                               (1625,
-                                                1627,
+                                               (1626,
+                                                1628,
                                                 ('        if typed.is_current(name, raw):\n',),
                                                 ('        endpoint = _typed_endpoint(name, raw)\n',
                                                  '        if typed.is_current(name, endpoint):\n')),
-                                               (1637,
-                                                1638,
+                                               (1638,
+                                                1639,
                                                 ('            checked = typed.historical_source(name, '
                                                  "raw.decode('utf-8'))\n",),
                                                 ('            checked = typed.historical_source(name, '
                                                  "endpoint.decode('utf-8'))\n",)),
-                                               (1834,
-                                                1835,
+                                               (1835,
+                                                1836,
                                                 ('            if typed.is_current(name, current):\n',),
                                                 ('            if typed.is_current(name, '
                                                  '_typed_endpoint(name, current)):\n',)),
-                                               (1844,
-                                                1845,
+                                               (1845,
+                                                1846,
                                                 ('        if (typed.is_current(name, current) and '
                                                  '_operation is None\n',),
                                                 ('        if (typed.is_current(name, _typed_endpoint(name, '
                                                  'current)) and _operation is None\n',)),
-                                               (1878,
-                                                1879,
+                                               (1879,
+                                                1880,
                                                 ('        typed_current = typed.is_current(module_path, '
                                                  'current)\n',),
                                                 ('        typed_current = typed.is_current(module_path, '
                                                  '_typed_endpoint(module_path, current))\n',)),
-                                               (2100,
-                                                2101,
+                                               (2101,
+                                                2102,
                                                 ('            or not typed.is_current(name, current)):\n',),
                                                 ('            or not typed.is_current(name, '
                                                  '_typed_endpoint(name, current))):\n',)),
-                                               (2163,
-                                                2164,
+                                               (2164,
+                                                2165,
                                                 ('        if typed.is_current(name, current):\n',),
                                                 ('        if typed.is_current(name, _typed_endpoint(name, '
                                                  'current)):\n',)))}}
@@ -807,7 +808,7 @@ def predecessor(name, raw):
     """Compose exact current checkers into the retained 5e91dad comparison."""
     if type(raw) is not bytes:
         raise AssertionError('checker source must be physical builtin bytes')
-    if hashlib.sha256(json.dumps(EDGES, sort_keys=True, separators=(',', ':')).encode()).hexdigest() != 'c2548a44dff9d213175b52c38faf9cd38682e52d558d30690553ce11cc41d057':
+    if hashlib.sha256(json.dumps(EDGES, sort_keys=True, separators=(',', ':')).encode()).hexdigest() != '64639b6ed2fc9db36ddf33c40b1b2c3566ad8c579edde67e697fb5af849765ba':
         raise AssertionError('PR780 checker inverse data changed')
     digest = hashlib.sha256(raw).hexdigest()
     edge = EDGES.get(name)

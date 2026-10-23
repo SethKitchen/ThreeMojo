@@ -1220,10 +1220,11 @@ DENSITY760_INPUTS = {'core/__init__.mojo': '5f3ace6c2d6162c4a542666c21a966d54d5b
  'units/measure.mojo': 'b7531458ae7a74d6b9213f55672073137dbac41c2634787f7d6a78a16b526b85',
  'units/quantity.mojo': 'bb77541cdb757cd63b59ac01134c6a6ebce88863bee69c84ff77b8c03aff6223',
  'units/si.mojo': 'd149a23f2ee4a9bde17875615e7251285cb56af535716b66c7d8959c80f48c02'}
-# PR780 changes six imported helpers, but leaves density, groom, their tests,
-# and every theorem coordinate unchanged. Retain the complete PR760 closure
-# above and admit only this exact local successor cohort. The broader CARLA
-# successor is not a premise for these four local domination theorems.
+# PR780 and the Mojo 1.2 port change twelve imported helpers, but leave
+# density, groom, their tests, and every theorem coordinate unchanged. Retain
+# the complete PR760 closure above and admit only this exact local successor
+# cohort. The broader CARLA successor is not a premise for these four local
+# domination theorems.
 DENSITY780_DEPENDENCY_SHA256 = {
     'core/extent.mojo': '90490706baa17456a3ec99374c2a00f72768a0178b4e56436571ab4ca673f068',
     'extensions/humanoid/skeleton/head/assembly.mojo': '813a09e4b30a5a9682e606cdabb2e22188866f4153318a18f9df62f091c0435e',

@@ -304,7 +304,7 @@ def case_{number}():
 # opaque conditional expression. A Moving is only in two-type operators. A
 # retained Shared is in a one-type operator only as the right operand: the
 # operator copies it. A Bits is in both, also twice as one retained variable.
-# Pinned Mojo 1.1.0 lowers `and`/`or` by operand type. With one type, it tests
+# Mojo 1.1.0 and 1.2.0 lower `and`/`or` by operand type. With one type, it tests
 # the left operand, then returns it or the right operand unconverted, and the
 # enclosing operator or truth context tests the selected object again. These
 # two-type fixtures use the ordinary Bool fallback, which converts each
@@ -2628,7 +2628,7 @@ def positive_{number}(first: Bool, second: Bool):
     return source, widths, len(cases)
 
 
-# Only public String operations appear here. In Mojo 1.1 the nondeprecated
+# Only public String operations appear here. In Mojo 1.1 and 1.2 the nondeprecated
 # APIs are capacity_bytes/reserve_bytes and String(capacity_bytes=...). A
 # literal remains static until mutation; build the inline case from String().
 OPTIONAL_STRING_PRELUDE = '''def heap_string() -> String:
@@ -2985,7 +2985,7 @@ def check_optional_lifecycles(work, native, rewritten, build, mojo):
 
 
 # The operator check evaluates these runtime helpers at compile time.
-# Pinned Mojo 1.1.0 can deadlock a single-threaded build that evaluates
+# Mojo 1.1.0 can deadlock a single-threaded build that evaluates
 # `startswith` or `find` there: the instrumented `materials/nodes.mojo`
 # waited forever on one `flag or mask.reduce_or()` check.
 COMPILE_TIME_HELPERS = ('node', '_pure', '_starts', '_bracket', '_optional', '_borrowed',
