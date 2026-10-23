@@ -1034,6 +1034,483 @@ def check_semantics(mojo: String) raises:
         _ = run_program(["rm", "-rf", work], 30)
 
 
+def repeated_truth_source(probe: Bool) -> String:
+    """Return the program that converts one Boolable value twice.
+
+    Args:
+        probe: True to convert through the coverage leaf helper.
+
+    Returns:
+        The Mojo source.
+    """
+    var text = String()
+    if probe:
+        text += (
+            "from coverage.runtime import buffer, begin, leaf, finish,"
+            " _borrowed\n"
+        )
+        text += "from std.reflection import reflect\n\n"
+    text += """@fieldwise_init
+struct Changing(Boolable):
+    var count: Pointer[Int, MutUntrackedOrigin]
+
+    @inline(.never)
+    def __bool__(self) -> Bool:
+        self.count[] += 1
+        return self.count[] == 1
+
+def main():
+    var count = 0
+    var kept = Changing(Pointer(to=count).unsafe_origin_cast[MutUntrackedOrigin]())
+"""
+    if probe:
+        text += """    var values = buffer()
+    _ = begin(values, 2)
+    var observed = leaf(kept, values, "repeat:1.0", 0)
+    comptime assert _borrowed(reflect[type_of(observed)].name())
+"""
+    var target = "kept"
+    if probe:
+        target = "observed"
+    text += '    print("FIRST", ' + target + ".__bool__())\n"
+    text += '    print("SECOND", ' + target + ".__bool__())\n"
+    if probe:
+        text += "    _ = observed^\n"
+    text += '    print("COUNT", count, kept.count[])\n'
+    if probe:
+        text += """    _ = leaf(True, values, "repeat:1.1", 1)
+    _ = finish(False, values, "repeat:1")
+"""
+    return text
+
+
+def _without_quotes(body: String) -> String:
+    """Remove triple-quoted docstrings the way the Python checker does."""
+    var out = String()
+    var rest = body
+    while True:
+        var at = rest.find('"""')
+        if at < 0:
+            out += rest
+            return out
+        var head = String(rest[byte=:at])
+        out += head
+        var after = String(rest[byte = at + 3 :])
+        var end = after.find('"""')
+        if end < 0:
+            return out
+        var next = String(after[byte = end + 3 :])
+        rest = next
+
+
+def _helper_body(text: String, name: String) raises -> String:
+    """Return one coverage helper with comments and docstrings removed."""
+    var lines = text.splitlines()
+    var start = -1
+    var index = 0
+    var open_def = "def " + name + "("
+    var generic_def = "def " + name + "["
+    for line in lines:
+        var row = String(line)
+        if row.startswith(open_def) or row.startswith(generic_def):
+            if start >= 0:
+                raise Error("ambiguous helper " + name)
+            start = index
+        index += 1
+    if start < 0:
+        raise Error("missing helper " + name)
+    var end = start + 1
+    while end < len(lines):
+        var row = String(lines[end])
+        if row.byte_length() == 0:
+            end += 1
+            continue
+        var lead = row.as_bytes()[0]
+        if lead == 32 or lead == 41 or lead == 93:
+            end += 1
+            continue
+        break
+    var body = String()
+    index = start
+    while index < end:
+        if body.byte_length() > 0:
+            body += "\n"
+        body += String(lines[index])
+        index += 1
+    body = _without_quotes(body)
+    var stripped = String()
+    for line in body.splitlines():
+        var row = String(line)
+        var mark = row.find("#")
+        if mark >= 0:
+            var cut = String(row[byte=:mark])
+            row = cut
+        if stripped.byte_length() > 0:
+            stripped += "\n"
+        stripped += row
+    return stripped
+
+
+def _count(text: String, needle: String) -> Int:
+    """Return how many times `needle` occurs in `text`."""
+    var count = 0
+    var rest = text
+    var width = needle.byte_length()
+    while True:
+        var at = rest.find(needle)
+        if at < 0:
+            return count
+        count += 1
+        var next = String(rest[byte = at + width :])
+        rest = next
+
+
+def _names_fixture() -> String:
+    """Return the mixed pure-operand fixture."""
+    return """comptime READS = SIMD[DType.int32, 4](1, 2, 3, 4)
+
+
+def flag(value: Int) -> Bool:
+    return value == 7 or value == 9
+
+
+def check(
+    value: Int, items: List[Int], text: String, maybe: Optional[Int]
+) -> Int:
+    var total = 0
+    if flag(value) or READS.eq(Int32(value)).reduce_or():
+        total += 1
+    if READS.eq(Int32(value)).reduce_or() and value:
+        total += 2
+    if text or value and flag(value):
+        total += 4
+    if items or maybe and flag(value):
+        total += 8
+    if not flag(value) and READS.eq(Int32(value)).reduce_or() or text:
+        total += 16
+    return total
+
+
+def main():
+    for value in range(12):
+        var items = [value] if value % 2 == 1 else List[Int]()
+        var text = String("x") if value % 3 == 1 else String("")
+        var maybe = Optional(value) if value % 4 != 0 else Optional[Int](None)
+        print(value, check(value, items, text, maybe))
+"""
+
+
+def check_compile_time_names(mojo: String) raises:
+    """Refuse compile-time string search and compare the pure name helpers.
+
+    Args:
+        mojo: The Mojo compiler.
+
+    Raises:
+        Error: If a helper searches at compile time or a result differs.
+    """
+    var root = absolute_path(".")
+    var compiler = absolute_path(mojo)
+    var source = Path(root + "/coverage/runtime.mojo").read_text()
+    for name in [
+        "node",
+        "_pure",
+        "_starts",
+        "_bracket",
+        "_optional",
+        "_borrowed",
+        "_standard_string_optional",
+        "_optional_lifecycle",
+    ]:
+        var body = _helper_body(source, name)
+        if body.find(".startswith(") >= 0 or body.find(".find(") >= 0:
+            raise Error(name + " evaluates a string search at compile time")
+    var work = mkdtemp(prefix="threemojo-names-")
+    try:
+        var native = work + "/native"
+        var rewritten = work + "/rewritten"
+        _ = _must(["mkdir", "-p", native, rewritten], 10)
+        _ = _must(["cp", "-a", root + "/coverage", native + "/coverage"], 30)
+        _ = _must(["cp", "-a", root + "/coverage", rewritten + "/coverage"], 30)
+        Path(native + "/names.mojo").write_text(_names_source())
+        _ = _must(
+            [
+                compiler,
+                "build",
+                "-Werror",
+                "-I",
+                native,
+                native + "/names.mojo",
+                "-o",
+                work + "/names",
+            ],
+            120,
+        )
+        var output = _must([work + "/names"], 5).output
+        var rows = output.splitlines()
+        if len(rows) == 0 or String(rows[0]) != "FIXED True":
+            raise Error(output)
+        var starts = 0
+        var brackets = 0
+        var saw_true = False
+        var saw_false = False
+        for line in rows:
+            var row = String(line)
+            if row.startswith("STARTS "):
+                starts += 1
+                var parts = row.split(" ")
+                if String(parts[1]) != String(parts[2]):
+                    raise Error(row)
+                if String(parts[1]) == "True":
+                    saw_true = True
+                elif String(parts[1]) == "False":
+                    saw_false = True
+                else:
+                    raise Error(row)
+            elif row.startswith("BRACKET "):
+                brackets += 1
+                var parts = row.split(" ")
+                if String(parts[1]) != String(parts[2]):
+                    raise Error(row)
+        if starts != 16 * 16 or brackets != 16 or not saw_true or not saw_false:
+            raise Error(output)
+        var types = 0
+        for line in rows:
+            var row = String(line)
+            if not row.startswith("TYPE "):
+                continue
+            types += 1
+            var parts = row.split(" ")
+            var label = String(parts[1])
+            var scalar = String(parts[2])
+            var pure = String(parts[3])
+            var optional = String(parts[4])
+            var is_scalar = (
+                label == "Bool"
+                or label == "Scalar[bool]"
+                or label == "Int"
+                or label == "String"
+            )
+            if (scalar == "True") != is_scalar:
+                raise Error(row)
+            if scalar == "True" and (pure != "True" or optional != "False"):
+                raise Error(row)
+        if types != 11:
+            raise Error("expected 11 type rows")
+        var build = work + "/build_cli"
+        _ = _must(
+            [
+                compiler,
+                "build",
+                "-Werror",
+                "-I",
+                root,
+                root + "/coverage/build_cli.mojo",
+                "-o",
+                build,
+            ],
+            180,
+        )
+        Path(native + "/names_fixture.mojo").write_text(_names_fixture())
+        _ = _must([build, rewritten, "names_fixture.mojo"], 60, native)
+        var instrumented = Path(rewritten + "/names_fixture.mojo").read_text()
+        if _count(instrumented, "_cov_eval_node[") != 8:
+            raise Error("instrumented name fixture changed")
+        var native_out = String()
+        var instrumented_out = String()
+        for pair in ["native", "instrumented"]:
+            var folder = native
+            if pair == "instrumented":
+                folder = rewritten
+            var binary = work + "/names-fixture-" + pair
+            _ = _must(
+                [
+                    compiler,
+                    "build",
+                    "--num-threads",
+                    "1",
+                    "-Werror",
+                    "-I",
+                    folder,
+                    folder + "/names_fixture.mojo",
+                    "-o",
+                    binary,
+                ],
+                120,
+            )
+            var ran = _must([binary], 5)
+            if pair == "native":
+                native_out = ran.output
+            else:
+                instrumented_out = ran.output
+        if native_out != instrumented_out or len(native_out.splitlines()) != 12:
+            raise Error(native_out)
+        print(
+            "PASS: "
+            + String(starts + brackets)
+            + " byte-exact name-test results and "
+            + String(types)
+            + " scalar identities"
+        )
+    finally:
+        _ = run_program(["rm", "-rf", work], 30)
+
+
+def _names_source() -> String:
+    """Return the compile-time name probe."""
+    return """from coverage.runtime import _bracket, _optional, _pure, _scalar, _starts
+from std.reflection import reflect
+
+def names() -> List[StaticString]:
+    var result = List[StaticString]()
+    result.append("")
+    result.append("[")
+    result.append("L")
+    result.append("List[")
+    result.append("List[Int]")
+    result.append("Lis")
+    result.append("Optional[")
+    result.append("Optional[Int]")
+    result.append("Optional")
+    result.append("std.collections.optional.Optional[Int]")
+    result.append("std.collections.optional.Optional[")
+    result.append("Bool")
+    result.append("SIMD[DType.bool, 1]")
+    result.append("a[b[c")
+    result.append("é[x")
+    result.append("é")
+    return result^
+
+comptime FIXED = (
+    _starts("List[Int]", "List[")
+    and not _starts("Lis", "List[")
+    and _starts("x", "")
+    and _bracket("a[b[c") == 2
+    and _bracket("abc") == 0
+)
+
+
+def kind[T: AnyType](label: StaticString):
+    comptime name = reflect[T].name()
+    print("TYPE", label, _scalar[T], _pure(name), _optional(name))
+
+
+def main():
+    print("FIXED", FIXED)
+    var all = names()
+    for name in all:
+        print("BRACKET", _bracket(name), name.find("[") + 1)
+        for prefix in all:
+            print("STARTS", _starts(name, prefix), name.startswith(prefix))
+    kind[Bool]("Bool")
+    kind[Scalar[DType.bool]]("Scalar[bool]")
+    kind[Int]("Int")
+    kind[String]("String")
+    kind[Int32]("Int32")
+    kind[Float64]("Float64")
+    kind[StaticString]("StaticString")
+    kind[SIMD[DType.bool, 4]]("SIMD[bool,4]")
+    kind[List[Int]]("List[Int]")
+    kind[Optional[Int]]("Optional[Int]")
+    kind[Optional[Bool]]("Optional[Bool]")
+"""
+
+
+def check_repeated_truth(mojo: String) raises:
+    """Require native and borrowed repeated truth, then refuse the `?` vector.
+
+    Args:
+        mojo: The Mojo compiler.
+
+    Raises:
+        Error: If the output, the records, or the report differ.
+    """
+    var root = absolute_path(".")
+    var compiler = absolute_path(mojo)
+    var work = mkdtemp(prefix="threemojo-repeat-")
+    try:
+        var expected = "FIRST True\nSECOND False\nCOUNT 2 2\n"
+        var stderr_text = String()
+        for probe in [False, True]:
+            var name = "repeat-native"
+            if probe:
+                name = "repeat-probe"
+            var path = work + "/" + name + ".mojo"
+            Path(path).write_text(repeated_truth_source(probe))
+            var include = List[String]()
+            include.append(compiler)
+            include.append("build")
+            include.append("-Werror")
+            if probe:
+                include.append("-I")
+                include.append(root)
+            include.append(path)
+            include.append("-o")
+            include.append(work + "/" + name)
+            _ = _must(include, 180)
+            var ran = _must([work + "/" + name], 5)
+            if ran.output != expected:
+                raise Error(name + "\n" + ran.output)
+            if not probe and ran.errors.byte_length() > 0:
+                raise Error(ran.errors)
+            if probe:
+                stderr_text = ran.errors
+        var records = (
+            "COVLINE:repeat:1.0:T\n"
+            "COVLINE:repeat:1.0:F\n"
+            "COVLINE:repeat:1.1:T\n"
+            "COVLINE:repeat:1:F\n"
+            "COVEVAL2:repeat:1:F:?T;\n"
+        )
+        if stderr_text != records:
+            raise Error(stderr_text)
+        var refused = False
+        for line in stderr_text.splitlines():
+            var row = String(line)
+            if row.startswith("COVEVAL2:") and row.find("?") >= 0:
+                refused = True
+        if not refused:
+            raise Error("the reducer accepted an inconsistent vector")
+        _ = _must(
+            [
+                compiler,
+                "build",
+                "-Werror",
+                "-I",
+                root,
+                root + "/coverage/report_cli.mojo",
+                "-o",
+                work + "/report",
+            ],
+            180,
+        )
+        Path(work + "/repeat-manifest.txt").write_text(
+            "B repeat 1\nC repeat 1 0\nM repeat 1 0\nC repeat 1 1\nM repeat"
+            " 1 1\n"
+        )
+        Path(work + "/repeat-raw.txt").write_text(stderr_text)
+        var report = run_program(
+            [
+                work + "/report",
+                work + "/repeat-manifest.txt",
+                work + "/repeat-raw.txt",
+            ],
+            5,
+            merge_errors=False,
+        )
+        if (
+            report.status == 0
+            or (report.output + report.errors).find(
+                "Inconsistent repeated truth conversion"
+            )
+            < 0
+        ):
+            raise Error(report.output + report.errors)
+        print("PASS: repeated truth stays borrowed and the ? vector is refused")
+    finally:
+        _ = run_program(["rm", "-rf", work], 30)
+
+
 def main() raises:
     """Compare the Boolean grouping fixture from the command line."""
     var mojo = ".venv/bin/mojo"
@@ -1055,6 +1532,8 @@ def main() raises:
         exit(2)
     try:
         check_semantics(mojo)
+        check_compile_time_names(mojo)
+        check_repeated_truth(mojo)
     except error:
         print(String(error), file=stderr)
         exit(1)

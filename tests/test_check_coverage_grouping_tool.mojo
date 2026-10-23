@@ -5,7 +5,7 @@
 
 """The Boolean grouping reference matches the former Python model."""
 
-from std.testing import TestSuite, assert_equal
+from std.testing import TestSuite, assert_equal, assert_true
 
 from tools._sha256 import sha256_hex
 from tools.check_coverage_grouping import (
@@ -13,6 +13,7 @@ from tools.check_coverage_grouping import (
     expected_records,
     expected_rows,
     fixture_source,
+    repeated_truth_source,
 )
 
 
@@ -40,6 +41,16 @@ def test_every_mask_and_throwing_position_has_a_result_row() raises:
     var records = expected_records(-1, made[1])
     assert_equal(len(records[0]), 23)
     assert_equal(len(records[1]), 23)
+
+
+def test_repeated_truth_keeps_the_value_alive() raises:
+    var native = repeated_truth_source(False)
+    var probe = repeated_truth_source(True)
+    assert_true(native.find('print("FIRST", kept.__bool__())') >= 0)
+    assert_equal(native.find("coverage.runtime"), -1)
+    assert_true(probe.find("comptime assert _borrowed(") >= 0)
+    assert_equal(probe.find("COVEVAL2"), -1)
+    assert_true(probe.find('print("COUNT", count, kept.count[])') >= 0)
 
 
 def main() raises:
