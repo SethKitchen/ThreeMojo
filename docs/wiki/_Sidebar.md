@@ -73,6 +73,8 @@
 - [Continuous collision](Continuous-collision)
 - [Tick force restoration](Tick-force-restoration)
 - [Water](Water)
+- [Vegetation](Vegetation)
+  - [Why grass is drawn in clusters](Why-grass-is-drawn-in-clusters)
 - [Streamline](Streamline)
 - [Animals](Animals)
   - [Animal anatomy](Animal-anatomy)
