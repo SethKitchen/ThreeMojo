@@ -78,7 +78,7 @@ comptime SNAPSHOT_DIGEST = (
 )
 """The Python tool's digest of the synthetic snapshot."""
 comptime HELD_DIGEST = (
-    "1218804c983bcddfbc256181798ebfd4765ececf2e5fdf07b67d66d3bcdb9522"
+    "088390afcf4e28bcb7665a517612cabdc76fe17e6c58e44ec4699b4a05193b44"
 )
 """The Python tool's digest of the snapshot that holds the evidence."""
 
@@ -267,15 +267,15 @@ def test_current_producer_sampled_properties_are_copied_without_recalculation() 
     )
     var before = _text(evidence)
     var digests: List[String] = [
-        "2ba875a081dd0800504c694df2092724790bf3a5de32e7cb7eb9aeec10a766f8",
-        "dc7f05ce558828da903399d3f965e18634611d281ce73d36a41fa2daeb47178f",
-        "1e0f1cac220a6823905c9da381289e824ac822b76a43a88c3973c36294b39ee4",
-        "477b22e2d1ea444fe3eaf264ec76c1cb487903ef407331d988983a336e5186c3",
-        "d7c0147412090f7e103e6030515c92799531ca93eb6622af0dad03497c41f33f",
-        "ba5745aafc34c66f222fc3c5f95ae11328de88f425780ce845030b174c3c01d3",
-        "88b04a679f5bb9df64bbd8880b6c15fb3b323506acf97eff10837b09fbd3014e",
-        "d230b766176ce674deb61e60bf0dc2a42539ed5df0c06b0f48797de74e3a0dcd",
-        "abc949ac3e79f2e135aa8a66493c6bebff85e873c3700c7b1183bed5532a6038",
+        "8fa27578be48f798de6a4fb7309d8dd0642f2a672241ebae07e33dd070769481",
+        "fc91c83c05c8f1900319225c21a054dc0afbb670d557c618a668c9f5d28680a8",
+        "2737eba81e5fdf8d3acf71090a56a33b43027b9644a62f9fb6eb3dc72cf94747",
+        "57476dcdf15965476a80d7a80f50db13688e8a1bbeb3c3a188d3e1615e022148",
+        "e585ef70edf95a0da43c2e094de3bc2e74b84efa0f6b02e588de0c48f2c6c10d",
+        "ef53bdd827dcd6a0423c6708e89d1b2dde53eda6ebf8a5032fc91b5ea3d518d6",
+        "906fb2708049b8741172d0c3066d312a20ca5e4efc5b98cc1ba467cbc6c42906",
+        "5fea7ce6800ad0e2f8024d428c01f6881b81a38afe9148d431a692574665dd25",
+        "617e1ba9be8ffcb288e67862ca3245efbe54bd8b915d4ce0a4ac281dd218def8",
     ]
     var frame = _at(evidence, ["frame"])
     var count = 0

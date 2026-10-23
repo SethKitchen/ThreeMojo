@@ -232,7 +232,7 @@ def copy_common758_boundary_root(case, source, *, destination=None):
         for name, previous in hair_predecessors.items():
             (root/name).write_bytes(previous)
         for name in cleanup.pr780_successor.EDGES:
-            if name in hair_predecessors:
+            if name in hair_predecessors or name in cleanup.CHECKER_PATHS:
                 continue
             target = root/name
             target.write_bytes(cleanup.pr780_successor.predecessor_bytes(
