@@ -5,6 +5,7 @@
 
 """The Boolean grouping reference matches the former Python model."""
 
+from std.pathlib import Path
 from std.testing import TestSuite, assert_equal, assert_true
 
 from tools._sha256 import sha256_hex
@@ -13,6 +14,8 @@ from tools.check_coverage_grouping import (
     expected_records,
     expected_rows,
     fixture_source,
+    generic_pair_expected,
+    generic_pair_line,
     identity_last_use_source,
     identity_source,
     lifetime_source,
@@ -104,6 +107,33 @@ def test_the_temporary_identity_fixture_matches_the_pinned_text() raises:
     assert_equal(
         sha256_hex(source.as_bytes()),
         "8159a7f5605c3ae2ee16987901c8bbd69bc540058f6a2837a309faaf8a366891",
+    )
+
+
+def test_the_generic_pair_fixture_matches_the_pinned_text() raises:
+    var source = Path(
+        "tools/fixtures/coverage_generic_pair_isolated.txt"
+    ).read_text()
+    assert_equal(
+        sha256_hex(source.as_bytes()),
+        "c224718ba677f218cdf8c2e0c5b47c6b5a7ff358ab996cb010b66f6a1f591d94",
+    )
+    assert_true(
+        source.find("def generic_pair[A: Made, B: Made](state: Cell) -> Bool:")
+        >= 0
+    )
+    var expected = generic_pair_expected()
+    assert_equal(
+        sha256_hex(expected.as_bytes()),
+        "6513143e353280acfbf55293bd983b3782760e1f160de41c4ed9ce9248df96b5",
+    )
+    assert_equal(
+        generic_pair_line("Probe", 0, False),
+        "PAIR Probe 0 False False 0~01~1 1 1 0",
+    )
+    assert_equal(
+        generic_pair_line("Other", 1, True),
+        "PAIR Other 1 True True 0~0 1 0 0",
     )
 
 

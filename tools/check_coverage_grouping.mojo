@@ -2656,6 +2656,269 @@ def check_temporary_identity(mojo: String) raises:
         _ = run_program(["rm", "-rf", work], 30)
 
 
+def _pair_leaf(
+    mut log: String,
+    mut counts: List[Int],
+    name: Int,
+    mask: Int,
+    changing: Bool,
+) -> Bool:
+    """Convert one generic leaf once and drop it."""
+    var count = counts[name]
+    counts[name] = count + 1
+    log += String(name)
+    var value = (mask & (1 << name)) != 0
+    if changing and count % 2 == 1:
+        value = not value
+    log += "~" + String(name)
+    return value
+
+
+def generic_pair_expected() -> String:
+    """Return the 64 native `PAIR` lines, with a trailing newline.
+
+    Returns:
+        The lines in changing, mask, then concrete order.
+    """
+    var expected = String()
+    for changing in [False, True]:
+        var mask = 0
+        while mask < 16:
+            for concrete in ["Probe", "Other"]:
+                expected += generic_pair_line(concrete, mask, changing) + "\n"
+            mask += 1
+    return expected
+
+
+def _pair_manifest(name: String, source: String) raises -> List[String]:
+    """Return the branch rows for the isolated generic fixture.
+
+    Args:
+        name: The module name in the manifest.
+        source: The isolated fixture source.
+
+    Returns:
+        One `B` row for each decision, plus `C` and `M` slots when the
+        width is greater than one.
+
+    Raises:
+        Error: If the compound decision is missing or another compound appears.
+    """
+    var compound = (
+        "if A.make(0, state) or B.make(1, state) and A.make(2, state):"
+    )
+    var rows = List[String]()
+    var number = 1
+    var saw = False
+    for line in source.splitlines():
+        var header = String(line).strip()
+        var decision = (
+            header.startswith("if ")
+            or header.startswith("elif ")
+            or header.startswith("while ")
+            or header.startswith("for ")
+        )
+        if decision:
+            if not header.endswith(":"):
+                raise Error("decision has no colon " + header)
+            var width = 1
+            if header == compound:
+                width = 3
+                saw = True
+            elif header.find(" and ") >= 0 or header.find(" or ") >= 0:
+                raise Error("unexpected compound " + header)
+            rows.append("B " + name + " " + String(number))
+            if width > 1:
+                var slot = 0
+                while slot < width:
+                    rows.append(
+                        "C " + name + " " + String(number) + " " + String(slot)
+                    )
+                    rows.append(
+                        "M " + name + " " + String(number) + " " + String(slot)
+                    )
+                    slot += 1
+        number += 1
+    if not saw:
+        raise Error("missing generic pair decision")
+    return rows^
+
+
+def generic_pair_line(concrete: String, mask: Int, changing: Bool) -> String:
+    """Return one native `PAIR` line from the independent model.
+
+    Args:
+        concrete: `Probe` or `Other`.
+        mask: The four truth bits.
+        changing: True when a repeated conversion flips.
+
+    Returns:
+        The line the native program prints, without a newline.
+    """
+    var log = String()
+    var counts = List[Int](length=3, fill=0)
+    var outcome = False
+    var left = _pair_leaf(log, counts, 0, mask, changing)
+    if left:
+        outcome = True
+    else:
+        var middle = _pair_leaf(log, counts, 1, mask, changing)
+        if middle:
+            outcome = _pair_leaf(log, counts, 2, mask, changing)
+    var flag = "False"
+    if outcome:
+        flag = "True"
+    var changing_text = "False"
+    if changing:
+        changing_text = "True"
+    return (
+        "PAIR "
+        + concrete
+        + " "
+        + String(mask)
+        + " "
+        + changing_text
+        + " "
+        + flag
+        + " "
+        + log
+        + " "
+        + String(counts[0])
+        + " "
+        + String(counts[1])
+        + " "
+        + String(counts[2])
+    )
+
+
+def check_generic_pair(mojo: String) raises:
+    """Require the two-parameter generic refusal after the native model.
+
+    Args:
+        mojo: The Mojo compiler.
+
+    Raises:
+        Error: If the native rows, the manifest, or the refusal differ.
+    """
+    var root = absolute_path(".")
+    var compiler = absolute_path(mojo)
+    var source = Path(
+        "tools/fixtures/coverage_generic_pair_isolated.txt"
+    ).read_text()
+    var expected = generic_pair_expected()
+    var work = mkdtemp(prefix="threemojo-generic-pair-")
+    try:
+        var native = work + "/native"
+        var rewritten = work + "/rewritten"
+        _ = _must(["mkdir", "-p", native, rewritten], 10)
+        _ = _must(["cp", "-a", root + "/coverage", native + "/coverage"], 30)
+        _ = _must(["cp", "-a", root + "/coverage", rewritten + "/coverage"], 30)
+        for folder in [native, rewritten]:
+            var built = folder + "/coverage/build"
+            if Path(built).exists():
+                _ = _must(["rm", "-rf", built], 10)
+        var name = "generic-pair-isolated"
+        Path(native + "/" + name + ".mojo").write_text(source)
+        var binary = work + "/" + name + "-native"
+        _ = _must(
+            [
+                compiler,
+                "build",
+                "-Werror",
+                "-I",
+                native,
+                "-I",
+                root,
+                native + "/" + name + ".mojo",
+                "-o",
+                binary,
+            ],
+            180,
+        )
+        var ran = _must([binary], 5)
+        if ran.output != expected:
+            raise Error(ran.output)
+        var build = work + "/build_cli"
+        _ = _must(
+            [
+                compiler,
+                "build",
+                "-Werror",
+                "-I",
+                root,
+                root + "/coverage/build_cli.mojo",
+                "-o",
+                build,
+            ],
+            180,
+        )
+        _ = _must([build, rewritten, name + ".mojo"], 60, native)
+        _require_origin(rewritten, name, source)
+        var wanted_manifest = _pair_manifest(name, source)
+        var manifest = Path(rewritten + "/manifest.txt").read_text()
+        var manifest_rows = List[String]()
+        for line in manifest.splitlines():
+            var row = String(line)
+            var parts = row.split(" ")
+            if (
+                len(parts) >= 2
+                and String(parts[1]) == name
+                and (
+                    String(parts[0]) == "B"
+                    or String(parts[0]) == "C"
+                    or String(parts[0]) == "M"
+                )
+            ):
+                manifest_rows.append(row)
+        sort(manifest_rows)
+        sort(wanted_manifest)
+        if not _same(manifest_rows, wanted_manifest):
+            var shown = String()
+            for row in manifest_rows:
+                shown += "actual " + row + "\n"
+            for row in wanted_manifest:
+                shown += "wanted " + row + "\n"
+            raise Error(name + " manifest changed\n" + shown)
+        var rejected = run_program(
+            [
+                compiler,
+                "build",
+                "-Werror",
+                "-I",
+                rewritten,
+                "-I",
+                root,
+                rewritten + "/" + name + ".mojo",
+                "-o",
+                work + "/rejected",
+            ],
+            180,
+            merge_errors=False,
+        )
+        if rejected.status == 0:
+            raise Error("generic pair was accepted")
+        var errors = rejected.errors
+        if (
+            errors.find("Coverage cannot yet preserve this compound condition")
+            < 0
+        ):
+            raise Error(errors)
+        if errors.find("custom mixed-type operator whose Bool result") < 0:
+            raise Error(errors)
+        if (
+            errors.find(
+                "def generic_pair[A: Made, B: Made](state: Cell) -> Bool:"
+            )
+            < 0
+        ):
+            raise Error(errors)
+        print(
+            "PASS: 64 isolated two-parameter generic controls and the refusal"
+        )
+    finally:
+        _ = run_program(["rm", "-rf", work], 30)
+
+
 def main() raises:
     """Compare the Boolean grouping fixture from the command line."""
     var mojo = ".venv/bin/mojo"
@@ -2683,6 +2946,7 @@ def main() raises:
         check_identity(mojo)
         check_last_use(mojo)
         check_temporary_identity(mojo)
+        check_generic_pair(mojo)
     except error:
         print(String(error), file=stderr)
         exit(1)
