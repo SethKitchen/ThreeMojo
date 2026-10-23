@@ -129,7 +129,9 @@ Some portable features remain partial, including [GLSL shaders](https://github.c
 ### Project tools
 
 <details>
-<summary>Implemented: 19</summary>
+<summary>Implemented: 20</summary>
+
+- [x] [Native test fixtures in Mojo](https://github.com/SethKitchen/ThreeMojo/wiki/How-to-run-the-checks#run-one-test-suite): `make test-cpu` links the C fixtures with `tools/native_test_support.mojo` [#761](https://github.com/SethKitchen/ThreeMojo/issues/761)
 
 - [x] [CI planner in Mojo](https://github.com/SethKitchen/ThreeMojo/wiki/How-to-run-the-checks#rebuild-the-project-tools): `tools/ci_scope.mojo` selects, runs and checks the hosted CI jobs with byte-identical plans [#769](https://github.com/SethKitchen/ThreeMojo/issues/769)
 
