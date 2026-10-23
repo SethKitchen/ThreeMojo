@@ -12,6 +12,11 @@ it for a segment, a step, or a division.
 from core.ordinal import require_positive
 from math.polyline import PolylineVertex
 
+# A sample step is `Float32(index) / Float32(divisions)`. Every integer
+# through 16777216 is exact in `Float32`. One more is not, and a count
+# of `Int.MAX` does not finish the sample loop.
+comptime MAX_CURVE_DIVISIONS = 16777216
+
 
 def require_curve_kind(valid: Bool) raises:
     """Refuse a curve kind that is not named.
@@ -114,6 +119,11 @@ def require_at_least_one(count: Int, message: String) raises:
 def curve_sample_count(divisions: Int) raises -> Int:
     """Return the checked number of samples for a positive division count.
 
+    A division count above 16777216 is refused. `Float32` cannot tell
+    those steps apart, and a count at the top of `Int` does not finish
+    the sample loop. A count of `Int.MAX` still reports that the sum
+    cannot fit, before this limit.
+
     Args:
         divisions: The number of runs between samples.
 
@@ -121,10 +131,14 @@ def curve_sample_count(divisions: Int) raises -> Int:
         One more than the number of divisions.
 
     Raises:
-        Error: If divisions is not positive or the sample count overflows.
+        Error: If divisions is not positive, above 16777216, or the
+            sample count overflows.
     """
     require_at_least_one(divisions, "A curve needs at least one division")
-    return curve_count_sum(divisions, 1)
+    var count = curve_count_sum(divisions, 1)
+    if divisions > MAX_CURVE_DIVISIONS:
+        raise Error("A curve's division count is larger than this port samples")
+    return count
 
 
 def require_curve_counts(first: Int, second: Int) raises:
@@ -203,8 +217,8 @@ def parameter_samples[
         The values, first to last.
 
     Raises:
-        Error: If `divisions` is less than one, the sample count cannot
-            fit in Int, or `take` raises.
+        Error: If `divisions` is less than one, above 16777216, the sample
+            count cannot fit in Int, or `take` raises.
     """
     var sample_count = curve_sample_count(divisions)
     var out = List[T]()

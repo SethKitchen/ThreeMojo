@@ -323,6 +323,11 @@ def test_rotate_point_and_range() raises:
     assert_equal(down[0], 3)
     assert_equal(down[2], 1)
     assert_equal(len(generate_range(4, 4)), 1)
+    # 16777217 numbers do not finish, and the ends can overflow a subtraction.
+    with assert_raises(contains="larger than this port"):
+        _ = generate_range(0, 16777216)
+    with assert_raises(contains="larger than this port"):
+        _ = generate_range(Int.MIN, 0)
 
 
 def test_make_unit_vector() raises:

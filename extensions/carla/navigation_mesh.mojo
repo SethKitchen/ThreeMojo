@@ -12,8 +12,10 @@ flags on top. It uses these well-known patterns:
 
 - **A polygon graph.** Each lane of a lane section is cut across into
   strips at every `resolution` along s, at the section's ends, and at the
-  ends of each crosswalk. Each strip is a convex quad from the lane's two
-  edges, `Road.lane_corners`, which also raise a sidewalk by its curb. A
+  ends of each crosswalk. The resolution must be a finite distance more
+  than zero. A section that needs more than 16777216 stations is refused.
+  Each strip is a convex quad from the lane's two edges,
+  `Road.lane_corners`, which also raise a sidewalk by its curb. A
   sidewalk quad is `AREA_SIDEWALK`. A quad of a road lane is `AREA_ROAD`,
   or `AREA_CROSSWALK` when its middle lies inside a crosswalk's outline,
   `Map.all_crosswalk_zones`.
@@ -83,6 +85,8 @@ comptime _ALONG = Float32(0.05)
 comptime _CLIMB = Float32(0.5)
 # Cut points closer than this along s merge, in meters.
 comptime _MERGE = 0.01
+# Stations along one section. A finer spacing does not finish.
+comptime _MAX_MESH_STATIONS = 16777216
 # Path points closer than this in plan are one point, in meters.
 comptime _SAME = 0.01
 # A point this close outside an edge is on it, in meters.
@@ -1287,8 +1291,11 @@ def _cuts(map: Map, road: Int) -> List[Float64]:
 
 def _stations(
     start: Float64, end: Float64, step: Float64, cuts: List[Float64]
-) -> List[Float64]:
+) raises -> List[Float64]:
     var all = List[Float64]()
+    var span = end - start
+    if not (span / step < Float64(_MAX_MESH_STATIONS)):
+        raise Error("A navigation mesh is larger than this port walks")
     var s = start + EPSILON
     while s < end - EPSILON:
         all.append(s)
@@ -1319,14 +1326,17 @@ def build_navigation_mesh(
         The mesh, connected.
 
     Raises:
-        Error: If the resolution is not more than zero, or a map query
-            fails.
+        Error: If the resolution is not a finite distance more than zero,
+            a section needs more stations than this port walks, or a map
+            query fails.
     """
-    if not (resolution.value > 0.0):
-        raise Error("The mesh resolution must be more than zero")
+    var step = Float64(resolution.value)
+    if not isfinite(step) or not (step > 0.0):
+        raise Error(
+            "The mesh resolution must be a finite distance more than zero"
+        )
     var mesh = NavMesh()
     var outlines = crosswalk_outlines(map)
-    var step = Float64(resolution.value)
     for r in range(len(map.roads)):
         ref road = map.roads[r]
         var cuts = _cuts(map, r)

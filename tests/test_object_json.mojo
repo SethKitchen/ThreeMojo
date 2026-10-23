@@ -72,6 +72,8 @@ from loaders.object_loader import (
     load_object_json,
     read_object_json,
     wrap_code,
+    shadow_map_size,
+    wrap_number,
     wrap_of,
 )
 from materials.material import (
@@ -1485,6 +1487,11 @@ def test_texture_refusals() raises:
     _refuses(_textured(',"channel":2'))
     _refuses(_textured(',"wrap":[1000,999]'))
     _refuses(_textured(',"wrap":[999,999]'))
+    # `Int` of 1e20 is not that number. The cast used to run before the
+    # range check.
+    _refuses(_textured(',"wrap":[1e20,1000]'))
+    _refuses(_textured(',"wrap":[2000,1000]'))
+    _refuses(_textured(',"wrap":[1000.5,1000]'))
     _refuses(_textured(',"magFilter":1008'))
     _refuses(_textured(',"minFilter":1002'))
     _refuses(_textured(',"minFilter":1009'))
@@ -1648,7 +1655,25 @@ def test_a_mesh_reads_and_writes_a_material_list() raises:
 
 def test_the_helpers() raises:
     """The constant tables map three.js's numbers both ways."""
+    assert_equal(wrap_number(1000), 1000)
+    assert_equal(shadow_map_size(2048), 2048)
+    assert_equal(shadow_map_size(1), 1)
+    assert_equal(shadow_map_size(8192), 8192)
+    with assert_raises(contains="8192"):
+        _ = shadow_map_size(0)
+    with assert_raises(contains="8192"):
+        _ = shadow_map_size(10000)
+    with assert_raises(contains="8192"):
+        _ = shadow_map_size(Float32(1e20))
+    with assert_raises(contains="8192"):
+        _ = shadow_map_size(512.5)
     assert_equal(wrap_of(1002), MIRROR)
+    with assert_raises(contains="wrap"):
+        _ = wrap_number(Float32(1e20))
+    with assert_raises(contains="wrap"):
+        _ = wrap_number(2000)
+    with assert_raises(contains="wrap"):
+        _ = wrap_number(1000.5)
     assert_equal(wrap_code(MIRROR), 1002)
     assert_equal(wrap_code(CLAMP), 1001)
     assert_equal(wrap_code(REPEAT), 1000)
@@ -1807,6 +1832,23 @@ def test_light_refusals() raises:
         '"object":{"uuid":"a","type":"DirectionalLight","shadow":'
         + '{"mapSize":[512,256]}}'
     )
+    _refuses(
+        '"object":{"uuid":"a","type":"DirectionalLight","shadow":'
+        + '{"mapSize":[1e20,1e20]}}'
+    )
+    _refuses(
+        '"object":{"uuid":"a","type":"DirectionalLight","shadow":'
+        + '{"mapSize":[10000,10000]}}'
+    )
+    _refuses(
+        '"object":{"uuid":"a","type":"DirectionalLight","shadow":'
+        + '{"mapSize":[512.5,512.5]}}'
+    )
+    var sized = _read(
+        '"object":{"uuid":"a","type":"DirectionalLight","shadow":'
+        + '{"mapSize":[8192,8192]}}'
+    )
+    assert_equal(sized[0].lights[0].shadow.map_size, 8192)
     _refuses(
         '"object":{"uuid":"a","type":"DirectionalLight","shadow":'
         + '{"camera":{"left":5,"right":-5,"top":4,"bottom":-4}}}'
@@ -2034,6 +2076,14 @@ def test_document_refusals() raises:
     with assert_raises(contains="version 4"):
         _ = read_object_json(
             '{"metadata":{"version":3,"type":"Object"}}', scene, assets
+        )
+    with assert_raises(contains="version 4"):
+        _ = read_object_json(
+            '{"metadata":{"version":5,"type":"Object"}}', scene, assets
+        )
+    with assert_raises(contains="version 4"):
+        _ = read_object_json(
+            '{"metadata":{"version":1e20,"type":"Object"}}', scene, assets
         )
     with assert_raises(contains="no object"):
         _ = read_object_json(

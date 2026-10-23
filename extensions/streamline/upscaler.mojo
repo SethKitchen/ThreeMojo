@@ -73,7 +73,8 @@ trait Upscaler:
         Raises:
             Error: If the feature is not valid or not supported, a size has
                 a side below one pixel, the render is larger than the
-                output, or the colors are not `render` sized.
+                output, a pixel count does not fit in an integer, or the
+                colors are not `render` sized.
         """
         ...
 
@@ -137,7 +138,8 @@ struct SpatialUpscaler(Upscaler):
         Raises:
             Error: If the feature is not valid or not Super Resolution, a
                 size has a side below one pixel, the render is larger than
-                the output, or the colors are not `render` sized.
+                the output, a pixel count does not fit in an integer, or
+                the colors are not `render` sized.
         """
         if not feature.is_valid():
             raise Error(
@@ -149,6 +151,10 @@ struct SpatialUpscaler(Upscaler):
             raise Error("A render must be at least one pixel each way")
         if output.width < render.width or output.height < render.height:
             raise Error("The output must be at least as large as the render")
+        if render.width > Int.MAX // render.height:
+            raise Error("A render is larger than this port upscales")
+        if output.width > Int.MAX // output.height:
+            raise Error("An output is larger than this port upscales")
         if len(colors) != render.width * render.height:
             raise Error("The colors must fill the render")
         var source = LightView(colors, render.width, render.height)

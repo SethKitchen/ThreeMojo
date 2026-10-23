@@ -122,6 +122,15 @@ struct GtaoSettings(ImplicitlyCopyable):
         self.seed = 1
 
 
+# A sample index is a `Float32` in the occlusion and a `Float64` in the
+# denoise disk. Past 16777216 the occlusion step is no longer that index
+# once the slices are counted in. The maximum integer wraps
+# `samples + directions`, and a count just below that does not finish.
+# The denoise disk walks one tap per sample and does not finish at the
+# maximum integer.
+comptime MAX_GTAO_SAMPLES = 16777216
+
+
 def check_gtao(settings: GtaoSettings) raises:
     """Refuse GTAO settings no pass could use.
 
@@ -133,8 +142,8 @@ def check_gtao(settings: GtaoSettings) raises:
             six; the radius, the thickness, the scale or a phi is not
             positive; the fall-off is outside zero to one, where a horizon
             could pass straight up; the intensity or the exponent is
-            negative; a sample count is below two, or the denoise's radius
-            below one.
+            negative; a sample count is below two or above 16777216, or
+            the denoise's radius below one.
     """
     require_screen_output(settings.output)
     if not (
@@ -172,24 +181,42 @@ def check_gtao(settings: GtaoSettings) raises:
         raise Error("A GTAO intensity or exponent must not be negative")
     if settings.samples < 2 or settings.denoise_samples < 2:
         raise Error("A GTAO pass needs at least two samples")
+    if (
+        settings.samples > MAX_GTAO_SAMPLES
+        or settings.denoise_samples > MAX_GTAO_SAMPLES
+    ):
+        raise Error("A GTAO sample count is larger than this port takes")
     if settings.denoise_radius < 1:
         raise Error("A GTAO denoise radius is at least one pixel")
 
 
-def magic_square(size: Int) -> List[Int]:
+# An even side is made the odd side above it. 4095 squared is 16769025.
+# The next odd side is past 16777216 cells. A side near three billion
+# never leaves the placement loop. The maximum integer wraps the cell
+# count to one, and one below that wraps the rounded side.
+comptime MAX_MAGIC_SIDE = 4095
+
+
+def magic_square(size: Int) raises -> List[Int]:
     """Return three.js's `generateMagicSquare`: the numbers one to `size`
     squared, laid out by the Siamese method, row by row. An even size is
     made the odd size above it.
 
     Args:
-        size: The side, positive.
+        size: The side. Zero becomes one. An even side becomes the odd
+            side above it, through 4095.
 
     Returns:
         The square's entries.
+
+    Raises:
+        Error: If the odd side is below one or above 4095.
     """
     var n = size
     if n % 2 == 0:
         n += 1
+    if n < 1 or n > MAX_MAGIC_SIDE:
+        raise Error("A magic square's side is larger than this port builds")
     var count = n * n
     var square = List[Int](length=count, fill=0)
     var i = n // 2
@@ -221,17 +248,21 @@ def _byte(value: Float64) -> Float32:
     return Float32(Int(value)) / 255
 
 
-def gtao_noise(size: Int = GTAO_NOISE_SIZE) -> List[FloatColor]:
+def gtao_noise(size: Int = GTAO_NOISE_SIZE) raises -> List[FloatColor]:
     """Return three.js's `generateMagicSquareNoise`: one unit direction in
     the plane per texel, turned by the magic square, stored in bytes.
 
     Args:
-        size: The side, positive; an even size is made odd.
+        size: The side. Zero becomes one. An even size is made odd, and
+            the odd side must be from one through 4095.
 
     Returns:
         The texels, row by row from the bottom, as a `DataTexture` holds
         them: the direction's x and y packed from zero to one, then 127
         and 255, over 255.
+
+    Raises:
+        Error: Everything `magic_square` raises.
     """
     var square = magic_square(size)
     var count = len(square)
@@ -252,6 +283,12 @@ def gtao_noise(size: Int = GTAO_NOISE_SIZE) -> List[FloatColor]:
     return texels^
 
 
+# One texel a cell. 4096 squared is 16777216. The next side is a longer
+# walk, and the maximum integer wraps the cell count and then never
+# leaves the row loop.
+comptime MAX_DENOISE_NOISE_SIDE = 4096
+
+
 def denoise_noise(
     seed: Int, size: Int = DENOISE_NOISE_SIZE
 ) raises -> List[Float32]:
@@ -260,14 +297,17 @@ def denoise_noise(
 
     Args:
         seed: The seed of the noise's permutation.
-        size: The side.
+        size: The side, at most 4096.
 
     Returns:
         The texels, row by row from the bottom.
 
     Raises:
-        Error: Everything `SimplexNoise.noise` raises.
+        Error: If `size` is above 4096, and everything `SimplexNoise.noise`
+            raises.
     """
+    if size > MAX_DENOISE_NOISE_SIDE:
+        raise Error("A denoise noise side is larger than this port builds")
     var random = SeededRandom(seed)
     var simplex = SimplexNoise(random)
     var texels = List[Float32](capacity=size * size)
@@ -280,19 +320,24 @@ def denoise_noise(
 
 def denoise_disk(
     samples: Int, rings: Float32, radius_exponent: Float32
-) -> List[Vector3]:
+) raises -> List[Vector3]:
     """Return `generateDenoiseSamples`: `samples` directions turning
     `rings` times, each with its distance from the center, zero to one,
     raised to `radius_exponent`.
 
     Args:
-        samples: How many, at least two.
+        samples: How many, at least two, and at most 16777216.
         rings: How many turns.
         radius_exponent: How the distances crowd toward the center.
 
     Returns:
         The cosine and the sine of each direction, and its distance.
+
+    Raises:
+        Error: If `samples` is above 16777216.
     """
+    if samples > MAX_GTAO_SAMPLES:
+        raise Error("A GTAO sample count is larger than this port takes")
     var disk = List[Vector3](capacity=samples)
     for i in range(samples):  # pragma: no branch
         var angle = 2 * pi * Float64(rings) * Float64(i) / Float64(samples)
@@ -345,6 +390,27 @@ def _horizon(
     return horizon + max(Float32(0), (cosine - horizon) * weight)
 
 
+def gtao_grid_side(count: Int) raises -> Int:
+    """Return the side of a square noise grid that fits in `count` texels.
+
+    The side is the greatest integer whose square is at most `count`.
+    A `Float32` square root rounds some lengths up, and the last read is
+    then past the list.
+
+    Args:
+        count: How many noise texels there are.
+
+    Returns:
+        The side, at least one.
+
+    Raises:
+        Error: If `count` is below one.
+    """
+    if count < 1:
+        raise Error("GTAO noise needs a texel")
+    return Int(floor(sqrt(Float64(count))))
+
+
 def gtao_occlusion(
     view: DepthView,
     normals: List[Vector3],
@@ -352,7 +418,7 @@ def gtao_occlusion(
     x: Int,
     y: Int,
     settings: GtaoSettings,
-) -> Float32:
+) raises -> Float32:
     """Return one pixel of `GTAOShader`: the ambient light that reaches
     it, one for none blocked.
 
@@ -367,11 +433,17 @@ def gtao_occlusion(
     Returns:
         The visibility, zero to one, raised to `scale`. A pixel with no
         surface gives one, as three.js's cleared target holds.
+
+    Raises:
+        Error: If a surface pixel reads noise that has no texel, or its
+            sample count is above 16777216.
     """
     var slot = y * view.width + x
     var depth = view.depth[slot]
     if depth >= 1:
         return 1
+    if settings.samples > MAX_GTAO_SAMPLES:
+        raise Error("A GTAO sample count is larger than this port takes")
     var u = u_of(x, view.width)
     var v = v_of(y, view.height)
     var center = view.position(u, v, depth)
@@ -381,7 +453,7 @@ def gtao_occlusion(
         radius *= view.position(
             0.5 + SCREEN_SPACE_RADIUS_SCALE / Float32(view.width), 0, depth
         ).x
-    var side = Int(sqrt(Float32(len(noise))))
+    var side = gtao_grid_side(len(noise))
     var texel = noise[(_row_up(y, view.height) % side) * side + (x % side)]
     var tangent = _unit(Vector3(texel.r * 2 - 1, texel.g * 2 - 1, 0))
     var bitangent = Vector3(-tangent.y, tangent.x, 0)
@@ -454,7 +526,7 @@ def gtao_denoise(
     x: Int,
     y: Int,
     settings: GtaoSettings,
-) -> Float32:
+) raises -> Float32:
     """Return one pixel of `PoissonDenoiseShader` over the occlusion.
 
     Args:
@@ -470,6 +542,9 @@ def gtao_denoise(
     Returns:
         The denoised occlusion. A pixel with no surface, or no normal,
         gives one, as three.js's cleared target holds.
+
+    Raises:
+        Error: If a surface pixel reads noise that has no texel.
     """
     var slot = y * view.width + x
     var depth = view.depth[slot]
@@ -480,7 +555,7 @@ def gtao_denoise(
     var v = v_of(y, view.height)
     var center = ao.sample(u, v).r
     var here = view.position(u, v, depth)
-    var side = Int(sqrt(Float32(len(noise))))
+    var side = gtao_grid_side(len(noise))
     var turn = noise[(_row_up(y, view.height) % side) * side + (x % side)]
     var nx = sin(turn * 2 * Float32(pi))
     var ny = cos(turn * 2 * Float32(pi))
@@ -539,7 +614,8 @@ def gtao_light(
         settings: The settings.
 
     Raises:
-        Error: Everything `denoise_noise` raises.
+        Error: Everything `gtao_occlusion`, `denoise_noise` and
+            `denoise_disk` raise.
     """
     var width = frame.width
     var height = frame.height

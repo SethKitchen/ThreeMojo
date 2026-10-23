@@ -35,6 +35,7 @@ from lights.vxgi_cone_tracer import (
 from lights.vxgi_volume import (
     VXGIVolume,
     bounce_voxel,
+    require_vxgi_bounces,
     inject_voxel,
     opacity_mip_voxel,
     radiance_mip_voxel,
@@ -459,8 +460,10 @@ struct GpuVxgi(Movable):
             volume: The volume. Its direct light and radiance are written.
 
         Raises:
-            Error: If the device fails.
+            Error: If the bounce count is above 16777216, or the device
+                fails.
         """
+        require_vxgi_bounces(volume.bounces)
         var grid = volume.grid
         var count = grid.level_count(0)
         var total = grid.total() * VOXEL_FLOATS

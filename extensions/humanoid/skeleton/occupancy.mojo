@@ -210,6 +210,40 @@ def grid_cells(span: Float32, step: Float32) -> Int:
     return n
 
 
+def check_mass_box(
+    low: Vector3, high: Vector3, step: Length, kind: String
+) raises:
+    """Refuse a mass sample whose rounded cell count is not an integer.
+
+    Nothing. The call returns when every span is finite, ordered, and
+    its rounded cell count fits in `Int`.
+
+    Args:
+        low: Minimum corner, in meters.
+        high: Maximum corner, in meters.
+        step: Cell size. The caller has already required a usable step.
+        kind: The sample name used in the error text.
+
+    Returns:
+        Nothing.
+
+    Raises:
+        Error: If a bound is not finite, the box is unordered, or a
+            span's rounded cell count does not fit in `Int`.
+    """
+    for axis in range(3):  # pragma: no branch
+        var lo = low.get_component(axis)
+        var hi = high.get_component(axis)
+        if not isfinite(lo) or not isfinite(hi) or hi < lo:
+            raise Error("A " + kind + " sample box must be finite and ordered")
+        var span = hi - lo
+        # Refuse overflow before grid_cells converts its rounded count.
+        if not isfinite(span) or span / step.value + Float32(0.5) >= Float32(
+            Int.MAX
+        ):
+            raise Error("A " + kind + " sample span is too large")
+
+
 def in_shaft_span(
     y: Float32, y0: Float32, y1: Float32, distal: Float32, proximal: Float32
 ) -> Bool:
@@ -304,17 +338,7 @@ def sample_bone_mass[
     check_mass_step(step, name)
     cortical.validate()
     trabecular.validate()
-    for axis in range(3):  # pragma: no branch
-        var lo = low.get_component(axis)
-        var hi = high.get_component(axis)
-        if not isfinite(lo) or not isfinite(hi) or hi < lo:
-            raise Error("A bone mass sample box must be finite and ordered")
-        var span = hi - lo
-        # Refuse overflow before grid_cells converts its rounded count.
-        if not isfinite(span) or span / step.value + Float32(0.5) >= Float32(
-            Int.MAX
-        ):
-            raise Error("A bone mass sample span is too large")
+    check_mass_box(low, high, step, "bone mass")
     var dx = step.value
     var dy = step.value
     var dz = step.value

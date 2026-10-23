@@ -925,24 +925,84 @@ def _numbers(tree: LwoTree, object: Int, key: String) -> List[Float64]:
     return value.numbers.copy() if value.is_numbers() else List[Float64]()
 
 
-def _split_indices(indices: List[Float64], dims: List[Float64]) -> List[Int]:
+def _whole_fit(value: Float64, what: String) raises -> Int:
+    """Return a file number that is a whole value from zero and fits.
+
+    Args:
+        value: The number from the file.
+        what: The name used in the error.
+
+    Returns:
+        The value, as an integer.
+
+    Raises:
+        Error: If it is not a whole number, or does not fit.
+    """
+    if not (value >= 0) or not (value < Float64(Int.MAX)):
+        raise Error("LWO: " + what + " does not fit")
+    var whole = Int(value)
+    if Float64(whole) != value:
+        raise Error("LWO: " + what + " must be a whole number")
+    return whole
+
+
+def _polygon_corners(value: Float64) raises -> Int:
+    """Return a polygon's corner count.
+
+    Args:
+        value: The count from the file.
+
+    Returns:
+        The count, when it is a whole number that fits.
+
+    Raises:
+        Error: If the count is not a whole number, or does not fit.
+    """
+    return _whole_fit(value, "a polygon's corner count")
+
+
+def _polygon_index(value: Float64) raises -> Int:
+    """Return a polygon index that names a point or a tag.
+
+    Args:
+        value: The index from the file.
+
+    Returns:
+        The index, when it is a whole number that fits.
+
+    Raises:
+        Error: If the index is not a whole number, or does not fit.
+    """
+    return _whole_fit(value, "a polygon index")
+
+
+def _split_indices(
+    indices: List[Float64], dims: List[Float64]
+) raises -> List[Int]:
     """three.js's `splitIndices`: quads into two triangles, and polygons of
-    more sides into a fan."""
+    more sides into a fan.
+
+    Raises:
+        Error: If a corner count does not fit, or the corners run past
+            the index list.
+    """
     var out = List[Int]()
     var i = 0
     for d in dims:
-        var dim = Int(d)
+        var dim = _polygon_corners(d)
+        if len(indices) - i < dim:
+            raise Error("LWO: a polygon runs past its indices")
         if dim < 4:
             for k in range(dim):
-                out.append(Int(indices[i + k]))
+                out.append(_polygon_index(indices[i + k]))
         elif dim == 4:
             for k in [0, 1, 2, 0, 2, 3]:  # pragma: no branch
-                out.append(Int(indices[i + k]))
+                out.append(_polygon_index(indices[i + k]))
         else:
             for k in range(1, dim - 1):  # pragma: no branch
-                out.append(Int(indices[i]))
-                out.append(Int(indices[i + k]))
-                out.append(Int(indices[i + k + 1]))
+                out.append(_polygon_index(indices[i]))
+                out.append(_polygon_index(indices[i + k]))
+                out.append(_polygon_index(indices[i + k + 1]))
         i += dim
     return out^
 
@@ -957,14 +1017,14 @@ def _split_material_indices(
         if i * 2 + 1 >= len(indices):
             raise Error("LWO: fewer surface tags than polygons")
         var repeat = 1
-        var dim = Int(dims[i])
+        var dim = _polygon_corners(dims[i])
         if dim == 4:
             repeat = 2
         elif dim > 4:
             repeat = dim - 2
         for _ in range(repeat):  # pragma: no branch
-            out.append(Int(indices[i * 2]))
-            out.append(Int(indices[i * 2 + 1]))
+            out.append(_polygon_index(indices[i * 2]))
+            out.append(_polygon_index(indices[i * 2 + 1]))
     return out^
 
 
@@ -1170,7 +1230,7 @@ def _geometry(tree: LwoTree, layer: Int, mut mesh: LwoMesh) raises:
             var at = _numbers(tree, map, "uvIndices")
             var uvs = _numbers(tree, map, "uvs")
             for j in range(len(at)):  # pragma: no branch
-                var i = Int(at[j])
+                var i = _polygon_index(at[j])
                 if i >= count:
                     raise Error(
                         "LWO: a UV names a point the layer does not have"
@@ -1188,7 +1248,7 @@ def _geometry(tree: LwoTree, layer: Int, mut mesh: LwoMesh) raises:
             var offsets = _numbers(tree, target, "points")
             var relative = tree.get(target, "type").text == "relative"
             for j in range(len(at)):  # pragma: no branch
-                var i = Int(at[j])
+                var i = _polygon_index(at[j])
                 if i >= count:
                     continue
                 for c in range(3):  # pragma: no branch

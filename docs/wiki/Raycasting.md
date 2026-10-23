@@ -41,7 +41,7 @@ Line picking measures the gap between the nearest points on the ray and the segm
 | `set_from_camera(coords, camera, scene)` | Through a point of the camera's image. `coords` is a `Vector2` in normalized device coordinates: -1 to 1 each way, y up. |
 | `set_from_pixel(x, y, width, height, camera, scene)` | Through a pixel of an image the camera would render at `width` by `height`. y counts down from the top. The center of pixel `(i, j)` is `(i + 0.5, j + 0.5)`. |
 
-A perspective camera's ray leaves the camera's position toward the point. An orthographic camera's ray starts on the camera's own plane and goes the way the camera looks. Every orthographic ray is parallel. Both are three.js's choices.
+A perspective camera's ray leaves the camera's position toward the point. An orthographic camera's ray starts on the camera's own plane and goes the way the camera looks. Every orthographic ray is parallel. Both are three.js's choices. A side above 16777216 pixels is divided in `Float64`.
 
 `set_from_camera` and `set_from_pixel` also keep the camera, three.js's `Raycaster.camera`. A sprite faces the camera, so a sprite is picked only after one of them. A later `set` keeps the camera.
 

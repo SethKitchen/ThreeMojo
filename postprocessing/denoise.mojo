@@ -101,7 +101,7 @@ def denoise_pixel(
     x: Int,
     y: Int,
     settings: DenoiseSettings,
-) -> FloatColor:
+) raises -> FloatColor:
     """Return one pixel of three.js's `DenoiseNode`.
 
     Args:
@@ -118,6 +118,9 @@ def denoise_pixel(
     Returns:
         The denoised color, straight, with the pixel's own alpha. A pixel
         with no surface, or no normal, keeps its color.
+
+    Raises:
+        Error: If a surface pixel reads noise shorter than a 64 by 64 grid.
     """
     var u = u_of(x, view.width)
     var v = v_of(y, view.height)
@@ -128,7 +131,11 @@ def denoise_pixel(
         return texel
     var center = luminance_of(texel.r, texel.g, texel.b)
     var here = view.position(u, v, depth)
+    # The node turns the disk with a 64 by 64 noise texture. A shorter
+    # list would read past its last texel.
     var side = 64
+    if len(noise) < side * side:
+        raise Error("Denoise noise must cover a 64 by 64 grid")
     var turn = noise[((view.height - 1 - y) % side) * side + (x % side)]
     # r186's node reads channel zero as radians, unlike the WebGL shader.
     var nx = sin(turn)

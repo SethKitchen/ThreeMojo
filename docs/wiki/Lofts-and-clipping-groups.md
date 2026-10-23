@@ -90,6 +90,7 @@ var helper = add_animation_path_helper(scene, assets, clip, node)
 ```
 
 - The line follows the node's position track. It is sampled `divisions + 1` times from the start of the clip to its end. The default is 100 divisions.
+- A division count above 16777216 is refused.
 - A point marks the value of each key. Set `show_markers=False` to leave the points out.
 - The line is green and the points are red, five pixels across at any distance. Neither is tone mapped.
 - The helper's node is under the node's parent, so the path is in the parent's space.
@@ -140,7 +141,7 @@ var depth = cube_depth_texture_of(faces)
 var seen = depth.sample(Vector3(1, 0, 0)).r
 ```
 
-Each face holds the window depth: zero at the near plane and one at the far plane. A texel is read nearest, as three.js's `NearestFilter` reads it. `cube_depth_texture(size, depths, mode)` builds the cube from six depth buffers in one list.
+Each face holds the window depth: zero at the near plane and one at the far plane. A texel is read nearest, as three.js's `NearestFilter` reads it. `cube_depth_texture(size, depths, mode)` builds the cube from six depth buffers in one list. A face whose six depth buffers do not fit in an integer is refused.
 
 ## What is not ported
 

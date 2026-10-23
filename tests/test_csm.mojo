@@ -360,6 +360,16 @@ def test_a_csm_refuses_what_it_cannot_slice() raises:
     var scene = Scene()
     with assert_raises():
         _ = CSM(scene, camera, cascades=0)
+    with assert_raises(contains="larger than this port"):
+        _ = CSM(scene, camera, cascades=16777217)
+    with assert_raises(contains="larger than this port"):
+        _ = CSM(scene, camera, cascades=Int.MAX)
+    with assert_raises(contains="larger than this port"):
+        _ = uniform_split(Int.MAX, 1, 100)
+    with assert_raises(contains="larger than this port"):
+        _ = logarithmic_split(16777217, 1, 100)
+    with assert_raises(contains="larger than this port"):
+        _ = practical_split(Int.MAX, 1, 100, 0.5)
     with assert_raises():
         _ = CSM(scene, camera, mode=CsmMode(5))
     with assert_raises():

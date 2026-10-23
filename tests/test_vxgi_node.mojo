@@ -194,6 +194,14 @@ def test_a_pass_refuses_settings_it_cannot_use() raises:
     node.cone_count = 0
     with assert_raises(contains="at least one cone"):
         node.validate()
+    node = VXGINode()
+    node.cone_count = 16777217
+    with assert_raises(contains="larger than this port"):
+        node.validate()
+    node = VXGINode()
+    node.cone_count = Int.MAX
+    with assert_raises(contains="larger than this port"):
+        node.validate()
     var apertures: List[Float32] = [0, 180, nan[DType.float32]()]
     for aperture in apertures:
         node = VXGINode()
@@ -357,6 +365,34 @@ def test_a_pixel_through_a_flat_matrix_keeps_its_point() raises:
         1,
     )
     assert_equal(pixel[3], 1)
+    # Zero cones make the first comparison fail. A count past the cap
+    # makes the second fail. Neither walk starts.
+    params[PARAM_CONES] = 0
+    var none = vxgi_pixel(
+        node.volume.grid,
+        floats_of(node.volume.opacity),
+        floats_of(node.volume.radiance),
+        floats_of(params),
+        0.5,
+        Vector3(0, 0, 1),
+        1,
+        1,
+    )
+    assert_equal(none[0], 1)
+    assert_equal(none[3], 1)
+    params[PARAM_CONES] = Float32(1e20)
+    var huge = vxgi_pixel(
+        node.volume.grid,
+        floats_of(node.volume.opacity),
+        floats_of(node.volume.radiance),
+        floats_of(params),
+        0.5,
+        Vector3(0, 0, 1),
+        1,
+        1,
+    )
+    assert_equal(huge[0], 1)
+    assert_equal(huge[3], 1)
     _ = params^
     _ = node^
 

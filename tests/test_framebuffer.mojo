@@ -18,6 +18,7 @@ from render.framebuffer import (
     Framebuffer,
     HSL,
     SrgbBytes,
+    unit_byte,
     _encoded,
     rgb_is_black,
 )
@@ -121,6 +122,9 @@ def test_rows_are_stored_top_down() raises:
 def test_zero_width_is_rejected() raises:
     with assert_raises():
         _ = Framebuffer(0, 3, Color(0, 0, 0))
+    # Four bytes a pixel at this side length does not fit in an integer.
+    with assert_raises(contains="larger than this port"):
+        _ = Framebuffer(3037000500, 3037000500, Color(0, 0, 0))
 
 
 def test_negative_height_is_rejected() raises:
@@ -279,6 +283,20 @@ def test_an_eight_bit_color_round_trips_through_floats() raises:
         var back = FloatColor(of=Color(byte, byte, byte, byte)).quantize()
         assert_equal(back.r, byte)
         assert_equal(back.a, byte)
+
+
+def test_a_unit_byte_holds_the_fraction_from_zero_to_one() raises:
+    assert_equal(unit_byte(Float32(0)), 0)
+    assert_equal(unit_byte(Float32(0.5)), 128)
+    assert_equal(unit_byte(Float32(1)), 255)
+    # A fraction just above one used to round to 256 and wrap to zero.
+    assert_equal(unit_byte(Float32(1.002)), 255)
+    assert_equal(unit_byte(Float32(2)), 255)
+    assert_equal(unit_byte(Float32(-1)), 0)
+    assert_equal(unit_byte(Float32(1e20)), 255)
+    assert_equal(unit_byte(nan[DType.float32]()), 255)
+    assert_equal(unit_byte(inf[DType.float32]()), 255)
+    assert_equal(unit_byte(-inf[DType.float32]()), 0)
 
 
 def test_quantizing_rounds_rather_than_truncating() raises:

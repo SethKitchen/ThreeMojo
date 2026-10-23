@@ -47,7 +47,7 @@ from postprocessing.display_nodes import (
     luminance_of,
     replace_light,
 )
-from postprocessing.sampling import LightView, u_of
+from postprocessing.sampling import LightView, clamped_texel, u_of
 from postprocessing.screen_space import DepthView
 from render.framebuffer import FloatColor
 from render.target import RenderTarget
@@ -128,6 +128,11 @@ struct FilterSettings(ImplicitlyCopyable):
         self.edge_strength = 2
 
 
+# A radial tap index is a `Float32`. Past 16777216 it is no longer that
+# index, and a count of the maximum integer does not finish the walk.
+comptime MAX_RADIAL_TAPS = 16777216
+
+
 def check_filters(settings: FilterSettings) raises:
     """Refuse settings no filter pass could run.
 
@@ -169,6 +174,8 @@ def check_filters(settings: FilterSettings) raises:
     if settings.curvature >= 0.5:
         raise Error("A CRT's curvature must be below a half")
     require_positive(settings.count, "A radial blur takes at least one tap")
+    if settings.count > MAX_RADIAL_TAPS:
+        raise Error("A radial blur's tap count is larger than this port takes")
     if not (settings.sigma > 0 and settings.sigma_color > 0):
         raise Error("A bilateral blur's sigmas must be positive")
     if not (settings.radius.value > 0):
@@ -195,7 +202,7 @@ def sample_down(view: LightView, u: Float32, v_down: Float32) -> FloatColor:
         The bilinear blend there, held at the edges.
     """
     return view.tap(
-        u * Float32(view.width) - 0.5, v_down * Float32(view.height) - 0.5
+        clamped_texel(u, view.width), clamped_texel(v_down, view.height)
     )
 
 
@@ -373,7 +380,7 @@ def crt_pixel(
         The pixel, premultiplied.
     """
     var u = u_of(x, source.width)
-    var v = (Float32(y) + 0.5) / Float32(source.height)
+    var v = u_of(y, source.height)
     var bent = barrel_uv(settings.curvature, u, v)
     var bu = bent[0]
     var bv = bent[1]
@@ -441,12 +448,20 @@ def radial_blur_pixel(
             the blur works on premultiplied light.
 
     Returns:
-        The pixel, premultiplied.
+        The pixel, premultiplied. The pixel alone when the count is
+        above 16777216.
     """
     var u = u_of(x, source.width)
-    var v = (Float32(y) + 0.5) / Float32(source.height)
+    var v = u_of(y, source.height)
     var premultiplied = settings.premultiplied_alpha
     var base = _radial_tap(source, u, v, premultiplied)
+    if settings.count > MAX_RADIAL_TAPS:
+        var held = base
+        if premultiplied:
+            held = held.unpremultiplied()
+        return FloatColor(
+            held.r, held.g, held.b, min(held.a, 1)
+        ).premultiplied()
     var count = Float32(settings.count)
     var step_u = (settings.center_u - u) / count
     var step_v = (settings.center_v - v) / count
@@ -526,7 +541,7 @@ def bilateral_pixel(
         The weighted mean, straight.
     """
     var u = u_of(x, source.width)
-    var v = (Float32(y) + 0.5) / Float32(source.height)
+    var v = u_of(y, source.height)
     var center = sample_down(source, u, v)
     var center_luma = luminance_of(center.r, center.g, center.b)
     var total = weights[0]
@@ -553,13 +568,18 @@ def bilateral_pixel(
     return FloatColor(r / share, g / share, b / share, a / share)
 
 
-def bilateral_blur_light(mut frame: RenderTarget, settings: FilterSettings):
+def bilateral_blur_light(
+    mut frame: RenderTarget, settings: FilterSettings
+) raises:
     """Run `BilateralBlurNode` over the frame: across, then down over what
     the first pass wrote.
 
     Args:
         frame: The frame, replaced.
         settings: The direction and the two sigmas.
+
+    Raises:
+        Error: If the Gaussian kernel has more than 16777216 weights.
     """
     var w = frame.width
     var h = frame.height
@@ -674,7 +694,7 @@ def depth_aware_blur_value(
         The filtered value.
     """
     var u = u_of(x, width)
-    var v = (Float32(y) + 0.5) / Float32(height)
+    var v = u_of(y, height)
     var center = _view_z_down(view, u, v)
     var total = Float32(0)
     var sum = Float32(0)
@@ -699,8 +719,8 @@ def _value_at(
 ) -> Float32:
     """Return one float a pixel read bilinear at a coordinate that grows
     down, held at the edges."""
-    var px = min(max(u * Float32(width) - 0.5, 0), Float32(width - 1))
-    var py = min(max(v_down * Float32(height) - 0.5, 0), Float32(height - 1))
+    var px = clamped_texel(u, width)
+    var py = clamped_texel(v_down, height)
     var x0 = Int(px)
     var y0 = Int(py)
     var fx = px - Float32(x0)
@@ -835,7 +855,7 @@ def depth_aware_blend_pixel(
     var w = base.width
     var h = base.height
     var u = u_of(x, w)
-    var v = (Float32(y) + 0.5) / Float32(h)
+    var v = u_of(y, h)
     var near = view.near
     var far = view.far
     var here = view_z_to_orthographic_depth(_view_z_down(view, u, v), near, far)

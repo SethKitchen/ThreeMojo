@@ -830,7 +830,7 @@ A surface transmits under `SHADE_TEXTURE` alone, because the scene behind it is 
 ### Where this port differs
 
 - The target is the renderer's size, where three.js sizes it to the viewport. With the viewport the whole target, as it is by default, the two agree.
-- A read past the chain's last level reads the last level. WebGL leaves `textureSize` of a missing level undefined.
+- A read past the chain's last level reads the last level. WebGL leaves `textureSize` of a missing level undefined. A level that is not finite reads the last level too. A level below zero reads the first.
 - A ray of no length is not dimmed. three.js divides zero by zero there for a black attenuation color.
 - The GPU does not draw the pass itself. The host draws it and uploads the target with the frame.
 

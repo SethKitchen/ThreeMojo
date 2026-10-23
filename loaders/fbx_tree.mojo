@@ -84,8 +84,13 @@ def require_fbx_whole(value: Float64) raises:
         value: The number.
 
     Raises:
-        Error: If the number has a fraction.
+        Error: If the number has a fraction, or it does not fit in an
+            integer.
     """
+    # `Float64(Int.MAX)` rounds up to 2^63. Check the range before `Int`,
+    # which does not return a number past that.
+    if not (value > -Float64(Int.MAX) and value < Float64(Int.MAX)):
+        raise Error("FBX: a whole number was expected, not " + String(value))
     if value != Float64(Int(value)):
         raise Error("FBX: a whole number was expected, not " + String(value))
 

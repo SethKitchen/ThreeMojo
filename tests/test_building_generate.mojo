@@ -265,6 +265,8 @@ def test_plan_floor_refuses() raises:
         _ = plan_floor(_rect(0, 0, 36, 7), OFFICE_FLOOR, 1, options)
     with assert_raises(contains="short"):
         _ = plan_floor(_rect(0, 0, 16, 15), OFFICE_FLOOR, 1, options)
+    with assert_raises(contains="larger than this port"):
+        _ = plan_floor(_rect(0, 0, 1e20, 20), OFFICE_FLOOR, 1, options)
 
 
 # --- doors and windows -----------------------------------------------------------
@@ -388,6 +390,11 @@ def test_windows_fill_outside_walls_by_bay() raises:
     var tall = WindowOptions(_m(2.5), _m(0.4), _m(0.9), _m(3), double_glazing())
     var c = _one_storey([SpacePlan("room", OFFICE, _rect(0, 0, 6, 4))])
     assert_equal(add_windows(c, tall), 0)
+    var fine = WindowOptions(
+        _m(1e-7), _m(1e-8), _m(0.9), _m(1.5), double_glazing()
+    )
+    with assert_raises(contains="larger than this port"):
+        _ = add_windows(c, fine)
 
 
 def test_window_options_refuse() raises:
@@ -471,6 +478,13 @@ def test_furniture_in_bare_rooms() raises:
         ):
             shallow_chairs += 1
     assert_equal(shallow_chairs, 0)
+
+
+def test_furniture_refuses_a_room_it_cannot_walk() raises:
+    var b = _one_storey([SpacePlan("office", OFFICE, _rect(0, 0, 4, 4))])
+    b.spaces[0].outline = _rect(0, 0, 1e20, 4)
+    with assert_raises(contains="larger than this port"):
+        _ = furnish(b, 1)
 
 
 def test_a_tiny_room_gets_no_furniture() raises:
@@ -607,6 +621,18 @@ def _small(seed: Int, height: Float32) -> SkyscraperParameters:
     p.seed = seed
     p.total_height = Length(height, METER)
     return p^
+
+
+def test_a_tower_frame_refuses_a_grid_it_cannot_build() raises:
+    var parameters = _small(1, 0.2)
+    parameters.floor_height = Length(Float32(1.8), METER)
+    parameters.bay_width = Length(Float32(1.8), METER)
+    parameters.footprint_width = Length(Float32(2e8), METER)
+    parameters.footprint_depth = Length(Float32(40), METER)
+    var options = TowerOptions(parameters^)
+    options.furnished = False
+    with assert_raises(contains="tower frame"):
+        _ = generate_tower(options)
 
 
 def test_a_small_tower_is_a_full_building() raises:

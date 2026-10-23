@@ -64,6 +64,7 @@ from controls.input import (
     POINTER_DOWN,
     require_named,
     require_view_size,
+    pixel_center_ndc,
     require_input,
     POINTER_MOVE,
     POINTER_UP,
@@ -535,8 +536,8 @@ struct TransformControls(Copyable, Movable):
         var frame = TransformFrame(camera, scene, self.node.value())
         self.raycaster.set_from_camera(
             Vector2(
-                (Float32(event.x) + 0.5) / Float32(width) * 2 - 1,
-                1 - (Float32(event.y) + 0.5) / Float32(height) * 2,
+                pixel_center_ndc(event.x, width),
+                -pixel_center_ndc(event.y, height),
             ),
             camera,
             scene,

@@ -76,7 +76,7 @@ from extensions.humanoid.spec import HumanoidSpec
 from math.cross import cross_vectors
 from math.utils import mix_delta
 from math.vector3 import Vector3, mix_delta3, append_vector3
-from std.math import acos, cos, max, min, pi, pow, sin, sqrt
+from std.math import acos, cos, isfinite, max, min, pi, pow, sin, sqrt
 
 # The most guides one groom has.
 comptime MAX_GUIDES = 20000
@@ -84,6 +84,8 @@ comptime MAX_GUIDES = 20000
 comptime MAX_FOLLOWERS = 64
 # How many roots are tried for each guide before it is given up.
 comptime ROOT_TRIES = 8
+# A larger try count does not finish. Each try walks the scalp.
+comptime MAX_ROOT_TRIES = 16777216
 # How many points a guide takes over one turn of its curl.
 comptime CURL_POINTS = Float32(8)
 # The designed styles, in template centimeters: the middle of the
@@ -107,6 +109,9 @@ comptime BUN_FLOAT = Float32(1.25)
 comptime LONG_HANGS_Y = Float32(70.0)
 comptime PART_SPREAD = Float32(0.9)
 comptime MAX_STEPS = 60
+# A guide's samples. A zero step never advances, and a count past 2^24
+# is not a Float32 index the strand can store.
+comptime MAX_HAIR_STEPS = 16777216
 # How far a tied strand's path over the scalp is arched up at its middle,
 # in the cranium's radius.
 comptime ARC_RISE = Float32(0.3)
@@ -381,10 +386,7 @@ struct GroomSpec(ImplicitlyCopyable):
         Raises:
             Error: If a count is out of range or the genome is not valid.
         """
-        if guides < 1 or guides > MAX_GUIDES:
-            raise Error("A groom's guides number one through 20000")
-        if followers < 0 or followers > MAX_FOLLOWERS:
-            raise Error("A guide's followers number zero through 64")
+        require_groom_counts(guides, followers, ROOT_TRIES)
         var h = dimensions.head.copy()
         var length = h.torso.genome.get(HAIR_LENGTH)
         var grow = max(Float32(0), length)
@@ -704,9 +706,10 @@ def _grow_guide(
     mut points: List[Vector3],
     mut normals: List[Vector3],
     mut levels: List[Float32],
-):
+) raises:
     """Grow one guide from `root` along the comb, on the field's level."""
     var target = mix_delta(spec.shortest, spec.longest, _unit(key, 2))
+    require_hair_steps(spec.step, target)
     var phase = Float32(2 * pi) * _unit(key, 3)
     # A root at the front of the scalp may fall past the hair's edge
     # onto the forehead, down to the fringe's ragged line.
@@ -739,6 +742,59 @@ def _grow_guide(
         points.append(p)
         normals.append(n)
         levels.append(lift)
+
+
+def require_groom_counts(guides: Int, followers: Int, root_tries: Int) raises:
+    """Refuse a groom count this port cannot grow.
+
+    Nothing. The call returns when the guides are one through 20000,
+    the followers are zero through 64, and the root tries are zero
+    through 16777216.
+
+    Args:
+        guides: How many guide strands.
+        followers: How many follow strands round each guide.
+        root_tries: How many roots are tried for each guide.
+
+    Returns:
+        Nothing.
+
+    Raises:
+        Error: If a guide count is outside one through 20000, a follower
+            count is outside zero through 64, or a root try count is
+            below zero or above 16777216.
+    """
+    if guides < 1 or guides > MAX_GUIDES:
+        raise Error("A groom's guides number one through 20000")
+    if followers < 0 or followers > MAX_FOLLOWERS:
+        raise Error("A guide's followers number zero through 64")
+    if root_tries < 0:
+        raise Error("A groom's root tries must be zero or more")
+    if root_tries > MAX_ROOT_TRIES:
+        raise Error("A groom's root try count is larger than this port grows")
+
+
+def require_hair_steps(step: Float32, span: Float32) raises:
+    """Refuse a hair step this port cannot walk.
+
+    Nothing. The call returns when `step` is a positive finite length
+    and `span / step` is at most 16777216.
+
+    Args:
+        step: How far one sample moves, in meters.
+        span: How far the walk may run, in meters.
+
+    Returns:
+        Nothing.
+
+    Raises:
+        Error: If `step` is not a positive finite length, or the sample
+            count is above 16777216.
+    """
+    if not isfinite(step) or not (step > 0):
+        raise Error("A hair step must be a positive length")
+    if not (span / step <= Float32(MAX_HAIR_STEPS)):
+        raise Error("A hair step count is larger than this port grows")
 
 
 def require_hair_roots(count: Int) raises:
@@ -776,10 +832,16 @@ def groom_hair(
 
     Raises:
         Error: If `dimensions.validate` refuses the copy, if `style` is
-            not named or its file cannot be read, or if no guide finds a
-            root.
+            not named or its file cannot be read, if no guide finds a
+            root, if a guide, follower, or root try count is out of
+            range, or if a step is not a positive length or asks for more
+            than 16777216 samples.
     """
+    require_groom_counts(spec.guides, spec.followers, spec.root_tries)
     require_hair_style(style)
+    require_hair_steps(spec.step, spec.longest)
+    if spec.curl > 0:
+        require_hair_steps(spec.curl_length, spec.longest)
     if style == LAYERED or style == MOHAWK:
         return _laid(dimensions, spec, seed, style)
     if style != GROWN:
@@ -1116,7 +1178,7 @@ def _braid(
     width: Float32,
     twist: Float32,
     key: Int,
-):
+) raises:
     """Weave a strand into a braid of three that hangs from the tie.
 
     The braid's middle springs back from the tie and falls. Each strand
@@ -1134,6 +1196,7 @@ def _braid(
     var core = tie
     var going = away
     var along = Float32(0)
+    require_hair_steps(step, length)
     while along < length:
         going = _unit_vector(going * Float32(0.8) + Vector3(0, -0.45, 0), going)
         core = core + going * step
@@ -1155,7 +1218,7 @@ def _arc(
     tie: Vector3,
     spec: GroomSpec,
     probe: Float32,
-) -> Float32:
+) raises -> Float32:
     """Comb a strand from its root to the tie over the scalp, and return
     how far it went.
 
@@ -1174,7 +1237,9 @@ def _arc(
     var ub = b / rb
     var angle = acos(min(Float32(1), max(Float32(-1), ua.dot(ub))))
     var sine = max(sin(angle), Float32(1e-6))
-    var count = max(1, Int(angle * (ra + rb) / 2 / spec.step))
+    var span = angle * (ra + rb) / Float32(2)
+    require_hair_steps(spec.step, span)
+    var count = max(1, Int(span / spec.step))
     var travelled = Float32(0)
     for i in range(1, count + 1):  # pragma: no branch
         var t = Float32(i) / Float32(count)
@@ -1203,7 +1268,7 @@ def _hang(
     step: Float32,
     key: Int,
     floor: Float32 = -1e9,
-):
+) raises:
     """Let a strand fall `length` further, or down to `floor`, bending
     down from the way it was going, and swaying a little out of line
     with its neighbors."""
@@ -1216,6 +1281,7 @@ def _hang(
     var drift = Vector3(_signed(key, 41), 0, _signed(key, 43)) * Float32(0.08)
     var left = length
     var p = strand[last]
+    require_hair_steps(step, length)
     while left > 0 and p.y > floor:
         going = _unit_vector(
             going * Float32(0.6) + Vector3(0, -1, 0) + drift, going
@@ -1233,7 +1299,7 @@ def _tail(
     step: Float32,
     spread: Float32,
     key: Int,
-):
+) raises:
     """Gather a strand into the tie and let it fall as part of the
     ponytail: out from the head at first, then down, fanning a little
     wider toward its tip."""
@@ -1246,6 +1312,7 @@ def _tail(
     var along = Float32(0)
     var core = tie
     var going = away
+    require_hair_steps(step, length)
     while along < length:
         going = _unit_vector(
             going * Float32(0.85) + Vector3(0, -0.35, 0), going
@@ -1263,7 +1330,7 @@ def _coil(
     radius: Float32,
     step: Float32,
     key: Int,
-):
+) raises:
     """Wind a strand round the ball of a bun that sits on the tie, a
     little out from it, so the ball does not sink into the head.
 
@@ -1283,16 +1350,18 @@ def _coil(
     # the head.
     var first = (across * cos(start) + up * sin(start)) * c + away * lean
     var bottom = away * -1
-    var climb = Int(
-        acos(min(Float32(1), max(Float32(-1), bottom.dot(first))))
-        * radius
-        / step
+    var climb_span = (
+        acos(min(Float32(1), max(Float32(-1), bottom.dot(first)))) * radius
     )
+    require_hair_steps(step, climb_span)
+    var climb = Int(climb_span / step)
     for k in range(1, climb + 1):  # pragma: no branch
         var t = Float32(k) / Float32(climb + 1)
         var d = _unit_vector(bottom * (1 - t) + first * t, first)
         strand.append(middle + d * radius)
-    var count = Int(turns * Float32(2 * pi) * radius / step) + 1
+    var wind = turns * Float32(2 * pi) * radius
+    require_hair_steps(step, wind)
+    var count = Int(wind / step) + 1
     for k in range(count):  # pragma: no branch
         var a = start + Float32(2 * pi) * turns * Float32(k) / Float32(count)
         var ring = (across * cos(a) + up * sin(a)) * c + away * lean
@@ -1306,7 +1375,7 @@ def _curl(
     spec: GroomSpec,
     key: Int,
     taut: Float32 = 0,
-):
+) raises:
     """Wind a guide into its curl, if its hair curls.
 
     The guide is first resampled finely enough to hold its turns, eight
@@ -1323,6 +1392,7 @@ def _curl(
     for k in range(1, len(points)):  # pragma: no branch
         along.append(along[k - 1] + (points[k] - points[k - 1]).length())
     var total = along[len(along) - 1]
+    require_hair_steps(spacing, total)
     var count = max(len(points), Int(total / spacing) + 1)
     var phase = Float32(2 * pi) * _unit(key, 31)
     var fine = List[Vector3](capacity=count)

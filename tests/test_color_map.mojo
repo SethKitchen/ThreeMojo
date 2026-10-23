@@ -269,6 +269,32 @@ def test_a_range_upside_down_gives_the_first_color() raises:
     assert_color(lut.get_color(-7), 0, 0, 1)
 
 
+def test_a_changed_color_table_step_count_is_refused() raises:
+    var lut = Lut(RAINBOW, 4)
+    lut.n = 0
+    with assert_raises(contains="one step"):
+        _ = lut.get_color(0.5)
+    with assert_raises(contains="one step"):
+        _ = lut.canvas_pixels()
+    lut.n = -1
+    with assert_raises(contains="one step"):
+        _ = lut.canvas_pixels()
+    lut.n = 16777217
+    with assert_raises(contains="larger than this port"):
+        _ = lut.get_color(0.5)
+    with assert_raises(contains="larger than this port"):
+        _ = lut.canvas_pixels()
+    lut.n = Int.MAX
+    with assert_raises(contains="larger than this port"):
+        _ = lut.canvas_pixels()
+    lut.n = 1000
+    with assert_raises(contains="does not match"):
+        _ = lut.get_color(1.0)
+    lut.n = 4
+    _ = lut.get_color(0.5)
+    assert_equal(len(lut.canvas_pixels()), 16)
+
+
 def test_canvas_matches_three() raises:
     """The pixels three.js's `updateCanvas` draws."""
     assert_bytes(
@@ -425,6 +451,10 @@ def test_refusals() raises:
         _ = Lut(ColorMapName(4), 8)
     with assert_raises(contains="one step"):
         _ = Lut(RAINBOW, 0)
+    with assert_raises(contains="larger than this port"):
+        _ = Lut(RAINBOW, 16777217)
+    with assert_raises(contains="larger than this port"):
+        _ = Lut(RAINBOW, Int.MAX)
     var lut = Lut(RAINBOW, 8)
     with assert_raises(contains="finite"):
         lut.set_min(nan[DType.float64]())

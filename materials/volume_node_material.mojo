@@ -44,6 +44,7 @@ from lights.lighting import Lighting
 from materials.material import (
     BACK_SIDE,
     DEFAULT_STEPS,
+    MAX_VOLUME_STEPS,
     VOLUME,
     Material,
 )
@@ -161,7 +162,8 @@ def volumetric_light[
             `cameraPosition`.
         radius: The mesh's bounding radius in world space, three.js's
             `modelRadius`.
-        steps: How many steps the ray takes, from one.
+        steps: How many steps the ray takes, from one. Above 4096 the
+            ray gathers nothing, so the march cannot fail to finish.
         offset: The share of a step the ray starts at: the graph's
             `OFFSET_NODE`, or zero.
         scene_depth: The opaque scene's signed camera-axis distance at
@@ -174,6 +176,8 @@ def volumetric_light[
         One minus what the ray lets through, per channel, linear: the
         surface's outgoing light.
     """
+    if steps > MAX_VOLUME_STEPS:
+        return Vector3(0, 0, 0)
     var start = eye
     var end = inputs.position
     if not ((eye - inputs.position).length() > radius * 2):
@@ -232,8 +236,9 @@ def volume_node_material(
         The material.
 
     Raises:
-        Error: If `steps` is below one, `opacity` is outside zero to one,
-            or `nodes` is a negative other than `NO_NODES`.
+        Error: If `steps` is below one or above 4096, `opacity` is
+            outside zero to one, or `nodes` is a negative other than
+            `NO_NODES`.
     """
     var material = Material(
         color,

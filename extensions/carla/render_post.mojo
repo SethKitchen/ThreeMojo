@@ -32,7 +32,7 @@ The sizes and gains are this port's own choices.
 
 from extensions.carla.render_weather import HeightFog, RainSettings
 from math.matrix4 import Matrix4
-from math.utils import SeededRandom
+from math.utils import SeededRandom, texel_ndc, texel_ndc_up
 from math.vector3 import Vector3
 from render.cube_texture import CubeTexture
 from render.framebuffer import FloatColor
@@ -130,13 +130,14 @@ struct ViewRays(ImplicitlyCopyable):
             x: The column.
             y: The row, down from the top.
             depth: The depth a render target stores: the NDC depth, -1 at
-                the near plane and 1 at the far.
+                the near plane and 1 at the far. A side above 2^23
+                measures the pixel center in `Float64`.
 
         Returns:
             The point, minus z in front of the camera.
         """
-        var u = (Float32(x) + 0.5) / Float32(self.width) * 2 - 1
-        var v = 1 - (Float32(y) + 0.5) / Float32(self.height) * 2
+        var u = texel_ndc(x, self.width)
+        var v = texel_ndc_up(y, self.height)
         return self.unproject.transform_point(Vector3(u, v, depth))
 
     def world_point(self, x: Int, y: Int, depth: Float32) -> Vector3:
@@ -287,7 +288,7 @@ def draw_rain(
     rain: RainSettings,
     light: FloatColor,
     seed: Int,
-):
+) raises:
     """Draw rain streaks over a frame.
 
     Each streak falls at a random pixel and a random depth from
@@ -301,6 +302,9 @@ def draw_rain(
         rain: The rain.
         light: The light a streak catches, before its opacity.
         seed: Which streaks.
+
+    Raises:
+        Error: Everything `RainSettings.streaks` raises.
     """
     var count = rain.streaks(frame.width, frame.height)
     var random = SeededRandom(seed)
@@ -500,6 +504,9 @@ def lens_falloff(lens: LensSettings, u: Float32, v: Float32) -> Float32:
 def apply_lens(mut frame: RenderTarget, lens: LensSettings):
     """Bend and darken a frame as the lens does.
 
+    A side above 8388608 pixels measures each pixel's center in
+    `Float64`.
+
     Args:
         frame: The frame, changed in place.
         lens: The lens.
@@ -513,8 +520,8 @@ def apply_lens(mut frame: RenderTarget, lens: LensSettings):
     # A frame has at least one pixel.
     for y in range(frame.height):  # pragma: no branch
         for x in range(frame.width):  # pragma: no branch
-            var u = (Float32(x) + 0.5) / w * 2 - 1
-            var v = (Float32(y) + 0.5) / h * 2 - 1
+            var u = texel_ndc(x, frame.width)
+            var v = texel_ndc(y, frame.height)
             var seen = before[y * frame.width + x]
             if bends:
                 var from_ = lens_source(lens, u, v)

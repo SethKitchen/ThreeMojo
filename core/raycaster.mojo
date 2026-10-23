@@ -619,7 +619,7 @@ struct Raycaster(ImplicitlyCopyable, RayQuery):
 
         The undoing of `PerspectiveCamera.project`: x runs from zero at the
         left edge, y from zero at the top, and the center of pixel (i, j)
-        is at (i + 0.5, j + 0.5).
+        is at (i + 0.5, j + 0.5). A side past 2^24 is divided in `Float64`.
 
         Args:
             x: How far across the image, in pixels.
@@ -634,14 +634,17 @@ struct Raycaster(ImplicitlyCopyable, RayQuery):
                 view cannot be read.
         """
         require_image_extent(width, height)
-        self.set_from_camera(
-            Vector2(
-                x / Float32(width) * 2 - 1,
-                1 - y / Float32(height) * 2,
-            ),
-            camera,
-            scene,
-        )
+        # A `Float32` side past 2^24 is not that side, so the last pixel
+        # reads as the edge. A smaller image keeps the `Float32` quotient.
+        var nx: Float32
+        var ny: Float32
+        if width > 16777216 or height > 16777216:
+            nx = Float32(Float64(x) / Float64(width) * 2 - 1)
+            ny = Float32(1 - Float64(y) / Float64(height) * 2)
+        else:
+            nx = x / Float32(width) * 2 - 1
+            ny = 1 - y / Float32(height) * 2
+        self.set_from_camera(Vector2(nx, ny), camera, scene)
 
     def intersect_mesh(
         self, scene: Scene, assets: Assets, index: Int

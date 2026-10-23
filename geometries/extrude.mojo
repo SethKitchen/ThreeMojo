@@ -96,7 +96,7 @@ is split along is part of the surface. Both forms split it as three.js's
 
 from core.buffer_attribute import BufferAttribute
 from core.ordinal import require_positive
-from geometries.surface import record_kind, textured_surface
+from geometries.surface import record_kind, require_grid_cells, textured_surface
 from core.buffer_geometry import (
     BufferGeometry,
     EXTRUDE_GEOMETRY,
@@ -108,6 +108,7 @@ from core.buffer_geometry import (
 from exporters.json_writer import JsonWriter
 from geometries.earcut import triangulate_shape
 from math.curve_checks import require_at_least_one
+from math.finite import require_finite
 from loaders.curve_json import write_curve3, write_curve_path3
 from geometries.shape import Contours, extract_points, is_clockwise
 from math.curve3 import Curve3, CurvePath3, FrenetFrames
@@ -621,8 +622,23 @@ def _extruded(
 
 
 def _check_sweep(steps: Int) raises:
-    """Refuse a sweep of fewer than one step."""
+    """Refuse a sweep this port does not build.
+
+    Nothing. The call returns when there is at least one step and the
+    step count fits in the cell budget.
+
+    Args:
+        steps: How many equal runs the extrusion is cut into.
+
+    Raises:
+        Error: If `steps` is less than one, or above 16777216.
+    """
     require_at_least_one(steps, "An extrusion needs at least one step")
+    require_grid_cells(
+        steps,
+        1,
+        "An extrusion's step count is larger than this port builds",
+    )
 
 
 def require_extrusion_shapes(count: Int) raises:
@@ -810,28 +826,34 @@ def check_extrusion(
     bevel_thickness: Length,
     bevel_size: Length,
     bevel_segments: Int,
+    bevel_offset: Length = Length(0, METER),
 ) raises:
     """Refuse the options an extrusion along z cannot be built with.
 
     `extrude` calls this before it looks at the shape, and so does a
     caller such as `text_geometry` that may have no shape to hand it.
+    A bevel that is off does not read its thickness, size, or offset.
 
     Args:
-        depth: How thick the solid is; positive.
+        depth: How thick the solid is; positive and finite.
         steps: How many layers the extrusion is cut into; at least one.
         curve_segments: How many straight runs each curve is sampled into;
             at least one.
         bevel_enabled: True to round the two edges off.
         bevel_thickness: How far past each end face the bevel reaches;
-            positive when there is a bevel.
-        bevel_size: How far out from the outline the body stands; not
-            negative when there is a bevel.
+            positive and finite when there is a bevel.
+        bevel_size: How far out from the outline the body stands; finite,
+            and not negative, when there is a bevel.
         bevel_segments: How many bands each bevel is cut into; at least one
             when there is a bevel.
+        bevel_offset: How far out every layer is moved before the bevel is
+            measured. It must be finite when there is a bevel. A negative
+            offset is a lip inward.
 
     Raises:
         Error: If any option is outside the range given above.
     """
+    require_finite(Float64(depth.value), "An extrusion needs a finite depth")
     require_positive(depth.value, "An extrusion needs a positive depth")
     _check_sweep(steps)
     require_at_least_one(
@@ -839,10 +861,26 @@ def check_extrusion(
     )
     if bevel_enabled and bevel_segments < 1:
         raise Error("A bevel needs at least one band")
-    if bevel_enabled and bevel_thickness.value <= 0:
-        raise Error("A bevel needs a positive thickness")
-    if bevel_enabled and bevel_size.value < 0:
-        raise Error("A bevel cannot reach a negative distance in")
+    if bevel_enabled:
+        require_grid_cells(
+            bevel_segments,
+            1,
+            "A bevel's band count is larger than this port builds",
+        )
+        require_finite(
+            Float64(bevel_thickness.value), "A bevel needs a finite thickness"
+        )
+        # `not (x > 0)`, not `x <= 0`: NaN compares false both ways, so the
+        # <= form would let it through. Finite was checked above.
+        if not (bevel_thickness.value > 0):
+            raise Error("A bevel needs a positive thickness")
+        require_finite(Float64(bevel_size.value), "A bevel needs a finite size")
+        # `not (x >= 0)`, not `x < 0`: NaN compares false both ways.
+        if not (bevel_size.value >= 0):
+            raise Error("A bevel cannot reach a negative distance in")
+        require_finite(
+            Float64(bevel_offset.value), "A bevel needs a finite offset"
+        )
 
 
 def _cap_uvs(
@@ -927,10 +965,11 @@ def extrude(
         up the negative of z, which is three.js's own generator.
 
     Raises:
-        Error: If the depth is not positive, if there are fewer than one
-            step or one curve segment, if a bevel has no thickness, a
-            negative size or fewer than one band, or if the shape cannot
-            be filled in; see `geometries.shape.extract_points`.
+        Error: If the depth is not finite or not positive, if there are
+            fewer than one step or one curve segment, if a bevel has a
+            nonfinite thickness, size, or offset, no thickness, a negative
+            size, or fewer than one band, or if the shape cannot be filled
+            in; see `geometries.shape.extract_points`.
     """
     check_extrusion(
         depth,
@@ -940,6 +979,7 @@ def extrude(
         bevel_thickness,
         bevel_size,
         bevel_segments,
+        bevel_offset,
     )
     var cut = _extrusion_contours(shape, curve_segments)
     # Without a bevel every layer sits on the outline itself, so nothing

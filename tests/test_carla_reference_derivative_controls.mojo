@@ -126,6 +126,10 @@ def test_reference_spiral_rejects_finite_and_overflowing_work_counts() raises:
         var g = with_spiral(_line(), curvature, curvature)
         with assert_raises(contains="work is not representable"):
             _ = g._derivative_at(2.0)
+    # 1e18 fits in an integer. The quadrature would not finish.
+    var finite = with_spiral(_line(), 1e18, 1e18)
+    with assert_raises(contains="spiral work limit"):
+        _ = finite._derivative_at(2.0)
 
 
 def test_reference_sampled_chords_and_rotated_world_derivatives() raises:

@@ -343,9 +343,9 @@ def arc_samples[
         The values, first to last.
 
     Raises:
-        Error: If `divisions` is less than one, the sample count cannot
-            fit in Int, the table has fewer than two entries, or `take`
-            raises.
+        Error: If `divisions` is less than one, above 16777216, the sample
+            count cannot fit in Int, the table has fewer than two entries,
+            or `take` raises.
     """
     var sample_count = curve_sample_count(divisions)
     var out = List[T]()
@@ -552,7 +552,9 @@ struct Curve(Copyable, Movable):
         curve instead of one point past its end.
         """
         var last = len(self.points) - 1
-        var segment = Int(floor(Float32(last) * t))
+        # `Float64`, as JavaScript's number is. A `Float32` product drops
+        # whole segments past 2^24, so `t` of one misses the last point.
+        var segment = Int(floor(Float64(last) * Float64(t)))
         if segment > last - 1:
             segment = last - 1
         return segment
@@ -566,8 +568,9 @@ struct Curve(Copyable, Movable):
         stored points stand in where the spline has nothing beyond them.
         """
         var last = len(self.points) - 1
+        var span = Float64(last) * Float64(t)
         var segment = self._spline_segment(t)
-        var weight = Float32(last) * t - Float32(segment)
+        var weight = Float32(span - Float64(segment))
         var before = self.points[max(segment - 1, 0)]
         var start = self.points[segment]
         var end = self.points[segment + 1]
@@ -660,8 +663,9 @@ struct Curve(Copyable, Movable):
             The points, first to last, in meters.
 
         Raises:
-            Error: If `divisions` is less than one, its sample count cannot
-                fit in Int, or the mutable curve is not valid.
+            Error: If `divisions` is less than one, above 16777216, its
+                sample count cannot fit in Int, or the mutable curve is
+                not valid.
         """
         return parameter_samples[Self.point](self, divisions)
 
@@ -676,8 +680,9 @@ struct Curve(Copyable, Movable):
             last the curve's whole length.
 
         Raises:
-            Error: If `divisions` is less than one, its sample count cannot
-                fit in Int, or the mutable curve is not valid.
+            Error: If `divisions` is less than one, above 16777216, its
+                sample count cannot fit in Int, or the mutable curve is
+                not valid.
         """
         return prefix_lengths(self.sample(divisions))
 
@@ -767,8 +772,9 @@ struct Curve(Copyable, Movable):
             The points, first to last, in meters.
 
         Raises:
-            Error: If `divisions` is less than one, its sample count cannot
-                fit in Int, or the mutable curve is not valid.
+            Error: If `divisions` is less than one, above 16777216, its
+                sample count cannot fit in Int, or the mutable curve is
+                not valid.
         """
         # One table for the whole call. `point_at` builds its own, and
         # asking it once per point rebuilt the same hundreds of samples for

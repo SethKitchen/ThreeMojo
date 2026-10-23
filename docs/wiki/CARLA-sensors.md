@@ -115,7 +115,7 @@ Each sensor has its own `SensorRandom`, seeded with its `noise_seed`. The engine
 
 ### LiDARs
 
-Each laser of a rotating LiDAR fires the points per second times the tick over the channels, rounded half away from zero. The rays sweep the angle that the rotation covers in the tick, from where the last tick stopped.
+Each laser of a rotating LiDAR fires the points per second times the tick over the channels, rounded half away from zero. The quotient is a `Float64`, and a quotient that is not finite or does not fit in an integer is refused. The rays sweep the angle that the rotation covers in the tick, from where the last tick stopped. A channel count above 16777216 is refused. An HSS ray count that does not fit in an integer is refused. A channel count times the rays of one laser that does not fit is refused.
 
 - The semantic LiDAR keeps each hit. A hit holds the point in the sensor's frame, the cosine between the normal and the way back, the actor id and the tag.
 - The ray-cast LiDAR draws a drop-off for each ray before the cast. Each hit then gets exp(-a d), noise along its direction and a drop-off by intensity.
@@ -125,7 +125,7 @@ A tick with no ray to fire sends the last measurement again, as CARLA does.
 
 ### Radar
 
-The radar fires the points per second times the tick, truncated. Each ray draws a radius and an angle inside the two fields of view. A hit gives the depth, the azimuth, the altitude and the velocity toward the radar. That velocity is the hit actor's velocity less the radar's own, along the ray.
+The radar fires the points per second times the tick, truncated. The product is a `Float64`, and a product that is not finite or does not fit in an integer is refused. Each ray draws a radius and an angle inside the two fields of view. A hit gives the depth, the azimuth, the altitude and the velocity toward the radar. That velocity is the hit actor's velocity less the radar's own, along the ray.
 
 ### IMU
 
@@ -160,9 +160,10 @@ A ground-truth camera casts one ray through the center of each pixel.
 - Instance segmentation writes the tag in red and the low 16 bits of the actor id in green and blue.
 - Normals write the normal in the view frame: x right, y up and z toward the camera.
 - Optical flow gives the move of each pixel's point since the last frame, in normalized device units.
+- An optical flow image whose pixel count does not fit in an integer is refused.
 - RGB is a shaded stand-in: the tag's CityScapes color times the light on the surface. The [rendering tier](CARLA) draws the real image.
 
-The event camera compares the log intensity of each pixel with the last frame. Each crossing of the threshold gives an event with a time inside the tick.
+The event camera compares the log intensity of each pixel with the last frame. Each crossing of the threshold gives an event with a time inside the tick. A step that does not change either gray level is refused.
 
 `DVSCamera.simulate` takes the frame time as a `Duration64`, so a short tick late in a run keeps its Float64 digits. The time must be finite, nonnegative and at most 9.2e9 seconds, about 291 years. The interpolation inside a tick uses `Float32` nanoseconds, as CARLA does, and can overshoot the tick slightly. Below that cap every event time still fits in an `Int`.
 

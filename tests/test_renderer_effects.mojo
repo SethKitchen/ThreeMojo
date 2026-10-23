@@ -234,6 +234,15 @@ def test_the_brightness_and_the_character_it_picks() raises:
     assert_equal(ascii_index(0.5, 10, False), 4)
     assert_equal(ascii_index(0, 10, True), 0)
     assert_equal(ascii_index(1, 10, True), 9)
+    # A `Float32` count of 16777218 loses a character. The dark pixel
+    # must name the last one, and a count past an integer is refused.
+    assert_equal(ascii_index(0, 16777218, False), 16777217)
+    with assert_raises(contains="does not fit"):
+        _ = ascii_index(0, Int.MAX, False)
+    with assert_raises(contains="does not fit"):
+        _ = ascii_index(Float32(1e20), 10, False)
+    with assert_raises(contains="does not fit"):
+        _ = ascii_index(nan[DType.float32](), 10, False)
 
 
 def test_a_character_set_splits_and_falls_back() raises:
@@ -248,6 +257,15 @@ def test_a_character_set_splits_and_falls_back() raises:
     assert_equal(len(ascii_characters(" ░█", False)), 3)
     assert_equal(ascii_size(100, 0.15), 15)
     assert_equal(ascii_size(3, 0.15), 0)
+    # A `Float32` product of 16777217 is 16777216. JavaScript keeps the
+    # extra pixel. A product at 2^63, below `-2^63`, or not finite is refused.
+    assert_equal(ascii_size(16777217, 1), 16777217)
+    with assert_raises(contains="does not fit"):
+        _ = ascii_size(Int.MAX, 1)
+    with assert_raises(contains="does not fit"):
+        _ = ascii_size(Int.MIN, 1.5)
+    with assert_raises(contains="does not fit"):
+        _ = ascii_size(1, nan[DType.float32]())
 
 
 def test_shrink_averages_by_alpha() raises:

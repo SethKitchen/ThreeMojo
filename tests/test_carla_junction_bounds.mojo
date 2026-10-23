@@ -13,6 +13,7 @@ from extensions.carla.map import Map, Waypoint
 from extensions.carla.map_builder import MapBuilder, junction_box
 from extensions.carla.mesh_factory import junctions_bounding_boxes
 from extensions.carla.polynomial import CubicPolynomial
+from extensions.carla.road import LaneKey
 from extensions.carla.road_info import (
     ConId,
     JuncId,
@@ -274,6 +275,100 @@ def test_spiral_poly3_and_param_poly3_interiors() raises:
                         x - 1.75 * sin(theta),
                         -y - 1.75 * cos(theta),
                     )
+
+
+def _crossing() raises -> Map:
+    var b = MapBuilder()
+    for id in [1, 2]:
+        var r = _road(b, id, 90, 1)
+        b.add_road_geometry_arc_si(
+            r, 0, 0, -20.0 * Float64(id - 1), 0, 90, PI / 90.0
+        )
+        if id == 2:
+            b.roads[r].sections[0].lanes[0].successor = LaneId(1)
+            for n in [1, 2]:
+                var sec = b.add_road_section_si(
+                    r, SectionId(n), Float64(n) * 30.0
+                )
+                _ = b.add_road_section_lane(
+                    r,
+                    sec,
+                    LaneId(1),
+                    LANE_DRIVING,
+                    False,
+                    LaneId(1),
+                    LaneId(1),
+                )
+                b.create_lane_width_si(
+                    b.lane_si(RoadId(2), LaneId(1), Float64(n) * 30.0),
+                    Float64(n) * 30.0,
+                    3.5,
+                    0,
+                    0,
+                    0,
+                )
+    _connect(b, [1, 2])
+    return b.build()
+
+
+def test_a_sign_check_refuses_a_lane_it_would_walk_twice() raises:
+    var wide_map = _crossing()
+    # A length past one lap is refused before the walk starts.
+    wide_map.road(RoadId(2)).length = 1e20
+    var wide = List[TriggerBox]()
+    with assert_raises(contains="more than once"):
+        _check_boxes(wide_map, RoadId(1), List[Int](), wide)
+    var map = _crossing()
+    ref conflict = map.road(RoadId(2))
+    # Lane 1 runs against s, so the ring joins its last section to its first.
+    var last = len(conflict.sections) - 1
+    conflict.sections[0].lanes[0].next_lanes.clear()
+    conflict.sections[0].lanes[0].next_lanes.append(
+        LaneKey(
+            RoadId(2),
+            conflict.sections[last].id,
+            conflict.sections[last].lanes[0].id,
+        )
+    )
+    var loop = List[TriggerBox]()
+    with assert_raises(contains="more than once"):
+        _check_boxes(map, RoadId(1), List[Int](), loop)
+    # One billion meters a second does not change the anticipation time.
+    var fast = MapBuilder()
+    for id in [1, 2]:
+        var r = _road(fast, id, 90, 1)
+        fast.add_road_geometry_arc_si(
+            r, 0, 0, -20.0 * Float64(id - 1), 0, 90, PI / 90.0
+        )
+        if id == 2:
+            fast.create_road_speed_opendrive(r, 0.0, "Town", 1e9, "m/s")
+            var sec = fast.add_road_section_si(r, SectionId(1), 45.0)
+            _ = fast.add_road_section_lane(
+                r, sec, LaneId(1), LANE_DRIVING, False, LaneId(1), LaneId(1)
+            )
+            fast.create_lane_width_si(
+                fast.lane_si(RoadId(2), LaneId(1), 45.0), 45.0, 3.5, 0, 0, 0
+            )
+    _connect(fast, [1, 2])
+    var fast_map = fast.build()
+    ref fast_road = fast_map.road(RoadId(2))
+    var fast_last = len(fast_road.sections) - 1
+    fast_road.sections[0].lanes[0].prev_lanes.clear()
+    fast_road.sections[fast_last].lanes[0].prev_lanes.append(
+        LaneKey(
+            RoadId(2),
+            fast_road.sections[0].id,
+            fast_road.sections[0].lanes[0].id,
+        )
+    )
+    var ahead = List[TriggerBox]()
+    with assert_raises(contains="against its lane"):
+        _check_boxes(fast_map, RoadId(1), List[Int](), ahead)
+    # The same predecessor at 40 m/s still shortens the anticipation time.
+    fast_road.info.speeds[0].speed = 40.0
+    var ordinary = List[TriggerBox]()
+    _check_boxes(fast_map, RoadId(1), List[Int](), ordinary)
+    assert_true(len(ordinary) > 0)
 
 
 def test_parametric_tail_and_singular_tangent_fallback() raises:

@@ -93,9 +93,30 @@ comptime CUSTOM_SPLIT = CsmMode(3)
 # three.js's `lerp` weight between the uniform and the logarithmic breaks
 # in a practical split.
 comptime PRACTICAL_LAMBDA = Float32(0.5)
+# The most slices a split walks. `range` of `Int.MAX` never ends, and a
+# count past 2^24 is not an exact `Float32` step.
+comptime MAX_CSM_CASCADES = 16777216
 
 
-def uniform_split(amount: Int, near: Float32, far: Float32) -> List[Float32]:
+def require_csm_cascades(amount: Int) raises:
+    """Refuse a cascade count this port cannot slice.
+
+    Nothing. The call returns when the count is in range. A count below
+    one is refused separately.
+
+    Args:
+        amount: How many slices.
+
+    Raises:
+        Error: If the count is above 16777216.
+    """
+    if amount > MAX_CSM_CASCADES:
+        raise Error("A CSM cascade count is larger than this port slices")
+
+
+def uniform_split(
+    amount: Int, near: Float32, far: Float32
+) raises -> List[Float32]:
     """Return breaks spaced evenly between the planes, three.js's
     `uniformSplit`.
 
@@ -106,7 +127,11 @@ def uniform_split(amount: Int, near: Float32, far: Float32) -> List[Float32]:
 
     Returns:
         `amount` breaks as fractions of `far`, the last one.
+
+    Raises:
+        Error: If `amount` is above 16777216.
     """
+    require_csm_cascades(amount)
     var breaks = List[Float32]()
     for index in range(1, amount):
         breaks.append(
@@ -118,7 +143,7 @@ def uniform_split(amount: Int, near: Float32, far: Float32) -> List[Float32]:
 
 def logarithmic_split(
     amount: Int, near: Float32, far: Float32
-) -> List[Float32]:
+) raises -> List[Float32]:
     """Return breaks spaced by ratio between the planes, three.js's
     `logarithmicSplit`.
 
@@ -129,7 +154,11 @@ def logarithmic_split(
 
     Returns:
         `amount` breaks as fractions of `far`, the last one.
+
+    Raises:
+        Error: If `amount` is above 16777216.
     """
+    require_csm_cascades(amount)
     var breaks = List[Float32]()
     for index in range(1, amount):
         breaks.append(
@@ -141,7 +170,7 @@ def logarithmic_split(
 
 def practical_split(
     amount: Int, near: Float32, far: Float32, weight: Float32
-) -> List[Float32]:
+) raises -> List[Float32]:
     """Return breaks between the uniform and the logarithmic ones,
     three.js's `practicalSplit`.
 
@@ -154,7 +183,11 @@ def practical_split(
 
     Returns:
         `amount` breaks as fractions of `far`, the last one.
+
+    Raises:
+        Error: If `amount` is above 16777216.
     """
+    require_csm_cascades(amount)
     var even = uniform_split(amount, near, far)
     var ratio = logarithmic_split(amount, near, far)
     var breaks = List[Float32]()
@@ -352,11 +385,12 @@ struct CSM(Movable):
         Raises:
             Error: If there is no cascade; the mode is none of the four;
                 the direction is zero or not finite; the furthest depth is
-                not a positive length or the margin not finite; the custom
-                breaks do not fit `CUSTOM_SPLIT`; or a light is refused by
-                `Light.validate`.
+                not a positive length or the margin not finite; the cascade
+                count is above 16777216; the custom breaks do not fit
+                `CUSTOM_SPLIT`; or a light is refused by `Light.validate`.
         """
         require_positive(cascades, "A CSM needs at least one cascade")
+        require_csm_cascades(cascades)
         require_valid(
             mode.is_valid(), "A CSM split mode that is none of the four"
         )

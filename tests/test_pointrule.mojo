@@ -243,6 +243,26 @@ def test_the_bounds_hold_the_covered_pixels_and_little_else() raises:
                 assert_true(after >= last and after <= last + 1)
 
 
+def test_a_center_past_an_integer_lies_past_the_image() raises:
+    # The ordinary square still rounds outward by at most one pixel.
+    assert_equal(first_covered(4.5, 3), 2)
+    assert_equal(last_covered(4.5, 3), 6)
+    # Past 2^63 the cast is not the coordinate. The walk stays off the image.
+    assert_equal(first_covered(Float32(1e20), 1), Int.MAX)
+    assert_equal(last_covered(Float32(1e20), 1), Int.MAX)
+    assert_equal(first_covered(Float32(-1e20), 1), Int.MIN)
+    assert_equal(last_covered(Float32(-1e20), 1), Int.MIN)
+    assert_equal(first_covered(nan[DType.float32](), 1), Int.MAX)
+    assert_equal(last_covered(nan[DType.float32](), 1), Int.MAX)
+    assert_equal(first_covered(inf[DType.float32](), 1), Int.MAX)
+    assert_equal(last_covered(-inf[DType.float32](), 1), Int.MIN)
+    var target = RenderTarget(8, 8, Color(0, 0, 0))
+    rasterize_point(dot(Float32(1e20), 4.5, 3), target)
+    rasterize_point(dot(Float32(-1e20), 4.5, 3), target)
+    rasterize_point(dot(4.5, nan[DType.float32](), 3), target)
+    assert_equal(lit(target), 0)
+
+
 def test_the_mip_level_follows_the_size() raises:
     # An eight-texel image on a two-pixel point: four texels a pixel, two
     # levels down. The longer edge decides.

@@ -19,6 +19,7 @@ from render.css_color import (
 )
 from render.framebuffer import FloatColor
 from render.srgb import LINEAR, SRGB, ColorSpace
+from std.math import inf
 from std.testing import (
     TestSuite,
     assert_almost_equal,
@@ -221,6 +222,22 @@ def test_out_of_range_style() raises:
     assert_equal(
         format_style(FloatColor(-0.0001, 0, 0), LINEAR),
         "color(srgb-linear -0.000 0.000 0.000)",
+    )
+    # A magnitude past 2^63 used to be cast with `Int`, which is not the
+    # number. `toFixed` writes the digits, and an exponent from 1e21.
+    var wide = FloatColor(Float32(-1e16), Float32(0), Float32(0))
+    assert_equal(format_style(wide), "rgb(-32946000919894425600,0,0)")
+    assert_equal(
+        format_style(FloatColor(Float32(1e20), Float32(0), Float32(0)), LINEAR),
+        "color(srgb-linear 100000002004087734272.000 0.000 0.000)",
+    )
+    assert_equal(
+        format_style(FloatColor(Float32(1e22), Float32(0), Float32(0)), LINEAR),
+        "color(srgb-linear 9.999999778196308e+21 0.000 0.000)",
+    )
+    assert_equal(
+        format_style(FloatColor(-inf[DType.float32](), Float32(0), Float32(0))),
+        "rgb(-Infinity,0,0)",
     )
 
 

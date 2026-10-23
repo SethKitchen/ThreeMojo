@@ -133,7 +133,7 @@ Otherwise the pass finds the edge through the pixel. It walks along the edge in 
 
 ### SMAA
 
-`smaa_pass` is three.js's `SMAAPass` in its three stages. Each stage is a function that you can call on its own.
+`smaa_pass` is three.js's `SMAAPass` in its three stages. Each stage is a function that you can call on its own. A frame below one pixel, or whose pixel count does not fit in an integer, is refused.
 
 1. `smaa_edges` marks an edge on the left or the top of a pixel. The step to that neighbor must be at least 0.1 in some channel. It must also be at least half the largest step to the four neighbors and to the pixels two to the left and two above.
 2. `smaa_weights` walks each edge to its two ends and reads the edges that cross it there. `smaa_area` turns that pattern and the two distances into two weights. A vertical edge is a horizontal edge on the transposed map.
@@ -213,10 +213,10 @@ A pixel with no normal in the attachment takes one from the depth. So does every
 
 `ssao_pass` is three.js's `SSAOPass`. The pass draws the scene. Then, for each pixel that holds a surface, it tests a kernel of samples in the hemisphere above the surface.
 
-1. `ssao_kernel(size, seed)` is `generateSampleKernel`. Each sample is a random direction above the surface. The `i`th of `n` samples has a length of 0.1 + 0.9 (i / n)².
+1. `ssao_kernel(size, seed)` is `generateSampleKernel`. Each sample is a random direction above the surface. The `i`th of `n` samples has a length of 0.1 + 0.9 (i / n)². A kernel above 16777216 samples is refused.
 2. `ssao_noise(seed)` is `generateRandomKernelRotations`. It gives 16 values that repeat over the frame every four pixels. Each value turns the kernel about the normal.
 3. `ssao_occlusion` is `SSAOShader`. The kernel is scaled by `kernel_radius` and set on the surface. A sample occludes when the frame's linear depth where it lands is in front of it. The difference must be more than `min_distance` and less than `max_distance`.
-4. `ssao_blur` is `SSAOBlurShader`. It averages the five by five pixels around each pixel.
+4. `ssao_blur` is `SSAOBlurShader`. It averages the five by five pixels around each pixel. A frame whose pixel count does not fit in an integer is refused.
 
 The blurred value multiplies the light of each pixel. Alpha is kept. `kernel_radius` is a `Length`. `min_distance` and `max_distance` are fractions of the camera's near-to-far range, as in three.js.
 
@@ -226,7 +226,7 @@ The blurred value multiplies the light of each pixel. Alpha is kept. `kernel_rad
 
 - `sao_sample_occlusion` is `getOcclusion`. It returns the slope toward the sample, less `bias`, over the scaled distance. The result is divided by one plus that distance squared.
 - The occlusion is the average of the samples that land on a surface, scaled by `intensity`. A pixel with no such sample keeps its light.
-- With `blur` on, `depth_limited_blur` is `DepthLimitedBlurShader`. It blurs down, then across, over `blur_radius` pixels with `blur_std_dev`. `blur_weights` is `BlurShaderUtils.createSampleWeights`. On each side, the blur stops at the first neighbor whose distance differs by more than `blur_depth_cutoff` of the range.
+- With `blur` on, `depth_limited_blur` is `DepthLimitedBlurShader`. It blurs down, then across, over `blur_radius` pixels with `blur_std_dev`. `blur_weights` is `BlurShaderUtils.createSampleWeights`. On each side, the blur stops at the first neighbor whose distance differs by more than `blur_depth_cutoff` of the range. A blur radius above 16777216 is refused.
 
 One minus the occlusion multiplies the light of each pixel. `kernel_radius` is in pixels, as in three.js.
 
@@ -236,7 +236,9 @@ One minus the occlusion multiplies the light of each pixel. `kernel_radius` is i
 
 The pass walks the ray across the screen one pixel at a time. The first surface that the ray passes behind is a hit. The surface must be within `thickness` of the ray, or within three pixels' width. With `infinite_thick` on, every surface behind the ray is a hit. A hit surface must face the ray. A hit farther than `max_distance` from the plane ends the walk with no reflection.
 
-The strength of a reflection starts at `opacity`. With `distance_attenuation` on, it fades with the square of the distance. With `fresnel` on, it fades as the view meets the surface square on. With `blur` on, `ssr_blur` is `SSRBlurShader`, applied twice. The pass lays each reflection over the light by its strength, as three.js's `NormalBlending` does.
+The longest walk is the frame's diagonal. Its square is a `Float64`, so a wide frame does not wrap.
+
+The strength of a reflection starts at `opacity`. With `distance_attenuation` on, it fades with the square of the distance. With `fresnel` on, it fades as the view meets the surface square on. With `blur` on, `ssr_blur` is `SSRBlurShader`, applied twice. The pass lays each reflection over the light by its strength, as three.js's `NormalBlending` does. A frame whose pixel count does not fit in an integer is refused.
 
 With `selective` on, only the objects on the `selects` layers reflect. three.js takes a list of objects and draws a metalness mask. This port draws the selected layers alone, as the outline pass does, and a pixel that they do not cover reflects nothing.
 
@@ -292,8 +294,8 @@ With `use_pattern_texture` on, the selected objects are filled with a pattern. T
 `check_ssao`, `check_sao`, `check_ssr` and `check_outline` refuse settings that no pass can use. `check_pass` calls all four, so `add_pass` and `render` call them too.
 
 - Every check refuses a setting that is not finite, and an output that is none of the six.
-- `check_ssao` refuses a negative radius or distance, and a kernel of no samples.
-- `check_sao` refuses a negative intensity, minimum resolution, blur radius or cutoff. It refuses a scale, kernel radius or deviation that is not positive.
+- `check_ssao` refuses a negative radius or distance, and a kernel of no samples. It refuses a kernel above 16777216 samples.
+- `check_sao` refuses a negative intensity, minimum resolution, blur radius or cutoff. It refuses a scale, kernel radius or deviation that is not positive. It refuses a blur radius above 16777216.
 - `check_ssr` refuses an opacity outside zero to one, a negative thickness, and a reach that is not positive.
 - `check_outline` refuses a negative color channel, strength, glow or period, and a thickness that is not positive.
 - `DepthView` refuses a size that is not positive and a depth of the wrong length. It refuses a list of normals of the wrong length. It refuses a near distance that is not before the far distance, and a projection with no inverse.
@@ -345,7 +347,7 @@ That is three.js's masking example. The texture fills only the pixels that the o
 
 - The blur comes from the lens: the focal length, the f-stop and the distance to the focal plane. With `manual_dof`, it comes from the fixed near and far ranges of the shader instead.
 - With `shader_focus`, the focal plane is the depth at `focus_u`, `focus_v`. Otherwise it is `focal_depth`, in meters.
-- Each ring of taps holds `samples` times its number of taps. A tap is fringed by `fringe`, and a bright tap is raised by `threshold` and `gain`.
+- Each ring of taps holds `samples` times its number of taps. A tap is fringed by `fringe`, and a bright tap is raised by `threshold` and `gain`. A ring and sample count of more than 16777216 taps is refused.
 - `pentagon`, `depth_blur`, `show_focus` and `vignetting` are the shader's own switches.
 
 `texture_width` and `texture_height` of zero read the frame's size. three.js starts them at one and has the caller set them. The shader's `bdepth` spells one offset `vec2( wh.x -wh.y )`, and the port keeps that.
@@ -358,18 +360,20 @@ That is three.js's masking example. The texture fills only the pixels that the o
 
 `classic_bloom_pass` is three.js's `BloomPass`. `bloom_pass` is `UnrealBloomPass`. The frame is blurred across and then up by `ConvolutionShader`, with `kernel_size` taps 1/512 of the texture apart. The kernel is `buildKernel( sigma )`, at most 25 taps, and the uniforms past it are zero. The blur, times `strength`, is added with three.js's additive blend, so the added light is the blur times the strength twice.
 
+A sigma of 1e20 is cut at 25 taps.
+
 These three passes run on the host in a `GpuComposer` frame, as the other passes that draw depth do.
 
 ### Glitch
 
 `glitch_pass(size, seed)` is three.js's `GlitchPass`. Each frame that `render` draws advances it. The draws come from `SeededRandom`, in three.js's order.
 
-1. `GlitchSettings(size, seed)` is the constructor. It draws the displacement map, then the first trigger from 120 to 240.
+1. `GlitchSettings(size, seed)` is the constructor. It draws the displacement map, then the first trigger from 120 to 240. A side below zero or above 4096 leaves the map undrawn.
 2. `glitch_uniforms` is the start of `render`. A frame whose count is a multiple of the trigger is wild: a large shift, a wide tear and a new trigger. With `go_wild` on, every frame is wild.
 3. The frames in the first fifth after a wild frame glitch a little. The other frames are not changed.
 4. `glitch_light` is `DigitalGlitch`. It tears a row band and a column band, and pushes the frame by the map. It moves red and blue apart and adds snow.
 
-`glitch_heightmap(size, seed)` returns the displacement map. It is read with the nearest texel, held at the edges.
+`glitch_heightmap(size, seed)` returns the displacement map. It is read with the nearest texel, held at the edges. A side below zero or above 4096 is refused.
 
 ### Halftone
 
@@ -405,6 +409,8 @@ A mask pass has `clear` on, as three.js's has. With `clear` off, the stencil is 
 `clear_pass(color)` is three.js's `ClearPass`. `clear_light` sets the light to the color, the depth to far, and the stencil to zero. The color is in sRGB, and its alpha is three.js's `clearAlpha`.
 
 `texture_pass(texture, opacity)` is three.js's `TexturePass`. The texture is a `TextureId` in the assets that `render` is given. `texture_light` scales the texture by `opacity` and draws it over the frame, alpha included. Below an opacity of one, the frame keeps one minus the scaled alpha of its color. At an opacity of one, the texture replaces the frame. That is `CopyShader` with three.js's premultiplied normal blending, which is on only below an opacity of one.
+
+A frame below one pixel, or whose pixel count does not fit, is refused.
 
 ### LUT
 
@@ -489,10 +495,12 @@ var image = composer.render(renderer, scene, assets, camera)
 
 `gtao_pass` is three.js's `GTAOPass`. Put it after a `render_pass`. It draws the depth and the normals itself. The fields of `GtaoSettings` are three.js's parameters, with its defaults.
 
-1. `gtao_occlusion` is `GTAOShader`. It cuts the hemisphere above each surface into three slices, or five for thirty samples or more. In each slice it finds the highest horizon both ways, and it integrates the visible arc against the normal.
-2. `gtao_noise` turns the slices from pixel to pixel by a five by five magic square, as `generateMagicSquareNoise` does.
-3. `gtao_denoise` is `PoissonDenoiseShader`. It averages sixteen taps on a Poisson disk, each weighed by how like the pixel it is.
+1. `gtao_occlusion` is `GTAOShader`. It cuts the hemisphere above each surface into three slices, or five for thirty samples or more. In each slice it finds the highest horizon both ways, and it integrates the visible arc against the normal. A sample count above 16777216 is refused.
+2. `gtao_noise` turns the slices from pixel to pixel by a five by five magic square, as `generateMagicSquareNoise` does. A side above 4095 is refused.
+3. `gtao_denoise` is `PoissonDenoiseShader`. It averages sixteen taps on a Poisson disk, each weighed by how like the pixel it is. A noise texture above 4096 texels a side is refused.
 4. With the default output, the frame is multiplied by the result, mixed toward one by `blend_intensity`. The other five outputs are the SSAO pass's. See [Outputs](#outputs).
+
+The noise grid's side is the greatest integer square that fits in the list. A length of no texels is refused.
 
 ### Transition
 
@@ -504,7 +512,7 @@ With a texture, a threshold sweeps across the texture's red channel as the ratio
 
 ### Cube texture
 
-`cube_texture_pass(cube, opacity)` is three.js's `CubeTexturePass`. `cube_overlay` reads the cube in the direction of each pixel's ray. The camera's position does not change it. `cube_texture_light` draws it over the frame as the texture pass draws.
+`cube_texture_pass(cube, opacity)` is three.js's `CubeTexturePass`. `cube_overlay` reads the cube in the direction of each pixel's ray. The camera's position does not change it. `cube_texture_light` draws it over the frame as the texture pass draws. A frame below one pixel, or whose pixel count does not fit, is refused.
 
 ### Save and shader
 
@@ -531,7 +539,7 @@ composer.add_pass(step^)
 ### Validation of the scene and shader passes
 
 - `check_pixelated` refuses a pixel size below one, and an edge strength that is negative or not finite.
-- `check_gtao` refuses an output that is not named and a setting that is not finite. It refuses a radius, thickness, scale or phi that is not positive, and a fall-off outside zero to one. It refuses a negative intensity or exponent, fewer than two samples, and a denoise radius below one pixel.
+- `check_gtao` refuses an output that is not named and a setting that is not finite. It refuses a radius, thickness, scale or phi that is not positive, and a fall-off outside zero to one. It refuses a negative intensity or exponent, fewer than two samples, and a denoise radius below one pixel. It refuses more than 16777216 samples.
 - `check_transition` refuses a setting that is not finite, and a threshold that is not positive.
 - `check_shader` refuses `NO_NODES`, and a saved sampler that names no pass.
 - `check_pass` refuses a cube texture pass with `NO_CUBE_TEXTURE`, and a transition pass that reads a texture with `NO_TEXTURE`.
@@ -591,6 +599,7 @@ composer.add_pass(god_rays_pass(Vector3(0, 1000, -1000)))
 
 - `check_effect` refuses an effect or a mirror side that is not named, and a uniform that is not finite. It refuses a contrast of one or more, where the shader divides by zero. It refuses a saturation above one and sides that are not positive.
 - `check_god_rays` refuses a setting that is not finite, a negative intensity and a filter length that is not positive. It refuses a resolution scale outside above zero to one.
+- `god_rays_size` multiplies the frame side by the scale in `Float64` and cuts toward zero. It refuses a product that is not finite or does not fit in an integer.
 
 `ShaderEffect` and `MirrorSide` are types. A bare number does not compile. `tests/compile_fail/` proves it.
 
@@ -616,15 +625,19 @@ Each pass keeps its settings in `display`, a `DisplaySettings`, with three.js's 
 - A blur and the chromatic aberration replace the frame, as a node set as the output does.
 - The anamorphic streak and the lens flare are added to the frame, as three.js's examples add them to the scene pass.
 - A node that draws into a smaller target is worked out at that size and read back bilinear.
+- `scaled_size` rounds in `Float64`, as `Math.round` does. A side past 2^24 keeps its whole pixels. A product that does not fit in an integer is refused.
+- A scaled width times height that does not fit in an integer is refused.
 - The three blurs take `premultiplied_alpha`, three.js's `premultipliedAlpha`. Off, they blur straight color, as three.js's texture holds it. The alpha is blurred too, so the stored light is scaled by it.
 
-`GaussianBlurNode`'s weights are not normalized, as three.js leaves them. So a blur of an even frame is a little darker than the frame. `hashBlur` turns each tap's angle into degrees and takes the cosine of that, as the node does.
+`GaussianBlurNode`'s weights are not normalized, as three.js leaves them. So a blur of an even frame is a little darker than the frame. `hashBlur` turns each tap's angle into degrees and takes the cosine of that, as the node does. A kernel of more than 16777216 weights is refused. A hash blur above 16777216 repeats is refused. An anamorphic sample count or a ghost count above 16777216 is refused.
+
+A box blur above 2047 taps from the center is refused.
 
 `dof_pass` is three.js r186's `DepthOfFieldNode`, in its five stages. Each pixel's circle of confusion is `smoothstep(0, focal_length, abs(distance - focus_distance))`, from its view distance. The circle is kept apart for the near field and the far field.
 
 The near field's circle is blurred by `gaussianBlur(coc, 1, 2)` and halved in size. Then each field blurs the frame at half size with 64 taps on a golden-angle spiral, spread by its circle. It spreads the brightest of 16 more taps of that. The composite mixes the far blur over the frame and the near blur over that, each by twice its circle, at most one.
 
-`denoise_pass` is three.js r186's `DenoiseNode` over the frame. The composer draws its frame with a normal attachment while the pass is on. Each pixel that holds a surface averages 16 taps on a disk, which a noise texture turns. Each tap weighs by how like the pixel it is in luminance, in depth along the normal, and in normal.
+`denoise_pass` is three.js r186's `DenoiseNode` over the frame. The composer draws its frame with a normal attachment while the pass is on. Each pixel that holds a surface averages 16 taps on a disk, which a noise texture turns. Each tap weighs by how like the pixel it is in luminance, in depth along the normal, and in normal. The noise is a 64 by 64 grid. A shorter list is refused.
 
 The node's texture coordinate grows down the image, so its disk is upside down against the WebGL `PoissonDenoiseShader`. The node reads the noise as the angle itself, where the shader multiplies it by two pi. This port does both as the node does. The noise is seeded, as the [GTAO pass's](#gtao) is.
 
@@ -642,7 +655,7 @@ Each pixel with a surface and some metalness sends a ray along its reflection. T
 
 A hit reads the frame's color there. The color is scaled by the metalness, by the square of the part of `max_distance` that is left, and by three.js's Fresnel term, `(dot(incident, reflected) + 1) / 2`. The light is capped at `max_luminance` and scaled by `intensity`.
 
-With `use_roughness` on, the reflections go into a chain of five levels. Each level after the first is a box blur, a level's number of pixels apart. The frame reads the chain at the level that its roughness squared, times four, gives. This is how the example reads the node through its `roughnessNode`.
+With `use_roughness` on, the reflections go into a chain of five levels. Each level after the first is a box blur, a level's number of pixels apart. The frame reads the chain at the level that its roughness squared, times four, gives. This is how the example reads the node through its `roughnessNode`. A blur whose pixel count does not fit in an integer is refused. A blur reach above 2047 taps is refused.
 
 The node's stochastic mode, its environment sampling, its history and its binary refinement are not ported. The example leaves all four off. The pass runs on the host in a `GpuComposer` frame.
 
@@ -650,7 +663,7 @@ The node's stochastic mode, its environment sampling, its history and its binary
 
 The motion blur reads the frame's [velocity attachment](Render-target-and-framebuffer#velocity). The composer draws its frame with one while a motion blur pass is on. The pass scales each velocity by `amount`, three.js's example's `blurAmount`.
 
-Then it sums the taps as three.js's node sums them. The first tap is the pixel. Each other tap is `i / (samples - 1) - 0.5` of the velocity along, for `i` from one to `samples`. The sum is divided by `samples`, one less than the taps, as three.js divides it. The node adds the velocity to a texture coordinate that grows down the image, so the vertical taps go against the velocity, as three.js's do.
+Then it sums the taps as three.js's node sums them. The first tap is the pixel. Each other tap is `i / (samples - 1) - 0.5` of the velocity along, for `i` from one to `samples`. The sum is divided by `samples`, one less than the taps, as three.js divides it. The node adds the velocity to a texture coordinate that grows down the image, so the vertical taps go against the velocity, as three.js's do. A sample count above 16777216 is refused.
 
 The camera and the objects move between two calls to `render`. So the first frame is sharp.
 
@@ -709,23 +722,27 @@ A thin feature locks the history against the clip where the depth did not change
 
 `radial_blur_pass` is three.js's `radialBlur`. Each pixel walks `count` taps toward the center. Each tap weighs `weight` times `decay` to the power of its number. The walk starts a share of a step along, from `interleaved_gradient_noise`. The sum over `count`, times `exposure`, is mixed with twice the pixel. An alpha above one is shown as one.
 
+A count above 16777216 is refused.
+
 `bilateral_blur_pass` is three.js's `BilateralBlurNode`: the Gaussian taps of `gaussian_coefficients`, across and then down. Each tap is weighed down by how unlike the center its luminance is, by `sigma_color`.
 
-`depth_aware_blur_pass` is three.js's `depthAwareBlur`: five Gaussian taps along a step. Each tap is weighed down by its distance in depth from the center, relative to `radius`. three.js filters the red channel alone. The pass runs it across and then down over red, green and blue alike.
+`depth_aware_blur_pass` is three.js's `depthAwareBlur`: five Gaussian taps along a step. Each tap is weighed down by its distance in depth from the center, relative to `radius`. three.js filters the red channel alone. The pass runs it across and then down over red, green and blue alike. A side above 16777216 pixels scales a bilinear sample in `Float64`.
 
 `depth_aware_blend_pass` is three.js's `depthAwareBlend`. It reads its blend texture from the assets, as a texture pass does. Eight Poisson taps find the neighbors that share the pixel's depth. Their mean offset pushes the read of the blend texture. three.js calls `normalize` on the mean and does not keep the result. So the push is the mean offset, and this port keeps that.
 
 ### SSGI
 
-`ssgi_pass` is three.js's `SSGINode`. The composer draws its frame with a normal attachment while the pass is on. Each pixel with a surface cuts the hemisphere over it into `slice_count` slices. It walks `step_count` taps each way along each slice.
+`ssgi_pass` is three.js's `SSGINode`. The composer draws its frame with a normal attachment while the pass is on. Each pixel with a surface cuts the hemisphere over it into `slice_count` slices. It walks `step_count` taps each way along each slice. A slice count or a step count above 16777216 is refused.
 
 The angles to each tap's front and back cover some of 32 sectors. The sectors that a tap covers first occlude the pixel and send it the tap's light. The AO is the share of the sectors covered, to the power of `ao_intensity`. The light is scaled by `gi_intensity` and held at a luminance of seven. The temporal filter turns the slices and offsets the taps each frame, as three.js's `frameId` does.
+
+A sector span past the 32 sectors covers the whole slice. A span that is not a positive number covers none. A start past the slice covers none.
 
 three.js's example mixes the AO and the light with the scene and its diffuse color. The frame has no diffuse color attachment, so the pass takes the frame's own color for it: `frame * ao + frame * gi`. The AO is kept in eight bits, as three.js's `RedFormat` target keeps it.
 
 ### The SSGI denoiser
 
-`ssgi_pass(denoise=True)` runs the raw signal through three.js's `TemporalReprojectNode` and then its `RecurrentDenoiseNode`, in their diffuse mode. The composer draws its frame with a velocity attachment too. The denoised result is the next frame's history, as the example's `setHistoryTexture` makes it. The AO stays the raw signal's.
+`ssgi_pass(denoise=True)` runs the raw signal through three.js's `TemporalReprojectNode` and then its `RecurrentDenoiseNode`, in their diffuse mode. The composer draws its frame with a velocity attachment too. The denoised result is the next frame's history, as the example's `setHistoryTexture` makes it. The AO stays the raw signal's. A frame below one pixel, or whose pixel count does not fit in an integer, is refused. A denoise depth coordinate that does not fit in an integer reads the edge.
 
 1. The reprojection reads the history where the velocity says that the pixel was, from four texels. Each texel weighs by how well its surface matches the pixel's plane and normal.
 2. It clips the history toward the neighbors' box in YCoCg. The confidence falls with the clip, with motion and where the reprojection stretches the image. Its alpha is one over the frames that it holds.
@@ -750,7 +767,7 @@ three.js blends every fragment of an object into its targets. This port draws ea
 
 ### Retro
 
-`retro_pass` is three.js's `RetroPassNode`. It draws the scene at a quarter of the frame's size, with the renderer's `snap_vertices` on. Each corner is then rounded to a whole pixel from the center of the screen, as three.js's vertex node rounds it. The small image is kept in eight bits and shown with nearest filtering.
+`retro_pass` is three.js's `RetroPassNode`. It draws the scene at a quarter of the frame's size, with the renderer's `snap_vertices` on. Each corner is then rounded to a whole pixel from the center of the screen, as three.js's vertex node rounds it. The center of a side above 16777216 pixels is a `Float64`. The small image is kept in eight bits and shown with nearest filtering.
 
 ### Importance-sampled environment
 
@@ -819,6 +836,8 @@ The outline meshes, their materials and their programs are added to the scene an
 
 - `StereoEffect.render` refuses a renderer narrower than two pixels. `set_eye_separation` refuses a negative separation and keeps the old one.
 - `AsciiEffect` refuses a resolution that is not finite, or not above zero and at most one. `asciify` refuses an image that shrinks to nothing.
+- `ascii_size` multiplies in `Float64`, as `Math.floor` does. It refuses a product that does not fit in an integer.
+- `ascii_index` multiplies in `Float64`, as `Math.floor` does. It refuses an index that does not fit in an integer.
 - `check_outline_parameters` refuses a thickness or an alpha that is not finite, a negative thickness, and an alpha outside zero to one. `set_parameters` refuses a negative material id.
 
 ### How the renderer effects differ from three.js

@@ -13,7 +13,8 @@ double-width entrance in its longest outside wall.
 
 `add_windows` puts a row of windows in every outside wall, one per bay.
 The bays divide the wall evenly into the fewest bays no wider than the
-bay width. Each window leaves a pier between it and the next.
+bay width. A wall that needs more than 16777216 bays is refused. Each
+window leaves a pier between it and the next.
 
 Both read the shared faces of the cell complex, so a door always joins
 the two rooms whose wall it is in.
@@ -201,7 +202,8 @@ def add_windows(mut building: Building, options: WindowOptions) raises -> Int:
         The number of windows added.
 
     Raises:
-        Error: If the options are not valid.
+        Error: If the options are not valid, or a wall needs more windows
+            than this port cuts.
     """
     options.check()
     var bay = options.bay.to(METER)
@@ -218,6 +220,8 @@ def add_windows(mut building: Building, options: WindowOptions) raises -> Int:
         var frame = building.wall_frame(id)
         if sill + height > frame.height:
             continue
+        if not (frame.length / bay < Float64(16777216)):
+            raise Error("A window count is larger than this port cuts")
         var count = Int(frame.length / bay)
         if Float64(count) * bay < frame.length:
             count += 1

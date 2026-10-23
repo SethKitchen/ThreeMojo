@@ -82,6 +82,8 @@ comptime _EPSILON = 0.00001
 comptime _DEFAULT_SPEED = Float32(40)
 # How far ahead in time the check boxes reach before a crossing lane.
 comptime _ANTICIPATION_TIME = Float32(0.1)
+# One lap of a lane, in steps. A second lap does not finish.
+comptime _MAX_SIGN_STEPS = 16777216
 
 
 @fieldwise_init
@@ -230,7 +232,8 @@ def traffic_light_boxes(map: Map, id: SignalId) raises -> List[TriggerBox]:
         The boxes.
 
     Raises:
-        Error: If the id is not valid.
+        Error: If the id is not valid, or a lane range is larger than
+            this port walks.
     """
     var out = List[TriggerBox]()
     for reference in signal_references(map, id):
@@ -284,12 +287,21 @@ def _check_boxes(
             var step = Float64(2 * size)
             out.append(_cube(map, w, size))
             var next = w
+            var span = map.road(w.road_id).length
+            # A second lap of this lane does not finish.
+            if not (span / step < Float64(_MAX_SIGN_STEPS)):
+                raise Error("A sign check walks its lane more than once")
+            var budget = Int(span / step) + 3
+            var taken = 0
             while True:
+                if taken >= budget:
+                    raise Error("A sign check walks its lane more than once")
                 var ahead = map.next_meters(next, step)
                 if len(ahead) != 1 or ahead[0].road_id != w.road_id:
                     break
                 next = ahead[0]
                 out.append(_cube(map, next, size))
+                taken += 1
             var queue = List[Tuple[Float32, Waypoint]]()
             for before in map.previous_meters(w, step):
                 queue.append((_ANTICIPATION_TIME, before))
@@ -307,6 +319,12 @@ def _check_boxes(
                 var remaining = Float32(0)
                 if speed > 0:
                     remaining = item[0] - size / speed
+                    # A huge speed leaves this time unchanged, so a ring
+                    # of predecessors never ends.
+                    if not (remaining < item[0]):
+                        raise Error(
+                            "A sign check cannot advance against its lane"
+                        )
                 if remaining > 0:
                     for before in map.previous_meters(item[1], step):
                         queue.append((remaining, before))
@@ -342,7 +360,8 @@ def give_way_boxes(map: Map, id: SignalId) raises -> SignBoxes:
         The boxes.
 
     Raises:
-        Error: If the id is not valid.
+        Error: If the id is not valid, or a lane range is larger than
+            this port walks.
     """
     var out = SignBoxes()
     for reference in signal_references(map, id):
@@ -388,7 +407,8 @@ def speed_limit_boxes(map: Map, id: SignalId) raises -> List[TriggerBox]:
         The boxes.
 
     Raises:
-        Error: If the id is not valid.
+        Error: If the id is not valid, or a lane range is larger than
+            this port walks.
     """
     var out = List[TriggerBox]()
     for reference in signal_references(map, id):

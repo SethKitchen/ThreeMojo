@@ -420,6 +420,9 @@ struct ViewHelper(Movable):
         """Return the disk under a point of the image, if any: the hit
         test of three.js's `handleClick`.
 
+        A side above 16777216 pixels measures the helper's corner in
+        `Float64`.
+
         Args:
             x: Where the point is, in pixels from the image's left edge.
             y: Where the point is, in pixels from the image's top edge.
@@ -437,10 +440,16 @@ struct ViewHelper(Movable):
             width, height, "A view helper needs an image with a size"
         )
         self._orient(camera)
-        var dim = Float32(VIEW_HELPER_DIM)
+        var dim = Float64(VIEW_HELPER_DIM)
         # three.js's `mouse`, from the corner the helper is drawn in.
-        var mouse_x = (x - (Float32(width) - dim)) / dim * 2 - 1
-        var mouse_y = -((y - (Float32(height) - dim)) / dim) * 2 + 1
+        # `Float32(width)` drops a pixel past 2^24, so the corner is measured
+        # in `Float64` and stored after the quotient.
+        var mouse_x = Float32(
+            (Float64(x) - (Float64(width) - dim)) / dim * 2 - 1
+        )
+        var mouse_y = Float32(
+            -((Float64(y) - (Float64(height) - dim)) / dim) * 2 + 1
+        )
         # The ray starts on the near plane, two meters in front of the
         # disks' center, and runs down -z.
         var ray_x = mouse_x * 2

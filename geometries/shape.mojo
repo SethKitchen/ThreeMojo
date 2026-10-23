@@ -48,7 +48,7 @@ from core.buffer_geometry import (
 )
 from core.ordinal import require_positive
 from geometries.earcut import triangulate_shape
-from geometries.surface import indexed_surface, record_kind
+from geometries.surface import indexed_surface, record_kind, require_grid_cells
 from math.matrix_determinant import _determinant3_f32
 from math.path import Shape
 from math.polygon_area import signed_area64
@@ -401,11 +401,17 @@ def extract_points(shape: Shape, curve_segments: Int) raises -> ShapePoints:
         The outline's points and each hole's, as `Path.sample` gives them.
 
     Raises:
-        Error: If `curve_segments` is less than one, if a contour has a
-            nonfinite coordinate, fewer than three distinct corners or no
-            area, or if a hole lies outside the outline or inside another
-            hole, or two contours touch or cross.
+        Error: If `curve_segments` is less than one or above 16777216, if
+            a contour has a nonfinite coordinate, fewer than three distinct
+            corners or no area, or if a hole lies outside the outline or
+            inside another hole, or two contours touch or cross.
     """
+    if curve_segments >= 1:
+        require_grid_cells(
+            curve_segments,
+            1,
+            "A shape's curve segment count is larger than this port builds",
+        )
     var outline = shape.outline_points(curve_segments)
     _ = _corners(outline)
     var holes = List[List[Vector2]]()

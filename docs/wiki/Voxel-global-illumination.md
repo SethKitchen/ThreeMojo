@@ -33,11 +33,11 @@ vxgi_light(frame, gathered, diffuse)
 
 After an update, `world_bounds` is the box the grid covers. `opacity_at` and `radiance_at` read one texel of a level.
 
-`validate` refuses a resolution that is not positive and negative bounces or lights. It refuses a step scale or a distance that is not usable, and an aperture that is not between 0° and 180°.
+`validate` refuses a resolution that is not positive and negative bounces or lights. It refuses a step scale or a distance that is not usable, and an aperture that is not between 0 and 180 degrees. A bounce count above 16777216 is refused.
 
 ## The grid
 
-The longest axis of the bounds gets `resolution` voxels. The resolution is at least 8. Each axis gets one more voxel on each side. Each axis is then rounded up to a multiple of the coarsest level's step. The chain has two levels fewer than the powers of two in the resolution, from one to eight.
+The longest axis of the bounds gets `resolution` voxels. The resolution is at least 8. Each axis gets one more voxel on each side. Each axis is then rounded up to a multiple of the coarsest level's step. The chain has two levels fewer than the powers of two in the resolution, from one to eight. A grid whose voxel count does not fit in an integer is refused.
 
 A volume is a flat list of four floats a voxel. Level zero comes first, then each smaller level. `VxgiGrid` in `lights/vxgi_cone_tracer.mojo` gives the size and the start of each level.
 
@@ -50,10 +50,13 @@ A volume is a flat list of four floats a voxel. Level zero comes first, then eac
 - A lit material glows with `emissive` times `emissive_intensity`, times its `emissive_map`.
 - A triangle that is too faint, of no size, or outside the bounds is skipped.
 - A triangle with an edge longer than 16 sub-voxels is split at the middle of that edge.
+- A texture coordinate that is not finite, or that does not fit in an integer, is read at zero.
+
+A triangle is cut to the bounds before it is split, so an edge past the volume does not keep splitting. A corner that is not finite is dropped.
 
 ## Voxelization
 
-Each voxel has two by two by two sub-voxels. A triangle is projected along its dominant axis and rasterized conservatively. A sub-voxel column is covered when its center is within half a sub-voxel of each edge. The triangle's plane then fills the column's depth range. A voxel keeps a bit for each covered sub-voxel, and the last triangle that covers it.
+Each voxel has two by two by two sub-voxels. A triangle is projected along its dominant axis and rasterized conservatively. A sub-voxel column is covered when its center is within half a sub-voxel of each edge. The triangle's plane then fills the column's depth range. A voxel keeps a bit for each covered sub-voxel, and the last triangle that covers it. A coordinate that does not fit in an integer lies past the grid.
 
 The opacity along an axis is a quarter for each of the four sub-voxel columns on that axis that has a bit. The occupancy is an eighth for each bit. A coarser level combines two children along each axis, `1 - (1 - a)(1 - b)`, and averages the pairs across it. The opacity is stored in eight-bit texels, as three.js stores it.
 
@@ -85,7 +88,7 @@ Each bounce traces eight cosine-weighted cones from every occupied voxel through
 
 `render(view, camera_world, scene, assets, frame_id)` updates the volume. Then it gathers a `VxgiFrame`: one occlusion and one irradiance for each pixel. These are three.js's AO and GI textures.
 
-For each pixel, the cones leave the surface one and a half voxels along the normal. Interleaved gradient noise turns them. With temporal filtering on, the noise moves with `frame_id` over a cycle of 64 frames. The mean radiance of the cones times pi is the irradiance. A pixel with no surface keeps the pass's white clear.
+For each pixel, the cones leave the surface one and a half voxels along the normal. Interleaved gradient noise turns them. With temporal filtering on, the noise moves with `frame_id` over a cycle of 64 frames. The mean radiance of the cones times pi is the irradiance. A pixel with no surface keeps the pass's white clear. A cone count above 16777216 is refused, and a stored count outside that range keeps the white clear.
 
 The debug view `VXGI_DEBUG_RADIANCE` shows the first voxel with radiance along the view. `VXGI_DEBUG_OPACITY` shows the first voxel with opacity.
 

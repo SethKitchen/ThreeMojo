@@ -75,7 +75,13 @@ def render_scale(mode: UpscaleMode) raises -> Float64:
 
 
 def _scaled(side: Int, scale: Float64) -> Int:
-    """Return a side at a scale, to the nearest pixel and at least one."""
+    """Return a side at a scale, to the nearest pixel and at least one.
+
+    A scale of one keeps the side. `Float64` of a side at 2^63 rounds up,
+    so adding a half and casting that is not the side.
+    """
+    if scale == 1:
+        return side
     return max(Int(floor(Float64(side) * scale + 0.5)), 1)
 
 

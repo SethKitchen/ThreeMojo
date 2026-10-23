@@ -45,7 +45,7 @@ from extensions.animals.noise import ihash, centered_fbm
 from extensions.animals.options import AnimalOptions, AnimalRandom
 from extensions.animals.rig import Rig
 from extensions.sdf.field import SdfModel
-from extensions.animals.traits import Traits, pick_age, pick_sex
+from extensions.animals.traits import Traits, pick_age, pick_sex, trait_repeats
 from extensions.sdf.vector import (
     V3,
     clamp,
@@ -434,7 +434,8 @@ def snake_sculpt(mut m: SdfModel, rig: Rig, t: Traits) raises:
 
     Raises:
         Error: If the rig lacks a joint or a bone, or the sculpt refuses
-            a primitive.
+            a primitive. A rattlesnake rattle count that is not finite,
+            or above 16777216, is refused.
     """
     var plan = _Plan(t)
     var viper = plan.viper
@@ -741,7 +742,7 @@ def snake_sculpt(mut m: SdfModel, rig: Rig, t: Traits) raises:
         var a = rig.j("v" + String(SPINE - 1))
         var b = rig.j("v" + String(SPINE))
         var d = normalize(b - a)
-        var n_seg = Int(t.get("rattleSegs", Float64(RATTLE_SEGS)))
+        var n_seg = trait_repeats(t.get("rattleSegs", Float64(RATTLE_SEGS)))
         var tip = hw_at[SPINE]
         var seg_l = (RATTLE_LEN / Float64(RATTLE_SEGS)) * t.get("girth")
         # A rattle has one segment in the young, five to eight later.

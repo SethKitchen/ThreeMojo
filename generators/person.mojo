@@ -28,6 +28,7 @@ from generators.utils import (
     PartId,
     Vec3d,
     angle_radians as _a,
+    check_finite,
     length_meters as _l,
     meters,
     part,
@@ -361,9 +362,10 @@ def person_geometry(pose: Pose, height: Length) raises -> BufferGeometry:
 
     Raises:
         Error: If the pose is not one there is, or the height is not
-            positive.
+            finite and positive.
     """
     require_valid(pose.is_valid(), "A pose must be walking or standing")
+    check_finite(meters(height), "A person's height")
     if not meters(height) > 0:
         raise Error("A person's height must be positive")
     var walking = pose == WALK

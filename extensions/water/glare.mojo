@@ -290,7 +290,7 @@ def _normalize_channels(mut spatial: List[Float32], n: Int):
         spatial[i * 3 + 2] /= sum_b
 
 
-def glare_grid_size(n: Int, width: Int, height: Int) -> Tuple[Int, Int]:
+def glare_grid_size(n: Int, width: Int, height: Int) raises -> Tuple[Int, Int]:
     """Return the size of the grid that the glare is computed on.
 
     The image is fitted into three quarters of the kernel's grid, so the star
@@ -304,14 +304,23 @@ def glare_grid_size(n: Int, width: Int, height: Int) -> Tuple[Int, Int]:
 
     Returns:
         The width and the height of the glare grid, each at least 1.
+
+    The fit is a `Float64`. A `Float32` image side past 2^24 changes which
+    side limits the grid, and the rounded side with it.
+
+    Raises:
+        Error: If the image is below one pixel either way. A side of zero
+            makes the fit infinite, and `Int` of that is not a grid size.
     """
-    var fit = Float32(n) * 0.75
-    var scale = fit / Float32(width)
-    var tall = fit / Float32(height)
+    if width < 1 or height < 1:
+        raise Error("A glare grid needs a positive image")
+    var fit = Float64(n) * 0.75
+    var scale = fit / Float64(width)
+    var tall = fit / Float64(height)
     if tall < scale:
         scale = tall
-    var sw = Int(Float32(width) * scale + 0.5)
-    var sh = Int(Float32(height) * scale + 0.5)
+    var sw = Int(Float64(width) * scale + 0.5)
+    var sh = Int(Float64(height) * scale + 0.5)
     if sw < 1:
         sw = 1
     if sh < 1:
@@ -328,11 +337,18 @@ def glare_sample_x(x: Int, sw: Int, width: Int) -> Int:
         width: Image width.
 
     Returns:
-        A column of the image.
+        A column of the image. A grid width below one reads the first
+        column. A coordinate at or past the far side reads the last.
     """
-    var u = (Float32(x) + 0.5) / Float32(sw)
-    # `u` stays below 1, so the product stays inside the image.
-    return Int(u * Float32(width))
+    # A `Float32` width past 2^24 makes the last column's coordinate one,
+    # and the sample lands past the image. The division is a `Float64`.
+    # Past 2^53 that coordinate is one again.
+    if sw < 1 or width < 1:
+        return 0
+    var u = (Float64(x) + 0.5) / Float64(sw)
+    if not (u < 1):
+        return width - 1
+    return Int(u * Float64(width))
 
 
 def glare_sample_y(y: Int, sh: Int, height: Int) -> Int:
@@ -344,10 +360,15 @@ def glare_sample_y(y: Int, sh: Int, height: Int) -> Int:
         height: Image height.
 
     Returns:
-        A row of the image.
+        A row of the image. A grid height below one reads the first row.
+        A coordinate at or past the far side reads the last.
     """
-    var v = (Float32(y) + 0.5) / Float32(sh)
-    return Int(v * Float32(height))
+    if sh < 1 or height < 1:
+        return 0
+    var v = (Float64(y) + 0.5) / Float64(sh)
+    if not (v < 1):
+        return height - 1
+    return Int(v * Float64(height))
 
 
 def glare_cell_x(x: Int, width: Int, sw: Int) -> Int:
@@ -359,10 +380,19 @@ def glare_cell_x(x: Int, width: Int, sw: Int) -> Int:
         sw: The glare grid's width.
 
     Returns:
-        A column of the glare grid.
+        A column of the glare grid. An image or grid width below one
+        reads the first column. A pixel at or past the far side reads
+        the last column.
     """
-    # The last pixel still maps inside the fitted rectangle.
-    return Int(Float32(x) / Float32(width) * Float32(sw))
+    # The last pixel still maps inside the fitted rectangle. A `Float32`
+    # width past 2^24 makes that ratio one, which is past the grid. Past
+    # 2^53 the same ratio is one again.
+    if width < 1 or sw < 1:
+        return 0
+    var ratio = Float64(x) / Float64(width)
+    if not (ratio < 1):
+        return sw - 1
+    return Int(ratio * Float64(sw))
 
 
 def glare_cell_y(y: Int, height: Int, sh: Int) -> Int:
@@ -374,9 +404,15 @@ def glare_cell_y(y: Int, height: Int, sh: Int) -> Int:
         sh: The glare grid's height.
 
     Returns:
-        A row of the glare grid.
+        A row of the glare grid. An image or grid height below one reads
+        the first row. A pixel at or past the far side reads the last row.
     """
-    return Int(Float32(y) / Float32(height) * Float32(sh))
+    if height < 1 or sh < 1:
+        return 0
+    var ratio = Float64(y) / Float64(height)
+    if not (ratio < 1):
+        return sh - 1
+    return Int(ratio * Float64(sh))
 
 
 def glare_convolve(

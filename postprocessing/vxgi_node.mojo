@@ -93,6 +93,9 @@ comptime VXGI_DEBUG_OPACITY = VxgiDebug(2)
 comptime TEMPORAL_SHIFT = Float32(5.588238)
 # The frames the noise cycles over, three.js's `TEMPORAL_CYCLE`.
 comptime TEMPORAL_CYCLE = 64
+# The most cones one pixel traces. A larger count is not an exact
+# `Float32`, and `range` of `Int.MAX` never ends.
+comptime MAX_VXGI_CONES = 16777216
 # The steps of the debug walk, three.js's `512`.
 comptime DEBUG_STEPS = 512
 # The radiance or opacity the debug walk stops at, three.js's `0.01`.
@@ -258,6 +261,22 @@ def _debug_view(
     return Vector3(0, 0, 0)
 
 
+def require_vxgi_cones(count: Int) raises:
+    """Refuse a cone count this port cannot trace.
+
+    Nothing. The call returns when the count is in range. A count below
+    one is refused separately.
+
+    Args:
+        count: How many cones leave each pixel.
+
+    Raises:
+        Error: If the count is above 16777216.
+    """
+    if count > MAX_VXGI_CONES:
+        raise Error("A VXGI cone count is larger than this port traces")
+
+
 def require_vxgi_normals(got: Int, pixels: Int) raises:
     """Refuse a VXGI normal buffer that is not one normal a pixel.
 
@@ -298,7 +317,8 @@ def vxgi_pixel(
 
     Returns:
         The irradiance, red, green and blue, and the occlusion. White and
-        one where the depth is the far plane.
+        one where the depth is the far plane, or where the cone count is
+        not from one through 16777216.
     """
     if depth >= 1:
         return Lanes(1, 1, 1, 1)
@@ -326,7 +346,13 @@ def vxgi_pixel(
         sx + ELEVATION_SHIFT_X, sy + ELEVATION_SHIFT_Y
     )
     var frame = tangent_frame(turned)
-    var count = Int(params[unsafe_offset=PARAM_CONES])
+    var wide = params[unsafe_offset=PARAM_CONES]
+    # `Int` of a float at or past 2^63 is not a cone count, and the walk
+    # does not finish. The far-plane clear is the same white the pixel
+    # returns where there is no surface.
+    if not (wide >= 1 and wide <= Float32(MAX_VXGI_CONES)):
+        return Lanes(1, 1, 1, 1)
+    var count = Int(wide)
     var tan_half = params[unsafe_offset=PARAM_TAN_HALF]
     var reach = params[unsafe_offset=PARAM_TRACE_DISTANCE]
     var ao_distance = params[unsafe_offset=PARAM_AO_DISTANCE]
@@ -453,11 +479,13 @@ struct VXGINode(Movable):
         """Refuse settings three.js's pass cannot use.
 
         Raises:
-            Error: If there are no cones, the aperture is not between zero
-                and a half turn, a number is not finite, the distance is
-                negative, or the debug view is none of the three.
+            Error: If there are no cones, the cone count is above
+                16777216, the aperture is not between zero and a half
+                turn, a number is not finite, the distance is negative,
+                or the debug view is none of the three.
         """
         require_positive(self.cone_count, "A VXGI pass needs at least one cone")
+        require_vxgi_cones(self.cone_count)
         var degrees = self.cone_angle.to(DEGREE)
         if not (isfinite(degrees) and degrees > 0 and degrees < 180):
             raise Error("A VXGI cone must open between 0 and 180 degrees")

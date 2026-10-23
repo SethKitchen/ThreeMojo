@@ -54,6 +54,8 @@ An agent keeps the id of its vehicle. Each call takes the world, so the agent re
 3. A piece that leads to a lane with no piece gets an extra edge to a loose end. A loose end has a negative id.
 4. Where a lane mark lets a vehicle cross to a driving lane of the same road, an edge of weight zero joins the two pieces.
 
+The sampling resolution must be a finite distance more than zero. A step that does not move a waypoint is refused. A lane whose sample count passes 16777216 is refused.
+
 `trace_route` finds a minimum-cost route between the pieces under the two points. The cost is the sum of the graph's sample counts. Lane changes cost zero. This objective does not measure meters, travel time, or the number of lane changes. Changing the sampling resolution can change the preferred route.
 
 The search uses Dijkstra's algorithm, which is A* with a zero heuristic. CARLA's Euclidean heuristic is in meters. It can exceed the remaining sample-count cost, especially across zero-cost lane changes. It can therefore select a more costly route. This port deliberately removes that heuristic, while it keeps the graph costs.
@@ -139,6 +141,8 @@ CARLA bakes its pedestrian mesh offline with a third-party library. This port bu
 - **The funnel algorithm.** The path is pulled tight through the portals. A point is added where the path goes into another area kind.
 - **Area-weighted random points.** A random point is uniform over the area of the polygons that the filter allows.
 
+The mesh resolution must be a finite distance more than zero. A lane section whose station count passes 16777216 is refused.
+
 CARLA's filters decide where a walker can go. Filter 0 keeps a walker off the roads, so it crosses only at crosswalks. Filter 1 lets it cross anywhere, at a cost of 10 a meter on a road. `set_pedestrians_cross_factor` sets the chance that a new walker gets filter 1.
 
 ## The crowd and the routes
@@ -160,6 +164,8 @@ A walker that moves less than 0.5 m in 4 s gets a new random route, as in CARLA.
 - The agents take the world at each call. CARLA's agents keep a reference to the world.
 - The random choices use a seeded minimal-standard generator, not Python's `random` module.
 - A lane change takes `OPTION_CHANGE_LANE_LEFT` or `OPTION_CHANGE_LANE_RIGHT` in place of the strings "left" and "right".
+- A lane plan refuses more than 16777216 steps or lane changes.
+- A step that does not move the plan is a dead end.
 - The constant velocity agent reads its collisions with a `CollisionSensor` at each step. CARLA spawns a sensor actor.
 - The mesh comes from the map, not from a baked file. The crowd's steering and its constants are this port's own.
 - A walker keeps its body in the world. The navigation turns off its gravity and sets its pose at each tick.

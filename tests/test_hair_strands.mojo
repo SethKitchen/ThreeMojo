@@ -79,6 +79,60 @@ def test_a_groom_spec_refuses_bad_counts() raises:
     assert_true(long.longest > GroomSpec(dims).longest)
 
 
+def test_a_changed_groom_count_this_port_cannot_grow_is_refused() raises:
+    var dims = head_muscle_dimensions(_person())
+    var spec = GroomSpec(dims, 4, 0)
+    spec.guides = 0
+    with assert_raises(contains="guides"):
+        _ = groom_hair(dims, spec)
+    spec.guides = 20001
+    with assert_raises(contains="guides"):
+        _ = groom_hair(dims, spec)
+    spec.guides = Int.MAX
+    with assert_raises(contains="guides"):
+        _ = groom_hair(dims, spec)
+    spec.guides = 4
+    spec.followers = -1
+    with assert_raises(contains="followers"):
+        _ = groom_hair(dims, spec)
+    spec.followers = 65
+    with assert_raises(contains="followers"):
+        _ = groom_hair(dims, spec)
+    spec.followers = Int.MAX
+    with assert_raises(contains="followers"):
+        _ = groom_hair(dims, spec)
+    spec.followers = 0
+    spec.root_tries = -1
+    with assert_raises(contains="zero or more"):
+        _ = groom_hair(dims, spec)
+    spec.root_tries = 16777217
+    with assert_raises(contains="larger than this port"):
+        _ = groom_hair(dims, spec)
+    spec.root_tries = Int.MAX
+    with assert_raises(contains="larger than this port"):
+        _ = groom_hair(dims, spec)
+
+
+def test_a_hair_step_that_cannot_grow_is_refused() raises:
+    var dims = head_muscle_dimensions(_person())
+    var spec = GroomSpec(dims, 4, 0)
+    spec.step = 0
+    with assert_raises(contains="positive length"):
+        _ = groom_hair(dims, spec)
+    spec.step = nan[DType.float32]()
+    with assert_raises(contains="positive length"):
+        _ = groom_hair(dims, spec)
+    spec = GroomSpec(dims, 4, 0)
+    spec.step = Float32(1e-20)
+    with assert_raises(contains="larger than this port"):
+        _ = groom_hair(dims, spec)
+    spec = GroomSpec(dims, 4, 0)
+    spec.curl = Float32(0.01)
+    spec.curl_length = 0
+    with assert_raises(contains="positive length"):
+        _ = groom_hair(dims, spec)
+
+
 def test_a_groom_grows_guides_and_followers() raises:
     var dims = head_muscle_dimensions(_person(0.6))
     var groom = groom_hair(dims, GroomSpec(dims, 120, 2))

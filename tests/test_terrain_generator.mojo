@@ -18,7 +18,7 @@ from generators.terrain import (
     TerrainParameters,
     thermal_erode,
 )
-from std.math import nan
+from std.math import inf, nan
 from std.testing import (
     TestSuite,
     assert_almost_equal,
@@ -208,6 +208,15 @@ def test_terrain_parameters_are_checked() raises:
     p.segments = 0
     _refused(p^, "segment")
     p = _terrain()
+    p.segments = 4097
+    _refused(p^, "segment count is larger")
+    p = _terrain()
+    p.octaves = 33
+    _refused(p^, "octave count is larger")
+    p = _terrain()
+    p.talus_passes = 65
+    _refused(p^, "pass count is larger")
+    p = _terrain()
     p.octaves = -1
     _refused(p^, "octave")
     p = _terrain()
@@ -216,6 +225,14 @@ def test_terrain_parameters_are_checked() raises:
     p = _terrain()
     p.gain = nan[DType.float64]()
     _refused(p^, "noise parameter")
+    for bad in [
+        nan[DType.float32](),
+        inf[DType.float32](),
+        -inf[DType.float32](),
+    ]:
+        p = _terrain()
+        p.size = Length(bad, METER)
+        _refused(p^, "finite")
 
 
 def main() raises:

@@ -39,7 +39,7 @@ from std.math import isfinite
 from math.matrix_inverse import adjugate3
 from math.norm import length2, _ordinary_squared
 from math.curve import CUBIC, ELLIPSE, LINE, QUADRATIC, Curve, CurveKind
-from math.curve_checks import require_at_least_one
+from math.curve_checks import MAX_CURVE_DIVISIONS, require_at_least_one
 from math.path import Path, Shape
 from math.vector2 import Vector2, vector2_from_float64
 from render.framebuffer import FloatColor
@@ -214,7 +214,7 @@ struct SvgCurve(Copyable, Movable):
             y = tx * s + ty * c + center[1]
         return SvgVector(x, y)
 
-    def resolution(self, divisions: Int) -> Int:
+    def resolution(self, divisions: Int) raises -> Int:
         """Return how many runs `CurvePath.getPoints` cuts this curve into.
 
         Args:
@@ -223,10 +223,19 @@ struct SvgCurve(Copyable, Movable):
         Returns:
             One for a line, twice `divisions` for an ellipse, and
             `divisions` for a Bezier curve.
+
+        Raises:
+            Error: If an ellipse asks for more than 16777216 runs.
         """
         if self.kind == LINE:
             return 1
         if self.kind == ELLIPSE:
+            # Twice `divisions` wraps past `Int.MAX // 2`, and the sample
+            # loop then does not finish.
+            if divisions > MAX_CURVE_DIVISIONS // 2:
+                raise Error(
+                    "A curve's division count is larger than this port samples"
+                )
             return divisions * 2
         return divisions
 
@@ -241,12 +250,16 @@ struct SvgCurve(Copyable, Movable):
             The points.
 
         Raises:
-            Error: If `divisions` is below one, or `check` refuses the
-                curve.
+            Error: If `divisions` is below one, above 16777216, or `check`
+                refuses the curve.
         """
         require_at_least_one(
             divisions, "SVG: a curve needs at least one division"
         )
+        if divisions > MAX_CURVE_DIVISIONS:
+            raise Error(
+                "A curve's division count is larger than this port samples"
+            )
         var out = List[SvgVector]()
         for d in range(divisions + 1):  # pragma: no branch
             out.append(self.point(Float64(d) / Float64(divisions)))
@@ -456,7 +469,8 @@ struct SvgSubPath(Copyable, Movable):
             The points. None for an outline with no curves.
 
         Raises:
-            Error: If `divisions` is below one, or a curve is refused.
+            Error: If `divisions` is below one, a curve asks for more than
+                16777216 runs, or a curve is refused.
         """
         var out = List[SvgVector]()
         for curve in self.curves:

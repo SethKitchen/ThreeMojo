@@ -22,7 +22,9 @@ from extensions.anatomy.soft_tissue import (
     vessel_tissue,
     arterial_tissue,
     venous_tissue,
+    muscle_tissue,
 )
+from extensions.humanoid.skeleton.soft_tissue import sample_soft_mass
 from extensions.anatomy.tissue import (
     cortical_tissue,
     trabecular_tissue,
@@ -31,7 +33,7 @@ from materials.material import MaterialId, phong_material
 from math.vector3 import Vector3
 from render.framebuffer import Color
 from std.math import inf, nan
-from std.testing import TestSuite, assert_equal, assert_raises
+from std.testing import TestSuite, assert_equal, assert_raises, assert_true
 from units.si import Length, MILLIMETER
 from extensions.humanoid.skeleton.leg.femur.dimensions import (
     FemurField,
@@ -225,6 +227,54 @@ def test_shared_sampler_refuses_invalid_bounds_and_steps() raises:
                 Length(20, MILLIMETER),
                 "test",
             )
+    var flesh = muscle_tissue()
+    for invalid in [inf[DType.float32](), nan[DType.float32]()]:
+        with assert_raises(contains="finite and ordered"):
+            _ = sample_soft_mass(
+                field,
+                Vector3(invalid, 0, 0),
+                Vector3(1, 1, 1),
+                flesh,
+                Length(20, MILLIMETER),
+                "test",
+            )
+        with assert_raises(contains="finite and ordered"):
+            _ = sample_soft_mass(
+                field,
+                Vector3(0, 0, 0),
+                Vector3(1, invalid, 1),
+                flesh,
+                Length(20, MILLIMETER),
+                "test",
+            )
+    with assert_raises(contains="finite and ordered"):
+        _ = sample_soft_mass(
+            field,
+            Vector3(0, 0, 1),
+            Vector3(1, 1, 0),
+            flesh,
+            Length(20, MILLIMETER),
+            "test",
+        )
+    for low_x in [Float32(0), Float32(-3e38)]:
+        with assert_raises(contains="span is too large"):
+            _ = sample_soft_mass(
+                field,
+                Vector3(low_x, 0, 0),
+                Vector3(Float32(3e38), 1, 1),
+                flesh,
+                Length(20, MILLIMETER),
+                "test",
+            )
+    var one = sample_soft_mass(
+        field,
+        Vector3(0, 0, 0),
+        Vector3(0.02, 0.02, 0.02),
+        flesh,
+        Length(20, MILLIMETER),
+        "test",
+    )
+    assert_true(one.mass.value >= 0)
     for value in [
         Float32(0),
         Float32(21),

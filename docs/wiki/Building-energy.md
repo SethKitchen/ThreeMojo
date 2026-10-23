@@ -86,7 +86,7 @@ An azimuth is measured from south, west positive. A longitude and a time zone ar
 
 ### Conduction
 
-`LayeredWall` cuts each layer of a construction into equal elements, with a node at each element boundary. Each element is small enough that its Fourier number α Δt / Δx² is at least `fourier`. A layer gets at most 64 elements. The energy balance of node i is the implicit (backward Euler) form, Incropera section 5.10:
+`LayeredWall` cuts each layer of a construction into equal elements, with a node at each element boundary. Each element is small enough that its Fourier number α Δt / Δx² is at least `fourier`. A layer gets at most 64 elements. A count that does not fit in an integer is still cut at 64. The energy balance of node i is the implicit (backward Euler) form, Incropera section 5.10:
 
 ```text
 C_i (T_i' - T_i) / Δt = K_(i-1) (T_(i-1)' - T_i') + K_i (T_(i+1)' - T_i')

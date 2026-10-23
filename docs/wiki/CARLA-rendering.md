@@ -100,6 +100,8 @@ The road comes from CARLA's mesh factory. Its mesh has one group per surface kin
 
 Buildings stand on lots beside each road, outside the junctions. A lot that comes near a lane or another lot stays empty. A ring of tall buildings far out gives the skyline.
 
+A street lamp spacing must be a finite distance more than zero. A road whose lamp count passes 16777216 is refused. A crosswalk whose stripe count passes 16777216 is refused. A road whose building lots pass 16777216 is refused. A skyline of more than 16777216 buildings is refused.
+
 ## The town package
 
 A CARLA town can be drawn from CARLA's own content: its buildings, streets, plants, poles, props and parked vehicles, each where CARLA puts them. Set `TownSettings.package` to the town's name, such as `Town02`, and load its OpenDRIVE map. When the registry's cache holds `town.Town02`, the package stands in for the procedural roads, lane marks, ground, buildings, trees and lamps. See [CARLA assets](CARLA-assets) for what a package holds.
@@ -168,13 +170,13 @@ Each mapping is a pure function in `render_weather`. The tests check each one ag
 | `dust_storm` | More fog and a more turbid sky. |
 | Sun below the horizon | The street lamps, the lit windows and the car lamps. |
 
-The fog takes the sky's color just above the horizon in each ray's direction. It glows warm toward a low sun and stays blue away from it. The haze dims far surfaces but not the sky.
+The fog takes the sky's color just above the horizon in each ray's direction. It glows warm toward a low sun and stays blue away from it. The haze dims far surfaces but not the sky. A side above 8388608 pixels measures the ray's pixel center in `Float64`.
 
 ## Light
 
 The town is lit in physical units. The sun gives 127.5 klx outside the air, less `exp(-0.21 m)` through the Kasten-Young air mass `m`. A clear sky gives `0.8 + 15.5 sqrt(sin h)` klx on level ground at the sun's altitude `h`, and an overcast sky `0.3 + 21 sin h` klx. The cloud cover moves the sky from one to the other. These are the daylight availability formulas of lighting engineering.
 
-The sky cube and an HDRI sky are both scaled so that level ground under them gets the sky's illuminance. The sun, the sky and the reflections then agree.
+The sky cube and an HDRI sky are both scaled so that level ground under them gets the sky's illuminance. The sun, the sky and the reflections then agree. A face above 8388608 texels measures a texel center in `Float64`.
 
 One unit of the renderer's light is `pi` times 4000 lux, so a white wall under one unit shines 4000 nits. The camera meters that light as a real camera does. A clear noon meters near EV100 15, so the camera reads CARLA's exposure limits three stops higher.
 
@@ -209,7 +211,7 @@ One unit of the renderer's light is `pi` times 4000 lux, so a white wall under o
 | `lens_circle_falloff`, `lens_circle_multiplier` | The darkening of the rim. |
 | `camera_model` and the fisheye attributes | The fisheye lens, through `cameras.WideAngleLens`. |
 
-The depth of field, the filmic curve's shape and the adaptation speeds are read and kept. ThreeMojo's passes have no place for them.
+The depth of field, the filmic curve's shape and the adaptation speeds are read and kept. ThreeMojo's passes have no place for them. A side above 8388608 pixels measures a lens pixel's center in `Float64`.
 
 A fisheye camera draws a cube of the scene around the camera, then reads each pixel's ray through its lens. The cube has no depth. The fog is then the renderer's exponential fog, and the rain and the reflections are left out.
 
@@ -230,5 +232,5 @@ With the Town02 package, an 800 by 600 view on Town02's roads takes about 2.2 se
 
 - Without a town package, the buildings are boxes with textured facades, and the trees are noise-shaped spheres or the cached tree model.
 - A vehicle is CARLA's own model when the cache holds it, and a procedural shape when it does not. The walkers are procedural shapes.
-- The rain is streaks over the image. It does not wet the camera lens.
+- The rain is streaks over the image. It does not wet the camera lens. A streak count above 16777216 is refused.
 - The clouds are one flat layer. Their shadows are a screen-space effect, not a volume.

@@ -55,6 +55,7 @@ from geometries.surface import (
     record_kind,
     record_shaft_segments,
     record_sweep,
+    require_grid_cells,
     require_three_segments,
 )
 from geometries.circle import FULL_TURN, check_sweep
@@ -183,8 +184,8 @@ def cylinder(
     Raises:
         Error: If either radius is not finite, is negative, or both are
             zero, the height is not finite or not positive, either segment
-            count is too small, or the sweep is not positive or is more
-            than a turn.
+            count is too small, the grid has more than 16777216 cells, or
+            the sweep is not positive or is more than a turn.
     """
     require_finite_extents(
         radius_top.value, radius_bottom.value, height.value, "cylinder"
@@ -202,6 +203,11 @@ def cylinder(
     )
     require_at_least_one(
         height_segments, "A cylinder needs at least one segment down its side"
+    )
+    require_grid_cells(
+        radial_segments,
+        height_segments,
+        "A cylinder's segment count is larger than this port builds",
     )
     check_sweep(theta_length)
 
@@ -361,8 +367,8 @@ def cone(
 
     Raises:
         Error: If the radius or the height is not positive, either segment
-            count is too small, or the sweep is not positive or is more than
-            a turn.
+            count is too small, the grid has more than 16777216 cells, or
+            the sweep is not positive or is more than a turn.
     """
     var geometry = cylinder(
         Length(0.0, METER),

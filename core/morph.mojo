@@ -25,6 +25,11 @@ from core.ordinal import require_non_negative
 from math.finite import require_finite
 
 
+# `set` grows the list one weight at a time. The maximum integer never
+# finishes that growth. A list holds at most this many weights.
+comptime MAX_MORPH_WEIGHTS = 16777216
+
+
 def require_morph_target(target: Int) raises:
     """Refuse a morph target index below zero.
 
@@ -56,11 +61,13 @@ struct MorphInfluences(ImplicitlyCopyable, Sized):
             count: How many targets the geometry carries.
 
         Raises:
-            Error: If the count is negative.
+            Error: If the count is negative or above 16777216.
         """
         require_non_negative(
             count, "A mesh cannot wear a negative number of targets"
         )
+        if count > MAX_MORPH_WEIGHTS:
+            raise Error("A morph weight count is larger than this port stores")
         self.weights = List[Float32](length=count, fill=0)
 
     def __init__(out self, *, copy: Self):
@@ -118,10 +125,13 @@ struct MorphInfluences(ImplicitlyCopyable, Sized):
                 as three.js allows them.
 
         Raises:
-            Error: If the target is negative or the weight is not a number.
+            Error: If the target is negative or at least 16777216, or the
+                weight is not a number.
         """
         require_morph_target(target)
         require_finite(Float64(weight), "A morph influence must be a number")
+        if target >= MAX_MORPH_WEIGHTS:
+            raise Error("A morph target index is larger than this port stores")
         while len(self.weights) <= target:
             self.weights.append(0)
         self.weights[target] = weight

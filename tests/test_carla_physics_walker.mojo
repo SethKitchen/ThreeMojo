@@ -599,6 +599,10 @@ def test_ids() raises:
         _ = sim.angular_velocity(BodyId(-2))
     with assert_raises():
         sim.tick(Duration(H, SECOND), 0)
+    with assert_raises(contains="larger than this port"):
+        sim.tick(Duration(H, SECOND), 16777217)
+    with assert_raises(contains="larger than this port"):
+        sim.tick(Duration(H, SECOND), Int.MAX)
     with assert_raises():
         sim.tick(Duration(0, SECOND), 1)
 

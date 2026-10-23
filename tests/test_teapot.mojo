@@ -150,6 +150,10 @@ def test_a_teapot_needs_a_size_and_two_segments() raises:
         _ = teapot(Length(Float32.MAX * 2, METER))
     with assert_raises():
         _ = teapot(meters(1), 1)
+    with assert_raises(contains="larger than this port"):
+        _ = teapot(meters(1), 4097)
+    with assert_raises(contains="larger than this port"):
+        _ = teapot(meters(1), Int.MAX)
 
 
 def test_a_box_of_lines_matches_three() raises:
@@ -187,6 +191,14 @@ def test_a_box_of_lines_needs_extents_and_segments() raises:
         _ = box_line(height_segments=0)
     with assert_raises():
         _ = box_line(depth_segments=0)
+    var strip = box_line(width_segments=4096)
+    assert_equal(strip.attribute_view(String(POSITION)).count(), 32808)
+    with assert_raises(contains="larger than this port"):
+        _ = box_line(width_segments=16777217)
+    with assert_raises(contains="larger than this port"):
+        _ = box_line(height_segments=Int.MAX)
+    with assert_raises(contains="larger than this port"):
+        _ = box_line(depth_segments=Int.MAX)
 
 
 def main() raises:

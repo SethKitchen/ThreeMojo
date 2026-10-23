@@ -951,6 +951,18 @@ def test_the_classic_bloom_kernel_is_three_js_s() raises:
     var cut = bloom_kernel(10, 30)
     assert_true(cut[24] > 0)
     assert_equal(cut[25], Float32(0))
+    # A sigma of 1e20 is not a kernel width. The ceil used to become a
+    # garbage index, and the read fell off an empty list.
+    var far = bloom_kernel(Float32(1e20), 25)
+    var far_total = Float32(0)
+    for at in range(25):
+        far_total += far[at]
+    assert_almost_equal(far_total, Float32(1), atol=1e-5)
+    var low = bloom_kernel(-Float32(1e20), 25)
+    var low_total = Float32(0)
+    for at in range(25):
+        low_total += low[at]
+    assert_almost_equal(low_total, Float32(1), atol=1e-5)
 
 
 def test_the_classic_bloom_adds_its_blur_times_its_strength_twice() raises:

@@ -50,9 +50,9 @@ from std.os.path import exists
 from units.si import Duration
 from window.poll_timeout import poll_milliseconds
 from window.present import (
+    require_native_window_size,
     require_open,
     require_presented_frame,
-    require_window_size,
 )
 
 # Linux finds Xlib by its soname.
@@ -290,10 +290,12 @@ struct X11Window(Movable):
                 `DISPLAY` from the environment.
 
         Raises:
-            Error: If the size is not positive, Xlib cannot be loaded, the display cannot be opened, or its visual is not
-                24-bit TrueColor.
+            Error: If the size is not positive, a side does not fit in a
+                native integer, four bytes a pixel do not fit, Xlib cannot
+                be loaded, the display cannot be opened, or its visual is
+                not 24-bit TrueColor.
         """
-        require_window_size(width, height)
+        require_native_window_size(width, height)
         self.width = width
         self.height = height
         self.is_open = False
@@ -436,10 +438,12 @@ struct X11Window(Movable):
             height: The new height, in pixels.
 
         Raises:
-            Error: If the window is closed or the size is not positive.
+            Error: If the window is closed, the size is not positive, a
+                side does not fit in a native integer, or four bytes a
+                pixel do not fit.
         """
         require_open(self.is_open)
-        require_window_size(width, height)
+        require_native_window_size(width, height)
         self.width = width
         self.height = height
         self._pixels = List[UInt8](length=width * height * 4, fill=0)

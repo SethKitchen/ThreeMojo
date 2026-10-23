@@ -159,6 +159,30 @@ def test_a_checkered_surface_is_smoothed_and_the_rest_kept() raises:
     assert_equal(target.colors[0].r, 0)
 
 
+def test_denoise_noise_must_cover_its_grid() raises:
+    var depth = List[Float32](length=1, fill=0)
+    var view = DepthView(
+        depth, 1, 1, Matrix4(), Length(0.1, METER), Length(10, METER)
+    )
+    var source = LightView(
+        List[FloatColor](length=1, fill=FloatColor(0.2, 0.2, 0.2, 1)), 1, 1
+    )
+    var normals = LightView(
+        List[FloatColor](length=1, fill=FloatColor(0, 0, 1, 1)), 1, 1
+    )
+    with assert_raises(contains="64 by 64"):
+        _ = denoise_pixel(
+            source,
+            view,
+            normals,
+            List[Float32](),
+            List[Vector3](),
+            0,
+            0,
+            DenoiseSettings(),
+        )
+
+
 def test_a_frame_without_normals_is_refused() raises:
     var target = RenderTarget(SIZE, SIZE, Color(0, 0, 0), FLOAT_TARGET)
     var camera = a_camera()

@@ -365,6 +365,37 @@ def test_tube() raises:
         Vec3d(0, 0, 0),
     )
     assert_equal(rod.count(), 6 * 4)
+    var fine = MeshBuilder()
+    fine.tube(
+        Vec3d(0, 0, 0),
+        Vec3d(0, 0, 1),
+        1.0,
+        0.0,
+        64,
+        Vec3d(1, 1, 1),
+        Vec3d(0, 0, 0),
+    )
+    assert_equal(fine.count(), 64 * 4)
+    with assert_raises(contains="larger than this port"):
+        rod.tube(
+            Vec3d(0, 0, 0),
+            Vec3d(1, 0, 0),
+            1.0,
+            0.0,
+            16777217,
+            Vec3d(1, 1, 1),
+            Vec3d(0, 0, 0),
+        )
+    with assert_raises(contains="larger than this port"):
+        rod.tube(
+            Vec3d(0, 0, 0),
+            Vec3d(1, 0, 0),
+            1.0,
+            0.0,
+            Int.MAX,
+            Vec3d(1, 1, 1),
+            Vec3d(0, 0, 0),
+        )
     with assert_raises(contains="three segments"):
         rod.tube(
             Vec3d(0, 0, 0),
@@ -435,6 +466,16 @@ def test_heightfield() raises:
     with assert_raises(contains="2 by 2"):
         mb.heightfield(
             Vec3d(0, 0, 0), 1.0, 1.0, 1, 2, [0.0, 0.0], List[Vec3d]()
+        )
+    with assert_raises(contains="larger than this port"):
+        mb.heightfield(
+            Vec3d(0, 0, 0),
+            1.0,
+            1.0,
+            1 << 32,
+            1 << 32,
+            List[Float64](),
+            List[Vec3d](),
         )
     with assert_raises(contains="2 by 2"):
         mb.heightfield(
@@ -519,6 +560,18 @@ def test_fill_edge_cases() raises:
     fill_polygons(fb, pair, Color(0, 200, 0))
     assert_equal(Int(fb.get_pixel(9, 11).g), 200)
     assert_equal(Int(fb.get_pixel(0, 11).g), 0)
+
+
+def test_an_overlay_past_an_integer_lies_past_the_frame() raises:
+    var fb = Framebuffer(4, 4, Color(0, 0, 0))
+    # Entirely to the right of every frame.
+    fill_rect(fb, 1e20, 0, 1e20, 2, Color(255, 0, 0))
+    assert_equal(Int(fb.get_pixel(0, 0).r), 0)
+    # A rectangle from past the left to past the right covers the frame.
+    # A floor of 1e20 is not a column, so the old box could miss it.
+    fill_rect(fb, -1e20, -1e20, 1e20, 1e20, Color(0, 180, 0))
+    assert_equal(Int(fb.get_pixel(0, 0).g), 180)
+    assert_equal(Int(fb.get_pixel(3, 3).g), 180)
 
 
 def test_text() raises:

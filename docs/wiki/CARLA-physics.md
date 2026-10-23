@@ -37,7 +37,7 @@ The rigid-body core lives in [Shared physics](Physics). Its CARLA import paths r
 
 ## Step a world
 
-`CarlaPhysics.tick` advances the world by CARLA's `fixed_delta_seconds`. It can cut the step into substeps. Each substep updates every vehicle and walker, and then steps the world. External forces and torques applied before the tick act through every substep. They are cleared after the tick.
+`CarlaPhysics.tick` advances the world by CARLA's `fixed_delta_seconds`. It can cut the step into substeps. Each substep updates every vehicle and walker, and then steps the world. External forces and torques applied before the tick act through every substep. They are cleared after the tick. A substep count above 16777216 is refused.
 
 The [tick-force benchmark](Tick-force-restoration) retains all-body snapshots after comparing dynamic-only alternatives. Static and kinematic forces are consumed without acceleration. Ghost dynamic bodies still receive their forces.
 
@@ -193,6 +193,8 @@ One step of `PhysicsWorld` does this:
 5. A second pass gives the restitution to each point that hit faster than 1 m/s, Box2D's restitution threshold.
 6. Split impulses push overlapping bodies apart without adding energy.
 7. The velocities move the bodies.
+
+A velocity or position iteration count above 16777216 is refused.
 
 A contact can have a gap of up to 2 cm. The solver lets the bodies close the gap and no more, so a fast body stops at a surface and not in it. Two materials use the geometric mean of the frictions and the larger restitution, as Box2D mixes them. The default material is Box2D's: a friction of 0.6 and a restitution of 0. The damping is Box2D's implicit damping, and it is 0 by default. The gravity is 9.8 m/s², standard gravity rounded.
 
