@@ -150,6 +150,7 @@ class DeviationIntegrationControls(unittest.TestCase):
     def setUp(self):
         self.root = fixtures.copy_historical_boundary_root(self, ROOT)
         self.current = (self.root/deviation.MODULE).read_bytes()
+        self.physical = self.current
         self.before = deviation.predecessor_source(self.current.decode()).encode()
 
     @contextmanager
@@ -182,7 +183,7 @@ class DeviationIntegrationControls(unittest.TestCase):
         record = cleanup.read_record(self.root)
         for group in ('unchanged_inputs', 'native_dependency_inputs'):
             self.assertEqual(record[group][deviation.MODULE], station.BEFORE_SHA256)
-        self.assertEqual((self.root/deviation.MODULE).read_bytes(), self.current)
+        self.assertEqual((self.root/deviation.MODULE).read_bytes(), self.physical)
 
     def test_mutated_or_forged_map_endpoints_reject(self):
         skip = b'if _indexed_curve_lower(key, segment.deviation) > best_radius:'
@@ -205,13 +206,13 @@ class DeviationIntegrationControls(unittest.TestCase):
         read = Path.read_text; target = self.root/deviation.MODULE
         skip = 'if _indexed_curve_lower(key, segment.deviation) > best_radius:'
         for consumer in (cache, order):
-            for supplied in (self.before.decode(), self.current.decode().replace(skip, skip.replace('>', '>='), 1)):
+            for supplied in (self.before.decode(), self.physical.decode().replace(skip, skip.replace('>', '>='), 1)):
                 with self.subTest(consumer=consumer.__name__), patch.object(Path, 'read_text',
                         lambda path,*a,**k: supplied if path == target else read(path,*a,**k)):
                     with self.assertRaisesRegex(RuntimeError if consumer is order else ValueError, 'supplied score-helper'):
                         consumer.inventory(self.root)
             with patch.object(Path, 'read_text', lambda path,*a,**k:
-                    self.current.decode()+'\n# supplied comment\n' if path == target else read(path,*a,**k)):
+                    self.physical.decode()+'\n# supplied comment\n' if path == target else read(path,*a,**k)):
                 consumer.inventory(self.root)
 
     def test_every_new_test_and_leaf_read_is_pinned_and_unreadable_fails(self):

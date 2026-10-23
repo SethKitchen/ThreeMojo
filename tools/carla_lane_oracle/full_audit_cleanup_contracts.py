@@ -158,7 +158,7 @@ PR760_OWNER_PREDECESSOR_SHA256 = '6138ba2dcac394c716ea9ed32e74e0c6d15857d5c605fc
 DEPENDENCY_TOOL_SHA256 = {'tools/carla_lane_oracle/winner_sign_contracts.py': 'f850902634073364fe2407b00d12e9fdfb2ecfc6cf2a03414269fbb7984a8a7f',
  'tools/carla_lane_oracle/border_parser_contracts.py': '734d7b24aaf4e9f537cd7f0d7c7b8094d9c29106770b66c4a7a24cab74604dd4',
  'tools/carla_lane_oracle/pr760_arithmetic_stage.py': PR760_STAGE_SHA256,
- 'tools/carla_lane_oracle/pr780_source_successor.py': 'c7b88fd9e8ce36f7e2e3bece313cf367f409af271eb40da48d00b119ad2399b4',
+ 'tools/carla_lane_oracle/pr780_source_successor.py': 'ad73e5807979e71ef93d955759b18f8e4bec756869c9be3cd851dcb1f60fd92d',
  'tools/carla_lane_oracle/scaled_float32_contracts.py': 'e3a59a9f8d5a9394007c03fab6ac696e04998812dad5843a22e721bfbe57c2a1',
  'tools/affected.py': 'dcf533b9cd995902f53578aa93b98a32ca732643ccfa6ab7e30f95fd8b321eb3',
  'tools/cache_key.py': 'ec06247feb8fe079c30b6da19fc655ffec363f1ce8e3372d063bf728e8c804c4',
@@ -4200,7 +4200,11 @@ def station_proof_bindings(root, *, _operation=None):
     try:
         executing = executing_checker_bindings()
         result = _station_bindings(root, _operation=_operation)
-        if result.get(station.MODULE) == typed_boundary.EDGES[station.MODULE]['after_sha256']:
+        station_digest = result.get(station.MODULE)
+        extension = pr780_successor._data_snapshot()['edges'].get(station.MODULE)
+        if extension is not None and station_digest == extension['after_sha256']:
+            station_digest = extension['before_sha256']
+        if station_digest == typed_boundary.EDGES[station.MODULE]['after_sha256']:
             # The public typed receipt requires the complete current graph.
             # Keep _station_bindings itself nonrecursive for verify's capture.
             if _operation is None:

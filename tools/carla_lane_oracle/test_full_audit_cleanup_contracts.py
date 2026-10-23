@@ -587,7 +587,8 @@ class FullAuditCleanupContracts(unittest.TestCase):
         typed = cleanup.typed_boundary
         map_edge = typed.edge(station.MODULE)
         self.assertEqual(map_edge['before_sha256'], deviation.AFTER_SHA256)
-        self.assertEqual(cleanup.sha((self.root/station.MODULE).read_bytes()), map_edge['after_sha256'])
+        self.assertEqual(cleanup.sha(fixtures.typed_current_bytes(
+            station.MODULE, (self.root/station.MODULE).read_bytes())), map_edge['after_sha256'])
         supplemental = {
             station.MODULE: map_edge['after_sha256'], **station.TESTS, **deviation.TESTS,
             runtime.MIGRATION: runtime.MIGRATION_SHA256,

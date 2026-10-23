@@ -40,7 +40,8 @@ def _current_bytes(name):
 
 
 def _historical_text(name):
-    text = _current_bytes(name).decode('utf-8')
+    raw = full_audit.pr780_successor.predecessor_bytes(name, _current_bytes(name))
+    text = raw.decode('utf-8')
     return (typed_boundary.historical_source(name, text)
             if typed_boundary.is_current(name, text) else text)
 

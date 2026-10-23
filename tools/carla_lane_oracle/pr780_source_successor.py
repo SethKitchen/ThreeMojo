@@ -1463,10 +1463,22 @@ EDGES = json.loads(r'''
   },
   "tools/carla_lane_oracle/test_typed_boundary_contracts.py": {
     "before_sha256": "8dee4d9c4bf42214fb2f10fbdcf71a4ba04398095d8c62a16233ad6fc038fce7",
-    "after_sha256": "829b1391edfbac1300ca194a7e9a12affab310cc0b257b3e5d23278a567526a5",
+    "after_sha256": "5a8d3d51eae53713e6133f4640d101176ac5d228f7e5085e9bebeb6bfa6d9f5f",
     "before_token_sha256": "f71efcac558cf883d01cc2cf792879074f5275e36fd3cd8c2e2d43b2de380db3",
-    "after_token_sha256": "c0a5f42b729e60db397f12264b1bba380efb2162e4db12de06fe4a08a2c0dc43",
+    "after_token_sha256": "c45993ef4292b45926aed436aab5964e3f70135bade264194e95bb2618a43b2d",
     "edits": [
+      {
+        "start": 43,
+        "stop": 45,
+        "before": [
+          "            text = (ROOT/name).read_text()\n",
+          "            return typed.historical_source(name, text)\n"
+        ],
+        "after": [
+          "            raw = audit.pr780_successor.predecessor_bytes(name, (ROOT/name).read_bytes())\n",
+          "            return typed.historical_source(name, raw.decode('utf-8'))\n"
+        ]
+      },
       {
         "start": 444,
         "stop": 445,
@@ -3208,6 +3220,36 @@ EDGES = json.loads(r'''
       }
     ]
   },
+  "tools/carla_lane_oracle/test_typed_owned_operations.py": {
+    "before_sha256": "b71272abd022ff7453099ede5e5cd8ca8fc0dc6ba92057a94bdcd85170e39984",
+    "after_sha256": "935e782aed3a11816c65001422c1b41e3760b5c9ded88ccf7dd58a7fff23cb5f",
+    "before_token_sha256": "c84f544cdbffbd74be814905e13bba935182e54c2df54f44c2d5e2a1a38b885f",
+    "after_token_sha256": "f88fa77df27b2afe4c77a143f00ec6074a288ed732e09f19c9592e21264a3938",
+    "edits": [
+      {
+        "start": 165,
+        "stop": 167,
+        "before": [
+          "        historical = typed.historical_source(seed.MODULE, current)\n"
+        ],
+        "after": [
+          "        historical = typed.historical_source(seed.MODULE, fixtures.typed_current_bytes(\n",
+          "            seed.MODULE, current.encode()).decode())\n"
+        ]
+      },
+      {
+        "start": 181,
+        "stop": 183,
+        "before": [
+          "        old_lane = typed.historical_source('extensions/carla/lane_refinement.mojo', physical_lane)\n"
+        ],
+        "after": [
+          "        old_lane = typed.historical_source('extensions/carla/lane_refinement.mojo', fixtures.typed_current_bytes(\n",
+          "            'extensions/carla/lane_refinement.mojo', physical_lane.encode()).decode())\n"
+        ]
+      }
+    ]
+  },
   "tools/carla_lane_oracle/test_witness_format_contracts.py": {
     "before_sha256": "82f7e13e72b4f99ccad63d5dfe55fc0a73c898120b43ed8416b0731489ea6f84",
     "after_sha256": "ac1dcd518c3a6681ca0e161081b9bb26ccdf2a3e4217266d5a5ecd1c52f3e203",
@@ -3228,6 +3270,25 @@ EDGES = json.loads(r'''
         ]
       }
     ]
+  },
+  "tools/carla_lane_oracle/translated_parameter_resolution.py": {
+    "before_sha256": "0523d91f8d3b508619d37b9e9a73106c2b961cebf5808f23e61758c2a6228be9",
+    "after_sha256": "0de1410549e5d230c9f0a7cfa9f9a3b43e09c30d405bb7f9c3824eacedb6c881",
+    "before_token_sha256": "a22e21762dedad21f046301b224fbd850c09287354f2b928cf500d8140f2baa1",
+    "after_token_sha256": "c72c2c6388b7739f365221c24fffe15079d612c3ed33dba5ebe780ef5eb5de61",
+    "edits": [
+      {
+        "start": 42,
+        "stop": 44,
+        "before": [
+          "    text = _current_bytes(name).decode('utf-8')\n"
+        ],
+        "after": [
+          "    raw = full_audit.pr780_successor.predecessor_bytes(name, _current_bytes(name))\n",
+          "    text = raw.decode('utf-8')\n"
+        ]
+      }
+    ]
   }
 }
 ''')
@@ -3235,7 +3296,7 @@ BOUND_INPUTS = {'tests/test_anatomy_muscle.mojo': '3653d6056c1f9f639537eedb7cd80
  'tests/test_animation_strings.mojo': 'f5103e3660a63d3d5d9d348a0d928fa106e5cef03059d432a31335bb7dd14184',
  'tests/test_loader_bounds.mojo': '6e0c1487f1ff21f4654c2790e4460c0adf934bf6b9273e826782eec1bfed2d83',
  'tools/carla_lane_oracle/test_pr780_source_successor.py': 'b88cdc20f3a6dfb0b38c6e85ccbe9b5c80d8ba5700ee2d8cf1a982e8e43ceeb0'}
-DATA_SHA256 = '43ea6d9a20e86e67ce9126b72f22bc208f7c7fbfdb6554e26a81ad2ca218e9ab'
+DATA_SHA256 = 'b341108e8c41feeb5d21ceea212cd0b526171c4073e1564d758214e3e1098416'
 # END FIXED PR780 SUCCESSOR DATA
 
 
@@ -3251,7 +3312,7 @@ def sha(raw):
 def _data_snapshot():
     """Authenticate and detach the full finite inverse data before consuming it."""
     require(type(DATA_SHA256) is str, 'authority digest selector is not a builtin string')
-    require(DATA_SHA256 == '43ea6d9a20e86e67ce9126b72f22bc208f7c7fbfdb6554e26a81ad2ca218e9ab', 'authority digest selector changed')
+    require(DATA_SHA256 == 'b341108e8c41feeb5d21ceea212cd0b526171c4073e1564d758214e3e1098416', 'authority digest selector changed')
     encoded = json.dumps({'edges': EDGES, 'bound_inputs': BOUND_INPUTS},
                          sort_keys=True, separators=(',', ':'))
     require(sha(encoded) == DATA_SHA256, 'fixed source inverse data changed')

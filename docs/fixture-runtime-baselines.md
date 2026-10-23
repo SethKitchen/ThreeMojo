@@ -36,7 +36,14 @@ The digest matches the accepted and generated values in the preserved
 `srgb` entry of the October 3 runtime report. The default-pow diagnostic
 is not an accepted baseline.
 
-The manifest now binds the reviewed current source. It still rejects any
+The Mojo 1.2.0 port changed `loaders/js_number.mojo` again. The decimal parser
+now uses the correctly rounded `Float64` conversion of 1.2. The 256 accepted
+sRGB words did not change. A second
+[source successor record](fixtures/srgb-source-successor-mojo-1-2.json)
+chains from the #760 source to the 1.2 source. It names both complete source
+hashes and the same table digest.
+
+The manifest binds the reviewed current source. It still rejects any
 other whole-file change, even when the table is unchanged. The fixture tests
 also check the fixed accepted word digest independently of the manifest.
 They reject table changes even when a test fixture's manifest is refreshed.
