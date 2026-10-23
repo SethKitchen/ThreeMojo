@@ -27,7 +27,8 @@ def descriptors():
 
 class ConditionedLoopRows(unittest.TestCase):
     def setUp(self):
-        self.texts = {module:(ROOT/(module+'.mojo')).read_text()
+        self.texts = {module:loops._typed_endpoint(module+'.mojo',
+                          (ROOT/(module+'.mojo')).read_text())
                       for module,_ in descriptors()}
 
     def test_every_reviewed_site_has_exact_current_owner_and_statement(self):

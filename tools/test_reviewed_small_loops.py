@@ -26,7 +26,7 @@ class SmallLoopTests(unittest.TestCase):
                 p.write_bytes(content)
 
     def test_exact_partial_outcomes_keep_true(self):
-        for module,line,kind,maximum in [(SPEED,154,'reviewed-nonempty-iterator',None),(TREE,666,'reviewed-nonempty-iterator',16)]:
+        for module,line,kind,maximum in [(SPEED,150,'reviewed-nonempty-iterator',None),(TREE,666,'reviewed-nonempty-iterator',16)]:
             proofs=loops.reviewed_nonempty_loops(self.root,module)
             self.assertEqual(set(proofs),{line})
             self.assertEqual((proofs[line]['kind'],proofs[line]['required'],proofs[line]['impossible'],proofs[line]['cardinality'],proofs[line]['maximum_cardinality']),(kind,'T','F',1,maximum))

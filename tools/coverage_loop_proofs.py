@@ -492,9 +492,9 @@ REVIEWED_LOOP_RULES = {
     )),
     'extensions/carla/speed_limits': ({
         'extensions/carla/speed_limits.mojo':
-            '1e95ebc085e03a44e4daaef20a94b724dedc4240a2099227e82be54d32b045f6',
+            '2d9d5401b3dabf53c1c19f0a8098009275e19edb978f5ae369596fe7ac6557a0',
     }, (
-        (154, 'reviewed-nonempty-iterator', 1, None, 'number.as_bytes()',
+        (150, 'reviewed-nonempty-iterator', 1, None, 'number.as_bytes()',
          'speed-number-nonempty-owned-byte-view'),
     )),
     'extensions/carla/rtree': ({

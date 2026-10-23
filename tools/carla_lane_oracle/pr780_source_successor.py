@@ -1431,9 +1431,9 @@ EDGES = json.loads(r'''
   },
   "tools/carla_lane_oracle/test_pr760_physical_image.py": {
     "before_sha256": "6df971f2bf09c710a4e6ababc6adeea8995fd2e86c3e6866e548d5b193ae3669",
-    "after_sha256": "282ac67d6fc9eb9395282b15a9e7178b0b92ff52ee34cafc5fbfc72efe44e408",
+    "after_sha256": "bb905630d2fe05f7f7a3153536f5fcbb406793b22f5d7300600647ac80308868",
     "before_token_sha256": "74ca01c4b41870f5b83e81d83ac19063908258e12e2c58026092a958f05e45ec",
-    "after_token_sha256": "b17ea63a4a17c83a9d825528de80d8a4482f1591ca5772d8f545010a34712d38",
+    "after_token_sha256": "48e0b075a1764f210c5d662a4ad87a1b90eaf839a1dcc2dc6a7b7da149c8b8a5",
     "edits": [
       {
         "start": 122,
@@ -1441,6 +1441,27 @@ EDGES = json.loads(r'''
         "before": [],
         "after": [
           "            raw = owner.pr780_successor.predecessor_bytes(path, raw)\n"
+        ]
+      },
+      {
+        "start": 241,
+        "stop": 243,
+        "before": [
+          "            previous = (owner.pr776_predecessor_bytes(path, raw) if path in (\n"
+        ],
+        "after": [
+          "            previous = owner.pr780_successor.predecessor_bytes(path, raw)\n",
+          "            previous = (owner.pr776_predecessor_bytes(path, previous) if path in (\n"
+        ]
+      },
+      {
+        "start": 244,
+        "stop": 245,
+        "before": [
+          "                        'tools/carla_lane_oracle/test_typed_boundary_contracts.py') else raw)\n"
+        ],
+        "after": [
+          "                        'tools/carla_lane_oracle/test_typed_boundary_contracts.py') else previous)\n"
         ]
       }
     ]
@@ -3289,6 +3310,25 @@ EDGES = json.loads(r'''
         ]
       }
     ]
+  },
+  "tools/test_conditioned_coverage_loops.py": {
+    "before_sha256": "1c7a6f9f0f32ec579b0609c0cac7fec04dedd342c7e22ec9a9956d6c6042c2dc",
+    "after_sha256": "9c2c7d223a88f6a974fbdff0f9fc42246ac44583b73162b46c300b83ec2861dd",
+    "before_token_sha256": "6d29f83a10d9be3031969d0702b6b5ee80de96a3441115aba4920715e13d03d2",
+    "after_token_sha256": "a58817c389e1bfbfcff3ae68cba1ad9503fec8957cc4b5981e63432ba50a5d9d",
+    "edits": [
+      {
+        "start": 29,
+        "stop": 31,
+        "before": [
+          "        self.texts = {module:(ROOT/(module+'.mojo')).read_text()\n"
+        ],
+        "after": [
+          "        self.texts = {module:loops._typed_endpoint(module+'.mojo',\n",
+          "                          (ROOT/(module+'.mojo')).read_text())\n"
+        ]
+      }
+    ]
   }
 }
 ''')
@@ -3296,7 +3336,7 @@ BOUND_INPUTS = {'tests/test_anatomy_muscle.mojo': '3653d6056c1f9f639537eedb7cd80
  'tests/test_animation_strings.mojo': 'f5103e3660a63d3d5d9d348a0d928fa106e5cef03059d432a31335bb7dd14184',
  'tests/test_loader_bounds.mojo': '6e0c1487f1ff21f4654c2790e4460c0adf934bf6b9273e826782eec1bfed2d83',
  'tools/carla_lane_oracle/test_pr780_source_successor.py': 'b88cdc20f3a6dfb0b38c6e85ccbe9b5c80d8ba5700ee2d8cf1a982e8e43ceeb0'}
-DATA_SHA256 = 'b341108e8c41feeb5d21ceea212cd0b526171c4073e1564d758214e3e1098416'
+DATA_SHA256 = '99846e6bfa666c3b9a92bc2cb0f0f9e7704bd0fb549d1e96ec61c81b79ece191'
 # END FIXED PR780 SUCCESSOR DATA
 
 
@@ -3312,7 +3352,7 @@ def sha(raw):
 def _data_snapshot():
     """Authenticate and detach the full finite inverse data before consuming it."""
     require(type(DATA_SHA256) is str, 'authority digest selector is not a builtin string')
-    require(DATA_SHA256 == 'b341108e8c41feeb5d21ceea212cd0b526171c4073e1564d758214e3e1098416', 'authority digest selector changed')
+    require(DATA_SHA256 == '99846e6bfa666c3b9a92bc2cb0f0f9e7704bd0fb549d1e96ec61c81b79ece191', 'authority digest selector changed')
     encoded = json.dumps({'edges': EDGES, 'bound_inputs': BOUND_INPUTS},
                          sort_keys=True, separators=(',', ':'))
     require(sha(encoded) == DATA_SHA256, 'fixed source inverse data changed')

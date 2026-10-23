@@ -2922,7 +2922,8 @@ class CacheInputViewCurrentControls(unittest.TestCase):
         seed = self.seed
         path = self.root/seed.MODULE
         original = path.read_bytes()
-        historical = cleanup.typed_boundary.historical_source(seed.MODULE, original.decode('utf-8'))
+        typed_current = fixtures.typed_current_bytes(seed.MODULE, original).decode('utf-8')
+        historical = cleanup.typed_boundary.historical_source(seed.MODULE, typed_current)
         prior = seed.score_family_predecessor_source(historical).encode('utf-8')
         mutants = (('prior', prior), ('comment', original + b'\n# Retained B.\n'),
                    ('crlf', original.replace(b'\n', b'\r\n')))

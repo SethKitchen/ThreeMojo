@@ -1007,7 +1007,8 @@ class BoundedOwnerCurrentControls(unittest.TestCase):
             if hashlib.sha256(historical).hexdigest() != digest:
                 historical_changed.add(path)
         self.assertEqual(historical_changed, prior | fixtures.WINNER_SHARED_HELPER_SUCCESSORS)
-        self.assertEqual(current_changed, historical_changed | (set(canonical) & set(typed.SOURCE_PATHS)))
+        self.assertEqual(current_changed, historical_changed | (set(canonical) & set(typed.SOURCE_PATHS))
+                         | (set(canonical) & set(cleanup.pr780_successor.EDGES)))
         self.assertEqual((len(prior), len(canonical) - len(prior)), (20, 92))
         self.assertEqual((result['reviewed_cleanup_successors'], result['canonical_dependencies_unchanged']),
                          (len(historical_changed), len(canonical) - len(historical_changed)))
