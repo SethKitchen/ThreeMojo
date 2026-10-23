@@ -134,6 +134,10 @@ The comparison uses 61 shared examples.
 - A Node process that does nothing: `0.023` s
 <!-- /BENCH:HOST:macos -->
 
+The macOS record is from Mojo 1.1.0.
+No Mac was available for the move to Mojo 1.2.0, so that record is not measured again.
+Run `make bench-examples` on a Mac to refresh it.
+
 ## What the columns measure
 
 | Column | Meaning |
