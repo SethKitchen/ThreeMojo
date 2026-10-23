@@ -1,43 +1,43 @@
 {
-  "generated_at": "2026-10-07",
+  "generated_at": "2026-10-23",
   "host": {
     "os": "Linux 6.12.94+",
     "cpu": "Intel(R) Xeon(R) Processor",
     "python": "3.12.3",
-    "mojo_pinned": "Mojo 1.1.0 (8189361e)",
-    "mojo_previous": "Mojo 1.0.0 (ed45d567)",
-    "node": "v22.14.0"
+    "mojo_pinned": "Mojo 1.2.0 (2016d0cd)",
+    "mojo_previous": "Mojo 1.1.0 (8189361e)",
+    "node": "v22.23.4"
   },
   "threejs_webgl": false,
   "baselines": {
     "mojo": {
       "ok": true,
-      "seconds": 0.0087,
-      "rss_kib": 9356,
+      "seconds": 0.0072,
+      "rss_kib": 9720,
       "status": 0,
       "frames_seconds": null
     },
     "node": {
       "ok": true,
-      "seconds": 0.0213,
-      "rss_kib": 42380,
+      "seconds": 0.0154,
+      "rss_kib": 42920,
       "status": 0
     }
   },
-  "previous_refused": 71,
+  "previous_refused": 75,
   "previous_total": 76,
   "probe": {
     "pinned": {
       "compile": {
         "ok": true,
-        "seconds": 3.2174,
-        "rss_kib": 262456,
+        "seconds": 1.9363,
+        "rss_kib": 281240,
         "status": 0
       },
       "run": {
         "ok": true,
-        "seconds": 0.0595,
-        "rss_kib": 10400,
+        "seconds": 0.0426,
+        "rss_kib": 10820,
         "status": 0,
         "frames_seconds": null
       }
@@ -45,14 +45,14 @@
     "previous": {
       "compile": {
         "ok": true,
-        "seconds": 3.3125,
-        "rss_kib": 269632,
+        "seconds": 2.7475,
+        "rss_kib": 220588,
         "status": 0
       },
       "run": {
         "ok": true,
-        "seconds": 0.0578,
-        "rss_kib": 11652,
+        "seconds": 0.0625,
+        "rss_kib": 10684,
         "status": 0,
         "frames_seconds": null
       }
@@ -61,7 +61,7 @@
   "examples": [
     {
       "name": "triangle",
-      "measured_on": "2026-10-07",
+      "measured_on": "2026-10-23",
       "measurement_date_source": "direct",
       "width": 320,
       "height": 240,
@@ -69,54 +69,57 @@
       "threemojo": {
         "compile": {
           "ok": true,
-          "seconds": 5.0292,
-          "rss_kib": 269560,
+          "seconds": 3.1255,
+          "rss_kib": 302384,
           "status": 0
         },
         "run": {
           "ok": true,
-          "seconds": 0.0125,
-          "rss_kib": 10676,
+          "seconds": 0.0101,
+          "rss_kib": 11052,
           "status": 0,
-          "frames_seconds": 0.0014971479000000002
+          "frames_seconds": 0.0011359220000000001
         }
       },
       "threejs_flat": {
         "ok": true,
-        "seconds": 0.0815,
-        "rss_kib": 63920,
+        "seconds": 0.0566,
+        "rss_kib": 63948,
         "status": 0,
         "backend": "cpu-flat",
-        "frames_seconds": 0.0085,
-        "import_seconds": 0.033600000000000005
+        "frames_seconds": 0.0060999999999999995,
+        "import_seconds": 0.0224
       },
       "threejs_webgl": {
         "ok": false,
-        "seconds": null,
-        "rss_kib": null,
-        "status": 0,
+        "seconds": 0.0539,
+        "rss_kib": 56004,
+        "status": 1,
         "backend": "",
-        "error": "skipped"
+        "frames_seconds": null,
+        "import_seconds": null,
+        "error": "libEGL.so.1: cannot open shared object file: No such file or directory"
       },
       "previous": {
         "compile": {
-          "ok": true,
-          "seconds": 13.4152,
-          "rss_kib": 426968,
-          "status": 0
+          "ok": false,
+          "seconds": 0.1931,
+          "rss_kib": 109236,
+          "status": 1,
+          "error": "Imported from /workspace/examples/triangle.mojo:22:"
         },
         "run": {
-          "ok": true,
-          "seconds": 0.0127,
-          "rss_kib": 10532,
-          "status": 0,
-          "frames_seconds": 0.0016568509
+          "ok": false,
+          "seconds": null,
+          "rss_kib": null,
+          "status": 1,
+          "error": "Imported from /workspace/examples/triangle.mojo:22:"
         }
       }
     },
     {
       "name": "spin",
-      "measured_on": "2026-10-07",
+      "measured_on": "2026-10-23",
       "measurement_date_source": "direct",
       "width": 160,
       "height": 120,
@@ -124,54 +127,57 @@
       "threemojo": {
         "compile": {
           "ok": true,
-          "seconds": 4.9261,
-          "rss_kib": 281552,
+          "seconds": 3.1112,
+          "rss_kib": 302808,
           "status": 0
         },
         "run": {
           "ok": true,
-          "seconds": 0.0245,
-          "rss_kib": 18384,
+          "seconds": 0.0158,
+          "rss_kib": 18552,
           "status": 0,
-          "frames_seconds": 0.0023458389999999997
+          "frames_seconds": 0.0018631439000000001
         }
       },
       "threejs_flat": {
         "ok": true,
-        "seconds": 0.0835,
-        "rss_kib": 64952,
+        "seconds": 0.0545,
+        "rss_kib": 64852,
         "status": 0,
         "backend": "cpu-flat",
-        "frames_seconds": 0.009800000000000001,
-        "import_seconds": 0.033600000000000005
+        "frames_seconds": 0.007,
+        "import_seconds": 0.0216
       },
       "threejs_webgl": {
         "ok": false,
-        "seconds": null,
-        "rss_kib": null,
-        "status": 0,
+        "seconds": 0.0524,
+        "rss_kib": 55912,
+        "status": 1,
         "backend": "",
-        "error": "skipped"
+        "frames_seconds": null,
+        "import_seconds": null,
+        "error": "libEGL.so.1: cannot open shared object file: No such file or directory"
       },
       "previous": {
         "compile": {
-          "ok": true,
-          "seconds": 11.1232,
-          "rss_kib": 442612,
-          "status": 0
+          "ok": false,
+          "seconds": 0.1676,
+          "rss_kib": 107216,
+          "status": 1,
+          "error": "Imported from /workspace/examples/spin.mojo:23:"
         },
         "run": {
-          "ok": true,
-          "seconds": 0.0271,
-          "rss_kib": 18140,
-          "status": 0,
-          "frames_seconds": 0.008369834000000001
+          "ok": false,
+          "seconds": null,
+          "rss_kib": null,
+          "status": 1,
+          "error": "Imported from /workspace/examples/spin.mojo:23:"
         }
       }
     },
     {
       "name": "cube",
-      "measured_on": "2026-10-07",
+      "measured_on": "2026-10-23",
       "measurement_date_source": "direct",
       "width": 240,
       "height": 180,
@@ -179,54 +185,57 @@
       "threemojo": {
         "compile": {
           "ok": true,
-          "seconds": 7.1537,
-          "rss_kib": 326208,
+          "seconds": 5.0848,
+          "rss_kib": 347736,
           "status": 0
         },
         "run": {
           "ok": true,
-          "seconds": 0.057,
-          "rss_kib": 42108,
+          "seconds": 0.0528,
+          "rss_kib": 42380,
           "status": 0,
-          "frames_seconds": 0.012697564
+          "frames_seconds": 0.009786963
         }
       },
       "threejs_flat": {
         "ok": true,
-        "seconds": 0.083,
-        "rss_kib": 64852,
+        "seconds": 0.0647,
+        "rss_kib": 64344,
         "status": 0,
         "backend": "cpu-flat",
-        "frames_seconds": 0.0198,
-        "import_seconds": 0.0298
+        "frames_seconds": 0.015099999999999999,
+        "import_seconds": 0.0219
       },
       "threejs_webgl": {
         "ok": false,
-        "seconds": null,
-        "rss_kib": null,
-        "status": 0,
+        "seconds": 0.0554,
+        "rss_kib": 56124,
+        "status": 1,
         "backend": "",
-        "error": "skipped"
+        "frames_seconds": null,
+        "import_seconds": null,
+        "error": "libEGL.so.1: cannot open shared object file: No such file or directory"
       },
       "previous": {
         "compile": {
-          "ok": true,
-          "seconds": 11.9828,
-          "rss_kib": 468300,
-          "status": 0
+          "ok": false,
+          "seconds": 0.2194,
+          "rss_kib": 110484,
+          "status": 1,
+          "error": "Imported from /workspace/examples/cube.mojo:36:"
         },
         "run": {
-          "ok": true,
-          "seconds": 0.0612,
-          "rss_kib": 41952,
-          "status": 0,
-          "frames_seconds": 0.023125559
+          "ok": false,
+          "seconds": null,
+          "rss_kib": null,
+          "status": 1,
+          "error": "Imported from /workspace/examples/cube.mojo:36:"
         }
       }
     },
     {
       "name": "cubes",
-      "measured_on": "2026-10-07",
+      "measured_on": "2026-10-23",
       "measurement_date_source": "direct",
       "width": 260,
       "height": 200,
@@ -234,55 +243,57 @@
       "threemojo": {
         "compile": {
           "ok": true,
-          "seconds": 37.5656,
-          "rss_kib": 881836,
+          "seconds": 28.3623,
+          "rss_kib": 804772,
           "status": 0
         },
         "run": {
           "ok": true,
-          "seconds": 0.1738,
-          "rss_kib": 56328,
+          "seconds": 0.0932,
+          "rss_kib": 56744,
           "status": 0,
-          "frames_seconds": 0.097341255
+          "frames_seconds": 0.05275637
         }
       },
       "threejs_flat": {
         "ok": true,
-        "seconds": 0.1322,
-        "rss_kib": 65780,
+        "seconds": 0.0756,
+        "rss_kib": 65608,
         "status": 0,
         "backend": "cpu-flat",
-        "frames_seconds": 0.0479,
-        "import_seconds": 0.0421
+        "frames_seconds": 0.026,
+        "import_seconds": 0.0218
       },
       "threejs_webgl": {
         "ok": false,
-        "seconds": null,
-        "rss_kib": null,
-        "status": 0,
+        "seconds": 0.0555,
+        "rss_kib": 55984,
+        "status": 1,
         "backend": "",
-        "error": "skipped"
+        "frames_seconds": null,
+        "import_seconds": null,
+        "error": "libEGL.so.1: cannot open shared object file: No such file or directory"
       },
       "previous": {
         "compile": {
           "ok": false,
-          "seconds": 13.5831,
-          "rss_kib": 223132,
+          "seconds": 0.2845,
+          "rss_kib": 114816,
           "status": 1,
-          "error": "Imported from /workspace/examples/cubes.mojo:43:"
+          "error": "Imported from /workspace/examples/cubes.mojo:48:"
         },
         "run": {
           "ok": false,
           "seconds": null,
           "rss_kib": null,
           "status": 1,
-          "error": "Imported from /workspace/examples/cubes.mojo:43:"
+          "error": "Imported from /workspace/examples/cubes.mojo:48:"
         }
       }
     },
     {
       "name": "uv",
-      "measured_on": "2026-10-07",
+      "measured_on": "2026-10-23",
       "measurement_date_source": "direct",
       "width": 320,
       "height": 200,
@@ -290,55 +301,57 @@
       "threemojo": {
         "compile": {
           "ok": true,
-          "seconds": 35.0725,
-          "rss_kib": 600428,
+          "seconds": 19.707,
+          "rss_kib": 637924,
           "status": 0
         },
         "run": {
           "ok": true,
-          "seconds": 0.0367,
-          "rss_kib": 13168,
+          "seconds": 0.0161,
+          "rss_kib": 13116,
           "status": 0,
-          "frames_seconds": 0.01133536
+          "frames_seconds": 0.006760075999999999
         }
       },
       "threejs_flat": {
         "ok": true,
-        "seconds": 0.0881,
-        "rss_kib": 64848,
+        "seconds": 0.0587,
+        "rss_kib": 64072,
         "status": 0,
         "backend": "cpu-flat",
-        "frames_seconds": 0.0114,
-        "import_seconds": 0.034
+        "frames_seconds": 0.0070999999999999995,
+        "import_seconds": 0.0224
       },
       "threejs_webgl": {
         "ok": false,
-        "seconds": null,
-        "rss_kib": null,
-        "status": 0,
+        "seconds": 0.0517,
+        "rss_kib": 56132,
+        "status": 1,
         "backend": "",
-        "error": "skipped"
+        "frames_seconds": null,
+        "import_seconds": null,
+        "error": "libEGL.so.1: cannot open shared object file: No such file or directory"
       },
       "previous": {
         "compile": {
           "ok": false,
-          "seconds": 10.2236,
-          "rss_kib": 208044,
+          "seconds": 0.6863,
+          "rss_kib": 119368,
           "status": 1,
-          "error": "Imported from /workspace/examples/uv.mojo:42:"
+          "error": "Imported from /workspace/examples/uv.mojo:46:"
         },
         "run": {
           "ok": false,
           "seconds": null,
           "rss_kib": null,
           "status": 1,
-          "error": "Imported from /workspace/examples/uv.mojo:42:"
+          "error": "Imported from /workspace/examples/uv.mojo:46:"
         }
       }
     },
     {
       "name": "textured",
-      "measured_on": "2026-10-07",
+      "measured_on": "2026-10-23",
       "measurement_date_source": "direct",
       "width": 260,
       "height": 200,
@@ -346,55 +359,57 @@
       "threemojo": {
         "compile": {
           "ok": true,
-          "seconds": 51.1242,
-          "rss_kib": 899224,
+          "seconds": 28.7133,
+          "rss_kib": 749492,
           "status": 0
         },
         "run": {
           "ok": true,
-          "seconds": 0.2388,
-          "rss_kib": 49192,
+          "seconds": 0.1893,
+          "rss_kib": 51920,
           "status": 0,
-          "frames_seconds": 0.18375624
+          "frames_seconds": 0.15371807999999998
         }
       },
       "threejs_flat": {
         "ok": true,
-        "seconds": 0.1081,
-        "rss_kib": 65228,
+        "seconds": 0.0678,
+        "rss_kib": 65152,
         "status": 0,
         "backend": "cpu-flat",
-        "frames_seconds": 0.0314,
-        "import_seconds": 0.0346
+        "frames_seconds": 0.0174,
+        "import_seconds": 0.0217
       },
       "threejs_webgl": {
         "ok": false,
-        "seconds": null,
-        "rss_kib": null,
-        "status": 0,
+        "seconds": 0.0549,
+        "rss_kib": 56020,
+        "status": 1,
         "backend": "",
-        "error": "skipped"
+        "frames_seconds": null,
+        "import_seconds": null,
+        "error": "libEGL.so.1: cannot open shared object file: No such file or directory"
       },
       "previous": {
         "compile": {
           "ok": false,
-          "seconds": 12.5392,
-          "rss_kib": 222660,
+          "seconds": 0.2832,
+          "rss_kib": 115344,
           "status": 1,
-          "error": "Imported from /workspace/examples/textured.mojo:42:"
+          "error": "Imported from /workspace/examples/textured.mojo:30:"
         },
         "run": {
           "ok": false,
           "seconds": null,
           "rss_kib": null,
           "status": 1,
-          "error": "Imported from /workspace/examples/textured.mojo:42:"
+          "error": "Imported from /workspace/examples/textured.mojo:30:"
         }
       }
     },
     {
       "name": "glass",
-      "measured_on": "2026-10-07",
+      "measured_on": "2026-10-23",
       "measurement_date_source": "direct",
       "width": 260,
       "height": 200,
@@ -402,55 +417,57 @@
       "threemojo": {
         "compile": {
           "ok": true,
-          "seconds": 48.511,
-          "rss_kib": 908120,
+          "seconds": 27.863,
+          "rss_kib": 762936,
           "status": 0
         },
         "run": {
           "ok": true,
-          "seconds": 0.1871,
-          "rss_kib": 49184,
+          "seconds": 0.1029,
+          "rss_kib": 49584,
           "status": 0,
-          "frames_seconds": 0.11941063
+          "frames_seconds": 0.06923273
         }
       },
       "threejs_flat": {
         "ok": true,
-        "seconds": 0.1111,
-        "rss_kib": 65140,
+        "seconds": 0.0698,
+        "rss_kib": 65228,
         "status": 0,
         "backend": "cpu-flat",
-        "frames_seconds": 0.0348,
-        "import_seconds": 0.0329
+        "frames_seconds": 0.0217,
+        "import_seconds": 0.0212
       },
       "threejs_webgl": {
         "ok": false,
-        "seconds": null,
-        "rss_kib": null,
-        "status": 0,
+        "seconds": 0.0555,
+        "rss_kib": 56128,
+        "status": 1,
         "backend": "",
-        "error": "skipped"
+        "frames_seconds": null,
+        "import_seconds": null,
+        "error": "libEGL.so.1: cannot open shared object file: No such file or directory"
       },
       "previous": {
         "compile": {
           "ok": false,
-          "seconds": 14.0223,
-          "rss_kib": 223260,
+          "seconds": 0.2755,
+          "rss_kib": 115316,
           "status": 1,
-          "error": "Imported from /workspace/examples/glass.mojo:39:"
+          "error": "Imported from /workspace/examples/glass.mojo:27:"
         },
         "run": {
           "ok": false,
           "seconds": null,
           "rss_kib": null,
           "status": 1,
-          "error": "Imported from /workspace/examples/glass.mojo:39:"
+          "error": "Imported from /workspace/examples/glass.mojo:27:"
         }
       }
     },
     {
       "name": "floor",
-      "measured_on": "2026-10-07",
+      "measured_on": "2026-10-23",
       "measurement_date_source": "direct",
       "width": 320,
       "height": 200,
@@ -458,55 +475,57 @@
       "threemojo": {
         "compile": {
           "ok": true,
-          "seconds": 53.4492,
-          "rss_kib": 895644,
+          "seconds": 27.2848,
+          "rss_kib": 828736,
           "status": 0
         },
         "run": {
           "ok": true,
-          "seconds": 0.2813,
-          "rss_kib": 43736,
+          "seconds": 0.2353,
+          "rss_kib": 44284,
           "status": 0,
-          "frames_seconds": 0.22405931
+          "frames_seconds": 0.20221364
         }
       },
       "threejs_flat": {
         "ok": true,
-        "seconds": 0.0925,
-        "rss_kib": 65080,
+        "seconds": 0.0691,
+        "rss_kib": 65012,
         "status": 0,
         "backend": "cpu-flat",
-        "frames_seconds": 0.0252,
-        "import_seconds": 0.0305
+        "frames_seconds": 0.0195,
+        "import_seconds": 0.0217
       },
       "threejs_webgl": {
         "ok": false,
-        "seconds": null,
-        "rss_kib": null,
-        "status": 0,
+        "seconds": 0.054,
+        "rss_kib": 56112,
+        "status": 1,
         "backend": "",
-        "error": "skipped"
+        "frames_seconds": null,
+        "import_seconds": null,
+        "error": "libEGL.so.1: cannot open shared object file: No such file or directory"
       },
       "previous": {
         "compile": {
           "ok": false,
-          "seconds": 9.3192,
-          "rss_kib": 223224,
+          "seconds": 0.3005,
+          "rss_kib": 115372,
           "status": 1,
-          "error": "Imported from /workspace/examples/floor.mojo:55:"
+          "error": "Imported from /workspace/examples/floor.mojo:40:"
         },
         "run": {
           "ok": false,
           "seconds": null,
           "rss_kib": null,
           "status": 1,
-          "error": "Imported from /workspace/examples/floor.mojo:55:"
+          "error": "Imported from /workspace/examples/floor.mojo:40:"
         }
       }
     },
     {
       "name": "photo",
-      "measured_on": "2026-10-07",
+      "measured_on": "2026-10-23",
       "measurement_date_source": "direct",
       "width": 260,
       "height": 200,
@@ -514,55 +533,57 @@
       "threemojo": {
         "compile": {
           "ok": true,
-          "seconds": 42.9983,
-          "rss_kib": 933348,
+          "seconds": 27.6249,
+          "rss_kib": 832792,
           "status": 0
         },
         "run": {
           "ok": true,
-          "seconds": 0.1154,
-          "rss_kib": 48812,
+          "seconds": 0.1318,
+          "rss_kib": 49144,
           "status": 0,
-          "frames_seconds": 0.07806141999999999
+          "frames_seconds": 0.097647316
         }
       },
       "threejs_flat": {
         "ok": true,
-        "seconds": 0.0678,
-        "rss_kib": 65356,
+        "seconds": 0.0673,
+        "rss_kib": 65100,
         "status": 0,
         "backend": "cpu-flat",
-        "frames_seconds": 0.0176,
-        "import_seconds": 0.0225
+        "frames_seconds": 0.0172,
+        "import_seconds": 0.0217
       },
       "threejs_webgl": {
         "ok": false,
-        "seconds": null,
-        "rss_kib": null,
-        "status": 0,
+        "seconds": 0.0529,
+        "rss_kib": 56156,
+        "status": 1,
         "backend": "",
-        "error": "skipped"
+        "frames_seconds": null,
+        "import_seconds": null,
+        "error": "libEGL.so.1: cannot open shared object file: No such file or directory"
       },
       "previous": {
         "compile": {
           "ok": false,
-          "seconds": 8.491,
-          "rss_kib": 224984,
+          "seconds": 0.2803,
+          "rss_kib": 115900,
           "status": 1,
-          "error": "Imported from /workspace/examples/photo.mojo:42:"
+          "error": "Imported from /workspace/examples/photo.mojo:30:"
         },
         "run": {
           "ok": false,
           "seconds": null,
           "rss_kib": null,
           "status": 1,
-          "error": "Imported from /workspace/examples/photo.mojo:42:"
+          "error": "Imported from /workspace/examples/photo.mojo:30:"
         }
       }
     },
     {
       "name": "lamps",
-      "measured_on": "2026-10-07",
+      "measured_on": "2026-10-23",
       "measurement_date_source": "direct",
       "width": 260,
       "height": 200,
@@ -570,55 +591,57 @@
       "threemojo": {
         "compile": {
           "ok": true,
-          "seconds": 33.6349,
-          "rss_kib": 842244,
+          "seconds": 27.0786,
+          "rss_kib": 811932,
           "status": 0
         },
         "run": {
           "ok": true,
-          "seconds": 0.1943,
-          "rss_kib": 51640,
+          "seconds": 0.1021,
+          "rss_kib": 49060,
           "status": 0,
-          "frames_seconds": 0.12954987
+          "frames_seconds": 0.06732894
         }
       },
       "threejs_flat": {
         "ok": true,
-        "seconds": 0.1212,
-        "rss_kib": 67568,
+        "seconds": 0.0847,
+        "rss_kib": 66624,
         "status": 0,
         "backend": "cpu-flat",
-        "frames_seconds": 0.0479,
-        "import_seconds": 0.0348
+        "frames_seconds": 0.034,
+        "import_seconds": 0.0224
       },
       "threejs_webgl": {
         "ok": false,
-        "seconds": null,
-        "rss_kib": null,
-        "status": 0,
+        "seconds": 0.0539,
+        "rss_kib": 56240,
+        "status": 1,
         "backend": "",
-        "error": "skipped"
+        "frames_seconds": null,
+        "import_seconds": null,
+        "error": "libEGL.so.1: cannot open shared object file: No such file or directory"
       },
       "previous": {
         "compile": {
           "ok": false,
-          "seconds": 12.5669,
-          "rss_kib": 223304,
+          "seconds": 0.2914,
+          "rss_kib": 115360,
           "status": 1,
-          "error": "Imported from /workspace/examples/lamps.mojo:51:"
+          "error": "Imported from /workspace/examples/lamps.mojo:40:"
         },
         "run": {
           "ok": false,
           "seconds": null,
           "rss_kib": null,
           "status": 1,
-          "error": "Imported from /workspace/examples/lamps.mojo:51:"
+          "error": "Imported from /workspace/examples/lamps.mojo:40:"
         }
       }
     },
     {
       "name": "first_scene",
-      "measured_on": "2026-10-07",
+      "measured_on": "2026-10-23",
       "measurement_date_source": "direct",
       "width": 320,
       "height": 240,
@@ -626,40 +649,42 @@
       "threemojo": {
         "compile": {
           "ok": true,
-          "seconds": 44.0739,
-          "rss_kib": 833208,
+          "seconds": 26.6076,
+          "rss_kib": 800088,
           "status": 0
         },
         "run": {
           "ok": true,
-          "seconds": 0.0147,
-          "rss_kib": 13684,
+          "seconds": 0.0119,
+          "rss_kib": 14108,
           "status": 0,
-          "frames_seconds": 0.0048940597
+          "frames_seconds": 0.0028994430000000002
         }
       },
       "threejs_flat": {
         "ok": true,
-        "seconds": 0.0668,
-        "rss_kib": 64300,
+        "seconds": 0.0565,
+        "rss_kib": 64700,
         "status": 0,
         "backend": "cpu-flat",
-        "frames_seconds": 0.0085,
-        "import_seconds": 0.0269
+        "frames_seconds": 0.0072,
+        "import_seconds": 0.0215
       },
       "threejs_webgl": {
         "ok": false,
-        "seconds": null,
-        "rss_kib": null,
-        "status": 0,
+        "seconds": 0.0565,
+        "rss_kib": 56128,
+        "status": 1,
         "backend": "",
-        "error": "skipped"
+        "frames_seconds": null,
+        "import_seconds": null,
+        "error": "libEGL.so.1: cannot open shared object file: No such file or directory"
       },
       "previous": {
         "compile": {
           "ok": false,
-          "seconds": 9.6548,
-          "rss_kib": 222212,
+          "seconds": 0.273,
+          "rss_kib": 115116,
           "status": 1,
           "error": "Imported from /workspace/examples/first_scene.mojo:28:"
         },
@@ -674,7 +699,7 @@
     },
     {
       "name": "lit_scene",
-      "measured_on": "2026-10-07",
+      "measured_on": "2026-10-23",
       "measurement_date_source": "direct",
       "width": 320,
       "height": 240,
@@ -682,40 +707,42 @@
       "threemojo": {
         "compile": {
           "ok": true,
-          "seconds": 44.6195,
-          "rss_kib": 883564,
+          "seconds": 26.747,
+          "rss_kib": 804012,
           "status": 0
         },
         "run": {
           "ok": true,
-          "seconds": 0.2772,
-          "rss_kib": 66236,
+          "seconds": 0.183,
+          "rss_kib": 66652,
           "status": 0,
-          "frames_seconds": 0.19266193999999998
+          "frames_seconds": 0.13639888
         }
       },
       "threejs_flat": {
         "ok": true,
-        "seconds": 0.1183,
-        "rss_kib": 64712,
+        "seconds": 0.0707,
+        "rss_kib": 65180,
         "status": 0,
         "backend": "cpu-flat",
-        "frames_seconds": 0.0345,
-        "import_seconds": 0.038799999999999994
+        "frames_seconds": 0.0201,
+        "import_seconds": 0.0224
       },
       "threejs_webgl": {
         "ok": false,
-        "seconds": null,
-        "rss_kib": null,
-        "status": 0,
+        "seconds": 0.0562,
+        "rss_kib": 56120,
+        "status": 1,
         "backend": "",
-        "error": "skipped"
+        "frames_seconds": null,
+        "import_seconds": null,
+        "error": "libEGL.so.1: cannot open shared object file: No such file or directory"
       },
       "previous": {
         "compile": {
           "ok": false,
-          "seconds": 13.0522,
-          "rss_kib": 223072,
+          "seconds": 0.2852,
+          "rss_kib": 115864,
           "status": 1,
           "error": "Imported from /workspace/examples/lit_scene.mojo:29:"
         },
@@ -730,7 +757,7 @@
     },
     {
       "name": "rotations",
-      "measured_on": "2026-10-07",
+      "measured_on": "2026-10-23",
       "measurement_date_source": "direct",
       "width": 240,
       "height": 180,
@@ -738,1007 +765,1043 @@
       "threemojo": {
         "compile": {
           "ok": true,
-          "seconds": 54.0539,
-          "rss_kib": 846572,
+          "seconds": 26.8462,
+          "rss_kib": 829748,
           "status": 0
         },
         "run": {
           "ok": true,
-          "seconds": 0.1053,
-          "rss_kib": 45232,
+          "seconds": 0.0701,
+          "rss_kib": 45744,
           "status": 0,
-          "frames_seconds": 0.059070496
-        }
-      },
-      "threejs_flat": {
-        "ok": true,
-        "seconds": 0.1094,
-        "rss_kib": 64440,
-        "status": 0,
-        "backend": "cpu-flat",
-        "frames_seconds": 0.027,
-        "import_seconds": 0.0376
-      },
-      "threejs_webgl": {
-        "ok": false,
-        "seconds": null,
-        "rss_kib": null,
-        "status": 0,
-        "backend": "",
-        "error": "skipped"
-      },
-      "previous": {
-        "compile": {
-          "ok": false,
-          "seconds": 13.3021,
-          "rss_kib": 223068,
-          "status": 1,
-          "error": "Imported from /workspace/examples/rotations.mojo:27:"
-        },
-        "run": {
-          "ok": false,
-          "seconds": null,
-          "rss_kib": null,
-          "status": 1,
-          "error": "Imported from /workspace/examples/rotations.mojo:27:"
-        }
-      }
-    },
-    {
-      "name": "ortho",
-      "measured_on": "2026-10-07",
-      "measurement_date_source": "direct",
-      "width": 240,
-      "height": 180,
-      "frames": 36,
-      "threemojo": {
-        "compile": {
-          "ok": true,
-          "seconds": 49.4371,
-          "rss_kib": 903672,
-          "status": 0
-        },
-        "run": {
-          "ok": true,
-          "seconds": 0.1054,
-          "rss_kib": 43516,
-          "status": 0,
-          "frames_seconds": 0.05823755
-        }
-      },
-      "threejs_flat": {
-        "ok": true,
-        "seconds": 0.0928,
-        "rss_kib": 65208,
-        "status": 0,
-        "backend": "cpu-flat",
-        "frames_seconds": 0.016,
-        "import_seconds": 0.0335
-      },
-      "threejs_webgl": {
-        "ok": false,
-        "seconds": null,
-        "rss_kib": null,
-        "status": 0,
-        "backend": "",
-        "error": "skipped"
-      },
-      "previous": {
-        "compile": {
-          "ok": false,
-          "seconds": 13.3461,
-          "rss_kib": 223800,
-          "status": 1,
-          "error": "Imported from /workspace/examples/ortho.mojo:25:"
-        },
-        "run": {
-          "ok": false,
-          "seconds": null,
-          "rss_kib": null,
-          "status": 1,
-          "error": "Imported from /workspace/examples/ortho.mojo:25:"
-        }
-      }
-    },
-    {
-      "name": "geometry",
-      "measured_on": "2026-10-07",
-      "measurement_date_source": "direct",
-      "width": 240,
-      "height": 180,
-      "frames": 36,
-      "threemojo": {
-        "compile": {
-          "ok": true,
-          "seconds": 52.5004,
-          "rss_kib": 900056,
-          "status": 0
-        },
-        "run": {
-          "ok": true,
-          "seconds": 0.2192,
-          "rss_kib": 46240,
-          "status": 0,
-          "frames_seconds": 0.16749364
-        }
-      },
-      "threejs_flat": {
-        "ok": true,
-        "seconds": 0.2124,
-        "rss_kib": 67412,
-        "status": 0,
-        "backend": "cpu-flat",
-        "frames_seconds": 0.101,
-        "import_seconds": 0.041100000000000005
-      },
-      "threejs_webgl": {
-        "ok": false,
-        "seconds": null,
-        "rss_kib": null,
-        "status": 0,
-        "backend": "",
-        "error": "skipped"
-      },
-      "previous": {
-        "compile": {
-          "ok": false,
-          "seconds": 14.4971,
-          "rss_kib": 223044,
-          "status": 1,
-          "error": "Imported from /workspace/examples/geometry.mojo:25:"
-        },
-        "run": {
-          "ok": false,
-          "seconds": null,
-          "rss_kib": null,
-          "status": 1,
-          "error": "Imported from /workspace/examples/geometry.mojo:25:"
-        }
-      }
-    },
-    {
-      "name": "instances",
-      "measured_on": "2026-10-07",
-      "measurement_date_source": "direct",
-      "width": 240,
-      "height": 180,
-      "frames": 36,
-      "threemojo": {
-        "compile": {
-          "ok": true,
-          "seconds": 50.4812,
-          "rss_kib": 869776,
-          "status": 0
-        },
-        "run": {
-          "ok": true,
-          "seconds": 0.0924,
-          "rss_kib": 44236,
-          "status": 0,
-          "frames_seconds": 0.055024624
-        }
-      },
-      "threejs_flat": {
-        "ok": true,
-        "seconds": 0.0976,
-        "rss_kib": 66760,
-        "status": 0,
-        "backend": "cpu-flat",
-        "frames_seconds": 0.0365,
-        "import_seconds": 0.027800000000000002
-      },
-      "threejs_webgl": {
-        "ok": false,
-        "seconds": null,
-        "rss_kib": null,
-        "status": 0,
-        "backend": "",
-        "error": "skipped"
-      },
-      "previous": {
-        "compile": {
-          "ok": false,
-          "seconds": 9.0737,
-          "rss_kib": 222480,
-          "status": 1,
-          "error": "Imported from /workspace/examples/instances.mojo:27:"
-        },
-        "run": {
-          "ok": false,
-          "seconds": null,
-          "rss_kib": null,
-          "status": 1,
-          "error": "Imported from /workspace/examples/instances.mojo:27:"
-        }
-      }
-    },
-    {
-      "name": "raycast",
-      "measured_on": "2026-10-07",
-      "measurement_date_source": "direct",
-      "width": 240,
-      "height": 180,
-      "frames": 36,
-      "threemojo": {
-        "compile": {
-          "ok": true,
-          "seconds": 32.6414,
-          "rss_kib": 881556,
-          "status": 0
-        },
-        "run": {
-          "ok": true,
-          "seconds": 0.096,
-          "rss_kib": 45544,
-          "status": 0,
-          "frames_seconds": 0.06585575
-        }
-      },
-      "threejs_flat": {
-        "ok": true,
-        "seconds": 0.0944,
-        "rss_kib": 68928,
-        "status": 0,
-        "backend": "cpu-flat",
-        "frames_seconds": 0.0418,
-        "import_seconds": 0.0233
-      },
-      "threejs_webgl": {
-        "ok": false,
-        "seconds": null,
-        "rss_kib": null,
-        "status": 0,
-        "backend": "",
-        "error": "skipped"
-      },
-      "previous": {
-        "compile": {
-          "ok": false,
-          "seconds": 8.4748,
-          "rss_kib": 226248,
-          "status": 1,
-          "error": "Imported from /workspace/examples/raycast.mojo:29:"
-        },
-        "run": {
-          "ok": false,
-          "seconds": null,
-          "rss_kib": null,
-          "status": 1,
-          "error": "Imported from /workspace/examples/raycast.mojo:29:"
-        }
-      }
-    },
-    {
-      "name": "curves",
-      "measured_on": "2026-10-07",
-      "measurement_date_source": "direct",
-      "width": 240,
-      "height": 180,
-      "frames": 36,
-      "threemojo": {
-        "compile": {
-          "ok": true,
-          "seconds": 31.3512,
-          "rss_kib": 859520,
-          "status": 0
-        },
-        "run": {
-          "ok": true,
-          "seconds": 0.0915,
-          "rss_kib": 43844,
-          "status": 0,
-          "frames_seconds": 0.049656585999999996
-        }
-      },
-      "threejs_flat": {
-        "ok": true,
-        "seconds": 0.0943,
-        "rss_kib": 66872,
-        "status": 0,
-        "backend": "cpu-flat",
-        "frames_seconds": 0.0297,
-        "import_seconds": 0.027399999999999997
-      },
-      "threejs_webgl": {
-        "ok": false,
-        "seconds": null,
-        "rss_kib": null,
-        "status": 0,
-        "backend": "",
-        "error": "skipped"
-      },
-      "previous": {
-        "compile": {
-          "ok": false,
-          "seconds": 11.7806,
-          "rss_kib": 225936,
-          "status": 1,
-          "error": "Imported from /workspace/examples/curves.mojo:28:"
-        },
-        "run": {
-          "ok": false,
-          "seconds": null,
-          "rss_kib": null,
-          "status": 1,
-          "error": "Imported from /workspace/examples/curves.mojo:28:"
-        }
-      }
-    },
-    {
-      "name": "keyframes",
-      "measured_on": "2026-10-07",
-      "measurement_date_source": "direct",
-      "width": 240,
-      "height": 180,
-      "frames": 36,
-      "threemojo": {
-        "compile": {
-          "ok": true,
-          "seconds": 45.1067,
-          "rss_kib": 931216,
-          "status": 0
-        },
-        "run": {
-          "ok": true,
-          "seconds": 0.0878,
-          "rss_kib": 45056,
-          "status": 0,
-          "frames_seconds": 0.045290996
-        }
-      },
-      "threejs_flat": {
-        "ok": true,
-        "seconds": 0.0844,
-        "rss_kib": 65116,
-        "status": 0,
-        "backend": "cpu-flat",
-        "frames_seconds": 0.020300000000000002,
-        "import_seconds": 0.0293
-      },
-      "threejs_webgl": {
-        "ok": false,
-        "seconds": null,
-        "rss_kib": null,
-        "status": 0,
-        "backend": "",
-        "error": "skipped"
-      },
-      "previous": {
-        "compile": {
-          "ok": false,
-          "seconds": 11.7318,
-          "rss_kib": 228556,
-          "status": 1,
-          "error": "Imported from /workspace/examples/keyframes.mojo:30:"
-        },
-        "run": {
-          "ok": false,
-          "seconds": null,
-          "rss_kib": null,
-          "status": 1,
-          "error": "Imported from /workspace/examples/keyframes.mojo:30:"
-        }
-      }
-    },
-    {
-      "name": "skinning",
-      "measured_on": "2026-10-07",
-      "measurement_date_source": "direct",
-      "width": 240,
-      "height": 180,
-      "frames": 36,
-      "threemojo": {
-        "compile": {
-          "ok": true,
-          "seconds": 42.4891,
-          "rss_kib": 794004,
-          "status": 0
-        },
-        "run": {
-          "ok": true,
-          "seconds": 0.0953,
-          "rss_kib": 45628,
-          "status": 0,
-          "frames_seconds": 0.04596547
-        }
-      },
-      "threejs_flat": {
-        "ok": true,
-        "seconds": 0.1009,
-        "rss_kib": 65512,
-        "status": 0,
-        "backend": "cpu-flat",
-        "frames_seconds": 0.0183,
-        "import_seconds": 0.0353
-      },
-      "threejs_webgl": {
-        "ok": false,
-        "seconds": null,
-        "rss_kib": null,
-        "status": 0,
-        "backend": "",
-        "error": "skipped"
-      },
-      "previous": {
-        "compile": {
-          "ok": false,
-          "seconds": 11.9716,
-          "rss_kib": 223504,
-          "status": 1,
-          "error": "Imported from /workspace/examples/skinning.mojo:30:"
-        },
-        "run": {
-          "ok": false,
-          "seconds": null,
-          "rss_kib": null,
-          "status": 1,
-          "error": "Imported from /workspace/examples/skinning.mojo:30:"
-        }
-      }
-    },
-    {
-      "name": "phong",
-      "measured_on": "2026-10-07",
-      "measurement_date_source": "direct",
-      "width": 240,
-      "height": 180,
-      "frames": 36,
-      "threemojo": {
-        "compile": {
-          "ok": true,
-          "seconds": 49.7559,
-          "rss_kib": 871472,
-          "status": 0
-        },
-        "run": {
-          "ok": true,
-          "seconds": 0.1942,
-          "rss_kib": 46524,
-          "status": 0,
-          "frames_seconds": 0.13465855
-        }
-      },
-      "threejs_flat": {
-        "ok": true,
-        "seconds": 0.1351,
-        "rss_kib": 66868,
-        "status": 0,
-        "backend": "cpu-flat",
-        "frames_seconds": 0.0598,
-        "import_seconds": 0.0316
-      },
-      "threejs_webgl": {
-        "ok": false,
-        "seconds": null,
-        "rss_kib": null,
-        "status": 0,
-        "backend": "",
-        "error": "skipped"
-      },
-      "previous": {
-        "compile": {
-          "ok": false,
-          "seconds": 12.8324,
-          "rss_kib": 223632,
-          "status": 1,
-          "error": "Imported from /workspace/examples/phong.mojo:26:"
-        },
-        "run": {
-          "ok": false,
-          "seconds": null,
-          "rss_kib": null,
-          "status": 1,
-          "error": "Imported from /workspace/examples/phong.mojo:26:"
-        }
-      }
-    },
-    {
-      "name": "fog",
-      "measured_on": "2026-10-07",
-      "measurement_date_source": "direct",
-      "width": 240,
-      "height": 180,
-      "frames": 36,
-      "threemojo": {
-        "compile": {
-          "ok": true,
-          "seconds": 49.5543,
-          "rss_kib": 843008,
-          "status": 0
-        },
-        "run": {
-          "ok": true,
-          "seconds": 0.0937,
-          "rss_kib": 43752,
-          "status": 0,
-          "frames_seconds": 0.031036077999999998
-        }
-      },
-      "threejs_flat": {
-        "ok": true,
-        "seconds": 0.0975,
-        "rss_kib": 64556,
-        "status": 0,
-        "backend": "cpu-flat",
-        "frames_seconds": 0.0218,
-        "import_seconds": 0.0368
-      },
-      "threejs_webgl": {
-        "ok": false,
-        "seconds": null,
-        "rss_kib": null,
-        "status": 0,
-        "backend": "",
-        "error": "skipped"
-      },
-      "previous": {
-        "compile": {
-          "ok": false,
-          "seconds": 12.4224,
-          "rss_kib": 223236,
-          "status": 1,
-          "error": "Imported from /workspace/examples/fog.mojo:27:"
-        },
-        "run": {
-          "ok": false,
-          "seconds": null,
-          "rss_kib": null,
-          "status": 1,
-          "error": "Imported from /workspace/examples/fog.mojo:27:"
-        }
-      }
-    },
-    {
-      "name": "culling",
-      "measured_on": "2026-10-07",
-      "measurement_date_source": "direct",
-      "width": 240,
-      "height": 180,
-      "frames": 36,
-      "threemojo": {
-        "compile": {
-          "ok": true,
-          "seconds": 56.5501,
-          "rss_kib": 891592,
-          "status": 0
-        },
-        "run": {
-          "ok": true,
-          "seconds": 0.1118,
-          "rss_kib": 43692,
-          "status": 0,
-          "frames_seconds": 0.046631929999999995
-        }
-      },
-      "threejs_flat": {
-        "ok": true,
-        "seconds": 0.1403,
-        "rss_kib": 65620,
-        "status": 0,
-        "backend": "cpu-flat",
-        "frames_seconds": 0.0416,
-        "import_seconds": 0.0479
-      },
-      "threejs_webgl": {
-        "ok": false,
-        "seconds": null,
-        "rss_kib": null,
-        "status": 0,
-        "backend": "",
-        "error": "skipped"
-      },
-      "previous": {
-        "compile": {
-          "ok": false,
-          "seconds": 13.968,
-          "rss_kib": 222760,
-          "status": 1,
-          "error": "Imported from /workspace/examples/culling.mojo:27:"
-        },
-        "run": {
-          "ok": false,
-          "seconds": null,
-          "rss_kib": null,
-          "status": 1,
-          "error": "Imported from /workspace/examples/culling.mojo:27:"
-        }
-      }
-    },
-    {
-      "name": "clipping",
-      "measured_on": "2026-10-07",
-      "measurement_date_source": "direct",
-      "width": 240,
-      "height": 180,
-      "frames": 36,
-      "threemojo": {
-        "compile": {
-          "ok": true,
-          "seconds": 66.4008,
-          "rss_kib": 843940,
-          "status": 0
-        },
-        "run": {
-          "ok": true,
-          "seconds": 2.5855,
-          "rss_kib": 45160,
-          "status": 0,
-          "frames_seconds": 0.06818758
-        }
-      },
-      "threejs_flat": {
-        "ok": true,
-        "seconds": 0.7988,
-        "rss_kib": 64448,
-        "status": 0,
-        "backend": "cpu-flat",
-        "frames_seconds": 0.040100000000000004,
-        "import_seconds": 0.0407
-      },
-      "threejs_webgl": {
-        "ok": false,
-        "seconds": null,
-        "rss_kib": null,
-        "status": 0,
-        "backend": "",
-        "error": "skipped"
-      },
-      "previous": {
-        "compile": {
-          "ok": false,
-          "seconds": 16.3767,
-          "rss_kib": 223220,
-          "status": 1,
-          "error": "Imported from /workspace/examples/clipping.mojo:26:"
-        },
-        "run": {
-          "ok": false,
-          "seconds": null,
-          "rss_kib": null,
-          "status": 1,
-          "error": "Imported from /workspace/examples/clipping.mojo:26:"
-        }
-      }
-    },
-    {
-      "name": "gpu_backend",
-      "measured_on": "2026-10-07",
-      "measurement_date_source": "direct",
-      "width": 240,
-      "height": 180,
-      "frames": 36,
-      "threemojo": {
-        "compile": {
-          "ok": true,
-          "seconds": 61.7941,
-          "rss_kib": 887968,
-          "status": 0
-        },
-        "run": {
-          "ok": true,
-          "seconds": 0.1772,
-          "rss_kib": 45056,
-          "status": 0,
-          "frames_seconds": 0.10271496000000001
-        }
-      },
-      "threejs_flat": {
-        "ok": true,
-        "seconds": 0.116,
-        "rss_kib": 65592,
-        "status": 0,
-        "backend": "cpu-flat",
-        "frames_seconds": 0.040100000000000004,
-        "import_seconds": 0.0334
-      },
-      "threejs_webgl": {
-        "ok": false,
-        "seconds": null,
-        "rss_kib": null,
-        "status": 0,
-        "backend": "",
-        "error": "skipped"
-      },
-      "previous": {
-        "compile": {
-          "ok": false,
-          "seconds": 17.1054,
-          "rss_kib": 223968,
-          "status": 1,
-          "error": "Imported from /workspace/examples/gpu_backend.mojo:27:"
-        },
-        "run": {
-          "ok": false,
-          "seconds": null,
-          "rss_kib": null,
-          "status": 1,
-          "error": "Imported from /workspace/examples/gpu_backend.mojo:27:"
-        }
-      }
-    },
-    {
-      "name": "exposure",
-      "measured_on": "2026-10-07",
-      "measurement_date_source": "direct",
-      "width": 240,
-      "height": 180,
-      "frames": 36,
-      "threemojo": {
-        "compile": {
-          "ok": true,
-          "seconds": 52.4875,
-          "rss_kib": 781536,
-          "status": 0
-        },
-        "run": {
-          "ok": true,
-          "seconds": 0.1872,
-          "rss_kib": 46392,
-          "status": 0,
-          "frames_seconds": 0.1363665
-        }
-      },
-      "threejs_flat": {
-        "ok": true,
-        "seconds": 0.0996,
-        "rss_kib": 64596,
-        "status": 0,
-        "backend": "cpu-flat",
-        "frames_seconds": 0.025,
-        "import_seconds": 0.0342
-      },
-      "threejs_webgl": {
-        "ok": false,
-        "seconds": null,
-        "rss_kib": null,
-        "status": 0,
-        "backend": "",
-        "error": "skipped"
-      },
-      "previous": {
-        "compile": {
-          "ok": false,
-          "seconds": 12.7962,
-          "rss_kib": 223624,
-          "status": 1,
-          "error": "Imported from /workspace/examples/exposure.mojo:27:"
-        },
-        "run": {
-          "ok": false,
-          "seconds": null,
-          "rss_kib": null,
-          "status": 1,
-          "error": "Imported from /workspace/examples/exposure.mojo:27:"
-        }
-      }
-    },
-    {
-      "name": "model",
-      "measured_on": "2026-10-07",
-      "measurement_date_source": "direct",
-      "width": 240,
-      "height": 180,
-      "frames": 36,
-      "threemojo": {
-        "compile": {
-          "ok": true,
-          "seconds": 50.2936,
-          "rss_kib": 941096,
-          "status": 0
-        },
-        "run": {
-          "ok": true,
-          "seconds": 0.1109,
-          "rss_kib": 45716,
-          "status": 0,
-          "frames_seconds": 0.058236828000000004
-        }
-      },
-      "threejs_flat": {
-        "ok": true,
-        "seconds": 0.0932,
-        "rss_kib": 64440,
-        "status": 0,
-        "backend": "cpu-flat",
-        "frames_seconds": 0.0215,
-        "import_seconds": 0.030600000000000002
-      },
-      "threejs_webgl": {
-        "ok": false,
-        "seconds": null,
-        "rss_kib": null,
-        "status": 0,
-        "backend": "",
-        "error": "skipped"
-      },
-      "previous": {
-        "compile": {
-          "ok": false,
-          "seconds": 15.2597,
-          "rss_kib": 224112,
-          "status": 1,
-          "error": "Imported from /workspace/examples/model.mojo:26:"
-        },
-        "run": {
-          "ok": false,
-          "seconds": null,
-          "rss_kib": null,
-          "status": 1,
-          "error": "Imported from /workspace/examples/model.mojo:26:"
-        }
-      }
-    },
-    {
-      "name": "orbit",
-      "measured_on": "2026-10-07",
-      "measurement_date_source": "direct",
-      "width": 240,
-      "height": 180,
-      "frames": 36,
-      "threemojo": {
-        "compile": {
-          "ok": true,
-          "seconds": 65.2313,
-          "rss_kib": 840244,
-          "status": 0
-        },
-        "run": {
-          "ok": true,
-          "seconds": 0.175,
-          "rss_kib": 43772,
-          "status": 0,
-          "frames_seconds": 0.073838165
-        }
-      },
-      "threejs_flat": {
-        "ok": true,
-        "seconds": 0.1439,
-        "rss_kib": 66584,
-        "status": 0,
-        "backend": "cpu-flat",
-        "frames_seconds": 0.026199999999999998,
-        "import_seconds": 0.047
-      },
-      "threejs_webgl": {
-        "ok": false,
-        "seconds": null,
-        "rss_kib": null,
-        "status": 0,
-        "backend": "",
-        "error": "skipped"
-      },
-      "previous": {
-        "compile": {
-          "ok": false,
-          "seconds": 15.7342,
-          "rss_kib": 223256,
-          "status": 1,
-          "error": "Imported from /workspace/examples/orbit.mojo:28:"
-        },
-        "run": {
-          "ok": false,
-          "seconds": null,
-          "rss_kib": null,
-          "status": 1,
-          "error": "Imported from /workspace/examples/orbit.mojo:28:"
-        }
-      }
-    },
-    {
-      "name": "clock",
-      "measured_on": "2026-10-07",
-      "measurement_date_source": "direct",
-      "width": 240,
-      "height": 180,
-      "frames": 36,
-      "threemojo": {
-        "compile": {
-          "ok": true,
-          "seconds": 40.1019,
-          "rss_kib": 927580,
-          "status": 0
-        },
-        "run": {
-          "ok": true,
-          "seconds": 0.0869,
-          "rss_kib": 44884,
-          "status": 0,
-          "frames_seconds": 0.044554670000000005
-        }
-      },
-      "threejs_flat": {
-        "ok": true,
-        "seconds": 0.071,
-        "rss_kib": 64472,
-        "status": 0,
-        "backend": "cpu-flat",
-        "frames_seconds": 0.0162,
-        "import_seconds": 0.0237
-      },
-      "threejs_webgl": {
-        "ok": false,
-        "seconds": null,
-        "rss_kib": null,
-        "status": 0,
-        "backend": "",
-        "error": "skipped"
-      },
-      "previous": {
-        "compile": {
-          "ok": false,
-          "seconds": 8.1359,
-          "rss_kib": 222668,
-          "status": 1,
-          "error": "Imported from /workspace/examples/clock.mojo:27:"
-        },
-        "run": {
-          "ok": false,
-          "seconds": null,
-          "rss_kib": null,
-          "status": 1,
-          "error": "Imported from /workspace/examples/clock.mojo:27:"
-        }
-      }
-    },
-    {
-      "name": "chain",
-      "measured_on": "2026-10-07",
-      "measurement_date_source": "direct",
-      "width": 240,
-      "height": 180,
-      "frames": 36,
-      "threemojo": {
-        "compile": {
-          "ok": true,
-          "seconds": 27.7754,
-          "rss_kib": 842096,
-          "status": 0
-        },
-        "run": {
-          "ok": true,
-          "seconds": 0.0751,
-          "rss_kib": 45552,
-          "status": 0,
-          "frames_seconds": 0.039773724
+          "frames_seconds": 0.038966297
         }
       },
       "threejs_flat": {
         "ok": true,
         "seconds": 0.0638,
-        "rss_kib": 65272,
+        "rss_kib": 64204,
         "status": 0,
         "backend": "cpu-flat",
-        "frames_seconds": 0.0145,
-        "import_seconds": 0.0224
+        "frames_seconds": 0.015099999999999999,
+        "import_seconds": 0.0215
       },
       "threejs_webgl": {
         "ok": false,
-        "seconds": null,
-        "rss_kib": null,
-        "status": 0,
+        "seconds": 0.053,
+        "rss_kib": 55984,
+        "status": 1,
         "backend": "",
-        "error": "skipped"
+        "frames_seconds": null,
+        "import_seconds": null,
+        "error": "libEGL.so.1: cannot open shared object file: No such file or directory"
       },
       "previous": {
         "compile": {
           "ok": false,
-          "seconds": 7.661,
-          "rss_kib": 223316,
+          "seconds": 0.2754,
+          "rss_kib": 115116,
           "status": 1,
-          "error": "Imported from /workspace/examples/chain.mojo:26:"
+          "error": "Imported from /workspace/examples/rotations.mojo:15:"
         },
         "run": {
           "ok": false,
           "seconds": null,
           "rss_kib": null,
           "status": 1,
-          "error": "Imported from /workspace/examples/chain.mojo:26:"
+          "error": "Imported from /workspace/examples/rotations.mojo:15:"
+        }
+      }
+    },
+    {
+      "name": "ortho",
+      "measured_on": "2026-10-23",
+      "measurement_date_source": "direct",
+      "width": 240,
+      "height": 180,
+      "frames": 36,
+      "threemojo": {
+        "compile": {
+          "ok": true,
+          "seconds": 26.7316,
+          "rss_kib": 810744,
+          "status": 0
+        },
+        "run": {
+          "ok": true,
+          "seconds": 0.0667,
+          "rss_kib": 43644,
+          "status": 0,
+          "frames_seconds": 0.035948837
+        }
+      },
+      "threejs_flat": {
+        "ok": true,
+        "seconds": 0.0576,
+        "rss_kib": 65100,
+        "status": 0,
+        "backend": "cpu-flat",
+        "frames_seconds": 0.0116,
+        "import_seconds": 0.0208
+      },
+      "threejs_webgl": {
+        "ok": false,
+        "seconds": 0.0526,
+        "rss_kib": 56068,
+        "status": 1,
+        "backend": "",
+        "frames_seconds": null,
+        "import_seconds": null,
+        "error": "libEGL.so.1: cannot open shared object file: No such file or directory"
+      },
+      "previous": {
+        "compile": {
+          "ok": false,
+          "seconds": 0.2692,
+          "rss_kib": 116380,
+          "status": 1,
+          "error": "Imported from /workspace/examples/ortho.mojo:15:"
+        },
+        "run": {
+          "ok": false,
+          "seconds": null,
+          "rss_kib": null,
+          "status": 1,
+          "error": "Imported from /workspace/examples/ortho.mojo:15:"
+        }
+      }
+    },
+    {
+      "name": "geometry",
+      "measured_on": "2026-10-23",
+      "measurement_date_source": "direct",
+      "width": 240,
+      "height": 180,
+      "frames": 36,
+      "threemojo": {
+        "compile": {
+          "ok": true,
+          "seconds": 27.2803,
+          "rss_kib": 809168,
+          "status": 0
+        },
+        "run": {
+          "ok": true,
+          "seconds": 0.1071,
+          "rss_kib": 46312,
+          "status": 0,
+          "frames_seconds": 0.07624977
+        }
+      },
+      "threejs_flat": {
+        "ok": true,
+        "seconds": 0.115,
+        "rss_kib": 66884,
+        "status": 0,
+        "backend": "cpu-flat",
+        "frames_seconds": 0.0611,
+        "import_seconds": 0.0224
+      },
+      "threejs_webgl": {
+        "ok": false,
+        "seconds": 0.0615,
+        "rss_kib": 57548,
+        "status": 1,
+        "backend": "",
+        "frames_seconds": null,
+        "import_seconds": null,
+        "error": "libEGL.so.1: cannot open shared object file: No such file or directory"
+      },
+      "previous": {
+        "compile": {
+          "ok": false,
+          "seconds": 0.2764,
+          "rss_kib": 116440,
+          "status": 1,
+          "error": "Imported from /workspace/examples/geometry.mojo:14:"
+        },
+        "run": {
+          "ok": false,
+          "seconds": null,
+          "rss_kib": null,
+          "status": 1,
+          "error": "Imported from /workspace/examples/geometry.mojo:14:"
+        }
+      }
+    },
+    {
+      "name": "instances",
+      "measured_on": "2026-10-23",
+      "measurement_date_source": "direct",
+      "width": 240,
+      "height": 180,
+      "frames": 36,
+      "threemojo": {
+        "compile": {
+          "ok": true,
+          "seconds": 28.4529,
+          "rss_kib": 808884,
+          "status": 0
+        },
+        "run": {
+          "ok": true,
+          "seconds": 0.0731,
+          "rss_kib": 44540,
+          "status": 0,
+          "frames_seconds": 0.043198230000000004
+        }
+      },
+      "threejs_flat": {
+        "ok": true,
+        "seconds": 0.0742,
+        "rss_kib": 66812,
+        "status": 0,
+        "backend": "cpu-flat",
+        "frames_seconds": 0.0273,
+        "import_seconds": 0.021
+      },
+      "threejs_webgl": {
+        "ok": false,
+        "seconds": 0.0519,
+        "rss_kib": 56408,
+        "status": 1,
+        "backend": "",
+        "frames_seconds": null,
+        "import_seconds": null,
+        "error": "libEGL.so.1: cannot open shared object file: No such file or directory"
+      },
+      "previous": {
+        "compile": {
+          "ok": false,
+          "seconds": 0.2682,
+          "rss_kib": 115824,
+          "status": 1,
+          "error": "Imported from /workspace/examples/instances.mojo:15:"
+        },
+        "run": {
+          "ok": false,
+          "seconds": null,
+          "rss_kib": null,
+          "status": 1,
+          "error": "Imported from /workspace/examples/instances.mojo:15:"
+        }
+      }
+    },
+    {
+      "name": "raycast",
+      "measured_on": "2026-10-23",
+      "measurement_date_source": "direct",
+      "width": 240,
+      "height": 180,
+      "frames": 36,
+      "threemojo": {
+        "compile": {
+          "ok": true,
+          "seconds": 27.8646,
+          "rss_kib": 825100,
+          "status": 0
+        },
+        "run": {
+          "ok": true,
+          "seconds": 0.1075,
+          "rss_kib": 46132,
+          "status": 0,
+          "frames_seconds": 0.063283417
+        }
+      },
+      "threejs_flat": {
+        "ok": true,
+        "seconds": 0.0908,
+        "rss_kib": 68104,
+        "status": 0,
+        "backend": "cpu-flat",
+        "frames_seconds": 0.0415,
+        "import_seconds": 0.0218
+      },
+      "threejs_webgl": {
+        "ok": false,
+        "seconds": 0.0518,
+        "rss_kib": 56352,
+        "status": 1,
+        "backend": "",
+        "frames_seconds": null,
+        "import_seconds": null,
+        "error": "libEGL.so.1: cannot open shared object file: No such file or directory"
+      },
+      "previous": {
+        "compile": {
+          "ok": false,
+          "seconds": 0.2818,
+          "rss_kib": 115008,
+          "status": 1,
+          "error": "Imported from /workspace/examples/raycast.mojo:16:"
+        },
+        "run": {
+          "ok": false,
+          "seconds": null,
+          "rss_kib": null,
+          "status": 1,
+          "error": "Imported from /workspace/examples/raycast.mojo:16:"
+        }
+      }
+    },
+    {
+      "name": "curves",
+      "measured_on": "2026-10-23",
+      "measurement_date_source": "direct",
+      "width": 240,
+      "height": 180,
+      "frames": 36,
+      "threemojo": {
+        "compile": {
+          "ok": true,
+          "seconds": 29.2891,
+          "rss_kib": 805480,
+          "status": 0
+        },
+        "run": {
+          "ok": true,
+          "seconds": 0.0678,
+          "rss_kib": 45948,
+          "status": 0,
+          "frames_seconds": 0.037379227
+        }
+      },
+      "threejs_flat": {
+        "ok": true,
+        "seconds": 0.0765,
+        "rss_kib": 67196,
+        "status": 0,
+        "backend": "cpu-flat",
+        "frames_seconds": 0.024,
+        "import_seconds": 0.0225
+      },
+      "threejs_webgl": {
+        "ok": false,
+        "seconds": 0.0544,
+        "rss_kib": 57476,
+        "status": 1,
+        "backend": "",
+        "frames_seconds": null,
+        "import_seconds": null,
+        "error": "libEGL.so.1: cannot open shared object file: No such file or directory"
+      },
+      "previous": {
+        "compile": {
+          "ok": false,
+          "seconds": 0.2761,
+          "rss_kib": 114948,
+          "status": 1,
+          "error": "Imported from /workspace/examples/curves.mojo:15:"
+        },
+        "run": {
+          "ok": false,
+          "seconds": null,
+          "rss_kib": null,
+          "status": 1,
+          "error": "Imported from /workspace/examples/curves.mojo:15:"
+        }
+      }
+    },
+    {
+      "name": "keyframes",
+      "measured_on": "2026-10-23",
+      "measurement_date_source": "direct",
+      "width": 240,
+      "height": 180,
+      "frames": 36,
+      "threemojo": {
+        "compile": {
+          "ok": true,
+          "seconds": 29.601,
+          "rss_kib": 861060,
+          "status": 0
+        },
+        "run": {
+          "ok": true,
+          "seconds": 0.0557,
+          "rss_kib": 45408,
+          "status": 0,
+          "frames_seconds": 0.024630821
+        }
+      },
+      "threejs_flat": {
+        "ok": true,
+        "seconds": 0.0623,
+        "rss_kib": 65128,
+        "status": 0,
+        "backend": "cpu-flat",
+        "frames_seconds": 0.0157,
+        "import_seconds": 0.0207
+      },
+      "threejs_webgl": {
+        "ok": false,
+        "seconds": 0.0539,
+        "rss_kib": 56088,
+        "status": 1,
+        "backend": "",
+        "frames_seconds": null,
+        "import_seconds": null,
+        "error": "libEGL.so.1: cannot open shared object file: No such file or directory"
+      },
+      "previous": {
+        "compile": {
+          "ok": false,
+          "seconds": 0.3037,
+          "rss_kib": 115968,
+          "status": 1,
+          "error": "Imported from /workspace/examples/keyframes.mojo:15:"
+        },
+        "run": {
+          "ok": false,
+          "seconds": null,
+          "rss_kib": null,
+          "status": 1,
+          "error": "Imported from /workspace/examples/keyframes.mojo:15:"
+        }
+      }
+    },
+    {
+      "name": "skinning",
+      "measured_on": "2026-10-23",
+      "measurement_date_source": "direct",
+      "width": 240,
+      "height": 180,
+      "frames": 36,
+      "threemojo": {
+        "compile": {
+          "ok": true,
+          "seconds": 27.1446,
+          "rss_kib": 826544,
+          "status": 0
+        },
+        "run": {
+          "ok": true,
+          "seconds": 0.0697,
+          "rss_kib": 45480,
+          "status": 0,
+          "frames_seconds": 0.03817229
+        }
+      },
+      "threejs_flat": {
+        "ok": true,
+        "seconds": 0.0631,
+        "rss_kib": 65352,
+        "status": 0,
+        "backend": "cpu-flat",
+        "frames_seconds": 0.0134,
+        "import_seconds": 0.0217
+      },
+      "threejs_webgl": {
+        "ok": false,
+        "seconds": 0.0544,
+        "rss_kib": 55984,
+        "status": 1,
+        "backend": "",
+        "frames_seconds": null,
+        "import_seconds": null,
+        "error": "libEGL.so.1: cannot open shared object file: No such file or directory"
+      },
+      "previous": {
+        "compile": {
+          "ok": false,
+          "seconds": 0.295,
+          "rss_kib": 115252,
+          "status": 1,
+          "error": "Imported from /workspace/examples/skinning.mojo:16:"
+        },
+        "run": {
+          "ok": false,
+          "seconds": null,
+          "rss_kib": null,
+          "status": 1,
+          "error": "Imported from /workspace/examples/skinning.mojo:16:"
+        }
+      }
+    },
+    {
+      "name": "phong",
+      "measured_on": "2026-10-23",
+      "measurement_date_source": "direct",
+      "width": 240,
+      "height": 180,
+      "frames": 36,
+      "threemojo": {
+        "compile": {
+          "ok": true,
+          "seconds": 28.3817,
+          "rss_kib": 746424,
+          "status": 0
+        },
+        "run": {
+          "ok": true,
+          "seconds": 0.1061,
+          "rss_kib": 44768,
+          "status": 0,
+          "frames_seconds": 0.07599619
+        }
+      },
+      "threejs_flat": {
+        "ok": true,
+        "seconds": 0.0902,
+        "rss_kib": 67264,
+        "status": 0,
+        "backend": "cpu-flat",
+        "frames_seconds": 0.0396,
+        "import_seconds": 0.0219
+      },
+      "threejs_webgl": {
+        "ok": false,
+        "seconds": 0.0566,
+        "rss_kib": 56504,
+        "status": 1,
+        "backend": "",
+        "frames_seconds": null,
+        "import_seconds": null,
+        "error": "libEGL.so.1: cannot open shared object file: No such file or directory"
+      },
+      "previous": {
+        "compile": {
+          "ok": false,
+          "seconds": 0.2737,
+          "rss_kib": 115112,
+          "status": 1,
+          "error": "Imported from /workspace/examples/phong.mojo:16:"
+        },
+        "run": {
+          "ok": false,
+          "seconds": null,
+          "rss_kib": null,
+          "status": 1,
+          "error": "Imported from /workspace/examples/phong.mojo:16:"
+        }
+      }
+    },
+    {
+      "name": "fog",
+      "measured_on": "2026-10-23",
+      "measurement_date_source": "direct",
+      "width": 240,
+      "height": 180,
+      "frames": 36,
+      "threemojo": {
+        "compile": {
+          "ok": true,
+          "seconds": 29.2248,
+          "rss_kib": 798284,
+          "status": 0
+        },
+        "run": {
+          "ok": true,
+          "seconds": 0.0536,
+          "rss_kib": 43828,
+          "status": 0,
+          "frames_seconds": 0.023318388
+        }
+      },
+      "threejs_flat": {
+        "ok": true,
+        "seconds": 0.0623,
+        "rss_kib": 64336,
+        "status": 0,
+        "backend": "cpu-flat",
+        "frames_seconds": 0.015,
+        "import_seconds": 0.0211
+      },
+      "threejs_webgl": {
+        "ok": false,
+        "seconds": 0.0543,
+        "rss_kib": 55924,
+        "status": 1,
+        "backend": "",
+        "frames_seconds": null,
+        "import_seconds": null,
+        "error": "libEGL.so.1: cannot open shared object file: No such file or directory"
+      },
+      "previous": {
+        "compile": {
+          "ok": false,
+          "seconds": 0.3095,
+          "rss_kib": 115752,
+          "status": 1,
+          "error": "Imported from /workspace/examples/fog.mojo:32:"
+        },
+        "run": {
+          "ok": false,
+          "seconds": null,
+          "rss_kib": null,
+          "status": 1,
+          "error": "Imported from /workspace/examples/fog.mojo:32:"
+        }
+      }
+    },
+    {
+      "name": "culling",
+      "measured_on": "2026-10-23",
+      "measurement_date_source": "direct",
+      "width": 240,
+      "height": 180,
+      "frames": 36,
+      "threemojo": {
+        "compile": {
+          "ok": true,
+          "seconds": 27.1055,
+          "rss_kib": 800628,
+          "status": 0
+        },
+        "run": {
+          "ok": true,
+          "seconds": 0.0559,
+          "rss_kib": 43888,
+          "status": 0,
+          "frames_seconds": 0.026698898
+        }
+      },
+      "threejs_flat": {
+        "ok": true,
+        "seconds": 0.0765,
+        "rss_kib": 65564,
+        "status": 0,
+        "backend": "cpu-flat",
+        "frames_seconds": 0.026600000000000002,
+        "import_seconds": 0.0223
+      },
+      "threejs_webgl": {
+        "ok": false,
+        "seconds": 0.0537,
+        "rss_kib": 55984,
+        "status": 1,
+        "backend": "",
+        "frames_seconds": null,
+        "import_seconds": null,
+        "error": "libEGL.so.1: cannot open shared object file: No such file or directory"
+      },
+      "previous": {
+        "compile": {
+          "ok": false,
+          "seconds": 0.2658,
+          "rss_kib": 114624,
+          "status": 1,
+          "error": "Imported from /workspace/examples/culling.mojo:16:"
+        },
+        "run": {
+          "ok": false,
+          "seconds": null,
+          "rss_kib": null,
+          "status": 1,
+          "error": "Imported from /workspace/examples/culling.mojo:16:"
+        }
+      }
+    },
+    {
+      "name": "clipping",
+      "measured_on": "2026-10-23",
+      "measurement_date_source": "direct",
+      "width": 240,
+      "height": 180,
+      "frames": 36,
+      "threemojo": {
+        "compile": {
+          "ok": true,
+          "seconds": 27.1929,
+          "rss_kib": 804100,
+          "status": 0
+        },
+        "run": {
+          "ok": true,
+          "seconds": 0.0699,
+          "rss_kib": 45528,
+          "status": 0,
+          "frames_seconds": 0.039780968
+        }
+      },
+      "threejs_flat": {
+        "ok": true,
+        "seconds": 0.0642,
+        "rss_kib": 64200,
+        "status": 0,
+        "backend": "cpu-flat",
+        "frames_seconds": 0.0154,
+        "import_seconds": 0.0217
+      },
+      "threejs_webgl": {
+        "ok": false,
+        "seconds": 0.0565,
+        "rss_kib": 56068,
+        "status": 1,
+        "backend": "",
+        "frames_seconds": null,
+        "import_seconds": null,
+        "error": "libEGL.so.1: cannot open shared object file: No such file or directory"
+      },
+      "previous": {
+        "compile": {
+          "ok": false,
+          "seconds": 0.2745,
+          "rss_kib": 114860,
+          "status": 1,
+          "error": "Imported from /workspace/examples/clipping.mojo:15:"
+        },
+        "run": {
+          "ok": false,
+          "seconds": null,
+          "rss_kib": null,
+          "status": 1,
+          "error": "Imported from /workspace/examples/clipping.mojo:15:"
+        }
+      }
+    },
+    {
+      "name": "gpu_backend",
+      "measured_on": "2026-10-23",
+      "measurement_date_source": "direct",
+      "width": 240,
+      "height": 180,
+      "frames": 36,
+      "threemojo": {
+        "compile": {
+          "ok": true,
+          "seconds": 28.3007,
+          "rss_kib": 820796,
+          "status": 0
+        },
+        "run": {
+          "ok": true,
+          "seconds": 0.0907,
+          "rss_kib": 45292,
+          "status": 0,
+          "frames_seconds": 0.051159184
+        }
+      },
+      "threejs_flat": {
+        "ok": true,
+        "seconds": 0.078,
+        "rss_kib": 65388,
+        "status": 0,
+        "backend": "cpu-flat",
+        "frames_seconds": 0.027899999999999998,
+        "import_seconds": 0.0219
+      },
+      "threejs_webgl": {
+        "ok": false,
+        "seconds": 0.0603,
+        "rss_kib": 56360,
+        "status": 1,
+        "backend": "",
+        "frames_seconds": null,
+        "import_seconds": null,
+        "error": "libEGL.so.1: cannot open shared object file: No such file or directory"
+      },
+      "previous": {
+        "compile": {
+          "ok": false,
+          "seconds": 0.264,
+          "rss_kib": 114132,
+          "status": 1,
+          "error": "Imported from /workspace/examples/gpu_backend.mojo:16:"
+        },
+        "run": {
+          "ok": false,
+          "seconds": null,
+          "rss_kib": null,
+          "status": 1,
+          "error": "Imported from /workspace/examples/gpu_backend.mojo:16:"
+        }
+      }
+    },
+    {
+      "name": "exposure",
+      "measured_on": "2026-10-23",
+      "measurement_date_source": "direct",
+      "width": 240,
+      "height": 180,
+      "frames": 36,
+      "threemojo": {
+        "compile": {
+          "ok": true,
+          "seconds": 27.5141,
+          "rss_kib": 817284,
+          "status": 0
+        },
+        "run": {
+          "ok": true,
+          "seconds": 0.1128,
+          "rss_kib": 47020,
+          "status": 0,
+          "frames_seconds": 0.082742096
+        }
+      },
+      "threejs_flat": {
+        "ok": true,
+        "seconds": 0.063,
+        "rss_kib": 64344,
+        "status": 0,
+        "backend": "cpu-flat",
+        "frames_seconds": 0.015,
+        "import_seconds": 0.0206
+      },
+      "threejs_webgl": {
+        "ok": false,
+        "seconds": 0.0506,
+        "rss_kib": 56084,
+        "status": 1,
+        "backend": "",
+        "frames_seconds": null,
+        "import_seconds": null,
+        "error": "libEGL.so.1: cannot open shared object file: No such file or directory"
+      },
+      "previous": {
+        "compile": {
+          "ok": false,
+          "seconds": 0.2758,
+          "rss_kib": 114828,
+          "status": 1,
+          "error": "Imported from /workspace/examples/exposure.mojo:15:"
+        },
+        "run": {
+          "ok": false,
+          "seconds": null,
+          "rss_kib": null,
+          "status": 1,
+          "error": "Imported from /workspace/examples/exposure.mojo:15:"
+        }
+      }
+    },
+    {
+      "name": "model",
+      "measured_on": "2026-10-23",
+      "measurement_date_source": "direct",
+      "width": 240,
+      "height": 180,
+      "frames": 36,
+      "threemojo": {
+        "compile": {
+          "ok": true,
+          "seconds": 27.9474,
+          "rss_kib": 830768,
+          "status": 0
+        },
+        "run": {
+          "ok": true,
+          "seconds": 0.0676,
+          "rss_kib": 45648,
+          "status": 0,
+          "frames_seconds": 0.037853027
+        }
+      },
+      "threejs_flat": {
+        "ok": true,
+        "seconds": 0.0627,
+        "rss_kib": 64488,
+        "status": 0,
+        "backend": "cpu-flat",
+        "frames_seconds": 0.0154,
+        "import_seconds": 0.0216
+      },
+      "threejs_webgl": {
+        "ok": false,
+        "seconds": 0.0527,
+        "rss_kib": 55976,
+        "status": 1,
+        "backend": "",
+        "frames_seconds": null,
+        "import_seconds": null,
+        "error": "libEGL.so.1: cannot open shared object file: No such file or directory"
+      },
+      "previous": {
+        "compile": {
+          "ok": false,
+          "seconds": 0.2692,
+          "rss_kib": 116572,
+          "status": 1,
+          "error": "Imported from /workspace/examples/model.mojo:15:"
+        },
+        "run": {
+          "ok": false,
+          "seconds": null,
+          "rss_kib": null,
+          "status": 1,
+          "error": "Imported from /workspace/examples/model.mojo:15:"
+        }
+      }
+    },
+    {
+      "name": "orbit",
+      "measured_on": "2026-10-23",
+      "measurement_date_source": "direct",
+      "width": 240,
+      "height": 180,
+      "frames": 36,
+      "threemojo": {
+        "compile": {
+          "ok": true,
+          "seconds": 25.9291,
+          "rss_kib": 794184,
+          "status": 0
+        },
+        "run": {
+          "ok": true,
+          "seconds": 0.0662,
+          "rss_kib": 44400,
+          "status": 0,
+          "frames_seconds": 0.03753132
+        }
+      },
+      "threejs_flat": {
+        "ok": true,
+        "seconds": 0.064,
+        "rss_kib": 66748,
+        "status": 0,
+        "backend": "cpu-flat",
+        "frames_seconds": 0.0165,
+        "import_seconds": 0.0206
+      },
+      "threejs_webgl": {
+        "ok": false,
+        "seconds": 0.0509,
+        "rss_kib": 56064,
+        "status": 1,
+        "backend": "",
+        "frames_seconds": null,
+        "import_seconds": null,
+        "error": "libEGL.so.1: cannot open shared object file: No such file or directory"
+      },
+      "previous": {
+        "compile": {
+          "ok": false,
+          "seconds": 0.2675,
+          "rss_kib": 114912,
+          "status": 1,
+          "error": "Imported from /workspace/examples/orbit.mojo:16:"
+        },
+        "run": {
+          "ok": false,
+          "seconds": null,
+          "rss_kib": null,
+          "status": 1,
+          "error": "Imported from /workspace/examples/orbit.mojo:16:"
+        }
+      }
+    },
+    {
+      "name": "clock",
+      "measured_on": "2026-10-23",
+      "measurement_date_source": "direct",
+      "width": 240,
+      "height": 180,
+      "frames": 36,
+      "threemojo": {
+        "compile": {
+          "ok": true,
+          "seconds": 27.6128,
+          "rss_kib": 806860,
+          "status": 0
+        },
+        "run": {
+          "ok": true,
+          "seconds": 0.0671,
+          "rss_kib": 43788,
+          "status": 0,
+          "frames_seconds": 0.032676555999999995
+        }
+      },
+      "threejs_flat": {
+        "ok": true,
+        "seconds": 0.0613,
+        "rss_kib": 64548,
+        "status": 0,
+        "backend": "cpu-flat",
+        "frames_seconds": 0.0149,
+        "import_seconds": 0.021
+      },
+      "threejs_webgl": {
+        "ok": false,
+        "seconds": 0.0619,
+        "rss_kib": 56272,
+        "status": 1,
+        "backend": "",
+        "frames_seconds": null,
+        "import_seconds": null,
+        "error": "libEGL.so.1: cannot open shared object file: No such file or directory"
+      },
+      "previous": {
+        "compile": {
+          "ok": false,
+          "seconds": 0.2842,
+          "rss_kib": 116712,
+          "status": 1,
+          "error": "Imported from /workspace/examples/clock.mojo:16:"
+        },
+        "run": {
+          "ok": false,
+          "seconds": null,
+          "rss_kib": null,
+          "status": 1,
+          "error": "Imported from /workspace/examples/clock.mojo:16:"
+        }
+      }
+    },
+    {
+      "name": "chain",
+      "measured_on": "2026-10-23",
+      "measurement_date_source": "direct",
+      "width": 240,
+      "height": 180,
+      "frames": 36,
+      "threemojo": {
+        "compile": {
+          "ok": true,
+          "seconds": 26.7927,
+          "rss_kib": 809232,
+          "status": 0
+        },
+        "run": {
+          "ok": true,
+          "seconds": 0.0697,
+          "rss_kib": 46096,
+          "status": 0,
+          "frames_seconds": 0.039138725
+        }
+      },
+      "threejs_flat": {
+        "ok": true,
+        "seconds": 0.0654,
+        "rss_kib": 65364,
+        "status": 0,
+        "backend": "cpu-flat",
+        "frames_seconds": 0.015,
+        "import_seconds": 0.0218
+      },
+      "threejs_webgl": {
+        "ok": false,
+        "seconds": 0.0525,
+        "rss_kib": 56016,
+        "status": 1,
+        "backend": "",
+        "frames_seconds": null,
+        "import_seconds": null,
+        "error": "libEGL.so.1: cannot open shared object file: No such file or directory"
+      },
+      "previous": {
+        "compile": {
+          "ok": false,
+          "seconds": 0.2729,
+          "rss_kib": 116684,
+          "status": 1,
+          "error": "Imported from /workspace/examples/chain.mojo:15:"
+        },
+        "run": {
+          "ok": false,
+          "seconds": null,
+          "rss_kib": null,
+          "status": 1,
+          "error": "Imported from /workspace/examples/chain.mojo:15:"
         }
       }
     },
     {
       "name": "additive",
-      "measured_on": "2026-10-07",
+      "measured_on": "2026-10-23",
       "measurement_date_source": "direct",
       "width": 240,
       "height": 180,
@@ -1746,55 +1809,57 @@
       "threemojo": {
         "compile": {
           "ok": true,
-          "seconds": 36.8308,
-          "rss_kib": 870312,
+          "seconds": 27.7579,
+          "rss_kib": 805784,
           "status": 0
         },
         "run": {
           "ok": true,
-          "seconds": 0.2077,
-          "rss_kib": 45752,
+          "seconds": 0.0942,
+          "rss_kib": 45212,
           "status": 0,
-          "frames_seconds": 0.13028057999999998
+          "frames_seconds": 0.06462133
         }
       },
       "threejs_flat": {
         "ok": true,
-        "seconds": 0.1084,
-        "rss_kib": 64452,
+        "seconds": 0.0634,
+        "rss_kib": 64504,
         "status": 0,
         "backend": "cpu-flat",
-        "frames_seconds": 0.0228,
-        "import_seconds": 0.0353
+        "frames_seconds": 0.0148,
+        "import_seconds": 0.0223
       },
       "threejs_webgl": {
         "ok": false,
-        "seconds": null,
-        "rss_kib": null,
-        "status": 0,
+        "seconds": 0.053,
+        "rss_kib": 56176,
+        "status": 1,
         "backend": "",
-        "error": "skipped"
+        "frames_seconds": null,
+        "import_seconds": null,
+        "error": "libEGL.so.1: cannot open shared object file: No such file or directory"
       },
       "previous": {
         "compile": {
           "ok": false,
-          "seconds": 12.5212,
-          "rss_kib": 223032,
+          "seconds": 0.2735,
+          "rss_kib": 115548,
           "status": 1,
-          "error": "Imported from /workspace/examples/additive.mojo:27:"
+          "error": "Imported from /workspace/examples/additive.mojo:16:"
         },
         "run": {
           "ok": false,
           "seconds": null,
           "rss_kib": null,
           "status": 1,
-          "error": "Imported from /workspace/examples/additive.mojo:27:"
+          "error": "Imported from /workspace/examples/additive.mojo:16:"
         }
       }
     },
     {
       "name": "normals",
-      "measured_on": "2026-10-07",
+      "measured_on": "2026-10-23",
       "measurement_date_source": "direct",
       "width": 240,
       "height": 180,
@@ -1802,55 +1867,57 @@
       "threemojo": {
         "compile": {
           "ok": true,
-          "seconds": 44.0003,
-          "rss_kib": 825720,
+          "seconds": 26.8028,
+          "rss_kib": 807196,
           "status": 0
         },
         "run": {
           "ok": true,
-          "seconds": 0.1568,
-          "rss_kib": 44460,
+          "seconds": 0.1017,
+          "rss_kib": 45756,
           "status": 0,
-          "frames_seconds": 0.10551271
+          "frames_seconds": 0.07159932999999999
         }
       },
       "threejs_flat": {
         "ok": true,
-        "seconds": 0.1105,
-        "rss_kib": 66776,
+        "seconds": 0.0891,
+        "rss_kib": 66904,
         "status": 0,
         "backend": "cpu-flat",
-        "frames_seconds": 0.045,
-        "import_seconds": 0.0297
+        "frames_seconds": 0.0384,
+        "import_seconds": 0.022
       },
       "threejs_webgl": {
         "ok": false,
-        "seconds": null,
-        "rss_kib": null,
-        "status": 0,
+        "seconds": 0.0964,
+        "rss_kib": 56236,
+        "status": 1,
         "backend": "",
-        "error": "skipped"
+        "frames_seconds": null,
+        "import_seconds": null,
+        "error": "libEGL.so.1: cannot open shared object file: No such file or directory"
       },
       "previous": {
         "compile": {
           "ok": false,
-          "seconds": 12.2424,
-          "rss_kib": 222864,
+          "seconds": 0.3287,
+          "rss_kib": 116212,
           "status": 1,
-          "error": "Imported from /workspace/examples/normals.mojo:25:"
+          "error": "Imported from /workspace/examples/normals.mojo:16:"
         },
         "run": {
           "ok": false,
           "seconds": null,
           "rss_kib": null,
           "status": 1,
-          "error": "Imported from /workspace/examples/normals.mojo:25:"
+          "error": "Imported from /workspace/examples/normals.mojo:16:"
         }
       }
     },
     {
       "name": "fragments",
-      "measured_on": "2026-10-07",
+      "measured_on": "2026-10-23",
       "measurement_date_source": "direct",
       "width": 240,
       "height": 180,
@@ -1858,55 +1925,57 @@
       "threemojo": {
         "compile": {
           "ok": true,
-          "seconds": 48.4021,
-          "rss_kib": 747692,
+          "seconds": 26.1792,
+          "rss_kib": 745364,
           "status": 0
         },
         "run": {
           "ok": true,
-          "seconds": 0.2058,
-          "rss_kib": 44956,
+          "seconds": 0.0938,
+          "rss_kib": 44000,
           "status": 0,
-          "frames_seconds": 0.13132463000000003
+          "frames_seconds": 0.0641544
         }
       },
       "threejs_flat": {
         "ok": true,
-        "seconds": 0.1236,
-        "rss_kib": 65500,
+        "seconds": 0.071,
+        "rss_kib": 65736,
         "status": 0,
         "backend": "cpu-flat",
-        "frames_seconds": 0.0356,
-        "import_seconds": 0.0364
+        "frames_seconds": 0.0229,
+        "import_seconds": 0.0216
       },
       "threejs_webgl": {
         "ok": false,
-        "seconds": null,
-        "rss_kib": null,
-        "status": 0,
+        "seconds": 0.0548,
+        "rss_kib": 56400,
+        "status": 1,
         "backend": "",
-        "error": "skipped"
+        "frames_seconds": null,
+        "import_seconds": null,
+        "error": "libEGL.so.1: cannot open shared object file: No such file or directory"
       },
       "previous": {
         "compile": {
           "ok": false,
-          "seconds": 14.3823,
-          "rss_kib": 222788,
+          "seconds": 0.2626,
+          "rss_kib": 114784,
           "status": 1,
-          "error": "Imported from /workspace/examples/fragments.mojo:27:"
+          "error": "Imported from /workspace/examples/fragments.mojo:16:"
         },
         "run": {
           "ok": false,
           "seconds": null,
           "rss_kib": null,
           "status": 1,
-          "error": "Imported from /workspace/examples/fragments.mojo:27:"
+          "error": "Imported from /workspace/examples/fragments.mojo:16:"
         }
       }
     },
     {
       "name": "edges",
-      "measured_on": "2026-10-07",
+      "measured_on": "2026-10-23",
       "measurement_date_source": "direct",
       "width": 240,
       "height": 180,
@@ -1914,54 +1983,57 @@
       "threemojo": {
         "compile": {
           "ok": true,
-          "seconds": 6.0975,
-          "rss_kib": 280956,
+          "seconds": 2.9201,
+          "rss_kib": 302660,
           "status": 0
         },
         "run": {
           "ok": true,
-          "seconds": 0.1623,
-          "rss_kib": 48900,
+          "seconds": 0.0518,
+          "rss_kib": 49584,
           "status": 0,
-          "frames_seconds": 0.012969103000000001
+          "frames_seconds": 0.007487838
         }
       },
       "threejs_flat": {
         "ok": true,
-        "seconds": 0.1762,
-        "rss_kib": 64908,
+        "seconds": 0.0603,
+        "rss_kib": 64892,
         "status": 0,
         "backend": "cpu-flat",
-        "frames_seconds": 0.0264,
-        "import_seconds": 0.053700000000000005
+        "frames_seconds": 0.0104,
+        "import_seconds": 0.0212
       },
       "threejs_webgl": {
         "ok": false,
-        "seconds": null,
-        "rss_kib": null,
-        "status": 0,
+        "seconds": 0.0509,
+        "rss_kib": 56008,
+        "status": 1,
         "backend": "",
-        "error": "skipped"
+        "frames_seconds": null,
+        "import_seconds": null,
+        "error": "libEGL.so.1: cannot open shared object file: No such file or directory"
       },
       "previous": {
         "compile": {
-          "ok": true,
-          "seconds": 19.0521,
-          "rss_kib": 426592,
-          "status": 0
+          "ok": false,
+          "seconds": 0.1685,
+          "rss_kib": 107444,
+          "status": 1,
+          "error": "Imported from /workspace/examples/edges.mojo:23:"
         },
         "run": {
-          "ok": true,
-          "seconds": 0.1037,
-          "rss_kib": 48980,
-          "status": 0,
-          "frames_seconds": 0.042735775
+          "ok": false,
+          "seconds": null,
+          "rss_kib": null,
+          "status": 1,
+          "error": "Imported from /workspace/examples/edges.mojo:23:"
         }
       }
     },
     {
       "name": "lines",
-      "measured_on": "2026-10-07",
+      "measured_on": "2026-10-23",
       "measurement_date_source": "direct",
       "width": 240,
       "height": 180,
@@ -1969,55 +2041,57 @@
       "threemojo": {
         "compile": {
           "ok": true,
-          "seconds": 54.0384,
-          "rss_kib": 835568,
+          "seconds": 26.0668,
+          "rss_kib": 824612,
           "status": 0
         },
         "run": {
           "ok": true,
-          "seconds": 0.1546,
-          "rss_kib": 45876,
+          "seconds": 0.0693,
+          "rss_kib": 45416,
           "status": 0,
-          "frames_seconds": 0.07364538600000001
+          "frames_seconds": 0.03902782
         }
       },
       "threejs_flat": {
         "ok": true,
-        "seconds": 0.1161,
-        "rss_kib": 67956,
+        "seconds": 0.0675,
+        "rss_kib": 66648,
         "status": 0,
         "backend": "cpu-flat",
-        "frames_seconds": 0.03,
-        "import_seconds": 0.0351
+        "frames_seconds": 0.0171,
+        "import_seconds": 0.0211
       },
       "threejs_webgl": {
         "ok": false,
-        "seconds": null,
-        "rss_kib": null,
-        "status": 0,
+        "seconds": 0.0529,
+        "rss_kib": 57420,
+        "status": 1,
         "backend": "",
-        "error": "skipped"
+        "frames_seconds": null,
+        "import_seconds": null,
+        "error": "libEGL.so.1: cannot open shared object file: No such file or directory"
       },
       "previous": {
         "compile": {
           "ok": false,
-          "seconds": 13.7117,
-          "rss_kib": 223008,
+          "seconds": 0.2879,
+          "rss_kib": 116900,
           "status": 1,
-          "error": "Imported from /workspace/examples/lines.mojo:32:"
+          "error": "Imported from /workspace/examples/lines.mojo:18:"
         },
         "run": {
           "ok": false,
           "seconds": null,
           "rss_kib": null,
           "status": 1,
-          "error": "Imported from /workspace/examples/lines.mojo:32:"
+          "error": "Imported from /workspace/examples/lines.mojo:18:"
         }
       }
     },
     {
       "name": "sprites",
-      "measured_on": "2026-10-07",
+      "measured_on": "2026-10-23",
       "measurement_date_source": "direct",
       "width": 240,
       "height": 180,
@@ -2025,55 +2099,57 @@
       "threemojo": {
         "compile": {
           "ok": true,
-          "seconds": 46.4792,
-          "rss_kib": 919132,
+          "seconds": 26.0348,
+          "rss_kib": 820632,
           "status": 0
         },
         "run": {
           "ok": true,
-          "seconds": 0.1105,
-          "rss_kib": 45740,
+          "seconds": 0.0686,
+          "rss_kib": 45676,
           "status": 0,
-          "frames_seconds": 0.06966061000000001
+          "frames_seconds": 0.038898063999999996
         }
       },
       "threejs_flat": {
         "ok": true,
-        "seconds": 0.1076,
-        "rss_kib": 67000,
+        "seconds": 0.0724,
+        "rss_kib": 67268,
         "status": 0,
         "backend": "cpu-flat",
-        "frames_seconds": 0.032600000000000004,
-        "import_seconds": 0.0317
+        "frames_seconds": 0.023600000000000003,
+        "import_seconds": 0.0212
       },
       "threejs_webgl": {
         "ok": false,
-        "seconds": null,
-        "rss_kib": null,
-        "status": 0,
+        "seconds": 0.0558,
+        "rss_kib": 57244,
+        "status": 1,
         "backend": "",
-        "error": "skipped"
+        "frames_seconds": null,
+        "import_seconds": null,
+        "error": "libEGL.so.1: cannot open shared object file: No such file or directory"
       },
       "previous": {
         "compile": {
           "ok": false,
-          "seconds": 14.2232,
-          "rss_kib": 223492,
+          "seconds": 0.3057,
+          "rss_kib": 115256,
           "status": 1,
-          "error": "Imported from /workspace/examples/sprites.mojo:43:"
+          "error": "Imported from /workspace/examples/sprites.mojo:21:"
         },
         "run": {
           "ok": false,
           "seconds": null,
           "rss_kib": null,
           "status": 1,
-          "error": "Imported from /workspace/examples/sprites.mojo:43:"
+          "error": "Imported from /workspace/examples/sprites.mojo:21:"
         }
       }
     },
     {
       "name": "stereo",
-      "measured_on": "2026-10-07",
+      "measured_on": "2026-10-23",
       "measurement_date_source": "direct",
       "width": 240,
       "height": 120,
@@ -2081,55 +2157,57 @@
       "threemojo": {
         "compile": {
           "ok": true,
-          "seconds": 54.9524,
-          "rss_kib": 849752,
+          "seconds": 27.5705,
+          "rss_kib": 753904,
           "status": 0
         },
         "run": {
           "ok": true,
-          "seconds": 0.0944,
-          "rss_kib": 35796,
+          "seconds": 0.0732,
+          "rss_kib": 36240,
           "status": 0,
-          "frames_seconds": 0.061070213000000005
+          "frames_seconds": 0.05143768
         }
       },
       "threejs_flat": {
         "ok": true,
-        "seconds": 0.085,
-        "rss_kib": 67440,
+        "seconds": 0.0681,
+        "rss_kib": 67216,
         "status": 0,
         "backend": "cpu-flat",
-        "frames_seconds": 0.0242,
-        "import_seconds": 0.0268
+        "frames_seconds": 0.0193,
+        "import_seconds": 0.0213
       },
       "threejs_webgl": {
         "ok": false,
-        "seconds": null,
-        "rss_kib": null,
-        "status": 0,
+        "seconds": 0.0517,
+        "rss_kib": 56256,
+        "status": 1,
         "backend": "",
-        "error": "skipped"
+        "frames_seconds": null,
+        "import_seconds": null,
+        "error": "libEGL.so.1: cannot open shared object file: No such file or directory"
       },
       "previous": {
         "compile": {
           "ok": false,
-          "seconds": 9.1269,
-          "rss_kib": 224512,
+          "seconds": 0.2823,
+          "rss_kib": 116876,
           "status": 1,
-          "error": "Imported from /workspace/examples/stereo.mojo:33:"
+          "error": "Imported from /workspace/examples/stereo.mojo:18:"
         },
         "run": {
           "ok": false,
           "seconds": null,
           "rss_kib": null,
           "status": 1,
-          "error": "Imported from /workspace/examples/stereo.mojo:33:"
+          "error": "Imported from /workspace/examples/stereo.mojo:18:"
         }
       }
     },
     {
       "name": "television",
-      "measured_on": "2026-10-07",
+      "measured_on": "2026-10-23",
       "measurement_date_source": "direct",
       "width": 240,
       "height": 180,
@@ -2137,55 +2215,57 @@
       "threemojo": {
         "compile": {
           "ok": true,
-          "seconds": 59.8857,
-          "rss_kib": 877636,
+          "seconds": 28.8652,
+          "rss_kib": 825168,
           "status": 0
         },
         "run": {
           "ok": true,
-          "seconds": 0.3643,
-          "rss_kib": 49808,
+          "seconds": 0.1385,
+          "rss_kib": 50256,
           "status": 0,
-          "frames_seconds": 0.23598879
+          "frames_seconds": 0.1067141
         }
       },
       "threejs_flat": {
         "ok": true,
-        "seconds": 0.0991,
-        "rss_kib": 64464,
+        "seconds": 0.0622,
+        "rss_kib": 64344,
         "status": 0,
         "backend": "cpu-flat",
-        "frames_seconds": 0.0205,
-        "import_seconds": 0.0353
+        "frames_seconds": 0.0141,
+        "import_seconds": 0.021
       },
       "threejs_webgl": {
         "ok": false,
-        "seconds": null,
-        "rss_kib": null,
-        "status": 0,
+        "seconds": 0.053,
+        "rss_kib": 55964,
+        "status": 1,
         "backend": "",
-        "error": "skipped"
+        "frames_seconds": null,
+        "import_seconds": null,
+        "error": "libEGL.so.1: cannot open shared object file: No such file or directory"
       },
       "previous": {
         "compile": {
           "ok": false,
-          "seconds": 17.3396,
-          "rss_kib": 223448,
+          "seconds": 0.3153,
+          "rss_kib": 115568,
           "status": 1,
-          "error": "Imported from /workspace/examples/television.mojo:33:"
+          "error": "Imported from /workspace/examples/television.mojo:18:"
         },
         "run": {
           "ok": false,
           "seconds": null,
           "rss_kib": null,
           "status": 1,
-          "error": "Imported from /workspace/examples/television.mojo:33:"
+          "error": "Imported from /workspace/examples/television.mojo:18:"
         }
       }
     },
     {
       "name": "mirror",
-      "measured_on": "2026-10-07",
+      "measured_on": "2026-10-23",
       "measurement_date_source": "direct",
       "width": 240,
       "height": 180,
@@ -2193,55 +2273,57 @@
       "threemojo": {
         "compile": {
           "ok": true,
-          "seconds": 58.6231,
-          "rss_kib": 890060,
+          "seconds": 28.7686,
+          "rss_kib": 845752,
           "status": 0
         },
         "run": {
           "ok": true,
-          "seconds": 0.5393,
-          "rss_kib": 42620,
+          "seconds": 0.286,
+          "rss_kib": 44316,
           "status": 0,
-          "frames_seconds": 0.45976862
+          "frames_seconds": 0.26088705
         }
       },
       "threejs_flat": {
         "ok": true,
-        "seconds": 0.13,
-        "rss_kib": 67156,
+        "seconds": 0.0772,
+        "rss_kib": 66764,
         "status": 0,
         "backend": "cpu-flat",
-        "frames_seconds": 0.0423,
-        "import_seconds": 0.037
+        "frames_seconds": 0.027,
+        "import_seconds": 0.0225
       },
       "threejs_webgl": {
         "ok": false,
-        "seconds": null,
-        "rss_kib": null,
-        "status": 0,
+        "seconds": 0.0583,
+        "rss_kib": 56508,
+        "status": 1,
         "backend": "",
-        "error": "skipped"
+        "frames_seconds": null,
+        "import_seconds": null,
+        "error": "libEGL.so.1: cannot open shared object file: No such file or directory"
       },
       "previous": {
         "compile": {
           "ok": false,
-          "seconds": 14.7706,
-          "rss_kib": 224444,
+          "seconds": 0.33,
+          "rss_kib": 116548,
           "status": 1,
-          "error": "Imported from /workspace/examples/mirror.mojo:47:"
+          "error": "Imported from /workspace/examples/mirror.mojo:52:"
         },
         "run": {
           "ok": false,
           "seconds": null,
           "rss_kib": null,
           "status": 1,
-          "error": "Imported from /workspace/examples/mirror.mojo:47:"
+          "error": "Imported from /workspace/examples/mirror.mojo:52:"
         }
       }
     },
     {
       "name": "split",
-      "measured_on": "2026-10-07",
+      "measured_on": "2026-10-23",
       "measurement_date_source": "direct",
       "width": 240,
       "height": 180,
@@ -2249,55 +2331,57 @@
       "threemojo": {
         "compile": {
           "ok": true,
-          "seconds": 59.4041,
-          "rss_kib": 871252,
+          "seconds": 28.6928,
+          "rss_kib": 844284,
           "status": 0
         },
         "run": {
           "ok": true,
-          "seconds": 0.1738,
-          "rss_kib": 46496,
+          "seconds": 0.0975,
+          "rss_kib": 48636,
           "status": 0,
-          "frames_seconds": 0.117338104
+          "frames_seconds": 0.0673502
         }
       },
       "threejs_flat": {
         "ok": true,
-        "seconds": 0.13,
-        "rss_kib": 66780,
+        "seconds": 0.075,
+        "rss_kib": 67056,
         "status": 0,
         "backend": "cpu-flat",
-        "frames_seconds": 0.0418,
-        "import_seconds": 0.0376
+        "frames_seconds": 0.026600000000000002,
+        "import_seconds": 0.0217
       },
       "threejs_webgl": {
         "ok": false,
-        "seconds": null,
-        "rss_kib": null,
-        "status": 0,
+        "seconds": 0.0551,
+        "rss_kib": 56108,
+        "status": 1,
         "backend": "",
-        "error": "skipped"
+        "frames_seconds": null,
+        "import_seconds": null,
+        "error": "libEGL.so.1: cannot open shared object file: No such file or directory"
       },
       "previous": {
         "compile": {
           "ok": false,
-          "seconds": 12.0988,
-          "rss_kib": 224168,
+          "seconds": 0.2967,
+          "rss_kib": 117168,
           "status": 1,
-          "error": "Imported from /workspace/examples/split.mojo:30:"
+          "error": "Imported from /workspace/examples/split.mojo:35:"
         },
         "run": {
           "ok": false,
           "seconds": null,
           "rss_kib": null,
           "status": 1,
-          "error": "Imported from /workspace/examples/split.mojo:30:"
+          "error": "Imported from /workspace/examples/split.mojo:35:"
         }
       }
     },
     {
       "name": "physical",
-      "measured_on": "2026-10-07",
+      "measured_on": "2026-10-23",
       "measurement_date_source": "direct",
       "width": 480,
       "height": 220,
@@ -2305,55 +2389,57 @@
       "threemojo": {
         "compile": {
           "ok": true,
-          "seconds": 37.1761,
-          "rss_kib": 843796,
+          "seconds": 27.1443,
+          "rss_kib": 740456,
           "status": 0
         },
         "run": {
           "ok": true,
-          "seconds": 0.0373,
-          "rss_kib": 37648,
+          "seconds": 0.0346,
+          "rss_kib": 39760,
           "status": 0,
-          "frames_seconds": 0.022657988
+          "frames_seconds": 0.022438182999999997
         }
       },
       "threejs_flat": {
         "ok": true,
-        "seconds": 0.0618,
-        "rss_kib": 65564,
+        "seconds": 0.059,
+        "rss_kib": 65288,
         "status": 0,
         "backend": "cpu-flat",
-        "frames_seconds": 0.0094,
-        "import_seconds": 0.0229
+        "frames_seconds": 0.0099,
+        "import_seconds": 0.0205
       },
       "threejs_webgl": {
         "ok": false,
-        "seconds": null,
-        "rss_kib": null,
-        "status": 0,
+        "seconds": 0.0565,
+        "rss_kib": 63836,
+        "status": 1,
         "backend": "",
-        "error": "skipped"
+        "frames_seconds": null,
+        "import_seconds": null,
+        "error": "libEGL.so.1: cannot open shared object file: No such file or directory"
       },
       "previous": {
         "compile": {
           "ok": false,
-          "seconds": 7.9155,
-          "rss_kib": 222320,
+          "seconds": 0.3278,
+          "rss_kib": 117496,
           "status": 1,
-          "error": "Imported from /workspace/examples/physical.mojo:38:"
+          "error": "Imported from /workspace/examples/physical.mojo:39:"
         },
         "run": {
           "ok": false,
           "seconds": null,
           "rss_kib": null,
           "status": 1,
-          "error": "Imported from /workspace/examples/physical.mojo:38:"
+          "error": "Imported from /workspace/examples/physical.mojo:39:"
         }
       }
     },
     {
       "name": "outlines",
-      "measured_on": "2026-10-07",
+      "measured_on": "2026-10-23",
       "measurement_date_source": "direct",
       "width": 240,
       "height": 180,
@@ -2361,55 +2447,57 @@
       "threemojo": {
         "compile": {
           "ok": true,
-          "seconds": 28.834,
-          "rss_kib": 753044,
+          "seconds": 28.9894,
+          "rss_kib": 762088,
           "status": 0
         },
         "run": {
           "ok": true,
-          "seconds": 0.0671,
-          "rss_kib": 45352,
+          "seconds": 0.066,
+          "rss_kib": 45976,
           "status": 0,
-          "frames_seconds": 0.034002544
+          "frames_seconds": 0.034836993999999996
         }
       },
       "threejs_flat": {
         "ok": true,
-        "seconds": 0.0608,
-        "rss_kib": 65260,
+        "seconds": 0.0661,
+        "rss_kib": 65200,
         "status": 0,
         "backend": "cpu-flat",
-        "frames_seconds": 0.013099999999999999,
-        "import_seconds": 0.022600000000000002
+        "frames_seconds": 0.0136,
+        "import_seconds": 0.0228
       },
       "threejs_webgl": {
         "ok": false,
-        "seconds": null,
-        "rss_kib": null,
-        "status": 0,
+        "seconds": 0.0575,
+        "rss_kib": 56140,
+        "status": 1,
         "backend": "",
-        "error": "skipped"
+        "frames_seconds": null,
+        "import_seconds": null,
+        "error": "libEGL.so.1: cannot open shared object file: No such file or directory"
       },
       "previous": {
         "compile": {
           "ok": false,
-          "seconds": 7.6472,
-          "rss_kib": 224428,
+          "seconds": 0.3116,
+          "rss_kib": 115724,
           "status": 1,
-          "error": "Imported from /workspace/examples/outlines.mojo:34:"
+          "error": "Imported from /workspace/examples/outlines.mojo:17:"
         },
         "run": {
           "ok": false,
           "seconds": null,
           "rss_kib": null,
           "status": 1,
-          "error": "Imported from /workspace/examples/outlines.mojo:34:"
+          "error": "Imported from /workspace/examples/outlines.mojo:17:"
         }
       }
     },
     {
       "name": "shadows",
-      "measured_on": "2026-10-07",
+      "measured_on": "2026-10-23",
       "measurement_date_source": "direct",
       "width": 240,
       "height": 180,
@@ -2417,55 +2505,57 @@
       "threemojo": {
         "compile": {
           "ok": true,
-          "seconds": 28.926,
-          "rss_kib": 835896,
+          "seconds": 28.5627,
+          "rss_kib": 810908,
           "status": 0
         },
         "run": {
           "ok": true,
-          "seconds": 0.1627,
-          "rss_kib": 46852,
+          "seconds": 0.1657,
+          "rss_kib": 46980,
           "status": 0,
-          "frames_seconds": 0.13223617999999998
+          "frames_seconds": 0.13560729000000002
         }
       },
       "threejs_flat": {
         "ok": true,
-        "seconds": 0.0674,
-        "rss_kib": 65216,
+        "seconds": 0.0705,
+        "rss_kib": 65252,
         "status": 0,
         "backend": "cpu-flat",
-        "frames_seconds": 0.0209,
-        "import_seconds": 0.0213
+        "frames_seconds": 0.0212,
+        "import_seconds": 0.0212
       },
       "threejs_webgl": {
         "ok": false,
-        "seconds": null,
-        "rss_kib": null,
-        "status": 0,
+        "seconds": 0.0544,
+        "rss_kib": 56140,
+        "status": 1,
         "backend": "",
-        "error": "skipped"
+        "frames_seconds": null,
+        "import_seconds": null,
+        "error": "libEGL.so.1: cannot open shared object file: No such file or directory"
       },
       "previous": {
         "compile": {
           "ok": false,
-          "seconds": 7.3621,
-          "rss_kib": 223292,
+          "seconds": 0.2815,
+          "rss_kib": 116528,
           "status": 1,
-          "error": "Imported from /workspace/examples/shadows.mojo:29:"
+          "error": "Imported from /workspace/examples/shadows.mojo:16:"
         },
         "run": {
           "ok": false,
           "seconds": null,
           "rss_kib": null,
           "status": 1,
-          "error": "Imported from /workspace/examples/shadows.mojo:29:"
+          "error": "Imported from /workspace/examples/shadows.mojo:16:"
         }
       }
     },
     {
       "name": "wide",
-      "measured_on": "2026-10-07",
+      "measured_on": "2026-10-23",
       "measurement_date_source": "direct",
       "width": 240,
       "height": 180,
@@ -2473,55 +2563,57 @@
       "threemojo": {
         "compile": {
           "ok": true,
-          "seconds": 27.8545,
-          "rss_kib": 843512,
+          "seconds": 27.2571,
+          "rss_kib": 827652,
           "status": 0
         },
         "run": {
           "ok": true,
-          "seconds": 0.0911,
-          "rss_kib": 46992,
+          "seconds": 0.0906,
+          "rss_kib": 47716,
           "status": 0,
-          "frames_seconds": 0.059208992
+          "frames_seconds": 0.06049736
         }
       },
       "threejs_flat": {
         "ok": true,
-        "seconds": 0.0778,
-        "rss_kib": 66660,
+        "seconds": 0.0782,
+        "rss_kib": 66176,
         "status": 0,
         "backend": "cpu-flat",
-        "frames_seconds": 0.0297,
-        "import_seconds": 0.0223
+        "frames_seconds": 0.03,
+        "import_seconds": 0.0212
       },
       "threejs_webgl": {
         "ok": false,
-        "seconds": null,
-        "rss_kib": null,
-        "status": 0,
+        "seconds": 0.0545,
+        "rss_kib": 56348,
+        "status": 1,
         "backend": "",
-        "error": "skipped"
+        "frames_seconds": null,
+        "import_seconds": null,
+        "error": "libEGL.so.1: cannot open shared object file: No such file or directory"
       },
       "previous": {
         "compile": {
           "ok": false,
-          "seconds": 7.0499,
-          "rss_kib": 222716,
+          "seconds": 0.2832,
+          "rss_kib": 116740,
           "status": 1,
-          "error": "Imported from /workspace/examples/wide.mojo:28:"
+          "error": "Imported from /workspace/examples/wide.mojo:16:"
         },
         "run": {
           "ok": false,
           "seconds": null,
           "rss_kib": null,
           "status": 1,
-          "error": "Imported from /workspace/examples/wide.mojo:28:"
+          "error": "Imported from /workspace/examples/wide.mojo:16:"
         }
       }
     },
     {
       "name": "bloom",
-      "measured_on": "2026-10-07",
+      "measured_on": "2026-10-23",
       "measurement_date_source": "direct",
       "width": 240,
       "height": 180,
@@ -2529,55 +2621,57 @@
       "threemojo": {
         "compile": {
           "ok": true,
-          "seconds": 40.672,
-          "rss_kib": 951616,
+          "seconds": 41.6482,
+          "rss_kib": 1048604,
           "status": 0
         },
         "run": {
           "ok": true,
-          "seconds": 0.2577,
-          "rss_kib": 52304,
+          "seconds": 0.2697,
+          "rss_kib": 53288,
           "status": 0,
-          "frames_seconds": 0.22381362999999999
+          "frames_seconds": 0.23697841
         }
       },
       "threejs_flat": {
         "ok": true,
-        "seconds": 0.0961,
-        "rss_kib": 67068,
+        "seconds": 0.108,
+        "rss_kib": 67280,
         "status": 0,
         "backend": "cpu-flat",
-        "frames_seconds": 0.0475,
-        "import_seconds": 0.0221
+        "frames_seconds": 0.05,
+        "import_seconds": 0.0254
       },
       "threejs_webgl": {
         "ok": false,
-        "seconds": null,
-        "rss_kib": null,
-        "status": 0,
+        "seconds": 0.0567,
+        "rss_kib": 63024,
+        "status": 1,
         "backend": "",
-        "error": "skipped"
+        "frames_seconds": null,
+        "import_seconds": null,
+        "error": "libEGL.so.1: cannot open shared object file: No such file or directory"
       },
       "previous": {
         "compile": {
           "ok": false,
-          "seconds": 9.8705,
-          "rss_kib": 251176,
+          "seconds": 0.3311,
+          "rss_kib": 119436,
           "status": 1,
-          "error": "Imported from /workspace/examples/bloom.mojo:36:"
+          "error": "Imported from /workspace/examples/bloom.mojo:16:"
         },
         "run": {
           "ok": false,
           "seconds": null,
           "rss_kib": null,
           "status": 1,
-          "error": "Imported from /workspace/examples/bloom.mojo:36:"
+          "error": "Imported from /workspace/examples/bloom.mojo:16:"
         }
       }
     },
     {
       "name": "gizmo",
-      "measured_on": "2026-10-07",
+      "measured_on": "2026-10-23",
       "measurement_date_source": "direct",
       "width": 240,
       "height": 180,
@@ -2585,55 +2679,57 @@
       "threemojo": {
         "compile": {
           "ok": true,
-          "seconds": 27.4473,
-          "rss_kib": 864344,
+          "seconds": 29.7706,
+          "rss_kib": 838572,
           "status": 0
         },
         "run": {
           "ok": true,
-          "seconds": 0.0901,
-          "rss_kib": 49172,
+          "seconds": 0.0904,
+          "rss_kib": 48020,
           "status": 0,
-          "frames_seconds": 0.058922535000000005
+          "frames_seconds": 0.06069052
         }
       },
       "threejs_flat": {
         "ok": true,
-        "seconds": 0.0673,
-        "rss_kib": 67508,
+        "seconds": 0.072,
+        "rss_kib": 67020,
         "status": 0,
         "backend": "cpu-flat",
-        "frames_seconds": 0.0201,
-        "import_seconds": 0.0216
+        "frames_seconds": 0.0212,
+        "import_seconds": 0.0224
       },
       "threejs_webgl": {
         "ok": false,
-        "seconds": null,
-        "rss_kib": null,
-        "status": 0,
+        "seconds": 0.0539,
+        "rss_kib": 56384,
+        "status": 1,
         "backend": "",
-        "error": "skipped"
+        "frames_seconds": null,
+        "import_seconds": null,
+        "error": "libEGL.so.1: cannot open shared object file: No such file or directory"
       },
       "previous": {
         "compile": {
           "ok": false,
-          "seconds": 7.6114,
-          "rss_kib": 226292,
+          "seconds": 0.2939,
+          "rss_kib": 115856,
           "status": 1,
-          "error": "Imported from /workspace/examples/gizmo.mojo:33:"
+          "error": "Imported from /workspace/examples/gizmo.mojo:17:"
         },
         "run": {
           "ok": false,
           "seconds": null,
           "rss_kib": null,
           "status": 1,
-          "error": "Imported from /workspace/examples/gizmo.mojo:33:"
+          "error": "Imported from /workspace/examples/gizmo.mojo:17:"
         }
       }
     },
     {
       "name": "json_scene",
-      "measured_on": "2026-10-07",
+      "measured_on": "2026-10-23",
       "measurement_date_source": "direct",
       "width": 240,
       "height": 180,
@@ -2641,1062 +2737,1100 @@
       "threemojo": {
         "compile": {
           "ok": true,
-          "seconds": 59.0899,
-          "rss_kib": 1638332,
-          "status": 0
-        },
-        "run": {
-          "ok": true,
-          "seconds": 0.0651,
-          "rss_kib": 47124,
-          "status": 0,
-          "frames_seconds": 0.03358606
-        }
-      },
-      "threejs_flat": {
-        "ok": true,
-        "seconds": 0.0604,
-        "rss_kib": 64476,
-        "status": 0,
-        "backend": "cpu-flat",
-        "frames_seconds": 0.0134,
-        "import_seconds": 0.0214
-      },
-      "threejs_webgl": {
-        "ok": false,
-        "seconds": null,
-        "rss_kib": null,
-        "status": 0,
-        "backend": "",
-        "error": "skipped"
-      },
-      "previous": {
-        "compile": {
-          "ok": false,
-          "seconds": 14.7494,
-          "rss_kib": 277796,
-          "status": 1,
-          "error": "Imported from /workspace/examples/json_scene.mojo:28:"
-        },
-        "run": {
-          "ok": false,
-          "seconds": null,
-          "rss_kib": null,
-          "status": 1,
-          "error": "Imported from /workspace/examples/json_scene.mojo:28:"
-        }
-      }
-    },
-    {
-      "name": "reloaded",
-      "measured_on": "2026-10-07",
-      "measurement_date_source": "direct",
-      "width": 240,
-      "height": 180,
-      "frames": 36,
-      "threemojo": {
-        "compile": {
-          "ok": true,
-          "seconds": 56.9639,
-          "rss_kib": 1294296,
-          "status": 0
-        },
-        "run": {
-          "ok": true,
-          "seconds": 0.1291,
-          "rss_kib": 46356,
-          "status": 0,
-          "frames_seconds": 0.096087036
-        }
-      },
-      "threejs_flat": {
-        "ok": true,
-        "seconds": 0.0975,
-        "rss_kib": 67072,
-        "status": 0,
-        "backend": "cpu-flat",
-        "frames_seconds": 0.0495,
-        "import_seconds": 0.0217
-      },
-      "threejs_webgl": {
-        "ok": false,
-        "seconds": null,
-        "rss_kib": null,
-        "status": 0,
-        "backend": "",
-        "error": "skipped"
-      },
-      "previous": {
-        "compile": {
-          "ok": false,
-          "seconds": 16.7609,
-          "rss_kib": 279544,
-          "status": 1,
-          "error": "Imported from /workspace/examples/reloaded.mojo:29:"
-        },
-        "run": {
-          "ok": false,
-          "seconds": null,
-          "rss_kib": null,
-          "status": 1,
-          "error": "Imported from /workspace/examples/reloaded.mojo:29:"
-        }
-      }
-    },
-    {
-      "name": "gem",
-      "measured_on": "2026-10-07",
-      "measurement_date_source": "direct",
-      "width": 240,
-      "height": 180,
-      "frames": 36,
-      "threemojo": {
-        "compile": {
-          "ok": true,
-          "seconds": 30.3482,
-          "rss_kib": 912856,
-          "status": 0
-        },
-        "run": {
-          "ok": true,
-          "seconds": 0.3148,
-          "rss_kib": 51852,
-          "status": 0,
-          "frames_seconds": 0.28232153
-        }
-      },
-      "threejs_flat": {
-        "ok": true,
-        "seconds": 0.0875,
-        "rss_kib": 67316,
-        "status": 0,
-        "backend": "cpu-flat",
-        "frames_seconds": 0.0356,
-        "import_seconds": 0.023100000000000002
-      },
-      "threejs_webgl": {
-        "ok": false,
-        "seconds": null,
-        "rss_kib": null,
-        "status": 0,
-        "backend": "",
-        "error": "skipped"
-      },
-      "previous": {
-        "compile": {
-          "ok": false,
-          "seconds": 8.0263,
-          "rss_kib": 223220,
-          "status": 1,
-          "error": "Imported from /workspace/examples/gem.mojo:27:"
-        },
-        "run": {
-          "ok": false,
-          "seconds": null,
-          "rss_kib": null,
-          "status": 1,
-          "error": "Imported from /workspace/examples/gem.mojo:27:"
-        }
-      }
-    },
-    {
-      "name": "distance",
-      "measured_on": "2026-10-07",
-      "measurement_date_source": "direct",
-      "width": 240,
-      "height": 180,
-      "frames": 36,
-      "threemojo": {
-        "compile": {
-          "ok": true,
-          "seconds": 30.8053,
-          "rss_kib": 878004,
-          "status": 0
-        },
-        "run": {
-          "ok": true,
-          "seconds": 0.1358,
-          "rss_kib": 48804,
-          "status": 0,
-          "frames_seconds": 0.09557059
-        }
-      },
-      "threejs_flat": {
-        "ok": true,
-        "seconds": 0.0929,
-        "rss_kib": 67004,
-        "status": 0,
-        "backend": "cpu-flat",
-        "frames_seconds": 0.039799999999999995,
-        "import_seconds": 0.0232
-      },
-      "threejs_webgl": {
-        "ok": false,
-        "seconds": null,
-        "rss_kib": null,
-        "status": 0,
-        "backend": "",
-        "error": "skipped"
-      },
-      "previous": {
-        "compile": {
-          "ok": false,
-          "seconds": 8.2647,
-          "rss_kib": 222908,
-          "status": 1,
-          "error": "Imported from /workspace/examples/distance.mojo:26:"
-        },
-        "run": {
-          "ok": false,
-          "seconds": null,
-          "rss_kib": null,
-          "status": 1,
-          "error": "Imported from /workspace/examples/distance.mojo:26:"
-        }
-      }
-    },
-    {
-      "name": "unfogged",
-      "measured_on": "2026-10-07",
-      "measurement_date_source": "direct",
-      "width": 240,
-      "height": 180,
-      "frames": 36,
-      "threemojo": {
-        "compile": {
-          "ok": true,
-          "seconds": 32.0598,
-          "rss_kib": 909688,
-          "status": 0
-        },
-        "run": {
-          "ok": true,
-          "seconds": 0.0695,
-          "rss_kib": 45632,
-          "status": 0,
-          "frames_seconds": 0.037394062
-        }
-      },
-      "threejs_flat": {
-        "ok": true,
-        "seconds": 0.0605,
-        "rss_kib": 65480,
-        "status": 0,
-        "backend": "cpu-flat",
-        "frames_seconds": 0.013699999999999999,
-        "import_seconds": 0.0221
-      },
-      "threejs_webgl": {
-        "ok": false,
-        "seconds": null,
-        "rss_kib": null,
-        "status": 0,
-        "backend": "",
-        "error": "skipped"
-      },
-      "previous": {
-        "compile": {
-          "ok": false,
-          "seconds": 7.5339,
-          "rss_kib": 223156,
-          "status": 1,
-          "error": "Imported from /workspace/examples/unfogged.mojo:28:"
-        },
-        "run": {
-          "ok": false,
-          "seconds": null,
-          "rss_kib": null,
-          "status": 1,
-          "error": "Imported from /workspace/examples/unfogged.mojo:28:"
-        }
-      }
-    },
-    {
-      "name": "targets",
-      "measured_on": "2026-10-07",
-      "measurement_date_source": "direct",
-      "width": 240,
-      "height": 180,
-      "frames": 36,
-      "threemojo": {
-        "compile": {
-          "ok": true,
-          "seconds": 27.0849,
-          "rss_kib": 839576,
-          "status": 0
-        },
-        "run": {
-          "ok": true,
-          "seconds": 0.1648,
-          "rss_kib": 46280,
-          "status": 0,
-          "frames_seconds": 0.13180328
-        }
-      },
-      "threejs_flat": {
-        "ok": true,
-        "seconds": 0.0849,
-        "rss_kib": 68904,
-        "status": 0,
-        "backend": "cpu-flat",
-        "frames_seconds": 0.0347,
-        "import_seconds": 0.022699999999999998
-      },
-      "threejs_webgl": {
-        "ok": false,
-        "seconds": null,
-        "rss_kib": null,
-        "status": 0,
-        "backend": "",
-        "error": "skipped"
-      },
-      "previous": {
-        "compile": {
-          "ok": false,
-          "seconds": 7.5241,
-          "rss_kib": 220844,
-          "status": 1,
-          "error": "Imported from /workspace/examples/targets.mojo:36:"
-        },
-        "run": {
-          "ok": false,
-          "seconds": null,
-          "rss_kib": null,
-          "status": 1,
-          "error": "Imported from /workspace/examples/targets.mojo:36:"
-        }
-      }
-    },
-    {
-      "name": "layers",
-      "measured_on": "2026-10-07",
-      "measurement_date_source": "direct",
-      "width": 320,
-      "height": 180,
-      "frames": 36,
-      "threemojo": {
-        "compile": {
-          "ok": true,
-          "seconds": 34.5126,
-          "rss_kib": 798936,
-          "status": 0
-        },
-        "run": {
-          "ok": true,
-          "seconds": 0.3028,
-          "rss_kib": 58296,
-          "status": 0,
-          "frames_seconds": 0.25197752
-        }
-      },
-      "threejs_flat": {
-        "ok": true,
-        "seconds": 0.1257,
-        "rss_kib": 67088,
-        "status": 0,
-        "backend": "cpu-flat",
-        "frames_seconds": 0.060700000000000004,
-        "import_seconds": 0.0289
-      },
-      "threejs_webgl": {
-        "ok": false,
-        "seconds": null,
-        "rss_kib": null,
-        "status": 0,
-        "backend": "",
-        "error": "skipped"
-      },
-      "previous": {
-        "compile": {
-          "ok": false,
-          "seconds": 10.3007,
-          "rss_kib": 223952,
-          "status": 1,
-          "error": "Imported from /workspace/examples/layers.mojo:27:"
-        },
-        "run": {
-          "ok": false,
-          "seconds": null,
-          "rss_kib": null,
-          "status": 1,
-          "error": "Imported from /workspace/examples/layers.mojo:27:"
-        }
-      }
-    },
-    {
-      "name": "graph",
-      "measured_on": "2026-10-07",
-      "measurement_date_source": "direct",
-      "width": 240,
-      "height": 180,
-      "frames": 36,
-      "threemojo": {
-        "compile": {
-          "ok": true,
-          "seconds": 47.4039,
-          "rss_kib": 944532,
-          "status": 0
-        },
-        "run": {
-          "ok": true,
-          "seconds": 0.4121,
-          "rss_kib": 46040,
-          "status": 0,
-          "frames_seconds": 0.27979187
-        }
-      },
-      "threejs_flat": {
-        "ok": true,
-        "seconds": 0.1338,
-        "rss_kib": 68960,
-        "status": 0,
-        "backend": "cpu-flat",
-        "frames_seconds": 0.054299999999999994,
-        "import_seconds": 0.0337
-      },
-      "threejs_webgl": {
-        "ok": false,
-        "seconds": null,
-        "rss_kib": null,
-        "status": 0,
-        "backend": "",
-        "error": "skipped"
-      },
-      "previous": {
-        "compile": {
-          "ok": false,
-          "seconds": 14.182,
-          "rss_kib": 226500,
-          "status": 1,
-          "error": "Imported from /workspace/examples/graph.mojo:28:"
-        },
-        "run": {
-          "ok": false,
-          "seconds": null,
-          "rss_kib": null,
-          "status": 1,
-          "error": "Imported from /workspace/examples/graph.mojo:28:"
-        }
-      }
-    },
-    {
-      "name": "basis",
-      "measured_on": "2026-10-07",
-      "measurement_date_source": "direct",
-      "width": 320,
-      "height": 180,
-      "frames": 36,
-      "threemojo": {
-        "compile": {
-          "ok": true,
-          "seconds": 79.426,
-          "rss_kib": 912212,
-          "status": 0
-        },
-        "run": {
-          "ok": true,
-          "seconds": 0.2114,
-          "rss_kib": 52764,
-          "status": 0,
-          "frames_seconds": 0.112629654
-        }
-      },
-      "threejs_flat": {
-        "ok": true,
-        "seconds": 0.0922,
-        "rss_kib": 64856,
-        "status": 0,
-        "backend": "cpu-flat",
-        "frames_seconds": 0.0212,
-        "import_seconds": 0.0296
-      },
-      "threejs_webgl": {
-        "ok": false,
-        "seconds": null,
-        "rss_kib": null,
-        "status": 0,
-        "backend": "",
-        "error": "skipped"
-      },
-      "previous": {
-        "compile": {
-          "ok": false,
-          "seconds": 19.7391,
-          "rss_kib": 239208,
-          "status": 1,
-          "error": "Imported from /workspace/examples/basis.mojo:29:"
-        },
-        "run": {
-          "ok": false,
-          "seconds": null,
-          "rss_kib": null,
-          "status": 1,
-          "error": "Imported from /workspace/examples/basis.mojo:29:"
-        }
-      }
-    },
-    {
-      "name": "coats",
-      "measured_on": "2026-10-07",
-      "measurement_date_source": "direct",
-      "width": 320,
-      "height": 180,
-      "frames": 36,
-      "threemojo": {
-        "compile": {
-          "ok": true,
-          "seconds": 57.1066,
-          "rss_kib": 843532,
-          "status": 0
-        },
-        "run": {
-          "ok": true,
-          "seconds": 0.4158,
-          "rss_kib": 65172,
-          "status": 0,
-          "frames_seconds": 0.30830386
-        }
-      },
-      "threejs_flat": {
-        "ok": true,
-        "seconds": 0.1619,
-        "rss_kib": 67336,
-        "status": 0,
-        "backend": "cpu-flat",
-        "frames_seconds": 0.07859999999999999,
-        "import_seconds": 0.0341
-      },
-      "threejs_webgl": {
-        "ok": false,
-        "seconds": null,
-        "rss_kib": null,
-        "status": 0,
-        "backend": "",
-        "error": "skipped"
-      },
-      "previous": {
-        "compile": {
-          "ok": false,
-          "seconds": 13.6996,
-          "rss_kib": 223256,
-          "status": 1,
-          "error": "Imported from /workspace/examples/coats.mojo:28:"
-        },
-        "run": {
-          "ok": false,
-          "seconds": null,
-          "rss_kib": null,
-          "status": 1,
-          "error": "Imported from /workspace/examples/coats.mojo:28:"
-        }
-      }
-    },
-    {
-      "name": "skyjson",
-      "measured_on": "2026-10-07",
-      "measurement_date_source": "direct",
-      "width": 240,
-      "height": 180,
-      "frames": 36,
-      "threemojo": {
-        "compile": {
-          "ok": true,
-          "seconds": 118.177,
-          "rss_kib": 1561048,
-          "status": 0
-        },
-        "run": {
-          "ok": true,
-          "seconds": 0.6101,
-          "rss_kib": 51588,
-          "status": 0,
-          "frames_seconds": 0.48066467
-        }
-      },
-      "threejs_flat": {
-        "ok": true,
-        "seconds": 0.1374,
-        "rss_kib": 67452,
-        "status": 0,
-        "backend": "cpu-flat",
-        "frames_seconds": 0.0535,
-        "import_seconds": 0.0373
-      },
-      "threejs_webgl": {
-        "ok": false,
-        "seconds": null,
-        "rss_kib": null,
-        "status": 0,
-        "backend": "",
-        "error": "skipped"
-      },
-      "previous": {
-        "compile": {
-          "ok": false,
-          "seconds": 30.1892,
-          "rss_kib": 278500,
-          "status": 1,
-          "error": "Imported from /workspace/examples/skyjson.mojo:34:"
-        },
-        "run": {
-          "ok": false,
-          "seconds": null,
-          "rss_kib": null,
-          "status": 1,
-          "error": "Imported from /workspace/examples/skyjson.mojo:34:"
-        }
-      }
-    },
-    {
-      "name": "daylight",
-      "measured_on": "2026-10-07",
-      "measurement_date_source": "direct",
-      "width": 240,
-      "height": 180,
-      "frames": 36,
-      "threemojo": {
-        "compile": {
-          "ok": true,
-          "seconds": 65.5315,
-          "rss_kib": 1262100,
-          "status": 0
-        },
-        "run": {
-          "ok": true,
-          "seconds": 1.9675,
-          "rss_kib": 48776,
-          "status": 0,
-          "frames_seconds": 1.9219482
-        }
-      },
-      "threejs_flat": {
-        "ok": true,
-        "seconds": 0.1766,
-        "rss_kib": 66760,
-        "status": 0,
-        "backend": "cpu-flat",
-        "frames_seconds": 0.1155,
-        "import_seconds": 0.0289
-      },
-      "threejs_webgl": {
-        "ok": false,
-        "seconds": null,
-        "rss_kib": null,
-        "status": 0,
-        "backend": "",
-        "error": "skipped"
-      },
-      "previous": {
-        "compile": {
-          "ok": false,
-          "seconds": 10.9569,
-          "rss_kib": 242140,
-          "status": 1,
-          "error": "Imported from /workspace/examples/daylight.mojo:28:"
-        },
-        "run": {
-          "ok": false,
-          "seconds": null,
-          "rss_kib": null,
-          "status": 1,
-          "error": "Imported from /workspace/examples/daylight.mojo:28:"
-        }
-      }
-    },
-    {
-      "name": "faces",
-      "measured_on": "2026-10-07",
-      "measurement_date_source": "direct",
-      "width": 240,
-      "height": 180,
-      "frames": 36,
-      "threemojo": {
-        "compile": {
-          "ok": true,
-          "seconds": 38.7324,
-          "rss_kib": 791336,
-          "status": 0
-        },
-        "run": {
-          "ok": true,
-          "seconds": 0.1729,
-          "rss_kib": 45648,
-          "status": 0,
-          "frames_seconds": 0.110788155
-        }
-      },
-      "threejs_flat": {
-        "ok": true,
-        "seconds": 0.1115,
-        "rss_kib": 65244,
-        "status": 0,
-        "backend": "cpu-flat",
-        "frames_seconds": 0.0298,
-        "import_seconds": 0.0354
-      },
-      "threejs_webgl": {
-        "ok": false,
-        "seconds": null,
-        "rss_kib": null,
-        "status": 0,
-        "backend": "",
-        "error": "skipped"
-      },
-      "previous": {
-        "compile": {
-          "ok": false,
-          "seconds": 11.7602,
-          "rss_kib": 222744,
-          "status": 1,
-          "error": "Imported from /workspace/examples/faces.mojo:27:"
-        },
-        "run": {
-          "ok": false,
-          "seconds": null,
-          "rss_kib": null,
-          "status": 1,
-          "error": "Imported from /workspace/examples/faces.mojo:27:"
-        }
-      }
-    },
-    {
-      "name": "utah",
-      "measured_on": "2026-10-07",
-      "measurement_date_source": "direct",
-      "width": 240,
-      "height": 180,
-      "frames": 36,
-      "threemojo": {
-        "compile": {
-          "ok": true,
-          "seconds": 45.9313,
-          "rss_kib": 899988,
-          "status": 0
-        },
-        "run": {
-          "ok": true,
-          "seconds": 0.2549,
-          "rss_kib": 48684,
-          "status": 0,
-          "frames_seconds": 0.17063695
-        }
-      },
-      "threejs_flat": {
-        "ok": true,
-        "seconds": 0.1825,
-        "rss_kib": 69268,
-        "status": 0,
-        "backend": "cpu-flat",
-        "frames_seconds": 0.07690000000000001,
-        "import_seconds": 0.027600000000000003
-      },
-      "threejs_webgl": {
-        "ok": false,
-        "seconds": null,
-        "rss_kib": null,
-        "status": 0,
-        "backend": "",
-        "error": "skipped"
-      },
-      "previous": {
-        "compile": {
-          "ok": false,
-          "seconds": 13.7249,
-          "rss_kib": 224672,
-          "status": 1,
-          "error": "Imported from /workspace/examples/utah.mojo:27:"
-        },
-        "run": {
-          "ok": false,
-          "seconds": null,
-          "rss_kib": null,
-          "status": 1,
-          "error": "Imported from /workspace/examples/utah.mojo:27:"
-        }
-      }
-    },
-    {
-      "name": "blobs",
-      "measured_on": "2026-10-07",
-      "measurement_date_source": "direct",
-      "width": 240,
-      "height": 180,
-      "frames": 36,
-      "threemojo": {
-        "compile": {
-          "ok": true,
-          "seconds": 71.7989,
-          "rss_kib": 887900,
-          "status": 0
-        },
-        "run": {
-          "ok": true,
-          "seconds": 0.1325,
-          "rss_kib": 43612,
-          "status": 0,
-          "frames_seconds": 0.06816987000000001
-        }
-      },
-      "threejs_flat": {
-        "ok": true,
-        "seconds": 0.2667,
-        "rss_kib": 69424,
-        "status": 0,
-        "backend": "cpu-flat",
-        "frames_seconds": 0.1419,
-        "import_seconds": 0.0332
-      },
-      "threejs_webgl": {
-        "ok": false,
-        "seconds": null,
-        "rss_kib": null,
-        "status": 0,
-        "backend": "",
-        "error": "skipped"
-      },
-      "previous": {
-        "compile": {
-          "ok": false,
-          "seconds": 21.234,
-          "rss_kib": 227800,
-          "status": 1,
-          "error": "Imported from /workspace/examples/blobs.mojo:27:"
-        },
-        "run": {
-          "ok": false,
-          "seconds": null,
-          "rss_kib": null,
-          "status": 1,
-          "error": "Imported from /workspace/examples/blobs.mojo:27:"
-        }
-      }
-    },
-    {
-      "name": "flipbook",
-      "measured_on": "2026-10-07",
-      "measurement_date_source": "direct",
-      "width": 240,
-      "height": 180,
-      "frames": 36,
-      "threemojo": {
-        "compile": {
-          "ok": true,
-          "seconds": 54.2951,
-          "rss_kib": 892684,
-          "status": 0
-        },
-        "run": {
-          "ok": true,
-          "seconds": 0.2369,
-          "rss_kib": 47016,
-          "status": 0,
-          "frames_seconds": 0.14448698
-        }
-      },
-      "threejs_flat": {
-        "ok": true,
-        "seconds": 0.2147,
-        "rss_kib": 68840,
-        "status": 0,
-        "backend": "cpu-flat",
-        "frames_seconds": 0.055299999999999995,
-        "import_seconds": 0.06509999999999999
-      },
-      "threejs_webgl": {
-        "ok": false,
-        "seconds": null,
-        "rss_kib": null,
-        "status": 0,
-        "backend": "",
-        "error": "skipped"
-      },
-      "previous": {
-        "compile": {
-          "ok": false,
-          "seconds": 15.0823,
-          "rss_kib": 224472,
-          "status": 1,
-          "error": "Imported from /workspace/examples/flipbook.mojo:34:"
-        },
-        "run": {
-          "ok": false,
-          "seconds": null,
-          "rss_kib": null,
-          "status": 1,
-          "error": "Imported from /workspace/examples/flipbook.mojo:34:"
-        }
-      }
-    },
-    {
-      "name": "ripples",
-      "measured_on": "2026-10-07",
-      "measurement_date_source": "direct",
-      "width": 240,
-      "height": 180,
-      "frames": 36,
-      "threemojo": {
-        "compile": {
-          "ok": true,
-          "seconds": 75.3938,
-          "rss_kib": 1137264,
-          "status": 0
-        },
-        "run": {
-          "ok": true,
-          "seconds": 0.6661,
-          "rss_kib": 54288,
-          "status": 0,
-          "frames_seconds": 0.5137344399999999
-        }
-      },
-      "threejs_flat": {
-        "ok": true,
-        "seconds": 0.2201,
-        "rss_kib": 67144,
-        "status": 0,
-        "backend": "cpu-flat",
-        "frames_seconds": 0.0889,
-        "import_seconds": 0.044
-      },
-      "threejs_webgl": {
-        "ok": false,
-        "seconds": null,
-        "rss_kib": null,
-        "status": 0,
-        "backend": "",
-        "error": "skipped"
-      },
-      "previous": {
-        "compile": {
-          "ok": false,
-          "seconds": 20.0075,
-          "rss_kib": 242348,
-          "status": 1,
-          "error": "Imported from /workspace/examples/ripples.mojo:28:"
-        },
-        "run": {
-          "ok": false,
-          "seconds": null,
-          "rss_kib": null,
-          "status": 1,
-          "error": "Imported from /workspace/examples/ripples.mojo:28:"
-        }
-      }
-    },
-    {
-      "name": "baked",
-      "measured_on": "2026-10-07",
-      "measurement_date_source": "direct",
-      "width": 240,
-      "height": 180,
-      "frames": 36,
-      "threemojo": {
-        "compile": {
-          "ok": true,
-          "seconds": 48.4251,
-          "rss_kib": 886100,
-          "status": 0
-        },
-        "run": {
-          "ok": true,
-          "seconds": 1.2324,
-          "rss_kib": 46152,
-          "status": 0,
-          "frames_seconds": 0.78832605
-        }
-      },
-      "threejs_flat": {
-        "ok": true,
-        "seconds": 0.0995,
-        "rss_kib": 65696,
-        "status": 0,
-        "backend": "cpu-flat",
-        "frames_seconds": 0.032799999999999996,
-        "import_seconds": 0.028300000000000002
-      },
-      "threejs_webgl": {
-        "ok": false,
-        "seconds": null,
-        "rss_kib": null,
-        "status": 0,
-        "backend": "",
-        "error": "skipped"
-      },
-      "previous": {
-        "compile": {
-          "ok": false,
-          "seconds": 8.6629,
-          "rss_kib": 227456,
-          "status": 1,
-          "error": "Imported from /workspace/examples/baked.mojo:31:"
-        },
-        "run": {
-          "ok": false,
-          "seconds": null,
-          "rss_kib": null,
-          "status": 1,
-          "error": "Imported from /workspace/examples/baked.mojo:31:"
-        }
-      }
-    },
-    {
-      "name": "diagram",
-      "measured_on": "2026-10-07",
-      "measurement_date_source": "direct",
-      "width": 240,
-      "height": 180,
-      "frames": 36,
-      "threemojo": {
-        "compile": {
-          "ok": true,
-          "seconds": 12.801,
-          "rss_kib": 549616,
-          "status": 0
-        },
-        "run": {
-          "ok": true,
-          "seconds": 0.0687,
-          "rss_kib": 43292,
-          "status": 0,
-          "frames_seconds": 0.03554518
-        }
-      },
-      "threejs_flat": {
-        "ok": true,
-        "seconds": 0.0776,
-        "rss_kib": 65232,
-        "status": 0,
-        "backend": "cpu-flat",
-        "frames_seconds": 0.0254,
-        "import_seconds": 0.0228
-      },
-      "threejs_webgl": {
-        "ok": false,
-        "seconds": null,
-        "rss_kib": null,
-        "status": 0,
-        "backend": "",
-        "error": "skipped"
-      },
-      "previous": {
-        "compile": {
-          "ok": true,
-          "seconds": 16.9036,
-          "rss_kib": 657756,
+          "seconds": 58.9631,
+          "rss_kib": 1450976,
           "status": 0
         },
         "run": {
           "ok": true,
           "seconds": 0.0718,
-          "rss_kib": 42560,
+          "rss_kib": 47756,
           "status": 0,
-          "frames_seconds": 0.037705196
+          "frames_seconds": 0.040099407
+        }
+      },
+      "threejs_flat": {
+        "ok": true,
+        "seconds": 0.0632,
+        "rss_kib": 64584,
+        "status": 0,
+        "backend": "cpu-flat",
+        "frames_seconds": 0.014,
+        "import_seconds": 0.0214
+      },
+      "threejs_webgl": {
+        "ok": false,
+        "seconds": 0.0559,
+        "rss_kib": 56052,
+        "status": 1,
+        "backend": "",
+        "frames_seconds": null,
+        "import_seconds": null,
+        "error": "libEGL.so.1: cannot open shared object file: No such file or directory"
+      },
+      "previous": {
+        "compile": {
+          "ok": false,
+          "seconds": 0.3346,
+          "rss_kib": 116376,
+          "status": 1,
+          "error": "Imported from /workspace/examples/json_scene.mojo:16:"
+        },
+        "run": {
+          "ok": false,
+          "seconds": null,
+          "rss_kib": null,
+          "status": 1,
+          "error": "Imported from /workspace/examples/json_scene.mojo:16:"
+        }
+      }
+    },
+    {
+      "name": "reloaded",
+      "measured_on": "2026-10-23",
+      "measurement_date_source": "direct",
+      "width": 240,
+      "height": 180,
+      "frames": 36,
+      "threemojo": {
+        "compile": {
+          "ok": true,
+          "seconds": 57.7326,
+          "rss_kib": 1455056,
+          "status": 0
+        },
+        "run": {
+          "ok": true,
+          "seconds": 0.1279,
+          "rss_kib": 46784,
+          "status": 0,
+          "frames_seconds": 0.097571106
+        }
+      },
+      "threejs_flat": {
+        "ok": true,
+        "seconds": 0.1017,
+        "rss_kib": 66812,
+        "status": 0,
+        "backend": "cpu-flat",
+        "frames_seconds": 0.0508,
+        "import_seconds": 0.0216
+      },
+      "threejs_webgl": {
+        "ok": false,
+        "seconds": 0.0555,
+        "rss_kib": 57196,
+        "status": 1,
+        "backend": "",
+        "frames_seconds": null,
+        "import_seconds": null,
+        "error": "libEGL.so.1: cannot open shared object file: No such file or directory"
+      },
+      "previous": {
+        "compile": {
+          "ok": false,
+          "seconds": 0.292,
+          "rss_kib": 116200,
+          "status": 1,
+          "error": "Imported from /workspace/examples/reloaded.mojo:16:"
+        },
+        "run": {
+          "ok": false,
+          "seconds": null,
+          "rss_kib": null,
+          "status": 1,
+          "error": "Imported from /workspace/examples/reloaded.mojo:16:"
+        }
+      }
+    },
+    {
+      "name": "gem",
+      "measured_on": "2026-10-23",
+      "measurement_date_source": "direct",
+      "width": 240,
+      "height": 180,
+      "frames": 36,
+      "threemojo": {
+        "compile": {
+          "ok": true,
+          "seconds": 29.7112,
+          "rss_kib": 749428,
+          "status": 0
+        },
+        "run": {
+          "ok": true,
+          "seconds": 0.2939,
+          "rss_kib": 51320,
+          "status": 0,
+          "frames_seconds": 0.26179266
+        }
+      },
+      "threejs_flat": {
+        "ok": true,
+        "seconds": 0.0841,
+        "rss_kib": 67104,
+        "status": 0,
+        "backend": "cpu-flat",
+        "frames_seconds": 0.0346,
+        "import_seconds": 0.0218
+      },
+      "threejs_webgl": {
+        "ok": false,
+        "seconds": 0.0529,
+        "rss_kib": 56616,
+        "status": 1,
+        "backend": "",
+        "frames_seconds": null,
+        "import_seconds": null,
+        "error": "libEGL.so.1: cannot open shared object file: No such file or directory"
+      },
+      "previous": {
+        "compile": {
+          "ok": false,
+          "seconds": 0.2968,
+          "rss_kib": 115684,
+          "status": 1,
+          "error": "Imported from /workspace/examples/gem.mojo:16:"
+        },
+        "run": {
+          "ok": false,
+          "seconds": null,
+          "rss_kib": null,
+          "status": 1,
+          "error": "Imported from /workspace/examples/gem.mojo:16:"
+        }
+      }
+    },
+    {
+      "name": "distance",
+      "measured_on": "2026-10-23",
+      "measurement_date_source": "direct",
+      "width": 240,
+      "height": 180,
+      "frames": 36,
+      "threemojo": {
+        "compile": {
+          "ok": true,
+          "seconds": 28.2192,
+          "rss_kib": 807540,
+          "status": 0
+        },
+        "run": {
+          "ok": true,
+          "seconds": 0.1407,
+          "rss_kib": 49144,
+          "status": 0,
+          "frames_seconds": 0.109698814
+        }
+      },
+      "threejs_flat": {
+        "ok": true,
+        "seconds": 0.0878,
+        "rss_kib": 67312,
+        "status": 0,
+        "backend": "cpu-flat",
+        "frames_seconds": 0.0396,
+        "import_seconds": 0.0224
+      },
+      "threejs_webgl": {
+        "ok": false,
+        "seconds": 0.0519,
+        "rss_kib": 56396,
+        "status": 1,
+        "backend": "",
+        "frames_seconds": null,
+        "import_seconds": null,
+        "error": "libEGL.so.1: cannot open shared object file: No such file or directory"
+      },
+      "previous": {
+        "compile": {
+          "ok": false,
+          "seconds": 0.2684,
+          "rss_kib": 114864,
+          "status": 1,
+          "error": "Imported from /workspace/examples/distance.mojo:16:"
+        },
+        "run": {
+          "ok": false,
+          "seconds": null,
+          "rss_kib": null,
+          "status": 1,
+          "error": "Imported from /workspace/examples/distance.mojo:16:"
+        }
+      }
+    },
+    {
+      "name": "unfogged",
+      "measured_on": "2026-10-23",
+      "measurement_date_source": "direct",
+      "width": 240,
+      "height": 180,
+      "frames": 36,
+      "threemojo": {
+        "compile": {
+          "ok": true,
+          "seconds": 28.7351,
+          "rss_kib": 809352,
+          "status": 0
+        },
+        "run": {
+          "ok": true,
+          "seconds": 0.0694,
+          "rss_kib": 45724,
+          "status": 0,
+          "frames_seconds": 0.0384578
+        }
+      },
+      "threejs_flat": {
+        "ok": true,
+        "seconds": 0.0639,
+        "rss_kib": 65196,
+        "status": 0,
+        "backend": "cpu-flat",
+        "frames_seconds": 0.0149,
+        "import_seconds": 0.0214
+      },
+      "threejs_webgl": {
+        "ok": false,
+        "seconds": 0.0616,
+        "rss_kib": 56148,
+        "status": 1,
+        "backend": "",
+        "frames_seconds": null,
+        "import_seconds": null,
+        "error": "libEGL.so.1: cannot open shared object file: No such file or directory"
+      },
+      "previous": {
+        "compile": {
+          "ok": false,
+          "seconds": 0.2929,
+          "rss_kib": 115696,
+          "status": 1,
+          "error": "Imported from /workspace/examples/unfogged.mojo:32:"
+        },
+        "run": {
+          "ok": false,
+          "seconds": null,
+          "rss_kib": null,
+          "status": 1,
+          "error": "Imported from /workspace/examples/unfogged.mojo:32:"
+        }
+      }
+    },
+    {
+      "name": "targets",
+      "measured_on": "2026-10-23",
+      "measurement_date_source": "direct",
+      "width": 240,
+      "height": 180,
+      "frames": 36,
+      "threemojo": {
+        "compile": {
+          "ok": true,
+          "seconds": 28.5089,
+          "rss_kib": 798404,
+          "status": 0
+        },
+        "run": {
+          "ok": true,
+          "seconds": 0.1607,
+          "rss_kib": 46472,
+          "status": 0,
+          "frames_seconds": 0.12894103999999998
+        }
+      },
+      "threejs_flat": {
+        "ok": true,
+        "seconds": 0.0881,
+        "rss_kib": 66944,
+        "status": 0,
+        "backend": "cpu-flat",
+        "frames_seconds": 0.0349,
+        "import_seconds": 0.022
+      },
+      "threejs_webgl": {
+        "ok": false,
+        "seconds": 0.0561,
+        "rss_kib": 56456,
+        "status": 1,
+        "backend": "",
+        "frames_seconds": null,
+        "import_seconds": null,
+        "error": "libEGL.so.1: cannot open shared object file: No such file or directory"
+      },
+      "previous": {
+        "compile": {
+          "ok": false,
+          "seconds": 0.3057,
+          "rss_kib": 115580,
+          "status": 1,
+          "error": "Imported from /workspace/examples/targets.mojo:16:"
+        },
+        "run": {
+          "ok": false,
+          "seconds": null,
+          "rss_kib": null,
+          "status": 1,
+          "error": "Imported from /workspace/examples/targets.mojo:16:"
+        }
+      }
+    },
+    {
+      "name": "layers",
+      "measured_on": "2026-10-23",
+      "measurement_date_source": "direct",
+      "width": 320,
+      "height": 180,
+      "frames": 36,
+      "threemojo": {
+        "compile": {
+          "ok": true,
+          "seconds": 29.4461,
+          "rss_kib": 816512,
+          "status": 0
+        },
+        "run": {
+          "ok": true,
+          "seconds": 0.2247,
+          "rss_kib": 62372,
+          "status": 0,
+          "frames_seconds": 0.17747073
+        }
+      },
+      "threejs_flat": {
+        "ok": true,
+        "seconds": 0.1037,
+        "rss_kib": 67360,
+        "status": 0,
+        "backend": "cpu-flat",
+        "frames_seconds": 0.049100000000000005,
+        "import_seconds": 0.022
+      },
+      "threejs_webgl": {
+        "ok": false,
+        "seconds": 0.1842,
+        "rss_kib": 62944,
+        "status": 1,
+        "backend": "",
+        "frames_seconds": null,
+        "import_seconds": null,
+        "error": "libEGL.so.1: cannot open shared object file: No such file or directory"
+      },
+      "previous": {
+        "compile": {
+          "ok": false,
+          "seconds": 1.0193,
+          "rss_kib": 115204,
+          "status": 1,
+          "error": "Imported from /workspace/examples/layers.mojo:17:"
+        },
+        "run": {
+          "ok": false,
+          "seconds": null,
+          "rss_kib": null,
+          "status": 1,
+          "error": "Imported from /workspace/examples/layers.mojo:17:"
+        }
+      }
+    },
+    {
+      "name": "graph",
+      "measured_on": "2026-10-23",
+      "measurement_date_source": "direct",
+      "width": 240,
+      "height": 180,
+      "frames": 36,
+      "threemojo": {
+        "compile": {
+          "ok": true,
+          "seconds": 31.2181,
+          "rss_kib": 844520,
+          "status": 0
+        },
+        "run": {
+          "ok": true,
+          "seconds": 0.1796,
+          "rss_kib": 44968,
+          "status": 0,
+          "frames_seconds": 0.14618999
+        }
+      },
+      "threejs_flat": {
+        "ok": true,
+        "seconds": 0.0877,
+        "rss_kib": 67268,
+        "status": 0,
+        "backend": "cpu-flat",
+        "frames_seconds": 0.0363,
+        "import_seconds": 0.0219
+      },
+      "threejs_webgl": {
+        "ok": false,
+        "seconds": 0.0561,
+        "rss_kib": 56364,
+        "status": 1,
+        "backend": "",
+        "frames_seconds": null,
+        "import_seconds": null,
+        "error": "libEGL.so.1: cannot open shared object file: No such file or directory"
+      },
+      "previous": {
+        "compile": {
+          "ok": false,
+          "seconds": 0.3016,
+          "rss_kib": 116672,
+          "status": 1,
+          "error": "Imported from /workspace/examples/graph.mojo:16:"
+        },
+        "run": {
+          "ok": false,
+          "seconds": null,
+          "rss_kib": null,
+          "status": 1,
+          "error": "Imported from /workspace/examples/graph.mojo:16:"
+        }
+      }
+    },
+    {
+      "name": "basis",
+      "measured_on": "2026-10-23",
+      "measurement_date_source": "direct",
+      "width": 320,
+      "height": 180,
+      "frames": 36,
+      "threemojo": {
+        "compile": {
+          "ok": true,
+          "seconds": 37.1451,
+          "rss_kib": 913180,
+          "status": 0
+        },
+        "run": {
+          "ok": true,
+          "seconds": 0.1033,
+          "rss_kib": 53428,
+          "status": 0,
+          "frames_seconds": 0.063949196
+        }
+      },
+      "threejs_flat": {
+        "ok": true,
+        "seconds": 0.0614,
+        "rss_kib": 65460,
+        "status": 0,
+        "backend": "cpu-flat",
+        "frames_seconds": 0.013099999999999999,
+        "import_seconds": 0.021
+      },
+      "threejs_webgl": {
+        "ok": false,
+        "seconds": 0.0552,
+        "rss_kib": 62384,
+        "status": 1,
+        "backend": "",
+        "frames_seconds": null,
+        "import_seconds": null,
+        "error": "libEGL.so.1: cannot open shared object file: No such file or directory"
+      },
+      "previous": {
+        "compile": {
+          "ok": false,
+          "seconds": 0.2762,
+          "rss_kib": 117676,
+          "status": 1,
+          "error": "Imported from /workspace/examples/basis.mojo:17:"
+        },
+        "run": {
+          "ok": false,
+          "seconds": null,
+          "rss_kib": null,
+          "status": 1,
+          "error": "Imported from /workspace/examples/basis.mojo:17:"
+        }
+      }
+    },
+    {
+      "name": "coats",
+      "measured_on": "2026-10-23",
+      "measurement_date_source": "direct",
+      "width": 320,
+      "height": 180,
+      "frames": 36,
+      "threemojo": {
+        "compile": {
+          "ok": true,
+          "seconds": 28.7109,
+          "rss_kib": 750820,
+          "status": 0
+        },
+        "run": {
+          "ok": true,
+          "seconds": 0.2071,
+          "rss_kib": 65052,
+          "status": 0,
+          "frames_seconds": 0.16971924000000002
+        }
+      },
+      "threejs_flat": {
+        "ok": true,
+        "seconds": 0.1016,
+        "rss_kib": 67048,
+        "status": 0,
+        "backend": "cpu-flat",
+        "frames_seconds": 0.0489,
+        "import_seconds": 0.0215
+      },
+      "threejs_webgl": {
+        "ok": false,
+        "seconds": 0.0591,
+        "rss_kib": 62864,
+        "status": 1,
+        "backend": "",
+        "frames_seconds": null,
+        "import_seconds": null,
+        "error": "libEGL.so.1: cannot open shared object file: No such file or directory"
+      },
+      "previous": {
+        "compile": {
+          "ok": false,
+          "seconds": 0.3052,
+          "rss_kib": 116412,
+          "status": 1,
+          "error": "Imported from /workspace/examples/coats.mojo:17:"
+        },
+        "run": {
+          "ok": false,
+          "seconds": null,
+          "rss_kib": null,
+          "status": 1,
+          "error": "Imported from /workspace/examples/coats.mojo:17:"
+        }
+      }
+    },
+    {
+      "name": "skyjson",
+      "measured_on": "2026-10-23",
+      "measurement_date_source": "direct",
+      "width": 240,
+      "height": 180,
+      "frames": 36,
+      "threemojo": {
+        "compile": {
+          "ok": true,
+          "seconds": 59.5003,
+          "rss_kib": 1448824,
+          "status": 0
+        },
+        "run": {
+          "ok": true,
+          "seconds": 0.2882,
+          "rss_kib": 52472,
+          "status": 0,
+          "frames_seconds": 0.23455945
+        }
+      },
+      "threejs_flat": {
+        "ok": true,
+        "seconds": 0.0828,
+        "rss_kib": 67316,
+        "status": 0,
+        "backend": "cpu-flat",
+        "frames_seconds": 0.0305,
+        "import_seconds": 0.023399999999999997
+      },
+      "threejs_webgl": {
+        "ok": false,
+        "seconds": 0.0606,
+        "rss_kib": 56504,
+        "status": 1,
+        "backend": "",
+        "frames_seconds": null,
+        "import_seconds": null,
+        "error": "libEGL.so.1: cannot open shared object file: No such file or directory"
+      },
+      "previous": {
+        "compile": {
+          "ok": false,
+          "seconds": 0.3398,
+          "rss_kib": 118460,
+          "status": 1,
+          "error": "Imported from /workspace/examples/skyjson.mojo:39:"
+        },
+        "run": {
+          "ok": false,
+          "seconds": null,
+          "rss_kib": null,
+          "status": 1,
+          "error": "Imported from /workspace/examples/skyjson.mojo:39:"
+        }
+      }
+    },
+    {
+      "name": "daylight",
+      "measured_on": "2026-10-23",
+      "measurement_date_source": "direct",
+      "width": 240,
+      "height": 180,
+      "frames": 36,
+      "threemojo": {
+        "compile": {
+          "ok": true,
+          "seconds": 40.5089,
+          "rss_kib": 1018836,
+          "status": 0
+        },
+        "run": {
+          "ok": true,
+          "seconds": 2.2295,
+          "rss_kib": 48664,
+          "status": 0,
+          "frames_seconds": 2.198188
+        }
+      },
+      "threejs_flat": {
+        "ok": true,
+        "seconds": 0.1505,
+        "rss_kib": 67072,
+        "status": 0,
+        "backend": "cpu-flat",
+        "frames_seconds": 0.1003,
+        "import_seconds": 0.0218
+      },
+      "threejs_webgl": {
+        "ok": false,
+        "seconds": 0.0575,
+        "rss_kib": 56480,
+        "status": 1,
+        "backend": "",
+        "frames_seconds": null,
+        "import_seconds": null,
+        "error": "libEGL.so.1: cannot open shared object file: No such file or directory"
+      },
+      "previous": {
+        "compile": {
+          "ok": false,
+          "seconds": 0.2957,
+          "rss_kib": 115140,
+          "status": 1,
+          "error": "Imported from /workspace/examples/daylight.mojo:16:"
+        },
+        "run": {
+          "ok": false,
+          "seconds": null,
+          "rss_kib": null,
+          "status": 1,
+          "error": "Imported from /workspace/examples/daylight.mojo:16:"
+        }
+      }
+    },
+    {
+      "name": "faces",
+      "measured_on": "2026-10-23",
+      "measurement_date_source": "direct",
+      "width": 240,
+      "height": 180,
+      "frames": 36,
+      "threemojo": {
+        "compile": {
+          "ok": true,
+          "seconds": 29.4205,
+          "rss_kib": 802480,
+          "status": 0
+        },
+        "run": {
+          "ok": true,
+          "seconds": 0.0779,
+          "rss_kib": 44316,
+          "status": 0,
+          "frames_seconds": 0.047811165
+        }
+      },
+      "threejs_flat": {
+        "ok": true,
+        "seconds": 0.0677,
+        "rss_kib": 65100,
+        "status": 0,
+        "backend": "cpu-flat",
+        "frames_seconds": 0.020300000000000002,
+        "import_seconds": 0.0214
+      },
+      "threejs_webgl": {
+        "ok": false,
+        "seconds": 0.0574,
+        "rss_kib": 56132,
+        "status": 1,
+        "backend": "",
+        "frames_seconds": null,
+        "import_seconds": null,
+        "error": "libEGL.so.1: cannot open shared object file: No such file or directory"
+      },
+      "previous": {
+        "compile": {
+          "ok": false,
+          "seconds": 0.3024,
+          "rss_kib": 116424,
+          "status": 1,
+          "error": "Imported from /workspace/examples/faces.mojo:16:"
+        },
+        "run": {
+          "ok": false,
+          "seconds": null,
+          "rss_kib": null,
+          "status": 1,
+          "error": "Imported from /workspace/examples/faces.mojo:16:"
+        }
+      }
+    },
+    {
+      "name": "utah",
+      "measured_on": "2026-10-23",
+      "measurement_date_source": "direct",
+      "width": 240,
+      "height": 180,
+      "frames": 36,
+      "threemojo": {
+        "compile": {
+          "ok": true,
+          "seconds": 29.2005,
+          "rss_kib": 813224,
+          "status": 0
+        },
+        "run": {
+          "ok": true,
+          "seconds": 0.1384,
+          "rss_kib": 48324,
+          "status": 0,
+          "frames_seconds": 0.10882125000000001
+        }
+      },
+      "threejs_flat": {
+        "ok": true,
+        "seconds": 0.1249,
+        "rss_kib": 69308,
+        "status": 0,
+        "backend": "cpu-flat",
+        "frames_seconds": 0.0613,
+        "import_seconds": 0.022600000000000002
+      },
+      "threejs_webgl": {
+        "ok": false,
+        "seconds": 0.0672,
+        "rss_kib": 65076,
+        "status": 1,
+        "backend": "",
+        "frames_seconds": null,
+        "import_seconds": null,
+        "error": "libEGL.so.1: cannot open shared object file: No such file or directory"
+      },
+      "previous": {
+        "compile": {
+          "ok": false,
+          "seconds": 0.2852,
+          "rss_kib": 116528,
+          "status": 1,
+          "error": "Imported from /workspace/examples/utah.mojo:16:"
+        },
+        "run": {
+          "ok": false,
+          "seconds": null,
+          "rss_kib": null,
+          "status": 1,
+          "error": "Imported from /workspace/examples/utah.mojo:16:"
+        }
+      }
+    },
+    {
+      "name": "blobs",
+      "measured_on": "2026-10-23",
+      "measurement_date_source": "direct",
+      "width": 240,
+      "height": 180,
+      "frames": 36,
+      "threemojo": {
+        "compile": {
+          "ok": true,
+          "seconds": 41.1454,
+          "rss_kib": 793320,
+          "status": 0
+        },
+        "run": {
+          "ok": true,
+          "seconds": 0.0698,
+          "rss_kib": 45724,
+          "status": 0,
+          "frames_seconds": 0.038057602
+        }
+      },
+      "threejs_flat": {
+        "ok": true,
+        "seconds": 0.1542,
+        "rss_kib": 69496,
+        "status": 0,
+        "backend": "cpu-flat",
+        "frames_seconds": 0.0937,
+        "import_seconds": 0.0254
+      },
+      "threejs_webgl": {
+        "ok": false,
+        "seconds": 0.0557,
+        "rss_kib": 56812,
+        "status": 1,
+        "backend": "",
+        "frames_seconds": null,
+        "import_seconds": null,
+        "error": "libEGL.so.1: cannot open shared object file: No such file or directory"
+      },
+      "previous": {
+        "compile": {
+          "ok": false,
+          "seconds": 0.3072,
+          "rss_kib": 117008,
+          "status": 1,
+          "error": "Imported from /workspace/examples/blobs.mojo:16:"
+        },
+        "run": {
+          "ok": false,
+          "seconds": null,
+          "rss_kib": null,
+          "status": 1,
+          "error": "Imported from /workspace/examples/blobs.mojo:16:"
+        }
+      }
+    },
+    {
+      "name": "flipbook",
+      "measured_on": "2026-10-23",
+      "measurement_date_source": "direct",
+      "width": 240,
+      "height": 180,
+      "frames": 36,
+      "threemojo": {
+        "compile": {
+          "ok": true,
+          "seconds": 34.6204,
+          "rss_kib": 767944,
+          "status": 0
+        },
+        "run": {
+          "ok": true,
+          "seconds": 0.0901,
+          "rss_kib": 45404,
+          "status": 0,
+          "frames_seconds": 0.05709727
+        }
+      },
+      "threejs_flat": {
+        "ok": true,
+        "seconds": 0.0882,
+        "rss_kib": 67056,
+        "status": 0,
+        "backend": "cpu-flat",
+        "frames_seconds": 0.030899999999999997,
+        "import_seconds": 0.0268
+      },
+      "threejs_webgl": {
+        "ok": false,
+        "seconds": 0.0597,
+        "rss_kib": 56224,
+        "status": 1,
+        "backend": "",
+        "frames_seconds": null,
+        "import_seconds": null,
+        "error": "libEGL.so.1: cannot open shared object file: No such file or directory"
+      },
+      "previous": {
+        "compile": {
+          "ok": false,
+          "seconds": 0.3711,
+          "rss_kib": 116212,
+          "status": 1,
+          "error": "Imported from /workspace/examples/flipbook.mojo:17:"
+        },
+        "run": {
+          "ok": false,
+          "seconds": null,
+          "rss_kib": null,
+          "status": 1,
+          "error": "Imported from /workspace/examples/flipbook.mojo:17:"
+        }
+      }
+    },
+    {
+      "name": "ripples",
+      "measured_on": "2026-10-23",
+      "measurement_date_source": "direct",
+      "width": 240,
+      "height": 180,
+      "frames": 36,
+      "threemojo": {
+        "compile": {
+          "ok": true,
+          "seconds": 44.2797,
+          "rss_kib": 1044196,
+          "status": 0
+        },
+        "run": {
+          "ok": true,
+          "seconds": 0.2705,
+          "rss_kib": 54392,
+          "status": 0,
+          "frames_seconds": 0.23389317
+        }
+      },
+      "threejs_flat": {
+        "ok": true,
+        "seconds": 0.1032,
+        "rss_kib": 67072,
+        "status": 0,
+        "backend": "cpu-flat",
+        "frames_seconds": 0.0531,
+        "import_seconds": 0.0225
+      },
+      "threejs_webgl": {
+        "ok": false,
+        "seconds": 0.0558,
+        "rss_kib": 56704,
+        "status": 1,
+        "backend": "",
+        "frames_seconds": null,
+        "import_seconds": null,
+        "error": "libEGL.so.1: cannot open shared object file: No such file or directory"
+      },
+      "previous": {
+        "compile": {
+          "ok": false,
+          "seconds": 0.2891,
+          "rss_kib": 116948,
+          "status": 1,
+          "error": "Imported from /workspace/examples/ripples.mojo:17:"
+        },
+        "run": {
+          "ok": false,
+          "seconds": null,
+          "rss_kib": null,
+          "status": 1,
+          "error": "Imported from /workspace/examples/ripples.mojo:17:"
+        }
+      }
+    },
+    {
+      "name": "baked",
+      "measured_on": "2026-10-23",
+      "measurement_date_source": "direct",
+      "width": 240,
+      "height": 180,
+      "frames": 36,
+      "threemojo": {
+        "compile": {
+          "ok": true,
+          "seconds": 32.3411,
+          "rss_kib": 871692,
+          "status": 0
+        },
+        "run": {
+          "ok": true,
+          "seconds": 1.0404,
+          "rss_kib": 46804,
+          "status": 0,
+          "frames_seconds": 0.65128174
+        }
+      },
+      "threejs_flat": {
+        "ok": true,
+        "seconds": 0.0722,
+        "rss_kib": 65184,
+        "status": 0,
+        "backend": "cpu-flat",
+        "frames_seconds": 0.0233,
+        "import_seconds": 0.0217
+      },
+      "threejs_webgl": {
+        "ok": false,
+        "seconds": 0.0563,
+        "rss_kib": 56272,
+        "status": 1,
+        "backend": "",
+        "frames_seconds": null,
+        "import_seconds": null,
+        "error": "libEGL.so.1: cannot open shared object file: No such file or directory"
+      },
+      "previous": {
+        "compile": {
+          "ok": false,
+          "seconds": 0.2929,
+          "rss_kib": 116596,
+          "status": 1,
+          "error": "Imported from /workspace/examples/baked.mojo:17:"
+        },
+        "run": {
+          "ok": false,
+          "seconds": null,
+          "rss_kib": null,
+          "status": 1,
+          "error": "Imported from /workspace/examples/baked.mojo:17:"
+        }
+      }
+    },
+    {
+      "name": "diagram",
+      "measured_on": "2026-10-23",
+      "measurement_date_source": "direct",
+      "width": 240,
+      "height": 180,
+      "frames": 36,
+      "threemojo": {
+        "compile": {
+          "ok": true,
+          "seconds": 12.1333,
+          "rss_kib": 560968,
+          "status": 0
+        },
+        "run": {
+          "ok": true,
+          "seconds": 0.0703,
+          "rss_kib": 42944,
+          "status": 0,
+          "frames_seconds": 0.03415316
+        }
+      },
+      "threejs_flat": {
+        "ok": true,
+        "seconds": 0.0724,
+        "rss_kib": 65464,
+        "status": 0,
+        "backend": "cpu-flat",
+        "frames_seconds": 0.0252,
+        "import_seconds": 0.0212
+      },
+      "threejs_webgl": {
+        "ok": false,
+        "seconds": 0.0516,
+        "rss_kib": 56240,
+        "status": 1,
+        "backend": "",
+        "frames_seconds": null,
+        "import_seconds": null,
+        "error": "libEGL.so.1: cannot open shared object file: No such file or directory"
+      },
+      "previous": {
+        "compile": {
+          "ok": true,
+          "seconds": 12.6917,
+          "rss_kib": 524296,
+          "status": 0
+        },
+        "run": {
+          "ok": true,
+          "seconds": 0.0666,
+          "rss_kib": 42800,
+          "status": 0,
+          "frames_seconds": 0.03584388
         }
       }
     },
     {
       "name": "bricks",
-      "measured_on": "2026-10-07",
+      "measured_on": "2026-10-23",
       "measurement_date_source": "direct",
       "width": 240,
       "height": 180,
@@ -3704,55 +3838,57 @@
       "threemojo": {
         "compile": {
           "ok": true,
-          "seconds": 58.4542,
-          "rss_kib": 1034860,
+          "seconds": 31.7333,
+          "rss_kib": 902792,
           "status": 0
         },
         "run": {
           "ok": true,
-          "seconds": 0.1538,
-          "rss_kib": 44772,
+          "seconds": 0.0772,
+          "rss_kib": 45140,
           "status": 0,
-          "frames_seconds": 0.08536711
+          "frames_seconds": 0.047617935
         }
       },
       "threejs_flat": {
         "ok": true,
-        "seconds": 0.0938,
-        "rss_kib": 65108,
+        "seconds": 0.0634,
+        "rss_kib": 64556,
         "status": 0,
         "backend": "cpu-flat",
-        "frames_seconds": 0.022699999999999998,
-        "import_seconds": 0.0324
+        "frames_seconds": 0.016,
+        "import_seconds": 0.0214
       },
       "threejs_webgl": {
         "ok": false,
-        "seconds": null,
-        "rss_kib": null,
-        "status": 0,
+        "seconds": 0.054,
+        "rss_kib": 55924,
+        "status": 1,
         "backend": "",
-        "error": "skipped"
+        "frames_seconds": null,
+        "import_seconds": null,
+        "error": "libEGL.so.1: cannot open shared object file: No such file or directory"
       },
       "previous": {
         "compile": {
           "ok": false,
-          "seconds": 14.9857,
-          "rss_kib": 228912,
+          "seconds": 0.2213,
+          "rss_kib": 113436,
           "status": 1,
-          "error": "Imported from /workspace/examples/bricks.mojo:26:"
+          "error": "Imported from /workspace/examples/bricks.mojo:16:"
         },
         "run": {
           "ok": false,
           "seconds": null,
           "rss_kib": null,
           "status": 1,
-          "error": "Imported from /workspace/examples/bricks.mojo:26:"
+          "error": "Imported from /workspace/examples/bricks.mojo:16:"
         }
       }
     },
     {
       "name": "terrain",
-      "measured_on": "2026-10-07",
+      "measured_on": "2026-10-23",
       "measurement_date_source": "direct",
       "width": 240,
       "height": 180,
@@ -3760,55 +3896,57 @@
       "threemojo": {
         "compile": {
           "ok": true,
-          "seconds": 62.1276,
-          "rss_kib": 873360,
+          "seconds": 28.054,
+          "rss_kib": 767016,
           "status": 0
         },
         "run": {
           "ok": true,
-          "seconds": 0.1843,
-          "rss_kib": 44460,
+          "seconds": 0.0914,
+          "rss_kib": 44728,
           "status": 0,
-          "frames_seconds": 0.11864140000000001
+          "frames_seconds": 0.06161245
         }
       },
       "threejs_flat": {
         "ok": true,
-        "seconds": 0.172,
-        "rss_kib": 67104,
+        "seconds": 0.0931,
+        "rss_kib": 67608,
         "status": 0,
         "backend": "cpu-flat",
-        "frames_seconds": 0.060399999999999995,
-        "import_seconds": 0.049
+        "frames_seconds": 0.038299999999999994,
+        "import_seconds": 0.0216
       },
       "threejs_webgl": {
         "ok": false,
-        "seconds": null,
-        "rss_kib": null,
-        "status": 0,
+        "seconds": 0.0594,
+        "rss_kib": 64456,
+        "status": 1,
         "backend": "",
-        "error": "skipped"
+        "frames_seconds": null,
+        "import_seconds": null,
+        "error": "libEGL.so.1: cannot open shared object file: No such file or directory"
       },
       "previous": {
         "compile": {
           "ok": false,
-          "seconds": 15.4685,
-          "rss_kib": 223032,
+          "seconds": 0.2956,
+          "rss_kib": 114720,
           "status": 1,
-          "error": "Imported from /workspace/examples/terrain.mojo:30:"
+          "error": "Imported from /workspace/examples/terrain.mojo:16:"
         },
         "run": {
           "ok": false,
           "seconds": null,
           "rss_kib": null,
           "status": 1,
-          "error": "Imported from /workspace/examples/terrain.mojo:30:"
+          "error": "Imported from /workspace/examples/terrain.mojo:16:"
         }
       }
     },
     {
       "name": "override",
-      "measured_on": "2026-10-07",
+      "measured_on": "2026-10-23",
       "measurement_date_source": "direct",
       "width": 240,
       "height": 180,
@@ -3816,55 +3954,57 @@
       "threemojo": {
         "compile": {
           "ok": true,
-          "seconds": 51.8339,
-          "rss_kib": 860020,
+          "seconds": 27.5212,
+          "rss_kib": 759864,
           "status": 0
         },
         "run": {
           "ok": true,
-          "seconds": 0.19,
-          "rss_kib": 49080,
+          "seconds": 0.1138,
+          "rss_kib": 48616,
           "status": 0,
-          "frames_seconds": 0.13375104
+          "frames_seconds": 0.08496992
         }
       },
       "threejs_flat": {
         "ok": true,
-        "seconds": 0.1541,
-        "rss_kib": 66592,
+        "seconds": 0.0941,
+        "rss_kib": 68204,
         "status": 0,
         "backend": "cpu-flat",
-        "frames_seconds": 0.067,
-        "import_seconds": 0.0394
+        "frames_seconds": 0.0434,
+        "import_seconds": 0.0224
       },
       "threejs_webgl": {
         "ok": false,
-        "seconds": null,
-        "rss_kib": null,
-        "status": 0,
+        "seconds": 0.0557,
+        "rss_kib": 62892,
+        "status": 1,
         "backend": "",
-        "error": "skipped"
+        "frames_seconds": null,
+        "import_seconds": null,
+        "error": "libEGL.so.1: cannot open shared object file: No such file or directory"
       },
       "previous": {
         "compile": {
           "ok": false,
-          "seconds": 12.8013,
-          "rss_kib": 223140,
+          "seconds": 0.2863,
+          "rss_kib": 115380,
           "status": 1,
-          "error": "Imported from /workspace/examples/override.mojo:27:"
+          "error": "Imported from /workspace/examples/override.mojo:17:"
         },
         "run": {
           "ok": false,
           "seconds": null,
           "rss_kib": null,
           "status": 1,
-          "error": "Imported from /workspace/examples/override.mojo:27:"
+          "error": "Imported from /workspace/examples/override.mojo:17:"
         }
       }
     },
     {
       "name": "clay",
-      "measured_on": "2026-10-07",
+      "measured_on": "2026-10-23",
       "measurement_date_source": "direct",
       "width": 240,
       "height": 180,
@@ -3872,55 +4012,57 @@
       "threemojo": {
         "compile": {
           "ok": true,
-          "seconds": 63.8333,
-          "rss_kib": 1000992,
+          "seconds": 31.1794,
+          "rss_kib": 846096,
           "status": 0
         },
         "run": {
           "ok": true,
-          "seconds": 0.2066,
-          "rss_kib": 46276,
+          "seconds": 0.088,
+          "rss_kib": 45524,
           "status": 0,
-          "frames_seconds": 0.123103676
+          "frames_seconds": 0.055553856000000006
         }
       },
       "threejs_flat": {
         "ok": true,
-        "seconds": 0.1459,
-        "rss_kib": 66648,
+        "seconds": 0.0888,
+        "rss_kib": 66468,
         "status": 0,
         "backend": "cpu-flat",
-        "frames_seconds": 0.0593,
-        "import_seconds": 0.0334
+        "frames_seconds": 0.0404,
+        "import_seconds": 0.0212
       },
       "threejs_webgl": {
         "ok": false,
-        "seconds": null,
-        "rss_kib": null,
-        "status": 0,
+        "seconds": 0.0565,
+        "rss_kib": 56624,
+        "status": 1,
         "backend": "",
-        "error": "skipped"
+        "frames_seconds": null,
+        "import_seconds": null,
+        "error": "libEGL.so.1: cannot open shared object file: No such file or directory"
       },
       "previous": {
         "compile": {
           "ok": false,
-          "seconds": 14.8517,
-          "rss_kib": 230384,
+          "seconds": 0.2892,
+          "rss_kib": 115784,
           "status": 1,
-          "error": "Imported from /workspace/examples/clay.mojo:29:"
+          "error": "Imported from /workspace/examples/clay.mojo:16:"
         },
         "run": {
           "ok": false,
           "seconds": null,
           "rss_kib": null,
           "status": 1,
-          "error": "Imported from /workspace/examples/clay.mojo:29:"
+          "error": "Imported from /workspace/examples/clay.mojo:16:"
         }
       }
     },
     {
       "name": "cells",
-      "measured_on": "2026-10-07",
+      "measured_on": "2026-10-23",
       "measurement_date_source": "direct",
       "width": 240,
       "height": 180,
@@ -3928,55 +4070,57 @@
       "threemojo": {
         "compile": {
           "ok": true,
-          "seconds": 38.1259,
-          "rss_kib": 882380,
+          "seconds": 30.2635,
+          "rss_kib": 836276,
           "status": 0
         },
         "run": {
           "ok": true,
-          "seconds": 0.8591,
-          "rss_kib": 44684,
+          "seconds": 0.8931,
+          "rss_kib": 45108,
           "status": 0,
-          "frames_seconds": 0.8170503499999999
+          "frames_seconds": 0.8520675
         }
       },
       "threejs_flat": {
         "ok": true,
-        "seconds": 0.1139,
-        "rss_kib": 68200,
+        "seconds": 0.1039,
+        "rss_kib": 68692,
         "status": 0,
         "backend": "cpu-flat",
-        "frames_seconds": 0.0549,
-        "import_seconds": 0.0256
+        "frames_seconds": 0.052899999999999996,
+        "import_seconds": 0.0217
       },
       "threejs_webgl": {
         "ok": false,
-        "seconds": null,
-        "rss_kib": null,
-        "status": 0,
+        "seconds": 0.055,
+        "rss_kib": 62804,
+        "status": 1,
         "backend": "",
-        "error": "skipped"
+        "frames_seconds": null,
+        "import_seconds": null,
+        "error": "libEGL.so.1: cannot open shared object file: No such file or directory"
       },
       "previous": {
         "compile": {
           "ok": false,
-          "seconds": 8.8464,
-          "rss_kib": 226472,
+          "seconds": 0.2922,
+          "rss_kib": 116220,
           "status": 1,
-          "error": "Imported from /workspace/examples/cells.mojo:31:"
+          "error": "Imported from /workspace/examples/cells.mojo:17:"
         },
         "run": {
           "ok": false,
           "seconds": null,
           "rss_kib": null,
           "status": 1,
-          "error": "Imported from /workspace/examples/cells.mojo:31:"
+          "error": "Imported from /workspace/examples/cells.mojo:17:"
         }
       }
     },
     {
       "name": "cloud",
-      "measured_on": "2026-10-07",
+      "measured_on": "2026-10-23",
       "measurement_date_source": "direct",
       "width": 240,
       "height": 180,
@@ -3984,55 +4128,57 @@
       "threemojo": {
         "compile": {
           "ok": true,
-          "seconds": 30.3145,
-          "rss_kib": 761120,
+          "seconds": 26.9162,
+          "rss_kib": 747220,
           "status": 0
         },
         "run": {
           "ok": true,
-          "seconds": 0.1113,
-          "rss_kib": 43624,
+          "seconds": 0.0907,
+          "rss_kib": 45424,
           "status": 0,
-          "frames_seconds": 0.061353962000000005
+          "frames_seconds": 0.06063225
         }
       },
       "threejs_flat": {
         "ok": true,
-        "seconds": 0.0559,
-        "rss_kib": 61176,
+        "seconds": 0.0498,
+        "rss_kib": 60992,
         "status": 0,
         "backend": "cpu-flat",
-        "frames_seconds": 0.0033,
-        "import_seconds": 0.0229
+        "frames_seconds": 0.0032,
+        "import_seconds": 0.0207
       },
       "threejs_webgl": {
         "ok": false,
-        "seconds": null,
-        "rss_kib": null,
-        "status": 0,
+        "seconds": 0.0539,
+        "rss_kib": 56120,
+        "status": 1,
         "backend": "",
-        "error": "skipped"
+        "frames_seconds": null,
+        "import_seconds": null,
+        "error": "libEGL.so.1: cannot open shared object file: No such file or directory"
       },
       "previous": {
         "compile": {
           "ok": false,
-          "seconds": 7.7278,
-          "rss_kib": 222044,
+          "seconds": 0.2461,
+          "rss_kib": 113384,
           "status": 1,
-          "error": "Imported from /workspace/examples/cloud.mojo:30:"
+          "error": "Imported from /workspace/examples/cloud.mojo:17:"
         },
         "run": {
           "ok": false,
           "seconds": null,
           "rss_kib": null,
           "status": 1,
-          "error": "Imported from /workspace/examples/cloud.mojo:30:"
+          "error": "Imported from /workspace/examples/cloud.mojo:17:"
         }
       }
     },
     {
       "name": "bounce",
-      "measured_on": "2026-10-07",
+      "measured_on": "2026-10-23",
       "measurement_date_source": "direct",
       "width": 240,
       "height": 180,
@@ -4040,55 +4186,57 @@
       "threemojo": {
         "compile": {
           "ok": true,
-          "seconds": 33.8383,
-          "rss_kib": 862976,
+          "seconds": 30.2677,
+          "rss_kib": 846164,
           "status": 0
         },
         "run": {
           "ok": true,
-          "seconds": 7.4619,
-          "rss_kib": 50812,
+          "seconds": 7.6913,
+          "rss_kib": 51320,
           "status": 0,
-          "frames_seconds": 7.4186943
+          "frames_seconds": 7.646338399999999
         }
       },
       "threejs_flat": {
         "ok": true,
-        "seconds": 0.0869,
-        "rss_kib": 65404,
+        "seconds": 0.079,
+        "rss_kib": 65224,
         "status": 0,
         "backend": "cpu-flat",
-        "frames_seconds": 0.033299999999999996,
-        "import_seconds": 0.024399999999999998
+        "frames_seconds": 0.030899999999999997,
+        "import_seconds": 0.0212
       },
       "threejs_webgl": {
         "ok": false,
-        "seconds": null,
-        "rss_kib": null,
-        "status": 0,
+        "seconds": 0.0529,
+        "rss_kib": 56060,
+        "status": 1,
         "backend": "",
-        "error": "skipped"
+        "frames_seconds": null,
+        "import_seconds": null,
+        "error": "libEGL.so.1: cannot open shared object file: No such file or directory"
       },
       "previous": {
         "compile": {
           "ok": false,
-          "seconds": 8.3833,
-          "rss_kib": 228032,
+          "seconds": 0.2941,
+          "rss_kib": 116924,
           "status": 1,
-          "error": "Imported from /workspace/examples/bounce.mojo:28:"
+          "error": "Imported from /workspace/examples/bounce.mojo:16:"
         },
         "run": {
           "ok": false,
           "seconds": null,
           "rss_kib": null,
           "status": 1,
-          "error": "Imported from /workspace/examples/bounce.mojo:28:"
+          "error": "Imported from /workspace/examples/bounce.mojo:16:"
         }
       }
     },
     {
       "name": "sunlight",
-      "measured_on": "2026-10-07",
+      "measured_on": "2026-10-23",
       "measurement_date_source": "direct",
       "width": 240,
       "height": 180,
@@ -4096,55 +4244,57 @@
       "threemojo": {
         "compile": {
           "ok": true,
-          "seconds": 33.4303,
-          "rss_kib": 861332,
+          "seconds": 27.9001,
+          "rss_kib": 830948,
           "status": 0
         },
         "run": {
           "ok": true,
-          "seconds": 0.2188,
-          "rss_kib": 46940,
+          "seconds": 0.1815,
+          "rss_kib": 47572,
           "status": 0,
-          "frames_seconds": 0.17139026000000002
+          "frames_seconds": 0.14313623
         }
       },
       "threejs_flat": {
         "ok": true,
-        "seconds": 0.0796,
-        "rss_kib": 65596,
+        "seconds": 0.0714,
+        "rss_kib": 65296,
         "status": 0,
         "backend": "cpu-flat",
-        "frames_seconds": 0.0258,
-        "import_seconds": 0.0242
+        "frames_seconds": 0.022,
+        "import_seconds": 0.0213
       },
       "threejs_webgl": {
         "ok": false,
-        "seconds": null,
-        "rss_kib": null,
-        "status": 0,
+        "seconds": 0.0523,
+        "rss_kib": 56076,
+        "status": 1,
         "backend": "",
-        "error": "skipped"
+        "frames_seconds": null,
+        "import_seconds": null,
+        "error": "libEGL.so.1: cannot open shared object file: No such file or directory"
       },
       "previous": {
         "compile": {
           "ok": false,
-          "seconds": 8.8798,
-          "rss_kib": 223624,
+          "seconds": 0.2787,
+          "rss_kib": 116388,
           "status": 1,
-          "error": "Imported from /workspace/examples/sunlight.mojo:30:"
+          "error": "Imported from /workspace/examples/sunlight.mojo:16:"
         },
         "run": {
           "ok": false,
           "seconds": null,
           "rss_kib": null,
           "status": 1,
-          "error": "Imported from /workspace/examples/sunlight.mojo:30:"
+          "error": "Imported from /workspace/examples/sunlight.mojo:16:"
         }
       }
     },
     {
       "name": "vase",
-      "measured_on": "2026-10-07",
+      "measured_on": "2026-10-23",
       "measurement_date_source": "direct",
       "width": 240,
       "height": 180,
@@ -4152,55 +4302,57 @@
       "threemojo": {
         "compile": {
           "ok": true,
-          "seconds": 36.846,
-          "rss_kib": 874468,
+          "seconds": 28.4062,
+          "rss_kib": 802592,
           "status": 0
         },
         "run": {
           "ok": true,
-          "seconds": 0.1347,
-          "rss_kib": 44384,
+          "seconds": 0.089,
+          "rss_kib": 46840,
           "status": 0,
-          "frames_seconds": 0.07680714000000001
+          "frames_seconds": 0.05494159
         }
       },
       "threejs_flat": {
         "ok": true,
-        "seconds": 0.1102,
-        "rss_kib": 66752,
+        "seconds": 0.0778,
+        "rss_kib": 66988,
         "status": 0,
         "backend": "cpu-flat",
-        "frames_seconds": 0.0409,
-        "import_seconds": 0.0293
+        "frames_seconds": 0.0315,
+        "import_seconds": 0.0212
       },
       "threejs_webgl": {
         "ok": false,
-        "seconds": null,
-        "rss_kib": null,
-        "status": 0,
+        "seconds": 0.0503,
+        "rss_kib": 56180,
+        "status": 1,
         "backend": "",
-        "error": "skipped"
+        "frames_seconds": null,
+        "import_seconds": null,
+        "error": "libEGL.so.1: cannot open shared object file: No such file or directory"
       },
       "previous": {
         "compile": {
           "ok": false,
-          "seconds": 11.156,
-          "rss_kib": 225048,
+          "seconds": 0.2716,
+          "rss_kib": 115816,
           "status": 1,
-          "error": "Imported from /workspace/examples/vase.mojo:28:"
+          "error": "Imported from /workspace/examples/vase.mojo:16:"
         },
         "run": {
           "ok": false,
           "seconds": null,
           "rss_kib": null,
           "status": 1,
-          "error": "Imported from /workspace/examples/vase.mojo:28:"
+          "error": "Imported from /workspace/examples/vase.mojo:16:"
         }
       }
     },
     {
       "name": "sapling",
-      "measured_on": "2026-10-07",
+      "measured_on": "2026-10-23",
       "measurement_date_source": "direct",
       "width": 240,
       "height": 180,
@@ -4208,55 +4360,57 @@
       "threemojo": {
         "compile": {
           "ok": true,
-          "seconds": 45.6596,
-          "rss_kib": 746824,
+          "seconds": 27.238,
+          "rss_kib": 758896,
           "status": 0
         },
         "run": {
           "ok": true,
-          "seconds": 0.1023,
-          "rss_kib": 44360,
+          "seconds": 0.0676,
+          "rss_kib": 44856,
           "status": 0,
-          "frames_seconds": 0.05008771
+          "frames_seconds": 0.038130806
         }
       },
       "threejs_flat": {
         "ok": true,
-        "seconds": 0.0947,
-        "rss_kib": 65460,
+        "seconds": 0.0603,
+        "rss_kib": 64884,
         "status": 0,
         "backend": "cpu-flat",
-        "frames_seconds": 0.0208,
-        "import_seconds": 0.0335
+        "frames_seconds": 0.013699999999999999,
+        "import_seconds": 0.0215
       },
       "threejs_webgl": {
         "ok": false,
-        "seconds": null,
-        "rss_kib": null,
-        "status": 0,
+        "seconds": 0.0532,
+        "rss_kib": 56144,
+        "status": 1,
         "backend": "",
-        "error": "skipped"
+        "frames_seconds": null,
+        "import_seconds": null,
+        "error": "libEGL.so.1: cannot open shared object file: No such file or directory"
       },
       "previous": {
         "compile": {
           "ok": false,
-          "seconds": 13.0464,
-          "rss_kib": 224124,
+          "seconds": 0.2687,
+          "rss_kib": 116936,
           "status": 1,
-          "error": "Imported from /workspace/examples/sapling.mojo:27:"
+          "error": "Imported from /workspace/examples/sapling.mojo:16:"
         },
         "run": {
           "ok": false,
           "seconds": null,
           "rss_kib": null,
           "status": 1,
-          "error": "Imported from /workspace/examples/sapling.mojo:27:"
+          "error": "Imported from /workspace/examples/sapling.mojo:16:"
         }
       }
     },
     {
       "name": "particles",
-      "measured_on": "2026-10-07",
+      "measured_on": "2026-10-23",
       "measurement_date_source": "direct",
       "width": 240,
       "height": 180,
@@ -4264,49 +4418,51 @@
       "threemojo": {
         "compile": {
           "ok": true,
-          "seconds": 52.9091,
-          "rss_kib": 906600,
+          "seconds": 30.1279,
+          "rss_kib": 863044,
           "status": 0
         },
         "run": {
           "ok": true,
-          "seconds": 0.1111,
-          "rss_kib": 46264,
+          "seconds": 0.0753,
+          "rss_kib": 45376,
           "status": 0,
-          "frames_seconds": 0.058378320000000004
+          "frames_seconds": 0.045573326000000004
         }
       },
       "threejs_flat": {
         "ok": true,
-        "seconds": 0.1148,
-        "rss_kib": 67424,
+        "seconds": 0.0737,
+        "rss_kib": 67020,
         "status": 0,
         "backend": "cpu-flat",
-        "frames_seconds": 0.0324,
-        "import_seconds": 0.031
+        "frames_seconds": 0.0241,
+        "import_seconds": 0.0213
       },
       "threejs_webgl": {
         "ok": false,
-        "seconds": null,
-        "rss_kib": null,
-        "status": 0,
+        "seconds": 0.054,
+        "rss_kib": 56344,
+        "status": 1,
         "backend": "",
-        "error": "skipped"
+        "frames_seconds": null,
+        "import_seconds": null,
+        "error": "libEGL.so.1: cannot open shared object file: No such file or directory"
       },
       "previous": {
         "compile": {
           "ok": false,
-          "seconds": 13.4528,
-          "rss_kib": 228564,
+          "seconds": 0.2942,
+          "rss_kib": 115548,
           "status": 1,
-          "error": "Imported from /workspace/examples/particles.mojo:39:"
+          "error": "Imported from /workspace/examples/particles.mojo:16:"
         },
         "run": {
           "ok": false,
           "seconds": null,
           "rss_kib": null,
           "status": 1,
-          "error": "Imported from /workspace/examples/particles.mojo:39:"
+          "error": "Imported from /workspace/examples/particles.mojo:16:"
         }
       }
     }
