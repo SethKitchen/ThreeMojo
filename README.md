@@ -591,6 +591,9 @@ Procedural buildings for engineering analysis and for games share one canonical 
 - [x] [Scanned buildings on the GPU](https://github.com/SethKitchen/ThreeMojo/wiki/C-ABI-and-hosts): the C ABI splat app draws a scanned building with WebGPU or Metal. Its WebAssembly module builds on Linux [#788](https://github.com/SethKitchen/ThreeMojo/issues/788)
 - [x] [Scan parts](https://github.com/SethKitchen/ThreeMojo/wiki/Scan-parts): a scanned place cut into parts with mass, inertia, bearing pressure and tip angle. Each is a rigid body and splats to place again [#786](https://github.com/SethKitchen/ThreeMojo/issues/786)
 - [x] [Scan parts on terrain](https://github.com/SethKitchen/ThreeMojo/wiki/Scan-parts#find-the-ground-of-a-slope): a hillside's ground as a surface. A scanned site cuts into buildings that bear on the slope [#789](https://github.com/SethKitchen/ThreeMojo/issues/789)
+- [x] [Cleaning and orienting scans](https://github.com/SethKitchen/ThreeMojo/wiki/Cleaning-and-orienting-scans): leave out a scan's sky and floaters, find its up axis, and stand it in a scene [#782](https://github.com/SethKitchen/ThreeMojo/issues/782)
+- [x] [Walking through a scan](https://github.com/SethKitchen/ThreeMojo/wiki/Walking-through-a-scan): a capsule walks a scan's floor in a physics world, with a first-person camera, as a game does [#786](https://github.com/SethKitchen/ThreeMojo/issues/786)
+- [x] [GPU splats](https://github.com/SethKitchen/ThreeMojo/wiki/GPU-splats): a scan kept on the GPU and drawn a tile at a time. A scan of a building draws at 1920 by 1080 in 21 milliseconds, twice as fast as 24 CPU threads [#790](https://github.com/SethKitchen/ThreeMojo/issues/790)
 
 ### Earth retaining
 

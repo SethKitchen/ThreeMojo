@@ -131,6 +131,8 @@ A splat is not drawn when its center is behind the camera or outside the near an
 
 ## The GPU
 
+For a scan of a building, draw on the device a tile at a time with `render.gpu_splat_lod.GpuSplatScene`. It keeps the scan on the device and draws 850,000 splats at 1920 by 1080 in 21 milliseconds. See [GPU splats](GPU-splats).
+
 `render.gpu.GpuSplats` draws the same list on the device, with one thread for each pixel. The thread walks the splats in draw order. The host and the device share `splat_alpha` and `splat_depth_passes`, so the two images agree. `tests/test_gpu.mojo` compares them pixel by pixel.
 
 ```mojo
