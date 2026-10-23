@@ -26,6 +26,7 @@ from tests._make_recipe import (
     read_calls,
     section,
 )
+from tools._cli import absolute_path
 from tools._process import ProcessResult, run_program, shell_quote
 
 comptime START = "# mojo format has no --check flag"
@@ -56,6 +57,7 @@ def _header(hash: String) -> String:
         + hash
         + "\nFMT_STAMP := cache/fmt-$(HASH)\n"
         + "MOJO := sh formatter.sh\n"
+        + "TOOL := /tmp/threemojo-shell-log-wrapper\n"
         + "quote = '$(subst ','\"'\"',$(1))'\n"
     )
 
@@ -491,5 +493,35 @@ def test_outer_make_overrides_cannot_replace_fixture_formatter() raises:
     assert_true(outcome.stamped)
 
 
+def _install_log() raises:
+    """Point the format id command at the built Mojo program."""
+    var root = absolute_path(".")
+    Path("/tmp/threemojo-shell-log-wrapper").write_text(
+        "#!/bin/sh\nexec sh "
+        + shell_quote(root + "/tools/tool.sh")
+        + " "
+        + shell_quote(root + "/.venv/bin/mojo")
+        + ' "$@"\n'
+    )
+    var mode = run_program(
+        ["chmod", "755", "/tmp/threemojo-shell-log-wrapper"], 10
+    )
+    if mode.status != 0:
+        raise Error(mode.output)
+    var built = run_program(
+        [
+            "sh",
+            root + "/tools/tool.sh",
+            root + "/.venv/bin/mojo",
+            "--build",
+            "shell_log",
+        ],
+        120,
+    )
+    if built.status != 0:
+        raise Error(built.output + built.errors)
+
+
 def main() raises:
+    _install_log()
     TestSuite.discover_tests[__functions_in_module()]().run()

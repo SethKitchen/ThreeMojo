@@ -168,7 +168,7 @@ Coverage splits into three steps. Each CI runner runs `coverage-instrument` and 
 
 ## Rebuild the project tools
 
-The `Makefile` runs Mojo tools while it reads itself. They select the affected files, split the suites, key the stamps and list the prerequisites of each example. `tools/tool.sh` builds each tool once into `.cache/tools/` and then runs the program. It builds a tool again when a `.mojo` file in `tools/` or `loaders/` is newer than the program. A tool must import nothing outside these two directories, apart from the standard library.
+The `Makefile` runs Mojo tools while it reads itself. They select the affected files, split the suites, key the stamps and list the prerequisites of each example. `tools/tool.sh` builds each tool once into `.cache/tools/` and then runs the program. It builds a tool again when a `.mojo` file in `tools/` or `loaders/` is newer than the program. A tool must import nothing outside these two directories, apart from the standard library. `tools/shell_log.mojo` writes the lint log lines and the format run id.
 
 The tools use their own compiler, `TOOL_MOJO`. It is `.venv/bin/mojo` when that file exists, and `mojo` otherwise. So a test can give `MOJO` a stand-in compiler. To build the tools with a different compiler, set `TOOL_MOJO`:
 

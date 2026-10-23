@@ -37,6 +37,10 @@ quote = '$(subst ','"'"',$(1))'
 # lists are longer than one argument can be.
 TOOL_MOJO := $(if $(wildcard .venv/bin/mojo),.venv/bin/mojo,mojo)
 TOOL = sh tools/tool.sh $(call quote,$(TOOL_MOJO))
+# Lint progress and a failed command. The value is shell words. The default
+# `TOOL_MOJO` has no spaces, so a recipe can expand this variable unquoted.
+THREEMOJO_SHELL_LOG := sh tools/tool.sh $(TOOL_MOJO) shell_log
+export THREEMOJO_SHELL_LOG
 
 # --- sources ----------------------------------------------------------------
 # Library modules have no main(), so they are checked with `mojo doc`.
@@ -484,7 +488,7 @@ $(LINT_CPU_STAMP):
 	      sh -c 'source=$$1; set -- $(MOJO) build $(MOJOFLAGS) $(LINT_CPU_BUILD_FLAGS) \
 	               --Werror -o /dev/null "$$source"; \
 	             if [ "$(LINT_CPU_PROGRESS)" = 1 ]; then \
-	               python3 -c "import datetime, shlex, sys; line = datetime.datetime.now(datetime.timezone.utc).strftime(\"%Y-%m-%dT%H:%M:%SZ\") + \" lint-build-start: \" + shlex.join(sys.argv[1:]); print(line if len(line) <= 4096 else line[:4084] + \" [truncated]\", flush=True)" "$$@"; \
+	               $$THREEMOJO_SHELL_LOG start lint-build-start: "$$@"; \
 	             fi; \
 	             out=$$("$$@" 2>&1); rc=$$?; \
 	             if [ "$(LINT_CPU_PROGRESS)" = 1 ]; then \
@@ -492,7 +496,7 @@ $(LINT_CPU_STAMP):
 	             fi; \
 	             if [ $$rc -ne 0 ]; then \
 	               printf "lint-cpu failed: %s (exit %s)\n" "$$source" "$$rc" >&2; \
-	               python3 -c "import shlex, sys; print(\"command: \" + shlex.join(sys.argv[1:]), file=sys.stderr)" "$$@"; \
+	               $$THREEMOJO_SHELL_LOG command "$$@"; \
 	             fi; \
 	             printf "%s" "$$out" | sed "/Crashpad/d"; \
 	             exit $$rc' _ {} \
@@ -502,7 +506,7 @@ $(LINT_CPU_STAMP):
 	      sh -c 'source=$$1; set -- $(MOJO) doc $(MOJOFLAGS) \
 	               --Werror -o /dev/null "$$source"; \
 	             if [ "$(LINT_CPU_PROGRESS)" = 1 ]; then \
-	               python3 -c "import datetime, shlex, sys; line = datetime.datetime.now(datetime.timezone.utc).strftime(\"%Y-%m-%dT%H:%M:%SZ\") + \" lint-doc-start: \" + shlex.join(sys.argv[1:]); print(line if len(line) <= 4096 else line[:4084] + \" [truncated]\", flush=True)" "$$@"; \
+	               $$THREEMOJO_SHELL_LOG start lint-doc-start: "$$@"; \
 	             fi; \
 	             out=$$("$$@" 2>&1); rc=$$?; \
 	             if [ "$(LINT_CPU_PROGRESS)" = 1 ]; then \
@@ -510,7 +514,7 @@ $(LINT_CPU_STAMP):
 	             fi; \
 	             if [ $$rc -ne 0 ]; then \
 	               printf "lint-cpu failed: %s (exit %s)\n" "$$source" "$$rc" >&2; \
-	               python3 -c "import shlex, sys; print(\"command: \" + shlex.join(sys.argv[1:]), file=sys.stderr)" "$$@"; \
+	               $$THREEMOJO_SHELL_LOG command "$$@"; \
 	             fi; \
 	             printf "%s" "$$out" | sed "/Crashpad/d"; \
 	             exit $$rc' _ {} \
@@ -550,7 +554,7 @@ $(LINT_GPU_STAMP): $(COMPILE_GPU_STAMP)
 # The manifest also lets the copy and diff loops share exactly one selection.
 # Each make process owns its manifest. Keep it outside stamp(fmt)'s fmt-*
 # cleanup so concurrent checks cannot remove or overwrite another selection.
-FMT_RUN_ID := $(shell python3 -c 'import uuid; print(uuid.uuid4().hex)')
+FMT_RUN_ID := $(shell $(TOOL) shell_log uuid)
 FMT_INPUTS := $(CACHE_DIR)/format-inputs-$(FMT_RUN_ID)
 define write-format-inputs
 $(if $(strip $(1)),@printf '%s\n' $(foreach f,$(wordlist 1,4,$(1)),$(call quote,$(f))) >> $(FMT_INPUTS)

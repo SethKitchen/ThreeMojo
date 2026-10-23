@@ -109,6 +109,7 @@ comptime BUILD_TOOLS = [
     "tools/coverage_shard.mojo",
     "tools/example_inputs.mojo",
     "tools/run_suite.mojo",
+    "tools/shell_log.mojo",
 ]
 """The Mojo tools the Makefile runs to select, split, key and judge the checks. A
 change to one, or to any file it imports, changes the selection itself."""
