@@ -55,7 +55,7 @@ from render.raster_state import (
     LOGARITHMIC_DEPTH,
     REVERSED_DEPTH,
 )
-from std.math import atan2, cos, exp, log2, max, min, sin, sqrt
+from std.math import copysign, exp, fma, log2, max, min, sqrt
 
 # The low-pass filter added to the 2D covariance's diagonal, in pixels
 # squared.
@@ -142,14 +142,76 @@ def splat_alpha(splat: ProjectedSplat, x: Int, y: Int) -> Float32:
         `a exp(-r^2 / 2)` at the pixel's center, or zero where `r^2` is
         above 4 and three.js discards the fragment.
     """
-    var dx = Float32(x) + 0.5 - splat.x
+    return _alpha_lanes[1](splat, SIMD[DType.float32, 1](Float32(x)), y)[0]
+
+
+def _alpha_lanes[
+    width: Int
+](splat: ProjectedSplat, columns: SIMD[DType.float32, width], y: Int) -> SIMD[
+    DType.float32, width
+]:
+    """Return the opacities a splat gives pixels of one row.
+
+    `splat_alpha` and `splat_alphas` both run this one expression, and
+    `exp` gives a lane what it gives one number. So a lane of eight is the
+    lane of one to the bit.
+
+    Parameters:
+        width: How many pixels.
+
+    Args:
+        splat: The splat.
+        columns: The pixels' columns.
+        y: Their row, down from the top.
+
+    Returns:
+        Each pixel's opacity; see `splat_alpha`.
+    """
+    var dx = columns + 0.5 - splat.x
     var dy = splat.y - (Float32(y) + 0.5)
-    var u = (dx * splat.axis_x + dy * splat.axis_y) / splat.scale1
-    var v = (dy * splat.axis_x - dx * splat.axis_y) / splat.scale2
-    var r2 = squared_length2[DType.float32](u, v)
-    if r2 > SPLAT_RADIUS_SQ:
-        return 0
-    return exp(r2 * -0.5) * splat.a
+    # Explicit fused products: each rounds once, in any width, so the
+    # compiler has nothing left to fuse one way in a lane and another way
+    # alone.
+    var along = SIMD[DType.float32, width](dy * splat.axis_y)
+    var across = SIMD[DType.float32, width](dy * splat.axis_x)
+    var u = fma(dx, SIMD[DType.float32, width](splat.axis_x), along) / (
+        splat.scale1
+    )
+    var v = fma(-dx, SIMD[DType.float32, width](splat.axis_y), across) / (
+        splat.scale2
+    )
+    var r2 = fma(u, u, v * v)
+    return r2.gt(SPLAT_RADIUS_SQ).select(
+        SIMD[DType.float32, width](0), exp(r2 * -0.5) * splat.a
+    )
+
+
+comptime SPLAT_LANES = 8
+"""How many pixels of a row `splat_alphas` shades at once."""
+
+
+def splat_alphas(
+    splat: ProjectedSplat, x: Int, y: Int
+) -> SIMD[DType.float32, SPLAT_LANES]:
+    """Return the opacities a splat gives `SPLAT_LANES` pixels of a row.
+
+    The lanes run the expression of `splat_alpha`. So each lane is
+    `splat_alpha` of its pixel, to the bit, at a fraction of the time.
+
+    Args:
+        splat: The splat.
+        x: The first pixel's column.
+        y: The pixels' row, down from the top.
+
+    Returns:
+        Lane `k` is `splat_alpha(splat, x + k, y)`.
+    """
+    # Columns below 2^24 are exact in `Float32`, so lane k's column is the
+    # one `splat_alpha` makes of `x + k`.
+    var columns = SIMD[DType.float32, SPLAT_LANES](
+        0, 1, 2, 3, 4, 5, 6, 7
+    ) + Float32(x)
+    return _alpha_lanes[SPLAT_LANES](splat, columns, y)
 
 
 @always_inline
@@ -255,7 +317,8 @@ def project_splat(
     Args:
         center: The splat's center, in the object's space.
         covariance: The covariances, six floats a splat.
-        at: Where this splat's six floats start.
+        at: Where this splat's six floats start. They must be inside
+            `covariance`: they are read unchecked.
         color: Its color between zero and one, before the clamp, and its
             opacity.
         view: The camera and the target.
@@ -283,12 +346,16 @@ def project_splat(
     var r0 = Vector3(m[0], m[4], m[8])
     var r1 = Vector3(m[1], m[5], m[9])
     var r2 = Vector3(m[2], m[6], m[10])
-    var cov0 = Vector3(covariance[at], covariance[at + 1], covariance[at + 2])
+    # The caller gives a splat's six floats; they are read unchecked.
+    var six = covariance.unsafe_ptr().unsafe_offset(at)
+    var cov0 = Vector3(
+        six[unsafe_offset=0], six[unsafe_offset=1], six[unsafe_offset=2]
+    )
     var cov1 = Vector3(
-        covariance[at + 1], covariance[at + 3], covariance[at + 4]
+        six[unsafe_offset=1], six[unsafe_offset=3], six[unsafe_offset=4]
     )
     var cov2 = Vector3(
-        covariance[at + 2], covariance[at + 4], covariance[at + 5]
+        six[unsafe_offset=2], six[unsafe_offset=4], six[unsafe_offset=5]
     )
     var vc0 = Vector3(_dot(r0, cov0), _dot(r0, cov1), _dot(r0, cov2))
     var vc1 = Vector3(_dot(r1, cov0), _dot(r1, cov1), _dot(r1, cov2))
@@ -326,9 +393,15 @@ def project_splat(
     var lambda2 = max(half_trace - radius, 0.0000001)
     # three.js keeps the axis at (1, 0) for a radius of 0.00001 or less,
     # which the floor above never lets it be.
-    var angle = atan2(b * 2, a - c) * 0.5
-    var axis_x = cos(angle)
-    var axis_y = sin(angle)
+    # The major axis is at half the angle of (a - c, 2 b), three.js's
+    # `atan2`. The half-angle formulas give its cosine and sine with two
+    # square roots in place of three trigonometric calls.
+    # A round splat has no gap: three.js's atan2(0, 0) keeps its axis at
+    # (1, 0).
+    var gap = sqrt(squared_length2[DType.float32](half_gap, b))
+    var cos2 = half_gap / gap if gap > 0 else Float32(1)
+    var axis_x = sqrt(max((1 + cos2) * 0.5, 0))
+    var axis_y = copysign(sqrt(max((1 - cos2) * 0.5, 0)), b)
     return ProjectedSplat(
         (cx / cw + 1) * 0.5 * Float32(view.width),
         (1 - cy / cw) * 0.5 * Float32(view.height),

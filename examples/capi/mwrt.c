@@ -192,6 +192,21 @@ void KGEN_CompilerRT_AlignedFree(void *pointer) {
 
 /* ---- 2. Math ---------------------------------------------------------- */
 
+/* The 128-bit product, compiler-rt's __multi3, which the standard library's
+ * float parsing and hashing use. It is made of 32-bit products, and it is not
+ * optimized, so that the compiler cannot make a 128-bit multiply of it again,
+ * which would call itself. */
+__attribute__((noinline, optnone)) __int128 __multi3(__int128 a, __int128 b) {
+  uint64_t al = (uint64_t)a, ah = (uint64_t)(a >> 64);
+  uint64_t bl = (uint64_t)b, bh = (uint64_t)(b >> 64);
+  uint64_t a0 = al & 0xffffffffu, a1 = al >> 32, b0 = bl & 0xffffffffu, b1 = bl >> 32;
+  uint64_t p00 = a0 * b0, p01 = a0 * b1, p10 = a1 * b0, p11 = a1 * b1;
+  uint64_t middle = (p00 >> 32) + (p01 & 0xffffffffu) + (p10 & 0xffffffffu);
+  uint64_t low = (p00 & 0xffffffffu) | (middle << 32);
+  uint64_t high = p11 + (p01 >> 32) + (p10 >> 32) + (middle >> 32) + al * bh + ah * bl;
+  return ((__int128)high << 64) | low;
+}
+
 float fmaxf(float a, float b) {
   if (a != a) return b;
   if (b != b) return a;

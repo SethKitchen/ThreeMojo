@@ -10,6 +10,8 @@ The animals subject ports procedural-animals: 24 species sculpted as distance fi
 
 The building subject generates buildings for engineering analysis and for games from one canonical model. It has shared numerics, a cell complex, the building model, IFC exchange and procedural towers and interiors. Frame, shell and energy analysis read the same model. See [Why buildings have one canonical model](Why-buildings-have-one-canonical-model).
 
+The scan subject reads splat scans of real places, in SOG and other formats, and puts them in meters with z up. It fills an occupancy grid that gives a static collider, and cuts the grid into parts to weigh, simulate and use again. It also cleans a scan and walks a physics capsule through it. The building subject fits a building model of a reusable construction kit to the grid, and takes the gravity load down its walls. A pinned manifest downloads the scans, and a GPU draws one at 50 frames a second at 1920 by 1080. See [Scanned buildings](Scanned-buildings), [Scan parts](Scan-parts), [Cleaning and orienting scans](Cleaning-and-orienting-scans), [Walking through a scan](Walking-through-a-scan) and [GPU splats](GPU-splats).
+
 The geotech subject analyzes earth-retaining walls: earth and water pressure, LRFD stability and slip circles. The visual subject draws engineering results with meshes, labels and textures. See [Retaining walls](Retaining-walls) and [Engineering views](Engineering-views).
 
 The CARLA subject ports the CARLA driving simulator without its game engine and its network transport. It covers maps, physics, the world, sensors, traffic, agents, recording and rendering. See [CARLA](CARLA).

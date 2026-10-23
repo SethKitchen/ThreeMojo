@@ -13,6 +13,7 @@
  *
  *   threemojo_host LIBRARY [WIDTH HEIGHT] [--frames N] [--dump FILE.ppm]
  *                          [--chdir DIR] [--headless] [--crisp] [--cpu]
+ *                          [--scan FILE]
  *
  * Start a window with run.sh, which launches ThreeMojo.app through Launch
  * Services. Since macOS 14 an app that a shell starts cannot take focus: its
@@ -39,6 +40,10 @@
  * Metal shows the frames on a layer, so --dump and the frame hash work only
  * with --headless.
  *
+ * --scan FILE gives the app a file with tm_asset, after --chdir: for the
+ * splat library, a scan of any format whose first bytes name it, such as a
+ * scan that tools/building_scans.mojo fetched into .cache/building-scans/.
+ *
  * Keys: the arrow keys and the space bar go to the app. Escape quits.
  */
 #import <Cocoa/Cocoa.h>
@@ -52,6 +57,7 @@
 #include <time.h>
 #include <unistd.h>
 
+#include "host_scan.h"
 #include "macos_splat.h"
 #include "threemojo.h"
 
@@ -629,7 +635,7 @@ static int key_code(NSEvent *event) {
 static void usage(void) {
   fprintf(stderr,
           "usage: threemojo_host LIBRARY [WIDTH HEIGHT] [--frames N] [--dump FILE.ppm] "
-          "[--chdir DIR] [--headless] [--crisp] [--cpu]\n");
+          "[--chdir DIR] [--headless] [--crisp] [--cpu] [--scan FILE]\n");
 }
 
 static bool load_symbols(Host *host, void *library) {
@@ -670,6 +676,7 @@ int main(int argc, char **argv) {
     host.width = DEFAULT_WIDTH;
     host.height = DEFAULT_HEIGHT;
     const char *path = NULL;
+    const char *scan = NULL;
     bool headless = false;
     int sizes = 0;
     for (int index = 1; index < argc; index++) {
@@ -684,6 +691,8 @@ int main(int argc, char **argv) {
         host.limit = strtoull(argv[++index], NULL, 10);
       } else if (!strcmp(argument, "--dump") && index + 1 < argc) {
         host.dump = argv[++index];
+      } else if (!strcmp(argument, "--scan") && index + 1 < argc) {
+        scan = argv[++index];
       } else if (!strcmp(argument, "--chdir") && index + 1 < argc) {
         if (chdir(argv[++index]) != 0) {
           fprintf(stderr, "threemojo_host: cannot enter %s\n", argv[index]);
@@ -724,6 +733,7 @@ int main(int argc, char **argv) {
               host.height, TM_MAX_SIDE);
       return 1;
     }
+    if (scan && !give_file(library, host.app, scan)) return 1;
     const char *slash = strrchr(path, '/');
     host.name = slash ? slash + 1 : path;
     pthread_mutex_init(&host.lock, NULL);

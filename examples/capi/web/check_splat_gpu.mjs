@@ -8,6 +8,12 @@
 //
 //   node examples/capi/web/check_splat_gpu.mjs [out/capi/web]
 //
+// SCAN names another scan that you copy into the folder, such as a
+// SuperSplat scene's compressed PLY. FRAMES sets how many frames the timed
+// run takes: 120, or fewer where the GPU is a software one, such as
+// SwiftShader in a headless Chrome on a machine with no GPU, which takes
+// seconds a frame.
+//
 // The page's WebGPU path and the module's own CPU path draw the same view of
 // the same scan, so they must agree. They cannot agree bit for bit: the shader
 // has its own exponential, sine and arctangent, WGSL cannot forbid a fused
@@ -27,6 +33,8 @@ const MEAN_LIMIT = 0.25;
 const OUTLIER = 20;
 const OUTLIER_LIMIT = 0.001;
 const TIMEOUT_MS = 300000;
+const SCAN = (process.env.SCAN ?? "tomatoes.v4.spz").replace(/[^A-Za-z0-9._-]/g, "");
+const FRAMES = Math.max(1, Number.parseInt(process.env.FRAMES ?? "120", 10) || 120);
 
 // What runs in the page: two apps with the same events, the CPU frame of one
 // and the device's frame of the other, then a timed run and a second size.
@@ -36,7 +44,7 @@ const EXPRESSION = `(async () => {
   const gpu = await requestGpu();
   if (!gpu) return { skip: "Chrome has no WebGPU adapter" };
   const shader = await (await fetch("/splat.wgsl")).text();
-  const scan = new Uint8Array(await (await fetch("/tomatoes.v4.spz")).arrayBuffer());
+  const scan = new Uint8Array(await (await fetch("/${SCAN}")).arrayBuffer());
   const library = await load("/threemojo_splat.wasm");
   const make = (width, height) => {
     const app = library.create(width, height);
@@ -81,9 +89,9 @@ const EXPRESSION = `(async () => {
 
   // A timed run at 1280 by 720, with the camera turning by itself.
   splats.resize(1280, 720);
-  for (let frame = 0; frame < 20; frame++) await splats.frame(TICK);
+  for (let frame = 0; frame < Math.min(20, ${FRAMES}); frame++) await splats.frame(TICK);
   const times = [];
-  for (let frame = 0; frame < 120; frame++) times.push(await splats.frame(TICK));
+  for (let frame = 0; frame < ${FRAMES}; frame++) times.push(await splats.frame(TICK));
   times.sort((a, b) => a - b);
   const mean = times.reduce((total, value) => total + value, 0) / times.length;
   return {
@@ -94,7 +102,7 @@ const EXPRESSION = `(async () => {
   };
 })()`;
 
-const result = await inChrome(folder, EXPRESSION, { timeout: TIMEOUT_MS });
+const result = await inChrome(folder, EXPRESSION, { timeout: TIMEOUT_MS + FRAMES * 10000 });
 let failures = 0;
 if (result === null) {
   console.log("skip no Chrome (set CHROME to one)");
@@ -105,13 +113,13 @@ if (result === null) {
     if (!ok) failures++;
     console.log(`${ok ? "ok  " : "FAIL"} ${name}`);
   };
-  console.log(`mean ${result.mean.toFixed(4)}, worst ${result.worst}, outliers ${(result.outliers * 100).toFixed(4)} %, lit ${result.lit}`);
+  console.log(`${SCAN}: mean ${result.mean.toFixed(4)}, worst ${result.worst}, outliers ${(result.outliers * 100).toFixed(4)} %, lit ${result.lit}`);
   const t = result.timing;
   console.log(
     `1280x720: ${t.mean.toFixed(2)} ms a frame on average (${(1000 / t.mean).toFixed(0)} fps), ` +
       `median ${t.median.toFixed(2)}, 95th ${t.p95.toFixed(2)}, best ${t.best.toFixed(2)}`,
   );
-  check("gpu: the picture has the tomatoes in it", result.lit > 2000);
+  check("gpu: the picture has the scan in it", result.lit > 2000);
   check(`gpu: the mean difference from the CPU frame is at most ${MEAN_LIMIT}`, result.mean <= MEAN_LIMIT);
   check(`gpu: at most ${OUTLIER_LIMIT * 100} % of the values differ by more than ${OUTLIER}`, result.outliers <= OUTLIER_LIMIT);
   check("gpu: a frame of another size is drawn from the same scan", result.reused);

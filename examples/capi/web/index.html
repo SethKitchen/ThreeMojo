@@ -14,6 +14,9 @@
                  the largest frame that it can draw at 30 frames a second
     ?threads=N   the workers of the water, or 0 for one thread
     ?gpu=0       draw on the CPU, even where the browser has WebGPU
+    ?scan=NAME   the splat app's scan, a file in this folder: tomatoes.v4.spz
+                 is the default. Copy another scan here to draw it.
+                 Any .spz file, splat PLY, compressed PLY or SOG bundle works
 
   A browser with WebGPU draws the water on its GPU: the module keeps the
   simulation, the ocean surface, the caustics and the glare's small FFT, and
@@ -132,6 +135,15 @@ const APPS = {
   },
 };
 let app_info = APPS[name] ?? { size: [480, 320], sizes: [[480, 320]], help: "" };
+// The credit of each scan that build.sh copies here.
+const SCANS = {
+  "tomatoes.v4.spz": "Scan: Grail, CC BY 4.0.",
+};
+if (name === "splat" && params.has("scan")) {
+  const scan = params.get("scan").replace(/[^A-Za-z0-9._-]/g, "");
+  const credit = SCANS[scan] ?? `Scan: ${scan}; see its license.`;
+  app_info = { ...app_info, asset: scan, help: app_info.help.replace(/Scan: .*$/, credit) };
+}
 const side = (key, fallback) => {
   const value = parseInt(params.get(key) ?? "", 10);
   return Number.isFinite(value) && value > 0 ? value : fallback;
