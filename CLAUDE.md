@@ -22,8 +22,8 @@ ThreeMojo ports three.js to Mojo. Read the [README](README.md) first and [CONTRI
 
 The pin is exact: Mojo `1.2.0` (`2016d0cd`), and MAX `26.7.0` for the GPU
 half. It is a pin and not a floor, because one source cannot serve both 1.1
-and 1.2: 1.1 cannot parse `__async`, and 1.2 has no `std.hashlib`. Seven
-things moved, and all seven are easy to write back the old way by habit:
+and 1.2: 1.1 cannot parse `__async`, and 1.2 has no `std.hashlib`. Several
+things moved, and all are easy to write back the old way by habit:
 
 - `TaskGroup` is `from std.runtime._asyncrt import TaskGroup`. The public
   `std.runtime` keeps only `parallelism_level` and `initialize_runtime`, and
@@ -46,6 +46,14 @@ things moved, and all seven are easy to write back the old way by habit:
 - `global_idx` is `from max.gpu import global_idx`. Much of `std.gpu` moved
   into the `max` package, and the compiler says so when it cannot find it.
 - `Hasher` is `from std.hash import Hasher`. `std.hashlib` is gone.
+- Pass a file descriptor to libc `read` and `write` as `Int32`, as in
+  `external_call["write", Int](Int32(2), ...)`. The standard library declares
+  these two functions with a 32-bit descriptor. A call with an `Int`
+  descriptor compiles, and `mojo doc` accepts it. Then `mojo build` fails to
+  lower the module with "existing function with conflicting signature". The
+  compile-time interpreter is the exception: it accepts only an `Int`
+  descriptor in `write`. Code that can run at compile time, such as the
+  coverage probes, writes through `std.sys.stderr` there.
 - `has_apple_gpu_accelerator()` and its two siblings are gone. Ask the target:
   `default_accelerator().is_apple_gpu()`, from `std.sys`.
 - Do not write `x^` where the callee only reads its argument. 1.2 warns that
