@@ -1511,6 +1511,239 @@ def check_repeated_truth(mojo: String) raises:
         _ = run_program(["rm", "-rf", work], 30)
 
 
+def lifetime_source() -> Tuple[String, List[String]]:
+    """Return the container-destruction fixture and its expressions.
+
+    Returns:
+        The source, and one expression per case.
+    """
+    var text = """@fieldwise_init
+struct Item(Movable):
+    var id: Int
+    var drops: Pointer[Int, MutUntrackedOrigin]
+    def __deinit__(deinit self):
+        self.drops[] = self.drops[] * 10 + self.id
+        print("DROP", self.id, self.drops[])
+
+def optional(id: Int, full: Bool, drops: Pointer[Int, MutUntrackedOrigin]) -> Optional[Item]:
+    print("MAKE", id)
+    if full:
+        return Optional[Item](Item(id, drops))
+    return None
+
+def items(id: Int, full: Bool, drops: Pointer[Int, MutUntrackedOrigin]) -> List[Item]:
+    print("MAKE", id)
+    var result = List[Item]()
+    if full:
+        result.append(Item(id, drops))
+    return result^
+
+def observe(id: Int, result: Bool, drops: Pointer[Int, MutUntrackedOrigin]) -> Bool:
+    print("OBSERVE", id, drops[])
+    return result
+"""
+    var cases = List[String]()
+    for kind in ["optional", "items"]:
+        var other = "items"
+        if kind == "items":
+            other = "optional"
+        for first in ["True", "False"]:
+            for second in ["True", "False"]:
+                var left = kind + "(1, " + first + ", drops)"
+                var right = kind + "(2, " + second + ", drops)"
+                var mixed = other + "(2, " + second + ", drops)"
+                var observe = "observe(3, " + second + ", drops)"
+                var expressions = List[String]()
+                expressions.append(left + " and " + right)
+                expressions.append(left + " or " + right)
+                expressions.append(left + " and " + observe)
+                expressions.append(left + " or " + observe)
+                expressions.append(
+                    "(" + left + " or " + right + ") and " + observe
+                )
+                expressions.append(
+                    "(" + left + " and " + right + ") or " + observe
+                )
+                expressions.append("not (" + left + " or " + right + ")")
+                expressions.append("retained and " + observe)
+                expressions.append("retained or " + observe)
+                expressions.append("(retained or " + observe + ") and " + left)
+                expressions.append("(retained and " + observe + ") or " + left)
+                expressions.append(left + " and " + mixed)
+                expressions.append(left + " or " + mixed)
+                for expression in expressions:
+                    var number = len(cases)
+                    cases.append(expression)
+                    text += "\ndef case_" + String(number) + "():\n"
+                    text += '    print("CASE", ' + String(number) + ")\n"
+                    text += "    var state = 0\n"
+                    text += (
+                        "    var drops ="
+                        " Pointer(to=state).unsafe_origin_cast[MutUntrackedOrigin]()\n"
+                    )
+                    text += (
+                        "    var retained = "
+                        + kind
+                        + "(4, "
+                        + first
+                        + ", drops)\n"
+                    )
+                    text += "    if " + expression + ":\n"
+                    text += (
+                        '        print("BODY", ' + String(number) + ", state)\n"
+                    )
+                    text += "    else:\n"
+                    text += (
+                        '        print("ELSE", ' + String(number) + ", state)\n"
+                    )
+                    text += (
+                        '    print("AFTER", '
+                        + String(number)
+                        + ", Bool(retained), state)\n"
+                    )
+    text += "\ndef main():\n"
+    var number = 0
+    while number < len(cases):
+        text += "    case_" + String(number) + "()\n"
+        text += '    print("END", ' + String(number) + ")\n"
+        number += 1
+    return (text, cases^)
+
+
+def _obligation_width(expression: String) -> Int:
+    """Return the compound width the lifetime manifest expects."""
+    var width = 1
+    var rest = expression
+    while True:
+        var at = rest.find(" and ")
+        var other = rest.find(" or ")
+        var next = at
+        if next < 0 or (other >= 0 and other < next):
+            next = other
+        if next < 0:
+            return width
+        width += 1
+        var tail = String(rest[byte = next + 5 :])
+        rest = tail
+
+
+def check_lifetime(mojo: String) raises:
+    """Require native and instrumented container destruction to match.
+
+    Args:
+        mojo: The Mojo compiler.
+
+    Raises:
+        Error: If the manifest or the destruction order differs.
+    """
+    var root = absolute_path(".")
+    var compiler = absolute_path(mojo)
+    var made = lifetime_source()
+    var work = mkdtemp(prefix="threemojo-lifetime-")
+    try:
+        var native = work + "/native"
+        var rewritten = work + "/rewritten"
+        _ = _must(["mkdir", "-p", native, rewritten], 10)
+        _ = _must(["cp", "-a", root + "/coverage", native + "/coverage"], 30)
+        _ = _must(["cp", "-a", root + "/coverage", rewritten + "/coverage"], 30)
+        for folder in [native, rewritten]:
+            var built = folder + "/coverage/build"
+            if Path(built).exists():
+                _ = _must(["rm", "-rf", built], 10)
+        Path(native + "/lifetime.mojo").write_text(made[0])
+        var build = work + "/build_cli"
+        _ = _must(
+            [
+                compiler,
+                "build",
+                "-Werror",
+                "-I",
+                root,
+                root + "/coverage/build_cli.mojo",
+                "-o",
+                build,
+            ],
+            180,
+        )
+        _ = _must([build, rewritten, "lifetime.mojo"], 60, native)
+        var manifest = Path(rewritten + "/manifest.txt").read_text()
+        var actual = List[String]()
+        for line in manifest.splitlines():
+            var row = String(line)
+            var parts = row.split(" ")
+            if (
+                len(parts) >= 2
+                and (
+                    String(parts[0]) == "B"
+                    or String(parts[0]) == "C"
+                    or String(parts[0]) == "M"
+                )
+                and String(parts[1]) == "lifetime"
+            ):
+                actual.append(row)
+        var expected = List[String]()
+        var source_lines = made[0].splitlines()
+        var index = 0
+        while index < len(source_lines):
+            var header = String(source_lines[index]).strip()
+            if header.startswith("if ") and header.endswith(":"):
+                var expression = String(
+                    header[byte = 3 : header.byte_length() - 1]
+                )
+                var width = _obligation_width(expression)
+                var line = index + 1
+                expected.append("B lifetime " + String(line))
+                if width > 1:
+                    var slot = 0
+                    while slot < width:
+                        expected.append(
+                            "C lifetime " + String(line) + " " + String(slot)
+                        )
+                        expected.append(
+                            "M lifetime " + String(line) + " " + String(slot)
+                        )
+                        slot += 1
+            index += 1
+        sort(actual)
+        sort(expected)
+        if not _same(actual, expected):
+            raise Error("lifetime manifest changed")
+        var native_out = String()
+        var instrumented_out = String()
+        for label in ["native", "instrumented"]:
+            var folder = native
+            if label == "instrumented":
+                folder = rewritten
+            var binary = work + "/lifetime-" + label
+            _ = _must(
+                [
+                    compiler,
+                    "build",
+                    "-Werror",
+                    "-I",
+                    folder,
+                    folder + "/lifetime.mojo",
+                    "-o",
+                    binary,
+                ],
+                180,
+            )
+            var ran = _must([binary], 5)
+            if label == "native":
+                native_out = ran.output
+            else:
+                instrumented_out = ran.output
+        if native_out != instrumented_out:
+            raise Error("Container destruction order differs")
+        print(
+            "PASS: "
+            + String(len(made[1]))
+            + " container destructor-order cases"
+        )
+    finally:
+        _ = run_program(["rm", "-rf", work], 30)
+
+
 def main() raises:
     """Compare the Boolean grouping fixture from the command line."""
     var mojo = ".venv/bin/mojo"
@@ -1534,6 +1767,7 @@ def main() raises:
         check_semantics(mojo)
         check_compile_time_names(mojo)
         check_repeated_truth(mojo)
+        check_lifetime(mojo)
     except error:
         print(String(error), file=stderr)
         exit(1)

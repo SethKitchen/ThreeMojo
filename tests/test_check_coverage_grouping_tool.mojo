@@ -13,6 +13,7 @@ from tools.check_coverage_grouping import (
     expected_records,
     expected_rows,
     fixture_source,
+    lifetime_source,
     repeated_truth_source,
 )
 
@@ -51,6 +52,15 @@ def test_repeated_truth_keeps_the_value_alive() raises:
     assert_true(probe.find("comptime assert _borrowed(") >= 0)
     assert_equal(probe.find("COVEVAL2"), -1)
     assert_true(probe.find('print("COUNT", count, kept.count[])') >= 0)
+
+
+def test_the_lifetime_fixture_matches_the_pinned_text() raises:
+    var made = lifetime_source()
+    assert_equal(len(made[1]), 104)
+    assert_equal(
+        sha256_hex(made[0].as_bytes()),
+        "4b673e30bbe631306a27379cf3eb6dd89fdc8bf15713a494bd38d06f611289cd",
+    )
 
 
 def main() raises:
