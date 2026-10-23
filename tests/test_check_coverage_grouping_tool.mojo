@@ -13,6 +13,7 @@ from tools.check_coverage_grouping import (
     expected_records,
     expected_rows,
     fixture_source,
+    identity_last_use_source,
     identity_source,
     lifetime_source,
     reduce_text,
@@ -83,6 +84,15 @@ def test_the_identity_fixture_matches_the_pinned_text() raises:
     assert_equal(
         sha256_hex(identity_source("not kept or False").as_bytes()),
         "c5d35a3906009b2f70c7a5cba999dcb97a5be75bc0a35b67253a06d7c5252a7a",
+    )
+
+
+def test_the_last_use_fixture_drops_the_trailing_reads() raises:
+    var source = identity_last_use_source("not kept or False")
+    assert_equal(source.find("RETAINED"), -1)
+    assert_equal(
+        sha256_hex(source.as_bytes()),
+        "064262fd3be99a794b8d0e497f6c3a978bc9e7c4a2b4b34937eca21460523e3d",
     )
 
 

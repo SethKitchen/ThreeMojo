@@ -2248,6 +2248,166 @@ def check_identity(mojo: String) raises:
         _ = run_program(["rm", "-rf", work], 30)
 
 
+def identity_last_use_source(expression: String) raises -> String:
+    """Return an identity fixture without the post-use reads.
+
+    Args:
+        expression: The condition to test.
+
+    Returns:
+        The source with the retained-value prints removed.
+
+    Raises:
+        Error: If the full fixture does not end with those prints.
+    """
+    var source = identity_source(expression)
+    var suffix = (
+        '    print("RETAINED", kept.payload)\n'
+        '    print("ADDRESS", Int(Pointer(to=kept.payload)) =='
+        " kept.expected)\n"
+    )
+    if not source.endswith(suffix):
+        raise Error("identity source lost its trailing reads")
+    var copy = source
+    return String(copy[byte = : copy.byte_length() - suffix.byte_length()])
+
+
+def check_last_use(mojo: String) raises:
+    """Compare the two last-use identity controls with native execution.
+
+    Args:
+        mojo: The Mojo compiler.
+
+    Raises:
+        Error: If native output, the origin, or a trace differs.
+    """
+    var root = absolute_path(".")
+    var compiler = absolute_path(mojo)
+    var work = mkdtemp(prefix="threemojo-last-use-")
+    try:
+        var native = work + "/native"
+        var rewritten = work + "/rewritten"
+        _ = _must(["mkdir", "-p", native, rewritten], 10)
+        _ = _must(["cp", "-a", root + "/coverage", native + "/coverage"], 30)
+        _ = _must(["cp", "-a", root + "/coverage", rewritten + "/coverage"], 30)
+        for folder in [native, rewritten]:
+            var built = folder + "/coverage/build"
+            if Path(built).exists():
+                _ = _must(["rm", "-rf", built], 10)
+        var build = work + "/build_cli"
+        _ = _must(
+            [
+                compiler,
+                "build",
+                "-Werror",
+                "-I",
+                root,
+                root + "/coverage/build_cli.mojo",
+                "-o",
+                build,
+            ],
+            180,
+        )
+        for number in [0, 3]:
+            var expression = "not kept or False"
+            var vector = "TF"
+            if number == 3:
+                expression = "not (kept if choose_kept else kept) or False"
+            var name = "identity-last-use-" + String(number)
+            var source = identity_last_use_source(expression)
+            var full = _identity_output(1, False)
+            var tail = "RETAINED 7\nADDRESS True\n"
+            var copy = full
+            var expected = String(
+                copy[byte = : copy.byte_length() - tail.byte_length()]
+            )
+            Path(native + "/" + name + ".mojo").write_text(source)
+            var native_binary = work + "/" + name + "-native"
+            _ = _must(
+                [
+                    compiler,
+                    "build",
+                    "-Werror",
+                    "-I",
+                    native,
+                    native + "/" + name + ".mojo",
+                    "-o",
+                    native_binary,
+                ],
+                180,
+            )
+            var actual = _must([native_binary], 5)
+            if actual.output != expected:
+                raise Error(name + "\n" + actual.output + "\n" + expected)
+            _ = _must([build, rewritten, name + ".mojo"], 60, native)
+            var decision = _decision_line(source, expression)
+            var manifest = Path(rewritten + "/manifest.txt").read_text()
+            var manifest_rows = List[String]()
+            for line in manifest.splitlines():
+                var row = String(line)
+                var parts = row.split(" ")
+                if (
+                    len(parts) >= 2
+                    and String(parts[1]) == name
+                    and (
+                        String(parts[0]) == "B"
+                        or String(parts[0]) == "C"
+                        or String(parts[0]) == "M"
+                    )
+                ):
+                    manifest_rows.append(row)
+            var wanted_manifest = List[String]()
+            wanted_manifest.append("B " + name + " " + String(decision))
+            wanted_manifest.append("C " + name + " " + String(decision) + " 0")
+            wanted_manifest.append("M " + name + " " + String(decision) + " 0")
+            wanted_manifest.append("C " + name + " " + String(decision) + " 1")
+            wanted_manifest.append("M " + name + " " + String(decision) + " 1")
+            sort(manifest_rows)
+            sort(wanted_manifest)
+            if not _same(manifest_rows, wanted_manifest):
+                raise Error(name + " manifest changed")
+            _require_origin(rewritten, name, source)
+            var instrumented_binary = work + "/" + name + "-instrumented"
+            _ = _must(
+                [
+                    compiler,
+                    "build",
+                    "-Werror",
+                    "-I",
+                    rewritten,
+                    rewritten + "/" + name + ".mojo",
+                    "-o",
+                    instrumented_binary,
+                ],
+                180,
+            )
+            var instrumented = _must([instrumented_binary], 5)
+            if instrumented.output != actual.output:
+                raise Error(name + " stdout differs\n" + instrumented.output)
+            var wanted = _identity_records(name, decision, False, vector)
+            var prefix_hit = "COVLINE:" + name + ":" + String(decision)
+            var prefix_vector = (
+                "COVEVAL2:" + name + ":" + String(decision) + ":"
+            )
+            var seen = String()
+            for line in instrumented.errors.splitlines():
+                var row = String(line)
+                if (
+                    row.startswith(prefix_hit + ":")
+                    or row.startswith(prefix_hit + ".")
+                    or row.startswith(prefix_vector)
+                ):
+                    seen += row + "\n"
+            if seen != wanted:
+                raise Error(name + "\n" + seen + "\n" + wanted)
+        print(
+            "PASS: 2 last-use identity controls with exact native truth and"
+            " traces"
+        )
+    finally:
+        _ = run_program(["rm", "-rf", work], 30)
+
+
 def main() raises:
     """Compare the Boolean grouping fixture from the command line."""
     var mojo = ".venv/bin/mojo"
@@ -2273,6 +2433,7 @@ def main() raises:
         check_repeated_truth(mojo)
         check_lifetime(mojo)
         check_identity(mojo)
+        check_last_use(mojo)
     except error:
         print(String(error), file=stderr)
         exit(1)
