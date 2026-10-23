@@ -14,7 +14,7 @@ part of that limit. No device or external service is used.
 Run it from the repository root. `make test-coverage-tool` does.
 """
 
-from std.collections import Dict
+from std.collections import Dict, Set
 from std.pathlib import Path
 from std.sys import argv, exit, stderr
 from std.tempfile import mkdtemp
@@ -886,6 +886,50 @@ def _matching(raw: String, prefix: String) -> String:
     return text
 
 
+def reduce_text(text: String) -> String:
+    """Return distinct hits and complete vectors, in first-seen order.
+
+    Args:
+        text: The raw standard error.
+
+    Returns:
+        The reduced stream. A repeated hit or vector is omitted.
+    """
+    var seen_hits = Set[String]()
+    var seen_vectors = Set[String]()
+    var out = String()
+    for line in text.splitlines():
+        var row = String(line)
+        if row.startswith("COVLINE:"):
+            if not (row in seen_hits):
+                seen_hits.add(row)
+                out += row + "\n"
+        elif row.startswith("COVEVAL2:"):
+            if not (row in seen_vectors):
+                seen_vectors.add(row)
+                out += row + "\n"
+        else:
+            out += row + "\n"
+    return out
+
+
+def _analyzer_source() -> String:
+    """Return the program that prints parsed coverage traces."""
+    return """from coverage.mcdc import parse_traces, is_mcdc_covered
+from std.pathlib import Path
+from std.sys import argv
+
+def main() raises:
+    var traces = parse_traces(Path(String(argv()[1])).read_text())
+    for trace in traces:
+        print(trace.id)
+        for evaluation in trace.evaluations:
+            print(evaluation.values, evaluation.outcome)
+        for index in range(6):
+            print(index, is_mcdc_covered(trace, index))
+"""
+
+
 def check_semantics(mojo: String) raises:
     """Compare the Boolean fixture with the independent reference tree.
 
@@ -1023,12 +1067,161 @@ def check_semantics(mojo: String) raises:
                         "vectors changed " + String(number) + " " + String(fail)
                     )
                 number += 1
+            Path(work + "/raw-" + String(fail) + ".txt").write_text(raw)
+            Path(work + "/reduced-" + String(fail) + ".txt").write_text(
+                reduce_text(raw)
+            )
+            if fail == -1:
+                Path(work + "/raw.txt").write_text(raw)
+                Path(work + "/reduced.txt").write_text(reduce_text(raw))
             fail += 1
+        Path(native + "/analyze.mojo").write_text(_analyzer_source())
+        _ = _must(
+            [
+                compiler,
+                "build",
+                "-Werror",
+                "-I",
+                native,
+                native + "/analyze.mojo",
+                "-o",
+                work + "/analyze",
+            ],
+            180,
+        )
+        fail = -1
+        while fail < 6:
+            var raw_report = _must(
+                [
+                    work + "/analyze",
+                    work + "/raw-" + String(fail) + ".txt",
+                ],
+                10,
+            )
+            var reduced_report = _must(
+                [
+                    work + "/analyze",
+                    work + "/reduced-" + String(fail) + ".txt",
+                ],
+                10,
+            )
+            if raw_report.output != reduced_report.output:
+                raise Error(
+                    "raw/reduced Mojo traces differ at throwing leaf "
+                    + String(fail)
+                )
+            fail += 1
+        var line = made[1][8]
+        var negative = (
+            "COVLINE:fixture:"
+            + String(line)
+            + ".0:F\nCOVLINE:fixture:"
+            + String(line)
+            + ".1:F\nCOVLINE:fixture:"
+            + String(line)
+            + ".2:F\nCOVLINE:fixture:"
+            + String(line)
+            + ":F\nCOVEVAL2:fixture:"
+            + String(line)
+            + ":F:FFF;\nCOVLINE:fixture:"
+            + String(line)
+            + ".0:T\nCOVLINE:fixture:"
+            + String(line)
+            + ":T\nCOVEVAL2:fixture:"
+            + String(line)
+            + ":T:T--;\n"
+        )
+        Path(work + "/negative.txt").write_text(negative)
+        var negative_manifest = "B fixture " + String(line) + "\n"
+        var slot = 0
+        while slot < 3:
+            negative_manifest += (
+                "C fixture " + String(line) + " " + String(slot) + "\n"
+            )
+            negative_manifest += (
+                "M fixture " + String(line) + " " + String(slot) + "\n"
+            )
+            slot += 1
+        Path(work + "/negative-manifest.txt").write_text(negative_manifest)
+        var report_bin = work + "/report"
+        _ = _must(
+            [
+                compiler,
+                "build",
+                "-Werror",
+                "-I",
+                root,
+                root + "/coverage/report_cli.mojo",
+                "-o",
+                report_bin,
+            ],
+            180,
+        )
+        var selected = String()
+        for row in manifest.splitlines():
+            var entry = String(row)
+            var parts = entry.split(" ")
+            if len(parts) < 3:
+                continue
+            var kind = String(parts[0])
+            if kind != "B" and kind != "C" and kind != "M":
+                continue
+            var decision = _number(String(parts[2]))
+            var kept = False
+            for item in made[1]:
+                if item == decision:
+                    kept = True
+            if kept:
+                selected += entry + "\n"
+        Path(work + "/decision-manifest.txt").write_text(selected)
+        _ = _must(
+            [report_bin, work + "/decision-manifest.txt", work + "/raw.txt"],
+            10,
+        )
+        _ = _must(
+            [
+                report_bin,
+                work + "/decision-manifest.txt",
+                work + "/reduced.txt",
+            ],
+            10,
+        )
+        var negative_report = run_program(
+            [
+                report_bin,
+                work + "/negative-manifest.txt",
+                work + "/negative.txt",
+            ],
+            10,
+            merge_errors=False,
+        )
+        if negative_report.status == 0:
+            raise Error("negative report was accepted")
+        var negative_text = negative_report.output + negative_report.errors
+        if (
+            negative_text.find("condition 1:") < 0
+            or negative_text.find("condition 2:") < 0
+        ):
+            raise Error(negative_text)
+        Path(work + "/branch-manifest.txt").write_text(
+            "B fixture " + String(line) + "\n"
+        )
+        var branch_report = _must(
+            [
+                report_bin,
+                work + "/branch-manifest.txt",
+                work + "/negative.txt",
+            ],
+            10,
+        )
+        if branch_report.output.find("100%") < 0:
+            raise Error(branch_report.output)
         print(
             "PASS: "
             + String(len(cases()))
             + " native/instrumented Boolean cases, 64 truth assignments,"
-            " normal and 6 throwing positions"
+            " normal and 6 throwing positions, raw/reduced vectors, and"
+            " the negative report"
         )
     finally:
         _ = run_program(["rm", "-rf", work], 30)

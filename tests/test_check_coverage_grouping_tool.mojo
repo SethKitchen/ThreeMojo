@@ -14,6 +14,7 @@ from tools.check_coverage_grouping import (
     expected_rows,
     fixture_source,
     lifetime_source,
+    reduce_text,
     repeated_truth_source,
 )
 
@@ -60,6 +61,20 @@ def test_the_lifetime_fixture_matches_the_pinned_text() raises:
     assert_equal(
         sha256_hex(made[0].as_bytes()),
         "4b673e30bbe631306a27379cf3eb6dd89fdc8bf15713a494bd38d06f611289cd",
+    )
+
+
+def test_repeated_records_reduce_to_the_first_copy() raises:
+    var raw = (
+        "COVLINE:fixture:1:T\n"
+        "COVLINE:fixture:1:T\n"
+        "COVEVAL2:fixture:1:T:T;\n"
+        "COVEVAL2:fixture:1:T:T;\n"
+        "hello\n"
+    )
+    assert_equal(
+        reduce_text(raw),
+        "COVLINE:fixture:1:T\nCOVEVAL2:fixture:1:T:T;\nhello\n",
     )
 
 
