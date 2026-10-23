@@ -582,14 +582,14 @@ def check_current_generated_include_root(stage, mojo, compiler, flags):
             '04ff45c12cefcb4dbe3a7b136e77b6baaf02cff52325f6599d99250f820fdebb'),
         ('extensions/carla/map',5020): (
             'construction-geometry-boundary-list','boundaries','reviewed-nonempty-iterator',None,
-            'b3862a55a54927b2a1e50186af82f64bdf145adbef5cef9f31ab19d9585749df'),
+            '288d0e5d3a5bc2e5a6b9542868de6566dc6cb4de6eae39192c0289d76a8c99fa'),
     }
     ordinary = {
         ('extensions/carla/map',line): {
             'module':'extensions/carla/map', 'line':line,
             'kind':'literal-range', 'cardinality':count, 'required':'T', 'impossible':'F',
             'expression':expression,
-            'source_sha256':'b3862a55a54927b2a1e50186af82f64bdf145adbef5cef9f31ab19d9585749df'}
+            'source_sha256':'288d0e5d3a5bc2e5a6b9542868de6566dc6cb4de6eae39192c0289d76a8c99fa'}
         for line,count,expression in ((2170,3,'range (3 )'),(2201,8,'range (8 )'))}
     expected = set(rows) | set(ordinary)
     observed = {(row['module'],row['line']):row for row in envelope['receipt']['proofs']}

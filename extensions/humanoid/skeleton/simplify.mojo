@@ -1028,7 +1028,7 @@ def share_budget(
             return shares^
 
 
-async def _weld_task(
+__async def _weld_task(
     meshes: MutPointer[WeldedMesh, MutAnyOrigin],
     areas: MutPointer[Float64, MutAnyOrigin],
     count: Int,
@@ -1054,7 +1054,7 @@ async def _weld_task(
         index += tasks
 
 
-async def _simplify_task(
+__async def _simplify_task(
     meshes: MutPointer[WeldedMesh, MutAnyOrigin],
     targets: MutPointer[Int, MutAnyOrigin],
     count: Int,

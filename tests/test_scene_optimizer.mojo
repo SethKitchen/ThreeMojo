@@ -242,7 +242,7 @@ def test_meshes_at_the_top_are_batched_at_the_top() raises:
     var bare = assets.geometries.add(shape^)
     var mapped = Material(Color(255, 0, 0), kind=LAMBERT)
     mapped.map = assets.textures.add(Texture())
-    var paint = assets.materials.add(mapped^)
+    var paint = assets.materials.add(mapped)
     # Two boxes of one material, a box of the same index with no texture
     # coordinates, and a box of two materials, which is left as it is.
     scene.add_mesh(Mesh(cube, paint, scene.add(_node("A", 0, 0, 0))))

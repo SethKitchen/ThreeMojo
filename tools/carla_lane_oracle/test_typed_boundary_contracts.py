@@ -41,8 +41,8 @@ class TypedBoundaryContracts(unittest.TestCase):
         seen = []
         def historical(name):
             seen.append(name)
-            text = (ROOT/name).read_text()
-            return typed.historical_source(name, text)
+            raw = audit.pr780_successor.predecessor_bytes(name, (ROOT/name).read_bytes())
+            return typed.historical_source(name, raw.decode('utf-8'))
         namespace = {'re': re, '_historical_text': historical}
         exec(compile(ast.Module(body=[function], type_ignores=[]), str(path), 'exec'), namespace)
         pins = json.loads((ROOT/'tools/carla_lane_oracle/translated-parameter-source.json').read_text())

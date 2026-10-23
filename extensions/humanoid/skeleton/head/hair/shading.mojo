@@ -282,7 +282,7 @@ def _shade_groom_into(
     group.wait()
 
 
-async def _shade_task(
+__async def _shade_task(
     groom: Pointer[HairGroom, ImmutAnyOrigin],
     look: HairLook,
     lights: Pointer[List[HairLight], ImmutAnyOrigin],

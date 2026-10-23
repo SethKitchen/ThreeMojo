@@ -69,7 +69,7 @@ struct TestScratch(Movable):
                 parent = String(cwd()) + "/" + parent
             directory = parent
         self._owned = TemporaryDirectory(
-            prefix="threemojo-test-", dir=directory^
+            prefix="threemojo-test-", dir=directory
         )
         var root = self._owned.value().name
         if not root.startswith("/"):

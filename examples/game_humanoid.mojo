@@ -114,7 +114,7 @@ def _bake(path: String, triangles: Int) raises:
     print("Built in", _seconds_since(start), "s")
     var written = perf_counter_ns()
     write_sealed_bake(
-        path, scene, assets, _expected_provenance(triangles), animations=clips^
+        path, scene, assets, _expected_provenance(triangles), animations=clips
     )
     print("Baked", path, "in", _seconds_since(written), "s")
 

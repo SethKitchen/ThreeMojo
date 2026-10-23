@@ -14,9 +14,9 @@ This is original work with no three.js lineage.
 
 ### Why the run happens inside the build tree
 
-Mojo 1.1 resolves a module beside the file being compiled before it looks at any `-I` path. A suite run from the repository root therefore imports the *real* library, whatever the search path says.
+Mojo 1.1 and 1.2 resolve a module beside the file being compiled before they look at any `-I` path. A suite run from the repository root therefore imports the *real* library, whatever the search path says.
 
-The suites used to run with `-I coverage/build -I .` and the first `-I` decided. Under 1.1 that arrangement measured nothing at all and reported a clean zero, which is the worst way for a coverage tool to fail. Copying the suites in makes the instrumented copies the ones beside them.
+The suites used to run with `-I coverage/build -I .` and the first `-I` decided. Under 1.1 and 1.2 that arrangement measured nothing at all. It reported a clean zero, which is the worst way for a coverage tool to fail. Copying the suites in makes the instrumented copies the ones beside them.
 
 The repository coverage run copies the tool without instrumentation. Separate diagnostic runs can instrument the tool, but those results cannot independently validate the instrumenter.
 
@@ -69,7 +69,7 @@ and probe formats described on this page when they need structured records.
 
 - The Makefile's `COVERED` list is every CPU module. `COVERAGE_EXCLUDE` names the GPU modules. The Makefile finds them by name: `gpu.mojo`, `gpu_*.mojo` and `*_gpu.mojo`. They are `render/gpu.mojo`, `render/gpu_vxgi.mojo`, `extensions/water/gpu.mojo` and `window/capi_water_gpu.mojo`. They need MAX, and a kernel has no `stderr`.
 - `# pragma: no branch` opts one decision out. Use it only when the other outcome is provably unreachable.
-- Probes cannot reach compile-time code, and the instrumenter recognizes `def` and `async def` only.
+- Probes cannot reach compile-time code, and the instrumenter recognizes `def` and `__async def` only.
 - The tool does not measure itself.
 
 ## Limits
@@ -84,7 +84,7 @@ Version 2 fixes the ambiguous evaluation boundaries tracked in [issue #385](http
 
 Simple decisions accept any `Boolable` value. Their helper borrows the value and calls `__bool__` exactly once.
 
-Compound decisions keep the native `and`, `or` and `not` operators. Pinned Mojo 1.1.0 selects the truth semantics of `and` and `or` from the operand types:
+Compound decisions keep the native `and`, `or` and `not` operators. Mojo 1.1.0 and 1.2.0 select the truth semantics of `and` and `or` from the operand types:
 
 - **One type.** Mojo converts the left operand. It returns the left operand, or the right operand without a conversion. The result owns the selected operand: Mojo moves a temporary into it. Mojo copies a retained operand into it, or moves the operand at its last use. The enclosing operator or truth test converts the result again. In `a or b or c`, a true `a` is converted three times.
 - **Two types without a join.** Mojo converts each evaluated operand to `Bool` once. It does not copy or move the operand.
@@ -145,7 +145,7 @@ Restoring the existing positive controls does not complete arbitrary custom trut
 
 #### Why mixed custom operators are refused
 
-A mixed-type operator with a `Bool` result can use Boolean fallback or a custom merge. The two need different probes. Boolean fallback converts each evaluated operand once. A merge converts only the left operand, and then calls the merge of the selected operand. Pinned Mojo 1.1.0 gives no way to tell the two apart at compile time:
+A mixed-type operator with a `Bool` result can use Boolean fallback or a custom merge. The two need different probes. Boolean fallback converts each evaluated operand once. A merge converts only the left operand, and then calls the merge of the selected operand. Mojo 1.1.0 and 1.2.0 give no way to tell the two apart at compile time:
 
 - Both give the same native result type, `Bool`. The `type_of` check sees only types.
 - Generic code can call only the methods of its trait bounds. No standard trait declares `__merge_with__`. A generic helper that calls it does not compile: "'T' value has no attribute '__merge_with__'". This is also true in a `where` clause, so an overload cannot test for a merge.
@@ -160,7 +160,7 @@ So a proxy cannot forward a merge, and the operator check cannot detect one. The
 
 The native operator converts the left operand in its own type. Then it converts the selected operand to the joined type and moves it into the result. The enclosing operator converts the joined value.
 
-To keep this order, a probe must run the native implicit conversion at that point. No probe can do this in pinned Mojo 1.1.0:
+To keep this order, a probe must run the native implicit conversion at that point. No probe can do this in Mojo 1.1.0 or 1.2.0:
 
 - Only code with concrete types can call an implicit conversion. A generic function that returns a generic `L` value as a generic `J` does not compile: "cannot implicitly convert 'L' value to 'J'". The runtime helpers are generic, so they cannot convert.
 - The instrumenter reads source text without types. It writes the same probe text for a join and for every other operator. That text must select its behavior through overloads.
@@ -172,7 +172,9 @@ The operator check therefore refuses each join, instead of a false vector. This 
 
 #### Retry the refused forms on a new Mojo
 
-The refused forms are limits of pinned Mojo 1.1.0. They are not limits of the coverage design. When the toolchain pin moves, test each form again. Admit a form only if the native and instrumented controls agree. These language features can remove a refusal:
+The refused forms are limits of Mojo 1.1.0 and 1.2.0. They are not limits of the coverage design. When the toolchain pin moves, test each form again. Admit a form only if the native and instrumented controls agree.
+
+The move to 1.2.0 kept every refusal. A generic implicit conversion still fails to compile, and the grouping check still counts the same conversions. These language features can remove a refusal:
 
 - A way to copy or move an operand after its truth test, and only on selection. This removes the one-type refusals for a retained left operand and for a type with a user-defined move constructor.
 - A generic implicit conversion, or reflection that can call a conversion between two generic types. This removes the refusal of implicit-conversion joins.
@@ -343,7 +345,7 @@ A `Bool` loop flag read after nested loops hangs the Mojo compiler. The instrume
 
 ### Compile-time name tests
 
-The operator check must not call `startswith` or `find` at compile time. Pinned Mojo 1.1.0 can deadlock a build that evaluates these methods at compile time. The compiler then waits on a semaphore and uses no CPU. The build does not fail and does not stop. The capture reports "waiting for probes (compile/startup)" until the shard budget stops it.
+The operator check must not call `startswith` or `find` at compile time. Mojo 1.1.0 can deadlock a build that evaluates these methods at compile time. The pinned 1.2.0 keeps the same workaround, because no test shows that it is safe to remove. The compiler then waits on a semaphore and uses no CPU. The build does not fail and does not stop. The capture reports "waiting for probes (compile/startup)" until the shard budget stops it.
 
 The instrumented `materials/nodes.mojo` caused this deadlock in `test_glsl614_reference_refusals`. One operator in that module, `flag or mask.reduce_or()`, joins a `Bool` and a `SIMD[DType.bool, 1]`. Its check got to the reflected-name tests and their `startswith` calls. With one compiler thread, the build did not stop in 900 seconds. Without that one check, the build took 45 seconds.
 

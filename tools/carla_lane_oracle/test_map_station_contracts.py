@@ -174,6 +174,7 @@ class StationIntegrationControls(unittest.TestCase):
         self.current = deviation.station_source(
             (self.root/station.MODULE).read_bytes().decode()).encode()
         (self.root/station.MODULE).write_bytes(self.current)
+        self.physical = self.current
         self.before = station.predecessor_source(self.current.decode()).encode()
 
     @contextmanager
@@ -199,7 +200,7 @@ class StationIntegrationControls(unittest.TestCase):
         record = cleanup.read_record(self.root)
         for group in ('unchanged_inputs', 'native_dependency_inputs'):
             self.assertEqual(record[group][station.MODULE], station.BEFORE_SHA256)
-        self.assertEqual((self.root/station.MODULE).read_bytes(), self.current)
+        self.assertEqual((self.root/station.MODULE).read_bytes(), self.physical)
 
     def test_crossed_station_census_endpoints_and_extra_caller_reject(self):
         seed.verify_score_caller_inventory(self.root, station_edge=True)
@@ -220,13 +221,13 @@ class StationIntegrationControls(unittest.TestCase):
         import lane_order_contracts as order
         read = Path.read_text; target = self.root/station.MODULE
         for consumer in (cache, order):
-            for supplied in (self.before.decode(), self.current.decode().replace('return t * span', 'return span', 1)):
+            for supplied in (self.before.decode(), self.physical.decode().replace('return t * span', 'return span', 1)):
                 with self.subTest(consumer=consumer.__name__), patch.object(Path, 'read_text',
                         lambda path,*a,**k: supplied if path == target else read(path,*a,**k)):
                     with self.assertRaisesRegex(RuntimeError if consumer is order else ValueError, 'supplied score-helper'):
                         consumer.inventory(self.root)
             with patch.object(Path, 'read_text', lambda path,*a,**k:
-                    self.current.decode()+'\n# supplied comment\n' if path == target else read(path,*a,**k)):
+                    self.physical.decode()+'\n# supplied comment\n' if path == target else read(path,*a,**k)):
                 consumer.inventory(self.root)
 
     def test_every_new_test_and_leaf_read_is_pinned_and_unreadable_fails(self):
@@ -265,7 +266,7 @@ class StationIntegrationControls(unittest.TestCase):
         with patch.object(Path, 'read_bytes', changed), patch.object(seed, 'verify_score', catch):
             with self.assertRaises(cleanup._OperationCoherenceError): winner.verify(self.root)
         self.assertEqual(injected, [True]); self.assertTrue(caught)
-        self.assertEqual((self.root/station.MODULE).read_bytes(), self.current)
+        self.assertEqual((self.root/station.MODULE).read_bytes(), self.physical)
 
 
 class StationCurrentIntegrationControls(StationIntegrationControls):
@@ -273,7 +274,8 @@ class StationCurrentIntegrationControls(StationIntegrationControls):
 
     def setUp(self):
         self.root = fixtures.copy_current_root(self, ROOT)
-        self.current = (self.root/station.MODULE).read_bytes()
+        self.physical = (self.root/station.MODULE).read_bytes()
+        self.current = fixtures.typed_current_bytes(station.MODULE, self.physical)
         historical = cleanup.typed_boundary.historical_source(
             station.MODULE, self.current.decode())
         self.before = station.predecessor_source(
@@ -287,13 +289,13 @@ class StationCurrentIntegrationControls(StationIntegrationControls):
         self.assertEqual(edge['after_sha256'], cleanup.sha(self.current))
         record = cleanup.read_record(self.root)
         bound = cleanup.proof_bindings(self.root)
-        self.assertEqual(bound[station.MODULE], cleanup.sha(self.current))
+        self.assertEqual(bound[station.MODULE], cleanup.sha(self.physical))
         for name in (*station.TESTS, LEAF):
             self.assertEqual(bound[name], cleanup.sha((self.root/name).read_bytes()))
         for group in ('unchanged_inputs', 'native_dependency_inputs'):
             self.assertEqual(record[group][station.MODULE], station.BEFORE_SHA256)
         self.assertEqual(seed.verify(self.root)['edges'][-2], station.edge())
-        self.assertEqual((self.root/station.MODULE).read_bytes(), self.current)
+        self.assertEqual((self.root/station.MODULE).read_bytes(), self.physical)
         with self.map_state(self.before):
             with self.assertRaises(ValueError): cleanup.verify(self.root)
 

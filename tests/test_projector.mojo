@@ -94,7 +94,7 @@ def _plain(mut assets: Assets, side: Int = 0) raises -> MaterialId:
         material.side = BACK_SIDE
     elif side == 2:
         material.side = DOUBLE_SIDE
-    return assets.materials.add(material^)
+    return assets.materials.add(material)
 
 
 def _node(mut scene: Scene) raises -> NodeId:
@@ -222,7 +222,7 @@ def test_an_indexed_mesh_and_one_without_positions() raises:
     scene.add_mesh(
         Mesh(
             assets.geometries.add(geometry^),
-            assets.materials.add(shaded^),
+            assets.materials.add(shaded),
             _node(scene),
         )
     )
@@ -318,7 +318,7 @@ def test_points_and_sprites_near_the_camera() raises:
     scene.add_sprite(unculled)
     var hidden = Material(Color(255, 255, 255), kind=BASIC)
     hidden.visible = False
-    scene.add_sprite(Sprite(assets.materials.add(hidden^), _node(scene)))
+    scene.add_sprite(Sprite(assets.materials.add(hidden), _node(scene)))
     var data = _project(scene, assets)
     var points = 0
     var sprites = 0

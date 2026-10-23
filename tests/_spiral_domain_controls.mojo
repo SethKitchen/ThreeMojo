@@ -91,7 +91,7 @@ def _road(var geometry: RoadGeometry, record_s: Float64 = 0.0) raises -> Road:
     road.sections[0].lanes[0].info.widths.append(
         RoadInfoLaneWidth._from_si(0.0, CubicPolynomial._constant_si(3.5))
     )
-    road.info.geometries.append(RoadInfoGeometry._from_si(record_s, geometry^))
+    road.info.geometries.append(RoadInfoGeometry._from_si(record_s, geometry))
     road.info.elevations.append(
         RoadInfoElevation._from_si(
             0.0, CubicPolynomial._from_coefficients(1.0, 0.02, 0.0, 0.0, 0.0)

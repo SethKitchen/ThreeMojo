@@ -818,7 +818,7 @@ struct _Edgebreaker(Movable):
                     if split[1] == 1:
                         new_corner = self.table.next(top)
                     split_corners[symbols - split[2] - 1] = new_corner
-        return self._close(active^, faces, invalid^)
+        return self._close(active^, faces, invalid)
 
     def _close(
         mut self, var active: List[Int], var faces: Int, invalid: List[Int]

@@ -89,7 +89,7 @@ def _road(arc: Bool = False) raises -> Road:
     )
     if arc:
         geometry = with_arc(geometry^, InverseLength64(0.125))
-    road.info.geometries.append(RoadInfoGeometry(Length64(0), geometry^))
+    road.info.geometries.append(RoadInfoGeometry(Length64(0), geometry))
     road.info.elevations.append(
         RoadInfoElevation(Length64(0), CubicPolynomial.constant(Length64(0)))
     )

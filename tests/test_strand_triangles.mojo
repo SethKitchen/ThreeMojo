@@ -61,7 +61,7 @@ def _scene(
         style.polygon_offset = True
         style.polygon_offset_units = units
         style.polygon_offset_factor = factor
-    var material = assets.materials.add(style^)
+    var material = assets.materials.add(style)
     scene.add_wide_line(
         LineSegments2(geometry, material, node, coverage=STRAND_LINE_COVERAGE)
     )

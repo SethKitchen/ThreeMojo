@@ -118,8 +118,8 @@ def _make_part(
     wire.wireframe = True
     var textured = Material(Color(255, 255, 255), kind=LAMBERT)
     textured.map = skin
-    var wire_id = assets.materials.add(wire^)
-    var textured_id = assets.materials.add(textured^)
+    var wire_id = assets.materials.add(wire)
+    var textured_id = assets.materials.add(textured)
     var node = Object3D()
     node.set_euler(Angle(0.0, DEGREE), Angle(-90.0, DEGREE), Angle(0.0, DEGREE))
     node.set_scale(scale, scale, scale)

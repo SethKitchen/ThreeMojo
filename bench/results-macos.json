@@ -4,8 +4,8 @@
     "os": "macOS 26.7 (arm64)",
     "cpu": "Apple M4 Max, 16 cores",
     "python": "3.14.4",
-    "mojo_1_1": "Mojo 1.1.0 (8189361e)",
-    "mojo_1_0": "Mojo 1.0.0 (ed45d567)",
+    "mojo_pinned": "Mojo 1.1.0 (8189361e)",
+    "mojo_previous": "Mojo 1.0.0 (ed45d567)",
     "node": "v24.20.0"
   },
   "threejs_webgl": true,
@@ -23,10 +23,10 @@
       "status": 0
     }
   },
-  "mojo10_refused": 57,
-  "mojo10_total": 61,
+  "previous_refused": 57,
+  "previous_total": 61,
   "probe": {
-    "v11": {
+    "pinned": {
       "compile": {
         "ok": true,
         "seconds": 0.3428,
@@ -40,7 +40,7 @@
         "status": 0
       }
     },
-    "v10": {
+    "previous": {
       "compile": {
         "ok": true,
         "seconds": 3.1948,
@@ -93,7 +93,7 @@
         "frames_seconds": 0.014199999999999999,
         "import_seconds": 0.0125
       },
-      "mojo10": {
+      "previous": {
         "compile": {
           "ok": true,
           "seconds": 6.5346,
@@ -145,7 +145,7 @@
         "frames_seconds": 0.0198,
         "import_seconds": 0.0121
       },
-      "mojo10": {
+      "previous": {
         "compile": {
           "ok": true,
           "seconds": 6.6461,
@@ -197,7 +197,7 @@
         "frames_seconds": 0.0315,
         "import_seconds": 0.012199999999999999
       },
-      "mojo10": {
+      "previous": {
         "compile": {
           "ok": true,
           "seconds": 7.6494,
@@ -249,7 +249,7 @@
         "frames_seconds": 0.0352,
         "import_seconds": 0.012
       },
-      "mojo10": {
+      "previous": {
         "compile": {
           "ok": false,
           "seconds": 2.8814,
@@ -303,7 +303,7 @@
         "frames_seconds": 0.0161,
         "import_seconds": 0.012
       },
-      "mojo10": {
+      "previous": {
         "compile": {
           "ok": false,
           "seconds": 2.5421,
@@ -357,7 +357,7 @@
         "frames_seconds": 0.0316,
         "import_seconds": 0.011800000000000001
       },
-      "mojo10": {
+      "previous": {
         "compile": {
           "ok": false,
           "seconds": 2.7628,
@@ -411,7 +411,7 @@
         "frames_seconds": 0.0345,
         "import_seconds": 0.0116
       },
-      "mojo10": {
+      "previous": {
         "compile": {
           "ok": false,
           "seconds": 2.7456,
@@ -465,7 +465,7 @@
         "frames_seconds": 0.0288,
         "import_seconds": 0.0116
       },
-      "mojo10": {
+      "previous": {
         "compile": {
           "ok": false,
           "seconds": 2.7507,
@@ -519,7 +519,7 @@
         "frames_seconds": 0.0338,
         "import_seconds": 0.011699999999999999
       },
-      "mojo10": {
+      "previous": {
         "compile": {
           "ok": false,
           "seconds": 2.9094,
@@ -573,7 +573,7 @@
         "frames_seconds": 0.0316,
         "import_seconds": 0.011699999999999999
       },
-      "mojo10": {
+      "previous": {
         "compile": {
           "ok": false,
           "seconds": 2.7385,
@@ -627,7 +627,7 @@
         "frames_seconds": 0.0148,
         "import_seconds": 0.0114
       },
-      "mojo10": {
+      "previous": {
         "compile": {
           "ok": false,
           "seconds": 2.695,
@@ -681,7 +681,7 @@
         "frames_seconds": 0.0315,
         "import_seconds": 0.011699999999999999
       },
-      "mojo10": {
+      "previous": {
         "compile": {
           "ok": false,
           "seconds": 2.738,
@@ -735,7 +735,7 @@
         "frames_seconds": 0.0303,
         "import_seconds": 0.0116
       },
-      "mojo10": {
+      "previous": {
         "compile": {
           "ok": false,
           "seconds": 2.7617,
@@ -789,7 +789,7 @@
         "frames_seconds": 0.0297,
         "import_seconds": 0.0115
       },
-      "mojo10": {
+      "previous": {
         "compile": {
           "ok": false,
           "seconds": 2.7409,
@@ -843,7 +843,7 @@
         "frames_seconds": 0.0303,
         "import_seconds": 0.0116
       },
-      "mojo10": {
+      "previous": {
         "compile": {
           "ok": false,
           "seconds": 2.7059,
@@ -897,7 +897,7 @@
         "frames_seconds": 0.0313,
         "import_seconds": 0.0116
       },
-      "mojo10": {
+      "previous": {
         "compile": {
           "ok": false,
           "seconds": 2.7401,
@@ -951,7 +951,7 @@
         "frames_seconds": 0.0348,
         "import_seconds": 0.0115
       },
-      "mojo10": {
+      "previous": {
         "compile": {
           "ok": false,
           "seconds": 2.8452,
@@ -1005,7 +1005,7 @@
         "frames_seconds": 0.0315,
         "import_seconds": 0.0114
       },
-      "mojo10": {
+      "previous": {
         "compile": {
           "ok": false,
           "seconds": 2.9321,
@@ -1059,7 +1059,7 @@
         "frames_seconds": 0.0305,
         "import_seconds": 0.0116
       },
-      "mojo10": {
+      "previous": {
         "compile": {
           "ok": false,
           "seconds": 2.9953,
@@ -1113,7 +1113,7 @@
         "frames_seconds": 0.0297,
         "import_seconds": 0.0116
       },
-      "mojo10": {
+      "previous": {
         "compile": {
           "ok": false,
           "seconds": 2.7516,
@@ -1167,7 +1167,7 @@
         "frames_seconds": 0.0965,
         "import_seconds": 0.011699999999999999
       },
-      "mojo10": {
+      "previous": {
         "compile": {
           "ok": false,
           "seconds": 2.7043,
@@ -1221,7 +1221,7 @@
         "frames_seconds": 0.0281,
         "import_seconds": 0.0116
       },
-      "mojo10": {
+      "previous": {
         "compile": {
           "ok": false,
           "seconds": 2.7603,
@@ -1275,7 +1275,7 @@
         "frames_seconds": 0.0313,
         "import_seconds": 0.0114
       },
-      "mojo10": {
+      "previous": {
         "compile": {
           "ok": false,
           "seconds": 2.7451,
@@ -1329,7 +1329,7 @@
         "frames_seconds": 0.027800000000000002,
         "import_seconds": 0.0116
       },
-      "mojo10": {
+      "previous": {
         "compile": {
           "ok": false,
           "seconds": 2.735,
@@ -1383,7 +1383,7 @@
         "frames_seconds": 0.0334,
         "import_seconds": 0.0114
       },
-      "mojo10": {
+      "previous": {
         "compile": {
           "ok": false,
           "seconds": 2.8381,
@@ -1437,7 +1437,7 @@
         "frames_seconds": 0.0297,
         "import_seconds": 0.011699999999999999
       },
-      "mojo10": {
+      "previous": {
         "compile": {
           "ok": false,
           "seconds": 2.7294,
@@ -1491,7 +1491,7 @@
         "frames_seconds": 0.032,
         "import_seconds": 0.0116
       },
-      "mojo10": {
+      "previous": {
         "compile": {
           "ok": false,
           "seconds": 2.8129,
@@ -1545,7 +1545,7 @@
         "frames_seconds": 0.0258,
         "import_seconds": 0.011800000000000001
       },
-      "mojo10": {
+      "previous": {
         "compile": {
           "ok": false,
           "seconds": 2.7283,
@@ -1599,7 +1599,7 @@
         "frames_seconds": 0.0254,
         "import_seconds": 0.0115
       },
-      "mojo10": {
+      "previous": {
         "compile": {
           "ok": false,
           "seconds": 2.7142,
@@ -1653,7 +1653,7 @@
         "frames_seconds": 0.0286,
         "import_seconds": 0.0115
       },
-      "mojo10": {
+      "previous": {
         "compile": {
           "ok": false,
           "seconds": 2.7214,
@@ -1707,7 +1707,7 @@
         "frames_seconds": 0.0257,
         "import_seconds": 0.0115
       },
-      "mojo10": {
+      "previous": {
         "compile": {
           "ok": false,
           "seconds": 2.6843,
@@ -1761,7 +1761,7 @@
         "frames_seconds": 0.024399999999999998,
         "import_seconds": 0.011800000000000001
       },
-      "mojo10": {
+      "previous": {
         "compile": {
           "ok": false,
           "seconds": 2.6975,
@@ -1815,7 +1815,7 @@
         "frames_seconds": 0.0258,
         "import_seconds": 0.0114
       },
-      "mojo10": {
+      "previous": {
         "compile": {
           "ok": false,
           "seconds": 2.6992,
@@ -1869,7 +1869,7 @@
         "frames_seconds": 0.0268,
         "import_seconds": 0.0115
       },
-      "mojo10": {
+      "previous": {
         "compile": {
           "ok": true,
           "seconds": 6.2516,
@@ -1921,7 +1921,7 @@
         "frames_seconds": 0.0263,
         "import_seconds": 0.0115
       },
-      "mojo10": {
+      "previous": {
         "compile": {
           "ok": false,
           "seconds": 2.7721,
@@ -1975,7 +1975,7 @@
         "frames_seconds": 0.027899999999999998,
         "import_seconds": 0.0116
       },
-      "mojo10": {
+      "previous": {
         "compile": {
           "ok": false,
           "seconds": 2.7794,
@@ -2029,7 +2029,7 @@
         "frames_seconds": 0.0255,
         "import_seconds": 0.011699999999999999
       },
-      "mojo10": {
+      "previous": {
         "compile": {
           "ok": false,
           "seconds": 2.7971,
@@ -2083,7 +2083,7 @@
         "frames_seconds": 0.0246,
         "import_seconds": 0.0116
       },
-      "mojo10": {
+      "previous": {
         "compile": {
           "ok": false,
           "seconds": 2.729,
@@ -2137,7 +2137,7 @@
         "frames_seconds": 0.0241,
         "import_seconds": 0.0115
       },
-      "mojo10": {
+      "previous": {
         "compile": {
           "ok": false,
           "seconds": 2.8156,
@@ -2191,7 +2191,7 @@
         "frames_seconds": 0.0263,
         "import_seconds": 0.0115
       },
-      "mojo10": {
+      "previous": {
         "compile": {
           "ok": false,
           "seconds": 2.7974,
@@ -2245,7 +2245,7 @@
         "frames_seconds": 0.0852,
         "import_seconds": 0.0119
       },
-      "mojo10": {
+      "previous": {
         "compile": {
           "ok": false,
           "seconds": 2.7293,
@@ -2299,7 +2299,7 @@
         "frames_seconds": 0.0247,
         "import_seconds": 0.011699999999999999
       },
-      "mojo10": {
+      "previous": {
         "compile": {
           "ok": false,
           "seconds": 2.8204,
@@ -2353,7 +2353,7 @@
         "frames_seconds": 0.032600000000000004,
         "import_seconds": 0.011800000000000001
       },
-      "mojo10": {
+      "previous": {
         "compile": {
           "ok": false,
           "seconds": 2.7686,
@@ -2407,7 +2407,7 @@
         "frames_seconds": 0.0265,
         "import_seconds": 0.0114
       },
-      "mojo10": {
+      "previous": {
         "compile": {
           "ok": false,
           "seconds": 2.7549,
@@ -2461,7 +2461,7 @@
         "frames_seconds": 0.032100000000000004,
         "import_seconds": 0.0116
       },
-      "mojo10": {
+      "previous": {
         "compile": {
           "ok": false,
           "seconds": 3.6567,
@@ -2515,7 +2515,7 @@
         "frames_seconds": 0.026199999999999998,
         "import_seconds": 0.0115
       },
-      "mojo10": {
+      "previous": {
         "compile": {
           "ok": false,
           "seconds": 2.8564,
@@ -2569,7 +2569,7 @@
         "frames_seconds": 0.0251,
         "import_seconds": 0.0116
       },
-      "mojo10": {
+      "previous": {
         "compile": {
           "ok": false,
           "seconds": 5.735,
@@ -2623,7 +2623,7 @@
         "frames_seconds": 0.0254,
         "import_seconds": 0.0115
       },
-      "mojo10": {
+      "previous": {
         "compile": {
           "ok": false,
           "seconds": 7.4154,
@@ -2677,7 +2677,7 @@
         "frames_seconds": 0.048600000000000004,
         "import_seconds": 0.011699999999999999
       },
-      "mojo10": {
+      "previous": {
         "compile": {
           "ok": false,
           "seconds": 2.7495,
@@ -2731,7 +2731,7 @@
         "frames_seconds": 0.024399999999999998,
         "import_seconds": 0.0115
       },
-      "mojo10": {
+      "previous": {
         "compile": {
           "ok": false,
           "seconds": 2.7038,
@@ -2785,7 +2785,7 @@
         "frames_seconds": 0.0292,
         "import_seconds": 0.0115
       },
-      "mojo10": {
+      "previous": {
         "compile": {
           "ok": false,
           "seconds": 2.7226,
@@ -2839,7 +2839,7 @@
         "frames_seconds": 0.0259,
         "import_seconds": 0.0116
       },
-      "mojo10": {
+      "previous": {
         "compile": {
           "ok": false,
           "seconds": 2.6534,
@@ -2893,7 +2893,7 @@
         "frames_seconds": 0.0404,
         "import_seconds": 0.011699999999999999
       },
-      "mojo10": {
+      "previous": {
         "compile": {
           "ok": false,
           "seconds": 2.7293,
@@ -2947,7 +2947,7 @@
         "frames_seconds": 0.0294,
         "import_seconds": 0.011800000000000001
       },
-      "mojo10": {
+      "previous": {
         "compile": {
           "ok": false,
           "seconds": 2.8194,
@@ -3001,7 +3001,7 @@
         "frames_seconds": 0.029,
         "import_seconds": 0.011699999999999999
       },
-      "mojo10": {
+      "previous": {
         "compile": {
           "ok": false,
           "seconds": 4.5407,
@@ -3055,7 +3055,7 @@
         "frames_seconds": 0.0357,
         "import_seconds": 0.011800000000000001
       },
-      "mojo10": {
+      "previous": {
         "compile": {
           "ok": false,
           "seconds": 2.7541,
@@ -3109,7 +3109,7 @@
         "frames_seconds": 0.0395,
         "import_seconds": 0.0119
       },
-      "mojo10": {
+      "previous": {
         "compile": {
           "ok": false,
           "seconds": 5.7895,
@@ -3163,7 +3163,7 @@
         "frames_seconds": 0.0282,
         "import_seconds": 0.0116
       },
-      "mojo10": {
+      "previous": {
         "compile": {
           "ok": false,
           "seconds": 3.3619,
@@ -3217,7 +3217,7 @@
         "frames_seconds": 0.0268,
         "import_seconds": 0.0116
       },
-      "mojo10": {
+      "previous": {
         "compile": {
           "ok": false,
           "seconds": 2.7509,
@@ -3271,7 +3271,7 @@
         "frames_seconds": 0.0255,
         "import_seconds": 0.0114
       },
-      "mojo10": {
+      "previous": {
         "compile": {
           "ok": false,
           "seconds": 3.1052,
@@ -3325,7 +3325,7 @@
         "frames_seconds": 0.023899999999999998,
         "import_seconds": 0.0119
       },
-      "mojo10": {
+      "previous": {
         "compile": {
           "ok": false,
           "seconds": 4.471,

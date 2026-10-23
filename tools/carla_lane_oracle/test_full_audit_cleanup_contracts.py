@@ -587,7 +587,8 @@ class FullAuditCleanupContracts(unittest.TestCase):
         typed = cleanup.typed_boundary
         map_edge = typed.edge(station.MODULE)
         self.assertEqual(map_edge['before_sha256'], deviation.AFTER_SHA256)
-        self.assertEqual(cleanup.sha((self.root/station.MODULE).read_bytes()), map_edge['after_sha256'])
+        self.assertEqual(cleanup.sha(fixtures.typed_current_bytes(
+            station.MODULE, (self.root/station.MODULE).read_bytes())), map_edge['after_sha256'])
         supplemental = {
             station.MODULE: map_edge['after_sha256'], **station.TESTS, **deviation.TESTS,
             runtime.MIGRATION: runtime.MIGRATION_SHA256,
@@ -2921,7 +2922,8 @@ class CacheInputViewCurrentControls(unittest.TestCase):
         seed = self.seed
         path = self.root/seed.MODULE
         original = path.read_bytes()
-        historical = cleanup.typed_boundary.historical_source(seed.MODULE, original.decode('utf-8'))
+        typed_current = fixtures.typed_current_bytes(seed.MODULE, original).decode('utf-8')
+        historical = cleanup.typed_boundary.historical_source(seed.MODULE, typed_current)
         prior = seed.score_family_predecessor_source(historical).encode('utf-8')
         mutants = (('prior', prior), ('comment', original + b'\n# Retained B.\n'),
                    ('crlf', original.replace(b'\n', b'\r\n')))

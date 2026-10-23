@@ -23,7 +23,7 @@ def _dispatch_road(origin: Float64 = 0.0) raises -> Road:
     for i in range(4):
         geometry.samples.append(_Sample(Float64(i), 0.0, Float64(i), 1.0, 0.0))
     road.length = origin + 3.0
-    road.info.geometries[0] = RoadInfoGeometry._from_si(origin, geometry^)
+    road.info.geometries[0] = RoadInfoGeometry._from_si(origin, geometry)
     road.info.elevations[0].polynomial = CubicPolynomial._from_coefficients(
         0.0, 1.0, 0.0, 0.0, 0.0
     )

@@ -125,7 +125,7 @@ def test_between_quarter_peak_is_enclosed_as_a_complete_interval() raises:
     geometry.samples.append(_Sample(0.0, 0.0, 0.0, 1.0, 0.0))
     geometry.samples.append(_Sample(0.125, 0.005, 0.125, 1.0, 0.0))
     geometry.samples.append(_Sample(1.0, 0.0, 1.0, 1.0, 0.0))
-    road.info.geometries[0] = RoadInfoGeometry._from_si(0.0, geometry^)
+    road.info.geometries[0] = RoadInfoGeometry._from_si(0.0, geometry)
     _assert_full_cells(road, 0.0, 1.0)
     var terms = 0
     var cover = _sampled_lane_box_cover(road, 0, 0, 0, 1, terms).value()

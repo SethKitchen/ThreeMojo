@@ -542,7 +542,7 @@ def apply_glare(
     return out^
 
 
-async def _spread_task(
+__async def _spread_task(
     grid: Pointer[List[Float32], ImmutAnyOrigin],
     result: MutPointer[Float32, MutAnyOrigin],
     width: Int,

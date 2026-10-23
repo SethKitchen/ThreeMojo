@@ -317,7 +317,7 @@ def _sample_indices(
     return pending^
 
 
-async def _sample_task[
+__async def _sample_task[
     F: DistanceField
 ](
     field: Pointer[F, ImmutAnyOrigin],
@@ -342,7 +342,7 @@ async def _sample_task[
         values[unsafe_offset=at] = field[].distance(grid.point(i, j, k))
 
 
-async def _vertex_task[
+__async def _vertex_task[
     F: DistanceField
 ](
     field: Pointer[F, ImmutAnyOrigin],

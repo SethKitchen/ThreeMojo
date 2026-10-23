@@ -548,8 +548,11 @@ comptime _ACCEPTED_SRGB_WORDS_SHA256 = (
 comptime _SRGB_BEFORE_SOURCE_SHA256 = (
     "286770b03443ffd560185d6b543a50d9938d5cf6d548cf615b6ebe41d1ef5101"
 )
-comptime _SRGB_CURRENT_SOURCE_SHA256 = (
+comptime _SRGB_760_SOURCE_SHA256 = (
     "9d7d0dc7f0a7c526881e469ed2b7e918fbcfb8b27258641631515b6893c5905e"
+)
+comptime _SRGB_CURRENT_SOURCE_SHA256 = (
+    "a7f8cd0bdaf91756b5583de24cf27e7d8ee86c7cc91cb68ab2da2dec3bd9b19d"
 )
 comptime _SRGB_RUNTIME_REPORT_SHA256 = (
     "c45b8ee4c2d08d1d7486985e1c9460d2b037e1816dc04571ccf192260f93494b"
@@ -606,23 +609,35 @@ def test_srgb_source_successor_preserves_the_accepted_runtime_words() raises:
             report.string(report.get(accepted, key)),
             _ACCEPTED_SRGB_WORDS_SHA256,
         )
-    var successor = parse_json(
-        Path("docs/fixtures/srgb-source-successor-760.json").read_text()
-    )
-    for key, expected in [
-        ("before_source_sha256", String(_SRGB_BEFORE_SOURCE_SHA256)),
-        ("after_source_sha256", String(_SRGB_CURRENT_SOURCE_SHA256)),
-        ("accepted_words_sha256", String(_ACCEPTED_SRGB_WORDS_SHA256)),
+    var chain = [
         (
-            "historical_runtime_report_sha256",
-            String(_SRGB_RUNTIME_REPORT_SHA256),
+            String("docs/fixtures/srgb-source-successor-760.json"),
+            String(_SRGB_BEFORE_SOURCE_SHA256),
+            String(_SRGB_760_SOURCE_SHA256),
         ),
-        ("historical_runtime_entry", String("srgb")),
-        ("historical_runtime_mode", String("verify_accepted")),
-    ]:
-        assert_equal(
-            successor.string(successor.get(successor.root(), key)), expected
-        )
+        (
+            String("docs/fixtures/srgb-source-successor-mojo-1-2.json"),
+            String(_SRGB_760_SOURCE_SHA256),
+            String(_SRGB_CURRENT_SOURCE_SHA256),
+        ),
+    ]
+    for link in chain:
+        var successor = parse_json(Path(link[0]).read_text())
+        for key, expected in [
+            ("before_source_sha256", link[1]),
+            ("after_source_sha256", link[2]),
+            ("accepted_words_sha256", String(_ACCEPTED_SRGB_WORDS_SHA256)),
+            (
+                "historical_runtime_report_sha256",
+                String(_SRGB_RUNTIME_REPORT_SHA256),
+            ),
+            ("historical_runtime_entry", String("srgb")),
+            ("historical_runtime_mode", String("verify_accepted")),
+        ]:
+            assert_equal(
+                successor.string(successor.get(successor.root(), key)),
+                expected,
+            )
 
 
 def test_srgb_successor_rejects_bit_count_and_order_changes() raises:

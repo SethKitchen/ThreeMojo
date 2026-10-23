@@ -951,7 +951,7 @@ struct _Reader(Movable):
                 _utf8(out, code)
             else:
                 raise self.fail("Invalid \\escape")
-        return String(unsafe_from_utf8=out^)
+        return String(unsafe_from_utf8=out)
 
 
 def _utf8(mut out: List[UInt8], code: Int):

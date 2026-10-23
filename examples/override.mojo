@@ -47,7 +47,7 @@ def main() raises:
     var ball = assets.geometries.add(sphere(Length(0.42, METER), 24, 16))
     var kept_paint = Material(Color(232, 120, 64))
     kept_paint.allow_override = False
-    var kept = assets.materials.add(kept_paint^)
+    var kept = assets.materials.add(kept_paint)
     var other = assets.materials.add(Material(Color(70, 140, 210)))
     var normals = assets.materials.add(normal_material())
 

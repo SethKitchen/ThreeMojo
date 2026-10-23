@@ -46,7 +46,7 @@ Read `kind()`, `mass()`, `inverse_mass()` and `inverse_inertia()` as values. The
 
 Use `set_inverse_inertia` for a finite custom inverse tensor, including locked axes. This setter retains the supplied entries. A returned tensor is a copy; editing it does not edit the body. Custom tensors keep their previous finite-entry contract. Negative and nonsymmetric tensors remain accepted for compatibility. They do not need to describe a positive-definite solid.
 
-Mojo 1.1 has no enforced field privacy. Underscore storage is internal by convention, not a security boundary. Do not mutate that storage, use reflection to bypass setters, or replace the shape directly. The supported API prevents partial mode and mass edits; it does not make arbitrary storage access safe.
+Mojo 1.2 has no enforced field privacy. Underscore storage is internal by convention, not a security boundary. Do not mutate that storage, use reflection to bypass setters, or replace the shape directly. The supported API prevents partial mode and mass edits; it does not make arbitrary storage access safe.
 
 `validate` checks valid mode, mesh restrictions, reciprocal dynamic mass, finite inverse tensors and zero disabled effective properties. Setters, standalone impulses, world insertion and each world step run this check. A step checks all bodies before it changes any body or consumes forces. A failed check leaves that operation's state unchanged. World insertion and standalone impulses can now raise `Error`.
 

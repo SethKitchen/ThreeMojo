@@ -543,7 +543,7 @@ def bake_occlusion(
     return out^
 
 
-async def _occlusion_task(
+__async def _occlusion_task(
     model: Pointer[SdfModel, ImmutAnyOrigin],
     surface: Pointer[SurfaceMesh, ImmutAnyOrigin],
     solids: Pointer[List[Int], MutAnyOrigin],

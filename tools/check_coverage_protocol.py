@@ -137,7 +137,7 @@ def concurrent_case(worker: Int, iteration: Int) -> Bool:
     return False
 
 
-async def task(worker: Int, totals: MutPointer[Int, MutAnyOrigin]):
+__async def task(worker: Int, totals: MutPointer[Int, MutAnyOrigin]):
     var total = 0
     for iteration in range(100):
         total += Int(concurrent_case(worker, iteration))
@@ -198,7 +198,9 @@ from std.testing import assert_equal
 def main() raises:
     var record = String("errno probe")
     var written = external_call["write", Int](
-        -1, record.unsafe_ptr().unsafe_bitcast[NoneType](), record.byte_length()
+        Int32(-1),
+        record.unsafe_ptr().unsafe_bitcast[NoneType](),
+        record.byte_length(),
     )
     var error = get_errno()
     assert_equal(written, -1)
@@ -209,7 +211,7 @@ BOUNDARY = '''from coverage.runtime import _emit, _emit_hit, hit, branch, begin,
 from std.sys import argv
 from render.tasks import TaskGroup
 
-async def emit_many(record: String):
+__async def emit_many(record: String):
     for _ in range(100):
         _emit(record)
 

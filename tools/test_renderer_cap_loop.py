@@ -8,7 +8,7 @@ import coverage_loop_proofs as loops
 
 ROOT = Path(__file__).resolve().parents[1]
 MODULE = 'renderers/renderer'
-CURRENT_RENDERER_SHA256 = '5cc066092d9b0302c60a6676459efc855e220dc319d1f88b5eb84df768f489f9'
+CURRENT_RENDERER_SHA256 = '990d94c815315c910b12c1b126c076183fc35cdeb9f64a26d1f7e574f424bccd'
 CURRENT_CAP_LINE = 4049
 
 

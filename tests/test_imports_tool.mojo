@@ -3,9 +3,10 @@
 # Noncommercial use is free; commercial use requires a paid license.
 # See LICENSE, LICENSE-COMMERCIAL.md and THIRD-PARTY-NOTICES.md.
 
-"""The import graph resolves names as the pinned Mojo 1.1.0 does (#714).
+"""The import graph resolves names as the pinned Mojo does (#714).
 
-Each resolution fixture records what Mojo 1.1.0 (8189361e) did with
+Each resolution fixture records what Mojo 1.1.0 (8189361e) and Mojo 1.2.0
+(2016d0cd) did with
 `mojo build --num-threads 1 -I . tools/probe.mojo`, where tools/probe.mojo
 imports `pkg.one` and pkg/one.mojo imports `helper`:
 

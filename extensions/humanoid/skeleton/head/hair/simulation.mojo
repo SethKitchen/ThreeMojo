@@ -497,7 +497,7 @@ struct HairSimulation(Movable):
             )
 
 
-async def _step_task[
+__async def _step_task[
     F: DistanceField
 ](
     simulation: Pointer[HairSimulation, MutAnyOrigin],
@@ -509,7 +509,7 @@ async def _step_task[
     simulation[]._step_strands(collider[], wind, first_strand, past)
 
 
-async def _lay_task(
+__async def _lay_task(
     simulation: Pointer[HairSimulation, MutAnyOrigin],
     first_strand: Int,
     past: Int,
@@ -517,7 +517,7 @@ async def _lay_task(
     simulation[]._lay_strands(first_strand, past)
 
 
-async def _write_task(
+__async def _write_task(
     simulation: Pointer[HairSimulation, ImmutAnyOrigin],
     groom: Pointer[HairGroom, MutAnyOrigin],
     first_strand: Int,

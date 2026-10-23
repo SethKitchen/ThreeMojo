@@ -928,7 +928,7 @@ def _case[
         var x = Float64(-1.0 if i % 2 == 0 else 1.0)
         geometry.samples.append(_Sample(x, 0.0, Float64(i), 1.0, 0.0))
     road.length = 3.0
-    road.info.geometries[0] = RoadInfoGeometry._from_si(0.0, geometry^)
+    road.info.geometries[0] = RoadInfoGeometry._from_si(0.0, geometry)
     var location = Vector3(0, 1, 0)
     var pending = List[Tuple[Float64, Float64, Int]]()
     var seed = Float64(0.5)

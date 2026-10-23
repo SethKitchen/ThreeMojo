@@ -31,7 +31,7 @@ def make_scene(reverse: Bool = False) raises -> Scene:
         mesh.morph_target_dictionary["run2"] = 4
         mesh.morph_target_dictionary["idle3"] = 2
     mesh.set_morph_influence(4, 0)
-    scene.add_mesh(mesh^)
+    scene.add_mesh(mesh)
     return scene^
 
 

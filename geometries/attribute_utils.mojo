@@ -137,7 +137,7 @@ def merge_attributes(
             data.extend(attribute.packed())
     if first.is_integer():
         return BufferAttribute(
-            stored^, size, first.component_type(), first.is_normalized()
+            stored, size, first.component_type(), first.is_normalized()
         )
     var result: BufferAttribute
     if first.is_instanced():

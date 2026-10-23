@@ -28,7 +28,7 @@ The scanner reads this file before it starts. It is for Anthropic's OSS Scanner.
 
 ## How to exercise it
 
-- The toolchain is `/src/.venv/bin/mojo`. It is Mojo 1.1.0. The pin is exact. Do not install another version.
+- The toolchain is `/src/.venv/bin/mojo`. It is Mojo 1.2.0. The pin is exact. Do not install another version.
 - Run one suite from `/src` with `.venv/bin/mojo run -I . tests/test_obj.mojo`. The `-I .` flag is required. The suites for the loaders are `tests/test_obj.mojo`, `tests/test_stl.mojo`, `tests/test_ply.mojo` and `tests/test_json.mojo`. Read them to see how to call a loader.
 - To test a loader, write a small program with a `main()` that passes hostile bytes to it. Build it with `.venv/bin/mojo build -I . --sanitize address`.
 - Do not run `make check`. It takes hours. Each single test must finish in 5 seconds or less.

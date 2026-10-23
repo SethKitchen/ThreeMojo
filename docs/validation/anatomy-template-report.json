@@ -12,14 +12,14 @@
     "reason": "Template and game/fantasy use is permitted. Other claims lack task-specific independent reference evidence and acceptance thresholds."
   },
   "build_provenance": {
-    "source_sha256": "0f03fe3707739aedcd2f49658f3266dddd9a7753837b94bb852215c7e781d687",
-    "toolchain": "Mojo 1.1.0 (8189361e)",
+    "source_sha256": "e467f6564e5add2dc42d5399517f3715811a3ce98b49a95dd5ef30587f0eff21",
+    "toolchain": "Mojo 1.2.0 (2016d0cd)",
     "flags": [
       "--Werror",
       "--num-threads",
       "1"
     ],
-    "binary_sha256": "8d432ebf82a9c4deaca69fa36b08241557e3ad9858bb2c8a9ecd30306489fe2f"
+    "binary_sha256": "5aaf5948034f011809545bd8b3ce7b672d543005768840ad01e3054377ac402d"
   },
   "source_file_sha256": {
     "extensions/anatomy/soft_tissue.mojo": "7a72a46ef52f2d4a506b30eb405381a2e24760bfdb7e80a3b49bde1a29d1b91b",
@@ -63,7 +63,7 @@
     "extensions/humanoid/skeleton/torso/sweep.mojo": "8ee430e8785effa1078ce22509580f60eb64c5c23e79c55145ba7cec2189891a",
     "extensions/humanoid/spec.mojo": "994d707324d994e1054b49bbb2181463727e7efb560ba66af9412ba1ec927224"
   },
-  "report_logic_sha256": "3984de03a1af83470efadf7c715d308eefe95ba0b595411ad39905b44bdcdc42",
+  "report_logic_sha256": "9415536db41536e32f3d6f7428c23351fdc1c5886206db32a92a68cb6c96ff6b",
   "inventory_sha256": "5826fa8ad9b66d74952868d993f5fd6e3abb1191bfff26d8d4c9b097e3e2adff",
   "follow_ups": [
     "https://github.com/SethKitchen/ThreeMojo/issues/297"
@@ -144,7 +144,7 @@
           "step_m": 0.020000001,
           "mass_kg": 9.783823,
           "center_m": [
-            0.009095548,
+            0.00909554,
             0.28858003,
             -0.010777195
           ],
@@ -158,7 +158,7 @@
           ],
           "length_m": 0.45461026,
           "low_m": [
-            -0.10018138,
+            -0.100181386,
             0.03223575,
             -0.15179876
           ],
@@ -228,7 +228,7 @@
           "step_m": 0.010000001,
           "mass_kg": 9.881311,
           "center_m": [
-            0.009113024,
+            0.009113017,
             0.28687984,
             -0.010623478
           ],
@@ -242,7 +242,7 @@
           ],
           "length_m": 0.45461026,
           "low_m": [
-            -0.10018138,
+            -0.100181386,
             0.03223575,
             -0.15179876
           ],
@@ -312,7 +312,7 @@
           "step_m": 0.0050000004,
           "mass_kg": 9.820246,
           "center_m": [
-            0.009273371,
+            0.009273363,
             0.2872008,
             -0.010798338
           ],
@@ -326,7 +326,7 @@
           ],
           "length_m": 0.45461026,
           "low_m": [
-            -0.10018138,
+            -0.100181386,
             0.03223575,
             -0.15179876
           ],
@@ -399,11 +399,11 @@
             "mass_abs_delta_kg": 0.09748800000000024,
             "mass_relative_delta": 0.009865897349046117,
             "center_delta_m": [
-              -1.7476000000000644e-05,
+              -1.7477000000000117e-05,
               0.0017001899999999903,
               -0.0001537169999999994
             ],
-            "center_delta_norm_m": 0.0017072142111536463,
+            "center_delta_norm_m": 0.001707214221390499,
             "tensor_delta_kg_m2": [
               -0.006975129999999996,
               0.00023753499999999705,
@@ -421,11 +421,11 @@
             "mass_abs_delta_kg": 0.061065000000001035,
             "mass_relative_delta": 0.006218275998381409,
             "center_delta_m": [
-              -0.00016034699999999992,
+              -0.00016034600000000045,
               -0.00032095999999998126,
               0.0001748599999999989
             ],
-            "center_delta_norm_m": 0.00039912717473129735,
+            "center_delta_norm_m": 0.00039912677298821703,
             "tensor_delta_kg_m2": [
               0.001877950000000017,
               0.0005248950000000044,
@@ -452,7 +452,7 @@
           "step_m": 0.020000001,
           "mass_kg": 5.3344917,
           "center_m": [
-            0.0046054055,
+            0.004605398,
             -0.16758005,
             -0.0042514047
           ],
@@ -466,7 +466,7 @@
           ],
           "length_m": 0.44526762,
           "low_m": [
-            -0.10018138,
+            -0.100181386,
             -0.41197538,
             -0.15179876
           ],
@@ -536,7 +536,7 @@
           "step_m": 0.010000001,
           "mass_kg": 5.4477906,
           "center_m": [
-            0.004593987,
+            0.0045939796,
             -0.16809304,
             -0.0035288616
           ],
@@ -550,7 +550,7 @@
           ],
           "length_m": 0.44526762,
           "low_m": [
-            -0.10018138,
+            -0.100181386,
             -0.41197538,
             -0.15179876
           ],
@@ -620,7 +620,7 @@
           "step_m": 0.0050000004,
           "mass_kg": 5.447068,
           "center_m": [
-            0.0047433707,
+            0.0047433632,
             -0.16844031,
             -0.0035993713
           ],
@@ -634,7 +634,7 @@
           ],
           "length_m": 0.44526762,
           "low_m": [
-            -0.10018138,
+            -0.100181386,
             -0.41197538,
             -0.15179876
           ],
@@ -707,11 +707,11 @@
             "mass_abs_delta_kg": 0.1132989000000002,
             "mass_relative_delta": 0.020797220069361733,
             "center_delta_m": [
-              1.1418499999999755e-05,
+              1.1418400000000155e-05,
               0.000512989999999991,
               -0.0007225431
             ],
-            "center_delta_norm_m": 0.000886204069952204,
+            "center_delta_norm_m": 0.0008862040686637366,
             "tensor_delta_kg_m2": [
               -0.003330065000000007,
               -0.00025449099999999905,
@@ -729,11 +729,11 @@
             "mass_abs_delta_kg": 0.0007226000000004618,
             "mass_relative_delta": 0.00013265852381509865,
             "center_delta_m": [
-              -0.00014938370000000013,
+              -0.00014938359999999967,
               0.0003472700000000106,
               7.050970000000009e-05
             ],
-            "center_delta_norm_m": 0.000384556316447653,
+            "center_delta_norm_m": 0.00038455627760193605,
             "tensor_delta_kg_m2": [
               -0.00027775499999999065,
               9.022350000000012e-05,
@@ -760,7 +760,7 @@
           "step_m": 0.020000001,
           "mass_kg": 1.5205243,
           "center_m": [
-            0.0034878636,
+            0.0034878561,
             -0.4619767,
             0.07440439
           ],
@@ -774,7 +774,7 @@
           ],
           "length_m": 0.2779776,
           "low_m": [
-            -0.10018138,
+            -0.100181386,
             -0.5110793,
             -0.15179876
           ],
@@ -844,7 +844,7 @@
           "step_m": 0.010000001,
           "mass_kg": 1.4684794,
           "center_m": [
-            0.0014990829,
+            0.0014990754,
             -0.4614311,
             0.07395244
           ],
@@ -858,7 +858,7 @@
           ],
           "length_m": 0.2779776,
           "low_m": [
-            -0.10018138,
+            -0.100181386,
             -0.5110793,
             -0.15179876
           ],
@@ -928,7 +928,7 @@
           "step_m": 0.0050000004,
           "mass_kg": 1.4744574,
           "center_m": [
-            0.0011534143,
+            0.0011534068,
             -0.46106666,
             0.07284143
           ],
@@ -942,7 +942,7 @@
           ],
           "length_m": 0.2779776,
           "low_m": [
-            -0.10018138,
+            -0.100181386,
             -0.5110793,
             -0.15179876
           ],
@@ -2202,12 +2202,12 @@
         "label": "leg/muscle/gracilis",
         "family": "muscle",
         "low_m": [
-          -0.09474101,
+          -0.09474102,
           -0.09115814,
           -0.024194459
         ],
         "high_m": [
-          0.025746493,
+          0.025746489,
           0.44018716,
           0.07551795
         ],
@@ -2274,7 +2274,7 @@
         "label": "leg/muscle/semimembranosus",
         "family": "muscle",
         "low_m": [
-          -0.07386461,
+          -0.0738646,
           -0.041331746,
           -0.11886506
         ],
@@ -2514,7 +2514,7 @@
         "label": "leg/muscle/extensor hallucis longus",
         "family": "muscle",
         "low_m": [
-          -0.021543203,
+          -0.021543201,
           -0.40886107,
           0.0005130973
         ],
@@ -67855,16 +67855,16 @@
     "is_whole_body": false,
     "mass_kg": 16.741771399999998,
     "center_m": [
-      0.00708437026390615,
+      0.007084362470620398,
       0.07305401005268988,
       -0.001089894841678127
     ],
     "inertia_kg_m2": [
       1.4777775751900732,
-      0.06669490226680702,
-      1.4573622709795662,
-      -0.020898995813500944,
-      0.002501642369769453,
+      0.0666949022453105,
+      1.45736227095807,
+      -0.020898994762013866,
+      0.0025016423220998027,
       0.09706562199949344
     ],
     "tensor_checks": {
@@ -67872,22 +67872,22 @@
       "positive_semidefinite": true,
       "triangle_inequalities": true,
       "scaled_central_second_moment_principal_minors": [
-        0.01565851276716912,
-        0.9705266178280889,
-        0.02947338217191109,
-        0.014997002193518945,
-        0.0004586436206046678,
-        0.024290378086051855,
-        0.00037482022114471343
+        0.015658512752622755,
+        0.9705266178280891,
+        0.029473382171910922,
+        0.014997002199526559,
+        0.0004586436202851489,
+        0.024290378086051702,
+        0.0003748202212723668
       ],
       "scaled_principal_minors": [
         1.0,
-        0.04513189493908016,
-        0.986185130595258,
-        0.04493189369646051,
-        0.9861822648848322,
-        0.04019407987530053,
-        0.03999356730171581
+        0.045131894924533636,
+        0.9861851305807118,
+        0.04493189370203923,
+        0.9861822648703952,
+        0.040194079860298465,
+        0.03999356730678701
       ],
       "relative_roundoff_tolerance": 5e-06
     },
@@ -76475,7 +76475,7 @@
         "samples": 24570,
         "overlap_samples": 100,
         "overlap_volume_m3": 1.2500002e-05,
-        "signed_field_witness_m": -0.00936704,
+        "signed_field_witness_m": -0.009367039,
         "frame_id": "canonical/selected-side/lower-limb/knee-origin",
         "pair_id": "canonical/lower-limb/leg/bone/femur|leg/muscle/10",
         "allowlist_applied": false,
@@ -78365,7 +78365,7 @@
         "samples": 20540,
         "overlap_samples": 0,
         "overlap_volume_m3": 0.0,
-        "signed_field_witness_m": 0.00039061284,
+        "signed_field_witness_m": 0.00039061287,
         "frame_id": "canonical/selected-side/lower-limb/knee-origin",
         "pair_id": "canonical/lower-limb/leg/bone/tibia|leg/muscle/16",
         "allowlist_applied": false,
@@ -78491,7 +78491,7 @@
         "samples": 7344,
         "overlap_samples": 0,
         "overlap_volume_m3": 0.0,
-        "signed_field_witness_m": 0.0023473695,
+        "signed_field_witness_m": 0.0023473678,
         "frame_id": "canonical/selected-side/lower-limb/knee-origin",
         "pair_id": "canonical/lower-limb/leg/bone/tibia|leg/muscle/27",
         "allowlist_applied": false,
@@ -80039,7 +80039,7 @@
         "samples": 912,
         "overlap_samples": 0,
         "overlap_volume_m3": 0.0,
-        "signed_field_witness_m": 0.028083678,
+        "signed_field_witness_m": 0.028083686,
         "frame_id": "canonical/selected-side/lower-limb/knee-origin",
         "pair_id": "canonical/lower-limb/leg/bone/fibula|leg/muscle/10",
         "allowlist_applied": false,
@@ -88571,7 +88571,7 @@
         "samples": 300,
         "overlap_samples": 0,
         "overlap_volume_m3": 0.0,
-        "signed_field_witness_m": 0.016141625,
+        "signed_field_witness_m": 0.016141636,
         "frame_id": "canonical/selected-side/lower-limb/knee-origin",
         "pair_id": "canonical/lower-limb/leg/knee/lateral|leg/muscle/10",
         "allowlist_applied": false,
@@ -90821,7 +90821,7 @@
         "samples": 1656,
         "overlap_samples": 0,
         "overlap_volume_m3": 0.0,
-        "signed_field_witness_m": 0.0040236623,
+        "signed_field_witness_m": 0.0040236576,
         "frame_id": "canonical/selected-side/lower-limb/knee-origin",
         "pair_id": "canonical/lower-limb/leg/knee/mcl|leg/muscle/10",
         "allowlist_applied": false,
@@ -93071,7 +93071,7 @@
         "samples": 120,
         "overlap_samples": 0,
         "overlap_volume_m3": 0.0,
-        "signed_field_witness_m": 0.02813429,
+        "signed_field_witness_m": 0.028134303,
         "frame_id": "canonical/selected-side/lower-limb/knee-origin",
         "pair_id": "canonical/lower-limb/leg/knee/lcl|leg/muscle/10",
         "allowlist_applied": false,
@@ -140987,7 +140987,7 @@
         "samples": 21736,
         "overlap_samples": 0,
         "overlap_volume_m3": 0.0,
-        "signed_field_witness_m": 0.008118804,
+        "signed_field_witness_m": 0.008118801,
         "frame_id": "canonical/selected-side/lower-limb/knee-origin",
         "pair_id": "canonical/lower-limb/leg/muscle/0|leg/muscle/2",
         "allowlist_applied": false,
@@ -141095,7 +141095,7 @@
         "samples": 26703,
         "overlap_samples": 0,
         "overlap_volume_m3": 0.0,
-        "signed_field_witness_m": 0.00803125,
+        "signed_field_witness_m": 0.008031252,
         "frame_id": "canonical/selected-side/lower-limb/knee-origin",
         "pair_id": "canonical/lower-limb/leg/muscle/0|leg/muscle/22",
         "allowlist_applied": false,
@@ -141149,7 +141149,7 @@
         "samples": 35557,
         "overlap_samples": 0,
         "overlap_volume_m3": 0.0,
-        "signed_field_witness_m": 0.013416605,
+        "signed_field_witness_m": 0.013416608,
         "frame_id": "canonical/selected-side/lower-limb/knee-origin",
         "pair_id": "canonical/lower-limb/leg/muscle/0|leg/muscle/23",
         "allowlist_applied": false,
@@ -141185,7 +141185,7 @@
         "samples": 17986,
         "overlap_samples": 16,
         "overlap_volume_m3": 2.0000005e-06,
-        "signed_field_witness_m": -0.002789637,
+        "signed_field_witness_m": -0.0027896348,
         "frame_id": "canonical/selected-side/lower-limb/knee-origin",
         "pair_id": "canonical/lower-limb/leg/muscle/0|leg/muscle/11",
         "allowlist_applied": false,
@@ -141221,7 +141221,7 @@
         "samples": 22011,
         "overlap_samples": 11,
         "overlap_volume_m3": 1.3750002e-06,
-        "signed_field_witness_m": -0.002274914,
+        "signed_field_witness_m": -0.0022749072,
         "frame_id": "canonical/selected-side/lower-limb/knee-origin",
         "pair_id": "canonical/lower-limb/leg/muscle/0|leg/muscle/13",
         "allowlist_applied": false,
@@ -142427,7 +142427,7 @@
         "samples": 3584,
         "overlap_samples": 0,
         "overlap_volume_m3": 0.0,
-        "signed_field_witness_m": 0.027692417,
+        "signed_field_witness_m": 0.027692424,
         "frame_id": "canonical/selected-side/lower-limb/knee-origin",
         "pair_id": "canonical/lower-limb/leg/muscle/0|leg/nerve/4",
         "allowlist_applied": false,
@@ -142625,7 +142625,7 @@
         "samples": 16698,
         "overlap_samples": 0,
         "overlap_volume_m3": 0.0,
-        "signed_field_witness_m": 0.034829512,
+        "signed_field_witness_m": 0.034829516,
         "frame_id": "canonical/selected-side/lower-limb/knee-origin",
         "pair_id": "canonical/lower-limb/leg/lymphatic/2|leg/muscle/0",
         "allowlist_applied": false,
@@ -142643,7 +142643,7 @@
         "samples": 10208,
         "overlap_samples": 0,
         "overlap_volume_m3": 0.0,
-        "signed_field_witness_m": 0.03395422,
+        "signed_field_witness_m": 0.033954225,
         "frame_id": "canonical/selected-side/lower-limb/knee-origin",
         "pair_id": "canonical/lower-limb/leg/lymphatic/3|leg/muscle/0",
         "allowlist_applied": false,
@@ -142913,7 +142913,7 @@
         "samples": 240,
         "overlap_samples": 0,
         "overlap_volume_m3": 0.0,
-        "signed_field_witness_m": 0.059578877,
+        "signed_field_witness_m": 0.05957886,
         "frame_id": "canonical/selected-side/lower-limb/knee-origin",
         "pair_id": "canonical/lower-limb/leg/muscle/1|leg/muscle/10",
         "allowlist_applied": false,
@@ -146351,7 +146351,7 @@
         "samples": 5871,
         "overlap_samples": 0,
         "overlap_volume_m3": 0.0,
-        "signed_field_witness_m": 0.020439774,
+        "signed_field_witness_m": 0.020439778,
         "frame_id": "canonical/selected-side/lower-limb/knee-origin",
         "pair_id": "canonical/lower-limb/leg/muscle/10|leg/muscle/3",
         "allowlist_applied": false,
@@ -149717,7 +149717,7 @@
         "samples": 21840,
         "overlap_samples": 10,
         "overlap_volume_m3": 1.2500003e-06,
-        "signed_field_witness_m": -0.0021638744,
+        "signed_field_witness_m": -0.0021638714,
         "frame_id": "canonical/selected-side/lower-limb/knee-origin",
         "pair_id": "canonical/lower-limb/leg/muscle/10|leg/muscle/5",
         "allowlist_applied": false,
@@ -151373,7 +151373,7 @@
         "samples": 18920,
         "overlap_samples": 0,
         "overlap_volume_m3": 0.0,
-        "signed_field_witness_m": 0.011314563,
+        "signed_field_witness_m": 0.011314571,
         "frame_id": "canonical/selected-side/lower-limb/knee-origin",
         "pair_id": "canonical/lower-limb/leg/muscle/10|leg/muscle/6",
         "allowlist_applied": false,
@@ -153011,7 +153011,7 @@
         "samples": 38000,
         "overlap_samples": 235,
         "overlap_volume_m3": 2.9375005e-05,
-        "signed_field_witness_m": -0.005945243,
+        "signed_field_witness_m": -0.0059452434,
         "frame_id": "canonical/selected-side/lower-limb/knee-origin",
         "pair_id": "canonical/lower-limb/leg/muscle/10|leg/muscle/7",
         "allowlist_applied": false,
@@ -157817,7 +157817,7 @@
         "samples": 23000,
         "overlap_samples": 75,
         "overlap_volume_m3": 9.375002e-06,
-        "signed_field_witness_m": -0.008660145,
+        "signed_field_witness_m": -0.008660178,
         "frame_id": "canonical/selected-side/lower-limb/knee-origin",
         "pair_id": "canonical/lower-limb/leg/muscle/10|leg/muscle/9",
         "allowlist_applied": false,
@@ -157871,7 +157871,7 @@
         "samples": 17986,
         "overlap_samples": 0,
         "overlap_volume_m3": 0.0,
-        "signed_field_witness_m": 0.011288013,
+        "signed_field_witness_m": 0.011288017,
         "frame_id": "canonical/selected-side/lower-limb/knee-origin",
         "pair_id": "canonical/lower-limb/leg/muscle/13|leg/muscle/9",
         "allowlist_applied": false,
@@ -159383,7 +159383,7 @@
         "samples": 36125,
         "overlap_samples": 4,
         "overlap_volume_m3": 5.000001e-07,
-        "signed_field_witness_m": -0.0009923887,
+        "signed_field_witness_m": -0.0009923936,
         "frame_id": "canonical/selected-side/lower-limb/knee-origin",
         "pair_id": "canonical/lower-limb/leg/muscle/10|leg/muscle/23",
         "allowlist_applied": false,
@@ -159437,7 +159437,7 @@
         "samples": 47472,
         "overlap_samples": 17,
         "overlap_volume_m3": 2.1250005e-06,
-        "signed_field_witness_m": -0.0018259907,
+        "signed_field_witness_m": -0.0018259889,
         "frame_id": "canonical/selected-side/lower-limb/knee-origin",
         "pair_id": "canonical/lower-limb/leg/muscle/13|leg/muscle/23",
         "allowlist_applied": false,
@@ -160985,7 +160985,7 @@
         "samples": 19400,
         "overlap_samples": 0,
         "overlap_volume_m3": 0.0,
-        "signed_field_witness_m": 0.01161431,
+        "signed_field_witness_m": 0.011614311,
         "frame_id": "canonical/selected-side/lower-limb/knee-origin",
         "pair_id": "canonical/lower-limb/leg/muscle/10|leg/muscle/13",
         "allowlist_applied": false,
@@ -161021,7 +161021,7 @@
         "samples": 7040,
         "overlap_samples": 0,
         "overlap_volume_m3": 0.0,
-        "signed_field_witness_m": 0.03547971,
+        "signed_field_witness_m": 0.035479717,
         "frame_id": "canonical/selected-side/lower-limb/knee-origin",
         "pair_id": "canonical/lower-limb/leg/muscle/10|leg/muscle/15",
         "allowlist_applied": false,
@@ -161075,7 +161075,7 @@
         "samples": 2340,
         "overlap_samples": 0,
         "overlap_volume_m3": 0.0,
-        "signed_field_witness_m": 0.0299827,
+        "signed_field_witness_m": 0.029982707,
         "frame_id": "canonical/selected-side/lower-limb/knee-origin",
         "pair_id": "canonical/lower-limb/leg/muscle/10|leg/muscle/17",
         "allowlist_applied": false,
@@ -161093,7 +161093,7 @@
         "samples": 1100,
         "overlap_samples": 0,
         "overlap_volume_m3": 0.0,
-        "signed_field_witness_m": 0.029218912,
+        "signed_field_witness_m": 0.02921892,
         "frame_id": "canonical/selected-side/lower-limb/knee-origin",
         "pair_id": "canonical/lower-limb/leg/muscle/10|leg/muscle/18",
         "allowlist_applied": false,
@@ -162155,7 +162155,7 @@
         "samples": 2646,
         "overlap_samples": 0,
         "overlap_volume_m3": 0.0,
-        "signed_field_witness_m": 0.043155346,
+        "signed_field_witness_m": 0.043155354,
         "frame_id": "canonical/selected-side/lower-limb/knee-origin",
         "pair_id": "canonical/lower-limb/leg/muscle/10|leg/nerve/2",
         "allowlist_applied": false,
@@ -162173,7 +162173,7 @@
         "samples": 2058,
         "overlap_samples": 0,
         "overlap_volume_m3": 0.0,
-        "signed_field_witness_m": 0.033871498,
+        "signed_field_witness_m": 0.033871505,
         "frame_id": "canonical/selected-side/lower-limb/knee-origin",
         "pair_id": "canonical/lower-limb/leg/muscle/10|leg/nerve/3",
         "allowlist_applied": false,
@@ -164027,7 +164027,7 @@
         "samples": 48576,
         "overlap_samples": 269,
         "overlap_volume_m3": 3.362501e-05,
-        "signed_field_witness_m": -0.0070835147,
+        "signed_field_witness_m": -0.007083518,
         "frame_id": "canonical/selected-side/lower-limb/knee-origin",
         "pair_id": "canonical/lower-limb/leg/muscle/12|leg/muscle/13",
         "allowlist_applied": false,
@@ -165557,7 +165557,7 @@
         "samples": 6670,
         "overlap_samples": 0,
         "overlap_volume_m3": 0.0,
-        "signed_field_witness_m": 0.027965996,
+        "signed_field_witness_m": 0.027966004,
         "frame_id": "canonical/selected-side/lower-limb/knee-origin",
         "pair_id": "canonical/lower-limb/leg/muscle/13|leg/muscle/15",
         "allowlist_applied": false,
@@ -166439,7 +166439,7 @@
         "samples": 3663,
         "overlap_samples": 0,
         "overlap_volume_m3": 0.0,
-        "signed_field_witness_m": 0.0030964722,
+        "signed_field_witness_m": 0.003096474,
         "frame_id": "canonical/selected-side/lower-limb/knee-origin",
         "pair_id": "canonical/lower-limb/leg/muscle/13|leg/vascular/7",
         "allowlist_applied": false,
@@ -169679,7 +169679,7 @@
         "samples": 945,
         "overlap_samples": 0,
         "overlap_volume_m3": 0.0,
-        "signed_field_witness_m": 0.0010528554,
+        "signed_field_witness_m": 0.0010528559,
         "frame_id": "canonical/selected-side/lower-limb/knee-origin",
         "pair_id": "canonical/lower-limb/leg/muscle/15|leg/nerve/5",
         "allowlist_applied": false,
@@ -170021,7 +170021,7 @@
         "samples": 3744,
         "overlap_samples": 0,
         "overlap_volume_m3": 0.0,
-        "signed_field_witness_m": 0.019097587,
+        "signed_field_witness_m": 0.01909759,
         "frame_id": "canonical/selected-side/lower-limb/knee-origin",
         "pair_id": "canonical/lower-limb/leg/muscle/16|leg/muscle/19",
         "allowlist_applied": false,
@@ -170075,7 +170075,7 @@
         "samples": 10404,
         "overlap_samples": 134,
         "overlap_volume_m3": 1.6750004e-05,
-        "signed_field_witness_m": -0.0070065483,
+        "signed_field_witness_m": -0.007006549,
         "frame_id": "canonical/selected-side/lower-limb/knee-origin",
         "pair_id": "canonical/lower-limb/leg/muscle/16|leg/muscle/27",
         "allowlist_applied": false,
@@ -170201,7 +170201,7 @@
         "samples": 2730,
         "overlap_samples": 0,
         "overlap_volume_m3": 0.0,
-        "signed_field_witness_m": 0.026555031,
+        "signed_field_witness_m": 0.026555037,
         "frame_id": "canonical/selected-side/lower-limb/knee-origin",
         "pair_id": "canonical/lower-limb/foot/muscle/4|leg/muscle/16",
         "allowlist_applied": false,
@@ -171011,7 +171011,7 @@
         "samples": 1428,
         "overlap_samples": 0,
         "overlap_volume_m3": 0.0,
-        "signed_field_witness_m": 0.0381977,
+        "signed_field_witness_m": 0.038197707,
         "frame_id": "canonical/selected-side/lower-limb/knee-origin",
         "pair_id": "canonical/lower-limb/foot/vascular/8|leg/muscle/16",
         "allowlist_applied": false,
@@ -172541,7 +172541,7 @@
         "samples": 990,
         "overlap_samples": 0,
         "overlap_volume_m3": 0.0,
-        "signed_field_witness_m": 0.0071621067,
+        "signed_field_witness_m": 0.0071621076,
         "frame_id": "canonical/selected-side/lower-limb/knee-origin",
         "pair_id": "canonical/lower-limb/leg/muscle/24|leg/nerve/5",
         "allowlist_applied": false,
@@ -172901,7 +172901,7 @@
         "samples": 10404,
         "overlap_samples": 40,
         "overlap_volume_m3": 5.0000012e-06,
-        "signed_field_witness_m": -0.0050866264,
+        "signed_field_witness_m": -0.005086626,
         "frame_id": "canonical/selected-side/lower-limb/knee-origin",
         "pair_id": "canonical/lower-limb/leg/muscle/17|leg/muscle/27",
         "allowlist_applied": false,
@@ -180101,7 +180101,7 @@
         "samples": 60,
         "overlap_samples": 0,
         "overlap_volume_m3": 0.0,
-        "signed_field_witness_m": 0.04274627,
+        "signed_field_witness_m": 0.042746264,
         "frame_id": "canonical/selected-side/lower-limb/knee-origin",
         "pair_id": "canonical/lower-limb/foot/ligament/1|leg/muscle/27",
         "allowlist_applied": false,
@@ -180335,7 +180335,7 @@
         "samples": 357,
         "overlap_samples": 0,
         "overlap_volume_m3": 0.0,
-        "signed_field_witness_m": 0.020899568,
+        "signed_field_witness_m": 0.02089957,
         "frame_id": "canonical/selected-side/lower-limb/knee-origin",
         "pair_id": "canonical/lower-limb/leg/muscle/27|leg/vascular/4",
         "allowlist_applied": false,
@@ -180407,7 +180407,7 @@
         "samples": 1377,
         "overlap_samples": 0,
         "overlap_volume_m3": 0.0,
-        "signed_field_witness_m": 0.016867254,
+        "signed_field_witness_m": 0.016867252,
         "frame_id": "canonical/selected-side/lower-limb/knee-origin",
         "pair_id": "canonical/lower-limb/leg/muscle/27|leg/vascular/8",
         "allowlist_applied": false,
@@ -180565,7 +180565,7 @@
         "second_id": "foot/vascular/7",
         "first": "leg/muscle/extensor hallucis longus",
         "second": "foot/vascular/great saphenous vein",
-        "bounds_gap_m": 0.0042322297,
+        "bounds_gap_m": 0.0042322315,
         "samples": 0,
         "overlap_samples": 0,
         "overlap_volume_m3": 0.0,
@@ -180677,7 +180677,7 @@
         "samples": 2856,
         "overlap_samples": 0,
         "overlap_volume_m3": 0.0,
-        "signed_field_witness_m": 0.020338638,
+        "signed_field_witness_m": 0.02033864,
         "frame_id": "canonical/selected-side/lower-limb/knee-origin",
         "pair_id": "canonical/lower-limb/leg/muscle/27|leg/nerve/4",
         "allowlist_applied": false,
@@ -180875,7 +180875,7 @@
         "samples": 5508,
         "overlap_samples": 0,
         "overlap_volume_m3": 0.0,
-        "signed_field_witness_m": 0.012745873,
+        "signed_field_witness_m": 0.012745871,
         "frame_id": "canonical/selected-side/lower-limb/knee-origin",
         "pair_id": "canonical/lower-limb/leg/lymphatic/2|leg/muscle/27",
         "allowlist_applied": false,
@@ -180893,7 +180893,7 @@
         "samples": 6000,
         "overlap_samples": 0,
         "overlap_volume_m3": 0.0,
-        "signed_field_witness_m": 0.00038451338,
+        "signed_field_witness_m": 0.00038451163,
         "frame_id": "canonical/selected-side/lower-limb/knee-origin",
         "pair_id": "canonical/lower-limb/leg/lymphatic/3|leg/muscle/27",
         "allowlist_applied": false,
@@ -180943,7 +180943,7 @@
         "second_id": "foot/lymphatic/2",
         "first": "leg/muscle/extensor hallucis longus",
         "second": "foot/lymphatic/medial collectors",
-        "bounds_gap_m": 0.0009905752,
+        "bounds_gap_m": 0.000990577,
         "samples": 0,
         "overlap_samples": 0,
         "overlap_volume_m3": 0.0,
@@ -220169,7 +220169,7 @@
         "samples": 990,
         "overlap_samples": 0,
         "overlap_volume_m3": 0.0,
-        "signed_field_witness_m": 0.0016605054,
+        "signed_field_witness_m": 0.001660504,
         "frame_id": "canonical/selected-side/lower-limb/knee-origin",
         "pair_id": "canonical/lower-limb/leg/nerve/5|leg/vascular/9",
         "allowlist_applied": false,

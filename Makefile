@@ -332,7 +332,7 @@ help:
 	@echo "  make viewer     orbit a scene in this terminal with the mouse"
 	@echo "  make bench      CPU vs GPU rasterization across sizes"
 	@echo "  make bench-scene  a textured sphere through the CPU renderer, per stage"
-	@echo "  make bench-examples  cataloged examples vs three.js and Mojo 1.0"
+	@echo "  make bench-examples  cataloged examples vs three.js and the previous Mojo"
 	@echo "  make draco-export-check  every Draco export against three.js (not in check)"
 	@echo "  make clean      remove the coverage build and the cache"
 	@echo "  make clean-images  remove the rendered images in out/"
@@ -600,8 +600,8 @@ $(FMT_STAMP):
 # compare what ran against what could have run. Probe records go to stderr,
 # keeping stdout untouched.
 #
-# **The whole run happens inside $(COV_DIR).** Mojo 1.1 resolves a module
-# beside the file being compiled before it looks at any `-I` path, so a suite
+# **The whole run happens inside $(COV_DIR).** Mojo 1.1 and 1.2 resolve a module
+# beside the file being compiled before they look at any `-I` path, so a suite
 # run from the repo root imports the *real* library however the search path
 # is ordered: `-I $(COV_DIR) -I .` measured nothing at all and reported a
 # clean zero. Copying the suites and the probe runtime into the build tree

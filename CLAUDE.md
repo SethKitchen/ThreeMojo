@@ -20,27 +20,44 @@ ThreeMojo ports three.js to Mojo. Read the [README](README.md) first and [CONTRI
 
 ## Toolchain
 
-The pin is exact: Mojo `1.1.0` (`8189361e`), and MAX `26.6.0` for the GPU
-half. It is a pin and not a floor, because one source cannot serve both 1.0
-and 1.1. Three things moved, and all three are easy to write back the old
-way by habit:
+The pin is exact: Mojo `1.2.0` (`2016d0cd`), and MAX `26.7.0` for the GPU
+half. It is a pin and not a floor, because one source cannot serve both 1.1
+and 1.2: 1.1 cannot parse `__async`, and 1.2 has no `std.hashlib`. Several
+things moved, and all are easy to write back the old way by habit:
 
 - `TaskGroup` is `from std.runtime._asyncrt import TaskGroup`. The public
   `std.runtime` keeps only `parallelism_level` and `initialize_runtime`, and
   nothing public in `std` runs work on a thread pool. This is one of two places
   the project reaches past a leading underscore. 1.0 has no `_asyncrt`; 1.1
-  has no `asyncrt`. Production modules import the adapter in
+  and 1.2 have no `asyncrt`. Production modules import the adapter in
   `render/tasks.mojo`, which holds the private import.
+- A task function is `__async def`, and an await is `__await`. 1.2 renamed
+  the keywords to mark async as unstable. The bare `async def` still parses,
+  but it warns, and `--Werror` makes that an error. The coverage tool, the
+  scanner and `tools/coverage_loop_proofs.py` all read `__async def`.
 - Coverage writes are the second narrow exception for a private import.
   `coverage/runtime.mojo` is the adapter boundary for `std.sys._libc_errno`.
   Keep this import inside that file in production code. It uses the pinned
-  Mojo `1.1.0` accessor for thread-local `errno` on Linux and macOS.
+  Mojo `1.2.0` accessor for thread-local `errno` on Linux and macOS.
   Retry only `-1` with `EINTR`. Short writes and other errors must still abort
   the capture. `tools/check_coverage_protocol.py` tests the accessor without
   an interposer, then tests repeated `EINTR`, real pipe interruptions, and
   failed, short, and zero writes on both platforms.
 - `global_idx` is `from max.gpu import global_idx`. Much of `std.gpu` moved
   into the `max` package, and the compiler says so when it cannot find it.
+- `Hasher` is `from std.hash import Hasher`. `std.hashlib` is gone.
+- Pass a file descriptor to libc `read` and `write` as `Int32`, as in
+  `external_call["write", Int](Int32(2), ...)`. The standard library declares
+  these two functions with a 32-bit descriptor. A call with an `Int`
+  descriptor compiles, and `mojo doc` accepts it. Then `mojo build` fails to
+  lower the module with "existing function with conflicting signature". The
+  compile-time interpreter is the exception: it accepts only an `Int`
+  descriptor in `write`. Code that can run at compile time, such as the
+  coverage probes, writes through `std.sys.stderr` there.
+- `has_apple_gpu_accelerator()` and its two siblings are gone. Ask the target:
+  `default_accelerator().is_apple_gpu()`, from `std.sys`.
+- Do not write `x^` where the callee only reads its argument. 1.2 warns that
+  the move has no effect, and `--Werror` makes that an error. Pass `x`.
 - A module beside the file being compiled now beats any `-I` path. That is
   why `make coverage` copies the suites and the coverage tool into
   `coverage/build/` and runs them from there. Adding `-I` in front of the

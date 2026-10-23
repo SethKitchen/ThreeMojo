@@ -378,7 +378,7 @@ def test_the_default_generator_is_three_js_world_generator() raises:
     var world = UVGenerator()
     Reference().check(
         "shapes_extruded",
-        extrude(two_shapes(), meters(0.5), steps=2, uv_generator=world^),
+        extrude(two_shapes(), meters(0.5), steps=2, uv_generator=world),
     )
 
 

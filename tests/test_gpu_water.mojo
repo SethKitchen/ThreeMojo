@@ -37,8 +37,8 @@ from std.pathlib import Path
 from std.ffi import external_call
 from std.sys import (
     CompilationTarget,
+    default_accelerator,
     has_accelerator,
-    has_apple_gpu_accelerator,
 )
 from std.testing import TestSuite, assert_equal, assert_raises, assert_true
 from units.si import DEGREE, METER, RADIAN, SECOND, Angle, Duration, Length
@@ -323,7 +323,7 @@ def _released(probe: DeviceContext, empty: UInt) raises -> Bool:
 def _device_memory_is_its_own() -> Bool:
     # An Apple GPU shares the system's memory, so the free memory a context
     # reports moves with every other process on the machine.
-    return not has_apple_gpu_accelerator()
+    return not default_accelerator().is_apple_gpu()
 
 
 def test_gpu_resources_stay_bounded_and_are_released() raises:

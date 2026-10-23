@@ -524,7 +524,7 @@ def _fixture(logic: String) raises -> Tree:
 
 
 comptime FAKE_MOJO = """#!/bin/sh
-if [ "$1" = "--version" ]; then echo 'Mojo 1.1.0 (8189361e)'; exit 0; fi
+if [ "$1" = "--version" ]; then echo 'Mojo 1.2.0 (2016d0cd)'; exit 0; fi
 pwd > .build-cwd
 for word in "$@"; do printf '%s\\n' "$word"; done > .build-args
 eval "out=\\${$#}"
@@ -569,7 +569,7 @@ def test_probe_build_uses_relative_pinned_invocation() raises:
     # A compiler of another version is refused.
     files.write("old-mojo", "#!/bin/sh\necho 'Mojo 1.0.0 (old)'\n")
     _ = run_program(["chmod", "+x", files.root + "/old-mojo"], 10)
-    with assert_raises(contains="pinned Mojo 1.1.0"):
+    with assert_raises(contains="pinned Mojo 1.2.0"):
         _ = prepare_probe(
             tree, files.root, files.root + "/p", files.root + "/old-mojo", True
         )

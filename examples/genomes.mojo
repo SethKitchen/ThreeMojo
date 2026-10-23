@@ -248,7 +248,7 @@ def main() raises:
         var bust = assets.materials.get(looks.skin)
         var cut = Float32(0.17) + Float32(1 - index // COLUMNS) * SPACING_Y
         bust.set_clipping_planes([Plane(Vector3(0, 1, 0), -(cut - CUT_BELOW))])
-        var skin = assets.materials.add(bust^)
+        var skin = assets.materials.add(bust)
         var column = index % COLUMNS
         var row = index // COLUMNS
         var x = (Float32(column) - Float32(COLUMNS - 1) / 2) * SPACING_X

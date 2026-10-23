@@ -27,10 +27,10 @@ from loaders.bvh import (
     parse_bvh,
     read_bvh,
 )
-from loaders.js_number import js_parse_float, js_parse_int
+from loaders.js_number import _decimal, js_parse_float, js_parse_int
 from loaders.json import parse_json
 from math.matrix4 import Matrix4
-from std.math import isnan
+from std.math import inf, isnan
 from std.pathlib import Path
 from std.testing import (
     TestSuite,
@@ -125,7 +125,9 @@ def test_js_numbers() raises:
     assert_true(isnan(js_parse_int("x1")))
     assert_true(isnan(js_parse_int("-")))
     assert_true(isnan(js_parse_int("")))
-    assert_true(isnan(js_parse_int("9" * 60)))
+    assert_equal(js_parse_int("9" * 60), 1e60)
+    assert_equal(js_parse_int("9" * 400), inf[DType.float64]())
+    assert_true(isnan(_decimal("x")))
     near(js_parse_float("  12.5e3xyz"), 12500)
     near(js_parse_float("-.5"), -0.5)
     near(js_parse_float("+7."), 7)
@@ -137,7 +139,7 @@ def test_js_numbers() raises:
     assert_true(isnan(js_parse_float("")))
     assert_true(isnan(js_parse_float(".")))
     assert_true(isnan(js_parse_float("abc")))
-    assert_true(isnan(js_parse_float("0" * 60 + "1")))
+    near(js_parse_float("0" * 60 + "1"), 1)
 
 
 def bvh(hierarchy: String, motion: String) -> String:

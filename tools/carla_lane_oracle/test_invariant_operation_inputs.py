@@ -1007,7 +1007,8 @@ class BoundedOwnerCurrentControls(unittest.TestCase):
             if hashlib.sha256(historical).hexdigest() != digest:
                 historical_changed.add(path)
         self.assertEqual(historical_changed, prior | fixtures.WINNER_SHARED_HELPER_SUCCESSORS)
-        self.assertEqual(current_changed, historical_changed | (set(canonical) & set(typed.SOURCE_PATHS)))
+        self.assertEqual(current_changed, historical_changed | (set(canonical) & set(typed.SOURCE_PATHS))
+                         | (set(canonical) & set(cleanup.pr780_successor.EDGES)))
         self.assertEqual((len(prior), len(canonical) - len(prior)), (20, 92))
         self.assertEqual((result['reviewed_cleanup_successors'], result['canonical_dependencies_unchanged']),
                          (len(historical_changed), len(canonical) - len(historical_changed)))
@@ -13339,7 +13340,8 @@ class StandaloneSeedFrameControls(unittest.TestCase):
         source_root = Path(cleanup.__file__).resolve().parents[2]
         typed = cleanup.typed_boundary
         historical_map = typed.predecessor_source(
-            seed.MODULE, (source_root/seed.MODULE).read_text(encoding='utf-8'))
+            seed.MODULE, cleanup.pr780_successor.predecessor_bytes(
+                seed.MODULE, (source_root/seed.MODULE).read_bytes()).decode('utf-8'))
         self.assertEqual(cleanup.sha(historical_map), typed.EDGES[seed.MODULE]['before_sha256'])
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory).resolve()

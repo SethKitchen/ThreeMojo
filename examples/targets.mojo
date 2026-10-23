@@ -119,7 +119,7 @@ def main() raises:
     var outputs = List[TargetOutput]()
     outputs.append(OUTPUT_COLOR)
     outputs.append(OUTPUT_NORMAL)
-    var held = RenderTarget(WIDTH, HALF, Color(0, 0, 0), FLOAT_TARGET, outputs^)
+    var held = RenderTarget(WIDTH, HALF, Color(0, 0, 0), FLOAT_TARGET, outputs)
 
     var camera = gallery_camera(
         WIDTH,
@@ -141,6 +141,6 @@ def main() raises:
         renderer.render_into(held, scene, assets, camera)
         var light = held.attachment(0)
         var normals = held.attachment(1)
-        frames.append(show(light^, normals^))
+        frames.append(show(light, normals))
 
     write_example(frames, destination, DELAY_MS, FRAMES, frame_clock)

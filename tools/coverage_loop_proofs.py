@@ -281,10 +281,11 @@ def constant_loops(source):
         while declarations and declarations[-1][0] >= first.start[1]:
             declarations.pop()
         words = [token.string for token in statement]
-        if words[0] in {'def', 'struct', 'trait'} or words[:2] == ['async', 'def']:
-            kind = 'def' if words[0] == 'async' else words[0]
+        asynchronous = words[0] in {'async', '__async'} and words[1:2] == ['def']
+        if words[0] in {'def', 'struct', 'trait'} or asynchronous:
+            kind = 'def' if asynchronous else words[0]
             # A generic function's parameters can alter expression bindings.
-            name_position = 2 if words[0] == 'async' else 1
+            name_position = 2 if asynchronous else 1
             generic = (len(words) > name_position + 1
                        and words[name_position + 1] == '[')
             declarations.append((first.start[1], kind, generic))
@@ -372,6 +373,38 @@ _TYPED_LOOP_ROWS = {('extensions/carla/curve_rounded_arc', 228): (228, (), '_rou
  ('extensions/carla/rtree', 666): (666, ('_Rtree',), '_nearest_next')}
 
 
+def _typed_endpoint(name, raw):
+    """Return the exact typed endpoint of a PR780 successor, else `raw`.
+
+    The PR780 successor data is fixed and sealed. A successor is mapped only
+    when its exact inverse is a complete typed endpoint, so a successor cannot
+    make an unrelated source current.
+
+    Args:
+        name: Repository-relative path of the source.
+        raw: Physical source bytes, or the same text decoded as UTF-8.
+
+    Returns:
+        The typed endpoint in the type of `raw`, or `raw` when `name` has no
+        reviewed successor edge or `raw` is not the successor endpoint.
+
+    Raises:
+        ValueError: The successor data or its inverse changed.
+    """
+    from carla_lane_oracle import full_audit_cleanup_contracts as cleanup
+    from carla_lane_oracle import typed_boundary_contracts as typed
+    successor = cleanup.pr780_successor
+    edge = successor.reviewed_edge(name)
+    encoded = raw.encode('utf-8') if type(raw) is str else raw
+    if (edge is None or name not in typed.EDGES
+            or sha256(encoded) != edge['after_sha256']):
+        return raw
+    prior = successor.predecessor_bytes(name, encoded)
+    if not typed.is_current(name, prior):
+        return raw
+    return prior.decode('utf-8') if type(raw) is str else prior
+
+
 def _typed_loop_row(module, historical_line, expression, current):
     """Locate one unchanged loop in its exact reviewed declaration owner.
 
@@ -383,14 +416,15 @@ def _typed_loop_row(module, historical_line, expression, current):
     from carla_lane_oracle import seed_count_contracts as seed
     item = _TYPED_LOOP_ROWS.get((module, historical_line))
     name = module + '.mojo'
-    if item is None or not typed.is_current(name, current):
+    endpoint = _typed_endpoint(name, current)
+    if item is None or not typed.is_current(name, endpoint):
         return None
-    previous = typed.historical_source(name, current)
+    previous = typed.historical_source(name, endpoint)
     if sha256(previous.encode('utf-8')) != _TYPED_LOOP_MAIN_SHA256[name]:
         return None
     main_line, owner, function = item
     before, before_first, before_last = seed._function_span(previous, function, owner)
-    after, after_first, after_last = seed._function_span(current, function, owner)
+    after, after_first, after_last = seed._function_span(endpoint, function, owner)
     old_statements, new_statements = _statements(before), _statements(after)
     expected = _statements('for value in ' + expression + ':\n    pass\n')
     if old_statements is None or new_statements is None or expected is None:
@@ -410,6 +444,17 @@ def _typed_loop_row(module, historical_line, expression, current):
     if len(words) < 5 or words[2] != 'in' or words[-1] != ':' or words[3:-1] != tuple(
             token.string for token in expected[0])[3:-1]:
         return None
+    if endpoint is not current:
+        # A reviewed successor keeps the complete ordered loop inventory of the
+        # owner. Its row moves only with the lines the successor shifts.
+        final, final_first, final_last = seed._function_span(current, function, owner)
+        final_statements = _statements(final)
+        if final_statements is None:
+            return None
+        final_rows = for_rows(final_statements, final_first)
+        if [words for _, words in final_rows] != [words for _, words in new_rows]:
+            return None
+        new_rows = final_rows
     return new_rows[index][0]
 
 
@@ -447,9 +492,9 @@ REVIEWED_LOOP_RULES = {
     )),
     'extensions/carla/speed_limits': ({
         'extensions/carla/speed_limits.mojo':
-            '1e95ebc085e03a44e4daaef20a94b724dedc4240a2099227e82be54d32b045f6',
+            '2d9d5401b3dabf53c1c19f0a8098009275e19edb978f5ae369596fe7ac6557a0',
     }, (
-        (154, 'reviewed-nonempty-iterator', 1, None, 'number.as_bytes()',
+        (150, 'reviewed-nonempty-iterator', 1, None, 'number.as_bytes()',
          'speed-number-nonempty-owned-byte-view'),
     )),
     'extensions/carla/rtree': ({
@@ -499,7 +544,7 @@ REVIEWED_LOOP_RULES = {
 # PR760 local literal successor. The retained-groom theorem below is unchanged.
 HAIR_LITERAL_SUCCESSOR = ({
     'extensions/humanoid/skeleton/head/hair/strands.mojo':
-        '058c0e6fbfce95ee97c79247622185de968c8de5e0ad23240d667da13776404f',
+        '81d104e6b65fe1539bf9c244330ae53b6d337ad081529cb0c5f7bcde27887db5',
 }, (
     (229, 'literal-range', 2, 2, 'range(2)', 'hair-upload-two-endpoints'),
     (235, 'literal-range', 3, 3, 'range(3)', 'hair-upload-three-channels'),
@@ -1175,17 +1220,24 @@ DENSITY760_INPUTS = {'core/__init__.mojo': '5f3ace6c2d6162c4a542666c21a966d54d5b
  'units/measure.mojo': 'b7531458ae7a74d6b9213f55672073137dbac41c2634787f7d6a78a16b526b85',
  'units/quantity.mojo': 'bb77541cdb757cd63b59ac01134c6a6ebce88863bee69c84ff77b8c03aff6223',
  'units/si.mojo': 'd149a23f2ee4a9bde17875615e7251285cb56af535716b66c7d8959c80f48c02'}
-# PR780 changes six imported helpers, but leaves density, groom, their tests,
-# and every theorem coordinate unchanged. Retain the complete PR760 closure
-# above and admit only this exact local successor cohort. The broader CARLA
-# successor is not a premise for these four local domination theorems.
+# PR780 and the Mojo 1.2 port change twelve imported helpers, but leave
+# density, groom, their tests, and every theorem coordinate unchanged. Retain
+# the complete PR760 closure above and admit only this exact local successor
+# cohort. The broader CARLA successor is not a premise for these four local
+# domination theorems.
 DENSITY780_DEPENDENCY_SHA256 = {
     'core/extent.mojo': '90490706baa17456a3ec99374c2a00f72768a0178b4e56436571ab4ca673f068',
+    'extensions/humanoid/skeleton/head/assembly.mojo': '813a09e4b30a5a9682e606cdabb2e22188866f4153318a18f9df62f091c0435e',
+    'extensions/humanoid/skeleton/look.mojo': '662665a1ea3c291b45030fcf90d732b2a7900f0c1a591e4d94d854201e8caa48',
+    'extensions/humanoid/skeleton/surface_nets.mojo': '98b354cea54d1d1dc33ee23f02b0e89f80466ddb2fc06a6415ea224a3a93aeee',
+    'geometries/attribute_utils.mojo': '91d45ff588571ab0bbda20331d1f60a0b55e124985a76f8cad97d682bdca523e',
     'geometries/surface.mojo': 'deeba40777e10da75651f07b8d8f86abb609d4c916b098f1dc28be228f20d3cd',
+    'lights/shadow.mojo': '649970324f8a80cd0ba959f3278d635b12b9886a5ecb09290620b5b61b3c1d20',
     'loaders/bytes.mojo': '139ca1cb876bdf7b0a7c258d1d3a40375d8f3b73c75af160e26e07e7c9ba062a',
     'math/matrix4.mojo': '1e72ab51f9dbcee3af4c2bfe9da93946616736bf02f4b20e2160ee7b69b448fa',
     'math/square_matrix.mojo': 'f1b2e67489949b53594b5f06604a0227260fd961df2fdebe5347d91c82d99a69',
     'math/vector4.mojo': 'db774733a27a706e5d5c940c4533de2c567d7d6ece3c918215052bccfd87b9aa',
+    'render/tasks.mojo': '9b80dcaceec958190ade19bff6d106617c8c4c99e80d37eb0205609741ca2934',
 }
 
 
@@ -1205,7 +1257,7 @@ def _density780_dependencies():
     dependencies = dict(declared)
     if (any(type(name) is not str or type(digest) is not str
             for name, digest in dependencies.items())
-            or sha256(canonical(dependencies)) != 'e58c79dd871f936c9ec0ad0488408d0635d93d6b451a379e844b2ca07ead972b'):
+            or sha256(canonical(dependencies)) != '245d9fb1d888fbe3265ee9d6ef4a58aa391671199c9b3d11598622b00ce3c403'):
         raise ValueError('Unreviewed density dependency successor endpoints')
     return dependencies
 
@@ -1390,7 +1442,7 @@ STRAND_CAP_CAMERA_ORDER_SUCCESSOR = ({
 STRAND_CAP_FORMATTED_SUCCESSOR = ({
     **STRAND_CAP_CAMERA_ORDER_SUCCESSOR[0],
     'renderers/renderer.mojo':
-        '5cc066092d9b0302c60a6676459efc855e220dc319d1f88b5eb84df768f489f9',
+        '990d94c815315c910b12c1b126c076183fc35cdeb9f64a26d1f7e574f424bccd',
 }, 4049)
 
 
@@ -1572,7 +1624,8 @@ def _reviewed_dependency_hashes(root, bindings, *, include_roots=(), _operation=
         digest = sha256(raw)
         physical_digest = digest
         from carla_lane_oracle import typed_boundary_contracts as typed
-        if typed.is_current(name, raw):
+        endpoint = _typed_endpoint(name, raw)
+        if typed.is_current(name, endpoint):
             from carla_lane_oracle import full_audit_cleanup_contracts as cleanup
             current_bindings = cleanup.proof_bindings(
                 root, include_roots=include_roots, **operation_args)
@@ -1583,7 +1636,7 @@ def _reviewed_dependency_hashes(root, bindings, *, include_roots=(), _operation=
             actual.update(current_bindings)
             # The current numerical/API graph was physically admitted above.
             # This exact inverse now supplies historical provenance only.
-            checked = typed.historical_source(name, raw.decode('utf-8'))
+            checked = typed.historical_source(name, endpoint.decode('utf-8'))
             digest = sha256(checked.encode('utf-8'))
         if (name == DENSITY_SOURCE and expected == DENSITY_BEFORE_SHA256
                 and digest == DENSITY_AFTER_SHA256):
@@ -1780,7 +1833,7 @@ def _historical_reviewed_nonempty_loops(root, module, *, include_roots=(), _oper
         if sha256(current.encode('utf-8')) != actual[name]:
             return {}
         for line, kind, minimum, maximum, expression, proof_id in sites:
-            if typed.is_current(name, current):
+            if typed.is_current(name, _typed_endpoint(name, current)):
                 line = _typed_loop_row(module, line, expression, current)
                 if line is None:
                     return {}
@@ -1790,7 +1843,7 @@ def _historical_reviewed_nonempty_loops(root, module, *, include_roots=(), _oper
                 'expression': expression, 'proof_id': proof_id,
                 'dependency_sha256': actual,
             }
-        if (typed.is_current(name, current) and _operation is None
+        if (typed.is_current(name, _typed_endpoint(name, current)) and _operation is None
                 and not _final_unowned_typed_loop_bindings(
                     root, actual, include_roots=include_roots)):
             return {}
@@ -1825,6 +1878,9 @@ def guarded_loop_proof(root, rule, *, include_roots=(), _operation=None):
         if sha256(current.encode('utf-8')) != actual_bindings[module_path]:
             return None
         typed_current = typed.is_current(module_path, current)
+        if not typed_current:
+            typed_current = typed.is_current(
+                module_path, _typed_endpoint(module_path, current))
         if typed_current:
             line = _typed_loop_row(module, line, expression, current)
             if line is None:
@@ -2046,7 +2102,7 @@ def _typed_construction_boundary_loops(root, current, *, include_roots=(), _oper
     bindings = cleanup.proof_bindings(root, include_roots=include_roots, **operation_args)
     name = 'extensions/carla/map.mojo'
     if (bindings.get(name) != sha256(current.encode('utf-8'))
-            or not typed.is_current(name, current)):
+            or not typed.is_current(name, _typed_endpoint(name, current))):
         return {}
     line = _typed_loop_row('extensions/carla/map', CONSTRUCTION_BOUNDARY_LINE,
                            'boundaries', current)
@@ -2109,7 +2165,7 @@ def construction_boundary_loops(root, *, include_roots=(), _operation=None):
         current = _coverage_observe_text(root, name,
             relative_source(root, name, **operation_args).read_text(),
             _operation=_operation)
-        if typed.is_current(name, current):
+        if typed.is_current(name, _typed_endpoint(name, current)):
             return _typed_construction_boundary_loops(
                 root, current, include_roots=include_roots, **operation_args)
         actual = {name: file_sha256(relative_source(root, name, **operation_args), **stream_args)

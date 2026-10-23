@@ -576,7 +576,7 @@ CPU evidence does not verify GPU runtime behavior.
 #### Differences from three.js
 
 The upstream baseline is three.js 0.180.0, `src/math/MathUtils.js`. Its
-Euclidean formula is `((n % m) + m) % m`. In Mojo 1.1.0, Float32 bits
+Euclidean formula is `((n % m) + m) % m`. In Mojo 1.1.0 and 1.2.0, Float32 bits
 `0x71800000` are exactly `2^100`. Both native Float32 and widened Float64 `%`
 return zero for a divisor of `1.5`. Exact rational arithmetic gives one.
 The shared primitive returns one.
@@ -637,3 +637,31 @@ A rounded approximation to pi does not create an exact midpoint test.
 `tests/test_gpu.mojo` compares host and device sine bits for the same signed
 inputs. A GPU-target build checks compilation only. It does not establish that
 the test ran on a physical device. Use the device test result for that claim.
+
+## Accuracy of `std.math` across Mojo releases
+
+Mojo 1.2 changed the last bits of many `std.math` functions on `Float64`.
+Code that compares bits must be checked again when the toolchain changes.
+
+The comparison used 20,000 pseudo-random arguments on x86-64 Linux with `--target-cpu=x86-64-v3`.
+The reference was Python 3.12 `math`, which uses glibc.
+The error is the distance in units in the last place (ulp) between the Mojo result and the reference.
+
+| Function | Mojo 1.1.0 | Mojo 1.2.0 |
+|---|---|---|
+| `log`, `log1p`, `erf` | Up to 21 million, 7 billion and 196 million ulp | At most 1 ulp |
+| `pow` | Up to 12 million ulp | Up to 29 thousand ulp |
+| `tan`, `atan`, `atan2`, `hypot` | Exact | At most 1 ulp |
+| `asinh`, `acosh`, `log10` | Exact | At most 2 ulp |
+| `cbrt`, `erfc` | Exact | At most 3 ulp |
+| `sin`, `cos`, `sqrt` | Exact | Exact |
+| `exp`, `exp2`, `cosh`, `log2` | Up to 36 thousand, 25 thousand, 8 thousand and 27 million ulp | The same bits as 1.1.0 |
+
+In the table, "Exact" means that all 20,000 results equal the reference.
+Do not read the table as a bound for every argument.
+
+Two effects follow in this repository.
+`tests/test_carla_control_replay_tool.mojo` stores the sine and cosine bits of one geometry.
+Three rows of the Linux capture changed by one ulp, and the stored capture follows the pinned compiler.
+The 1.2 parser also reads any number of decimal digits, and it rounds to the nearest `Float64`.
+A test that expects NaN for a long number must now expect that number.

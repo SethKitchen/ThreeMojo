@@ -239,9 +239,10 @@ class ClosedPhysicalImageControls(unittest.TestCase):
         for path, row in rows.items():
             raw = (self.root/path).read_bytes()
             old = (self.root/row['predecessor_archive']).read_bytes()
-            previous = (owner.pr776_predecessor_bytes(path, raw) if path in (
+            previous = owner.pr780_successor.predecessor_bytes(path, raw)
+            previous = (owner.pr776_predecessor_bytes(path, previous) if path in (
                         'tools/carla_lane_oracle/test_expectation_binding_successor.py',
-                        'tools/carla_lane_oracle/test_typed_boundary_contracts.py') else raw)
+                        'tools/carla_lane_oracle/test_typed_boundary_contracts.py') else previous)
             self.assertEqual(owner.sha(previous), row['after_sha256'])
             self.assertEqual(self.accepted['bindings'][path], owner.sha(raw))
             self.assertEqual(owner.sha(old), row['before_sha256'])

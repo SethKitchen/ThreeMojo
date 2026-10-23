@@ -274,10 +274,10 @@ struct Scanner(Movable):
             self._scopes.append(_Scope(indent, False, True, -1, False))
             return False
 
-        if stripped.startswith("def ") or stripped.startswith("async def "):
+        if stripped.startswith("def ") or stripped.startswith("__async def "):
             # Default trait methods have ordinary function scope. Only an
             # abstract ellipsis is a declaration, not an executable step.
-            # An `async def` is a function body like any other; the renderer
+            # An `__async def` is a function body like any other; the renderer
             # has one per rasterizer band.
             self._scopes.append(
                 _Scope(

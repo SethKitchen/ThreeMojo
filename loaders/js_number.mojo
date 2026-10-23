@@ -14,10 +14,10 @@ is NaN, `Number("")` is 0 and `Number("0x1F")` is 31. Where JavaScript
 gives `NaN`, so do these.
 
 **Where this differs.** White space is ASCII white space here;
-JavaScript also skips the Unicode spaces. A number with more digits than
-Mojo's parser reads gives NaN; JavaScript rounds it. A `0x`, `0o` or `0b`
+JavaScript also skips the Unicode spaces. A `0x`, `0o` or `0b`
 integer past 2 to the 53 is summed a digit at a time, so it can round
-differently.
+differently. Mojo 1.2 reads any number of decimal digits and rounds to
+the nearest `Float64`, as JavaScript does.
 """
 
 from loaders.bytes import (
@@ -48,6 +48,22 @@ def is_decimal_text(text: String) -> Bool:
         if not ascii_digit(bytes[at]):
             return False
     return True
+
+
+def _decimal(text: String) -> Float64:
+    """Return the number that a decimal text writes.
+
+    Args:
+        text: A sign, digits, a point and an exponent. Every caller
+            checks the shape first.
+
+    Returns:
+        The nearest `Float64`, or NaN when Mojo cannot read the text.
+    """
+    try:
+        return Float64(text)
+    except:
+        return nan[DType.float64]()
 
 
 def _sign_at(bytes: Span[UInt8, _], i: Int) -> Bool:
@@ -99,10 +115,7 @@ def js_parse_float(text: String) -> Float64:
             exponent += 1
         if exponent > 0:
             end = i
-    try:
-        return Float64(String(text[byte=start:end]))
-    except:
-        return nan[DType.float64]()
+    return _decimal(String(text[byte=start:end]))
 
 
 def js_parse_int(text: String) -> Float64:
@@ -128,10 +141,7 @@ def js_parse_int(text: String) -> Float64:
         i += 1
     if i == first:
         return nan[DType.float64]()
-    try:
-        return Float64(String(text[byte=start:i]))
-    except:
-        return nan[DType.float64]()
+    return _decimal(String(text[byte=start:i]))
 
 
 def _digit_value(byte: UInt8, radix: Int) -> Int:

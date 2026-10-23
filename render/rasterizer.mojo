@@ -7255,7 +7255,7 @@ def _lit_by(
     ]()
 
 
-async def _frame_band(
+__async def _frame_band(
     corners: Pointer[Corner, ImmutAnyOrigin],
     surfaces: Pointer[Surface, ImmutAnyOrigin],
     triangle_rows: MutPointer[Int, MutAnyOrigin],

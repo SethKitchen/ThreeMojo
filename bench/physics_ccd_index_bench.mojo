@@ -5,7 +5,7 @@
 
 """Compare the CCD index with the retained brute-force CCD oracle.
 
-Build and run from the repository root, with the pinned Mojo 1.1.0 toolchain:
+Build and run from the repository root, with the pinned Mojo toolchain:
     mojo build -I . bench/physics_ccd_index_bench.mojo -o /tmp/ccd-index-bench
     /tmp/ccd-index-bench > /tmp/ccd-index-native.csv
     cc -shared -fPIC -O2 bench/navigation_allocations.c -o /tmp/navalloc.so

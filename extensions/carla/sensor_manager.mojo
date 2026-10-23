@@ -233,9 +233,11 @@ comptime _IDS: Array[StaticString, 22] = [
     "sensor.other.v2x",
     "sensor.other.v2x_custom",
 ]
+# fmt: off
 comptime _TYPES: Array[Int, 22] = [
     1, 14, 15, 2, 8, 3, 13, 17, 18, 20, 19, 11, 10, 23, 9, 4, 5, 0, 6, 7, 24, 25
-]  # fmt: skip
+]
+# fmt: on
 
 
 def sensor_kind_of(blueprint_id: String) -> Optional[SensorKind]:

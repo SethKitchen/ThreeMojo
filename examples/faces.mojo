@@ -92,7 +92,7 @@ def main() raises:
     posed.rotate_y(Angle(32.0, DEGREE))
     posed.rotate_x(Angle(22.0, DEGREE))
     var node = scene.add(posed^)
-    scene.add_mesh(Mesh(block, faces^, node))
+    scene.add_mesh(Mesh(block, faces, node))
     fill_and_key(
         scene,
         1.2,

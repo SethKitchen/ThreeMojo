@@ -8,7 +8,7 @@ The default geometry pass checks all 8,911 distinct pairs among 134 named lower-
 
 ## Generate a report
 
-Use the pinned Mojo 1.1.0 compiler. Run this command from the repository root:
+Use the pinned Mojo 1.2.0 compiler. Run this command from the repository root:
 
 ```sh
 mojo run -I . tools/anatomy_validity.mojo --build --output anatomy-report.json

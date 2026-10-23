@@ -316,7 +316,7 @@ def test_imports_are_read_as_the_compiler_reads_them() raises:
 
 
 def test_each_alias_spacing_binds_its_module() raises:
-    # Pinned Mojo 1.1.0 compiles all six forms. Each one alone must bind the
+    # Mojo 1.1.0 and 1.2.0 compile all six forms. Each one alone must bind the
     # module it imports.
     for form in [
         "import pkg.bound as renamed",
@@ -339,7 +339,7 @@ def test_each_alias_spacing_binds_its_module() raises:
 
 
 def test_a_local_file_under_a_toolchain_name_is_bound() raises:
-    # Pinned Mojo 1.1.0 reads a local max/sentinel.mojo for `max.sentinel`,
+    # Mojo 1.1.0 reads a local max/sentinel.mojo for `max.sentinel`,
     # with or without max/__init__.mojo. A local file under `std` is bound
     # as well, which can only bind more.
     for package in ["max", "std"]:

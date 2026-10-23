@@ -244,7 +244,7 @@ struct ModelCache(Movable):
             mesh.node = NodeId(first_node + mesh.node.value)
             mesh.material = MaterialId(mesh.material.value + offset)
             mesh.materials = _material_ids(mesh.materials, offset)
-            scene.add_mesh(mesh^)
+            scene.add_mesh(mesh)
             m += 1
         for source in template.scene.lines:
             var line = source.copy()

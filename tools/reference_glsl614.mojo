@@ -39,8 +39,8 @@ from tools._sha256 import sha256_hex
 
 comptime U32 = 0xFFFFFFFF
 """The largest unsigned 32-bit value."""
-comptime MOJO_VERSION = "1.1.0 (8189361e)"
-"""The pinned Mojo toolchain. The project builds with this version only."""
+comptime MOJO_VERSION = "1.2.0 (2016d0cd)"
+"""The pinned Mojo toolchain. A regenerated catalog records this version."""
 comptime TOLERANCE = 2e-6
 """The absolute tolerance of each float32 lane."""
 comptime HEX = "0123456789abcdef"

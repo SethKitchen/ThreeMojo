@@ -163,7 +163,8 @@ class TypedCurrentOwnedOperation(unittest.TestCase):
         import source_contracts as source
         map_path = self.root/seed.MODULE
         current = map_path.read_text()
-        historical = typed.historical_source(seed.MODULE, current)
+        historical = typed.historical_source(seed.MODULE, fixtures.typed_current_bytes(
+            seed.MODULE, current.encode()).decode())
         # A stale historical supplied view must fail before invoking the old
         # semantic family. This tests the physical current root, not a mock root.
         with patch.object(seed, 'verify', side_effect=AssertionError('semantic family reached')):
@@ -178,7 +179,8 @@ class TypedCurrentOwnedOperation(unittest.TestCase):
         self.assertEqual(plain, commented)
         lane = self.root/'extensions/carla/lane_refinement.mojo'
         physical_lane = lane.read_text()
-        old_lane = typed.historical_source('extensions/carla/lane_refinement.mojo', physical_lane)
+        old_lane = typed.historical_source('extensions/carla/lane_refinement.mojo', fixtures.typed_current_bytes(
+            'extensions/carla/lane_refinement.mojo', physical_lane.encode()).decode())
         original = Path.read_text
         def supplied(path, *args, **kwargs):
             return old_lane if path == lane else original(path, *args, **kwargs)
@@ -249,7 +251,8 @@ class TypedCurrentOwnedOperation(unittest.TestCase):
         import sys
         target = self.root/seed.MODULE
         current = target.read_bytes()
-        historical = typed.historical_source(seed.MODULE, current.decode()).encode()
+        historical = typed.historical_source(seed.MODULE, fixtures.typed_current_bytes(
+            seed.MODULE, current).decode()).encode()
         original = Path.read_bytes
         reads = []
         def changed_final(path, *args, **kwargs):

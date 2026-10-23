@@ -4,7 +4,8 @@
 # See LICENSE, LICENSE-COMMERCIAL.md and THIRD-PARTY-NOTICES.md.
 """Resolve imports from the entry point's directory and the root (#714).
 
-Each fixture records what pinned Mojo 1.1.0 (8189361e) did with
+Each fixture records what Mojo 1.1.0 (8189361e) and Mojo 1.2.0
+(2016d0cd) did with
 `mojo build --num-threads 1 -I . tools/probe.mojo`, where tools/probe.mojo
 imports `pkg.one` and pkg/one.mojo imports `helper`:
 

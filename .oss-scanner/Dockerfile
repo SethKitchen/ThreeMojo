@@ -28,13 +28,13 @@ COPY . /src
 WORKDIR /src
 
 # The pinned toolchain, as README.md installs it: CPython 3.12.14 from uv, a
-# venv without pip, and Mojo 1.1.0. The Makefile expects .venv/bin/mojo. Linux
+# venv without pip, and Mojo 1.2.0. The Makefile expects .venv/bin/mojo. Linux
 # on aarch64 has no 3.12.14 build, so the install falls back to the latest
 # 3.12. Mojo does not depend on the patch release.
 RUN (uv python install --no-bin 3.12.14 || uv python install --no-bin 3.12) \
     && PYTHON="$(uv python find --managed-python --no-project 3.12)" \
     && "$PYTHON" -m venv --without-pip --prompt ThreeMojo .venv \
-    && uv pip install --python .venv/bin/python "mojo==1.1.0" \
+    && uv pip install --python .venv/bin/python "mojo==1.2.0" \
     && .venv/bin/mojo --version
 
 # Run the cheap checks so the image is known to work. A failure here must not

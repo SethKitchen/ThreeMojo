@@ -143,7 +143,7 @@ def main() raises:
         # A bust: the skin is cut off under the chin.
         var bust = assets.materials.get(looks.skin)
         bust.set_clipping_planes([Plane(Vector3(0, 1, 0), -(y - CUT_BELOW))])
-        var skin = assets.materials.add(bust^)
+        var skin = assets.materials.add(bust)
         var pivot = Object3D()
         pivot.set_position(x, y, 0)
         var pivot_id = scene.add(pivot^)

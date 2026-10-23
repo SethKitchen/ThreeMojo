@@ -24,7 +24,7 @@ for WebAssembly today. `window.capi_scene` has the same functions on the
 full renderer, and it builds for the host only. Never import both modules
 into one program: they export the same names.
 
-Mojo 1.1 has no WebAssembly backend. `examples/capi/build.sh` retargets
+Mojo 1.2 has no WebAssembly backend. `examples/capi/build.sh` retargets
 the LLVM IR of this module to wasm32. See the wiki page `C-ABI-and-hosts`.
 """
 

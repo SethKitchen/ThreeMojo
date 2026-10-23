@@ -3,13 +3,14 @@
 # Noncommercial use is free; commercial use requires a paid license.
 # See LICENSE, LICENSE-COMMERCIAL.md and THIRD-PARTY-NOTICES.md.
 
-"""Standalone triangle fill used to compare Mojo 1.1 against Mojo 1.0.
+"""Standalone triangle fill that times two Mojo releases against each other.
 
     mojo build -o bench/build/probe bench/probe.mojo
 
-This file imports nothing from ThreeMojo. The 1.0 twin is `bench/mojo10/probe.mojo`.
-Both walk the same pixels so the compilers and runtimes can be timed apart from
-the library.
+This file imports nothing from ThreeMojo. `make bench-examples` builds this one
+file with both compilers, so the compilers and runtimes can be timed apart from
+the library. The benchmark no longer builds the Mojo 1.0 twin in
+`bench/mojo10/probe.mojo`.
 """
 
 comptime WIDTH = 512

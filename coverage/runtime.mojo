@@ -21,7 +21,7 @@ from std.iter import downcast
 from std.memory import stack_allocation
 from std.sys._libc_errno import ErrNo, get_errno, set_errno
 from std.reflection import reflect
-from std.sys import is_defined
+from std.sys import is_defined, stderr
 from std.traits import (
     IsTriviallyCopyable,
     IsTriviallyDeinitable,
@@ -54,9 +54,13 @@ def _emit(record: String):
     var size = record.byte_length()
     if size > MAX_RECORD_BYTES:
         external_call["abort", NoneType]()
+    if __is_run_in_comptime_interpreter:
+        var sink = stderr
+        sink.write_bytes(record.as_bytes())
+        return
     while True:
         var written = external_call["write", Int](
-            2, record.unsafe_ptr().unsafe_bitcast[NoneType](), size
+            Int32(2), record.unsafe_ptr().unsafe_bitcast[NoneType](), size
         )
         if written == size:
             return
@@ -91,9 +95,13 @@ def _emit_hit(id: StaticString, suffix: StaticString):
             ](bytes.unsafe_bitcast[NoneType](), size, saved_errno.value)
             set_errno(ErrNo(result_errno))
             return
+    if __is_run_in_comptime_interpreter:
+        var sink = stderr
+        sink.write_bytes(Span(unsafe_ptr=bytes, length=size))
+        return
     while True:
         var written = external_call["write", Int](
-            2, bytes.unsafe_bitcast[NoneType](), size
+            Int32(2), bytes.unsafe_bitcast[NoneType](), size
         )
         if written == size:
             return
@@ -883,7 +891,7 @@ comptime _scalar[T: AnyType] = (
 def _pure(name: StaticString) -> Bool:
     """Return True for a type whose operands convert to Bool without probes.
 
-    These are the fixed `leaf` overloads. Pinned Mojo 1.1.0 names prelude
+    These are the fixed `leaf` overloads. Pinned Mojo 1.2.0 names prelude
     types without a module and every source type with its module, so a source
     type cannot take one of these names.
     """
@@ -901,7 +909,7 @@ def _starts(name: StaticString, prefix: StaticString) -> Bool:
     """Return True if `name` starts with `prefix`, compared byte by byte.
 
     It gives the result of `name.startswith(prefix)`. `node` evaluates the
-    reflected-name tests at compile time, and pinned Mojo 1.1.0 can deadlock
+    reflected-name tests at compile time, and Mojo 1.1.0 can deadlock
     a single-threaded build that evaluates `startswith` there. The coverage
     build of `materials/nodes.mojo` waits forever on one such test.
 

@@ -402,7 +402,7 @@ def test_a_caster_behind_one_already_drawn_is_not_seen() raises:
     pair.add_points(
         Points(
             assets.geometries.add(two^),
-            assets.materials.add(dotted^),
+            assets.materials.add(dotted),
             pair.add(Object3D()),
             cast_shadow=True,
         )

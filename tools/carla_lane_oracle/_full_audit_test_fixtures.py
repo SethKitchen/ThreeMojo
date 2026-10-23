@@ -108,6 +108,18 @@ def copy_shared_helper_inputs(root, source):
     return copied
 
 
+def typed_current_bytes(name, raw):
+    """Return the typed-current endpoint of one physical source.
+
+    A source that the PR780 successor edits is physically at the successor
+    endpoint. The typed boundary tests reason about its exact predecessor.
+    """
+    successor = cleanup.pr780_successor
+    if name in successor.EDGES and cleanup.sha(raw) == successor.EDGES[name]['after_sha256']:
+        return successor.predecessor_bytes(name, raw)
+    return raw
+
+
 def copy_current_root(case, source, *, destination=None):
     """Copy the complete Mojo census and verifier inputs into a real root."""
     source = Path(source)
@@ -172,7 +184,10 @@ def _historical_hair_predecessors(root):
         sys.path.insert(0, tools)
     import coverage_loop_proofs as loops
     stage = cleanup.pr760_stage
-    physical = {name: (root/name).read_bytes() for name in stage.HAIR_SOURCE_PATHS}
+    current = {name: (root/name).read_bytes() for name in stage.HAIR_SOURCE_PATHS}
+    successor = cleanup.pr780_successor
+    physical = {name: successor.predecessor_bytes(name, raw) if name in successor.EDGES else raw
+                for name, raw in current.items()}
     for name, raw in physical.items():
         if cleanup.sha(raw) != stage.EDGES[name]['after_sha256']:
             raise AssertionError('historical hair fixture current endpoint changed: ' + name)
@@ -192,7 +207,7 @@ def _historical_hair_predecessors(root):
                 or cleanup.sha(previous) != expected):
             raise AssertionError('historical hair fixture predecessor changed: ' + name)
         predecessors[name] = previous
-    for name, raw in physical.items():
+    for name, raw in current.items():
         if (root/name).read_bytes() != raw:
             raise AssertionError('historical hair fixture source changed after transport: ' + name)
     return predecessors
@@ -217,6 +232,8 @@ def copy_common758_boundary_root(case, source, *, destination=None):
         for name, previous in hair_predecessors.items():
             (root/name).write_bytes(previous)
         for name in cleanup.pr780_successor.EDGES:
+            if name in hair_predecessors or name in cleanup.CHECKER_PATHS:
+                continue
             target = root/name
             target.write_bytes(cleanup.pr780_successor.predecessor_bytes(
                 name, target.read_bytes()))

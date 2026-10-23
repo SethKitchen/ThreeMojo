@@ -61,7 +61,7 @@ struct _SourceLine(Copyable, Movable):
 def _physical_lines(source: String) -> List[_SourceLine]:
     """Split physical source lines without treating tabs as line breaks.
 
-    Mojo 1.1 splitlines() also splits tabs. Keep line terminators separately:
+    Mojo 1.1 and 1.2 splitlines() also split tabs. Keep line terminators separately:
     a CR or CRLF inside a multiline literal must retain its exact bytes.
     An unterminated final statement gets a newline for any trailing probes.
     """
@@ -647,7 +647,7 @@ def _opens_top_level_block(line: String) -> Bool:
     var stripped = String(line.strip())
     return (
         stripped.startswith("def ")
-        or stripped.startswith("async def ")
+        or stripped.startswith("__async def ")
         or stripped.startswith("struct ")
         or stripped.startswith("trait ")
         or stripped.startswith("@")

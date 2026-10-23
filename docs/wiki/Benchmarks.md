@@ -2,7 +2,7 @@
 
 This page records CPU compile time, draw time and peak memory for `bench/catalog.json`.
 The same size and frame count run in three.js.
-Mojo 1.0 is compared when that compiler is installed.
+The previous Mojo release is compared when that compiler is installed.
 
 The draw column names the faster frame loop.
 Whole-process time is summarized, because startup can hide the draw.
@@ -36,30 +36,28 @@ cpu-flat is a flat color fill, so the comparison is the CPU fill.
 
 cpu-flat is the draw comparison on this host.
 ThreeMojo wins 6 draws, 6 of them by 30% or more.
-cpu-flat wins 69 draws, 68 of them by 30% or more.
-1 draw is within 10% and counts as a tie.
-The median cpu-flat draw takes 0.38 times the ThreeMojo draw.
+cpu-flat wins 67 draws, 67 of them by 30% or more.
+3 draws are within 10% and count as ties.
+The median cpu-flat draw takes 0.42 times the ThreeMojo draw.
 The flat fill does less work than the ThreeMojo frame.
 
 ThreeMojo uses less memory on 75 of 76 examples.
 The median resident set is 45 MiB for ThreeMojo and 64 MiB for cpu-flat.
 
 Whole-process time includes startup and writing the image.
-The median ThreeMojo process takes 0.16 s.
-The median cpu-flat process takes 0.100 s.
-A Mojo program that does nothing takes 0.009 s.
-A Node process that does nothing takes 0.021 s.
-The median Mojo 1.1 compile takes 46.2 s.
+The median ThreeMojo process takes 0.096 s.
+The median cpu-flat process takes 0.073 s.
+A Mojo program that does nothing takes 0.007 s.
+A Node process that does nothing takes 0.019 s.
+The median Mojo 1.2.0 compile takes 26.4 s.
 
-Mojo 1.0 runs 6 programs.
-Refused programs: 71.
+Mojo 1.1.0 runs 2 programs.
+Refused programs: 75.
 A refused compile is not a faster compile.
-On those programs, Mojo 1.1 compiles faster on 5 of 6.
+On those programs, Mojo 1.2.0 compiles faster on 1 of 2.
 1 compile is within 10%.
 
-Mojo 1.1 runs faster on 1 of 6.
-Mojo 1.0 runs faster on 1 of 6.
-4 runs are within 10%.
+2 runs are within 10%.
 
 The catalog lists 76 examples.
 This host measures 76 of them.
@@ -79,14 +77,14 @@ The median ThreeMojo process takes 0.058 s.
 The median WebGL process takes 0.099 s.
 A Mojo program that does nothing takes 0.010 s.
 A Node process that does nothing takes 0.023 s.
-The median Mojo 1.1 compile takes 8.79 s.
+The median Mojo 1.1.0 compile takes 8.79 s.
 
-Mojo 1.0 runs 5 programs.
+Mojo 1.0.0 runs 5 programs.
 Refused programs: 57.
 A refused compile is not a faster compile.
-On those programs, Mojo 1.1 compiles faster on 5 of 5.
+On those programs, Mojo 1.1.0 compiles faster on 5 of 5.
 
-Mojo 1.1 runs faster on 4 of 5.
+Mojo 1.1.0 runs faster on 4 of 5.
 1 run is within 10%.
 
 The catalog lists 76 examples.
@@ -96,11 +94,11 @@ This host measures 61 of them.
 ## Linux against macOS
 
 <!-- BENCH:CROSS -->
-For these saved runs, the median Linux/macOS whole-process time ratio is 2.2.
-The median Linux/macOS compile-time ratio is 5.1.
+For these saved runs, the median Linux/macOS whole-process time ratio is 1.6.
+The median Linux/macOS compile-time ratio is 3.0.
 Each ratio is Linux time divided by macOS time.
 
-The Linux date is 2026-10-07. The macOS date is 2026-09-26.
+The Linux date is 2026-10-23. The macOS date is 2026-09-26.
 The source and software can differ between these snapshots.
 These ratios do not isolate hardware speed.
 The comparison uses 61 shared examples.
@@ -111,15 +109,15 @@ The comparison uses 61 shared examples.
 ### Linux
 
 <!-- BENCH:HOST:linux -->
-- Latest refresh: `2026-10-07`
+- Latest refresh: `2026-10-23`
 - OS: Linux 6.12.94+
 - CPU: Intel(R) Xeon(R) Processor
-- Mojo 1.1: `Mojo 1.1.0 (8189361e)`
-- Mojo 1.0: `Mojo 1.0.0 (ed45d567)`
-- Node: `v22.14.0`
+- Mojo: `Mojo 1.2.0 (2016d0cd)`
+- Previous Mojo: `Mojo 1.1.0 (8189361e)`
+- Node: `v22.23.4`
 - three.js backends: `cpu-flat` (`webgl` did not run)
-- A Mojo program that does nothing: `0.009` s
-- A Node process that does nothing: `0.021` s
+- A Mojo program that does nothing: `0.007` s
+- A Node process that does nothing: `0.019` s
 <!-- /BENCH:HOST:linux -->
 
 ### macOS
@@ -128,13 +126,17 @@ The comparison uses 61 shared examples.
 - Latest refresh: `2026-09-26`
 - OS: macOS 26.7 (arm64)
 - CPU: Apple M4 Max, 16 cores
-- Mojo 1.1: `Mojo 1.1.0 (8189361e)`
-- Mojo 1.0: `Mojo 1.0.0 (ed45d567)`
+- Mojo: `Mojo 1.1.0 (8189361e)`
+- Previous Mojo: `Mojo 1.0.0 (ed45d567)`
 - Node: `v24.20.0`
 - three.js backends: `cpu-flat` and `webgl`
 - A Mojo program that does nothing: `0.010` s
 - A Node process that does nothing: `0.023` s
 <!-- /BENCH:HOST:macos -->
+
+The macOS record is from Mojo 1.1.0.
+No Mac was available for the move to Mojo 1.2.0, so that record is not measured again.
+Run `make bench-examples` on a Mac to refresh it.
 
 ## What the columns measure
 
@@ -158,82 +160,82 @@ The refresh command is in [How to measure examples](How-to-measure-examples).
 <!-- BENCH:EXAMPLES:linux -->
 | Example | Size | Frames | Compile (s) | Mojo draw (s) | cpu-flat draw (s) | WebGL draw (s) | Draw winner | Mojo RSS (MiB) | Measured |
 |---|---|---|---|---|---|---|---|---|---|
-| `triangle` | 320×240 | 1 | 5.03 | 0.001 | 0.009 | unavailable | Mojo | 10 | 2026-10-07 |
-| `spin` | 160×120 | 24 | 4.93 | 0.002 | 0.010 | unavailable | Mojo | 18 | 2026-10-07 |
-| `cube` | 240×180 | 36 | 7.15 | 0.013 | 0.020 | unavailable | Mojo | 41 | 2026-10-07 |
-| `cubes` | 260×200 | 48 | 37.6 | 0.097 | 0.048 | unavailable | cpu-flat | 55 | 2026-10-07 |
-| `uv` | 320×200 | 2 | 35.1 | 0.011 | 0.011 | unavailable | tie | 13 | 2026-10-07 |
-| `textured` | 260×200 | 36 | 51.1 | 0.18 | 0.031 | unavailable | cpu-flat | 48 | 2026-10-07 |
-| `glass` | 260×200 | 36 | 48.5 | 0.12 | 0.035 | unavailable | cpu-flat | 48 | 2026-10-07 |
-| `floor` | 320×200 | 30 | 53.4 | 0.22 | 0.025 | unavailable | cpu-flat | 43 | 2026-10-07 |
-| `photo` | 260×200 | 36 | 43.0 | 0.078 | 0.018 | unavailable | cpu-flat | 48 | 2026-10-07 |
-| `lamps` | 260×200 | 36 | 33.6 | 0.13 | 0.048 | unavailable | cpu-flat | 50 | 2026-10-07 |
-| `first_scene` | 320×240 | 1 | 44.1 | 0.005 | 0.009 | unavailable | Mojo | 13 | 2026-10-07 |
-| `lit_scene` | 320×240 | 36 | 44.6 | 0.19 | 0.035 | unavailable | cpu-flat | 65 | 2026-10-07 |
-| `rotations` | 240×180 | 36 | 54.1 | 0.059 | 0.027 | unavailable | cpu-flat | 44 | 2026-10-07 |
-| `ortho` | 240×180 | 36 | 49.4 | 0.058 | 0.016 | unavailable | cpu-flat | 42 | 2026-10-07 |
-| `geometry` | 240×180 | 36 | 52.5 | 0.17 | 0.10 | unavailable | cpu-flat | 45 | 2026-10-07 |
-| `instances` | 240×180 | 36 | 50.5 | 0.055 | 0.036 | unavailable | cpu-flat | 43 | 2026-10-07 |
-| `raycast` | 240×180 | 36 | 32.6 | 0.066 | 0.042 | unavailable | cpu-flat | 44 | 2026-10-07 |
-| `curves` | 240×180 | 36 | 31.4 | 0.050 | 0.030 | unavailable | cpu-flat | 43 | 2026-10-07 |
-| `keyframes` | 240×180 | 36 | 45.1 | 0.045 | 0.020 | unavailable | cpu-flat | 44 | 2026-10-07 |
-| `skinning` | 240×180 | 36 | 42.5 | 0.046 | 0.018 | unavailable | cpu-flat | 45 | 2026-10-07 |
-| `phong` | 240×180 | 36 | 49.8 | 0.13 | 0.060 | unavailable | cpu-flat | 45 | 2026-10-07 |
-| `fog` | 240×180 | 36 | 49.6 | 0.031 | 0.022 | unavailable | cpu-flat | 43 | 2026-10-07 |
-| `culling` | 240×180 | 36 | 56.6 | 0.047 | 0.042 | unavailable | cpu-flat | 43 | 2026-10-07 |
-| `clipping` | 240×180 | 36 | 66.4 | 0.068 | 0.040 | unavailable | cpu-flat | 44 | 2026-10-07 |
-| `gpu_backend` | 240×180 | 36 | 61.8 | 0.10 | 0.040 | unavailable | cpu-flat | 44 | 2026-10-07 |
-| `exposure` | 240×180 | 36 | 52.5 | 0.14 | 0.025 | unavailable | cpu-flat | 45 | 2026-10-07 |
-| `model` | 240×180 | 36 | 50.3 | 0.058 | 0.021 | unavailable | cpu-flat | 45 | 2026-10-07 |
-| `orbit` | 240×180 | 36 | 65.2 | 0.074 | 0.026 | unavailable | cpu-flat | 43 | 2026-10-07 |
-| `clock` | 240×180 | 36 | 40.1 | 0.045 | 0.016 | unavailable | cpu-flat | 44 | 2026-10-07 |
-| `chain` | 240×180 | 36 | 27.8 | 0.040 | 0.015 | unavailable | cpu-flat | 44 | 2026-10-07 |
-| `additive` | 240×180 | 36 | 36.8 | 0.13 | 0.023 | unavailable | cpu-flat | 45 | 2026-10-07 |
-| `normals` | 240×180 | 36 | 44.0 | 0.11 | 0.045 | unavailable | cpu-flat | 43 | 2026-10-07 |
-| `fragments` | 240×180 | 36 | 48.4 | 0.13 | 0.036 | unavailable | cpu-flat | 44 | 2026-10-07 |
-| `edges` | 240×180 | 48 | 6.10 | 0.013 | 0.026 | unavailable | Mojo | 48 | 2026-10-07 |
-| `lines` | 240×180 | 36 | 54.0 | 0.074 | 0.030 | unavailable | cpu-flat | 45 | 2026-10-07 |
-| `sprites` | 240×180 | 36 | 46.5 | 0.070 | 0.033 | unavailable | cpu-flat | 45 | 2026-10-07 |
-| `stereo` | 240×120 | 36 | 55.0 | 0.061 | 0.024 | unavailable | cpu-flat | 35 | 2026-10-07 |
-| `television` | 240×180 | 36 | 59.9 | 0.24 | 0.021 | unavailable | cpu-flat | 49 | 2026-10-07 |
-| `mirror` | 240×180 | 30 | 58.6 | 0.46 | 0.042 | unavailable | cpu-flat | 42 | 2026-10-07 |
-| `split` | 240×180 | 36 | 59.4 | 0.12 | 0.042 | unavailable | cpu-flat | 45 | 2026-10-07 |
-| `physical` | 480×220 | 1 | 37.2 | 0.023 | 0.009 | unavailable | cpu-flat | 37 | 2026-10-07 |
-| `outlines` | 240×180 | 36 | 28.8 | 0.034 | 0.013 | unavailable | cpu-flat | 44 | 2026-10-07 |
-| `shadows` | 240×180 | 36 | 28.9 | 0.13 | 0.021 | unavailable | cpu-flat | 46 | 2026-10-07 |
-| `wide` | 240×180 | 36 | 27.9 | 0.059 | 0.030 | unavailable | cpu-flat | 46 | 2026-10-07 |
-| `bloom` | 240×180 | 36 | 40.7 | 0.22 | 0.048 | unavailable | cpu-flat | 51 | 2026-10-07 |
-| `gizmo` | 240×180 | 36 | 27.4 | 0.059 | 0.020 | unavailable | cpu-flat | 48 | 2026-10-07 |
-| `json_scene` | 240×180 | 36 | 59.1 | 0.034 | 0.013 | unavailable | cpu-flat | 46 | 2026-10-07 |
-| `reloaded` | 240×180 | 36 | 57.0 | 0.096 | 0.050 | unavailable | cpu-flat | 45 | 2026-10-07 |
-| `gem` | 240×180 | 36 | 30.3 | 0.28 | 0.036 | unavailable | cpu-flat | 51 | 2026-10-07 |
-| `distance` | 240×180 | 36 | 30.8 | 0.096 | 0.040 | unavailable | cpu-flat | 48 | 2026-10-07 |
-| `unfogged` | 240×180 | 36 | 32.1 | 0.037 | 0.014 | unavailable | cpu-flat | 45 | 2026-10-07 |
-| `targets` | 240×180 | 36 | 27.1 | 0.13 | 0.035 | unavailable | cpu-flat | 45 | 2026-10-07 |
-| `layers` | 320×180 | 36 | 34.5 | 0.25 | 0.061 | unavailable | cpu-flat | 57 | 2026-10-07 |
-| `graph` | 240×180 | 36 | 47.4 | 0.28 | 0.054 | unavailable | cpu-flat | 45 | 2026-10-07 |
-| `basis` | 320×180 | 36 | 79.4 | 0.11 | 0.021 | unavailable | cpu-flat | 52 | 2026-10-07 |
-| `coats` | 320×180 | 36 | 57.1 | 0.31 | 0.079 | unavailable | cpu-flat | 64 | 2026-10-07 |
-| `skyjson` | 240×180 | 36 | 118.2 | 0.48 | 0.053 | unavailable | cpu-flat | 50 | 2026-10-07 |
-| `daylight` | 240×180 | 36 | 65.5 | 1.92 | 0.12 | unavailable | cpu-flat | 48 | 2026-10-07 |
-| `faces` | 240×180 | 36 | 38.7 | 0.11 | 0.030 | unavailable | cpu-flat | 45 | 2026-10-07 |
-| `utah` | 240×180 | 36 | 45.9 | 0.17 | 0.077 | unavailable | cpu-flat | 48 | 2026-10-07 |
-| `blobs` | 240×180 | 36 | 71.8 | 0.068 | 0.14 | unavailable | Mojo | 43 | 2026-10-07 |
-| `flipbook` | 240×180 | 36 | 54.3 | 0.14 | 0.055 | unavailable | cpu-flat | 46 | 2026-10-07 |
-| `ripples` | 240×180 | 36 | 75.4 | 0.51 | 0.089 | unavailable | cpu-flat | 53 | 2026-10-07 |
-| `baked` | 240×180 | 36 | 48.4 | 0.79 | 0.033 | unavailable | cpu-flat | 45 | 2026-10-07 |
-| `diagram` | 240×180 | 36 | 12.8 | 0.036 | 0.025 | unavailable | cpu-flat | 42 | 2026-10-07 |
-| `bricks` | 240×180 | 36 | 58.5 | 0.085 | 0.023 | unavailable | cpu-flat | 44 | 2026-10-07 |
-| `terrain` | 240×180 | 36 | 62.1 | 0.12 | 0.060 | unavailable | cpu-flat | 43 | 2026-10-07 |
-| `override` | 240×180 | 36 | 51.8 | 0.13 | 0.067 | unavailable | cpu-flat | 48 | 2026-10-07 |
-| `clay` | 240×180 | 36 | 63.8 | 0.12 | 0.059 | unavailable | cpu-flat | 45 | 2026-10-07 |
-| `cells` | 240×180 | 36 | 38.1 | 0.82 | 0.055 | unavailable | cpu-flat | 44 | 2026-10-07 |
-| `cloud` | 240×180 | 36 | 30.3 | 0.061 | 0.003 | unavailable | cpu-flat | 43 | 2026-10-07 |
-| `bounce` | 240×180 | 36 | 33.8 | 7.42 | 0.033 | unavailable | cpu-flat | 50 | 2026-10-07 |
-| `sunlight` | 240×180 | 36 | 33.4 | 0.17 | 0.026 | unavailable | cpu-flat | 46 | 2026-10-07 |
-| `vase` | 240×180 | 36 | 36.8 | 0.077 | 0.041 | unavailable | cpu-flat | 43 | 2026-10-07 |
-| `sapling` | 240×180 | 36 | 45.7 | 0.050 | 0.021 | unavailable | cpu-flat | 43 | 2026-10-07 |
-| `particles` | 240×180 | 36 | 52.9 | 0.058 | 0.032 | unavailable | cpu-flat | 45 | 2026-10-07 |
+| `triangle` | 320×240 | 1 | 2.91 | 0.001 | 0.006 | unavailable | Mojo | 11 | 2026-10-23 |
+| `spin` | 160×120 | 24 | 3.02 | 0.002 | 0.007 | unavailable | Mojo | 18 | 2026-10-23 |
+| `cube` | 240×180 | 36 | 4.95 | 0.009 | 0.015 | unavailable | Mojo | 41 | 2026-10-23 |
+| `cubes` | 260×200 | 48 | 25.9 | 0.052 | 0.026 | unavailable | cpu-flat | 56 | 2026-10-23 |
+| `uv` | 320×200 | 2 | 18.1 | 0.008 | 0.008 | unavailable | tie | 14 | 2026-10-23 |
+| `textured` | 260×200 | 36 | 26.0 | 0.15 | 0.017 | unavailable | cpu-flat | 48 | 2026-10-23 |
+| `glass` | 260×200 | 36 | 25.6 | 0.068 | 0.021 | unavailable | cpu-flat | 48 | 2026-10-23 |
+| `floor` | 320×200 | 30 | 25.9 | 0.20 | 0.018 | unavailable | cpu-flat | 43 | 2026-10-23 |
+| `photo` | 260×200 | 36 | 26.5 | 0.092 | 0.017 | unavailable | cpu-flat | 48 | 2026-10-23 |
+| `lamps` | 260×200 | 36 | 25.7 | 0.063 | 0.032 | unavailable | cpu-flat | 51 | 2026-10-23 |
+| `first_scene` | 320×240 | 1 | 25.3 | 0.003 | 0.007 | unavailable | Mojo | 14 | 2026-10-23 |
+| `lit_scene` | 320×240 | 36 | 25.7 | 0.13 | 0.020 | unavailable | cpu-flat | 65 | 2026-10-23 |
+| `rotations` | 240×180 | 36 | 26.6 | 0.033 | 0.015 | unavailable | cpu-flat | 44 | 2026-10-23 |
+| `ortho` | 240×180 | 36 | 25.7 | 0.033 | 0.012 | unavailable | cpu-flat | 43 | 2026-10-23 |
+| `geometry` | 240×180 | 36 | 25.9 | 0.061 | 0.060 | unavailable | tie | 44 | 2026-10-23 |
+| `instances` | 240×180 | 36 | 25.6 | 0.043 | 0.028 | unavailable | cpu-flat | 43 | 2026-10-23 |
+| `raycast` | 240×180 | 36 | 26.7 | 0.063 | 0.041 | unavailable | cpu-flat | 45 | 2026-10-23 |
+| `curves` | 240×180 | 36 | 26.3 | 0.035 | 0.023 | unavailable | cpu-flat | 44 | 2026-10-23 |
+| `keyframes` | 240×180 | 36 | 28.3 | 0.025 | 0.016 | unavailable | cpu-flat | 45 | 2026-10-23 |
+| `skinning` | 240×180 | 36 | 26.2 | 0.037 | 0.013 | unavailable | cpu-flat | 43 | 2026-10-23 |
+| `phong` | 240×180 | 36 | 25.4 | 0.082 | 0.040 | unavailable | cpu-flat | 44 | 2026-10-23 |
+| `fog` | 240×180 | 36 | 25.9 | 0.021 | 0.015 | unavailable | cpu-flat | 43 | 2026-10-23 |
+| `culling` | 240×180 | 36 | 26.1 | 0.025 | 0.027 | unavailable | tie | 43 | 2026-10-23 |
+| `clipping` | 240×180 | 36 | 25.6 | 0.039 | 0.015 | unavailable | cpu-flat | 45 | 2026-10-23 |
+| `gpu_backend` | 240×180 | 36 | 27.6 | 0.061 | 0.027 | unavailable | cpu-flat | 43 | 2026-10-23 |
+| `exposure` | 240×180 | 36 | 26.9 | 0.077 | 0.015 | unavailable | cpu-flat | 46 | 2026-10-23 |
+| `model` | 240×180 | 36 | 27.2 | 0.037 | 0.015 | unavailable | cpu-flat | 44 | 2026-10-23 |
+| `orbit` | 240×180 | 36 | 26.4 | 0.036 | 0.016 | unavailable | cpu-flat | 43 | 2026-10-23 |
+| `clock` | 240×180 | 36 | 27.4 | 0.032 | 0.015 | unavailable | cpu-flat | 43 | 2026-10-23 |
+| `chain` | 240×180 | 36 | 26.3 | 0.038 | 0.015 | unavailable | cpu-flat | 45 | 2026-10-23 |
+| `additive` | 240×180 | 36 | 26.3 | 0.057 | 0.015 | unavailable | cpu-flat | 45 | 2026-10-23 |
+| `normals` | 240×180 | 36 | 26.7 | 0.071 | 0.035 | unavailable | cpu-flat | 45 | 2026-10-23 |
+| `fragments` | 240×180 | 36 | 26.0 | 0.060 | 0.023 | unavailable | cpu-flat | 44 | 2026-10-23 |
+| `edges` | 240×180 | 48 | 2.87 | 0.007 | 0.011 | unavailable | Mojo | 47 | 2026-10-23 |
+| `lines` | 240×180 | 36 | 26.0 | 0.036 | 0.017 | unavailable | cpu-flat | 43 | 2026-10-23 |
+| `sprites` | 240×180 | 36 | 26.0 | 0.043 | 0.024 | unavailable | cpu-flat | 43 | 2026-10-23 |
+| `stereo` | 240×120 | 36 | 29.1 | 0.049 | 0.021 | unavailable | cpu-flat | 34 | 2026-10-23 |
+| `television` | 240×180 | 36 | 27.3 | 0.10 | 0.017 | unavailable | cpu-flat | 49 | 2026-10-23 |
+| `mirror` | 240×180 | 30 | 27.2 | 0.25 | 0.032 | unavailable | cpu-flat | 41 | 2026-10-23 |
+| `split` | 240×180 | 36 | 27.0 | 0.068 | 0.027 | unavailable | cpu-flat | 47 | 2026-10-23 |
+| `physical` | 480×220 | 1 | 25.5 | 0.022 | 0.009 | unavailable | cpu-flat | 39 | 2026-10-23 |
+| `outlines` | 240×180 | 36 | 26.1 | 0.032 | 0.013 | unavailable | cpu-flat | 43 | 2026-10-23 |
+| `shadows` | 240×180 | 36 | 25.3 | 0.13 | 0.021 | unavailable | cpu-flat | 46 | 2026-10-23 |
+| `wide` | 240×180 | 36 | 26.1 | 0.053 | 0.030 | unavailable | cpu-flat | 45 | 2026-10-23 |
+| `bloom` | 240×180 | 36 | 38.1 | 0.23 | 0.048 | unavailable | cpu-flat | 52 | 2026-10-23 |
+| `gizmo` | 240×180 | 36 | 27.1 | 0.057 | 0.021 | unavailable | cpu-flat | 47 | 2026-10-23 |
+| `json_scene` | 240×180 | 36 | 54.7 | 0.034 | 0.014 | unavailable | cpu-flat | 44 | 2026-10-23 |
+| `reloaded` | 240×180 | 36 | 55.6 | 0.10 | 0.051 | unavailable | cpu-flat | 46 | 2026-10-23 |
+| `gem` | 240×180 | 36 | 27.9 | 0.25 | 0.034 | unavailable | cpu-flat | 51 | 2026-10-23 |
+| `distance` | 240×180 | 36 | 25.7 | 0.093 | 0.039 | unavailable | cpu-flat | 47 | 2026-10-23 |
+| `unfogged` | 240×180 | 36 | 26.2 | 0.033 | 0.014 | unavailable | cpu-flat | 44 | 2026-10-23 |
+| `targets` | 240×180 | 36 | 26.5 | 0.12 | 0.035 | unavailable | cpu-flat | 44 | 2026-10-23 |
+| `layers` | 320×180 | 36 | 26.5 | 0.18 | 0.048 | unavailable | cpu-flat | 57 | 2026-10-23 |
+| `graph` | 240×180 | 36 | 27.2 | 0.13 | 0.036 | unavailable | cpu-flat | 45 | 2026-10-23 |
+| `basis` | 320×180 | 36 | 32.6 | 0.062 | 0.012 | unavailable | cpu-flat | 54 | 2026-10-23 |
+| `coats` | 320×180 | 36 | 26.2 | 0.16 | 0.049 | unavailable | cpu-flat | 64 | 2026-10-23 |
+| `skyjson` | 240×180 | 36 | 52.7 | 0.22 | 0.029 | unavailable | cpu-flat | 51 | 2026-10-23 |
+| `daylight` | 240×180 | 36 | 39.6 | 1.50 | 0.100 | unavailable | cpu-flat | 48 | 2026-10-23 |
+| `faces` | 240×180 | 36 | 26.0 | 0.045 | 0.020 | unavailable | cpu-flat | 43 | 2026-10-23 |
+| `utah` | 240×180 | 36 | 28.9 | 0.11 | 0.061 | unavailable | cpu-flat | 49 | 2026-10-23 |
+| `blobs` | 240×180 | 36 | 36.0 | 0.034 | 0.080 | unavailable | Mojo | 43 | 2026-10-23 |
+| `flipbook` | 240×180 | 36 | 28.4 | 0.048 | 0.027 | unavailable | cpu-flat | 45 | 2026-10-23 |
+| `ripples` | 240×180 | 36 | 37.5 | 0.22 | 0.053 | unavailable | cpu-flat | 51 | 2026-10-23 |
+| `baked` | 240×180 | 36 | 30.7 | 0.62 | 0.022 | unavailable | cpu-flat | 46 | 2026-10-23 |
+| `diagram` | 240×180 | 36 | 12.0 | 0.036 | 0.026 | unavailable | cpu-flat | 42 | 2026-10-23 |
+| `bricks` | 240×180 | 36 | 30.7 | 0.046 | 0.017 | unavailable | cpu-flat | 44 | 2026-10-23 |
+| `terrain` | 240×180 | 36 | 26.3 | 0.059 | 0.038 | unavailable | cpu-flat | 45 | 2026-10-23 |
+| `override` | 240×180 | 36 | 26.1 | 0.083 | 0.042 | unavailable | cpu-flat | 47 | 2026-10-23 |
+| `clay` | 240×180 | 36 | 29.6 | 0.057 | 0.041 | unavailable | cpu-flat | 44 | 2026-10-23 |
+| `cells` | 240×180 | 36 | 28.6 | 0.70 | 0.053 | unavailable | cpu-flat | 44 | 2026-10-23 |
+| `cloud` | 240×180 | 36 | 26.1 | 0.061 | 0.003 | unavailable | cpu-flat | 44 | 2026-10-23 |
+| `bounce` | 240×180 | 36 | 27.6 | 7.64 | 0.030 | unavailable | cpu-flat | 49 | 2026-10-23 |
+| `sunlight` | 240×180 | 36 | 27.2 | 0.15 | 0.024 | unavailable | cpu-flat | 46 | 2026-10-23 |
+| `vase` | 240×180 | 36 | 27.1 | 0.045 | 0.032 | unavailable | cpu-flat | 45 | 2026-10-23 |
+| `sapling` | 240×180 | 36 | 27.0 | 0.034 | 0.014 | unavailable | cpu-flat | 45 | 2026-10-23 |
+| `particles` | 240×180 | 36 | 28.6 | 0.041 | 0.023 | unavailable | cpu-flat | 44 | 2026-10-23 |
 
 A legacy date is from an older aggregate file; its per-row measurement date is unknown.
 
@@ -318,45 +320,83 @@ cpu-flat is a flat color fill with a depth test.
 WebGL is the three.js draw used for the language comparison.
 <!-- /BENCH:EXAMPLES:macos -->
 
-## Mojo 1.1 against Mojo 1.0
+## The pinned Mojo against the previous release
 
 The table lists only programs both compilers run.
+The column names give the version of each compiler on that host.
 A refused compile is not a faster compile.
 
 ### Linux
 
-<!-- BENCH:MOJO10:linux -->
-| Program | 1.1 compile (s) | 1.0 compile (s) | Compile winner | 1.1 run (s) | 1.0 run (s) | Run winner |
+<!-- BENCH:PREVIOUS:linux -->
+| Program | 1.2.0 compile (s) | 1.1.0 compile (s) | Compile winner | 1.2.0 run (s) | 1.1.0 run (s) | Run winner |
 |---|---|---|---|---|---|---|
-| `probe` | 3.22 | 3.31 | tie | 0.059 | 0.058 | tie |
-| `triangle` | 5.03 | 13.4 | 1.1 | 0.013 | 0.013 | tie |
-| `spin` | 4.93 | 11.1 | 1.1 | 0.025 | 0.027 | 1.1 |
-| `cube` | 7.15 | 12.0 | 1.1 | 0.057 | 0.061 | tie |
-| `edges` | 6.10 | 19.1 | 1.1 | 0.16 | 0.10 | 1.0 |
-| `diagram` | 12.8 | 16.9 | 1.1 | 0.069 | 0.072 | tie |
+| `probe` | 1.97 | 2.06 | tie | 0.042 | 0.043 | tie |
+| `diagram` | 12.0 | 14.0 | 1.2.0 | 0.081 | 0.078 | tie |
 
-Programs in this table: 6.
-Refused catalog rows: 71.
+Programs in this table: 2.
+Refused catalog rows: 75.
 A refused compile is not a faster compile.
 Those rows stay out of this table.
-<!-- /BENCH:MOJO10:linux -->
+<!-- /BENCH:PREVIOUS:linux -->
 
 ### macOS
 
-<!-- BENCH:MOJO10:macos -->
-| Program | 1.1 compile (s) | 1.0 compile (s) | Compile winner | 1.1 run (s) | 1.0 run (s) | Run winner |
+<!-- BENCH:PREVIOUS:macos -->
+| Program | 1.1.0 compile (s) | 1.0.0 compile (s) | Compile winner | 1.1.0 run (s) | 1.0.0 run (s) | Run winner |
 |---|---|---|---|---|---|---|
-| `probe` | 0.34 | 3.19 | 1.1 | 0.025 | 0.029 | 1.1 |
-| `triangle` | 1.39 | 6.53 | 1.1 | 0.012 | 0.011 | tie |
-| `spin` | 1.37 | 6.65 | 1.1 | 0.014 | 0.018 | 1.1 |
-| `cube` | 2.33 | 7.65 | 1.1 | 0.026 | 0.034 | 1.1 |
-| `edges` | 1.30 | 6.25 | 1.1 | 0.030 | 0.042 | 1.1 |
+| `probe` | 0.34 | 3.19 | 1.1.0 | 0.025 | 0.029 | 1.1.0 |
+| `triangle` | 1.39 | 6.53 | 1.1.0 | 0.012 | 0.011 | tie |
+| `spin` | 1.37 | 6.65 | 1.1.0 | 0.014 | 0.018 | 1.1.0 |
+| `cube` | 2.33 | 7.65 | 1.1.0 | 0.026 | 0.034 | 1.1.0 |
+| `edges` | 1.30 | 6.25 | 1.1.0 | 0.030 | 0.042 | 1.1.0 |
 
 Programs in this table: 5.
 Refused catalog rows: 57.
 A refused compile is not a faster compile.
 Those rows stay out of this table.
-<!-- /BENCH:MOJO10:macos -->
+<!-- /BENCH:PREVIOUS:macos -->
+
+## Mojo 1.1.0 against Mojo 1.2.0 on the whole catalog
+
+Mojo 1.2.0 compiles the catalog 10% faster than Mojo 1.1.0.
+It draws at the same speed.
+
+The previous-release table above lists only 2 programs, because Mojo 1.1.0 refuses the 1.2 source.
+So a second run measures the whole catalog.
+That run builds the source of commit `9b910ded`, which is the source before the port to 1.2, with Mojo 1.1.0.
+The 1.2.0 numbers come from `make bench-examples` on the port.
+To repeat the 1.1.0 run, check out `9b910ded`, link a Mojo 1.1.0 environment as `.venv`, and run `sh tools/tool.sh .venv/bin/mojo bench_examples --skip-mojo10 --no-write-wiki`.
+Both runs used the Linux host above, one after the other, and no test or build ran beside them.
+
+| Measure, 76 examples | Mojo 1.1.0 | Mojo 1.2.0 |
+|---|---|---|
+| Median compile | 29.3 s | 26.4 s |
+| Total compile | 2288 s | 2050 s |
+| Total draw | 15.67 s | 15.73 s |
+| Median whole process | 0.095 s | 0.096 s |
+| Median ThreeMojo resident set | 45.0 MiB | 44.6 MiB |
+| Median compiler resident set | 826 MiB | 791 MiB |
+
+The next table counts examples. A gap under 10% is a tie.
+
+| Measure | 1.2.0 faster | Tie | 1.1.0 faster |
+|---|---|---|---|
+| Compile | 35 | 41 | 0 |
+| Draw | 11 | 63 | 2 |
+| Whole process | 3 | 66 | 7 |
+
+The two draws that are slower on 1.2.0 are `uv` (0.0065 s to 0.0080 s) and `gpu_backend` (0.053 s to 0.061 s).
+The gaps are 1.5 ms and 7 ms, so they can be noise.
+The largest draw gain is `sapling` (0.045 s to 0.034 s).
+The largest compile gains are `first_scene`, `faces`, `lamps`, `bricks`, `ripples` and `utah`, each 16% to 21% faster.
+A compile runs once, and a draw is the fastest of three runs.
+The seven slower whole-process times are gaps of 12 ms or less.
+
+The source differs between the two columns, so this is a toolchain and port comparison, not a compiler-only one.
+The port touches 56 library, example and benchmark files, with 113 lines added and 97 removed.
+The changes include `__async def`, `std.hash` and the `Float64(String)` parse.
+Mojo 1.2.0 also moves a few `std.math` results in the last bits, and the anatomy reports record the changed floats.
 
 ## PMREM and the coverage run
 
@@ -396,7 +436,7 @@ Every other CPU bench is named here.
 |---|---|---|
 | `bench/raster_bench.mojo` | This page | CPU and GPU raster time by image size |
 | `bench/scene_bench.mojo` | This page | CPU renderer stages, one worker and every core |
-| `bench/probe.mojo` | Mojo 1.1 table | A triangle fill with no ThreeMojo import |
+| `bench/probe.mojo` | Previous-release table | A triangle fill with no ThreeMojo import |
 | `bench/mojo10/probe.mojo` | Mojo 1.0 table | The same fill, built by Mojo 1.0 |
 | `bench/noop.mojo` | Host baselines | A program that does nothing |
 | `bench/animation_loop_bench.mojo` | [Animation](Animation) | Actions and the mixer |

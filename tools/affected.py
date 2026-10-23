@@ -11,9 +11,9 @@
 With FILE..., prints the FILEs that the change can affect, in their order:
 
 - A `.mojo` file is affected when it changed, or when it imports an affected
-  file, directly or through other files. Imports resolve as Mojo 1.1 resolves
-  them: a module beside the compiled entry point first, then the repo root
-  (`-I .`). An imported module does not search its own directory. A module
+  file, directly or through other files. Imports resolve as Mojo 1.1 and 1.2
+  resolve them: a module beside the compiled entry point first, then the repo
+  root (`-I .`). An imported module does not search its own directory. A module
   can be compiled from any entry point, so each import keeps every file it
   can reach from a directory that holds a file defining `main`.
 - A file under `assets/` affects each `.mojo` file whose source quotes a path
