@@ -131,6 +131,8 @@ mkdir -p out
 | `hairstyles.mojo` | `hairstyles.png` | [Head](Head) |
 | `game_humanoid.mojo` | `game_humanoid.png` | [Game humanoid](Game-humanoid) |
 | `water.mojo` | `water.png` | [Water](Water) |
+| `meadow.mojo` | `meadow.png` | [Vegetation](Vegetation) |
+| `meadow_wind.mojo` | `meadow-wind.png` | [Why grass is drawn in clusters](Why-grass-is-drawn-in-clusters) |
 | `animals.mojo` | `animals.png` | [Animals](Animals) |
 | `walk.mojo` | `walk.png` | [Animals](Animals) |
 | `animal_anatomy.mojo` | `animal_anatomy.png` | [Animal anatomy](Animal-anatomy) |

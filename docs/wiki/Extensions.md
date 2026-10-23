@@ -6,6 +6,8 @@ The first subject is the humanoid. The leg bones are the femur, tibia, fibula an
 
 The water subject ports Clearwater. See [Water](Water).
 
+The vegetation subject grows a summer meadow: grass in clusters with levels of detail, wind, poppies, leafy trees, boulders and a painted sky. See [Vegetation](Vegetation) and [Why grass is drawn in clusters](Why-grass-is-drawn-in-clusters).
+
 The animals subject ports procedural-animals: 24 species sculpted as distance fields, posed and painted. See [Animals](Animals). Its distance field sculpting and meshing live in `extensions/sdf/`, so other subjects can use them. Its anatomy, mass and muscles build on `extensions/anatomy/`, which the humanoid shares. See [Animal anatomy](Animal-anatomy).
 
 The building subject generates buildings for engineering analysis and for games from one canonical model. It has shared numerics, a cell complex, the building model, IFC exchange and procedural towers and interiors. Frame, shell and energy analysis read the same model. See [Why buildings have one canonical model](Why-buildings-have-one-canonical-model).
@@ -107,6 +109,18 @@ extensions/
     frame.mojo     one shaded picture
     pebbles.mojo   the pebble photograph
     filter.mojo    mipmaps and anisotropy
+  vegetation/
+    kinds.mojo     plant kinds and cluster fates
+    checks.mojo    shared range checks
+    noise.mojo     a lattice hash and value noise
+    wind.mojo      traveling gusts and a flutter
+    blade.mojo     one blade, and a buffer of many
+    ground.mojo    hills, grass masks, ground and mountains
+    field.mojo     clusters, levels of detail, the blade stream
+    crown.mojo     leafy trees and bushes
+    rock.mojo      boulders
+    sky.mojo       Preetham's sky with clouds, in a cube
+    meadow.mojo    the whole scene, frame by frame
   carla/
     transform.mojo, math.mojo, geo.mojo, ...   frames and geometry
     opendrive.mojo, map.mojo, mesh_factory.mojo  OpenDRIVE maps
