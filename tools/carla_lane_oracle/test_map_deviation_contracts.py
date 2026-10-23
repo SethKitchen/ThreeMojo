@@ -267,7 +267,8 @@ class DeviationCurrentIntegrationControls(DeviationIntegrationControls):
 
     def setUp(self):
         self.root = fixtures.copy_current_root(self, ROOT)
-        self.current = (self.root/deviation.MODULE).read_bytes()
+        self.physical = (self.root/deviation.MODULE).read_bytes()
+        self.current = fixtures.typed_current_bytes(deviation.MODULE, self.physical)
         self.historical = cleanup.typed_boundary.historical_source(
             deviation.MODULE, self.current.decode())
         self.before = deviation.predecessor_source(self.historical).encode()
@@ -280,7 +281,7 @@ class DeviationCurrentIntegrationControls(DeviationIntegrationControls):
         self.assertEqual(len(current['edges']), 7)
         self.assertEqual(current['edges'][-2:], [station.edge(), deviation.edge()])
         bound = cleanup.proof_bindings(self.root)
-        self.assertEqual(bound[deviation.MODULE], cleanup.sha(self.current))
+        self.assertEqual(bound[deviation.MODULE], cleanup.sha(self.physical))
         for name in (*deviation.TESTS, *station.TESTS, LEAF, STATION_LEAF):
             self.assertEqual(bound[name], cleanup.sha((self.root/name).read_bytes()))
         record = cleanup.read_record(self.root)
@@ -288,7 +289,7 @@ class DeviationCurrentIntegrationControls(DeviationIntegrationControls):
             self.assertEqual(record[group][deviation.MODULE], station.BEFORE_SHA256)
         with self.map_state(self.before):
             with self.assertRaises(ValueError): cleanup.verify(self.root)
-        self.assertEqual((self.root/deviation.MODULE).read_bytes(), self.current)
+        self.assertEqual((self.root/deviation.MODULE).read_bytes(), self.physical)
 
     def test_loop_proofs_map_every_row_and_bind_the_new_leaf(self):
         import difflib
@@ -312,7 +313,7 @@ class DeviationCurrentIntegrationControls(DeviationIntegrationControls):
         for line, proof in proofs.items():
             self.assertTrue(new[line - 1].lstrip().startswith('for '))
             self.assertEqual(proof['required'], 'T')
-            self.assertEqual(proof['dependency_sha256'][deviation.MODULE], cleanup.sha(self.current))
+            self.assertEqual(proof['dependency_sha256'][deviation.MODULE], cleanup.sha(self.physical))
             for name in (*deviation.TESTS, LEAF, STATION_LEAF):
                 self.assertEqual(proof['dependency_sha256'][name],
                                  cleanup.sha((self.root/name).read_bytes()))

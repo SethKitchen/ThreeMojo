@@ -1877,7 +1877,10 @@ def guarded_loop_proof(root, rule, *, include_roots=(), _operation=None):
             _operation=_operation)
         if sha256(current.encode('utf-8')) != actual_bindings[module_path]:
             return None
-        typed_current = typed.is_current(module_path, _typed_endpoint(module_path, current))
+        typed_current = typed.is_current(module_path, current)
+        if not typed_current:
+            typed_current = typed.is_current(
+                module_path, _typed_endpoint(module_path, current))
         if typed_current:
             line = _typed_loop_row(module, line, expression, current)
             if line is None:

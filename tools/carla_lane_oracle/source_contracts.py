@@ -49,6 +49,11 @@ GROUP_PATHS = {
         'spiral_domain_proof', 'spiral_moment_table', 'spiral_moment_proof',
         'spiral_roundoff_proof')),
 }
+# Immutable records pin these sources by their digests from before the PR780
+# successor edit. Their historical view is the exact predecessor.
+HISTORICAL_SUCCESSOR_PATHS = frozenset((
+    PREFIX + 'assets.mojo', PREFIX + 'model_cache.mojo', PREFIX + 'sensor.mojo',
+    PREFIX + 'speed_limits.mojo', 'tests/test_carla_speed_parser_exceptions.mojo'))
 QUALIFIER_FILES = ('curve_bounds.mojo', 'curve_trig.mojo',
                    'curve_interval.mojo', 'lane_value_bounds.mojo')
 QUALIFIERS = {'var', 'mut', 'out', 'ref', 'comptime', 'raises'}
@@ -348,7 +353,8 @@ def historical_text(root, path, text, *, _operation=None, _inputs=None, _input_o
             from . import pr760_arithmetic_stage as pr760
         else:
             import pr760_arithmetic_stage as pr760
-        if relative not in pr760.CARLA_REGISTRY_PATHS:
+        if (relative not in pr760.CARLA_REGISTRY_PATHS
+                and relative not in HISTORICAL_SUCCESSOR_PATHS):
             return text
     if __package__:
         from . import full_audit_cleanup_contracts as audit
@@ -372,7 +378,8 @@ def historical_bytes(root, path, raw, *, _operation=None, _inputs=None, _input_o
             from . import pr760_arithmetic_stage as pr760
         else:
             import pr760_arithmetic_stage as pr760
-        if relative not in pr760.CARLA_REGISTRY_PATHS:
+        if (relative not in pr760.CARLA_REGISTRY_PATHS
+                and relative not in HISTORICAL_SUCCESSOR_PATHS):
             return raw
     require(type(raw) is bytes, 'historical input is not physical bytes')
     return historical_text(root, relative, raw.decode('utf-8'), _operation=_operation,

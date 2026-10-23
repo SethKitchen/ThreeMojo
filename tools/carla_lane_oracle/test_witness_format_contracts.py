@@ -107,7 +107,10 @@ class WitnessFormatPhysicalControls(unittest.TestCase):
             if path in cleanup.typed_boundary.EDGES:
                 edge = cleanup.typed_boundary.edge(path)
                 self.assertEqual(edge['before_sha256'], witness.AFTER_SHA256[path])
-                self.assertEqual(bindings[path], edge['after_sha256'])
+                physical = (self.root/path).read_bytes()
+                self.assertEqual(bindings[path], cleanup.sha(physical))
+                self.assertEqual(cleanup.sha(fixtures.typed_current_bytes(path, physical)),
+                                 edge['after_sha256'])
             else:
                 self.assertEqual(bindings[path], witness.AFTER_SHA256[path])
         for path in self.paths:

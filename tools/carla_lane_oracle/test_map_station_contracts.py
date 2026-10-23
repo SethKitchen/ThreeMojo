@@ -273,7 +273,8 @@ class StationCurrentIntegrationControls(StationIntegrationControls):
 
     def setUp(self):
         self.root = fixtures.copy_current_root(self, ROOT)
-        self.current = (self.root/station.MODULE).read_bytes()
+        self.physical = (self.root/station.MODULE).read_bytes()
+        self.current = fixtures.typed_current_bytes(station.MODULE, self.physical)
         historical = cleanup.typed_boundary.historical_source(
             station.MODULE, self.current.decode())
         self.before = station.predecessor_source(
@@ -287,13 +288,13 @@ class StationCurrentIntegrationControls(StationIntegrationControls):
         self.assertEqual(edge['after_sha256'], cleanup.sha(self.current))
         record = cleanup.read_record(self.root)
         bound = cleanup.proof_bindings(self.root)
-        self.assertEqual(bound[station.MODULE], cleanup.sha(self.current))
+        self.assertEqual(bound[station.MODULE], cleanup.sha(self.physical))
         for name in (*station.TESTS, LEAF):
             self.assertEqual(bound[name], cleanup.sha((self.root/name).read_bytes()))
         for group in ('unchanged_inputs', 'native_dependency_inputs'):
             self.assertEqual(record[group][station.MODULE], station.BEFORE_SHA256)
         self.assertEqual(seed.verify(self.root)['edges'][-2], station.edge())
-        self.assertEqual((self.root/station.MODULE).read_bytes(), self.current)
+        self.assertEqual((self.root/station.MODULE).read_bytes(), self.physical)
         with self.map_state(self.before):
             with self.assertRaises(ValueError): cleanup.verify(self.root)
 

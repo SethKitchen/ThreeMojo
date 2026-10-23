@@ -108,6 +108,18 @@ def copy_shared_helper_inputs(root, source):
     return copied
 
 
+def typed_current_bytes(name, raw):
+    """Return the typed-current endpoint of one physical source.
+
+    A source that the PR780 successor edits is physically at the successor
+    endpoint. The typed boundary tests reason about its exact predecessor.
+    """
+    successor = cleanup.pr780_successor
+    if name in successor.EDGES and cleanup.sha(raw) == successor.EDGES[name]['after_sha256']:
+        return successor.predecessor_bytes(name, raw)
+    return raw
+
+
 def copy_current_root(case, source, *, destination=None):
     """Copy the complete Mojo census and verifier inputs into a real root."""
     source = Path(source)

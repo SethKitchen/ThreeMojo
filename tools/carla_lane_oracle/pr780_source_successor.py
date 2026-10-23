@@ -1621,6 +1621,28 @@ EDGES = json.loads(r'''
       }
     ]
   },
+  "extensions/carla/speed_limits.mojo": {
+    "before_sha256": "1e95ebc085e03a44e4daaef20a94b724dedc4240a2099227e82be54d32b045f6",
+    "after_sha256": "2d9d5401b3dabf53c1c19f0a8098009275e19edb978f5ae369596fe7ac6557a0",
+    "before_token_sha256": "5ba74b5993221135eba428267daafe27011934dbe8fecf9928edd41670572026",
+    "after_token_sha256": "62d358aaefa3590d00cd56121ff2d132a87cbfb05ce8786d22bad6bc9eea850a",
+    "edits": [
+      {
+        "start": 145,
+        "stop": 146,
+        "before": [
+          "    var value: Float64\n",
+          "    try:\n",
+          "        value = Float64(number)\n",
+          "    except:\n",
+          "        raise Error(\"OpenDRIVE speed needs a numeric max value\")\n"
+        ],
+        "after": [
+          "    var value = Float64(number)\n"
+        ]
+      }
+    ]
+  },
   "extensions/carla/town.mojo": {
     "before_sha256": "f1917d2fdbe678e0f6623d0bd44f80f54b4e0a9f9c4bb9c486c312ae6cf50ee5",
     "after_sha256": "dbf66b4953eda09d150e9cec8d7b74b489c5f6bdd38b77049eaddfcda49d3eb8",
@@ -1782,6 +1804,85 @@ EDGES = json.loads(r'''
         ],
         "after": [
           "__async def _decode_worker[\n"
+        ]
+      }
+    ]
+  },
+  "loaders/js_number.mojo": {
+    "before_sha256": "9d7d0dc7f0a7c526881e469ed2b7e918fbcfb8b27258641631515b6893c5905e",
+    "after_sha256": "a7f8cd0bdaf91756b5583de24cf27e7d8ee86c7cc91cb68ab2da2dec3bd9b19d",
+    "before_token_sha256": "1319e8b960d6c0967c7a90b5a8d56ad36a21f789b899ba1743d8690667e0b204",
+    "after_token_sha256": "27d8ca31d4fadc1fe9a25cb151c1c57008298bc2c173bcb895ae3a674973d83d",
+    "edits": [
+      {
+        "start": 16,
+        "stop": 17,
+        "before": [
+          "JavaScript also skips the Unicode spaces. A number with more digits than\n",
+          "Mojo's parser reads gives NaN; JavaScript rounds it. A `0x`, `0o` or `0b`\n"
+        ],
+        "after": [
+          "JavaScript also skips the Unicode spaces. A `0x`, `0o` or `0b`\n"
+        ]
+      },
+      {
+        "start": 18,
+        "stop": 20,
+        "before": [
+          "differently.\n"
+        ],
+        "after": [
+          "differently. Mojo 1.2 reads any number of decimal digits and rounds to\n",
+          "the nearest `Float64`, as JavaScript does.\n"
+        ]
+      },
+      {
+        "start": 50,
+        "stop": 66,
+        "before": [],
+        "after": [
+          "\n",
+          "\n",
+          "def _decimal(text: String) -> Float64:\n",
+          "    \"\"\"Return the number that a decimal text writes.\n",
+          "\n",
+          "    Args:\n",
+          "        text: A sign, digits, a point and an exponent. Every caller\n",
+          "            checks the shape first.\n",
+          "\n",
+          "    Returns:\n",
+          "        The nearest `Float64`, or NaN when Mojo cannot read the text.\n",
+          "    \"\"\"\n",
+          "    try:\n",
+          "        return Float64(text)\n",
+          "    except:\n",
+          "        return nan[DType.float64]()\n"
+        ]
+      },
+      {
+        "start": 117,
+        "stop": 118,
+        "before": [
+          "    try:\n",
+          "        return Float64(String(text[byte=start:end]))\n",
+          "    except:\n",
+          "        return nan[DType.float64]()\n"
+        ],
+        "after": [
+          "    return _decimal(String(text[byte=start:end]))\n"
+        ]
+      },
+      {
+        "start": 143,
+        "stop": 144,
+        "before": [
+          "    try:\n",
+          "        return Float64(String(text[byte=start:i]))\n",
+          "    except:\n",
+          "        return nan[DType.float64]()\n"
+        ],
+        "after": [
+          "    return _decimal(String(text[byte=start:i]))\n"
         ]
       }
     ]
@@ -2389,6 +2490,64 @@ EDGES = json.loads(r'''
         ],
         "after": [
           "    road.info.geometries.append(RoadInfoGeometry._from_si(0.0, geometry))\n"
+        ]
+      }
+    ]
+  },
+  "tests/test_carla_speed_parser_exceptions.mojo": {
+    "before_sha256": "46ef2fd18fde1f532f06b0027b317f96a3e5f3f2260ddcb7b266f1fe9d58731b",
+    "after_sha256": "c6b4a9415cfec9b5929428d0fe9a5c95db56ede90d1802d4f033a78543a4d4d8",
+    "before_token_sha256": "e5005d4bd15a6074ea9d73bca08039ecf1a94567903a06b7141512e180a71132",
+    "after_token_sha256": "8a85b9da2912d774305237d6cd30fb053e4842cb5a1127ff00a96f1ee753ef9d",
+    "edits": [
+      {
+        "start": 3,
+        "stop": 4,
+        "before": [
+          "\"\"\"Fresh source control for the maintained SDK's real converter exception.\n"
+        ],
+        "after": [
+          "\"\"\"Fresh source control for the speed number converter.\n"
+        ]
+      },
+      {
+        "start": 5,
+        "stop": 8,
+        "before": [
+          "The decimal grammar admits the long token. The installed Float64 converter\n",
+          "must independently raise, and read_speed_number must translate that actual\n",
+          "exception. No injected parser or synthetic coverage trace is used.\n"
+        ],
+        "after": [
+          "The decimal grammar admits a token of any length. The installed Float64\n",
+          "converter reads that token and rounds it. It has no failure for a text that\n",
+          "the grammar admits, so `read_speed_number` has no parse-failure line.\n"
+        ]
+      },
+      {
+        "start": 17,
+        "stop": 18,
+        "before": [
+          "def test_valid_decimal_converter_exception_is_translated() raises:\n"
+        ],
+        "after": [
+          "def test_a_long_decimal_is_read_and_rounded() raises:\n"
+        ]
+      },
+      {
+        "start": 21,
+        "stop": 23,
+        "before": [
+          "    # Assert the underlying cause separately, so lexical/range rejection\n",
+          "    # cannot masquerade as execution of the converter exception handler.\n",
+          "    with assert_raises(contains=\"too long\"):\n",
+          "        _ = Float64(number)\n",
+          "    with assert_raises(contains=\"OpenDRIVE speed needs a numeric max value\"):\n",
+          "        _ = read_speed_number(number)\n"
+        ],
+        "after": [
+          "    assert_equal(Float64(number), Float64(1.2345678901234568e29))\n",
+          "    assert_equal(read_speed_number(number), Float64(1.2345678901234568e29))\n"
         ]
       }
     ]
@@ -3006,6 +3165,69 @@ EDGES = json.loads(r'''
         ]
       }
     ]
+  },
+  "tools/carla_lane_oracle/source_contracts.py": {
+    "before_sha256": "ebb6e75b90528b5456485433d470de36e6b33e4df98139dd0acadda75a57adf5",
+    "after_sha256": "6a1f6f3efed801d586976fb3f7acff672d61409fbc61c957b8bf7cd808d3fda8",
+    "before_token_sha256": "b22fc35f7dfa59a57136e32d554c6ae85d2790aef00f672adee10883c1067c7e",
+    "after_token_sha256": "943ff2bc5565dbac6d57905f78cf8b8909cbf33f7d85fdfc3580d9c79af6714f",
+    "edits": [
+      {
+        "start": 51,
+        "stop": 56,
+        "before": [],
+        "after": [
+          "# Immutable records pin these sources by their digests from before the PR780\n",
+          "# successor edit. Their historical view is the exact predecessor.\n",
+          "HISTORICAL_SUCCESSOR_PATHS = frozenset((\n",
+          "    PREFIX + 'assets.mojo', PREFIX + 'model_cache.mojo', PREFIX + 'sensor.mojo',\n",
+          "    PREFIX + 'speed_limits.mojo', 'tests/test_carla_speed_parser_exceptions.mojo'))\n"
+        ]
+      },
+      {
+        "start": 355,
+        "stop": 357,
+        "before": [
+          "        if relative not in pr760.CARLA_REGISTRY_PATHS:\n"
+        ],
+        "after": [
+          "        if (relative not in pr760.CARLA_REGISTRY_PATHS\n",
+          "                and relative not in HISTORICAL_SUCCESSOR_PATHS):\n"
+        ]
+      },
+      {
+        "start": 380,
+        "stop": 382,
+        "before": [
+          "        if relative not in pr760.CARLA_REGISTRY_PATHS:\n"
+        ],
+        "after": [
+          "        if (relative not in pr760.CARLA_REGISTRY_PATHS\n",
+          "                and relative not in HISTORICAL_SUCCESSOR_PATHS):\n"
+        ]
+      }
+    ]
+  },
+  "tools/carla_lane_oracle/test_witness_format_contracts.py": {
+    "before_sha256": "82f7e13e72b4f99ccad63d5dfe55fc0a73c898120b43ed8416b0731489ea6f84",
+    "after_sha256": "ac1dcd518c3a6681ca0e161081b9bb26ccdf2a3e4217266d5a5ecd1c52f3e203",
+    "before_token_sha256": "919de972f5e315164ceb6eb6b81a139c388e3749edc5103cfe7f2c9f1206a327",
+    "after_token_sha256": "1a71f2a5b784e89be03f1e4a9ae7ee63fe0e5652f71c1c6482c369a67d6b9174",
+    "edits": [
+      {
+        "start": 109,
+        "stop": 113,
+        "before": [
+          "                self.assertEqual(bindings[path], edge['after_sha256'])\n"
+        ],
+        "after": [
+          "                physical = (self.root/path).read_bytes()\n",
+          "                self.assertEqual(bindings[path], cleanup.sha(physical))\n",
+          "                self.assertEqual(cleanup.sha(fixtures.typed_current_bytes(path, physical)),\n",
+          "                                 edge['after_sha256'])\n"
+        ]
+      }
+    ]
   }
 }
 ''')
@@ -3013,7 +3235,7 @@ BOUND_INPUTS = {'tests/test_anatomy_muscle.mojo': '3653d6056c1f9f639537eedb7cd80
  'tests/test_animation_strings.mojo': 'f5103e3660a63d3d5d9d348a0d928fa106e5cef03059d432a31335bb7dd14184',
  'tests/test_loader_bounds.mojo': '6e0c1487f1ff21f4654c2790e4460c0adf934bf6b9273e826782eec1bfed2d83',
  'tools/carla_lane_oracle/test_pr780_source_successor.py': 'b88cdc20f3a6dfb0b38c6e85ccbe9b5c80d8ba5700ee2d8cf1a982e8e43ceeb0'}
-DATA_SHA256 = '384d488defdd9a30550c88aaf2545d7236943fd9bf614b0e468f67e34dea3aa2'
+DATA_SHA256 = '43ea6d9a20e86e67ce9126b72f22bc208f7c7fbfdb6554e26a81ad2ca218e9ab'
 # END FIXED PR780 SUCCESSOR DATA
 
 
@@ -3029,7 +3251,7 @@ def sha(raw):
 def _data_snapshot():
     """Authenticate and detach the full finite inverse data before consuming it."""
     require(type(DATA_SHA256) is str, 'authority digest selector is not a builtin string')
-    require(DATA_SHA256 == '384d488defdd9a30550c88aaf2545d7236943fd9bf614b0e468f67e34dea3aa2', 'authority digest selector changed')
+    require(DATA_SHA256 == '43ea6d9a20e86e67ce9126b72f22bc208f7c7fbfdb6554e26a81ad2ca218e9ab', 'authority digest selector changed')
     encoded = json.dumps({'edges': EDGES, 'bound_inputs': BOUND_INPUTS},
                          sort_keys=True, separators=(',', ':'))
     require(sha(encoded) == DATA_SHA256, 'fixed source inverse data changed')

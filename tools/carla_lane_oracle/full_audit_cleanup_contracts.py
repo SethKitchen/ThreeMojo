@@ -158,7 +158,7 @@ PR760_OWNER_PREDECESSOR_SHA256 = '6138ba2dcac394c716ea9ed32e74e0c6d15857d5c605fc
 DEPENDENCY_TOOL_SHA256 = {'tools/carla_lane_oracle/winner_sign_contracts.py': 'f850902634073364fe2407b00d12e9fdfb2ecfc6cf2a03414269fbb7984a8a7f',
  'tools/carla_lane_oracle/border_parser_contracts.py': '734d7b24aaf4e9f537cd7f0d7c7b8094d9c29106770b66c4a7a24cab74604dd4',
  'tools/carla_lane_oracle/pr760_arithmetic_stage.py': PR760_STAGE_SHA256,
- 'tools/carla_lane_oracle/pr780_source_successor.py': 'ec739a06d2937b4ccf78a855e12823b589a201dafdd8e7dd32c01544c7685975',
+ 'tools/carla_lane_oracle/pr780_source_successor.py': 'c7b88fd9e8ce36f7e2e3bece313cf367f409af271eb40da48d00b119ad2399b4',
  'tools/carla_lane_oracle/scaled_float32_contracts.py': 'e3a59a9f8d5a9394007c03fab6ac696e04998812dad5843a22e721bfbe57c2a1',
  'tools/affected.py': 'dcf533b9cd995902f53578aa93b98a32ca732643ccfa6ab7e30f95fd8b321eb3',
  'tools/cache_key.py': 'ec06247feb8fe079c30b6da19fc655ffec363f1ce8e3372d063bf728e8c804c4',
@@ -168,7 +168,7 @@ DEPENDENCY_TOOL_SHA256 = {'tools/carla_lane_oracle/winner_sign_contracts.py': 'f
  'tools/carla_lane_oracle/map_station_contracts.py': 'caca22f46767ced3037d839a7941cb73a8ccf816238ad2037e28715f060055b7',
  'tools/carla_lane_oracle/runtime_view_contracts.py': '67316129402fac643be3c6e49ceef94bcb25c1ef92f81fd764a6abb583f89e34',
  'tools/carla_lane_oracle/shared_helper_contracts.py': '70b070d0bd5117b146a71470a46cb7a02c7fc31dfac1a5236eed50faf75b468e',
- 'tools/carla_lane_oracle/source_contracts.py': 'ebb6e75b90528b5456485433d470de36e6b33e4df98139dd0acadda75a57adf5',
+ 'tools/carla_lane_oracle/source_contracts.py': '6a1f6f3efed801d586976fb3f7acff672d61409fbc61c957b8bf7cd808d3fda8',
  'tools/carla_lane_oracle/sum2_guard_contracts.py': '8c1d646c1dd70e1e7c9453077b63060ca506f76d2493137af0dd0a9a68012570',
  'tools/carla_lane_oracle/lane_order_contracts.py': '314b1fae1f274c7223ab5dec50ad4cb97760c31926844ca92e1e6aa8560b4889',
  'tools/carla_lane_oracle/typed_boundary_contracts.py': '59cc73b325af897981a2d7299cf2d4ed3c61d3ea64d5f958f2b85aef51666362',
@@ -3650,12 +3650,13 @@ def reviewed_typed_text(root, path, text, *, _operation=None, _inputs=None, _inp
                 require(explicit_operation is None or explicit_operation is _operation,
                         'typed source operation differs from borrowed owner')
         require((_inputs is None) == (_input_owner is None), 'incomplete typed input owner')
-        extended = (extension is not None and
+        extended = (extension is not None and sha(text) != extension['before_sha256'] and
             source.token_sha256(text) == extension['after_token_sha256'])
         new_endpoint = path in pr760_stage.CARLA_REGISTRY_PATHS and (extended or
             source.token_sha256(text) == edge['after_token_sha256'])
         if not (extended or new_endpoint or typed_boundary.is_current(path, text) or
-                source.token_sha256(text) == edge['after_token_sha256']):
+                (edge is not extension and
+                 source.token_sha256(text) == edge['after_token_sha256'])):
             return text
         _operation_check(_operation, root)
         raw = _observe_bytes(root, path, _regular(root, path).read_bytes(), _operation=_operation)
@@ -3861,6 +3862,10 @@ def verify(root, *, exact=False, include_roots=(), _expected_lane_raw=None, _cap
                     historical = pr760['predecessors'][path].encode('utf-8')
                 if path in typed_boundary.EDGES and typed_bindings:
                     historical = _historical_typed_text(path, historical.decode('utf-8')).encode('utf-8')
+                else:
+                    extension = pr780_successor._data_snapshot()['edges'].get(path)
+                    if extension is not None and sha(historical) == extension['after_sha256']:
+                        historical = pr780_successor.predecessor_bytes(path, historical)
                 if historical != raw and expected == sha(raw):
                     expected = sha(historical)
                 require(sha(historical) == expected, 'unchanged premise, record or fixture changed: ' + path)
@@ -4264,7 +4269,7 @@ PR760_IMPLEMENTATION_PREDECESSORS = {'tools/carla_lane_oracle/pr760-border_parse
  'tools/carla_lane_oracle/pr760-winner_sign-predecessor.txt': '2ed96052d6568fee1bb7700515b7ad03bd38edafc7ca413fc1c03bb9ad5f6aad'}
 PR760_IMPLEMENTATION_SUCCESSORS = {'tools/carla_lane_oracle/border_parser_contracts.py': '734d7b24aaf4e9f537cd7f0d7c7b8094d9c29106770b66c4a7a24cab74604dd4',
  'tools/carla_lane_oracle/seed_count_contracts.py': 'daa8f391a18e54a3fae958150673c134897db52ce5de87291f613f84df7c6d90',
- 'tools/carla_lane_oracle/source_contracts.py': 'ebb6e75b90528b5456485433d470de36e6b33e4df98139dd0acadda75a57adf5',
+ 'tools/carla_lane_oracle/source_contracts.py': '6a1f6f3efed801d586976fb3f7acff672d61409fbc61c957b8bf7cd808d3fda8',
  'tools/carla_lane_oracle/winner_sign_contracts.py': 'f850902634073364fe2407b00d12e9fdfb2ecfc6cf2a03414269fbb7984a8a7f'}
 
 

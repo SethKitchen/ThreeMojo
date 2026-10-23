@@ -15,6 +15,38 @@ from carla_lane_oracle import pr780_source_successor as successor
 ROOT = Path(__file__).resolve().parents[1]
 DENSITY = loops.DENSITY_SOURCE.removesuffix('.mojo')
 ROWS = {131, 167, 178, 245}
+# The Mojo 1.2 port edits three imported helpers that the PR760 image does not
+# pin. Each row maps a helper to its port digest and its exact inverse edits,
+# as (start, stop, before, after) in the coordinates of the port source.
+PORT_INVERSE = {
+    'extensions/humanoid/skeleton/head/assembly.mojo': (
+        '813a09e4b30a5a9682e606cdabb2e22188866f4153318a18f9df62f091c0435e',
+        ((362, 363, ('    scene.add_mesh(mesh^)\n',), ('    scene.add_mesh(mesh)\n',)),)),
+    'extensions/humanoid/skeleton/look.mojo': (
+        '662665a1ea3c291b45030fcf90d732b2a7900f0c1a591e4d94d854201e8caa48',
+        ((725, 726, ('    var skin = assets.materials.add(look^)\n',),
+          ('    var skin = assets.materials.add(look)\n',)),
+         (757, 758, ('    return assets.materials.add(material^)\n',),
+          ('    return assets.materials.add(material)\n',)))),
+    'extensions/humanoid/skeleton/surface_nets.mojo': (
+        '98b354cea54d1d1dc33ee23f02b0e89f80466ddb2fc06a6415ea224a3a93aeee',
+        ((319, 320, ('async def _sample_task[\n',), ('__async def _sample_task[\n',)),
+         (344, 345, ('async def _vertex_task[\n',), ('__async def _vertex_task[\n',)))),
+}
+
+
+def historical_bytes(name, raw):
+    """Return the PR760 bytes of a cohort helper from its current bytes."""
+    if name not in PORT_INVERSE:
+        return successor.predecessor_bytes(name, raw)
+    digest, edits = PORT_INVERSE[name]
+    if loops.sha256(raw) != digest:
+        return raw
+    lines = raw.decode().splitlines(keepends=True)
+    for start, stop, before, after in reversed(edits):
+        assert tuple(lines[start:stop]) == after, (name, start)
+        lines[start:stop] = before
+    return ''.join(lines).encode()
 
 
 class Density780DependencyTests(unittest.TestCase):
@@ -28,7 +60,7 @@ class Density780DependencyTests(unittest.TestCase):
             target.write_bytes((ROOT/name).read_bytes())
         self.current = {name: (self.root/name).read_bytes()
                         for name in loops.DENSITY780_DEPENDENCY_SHA256}
-        self.historical = {name: successor.predecessor_bytes(name, raw)
+        self.historical = {name: historical_bytes(name, raw)
                            for name, raw in self.current.items()}
 
     def assert_rows(self, rows):
@@ -77,6 +109,8 @@ class Density780DependencyTests(unittest.TestCase):
         self.assertEqual(set(loops.DENSITY780_DEPENDENCY_SHA256), {
             'core/extent.mojo', 'geometries/surface.mojo', 'loaders/bytes.mojo',
             'math/matrix4.mojo', 'math/square_matrix.mojo', 'math/vector4.mojo',
+            'geometries/attribute_utils.mojo', 'lights/shadow.mojo', 'render/tasks.mojo',
+            *PORT_INVERSE,
         })
 
     def test_historical_local_cohort_keeps_original_receipt_digests(self):
