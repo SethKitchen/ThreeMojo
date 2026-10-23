@@ -129,7 +129,9 @@ Some portable features remain partial, including [GLSL shaders](https://github.c
 ### Project tools
 
 <details>
-<summary>Implemented: 19</summary>
+<summary>Implemented: 20</summary>
+
+- [x] [Compiled coverage profile check in Mojo](https://github.com/SethKitchen/ThreeMojo/wiki/How-to-measure-coverage#choose-the-capture-profile): `tools/check_coverage_hit_profile.mojo` checks cold and warm phase records [#761](https://github.com/SethKitchen/ThreeMojo/issues/761)
 
 - [x] [CI planner in Mojo](https://github.com/SethKitchen/ThreeMojo/wiki/How-to-run-the-checks#rebuild-the-project-tools): `tools/ci_scope.mojo` selects, runs and checks the hosted CI jobs with byte-identical plans [#769](https://github.com/SethKitchen/ThreeMojo/issues/769)
 

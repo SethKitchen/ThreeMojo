@@ -961,7 +961,7 @@ test-coverage-tool:
 	@$(TOOL) check_coverage_sources --mojo $(MOJO)
 	@$(TOOL) check_coverage_loops --mojo $(MOJO)
 	@python3 tools/check_coverage_loop_proofs.py --mojo $(MOJO)
-	@python3 tools/check_coverage_hit_profile.py --mojo $(MOJO)
+	@$(TOOL) check_coverage_hit_profile --mojo $(MOJO)
 
 # Subprocess-only contracts need native children with different environments.
 # Metal kernels as AIR, emitted for a Metal target without a GPU or Apple's
