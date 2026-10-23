@@ -158,7 +158,7 @@ PR760_OWNER_PREDECESSOR_SHA256 = '6138ba2dcac394c716ea9ed32e74e0c6d15857d5c605fc
 DEPENDENCY_TOOL_SHA256 = {'tools/carla_lane_oracle/winner_sign_contracts.py': 'f850902634073364fe2407b00d12e9fdfb2ecfc6cf2a03414269fbb7984a8a7f',
  'tools/carla_lane_oracle/border_parser_contracts.py': '734d7b24aaf4e9f537cd7f0d7c7b8094d9c29106770b66c4a7a24cab74604dd4',
  'tools/carla_lane_oracle/pr760_arithmetic_stage.py': PR760_STAGE_SHA256,
- 'tools/carla_lane_oracle/pr780_source_successor.py': '9f723d6215b1f62bc1573b052cc8a7afd0d18ac5488f31feb65b96d65bdd2c0d',
+ 'tools/carla_lane_oracle/pr780_source_successor.py': '28bc490bcaa02cc829547248acb65d41318fda4b3e400b76dc957f5508164a52',
  'tools/carla_lane_oracle/scaled_float32_contracts.py': 'e3a59a9f8d5a9394007c03fab6ac696e04998812dad5843a22e721bfbe57c2a1',
  'tools/affected.py': 'dcf533b9cd995902f53578aa93b98a32ca732643ccfa6ab7e30f95fd8b321eb3',
  'tools/cache_key.py': 'ec06247feb8fe079c30b6da19fc655ffec363f1ce8e3372d063bf728e8c804c4',
@@ -3538,7 +3538,7 @@ def _witness_format_bindings(root, *, _snapshots=None, _operation=None):
 
 def _historical_typed_text(path, text, *, pr760=False):
     """Pure named provenance projection; never replace a captured input."""
-    extension = pr780_successor._data_snapshot()['edges'].get(path)
+    extension = pr780_successor.reviewed_edge(path)
     if extension is not None and sha(text) == extension['after_sha256']:
         text = pr780_successor.predecessor_bytes(path, text.encode('utf-8')).decode('utf-8')
     if pr760 and path in pr760_stage.CARLA_REGISTRY_PATHS:
@@ -3629,7 +3629,7 @@ def reviewed_typed_text(root, path, text, *, _operation=None, _inputs=None, _inp
     path = str(path)
     edge = (pr760_stage.EDGES.get(path) if path in pr760_stage.CARLA_REGISTRY_PATHS
             else typed_boundary.EDGES.get(path))
-    extension = pr780_successor._data_snapshot()['edges'].get(path)
+    extension = pr780_successor.reviewed_edge(path)
     if edge is None and extension is None:
         return text
     if edge is None:
@@ -3863,7 +3863,7 @@ def verify(root, *, exact=False, include_roots=(), _expected_lane_raw=None, _cap
                 if path in typed_boundary.EDGES and typed_bindings:
                     historical = _historical_typed_text(path, historical.decode('utf-8')).encode('utf-8')
                 else:
-                    extension = pr780_successor._data_snapshot()['edges'].get(path)
+                    extension = pr780_successor.reviewed_edge(path)
                     if extension is not None and sha(historical) == extension['after_sha256']:
                         historical = pr780_successor.predecessor_bytes(path, historical)
                 if historical != raw and expected == sha(raw):
@@ -4161,7 +4161,7 @@ def typed_successor_edges(root, *, _operation=None):
                                      _operation=_operation)
             qualification = (current_image and path ==
                 'tools/carla_lane_oracle/test_witness_format_contracts.py')
-            extension = pr780_successor._data_snapshot()['edges'].get(path)
+            extension = pr780_successor.reviewed_edge(path)
             retained = (pr780_successor.predecessor_bytes(path, current)
                         if extension is not None and sha(current) in (
                             extension['before_sha256'], extension['after_sha256'])
@@ -4205,7 +4205,7 @@ def station_proof_bindings(root, *, _operation=None):
         executing = executing_checker_bindings()
         result = _station_bindings(root, _operation=_operation)
         station_digest = result.get(station.MODULE)
-        extension = pr780_successor._data_snapshot()['edges'].get(station.MODULE)
+        extension = pr780_successor.reviewed_edge(station.MODULE)
         if extension is not None and station_digest == extension['after_sha256']:
             station_digest = extension['before_sha256']
         if station_digest == typed_boundary.EDGES[station.MODULE]['after_sha256']:
@@ -4322,7 +4322,7 @@ def pr776_predecessor_bytes(path, raw):
     executing_checker_bindings()
     require(type(path) is str and type(raw) is bytes,
             'PR776 predecessor requires builtin path and immutable bytes')
-    extension = pr780_successor._data_snapshot()['edges'].get(path)
+    extension = pr780_successor.reviewed_edge(path)
     if extension is not None and sha(raw) == extension['after_sha256']:
         raw = pr780_successor.predecessor_bytes(path, raw)
     rows = {'tests/test_water.mojo': ('ffe2ab6e56ea73498bc8f2f65f5dd80bb02f6e6ac72024c082a6920878ddf86a',
@@ -4809,7 +4809,7 @@ def qualification_predecessor_bytes(path, raw):
     executing_checker_bindings()
     require(type(path) is str and type(raw) is bytes,
             'qualification predecessor requires builtin source bytes')
-    extension = pr780_successor._data_snapshot()['edges'].get(path)
+    extension = pr780_successor.reviewed_edge(path)
     if extension is not None and sha(raw) == extension['after_sha256']:
         raw = pr780_successor.predecessor_bytes(path, raw)
     if (path == 'tools/carla_lane_oracle/test_expectation_binding_successor.py'
@@ -5410,7 +5410,7 @@ def stage_witness_predecessor_bytes(raw):
     """
     executing_checker_bindings()
     extension_path = 'tools/carla_lane_oracle/test_pr760_arithmetic_stage.py'
-    extension = pr780_successor._data_snapshot()['edges'][extension_path]
+    extension = pr780_successor.reviewed_edge(extension_path)
     if (type(raw) is bytes and
             sha(raw) == extension['after_sha256']):
         raw = pr780_successor.predecessor_bytes(extension_path, raw)

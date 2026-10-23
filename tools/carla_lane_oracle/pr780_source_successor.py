@@ -3243,9 +3243,9 @@ EDGES = json.loads(r'''
   },
   "tools/carla_lane_oracle/test_typed_owned_operations.py": {
     "before_sha256": "b71272abd022ff7453099ede5e5cd8ca8fc0dc6ba92057a94bdcd85170e39984",
-    "after_sha256": "935e782aed3a11816c65001422c1b41e3760b5c9ded88ccf7dd58a7fff23cb5f",
+    "after_sha256": "ff7ce184c8a71b84a523ee6a22652604b76f1e463f37cac7276f37c85a8c7edd",
     "before_token_sha256": "c84f544cdbffbd74be814905e13bba935182e54c2df54f44c2d5e2a1a38b885f",
-    "after_token_sha256": "f88fa77df27b2afe4c77a143f00ec6074a288ed732e09f19c9592e21264a3938",
+    "after_token_sha256": "5d3aadca1fb008c03df6f502588987eea34019ceb31a91b3d567f0080bad6311",
     "edits": [
       {
         "start": 165,
@@ -3267,6 +3267,17 @@ EDGES = json.loads(r'''
         "after": [
           "        old_lane = typed.historical_source('extensions/carla/lane_refinement.mojo', fixtures.typed_current_bytes(\n",
           "            'extensions/carla/lane_refinement.mojo', physical_lane.encode()).decode())\n"
+        ]
+      },
+      {
+        "start": 253,
+        "stop": 255,
+        "before": [
+          "        historical = typed.historical_source(seed.MODULE, current.decode()).encode()\n"
+        ],
+        "after": [
+          "        historical = typed.historical_source(seed.MODULE, fixtures.typed_current_bytes(\n",
+          "            seed.MODULE, current).decode()).encode()\n"
         ]
       }
     ]
@@ -3348,8 +3359,106 @@ EDGES = json.loads(r'''
 BOUND_INPUTS = {'tests/test_anatomy_muscle.mojo': '3653d6056c1f9f639537eedb7cd80364baf80352b4aa984d39c0e737d8801401',
  'tests/test_animation_strings.mojo': 'f5103e3660a63d3d5d9d348a0d928fa106e5cef03059d432a31335bb7dd14184',
  'tests/test_loader_bounds.mojo': '6e0c1487f1ff21f4654c2790e4460c0adf934bf6b9273e826782eec1bfed2d83',
- 'tools/carla_lane_oracle/test_pr780_source_successor.py': 'b88cdc20f3a6dfb0b38c6e85ccbe9b5c80d8ba5700ee2d8cf1a982e8e43ceeb0'}
-DATA_SHA256 = 'a8a9be7b1adcadcaa6ca836d6c7e78e5d2e5183cfdd558eb68ba753d769d1f06'
+ 'tools/carla_lane_oracle/test_pr780_source_successor.py': 'fad1fe54f34c47efeff20f5d26f3c644dcc6eb129848290bada4235215815606'}
+EDGE_SHA256 = {'core/extent.mojo': '3bde830a747999835ef471ceba2eac3e73bbff4e300162851a8096a194a58726',
+ 'extensions/carla/v2x.mojo': 'fe4f85ef760c4b25d99b75ab05b7f137f7e22041129f2e0ed8f8f63f887e99d8',
+ 'geometries/box.mojo': '80ff7d14a0be9eccae8909df9c41e69222ccebc87fe30ed16b4edc683540c235',
+ 'geometries/circle.mojo': '81b3608094efc619f90385a62e5cc99d94880e4caa6cadedd4445147916683f8',
+ 'geometries/cylinder.mojo': '7f355e959a8d44b202c4ecc4f18bce5203ed55b949a18fce1112c7a232c99d9d',
+ 'geometries/plane.mojo': '3313fc972f959754018971f81f1cc667d5ae5110c05a7367e465b3fc4b1192e8',
+ 'geometries/surface.mojo': '3ec973c7a37d9b1477e686de0c5c96a9021f9202a0b2517f3c8d1d05af1d6a6b',
+ 'loaders/bytes.mojo': '7e433bce46cd84a26d82898684ddc565f9ce43e10a147a4ca17f1cbaee424683',
+ 'loaders/draco.mojo': 'e50c9ca8beed22e467b2adf8057ea34da9e02402ea0d268bed90ec03ab45eec7',
+ 'loaders/gltf_layout.mojo': '3faf915314dbc3859d1a77f8726ff4813141452f119370a9efe62415ee6def4d',
+ 'loaders/meshopt.mojo': '2e6e4544b362eb86202877b7d0f59655cf9755392bf2bc6a653e13674da6e1e5',
+ 'math/matrix4.mojo': '3a14fb7473be39825f01e0b25141dc11deae32815083038f273f1dc88f0d3b45',
+ 'math/square_matrix.mojo': '0654dc0cfd85f05b383961d1507464559d00fefc15e49d682d8d3a4a8aa95ed9',
+ 'math/vector4.mojo': '3bf820cf0f2f9ad74083de036282f10d01d9fed78a6a90ac2ff65bfa6bc440d1',
+ 'postprocessing/denoise.mojo': 'c5fbccc98a75c90ac9c7ca4954e0403c4fb2e279c25156c54f67226acea5da0a',
+ 'render/rasterizer.mojo': '3afd3bd79f9b35ee00ff47136b22a4c6367cdb218e7c32bd69d23b0bcfcc76f7',
+ 'tests/test_byte_extent_boundaries.mojo': '546193eda4e2499ca8be0ff495e628de56fc43c6b484ac02fb5ba6ef011c1552',
+ 'tests/test_carla_sensors_world.mojo': '2757a7a57aebb6162c7ae58c236a33aa893a55ca07731b3339097d60e481d6bf',
+ 'tests/test_denoise.mojo': '5701e5c4cede9ae3ed9268940b601ebdddc9e2cb81120061435ea115399d0cec',
+ 'tests/test_geometry_inputs.mojo': '613e723bce7a32c8a0661c1293a5022ca205740fa883c42083682d58c243f91f',
+ 'tests/test_matrix4.mojo': '2b259391fe4b483a214d9ed581e3324ecf90a2138ca2a626587777e4effac7cc',
+ 'tools/carla_lane_oracle/test_pr760_arithmetic_stage.py': '39c4e84ee8f2480d1039369011c39ab38c055f71fae6bf0962778b558be9b82f',
+ 'tools/carla_lane_oracle/test_pr760_physical_image.py': 'fb6a9d7dfab6f5d7e620e6d42ae9dd47ee8fbd609e65a2f82a7e56e888734970',
+ 'tools/carla_lane_oracle/test_pr776_input_successors.py': '51a5c68c4717c7afb068b45c3df77e982c0c2b2146e12af3de7c8611fa7c83d9',
+ 'tools/carla_lane_oracle/test_typed_boundary_contracts.py': '0be305bc14258206747f94b71996e5e9d29650e7a0a49ccc9dc2ea97b3ce2f89',
+ 'core/deform.mojo': 'b6afec67eea77b1a76cae98df1b4399de366b2a82878edf56aa1b53d26c046e9',
+ 'extensions/carla/assets.mojo': '1f82f569bc1ee02238d2925e063ab4a1bccf71b80d2045d4197695d164123fa9',
+ 'extensions/carla/map.mojo': '37b62f4b12e627c72d89c6a4a5d7d2d909f362c255a7bebc22bc63ae60d170df',
+ 'extensions/carla/map_builder.mojo': 'f10f4855653a78039ea7b08e16732f20cd2c810b347dca7ed650bb9bb8ffac39',
+ 'extensions/carla/model_cache.mojo': '33f5acadc7a3efbab1fa2481da70d2c920034f337d646c85caf87e432c7d1d1d',
+ 'extensions/carla/sensor.mojo': '4f8123d63ba83d79627b57c8f15bce7027a8c40f622a8c187e4bcdb4b89496df',
+ 'extensions/carla/sensor_manager.mojo': '26af2114c101807527138252638fa5d85a3a4bed2c4fa63679723d8f62429639',
+ 'extensions/carla/speed_limits.mojo': '9ea486a37f7b62ff037dcf11d5482153466d6f8ef01f729efe5e85b5c739dac5',
+ 'extensions/carla/town.mojo': '1602d3b9c429f1d59e235e09a080293adea3b834ec2c7b1d698155268fd2bf20',
+ 'extensions/carla/world.mojo': 'aeec9ddf2a5c0a2546e82643678125e2dad5bfca9437421f6ba3e8bd7a2db6ca',
+ 'extensions/humanoid/skeleton/head/hair/shading.mojo': '750bad042961cf21294f6a0c352ca332d42fce673acea3643b4a39a4bf77003f',
+ 'extensions/humanoid/skeleton/head/hair/strands.mojo': '7448d4398a1552b0fce1ee1a4131c5f667e79f0854c56f45ddda8fa8f37fdc7f',
+ 'geometries/attribute_utils.mojo': 'b64808aa33e920a8d55294eb65e40e76379642771cbf391f7195b030be8b359d',
+ 'lights/shadow.mojo': '13956ed1900da2198deea2bf357f18d2dd66a337d5584eff918e6b52f62daf43',
+ 'loaders/draco_mesh.mojo': 'a2d7906ebb2a158d60c39600a1715f39575c05b9694887ff9669b13a0a0670dd',
+ 'loaders/image_batch.mojo': '3cfee85ce4e0e788deee3556bd33866f2e801c23a8d4c08f7e82f3bd3747c4f3',
+ 'loaders/js_number.mojo': '09c981f063332e9a8eb35102bc63c812e142d74c97d8dd61dc32f526cf68c6b3',
+ 'math/convex_hull.mojo': '7c3f56da413ade65c3f40974cc86c1e2f91029e920206566f9952ebedd589e11',
+ 'render/target.mojo': '3812c03012fc2f0eb3d0025f89dac9b8e0f9831d2c6389152f8724272aef43a4',
+ 'render/tasks.mojo': 'b8dfd9c3417ae3c05156a394811e45a7eb7a990cedb22f8d21652053d9ce61a6',
+ 'renderers/renderer.mojo': '4ab27f1610b8cec1e860bb35c44f99f72809d5e72cb132bd0ba376dd83b33060',
+ 'tests/_sample_dispatch_controls.mojo': '1b8250d0cb155e2f0bf7e9d6fbef2c3bd94f1b243c9cf1b43e542c0e67661782',
+ 'tests/_spiral_domain_controls.mojo': '007f97c95ad5c7e712c93b9c3fd97d8cbd5395544f4b538c1e094dd485137f22',
+ 'tests/test_animation_paths.mojo': '82400a6046544f6088206cb4458e86edde85e992b42738a8e4f5efde1f89ebe3',
+ 'tests/test_audit_boundaries.mojo': '70ad35b3a59f6d910f2f434c4665d4a3144b64b310da9b3798b7c8fae18940df',
+ 'tests/test_audit_regressions.mojo': '82d32882bf4c0f74fe35a9b253ebde6f49f0ef326fb9f150cc0745c19f3e2411',
+ 'tests/test_audit_slim.mojo': '86faaa5d826e188bbef50589f74f43b5528abb3473cc4067f98a11d8071787af',
+ 'tests/test_carla_axis_direct_road.mojo': '43c37e0c1c3c90429b161b42539591a2be6436642bdbb0f1d77fd596fb7a11a8',
+ 'tests/test_carla_centered_bounds.mojo': '6922875f17e44e981fd6a8f1d5e41601b551ce53141ac26a4b324fcb50e98655',
+ 'tests/test_carla_chord_endpoint_refusals.mojo': 'dd667ee7d581c0222d777f4d654353115b61e1538605bff919400b5b695a266b',
+ 'tests/test_carla_conditioned_polynomial.mojo': 'ca77a8a162e0380f894b8ff3e5d17c4077c173e9262e1a64a38fee771ec6fb0b',
+ 'tests/test_carla_cross_candidate_certificates.mojo': 'e5b2355fa39ef4c907826f41fb9f1df8b865f9dcf934b1c19b57dcbee175190b',
+ 'tests/test_carla_curve_bounds.mojo': '317138510f87f7577a7454792171ab321ca5f60e676c1c61b1467d6c897697fc',
+ 'tests/test_carla_junction_endpoint_refusals.mojo': '62aabd16af04bb7638eceb42d863fd5a2c2bbf95d86ffc3c08f57018e304e94d',
+ 'tests/test_carla_lane_center_bound_phase.mojo': 'b05ad08b43a5980f8c5ede640e855c1ec9c2d2923fb5c4ab5464bfb7b2b0a3a0',
+ 'tests/test_carla_lane_certificates.mojo': 'fe7605b6019e63bf032f3cf6c4ac598b290e6f45125b5b19c9a66cadeec7add0',
+ 'tests/test_carla_lane_control_successor.mojo': 'a77158dd8babf857f648aada8f8ab68d3d3fef52e47223cc3e05fbc8d49fdbc4',
+ 'tests/test_carla_lane_dispatch_cell_residuals.mojo': 'e6aa6eb4a962fba4bd85d71048c608fe99e5cd7ef8a7d4190377af321140718c',
+ 'tests/test_carla_lane_helper_guards.mojo': '1d10847201043e0acd7fe10d3b5f746314fab0db3cafadd844b0767128360a01',
+ 'tests/test_carla_lane_order_successor.mojo': '04bed87e5085305c688b3886139ddb70f99907c43a6c21018ff8bb40d9bea897',
+ 'tests/test_carla_lane_search_positive_controls.mojo': '5d7e0ee71cebbf73c1258d50058a117a50edad70c53c8cf2cd6c6ef5eac68030',
+ 'tests/test_carla_render_light.mojo': '988e4699df0ab6b5ab338577914b7f8af6582c49955160d383c2bd705771083c',
+ 'tests/test_carla_road_fixed_s.mojo': 'db41f9c38e18a4b9b4a7064a7862931870ca396c92689221f2d3243a32cf867a',
+ 'tests/test_carla_sampled_box_cover.mojo': '1f89d12d4b3179fdd0e7904560d2f37f944878dddaf92c60e7b652268bda1018',
+ 'tests/test_carla_scaled_lane_refinement.mojo': 'd0608befa93df7ea91da9f40c42a2844bd49aa66c4aa3f4c093e3d057297484f',
+ 'tests/test_carla_speed_parser_exceptions.mojo': 'fee54ffb5e01aed94eb2e1951af548bfa7feac04e5dd0bb01c21d486fb4a4941',
+ 'tests/test_carla_tiny_cell_enumeration.mojo': 'd1c1fe9ab86e767828c87199e938c7a507471943e7ac2bd3b9ba1a28418087d0',
+ 'tests/test_carla_unsampled_admission.mojo': '4562ded403e057a1950e6e78f657e6488adba27e15593dc97536a13c1cb85b7a',
+ 'tests/test_cast_shadow.mojo': '7362d06404012c685058a0bd797d7feb980fca71a396aaa7ad0a6c00fab7d5fc',
+ 'tests/test_draco.mojo': 'b6d583c0d224af6b2f881d4c5da1d4145f9e5b2119df81b6594cdb122e077ebf',
+ 'tests/test_draco_export.mojo': '1c60b89e44fd43032acd77dd6c8d1c4d06a692e505617695a9ea0a2696e7fbbd',
+ 'tests/test_geometry_addons.mojo': '3dbb23ccc62f9d3e57ba6cab730fb89a0ec745b25c284323445cf0f021e1ab3e',
+ 'tests/test_geometry_signatures.mojo': '8e98a77013a6545f33dc7e9012716b125cbb5cd92ffa45a9460d9d1fddde1c1e',
+ 'tests/test_gpu.mojo': 'c205408079bb797a553b1623d15120eb9ad1d58205f366692b742ffe65db35f4',
+ 'tests/test_gpu_layout.mojo': '0d065631b2e39eed26f83e39036a5d841fa48eee90c7253310d14b61d40e1682',
+ 'tests/test_gpu_water.mojo': '0e330277b81d1cf8f2d1791b00d34ad63355666a99ad48e1de60893cc9362d89',
+ 'tests/test_humanoid_bake.mojo': 'fbf4f1b8601b102957f6d52243f89853084b62034ed4230368b4bfc8ae23c9b5',
+ 'tests/test_image_batch.mojo': 'd5ffbdbbabbfa1359f82c30992bbb22d611723f1f5ee04939fc0303725cc13a0',
+ 'tests/test_morph_sequence_indices.mojo': '3cca7e0f9b16ea29b05ce0c13c156c2f7c40703df62c66cc426d7dfbe75500e1',
+ 'tests/test_norm_review_regressions.mojo': 'd40f259ea7408859c5022cbda00b8cd6251b698e9ca6ce6ad079c94e5e247e6f',
+ 'tests/test_projector.mojo': 'dc21f222e0babb98bafd7ed4110bfe253853ca74d3013ab55b2b6b6a1661249b',
+ 'tests/test_scene_optimizer.mojo': '94f9557fdb7bd5a59efb11c4b632160dd8ac7bb16c0cab43d3eb05672e160ed9',
+ 'tests/test_scratch.mojo': '0d543e4a6eed7544fc7df40f213ca4f88bd98aea6b469295e3ab8d3832408a0a',
+ 'tests/test_shadow_casters.mojo': '0e5ff505a7c7167989697737467d0e0bdaaba482c8acc23daa99f9cdb47abca0',
+ 'tests/test_strand_triangles.mojo': '159581520b40d67559cd7e7c39d4030ab6ae225c3ef5dca580b91200dda81099',
+ 'tests/test_svg_renderer.mojo': 'ddd92e65870a96d703a380eec17ed1827535a21b11da79ff605aabb947252c83',
+ 'tests/test_visibility.mojo': 'f15d91b888cb658367569400ce7994d1d64c04535d406037998cd2f88028c98f',
+ 'tests/test_wide_line_workers.mojo': '2df16a02373e7f1145573f41df89971d8483ddddd1439607c114642f3a0e2b09',
+ 'tools/carla_lane_oracle/source_contracts.py': 'ea592d2bfda0604aff24f0262afe164980221d12138eaa6e8fd485bc2539095a',
+ 'tools/carla_lane_oracle/test_typed_owned_operations.py': '56a59b04408d344079048ccc8a32e3a5c0e1af4505cb06aa281c01364738b1eb',
+ 'tools/carla_lane_oracle/test_witness_format_contracts.py': '554b6db980e099747c3d536eaf722f210f0f17d3f78983cf08bb180c588a22ae',
+ 'tools/carla_lane_oracle/translated_parameter_resolution.py': '1c63297c0097ce50b9f314ba321e7f4d04c009f6379552a84adefb62a2a7f375',
+ 'tools/test_conditioned_coverage_loops.py': 'f88451e7313fd84cc788847b1c960dc395b98736779a92c81a1d056ff2977520'}
+DATA_SHA256 = 'b608b56194725149f63f48dc83b4dbf3e08c7880d2850c3e8215319ef844911a'
 # END FIXED PR780 SUCCESSOR DATA
 
 
@@ -3362,14 +3471,38 @@ def sha(raw):
     return hashlib.sha256(raw.encode('utf-8') if type(raw) is str else raw).hexdigest()
 
 
-def _data_snapshot():
-    """Authenticate and detach the full finite inverse data before consuming it."""
+def _index_snapshot():
+    """Authenticate and detach the fixed per-edge digests and bound inputs."""
     require(type(DATA_SHA256) is str, 'authority digest selector is not a builtin string')
-    require(DATA_SHA256 == 'a8a9be7b1adcadcaa6ca836d6c7e78e5d2e5183cfdd558eb68ba753d769d1f06', 'authority digest selector changed')
-    encoded = json.dumps({'edges': EDGES, 'bound_inputs': BOUND_INPUTS},
+    require(DATA_SHA256 == 'b608b56194725149f63f48dc83b4dbf3e08c7880d2850c3e8215319ef844911a', 'authority digest selector changed')
+    encoded = json.dumps({'edges': EDGE_SHA256, 'bound_inputs': BOUND_INPUTS},
                          sort_keys=True, separators=(',', ':'))
     require(sha(encoded) == DATA_SHA256, 'fixed source inverse data changed')
     return json.loads(encoded)
+
+
+def _edge_snapshot(path, digest):
+    """Authenticate and detach one inverse edge against its fixed digest."""
+    require(type(EDGES) is dict and path in EDGES, 'fixed source inverse edge missing: ' + path)
+    encoded = json.dumps(EDGES[path], sort_keys=True, separators=(',', ':'))
+    require(sha(encoded) == digest, 'fixed source inverse data changed')
+    return json.loads(encoded)
+
+
+def reviewed_edge(path):
+    """Return one authenticated detached edge, or None for an unreviewed path."""
+    digest = _index_snapshot()['edges'].get(path)
+    return None if digest is None else _edge_snapshot(path, digest)
+
+
+def _data_snapshot():
+    """Authenticate and detach the full finite inverse data before consuming it."""
+    index = _index_snapshot()
+    require(type(EDGES) is dict and set(EDGES) == set(index['edges']),
+            'fixed source inverse data changed')
+    return {'edges': {path: _edge_snapshot(path, digest)
+                      for path, digest in index['edges'].items()},
+            'bound_inputs': index['bound_inputs']}
 
 
 def verify_data():
@@ -3408,10 +3541,10 @@ def predecessor_bytes(path, raw):
     """Return a named exact predecessor for pure historical comparisons only."""
     require(type(path) is str and type(raw) is bytes,
             'predecessor requires builtin source bytes')
-    edges = _data_snapshot()['edges']
-    if path not in edges:
+    reviewed = reviewed_edge(path)
+    if reviewed is None:
         return raw
-    result = _predecessor(path, raw, edges[path])
+    result = _predecessor(path, raw, reviewed)
     verify_data()
     return result
 

@@ -251,7 +251,8 @@ class TypedCurrentOwnedOperation(unittest.TestCase):
         import sys
         target = self.root/seed.MODULE
         current = target.read_bytes()
-        historical = typed.historical_source(seed.MODULE, current.decode()).encode()
+        historical = typed.historical_source(seed.MODULE, fixtures.typed_current_bytes(
+            seed.MODULE, current).decode()).encode()
         original = Path.read_bytes
         reads = []
         def changed_final(path, *args, **kwargs):

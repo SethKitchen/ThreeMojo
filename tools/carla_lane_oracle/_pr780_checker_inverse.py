@@ -11,7 +11,7 @@ import hashlib
 import json
 
 EDGES = {'full_audit_cleanup_contracts.py': {'before_sha256': 'f62dbe69ddd5d15bd79aa4b0a8237d9475fe1a00cea06c2f7124c59af237c833',
-                                             'after_sha256': '6aeb51f67f61b5459fd979268f3845358f80117de3c670023acaf268d73b0dc5',
+                                             'after_sha256': '2e2abe70df36b5cdaf629214a719d7c6fbfbb49d98df993049b702c8604302cf',
                                              'edits': ((56,
                                                         57,
                                                         (),
@@ -27,7 +27,7 @@ EDGES = {'full_audit_cleanup_contracts.py': {'before_sha256': 'f62dbe69ddd5d15bd
                                                         (),
                                                         (' '
                                                          "'tools/carla_lane_oracle/pr780_source_successor.py': "
-                                                         "'9f723d6215b1f62bc1573b052cc8a7afd0d18ac5488f31feb65b96d65bdd2c0d',\n",)),
+                                                         "'28bc490bcaa02cc829547248acb65d41318fda4b3e400b76dc957f5508164a52',\n",)),
                                                        (162,
                                                         163,
                                                         (" 'tools/affected.py': "
@@ -191,7 +191,7 @@ EDGES = {'full_audit_cleanup_contracts.py': {'before_sha256': 'f62dbe69ddd5d15bd
                                                         3543,
                                                         (),
                                                         ('    extension = '
-                                                         "pr780_successor._data_snapshot()['edges'].get(path)\n",
+                                                         'pr780_successor.reviewed_edge(path)\n',
                                                          '    if extension is not None and sha(text) == '
                                                          "extension['after_sha256']:\n",
                                                          '        text = '
@@ -201,7 +201,7 @@ EDGES = {'full_audit_cleanup_contracts.py': {'before_sha256': 'f62dbe69ddd5d15bd
                                                         3634,
                                                         (),
                                                         ('    extension = '
-                                                         "pr780_successor._data_snapshot()['edges'].get(path)\n",
+                                                         'pr780_successor.reviewed_edge(path)\n',
                                                          '    if edge is None and extension is None:\n',
                                                          '        return text\n')),
                                                        (3635,
@@ -247,7 +247,7 @@ EDGES = {'full_audit_cleanup_contracts.py': {'before_sha256': 'f62dbe69ddd5d15bd
                                                         (),
                                                         ('                else:\n',
                                                          '                    extension = '
-                                                         "pr780_successor._data_snapshot()['edges'].get(path)\n",
+                                                         'pr780_successor.reviewed_edge(path)\n',
                                                          '                    if extension is not None and '
                                                          "sha(historical) == extension['after_sha256']:\n",
                                                          '                        historical = '
@@ -274,7 +274,7 @@ EDGES = {'full_audit_cleanup_contracts.py': {'before_sha256': 'f62dbe69ddd5d15bd
                                                          '(pr760_stage.predecessor_source(path, '
                                                          "current.decode('utf-8'))\n",),
                                                         ('            extension = '
-                                                         "pr780_successor._data_snapshot()['edges'].get(path)\n",
+                                                         'pr780_successor.reviewed_edge(path)\n',
                                                          '            retained = '
                                                          '(pr780_successor.predecessor_bytes(path, '
                                                          'current)\n',
@@ -307,7 +307,7 @@ EDGES = {'full_audit_cleanup_contracts.py': {'before_sha256': 'f62dbe69ddd5d15bd
                                                         ('        station_digest = '
                                                          'result.get(station.MODULE)\n',
                                                          '        extension = '
-                                                         "pr780_successor._data_snapshot()['edges'].get(station.MODULE)\n",
+                                                         'pr780_successor.reviewed_edge(station.MODULE)\n',
                                                          '        if extension is not None and '
                                                          "station_digest == extension['after_sha256']:\n",
                                                          '            station_digest = '
@@ -355,7 +355,7 @@ EDGES = {'full_audit_cleanup_contracts.py': {'before_sha256': 'f62dbe69ddd5d15bd
                                                         4327,
                                                         (),
                                                         ('    extension = '
-                                                         "pr780_successor._data_snapshot()['edges'].get(path)\n",
+                                                         'pr780_successor.reviewed_edge(path)\n',
                                                          '    if extension is not None and sha(raw) == '
                                                          "extension['after_sha256']:\n",
                                                          '        raw = '
@@ -441,7 +441,7 @@ EDGES = {'full_audit_cleanup_contracts.py': {'before_sha256': 'f62dbe69ddd5d15bd
                                                         4814,
                                                         (),
                                                         ('    extension = '
-                                                         "pr780_successor._data_snapshot()['edges'].get(path)\n",
+                                                         'pr780_successor.reviewed_edge(path)\n',
                                                          '    if extension is not None and sha(raw) == '
                                                          "extension['after_sha256']:\n",
                                                          '        raw = '
@@ -461,7 +461,7 @@ EDGES = {'full_audit_cleanup_contracts.py': {'before_sha256': 'f62dbe69ddd5d15bd
                                                         ('    extension_path = '
                                                          "'tools/carla_lane_oracle/test_pr760_arithmetic_stage.py'\n",
                                                          '    extension = '
-                                                         "pr780_successor._data_snapshot()['edges'][extension_path]\n",
+                                                         'pr780_successor.reviewed_edge(extension_path)\n',
                                                          '    if (type(raw) is bytes and\n',
                                                          '            sha(raw) == '
                                                          "extension['after_sha256']):\n",
@@ -573,7 +573,7 @@ EDGES = {'full_audit_cleanup_contracts.py': {'before_sha256': 'f62dbe69ddd5d15bd
                                                          '_snapshots=image, '
                                                          '_production=production).items()}\n')))},
          'coverage_loop_proofs.py': {'before_sha256': '21e3a9637a69c6abbf27e9c8dd193a1addf7ed8537dd8f2734c35ff1a468304d',
-                                     'after_sha256': '417cc8771fa895c524ca0e107b455143344b6d9da49ea6ca5da99c2979facca3',
+                                     'after_sha256': '4182ab0747075751e586a1b06ac2cc7ea55c7e904a46951d46460417bef24e00',
                                      'edits': ((283,
                                                 286,
                                                 ("        if words[0] in {'def', 'struct', 'trait'} or "
@@ -625,8 +625,7 @@ EDGES = {'full_audit_cleanup_contracts.py': {'before_sha256': 'f62dbe69ddd5d15bd
                                                  '    from carla_lane_oracle import '
                                                  'typed_boundary_contracts as typed\n',
                                                  '    successor = cleanup.pr780_successor\n',
-                                                 '    edge = '
-                                                 "successor._data_snapshot()['edges'].get(name)\n",
+                                                 '    edge = successor.reviewed_edge(name)\n',
                                                  "    encoded = raw.encode('utf-8') if type(raw) is str "
                                                  'else raw\n',
                                                  '    if (edge is None or name not in typed.EDGES\n',
@@ -898,7 +897,7 @@ def predecessor(name, raw):
     """Compose exact current checkers into the retained 5e91dad comparison."""
     if type(raw) is not bytes:
         raise AssertionError('checker source must be physical builtin bytes')
-    if hashlib.sha256(json.dumps(EDGES, sort_keys=True, separators=(',', ':')).encode()).hexdigest() != 'de7147ddf5c84600698e508f9cbe33a280aed0543bec7a01296d47c5107efeac':
+    if hashlib.sha256(json.dumps(EDGES, sort_keys=True, separators=(',', ':')).encode()).hexdigest() != '28eaf96c88d5dab38e3f878ef7c58c828d1cf05b3cb4cc6841ef7d88f08b7c67':
         raise AssertionError('PR780 checker inverse data changed')
     digest = hashlib.sha256(raw).hexdigest()
     edge = EDGES.get(name)

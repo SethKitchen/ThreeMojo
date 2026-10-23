@@ -394,7 +394,7 @@ def _typed_endpoint(name, raw):
     from carla_lane_oracle import full_audit_cleanup_contracts as cleanup
     from carla_lane_oracle import typed_boundary_contracts as typed
     successor = cleanup.pr780_successor
-    edge = successor._data_snapshot()['edges'].get(name)
+    edge = successor.reviewed_edge(name)
     encoded = raw.encode('utf-8') if type(raw) is str else raw
     if (edge is None or name not in typed.EDGES
             or sha256(encoded) != edge['after_sha256']):

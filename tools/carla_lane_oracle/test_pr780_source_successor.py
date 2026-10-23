@@ -70,16 +70,62 @@ class ExactSourceSuccessorControls(unittest.TestCase):
 
     def test_namespace_and_coordinated_digest_changes_are_refused(self):
         changed = copy.deepcopy(successor.EDGES)
-        changed[next(iter(changed))]['after_sha256'] = '0'*64
+        first = next(iter(changed))
+        changed[first]['after_sha256'] = '0'*64
         with patch.object(successor, 'EDGES', changed), self.assertRaises(ValueError):
             successor.verify_data()
-        payload = {'edges': changed, 'bound_inputs': successor.BOUND_INPUTS}
+        digests = {path: owner.sha(json.dumps(edge, sort_keys=True, separators=(',', ':')))
+                   for path, edge in changed.items()}
+        payload = {'edges': digests, 'bound_inputs': successor.BOUND_INPUTS}
         digest = owner.sha(json.dumps(payload, sort_keys=True, separators=(',', ':')))
-        with patch.object(successor, 'EDGES', changed), patch.object(successor, 'DATA_SHA256', digest):
-            with self.assertRaises(ValueError):
-                successor.verify_data()
+        with patch.object(successor, 'EDGES', changed), patch.object(
+                successor, 'EDGE_SHA256', digests), patch.object(successor, 'DATA_SHA256', digest):
+            for check in (successor.verify_data, successor._data_snapshot,
+                          lambda: successor.reviewed_edge(first)):
+                with self.assertRaisesRegex(ValueError, 'authority digest selector changed'):
+                    check()
         with patch.object(successor, 'BOUND_INPUTS', {}), self.assertRaises(ValueError):
             successor.verify_data()
+
+    def test_one_edge_is_authenticated_against_its_fixed_digest(self):
+        paths = list(successor.EDGES)
+        first, second = paths[0], paths[-1]
+        self.assertEqual(set(successor.EDGE_SHA256), set(paths))
+        for path in paths:
+            with self.subTest(path=path):
+                reviewed = successor.reviewed_edge(path)
+                self.assertEqual(reviewed, successor.EDGES[path])
+                self.assertIsNot(reviewed, successor.EDGES[path])
+                self.assertEqual(owner.sha(json.dumps(reviewed, sort_keys=True, separators=(',', ':'))),
+                                 successor.EDGE_SHA256[path])
+        self.assertIsNone(successor.reviewed_edge('unreviewed.mojo'))
+        self.assertIsNone(successor.reviewed_edge('tools/carla_lane_oracle/pr780_source_successor.py'))
+        changed = copy.deepcopy(successor.EDGES)
+        changed[first]['edits'][0]['after'] = ['# changed\n']
+        with patch.object(successor, 'EDGES', changed):
+            with self.assertRaisesRegex(ValueError, 'fixed source inverse data changed'):
+                successor.reviewed_edge(first)
+            with self.assertRaisesRegex(ValueError, 'fixed source inverse data changed'):
+                successor.predecessor_bytes(first, (ROOT/first).read_bytes())
+            self.assertEqual(successor.reviewed_edge(second), successor.EDGES[second])
+            with self.assertRaises(ValueError):
+                successor.verify_data()
+        missing = dict(successor.EDGES)
+        missing.pop(first)
+        with patch.object(successor, 'EDGES', missing):
+            with self.assertRaisesRegex(ValueError, 'edge missing'):
+                successor.reviewed_edge(first)
+            with self.assertRaisesRegex(ValueError, 'fixed source inverse data changed'):
+                successor.verify_data()
+        extra = {**successor.EDGES, 'unreviewed.mojo': successor.EDGES[first]}
+        with patch.object(successor, 'EDGES', extra):
+            self.assertIsNone(successor.reviewed_edge('unreviewed.mojo'))
+            with self.assertRaisesRegex(ValueError, 'fixed source inverse data changed'):
+                successor.verify_data()
+        for kind in (list(successor.EDGES), tuple(successor.EDGES.items())):
+            with patch.object(successor, 'EDGES', kind), self.assertRaises(ValueError):
+                successor.reviewed_edge(first)
+        successor.verify_data()
 
     def test_nonbuiltin_digest_selector_cannot_admit_changed_data(self):
         class EqualString(str):
