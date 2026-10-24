@@ -18,8 +18,10 @@ cube.
 
 import json
 import os
+import shutil
 import subprocess
 import sys
+import tempfile
 
 BASE = os.path.abspath(os.environ.get("CARLA_EXPORT_DIR", "."))
 CONTENT = os.path.join(BASE, "release", "CarlaUE4", "Content")
@@ -84,9 +86,25 @@ def relative(game_path):
     return _paths_tool(["relative", game_path]).rstrip("\n")
 
 
-def exported(game_path, suffix):
-    """Return whether a package's export is already in RAW."""
-    return os.path.exists(os.path.join(RAW, *game_path[len("/Game/"):].split("/")) + suffix)
+def _pending(meshes, materials):
+    """Return the packages that are not exported yet.
+
+    `tools/carla_town_paths.mojo` skips a file that is already present
+    and groups the rest into batches of `BATCH`.
+    """
+    folder = tempfile.mkdtemp(prefix="town-pending-")
+    try:
+        path = os.path.join(folder, "pending.json")
+        with open(path, "w", encoding="utf-8") as handle:
+            json.dump({
+                "root": RAW,
+                "batch": BATCH,
+                "meshes": list(meshes),
+                "materials": list(materials),
+            }, handle, separators=(",", ":"))
+        return json.loads(_paths_tool(["pending", path]))
+    finally:
+        shutil.rmtree(folder, ignore_errors=True)
 
 
 def run(batch, mesh):
@@ -107,21 +125,26 @@ def run(batch, mesh):
         run(batch[half:], mesh)
 
 
+def _export_batches(batches, mesh, label):
+    """Export each batch and print how many of `label` are done."""
+    total = sum(len(batch) for batch in batches)
+    done = 0
+    for batch in batches:
+        run(batch, mesh)
+        done += len(batch)
+        print("exported", done, "of", total, label, flush=True)
+
+
 def main(argv=None):
     """Export what the towns need."""
     towns = (argv if argv is not None else sys.argv[1:]) or TOWNS
     meshes, materials = wanted(towns)
-    todo = [(p, True) for p in meshes if not exported(p, ".gltf")]
-    todo += [(p, False) for p in materials if not exported(p, ".mat")]
-    print(len(meshes), "meshes,", len(materials), "materials,", len(todo), "to export", flush=True)
-    for kind in (True, False):
-        paths = [p for p, mesh in todo if mesh == kind]
-        for start in range(0, len(paths), BATCH):
-            run(paths[start:start + BATCH], kind)
-            print("exported", min(start + BATCH, len(paths)), "of", len(paths),
-                  "meshes" if kind else "materials", flush=True)
-    missing = [p for p in meshes if not exported(p, ".gltf")]
-    missing += [p for p in materials if not exported(p, ".mat")]
+    plan = _pending(meshes, materials)
+    print(len(meshes), "meshes,", len(materials), "materials,", plan["todo"], "to export", flush=True)
+    _export_batches(plan["mesh_batches"], True, "meshes")
+    _export_batches(plan["material_batches"], False, "materials")
+    again = _pending(meshes, materials)
+    missing = again["meshes"] + again["materials"]
     print(len(missing), "not exported", flush=True)
     for path in missing[:20]:
         print("  ", path)

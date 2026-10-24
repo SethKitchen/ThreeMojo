@@ -484,7 +484,7 @@ The towns are made in three steps. The scripts run on Windows, like the vehicle 
 
    It reads the release's own `CarlaUE4/Content`, not `cooked/`. It does not export the engine's own content, which is licensed for use in the engine only. `build_towns.py` draws its own box for the engine's cube from `tools/carla_town_cube.mojo`.
 
-   `tools/carla_town_paths.mojo` names the packages. `build_towns.py` reads each mesh with `tools/carla_town_mesh.mojo`.
+   `tools/carla_town_paths.mojo` names the packages. It skips a package that is already exported and groups the rest into batches of 40. `build_towns.py` reads each mesh with `tools/carla_town_mesh.mojo`.
 
 3. Build and zip the packages:
 

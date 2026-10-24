@@ -16,7 +16,13 @@ from std.testing import TestSuite, assert_equal, assert_raises, assert_true
 
 from tests._tree import tool_mojo
 from tools._process import ProcessResult, run_program
-from tools.carla_town_paths import cooked_name, package_of, wanted_text
+from tools.carla_town_paths import (
+    cooked_name,
+    export_path,
+    package_of,
+    pending_text,
+    wanted_text,
+)
 
 
 def _dir() raises -> String:
@@ -102,6 +108,42 @@ def test_layouts_keep_sorted_game_paths_once() raises:
     )
     var empty = List[String]()
     assert_equal(wanted_text(empty^), '{"meshes": [], "materials": []}')
+    _remove(root)
+
+
+def test_pending_skips_an_export_and_keeps_batches() raises:
+    assert_equal(
+        export_path("/work/raw", "/Game/Carla/Static/Foo", ".gltf"),
+        "/work/raw/Carla/Static/Foo.gltf",
+    )
+    assert_equal(export_path("/work/raw", "/Game/A", ".mat"), "/work/raw/A.mat")
+    assert_equal(export_path("/work/raw", "/Game/", ".gltf"), "/work/raw/.gltf")
+    assert_equal(export_path("/work/raw", "short", ".gltf"), "/work/raw/.gltf")
+    assert_equal(
+        export_path("/work/raw", "/Game/A/B/", ".gltf"), "/work/raw/A/B/.gltf"
+    )
+    assert_equal(
+        export_path("/work/raw", "/Game/A//B", ".gltf"), "/work/raw/A/B.gltf"
+    )
+    var root = _dir()
+    _ = run_program(["mkdir", "-p", root + "/A"], 10)
+    Path(export_path(root, "/Game/A/Keep", ".gltf")).write_text("x")
+    var request = (
+        '{"root":"'
+        + root
+        + '","batch":2,"meshes":["/Game/A/Keep","/Game/B","/Game/C","/Game/D",'
+        + '"/Game/E"],"materials":["/Game/M"]}'
+    )
+    assert_equal(
+        pending_text(request),
+        '{"todo": 5, "meshes": ["/Game/B", "/Game/C", "/Game/D", "/Game/E"], '
+        + '"materials": ["/Game/M"], "mesh_batches": [["/Game/B", "/Game/C"], '
+        + '["/Game/D", "/Game/E"]], "material_batches": [["/Game/M"]]}',
+    )
+    with assert_raises(contains="batch is not positive"):
+        _ = pending_text('{"root":"/tmp","batch":0,"meshes":[],"materials":[]}')
+    with assert_raises(contains="pending request is not an object"):
+        _ = pending_text("[]")
     _remove(root)
 
 
