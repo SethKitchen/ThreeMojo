@@ -16,6 +16,7 @@ import re
 import shutil
 import subprocess
 import sys
+import tempfile
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 # The work folder: the cooked content, UModel and every stage's output.
@@ -166,48 +167,62 @@ def load(path):
     return gltf, bytearray(data)
 
 
+def _tool_root():
+    """Return the repository root that holds `tools/tool.sh`."""
+    return os.path.abspath(os.path.join(HERE, "..", "..", "..", ".."))
+
+
+def _tool_mojo():
+    """Return the Mojo compiler, as the Makefile's `TOOL_MOJO` chooses it."""
+    path = os.path.join(_tool_root(), ".venv", "bin", "mojo")
+    if os.path.isfile(path):
+        return path
+    return "mojo"
+
+
 def merge(base, extra):
-    """Append glTF `extra` (a static mesh) into `base`, both loaded."""
+    """Append glTF `extra` (a static mesh) into `base`, both loaded.
+
+    `tools/carla_vehicle_merge.mojo` appends the buffer and renumbers
+    the views, accessors, materials, meshes and nodes.
+    """
     a, abin = base
     b, bbin = extra
-    while len(abin) % 4:
-        abin.append(0)
-    shift = len(abin)
-    abin.extend(bbin)
-    view0 = len(a["bufferViews"])
-    for view in b["bufferViews"]:
-        view = dict(view)
-        view["buffer"] = 0
-        view["byteOffset"] = view.get("byteOffset", 0) + shift
-        a["bufferViews"].append(view)
-    acc0 = len(a["accessors"])
-    for accessor in b["accessors"]:
-        accessor = dict(accessor)
-        accessor["bufferView"] += view0
-        a["accessors"].append(accessor)
-    mat0 = len(a.get("materials", []))
-    a.setdefault("materials", []).extend(b.get("materials", []))
-    mesh0 = len(a["meshes"])
-    for mesh in b["meshes"]:
-        mesh = json.loads(json.dumps(mesh))
-        for primitive in mesh["primitives"]:
-            primitive["attributes"] = {k: v + acc0 for k, v in primitive["attributes"].items()}
-            if "indices" in primitive:
-                primitive["indices"] += acc0
-            if "material" in primitive:
-                primitive["material"] += mat0
-        a["meshes"].append(mesh)
-    node0 = len(a["nodes"])
-    for node in b["nodes"]:
-        node = dict(node)
-        if "mesh" in node:
-            node["mesh"] += mesh0
-        if "children" in node:
-            node["children"] = [c + node0 for c in node["children"]]
-        a["nodes"].append(node)
-    roots = b["scenes"][b.get("scene", 0)]["nodes"]
-    a["scenes"][a.get("scene", 0)]["nodes"].extend(r + node0 for r in roots)
-    a["buffers"][0]["byteLength"] = len(abin)
+    folder = tempfile.mkdtemp(prefix="vehicle-merge-")
+    try:
+        base_gltf = os.path.join(folder, "base.gltf")
+        base_bin = os.path.join(folder, "base.bin")
+        extra_gltf = os.path.join(folder, "extra.gltf")
+        extra_bin = os.path.join(folder, "extra.bin")
+        out_gltf = os.path.join(folder, "out.gltf")
+        out_bin = os.path.join(folder, "out.bin")
+        with open(base_gltf, "w", encoding="utf-8") as handle:
+            json.dump(a, handle)
+        with open(base_bin, "wb") as handle:
+            handle.write(bytes(abin))
+        with open(extra_gltf, "w", encoding="utf-8") as handle:
+            json.dump(b, handle)
+        with open(extra_bin, "wb") as handle:
+            handle.write(bytes(bbin))
+        root = _tool_root()
+        result = subprocess.run(
+            ["sh", os.path.join(root, "tools", "tool.sh"), _tool_mojo(),
+             "carla_vehicle_merge", base_gltf, base_bin, extra_gltf, extra_bin,
+             out_gltf, out_bin],
+            capture_output=True, text=True,
+        )
+        if result.returncode != 0:
+            raise ValueError(result.stderr.strip() or "vehicle merge failed")
+        with open(out_gltf, encoding="utf-8") as handle:
+            merged = json.load(handle)
+        with open(out_bin, "rb") as handle:
+            data = handle.read()
+    finally:
+        shutil.rmtree(folder, ignore_errors=True)
+    a.clear()
+    a.update(merged)
+    abin.clear()
+    abin.extend(data)
 
 
 def build(vehicle_id):
