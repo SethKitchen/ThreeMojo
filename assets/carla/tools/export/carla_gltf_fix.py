@@ -401,6 +401,37 @@ def _append(out, gltf, values, form, component, kind, target):
     return doc["index"]
 
 
+def _area_normals(points, faces):
+    """Return area-weighted normals from `tools/carla_area_normals.mojo`."""
+    import numpy
+    here = os.path.dirname(os.path.abspath(__file__))
+    repo = os.path.abspath(os.path.join(here, "..", "..", "..", ".."))
+    mojo = os.path.join(repo, ".venv", "bin", "mojo")
+    if not os.path.isfile(mojo):
+        mojo = "mojo"
+    folder = tempfile.mkdtemp(prefix="area normals ")
+    try:
+        path = os.path.join(folder, "mesh.json")
+        with open(path, "w", encoding="utf-8") as handle:
+            json.dump({
+                "points": numpy.asarray(points, dtype=float).reshape(-1, 3).tolist(),
+                "faces": numpy.asarray(faces).reshape(-1, 3).tolist(),
+            }, handle)
+        result = subprocess.run(
+            ["sh", os.path.join(repo, "tools", "tool.sh"), mojo,
+             "carla_area_normals", path],
+            capture_output=True, text=True,
+        )
+    finally:
+        shutil.rmtree(folder, ignore_errors=True)
+    if result.returncode != 0:
+        raise ValueError(result.stderr.strip() or "area normals failed")
+    values = json.loads(result.stdout)
+    if not values:
+        return numpy.zeros((0, 3))
+    return numpy.array(values, dtype=numpy.float64)
+
+
 def decimate(gltf, data, budget):
     """Bring a model's triangles down to about `budget`, and return the
     buffer with the new primitives' data added.
@@ -458,14 +489,8 @@ def decimate(gltf, data, budget):
                 # The collapses moved the vertices, so an old vertex's normal
                 # no longer fits: each normal is its faces' again, weighted
                 # by their areas. A hard edge is two vertices in glTF, so it
-                # stays hard.
-                corners = new_points[new_faces]
-                face = numpy.cross(corners[:, 1] - corners[:, 0], corners[:, 2] - corners[:, 0])
-                normals = numpy.zeros_like(new_points)
-                for k in range(3):
-                    numpy.add.at(normals, new_faces[:, k], face)
-                length = numpy.linalg.norm(normals, axis=1, keepdims=True)
-                normals = numpy.where(length > 1e-12, normals / numpy.maximum(length, 1e-12), [0.0, 1.0, 0.0])
+                # stays hard. `tools/carla_area_normals.mojo` weights them.
+                normals = _area_normals(new_points, new_faces)
                 attributes["NORMAL"] = _append(out, gltf, [float(v) for v in normals.reshape(-1)],
                                                "f", 5126, "VEC3", 34962)
             for name, accessor_index in primitive["attributes"].items():

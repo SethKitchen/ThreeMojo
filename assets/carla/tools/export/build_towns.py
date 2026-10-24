@@ -712,6 +712,34 @@ def simplify_welded(primitive, target):
             "material": primitive["material"]}
 
 
+def _uv_tool(source, uvs, corners):
+    """Return projected coordinates from `tools/carla_town_uv.mojo`."""
+    here = os.path.dirname(os.path.abspath(__file__))
+    repo = os.path.abspath(os.path.join(here, "..", "..", "..", ".."))
+    mojo = os.path.join(repo, ".venv", "bin", "mojo")
+    if not os.path.isfile(mojo):
+        mojo = "mojo"
+    folder = tempfile.mkdtemp(prefix="town-uv-")
+    try:
+        path = os.path.join(folder, "uv.json")
+        with open(path, "w", encoding="utf-8") as handle:
+            json.dump({
+                "source": numpy.asarray(source, dtype=float).reshape(-1, 3, 3).tolist(),
+                "uvs": numpy.asarray(uvs, dtype=float).reshape(-1, 3, 2).tolist(),
+                "corners": numpy.asarray(corners, dtype=float).reshape(-1, 3, 3).tolist(),
+            }, handle, separators=(",", ":"), allow_nan=False)
+        result = subprocess.run(
+            ["sh", os.path.join(repo, "tools", "tool.sh"), mojo,
+             "carla_town_uv", path],
+            capture_output=True, text=True,
+        )
+    finally:
+        shutil.rmtree(folder, ignore_errors=True)
+    if result.returncode != 0:
+        raise ValueError(result.stderr.strip() or "texture projection failed")
+    return json.loads(result.stdout)["uvs"]
+
+
 def transfer_uvs(primitive, corners, normals, candidates=8):
     """Return texture coordinates for new triangles `corners` (n, 3, 3)
     with unit normals `normals`, from the primitive they were simplified
@@ -724,6 +752,8 @@ def transfer_uvs(primitive, corners, normals, candidates=8):
     would give there, so the new triangle reads one texture island, not
     three. Returns the coordinates, three to a triangle, and the normal of
     each triangle's original.
+
+    `tools/carla_town_uv.mojo` projects the corners into that triangle.
     """
     from scipy.spatial import cKDTree
     faces = primitive["triangles"]
@@ -738,23 +768,10 @@ def transfer_uvs(primitive, corners, normals, candidates=8):
     offset = numpy.abs(numpy.einsum("nkd,nkd->nk", normal[near],
                                     corners.mean(axis=1)[:, None, :] - centers[near]))
     best = near[numpy.arange(len(corners)), numpy.argmin(offset - numpy.abs(facing), axis=1)]
-    a, b, c = source[best, 0], source[best, 1], source[best, 2]
-    uv = primitive["uvs"][faces[best]]
-    e0, e1 = b - a, c - a
-    d00 = numpy.einsum("nd,nd->n", e0, e0)
-    d01 = numpy.einsum("nd,nd->n", e0, e1)
-    d11 = numpy.einsum("nd,nd->n", e1, e1)
-    denominator = d00 * d11 - d01 * d01
-    denominator = numpy.where(numpy.abs(denominator) > 1e-18, denominator, 1e-18)
-    out = numpy.zeros((len(corners), 3, 2))
-    for k in range(3):
-        e2 = corners[:, k] - a
-        d20 = numpy.einsum("nd,nd->n", e2, e0)
-        d21 = numpy.einsum("nd,nd->n", e2, e1)
-        v = (d11 * d20 - d01 * d21) / denominator
-        w = (d00 * d21 - d01 * d20) / denominator
-        out[:, k] = (1 - v - w)[:, None] * uv[:, 0] + v[:, None] * uv[:, 1] + w[:, None] * uv[:, 2]
-    return out, normal[best]
+    if len(corners) == 0:
+        return numpy.zeros((0, 3, 2)), normal[best]
+    projected = _uv_tool(source[best], primitive["uvs"][faces[best]], corners)
+    return numpy.array(projected, dtype=numpy.float64).reshape(-1, 3, 2), normal[best]
 
 
 def _cards_tool(primitive, keep, seed):
