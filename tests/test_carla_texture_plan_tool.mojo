@@ -168,10 +168,33 @@ def test_a_mask_keeps_png_and_the_limit_uses_python_round() raises:
     assert_equal(count, 200)
 
 
+def test_the_name_is_the_sha256_of_the_bytes() raises:
+    var root = _dir()
+    var raw = root + "/bytes"
+    Path(raw).write_text("texture-bytes")
+    var digest = _python(
+        "import hashlib; print(hashlib.sha256(b'texture-bytes').hexdigest(),"
+        " end='')"
+    )
+    assert_equal(
+        plan_text('{"mode":"name","path":"' + raw + '","format":"JPEG"}'),
+        '{"name":"texture_' + digest + '.jpg"}',
+    )
+    var empty = root + "/empty"
+    Path(empty).write_text("")
+    assert_equal(
+        plan_text('{"mode":"name","path":"' + empty + '","format":"PNG"}'),
+        '{"name":"texture_e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855.png"}',
+    )
+    with assert_raises(contains="texture format is not JPEG or PNG"):
+        _ = plan_text('{"mode":"name","path":"' + empty + '","format":"GIF"}')
+    _remove(root)
+
+
 def test_a_bad_plan_is_refused() raises:
     with assert_raises(contains="texture plan is not an object"):
         _ = plan_text("[]")
-    with assert_raises(contains="texture mode is not texture or fit"):
+    with assert_raises(contains="texture mode is not texture, fit or name"):
         _ = plan_text('{"mode":"other","width":1,"height":1,"max":1}')
     with assert_raises(contains="image size is not positive"):
         _ = plan_text('{"mode":"fit","width":0,"height":0,"max":1}')

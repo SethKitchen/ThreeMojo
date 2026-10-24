@@ -514,7 +514,7 @@ until that build ends.
 
 The primitive digest is `tools/carla_geometry_digest.mojo`. It packs each field as little-endian bytes and hashes the name, the shape and those bytes.
 
-Packaged texture names use a hash of the encoded image bytes. Two material
+`tools/carla_texture_plan.mojo` names each packaged texture by the SHA-256 of its encoded bytes. Two material
 overrides can share a color map with different masks without replacing each
 other's image. Source images with the same filename also stay distinct.
 Equal encoded images can share one packaged file.

@@ -21,6 +21,7 @@ from std.sys import argv, exit, stderr
 
 from tools._python_json import PY_BOOL, PY_DICT, PY_INT, PyJson
 from tools._python_math import round_half_even
+from tools._sha256 import sha256_hex
 
 
 @no_inline
@@ -39,22 +40,27 @@ def plan_text(text: String) raises -> String:
     """Return the packaged size and encoding as JSON.
 
     Args:
-        text: A JSON object. `mode` is `texture` or `fit`.
+        text: A JSON object. `mode` is `texture`, `fit` or `name`.
 
     Returns:
-        `neutral`, `width`, `height`, `resize`, `format`, `quality` and
-        `optimize`. `quality` is -1 when the encoder keeps its default.
+        For `texture` and `fit`: `neutral`, `width`, `height`, `resize`,
+        `format`, `quality` and `optimize`. `quality` is -1 when the
+        encoder keeps its default. For `name`: `name`, the SHA-256 of the
+        file plus `texture_` and the suffix.
 
     Raises:
-        Error: If the JSON is not that object, or a size is not usable.
+        Error: If the JSON is not that object, a size is not usable, or
+            the format is not JPEG or PNG.
     """
     var doc = PyJson.parse(text)
     var root = doc.root
     if doc.kind(root) != PY_DICT:
         raise Error("texture plan is not an object")
     var mode = doc.text(doc.at(root, "mode"))
+    if mode == "name":
+        return _name(doc, root)
     if mode != "texture" and mode != "fit":
-        raise Error("texture mode is not texture or fit")
+        raise Error("texture mode is not texture, fit or name")
     var width = _whole(doc, doc.at(root, "width"))
     var height = _whole(doc, doc.at(root, "height"))
     var limit = _whole(doc, doc.at(root, "max"))
@@ -102,6 +108,19 @@ struct _Fit(ImplicitlyCopyable, Movable):
     var width: Int
     var height: Int
     var resize: Bool
+
+
+def _name(doc: PyJson, root: Int) raises -> String:
+    """Return the packaged file name of one encoded image."""
+    var path = doc.text(doc.at(root, "path"))
+    var format = doc.text(doc.at(root, "format"))
+    var suffix = String(".png")
+    if format == "JPEG":
+        suffix = ".jpg"
+    elif format != "PNG":
+        raise Error("texture format is not JPEG or PNG")
+    var digest = sha256_hex(Path(path).read_bytes())
+    return '{"name":"texture_' + digest + suffix + '"}'
 
 
 def _fit(width: Int, height: Int, limit: Int) raises -> _Fit:
