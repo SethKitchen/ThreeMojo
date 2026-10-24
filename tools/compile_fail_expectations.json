@@ -572,6 +572,16 @@
       "candidate not viable: value passed to 'id' cannot be converted from 'String' to 'ControllerId'"
     ]
   },
+  "tests/compile_fail/a_controller_type_is_not_a_bare_int.mojo": {
+    "errors": [
+      {
+        "line": 12,
+        "column": 33,
+        "message": "cannot implicitly convert 'IntLiteral[0]' value to 'ControllerType'"
+      }
+    ],
+    "notes": []
+  },
   "tests/compile_fail/a_coordinate_system_is_not_a_bare_int.mojo": {
     "errors": [
       {
@@ -1390,6 +1400,96 @@
     ],
     "notes": []
   },
+  "tests/compile_fail/a_gamepad_axis_is_not_a_bare_int.mojo": {
+    "errors": [
+      {
+        "line": 12,
+        "column": 30,
+        "message": "cannot implicitly convert 'IntLiteral[0]' value to 'GamepadAxis'"
+      }
+    ],
+    "notes": []
+  },
+  "tests/compile_fail/a_gamepad_bind_type_is_not_a_bare_int.mojo": {
+    "errors": [
+      {
+        "line": 12,
+        "column": 27,
+        "message": "cannot implicitly convert 'IntLiteral[0]' value to 'BindType'"
+      }
+    ],
+    "notes": []
+  },
+  "tests/compile_fail/a_gamepad_button_is_not_a_bare_int.mojo": {
+    "errors": [
+      {
+        "line": 12,
+        "column": 32,
+        "message": "cannot implicitly convert 'IntLiteral[0]' value to 'GamepadButton'"
+      }
+    ],
+    "notes": []
+  },
+  "tests/compile_fail/a_gamepad_button_label_is_not_a_bare_int.mojo": {
+    "errors": [
+      {
+        "line": 12,
+        "column": 37,
+        "message": "cannot implicitly convert 'IntLiteral[0]' value to 'GamepadButtonLabel'"
+      }
+    ],
+    "notes": []
+  },
+  "tests/compile_fail/a_gamepad_event_kind_is_not_a_bare_int.mojo": {
+    "errors": [
+      {
+        "line": 12,
+        "column": 35,
+        "message": "cannot implicitly convert 'IntLiteral[0]' value to 'GamepadEventKind'"
+      }
+    ],
+    "notes": []
+  },
+  "tests/compile_fail/a_gamepad_face_style_is_not_a_bare_int.mojo": {
+    "errors": [
+      {
+        "line": 12,
+        "column": 28,
+        "message": "cannot implicitly convert 'IntLiteral[0]' value to 'FaceStyle'"
+      }
+    ],
+    "notes": []
+  },
+  "tests/compile_fail/a_gamepad_mapping_kind_is_not_a_bare_int.mojo": {
+    "errors": [
+      {
+        "line": 12,
+        "column": 30,
+        "message": "cannot implicitly convert 'IntLiteral[0]' value to 'MappingKind'"
+      }
+    ],
+    "notes": []
+  },
+  "tests/compile_fail/a_gamepad_mapping_priority_is_not_a_bare_int.mojo": {
+    "errors": [
+      {
+        "line": 12,
+        "column": 34,
+        "message": "cannot implicitly convert 'IntLiteral[0]' value to 'MappingPriority'"
+      }
+    ],
+    "notes": []
+  },
+  "tests/compile_fail/a_gamepad_type_is_not_a_bare_int.mojo": {
+    "errors": [
+      {
+        "line": 12,
+        "column": 30,
+        "message": "cannot implicitly convert 'IntLiteral[0]' value to 'GamepadType'"
+      }
+    ],
+    "notes": []
+  },
   "tests/compile_fail/a_gear_is_not_a_bare_int.mojo": {
     "errors": [
       {
@@ -1637,6 +1737,16 @@
       "function declared here"
     ]
   },
+  "tests/compile_fail/a_hardware_bus_is_not_a_bare_int.mojo": {
+    "errors": [
+      {
+        "line": 12,
+        "column": 30,
+        "message": "cannot implicitly convert 'IntLiteral[0]' value to 'HardwareBus'"
+      }
+    ],
+    "notes": []
+  },
   "tests/compile_fail/a_head_bone_is_not_a_bare_int.mojo": {
     "errors": [
       {
@@ -1770,6 +1880,26 @@
     "notes": [
       "function declared here"
     ]
+  },
+  "tests/compile_fail/a_joystick_driver_signature_is_not_a_bare_int.mojo": {
+    "errors": [
+      {
+        "line": 12,
+        "column": 34,
+        "message": "cannot implicitly convert 'IntLiteral[0]' value to 'DriverSignature'"
+      }
+    ],
+    "notes": []
+  },
+  "tests/compile_fail/a_joystick_event_kind_is_not_a_bare_int.mojo": {
+    "errors": [
+      {
+        "line": 12,
+        "column": 36,
+        "message": "cannot implicitly convert 'IntLiteral[0]' value to 'JoystickEventKind'"
+      }
+    ],
+    "notes": []
   },
   "tests/compile_fail/a_json_kind_is_not_a_bare_int.mojo": {
     "errors": [
@@ -3910,6 +4040,26 @@
       "function declared here"
     ]
   },
+  "tests/compile_fail/a_usb_product_id_is_not_a_bare_int.mojo": {
+    "errors": [
+      {
+        "line": 12,
+        "column": 28,
+        "message": "cannot implicitly convert 'IntLiteral[0]' value to 'ProductId'"
+      }
+    ],
+    "notes": []
+  },
+  "tests/compile_fail/a_usb_vendor_id_is_not_a_bare_int.mojo": {
+    "errors": [
+      {
+        "line": 12,
+        "column": 27,
+        "message": "cannot implicitly convert 'IntLiteral[0]' value to 'VendorId'"
+      }
+    ],
+    "notes": []
+  },
   "tests/compile_fail/a_usd_asset_kind_is_not_a_bare_int.mojo": {
     "errors": [
       {
@@ -5067,6 +5217,16 @@
     "notes": [
       "function declared here"
     ]
+  },
+  "tests/compile_fail/an_input_device_class_is_not_a_bare_int.mojo": {
+    "errors": [
+      {
+        "line": 12,
+        "column": 30,
+        "message": "cannot implicitly convert 'IntLiteral[0]' value to 'DeviceClass'"
+      }
+    ],
+    "notes": []
   },
   "tests/compile_fail/an_input_kind_is_not_a_bare_int.mojo": {
     "errors": [
