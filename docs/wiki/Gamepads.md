@@ -1,6 +1,12 @@
 # Gamepads
 
-`extensions/gamepad/` reads Xbox, PlayStation, Nintendo and other game controllers on Linux. It is a port of the gamepad subsystem of [SDL](https://github.com/libsdl-org/SDL) 3.2.24. It names each control by its position, so one program works with every pad.
+`extensions/gamepad/` reads Xbox, PlayStation, Nintendo and other game controllers. It is a port of the gamepad subsystem of [SDL](https://github.com/libsdl-org/SDL) 3.2.24. It names each control by its position, so one program works with every pad. It runs the pads' rumble, lights, motion sensors and touchpads. It finds pads as they are plugged in.
+
+There are three backends:
+
+- Linux: evdev for every pad, and SDL's HIDAPI drivers for DualSense, DualShock 4, Switch Pro and Xbox pads on hidraw.
+- A browser: SDL's Emscripten driver behind the C ABI. The page reads the Gamepad API.
+- macOS: the window host reads the GameController framework and feeds the same C ABI.
 
 | Module | What it holds |
 |---|---|
@@ -13,9 +19,15 @@
 | `joystick.mojo` | `Joystick`: the raw axes, buttons and hats, and their events. |
 | `gamepad.mojo` | `Gamepad`: a joystick read through a mapping, and `GamepadEvent`. |
 | `evdev.mojo` | The Linux evdev logic: device classes, axis scaling, hats, events and the automatic mapping. |
-| `linux.mojo` | The device calls: `list_event_nodes`, `probe_joystick`, `EvdevGamepad` and `open_gamepads`. |
+| `linux.mojo` | The device calls: `list_event_nodes`, `probe_joystick`, `EvdevGamepad`, `open_gamepads` and `EvdevHub`. |
+| `effects.mojo` | When SDL sends rumble and light changes: `RumbleState` and `LedState`. |
+| `hid.mojo` | The HID transport: `HidSource`, `HidrawFile` and `enumerate_hidraw`. |
+| `hid_device.mojo` | `HidapiDevice`, what a HIDAPI driver knows about a device. |
+| `hidapi.mojo` | `HidGamepad`, `HidHub`, the choice of driver and the mapping SDL makes for a HIDAPI pad. |
+| `hid_ps5.mojo`, `hid_ps4.mojo`, `hid_switch.mojo`, `hid_xboxone.mojo` | The four HIDAPI drivers. |
+| `web.mojo` | `WebHub`: the pads a browser or another host gives. |
 
-SDL: `src/joystick/SDL_gamepad.c`, `SDL_joystick.c`, `controller_type.c`, `SDL_gamepad_db.h` and `linux/SDL_sysjoystick.c`.
+SDL: `src/joystick/SDL_gamepad.c`, `SDL_joystick.c`, `controller_type.c`, `SDL_gamepad_db.h`, `linux/SDL_sysjoystick.c`, `emscripten/SDL_sysjoystick.c` and `hidapi/`.
 
 ## Read a gamepad
 
@@ -38,7 +50,65 @@ for ref pad in pads:
 
 A stick axis is from -32768 to 32767. Up on a stick is negative. A trigger is from 0 to 32767. A button event comes once for each press, so an attack starts on `GAMEPAD_BUTTON_DOWN`.
 
-The user must have read access to `/dev/input/event*`. Most desktop systems give it to the user at the seat. `open_gamepads` does not watch for new devices. Call it again to find a pad that was plugged in later. A pad that is unplugged sets `gone`.
+The user must have read access to `/dev/input/event*`. Most desktop systems give it to the user at the seat. Write access lets a pad rumble.
+
+## Find pads as they come and go
+
+`EvdevHub` and `HidHub` keep a list of pads. Call `detect` each frame. It returns the pads that were added and removed. A hub scans its folder when the folder changed, at most every 3 seconds, as SDL does without udev.
+
+```mojo
+var database = default_mapping_database()
+var hid = HidHub[HidrawFile]()
+var evdev = EvdevHub[EvdevFile]()
+while running:
+    _ = hid.detect(database)
+    _ = evdev.detect(database, hid.claimed())
+    for index in range(len(hid.pads)):
+        for event in hid.pads[index].update():
+            ...
+```
+
+Give `hid.claimed()` to the evdev hub. The kernel also shows a HIDAPI pad as an evdev device, and SDL reads each pad once. `examples/gamepad.mojo` runs both hubs.
+
+A hidraw node is often readable only by root. A udev rule gives the user at the seat access. Steam installs such rules for its controllers.
+
+## Rumble, lights and sensors
+
+```mojo
+_ = pad.rumble(0xFFFF, 0x8000, Duration64(0.25, SECOND))  # low, high, duration
+_ = pad.set_led_at(0, 64, 255, pad.now())                  # HIDAPI pads only
+_ = pad.set_sensor_enabled(SENSOR_GYRO, True)
+var turn = pad.pad.value().angular_velocity(SENSOR_GYRO, 0)  # AngularVelocity
+```
+
+A strength is from 0 to 65535. A duration of zero rumbles until the next call. SDL sends a running rumble again every 2 seconds and stops it when the duration ends. `update` does both.
+
+The evdev backend rumbles through the kernel's force feedback. The HIDAPI drivers write the pad's own output reports, so they also set the light bar and the player lights. A HIDAPI pad shows its player number when it connects.
+
+A gyroscope reads in radians per second, and an accelerometer in meters per second squared. A touchpad finger is from 0 to 1 across and down. `GAMEPAD_TOUCHPAD_DOWN`, `GAMEPAD_TOUCHPAD_MOTION` and `GAMEPAD_TOUCHPAD_UP` report a finger. `GAMEPAD_SENSOR_UPDATE` reports a reading.
+
+## The HIDAPI drivers
+
+| Driver | Pads | Links |
+|---|---|---|
+| `hid_ps5.mojo` | DualSense, DualSense Edge, and compatible pads | USB, Bluetooth |
+| `hid_ps4.mojo` | DualShock 4, the Sony wireless adapter, and compatible pads | USB, Bluetooth |
+| `hid_switch.mojo` | Switch Pro Controller and compatible pads | USB, Bluetooth |
+| `hid_xboxone.mojo` | Xbox One and Xbox Series pads | Bluetooth |
+
+A wired Xbox pad speaks GIP on a vendor interface, not HID. hidapi reaches it only through libusb, so the evdev backend reads it, with the kernel's `xpad` driver. Joy-Cons and the other Nintendo pads are not ported.
+
+## A browser
+
+`window/capi_gamepad.mojo` is a C ABI library for a host that has its own gamepad API. Each frame, the host stages each pad's state in the browser's standard layout and samples it. The library maps the pads with SDL's `Standard Gamepad` mapping. The app reads the pads by SDL's names, and asks the host to play each rumble. `window/threemojo.h` lists the functions.
+
+`examples/capi/web/gamepad.js` is the page's half. Run it with `examples/capi/run.sh web gamepad`. The frame shows the first pad's sticks, triggers and buttons. Its south button rumbles it.
+
+## macOS
+
+The macOS window host feeds the same library from the GameController framework: `examples/capi/macos_gamepad.m`. It reads every controller that has an extended gamepad profile, on USB and Bluetooth. It plays rumble with Core Haptics. Run it with `examples/capi/run.sh native gamepad`.
+
+The Mojo HID transport does not open IOKit devices. The coverage gate runs on Linux, and an IOKit transport in Mojo could not be measured there. So on macOS the pads give the standard layout, without the lights, the sensors and the touchpads.
 
 ## Buttons by position
 
@@ -78,12 +148,13 @@ SDL's hints are not ported. The three Linux hints are arguments of `EvdevGamepad
 
 ## What is not ported
 
-- The HIDAPI drivers, which talk to some pads without the kernel driver.
-- Rumble, LEDs, motion sensors and touchpads.
+- The HIDAPI drivers other than the four above: Joy-Cons, Steam, Stadia, Luna, Shield, GameCube, Wii and PS3 pads.
+- libusb, so wired Xbox pads on HIDAPI.
 - The classic `js` joystick interface, and trackballs.
-- Hotplug through udev or inotify.
+- Hotplug through udev or inotify. The hubs poll the device folder instead.
 - The delay SDL adds to a short press of the guide button.
-- Drivers for other systems. The types, the mappings and `Gamepad` work on every system. A host can feed a `Joystick` from its own API.
+- `SDL_SendGamepadEffect`, the raw effect reports of the PlayStation pads.
+- Windows. The Windows Subsystem for Linux uses the Linux backend.
 
 ## Tests
 
@@ -93,3 +164,6 @@ The tests compare against SDL 3.2.24, built from source.
 - `tests/test_gamepad_mapping.mojo`: mapping strings, CRCs, hints, priorities and the built-in database.
 - `tests/test_gamepad.mojo`: a scripted pad, step by step, against SDL's virtual joystick.
 - `tests/test_gamepad_evdev.mojo`: recorded devices against SDL's own Linux driver. The SDL run linked the driver with wrappers for `open`, `ioctl`, `read` and `fstat` that answer from the same tables.
+- `tests/test_gamepad_hid.mojo`: the hidraw transport on a made sysfs tree, and the HIDAPI device record.
+- `tests/test_gamepad_ps5.mojo`, `test_gamepad_ps4.mojo`, `test_gamepad_switch.mojo` and `test_gamepad_xboxone.mojo`: scripts of device reports against SDL's own HIDAPI drivers. The SDL run linked the drivers with wrappers for the `SDL_hid_*` calls, the clock and the rumble thread. Both sides print one transcript, and a test compares the two whole. `tests/_gamepad_hid_script.mojo` runs a script.
+- `tests/test_gamepad_web.mojo` and `tests/test_capi_gamepad.mojo`: the browser driver and its C ABI.

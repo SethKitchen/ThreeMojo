@@ -1023,6 +1023,9 @@ SOFTWARE.
 `extensions/gamepad/` is an altered version of the gamepad subsystem of SDL
 3.2.24: `src/joystick/SDL_gamepad.c`, `SDL_gamepad_db.h`, `SDL_joystick.c`,
 `controller_type.c`, `controller_list.h`, `linux/SDL_sysjoystick.c`,
+`emscripten/SDL_sysjoystick.c`, `hidapi/SDL_hidapijoystick.c`,
+`hidapi/SDL_hidapi_ps4.c`, `hidapi/SDL_hidapi_ps5.c`,
+`hidapi/SDL_hidapi_switch.c`, `hidapi/SDL_hidapi_xboxone.c`,
 `src/core/linux/SDL_evdev_capabilities.c`, `src/SDL_guid.c`,
 `src/SDL_utils.c` and `src/stdlib/SDL_crc16.c`. It is a translation from C to
 Mojo and is not the original software. Each ported file repeats the notice

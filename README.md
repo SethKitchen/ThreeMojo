@@ -502,7 +502,7 @@ A checked box records implemented scope. It does not establish engineering or cl
 The anatomy combines measured inputs with authored templates. See the [bounded validity report](https://github.com/SethKitchen/ThreeMojo/wiki/Anatomy-validity) for template estimates, numerical evidence and unsupported uses.
 
 <details>
-<summary>Implemented: 46</summary>
+<summary>Implemented: 47</summary>
 
 - [x] [Audio-aligned game faces](https://github.com/SethKitchen/ThreeMojo/wiki/Audio-aligned-game-faces): caller-provided phonemes or visemes, audio-clock transport, preserved facial LOD and validated glTF bakes [#299](https://github.com/SethKitchen/ThreeMojo/issues/299)
 
@@ -562,6 +562,7 @@ The anatomy combines measured inputs with authored templates. See the [bounded v
 - [x] [Dimension-safe R-tree packing](https://github.com/SethKitchen/ThreeMojo/wiki/CARLA-geometry#find-the-nearest-segment): volume, area, and length costs keep planar and linear trees spatially packed [#583](https://github.com/SethKitchen/ThreeMojo/issues/583)
 - [x] [Translation-stable traffic curvature](https://github.com/SethKitchen/ThreeMojo/wiki/CARLA-traffic-manager#curve-radius-and-coordinate-precision): widened circle radii and speed caps retain the absolute near-line cutoff [#489](https://github.com/SethKitchen/ThreeMojo/issues/489)
 - [x] [Gamepads](https://github.com/SethKitchen/ThreeMojo/wiki/Gamepads): SDL 3.2.24's gamepad subsystem, with mappings, controller types and a Linux evdev backend for Xbox, PlayStation and other pads [#844](https://github.com/SethKitchen/ThreeMojo/issues/844)
+- [x] [Gamepad drivers](https://github.com/SethKitchen/ThreeMojo/wiki/Gamepads#the-hidapi-drivers): DualSense, DualShock 4, Switch Pro and Xbox drivers, rumble, lights, sensors, touchpads, hotplug, browser and macOS [#845](https://github.com/SethKitchen/ThreeMojo/issues/845)
 - [ ] [DLSS 4.5 through Streamline](https://github.com/SethKitchen/ThreeMojo/wiki/Streamline): typed options, jitter, constants and buffer checks, with a CPU fallback; the native binding remains open [#771](https://github.com/SethKitchen/ThreeMojo/issues/771)
 
 </details>
