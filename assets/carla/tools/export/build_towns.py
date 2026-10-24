@@ -484,24 +484,51 @@ IMPOSTOR_SAMPLES = 4
 _IMPOSTOR_LIGHT = None
 
 
-def _albedo(library, material):
-    """Return a material's base color image as float RGBA, and its
-    factor.
+def _albedo_tool(payload):
+    """Return a material's base color from `tools/carla_town_albedo.mojo`."""
+    here = os.path.dirname(os.path.abspath(__file__))
+    repo = os.path.abspath(os.path.join(here, "..", "..", "..", ".."))
+    mojo = os.path.join(repo, ".venv", "bin", "mojo")
+    if not os.path.isfile(mojo):
+        mojo = "mojo"
+    folder = tempfile.mkdtemp(prefix="town-albedo-")
+    try:
+        path = os.path.join(folder, "albedo.json")
+        with open(path, "w", encoding="utf-8") as handle:
+            json.dump(payload, handle, separators=(",", ":"), allow_nan=False)
+        result = subprocess.run(
+            ["sh", os.path.join(repo, "tools", "tool.sh"), mojo,
+             "carla_town_albedo", path],
+            capture_output=True, text=True,
+        )
+    finally:
+        shutil.rmtree(folder, ignore_errors=True)
+    if result.returncode != 0:
+        raise ValueError(result.stderr.strip() or "town albedo failed")
+    return json.loads(result.stdout)
 
-    `tools/carla_image.mojo` reads the file and divides each byte by 255.
-    """
+
+def _colored_part(part, material, library):
+    """Return one mesh part with its base color for a picture."""
+    color = _albedo_tool({
+        "out_dir": library.package.out_dir,
+        "material": library.gltf["materials"][material],
+        "textures": library.gltf.get("textures", []),
+        "images": library.gltf.get("images", []),
+    })
     entry = library.gltf["materials"][material]
-    pbr = entry.get("pbrMetallicRoughness", {})
-    factor = numpy.array(pbr.get("baseColorFactor", [1, 1, 1, 1]), dtype=numpy.float64)
-    texture = pbr.get("baseColorTexture")
-    if texture is None:
-        return None, factor
-    source = library.gltf["textures"][texture["index"]]["source"]
-    path = os.path.join(library.package.out_dir, library.gltf["images"][source]["uri"])
-    _, width, height, rgba = fix.open_image(path)
-    values = fix.unit_rgba(rgba)
-    image = numpy.array(values, dtype=numpy.float64).reshape(height, width, 4)
-    return image, factor
+    item = {
+        "positions": numpy.asarray(part["positions"], dtype=float).reshape(-1, 3).tolist(),
+        "normals": numpy.asarray(part["normals"], dtype=float).reshape(-1, 3).tolist(),
+        "uvs": numpy.asarray(part["uvs"], dtype=float).reshape(-1, 2).tolist(),
+        "triangles": numpy.asarray(part["triangles"]).reshape(-1, 3).tolist(),
+        "factor": color["factor"],
+        "cut": float(entry.get("alphaCutoff", 0.5)),
+        "masked": entry.get("alphaMode") == "MASK",
+    }
+    if "image" in color:
+        item["image"] = color["image"]
+    return item
 
 
 
@@ -570,26 +597,7 @@ def impostor(parts, library, out_dir, name):
     `tools/carla_town_tree.mojo` draws the two views, writes the PNG, and
     builds the quads. The picture holds its own shading.
     """
-    items = []
-    for part, material in parts:
-        image, factor = _albedo(library, material)
-        entry = library.gltf["materials"][material]
-        item = {
-            "positions": numpy.asarray(part["positions"], dtype=float).reshape(-1, 3).tolist(),
-            "normals": numpy.asarray(part["normals"], dtype=float).reshape(-1, 3).tolist(),
-            "uvs": numpy.asarray(part["uvs"], dtype=float).reshape(-1, 2).tolist(),
-            "triangles": numpy.asarray(part["triangles"]).reshape(-1, 3).tolist(),
-            "factor": numpy.asarray(factor, dtype=float).reshape(4).tolist(),
-            "cut": float(entry.get("alphaCutoff", 0.5)),
-            "masked": entry.get("alphaMode") == "MASK",
-        }
-        if image is not None:
-            item["image"] = {
-                "width": int(image.shape[1]),
-                "height": int(image.shape[0]),
-                "rgba": numpy.asarray(image, dtype=float).reshape(-1).tolist(),
-            }
-        items.append(item)
+    items = [_colored_part(part, material, library) for part, material in parts]
     tag = library._bake_tag(name, "impostor", parts)
     os.makedirs(os.path.join(out_dir, "textures"), exist_ok=True)
     frame = _tree_tool({
@@ -759,26 +767,7 @@ def baked_building(parts, library, out_dir, name, target):
                "normals": numpy.array(flat["normals"], dtype=numpy.float64),
                "triangles": numpy.array(flat["triangles"], dtype=numpy.int64),
                "material": name}
-    items = []
-    for part, material in parts:
-        image, factor = _albedo(library, material)
-        entry = library.gltf["materials"][material]
-        item = {
-            "positions": numpy.asarray(part["positions"], dtype=float).reshape(-1, 3).tolist(),
-            "normals": numpy.asarray(part["normals"], dtype=float).reshape(-1, 3).tolist(),
-            "uvs": numpy.asarray(part["uvs"], dtype=float).reshape(-1, 2).tolist(),
-            "triangles": numpy.asarray(part["triangles"]).reshape(-1, 3).tolist(),
-            "factor": numpy.asarray(factor, dtype=float).reshape(4).tolist(),
-            "cut": float(entry.get("alphaCutoff", 0.5)),
-            "masked": entry.get("alphaMode") == "MASK",
-        }
-        if image is not None:
-            item["image"] = {
-                "width": int(image.shape[1]),
-                "height": int(image.shape[0]),
-                "rgba": numpy.asarray(image, dtype=float).reshape(-1).tolist(),
-            }
-        items.append(item)
+    items = [_colored_part(part, material, library) for part, material in parts]
     tag = library._bake_tag(name, "baked", parts, target)
     os.makedirs(os.path.join(out_dir, "textures"), exist_ok=True)
     packed = _bake_tool({

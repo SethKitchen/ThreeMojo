@@ -129,7 +129,9 @@ Some portable features remain partial, including [GLSL shaders](https://github.c
 ### Project tools
 
 <details>
-<summary>Implemented: 54</summary>
+<summary>Implemented: 55</summary>
+
+- [x] [CARLA town base color](https://github.com/SethKitchen/ThreeMojo/wiki/CARLA-assets#the-carla-towns): `tools/carla_town_albedo.mojo` reads a material's base color [#761](https://github.com/SethKitchen/ThreeMojo/issues/761)
 
 - [x] [CARLA town picture materials](https://github.com/SethKitchen/ThreeMojo/wiki/CARLA-assets#the-carla-towns): `tools/carla_town_attach.mojo` adds a plain material and each picture material [#761](https://github.com/SethKitchen/ThreeMojo/issues/761)
 
