@@ -155,7 +155,7 @@ def is_clear(
     x: Length64,
     y: Length64,
     floor_z: Length64,
-) -> Bool:
+) raises -> Bool:
     """Return whether a walker can stand at a plan point.
 
     Args:
@@ -169,7 +169,13 @@ def is_clear(
         True if no voxel is solid within the walker's radius, from the step
         height to the clearance over the floor, and the floor is under the
         point.
+
+    Raises:
+        Error: If the options are refused.
     """
+    # A checked walker has a radius and a clearance above its step, so
+    # each loop below runs at least once.
+    options.check()
     var edge = grid.voxel.to(METER)
     var floor_m = floor_z.to(METER)
     var radius = options.radius.to(METER)
@@ -182,11 +188,11 @@ def is_clear(
         floor((floor_m + options.clearance.to(METER) - grid.origin.z) / edge)
     )
     var reach = Int(ceil(radius / edge))
-    for dj in range(-reach, reach + 1):
-        for di in range(-reach, reach + 1):
+    for dj in range(-reach, reach + 1):  # pragma: no branch
+        for di in range(-reach, reach + 1):  # pragma: no branch
             if Float64(di * di + dj * dj) * edge * edge > radius * radius:
                 continue
-            for k in range(low, high + 1):
+            for k in range(low, high + 1):  # pragma: no branch
                 if grid.is_solid(ci + di, cj + dj, k):
                     return False
     var below = Int(floor((floor_m - 0.5 * edge - grid.origin.z) / edge))
@@ -201,7 +207,7 @@ def is_walkable(
     to_x: Length64,
     to_y: Length64,
     floor_z: Length64,
-) -> Bool:
+) raises -> Bool:
     """Return whether the walker can walk the straight line between two
     plan points.
 
@@ -216,13 +222,16 @@ def is_walkable(
 
     Returns:
         Whether every point of the line, a tenth of a meter apart, is clear.
+
+    Raises:
+        Error: If the options are refused.
     """
     var ax = from_x.to(METER)
     var ay = from_y.to(METER)
     var dx = to_x.to(METER) - ax
     var dy = to_y.to(METER) - ay
-    var steps = Int(sqrt(dx * dx + dy * dy) / 0.1) + 1
-    for step in range(steps + 1):
+    var steps = max(1, Int(sqrt(dx * dx + dy * dy) / 0.1) + 1)
+    for step in range(steps + 1):  # pragma: no branch
         var t = Float64(step) / Float64(steps)
         if not is_clear(
             grid,
@@ -241,24 +250,27 @@ def _farthest(
     points: List[Vec3d],
     around: Vec3d,
     floor_z: Length64,
-) -> Int:
+) raises -> Int:
     """Return the clear point farthest from a place that can be walked to
     in a straight line.
 
     Args:
         grid: The scan's grid.
         options: The walker.
-        points: The clear points; z is not used.
+        points: The clear points, at least two; z is not used.
         around: The place.
         floor_z: The floor's elevation.
 
     Returns:
         The index of the point. A place that is one of the points can be
         walked to from itself, so a point is always found.
+
+    Raises:
+        Error: If the options are refused.
     """
     var best = 0
     var best_length = Float64(-1)
-    for index in range(len(points)):
+    for index in range(len(points)):  # pragma: no branch
         var dx = points[index].x - around.x
         var dy = points[index].y - around.y
         var length = dx * dx + dy * dy
@@ -316,12 +328,12 @@ def walk_ends(
     if len(points) < 2:
         raise Error("Scan walk: the scan has no clear floor to walk on")
     var mean = Vec3d(0, 0, 0)
-    for point in points:
+    for point in points:  # pragma: no branch
         mean = mean + point
     mean = mean * (1 / Float64(len(points)))
     var first = 0
     var nearest = Float64(1e300)
-    for index in range(len(points)):
+    for index in range(len(points)):  # pragma: no branch
         var dx = points[index].x - mean.x
         var dy = points[index].y - mean.y
         if dx * dx + dy * dy < nearest:

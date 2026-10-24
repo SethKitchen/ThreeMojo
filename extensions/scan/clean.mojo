@@ -279,7 +279,7 @@ def clean_scan(
     var outside = 0
     var faint = 0
     var huge = 0
-    for index in range(count):
+    for index in range(count):  # pragma: no branch
         var inside = True
         for axis in range(3):  # pragma: no branch
             var c = Float64(geometry.centers[index * 3 + axis])

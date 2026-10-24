@@ -87,7 +87,8 @@ def test_a_cached_scene_is_found_by_its_text() raises:
 
 
 def test_a_splat_file_is_the_scan() raises:
-    """An entry's `splat` file is the file that reads it."""
+    """An entry's `splat` file is the file that reads it. An entry with no
+    `splat` file, or an empty list of files, reads its folder."""
     var entry = String(ENTRY).replace(
         "}}",
         (
@@ -110,6 +111,11 @@ def test_a_splat_file_is_the_scan() raises:
     )
     assert_equal(
         ScanCatalog.parse(_manifest(folder), cache).find("flat-room").file,
+        "flat-room/meta.json",
+    )
+    var listed = String(ENTRY).replace("}}", '}, "files": []}')
+    assert_equal(
+        ScanCatalog.parse(_manifest(listed), cache).find("flat-room").file,
         "flat-room/meta.json",
     )
     with assert_raises(contains="an entry has no role"):

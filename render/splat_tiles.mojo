@@ -179,7 +179,8 @@ def _count_run(
         for lane in range(4):
             boxes[unsafe_offset=index * 4 + lane] = box[lane]
         for ty in range(Int(box[2]), Int(box[3]) + 1):
-            for tx in range(Int(box[0]), Int(box[1]) + 1):
+            # A box is empty on both axes or on neither.
+            for tx in range(Int(box[0]), Int(box[1]) + 1):  # pragma: no branch
                 counts[unsafe_offset=ty * tiles_x + tx] += 1
 
 
@@ -231,7 +232,7 @@ def _place_run(
             Int(boxes[unsafe_offset=index * 4 + 2]),
             Int(boxes[unsafe_offset=index * 4 + 3]) + 1,
         ):
-            for tx in range(
+            for tx in range(  # pragma: no branch
                 Int(boxes[unsafe_offset=index * 4]),
                 Int(boxes[unsafe_offset=index * 4 + 1]) + 1,
             ):
