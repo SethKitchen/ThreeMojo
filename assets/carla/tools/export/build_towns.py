@@ -1133,9 +1133,8 @@ def impostor(parts, library, out_dir, name):
     material's index.
 
     `tools/carla_town_impostor.mojo` sizes the views, builds the quads, and
-    fills the empty texels.
+    fills the empty texels. `tools/carla_png.mojo` writes the picture.
     """
-    from PIL import Image
     points = numpy.concatenate([p["positions"] for p, _ in parts])
     frame = _impostor_tool({
         "mode": "frame",
@@ -1157,15 +1156,19 @@ def impostor(parts, library, out_dir, name):
             raw.reshape(-1).tolist(), raw.shape[1], raw.shape[0], 4,
             IMPOSTOR_SIZE, IMPOSTOR_SIZE, "lanczos",
         )
-        views.append(Image.frombytes(
-            "RGBA", (IMPOSTOR_SIZE, IMPOSTOR_SIZE), bytes(resized),
-        ))
-    atlas = Image.new("RGBA", (2 * IMPOSTOR_SIZE, IMPOSTOR_SIZE))
-    atlas.paste(views[0], (0, 0))
-    atlas.paste(views[1], (IMPOSTOR_SIZE, 0))
+        views.append(bytes(resized))
+    row = IMPOSTOR_SIZE * 4
+    atlas = bytearray()
+    for y in range(IMPOSTOR_SIZE):
+        start = y * row
+        atlas += views[0][start:start + row]
+        atlas += views[1][start:start + row]
     tag = library._bake_tag(name, "impostor", parts)
     os.makedirs(os.path.join(out_dir, "textures"), exist_ok=True)
-    atlas.save(os.path.join(out_dir, "textures", tag + ".png"), optimize=True)
+    with open(os.path.join(out_dir, "textures", tag + ".png"), "wb") as handle:
+        handle.write(fix.save_png(
+            list(atlas), 2 * IMPOSTOR_SIZE, IMPOSTOR_SIZE, "RGBA", True,
+        ))
     gltf = library.gltf
     gltf["images"].append({"uri": "textures/" + tag + ".png"})
     gltf["textures"].append({"sampler": 0, "source": len(gltf["images"]) - 1})

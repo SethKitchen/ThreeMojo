@@ -129,7 +129,9 @@ Some portable features remain partial, including [GLSL shaders](https://github.c
 ### Project tools
 
 <details>
-<summary>Implemented: 37</summary>
+<summary>Implemented: 38</summary>
+
+- [x] [Pillow PNG files for CARLA textures](https://github.com/SethKitchen/ThreeMojo/wiki/CARLA-assets#rebuild-the-vehicle-zips): `tools/carla_png.mojo` writes an optimized PNG with Pillow's row filters [#761](https://github.com/SethKitchen/ThreeMojo/issues/761)
 
 - [x] [Quadric mesh collapses](https://github.com/SethKitchen/ThreeMojo/wiki/CARLA-assets#rebuild-the-vehicle-zips): `tools/carla_simplify.mojo` records the same collapses as fast-simplification and replays them [#761](https://github.com/SethKitchen/ThreeMojo/issues/761)
 

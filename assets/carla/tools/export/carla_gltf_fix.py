@@ -261,6 +261,44 @@ def _texture_plan(path, color, max_size, width, height, masked):
     return json.loads(result.stdout)
 
 
+def save_png(pixels, width, height, mode, optimize):
+    """Return PNG bytes from `tools/carla_png.mojo`.
+
+    The bytes match Pillow's ``Image.save`` for mode ``L``, ``RGB`` or
+    ``RGBA``. ``optimize`` true uses Pillow's average filter and zlib
+    level 9.
+    """
+    here = os.path.dirname(os.path.abspath(__file__))
+    repo = os.path.abspath(os.path.join(here, "..", "..", "..", ".."))
+    mojo = os.path.join(repo, ".venv", "bin", "mojo")
+    if not os.path.isfile(mojo):
+        mojo = "mojo"
+    folder = tempfile.mkdtemp(prefix="png-")
+    try:
+        request = os.path.join(folder, "image.json")
+        out = os.path.join(folder, "image.png")
+        with open(request, "w", encoding="utf-8") as handle:
+            json.dump({
+                "mode": mode,
+                "width": int(width),
+                "height": int(height),
+                "optimize": bool(optimize),
+                "pixels": [int(value) for value in pixels],
+            }, handle, separators=(",", ":"))
+        result = subprocess.run(
+            ["sh", os.path.join(repo, "tools", "tool.sh"), mojo,
+             "carla_png", request, out],
+            capture_output=True,
+        )
+        if result.returncode != 0:
+            raise ValueError(result.stderr.decode("utf-8", "replace").strip()
+                             or "png save failed")
+        with open(out, "rb") as handle:
+            return handle.read()
+    finally:
+        shutil.rmtree(folder, ignore_errors=True)
+
+
 def _save_texture(package, image, plan):
     """Encode `image` with the format and options in `plan`."""
     options = {}
@@ -304,9 +342,15 @@ class Package:
         near materials and memoized far-bake inputs still refer to it.
         Equal encoded images can safely share a name across source paths.
         """
-        with io.BytesIO() as output:
-            image.save(output, format=image_format, **options)
-            data = output.getvalue()
+        if image_format == "PNG":
+            data = save_png(
+                list(image.tobytes()), image.width, image.height, image.mode,
+                bool(options.get("optimize", False)),
+            )
+        else:
+            with io.BytesIO() as output:
+                image.save(output, format=image_format, **options)
+                data = output.getvalue()
         name = _texture_name(data, image_format)
         os.makedirs(os.path.join(self.out_dir, "textures"), exist_ok=True)
         with open(os.path.join(self.out_dir, "textures", name), "wb") as target:
