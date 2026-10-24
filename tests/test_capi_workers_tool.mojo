@@ -1,15 +1,27 @@
 # Copyright (c) 2026 Seth Kitchen, PE
 # SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
-"""Check worker cleanup when a WebAssembly thread pool cannot start."""
+# Noncommercial use is free; commercial use requires a paid license.
+# See LICENSE, LICENSE-COMMERCIAL.md and THIRD-PARTY-NOTICES.md.
 
-from pathlib import Path
-import shutil
-import subprocess
-import unittest
+"""Check worker cleanup when a WebAssembly thread pool cannot start.
+
+Node runs `examples/capi/web/threemojo.js` with a stand-in WebAssembly
+runtime. A missing Node skips the check.
+"""
+
+from std.os.path import realpath
+from std.testing import TestSuite, assert_equal
+
+from tools._process import run_program
 
 
-LIBRARY = Path(__file__).resolve().parents[1] / "examples/capi/web/threemojo.js"
-CHECK = r"""
+def _script() -> String:
+    """Return the Node program that drives each failure.
+
+    Returns:
+        A module that imports the page's thread loader.
+    """
+    return """
 import assert from "node:assert/strict";
 const { loadThreads } = await import(process.argv[1]);
 const scenario = process.argv[2];
@@ -68,22 +80,37 @@ if (scenario === "success") {
 """
 
 
-class CapiWorkerTests(unittest.TestCase):
-    def test_startup_cleanup_and_successful_close(self):
-        node = shutil.which("node")
-        if node is None:
-            self.skipTest("the JavaScript wrapper test needs Node")
-        for scenario in ("stack", "spawn", "post", "abi", "init", "success"):
-            with self.subTest(scenario=scenario):
-                result = subprocess.run(
-                    [node, "--input-type=module", "-e", CHECK, LIBRARY.as_uri(), scenario],
-                    capture_output=True,
-                    text=True,
-                    check=False,
-                    timeout=5,
-                )
-                self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+def test_startup_cleanup_and_successful_close() raises:
+    var found = run_program(["sh", "-c", "command -v node"], 5)
+    if found.status != 0:
+        print("SKIP (no node): C ABI worker cleanup")
+        return
+    var node = String(found.output.split("\n")[0])
+    var library = "file://" + realpath("examples/capi/web/threemojo.js")
+    var script = _script()
+    for scenario in [
+        "stack",
+        "spawn",
+        "post",
+        "abi",
+        "init",
+        "success",
+    ]:
+        var result = run_program(
+            [
+                node,
+                "--input-type=module",
+                "-e",
+                script,
+                library,
+                scenario,
+            ],
+            10,
+        )
+        assert_equal(
+            result.status, 0, scenario + "\n" + result.output + result.errors
+        )
 
 
-if __name__ == "__main__":
-    unittest.main()
+def main() raises:
+    TestSuite.discover_tests[__functions_in_module()]().run()
