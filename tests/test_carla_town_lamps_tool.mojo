@@ -113,6 +113,49 @@ def test_corners_that_share_a_millimeter_are_one_piece() raises:
         )
 
 
+def test_a_head_is_placed_by_the_copy_matrix() raises:
+    var lines = run_program(
+        [
+            "python3",
+            "-c",
+            "import json, numpy\n"
+            + "rng = numpy.random.default_rng(761)\n"
+            + "for _ in range(30):\n"
+            + "    heads = rng.normal(size=(int(rng.integers(1, 5)), 3))\n"
+            + "    linear = rng.normal(size=(3, 3))\n"
+            + "    move = rng.normal(size=3)\n"
+            + "    got = (heads @ linear.T + move).tolist()\n"
+            + "    print(json.dumps({'heads': heads.tolist(), 'linear':"
+            " linear.tolist(), 'move': move.tolist()}, separators=(',',"
+            " ':')))\n"
+            + "    print(json.dumps(got, separators=(',', ':')))\n"
+            + "print(json.dumps({'heads': [], 'linear':"
+            " [[1,0,0],[0,1,0],[0,0,1]], 'move': [0,0,0]}, separators=(',',"
+            " ':')))\n"
+            + "print('[]')\n",
+        ],
+        15,
+        merge_errors=False,
+    )
+    if lines.status != 0:
+        raise Error(lines.errors)
+    var pending = String("")
+    var count = 0
+    for line in lines.output.splitlines():
+        var text = String(line)
+        if text.byte_length() == 0:
+            continue
+        if pending.byte_length() == 0:
+            pending = text
+            continue
+        assert_equal(heads_text(pending), text)
+        pending = ""
+        count += 1
+    assert_equal(count, 31)
+    with assert_raises(contains="matrix is not 3 by 3"):
+        _ = heads_text('{"heads":[[0,0,0]],"linear":[[1,0,0]],"move":[0,0,0]}')
+
+
 def test_the_command_line() raises:
     var root = _dir()
     var path = _file(

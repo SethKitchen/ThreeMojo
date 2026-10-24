@@ -9,7 +9,8 @@
 
 `FILE` is JSON. It has `mesh` and `primitives`. Each primitive has
 `positions` and `triangles`. The program prints the heads in the mesh
-frame, or `null` when the mesh is not a lamp.
+frame, or `null` when the mesh is not a lamp. With `heads`, `linear`
+and `move`, it places those heads: `heads @ linear.T + move`.
 """
 
 from std.math import isinf, isnan
@@ -19,6 +20,7 @@ from std.sys import argv, exit, stderr
 from tools._bigint import BigInt
 from tools._python_float import parse_float, python_repr
 from tools._python_json import (
+    MISSING,
     PY_DICT,
     PY_FLOAT,
     PY_INT,
@@ -58,6 +60,8 @@ def heads_text(text: String) raises -> String:
     var root = doc.root
     if doc.kind(root) != PY_DICT:
         raise Error("lamp request is not an object")
+    if doc.get(root, "heads") != MISSING:
+        return _placed(doc, root)
     var mesh_node = doc.at(root, "mesh")
     if doc.kind(mesh_node) != PY_STR:
         raise Error("mesh is not a string")
@@ -418,6 +422,85 @@ def _before(left: _WeldKey, right: _WeldKey) -> Bool:
 def _same(left: _WeldKey, right: _WeldKey) -> Bool:
     """Return whether two welded keys are equal."""
     return left.x == right.x and left.y == right.y and left.z == right.z
+
+
+def _placed(doc: PyJson, root: Int) raises -> String:
+    """Return lamp heads in the world frame."""
+    var heads = _rows(doc, doc.at(root, "heads"), 3, "head")
+    var linear = _rows(doc, doc.at(root, "linear"), 3, "matrix row")
+    if len(linear) != 3:
+        raise Error("matrix is not 3 by 3")
+    var move = _row(doc, doc.at(root, "move"), 3, "move")
+    var out = String("[")
+    for index in range(len(heads)):
+        if index > 0:
+            out += ","
+        out += "["
+        for axis in range(3):
+            if axis > 0:
+                out += ","
+            var sum = _fadd(
+                _fadd(
+                    _fmul(heads[index][0], linear[axis][0]),
+                    _fmul(heads[index][1], linear[axis][1]),
+                ),
+                _fmul(heads[index][2], linear[axis][2]),
+            )
+            out += python_repr(_fadd(sum, move[axis]))
+        out += "]"
+    out += "]"
+    return out^
+
+
+def _rows(
+    doc: PyJson, node: Int, width: Int, name: String
+) raises -> List[List[Float64]]:
+    """Return a list of number rows."""
+    if doc.kind(node) != PY_LIST:
+        raise Error(name + " is not a list")
+    var out = List[List[Float64]]()
+    for index in range(doc.length(node)):
+        out.append(_row(doc, doc.item(node, index), width, name))
+    return out^
+
+
+def _row(
+    doc: PyJson, node: Int, width: Int, name: String
+) raises -> List[Float64]:
+    """Return one row of `width` numbers."""
+    if doc.kind(node) != PY_LIST or doc.length(node) != width:
+        raise Error(name + " is not " + String(width) + " numbers")
+    var out = List[Float64]()
+    for index in range(width):
+        out.append(_coord(doc, doc.item(node, index)))
+    return out^
+
+
+def _coord(doc: PyJson, node: Int) raises -> Float64:
+    """Return one finite coordinate."""
+    var kind = doc.kind(node)
+    var value: Float64
+    if kind == PY_FLOAT:
+        value = doc.number(node)
+    elif kind == PY_INT:
+        value = parse_float(doc.text(node))
+    else:
+        raise Error("coordinate is not a number")
+    if isnan(value) or isinf(value):
+        raise Error("coordinate is not finite")
+    return value
+
+
+@no_inline
+def _fmul(left: Float64, right: Float64) -> Float64:
+    """Return one product, rounded before the next operation."""
+    return left * right
+
+
+@no_inline
+def _fadd(left: Float64, right: Float64) -> Float64:
+    """Return one sum, rounded before the next operation."""
+    return left + right
 
 
 def _ends(text: String, suffix: String) -> Bool:

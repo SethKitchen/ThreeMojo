@@ -1705,23 +1705,29 @@ def place(part, row, rows):
     return _spline_place(local, normals, part["triangles"], rows)
 
 
-def _lamps_tool(primitives, mesh_path):
+def _lamp_world(heads, linear, move):
+    """Return lamp heads placed by `tools/carla_town_lamps.mojo`.
+
+    The map is `heads @ linear.T + move`, in the three.js frame.
+    """
+    return _lamps_request({
+        "heads": numpy.asarray(heads, dtype=float).reshape(-1, 3).tolist(),
+        "linear": numpy.asarray(linear, dtype=float).reshape(3, 3).tolist(),
+        "move": numpy.asarray(move, dtype=float).reshape(3).tolist(),
+    })
+
+
+def _lamps_request(payload):
     """Return JSON from `tools/carla_town_lamps.mojo`."""
     here = os.path.dirname(os.path.abspath(__file__))
     repo = os.path.abspath(os.path.join(here, "..", "..", "..", ".."))
     mojo = os.path.join(repo, ".venv", "bin", "mojo")
     if not os.path.isfile(mojo):
         mojo = "mojo"
-    payload = {"mesh": mesh_path, "primitives": []}
-    for primitive in primitives:
-        payload["primitives"].append({
-            "positions": primitive["positions"].tolist(),
-            "triangles": primitive["triangles"].tolist(),
-        })
     fd, path = tempfile.mkstemp(prefix="carla-town-lamps-", suffix=".json")
     try:
         with os.fdopen(fd, "w", encoding="utf-8") as handle:
-            json.dump(payload, handle, separators=(",", ":"))
+            json.dump(payload, handle, separators=(",", ":"), allow_nan=False)
         result = subprocess.run(
             ["sh", os.path.join(repo, "tools", "tool.sh"), mojo,
              "carla_town_lamps", path],
@@ -1734,7 +1740,18 @@ def _lamps_tool(primitives, mesh_path):
         if "index out of range" in message:
             raise IndexError(message)
         raise ValueError(message)
-    heads = json.loads(result.stdout)
+    return json.loads(result.stdout)
+
+
+def _lamps_tool(primitives, mesh_path):
+    """Return JSON from `tools/carla_town_lamps.mojo`."""
+    payload = {"mesh": mesh_path, "primitives": []}
+    for primitive in primitives:
+        payload["primitives"].append({
+            "positions": primitive["positions"].tolist(),
+            "triangles": primitive["triangles"].tolist(),
+        })
+    heads = _lamps_request(payload)
     if heads is None:
         return None
     return numpy.array(heads, dtype=numpy.float64)
@@ -1874,7 +1891,7 @@ def build(town, max_size, tile):
         if heads is not None:
             for rows in copies:
                 linear, move = to_three(rows)
-                lamps.extend((heads @ linear.T + move).tolist())
+                lamps.extend(_lamp_world(heads, linear, move))
         for index, (primitive, material_name) in enumerate(zip(primitives, names)):
             if material_name == GRID:
                 continue
