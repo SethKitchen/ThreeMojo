@@ -499,7 +499,7 @@ The towns are made in three steps. The scripts run on Windows, like the vehicle 
    sh tools/tool.sh .venv/bin/mojo carla_export_manifest_towns [--urls urls.json]
    ```
 
-   `carla_export_manifest_towns` writes each town's entry and its binding, `town.<town>`. The URLs file is the same form as the vehicles'.
+   `carla_export_manifest_towns` writes each town's entry and its binding, `town.<town>`. The URLs file is the same form as the vehicles'. `tools/carla_town_buffers.mojo` packs each tile's vertices into the glTF buffer.
 
    `--top` lists the meshes that add the most triangles to each town.
 

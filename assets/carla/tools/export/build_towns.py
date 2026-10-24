@@ -1608,49 +1608,65 @@ def build(town, max_size, tile):
     return write(town, name, out_dir, library, groups, lamps)
 
 
+def _buffer_tool(name, groups, lamps, bin_path):
+    """Return JSON from `tools/carla_town_buffers.mojo` and write the bin."""
+    here = os.path.dirname(os.path.abspath(__file__))
+    repo = os.path.abspath(os.path.join(here, "..", "..", "..", ".."))
+    mojo = os.path.join(repo, ".venv", "bin", "mojo")
+    if not os.path.isfile(mojo):
+        mojo = "mojo"
+    payload = {"bin": bin_path, "name": name, "groups": [], "lamps": []}
+    for (lod, kind, cell, material), group in groups.items():
+        payload["groups"].append({
+            "lod": int(lod),
+            "kind": kind,
+            "cell": [int(cell[0]), int(cell[1])],
+            "material": int(material),
+            "positions": [numpy.asarray(chunk, dtype=float).reshape(-1, 3).tolist() for chunk in group[0]],
+            "normals": [numpy.asarray(chunk, dtype=float).reshape(-1, 3).tolist() for chunk in group[1]],
+            "uvs": [numpy.asarray(chunk, dtype=float).reshape(-1, 2).tolist() for chunk in group[2]],
+            "triangles": [numpy.asarray(chunk).reshape(-1, 3).tolist() for chunk in group[3]],
+        })
+    for head in lamps:
+        payload["lamps"].append([float(value) for value in head])
+    folder = tempfile.mkdtemp(prefix="town-buffers-")
+    try:
+        path = os.path.join(folder, "buffers.json")
+        with open(path, "w", encoding="utf-8") as handle:
+            json.dump(payload, handle, separators=(",", ":"), allow_nan=False)
+        result = subprocess.run(
+            ["sh", os.path.join(repo, "tools", "tool.sh"), mojo,
+             "carla_town_buffers", path],
+            capture_output=True, text=True,
+        )
+    finally:
+        shutil.rmtree(folder, ignore_errors=True)
+    if result.returncode != 0:
+        raise ValueError(result.stderr.strip() or "town buffers failed")
+    return json.loads(result.stdout)
+
+
 def write(town, name, out_dir, library, groups, lamps):
     """Write the glTF and its buffer, and return the triangle counts of
-    the two levels of detail and the node count."""
+    the two levels of detail and the node count.
+
+    `tools/carla_town_buffers.mojo` packs the vertices and rounds the lamp
+    heads.
+    """
     gltf = library.gltf
     gltf["asset"] = {"version": "2.0", "generator": "ThreeMojo build_towns.py", "copyright": CREDIT}
     gltf["scene"] = 0
-    gltf["nodes"], gltf["meshes"], gltf["accessors"], gltf["bufferViews"] = [], [], [], []
-    blob = bytearray()
-
-    def add(values, component, kind, target):
-        while len(blob) % 4:
-            blob.append(0)
-        data = values.tobytes()
-        gltf["bufferViews"].append({"buffer": 0, "byteOffset": len(blob), "byteLength": len(data), "target": target})
-        blob.extend(data)
-        accessor = {"bufferView": len(gltf["bufferViews"]) - 1, "componentType": component,
-                    "count": len(values) if values.ndim > 1 else values.size, "type": kind}
-        if kind == "VEC3" and target == 34962:
-            accessor["min"] = values.min(axis=0).tolist()
-            accessor["max"] = values.max(axis=0).tolist()
-        gltf["accessors"].append(accessor)
-        return len(gltf["accessors"]) - 1
-
-    triangles = [0, 0]
-    for (lod, kind, cell, material), group in sorted(groups.items(), key=lambda item: item[0]):
-        faces = numpy.concatenate(group[3]).astype(numpy.uint32)
-        triangles[lod] += len(faces)
-        primitive = {"attributes": {"POSITION": add(numpy.concatenate(group[0]), 5126, "VEC3", 34962),
-                                    "NORMAL": add(numpy.concatenate(group[1]), 5126, "VEC3", 34962),
-                                    "TEXCOORD_0": add(numpy.concatenate(group[2]), 5126, "VEC2", 34962)},
-                     "indices": add(faces.reshape(-1), 5125, "SCALAR", 34963), "material": material}
-        gltf["meshes"].append({"primitives": [primitive]})
-        gltf["nodes"].append({"name": "%s_%d_%d_lod%d" % (kind, cell[0], cell[1], lod), "mesh": len(gltf["meshes"]) - 1,
-                              "extras": {"carla_kind": kind, "carla_lod": lod}})
-    # Each street lamp's head, three numbers each, for the lights at night.
-    gltf["scenes"] = [{"nodes": list(range(len(gltf["nodes"]))),
-                       "extras": {"carla_lamps": [round(v, 3) for head in lamps for v in head]}}]
-    gltf["buffers"] = [{"byteLength": len(blob), "uri": name + ".bin"}]
-    open(os.path.join(out_dir, name + ".bin"), "wb").write(blob)
+    doc = _buffer_tool(name, groups, lamps, os.path.join(out_dir, name + ".bin"))
+    gltf["nodes"] = doc["nodes"]
+    gltf["meshes"] = doc["meshes"]
+    gltf["accessors"] = doc["accessors"]
+    gltf["bufferViews"] = doc["bufferViews"]
+    gltf["scenes"] = doc["scenes"]
+    gltf["buffers"] = doc["buffers"]
     json.dump(gltf, open(os.path.join(out_dir, name + ".gltf"), "w", encoding="utf-8"), separators=(",", ":"))
     check_clean(out_dir)
     to_glb(out_dir, name)
-    return triangles, len(gltf["nodes"])
+    return doc["triangles"], len(gltf["nodes"])
 
 
 def to_glb(out_dir, name):
