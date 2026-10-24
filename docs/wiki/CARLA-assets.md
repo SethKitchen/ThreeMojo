@@ -433,6 +433,8 @@ A package is two files: one binary glTF file, `carla.town.<town>.glb`, with its 
 
 A spline mesh bends along its curve before that placement. `tools/carla_town_bend.mojo` bends the points.
 
+Each primitive takes the component's material for its slot. `tools/carla_town_slots.mojo` chooses the name.
+
 The meshes are merged by tile, by kind and by material. A tile is 32 meters square. Each node has two tags in its `extras`:
 
 | Tag | Values |
