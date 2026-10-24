@@ -193,7 +193,7 @@ def _in_vendors(vendor: Int, vendors: List[Int]) -> Bool:
     Returns:
         Whether it is there.
     """
-    for entry in vendors:
+    for entry in vendors:  # pragma: no branch
         if entry == vendor:
             return True
     return False

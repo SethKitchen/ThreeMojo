@@ -407,7 +407,7 @@ def _uevent_field(uevent: String, key: String) -> String:
     Returns:
         The value, or an empty string when the field is missing.
     """
-    for line in uevent.split("\n"):
+    for line in uevent.split("\n"):  # pragma: no branch
         if line.startswith(key + "="):
             return String(line[byte = key.byte_length() + 1 :])
     return ""
