@@ -472,7 +472,7 @@ The towns are made in three steps. The scripts run on Windows, like the vehicle 
    python export_towns.py
    ```
 
-   It reads the release's own `CarlaUE4/Content`, not `cooked/`. It does not export the engine's own content, which is licensed for use in the engine only. `build_towns.py` draws its own box for the engine's cube.
+   It reads the release's own `CarlaUE4/Content`, not `cooked/`. It does not export the engine's own content, which is licensed for use in the engine only. `build_towns.py` draws its own box for the engine's cube. `build_towns.py` reads each mesh with `tools/carla_town_mesh.mojo`.
 
 3. Build and zip the packages:
 
@@ -508,8 +508,10 @@ Equal encoded images can share one packaged file.
 ## Test the town exporter
 
 The standard-library identity checks run with `make test-tools`.
-The synthetic bake checks need only NumPy and Pillow. They use two small
-meshes and two colors. They need no CARLA release, server or GPU.
+The synthetic bake checks need NumPy, Pillow and the repository Mojo.
+They use two small meshes and two colors. They need no CARLA release,
+server or GPU. They call `tools/carla_town_mesh.mojo` through
+`tools/tool.sh`.
 
 Only mesh simplification is substituted. The tests use the real material
 reconstruction, texture conversion, bake rasterizers and GLB writer. They
@@ -523,8 +525,9 @@ uv pip install --python .venv-carla-export/bin/python --only-binary :all: "numpy
 .venv-carla-export/bin/python -m unittest discover -s assets/carla/tools/export -p 'test_build_towns.py'
 ```
 
-The existing Linux and macOS lint jobs run this command. They keep the Mojo
-environment unchanged. A missing dependency or wheel fails the check.
+The existing Linux and macOS lint jobs run this command. They install
+Mojo when the bake checks run. The exporter packages stay in a separate
+environment. A missing dependency or wheel fails the check.
 
 ## Why not Poly Haven
 
