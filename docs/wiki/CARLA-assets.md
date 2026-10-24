@@ -416,7 +416,7 @@ CARLA's vehicles are Unreal Engine 4.26 assets. The scripts in `assets/carla/too
 
 `export_vehicles.py` reads each vehicle blueprint for the meshes it names. It exports the skeletal body and the static glass and lights, then merges them into one glTF file. `carla_gltf_fix.py` then does these steps:
 
-1. It rebuilds each material from the parameters that UModel writes beside the mesh. It uses the base color, normal and ORM maps, the car paint's color and translucent glass. It scales each texture to 1024 pixels or less.
+1. It rebuilds each material from the parameters that UModel writes beside the mesh. It uses the base color, normal and ORM maps, the car paint's color and translucent glass. It scales each texture to 1024 pixels or less. `tools/carla_mat_text.mojo` reads the `.mat` and `.props.txt` files.
 2. It removes the skin, because the town takes plain meshes. It removes Unreal's vertex colors, because they are masks and not colors.
 3. It splits the lamps into head lamps and tail lamps. CARLA's lamp material reads an eight-color mask, and UModel does not export what the colors mean. So a lamp in front of the model's middle is a head lamp, and a lamp behind it is a tail lamp.
 4. It simplifies the model to `--budget` triangles, 35,000 by default, one primitive at a time. The seams stay where they are, so the textures do not tear. The normals are made again from the simplified faces.
@@ -508,8 +508,10 @@ Equal encoded images can share one packaged file.
 ## Test the town exporter
 
 The standard-library identity checks run with `make test-tools`.
-The synthetic bake checks need only NumPy and Pillow. They use two small
-meshes and two colors. They need no CARLA release, server or GPU.
+The synthetic bake checks need NumPy, Pillow and the repository Mojo.
+They use two small meshes and two colors. They need no CARLA release,
+server or GPU. They call `tools/carla_mat_text.mojo` through
+`tools/tool.sh`.
 
 Only mesh simplification is substituted. The tests use the real material
 reconstruction, texture conversion, bake rasterizers and GLB writer. They
@@ -523,8 +525,9 @@ uv pip install --python .venv-carla-export/bin/python --only-binary :all: "numpy
 .venv-carla-export/bin/python -m unittest discover -s assets/carla/tools/export -p 'test_build_towns.py'
 ```
 
-The existing Linux and macOS lint jobs run this command. They keep the Mojo
-environment unchanged. A missing dependency or wheel fails the check.
+The existing Linux and macOS lint jobs run this command. They install
+Mojo when the bake checks run. The exporter packages stay in a separate
+environment. A missing dependency or wheel fails the check.
 
 ## Why not Poly Haven
 

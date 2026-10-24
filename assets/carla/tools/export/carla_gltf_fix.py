@@ -32,6 +32,7 @@ import os
 import re
 import shutil
 import struct
+import subprocess
 import sys
 
 from PIL import Image
@@ -57,45 +58,40 @@ def index_files(root, suffix):
     return found
 
 
+def _mat_tool(kind, path):
+    """Return JSON from `tools/carla_mat_text.mojo`."""
+    here = os.path.dirname(os.path.abspath(__file__))
+    repo = os.path.abspath(os.path.join(here, "..", "..", "..", ".."))
+    mojo = os.path.join(repo, ".venv", "bin", "mojo")
+    if not os.path.isfile(mojo):
+        mojo = "mojo"
+    result = subprocess.run(
+        ["sh", os.path.join(repo, "tools", "tool.sh"), mojo,
+         "carla_mat_text", kind, path],
+        capture_output=True, text=True,
+    )
+    if result.returncode != 0:
+        raise ValueError(result.stderr.strip() or "material text failed")
+    return json.loads(result.stdout)
+
+
 def read_mat(path):
-    """Return the `key=value` pairs of a UModel `.mat` file."""
-    pairs = {}
-    others = []
-    for line in open(path, encoding="utf-8", errors="replace"):
-        line = line.strip()
-        if "=" not in line:
-            continue
-        key, value = line.split("=", 1)
-        if key.startswith("Other"):
-            others.append(value)
-        else:
-            pairs[key] = value
-    pairs["_others"] = others
-    return pairs
+    """Return the `key=value` pairs of a UModel `.mat` file.
+
+    `tools/carla_mat_text.mojo` reads the file. Keys that start with
+    `Other` are collected in `_others`.
+    """
+    return _mat_tool("mat", path)
 
 
 def read_props(path):
     """Return the parent, the vector and the scalar parameters of a
-    UModel `.props.txt` file, and whether it blends."""
-    text = open(path, encoding="utf-8", errors="replace").read()
-    parent = ""
-    m = re.search(r"^Parent = \w+'([^']+)'", text, re.M)
-    if m:
-        parent = m.group(1)
-    vectors = {}
-    for name, r, g, b, a in re.findall(
-        r"Name=([^}]+?) \}\s*ParameterValue = \{ R=([-\d.e]+), G=([-\d.e]+), B=([-\d.e]+), A=([-\d.e]+) \}",
-        text,
-    ):
-        vectors[name.strip()] = [float(r), float(g), float(b), float(a)]
-    scalars = {}
-    for name, value in re.findall(
-        r"Name=([^}]+?) \}\s*ParameterValue = ([-\d.e]+)\s", text
-    ):
-        scalars[name.strip()] = float(value)
-    translucent = bool(re.search(r"BlendMode = BLEND_Translucent", text))
-    masked = bool(re.search(r"BlendMode = BLEND_Masked", text))
-    return parent, vectors, scalars, translucent, masked
+    UModel `.props.txt` file, and whether it blends.
+
+    `tools/carla_mat_text.mojo` reads the file.
+    """
+    doc = _mat_tool("props", path)
+    return doc["parent"], doc["vectors"], doc["scalars"], doc["translucent"], doc["masked"]
 
 
 def srgb_to_linear(c):
