@@ -20,6 +20,7 @@ OpenDRIVE map, `<town>.xodr`. The package names no engine
 and no engine path: `check_clean` refuses one that does.
 """
 
+import atexit
 import argparse
 import hashlib
 import json
@@ -27,7 +28,9 @@ import os
 import re
 import shutil
 import struct
+import subprocess
 import sys
+import tempfile
 import zlib
 
 import numpy
@@ -44,19 +47,6 @@ MAPS = os.path.join(BASE, "release", "CarlaUE4", "Content", "Carla", "Maps", "Op
 OUT = os.path.join(BASE, "town_packages")
 TOWNS = ["Town01", "Town02", "Town03", "Town04", "Town05", "Town10HD"]
 
-# The folder under /Game/Carla/Static/ -> the kind the package tags.
-KINDS = {
-    "Building": "building", "Bridge": "building", "Wall": "wall", "Fence": "fence",
-    "GuardRail": "fence", "Road": "road", "RoadLine": "road_line", "SideWalk": "sidewalk",
-    "Ground": "ground", "Terrain": "terrain", "Water": "water", "RailTrack": "rail",
-    "Vegetation": "vegetation", "Pole": "pole", "StreetLight": "pole",
-    "TrafficLight": "traffic_light", "TrafficSign": "traffic_sign",
-    "Car": "parked_vehicle", "Truck": "parked_vehicle", "Motorcycle": "parked_vehicle",
-    "Bicycle": "parked_vehicle", "Bus": "parked_vehicle",
-    "Static": "prop", "Dynamic": "prop", "Other": "prop",
-}
-# Folders the renderer draws itself, or that are not scenery.
-SKIP = {"Sky", "Particles", "Pedestrian", "Hair", "CubeMaps", "HDRi", "Decals", "TestWindowsParts"}
 # Engine materials: the grid marks a brush's hidden faces; the basic
 # shape's material is plain.
 GRID = "WorldGridMaterial"
@@ -95,43 +85,146 @@ STATS = {}
 CREDIT = "CARLA Team, CARLA Simulator 0.9.16, CC-BY 4.0 (https://carla.org)"
 
 
+_BUDGET_CACHE = {}
+_BUDGET_PROC = None
+_BUDGET_ERR = None
+
+
+def _budget_root():
+    """Return the repository root that holds `tools/tool.sh`."""
+    return os.path.abspath(os.path.join(HERE, "..", "..", "..", ".."))
+
+
+def _budget_mojo():
+    """Return the Mojo compiler, as the Makefile's `TOOL_MOJO` chooses it."""
+    path = os.path.join(_budget_root(), ".venv", "bin", "mojo")
+    if os.path.isfile(path):
+        return path
+    return "mojo"
+
+
+def _budget_close():
+    """Stop the budget worker when this process ends."""
+    global _BUDGET_PROC
+    proc = _BUDGET_PROC
+    if proc is None or proc.poll() is not None:
+        return
+    try:
+        proc.stdin.close()
+    except Exception:
+        pass
+    try:
+        proc.wait(timeout=5)
+    except Exception:
+        proc.kill()
+    _BUDGET_PROC = None
+
+
+def _budget_worker():
+    """Return the long-lived `carla_town_budget serve` process."""
+    global _BUDGET_PROC, _BUDGET_ERR
+    if _BUDGET_PROC is not None and _BUDGET_PROC.poll() is None:
+        return _BUDGET_PROC
+    if _BUDGET_ERR is not None:
+        _BUDGET_ERR.close()
+    _BUDGET_ERR = tempfile.TemporaryFile()
+    _BUDGET_PROC = subprocess.Popen(
+        ["sh", os.path.join(_budget_root(), "tools", "tool.sh"), _budget_mojo(),
+         "carla_town_budget", "serve"],
+        stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=_BUDGET_ERR, text=True,
+    )
+    return _BUDGET_PROC
+
+
+def _budget_failed(proc):
+    """Raise the worker's error text and forget the dead process."""
+    global _BUDGET_PROC
+    try:
+        proc.wait(timeout=5)
+    except Exception:
+        proc.kill()
+    text = ""
+    if _BUDGET_ERR is not None:
+        _BUDGET_ERR.seek(0)
+        text = _BUDGET_ERR.read().decode("utf-8", "replace").strip()
+    _BUDGET_PROC = None
+    raise ValueError(text or "town budget failed")
+
+
+def _budget_ask(fields):
+    """Return one answer from `tools/carla_town_budget.mojo`."""
+    for field in fields:
+        if "\t" in field or "\n" in field or "\r" in field:
+            raise ValueError("town budget field has a separator")
+    key = tuple(fields)
+    cached = _BUDGET_CACHE.get(key)
+    if cached is not None:
+        return cached
+    proc = _budget_worker()
+    try:
+        proc.stdin.write("\t".join(fields) + "\n")
+        proc.stdin.flush()
+        line = proc.stdout.readline()
+    except (BrokenPipeError, ValueError):
+        _budget_failed(proc)
+    if not line:
+        _budget_failed(proc)
+    if not line.startswith("ok\t"):
+        raise ValueError(line.split("\t", 1)[-1].strip() or "town budget failed")
+    value = line[3:]
+    if value.endswith("\n"):
+        value = value[:-1]
+    if value.endswith("\r"):
+        value = value[:-1]
+    _BUDGET_CACHE[key] = value
+    return value
+
+
+atexit.register(_budget_close)
+
+
 def object_path(full_name):
-    """Return (`Class`, `/Game/A/B`, `B`) from UE4SS's `Class /Game/A/B.B`."""
-    cls, path = full_name.split(" ", 1)
-    package, _, name = path.rpartition(".")
-    return cls, package, name.rsplit(":", 1)[-1].rsplit(".", 1)[-1]
+    """Return (`Class`, `/Game/A/B`, `B`) from UE4SS's `Class /Game/A/B.B`.
+
+    `tools/carla_town_budget.mojo` splits the name.
+    """
+    parts = _budget_ask(["object", full_name]).split("\t")
+    if len(parts) != 3:
+        raise ValueError("town budget object path failed")
+    return parts[0], parts[1], parts[2]
 
 
 def kind_of(mesh_path):
-    """Return a mesh's kind, None to leave it out."""
-    parts = mesh_path.split("/")
-    if mesh_path.startswith("/Engine/"):
-        return "prop"
-    folder = parts[4] if len(parts) > 4 and parts[3] == "Static" else ""
-    if folder in SKIP:
+    """Return a mesh's kind, None to leave it out.
+
+    `tools/carla_town_budget.mojo` chooses the kind.
+    """
+    kind = _budget_ask(["kind", mesh_path])
+    if kind == "skip":
         return None
-    return KINDS.get(folder, "prop")
-
-
-# Kinds that lie flat on the ground. A road's paint is a decal a few
-# triangles deep, which simplifying breaks, and each is cheap, so each
-# keeps every triangle at both levels.
-FLAT = ("road", "road_line", "sidewalk", "ground", "terrain", "water", "rail")
+    return kind
 
 
 def budget(kind, triangles, mesh_path):
-    """Return the most triangles one copy of a mesh keeps."""
-    if kind in FLAT:
-        return triangles
-    if kind == "building":
-        return max(min(triangles, 2500), triangles // 6)
-    if kind == "parked_vehicle":
-        return min(triangles, 2500)
-    if kind == "vegetation":
-        return min(triangles, 800 if "/Bushes/" in mesh_path else 4000)
-    if kind in ("pole", "traffic_light", "traffic_sign"):
-        return min(triangles, max(400, triangles // 6))
-    return min(triangles, max(600, triangles // 4))
+    """Return the most triangles one copy of a mesh keeps.
+
+    `tools/carla_town_budget.mojo` chooses the limit. A flat kind keeps
+    every triangle: a road's paint is only a few triangles deep.
+    """
+    if kind is None:
+        kind = ""
+    return int(_budget_ask(["near", str(kind), str(int(triangles)), str(mesh_path)]))
+
+
+def far_budget(kind, triangles, mesh_path):
+    """Return the most triangles one copy keeps in the far level of
+    detail, 0 to leave it out there: what is small at a distance goes.
+
+    `tools/carla_town_budget.mojo` chooses the limit.
+    """
+    if kind is None:
+        kind = ""
+    return int(_budget_ask(["far", str(kind), str(int(triangles)), str(mesh_path)]))
 
 
 # ---- Transforms ------------------------------------------------------------
@@ -886,23 +979,6 @@ def slot_materials(row, primitives):
 
 
 # ---- Building --------------------------------------------------------------
-
-def far_budget(kind, triangles, mesh_path):
-    """Return the most triangles one copy keeps in the far level of
-    detail, 0 to leave it out there: what is small at a distance goes."""
-    low = mesh_path.lower()
-    if kind in ("prop", "parked_vehicle", "traffic_sign"):
-        return 0
-    if kind == "vegetation":
-        return min(triangles, max(150, triangles // 5)) if "/trees/" in low else 0
-    if kind == "building":
-        return max(min(triangles, 300), triangles // 60)
-    if kind in ("pole", "traffic_light"):
-        return 0 if "glass" in low or "leds" in low else min(triangles, max(120, triangles // 12))
-    if kind in ("wall", "fence"):
-        return min(triangles, max(150, triangles // 10))
-    return budget(kind, triangles, mesh_path)
-
 
 def limit_of(kind, total, mesh_path, lod):
     """Return the most triangles one copy of a mesh keeps at a level of
