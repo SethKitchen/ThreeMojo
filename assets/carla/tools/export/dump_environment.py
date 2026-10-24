@@ -19,36 +19,71 @@ release's `PythonAPI/carla/dist/`.
 import argparse
 import json
 import os
+import shutil
+import subprocess
 import sys
+import tempfile
 import time
 
 BASE = os.path.abspath(os.environ.get("CARLA_EXPORT_DIR", "."))
 OUT = os.path.join(BASE, "environment")
 
 
-def vector(v):
-    """Return a CARLA vector as a list."""
-    return [round(v.x, 4), round(v.y, 4), round(v.z, 4)]
+def _record_tool(payload):
+    """Return rounded records from `tools/carla_environment_record.mojo`."""
+    here = os.path.dirname(os.path.abspath(__file__))
+    repo = os.path.abspath(os.path.join(here, "..", "..", "..", ".."))
+    mojo = os.path.join(repo, ".venv", "bin", "mojo")
+    if not os.path.isfile(mojo):
+        mojo = "mojo"
+    folder = tempfile.mkdtemp(prefix="environment-record-")
+    try:
+        path = os.path.join(folder, "record.json")
+        with open(path, "w", encoding="utf-8") as handle:
+            json.dump(payload, handle, separators=(",", ":"), allow_nan=True)
+        result = subprocess.run(
+            ["sh", os.path.join(repo, "tools", "tool.sh"), mojo,
+             "carla_environment_record", path],
+            capture_output=True, text=True,
+        )
+    finally:
+        shutil.rmtree(folder, ignore_errors=True)
+    if result.returncode != 0:
+        raise ValueError(result.stderr.strip() or "environment record failed")
+    return json.loads(result.stdout)
 
 
-def rotation(r):
-    """Return a CARLA rotation as [pitch, yaw, roll], in degrees."""
-    return [round(r.pitch, 4), round(r.yaw, 4), round(r.roll, 4)]
-
-
-def record(item):
-    """Return one environment object as a JSON-ready dict."""
+def _raw(item):
+    """Return one environment object with its positions still unrounded."""
     box = item.bounding_box
     return {
         "id": item.id,
         "name": item.name,
         "label": str(item.type),
-        "location": vector(item.transform.location),
-        "rotation": rotation(item.transform.rotation),
-        "box_center": vector(box.location),
-        "box_extent": vector(box.extent),
-        "box_rotation": rotation(box.rotation),
+        "location": [item.transform.location.x, item.transform.location.y,
+                     item.transform.location.z],
+        "rotation": [item.transform.rotation.pitch, item.transform.rotation.yaw,
+                     item.transform.rotation.roll],
+        "box_center": [box.location.x, box.location.y, box.location.z],
+        "box_extent": [box.extent.x, box.extent.y, box.extent.z],
+        "box_rotation": [box.rotation.pitch, box.rotation.yaw, box.rotation.roll],
     }
+
+
+def records(items):
+    """Return the environment objects, with each position rounded.
+
+    `tools/carla_environment_record.mojo` rounds each position and each
+    angle to four decimal places, half to even.
+    """
+    if not items:
+        return []
+    return _record_tool({"objects": [_raw(item) for item in items]})["objects"]
+
+
+def record(item):
+    """Return one environment object as a JSON-ready dict."""
+    return records([item])[0]
 
 
 def main(argv=None):
@@ -77,7 +112,7 @@ def main(argv=None):
             "town": town,
             "map": world.get_map().name,
             "carla": client.get_server_version(),
-            "objects": [record(i) for i in items],
+            "objects": records(items),
         }
         with open(target, "w", encoding="utf-8") as out:
             json.dump(data, out, indent=0)
