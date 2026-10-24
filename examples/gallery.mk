@@ -160,9 +160,9 @@ $(call gallery,hand,hand)
 # A neck and a head, with skin and without.
 $(call gallery,head,head)
 $(call gallery,water,water,assets/pebbles.jpg)
-# A lone pale-trunked tree in tall grass, with scattered trees and mountains.
+# A lone pale-trunked tree in tall grass, with scattered trees, cliffs and mountains.
 $(call gallery,meadow,meadow)
-# Gusts sweep across the meadow and bend the tall grass.
+# Gusts sweep across the meadow and bend the tall grass, in a seamless loop.
 $(call gallery,meadow-wind,meadow_wind)
 # Every procedural animal, one to a tile, turning.
 $(call gallery,animals,animals)

@@ -2,7 +2,7 @@
 
 A meadow has millions of blades, and a frame can draw only a few hundred thousand of them. Clusters let a frame draw only the blades that it can see, at the detail that their distance needs.
 
-![Gusts sweep across the meadow and bend the tall grass](out/meadow-wind.png)
+![Gusts sweep across the meadow and bend the tall grass, in a loop](out/meadow-wind.png)
 
 `examples/meadow_wind.mojo` draws this picture. The page is an explanation. For the calls and the numbers, see [Vegetation](Vegetation).
 
@@ -42,6 +42,12 @@ Past the last level, the ground carries the far color of the grass that grows on
 The wind turns each segment of a blade by its share of an angle. It does not push the tip by a distance. A turned segment keeps its length, so a bent blade is as long as a straight one. A push would stretch the blade in a gust.
 
 A gust is a patch of noise that travels downwind. Every blade under a patch bends together. A bent blade shows more of its lit face, and the gust also brightens the tips it reaches. The patches are then seen as waves of light that sweep across the field. The flutter is a small wobble of each blade on its own, with its own phase.
+
+## Why the wind loops
+
+An animation that plays round and round jumps at its end unless its last frame leads into its first. Noise that travels never comes back to where it started. So a looping wind fades the gusts at a time into the gusts one loop earlier. At the start of the loop the first pattern shows, and at its end the second, which is the first one again.
+
+Two patterns faded half and half are flatter than either. The fade divides by the length of its weights, `sqrt((1 - w)^2 + w^2)`, so the gusts keep their contrast through the loop. The flutter wobbles a whole number of times a loop, so it also ends where it began.
 
 ## Why a blade is lit from both sides
 
