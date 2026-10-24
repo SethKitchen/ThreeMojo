@@ -10,7 +10,9 @@ from std.testing import TestSuite, assert_equal, assert_true
 
 from tools._sha256 import sha256_hex
 from tools.check_coverage_grouping import (
+    accepted_truth_numbers,
     cases,
+    helper_body,
     expected_records,
     expected_rows,
     fixture_source,
@@ -390,6 +392,89 @@ def test_the_lifecycle_fixtures_match_the_pinned_text() raises:
         sha256_hex(extra.as_bytes()),
         "c67b01364e6a0e52f48a7ad35eaef333cd6fab440c0c97a364a4ea0bb7019392",
     )
+
+
+def test_compile_time_helpers_have_no_string_search() raises:
+    var source = Path("coverage/runtime.mojo").read_text()
+    var names = List[String]()
+    names.append("node")
+    names.append("_pure")
+    names.append("_starts")
+    names.append("_bracket")
+    names.append("_optional")
+    names.append("_borrowed")
+    names.append("_standard_string_optional")
+    names.append("_optional_lifecycle")
+    for name in names:
+        var body = helper_body(source, name)
+        assert_equal(body.find(".startswith("), -1, name)
+        assert_equal(body.find(".find("), -1, name)
+    var standard = helper_body(source, "_standard_string_optional")
+    assert_true(standard.find("comptime if T == Candidate:") >= 0)
+    assert_true(
+        standard.find(
+            "return _standard_string_optional[T, Optional[Candidate]]()"
+        )
+        >= 0
+    )
+    assert_equal(standard.find("def _optional_lifecycle"), -1)
+    var original = "    comptime if T == Candidate:\n"
+    assert_equal(_count_lines(source, original), 1)
+    var mutant = source.replace(
+        original,
+        '    _ = StaticString("Optional[Int]").startswith("Optional[")\n'
+        + original,
+    )
+    var mutant_body = helper_body(mutant, "_standard_string_optional")
+    assert_true(mutant_body.find(".startswith(") >= 0)
+
+
+def _count_lines(text: String, needle: String) -> Int:
+    var count = 0
+    var rest = text
+    var width = needle.byte_length()
+    while True:
+        var at = rest.find(needle)
+        if at < 0:
+            return count
+        count += 1
+        var next = String(rest[byte = at + width :])
+        rest = next
+
+
+def test_accepted_and_mixed_truth_trees_cover_every_case() raises:
+    var accepted = accepted_truth_numbers()
+    var mixed = mixed_truth_numbers()
+    assert_equal(len(accepted), 13)
+    assert_equal(len(mixed), 30)
+    assert_equal(accepted[0], 0)
+    assert_equal(accepted[6], 9)
+    assert_equal(accepted[12], 41)
+    var seen = List[Int](length=43, fill=0)
+    for number in accepted:
+        seen[number] += 1
+    for number in mixed:
+        seen[number] += 1
+    var index = 0
+    while index < 43:
+        assert_equal(seen[index], 1)
+        index += 1
+
+
+def test_last_use_identity_drops_only_the_suffix() raises:
+    var suffix = (
+        '    print("RETAINED", kept.payload)\n'
+        '    print("ADDRESS", Int(Pointer(to=kept.payload)) =='
+        " kept.expected)\n"
+    )
+    for expression in [
+        "not kept or False",
+        "not (kept if choose_kept else kept) or False",
+    ]:
+        assert_equal(
+            identity_source(expression),
+            identity_last_use_source(expression) + suffix,
+        )
 
 
 def main() raises:

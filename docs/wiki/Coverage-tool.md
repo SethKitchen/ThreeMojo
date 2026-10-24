@@ -357,7 +357,7 @@ The runtime obeys these rules:
 - `_starts` and `_bracket` compare bytes. They give the results of `startswith` and `find`. The compile-time helpers use them, not the methods.
 - The `Bool` identity check stays first in `node`.
 
-`make test-coverage-tool` checks these rules. `check_coverage_grouping.py` fails if a compile-time helper of `node` calls `startswith` or `find`. It compares `_starts` and `_bracket` with `startswith` and `find` on 272 name pairs. It also builds a fixture of mixed pure operators with one compiler thread. The build must stop in 120 seconds, and the native and instrumented output must agree.
+`make test-coverage-tool` checks these rules. `tools/check_coverage_grouping.mojo` fails if a compile-time helper of `node` calls `startswith` or `find`. It compares `_starts` and `_bracket` with `startswith` and `find` on 272 name pairs. It also builds a fixture of mixed pure operators with one compiler thread. The build must stop in 120 seconds, and the native and instrumented output must agree.
 
 ## Capture storage
 

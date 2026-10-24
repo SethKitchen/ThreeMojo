@@ -1356,6 +1356,22 @@ def _without_quotes(body: String) -> String:
         rest = next
 
 
+def helper_body(text: String, name: String) raises -> String:
+    """Return one coverage helper with comments and docstrings removed.
+
+    Args:
+        text: The source that declares the helper.
+        name: The helper name.
+
+    Returns:
+        The helper body, without docstrings or comments.
+
+    Raises:
+        Error: If the helper is missing or declared twice.
+    """
+    return _helper_body(text, name)
+
+
 def _helper_body(text: String, name: String) raises -> String:
     """Return one coverage helper with comments and docstrings removed."""
     var lines = text.splitlines()
@@ -4095,6 +4111,15 @@ def check_custom_truth_native(mojo: String) raises:
         )
     finally:
         _ = run_program(["rm", "-rf", work], 30)
+
+
+def accepted_truth_numbers() -> List[Int]:
+    """Return the custom-truth trees whose instrumentation is supported.
+
+    Returns:
+        The tree numbers, in source order.
+    """
+    return _truth_accepted_numbers()
 
 
 def _truth_accepted_numbers() -> List[Int]:
