@@ -24,7 +24,6 @@ import atexit
 import argparse
 import json
 import os
-import re
 import shutil
 import struct
 import subprocess
@@ -122,8 +121,6 @@ CAPS = {
 TREES = "/Vegetation/Trees/"
 # One grass leaf in this many is kept: the ground's texture is the lawn.
 GRASS_KEEP = 10
-# Words that must not appear in a package.
-UNCLEAN = re.compile(r"unreal|\bue4\b|\bue5\b|epic games|umodel|/game/|/engine/|\.uasset|\.umap", re.I)
 # Triangles each mesh adds to the package, for the report.
 STATS = {}
 CREDIT = "CARLA Team, CARLA Simulator 0.9.16, CC-BY 4.0 (https://carla.org)"
@@ -1366,16 +1363,21 @@ def to_glb(out_dir, name):
 
 def check_clean(out_dir):
     """Refuse a package that names an engine or an engine path, in its
-    glTF or in a file name."""
-    for base, _, files in os.walk(out_dir):
-        for name in files:
-            if UNCLEAN.search(name):
-                raise SystemExit("unclean file name: " + os.path.join(base, name))
-            if name.endswith(".gltf") or name.endswith(".xodr"):
-                text = open(os.path.join(base, name), encoding="utf-8").read()
-                found = UNCLEAN.search(text)
-                if found:
-                    raise SystemExit("unclean text in %s: %r" % (name, text[max(0, found.start() - 60):found.end() + 60]))
+    glTF or in a file name.
+
+    `tools/carla_town_clean.mojo` reads the names and the text.
+    """
+    root = os.path.abspath(os.path.join(HERE, "..", "..", "..", ".."))
+    mojo = os.path.join(root, ".venv", "bin", "mojo")
+    if not os.path.isfile(mojo):
+        mojo = "mojo"
+    result = subprocess.run(
+        ["sh", os.path.join(root, "tools", "tool.sh"), mojo,
+         "carla_town_clean", out_dir],
+        capture_output=True, text=True,
+    )
+    if result.returncode != 0:
+        raise SystemExit(result.stderr.strip() or "town package is unclean")
 
 
 def main(argv=None):
