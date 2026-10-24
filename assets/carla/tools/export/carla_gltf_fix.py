@@ -69,6 +69,46 @@ def index_files(root, suffix):
     return json.loads(result.stdout)
 
 
+def _mat_tool(kind, path):
+    """Return JSON from `tools/carla_mat_text.mojo`."""
+    here = os.path.dirname(os.path.abspath(__file__))
+    repo = os.path.abspath(os.path.join(here, "..", "..", "..", ".."))
+    mojo = os.path.join(repo, ".venv", "bin", "mojo")
+    if not os.path.isfile(mojo):
+        mojo = "mojo"
+    result = subprocess.run(
+        ["sh", os.path.join(repo, "tools", "tool.sh"), mojo,
+         "carla_mat_text", kind, path],
+        capture_output=True, text=True,
+    )
+    if result.returncode != 0:
+        raise ValueError(result.stderr.strip() or "material text failed")
+    return json.loads(result.stdout)
+
+
+def read_mat(path):
+    """Return the `key=value` pairs of a UModel `.mat` file.
+
+    `tools/carla_mat_text.mojo` reads the file. Keys that start with
+    `Other` are collected in `_others`.
+    """
+    return _mat_tool("mat", path)
+
+
+def read_props(path):
+    """Return the parent, the vector and the scalar parameters of a
+    UModel `.props.txt` file, and whether it blends.
+
+    `tools/carla_mat_text.mojo` reads the file.
+    """
+    doc = _mat_tool("props", path)
+    return doc["parent"], doc["vectors"], doc["scalars"], doc["translucent"], doc["masked"]
+
+
+def srgb_to_linear(c):
+    return c / 12.92 if c <= 0.04045 else ((c + 0.055) / 1.055) ** 2.4
+
+
 class Package:
     """The glTF being rebuilt and the textures it has gathered."""
 
