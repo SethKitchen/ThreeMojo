@@ -56,11 +56,14 @@ from extensions.vegetation.checks import (
 from extensions.vegetation.crown import (
     CrownLevel,
     CrownParameters,
-    broad_tree,
     bush_parameters,
     crown_level_for,
     default_crown_levels,
-    leafy_tree,
+    dress,
+    grow_crown,
+    round_tree,
+    windswept_tree,
+    young_tree,
 )
 from extensions.vegetation.field import (
     FieldParameters,
@@ -83,7 +86,7 @@ from materials.nodes import NORMAL_NODE, NodeGraph, NodeProgram
 from math.frustum import Frustum
 from math.vector3 import Vector3
 from objects.mesh import Mesh
-from render.framebuffer import Color
+from render.framebuffer import Color, Framebuffer
 from render.tonemap import ACES_FILMIC_TONE_MAPPING
 from renderers.renderer import Renderer, available_workers
 from std.math import cos, pi, pow, sin
@@ -128,6 +131,41 @@ def two_sided_program() raises -> NodeProgram:
     )
     graph.set_output(NORMAL_NODE, graph.mul(graph.normal_world(), behind))
     return graph.compile()
+
+
+def blend_frames(frames: List[Framebuffer]) raises -> Framebuffer:
+    """Return the mean of frames of one size, channel by channel.
+
+    Frames rendered at moments inside one frame's shutter blend into a
+    frame with motion blur. A thin blade that moves a few pixels a frame
+    then smears, as it does in a film, and does not jump.
+
+    Args:
+        frames: The frames, at least one, all of one size.
+
+    Returns:
+        The blended frame. Its depth is the first frame's.
+
+    Raises:
+        Error: If there is no frame, or the frames differ in size.
+    """
+    if len(frames) == 0:
+        raise Error("Blending needs at least one frame")
+    var width = frames[0].width
+    var height = frames[0].height
+    var blended = Framebuffer(width, height, Color(0, 0, 0, 0))
+    blended.depth = frames[0].depth.copy()
+    var total = List[Int](length=len(frames[0].pixels), fill=0)
+    for f in range(len(frames)):  # pragma: no branch
+        ref frame = frames[f]
+        if frame.width != width or frame.height != height:
+            raise Error("Blended frames must all be of one size")
+        for index in range(len(frame.pixels)):  # pragma: no branch
+            total[index] += Int(frame.pixels[index])
+    var count = len(frames)
+    for index in range(len(total)):  # pragma: no branch
+        blended.pixels[index] = UInt8((total[index] + count // 2) // count)
+    return blended^
 
 
 def sun_direction(elevation: Angle, azimuth: Angle) -> Vector3:
@@ -264,23 +302,81 @@ def scatter_plantings(
     return plantings^
 
 
-def default_crowns() -> List[CrownParameters]:
-    """Return the seven crowns of the grassland.
+def grove_plantings(
+    count: Int,
+    first: Int,
+    kinds: Int,
+    x: Float32,
+    z: Float32,
+    spread: Length,
+    smallest: Float32,
+    largest: Float32,
+    seed: Int,
+) -> List[Planting]:
+    """Return plantings that stand together in a grove.
+
+    Each stands within `spread` of the grove's middle, more of them near
+    it. They cycle through `kinds` crowns from `first`.
+
+    Args:
+        count: How many plantings.
+        first: The first crown they wear.
+        kinds: How many crowns, from `first`, they cycle through.
+        x: The grove's middle along x, in meters.
+        z: The grove's middle along z, in meters.
+        spread: The grove's radius.
+        smallest: The smallest size.
+        largest: The largest size.
+        seed: Which places to pick.
 
     Returns:
-        Three slender trees, two broad trees and two bushes, each of its
-        own seed.
+        The plantings.
     """
-    var crowns = List[CrownParameters]()
-    for index in range(7):  # pragma: no branch
-        var crown = CrownParameters()
-        if index >= 5:
-            crown = bush_parameters()
-        elif index >= 3:
-            crown = broad_tree()
-        crown.seed = 11 + 7 * index
-        crown.tree.seed = 3 + 5 * index
-        crowns.append(crown^)
+    var plantings = List[Planting]()
+    var turn = Float32(2) * Float32(pi)
+    for index in range(count):
+        var away = spread.to(METER) * pow(hash01(index, 0, seed), Float32(0.6))
+        var round = turn * hash01(index, 1, seed)
+        var size = smallest + (largest - smallest) * hash01(index, 2, seed)
+        plantings.append(
+            Planting(
+                first + index % max(kinds, 1),
+                x + cos(round) * away,
+                z + sin(round) * away,
+                size,
+            )
+        )
+    return plantings^
+
+
+def default_crowns() -> List[CrownParameters]:
+    """Return the eight crowns of the grassland.
+
+    Returns:
+        Two open trees, a windswept tree, two young trees, a round tree,
+        a green bush and a gray-green bush, each of its own seed.
+    """
+    var crowns: List[CrownParameters] = [
+        CrownParameters(),
+        CrownParameters(),
+        windswept_tree(),
+        young_tree(),
+        young_tree(),
+        round_tree(),
+        bush_parameters(),
+        bush_parameters(),
+    ]
+    crowns[7].leaf = Vector3(0.060, 0.080, 0.045)
+    crowns[7].leaf_light = Vector3(0.120, 0.140, 0.085)
+    crowns[7].leaf_length = Length(0.07, METER)
+    crowns[7].leaf_width = Length(0.04, METER)
+    crowns[7].leaves_per_node = 6
+    for index in range(len(crowns)):  # pragma: no branch
+        crowns[index].seed = 11 + 7 * index
+        crowns[index].limbs.seed = 3 + 5 * index
+    # The two open trees whose crowns spread most like a lone tree's.
+    crowns[0].limbs.seed = 10
+    crowns[1].limbs.seed = 6
     return crowns^
 
 
@@ -288,20 +384,35 @@ def default_plantings() -> List[Planting]:
     """Return the layout of the grassland.
 
     Returns:
-        A lone tree and a bush near the camera, a second lone tree, trees
-        scattered from 45 to 160 meters, round bushes from 12 to 120
-        meters, and broad trees from 435 to 700 meters, on the far side of
-        the canyon.
+        A lone open tree and a bush near the camera; a second open tree
+        and a windswept tree; three groves of mixed trees from 60 to 140
+        meters; trees and round bushes scattered from 12 to 160 meters;
+        and young and round trees from 435 to 700 meters, on the far side
+        of the canyon.
     """
     var plantings: List[Planting] = [
-        Planting(0, -9.0, -8.0, 1.15),
-        Planting(1, 34.0, -44.0, 1.0),
-        Planting(5, -3.4, 25.8, 0.85),
+        Planting(0, -12.0, -6.0, 1.0),
+        Planting(1, 33.0, -36.0, 1.1),
+        Planting(2, 21.0, -12.0, 0.9),
+        Planting(6, -3.4, 25.8, 0.85),
     ]
     plantings.extend(
+        grove_plantings(
+            9, 1, 5, 44.0, -95.0, Length(22.0, METER), 0.8, 1.25, 31
+        )
+    )
+    plantings.extend(
+        grove_plantings(
+            5, 3, 3, -26.0, -70.0, Length(12.0, METER), 0.75, 1.15, 32
+        )
+    )
+    plantings.extend(
+        grove_plantings(6, 2, 4, 6.0, -132.0, Length(18.0, METER), 0.8, 1.2, 33)
+    )
+    plantings.extend(
         scatter_plantings(
-            22,
-            0,
+            14,
+            1,
             5,
             Length(45.0, METER),
             Length(160.0, METER),
@@ -312,13 +423,13 @@ def default_plantings() -> List[Planting]:
     )
     plantings.extend(
         scatter_plantings(
-            26,
-            5,
+            30,
+            6,
             2,
             Length(12.0, METER),
             Length(120.0, METER),
-            0.8,
-            1.6,
+            0.6,
+            1.5,
             22,
         )
     )
@@ -326,11 +437,11 @@ def default_plantings() -> List[Planting]:
         scatter_plantings(
             45,
             3,
-            2,
+            3,
             Length(435.0, METER),
             Length(700.0, METER),
-            0.8,
-            1.3,
+            0.9,
+            1.4,
             23,
         )
     )
@@ -366,7 +477,9 @@ struct MeadowParameters(Copyable, Movable):
     var seed: Int
 
     def __init__(out self) raises:
-        """Create open grassland under a high sun behind the camera.
+        """Create open grassland under a sun ahead of the camera and to its
+        right, so the grass glows against it and the trees cast their
+        shadows toward the camera.
 
         Raises:
             Error: Never; the defaults are in range.
@@ -385,8 +498,8 @@ struct MeadowParameters(Copyable, Movable):
         self.plantings = default_plantings()
         self.crown_levels = default_crown_levels()
         self.rocks = 6
-        self.sun_elevation = Angle(42.0, DEGREE)
-        self.sun_azimuth = Angle(35.0, DEGREE)
+        self.sun_elevation = Angle(38.0, DEGREE)
+        self.sun_azimuth = Angle(-30.0, DEGREE)
         self.sky = SkyLook()
         self.sky_size = 512
         self.ground_span = Length(1400.0, METER)
@@ -621,12 +734,14 @@ struct Meadow(Movable):
         self.woods = List[GeometryId]()
         self.leaves = List[GeometryId]()
         for crown in range(len(parameters.crowns)):  # pragma: no branch
+            ref kind = parameters.crowns[crown]
+            var grown = grow_crown(kind, toward)
             for level in range(len(self.levels)):  # pragma: no branch
-                var grown = leafy_tree(
-                    parameters.crowns[crown], self.levels[level], toward
+                var dressed = dress(grown, kind, self.levels[level])
+                self.woods.append(assets.geometries.add(dressed.wood.clone()))
+                self.leaves.append(
+                    assets.geometries.add(dressed.leaves.clone())
                 )
-                self.woods.append(assets.geometries.add(grown.wood.clone()))
-                self.leaves.append(assets.geometries.add(grown.leaves.clone()))
         self.trees = List[_Tree]()
         var first_level = len(self.levels)
         for index in range(len(parameters.plantings)):

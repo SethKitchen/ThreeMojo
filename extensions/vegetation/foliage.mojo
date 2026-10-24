@@ -3,20 +3,17 @@
 # Noncommercial use is free; commercial use requires a paid license.
 # See LICENSE, LICENSE-COMMERCIAL.md and THIRD-PARTY-NOTICES.md.
 
-"""Leaves in clumps, and the light that reaches each leaf through them.
+"""Leaves, and the light that reaches each leaf through the others.
 
-**Clumps.** A broadleaf crown is not an even cloud of leaves. Each twig
-holds a dense clump, and the crown is many clumps with gaps of sky
-between them. A clump here is a sphere. Its leaves crowd its outer shell,
-where the light is.
-
-**The light inside a crown.** A leaf deep in a clump, or behind another
-clump, gets little sun and little sky. `sun_through` follows the ray from
-a leaf toward the sun and adds the length of every clump it crosses. The
-light that comes through is `exp(-density * length)`, Beer's law for a
-cloud of leaves. `sky_through` averages the same over `SKY_RAYS`
-directions of the open sky. Both are exact for spheres, so they need no
-voxel grid and no noise.
+**The light inside a crown.** A leaf deep in a crown, or behind a lobe of
+it, gets little sun and little sky. `LeafShade` counts the leaves of a
+crown in a grid of cells: each leaf adds its area to the cell it is in.
+A cell's leaf area over its volume, times `shade`, is how much a meter of
+it dims light. `LeafShade.through` follows the ray from a leaf toward the
+sun, cell by cell, and adds that up. The light that comes through is
+`exp(-sum)`, Beer's law for a cloud of leaves. `LeafShade.sky` averages
+the same over `SKY_RAYS` directions of the open sky. The grid is blurred
+once, and read between its cells, so the light is smooth across a crown.
 
 The two numbers are kept apart, as `SUNLIT` and `SKYLIT` attributes.
 `foliage_program` multiplies the sun's light by the first and the sky's
@@ -39,8 +36,10 @@ from materials.nodes import (
     NodeGraph,
     NodeProgram,
 )
+from extensions.vegetation.checks import require_between
 from math.vector3 import Vector3
-from std.math import exp, sqrt
+from std.math import cos, exp, floor, pi, sin, sqrt
+from units.si import METER, Length
 
 # The attributes that hold the light that reaches each leaf vertex.
 comptime SUNLIT = "sunlit"
@@ -51,111 +50,228 @@ comptime FOLD = Float32(0.45)
 # fractions of its width, and where along the leaf they are.
 comptime OVATE_AT = [Float32(0.18), Float32(0.5), Float32(0.8)]
 comptime OVATE_WIDTH = [Float32(0.7), Float32(1.0), Float32(0.62)]
-# The open-sky directions that `sky_through` averages: straight up, and
-# six at 45 degrees round it.
-comptime SKY_RAYS = 7
+# The open-sky directions that `LeafShade.sky` averages: straight up, six
+# at 45 degrees round it, and six near the horizon.
+comptime SKY_RAYS = 13
+# How far a ray steps through a shade grid, as a fraction of a cell.
+comptime MARCH = Float32(0.75)
+# The most cells a shade grid can have.
+comptime MAX_CELLS = 4_000_000
 
 
-@fieldwise_init
-struct Clump(ImplicitlyCopyable):
-    """One clump of leaves, as a sphere."""
+struct LeafShade(Movable):
+    """The leaves of a crown counted in a grid of cells, and the light that
+    comes through them."""
 
-    var center: Vector3
-    var radius: Float32
+    # The corner of the grid with the least x, y and z, in meters.
+    var low: Vector3
+    # The side of a cell, in meters.
+    var cell: Float32
+    # The cells along x, y and z.
+    var nx: Int
+    var ny: Int
+    var nz: Int
+    # Each cell's leaf area until `finish`, then how much a meter of it
+    # dims light, per meter. Cell `(x, y, z)` is entry
+    # `(z * ny + y) * nx + x`.
+    var density: List[Float32]
 
+    def __init__(out self, low: Vector3, high: Vector3, cell: Length) raises:
+        """Create an empty grid that covers a box.
 
-def chord(origin: Vector3, toward: Vector3, clump: Clump) -> Float32:
-    """Return how far a ray from `origin` runs inside a clump.
+        Args:
+            low: The box's corner with the least x, y and z, in meters.
+            high: Its corner with the most, in meters.
+            cell: The side of a cell, from 1 centimeter to 10 meters.
 
-    Only the part of the ray ahead of the origin counts. A ray that starts
-    inside the clump counts from the origin to the clump's edge.
+        Raises:
+            Error: If the cell is out of range, the box is not from 1
+                millimeter to 1 kilometer on each side, or it needs more
+                than 4 million cells.
+        """
+        var side = cell.to(METER)
+        require_between(
+            side,
+            0.01,
+            10,
+            "A shade cell must be from 1 centimeter to 10 meters",
+        )
+        var size = high - low
+        for axis in range(3):  # pragma: no branch
+            require_between(
+                size.get_component(axis),
+                0.001,
+                1000,
+                "A shade grid must be from 1 millimeter to 1 kilometer across",
+            )
+        var nx = Int(size.x / side) + 1
+        var ny = Int(size.y / side) + 1
+        var nz = Int(size.z / side) + 1
+        if nx * ny * nz > MAX_CELLS:
+            raise Error("A shade grid must have at most 4 million cells")
+        self.low = low
+        self.cell = side
+        self.nx = nx
+        self.ny = ny
+        self.nz = nz
+        self.density = List[Float32](length=nx * ny * nz, fill=0)
 
-    Args:
-        origin: Where the ray starts, in meters.
-        toward: The ray's direction, of unit length.
-        clump: The clump.
+    def _at(self, x: Int, y: Int, z: Int) -> Float32:
+        """Return a cell's value, or zero outside the grid."""
+        if (
+            x < 0
+            or y < 0
+            or z < 0
+            or x >= self.nx
+            or y >= self.ny
+            or z >= self.nz
+        ):
+            return 0
+        return self.density[(z * self.ny + y) * self.nx + x]
 
-    Returns:
-        The length inside, in meters. Zero if the ray misses.
-    """
-    var offset = origin - clump.center
-    var b = offset.dot(toward)
-    var c = offset.dot(offset) - clump.radius * clump.radius
-    var reach = b * b - c
-    if reach <= 0:
-        return 0
-    var half = sqrt(reach)
-    var leave = -b + half
-    var enter = -b - half
-    return max(Float32(0), leave) - max(Float32(0), min(enter, leave))
+    def add(mut self, p: Vector3, area: Float32):
+        """Add a leaf's area to the cell it is in. A leaf outside the grid
+        adds to the nearest cell.
 
+        Args:
+            p: Where the leaf is, in meters.
+            area: Its area, in square meters.
+        """
+        var q = (p - self.low) / self.cell
+        var x = max(0, min(self.nx - 1, Int(floor(q.x))))
+        var y = max(0, min(self.ny - 1, Int(floor(q.y))))
+        var z = max(0, min(self.nz - 1, Int(floor(q.z))))
+        self.density[(z * self.ny + y) * self.nx + x] += area
 
-def sun_through(
-    origin: Vector3, toward: Vector3, clumps: List[Clump], density: Float32
-) -> Float32:
-    """Return the share of light that reaches a point through the clumps.
+    def finish(mut self, shade: Float32):
+        """Turn the leaf areas into how much a meter dims light, and blur
+        them once along each axis by a quarter, a half and a quarter.
 
-    Args:
-        origin: The point, in meters.
-        toward: The direction the light comes from, of unit length.
-        clumps: Every clump of the crown.
-        density: How much a meter of clump dims the light, per meter.
+        Args:
+            shade: How much of its area a leaf shades along a ray: a half
+                for leaves that face every way.
+        """
+        var volume = self.cell * self.cell * self.cell
+        for index in range(len(self.density)):  # pragma: no branch
+            self.density[index] *= shade / volume
+        for axis in range(3):  # pragma: no branch
+            var blurred = List[Float32](length=len(self.density), fill=0)
+            for z in range(self.nz):  # pragma: no branch
+                for y in range(self.ny):  # pragma: no branch
+                    for x in range(self.nx):  # pragma: no branch
+                        var dx = 1 if axis == 0 else 0
+                        var dy = 1 if axis == 1 else 0
+                        var dz = 1 if axis == 2 else 0
+                        blurred[(z * self.ny + y) * self.nx + x] = (
+                            0.5 * self._at(x, y, z)
+                            + 0.25 * self._at(x - dx, y - dy, z - dz)
+                            + 0.25 * self._at(x + dx, y + dy, z + dz)
+                        )
+            self.density = blurred^
 
-    Returns:
-        `exp(-density * length)`, with `length` the sum of the chords.
-        One if there is no clump.
-    """
-    var length = Float32(0)
-    for index in range(len(clumps)):
-        length += chord(origin, toward, clumps[index])
-    return exp(-density * length)
+    def dimming(self, p: Vector3) -> Float32:
+        """Return how much a meter dims light at a point, read between the
+        cells' middles. Zero outside the grid.
+
+        Args:
+            p: The point, in meters.
+
+        Returns:
+            The dimming, per meter.
+        """
+        var q = (p - self.low) / self.cell - Vector3(0.5, 0.5, 0.5)
+        var fx = floor(q.x)
+        var fy = floor(q.y)
+        var fz = floor(q.z)
+        var x = Int(fx)
+        var y = Int(fy)
+        var z = Int(fz)
+        var sx = q.x - fx
+        var sy = q.y - fy
+        var sz = q.z - fz
+        var near = (
+            self._at(x, y, z) * (1 - sx) + self._at(x + 1, y, z) * sx
+        ) * (1 - sy) + (
+            self._at(x, y + 1, z) * (1 - sx) + self._at(x + 1, y + 1, z) * sx
+        ) * sy
+        var far = (
+            self._at(x, y, z + 1) * (1 - sx) + self._at(x + 1, y, z + 1) * sx
+        ) * (1 - sy) + (
+            self._at(x, y + 1, z + 1) * (1 - sx)
+            + self._at(x + 1, y + 1, z + 1) * sx
+        ) * sy
+        return near * (1 - sz) + far * sz
+
+    def through(self, origin: Vector3, toward: Vector3) -> Float32:
+        """Return the share of light that reaches a point from a direction.
+
+        The ray starts half a cell out, so a leaf does not shade itself,
+        and steps `MARCH` of a cell at a time until it leaves the grid.
+
+        Args:
+            origin: The point, in meters.
+            toward: The direction the light comes from, of unit length.
+
+        Returns:
+            `exp(-sum)` of the dimming along the ray. One outside the
+            grid.
+        """
+        var step = self.cell * MARCH
+        var high = (
+            self.low
+            + Vector3(Float32(self.nx), Float32(self.ny), Float32(self.nz))
+            * self.cell
+        )
+        var total = Float32(0)
+        var p = origin + toward * (self.cell * 0.5)
+        while (
+            p.x >= self.low.x
+            and p.y >= self.low.y
+            and p.z >= self.low.z
+            and p.x <= high.x
+            and p.y <= high.y
+            and p.z <= high.z
+        ):
+            total += self.dimming(p) * step
+            p = p + toward * step
+        return exp(-total)
+
+    def sky(self, origin: Vector3, rays: List[Vector3]) -> Float32:
+        """Return the share of the open sky a point sees.
+
+        Args:
+            origin: The point, in meters.
+            rays: The sky's directions, from `sky_rays`.
+
+        Returns:
+            The mean of `through` over the rays. One with no ray.
+        """
+        if len(rays) == 0:
+            return 1
+        var total = Float32(0)
+        for index in range(len(rays)):  # pragma: no branch
+            total += self.through(origin, rays[index])
+        return total / Float32(len(rays))
 
 
 def sky_rays() -> List[Vector3]:
     """Return the `SKY_RAYS` unit directions of the open sky.
 
     Returns:
-        Straight up, then six directions 45 degrees up, a sixth of a turn
-        apart.
+        Straight up, six directions 45 degrees up a sixth of a turn
+        apart, and six 10 degrees up between them, toward the horizon.
     """
     var rays: List[Vector3] = [Vector3(0, 1, 0)]
-    var side = Float32(0.70710678)
-    var rim: List[Vector3] = [
-        Vector3(1, 0, 0),
-        Vector3(0.5, 0, 0.8660254),
-        Vector3(-0.5, 0, 0.8660254),
-        Vector3(-1, 0, 0),
-        Vector3(-0.5, 0, -0.8660254),
-        Vector3(0.5, 0, -0.8660254),
-    ]
-    for index in range(len(rim)):  # pragma: no branch
-        rays.append(Vector3(rim[index].x * side, side, rim[index].z * side))
+    var turn = Float32(2) * Float32(pi)
+    var rings: List[Float32] = [Float32(45), Float32(10)]
+    for ring in range(len(rings)):  # pragma: no branch
+        var up = rings[ring] / 180 * Float32(pi)
+        for k in range(6):  # pragma: no branch
+            var round = turn * (Float32(k) + 0.5 * Float32(ring)) / 6
+            rays.append(
+                Vector3(cos(up) * cos(round), sin(up), cos(up) * sin(round))
+            )
     return rays^
-
-
-def sky_through(
-    origin: Vector3,
-    rays: List[Vector3],
-    clumps: List[Clump],
-    density: Float32,
-) -> Float32:
-    """Return the share of the open sky a point sees through the clumps.
-
-    Args:
-        origin: The point, in meters.
-        rays: The sky's directions, from `sky_rays`.
-        clumps: Every clump of the crown.
-        density: How much a meter of clump dims the light, per meter.
-
-    Returns:
-        The mean of `sun_through` over the rays. One with no ray.
-    """
-    if len(rays) == 0:
-        return 1
-    var total = Float32(0)
-    for index in range(len(rays)):  # pragma: no branch
-        total += sun_through(origin, rays[index], clumps, density)
-    return total / Float32(len(rays))
 
 
 def foliage_program() raises -> NodeProgram:

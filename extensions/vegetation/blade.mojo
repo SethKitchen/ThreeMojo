@@ -12,8 +12,9 @@ one segment at a time:
 
 - Each segment turns toward the blade's forward side by its share of
   `curl`, the bend of a blade at rest. It turns by its share of the
-  wind's tip bend as well. The two turns add as one tilt along the
-  ground, at most `MAX_TILT`. Each segment keeps its length.
+  wind's tip bend as well, `WHIP * s ** 1.5` of it, so the top whips and
+  the base stays put. The two turns add as one tilt along the ground, at
+  most `MAX_TILT`. Each segment keeps its length.
 - The width tapers as `1 - s * s`, where `s` runs from zero at the root
   to one at the tip. A blade is nearly parallel at the root and comes
   to a point.
@@ -29,8 +30,9 @@ is dark: it holds the occlusion of the dense grass round the root, which
 the renderer does not compute. `shade` mixes between two tip colors, so
 neighbors differ.
 
-**A poppy** is a thin stem, built as a blade, with a cup of five red
-petals at its tip. **A seed head** is a tall thin stalk with a spike of
+**A broad leaf** is not a strip: it is a low rosette of five oval leaves,
+as a plantain or a dock is, under the grass. **A poppy** is a thin stem,
+built as a blade, with a cup of five red petals at its tip. **A seed head** is a tall thin stalk with a spike of
 two crossed strips at its tip, which stands above the grass.
 """
 
@@ -38,6 +40,7 @@ from core.buffer_attribute import BufferAttribute
 from core.buffer_geometry import COLOR, NORMAL, POSITION, BufferGeometry
 from extensions.vegetation.checks import require_between
 from extensions.vegetation.kinds import (
+    BROADLEAF,
     DRY_GRASS,
     POPPY,
     SEED_HEAD,
@@ -46,7 +49,7 @@ from extensions.vegetation.kinds import (
 )
 from math.vector2 import Vector2
 from math.vector3 import Vector3
-from std.math import cos, pi, sin, sqrt
+from std.math import cos, pi, pow, sin, sqrt
 from units.si import DEGREE, METER, RADIAN, Angle, Length
 
 # How far an edge normal tilts out toward its edge.
@@ -62,6 +65,13 @@ comptime CUP_RADIUS = Float32(0.025)
 # The length and the width of a seed head.
 comptime SPIKE_LENGTH = Float32(0.075)
 comptime SPIKE_WIDTH = Float32(0.01)
+# The leaves of a broad-leaf rosette, and how far each half of a leaf
+# tilts its normal from the midrib.
+comptime ROSETTE_LEAVES = 5
+comptime LEAF_FOLD = Float32(0.4)
+# The wind turns a segment by `WHIP * s ** 1.5` of the tip's bend, so the
+# top of a blade whips and its base stays put.
+comptime WHIP = Float32(1.25)
 # The most a segment can tilt from upright, in radians: 83 degrees. A
 # segment never lies flat, so a blade never folds into the ground.
 comptime MAX_TILT = Float32(1.45)
@@ -102,6 +112,11 @@ def blade_colors(kind: PlantKind, shade: Float32) raises -> BladeColors:
     if kind == SEED_HEAD:
         return BladeColors(
             Vector3(0.010, 0.020, 0.004), Vector3(0.120, 0.150, 0.045)
+        )
+    if kind == BROADLEAF:
+        return BladeColors(
+            Vector3(0.020, 0.045, 0.014),
+            Vector3(0.045 + 0.04 * shade, 0.100 + 0.05 * shade, 0.028),
         )
     return BladeColors(
         Vector3(0.008, 0.016, 0.003),
@@ -305,23 +320,26 @@ struct BladeMesh(Movable):
             widen: What the width is multiplied by. A thinned level of
                 detail widens the blades it keeps, so the field keeps its
                 cover.
-            glint: How much brighter the tip is, from 0 to 1. A gust bends
+            glint: How much brighter the tip is, from 0 to 2. A gust bends
                 a blade so it shows more of its lit face, and the field
                 then shows the gust as a wave of light.
 
         Raises:
             Error: If `segments` is out of range, `widen` is not from 1 to
-                200, `glint` is not from 0 to 1, or the kind is not valid.
+                200, `glint` is not from 0 to 2, or the kind is not valid.
         """
         if segments < 1 or segments > MAX_SEGMENTS:
             raise Error("A blade must have from 1 to 8 segments")
         require_between(
             widen, 1, 200, "A blade must be widened from 1 to 200 times"
         )
-        require_between(glint, 0, 1, "A blade's glint must be from 0 to 1")
+        require_between(glint, 0, 2, "A blade's glint must be from 0 to 2")
         var colors = blade_colors(blade.kind, blade.shade)
         colors.tip = colors.tip * (1 + glint)
         var face = blade.facing.to(RADIAN)
+        if blade.kind == BROADLEAF:
+            self._rosette(blade, colors, face, bend, sqrt(widen))
+            return
         var ax = cos(face)
         var az = sin(face)
         var curl = blade.curl.to(RADIAN)
@@ -338,8 +356,9 @@ struct BladeMesh(Movable):
             var mid = s + 0.5 / Float32(segments)
             # The rest curl and the wind are one tilt: an angle along the
             # ground. The wind adds to the curl or takes from it.
-            var tx = -az * curl * mid + bend.x * mid
-            var tz = ax * curl * mid + bend.y * mid
+            var whip = WHIP * pow(mid, Float32(1.5))
+            var tx = -az * curl * mid + bend.x * whip
+            var tz = ax * curl * mid + bend.y * whip
             var tilt = sqrt(tx * tx + tz * tz)
             var lean = min(tilt, MAX_TILT)
             var keep = sin(lean) / max(tilt, Float32(1.0e-6))
@@ -369,6 +388,67 @@ struct BladeMesh(Movable):
             self._cup(point, face, blade.shade, sqrt(widen))
         if blade.kind == SEED_HEAD:
             self._spike(point, top, face, sqrt(widen))
+
+    def _rosette(
+        mut self,
+        blade: Blade,
+        colors: BladeColors,
+        face: Float32,
+        bend: Vector2,
+        grow: Float32,
+    ):
+        """Append a broad-leaf rosette: `ROSETTE_LEAVES` oval leaves that
+        rise from the root at low angles. The blade's height is a leaf's
+        length, and its width a leaf's width.
+
+        A rosette is stiff: the wind moves its tips a quarter as far as a
+        blade's.
+        """
+        var length = blade.height.to(METER) * grow
+        var width = blade.width.to(METER) * grow
+        var turn = Float32(2) * Float32(pi) / Float32(ROSETTE_LEAVES)
+        for j in range(ROSETTE_LEAVES):  # pragma: no branch
+            var a = face + turn * (Float32(j) + 0.3 * blade.phase)
+            var rise = 0.35 + 0.5 * blade.shade * Float32(j % 3) * 0.5
+            var flat = cos(rise)
+            var along = Vector3(
+                cos(a) * flat + bend.x * 0.25,
+                sin(rise),
+                sin(a) * flat + bend.y * 0.25,
+            )
+            along = along / along.length()
+            var across = Vector3(-sin(a), 0, cos(a))
+            var normal = Vector3(
+                across.y * along.z - across.z * along.y,
+                across.z * along.x - across.x * along.z,
+                across.x * along.y - across.y * along.x,
+            )
+            var first = self.vertex_count()
+            var droop = length * 0.22
+            self._vertex(blade.root, normal, colors.root)
+            var rows: List[Float32] = [0.2, 0.5, 0.8]
+            var widths: List[Float32] = [0.65, 1.0, 0.6]
+            for row in range(3):  # pragma: no branch
+                var s = rows[row]
+                var spine = (
+                    blade.root + along * (length * s) - normal * (droop * s * s)
+                )
+                var side = across * (width * 0.5 * widths[row])
+                var tilt = across * LEAF_FOLD
+                var color = colors.root + (colors.tip - colors.root) * (
+                    0.4 + 0.6 * s
+                )
+                self._vertex(spine - side, normal - tilt, color)
+                self._vertex(spine + side, normal + tilt, color)
+            self._vertex(
+                blade.root + along * length - normal * droop, normal, colors.tip
+            )
+            self._triangle(first, first + 1, first + 2)
+            for row in range(2):  # pragma: no branch
+                var a0 = first + 1 + 2 * row
+                self._triangle(a0, a0 + 2, a0 + 3)
+                self._triangle(a0, a0 + 3, a0 + 1)
+            self._triangle(first + 5, first + 7, first + 6)
 
     def _spike(
         mut self, tip: Vector3, heading: Vector3, face: Float32, grow: Float32

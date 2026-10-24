@@ -71,6 +71,28 @@ def value_noise(x: Float32, z: Float32, seed: Int) -> Float32:
     return near + (far - near) * sz
 
 
+def value_noise3(x: Float32, y: Float32, z: Float32, seed: Int) -> Float32:
+    """Return smooth value noise at a point in space, from zero to one.
+
+    Each layer of the lattice, one unit apart in `y`, is a field of its
+    own. The noise blends the two layers round the point.
+
+    Args:
+        x: The first coordinate, in lattice units.
+        y: The second coordinate, in lattice units.
+        z: The third coordinate, in lattice units.
+        seed: Which field to read.
+
+    Returns:
+        The noise, from zero to one.
+    """
+    var fy = floor(y)
+    var layer = Int(fy) * 977
+    var below = value_noise(x, z, seed + layer)
+    var above = value_noise(x, z, seed + layer + 977)
+    return below + (above - below) * _smooth(y - fy)
+
+
 def layered_noise(x: Float32, z: Float32, seed: Int) -> Float32:
     """Return two octaves of value noise, from zero to one.
 

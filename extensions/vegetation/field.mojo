@@ -49,10 +49,11 @@ from extensions.vegetation.kinds import (
     GRASS,
     POPPY,
     SEED_HEAD,
+    BROADLEAF,
     ClusterFate,
     PlantKind,
 )
-from extensions.vegetation.noise import hash01
+from extensions.vegetation.noise import hash01, value_noise
 from extensions.vegetation.wind import Wind
 from math.bounds import Sphere
 from math.frustum import Frustum
@@ -67,11 +68,26 @@ comptime MAX_CLUSTERS = 1 << 20
 # The width of a poppy's stem.
 comptime STEM_WIDTH = Length(0.003, METER)
 # How much taller than the grass round it a poppy stands, and a stalk
-# with a seed head.
+# with a seed head. A stalk stands above even short grass.
 comptime POPPY_LIFT = Float32(1.15)
 comptime SEED_LIFT = Float32(1.45)
-# How much a full gust brightens a blade's tip.
-comptime GUST_GLINT = Float32(0.8)
+# The height of short grass, as a fraction of the meadow's full height,
+# and how tall the tallest tuft is, as a multiple of it.
+comptime SHORT_GRASS = Float32(0.22)
+comptime TALLEST_TUFT = Float32(1.3)
+# The mean length of a broad leaf.
+comptime LEAF_LENGTH = Float32(0.2)
+# The share of the tufts that wind and rain have laid over: their blades
+# arch over and lie, `LODGED_CURL` times as curled as a standing tuft's,
+# up to `LODGED_MOST` degrees.
+comptime LODGED = Float32(0.14)
+comptime LODGED_CURL = Float32(2.4)
+comptime LODGED_MOST = Float32(115)
+# How wide a patch of one shade of green is, in meters.
+comptime HUE_PATCH = Float32(3.5)
+# How much a full gust brightens a blade's tip: a bent blade shows its lit
+# face, so the gusts roll across the field as bands of light.
+comptime GUST_GLINT = Float32(1.0)
 # How far a blade's curl can turn from straight out of its tuft, in
 # radians.
 comptime SPLAY_JITTER = Float32(0.7)
@@ -176,6 +192,9 @@ struct FieldParameters(Copyable, Movable):
     var poppy_share: Float32
     # The fraction of the blades that are stalks with seed heads.
     var seed_share: Float32
+    # The fraction of the tufts that hold a broad-leaf plant, where weeds
+    # grow most.
+    var broadleaf_share: Float32
     # The levels of detail, nearest first.
     var bands: List[LodBand]
 
@@ -194,6 +213,7 @@ struct FieldParameters(Copyable, Movable):
         self.dry_share = 0.08
         self.poppy_share = 0.9
         self.seed_share = 0.012
+        self.broadleaf_share = 0.25
         self.bands = default_bands()
 
     def check(self) raises:
@@ -272,6 +292,12 @@ struct FieldParameters(Copyable, Movable):
         )
         require_between(
             self.seed_share, 0, 1, "The seed share must be from 0 to 1"
+        )
+        require_between(
+            self.broadleaf_share,
+            0,
+            1,
+            "The broad-leaf share must be from 0 to 1",
         )
         require_count_between(
             len(self.bands), 1, 16, "A field must have from 1 to 16 levels"
@@ -451,7 +477,8 @@ struct GrassField(Movable):
         """Return the tallest a blade can be, in meters."""
         return (
             self.parameters.height.to(METER)
-            * (1 + self.parameters.height_spread)
+            * TALLEST_TUFT
+            * (1 + 0.5 * self.parameters.height_spread)
             * max(POPPY_LIFT, SEED_LIFT)
         )
 
@@ -578,22 +605,55 @@ struct GrassField(Movable):
         )
         var x = tx + cos(spread) * reach
         var z = tz + sin(spread) * reach
+        # Each tuft is a plant of its own: its height, the width of its
+        # blades, how far they droop, their color and their sway are its
+        # own. Its blades vary round them.
+        var traits = seed + 9
+        var tall = SHORT_GRASS + (1 - SHORT_GRASS) * self.ground.tallness(
+            tx, tz
+        )
         var height = (
             p.height.to(METER)
-            * (1 + p.height_spread * (hash01(index, key + 2, seed + 5) * 2 - 1))
+            * tall
+            * (0.75 + (TALLEST_TUFT - 0.75) * hash01(index, tuft, traits))
+            * (1 + p.height_spread * (hash01(index, key + 2, seed + 5) - 0.5))
             * (0.55 + 0.45 * cover)
         )
-        var width = p.width.to(METER) * (
-            0.7 + 0.6 * hash01(index, key + 3, seed + 5)
+        var broad = hash01(index, tuft, traits + 1)
+        var width = (
+            p.width.to(METER)
+            * (0.55 + 1.3 * broad * broad)
+            * (0.8 + 0.4 * hash01(index, key + 3, seed + 5))
         )
-        var curl = p.curl.to(DEGREE) * (
-            0.4 + 1.2 * hash01(index, key + 4, seed + 5)
+        var curl = (
+            p.curl.to(DEGREE)
+            * (0.45 + 1.1 * hash01(index, tuft, traits + 2))
+            * (0.7 + 0.6 * hash01(index, key + 4, seed + 5))
+        )
+        if hash01(index, tuft, traits + 5) < LODGED:
+            curl = min(curl * LODGED_CURL, LODGED_MOST)
+        # A patch of the meadow is a deeper or a yellower green, and each
+        # tuft and blade differs within it.
+        var hue = value_noise(tx / HUE_PATCH, tz / HUE_PATCH, seed + 13)
+        var shade = min(
+            Float32(1),
+            max(
+                Float32(0),
+                0.6 * hash01(index, tuft, traits + 3)
+                + 0.15 * hash01(index, key + 7, seed + 5)
+                + 0.8 * (hue - 0.5)
+                + 0.12,
+            ),
+        )
+        var phase = 0.8 * hash01(index, tuft, traits + 4) + 0.2 * hash01(
+            index, key + 6, seed + 5
         )
         # The chance is a blade's and not a tuft's, so every level keeps
         # the same mix of kinds.
         var pick = hash01(index, key + 8, seed + 5)
         var kind = GRASS
         var poppy = p.poppy_share / Float32(p.tuft_blades)
+        var weed = p.broadleaf_share / Float32(p.tuft_blades)
         if pick < poppy * self.ground.bloom(tx, tz):
             kind = POPPY
             height *= POPPY_LIFT
@@ -603,9 +663,15 @@ struct GrassField(Movable):
             kind = DRY_GRASS
         elif hash01(index, key + 9, seed + 5) < p.seed_share:
             kind = SEED_HEAD
-            height *= SEED_LIFT
+            height = height / (0.55 + 0.45 * cover) * SEED_LIFT / tall
             width = STEM_WIDTH.to(METER)
             curl *= 0.25
+        elif hash01(index, key + 10, seed + 5) < weed * self.ground.weeds(x, z):
+            kind = BROADLEAF
+            height = LEAF_LENGTH * (
+                0.6 + 0.8 * hash01(index, key + 11, seed + 5)
+            )
+            width = height * 0.5
         # The blade curls out of its tuft, as the blades of a real tuft
         # fan out from the crown: its face turns a quarter turn back from
         # the way out, give or take `SPLAY_JITTER`.
@@ -620,8 +686,8 @@ struct GrassField(Movable):
             Length(height, METER),
             Length(width, METER),
             Angle(curl, DEGREE),
-            hash01(index, key + 6, seed + 5),
-            hash01(index, key + 7, seed + 5),
+            phase,
+            shade,
             kind,
         )
 
@@ -654,8 +720,10 @@ struct GrassField(Movable):
                 continue
             ref placed = grown.value()
             var gust = wind.gust(placed.root.x, placed.root.z, time)
-            var bend = wind.tip_bend(gust, placed.phase, time)
-            mesh.add(placed, level.segments, bend, widen, gust * GUST_GLINT)
+            var bend = wind.tip_bend(
+                placed.root.x, placed.root.z, gust, placed.phase, time
+            )
+            mesh.add(placed, level.segments, bend, widen, GUST_GLINT * gust)
         if mesh.triangle_count() == 0:
             return None
         return mesh^.geometry()

@@ -28,6 +28,7 @@ from extensions.vegetation.ground import (
 )
 from extensions.vegetation.kinds import (
     BEYOND,
+    BROADLEAF,
     CULLED,
     DRAWN,
     DRY_GRASS,
@@ -39,7 +40,12 @@ from extensions.vegetation.kinds import (
     require_cluster_fate,
     require_plant_kind,
 )
-from extensions.vegetation.noise import hash01, layered_noise, value_noise
+from extensions.vegetation.noise import (
+    hash01,
+    layered_noise,
+    value_noise,
+    value_noise3,
+)
 from extensions.vegetation.rock import boulder
 from extensions.vegetation.wind import Wind, still_air
 from math.vector2 import Vector2
@@ -106,11 +112,12 @@ def test_plant_kinds_are_named_and_checked() raises:
     assert_equal(DRY_GRASS.name(), "dry grass")
     assert_equal(POPPY.name(), "poppy")
     assert_equal(SEED_HEAD.name(), "seed head")
-    assert_equal(PlantKind(4).name(), "unknown")
+    assert_equal(BROADLEAF.name(), "broad leaf")
+    assert_equal(PlantKind(5).name(), "unknown")
     assert_true(GRASS.is_valid())
-    assert_true(SEED_HEAD.is_valid())
+    assert_true(BROADLEAF.is_valid())
     assert_false(PlantKind(-1).is_valid())
-    assert_false(PlantKind(4).is_valid())
+    assert_false(PlantKind(5).is_valid())
     require_plant_kind(POPPY)
     with assert_raises(contains="plant kind"):
         require_plant_kind(PlantKind(7))
@@ -150,6 +157,21 @@ def test_value_noise_meets_the_lattice_and_is_smooth() raises:
     assert_true(layered >= 0 and layered <= 1)
 
 
+def test_value_noise_in_space_blends_its_layers() raises:
+    """On a whole layer the noise in space is that layer's plane noise.
+    Between layers it is smooth, and stays from zero to one."""
+    assert_almost_equal(
+        value_noise3(2.5, 3, 1.5, 6), value_noise(2.5, 1.5, 6 + 3 * 977)
+    )
+    assert_almost_equal(
+        value_noise3(2.5, -2, 1.5, 6), value_noise(2.5, 1.5, 6 - 2 * 977)
+    )
+    var a = value_noise3(0.4, 0.5, 0.6, 2)
+    var b = value_noise3(0.4, 0.501, 0.6, 2)
+    assert_true(abs(a - b) < 0.01)
+    assert_true(a >= 0 and a <= 1)
+
+
 def test_wind_refuses_each_out_of_range_value() raises:
     """Each field outside its range is refused."""
     with assert_raises(contains="heading"):
@@ -168,6 +190,12 @@ def test_wind_refuses_each_out_of_range_value() raises:
         _ = Wind(flutter_rate=Frequency(21.0, PER_SECOND))
     with assert_raises(contains="loop"):
         _ = Wind(loop=Duration(-1.0, SECOND))
+    with assert_raises(contains="sway must be"):
+        _ = Wind(sway=Angle(50.0, DEGREE))
+    with assert_raises(contains="swings"):
+        _ = Wind(sway_rate=Frequency(-1.0, PER_SECOND))
+    with assert_raises(contains="crests"):
+        _ = Wind(sway_length=Length(0.0, METER))
 
 
 def test_gusts_travel_downwind_at_their_speed() raises:
@@ -210,8 +238,8 @@ def test_a_looping_wind_repeats_itself_with_no_jump() raises:
         var middle = wind.gust(x, z, Duration(1.0, SECOND))
         lowest = min(lowest, middle)
         highest = max(highest, middle)
-        var bend = wind.tip_bend(start, 0.3, Duration(0.5, SECOND))
-        var later = wind.tip_bend(start, 0.3, Duration(4.5, SECOND))
+        var bend = wind.tip_bend(x, z, start, 0.3, Duration(0.5, SECOND))
+        var later = wind.tip_bend(x, z, start, 0.3, Duration(4.5, SECOND))
         assert_almost_equal(bend.x, later.x, atol=1e-4)
         assert_almost_equal(bend.y, later.y, atol=1e-4)
     assert_true(highest - lowest > 0.5)
@@ -224,34 +252,60 @@ def test_a_looping_flutter_wobbles_a_whole_number_of_times() raises:
         lean=Angle(0.0, DEGREE),
         flutter_rate=Frequency(1.6, PER_SECOND),
         loop=Duration(2.0, SECOND),
+        sway=Angle(0.0, DEGREE),
     )
     var slow = Wind(
         lean=Angle(0.0, DEGREE),
         flutter_rate=Frequency(0.1, PER_SECOND),
         loop=Duration(2.0, SECOND),
     )
-    var a = slow.tip_bend(0, 0.2, Duration(0.3, SECOND))
-    var b = slow.tip_bend(0, 0.2, Duration(2.3, SECOND))
+    var a = slow.tip_bend(1, 2, 0, 0.2, Duration(0.3, SECOND))
+    var b = slow.tip_bend(1, 2, 0, 0.2, Duration(2.3, SECOND))
     assert_almost_equal(a.x, b.x, atol=1e-5)
     var along = wind.downwind()
-    var peak = wind.tip_bend(0, 0, Duration(0.5 / 3.0, SECOND))
-    var wobble = Angle(8.0, DEGREE).to(RADIAN)
+    var peak = wind.tip_bend(0, 0, 0, 0, Duration(0.5 / 3.0, SECOND))
+    var wobble = wind.flutter.to(RADIAN)
     assert_almost_equal(peak.x * along.x + peak.y * along.y, wobble, atol=1e-4)
 
 
+def test_the_sway_rolls_downwind_and_grows_in_a_gust() raises:
+    """The sway at a point is the sway a quarter crest downwind a quarter
+    swing later. A full gust swings a tip further than calm air does."""
+    var wind = Wind(
+        heading=Angle(0.0, DEGREE),
+        lean=Angle(0.0, DEGREE),
+        flutter=Angle(0.0, DEGREE),
+        sway_rate=Frequency(1.0, PER_SECOND),
+        sway_length=Length(4.0, METER),
+    )
+    for k in range(6):
+        var t = Float32(k) * 0.13
+        var here = wind.tip_bend(0, 0, 0.5, 0, Duration(t, SECOND))
+        var later = wind.tip_bend(1, 0, 0.5, 0, Duration(t + 0.25, SECOND))
+        assert_almost_equal(here.x, later.x, atol=1e-4)
+    var widest_calm = Float32(0)
+    var widest_gust = Float32(0)
+    for k in range(20):
+        var time = Duration(Float32(k) * 0.05, SECOND)
+        widest_calm = max(widest_calm, abs(wind.tip_bend(0, 0, 0, 0, time).x))
+        widest_gust = max(widest_gust, abs(wind.tip_bend(0, 0, 1, 0, time).x))
+    assert_true(widest_gust > 3 * widest_calm)
+
+
 def test_tip_bend_leans_downwind_and_still_air_leans_nothing() raises:
-    """A full gust with no flutter leans the tip by `lean`, downwind.
-    Still air bends nothing."""
+    """A full gust with no sway and no flutter leans the tip by `lean`,
+    downwind. Still air bends nothing."""
     var wind = Wind(
         heading=Angle(90.0, DEGREE),
         lean=Angle(20.0, DEGREE),
         calm=0.0,
         flutter=Angle(0.0, DEGREE),
+        sway=Angle(0.0, DEGREE),
     )
-    var bend = wind.tip_bend(1.0, 0.25, Duration(1.0, SECOND))
+    var bend = wind.tip_bend(3, 4, 1.0, 0.25, Duration(1.0, SECOND))
     assert_almost_equal(bend.x, 0, atol=1e-6)
     assert_almost_equal(bend.y, Angle(20.0, DEGREE).to(RADIAN), atol=1e-6)
-    var calm = still_air().tip_bend(1.0, 0.7, Duration(3.0, SECOND))
+    var calm = still_air().tip_bend(3, 4, 1.0, 0.7, Duration(3.0, SECOND))
     assert_almost_equal(calm.length(), 0, atol=1e-7)
 
 
@@ -262,6 +316,9 @@ def test_blade_colors_differ_by_kind() raises:
     var dry = blade_colors(DRY_GRASS, 0.5)
     var stem = blade_colors(POPPY, 0.5)
     var stalk = blade_colors(SEED_HEAD, 0.5)
+    var leaf = blade_colors(BROADLEAF, 0.5)
+    assert_true(leaf.tip.y < green.tip.y)
+    assert_true(leaf.tip.y > leaf.root.y)
     assert_true(stalk.tip.x > stem.tip.x)
     assert_true(green.tip.y > green.tip.x)
     assert_true(dry.tip.x > green.tip.x)
@@ -311,7 +368,7 @@ def test_blade_check_refuses_each_bad_field() raises:
     with assert_raises(contains="shade"):
         b.check()
     b = _blade(GRASS)
-    b.kind = PlantKind(4)
+    b.kind = PlantKind(5)
     with assert_raises(contains="plant kind"):
         b.check()
 
@@ -429,6 +486,37 @@ def test_a_seed_head_tops_its_stalk_with_a_spike() raises:
     assert_almost_equal(mesh.positions[top + 1], 0.4 + 0.075, atol=1e-4)
 
 
+def test_a_broad_leaf_is_a_low_rosette() raises:
+    """A broad-leaf plant is five oval leaves of eight vertices and six
+    triangles each, low round its root, whatever its segments. The wind
+    moves its tips less than a blade's."""
+    var still = BladeMesh()
+    still.add(_blade(BROADLEAF), 3, Vector2(0, 0), 1.0)
+    assert_equal(still.vertex_count(), 5 * 8)
+    assert_equal(still.triangle_count(), 5 * 6)
+    var highest = Float32(0)
+    for v in range(still.vertex_count()):
+        highest = max(highest, still.positions[3 * v + 1])
+    assert_true(highest < 0.4 * 0.7)
+    var blown = BladeMesh()
+    blown.add(_blade(BROADLEAF), 3, Vector2(1, 0), 1.0)
+    var moved = blown.positions[3 * 7] - still.positions[3 * 7]
+    var blade = BladeMesh()
+    blade.add(_blade(GRASS), 3, Vector2(1, 0), 1.0)
+    assert_true(moved > 0)
+    assert_true(moved < blade.positions[3 * 6])
+
+
+def test_the_wind_bends_a_blade_most_at_its_tip() raises:
+    """Under the wind the root stays put and the tip moves the most."""
+    var mesh = BladeMesh()
+    mesh.add(_blade(GRASS), 4, Vector2(0.6, 0), 1.0)
+    var low = mesh.positions[3 * 2] + mesh.positions[3 * 3]
+    var high = mesh.positions[3 * 6] + mesh.positions[3 * 7]
+    assert_almost_equal(mesh.positions[0] + mesh.positions[3], 0, atol=1e-6)
+    assert_true(high > 4 * low)
+
+
 def test_add_refuses_bad_segments_widen_and_glint() raises:
     """Segments, widening and glint outside their ranges are refused."""
     var mesh = BladeMesh()
@@ -439,7 +527,7 @@ def test_add_refuses_bad_segments_widen_and_glint() raises:
     with assert_raises(contains="widened"):
         mesh.add(_blade(GRASS), 2, Vector2(0, 0), 0.5)
     with assert_raises(contains="glint"):
-        mesh.add(_blade(GRASS), 2, Vector2(0, 0), 1.0, 2.0)
+        mesh.add(_blade(GRASS), 2, Vector2(0, 0), 1.0, 2.5)
     with assert_raises(contains="plant kind"):
         mesh.add(_blade(PlantKind(8)), 2, Vector2(0, 0), 1.0)
 
@@ -567,7 +655,8 @@ def test_a_cliff_wall_faces_the_camera_from_floor_to_plateau() raises:
 
 def test_ground_heights_climb_and_masks_stay_in_range() raises:
     """Level hills climb by `climb` toward -z. Each mask is from zero to
-    one, and a normal is of unit length."""
+    one, the grass is short in some places and full height in others, and
+    a normal is of unit length."""
     var flat = Ground(hill_height=Length(0.0, METER), climb=0.1)
     assert_almost_equal(flat.height_at(3, -10), 1.0, atol=1e-5)
     assert_almost_equal(flat.normal_at(0, 0).length(), 1, atol=1e-5)
@@ -575,21 +664,31 @@ def test_ground_heights_climb_and_masks_stay_in_range() raises:
     var ground = Ground()
     var bare = False
     var thick = False
+    var short = False
+    var high = False
     for i in range(400):
         var x = Float32(i % 20) * 2.3 - 20
         var z = Float32(i // 20) * 2.9 - 25
         var cover = ground.cover(x, z)
         var dry = ground.dryness(x, z)
         var bloom = ground.bloom(x, z)
+        var tall = ground.tallness(x, z)
+        var weeds = ground.weeds(x, z)
         assert_true(cover >= 0 and cover <= 1)
         assert_true(dry >= 0 and dry <= 1)
         assert_true(bloom >= 0 and bloom <= 1)
+        assert_true(tall >= 0 and tall <= 1)
+        assert_true(weeds >= 0.35 and weeds <= 1)
         bare = bare or cover < 0.5
         thick = thick or cover == 1
+        short = short or tall == 0
+        high = high or tall == 1
         var far = ground.far_color(x, z)
         assert_true(far.x >= 0 and far.y >= 0 and far.z >= 0)
     assert_true(bare)
     assert_true(thick)
+    assert_true(short)
+    assert_true(high)
 
 
 def test_ground_mesh_spaces_rows_closer_in_the_middle() raises:
