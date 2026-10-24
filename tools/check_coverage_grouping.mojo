@@ -3246,6 +3246,483 @@ def check_single_generic(mojo: String) raises:
         _ = run_program(["rm", "-rf", work], 30)
 
 
+comptime _TS = 1
+comptime _TD = 2
+comptime _TB = 3
+comptime _TX = 4
+comptime _TC = 5
+comptime _TM = 6
+comptime _TP = 7
+comptime _TQ = 8
+comptime _TT = 9
+comptime _TAND = 10
+comptime _TOR = 11
+comptime _TNOT = 12
+comptime _TCHOOSE = 13
+
+
+struct _TruthNode(Copyable, ImplicitlyCopyable, Movable):
+    var kind: Int
+    var index: Int
+    var left: Int
+    var right: Int
+    var third: Int
+
+    def __init__(
+        out self, kind: Int, index: Int, left: Int, right: Int, third: Int
+    ):
+        self.kind = kind
+        self.index = index
+        self.left = left
+        self.right = right
+        self.third = third
+
+
+struct _TruthItem(Copyable, ImplicitlyCopyable, Movable):
+    var kind: Int
+    var name: Int
+    var retained: Bool
+
+    def __init__(out self, kind: Int, name: Int, retained: Bool):
+        self.kind = kind
+        self.name = name
+        self.retained = retained
+
+
+def _tn(kind: Int, index: Int) -> List[_TruthNode]:
+    var nodes = List[_TruthNode]()
+    nodes.append(_TruthNode(kind, index, -1, -1, -1))
+    return nodes^
+
+
+def _tjoin(
+    var prefix: List[_TruthNode], var child: List[_TruthNode]
+) -> List[_TruthNode]:
+    var base = len(prefix)
+    for item in child:
+        var left = item.left if item.left < 0 else item.left + base
+        var right = item.right if item.right < 0 else item.right + base
+        var third = item.third if item.third < 0 else item.third + base
+        prefix.append(_TruthNode(item.kind, item.index, left, right, third))
+    return prefix^
+
+
+def _tbin(
+    kind: Int, var left: List[_TruthNode], var right: List[_TruthNode]
+) -> List[_TruthNode]:
+    var left_root = len(left) - 1
+    var nodes = _tjoin(left^, right^)
+    var right_root = len(nodes) - 1
+    nodes.append(_TruthNode(kind, 0, left_root, right_root, -1))
+    return nodes^
+
+
+def _tunary(kind: Int, var child: List[_TruthNode]) -> List[_TruthNode]:
+    var root = len(child) - 1
+    child.append(_TruthNode(kind, 0, root, -1, -1))
+    return child^
+
+
+def _tchoose(
+    var condition: List[_TruthNode],
+    var taken: List[_TruthNode],
+    var other: List[_TruthNode],
+) -> List[_TruthNode]:
+    var condition_root = len(condition) - 1
+    var nodes = _tjoin(condition^, taken^)
+    var taken_root = len(nodes) - 1
+    nodes = _tjoin(nodes^, other^)
+    var other_root = len(nodes) - 1
+    nodes.append(
+        _TruthNode(_TCHOOSE, 0, condition_root, taken_root, other_root)
+    )
+    return nodes^
+
+
+def _truth_case(number: Int) raises -> List[_TruthNode]:
+    if number == 0:
+        return _tbin(_TOR, _tn(_TS, 0), _tn(_TS, 1))
+    if number == 1:
+        return _tbin(_TAND, _tn(_TS, 0), _tn(_TS, 1))
+    if number == 2:
+        return _tbin(_TOR, _tbin(_TOR, _tn(_TS, 0), _tn(_TS, 1)), _tn(_TS, 2))
+    if number == 3:
+        return _tbin(_TOR, _tbin(_TAND, _tn(_TS, 0), _tn(_TS, 1)), _tn(_TS, 2))
+    if number == 4:
+        return _tbin(_TOR, _tn(_TS, 0), _tbin(_TAND, _tn(_TS, 1), _tn(_TS, 2)))
+    if number == 5:
+        return _tunary(_TNOT, _tbin(_TOR, _tn(_TS, 0), _tn(_TS, 1)))
+    if number == 6:
+        return _tbin(_TAND, _tunary(_TNOT, _tn(_TS, 0)), _tn(_TS, 1))
+    if number == 7:
+        return _tbin(_TOR, _tn(_TS, 0), _tn(_TD, 1))
+    if number == 8:
+        return _tbin(_TAND, _tn(_TD, 0), _tbin(_TOR, _tn(_TS, 1), _tn(_TS, 2)))
+    if number == 9:
+        return _tbin(
+            _TAND,
+            _tbin(_TOR, _tn(_TS, 0), _tn(_TS, 1)),
+            _tbin(_TOR, _tn(_TS, 2), _tn(_TS, 3)),
+        )
+    if number == 10:
+        return _tbin(_TOR, _tbin(_TAND, _tn(_TS, 0), _tn(_TS, 1)), _tn(_TB, 2))
+    if number == 11:
+        return _tbin(_TOR, _tn(_TB, 0), _tbin(_TAND, _tn(_TS, 1), _tn(_TS, 2)))
+    if number == 12:
+        return _tbin(_TOR, _tn(_TX, 0), _tn(_TB, 1))
+    if number == 13:
+        return _tbin(
+            _TOR,
+            _tbin(_TAND, _tn(_TB, 0), _tunary(_TNOT, _tn(_TX, 1))),
+            _tn(_TS, 2),
+        )
+    if number == 14:
+        return _tbin(_TOR, _tbin(_TAND, _tn(_TX, 0), _tn(_TD, 1)), _tn(_TS, 2))
+    if number == 15:
+        return _tbin(
+            _TOR,
+            _tchoose(_tn(_TB, 1), _tn(_TS, 2), _tn(_TS, 3)),
+            _tn(_TS, 0),
+        )
+    if number == 16:
+        return _tbin(_TAND, _tbin(_TOR, _tn(_TD, 0), _tn(_TD, 1)), _tn(_TS, 2))
+    if number == 17:
+        return _tbin(_TOR, _tn(_TC, 0), _tn(_TB, 1))
+    if number == 18:
+        return _tbin(_TAND, _tn(_TB, 0), _tn(_TC, 1))
+    if number == 19:
+        return _tbin(_TOR, _tbin(_TAND, _tn(_TC, 0), _tn(_TS, 1)), _tn(_TS, 2))
+    if number == 20:
+        return _tbin(
+            _TAND,
+            _tbin(_TOR, _tn(_TS, 0), _tn(_TS, 1)),
+            _tunary(_TNOT, _tn(_TC, 2)),
+        )
+    if number == 21:
+        return _tbin(
+            _TOR,
+            _tn(_TC, 0),
+            _tbin(_TOR, _tn(_TX, 1), _tbin(_TAND, _tn(_TC, 2), _tn(_TB, 3))),
+        )
+    if number == 22:
+        return _tbin(_TAND, _tn(_TC, 0), _tn(_TD, 1))
+    if number == 23:
+        return _tbin(
+            _TOR,
+            _tchoose(_tn(_TB, 1), _tn(_TC, 2), _tn(_TC, 3)),
+            _tn(_TS, 0),
+        )
+    if number == 24:
+        return _tbin(_TOR, _tn(_TM, 0), _tn(_TB, 1))
+    if number == 25:
+        return _tbin(_TAND, _tn(_TB, 0), _tn(_TM, 1))
+    if number == 26:
+        return _tbin(
+            _TOR,
+            _tunary(_TNOT, _tn(_TM, 0)),
+            _tbin(_TAND, _tn(_TS, 1), _tn(_TM, 2)),
+        )
+    if number == 27:
+        return _tbin(
+            _TAND,
+            _tbin(_TOR, _tn(_TM, 0), _tn(_TD, 1)),
+            _tbin(_TOR, _tn(_TS, 2), _tn(_TS, 3)),
+        )
+    if number == 28:
+        return _tbin(_TAND, _tn(_TM, 0), _tn(_TC, 1))
+    if number == 29:
+        return _tbin(
+            _TOR,
+            _tchoose(_tn(_TB, 1), _tn(_TM, 2), _tn(_TM, 3)),
+            _tn(_TC, 0),
+        )
+    if number == 30:
+        return _tbin(_TAND, _tbin(_TOR, _tn(_TP, 0), _tn(_TP, 1)), _tn(_TB, 2))
+    if number == 31:
+        return _tbin(_TAND, _tn(_TP, 0), _tbin(_TOR, _tn(_TP, 1), _tn(_TQ, 2)))
+    if number == 32:
+        return _tbin(_TOR, _tbin(_TOR, _tn(_TQ, 0), _tn(_TP, 1)), _tn(_TB, 2))
+    if number == 33:
+        return _tbin(
+            _TAND,
+            _tunary(_TNOT, _tn(_TP, 0)),
+            _tbin(_TOR, _tn(_TP, 1), _tbin(_TOR, _tn(_TP, 2), _tn(_TQ, 3))),
+        )
+    if number == 34:
+        return _tbin(
+            _TOR,
+            _tchoose(_tn(_TB, 1), _tn(_TP, 2), _tn(_TP, 3)),
+            _tn(_TP, 0),
+        )
+    if number == 35:
+        return _tbin(_TOR, _tbin(_TAND, _tn(_TP, 0), _tn(_TP, 0)), _tn(_TB, 1))
+    if number == 36:
+        return _tbin(
+            _TAND,
+            _tbin(_TOR, _tn(_TP, 0), _tn(_TS, 1)),
+            _tbin(_TOR, _tn(_TQ, 2), _tn(_TP, 3)),
+        )
+    if number == 37:
+        return _tbin(_TOR, _tn(_TT, 0), _tn(_TC, 1))
+    if number == 38:
+        return _tbin(_TAND, _tbin(_TOR, _tn(_TT, 0), _tn(_TC, 1)), _tn(_TB, 2))
+    if number == 39:
+        return _tbin(_TOR, _tbin(_TOR, _tn(_TT, 0), _tn(_TC, 1)), _tn(_TC, 2))
+    if number == 40:
+        return _tbin(_TAND, _tn(_TT, 0), _tbin(_TOR, _tn(_TB, 1), _tn(_TC, 2)))
+    if number == 41:
+        return _tbin(
+            _TOR,
+            _tn(_TT, 0),
+            _tchoose(_tn(_TB, 1), _tn(_TC, 2), _tn(_TC, 3)),
+        )
+    if number == 42:
+        return _tbin(_TAND, _tn(_TT, 0), _tunary(_TNOT, _tn(_TC, 1)))
+    raise Error("bad truth case " + String(number))
+
+
+def _truth_type(nodes: List[_TruthNode], id: Int) -> Int:
+    var kind = nodes[id].kind
+    if kind == _TS or kind == _TX:
+        return _TS
+    if kind == _TP or kind == _TQ:
+        return _TP
+    if kind == _TT:
+        return _TC
+    if kind == _TD or kind == _TB or kind == _TC or kind == _TM:
+        return kind
+    if kind == _TCHOOSE:
+        return _truth_type(nodes, nodes[id].right)
+    if kind == _TNOT:
+        return _TB
+    var left = _truth_type(nodes, nodes[id].left)
+    var right = _truth_type(nodes, nodes[id].right)
+    if left == right:
+        return left
+    return _TB
+
+
+def _truth_enter(mut log: String, index: Int, fail: Int) raises:
+    log += "+" + String(index)
+    if index == fail:
+        raise Error("truth-fail")
+
+
+def _truth_convert(
+    mut log: String,
+    mut counts: List[Int],
+    item: _TruthItem,
+    mask: Int,
+    changing: Bool,
+) -> Bool:
+    if item.kind == _TB:
+        return item.name != 0
+    log += String(item.name)
+    var count = counts[item.name]
+    counts[item.name] = count + 1
+    var value = (mask & (1 << item.name)) != 0
+    if changing and count % 2 == 1:
+        value = not value
+    return value
+
+
+def _truth_drop(mut log: String, item: _TruthItem):
+    if item.kind == _TB or item.kind == _TQ or item.retained:
+        return
+    log += "~" + String(item.name)
+
+
+def _truth_bit(value: Bool) -> _TruthItem:
+    var bit = 0
+    if value:
+        bit = 1
+    return _TruthItem(_TB, bit, False)
+
+
+def _truth_eval(
+    nodes: List[_TruthNode],
+    id: Int,
+    mut log: String,
+    mut counts: List[Int],
+    mask: Int,
+    fail: Int,
+    changing: Bool,
+    owned: Bool,
+) raises -> _TruthItem:
+    var node = nodes[id]
+    var kind = node.kind
+    if kind == _TS or kind == _TD or kind == _TM or kind == _TQ or kind == _TT:
+        _truth_enter(log, node.index, fail)
+        return _TruthItem(kind, node.index, False)
+    if kind == _TC and owned:
+        log += "=" + String(node.index)
+        return _TruthItem(_TS, node.index, False)
+    if kind == _TX or kind == _TC or kind == _TP:
+        return _TruthItem(_TS, node.index, True)
+    if kind == _TB:
+        _truth_enter(log, node.index, fail)
+        return _truth_bit((mask & (1 << node.index)) != 0)
+    if kind == _TCHOOSE:
+        var cond = nodes[node.left]
+        _truth_enter(log, cond.index, fail)
+        var chosen = node.third
+        if (mask & (1 << cond.index)) != 0:
+            chosen = node.right
+        var chosen_node = nodes[chosen]
+        if chosen_node.kind == _TC or chosen_node.kind == _TP:
+            return _truth_eval(
+                nodes, chosen, log, counts, mask, fail, changing, owned
+            )
+        _truth_enter(log, chosen_node.index, fail)
+        if chosen_node.kind == _TM:
+            log += ">" + String(chosen_node.index)
+        return _TruthItem(_TS, chosen_node.index, False)
+    if kind == _TNOT:
+        var item = _truth_eval(
+            nodes, node.left, log, counts, mask, fail, changing, False
+        )
+        var value = _truth_convert(log, counts, item, mask, changing)
+        _truth_drop(log, item)
+        return _truth_bit(not value)
+    var left = _truth_eval(
+        nodes, node.left, log, counts, mask, fail, changing, False
+    )
+    var value = _truth_convert(log, counts, left, mask, changing)
+    var short = value if kind == _TOR else not value
+    var same = _truth_type(nodes, node.left) == _truth_type(nodes, node.right)
+    if same:
+        if short:
+            return left
+        _truth_drop(log, left)
+        var right_kind = nodes[node.right].kind
+        var own_right = right_kind == _TC or right_kind == _TCHOOSE
+        return _truth_eval(
+            nodes, node.right, log, counts, mask, fail, changing, own_right
+        )
+    _truth_drop(log, left)
+    if short:
+        return _truth_bit(value)
+    var right = _truth_eval(
+        nodes, node.right, log, counts, mask, fail, changing, False
+    )
+    value = _truth_convert(log, counts, right, mask, changing)
+    _truth_drop(log, right)
+    return _truth_bit(value)
+
+
+def _truth_retain(nodes: List[_TruthNode], id: Int, mut log: String):
+    var node = nodes[id]
+    var kind = node.kind
+    if kind == _TX or kind == _TC:
+        log += "~" + String(node.index)
+        return
+    if (
+        kind == _TS
+        or kind == _TD
+        or kind == _TB
+        or kind == _TM
+        or kind == _TP
+        or kind == _TQ
+        or kind == _TT
+    ):
+        return
+    if node.left >= 0:
+        _truth_retain(nodes, node.left, log)
+    if node.right >= 0:
+        _truth_retain(nodes, node.right, log)
+    if node.third >= 0:
+        _truth_retain(nodes, node.third, log)
+
+
+def truth_log(
+    number: Int, mask: Int, fail: Int, changing: Bool
+) raises -> String:
+    """Return one custom-truth log, without the `TRUTH` label.
+
+    Args:
+        number: The reference tree, from 0 through 42.
+        mask: The four truth bits.
+        fail: The leaf that raises, or -1.
+        changing: True when a repeated conversion flips.
+
+    Returns:
+        The native log, including the outcome mark and retained destruction.
+
+    Raises:
+        Error: If `number` is outside the reference trees.
+    """
+    var nodes = _truth_case(number)
+    var log = String()
+    var counts = List[Int](length=8, fill=0)
+    var failed = False
+    var outcome = False
+    try:
+        var item = _truth_eval(
+            nodes,
+            len(nodes) - 1,
+            log,
+            counts,
+            mask,
+            fail,
+            changing,
+            False,
+        )
+        outcome = _truth_convert(log, counts, item, mask, changing)
+        _truth_drop(log, item)
+    except error:
+        if String(error).find("truth-fail") < 0:
+            raise error
+        failed = True
+    if failed:
+        log += "|E"
+    elif outcome:
+        log += "|T"
+    else:
+        log += "|F"
+    _truth_retain(nodes, len(nodes) - 1, log)
+    return log
+
+
+def truth_model_rows() raises -> String:
+    """Return every custom-truth row, with a trailing newline.
+
+    Returns:
+        6,880 rows in changing, failure, mask, then tree order.
+
+    Raises:
+        Error: If a reference tree is missing.
+    """
+    var text = String()
+    for changing in [False, True]:
+        var fail = -1
+        while fail < 4:
+            var mask = 0
+            while mask < 16:
+                var number = 0
+                while number < 43:
+                    var log = truth_log(number, mask, fail, changing)
+                    var changing_text = "False"
+                    if changing:
+                        changing_text = "True"
+                    text += (
+                        "TRUTH "
+                        + String(number)
+                        + " "
+                        + String(mask)
+                        + " "
+                        + String(fail)
+                        + " "
+                        + changing_text
+                        + " "
+                        + log
+                        + "\n"
+                    )
+                    number += 1
+                mask += 1
+            fail += 1
+    return text
+
+
 def main() raises:
     """Compare the Boolean grouping fixture from the command line."""
     var mojo = ".venv/bin/mojo"

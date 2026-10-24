@@ -25,6 +25,8 @@ from tools.check_coverage_grouping import (
     reduce_text,
     repeated_truth_source,
     temporary_identity_source,
+    truth_log,
+    truth_model_rows,
 )
 
 
@@ -160,6 +162,25 @@ def test_the_single_generic_fixture_matches_the_pinned_text() raises:
     assert_equal(stable[0], "GENERIC Probe 0 False False 0~011~1 1 2 0")
     var flipped = single_generic_case("Probe", 1, True, 164)
     assert_equal(flipped[0], "GENERIC Probe 1 True False 00~0 2 0 0")
+
+
+def test_the_custom_truth_model_matches_the_pinned_rows() raises:
+    assert_equal(truth_log(0, 0, -1, False), "+00~0+11~1|F")
+    assert_equal(truth_log(0, 5, -1, False), "+000~0|T")
+    assert_equal(truth_log(0, 5, 0, True), "+0|E")
+    assert_equal(truth_log(4, 1, -1, True), "+000~0|F")
+    assert_equal(truth_log(12, 5, -1, False), "0|T~0")
+    assert_equal(truth_log(15, 1, -1, False), "+1+33~3+00~0|T")
+    assert_equal(truth_log(23, 1, 1, False), "+1|E~2~3")
+    assert_equal(truth_log(30, 7, 2, True), "00|F")
+    assert_equal(truth_log(36, 5, 0, True), "0+222|F")
+    assert_equal(truth_log(39, 2, -1, False), "+00~0=111~1|T~1~2")
+    assert_equal(truth_log(41, 4, -1, False), "+00~0+1=33~3|F~2~3")
+    assert_equal(truth_log(42, 5, 0, True), "+0|E~1")
+    assert_equal(
+        sha256_hex(truth_model_rows().as_bytes()),
+        "25f58af42cbb9e5d2118a66f0b95c71d7158d20f5b9f86fdc8b80c46d57c9d85",
+    )
 
 
 def main() raises:
