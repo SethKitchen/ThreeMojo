@@ -554,7 +554,7 @@ $(LINT_GPU_STAMP): $(COMPILE_GPU_STAMP)
 # The manifest also lets the copy and diff loops share exactly one selection.
 # Each make process owns its manifest. Keep it outside stamp(fmt)'s fmt-*
 # cleanup so concurrent checks cannot remove or overwrite another selection.
-FMT_RUN_ID := $(shell $(TOOL) shell_log uuid)
+FMT_RUN_ID := $(shell $(TOOL) format_run_id)
 FMT_INPUTS := $(CACHE_DIR)/format-inputs-$(FMT_RUN_ID)
 define write-format-inputs
 $(if $(strip $(1)),@printf '%s\n' $(foreach f,$(wordlist 1,4,$(1)),$(call quote,$(f))) >> $(FMT_INPUTS)

@@ -95,7 +95,13 @@ def test_the_makefile_no_longer_calls_python_for_these_lines() raises:
     var source = Path("Makefile").read_text()
     assert_equal(source.find("python3 -c"), -1)
     assert_equal(source.find("import uuid"), -1)
-    assert_true(source.find("$(TOOL) shell_log uuid") >= 0)
+    assert_true(source.find("$(TOOL) format_run_id") >= 0)
+    assert_true(
+        source.find(
+            "THREEMOJO_SHELL_LOG := sh tools/tool.sh $(TOOL_MOJO) shell_log"
+        )
+        >= 0
+    )
     assert_true(
         source.find("$$THREEMOJO_SHELL_LOG start lint-build-start:") >= 0
     )
