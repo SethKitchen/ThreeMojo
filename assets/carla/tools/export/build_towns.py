@@ -1089,8 +1089,8 @@ def _splat(parts, library, across, left, width, top, height, rows, fill=False):
         "across": int(across),
         "left": float(left),
         "top": float(top),
-        "scale_u": IMPOSTOR_SIZE / max(width, 1e-6),
-        "scale_v": rows / max(height, 1e-6),
+        "span_u": float(width),
+        "span_v": float(height),
         "light": impostor_light(),
     }
     if fill:
@@ -1266,8 +1266,8 @@ def _view(parts, library, forward, right, up, low_r, low_u, width, height, colum
         "low_r": float(low_r),
         "low_u": float(low_u),
         "height": float(height),
-        "scale_u": columns / max(width, 1e-6),
-        "scale_v": rows / max(height, 1e-6),
+        "span_u": float(width),
+        "span_v": float(height),
     })
     image = numpy.array(doc, dtype=numpy.float64)
     return _dilate(image[:, :, :3], image[:, :, 3] > 0)
@@ -1836,6 +1836,23 @@ def placements(row):
     return [numpy.array(matrix, dtype=numpy.float64) for matrix in _copies_tool(payload)]
 
 
+def _export_file(root, game_path, suffix):
+    """Return the exported path from `tools/carla_town_paths.mojo`."""
+    here = os.path.dirname(os.path.abspath(__file__))
+    repo = os.path.abspath(os.path.join(here, "..", "..", "..", ".."))
+    mojo = os.path.join(repo, ".venv", "bin", "mojo")
+    if not os.path.isfile(mojo):
+        mojo = "mojo"
+    result = subprocess.run(
+        ["sh", os.path.join(repo, "tools", "tool.sh"), mojo,
+         "carla_town_paths", "export", root, game_path, suffix],
+        capture_output=True, text=True,
+    )
+    if result.returncode != 0:
+        raise ValueError(result.stderr.strip() or "export path failed")
+    return result.stdout.rstrip("\n")
+
+
 def build(town, max_size, tile):
     """Write one town's package, and return the triangle counts of its
     two levels of detail and its node count."""
@@ -1866,7 +1883,7 @@ def build(town, max_size, tile):
             if mesh_path.startswith("/Engine/"):
                 meshes[mesh_path] = cube()
             else:
-                path = os.path.join(RAW, *mesh_path[len("/Game/"):].split("/")) + ".gltf"
+                path = _export_file(RAW, mesh_path, ".gltf")
                 meshes[mesh_path] = read_gltf(path) if os.path.exists(path) else []
         primitives = meshes[mesh_path]
         if not primitives:

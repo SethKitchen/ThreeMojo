@@ -9,7 +9,9 @@
 
 `FILE` is JSON. `mode` is `axis` for a tree impostor or `ortho` for a
 baked building. The program prints RGBA texels. A covered texel has
-alpha 1. The nearest sample along the view wins.
+alpha 1. The nearest sample along the view wins. `span_u` and `span_v`
+set the scale as `columns / max(span_u, 1e-6)` and
+`rows / max(span_v, 1e-6)` when `scale_u` is absent.
 """
 
 from std.math import ceil, floor, sqrt
@@ -72,13 +74,16 @@ def splat_text(text: String) raises -> String:
         low_r = _number(doc, doc.at(root, "low_r"))
         low_u = _number(doc, doc.at(root, "low_u"))
         height = _number(doc, doc.at(root, "height"))
-        scale_u = _number(doc, doc.at(root, "scale_u"))
-        scale_v = _number(doc, doc.at(root, "scale_v"))
     else:
         across = _whole(doc, doc.at(root, "across"))
         left = _number(doc, doc.at(root, "left"))
         top = _number(doc, doc.at(root, "top"))
-        scale_u = _number(doc, doc.at(root, "scale_u"))
+    var named_scale = doc.get(root, "scale_u")
+    if named_scale == -1:
+        scale_u = _view_scale(columns, _number(doc, doc.at(root, "span_u")))
+        scale_v = _view_scale(image_rows, _number(doc, doc.at(root, "span_v")))
+    else:
+        scale_u = _number(doc, named_scale)
         scale_v = _number(doc, doc.at(root, "scale_v"))
     var depth_axis = 0
     if across == 0:
@@ -760,6 +765,14 @@ def _fsub(left: Float64, right: Float64) -> Float64:
 def _fdiv(left: Float64, right: Float64) -> Float64:
     """Return one quotient, rounded before the next operation."""
     return left / right
+
+
+def _view_scale(count: Int, span: Float64) -> Float64:
+    """Return `count / max(span, 1e-6)`."""
+    var denom = span
+    if not (denom > 1e-6):
+        denom = 1e-6
+    return _fdiv(Float64(count), denom)
 
 
 def _ceil_nonneg(value: Float64) -> Int:

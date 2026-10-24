@@ -8,12 +8,14 @@
     carla_town_paths object TEXT
     carla_town_paths relative TEXT
     carla_town_paths wanted [FILE ...]
+    carla_town_paths export ROOT GAME_PATH SUFFIX
 
 `object` prints the package in UE4SS's `Class /Game/A/B.B`. `relative`
 prints the cooked `.uasset` path. `wanted` reads layout files and prints
 the sorted `/Game/...` meshes and materials, once each. `pending` reads
 a JSON file and prints the packages that are not exported yet, in
-batches.
+batches. `export` joins `ROOT` with the package path and adds
+`SUFFIX`.
 """
 
 from std.pathlib import Path
@@ -370,7 +372,7 @@ def _usage() raises:
     print(
         (
             "usage: carla_town_paths object TEXT | relative TEXT | wanted [FILE"
-            " ...] | pending FILE"
+            " ...] | pending FILE | export ROOT GAME_PATH SUFFIX"
         ),
         file=stderr,
     )
@@ -398,6 +400,9 @@ def main() raises:
         except error:
             print("carla_town_paths:", error, file=stderr)
             exit(1)
+        return
+    if arguments[1] == "export" and len(arguments) == 5:
+        print(export_path(arguments[2], arguments[3], arguments[4]))
         return
     if arguments[1] == "wanted":
         var files = List[String]()

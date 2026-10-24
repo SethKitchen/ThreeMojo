@@ -84,6 +84,37 @@ def test_a_lit_triangle_keeps_the_near_red_samples() raises:
     )
 
 
+def test_a_span_uses_the_same_scale_as_the_explicit_quotient() raises:
+    var base = _axis()
+    assert_equal(
+        splat_text(
+            base.replace('"scale_u":2,"scale_v":2', '"span_u":1,"span_v":1')
+        ),
+        splat_text(base),
+    )
+    assert_equal(
+        splat_text(
+            base.replace('"scale_u":2,"scale_v":2', '"span_u":0,"span_v":-1')
+        ),
+        splat_text(
+            base.replace(
+                '"scale_u":2,"scale_v":2', '"scale_u":2000000,"scale_v":2000000'
+            )
+        ),
+    )
+    assert_equal(
+        splat_text(
+            base.replace('"scale_u":2,"scale_v":2', '"span_u":3,"span_v":3')
+        ),
+        splat_text(
+            base.replace(
+                '"scale_u":2,"scale_v":2',
+                '"scale_u":0.6666666666666666,"scale_v":0.6666666666666666',
+            )
+        ),
+    )
+
+
 def test_a_mask_drops_a_sample_and_two_parts_share_one_stream() raises:
     assert_equal(
         splat_text(
