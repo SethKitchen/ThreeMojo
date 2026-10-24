@@ -500,6 +500,9 @@ with different material overrides keeps its own far appearance. Each build
 starts a new cache. Its geometry, materials and texture files must stay fixed
 until that build ends.
 
+The primitive digest is `tools/carla_geometry_digest.mojo`. It hashes each
+field name, shape and little-endian payload in the reviewed order.
+
 Packaged texture names use a hash of the encoded image bytes. Two material
 overrides can share a color map with different masks without replacing each
 other's image. Source images with the same filename also stay distinct.
@@ -508,8 +511,10 @@ Equal encoded images can share one packaged file.
 ## Test the town exporter
 
 The standard-library identity checks run with `make test-tools`.
-The synthetic bake checks need only NumPy and Pillow. They use two small
-meshes and two colors. They need no CARLA release, server or GPU.
+The synthetic bake checks need NumPy, Pillow and the repository Mojo.
+They use two small meshes and two colors. They need no CARLA release,
+server or GPU. They call `tools/carla_geometry_digest.mojo` through
+`tools/tool.sh`.
 
 Only mesh simplification is substituted. The tests use the real material
 reconstruction, texture conversion, bake rasterizers and GLB writer. They
@@ -523,8 +528,9 @@ uv pip install --python .venv-carla-export/bin/python --only-binary :all: "numpy
 .venv-carla-export/bin/python -m unittest discover -s assets/carla/tools/export -p 'test_build_towns.py'
 ```
 
-The existing Linux and macOS lint jobs run this command. They keep the Mojo
-environment unchanged. A missing dependency or wheel fails the check.
+The existing Linux and macOS lint jobs run this command. They install
+Mojo when the bake checks run. The exporter packages stay in a separate
+environment. A missing dependency or wheel fails the check.
 
 ## Why not Poly Haven
 

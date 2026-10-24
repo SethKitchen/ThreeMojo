@@ -1,6 +1,6 @@
 # Copyright (c) 2026 Seth Kitchen, PE
 # SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
-"""Synthetic, real-rasterizer bake regressions. Require NumPy and Pillow.
+"""Synthetic, real-rasterizer bake regressions. Require NumPy, Pillow and Mojo.
 
 Run explicitly with the pinned exporter test environment documented in
 CARLA-assets. No CARLA release is needed. Only mesh simplification is

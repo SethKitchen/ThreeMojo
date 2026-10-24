@@ -21,13 +21,14 @@ and no engine path: `check_clean` refuses one that does.
 """
 
 import argparse
-import hashlib
 import json
 import os
 import re
 import shutil
 import struct
+import subprocess
 import sys
+import tempfile
 import zlib
 
 import numpy
@@ -788,6 +789,57 @@ def baked_building(parts, library, out_dir, name, target):
     return far, len(gltf["materials"]) - 1
 
 
+def geometry_digests(primitives):
+    """Return the SHA-256 of each primitive, in order.
+
+    Each field is hashed as its JSON shape plus the little-endian
+    contiguous array bytes. An empty dimension contributes no payload
+    bytes. `tools/carla_geometry_digest.mojo` does the hash.
+    """
+    if not primitives:
+        return []
+    blob = bytearray(b"CGD1")
+    blob += struct.pack("<I", len(primitives))
+    for primitive in primitives:
+        blob += struct.pack("<I", 4)
+        for field in ("positions", "normals", "uvs", "triangles"):
+            values = numpy.ascontiguousarray(
+                primitive[field],
+                dtype="<i8" if field == "triangles" else "<f8",
+            )
+            name = field.encode("ascii")
+            raw = values.tobytes()
+            blob += struct.pack("<I", len(name))
+            blob += name
+            blob += struct.pack("<I", len(values.shape))
+            for dim in values.shape:
+                blob += struct.pack("<I", int(dim))
+            blob += struct.pack("<Q", len(raw))
+            blob += raw
+    root = os.path.abspath(os.path.join(HERE, "..", "..", "..", ".."))
+    mojo = os.path.join(root, ".venv", "bin", "mojo")
+    if not os.path.isfile(mojo):
+        mojo = "mojo"
+    handle = tempfile.NamedTemporaryFile("wb", suffix=".cgd", delete=False)
+    path = handle.name
+    try:
+        handle.write(blob)
+        handle.close()
+        result = subprocess.run(
+            ["sh", os.path.join(root, "tools", "tool.sh"), mojo,
+             "carla_geometry_digest", path],
+            text=True, capture_output=True, check=False,
+        )
+    finally:
+        os.remove(path)
+    if result.returncode != 0:
+        raise ValueError(result.stderr.strip() or "geometry digest failed")
+    lines = result.stdout.splitlines()
+    if len(lines) != len(primitives):
+        raise ValueError("geometry digest count mismatch")
+    return lines
+
+
 # ---- Materials -------------------------------------------------------------
 
 class Textures(fix.Package):
@@ -820,17 +872,22 @@ class Library:
         of its original array layout. Keep its reference to prevent object
         id reuse. Placement transforms are applied after cache lookup.
         """
+        pending = []
+        pending_ids = []
+        seen = set()
+        for primitive, _material in parts:
+            identity = id(primitive)
+            if identity not in self._bake_geometry and identity not in seen:
+                seen.add(identity)
+                pending.append(primitive)
+                pending_ids.append(identity)
+        if pending:
+            digests = geometry_digests(pending)
+            for identity, primitive, digest in zip(pending_ids, pending, digests):
+                self._bake_geometry[identity] = (primitive, digest)
         ordered = []
         for primitive, material in parts:
-            identity = id(primitive)
-            if identity not in self._bake_geometry:
-                digest = hashlib.sha256()
-                for field in ("positions", "normals", "uvs", "triangles"):
-                    values = numpy.ascontiguousarray(primitive[field], dtype="<i8" if field == "triangles" else "<f8")
-                    digest.update(json.dumps([field, values.shape], separators=(",", ":")).encode())
-                    digest.update(memoryview(values).cast("B"))
-                self._bake_geometry[identity] = (primitive, digest.hexdigest())
-            ordered.append((self._bake_geometry[identity][1], material))
+            ordered.append((self._bake_geometry[id(primitive)][1], material))
         if kind == "baked":
             settings = [target, BAKE_DENSITY, BAKE_MOST, BAKE_VIEWS, CLUSTER_CELL, CLUSTER_DIVISIONS]
         else:
