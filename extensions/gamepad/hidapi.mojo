@@ -671,8 +671,10 @@ struct HidGamepad[S: HidSource](Movable):
         Returns:
             The type the ids name, else the type the driver found.
         """
+        # SDL reads the ids of the GUID, which a driver may rewrite.
+        var info = joystick_guid_info(self.device.guid)
         var type = gamepad_type_from_vidpid(
-            self.device.vendor, self.device.product, self.device.name, True
+            info.vendor, info.product, self.device.name, True
         )
         if type == GAMEPAD_TYPE_STANDARD:
             return self.device.type
