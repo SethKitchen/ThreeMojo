@@ -357,13 +357,9 @@ def test_oracle_failures_remain_fatal_on_every_shard() raises:
     var python = _python()
     for index in range(1, 7):
         var shard = String(index) + "/6"
-        var result = _run(
-            python, "test-tools", shard, "parallel_unittest"
-        )
+        var result = _run(python, "test-tools", shard, "parallel_unittest")
         assert_true(result[0] != 0, shard)
-        assert_equal(
-            result[2][len(result[2]) - 1][0], "parallel_unittest"
-        )
+        assert_equal(result[2][len(result[2]) - 1][0], "parallel_unittest")
 
 
 def test_dedicated_discovery_runs_only_the_plain_discoveries() raises:
@@ -429,13 +425,9 @@ def test_each_component_failure_stops_its_target() raises:
     assert_true(_has(result[2][len(result[2]) - 1], "repository-check"))
     for index in range(1, 7):
         var shard = String(index) + "/6"
-        result = _run(
-            python, "test-tools-oracle", shard, "parallel_unittest"
-        )
+        result = _run(python, "test-tools-oracle", shard, "parallel_unittest")
         assert_true(result[0] != 0, shard)
-        assert_equal(
-            result[2][len(result[2]) - 1][0], "parallel_unittest"
-        )
+        assert_equal(result[2][len(result[2]) - 1][0], "parallel_unittest")
 
 
 def test_component_targets_are_phony_in_the_real_makefile() raises:
