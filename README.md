@@ -129,7 +129,9 @@ Some portable features remain partial, including [GLSL shaders](https://github.c
 ### Project tools
 
 <details>
-<summary>Implemented: 52</summary>
+<summary>Implemented: 53</summary>
+
+- [x] [CARLA far building picture](https://github.com/SethKitchen/ThreeMojo/wiki/CARLA-assets#the-carla-towns): `tools/carla_town_bake.mojo` draws a far building and writes its picture [#761](https://github.com/SethKitchen/ThreeMojo/issues/761)
 
 - [x] [CARLA far tree picture](https://github.com/SethKitchen/ThreeMojo/wiki/CARLA-assets#the-carla-towns): `tools/carla_town_tree.mojo` draws a far tree and writes its picture [#761](https://github.com/SethKitchen/ThreeMojo/issues/761)
 

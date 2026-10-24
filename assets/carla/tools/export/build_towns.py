@@ -566,243 +566,6 @@ def _albedo(library, material):
     return image, factor
 
 
-def _raster_tool(parts, library, request):
-    """Return one view from `tools/carla_town_splat.mojo`."""
-    here = os.path.dirname(os.path.abspath(__file__))
-    repo = os.path.abspath(os.path.join(here, "..", "..", "..", ".."))
-    mojo = os.path.join(repo, ".venv", "bin", "mojo")
-    if not os.path.isfile(mojo):
-        mojo = "mojo"
-    folder = tempfile.mkdtemp(prefix="town-splat-")
-    try:
-        path = os.path.join(folder, "view.json")
-        payload = dict(request)
-        items = []
-        for part, material in parts:
-            image, factor = _albedo(library, material)
-            entry = library.gltf["materials"][material]
-            item = {
-                "positions": numpy.asarray(part["positions"], dtype=float).reshape(-1, 3).tolist(),
-                "normals": numpy.asarray(part["normals"], dtype=float).reshape(-1, 3).tolist(),
-                "uvs": numpy.asarray(part["uvs"], dtype=float).reshape(-1, 2).tolist(),
-                "triangles": numpy.asarray(part["triangles"]).reshape(-1, 3).tolist(),
-                "factor": numpy.asarray(factor, dtype=float).reshape(4).tolist(),
-                "cut": float(entry.get("alphaCutoff", 0.5)),
-                "masked": entry.get("alphaMode") == "MASK",
-            }
-            if image is not None:
-                item["image"] = {
-                    "width": int(image.shape[1]),
-                    "height": int(image.shape[0]),
-                    "rgba": numpy.asarray(image, dtype=float).reshape(-1).tolist(),
-                }
-            items.append(item)
-        payload["parts"] = items
-        with open(path, "w", encoding="utf-8") as handle:
-            json.dump(payload, handle, separators=(",", ":"), allow_nan=False)
-        result = subprocess.run(
-            ["sh", os.path.join(repo, "tools", "tool.sh"), mojo,
-             "carla_town_splat", path],
-            capture_output=True, text=True,
-        )
-    finally:
-        shutil.rmtree(folder, ignore_errors=True)
-    if result.returncode != 0:
-        raise ValueError(result.stderr.strip() or "splat failed")
-    return json.loads(result.stdout)
-
-
-def impostor_light():
-    """Return the unit impostor light from `tools/carla_town_impostor.mojo`."""
-    global _IMPOSTOR_LIGHT
-    if _IMPOSTOR_LIGHT is None:
-        _IMPOSTOR_LIGHT = _impostor_tool({"mode": "light"})
-    return _IMPOSTOR_LIGHT
-
-
-def _impostor_tool(payload):
-    """Return JSON from `tools/carla_town_impostor.mojo`."""
-    here = os.path.dirname(os.path.abspath(__file__))
-    repo = os.path.abspath(os.path.join(here, "..", "..", "..", ".."))
-    mojo = os.path.join(repo, ".venv", "bin", "mojo")
-    if not os.path.isfile(mojo):
-        mojo = "mojo"
-    folder = tempfile.mkdtemp(prefix="town-impostor-")
-    try:
-        path = os.path.join(folder, "impostor.json")
-        with open(path, "w", encoding="utf-8") as handle:
-            json.dump(payload, handle, separators=(",", ":"), allow_nan=False)
-        result = subprocess.run(
-            ["sh", os.path.join(repo, "tools", "tool.sh"), mojo,
-             "carla_town_impostor", path],
-            capture_output=True, text=True,
-        )
-    finally:
-        shutil.rmtree(folder, ignore_errors=True)
-    if result.returncode != 0:
-        raise ValueError(result.stderr.strip() or "impostor failed")
-    return json.loads(result.stdout)
-
-
-def _tree_tool(payload):
-    """Return the crossing quads from `tools/carla_town_tree.mojo`."""
-    here = os.path.dirname(os.path.abspath(__file__))
-    repo = os.path.abspath(os.path.join(here, "..", "..", "..", ".."))
-    mojo = os.path.join(repo, ".venv", "bin", "mojo")
-    if not os.path.isfile(mojo):
-        mojo = "mojo"
-    folder = tempfile.mkdtemp(prefix="town-tree-")
-    try:
-        path = os.path.join(folder, "tree.json")
-        with open(path, "w", encoding="utf-8") as handle:
-            json.dump(payload, handle, separators=(",", ":"), allow_nan=False)
-        result = subprocess.run(
-            ["sh", os.path.join(repo, "tools", "tool.sh"), mojo,
-             "carla_town_tree", path],
-            capture_output=True, text=True,
-        )
-    finally:
-        shutil.rmtree(folder, ignore_errors=True)
-    if result.returncode != 0:
-        raise ValueError(result.stderr.strip() or "town tree failed")
-    return json.loads(result.stdout)
-
-
-def impostor(parts, library, out_dir, name):
-    """Return a tree's far level, two quads that cross on its trunk, each
-    showing a picture of the tree drawn from its near level; and the
-    picture's material. `parts` are the tree's primitives, each with its
-    material's index.
-
-    `tools/carla_town_tree.mojo` draws the two views, writes the PNG, and
-    builds the quads. The picture holds its own shading.
-    """
-    items = []
-    for part, material in parts:
-        image, factor = _albedo(library, material)
-        entry = library.gltf["materials"][material]
-        item = {
-            "positions": numpy.asarray(part["positions"], dtype=float).reshape(-1, 3).tolist(),
-            "normals": numpy.asarray(part["normals"], dtype=float).reshape(-1, 3).tolist(),
-            "uvs": numpy.asarray(part["uvs"], dtype=float).reshape(-1, 2).tolist(),
-            "triangles": numpy.asarray(part["triangles"]).reshape(-1, 3).tolist(),
-            "factor": numpy.asarray(factor, dtype=float).reshape(4).tolist(),
-            "cut": float(entry.get("alphaCutoff", 0.5)),
-            "masked": entry.get("alphaMode") == "MASK",
-        }
-        if image is not None:
-            item["image"] = {
-                "width": int(image.shape[1]),
-                "height": int(image.shape[0]),
-                "rgba": numpy.asarray(image, dtype=float).reshape(-1).tolist(),
-            }
-        items.append(item)
-    tag = library._bake_tag(name, "impostor", parts)
-    os.makedirs(os.path.join(out_dir, "textures"), exist_ok=True)
-    frame = _tree_tool({
-        "size": IMPOSTOR_SIZE,
-        "samples": IMPOSTOR_SAMPLES,
-        "out": os.path.join(out_dir, "textures", tag + ".png"),
-        "parts": items,
-    })
-    gltf = library.gltf
-    gltf["images"].append({"uri": "textures/" + tag + ".png"})
-    gltf["textures"].append({"sampler": 0, "source": len(gltf["images"]) - 1})
-    gltf["materials"].append({
-        "name": tag,
-        "pbrMetallicRoughness": {"baseColorTexture": {"index": len(gltf["textures"]) - 1},
-                                 "metallicFactor": 0.0, "roughnessFactor": 0.9},
-        "alphaMode": "MASK", "alphaCutoff": 0.5, "doubleSided": True})
-    material = len(gltf["materials"]) - 1
-    return {"positions": numpy.array(frame["positions"], dtype=numpy.float64),
-            "normals": numpy.array(frame["normals"], dtype=numpy.float64),
-            "uvs": numpy.array(frame["uvs"], dtype=numpy.float64),
-            "triangles": numpy.array(frame["triangles"], dtype=numpy.int64),
-            "material": tag}, material
-
-
-# ---- Baked far buildings ----------------------------------------------------
-
-# The views a far building's picture is drawn from: toward the viewer, and
-# the image's right and up, in the three.js frame.
-BAKE_VIEWS = (
-    ((1.0, 0.0, 0.0), (0.0, 0.0, -1.0), (0.0, 1.0, 0.0)),
-    ((-1.0, 0.0, 0.0), (0.0, 0.0, 1.0), (0.0, 1.0, 0.0)),
-    ((0.0, 0.0, 1.0), (1.0, 0.0, 0.0), (0.0, 1.0, 0.0)),
-    ((0.0, 0.0, -1.0), (-1.0, 0.0, 0.0), (0.0, 1.0, 0.0)),
-    ((0.0, 1.0, 0.0), (1.0, 0.0, 0.0), (0.0, 0.0, -1.0)),
-)
-# Texels a meter each view is drawn at, and the most a side of one view.
-BAKE_DENSITY = 6.0
-BAKE_MOST = 512
-
-
-def _dilate_tool(image, covered, passes):
-    """Return JSON from `tools/carla_town_dilate.mojo`."""
-    here = os.path.dirname(os.path.abspath(__file__))
-    repo = os.path.abspath(os.path.join(here, "..", "..", "..", ".."))
-    mojo = os.path.join(repo, ".venv", "bin", "mojo")
-    if not os.path.isfile(mojo):
-        mojo = "mojo"
-    folder = tempfile.mkdtemp(prefix="town dilate ")
-    try:
-        path = os.path.join(folder, "view.json")
-        with open(path, "w", encoding="utf-8") as handle:
-            json.dump({
-                "image": numpy.asarray(image, dtype=numpy.float64).tolist(),
-                "covered": numpy.asarray(covered, dtype=bool).tolist(),
-                "passes": int(passes),
-            }, handle)
-        result = subprocess.run(
-            ["sh", os.path.join(repo, "tools", "tool.sh"), mojo,
-             "carla_town_dilate", path],
-            capture_output=True, text=True,
-        )
-    finally:
-        shutil.rmtree(folder, ignore_errors=True)
-    if result.returncode != 0:
-        raise ValueError(result.stderr.strip() or "dilate failed")
-    return json.loads(result.stdout)
-
-
-def _dilate(image, covered, passes=6):
-    """Spread the covered texels' colors into the uncovered ones next to
-    them, so filtering at a view's edge does not bleed the background.
-
-    `tools/carla_town_dilate.mojo` spreads the colors.
-    """
-    values = _dilate_tool(image, covered, passes)
-    if len(numpy.shape(image)) == 0:
-        return numpy.asarray(image, dtype=numpy.float64).copy()
-    return numpy.array(values, dtype=numpy.float64)
-
-
-def _view(parts, library, forward, right, up, low_r, low_u, width, height, columns, rows):
-    """Return one orthographic view of a mesh's albedo, `rows` by
-    `columns` texels, looking down `-forward`, as `_splat` draws a tree's,
-    with no light: the renderer lights the far mesh itself.
-
-    `tools/carla_town_splat.mojo` draws the view.
-    """
-    doc = _raster_tool(parts, library, {
-        "mode": "ortho",
-        "columns": int(columns),
-        "rows": int(rows),
-        "samples": 3,
-        "cap": 8192,
-        "seed": 11,
-        "right": numpy.asarray(right, dtype=float).reshape(3).tolist(),
-        "up": numpy.asarray(up, dtype=float).reshape(3).tolist(),
-        "forward": numpy.asarray(forward, dtype=float).reshape(3).tolist(),
-        "low_r": float(low_r),
-        "low_u": float(low_u),
-        "height": float(height),
-        "span_u": float(width),
-        "span_v": float(height),
-    })
-    image = numpy.array(doc, dtype=numpy.float64)
-    return _dilate(image[:, :, :3], image[:, :, 3] > 0)
-
 
 def _join_tool(parts):
     """Return JSON from `tools/carla_town_join.mojo`."""
@@ -860,6 +623,31 @@ def _atlas_tool(payload):
     return json.loads(result.stdout)
 
 
+
+def _bake_tool(payload):
+    """Return texture coordinates from `tools/carla_town_bake.mojo`."""
+    here = os.path.dirname(os.path.abspath(__file__))
+    repo = os.path.abspath(os.path.join(here, "..", "..", "..", ".."))
+    mojo = os.path.join(repo, ".venv", "bin", "mojo")
+    if not os.path.isfile(mojo):
+        mojo = "mojo"
+    folder = tempfile.mkdtemp(prefix="town-bake-")
+    try:
+        path = os.path.join(folder, "bake.json")
+        with open(path, "w", encoding="utf-8") as handle:
+            json.dump(payload, handle, separators=(",", ":"), allow_nan=False)
+        result = subprocess.run(
+            ["sh", os.path.join(repo, "tools", "tool.sh"), mojo,
+             "carla_town_bake", path],
+            capture_output=True, text=True,
+        )
+    finally:
+        shutil.rmtree(folder, ignore_errors=True)
+    if result.returncode != 0:
+        raise ValueError(result.stderr.strip() or "town bake failed")
+    return json.loads(result.stdout)
+
+
 def baked_building(parts, library, out_dir, name, target):
     """Return a building's far level and its material: its mesh gathered
     and collapsed to about `target` triangles, all its primitives as one,
@@ -867,9 +655,8 @@ def baked_building(parts, library, out_dir, name, target):
     from above. Each far triangle reads the view that faces it most, so
     its windows and its trim are pictures, not geometry.
 
-    `tools/carla_town_join.mojo` joins the primitives. `tools/carla_town_atlas.mojo`
-    sizes the views and writes the texture coordinates. `tools/carla_image_pack.mojo`
-    stores the picture as bytes. `tools/carla_jpeg.mojo` writes the picture.
+    `tools/carla_town_join.mojo` joins the primitives. `tools/carla_town_bake.mojo`
+    draws the five views and writes the JPEG.
     """
     joined = _join_tool(parts)
     whole = {
@@ -892,41 +679,45 @@ def baked_building(parts, library, out_dir, name, target):
                "normals": numpy.array(flat["normals"], dtype=numpy.float64),
                "triangles": numpy.array(flat["triangles"], dtype=numpy.int64),
                "material": name}
-    spans = _atlas_tool({
-        "mode": "spans",
-        "positions": numpy.asarray(whole["positions"], dtype=float).reshape(-1, 3).tolist(),
-        "density": BAKE_DENSITY,
-        "most": BAKE_MOST,
-        "views": [{"right": list(right), "up": list(up)} for _, right, up in BAKE_VIEWS],
-    })
-    cells = []
-    for (forward, right, up), span in zip(BAKE_VIEWS, spans):
-        image = _view(parts, library, forward, right, up, span["low_r"], span["low_u"],
-                      span["width"], span["height"], span["columns"], span["rows"])
-        cells.append((image, (span["low_r"], span["high_r"]), (span["low_u"], span["high_u"])))
-    views = []
-    for (forward, right, up), (image, span_r, span_u) in zip(BAKE_VIEWS, cells):
-        views.append({
-            "forward": list(forward),
-            "right": list(right),
-            "up": list(up),
-            "span_r": [float(span_r[0]), float(span_r[1])],
-            "span_u": [float(span_u[0]), float(span_u[1])],
-            "image": numpy.asarray(image, dtype=float).tolist(),
-        })
-    packed = _atlas_tool({
-        "mode": "pack",
-        "positions": numpy.asarray(far["positions"], dtype=float).reshape(-1, 3).tolist(),
-        "normals": numpy.asarray(far["normals"], dtype=float).reshape(-1, 3).tolist(),
-        "views": views,
-    })
-    stored = fix.pack_quantize(packed["atlas"])
+    items = []
+    for part, material in parts:
+        image, factor = _albedo(library, material)
+        entry = library.gltf["materials"][material]
+        item = {
+            "positions": numpy.asarray(part["positions"], dtype=float).reshape(-1, 3).tolist(),
+            "normals": numpy.asarray(part["normals"], dtype=float).reshape(-1, 3).tolist(),
+            "uvs": numpy.asarray(part["uvs"], dtype=float).reshape(-1, 2).tolist(),
+            "triangles": numpy.asarray(part["triangles"]).reshape(-1, 3).tolist(),
+            "factor": numpy.asarray(factor, dtype=float).reshape(4).tolist(),
+            "cut": float(entry.get("alphaCutoff", 0.5)),
+            "masked": entry.get("alphaMode") == "MASK",
+        }
+        if image is not None:
+            item["image"] = {
+                "width": int(image.shape[1]),
+                "height": int(image.shape[0]),
+                "rgba": numpy.asarray(image, dtype=float).reshape(-1).tolist(),
+            }
+        items.append(item)
     tag = library._bake_tag(name, "baked", parts, target)
     os.makedirs(os.path.join(out_dir, "textures"), exist_ok=True)
-    with open(os.path.join(out_dir, "textures", tag + ".jpg"), "wb") as handle:
-        handle.write(fix.save_jpeg(
-            stored["pixels"], stored["width"], stored["height"], "RGB", 85, False,
-        ))
+    packed = _bake_tool({
+        "out": os.path.join(out_dir, "textures", tag + ".jpg"),
+        "density": BAKE_DENSITY,
+        "most": BAKE_MOST,
+        "whole": {
+            "positions": numpy.asarray(whole["positions"], dtype=float).reshape(-1, 3).tolist(),
+        },
+        "far": {
+            "positions": numpy.asarray(far["positions"], dtype=float).reshape(-1, 3).tolist(),
+            "normals": numpy.asarray(far["normals"], dtype=float).reshape(-1, 3).tolist(),
+        },
+        "parts": items,
+        "views": [
+            {"forward": list(forward), "right": list(right), "up": list(up)}
+            for forward, right, up in BAKE_VIEWS
+        ],
+    })
     gltf = library.gltf
     gltf["images"].append({"uri": "textures/" + tag + ".jpg"})
     gltf["textures"].append({"sampler": 0, "source": len(gltf["images"]) - 1})
