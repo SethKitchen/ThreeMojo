@@ -129,7 +129,7 @@ Some portable features remain partial, including [GLSL shaders](https://github.c
 ### Project tools
 
 <details>
-<summary>Implemented: 25</summary>
+<summary>Implemented: 26</summary>
 
 - [x] [C ABI host tools in Mojo](https://github.com/SethKitchen/ThreeMojo/wiki/C-ABI-and-hosts#run-it): frame compare, wasm32 retarget, the isolated page server and the Metal string run as Mojo [#761](https://github.com/SethKitchen/ThreeMojo/issues/761)
 
@@ -142,6 +142,8 @@ Some portable features remain partial, including [GLSL shaders](https://github.c
 - [x] [Lint and format log in Mojo](https://github.com/SethKitchen/ThreeMojo/wiki/How-to-run-the-checks#rebuild-the-project-tools): `tools/shell_log.mojo` writes the lint lines and the format run id [#761](https://github.com/SethKitchen/ThreeMojo/issues/761)
 
 - [x] [Coverage protocol check in Mojo](https://github.com/SethKitchen/ThreeMojo/wiki/Coverage-tool#evaluation-protocol): `tools/check_coverage_protocol.mojo` checks vectors, pipes, and write faults [#761](https://github.com/SethKitchen/ThreeMojo/issues/761)
+
+- [x] [Coverage grouping checker in Mojo](https://github.com/SethKitchen/ThreeMojo/wiki/Coverage-tool#compiler-hang): `tools/check_coverage_grouping.mojo` compares the Boolean, custom-truth, and Optional fixtures [#761](https://github.com/SethKitchen/ThreeMojo/issues/761)
 
 - [x] [CI planner in Mojo](https://github.com/SethKitchen/ThreeMojo/wiki/How-to-run-the-checks#rebuild-the-project-tools): `tools/ci_scope.mojo` selects, runs and checks the hosted CI jobs with byte-identical plans [#769](https://github.com/SethKitchen/ThreeMojo/issues/769)
 

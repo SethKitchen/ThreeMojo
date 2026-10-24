@@ -1,0 +1,19 @@
+struct Lifted(Movable, Boolable):
+    var value: Bool
+
+    @implicit
+    def __init__(out self, value: Bool):
+        print("LIFT")
+        self.value = value
+
+    def __bool__(self) -> Bool:
+        print("CONVERT")
+        return self.value
+
+
+def main():
+    var flag = True
+    if Lifted(False) or flag:
+        print("T")
+    else:
+        print("F")

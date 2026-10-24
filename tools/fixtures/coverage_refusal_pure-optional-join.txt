@@ -1,0 +1,7 @@
+def main():
+    var empty = Optional[Int](None)
+    var zero = 0
+    if empty or zero:
+        print("T")
+    else:
+        print("F")

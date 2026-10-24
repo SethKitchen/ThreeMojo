@@ -1,0 +1,17 @@
+@fieldwise_init
+struct Moving(Boolable):
+    var value: Bool
+
+    def __init__(out self, *, deinit move: Self):
+        self.value = move.value
+        print("MOVE")
+
+    def __bool__(self) -> Bool:
+        return self.value
+
+
+def main():
+    if Moving(False) or Moving(True):
+        print("T")
+    else:
+        print("F")

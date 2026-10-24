@@ -1,0 +1,23 @@
+def inner(full: Bool) -> Optional[Int]:
+    print("MAKE inner")
+    if full:
+        return 0
+    return None
+
+
+def outer(full: Bool) -> Optional[Optional[Int]]:
+    print("MAKE outer")
+    if full:
+        return Optional[Int](None)
+    return None
+
+
+def main():
+    for mask in range(4):
+        print("CASE", mask)
+        var left = (mask & 1) != 0
+        var right = (mask & 2) != 0
+        if inner(left) and outer(right):
+            print("T")
+        else:
+            print("F")

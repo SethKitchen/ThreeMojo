@@ -1,0 +1,15 @@
+@fieldwise_init
+struct Copied(ImplicitlyCopyable, Boolable):
+    var value: Bool
+
+    def __bool__(self) -> Bool:
+        return self.value
+
+
+def main():
+    var copied = Copied(False)
+    var flag = True
+    if copied or flag:
+        print("T")
+    else:
+        print("F")

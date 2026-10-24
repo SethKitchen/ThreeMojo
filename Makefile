@@ -960,7 +960,7 @@ repository-check:
 # Native source-to-source regression: compile first, then enforce the normal
 # five-second limit on each executed test. test-tools remains compiler-free.
 test-coverage-tool:
-	@python3 tools/check_coverage_grouping.py --mojo $(MOJO)
+	@$(TOOL) check_coverage_grouping --mojo $(MOJO)
 	@$(TOOL) check_coverage_protocol --mojo $(MOJO)
 	@$(TOOL) check_coverage_sources --mojo $(MOJO)
 	@$(TOOL) check_coverage_loops --mojo $(MOJO)

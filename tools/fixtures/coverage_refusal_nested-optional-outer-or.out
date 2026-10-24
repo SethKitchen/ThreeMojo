@@ -1,0 +1,14 @@
+CASE 0
+MAKE outer
+MAKE inner
+T
+CASE 1
+MAKE outer
+T
+CASE 2
+MAKE outer
+MAKE inner
+T
+CASE 3
+MAKE outer
+T
