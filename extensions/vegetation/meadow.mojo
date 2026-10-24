@@ -26,8 +26,10 @@ sun.
 **The layout.** `MeadowParameters.crowns` lists the kinds of tree and
 bush, and `plantings` says where each one stands and how large it is.
 The default layout is open grassland: a lone tree near the camera,
-trees and round bushes scattered at every distance, a woodland along the
-horizon, and a bush with broad leaves a few meters away.
+trees and round bushes scattered at every distance, and a bush with
+broad leaves a few meters away. A canyon crosses the land 330 meters
+away. Its far wall shows above the near rim as a band of cliffs, and a
+woodland grows on the higher plateau beyond it.
 
 **The light.** The sun is a `SunLight`. The sky's light is a hemisphere
 light, blue from above and green from below, which is the light that the
@@ -67,7 +69,7 @@ from extensions.vegetation.field import (
     no_stats,
 )
 from extensions.vegetation.foliage import foliage_program
-from extensions.vegetation.ground import Ground, ridge_ring
+from extensions.vegetation.ground import Canyon, Ground, cliff_wall, ridge_ring
 from extensions.vegetation.kinds import DRAWN
 from extensions.vegetation.noise import hash01
 from extensions.vegetation.rock import boulder
@@ -287,8 +289,9 @@ def default_plantings() -> List[Planting]:
 
     Returns:
         A lone tree and a bush near the camera, a second lone tree, trees
-        scattered from 45 to 250 meters, round bushes from 12 to 120
-        meters, and a woodland of broad trees from 260 to 420 meters.
+        scattered from 45 to 160 meters, round bushes from 12 to 120
+        meters, and broad trees from 435 to 700 meters, on the far side of
+        the canyon.
     """
     var plantings: List[Planting] = [
         Planting(0, -9.0, -8.0, 1.15),
@@ -301,7 +304,7 @@ def default_plantings() -> List[Planting]:
             0,
             5,
             Length(45.0, METER),
-            Length(250.0, METER),
+            Length(160.0, METER),
             0.7,
             1.2,
             21,
@@ -321,11 +324,11 @@ def default_plantings() -> List[Planting]:
     )
     plantings.extend(
         scatter_plantings(
-            90,
+            45,
             3,
             2,
-            Length(260.0, METER),
-            Length(420.0, METER),
+            Length(435.0, METER),
+            Length(700.0, METER),
             0.8,
             1.3,
             23,
@@ -369,7 +372,14 @@ struct MeadowParameters(Copyable, Movable):
             Error: Never; the defaults are in range.
         """
         self.field = FieldParameters()
-        self.ground = Ground()
+        self.ground = Ground(
+            canyon=Canyon(
+                Length(300.0, METER),
+                Length(420.0, METER),
+                Length(80.0, METER),
+                Length(38.0, METER),
+            )
+        )
         self.wind = Wind()
         self.crowns = default_crowns()
         self.plantings = default_plantings()
@@ -577,7 +587,7 @@ struct Meadow(Movable):
         var ridge = ridge_ring(
             parameters.mountain_radius,
             Length(parameters.mountain_radius.to(METER) * 0.6, METER),
-            Length(parameters.mountain_radius.to(METER) * 0.3, METER),
+            Length(parameters.mountain_radius.to(METER) * 0.34, METER),
             480,
             parameters.seed,
         )
@@ -589,6 +599,20 @@ struct Meadow(Movable):
                 assets.geometries.add(ridge^), far_stone, scene.add(ridge_node^)
             )
         )
+        ref canyon = ground.canyon
+        if canyon.depth.value + canyon.rise.value > 0:
+            var wall = cliff_wall(
+                ground, Length(1200.0, METER), 1600, 96, parameters.seed
+            )
+            wall.compute_vertex_normals()
+            scene.add_mesh(
+                Mesh(
+                    assets.geometries.add(wall^),
+                    stone,
+                    scene.add(Object3D()),
+                    receive_shadow=True,
+                )
+            )
 
         var toward = sun_direction(
             parameters.sun_elevation, parameters.sun_azimuth
@@ -769,7 +793,13 @@ struct Meadow(Movable):
         var id = assets.geometries.add(geometry^)
         self.cluster_geometry[index] = id
         scene.add_mesh(
-            Mesh(id, self.grass, self.cluster_node[index], receive_shadow=True)
+            Mesh(
+                id,
+                self.grass,
+                self.cluster_node[index],
+                cast_shadow=True,
+                receive_shadow=True,
+            )
         )
         self.cluster_mesh[index] = len(scene.meshes) - 1
         return True

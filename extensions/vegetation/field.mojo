@@ -192,7 +192,7 @@ struct FieldParameters(Copyable, Movable):
         self.width = Length(0.013, METER)
         self.curl = Angle(52.0, DEGREE)
         self.dry_share = 0.08
-        self.poppy_share = 0.45
+        self.poppy_share = 0.9
         self.seed_share = 0.012
         self.bands = default_bands()
 

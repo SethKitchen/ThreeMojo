@@ -52,7 +52,7 @@ from units.si import DEGREE, METER, RADIAN, Angle, Length
 # How far an edge normal tilts out toward its edge.
 comptime ROUNDING = Float32(0.55)
 # How far every normal tilts up.
-comptime UP_BIAS = Float32(0.65)
+comptime UP_BIAS = Float32(0.35)
 # The most segments a blade can have.
 comptime MAX_SEGMENTS = 8
 # The petals of a poppy's cup.
