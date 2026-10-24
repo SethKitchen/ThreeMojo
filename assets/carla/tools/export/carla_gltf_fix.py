@@ -32,7 +32,9 @@ import os
 import re
 import shutil
 import struct
+import subprocess
 import sys
+import tempfile
 
 from PIL import Image
 
@@ -498,24 +500,39 @@ def decimate(gltf, data, budget):
     return compact(gltf, bytes(out))
 
 
+def _dedupe_tool(gltf):
+    """Return JSON from `tools/carla_gltf_dedupe.mojo`."""
+    here = os.path.dirname(os.path.abspath(__file__))
+    repo = os.path.abspath(os.path.join(here, "..", "..", "..", ".."))
+    mojo = os.path.join(repo, ".venv", "bin", "mojo")
+    if not os.path.isfile(mojo):
+        mojo = "mojo"
+    folder = tempfile.mkdtemp(prefix="gltf dedupe ")
+    try:
+        path = os.path.join(folder, "mesh.gltf")
+        with open(path, "w", encoding="utf-8") as handle:
+            json.dump(gltf, handle)
+        result = subprocess.run(
+            ["sh", os.path.join(repo, "tools", "tool.sh"), mojo,
+             "carla_gltf_dedupe", path],
+            capture_output=True, text=True,
+        )
+    finally:
+        shutil.rmtree(folder, ignore_errors=True)
+    if result.returncode != 0:
+        raise ValueError(result.stderr.strip() or "material dedupe failed")
+    return json.loads(result.stdout)
+
+
 def dedupe_materials(gltf):
     """Keep one material of each name. The merge gives each primitive its
-    own copy, so a car's glass is twenty materials."""
-    first = {}
-    kept = []
-    new_index = []
-    for material in gltf.get("materials", []):
-        name = material.get("name", "")
-        if name not in first:
-            first[name] = len(kept)
-            kept.append(material)
-        new_index.append(first[name])
-    for mesh in gltf["meshes"]:
-        for primitive in mesh["primitives"]:
-            if "material" in primitive:
-                primitive["material"] = new_index[primitive["material"]]
-    if kept:
-        gltf["materials"] = kept
+    own copy, so a car's glass is twenty materials.
+
+    `tools/carla_gltf_dedupe.mojo` keeps the first of each name.
+    """
+    updated = _dedupe_tool(gltf)
+    gltf.clear()
+    gltf.update(updated)
 
 
 def strip_skin(gltf, data):
