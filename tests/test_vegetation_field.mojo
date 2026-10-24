@@ -16,7 +16,7 @@ from extensions.vegetation.field import (
     default_bands,
     no_stats,
 )
-from extensions.vegetation.ground import Ground
+from extensions.vegetation.ground import Clearing, Ground
 from extensions.vegetation.kinds import (
     BEYOND,
     BROADLEAF,
@@ -338,6 +338,25 @@ def test_a_level_whose_blades_are_all_bare_builds_nothing() raises:
             assert_false(built)
             empty += 1
     assert_true(empty > 0)
+
+
+def test_a_clearing_thins_the_grass_round_a_tree() raises:
+    """A field's cover is the ground's, thinned by its clearings: none at
+    a tree's foot. Fewer blades grow in a clearing than in the open."""
+    var open = GrassField(_small(), Ground())
+    var shaded = GrassField(_small(), Ground())
+    shaded.clearings = [Clearing(0, 0, 6)]
+    assert_almost_equal(shaded.cover_at(0, 0), 0)
+    assert_almost_equal(shaded.cover_at(7, 7), open.cover_at(7, 7))
+    var in_open = 0
+    var in_shade = 0
+    for index in range(len(open.clusters)):
+        for blade in range(open.clusters[index].blades):
+            if open.grow(index, blade):
+                in_open += 1
+            if shaded.grow(index, blade):
+                in_shade += 1
+    assert_true(in_shade < in_open)
 
 
 def test_stats_tally_each_fate() raises:

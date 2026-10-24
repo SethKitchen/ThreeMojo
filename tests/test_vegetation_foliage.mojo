@@ -15,7 +15,9 @@ from extensions.vegetation.foliage import (
     LeafShade,
     foliage_program,
     sky_rays,
+    wood_program,
 )
+from extensions.vegetation.wind import Wind
 from materials.nodes import (
     AO_NODE,
     NORMAL_NODE,
@@ -136,12 +138,20 @@ def test_the_sky_rays_rise_and_average() raises:
 
 def test_the_foliage_program_sets_its_three_outputs() raises:
     """The program turns back faces, takes the baked sun as the shadow and
-    the baked sky as the occlusion, and moves no vertex."""
+    the baked sky as the occlusion, and moves no vertex. The swaying one
+    also moves each vertex, and the wood's program only moves them."""
     var program = foliage_program()
     assert_true(program.has(NORMAL_NODE))
     assert_true(program.has(RECEIVED_SHADOW_NODE))
     assert_true(program.has(AO_NODE))
     assert_false(program.has(POSITION_NODE))
+    var motion = Wind().crown_motion()
+    var swaying = foliage_program(motion)
+    assert_true(swaying.has(POSITION_NODE))
+    assert_true(swaying.has(AO_NODE))
+    var wood = wood_program(motion)
+    assert_true(wood.has(POSITION_NODE))
+    assert_false(wood.has(NORMAL_NODE))
 
 
 def test_an_ovate_leaf_is_eight_vertices_and_six_triangles() raises:

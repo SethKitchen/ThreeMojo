@@ -6,7 +6,7 @@
 """The parts of a meadow: kinds, checks, noise, wind, blades, ground and
 boulders."""
 
-from core.buffer_geometry import COLOR, NORMAL, POSITION
+from core.buffer_geometry import COLOR, NORMAL, POSITION, BufferGeometry
 from extensions.vegetation.blade import (
     MAX_SEGMENTS,
     Blade,
@@ -19,11 +19,20 @@ from extensions.vegetation.checks import (
     require_count_between,
 )
 from extensions.vegetation.ground import (
+    LITTER,
     RIM,
+    TRAIL_DRIFT,
+    TRAIL_WANDER,
+    TRAIL_BEND,
+    TRAIL_X,
+    TRAIL_Z,
     Canyon,
+    Clearing,
     Ground,
     cliff_wall,
+    litter_shade,
     no_canyon,
+    openness,
     ridge_ring,
 )
 from extensions.vegetation.kinds import (
@@ -51,7 +60,7 @@ from extensions.vegetation.rock import boulder
 from extensions.vegetation.wind import Wind, still_air
 from math.vector2 import Vector2
 from math.vector3 import Vector3
-from std.math import nan, sqrt
+from std.math import nan, sin, sqrt
 from std.testing import (
     TestSuite,
     assert_almost_equal,
@@ -293,6 +302,21 @@ def test_the_sway_rolls_downwind_and_grows_in_a_gust() raises:
         widest_calm = max(widest_calm, abs(wind.tip_bend(0, 0, 0, 0, time).x))
         widest_gust = max(widest_gust, abs(wind.tip_bend(0, 0, 1, 0, time).x))
     assert_true(widest_gust > 3 * widest_calm)
+
+
+def test_a_crown_moves_with_the_wind() raises:
+    """A crown's twigs swing and its leaves flutter in proportion to the
+    wind's lean, at rates that loop. Still air moves nothing."""
+    var wind = Wind(heading=Angle(0.0, DEGREE), loop=Duration(2.0, SECOND))
+    var motion = wind.crown_motion()
+    assert_almost_equal(motion.downwind.x, 1, atol=1e-6)
+    assert_almost_equal(motion.reach.to(METER), 0.12, atol=1e-6)
+    assert_almost_equal(motion.flutter.to(METER), 0.02, atol=1e-6)
+    assert_almost_equal(motion.rate.to(PER_SECOND), 1.0, atol=1e-6)
+    assert_almost_equal(motion.flutter_rate.to(PER_SECOND), 2.5, atol=1e-6)
+    var still = still_air().crown_motion()
+    assert_almost_equal(still.reach.to(METER), 0)
+    assert_almost_equal(still.flutter.to(METER), 0)
 
 
 def test_a_tree_sways_a_little_and_slowly() raises:
@@ -609,6 +633,72 @@ def test_ground_refuses_each_out_of_range_value() raises:
         _ = Ground(climb=2)
     with assert_raises(contains="patch"):
         _ = Ground(patch_length=Length(0.01, METER))
+    with assert_raises(contains="dirt"):
+        _ = Ground(dirt=2)
+    with assert_raises(contains="trail"):
+        _ = Ground(trail_width=Length(-1.0, METER))
+
+
+def test_dirt_and_a_trail_leave_the_ground_bare() raises:
+    """Ground with no dirt and no trail is nowhere bare. With dirt, some
+    patches are bare and most of the field is not. The middle of the
+    trail is bare and has no cover, and the ground far from it is not
+    bared by it. Bare ground is dirt-colored."""
+    var plain = Ground()
+    var dirty = Ground(dirt=0.3, trail_width=Length(1.5, METER))
+    var patches = 0
+    for i in range(400):
+        var x = Float32(i % 20) * 3.1 - 30
+        var z = Float32(i // 20) * 3.7 - 35
+        assert_almost_equal(plain.bare(x, z), 0, atol=1e-6)
+        var bare = dirty.bare(x, z)
+        assert_true(bare >= 0 and bare <= 1)
+        if bare > 0.9:
+            patches += 1
+    assert_true(patches > 0)
+    assert_true(patches < 200)
+    var z = Float32(-10)
+    var course = (
+        TRAIL_X
+        + TRAIL_DRIFT * (TRAIL_Z - z)
+        + TRAIL_WANDER * sin(z / TRAIL_BEND)
+    )
+    var trail = Ground(trail_width=Length(1.5, METER))
+    assert_true(trail.bare(course, z) > 0.9)
+    assert_true(trail.cover(course, z) < 0.1)
+    assert_almost_equal(trail.bare(course + 8, z), 0, atol=1e-6)
+    var dirt = trail.far_color(course, z)
+    assert_true(dirt.x > dirt.y and dirt.y > dirt.z)
+
+
+def test_a_clearing_shades_round_a_trees_foot() raises:
+    """A point outside every clearing is open. The foot of a tree is
+    closed, and the shade opens out to the clearing's edge. Overlapping
+    clearings count the most shaded. Litter shade browns a ground mesh
+    under a clearing and leaves it alone outside."""
+    var none = List[Clearing]()
+    assert_almost_equal(openness(none, 3, 4), 1)
+    var one: List[Clearing] = [Clearing(0, 0, 4)]
+    assert_almost_equal(openness(one, 0, 0), 0)
+    assert_almost_equal(openness(one, 0.5, 0), 0)
+    var middle = openness(one, 2.5, 0)
+    assert_true(middle > 0 and middle < 1)
+    assert_almost_equal(openness(one, 5, 0), 1)
+    var two: List[Clearing] = [Clearing(0, 0, 4), Clearing(3, 0, 4)]
+    assert_true(openness(two, 2.5, 0) < middle)
+    var ground = Ground()
+    var land = ground.mesh(Length(40.0, METER), 8, 0, 0)
+    ref before = land.attribute_view(String(COLOR))
+    var corner = before.vector3(0)
+    var center = before.vector3(40)
+    litter_shade(land, one, 3)
+    ref after = land.attribute_view(String(COLOR))
+    assert_almost_equal(after.vector3(0).y, corner.y)
+    assert_true(after.vector3(40).y < center.y)
+    assert_true(after.vector3(40).y < LITTER.y * 1.3)
+    with assert_raises():
+        var bare = BufferGeometry()
+        litter_shade(bare, one, 3)
 
 
 def test_a_canyon_cuts_a_floor_and_raises_a_plateau() raises:

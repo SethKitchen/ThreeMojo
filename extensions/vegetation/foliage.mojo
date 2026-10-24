@@ -15,6 +15,17 @@ sun, cell by cell, and adds that up. The light that comes through is
 the same over `SKY_RAYS` directions of the open sky. The grid is blurred
 once, and read between its cells, so the light is smooth across a crown.
 
+**The wind in a crown.** `sway_offset` moves a vertex of a leaf or of
+the wood by a share of a swing along the wind and of a flutter up and
+down. The share is read from where the vertex is in the tree: none at
+the foot, more the higher and the further out from the trunk it is. A
+position program reads no attribute, so the share cannot be baked. The
+swing's phase changes slowly through the crown, so a limb and its leaves
+move together and the lobes move apart. The flutter's phase changes
+fast, so each spray flutters on its own. The leaves and the wood read the
+same offset, so a leaf stays on its twig. The time is the `SWAY_TIME`
+uniform.
+
 The two numbers are kept apart, as `SUNLIT` and `SKYLIT` attributes.
 `foliage_program` multiplies the sun's light by the first and the sky's
 light by the second. A leaf in the shade of its own crown then still has
@@ -32,18 +43,34 @@ from materials.nodes import (
     AO_NODE,
     NODE_FLOAT,
     NORMAL_NODE,
+    POSITION_NODE,
     RECEIVED_SHADOW_NODE,
     NodeGraph,
     NodeProgram,
+    NodeRef,
 )
 from extensions.vegetation.checks import require_between
+from extensions.vegetation.wind import CrownMotion
 from math.vector3 import Vector3
 from std.math import cos, exp, floor, pi, sin, sqrt
-from units.si import METER, Length
+from units.si import METER, PER_SECOND, Length
 
 # The attributes that hold the light that reaches each leaf vertex.
 comptime SUNLIT = "sunlit"
 comptime SKYLIT = "skylit"
+# The uniform that holds the wind's time, in seconds.
+comptime SWAY_TIME = "sway_time"
+# A vertex this high above a tree's foot sways a full swing, and one this
+# far out from the trunk a full share of it, in meters. A vertex higher up
+# sways more, up to `SWAY_MOST` swings.
+comptime SWAY_HEIGHT = Float32(12)
+comptime SWAY_SPREAD = Float32(4)
+comptime SWAY_MOST = Float32(1.5)
+# How fast the phase of the swing and of the flutter change through a
+# crown, per meter along x, y and z: a swing's phase turns once in about
+# 30 meters, and a flutter's in about 2.
+comptime SWING_PHASE = (Float32(0.21), Float32(0.13), Float32(0.17))
+comptime FLUTTER_PHASE = (Float32(2.3), Float32(3.1), Float32(2.9))
 # How far each half of a leaf tilts its normal from the midrib.
 comptime FOLD = Float32(0.45)
 # The widths of the three pairs of edge vertices of an ovate leaf, as
@@ -274,8 +301,79 @@ def sky_rays() -> List[Vector3]:
     return rays^
 
 
+def sway_offset(mut graph: NodeGraph, motion: CrownMotion) raises -> NodeRef:
+    """Add the nodes that move a crown's vertex in the wind, and return
+    the offset.
+
+    The offset is a swing of `motion.reach` along the wind and a flutter
+    of `motion.flutter` up and down, each a sine of the `SWAY_TIME`
+    uniform at its own rate, with a phase that changes through the crown.
+    Both are scaled by the vertex's share: the square of its height over
+    `SWAY_HEIGHT`, at most `SWAY_MOST`, times from 0.35 at the trunk to
+    one at `SWAY_SPREAD` out from it.
+
+    Args:
+        graph: The graph to add the nodes to.
+        motion: How the wind moves the crown.
+
+    Returns:
+        The offset node, a `vec3` in the tree's own frame.
+
+    Raises:
+        Error: Never; the nodes are fixed.
+    """
+    var turn = Float32(2) * Float32(pi)
+    var time = graph.uniform(String(SWAY_TIME), Float32(0))
+    var p = graph.position_local()
+    var high = graph.clamp(
+        graph.mul(graph.swizzle(p, "y"), graph.float(1 / SWAY_HEIGHT)),
+        graph.float(0),
+        graph.float(SWAY_MOST),
+    )
+    var spread = graph.clamp(
+        graph.mul(
+            graph.length(graph.swizzle(p, "xz")), graph.float(1 / SWAY_SPREAD)
+        ),
+        graph.float(0),
+        graph.float(1),
+    )
+    var weight = graph.mul(
+        graph.mul(high, high),
+        graph.add(graph.float(0.35), graph.mul(spread, graph.float(0.65))),
+    )
+    var swing = graph.sin(
+        graph.add(
+            graph.mul(time, graph.float(turn * motion.rate.to(PER_SECOND))),
+            graph.dot(
+                p, graph.vec3(SWING_PHASE[0], SWING_PHASE[1], SWING_PHASE[2])
+            ),
+        )
+    )
+    var flutter = graph.sin(
+        graph.add(
+            graph.mul(
+                time, graph.float(turn * motion.flutter_rate.to(PER_SECOND))
+            ),
+            graph.dot(
+                p,
+                graph.vec3(
+                    FLUTTER_PHASE[0], FLUTTER_PHASE[1], FLUTTER_PHASE[2]
+                ),
+            ),
+        )
+    )
+    var reach = motion.reach.to(METER)
+    var along = graph.vec3(
+        motion.downwind.x * reach, 0, motion.downwind.y * reach
+    )
+    var up = graph.vec3(0, motion.flutter.to(METER), 0)
+    var moved = graph.add(graph.mul(along, swing), graph.mul(up, flutter))
+    return graph.mul(moved, weight)
+
+
 def foliage_program() raises -> NodeProgram:
-    """Return the node program that lights leaves as their attributes say.
+    """Return the node program that lights still leaves as their
+    attributes say.
 
     The normal of a back face turns to the front, as `two_sided_program`
     turns it: a leaf with the sun behind it glows. Each light's shadow is
@@ -289,6 +387,51 @@ def foliage_program() raises -> NodeProgram:
         Error: Never; the graph is fixed.
     """
     var graph = NodeGraph()
+    _light_leaves(graph)
+    return graph.compile()
+
+
+def foliage_program(motion: CrownMotion) raises -> NodeProgram:
+    """Return the node program that lights leaves as their attributes say
+    and sways them in the wind.
+
+    Args:
+        motion: How the wind moves the crowns.
+
+    Returns:
+        The compiled program, with a `POSITION_NODE` from `sway_offset`,
+        and the outputs of the still program.
+
+    Raises:
+        Error: Never; the graph is fixed.
+    """
+    var graph = NodeGraph()
+    _light_leaves(graph)
+    graph.set_output(POSITION_NODE, sway_offset(graph, motion))
+    return graph.compile()
+
+
+def wood_program(motion: CrownMotion) raises -> NodeProgram:
+    """Return the node program that sways a crown's wood in the wind, as
+    its leaves sway.
+
+    Args:
+        motion: How the wind moves the crowns.
+
+    Returns:
+        The compiled program, with a `POSITION_NODE` and no other output.
+
+    Raises:
+        Error: Never; the graph is fixed.
+    """
+    var graph = NodeGraph()
+    graph.set_output(POSITION_NODE, sway_offset(graph, motion))
+    return graph.compile()
+
+
+def _light_leaves(mut graph: NodeGraph) raises:
+    """Set the outputs that light a leaf: its normal turned to the front,
+    its baked sun as the shadow, and its baked sky as the occlusion."""
     var behind = graph.mul(
         graph.sub(graph.front_facing(), graph.float(1.0)), graph.float(2.0)
     )
@@ -296,7 +439,6 @@ def foliage_program() raises -> NodeProgram:
     var sun = graph.attribute(String(SUNLIT), NODE_FLOAT)
     graph.set_output(RECEIVED_SHADOW_NODE, graph.mul(graph.vec3(1, 1, 1), sun))
     graph.set_output(AO_NODE, graph.attribute(String(SKYLIT), NODE_FLOAT))
-    return graph.compile()
 
 
 struct LeafMesh(Movable):
@@ -348,7 +490,12 @@ struct LeafMesh(Movable):
         return len(self.index) // 3
 
     def _vertex(
-        mut self, p: Vector3, n: Vector3, c: Vector3, sun: Float32, sky: Float32
+        mut self,
+        p: Vector3,
+        n: Vector3,
+        c: Vector3,
+        sun: Float32,
+        sky: Float32,
     ):
         """Append one vertex, with its normal made unit length."""
         self.positions.append(p.x)
@@ -408,7 +555,11 @@ struct LeafMesh(Movable):
             self._vertex(spine - left, normal - tilt, color, sun, sky)
             self._vertex(spine + left, normal + tilt, color, sun, sky)
         self._vertex(
-            base + along * length - normal * droop, normal, color, sun, sky
+            base + along * length - normal * droop,
+            normal,
+            color,
+            sun,
+            sky,
         )
         self._triangle(first, first + 1, first + 2)
         for row in range(2):  # pragma: no branch
