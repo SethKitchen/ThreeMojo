@@ -139,7 +139,7 @@ Some portable features remain partial, including [GLSL shaders](https://github.c
 
 - [x] [UModel package class for a CARLA vehicle](https://github.com/SethKitchen/ThreeMojo/wiki/CARLA-assets#rebuild-the-vehicle-zips): `tools/carla_umodel_class.mojo` reads the class UModel lists for a package [#761](https://github.com/SethKitchen/ThreeMojo/issues/761)
 
-- [x] [Pillow image reads for CARLA textures](https://github.com/SethKitchen/ThreeMojo/wiki/CARLA-assets#rebuild-the-vehicle-zips): `tools/carla_image.mojo` reads a PNG or a JPEG into the pixels Pillow reads [#761](https://github.com/SethKitchen/ThreeMojo/issues/761)
+- [x] [Pillow image reads for CARLA textures](https://github.com/SethKitchen/ThreeMojo/wiki/CARLA-assets#rebuild-the-vehicle-zips): `tools/carla_image.mojo` reads a PNG or a JPEG into the pixels Pillow reads. It turns each byte into unit color [#761](https://github.com/SethKitchen/ThreeMojo/issues/761)
 
 - [x] [Pillow JPEG files for CARLA textures](https://github.com/SethKitchen/ThreeMojo/wiki/CARLA-assets#rebuild-the-vehicle-zips): `tools/carla_jpeg.mojo` writes a JPEG with Pillow's libjpeg settings [#761](https://github.com/SethKitchen/ThreeMojo/issues/761)
 

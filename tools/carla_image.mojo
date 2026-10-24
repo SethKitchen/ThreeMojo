@@ -6,10 +6,14 @@
 """Read a PNG or a JPEG as Pillow reads it.
 
     carla_image FILE
+    carla_image unit FILE
 
 `FILE` is an image. The program prints `mode`, `width`, `height` and
 `pixels`. `pixels` are RGBA samples, the same bytes as Pillow's
 `convert("RGBA")`. `mode` is the mode Pillow's `open` reports.
+
+`unit` reads JSON `pixels` of those bytes. It divides each byte by 255
+and prints `rgba`. The values match NumPy's float64 division.
 """
 
 from std.ffi import OwnedDLHandle
@@ -19,6 +23,8 @@ from std.pathlib import Path
 from std.sys import argv, exit, stderr
 
 from render.png import decode
+from tools._python_float import parse_float, python_repr
+from tools._python_json import MISSING, PY_DICT, PY_INT, PY_LIST, PyJson
 
 comptime _DECOMPRESS_BYTES = 632
 comptime _ERROR_BYTES = 168
@@ -30,6 +36,35 @@ comptime _OUTPUT_HEIGHT = 140
 comptime _OUTPUT_COMPONENTS = 148
 comptime _JCS_GRAYSCALE = 1
 comptime _JCS_RGB = 2
+
+
+def unit_text(text: String) raises -> String:
+    """Return RGBA bytes as unit color.
+
+    Args:
+        text: JSON with `pixels`, one integer from 0 to 255 per channel.
+
+    Returns:
+        JSON `rgba`. Each value is that byte divided by 255.
+
+    Raises:
+        Error: If `pixels` is not a list of bytes.
+    """
+    var doc = PyJson.parse(text)
+    var root = doc.root
+    if doc.kind(root) != PY_DICT:
+        raise Error("unit request is not an object")
+    var node = doc.get(root, "pixels")
+    if node == MISSING or doc.kind(node) != PY_LIST:
+        raise Error("pixels are not a list")
+    var out = String('{"rgba":[')
+    for index in range(doc.length(node)):
+        if index > 0:
+            out += ","
+        var sample = _byte(doc, doc.item(node, index))
+        out += python_repr(_fdiv(Float64(sample), 255.0))
+    out += "]}"
+    return out^
 
 
 def image_file(path: String) raises -> String:
@@ -258,15 +293,41 @@ def _load_i32(raw: List[UInt8], offset: Int) -> Int:
     return Int(_load_u32(raw, offset))
 
 
+def _byte(doc: PyJson, node: Int) raises -> Int:
+    """Return one RGBA byte, or raise when it is not a byte."""
+    if doc.kind(node) != PY_INT:
+        raise Error("pixel is not an integer")
+    var digits = doc.text(node)
+    if digits.byte_length() > 3:
+        raise Error("pixel is out of range")
+    var value = Int(parse_float(digits))
+    if value < 0 or value > 255:
+        raise Error("pixel is out of range")
+    return value
+
+
+@no_inline
+def _fdiv(left: Float64, right: Float64) -> Float64:
+    """Return one quotient, rounded before the next operation."""
+    return left / right
+
+
 def main() raises:
-    """Print the image named on the command line.
+    """Print one image, or the unit color of its bytes.
 
     Raises:
         Error: If the standard streams cannot be written.
     """
     var arguments = argv()
+    if len(arguments) == 3 and arguments[1] == "unit":
+        try:
+            print(unit_text(Path(arguments[2]).read_text()))
+        except error:
+            print("carla_image:", error, file=stderr)
+            exit(1)
+        return
     if len(arguments) != 2:
-        print("usage: carla_image FILE", file=stderr)
+        print("usage: carla_image FILE | carla_image unit FILE", file=stderr)
         exit(2)
     try:
         print(image_file(arguments[1]))

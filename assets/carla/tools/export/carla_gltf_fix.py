@@ -302,6 +302,37 @@ def save_jpeg(pixels, width, height, mode, quality, optimize):
         shutil.rmtree(folder, ignore_errors=True)
 
 
+def unit_rgba(pixels):
+    """Return RGBA bytes as unit floats from `tools/carla_image.mojo`.
+
+    Each byte is divided by 255, as NumPy's ``float64`` division does.
+    """
+    here = os.path.dirname(os.path.abspath(__file__))
+    repo = os.path.abspath(os.path.join(here, "..", "..", "..", ".."))
+    mojo = os.path.join(repo, ".venv", "bin", "mojo")
+    if not os.path.isfile(mojo):
+        mojo = "mojo"
+    folder = tempfile.mkdtemp(prefix="image-unit-")
+    try:
+        path = os.path.join(folder, "unit.json")
+        with open(path, "w", encoding="utf-8") as handle:
+            json.dump(
+                {"pixels": [int(value) for value in pixels]},
+                handle,
+                separators=(",", ":"),
+            )
+        result = subprocess.run(
+            ["sh", os.path.join(repo, "tools", "tool.sh"), mojo,
+             "carla_image", "unit", path],
+            capture_output=True, text=True,
+        )
+    finally:
+        shutil.rmtree(folder, ignore_errors=True)
+    if result.returncode != 0:
+        raise ValueError(result.stderr.strip() or "image unit failed")
+    return json.loads(result.stdout)["rgba"]
+
+
 def open_image(path):
     """Return the mode, size and RGBA samples from `tools/carla_image.mojo`.
 

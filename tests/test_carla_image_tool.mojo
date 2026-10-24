@@ -10,7 +10,7 @@ from std.testing import TestSuite, assert_equal, assert_raises, assert_true
 
 from tests._tree import tool_mojo
 from tools._process import run_program
-from tools.carla_image import image_file
+from tools.carla_image import image_file, unit_text
 
 
 def _python(script: String) raises -> String:
@@ -100,7 +100,9 @@ def test_cli_prints_the_image() raises:
         merge_errors=False,
     )
     assert_equal(usage.status, 2)
-    assert_equal(usage.errors, "usage: carla_image FILE\n")
+    assert_equal(
+        usage.errors, "usage: carla_image FILE | carla_image unit FILE\n"
+    )
     var failed = run_program(
         [
             "sh",
@@ -108,6 +110,58 @@ def test_cli_prints_the_image() raises:
             tool_mojo(),
             "carla_image",
             folder + "/missing.png",
+        ],
+        30,
+        merge_errors=False,
+    )
+    assert_true(failed.status != 0)
+    assert_true(failed.errors.startswith("carla_image:"))
+
+
+def test_unit_color_matches_numpy() raises:
+    var pixels = String("")
+    for value in range(256):
+        if value > 0:
+            pixels += ","
+        pixels += String(value)
+    var expected = _python(
+        "import json, numpy\n"
+        + "pixels = list(range(256))\n"
+        + "values = (numpy.array(pixels, dtype=numpy.float64) /"
+        " 255.0).tolist()\n"
+        + "print(json.dumps({'rgba': values}, separators=(',', ':')))\n"
+    )
+    assert_equal(unit_text('{"pixels":[' + pixels + "]}"), expected.strip())
+    assert_equal(unit_text('{"pixels":[]}'), '{"rgba":[]}')
+    with assert_raises(contains="unit request is not an object"):
+        _ = unit_text("[]")
+    with assert_raises(contains="pixels are not a list"):
+        _ = unit_text("{}")
+    with assert_raises(contains="pixel is not an integer"):
+        _ = unit_text('{"pixels":[1.0]}')
+    with assert_raises(contains="pixel is not an integer"):
+        _ = unit_text('{"pixels":[true]}')
+    with assert_raises(contains="pixel is out of range"):
+        _ = unit_text('{"pixels":[-1]}')
+    with assert_raises(contains="pixel is out of range"):
+        _ = unit_text('{"pixels":[256]}')
+    var path = "/tmp/carla-image-unit.json"
+    Path(path).write_text('{"pixels":[0,255,128]}')
+    var ran = run_program(
+        ["sh", "tools/tool.sh", tool_mojo(), "carla_image", "unit", path],
+        60,
+    )
+    if ran.status != 0:
+        raise Error(ran.output)
+    assert_equal(ran.output, unit_text(Path(path).read_text()) + "\n")
+    var failed = run_program(
+        [
+            "sh",
+            "tools/tool.sh",
+            tool_mojo(),
+            "carla_image",
+            "unit",
+            path + ".missing",
         ],
         30,
         merge_errors=False,

@@ -758,7 +758,7 @@ def _albedo(library, material):
     """Return a material's base color image as float RGBA, and its
     factor.
 
-    `tools/carla_image.mojo` reads the file.
+    `tools/carla_image.mojo` reads the file and divides each byte by 255.
     """
     entry = library.gltf["materials"][material]
     pbr = entry.get("pbrMetallicRoughness", {})
@@ -769,7 +769,8 @@ def _albedo(library, material):
     source = library.gltf["textures"][texture["index"]]["source"]
     path = os.path.join(library.package.out_dir, library.gltf["images"][source]["uri"])
     _, width, height, rgba = fix.open_image(path)
-    image = numpy.array(rgba, dtype=numpy.float64).reshape(height, width, 4) / 255.0
+    values = fix.unit_rgba(rgba)
+    image = numpy.array(values, dtype=numpy.float64).reshape(height, width, 4)
     return image, factor
 
 
