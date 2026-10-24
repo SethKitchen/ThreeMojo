@@ -448,7 +448,7 @@ The near level keeps the detail that a camera sees close up, and the far level k
 
 A far building is a baked proxy. `tools/carla_town_join.mojo` joins its parts, `tools/carla_town_weld.mojo` gathers corners into cells a 200th of its size, and `tools/carla_town_simplify.mojo` simplifies that far mesh. `tools/carla_town_bake.mojo` draws that picture from each side and from above, and `tools/carla_town_atlas.mojo` gives each far triangle the view that faces it. So its windows and its trim are in the picture, not in the geometry. `tools/carla_town_dilate.mojo` spreads colors into the empty texels. The picture holds no light, the renderer lights the proxy, `tools/carla_image_pack.mojo` stores its bytes, and `tools/carla_jpeg.mojo` writes it.
 
-A town's glass is a dark, smooth, partly metal pane that reflects its surroundings. A see-through window has nothing behind it, so a tower would show the sky through its windows. `tools/carla_gltf_rebuild.mojo` makes that pane and drops the vehicle glass tag.
+A town's glass is a dark, smooth, partly metal pane that reflects its surroundings. A see-through window has nothing behind it, so a tower would show the sky through its windows. `tools/carla_gltf_rebuild.mojo` makes that pane and drops the vehicle glass tag. `tools/carla_town_attach.mojo` adds a plain material and each baked picture's material.
 
 `tools/carla_town_lamps.mojo` finds each street lamp head and places it with the copy's matrix. The scene's `extras` list the head of each street lamp, as `carla_lamps`: three numbers for each lamp, in the renderer's frame. The lamps' glass has the material tag `{"carla": "lamp"}`. A renderer draws each tile at one level, chosen by the tile's distance to the camera.
 

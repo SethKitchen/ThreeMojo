@@ -57,6 +57,9 @@ def bake_text(text: String) raises -> String:
     var doc = PyJson.parse(text)
     if doc.kind(doc.root) != PY_DICT:
         raise Error("bake request is not an object")
+    var mode = doc.get(doc.root, "mode")
+    if mode != MISSING and _text(doc, mode, "mode is not text") == "flat":
+        return _flat_mesh(doc)
     var path = _text(doc, _member(doc, doc.root, "out"), "out is not text")
     var density = _number(
         doc, _member(doc, doc.root, "density"), "density is not a number"
@@ -95,6 +98,25 @@ def bake_text(text: String) raises -> String:
     _write_jpeg(path, packed)
     var out = String('{"uvs":')
     out += _array_of(packed, "uvs")
+    out += "}"
+    return out
+
+
+def _flat_mesh(doc: PyJson) raises -> String:
+    """Return one unsimplified mesh as unindexed corners."""
+    var flat = atlas_text(
+        '{"mode":"flat","positions":'
+        + _compact(doc, _member(doc, doc.root, "positions"))
+        + ',"triangles":'
+        + _compact(doc, _member(doc, doc.root, "triangles"))
+        + "}"
+    )
+    var out = String('{"positions":')
+    out += _array_of(flat, "positions")
+    out += ',"normals":'
+    out += _array_of(flat, "normals")
+    out += ',"triangles":'
+    out += _array_of(flat, "triangles")
     out += "}"
     return out
 

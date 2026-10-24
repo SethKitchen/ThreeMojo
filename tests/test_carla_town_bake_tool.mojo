@@ -42,6 +42,15 @@ def test_a_small_building_writes_a_jpeg() raises:
     _ = run_program(["rm", "-rf", root], 10)
 
 
+def test_an_unsimplified_mesh_keeps_one_corner_per_triangle() raises:
+    var doc = bake_text(
+        '{"mode":"flat","positions":[[0,0,0],[1,0,0],[0,1,0]],"triangles":[[0,1,2]]}'
+    )
+    assert_true(doc.startswith('{"positions":'))
+    assert_true(doc.find('"triangles":[[0, 1, 2]]') >= 0)
+    assert_true(doc.find('"normals":') >= 0)
+
+
 def test_views_must_be_a_list() raises:
     with assert_raises(contains="views are not a list"):
         _ = bake_text(
