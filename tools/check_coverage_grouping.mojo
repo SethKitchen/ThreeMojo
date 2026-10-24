@@ -2690,12 +2690,15 @@ def generic_pair_expected() -> String:
     return expected
 
 
-def _pair_manifest(name: String, source: String) raises -> List[String]:
-    """Return the branch rows for the isolated generic fixture.
+def _decision_manifest(
+    name: String, source: String, compound: String
+) raises -> List[String]:
+    """Return the branch rows for one isolated fixture.
 
     Args:
         name: The module name in the manifest.
         source: The isolated fixture source.
+        compound: The one decision whose width is 3.
 
     Returns:
         One `B` row for each decision, plus `C` and `M` slots when the
@@ -2704,9 +2707,6 @@ def _pair_manifest(name: String, source: String) raises -> List[String]:
     Raises:
         Error: If the compound decision is missing or another compound appears.
     """
-    var compound = (
-        "if A.make(0, state) or B.make(1, state) and A.make(2, state):"
-    )
     var rows = List[String]()
     var number = 1
     var saw = False
@@ -2740,8 +2740,49 @@ def _pair_manifest(name: String, source: String) raises -> List[String]:
                     slot += 1
         number += 1
     if not saw:
-        raise Error("missing generic pair decision")
+        raise Error("missing compound decision")
     return rows^
+
+
+def _require_manifest(
+    rewritten: String, name: String, source: String, compound: String
+) raises:
+    """Require the manifest to keep every decision in `source`.
+
+    Args:
+        rewritten: The instrumented tree.
+        name: The module name.
+        source: The original source.
+        compound: The one decision whose width is 3.
+
+    Raises:
+        Error: If the manifest rows differ.
+    """
+    var wanted_manifest = _decision_manifest(name, source, compound)
+    var manifest = Path(rewritten + "/manifest.txt").read_text()
+    var manifest_rows = List[String]()
+    for line in manifest.splitlines():
+        var row = String(line)
+        var parts = row.split(" ")
+        if (
+            len(parts) >= 2
+            and String(parts[1]) == name
+            and (
+                String(parts[0]) == "B"
+                or String(parts[0]) == "C"
+                or String(parts[0]) == "M"
+            )
+        ):
+            manifest_rows.append(row)
+    sort(manifest_rows)
+    sort(wanted_manifest)
+    if not _same(manifest_rows, wanted_manifest):
+        var shown = String()
+        for row in manifest_rows:
+            shown += "actual " + row + "\n"
+        for row in wanted_manifest:
+            shown += "wanted " + row + "\n"
+        raise Error(name + " manifest changed\n" + shown)
 
 
 def generic_pair_line(concrete: String, mask: Int, changing: Bool) -> String:
@@ -2854,31 +2895,12 @@ def check_generic_pair(mojo: String) raises:
         )
         _ = _must([build, rewritten, name + ".mojo"], 60, native)
         _require_origin(rewritten, name, source)
-        var wanted_manifest = _pair_manifest(name, source)
-        var manifest = Path(rewritten + "/manifest.txt").read_text()
-        var manifest_rows = List[String]()
-        for line in manifest.splitlines():
-            var row = String(line)
-            var parts = row.split(" ")
-            if (
-                len(parts) >= 2
-                and String(parts[1]) == name
-                and (
-                    String(parts[0]) == "B"
-                    or String(parts[0]) == "C"
-                    or String(parts[0]) == "M"
-                )
-            ):
-                manifest_rows.append(row)
-        sort(manifest_rows)
-        sort(wanted_manifest)
-        if not _same(manifest_rows, wanted_manifest):
-            var shown = String()
-            for row in manifest_rows:
-                shown += "actual " + row + "\n"
-            for row in wanted_manifest:
-                shown += "wanted " + row + "\n"
-            raise Error(name + " manifest changed\n" + shown)
+        _require_manifest(
+            rewritten,
+            name,
+            source,
+            "if A.make(0, state) or B.make(1, state) and A.make(2, state):",
+        )
         var rejected = run_program(
             [
                 compiler,
@@ -2919,6 +2941,311 @@ def check_generic_pair(mojo: String) raises:
         _ = run_program(["rm", "-rf", work], 30)
 
 
+def _single_observe(
+    mut records: String,
+    mut states: List[Int],
+    line: Int,
+    slot: Int,
+    value: Bool,
+):
+    """Record the first truth in a slot, and a later disagreement."""
+    var bit = 0
+    if value:
+        bit = 1
+    var state = states[slot]
+    if state == bit:
+        return
+    if state < 0:
+        states[slot] = bit
+    else:
+        states[slot] = 2
+    var flag = "F"
+    if value:
+        flag = "T"
+    records += (
+        "COVLINE:generic_single:"
+        + String(line)
+        + "."
+        + String(slot)
+        + ":"
+        + flag
+        + "\n"
+    )
+
+
+def _single_convert(
+    mut log: String,
+    mut counts: List[Int],
+    mut records: String,
+    mut states: List[Int],
+    line: Int,
+    index: Int,
+    mask: Int,
+    changing: Bool,
+) -> Bool:
+    """Convert one same-type leaf and keep its slot."""
+    log += String(index)
+    var count = counts[index]
+    counts[index] = count + 1
+    var value = (mask & (1 << index)) != 0
+    if changing and count % 2 == 1:
+        value = not value
+    _single_observe(records, states, line, index, value)
+    return value
+
+
+def single_generic_case(
+    concrete: String, mask: Int, changing: Bool, line: Int
+) -> Tuple[String, String]:
+    """Return one native `GENERIC` line and its coverage trace.
+
+    Args:
+        concrete: `Probe` or `Other`.
+        mask: The four truth bits.
+        changing: True when a repeated conversion flips.
+        line: The decision line in the fixture.
+
+    Returns:
+        The stdout line without a newline, and the trace with newlines.
+    """
+    var log = String()
+    var counts = List[Int](length=3, fill=0)
+    var states = List[Int](length=3, fill=-1)
+    var records = String()
+    var left = _single_convert(
+        log, counts, records, states, line, 0, mask, changing
+    )
+    var item = 0
+    if not left:
+        log += "~0"
+        var middle = _single_convert(
+            log, counts, records, states, line, 1, mask, changing
+        )
+        if not middle:
+            item = 1
+        else:
+            log += "~1"
+            item = 2
+    var outcome = _single_convert(
+        log, counts, records, states, line, item, mask, changing
+    )
+    log += "~" + String(item)
+    var flag = "False"
+    if outcome:
+        flag = "True"
+    var changing_text = "False"
+    if changing:
+        changing_text = "True"
+    var row = (
+        "GENERIC "
+        + concrete
+        + " "
+        + String(mask)
+        + " "
+        + changing_text
+        + " "
+        + flag
+        + " "
+        + log
+        + " "
+        + String(counts[0])
+        + " "
+        + String(counts[1])
+        + " "
+        + String(counts[2])
+    )
+    var truth = "F"
+    if outcome:
+        truth = "T"
+    var vector = String()
+    var slot = 0
+    while slot < 3:
+        var state = states[slot]
+        if state < 0:
+            vector += "-"
+        elif state == 0:
+            vector += "F"
+        elif state == 1:
+            vector += "T"
+        else:
+            vector += "?"
+        slot += 1
+    var trace = "COVLINE:generic_single:" + String(line) + "\n"
+    trace += records
+    trace += "COVLINE:generic_single:" + String(line) + ":" + truth + "\n"
+    trace += (
+        "COVEVAL2:generic_single:"
+        + String(line)
+        + ":"
+        + truth
+        + ":"
+        + vector
+        + ";\n"
+    )
+    return (row, trace)
+
+
+def single_generic_expected(line: Int) -> String:
+    """Return the 64 native `GENERIC` lines, with a trailing newline.
+
+    Args:
+        line: The decision line in the fixture.
+
+    Returns:
+        The lines in changing, mask, then concrete order.
+    """
+    var text = String()
+    for changing in [False, True]:
+        var mask = 0
+        while mask < 16:
+            for concrete in ["Probe", "Other"]:
+                var made = single_generic_case(concrete, mask, changing, line)
+                text += made[0] + "\n"
+            mask += 1
+    return text
+
+
+def single_generic_trace(line: Int) -> String:
+    """Return the 64 coverage traces, with a trailing newline.
+
+    Args:
+        line: The decision line in the fixture.
+
+    Returns:
+        Statement, condition, decision, and vector records, in order.
+    """
+    var text = String()
+    for changing in [False, True]:
+        var mask = 0
+        while mask < 16:
+            for concrete in ["Probe", "Other"]:
+                var made = single_generic_case(concrete, mask, changing, line)
+                text += made[1]
+            mask += 1
+    return text
+
+
+def _trace_for_line(raw: String, name: String, line: Int) -> String:
+    """Return the coverage records for one decision line."""
+    var wanted = String(line)
+    var text = String()
+    for row in raw.splitlines():
+        var line_text = String(row)
+        var parts = line_text.split(":")
+        if len(parts) < 3:
+            continue
+        var kind = String(parts[0])
+        if kind != "COVLINE" and kind != "COVEVAL2":
+            continue
+        if String(parts[1]) != name:
+            continue
+        var field = String(parts[2])
+        var dot = field.find(".")
+        var number = field
+        if dot >= 0:
+            number = String(field[byte=:dot])
+        if number == wanted:
+            text += line_text + "\n"
+    return text
+
+
+def check_single_generic(mojo: String) raises:
+    """Require one-parameter generic truth to match native and instrumented runs.
+
+    Args:
+        mojo: The Mojo compiler.
+
+    Raises:
+        Error: If the rows, the manifest, the origin, or the trace differ.
+    """
+    var root = absolute_path(".")
+    var compiler = absolute_path(mojo)
+    var source = Path("tools/fixtures/coverage_generic_single.txt").read_text()
+    var expression = "A.make(0, state) or A.make(1, state) and A.make(2, state)"
+    var line = _decision_line(source, expression)
+    var expected = single_generic_expected(line)
+    var wanted_trace = single_generic_trace(line)
+    var work = mkdtemp(prefix="threemojo-generic-single-")
+    try:
+        var native = work + "/native"
+        var rewritten = work + "/rewritten"
+        _ = _must(["mkdir", "-p", native, rewritten], 10)
+        _ = _must(["cp", "-a", root + "/coverage", native + "/coverage"], 30)
+        _ = _must(["cp", "-a", root + "/coverage", rewritten + "/coverage"], 30)
+        for folder in [native, rewritten]:
+            var built = folder + "/coverage/build"
+            if Path(built).exists():
+                _ = _must(["rm", "-rf", built], 10)
+        var name = "generic_single"
+        Path(native + "/" + name + ".mojo").write_text(source)
+        var binary = work + "/" + name + "-native"
+        _ = _must(
+            [
+                compiler,
+                "build",
+                "-Werror",
+                "-I",
+                native,
+                "-I",
+                root,
+                native + "/" + name + ".mojo",
+                "-o",
+                binary,
+            ],
+            180,
+        )
+        var ran = _must([binary], 5)
+        if ran.output != expected:
+            raise Error(ran.output)
+        var build = work + "/build_cli"
+        _ = _must(
+            [
+                compiler,
+                "build",
+                "-Werror",
+                "-I",
+                root,
+                root + "/coverage/build_cli.mojo",
+                "-o",
+                build,
+            ],
+            180,
+        )
+        _ = _must([build, rewritten, name + ".mojo"], 60, native)
+        _require_origin(rewritten, name, source)
+        _require_manifest(
+            rewritten,
+            name,
+            source,
+            "if " + expression + ":",
+        )
+        var instrumented_binary = work + "/" + name + "-instrumented"
+        _ = _must(
+            [
+                compiler,
+                "build",
+                "-Werror",
+                "-I",
+                rewritten,
+                "-I",
+                root,
+                rewritten + "/" + name + ".mojo",
+                "-o",
+                instrumented_binary,
+            ],
+            180,
+        )
+        var instrumented = _must([instrumented_binary], 5)
+        if instrumented.output != expected:
+            raise Error(instrumented.output)
+        var seen = _trace_for_line(instrumented.errors, name, line)
+        if seen != wanted_trace:
+            raise Error(seen + "\n" + wanted_trace)
+        print("PASS: 64 single-parameter generic controls with exact traces")
+    finally:
+        _ = run_program(["rm", "-rf", work], 30)
+
+
 def main() raises:
     """Compare the Boolean grouping fixture from the command line."""
     var mojo = ".venv/bin/mojo"
@@ -2947,6 +3274,7 @@ def main() raises:
         check_last_use(mojo)
         check_temporary_identity(mojo)
         check_generic_pair(mojo)
+        check_single_generic(mojo)
     except error:
         print(String(error), file=stderr)
         exit(1)

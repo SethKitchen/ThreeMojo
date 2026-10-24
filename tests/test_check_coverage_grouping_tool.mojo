@@ -16,6 +16,9 @@ from tools.check_coverage_grouping import (
     fixture_source,
     generic_pair_expected,
     generic_pair_line,
+    single_generic_case,
+    single_generic_expected,
+    single_generic_trace,
     identity_last_use_source,
     identity_source,
     lifetime_source,
@@ -135,6 +138,28 @@ def test_the_generic_pair_fixture_matches_the_pinned_text() raises:
         generic_pair_line("Other", 1, True),
         "PAIR Other 1 True True 0~0 1 0 0",
     )
+
+
+def test_the_single_generic_fixture_matches_the_pinned_text() raises:
+    var source = Path("tools/fixtures/coverage_generic_single.txt").read_text()
+    assert_equal(
+        sha256_hex(source.as_bytes()),
+        "211b828675bff5954aad8863d14ab195198638a132b665ae4f8e811db26f9422",
+    )
+    var expected = single_generic_expected(164)
+    var trace = single_generic_trace(164)
+    assert_equal(
+        sha256_hex(expected.as_bytes()),
+        "f33782a8594219db463613900fb9f729b101be5ed1a8c13a96d792aa6e2f997c",
+    )
+    assert_equal(
+        sha256_hex(trace.as_bytes()),
+        "3a0e90f53e245ba663b5e15e232e35ece2d1e9c9d3002971e331a1e86d649afd",
+    )
+    var stable = single_generic_case("Probe", 0, False, 164)
+    assert_equal(stable[0], "GENERIC Probe 0 False False 0~011~1 1 2 0")
+    var flipped = single_generic_case("Probe", 1, True, 164)
+    assert_equal(flipped[0], "GENERIC Probe 1 True False 00~0 2 0 0")
 
 
 def main() raises:
