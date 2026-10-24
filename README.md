@@ -129,7 +129,9 @@ Some portable features remain partial, including [GLSL shaders](https://github.c
 ### Project tools
 
 <details>
-<summary>Implemented: 49</summary>
+<summary>Implemented: 50</summary>
+
+- [x] [CARLA town copy groups](https://github.com/SethKitchen/ThreeMojo/wiki/CARLA-assets#the-carla-towns): `tools/carla_town_group.mojo` places each copy and merges one tile [#761](https://github.com/SethKitchen/ThreeMojo/issues/761)
 
 - [x] [CARLA town mesh plan](https://github.com/SethKitchen/ThreeMojo/wiki/CARLA-assets#the-carla-towns): `tools/carla_town_plan.mojo` chooses which meshes stay and which far level each uses [#761](https://github.com/SethKitchen/ThreeMojo/issues/761)
 

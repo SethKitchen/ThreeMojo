@@ -302,35 +302,6 @@ def _place_worker():
     return _PLACE_PROC
 
 
-def _tile_cell(rows, tile):
-    """Return the tile column and row for one copy's matrix.
-
-    `tools/carla_town_place.mojo` floors the origin. The origin is the
-    matrix translation in centimeters.
-    """
-    proc = _place_worker()
-    try:
-        proc.stdin.write(
-            "cell\t"
-            + json.dumps(float(rows[3][0]))
-            + "\t"
-            + json.dumps(float(rows[3][1]))
-            + "\t"
-            + json.dumps(float(tile))
-            + "\n"
-        )
-        proc.stdin.flush()
-        line = proc.stdout.readline()
-    except (BrokenPipeError, ValueError):
-        _place_failed(proc)
-    if not line:
-        _place_failed(proc)
-    if line.startswith("ERR\t"):
-        raise ValueError(line[4:].strip() or "tile failed")
-    column, row = line.strip().split("\t")
-    return int(column), int(row)
-
-
 def _place_failed(proc):
     """Raise the worker's error text and forget the dead process."""
     global _PLACE_PROC
@@ -448,49 +419,6 @@ def to_three(rows):
         numpy.array(doc["linear"], dtype=numpy.float64),
         numpy.array(doc["move"], dtype=numpy.float64),
     )
-
-
-def bend(points, normals, spline):
-    """Bend mesh points (three.js frame, meters) along a spline mesh
-    component's curve, as Unreal's spline mesh does, and return them in
-    the component's frame, in Unreal's axes and centimeters.
-
-    `tools/carla_town_bend.mojo` bends the points.
-    """
-    folder = tempfile.mkdtemp(prefix="town-bend-")
-    try:
-        request = os.path.join(folder, "bend.json")
-        payload = {
-            "points": numpy.asarray(points, dtype=float).reshape(-1, 3).tolist(),
-            "normals": numpy.asarray(normals, dtype=float).reshape(-1, 3).tolist(),
-            "forward_axis": int(spline["forward_axis"]),
-            "start": list(spline["start"]),
-            "end": list(spline["end"]),
-            "start_tangent": list(spline["start_tangent"]),
-            "end_tangent": list(spline["end_tangent"]),
-            "start_roll": float(spline["start_roll"]),
-            "end_roll": float(spline["end_roll"]),
-            "start_scale": list(spline["start_scale"]),
-            "end_scale": list(spline["end_scale"]),
-        }
-        with open(request, "w", encoding="utf-8") as handle:
-            json.dump(payload, handle, separators=(",", ":"), allow_nan=False)
-        root = os.path.abspath(os.path.join(HERE, "..", "..", "..", ".."))
-        mojo = os.path.join(root, ".venv", "bin", "mojo")
-        if not os.path.isfile(mojo):
-            mojo = "mojo"
-        result = subprocess.run(
-            ["sh", os.path.join(root, "tools", "tool.sh"), mojo,
-             "carla_town_bend", request],
-            capture_output=True, text=True,
-        )
-        if result.returncode != 0:
-            raise ValueError(result.stderr.strip() or "town bend failed")
-        bent = json.loads(result.stdout)
-    finally:
-        shutil.rmtree(folder, ignore_errors=True)
-    return (numpy.array(bent["points"], dtype=numpy.float64),
-            numpy.array(bent["normals"], dtype=numpy.float64))
 
 
 # ---- Meshes ----------------------------------------------------------------
@@ -1362,79 +1290,6 @@ def lower(primitive, kind, mesh_path, index, total, masked, lod, factor=1.0):
     return simplify(primitive, chosen["target"], borders=lod == 0, small=chosen["small"])
 
 
-def _spline_place(local, normals, triangles, rows):
-    """Return a bent mesh placed by `tools/carla_town_spline.mojo`."""
-    here = os.path.dirname(os.path.abspath(__file__))
-    repo = os.path.abspath(os.path.join(here, "..", "..", "..", ".."))
-    mojo = os.path.join(repo, ".venv", "bin", "mojo")
-    if not os.path.isfile(mojo):
-        mojo = "mojo"
-    folder = tempfile.mkdtemp(prefix="town-spline-")
-    try:
-        request = os.path.join(folder, "spline.json")
-        payload = {
-            "matrix": numpy.asarray(rows, dtype=float).reshape(4, 4).tolist(),
-            "positions": numpy.asarray(local, dtype=float).reshape(-1, 3).tolist(),
-            "normals": numpy.asarray(normals, dtype=float).reshape(-1, 3).tolist(),
-            "triangles": numpy.asarray(triangles).reshape(-1, 3).tolist(),
-        }
-        with open(request, "w", encoding="utf-8") as handle:
-            json.dump(payload, handle, separators=(",", ":"), allow_nan=False)
-        result = subprocess.run(
-            ["sh", os.path.join(repo, "tools", "tool.sh"), mojo,
-             "carla_town_spline", request],
-            capture_output=True, text=True,
-        )
-    finally:
-        shutil.rmtree(folder, ignore_errors=True)
-    if result.returncode != 0:
-        message = result.stderr.strip() or "spline placement failed"
-        if "singular" in message:
-            raise numpy.linalg.LinAlgError(message)
-        raise ValueError(message)
-    placed = json.loads(result.stdout)
-    return (numpy.array(placed["points"], dtype=numpy.float64),
-            numpy.array(placed["normals"], dtype=numpy.float64),
-            numpy.array(placed["triangles"], dtype=numpy.int64))
-
-
-def place(part, row, rows):
-    """Return a primitive's points, normals and triangles placed by one
-    copy's world matrix, in the three.js frame.
-
-    A rigid copy is placed by `tools/carla_town_place.mojo`.
-    A bent spline mesh is placed by `tools/carla_town_spline.mojo`.
-    """
-    if "spline" not in row:
-        folder = tempfile.mkdtemp(prefix="town-place-")
-        try:
-            request = os.path.join(folder, "place.json")
-            with open(request, "w", encoding="utf-8") as handle:
-                json.dump({"matrix": rows.tolist(), "positions": part["positions"].tolist(),
-                           "normals": part["normals"].tolist(),
-                           "triangles": part["triangles"].tolist()},
-                          handle, separators=(",", ":"), allow_nan=False)
-            proc = _place_worker()
-            try:
-                proc.stdin.write("apply\t" + request + "\n")
-                proc.stdin.flush()
-                line = proc.stdout.readline()
-            except (BrokenPipeError, ValueError):
-                _place_failed(proc)
-            if not line:
-                _place_failed(proc)
-            if line.startswith("ERR\t"):
-                raise ValueError(line[4:].strip() or "town placement failed")
-            placed = json.loads(line)
-        finally:
-            shutil.rmtree(folder, ignore_errors=True)
-        return (numpy.array(placed["points"], dtype=numpy.float64),
-                numpy.array(placed["normals"], dtype=numpy.float64),
-                numpy.array(placed["triangles"], dtype=numpy.int64))
-    local, normals = bend(part["positions"], part["normals"], row["spline"])
-    return _spline_place(local, normals, part["triangles"], rows)
-
-
 def _lamp_world(heads, linear, move):
     """Return lamp heads placed by `tools/carla_town_lamps.mojo`.
 
@@ -1604,12 +1459,42 @@ def _plan(payload):
     return json.loads(result.stdout)
 
 
+def _group(payload):
+    """Return placed groups from `tools/carla_town_group.mojo`."""
+    here = os.path.dirname(os.path.abspath(__file__))
+    repo = os.path.abspath(os.path.join(here, "..", "..", "..", ".."))
+    mojo = os.path.join(repo, ".venv", "bin", "mojo")
+    if not os.path.isfile(mojo):
+        mojo = "mojo"
+    folder = tempfile.mkdtemp(prefix="town-group-")
+    try:
+        path = os.path.join(folder, "group.json")
+        with open(path, "w", encoding="utf-8") as handle:
+            json.dump(payload, handle, separators=(",", ":"), allow_nan=False)
+        result = subprocess.run(
+            ["sh", os.path.join(repo, "tools", "tool.sh"), mojo,
+             "carla_town_group", path],
+            capture_output=True, text=True,
+        )
+    finally:
+        shutil.rmtree(folder, ignore_errors=True)
+    if result.returncode != 0:
+        message = result.stderr.strip()
+        if message.startswith("carla_town_group: "):
+            message = message[len("carla_town_group: "):]
+        if "singular" in message:
+            raise numpy.linalg.LinAlgError(message)
+        raise ValueError(message or "town group failed")
+    return json.loads(result.stdout)["groups"]
+
+
 def build(town, max_size, tile):
     """Write one town's package, and return the triangle counts of its
     two levels of detail and its node count.
 
     `tools/carla_town_plan.mojo` chooses which meshes stay and which far
-    level each one uses.
+    level each one uses. `tools/carla_town_group.mojo` places each copy
+    and merges copies that share a tile, a kind and a material.
     """
     name = "carla.town." + town.lower()
     out_dir = os.path.join(OUT, name)
@@ -1618,7 +1503,7 @@ def build(town, max_size, tile):
     library = Library(out_dir, max_size)
     meshes = {}
     lowered = {}
-    groups = {}
+    pending = []
     # Each lamp head, in the three.js frame, and each lamp mesh's heads.
     lamps = []
     heads_of = {}
@@ -1715,22 +1600,28 @@ def build(town, max_size, tile):
                 if part_mesh is None:
                     continue
                 STATS[mesh_path] = STATS.get(mesh_path, 0) + len(part_mesh["triangles"]) * len(copies)
+                one_copies = []
                 for rows in copies:
-                    points, normals, triangles = place(part_mesh, row, rows)
-                    # The copy's origin picks its tile, so both levels of
-                    # detail of a copy fall in the same tile.
-                    # `tools/carla_town_place.mojo` floors that origin.
-                    cell = _tile_cell(rows, tile)
-                    group = groups.setdefault((lod, kind, cell, part_material), [[], [], [], []])
-                    # `tools/carla_town_buffers.mojo` rounds to float32 and
-                    # shifts each copy's triangles by the copies before it.
-                    group[0].append(points)
-                    group[1].append(normals)
-                    group[2].append(part_mesh["uvs"])
-                    group[3].append(triangles)
+                    entry = {
+                        "matrix": numpy.asarray(rows, dtype=float).reshape(4, 4).tolist(),
+                    }
+                    if "spline" in row:
+                        entry["spline"] = row["spline"]
+                    one_copies.append(entry)
+                pending.append({
+                    "lod": int(lod),
+                    "kind": kind,
+                    "material": int(part_material),
+                    "positions": numpy.asarray(part_mesh["positions"], dtype=float).reshape(-1, 3).tolist(),
+                    "normals": numpy.asarray(part_mesh["normals"], dtype=float).reshape(-1, 3).tolist(),
+                    "uvs": numpy.asarray(part_mesh["uvs"], dtype=float).reshape(-1, 2).tolist(),
+                    "triangles": numpy.asarray(part_mesh["triangles"]).reshape(-1, 3).tolist(),
+                    "copies": one_copies,
+                })
+    grouped = _group({"tile": float(tile), "parts": pending})
     # The town's own road network, so a package brings the map it stands on.
     shutil.copy(os.path.join(MAPS, town + ".xodr"), os.path.join(out_dir, town + ".xodr"))
-    return write(town, name, out_dir, library, groups, lamps)
+    return write(town, name, out_dir, library, grouped, lamps)
 
 
 def write(town, name, out_dir, library, groups, lamps):
@@ -1745,18 +1636,7 @@ def write(town, name, out_dir, library, groups, lamps):
     mojo = os.path.join(repo, ".venv", "bin", "mojo")
     if not os.path.isfile(mojo):
         mojo = "mojo"
-    payload = {"out_dir": out_dir, "name": name, "gltf": library.gltf, "groups": [], "lamps": []}
-    for (lod, kind, cell, material), group in groups.items():
-        payload["groups"].append({
-            "lod": int(lod),
-            "kind": kind,
-            "cell": [int(cell[0]), int(cell[1])],
-            "material": int(material),
-            "positions": [numpy.asarray(chunk, dtype=float).reshape(-1, 3).tolist() for chunk in group[0]],
-            "normals": [numpy.asarray(chunk, dtype=float).reshape(-1, 3).tolist() for chunk in group[1]],
-            "uvs": [numpy.asarray(chunk, dtype=float).reshape(-1, 2).tolist() for chunk in group[2]],
-            "triangles": [numpy.asarray(chunk).reshape(-1, 3).tolist() for chunk in group[3]],
-        })
+    payload = {"out_dir": out_dir, "name": name, "gltf": library.gltf, "groups": groups, "lamps": []}
     for head in lamps:
         payload["lamps"].append([float(value) for value in head])
     folder = tempfile.mkdtemp(prefix="town-write-")
