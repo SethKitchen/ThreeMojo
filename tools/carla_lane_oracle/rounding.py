@@ -16,6 +16,8 @@ its residual arithmetic must not be contracted, reassociated or flushed.
 """
 from fractions import Fraction as F
 import json
+import subprocess
+from pathlib import Path
 from oracle import HERE,BITS,J,W,S,C,r,h,grade,mf,out,b64
 U=F(1,2**53); TINY=F(1,2**1075)
 GRID=2**160
@@ -27,7 +29,20 @@ def require(condition, message):
         raise ValueError(message)
 
 
-from sum2_analysis import sum2_error
+def sum2_error(magnitude, inherited, count):
+    """Return the independent Sum2 bound from the Mojo program."""
+    root = Path(__file__).resolve().parents[2]
+    mojo = root / ".venv" / "bin" / "mojo"
+    program = str(mojo) if mojo.is_file() else "mojo"
+    result = subprocess.run(
+        ["sh", str(root / "tools" / "tool.sh"), program, "carla_sum2_error",
+         str(magnitude.numerator), str(magnitude.denominator),
+         str(inherited.numerator), str(inherited.denominator), str(count)],
+        text=True, capture_output=True, check=False,
+    )
+    if result.returncode != 0:
+        raise ValueError(result.stderr.strip() or "unsupported Sum2")
+    return F(result.stdout.strip())
 
 
 def sum2_terms(terms):

@@ -14,7 +14,8 @@ Run these controls with Python 3 and mpmath 1.3.0:
     python3 tools/carla_lane_oracle/translated_parameter_resolution.py
 
 The reports go to `out/carla-lane-oracle`. Set `CARLA_LANE_ORACLE_OUTPUT`
-to choose another directory. The scripts do not run Mojo or change source.
+to choose another directory. The scripts do not change source.
+`rounding.py` calls `tools/carla_sum2_error.mojo` for the Sum2 bound.
 
 Reports label earlier measured query outputs as retained observations.
 They do not claim a new native run.
