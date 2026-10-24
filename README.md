@@ -502,7 +502,7 @@ A checked box records implemented scope. It does not establish engineering or cl
 The anatomy combines measured inputs with authored templates. See the [bounded validity report](https://github.com/SethKitchen/ThreeMojo/wiki/Anatomy-validity) for template estimates, numerical evidence and unsupported uses.
 
 <details>
-<summary>Implemented: 45</summary>
+<summary>Implemented: 46</summary>
 
 - [x] [Audio-aligned game faces](https://github.com/SethKitchen/ThreeMojo/wiki/Audio-aligned-game-faces): caller-provided phonemes or visemes, audio-clock transport, preserved facial LOD and validated glTF bakes [#299](https://github.com/SethKitchen/ThreeMojo/issues/299)
 
@@ -535,6 +535,7 @@ The anatomy combines measured inputs with authored templates. See the [bounded v
 - [x] [Segment inertia](https://github.com/SethKitchen/ThreeMojo/wiki/Segment-inertia): mass, center of mass and inertia tensor of a thigh, a shank and a foot [#326](https://github.com/SethKitchen/ThreeMojo/issues/326)
 - [x] [Persistent scene water](https://github.com/SethKitchen/ThreeMojo/wiki/Water#animate-it): `WaterScene` keeps its state and composes with a scene. `GpuWater` shades it on a CUDA or Apple Metal GPU, with CPU comparisons and 1080p benchmarks [#300](https://github.com/SethKitchen/ThreeMojo/issues/300)
 - [x] [Water](https://github.com/SethKitchen/ThreeMojo/wiki/Water): a Clearwater shallow-water still, with spectrum, ripples, caustics and glare [#327](https://github.com/SethKitchen/ThreeMojo/issues/327)
+- [x] [Vegetation](https://github.com/SethKitchen/ThreeMojo/wiki/Vegetation): ten million grass blades in culled clusters with levels of detail, gusts, poppies, trees grown by space colonization and a clouded sky
 - [x] [CARLA lane borders](https://github.com/SethKitchen/ThreeMojo/wiki/CARLA-lane-borders): border-only OpenDRIVE lanes get width records from their borders, with ASAM's precedence and refusal rules [#577](https://github.com/SethKitchen/ThreeMojo/issues/577)
 - [x] [CARLA map budgets](https://github.com/SethKitchen/ThreeMojo/wiki/CARLA-map-budgets): typed construction and certified-query work limits, checked before the work, with exhaustion kept apart from no lane [#580](https://github.com/SethKitchen/ThreeMojo/issues/580)
 - [x] [Certified CARLA query pruning](https://github.com/SethKitchen/ThreeMojo/wiki/CARLA-index-admission#per-segment-skip): each segment's own curve deviation skips candidates that cannot win, with the same answers [#685](https://github.com/SethKitchen/ThreeMojo/issues/685)
