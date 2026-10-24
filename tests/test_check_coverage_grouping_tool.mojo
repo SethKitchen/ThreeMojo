@@ -259,5 +259,36 @@ def test_the_mixed_truth_fixtures_match_the_native_functions() raises:
     )
 
 
+def test_the_control_fixtures_match_the_pinned_text() raises:
+    var mixed = Path(
+        "tools/fixtures/coverage_truth_controls_mixed.txt"
+    ).read_text()
+    var two = Path("tools/fixtures/coverage_truth_controls_two.txt").read_text()
+    var single = Path(
+        "tools/fixtures/coverage_truth_controls_single.txt"
+    ).read_text()
+    var lines = Path(
+        "tools/fixtures/coverage_truth_controls_lines.txt"
+    ).read_text()
+    assert_equal(
+        sha256_hex(mixed.as_bytes()),
+        "3defd4c1b92f07b11b1aece70edb5ab116bdb7ea5b9f94430cea75f25dec2499",
+    )
+    assert_equal(
+        sha256_hex(two.as_bytes()),
+        "1228fd93d4893c876eb217b7bf489ebc4fef35e574510c1e877a2a7a27b86370",
+    )
+    assert_equal(
+        sha256_hex(single.as_bytes()),
+        "e7e2f8d8a9dfdbdd2df0c8154b02079ca5ec0acdcf233a0f2e25419c6c4d9cc9",
+    )
+    assert_equal(
+        sha256_hex(lines.as_bytes()),
+        "a3eec573cf2867e56fea91beaa5c102ea574a0b9606ff7a1da500dc3ae0bf997",
+    )
+    assert_true(mixed.find("from render.tasks import TaskGroup") >= 0)
+    assert_equal(len(lines.splitlines()), 28)
+
+
 def main() raises:
     TestSuite.discover_tests[__functions_in_module()]().run()

@@ -21,6 +21,7 @@ from std.tempfile import mkdtemp
 
 from tools._cli import absolute_path
 from tools._process import ProcessResult, run_program
+from tools._sha256 import sha256_hex
 from tools.run_suite import result_errors, slow_tests
 
 comptime _LEAF = 0
@@ -4835,6 +4836,252 @@ def check_custom_truth_refusals(mojo: String) raises:
         _ = run_program(["rm", "-rf", work], 30)
 
 
+def _control_text(stdout: String) -> String:
+    """Return the control output before the test runner, with one newline."""
+    var head = _before_suite(stdout)
+    if head.byte_length() == 0:
+        return stdout
+    return head + "\n"
+
+
+def _count_prefix(text: String, prefix: String) -> Int:
+    var count = 0
+    for line in text.splitlines():
+        if String(line).startswith(prefix):
+            count += 1
+    return count
+
+
+def _control_keys(text: String) -> String:
+    var keys = String()
+    for line in text.splitlines():
+        var row = String(line)
+        if row.startswith("CONTROL "):
+            var parts = row.split(" ")
+            keys += String(parts[1]) + " " + String(parts[2]) + "\n"
+    return keys
+
+
+def _require_width_manifest(
+    rewritten: String, name: String, lines_text: String
+) raises:
+    var wanted = List[String]()
+    for row in lines_text.splitlines():
+        var text = String(row)
+        var parts = text.split(" ")
+        var line = String(parts[0])
+        var width = _number(String(parts[1]))
+        wanted.append("B " + name + " " + line)
+        if width > 1:
+            var slot = 0
+            while slot < width:
+                wanted.append("C " + name + " " + line + " " + String(slot))
+                wanted.append("M " + name + " " + line + " " + String(slot))
+                slot += 1
+    var manifest = Path(rewritten + "/manifest.txt").read_text()
+    var actual = List[String]()
+    for line in manifest.splitlines():
+        var row = String(line)
+        var parts = row.split(" ")
+        if (
+            len(parts) >= 2
+            and String(parts[1]) == name
+            and (
+                String(parts[0]) == "B"
+                or String(parts[0]) == "C"
+                or String(parts[0]) == "M"
+            )
+        ):
+            actual.append(row)
+    sort(actual)
+    sort(wanted)
+    if not _same(actual, wanted):
+        raise Error(name + " manifest changed")
+
+
+def _run_control(binary: String) raises -> String:
+    var temp = mkdtemp(prefix="threemojo-controls-run-")
+    var ran = _must(
+        _with_env(
+            ["TMPDIR=" + temp, "THREEMOJO_TEST_TMPDIR=" + temp], [binary]
+        ),
+        10,
+    )
+    _ = _must(["rm", "-rf", temp], 10)
+    if (
+        len(result_errors(ran.output)) > 0
+        or len(slow_tests(ran.output, 5.0)) > 0
+    ):
+        raise Error(ran.output)
+    var text = _control_text(ran.output)
+    if _count_prefix(text, "CONTROL ") != 32 or text.find("CONCURRENT") < 0:
+        raise Error(text)
+    return text
+
+
+def _build_control(
+    compiler: String, folder: String, name: String, binary: String
+) raises:
+    _ = _must(
+        [
+            compiler,
+            "build",
+            "-Werror",
+            "-I",
+            folder,
+            "-I",
+            absolute_path("."),
+            folder + "/" + name + ".mojo",
+            "-o",
+            binary,
+        ],
+        180,
+    )
+
+
+def check_custom_truth_controls(mojo: String) raises:
+    """Require the control programs to match, then refuse the mixed forms.
+
+    Args:
+        mojo: The Mojo compiler.
+
+    Raises:
+        Error: If a control row, the manifest, or a refusal message differs.
+    """
+    var root = absolute_path(".")
+    var compiler = absolute_path(mojo)
+    var lines_text = Path(
+        "tools/fixtures/coverage_truth_controls_lines.txt"
+    ).read_text()
+    var work = mkdtemp(prefix="threemojo-controls-")
+    try:
+        var native = work + "/native"
+        var rewritten = work + "/rewritten"
+        _ = _must(["mkdir", "-p", native, rewritten], 10)
+        _ = _must(["cp", "-a", root + "/coverage", rewritten + "/coverage"], 30)
+        var built = rewritten + "/coverage/build"
+        if Path(built).exists():
+            _ = _must(["rm", "-rf", built], 10)
+        var build = work + "/build_cli"
+        _ = _must(
+            [
+                compiler,
+                "build",
+                "-Werror",
+                "-I",
+                root,
+                root + "/coverage/build_cli.mojo",
+                "-o",
+                build,
+            ],
+            180,
+        )
+        var mixed_source = Path(
+            "tools/fixtures/coverage_truth_controls_mixed.txt"
+        ).read_text()
+        var two_source = Path(
+            "tools/fixtures/coverage_truth_controls_two.txt"
+        ).read_text()
+        var single_source = Path(
+            "tools/fixtures/coverage_truth_controls_single.txt"
+        ).read_text()
+        var names = List[String]()
+        names.append("controls-mixed")
+        names.append("controls-two-parameters")
+        var sources = List[String]()
+        sources.append(mixed_source)
+        sources.append(two_source)
+        var digests = List[String]()
+        digests.append(
+            "3e8fb73d24b903de616810b43a40864a646fbf4be9a366a18b98397c584c6ea8"
+        )
+        digests.append(
+            "6081d1d8fedc90e8ee1e2ce983331819b94524df221bad40cac1b47ea35b55c6"
+        )
+        var two_text = String()
+        var index = 0
+        while index < len(names):
+            var name = names[index]
+            var source = sources[index]
+            Path(native + "/" + name + ".mojo").write_text(source)
+            var binary = work + "/" + name
+            _build_control(compiler, native, name, binary)
+            var text = _run_control(binary)
+            var digest = sha256_hex(text.as_bytes())
+            if digest != digests[index]:
+                raise Error(name + " " + digest)
+            if index == 1:
+                two_text = text
+            _ = _must([build, rewritten, name + ".mojo"], 60, native)
+            _require_origin(rewritten, name, source)
+            _require_width_manifest(rewritten, name, lines_text)
+            var rejected = run_program(
+                [
+                    compiler,
+                    "build",
+                    "-Werror",
+                    "-I",
+                    rewritten,
+                    "-I",
+                    root,
+                    rewritten + "/" + name + ".mojo",
+                    "-o",
+                    work + "/rejected",
+                ],
+                180,
+                merge_errors=False,
+            )
+            if rejected.status == 0:
+                raise Error(name + " was accepted")
+            var errors = rejected.errors
+            if (
+                errors.find(
+                    "Coverage cannot yet preserve this compound condition"
+                )
+                < 0
+            ):
+                raise Error(name + "\n" + errors)
+            if errors.find("custom mixed-type operator whose Bool result") < 0:
+                raise Error(name + "\n" + errors)
+            if (
+                index == 1
+                and errors.find("def generic_pair[A: Made, B: Made]") < 0
+            ):
+                raise Error(errors)
+            index += 1
+        var single_name = "controls"
+        Path(native + "/" + single_name + ".mojo").write_text(single_source)
+        _ = _must([build, rewritten, single_name + ".mojo"], 60, native)
+        _require_origin(rewritten, single_name, single_source)
+        _require_width_manifest(rewritten, single_name, lines_text)
+        var native_binary = work + "/controls-native"
+        var instrumented_binary = work + "/controls-instrumented"
+        _build_control(compiler, native, single_name, native_binary)
+        _build_control(compiler, rewritten, single_name, instrumented_binary)
+        var native_text = _run_control(native_binary)
+        var instrumented_text = _run_control(instrumented_binary)
+        if native_text != instrumented_text:
+            raise Error(instrumented_text)
+        var single_digest = sha256_hex(native_text.as_bytes())
+        if (
+            single_digest
+            != "ed3d1c6c34e784c5a81ae8034aba113b09a36600d7b6cb845ed2d867ddeb7a75"
+        ):
+            raise Error("controls " + single_digest)
+        if _control_keys(two_text) != _control_keys(native_text):
+            raise Error("control masks changed")
+        if two_text == native_text:
+            raise Error(
+                "independent parameters lost their distinct native traces"
+            )
+        print(
+            "PASS: 32 control rows, mixed and two-parameter refusals, and the"
+            " single-parameter instrumented match"
+        )
+    finally:
+        _ = run_program(["rm", "-rf", work], 30)
+
+
 def main() raises:
     """Compare the Boolean grouping fixture from the command line."""
     var mojo = ".venv/bin/mojo"
@@ -4868,6 +5115,7 @@ def main() raises:
         check_custom_truth_instrumented(mojo)
         check_custom_truth_collision(mojo)
         check_custom_truth_refusals(mojo)
+        check_custom_truth_controls(mojo)
     except error:
         print(String(error), file=stderr)
         exit(1)
