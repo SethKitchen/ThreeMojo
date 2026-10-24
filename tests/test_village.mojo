@@ -27,9 +27,12 @@ from extensions.village.house import (
     house_model,
     stand_house,
 )
+from extensions.scan.occupancy import ScanRegion
 from extensions.village.scanned import (
+    MAX_VOXELS,
     SINK,
     cut_building,
+    grid_voxel,
     linear_splats,
     scan_lot,
     stand_scan,
@@ -41,6 +44,7 @@ from extensions.village.village import (
 )
 from extensions.water.pebbles import pebble_bed
 from extensions.water.resolution import SpectrumResolution
+from generators.utils import Vec3d
 from math.vector3 import Vector3
 from render.srgb import SRGB
 from render.png import DecodedImage
@@ -242,6 +246,24 @@ def test_a_building_is_cut_out_of_its_scan() raises:
         _ = cut_building(_scan(False), supersplat_frame(), Length(0.5, METER))
 
 
+def test_a_large_scan_gets_larger_voxels() raises:
+    """A box small enough for its voxel keeps it. A box too large doubles
+    the voxel until its grid holds at most `MAX_VOXELS`, counted in whole
+    voxels as the grid lays them. A voxel that is not positive and finite
+    is refused."""
+    var small = ScanRegion(Vec3d(0, 0, 0), Vec3d(16, 16, 4))
+    assert_almost_equal(grid_voxel(small, Length(0.5, METER)).to(METER), 0.5)
+    var large = ScanRegion(Vec3d(0, 0, 0), Vec3d(1000, 1000, 100))
+    var edge = grid_voxel(large, Length(0.1, METER)).to(METER)
+    assert_almost_equal(edge, 3.2, atol=1e-6)
+    assert_true(313 * 313 * 32 <= MAX_VOXELS)
+    assert_true(625 * 625 * 63 > MAX_VOXELS)
+    with assert_raises(contains="voxel"):
+        _ = grid_voxel(small, Length(0.0, METER))
+    with assert_raises(contains="voxel"):
+        _ = grid_voxel(small, Length(Float32.MAX * 2, METER))
+
+
 def test_linear_splats_turn_colors_to_light() raises:
     """Each color byte becomes linear light, opacity is kept, and the
     spherical harmonics are left out."""
@@ -388,8 +410,8 @@ def test_village_parameters_are_checked() raises:
 def test_a_village_stands_its_buildings_and_draws_its_pond() raises:
     """A village stands its houses and its scanned building on lots where
     nothing grows. Its water's clock moves on to a later frame and stays
-    for an earlier one. Its pond shows in a frame that looks into it, and
-    a village with no scan has none."""
+    for an earlier one. Its pond shows in a frame that looks into it. A
+    village with no houses and no scan has no lot."""
     var renderer = Renderer(32, 18)
     var assets = Assets()
     var scene = Scene()
@@ -421,11 +443,12 @@ def test_a_village_stands_its_buildings_and_draws_its_pond() raises:
             changed += 1
     assert_true(changed > 0)
     var bare = Scene()
-    var plain = Village(
-        bare, assets, renderer, _parameters(), pebble_bed(_bed()), None
-    )
+    var empty = _parameters()
+    empty.houses = []
+    var plain = Village(bare, assets, renderer, empty, pebble_bed(_bed()), None)
     assert_false(Bool(plain.scanned))
-    assert_equal(len(plain.meadow.field.lots), 1)
+    assert_equal(len(plain.houses), 0)
+    assert_equal(len(plain.meadow.field.lots), 0)
 
 
 def main() raises:

@@ -67,7 +67,7 @@ On a four-core Linux host, the example cuts the Seem church out of its scan in 1
 | Module | Holds |
 |---|---|
 | `house.mojo` | `HouseParameters`, `house_model`, `gable_roof`, `house_lot` and `stand_house`. |
-| `scanned.mojo` | `CutBuilding`, `cut_building`, `linear_splats`, `scan_lot` and `stand_scan`. |
+| `scanned.mojo` | `CutBuilding`, `cut_building`, `grid_voxel`, `linear_splats`, `scan_lot` and `stand_scan`. |
 | `village.mojo` | `HousePlacement`, `VillageParameters` and `Village`. |
 
 ## The default village
@@ -108,7 +108,7 @@ Each building stands on a `Lot`: its footprint, turned about +y. `Village` puts 
 
 A scan of a building also holds its ground: paths, graves, a lawn or a street. `cut_building` keeps only the building:
 
-1. It fills an occupancy grid of the scan. The voxel starts at the size that you give, and it doubles until the grid holds at most 4,194,304 voxels.
+1. It fills an occupancy grid of the scan. `grid_voxel` starts the voxel at the size that you give, and doubles it until the grid holds at most 4,194,304 voxels.
 2. It finds the ground as a terrain surface of column tops. The surface must cover a quarter of the plan, and two columns of it differ by 2 meters at most.
 3. It cuts the grid into parts above the ground, of 20 voxels or more. See [Scan parts](Scan-parts).
 4. It copies the splats of the largest part.

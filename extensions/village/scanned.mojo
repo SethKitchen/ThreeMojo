@@ -51,7 +51,7 @@ from math.quaternion import Quaternion
 from math.vector3 import Vector3
 from objects.gaussian_splat import GaussianSplat
 from render.srgb import srgb_to_linear
-from std.math import cos, sin
+from std.math import ceil, cos, isfinite, sin
 from units.si import (
     METER,
     RADIAN,
@@ -122,6 +122,39 @@ def _ground(grid: OccupancyGrid) raises -> GroundSurface:
     )
 
 
+def _cells(extent: Float64, edge: Float64) -> Float64:
+    """Return how many voxels of `edge` a grid lays along `extent`, as
+    `occupancy_grid` counts them: at least one."""
+    return max(Float64(1), ceil(extent / edge))
+
+
+def grid_voxel(region: ScanRegion, voxel: Length) raises -> Length64:
+    """Return the voxel edge of a building's grid over a box.
+
+    Args:
+        region: The box, in building coordinates.
+        voxel: The edge to start from.
+
+    Returns:
+        `voxel`, doubled until the grid over the box holds at most
+        `MAX_VOXELS` voxels.
+
+    Raises:
+        Error: If the box is not valid, or the voxel is not positive and
+            finite.
+    """
+    region.check()
+    var edge = Float64(voxel.to(METER))
+    if not (edge > 0 and isfinite(edge)):
+        raise Error("A voxel must be positive and finite")
+    var size = region.high - region.low
+    while _cells(size.x, edge) * _cells(size.y, edge) * _cells(
+        size.z, edge
+    ) > Float64(MAX_VOXELS):
+        edge *= 2
+    return Length64(edge, METER)
+
+
 def cut_building(
     geometry: GaussianSplatGeometry, frame: ScanFrame, voxel: Length
 ) raises -> CutBuilding:
@@ -144,13 +177,7 @@ def cut_building(
     options.voxel = Length64(Float64(voxel.to(METER)), METER)
     options.max_voxels = MAX_VOXELS
     var region = trimmed_region(geometry, frame, options)
-    var size = region.high - region.low
-    var edge = Float64(voxel.to(METER))
-    while (size.x / edge) * (size.y / edge) * (size.z / edge) > Float64(
-        MAX_VOXELS
-    ):
-        edge *= 2
-    options.voxel = Length64(edge, METER)
+    options.voxel = grid_voxel(region, voxel)
     var grid = occupancy_grid(geometry, frame, options, region)
     var parts = scan_parts_on(grid, _ground(grid), MIN_PART_VOXELS)
     if len(parts.parts) == 0:
