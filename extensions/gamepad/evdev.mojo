@@ -1431,11 +1431,13 @@ struct SensorState(ImplicitlyCopyable):
         ):
             return False
         if event.type == EV_ABS:
-            if code >= ABS_X and code <= ABS_Z:
+            # ABS_X is 0, so a code is never below it.
+            if code <= ABS_Z:
                 self.accel_data[code - ABS_X] = self.layout.accelerometer(
                     code - ABS_X, event.value
                 )
-            elif code >= ABS_RX and code <= ABS_RZ:
+            # ABS_RX follows ABS_Z, so no code falls between them.
+            elif code <= ABS_RZ:
                 self.gyro_data[code - ABS_RX] = self.layout.gyro(
                     code - ABS_RX, event.value
                 )

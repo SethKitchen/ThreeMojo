@@ -88,6 +88,10 @@ from extensions.gamepad.evdev import (
     DeviceClass,
     EvdevCapabilities,
     EvdevEvent,
+    EV_MSC,
+    MSC_TIMESTAMP,
+    SensorLayout,
+    SensorState,
     EvdevLayout,
     EvdevState,
     InputId,
@@ -106,7 +110,7 @@ from extensions.gamepad.gamepad import (
     GAMEPAD_SENSOR_UPDATE,
 )
 from extensions.gamepad.joystick import SENSOR_ACCEL, SENSOR_GYRO, SensorType
-from units.si import Duration64, SECOND
+from units.si import Duration64, Frequency, SECOND
 from extensions.gamepad.guid import JoystickGuid, VendorId, guid_to_string
 from extensions.gamepad.ids import (
     AXIS_COUNT,
@@ -1600,6 +1604,72 @@ def test_sensor_and_rumble_corners() raises:
     var anonymous = RecordedDevice.open("/x/event4")
     anonymous.fail(EVIOCGID)
     assert_false(probe_sensor(anonymous))
+
+
+def test_sensor_layout_and_state_corners() raises:
+    # No sensor axes: no sensors, and nothing to send.
+    var none = SensorLayout()
+    var info = List[Optional[AbsInfo]](length=64, fill=None)
+    none.configure(List[UInt8](length=8, fill=0), info)
+    assert_false(none.has_accelerometer)
+    assert_false(none.has_gyro)
+    var joystick = Joystick("Pad", JoystickGuid(), 0, 0, 0)
+    var quiet = SensorState(none)
+    quiet.apply_state(joystick, info)
+    # Two of the three axes of each sensor are no sensor.
+    for missing in [ABS_Y, ABS_Z]:
+        var two = List[UInt8](length=8, fill=0)
+        for code in [ABS_X, ABS_Y, ABS_Z]:
+            if code != missing:
+                set_bit(two, code)
+                set_bit(two, code + 3)
+        var layout = SensorLayout()
+        layout.configure(two, info)
+        assert_false(layout.has_accelerometer)
+        assert_false(layout.has_gyro)
+    # All six axes, but one of each without its range: no sensors.
+    var bits = List[UInt8](length=8, fill=0)
+    for code in [ABS_X, ABS_Y, ABS_Z, ABS_RX, ABS_RY, ABS_RZ]:
+        set_bit(bits, code)
+    info[ABS_X] = AbsInfo(0, -32768, 32767, 0, 0, 8192)
+    info[ABS_RX] = AbsInfo(0, -32768, 32767, 0, 0, 1024)
+    var partial = SensorLayout()
+    partial.configure(bits, info)
+    assert_false(partial.has_accelerometer)
+    assert_false(partial.has_gyro)
+    # A full layout reads a state with an axis missing as 0 there.
+    for code in [ABS_Y, ABS_Z]:
+        info[code] = AbsInfo(1, -32768, 32767, 0, 0, 8192)
+    for code in [ABS_RY, ABS_RZ]:
+        info[code] = AbsInfo(1, -32768, 32767, 0, 0, 1024)
+    var full = SensorLayout()
+    full.configure(bits, info)
+    assert_true(full.has_gyro)
+    var state = SensorState(full)
+    joystick.add_sensor(SENSOR_GYRO, Frequency(0))
+    joystick.add_sensor(SENSOR_ACCEL, Frequency(0))
+    joystick.set_sensor_enabled(SENSOR_GYRO, True)
+    joystick.set_sensor_enabled(SENSOR_ACCEL, True)
+    info[ABS_X] = None
+    info[ABS_RX] = None
+    state.apply_state(joystick, info)
+    assert_equal(joystick.sensors[0].data[0], 0)
+    # Events the sensor loop does not use change nothing.
+    for event in [
+        EvdevEvent(EV_ABS, ABS_HAT0X, 5),
+        EvdevEvent(EV_MSC, 0, 5),
+        EvdevEvent(EV_KEY, BTN_A, 1),
+        EvdevEvent(EV_SYN, 1, 0),
+    ]:
+        assert_false(state.handle_event(joystick, event))
+    # The sensor clock wraps at 2^31.
+    _ = state.handle_event(joystick, EvdevEvent(EV_MSC, MSC_TIMESTAMP, 100))
+    _ = state.handle_event(joystick, EvdevEvent(EV_MSC, MSC_TIMESTAMP, 50))
+    assert_equal(state.sensor_tick, 100 + 0x7FFFFFFF - 100 + 50 + 1)
+    # While recovering, only a report counts.
+    _ = state.handle_event(joystick, EvdevEvent(EV_SYN, SYN_DROPPED, 0))
+    assert_false(state.handle_event(joystick, EvdevEvent(EV_SYN, 1, 0)))
+    assert_true(state.handle_event(joystick, EvdevEvent(EV_SYN, SYN_REPORT, 0)))
 
 
 def test_the_hub_follows_devices_as_sdl_does() raises:

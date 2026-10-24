@@ -544,8 +544,14 @@ def test_state_corners() raises:
     var state = RumbleState()
     _ = state.commit(True, True, 1, 1, Duration64(100, SECOND), Duration64(0))
     assert_true(state.expiration.value() == MAX_RUMBLE_DURATION)
+    # The high motor alone starts the timer too.
+    _ = state.commit(True, True, 0, 5, Duration64(1, SECOND), Duration64(0))
+    assert_true(state.expiration)
     with assert_raises():
         require_color(-1, 0, 0)
+    with assert_raises():
+        require_color(0, 0, 300)
+    require_color(0, 255, 0)
     # Two pads SDL knows are centered at zero, even with more axes.
     for pair in [(0x05A0, 0x3232), (0x0E8F, 0x3013)]:
         var known = create_joystick_guid(
@@ -577,6 +583,10 @@ def test_state_corners() raises:
         joystick.set_sensor_enabled(SENSOR_GYRO, True)
     joystick.add_touchpad(1)
     joystick.add_sensor(SENSOR_GYRO, Frequency(0))
+    # Asking for the state a sensor is in changes nothing.
+    assert_equal(joystick.sensor_switch(SENSOR_GYRO, False), 0)
+    joystick.set_sensor_enabled(SENSOR_GYRO, False)
+    assert_equal(joystick.sensors_enabled, 0)
     # A reading of a sensor that is off, or missing, is dropped.
     joystick.send_sensor(SENSOR_GYRO, Duration64(0), 1)
     joystick.send_sensor(SENSOR_ACCEL, Duration64(0), 1)
@@ -586,6 +596,13 @@ def test_state_corners() raises:
     joystick.send_touchpad(-1, 0, True, 0.5, 0.5, 1)
     joystick.send_touchpad(0, 1, True, 0.5, 0.5, 1)
     joystick.send_touchpad(0, -1, True, 0.5, 0.5, 1)
+    joystick.send_touchpad(0, 0, True, -2, 3, 1)
+    # A move in y alone, and in pressure alone, are motion.
+    joystick.send_touchpad(0, 0, True, 0, 0.5, 1)
+    joystick.send_touchpad(0, 0, True, 0, 0.5, 0.5)
+    # A lift at x 0 but y not 0 keeps that position.
+    joystick.send_touchpad(0, 0, False, 0, 0.75, 0)
+    assert_equal(joystick.touchpads[0][0].y, 0.75)
     joystick.send_touchpad(0, 0, True, -2, 3, 1)
     var database = MappingDatabase()
     _ = database.add_mapping(
