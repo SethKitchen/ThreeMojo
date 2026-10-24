@@ -56,6 +56,7 @@ def _header(hash: String) -> String:
         + hash
         + "\nFMT_STAMP := cache/fmt-$(HASH)\n"
         + "MOJO := sh formatter.sh\n"
+        + 'TOOL = sh -c "printf %s $$$$"\n'
         + "quote = '$(subst ','\"'\"',$(1))'\n"
     )
 

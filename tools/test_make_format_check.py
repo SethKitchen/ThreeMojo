@@ -80,6 +80,7 @@ class FormatRecipeTests(unittest.TestCase):
                 'CACHE_DIR := cache\nHASH := fixture\n'
                 'FMT_STAMP := cache/fmt-fixture\n'
                 'MOJO := python3 formatter.py\n'
+                'TOOL = sh -c "printf %s $$$$"\n'
                 'quote = \'$(subst \',\'"\'"\',$(1))\'\n'
                 'FORMATTED := ' + ' '.join(paths) + '\n' +
                 definition(source, 'run') + '\n' +
