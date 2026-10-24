@@ -500,6 +500,9 @@ with different material overrides keeps its own far appearance. Each build
 starts a new cache. Its geometry, materials and texture files must stay fixed
 until that build ends.
 
+The primitive digest is `tools/carla_geometry_digest.mojo`. It hashes each
+field name, shape and little-endian payload in the reviewed order.
+
 Packaged texture names use a hash of the encoded image bytes. Two material
 overrides can share a color map with different masks without replacing each
 other's image. Source images with the same filename also stay distinct.
@@ -510,7 +513,7 @@ Equal encoded images can share one packaged file.
 The standard-library identity checks run with `make test-tools`.
 The synthetic bake checks need NumPy, Pillow and the repository Mojo.
 They use two small meshes and two colors. They need no CARLA release,
-server or GPU. They call `tools/carla_town_lamps.mojo` through
+server or GPU. They call the Mojo export programs through
 `tools/tool.sh`.
 
 Only mesh simplification is substituted. The tests use the real material
