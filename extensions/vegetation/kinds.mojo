@@ -16,18 +16,18 @@ from core.ordinal import ordinal_label, require_valid
 
 @fieldwise_init
 struct PlantKind(Equatable, ImplicitlyCopyable, Writable):
-    """What one blade of a field is: green grass, dry grass, a poppy or a
-    stalk with a seed head."""
+    """What one blade of a field is: green grass, dry grass, a poppy, a
+    stalk with a seed head, or a low broad-leaf plant."""
 
     var value: Int
 
     def is_valid(self) -> Bool:
-        """Return True if this names one of the 4 kinds.
+        """Return True if this names one of the 5 kinds.
 
         Returns:
-            Whether the value is 0 to 3.
+            Whether the value is 0 to 4.
         """
-        return self.value >= 0 and self.value < 4
+        return self.value >= 0 and self.value < 5
 
     def name(self) -> String:
         """Return the kind's name, in lowercase.
@@ -35,7 +35,13 @@ struct PlantKind(Equatable, ImplicitlyCopyable, Writable):
         Returns:
             The name, or "unknown" for a value that is not valid.
         """
-        var names: List[String] = ["grass", "dry grass", "poppy", "seed head"]
+        var names: List[String] = [
+            "grass",
+            "dry grass",
+            "poppy",
+            "seed head",
+            "broad leaf",
+        ]
         return ordinal_label(self.is_valid(), self.value, names, "unknown")
 
 
@@ -47,6 +53,8 @@ comptime DRY_GRASS = PlantKind(1)
 comptime POPPY = PlantKind(2)
 # A tall thin stalk with a spike of seeds at its tip, above the grass.
 comptime SEED_HEAD = PlantKind(3)
+# A low rosette of broad leaves under the grass, as a plantain or a dock.
+comptime BROADLEAF = PlantKind(4)
 
 
 def require_plant_kind(kind: PlantKind) raises:
@@ -60,7 +68,10 @@ def require_plant_kind(kind: PlantKind) raises:
     """
     require_valid(
         kind.is_valid(),
-        "A plant kind must be grass, dry grass, a poppy or a seed head",
+        (
+            "A plant kind must be grass, dry grass, a poppy, a seed head or a"
+            " broad leaf"
+        ),
     )
 
 

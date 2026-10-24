@@ -3,21 +3,18 @@
 # Noncommercial use is free; commercial use requires a paid license.
 # See LICENSE, LICENSE-COMMERCIAL.md and THIRD-PARTY-NOTICES.md.
 
-"""Leaves in clumps: chords, the light through a crown, leaf meshes and
-the foliage program."""
+"""Leaves: the grid that shades them, the light through a crown, leaf
+meshes and the foliage program."""
 
 from core.buffer_geometry import COLOR, NORMAL, POSITION
 from extensions.vegetation.foliage import (
     SKYLIT,
     SKY_RAYS,
     SUNLIT,
-    Clump,
     LeafMesh,
-    chord,
+    LeafShade,
     foliage_program,
     sky_rays,
-    sky_through,
-    sun_through,
 )
 from materials.nodes import (
     AO_NODE,
@@ -26,7 +23,6 @@ from materials.nodes import (
     RECEIVED_SHADOW_NODE,
 )
 from math.vector3 import Vector3
-from std.math import exp
 from std.testing import (
     TestSuite,
     assert_almost_equal,
@@ -35,54 +31,107 @@ from std.testing import (
     assert_raises,
     assert_true,
 )
+from units.si import METER, Length
 
 
-def _ball() -> Clump:
-    """Return a clump of radius one at the origin."""
-    return Clump(Vector3(0, 0, 0), 1)
+def _filled(shade: Float32) raises -> LeafShade:
+    """Return a grid 10 meters on a side of 1-meter cells, each holding a
+    square meter of leaves, finished with `shade`."""
+    var grid = LeafShade(
+        Vector3(0, 0, 0), Vector3(10, 10, 10), Length(1.0, METER)
+    )
+    for z in range(grid.nz):
+        for y in range(grid.ny):
+            for x in range(grid.nx):
+                grid.add(
+                    Vector3(
+                        Float32(x) + 0.5, Float32(y) + 0.5, Float32(z) + 0.5
+                    ),
+                    1,
+                )
+    grid.finish(shade)
+    return grid^
 
 
-def test_a_chord_measures_the_ray_inside_a_clump() raises:
-    """A ray through the middle runs the diameter; one from the middle
-    runs the radius; one that misses or points away runs nothing."""
-    var up = Vector3(0, 1, 0)
-    assert_almost_equal(chord(Vector3(0, -5, 0), up, _ball()), 2, atol=1e-5)
-    assert_almost_equal(chord(Vector3(0, 0, 0), up, _ball()), 1, atol=1e-5)
-    assert_almost_equal(chord(Vector3(0, 0.5, 0), up, _ball()), 0.5, atol=1e-5)
-    assert_almost_equal(chord(Vector3(3, -5, 0), up, _ball()), 0)
-    assert_almost_equal(chord(Vector3(0, 5, 0), up, _ball()), 0)
-    var grazing = chord(Vector3(0.6, -5, 0), up, _ball())
-    assert_almost_equal(grazing, 1.6, atol=1e-5)
+def test_a_shade_grid_is_checked() raises:
+    """A grid covers its box with whole cells. A cell out of range, a box
+    of no size, and a grid of too many cells are refused."""
+    var grid = LeafShade(
+        Vector3(-1, 0, -1), Vector3(1, 3, 1), Length(0.5, METER)
+    )
+    assert_equal(grid.nx, 5)
+    assert_equal(grid.ny, 7)
+    assert_equal(grid.nz, 5)
+    assert_equal(len(grid.density), 5 * 7 * 5)
+    with assert_raises(contains="shade cell"):
+        _ = LeafShade(Vector3(0, 0, 0), Vector3(1, 1, 1), Length(0.0, METER))
+    with assert_raises(contains="1 millimeter to 1 kilometer"):
+        _ = LeafShade(Vector3(0, 0, 0), Vector3(1, 0, 1), Length(0.5, METER))
+    with assert_raises(contains="4 million"):
+        _ = LeafShade(
+            Vector3(0, 0, 0), Vector3(500, 500, 500), Length(0.1, METER)
+        )
+
+
+def test_leaves_are_counted_in_their_cells() raises:
+    """A leaf adds its area to its cell, or to the nearest cell if it is
+    outside. Finishing divides by the volume, times the shade, and blurs:
+    a cell keeps an eighth of itself, and gets a 64th of a corner
+    neighbor's. Outside the grid nothing dims the light."""
+    var grid = LeafShade(Vector3(0, 0, 0), Vector3(2, 2, 2), Length(1.0, METER))
+    grid.add(Vector3(1.5, 1.5, 1.5), 2)
+    grid.add(Vector3(-5, -5, -5), 1)
+    assert_almost_equal(grid.density[(1 * 3 + 1) * 3 + 1], 2)
+    assert_almost_equal(grid.density[0], 1)
+    grid.finish(0.5)
+    var middle = Float32(0.125 + 0.5 / 64)
+    assert_almost_equal(grid.density[(1 * 3 + 1) * 3 + 1], middle)
+    assert_almost_equal(grid.dimming(Vector3(1.5, 1.5, 1.5)), middle)
+    assert_almost_equal(grid.dimming(Vector3(30, 1, 1)), 0)
+    assert_almost_equal(grid.through(Vector3(30, 1, 1), Vector3(0, 1, 0)), 1)
 
 
 def test_light_falls_off_by_beers_law() raises:
-    """Light through clumps falls as `exp(-density * length)`. With no
-    clump nothing dims it."""
-    var clumps: List[Clump] = [_ball(), Clump(Vector3(0, 3, 0), 0.5)]
-    var lit = sun_through(Vector3(0, -5, 0), Vector3(0, 1, 0), clumps, 2)
-    assert_almost_equal(lit, exp(Float32(-2 * 3)), atol=1e-6)
-    var open = sun_through(
-        Vector3(0, -5, 0), Vector3(0, 1, 0), List[Clump](), 2
+    """Light through the leaves falls as `exp(-sum)`: twice the shade lets
+    through the square of the light. An empty grid dims nothing."""
+    var right = Vector3(1, 0, 0)
+    var start = Vector3(5.5, 5.5, 5.5)
+    var thin = _filled(0.5).through(start, right)
+    var thick = _filled(1.0).through(start, right)
+    assert_true(thin < 0.5)
+    assert_true(thin > 0)
+    assert_almost_equal(thick, thin * thin, atol=1e-6)
+    var empty = LeafShade(
+        Vector3(0, 0, 0), Vector3(4, 4, 4), Length(1.0, METER)
     )
-    assert_almost_equal(open, 1)
+    empty.finish(0.5)
+    assert_almost_equal(empty.through(Vector3(2, 2, 2), right), 1)
 
 
 def test_the_sky_rays_rise_and_average() raises:
-    """The sky's rays are unit length and point up. A point under a clump
-    sees less sky than one beside it, and no ray sees all of it."""
+    """The sky's rays are unit length and point up, the lowest 10 degrees
+    up. A point under a layer of leaves sees less sky than one beside it,
+    and with no ray it sees all of it."""
     var rays = sky_rays()
     assert_equal(len(rays), SKY_RAYS)
     for index in range(len(rays)):
         assert_almost_equal(rays[index].length(), 1, atol=1e-6)
-        assert_true(rays[index].y > 0.7)
-    var clumps: List[Clump] = [Clump(Vector3(0, 2, 0), 1)]
-    var under = sky_through(Vector3(0, 0, 0), rays, clumps, 3)
-    var beside = sky_through(Vector3(8, 0, 0), rays, clumps, 3)
+        assert_true(rays[index].y > 0.17)
+    var grid = LeafShade(
+        Vector3(-2, 0, -2), Vector3(2, 4, 2), Length(0.5, METER)
+    )
+    for x in range(8):
+        for z in range(8):
+            grid.add(
+                Vector3(Float32(x) * 0.5 - 1.75, 3.25, Float32(z) * 0.5 - 1.75),
+                3,
+            )
+    grid.finish(0.5)
+    var under = grid.sky(Vector3(0, 0.25, 0), rays)
+    var beside = grid.sky(Vector3(8, 0.25, 0), rays)
     assert_true(under < beside)
     assert_almost_equal(beside, 1, atol=1e-6)
-    assert_almost_equal(
-        sky_through(Vector3(0, 0, 0), List[Vector3](), clumps, 3), 1
-    )
+    assert_almost_equal(grid.sky(Vector3(0, 0.25, 0), List[Vector3]()), 1)
 
 
 def test_the_foliage_program_sets_its_three_outputs() raises:

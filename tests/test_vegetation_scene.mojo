@@ -15,24 +15,31 @@ from extensions.vegetation.crown import (
     CrownLevel,
     CrownParameters,
     _unit,
-    broad_tree,
     bush_parameters,
-    crown_clumps,
     crown_level_for,
     default_crown_levels,
+    dress,
+    grow_crown,
+    hang_leaves,
     leafy_tree,
+    round_tree,
+    windswept_tree,
+    young_tree,
 )
 from extensions.vegetation.field import LodBand
 from extensions.vegetation.foliage import SKYLIT, SUNLIT
 from extensions.vegetation.ground import Canyon, Ground
+from extensions.vegetation.limbs import CrownShape, grow_limbs
 from extensions.vegetation.meadow import (
     EXPOSURE,
     EYE_HEIGHT,
     Meadow,
     MeadowParameters,
     Planting,
+    blend_frames,
     default_crowns,
     default_plantings,
+    grove_plantings,
     meadow_camera,
     meadow_renderer,
     scatter_plantings,
@@ -40,13 +47,13 @@ from extensions.vegetation.meadow import (
     two_sided_program,
 )
 from extensions.vegetation.sky import SkyDome, SkyLook, cloud_density, paint_sky
-from generators.tree import TreeGenerator
 from lights.shadow import PCF_SOFT_SHADOW_MAP
 from materials.nodes import NORMAL_NODE, POSITION_NODE
 from math.vector2 import Vector2
 from math.vector3 import Vector3
 from render.cube_texture import FACE_COUNT, face_direction
 from render.tonemap import ACES_FILMIC_TONE_MAPPING
+from render.framebuffer import Color, Framebuffer
 from renderers.renderer import Renderer
 from std.testing import (
     TestSuite,
@@ -59,12 +66,10 @@ from std.testing import (
 from units.si import (
     DEGREE,
     METER,
-    PER_METER,
     RADIAN,
     SECOND,
     Angle,
     Duration,
-    InverseLength,
     Length,
 )
 
@@ -73,19 +78,25 @@ comptime OVERHEAD = Vector3(0, 1, 0)
 
 
 def _sapling() -> CrownParameters:
-    """Return a small tree: a trunk and one level of branches, with a few
-    leaves on each of its clumps."""
+    """Return a small tree: a crown 3 meters across from 1.5 meters up, in
+    four lobes, with a few leaves on each twig."""
     var crown = CrownParameters()
-    crown.tree.levels = 2
-    crown.tree.children = [5]
-    crown.tree.trunk_length = Length(3.0, METER)
-    crown.tree.trunk_radius = Length(0.1, METER)
-    crown.tree.section_length = Length(0.5, METER)
-    crown.tree.trunk_clear = 0.3
-    crown.twig_radius = Length(0.05, METER)
-    crown.clump_radius = Length(0.4, METER)
-    crown.clump_spacing = Length(0.4, METER)
-    crown.leaves_per_clump = 24
+    crown.limbs.shape = CrownShape(
+        Length(1.5, METER),
+        Length(4.5, METER),
+        Length(1.5, METER),
+        0.5,
+        4,
+        Length(0.8, METER),
+        0.3,
+        0.1,
+    )
+    crown.limbs.points = 200
+    crown.limbs.step = Length(0.15, METER)
+    crown.limbs.reach = Length(0.8, METER)
+    crown.limbs.kill = Length(0.25, METER)
+    crown.leaf_reach = Length(0.3, METER)
+    crown.leaves_per_node = 4
     return crown^
 
 
@@ -142,29 +153,31 @@ def _refused(var p: MeadowParameters, text: String) raises:
 
 
 def test_crown_parameters_are_checked() raises:
-    """The three kinds pass; each field out of range is refused, and so
-    is a tree the generator refuses."""
+    """The five kinds pass; each field out of range is refused, and so is
+    a shape the limbs refuse."""
     CrownParameters().check()
-    broad_tree().check()
+    windswept_tree().check()
+    young_tree().check()
+    round_tree().check()
     bush_parameters().check()
     var c = CrownParameters()
-    c.tree.levels = 0
-    with assert_raises():
+    c.limbs.points = 0
+    with assert_raises(contains="points"):
         c.check()
     c = CrownParameters()
-    c.twig_radius = Length(0.0, METER)
-    with assert_raises(contains="twig"):
+    c.wood_radius = Length(0.0, METER)
+    with assert_raises(contains="thinnest wood"):
         c.check()
     c = CrownParameters()
-    c.clump_radius = Length(20.0, METER)
-    with assert_raises(contains="clump must be"):
+    c.sides = 2
+    with assert_raises(contains="sides"):
         c.check()
     c = CrownParameters()
-    c.clump_spacing = Length(0.0, METER)
-    with assert_raises(contains="apart"):
+    c.leaf_reach = Length(-1.0, METER)
+    with assert_raises(contains="back from a tip"):
         c.check()
     c = CrownParameters()
-    c.leaves_per_clump = 0
+    c.leaves_per_node = 0
     with assert_raises(contains="hold"):
         c.check()
     c = CrownParameters()
@@ -176,8 +189,8 @@ def test_crown_parameters_are_checked() raises:
     with assert_raises(contains="wide"):
         c.check()
     c = CrownParameters()
-    c.density = InverseLength(-1.0, PER_METER)
-    with assert_raises(contains="density"):
+    c.shade = -1
+    with assert_raises(contains="shade"):
         c.check()
     c = CrownParameters()
     c.leaf = Vector3(2, 0, 0)
@@ -213,26 +226,33 @@ def test_crown_levels_pick_by_distance() raises:
         CrownLevel(Length(1.0, METER), 0.0, False).check()
 
 
-def test_clumps_hang_on_the_twigs() raises:
-    """Every twig carries a clump at its tip, and long thin twigs carry
-    more along their length. A tree with no twig thin enough is refused."""
+def test_leaves_hang_near_the_twig_tips() raises:
+    """Each node near a tip carries its leaves, on the twig below it. A
+    reach of zero hangs leaves on the tips alone. The leaves face up more
+    than down, and splay out from their twigs."""
     var sapling = _sapling()
-    var clumps = crown_clumps(TreeGenerator(sapling.tree.copy()), sapling)
-    assert_true(len(clumps) >= 5)
-    for index in range(len(clumps)):
-        assert_true(clumps[index].radius >= 0.4 * 0.7 - 1e-5)
-        assert_true(clumps[index].radius <= 0.4 * 1.3 + 1e-5)
-        assert_true(clumps[index].center.y > 0.5)
-    # A twig radius thicker than the whole trunk makes every ring a twig,
-    # so the walk back along each tube reaches its base.
-    var thin = _sapling()
-    thin.twig_radius = Length(0.5, METER)
-    var everywhere = crown_clumps(TreeGenerator(thin.tree.copy()), thin)
-    assert_true(len(everywhere) > len(clumps))
-    var bare = _sapling()
-    bare.twig_radius = Length(0.001, METER)
-    with assert_raises(contains="no twig"):
-        _ = crown_clumps(TreeGenerator(bare.tree.copy()), bare)
+    var skeleton = grow_limbs(sapling.limbs)
+    var leaves = hang_leaves(skeleton, sapling)
+    var near = 0
+    for n in range(1, skeleton.count()):
+        if skeleton.tip_distance[n] <= 0.3:
+            near += 1
+    assert_equal(len(leaves), 4 * near)
+    var up = 0
+    for index in range(len(leaves)):
+        ref leaf = leaves[index]
+        assert_almost_equal(leaf.normal.length(), 1, atol=1e-4)
+        assert_almost_equal(leaf.along.dot(leaf.normal), 0, atol=1e-4)
+        assert_true(leaf.scale >= 0.7 and leaf.scale <= 1.3)
+        assert_equal(leaf.sun, 0)
+        if leaf.normal.y > 0:
+            up += 1
+    assert_true(up > len(leaves) * 3 // 4)
+    var tips_only = _sapling()
+    tips_only.leaf_reach = Length(0.0, METER)
+    assert_equal(
+        len(hang_leaves(skeleton, tips_only)), 4 * (skeleton.tips() - 0)
+    )
 
 
 def test_a_unit_vector_falls_back_to_up() raises:
@@ -243,7 +263,7 @@ def test_a_unit_vector_falls_back_to_up() raises:
 
 def test_a_leafy_tree_bakes_its_light() raises:
     """A full tree has ovate leaves of eight vertices, with the light of
-    each baked. A leaf on top sees more sky than one below its clump. Its
+    each baked. A leaf on top sees more sky than one below the crown. Its
     bark is colored."""
     var tree = leafy_tree(_sapling(), _full(), OVERHEAD)
     assert_true(tree.leaf_count > 50)
@@ -284,37 +304,53 @@ def test_a_thin_level_keeps_fewer_larger_cards_on_lean_wood() raises:
 
 
 def test_a_dense_crown_leaves_out_the_leaves_nobody_sees() raises:
-    """In a crown dense enough to stop all light, a leaf deep in a clump
-    sees neither sun nor sky and is left out. A leaf under a clump with
-    the sun below it sees the sun but no sky, and is kept."""
+    """In a crown dense enough to stop nearly all light, most leaves see
+    neither sun nor sky and are left out. Each leaf kept sees one or the
+    other."""
     var dense = _sapling()
-    dense.density = InverseLength(100.0, PER_METER)
-    var open = leafy_tree(_sapling(), _full(), Vector3(0, -1, 0))
-    var thick = leafy_tree(dense, _full(), Vector3(0, -1, 0))
-    assert_true(thick.leaf_count < open.leaf_count)
-    ref sky = thick.leaves.attribute_view(String(SKYLIT))
-    ref sun = thick.leaves.attribute_view(String(SUNLIT))
-    var lit_in_shade = 0
-    for leaf in range(thick.leaf_count):
-        if (
-            sky.component(8 * leaf, 0) < 0.004
-            and sun.component(8 * leaf, 0) > 0.5
-        ):
-            lit_in_shade += 1
-    assert_true(lit_in_shade > 0)
+    dense.shade = 20
+    dense.leaves_per_node = 12
+    var open = grow_crown(_sapling(), Vector3(0, -1, 0))
+    var thick = grow_crown(dense, Vector3(0, -1, 0))
+    assert_true(len(thick.leaves) < len(open.leaves) // 2)
+    assert_true(len(thick.leaves) > 0)
+    for index in range(len(thick.leaves)):
+        ref leaf = thick.leaves[index]
+        assert_true(leaf.sun >= 0.004 or leaf.sky >= 0.004)
+        assert_true(leaf.sun <= 1 and leaf.sky <= 1)
 
 
 def test_a_crown_with_no_leaf_is_refused() raises:
-    """A detail out of range, a sun that is not a unit direction, and a
-    detail that keeps no leaf are refused."""
+    """A detail out of range, a sun that is not a unit direction, a tree
+    whose root reaches every point and so grows no twig, and a detail that
+    keeps no leaf are refused."""
     with assert_raises(contains="detail"):
         _ = leafy_tree(
             _sapling(), CrownLevel(Length(1.0, METER), 0.0, False), OVERHEAD
         )
     with assert_raises(contains="unit length"):
         _ = leafy_tree(_sapling(), _full(), Vector3(0, 2, 0))
+    var stump = _sapling()
+    stump.limbs.shape = CrownShape(
+        Length(0.0, METER),
+        Length(0.2, METER),
+        Length(0.1, METER),
+        0.5,
+        0,
+        Length(0.1, METER),
+        0,
+        0,
+    )
+    stump.limbs.step = Length(0.02, METER)
+    stump.limbs.reach = Length(0.5, METER)
+    stump.limbs.kill = Length(0.5, METER)
+    stump.limbs.fork = 0
+    with assert_raises(contains="no twig"):
+        _ = grow_crown(stump, OVERHEAD)
     var sparse = _sapling()
-    sparse.leaves_per_clump = 1
+    sparse.leaves_per_node = 1
+    sparse.leaf_reach = Length(0.0, METER)
+    sparse.limbs.points = 20
     with assert_raises(contains="keeps no leaf"):
         _ = leafy_tree(
             sparse, CrownLevel(Length(1.0, METER), 0.01, False), OVERHEAD
@@ -432,10 +468,41 @@ def test_the_light_helpers() raises:
     )
 
 
+def test_frames_blend_into_their_mean() raises:
+    """Each channel of a blend is the rounded mean of the frames. One
+    frame blends into itself. No frame, and frames of two sizes, are
+    refused."""
+    var dark = Framebuffer(2, 1, Color(10, 20, 30, 255))
+    var light = Framebuffer(2, 1, Color(20, 41, 30, 255))
+    var frames = List[Framebuffer]()
+    frames.append(dark^)
+    frames.append(light^)
+    var blended = blend_frames(frames)
+    assert_equal(blended.width, 2)
+    assert_equal(Int(blended.pixels[0]), 15)
+    assert_equal(Int(blended.pixels[1]), 31)
+    assert_equal(Int(blended.pixels[2]), 30)
+    assert_equal(Int(blended.pixels[7]), 255)
+    var one = List[Framebuffer]()
+    one.append(Framebuffer(1, 1, Color(7, 8, 9, 255)))
+    assert_equal(Int(blend_frames(one).pixels[2]), 9)
+    with assert_raises(contains="at least one"):
+        _ = blend_frames(List[Framebuffer]())
+    frames.append(Framebuffer(3, 1, Color(0, 0, 0, 255)))
+    with assert_raises(contains="one size"):
+        _ = blend_frames(frames)
+    var taller = List[Framebuffer]()
+    taller.append(Framebuffer(2, 1, Color(0, 0, 0, 255)))
+    taller.append(Framebuffer(2, 2, Color(0, 0, 0, 255)))
+    with assert_raises(contains="one size"):
+        _ = blend_frames(taller)
+
+
 def test_plantings_scatter_across_the_view() raises:
     """Scattered plantings stand in their band toward -z, within the view's
-    width there, and cycle through their crowns. None is scattered for a
-    count of zero. The default layout names only its own crowns."""
+    width there, and cycle through their crowns. A grove stands within its
+    spread. None is scattered or planted for a count of zero. The default
+    layout names only its own crowns."""
     var scattered = scatter_plantings(
         40, 2, 3, Length(10.0, METER), Length(50.0, METER), 0.5, 1.5, 4
     )
@@ -454,11 +521,25 @@ def test_plantings_scatter_across_the_view() raises:
         ),
         0,
     )
+    var grove = grove_plantings(
+        12, 1, 3, 10, -40, Length(8.0, METER), 0.8, 1.2, 5
+    )
+    assert_equal(len(grove), 12)
+    for index in range(len(grove)):
+        ref planting = grove[index]
+        var dx = planting.x - 10
+        var dz = planting.z + 40
+        assert_true(dx * dx + dz * dz <= 64 + 1e-3)
+        assert_equal(planting.crown, 1 + index % 3)
+        assert_true(planting.size >= 0.8 and planting.size <= 1.2)
+    assert_equal(
+        len(grove_plantings(0, 0, 1, 0, 0, Length(1.0, METER), 1, 1, 0)), 0
+    )
     var crowns = default_crowns()
-    assert_equal(len(crowns), 7)
-    assert_true(crowns[6].leaf_length.value < crowns[0].leaf_length.value)
+    assert_equal(len(crowns), 8)
+    assert_true(crowns[7].leaf_length.value < crowns[0].leaf_length.value)
     var plantings = default_plantings()
-    assert_equal(len(plantings), 3 + 22 + 26 + 45)
+    assert_equal(len(plantings), 4 + 9 + 5 + 6 + 14 + 30 + 45)
     for index in range(len(plantings)):
         assert_true(plantings[index].crown < len(crowns))
 
@@ -483,14 +564,14 @@ def test_each_meadow_parameter_is_refused_out_of_range() raises:
     p.crowns = List[CrownParameters]()
     _refused(p^, "crowns")
     p = MeadowParameters()
-    p.crowns[1].leaves_per_clump = 0
+    p.crowns[1].leaves_per_node = 0
     _refused(p^, "hold")
     p = MeadowParameters()
     for _ in range(100001 - len(p.plantings)):
         p.plantings.append(Planting(0, 0, 0, 1))
     _refused(p^, "plantings")
     p = MeadowParameters()
-    p.plantings = [Planting(7, 0, 0, 1)]
+    p.plantings = [Planting(8, 0, 0, 1)]
     _refused(p^, "wear")
     p = MeadowParameters()
     p.plantings = [Planting(-1, 0, 0, 1)]

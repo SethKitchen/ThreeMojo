@@ -11,8 +11,10 @@ The page is Why grass is drawn in clusters. The camera stands still, so
 the wind is all that moves. The wind repeats itself every `LOOP` seconds,
 and the frames divide the loop evenly, so the animation plays round and
 round with no jump. Each frame culls the clusters again and grows the
-drawn ones bent by the wind at that time. The size is 400 by 225 unless
-the arguments give another.
+drawn ones bent by the wind at that time. Each frame is the blend of
+`SHUTTER` moments across half of its time, as a film camera's shutter is
+open for half of each frame, so the blades that move blur and do not
+jump. The size is 400 by 225 unless the arguments give another.
 """
 
 from tools._example_output import example_destination, write_example
@@ -23,6 +25,7 @@ from core.scene import Scene
 from extensions.vegetation.meadow import (
     Meadow,
     MeadowParameters,
+    blend_frames,
     meadow_camera,
     meadow_renderer,
 )
@@ -36,6 +39,10 @@ comptime HEIGHT = 225
 # The frames a second, and how long the wind takes to repeat itself.
 comptime RATE = 24
 comptime LOOP = Float32(2.0)
+# The moments blended into each frame, and the share of a frame's time
+# the shutter is open.
+comptime SHUTTER = 3
+comptime OPEN = Float32(0.5)
 
 
 def main() raises:
@@ -58,8 +65,13 @@ def main() raises:
     var clock = Clock()
     clock.start()
     var frames = List[Framebuffer]()
+    var step = LOOP / Float32(frames_count)
     for index in range(frames_count):
-        var seconds = LOOP * Float32(index) / Float32(frames_count)
-        _ = meadow.update(scene, assets, camera, Duration(seconds, SECOND))
-        frames.append(renderer.render(scene, assets, camera))
+        var moments = List[Framebuffer]()
+        for k in range(SHUTTER):
+            var within = (Float32(k) + 0.5) / Float32(SHUTTER) - 0.5
+            var seconds = step * (Float32(index) + OPEN * within)
+            _ = meadow.update(scene, assets, camera, Duration(seconds, SECOND))
+            moments.append(renderer.render(scene, assets, camera))
+        frames.append(blend_frames(moments))
     write_example(frames, destination, 1000 // RATE, frames_count, clock)

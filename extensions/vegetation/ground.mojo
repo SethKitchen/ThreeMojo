@@ -5,9 +5,10 @@
 
 """Rolling ground, the masks of what grows on it, and its meshes.
 
-`Ground` answers four questions about a point: how high the ground is,
-how thick the grass is, how dry it is, and how many poppies bloom there.
-Each answer is slow value noise, so each is a patch meters wide.
+`Ground` answers questions about a point: how high the ground is, how
+thick and how tall the grass is, how dry it is, how many broad-leaf
+plants grow there, and how many poppies bloom. Each answer is slow value
+noise, so each is a patch meters wide.
 
 **A canyon** can cross the ground toward -z. Its floor lies `depth`
 below the near side, and its far plateau stands `rise` above it, so the
@@ -39,6 +40,9 @@ from units.si import METER, Length
 
 # The linear color of grass seen from far away.
 comptime FAR_GRASS = Vector3(0.065, 0.115, 0.020)
+# The linear color of short grass seen from far away: lighter and more
+# yellow than the tall grass, which shades itself.
+comptime FAR_LAWN = Vector3(0.090, 0.135, 0.030)
 # The linear color of dry grass seen from far away.
 comptime FAR_STRAW = Vector3(0.150, 0.130, 0.045)
 # The linear color of a poppy patch seen from far away.
@@ -51,8 +55,8 @@ comptime STONE = Vector3(0.036, 0.044, 0.056)
 comptime RIM = Float32(6)
 # The linear colors of a cliff: its rock, its dark bands, and the moss
 # along its top.
-comptime ROCK = Vector3(0.150, 0.125, 0.095)
-comptime ROCK_DARK = Vector3(0.060, 0.052, 0.045)
+comptime ROCK = Vector3(0.095, 0.092, 0.088)
+comptime ROCK_DARK = Vector3(0.036, 0.036, 0.038)
 comptime MOSS = Vector3(0.070, 0.100, 0.030)
 # The linear color of snow on the highest peaks, and the rows across the
 # ring of mountains.
@@ -320,6 +324,39 @@ struct Ground(ImplicitlyCopyable):
         var raw = layered_noise(x / length, z / length, self.seed + 30)
         return min(Float32(1), max(Float32(0), (raw - 0.64) * 6))
 
+    def tallness(self, x: Float32, z: Float32) -> Float32:
+        """Return how tall the grass grows at a point, from zero to one.
+
+        Zero is short grass, as on a path or where animals graze, and one
+        is the meadow's full height. The edge between them is sharp, so
+        tall grass stands in islands.
+
+        Args:
+            x: The point's x, in meters.
+            z: The point's z, in meters.
+
+        Returns:
+            The tallness.
+        """
+        var length = self.patch_length.to(METER) * 1.6
+        var raw = layered_noise(x / length, z / length, self.seed + 40)
+        return _ramp(0.36, 0.44, raw)
+
+    def weeds(self, x: Float32, z: Float32) -> Float32:
+        """Return how many broad-leaf plants grow at a point, from zero to
+        one.
+
+        Args:
+            x: The point's x, in meters.
+            z: The point's z, in meters.
+
+        Returns:
+            The share of the most there can be.
+        """
+        var length = self.patch_length.to(METER) * 0.8
+        var raw = value_noise(x / length, z / length, self.seed + 50)
+        return 0.35 + 0.65 * _ramp(0.35, 0.65, raw)
+
     def far_color(self, x: Float32, z: Float32) -> Vector3:
         """Return the linear color of the ground and its grass from far.
 
@@ -331,9 +368,8 @@ struct Ground(ImplicitlyCopyable):
             Soil where the grass is thin, the far grass where it is thick,
             tinted by the straw and the poppies.
         """
-        var green = FAR_GRASS + (FAR_STRAW - FAR_GRASS) * (
-            self.dryness(x, z) * 0.5
-        )
+        var green = FAR_LAWN + (FAR_GRASS - FAR_LAWN) * self.tallness(x, z)
+        green = green + (FAR_STRAW - green) * (self.dryness(x, z) * 0.5)
         green = green + (FAR_POPPY - green) * (self.bloom(x, z) * 0.35)
         return SOIL + (green - SOIL) * self.cover(x, z)
 

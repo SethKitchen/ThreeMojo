@@ -19,6 +19,7 @@ from extensions.vegetation.field import (
 from extensions.vegetation.ground import Ground
 from extensions.vegetation.kinds import (
     BEYOND,
+    BROADLEAF,
     CULLED,
     DRAWN,
     DRY_GRASS,
@@ -247,19 +248,24 @@ def test_kept_is_a_rounded_share_of_the_stream() raises:
 
 
 def test_the_stream_grows_each_kind_and_skips_bare_tufts() raises:
-    """With every tuft a poppy's chance, half the blades dry and some
-    stalks, the stream grows every kind, and skips some tufts where
-    the ground is bare. The same blade grows the same way twice."""
+    """With every tuft a poppy's chance, half the blades dry, some stalks
+    and every tuft a weed's chance, the stream grows every kind, and skips
+    some tufts where the ground is bare. Some tufts are laid over, more
+    curled than any standing tuft. The same blade grows the same way
+    twice."""
     var p = _small()
     p.span = Length(60.0, METER)
     p.tuft_blades = 1
     p.poppy_share = 1
     p.dry_share = 0.5
     p.seed_share = 0.3
+    p.broadleaf_share = 1
+    var standing = p.curl.to(DEGREE) * 1.55 * 1.3
     var field = GrassField(p^, Ground())
-    var kinds = List[Int](length=4, fill=0)
+    var kinds = List[Int](length=5, fill=0)
     var skipped = 0
     var thick_stems = 0
+    var lodged = 0
     for index in range(len(field.clusters)):
         for blade in range(field.clusters[index].blades):
             var grown = field.grow(index, blade)
@@ -271,6 +277,10 @@ def test_the_stream_grows_each_kind_and_skips_bare_tufts() raises:
             kinds[b.kind.value] += 1
             if b.kind == POPPY and abs(b.width.to(METER) - 0.003) > 1e-6:
                 thick_stems += 1
+            if b.kind == GRASS and b.curl.to(DEGREE) > standing:
+                lodged += 1
+    assert_true(lodged > 0)
+    assert_true(kinds[BROADLEAF.value] > 0)
     assert_true(kinds[GRASS.value] > 0)
     assert_true(kinds[DRY_GRASS.value] > 0)
     assert_true(kinds[POPPY.value] > 0)
