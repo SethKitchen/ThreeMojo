@@ -463,6 +463,38 @@ def collapse_source(mapping, count):
     return json.loads(result.stdout)["source"]
 
 
+def collapse_gather(source, values, width):
+    """Return the texture values of the corners in `source`.
+
+    `tools/carla_collapse_map.mojo` copies them. `source[new]` is the old
+    corner whose `width` values are copied.
+    """
+    here = os.path.dirname(os.path.abspath(__file__))
+    repo = os.path.abspath(os.path.join(here, "..", "..", "..", ".."))
+    mojo = os.path.join(repo, ".venv", "bin", "mojo")
+    if not os.path.isfile(mojo):
+        mojo = "mojo"
+    folder = tempfile.mkdtemp(prefix="collapse-gather-")
+    try:
+        path = os.path.join(folder, "gather.json")
+        with open(path, "w", encoding="utf-8") as handle:
+            json.dump({
+                "source": [int(value) for value in source],
+                "values": [float(value) for value in values],
+                "width": int(width),
+            }, handle, separators=(",", ":"), allow_nan=False)
+        result = subprocess.run(
+            ["sh", os.path.join(repo, "tools", "tool.sh"), mojo,
+             "carla_collapse_map", path],
+            capture_output=True, text=True,
+        )
+    finally:
+        shutil.rmtree(folder, ignore_errors=True)
+    if result.returncode != 0:
+        raise ValueError(result.stderr.strip() or "collapse gather failed")
+    return json.loads(result.stdout)["values"]
+
+
 def decimate(gltf, data, budget):
     """Bring a model's triangles down to about `budget`, and return the
     buffer with the new primitives' data added.
@@ -476,7 +508,7 @@ def decimate(gltf, data, budget):
     of two triangles, all edge, which a collapse would tear. Each new
     vertex takes the texture coordinates and the tangent of an old vertex
     that collapsed into it. `tools/carla_collapse_map.mojo` keeps the
-    first of those old vertices.
+    first of those old vertices and copies its values.
     """
     import numpy
     import fast_simplification
@@ -530,10 +562,7 @@ def decimate(gltf, data, budget):
                 accessor = gltf["accessors"][accessor_index]
                 if accessor["componentType"] != 5126:
                     continue
-                picked = []
-                for new in range(len(new_points)):
-                    old = source[new]
-                    picked += values[old * width:(old + 1) * width]
+                picked = collapse_gather(source, values, width)
                 attributes[name] = _append(out, gltf, picked, "f", 5126, accessor["type"], 34962)
             primitive["attributes"] = attributes
             primitive["indices"] = _append(out, gltf, [int(v) for v in new_faces.reshape(-1)],

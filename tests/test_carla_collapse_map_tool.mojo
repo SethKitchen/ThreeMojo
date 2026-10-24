@@ -6,7 +6,8 @@
 """The first corner that collapsed into each new corner.
 
 When two old corners land on one new corner, the smaller old index
-stays. A new corner that nobody reached stays 0.
+stays. A new corner that nobody reached stays 0. The texture values of
+the surviving corner are copied.
 """
 
 from std.pathlib import Path
@@ -63,7 +64,28 @@ def test_the_first_old_corner_stays() raises:
     )
     assert_equal(collapse_text('{"mapping":[],"count":2}'), '{"source":[0,0]}')
     assert_equal(collapse_text('{"mapping":[],"count":0}'), '{"source":[]}')
+    assert_equal(
+        collapse_text('{"source":[1,0,1],"width":2,"values":[10,20,30,40]}'),
+        '{"values":[30.0,40.0,10.0,20.0,30.0,40.0]}',
+    )
+    assert_equal(
+        collapse_text('{"source":[],"width":2,"values":[1,2]}'),
+        '{"values":[]}',
+    )
     _refuse("[]", "collapse map is not an object")
+    _refuse(
+        '{"source":[],"width":1,"values":1}',
+        "gather arrays are not lists",
+    )
+    _refuse('{"source":[],"width":0,"values":[]}', "width is not positive")
+    _refuse(
+        '{"source":[],"width":1.5,"values":[]}',
+        "width is not an integer",
+    )
+    _refuse(
+        '{"source":[0],"width":1,"values":["no"]}',
+        "value is not a number",
+    )
     _refuse('{"mapping":1,"count":0}', "mapping is not a list")
     _refuse('{"mapping":[],"count":-1}', "count is negative")
     _refuse('{"mapping":[],"count":1.5}', "count is not an integer")

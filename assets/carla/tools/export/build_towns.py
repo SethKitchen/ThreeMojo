@@ -609,11 +609,15 @@ def simplify(primitive, target, borders=True, small=False):
         points, faces.astype(numpy.int32), collapses)
     if len(new_faces) == 0:
         return primitive
-    # `tools/carla_collapse_map.mojo` keeps the first old corner.
-    source = numpy.array(
-        fix.collapse_source(mapping, len(new_points)), dtype=numpy.int64)
+    # `tools/carla_collapse_map.mojo` keeps the first old corner and copies
+    # its texture coordinates.
+    source = fix.collapse_source(mapping, len(new_points))
+    uvs = numpy.array(
+        fix.collapse_gather(source, numpy.asarray(primitive["uvs"], dtype=float).reshape(-1), 2),
+        dtype=numpy.float64,
+    ).reshape(-1, 2)
     return {"positions": new_points, "normals": area_normals(new_points, new_faces),
-            "uvs": primitive["uvs"][source], "triangles": new_faces.astype(numpy.int64),
+            "uvs": uvs, "triangles": new_faces.astype(numpy.int64),
             "material": primitive["material"]}
 
 
