@@ -29,7 +29,7 @@ from extensions.vegetation.crown import (
 )
 from extensions.vegetation.field import LodBand
 from extensions.vegetation.foliage import SKYLIT, SUNLIT
-from extensions.vegetation.ground import Canyon, Ground
+from extensions.vegetation.ground import Canyon, Ground, Lot, Pond
 from extensions.vegetation.limbs import CrownShape, grow_limbs
 from extensions.vegetation.meadow import (
     EXPOSURE,
@@ -590,6 +590,10 @@ def test_each_meadow_parameter_is_refused_out_of_range() raises:
     p.plantings = [Planting(12, 0, 0, 1)]
     _refused(p^, "wear")
     p = MeadowParameters()
+    for _ in range(1001):
+        p.lots.append(Lot(0, 0, 1, 1, 0))
+    _refused(p^, "lots")
+    p = MeadowParameters()
     p.litter = -1
     _refused(p^, "litter must try")
     p = MeadowParameters()
@@ -638,6 +642,26 @@ def _camera() raises -> PerspectiveCamera:
         Length(0.1, METER),
         Length(300.0, METER),
     )
+
+
+def test_no_tree_grows_on_a_lot_or_in_a_pond() raises:
+    """A planting on a lot, and one in a pond's basin, are left out; the
+    others grow. Nothing grows on the lot."""
+    var renderer = Renderer(16, 9)
+    var assets = Assets()
+    var scene = Scene()
+    var p = _meadow_parameters(True)
+    p.lots = [Lot(2, -3, 1.5, 1.5, 0)]
+    p.ground.pond = Pond(
+        Length(-3.0, METER),
+        Length(2.0, METER),
+        Length(3.0, METER),
+        Length(1.0, METER),
+    )
+    var meadow = Meadow(scene, assets, renderer, p)
+    assert_equal(len(meadow.trees), 3)
+    assert_equal(len(meadow.field.lots), 1)
+    assert_almost_equal(meadow.field.cover_at(2, -3), 0)
 
 
 def test_an_empty_meadow_draws_its_grass_and_sky() raises:

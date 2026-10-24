@@ -19,7 +19,13 @@ from extensions.vegetation.checks import (
     require_count_between,
 )
 from extensions.vegetation.ground import (
+    APRON,
+    APRON_EDGE,
+    DIRT,
     LITTER,
+    POND_DROP,
+    POND_FREEBOARD,
+    POND_SHORE,
     RIM,
     TRAIL_DRIFT,
     TRAIL_WANDER,
@@ -29,9 +35,14 @@ from extensions.vegetation.ground import (
     Canyon,
     Clearing,
     Ground,
+    Lot,
+    Pond,
     cliff_wall,
     litter_shade,
+    lot_openness,
+    lot_shade,
     no_canyon,
+    no_pond,
     openness,
     ridge_ring,
 )
@@ -669,6 +680,101 @@ def test_dirt_and_a_trail_leave_the_ground_bare() raises:
     assert_almost_equal(trail.bare(course + 8, z), 0, atol=1e-6)
     var dirt = trail.far_color(course, z)
     assert_true(dirt.x > dirt.y and dirt.y > dirt.z)
+
+
+def _pond(radius: Float32) -> Pond:
+    """Return a pond 1.2 meters deep at (6, -4) of `radius`."""
+    return Pond(
+        Length(6.0, METER),
+        Length(-4.0, METER),
+        Length(radius, METER),
+        Length(1.2, METER),
+    )
+
+
+def test_a_pond_is_checked() raises:
+    """A pond in range passes, and so does no pond; a pond too far, too
+    wide or too deep is refused, and so is ground with such a pond."""
+    _pond(5).check()
+    no_pond().check()
+    var far = _pond(5)
+    far.x = Length(2.0e4, METER)
+    with assert_raises(contains="within 10 kilometers"):
+        far.check()
+    far = _pond(5)
+    far.z = Length(-2.0e4, METER)
+    with assert_raises(contains="within 10 kilometers"):
+        far.check()
+    with assert_raises(contains="across"):
+        _pond(2000).check()
+    var deep = _pond(5)
+    deep.depth = Length(60.0, METER)
+    with assert_raises(contains="deep"):
+        deep.check()
+    with assert_raises(contains="across"):
+        _ = Ground(pond=_pond(-1))
+
+
+def test_a_pond_holds_water_only_in_its_basin() raises:
+    """The water lies `POND_DROP` below the hills at the pond's middle.
+    The basin's floor is `depth` below the water, and no ground outside the
+    basin lies below it. Its shore is bare and wet, the ground beyond it is
+    neither, and the grass round it is short. Ground with no pond is never
+    wet and is not carved."""
+    var plain = Ground()
+    var ground = Ground(pond=_pond(5))
+    var level = ground.water_level()
+    assert_almost_equal(level, plain.hills_at(6, -4) - POND_DROP, atol=1e-5)
+    assert_almost_equal(ground.height_at(6, -4), level - 1.2, atol=1e-4)
+    assert_true(ground.wet(6, -4))
+    assert_almost_equal(ground.bare(6, -4), 1, atol=1e-5)
+    assert_almost_equal(ground.tallness(6, -4), 0, atol=1e-6)
+    var lowest = Float32(1.0e30)
+    for i in range(400):
+        var x = Float32(i % 20) * 3.1 - 40
+        var z = Float32(i // 20) * 3.7 - 40
+        var dx = x - 6
+        var dz = z + 4
+        if dx * dx + dz * dz > 30:
+            lowest = min(lowest, ground.height_at(x, z))
+            assert_false(ground.wet(x, z))
+        assert_false(plain.wet(x, z))
+        assert_almost_equal(plain.height_at(x, z), plain.hills_at(x, z))
+    assert_true(lowest >= level + POND_FREEBOARD - 1e-5)
+    assert_almost_equal(ground.tallness(20, -4), plain.tallness(20, -4))
+    assert_true(level + POND_SHORE > level)
+
+
+def test_a_lot_bares_its_footprint_and_an_apron() raises:
+    """A point inside a lot is no distance from it, and a point beside a
+    turned lot is its distance from the nearest edge. The lot and its
+    apron are closed to growth, and the grass comes back beyond. Lot
+    shade bares a ground mesh round a lot to dirt and leaves it alone far
+    away."""
+    var lot = Lot(10, -5, 3, 2, 0)
+    assert_almost_equal(lot.reach(10, -5), 0)
+    assert_almost_equal(lot.reach(15, -5), 2, atol=1e-5)
+    assert_almost_equal(lot.reach(10, -9), 2, atol=1e-5)
+    var turned = Lot(0, 0, 3, 1, 1.5707963)
+    assert_almost_equal(turned.reach(0, 3), 0, atol=1e-5)
+    assert_almost_equal(turned.reach(3, 0), 2, atol=1e-5)
+    var lots: List[Lot] = [lot]
+    assert_almost_equal(lot_openness(lots, 10, -5), 0)
+    assert_almost_equal(lot_openness(lots, 13 + APRON * 0.5, -5), 0)
+    assert_almost_equal(lot_openness(lots, 13 + APRON + APRON_EDGE + 1, -5), 1)
+    assert_almost_equal(lot_openness(List[Lot](), 10, -5), 1)
+    var land = Ground().mesh(Length(40.0, METER), 8, 0, 0)
+    ref before = land.attribute_view(String(COLOR))
+    var corner = before.vector3(0)
+    var near: List[Lot] = [Lot(0, 0, 3, 3, 0)]
+    lot_shade(land, near, 2)
+    ref after = land.attribute_view(String(COLOR))
+    assert_almost_equal(after.vector3(0).y, corner.y)
+    assert_true(after.vector3(40).x > after.vector3(40).y)
+    assert_true(after.vector3(40).x <= DIRT.x + 1e-5)
+    with assert_raises():
+        var bare = BufferGeometry()
+        lot_shade(bare, near, 2)
 
 
 def test_a_clearing_shades_round_a_trees_foot() raises:

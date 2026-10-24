@@ -40,7 +40,13 @@ from extensions.vegetation.checks import (
     require_between,
     require_count_between,
 )
-from extensions.vegetation.ground import Clearing, Ground, openness
+from extensions.vegetation.ground import (
+    Clearing,
+    Ground,
+    Lot,
+    lot_openness,
+    openness,
+)
 from extensions.vegetation.kinds import (
     BEYOND,
     CULLED,
@@ -416,9 +422,10 @@ struct GrassField(Movable):
     var parameters: FieldParameters
     var ground: Ground
     var clusters: List[GrassCluster]
-    # The shade round the feet of the trees that stand in the field. None
-    # until they are added.
+    # The shade round the feet of the trees that stand in the field, and
+    # the footprints of its buildings. None until they are added.
     var clearings: List[Clearing]
+    var lots: List[Lot]
 
     def __init__(
         out self, var parameters: FieldParameters, ground: Ground
@@ -438,6 +445,7 @@ struct GrassField(Movable):
         self.ground = ground
         self.clusters = List[GrassCluster]()
         self.clearings = List[Clearing]()
+        self.lots = List[Lot]()
         var side = self.parameters.clusters_across()
         var size = self.parameters.cluster_size.to(METER)
         var start = -self.parameters.span.to(METER) * 0.5
@@ -482,7 +490,7 @@ struct GrassField(Movable):
 
     def cover_at(self, x: Float32, z: Float32) -> Float32:
         """Return how thick the grass is at a point: the ground's cover,
-        thinned in the shade of the field's clearings.
+        thinned in the shade of the field's clearings, and none on its lots.
 
         Args:
             x: The point's x, in meters.
@@ -491,7 +499,11 @@ struct GrassField(Movable):
         Returns:
             The cover, from zero to one.
         """
-        return self.ground.cover(x, z) * openness(self.clearings, x, z)
+        return (
+            self.ground.cover(x, z)
+            * openness(self.clearings, x, z)
+            * lot_openness(self.lots, x, z)
+        )
 
     def full_blades(self) -> Int:
         """Return how many blades the field holds at full detail.

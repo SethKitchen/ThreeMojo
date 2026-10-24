@@ -82,8 +82,11 @@ from extensions.vegetation.ground import (
     Canyon,
     Clearing,
     Ground,
+    Lot,
     cliff_wall,
     litter_shade,
+    lot_openness,
+    lot_shade,
     ridge_ring,
 )
 from extensions.vegetation.litter import ground_litter
@@ -493,9 +496,12 @@ struct MeadowParameters(Copyable, Movable):
     var field: FieldParameters
     var ground: Ground
     var wind: Wind
-    # The kinds of tree and bush, and where each stands.
+    # The kinds of tree and bush, and where each stands. A planting on a
+    # lot or under the pond's water is left out.
     var crowns: List[CrownParameters]
     var plantings: List[Planting]
+    # The footprints of buildings, where nothing grows. None by default.
+    var lots: List[Lot]
     # The levels of detail of every crown, nearest first.
     var crown_levels: List[CrownLevel]
     # How many boulders lie in the field.
@@ -540,6 +546,7 @@ struct MeadowParameters(Copyable, Movable):
         self.wind = Wind()
         self.crowns = default_crowns()
         self.plantings = default_plantings()
+        self.lots = List[Lot]()
         self.crown_levels = default_crown_levels()
         self.rocks = 6
         self.litter = 160000
@@ -559,7 +566,8 @@ struct MeadowParameters(Copyable, Movable):
         Raises:
             Error: If the field, the ground, the wind, a crown or the sky
                 is refused; there are not from 1 to 64 crowns, from 0 to
-                100,000 plantings or from 0 to 1,000 boulders; the litter
+                100,000 plantings, or from 0 to 1,000 boulders or lots; the
+                litter
                 tries not from 0 to 2 million points, or reaches not from
                 1 meter to 1 kilometer; a planting
                 names no crown, stands further than 10 kilometers, or is
@@ -612,6 +620,9 @@ struct MeadowParameters(Copyable, Movable):
             )
         require_count_between(
             self.rocks, 0, 1000, "A meadow must have from 0 to 1,000 boulders"
+        )
+        require_count_between(
+            len(self.lots), 0, 1000, "A meadow must have from 0 to 1,000 lots"
         )
         require_count_between(
             self.litter,
@@ -720,12 +731,22 @@ struct Meadow(Movable):
                 cannot be built.
         """
         parameters.check()
+        # A tree or a bush does not grow on a lot or in the pond.
+        var stands = List[Bool]()
+        for index in range(len(parameters.plantings)):
+            ref planting = parameters.plantings[index]
+            stands.append(
+                lot_openness(parameters.lots, planting.x, planting.z) >= 1
+                and not parameters.ground.wet(planting.x, planting.z)
+            )
         # The shade of each tree near the field thins the grass round its
         # foot and browns the ground there.
         var half = parameters.field.span.to(METER) * 0.5
         var shade = List[Clearing]()
         var thin = List[Clearing]()
         for index in range(len(parameters.plantings)):
+            if not stands[index]:
+                continue
             ref planting = parameters.plantings[index]
             var reach = (
                 parameters.crowns[planting.crown].limbs.shape.radius.to(METER)
@@ -745,6 +766,7 @@ struct Meadow(Movable):
                 thin.append(clearing)
         var field = GrassField(parameters.field.copy(), parameters.ground)
         field.clearings = thin^
+        field.lots = parameters.lots.copy()
         self.field = field^
         self.wind = parameters.wind
         self.levels = parameters.crown_levels.copy()
@@ -798,6 +820,7 @@ struct Meadow(Movable):
             parameters.ground_span, parameters.ground_cells, 0, 0
         )
         litter_shade(land, shade, parameters.seed + 7)
+        lot_shade(land, parameters.lots, parameters.seed + 9)
         land.compute_vertex_normals()
         scene.add_mesh(
             Mesh(
@@ -874,6 +897,8 @@ struct Meadow(Movable):
         self.trees = List[_Tree]()
         var first_level = len(self.levels)
         for index in range(len(parameters.plantings)):
+            if not stands[index]:
+                continue
             ref planting = parameters.plantings[index]
             var place = Vector3(
                 planting.x,

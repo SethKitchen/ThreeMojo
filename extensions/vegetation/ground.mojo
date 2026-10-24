@@ -10,6 +10,14 @@ bare it is, how thick and how tall the grass is, how dry it is, how many
 broad-leaf plants grow there, and how many poppies bloom. Each answer is
 slow value noise, so each is a patch meters wide.
 
+**A pond** is a round basin. Its water lies at `Ground.water_level`, a
+little below the hills at its middle. Ground outside the basin that would
+lie lower is raised just above the water, so the water shows only in the
+basin. Its shore is bare mud, and the grass round it is short.
+
+**A lot** is a building's footprint. Nothing grows on it or on a bare
+apron round it: see `lot_openness` and `lot_shade`.
+
 **Bare ground** is dirt with no grass. `bare` is one in patches of dirt,
 `dirt` of the field or so, and on a trail `trail_width` wide that winds
 away from the camera's side of the field. The grass thins toward a bare
@@ -75,6 +83,20 @@ comptime TRAIL_WORN = Float32(0.92)
 comptime TRAIL_EDGE = Float32(1.3)
 # The share of a clearing's radius, out from the foot, that is bare.
 comptime CLEARING_BARE = Float32(0.25)
+# The share of a pond's radius that is its flat floor; how far its water
+# lies below the lowest hills; and how far above the water its shore is
+# bare mud, in meters.
+comptime POND_FLAT = Float32(0.3)
+comptime POND_DROP = Float32(0.3)
+comptime POND_FREEBOARD = Float32(0.05)
+comptime POND_SHORE = Float32(0.3)
+# How far out from a pond's middle the grass is short, as a multiple of
+# its radius, so the water shows from eye height.
+comptime POND_LAWN = Float32(1.6)
+# How far round a lot the ground is bare, and how far further the grass
+# comes back, in meters.
+comptime APRON = Float32(0.8)
+comptime APRON_EDGE = Float32(1.6)
 # The linear color of the mountains.
 comptime STONE = Vector3(0.036, 0.044, 0.056)
 # How wide the step at each rim of a canyon is, in meters.
@@ -180,6 +202,70 @@ def no_canyon() -> Canyon:
     )
 
 
+@fieldwise_init
+struct Pond(ImplicitlyCopyable):
+    """A round basin in the ground that holds still water.
+
+    The basin's floor lies `depth` below the water. Its inner `POND_FLAT`
+    of the radius is flat, and it rises smoothly to the hills at `radius`.
+    """
+
+    # The basin's middle, in meters.
+    var x: Length
+    var z: Length
+    # How far out the basin reaches. Zero is no pond.
+    var radius: Length
+    # How far below the water the basin's floor lies.
+    var depth: Length
+
+    def check(self) raises:
+        """Refuse a pond that cannot be carved.
+
+        Raises:
+            Error: If the middle is further than 10 kilometers, the radius
+                is not from 0 to 1 kilometer, or the depth is not from 0 to
+                50 meters.
+        """
+        require_between(
+            self.x.to(METER),
+            -1.0e4,
+            1.0e4,
+            "A pond must lie within 10 kilometers",
+        )
+        require_between(
+            self.z.to(METER),
+            -1.0e4,
+            1.0e4,
+            "A pond must lie within 10 kilometers",
+        )
+        require_between(
+            self.radius.to(METER),
+            0,
+            1000,
+            "A pond must be from 0 to 1 kilometer across",
+        )
+        require_between(
+            self.depth.to(METER),
+            0,
+            50,
+            "A pond must be from 0 to 50 meters deep",
+        )
+
+
+def no_pond() -> Pond:
+    """Return a pond that carves nothing.
+
+    Returns:
+        A pond of no radius.
+    """
+    return Pond(
+        Length(0.0, METER),
+        Length(0.0, METER),
+        Length(0.0, METER),
+        Length(0.0, METER),
+    )
+
+
 struct Ground(ImplicitlyCopyable):
     """Rolling hills, the patches of grass, straw and poppies, and a
     canyon."""
@@ -201,6 +287,8 @@ struct Ground(ImplicitlyCopyable):
     var dirt: Float32
     # How wide the trail is. Zero is no trail.
     var trail_width: Length
+    # The pond in the ground.
+    var pond: Pond
 
     def __init__(
         out self,
@@ -212,6 +300,7 @@ struct Ground(ImplicitlyCopyable):
         canyon: Canyon = no_canyon(),
         dirt: Float32 = 0.0,
         trail_width: Length = Length(0.0, METER),
+        pond: Pond = no_pond(),
     ) raises:
         """Create ground and check it.
 
@@ -231,6 +320,7 @@ struct Ground(ImplicitlyCopyable):
                 1, about half.
             trail_width: How wide the trail is, from 0, no trail, to 20
                 meters.
+            pond: The pond in the ground. `no_pond` carves nothing.
 
         Raises:
             Error: If `check` refuses a value.
@@ -243,6 +333,7 @@ struct Ground(ImplicitlyCopyable):
         self.canyon = canyon
         self.dirt = dirt
         self.trail_width = trail_width
+        self.pond = pond
         self.check()
 
     def check(self) raises:
@@ -278,6 +369,7 @@ struct Ground(ImplicitlyCopyable):
             20,
             "A trail must be from 0 to 20 meters wide",
         )
+        self.pond.check()
 
     def height_at(self, x: Float32, z: Float32) -> Float32:
         """Return the ground's height at a point.
@@ -287,9 +379,61 @@ struct Ground(ImplicitlyCopyable):
             z: The point's z, in meters.
 
         Returns:
-            The height, in meters, the canyon's cut included.
+            The height, in meters, the canyon's cut and the pond's basin
+            included.
         """
-        return self.hills_at(x, z) + self.canyon.cut(z)
+        var hills = self.hills_at(x, z)
+        var reach = self.pond.radius.to(METER)
+        if reach > 0:
+            # No ground outside the basin lies below the water, so the
+            # water shows only in it.
+            var level = self.water_level()
+            hills = max(hills, level + POND_FREEBOARD)
+            var dx = x - self.pond.x.to(METER)
+            var dz = z - self.pond.z.to(METER)
+            var basin = _ramp(reach, reach * POND_FLAT, sqrt(dx * dx + dz * dz))
+            var floor = level - self.pond.depth.to(METER)
+            hills = hills + (floor - hills) * basin
+        return hills + self.canyon.cut(z)
+
+    def wet(self, x: Float32, z: Float32) -> Bool:
+        """Return whether a point is under the pond's water or on its bare
+        shore.
+
+        Args:
+            x: The point's x, in meters.
+            z: The point's z, in meters.
+
+        Returns:
+            True in a pond's basin within `POND_SHORE` above its water, and
+            False everywhere else and for ground with no pond.
+        """
+        return self._in_basin(x, z) and (
+            self.height_at(x, z) < self.water_level() + POND_SHORE
+        )
+
+    def _in_basin(self, x: Float32, z: Float32) -> Bool:
+        """Return whether a point is within the pond's basin."""
+        var dx = x - self.pond.x.to(METER)
+        var dz = z - self.pond.z.to(METER)
+        var reach = self.pond.radius.to(METER)
+        return dx * dx + dz * dz < reach * reach
+
+    def water_level(self) -> Float32:
+        """Return the height of the pond's still water.
+
+        It lies `POND_DROP` below the hills at the pond's middle. Ground
+        that would lie below it outside the basin is raised to
+        `POND_FREEBOARD` above it, so the water shows only in the basin. A
+        canyon's floor below it holds water too.
+
+        Returns:
+            The height, in meters.
+        """
+        return (
+            self.hills_at(self.pond.x.to(METER), self.pond.z.to(METER))
+            - POND_DROP
+        )
 
     def hills_at(self, x: Float32, z: Float32) -> Float32:
         """Return the hills' height at a point, without the canyon.
@@ -324,9 +468,10 @@ struct Ground(ImplicitlyCopyable):
     def bare(self, x: Float32, z: Float32) -> Float32:
         """Return how bare the ground is at a point, from zero to one.
 
-        One is dirt with no grass: a patch of dirt, or the trail. The
-        edge of a patch is a few tens of centimeters wide, and the trail's
-        width wanders.
+        One is dirt with no grass: a patch of dirt, the trail, or the
+        pond's bed and its muddy shore, up to `POND_SHORE` above the water.
+        The edge of a patch is a few tens of centimeters wide, and the
+        trail's width wanders.
 
         Args:
             x: The point's x, in meters.
@@ -357,7 +502,11 @@ struct Ground(ImplicitlyCopyable):
             * (1 - _ramp(half, half + TRAIL_EDGE, abs(x - course)))
             * min(Float32(1), width * 10)
         )
-        return max(patches, trail)
+        var shore = Float32(0)
+        if self._in_basin(x, z):
+            var level = self.water_level()
+            shore = _ramp(level + POND_SHORE, level, self.height_at(x, z))
+        return max(max(patches, trail), shore)
 
     def cover(self, x: Float32, z: Float32) -> Float32:
         """Return how thick the grass is at a point, from zero to one.
@@ -413,7 +562,8 @@ struct Ground(ImplicitlyCopyable):
 
         Zero is short grass, as on a path or where animals graze, and one
         is the meadow's full height. The edge between them is sharp, so
-        tall grass stands in islands.
+        tall grass stands in islands. Round a pond, out to `POND_LAWN` of
+        its radius, the grass is short.
 
         Args:
             x: The point's x, in meters.
@@ -424,7 +574,13 @@ struct Ground(ImplicitlyCopyable):
         """
         var length = self.patch_length.to(METER) * 1.6
         var raw = layered_noise(x / length, z / length, self.seed + 40)
-        return _ramp(0.36, 0.44, raw)
+        var tall = _ramp(0.36, 0.44, raw)
+        var reach = self.pond.radius.to(METER)
+        if reach > 0:
+            var dx = x - self.pond.x.to(METER)
+            var dz = z - self.pond.z.to(METER)
+            tall *= _ramp(reach, reach * POND_LAWN, sqrt(dx * dx + dz * dz))
+        return tall
 
     def weeds(self, x: Float32, z: Float32) -> Float32:
         """Return how many broad-leaf plants grow at a point, from zero to
@@ -610,6 +766,92 @@ def litter_shade(
         shaded.append(c.y)
         shaded.append(c.z)
     geometry.set_attribute(COLOR, BufferAttribute(shaded^, 3))
+
+
+@fieldwise_init
+struct Lot(ImplicitlyCopyable):
+    """A building's footprint: a rectangle where nothing grows, turned
+    about +y, with a bare apron round it."""
+
+    # The middle, in meters.
+    var x: Float32
+    var z: Float32
+    # Half the width along the lot's own x, and half its depth along its
+    # own z, in meters.
+    var half_width: Float32
+    var half_depth: Float32
+    # How far the lot is turned about +y, from +x toward -z, in radians.
+    var turn: Float32
+
+    def reach(self, x: Float32, z: Float32) -> Float32:
+        """Return how far a point is outside the lot.
+
+        Args:
+            x: The point's x, in meters.
+            z: The point's z, in meters.
+
+        Returns:
+            Zero inside it, and the distance to its nearest edge outside,
+            in meters.
+        """
+        var dx = x - self.x
+        var dz = z - self.z
+        var c = cos(self.turn)
+        var s = sin(self.turn)
+        var across = max(Float32(0), abs(dx * c - dz * s) - self.half_width)
+        var along = max(Float32(0), abs(dx * s + dz * c) - self.half_depth)
+        return sqrt(across * across + along * along)
+
+
+def lot_openness(lots: List[Lot], x: Float32, z: Float32) -> Float32:
+    """Return how open a point is to growth round the lots.
+
+    The lot and its apron, `APRON` round it, are bare, and the grass comes
+    back smoothly over `APRON_EDGE` further.
+
+    Args:
+        lots: The lots.
+        x: The point's x, in meters.
+        z: The point's z, in meters.
+
+    Returns:
+        Zero on a lot and its apron, and one clear of them.
+    """
+    var open = Float32(1)
+    for index in range(len(lots)):
+        open = min(
+            open, _ramp(APRON, APRON + APRON_EDGE, lots[index].reach(x, z))
+        )
+    return open
+
+
+def lot_shade(mut geometry: BufferGeometry, lots: List[Lot], seed: Int) raises:
+    """Bare a ground mesh's colors round its lots, toward mottled dirt.
+
+    Args:
+        geometry: A ground mesh, with `position` and `color`.
+        lots: The lots.
+        seed: Which mottle the dirt has.
+
+    Raises:
+        Error: If the geometry has no `position` or no `color`.
+    """
+    ref positions = geometry.attribute_view(String(POSITION))
+    ref colors = geometry.attribute_view(String(COLOR))
+    var bared = List[Float32]()
+    bared.reserve(3 * positions.count())
+    for v in range(positions.count()):  # pragma: no branch
+        var p = positions.vector3(v)
+        var c = colors.vector3(v)
+        var bare = 1 - lot_openness(lots, p.x, p.z)
+        var dirt = DIRT + (DIRT_DARK - DIRT) * value_noise(
+            p.x / 0.7, p.z / 0.7, seed
+        )
+        c = c + (dirt - c) * bare
+        bared.append(c.x)
+        bared.append(c.y)
+        bared.append(c.z)
+    geometry.set_attribute(COLOR, BufferAttribute(bared^, 3))
 
 
 def ridge_ring(

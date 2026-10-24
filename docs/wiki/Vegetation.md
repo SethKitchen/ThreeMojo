@@ -94,7 +94,7 @@ The wind loop renders 4 moments for each of its 48 frames, and takes about 55 mi
 | `noise.mojo` | `hash01`, `value_noise`, `value_noise3` and `layered_noise`. |
 | `wind.mojo` | `Wind`: gusts that travel downwind, a sway, and a flutter. |
 | `blade.mojo` | `Blade`, and `BladeMesh`, which bakes blades into one geometry. |
-| `ground.mojo` | `Ground`: hills, a `Canyon`, the grass masks, the ground mesh, the cliff wall and the mountain ring. |
+| `ground.mojo` | `Ground`: hills, a `Canyon`, a `Pond`, the grass masks, the ground mesh, the cliff wall and the mountain ring. `Lot`, `lot_openness` and `lot_shade`. |
 | `field.mojo` | `GrassField`: clusters, levels of detail and the blade stream. |
 | `limbs.mojo` | `CrownShape`, `LimbParameters` and `grow_limbs`: branches grown by space colonization, and `limb_mesh`. |
 | `litter.mojo` | `ground_litter`: fallen leaves, twigs and pebbles on bare ground. |
@@ -246,6 +246,30 @@ Bare ground is mottled dirt, light and dark brown.
 `ground_litter` scatters fallen leaves, twigs and pebbles on the bare ground. It tries `litter` points within `litter_reach` of the field's middle. A point in full shade is littered 90 times in a hundred, and a point of bare dirt 50 times.
 
 Of the litter, 78 percent is leaves, 17 percent is pebbles and the rest is twigs. A leaf is a diamond that lies on the ground, brown, ochre or a dull green. A pebble has eight faces, each with its own normal. All of it is one mesh that takes the sun's shadow.
+
+## Ponds and lots
+
+A `Pond` carves a round basin into the ground. A `Lot` keeps a rectangle of the ground free of plants. [Village](Village) uses both: it puts water in the pond and a building on each lot.
+
+### A pond
+
+`Ground(pond=Pond(x, z, radius, depth))` carves the basin. `no_pond()` carves nothing, and it is the default.
+
+- `Ground.water_level` is 30 centimeters below the hills at the pond's middle.
+- The basin's floor is `depth` below the water. The inner 30 percent of the radius is flat. The floor rises smoothly to the hills at `radius`.
+- Ground that would lie below the water is raised to 5 centimeters above it. So the water shows only in the basin. A canyon's floor is still cut below the water.
+- The bed and the shore are bare mud, up to 30 centimeters above the water. `Ground.wet` is true there, and the meadow stands no tree or bush on wet ground.
+- The grass is short round the pond, out to 1.6 times its radius.
+
+The ground has no water of its own. Compose the water into the picture after the render, at `water_level`. See [Water](Water).
+
+### A lot
+
+`MeadowParameters.lots` lists the lots, up to 1,000. A lot has a middle, a half width, a half depth and a turn about +y.
+
+- `lot_openness` is zero on a lot and on an apron 0.8 meters wide round it. It rises smoothly to one over the next 1.6 meters. `GrassField.cover_at` thins the grass by it.
+- `lot_shade` turns the ground mesh's colors on a lot and its apron to mottled dirt.
+- The meadow stands no tree or bush where `lot_openness` is below one.
 
 ## Ground, sky and light
 

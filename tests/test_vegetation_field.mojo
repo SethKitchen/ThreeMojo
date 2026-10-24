@@ -16,7 +16,7 @@ from extensions.vegetation.field import (
     default_bands,
     no_stats,
 )
-from extensions.vegetation.ground import Clearing, Ground
+from extensions.vegetation.ground import Clearing, Ground, Lot
 from extensions.vegetation.kinds import (
     BEYOND,
     BROADLEAF,
@@ -341,12 +341,17 @@ def test_a_level_whose_blades_are_all_bare_builds_nothing() raises:
 
 
 def test_a_clearing_thins_the_grass_round_a_tree() raises:
-    """A field's cover is the ground's, thinned by its clearings: none at
-    a tree's foot. Fewer blades grow in a clearing than in the open."""
+    """A field's cover is the ground's, thinned by its clearings and its
+    lots: none at a tree's foot or on a lot. Fewer blades grow in a
+    clearing than in the open."""
     var open = GrassField(_small(), Ground())
     var shaded = GrassField(_small(), Ground())
     shaded.clearings = [Clearing(0, 0, 6)]
     assert_almost_equal(shaded.cover_at(0, 0), 0)
+    var built = GrassField(_small(), Ground())
+    built.lots = [Lot(5, 5, 2, 2, 0)]
+    assert_almost_equal(built.cover_at(5, 5), 0)
+    assert_almost_equal(built.cover_at(-5, -5), open.cover_at(-5, -5))
     assert_almost_equal(shaded.cover_at(7, 7), open.cover_at(7, 7))
     var in_open = 0
     var in_shade = 0
