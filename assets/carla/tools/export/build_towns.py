@@ -27,7 +27,9 @@ import os
 import re
 import shutil
 import struct
+import subprocess
 import sys
+import tempfile
 import zlib
 
 import numpy
@@ -618,30 +620,44 @@ BAKE_DENSITY = 6.0
 BAKE_MOST = 512
 
 
+def _dilate_tool(image, covered, passes):
+    """Return JSON from `tools/carla_town_dilate.mojo`."""
+    here = os.path.dirname(os.path.abspath(__file__))
+    repo = os.path.abspath(os.path.join(here, "..", "..", "..", ".."))
+    mojo = os.path.join(repo, ".venv", "bin", "mojo")
+    if not os.path.isfile(mojo):
+        mojo = "mojo"
+    folder = tempfile.mkdtemp(prefix="town dilate ")
+    try:
+        path = os.path.join(folder, "view.json")
+        with open(path, "w", encoding="utf-8") as handle:
+            json.dump({
+                "image": numpy.asarray(image, dtype=numpy.float64).tolist(),
+                "covered": numpy.asarray(covered, dtype=bool).tolist(),
+                "passes": int(passes),
+            }, handle)
+        result = subprocess.run(
+            ["sh", os.path.join(repo, "tools", "tool.sh"), mojo,
+             "carla_town_dilate", path],
+            capture_output=True, text=True,
+        )
+    finally:
+        shutil.rmtree(folder, ignore_errors=True)
+    if result.returncode != 0:
+        raise ValueError(result.stderr.strip() or "dilate failed")
+    return json.loads(result.stdout)
+
+
 def _dilate(image, covered, passes=6):
     """Spread the covered texels' colors into the uncovered ones next to
-    them, so filtering at a view's edge does not bleed the background."""
-    image = image.copy()
-    covered = covered.copy()
-    for _ in range(passes):
-        if covered.all():
-            break
-        grown = covered.copy()
-        total = numpy.zeros_like(image)
-        count = numpy.zeros(covered.shape)
-        for dy, dx in ((1, 0), (-1, 0), (0, 1), (0, -1)):
-            shifted = numpy.roll(numpy.roll(covered, dy, axis=0), dx, axis=1)
-            colors = numpy.roll(numpy.roll(image, dy, axis=0), dx, axis=1)
-            take = shifted & ~covered
-            total[take] += colors[take]
-            count[take] += 1
-            grown |= take
-        fill = (count > 0) & ~covered
-        image[fill] = total[fill] / count[fill][:, None]
-        covered = grown
-    if not covered.all() and covered.any():
-        image[~covered] = image[covered].mean(axis=0)
-    return image
+    them, so filtering at a view's edge does not bleed the background.
+
+    `tools/carla_town_dilate.mojo` spreads the colors.
+    """
+    values = _dilate_tool(image, covered, passes)
+    if len(numpy.shape(image)) == 0:
+        return numpy.asarray(image, dtype=numpy.float64).copy()
+    return numpy.array(values, dtype=numpy.float64)
 
 
 def _view(parts, library, forward, right, up, low_r, low_u, width, height, columns, rows):

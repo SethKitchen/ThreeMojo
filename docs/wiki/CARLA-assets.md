@@ -440,7 +440,7 @@ The meshes are merged by tile, by kind and by material. A tile is 32 meters squa
 
 The near level keeps the detail that a camera sees close up. The far level keeps what shows at a distance. It leaves out the grass, the bushes, the props, the parked vehicles, the signs and the lamps' glass. A far tree is an impostor: two quads that cross on its trunk. Each quad shows a picture of the tree, drawn from its near level from the front or from the side, with its leaves cut out.
 
-A far building is a baked proxy. Its corners are gathered into cells a 200th of its size, and the joined mesh is simplified. Its near level is drawn from each side and from above into one picture, and each far triangle shows the view that faces it. So its windows and its trim are in the picture, not in the geometry. The picture holds no light: the renderer lights the proxy.
+A far building is a baked proxy. Its corners are gathered into cells a 200th of its size, and the joined mesh is simplified. Its near level is drawn from each side and from above into one picture, and each far triangle shows the view that faces it. So its windows and its trim are in the picture, not in the geometry. `tools/carla_town_dilate.mojo` spreads colors into the empty texels. The picture holds no light: the renderer lights the proxy.
 
 A town's glass is a dark, smooth, partly metal pane that reflects its surroundings. A see-through window has nothing behind it, so a tower would show the sky through its windows.
 
@@ -508,8 +508,10 @@ Equal encoded images can share one packaged file.
 ## Test the town exporter
 
 The standard-library identity checks run with `make test-tools`.
-The synthetic bake checks need only NumPy and Pillow. They use two small
-meshes and two colors. They need no CARLA release, server or GPU.
+The synthetic bake checks need NumPy, Pillow and the repository Mojo.
+They use two small meshes and two colors. They need no CARLA release,
+server or GPU. They call `tools/carla_town_dilate.mojo` through
+`tools/tool.sh`.
 
 Only mesh simplification is substituted. The tests use the real material
 reconstruction, texture conversion, bake rasterizers and GLB writer. They
@@ -523,8 +525,9 @@ uv pip install --python .venv-carla-export/bin/python --only-binary :all: "numpy
 .venv-carla-export/bin/python -m unittest discover -s assets/carla/tools/export -p 'test_build_towns.py'
 ```
 
-The existing Linux and macOS lint jobs run this command. They keep the Mojo
-environment unchanged. A missing dependency or wheel fails the check.
+The existing Linux and macOS lint jobs run this command. They install
+Mojo when the bake checks run. The exporter packages stay in a separate
+environment. A missing dependency or wheel fails the check.
 
 ## Why not Poly Haven
 
