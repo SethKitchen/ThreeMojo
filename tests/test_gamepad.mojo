@@ -13,6 +13,12 @@ Like SDL's virtual driver, the script sends every axis when one changes,
 every button when one changes, and the hat when it changes.
 """
 
+from extensions.gamepad.effects import (
+    MAX_RUMBLE_DURATION,
+    RumbleState,
+    require_color,
+)
+from units.si import Duration64, Frequency, SECOND
 from std.testing import (
     TestSuite,
     assert_equal,
@@ -31,6 +37,9 @@ from extensions.gamepad.gamepad import (
 from extensions.gamepad.guid import (
     BUS_USB,
     DRIVER_NONE,
+    DRIVER_RAWINPUT,
+    DRIVER_WGI,
+    DRIVER_XINPUT,
     JoystickGuid,
     ProductId,
     VendorId,
@@ -69,6 +78,9 @@ from extensions.gamepad.joystick import (
     JOYSTICK_HAT_MOTION,
     Joystick,
     JoystickEventKind,
+    SENSOR_ACCEL,
+    SENSOR_GYRO,
+    SensorType,
 )
 from extensions.gamepad.mapping import (
     BIND_AXIS,
@@ -524,6 +536,83 @@ def test_an_axis_at_its_top_end_takes_a_new_rest() raises:
     joystick.send_axis(0, 32767)
     joystick.send_axis(0, 50)
     assert_equal(joystick.axes[0].initial_value, 50)
+
+
+def test_state_corners() raises:
+    """The checks around SDL's state calls, which no recorded device hits."""
+    # A rumble longer than SDL's longest is cut to it.
+    var state = RumbleState()
+    _ = state.commit(True, True, 1, 1, Duration64(100, SECOND), Duration64(0))
+    assert_true(state.expiration.value() == MAX_RUMBLE_DURATION)
+    with assert_raises():
+        require_color(-1, 0, 0)
+    # Two pads SDL knows are centered at zero, even with more axes.
+    for pair in [(0x05A0, 0x3232), (0x0E8F, 0x3013)]:
+        var known = create_joystick_guid(
+            BUS_USB,
+            VendorId(pair[0]),
+            ProductId(pair[1]),
+            0,
+            "",
+            "Pad",
+            DRIVER_NONE,
+            0,
+        )
+        var stick = Joystick("Pad", known, 3, 0, 0)
+        assert_true(stick.axes[2].has_initial_value)
+        _ = Joystick("Pad", known, 0, 0, 0)
+    # XInput, RawInput and WGI pads rest their triggers at the bottom.
+    for driver in [DRIVER_XINPUT, DRIVER_RAWINPUT, DRIVER_WGI]:
+        var guid = JoystickGuid()
+        guid.data[14] = UInt8(driver.value)
+        var pad = Joystick("Pad", guid, 6, 0, 0)
+        var left = 2 if driver == DRIVER_XINPUT else 4
+        assert_equal(pad.get_axis(left), -32768)
+    var joystick = Joystick("Pad", JoystickGuid(), 2, 1, 0)
+    with assert_raises():
+        joystick.add_touchpad(-1)
+    with assert_raises():
+        joystick.add_sensor(SensorType(9), Frequency(0))
+    with assert_raises():
+        joystick.set_sensor_enabled(SENSOR_GYRO, True)
+    joystick.add_touchpad(1)
+    joystick.add_sensor(SENSOR_GYRO, Frequency(0))
+    # A reading of a sensor that is off, or missing, is dropped.
+    joystick.send_sensor(SENSOR_GYRO, Duration64(0), 1)
+    joystick.send_sensor(SENSOR_ACCEL, Duration64(0), 1)
+    # A touch on a touchpad or finger that does not exist is dropped, and a
+    # position outside 0 to 1 is clamped.
+    joystick.send_touchpad(1, 0, True, 0.5, 0.5, 1)
+    joystick.send_touchpad(-1, 0, True, 0.5, 0.5, 1)
+    joystick.send_touchpad(0, 1, True, 0.5, 0.5, 1)
+    joystick.send_touchpad(0, -1, True, 0.5, 0.5, 1)
+    joystick.send_touchpad(0, 0, True, -2, 3, 1)
+    var database = MappingDatabase()
+    _ = database.add_mapping(
+        "00000000000000000000000000000000,Pad,leftx:a0,lefty:a1,a:b0,"
+    )
+    var gamepad = Gamepad(joystick^, database.mappings[0])
+    var finger = gamepad.touchpad_finger(0, 0)
+    assert_equal(finger.x, 0)
+    assert_equal(finger.y, 1)
+    assert_equal(gamepad.touchpad_finger_count(-1), 0)
+    assert_equal(gamepad.touchpad_finger_count(1), 0)
+    with assert_raises():
+        _ = gamepad.touchpad_finger(1, 0)
+    with assert_raises():
+        _ = gamepad.touchpad_finger(0, 1)
+    with assert_raises():
+        _ = gamepad.touchpad_finger(0, -1)
+    assert_equal(gamepad.sensor_data_rate(SENSOR_ACCEL).value, 0)
+    with assert_raises():
+        _ = gamepad.sensor_data(SENSOR_ACCEL)
+    for axis in [-1, 3]:
+        with assert_raises():
+            _ = gamepad.acceleration(SENSOR_ACCEL, axis)
+        with assert_raises():
+            _ = gamepad.angular_velocity(SENSOR_GYRO, axis)
+    with assert_raises():
+        _ = gamepad.angular_velocity(SensorType(-1), 0)
 
 
 def main() raises:

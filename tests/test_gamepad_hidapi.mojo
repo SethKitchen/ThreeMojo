@@ -64,7 +64,7 @@ from extensions.gamepad.linux import (
     default_mapping_database,
 )
 from units.si import Duration64, Frequency, SECOND
-from _gamepad_hid_script import ScriptedHid
+from _gamepad_hid_script import ScriptedHid, hex_bytes
 from test_scratch import TestScratch, temporary_path
 
 comptime STANDARD = (
@@ -377,6 +377,15 @@ def test_gamepad() raises:
     with assert_raises():
         _ = HidGamepad[ScriptedHid](
             _info("p", 0x1234, 0x5678, "Pad"), ScriptedHid(), _seconds(0)
+        )
+    # A Switch pad that says it is a Joy-Con: the driver does not start.
+    var joycon = ScriptedHid()
+    joycon.queue.append(hex_bytes("81010001665544332211"))
+    with assert_raises():
+        _ = HidGamepad[ScriptedHid](
+            _info("p", 0x0E6F, 0x0186, "Pad", bus=HID_BUS_USB),
+            joycon^,
+            _seconds(0),
         )
     var pad = HidGamepad[ScriptedHid](_xbox(), ScriptedHid(), _seconds(0))
     assert_true(pad.driver == HID_DRIVER_XBOXONE)

@@ -140,6 +140,7 @@ from extensions.gamepad.linux import (
     open_gamepads,
     open_gamepads_with,
     probe_joystick,
+    probe_sensor,
     read_absinfo,
     read_capabilities,
 )
@@ -180,6 +181,8 @@ struct RecordedDevice(EvdevSource):
     # Whether the device was unplugged, and whether writes fail.
     var unplugged: Bool
     var write_fails: Bool
+    # Whether the kernel forgets the uploaded effect once.
+    var lose_effect: Bool
 
     def __init__(
         out self,
@@ -209,6 +212,7 @@ struct RecordedDevice(EvdevSource):
         self.next_effect = 0
         self.unplugged = False
         self.write_fails = False
+        self.lose_effect = False
         set_bit(self.events, EV_SYN)
 
     def key(mut self, code: Int):
@@ -245,6 +249,11 @@ struct RecordedDevice(EvdevSource):
             return _sine_pad()
         if name == "event20":
             return _late_pad()
+        if name == "deaf":
+            # A sensor device that does not give its axes.
+            var device = _motion_sensors()
+            device.fail(eviocgbit(EV_ABS, 8))
+            return device^
         raise Error("No recorded device at " + path)
 
     def write_from(mut self, buffer: List[UInt8]) -> Int:
@@ -306,6 +315,9 @@ struct RecordedDevice(EvdevSource):
             return len(bytes) + 1
         if number == 0x80:
             var id = Int(buffer[2]) | (Int(buffer[3]) << 8)
+            if self.lose_effect and id != 0xFFFF:
+                self.lose_effect = False
+                return -1
             if id == 0xFFFF:
                 id = self.next_effect
                 self.next_effect += 1
@@ -1329,6 +1341,7 @@ def test_event_nodes_are_found_in_sdl_order() raises:
         assert_true(file.query(eviocgbit(0, 8), buffer) < 0)
         assert_true(file.readable())
         assert_equal(file.read_into(buffer), 0)
+        assert_equal(file.write_from(buffer), 8)
         with assert_raises():
             _ = EvdevFile(root + "/missing")
 
@@ -1552,6 +1565,41 @@ def test_rumble_resends_and_recovers() raises:
     var mute = _paired(database)
     mute.source.write_fails = True
     assert_false(mute.rumble_at(1, 1, Duration64(0), Duration64(0)))
+
+
+def test_sensor_and_rumble_corners() raises:
+    var database = default_mapping_database()
+    # A lost effect that uploads again as a new one.
+    var pad = _paired(database)
+    assert_true(pad.rumble(100, 200, Duration64(0)))
+    pad.source.lose_effect = True
+    assert_true(pad.rumble_at(300, 400, Duration64(0), Duration64(0)))
+    assert_equal(pad.effect_id, 1)
+    # A sensor device that goes away cannot be turned on again.
+    assert_true(pad.set_sensor_enabled(SENSOR_GYRO, True))
+    pad.sensor_sources[0].unplug()
+    _ = pad.update_at(Duration64(0))
+    assert_true(pad.sensor_gone)
+    _ = pad.update_at(Duration64(0))
+    assert_true(pad.set_sensor_enabled(SENSOR_GYRO, False))
+    assert_false(pad.set_sensor_enabled(SENSOR_GYRO, True))
+    # Nor can one that no longer opens.
+    var moved = _paired(database)
+    moved.sensor_path = "/x/missing"
+    assert_false(moved.set_sensor_enabled(SENSOR_GYRO, True))
+    # A sensor device that does not open, or does not give its axes,
+    # gives no sensors.
+    for path in ["/x/missing", "/x/deaf"]:
+        var source = RecordedDevice.open("/x/event3")
+        var info = probe_joystick(source, "/x/event3")
+        var lone = EvdevGamepad(
+            source^, info.value(), database, sensor_path=path
+        )
+        assert_false(lone.gamepad.has_sensor(SENSOR_GYRO))
+    # A device that does not say who it is is no sensor device.
+    var anonymous = RecordedDevice.open("/x/event4")
+    anonymous.fail(EVIOCGID)
+    assert_false(probe_sensor(anonymous))
 
 
 def test_the_hub_follows_devices_as_sdl_does() raises:

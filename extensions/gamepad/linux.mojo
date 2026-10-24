@@ -950,6 +950,22 @@ struct EvdevGamepad[S: EvdevSource](Movable):
         """
         require_strength(low)
         require_strength(high)
+        return self._rumble(low, high, duration, now)
+
+    def _rumble(
+        mut self, low: Int, high: Int, duration: Duration64, now: Duration64
+    ) -> Bool:
+        """Rumble with strengths that fit 16 bits.
+
+        Args:
+            low: The low frequency strength.
+            high: The high frequency strength.
+            duration: How long.
+            now: The time now.
+
+        Returns:
+            Whether the pad rumbles.
+        """
         var sent = self.rumble_state.needs_send(low, high)
         var succeeded = sent and self._driver_rumble(low, high)
         return self.rumble_state.commit(
@@ -1096,10 +1112,10 @@ struct EvdevGamepad[S: EvdevSource](Movable):
         The first read takes the device's whole state, so that a button
         held at open shows as down.
         """
+        # The pad opens with its sensors off, so the first read takes the
+        # joystick's state alone.
         if self.state.fresh:
             self._read_state()
-            if self.report_sensor:
-                self._read_sensor_state()
             self.state.fresh = False
         if not self.gone:
             self.gone = not self._read_events(False)
@@ -1122,19 +1138,15 @@ struct EvdevGamepad[S: EvdevSource](Movable):
         """
         self._read_device()
         if self.rumble_state.expired(now):
-            try:
-                _ = self.rumble_at(0, 0, Duration64(0), now)
-            except:
-                pass
+            _ = self._rumble(0, 0, Duration64(0), now)
             self.rumble_state.resend = None
         if self.rumble_state.resend_due(now):
             _ = self._driver_rumble(
                 self.rumble_state.first, self.rumble_state.second
             )
             self.rumble_state.resent(now)
-        if self.trigger_rumble_state.expired(now):
-            self.trigger_rumble_state.expiration = None
-            self.trigger_rumble_state.resend = None
+        # The driver has no trigger motors, so trigger rumble never starts
+        # and never needs to stop.
         return self.gamepad.update()
 
     def update(mut self) -> List[GamepadEvent]:
@@ -1302,7 +1314,8 @@ def _sensor_for(
         The path of the first unpaired sensor device with the same id, or
         an empty string.
     """
-    for index in range(len(found)):
+    # The joystick being paired is in `found`.
+    for index in range(len(found)):  # pragma: no branch
         if found[index].info or used[index]:
             continue
         if found[index].uniq == uniq:
