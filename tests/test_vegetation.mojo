@@ -29,6 +29,7 @@ from extensions.vegetation.ground import (
 from extensions.vegetation.kinds import (
     BEYOND,
     BROADLEAF,
+    BUTTERCUP,
     CULLED,
     DRAWN,
     DRY_GRASS,
@@ -113,11 +114,13 @@ def test_plant_kinds_are_named_and_checked() raises:
     assert_equal(POPPY.name(), "poppy")
     assert_equal(SEED_HEAD.name(), "seed head")
     assert_equal(BROADLEAF.name(), "broad leaf")
-    assert_equal(PlantKind(5).name(), "unknown")
+    assert_equal(BUTTERCUP.name(), "buttercup")
+    assert_equal(PlantKind(6).name(), "unknown")
     assert_true(GRASS.is_valid())
     assert_true(BROADLEAF.is_valid())
     assert_false(PlantKind(-1).is_valid())
-    assert_false(PlantKind(5).is_valid())
+    assert_true(BUTTERCUP.is_valid())
+    assert_false(PlantKind(6).is_valid())
     require_plant_kind(POPPY)
     with assert_raises(contains="plant kind"):
         require_plant_kind(PlantKind(7))
@@ -292,6 +295,30 @@ def test_the_sway_rolls_downwind_and_grows_in_a_gust() raises:
     assert_true(widest_gust > 3 * widest_calm)
 
 
+def test_a_tree_sways_a_little_and_slowly() raises:
+    """A tree leans downwind by a small share of the grass's lean, more in
+    a gust, and rocks once a loop in a 2 second loop. Still air sways
+    nothing."""
+    var wind = Wind(heading=Angle(0.0, DEGREE), loop=Duration(2.0, SECOND))
+    var most = Float32(0)
+    var least = Float32(1)
+    for k in range(40):
+        var lean = wind.tree_sway(
+            Float32(k) * 3.1, Float32(k) * -1.7, 0.3, Duration(0.4, SECOND)
+        )
+        assert_almost_equal(lean.y, 0, atol=1e-7)
+        most = max(most, lean.x)
+        least = min(least, lean.x)
+    assert_true(most < wind.lean.to(RADIAN) * (0.025 + 0.008) + 1e-6)
+    assert_true(most > least)
+    var a = wind.tree_sway(2, 3, 0.6, Duration(0.25, SECOND))
+    var b = wind.tree_sway(2, 3, 0.6, Duration(2.25, SECOND))
+    assert_almost_equal(a.x, b.x, atol=1e-6)
+    assert_almost_equal(
+        still_air().tree_sway(2, 3, 0.6, Duration(0.7, SECOND)).length(), 0
+    )
+
+
 def test_tip_bend_leans_downwind_and_still_air_leans_nothing() raises:
     """A full gust with no sway and no flutter leans the tip by `lean`,
     downwind. Still air bends nothing."""
@@ -368,7 +395,7 @@ def test_blade_check_refuses_each_bad_field() raises:
     with assert_raises(contains="shade"):
         b.check()
     b = _blade(GRASS)
-    b.kind = PlantKind(5)
+    b.kind = PlantKind(6)
     with assert_raises(contains="plant kind"):
         b.check()
 
@@ -473,6 +500,30 @@ def test_a_poppy_carries_a_red_cup() raises:
     var rim = 3 * (mesh.vertex_count() - 1)
     assert_true(mesh.colors[rim] > 10 * mesh.colors[rim + 1])
     assert_true(mesh.positions[rim + 1] > 0.4)
+
+
+def test_a_buttercup_carries_a_small_yellow_cup() raises:
+    """A buttercup is a poppy's stem with a smaller cup of five yellow
+    petals."""
+    var mesh = BladeMesh()
+    mesh.add(_blade(BUTTERCUP), 3, Vector2(0, 0), 1.0)
+    assert_equal(mesh.vertex_count(), 7 + 15)
+    var rim = 3 * (mesh.vertex_count() - 1)
+    assert_true(mesh.colors[rim] > mesh.colors[rim + 1])
+    assert_true(mesh.colors[rim + 1] > 20 * mesh.colors[rim + 2])
+    var poppy = BladeMesh()
+    poppy.add(_blade(POPPY), 3, Vector2(0, 0), 1.0)
+    var tip = 3 * 6
+    var cup = Float32(0)
+    var poppy_cup = Float32(0)
+    for v in range(7, 22):
+        cup = max(cup, abs(mesh.positions[3 * v] - mesh.positions[tip]))
+        poppy_cup = max(
+            poppy_cup, abs(poppy.positions[3 * v] - poppy.positions[tip])
+        )
+    assert_true(cup < poppy_cup)
+    var stem = blade_colors(BUTTERCUP, 0.5)
+    assert_almost_equal(stem.tip.y, blade_colors(POPPY, 0.5).tip.y)
 
 
 def test_a_seed_head_tops_its_stalk_with_a_spike() raises:

@@ -15,9 +15,10 @@ sun.
 2. **Grow the drawn clusters.** Each drawn cluster grows its blades again
    at its level, bends them by the wind at this time, and replaces its
    geometry. A culled or far cluster is hidden, and costs nothing more.
-3. **Pick each tree's crown.** Each tree wears the crown of the first
-   `CrownLevel` whose reach holds it: every leaf near, and fewer, larger
-   leaves further away.
+3. **Pick each tree's crown, and sway it.** Each tree wears the crown of
+   the first `CrownLevel` whose reach holds it: every leaf near, and
+   fewer, larger leaves further away. Each tree leans from its foot by
+   `Wind.tree_sway`, a degree or so in a gust.
 4. **Fit the sun.** `SunLight.update` fits its two shadow cascades to the
    view. The trees, the bushes and the boulders cast. The grass only
    receives. The dark roots of each blade stand in for its shadow on
@@ -876,6 +877,17 @@ struct Meadow(Movable):
             var entry = tree.crown * len(self.levels) + level
             scene.meshes[tree.wood].geometry = self.woods[entry]
             scene.meshes[tree.wood + 1].geometry = self.leaves[entry]
+            # The tree leans from its foot. A lean of zero is no turn,
+            # whatever the axis.
+            var lean = self.wind.tree_sway(
+                tree.place.x, tree.place.z, hash01(t, 0, 977), time
+            )
+            var angle = lean.length()
+            var axis = Vector3(lean.y, 0, -lean.x) / max(angle, 1.0e-9)
+            var stand = scene.meshes[tree.wood].node
+            scene.node(stand).set_rotation_from_axis_angle(
+                axis, Angle(angle, RADIAN)
+            )
         scene.update()
         self.sun.update(scene, camera)
         return stats

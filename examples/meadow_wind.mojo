@@ -41,7 +41,7 @@ comptime RATE = 24
 comptime LOOP = Float32(2.0)
 # The moments blended into each frame, and the share of a frame's time
 # the shutter is open.
-comptime SHUTTER = 3
+comptime SHUTTER = 4
 comptime OPEN = Float32(0.5)
 
 

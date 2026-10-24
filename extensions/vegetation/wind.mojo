@@ -14,7 +14,9 @@ bent blade shows more of its lit face. So the motion has three scales:
   downwind at `gust_speed`. Every blade under a patch bends together,
   which gives the sweep. `gust` is value noise read in a frame that moves
   with the wind, stretched across the wind so a gust front is a band. A
-  slower noise bends each front, so it is a ragged curve and not a line.
+  slower noise bends each front, so it is a ragged curve and not a line,
+  and smaller gusts cross the large ones at an angle. The whole pattern
+  travels with the wind, as turbulence does.
 - A sway is a wave that rolls downwind every `sway_length`, `sway_rate`
   times a second. Whole tufts ride it together: pushed forward, they snap
   flat, and they spring back. The sway is mostly in the gusts: calm air
@@ -63,11 +65,23 @@ comptime GUST_STRETCH = Float32(1.8)
 # How far a slow noise bends the gust fronts, in gust lengths: a front is
 # a ragged curve, with Vs where it lags, and not a straight line.
 comptime WARP = Float32(1.2)
+# The smaller gusts: their size as a share of a gust's, the share of the
+# gust field they make, and the cosine and sine of the angle at which they
+# cross the large ones, 35 degrees.
+comptime SMALL_GUST = Float32(0.55)
+# How far a tree leans in a full gust, and how far it rocks, as shares of
+# the wind's lean, and how many times a second it rocks.
+comptime TREE_LEAN = Float32(0.025)
+comptime TREE_ROCK = Float32(0.008)
+comptime TREE_RATE = Float32(0.5)
+comptime CROSS_SHARE = Float32(0.35)
+comptime CROSS_COS = Float32(0.81915204)
+comptime CROSS_SIN = Float32(0.57357644)
 # The gust noise below the first of these is calm air, and above the
 # second a full gust. The noise rarely leaves the middle of its range, so
 # the edges are close together, and a gust front is sharp.
-comptime GUST_LOW = Float32(0.4)
-comptime GUST_HIGH = Float32(0.6)
+comptime GUST_LOW = Float32(0.39)
+comptime GUST_HIGH = Float32(0.61)
 # How much of a cycle the phases of the blades spread the sway: a little,
 # so the sway stays one wave across a patch.
 comptime SWAY_SPREAD = Float32(0.08)
@@ -240,12 +254,21 @@ struct Wind(ImplicitlyCopyable):
         var down = self.downwind()
         var length = self.gust_length.to(METER)
         var travel = self.gust_speed.to(METER_PER_SECOND) * seconds
-        var along = (x * down.x + z * down.y - travel) / length
-        var across = (z * down.x - x * down.y) / (length * GUST_STRETCH)
+        var forward = x * down.x + z * down.y - travel
+        var sideways = z * down.x - x * down.y
+        var along = forward / length
+        var across = sideways / (length * GUST_STRETCH)
         var bent = value_noise(
             across * 1.3 + 4.1, along * 0.35 + 2.7, self.seed + 5
         )
-        return layered_noise(along + WARP * (bent - 0.5), across, self.seed)
+        var main = layered_noise(along + WARP * (bent - 0.5), across, self.seed)
+        # Smaller gusts cross the large ones at an angle, so the fronts
+        # meet in Vs and break into patches.
+        var small = length * SMALL_GUST
+        var u = forward * CROSS_COS + sideways * CROSS_SIN
+        var v = sideways * CROSS_COS - forward * CROSS_SIN
+        var cross = layered_noise(u / small, v / (small * 1.4), self.seed + 11)
+        return main * (1 - CROSS_SHARE) + cross * CROSS_SHARE
 
     def _rate(self, rate: Float32) -> Float32:
         """Return a rate a second: a whole number a loop when the wind
@@ -345,6 +368,39 @@ struct Wind(ImplicitlyCopyable):
         return Vector2(
             down.x * along - down.y * side, down.y * along + down.x * side
         )
+
+    def tree_sway(
+        self, x: Float32, z: Float32, phase: Float32, time: Duration
+    ) -> Vector2:
+        """Return how far a tree leans from its foot, and which way.
+
+        A tree is stiff and heavy, so it leans little and slowly. A full
+        gust leans it `TREE_LEAN` of the wind's `lean` downwind, and calm
+        air `calm` of that. It also rocks by `TREE_ROCK` of the lean,
+        `TREE_RATE` times a second. A looping wind rocks it a whole number
+        of times a loop.
+
+        Args:
+            x: The tree's foot's x, in meters.
+            z: The tree's foot's z, in meters.
+            phase: The tree's own phase, from zero to one.
+            time: The time since the wind began.
+
+        Returns:
+            The lean: x and z, in radians.
+        """
+        var down = self.downwind()
+        var gust = self.gust(x, z, time)
+        var swing = (
+            Float32(2)
+            * Float32(pi)
+            * (self._rate(TREE_RATE) * self._clock(time) + phase)
+        )
+        var along = self.lean.to(RADIAN) * (
+            TREE_LEAN * (self.calm + (1 - self.calm) * gust)
+            + TREE_ROCK * sin(swing)
+        )
+        return Vector2(down.x * along, down.y * along)
 
 
 def still_air() raises -> Wind:
