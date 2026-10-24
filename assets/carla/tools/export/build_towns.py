@@ -1060,6 +1060,38 @@ def _view(parts, library, forward, right, up, low_r, low_u, width, height, colum
     return _dilate(image[:, :, :3], image[:, :, 3] > 0)
 
 
+def _join_tool(parts):
+    """Return JSON from `tools/carla_town_join.mojo`."""
+    here = os.path.dirname(os.path.abspath(__file__))
+    repo = os.path.abspath(os.path.join(here, "..", "..", "..", ".."))
+    mojo = os.path.join(repo, ".venv", "bin", "mojo")
+    if not os.path.isfile(mojo):
+        mojo = "mojo"
+    payload = {"parts": []}
+    for part, _material in parts:
+        payload["parts"].append({
+            "positions": numpy.asarray(part["positions"], dtype=float).reshape(-1, 3).tolist(),
+            "normals": numpy.asarray(part["normals"], dtype=float).reshape(-1, 3).tolist(),
+            "uvs": numpy.asarray(part["uvs"], dtype=float).reshape(-1, 2).tolist(),
+            "triangles": numpy.asarray(part["triangles"]).reshape(-1, 3).tolist(),
+        })
+    folder = tempfile.mkdtemp(prefix="town-join-")
+    try:
+        path = os.path.join(folder, "join.json")
+        with open(path, "w", encoding="utf-8") as handle:
+            json.dump(payload, handle, separators=(",", ":"), allow_nan=False)
+        result = subprocess.run(
+            ["sh", os.path.join(repo, "tools", "tool.sh"), mojo,
+             "carla_town_join", path],
+            capture_output=True, text=True,
+        )
+    finally:
+        shutil.rmtree(folder, ignore_errors=True)
+    if result.returncode != 0:
+        raise ValueError(result.stderr.strip() or "join failed")
+    return json.loads(result.stdout)
+
+
 def _atlas_tool(payload):
     """Return JSON from `tools/carla_town_atlas.mojo`."""
     here = os.path.dirname(os.path.abspath(__file__))
@@ -1091,16 +1123,16 @@ def baked_building(parts, library, out_dir, name, target):
     from above. Each far triangle reads the view that faces it most, so
     its windows and its trim are pictures, not geometry.
 
-    `tools/carla_town_atlas.mojo` sizes the views, joins them, and writes
-    the texture coordinates.
+    `tools/carla_town_join.mojo` joins the primitives. `tools/carla_town_atlas.mojo`
+    sizes the views and writes the texture coordinates.
     """
     from PIL import Image
+    joined = _join_tool(parts)
     whole = {
-        "positions": numpy.concatenate([p["positions"] for p, _ in parts]),
-        "normals": numpy.concatenate([p["normals"] for p, _ in parts]),
-        "uvs": numpy.concatenate([p["uvs"] for p, _ in parts]),
-        "triangles": numpy.concatenate([p["triangles"] + sum(len(q["positions"]) for q, _ in parts[:i])
-                                        for i, (p, _) in enumerate(parts)]),
+        "positions": numpy.array(joined["positions"], dtype=numpy.float64),
+        "normals": numpy.array(joined["normals"], dtype=numpy.float64),
+        "uvs": numpy.array(joined["uvs"], dtype=numpy.float64),
+        "triangles": numpy.array(joined["triangles"], dtype=numpy.int64),
         "material": name,
     }
     far = simplify_welded(whole, target)
