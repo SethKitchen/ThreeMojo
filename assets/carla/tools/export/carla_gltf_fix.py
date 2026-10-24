@@ -32,7 +32,9 @@ import os
 import re
 import shutil
 import struct
+import subprocess
 import sys
+import tempfile
 
 from PIL import Image
 
@@ -498,24 +500,43 @@ def decimate(gltf, data, budget):
     return compact(gltf, bytes(out))
 
 
+def _gltf_tool(gltf, data, mode):
+    """Run one Mojo glTF buffer step and update `gltf` in place."""
+    root = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "..", ".."))
+    mojo = os.path.join(root, ".venv", "bin", "mojo")
+    if not os.path.isfile(mojo):
+        mojo = "mojo"
+    work = tempfile.mkdtemp(prefix="gltf compact ")
+    try:
+        source_gltf = os.path.join(work, "in.gltf")
+        source_bin = os.path.join(work, "in.bin")
+        out_gltf = os.path.join(work, "out.gltf")
+        out_bin = os.path.join(work, "out.bin")
+        with open(source_gltf, "w", encoding="utf-8") as handle:
+            json.dump(gltf, handle)
+        with open(source_bin, "wb") as handle:
+            handle.write(data)
+        result = subprocess.run(
+            ["sh", os.path.join(root, "tools", "tool.sh"), mojo,
+             "carla_gltf_compact", mode, source_gltf, source_bin, out_gltf, out_bin],
+            text=True, capture_output=True, check=False,
+        )
+        if result.returncode != 0:
+            raise ValueError(result.stderr.strip() or "glTF compact failed")
+        with open(out_gltf, encoding="utf-8") as handle:
+            updated = json.load(handle)
+        gltf.clear()
+        gltf.update(updated)
+        with open(out_bin, "rb") as handle:
+            return handle.read()
+    finally:
+        shutil.rmtree(work)
+
+
 def dedupe_materials(gltf):
     """Keep one material of each name. The merge gives each primitive its
     own copy, so a car's glass is twenty materials."""
-    first = {}
-    kept = []
-    new_index = []
-    for material in gltf.get("materials", []):
-        name = material.get("name", "")
-        if name not in first:
-            first[name] = len(kept)
-            kept.append(material)
-        new_index.append(first[name])
-    for mesh in gltf["meshes"]:
-        for primitive in mesh["primitives"]:
-            if "material" in primitive:
-                primitive["material"] = new_index[primitive["material"]]
-    if kept:
-        gltf["materials"] = kept
+    _gltf_tool(gltf, b"", "dedupe")
 
 
 def strip_skin(gltf, data):
@@ -528,56 +549,13 @@ def strip_skin(gltf, data):
     where the car stands. The skin, the joints and the weights go; the
     bone nodes stay as named markers of the wheels.
     """
-    for node in gltf["nodes"]:
-        node.pop("skin", None)
-    gltf.pop("skins", None)
-    for mesh in gltf["meshes"]:
-        for primitive in mesh["primitives"]:
-            attributes = primitive["attributes"]
-            # Unreal's vertex colors are masks for its materials, not
-            # colors: glTF would multiply them into the paint.
-            for key in [k for k in attributes if k.startswith(("JOINTS_", "WEIGHTS_", "COLOR_"))]:
-                del attributes[key]
-    return compact(gltf, data)
+    return _gltf_tool(gltf, data, "strip")
 
 
 def compact(gltf, data):
     """Return the buffer with only the bytes a primitive reads, and point
     the views and accessors at their new places."""
-    # Keep the accessors a primitive reads, and the views they read.
-    used = []
-    for mesh in gltf["meshes"]:
-        for primitive in mesh["primitives"]:
-            used += list(primitive["attributes"].values())
-            if "indices" in primitive:
-                used.append(primitive["indices"])
-    accessor_of = {old: new for new, old in enumerate(sorted(set(used)))}
-    accessors = [gltf["accessors"][old] for old in sorted(accessor_of)]
-    view_of = {}
-    views = []
-    out = bytearray()
-    for accessor in accessors:
-        old = accessor["bufferView"]
-        if old not in view_of:
-            view = dict(gltf["bufferViews"][old])
-            start = view.get("byteOffset", 0)
-            out += b"\0" * (-len(out) % 4)
-            chunk = data[start:start + view["byteLength"]]
-            view["byteOffset"] = len(out)
-            out += chunk
-            view_of[old] = len(views)
-            views.append(view)
-        accessor["bufferView"] = view_of[old]
-    for mesh in gltf["meshes"]:
-        for primitive in mesh["primitives"]:
-            primitive["attributes"] = {k: accessor_of[v] for k, v in primitive["attributes"].items()}
-            if "indices" in primitive:
-                primitive["indices"] = accessor_of[primitive["indices"]]
-    gltf["accessors"] = accessors
-    gltf["bufferViews"] = views
-    out += b"\0" * (-len(out) % 4)
-    gltf["buffers"] = [{"uri": gltf["buffers"][0]["uri"], "byteLength": len(out)}]
-    return bytes(out)
+    return _gltf_tool(gltf, data, "compact")
 
 
 def main():
