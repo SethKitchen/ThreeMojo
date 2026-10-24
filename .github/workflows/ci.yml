@@ -142,8 +142,8 @@ jobs:
           # uv venv installs an import hook; proof-bearing environments cannot.
           "$PYTHON" -m venv --without-pip --prompt ThreeMojo .venv
 
-      - name: Install Mojo only for selected native checks
-        if: needs.scope.outputs.run_native == 'true' || needs.scope.outputs.run_docs == 'true' || needs.scope.outputs.run_coverage_tools == 'true' || needs.scope.outputs.run_portability == 'true'
+      - name: Install Mojo for selected checks
+        if: needs.scope.outputs.run_native == 'true' || needs.scope.outputs.run_docs == 'true' || needs.scope.outputs.run_coverage_tools == 'true' || needs.scope.outputs.run_portability == 'true' || needs.scope.outputs.run_export == 'true'
         run: |
           uv pip install --python .venv/bin/python "mojo==1.2.0"
           .venv/bin/mojo --version
@@ -360,8 +360,8 @@ jobs:
           # uv venv installs an import hook; proof-bearing environments cannot.
           "$PYTHON" -m venv --without-pip --prompt ThreeMojo .venv
 
-      - name: Install Mojo only for selected native checks
-        if: needs.scope.outputs.run_native == 'true' || needs.scope.outputs.run_docs == 'true' || needs.scope.outputs.run_coverage_tools == 'true' || needs.scope.outputs.run_portability == 'true'
+      - name: Install Mojo for selected checks
+        if: needs.scope.outputs.run_native == 'true' || needs.scope.outputs.run_docs == 'true' || needs.scope.outputs.run_coverage_tools == 'true' || needs.scope.outputs.run_portability == 'true' || needs.scope.outputs.run_export == 'true'
         run: |
           uv pip install --python .venv/bin/python "mojo==1.2.0"
           .venv/bin/mojo --version

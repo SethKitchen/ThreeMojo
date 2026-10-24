@@ -462,7 +462,7 @@ The towns are made in three steps. The scripts run on Windows, like the vehicle 
    python dump_layout.py
    ```
 
-   The Python API does not say which mesh each object uses, and UModel cannot read the cooked levels. So `dump_layout.py` runs CARLA with UE4SS, a scripting runtime, and a Lua mod, `layout_dump/main.lua`. The mod writes each static mesh component: its mesh, its materials, its transform and its instances. The server runs with `-nullrhi`, so it does not use the GPU. Each run stops after `--limit` seconds, 60 by default.
+   The Python API does not say which mesh each object uses, and UModel cannot read the cooked levels. So `dump_layout.py` runs CARLA with UE4SS, a scripting runtime, and a Lua mod, `layout_dump/main.lua`. The mod writes each static mesh component: its mesh, its materials, its transform and its instances. `tools/carla_town_rows.mojo` reads that layout. The server runs with `-nullrhi`, so it does not use the GPU. Each run stops after `--limit` seconds, 60 by default.
 
    Use UE4SS experimental build 3.0.1-1152 or later. Version 3.0.1 stops CARLA 0.9.16 at start.
 
@@ -508,8 +508,10 @@ Equal encoded images can share one packaged file.
 ## Test the town exporter
 
 The standard-library identity checks run with `make test-tools`.
-The synthetic bake checks need only NumPy and Pillow. They use two small
-meshes and two colors. They need no CARLA release, server or GPU.
+The synthetic bake checks need NumPy, Pillow and the repository Mojo.
+They use two small meshes and two colors. They need no CARLA release,
+server or GPU. They call `tools/carla_town_rows.mojo` through
+`tools/tool.sh`.
 
 Only mesh simplification is substituted. The tests use the real material
 reconstruction, texture conversion, bake rasterizers and GLB writer. They
@@ -523,8 +525,9 @@ uv pip install --python .venv-carla-export/bin/python --only-binary :all: "numpy
 .venv-carla-export/bin/python -m unittest discover -s assets/carla/tools/export -p 'test_build_towns.py'
 ```
 
-The existing Linux and macOS lint jobs run this command. They keep the Mojo
-environment unchanged. A missing dependency or wheel fails the check.
+The existing Linux and macOS lint jobs run this command. They install
+Mojo when the bake checks run. The exporter packages stay in a separate
+environment. A missing dependency or wheel fails the check.
 
 ## Why not Poly Haven
 

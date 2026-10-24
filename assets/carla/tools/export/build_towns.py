@@ -27,6 +27,7 @@ import os
 import re
 import shutil
 import struct
+import subprocess
 import sys
 import zlib
 
@@ -977,9 +978,31 @@ def lamp_heads(primitives, mesh_path):
     return None
 
 
+def _rows_tool(path):
+    """Return JSON from `tools/carla_town_rows.mojo`."""
+    here = os.path.dirname(os.path.abspath(__file__))
+    repo = os.path.abspath(os.path.join(here, "..", "..", "..", ".."))
+    mojo = os.path.join(repo, ".venv", "bin", "mojo")
+    if not os.path.isfile(mojo):
+        mojo = "mojo"
+    result = subprocess.run(
+        ["sh", os.path.join(repo, "tools", "tool.sh"), mojo,
+         "carla_town_rows", path],
+        capture_output=True, text=True,
+    )
+    if result.returncode != 0:
+        if not os.path.isfile(path):
+            raise FileNotFoundError(path)
+        raise ValueError(result.stderr.strip() or "layout read failed")
+    return json.loads(result.stdout)
+
+
 def rows_of(town):
-    with open(os.path.join(LAYOUT, town + ".jsonl"), encoding="utf-8") as lines:
-        return [json.loads(line) for line in lines]
+    """Return a town's layout rows.
+
+    `tools/carla_town_rows.mojo` reads the file.
+    """
+    return _rows_tool(os.path.join(LAYOUT, town + ".jsonl"))
 
 
 def placements(row):
