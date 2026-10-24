@@ -32,7 +32,9 @@ import os
 import re
 import shutil
 import struct
+import subprocess
 import sys
+import tempfile
 
 from PIL import Image
 
@@ -338,60 +340,35 @@ def split_lamps(gltf, data):
     behind it a tail lamp: `"extras": {"carla": "heads"}` and `"tails"`.
     The lamps then glow white and red, as the town's own cars do.
     """
-    lamp = [i for i, m in enumerate(gltf.get("materials", []))
-            if m.get("extras", {}).get("carla") == "lamps"]
-    if not lamp:
-        return data
-    xs = []
-    for mesh in gltf["meshes"]:
-        for primitive in mesh["primitives"]:
-            accessor = gltf["accessors"][primitive["attributes"]["POSITION"]]
-            xs += [accessor["min"][0], accessor["max"][0]]
-    middle = (min(xs) + max(xs)) / 2
-    heads = lamp[0]
-    gltf["materials"][heads] = {
-        "name": "CarlaHeadLamps",
-        "pbrMetallicRoughness": {"baseColorFactor": [0.85, 0.85, 0.8, 1], "metallicFactor": 0.0,
-                                 "roughnessFactor": 0.15},
-        "extras": {"carla": "heads"},
-    }
-    gltf["materials"].append({
-        "name": "CarlaTailLamps",
-        "pbrMetallicRoughness": {"baseColorFactor": [0.3, 0.01, 0.01, 1], "metallicFactor": 0.0,
-                                 "roughnessFactor": 0.2},
-        "extras": {"carla": "tails"},
-    })
-    tails = len(gltf["materials"]) - 1
-    out = bytearray(data)
-    for mesh in gltf["meshes"]:
-        split = []
-        for primitive in mesh["primitives"]:
-            if primitive.get("material") not in lamp or "indices" not in primitive:
-                split.append(primitive)
-                continue
-            indices, _ = _read(data, gltf, primitive["indices"])
-            positions, _ = _read(data, gltf, primitive["attributes"]["POSITION"])
-            parts = ([], [])
-            for t in range(0, len(indices) - 2, 3):
-                corners = indices[t:t + 3]
-                x = sum(positions[3 * c] for c in corners) / 3
-                parts[0 if x >= middle else 1].extend(corners)
-            for material, part in ((heads, parts[0]), (tails, parts[1])):
-                if not part:
-                    continue
-                out += b"\0" * (-len(out) % 4)
-                gltf["bufferViews"].append({"buffer": 0, "byteOffset": len(out),
-                                            "byteLength": 4 * len(part), "target": 34963})
-                out += struct.pack("<%dI" % len(part), *part)
-                gltf["accessors"].append({"bufferView": len(gltf["bufferViews"]) - 1,
-                                          "componentType": 5125, "count": len(part), "type": "SCALAR"})
-                piece = dict(primitive)
-                piece["indices"] = len(gltf["accessors"]) - 1
-                piece["material"] = material
-                split.append(piece)
-        mesh["primitives"] = split
-    gltf["buffers"][0]["byteLength"] = len(out)
-    return bytes(out)
+    root = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "..", ".."))
+    mojo = os.path.join(root, ".venv", "bin", "mojo")
+    if not os.path.isfile(mojo):
+        mojo = "mojo"
+    work = tempfile.mkdtemp(prefix="gltf lamps ")
+    try:
+        source_gltf = os.path.join(work, "in.gltf")
+        source_bin = os.path.join(work, "in.bin")
+        out_gltf = os.path.join(work, "out.gltf")
+        out_bin = os.path.join(work, "out.bin")
+        with open(source_gltf, "w", encoding="utf-8") as handle:
+            json.dump(gltf, handle)
+        with open(source_bin, "wb") as handle:
+            handle.write(data)
+        result = subprocess.run(
+            ["sh", os.path.join(root, "tools", "tool.sh"), mojo,
+             "carla_gltf_lamps", source_gltf, source_bin, out_gltf, out_bin],
+            text=True, capture_output=True, check=False,
+        )
+        if result.returncode != 0:
+            raise ValueError(result.stderr.strip() or "lamp split failed")
+        with open(out_gltf, encoding="utf-8") as handle:
+            updated = json.load(handle)
+        gltf.clear()
+        gltf.update(updated)
+        with open(out_bin, "rb") as handle:
+            return handle.read()
+    finally:
+        shutil.rmtree(work)
 
 
 def _append(out, gltf, values, form, component, kind, target):
