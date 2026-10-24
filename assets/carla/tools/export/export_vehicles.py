@@ -75,19 +75,31 @@ VEHICLES = {
 _classes = {}
 
 
+def _paths_tool(kind, root, name):
+    """Return text from `tools/carla_vehicle_paths.mojo`."""
+    here = os.path.dirname(os.path.abspath(__file__))
+    repo = os.path.abspath(os.path.join(here, "..", "..", "..", ".."))
+    mojo = os.path.join(repo, ".venv", "bin", "mojo")
+    if not os.path.isfile(mojo):
+        mojo = "mojo"
+    result = subprocess.run(
+        ["sh", os.path.join(repo, "tools", "tool.sh"), mojo,
+         "carla_vehicle_paths", kind, root, name],
+        capture_output=True, text=True,
+    )
+    if result.returncode != 0:
+        if kind == "blueprint":
+            raise FileNotFoundError(name)
+        raise ValueError(result.stderr.strip() or "vehicle path failed")
+    return result.stdout.rstrip("\n")
+
+
 def find_blueprint(relative):
-    """Return the blueprint file, matching its name without case."""
-    folder = os.path.join(BLUEPRINTS, os.path.dirname(relative))
-    want = os.path.basename(relative).lower() + ".uasset"
-    for name in os.listdir(folder):
-        if name.lower() == want:
-            return os.path.join(folder, name)
-    # Otherwise the folder's one vehicle blueprint: not a wheel's.
-    for name in sorted(os.listdir(folder)):
-        low = name.lower()
-        if low.startswith("bp_") and low.endswith(".uasset") and not re.search(r"_(f|r)(l|r)?w\.uasset$", low):
-            return os.path.join(folder, name)
-    raise FileNotFoundError(relative)
+    """Return the blueprint file, matching its name without case.
+
+    `tools/carla_vehicle_paths.mojo` finds the file.
+    """
+    return _paths_tool("blueprint", BLUEPRINTS, relative)
 
 
 def references(blueprint):
@@ -104,25 +116,19 @@ def package_file(game_path):
     A name's number is stored apart from it, so a blueprint can name
     `SK_Volkswagen_T2` for the package `SK_Volkswagen_T2_2021`: a missing
     name falls back to the one package in its folder that extends it.
+
+    `tools/carla_vehicle_paths.mojo` finds the file.
     """
-    rel = game_path[len("/Game/"):] + ".uasset"
-    path = os.path.join(CONTENT, *rel.split("/"))
-    if os.path.exists(path):
-        return path
-    folder = os.path.dirname(path)
-    stem = os.path.basename(game_path) + "_"
-    if os.path.isdir(folder):
-        found = [n for n in os.listdir(folder) if n.startswith(stem) and n.endswith(".uasset")
-                 and not re.search(r"skeleton|physics", n, re.I)]
-        if len(found) == 1:
-            return os.path.join(folder, found[0])
-    return None
+    found = _paths_tool("package", CONTENT, game_path)
+    return found or None
 
 
 def game_path_of(path):
-    """Return the `/Game/...` package path of a cooked `.uasset`."""
-    rel = os.path.relpath(path, CONTENT).replace("\\", "/")[: -len(".uasset")]
-    return "/Game/" + rel
+    """Return the `/Game/...` package path of a cooked `.uasset`.
+
+    `tools/carla_vehicle_paths.mojo` reads the path.
+    """
+    return _paths_tool("game", CONTENT, path)
 
 
 def export_class(game_path):
