@@ -129,7 +129,9 @@ Some portable features remain partial, including [GLSL shaders](https://github.c
 ### Project tools
 
 <details>
-<summary>Implemented: 34</summary>
+<summary>Implemented: 35</summary>
+
+- [x] [Neutral CARLA texture plan](https://github.com/SethKitchen/ThreeMojo/wiki/CARLA-assets#the-carla-towns): `tools/carla_texture_plan.mojo` names a neutral texture and chooses its fitted size [#761](https://github.com/SethKitchen/ThreeMojo/issues/761)
 
 - [x] [Vehicle body and glass](https://github.com/SethKitchen/ThreeMojo/wiki/CARLA-assets#rebuild-the-vehicle-zips): `tools/carla_vehicle_pick.mojo` chooses the largest skeletal mesh and the static glass [#761](https://github.com/SethKitchen/ThreeMojo/issues/761)
 

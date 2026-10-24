@@ -29,7 +29,6 @@ import hashlib
 import io
 import json
 import os
-import re
 import shutil
 import struct
 import subprocess
@@ -38,12 +37,6 @@ import tempfile
 
 from PIL import Image
 
-# Textures that show another company's mark, a real person or a real
-# institution, or poster art of unclear origin. CARLA's license covers its
-# own work, not these, so each becomes one flat color: its average.
-NEUTRAL = re.compile(
-    r"^(bmw_logo|vh_car_mercedesbenzcoupe_mercedestopmat_basecolor|vh_car_minicoopers_minimat"
-    r"|t_carlacola_d|vh_truck_carlacola_bodyworkmat_basecolor|t_billboard_d|sm_banner_|t_banner)", re.I)
 # A primitive of fewer triangles is not simplified: a badge, a mirror.
 KEEP = 400
 
@@ -203,6 +196,51 @@ def resize_image(pixels, width, height, bands, out_width, out_height, mode):
     return json.loads(result.stdout)["pixels"]
 
 
+def _texture_plan(path, color, max_size, width, height, masked):
+    """Return the packaged size and encoding from `tools/carla_texture_plan.mojo`.
+
+    A neutral file name becomes an 8 pixel square before the size limit.
+    `masked` keeps an optimized PNG and does not use the neutral names.
+    """
+    here = os.path.dirname(os.path.abspath(__file__))
+    repo = os.path.abspath(os.path.join(here, "..", "..", "..", ".."))
+    mojo = os.path.join(repo, ".venv", "bin", "mojo")
+    if not os.path.isfile(mojo):
+        mojo = "mojo"
+    folder = tempfile.mkdtemp(prefix="texture-plan-")
+    try:
+        request = os.path.join(folder, "plan.json")
+        with open(request, "w", encoding="utf-8") as handle:
+            json.dump({
+                "mode": "fit" if masked else "texture",
+                "path": path,
+                "color": bool(color),
+                "max": int(max_size),
+                "width": int(width),
+                "height": int(height),
+            }, handle, separators=(",", ":"))
+        result = subprocess.run(
+            ["sh", os.path.join(repo, "tools", "tool.sh"), mojo,
+             "carla_texture_plan", request],
+            capture_output=True, text=True,
+        )
+    finally:
+        shutil.rmtree(folder, ignore_errors=True)
+    if result.returncode != 0:
+        raise ValueError(result.stderr.strip() or "texture plan failed")
+    return json.loads(result.stdout)
+
+
+def _save_texture(package, image, plan):
+    """Encode `image` with the format and options in `plan`."""
+    options = {}
+    if plan["quality"] >= 0:
+        options["quality"] = int(plan["quality"])
+    if plan["optimize"]:
+        options["optimize"] = True
+    return package._write_texture(image, plan["format"], **options)
+
+
 def _pillow_resize(image, size, mode):
     """Return `image` resized to `size` by the Mojo Pillow filter."""
     if image.mode not in ("L", "RGB", "RGBA"):
@@ -248,31 +286,25 @@ class Package:
 
     def texture(self, source, color):
         """Return the texture index for image file `source`, adding it. A
-        texture that `NEUTRAL` names becomes a small image of its average
-        color, under a plain name."""
+        texture that a neutral name selects becomes a small image of its
+        average color, under a plain name. `tools/carla_texture_plan.mojo`
+        names those textures and chooses the fitted size."""
         key = (source, color)
         if key in self.images:
             return self.images[key]
-        stem = os.path.splitext(os.path.basename(source))[0]
-        neutral = bool(NEUTRAL.search(stem))
         image = Image.open(source)
-        if neutral:
+        plan = _texture_plan(
+            source, color, self.max_size, image.width, image.height, False,
+        )
+        if plan["neutral"]:
             rgb = image.convert("RGB")
             average = resize_image(
                 list(rgb.tobytes()), rgb.width, rgb.height, 3, 1, 1, "box",
             )
             image = Image.new("RGB", (8, 8), tuple(average))
-        if max(image.size) > self.max_size:
-            scale = self.max_size / max(image.size)
-            image = _pillow_resize(
-                image,
-                (max(1, round(image.width * scale)), max(1, round(image.height * scale))),
-                "lanczos",
-            )
-        if color:
-            uri = self._write_texture(image.convert("RGB"), "JPEG", quality=88)
-        else:
-            uri = self._write_texture(image.convert("RGB"), "JPEG" if neutral else "PNG", optimize=True)
+        if plan["resize"]:
+            image = _pillow_resize(image, (plan["width"], plan["height"]), "lanczos")
+        uri = _save_texture(self, image.convert("RGB"), plan)
         self.gltf["images"].append({"uri": uri})
         self.gltf["textures"].append({"sampler": 0, "source": len(self.gltf["images"]) - 1})
         index = len(self.gltf["textures"]) - 1
@@ -304,14 +336,10 @@ class Package:
         alpha = _pillow_resize(alpha, rgb.size, "lanczos")
         image = rgb.copy()
         image.putalpha(alpha)
-        if max(image.size) > self.max_size:
-            scale = self.max_size / max(image.size)
-            image = _pillow_resize(
-                image,
-                (max(1, round(image.width * scale)), max(1, round(image.height * scale))),
-                "lanczos",
-            )
-        uri = self._write_texture(image, "PNG", optimize=True)
+        plan = _texture_plan("", False, self.max_size, image.width, image.height, True)
+        if plan["resize"]:
+            image = _pillow_resize(image, (plan["width"], plan["height"]), "lanczos")
+        uri = _save_texture(self, image, plan)
         self.gltf["images"].append({"uri": uri})
         self.gltf["textures"].append({"sampler": 0, "source": len(self.gltf["images"]) - 1})
         index = len(self.gltf["textures"]) - 1
