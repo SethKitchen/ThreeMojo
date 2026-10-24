@@ -32,7 +32,9 @@ import os
 import re
 import shutil
 import struct
+import subprocess
 import sys
+import tempfile
 
 from PIL import Image
 
@@ -394,22 +396,50 @@ def split_lamps(gltf, data):
     return bytes(out)
 
 
+def _append_tool(payload):
+    """Return JSON from `tools/carla_gltf_append.mojo`."""
+    here = os.path.dirname(os.path.abspath(__file__))
+    repo = os.path.abspath(os.path.join(here, "..", "..", "..", ".."))
+    mojo = os.path.join(repo, ".venv", "bin", "mojo")
+    if not os.path.isfile(mojo):
+        mojo = "mojo"
+    folder = tempfile.mkdtemp(prefix="gltf append ")
+    try:
+        path = os.path.join(folder, "append.json")
+        with open(path, "w", encoding="utf-8") as handle:
+            json.dump(payload, handle)
+        result = subprocess.run(
+            ["sh", os.path.join(repo, "tools", "tool.sh"), mojo,
+             "carla_gltf_append", path],
+            capture_output=True, text=True,
+        )
+    finally:
+        shutil.rmtree(folder, ignore_errors=True)
+    if result.returncode != 0:
+        raise ValueError(result.stderr.strip() or "buffer append failed")
+    return json.loads(result.stdout)
+
+
 def _append(out, gltf, values, form, component, kind, target):
     """Append values to the buffer as a new view and accessor, and return
-    the accessor's index."""
-    out += b"\0" * (-len(out) % 4)
-    raw = struct.pack("<%d%s" % (len(values), form), *values)
-    gltf["bufferViews"].append({"buffer": 0, "byteOffset": len(out), "byteLength": len(raw),
-                                "target": target})
-    out += raw
-    width = {"SCALAR": 1, "VEC2": 2, "VEC3": 3, "VEC4": 4}[kind]
-    accessor = {"bufferView": len(gltf["bufferViews"]) - 1, "componentType": component,
-                "count": len(values) // width, "type": kind}
-    if kind == "VEC3" and form == "f":
-        accessor["min"] = [min(values[i::3]) for i in range(3)]
-        accessor["max"] = [max(values[i::3]) for i in range(3)]
-    gltf["accessors"].append(accessor)
-    return len(gltf["accessors"]) - 1
+    the accessor's index.
+
+    `tools/carla_gltf_append.mojo` packs the bytes.
+    """
+    doc = _append_tool({
+        "length": len(out),
+        "viewIndex": len(gltf["bufferViews"]),
+        "accessorIndex": len(gltf["accessors"]),
+        "values": [float(value) if form == "f" else int(value) for value in values],
+        "form": form,
+        "component": component,
+        "kind": kind,
+        "target": target,
+    })
+    out += bytes(doc["bytes"])
+    gltf["bufferViews"].append(doc["view"])
+    gltf["accessors"].append(doc["accessor"])
+    return doc["index"]
 
 
 def decimate(gltf, data, budget):
