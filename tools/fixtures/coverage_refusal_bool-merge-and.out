@@ -1,0 +1,22 @@
+CASE AND False False
+MAKE L False
+BOOL L False
+MERGE L False
+BODY T
+CASE AND False True
+MAKE L False
+BOOL L False
+MERGE L False
+BODY T
+CASE AND True False
+MAKE L True
+BOOL L True
+MAKE R False
+MERGE R False
+BODY T
+CASE AND True True
+MAKE L True
+BOOL L True
+MAKE R True
+MERGE R True
+BODY F

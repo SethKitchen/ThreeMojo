@@ -290,5 +290,38 @@ def test_the_control_fixtures_match_the_pinned_text() raises:
     assert_equal(len(lines.splitlines()), 28)
 
 
+def test_the_refusal_fixtures_match_the_pinned_text() raises:
+    var index = Path("tools/fixtures/coverage_refusal_index.txt").read_text()
+    assert_equal(
+        sha256_hex(index.as_bytes()),
+        "125a8c5ceb0e0b728af21180b8f56d8b4f235b2c82e7a3f0b142b3951ec7c765",
+    )
+    var blob = String()
+    var count = 0
+    for line in index.splitlines():
+        var text = String(line)
+        var first = text.find("|")
+        var name = String(text[byte=:first])
+        var rest = String(text[byte = first + 1 :])
+        var second = rest.find("|")
+        var kind = String(rest[byte=:second])
+        var source = Path(
+            "tools/fixtures/coverage_refusal_" + name + ".txt"
+        ).read_text()
+        blob += name
+        blob += "\0"
+        blob += source
+        if kind != "none":
+            blob += Path(
+                "tools/fixtures/coverage_refusal_" + name + ".out"
+            ).read_text()
+        count += 1
+    assert_equal(count, 20)
+    assert_equal(
+        sha256_hex(blob.as_bytes()),
+        "725fd1a2ff233ef0f810f4c9a01594947f11f467ab68ec6d6818cdc1aaedafbc",
+    )
+
+
 def main() raises:
     TestSuite.discover_tests[__functions_in_module()]().run()

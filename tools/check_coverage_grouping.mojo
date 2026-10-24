@@ -5082,6 +5082,136 @@ def check_custom_truth_controls(mojo: String) raises:
         _ = run_program(["rm", "-rf", work], 30)
 
 
+def _refusal_fields(line: String) raises -> Tuple[String, String, String]:
+    var first = line.find("|")
+    if first < 0:
+        raise Error("refusal index " + line)
+    var name = String(line[byte=:first])
+    var rest = String(line[byte = first + 1 :])
+    var second = rest.find("|")
+    if second < 0:
+        raise Error("refusal index " + line)
+    var kind = String(rest[byte=:second])
+    var message = String(rest[byte = second + 1 :])
+    return (name, kind, message)
+
+
+def check_custom_refusals(mojo: String) raises:
+    """Require every original negative control to run and then be refused.
+
+    Args:
+        mojo: The Mojo compiler.
+
+    Raises:
+        Error: If native output, the manifest, or a refusal message differs.
+    """
+    var root = absolute_path(".")
+    var compiler = absolute_path(mojo)
+    var index_text = Path(
+        "tools/fixtures/coverage_refusal_index.txt"
+    ).read_text()
+    var work = mkdtemp(prefix="threemojo-refusals-")
+    try:
+        var native = work + "/native"
+        var rewritten = work + "/rewritten"
+        _ = _must(["mkdir", "-p", native, rewritten], 10)
+        _ = _must(["cp", "-a", root + "/coverage", rewritten + "/coverage"], 30)
+        var built = rewritten + "/coverage/build"
+        if Path(built).exists():
+            _ = _must(["rm", "-rf", built], 10)
+        var build = work + "/build_cli"
+        _ = _must(
+            [
+                compiler,
+                "build",
+                "-Werror",
+                "-I",
+                root,
+                root + "/coverage/build_cli.mojo",
+                "-o",
+                build,
+            ],
+            180,
+        )
+        var count = 0
+        for line in index_text.splitlines():
+            var fields = _refusal_fields(String(line))
+            var name = fields[0]
+            var kind = fields[1]
+            var message = fields[2]
+            var source = Path(
+                "tools/fixtures/coverage_refusal_" + name + ".txt"
+            ).read_text()
+            Path(native + "/" + name + ".mojo").write_text(source)
+            var binary = work + "/" + name
+            _ = _must(
+                [
+                    compiler,
+                    "build",
+                    "-Werror",
+                    "-I",
+                    native,
+                    native + "/" + name + ".mojo",
+                    "-o",
+                    binary,
+                ],
+                180,
+            )
+            var ran = _must([binary], 5)
+            if kind != "none":
+                var expected = Path(
+                    "tools/fixtures/coverage_refusal_" + name + ".out"
+                ).read_text()
+                if ran.output != expected:
+                    raise Error(name + "\n" + ran.output + "\n" + expected)
+            if kind == "no-bool-r" and ran.output.find("BOOL R") >= 0:
+                raise Error(name + "\n" + ran.output)
+            if kind == "gated-flag" and ran.output.find("MERGE G") < 0:
+                raise Error(name + "\n" + ran.output)
+            if kind == "gated-plain" and ran.output.find("MERGE G") >= 0:
+                raise Error(name + "\n" + ran.output)
+            _ = _must([build, rewritten, name + ".mojo"], 60, native)
+            _require_origin(rewritten, name, source)
+            _require_compound_manifest(rewritten, name, source, 2)
+            var rejected = run_program(
+                [
+                    compiler,
+                    "build",
+                    "-Werror",
+                    "-I",
+                    rewritten,
+                    "-I",
+                    root,
+                    rewritten + "/" + name + ".mojo",
+                    "-o",
+                    work + "/rejected",
+                ],
+                180,
+                merge_errors=False,
+            )
+            if rejected.status == 0:
+                raise Error(name + " was accepted")
+            var errors = rejected.errors
+            if (
+                errors.find(
+                    "Coverage cannot yet preserve this compound condition"
+                )
+                < 0
+            ):
+                raise Error(name + "\n" + errors)
+            if errors.find(message) < 0:
+                raise Error(name + "\n" + errors)
+            count += 1
+        if count != 20:
+            raise Error("refusal count " + String(count))
+        print(
+            "PASS: 20 custom refusal controls keep native output and are"
+            " refused"
+        )
+    finally:
+        _ = run_program(["rm", "-rf", work], 30)
+
+
 def main() raises:
     """Compare the Boolean grouping fixture from the command line."""
     var mojo = ".venv/bin/mojo"
@@ -5116,6 +5246,7 @@ def main() raises:
         check_custom_truth_collision(mojo)
         check_custom_truth_refusals(mojo)
         check_custom_truth_controls(mojo)
+        check_custom_refusals(mojo)
     except error:
         print(String(error), file=stderr)
         exit(1)

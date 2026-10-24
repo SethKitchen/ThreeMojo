@@ -1,0 +1,20 @@
+struct Probe(Movable, Boolable):
+    var value: Bool
+
+    def __init__(out self, value: Bool):
+        self.value = value
+
+    def __bool__(self) -> Bool:
+        print("CONVERT")
+        return self.value
+
+
+def empty() -> Optional[Probe]:
+    return None
+
+
+def main():
+    if empty() or Probe(False):
+        print("T")
+    else:
+        print("F")

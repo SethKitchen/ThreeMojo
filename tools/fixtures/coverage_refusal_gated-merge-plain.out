@@ -1,0 +1,20 @@
+CASE False False
+MAKE G False
+BOOL G False
+MAKE P False
+BOOL P False
+BODY F
+CASE False True
+MAKE G False
+BOOL G False
+MAKE P True
+BOOL P True
+BODY T
+CASE True False
+MAKE G True
+BOOL G True
+BODY T
+CASE True True
+MAKE G True
+BOOL G True
+BODY T

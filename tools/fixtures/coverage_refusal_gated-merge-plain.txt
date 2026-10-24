@@ -1,0 +1,41 @@
+struct Gated(Movable, Boolable):
+    var value: Bool
+
+    def __init__(out self, value: Bool):
+        self.value = value
+        print("MAKE G", value)
+
+    def __bool__(self) -> Bool:
+        print("BOOL G", self.value)
+        return self.value
+
+    def __merge_with__[other_type: AnyType](self) -> Bool where other_type == Bool:
+        print("MERGE G", self.value)
+        return not self.value
+
+
+struct Plain(Movable, Boolable):
+    var value: Bool
+
+    def __init__(out self, value: Bool):
+        self.value = value
+        print("MAKE P", value)
+
+    def __bool__(self) -> Bool:
+        print("BOOL P", self.value)
+        return self.value
+
+
+def flag(value: Bool) -> Bool:
+    print("FLAG", value)
+    return value
+
+
+def main():
+    for first in [False, True]:
+        for second in [False, True]:
+            print("CASE", first, second)
+            if Gated(first) or Plain(second):
+                print("BODY T")
+            else:
+                print("BODY F")
