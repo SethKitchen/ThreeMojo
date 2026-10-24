@@ -41,13 +41,15 @@ Past the last level, the ground carries the far color of the grass that grows on
 
 The wind turns each segment of a blade by its share of an angle. It does not push the tip by a distance. A turned segment keeps its length, so a bent blade is as long as a straight one. A push would stretch the blade in a gust.
 
-A gust is a patch of noise that travels downwind. Every blade under a patch bends together. A bent blade shows more of its lit face, and the gust also brightens the tips it reaches. The patches are then seen as waves of light that sweep across the field. The flutter is a small wobble of each blade on its own, with its own phase.
+A gust is a patch of noise that travels downwind. Every blade under a patch bends together. A bent blade shows more of its lit face, and the gust also brightens the tips it reaches. The patches are then seen as waves of light that sweep across the field.
+
+The eye reads wind in what moves together. A blade that moves on its own is noise. A thin blade that trembles a few degrees moves a pixel or two a frame, and a field of them looks as if it buzzes. So the gust does most of the bending. The sway that rides on it moves whole patches in step. The flutter of each blade is only a degree.
 
 ## Why the wind loops
 
 An animation that plays round and round jumps at its end unless its last frame leads into its first. Noise that travels never comes back to where it started. So a looping wind fades the gusts at a time into the gusts one loop earlier. At the start of the loop the first pattern shows, and at its end the second, which is the first one again.
 
-Two patterns faded half and half are flatter than either. The fade divides by the length of its weights, `sqrt((1 - w)^2 + w^2)`, so the gusts keep their contrast through the loop. The flutter wobbles a whole number of times a loop, so it also ends where it began.
+Two patterns faded half and half are flatter than either. The fade divides by the length of its weights, `sqrt((1 - w)^2 + w^2)`, so the gusts keep their contrast through the loop. The sway and the flutter swing a whole number of times a loop, so they also end where they began.
 
 ## Why a blade is lit from both sides
 
@@ -55,10 +57,18 @@ A blade is thin. Light that reaches one face shows through on the other, so a bl
 
 `two_sided_program` adds `2 * (front_facing - 1) * normal` to the normal. The offset is zero on a front face. On a back face, it turns the normal to the front again. The leaves of the trees use the same program.
 
-## Why a crown is lit by its clumps
+## Why a tree grows toward points
 
-A crown is tens of thousands of small leaves turned every way. Lit by their own normals and the sun's shadow map, the leaves are a noise of light and dark, and thin leaves shadow themselves. Real crowns read as clumps: bright where the sun reaches a clump's top, and dark under it and inside the crown.
+A tree grown by rules, with each branch forking at fixed angles, has a crown that is even all round. Real crowns are not. A tree grows toward the light, and its limbs compete for room. So a crown is lobes of leaves with sky between them, and each lobe is fed by a limb.
 
-So the leaves hang in clumps, and the clumps are spheres. The light that reaches a leaf through spheres is exact and cheap: the sum of a few chords, and Beer's law. The sun's share dims only the sun, and the sky's share dims only the sky, as the light of a real crown does. A leaf in the shade then keeps the blue light of the sky.
+Space colonization grows a tree in that way. The crown's lobes are filled with points, the places that the leaves reach for. Each point pulls the branch nearest to it, and a branch grows toward the mean of its pulls. Points close together pull one branch, and points apart split it in two. A limb then grows into each lobe and forks to fill it, and a gap between the lobes stays open. The trunk forks where it enters the crown, as a lone tree's trunk does.
 
-A far crown keeps fewer leaves and makes each larger, and the farthest uses cards. It stays geometry, so it is lit and it casts a shadow as a near crown does.
+The thickness follows the pipe model, so each fork carries the wood of the branches above it.
+
+## Why a crown's light comes from a grid
+
+A crown is tens of thousands of small leaves turned every way. Lit by their own normals and the sun's shadow map, the leaves are a noise of light and dark, and thin leaves shadow themselves. Real crowns read as masses: bright where the sun reaches the top of a lobe, and dark under it and inside the crown.
+
+So each leaf carries the light that reaches it through the others. The leaves are counted in a grid of cells, and a ray from each leaf steps through the cells toward the sun and the sky. Beer's law gives the light that comes through. The grid holds any shape of crown, and its cost grows with the leaves, not with their square. The sun's share dims only the sun, and the sky's share dims only the sky, as the light of a real crown does. A leaf in the shade then keeps the blue light of the sky.
+
+A far crown keeps fewer leaves and makes each larger, and the farthest uses cards. It stays geometry, so it is lit and it casts a shadow as a near crown does. The crown is grown and lit once, and each level draws from the same leaves.

@@ -109,10 +109,12 @@ extensions/
     kinds.mojo     plant kinds and cluster fates
     checks.mojo    shared range checks
     noise.mojo     a lattice hash and value noise
-    wind.mojo      traveling gusts and a flutter
+    wind.mojo      traveling gusts, a sway and a flutter
     blade.mojo     one blade, and a buffer of many
     ground.mojo    hills, grass masks, ground and mountains
     field.mojo     clusters, levels of detail, the blade stream
+    limbs.mojo     branches grown by space colonization
+    foliage.mojo   leaves, and the light through a crown
     crown.mojo     leafy trees and bushes
     rock.mojo      boulders
     sky.mojo       Preetham's sky with clouds, in a cube

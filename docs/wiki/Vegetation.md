@@ -1,12 +1,12 @@
 # Vegetation
 
-`Meadow` builds open summer grassland: tall grass, poppies, trees and bushes of real leaves, a canyon, mountains, a clouded sky and a soft sun.
+`Meadow` builds open summer grassland: tall grass, poppies, buttercups, trees and bushes of real leaves, a canyon, mountains, a clouded sky and a soft sun.
 
-![A lone pale-trunked tree stands in tall grass, with scattered trees, a band of cliffs and hazy mountains beyond](out/meadow.png)
+![A lone pale-trunked tree with a lobed crown stands in wind-bent grass with poppies, with groves, a band of cliffs and hazy mountains beyond](out/meadow.png)
 
 `examples/meadow.mojo` draws this picture. The modules live in `extensions/vegetation/`. See [Extensions](Extensions). [Why grass is drawn in clusters](Why-grass-is-drawn-in-clusters) explains the design.
 
-The field holds about ten million blades. A frame grows and draws only the clusters that it can see, each at the level of detail that its distance picks. The frame above draws 474,000 blades as 1.6 million triangles. The lone tree near the camera has 135,000 leaves.
+The field holds about ten million blades. A frame grows and draws only the clusters that it can see, each at the level of detail that its distance picks. The frame above draws 512,000 blades as 2.0 million triangles. The lone tree near the camera has 71,000 leaves.
 
 ## Draw one frame
 
@@ -51,6 +51,22 @@ for index in range(48):
 
 A wind with a `loop` repeats itself after that time, so the animation plays round and round with no jump. Divide the loop evenly into the frames. Do not put a frame at the end of the loop: it is the first frame again.
 
+### Blur each frame
+
+A thin blade that moves a few pixels a frame jumps from frame to frame, and the field looks as if it buzzes. A film camera's shutter is open for part of each frame, so a moving blade smears. `blend_frames` gives the same blur: render a few moments inside the frame's shutter, and blend them.
+
+```mojo
+var moments = List[Framebuffer]()
+for k in range(4):
+    var within = (Float32(k) + 0.5) / 4 - 0.5
+    var seconds = step * (Float32(index) + 0.5 * within)
+    _ = meadow.update(scene, assets, camera, Duration(seconds, SECOND))
+    moments.append(renderer.render(scene, assets, camera))
+frames.append(blend_frames(moments))
+```
+
+`examples/meadow_wind.mojo` blends four moments across half of each frame's time. Each frame then costs four renders.
+
 ## What a frame draws
 
 `update` returns a `FieldStats`.
@@ -65,7 +81,9 @@ A wind with a `loop` repeats itself after that time, so the animation plays roun
 | `blades` | The blades that the drawn clusters read from their streams. |
 | `triangles` | The grass triangles of the drawn clusters. |
 
-`examples/meadow.mojo` prints these counts and the time of each step as JSON. On a four-core Linux host, the meadow builds in 12 seconds, most of it the 21 crowns. `update` takes 0.2 seconds, and the render takes 21 seconds at 1280 by 720. The 48 frames of the wind loop take about 15 minutes at 400 by 225. The render time grows with the triangle count. It changes little with the image size or the four samples a pixel.
+`examples/meadow.mojo` prints these counts and the time of each step as JSON. On a four-core Linux host, the meadow builds in 2 seconds. Each of its 8 crowns grows once, and each of its 3 levels draws from that. `update` takes 0.4 seconds, and the render takes 20 seconds at 1280 by 720.
+
+The wind loop renders 4 moments for each of its 48 frames, and takes about 45 minutes at 640 by 360. The render time grows with the triangle count. It changes little with the image size or the four samples a pixel.
 
 ## The parts
 
@@ -73,13 +91,14 @@ A wind with a `loop` repeats itself after that time, so the animation plays roun
 |---|---|
 | `kinds.mojo` | `PlantKind` and `ClusterFate`. |
 | `checks.mojo` | The range checks that the parameters share. |
-| `noise.mojo` | `hash01`, `value_noise` and `layered_noise`. |
-| `wind.mojo` | `Wind`: gusts that travel downwind, and a flutter. |
+| `noise.mojo` | `hash01`, `value_noise`, `value_noise3` and `layered_noise`. |
+| `wind.mojo` | `Wind`: gusts that travel downwind, a sway, and a flutter. |
 | `blade.mojo` | `Blade`, and `BladeMesh`, which bakes blades into one geometry. |
 | `ground.mojo` | `Ground`: hills, a `Canyon`, the grass masks, the ground mesh, the cliff wall and the mountain ring. |
 | `field.mojo` | `GrassField`: clusters, levels of detail and the blade stream. |
-| `foliage.mojo` | `Clump`, the light through clumps, `LeafMesh` and `foliage_program`. |
-| `crown.mojo` | `leafy_tree`: branches from `TreeGenerator`, clumps on the twigs, and leaves with their light. |
+| `limbs.mojo` | `CrownShape`, `LimbParameters` and `grow_limbs`: branches grown by space colonization, and `limb_mesh`. |
+| `foliage.mojo` | `LeafShade`, the light through the leaves, `LeafMesh` and `foliage_program`. |
+| `crown.mojo` | `grow_crown`, `dress` and `leafy_tree`: the limbs, the leaves on the twigs, and their light. |
 | `rock.mojo` | `boulder`: a stone pushed out by noise, with moss on top. |
 | `sky.mojo` | `paint_sky`: Preetham's sky with clouds, baked into a cube. |
 | `meadow.mojo` | `Meadow`, its parameters and plantings, its camera and its renderer. |
@@ -92,7 +111,11 @@ The width tapers as `1 - s * s`, where `s` runs from zero at the root to one at 
 
 The root color is dark, and the tip color is light. The dark root stands in for the shadow of the dense grass round it. `shade` mixes between two tip colors, so neighbors differ.
 
-The blades of a tuft curl out from its middle. A tuft has `tuft_blades` blades at full detail.
+The blades of a tuft curl out from its middle. A tuft has `tuft_blades` blades at full detail. Each tuft is a plant of its own. Its height, the width of its blades, how far they curl, their shade and their sway are its own, and its blades vary round them. So the field has tall tufts beside short ones, and broad blades beside fine ones.
+
+- A patch of the field 3.5 meters wide is a deeper or a yellower green.
+- `Ground.tallness` makes islands of tall grass and patches of short grass, a fifth as tall, as on a path or where animals graze.
+- 14 percent of the tufts are laid over by wind and rain. Their blades arch over and lie.
 
 | Kind | Looks |
 |---|---|
@@ -100,6 +123,8 @@ The blades of a tuft curl out from its middle. A tuft has `tuft_blades` blades a
 | `DRY_GRASS` | Straw at the tip. More of them grow where the ground is dry. |
 | `POPPY` | A thin stem with a cup of five red petals. They grow in drifts. |
 | `SEED_HEAD` | A tall thin stalk with a spike of two crossed strips. It stands above the grass. `seed_share` of the blades are stalks. |
+| `BROADLEAF` | A low rosette of five oval leaves, 12 to 28 centimeters long, as a plantain or a dock is. More grow where `Ground.weeds` is high. |
+| `BUTTERCUP` | A thin stem with a small cup of five yellow petals, in the grass. They grow with the weeds. |
 
 ### Levels of detail
 
@@ -116,37 +141,67 @@ A cluster takes the first level whose reach holds its nearest point. A level tha
 
 ## Wind
 
-`Wind` has a heading, a lean, a calm, a gust length, a gust speed and a flutter. A gust is a patch of value noise that travels downwind at `gust_speed`. `gust` returns its strength at a point, from zero to one.
+`Wind` has a heading, a lean, a calm, gusts, a sway and a flutter. The default wind blows across the view, from left to right.
 
-`tip_bend` returns the angle that the tip turns from upright, as a vector on the ground. A full gust leans the tip by `lean`. Between gusts the wind keeps `calm` of the lean. The flutter adds a wobble along the wind and a smaller one across it.
+- **A gust** is a patch of value noise that travels downwind at `gust_speed`. It is `gust_length` long along the wind, and 1.8 times that across it, so a gust front is a band. A slower noise bends each front into a ragged curve, and smaller gusts cross the large ones at 35 degrees. `gust` returns its strength at a point, from zero to one. The noise between 0.39 and 0.61 of its range maps onto that, so a gust front is sharp.
+- **A sway** is a wave that rolls downwind every `sway_length`, `sway_rate` times a second. Its shape is a sine and a third of its double, so a tip snaps forward and springs back. The sway is mostly in the gusts.
+- **A flutter** is a slight tremble of each blade on its own, with its own phase.
 
-A gust also brightens the tips it reaches by up to 80 percent. The field then shows each gust as a wave of light.
+`tip_bend` returns the angle that the tip turns from upright, as a vector on the ground. Calm air leans the tip by `calm` of `lean`, and a full gust by all of `lean`. The sway and the flutter add to that. Each segment of a blade turns by a share of the bend that grows with its height. So the blade arcs over, and its root stays put.
 
-With a `loop`, the gusts at a time fade into the gusts a loop earlier. The fade divides by `sqrt((1 - w)^2 + w^2)`, so a gust keeps its contrast in the middle of the loop. The flutter wobbles a whole number of times a loop.
+The gust is the largest part. A gust front that passes bends the whole patch over and lets it rise again. A full gust also brightens the tips it reaches by up to 100 percent, so the gusts roll across the field as bands of light. Keep the flutter small and slow: a large, fast flutter of thin blades reads as jitter, not as wind.
+
+A poppy's stem and a seed stalk bend as a blade does. Their heads ride high, so they swing the most. A broad-leaf rosette moves its tips a quarter as far as a blade.
+
+`tree_sway` leans a tree from its foot by a small share of the lean. A full gust leans it 2.5 percent of `lean` downwind, about 1.3 degrees. It also rocks by 0.8 percent of `lean`, once every 2 seconds. `Meadow.update` turns each tree by its sway, about a level axis only, so the sun baked into its leaves stays true.
+
+With a `loop`, the gusts at a time fade into the gusts a loop earlier. The fade divides by `sqrt((1 - w)^2 + w^2)`, so a gust keeps its contrast in the middle of the loop. The sway and the flutter swing a whole number of times a loop.
 
 ## Trees
 
-`leafy_tree` grows the branches with `TreeGenerator`. A twig is a tube thinner than `twig_radius` at its tip. Each twig carries a clump of leaves at its tip, and one more every `clump_spacing` back along its thin end. A clump is a sphere of about `clump_radius`.
+`grow_crown` grows a tree in two steps. `grow_limbs` grows the branches by space colonization, and `hang_leaves` hangs the leaves on the twigs. `dress` then makes the meshes of one level of detail. `leafy_tree` does all three.
 
-A clump holds up to `leaves_per_clump` leaves. They crowd its shell, and the shell is lumpy, so a clump has a ragged edge. Each leaf faces out of its clump and up, and its midrib hangs a little. A near leaf is `OVATE`: a base, three pairs of edge vertices and a tip, six triangles. Its halves tilt their normals apart, so it is lit as if it were folded.
+### Branches
+
+`CrownShape` says where the crown is. It is an egg round the trunk, from `bottom` to `top`, `radius` wide where it is widest. The crown is made of `lobes` balls of about `lobe_size`. Their middles lie in the outer part of the egg, and they can bulge past it. `ragged` dents the outline and carves small gaps. `hollow` keeps the middle of the crown bare.
+
+`grow_limbs` scatters `points` in the lobes. These are the places that the leaves reach for. Then the tree grows:
+
+1. The trunk climbs from the ground to `fork` of the way up the crown, and on until a point is within `reach` of its top.
+2. Each point pulls the node nearest to it, if the node is within `reach`.
+3. Each node that is pulled grows a new node a `step` away, toward the mean of its pulls. `up_pull` bends the growth up. `droop` bends it down far out from the trunk. `gnarl` turns it a little at random.
+4. A point within `kill` of a node is reached, and pulls no more.
+5. The growth stops when no node grows.
+
+Points close together pull one branch. Points apart split it in two. So a limb grows into each lobe, and the lobes have sky between them. A node's radius to the power `pipe` is the sum of its children's, and each twig tip is `tip_radius` thick. The trunk flares at its foot by `flare`.
+
+`limb_mesh` draws a tube along each chain of nodes. A chain follows the thickest child at each fork. A branch thinner than `wood_radius` is left out, because the leaves hide it. The bark is pale with dark patches, and darker near the ground.
+
+### Leaves
+
+Each node within `leaf_reach` of a twig's tip carries `leaves_per_node` leaves on the stretch of twig below it. A leaf splays out from its twig, toward the twig's tip and a little down. It turns its face up and out of the crown. The leaves of one twig make a spray, and the sprays of one limb make a lobe. Neighboring twigs share a tint, so the lobes differ in color.
+
+A near leaf is `OVATE`: a base, three pairs of edge vertices and a tip, six triangles. Its halves tilt their normals apart, so it is lit as if it were folded.
 
 | Crown | Looks |
 |---|---|
-| `CrownParameters()` | A slender tree 14 meters tall. The pale trunk is bare for half its height, and long limbs spread a crown of separate clumps. |
-| `broad_tree()` | A broad tree 12 meters tall that forks low, with more and larger clumps. |
-| `bush_parameters()` | A bush 1.3 meters tall that forks from the ground, with leaves 12 centimeters long. |
-
-The bark is pale with dark patches, and darker near the ground.
+| `CrownParameters()` | An open tree 14.5 meters tall. Its pale trunk is bare for 5 meters and forks into thin limbs. Its crown is 12 meters across, nine lobes of 15-centimeter leaves. |
+| `windswept_tree()` | A slender tree 12.5 meters tall. Its dark trunk leans and wanders, and its narrow crown is a few wisps of leaves. |
+| `young_tree()` | A young tree 9.4 meters tall. Its crown is a tall oval from 2 meters up, 4 meters across. |
+| `round_tree()` | A dense tree 11 meters tall. Its dark crown reaches nearly to the ground, 9 meters across. |
+| `bush_parameters()` | A bush 1.9 meters tall that forks from the ground, with leaves 12 centimeters long. |
 
 ### The light in a crown
 
-`sun_through` follows the ray from a leaf toward the sun and adds the length of each clump that it crosses. The light that comes through is `exp(-density * length)`. `sky_through` averages the same over seven directions of the open sky. Both are exact for spheres.
+`LeafShade` counts the leaves in a grid of cells. Each leaf adds its area to its cell. A cell's leaf area over its volume, times `shade`, is how much a meter of it dims light. The grid is blurred once along each axis.
 
-Each leaf keeps the two numbers as its `sunlit` and `skylit` attributes. `foliage_program` uses the first as the leaf's shadow, so it dims only the sun. It uses the second as the ambient occlusion, so it dims only the sky. A leaf that sees neither is left out. A planting is never turned, because the sun's direction is baked into its leaves.
+`LeafShade.through` follows the ray from a leaf toward the sun, and steps three quarters of a cell at a time. The light that comes through is `exp(-sum)` of the dimming along the ray. `LeafShade.sky` averages the same over 13 directions of the open sky: straight up, six at 45 degrees and six at 10 degrees. A leaf in the shade still gets a tenth of the sun, which the leaves between pass on.
+
+Each leaf keeps the two numbers as its `sunlit` and `skylit` attributes. `foliage_program` uses the first as the leaf's shadow, so it dims only the sun. It uses the second as the ambient occlusion, so it dims only the sky. A leaf that sees neither is left out. A planting is never turned about +y, because the sun's direction is baked into its leaves.
 
 ### Levels of detail
 
-`default_crown_levels` returns three levels.
+`default_crown_levels` returns three levels. A crown is grown and lit once, and `dress` draws each level from it.
 
 | Reach | Keeps | Leaves | Wood |
 |---|---|---|---|
@@ -154,23 +209,25 @@ Each leaf keeps the two numbers as its `sunlit` and `skylit` attributes. `foliag
 | 110 meters | 40 percent | ovate | full |
 | past that | 16 percent | cards | lean |
 
-A kept leaf grows by the inverse square root of the fraction, so the crown keeps its cover. A card is a diamond of two triangles. Lean wood has one level of branches fewer, and three vertices round each ring.
+A kept leaf grows by the inverse square root of the fraction, so the crown keeps its cover. A card is a diamond of two triangles. Lean wood draws only the branches three times as thick as `wood_radius`, with three vertices round each ring.
 
 ## Layout
 
-`MeadowParameters.crowns` lists the kinds of tree and bush. `plantings` lists each tree and bush: the crown it wears, where it stands, and its size. `scatter_plantings` scatters plantings across the view toward -z, between two distances.
+`MeadowParameters.crowns` lists the kinds of tree and bush. `plantings` lists each tree and bush: the crown it wears, where it stands, and its size. `scatter_plantings` scatters plantings across the view toward -z, between two distances. `grove_plantings` stands plantings together round a point.
 
-`default_crowns` returns three slender trees, two broad trees and two bushes, each of its own seed. `default_plantings` places a lone tree and a bush near the camera, and a second lone tree. It scatters 22 trees from 45 to 160 meters and 26 bushes from 12 to 120 meters. 45 broad trees stand from 435 to 700 meters, on the far side of the canyon.
+`default_crowns` returns eight crowns: two open trees, a windswept tree, two young trees, a round tree, a green bush and a gray-green bush. `default_plantings` places a lone open tree and a bush near the camera, a second open tree, and a windswept tree. Three groves of mixed trees stand from 60 to 140 meters. 14 trees and 30 bushes are scattered from 12 to 160 meters. 45 young and round trees stand from 435 to 700 meters, on the far side of the canyon.
 
 ## Ground, sky and light
 
-`Ground` gives the height of rolling hills and four masks: the cover, the dryness, the bloom and the far color. The ground mesh carries the far color. Past the last level of detail, the ground looks like the grass that it stands in for.
+`Ground` gives the height of rolling hills and its masks: the cover, the tallness, the dryness, the weeds, the bloom and the far color. The ground mesh carries the far color. Past the last level of detail, the ground looks like the grass that it stands in for.
 
 A `Canyon` crosses the ground toward -z. Its floor is `depth` below the near side, and its far plateau is `rise` above it. Each rim is a smooth step 6 meters wide. The default canyon's near rim is 300 meters from the origin and its far rim 420 meters. It is 80 meters deep, and the far side rises 38 meters. The far wall then shows above the near rim as a band of cliffs.
 
 `cliff_wall` builds that wall as a dense face of rock. It stands just in front of the far rim, and hides the ground mesh's coarse step there. Buttresses and flutes run down it, a few ledges cross it, and dark strata band it. Moss grows along its top, and its crest is ragged.
 
 `paint_sky` draws Preetham's sky into a small cube and reads it into a large cube. It then paints the clouds. `gain` scales the sky's light, and `saturation` and `tint` deepen its blue. The cube is the scene's background. Its mean color near the horizon is the fog's color.
+
+The sun stands 38 degrees high, ahead of the camera and to its right. The grass glows against it, the trees are dark toward the camera with bright edges, and their shadows fall toward the camera.
 
 The sun is a `SunLight` with two cascades of 4,096 texels that reach 150 meters. The trees, the bushes, the grass and the boulders cast shadows. The grass, the ground and the wood receive them. A hemisphere light gives the blue light of the sky and the green light that the grass sends back. The blades and the leaves are lit from both sides: `two_sided_program` and `foliage_program` turn the normal of a back face to the front.
 
@@ -182,7 +239,7 @@ The mountains are `ridge_ring`, a ring of rugged peaks 900 meters away. Each col
 
 | Type | Values |
 |---|---|
-| `PlantKind` | `GRASS`, `DRY_GRASS`, `POPPY`, `SEED_HEAD` |
+| `PlantKind` | `GRASS`, `DRY_GRASS`, `POPPY`, `SEED_HEAD`, `BROADLEAF`, `BUTTERCUP` |
 | `ClusterFate` | `DRAWN`, `CULLED`, `BEYOND` |
 
 ## Limits
@@ -191,5 +248,7 @@ The mountains are `ridge_ring`, a ring of rugged peaks 900 meters away. Each col
 - Culling tests each cluster's bound against the view only. A cluster behind a hill is still drawn.
 - There is no visibility buffer. The rasterizer shades each fragment as it draws it.
 - The grass casts into the same two cascades as the trees. Its shadow on itself is only as sharp as their texels. So the dark roots still stand in for the shadow at the base of each tuft.
-- A crown is shadowed by its own clumps only. The shadow of another tree does not fall on its leaves.
+- A crown is shadowed by its own leaves only. The shadow of another tree does not fall on its leaves.
+- A tree sways as one stiff body from its foot. Its limbs and leaves do not move on their own.
+- The woodland beyond the canyon is small and hazy, and it barely shows above the band of cliffs.
 - The indirect light is a hemisphere light and baked occlusion. The voxel and screen-space passes of the renderer are not used.

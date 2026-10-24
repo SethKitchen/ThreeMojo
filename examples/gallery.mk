@@ -160,7 +160,7 @@ $(call gallery,hand,hand)
 # A neck and a head, with skin and without.
 $(call gallery,head,head)
 $(call gallery,water,water,assets/pebbles.jpg)
-# A lone pale-trunked tree in tall grass, with scattered trees, cliffs and mountains.
+# A lone tree with a lobed crown in wind-bent grass, with groves, cliffs and mountains.
 $(call gallery,meadow,meadow)
 # Gusts sweep across the meadow and bend the tall grass, in a seamless loop.
 $(call gallery,meadow-wind,meadow_wind)
