@@ -17,7 +17,7 @@ from std.testing import (
 
 from tests._tree import tool_mojo
 from tools._process import run_program
-from tools.carla_geometry_digest import digest_bytes
+from tools.carla_geometry_digest import digest_bytes, digest_text
 
 
 comptime _PIN_A = (
@@ -228,6 +228,112 @@ def test_a_bad_request_is_refused() raises:
     renamed[16] = UInt8(88)
     with assert_raises():
         _ = digest_bytes(renamed)
+
+
+def _zero_primitive(triangles: String) -> String:
+    """Return one primitive whose float fields are zero."""
+    return (
+        '{"primitives":[{"positions":{"shape":[1,3],"values":[0,0,0]},'
+        + '"normals":{"shape":[1,3],"values":[0,0,0]},'
+        + '"uvs":{"shape":[1,2],"values":[0,0]},'
+        + '"triangles":{"shape":[1,3],"values":['
+        + triangles
+        + "]}}]}"
+    )
+
+
+def test_json_payloads_match_numpy_bytes() raises:
+    var report = _python(
+        "import hashlib, json, sys\n"
+        + "import numpy\n"
+        + "sys.path.insert(0, 'assets/carla/tools/export')\n"
+        + "import build_towns\n"
+        + "def pack(name, values):\n"
+        + "    kind = '<i8' if name == 'triangles' else '<f8'\n"
+        + "    return numpy.ascontiguousarray(values, dtype=kind)\n"
+        + "def digest(prim):\n"
+        + "    h = hashlib.sha256()\n"
+        + "    names = ('positions', 'normals', 'uvs', 'triangles')\n"
+        + "    for name in names:\n"
+        + "        array = pack(name, prim[name])\n"
+        + "        h.update(json.dumps([name, list(array.shape)],"
+        " separators=(',', ':')).encode())\n"
+        + "        h.update(array.tobytes())\n"
+        + "    return h.hexdigest()\n"
+        + "def record(prim):\n"
+        + "    item = {}\n"
+        + "    for name in ('positions', 'normals', 'uvs', 'triangles'):\n"
+        + "        array = pack(name, prim[name])\n"
+        + "        item[name] = {'shape': [int(dim) for dim in array.shape],"
+        " 'values': array.reshape(-1).tolist()}\n"
+        + "    return item\n"
+        + "prims = [\n"
+        + "    {'positions': numpy.array([[0.0, -0.0, 0.1], [1.0, 2.0,"
+        " -3.5]]),\n"
+        + "     'normals': numpy.zeros((2, 3)),\n"
+        + "     'uvs': numpy.array([[0.5, -0.25], [1e-320, 0.35]]),\n"
+        + "     'triangles': numpy.array([[0, 1, -1]], dtype=numpy.int64)},\n"
+        + "    {'positions': numpy.zeros((0, 3)),\n"
+        + "     'normals': numpy.zeros((0, 3)),\n"
+        + "     'uvs': numpy.zeros((0, 2)),\n"
+        + "     'triangles': numpy.zeros((0, 3), dtype=numpy.int64)},\n"
+        + "    {'positions': numpy.array([[numpy.nan, numpy.inf,"
+        " -numpy.inf]]),\n"
+        + "     'normals': numpy.zeros((1, 3)),\n"
+        + "     'uvs': numpy.zeros((1, 2)),\n"
+        + "     'triangles': numpy.array([[-9223372036854775808,"
+        " 9223372036854775807, 4]], dtype=numpy.int64)},\n"
+        + "]\n"
+        + "payload = {'primitives': [record(prim) for prim in prims]}\n"
+        + "print(json.dumps(payload, separators=(',', ':'), allow_nan=True))\n"
+        + "print('---')\n"
+        + "wired = build_towns.geometry_digests(prims)\n"
+        + "for index, prim in enumerate(prims):\n"
+        + "    print(digest(prim))\n"
+        + "    assert wired[index] == digest(prim)\n"
+    )
+    var marker = report.find("\n---\n")
+    assert_true(marker > 0)
+    var lines = digest_text(String(report[byte=:marker]))
+    var expected = String(report[byte = marker + 5 :])
+    assert_equal(len(lines), 3)
+    assert_equal(lines[0] + "\n" + lines[1] + "\n" + lines[2] + "\n", expected)
+    var none = digest_text('{"primitives":[]}')
+    assert_equal(len(none), 0)
+    assert_equal(
+        digest_text(_zero_primitive("1.9,-1.9,0.0"))[0],
+        digest_text(_zero_primitive("1,-1,0"))[0],
+    )
+    var negative = digest_text(
+        '{"primitives":[{"positions":{"shape":[1],"values":[-0.0]},'
+        + '"normals":{"shape":[0],"values":[]},"uvs":{"shape":[0],"values":[]},'
+        + '"triangles":{"shape":[0],"values":[]}}]}'
+    )
+    var positive = digest_text(
+        '{"primitives":[{"positions":{"shape":[1],"values":[0.0]},'
+        + '"normals":{"shape":[0],"values":[]},"uvs":{"shape":[0],"values":[]},'
+        + '"triangles":{"shape":[0],"values":[]}}]}'
+    )
+    assert_not_equal(negative[0], positive[0])
+
+
+def test_a_bad_json_request_is_refused() raises:
+    with assert_raises(contains="digest request is not an object"):
+        _ = digest_text("[]")
+    with assert_raises(contains="KeyError: 'primitives'"):
+        _ = digest_text("{}")
+    with assert_raises(contains="geometry values do not match the shape"):
+        _ = digest_text(
+            '{"primitives":[{"positions":{"shape":[2],"values":[1.0]}}]}'
+        )
+    with assert_raises(contains="geometry dimension is negative"):
+        _ = digest_text(
+            '{"primitives":[{"positions":{"shape":[-1],"values":[]}}]}'
+        )
+    with assert_raises(contains="triangle is not finite"):
+        _ = digest_text(_zero_primitive("NaN,0,0"))
+    with assert_raises(contains="triangle does not fit in int64"):
+        _ = digest_text(_zero_primitive("9223372036854775808,0,0"))
 
 
 def test_the_tool_prints_one_line_per_primitive() raises:

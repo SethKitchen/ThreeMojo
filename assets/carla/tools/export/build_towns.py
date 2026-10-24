@@ -25,7 +25,6 @@ import argparse
 import json
 import os
 import shutil
-import struct
 import subprocess
 import sys
 import tempfile
@@ -1379,41 +1378,41 @@ def baked_building(parts, library, out_dir, name, target):
     return far, len(gltf["materials"]) - 1
 
 
+def _digest_field(values, integral):
+    """Return one field as a shape and C-order values."""
+    array = numpy.ascontiguousarray(values, dtype="<i8" if integral else "<f8")
+    return {
+        "shape": [int(dim) for dim in array.shape],
+        "values": array.reshape(-1).tolist(),
+    }
+
+
 def geometry_digests(primitives):
     """Return the SHA-256 of each primitive, in order.
 
     Each field is hashed as its JSON shape plus the little-endian
     contiguous array bytes. An empty dimension contributes no payload
-    bytes. `tools/carla_geometry_digest.mojo` does the hash.
+    bytes. `tools/carla_geometry_digest.mojo` packs the arrays and
+    does the hash.
     """
     if not primitives:
         return []
-    blob = bytearray(b"CGD1")
-    blob += struct.pack("<I", len(primitives))
+    payload = {"primitives": []}
     for primitive in primitives:
-        blob += struct.pack("<I", 4)
-        for field in ("positions", "normals", "uvs", "triangles"):
-            values = numpy.ascontiguousarray(
-                primitive[field],
-                dtype="<i8" if field == "triangles" else "<f8",
-            )
-            name = field.encode("ascii")
-            raw = values.tobytes()
-            blob += struct.pack("<I", len(name))
-            blob += name
-            blob += struct.pack("<I", len(values.shape))
-            for dim in values.shape:
-                blob += struct.pack("<I", int(dim))
-            blob += struct.pack("<Q", len(raw))
-            blob += raw
+        payload["primitives"].append({
+            field: _digest_field(primitive[field], field == "triangles")
+            for field in ("positions", "normals", "uvs", "triangles")
+        })
     root = os.path.abspath(os.path.join(HERE, "..", "..", "..", ".."))
     mojo = os.path.join(root, ".venv", "bin", "mojo")
     if not os.path.isfile(mojo):
         mojo = "mojo"
-    handle = tempfile.NamedTemporaryFile("wb", suffix=".cgd", delete=False)
+    handle = tempfile.NamedTemporaryFile(
+        "w", suffix=".json", delete=False, encoding="utf-8",
+    )
     path = handle.name
     try:
-        handle.write(blob)
+        json.dump(payload, handle, separators=(",", ":"), allow_nan=True)
         handle.close()
         result = subprocess.run(
             ["sh", os.path.join(root, "tools", "tool.sh"), mojo,
