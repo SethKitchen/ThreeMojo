@@ -1,0 +1,432 @@
+# Copyright (c) 2026 Seth Kitchen, PE
+# SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
+# Noncommercial use is free; commercial use requires a paid license.
+# See LICENSE, LICENSE-COMMERCIAL.md and THIRD-PARTY-NOTICES.md.
+
+"""The village: houses on plinths, scanned buildings cut out of their
+ground, and the meadow with its pond and its water."""
+
+from cameras.perspective_camera import PerspectiveCamera
+from core.assets import Assets
+from core.buffer_geometry import POSITION
+from core.gaussian_splat_utils import (
+    GaussianSplatGeometry,
+    create_gaussian_splat_geometry,
+)
+from core.scene import Scene
+from extensions.building.material import brick, timber
+from extensions.scan.frame import supersplat_frame
+from extensions.vegetation.field import LodBand
+from extensions.vegetation.ground import Ground, Lot, Pond
+from extensions.vegetation.meadow import Planting
+from extensions.village.house import (
+    EAVES,
+    HouseParameters,
+    gable_roof,
+    house_lot,
+    house_model,
+    stand_house,
+)
+from extensions.village.scanned import (
+    SINK,
+    cut_building,
+    linear_splats,
+    scan_lot,
+    stand_scan,
+)
+from extensions.village.village import (
+    HousePlacement,
+    Village,
+    VillageParameters,
+)
+from extensions.water.pebbles import pebble_bed
+from extensions.water.resolution import SpectrumResolution
+from math.vector3 import Vector3
+from render.srgb import SRGB
+from render.png import DecodedImage
+from renderers.renderer import Renderer
+from std.math import cos, sin, tan
+from std.testing import (
+    TestSuite,
+    assert_almost_equal,
+    assert_equal,
+    assert_false,
+    assert_raises,
+    assert_true,
+)
+from units.si import DEGREE, METER, RADIAN, SECOND, Angle, Duration, Length
+
+
+def _house(storeys: Int) -> HouseParameters:
+    """Return a small brick house, 5 by 4 meters, of `storeys`."""
+    return HouseParameters(
+        "test house", Length(5.0, METER), Length(4.0, METER), storeys, brick()
+    )
+
+
+def _splat(
+    mut centers: List[Float32],
+    mut covariances: List[Float32],
+    mut colors: List[UInt8],
+    x: Float32,
+    y: Float32,
+    z: Float32,
+    color: UInt8,
+):
+    """Add one small round splat at a building point; in SuperSplat's
+    frame building x, y and z are scan -x, -z and -y."""
+    centers.extend([-x, -z, -y])
+    covariances.extend([0.04, 0, 0, 0.04, 0, 0.04])
+    colors.extend([color, color, color, 240])
+
+
+def _scan(building: Bool) -> GaussianSplatGeometry:
+    """Return a test scan in SuperSplat's frame: flat ground 16 meters on a
+    side, and on it, with `building`, a box 4 by 3 meters and 3 meters
+    tall, with its middle at (1, 2)."""
+    var centers = List[Float32]()
+    var covariances = List[Float32]()
+    var colors = List[UInt8]()
+    for a in range(33):
+        for b in range(33):
+            _splat(
+                centers,
+                covariances,
+                colors,
+                Float32(a) * 0.5 - 8,
+                Float32(b) * 0.5 - 8,
+                0,
+                120,
+            )
+    if building:
+        for k in range(7):
+            var z = Float32(k) * 0.5
+            for a in range(9):
+                var x = Float32(a) * 0.5 - 1
+                _splat(centers, covariances, colors, x, 0.5, z, 200)
+                _splat(centers, covariances, colors, x, 3.5, z, 200)
+            for b in range(7):
+                var y = Float32(b) * 0.5 + 0.5
+                _splat(centers, covariances, colors, -1, y, z, 200)
+                _splat(centers, covariances, colors, 3, y, z, 200)
+        for a in range(9):
+            for b in range(7):
+                _splat(
+                    centers,
+                    covariances,
+                    colors,
+                    Float32(a) * 0.5 - 1,
+                    Float32(b) * 0.5 + 0.5,
+                    3,
+                    200,
+                )
+    try:
+        return create_gaussian_splat_geometry(centers^, covariances^, colors^)
+    except:
+        return GaussianSplatGeometry()
+
+
+def test_house_parameters_are_checked() raises:
+    """A house in range passes; each field out of range is refused."""
+    _house(2).check()
+    var house = _house(2)
+    house.width = Length(2.0, METER)
+    with assert_raises(contains="wide"):
+        house.check()
+    house = _house(2)
+    house.depth = Length(70.0, METER)
+    with assert_raises(contains="deep"):
+        house.check()
+    with assert_raises(contains="storeys"):
+        _house(0).check()
+    house = _house(2)
+    house.storey_height = Length(7.0, METER)
+    with assert_raises(contains="storey must"):
+        house.check()
+    house = _house(2)
+    house.pitch = Angle(70.0, DEGREE)
+    with assert_raises(contains="pitch"):
+        house.check()
+    house = _house(2)
+    house.gable = Vector3(2, 0, 0)
+    with assert_raises(contains="color"):
+        house.check()
+    house = _house(2)
+    house.gable = Vector3(0, -1, 0)
+    with assert_raises(contains="color"):
+        house.check()
+    house = _house(2)
+    house.gable = Vector3(0, 0, 3)
+    with assert_raises(contains="color"):
+        house.check()
+
+
+def test_a_house_model_has_its_storeys_windows_and_doors() raises:
+    """A model has as many storeys as asked, and openings: windows in its
+    outside walls and doors. A house that is refused builds no model."""
+    var model = house_model(_house(2))
+    assert_equal(len(model.storeys), 2)
+    assert_true(len(model.openings) > 4)
+    with assert_raises(contains="storeys"):
+        _ = house_model(_house(0))
+
+
+def test_a_gable_roof_spans_the_house() raises:
+    """A gable roof is two slopes and two gables. Its ridge rises over the
+    middle of the house's depth by the pitch, and its eaves reach past the
+    walls."""
+    var house = _house(1)
+    var roof = gable_roof(house)
+    assert_equal(roof.vertex_count(), 4 + 4 + 3 + 3)
+    assert_equal(len(roof.index), 6 * 3)
+    ref p = roof.attribute_view(String(POSITION))
+    var top = Float32(-1.0e30)
+    var widest = Float32(0)
+    for v in range(p.count()):
+        top = max(top, p.vector3(v).y)
+        widest = max(widest, abs(p.vector3(v).x))
+    var rise = tan(Angle(40.0, DEGREE).to(RADIAN)) * 2
+    assert_almost_equal(top, 2.8 + rise, atol=1e-4)
+    assert_almost_equal(widest, 2.5 + EAVES, atol=1e-5)
+
+
+def test_a_house_stands_on_its_lot() raises:
+    """A house's lot is as large as its plan. It stands at the highest
+    ground under its corners, turned by its lot, on a plinth, under its
+    roof. A flat-roofed house has no roof mesh."""
+    var house = _house(1)
+    var lot = house_lot(house, 4, -4, Angle(0.3, RADIAN))
+    assert_almost_equal(lot.half_width, 2.5)
+    assert_almost_equal(lot.half_depth, 2)
+    assert_almost_equal(lot.turn, 0.3, atol=1e-6)
+    var ground = Ground()
+    var assets = Assets()
+    var scene = Scene()
+    var drawn = stand_house(
+        scene, assets, house, house_model(house), lot, ground
+    )
+    var y = scene.get(drawn.root).position.y
+    var highest = Float32(-1.0e30)
+    for k in range(4):
+        var u = Float32(-2.5) if k % 2 == 0 else Float32(2.5)
+        var v = Float32(-2) if k < 2 else Float32(2)
+        highest = max(
+            highest,
+            ground.height_at(
+                4 + u * cos(Float32(0.3)) + v * sin(Float32(0.3)),
+                -4 - u * sin(Float32(0.3)) + v * cos(Float32(0.3)),
+            ),
+        )
+    assert_almost_equal(y, highest, atol=1e-5)
+    assert_true(drawn.triangles > 0)
+    var flat = _house(1)
+    flat.pitch = Angle(0.0, DEGREE)
+    var plain = Scene()
+    var level = stand_house(plain, assets, flat, house_model(flat), lot, ground)
+    assert_equal(level.meshes, drawn.meshes - 1)
+
+
+def test_a_building_is_cut_out_of_its_scan() raises:
+    """The cut keeps the box and leaves the ground: its footprint is the
+    box's, give or take a voxel, and it holds fewer splats than the scan.
+    A scan of bare ground has no building."""
+    var scan = _scan(True)
+    var cut = cut_building(scan, supersplat_frame(), Length(0.5, METER))
+    var wide = cut.region.high.x - cut.region.low.x
+    var deep = cut.region.high.y - cut.region.low.y
+    assert_true(wide > 3 and wide < 5.5)
+    assert_true(deep > 2 and deep < 4.5)
+    assert_true(cut.splats.count() > 100)
+    assert_true(cut.splats.count() < scan.count())
+    with assert_raises(contains="no building"):
+        _ = cut_building(_scan(False), supersplat_frame(), Length(0.5, METER))
+
+
+def test_linear_splats_turn_colors_to_light() raises:
+    """Each color byte becomes linear light, opacity is kept, and the
+    spherical harmonics are left out."""
+    var geometry = create_gaussian_splat_geometry(
+        [Float32(0), 0, 0],
+        [Float32(0.01), 0, 0, 0.01, 0, 0.01],
+        [UInt8(255), 128, 0, 200],
+        List[UInt8](length=12, fill=128),
+    )
+    var light = linear_splats(geometry)
+    assert_equal(Int(light.colors[0]), 255)
+    assert_equal(Int(light.colors[1]), 55)
+    assert_equal(Int(light.colors[2]), 0)
+    assert_equal(Int(light.colors[3]), 200)
+    assert_equal(light.spherical_harmonics_degree(), 0)
+    assert_equal(geometry.spherical_harmonics_degree(), 1)
+
+
+def test_a_scan_stands_on_its_lot() raises:
+    """A scanned building's lot is its footprint, turned. It stands as one
+    splat object, its footprint's middle at the point, and its foot just
+    below the ground."""
+    var cut = cut_building(_scan(True), supersplat_frame(), Length(0.5, METER))
+    var lot = scan_lot(cut, -4, 6, Angle(0.5, RADIAN))
+    assert_almost_equal(
+        lot.half_width,
+        Float32((cut.region.high.x - cut.region.low.x) / 2),
+        atol=1e-5,
+    )
+    var scene = Scene()
+    var ground = Ground()
+    var stood = stand_scan(scene, cut, -4, 6, Angle(0.5, RADIAN), ground)
+    assert_almost_equal(stood.half_depth, lot.half_depth)
+    assert_equal(len(scene.gaussian_splats), 1)
+    scene.update()
+    ref splat = scene.gaussian_splats[0][]
+    var world = scene.world_matrix(splat.node)
+    var low = Float32(1.0e30)
+    var mean = Vector3(0, 0, 0)
+    var count = splat.splat_geometry.count()
+    for index in range(count):
+        ref c = splat.splat_geometry.centers
+        var p = world.transform_point(
+            Vector3(c[index * 3], c[index * 3 + 1], c[index * 3 + 2])
+        )
+        low = min(low, p.y)
+        mean = mean + p / Float32(count)
+    assert_true(abs(mean.x + 4) < 0.6)
+    assert_true(abs(mean.z - 6) < 0.6)
+    var foot = ground.height_at(-4, 6) - SINK
+    assert_true(abs(low - foot) < 0.8)
+
+
+def _parameters() raises -> VillageParameters:
+    """Return a village small enough to build in a test: a field 16 meters
+    across, a pond, one small house, and small water."""
+    var p = VillageParameters()
+    p.meadow.field.span = Length(16.0, METER)
+    p.meadow.field.cluster_size = Length(4.0, METER)
+    p.meadow.field.density = 10
+    p.meadow.field.bands = [LodBand(Length(60.0, METER), 0.001, 1)]
+    p.meadow.ground = Ground(
+        seed=11,
+        pond=Pond(
+            Length(0.0, METER),
+            Length(4.0, METER),
+            Length(3.0, METER),
+            Length(1.0, METER),
+        ),
+    )
+    p.meadow.crowns = [p.meadow.crowns[6].copy()]
+    p.meadow.crowns[0].limbs.points = 100
+    p.meadow.crown_levels = [p.meadow.crown_levels[0]]
+    p.meadow.plantings = [Planting(0, 6, 6, 0.5)]
+    p.meadow.ground_span = Length(30.0, METER)
+    p.meadow.ground_cells = 30
+    p.meadow.mountain_radius = Length(100.0, METER)
+    p.meadow.sky_size = 8
+    p.meadow.rocks = 0
+    p.meadow.litter = 1000
+    p.meadow.litter_reach = Length(8.0, METER)
+    p.houses = [HousePlacement(_house(1), 5, -4, Angle(10.0, DEGREE))]
+    p.scan_x = -5
+    p.scan_z = -4
+    p.ocean = SpectrumResolution(16)
+    p.caustic_grid = 8
+    p.caustic_resolution = 16
+    p.glare = SpectrumResolution(16)
+    return p^
+
+
+def _bed() raises -> DecodedImage:
+    """Return a gray pebble photograph 4 pixels on a side."""
+    return DecodedImage(4, 4, List[UInt8](length=64, fill=128), SRGB)
+
+
+def _refused(p: VillageParameters, text: String) raises:
+    """Assert that the village is refused with `text`."""
+    with assert_raises(contains=text):
+        p.check()
+
+
+def test_village_parameters_are_checked() raises:
+    """The default village passes, with a pond and two houses; each field
+    out of range is refused, and so is a meadow or a house its own check
+    refuses."""
+    var village = VillageParameters()
+    village.check()
+    assert_equal(len(village.houses), 2)
+    assert_true(village.meadow.ground.pond.radius.to(METER) > 0)
+    var p = VillageParameters()
+    p.meadow.rocks = 2000
+    _refused(p, "boulders")
+    p = VillageParameters()
+    for _ in range(63):
+        p.houses.append(HousePlacement(_house(1), 0, 0, Angle(0.0, DEGREE)))
+    _refused(p, "houses")
+    p = VillageParameters()
+    p.houses[0].house.width = Length(1.0, METER)
+    _refused(p, "wide")
+    p = VillageParameters()
+    p.houses[0].x = 2.0e4
+    _refused(p, "A house must stand")
+    p = VillageParameters()
+    p.houses[0].z = -2.0e4
+    _refused(p, "A house must stand")
+    p = VillageParameters()
+    p.scan_z = 2.0e4
+    _refused(p, "A scanned building must stand")
+    p = VillageParameters()
+    p.ocean = SpectrumResolution(3)
+    _refused(p, "resolution")
+    p = VillageParameters()
+    p.glare = SpectrumResolution(512)
+    _refused(p, "resolution")
+    p = VillageParameters()
+    p.caustic_grid = 2
+    _refused(p, "caustic grid")
+    p = VillageParameters()
+    p.caustic_resolution = 5000
+    _refused(p, "caustic texture")
+
+
+def test_a_village_stands_its_buildings_and_draws_its_pond() raises:
+    """A village stands its houses and its scanned building on lots where
+    nothing grows. Its water's clock moves on to a later frame and stays
+    for an earlier one. Its pond shows in a frame that looks into it, and
+    a village with no scan has none."""
+    var renderer = Renderer(32, 18)
+    var assets = Assets()
+    var scene = Scene()
+    var p = _parameters()
+    var cut = cut_building(_scan(True), supersplat_frame(), Length(0.5, METER))
+    var village = Village(scene, assets, renderer, p, pebble_bed(_bed()), cut^)
+    assert_equal(len(village.houses), 1)
+    assert_true(Bool(village.scanned))
+    assert_equal(len(village.meadow.field.lots), 2)
+    assert_almost_equal(village.meadow.field.cover_at(5, -4), 0)
+    assert_almost_equal(village.meadow.field.cover_at(-5, -4), 0)
+    var camera = PerspectiveCamera(
+        Angle(50.0, DEGREE),
+        16.0 / 9.0,
+        Length(0.1, METER),
+        Length(300.0, METER),
+    )
+    camera.place(Vector3(0, 6, 10), Vector3(0, -1, 4))
+    _ = village.update(scene, assets, camera, Duration(6.0, SECOND))
+    assert_almost_equal(village.water.clock.to(SECOND), 6, atol=1e-5)
+    _ = village.update(scene, assets, camera, Duration(1.0, SECOND))
+    assert_almost_equal(village.water.clock.to(SECOND), 6, atol=1e-5)
+    var dry = renderer.render(scene, assets, camera)
+    var wet = village.render(renderer, scene, assets, camera)
+    assert_equal(wet.width, 32)
+    var changed = 0
+    for index in range(len(wet.pixels)):
+        if wet.pixels[index] != dry.pixels[index]:
+            changed += 1
+    assert_true(changed > 0)
+    var bare = Scene()
+    var plain = Village(
+        bare, assets, renderer, _parameters(), pebble_bed(_bed()), None
+    )
+    assert_false(Bool(plain.scanned))
+    assert_equal(len(plain.meadow.field.lots), 1)
+
+
+def main() raises:
+    TestSuite.discover_tests[__functions_in_module()]().run()

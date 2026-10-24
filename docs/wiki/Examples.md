@@ -133,6 +133,7 @@ mkdir -p out
 | `water.mojo` | `water.png` | [Water](Water) |
 | `meadow.mojo` | `meadow.png` | [Vegetation](Vegetation) |
 | `meadow_wind.mojo` | `meadow-wind.png` | [Why grass is drawn in clusters](Why-grass-is-drawn-in-clusters) |
+| `village.mojo` | `village.png` | [Village](Village) |
 | `animals.mojo` | `animals.png` | [Animals](Animals) |
 | `walk.mojo` | `walk.png` | [Animals](Animals) |
 | `animal_anatomy.mojo` | `animal_anatomy.png` | [Animal anatomy](Animal-anatomy) |

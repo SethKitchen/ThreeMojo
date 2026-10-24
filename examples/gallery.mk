@@ -164,6 +164,8 @@ $(call gallery,water,water,assets/pebbles.jpg)
 $(call gallery,meadow,meadow)
 # Gusts sweep across the meadow and bend the tall grass, in a seamless loop.
 $(call gallery,meadow-wind,meadow_wind)
+# A brick house and a timber barn on the meadow, beside a pond of still water.
+$(call gallery,village,village,assets/pebbles.jpg)
 # Every procedural animal, one to a tile, turning.
 $(call gallery,animals,animals)
 # A wolf walks one stride, re-meshed in each pose.
