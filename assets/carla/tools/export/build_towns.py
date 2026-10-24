@@ -612,35 +612,6 @@ def _raster_tool(parts, library, request):
     return json.loads(result.stdout)
 
 
-def _splat(parts, library, across, left, width, top, height, rows, fill=False):
-    """Return one view of a tree, drawn across axis `across` (0 for x,
-    2 for z) and down y from `top`: RGBA floats, `rows` by
-    `IMPOSTOR_SIZE` texels. Each triangle is sampled at random points, as
-    many as it covers texels times `IMPOSTOR_SAMPLES`, and the nearest
-    sample that the cut-out keeps colors each texel.
-
-    `tools/carla_town_splat.mojo` draws the view. With `fill`, an empty
-    texel takes the mean color of the covered texels.
-    """
-    request = {
-        "mode": "axis",
-        "columns": IMPOSTOR_SIZE,
-        "rows": int(rows),
-        "samples": IMPOSTOR_SAMPLES,
-        "cap": 4096,
-        "seed": 7,
-        "across": int(across),
-        "left": float(left),
-        "top": float(top),
-        "span_u": float(width),
-        "span_v": float(height),
-        "light": impostor_light(),
-    }
-    if fill:
-        request["fill"] = True
-    return numpy.array(_raster_tool(parts, library, request), dtype=numpy.float64)
-
-
 def impostor_light():
     """Return the unit impostor light from `tools/carla_town_impostor.mojo`."""
     global _IMPOSTOR_LIGHT
@@ -673,38 +644,67 @@ def _impostor_tool(payload):
     return json.loads(result.stdout)
 
 
+def _tree_tool(payload):
+    """Return the crossing quads from `tools/carla_town_tree.mojo`."""
+    here = os.path.dirname(os.path.abspath(__file__))
+    repo = os.path.abspath(os.path.join(here, "..", "..", "..", ".."))
+    mojo = os.path.join(repo, ".venv", "bin", "mojo")
+    if not os.path.isfile(mojo):
+        mojo = "mojo"
+    folder = tempfile.mkdtemp(prefix="town-tree-")
+    try:
+        path = os.path.join(folder, "tree.json")
+        with open(path, "w", encoding="utf-8") as handle:
+            json.dump(payload, handle, separators=(",", ":"), allow_nan=False)
+        result = subprocess.run(
+            ["sh", os.path.join(repo, "tools", "tool.sh"), mojo,
+             "carla_town_tree", path],
+            capture_output=True, text=True,
+        )
+    finally:
+        shutil.rmtree(folder, ignore_errors=True)
+    if result.returncode != 0:
+        raise ValueError(result.stderr.strip() or "town tree failed")
+    return json.loads(result.stdout)
+
+
 def impostor(parts, library, out_dir, name):
     """Return a tree's far level, two quads that cross on its trunk, each
     showing a picture of the tree drawn from its near level; and the
     picture's material. `parts` are the tree's primitives, each with its
     material's index.
 
-    `tools/carla_town_impostor.mojo` sizes the views, builds the quads, and
-    fills the empty texels. `tools/carla_image_pack.mojo` resizes and joins
-    the two pictures. `tools/carla_png.mojo` writes the picture.
+    `tools/carla_town_tree.mojo` draws the two views, writes the PNG, and
+    builds the quads. The picture holds its own shading.
     """
-    frame = _impostor_tool({
-        "mode": "frame",
-        "parts": [
-            numpy.asarray(part["positions"], dtype=float).reshape(-1, 3).tolist()
-            for part, _ in parts
-        ],
-        "size": IMPOSTOR_SIZE,
-    })
-    views = []
-    for view in frame["views"]:
-        image = _splat(parts, library, view["across"], view["left"], view["width"],
-                       view["top"], view["height"], view["rows"], fill=True)
-        # A texel the tree does not cover takes the mean color of those it
-        # does, so filtering at the edge of a leaf does not darken it.
-        views.append(numpy.asarray(image, dtype=float).tolist())
-    # `tools/carla_image_pack.mojo` stores the floats as bytes, resizes
-    # each view, and joins the two pictures.
-    pixels, width, height = fix.pack_atlas(views, IMPOSTOR_SIZE)
+    items = []
+    for part, material in parts:
+        image, factor = _albedo(library, material)
+        entry = library.gltf["materials"][material]
+        item = {
+            "positions": numpy.asarray(part["positions"], dtype=float).reshape(-1, 3).tolist(),
+            "normals": numpy.asarray(part["normals"], dtype=float).reshape(-1, 3).tolist(),
+            "uvs": numpy.asarray(part["uvs"], dtype=float).reshape(-1, 2).tolist(),
+            "triangles": numpy.asarray(part["triangles"]).reshape(-1, 3).tolist(),
+            "factor": numpy.asarray(factor, dtype=float).reshape(4).tolist(),
+            "cut": float(entry.get("alphaCutoff", 0.5)),
+            "masked": entry.get("alphaMode") == "MASK",
+        }
+        if image is not None:
+            item["image"] = {
+                "width": int(image.shape[1]),
+                "height": int(image.shape[0]),
+                "rgba": numpy.asarray(image, dtype=float).reshape(-1).tolist(),
+            }
+        items.append(item)
     tag = library._bake_tag(name, "impostor", parts)
     os.makedirs(os.path.join(out_dir, "textures"), exist_ok=True)
-    with open(os.path.join(out_dir, "textures", tag + ".png"), "wb") as handle:
-        handle.write(fix.save_png(pixels, width, height, "RGBA", True))
+    frame = _tree_tool({
+        "size": IMPOSTOR_SIZE,
+        "samples": IMPOSTOR_SAMPLES,
+        "out": os.path.join(out_dir, "textures", tag + ".png"),
+        "parts": items,
+    })
     gltf = library.gltf
     gltf["images"].append({"uri": "textures/" + tag + ".png"})
     gltf["textures"].append({"sampler": 0, "source": len(gltf["images"]) - 1})
@@ -714,7 +714,6 @@ def impostor(parts, library, out_dir, name):
                                  "metallicFactor": 0.0, "roughnessFactor": 0.9},
         "alphaMode": "MASK", "alphaCutoff": 0.5, "doubleSided": True})
     material = len(gltf["materials"]) - 1
-    # Lit from above, as a crown is: the picture holds its own shading.
     return {"positions": numpy.array(frame["positions"], dtype=numpy.float64),
             "normals": numpy.array(frame["normals"], dtype=numpy.float64),
             "uvs": numpy.array(frame["uvs"], dtype=numpy.float64),
