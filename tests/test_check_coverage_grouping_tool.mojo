@@ -202,6 +202,10 @@ def test_the_accepted_truth_traces_match_the_pinned_text() raises:
         truth_records(1, 0, -1, False, 180),
         "COVLINE:truth:180.0:F\nCOVLINE:truth:180:F\nCOVEVAL2:truth:180:F:F-;\n",
     )
+    assert_true(truth_accepted_traces(False).find("?") < 0)
+    assert_true(truth_accepted_traces(True).find("?") >= 0)
+    assert_true(truth_accepted_traces(False, "collision").find("?") < 0)
+    assert_true(truth_accepted_traces(True, "collision").find("?") >= 0)
     assert_equal(
         sha256_hex(truth_accepted_traces(False).as_bytes()),
         "f4cd305b17bbbadf58da1cd073318940d95f97868a76ec7c63c747fb3f435a55",

@@ -887,6 +887,65 @@ def _matching(raw: String, prefix: String) -> String:
     return text
 
 
+def _question_vectors(raw: String) -> Int:
+    """Return how many evaluation records contain an inconsistent operand."""
+    var marked = 0
+    for line in raw.splitlines():
+        var row = String(line)
+        if not row.startswith("COVEVAL2:"):
+            continue
+        var rest = row
+        var last = -1
+        var index = 0
+        while True:
+            var at = rest.find(":")
+            if at < 0:
+                break
+            last = index + at
+            var next = String(rest[byte = at + 1 :])
+            index += at + 1
+            rest = next
+        if last < 0:
+            continue
+        var vector = String(row[byte = last + 1 :])
+        if vector.find("?") >= 0:
+            marked += 1
+    return marked
+
+
+def _require_stable_questions(
+    analyze: String, raw: String, work: String, label: String
+) raises:
+    if _question_vectors(raw) != 0:
+        raise Error(label + " stable trace has an inconsistent vector")
+    var raw_path = work + "/" + label + "-raw-stable.txt"
+    var reduced_path = work + "/" + label + "-reduced-stable.txt"
+    Path(raw_path).write_text(raw)
+    Path(reduced_path).write_text(reduce_text(raw))
+    var left = _must([analyze, raw_path], 5)
+    var right = _must([analyze, reduced_path], 5)
+    if left.output != right.output:
+        raise Error(label + " raw and reduced traces differ")
+
+
+def _require_changing_questions(
+    report: String, manifest: String, raw: String, work: String, label: String
+) raises:
+    if _question_vectors(raw) == 0:
+        raise Error(label + " has no inconsistent vectors")
+    var capture = work + "/" + label + "-raw-changing.txt"
+    Path(capture).write_text(raw)
+    var result = run_program([report, manifest, capture], 5, merge_errors=False)
+    if (
+        result.status == 0
+        or (result.output + result.errors).find(
+            "Inconsistent repeated truth conversion"
+        )
+        < 0
+    ):
+        raise Error(label + "\n" + result.output + result.errors)
+
+
 def reduce_text(text: String) -> String:
     """Return distinct hits and complete vectors, in first-seen order.
 
@@ -4363,6 +4422,35 @@ def check_custom_truth_instrumented(mojo: String) raises:
             ],
             180,
         )
+        Path(work + "/analyze.mojo").write_text(_analyzer_source())
+        var analyze = work + "/analyze"
+        _ = _must(
+            [
+                compiler,
+                "build",
+                "-Werror",
+                "-I",
+                root,
+                work + "/analyze.mojo",
+                "-o",
+                analyze,
+            ],
+            180,
+        )
+        var report = work + "/report"
+        _ = _must(
+            [
+                compiler,
+                "build",
+                "-Werror",
+                "-I",
+                root,
+                root + "/coverage/report_cli.mojo",
+                "-o",
+                report,
+            ],
+            180,
+        )
         for changing in [False, True]:
             var flag = "0"
             if changing:
@@ -4404,9 +4492,22 @@ def check_custom_truth_instrumented(mojo: String) raises:
                                 + "\n"
                                 + wanted
                             )
+                    if changing:
+                        _require_changing_questions(
+                            report,
+                            rewritten + "/manifest.txt",
+                            ran.errors,
+                            work,
+                            name,
+                        )
+                    else:
+                        _require_stable_questions(
+                            analyze, ran.errors, work, name
+                        )
         print(
             "PASS: 13 instrumented custom truth trees, 16 masks, and 5 failure"
-            " positions, stable and changing"
+            " positions; stable questions agree and changing questions are"
+            " refused"
         )
     finally:
         _ = run_program(["rm", "-rf", work], 30)
@@ -4554,6 +4655,35 @@ def check_custom_truth_collision(mojo: String) raises:
             ],
             180,
         )
+        Path(work + "/analyze.mojo").write_text(_analyzer_source())
+        var analyze = work + "/analyze"
+        _ = _must(
+            [
+                compiler,
+                "build",
+                "-Werror",
+                "-I",
+                root,
+                work + "/analyze.mojo",
+                "-o",
+                analyze,
+            ],
+            180,
+        )
+        var report = work + "/report"
+        _ = _must(
+            [
+                compiler,
+                "build",
+                "-Werror",
+                "-I",
+                root,
+                root + "/coverage/report_cli.mojo",
+                "-o",
+                report,
+            ],
+            180,
+        )
         for changing in [False, True]:
             var flag = "0"
             if changing:
@@ -4602,9 +4732,22 @@ def check_custom_truth_collision(mojo: String) raises:
                                 + "\n"
                                 + wanted
                             )
+                    if changing:
+                        _require_changing_questions(
+                            report,
+                            rewritten + "/manifest.txt",
+                            ran.errors,
+                            work,
+                            name,
+                        )
+                    else:
+                        _require_stable_questions(
+                            analyze, ran.errors, work, name
+                        )
         print(
             "PASS: collision names keep 43 native and 13 instrumented custom"
-            " truth trees"
+            " truth trees; stable questions agree and changing questions are"
+            " refused"
         )
     finally:
         _ = run_program(["rm", "-rf", work], 30)
