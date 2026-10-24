@@ -177,9 +177,13 @@ def test_packaged_pixels_match_the_channel_steps() raises:
     )
     with assert_raises(contains="pack request is not an object"):
         _ = pack_text("[]")
-    with assert_raises(contains="mode is not color, masked, stitch or atlas"):
+    with assert_raises(
+        contains="mode is not color, masked, stitch, atlas or quantize"
+    ):
         _ = pack_text('{"mode":1}')
-    with assert_raises(contains="mode is not color, masked, stitch or atlas"):
+    with assert_raises(
+        contains="mode is not color, masked, stitch, atlas or quantize"
+    ):
         _ = pack_text('{"mode":"near"}')
     with assert_raises(contains="size is not an integer"):
         _ = pack_text(
@@ -283,6 +287,33 @@ def test_an_atlas_matches_quantize_resize_and_stitch() raises:
         _ = pack_text('{"mode":"atlas","size":2,"views":[]}')
     with assert_raises(contains="image is empty"):
         _ = pack_text('{"mode":"atlas","size":2,"views":[[],[[1,0,0,1]]]}')
+
+
+def test_a_float_picture_becomes_bytes() raises:
+    var image = "[[[1.2,-0.2,0.5],[0,1,0.0]],[[0.5,0.5,0.5],[1,1,1]]]"
+    var script = (
+        "import json, sys\n"
+        + "sys.path.insert(0, 'assets/carla/tools/export')\n"
+        + "import carla_gltf_fix as fix\n"
+        + "image = json.loads(sys.argv[1])\n"
+        + "flat = [c for row in image for px in row for c in px]\n"
+        + "pixels = fix.quantize_image(flat)\n"
+        + "print(json.dumps({'width': len(image[0]), 'height': len(image),\n"
+        + " 'bands': len(image[0][0]), 'pixels': pixels}, separators=(',',"
+        " ':')), end='')\n"
+    )
+    var result = run_program(
+        ["python3", "-c", script, image], 30, merge_errors=False
+    )
+    if result.status != 0:
+        raise Error(result.errors)
+    assert_equal(
+        pack_text('{"mode":"quantize","image":' + image + "}"), result.output
+    )
+    with assert_raises(contains="pixel is not RGB or RGBA"):
+        _ = pack_text('{"mode":"quantize","image":[[[1,2]]]}')
+    with assert_raises(contains="image is empty"):
+        _ = pack_text('{"mode":"quantize","image":[]}')
 
 
 def test_the_command_prints_the_pixels_and_refuses_bad_use() raises:

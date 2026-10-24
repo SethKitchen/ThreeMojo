@@ -1076,8 +1076,8 @@ def baked_building(parts, library, out_dir, name, target):
     its windows and its trim are pictures, not geometry.
 
     `tools/carla_town_join.mojo` joins the primitives. `tools/carla_town_atlas.mojo`
-    sizes the views and writes the texture coordinates. `tools/carla_jpeg.mojo`
-    writes the picture.
+    sizes the views and writes the texture coordinates. `tools/carla_image_pack.mojo`
+    stores the picture as bytes. `tools/carla_jpeg.mojo` writes the picture.
     """
     joined = _join_tool(parts)
     whole = {
@@ -1128,13 +1128,12 @@ def baked_building(parts, library, out_dir, name, target):
         "normals": numpy.asarray(far["normals"], dtype=float).reshape(-1, 3).tolist(),
         "views": views,
     })
-    atlas = numpy.array(packed["atlas"], dtype=numpy.float64)
+    stored = fix.pack_quantize(packed["atlas"])
     tag = library._bake_tag(name, "baked", parts, target)
     os.makedirs(os.path.join(out_dir, "textures"), exist_ok=True)
-    height, width = atlas.shape[:2]
     with open(os.path.join(out_dir, "textures", tag + ".jpg"), "wb") as handle:
         handle.write(fix.save_jpeg(
-            fix.quantize_image(atlas.reshape(-1)), width, height, "RGB", 85, False,
+            stored["pixels"], stored["width"], stored["height"], "RGB", 85, False,
         ))
     gltf = library.gltf
     gltf["images"].append({"uri": "textures/" + tag + ".jpg"})

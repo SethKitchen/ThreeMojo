@@ -348,6 +348,15 @@ def _pack_tool(payload):
     return json.loads(result.stdout)
 
 
+def pack_quantize(image):
+    """Return one float picture stored as bytes.
+
+    `tools/carla_image_pack.mojo` clips each sample to 0..1, multiplies
+    by 255, and drops the fraction.
+    """
+    return _pack_tool({"mode": "quantize", "image": image})
+
+
 def pack_atlas(views, size):
     """Return two float pictures resized and joined side by side.
 

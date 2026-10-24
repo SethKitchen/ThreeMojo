@@ -107,8 +107,24 @@ def _pending(meshes, materials):
         shutil.rmtree(folder, ignore_errors=True)
 
 
+def _split_batch(batch):
+    """Return how `tools/carla_town_paths.mojo` divides a timed-out batch."""
+    folder = tempfile.mkdtemp(prefix="town-split-")
+    try:
+        path = os.path.join(folder, "batch.json")
+        with open(path, "w", encoding="utf-8") as handle:
+            json.dump(list(batch), handle, separators=(",", ":"))
+        return json.loads(_paths_tool(["split", path]))
+    finally:
+        shutil.rmtree(folder, ignore_errors=True)
+
+
 def run(batch, mesh):
-    """Export one batch of packages. A run that takes too long is split."""
+    """Export one batch of packages. A run that takes too long is split.
+
+    `tools/carla_town_paths.mojo` gives up on one package and cuts a
+    longer batch in half.
+    """
     command = [UMODEL, "-game=ue4.26", "-path=" + CONTENT, "-export", "-png", "-out=" + RAW]
     if mesh:
         command.append("-gltf")
@@ -117,12 +133,12 @@ def run(batch, mesh):
     try:
         subprocess.run(command, capture_output=True, text=True, errors="replace", timeout=LIMIT)
     except subprocess.TimeoutExpired:
-        if len(batch) == 1:
-            print("gave up on", batch[0], file=sys.stderr)
+        plan = _split_batch(batch)
+        if plan["action"] == "gave_up":
+            print("gave up on", plan["path"], file=sys.stderr)
             return
-        half = len(batch) // 2
-        run(batch[:half], mesh)
-        run(batch[half:], mesh)
+        run(plan["left"], mesh)
+        run(plan["right"], mesh)
 
 
 def _export_batches(batches, mesh, label):

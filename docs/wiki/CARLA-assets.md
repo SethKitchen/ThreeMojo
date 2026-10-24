@@ -446,7 +446,7 @@ The meshes are merged by tile, by kind and by material. A tile is 32 meters squa
 
 The near level keeps the detail that a camera sees close up. The far level keeps what shows at a distance. It leaves out the grass, the bushes, the props, the parked vehicles, the signs and the lamps' glass. A far tree is an impostor: `tools/carla_town_impostor.mojo` builds the two quads that cross on its trunk and names its light. Each quad shows a picture of the tree, drawn from its near level from the front or from the side, with its leaves cut out. `tools/carla_town_splat.mojo` draws each picture and fills empty texels, `tools/carla_image_pack.mojo` resizes and joins the two views, and `tools/carla_png.mojo` writes the PNG.
 
-A far building is a baked proxy. `tools/carla_town_join.mojo` joins its parts, `tools/carla_town_weld.mojo` gathers corners into cells a 200th of its size, and `tools/carla_town_simplify.mojo` simplifies that far mesh. Its near level is drawn from each side and from above into one picture, and `tools/carla_town_atlas.mojo` gives each far triangle the view that faces it. So its windows and its trim are in the picture, not in the geometry. `tools/carla_town_dilate.mojo` spreads colors into the empty texels. The picture holds no light, the renderer lights the proxy, and `tools/carla_jpeg.mojo` writes it.
+A far building is a baked proxy. `tools/carla_town_join.mojo` joins its parts, `tools/carla_town_weld.mojo` gathers corners into cells a 200th of its size, and `tools/carla_town_simplify.mojo` simplifies that far mesh. Its near level is drawn from each side and from above into one picture, and `tools/carla_town_atlas.mojo` gives each far triangle the view that faces it. So its windows and its trim are in the picture, not in the geometry. `tools/carla_town_dilate.mojo` spreads colors into the empty texels. The picture holds no light, the renderer lights the proxy, `tools/carla_image_pack.mojo` stores its bytes, and `tools/carla_jpeg.mojo` writes it.
 
 A town's glass is a dark, smooth, partly metal pane that reflects its surroundings. A see-through window has nothing behind it, so a tower would show the sky through its windows.
 
@@ -484,7 +484,7 @@ The towns are made in three steps. The scripts run on Windows, like the vehicle 
 
    It reads the release's own `CarlaUE4/Content`, not `cooked/`. It does not export the engine's own content, which is licensed for use in the engine only. `build_towns.py` draws its own box for the engine's cube from `tools/carla_town_cube.mojo`.
 
-   `tools/carla_town_paths.mojo` names the packages. It skips a package that is already exported and groups the rest into batches of 40. It also names each mesh file the town build reads. `build_towns.py` reads each mesh with `tools/carla_town_mesh.mojo`.
+   `tools/carla_town_paths.mojo` names the packages. It skips a package that is already exported and groups the rest into batches of 40. It cuts a batch that takes too long in half, and gives up on one package. It also names each mesh file the town build reads. `build_towns.py` reads each mesh with `tools/carla_town_mesh.mojo`.
 
 3. Build and zip the packages:
 

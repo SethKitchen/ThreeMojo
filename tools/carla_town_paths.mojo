@@ -9,13 +9,15 @@
     carla_town_paths relative TEXT
     carla_town_paths wanted [FILE ...]
     carla_town_paths export ROOT GAME_PATH SUFFIX
+    carla_town_paths split FILE
 
 `object` prints the package in UE4SS's `Class /Game/A/B.B`. `relative`
 prints the cooked `.uasset` path. `wanted` reads layout files and prints
 the sorted `/Game/...` meshes and materials, once each. `pending` reads
 a JSON file and prints the packages that are not exported yet, in
 batches. `export` joins `ROOT` with the package path and adds
-`SUFFIX`.
+`SUFFIX`. `split` reads a JSON list of packages. One package is given
+up. A longer list is cut in half, with the extra package on the right.
 """
 
 from std.pathlib import Path
@@ -367,12 +369,54 @@ def _whole(doc: PyJson, node: Int) raises -> Int:
     return value
 
 
+def split_text(text: String) raises -> String:
+    """Return how to divide one timed-out export batch.
+
+    Args:
+        text: A JSON list of package paths.
+
+    Returns:
+        `gave_up` and `path` when the list has one package. Otherwise
+        `split`, `left` and `right`. `left` is the first half. `right`
+        holds the rest, including the extra package of an odd count.
+
+    Raises:
+        Error: If `text` is not a list of strings, or the list is empty.
+    """
+    var doc = PyJson.parse(text)
+    if doc.kind(doc.root) != PY_LIST or doc.length(doc.root) == 0:
+        raise Error("batch is empty")
+    var names = List[String]()
+    for index in range(doc.length(doc.root)):
+        var item = doc.item(doc.root, index)
+        if doc.kind(item) != PY_STR:
+            raise Error("package is not text")
+        names.append(doc.text(item))
+    var tree = JsonTree()
+    var obj = tree.object()
+    if len(names) == 1:
+        tree.set_text(obj, "action", "gave_up")
+        tree.set_text(obj, "path", names[0])
+        return tree.dumps(obj, False)
+    var half = len(names) // 2
+    var left = List[String]()
+    var right = List[String]()
+    for index in range(half):
+        left.append(names[index])
+    for index in range(half, len(names)):
+        right.append(names[index])
+    tree.set_text(obj, "action", "split")
+    tree.set(obj, "left", tree.strings(left))
+    tree.set(obj, "right", tree.strings(right))
+    return tree.dumps(obj, False)
+
+
 def _usage() raises:
     """Print the usage line and stop."""
     print(
         (
             "usage: carla_town_paths object TEXT | relative TEXT | wanted [FILE"
-            " ...] | pending FILE | export ROOT GAME_PATH SUFFIX"
+            " ...] | pending FILE | export ROOT GAME_PATH SUFFIX | split FILE"
         ),
         file=stderr,
     )
@@ -397,6 +441,13 @@ def main() raises:
     if arguments[1] == "pending" and len(arguments) == 3:
         try:
             print(pending_text(Path(arguments[2]).read_text()))
+        except error:
+            print("carla_town_paths:", error, file=stderr)
+            exit(1)
+        return
+    if arguments[1] == "split" and len(arguments) == 3:
+        try:
+            print(split_text(Path(arguments[2]).read_text()))
         except error:
             print("carla_town_paths:", error, file=stderr)
             exit(1)

@@ -7,12 +7,13 @@
 
     carla_image_pack FILE
 
-`FILE` is JSON. `mode` is `color`, `masked`, `stitch` or `atlas`.
-`color` builds the RGB samples of one texture, including a neutral 8
-pixel square and a fitted resize. `masked` builds an RGBA cut-out.
-`stitch` joins two RGBA pictures side by side, one row at a time.
-`atlas` turns two float pictures into bytes, resizes each one, and
-joins them the same way.
+`FILE` is JSON. `mode` is `color`, `masked`, `stitch`, `atlas` or
+`quantize`. `color` builds the RGB samples of one texture, including a
+neutral 8 pixel square and a fitted resize. `masked` builds an RGBA
+cut-out. `stitch` joins two RGBA pictures side by side, one row at a
+time. `atlas` turns two float pictures into bytes, resizes each one,
+and joins them the same way. `quantize` stores one float picture as
+bytes.
 """
 
 from std.pathlib import Path
@@ -36,8 +37,8 @@ def pack_text(text: String) raises -> String:
     """Return packaged texture pixels as JSON.
 
     Args:
-        text: A JSON object. `mode` selects `color`, `masked`, `stitch`
-            or `atlas`.
+        text: A JSON object. `mode` selects `color`, `masked`, `stitch`,
+            `atlas` or `quantize`.
 
     Returns:
         `width`, `height`, `bands` and `pixels`. `color` has 3 bands.
@@ -52,7 +53,7 @@ def pack_text(text: String) raises -> String:
         raise Error("pack request is not an object")
     var mode_node = doc.at(root, "mode")
     if doc.kind(mode_node) != PY_STR:
-        raise Error("mode is not color, masked, stitch or atlas")
+        raise Error("mode is not color, masked, stitch, atlas or quantize")
     var mode = doc.text(mode_node)
     if mode == "color":
         return _color(doc, root)
@@ -62,7 +63,9 @@ def pack_text(text: String) raises -> String:
         return _stitch(doc, root)
     if mode == "atlas":
         return _atlas(doc, root)
-    raise Error("mode is not color, masked, stitch or atlas")
+    if mode == "quantize":
+        return _quantize(doc, root)
+    raise Error("mode is not color, masked, stitch, atlas or quantize")
 
 
 def _color(doc: PyJson, root: Int) raises -> String:
@@ -133,6 +136,66 @@ def _stitch(doc: PyJson, root: Int) raises -> String:
         for offset in range(row):
             out.append(right[start + offset])
     return _emit(width * 2, height, 4, out)
+
+
+def _quantize(doc: PyJson, root: Int) raises -> String:
+    """Store one float picture as bytes."""
+    var samples = List[Float64]()
+    var width = 0
+    var height = 0
+    var bands = 0
+    _picture(doc, doc.at(root, "image"), width, height, bands, samples)
+    var request = String('{"mode":"bytes","pixels":[')
+    for index in range(len(samples)):
+        if index > 0:
+            request += ","
+        request += python_repr(samples[index])
+    request += "]}"
+    var quantized = PyJson.parse(resize_text(request))
+    var pixels = _bytes(
+        quantized,
+        quantized.at(quantized.root, "pixels"),
+        width * height * bands,
+    )
+    return _emit(width, height, bands, pixels)
+
+
+def _picture(
+    doc: PyJson,
+    node: Int,
+    mut width: Int,
+    mut height: Int,
+    mut bands: Int,
+    mut samples: List[Float64],
+) raises:
+    """Read an RGB or RGBA picture of unit floats."""
+    if doc.kind(node) != PY_LIST or doc.length(node) == 0:
+        raise Error("image is empty")
+    height = doc.length(node)
+    width = 0
+    bands = 0
+    for row in range(height):
+        var line = doc.item(node, row)
+        if doc.kind(line) != PY_LIST:
+            raise Error("image row is not a list")
+        if row == 0:
+            width = doc.length(line)
+        elif doc.length(line) != width:
+            raise Error("image rows differ")
+        if width == 0:
+            raise Error("image is empty")
+        for column in range(width):
+            var pixel = doc.item(line, column)
+            if doc.kind(pixel) != PY_LIST:
+                raise Error("pixel is not a list")
+            if row == 0 and column == 0:
+                bands = doc.length(pixel)
+                if bands != 3 and bands != 4:
+                    raise Error("pixel is not RGB or RGBA")
+            elif doc.length(pixel) != bands:
+                raise Error("pixels differ in length")
+            for channel in range(bands):
+                samples.append(_sample(doc, doc.item(pixel, channel)))
 
 
 def _atlas(doc: PyJson, root: Int) raises -> String:

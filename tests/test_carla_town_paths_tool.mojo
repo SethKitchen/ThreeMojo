@@ -21,6 +21,7 @@ from tools.carla_town_paths import (
     export_path,
     package_of,
     pending_text,
+    split_text,
     wanted_text,
 )
 
@@ -192,6 +193,31 @@ def test_the_command_prints_the_names_and_refuses_bad_use() raises:
     assert_true(failed.errors.startswith("carla_town_paths:"))
     assert_true(failed.errors.find("Crashpad") < 0)
     _remove(root)
+
+
+def test_a_timed_out_batch_is_cut_in_half() raises:
+    assert_equal(
+        split_text('["/Game/Only"]'),
+        '{"action": "gave_up", "path": "/Game/Only"}',
+    )
+    assert_equal(
+        split_text('["/Game/A","/Game/B","/Game/C"]'),
+        (
+            '{"action": "split", "left": ["/Game/A"], "right": ["/Game/B",'
+            ' "/Game/C"]}'
+        ),
+    )
+    assert_equal(
+        split_text('["/Game/A","/Game/B","/Game/C","/Game/D","/Game/E"]'),
+        (
+            '{"action": "split", "left": ["/Game/A", "/Game/B"], "right":'
+            ' ["/Game/C", "/Game/D", "/Game/E"]}'
+        ),
+    )
+    with assert_raises(contains="batch is empty"):
+        _ = split_text("[]")
+    with assert_raises(contains="package is not text"):
+        _ = split_text("[1]")
 
 
 def main() raises:
