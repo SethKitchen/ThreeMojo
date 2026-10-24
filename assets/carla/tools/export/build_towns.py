@@ -26,7 +26,7 @@ import json
 import os
 import re
 import shutil
-import struct
+import subprocess
 import sys
 import zlib
 
@@ -1157,34 +1157,21 @@ def to_glb(out_dir, name):
     """Pack a package's glTF, its buffer and its textures into one binary
     glTF, `<name>.glb`, and remove the loose files. A town is then two
     files, the glb and its OpenDRIVE map, and its manifest entry lists
-    two members, not a thousand."""
-    gltf_path = os.path.join(out_dir, name + ".gltf")
-    gltf = json.load(open(gltf_path, encoding="utf-8"))
-    blob = bytearray(open(os.path.join(out_dir, name + ".bin"), "rb").read())
-    for image in gltf.get("images", []):
-        while len(blob) % 4:
-            blob.append(0)
-        data = open(os.path.join(out_dir, image["uri"]), "rb").read()
-        gltf["bufferViews"].append({"buffer": 0, "byteOffset": len(blob), "byteLength": len(data)})
-        blob.extend(data)
-        mime = "image/png" if image["uri"].endswith(".png") else "image/jpeg"
-        image.clear()
-        image.update({"bufferView": len(gltf["bufferViews"]) - 1, "mimeType": mime})
-    while len(blob) % 4:
-        blob.append(0)
-    gltf["buffers"] = [{"byteLength": len(blob)}]
-    text = json.dumps(gltf, separators=(",", ":")).encode("utf-8")
-    text += b" " * (-len(text) % 4)
-    total = 12 + 8 + len(text) + 8 + len(blob)
-    with open(os.path.join(out_dir, name + ".glb"), "wb") as out:
-        out.write(struct.pack("<III", 0x46546C67, 2, total))
-        out.write(struct.pack("<II", len(text), 0x4E4F534A))
-        out.write(text)
-        out.write(struct.pack("<II", len(blob), 0x004E4942))
-        out.write(blob)
-    os.remove(gltf_path)
-    os.remove(os.path.join(out_dir, name + ".bin"))
-    shutil.rmtree(os.path.join(out_dir, "textures"), ignore_errors=True)
+    two members, not a thousand.
+
+    `tools/carla_town_glb.mojo` writes the binary glTF.
+    """
+    root = os.path.abspath(os.path.join(HERE, "..", "..", "..", ".."))
+    mojo = os.path.join(root, ".venv", "bin", "mojo")
+    if not os.path.isfile(mojo):
+        mojo = "mojo"
+    result = subprocess.run(
+        ["sh", os.path.join(root, "tools", "tool.sh"), mojo,
+         "carla_town_glb", out_dir, name],
+        capture_output=True, text=True,
+    )
+    if result.returncode != 0:
+        raise ValueError(result.stderr.strip() or "town glb failed")
 
 
 def check_clean(out_dir):
