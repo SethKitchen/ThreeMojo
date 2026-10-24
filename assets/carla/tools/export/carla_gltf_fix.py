@@ -723,13 +723,54 @@ def quadric_collapses(points, faces, target, border=True):
     return numpy.asarray(json.loads(result.stdout)["collapses"], dtype=numpy.int32)
 
 
+def replay_mesh(points, faces, collapses):
+    """Return the points, triangles and old-to-new map after the collapses.
+
+    `tools/carla_simplify.mojo` replays them. It rounds each point to
+    float32, as `replay_simplification` does, then rebuilds the triangles.
+    """
+    import numpy
+
+    here = os.path.dirname(os.path.abspath(__file__))
+    repo = os.path.abspath(os.path.join(here, "..", "..", "..", ".."))
+    mojo = os.path.join(repo, ".venv", "bin", "mojo")
+    if not os.path.isfile(mojo):
+        mojo = "mojo"
+    folder = tempfile.mkdtemp(prefix="simplify-replay-")
+    try:
+        path = os.path.join(folder, "replay.json")
+        with open(path, "w", encoding="utf-8") as handle:
+            json.dump({
+                "mode": "replay",
+                "points": numpy.asarray(points, dtype=float).reshape(-1, 3).tolist(),
+                "triangles": numpy.asarray(faces).reshape(-1, 3).tolist(),
+                "collapses": numpy.asarray(collapses).reshape(-1, 2).tolist(),
+            }, handle, separators=(",", ":"), allow_nan=False)
+        result = subprocess.run(
+            ["sh", os.path.join(repo, "tools", "tool.sh"), mojo,
+             "carla_simplify", path],
+            capture_output=True, text=True,
+        )
+    finally:
+        shutil.rmtree(folder, ignore_errors=True)
+    if result.returncode != 0:
+        raise ValueError(result.stderr.strip() or "replay failed")
+    parsed = json.loads(result.stdout)
+    return (
+        numpy.array(parsed["points"], dtype=numpy.float64).reshape(-1, 3),
+        numpy.array(parsed["triangles"], dtype=numpy.int64).reshape(-1, 3),
+        numpy.array(parsed["mapping"], dtype=numpy.int64),
+    )
+
+
 def decimate(gltf, data, budget):
     """Bring a model's triangles down to about `budget`, and return the
     buffer with the new primitives' data added.
 
     Each primitive is simplified alone with quadric error collapses, so
     no material bleeds into another, and its open edges stay put:
-    `tools/carla_simplify.mojo` records the collapses. glTF splits a
+    `tools/carla_simplify.mojo` records the collapses and replays them.
+    glTF splits a
     vertex along a texture seam, so
     the seams are edges and the textures do not tear. Every primitive
     gives up the same share. `tools/carla_simplify_target.mojo` chooses
@@ -741,7 +782,6 @@ def decimate(gltf, data, budget):
     first of those old vertices and copies its values.
     """
     import numpy
-    import fast_simplification
 
     def fixed(primitive):
         material = gltf["materials"][primitive["material"]] if "material" in primitive else {}
@@ -777,8 +817,7 @@ def decimate(gltf, data, budget):
             points = numpy.array(positions, dtype=numpy.float64).reshape(-1, 3)
             faces = numpy.array(indices, dtype=numpy.int32).reshape(-1, 3)
             collapses = quadric_collapses(points, faces, target, True)
-            new_points, new_faces, mapping = fast_simplification.replay_simplification(
-                points, faces, collapses)
+            new_points, new_faces, mapping = replay_mesh(points, faces, collapses)
             if len(new_faces) == 0:
                 continue
             source = collapse_source(mapping, len(new_points))

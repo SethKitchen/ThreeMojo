@@ -423,7 +423,7 @@ CARLA's vehicles are Unreal Engine 4.26 assets. The scripts in `assets/carla/too
 3. It splits the lamps into head lamps and tail lamps. CARLA's lamp material reads an eight-color mask, and UModel does not export what the colors mean. So a lamp in front of the model's middle is a head lamp, and a lamp behind it is a tail lamp. `tools/carla_gltf_read.mojo` reads each accessor.
 4. It simplifies the model to `--budget` triangles, 35,000 by default, and `tools/carla_simplify_target.mojo` chooses each part's share. The seams stay where they are, so the textures do not tear. The normals are made again from the simplified faces. `tools/carla_area_normals.mojo` weights each normal by the area of the faces that meet there. `tools/carla_collapse_map.mojo` keeps the first corner that fell into each new one and copies its texture values. `tools/carla_gltf_append.mojo` packs each new buffer view.
 
-`tools/carla_simplify.mojo` chooses the quadric collapses. Replaying them still needs the `fast-simplification` Python package.
+`tools/carla_simplify.mojo` chooses the quadric collapses and replays them.
 
 Use the cooked release, not the carla-content repository. The repository holds uncooked assets, and UModel cannot read an uncooked mesh.
 
@@ -452,7 +452,7 @@ A town's glass is a dark, smooth, partly metal pane that reflects its surroundin
 
 `tools/carla_town_lamps.mojo` finds each street lamp head and places it with the copy's matrix. The scene's `extras` list the head of each street lamp, as `carla_lamps`: three numbers for each lamp, in the renderer's frame. The lamps' glass has the material tag `{"carla": "lamp"}`. A renderer draws each tile at one level, chosen by the tile's distance to the camera.
 
-Each mesh keeps a share of its triangles, by its kind. Each town also has a cap for each kind at each level. A town can have more than its cap, as Town04 has with its eight thousand pines. Then every mesh of that kind gives up the same share, and `tools/carla_town_share.mojo` chooses that share. A tree gives up leaf cards, and each card that stays grows, so the crown stays full. Other meshes are simplified, and their texture seams stay where they are.
+Each mesh keeps a share of its triangles, by its kind. Each town also has a cap for each kind at each level. A town can have more than its cap, as Town04 has with its eight thousand pines. Then every mesh of that kind gives up the same share, and `tools/carla_town_share.mojo` chooses that share. A tree gives up leaf cards, and each card that stays grows, so the crown stays full. Other meshes are simplified by `tools/carla_simplify.mojo`, and their texture seams stay where they are.
 
 `tools/carla_town_cards.mojo` keeps about the requested share of those cards and grows each card that stays, using a CRC-32 seed. `tools/carla_town_uv.mojo` gives a simplified triangle the texture of one original triangle. `tools/carla_town_near.mojo` finds the original triangles nearest that face's center. `tools/carla_town_choose.mojo` picks that original triangle. `tools/carla_collapse_map.mojo` keeps the first corner that fell into each new one and copies its texture values. `tools/carla_town_finish.mojo` keeps each simplified corner inside the original box and turns a flipped face back.
 
@@ -503,7 +503,7 @@ The towns are made in three steps. The scripts run on Windows, like the vehicle 
 
    `--top` lists the meshes that add the most triangles to each town.
 
-The build needs the `numpy`, `fast-simplification` and `Pillow` Python packages.
+The build needs the `numpy` and `Pillow` Python packages.
 
 Far buildings and tree impostors share a bake only when their ordered
 geometry and resolved materials match. The cache key and atlas name include

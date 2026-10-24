@@ -609,7 +609,6 @@ def simplify(primitive, target, borders=True, small=False):
     collapses. With `borders`, its open edges, the texture seams among
     them, stay in place, so its textures do not tear. Without, it is
     welded first; see `simplify_welded`."""
-    import fast_simplification
     faces = primitive["triangles"]
     if not borders:
         return simplify_welded(primitive, target)
@@ -625,10 +624,10 @@ def simplify(primitive, target, borders=True, small=False):
     if chosen["whole"]:
         return primitive
     points = primitive["positions"]
-    # `tools/carla_simplify.mojo` records the collapses. Open edges stay.
+    # `tools/carla_simplify.mojo` records the collapses and replays them.
+    # Open edges stay.
     collapses = fix.quadric_collapses(points, faces, chosen["count"], True)
-    new_points, new_faces, mapping = fast_simplification.replay_simplification(
-        points, faces.astype(numpy.int32), collapses)
+    new_points, new_faces, mapping = fix.replay_mesh(points, faces, collapses)
     if len(new_faces) == 0:
         return primitive
     # `tools/carla_collapse_map.mojo` keeps the first old corner and copies
@@ -719,7 +718,6 @@ def simplify_welded(primitive, target):
     flat, its corners apart, and takes its texture coordinates from one
     original triangle, by `transfer_uvs`.
     """
-    import fast_simplification
     faces = primitive["triangles"]
     # `tools/carla_simplify_target.mojo` keeps a far mesh of at most 8
     # triangles whole.
@@ -744,9 +742,9 @@ def simplify_welded(primitive, target):
     })
     if not again["whole"]:
         # A welded mesh has no open border to keep.
+        # `tools/carla_simplify.mojo` replays the collapses.
         collapses = fix.quadric_collapses(points, joined, again["count"], False)
-        points, joined, _ = fast_simplification.replay_simplification(
-            points, joined.astype(numpy.int32), collapses)
+        points, joined, _ = fix.replay_mesh(points, joined, collapses)
         if len(joined) == 0:
             return None
         prepared = _finish_tool({

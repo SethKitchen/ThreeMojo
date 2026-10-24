@@ -10,8 +10,10 @@
 `FILE` is JSON with `points`, `triangles`, `target` and `border`.
 `aggressiveness` defaults to 7. The collapses are the ones
 `fast-simplification` 0.1.11 records. `border` true keeps every open
-edge, as version 0.2.0 does when `preserve_border` is true. The rule
-is Sven Forstmann's quadric simplifier, published under the MIT license.
+edge, as version 0.2.0 does when `preserve_border` is true. `mode`
+`replay` applies a collapse list the way 0.1.11 `replay_simplification`
+does, including its float32 rounding. The rule is Sven Forstmann's
+quadric simplifier, published under the MIT license.
 """
 
 from std.ffi import external_call
@@ -26,6 +28,7 @@ from tools._python_json import (
     PY_FLOAT,
     PY_INT,
     PY_LIST,
+    PY_STR,
     PyJson,
 )
 
@@ -55,24 +58,34 @@ def _fdiv(left: Float64, right: Float64) -> Float64:
 
 
 def simplify_text(text: String) raises -> String:
-    """Return the collapsed mesh and the collapse list as JSON.
+    """Return a simplified mesh as JSON.
 
     Args:
-        text: A JSON object with `points`, `triangles`, `target` and
-            `border`. `aggressiveness` is optional and defaults to 7.
+        text: A JSON object. A collapse request has `points`,
+            `triangles`, `target` and `border`. `aggressiveness` is
+            optional and defaults to 7. A replay request has `mode`
+            `replay`, `points`, `triangles` and `collapses`.
 
     Returns:
-        `points`, `triangles` and `collapses`. A collapse `[i0, i1]`
-        moves vertex `i1` onto vertex `i0`.
+        A collapse request returns `points`, `triangles` and
+        `collapses`. A collapse `[i0, i1]` moves vertex `i1` onto
+        vertex `i0`. A replay request returns `points`, `triangles`
+        and `mapping`. `mapping[i]` is the new index of old vertex `i`.
 
     Raises:
-        Error: If the JSON is not that mesh, a triangle index is out of
-            range, or `target` is outside the mesh.
+        Error: If the JSON is not that request, an index is out of
+            range, `target` is outside the mesh, or `mode` is not
+            `replay`.
     """
     var doc = PyJson.parse(text)
     var root = doc.root
     if doc.kind(root) != PY_DICT:
         raise Error("simplify request is not an object")
+    var mode = doc.get(root, "mode")
+    if mode != MISSING:
+        if doc.kind(mode) != PY_STR or doc.text(mode) != "replay":
+            raise Error("mode is not replay")
+        return _replay_text(doc, root)
     var points = _points(doc, doc.at(root, "points"))
     var tris = _tris(doc, doc.at(root, "triangles"), len(points))
     var target = _whole(doc, doc.at(root, "target"))
@@ -672,6 +685,388 @@ def _compact(mut points: List[_P], mut tris: List[_T]):
         tris[index] = face
     while len(points) > dst:
         _ = points.pop()
+
+
+def _f32(value: Float64) -> Float64:
+    """Return `value` rounded to float32 and back."""
+    return Float64(Float32(value))
+
+
+@fieldwise_init
+struct _Edge(ImplicitlyCopyable, Movable):
+    var a: Int
+    var b: Int
+
+
+@fieldwise_init
+struct _Replay(Movable):
+    var points: List[_V]
+    var tris: List[_T]
+    var mapping: List[Int]
+
+
+def _replay_text(doc: PyJson, root: Int) raises -> String:
+    """Return one replayed mesh as JSON."""
+    var points = _points(doc, doc.at(root, "points"))
+    var count = len(points)
+    var tris = _tris(doc, doc.at(root, "triangles"), count)
+    var collapses = _pairs(doc, doc.at(root, "collapses"), count)
+    var result = _replay(points^, tris^, collapses)
+    return _emit_replay(result^)
+
+
+def _replay(
+    var points: List[_P], var tris: List[_T], collapses: List[_C]
+) raises -> _Replay:
+    """Replay collapses and return points, triangles and the index map."""
+    for index in range(len(points)):
+        var point = points[index]
+        point.x = _f32(point.x)
+        point.y = _f32(point.y)
+        point.z = _f32(point.z)
+        points[index] = point
+    var refs = List[_R]()
+    _update(points, tris, refs, 0)
+    for index in range(len(collapses)):
+        var keep = collapses[index].keep
+        var drop = collapses[index].drop
+        var place = _error(points, keep, drop)
+        var head = points[keep]
+        var tail = points[drop]
+        head.x = place.x
+        head.y = place.y
+        head.z = place.z
+        head.q = _qadd(tail.q, head.q)
+        points[keep] = head
+        tail = points[drop]
+        tail.tcount = 0
+        points[drop] = tail
+    var count = len(points)
+    var kept = List[_V]()
+    for index in range(count):
+        if points[index].tcount != 0:
+            var point = points[index]
+            kept.append(_V(_f32(point.x), _f32(point.y), _f32(point.z)))
+    var indice = _indice_mapping(collapses, count)
+    var edges = List[_Edge]()
+    var faces = List[_T]()
+    _clean(_mapped(tris, indice), edges, faces)
+    return _settle(kept^, edges^, faces^, indice^)
+
+
+def _indice_mapping(collapses: List[_C], count: Int) raises -> List[Int]:
+    """Return the old-to-new index map from a collapse list."""
+    var mapping = List[Int]()
+    for index in range(count):
+        mapping.append(index)
+    var origin = List[Int]()
+    var dest = List[Int]()
+    for index in range(len(collapses)):
+        origin.append(collapses[index].drop)
+        dest.append(collapses[index].keep)
+    if len(origin) > 0:
+        for index in range(len(origin)):
+            mapping[origin[index]] = dest[index]
+        var guard = 0
+        while True:
+            guard += 1
+            if guard > count + 2:
+                raise Error("collapse map does not settle")
+            var rhs = List[Int]()
+            for index in range(len(origin)):
+                rhs.append(mapping[mapping[origin[index]]])
+            var changed = False
+            for index in range(len(origin)):
+                var at = origin[index]
+                if mapping[at] != rhs[index]:
+                    changed = True
+                mapping[at] = rhs[index]
+            if not changed:
+                break
+    var seen = List[Int]()
+    for _ in range(count):
+        seen.append(0)
+    for index in range(len(origin)):
+        seen[origin[index]] = 1
+    var keep = List[Int]()
+    for index in range(count):
+        if seen[index] == 0:
+            keep.append(index)
+    var application = List[Int]()
+    for _ in range(count):
+        application.append(0)
+    var cursor = 0
+    for index in range(count):
+        if cursor == len(keep):
+            break
+        if index == keep[cursor]:
+            application[index] = cursor
+            cursor += 1
+    var out = List[Int]()
+    for index in range(count):
+        out.append(application[mapping[index]])
+    return out^
+
+
+def _mapped(tris: List[_T], indice: List[Int]) -> List[_T]:
+    """Return triangles with the collapse map applied."""
+    var out = List[_T]()
+    for index in range(len(tris)):
+        var face = tris[index]
+        out.append(
+            _T(
+                indice[face.v0],
+                indice[face.v1],
+                indice[face.v2],
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+            )
+        )
+    return out^
+
+
+def _clean(mapped: List[_T], mut edges: List[_Edge], mut tris: List[_T]):
+    """Drop degenerate triangles and keep one edge from each."""
+    for index in range(len(mapped)):
+        var face = mapped[index]
+        var j = face.v0
+        var k = face.v1
+        var l = face.v2
+        if j != k and j != l and k != l:
+            tris.append(_T(j, k, l, 0, 0, 0, 0, 0, 0, 0, 0, 0))
+        elif j != k:
+            edges.append(_Edge(j, k))
+        elif j != l:
+            edges.append(_Edge(j, l))
+        elif l != k:
+            edges.append(_Edge(l, k))
+
+
+def _at(values: List[Int], index: Int) raises -> Int:
+    """Return one mapped index."""
+    if index < 0 or index >= len(values):
+        raise Error("replay index is out of range")
+    return values[index]
+
+
+def _mark(mut marks: List[Int], index: Int):
+    """Mark an index that is inside the point list."""
+    if index >= 0 and index < len(marks):
+        marks[index] = 1
+
+
+def _on(marks: List[Int], index: Int) -> Bool:
+    """Return whether an index is marked."""
+    return index >= 0 and index < len(marks) and marks[index] != 0
+
+
+def _flags(count: Int, ids: List[Int]) -> List[Int]:
+    """Return a mark for each id."""
+    var marks = List[Int]()
+    for _ in range(count):
+        marks.append(0)
+    for index in range(len(ids)):
+        marks[ids[index]] = 1
+    return marks^
+
+
+def _bind(
+    mut link: List[Int], edges: List[_Edge], tris: List[_T], count: Int
+) raises -> List[Int]:
+    """Merge edge-only points into triangle points and mark deletions."""
+    var in_tri = List[Int]()
+    var in_edge = List[Int]()
+    for _ in range(count):
+        in_tri.append(0)
+        in_edge.append(0)
+    for index in range(len(tris)):
+        var face = tris[index]
+        _mark(in_tri, face.v0)
+        _mark(in_tri, face.v1)
+        _mark(in_tri, face.v2)
+    for index in range(len(edges)):
+        _mark(in_edge, edges[index].a)
+        _mark(in_edge, edges[index].b)
+    var pending = List[Int]()
+    for index in range(count):
+        if in_tri[index] == 0 and in_edge[index] == 1:
+            pending.append(index)
+    var member = _flags(count, pending)
+    var active = List[_Edge]()
+    for index in range(len(edges)):
+        var edge = edges[index]
+        if _on(member, edge.a) or _on(member, edge.b):
+            active.append(edge)
+    var n_edges = len(active)
+    var previous = 0
+    while n_edges > 0 and n_edges != previous:
+        previous = n_edges
+        var both = List[_Edge]()
+        var merged = List[Int]()
+        var target = List[Int]()
+        for index in range(len(active)):
+            var edge = active[index]
+            var a_on = _on(member, edge.a)
+            var b_on = _on(member, edge.b)
+            if a_on and b_on:
+                both.append(edge)
+            else:
+                if a_on:
+                    merged.append(edge.a)
+                if b_on:
+                    merged.append(edge.b)
+                if not a_on:
+                    target.append(edge.a)
+                if not b_on:
+                    target.append(edge.b)
+        if len(merged) != len(target):
+            raise Error("replay index is out of range")
+        var rhs = List[Int]()
+        for index in range(len(target)):
+            rhs.append(_at(link, target[index]))
+        for index in range(len(merged)):
+            link[merged[index]] = rhs[index]
+        var gone = List[Int]()
+        for _ in range(count):
+            gone.append(0)
+        for index in range(len(merged)):
+            var at = merged[index]
+            if at >= 0 and at < count:
+                gone[at] = 1
+        var next_pending = List[Int]()
+        for index in range(len(pending)):
+            var at = pending[index]
+            if gone[at] == 0:
+                next_pending.append(at)
+        pending = next_pending^
+        member = _flags(count, pending)
+        var filtered = List[_Edge]()
+        for index in range(len(both)):
+            var edge = both[index]
+            if _on(member, edge.a) or _on(member, edge.b):
+                filtered.append(edge)
+        active = filtered^
+        n_edges = len(active)
+    var delete = List[Int]()
+    for index in range(count):
+        if link[index] != index:
+            delete.append(1)
+        else:
+            delete.append(0)
+    for index in range(len(pending)):
+        delete[pending[index]] = 1
+    return delete^
+
+
+def _apply_tris(mut tris: List[_T], table: List[Int]) raises:
+    """Replace each corner through `table`."""
+    for index in range(len(tris)):
+        var face = tris[index]
+        face.v0 = _at(table, face.v0)
+        face.v1 = _at(table, face.v1)
+        face.v2 = _at(table, face.v2)
+        tris[index] = face
+
+
+def _apply_map(mut values: List[Int], table: List[Int]) raises:
+    """Replace each index through `table`."""
+    for index in range(len(values)):
+        values[index] = _at(table, values[index])
+
+
+def _shift(delete: List[Int], count: Int) -> List[Int]:
+    """Return the index map after deleting marked points in order."""
+    var shift = List[Int]()
+    var removed = 0
+    for index in range(count):
+        if delete[index] != 0:
+            removed += 1
+        shift.append(index - removed)
+    return shift^
+
+
+def _settle(
+    var kept: List[_V],
+    var edges: List[_Edge],
+    var faces: List[_T],
+    var indice: List[Int],
+) raises -> _Replay:
+    """Merge isolated points, drop them, and renumber the mesh."""
+    var count = len(kept)
+    var link = List[Int]()
+    for index in range(count):
+        link.append(index)
+    var delete = _bind(link, edges, faces, count)
+    _apply_tris(faces, link)
+    _apply_map(indice, link)
+    var shift = _shift(delete, count)
+    var live = List[_V]()
+    for index in range(count):
+        if delete[index] == 0:
+            live.append(kept[index])
+    _apply_tris(faces, shift)
+    _apply_map(indice, shift)
+    var result = _Replay(live^, faces^, indice^)
+    return result^
+
+
+def _pairs(doc: PyJson, node: Int, count: Int) raises -> List[_C]:
+    """Read the collapse pairs."""
+    if doc.kind(node) != PY_LIST:
+        raise Error("collapses are not a list")
+    var out = List[_C]()
+    for index in range(doc.length(node)):
+        var row = doc.item(node, index)
+        if doc.kind(row) != PY_LIST or doc.length(row) != 2:
+            raise Error("collapse is not 2 indices")
+        var keep = _whole(doc, doc.item(row, 0))
+        var drop = _whole(doc, doc.item(row, 1))
+        if keep < 0 or drop < 0 or keep >= count or drop >= count:
+            raise Error("collapse index is out of range")
+        out.append(_C(keep, drop))
+    return out^
+
+
+def _emit_replay(var result: _Replay) raises -> String:
+    """Return the replayed mesh as JSON."""
+    var out = String('{"points":[')
+    for index in range(len(result.points)):
+        if index > 0:
+            out += ","
+        var point = result.points[index]
+        out += "["
+        out += python_repr(point.x)
+        out += ","
+        out += python_repr(point.y)
+        out += ","
+        out += python_repr(point.z)
+        out += "]"
+    out += '],"triangles":['
+    for index in range(len(result.tris)):
+        if index > 0:
+            out += ","
+        var face = result.tris[index]
+        out += "["
+        out += String(face.v0)
+        out += ","
+        out += String(face.v1)
+        out += ","
+        out += String(face.v2)
+        out += "]"
+    out += '],"mapping":['
+    for index in range(len(result.mapping)):
+        if index > 0:
+            out += ","
+        out += String(result.mapping[index])
+    out += "]}"
+    return out^
 
 
 def _emit(var result: _Out) raises -> String:
