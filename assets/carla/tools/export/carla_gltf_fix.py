@@ -28,7 +28,6 @@ import argparse
 import json
 import os
 import shutil
-import struct
 import subprocess
 import sys
 import tempfile
@@ -92,38 +91,6 @@ def read_props(path):
     """
     doc = _mat_tool("props", path)
     return doc["parent"], doc["vectors"], doc["scalars"], doc["translucent"], doc["masked"]
-
-
-def srgb_to_linear(c):
-    return c / 12.92 if c <= 0.04045 else ((c + 0.055) / 1.055) ** 2.4
-
-
-def mask_channel(pixels, width, height):
-    """Return the cut-out channel from `tools/carla_mask_channel.mojo`."""
-    here = os.path.dirname(os.path.abspath(__file__))
-    repo = os.path.abspath(os.path.join(here, "..", "..", "..", ".."))
-    mojo = os.path.join(repo, ".venv", "bin", "mojo")
-    if not os.path.isfile(mojo):
-        mojo = "mojo"
-    folder = tempfile.mkdtemp(prefix="mask-channel-")
-    try:
-        path = os.path.join(folder, "mask.json")
-        with open(path, "w", encoding="utf-8") as handle:
-            json.dump({
-                "width": int(width),
-                "height": int(height),
-                "pixels": [int(value) for value in pixels],
-            }, handle, separators=(",", ":"))
-        result = subprocess.run(
-            ["sh", os.path.join(repo, "tools", "tool.sh"), mojo,
-             "carla_mask_channel", path],
-            capture_output=True, text=True,
-        )
-    finally:
-        shutil.rmtree(folder, ignore_errors=True)
-    if result.returncode != 0:
-        raise ValueError(result.stderr.strip() or "mask channel failed")
-    return json.loads(result.stdout)
 
 
 def quantize_image(values):
@@ -357,53 +324,43 @@ def open_image(path):
     return doc["mode"], int(doc["width"]), int(doc["height"]), doc["pixels"]
 
 
-def _rgb_of(rgba):
-    """Return the RGB samples of an RGBA list."""
-    out = []
-    for index in range(0, len(rgba), 4):
-        out.extend(rgba[index:index + 3])
-    return out
-
-
-def _alpha_of(rgba):
-    """Return the alpha samples of an RGBA list."""
-    return list(rgba[3::4])
-
-
-def _nearest(rgba, width, height, out_width, out_height):
-    """Return a nearest resize, as Pillow resizes a palette image."""
-    out = []
-    for y in range(out_height):
-        sy = min(height - 1, int((y + 0.5) * height / out_height))
-        for x in range(out_width):
-            sx = min(width - 1, int((x + 0.5) * width / out_width))
-            start = (sy * width + sx) * 4
-            out.extend(rgba[start:start + 4])
-    return out
-
-
-def _resize_rgba(mode, rgba, width, height, out_width, out_height, filt):
-    """Resize one opened image the way Pillow resizes that mode."""
-    if mode == "P":
-        return _nearest(rgba, width, height, out_width, out_height)
-    if mode in ("LA", "RGBA"):
-        return resize_image(rgba, width, height, 4, out_width, out_height, filt)
-    if mode == "L":
-        resized = resize_image(
-            list(rgba[0::4]), width, height, 1, out_width, out_height, filt,
+def _pack_tool(payload):
+    """Return pixels from `tools/carla_image_pack.mojo`."""
+    here = os.path.dirname(os.path.abspath(__file__))
+    repo = os.path.abspath(os.path.join(here, "..", "..", "..", ".."))
+    mojo = os.path.join(repo, ".venv", "bin", "mojo")
+    if not os.path.isfile(mojo):
+        mojo = "mojo"
+    folder = tempfile.mkdtemp(prefix="image-pack-")
+    try:
+        path = os.path.join(folder, "pack.json")
+        with open(path, "w", encoding="utf-8") as handle:
+            json.dump(payload, handle, separators=(",", ":"))
+        result = subprocess.run(
+            ["sh", os.path.join(repo, "tools", "tool.sh"), mojo,
+             "carla_image_pack", path],
+            capture_output=True, text=True,
         )
-        out = []
-        for value in resized:
-            out.extend((value, value, value, 255))
-        return out
-    resized = resize_image(
-        _rgb_of(rgba), width, height, 3, out_width, out_height, filt,
-    )
-    out = []
-    for index in range(0, len(resized), 3):
-        out.extend(resized[index:index + 3])
-        out.append(255)
-    return out
+    finally:
+        shutil.rmtree(folder, ignore_errors=True)
+    if result.returncode != 0:
+        raise ValueError(result.stderr.strip() or "image pack failed")
+    return json.loads(result.stdout)
+
+
+def pack_stitch(left, right, width, height):
+    """Return two RGBA pictures joined side by side.
+
+    `tools/carla_image_pack.mojo` copies one row from each picture.
+    """
+    packed = _pack_tool({
+        "mode": "stitch",
+        "width": int(width),
+        "height": int(height),
+        "left": [int(value) for value in left],
+        "right": [int(value) for value in right],
+    })
+    return bytes(packed["pixels"])
 
 
 def _save_texture(package, pixels, width, height, mode, plan):
@@ -461,27 +418,27 @@ class Package:
         """Return the texture index for image file `source`, adding it. A
         texture that a neutral name selects becomes a small image of its
         average color, under a plain name. `tools/carla_texture_plan.mojo`
-        names those textures and chooses the fitted size."""
+        names those textures and chooses the fitted size.
+        `tools/carla_image_pack.mojo` builds the stored samples."""
         key = (source, color)
         if key in self.images:
             return self.images[key]
         mode, width, height, rgba = open_image(source)
         plan = _texture_plan(source, color, self.max_size, width, height, False)
-        if plan["neutral"]:
-            average = resize_image(
-                _rgb_of(rgba), width, height, 3, 1, 1, "box",
-            )
-            rgba = []
-            for _ in range(64):
-                rgba.extend((average[0], average[1], average[2], 255))
-            width, height = 8, 8
-            mode = "RGB"
-        if plan["resize"]:
-            rgba = _resize_rgba(
-                mode, rgba, width, height, plan["width"], plan["height"], "lanczos",
-            )
-            width, height = plan["width"], plan["height"]
-        uri = _save_texture(self, _rgb_of(rgba), width, height, "RGB", plan)
+        packed = _pack_tool({
+            "mode": "color",
+            "image_mode": mode,
+            "width": int(width),
+            "height": int(height),
+            "pixels": [int(value) for value in rgba],
+            "neutral": bool(plan["neutral"]),
+            "resize": bool(plan["resize"]),
+            "out_width": int(plan["width"]),
+            "out_height": int(plan["height"]),
+        })
+        uri = _save_texture(
+            self, packed["pixels"], packed["width"], packed["height"], "RGB", plan,
+        )
         self.gltf["images"].append({"uri": uri})
         self.gltf["textures"].append({"sampler": 0, "source": len(self.gltf["images"]) - 1})
         index = len(self.gltf["textures"]) - 1
@@ -493,34 +450,30 @@ class Package:
         file `color`, and an alpha from image file `mask`. The mask is its
         alpha channel when it has one, and otherwise its most black and
         white channel: CARLA's foliage packs a leaf's cut-out into one
-        channel of an RGB image."""
+        channel of an RGB image. `tools/carla_image_pack.mojo` builds the
+        stored samples."""
         key = (color, mask, "masked")
         if key in self.images:
             return self.images[key]
         _, width, height, color_rgba = open_image(color)
-        rgb = _rgb_of(color_rgba)
         mask_mode, mask_width, mask_height, mask_rgba = open_image(mask)
-        if mask_mode in ("RGBA", "LA"):
-            alpha = _alpha_of(mask_rgba)
-        else:
-            # `tools/carla_mask_channel.mojo` chooses the cut-out channel.
-            chosen = mask_channel(_rgb_of(mask_rgba), mask_width, mask_height)
-            alpha = chosen["pixels"]
-        if (mask_width, mask_height) != (width, height):
-            alpha = resize_image(
-                alpha, mask_width, mask_height, 1, width, height, "lanczos",
-            )
-        rgba = []
-        for index in range(width * height):
-            rgba.extend(rgb[index * 3:index * 3 + 3])
-            rgba.append(alpha[index])
         plan = _texture_plan("", False, self.max_size, width, height, True)
-        if plan["resize"]:
-            rgba = resize_image(
-                rgba, width, height, 4, plan["width"], plan["height"], "lanczos",
-            )
-            width, height = plan["width"], plan["height"]
-        uri = _save_texture(self, rgba, width, height, "RGBA", plan)
+        packed = _pack_tool({
+            "mode": "masked",
+            "width": int(width),
+            "height": int(height),
+            "color": [int(value) for value in color_rgba],
+            "mask_mode": mask_mode,
+            "mask_width": int(mask_width),
+            "mask_height": int(mask_height),
+            "mask": [int(value) for value in mask_rgba],
+            "resize": bool(plan["resize"]),
+            "out_width": int(plan["width"]),
+            "out_height": int(plan["height"]),
+        })
+        uri = _save_texture(
+            self, packed["pixels"], packed["width"], packed["height"], "RGBA", plan,
+        )
         self.gltf["images"].append({"uri": uri})
         self.gltf["textures"].append({"sampler": 0, "source": len(self.gltf["images"]) - 1})
         index = len(self.gltf["textures"]) - 1

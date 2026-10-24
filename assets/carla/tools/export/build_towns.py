@@ -1137,7 +1137,8 @@ def impostor(parts, library, out_dir, name):
     material's index.
 
     `tools/carla_town_impostor.mojo` sizes the views, builds the quads, and
-    fills the empty texels. `tools/carla_png.mojo` writes the picture.
+    fills the empty texels. `tools/carla_image_pack.mojo` joins the two
+    pictures. `tools/carla_png.mojo` writes the picture.
     """
     points = numpy.concatenate([p["positions"] for p, _ in parts])
     frame = _impostor_tool({
@@ -1161,12 +1162,7 @@ def impostor(parts, library, out_dir, name):
             IMPOSTOR_SIZE, IMPOSTOR_SIZE, "lanczos",
         )
         views.append(bytes(resized))
-    row = IMPOSTOR_SIZE * 4
-    atlas = bytearray()
-    for y in range(IMPOSTOR_SIZE):
-        start = y * row
-        atlas += views[0][start:start + row]
-        atlas += views[1][start:start + row]
+    atlas = fix.pack_stitch(views[0], views[1], IMPOSTOR_SIZE, IMPOSTOR_SIZE)
     tag = library._bake_tag(name, "impostor", parts)
     os.makedirs(os.path.join(out_dir, "textures"), exist_ok=True)
     with open(os.path.join(out_dir, "textures", tag + ".png"), "wb") as handle:
