@@ -77,7 +77,7 @@ VEHICLES = {
 _classes = {}
 
 
-def _paths_tool(kind, root, name):
+def _paths_tool(kind, *args):
     """Return text from `tools/carla_vehicle_paths.mojo`."""
     here = os.path.dirname(os.path.abspath(__file__))
     repo = os.path.abspath(os.path.join(here, "..", "..", "..", ".."))
@@ -86,7 +86,7 @@ def _paths_tool(kind, root, name):
         mojo = "mojo"
     result = subprocess.run(
         ["sh", os.path.join(repo, "tools", "tool.sh"), mojo,
-         "carla_vehicle_paths", kind, root, name],
+         "carla_vehicle_paths", kind, *args],
         capture_output=True, text=True,
     )
     if result.returncode != 0:
@@ -150,8 +150,35 @@ def game_path_of(path):
     return _paths_tool("game", CONTENT, path)
 
 
+def _class_tool(name, listing):
+    """Return the class from `tools/carla_umodel_class.mojo`, or None."""
+    here = os.path.dirname(os.path.abspath(__file__))
+    repo = os.path.abspath(os.path.join(here, "..", "..", "..", ".."))
+    mojo = os.path.join(repo, ".venv", "bin", "mojo")
+    if not os.path.isfile(mojo):
+        mojo = "mojo"
+    folder = tempfile.mkdtemp(prefix="umodel-class-")
+    try:
+        path = os.path.join(folder, "list.txt")
+        with open(path, "w", encoding="utf-8", errors="replace") as handle:
+            handle.write(listing)
+        result = subprocess.run(
+            ["sh", os.path.join(repo, "tools", "tool.sh"), mojo,
+             "carla_umodel_class", name, path],
+            capture_output=True, text=True,
+        )
+    finally:
+        shutil.rmtree(folder, ignore_errors=True)
+    if result.returncode != 0:
+        raise ValueError(result.stderr.strip() or "umodel class failed")
+    return result.stdout.rstrip("\n") or None
+
+
 def export_class(game_path):
-    """Return the class of a package's main export, as UModel lists it."""
+    """Return the class of a package's main export, as UModel lists it.
+
+    `tools/carla_umodel_class.mojo` reads the listing.
+    """
     if game_path in _classes:
         return _classes[game_path]
     path = package_file(game_path)
@@ -163,25 +190,23 @@ def export_class(game_path):
             capture_output=True, text=True, errors="replace",
         )
         name = os.path.basename(path)[: -len(".uasset")]
-        for line in run.stdout.splitlines():
-            parts = line.split()
-            if len(parts) >= 5 and parts[-1] == name:
-                kind = parts[-2]
-                break
+        kind = _class_tool(name, run.stdout)
     _classes[game_path] = kind
     return kind
 
 
 def export(game_path):
-    """Export one package to glTF under RAW and return the glTF path."""
-    rel = os.path.relpath(package_file(game_path), CONTENT).replace("\\", "/")
+    """Export one package to glTF under RAW and return the glTF path.
+
+    `tools/carla_vehicle_paths.mojo` names that glTF file.
+    """
+    package = package_file(game_path)
+    rel = os.path.relpath(package, CONTENT).replace("\\", "/")
     subprocess.run(
         [UMODEL, "-game=ue4.26", "-path=" + CONTENT, "-export", "-gltf", "-png", "-out=" + RAW, rel],
         capture_output=True, text=True, errors="replace",
     )
-    name = os.path.basename(rel)[: -len(".uasset")]
-    folder = os.path.join(RAW, *rel.split("/")[:-1])
-    path = os.path.join(folder, name + ".gltf")
+    path = _paths_tool("gltf", RAW, CONTENT, package)
     return path if os.path.exists(path) else None
 
 

@@ -15,7 +15,12 @@ from std.testing import TestSuite, assert_equal, assert_raises, assert_true
 
 from tests._tree import tool_mojo
 from tools._process import ProcessResult, run_program
-from tools.carla_vehicle_paths import blueprint_path, game_path, package_path
+from tools.carla_vehicle_paths import (
+    blueprint_path,
+    game_path,
+    gltf_path,
+    package_path,
+)
 
 
 def _dir() raises -> String:
@@ -100,6 +105,37 @@ def test_a_package_uses_the_one_longer_name() raises:
         game_path(content, root + "/other/A.uasset"), "/Game/../other/A"
     )
     _remove(root)
+
+
+def test_an_exported_gltf_replaces_the_uasset_suffix() raises:
+    assert_equal(
+        gltf_path("/out", "/content", "/content/Carla/Static/SK.uasset"),
+        "/out/Carla/Static/SK.gltf",
+    )
+    assert_equal(
+        gltf_path("/out", "/content", "/content/SK.uasset"), "/out/SK.gltf"
+    )
+    var script = (
+        "import os\n"
+        + "raw, content, package = '/out', '/content/Carla', "
+        "'/content/Other/A/B.uasset'\n"
+        + "rel = os.path.relpath(package, content).replace('\\\\', '/')\n"
+        + "name = os.path.basename(rel)[:-len('.uasset')]\n"
+        + "folder = os.path.join(raw, *rel.split('/')[:-1])\n"
+        + "print(os.path.join(folder, name + '.gltf'))\n"
+    )
+    var result = run_program(["python3", "-c", script], 10, merge_errors=False)
+    if result.status != 0:
+        raise Error(result.errors)
+    var expected = String(result.output)
+    if expected.endswith("\n"):
+        var end = expected.byte_length() - 1
+        var trimmed = String(expected[byte=0:end])
+        expected = trimmed
+    assert_equal(
+        gltf_path("/out", "/content/Carla", "/content/Other/A/B.uasset"),
+        expected,
+    )
 
 
 def test_the_command_prints_a_path_and_refuses_bad_use() raises:

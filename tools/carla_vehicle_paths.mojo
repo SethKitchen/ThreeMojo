@@ -8,10 +8,12 @@
     carla_vehicle_paths blueprint ROOT RELATIVE
     carla_vehicle_paths package CONTENT GAME_PATH
     carla_vehicle_paths game CONTENT FILE
+    carla_vehicle_paths gltf RAW CONTENT PACKAGE
 
 `blueprint` prints the `.uasset` for a vehicle. `package` prints the cooked
 file for a `/Game/...` path, or an empty line when there is none. `game`
-prints the `/Game/...` path of a cooked file.
+prints the `/Game/...` path of a cooked file. `gltf` prints the exported
+glTF path of a cooked package.
 """
 
 from std.os import listdir
@@ -86,6 +88,42 @@ def package_path(content: String, game_path: String) raises -> String:
     if len(found) == 1:
         return _join(folder, found[0])
     return String("")
+
+
+def gltf_path(raw: String, content: String, package: String) raises -> String:
+    """Return the exported glTF path of a cooked package.
+
+    Args:
+        raw: The directory UModel writes.
+        content: The cooked `Content` directory.
+        package: The cooked `.uasset` file.
+
+    Returns:
+        `raw` joined with the package's path under `content`, with
+        `.uasset` replaced by `.gltf`.
+
+    Raises:
+        Error: If the package path cannot be made relative to `content`.
+    """
+    var rel = _relpath(package, content)
+    var slash = String("")
+    var raw_rel = rel.as_bytes()
+    for index in range(len(raw_rel)):
+        var byte = raw_rel[index]
+        if byte == 92:
+            slash += "/"
+        else:
+            slash += String(rel[byte = index : index + 1])
+    var parts = _split(slash)
+    var stem = parts[len(parts) - 1]
+    if _ends(stem, ".uasset"):
+        var end = stem.byte_length() - 7
+        var trimmed = String(stem[byte=0:end])
+        stem = trimmed
+    var folder = raw
+    for index in range(len(parts) - 1):
+        folder = _join(folder, parts[index])
+    return _join(folder, stem + ".gltf")
 
 
 def game_path(content: String, file: String) raises -> String:
@@ -352,7 +390,8 @@ def _usage() raises:
     print(
         (
             "usage: carla_vehicle_paths blueprint ROOT RELATIVE | package"
-            " CONTENT GAME_PATH | game CONTENT FILE"
+            " CONTENT GAME_PATH | game CONTENT FILE | gltf RAW CONTENT"
+            " PACKAGE"
         ),
         file=stderr,
     )
@@ -362,6 +401,13 @@ def _usage() raises:
 def main() raises:
     """Print one blueprint, cooked package, or `/Game/...` path."""
     var arguments = argv()
+    if len(arguments) == 5 and arguments[1] == "gltf":
+        try:
+            print(gltf_path(arguments[2], arguments[3], arguments[4]))
+        except error:
+            print("carla_vehicle_paths:", error, file=stderr)
+            exit(1)
+        return
     if len(arguments) != 4:
         _usage()
     try:
