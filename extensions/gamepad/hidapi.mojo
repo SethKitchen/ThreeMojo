@@ -836,6 +836,22 @@ struct HidGamepad[S: HidSource](Movable):
         """
         require_strength(low)
         require_strength(high)
+        return self._rumble(low, high, duration, now)
+
+    def _rumble(
+        mut self, low: Int, high: Int, duration: Duration64, now: Duration64
+    ) -> Bool:
+        """Rumble with strengths that fit 16 bits.
+
+        Args:
+            low: The low frequency strength.
+            high: The high frequency strength.
+            duration: How long.
+            now: The time now.
+
+        Returns:
+            Whether the pad rumbles.
+        """
         var sent = self.rumble_state.needs_send(low, high)
         var succeeded = sent and self._driver_rumble(low, high)
         return self.rumble_state.commit(
@@ -879,6 +895,22 @@ struct HidGamepad[S: HidSource](Movable):
         """
         require_strength(left)
         require_strength(right)
+        return self._rumble_triggers(left, right, duration, now)
+
+    def _rumble_triggers(
+        mut self, left: Int, right: Int, duration: Duration64, now: Duration64
+    ) -> Bool:
+        """Rumble the triggers with strengths that fit 16 bits.
+
+        Args:
+            left: The left trigger's strength.
+            right: The right trigger's strength.
+            duration: How long.
+            now: The time now.
+
+        Returns:
+            Whether the triggers rumble.
+        """
         var sent = self.trigger_rumble_state.needs_send(left, right)
         var succeeded = sent and self._driver_rumble_triggers(left, right)
         return self.trigger_rumble_state.commit(
@@ -987,10 +1019,7 @@ struct HidGamepad[S: HidSource](Movable):
         if not self.pad:
             return List[GamepadEvent]()
         if self.rumble_state.expired(now):
-            try:
-                _ = self.rumble_at(0, 0, Duration64(0), now)
-            except:
-                pass
+            _ = self._rumble(0, 0, Duration64(0), now)
             self.rumble_state.resend = None
         if self.rumble_state.resend_due(now):
             _ = self._driver_rumble(
@@ -998,10 +1027,7 @@ struct HidGamepad[S: HidSource](Movable):
             )
             self.rumble_state.resent(now)
         if self.trigger_rumble_state.expired(now):
-            try:
-                _ = self.rumble_triggers_at(0, 0, Duration64(0), now)
-            except:
-                pass
+            _ = self._rumble_triggers(0, 0, Duration64(0), now)
             self.trigger_rumble_state.resend = None
         if self.trigger_rumble_state.resend_due(now):
             _ = self._driver_rumble_triggers(

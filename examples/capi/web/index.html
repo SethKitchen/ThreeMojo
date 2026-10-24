@@ -9,7 +9,7 @@
   page supplies the canvas, the events and the clock, as the macOS host does.
   Serve this folder over HTTP (run.sh web does), and open it.
 
-    ?app=core    which module to load: threemojo_<app>.wasm (core, water or splat)
+    ?app=core    which module to load: threemojo_<app>.wasm (core, water, splat or gamepad)
     ?w=480&h=320 the size of the frame, in pixels. Without it, the water picks
                  the largest frame that it can draw at 30 frames a second
     ?threads=N   the workers of the water, or 0 for one thread
@@ -84,6 +84,7 @@
 </main>
 <script type="module">
 import { Button, Key, Kind, load, loadThreads } from "./threemojo.js";
+import { Gamepads } from "./gamepad.js";
 
 const params = new URLSearchParams(location.search);
 const name = (params.get("app") ?? "core").replace(/[^a-z_]/g, "");
@@ -112,6 +113,13 @@ const APPS = {
       adapt: false,
     },
     help: "Press to drop a pebble in. Drag up or down to tilt the camera. Space pauses.",
+  },
+  gamepad: {
+    size: [240, 160],
+    sizes: [[240, 160], [480, 320]],
+    gamepads: true,
+    help: "Connect a gamepad and press a button. The frame shows its sticks, triggers and buttons. " +
+      "The south button rumbles the pad.",
   },
   splat: {
     size: [160, 90],
@@ -440,6 +448,9 @@ function adapt() {
   if (best !== current && best >= 0) resize(ladder[best][0], ladder[best][1]);
 }
 
+// The gamepad module's pads, fed from navigator.getGamepads() each frame.
+let pads = null;
+
 // The loop: the browser's clock and its refresh rate.
 let previous = performance.now();
 let windowStart = previous;
@@ -483,6 +494,13 @@ async function frame(now) {
       return;
     }
   } else {
+    if (app_info.gamepads) {
+      if (!pads || pads.handle !== app.handle) pads = new Gamepads(library, app);
+      pads.poll();
+      for (const index of pads.indices()) {
+        if (pads.button(index, 0)) pads.rumble(index, 0xffff, 0x8000, 200);
+      }
+    }
     app.step(Math.round(elapsed * 1000));
     context.putImageData(new ImageData(app.frame(), width, height), 0, 0);
   }

@@ -6,13 +6,13 @@
 #
 # Run the C ABI examples. Each run builds first if a source is newer.
 #
-#   run.sh native [core|scene|water|water-gpu|splat] [WIDTH HEIGHT] [--frames N] [--dump F.ppm] [--headless] [--crisp] [--cpu]
+#   run.sh native [core|scene|water|water-gpu|splat|gamepad] [WIDTH HEIGHT] [--frames N] [--dump F.ppm] [--headless] [--crisp] [--cpu]
 #       Open a macOS window. The title and a label show the frame rate.
 #       The window scales the frame smoothly. --crisp keeps hard pixels.
 #       The splats are drawn on Metal at the window's size in pixels. --cpu
 #       draws them on the CPU. Escape, Command+Q or Control-C in the terminal
 #       quits it.
-#   run.sh web [core|water|splat] [PORT]
+#   run.sh web [core|water|splat|gamepad] [PORT]
 #       Serve the WebAssembly build on localhost and open it in a browser.
 #       A browser with WebGPU draws the water and the splats on its GPU. Add
 #       ?gpu=0 to the address to draw on the CPU. serve.py sends the headers
@@ -25,7 +25,9 @@
 # core is a triangle that the three builds draw the same way. scene is the
 # full renderer, and the native host only. water is the Clearwater water.
 # water-gpu is the same water shaded on a GPU: it needs MAX and a GPU. splat
-# is the scan of three tomatoes, 445,409 Gaussian splats.
+# is the scan of three tomatoes, 445,409 Gaussian splats. gamepad shows the
+# sticks, triggers and buttons of the first controller; its south button
+# rumbles it.
 set -eu
 
 HERE=$(cd "$(dirname "$0")" && pwd)
@@ -57,7 +59,7 @@ usage() {
 
 native() {
   app=core
-  case ${1:-} in core | scene | water | water-gpu | splat) app=$1 && shift ;; esac
+  case ${1:-} in core | scene | water | water-gpu | splat | gamepad) app=$1 && shift ;; esac
   app=$(echo "$app" | tr - _)
   width=480
   height=320
@@ -95,15 +97,17 @@ native() {
 
 web() {
   app=core
-  case ${1:-} in core | water | splat) app=$1 && shift ;; esac
+  case ${1:-} in core | water | splat | gamepad) app=$1 && shift ;; esac
   port=${1:-8000}
   if stale "$OUT/web/threemojo_water_threads.wasm" || stale "$OUT/web/threemojo_splat.wasm" ||
+    stale "$OUT/web/threemojo_gamepad.wasm" ||
     stale "$OUT/web/index.html"; then "$HERE/build.sh" web; fi
   url="http://localhost:$port/?app=$app"
   echo "Serving $OUT/web"
   echo "  core:  http://localhost:$port/?app=core"
   echo "  water: http://localhost:$port/?app=water"
   echo "  splat: http://localhost:$port/?app=splat"
+  echo "  gamepad: http://localhost:$port/?app=gamepad"
   echo "Press Control-C to stop."
   (sleep 1 && { open "$url" 2>/dev/null || xdg-open "$url" 2>/dev/null || true; }) &
   # serve.py isolates the page, which the water needs to use many threads.
