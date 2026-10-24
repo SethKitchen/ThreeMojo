@@ -622,6 +622,30 @@ CLUSTER_DIVISIONS = 200
 CLUSTER_CELL = 0.25
 
 
+def _finish_tool(payload):
+    """Return JSON from `tools/carla_town_finish.mojo`."""
+    here = os.path.dirname(os.path.abspath(__file__))
+    repo = os.path.abspath(os.path.join(here, "..", "..", "..", ".."))
+    mojo = os.path.join(repo, ".venv", "bin", "mojo")
+    if not os.path.isfile(mojo):
+        mojo = "mojo"
+    folder = tempfile.mkdtemp(prefix="town-finish-")
+    try:
+        path = os.path.join(folder, "finish.json")
+        with open(path, "w", encoding="utf-8") as handle:
+            json.dump(payload, handle, allow_nan=True)
+        result = subprocess.run(
+            ["sh", os.path.join(repo, "tools", "tool.sh"), mojo,
+             "carla_town_finish", path],
+            capture_output=True, text=True,
+        )
+    finally:
+        shutil.rmtree(folder, ignore_errors=True)
+    if result.returncode != 0:
+        raise ValueError(result.stderr.strip() or "finish failed")
+    return json.loads(result.stdout)
+
+
 def _weld_tool(positions, triangles):
     """Return JSON from `tools/carla_town_weld.mojo`."""
     here = os.path.dirname(os.path.abspath(__file__))
@@ -687,28 +711,39 @@ def simplify_welded(primitive, target):
             points, joined.astype(numpy.int32), collapses)
         if len(joined) == 0:
             return None
-        # A collapse puts a vertex where its error is least, which on a
-        # thin or flat piece can be far outside the building: a sliver
-        # that casts a long shadow. Every vertex stays in the mesh's box.
-        low, high = positions.min(axis=0), positions.max(axis=0)
-        points = numpy.clip(points, low, high)
-    corners = points[joined]
-    # A collapse can leave a vertex that is not finite; its triangles go.
-    corners = corners[numpy.isfinite(corners).all(axis=(1, 2))]
-    if len(corners) == 0:
+        prepared = _finish_tool({
+            "mode": "prepare",
+            "points": numpy.asarray(points, dtype=float).reshape(-1, 3).tolist(),
+            "triangles": numpy.asarray(joined).reshape(-1, 3).tolist(),
+            # A collapse can leave a point outside the building. Keep the
+            # original box so a sliver cannot cast a long shadow.
+            "box": numpy.asarray(primitive["positions"], dtype=float).reshape(-1, 3).tolist(),
+        })
+    else:
+        prepared = _finish_tool({
+            "mode": "prepare",
+            "points": numpy.asarray(points, dtype=float).reshape(-1, 3).tolist(),
+            "triangles": numpy.asarray(joined).reshape(-1, 3).tolist(),
+        })
+    if prepared.get("empty"):
         return None
-    face = numpy.cross(corners[:, 1] - corners[:, 0], corners[:, 2] - corners[:, 0])
-    face /= numpy.maximum(numpy.linalg.norm(face, axis=1, keepdims=True), 1e-12)
+    corners = numpy.array(prepared["corners"], dtype=numpy.float64)
+    face = numpy.array(prepared["normals"], dtype=numpy.float64)
     uvs, facing = transfer_uvs(primitive, corners, face)
     # Gathering corners can turn a triangle over, and a face turned away
     # is culled, a hole: each faces as the original it reads its texture
-    # from.
-    over = numpy.einsum("nd,nd->n", face, facing) < 0
-    corners[over] = corners[over][:, ::-1]
-    uvs[over] = uvs[over][:, ::-1]
-    face[over] = -face[over]
-    return {"positions": corners.reshape(-1, 3), "normals": numpy.repeat(face, 3, axis=0),
-            "uvs": uvs.reshape(-1, 2), "triangles": numpy.arange(3 * len(corners)).reshape(-1, 3),
+    # from. `tools/carla_town_finish.mojo` turns that face back.
+    wound = _finish_tool({
+        "mode": "wind",
+        "corners": corners.tolist(),
+        "normals": face.tolist(),
+        "uvs": numpy.asarray(uvs, dtype=float).reshape(-1, 3, 2).tolist(),
+        "facing": numpy.asarray(facing, dtype=float).reshape(-1, 3).tolist(),
+    })
+    return {"positions": numpy.array(wound["positions"], dtype=numpy.float64),
+            "normals": numpy.array(wound["normals"], dtype=numpy.float64),
+            "uvs": numpy.array(wound["uvs"], dtype=numpy.float64),
+            "triangles": numpy.array(wound["triangles"], dtype=numpy.int64),
             "material": primitive["material"]}
 
 
