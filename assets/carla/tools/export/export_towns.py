@@ -119,17 +119,34 @@ def _split_batch(batch):
         shutil.rmtree(folder, ignore_errors=True)
 
 
+def _export_command(batch, mesh):
+    """Return the UModel arguments for one batch.
+
+    `tools/carla_town_paths.mojo` names each cooked package.
+    """
+    folder = tempfile.mkdtemp(prefix="town-command-")
+    try:
+        path = os.path.join(folder, "command.json")
+        with open(path, "w", encoding="utf-8") as handle:
+            json.dump({
+                "umodel": UMODEL,
+                "content": CONTENT,
+                "out": RAW,
+                "mesh": bool(mesh),
+                "packages": list(batch),
+            }, handle, separators=(",", ":"))
+        return json.loads(_paths_tool(["command", path]))
+    finally:
+        shutil.rmtree(folder, ignore_errors=True)
+
+
 def run(batch, mesh):
     """Export one batch of packages. A run that takes too long is split.
 
-    `tools/carla_town_paths.mojo` gives up on one package and cuts a
-    longer batch in half.
+    `tools/carla_town_paths.mojo` builds the UModel arguments, gives up
+    on one package, and cuts a longer batch in half.
     """
-    command = [UMODEL, "-game=ue4.26", "-path=" + CONTENT, "-export", "-png", "-out=" + RAW]
-    if mesh:
-        command.append("-gltf")
-    command.append(relative(batch[0]))
-    command += ["-pkg=" + relative(p) for p in batch[1:]]
+    command = _export_command(batch, mesh)
     try:
         subprocess.run(command, capture_output=True, text=True, errors="replace", timeout=LIMIT)
     except subprocess.TimeoutExpired:

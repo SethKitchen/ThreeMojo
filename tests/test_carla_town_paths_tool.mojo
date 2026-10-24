@@ -17,6 +17,7 @@ from std.testing import TestSuite, assert_equal, assert_raises, assert_true
 from tests._tree import tool_mojo
 from tools._process import ProcessResult, run_program
 from tools.carla_town_paths import (
+    command_text,
     cooked_name,
     export_path,
     package_of,
@@ -218,6 +219,31 @@ def test_a_timed_out_batch_is_cut_in_half() raises:
         _ = split_text("[]")
     with assert_raises(contains="package is not text"):
         _ = split_text("[1]")
+
+
+def test_a_batch_becomes_the_umodel_arguments() raises:
+    assert_equal(
+        command_text(
+            '{"umodel":"U","content":"C","out":"R","mesh":true,"packages":["/Game/A/B","/Game/C"]}'
+        ),
+        '["U","-game=ue4.26","-path=C","-export","-png","-out=R","-gltf","A/B.uasset","-pkg=C.uasset"]',
+    )
+    assert_equal(
+        command_text(
+            '{"umodel":"U","content":"C","out":"R","mesh":false,"packages":["/Game/Only"]}'
+        ),
+        '["U","-game=ue4.26","-path=C","-export","-png","-out=R","Only.uasset"]',
+    )
+    with assert_raises(contains="batch is empty"):
+        _ = command_text(
+            '{"umodel":"U","content":"C","out":"R","mesh":true,"packages":[]}'
+        )
+    with assert_raises(contains="command request is not an object"):
+        _ = command_text("[]")
+    with assert_raises(contains="mesh is not a bool"):
+        _ = command_text(
+            '{"umodel":"U","content":"C","out":"R","mesh":1,"packages":["/Game/A"]}'
+        )
 
 
 def main() raises:

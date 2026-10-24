@@ -10,6 +10,7 @@
     carla_town_paths wanted [FILE ...]
     carla_town_paths export ROOT GAME_PATH SUFFIX
     carla_town_paths split FILE
+    carla_town_paths command FILE
 
 `object` prints the package in UE4SS's `Class /Game/A/B.B`. `relative`
 prints the cooked `.uasset` path. `wanted` reads layout files and prints
@@ -18,13 +19,23 @@ a JSON file and prints the packages that are not exported yet, in
 batches. `export` joins `ROOT` with the package path and adds
 `SUFFIX`. `split` reads a JSON list of packages. One package is given
 up. A longer list is cut in half, with the extra package on the right.
+`command` prints the UModel arguments for one batch.
 """
 
 from std.pathlib import Path
 from std.sys import argv, exit, stderr
 
+from tools._json_tools import quote_ascii
 from tools._json_tree import JsonTree
-from tools._python_json import PY_DICT, PY_INT, PY_LIST, PY_NONE, PY_STR, PyJson
+from tools._python_json import (
+    PY_BOOL,
+    PY_DICT,
+    PY_INT,
+    PY_LIST,
+    PY_NONE,
+    PY_STR,
+    PyJson,
+)
 
 
 def package_of(full_name: String) raises -> String:
@@ -411,12 +422,74 @@ def split_text(text: String) raises -> String:
     return tree.dumps(obj, False)
 
 
+def command_text(text: String) raises -> String:
+    """Return the UModel arguments for one export batch.
+
+    Args:
+        text: JSON with `umodel`, `content`, `out`, `mesh`, and
+            `packages`. `packages` is a list of `/Game/...` paths.
+            `mesh` true adds `-gltf`.
+
+    Returns:
+        A JSON list. The first package is the main file. Each later
+        package is a `-pkg=` argument. Paths are cooked `.uasset` names.
+
+    Raises:
+        Error: If the JSON is not that batch, or the list is empty.
+    """
+    var doc = PyJson.parse(text)
+    if doc.kind(doc.root) != PY_DICT:
+        raise Error("command request is not an object")
+    var umodel = _text(doc, doc.at(doc.root, "umodel"), "umodel is not text")
+    var content = _text(doc, doc.at(doc.root, "content"), "content is not text")
+    var out = _text(doc, doc.at(doc.root, "out"), "out is not text")
+    var mesh_node = doc.at(doc.root, "mesh")
+    if doc.kind(mesh_node) != PY_BOOL:
+        raise Error("mesh is not a bool")
+    var packages = doc.at(doc.root, "packages")
+    if doc.kind(packages) != PY_LIST or doc.length(packages) == 0:
+        raise Error("batch is empty")
+    var args = List[String]()
+    args.append(umodel)
+    args.append("-game=ue4.26")
+    args.append("-path=" + content)
+    args.append("-export")
+    args.append("-png")
+    args.append("-out=" + out)
+    if doc.flag(mesh_node):
+        args.append("-gltf")
+    for index in range(doc.length(packages)):
+        var item = doc.item(packages, index)
+        if doc.kind(item) != PY_STR:
+            raise Error("package is not text")
+        var cooked = cooked_name(doc.text(item))
+        if index == 0:
+            args.append(cooked)
+        else:
+            args.append("-pkg=" + cooked)
+    var encoded = String("[")
+    for index in range(len(args)):
+        if index > 0:
+            encoded += ","
+        encoded += quote_ascii(args[index])
+    encoded += "]"
+    return encoded^
+
+
+def _text(doc: PyJson, node: Int, message: String) raises -> String:
+    """Return a JSON string, or raise `message`."""
+    if doc.kind(node) != PY_STR:
+        raise Error(message)
+    return doc.text(node)
+
+
 def _usage() raises:
     """Print the usage line and stop."""
     print(
         (
             "usage: carla_town_paths object TEXT | relative TEXT | wanted [FILE"
-            " ...] | pending FILE | export ROOT GAME_PATH SUFFIX | split FILE"
+            " ...] | pending FILE | export ROOT GAME_PATH SUFFIX | split FILE |"
+            " command FILE"
         ),
         file=stderr,
     )
@@ -441,6 +514,13 @@ def main() raises:
     if arguments[1] == "pending" and len(arguments) == 3:
         try:
             print(pending_text(Path(arguments[2]).read_text()))
+        except error:
+            print("carla_town_paths:", error, file=stderr)
+            exit(1)
+        return
+    if arguments[1] == "command" and len(arguments) == 3:
+        try:
+            print(command_text(Path(arguments[2]).read_text()))
         except error:
             print("carla_town_paths:", error, file=stderr)
             exit(1)
