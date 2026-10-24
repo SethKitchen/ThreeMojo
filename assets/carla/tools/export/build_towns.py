@@ -747,6 +747,34 @@ def simplify_welded(primitive, target):
             "material": primitive["material"]}
 
 
+def _near_tool(centers, queries, count):
+    """Return neighbor indexes from `tools/carla_town_near.mojo`."""
+    here = os.path.dirname(os.path.abspath(__file__))
+    repo = os.path.abspath(os.path.join(here, "..", "..", "..", ".."))
+    mojo = os.path.join(repo, ".venv", "bin", "mojo")
+    if not os.path.isfile(mojo):
+        mojo = "mojo"
+    folder = tempfile.mkdtemp(prefix="town-near-")
+    try:
+        path = os.path.join(folder, "near.json")
+        with open(path, "w", encoding="utf-8") as handle:
+            json.dump({
+                "centers": numpy.asarray(centers, dtype=float).reshape(-1, 3).tolist(),
+                "queries": numpy.asarray(queries, dtype=float).reshape(-1, 3).tolist(),
+                "count": int(count),
+            }, handle, separators=(",", ":"), allow_nan=False)
+        result = subprocess.run(
+            ["sh", os.path.join(repo, "tools", "tool.sh"), mojo,
+             "carla_town_near", path],
+            capture_output=True, text=True,
+        )
+    finally:
+        shutil.rmtree(folder, ignore_errors=True)
+    if result.returncode != 0:
+        raise ValueError(result.stderr.strip() or "neighbor search failed")
+    return json.loads(result.stdout)["near"]
+
+
 def _choose_tool(payload):
     """Return JSON from `tools/carla_town_choose.mojo`."""
     here = os.path.dirname(os.path.abspath(__file__))
@@ -812,10 +840,10 @@ def transfer_uvs(primitive, corners, normals, candidates=8):
     three. Returns the coordinates, three to a triangle, and the normal of
     each triangle's original.
 
+    `tools/carla_town_near.mojo` finds the nearest original triangles.
     `tools/carla_town_choose.mojo` picks that original triangle.
     `tools/carla_town_uv.mojo` projects the corners into that triangle.
     """
-    from scipy.spatial import cKDTree
     faces = primitive["triangles"]
     if len(faces) == 0 or len(corners) == 0:
         return numpy.zeros((0, 3, 2)), numpy.zeros((0, 3))
@@ -831,15 +859,14 @@ def transfer_uvs(primitive, corners, normals, candidates=8):
     normal = numpy.array(gathered["normals"], dtype=numpy.float64)
     count = min(candidates, len(faces))
     queries = corners.mean(axis=1)
-    _, near = cKDTree(centers).query(queries, k=count)
-    near = numpy.reshape(near, (len(corners), count))
+    near = numpy.array(_near_tool(centers, queries, count), dtype=numpy.int64)
     chosen = _choose_tool({
         "mode": "choose",
         "centers": centers.tolist(),
         "normals": normal.tolist(),
         "queries": numpy.asarray(queries, dtype=float).reshape(-1, 3).tolist(),
         "faces": numpy.asarray(normals, dtype=float).reshape(-1, 3).tolist(),
-        "near": numpy.reshape(near, (len(corners), count)).tolist(),
+        "near": near.reshape(len(corners), count).tolist(),
     })
     best = numpy.array(chosen["best"], dtype=numpy.int64)
     projected = _uv_tool(source[best], primitive["uvs"][faces[best]], corners)

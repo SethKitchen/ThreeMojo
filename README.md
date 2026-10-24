@@ -129,7 +129,9 @@ Some portable features remain partial, including [GLSL shaders](https://github.c
 ### Project tools
 
 <details>
-<summary>Implemented: 27</summary>
+<summary>Implemented: 28</summary>
+
+- [x] [Nearest triangles for a simplified town face](https://github.com/SethKitchen/ThreeMojo/wiki/CARLA-assets#the-carla-towns): `tools/carla_town_near.mojo` finds the original triangles nearest that face [#761](https://github.com/SethKitchen/ThreeMojo/issues/761)
 
 - [x] [Triangle choice for a simplified town face](https://github.com/SethKitchen/ThreeMojo/wiki/CARLA-assets#the-carla-towns): `tools/carla_town_choose.mojo` picks the original triangle that face reads [#761](https://github.com/SethKitchen/ThreeMojo/issues/761)
 
