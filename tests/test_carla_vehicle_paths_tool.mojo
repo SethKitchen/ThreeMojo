@@ -17,6 +17,7 @@ from tests._tree import tool_mojo
 from tools._process import ProcessResult, run_program
 from tools.carla_vehicle_paths import (
     blueprint_path,
+    folder_candidates,
     game_path,
     gltf_path,
     package_path,
@@ -136,6 +137,71 @@ def test_an_exported_gltf_replaces_the_uasset_suffix() raises:
         gltf_path("/out", "/content/Carla", "/content/Other/A/B.uasset"),
         expected,
     )
+
+
+def test_folder_candidates_skip_skeletons_physics_and_pedestrians() raises:
+    var root = _dir()
+    var content = root + "/Content"
+    _touch(content + "/Carla/Vehicles/SK_Body.uasset")
+    _touch(content + "/Carla/Vehicles/SK_Body_Skeleton.uasset")
+    _touch(content + "/Carla/Vehicles/SK_SKELETON.uasset")
+    _touch(content + "/Carla/Vehicles/SM_physics_prop.uasset")
+    _touch(content + "/Carla/Vehicles/notes.txt")
+    _touch(content + "/Carla/Vehicles/SM_Glass.uasset")
+    _touch(content + "/Carla/Amy/B.uasset")
+    _touch(content + "/Carla/Zed/A.uasset")
+    var names = (
+        '["/Game/Carla/Vehicles/SK_Body","/Game/Pedestrian/Walker/SK",'
+        '"/Game/Carla/Missing/Nope","/Game/Carla/Zed/A",'
+        '"/Game/Carla/Amy/B","/Game/Carla/Vehicles/SK_Body"]'
+    )
+    var expected = (
+        '[{"path":"/Game/Carla/Amy/B","name":"B.uasset"},'
+        '{"path":"/Game/Carla/Vehicles/SK_Body","name":"SK_Body.uasset"},'
+        '{"path":"/Game/Carla/Vehicles/SM_Glass","name":"SM_Glass.uasset"},'
+        '{"path":"/Game/Carla/Zed/A","name":"A.uasset"}]'
+    )
+    assert_equal(folder_candidates(content, names), expected)
+    var script = (
+        "import json, os, re, sys\n"
+        + "content, text = sys.argv[1], sys.argv[2]\n"
+        + "names = json.loads(text)\n"
+        + "folders, seen = [], set()\n"
+        + "for ref in names:\n"
+        + "    if '/Pedestrian/' in ref: continue\n"
+        + "    path = os.path.join(content, *ref[len('/Game/'):].split('/')) +"
+        " '.uasset'\n"
+        + "    if not os.path.exists(path): continue\n"
+        + "    folder = os.path.dirname(path)\n"
+        + "    if folder not in seen:\n"
+        + "        seen.add(folder); folders.append(folder)\n"
+        + "out = []\n"
+        + "for folder in sorted(folders):\n"
+        + "    for name in sorted(os.listdir(folder)):\n"
+        + "        if name.endswith('.uasset') and not"
+        " re.search(r'skeleton|physics', name, re.I):\n"
+        + "            rel = os.path.relpath(os.path.join(folder, name),"
+        " content).replace('\\\\', '/')\n"
+        + "            out.append({'path': '/Game/' + rel[:-len('.uasset')],"
+        " 'name': name})\n"
+        + "print(json.dumps(out, separators=(',', ':')))\n"
+    )
+    var result = run_program(
+        ["python3", "-c", script, content, names], 10, merge_errors=False
+    )
+    if result.status != 0:
+        raise Error(result.errors)
+    var printed = String(result.output)
+    if printed.endswith("\n"):
+        var end = printed.byte_length() - 1
+        var trimmed = String(printed[byte=0:end])
+        printed = trimmed
+    assert_equal(folder_candidates(content, names), printed)
+    with assert_raises(contains="names are not a list"):
+        _ = folder_candidates(content, "{}")
+    with assert_raises(contains="name is not text"):
+        _ = folder_candidates(content, "[1]")
+    _remove(root)
 
 
 def test_the_command_prints_a_path_and_refuses_bad_use() raises:

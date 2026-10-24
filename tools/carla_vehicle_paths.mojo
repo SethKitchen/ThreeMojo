@@ -9,16 +9,22 @@
     carla_vehicle_paths package CONTENT GAME_PATH
     carla_vehicle_paths game CONTENT FILE
     carla_vehicle_paths gltf RAW CONTENT PACKAGE
+    carla_vehicle_paths folders CONTENT NAMES
 
 `blueprint` prints the `.uasset` for a vehicle. `package` prints the cooked
 file for a `/Game/...` path, or an empty line when there is none. `game`
 prints the `/Game/...` path of a cooked file. `gltf` prints the exported
-glTF path of a cooked package.
+glTF path of a cooked package. `folders` reads a JSON list of `/Game/...`
+names and prints the other `.uasset` files in those folders. A pedestrian
+path is left out. A skeleton or physics asset is left out. The comparison
+ignores case.
 """
 
 from std.os import listdir
 from std.pathlib import Path, cwd
 from std.sys import argv, exit, stderr
+
+from tools._python_json import PY_LIST, PY_STR, PyJson
 
 
 def blueprint_path(root: String, relative: String) raises -> String:
@@ -126,6 +132,66 @@ def gltf_path(raw: String, content: String, package: String) raises -> String:
     return _join(folder, stem + ".gltf")
 
 
+def folder_candidates(content: String, text: String) raises -> String:
+    """Return the other cooked meshes in the folders `text` names.
+
+    Args:
+        content: The cooked `Content` directory.
+        text: A JSON list of `/Game/...` package paths.
+
+    Returns:
+        A JSON list of `path` and `name`. Folders are sorted, then the
+        file names in each folder. A pedestrian path is left out. A file
+        whose name contains `skeleton` or `physics` is left out.
+
+    Raises:
+        Error: If `text` is not a list of strings, or a directory cannot
+            be read.
+    """
+    var doc = PyJson.parse(text)
+    if doc.kind(doc.root) != PY_LIST:
+        raise Error("names are not a list")
+    var folders = List[String]()
+    var seen = List[String]()
+    for index in range(doc.length(doc.root)):
+        var item = doc.item(doc.root, index)
+        if doc.kind(item) != PY_STR:
+            raise Error("name is not text")
+        var game = doc.text(item)
+        if _find(game, "/Pedestrian/") >= 0:
+            continue
+        var package = package_path(content, game)
+        if package.byte_length() == 0:
+            continue
+        var folder = _dirname(package)
+        if not _has(seen, folder):
+            seen.append(folder)
+            folders.append(folder)
+    var ordered = _sorted(folders)
+    var out = String("[")
+    var first = True
+    for index in range(len(ordered)):
+        var files = List[String]()
+        for name in listdir(ordered[index]):
+            files.append(name)
+        var sorted_files = _sorted(files)
+        for file_index in range(len(sorted_files)):
+            var file = sorted_files[file_index]
+            if not _ends(file, ".uasset") or _excluded(file):
+                continue
+            if not first:
+                out += ","
+            first = False
+            var full = _join(ordered[index], file)
+            out += '{"path":'
+            out += _quote(game_path(content, full))
+            out += ',"name":'
+            out += _quote(file)
+            out += "}"
+    out += "]"
+    return out^
+
+
 def game_path(content: String, file: String) raises -> String:
     """Return the `/Game/...` package path of a cooked `.uasset`.
 
@@ -175,6 +241,27 @@ def _wheel(low: String) -> Bool:
     var mid = String(tail[byte=1:2])
     var end = String(tail[byte=2:3])
     return (mid == "f" or mid == "r") and (end == "l" or end == "r")
+
+
+def _has(names: List[String], text: String) -> Bool:
+    """Return whether `names` already holds `text`."""
+    for index in range(len(names)):
+        if names[index] == text:
+            return True
+    return False
+
+
+def _quote(text: String) -> String:
+    """Return `text` as a JSON string."""
+    var out = String('"')
+    var raw = text.as_bytes()
+    for index in range(len(raw)):
+        var byte = raw[index]
+        if byte == 34 or byte == 92:
+            out += "\\"
+        out += String(text[byte = index : index + 1])
+    out += '"'
+    return out^
 
 
 def _excluded(name: String) -> Bool:
@@ -391,7 +478,7 @@ def _usage() raises:
         (
             "usage: carla_vehicle_paths blueprint ROOT RELATIVE | package"
             " CONTENT GAME_PATH | game CONTENT FILE | gltf RAW CONTENT"
-            " PACKAGE"
+            " PACKAGE | folders CONTENT NAMES"
         ),
         file=stderr,
     )
@@ -417,6 +504,10 @@ def main() raises:
             print(package_path(arguments[2], arguments[3]))
         elif arguments[1] == "game":
             print(game_path(arguments[2], arguments[3]))
+        elif arguments[1] == "folders":
+            print(
+                folder_candidates(arguments[2], Path(arguments[3]).read_text())
+            )
         else:
             _usage()
     except error:

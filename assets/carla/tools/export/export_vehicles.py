@@ -13,7 +13,6 @@ with `carla_gltf_fix.py`.
 
 import json
 import os
-import re
 import shutil
 import subprocess
 import sys
@@ -323,30 +322,23 @@ def _choice_records(named):
 def _folder_records(named):
     """Return skeletal candidates from folders the blueprint already names.
 
-    A file whose name contains `skeleton` or `physics` is left out before
-    UModel runs. The comparison ignores case.
+    `tools/carla_vehicle_paths.mojo` lists the cooked `.uasset` files. A
+    pedestrian path is left out. A file whose name contains `skeleton` or
+    `physics` is left out before UModel runs. The comparison ignores case.
     """
-    folders = []
-    seen = set()
-    for ref in named:
-        if "/Pedestrian/" in ref:
-            continue
-        package = package_file(ref)
-        if not package:
-            continue
-        folder = os.path.dirname(package)
-        if folder not in seen:
-            seen.add(folder)
-            folders.append(folder)
+    folder = tempfile.mkdtemp(prefix="vehicle-folders-")
+    try:
+        path = os.path.join(folder, "names.json")
+        with open(path, "w", encoding="utf-8") as handle:
+            json.dump(list(named), handle, separators=(",", ":"))
+        found = json.loads(_paths_tool("folders", CONTENT, path))
+    finally:
+        shutil.rmtree(folder, ignore_errors=True)
     extras = []
-    for folder in sorted(folders):
-        for name in sorted(os.listdir(folder)):
-            if not name.endswith(".uasset") or re.search(r"skeleton|physics", name, re.I):
-                continue
-            candidate = game_path_of(os.path.join(folder, name))
-            kind = export_class(candidate) or ""
-            size = _uexp_size(candidate) if kind == "SkeletalMesh" else 0
-            extras.append(_mesh_record(candidate, kind, size, name))
+    for item in found:
+        kind = export_class(item["path"]) or ""
+        size = _uexp_size(item["path"]) if kind == "SkeletalMesh" else 0
+        extras.append(_mesh_record(item["path"], kind, size, item["name"]))
     return extras
 
 

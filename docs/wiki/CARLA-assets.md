@@ -414,7 +414,7 @@ CARLA's vehicles are Unreal Engine 4.26 assets. The scripts in `assets/carla/too
    sh tools/tool.sh .venv/bin/mojo carla_export_manifest_vehicles
    ```
 
-`export_vehicles.py` reads each vehicle blueprint for the meshes it names. `tools/carla_vehicle_paths.mojo` finds that blueprint, its cooked package, and the exported glTF path. `tools/carla_vehicle_refs.mojo` lists the static packages in that file. `tools/carla_vehicle_pick.mojo` chooses the largest skeletal body and the static glass, and it leaves out pedestrians, collision meshes and props. It exports the skeletal body and the static glass and lights, and `tools/carla_umodel_class.mojo` reads each package class. `tools/carla_vehicle_merge.mojo` appends the static mesh buffer and renumbers its views, accessors, materials, meshes and nodes.
+`export_vehicles.py` reads each vehicle blueprint for the meshes it names. `tools/carla_vehicle_paths.mojo` finds that blueprint, its cooked package, the exported glTF path, and the other meshes in those folders. `tools/carla_vehicle_refs.mojo` lists the static packages in that file. `tools/carla_vehicle_pick.mojo` chooses the largest skeletal body and the static glass, and it leaves out pedestrians, collision meshes and props. It exports the skeletal body and the static glass and lights, and `tools/carla_umodel_class.mojo` reads each package class. `tools/carla_vehicle_merge.mojo` appends the static mesh buffer and renumbers its views, accessors, materials, meshes and nodes.
 
 `carla_gltf_fix.py` then does these steps. `tools/carla_file_index.mojo` indexes the files. `tools/carla_mat_text.mojo` reads the `.mat` and `.props.txt` files. `tools/carla_gltf_dedupe.mojo` keeps one material of each name.
 
