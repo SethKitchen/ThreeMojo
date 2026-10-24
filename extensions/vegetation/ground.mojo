@@ -6,9 +6,16 @@
 """Rolling ground, the masks of what grows on it, and its meshes.
 
 `Ground` answers questions about a point: how high the ground is, how
-thick and how tall the grass is, how dry it is, how many broad-leaf
-plants grow there, and how many poppies bloom. Each answer is slow value
-noise, so each is a patch meters wide.
+bare it is, how thick and how tall the grass is, how dry it is, how many
+broad-leaf plants grow there, and how many poppies bloom. Each answer is
+slow value noise, so each is a patch meters wide.
+
+**Bare ground** is dirt with no grass. `bare` is one in patches of dirt,
+`dirt` of the field or so, and on a trail `trail_width` wide that winds
+away from the camera's side of the field. The grass thins toward a bare
+patch and is shorter at its edge. A `Clearing` is the shade round a
+tree's foot. `openness` is zero at the foot and rises to one at the
+shade's edge, and `litter_shade` browns the ground under it.
 
 **A canyon** can cross the ground toward -z. Its floor lies `depth`
 below the near side, and its far plateau stands `rise` above it, so the
@@ -35,7 +42,7 @@ from extensions.vegetation.checks import (
 )
 from extensions.vegetation.noise import layered_noise, value_noise
 from math.vector3 import Vector3
-from std.math import abs, cos, pi, pow, sin
+from std.math import abs, cos, pi, pow, sin, sqrt
 from units.si import METER, Length
 
 # The linear color of grass seen from far away.
@@ -49,6 +56,25 @@ comptime FAR_STRAW = Vector3(0.150, 0.130, 0.045)
 comptime FAR_POPPY = Vector3(0.200, 0.040, 0.012)
 # The linear color of the ground where the grass is short or thin.
 comptime SOIL = Vector3(0.070, 0.074, 0.030)
+# The linear colors of bare dirt, light and dark, and of the leaf litter
+# in a tree's shade.
+comptime DIRT = Vector3(0.260, 0.190, 0.115)
+comptime DIRT_DARK = Vector3(0.140, 0.100, 0.060)
+comptime LITTER = Vector3(0.070, 0.050, 0.026)
+# The trail's course: its x where it passes z = `TRAIL_Z`, how far it
+# drifts toward +x for each meter toward -z, and how far and how long it
+# wanders from side to side, in meters.
+comptime TRAIL_X = Float32(-7)
+comptime TRAIL_Z = Float32(30)
+comptime TRAIL_DRIFT = Float32(0.42)
+comptime TRAIL_WANDER = Float32(3.5)
+comptime TRAIL_BEND = Float32(13)
+# How bare the middle of the trail is, so a few tufts grow on it, and how
+# wide its edge is, where the grass thins out, in meters.
+comptime TRAIL_WORN = Float32(0.92)
+comptime TRAIL_EDGE = Float32(1.3)
+# The share of a clearing's radius, out from the foot, that is bare.
+comptime CLEARING_BARE = Float32(0.25)
 # The linear color of the mountains.
 comptime STONE = Vector3(0.036, 0.044, 0.056)
 # How wide the step at each rim of a canyon is, in meters.
@@ -171,6 +197,10 @@ struct Ground(ImplicitlyCopyable):
     var patch_length: Length
     # The canyon across the ground.
     var canyon: Canyon
+    # How much of the field is bare dirt, from zero to one.
+    var dirt: Float32
+    # How wide the trail is. Zero is no trail.
+    var trail_width: Length
 
     def __init__(
         out self,
@@ -180,6 +210,8 @@ struct Ground(ImplicitlyCopyable):
         climb: Float32 = 0.0,
         patch_length: Length = Length(6.0, METER),
         canyon: Canyon = no_canyon(),
+        dirt: Float32 = 0.0,
+        trail_width: Length = Length(0.0, METER),
     ) raises:
         """Create ground and check it.
 
@@ -195,6 +227,10 @@ struct Ground(ImplicitlyCopyable):
                 kilometer.
             canyon: The canyon across the ground. `no_canyon` cuts
                 nothing.
+            dirt: How much of the field is bare dirt, from 0, none, to
+                1, about half.
+            trail_width: How wide the trail is, from 0, no trail, to 20
+                meters.
 
         Raises:
             Error: If `check` refuses a value.
@@ -205,6 +241,8 @@ struct Ground(ImplicitlyCopyable):
         self.climb = climb
         self.patch_length = patch_length
         self.canyon = canyon
+        self.dirt = dirt
+        self.trail_width = trail_width
         self.check()
 
     def check(self) raises:
@@ -233,6 +271,13 @@ struct Ground(ImplicitlyCopyable):
             "A patch must be from 10 centimeters to 1 kilometer long",
         )
         self.canyon.check()
+        require_between(self.dirt, 0, 1, "The dirt must be from 0 to 1")
+        require_between(
+            self.trail_width.to(METER),
+            0,
+            20,
+            "A trail must be from 0 to 20 meters wide",
+        )
 
     def height_at(self, x: Float32, z: Float32) -> Float32:
         """Return the ground's height at a point.
@@ -276,11 +321,49 @@ struct Ground(ImplicitlyCopyable):
         var n = Vector3(-dx, 2 * e, -dz)
         return n / n.length()
 
+    def bare(self, x: Float32, z: Float32) -> Float32:
+        """Return how bare the ground is at a point, from zero to one.
+
+        One is dirt with no grass: a patch of dirt, or the trail. The
+        edge of a patch is a few tens of centimeters wide, and the trail's
+        width wanders.
+
+        Args:
+            x: The point's x, in meters.
+            z: The point's z, in meters.
+
+        Returns:
+            The bareness.
+        """
+        var length = self.patch_length.to(METER) * 2.2
+        var raw = layered_noise(x / length + 3.7, z / length, self.seed + 60)
+        var start = 0.72 - 0.4 * self.dirt
+        var patches = _ramp(start, start + 0.08, raw) * min(
+            Float32(1), self.dirt * 20
+        )
+        var width = self.trail_width.to(METER)
+        var course = (
+            TRAIL_X
+            + TRAIL_DRIFT * (TRAIL_Z - z)
+            + TRAIL_WANDER * sin(z / TRAIL_BEND)
+        )
+        var half = (
+            0.5
+            * width
+            * (0.75 + 0.5 * value_noise(z / 2.5, 0.5, self.seed + 61))
+        )
+        var trail = (
+            TRAIL_WORN
+            * (1 - _ramp(half, half + TRAIL_EDGE, abs(x - course)))
+            * min(Float32(1), width * 10)
+        )
+        return max(patches, trail)
+
     def cover(self, x: Float32, z: Float32) -> Float32:
         """Return how thick the grass is at a point, from zero to one.
 
-        Zero is bare soil. Most of the field is near one, with bare and
-        thin patches.
+        Zero is bare ground. Most of the field is near one, with thin
+        patches, and none where the ground is bare.
 
         Args:
             x: The point's x, in meters.
@@ -291,7 +374,8 @@ struct Ground(ImplicitlyCopyable):
         """
         var length = self.patch_length.to(METER)
         var raw = layered_noise(x / length, z / length, self.seed + 10)
-        return min(Float32(1), max(Float32(0), (raw - 0.2) * 3.5))
+        var thick = min(Float32(1), max(Float32(0), (raw - 0.2) * 3.5))
+        return thick * (1 - self.bare(x, z))
 
     def dryness(self, x: Float32, z: Float32) -> Float32:
         """Return how dry the grass is at a point, from zero to one.
@@ -365,13 +449,19 @@ struct Ground(ImplicitlyCopyable):
             z: The point's z, in meters.
 
         Returns:
-            Soil where the grass is thin, the far grass where it is thick,
-            tinted by the straw and the poppies.
+            Soil where the grass is thin, mottled dirt where the ground is
+            bare, the far grass where it is thick, tinted by the straw and
+            the poppies.
         """
         var green = FAR_LAWN + (FAR_GRASS - FAR_LAWN) * self.tallness(x, z)
         green = green + (FAR_STRAW - green) * (self.dryness(x, z) * 0.5)
         green = green + (FAR_POPPY - green) * (self.bloom(x, z) * 0.35)
-        return SOIL + (green - SOIL) * self.cover(x, z)
+        var mottle = 0.7 * value_noise(
+            x / 0.9, z / 0.9, self.seed + 62
+        ) + 0.3 * value_noise(x / 0.35, z / 0.35, self.seed + 63)
+        var dirt = DIRT + (DIRT_DARK - DIRT) * mottle
+        var ground = SOIL + (dirt - SOIL) * self.bare(x, z)
+        return ground + (green - ground) * self.cover(x, z)
 
     def mesh(
         self, span: Length, cells: Int, center_x: Float32, center_z: Float32
@@ -449,6 +539,77 @@ def _grid_index(cells: Int) -> List[Int]:
             index.append(b)
             index.append(b + 1)
     return index^
+
+
+@fieldwise_init
+struct Clearing(ImplicitlyCopyable):
+    """The shade round a tree's foot, where the grass is thin and the
+    ground is leaf litter."""
+
+    # The tree's foot, in meters.
+    var x: Float32
+    var z: Float32
+    # How far out the shade reaches, in meters.
+    var radius: Float32
+
+
+def openness(clearings: List[Clearing], x: Float32, z: Float32) -> Float32:
+    """Return how open a point is to the sky, from zero to one.
+
+    The inner `CLEARING_BARE` of a clearing is bare, and the grass comes
+    back smoothly out to its edge. Where clearings overlap, the most
+    shaded counts.
+
+    Args:
+        clearings: The clearings.
+        x: The point's x, in meters.
+        z: The point's z, in meters.
+
+    Returns:
+        One outside every clearing, and zero at a tree's foot.
+    """
+    var open = Float32(1)
+    for index in range(len(clearings)):
+        ref clearing = clearings[index]
+        var dx = x - clearing.x
+        var dz = z - clearing.z
+        var reach = clearing.radius
+        var far = dx * dx + dz * dz
+        if far < reach * reach:
+            open = min(open, _ramp(CLEARING_BARE * reach, reach, sqrt(far)))
+    return open
+
+
+def litter_shade(
+    mut geometry: BufferGeometry, clearings: List[Clearing], seed: Int
+) raises:
+    """Brown a ground mesh's colors under its clearings, toward leaf
+    litter.
+
+    Args:
+        geometry: A ground mesh, with `position` and `color`.
+        clearings: The clearings.
+        seed: Which mottle the litter has.
+
+    Raises:
+        Error: If the geometry has no `position` or no `color`.
+    """
+    ref positions = geometry.attribute_view(String(POSITION))
+    ref colors = geometry.attribute_view(String(COLOR))
+    var shaded = List[Float32]()
+    shaded.reserve(3 * positions.count())
+    for v in range(positions.count()):  # pragma: no branch
+        var p = positions.vector3(v)
+        var c = colors.vector3(v)
+        var shade = 1 - openness(clearings, p.x, p.z)
+        var leaf = LITTER * (
+            0.75 + 0.5 * value_noise(p.x / 0.6, p.z / 0.6, seed)
+        )
+        c = c + (leaf - c) * shade
+        shaded.append(c.x)
+        shaded.append(c.y)
+        shaded.append(c.z)
+    geometry.set_attribute(COLOR, BufferAttribute(shaded^, 3))
 
 
 def ridge_ring(

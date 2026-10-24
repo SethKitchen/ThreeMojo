@@ -12,7 +12,8 @@ on the twigs. Each node within `leaf_reach` of a twig's tip carries
 out from its twig, toward the twig's tip and a little down, and turns its
 face up and out of the crown. The leaves of one twig make a spray, and the
 sprays of one limb make a lobe, so a crown is lobes with sky between
-them. Neighboring twigs share a tint, so the lobes differ in color.
+them. Neighboring twigs share a tint, and a slow noise makes patches of
+the crown lighter or darker, so the lobes differ in color.
 
 **The light.** `LeafShade` counts the leaves in a grid and gives each leaf
 the sun and the sky that reach it through the others: see
@@ -46,10 +47,10 @@ from extensions.vegetation.limbs import (
     grow_limbs,
     limb_mesh,
 )
-from extensions.vegetation.noise import hash01, value_noise
+from extensions.vegetation.noise import hash01, value_noise, value_noise3
 from math.vector3 import Vector3
 from std.math import atan2, cos, pi, sin, sqrt
-from units.si import DEGREE, METER, Angle, Length
+from units.si import DEGREE, METER, PER_METER, Angle, InverseLength, Length
 
 # A leaf whose sun and sky are both below this is left out.
 comptime UNSEEN = Float32(0.004)
@@ -63,8 +64,10 @@ comptime LEAF_FILL = Float32(0.65)
 comptime SHADE_CELL = Float32(0.11)
 comptime SMALLEST_CELL = Float32(0.08)
 comptime LARGEST_CELL = Float32(0.45)
-# How many neighboring twig nodes share one tint.
+# How many neighboring twig nodes share one tint, and how large a patch
+# of one shade of a crown is, in meters.
 comptime SPRAY = 3
+comptime LOBE_TINT = Float32(2.2)
 
 
 struct CrownParameters(Copyable, Movable):
@@ -89,9 +92,12 @@ struct CrownParameters(Copyable, Movable):
     # The linear colors of a leaf: one tint and another, mixed per spray.
     var leaf: Vector3
     var leaf_light: Vector3
-    # The linear colors of the bark and of its dark patches.
+    # The linear colors of the bark and of its dark patches, and how many
+    # patches a meter climb the trunk. Many short patches are a birch's
+    # marks.
     var bark: Vector3
     var bark_dark: Vector3
+    var bark_marks: InverseLength
     # Which leaves to grow.
     var seed: Int
 
@@ -129,6 +135,7 @@ struct CrownParameters(Copyable, Movable):
         self.leaf_light = Vector3(0.125, 0.180, 0.044)
         self.bark = Vector3(0.330, 0.310, 0.270)
         self.bark_dark = Vector3(0.060, 0.052, 0.044)
+        self.bark_marks = InverseLength(1.7, PER_METER)
         self.seed = 1
 
     def check(self) raises:
@@ -140,7 +147,8 @@ struct CrownParameters(Copyable, Movable):
                 sides, the leaves reach back from a tip further than 20
                 meters, a node has not from 1 to 200 leaves, a leaf is not
                 from 5 millimeters to 2 meters long and wide, the shade is
-                not from 0 to 50, or a color channel is not from 0 to 1.
+                not from 0 to 50, the bark has not from 0.1 to 50 marks a
+                meter, or a color channel is not from 0 to 1.
         """
         self.limbs.check()
         require_between(
@@ -178,6 +186,12 @@ struct CrownParameters(Copyable, Movable):
         )
         require_between(
             self.shade, 0, 50, "A crown's shade must be from 0 to 50"
+        )
+        require_between(
+            self.bark_marks.to(PER_METER),
+            0.1,
+            50,
+            "Bark must have from 0.1 to 50 marks a meter",
         )
         var colors: List[Vector3] = [
             self.leaf,
@@ -220,6 +234,47 @@ def windswept_tree() -> CrownParameters:
     crown.leaves_per_node = 14
     crown.bark = Vector3(0.140, 0.125, 0.105)
     crown.bark_dark = Vector3(0.040, 0.035, 0.030)
+    return crown^
+
+
+def birch_tree() -> CrownParameters:
+    """Return a birch about 16 meters tall.
+
+    Its white trunk is marked with short dark bands, and bare for 6
+    meters. Its narrow crown is lobes of small, light leaves on limbs that
+    droop.
+
+    Returns:
+        The parameters.
+    """
+    var crown = CrownParameters()
+    crown.limbs.shape = CrownShape(
+        Length(6.0, METER),
+        Length(16.0, METER),
+        Length(3.2, METER),
+        0.45,
+        8,
+        Length(1.4, METER),
+        0.55,
+        0.15,
+    )
+    crown.limbs.points = 4500
+    crown.limbs.up_pull = 0.12
+    crown.limbs.droop = 0.45
+    crown.limbs.fork = 0.35
+    crown.limbs.lean = Angle(3.0, DEGREE)
+    crown.limbs.bend = 0.25
+    crown.limbs.tip_radius = Length(0.004, METER)
+    crown.leaf_reach = Length(0.9, METER)
+    crown.leaves_per_node = 22
+    crown.leaf_length = Length(0.075, METER)
+    crown.leaf_width = Length(0.05, METER)
+    crown.shade = 0.55
+    crown.leaf = Vector3(0.055, 0.110, 0.030)
+    crown.leaf_light = Vector3(0.140, 0.200, 0.050)
+    crown.bark = Vector3(0.620, 0.600, 0.560)
+    crown.bark_dark = Vector3(0.035, 0.033, 0.030)
+    crown.bark_marks = InverseLength(6.0, PER_METER)
     return crown^
 
 
@@ -371,16 +426,18 @@ struct CrownLevel(ImplicitlyCopyable):
 
 
 def default_crown_levels() -> List[CrownLevel]:
-    """Return the three levels of trees seen across a meadow.
+    """Return the four levels of trees seen across a meadow.
 
     Returns:
-        Every leaf to 40 meters, 40 percent of them to 110 meters, and 16
-        percent as cards past that.
+        Every leaf to 40 meters, 40 percent of them to 110 meters, 16
+        percent as cards to 300 meters, and 5 percent as cards past that,
+        for the woodland beyond the canyon.
     """
     return [
         CrownLevel(Length(40.0, METER), 1.0, False),
         CrownLevel(Length(110.0, METER), 0.4, False),
-        CrownLevel(Length(1.0e5, METER), 0.16, True),
+        CrownLevel(Length(300.0, METER), 0.16, True),
+        CrownLevel(Length(1.0e5, METER), 0.05, True),
     ]
 
 
@@ -485,7 +542,9 @@ def _bark_colors(
     for v in range(positions.count()):  # pragma: no branch
         var p = positions.vector3(v)
         var round = atan2(p.z, p.x) / Float32(pi) * 3
-        var patch = value_noise(round, p.y * 1.7, seed)
+        var patch = value_noise(
+            round, p.y * parameters.bark_marks.to(PER_METER), seed
+        )
         var dark = min(Float32(1), max(Float32(0), (patch - 0.55) * 4))
         var foot = min(Float32(1), p.y / 1.5)
         var shade = 0.55 + 0.45 * foot
@@ -551,9 +610,16 @@ def hang_leaves(skeleton: Skeleton, parameters: CrownParameters) -> List[Leaf]:
                 (b.z - mid.z) / radius,
             )
         )
-        var tint = parameters.leaf + (
-            parameters.leaf_light - parameters.leaf
-        ) * hash01(n // SPRAY, 0, seed)
+        # A lobe is lighter or darker than its neighbors, and each spray
+        # differs within it.
+        var lobe = value_noise3(
+            b.x / LOBE_TINT, b.y / LOBE_TINT, b.z / LOBE_TINT, seed + 9
+        )
+        var tint = (
+            parameters.leaf
+            + (parameters.leaf_light - parameters.leaf)
+            * hash01(n // SPRAY, 0, seed)
+        ) * (0.8 + 0.4 * lobe)
         for k in range(parameters.leaves_per_node):  # pragma: no branch
             var key = k * 8
             var spin = turn * hash01(n, key + 1, seed)

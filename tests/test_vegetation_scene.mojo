@@ -15,6 +15,7 @@ from extensions.vegetation.crown import (
     CrownLevel,
     CrownParameters,
     _unit,
+    birch_tree,
     bush_parameters,
     crown_level_for,
     default_crown_levels,
@@ -66,10 +67,12 @@ from std.testing import (
 from units.si import (
     DEGREE,
     METER,
+    PER_METER,
     RADIAN,
     SECOND,
     Angle,
     Duration,
+    InverseLength,
     Length,
 )
 
@@ -107,7 +110,8 @@ def _full() -> CrownLevel:
 
 def _meadow_parameters(crowded: Bool) raises -> MeadowParameters:
     """Return a meadow small enough to build in a test. A crowded meadow
-    has two trees, a bush and a boulder; an empty one has none."""
+    has two trees, a bush and a boulder near the field, and two bushes far
+    away; an empty one has none."""
     var p = MeadowParameters()
     p.field.span = Length(16.0, METER)
     p.field.cluster_size = Length(4.0, METER)
@@ -126,6 +130,8 @@ def _meadow_parameters(crowded: Bool) raises -> MeadowParameters:
     p.mountain_radius = Length(100.0, METER)
     p.sky_size = 8
     p.rocks = 0
+    p.litter = 2000
+    p.litter_reach = Length(10.0, METER)
     p.plantings = List[Planting]()
     if crowded:
         p.ground = Ground(
@@ -142,6 +148,8 @@ def _meadow_parameters(crowded: Bool) raises -> MeadowParameters:
             Planting(0, 2.0, -3.0, 1.0),
             Planting(0, 4.0, -40.0, 1.2),
             Planting(1, -3.0, 2.0, 0.7),
+            Planting(1, 300.0, 1.0, 0.5),
+            Planting(1, 1.0, -300.0, 0.5),
         ]
     return p^
 
@@ -156,6 +164,8 @@ def test_crown_parameters_are_checked() raises:
     """The five kinds pass; each field out of range is refused, and so is
     a shape the limbs refuse."""
     CrownParameters().check()
+    birch_tree().check()
+    assert_true(birch_tree().bark.x > CrownParameters().bark.x)
     windswept_tree().check()
     young_tree().check()
     round_tree().check()
@@ -193,6 +203,10 @@ def test_crown_parameters_are_checked() raises:
     with assert_raises(contains="shade"):
         c.check()
     c = CrownParameters()
+    c.bark_marks = InverseLength(0.0, PER_METER)
+    with assert_raises(contains="marks"):
+        c.check()
+    c = CrownParameters()
     c.leaf = Vector3(2, 0, 0)
     with assert_raises(contains="color"):
         c.check()
@@ -213,11 +227,13 @@ def test_crown_levels_pick_by_distance() raises:
     var levels = default_crown_levels()
     for index in range(len(levels)):
         levels[index].check()
+    assert_equal(len(levels), 4)
     assert_true(levels[2].cards)
     assert_false(levels[0].cards)
     assert_equal(crown_level_for(levels, 10), 0)
     assert_equal(crown_level_for(levels, 80), 1)
-    assert_equal(crown_level_for(levels, 2.0e5), 2)
+    assert_equal(crown_level_for(levels, 200), 2)
+    assert_equal(crown_level_for(levels, 2.0e5), 3)
     with assert_raises(contains="no level"):
         _ = crown_level_for(List[CrownLevel](), 1)
     with assert_raises(contains="reach"):
@@ -536,10 +552,10 @@ def test_plantings_scatter_across_the_view() raises:
         len(grove_plantings(0, 0, 1, 0, 0, Length(1.0, METER), 1, 1, 0)), 0
     )
     var crowns = default_crowns()
-    assert_equal(len(crowns), 8)
+    assert_equal(len(crowns), 12)
     assert_true(crowns[7].leaf_length.value < crowns[0].leaf_length.value)
     var plantings = default_plantings()
-    assert_equal(len(plantings), 4 + 9 + 5 + 6 + 14 + 30 + 45)
+    assert_equal(len(plantings), 4 + 9 + 6 + 6 + 14 + 30 + 90 + 30)
     for index in range(len(plantings)):
         assert_true(plantings[index].crown < len(crowns))
 
@@ -571,8 +587,14 @@ def test_each_meadow_parameter_is_refused_out_of_range() raises:
         p.plantings.append(Planting(0, 0, 0, 1))
     _refused(p^, "plantings")
     p = MeadowParameters()
-    p.plantings = [Planting(8, 0, 0, 1)]
+    p.plantings = [Planting(12, 0, 0, 1)]
     _refused(p^, "wear")
+    p = MeadowParameters()
+    p.litter = -1
+    _refused(p^, "litter must try")
+    p = MeadowParameters()
+    p.litter_reach = Length(0.0, METER)
+    _refused(p^, "litter must reach")
     p = MeadowParameters()
     p.plantings = [Planting(-1, 0, 0, 1)]
     _refused(p^, "wear")
@@ -620,13 +642,14 @@ def _camera() raises -> PerspectiveCamera:
 
 def test_an_empty_meadow_draws_its_grass_and_sky() raises:
     """A meadow with no tree, bush or boulder still has its ground,
-    mountains, sky, sun, fog and grass. Its frame draws clusters near the
-    camera and leaves the far ones to the ground."""
+    mountains, sky, sun, fog and grass, and no litter. Its frame draws
+    clusters near the camera and leaves the far ones to the ground."""
     var renderer = Renderer(16, 9)
     var assets = Assets()
     var scene = Scene()
     var p = _meadow_parameters(False)
     var meadow = Meadow(scene, assets, renderer, p)
+    var built = len(scene.meshes)
     assert_equal(len(meadow.trees), 0)
     assert_true(scene.background.kind == CUBE_BACKGROUND)
     assert_true(scene.fog.kind == EXP2_FOG)
@@ -642,20 +665,35 @@ def test_an_empty_meadow_draws_its_grass_and_sky() raises:
     stats = meadow.update(scene, assets, camera, Duration(2.0, SECOND))
     assert_equal(stats.drawn, 0)
     assert_equal(stats.beyond + stats.culled, 16)
+    # Grassy ground with no tree has no litter, and nor does a meadow
+    # that tries none.
+    var bare = _meadow_parameters(False)
+    bare.litter = 0
+    var plain = Scene()
+    _ = Meadow(plain, assets, renderer, bare)
+    assert_equal(len(plain.meshes), built)
 
 
 def test_a_crowded_meadow_grows_again_and_picks_crowns() raises:
-    """A second frame replaces each drawn cluster's geometry. A near tree
-    wears its full crown and a far one its thin crown. Each tree leans a
-    little from its foot, and is never turned about +y. A small frame of
-    it draws."""
+    """The trees in the field thin the grass round them and gather
+    litter. A second frame replaces each drawn cluster's geometry. A near
+    tree wears its full, swaying crown and a far one its thin, still
+    crown. Each tree leans a little from its foot, and is never turned
+    about +y. A small frame of it draws."""
     var renderer = Renderer(16, 9)
     var assets = Assets()
     var scene = Scene()
     var p = _meadow_parameters(True)
     var meadow = Meadow(scene, assets, renderer, p)
-    assert_equal(len(meadow.trees), 3)
+    assert_equal(len(meadow.trees), 5)
     assert_equal(len(meadow.leaves), 4)
+    assert_equal(len(meadow.field.clearings), 2)
+    assert_almost_equal(meadow.field.cover_at(2, -3), 0)
+    var bare = _meadow_parameters(True)
+    bare.litter = 0
+    var plain = Scene()
+    _ = Meadow(plain, assets, renderer, bare)
+    assert_equal(len(scene.meshes), len(plain.meshes) + 1)
     var camera = _camera()
     camera.place(Vector3(2, 30, 0), Vector3(0, 0, 0))
     var first = meadow.update(scene, assets, camera, Duration(0.0, SECOND))
@@ -670,12 +708,17 @@ def test_a_crowded_meadow_grows_again_and_picks_crowns() raises:
     for t in range(len(meadow.trees)):
         ref tree = meadow.trees[t]
         var wears = scene.meshes[tree.wood + 1].geometry
+        var dressed = scene.meshes[tree.wood + 1].material
         if wears == meadow.leaves[tree.crown * 2]:
             near += 1
+            assert_true(dressed == meadow.leaf_sway)
+            assert_true(scene.meshes[tree.wood].material == meadow.wood_sway)
         if wears == meadow.leaves[tree.crown * 2 + 1]:
             far += 1
+            assert_true(dressed == meadow.leaf_still)
+            assert_true(scene.meshes[tree.wood].material == meadow.wood_still)
     assert_equal(near, 2)
-    assert_equal(far, 1)
+    assert_equal(far, 3)
     for t in range(len(meadow.trees)):
         var turn = scene.get(scene.meshes[meadow.trees[t].wood].node).quaternion
         assert_true(abs(turn.w) < 1)

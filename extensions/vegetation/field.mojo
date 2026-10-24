@@ -40,7 +40,7 @@ from extensions.vegetation.checks import (
     require_between,
     require_count_between,
 )
-from extensions.vegetation.ground import Ground
+from extensions.vegetation.ground import Clearing, Ground, openness
 from extensions.vegetation.kinds import (
     BEYOND,
     CULLED,
@@ -76,6 +76,9 @@ comptime SEED_LIFT = Float32(1.45)
 # The height of short grass, as a fraction of the meadow's full height,
 # and how tall the tallest tuft is, as a multiple of it.
 comptime SHORT_GRASS = Float32(0.22)
+# How tall the grass grows where it is thinnest, as a share of its height
+# on full cover: at the edge of bare ground it is trodden short.
+comptime TRODDEN = Float32(0.3)
 comptime TALLEST_TUFT = Float32(1.3)
 # The mean length of a broad leaf.
 comptime LEAF_LENGTH = Float32(0.2)
@@ -413,6 +416,9 @@ struct GrassField(Movable):
     var parameters: FieldParameters
     var ground: Ground
     var clusters: List[GrassCluster]
+    # The shade round the feet of the trees that stand in the field. None
+    # until they are added.
+    var clearings: List[Clearing]
 
     def __init__(
         out self, var parameters: FieldParameters, ground: Ground
@@ -431,6 +437,7 @@ struct GrassField(Movable):
         self.parameters = parameters^
         self.ground = ground
         self.clusters = List[GrassCluster]()
+        self.clearings = List[Clearing]()
         var side = self.parameters.clusters_across()
         var size = self.parameters.cluster_size.to(METER)
         var start = -self.parameters.span.to(METER) * 0.5
@@ -472,6 +479,19 @@ struct GrassField(Movable):
                         tufts,
                     )
                 )
+
+    def cover_at(self, x: Float32, z: Float32) -> Float32:
+        """Return how thick the grass is at a point: the ground's cover,
+        thinned in the shade of the field's clearings.
+
+        Args:
+            x: The point's x, in meters.
+            z: The point's z, in meters.
+
+        Returns:
+            The cover, from zero to one.
+        """
+        return self.ground.cover(x, z) * openness(self.clearings, x, z)
 
     def full_blades(self) -> Int:
         """Return how many blades the field holds at full detail.
@@ -606,7 +626,7 @@ struct GrassField(Movable):
         var size = p.cluster_size.to(METER)
         var tx = cluster.corner_x + hash01(index, 2 * tuft, seed + 1) * size
         var tz = cluster.corner_z + hash01(index, 2 * tuft + 1, seed + 1) * size
-        var cover = self.ground.cover(tx, tz)
+        var cover = self.cover_at(tx, tz)
         if hash01(index, tuft, seed + 3) >= cover:
             return None
         var key = blade * 16
@@ -629,7 +649,7 @@ struct GrassField(Movable):
             * tall
             * (0.75 + (TALLEST_TUFT - 0.75) * hash01(index, tuft, traits))
             * (1 + p.height_spread * (hash01(index, key + 2, seed + 5) - 0.5))
-            * (0.55 + 0.45 * cover)
+            * (TRODDEN + (1 - TRODDEN) * cover)
         )
         var broad = hash01(index, tuft, traits + 1)
         var width = (
@@ -676,7 +696,9 @@ struct GrassField(Movable):
             kind = DRY_GRASS
         elif hash01(index, key + 9, seed + 5) < p.seed_share:
             kind = SEED_HEAD
-            height = height / (0.55 + 0.45 * cover) * SEED_LIFT / tall
+            height = (
+                height / (TRODDEN + (1 - TRODDEN) * cover) * SEED_LIFT / tall
+            )
             width = STEM_WIDTH.to(METER)
             curl *= 0.25
         elif hash01(index, key + 10, seed + 5) < weed * self.ground.weeds(x, z):

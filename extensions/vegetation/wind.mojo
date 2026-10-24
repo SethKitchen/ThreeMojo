@@ -74,6 +74,33 @@ comptime SMALL_GUST = Float32(0.55)
 comptime TREE_LEAN = Float32(0.025)
 comptime TREE_ROCK = Float32(0.008)
 comptime TREE_RATE = Float32(0.5)
+# A crown's limbs and leaves in a wind of `CROWN_LEAN`: how far an outer
+# twig swings with its limb and how many times a second, and how far a
+# leaf flutters and how many times a second. A wind of another lean moves
+# them in proportion.
+comptime CROWN_LEAN = Float32(50)
+comptime CROWN_REACH = Float32(0.12)
+comptime CROWN_RATE = Float32(0.8)
+comptime CROWN_FLUTTER = Float32(0.02)
+comptime CROWN_FLUTTER_RATE = Float32(2.4)
+
+
+@fieldwise_init
+struct CrownMotion(ImplicitlyCopyable):
+    """How the wind moves the limbs and the leaves of the crowns: what a
+    vertex program needs to sway them."""
+
+    # The unit direction the wind blows toward, as x and z.
+    var downwind: Vector2
+    # How far an outer twig swings with its limb, and how many times a
+    # second.
+    var reach: Length
+    var rate: Frequency
+    # How far a leaf flutters up and down, and how many times a second.
+    var flutter: Length
+    var flutter_rate: Frequency
+
+
 comptime CROSS_SHARE = Float32(0.35)
 comptime CROSS_COS = Float32(0.81915204)
 comptime CROSS_SIN = Float32(0.57357644)
@@ -367,6 +394,26 @@ struct Wind(ImplicitlyCopyable):
         var side = wobble * SIDE_FLUTTER * cos(beat * 2 + flick * 1.3)
         return Vector2(
             down.x * along - down.y * side, down.y * along + down.x * side
+        )
+
+    def crown_motion(self) -> CrownMotion:
+        """Return how this wind moves the limbs and the leaves of a crown.
+
+        The swing and the flutter are `CROWN_REACH` and `CROWN_FLUTTER` in
+        a wind of `CROWN_LEAN`, and in proportion to the lean in another.
+        A looping wind swings them a whole number of times a loop. Still
+        air moves nothing.
+
+        Returns:
+            The motion.
+        """
+        var share = self.lean.to(DEGREE) / CROWN_LEAN
+        return CrownMotion(
+            self.downwind(),
+            Length(CROWN_REACH * share, METER),
+            Frequency(self._rate(CROWN_RATE), PER_SECOND),
+            Length(CROWN_FLUTTER * share, METER),
+            Frequency(self._rate(CROWN_FLUTTER_RATE), PER_SECOND),
         )
 
     def tree_sway(

@@ -57,6 +57,7 @@ from extensions.vegetation.checks import (
 from extensions.vegetation.crown import (
     CrownLevel,
     CrownParameters,
+    birch_tree,
     bush_parameters,
     crown_level_for,
     default_crown_levels,
@@ -72,8 +73,20 @@ from extensions.vegetation.field import (
     GrassField,
     no_stats,
 )
-from extensions.vegetation.foliage import foliage_program
-from extensions.vegetation.ground import Canyon, Ground, cliff_wall, ridge_ring
+from extensions.vegetation.foliage import (
+    SWAY_TIME,
+    foliage_program,
+    wood_program,
+)
+from extensions.vegetation.ground import (
+    Canyon,
+    Clearing,
+    Ground,
+    cliff_wall,
+    litter_shade,
+    ridge_ring,
+)
+from extensions.vegetation.litter import ground_litter
 from extensions.vegetation.kinds import DRAWN
 from extensions.vegetation.noise import hash01
 from extensions.vegetation.rock import boulder
@@ -83,7 +96,7 @@ from lights.light import ambient_light, hemisphere_light
 from lights.shadow import PCF_SOFT_SHADOW_MAP
 from lights.sun_light import SunLight
 from materials.material import DOUBLE_SIDE, Material, MaterialId
-from materials.nodes import NORMAL_NODE, NodeGraph, NodeProgram
+from materials.nodes import NORMAL_NODE, NodeGraph, NodeProgram, NodeProgramId
 from math.frustum import Frustum
 from math.vector3 import Vector3
 from objects.mesh import Mesh
@@ -96,6 +109,7 @@ from units.si import (
     METER,
     PER_METER,
     RADIAN,
+    SECOND,
     Angle,
     Duration,
     InverseLength,
@@ -109,6 +123,11 @@ comptime FARTHEST = Float32(1.7)
 comptime EXPOSURE = Float32(0.8)
 # How high above the ground the camera's eye is.
 comptime EYE_HEIGHT = Float32(1.6)
+# How far a tree's shade reaches, as a share of its crown's radius, and
+# how far from the middle the ground under the trees is browned, in
+# meters.
+comptime CLEARING_SHARE = Float32(0.8)
+comptime SHADED_GROUND = Float32(250)
 
 
 def two_sided_program() raises -> NodeProgram:
@@ -351,11 +370,12 @@ def grove_plantings(
 
 
 def default_crowns() -> List[CrownParameters]:
-    """Return the eight crowns of the grassland.
+    """Return the twelve crowns of the grassland.
 
     Returns:
-        Two open trees, a windswept tree, two young trees, a round tree,
-        a green bush and a gray-green bush, each of its own seed.
+        In order: two open trees, a windswept tree, two young trees, a
+        round tree, a green bush, a gray-green bush, two birches, a second
+        round tree and a third open tree, each of its own seed.
     """
     var crowns: List[CrownParameters] = [
         CrownParameters(),
@@ -366,6 +386,10 @@ def default_crowns() -> List[CrownParameters]:
         round_tree(),
         bush_parameters(),
         bush_parameters(),
+        birch_tree(),
+        birch_tree(),
+        round_tree(),
+        CrownParameters(),
     ]
     crowns[7].leaf = Vector3(0.060, 0.080, 0.045)
     crowns[7].leaf_light = Vector3(0.120, 0.140, 0.085)
@@ -375,9 +399,10 @@ def default_crowns() -> List[CrownParameters]:
     for index in range(len(crowns)):  # pragma: no branch
         crowns[index].seed = 11 + 7 * index
         crowns[index].limbs.seed = 3 + 5 * index
-    # The two open trees whose crowns spread most like a lone tree's.
+    # The open trees whose crowns spread most like a lone tree's.
     crowns[0].limbs.seed = 10
     crowns[1].limbs.seed = 6
+    crowns[11].limbs.seed = 8
     return crowns^
 
 
@@ -386,10 +411,10 @@ def default_plantings() -> List[Planting]:
 
     Returns:
         A lone open tree and a bush near the camera; a second open tree
-        and a windswept tree; three groves of mixed trees from 60 to 140
-        meters; trees and round bushes scattered from 12 to 160 meters;
-        and young and round trees from 435 to 700 meters, on the far side
-        of the canyon.
+        and a windswept tree; a grove of mixed trees, a grove of birches
+        and a grove at the back, from 60 to 140 meters; trees and bushes
+        scattered from 12 to 160 meters; and a woodland of young and round
+        trees on the far side of the canyon, from 428 to 520 meters.
     """
     var plantings: List[Planting] = [
         Planting(0, -12.0, -6.0, 1.0),
@@ -404,11 +429,11 @@ def default_plantings() -> List[Planting]:
     )
     plantings.extend(
         grove_plantings(
-            5, 3, 3, -26.0, -70.0, Length(12.0, METER), 0.75, 1.15, 32
+            6, 8, 2, -26.0, -70.0, Length(12.0, METER), 0.8, 1.15, 32
         )
     )
     plantings.extend(
-        grove_plantings(6, 2, 4, 6.0, -132.0, Length(18.0, METER), 0.8, 1.2, 33)
+        grove_plantings(6, 9, 3, 6.0, -132.0, Length(18.0, METER), 0.8, 1.2, 33)
     )
     plantings.extend(
         scatter_plantings(
@@ -436,14 +461,26 @@ def default_plantings() -> List[Planting]:
     )
     plantings.extend(
         scatter_plantings(
-            45,
+            90,
             3,
             3,
-            Length(435.0, METER),
-            Length(700.0, METER),
-            0.9,
-            1.4,
+            Length(428.0, METER),
+            Length(520.0, METER),
+            1.3,
+            1.9,
             23,
+        )
+    )
+    plantings.extend(
+        scatter_plantings(
+            30,
+            10,
+            1,
+            Length(428.0, METER),
+            Length(520.0, METER),
+            1.3,
+            1.8,
+            24,
         )
     )
     return plantings^
@@ -463,6 +500,10 @@ struct MeadowParameters(Copyable, Movable):
     var crown_levels: List[CrownLevel]
     # How many boulders lie in the field.
     var rocks: Int
+    # How many points `ground_litter` tries for leaves, twigs and pebbles,
+    # and how far from the field's middle it reaches. Zero tries none.
+    var litter: Int
+    var litter_reach: Length
     # Where the sun is, and how the sky looks.
     var sun_elevation: Angle
     var sun_azimuth: Angle
@@ -492,19 +533,23 @@ struct MeadowParameters(Copyable, Movable):
                 Length(420.0, METER),
                 Length(80.0, METER),
                 Length(38.0, METER),
-            )
+            ),
+            dirt=0.2,
+            trail_width=Length(1.2, METER),
         )
         self.wind = Wind()
         self.crowns = default_crowns()
         self.plantings = default_plantings()
         self.crown_levels = default_crown_levels()
         self.rocks = 6
+        self.litter = 160000
+        self.litter_reach = Length(40.0, METER)
         self.sun_elevation = Angle(38.0, DEGREE)
         self.sun_azimuth = Angle(-30.0, DEGREE)
         self.sky = SkyLook()
         self.sky_size = 512
         self.ground_span = Length(1400.0, METER)
-        self.ground_cells = 160
+        self.ground_cells = 512
         self.mountain_radius = Length(900.0, METER)
         self.seed = 5
 
@@ -514,7 +559,9 @@ struct MeadowParameters(Copyable, Movable):
         Raises:
             Error: If the field, the ground, the wind, a crown or the sky
                 is refused; there are not from 1 to 64 crowns, from 0 to
-                100,000 plantings or from 0 to 1,000 boulders; a planting
+                100,000 plantings or from 0 to 1,000 boulders; the litter
+                tries not from 0 to 2 million points, or reaches not from
+                1 meter to 1 kilometer; a planting
                 names no crown, stands further than 10 kilometers, or is
                 not from 0.05 to 20 times its crown's size; the crowns
                 have not from 1 to 8 levels or a level is refused; the sun
@@ -565,6 +612,18 @@ struct MeadowParameters(Copyable, Movable):
             )
         require_count_between(
             self.rocks, 0, 1000, "A meadow must have from 0 to 1,000 boulders"
+        )
+        require_count_between(
+            self.litter,
+            0,
+            2000000,
+            "A meadow's litter must try from 0 to 2 million points",
+        )
+        require_between(
+            self.litter_reach.to(METER),
+            1,
+            1000,
+            "A meadow's litter must reach from 1 meter to 1 kilometer",
         )
         require_count_between(
             len(self.crown_levels),
@@ -628,6 +687,14 @@ struct Meadow(Movable):
     var woods: List[GeometryId]
     var leaves: List[GeometryId]
     var trees: List[_Tree]
+    # The materials of the crowns: wood and leaves that sway in the wind,
+    # for the levels of ovate leaves, and still ones for the levels of
+    # cards. The programs of the swaying ones read the wind's time.
+    var wood_sway: MaterialId
+    var leaf_sway: MaterialId
+    var wood_still: MaterialId
+    var leaf_still: MaterialId
+    var sway_programs: List[NodeProgramId]
     var sun: SunLight
     var dome: SkyDome
 
@@ -653,7 +720,32 @@ struct Meadow(Movable):
                 cannot be built.
         """
         parameters.check()
-        self.field = GrassField(parameters.field.copy(), parameters.ground)
+        # The shade of each tree near the field thins the grass round its
+        # foot and browns the ground there.
+        var half = parameters.field.span.to(METER) * 0.5
+        var shade = List[Clearing]()
+        var thin = List[Clearing]()
+        for index in range(len(parameters.plantings)):
+            ref planting = parameters.plantings[index]
+            var reach = (
+                parameters.crowns[planting.crown].limbs.shape.radius.to(METER)
+                * planting.size
+                * CLEARING_SHARE
+            )
+            var clearing = Clearing(planting.x, planting.z, reach)
+            if (
+                abs(planting.x) < SHADED_GROUND
+                and abs(planting.z) < SHADED_GROUND
+            ):
+                shade.append(clearing)
+            if (
+                abs(planting.x) < half + reach
+                and abs(planting.z) < half + reach
+            ):
+                thin.append(clearing)
+        var field = GrassField(parameters.field.copy(), parameters.ground)
+        field.clearings = thin^
+        self.field = field^
         self.wind = parameters.wind
         self.levels = parameters.crown_levels.copy()
         var white = Color(255, 255, 255)
@@ -663,13 +755,29 @@ struct Meadow(Movable):
                 white, side=DOUBLE_SIDE, vertex_colors=True, nodes=two_sided
             )
         )
-        var lit_leaves = assets.programs.add(foliage_program())
-        var foliage = assets.materials.add(
+        var motion = parameters.wind.crown_motion()
+        var still_leaves = assets.programs.add(foliage_program())
+        var swaying_leaves = assets.programs.add(foliage_program(motion))
+        var swaying_wood = assets.programs.add(wood_program(motion))
+        self.sway_programs = [swaying_leaves, swaying_wood]
+        self.leaf_still = assets.materials.add(
             Material(
-                white, side=DOUBLE_SIDE, vertex_colors=True, nodes=lit_leaves
+                white, side=DOUBLE_SIDE, vertex_colors=True, nodes=still_leaves
+            )
+        )
+        self.leaf_sway = assets.materials.add(
+            Material(
+                white,
+                side=DOUBLE_SIDE,
+                vertex_colors=True,
+                nodes=swaying_leaves,
             )
         )
         var painted = assets.materials.add(Material(white, vertex_colors=True))
+        self.wood_still = painted
+        self.wood_sway = assets.materials.add(
+            Material(white, vertex_colors=True, nodes=swaying_wood)
+        )
         var stone = assets.materials.add(
             Material(white, vertex_colors=True, flat_shading=True)
         )
@@ -689,6 +797,7 @@ struct Meadow(Movable):
         var land = ground.mesh(
             parameters.ground_span, parameters.ground_cells, 0, 0
         )
+        litter_shade(land, shade, parameters.seed + 7)
         land.compute_vertex_normals()
         scene.add_mesh(
             Mesh(
@@ -728,6 +837,25 @@ struct Meadow(Movable):
                 )
             )
 
+        if parameters.litter > 0:
+            var litter = ground_litter(
+                self.field,
+                0,
+                0,
+                parameters.litter_reach,
+                parameters.litter,
+                parameters.seed + 11,
+            )
+            if litter:
+                scene.add_mesh(
+                    Mesh(
+                        assets.geometries.add(litter.take()),
+                        painted,
+                        scene.add(Object3D()),
+                        receive_shadow=True,
+                    )
+                )
+
         var toward = sun_direction(
             parameters.sun_elevation, parameters.sun_azimuth
         )
@@ -760,7 +888,7 @@ struct Meadow(Movable):
             scene.add_mesh(
                 Mesh(
                     self.woods[entry],
-                    painted,
+                    self.wood_sway,
                     node,
                     cast_shadow=True,
                     receive_shadow=True,
@@ -771,7 +899,7 @@ struct Meadow(Movable):
             scene.add_mesh(
                 Mesh(
                     self.leaves[entry],
-                    foliage,
+                    self.leaf_sway,
                     node,
                     cast_shadow=True,
                     receive_shadow=True,
@@ -851,6 +979,11 @@ struct Meadow(Movable):
             Error: If the camera's view is refused, or a cluster cannot be
                 built.
         """
+        var seconds = time.to(SECOND)
+        for index in range(len(self.sway_programs)):  # pragma: no branch
+            assets.programs.get(self.sway_programs[index]).set_uniform(
+                String(SWAY_TIME), seconds
+            )
         var view = camera.view_matrix()
         var clip = camera.projection_matrix()
         clip.multiply(view)
@@ -877,6 +1010,14 @@ struct Meadow(Movable):
             var entry = tree.crown * len(self.levels) + level
             scene.meshes[tree.wood].geometry = self.woods[entry]
             scene.meshes[tree.wood + 1].geometry = self.leaves[entry]
+            # A level of cards is far: its limbs and leaves stay still.
+            var cards = self.levels[level].cards
+            scene.meshes[
+                tree.wood
+            ].material = self.wood_still if cards else self.wood_sway
+            scene.meshes[
+                tree.wood + 1
+            ].material = self.leaf_still if cards else self.leaf_sway
             # The tree leans from its foot. A lean of zero is no turn,
             # whatever the axis.
             var lean = self.wind.tree_sway(
