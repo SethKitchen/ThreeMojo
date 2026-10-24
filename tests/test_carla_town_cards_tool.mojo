@@ -101,6 +101,45 @@ def test_eight_cards_keep_four() raises:
     )
 
 
+def test_the_seed_matches_zlib() raises:
+    var lines = run_program(
+        [
+            "python3",
+            "-c",
+            "import json, zlib\n"
+            + "paths = ['', '/Game/A', 'café', 'a' * 40]\n"
+            + "for path in paths:\n"
+            + "    for index in (0, 3, 20):\n"
+            + "        for lod in (0, 1):\n"
+            + "            seed = zlib.crc32(path.encode()) + index + 7919 *"
+            " lod\n"
+            + "           "
+            " print(json.dumps({'mode':'seed','path':path,'index':index,'lod':lod},"
+            " separators=(',', ':')))\n"
+            + "            print(seed)\n",
+        ],
+        10,
+        merge_errors=False,
+    )
+    if lines.status != 0:
+        raise Error(lines.errors)
+    var pending = String("")
+    var count = 0
+    for line in lines.output.splitlines():
+        var text = String(line)
+        if text.byte_length() == 0:
+            continue
+        if pending.byte_length() == 0:
+            pending = text
+            continue
+        assert_equal(cards_text(pending), '{"seed":' + text + "}")
+        pending = ""
+        count += 1
+    assert_equal(count, 24)
+    with assert_raises(contains="seed index is negative"):
+        _ = cards_text('{"mode":"seed","path":"/Game/A","index":-1,"lod":0}')
+
+
 def test_one_card_stays_whole() raises:
     assert_equal(
         cards_text(

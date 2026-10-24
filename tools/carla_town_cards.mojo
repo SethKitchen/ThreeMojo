@@ -11,7 +11,8 @@
 `keep` and `seed`. A card is one connected piece of triangles. The
 program prints the kept cards, grown about their centers, or
 `{"unchanged": true}` when fewer than eight cards exist or none are
-kept. `seed` is the NumPy `default_rng` seed.
+kept. `seed` is the NumPy `default_rng` seed. `mode` `seed` prints the
+seed `zlib.crc32(path) + index + 7919 * lod`.
 """
 
 from std.math import sqrt
@@ -20,7 +21,15 @@ from std.sys import argv, exit, stderr
 
 from tools._bigint import BigInt
 from tools._python_float import parse_float, python_repr
-from tools._python_json import PY_DICT, PY_FLOAT, PY_INT, PY_LIST, PyJson
+from tools._python_json import (
+    MISSING,
+    PY_DICT,
+    PY_FLOAT,
+    PY_INT,
+    PY_LIST,
+    PyJson,
+)
+from tools._zlib import crc32
 
 
 def cards_text(text: String) raises -> String:
@@ -40,6 +49,9 @@ def cards_text(text: String) raises -> String:
     var root = doc.root
     if doc.kind(root) != PY_DICT:
         raise Error("card request is not an object")
+    var mode = doc.get(root, "mode")
+    if mode != MISSING and doc.text(mode) == "seed":
+        return _seed_line(doc, root)
     var xs = List[Float64]()
     var ys = List[Float64]()
     var zs = List[Float64]()
@@ -509,6 +521,28 @@ def _triangles(doc: PyJson, node: Int, count: Int) raises -> List[Int]:
                 raise Error("index out of range")
             out.append(face)
     return out^
+
+
+def _seed_line(doc: PyJson, root: Int) raises -> String:
+    """Return the leaf-card seed as JSON."""
+    var path = doc.text(doc.at(root, "path"))
+    var index = _count(doc, doc.at(root, "index"))
+    var lod = _count(doc, doc.at(root, "lod"))
+    if index < 0 or lod < 0:
+        raise Error("seed index is negative")
+    var raw = path.as_bytes()
+    var data = List[UInt8]()
+    for offset in range(len(raw)):
+        data.append(raw[offset])
+    var seed = Int(crc32(data)) + index + 7919 * lod
+    return '{"seed":' + String(seed) + "}"
+
+
+def _count(doc: PyJson, node: Int) raises -> Int:
+    """Return a non-negative JSON integer that fits in `Int`."""
+    if doc.kind(node) != PY_INT:
+        raise Error("seed index is not an integer")
+    return BigInt.parse(doc.text(node)).to_int()
 
 
 def _seed(doc: PyJson, node: Int) raises -> List[UInt32]:

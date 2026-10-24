@@ -72,8 +72,24 @@ def test_a_box_sets_the_views_and_the_crossing_quads() raises:
             "[0.5,0.5,0.0,1.0]]]"
         ),
     )
-    with assert_raises(contains="mode is not frame or fill"):
+    with assert_raises(contains="mode is not frame, fill or light"):
         _ = impostor_text('{"mode":"side"}')
+    var light = run_program(
+        [
+            "python3",
+            "-c",
+            (
+                "import json, numpy; v = numpy.array([0.35, 0.85, 0.4]);"
+                " print(json.dumps((v / numpy.linalg.norm(v)).tolist(),"
+                " separators=(',', ':')), end='')"
+            ),
+        ],
+        10,
+        merge_errors=False,
+    )
+    if light.status != 0:
+        raise Error(light.errors)
+    assert_equal(impostor_text('{"mode":"light"}'), light.output)
 
 
 def test_the_command_prints_the_quads_and_refuses_bad_use() raises:

@@ -7,12 +7,14 @@
 
     carla_town_impostor FILE
 
-`FILE` is JSON. `mode` is `frame` or `fill`. `frame` reads the tree's
-points and the picture's width. It prints the two views and the two
-quads that cross on the trunk. `fill` reads one RGBA picture. A texel
-the tree does not cover takes the mean color of those it does.
+`FILE` is JSON. `mode` is `frame`, `fill` or `light`. `frame` reads the
+tree's points and the picture's width. It prints the two views and the
+two quads that cross on the trunk. `fill` reads one RGBA picture. A
+texel the tree does not cover takes the mean color of those it does.
+`light` prints the unit vector `[0.35, 0.85, 0.4]`.
 """
 
+from std.ffi import external_call
 from std.pathlib import Path
 from std.sys import argv, exit, stderr
 
@@ -42,7 +44,9 @@ def impostor_text(text: String) raises -> String:
         return _frame(doc, root)
     if mode == "fill":
         return _fill(doc, root)
-    raise Error("mode is not frame or fill")
+    if mode == "light":
+        return _light()
+    raise Error("mode is not frame, fill or light")
 
 
 def _frame(doc: PyJson, root: Int) raises -> String:
@@ -297,6 +301,22 @@ def _whole(doc: PyJson, node: Int) raises -> Int:
     if doc.kind(node) != PY_INT:
         raise Error("index is not an integer")
     return Int(parse_float(doc.text(node)))
+
+
+def _light() raises -> String:
+    """Return the unit impostor light, as NumPy's norm writes it."""
+    var xx = _fmul(0.35, 0.35)
+    var yy = _fmul(0.85, 0.85)
+    var zz = _fmul(0.4, 0.4)
+    var norm = external_call["sqrt", Float64](_fadd(_fadd(xx, yy), zz))
+    var out = String("[")
+    out += python_repr(_fdiv(0.35, norm))
+    out += ","
+    out += python_repr(_fdiv(0.85, norm))
+    out += ","
+    out += python_repr(_fdiv(0.4, norm))
+    out += "]"
+    return out^
 
 
 @no_inline

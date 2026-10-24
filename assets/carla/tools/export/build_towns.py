@@ -28,7 +28,6 @@ import shutil
 import subprocess
 import sys
 import tempfile
-import zlib
 
 import numpy
 
@@ -928,6 +927,39 @@ def transfer_uvs(primitive, corners, normals, candidates=8):
     return numpy.array(projected, dtype=numpy.float64).reshape(-1, 3, 2), normal[best]
 
 
+def _card_seed(mesh_path, index, lod):
+    """Return the leaf-card seed from `tools/carla_town_cards.mojo`.
+
+    The seed is `zlib.crc32` of the mesh path, plus the part index, plus
+    7919 times the level of detail.
+    """
+    here = os.path.dirname(os.path.abspath(__file__))
+    repo = os.path.abspath(os.path.join(here, "..", "..", "..", ".."))
+    mojo = os.path.join(repo, ".venv", "bin", "mojo")
+    if not os.path.isfile(mojo):
+        mojo = "mojo"
+    folder = tempfile.mkdtemp(prefix="town-seed-")
+    try:
+        request = os.path.join(folder, "seed.json")
+        with open(request, "w", encoding="utf-8") as handle:
+            json.dump({
+                "mode": "seed",
+                "path": mesh_path,
+                "index": int(index),
+                "lod": int(lod),
+            }, handle, separators=(",", ":"), ensure_ascii=False)
+        result = subprocess.run(
+            ["sh", os.path.join(repo, "tools", "tool.sh"), mojo,
+             "carla_town_cards", request],
+            capture_output=True, text=True,
+        )
+    finally:
+        shutil.rmtree(folder, ignore_errors=True)
+    if result.returncode != 0:
+        raise ValueError(result.stderr.strip() or "leaf card seed failed")
+    return int(json.loads(result.stdout)["seed"])
+
+
 def _cards_tool(primitive, keep, seed):
     """Return JSON from `tools/carla_town_cards.mojo`."""
     here = os.path.dirname(os.path.abspath(__file__))
@@ -983,8 +1015,9 @@ def thin_cards(primitive, keep, seed):
 IMPOSTOR_SIZE = 256
 IMPOSTOR_SAMPLES = 4
 # The light an impostor's texels are shaded by, three.js frame: high and
-# from the side, as the sun is most of the day.
-IMPOSTOR_LIGHT = numpy.array([0.35, 0.85, 0.4]) / numpy.linalg.norm([0.35, 0.85, 0.4])
+# from the side, as the sun is most of the day. `tools/carla_town_impostor.mojo`
+# normalizes it.
+_IMPOSTOR_LIGHT = None
 
 
 def _albedo(library, material):
@@ -1070,11 +1103,19 @@ def _splat(parts, library, across, left, width, top, height, rows, fill=False):
         "top": float(top),
         "scale_u": IMPOSTOR_SIZE / max(width, 1e-6),
         "scale_v": rows / max(height, 1e-6),
-        "light": IMPOSTOR_LIGHT.tolist(),
+        "light": impostor_light(),
     }
     if fill:
         request["fill"] = True
     return numpy.array(_raster_tool(parts, library, request), dtype=numpy.float64)
+
+
+def impostor_light():
+    """Return the unit impostor light from `tools/carla_town_impostor.mojo`."""
+    global _IMPOSTOR_LIGHT
+    if _IMPOSTOR_LIGHT is None:
+        _IMPOSTOR_LIGHT = _impostor_tool({"mode": "light"})
+    return _IMPOSTOR_LIGHT
 
 
 def _impostor_tool(payload):
@@ -1480,7 +1521,7 @@ class Library:
         if kind == "baked":
             settings = [target, BAKE_DENSITY, BAKE_MOST, BAKE_VIEWS, CLUSTER_CELL, CLUSTER_DIVISIONS]
         else:
-            settings = [IMPOSTOR_SIZE, IMPOSTOR_SAMPLES, IMPOSTOR_LIGHT.tolist()]
+            settings = [IMPOSTOR_SIZE, IMPOSTOR_SAMPLES, impostor_light()]
         return atlas_tag(self.gltf, self._bake_out, mesh_path, kind, ordered, settings)
 
     def material(self, name):
@@ -1569,8 +1610,7 @@ def lower(primitive, kind, mesh_path, index, total, masked, lod, factor=1.0):
     if chosen["action"] == "none":
         return None
     if chosen["action"] == "cards":
-        seed = zlib.crc32(mesh_path.encode()) + index + 7919 * lod
-        return thin_cards(primitive, chosen["keep"], seed)
+        return thin_cards(primitive, chosen["keep"], _card_seed(mesh_path, index, lod))
     if chosen["action"] == "whole":
         return primitive
     return simplify(primitive, chosen["target"], borders=lod == 0, small=chosen["small"])
