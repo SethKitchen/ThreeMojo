@@ -450,7 +450,7 @@ Each mesh keeps a share of its triangles, by its kind. Each town also has a cap 
 
 Some textures in CARLA's content show a company's mark, a real person, a real institution or a poster of unclear origin. CARLA's license covers CARLA's own work, not these. Each one becomes one flat color, its average. `NEUTRAL` in `carla_gltf_fix.py` names them, and the vehicle packages use the same list.
 
-A package names no engine and no engine path. `build_towns.py` stops with an error when it finds one.
+A package names no engine and no engine path. `build_towns.py` stops with an error when it finds one. `tools/carla_town_clean.mojo` reads each file name, and the text of each glTF and OpenDRIVE file.
 
 ## Rebuild the town packages
 
@@ -508,8 +508,10 @@ Equal encoded images can share one packaged file.
 ## Test the town exporter
 
 The standard-library identity checks run with `make test-tools`.
-The synthetic bake checks need only NumPy and Pillow. They use two small
-meshes and two colors. They need no CARLA release, server or GPU.
+The synthetic bake checks need NumPy, Pillow and the repository Mojo.
+They use two small meshes and two colors. They need no CARLA release,
+server or GPU. They call `tools/carla_town_clean.mojo` through
+`tools/tool.sh`.
 
 Only mesh simplification is substituted. The tests use the real material
 reconstruction, texture conversion, bake rasterizers and GLB writer. They
@@ -523,8 +525,9 @@ uv pip install --python .venv-carla-export/bin/python --only-binary :all: "numpy
 .venv-carla-export/bin/python -m unittest discover -s assets/carla/tools/export -p 'test_build_towns.py'
 ```
 
-The existing Linux and macOS lint jobs run this command. They keep the Mojo
-environment unchanged. A missing dependency or wheel fails the check.
+The existing Linux and macOS lint jobs run this command. They install
+Mojo when the bake checks run. The exporter packages stay in a separate
+environment. A missing dependency or wheel fails the check.
 
 ## Why not Poly Haven
 
