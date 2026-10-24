@@ -1018,12 +1018,40 @@ def _view(parts, library, forward, right, up, low_r, low_u, width, height, colum
     return _dilate(image[:, :, :3], image[:, :, 3] > 0)
 
 
+def _atlas_tool(payload):
+    """Return JSON from `tools/carla_town_atlas.mojo`."""
+    here = os.path.dirname(os.path.abspath(__file__))
+    repo = os.path.abspath(os.path.join(here, "..", "..", "..", ".."))
+    mojo = os.path.join(repo, ".venv", "bin", "mojo")
+    if not os.path.isfile(mojo):
+        mojo = "mojo"
+    folder = tempfile.mkdtemp(prefix="town-atlas-")
+    try:
+        path = os.path.join(folder, "atlas.json")
+        with open(path, "w", encoding="utf-8") as handle:
+            json.dump(payload, handle, separators=(",", ":"), allow_nan=False)
+        result = subprocess.run(
+            ["sh", os.path.join(repo, "tools", "tool.sh"), mojo,
+             "carla_town_atlas", path],
+            capture_output=True, text=True,
+        )
+    finally:
+        shutil.rmtree(folder, ignore_errors=True)
+    if result.returncode != 0:
+        raise ValueError(result.stderr.strip() or "atlas failed")
+    return json.loads(result.stdout)
+
+
 def baked_building(parts, library, out_dir, name, target):
     """Return a building's far level and its material: its mesh gathered
     and collapsed to about `target` triangles, all its primitives as one,
     wearing an atlas of five views of its near level, from each side and
     from above. Each far triangle reads the view that faces it most, so
-    its windows and its trim are pictures, not geometry."""
+    its windows and its trim are pictures, not geometry.
+
+    `tools/carla_town_atlas.mojo` sizes the views, joins them, and writes
+    the texture coordinates.
+    """
     from PIL import Image
     whole = {
         "positions": numpy.concatenate([p["positions"] for p, _ in parts]),
@@ -1037,53 +1065,44 @@ def baked_building(parts, library, out_dir, name, target):
     if far is None:
         return None, None
     if far is whole:
-        corners = whole["positions"][whole["triangles"]]
-        face = numpy.cross(corners[:, 1] - corners[:, 0], corners[:, 2] - corners[:, 0])
-        face /= numpy.maximum(numpy.linalg.norm(face, axis=1, keepdims=True), 1e-12)
-        far = {"positions": corners.reshape(-1, 3), "normals": numpy.repeat(face, 3, axis=0),
-               "triangles": numpy.arange(3 * len(corners)).reshape(-1, 3), "material": name}
-    low, high = whole["positions"].min(axis=0), whole["positions"].max(axis=0)
+        flat = _atlas_tool({
+            "mode": "flat",
+            "positions": numpy.asarray(whole["positions"], dtype=float).reshape(-1, 3).tolist(),
+            "triangles": numpy.asarray(whole["triangles"]).reshape(-1, 3).tolist(),
+        })
+        far = {"positions": numpy.array(flat["positions"], dtype=numpy.float64),
+               "normals": numpy.array(flat["normals"], dtype=numpy.float64),
+               "triangles": numpy.array(flat["triangles"], dtype=numpy.int64),
+               "material": name}
+    spans = _atlas_tool({
+        "mode": "spans",
+        "positions": numpy.asarray(whole["positions"], dtype=float).reshape(-1, 3).tolist(),
+        "density": BAKE_DENSITY,
+        "most": BAKE_MOST,
+        "views": [{"right": list(right), "up": list(up)} for _, right, up in BAKE_VIEWS],
+    })
     cells = []
-    for forward, right, up in BAKE_VIEWS:
-        r, u = numpy.array(right), numpy.array(up)
-        span_r = sorted([low @ r, high @ r])
-        span_u = sorted([low @ u, high @ u])
-        # The box's corners give each view's extent along its axes.
-        box = numpy.array([[x, y, z] for x in (low[0], high[0]) for y in (low[1], high[1]) for z in (low[2], high[2])])
-        span_r = (float((box @ r).min()), float((box @ r).max()))
-        span_u = (float((box @ u).min()), float((box @ u).max()))
-        width, height = span_r[1] - span_r[0], span_u[1] - span_u[0]
-        density = min(BAKE_DENSITY, BAKE_MOST / max(width, height, 1e-6))
-        columns = max(4, int(numpy.ceil(width * density)))
-        rows = max(4, int(numpy.ceil(height * density)))
-        image = _view(parts, library, forward, right, up, span_r[0], span_u[0], width, height, columns, rows)
-        cells.append((image, span_r, span_u))
-    # One row of the five views, each at its own size.
-    atlas_w = sum(c[0].shape[1] for c in cells)
-    atlas_h = max(c[0].shape[0] for c in cells)
-    atlas = numpy.zeros((atlas_h, atlas_w, 3))
-    offsets = []
-    x = 0
-    for image, _, _ in cells:
-        atlas[: image.shape[0], x: x + image.shape[1]] = image
-        offsets.append(x)
-        x += image.shape[1]
-    # Each far triangle reads the view whose forward its face meets most.
-    corners = far["positions"].reshape(-1, 3, 3)
-    face = far["normals"].reshape(-1, 3, 3)[:, 0]
-    forwards = numpy.array([f for f, _, _ in BAKE_VIEWS])
-    pick = numpy.argmax(face @ forwards.T, axis=1)
-    uvs = numpy.zeros((len(corners), 3, 2))
-    for k, (forward, right, up) in enumerate(BAKE_VIEWS):
-        mine = pick == k
-        if not mine.any():
-            continue
-        image, span_r, span_u = cells[k]
-        r, u = numpy.array(right), numpy.array(up)
-        fr = (corners[mine] @ r - span_r[0]) / max(span_r[1] - span_r[0], 1e-6)
-        fu = (span_u[1] - corners[mine] @ u) / max(span_u[1] - span_u[0], 1e-6)
-        uvs[mine, :, 0] = (offsets[k] + numpy.clip(fr, 0, 1) * image.shape[1]) / atlas_w
-        uvs[mine, :, 1] = numpy.clip(fu, 0, 1) * image.shape[0] / atlas_h
+    for (forward, right, up), span in zip(BAKE_VIEWS, spans):
+        image = _view(parts, library, forward, right, up, span["low_r"], span["low_u"],
+                      span["width"], span["height"], span["columns"], span["rows"])
+        cells.append((image, (span["low_r"], span["high_r"]), (span["low_u"], span["high_u"])))
+    views = []
+    for (forward, right, up), (image, span_r, span_u) in zip(BAKE_VIEWS, cells):
+        views.append({
+            "forward": list(forward),
+            "right": list(right),
+            "up": list(up),
+            "span_r": [float(span_r[0]), float(span_r[1])],
+            "span_u": [float(span_u[0]), float(span_u[1])],
+            "image": numpy.asarray(image, dtype=float).tolist(),
+        })
+    packed = _atlas_tool({
+        "mode": "pack",
+        "positions": numpy.asarray(far["positions"], dtype=float).reshape(-1, 3).tolist(),
+        "normals": numpy.asarray(far["normals"], dtype=float).reshape(-1, 3).tolist(),
+        "views": views,
+    })
+    atlas = numpy.array(packed["atlas"], dtype=numpy.float64)
     tag = library._bake_tag(name, "baked", parts, target)
     os.makedirs(os.path.join(out_dir, "textures"), exist_ok=True)
     Image.fromarray((numpy.clip(atlas, 0, 1) * 255).astype(numpy.uint8), "RGB").save(
@@ -1096,7 +1115,7 @@ def baked_building(parts, library, out_dir, name, target):
         "pbrMetallicRoughness": {"baseColorTexture": {"index": len(gltf["textures"]) - 1},
                                  "metallicFactor": 0.0, "roughnessFactor": 0.85},
         "doubleSided": True})
-    far["uvs"] = uvs.reshape(-1, 2)
+    far["uvs"] = numpy.array(packed["uvs"], dtype=numpy.float64)
     far["material"] = tag
     return far, len(gltf["materials"]) - 1
 

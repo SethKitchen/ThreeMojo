@@ -446,7 +446,7 @@ The meshes are merged by tile, by kind and by material. A tile is 32 meters squa
 
 The near level keeps the detail that a camera sees close up. The far level keeps what shows at a distance. It leaves out the grass, the bushes, the props, the parked vehicles, the signs and the lamps' glass. A far tree is an impostor: two quads that cross on its trunk. Each quad shows a picture of the tree, drawn from its near level from the front or from the side, with its leaves cut out. `tools/carla_town_splat.mojo` draws each tree picture and each far building view.
 
-A far building is a baked proxy. Its corners are gathered into cells a 200th of its size, and the joined mesh is simplified. Its near level is drawn from each side and from above into one picture, and each far triangle shows the view that faces it. So its windows and its trim are in the picture, not in the geometry. `tools/carla_town_dilate.mojo` spreads colors into the empty texels. The picture holds no light: the renderer lights the proxy.
+A far building is a baked proxy. Its corners are gathered into cells a 200th of its size, and the joined mesh is simplified. Its near level is drawn from each side and from above into one picture, and `tools/carla_town_atlas.mojo` gives each far triangle the view that faces it. So its windows and its trim are in the picture, not in the geometry. `tools/carla_town_dilate.mojo` spreads colors into the empty texels. The picture holds no light: the renderer lights the proxy.
 
 A town's glass is a dark, smooth, partly metal pane that reflects its surroundings. A see-through window has nothing behind it, so a tower would show the sky through its windows.
 
