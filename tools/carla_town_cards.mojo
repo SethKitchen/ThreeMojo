@@ -544,6 +544,32 @@ def _whole(doc: PyJson, node: Int) raises -> Int:
     return BigInt.parse(doc.text(node)).to_int()
 
 
+def numpy_random(seed: Int, count: Int) raises -> List[Float64]:
+    """Return draws from NumPy `default_rng(seed).random`.
+
+    Args:
+        seed: A non-negative seed.
+        count: How many draws.
+
+    Returns:
+        The draws, in order.
+
+    Raises:
+        Error: If `seed` is negative.
+    """
+    if seed < 0:
+        raise Error("seed is negative")
+    var words = List[UInt32]()
+    var value = seed
+    if value == 0:
+        words.append(0)
+    else:
+        while value > 0:
+            words.append(UInt32(value & 0xFFFFFFFF))
+            value >>= 32
+    return _random(words, count)
+
+
 def main() raises:
     """Print the thinned cards for the JSON file on the command line.
 

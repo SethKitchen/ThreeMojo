@@ -810,70 +810,76 @@ def _albedo(library, material):
     return numpy.asarray(Image.open(path).convert("RGBA"), dtype=numpy.float64) / 255.0, factor
 
 
+def _raster_tool(parts, library, request):
+    """Return one view from `tools/carla_town_splat.mojo`."""
+    here = os.path.dirname(os.path.abspath(__file__))
+    repo = os.path.abspath(os.path.join(here, "..", "..", "..", ".."))
+    mojo = os.path.join(repo, ".venv", "bin", "mojo")
+    if not os.path.isfile(mojo):
+        mojo = "mojo"
+    folder = tempfile.mkdtemp(prefix="town-splat-")
+    try:
+        path = os.path.join(folder, "view.json")
+        payload = dict(request)
+        items = []
+        for part, material in parts:
+            image, factor = _albedo(library, material)
+            entry = library.gltf["materials"][material]
+            item = {
+                "positions": numpy.asarray(part["positions"], dtype=float).reshape(-1, 3).tolist(),
+                "normals": numpy.asarray(part["normals"], dtype=float).reshape(-1, 3).tolist(),
+                "uvs": numpy.asarray(part["uvs"], dtype=float).reshape(-1, 2).tolist(),
+                "triangles": numpy.asarray(part["triangles"]).reshape(-1, 3).tolist(),
+                "factor": numpy.asarray(factor, dtype=float).reshape(4).tolist(),
+                "cut": float(entry.get("alphaCutoff", 0.5)),
+                "masked": entry.get("alphaMode") == "MASK",
+            }
+            if image is not None:
+                item["image"] = {
+                    "width": int(image.shape[1]),
+                    "height": int(image.shape[0]),
+                    "rgba": numpy.asarray(image, dtype=float).reshape(-1).tolist(),
+                }
+            items.append(item)
+        payload["parts"] = items
+        with open(path, "w", encoding="utf-8") as handle:
+            json.dump(payload, handle, separators=(",", ":"), allow_nan=False)
+        result = subprocess.run(
+            ["sh", os.path.join(repo, "tools", "tool.sh"), mojo,
+             "carla_town_splat", path],
+            capture_output=True, text=True,
+        )
+    finally:
+        shutil.rmtree(folder, ignore_errors=True)
+    if result.returncode != 0:
+        raise ValueError(result.stderr.strip() or "splat failed")
+    return json.loads(result.stdout)
+
+
 def _splat(parts, library, across, left, width, top, height, rows):
     """Return one view of a tree, drawn across axis `across` (0 for x,
     2 for z) and down y from `top`: RGBA floats, `rows` by
     `IMPOSTOR_SIZE` texels. Each triangle is sampled at random points, as
     many as it covers texels times `IMPOSTOR_SAMPLES`, and the nearest
-    sample that the cut-out keeps colors each texel."""
-    depth_axis = 2 if across == 0 else 0
-    scale_u = IMPOSTOR_SIZE / max(width, 1e-6)
-    scale_v = rows / max(height, 1e-6)
-    rng = numpy.random.default_rng(7)
-    xs, ys, zs, colors = [], [], [], []
-    for part, material in parts:
-        image, factor = _albedo(library, material)
-        entry = library.gltf["materials"][material]
-        cut = entry.get("alphaCutoff", 0.5)
-        masked = entry.get("alphaMode") == "MASK"
-        tri = part["triangles"]
-        corners = part["positions"][tri]
-        u = (corners[:, :, across] - left) * scale_u
-        v = (top - corners[:, :, 1]) * scale_v
-        area = 0.5 * numpy.abs((u[:, 1] - u[:, 0]) * (v[:, 2] - v[:, 0]) - (u[:, 2] - u[:, 0]) * (v[:, 1] - v[:, 0]))
-        counts = numpy.minimum(numpy.maximum(1, numpy.ceil(area * IMPOSTOR_SAMPLES)), 4096).astype(numpy.int64)
-        owner = numpy.repeat(numpy.arange(len(corners)), counts)
-        a, b = rng.random(len(owner)), rng.random(len(owner))
-        flip = a + b > 1
-        a[flip], b[flip] = 1 - a[flip], 1 - b[flip]
-        w = numpy.stack([1 - a - b, a, b], axis=1)
-        depth = numpy.einsum("nk,nk->n", w, corners[owner][:, :, depth_axis])
-        uv = numpy.einsum("nk,nkd->nd", w, part["uvs"][tri][owner])
-        normal = numpy.einsum("nk,nkd->nd", w, part["normals"][tri][owner])
-        normal /= numpy.maximum(numpy.linalg.norm(normal, axis=1, keepdims=True), 1e-9)
-        if image is None:
-            rgba = numpy.tile(factor, (len(owner), 1))
-        else:
-            h, wd = image.shape[:2]
-            px = (numpy.mod(uv[:, 0], 1.0) * (wd - 1)).astype(numpy.int64)
-            py = (numpy.mod(uv[:, 1], 1.0) * (h - 1)).astype(numpy.int64)
-            rgba = image[py, px] * factor
-        keep = rgba[:, 3] >= cut if masked else numpy.ones(len(owner), dtype=bool)
-        rgba[:, :3] *= (0.45 + 0.55 * numpy.abs(normal @ IMPOSTOR_LIGHT))[:, None]
-        xs.append(numpy.einsum("nk,nk->n", w, u[owner])[keep])
-        ys.append(numpy.einsum("nk,nk->n", w, v[owner])[keep])
-        zs.append(depth[keep])
-        colors.append(rgba[keep, :3])
-    out = numpy.zeros((rows, IMPOSTOR_SIZE, 4))
-    if sum(len(x) for x in xs) == 0:
-        return out
-    x = numpy.concatenate(xs).astype(numpy.int64)
-    y = numpy.concatenate(ys).astype(numpy.int64)
-    z = numpy.concatenate(zs)
-    color = numpy.concatenate(colors)
-    inside = (x >= 0) & (x < IMPOSTOR_SIZE) & (y >= 0) & (y < rows)
-    x, y, z, color = x[inside], y[inside], z[inside], color[inside]
-    # The nearest sample of each texel: the view looks down the depth
-    # axis from its positive end.
-    texel = y * IMPOSTOR_SIZE + x
-    order = numpy.lexsort((-z, texel))
-    sorted_texel = texel[order]
-    first = numpy.ones(len(order), dtype=bool)
-    first[1:] = sorted_texel[1:] != sorted_texel[:-1]
-    chosen = order[first]
-    out[y[chosen], x[chosen], :3] = color[chosen]
-    out[y[chosen], x[chosen], 3] = 1.0
-    return out
+    sample that the cut-out keeps colors each texel.
+
+    `tools/carla_town_splat.mojo` draws the view.
+    """
+    doc = _raster_tool(parts, library, {
+        "mode": "axis",
+        "columns": IMPOSTOR_SIZE,
+        "rows": int(rows),
+        "samples": IMPOSTOR_SAMPLES,
+        "cap": 4096,
+        "seed": 7,
+        "across": int(across),
+        "left": float(left),
+        "top": float(top),
+        "scale_u": IMPOSTOR_SIZE / max(width, 1e-6),
+        "scale_v": rows / max(height, 1e-6),
+        "light": IMPOSTOR_LIGHT.tolist(),
+    })
+    return numpy.array(doc, dtype=numpy.float64)
 
 
 def impostor(parts, library, out_dir, name):
@@ -988,62 +994,28 @@ def _dilate(image, covered, passes=6):
 def _view(parts, library, forward, right, up, low_r, low_u, width, height, columns, rows):
     """Return one orthographic view of a mesh's albedo, `rows` by
     `columns` texels, looking down `-forward`, as `_splat` draws a tree's,
-    with no light: the renderer lights the far mesh itself."""
-    forward, right, up = numpy.array(forward), numpy.array(right), numpy.array(up)
-    rng = numpy.random.default_rng(11)
-    xs, ys, zs, colors = [], [], [], []
-    scale_u = columns / max(width, 1e-6)
-    scale_v = rows / max(height, 1e-6)
-    for part, material in parts:
-        image, factor = _albedo(library, material)
-        entry = library.gltf["materials"][material]
-        masked = entry.get("alphaMode") == "MASK"
-        cut = entry.get("alphaCutoff", 0.5)
-        tri = part["triangles"]
-        corners = part["positions"][tri]
-        u = (corners @ right - low_r) * scale_u
-        v = (low_u + height - corners @ up) * scale_v
-        area = 0.5 * numpy.abs((u[:, 1] - u[:, 0]) * (v[:, 2] - v[:, 0]) - (u[:, 2] - u[:, 0]) * (v[:, 1] - v[:, 0]))
-        counts = numpy.minimum(numpy.maximum(1, numpy.ceil(area * 3)), 8192).astype(numpy.int64)
-        owner = numpy.repeat(numpy.arange(len(corners)), counts)
-        a, b = rng.random(len(owner)), rng.random(len(owner))
-        flip = a + b > 1
-        a[flip], b[flip] = 1 - a[flip], 1 - b[flip]
-        w = numpy.stack([1 - a - b, a, b], axis=1)
-        depth = numpy.einsum("nk,nk->n", w, (corners @ forward)[owner])
-        uv = numpy.einsum("nk,nkd->nd", w, part["uvs"][tri][owner])
-        if image is None:
-            rgba = numpy.tile(factor, (len(owner), 1))
-        else:
-            h, wd = image.shape[:2]
-            px = (numpy.mod(uv[:, 0], 1.0) * (wd - 1)).astype(numpy.int64)
-            py = (numpy.mod(uv[:, 1], 1.0) * (h - 1)).astype(numpy.int64)
-            rgba = image[py, px] * factor
-        keep = rgba[:, 3] >= cut if masked else numpy.ones(len(owner), dtype=bool)
-        xs.append(numpy.einsum("nk,nk->n", w, u[owner])[keep])
-        ys.append(numpy.einsum("nk,nk->n", w, v[owner])[keep])
-        zs.append(depth[keep])
-        colors.append(rgba[keep, :3])
-    out = numpy.zeros((rows, columns, 3))
-    covered = numpy.zeros((rows, columns), dtype=bool)
-    if sum(len(x) for x in xs):
-        x = numpy.concatenate(xs).astype(numpy.int64)
-        y = numpy.concatenate(ys).astype(numpy.int64)
-        z = numpy.concatenate(zs)
-        color = numpy.concatenate(colors)
-        inside = (x >= 0) & (x < columns) & (y >= 0) & (y < rows)
-        x, y, z, color = x[inside], y[inside], z[inside], color[inside]
-        texel = y * columns + x
-        # The nearest sample to the viewer, who stands at the far end of
-        # `forward`.
-        order = numpy.lexsort((-z, texel))
-        sorted_texel = texel[order]
-        first = numpy.ones(len(order), dtype=bool)
-        first[1:] = sorted_texel[1:] != sorted_texel[:-1]
-        chosen = order[first]
-        out[y[chosen], x[chosen]] = color[chosen]
-        covered[y[chosen], x[chosen]] = True
-    return _dilate(out, covered)
+    with no light: the renderer lights the far mesh itself.
+
+    `tools/carla_town_splat.mojo` draws the view.
+    """
+    doc = _raster_tool(parts, library, {
+        "mode": "ortho",
+        "columns": int(columns),
+        "rows": int(rows),
+        "samples": 3,
+        "cap": 8192,
+        "seed": 11,
+        "right": numpy.asarray(right, dtype=float).reshape(3).tolist(),
+        "up": numpy.asarray(up, dtype=float).reshape(3).tolist(),
+        "forward": numpy.asarray(forward, dtype=float).reshape(3).tolist(),
+        "low_r": float(low_r),
+        "low_u": float(low_u),
+        "height": float(height),
+        "scale_u": columns / max(width, 1e-6),
+        "scale_v": rows / max(height, 1e-6),
+    })
+    image = numpy.array(doc, dtype=numpy.float64)
+    return _dilate(image[:, :, :3], image[:, :, 3] > 0)
 
 
 def baked_building(parts, library, out_dir, name, target):
