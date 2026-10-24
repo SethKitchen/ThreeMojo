@@ -974,6 +974,7 @@ def compact(gltf, data):
 
 
 def main():
+    """Write one vehicle package with `tools/carla_gltf_package.mojo`."""
     parser = argparse.ArgumentParser()
     parser.add_argument("export_root")
     parser.add_argument("mesh")
@@ -983,35 +984,18 @@ def main():
     parser.add_argument("--budget", type=int, default=35000,
                         help="the triangles a model is simplified to; 0 keeps them all")
     args = parser.parse_args()
-    mats = index_files(args.export_root, ".mat")
-    props = index_files(args.export_root, ".props.txt")
-    pngs = index_files(args.export_root, ".png")
-    pngs.update({k: v for k, v in index_files(args.export_root, ".tga").items() if k not in pngs})
-    gltf = json.load(open(args.mesh))
-    if os.path.isdir(args.out_dir):
-        shutil.rmtree(args.out_dir)
-    os.makedirs(args.out_dir)
-    package = Package(gltf, args.out_dir, args.max_size)
-    report = []
-    dedupe_materials(gltf)
-    for material in gltf.get("materials", []):
-        rebuild(package, material, mats, props, pngs, report)
-    source_bin = os.path.join(os.path.dirname(args.mesh), gltf["buffers"][0]["uri"])
-    data = split_lamps(gltf, strip_skin(gltf, open(source_bin, "rb").read()))
-    if args.budget > 0:
-        data = decimate(gltf, data, args.budget)
-    with open(os.path.join(args.out_dir, args.name + ".bin"), "wb") as out:
-        out.write(data)
-    gltf["buffers"][0]["uri"] = args.name + ".bin"
-    gltf["asset"]["generator"] = "ThreeMojo carla_gltf_fix.py"
-    gltf["asset"]["copyright"] = "CARLA Team, CC-BY 4.0"
-    if not gltf["images"]:
-        for key in ("images", "textures", "samplers"):
-            gltf.pop(key)
-    with open(os.path.join(args.out_dir, args.name + ".gltf"), "w") as out:
-        json.dump(gltf, out, indent=1)
-    for name, parent, textures in report:
-        print(f"  {name:45s} {parent:28s} {' '.join(textures)}")
+    here = os.path.dirname(os.path.abspath(__file__))
+    repo = os.path.abspath(os.path.join(here, "..", "..", "..", ".."))
+    mojo = os.path.join(repo, ".venv", "bin", "mojo")
+    if not os.path.isfile(mojo):
+        mojo = "mojo"
+    result = subprocess.run(
+        ["sh", os.path.join(repo, "tools", "tool.sh"), mojo, "carla_gltf_package",
+         args.export_root, args.mesh, args.out_dir, args.name,
+         "--max-size", str(args.max_size), "--budget", str(args.budget)],
+    )
+    if result.returncode != 0:
+        raise SystemExit(result.returncode)
 
 
 if __name__ == "__main__":
