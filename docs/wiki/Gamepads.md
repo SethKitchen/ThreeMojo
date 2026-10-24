@@ -2,11 +2,10 @@
 
 `extensions/gamepad/` reads Xbox, PlayStation, Nintendo and other game controllers. It is a port of the gamepad subsystem of [SDL](https://github.com/libsdl-org/SDL) 3.2.24. It names each control by its position, so one program works with every pad. It runs the pads' rumble, lights, motion sensors and touchpads. It finds pads as they are plugged in.
 
-There are three backends:
+There are two backends:
 
 - Linux: evdev for every pad, and SDL's HIDAPI drivers for DualSense, DualShock 4, Switch Pro and Xbox pads on hidraw.
-- A browser: SDL's Emscripten driver behind the C ABI. The page reads the Gamepad API.
-- macOS: the window host reads the GameController framework and feeds the same C ABI.
+- A host with its own gamepad API, such as a browser: SDL's Emscripten driver behind the C ABI.
 
 | Module | What it holds |
 |---|---|
@@ -98,17 +97,11 @@ A gyroscope reads in radians per second, and an accelerometer in meters per seco
 
 A wired Xbox pad speaks GIP on a vendor interface, not HID. hidapi reaches it only through libusb, so the evdev backend reads it, with the kernel's `xpad` driver. Joy-Cons and the other Nintendo pads are not ported.
 
-## A browser
+## A host's own gamepads
 
-`window/capi_gamepad.mojo` is a C ABI library for a host that has its own gamepad API. Each frame, the host stages each pad's state in the browser's standard layout and samples it. The library maps the pads with SDL's `Standard Gamepad` mapping. The app reads the pads by SDL's names, and asks the host to play each rumble. `window/threemojo.h` lists the functions.
+`window/capi_gamepad.mojo` is a C ABI library for a host that has its own gamepad API. A browser and the GameController framework on macOS are such APIs. Each frame, the host stages each pad's state in the browser's standard layout and samples it. The library maps the pads with SDL's `Standard Gamepad` mapping. The app reads the pads by SDL's names, and asks the host to play each rumble. The frame shows the first pad's sticks, triggers and buttons.
 
-`examples/capi/web/gamepad.js` is the page's half. Run it with `examples/capi/run.sh web gamepad`. The frame shows the first pad's sticks, triggers and buttons. Its south button rumbles it.
-
-## macOS
-
-The macOS window host feeds the same library from the GameController framework: `examples/capi/macos_gamepad.m`. It reads every controller that has an extended gamepad profile, on USB and Bluetooth. It plays rumble with Core Haptics. Run it with `examples/capi/run.sh native gamepad`.
-
-The Mojo HID transport does not open IOKit devices. The coverage gate runs on Linux, and an IOKit transport in Mojo could not be measured there. So on macOS the pads give the standard layout, without the lights, the sensors and the touchpads.
+The web page and the macOS window do not feed this library yet. Their host code changes inputs that select the full CI audit, so it comes in a later change.
 
 ## Buttons by position
 

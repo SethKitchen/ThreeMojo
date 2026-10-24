@@ -43,8 +43,8 @@ page to call `vibrationActuator.playEffect("dual-rumble")`: the page takes
 the request with `take_rumble`. A browser has no light, trigger rumble or
 motion sensors for a page.
 
-`window/capi_gamepad.mojo` puts this module behind the C ABI, and
-`examples/capi/web/gamepad.js` feeds it from a page.
+`window/capi_gamepad.mojo` puts this module behind the C ABI, for a page
+or another host to feed.
 """
 from extensions.gamepad.effects import RumbleState, require_strength
 from extensions.gamepad.gamepad import Gamepad, GamepadEvent

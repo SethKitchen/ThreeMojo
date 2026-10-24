@@ -58,9 +58,9 @@ Each script builds first when a source is newer than its output. Run `examples/c
 | Node | `run.sh check` only. |
 | Chrome or Chromium | The WebGPU check in `run.sh check`. Without one, the check is skipped. Set `CHROME` to name one. |
 
-## The six apps
+## The five apps
 
-Give `run.sh` one of six names. Each name is a library that exports the same functions.
+Give `run.sh` one of five names. Each name is a library that exports the same functions.
 
 | App | Library | What it draws | Browser |
 |---|---|---|---|
@@ -69,7 +69,6 @@ Give `run.sh` one of six names. Each name is a library that exports the same fun
 | `water` | `window/capi_water.mojo` | The Clearwater [Water](Water) over a pebble bed. | Yes, on the CPU or on WebGPU |
 | `water-gpu` | `window/capi_water_gpu.mojo` | The same water. A GPU shades the pixels. | No. Use `water`. |
 | `splat` | `window/capi_splat.mojo` | Three tomatoes, 445,409 [Gaussian splats](Gaussian-splats#three-tomatoes). | Yes, on WebGPU or on the CPU |
-| `gamepad` | `window/capi_gamepad.mojo` | The first [gamepad](Gamepads#a-browser): its sticks, triggers and buttons. | Yes |
 
 Options follow the app name, as in `run.sh native water 640 360 --frames 300`. The width and the height come first. `--frames N` quits after N frames. `--dump file.ppm` writes the last frame. `--headless` opens no window and steps with a fixed 1/60 second.
 
@@ -80,8 +79,6 @@ Controls of `core`: move the pointer, and press the space bar to pause.
 Controls of `scene`: drag to orbit, drag with the right button to pan, turn the wheel to dolly, and use the arrow keys to pan.
 
 Controls of `water` and `water-gpu`: press to drop a pebble in, and drag up or down to tilt the camera. Press the space bar to pause.
-
-Controls of `gamepad`: connect a controller and press a button. The south button rumbles it. The page reads the browser's Gamepad API, and the macOS window reads the GameController framework.
 
 Controls of `splat`: drag to orbit, drag with the right button to pan, and turn the wheel to zoom. The camera turns by itself until you press the space bar. The controls are those of the three.js example.
 

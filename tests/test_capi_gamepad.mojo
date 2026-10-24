@@ -5,8 +5,7 @@
 
 """Tests for `window.capi_gamepad`, the C ABI that a host feeds gamepads.
 
-The functions are the ones `examples/capi/web/gamepad.js` and
-`examples/capi/macos_gamepad.m` call, called here from Mojo with the same
+The functions are the ones a host calls, called here from Mojo with the same
 scalars and the same opaque handle.
 """
 

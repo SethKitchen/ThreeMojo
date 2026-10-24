@@ -19,9 +19,9 @@ as SDL names them, and asks the page to rumble them:
     if tm_gamepad_take_rumble(app, index): play
         tm_gamepad_rumble_strength(app, 0), (app, 1)
 
-The frame shows the first pad: its sticks, triggers and buttons.
-`examples/capi/web/gamepad.js` is the page's half. The library also has
-every function of `window/threemojo.h`, so a host loads it as any other.
+The frame shows the first pad: its sticks, triggers and buttons. The
+library also has every function of `window/threemojo.h`, so a host loads
+it as any other.
 """
 
 from extensions.gamepad.ids import (

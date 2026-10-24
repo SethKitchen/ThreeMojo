@@ -9,10 +9,9 @@
 #   build.sh [native] [web] [host] [gpu]   default: everything this machine can,
 #                                          and gpu only if you name it
 #
-#   native  libthreemojo_core, libthreemojo_scene, libthreemojo_water,
-#           libthreemojo_splat and libthreemojo_gamepad, shared libraries
-#   web     threemojo_core.wasm, threemojo_water.wasm, threemojo_splat.wasm and
-#           threemojo_gamepad.wasm,
+#   native  libthreemojo_core, libthreemojo_scene, libthreemojo_water and
+#           libthreemojo_splat, shared libraries
+#   web     threemojo_core.wasm, threemojo_water.wasm and threemojo_splat.wasm,
 #           and the page that runs them, in out/capi/web. The water also builds for many threads
 #           as threemojo_water_threads.wasm, which a page can run only when
 #           serve.py sends the headers that allow shared memory.
@@ -31,11 +30,11 @@ OUT=$REPO/out/capi
 MOJO=${MOJO:-$REPO/.venv/bin/mojo}
 PYTHON=${PYTHON:-$REPO/.venv/bin/python}
 [ -x "$PYTHON" ] || PYTHON=python3
-APPS=${APPS:-core scene water splat gamepad}
+APPS=${APPS:-core scene water splat}
 # The apps that need MAX and a GPU. They are built only when asked for.
 GPU_APPS=${GPU_APPS:-water_gpu}
 # The apps that build for WebAssembly. capi_scene needs the whole renderer.
-WASM_APPS=${WASM_APPS:-core water splat gamepad}
+WASM_APPS=${WASM_APPS:-core water splat}
 # The apps that also build for many threads: threemojo_APP_threads.wasm.
 THREAD_APPS=${THREAD_APPS:-water}
 # The memory that threads share. The page makes it, so these sizes must match
@@ -122,13 +121,6 @@ wasm_module() {
     exports="$exports tm_gpu_prepare tm_gpu_glare tm_gpu_part tm_gpu_words tm_gpu_info"
     cflags="-mtail-call -msimd128"
     ;;
-  gamepad)
-    # The gamepad module takes each pad's id and state from the page.
-    exports="$exports tm_alloc tm_free tm_gamepad_connect tm_gamepad_disconnect"
-    exports="$exports tm_gamepad_set_axis tm_gamepad_set_button tm_gamepad_sample"
-    exports="$exports tm_gamepad_count tm_gamepad_index tm_gamepad_axis tm_gamepad_button"
-    exports="$exports tm_gamepad_rumble tm_gamepad_take_rumble tm_gamepad_rumble_strength"
-    ;;
   splat)
     # The splat module takes its scan from the host. A browser with WebGPU
     # sorts here and draws the splats on its device.
@@ -186,7 +178,6 @@ build_web() {
     wasm_module "$app" yes
   done
   cp "$HERE/web/index.html" "$HERE/web/threemojo.js" "$HERE/web/threemojo_worker.js" "$OUT/web/"
-  cp "$HERE/web/gamepad.js" "$OUT/web/"
   cp "$HERE/web/water_gpu.js" "$HERE/web/water.wgsl" "$OUT/web/"
   cp "$HERE/web/splat_gpu.js" "$HERE/web/splat.wgsl" "$OUT/web/"
   cp "$REPO/assets/pebbles.jpg" "$REPO/assets/tomatoes/tomatoes.v4.spz" "$OUT/web/"
@@ -212,9 +203,8 @@ text.append(";")
 open(sys.argv[2], "w").write("\n".join(text) + "\n")
 PY
   cc -O2 -fobjc-arc -mmacosx-version-min=14.0 -I "$REPO/window" -I "$HERE" -I "$OUT/host" \
-    -framework Cocoa -framework QuartzCore -framework Metal -framework GameController \
-    -framework CoreHaptics -Wl,-rpath,"$runtime" \
-    -o "$OUT/threemojo_host" "$HERE/macos_host.m" "$HERE/macos_splat.m" "$HERE/macos_gamepad.m"
+    -framework Cocoa -framework QuartzCore -framework Metal -Wl,-rpath,"$runtime" \
+    -o "$OUT/threemojo_host" "$HERE/macos_host.m" "$HERE/macos_splat.m"
   # The window runs from a bundle. See Info.plist.
   app=$OUT/ThreeMojo.app
   rm -rf "$app"

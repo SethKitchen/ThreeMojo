@@ -39,10 +39,6 @@
  * Metal shows the frames on a layer, so --dump and the frame hash work only
  * with --headless.
  *
- * A library with the gamepad functions (libthreemojo_gamepad) gets the Mac's
- * controllers each frame, through the GameController framework: see
- * macos_gamepad.m. A held south button rumbles its pad.
- *
  * Keys: the arrow keys and the space bar go to the app. Escape quits.
  */
 #import <Cocoa/Cocoa.h>
@@ -56,7 +52,6 @@
 #include <time.h>
 #include <unistd.h>
 
-#include "macos_gamepad.h"
 #include "macos_splat.h"
 #include "threemojo.h"
 
@@ -96,8 +91,6 @@ typedef struct {
   bool crisp;      /* scale the frame with blocks, not smoothly */
   bool cpu;        /* --cpu: draw on the CPU even where Metal could */
   SplatApi splat;  /* the library's splat functions, if it has them all */
-  GamepadApi gamepad_api; /* the library's gamepad functions, if it has them all */
-  GamepadFeed *gamepads;  /* the controllers that feed them */
   bool has_splat;
   bool use_metal;  /* the app is drawn on Metal */
   SplatMetal *metal; /* the GPU that draws it, once the window has a layer */
@@ -154,7 +147,6 @@ static void write_ppm(const char *path, const uint8_t *rgba, int width, int heig
 
 /* Move the app on, draw it, and count the time that the library took. */
 static const uint8_t *advance(Host *host, int32_t microseconds) {
-  if (host->gamepads) gamepad_feed_poll(host->gamepads, host->app, true);
   uint64_t start = now_ns();
   host->api.step(host->app, microseconds);
   host->last = host->api.frame(host->app);
@@ -630,7 +622,6 @@ static int key_code(NSEvent *event) {
   }
   finish(_host);
   splat_metal_destroy(_host->metal);
-  gamepad_feed_destroy(_host->gamepads);
   _host->api.destroy(_host->app);
 }
 @end
@@ -664,8 +655,6 @@ static bool load_symbols(Host *host, void *library) {
   host->splat.words = dlsym(library, "tm_splat_words");
   host->splat.info = dlsym(library, "tm_splat_info");
   host->splat.resize = dlsym(library, "tm_resize");
-  /* So are the gamepad functions. */
-  if (!gamepad_api_bind(&host->gamepad_api, library)) memset(&host->gamepad_api, 0, sizeof host->gamepad_api);
   host->has_splat = host->splat.prepare && host->splat.part && host->splat.words &&
                     host->splat.info && host->splat.resize;
   return true;
@@ -735,7 +724,6 @@ int main(int argc, char **argv) {
               host.height, TM_MAX_SIDE);
       return 1;
     }
-    if (host.gamepad_api.connect) host.gamepads = gamepad_feed_create(&host.gamepad_api);
     const char *slash = strrchr(path, '/');
     host.name = slash ? slash + 1 : path;
     pthread_mutex_init(&host.lock, NULL);
@@ -767,7 +755,6 @@ int main(int argc, char **argv) {
       }
       finish(&host);
       splat_metal_destroy(host.metal);
-      gamepad_feed_destroy(host.gamepads);
       host.api.destroy(host.app);
       return 0;
     }
