@@ -129,7 +129,9 @@ Some portable features remain partial, including [GLSL shaders](https://github.c
 ### Project tools
 
 <details>
-<summary>Implemented: 30</summary>
+<summary>Implemented: 31</summary>
+
+- [x] [Tile of a placed town copy](https://github.com/SethKitchen/ThreeMojo/wiki/CARLA-assets#the-carla-towns): `tools/carla_town_place.mojo` chooses the tile from the copy's origin [#761](https://github.com/SethKitchen/ThreeMojo/issues/761)
 
 - [x] [Simplification target for a CARLA mesh](https://github.com/SethKitchen/ThreeMojo/wiki/CARLA-assets#the-carla-towns): `tools/carla_simplify_target.mojo` chooses how many triangles a simplified mesh keeps [#761](https://github.com/SethKitchen/ThreeMojo/issues/761)
 

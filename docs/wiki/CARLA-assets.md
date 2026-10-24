@@ -431,7 +431,7 @@ Use the cooked release, not the carla-content repository. The repository holds u
 
 Each town package holds one CARLA town as CARLA builds it. It has the town's buildings, streets, sidewalks, plants, poles, fences, props and parked vehicles, each where the town puts it. The packages are Town01, Town02, Town03, Town04, Town05 and Town10HD, as `carla.town.<town>.zip`.
 
-`tools/carla_town_glb.mojo` packs the loose glTF, its buffer and its textures into one binary glTF. `tools/carla_town_copies.mojo` builds each copy's world matrix. `tools/carla_town_frame.mojo` converts each copy's matrix. A rigid copy is placed by `tools/carla_town_place.mojo`. `tools/carla_town_bend.mojo` bends a spline mesh along its curve. `tools/carla_town_slots.mojo` chooses each primitive's material name.
+`tools/carla_town_glb.mojo` packs the loose glTF, its buffer and its textures into one binary glTF. `tools/carla_town_copies.mojo` builds each copy's world matrix. `tools/carla_town_frame.mojo` converts each copy's matrix. A rigid copy is placed by `tools/carla_town_place.mojo`, which also chooses its tile. `tools/carla_town_bend.mojo` bends a spline mesh along its curve. `tools/carla_town_slots.mojo` chooses each primitive's material name.
 
 `tools/carla_town_spline.mojo` places that bent mesh in the renderer frame.
 

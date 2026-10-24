@@ -7,16 +7,18 @@
 
     carla_town_place matrix PITCH YAW ROLL SX SY SZ X Y Z
     carla_town_place apply REQUEST.json
+    carla_town_place cell X Y TILE
     carla_town_place serve
 
 `matrix` prints the Unreal row-vector matrix: scale, then rotate, then
 move. `apply` reads that matrix plus positions, normals and triangles, and
-prints the placed points, unit normals and triangles. `serve` answers one
-JSON request on each line.
+prints the placed points, unit normals and triangles. `cell` prints the
+tile of a copy whose origin is `X` and `Y` centimeters. `TILE` is the
+tile width in meters. `serve` answers one request on each line.
 """
 
 from std.ffi import external_call
-from std.math import cos, pi, sin
+from std.math import cos, floor, pi, sin
 from std.memory import OpaquePointer
 from std.pathlib import Path
 from std.sys import argv, exit, stderr
@@ -393,6 +395,43 @@ def matrix_text(
     return out^
 
 
+def cell_text(x: Float64, y: Float64, tile: Float64) raises -> String:
+    """Return the tile column and row for one copy.
+
+    Args:
+        x: The copy's x origin in centimeters.
+        y: The copy's y origin in centimeters.
+        tile: The tile width in meters.
+
+    Returns:
+        Two integers separated by a tab. Each is the floor of the origin
+        in meters divided by `tile`.
+
+    Raises:
+        Error: If `tile` is not positive.
+    """
+    if not (tile > 0.0):
+        raise Error("tile is not positive")
+    var column = _floor_cell(x, tile)
+    var row = _floor_cell(y, tile)
+    return String(column) + "\t" + String(row)
+
+
+def _floor_cell(centimeters: Float64, tile: Float64) -> Int:
+    """Return the floor of one origin divided by the tile width."""
+    var origin = _fdiv(centimeters, 100.0)
+    var scaled = floor(_fdiv(origin, tile))
+    if scaled < 0.0:
+        return -Int(-scaled)
+    return Int(scaled)
+
+
+@no_inline
+def _fdiv(left: Float64, right: Float64) -> Float64:
+    """Return one quotient, rounded before the next operation."""
+    return left / right
+
+
 def answer(text: String) raises -> String:
     """Answer one JSON request.
 
@@ -499,11 +538,30 @@ def serve() raises:
             return
         try:
             if _starts(line, "apply\t"):
-                _write_stdout(apply_text(Path(String(line[byte=6:])).read_text()) + "\n")
+                _write_stdout(
+                    apply_text(Path(String(line[byte=6:])).read_text()) + "\n"
+                )
+            elif _starts(line, "cell\t"):
+                _write_stdout(_cell_line(String(line[byte=5:])) + "\n")
             else:
                 _write_stdout(answer(line) + "\n")
         except error:
             _write_stdout("ERR\t" + String(error) + "\n")
+
+
+def _cell_line(text: String) raises -> String:
+    """Return the tile for three tab-separated numbers."""
+    var parts = List[String]()
+    var start = 0
+    var raw = text.as_bytes()
+    for index in range(len(raw)):
+        if raw[index] == 9:
+            parts.append(String(text[byte=start:index]))
+            start = index + 1
+    parts.append(String(text[byte=start:]))
+    if len(parts) != 3:
+        raise Error("cell needs x, y and tile")
+    return cell_text(_arg(parts[0]), _arg(parts[1]), _arg(parts[2]))
 
 
 def _arg(text: String) raises -> Float64:
@@ -516,7 +574,9 @@ def main() raises:
     """Print one matrix or one placed mesh."""
     var arguments = argv()
     if len(arguments) < 2:
-        print("usage: carla_town_place matrix|apply|serve ...", file=stderr)
+        print(
+            "usage: carla_town_place matrix|apply|cell|serve ...", file=stderr
+        )
         exit(2)
     try:
         var command = arguments[1]
@@ -538,8 +598,14 @@ def main() raises:
             )
         elif command == "apply" and len(arguments) == 3:
             print(apply_text(Path(arguments[2]).read_text()))
+        elif command == "cell" and len(arguments) == 5:
+            print(
+                cell_text(
+                    _arg(arguments[2]), _arg(arguments[3]), _arg(arguments[4])
+                )
+            )
         else:
-            raise Error("usage: carla_town_place matrix|apply|serve ...")
+            raise Error("usage: carla_town_place matrix|apply|cell|serve ...")
     except error:
         print("carla_town_place:", error, file=stderr)
         exit(1)

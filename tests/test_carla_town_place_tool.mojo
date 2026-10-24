@@ -5,11 +5,16 @@
 
 """Rigid town placement matches the reviewed axis swap and matrix."""
 
-from std.testing import TestSuite, assert_equal, assert_true
+from std.testing import TestSuite, assert_equal, assert_raises, assert_true
 
 from tests._tree import tool_mojo
 from tools._process import run_program
-from tools.carla_town_place import matrix_rows, matrix_text, place_rigid
+from tools.carla_town_place import (
+    cell_text,
+    matrix_rows,
+    matrix_text,
+    place_rigid,
+)
 
 
 def test_an_identity_copy_moves_in_meters() raises:
@@ -50,6 +55,15 @@ def test_a_negative_scale_reverses_a_triangle() raises:
     triangles.append(2)
     var placed = place_rigid(matrix, positions, normals, triangles)
     assert_true(placed.find('"triangles":[[2,1,0]]') >= 0)
+
+
+def test_a_negative_origin_uses_the_lower_tile() raises:
+    assert_equal(cell_text(3200.0, 0.0, 32.0), "1\t0")
+    assert_equal(cell_text(-1.0, -3200.0, 32.0), "-1\t-1")
+    assert_equal(cell_text(0.0, -3201.0, 32.0), "0\t-2")
+    assert_equal(cell_text(0.0, 100.0, 32.0), "0\t0")
+    with assert_raises(contains="tile is not positive"):
+        _ = cell_text(0.0, 0.0, 0.0)
 
 
 def test_the_command_prints_a_matrix() raises:

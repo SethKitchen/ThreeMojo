@@ -321,6 +321,35 @@ def _place_worker():
     return _PLACE_PROC
 
 
+def _tile_cell(rows, tile):
+    """Return the tile column and row for one copy's matrix.
+
+    `tools/carla_town_place.mojo` floors the origin. The origin is the
+    matrix translation in centimeters.
+    """
+    proc = _place_worker()
+    try:
+        proc.stdin.write(
+            "cell\t"
+            + json.dumps(float(rows[3][0]))
+            + "\t"
+            + json.dumps(float(rows[3][1]))
+            + "\t"
+            + json.dumps(float(tile))
+            + "\n"
+        )
+        proc.stdin.flush()
+        line = proc.stdout.readline()
+    except (BrokenPipeError, ValueError):
+        _place_failed(proc)
+    if not line:
+        _place_failed(proc)
+    if line.startswith("ERR\t"):
+        raise ValueError(line[4:].strip() or "tile failed")
+    column, row = line.strip().split("\t")
+    return int(column), int(row)
+
+
 def _place_failed(proc):
     """Raise the worker's error text and forget the dead process."""
     global _PLACE_PROC
@@ -1820,8 +1849,8 @@ def build(town, max_size, tile):
                     points, normals, triangles = place(part, row, rows)
                     # The copy's origin picks its tile, so both levels of
                     # detail of a copy fall in the same tile.
-                    origin = rows[3, :3] / 100.0
-                    cell = (int(numpy.floor(origin[0] / tile)), int(numpy.floor(origin[1] / tile)))
+                    # `tools/carla_town_place.mojo` floors that origin.
+                    cell = _tile_cell(rows, tile)
                     group = groups.setdefault((lod, kind, cell, part_material), [[], [], [], []])
                     # `tools/carla_town_buffers.mojo` rounds to float32 and
                     # shifts each copy's triangles by the copies before it.
