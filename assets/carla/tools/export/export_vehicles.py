@@ -91,12 +91,29 @@ def find_blueprint(relative):
     raise FileNotFoundError(relative)
 
 
-def references(blueprint):
-    """Return the `/Game/Carla/Static/...` packages a blueprint names."""
-    data = open(blueprint, "rb").read()
-    return sorted(
-        set(m.decode() for m in re.findall(rb"/Game/Carla/Static/[A-Za-z0-9_/\-]+", data))
+def _refs_tool(path):
+    """Return JSON from `tools/carla_vehicle_refs.mojo`."""
+    here = os.path.dirname(os.path.abspath(__file__))
+    repo = os.path.abspath(os.path.join(here, "..", "..", "..", ".."))
+    mojo = os.path.join(repo, ".venv", "bin", "mojo")
+    if not os.path.isfile(mojo):
+        mojo = "mojo"
+    result = subprocess.run(
+        ["sh", os.path.join(repo, "tools", "tool.sh"), mojo,
+         "carla_vehicle_refs", path],
+        capture_output=True, text=True,
     )
+    if result.returncode != 0:
+        raise ValueError(result.stderr.strip() or "vehicle references failed")
+    return json.loads(result.stdout)
+
+
+def references(blueprint):
+    """Return the `/Game/Carla/Static/...` packages a blueprint names.
+
+    `tools/carla_vehicle_refs.mojo` reads the file.
+    """
+    return _refs_tool(blueprint)
 
 
 def package_file(game_path):
