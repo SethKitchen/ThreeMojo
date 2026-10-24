@@ -299,6 +299,45 @@ def save_png(pixels, width, height, mode, optimize):
         shutil.rmtree(folder, ignore_errors=True)
 
 
+def save_jpeg(pixels, width, height, mode, quality, optimize):
+    """Return JPEG bytes from `tools/carla_jpeg.mojo`.
+
+    The bytes match Pillow's ``Image.save`` for mode ``L`` or ``RGB``.
+    ``quality`` -1 keeps libjpeg's default. ``optimize`` true asks
+    libjpeg to optimize the Huffman tables.
+    """
+    here = os.path.dirname(os.path.abspath(__file__))
+    repo = os.path.abspath(os.path.join(here, "..", "..", "..", ".."))
+    mojo = os.path.join(repo, ".venv", "bin", "mojo")
+    if not os.path.isfile(mojo):
+        mojo = "mojo"
+    folder = tempfile.mkdtemp(prefix="jpeg-")
+    try:
+        request = os.path.join(folder, "image.json")
+        out = os.path.join(folder, "image.jpg")
+        with open(request, "w", encoding="utf-8") as handle:
+            json.dump({
+                "mode": mode,
+                "width": int(width),
+                "height": int(height),
+                "quality": int(quality),
+                "optimize": bool(optimize),
+                "pixels": [int(value) for value in pixels],
+            }, handle, separators=(",", ":"))
+        result = subprocess.run(
+            ["sh", os.path.join(repo, "tools", "tool.sh"), mojo,
+             "carla_jpeg", request, out],
+            capture_output=True,
+        )
+        if result.returncode != 0:
+            raise ValueError(result.stderr.decode("utf-8", "replace").strip()
+                             or "jpeg save failed")
+        with open(out, "rb") as handle:
+            return handle.read()
+    finally:
+        shutil.rmtree(folder, ignore_errors=True)
+
+
 def _save_texture(package, image, plan):
     """Encode `image` with the format and options in `plan`."""
     options = {}
@@ -345,6 +384,12 @@ class Package:
         if image_format == "PNG":
             data = save_png(
                 list(image.tobytes()), image.width, image.height, image.mode,
+                bool(options.get("optimize", False)),
+            )
+        elif image_format == "JPEG":
+            data = save_jpeg(
+                list(image.tobytes()), image.width, image.height, image.mode,
+                int(options.get("quality", -1)),
                 bool(options.get("optimize", False)),
             )
         else:
