@@ -11,6 +11,7 @@
     carla_town_paths export ROOT GAME_PATH SUFFIX
     carla_town_paths split FILE
     carla_town_paths command FILE
+    carla_town_paths drive [--root DIR] [--batch N] [--limit SECONDS] [TOWN ...]
 
 `object` prints the package in UE4SS's `Class /Game/A/B.B`. `relative`
 prints the cooked `.uasset` path. `wanted` reads layout files and prints
@@ -19,11 +20,16 @@ a JSON file and prints the packages that are not exported yet, in
 batches. `export` joins `ROOT` with the package path and adds
 `SUFFIX`. `split` reads a JSON list of packages. One package is given
 up. A longer list is cut in half, with the extra package on the right.
-`command` prints the UModel arguments for one batch.
+`command` prints the UModel arguments for one batch. `drive` runs
+UModel on each batch. A batch that takes too long is cut in half.
 """
 
+from std.os import getenv
 from std.pathlib import Path
 from std.sys import argv, exit, stderr
+
+from tools._process import run_program
+from tools._python_float import parse_float
 
 from tools._json_tools import quote_ascii
 from tools._json_tree import JsonTree
@@ -483,13 +489,279 @@ def _text(doc: PyJson, node: Int, message: String) raises -> String:
     return doc.text(node)
 
 
+def drive(root: String, towns: List[String], batch: Int, limit: Float64) raises:
+    """Export the packages named by each town layout.
+
+    Args:
+        root: The export directory. Layouts are in `layout`, cooked
+            content is in `release/CarlaUE4/Content`, and UModel is
+            `umodel/umodel_64.exe`. Exports land in `raw_town`.
+        towns: The town names. Each layout is `layout/<town>.jsonl`.
+        batch: The most packages in one UModel run.
+        limit: The most seconds one UModel run may take.
+
+    Raises:
+        Error: If a layout cannot be read, `batch` or `limit` is not
+            positive, or UModel cannot be started.
+    """
+    if batch < 1:
+        raise Error("batch is not positive")
+    if not limit > 0:
+        raise Error("limit is not positive")
+    var files = List[String]()
+    for index in range(len(towns)):
+        files.append(_child(root, "layout/" + towns[index] + ".jsonl"))
+    var wanted = PyJson.parse(wanted_text(files^))
+    var meshes = _paths(wanted, wanted.at(wanted.root, "meshes"))
+    var materials = _paths(wanted, wanted.at(wanted.root, "materials"))
+    var raw = _child(root, "raw_town")
+    var umodel = _child(root, "umodel/umodel_64.exe")
+    var content = _child(root, "release/CarlaUE4/Content")
+    var plan = PyJson.parse(
+        pending_text(_pending_json(raw, batch, meshes, materials))
+    )
+    var todo = _whole(plan, plan.at(plan.root, "todo"))
+    print(
+        String(len(meshes))
+        + " meshes, "
+        + String(len(materials))
+        + " materials, "
+        + String(todo)
+        + " to export"
+    )
+    _export_groups(
+        plan,
+        plan.at(plan.root, "mesh_batches"),
+        True,
+        "meshes",
+        umodel,
+        content,
+        raw,
+        limit,
+    )
+    _export_groups(
+        plan,
+        plan.at(plan.root, "material_batches"),
+        False,
+        "materials",
+        umodel,
+        content,
+        raw,
+        limit,
+    )
+    var again = PyJson.parse(
+        pending_text(_pending_json(raw, batch, meshes, materials))
+    )
+    var missing_meshes = _paths(again, again.at(again.root, "meshes"))
+    var missing_materials = _paths(again, again.at(again.root, "materials"))
+    print(
+        String(len(missing_meshes) + len(missing_materials)) + " not exported"
+    )
+    var shown = 0
+    for index in range(len(missing_meshes)):
+        if shown == 20:
+            break
+        print("   " + missing_meshes[index])
+        shown += 1
+    for index in range(len(missing_materials)):
+        if shown == 20:
+            break
+        print("   " + missing_materials[index])
+        shown += 1
+
+
+def _pending_json(
+    raw: String, batch: Int, meshes: List[String], materials: List[String]
+) -> String:
+    """Return the pending request for `raw`."""
+    var out = String('{"root":')
+    out += quote_ascii(raw)
+    out += ',"batch":'
+    out += String(batch)
+    out += ',"meshes":'
+    out += _json_strings(meshes)
+    out += ',"materials":'
+    out += _json_strings(materials)
+    out += "}"
+    return out
+
+
+def _json_strings(items: List[String]) -> String:
+    """Return a compact JSON list of strings."""
+    var out = String("[")
+    for index in range(len(items)):
+        if index > 0:
+            out += ","
+        out += quote_ascii(items[index])
+    out += "]"
+    return out
+
+
+def _export_groups(
+    doc: PyJson,
+    node: Int,
+    mesh: Bool,
+    label: String,
+    umodel: String,
+    content: String,
+    raw: String,
+    limit: Float64,
+) raises:
+    """Run each batch and print how many of `label` are done."""
+    var total = 0
+    var count = doc.length(node)
+    for index in range(count):
+        total += doc.length(doc.item(node, index))
+    var done = 0
+    for index in range(count):
+        var packages = _paths(doc, doc.item(node, index))
+        var size = len(packages)
+        _run_batch(packages, mesh, umodel, content, raw, limit)
+        done += size
+        print("exported " + String(done) + " of " + String(total) + " " + label)
+
+
+def _run_batch(
+    packages: List[String],
+    mesh: Bool,
+    umodel: String,
+    content: String,
+    raw: String,
+    limit: Float64,
+) raises:
+    """Run one batch, and split it when UModel takes too long."""
+    var payload = String('{"umodel":')
+    payload += quote_ascii(umodel)
+    payload += ',"content":'
+    payload += quote_ascii(content)
+    payload += ',"out":'
+    payload += quote_ascii(raw)
+    payload += ',"mesh":'
+    if mesh:
+        payload += "true"
+    else:
+        payload += "false"
+    payload += ',"packages":'
+    payload += _json_strings(packages)
+    payload += "}"
+    var encoded = PyJson.parse(command_text(payload))
+    var command = _paths(encoded, encoded.root)
+    var ran = run_program(command, limit)
+    if not ran.timed_out:
+        return
+    var plan = PyJson.parse(split_text(_json_strings(packages)))
+    var action = plan.text(plan.at(plan.root, "action"))
+    if action == "gave_up":
+        print(
+            "gave up on " + plan.text(plan.at(plan.root, "path")),
+            file=stderr,
+        )
+        return
+    var left = _paths(plan, plan.at(plan.root, "left"))
+    var right = _paths(plan, plan.at(plan.root, "right"))
+    _run_batch(left, mesh, umodel, content, raw, limit)
+    _run_batch(right, mesh, umodel, content, raw, limit)
+
+
+def _child(root: String, child: String) -> String:
+    """Join `child` onto `root` with one slash."""
+    var raw = root.as_bytes()
+    if len(raw) > 0 and raw[len(raw) - 1] == 47:
+        return root + child
+    return root + "/" + child
+
+
+def _absolute(path: String) raises -> String:
+    """Return `path` as an absolute path, as `os.path.abspath` does for `.`."""
+    var raw = path.as_bytes()
+    if len(raw) > 0 and raw[0] == 47:
+        return path
+    var pwd = run_program(["pwd"], 5)
+    if pwd.status != 0:
+        raise Error("cannot read the working directory")
+    var cwd = pwd.output
+    var length = cwd.byte_length()
+    var newline = False
+    if length > 0:
+        newline = cwd.as_bytes()[length - 1] == 10
+    if newline:
+        var end = length - 1
+        var trimmed = String(cwd[byte=:end])
+        cwd = trimmed
+    if path == "." or path.byte_length() == 0:
+        return cwd
+    var base = cwd.as_bytes()
+    if len(base) > 0 and base[len(base) - 1] == 47:
+        return cwd + path
+    return cwd + "/" + path
+
+
+def _drive_cli(arguments: List[String]) raises:
+    """Read `drive` options and export the named towns."""
+    var root = String()
+    var limit = Float64(55)
+    var batch = 40
+    var towns = List[String]()
+    var index = 2
+    while index < len(arguments):
+        var word = arguments[index]
+        if word == "--root" or word == "--limit" or word == "--batch":
+            if index + 1 >= len(arguments):
+                raise Error(word + " needs a value")
+            var value = arguments[index + 1]
+            if word == "--root":
+                root = value
+            elif word == "--limit":
+                limit = parse_float(value)
+            else:
+                batch = _batch_arg(value)
+            index += 2
+            continue
+        if _starts(word, "--"):
+            raise Error("unknown argument " + word)
+        towns.append(word)
+        index += 1
+    if root.byte_length() == 0:
+        root = getenv("CARLA_EXPORT_DIR", ".")
+    if len(towns) == 0:
+        towns = _default_towns()
+    drive(_absolute(root), towns, batch, limit)
+
+
+def _batch_arg(text: String) raises -> Int:
+    """Return a positive decimal batch size."""
+    var raw = text.as_bytes()
+    if len(raw) == 0:
+        raise Error("batch is not an integer")
+    var value = 0
+    for index in range(len(raw)):
+        var byte = raw[index]
+        if byte < 48 or byte > 57:
+            raise Error("batch is not an integer")
+        value = value * 10 + Int(byte - 48)
+    return value
+
+
+def _default_towns() -> List[String]:
+    """Return Town01 through Town05 and Town10HD."""
+    var towns = List[String]()
+    towns.append("Town01")
+    towns.append("Town02")
+    towns.append("Town03")
+    towns.append("Town04")
+    towns.append("Town05")
+    towns.append("Town10HD")
+    return towns^
+
+
 def _usage() raises:
     """Print the usage line and stop."""
     print(
         (
             "usage: carla_town_paths object TEXT | relative TEXT | wanted [FILE"
             " ...] | pending FILE | export ROOT GAME_PATH SUFFIX | split FILE |"
-            " command FILE"
+            " command FILE | drive [--root DIR] [--batch N] [--limit SECONDS]"
+            " [TOWN ...]"
         ),
         file=stderr,
     )
@@ -534,6 +806,16 @@ def main() raises:
         return
     if arguments[1] == "export" and len(arguments) == 5:
         print(export_path(arguments[2], arguments[3], arguments[4]))
+        return
+    if arguments[1] == "drive":
+        var copied = List[String]()
+        for index in range(len(arguments)):
+            copied.append(String(arguments[index]))
+        try:
+            _drive_cli(copied)
+        except error:
+            print("carla_town_paths:", error, file=stderr)
+            exit(1)
         return
     if arguments[1] == "wanted":
         var files = List[String]()

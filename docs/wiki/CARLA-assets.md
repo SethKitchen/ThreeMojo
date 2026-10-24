@@ -481,12 +481,12 @@ The towns are made in three steps. The scripts run on Windows, like the vehicle 
 2. Export every mesh and material that the layouts name:
 
    ```sh
-   python export_towns.py
+   sh tools/tool.sh .venv/bin/mojo carla_town_paths drive
    ```
 
    It reads the release's own `CarlaUE4/Content`, not `cooked/`. It does not export the engine's own content, which is licensed for use in the engine only. `build_towns.py` draws its own box for the engine's cube from `tools/carla_town_cube.mojo`.
 
-   `tools/carla_town_paths.mojo` names the packages. It skips a package that is already exported and groups the rest into batches of 40. It cuts a batch that takes too long in half, and gives up on one package. It builds the UModel arguments for one batch. It also names each mesh file the town build reads. `build_towns.py` reads each mesh with `tools/carla_town_mesh.mojo`.
+   `tools/carla_town_paths.mojo` names the packages. It skips a package that is already exported and groups the rest into batches of 40. It runs UModel on each batch, cuts a batch that takes more than 55 seconds in half, and gives up on one package. It builds the UModel arguments for one batch. It also names each mesh file the town build reads. `build_towns.py` reads each mesh with `tools/carla_town_mesh.mojo`.
 
 3. Build and zip the packages:
 

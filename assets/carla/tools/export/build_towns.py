@@ -3,7 +3,7 @@
 """Bake each CARLA town into one glTF package: every building, street,
 plant and prop where the town places it.
 
-`export_towns.py` exports the meshes and the materials. This script reads
+`tools/carla_town_paths.mojo` exports the meshes and the materials. This script reads
 each town's layout, lowers each mesh to a triangle budget once, places
 every copy in the three.js frame the renderer uses (meters, plus y up:
 three.js x, y and z are CARLA's x, z and y), and merges the copies by

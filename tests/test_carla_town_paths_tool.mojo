@@ -246,6 +246,115 @@ def test_a_batch_becomes_the_umodel_arguments() raises:
         )
 
 
+def _script(path: String, body: String) raises:
+    """Write an executable stand-in for UModel."""
+    Path(path).write_text("#!/bin/sh\n" + body)
+    var mode = run_program(["chmod", "+x", path], 10)
+    if mode.status != 0:
+        raise Error(mode.output)
+
+
+def test_drive_runs_each_batch_and_skips_a_file() raises:
+    var root = _dir()
+    var layout = root + "/layout"
+    var binary = root + "/umodel"
+    _ = run_program(["mkdir", "-p", layout, binary, root + "/raw_town"], 10)
+    _ = _write(
+        layout,
+        "Town01.jsonl",
+        '{"mesh": "StaticMesh /Game/A/B.B", "materials": '
+        + '["Material /Game/A/Red.Red"]}\n',
+    )
+    var log = root + "/log"
+    _script(
+        binary + "/umodel_64.exe",
+        "printf '%s\\n' \"$@\" >> "
+        + _quote(log)
+        + "\nmkdir -p "
+        + _quote(root + "/raw_town/A")
+        + "\n: > "
+        + _quote(root + "/raw_town/A/B.gltf")
+        + "\n: > "
+        + _quote(root + "/raw_town/A/Red.mat")
+        + "\n",
+    )
+    var arguments = List[String]()
+    arguments.append("drive")
+    arguments.append("--root")
+    arguments.append(root)
+    arguments.append("--batch")
+    arguments.append("40")
+    arguments.append("Town01")
+    var ran = _cli(arguments^)
+    if ran.status != 0:
+        raise Error(ran.errors + ran.output)
+    assert_equal(ran.errors, "")
+    assert_equal(
+        ran.output,
+        "1 meshes, 1 materials, 2 to export\nexported 1 of 1 meshes\n"
+        + "exported 1 of 1 materials\n0 not exported\n",
+    )
+    var text = Path(log).read_text()
+    assert_true(text.find("-gltf\n") >= 0)
+    assert_true(text.find("A/B.uasset\n") >= 0)
+    assert_true(text.find("A/Red.uasset\n") >= 0)
+    Path(root + "/raw_town/A/B.gltf").write_text("kept")
+    var again = List[String]()
+    again.append("drive")
+    again.append("--root")
+    again.append(root)
+    again.append("Town01")
+    var skipped = _cli(again^)
+    if skipped.status != 0:
+        raise Error(skipped.errors + skipped.output)
+    assert_equal(
+        skipped.output,
+        "1 meshes, 1 materials, 0 to export\n0 not exported\n",
+    )
+    _remove(root)
+
+
+def test_a_slow_batch_is_given_up() raises:
+    var root = _dir()
+    var layout = root + "/layout"
+    var binary = root + "/umodel"
+    _ = run_program(["mkdir", "-p", layout, binary], 10)
+    _ = _write(
+        layout,
+        "Town01.jsonl",
+        '{"mesh": "StaticMesh /Game/A/One.One", "materials": []}\n'
+        + '{"mesh": "StaticMesh /Game/A/Two.Two", "materials": []}\n',
+    )
+    _script(binary + "/umodel_64.exe", "sleep 30\n")
+    var arguments = List[String]()
+    arguments.append("drive")
+    arguments.append("--root")
+    arguments.append(root)
+    arguments.append("--limit")
+    arguments.append("0.4")
+    arguments.append("--batch")
+    arguments.append("40")
+    arguments.append("Town01")
+    var ran = _cli(arguments^)
+    if ran.status != 0:
+        raise Error(ran.errors + ran.output)
+    assert_equal(
+        ran.output,
+        "2 meshes, 0 materials, 2 to export\nexported 2 of 2 meshes\n"
+        + "2 not exported\n   /Game/A/One\n   /Game/A/Two\n",
+    )
+    assert_equal(
+        ran.errors,
+        "gave up on /Game/A/One\ngave up on /Game/A/Two\n",
+    )
+    _remove(root)
+
+
+def _quote(path: String) -> String:
+    """Return `path` quoted for the stand-in script."""
+    return "'" + path + "'"
+
+
 def main() raises:
     """Build the tool, then run the tests."""
     var built = run_program(
