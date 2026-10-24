@@ -129,7 +129,9 @@ Some portable features remain partial, including [GLSL shaders](https://github.c
 ### Project tools
 
 <details>
-<summary>Implemented: 44</summary>
+<summary>Implemented: 45</summary>
+
+- [x] [Packaged CARLA texture files](https://github.com/SethKitchen/ThreeMojo/wiki/CARLA-assets#rebuild-the-vehicle-zips): `tools/carla_texture_store.mojo` writes each color and cut-out picture [#761](https://github.com/SethKitchen/ThreeMojo/issues/761)
 
 - [x] [Town mesh simplification](https://github.com/SethKitchen/ThreeMojo/wiki/CARLA-assets#the-carla-towns): `tools/carla_town_simplify.mojo` collapses a near mesh and welds a far mesh [#761](https://github.com/SethKitchen/ThreeMojo/issues/761)
 

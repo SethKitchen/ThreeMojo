@@ -159,70 +159,28 @@ def resize_image(pixels, width, height, bands, out_width, out_height, mode):
     return json.loads(result.stdout)["pixels"]
 
 
-def _texture_name(data, image_format):
-    """Return `texture_` plus the SHA-256 of `data` from `tools/carla_texture_plan.mojo`."""
+def _store_tool(payload):
+    """Return the packaged URI from `tools/carla_texture_store.mojo`."""
     here = os.path.dirname(os.path.abspath(__file__))
     repo = os.path.abspath(os.path.join(here, "..", "..", "..", ".."))
     mojo = os.path.join(repo, ".venv", "bin", "mojo")
     if not os.path.isfile(mojo):
         mojo = "mojo"
-    folder = tempfile.mkdtemp(prefix="texture-name-")
+    folder = tempfile.mkdtemp(prefix="texture-store-")
     try:
-        raw = os.path.join(folder, "bytes")
-        with open(raw, "wb") as handle:
-            handle.write(data)
-        request = os.path.join(folder, "name.json")
-        with open(request, "w", encoding="utf-8") as handle:
-            json.dump({
-                "mode": "name",
-                "path": raw,
-                "format": image_format,
-            }, handle, separators=(",", ":"))
+        path = os.path.join(folder, "store.json")
+        with open(path, "w", encoding="utf-8") as handle:
+            json.dump(payload, handle, separators=(",", ":"))
         result = subprocess.run(
             ["sh", os.path.join(repo, "tools", "tool.sh"), mojo,
-             "carla_texture_plan", request],
+             "carla_texture_store", path],
             capture_output=True, text=True,
         )
     finally:
         shutil.rmtree(folder, ignore_errors=True)
     if result.returncode != 0:
-        raise ValueError(result.stderr.strip() or "texture name failed")
-    return json.loads(result.stdout)["name"]
-
-
-def _texture_plan(path, color, max_size, width, height, masked):
-    """Return the packaged size and encoding from `tools/carla_texture_plan.mojo`.
-
-    A neutral file name becomes an 8 pixel square before the size limit.
-    `masked` keeps an optimized PNG and does not use the neutral names.
-    """
-    here = os.path.dirname(os.path.abspath(__file__))
-    repo = os.path.abspath(os.path.join(here, "..", "..", "..", ".."))
-    mojo = os.path.join(repo, ".venv", "bin", "mojo")
-    if not os.path.isfile(mojo):
-        mojo = "mojo"
-    folder = tempfile.mkdtemp(prefix="texture-plan-")
-    try:
-        request = os.path.join(folder, "plan.json")
-        with open(request, "w", encoding="utf-8") as handle:
-            json.dump({
-                "mode": "fit" if masked else "texture",
-                "path": path,
-                "color": bool(color),
-                "max": int(max_size),
-                "width": int(width),
-                "height": int(height),
-            }, handle, separators=(",", ":"))
-        result = subprocess.run(
-            ["sh", os.path.join(repo, "tools", "tool.sh"), mojo,
-             "carla_texture_plan", request],
-            capture_output=True, text=True,
-        )
-    finally:
-        shutil.rmtree(folder, ignore_errors=True)
-    if result.returncode != 0:
-        raise ValueError(result.stderr.strip() or "texture plan failed")
-    return json.loads(result.stdout)
+        raise ValueError(result.stderr.strip() or "texture store failed")
+    return json.loads(result.stdout)["uri"]
 
 
 def save_png(pixels, width, height, mode, optimize):
@@ -417,18 +375,6 @@ def pack_stitch(left, right, width, height):
     return bytes(packed["pixels"])
 
 
-def _save_texture(package, pixels, width, height, mode, plan):
-    """Encode `pixels` with the format and options in `plan`."""
-    options = {}
-    if plan["quality"] >= 0:
-        options["quality"] = int(plan["quality"])
-    if plan["optimize"]:
-        options["optimize"] = True
-    return package._write_texture(
-        pixels, width, height, mode, plan["format"], **options
-    )
-
-
 class Package:
     """The glTF being rebuilt and the textures it has gathered."""
 
@@ -441,98 +387,53 @@ class Package:
         gltf["textures"] = []
         gltf["samplers"] = [{"magFilter": 9729, "minFilter": 9987, "wrapS": 10497, "wrapT": 10497}]
 
-    def _write_texture(self, pixels, width, height, mode, image_format, **options):
-        """Name each packaged texture by its encoded bytes.
-
-        Different source paths can have the same stem, and one color can
-        have several masks. Neither case may overwrite a previous image:
-        near materials and memoized far-bake inputs still refer to it.
-        Equal encoded images can safely share a name across source paths.
-        """
-        if image_format == "PNG":
-            data = save_png(
-                pixels, width, height, mode,
-                bool(options.get("optimize", False)),
-            )
-        elif image_format == "JPEG":
-            data = save_jpeg(
-                pixels, width, height, mode,
-                int(options.get("quality", -1)),
-                bool(options.get("optimize", False)),
-            )
-        else:
-            raise ValueError("texture format is not JPEG or PNG")
-        name = _texture_name(data, image_format)
-        os.makedirs(os.path.join(self.out_dir, "textures"), exist_ok=True)
-        with open(os.path.join(self.out_dir, "textures", name), "wb") as target:
-            target.write(data)
-        return "textures/" + name
-
-    def texture(self, source, color):
-        """Return the texture index for image file `source`, adding it. A
-        texture that a neutral name selects becomes a small image of its
-        average color, under a plain name. `tools/carla_texture_plan.mojo`
-        names those textures and chooses the fitted size.
-        `tools/carla_image_pack.mojo` builds the stored samples."""
-        key = (source, color)
-        if key in self.images:
-            return self.images[key]
-        mode, width, height, rgba = open_image(source)
-        plan = _texture_plan(source, color, self.max_size, width, height, False)
-        packed = _pack_tool({
-            "mode": "color",
-            "image_mode": mode,
-            "width": int(width),
-            "height": int(height),
-            "pixels": [int(value) for value in rgba],
-            "neutral": bool(plan["neutral"]),
-            "resize": bool(plan["resize"]),
-            "out_width": int(plan["width"]),
-            "out_height": int(plan["height"]),
-        })
-        uri = _save_texture(
-            self, packed["pixels"], packed["width"], packed["height"], "RGB", plan,
-        )
+    def _add_texture(self, uri, key):
+        """Record one packaged URI and return its texture index."""
         self.gltf["images"].append({"uri": uri})
         self.gltf["textures"].append({"sampler": 0, "source": len(self.gltf["images"]) - 1})
         index = len(self.gltf["textures"]) - 1
         self.images[key] = index
         return index
+
+    def texture(self, source, color):
+        """Return the texture index for image file `source`, adding it. A
+        texture that a neutral name selects becomes a small image of its
+        average color, under a plain name.
+
+        `tools/carla_texture_store.mojo` writes the file. Equal encoded
+        images share one name. A later image does not replace an earlier
+        file."""
+        key = (source, color)
+        if key in self.images:
+            return self.images[key]
+        uri = _store_tool({
+            "op": "color",
+            "out_dir": self.out_dir,
+            "max_size": int(self.max_size),
+            "source": source,
+            "color": bool(color),
+        })
+        return self._add_texture(uri, key)
 
     def masked_texture(self, color, mask):
         """Return the texture index of an RGBA image: the color of image
         file `color`, and an alpha from image file `mask`. The mask is its
         alpha channel when it has one, and otherwise its most black and
         white channel: CARLA's foliage packs a leaf's cut-out into one
-        channel of an RGB image. `tools/carla_image_pack.mojo` builds the
-        stored samples."""
+        channel of an RGB image.
+
+        `tools/carla_texture_store.mojo` writes the file."""
         key = (color, mask, "masked")
         if key in self.images:
             return self.images[key]
-        _, width, height, color_rgba = open_image(color)
-        mask_mode, mask_width, mask_height, mask_rgba = open_image(mask)
-        plan = _texture_plan("", False, self.max_size, width, height, True)
-        packed = _pack_tool({
-            "mode": "masked",
-            "width": int(width),
-            "height": int(height),
-            "color": [int(value) for value in color_rgba],
-            "mask_mode": mask_mode,
-            "mask_width": int(mask_width),
-            "mask_height": int(mask_height),
-            "mask": [int(value) for value in mask_rgba],
-            "resize": bool(plan["resize"]),
-            "out_width": int(plan["width"]),
-            "out_height": int(plan["height"]),
+        uri = _store_tool({
+            "op": "masked",
+            "out_dir": self.out_dir,
+            "max_size": int(self.max_size),
+            "color": color,
+            "mask": mask,
         })
-        uri = _save_texture(
-            self, packed["pixels"], packed["width"], packed["height"], "RGBA", plan,
-        )
-        self.gltf["images"].append({"uri": uri})
-        self.gltf["textures"].append({"sampler": 0, "source": len(self.gltf["images"]) - 1})
-        index = len(self.gltf["textures"]) - 1
-        self.images[key] = index
-        return index
+        return self._add_texture(uri, key)
 
 
 def _material_plan(name, mat_text, props_text, pngs):
