@@ -121,6 +121,7 @@ from extensions.gamepad.ids import (
 )
 from extensions.gamepad.joystick import Joystick
 from extensions.gamepad.linux import (
+    _before,
     EVIOCGID,
     EvdevFile,
     EvdevGamepad,
@@ -1329,6 +1330,10 @@ def test_event_nodes_are_found_in_sdl_order() raises:
         assert_equal(names[4], "event10")
         assert_equal(len(names), 5)
         assert_equal(event_joystick_index(sysfs, 7), 0)
+        # Each order of a node with a js number and one without, whatever
+        # order the folder lists them in.
+        assert_true(_before("event5", "event9", sysfs))
+        assert_false(_before("event9", "event5", sysfs))
         assert_equal(event_joystick_index(sysfs, 9), -1)
         assert_equal(event_joystick_index(sysfs, 3), -1)
         assert_equal(len(list_event_nodes(root + "/missing", sysfs)), 0)
