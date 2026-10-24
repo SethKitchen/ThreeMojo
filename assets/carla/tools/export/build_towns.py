@@ -1580,9 +1580,37 @@ def _export_file(root, game_path, suffix):
     return result.stdout.rstrip("\n")
 
 
+def _plan(payload):
+    """Return JSON from `tools/carla_town_plan.mojo`."""
+    here = os.path.dirname(os.path.abspath(__file__))
+    repo = os.path.abspath(os.path.join(here, "..", "..", "..", ".."))
+    mojo = os.path.join(repo, ".venv", "bin", "mojo")
+    if not os.path.isfile(mojo):
+        mojo = "mojo"
+    folder = tempfile.mkdtemp(prefix="town-plan-")
+    try:
+        path = os.path.join(folder, "plan.json")
+        with open(path, "w", encoding="utf-8") as handle:
+            json.dump(payload, handle, separators=(",", ":"), allow_nan=False)
+        result = subprocess.run(
+            ["sh", os.path.join(repo, "tools", "tool.sh"), mojo,
+             "carla_town_plan", path],
+            capture_output=True, text=True,
+        )
+    finally:
+        shutil.rmtree(folder, ignore_errors=True)
+    if result.returncode != 0:
+        raise ValueError(result.stderr.strip() or "town plan failed")
+    return json.loads(result.stdout)
+
+
 def build(town, max_size, tile):
     """Write one town's package, and return the triangle counts of its
-    two levels of detail and its node count."""
+    two levels of detail and its node count.
+
+    `tools/carla_town_plan.mojo` chooses which meshes stay and which far
+    level each one uses.
+    """
     name = "carla.town." + town.lower()
     out_dir = os.path.join(OUT, name)
     shutil.rmtree(out_dir, ignore_errors=True)
@@ -1591,21 +1619,22 @@ def build(town, max_size, tile):
     meshes = {}
     lowered = {}
     groups = {}
-    grass = 0
-    jobs = []
-    planned = {}
     # Each lamp head, in the three.js frame, and each lamp mesh's heads.
     lamps = []
     heads_of = {}
+    visible = []
     for row in rows_of(town):
         if not row["visible"]:
             continue
         _, mesh_path, _ = object_path(row["mesh"])
-        kind = kind_of(mesh_path)
-        if kind is None:
-            continue
-        if mesh_path.startswith("/Engine/") and not mesh_path.endswith("/Cube"):
-            continue
+        visible.append((row, mesh_path))
+    chosen = _plan({
+        "mode": "select",
+        "rows": [{"mesh": mesh_path, "visible": True} for _, mesh_path in visible],
+    })["rows"]
+    prepared = []
+    for slot in chosen:
+        row, mesh_path = visible[slot]
         if mesh_path not in meshes:
             if mesh_path.startswith("/Engine/"):
                 meshes[mesh_path] = cube()
@@ -1616,22 +1645,30 @@ def build(town, max_size, tile):
         if not primitives:
             continue
         copies = placements(row)
-        if "/Vegetation/Grass/" in mesh_path:
-            kept = _share({"mode": "grass", "start": grass, "count": len(copies)})
-            grass = kept["next"]
-            copies = [copies[index] for index in kept["indices"]]
-        total = sum(len(p["triangles"]) for p in primitives)
-        for lod in LODS:
-            planned[(kind, lod)] = planned.get((kind, lod), 0) + limit_of(kind, total, mesh_path, lod) * len(copies)
-        jobs.append((row, mesh_path, kind, primitives, copies))
-    # Each kind gives up the same share of every mesh's budget to keep
-    # under the town's cap: a forest of eight thousand pines thins them all.
-    items = [{"kind": kind, "lod": lod, "count": count} for (kind, lod), count in planned.items()]
-    shared = _share({"mode": "factors", "items": items})["factors"]
-    factors = {(item["kind"], item["lod"]): factor for item, factor in zip(items, shared)}
-    for row, mesh_path, kind, primitives, copies in jobs:
-        names = slot_materials(row, primitives)
-        first_visible = next((i for i, name in enumerate(names) if name != GRID), None)
+        prepared.append({
+            "row": row,
+            "mesh": mesh_path,
+            "primitives": primitives,
+            "copies": copies,
+            "materials": slot_materials(row, primitives),
+            "triangles": sum(len(p["triangles"]) for p in primitives),
+        })
+    plan = _plan({
+        "mode": "jobs",
+        "rows": [{
+            "mesh": item["mesh"],
+            "copies": len(item["copies"]),
+            "triangles": int(item["triangles"]),
+            "materials": item["materials"],
+        } for item in prepared],
+    })
+    for item, job in zip(prepared, plan["jobs"]):
+        row = item["row"]
+        mesh_path = item["mesh"]
+        primitives = item["primitives"]
+        names = item["materials"]
+        kind = job["kind"]
+        copies = [item["copies"][index] for index in job["copies"]]
         if mesh_path not in heads_of:
             heads_of[mesh_path] = lamp_heads(primitives, mesh_path)
         heads = heads_of[mesh_path]
@@ -1639,51 +1676,47 @@ def build(town, max_size, tile):
             for rows in copies:
                 linear, move = to_three(rows)
                 lamps.extend(_lamp_world(heads, linear, move))
-        for index, (primitive, material_name) in enumerate(zip(primitives, names)):
-            if material_name == GRID:
-                continue
+        total = item["triangles"]
+        for part in job["parts"]:
+            index = part["index"]
+            material_name = part["material"]
+            primitive = primitives[index]
             material = library.material(material_name)
-            if "_glass_" in mesh_path and "/StreetLights/" in mesh_path:
+            if job["lamp_glass"]:
                 library.gltf["materials"][material]["extras"] = dict(LAMP_TAG)
-            total = sum(len(p["triangles"]) for p in primitives)
-            for lod in LODS:
+            for level in part["levels"]:
+                if level["action"] == "skip":
+                    continue
+                lod = level["lod"]
                 part_material = material
-                if lod == 1 and kind == "building":
+                if level["action"] == "baked":
                     # A building's far level is its baked proxy, made once
                     # for all its primitives.
-                    if index != first_visible:
-                        continue
                     parts = [(p, library.material(n)) for p, n in zip(primitives, names) if n != GRID]
-                    goal = _share({
-                        "mode": "goal",
-                        "limit": int(limit_of(kind, total, mesh_path, 1)),
-                        "factor": float(factors[(kind, 1)]),
-                    })["goal"]
+                    goal = level["goal"]
                     key = library._bake_tag(mesh_path, "baked", parts, goal)
                     if key not in lowered:
                         lowered[key] = baked_building(parts, library, out_dir, mesh_path, goal)
-                    part, part_material = lowered[key]
-                elif lod == 1 and TREES in mesh_path:
+                    part_mesh, part_material = lowered[key]
+                elif level["action"] == "impostor":
                     # A tree's far level is its impostor, drawn once for
                     # all its primitives.
-                    if index != first_visible:
-                        continue
                     parts = [(p, library.material(n)) for p, n in zip(primitives, names) if n != GRID]
                     key = library._bake_tag(mesh_path, "impostor", parts)
                     if key not in lowered:
                         lowered[key] = impostor(parts, library, out_dir, mesh_path)
-                    part, part_material = lowered[key]
+                    part_mesh, part_material = lowered[key]
                 else:
                     key = (mesh_path, index, material_name, lod)
                     if key not in lowered:
                         lowered[key] = lower(primitive, kind, mesh_path, index, total,
-                                             library.masked[material_name], lod, factors[(kind, lod)])
-                    part = lowered[key]
-                if part is None:
+                                             library.masked[material_name], lod, level["factor"])
+                    part_mesh = lowered[key]
+                if part_mesh is None:
                     continue
-                STATS[mesh_path] = STATS.get(mesh_path, 0) + len(part["triangles"]) * len(copies)
+                STATS[mesh_path] = STATS.get(mesh_path, 0) + len(part_mesh["triangles"]) * len(copies)
                 for rows in copies:
-                    points, normals, triangles = place(part, row, rows)
+                    points, normals, triangles = place(part_mesh, row, rows)
                     # The copy's origin picks its tile, so both levels of
                     # detail of a copy fall in the same tile.
                     # `tools/carla_town_place.mojo` floors that origin.
@@ -1693,7 +1726,7 @@ def build(town, max_size, tile):
                     # shifts each copy's triangles by the copies before it.
                     group[0].append(points)
                     group[1].append(normals)
-                    group[2].append(part["uvs"])
+                    group[2].append(part_mesh["uvs"])
                     group[3].append(triangles)
     # The town's own road network, so a package brings the map it stands on.
     shutil.copy(os.path.join(MAPS, town + ".xodr"), os.path.join(out_dir, town + ".xodr"))
