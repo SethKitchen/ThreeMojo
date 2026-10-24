@@ -271,27 +271,111 @@ def far_budget(kind, triangles, mesh_path):
 # ---- Transforms ------------------------------------------------------------
 
 SWAP = numpy.array([[1.0, 0, 0], [0, 0, 1.0], [0, 1.0, 0]])
+_PLACE_PROC = None
+_PLACE_ERR = None
+
+
+def _place_root():
+    """Return the repository root that holds `tools/tool.sh`."""
+    return os.path.abspath(os.path.join(HERE, "..", "..", "..", ".."))
+
+
+def _place_mojo():
+    """Return the Mojo compiler, as the Makefile's `TOOL_MOJO` chooses it."""
+    path = os.path.join(_place_root(), ".venv", "bin", "mojo")
+    if os.path.isfile(path):
+        return path
+    return "mojo"
+
+
+def _place_close():
+    """Stop the placement worker when this process ends."""
+    global _PLACE_PROC
+    proc = _PLACE_PROC
+    if proc is None or proc.poll() is not None:
+        return
+    try:
+        proc.stdin.close()
+    except Exception:
+        pass
+    try:
+        proc.wait(timeout=5)
+    except Exception:
+        proc.kill()
+    _PLACE_PROC = None
+
+
+def _place_worker():
+    """Return the long-lived `carla_town_place serve` process."""
+    global _PLACE_PROC, _PLACE_ERR
+    if _PLACE_PROC is not None and _PLACE_PROC.poll() is None:
+        return _PLACE_PROC
+    if _PLACE_ERR is not None:
+        _PLACE_ERR.close()
+    _PLACE_ERR = tempfile.TemporaryFile()
+    _PLACE_PROC = subprocess.Popen(
+        ["sh", os.path.join(_place_root(), "tools", "tool.sh"), _place_mojo(),
+         "carla_town_place", "serve"],
+        stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=_PLACE_ERR, text=True,
+    )
+    return _PLACE_PROC
+
+
+def _place_failed(proc):
+    """Raise the worker's error text and forget the dead process."""
+    global _PLACE_PROC
+    try:
+        proc.wait(timeout=5)
+    except Exception:
+        proc.kill()
+    text = ""
+    if _PLACE_ERR is not None:
+        _PLACE_ERR.seek(0)
+        text = _PLACE_ERR.read().decode("utf-8", "replace").strip()
+    _PLACE_PROC = None
+    raise ValueError(text or "town placement failed")
+
+
+def _place_ask(payload):
+    """Return one answer from `tools/carla_town_place.mojo`."""
+    proc = _place_worker()
+    try:
+        proc.stdin.write(json.dumps(payload, separators=(",", ":"), allow_nan=False) + "\n")
+        proc.stdin.flush()
+        line = proc.stdout.readline()
+    except (BrokenPipeError, ValueError):
+        _place_failed(proc)
+    if not line:
+        _place_failed(proc)
+    if line.startswith("ERR\t"):
+        raise ValueError(line[4:].strip() or "town placement failed")
+    return json.loads(line)
+
+
+atexit.register(_place_close)
 
 
 def rotation_rows(pitch, yaw, roll):
     """Return Unreal's rotation matrix for a rotator, in its row-vector
-    convention (a point is a row, multiplied on the left)."""
-    p, y, r = numpy.radians([pitch, yaw, roll])
-    sp, cp, sy, cy, sr, cr = numpy.sin(p), numpy.cos(p), numpy.sin(y), numpy.cos(y), numpy.sin(r), numpy.cos(r)
-    return numpy.array([
-        [cp * cy, cp * sy, sp],
-        [sr * sp * cy - cr * sy, sr * sp * sy + cr * cy, -sr * cp],
-        [-(cr * sp * cy + sr * sy), cy * sr - cr * sp * sy, cr * cp],
-    ])
+    convention (a point is a row, multiplied on the left).
+
+    `tools/carla_town_place.mojo` builds the matrix.
+    """
+    matrix = _place_ask({"op": "matrix", "pitch": pitch, "yaw": yaw, "roll": roll,
+                         "scale": [1, 1, 1], "location": [0, 0, 0]})
+    return numpy.array(matrix, dtype=numpy.float64)[:3, :3]
 
 
 def component_rows(row):
     """Return a component's world matrix in Unreal's row-vector
-    convention, in centimeters: scale, then rotate, then move."""
-    matrix = numpy.eye(4)
-    matrix[:3, :3] = numpy.diag(row["scale"]) @ rotation_rows(*row["rotation"])
-    matrix[3, :3] = row["location"]
-    return matrix
+    convention, in centimeters: scale, then rotate, then move.
+
+    `tools/carla_town_place.mojo` builds the matrix.
+    """
+    pitch, yaw, roll = row["rotation"]
+    matrix = _place_ask({"op": "matrix", "pitch": pitch, "yaw": yaw, "roll": roll,
+                         "scale": list(row["scale"]), "location": list(row["location"])})
+    return numpy.array(matrix, dtype=numpy.float64)
 
 
 def to_three(rows):
@@ -1114,18 +1198,41 @@ def lower(primitive, kind, mesh_path, index, total, masked, lod, factor=1.0):
 
 def place(part, row, rows):
     """Return a primitive's points, normals and triangles placed by one
-    copy's world matrix, in the three.js frame."""
-    if "spline" in row:
-        local, normals = bend(part["positions"], part["normals"], row["spline"])
-        world = local @ rows[:3, :3] + rows[3, :3]
-        points = world[:, [0, 2, 1]] / 100.0
-        normals = (normals @ numpy.linalg.inv(rows[:3, :3]).T)[:, [0, 2, 1]]
-        flip = numpy.linalg.det(rows[:3, :3]) < 0
-    else:
-        linear, move = to_three(rows)
-        points = part["positions"] @ linear.T + move
-        normals = part["normals"] @ numpy.linalg.inv(linear)
-        flip = numpy.linalg.det(linear) < 0
+    copy's world matrix, in the three.js frame.
+
+    A rigid copy is placed by `tools/carla_town_place.mojo`.
+    """
+    if "spline" not in row:
+        folder = tempfile.mkdtemp(prefix="town-place-")
+        try:
+            request = os.path.join(folder, "place.json")
+            with open(request, "w", encoding="utf-8") as handle:
+                json.dump({"matrix": rows.tolist(), "positions": part["positions"].tolist(),
+                           "normals": part["normals"].tolist(),
+                           "triangles": part["triangles"].tolist()},
+                          handle, separators=(",", ":"), allow_nan=False)
+            proc = _place_worker()
+            try:
+                proc.stdin.write("apply\t" + request + "\n")
+                proc.stdin.flush()
+                line = proc.stdout.readline()
+            except (BrokenPipeError, ValueError):
+                _place_failed(proc)
+            if not line:
+                _place_failed(proc)
+            if line.startswith("ERR\t"):
+                raise ValueError(line[4:].strip() or "town placement failed")
+            placed = json.loads(line)
+        finally:
+            shutil.rmtree(folder, ignore_errors=True)
+        return (numpy.array(placed["points"], dtype=numpy.float64),
+                numpy.array(placed["normals"], dtype=numpy.float64),
+                numpy.array(placed["triangles"], dtype=numpy.int64))
+    local, normals = bend(part["positions"], part["normals"], row["spline"])
+    world = local @ rows[:3, :3] + rows[3, :3]
+    points = world[:, [0, 2, 1]] / 100.0
+    normals = (normals @ numpy.linalg.inv(rows[:3, :3]).T)[:, [0, 2, 1]]
+    flip = numpy.linalg.det(rows[:3, :3]) < 0
     length = numpy.linalg.norm(normals, axis=1, keepdims=True)
     normals = normals / numpy.maximum(length, 1e-12)
     return points, normals, (part["triangles"][:, ::-1] if flip else part["triangles"])
