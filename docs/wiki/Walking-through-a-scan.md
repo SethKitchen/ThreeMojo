@@ -48,6 +48,8 @@ The goal is one of two points of the floor. `walk_ends` finds them from the occu
 
 A scan with fewer than two clear points has no walk, and `walk_ends` refuses it.
 
+`is_clear` tests one point, and `is_walkable` tests one line. Each checks its options first. They refuse options that `WalkOptions.check` refuses.
+
 ## Options
 
 `WalkOptions` holds sizes and paces as typed quantities. `default_walk_options()` gives an adult.
