@@ -1700,14 +1700,19 @@ def build(town, max_size, tile):
     return write(town, name, out_dir, library, groups, lamps)
 
 
-def _buffer_tool(name, groups, lamps, bin_path):
-    """Return JSON from `tools/carla_town_buffers.mojo` and write the bin."""
+def write(town, name, out_dir, library, groups, lamps):
+    """Write the glTF and its buffer, and return the triangle counts of
+    the two levels of detail and the node count.
+
+    `tools/carla_town_write.mojo` packs the vertices, writes the loose
+    glTF and packs the binary glTF.
+    """
     here = os.path.dirname(os.path.abspath(__file__))
     repo = os.path.abspath(os.path.join(here, "..", "..", "..", ".."))
     mojo = os.path.join(repo, ".venv", "bin", "mojo")
     if not os.path.isfile(mojo):
         mojo = "mojo"
-    payload = {"bin": bin_path, "name": name, "groups": [], "lamps": []}
+    payload = {"out_dir": out_dir, "name": name, "gltf": library.gltf, "groups": [], "lamps": []}
     for (lod, kind, cell, material), group in groups.items():
         payload["groups"].append({
             "lod": int(lod),
@@ -1721,44 +1726,27 @@ def _buffer_tool(name, groups, lamps, bin_path):
         })
     for head in lamps:
         payload["lamps"].append([float(value) for value in head])
-    folder = tempfile.mkdtemp(prefix="town-buffers-")
+    folder = tempfile.mkdtemp(prefix="town-write-")
     try:
-        path = os.path.join(folder, "buffers.json")
+        path = os.path.join(folder, "write.json")
         with open(path, "w", encoding="utf-8") as handle:
             json.dump(payload, handle, separators=(",", ":"), allow_nan=False)
         result = subprocess.run(
             ["sh", os.path.join(repo, "tools", "tool.sh"), mojo,
-             "carla_town_buffers", path],
+             "carla_town_write", path],
             capture_output=True, text=True,
         )
     finally:
         shutil.rmtree(folder, ignore_errors=True)
     if result.returncode != 0:
-        raise ValueError(result.stderr.strip() or "town buffers failed")
-    return json.loads(result.stdout)
-
-
-def write(town, name, out_dir, library, groups, lamps):
-    """Write the glTF and its buffer, and return the triangle counts of
-    the two levels of detail and the node count.
-
-    `tools/carla_town_buffers.mojo` packs the vertices and rounds the lamp
-    heads.
-    """
-    gltf = library.gltf
-    gltf["asset"] = {"version": "2.0", "generator": "ThreeMojo build_towns.py", "copyright": CREDIT}
-    gltf["scene"] = 0
-    doc = _buffer_tool(name, groups, lamps, os.path.join(out_dir, name + ".bin"))
-    gltf["nodes"] = doc["nodes"]
-    gltf["meshes"] = doc["meshes"]
-    gltf["accessors"] = doc["accessors"]
-    gltf["bufferViews"] = doc["bufferViews"]
-    gltf["scenes"] = doc["scenes"]
-    gltf["buffers"] = doc["buffers"]
-    json.dump(gltf, open(os.path.join(out_dir, name + ".gltf"), "w", encoding="utf-8"), separators=(",", ":"))
-    check_clean(out_dir)
-    to_glb(out_dir, name)
-    return doc["triangles"], len(gltf["nodes"])
+        message = result.stderr.strip()
+        if message.startswith("carla_town_write: "):
+            message = message[len("carla_town_write: "):]
+        if message.startswith("unclean "):
+            raise SystemExit(message)
+        raise ValueError(message or "town write failed")
+    doc = json.loads(result.stdout)
+    return doc["triangles"], doc["nodes"]
 
 
 def to_glb(out_dir, name):

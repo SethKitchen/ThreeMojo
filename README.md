@@ -129,7 +129,9 @@ Some portable features remain partial, including [GLSL shaders](https://github.c
 ### Project tools
 
 <details>
-<summary>Implemented: 47</summary>
+<summary>Implemented: 48</summary>
+
+- [x] [CARLA town package writer](https://github.com/SethKitchen/ThreeMojo/wiki/CARLA-assets#the-carla-towns): `tools/carla_town_write.mojo` writes the loose glTF and packs the binary glTF [#761](https://github.com/SethKitchen/ThreeMojo/issues/761)
 
 - [x] [CARLA vehicle package](https://github.com/SethKitchen/ThreeMojo/wiki/CARLA-assets#rebuild-the-vehicle-zips): `tools/carla_gltf_package.mojo` writes one vehicle glTF package [#761](https://github.com/SethKitchen/ThreeMojo/issues/761)
 
