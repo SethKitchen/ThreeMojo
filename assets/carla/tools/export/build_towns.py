@@ -37,7 +37,52 @@ import numpy
 HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, HERE)
 import carla_gltf_fix as fix  # noqa: E402
-from bake_identity import BakeIdentity  # noqa: E402
+
+
+def atlas_tag(gltf, out_dir, mesh_path, kind, parts, settings):
+    """Return the Mojo bake identity for one ordered material list.
+
+    Args:
+        gltf: The package tables.
+        out_dir: The directory that holds the texture files.
+        mesh_path: The source mesh path.
+        kind: `baked` or `impostor`.
+        parts: Ordered pairs of geometry digests and material indexes.
+        settings: The bake settings that affect the output.
+
+    Returns:
+        The atlas tag.
+
+    Raises:
+        ValueError: The identity program cannot read an input.
+    """
+    root = os.path.abspath(os.path.join(HERE, "..", "..", "..", ".."))
+    mojo = os.path.join(root, ".venv", "bin", "mojo")
+    if not os.path.isfile(mojo):
+        mojo = "mojo"
+    request = {
+        "gltf": gltf,
+        "out_dir": str(out_dir),
+        "mesh": mesh_path,
+        "kind": kind,
+        "parts": [[geometry, int(material)] for geometry, material in parts],
+        "settings": settings,
+    }
+    handle = tempfile.NamedTemporaryFile("w", suffix=".json", delete=False)
+    try:
+        json.dump(request, handle)
+        handle.close()
+        result = subprocess.run(
+            ["sh", os.path.join(root, "tools", "tool.sh"), mojo,
+             "carla_bake_identity", handle.name],
+            text=True, capture_output=True, check=False,
+        )
+    finally:
+        os.remove(handle.name)
+    if result.returncode != 0:
+        raise ValueError(result.stderr.strip() or "bake identity failed")
+    return result.stdout.strip()
+
 
 BASE = os.path.abspath(os.environ.get("CARLA_EXPORT_DIR", "."))
 RAW = os.path.join(BASE, "raw_town")
@@ -811,7 +856,7 @@ class Library:
         self.pngs = fix.index_files(RAW, ".png")
         self.index = {}
         self.masked = {}
-        self._bake_identity = BakeIdentity(self.gltf, out_dir)
+        self._bake_out = out_dir
         self._bake_geometry = {}
 
     def _bake_tag(self, mesh_path, kind, parts, target=None):
@@ -837,7 +882,7 @@ class Library:
             settings = [target, BAKE_DENSITY, BAKE_MOST, BAKE_VIEWS, CLUSTER_CELL, CLUSTER_DIVISIONS]
         else:
             settings = [IMPOSTOR_SIZE, IMPOSTOR_SAMPLES, IMPOSTOR_LIGHT.tolist()]
-        return self._bake_identity.key(mesh_path, kind, ordered, settings)
+        return atlas_tag(self.gltf, self._bake_out, mesh_path, kind, ordered, settings)
 
     def material(self, name):
         """Return the glTF index of the material named `name`."""
