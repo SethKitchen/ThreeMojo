@@ -5212,6 +5212,257 @@ def check_custom_refusals(mojo: String) raises:
         _ = run_program(["rm", "-rf", work], 30)
 
 
+def _lifecycle_parts(line: String) raises -> Tuple[String, String]:
+    var cut = line.find("|")
+    if cut < 0:
+        raise Error("lifecycle index " + line)
+    var kind = String(line[byte=:cut])
+    var rest = String(line[byte = cut + 1 :])
+    return (kind, rest)
+
+
+def _count_needle(text: String, needle: String) -> Int:
+    var count = 0
+    var rest = text
+    while True:
+        var at = rest.find(needle)
+        if at < 0:
+            return count
+        count += 1
+        var next = String(rest[byte = at + needle.byte_length() :])
+        rest = next
+
+
+def _body_lines(stdout: String) -> String:
+    var text = String()
+    for line in stdout.splitlines():
+        var row = String(line)
+        if row.startswith("STRING BODY ") or row.startswith(
+            "NESTED STRING BODY "
+        ):
+            text += row + "\n"
+    return text
+
+
+def _lifecycle_decisions(expected: String) -> List[String]:
+    var found = List[String]()
+    for row in expected.splitlines():
+        var parts = String(row).split(":")
+        if len(parts) < 3:
+            continue
+        var field = String(parts[2])
+        var dot = field.find(".")
+        var number = field
+        if dot >= 0:
+            var cut = String(field[byte=:dot])
+            number = cut
+        var known = False
+        for item in found:
+            if item == number:
+                known = True
+        if not known:
+            found.append(number)
+    return found^
+
+
+def _lifecycle_coverage(
+    raw: String, module_name: String, decisions: List[String]
+) -> String:
+    var text = String()
+    for row in raw.splitlines():
+        var line_text = String(row)
+        var parts = line_text.split(":")
+        if len(parts) < 3:
+            continue
+        var kind = String(parts[0])
+        if kind != "COVLINE" and kind != "COVEVAL2":
+            continue
+        if String(parts[1]) != module_name:
+            continue
+        var field = String(parts[2])
+        var dot = field.find(".")
+        var number = field
+        if dot >= 0:
+            var cut = String(field[byte=:dot])
+            number = cut
+        var keep = False
+        for decision in decisions:
+            if decision == number:
+                keep = True
+        if keep:
+            text += line_text + "\n"
+    return text
+
+
+def _build_lifecycle(
+    compiler: String, folder: String, name: String, binary: String
+) raises:
+    _ = _must(
+        [
+            compiler,
+            "build",
+            "-Werror",
+            "-I",
+            folder,
+            folder + "/" + name + ".mojo",
+            "-o",
+            binary,
+        ],
+        180,
+    )
+
+
+def check_optional_lifecycles(mojo: String) raises:
+    """Require Optional lifecycle refusals and the accepted parity traces.
+
+    Args:
+        mojo: The Mojo compiler.
+
+    Raises:
+        Error: If native output, a manifest, a refusal, or a trace differs.
+    """
+    var root = absolute_path(".")
+    var compiler = absolute_path(mojo)
+    var index_text = Path(
+        "tools/fixtures/coverage_lifecycle_index.txt"
+    ).read_text()
+    var work = mkdtemp(prefix="threemojo-lifecycle-")
+    try:
+        var native = work + "/native"
+        var rewritten = work + "/rewritten"
+        _ = _must(["mkdir", "-p", native, rewritten], 10)
+        _ = _must(["cp", "-a", root + "/coverage", rewritten + "/coverage"], 30)
+        var built = rewritten + "/coverage/build"
+        if Path(built).exists():
+            _ = _must(["rm", "-rf", built], 10)
+        var build = work + "/build_cli"
+        _ = _must(
+            [
+                compiler,
+                "build",
+                "-Werror",
+                "-I",
+                root,
+                root + "/coverage/build_cli.mojo",
+                "-o",
+                build,
+            ],
+            180,
+        )
+        var refusals = 0
+        for line in index_text.splitlines():
+            var parts = _lifecycle_parts(String(line))
+            var kind = parts[0]
+            var rest = parts[1]
+            if kind == "reject":
+                var name = rest
+                var source = Path(
+                    "tools/fixtures/coverage_lifecycle_" + name + ".txt"
+                ).read_text()
+                var expected = Path(
+                    "tools/fixtures/coverage_lifecycle_" + name + ".out"
+                ).read_text()
+                var lines_text = Path(
+                    "tools/fixtures/coverage_lifecycle_" + name + ".lines"
+                ).read_text()
+                Path(native + "/" + name + ".mojo").write_text(source)
+                var binary = work + "/" + name
+                _build_lifecycle(compiler, native, name, binary)
+                var ran = _must([binary], 5)
+                if ran.output != expected:
+                    raise Error(name + "\n" + ran.output + "\n" + expected)
+                _ = _must([build, rewritten, name + ".mojo"], 60, native)
+                _require_origin(rewritten, name, source)
+                _require_width_manifest(rewritten, name, lines_text)
+                var rejected = run_program(
+                    [
+                        compiler,
+                        "build",
+                        "-Werror",
+                        "-I",
+                        rewritten,
+                        "-I",
+                        root,
+                        rewritten + "/" + name + ".mojo",
+                        "-o",
+                        work + "/rejected",
+                    ],
+                    180,
+                    merge_errors=False,
+                )
+                if rejected.status == 0:
+                    raise Error(name + " was accepted")
+                var errors = rejected.errors
+                if (
+                    errors.find(
+                        "Coverage cannot yet preserve this compound condition"
+                    )
+                    < 0
+                ):
+                    raise Error(name + "\n" + errors)
+                if (
+                    errors.find(
+                        "an Optional result with observable copy, move, or"
+                        " destructor effects"
+                    )
+                    < 0
+                ):
+                    raise Error(name + "\n" + errors)
+                refusals += 1
+            elif kind == "positive" or kind == "string":
+                var name = "optional-positive"
+                if kind == "string":
+                    name = "optional-string"
+                var source = Path(
+                    "tools/fixtures/coverage_lifecycle_" + name + ".txt"
+                ).read_text()
+                var lines_text = Path(
+                    "tools/fixtures/coverage_lifecycle_" + name + ".lines"
+                ).read_text()
+                var trace = Path(
+                    "tools/fixtures/coverage_lifecycle_" + name + ".trace"
+                ).read_text()
+                Path(native + "/" + name + ".mojo").write_text(source)
+                _ = _must([build, rewritten, name + ".mojo"], 60, native)
+                _require_origin(rewritten, name, source)
+                _require_width_manifest(rewritten, name, lines_text)
+                var native_binary = work + "/" + name + "-native"
+                var instrumented_binary = work + "/" + name + "-instrumented"
+                _build_lifecycle(compiler, native, name, native_binary)
+                _build_lifecycle(compiler, rewritten, name, instrumented_binary)
+                var native_run = _must([native_binary], 5)
+                var instrumented_run = _must([instrumented_binary], 5)
+                if native_run.output != instrumented_run.output:
+                    raise Error(name + " stdout differs")
+                if kind == "positive":
+                    var wanted = _number(rest) * 4
+                    if _count_needle(native_run.output, "POSITIVE ") != wanted:
+                        raise Error(name + " positive count")
+                else:
+                    var bodies = Path(
+                        "tools/fixtures/coverage_lifecycle_" + name + ".bodies"
+                    ).read_text()
+                    if _body_lines(native_run.output) != bodies:
+                        raise Error(name + " string bodies differ")
+                var seen = _lifecycle_coverage(
+                    instrumented_run.errors,
+                    name,
+                    _lifecycle_decisions(trace),
+                )
+                if seen != trace:
+                    raise Error(name + " trace differs\n" + seen)
+            else:
+                raise Error("lifecycle index " + kind)
+        if refusals != 8:
+            raise Error("lifecycle refusals " + String(refusals))
+        print(
+            "PASS: 8 Optional lifecycle refusals, 144 accepted controls, and"
+            " the string traces"
+        )
+    finally:
+        _ = run_program(["rm", "-rf", work], 30)
+
+
 def main() raises:
     """Compare the Boolean grouping fixture from the command line."""
     var mojo = ".venv/bin/mojo"
@@ -5247,6 +5498,7 @@ def main() raises:
         check_custom_truth_refusals(mojo)
         check_custom_truth_controls(mojo)
         check_custom_refusals(mojo)
+        check_optional_lifecycles(mojo)
     except error:
         print(String(error), file=stderr)
         exit(1)

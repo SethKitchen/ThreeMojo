@@ -1,0 +1,34 @@
+struct MoveOnly(Movable):
+    var index: Int
+
+    def __init__(out self, index: Int):
+        self.index = index
+        print("CREATE", index)
+
+    def __init__(out self, *, deinit move: Self):
+        self.index = move.index
+        print("MOVE", self.index)
+
+    def __deinit__(deinit self):
+        print("DROP", self.index)
+
+
+def optional(index: Int, full: Bool) -> Optional[MoveOnly]:
+    print("MAKE", index, full)
+    if full:
+        return MoveOnly(index)
+    return None
+
+
+def temporary(first: Bool, second: Bool):
+    print("TEMPORARY", first, second)
+    if optional(0, first) and optional(1, second):
+        print("BODY T")
+    else:
+        print("BODY F")
+
+
+def main():
+    for first in [False, True]:
+        for second in [False, True]:
+            temporary(first, second)

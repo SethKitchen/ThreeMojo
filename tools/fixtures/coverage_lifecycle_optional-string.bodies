@@ -1,0 +1,288 @@
+STRING BODY 0 0 False False False
+STRING BODY 1 0 False False False
+STRING BODY 2 0 False False False
+STRING BODY 3 0 False False False
+STRING BODY 4 0 False False False
+STRING BODY 5 0 False False True
+STRING BODY 6 0 False False False
+STRING BODY 7 0 False False False
+STRING BODY 8 0 False False False
+STRING BODY 9 0 False False False
+STRING BODY 10 0 False False False
+STRING BODY 11 0 False False True
+STRING BODY 0 0 False True False
+STRING BODY 1 0 False True False
+STRING BODY 2 0 False True False
+STRING BODY 3 0 False True False
+STRING BODY 4 0 False True False
+STRING BODY 5 0 False True True
+STRING BODY 6 0 False True True
+STRING BODY 7 0 False True True
+STRING BODY 8 0 False True True
+STRING BODY 9 0 False True True
+STRING BODY 10 0 False True True
+STRING BODY 11 0 False True True
+STRING BODY 0 0 True False False
+STRING BODY 1 0 True False False
+STRING BODY 2 0 True False False
+STRING BODY 3 0 True False False
+STRING BODY 4 0 True False False
+STRING BODY 5 0 True False True
+STRING BODY 6 0 True False True
+STRING BODY 7 0 True False True
+STRING BODY 8 0 True False True
+STRING BODY 9 0 True False True
+STRING BODY 10 0 True False True
+STRING BODY 11 0 True False True
+STRING BODY 0 0 True True True
+STRING BODY 1 0 True True True
+STRING BODY 2 0 True True True
+STRING BODY 3 0 True True True
+STRING BODY 4 0 True True True
+STRING BODY 5 0 True True True
+STRING BODY 6 0 True True True
+STRING BODY 7 0 True True True
+STRING BODY 8 0 True True True
+STRING BODY 9 0 True True True
+STRING BODY 10 0 True True True
+STRING BODY 11 0 True True True
+STRING BODY 0 1 False False False
+STRING BODY 1 1 False False False
+STRING BODY 2 1 False False False
+STRING BODY 3 1 False False False
+STRING BODY 4 1 False False False
+STRING BODY 5 1 False False True
+STRING BODY 6 1 False False False
+STRING BODY 7 1 False False False
+STRING BODY 8 1 False False False
+STRING BODY 9 1 False False False
+STRING BODY 10 1 False False False
+STRING BODY 11 1 False False True
+STRING BODY 0 1 False True False
+STRING BODY 1 1 False True False
+STRING BODY 2 1 False True False
+STRING BODY 3 1 False True False
+STRING BODY 4 1 False True False
+STRING BODY 5 1 False True True
+STRING BODY 6 1 False True True
+STRING BODY 7 1 False True True
+STRING BODY 8 1 False True True
+STRING BODY 9 1 False True True
+STRING BODY 10 1 False True True
+STRING BODY 11 1 False True True
+STRING BODY 0 1 True False False
+STRING BODY 1 1 True False False
+STRING BODY 2 1 True False False
+STRING BODY 3 1 True False False
+STRING BODY 4 1 True False False
+STRING BODY 5 1 True False True
+STRING BODY 6 1 True False True
+STRING BODY 7 1 True False True
+STRING BODY 8 1 True False True
+STRING BODY 9 1 True False True
+STRING BODY 10 1 True False True
+STRING BODY 11 1 True False True
+STRING BODY 0 1 True True True
+STRING BODY 1 1 True True True
+STRING BODY 2 1 True True True
+STRING BODY 3 1 True True True
+STRING BODY 4 1 True True True
+STRING BODY 5 1 True True True
+STRING BODY 6 1 True True True
+STRING BODY 7 1 True True True
+STRING BODY 8 1 True True True
+STRING BODY 9 1 True True True
+STRING BODY 10 1 True True True
+STRING BODY 11 1 True True True
+STRING BODY 0 2 False False False
+STRING BODY 1 2 False False False
+STRING BODY 2 2 False False False
+STRING BODY 3 2 False False False
+STRING BODY 4 2 False False False
+STRING BODY 5 2 False False True
+STRING BODY 6 2 False False False
+STRING BODY 7 2 False False False
+STRING BODY 8 2 False False False
+STRING BODY 9 2 False False False
+STRING BODY 10 2 False False False
+STRING BODY 11 2 False False True
+STRING BODY 0 2 False True False
+STRING BODY 1 2 False True False
+STRING BODY 2 2 False True False
+STRING BODY 3 2 False True False
+STRING BODY 4 2 False True False
+STRING BODY 5 2 False True True
+STRING BODY 6 2 False True True
+STRING BODY 7 2 False True True
+STRING BODY 8 2 False True True
+STRING BODY 9 2 False True True
+STRING BODY 10 2 False True True
+STRING BODY 11 2 False True True
+STRING BODY 0 2 True False False
+STRING BODY 1 2 True False False
+STRING BODY 2 2 True False False
+STRING BODY 3 2 True False False
+STRING BODY 4 2 True False False
+STRING BODY 5 2 True False True
+STRING BODY 6 2 True False True
+STRING BODY 7 2 True False True
+STRING BODY 8 2 True False True
+STRING BODY 9 2 True False True
+STRING BODY 10 2 True False True
+STRING BODY 11 2 True False True
+STRING BODY 0 2 True True True
+STRING BODY 1 2 True True True
+STRING BODY 2 2 True True True
+STRING BODY 3 2 True True True
+STRING BODY 4 2 True True True
+STRING BODY 5 2 True True True
+STRING BODY 6 2 True True True
+STRING BODY 7 2 True True True
+STRING BODY 8 2 True True True
+STRING BODY 9 2 True True True
+STRING BODY 10 2 True True True
+STRING BODY 11 2 True True True
+STRING BODY 0 3 False False False
+STRING BODY 1 3 False False False
+STRING BODY 2 3 False False False
+STRING BODY 3 3 False False False
+STRING BODY 4 3 False False False
+STRING BODY 5 3 False False True
+STRING BODY 6 3 False False False
+STRING BODY 7 3 False False False
+STRING BODY 8 3 False False False
+STRING BODY 9 3 False False False
+STRING BODY 10 3 False False False
+STRING BODY 11 3 False False True
+STRING BODY 0 3 False True False
+STRING BODY 1 3 False True False
+STRING BODY 2 3 False True False
+STRING BODY 3 3 False True False
+STRING BODY 4 3 False True False
+STRING BODY 5 3 False True True
+STRING BODY 6 3 False True True
+STRING BODY 7 3 False True True
+STRING BODY 8 3 False True True
+STRING BODY 9 3 False True True
+STRING BODY 10 3 False True True
+STRING BODY 11 3 False True True
+STRING BODY 0 3 True False False
+STRING BODY 1 3 True False False
+STRING BODY 2 3 True False False
+STRING BODY 3 3 True False False
+STRING BODY 4 3 True False False
+STRING BODY 5 3 True False True
+STRING BODY 6 3 True False True
+STRING BODY 7 3 True False True
+STRING BODY 8 3 True False True
+STRING BODY 9 3 True False True
+STRING BODY 10 3 True False True
+STRING BODY 11 3 True False True
+STRING BODY 0 3 True True True
+STRING BODY 1 3 True True True
+STRING BODY 2 3 True True True
+STRING BODY 3 3 True True True
+STRING BODY 4 3 True True True
+STRING BODY 5 3 True True True
+STRING BODY 6 3 True True True
+STRING BODY 7 3 True True True
+STRING BODY 8 3 True True True
+STRING BODY 9 3 True True True
+STRING BODY 10 3 True True True
+STRING BODY 11 3 True True True
+STRING BODY 0 4 False False False
+STRING BODY 1 4 False False False
+STRING BODY 2 4 False False False
+STRING BODY 3 4 False False False
+STRING BODY 4 4 False False False
+STRING BODY 5 4 False False True
+STRING BODY 6 4 False False False
+STRING BODY 7 4 False False False
+STRING BODY 8 4 False False False
+STRING BODY 9 4 False False False
+STRING BODY 10 4 False False False
+STRING BODY 11 4 False False True
+STRING BODY 0 4 False True False
+STRING BODY 1 4 False True False
+STRING BODY 2 4 False True False
+STRING BODY 3 4 False True False
+STRING BODY 4 4 False True False
+STRING BODY 5 4 False True True
+STRING BODY 6 4 False True True
+STRING BODY 7 4 False True True
+STRING BODY 8 4 False True True
+STRING BODY 9 4 False True True
+STRING BODY 10 4 False True True
+STRING BODY 11 4 False True True
+STRING BODY 0 4 True False False
+STRING BODY 1 4 True False False
+STRING BODY 2 4 True False False
+STRING BODY 3 4 True False False
+STRING BODY 4 4 True False False
+STRING BODY 5 4 True False True
+STRING BODY 6 4 True False True
+STRING BODY 7 4 True False True
+STRING BODY 8 4 True False True
+STRING BODY 9 4 True False True
+STRING BODY 10 4 True False True
+STRING BODY 11 4 True False True
+STRING BODY 0 4 True True True
+STRING BODY 1 4 True True True
+STRING BODY 2 4 True True True
+STRING BODY 3 4 True True True
+STRING BODY 4 4 True True True
+STRING BODY 5 4 True True True
+STRING BODY 6 4 True True True
+STRING BODY 7 4 True True True
+STRING BODY 8 4 True True True
+STRING BODY 9 4 True True True
+STRING BODY 10 4 True True True
+STRING BODY 11 4 True True True
+NESTED STRING BODY 0 0 False False False
+NESTED STRING BODY 1 0 False False False
+NESTED STRING BODY 2 0 False False False
+NESTED STRING BODY 3 0 False False False
+NESTED STRING BODY 0 0 False True False
+NESTED STRING BODY 1 0 False True False
+NESTED STRING BODY 2 0 False True True
+NESTED STRING BODY 3 0 False True True
+NESTED STRING BODY 0 0 True False False
+NESTED STRING BODY 1 0 True False False
+NESTED STRING BODY 2 0 True False True
+NESTED STRING BODY 3 0 True False True
+NESTED STRING BODY 0 0 True True True
+NESTED STRING BODY 1 0 True True True
+NESTED STRING BODY 2 0 True True True
+NESTED STRING BODY 3 0 True True True
+NESTED STRING BODY 0 1 False False False
+NESTED STRING BODY 1 1 False False False
+NESTED STRING BODY 2 1 False False False
+NESTED STRING BODY 3 1 False False False
+NESTED STRING BODY 0 1 False True False
+NESTED STRING BODY 1 1 False True False
+NESTED STRING BODY 2 1 False True True
+NESTED STRING BODY 3 1 False True True
+NESTED STRING BODY 0 1 True False False
+NESTED STRING BODY 1 1 True False False
+NESTED STRING BODY 2 1 True False True
+NESTED STRING BODY 3 1 True False True
+NESTED STRING BODY 0 1 True True True
+NESTED STRING BODY 1 1 True True True
+NESTED STRING BODY 2 1 True True True
+NESTED STRING BODY 3 1 True True True
+NESTED STRING BODY 0 2 False False False
+NESTED STRING BODY 1 2 False False False
+NESTED STRING BODY 2 2 False False False
+NESTED STRING BODY 3 2 False False False
+NESTED STRING BODY 0 2 False True False
+NESTED STRING BODY 1 2 False True False
+NESTED STRING BODY 2 2 False True True
+NESTED STRING BODY 3 2 False True True
+NESTED STRING BODY 0 2 True False False
+NESTED STRING BODY 1 2 True False False
+NESTED STRING BODY 2 2 True False True
+NESTED STRING BODY 3 2 True False True
+NESTED STRING BODY 0 2 True True True
+NESTED STRING BODY 1 2 True True True
+NESTED STRING BODY 2 2 True True True
+NESTED STRING BODY 3 2 True True True

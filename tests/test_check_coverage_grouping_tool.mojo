@@ -323,5 +323,70 @@ def test_the_refusal_fixtures_match_the_pinned_text() raises:
     )
 
 
+def test_the_lifecycle_fixtures_match_the_pinned_text() raises:
+    var index = Path("tools/fixtures/coverage_lifecycle_index.txt").read_text()
+    assert_equal(
+        sha256_hex(index.as_bytes()),
+        "c29d9f0493f1d6360922dddcab05c50c4a2c33a045799b3cb92b800e0c732226",
+    )
+    var blob = String()
+    var extra = String()
+    var refusals = 0
+    for line in index.splitlines():
+        var text = String(line)
+        var cut = text.find("|")
+        var kind = String(text[byte=:cut])
+        var rest = String(text[byte = cut + 1 :])
+        if kind == "reject":
+            var source = Path(
+                "tools/fixtures/coverage_lifecycle_" + rest + ".txt"
+            ).read_text()
+            var expected = Path(
+                "tools/fixtures/coverage_lifecycle_" + rest + ".out"
+            ).read_text()
+            blob += rest
+            blob += "\0"
+            blob += source
+            blob += expected
+            extra += Path(
+                "tools/fixtures/coverage_lifecycle_" + rest + ".lines"
+            ).read_text()
+            refusals += 1
+        elif kind == "positive":
+            blob += "positive\0"
+            blob += Path(
+                "tools/fixtures/coverage_lifecycle_optional-positive.txt"
+            ).read_text()
+            extra += Path(
+                "tools/fixtures/coverage_lifecycle_optional-positive.lines"
+            ).read_text()
+            extra += Path(
+                "tools/fixtures/coverage_lifecycle_optional-positive.trace"
+            ).read_text()
+        elif kind == "string":
+            blob += "string\0"
+            blob += Path(
+                "tools/fixtures/coverage_lifecycle_optional-string.txt"
+            ).read_text()
+            extra += Path(
+                "tools/fixtures/coverage_lifecycle_optional-string.lines"
+            ).read_text()
+            extra += Path(
+                "tools/fixtures/coverage_lifecycle_optional-string.bodies"
+            ).read_text()
+            extra += Path(
+                "tools/fixtures/coverage_lifecycle_optional-string.trace"
+            ).read_text()
+    assert_equal(refusals, 8)
+    assert_equal(
+        sha256_hex(blob.as_bytes()),
+        "dd0d057b862236ff4a2ee13b856420da71c3688cc89e1b775f7af8e15c5cbcd4",
+    )
+    assert_equal(
+        sha256_hex(extra.as_bytes()),
+        "c67b01364e6a0e52f48a7ad35eaef333cd6fab440c0c97a364a4ea0bb7019392",
+    )
+
+
 def main() raises:
     TestSuite.discover_tests[__functions_in_module()]().run()
