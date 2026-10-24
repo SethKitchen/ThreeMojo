@@ -450,7 +450,7 @@ A far building is a baked proxy. `tools/carla_town_join.mojo` joins its parts, `
 
 A town's glass is a dark, smooth, partly metal pane that reflects its surroundings. A see-through window has nothing behind it, so a tower would show the sky through its windows. `tools/carla_gltf_rebuild.mojo` makes that pane and drops the vehicle glass tag. `tools/carla_town_attach.mojo` adds a plain material and each baked picture's material.
 
-`tools/carla_town_lamps.mojo` finds each street lamp head and places it with the copy's matrix. The scene's `extras` list the head of each street lamp, as `carla_lamps`: three numbers for each lamp, in the renderer's frame. The lamps' glass has the material tag `{"carla": "lamp"}`. A renderer draws each tile at one level, chosen by the tile's distance to the camera.
+`tools/carla_town_lamps.mojo` finds each street lamp head and places every copy of that lamp. The scene's `extras` list the head of each street lamp, as `carla_lamps`: three numbers for each lamp, in the renderer's frame. The lamps' glass has the material tag `{"carla": "lamp"}`. A renderer draws each tile at one level, chosen by the tile's distance to the camera.
 
 Each mesh keeps a share of its triangles, by its kind. Each town also has a cap for each kind at each level. A town can have more than its cap, as Town04 has with its eight thousand pines. Then every mesh of that kind gives up the same share, and `tools/carla_town_share.mojo` chooses that share. A tree gives up leaf cards, and each card that stays grows, so the crown stays full. Other meshes are simplified by `tools/carla_town_simplify.mojo`, and their texture seams stay where they are.
 

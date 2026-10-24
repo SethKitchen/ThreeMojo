@@ -10,7 +10,8 @@
 `FILE` is JSON. It has `mesh` and `primitives`. Each primitive has
 `positions` and `triangles`. The program prints the heads in the mesh
 frame, or `null` when the mesh is not a lamp. With `heads`, `linear`
-and `move`, it places those heads: `heads @ linear.T + move`.
+and `move`, it places those heads: `heads @ linear.T + move`. With
+`heads` and `matrices`, it places the heads for every copy.
 """
 
 from std.math import isinf, isnan
@@ -21,13 +22,16 @@ from tools._bigint import BigInt
 from tools._python_float import parse_float, python_repr
 from tools._python_json import (
     MISSING,
+    PY_BOOL,
     PY_DICT,
     PY_FLOAT,
     PY_INT,
     PY_LIST,
+    PY_NONE,
     PY_STR,
     PyJson,
 )
+from tools.carla_town_frame import frame_json
 
 
 @fieldwise_init
@@ -43,8 +47,9 @@ def heads_text(text: String) raises -> String:
     """Return the lamp heads in a mesh as JSON.
 
     Args:
-        text: A JSON object with `mesh` and `primitives`. Each primitive
-            has `positions` and `triangles`.
+        text: A JSON object with `mesh` and `primitives`, or `heads`
+            with `linear` and `move`, or `heads` with `matrices`. Each
+            primitive has `positions` and `triangles`.
 
     Returns:
         A JSON array of heads, or `null` when the mesh is not a lamp.
@@ -60,6 +65,8 @@ def heads_text(text: String) raises -> String:
     var root = doc.root
     if doc.kind(root) != PY_DICT:
         raise Error("lamp request is not an object")
+    if doc.get(root, "matrices") != MISSING:
+        return _placed_copies(doc, root)
     if doc.get(root, "heads") != MISSING:
         return _placed(doc, root)
     var mesh_node = doc.at(root, "mesh")
@@ -422,6 +429,90 @@ def _before(left: _WeldKey, right: _WeldKey) -> Bool:
 def _same(left: _WeldKey, right: _WeldKey) -> Bool:
     """Return whether two welded keys are equal."""
     return left.x == right.x and left.y == right.y and left.z == right.z
+
+
+def _placed_copies(doc: PyJson, root: Int) raises -> String:
+    """Return every copy's heads in the world frame."""
+    var heads = doc.at(root, "heads")
+    if doc.kind(heads) != PY_LIST:
+        raise Error("heads are not a list")
+    var matrices = doc.at(root, "matrices")
+    if doc.kind(matrices) != PY_LIST:
+        raise Error("matrices are not a list")
+    var heads_json = _compact(doc, heads)
+    var out = String("[")
+    var first = True
+    for index in range(doc.length(matrices)):
+        var frame = PyJson.parse(
+            frame_json(_compact(doc, doc.item(matrices, index)))
+        )
+        var request = String('{"heads":')
+        request += heads_json
+        request += ',"linear":'
+        request += _compact(frame, frame.at(frame.root, "linear"))
+        request += ',"move":'
+        request += _compact(frame, frame.at(frame.root, "move"))
+        request += "}"
+        var placed_doc = PyJson.parse(request)
+        var one = _placed(placed_doc, placed_doc.root)
+        if one == "[]":
+            continue
+        if not first:
+            out += ","
+        first = False
+        var end = one.byte_length() - 1
+        out += String(one[byte=1:end])
+    out += "]"
+    return out
+
+
+def _compact(doc: PyJson, node: Int) raises -> String:
+    """Return JSON with no spaces, in insertion order."""
+    var kind = doc.kind(node)
+    if kind == PY_DICT:
+        var out = String("{")
+        var count = doc.length(node)
+        for index in range(count):
+            if index > 0:
+                out += ","
+            out += _quote(doc.key(node, index))
+            out += ":"
+            out += _compact(doc, doc.value(node, index))
+        out += "}"
+        return out
+    if kind == PY_LIST:
+        var out = String("[")
+        var count = doc.length(node)
+        for index in range(count):
+            if index > 0:
+                out += ","
+            out += _compact(doc, doc.item(node, index))
+        out += "]"
+        return out
+    if kind == PY_STR:
+        return _quote(doc.text(node))
+    if kind == PY_BOOL:
+        if doc.flag(node):
+            return "true"
+        return "false"
+    if kind == PY_NONE:
+        return "null"
+    return doc.text(node)
+
+
+def _quote(text: String) -> String:
+    """Return one JSON string."""
+    var out = String('"')
+    var raw = text.as_bytes()
+    for index in range(len(raw)):
+        var byte = raw[index]
+        if byte == 34 or byte == 92:
+            out += "\\"
+            out += chr(Int(byte))
+        else:
+            out += chr(Int(byte))
+    out += '"'
+    return out
 
 
 def _placed(doc: PyJson, root: Int) raises -> String:

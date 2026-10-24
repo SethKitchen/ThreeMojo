@@ -326,68 +326,6 @@ def component_rows(row):
     return numpy.array(matrix, dtype=numpy.float64)
 
 
-_FRAME = None
-
-
-def _frame_worker():
-    """Return the long-lived `tools/carla_town_frame.mojo` process."""
-    global _FRAME
-    if _FRAME is not None and _FRAME.poll() is None:
-        return _FRAME
-    here = os.path.dirname(os.path.abspath(__file__))
-    repo = os.path.abspath(os.path.join(here, "..", "..", "..", ".."))
-    mojo = os.path.join(repo, ".venv", "bin", "mojo")
-    if not os.path.isfile(mojo):
-        mojo = "mojo"
-    _FRAME = subprocess.Popen(
-        ["sh", os.path.join(repo, "tools", "tool.sh"), mojo,
-         "carla_town_frame", "serve"],
-        stdin=subprocess.PIPE, stdout=subprocess.PIPE, text=True,
-    )
-    return _FRAME
-
-
-def _close_frame():
-    """Stop the frame worker when the process exits."""
-    worker = _FRAME
-    if worker is None or worker.poll() is not None:
-        return
-    worker.stdin.close()
-    worker.wait(timeout=5)
-    worker.stdout.close()
-
-
-atexit.register(_close_frame)
-
-
-def _frame_ask(matrix):
-    """Return `linear` and `move` for one 4×4 matrix."""
-    worker = _frame_worker()
-    worker.stdin.write(json.dumps(matrix) + "\n")
-    worker.stdin.flush()
-    line = worker.stdout.readline()
-    if not line:
-        raise ValueError("town frame stopped")
-    if line.startswith("err\t"):
-        raise ValueError(line[4:].strip())
-    return json.loads(line)
-
-
-def to_three(rows):
-    """Return (A, t): an Unreal row-vector matrix as the map that takes a
-    point of an exported mesh (three.js frame, meters) to the world
-    (three.js frame, meters): world = A @ point + t.
-
-    `tools/carla_town_frame.mojo` converts the matrix.
-    """
-    matrix = numpy.asarray(rows, dtype=numpy.float64).reshape(4, 4)
-    doc = _frame_ask(matrix.tolist())
-    return (
-        numpy.array(doc["linear"], dtype=numpy.float64),
-        numpy.array(doc["move"], dtype=numpy.float64),
-    )
-
-
 # ---- Meshes ----------------------------------------------------------------
 
 def read_gltf(path):
@@ -1113,15 +1051,18 @@ def lower(primitive, kind, mesh_path, index, total, masked, lod, factor=1.0):
     }
 
 
-def _lamp_world(heads, linear, move):
-    """Return lamp heads placed by `tools/carla_town_lamps.mojo`.
+def _lamp_copies(heads, copies):
+    """Return every copy's lamp heads in the renderer frame.
 
-    The map is `heads @ linear.T + move`, in the three.js frame.
+    `tools/carla_town_lamps.mojo` converts each matrix and places the
+    heads. The map is `heads @ linear.T + move`.
     """
     return _lamps_request({
         "heads": numpy.asarray(heads, dtype=float).reshape(-1, 3).tolist(),
-        "linear": numpy.asarray(linear, dtype=float).reshape(3, 3).tolist(),
-        "move": numpy.asarray(move, dtype=float).reshape(3).tolist(),
+        "matrices": [
+            numpy.asarray(rows, dtype=float).reshape(4, 4).tolist()
+            for rows in copies
+        ],
     })
 
 
@@ -1380,10 +1321,8 @@ def build(town, max_size, tile):
         if mesh_path not in heads_of:
             heads_of[mesh_path] = lamp_heads(primitives, mesh_path)
         heads = heads_of[mesh_path]
-        if heads is not None:
-            for rows in copies:
-                linear, move = to_three(rows)
-                lamps.extend(_lamp_world(heads, linear, move))
+        if heads is not None and copies:
+            lamps.extend(_lamp_copies(heads, copies))
         total = item["triangles"]
         for part in job["parts"]:
             index = part["index"]

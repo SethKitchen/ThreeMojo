@@ -22,6 +22,22 @@ from tools._python_float import parse_float
 from tools._python_json import PY_FLOAT, PY_INT, PY_LIST, PyJson
 
 
+def frame_json(text: String) raises -> String:
+    """Return one matrix in the renderer's frame, as JSON.
+
+    Args:
+        text: A JSON 4×4 matrix, nested or as 16 row-major numbers.
+
+    Returns:
+        An object with `linear`, a 3×3 matrix, and `move`, three meters.
+        `move` is the translation with y and z swapped, divided by 100.
+
+    Raises:
+        Error: If the matrix is not 16 numbers.
+    """
+    return _frame_json(text)
+
+
 def frame_text(path: String) raises -> String:
     """Return one matrix in the renderer's frame, as JSON.
 
@@ -35,7 +51,7 @@ def frame_text(path: String) raises -> String:
     Raises:
         Error: If the file cannot be read, or the matrix is not 16 numbers.
     """
-    return _frame_json(Path(path).read_text())
+    return frame_json(Path(path).read_text())
 
 
 def _frame_json(text: String) raises -> String:

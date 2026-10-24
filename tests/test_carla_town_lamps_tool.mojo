@@ -113,6 +113,20 @@ def test_corners_that_share_a_millimeter_are_one_piece() raises:
         )
 
 
+def test_every_copy_is_placed_from_its_matrix() raises:
+    assert_equal(
+        heads_text(
+            '{"heads":[[1.0,2.0,3.0]],"matrices":['
+            + "[[1,0,0,0],[0,1,0,0],[0,0,1,0],[3200,0,0,1]],"
+            + "[[1,0,0,0],[0,1,0,0],[0,0,1,0],[0,100,0,1]]]}"
+        ),
+        "[[33.0,2.0,3.0],[1.0,2.0,4.0]]",
+    )
+    assert_equal(heads_text('{"heads":[[1,2,3]],"matrices":[]}'), "[]")
+    with assert_raises(contains="matrices are not a list"):
+        _ = heads_text('{"heads":[[1,2,3]],"matrices":{}}')
+
+
 def test_a_head_is_placed_by_the_copy_matrix() raises:
     var lines = run_program(
         [
