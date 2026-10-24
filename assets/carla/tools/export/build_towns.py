@@ -609,8 +609,9 @@ def simplify(primitive, target, borders=True, small=False):
         points, faces.astype(numpy.int32), collapses)
     if len(new_faces) == 0:
         return primitive
-    source = numpy.zeros(len(new_points), dtype=numpy.int64)
-    source[mapping[::-1]] = numpy.arange(len(mapping))[::-1]
+    # `tools/carla_collapse_map.mojo` keeps the first old corner.
+    source = numpy.array(
+        fix.collapse_source(mapping, len(new_points)), dtype=numpy.int64)
     return {"positions": new_points, "normals": area_normals(new_points, new_faces),
             "uvs": primitive["uvs"][source], "triangles": new_faces.astype(numpy.int64),
             "material": primitive["material"]}

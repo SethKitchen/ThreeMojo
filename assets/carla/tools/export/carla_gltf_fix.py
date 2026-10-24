@@ -432,6 +432,37 @@ def _area_normals(points, faces):
     return numpy.array(values, dtype=numpy.float64)
 
 
+def collapse_source(mapping, count):
+    """Return the first old corner that collapsed into each new corner.
+
+    `tools/carla_collapse_map.mojo` reads the map. A new corner nobody
+    reached stays 0.
+    """
+    here = os.path.dirname(os.path.abspath(__file__))
+    repo = os.path.abspath(os.path.join(here, "..", "..", "..", ".."))
+    mojo = os.path.join(repo, ".venv", "bin", "mojo")
+    if not os.path.isfile(mojo):
+        mojo = "mojo"
+    folder = tempfile.mkdtemp(prefix="collapse-map-")
+    try:
+        path = os.path.join(folder, "map.json")
+        with open(path, "w", encoding="utf-8") as handle:
+            json.dump({
+                "mapping": [int(value) for value in mapping],
+                "count": int(count),
+            }, handle, separators=(",", ":"))
+        result = subprocess.run(
+            ["sh", os.path.join(repo, "tools", "tool.sh"), mojo,
+             "carla_collapse_map", path],
+            capture_output=True, text=True,
+        )
+    finally:
+        shutil.rmtree(folder, ignore_errors=True)
+    if result.returncode != 0:
+        raise ValueError(result.stderr.strip() or "collapse map failed")
+    return json.loads(result.stdout)["source"]
+
+
 def decimate(gltf, data, budget):
     """Bring a model's triangles down to about `budget`, and return the
     buffer with the new primitives' data added.
@@ -444,7 +475,8 @@ def decimate(gltf, data, budget):
     whole, and so is a cut-out one, a tree's leaves: each leaf is a card
     of two triangles, all edge, which a collapse would tear. Each new
     vertex takes the texture coordinates and the tangent of an old vertex
-    that collapsed into it.
+    that collapsed into it. `tools/carla_collapse_map.mojo` keeps the
+    first of those old vertices.
     """
     import numpy
     import fast_simplification
@@ -480,9 +512,7 @@ def decimate(gltf, data, budget):
                 points, faces, collapses)
             if len(new_faces) == 0:
                 continue
-            source = {}
-            for old, new in enumerate(mapping):
-                source.setdefault(int(new), old)
+            source = collapse_source(mapping, len(new_points))
             attributes = {"POSITION": _append(out, gltf, [float(v) for v in new_points.reshape(-1)],
                                               "f", 5126, "VEC3", 34962)}
             if "NORMAL" in primitive["attributes"]:
@@ -502,7 +532,7 @@ def decimate(gltf, data, budget):
                     continue
                 picked = []
                 for new in range(len(new_points)):
-                    old = source.get(new, 0)
+                    old = source[new]
                     picked += values[old * width:(old + 1) * width]
                 attributes[name] = _append(out, gltf, picked, "f", 5126, accessor["type"], 34962)
             primitive["attributes"] = attributes
