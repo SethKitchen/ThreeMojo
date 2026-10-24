@@ -414,9 +414,11 @@ CARLA's vehicles are Unreal Engine 4.26 assets. The scripts in `assets/carla/too
    sh tools/tool.sh .venv/bin/mojo carla_export_manifest_vehicles
    ```
 
-The glTF merge is `tools/carla_vehicle_merge.mojo`. It appends the static mesh buffer and renumbers its views, accessors, materials, meshes and nodes. `export_vehicles.py` reads each vehicle blueprint for the meshes it names. `tools/carla_vehicle_refs.mojo` lists the static packages in that file. It exports the skeletal body and the static glass and lights, then merges them into one glTF file. `carla_gltf_fix.py` then does these steps: `tools/carla_gltf_dedupe.mojo` keeps one material of each name.
+`export_vehicles.py` reads each vehicle blueprint for the meshes it names. `tools/carla_vehicle_paths.mojo` finds that blueprint and its cooked package. `tools/carla_vehicle_refs.mojo` lists the static packages in that file. It exports the skeletal body and the static glass and lights, then merges them into one glTF file. `tools/carla_vehicle_merge.mojo` appends the static mesh buffer and renumbers its views, accessors, materials, meshes and nodes.
 
-The files are indexed by `tools/carla_file_index.mojo`. 1. It rebuilds each material from the parameters that UModel writes beside the mesh. It uses the base color, normal and ORM maps, the car paint's color and translucent glass. It scales each texture to 1024 pixels or less. `tools/carla_mat_text.mojo` reads the `.mat` and `.props.txt` files.
+`carla_gltf_fix.py` then does these steps. `tools/carla_file_index.mojo` indexes the files. `tools/carla_mat_text.mojo` reads the `.mat` and `.props.txt` files. `tools/carla_gltf_dedupe.mojo` keeps one material of each name.
+
+1. It rebuilds each material from the parameters that UModel writes beside the mesh. It uses the base color, normal and ORM maps, the car paint's color and translucent glass. It scales each texture to 1024 pixels or less.
 2. It removes the skin, because the town takes plain meshes. It removes Unreal's vertex colors, because they are masks and not colors.
 3. It splits the lamps into head lamps and tail lamps. CARLA's lamp material reads an eight-color mask, and UModel does not export what the colors mean. So a lamp in front of the model's middle is a head lamp, and a lamp behind it is a tail lamp.
 4. It simplifies the model to `--budget` triangles, 35,000 by default, one primitive at a time. The seams stay where they are, so the textures do not tear. The normals are made again from the simplified faces.
@@ -476,7 +478,9 @@ The towns are made in three steps. The scripts run on Windows, like the vehicle 
    python export_towns.py
    ```
 
-   `build_towns.py` draws its own box for the engine's cube from `tools/carla_town_cube.mojo`. `build_towns.py` reads each mesh with `tools/carla_town_mesh.mojo`. It reads the release's own `CarlaUE4/Content`, not `cooked/`. It does not export the engine's own content, which is licensed for use in the engine only. `tools/carla_town_paths.mojo` names the packages. `build_towns.py` draws its own box for the engine's cube.
+   It reads the release's own `CarlaUE4/Content`, not `cooked/`. It does not export the engine's own content, which is licensed for use in the engine only. `build_towns.py` draws its own box for the engine's cube from `tools/carla_town_cube.mojo`.
+
+   `tools/carla_town_paths.mojo` names the packages. `build_towns.py` reads each mesh with `tools/carla_town_mesh.mojo`.
 
 3. Build and zip the packages:
 
