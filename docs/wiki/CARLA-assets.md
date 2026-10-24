@@ -448,6 +448,8 @@ A town's glass is a dark, smooth, partly metal pane that reflects its surroundin
 
 Each mesh keeps a share of its triangles, by its kind. Each town also has a cap for each kind at each level. A town can have more than its cap, as Town04 has with its eight thousand pines. Then every mesh of that kind gives up the same share. A tree gives up leaf cards, and each card that stays grows, so the crown stays full. Other meshes are simplified, and their texture seams stay where they are.
 
+The kind of each mesh and both triangle limits come from `tools/carla_town_budget.mojo`. `build_towns.py` asks that program for every mesh.
+
 Some textures in CARLA's content show a company's mark, a real person, a real institution or a poster of unclear origin. CARLA's license covers CARLA's own work, not these. Each one becomes one flat color, its average. `NEUTRAL` in `carla_gltf_fix.py` names them, and the vehicle packages use the same list.
 
 A package names no engine and no engine path. `build_towns.py` stops with an error when it finds one.
@@ -514,6 +516,7 @@ The standard-library identity checks run with `make test-tools`.
 The synthetic bake checks need NumPy, Pillow and the repository Mojo.
 They use two small meshes and two colors. They need no CARLA release,
 server or GPU. They call the Mojo export programs through
+server or GPU. They call `tools/carla_town_budget.mojo` through
 `tools/tool.sh`.
 
 Only mesh simplification is substituted. The tests use the real material
