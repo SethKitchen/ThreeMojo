@@ -35,7 +35,9 @@ PR791 adds or extends five sources in the same table:
 - `tools/compile_fail_expectations.json`
 
 The scan renderer changes these files. It adds tiled and level-of-detail splat
-drawing, and it adds the compile-fail records of the new scan types. Each
+drawing, and it adds the compile-fail records of the new scan types. The
+vegetation extension merges into the same change. Its two compile-fail records,
+for `PlantKind` and `ClusterFate`, are in the same expectation edge. Each
 source has exact before and after digests, token digests and line edits. The
 before digest is the digest on main. For the expectation file that is the PR776
 digest. The prior files join the PR776 and PR760 pins in the same way as the

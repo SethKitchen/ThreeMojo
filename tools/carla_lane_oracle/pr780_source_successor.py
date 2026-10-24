@@ -5180,13 +5180,32 @@ EDGES = json.loads(r'''
   },
   "tools/compile_fail_expectations.json": {
     "before_sha256": "cae00c1721392c75b10af5793e6de851d963350c8396e405ef0233c19af5b723",
-    "after_sha256": "9e982fdf41995285061585ae5d12efa46185ece94d9ed22d157e37867e59d924",
+    "after_sha256": "b0999d4ca1624909e6d1ac2d0c6948b8833b3d25824efd623068457b550e1c43",
     "before_token_sha256": "f4adb6494fee3e96a00ed12990e3c1979b42e31df987492561c08e8354ac4ba2",
-    "after_token_sha256": "fa19c2642328c50ddc842479daab28a96137096b7fe625775b2daf248def8d8d",
+    "after_token_sha256": "fb3bbe6c365fa7d2886229bea3dbec6a3adaefa3d92d27f2b1e903926e4f5a90",
     "edits": [
       {
-        "start": 1815,
-        "stop": 1825,
+        "start": 349,
+        "stop": 361,
+        "before": [],
+        "after": [
+          "    ]\n",
+          "  },\n",
+          "  \"tests/compile_fail/a_cluster_fate_is_not_a_bare_int.mojo\": {\n",
+          "    \"errors\": [\n",
+          "      {\n",
+          "        \"line\": 12,\n",
+          "        \"column\": 26,\n",
+          "        \"message\": \"invalid call to 'require_cluster_fate': value passed to 'fate' cannot be converted from 'IntLiteral[0]' to 'ClusterFate'\"\n",
+          "      }\n",
+          "    ],\n",
+          "    \"notes\": [\n",
+          "      \"function declared here\"\n"
+        ]
+      },
+      {
+        "start": 1827,
+        "stop": 1837,
         "before": [],
         "after": [
           "  \"tests/compile_fail/a_kit_kind_is_not_a_bare_int.mojo\": {\n",
@@ -5202,10 +5221,33 @@ EDGES = json.loads(r'''
         ]
       },
       {
-        "start": 3018,
-        "stop": 3058,
+        "start": 2726,
+        "stop": 2738,
         "before": [],
         "after": [
+          "  \"tests/compile_fail/a_plant_kind_is_not_a_bare_int.mojo\": {\n",
+          "    \"errors\": [\n",
+          "      {\n",
+          "        \"line\": 12,\n",
+          "        \"column\": 24,\n",
+          "        \"message\": \"invalid call to 'require_plant_kind': value passed to 'kind' cannot be converted from 'IntLiteral[2]' to 'PlantKind'\"\n",
+          "      }\n",
+          "    ],\n",
+          "    \"notes\": [\n",
+          "      \"function declared here\"\n",
+          "    ]\n",
+          "  },\n"
+        ]
+      },
+      {
+        "start": 3038,
+        "stop": 3078,
+        "before": [],
+        "after": [
+          "      }\n",
+          "    ],\n",
+          "    \"notes\": []\n",
+          "  },\n",
           "  \"tests/compile_fail/a_scale_source_is_not_a_bare_int.mojo\": {\n",
           "    \"errors\": [\n",
           "      {\n",
@@ -5241,16 +5283,12 @@ EDGES = json.loads(r'''
           "      {\n",
           "        \"line\": 12,\n",
           "        \"column\": 28,\n",
-          "        \"message\": \"cannot implicitly convert 'IntLiteral[0]' value to 'ScanFormat'\"\n",
-          "      }\n",
-          "    ],\n",
-          "    \"notes\": []\n",
-          "  },\n"
+          "        \"message\": \"cannot implicitly convert 'IntLiteral[0]' value to 'ScanFormat'\"\n"
         ]
       },
       {
-        "start": 3368,
-        "stop": 3378,
+        "start": 3392,
+        "stop": 3402,
         "before": [],
         "after": [
           "  },\n",
@@ -5392,9 +5430,9 @@ EDGE_SHA256 = {'core/deform.mojo': 'b6afec67eea77b1a76cae98df1b4399de366b2a82878
  'tools/carla_lane_oracle/test_typed_owned_operations.py': '56a59b04408d344079048ccc8a32e3a5c0e1af4505cb06aa281c01364738b1eb',
  'tools/carla_lane_oracle/test_witness_format_contracts.py': '554b6db980e099747c3d536eaf722f210f0f17d3f78983cf08bb180c588a22ae',
  'tools/carla_lane_oracle/translated_parameter_resolution.py': '1c63297c0097ce50b9f314ba321e7f4d04c009f6379552a84adefb62a2a7f375',
- 'tools/compile_fail_expectations.json': '6fb6052b58467346a1ef6853a30b52ff692bce737a404a21355daaebc63d063d',
+ 'tools/compile_fail_expectations.json': '727e73ac157caad86d2072e5ea089c454ebe0f078c50e72871906dcf0dfce467',
  'tools/test_conditioned_coverage_loops.py': 'f88451e7313fd84cc788847b1c960dc395b98736779a92c81a1d056ff2977520'}
-DATA_SHA256 = 'c063bba38729f097302cd74d7703c0c89c7a69523dec229d5239b355d4f8fcd9'
+DATA_SHA256 = 'aeb09c5ca3cd04196137fd0961187c029631889f821a538347f34b924431fa99'
 # END FIXED PR780 SUCCESSOR DATA
 
 
@@ -5410,7 +5448,7 @@ def sha(raw):
 def _index_snapshot():
     """Authenticate and detach the fixed per-edge digests and bound inputs."""
     require(type(DATA_SHA256) is str, 'authority digest selector is not a builtin string')
-    require(DATA_SHA256 == 'c063bba38729f097302cd74d7703c0c89c7a69523dec229d5239b355d4f8fcd9', 'authority digest selector changed')
+    require(DATA_SHA256 == 'aeb09c5ca3cd04196137fd0961187c029631889f821a538347f34b924431fa99', 'authority digest selector changed')
     encoded = json.dumps({'edges': EDGE_SHA256, 'bound_inputs': BOUND_INPUTS},
                          sort_keys=True, separators=(',', ':'))
     require(sha(encoded) == DATA_SHA256, 'fixed source inverse data changed')
