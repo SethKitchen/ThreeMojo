@@ -20,14 +20,15 @@ OpenDRIVE map, `<town>.xodr`. The package names no engine
 and no engine path: `check_clean` refuses one that does.
 """
 
+import atexit
 import argparse
-import hashlib
 import json
 import os
-import re
 import shutil
 import struct
+import subprocess
 import sys
+import tempfile
 import zlib
 
 import numpy
@@ -35,7 +36,52 @@ import numpy
 HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, HERE)
 import carla_gltf_fix as fix  # noqa: E402
-from bake_identity import BakeIdentity  # noqa: E402
+
+
+def atlas_tag(gltf, out_dir, mesh_path, kind, parts, settings):
+    """Return the Mojo bake identity for one ordered material list.
+
+    Args:
+        gltf: The package tables.
+        out_dir: The directory that holds the texture files.
+        mesh_path: The source mesh path.
+        kind: `baked` or `impostor`.
+        parts: Ordered pairs of geometry digests and material indexes.
+        settings: The bake settings that affect the output.
+
+    Returns:
+        The atlas tag.
+
+    Raises:
+        ValueError: The identity program cannot read an input.
+    """
+    root = os.path.abspath(os.path.join(HERE, "..", "..", "..", ".."))
+    mojo = os.path.join(root, ".venv", "bin", "mojo")
+    if not os.path.isfile(mojo):
+        mojo = "mojo"
+    request = {
+        "gltf": gltf,
+        "out_dir": str(out_dir),
+        "mesh": mesh_path,
+        "kind": kind,
+        "parts": [[geometry, int(material)] for geometry, material in parts],
+        "settings": settings,
+    }
+    handle = tempfile.NamedTemporaryFile("w", suffix=".json", delete=False)
+    try:
+        json.dump(request, handle)
+        handle.close()
+        result = subprocess.run(
+            ["sh", os.path.join(root, "tools", "tool.sh"), mojo,
+             "carla_bake_identity", handle.name],
+            text=True, capture_output=True, check=False,
+        )
+    finally:
+        os.remove(handle.name)
+    if result.returncode != 0:
+        raise ValueError(result.stderr.strip() or "bake identity failed")
+    return result.stdout.strip()
+
 
 BASE = os.path.abspath(os.environ.get("CARLA_EXPORT_DIR", "."))
 RAW = os.path.join(BASE, "raw_town")
@@ -44,19 +90,6 @@ MAPS = os.path.join(BASE, "release", "CarlaUE4", "Content", "Carla", "Maps", "Op
 OUT = os.path.join(BASE, "town_packages")
 TOWNS = ["Town01", "Town02", "Town03", "Town04", "Town05", "Town10HD"]
 
-# The folder under /Game/Carla/Static/ -> the kind the package tags.
-KINDS = {
-    "Building": "building", "Bridge": "building", "Wall": "wall", "Fence": "fence",
-    "GuardRail": "fence", "Road": "road", "RoadLine": "road_line", "SideWalk": "sidewalk",
-    "Ground": "ground", "Terrain": "terrain", "Water": "water", "RailTrack": "rail",
-    "Vegetation": "vegetation", "Pole": "pole", "StreetLight": "pole",
-    "TrafficLight": "traffic_light", "TrafficSign": "traffic_sign",
-    "Car": "parked_vehicle", "Truck": "parked_vehicle", "Motorcycle": "parked_vehicle",
-    "Bicycle": "parked_vehicle", "Bus": "parked_vehicle",
-    "Static": "prop", "Dynamic": "prop", "Other": "prop",
-}
-# Folders the renderer draws itself, or that are not scenery.
-SKIP = {"Sky", "Particles", "Pedestrian", "Hair", "CubeMaps", "HDRi", "Decals", "TestWindowsParts"}
 # Engine materials: the grid marks a brush's hidden faces; the basic
 # shape's material is plain.
 GRID = "WorldGridMaterial"
@@ -88,194 +121,472 @@ CAPS = {
 TREES = "/Vegetation/Trees/"
 # One grass leaf in this many is kept: the ground's texture is the lawn.
 GRASS_KEEP = 10
-# Words that must not appear in a package.
-UNCLEAN = re.compile(r"unreal|\bue4\b|\bue5\b|epic games|umodel|/game/|/engine/|\.uasset|\.umap", re.I)
 # Triangles each mesh adds to the package, for the report.
 STATS = {}
 CREDIT = "CARLA Team, CARLA Simulator 0.9.16, CC-BY 4.0 (https://carla.org)"
 
 
+_BUDGET_CACHE = {}
+_BUDGET_PROC = None
+_BUDGET_ERR = None
+
+
+def _budget_root():
+    """Return the repository root that holds `tools/tool.sh`."""
+    return os.path.abspath(os.path.join(HERE, "..", "..", "..", ".."))
+
+
+def _budget_mojo():
+    """Return the Mojo compiler, as the Makefile's `TOOL_MOJO` chooses it."""
+    path = os.path.join(_budget_root(), ".venv", "bin", "mojo")
+    if os.path.isfile(path):
+        return path
+    return "mojo"
+
+
+def _budget_close():
+    """Stop the budget worker when this process ends."""
+    global _BUDGET_PROC
+    proc = _BUDGET_PROC
+    if proc is None or proc.poll() is not None:
+        return
+    try:
+        proc.stdin.close()
+    except Exception:
+        pass
+    try:
+        proc.wait(timeout=5)
+    except Exception:
+        proc.kill()
+    _BUDGET_PROC = None
+
+
+def _budget_worker():
+    """Return the long-lived `carla_town_budget serve` process."""
+    global _BUDGET_PROC, _BUDGET_ERR
+    if _BUDGET_PROC is not None and _BUDGET_PROC.poll() is None:
+        return _BUDGET_PROC
+    if _BUDGET_ERR is not None:
+        _BUDGET_ERR.close()
+    _BUDGET_ERR = tempfile.TemporaryFile()
+    _BUDGET_PROC = subprocess.Popen(
+        ["sh", os.path.join(_budget_root(), "tools", "tool.sh"), _budget_mojo(),
+         "carla_town_budget", "serve"],
+        stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=_BUDGET_ERR, text=True,
+    )
+    return _BUDGET_PROC
+
+
+def _budget_failed(proc):
+    """Raise the worker's error text and forget the dead process."""
+    global _BUDGET_PROC
+    try:
+        proc.wait(timeout=5)
+    except Exception:
+        proc.kill()
+    text = ""
+    if _BUDGET_ERR is not None:
+        _BUDGET_ERR.seek(0)
+        text = _BUDGET_ERR.read().decode("utf-8", "replace").strip()
+    _BUDGET_PROC = None
+    raise ValueError(text or "town budget failed")
+
+
+def _budget_ask(fields):
+    """Return one answer from `tools/carla_town_budget.mojo`."""
+    for field in fields:
+        if "\t" in field or "\n" in field or "\r" in field:
+            raise ValueError("town budget field has a separator")
+    key = tuple(fields)
+    cached = _BUDGET_CACHE.get(key)
+    if cached is not None:
+        return cached
+    proc = _budget_worker()
+    try:
+        proc.stdin.write("\t".join(fields) + "\n")
+        proc.stdin.flush()
+        line = proc.stdout.readline()
+    except (BrokenPipeError, ValueError):
+        _budget_failed(proc)
+    if not line:
+        _budget_failed(proc)
+    if not line.startswith("ok\t"):
+        raise ValueError(line.split("\t", 1)[-1].strip() or "town budget failed")
+    value = line[3:]
+    if value.endswith("\n"):
+        value = value[:-1]
+    if value.endswith("\r"):
+        value = value[:-1]
+    _BUDGET_CACHE[key] = value
+    return value
+
+
+atexit.register(_budget_close)
+
+
 def object_path(full_name):
-    """Return (`Class`, `/Game/A/B`, `B`) from UE4SS's `Class /Game/A/B.B`."""
-    cls, path = full_name.split(" ", 1)
-    package, _, name = path.rpartition(".")
-    return cls, package, name.rsplit(":", 1)[-1].rsplit(".", 1)[-1]
+    """Return (`Class`, `/Game/A/B`, `B`) from UE4SS's `Class /Game/A/B.B`.
+
+    `tools/carla_town_budget.mojo` splits the name.
+    """
+    parts = _budget_ask(["object", full_name]).split("\t")
+    if len(parts) != 3:
+        raise ValueError("town budget object path failed")
+    return parts[0], parts[1], parts[2]
 
 
 def kind_of(mesh_path):
-    """Return a mesh's kind, None to leave it out."""
-    parts = mesh_path.split("/")
-    if mesh_path.startswith("/Engine/"):
-        return "prop"
-    folder = parts[4] if len(parts) > 4 and parts[3] == "Static" else ""
-    if folder in SKIP:
+    """Return a mesh's kind, None to leave it out.
+
+    `tools/carla_town_budget.mojo` chooses the kind.
+    """
+    kind = _budget_ask(["kind", mesh_path])
+    if kind == "skip":
         return None
-    return KINDS.get(folder, "prop")
-
-
-# Kinds that lie flat on the ground. A road's paint is a decal a few
-# triangles deep, which simplifying breaks, and each is cheap, so each
-# keeps every triangle at both levels.
-FLAT = ("road", "road_line", "sidewalk", "ground", "terrain", "water", "rail")
+    return kind
 
 
 def budget(kind, triangles, mesh_path):
-    """Return the most triangles one copy of a mesh keeps."""
-    if kind in FLAT:
-        return triangles
-    if kind == "building":
-        return max(min(triangles, 2500), triangles // 6)
-    if kind == "parked_vehicle":
-        return min(triangles, 2500)
-    if kind == "vegetation":
-        return min(triangles, 800 if "/Bushes/" in mesh_path else 4000)
-    if kind in ("pole", "traffic_light", "traffic_sign"):
-        return min(triangles, max(400, triangles // 6))
-    return min(triangles, max(600, triangles // 4))
+    """Return the most triangles one copy of a mesh keeps.
+
+    `tools/carla_town_budget.mojo` chooses the limit. A flat kind keeps
+    every triangle: a road's paint is only a few triangles deep.
+    """
+    if kind is None:
+        kind = ""
+    return int(_budget_ask(["near", str(kind), str(int(triangles)), str(mesh_path)]))
+
+
+def far_budget(kind, triangles, mesh_path):
+    """Return the most triangles one copy keeps in the far level of
+    detail, 0 to leave it out there: what is small at a distance goes.
+
+    `tools/carla_town_budget.mojo` chooses the limit.
+    """
+    if kind is None:
+        kind = ""
+    return int(_budget_ask(["far", str(kind), str(int(triangles)), str(mesh_path)]))
 
 
 # ---- Transforms ------------------------------------------------------------
 
 SWAP = numpy.array([[1.0, 0, 0], [0, 0, 1.0], [0, 1.0, 0]])
+_PLACE_PROC = None
+_PLACE_ERR = None
+
+
+def _place_root():
+    """Return the repository root that holds `tools/tool.sh`."""
+    return os.path.abspath(os.path.join(HERE, "..", "..", "..", ".."))
+
+
+def _place_mojo():
+    """Return the Mojo compiler, as the Makefile's `TOOL_MOJO` chooses it."""
+    path = os.path.join(_place_root(), ".venv", "bin", "mojo")
+    if os.path.isfile(path):
+        return path
+    return "mojo"
+
+
+def _place_close():
+    """Stop the placement worker when this process ends."""
+    global _PLACE_PROC
+    proc = _PLACE_PROC
+    if proc is None or proc.poll() is not None:
+        return
+    try:
+        proc.stdin.close()
+    except Exception:
+        pass
+    try:
+        proc.wait(timeout=5)
+    except Exception:
+        proc.kill()
+    _PLACE_PROC = None
+
+
+def _place_worker():
+    """Return the long-lived `carla_town_place serve` process."""
+    global _PLACE_PROC, _PLACE_ERR
+    if _PLACE_PROC is not None and _PLACE_PROC.poll() is None:
+        return _PLACE_PROC
+    if _PLACE_ERR is not None:
+        _PLACE_ERR.close()
+    _PLACE_ERR = tempfile.TemporaryFile()
+    _PLACE_PROC = subprocess.Popen(
+        ["sh", os.path.join(_place_root(), "tools", "tool.sh"), _place_mojo(),
+         "carla_town_place", "serve"],
+        stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=_PLACE_ERR, text=True,
+    )
+    return _PLACE_PROC
+
+
+def _place_failed(proc):
+    """Raise the worker's error text and forget the dead process."""
+    global _PLACE_PROC
+    try:
+        proc.wait(timeout=5)
+    except Exception:
+        proc.kill()
+    text = ""
+    if _PLACE_ERR is not None:
+        _PLACE_ERR.seek(0)
+        text = _PLACE_ERR.read().decode("utf-8", "replace").strip()
+    _PLACE_PROC = None
+    raise ValueError(text or "town placement failed")
+
+
+def _place_ask(payload):
+    """Return one answer from `tools/carla_town_place.mojo`."""
+    proc = _place_worker()
+    try:
+        proc.stdin.write(json.dumps(payload, separators=(",", ":"), allow_nan=False) + "\n")
+        proc.stdin.flush()
+        line = proc.stdout.readline()
+    except (BrokenPipeError, ValueError):
+        _place_failed(proc)
+    if not line:
+        _place_failed(proc)
+    if line.startswith("ERR\t"):
+        raise ValueError(line[4:].strip() or "town placement failed")
+    return json.loads(line)
+
+
+atexit.register(_place_close)
 
 
 def rotation_rows(pitch, yaw, roll):
     """Return Unreal's rotation matrix for a rotator, in its row-vector
-    convention (a point is a row, multiplied on the left)."""
-    p, y, r = numpy.radians([pitch, yaw, roll])
-    sp, cp, sy, cy, sr, cr = numpy.sin(p), numpy.cos(p), numpy.sin(y), numpy.cos(y), numpy.sin(r), numpy.cos(r)
-    return numpy.array([
-        [cp * cy, cp * sy, sp],
-        [sr * sp * cy - cr * sy, sr * sp * sy + cr * cy, -sr * cp],
-        [-(cr * sp * cy + sr * sy), cy * sr - cr * sp * sy, cr * cp],
-    ])
+    convention (a point is a row, multiplied on the left).
+
+    `tools/carla_town_place.mojo` builds the matrix.
+    """
+    matrix = _place_ask({"op": "matrix", "pitch": pitch, "yaw": yaw, "roll": roll,
+                         "scale": [1, 1, 1], "location": [0, 0, 0]})
+    return numpy.array(matrix, dtype=numpy.float64)[:3, :3]
 
 
 def component_rows(row):
     """Return a component's world matrix in Unreal's row-vector
-    convention, in centimeters: scale, then rotate, then move."""
-    matrix = numpy.eye(4)
-    matrix[:3, :3] = numpy.diag(row["scale"]) @ rotation_rows(*row["rotation"])
-    matrix[3, :3] = row["location"]
-    return matrix
+    convention, in centimeters: scale, then rotate, then move.
+
+    `tools/carla_town_place.mojo` builds the matrix.
+    """
+    pitch, yaw, roll = row["rotation"]
+    matrix = _place_ask({"op": "matrix", "pitch": pitch, "yaw": yaw, "roll": roll,
+                         "scale": list(row["scale"]), "location": list(row["location"])})
+    return numpy.array(matrix, dtype=numpy.float64)
+
+
+_FRAME = None
+
+
+def _frame_worker():
+    """Return the long-lived `tools/carla_town_frame.mojo` process."""
+    global _FRAME
+    if _FRAME is not None and _FRAME.poll() is None:
+        return _FRAME
+    here = os.path.dirname(os.path.abspath(__file__))
+    repo = os.path.abspath(os.path.join(here, "..", "..", "..", ".."))
+    mojo = os.path.join(repo, ".venv", "bin", "mojo")
+    if not os.path.isfile(mojo):
+        mojo = "mojo"
+    _FRAME = subprocess.Popen(
+        ["sh", os.path.join(repo, "tools", "tool.sh"), mojo,
+         "carla_town_frame", "serve"],
+        stdin=subprocess.PIPE, stdout=subprocess.PIPE, text=True,
+    )
+    return _FRAME
+
+
+def _close_frame():
+    """Stop the frame worker when the process exits."""
+    worker = _FRAME
+    if worker is None or worker.poll() is not None:
+        return
+    worker.stdin.close()
+    worker.wait(timeout=5)
+    worker.stdout.close()
+
+
+atexit.register(_close_frame)
+
+
+def _frame_ask(matrix):
+    """Return `linear` and `move` for one 4×4 matrix."""
+    worker = _frame_worker()
+    worker.stdin.write(json.dumps(matrix) + "\n")
+    worker.stdin.flush()
+    line = worker.stdout.readline()
+    if not line:
+        raise ValueError("town frame stopped")
+    if line.startswith("err\t"):
+        raise ValueError(line[4:].strip())
+    return json.loads(line)
 
 
 def to_three(rows):
     """Return (A, t): an Unreal row-vector matrix as the map that takes a
     point of an exported mesh (three.js frame, meters) to the world
-    (three.js frame, meters): world = A @ point + t."""
-    linear = SWAP @ rows[:3, :3].T @ SWAP
-    return linear, SWAP @ rows[3, :3] / 100.0
+    (three.js frame, meters): world = A @ point + t.
 
-
-def hermite(p0, t0, p1, t1, a):
-    """Return the point and the unit direction of a Hermite curve."""
-    a2, a3 = a * a, a * a * a
-    point = ((2 * a3 - 3 * a2 + 1)[:, None] * p0 + (a3 - 2 * a2 + a)[:, None] * t0
-             + (-2 * a3 + 3 * a2)[:, None] * p1 + (a3 - a2)[:, None] * t1)
-    direction = ((6 * a2 - 6 * a)[:, None] * p0 + (3 * a2 - 4 * a + 1)[:, None] * t0
-                 + (-6 * a2 + 6 * a)[:, None] * p1 + (3 * a2 - 2 * a)[:, None] * t1)
-    length = numpy.linalg.norm(direction, axis=1, keepdims=True)
-    return point, direction / numpy.maximum(length, 1e-9)
+    `tools/carla_town_frame.mojo` converts the matrix.
+    """
+    matrix = numpy.asarray(rows, dtype=numpy.float64).reshape(4, 4)
+    doc = _frame_ask(matrix.tolist())
+    return (
+        numpy.array(doc["linear"], dtype=numpy.float64),
+        numpy.array(doc["move"], dtype=numpy.float64),
+    )
 
 
 def bend(points, normals, spline):
     """Bend mesh points (three.js frame, meters) along a spline mesh
     component's curve, as Unreal's spline mesh does, and return them in
-    the component's frame, in Unreal's axes and centimeters."""
-    local = points[:, [0, 2, 1]] * 100.0
-    axis = int(spline["forward_axis"])
-    along = local[:, axis]
-    low, high = along.min(), along.max()
-    alpha = (along - low) / max(high - low, 1e-6)
-    start, end = numpy.array(spline["start"]), numpy.array(spline["end"])
-    position, direction = hermite(start, numpy.array(spline["start_tangent"]), end,
-                                  numpy.array(spline["end_tangent"]), alpha)
-    up = numpy.array([0.0, 0.0, 1.0])
-    base_x = numpy.cross(up, direction)
-    base_x /= numpy.maximum(numpy.linalg.norm(base_x, axis=1, keepdims=True), 1e-9)
-    base_y = numpy.cross(direction, base_x)
-    roll = spline["start_roll"] + (spline["end_roll"] - spline["start_roll"]) * alpha
-    cos, sin = numpy.cos(roll)[:, None], numpy.sin(roll)[:, None]
-    x_vec = cos * base_x - sin * base_y
-    y_vec = cos * base_y + sin * base_x
-    scale = (numpy.array(spline["start_scale"])[None, :]
-             + (numpy.array(spline["end_scale"]) - numpy.array(spline["start_scale"]))[None, :] * alpha[:, None])
-    # The two axes across the curve, in the order Unreal takes them.
-    across = {0: (1, 2), 1: (2, 0), 2: (0, 1)}[axis]
-    out = (position + (local[:, across[0]] * scale[:, 0])[:, None] * x_vec
-           + (local[:, across[1]] * scale[:, 1])[:, None] * y_vec)
-    # Normals: the same frame without the curve's stretch.
-    n = normals[:, [0, 2, 1]]
-    frames = {0: (direction, x_vec, y_vec), 1: (y_vec, direction, x_vec), 2: (x_vec, y_vec, direction)}[axis]
-    bent = n[:, 0:1] * frames[0] + n[:, 1:2] * frames[1] + n[:, 2:3] * frames[2]
-    return out, bent
+    the component's frame, in Unreal's axes and centimeters.
+
+    `tools/carla_town_bend.mojo` bends the points.
+    """
+    folder = tempfile.mkdtemp(prefix="town-bend-")
+    try:
+        request = os.path.join(folder, "bend.json")
+        payload = {
+            "points": numpy.asarray(points, dtype=float).reshape(-1, 3).tolist(),
+            "normals": numpy.asarray(normals, dtype=float).reshape(-1, 3).tolist(),
+            "forward_axis": int(spline["forward_axis"]),
+            "start": list(spline["start"]),
+            "end": list(spline["end"]),
+            "start_tangent": list(spline["start_tangent"]),
+            "end_tangent": list(spline["end_tangent"]),
+            "start_roll": float(spline["start_roll"]),
+            "end_roll": float(spline["end_roll"]),
+            "start_scale": list(spline["start_scale"]),
+            "end_scale": list(spline["end_scale"]),
+        }
+        with open(request, "w", encoding="utf-8") as handle:
+            json.dump(payload, handle, separators=(",", ":"), allow_nan=False)
+        root = os.path.abspath(os.path.join(HERE, "..", "..", "..", ".."))
+        mojo = os.path.join(root, ".venv", "bin", "mojo")
+        if not os.path.isfile(mojo):
+            mojo = "mojo"
+        result = subprocess.run(
+            ["sh", os.path.join(root, "tools", "tool.sh"), mojo,
+             "carla_town_bend", request],
+            capture_output=True, text=True,
+        )
+        if result.returncode != 0:
+            raise ValueError(result.stderr.strip() or "town bend failed")
+        bent = json.loads(result.stdout)
+    finally:
+        shutil.rmtree(folder, ignore_errors=True)
+    return (numpy.array(bent["points"], dtype=numpy.float64),
+            numpy.array(bent["normals"], dtype=numpy.float64))
 
 
 # ---- Meshes ----------------------------------------------------------------
 
 def read_gltf(path):
     """Return a UModel glTF's primitives: positions, normals, texture
-    coordinates, triangles and material name, as numpy arrays."""
-    gltf = json.load(open(path, encoding="utf-8"))
-    data = open(os.path.join(os.path.dirname(path), gltf["buffers"][0]["uri"]), "rb").read()
+    coordinates, triangles and material name, as numpy arrays.
 
-    def array(index):
-        accessor = gltf["accessors"][index]
-        view = gltf["bufferViews"][accessor["bufferView"]]
-        width = {"SCALAR": 1, "VEC2": 2, "VEC3": 3, "VEC4": 4}[accessor["type"]]
-        dtype = {5121: numpy.uint8, 5123: numpy.uint16, 5125: numpy.uint32, 5126: numpy.float32}[accessor["componentType"]]
-        start = view.get("byteOffset", 0) + accessor.get("byteOffset", 0)
-        values = numpy.frombuffer(data, dtype=dtype, count=accessor["count"] * width, offset=start)
-        return values.reshape(-1, width) if width > 1 else values
-
+    `tools/carla_town_mesh.mojo` reads the buffer. A missing normal is
+    `[0, 1, 0]`, and a missing texture coordinate is zero.
+    """
+    root = os.path.abspath(os.path.join(HERE, "..", "..", "..", ".."))
+    mojo = os.path.join(root, ".venv", "bin", "mojo")
+    if not os.path.isfile(mojo):
+        mojo = "mojo"
+    result = subprocess.run(
+        ["sh", os.path.join(root, "tools", "tool.sh"), mojo, "carla_town_mesh", path],
+        capture_output=True, text=True,
+    )
+    if result.returncode != 0:
+        raise ValueError(result.stderr.strip() or "town mesh failed")
     primitives = []
-    for mesh in gltf["meshes"]:
-        for primitive in mesh["primitives"]:
-            attributes = primitive["attributes"]
-            positions = array(attributes["POSITION"]).astype(numpy.float64)
-            normals = (array(attributes["NORMAL"]).astype(numpy.float64) if "NORMAL" in attributes
-                       else numpy.tile([0.0, 1.0, 0.0], (len(positions), 1)))
-            uvs = (array(attributes["TEXCOORD_0"]).astype(numpy.float64) if "TEXCOORD_0" in attributes
-                   else numpy.zeros((len(positions), 2)))
-            triangles = array(primitive["indices"]).astype(numpy.int64).reshape(-1, 3)
-            name = gltf["materials"][primitive["material"]].get("name", "") if "material" in primitive else ""
-            primitives.append({"positions": positions, "normals": normals, "uvs": uvs,
-                               "triangles": triangles, "material": name})
+    for item in json.loads(result.stdout):
+        primitives.append({
+            "positions": numpy.array(item["positions"], dtype=numpy.float64),
+            "normals": numpy.array(item["normals"], dtype=numpy.float64),
+            "uvs": numpy.array(item["uvs"], dtype=numpy.float64),
+            "triangles": numpy.array(item["triangles"], dtype=numpy.int64),
+            "material": item["material"],
+        })
     return primitives
+
+
+_CUBE_TEXT = None
+
+
+def _cube_text():
+    """Return the engine cube JSON from `tools/carla_town_cube.mojo`."""
+    root = os.path.abspath(os.path.join(HERE, "..", "..", "..", ".."))
+    mojo = os.path.join(root, ".venv", "bin", "mojo")
+    if not os.path.isfile(mojo):
+        mojo = "mojo"
+    result = subprocess.run(
+        ["sh", os.path.join(root, "tools", "tool.sh"), mojo, "carla_town_cube"],
+        capture_output=True, text=True,
+    )
+    if result.returncode != 0:
+        raise ValueError(result.stderr.strip() or "town cube failed")
+    return result.stdout
 
 
 def cube():
     """Return a one-meter box centered on its origin: the engine's cube,
-    drawn from scratch."""
-    positions, normals, uvs, triangles = [], [], [], []
-    for axis in range(3):
-        for sign in (-1.0, 1.0):
-            normal = numpy.zeros(3)
-            normal[axis] = sign
-            u, v = numpy.zeros(3), numpy.zeros(3)
-            u[(axis + 1) % 3], v[(axis + 2) % 3] = 1.0, 1.0
-            if sign < 0:
-                u, v = v, u
-            base = len(positions)
-            for du, dv in ((0, 0), (1, 0), (1, 1), (0, 1)):
-                positions.append(0.5 * normal + (du - 0.5) * u + (dv - 0.5) * v)
-                normals.append(normal)
-                uvs.append((du, dv))
-            triangles += [(base, base + 1, base + 2), (base, base + 2, base + 3)]
-    return [{"positions": numpy.array(positions), "normals": numpy.array(normals), "uvs": numpy.array(uvs, float),
-             "triangles": numpy.array(triangles), "material": PLAIN}]
+    drawn from scratch.
+
+    `tools/carla_town_cube.mojo` chooses the corners. Each call returns
+    new arrays, so a caller can move one copy.
+    """
+    global _CUBE_TEXT
+    if _CUBE_TEXT is None:
+        _CUBE_TEXT = _cube_text()
+    doc = json.loads(_CUBE_TEXT)
+    return [{"positions": numpy.array(doc["positions"], dtype=numpy.float64),
+             "normals": numpy.array(doc["normals"], dtype=numpy.float64),
+             "uvs": numpy.array(doc["uvs"], dtype=numpy.float64),
+             "triangles": numpy.array(doc["triangles"], dtype=numpy.int64),
+             "material": doc["material"]}]
+
+
+def _normals_tool(points, faces):
+    """Return JSON from `tools/carla_area_normals.mojo`."""
+    here = os.path.dirname(os.path.abspath(__file__))
+    repo = os.path.abspath(os.path.join(here, "..", "..", "..", ".."))
+    mojo = os.path.join(repo, ".venv", "bin", "mojo")
+    if not os.path.isfile(mojo):
+        mojo = "mojo"
+    payload = {
+        "points": numpy.asarray(points, dtype=numpy.float64).reshape(-1, 3).tolist(),
+        "faces": numpy.asarray(faces, dtype=numpy.int64).reshape(-1, 3).tolist(),
+    }
+    folder = tempfile.mkdtemp(prefix="area normals ")
+    try:
+        path = os.path.join(folder, "mesh.json")
+        with open(path, "w", encoding="utf-8") as handle:
+            json.dump(payload, handle)
+        result = subprocess.run(
+            ["sh", os.path.join(repo, "tools", "tool.sh"), mojo,
+             "carla_area_normals", path],
+            capture_output=True, text=True,
+        )
+    finally:
+        shutil.rmtree(folder, ignore_errors=True)
+    if result.returncode != 0:
+        raise ValueError(result.stderr.strip() or "area normals failed")
+    values = json.loads(result.stdout)
+    if not values:
+        return numpy.zeros((0, 3))
+    return numpy.array(values, dtype=numpy.float64)
 
 
 def area_normals(points, faces):
-    """Return each vertex's normal: its faces' normals, weighted by area."""
-    corners = points[faces]
-    face = numpy.cross(corners[:, 1] - corners[:, 0], corners[:, 2] - corners[:, 0])
-    normals = numpy.zeros_like(points)
-    for k in range(3):
-        numpy.add.at(normals, faces[:, k], face)
-    length = numpy.linalg.norm(normals, axis=1, keepdims=True)
-    return numpy.where(length > 1e-12, normals / numpy.maximum(length, 1e-12), [0.0, 1.0, 0.0])
+    """Return each vertex's normal: its faces' normals, weighted by area.
+
+    `tools/carla_area_normals.mojo` weights the faces.
+    """
+    return _normals_tool(points, faces)
 
 
 def simplify(primitive, target, borders=True, small=False):
@@ -311,6 +622,35 @@ CLUSTER_DIVISIONS = 200
 CLUSTER_CELL = 0.25
 
 
+def _weld_tool(positions, triangles):
+    """Return JSON from `tools/carla_town_weld.mojo`."""
+    here = os.path.dirname(os.path.abspath(__file__))
+    repo = os.path.abspath(os.path.join(here, "..", "..", "..", ".."))
+    mojo = os.path.join(repo, ".venv", "bin", "mojo")
+    if not os.path.isfile(mojo):
+        mojo = "mojo"
+    folder = tempfile.mkdtemp(prefix="town-weld-")
+    try:
+        path = os.path.join(folder, "weld.json")
+        with open(path, "w", encoding="utf-8") as handle:
+            json.dump({
+                "positions": numpy.asarray(positions, dtype=float).reshape(-1, 3).tolist(),
+                "triangles": numpy.asarray(triangles).reshape(-1, 3).tolist(),
+                "divisions": CLUSTER_DIVISIONS,
+                "minimum": CLUSTER_CELL,
+            }, handle, separators=(",", ":"), allow_nan=False)
+        result = subprocess.run(
+            ["sh", os.path.join(repo, "tools", "tool.sh"), mojo,
+             "carla_town_weld", path],
+            capture_output=True, text=True,
+        )
+    finally:
+        shutil.rmtree(folder, ignore_errors=True)
+    if result.returncode != 0:
+        raise ValueError(result.stderr.strip() or "weld failed")
+    return json.loads(result.stdout)
+
+
 def simplify_welded(primitive, target):
     """Return a primitive lowered to about `target` triangles for the far
     level of detail.
@@ -324,27 +664,19 @@ def simplify_welded(primitive, target):
     wall stays a wall. Then the joined mesh is collapsed to the target
     with its edges free to move.
 
-    Each new triangle is flat, its corners apart, and takes its texture
-    coordinates from one original triangle, by `transfer_uvs`.
+    `tools/carla_town_weld.mojo` gathers the corners. Each new triangle is
+    flat, its corners apart, and takes its texture coordinates from one
+    original triangle, by `transfer_uvs`.
     """
     import fast_simplification
     faces = primitive["triangles"]
     if len(faces) <= max(target, 8):
         return primitive
-    positions = primitive["positions"]
-    size = numpy.linalg.norm(positions.max(axis=0) - positions.min(axis=0))
-    cell = max(CLUSTER_CELL, size / CLUSTER_DIVISIONS)
-    _, gathered = numpy.unique(numpy.floor(positions / cell).astype(numpy.int64), axis=0, return_inverse=True)
-    gathered = gathered.reshape(-1)
-    sums = numpy.zeros((gathered.max() + 1, 3))
-    numpy.add.at(sums, gathered, positions)
-    points = sums / numpy.bincount(gathered)[:, None]
-    joined = gathered[faces]
-    whole = (joined[:, 0] != joined[:, 1]) & (joined[:, 1] != joined[:, 2]) & (joined[:, 0] != joined[:, 2])
-    joined = joined[whole]
-    # Two pieces that met in the same cells leave the same triangle twice.
-    _, once = numpy.unique(numpy.sort(joined, axis=1), axis=0, return_index=True)
-    joined = joined[numpy.sort(once)]
+    welded = _weld_tool(primitive["positions"], faces)
+    if welded.get("empty"):
+        return None
+    points = numpy.array(welded["points"], dtype=numpy.float64)
+    joined = numpy.array(welded["triangles"], dtype=numpy.int64)
     if len(joined) == 0:
         return None
     if len(joined) > max(target, 8):
@@ -425,37 +757,53 @@ def transfer_uvs(primitive, corners, normals, candidates=8):
     return out, normal[best]
 
 
+def _cards_tool(primitive, keep, seed):
+    """Return JSON from `tools/carla_town_cards.mojo`."""
+    here = os.path.dirname(os.path.abspath(__file__))
+    repo = os.path.abspath(os.path.join(here, "..", "..", "..", ".."))
+    mojo = os.path.join(repo, ".venv", "bin", "mojo")
+    if not os.path.isfile(mojo):
+        mojo = "mojo"
+    folder = tempfile.mkdtemp(prefix="town-cards-")
+    try:
+        request = os.path.join(folder, "cards.json")
+        payload = {
+            "positions": numpy.asarray(primitive["positions"], dtype=float).reshape(-1, 3).tolist(),
+            "normals": numpy.asarray(primitive["normals"], dtype=float).reshape(-1, 3).tolist(),
+            "uvs": numpy.asarray(primitive["uvs"], dtype=float).reshape(-1, 2).tolist(),
+            "triangles": numpy.asarray(primitive["triangles"]).reshape(-1, 3).tolist(),
+            "keep": float(keep),
+            "seed": int(seed),
+        }
+        with open(request, "w", encoding="utf-8") as handle:
+            json.dump(payload, handle, separators=(",", ":"), allow_nan=False)
+        result = subprocess.run(
+            ["sh", os.path.join(repo, "tools", "tool.sh"), mojo,
+             "carla_town_cards", request],
+            capture_output=True, text=True,
+        )
+    finally:
+        shutil.rmtree(folder, ignore_errors=True)
+    if result.returncode != 0:
+        raise ValueError(result.stderr.strip() or "leaf cards failed")
+    return json.loads(result.stdout)
+
+
 def thin_cards(primitive, keep, seed):
     """Return a cut-out primitive with about `keep` of its cards, each
     kept card grown about its center so the canopy stays as full. A card
-    is a piece of connected triangles: a leaf, or a spray of leaves."""
-    from scipy.sparse import coo_matrix
-    from scipy.sparse.csgraph import connected_components
-    faces = primitive["triangles"]
-    count = len(primitive["positions"])
-    rows = numpy.concatenate([faces[:, 0], faces[:, 1], faces[:, 2]])
-    cols = numpy.concatenate([faces[:, 1], faces[:, 2], faces[:, 0]])
-    graph = coo_matrix((numpy.ones(len(rows)), (rows, cols)), shape=(count, count))
-    pieces, label = connected_components(graph, directed=False)
-    if pieces < 8:
+    is a piece of connected triangles: a leaf, or a spray of leaves.
+
+    `tools/carla_town_cards.mojo` chooses and grows the cards.
+    """
+    doc = _cards_tool(primitive, keep, seed)
+    if doc.get("unchanged"):
         return primitive
-    chosen = numpy.random.default_rng(seed).random(pieces) < keep
-    face_piece = label[faces[:, 0]]
-    faces = faces[chosen[face_piece]]
-    if len(faces) == 0:
-        return primitive
-    used = numpy.unique(faces)
-    remap = numpy.full(count, -1)
-    remap[used] = numpy.arange(len(used))
-    points = primitive["positions"][used]
-    piece = label[used]
-    sums = numpy.zeros((pieces, 3))
-    numpy.add.at(sums, piece, points)
-    centers = sums / numpy.maximum(numpy.bincount(piece, minlength=pieces), 1)[:, None]
-    grow = min(2.0, 1.0 / numpy.sqrt(max(keep, 1e-3)))
-    points = centers[piece] + (points - centers[piece]) * grow
-    return {"positions": points, "normals": primitive["normals"][used], "uvs": primitive["uvs"][used],
-            "triangles": remap[faces], "material": primitive["material"]}
+    return {"positions": numpy.array(doc["positions"], dtype=numpy.float64),
+            "normals": numpy.array(doc["normals"], dtype=numpy.float64),
+            "uvs": numpy.array(doc["uvs"], dtype=numpy.float64),
+            "triangles": numpy.array(doc["triangles"], dtype=numpy.int64),
+            "material": primitive["material"]}
 
 
 # ---- Impostors -------------------------------------------------------------
@@ -483,70 +831,76 @@ def _albedo(library, material):
     return numpy.asarray(Image.open(path).convert("RGBA"), dtype=numpy.float64) / 255.0, factor
 
 
+def _raster_tool(parts, library, request):
+    """Return one view from `tools/carla_town_splat.mojo`."""
+    here = os.path.dirname(os.path.abspath(__file__))
+    repo = os.path.abspath(os.path.join(here, "..", "..", "..", ".."))
+    mojo = os.path.join(repo, ".venv", "bin", "mojo")
+    if not os.path.isfile(mojo):
+        mojo = "mojo"
+    folder = tempfile.mkdtemp(prefix="town-splat-")
+    try:
+        path = os.path.join(folder, "view.json")
+        payload = dict(request)
+        items = []
+        for part, material in parts:
+            image, factor = _albedo(library, material)
+            entry = library.gltf["materials"][material]
+            item = {
+                "positions": numpy.asarray(part["positions"], dtype=float).reshape(-1, 3).tolist(),
+                "normals": numpy.asarray(part["normals"], dtype=float).reshape(-1, 3).tolist(),
+                "uvs": numpy.asarray(part["uvs"], dtype=float).reshape(-1, 2).tolist(),
+                "triangles": numpy.asarray(part["triangles"]).reshape(-1, 3).tolist(),
+                "factor": numpy.asarray(factor, dtype=float).reshape(4).tolist(),
+                "cut": float(entry.get("alphaCutoff", 0.5)),
+                "masked": entry.get("alphaMode") == "MASK",
+            }
+            if image is not None:
+                item["image"] = {
+                    "width": int(image.shape[1]),
+                    "height": int(image.shape[0]),
+                    "rgba": numpy.asarray(image, dtype=float).reshape(-1).tolist(),
+                }
+            items.append(item)
+        payload["parts"] = items
+        with open(path, "w", encoding="utf-8") as handle:
+            json.dump(payload, handle, separators=(",", ":"), allow_nan=False)
+        result = subprocess.run(
+            ["sh", os.path.join(repo, "tools", "tool.sh"), mojo,
+             "carla_town_splat", path],
+            capture_output=True, text=True,
+        )
+    finally:
+        shutil.rmtree(folder, ignore_errors=True)
+    if result.returncode != 0:
+        raise ValueError(result.stderr.strip() or "splat failed")
+    return json.loads(result.stdout)
+
+
 def _splat(parts, library, across, left, width, top, height, rows):
     """Return one view of a tree, drawn across axis `across` (0 for x,
     2 for z) and down y from `top`: RGBA floats, `rows` by
     `IMPOSTOR_SIZE` texels. Each triangle is sampled at random points, as
     many as it covers texels times `IMPOSTOR_SAMPLES`, and the nearest
-    sample that the cut-out keeps colors each texel."""
-    depth_axis = 2 if across == 0 else 0
-    scale_u = IMPOSTOR_SIZE / max(width, 1e-6)
-    scale_v = rows / max(height, 1e-6)
-    rng = numpy.random.default_rng(7)
-    xs, ys, zs, colors = [], [], [], []
-    for part, material in parts:
-        image, factor = _albedo(library, material)
-        entry = library.gltf["materials"][material]
-        cut = entry.get("alphaCutoff", 0.5)
-        masked = entry.get("alphaMode") == "MASK"
-        tri = part["triangles"]
-        corners = part["positions"][tri]
-        u = (corners[:, :, across] - left) * scale_u
-        v = (top - corners[:, :, 1]) * scale_v
-        area = 0.5 * numpy.abs((u[:, 1] - u[:, 0]) * (v[:, 2] - v[:, 0]) - (u[:, 2] - u[:, 0]) * (v[:, 1] - v[:, 0]))
-        counts = numpy.minimum(numpy.maximum(1, numpy.ceil(area * IMPOSTOR_SAMPLES)), 4096).astype(numpy.int64)
-        owner = numpy.repeat(numpy.arange(len(corners)), counts)
-        a, b = rng.random(len(owner)), rng.random(len(owner))
-        flip = a + b > 1
-        a[flip], b[flip] = 1 - a[flip], 1 - b[flip]
-        w = numpy.stack([1 - a - b, a, b], axis=1)
-        depth = numpy.einsum("nk,nk->n", w, corners[owner][:, :, depth_axis])
-        uv = numpy.einsum("nk,nkd->nd", w, part["uvs"][tri][owner])
-        normal = numpy.einsum("nk,nkd->nd", w, part["normals"][tri][owner])
-        normal /= numpy.maximum(numpy.linalg.norm(normal, axis=1, keepdims=True), 1e-9)
-        if image is None:
-            rgba = numpy.tile(factor, (len(owner), 1))
-        else:
-            h, wd = image.shape[:2]
-            px = (numpy.mod(uv[:, 0], 1.0) * (wd - 1)).astype(numpy.int64)
-            py = (numpy.mod(uv[:, 1], 1.0) * (h - 1)).astype(numpy.int64)
-            rgba = image[py, px] * factor
-        keep = rgba[:, 3] >= cut if masked else numpy.ones(len(owner), dtype=bool)
-        rgba[:, :3] *= (0.45 + 0.55 * numpy.abs(normal @ IMPOSTOR_LIGHT))[:, None]
-        xs.append(numpy.einsum("nk,nk->n", w, u[owner])[keep])
-        ys.append(numpy.einsum("nk,nk->n", w, v[owner])[keep])
-        zs.append(depth[keep])
-        colors.append(rgba[keep, :3])
-    out = numpy.zeros((rows, IMPOSTOR_SIZE, 4))
-    if sum(len(x) for x in xs) == 0:
-        return out
-    x = numpy.concatenate(xs).astype(numpy.int64)
-    y = numpy.concatenate(ys).astype(numpy.int64)
-    z = numpy.concatenate(zs)
-    color = numpy.concatenate(colors)
-    inside = (x >= 0) & (x < IMPOSTOR_SIZE) & (y >= 0) & (y < rows)
-    x, y, z, color = x[inside], y[inside], z[inside], color[inside]
-    # The nearest sample of each texel: the view looks down the depth
-    # axis from its positive end.
-    texel = y * IMPOSTOR_SIZE + x
-    order = numpy.lexsort((-z, texel))
-    sorted_texel = texel[order]
-    first = numpy.ones(len(order), dtype=bool)
-    first[1:] = sorted_texel[1:] != sorted_texel[:-1]
-    chosen = order[first]
-    out[y[chosen], x[chosen], :3] = color[chosen]
-    out[y[chosen], x[chosen], 3] = 1.0
-    return out
+    sample that the cut-out keeps colors each texel.
+
+    `tools/carla_town_splat.mojo` draws the view.
+    """
+    doc = _raster_tool(parts, library, {
+        "mode": "axis",
+        "columns": IMPOSTOR_SIZE,
+        "rows": int(rows),
+        "samples": IMPOSTOR_SAMPLES,
+        "cap": 4096,
+        "seed": 7,
+        "across": int(across),
+        "left": float(left),
+        "top": float(top),
+        "scale_u": IMPOSTOR_SIZE / max(width, 1e-6),
+        "scale_v": rows / max(height, 1e-6),
+        "light": IMPOSTOR_LIGHT.tolist(),
+    })
+    return numpy.array(doc, dtype=numpy.float64)
 
 
 def impostor(parts, library, out_dir, name):
@@ -618,91 +972,95 @@ BAKE_DENSITY = 6.0
 BAKE_MOST = 512
 
 
+def _dilate_tool(image, covered, passes):
+    """Return JSON from `tools/carla_town_dilate.mojo`."""
+    here = os.path.dirname(os.path.abspath(__file__))
+    repo = os.path.abspath(os.path.join(here, "..", "..", "..", ".."))
+    mojo = os.path.join(repo, ".venv", "bin", "mojo")
+    if not os.path.isfile(mojo):
+        mojo = "mojo"
+    folder = tempfile.mkdtemp(prefix="town dilate ")
+    try:
+        path = os.path.join(folder, "view.json")
+        with open(path, "w", encoding="utf-8") as handle:
+            json.dump({
+                "image": numpy.asarray(image, dtype=numpy.float64).tolist(),
+                "covered": numpy.asarray(covered, dtype=bool).tolist(),
+                "passes": int(passes),
+            }, handle)
+        result = subprocess.run(
+            ["sh", os.path.join(repo, "tools", "tool.sh"), mojo,
+             "carla_town_dilate", path],
+            capture_output=True, text=True,
+        )
+    finally:
+        shutil.rmtree(folder, ignore_errors=True)
+    if result.returncode != 0:
+        raise ValueError(result.stderr.strip() or "dilate failed")
+    return json.loads(result.stdout)
+
+
 def _dilate(image, covered, passes=6):
     """Spread the covered texels' colors into the uncovered ones next to
-    them, so filtering at a view's edge does not bleed the background."""
-    image = image.copy()
-    covered = covered.copy()
-    for _ in range(passes):
-        if covered.all():
-            break
-        grown = covered.copy()
-        total = numpy.zeros_like(image)
-        count = numpy.zeros(covered.shape)
-        for dy, dx in ((1, 0), (-1, 0), (0, 1), (0, -1)):
-            shifted = numpy.roll(numpy.roll(covered, dy, axis=0), dx, axis=1)
-            colors = numpy.roll(numpy.roll(image, dy, axis=0), dx, axis=1)
-            take = shifted & ~covered
-            total[take] += colors[take]
-            count[take] += 1
-            grown |= take
-        fill = (count > 0) & ~covered
-        image[fill] = total[fill] / count[fill][:, None]
-        covered = grown
-    if not covered.all() and covered.any():
-        image[~covered] = image[covered].mean(axis=0)
-    return image
+    them, so filtering at a view's edge does not bleed the background.
+
+    `tools/carla_town_dilate.mojo` spreads the colors.
+    """
+    values = _dilate_tool(image, covered, passes)
+    if len(numpy.shape(image)) == 0:
+        return numpy.asarray(image, dtype=numpy.float64).copy()
+    return numpy.array(values, dtype=numpy.float64)
 
 
 def _view(parts, library, forward, right, up, low_r, low_u, width, height, columns, rows):
     """Return one orthographic view of a mesh's albedo, `rows` by
     `columns` texels, looking down `-forward`, as `_splat` draws a tree's,
-    with no light: the renderer lights the far mesh itself."""
-    forward, right, up = numpy.array(forward), numpy.array(right), numpy.array(up)
-    rng = numpy.random.default_rng(11)
-    xs, ys, zs, colors = [], [], [], []
-    scale_u = columns / max(width, 1e-6)
-    scale_v = rows / max(height, 1e-6)
-    for part, material in parts:
-        image, factor = _albedo(library, material)
-        entry = library.gltf["materials"][material]
-        masked = entry.get("alphaMode") == "MASK"
-        cut = entry.get("alphaCutoff", 0.5)
-        tri = part["triangles"]
-        corners = part["positions"][tri]
-        u = (corners @ right - low_r) * scale_u
-        v = (low_u + height - corners @ up) * scale_v
-        area = 0.5 * numpy.abs((u[:, 1] - u[:, 0]) * (v[:, 2] - v[:, 0]) - (u[:, 2] - u[:, 0]) * (v[:, 1] - v[:, 0]))
-        counts = numpy.minimum(numpy.maximum(1, numpy.ceil(area * 3)), 8192).astype(numpy.int64)
-        owner = numpy.repeat(numpy.arange(len(corners)), counts)
-        a, b = rng.random(len(owner)), rng.random(len(owner))
-        flip = a + b > 1
-        a[flip], b[flip] = 1 - a[flip], 1 - b[flip]
-        w = numpy.stack([1 - a - b, a, b], axis=1)
-        depth = numpy.einsum("nk,nk->n", w, (corners @ forward)[owner])
-        uv = numpy.einsum("nk,nkd->nd", w, part["uvs"][tri][owner])
-        if image is None:
-            rgba = numpy.tile(factor, (len(owner), 1))
-        else:
-            h, wd = image.shape[:2]
-            px = (numpy.mod(uv[:, 0], 1.0) * (wd - 1)).astype(numpy.int64)
-            py = (numpy.mod(uv[:, 1], 1.0) * (h - 1)).astype(numpy.int64)
-            rgba = image[py, px] * factor
-        keep = rgba[:, 3] >= cut if masked else numpy.ones(len(owner), dtype=bool)
-        xs.append(numpy.einsum("nk,nk->n", w, u[owner])[keep])
-        ys.append(numpy.einsum("nk,nk->n", w, v[owner])[keep])
-        zs.append(depth[keep])
-        colors.append(rgba[keep, :3])
-    out = numpy.zeros((rows, columns, 3))
-    covered = numpy.zeros((rows, columns), dtype=bool)
-    if sum(len(x) for x in xs):
-        x = numpy.concatenate(xs).astype(numpy.int64)
-        y = numpy.concatenate(ys).astype(numpy.int64)
-        z = numpy.concatenate(zs)
-        color = numpy.concatenate(colors)
-        inside = (x >= 0) & (x < columns) & (y >= 0) & (y < rows)
-        x, y, z, color = x[inside], y[inside], z[inside], color[inside]
-        texel = y * columns + x
-        # The nearest sample to the viewer, who stands at the far end of
-        # `forward`.
-        order = numpy.lexsort((-z, texel))
-        sorted_texel = texel[order]
-        first = numpy.ones(len(order), dtype=bool)
-        first[1:] = sorted_texel[1:] != sorted_texel[:-1]
-        chosen = order[first]
-        out[y[chosen], x[chosen]] = color[chosen]
-        covered[y[chosen], x[chosen]] = True
-    return _dilate(out, covered)
+    with no light: the renderer lights the far mesh itself.
+
+    `tools/carla_town_splat.mojo` draws the view.
+    """
+    doc = _raster_tool(parts, library, {
+        "mode": "ortho",
+        "columns": int(columns),
+        "rows": int(rows),
+        "samples": 3,
+        "cap": 8192,
+        "seed": 11,
+        "right": numpy.asarray(right, dtype=float).reshape(3).tolist(),
+        "up": numpy.asarray(up, dtype=float).reshape(3).tolist(),
+        "forward": numpy.asarray(forward, dtype=float).reshape(3).tolist(),
+        "low_r": float(low_r),
+        "low_u": float(low_u),
+        "height": float(height),
+        "scale_u": columns / max(width, 1e-6),
+        "scale_v": rows / max(height, 1e-6),
+    })
+    image = numpy.array(doc, dtype=numpy.float64)
+    return _dilate(image[:, :, :3], image[:, :, 3] > 0)
+
+
+def _atlas_tool(payload):
+    """Return JSON from `tools/carla_town_atlas.mojo`."""
+    here = os.path.dirname(os.path.abspath(__file__))
+    repo = os.path.abspath(os.path.join(here, "..", "..", "..", ".."))
+    mojo = os.path.join(repo, ".venv", "bin", "mojo")
+    if not os.path.isfile(mojo):
+        mojo = "mojo"
+    folder = tempfile.mkdtemp(prefix="town-atlas-")
+    try:
+        path = os.path.join(folder, "atlas.json")
+        with open(path, "w", encoding="utf-8") as handle:
+            json.dump(payload, handle, separators=(",", ":"), allow_nan=False)
+        result = subprocess.run(
+            ["sh", os.path.join(repo, "tools", "tool.sh"), mojo,
+             "carla_town_atlas", path],
+            capture_output=True, text=True,
+        )
+    finally:
+        shutil.rmtree(folder, ignore_errors=True)
+    if result.returncode != 0:
+        raise ValueError(result.stderr.strip() or "atlas failed")
+    return json.loads(result.stdout)
 
 
 def baked_building(parts, library, out_dir, name, target):
@@ -710,7 +1068,11 @@ def baked_building(parts, library, out_dir, name, target):
     and collapsed to about `target` triangles, all its primitives as one,
     wearing an atlas of five views of its near level, from each side and
     from above. Each far triangle reads the view that faces it most, so
-    its windows and its trim are pictures, not geometry."""
+    its windows and its trim are pictures, not geometry.
+
+    `tools/carla_town_atlas.mojo` sizes the views, joins them, and writes
+    the texture coordinates.
+    """
     from PIL import Image
     whole = {
         "positions": numpy.concatenate([p["positions"] for p, _ in parts]),
@@ -724,53 +1086,44 @@ def baked_building(parts, library, out_dir, name, target):
     if far is None:
         return None, None
     if far is whole:
-        corners = whole["positions"][whole["triangles"]]
-        face = numpy.cross(corners[:, 1] - corners[:, 0], corners[:, 2] - corners[:, 0])
-        face /= numpy.maximum(numpy.linalg.norm(face, axis=1, keepdims=True), 1e-12)
-        far = {"positions": corners.reshape(-1, 3), "normals": numpy.repeat(face, 3, axis=0),
-               "triangles": numpy.arange(3 * len(corners)).reshape(-1, 3), "material": name}
-    low, high = whole["positions"].min(axis=0), whole["positions"].max(axis=0)
+        flat = _atlas_tool({
+            "mode": "flat",
+            "positions": numpy.asarray(whole["positions"], dtype=float).reshape(-1, 3).tolist(),
+            "triangles": numpy.asarray(whole["triangles"]).reshape(-1, 3).tolist(),
+        })
+        far = {"positions": numpy.array(flat["positions"], dtype=numpy.float64),
+               "normals": numpy.array(flat["normals"], dtype=numpy.float64),
+               "triangles": numpy.array(flat["triangles"], dtype=numpy.int64),
+               "material": name}
+    spans = _atlas_tool({
+        "mode": "spans",
+        "positions": numpy.asarray(whole["positions"], dtype=float).reshape(-1, 3).tolist(),
+        "density": BAKE_DENSITY,
+        "most": BAKE_MOST,
+        "views": [{"right": list(right), "up": list(up)} for _, right, up in BAKE_VIEWS],
+    })
     cells = []
-    for forward, right, up in BAKE_VIEWS:
-        r, u = numpy.array(right), numpy.array(up)
-        span_r = sorted([low @ r, high @ r])
-        span_u = sorted([low @ u, high @ u])
-        # The box's corners give each view's extent along its axes.
-        box = numpy.array([[x, y, z] for x in (low[0], high[0]) for y in (low[1], high[1]) for z in (low[2], high[2])])
-        span_r = (float((box @ r).min()), float((box @ r).max()))
-        span_u = (float((box @ u).min()), float((box @ u).max()))
-        width, height = span_r[1] - span_r[0], span_u[1] - span_u[0]
-        density = min(BAKE_DENSITY, BAKE_MOST / max(width, height, 1e-6))
-        columns = max(4, int(numpy.ceil(width * density)))
-        rows = max(4, int(numpy.ceil(height * density)))
-        image = _view(parts, library, forward, right, up, span_r[0], span_u[0], width, height, columns, rows)
-        cells.append((image, span_r, span_u))
-    # One row of the five views, each at its own size.
-    atlas_w = sum(c[0].shape[1] for c in cells)
-    atlas_h = max(c[0].shape[0] for c in cells)
-    atlas = numpy.zeros((atlas_h, atlas_w, 3))
-    offsets = []
-    x = 0
-    for image, _, _ in cells:
-        atlas[: image.shape[0], x: x + image.shape[1]] = image
-        offsets.append(x)
-        x += image.shape[1]
-    # Each far triangle reads the view whose forward its face meets most.
-    corners = far["positions"].reshape(-1, 3, 3)
-    face = far["normals"].reshape(-1, 3, 3)[:, 0]
-    forwards = numpy.array([f for f, _, _ in BAKE_VIEWS])
-    pick = numpy.argmax(face @ forwards.T, axis=1)
-    uvs = numpy.zeros((len(corners), 3, 2))
-    for k, (forward, right, up) in enumerate(BAKE_VIEWS):
-        mine = pick == k
-        if not mine.any():
-            continue
-        image, span_r, span_u = cells[k]
-        r, u = numpy.array(right), numpy.array(up)
-        fr = (corners[mine] @ r - span_r[0]) / max(span_r[1] - span_r[0], 1e-6)
-        fu = (span_u[1] - corners[mine] @ u) / max(span_u[1] - span_u[0], 1e-6)
-        uvs[mine, :, 0] = (offsets[k] + numpy.clip(fr, 0, 1) * image.shape[1]) / atlas_w
-        uvs[mine, :, 1] = numpy.clip(fu, 0, 1) * image.shape[0] / atlas_h
+    for (forward, right, up), span in zip(BAKE_VIEWS, spans):
+        image = _view(parts, library, forward, right, up, span["low_r"], span["low_u"],
+                      span["width"], span["height"], span["columns"], span["rows"])
+        cells.append((image, (span["low_r"], span["high_r"]), (span["low_u"], span["high_u"])))
+    views = []
+    for (forward, right, up), (image, span_r, span_u) in zip(BAKE_VIEWS, cells):
+        views.append({
+            "forward": list(forward),
+            "right": list(right),
+            "up": list(up),
+            "span_r": [float(span_r[0]), float(span_r[1])],
+            "span_u": [float(span_u[0]), float(span_u[1])],
+            "image": numpy.asarray(image, dtype=float).tolist(),
+        })
+    packed = _atlas_tool({
+        "mode": "pack",
+        "positions": numpy.asarray(far["positions"], dtype=float).reshape(-1, 3).tolist(),
+        "normals": numpy.asarray(far["normals"], dtype=float).reshape(-1, 3).tolist(),
+        "views": views,
+    })
+    atlas = numpy.array(packed["atlas"], dtype=numpy.float64)
     tag = library._bake_tag(name, "baked", parts, target)
     os.makedirs(os.path.join(out_dir, "textures"), exist_ok=True)
     Image.fromarray((numpy.clip(atlas, 0, 1) * 255).astype(numpy.uint8), "RGB").save(
@@ -783,9 +1136,60 @@ def baked_building(parts, library, out_dir, name, target):
         "pbrMetallicRoughness": {"baseColorTexture": {"index": len(gltf["textures"]) - 1},
                                  "metallicFactor": 0.0, "roughnessFactor": 0.85},
         "doubleSided": True})
-    far["uvs"] = uvs.reshape(-1, 2)
+    far["uvs"] = numpy.array(packed["uvs"], dtype=numpy.float64)
     far["material"] = tag
     return far, len(gltf["materials"]) - 1
+
+
+def geometry_digests(primitives):
+    """Return the SHA-256 of each primitive, in order.
+
+    Each field is hashed as its JSON shape plus the little-endian
+    contiguous array bytes. An empty dimension contributes no payload
+    bytes. `tools/carla_geometry_digest.mojo` does the hash.
+    """
+    if not primitives:
+        return []
+    blob = bytearray(b"CGD1")
+    blob += struct.pack("<I", len(primitives))
+    for primitive in primitives:
+        blob += struct.pack("<I", 4)
+        for field in ("positions", "normals", "uvs", "triangles"):
+            values = numpy.ascontiguousarray(
+                primitive[field],
+                dtype="<i8" if field == "triangles" else "<f8",
+            )
+            name = field.encode("ascii")
+            raw = values.tobytes()
+            blob += struct.pack("<I", len(name))
+            blob += name
+            blob += struct.pack("<I", len(values.shape))
+            for dim in values.shape:
+                blob += struct.pack("<I", int(dim))
+            blob += struct.pack("<Q", len(raw))
+            blob += raw
+    root = os.path.abspath(os.path.join(HERE, "..", "..", "..", ".."))
+    mojo = os.path.join(root, ".venv", "bin", "mojo")
+    if not os.path.isfile(mojo):
+        mojo = "mojo"
+    handle = tempfile.NamedTemporaryFile("wb", suffix=".cgd", delete=False)
+    path = handle.name
+    try:
+        handle.write(blob)
+        handle.close()
+        result = subprocess.run(
+            ["sh", os.path.join(root, "tools", "tool.sh"), mojo,
+             "carla_geometry_digest", path],
+            text=True, capture_output=True, check=False,
+        )
+    finally:
+        os.remove(path)
+    if result.returncode != 0:
+        raise ValueError(result.stderr.strip() or "geometry digest failed")
+    lines = result.stdout.splitlines()
+    if len(lines) != len(primitives):
+        raise ValueError("geometry digest count mismatch")
+    return lines
 
 
 # ---- Materials -------------------------------------------------------------
@@ -809,7 +1213,7 @@ class Library:
         self.pngs = fix.index_files(RAW, ".png")
         self.index = {}
         self.masked = {}
-        self._bake_identity = BakeIdentity(self.gltf, out_dir)
+        self._bake_out = out_dir
         self._bake_geometry = {}
 
     def _bake_tag(self, mesh_path, kind, parts, target=None):
@@ -820,22 +1224,27 @@ class Library:
         of its original array layout. Keep its reference to prevent object
         id reuse. Placement transforms are applied after cache lookup.
         """
+        pending = []
+        pending_ids = []
+        seen = set()
+        for primitive, _material in parts:
+            identity = id(primitive)
+            if identity not in self._bake_geometry and identity not in seen:
+                seen.add(identity)
+                pending.append(primitive)
+                pending_ids.append(identity)
+        if pending:
+            digests = geometry_digests(pending)
+            for identity, primitive, digest in zip(pending_ids, pending, digests):
+                self._bake_geometry[identity] = (primitive, digest)
         ordered = []
         for primitive, material in parts:
-            identity = id(primitive)
-            if identity not in self._bake_geometry:
-                digest = hashlib.sha256()
-                for field in ("positions", "normals", "uvs", "triangles"):
-                    values = numpy.ascontiguousarray(primitive[field], dtype="<i8" if field == "triangles" else "<f8")
-                    digest.update(json.dumps([field, values.shape], separators=(",", ":")).encode())
-                    digest.update(memoryview(values).cast("B"))
-                self._bake_geometry[identity] = (primitive, digest.hexdigest())
-            ordered.append((self._bake_geometry[identity][1], material))
+            ordered.append((self._bake_geometry[id(primitive)][1], material))
         if kind == "baked":
             settings = [target, BAKE_DENSITY, BAKE_MOST, BAKE_VIEWS, CLUSTER_CELL, CLUSTER_DIVISIONS]
         else:
             settings = [IMPOSTOR_SIZE, IMPOSTOR_SAMPLES, IMPOSTOR_LIGHT.tolist()]
-        return self._bake_identity.key(mesh_path, kind, ordered, settings)
+        return atlas_tag(self.gltf, self._bake_out, mesh_path, kind, ordered, settings)
 
     def material(self, name):
         """Return the glTF index of the material named `name`."""
@@ -870,39 +1279,34 @@ def slot_materials(row, primitives):
     """Return each primitive's material name for one component: the
     component's material for that slot, by name where UModel named it and
     by position otherwise. A runtime material instance falls back to the
-    mesh's own material for the slot."""
-    slots = [object_path(m) if m else None for m in row["materials"]]
-    names = [s[2] if s else None for s in slots]
-    chosen = []
-    for i, primitive in enumerate(primitives):
-        own = primitive["material"]
-        slot = names.index(own) if own in names else (i if i < len(slots) else None)
-        if slot is None or slots[slot] is None:
-            chosen.append(own)
-            continue
-        cls, _, name = slots[slot]
-        chosen.append(own if cls == "MaterialInstanceDynamic" else name)
-    return chosen
+    mesh's own material for the slot.
+
+    `tools/carla_town_slots.mojo` chooses the names.
+    """
+    folder = tempfile.mkdtemp(prefix="town-slots-")
+    try:
+        request = os.path.join(folder, "slots.json")
+        with open(request, "w", encoding="utf-8") as handle:
+            json.dump({"materials": [m if m else None for m in row["materials"]],
+                       "own": [primitive["material"] for primitive in primitives]},
+                      handle, separators=(",", ":"), allow_nan=False)
+        root = os.path.abspath(os.path.join(HERE, "..", "..", "..", ".."))
+        mojo = os.path.join(root, ".venv", "bin", "mojo")
+        if not os.path.isfile(mojo):
+            mojo = "mojo"
+        result = subprocess.run(
+            ["sh", os.path.join(root, "tools", "tool.sh"), mojo,
+             "carla_town_slots", request],
+            capture_output=True, text=True,
+        )
+        if result.returncode != 0:
+            raise ValueError(result.stderr.strip() or "town slots failed")
+        return json.loads(result.stdout)
+    finally:
+        shutil.rmtree(folder, ignore_errors=True)
 
 
 # ---- Building --------------------------------------------------------------
-
-def far_budget(kind, triangles, mesh_path):
-    """Return the most triangles one copy keeps in the far level of
-    detail, 0 to leave it out there: what is small at a distance goes."""
-    low = mesh_path.lower()
-    if kind in ("prop", "parked_vehicle", "traffic_sign"):
-        return 0
-    if kind == "vegetation":
-        return min(triangles, max(150, triangles // 5)) if "/trees/" in low else 0
-    if kind == "building":
-        return max(min(triangles, 300), triangles // 60)
-    if kind in ("pole", "traffic_light"):
-        return 0 if "glass" in low or "leds" in low else min(triangles, max(120, triangles // 12))
-    if kind in ("wall", "fence"):
-        return min(triangles, max(150, triangles // 10))
-    return budget(kind, triangles, mesh_path)
-
 
 def limit_of(kind, total, mesh_path, lod):
     """Return the most triangles one copy of a mesh keeps at a level of
@@ -927,71 +1331,188 @@ def lower(primitive, kind, mesh_path, index, total, masked, lod, factor=1.0):
     return simplify(primitive, int(len(primitive["triangles"]) * share), borders=lod == 0, small=factor < 1.0)
 
 
+def _spline_place(local, normals, triangles, rows):
+    """Return a bent mesh placed by `tools/carla_town_spline.mojo`."""
+    here = os.path.dirname(os.path.abspath(__file__))
+    repo = os.path.abspath(os.path.join(here, "..", "..", "..", ".."))
+    mojo = os.path.join(repo, ".venv", "bin", "mojo")
+    if not os.path.isfile(mojo):
+        mojo = "mojo"
+    folder = tempfile.mkdtemp(prefix="town-spline-")
+    try:
+        request = os.path.join(folder, "spline.json")
+        payload = {
+            "matrix": numpy.asarray(rows, dtype=float).reshape(4, 4).tolist(),
+            "positions": numpy.asarray(local, dtype=float).reshape(-1, 3).tolist(),
+            "normals": numpy.asarray(normals, dtype=float).reshape(-1, 3).tolist(),
+            "triangles": numpy.asarray(triangles).reshape(-1, 3).tolist(),
+        }
+        with open(request, "w", encoding="utf-8") as handle:
+            json.dump(payload, handle, separators=(",", ":"), allow_nan=False)
+        result = subprocess.run(
+            ["sh", os.path.join(repo, "tools", "tool.sh"), mojo,
+             "carla_town_spline", request],
+            capture_output=True, text=True,
+        )
+    finally:
+        shutil.rmtree(folder, ignore_errors=True)
+    if result.returncode != 0:
+        message = result.stderr.strip() or "spline placement failed"
+        if "singular" in message:
+            raise numpy.linalg.LinAlgError(message)
+        raise ValueError(message)
+    placed = json.loads(result.stdout)
+    return (numpy.array(placed["points"], dtype=numpy.float64),
+            numpy.array(placed["normals"], dtype=numpy.float64),
+            numpy.array(placed["triangles"], dtype=numpy.int64))
+
+
 def place(part, row, rows):
     """Return a primitive's points, normals and triangles placed by one
-    copy's world matrix, in the three.js frame."""
-    if "spline" in row:
-        local, normals = bend(part["positions"], part["normals"], row["spline"])
-        world = local @ rows[:3, :3] + rows[3, :3]
-        points = world[:, [0, 2, 1]] / 100.0
-        normals = (normals @ numpy.linalg.inv(rows[:3, :3]).T)[:, [0, 2, 1]]
-        flip = numpy.linalg.det(rows[:3, :3]) < 0
-    else:
-        linear, move = to_three(rows)
-        points = part["positions"] @ linear.T + move
-        normals = part["normals"] @ numpy.linalg.inv(linear)
-        flip = numpy.linalg.det(linear) < 0
-    length = numpy.linalg.norm(normals, axis=1, keepdims=True)
-    normals = normals / numpy.maximum(length, 1e-12)
-    return points, normals, (part["triangles"][:, ::-1] if flip else part["triangles"])
+    copy's world matrix, in the three.js frame.
+
+    A rigid copy is placed by `tools/carla_town_place.mojo`.
+    A bent spline mesh is placed by `tools/carla_town_spline.mojo`.
+    """
+    if "spline" not in row:
+        folder = tempfile.mkdtemp(prefix="town-place-")
+        try:
+            request = os.path.join(folder, "place.json")
+            with open(request, "w", encoding="utf-8") as handle:
+                json.dump({"matrix": rows.tolist(), "positions": part["positions"].tolist(),
+                           "normals": part["normals"].tolist(),
+                           "triangles": part["triangles"].tolist()},
+                          handle, separators=(",", ":"), allow_nan=False)
+            proc = _place_worker()
+            try:
+                proc.stdin.write("apply\t" + request + "\n")
+                proc.stdin.flush()
+                line = proc.stdout.readline()
+            except (BrokenPipeError, ValueError):
+                _place_failed(proc)
+            if not line:
+                _place_failed(proc)
+            if line.startswith("ERR\t"):
+                raise ValueError(line[4:].strip() or "town placement failed")
+            placed = json.loads(line)
+        finally:
+            shutil.rmtree(folder, ignore_errors=True)
+        return (numpy.array(placed["points"], dtype=numpy.float64),
+                numpy.array(placed["normals"], dtype=numpy.float64),
+                numpy.array(placed["triangles"], dtype=numpy.int64))
+    local, normals = bend(part["positions"], part["normals"], row["spline"])
+    return _spline_place(local, normals, part["triangles"], rows)
+
+
+def _lamps_tool(primitives, mesh_path):
+    """Return JSON from `tools/carla_town_lamps.mojo`."""
+    here = os.path.dirname(os.path.abspath(__file__))
+    repo = os.path.abspath(os.path.join(here, "..", "..", "..", ".."))
+    mojo = os.path.join(repo, ".venv", "bin", "mojo")
+    if not os.path.isfile(mojo):
+        mojo = "mojo"
+    payload = {"mesh": mesh_path, "primitives": []}
+    for primitive in primitives:
+        payload["primitives"].append({
+            "positions": primitive["positions"].tolist(),
+            "triangles": primitive["triangles"].tolist(),
+        })
+    fd, path = tempfile.mkstemp(prefix="carla-town-lamps-", suffix=".json")
+    try:
+        with os.fdopen(fd, "w", encoding="utf-8") as handle:
+            json.dump(payload, handle, separators=(",", ":"))
+        result = subprocess.run(
+            ["sh", os.path.join(repo, "tools", "tool.sh"), mojo,
+             "carla_town_lamps", path],
+            capture_output=True, text=True,
+        )
+    finally:
+        os.remove(path)
+    if result.returncode != 0:
+        message = result.stderr.strip() or "lamp heads failed"
+        if "index out of range" in message:
+            raise IndexError(message)
+        raise ValueError(message)
+    heads = json.loads(result.stdout)
+    if heads is None:
+        return None
+    return numpy.array(heads, dtype=numpy.float64)
 
 
 def lamp_heads(primitives, mesh_path):
-    """Return where a lamp mesh's heads are, in its own frame: the middle
-    of each connected piece of its glass, or the top of a lamp with no
-    glass. None for a mesh that is not a lamp."""
-    if mesh_path.endswith(LAMP_GLASS):
-        from scipy.sparse import coo_matrix
-        from scipy.sparse.csgraph import connected_components
-        points = numpy.concatenate([p["positions"] for p in primitives])
-        faces = numpy.concatenate([p["triangles"] + sum(len(q["positions"]) for q in primitives[:i])
-                                   for i, p in enumerate(primitives)])
-        # Corners that share a place are one, so a piece is whole.
-        _, welded = numpy.unique(numpy.round(points * 1000.0).astype(numpy.int64), axis=0, return_inverse=True)
-        welded = welded.reshape(-1)
-        joined = welded[faces]
-        count = welded.max() + 1
-        rows = numpy.concatenate([joined[:, 0], joined[:, 1]])
-        cols = numpy.concatenate([joined[:, 1], joined[:, 2]])
-        pieces, label = connected_components(
-            coo_matrix((numpy.ones(len(rows)), (rows, cols)), shape=(count, count)), directed=False)
-        heads = []
-        for piece in range(pieces):
-            inside = points[label[welded] == piece]
-            heads.append((inside.min(axis=0) + inside.max(axis=0)) / 2)
-        return numpy.array(heads)
-    if mesh_path.endswith(LAMP_TOPS):
-        points = numpy.concatenate([p["positions"] for p in primitives])
-        low, high = points.min(axis=0), points.max(axis=0)
-        return numpy.array([[(low[0] + high[0]) / 2, high[1] - 0.15, (low[2] + high[2]) / 2]])
-    return None
+    """Return where a lamp mesh's heads are, in its own frame.
+
+    `tools/carla_town_lamps.mojo` finds each connected piece of glass,
+    or the top of a lamp that has no glass. The result is None when
+    the mesh is not a lamp.
+    """
+    return _lamps_tool(primitives, mesh_path)
+
+
+def _rows_tool(path):
+    """Return JSON from `tools/carla_town_rows.mojo`."""
+    here = os.path.dirname(os.path.abspath(__file__))
+    repo = os.path.abspath(os.path.join(here, "..", "..", "..", ".."))
+    mojo = os.path.join(repo, ".venv", "bin", "mojo")
+    if not os.path.isfile(mojo):
+        mojo = "mojo"
+    result = subprocess.run(
+        ["sh", os.path.join(repo, "tools", "tool.sh"), mojo,
+         "carla_town_rows", path],
+        capture_output=True, text=True,
+    )
+    if result.returncode != 0:
+        if not os.path.isfile(path):
+            raise FileNotFoundError(path)
+        raise ValueError(result.stderr.strip() or "layout read failed")
+    return json.loads(result.stdout)
 
 
 def rows_of(town):
-    with open(os.path.join(LAYOUT, town + ".jsonl"), encoding="utf-8") as lines:
-        return [json.loads(line) for line in lines]
+    """Return a town's layout rows.
+
+    `tools/carla_town_rows.mojo` reads the file.
+    """
+    return _rows_tool(os.path.join(LAYOUT, town + ".jsonl"))
+
+
+def _copies_tool(payload):
+    """Return matrices from `tools/carla_town_copies.mojo`."""
+    here = os.path.dirname(os.path.abspath(__file__))
+    repo = os.path.abspath(os.path.join(here, "..", "..", "..", ".."))
+    mojo = os.path.join(repo, ".venv", "bin", "mojo")
+    if not os.path.isfile(mojo):
+        mojo = "mojo"
+    folder = tempfile.mkdtemp(prefix="town copies ")
+    try:
+        path = os.path.join(folder, "row.json")
+        with open(path, "w", encoding="utf-8") as handle:
+            json.dump(payload, handle)
+        result = subprocess.run(
+            ["sh", os.path.join(repo, "tools", "tool.sh"), mojo,
+             "carla_town_copies", path],
+            capture_output=True, text=True,
+        )
+    finally:
+        shutil.rmtree(folder, ignore_errors=True)
+    if result.returncode != 0:
+        raise ValueError(result.stderr.strip() or "placements failed")
+    return json.loads(result.stdout)
 
 
 def placements(row):
-    """Return each copy's Unreal row-vector world matrix."""
-    component = component_rows(row)
-    if "instances" not in row:
-        return [component]
-    out = []
-    for flat in row["instances"]:
-        instance = numpy.array(flat, dtype=numpy.float64).reshape(4, 4)
-        out.append(instance @ component)
-    return out
+    """Return each copy's Unreal row-vector world matrix.
+
+    `tools/carla_town_copies.mojo` builds the matrices.
+    """
+    payload = {
+        "scale": list(row["scale"]),
+        "rotation": list(row["rotation"]),
+        "location": list(row["location"]),
+    }
+    if "instances" in row:
+        payload["instances"] = [list(flat) for flat in row["instances"]]
+    return [numpy.array(matrix, dtype=numpy.float64) for matrix in _copies_tool(payload)]
 
 
 def build(town, max_size, tile):
@@ -1108,97 +1629,105 @@ def build(town, max_size, tile):
     return write(town, name, out_dir, library, groups, lamps)
 
 
+def _buffer_tool(name, groups, lamps, bin_path):
+    """Return JSON from `tools/carla_town_buffers.mojo` and write the bin."""
+    here = os.path.dirname(os.path.abspath(__file__))
+    repo = os.path.abspath(os.path.join(here, "..", "..", "..", ".."))
+    mojo = os.path.join(repo, ".venv", "bin", "mojo")
+    if not os.path.isfile(mojo):
+        mojo = "mojo"
+    payload = {"bin": bin_path, "name": name, "groups": [], "lamps": []}
+    for (lod, kind, cell, material), group in groups.items():
+        payload["groups"].append({
+            "lod": int(lod),
+            "kind": kind,
+            "cell": [int(cell[0]), int(cell[1])],
+            "material": int(material),
+            "positions": [numpy.asarray(chunk, dtype=float).reshape(-1, 3).tolist() for chunk in group[0]],
+            "normals": [numpy.asarray(chunk, dtype=float).reshape(-1, 3).tolist() for chunk in group[1]],
+            "uvs": [numpy.asarray(chunk, dtype=float).reshape(-1, 2).tolist() for chunk in group[2]],
+            "triangles": [numpy.asarray(chunk).reshape(-1, 3).tolist() for chunk in group[3]],
+        })
+    for head in lamps:
+        payload["lamps"].append([float(value) for value in head])
+    folder = tempfile.mkdtemp(prefix="town-buffers-")
+    try:
+        path = os.path.join(folder, "buffers.json")
+        with open(path, "w", encoding="utf-8") as handle:
+            json.dump(payload, handle, separators=(",", ":"), allow_nan=False)
+        result = subprocess.run(
+            ["sh", os.path.join(repo, "tools", "tool.sh"), mojo,
+             "carla_town_buffers", path],
+            capture_output=True, text=True,
+        )
+    finally:
+        shutil.rmtree(folder, ignore_errors=True)
+    if result.returncode != 0:
+        raise ValueError(result.stderr.strip() or "town buffers failed")
+    return json.loads(result.stdout)
+
+
 def write(town, name, out_dir, library, groups, lamps):
     """Write the glTF and its buffer, and return the triangle counts of
-    the two levels of detail and the node count."""
+    the two levels of detail and the node count.
+
+    `tools/carla_town_buffers.mojo` packs the vertices and rounds the lamp
+    heads.
+    """
     gltf = library.gltf
     gltf["asset"] = {"version": "2.0", "generator": "ThreeMojo build_towns.py", "copyright": CREDIT}
     gltf["scene"] = 0
-    gltf["nodes"], gltf["meshes"], gltf["accessors"], gltf["bufferViews"] = [], [], [], []
-    blob = bytearray()
-
-    def add(values, component, kind, target):
-        while len(blob) % 4:
-            blob.append(0)
-        data = values.tobytes()
-        gltf["bufferViews"].append({"buffer": 0, "byteOffset": len(blob), "byteLength": len(data), "target": target})
-        blob.extend(data)
-        accessor = {"bufferView": len(gltf["bufferViews"]) - 1, "componentType": component,
-                    "count": len(values) if values.ndim > 1 else values.size, "type": kind}
-        if kind == "VEC3" and target == 34962:
-            accessor["min"] = values.min(axis=0).tolist()
-            accessor["max"] = values.max(axis=0).tolist()
-        gltf["accessors"].append(accessor)
-        return len(gltf["accessors"]) - 1
-
-    triangles = [0, 0]
-    for (lod, kind, cell, material), group in sorted(groups.items(), key=lambda item: item[0]):
-        faces = numpy.concatenate(group[3]).astype(numpy.uint32)
-        triangles[lod] += len(faces)
-        primitive = {"attributes": {"POSITION": add(numpy.concatenate(group[0]), 5126, "VEC3", 34962),
-                                    "NORMAL": add(numpy.concatenate(group[1]), 5126, "VEC3", 34962),
-                                    "TEXCOORD_0": add(numpy.concatenate(group[2]), 5126, "VEC2", 34962)},
-                     "indices": add(faces.reshape(-1), 5125, "SCALAR", 34963), "material": material}
-        gltf["meshes"].append({"primitives": [primitive]})
-        gltf["nodes"].append({"name": "%s_%d_%d_lod%d" % (kind, cell[0], cell[1], lod), "mesh": len(gltf["meshes"]) - 1,
-                              "extras": {"carla_kind": kind, "carla_lod": lod}})
-    # Each street lamp's head, three numbers each, for the lights at night.
-    gltf["scenes"] = [{"nodes": list(range(len(gltf["nodes"]))),
-                       "extras": {"carla_lamps": [round(v, 3) for head in lamps for v in head]}}]
-    gltf["buffers"] = [{"byteLength": len(blob), "uri": name + ".bin"}]
-    open(os.path.join(out_dir, name + ".bin"), "wb").write(blob)
+    doc = _buffer_tool(name, groups, lamps, os.path.join(out_dir, name + ".bin"))
+    gltf["nodes"] = doc["nodes"]
+    gltf["meshes"] = doc["meshes"]
+    gltf["accessors"] = doc["accessors"]
+    gltf["bufferViews"] = doc["bufferViews"]
+    gltf["scenes"] = doc["scenes"]
+    gltf["buffers"] = doc["buffers"]
     json.dump(gltf, open(os.path.join(out_dir, name + ".gltf"), "w", encoding="utf-8"), separators=(",", ":"))
     check_clean(out_dir)
     to_glb(out_dir, name)
-    return triangles, len(gltf["nodes"])
+    return doc["triangles"], len(gltf["nodes"])
 
 
 def to_glb(out_dir, name):
     """Pack a package's glTF, its buffer and its textures into one binary
     glTF, `<name>.glb`, and remove the loose files. A town is then two
     files, the glb and its OpenDRIVE map, and its manifest entry lists
-    two members, not a thousand."""
-    gltf_path = os.path.join(out_dir, name + ".gltf")
-    gltf = json.load(open(gltf_path, encoding="utf-8"))
-    blob = bytearray(open(os.path.join(out_dir, name + ".bin"), "rb").read())
-    for image in gltf.get("images", []):
-        while len(blob) % 4:
-            blob.append(0)
-        data = open(os.path.join(out_dir, image["uri"]), "rb").read()
-        gltf["bufferViews"].append({"buffer": 0, "byteOffset": len(blob), "byteLength": len(data)})
-        blob.extend(data)
-        mime = "image/png" if image["uri"].endswith(".png") else "image/jpeg"
-        image.clear()
-        image.update({"bufferView": len(gltf["bufferViews"]) - 1, "mimeType": mime})
-    while len(blob) % 4:
-        blob.append(0)
-    gltf["buffers"] = [{"byteLength": len(blob)}]
-    text = json.dumps(gltf, separators=(",", ":")).encode("utf-8")
-    text += b" " * (-len(text) % 4)
-    total = 12 + 8 + len(text) + 8 + len(blob)
-    with open(os.path.join(out_dir, name + ".glb"), "wb") as out:
-        out.write(struct.pack("<III", 0x46546C67, 2, total))
-        out.write(struct.pack("<II", len(text), 0x4E4F534A))
-        out.write(text)
-        out.write(struct.pack("<II", len(blob), 0x004E4942))
-        out.write(blob)
-    os.remove(gltf_path)
-    os.remove(os.path.join(out_dir, name + ".bin"))
-    shutil.rmtree(os.path.join(out_dir, "textures"), ignore_errors=True)
+    two members, not a thousand.
+
+    `tools/carla_town_glb.mojo` writes the binary glTF.
+    """
+    root = os.path.abspath(os.path.join(HERE, "..", "..", "..", ".."))
+    mojo = os.path.join(root, ".venv", "bin", "mojo")
+    if not os.path.isfile(mojo):
+        mojo = "mojo"
+    result = subprocess.run(
+        ["sh", os.path.join(root, "tools", "tool.sh"), mojo,
+         "carla_town_glb", out_dir, name],
+        capture_output=True, text=True,
+    )
+    if result.returncode != 0:
+        raise ValueError(result.stderr.strip() or "town glb failed")
 
 
 def check_clean(out_dir):
     """Refuse a package that names an engine or an engine path, in its
-    glTF or in a file name."""
-    for base, _, files in os.walk(out_dir):
-        for name in files:
-            if UNCLEAN.search(name):
-                raise SystemExit("unclean file name: " + os.path.join(base, name))
-            if name.endswith(".gltf") or name.endswith(".xodr"):
-                text = open(os.path.join(base, name), encoding="utf-8").read()
-                found = UNCLEAN.search(text)
-                if found:
-                    raise SystemExit("unclean text in %s: %r" % (name, text[max(0, found.start() - 60):found.end() + 60]))
+    glTF or in a file name.
+
+    `tools/carla_town_clean.mojo` reads the names and the text.
+    """
+    root = os.path.abspath(os.path.join(HERE, "..", "..", "..", ".."))
+    mojo = os.path.join(root, ".venv", "bin", "mojo")
+    if not os.path.isfile(mojo):
+        mojo = "mojo"
+    result = subprocess.run(
+        ["sh", os.path.join(root, "tools", "tool.sh"), mojo,
+         "carla_town_clean", out_dir],
+        capture_output=True, text=True,
+    )
+    if result.returncode != 0:
+        raise SystemExit(result.stderr.strip() or "town package is unclean")
 
 
 def main(argv=None):

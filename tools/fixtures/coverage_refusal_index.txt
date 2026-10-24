@@ -1,0 +1,20 @@
+copyable-retained|none|a one-type operator that selects a retained operand whose copy runs source
+copyable-retained-self|exact|a one-type operator that selects a retained operand whose copy runs source
+copyable-retained-temporary|exact|a one-type operator that selects a retained operand whose copy runs source
+copyable-retained-mixed|none|custom mixed-type operator whose Bool result
+custom-move|none|custom mixed-type operator whose Bool result
+optional-copied-element|exact|a one-type operator that selects a retained operand whose copy runs source
+custom-move-same|exact|a one-type operator over a type with a user-defined move
+optional-join|none|an implicit conversion between operand types
+pure-optional-join|none|an implicit conversion between operand types
+nested-optional-inner-and|exact|an implicit conversion between operand types
+nested-optional-inner-or|exact|an implicit conversion between operand types
+nested-optional-outer-and|exact|an implicit conversion between operand types
+nested-optional-outer-or|exact|an implicit conversion between operand types
+implicit-join|none|an implicit conversion between operand types
+copyable-retained-same-origin|none|a one-type operator that selects a retained operand whose copy runs source
+custom-move-same-type|none|a one-type operator over a type with a user-defined move
+bool-merge-or|no-bool-r|custom mixed-type operator whose Bool result
+bool-merge-and|no-bool-r|custom mixed-type operator whose Bool result
+gated-merge-flag|gated-flag|custom mixed-type operator whose Bool result
+gated-merge-plain|gated-plain|custom mixed-type operator whose Bool result

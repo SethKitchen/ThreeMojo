@@ -414,12 +414,14 @@ CARLA's vehicles are Unreal Engine 4.26 assets. The scripts in `assets/carla/too
    sh tools/tool.sh .venv/bin/mojo carla_export_manifest_vehicles
    ```
 
-`export_vehicles.py` reads each vehicle blueprint for the meshes it names. It exports the skeletal body and the static glass and lights, then merges them into one glTF file. `carla_gltf_fix.py` then does these steps:
+`export_vehicles.py` reads each vehicle blueprint for the meshes it names. `tools/carla_vehicle_paths.mojo` finds that blueprint and its cooked package. `tools/carla_vehicle_refs.mojo` lists the static packages in that file. It exports the skeletal body and the static glass and lights, then merges them into one glTF file. `tools/carla_vehicle_merge.mojo` appends the static mesh buffer and renumbers its views, accessors, materials, meshes and nodes.
+
+`carla_gltf_fix.py` then does these steps. `tools/carla_file_index.mojo` indexes the files. `tools/carla_mat_text.mojo` reads the `.mat` and `.props.txt` files. `tools/carla_gltf_dedupe.mojo` keeps one material of each name.
 
 1. It rebuilds each material from the parameters that UModel writes beside the mesh. It uses the base color, normal and ORM maps, the car paint's color and translucent glass. It scales each texture to 1024 pixels or less.
-2. It removes the skin, because the town takes plain meshes. It removes Unreal's vertex colors, because they are masks and not colors.
-3. It splits the lamps into head lamps and tail lamps. CARLA's lamp material reads an eight-color mask, and UModel does not export what the colors mean. So a lamp in front of the model's middle is a head lamp, and a lamp behind it is a tail lamp.
-4. It simplifies the model to `--budget` triangles, 35,000 by default, one primitive at a time. The seams stay where they are, so the textures do not tear. The normals are made again from the simplified faces.
+2. It removes the skin, because the town takes plain meshes. It removes Unreal's vertex colors, because they are masks and not colors. `tools/carla_gltf_skin.mojo` removes the skin, the joints, the weights and those colors.
+3. It splits the lamps into head lamps and tail lamps. CARLA's lamp material reads an eight-color mask, and UModel does not export what the colors mean. So a lamp in front of the model's middle is a head lamp, and a lamp behind it is a tail lamp. `tools/carla_gltf_read.mojo` reads each accessor.
+4. It simplifies the model to `--budget` triangles, 35,000 by default, one primitive at a time. The seams stay where they are, so the textures do not tear. The normals are made again from the simplified faces. `tools/carla_area_normals.mojo` weights each normal by the area of the faces that meet there. `tools/carla_gltf_append.mojo` packs each new buffer view.
 
 The simplification needs the `fast-simplification` Python package.
 
@@ -428,6 +430,10 @@ Use the cooked release, not the carla-content repository. The repository holds u
 ## The CARLA towns
 
 Each town package holds one CARLA town as CARLA builds it. It has the town's buildings, streets, sidewalks, plants, poles, fences, props and parked vehicles, each where the town puts it. The packages are Town01, Town02, Town03, Town04, Town05 and Town10HD, as `carla.town.<town>.zip`.
+
+`tools/carla_town_glb.mojo` packs the loose glTF, its buffer and its textures into one binary glTF. `tools/carla_town_copies.mojo` builds each copy's world matrix. `tools/carla_town_frame.mojo` converts each copy's matrix. A rigid copy is placed by `tools/carla_town_place.mojo`. `tools/carla_town_bend.mojo` bends a spline mesh along its curve. `tools/carla_town_slots.mojo` chooses each primitive's material name.
+
+`tools/carla_town_spline.mojo` places that bent mesh in the renderer frame.
 
 A package is two files: one binary glTF file, `carla.town.<town>.glb`, with its buffer and its textures inside, and the town's OpenDRIVE map, `<town>.xodr`. The positions are in the renderer's frame, in meters: three.js x, y and z are CARLA's x, z and y. So the package goes at the origin, with no turn and no scale.
 
@@ -438,19 +444,23 @@ The meshes are merged by tile, by kind and by material. A tile is 32 meters squa
 | `carla_kind` | `building`, `road`, `road_line`, `sidewalk`, `ground`, `terrain`, `water`, `rail`, `wall`, `fence`, `vegetation`, `pole`, `traffic_light`, `traffic_sign`, `parked_vehicle`, `prop` |
 | `carla_lod` | `0` for near, `1` for far |
 
-The near level keeps the detail that a camera sees close up. The far level keeps what shows at a distance. It leaves out the grass, the bushes, the props, the parked vehicles, the signs and the lamps' glass. A far tree is an impostor: two quads that cross on its trunk. Each quad shows a picture of the tree, drawn from its near level from the front or from the side, with its leaves cut out.
+The near level keeps the detail that a camera sees close up. The far level keeps what shows at a distance. It leaves out the grass, the bushes, the props, the parked vehicles, the signs and the lamps' glass. A far tree is an impostor: two quads that cross on its trunk. Each quad shows a picture of the tree, drawn from its near level from the front or from the side, with its leaves cut out. `tools/carla_town_splat.mojo` draws each tree picture and each far building view.
 
-A far building is a baked proxy. Its corners are gathered into cells a 200th of its size, and the joined mesh is simplified. Its near level is drawn from each side and from above into one picture, and each far triangle shows the view that faces it. So its windows and its trim are in the picture, not in the geometry. The picture holds no light: the renderer lights the proxy.
+A far building is a baked proxy. Its corners are gathered into cells a 200th of its size by `tools/carla_town_weld.mojo`, and the joined mesh is simplified. Its near level is drawn from each side and from above into one picture, and `tools/carla_town_atlas.mojo` gives each far triangle the view that faces it. So its windows and its trim are in the picture, not in the geometry. `tools/carla_town_dilate.mojo` spreads colors into the empty texels. The picture holds no light: the renderer lights the proxy.
 
 A town's glass is a dark, smooth, partly metal pane that reflects its surroundings. A see-through window has nothing behind it, so a tower would show the sky through its windows.
 
-The scene's `extras` list the head of each street lamp, as `carla_lamps`: three numbers for each lamp, in the renderer's frame. The lamps' glass has the material tag `{"carla": "lamp"}`. A renderer draws each tile at one level, chosen by the tile's distance to the camera.
+`tools/carla_town_lamps.mojo` finds each street lamp head. The scene's `extras` list the head of each street lamp, as `carla_lamps`: three numbers for each lamp, in the renderer's frame. The lamps' glass has the material tag `{"carla": "lamp"}`. A renderer draws each tile at one level, chosen by the tile's distance to the camera.
 
 Each mesh keeps a share of its triangles, by its kind. Each town also has a cap for each kind at each level. A town can have more than its cap, as Town04 has with its eight thousand pines. Then every mesh of that kind gives up the same share. A tree gives up leaf cards, and each card that stays grows, so the crown stays full. Other meshes are simplified, and their texture seams stay where they are.
 
+`tools/carla_town_cards.mojo` keeps about the requested share of those cards and grows each card that stays.
+
+The kind of each mesh and both triangle limits come from `tools/carla_town_budget.mojo`. `build_towns.py` asks that program for every mesh.
+
 Some textures in CARLA's content show a company's mark, a real person, a real institution or a poster of unclear origin. CARLA's license covers CARLA's own work, not these. Each one becomes one flat color, its average. `NEUTRAL` in `carla_gltf_fix.py` names them, and the vehicle packages use the same list.
 
-A package names no engine and no engine path. `build_towns.py` stops with an error when it finds one.
+A package names no engine and no engine path. `build_towns.py` stops with an error when it finds one. `tools/carla_town_clean.mojo` reads each file name, and the text of each glTF and OpenDRIVE file.
 
 ## Rebuild the town packages
 
@@ -462,7 +472,7 @@ The towns are made in three steps. The scripts run on Windows, like the vehicle 
    python dump_layout.py
    ```
 
-   The Python API does not say which mesh each object uses, and UModel cannot read the cooked levels. So `dump_layout.py` runs CARLA with UE4SS, a scripting runtime, and a Lua mod, `layout_dump/main.lua`. The mod writes each static mesh component: its mesh, its materials, its transform and its instances. The server runs with `-nullrhi`, so it does not use the GPU. Each run stops after `--limit` seconds, 60 by default.
+   The Python API does not say which mesh each object uses, and UModel cannot read the cooked levels. So `dump_layout.py` runs CARLA with UE4SS, a scripting runtime, and a Lua mod, `layout_dump/main.lua`. The mod writes each static mesh component: its mesh, its materials, its transform and its instances. `tools/carla_town_rows.mojo` reads that layout. The server runs with `-nullrhi`, so it does not use the GPU. Each run stops after `--limit` seconds, 60 by default.
 
    Use UE4SS experimental build 3.0.1-1152 or later. Version 3.0.1 stops CARLA 0.9.16 at start.
 
@@ -472,7 +482,9 @@ The towns are made in three steps. The scripts run on Windows, like the vehicle 
    python export_towns.py
    ```
 
-   It reads the release's own `CarlaUE4/Content`, not `cooked/`. It does not export the engine's own content, which is licensed for use in the engine only. `build_towns.py` draws its own box for the engine's cube.
+   It reads the release's own `CarlaUE4/Content`, not `cooked/`. It does not export the engine's own content, which is licensed for use in the engine only. `build_towns.py` draws its own box for the engine's cube from `tools/carla_town_cube.mojo`.
+
+   `tools/carla_town_paths.mojo` names the packages. `build_towns.py` reads each mesh with `tools/carla_town_mesh.mojo`.
 
 3. Build and zip the packages:
 
@@ -487,7 +499,7 @@ The towns are made in three steps. The scripts run on Windows, like the vehicle 
    sh tools/tool.sh .venv/bin/mojo carla_export_manifest_towns [--urls urls.json]
    ```
 
-   `carla_export_manifest_towns` writes each town's entry and its binding, `town.<town>`. The URLs file is the same form as the vehicles'.
+   `carla_export_manifest_towns` writes each town's entry and its binding, `town.<town>`. The URLs file is the same form as the vehicles'. `tools/carla_town_buffers.mojo` packs each tile's vertices into the glTF buffer.
 
    `--top` lists the meshes that add the most triangles to each town.
 
@@ -500,6 +512,9 @@ with different material overrides keeps its own far appearance. Each build
 starts a new cache. Its geometry, materials and texture files must stay fixed
 until that build ends.
 
+The primitive digest is `tools/carla_geometry_digest.mojo`. It hashes each
+field name, shape and little-endian payload in the reviewed order.
+
 Packaged texture names use a hash of the encoded image bytes. Two material
 overrides can share a color map with different masks without replacing each
 other's image. Source images with the same filename also stay distinct.
@@ -508,8 +523,10 @@ Equal encoded images can share one packaged file.
 ## Test the town exporter
 
 The standard-library identity checks run with `make test-tools`.
-The synthetic bake checks need only NumPy and Pillow. They use two small
-meshes and two colors. They need no CARLA release, server or GPU.
+The synthetic bake checks need NumPy, Pillow and the repository Mojo.
+They use two small meshes and two colors. They need no CARLA release,
+server or GPU. They call the Mojo export programs through
+`tools/tool.sh`.
 
 Only mesh simplification is substituted. The tests use the real material
 reconstruction, texture conversion, bake rasterizers and GLB writer. They
@@ -523,8 +540,9 @@ uv pip install --python .venv-carla-export/bin/python --only-binary :all: "numpy
 .venv-carla-export/bin/python -m unittest discover -s assets/carla/tools/export -p 'test_build_towns.py'
 ```
 
-The existing Linux and macOS lint jobs run this command. They keep the Mojo
-environment unchanged. A missing dependency or wheel fails the check.
+The existing Linux and macOS lint jobs run this command. They install
+Mojo when the bake checks run. The exporter packages stay in a separate
+environment. A missing dependency or wheel fails the check.
 
 ## Why not Poly Haven
 

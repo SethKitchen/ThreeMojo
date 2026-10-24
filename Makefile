@@ -37,6 +37,10 @@ quote = '$(subst ','"'"',$(1))'
 # lists are longer than one argument can be.
 TOOL_MOJO := $(if $(wildcard .venv/bin/mojo),.venv/bin/mojo,mojo)
 TOOL = sh tools/tool.sh $(call quote,$(TOOL_MOJO))
+# Lint progress and a failed command. The value is shell words. The default
+# `TOOL_MOJO` has no spaces, so a recipe can expand this variable unquoted.
+THREEMOJO_SHELL_LOG := sh tools/tool.sh $(TOOL_MOJO) shell_log
+export THREEMOJO_SHELL_LOG
 
 # --- sources ----------------------------------------------------------------
 # Library modules have no main(), so they are checked with `mojo doc`.
@@ -251,7 +255,7 @@ TOOLCHAIN := $(shell $(MOJO) --version 2>/dev/null || echo "no-mojo")
 # Native test fixtures are test-only. Their compiler identity also invalidates
 # suite stamps; a missing compiler is a build failure, never a skipped suite.
 export CC
-NATIVE_TOOLCHAIN := $(shell python3 tools/native_test_support.py fingerprint \
+NATIVE_TOOLCHAIN := $(shell $(TOOL) native_test_support fingerprint \
                        --cc $(call quote,$(CC)) 2>/dev/null || echo "no-native-compiler")
 HASH := $(shell $(TOOL) cache_key \
           --setting=$(call quote,$(MOJO)) \
@@ -397,7 +401,7 @@ $(TEST_CPU_STAMP):
 	               "$$(date -u +%Y-%m-%dT%H:%M:%SZ)" "$$1" "$$2" >&3; }; \
 	             progress "$$1" "build-start: $(MOJO) build $(MOJOFLAGS) --Werror -o $$bin $$1"; \
 	             out=$$(sh tools/tool.sh $(TOOL_MOJO) compiler_telemetry --suite "$$1" --log-fd 3 -- \
-	                    python3 tools/native_test_support.py run --root . \
+	                    sh tools/tool.sh $(TOOL_MOJO) native_test_support run --root . \
 	                      --suite "$$1" --cache $(CACHE_DIR)/native -- \
 	                      $(MOJO) build $(MOJOFLAGS) --Werror -o "$$bin" "$$1" \
 	                    2>&1; build_rc=$$?; \
@@ -484,7 +488,7 @@ $(LINT_CPU_STAMP):
 	      sh -c 'source=$$1; set -- $(MOJO) build $(MOJOFLAGS) $(LINT_CPU_BUILD_FLAGS) \
 	               --Werror -o /dev/null "$$source"; \
 	             if [ "$(LINT_CPU_PROGRESS)" = 1 ]; then \
-	               python3 -c "import datetime, shlex, sys; line = datetime.datetime.now(datetime.timezone.utc).strftime(\"%Y-%m-%dT%H:%M:%SZ\") + \" lint-build-start: \" + shlex.join(sys.argv[1:]); print(line if len(line) <= 4096 else line[:4084] + \" [truncated]\", flush=True)" "$$@"; \
+	               $$THREEMOJO_SHELL_LOG start lint-build-start: "$$@"; \
 	             fi; \
 	             out=$$("$$@" 2>&1); rc=$$?; \
 	             if [ "$(LINT_CPU_PROGRESS)" = 1 ]; then \
@@ -492,7 +496,7 @@ $(LINT_CPU_STAMP):
 	             fi; \
 	             if [ $$rc -ne 0 ]; then \
 	               printf "lint-cpu failed: %s (exit %s)\n" "$$source" "$$rc" >&2; \
-	               python3 -c "import shlex, sys; print(\"command: \" + shlex.join(sys.argv[1:]), file=sys.stderr)" "$$@"; \
+	               $$THREEMOJO_SHELL_LOG command "$$@"; \
 	             fi; \
 	             printf "%s" "$$out" | sed "/Crashpad/d"; \
 	             exit $$rc' _ {} \
@@ -502,7 +506,7 @@ $(LINT_CPU_STAMP):
 	      sh -c 'source=$$1; set -- $(MOJO) doc $(MOJOFLAGS) \
 	               --Werror -o /dev/null "$$source"; \
 	             if [ "$(LINT_CPU_PROGRESS)" = 1 ]; then \
-	               python3 -c "import datetime, shlex, sys; line = datetime.datetime.now(datetime.timezone.utc).strftime(\"%Y-%m-%dT%H:%M:%SZ\") + \" lint-doc-start: \" + shlex.join(sys.argv[1:]); print(line if len(line) <= 4096 else line[:4084] + \" [truncated]\", flush=True)" "$$@"; \
+	               $$THREEMOJO_SHELL_LOG start lint-doc-start: "$$@"; \
 	             fi; \
 	             out=$$("$$@" 2>&1); rc=$$?; \
 	             if [ "$(LINT_CPU_PROGRESS)" = 1 ]; then \
@@ -510,7 +514,7 @@ $(LINT_CPU_STAMP):
 	             fi; \
 	             if [ $$rc -ne 0 ]; then \
 	               printf "lint-cpu failed: %s (exit %s)\n" "$$source" "$$rc" >&2; \
-	               python3 -c "import shlex, sys; print(\"command: \" + shlex.join(sys.argv[1:]), file=sys.stderr)" "$$@"; \
+	               $$THREEMOJO_SHELL_LOG command "$$@"; \
 	             fi; \
 	             printf "%s" "$$out" | sed "/Crashpad/d"; \
 	             exit $$rc' _ {} \
@@ -550,7 +554,7 @@ $(LINT_GPU_STAMP): $(COMPILE_GPU_STAMP)
 # The manifest also lets the copy and diff loops share exactly one selection.
 # Each make process owns its manifest. Keep it outside stamp(fmt)'s fmt-*
 # cleanup so concurrent checks cannot remove or overwrite another selection.
-FMT_RUN_ID := $(shell python3 -c 'import uuid; print(uuid.uuid4().hex)')
+FMT_RUN_ID := $(shell $(TOOL) format_run_id)
 FMT_INPUTS := $(CACHE_DIR)/format-inputs-$(FMT_RUN_ID)
 define write-format-inputs
 $(if $(strip $(1)),@printf '%s\n' $(foreach f,$(wordlist 1,4,$(1)),$(call quote,$(f))) >> $(FMT_INPUTS)
@@ -938,7 +942,7 @@ test-tools-discovery:
 	@python3 -m unittest discover -s assets/carla/tools -p 'test_*.py'
 
 test-tools-oracle:
-	@python3 tools/parallel_unittest.py --jobs $(JOBS) $(if $(TOOLS_SHARD),--shard $(TOOLS_SHARD)) tools/carla_lane_oracle
+	@$(TOOL) parallel_unittest --jobs $(JOBS) $(if $(TOOLS_SHARD),--shard $(TOOLS_SHARD)) tools/carla_lane_oracle
 	@$(if $(filter-out 1/%,$(TOOLS_SHARD)),:,python3 tools/carla_lane_oracle/spiral_moments.py --check)
 	@$(if $(filter-out 1/%,$(TOOLS_SHARD)),:,$(MAKE) --no-print-directory repository-check)
 
@@ -956,12 +960,12 @@ repository-check:
 # Native source-to-source regression: compile first, then enforce the normal
 # five-second limit on each executed test. test-tools remains compiler-free.
 test-coverage-tool:
-	@python3 tools/check_coverage_grouping.py --mojo $(MOJO)
-	@python3 tools/check_coverage_protocol.py --mojo $(MOJO)
+	@$(TOOL) check_coverage_grouping --mojo $(MOJO)
+	@$(TOOL) check_coverage_protocol --mojo $(MOJO)
 	@$(TOOL) check_coverage_sources --mojo $(MOJO)
 	@$(TOOL) check_coverage_loops --mojo $(MOJO)
 	@python3 tools/check_coverage_loop_proofs.py --mojo $(MOJO)
-	@python3 tools/check_coverage_hit_profile.py --mojo $(MOJO)
+	@$(TOOL) check_coverage_hit_profile --mojo $(MOJO)
 
 # Subprocess-only contracts need native children with different environments.
 # Metal kernels as AIR, emitted for a Metal target without a GPU or Apple's

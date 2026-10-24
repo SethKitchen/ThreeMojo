@@ -332,7 +332,8 @@ class NativeTestSupportTests(unittest.TestCase):
 
     def test_official_cpu_and_coverage_commands_share_the_adapter(self):
         make = (Path(__file__).resolve().parent.parent/'Makefile').read_text()
-        self.assertIn('tools/native_test_support.py run --root .', make)
+        self.assertIn('native_test_support run --root .', make)
+        self.assertIn('native_test_support fingerprint', make)
         self.assertIn('tools/native_test_support.py run --root $(COV_DIR)', make)
         self.assertIn('tools/native_test_support.py copy --root . --destination $(COV_DIR)', make)
         self.assertGreaterEqual(make.count('native-tests:$(NATIVE_TOOLCHAIN)'), 2)

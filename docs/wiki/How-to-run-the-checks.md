@@ -47,7 +47,7 @@ A missing compiler or fixture fails the check. It does not skip the suite.
 For a direct build and a timed run, use:
 
 ```bash
-python3 tools/native_test_support.py run --root . \
+sh tools/tool.sh .venv/bin/mojo native_test_support run --root . \
   --suite tests/test_carla_sum2_environment.mojo --cache .cache/native -- \
   .venv/bin/mojo build -I . --Werror \
   -o .cache/sum2-environment tests/test_carla_sum2_environment.mojo
@@ -91,6 +91,13 @@ A change to one leaf module, for example a loader, checks one suite in about a m
 Coverage is exact for each module it measures, because every suite that can reach the module runs. A test change can lower the coverage of a module that the change does not reach. `AFFECTED` does not see that. The full run does.
 
 The CI workflow checks a pull request with `AFFECTED` set to its base branch. It checks everything on a push to `main`. It runs the checks on Ubuntu and on a macOS runner with Apple Silicon.
+
+## Run the tool tests
+
+`make test-tools` runs the Python tool tests and the CARLA oracle.
+The oracle runner is `tools/parallel_unittest.mojo`.
+It starts several Python test processes at once.
+`TOOLS_SHARD=I/N` gives each runner a different share of those units.
 
 ## Verify generated fixtures
 
@@ -168,7 +175,7 @@ Coverage splits into three steps. Each CI runner runs `coverage-instrument` and 
 
 ## Rebuild the project tools
 
-The `Makefile` runs Mojo tools while it reads itself. They select the affected files, split the suites, key the stamps and list the prerequisites of each example. `tools/tool.sh` builds each tool once into `.cache/tools/` and then runs the program. It builds a tool again when a `.mojo` file in `tools/` or `loaders/` is newer than the program. A tool must import nothing outside these two directories, apart from the standard library.
+The `Makefile` runs Mojo tools while it reads itself. They select the affected files, split the suites, key the stamps and list the prerequisites of each example. `tools/tool.sh` builds each tool once into `.cache/tools/` and then runs the program. It builds a tool again when a `.mojo` file in `tools/` or `loaders/` is newer than the program. A tool must import nothing outside these two directories, apart from the standard library. `tools/shell_log.mojo` writes the lint log lines and the format run id.
 
 The tools use their own compiler, `TOOL_MOJO`. It is `.venv/bin/mojo` when that file exists, and `mojo` otherwise. So a test can give `MOJO` a stand-in compiler. To build the tools with a different compiler, set `TOOL_MOJO`:
 

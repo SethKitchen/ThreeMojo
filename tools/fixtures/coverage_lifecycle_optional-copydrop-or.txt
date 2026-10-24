@@ -1,0 +1,39 @@
+@fieldwise_init
+struct CopyDrop(ImplicitlyCopyable):
+    var index: Int
+
+    def __deinit__(deinit self):
+        print("DROP", self.index)
+
+
+def optional(index: Int, full: Bool) -> Optional[CopyDrop]:
+    print("MAKE", index, full)
+    if full:
+        return CopyDrop(index)
+    return None
+
+
+def retained(first: Bool, second: Bool):
+    print("RETAINED", first, second)
+    var left = optional(0, first)
+    var right = optional(1, second)
+    if left or right:
+        print("BODY T")
+    else:
+        print("BODY F")
+    print("RETAINED AFTER", Bool(left), Bool(right))
+
+
+def temporary(first: Bool, second: Bool):
+    print("TEMPORARY", first, second)
+    if optional(0, first) or optional(1, second):
+        print("BODY T")
+    else:
+        print("BODY F")
+
+
+def main():
+    for first in [False, True]:
+        for second in [False, True]:
+            retained(first, second)
+            temporary(first, second)

@@ -32,11 +32,12 @@ import os
 import re
 import shutil
 import struct
+import subprocess
 import sys
+import tempfile
 
 from PIL import Image
 
-PAINT_PARENTS = ("M_CarExterior_Master", "M_CarPaint", "CarPaint")
 # Textures that show another company's mark, a real person or a real
 # institution, or poster art of unclear origin. CARLA's license covers its
 # own work, not these, so each becomes one flat color: its average.
@@ -48,54 +49,60 @@ KEEP = 400
 
 
 def index_files(root, suffix):
-    """Map each file stem under `root` with `suffix` to its path."""
-    found = {}
-    for base, _, files in os.walk(root):
-        for name in files:
-            if name.endswith(suffix):
-                found.setdefault(name[: -len(suffix)], os.path.join(base, name))
-    return found
+    """Map each file stem under `root` with `suffix` to its path.
+
+    `tools/carla_file_index.mojo` walks the directory. The first file of a
+    stem is kept.
+    """
+    here = os.path.dirname(os.path.abspath(__file__))
+    repo = os.path.abspath(os.path.join(here, "..", "..", "..", ".."))
+    mojo = os.path.join(repo, ".venv", "bin", "mojo")
+    if not os.path.isfile(mojo):
+        mojo = "mojo"
+    result = subprocess.run(
+        ["sh", os.path.join(repo, "tools", "tool.sh"), mojo,
+         "carla_file_index", root, suffix],
+        capture_output=True, text=True,
+    )
+    if result.returncode != 0:
+        raise ValueError(result.stderr.strip() or "file index failed")
+    return json.loads(result.stdout)
+
+
+def _mat_tool(kind, path):
+    """Return JSON from `tools/carla_mat_text.mojo`."""
+    here = os.path.dirname(os.path.abspath(__file__))
+    repo = os.path.abspath(os.path.join(here, "..", "..", "..", ".."))
+    mojo = os.path.join(repo, ".venv", "bin", "mojo")
+    if not os.path.isfile(mojo):
+        mojo = "mojo"
+    result = subprocess.run(
+        ["sh", os.path.join(repo, "tools", "tool.sh"), mojo,
+         "carla_mat_text", kind, path],
+        capture_output=True, text=True,
+    )
+    if result.returncode != 0:
+        raise ValueError(result.stderr.strip() or "material text failed")
+    return json.loads(result.stdout)
 
 
 def read_mat(path):
-    """Return the `key=value` pairs of a UModel `.mat` file."""
-    pairs = {}
-    others = []
-    for line in open(path, encoding="utf-8", errors="replace"):
-        line = line.strip()
-        if "=" not in line:
-            continue
-        key, value = line.split("=", 1)
-        if key.startswith("Other"):
-            others.append(value)
-        else:
-            pairs[key] = value
-    pairs["_others"] = others
-    return pairs
+    """Return the `key=value` pairs of a UModel `.mat` file.
+
+    `tools/carla_mat_text.mojo` reads the file. Keys that start with
+    `Other` are collected in `_others`.
+    """
+    return _mat_tool("mat", path)
 
 
 def read_props(path):
     """Return the parent, the vector and the scalar parameters of a
-    UModel `.props.txt` file, and whether it blends."""
-    text = open(path, encoding="utf-8", errors="replace").read()
-    parent = ""
-    m = re.search(r"^Parent = \w+'([^']+)'", text, re.M)
-    if m:
-        parent = m.group(1)
-    vectors = {}
-    for name, r, g, b, a in re.findall(
-        r"Name=([^}]+?) \}\s*ParameterValue = \{ R=([-\d.e]+), G=([-\d.e]+), B=([-\d.e]+), A=([-\d.e]+) \}",
-        text,
-    ):
-        vectors[name.strip()] = [float(r), float(g), float(b), float(a)]
-    scalars = {}
-    for name, value in re.findall(
-        r"Name=([^}]+?) \}\s*ParameterValue = ([-\d.e]+)\s", text
-    ):
-        scalars[name.strip()] = float(value)
-    translucent = bool(re.search(r"BlendMode = BLEND_Translucent", text))
-    masked = bool(re.search(r"BlendMode = BLEND_Masked", text))
-    return parent, vectors, scalars, translucent, masked
+    UModel `.props.txt` file, and whether it blends.
+
+    `tools/carla_mat_text.mojo` reads the file.
+    """
+    doc = _mat_tool("props", path)
+    return doc["parent"], doc["vectors"], doc["scalars"], doc["translucent"], doc["masked"]
 
 
 def srgb_to_linear(c):
@@ -199,131 +206,110 @@ class Package:
         return index
 
 
-def by_name(name):
-    """Return factors for a material UModel could not describe."""
-    low = name.lower()
-    if "glass" in low or "window" in low:
-        return [0.08, 0.1, 0.12, 0.35], 0.0, 0.05, True
-    if "rubber" in low or "tire" in low or "tyre" in low:
-        return [0.03, 0.03, 0.03, 1], 0.0, 0.9, False
-    if "chrome" in low or "polished" in low:
-        return [0.9, 0.9, 0.9, 1], 1.0, 0.15, False
-    if "alumin" in low or "metal" in low:
-        return [0.6, 0.6, 0.62, 1], 1.0, 0.35, False
-    if "black" in low:
-        return [0.02, 0.02, 0.02, 1], 0.0, 0.6, False
-    if "grey" in low or "gray" in low:
-        return [0.25, 0.25, 0.25, 1], 0.0, 0.6, False
-    if "light" in low:
-        return [0.9, 0.9, 0.85, 1], 0.0, 0.2, False
-    return [0.5, 0.5, 0.5, 1], 0.0, 0.6, False
+def _material_plan(name, mat_text, props_text, pngs):
+    """Return the Mojo factor and texture decisions for one material."""
+    root = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "..", ".."))
+    mojo = os.path.join(root, ".venv", "bin", "mojo")
+    if not os.path.isfile(mojo):
+        mojo = "mojo"
+    request = {"name": name, "mat": mat_text, "props": props_text, "pngs": list(pngs)}
+    handle = tempfile.NamedTemporaryFile("w", suffix=".json", delete=False, encoding="utf-8")
+    try:
+        json.dump(request, handle)
+        handle.close()
+        result = subprocess.run(
+            ["sh", os.path.join(root, "tools", "tool.sh"), mojo,
+             "carla_gltf_material", handle.name],
+            text=True, capture_output=True, check=False,
+        )
+    finally:
+        os.remove(handle.name)
+    if result.returncode != 0:
+        raise ValueError(result.stderr.strip() or "material plan failed")
+    return json.loads(result.stdout)
 
 
 def rebuild(package, material, mats, props, pngs, report):
     """Rewrite one glTF material from UModel's files."""
     name = material.get("name", "")
-    pbr = {"metallicFactor": 0.0, "roughnessFactor": 0.6}
-    factors = by_name(name)
-    pbr["baseColorFactor"] = factors[0]
-    pbr["metallicFactor"] = factors[1]
-    pbr["roughnessFactor"] = factors[2]
-    blend = factors[3]
-    parent = ""
-    masked = False
+    mat_text = None
+    if name in mats:
+        with open(mats[name], encoding="utf-8", errors="replace") as handle:
+            mat_text = handle.read()
+    props_text = None
     if name in props:
-        parent, vectors, scalars, translucent, masked = read_props(props[name])
-        blend = blend or translucent
-        paint = any(p in parent for p in PAINT_PARENTS)
-        for key in ("Base Color", "BaseColor", "Color", "Tint", "Paint Color"):
-            if key in vectors:
-                rgba = vectors[key]
-                pbr["baseColorFactor"] = [rgba[0], rgba[1], rgba[2], 1.0]
-                break
-        if paint:
-            pbr["metallicFactor"] = 0.5
-            pbr["roughnessFactor"] = 0.3
-        for key in ("Roughness", "roughness"):
-            if key in scalars:
-                pbr["roughnessFactor"] = max(0.0, min(1.0, scalars[key]))
-        for key in ("Metallic", "Metalness", "metallic"):
-            if key in scalars:
-                pbr["metallicFactor"] = max(0.0, min(1.0, scalars[key]))
-    else:
-        paint = False
-    # Glass shows through; its "diffuse" is a dirt or reflection mask,
-    # which would paint the windows opaque.
-    glass = "glass" in name.lower() or "glass" in parent.lower()
-    if glass:
-        blend = True
-        pbr["baseColorFactor"] = [0.08, 0.1, 0.12, 0.35]
-        pbr["metallicFactor"] = 0.0
-        pbr["roughnessFactor"] = 0.05
-    if name in mats and not paint and not glass:
-        entries = read_mat(mats[name])
-        diffuse = entries.get("Diffuse")
-        if not diffuse:
-            # UModel names the color only when the master's parameter is
-            # one it knows; otherwise it is among the others, by its name.
-            named = [o for o in entries["_others"]
-                     if any(w in o.lower() for w in ("basecolor", "diffuse", "albedo"))]
-            diffuse = named[0] if named else None
-        if diffuse and diffuse in pngs:
-            pbr["baseColorTexture"] = {"index": package.texture(pngs[diffuse], True)}
-            pbr["baseColorFactor"] = [1, 1, 1, pbr["baseColorFactor"][3]]
-        normal = entries.get("Normal")
-        if normal and normal in pngs and "flat" not in normal.lower():
-            material["normalTexture"] = {"index": package.texture(pngs[normal], False)}
-        if masked:
-            # A cut-out: a leaf. Its "diffuse" can be the mask itself, with
-            # the color among the others.
-            color = diffuse
-            if not color or any(w in color.lower() for w in ("alpha", "mask")):
-                named = [o for o in entries["_others"]
-                         if any(w in o.lower() for w in ("front", "basecolor", "color"))]
-                color = named[0] if named else color
-            cut = entries.get("Opacity") or diffuse
-            if color in pngs and cut in pngs:
-                pbr["baseColorTexture"] = {"index": package.masked_texture(pngs[color], pngs[cut])}
-                pbr["baseColorFactor"] = [1, 1, 1, 1]
-                material["alphaMode"] = "MASK"
-                # Unreal's default opacity mask clip value.
-                material["alphaCutoff"] = 0.3333
-                material["doubleSided"] = True
-        packed = [o for o in entries["_others"] + [entries.get("Specular", "")] if o.lower().endswith("_orm")]
-        if packed and packed[0] in pngs:
-            index = package.texture(pngs[packed[0]], False)
+        with open(props[name], encoding="utf-8", errors="replace") as handle:
+            props_text = handle.read()
+    decision = _material_plan(name, mat_text, props_text, pngs)
+    pbr = {
+        "baseColorFactor": decision["baseColorFactor"],
+        "metallicFactor": decision["metallicFactor"],
+        "roughnessFactor": decision["roughnessFactor"],
+    }
+    for step in decision["textures"]:
+        kind = step["kind"]
+        if kind == "color":
+            pbr["baseColorTexture"] = {"index": package.texture(pngs[step["stem"]], True)}
+        elif kind == "normal":
+            material["normalTexture"] = {"index": package.texture(pngs[step["stem"]], False)}
+        elif kind == "masked":
+            pbr["baseColorTexture"] = {
+                "index": package.masked_texture(pngs[step["color"]], pngs[step["mask"]]),
+            }
+        elif kind == "orm":
+            index = package.texture(pngs[step["stem"]], False)
             pbr["metallicRoughnessTexture"] = {"index": index}
             material["occlusionTexture"] = {"index": index}
-            pbr["metallicFactor"] = 1.0
-            pbr["roughnessFactor"] = 1.0
-    # CARLA paints a car from its blueprint's color and lights its lamps
-    # from its light state; the tags say which materials those are.
-    lamps = "light" in name.lower() and not glass
-    if paint or "bodywork" in name.lower():
-        material["extras"] = {"carla": "paint"}
-    elif lamps:
-        # The lamps' texture is white at the front and red at the back;
-        # UModel's translucency would make them ghosts.
-        material["extras"] = {"carla": "lamps"}
-        blend = False
-        pbr["baseColorFactor"][3] = 1.0
     material["pbrMetallicRoughness"] = pbr
-    if blend:
-        material["alphaMode"] = "BLEND"
-        pbr["baseColorFactor"][3] = min(pbr["baseColorFactor"][3], 0.4)
+    if "alphaMode" in decision:
+        material["alphaMode"] = decision["alphaMode"]
+    if "alphaCutoff" in decision:
+        material["alphaCutoff"] = decision["alphaCutoff"]
+    if decision.get("doubleSided"):
+        material["doubleSided"] = True
+    if "extras" in decision:
+        material["extras"] = decision["extras"]
     material.pop("extensions", None)
-    report.append((name, parent.rsplit("/", 1)[-1], sorted(k for k in pbr if k.endswith("Texture")) + sorted(k for k in material if k.endswith("Texture"))))
+    parent, textures = decision["report"]
+    report.append((name, parent, textures))
+
+
+def _read_tool(data, gltf, accessor_index):
+    """Return JSON from `tools/carla_gltf_read.mojo`."""
+    here = os.path.dirname(os.path.abspath(__file__))
+    repo = os.path.abspath(os.path.join(here, "..", "..", "..", ".."))
+    mojo = os.path.join(repo, ".venv", "bin", "mojo")
+    if not os.path.isfile(mojo):
+        mojo = "mojo"
+    folder = tempfile.mkdtemp(prefix="gltf read ")
+    try:
+        path = os.path.join(folder, "read.json")
+        with open(path, "w", encoding="utf-8") as handle:
+            json.dump({
+                "bytes": list(data),
+                "accessors": gltf["accessors"],
+                "bufferViews": gltf["bufferViews"],
+                "accessor": accessor_index,
+            }, handle)
+        result = subprocess.run(
+            ["sh", os.path.join(repo, "tools", "tool.sh"), mojo,
+             "carla_gltf_read", path],
+            capture_output=True, text=True,
+        )
+    finally:
+        shutil.rmtree(folder, ignore_errors=True)
+    if result.returncode != 0:
+        raise ValueError(result.stderr.strip() or "accessor read failed")
+    return json.loads(result.stdout)
 
 
 def _read(data, gltf, accessor_index):
-    """Return an accessor's values as a flat list, and its width."""
-    accessor = gltf["accessors"][accessor_index]
-    view = gltf["bufferViews"][accessor["bufferView"]]
-    width = {"SCALAR": 1, "VEC2": 2, "VEC3": 3, "VEC4": 4}[accessor["type"]]
-    form = {5121: "B", 5123: "H", 5125: "I", 5126: "f"}[accessor["componentType"]]
-    start = view.get("byteOffset", 0) + accessor.get("byteOffset", 0)
-    count = accessor["count"] * width
-    return list(struct.unpack_from("<%d%s" % (count, form), data, start)), width
+    """Return an accessor's values as a flat list, and its width.
+
+    `tools/carla_gltf_read.mojo` reads the buffer.
+    """
+    doc = _read_tool(data, gltf, accessor_index)
+    return doc["values"], doc["width"]
 
 
 def split_lamps(gltf, data):
@@ -338,78 +324,81 @@ def split_lamps(gltf, data):
     behind it a tail lamp: `"extras": {"carla": "heads"}` and `"tails"`.
     The lamps then glow white and red, as the town's own cars do.
     """
-    lamp = [i for i, m in enumerate(gltf.get("materials", []))
-            if m.get("extras", {}).get("carla") == "lamps"]
-    if not lamp:
-        return data
-    xs = []
-    for mesh in gltf["meshes"]:
-        for primitive in mesh["primitives"]:
-            accessor = gltf["accessors"][primitive["attributes"]["POSITION"]]
-            xs += [accessor["min"][0], accessor["max"][0]]
-    middle = (min(xs) + max(xs)) / 2
-    heads = lamp[0]
-    gltf["materials"][heads] = {
-        "name": "CarlaHeadLamps",
-        "pbrMetallicRoughness": {"baseColorFactor": [0.85, 0.85, 0.8, 1], "metallicFactor": 0.0,
-                                 "roughnessFactor": 0.15},
-        "extras": {"carla": "heads"},
-    }
-    gltf["materials"].append({
-        "name": "CarlaTailLamps",
-        "pbrMetallicRoughness": {"baseColorFactor": [0.3, 0.01, 0.01, 1], "metallicFactor": 0.0,
-                                 "roughnessFactor": 0.2},
-        "extras": {"carla": "tails"},
-    })
-    tails = len(gltf["materials"]) - 1
-    out = bytearray(data)
-    for mesh in gltf["meshes"]:
-        split = []
-        for primitive in mesh["primitives"]:
-            if primitive.get("material") not in lamp or "indices" not in primitive:
-                split.append(primitive)
-                continue
-            indices, _ = _read(data, gltf, primitive["indices"])
-            positions, _ = _read(data, gltf, primitive["attributes"]["POSITION"])
-            parts = ([], [])
-            for t in range(0, len(indices) - 2, 3):
-                corners = indices[t:t + 3]
-                x = sum(positions[3 * c] for c in corners) / 3
-                parts[0 if x >= middle else 1].extend(corners)
-            for material, part in ((heads, parts[0]), (tails, parts[1])):
-                if not part:
-                    continue
-                out += b"\0" * (-len(out) % 4)
-                gltf["bufferViews"].append({"buffer": 0, "byteOffset": len(out),
-                                            "byteLength": 4 * len(part), "target": 34963})
-                out += struct.pack("<%dI" % len(part), *part)
-                gltf["accessors"].append({"bufferView": len(gltf["bufferViews"]) - 1,
-                                          "componentType": 5125, "count": len(part), "type": "SCALAR"})
-                piece = dict(primitive)
-                piece["indices"] = len(gltf["accessors"]) - 1
-                piece["material"] = material
-                split.append(piece)
-        mesh["primitives"] = split
-    gltf["buffers"][0]["byteLength"] = len(out)
-    return bytes(out)
+    root = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "..", ".."))
+    mojo = os.path.join(root, ".venv", "bin", "mojo")
+    if not os.path.isfile(mojo):
+        mojo = "mojo"
+    work = tempfile.mkdtemp(prefix="gltf lamps ")
+    try:
+        source_gltf = os.path.join(work, "in.gltf")
+        source_bin = os.path.join(work, "in.bin")
+        out_gltf = os.path.join(work, "out.gltf")
+        out_bin = os.path.join(work, "out.bin")
+        with open(source_gltf, "w", encoding="utf-8") as handle:
+            json.dump(gltf, handle)
+        with open(source_bin, "wb") as handle:
+            handle.write(data)
+        result = subprocess.run(
+            ["sh", os.path.join(root, "tools", "tool.sh"), mojo,
+             "carla_gltf_lamps", source_gltf, source_bin, out_gltf, out_bin],
+            text=True, capture_output=True, check=False,
+        )
+        if result.returncode != 0:
+            raise ValueError(result.stderr.strip() or "lamp split failed")
+        with open(out_gltf, encoding="utf-8") as handle:
+            updated = json.load(handle)
+        gltf.clear()
+        gltf.update(updated)
+        with open(out_bin, "rb") as handle:
+            return handle.read()
+    finally:
+        shutil.rmtree(work)
+
+
+def _append_tool(payload):
+    """Return JSON from `tools/carla_gltf_append.mojo`."""
+    here = os.path.dirname(os.path.abspath(__file__))
+    repo = os.path.abspath(os.path.join(here, "..", "..", "..", ".."))
+    mojo = os.path.join(repo, ".venv", "bin", "mojo")
+    if not os.path.isfile(mojo):
+        mojo = "mojo"
+    folder = tempfile.mkdtemp(prefix="gltf append ")
+    try:
+        path = os.path.join(folder, "append.json")
+        with open(path, "w", encoding="utf-8") as handle:
+            json.dump(payload, handle)
+        result = subprocess.run(
+            ["sh", os.path.join(repo, "tools", "tool.sh"), mojo,
+             "carla_gltf_append", path],
+            capture_output=True, text=True,
+        )
+    finally:
+        shutil.rmtree(folder, ignore_errors=True)
+    if result.returncode != 0:
+        raise ValueError(result.stderr.strip() or "buffer append failed")
+    return json.loads(result.stdout)
 
 
 def _append(out, gltf, values, form, component, kind, target):
     """Append values to the buffer as a new view and accessor, and return
-    the accessor's index."""
-    out += b"\0" * (-len(out) % 4)
-    raw = struct.pack("<%d%s" % (len(values), form), *values)
-    gltf["bufferViews"].append({"buffer": 0, "byteOffset": len(out), "byteLength": len(raw),
-                                "target": target})
-    out += raw
-    width = {"SCALAR": 1, "VEC2": 2, "VEC3": 3, "VEC4": 4}[kind]
-    accessor = {"bufferView": len(gltf["bufferViews"]) - 1, "componentType": component,
-                "count": len(values) // width, "type": kind}
-    if kind == "VEC3" and form == "f":
-        accessor["min"] = [min(values[i::3]) for i in range(3)]
-        accessor["max"] = [max(values[i::3]) for i in range(3)]
-    gltf["accessors"].append(accessor)
-    return len(gltf["accessors"]) - 1
+    the accessor's index.
+
+    `tools/carla_gltf_append.mojo` packs the bytes.
+    """
+    doc = _append_tool({
+        "length": len(out),
+        "viewIndex": len(gltf["bufferViews"]),
+        "accessorIndex": len(gltf["accessors"]),
+        "values": [float(value) if form == "f" else int(value) for value in values],
+        "form": form,
+        "component": component,
+        "kind": kind,
+        "target": target,
+    })
+    out += bytes(doc["bytes"])
+    gltf["bufferViews"].append(doc["view"])
+    gltf["accessors"].append(doc["accessor"])
+    return doc["index"]
 
 
 def decimate(gltf, data, budget):
@@ -498,24 +487,96 @@ def decimate(gltf, data, budget):
     return compact(gltf, bytes(out))
 
 
+def _gltf_tool(gltf, data, mode):
+    """Run one Mojo glTF buffer step and update `gltf` in place."""
+    root = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "..", ".."))
+    mojo = os.path.join(root, ".venv", "bin", "mojo")
+    if not os.path.isfile(mojo):
+        mojo = "mojo"
+    work = tempfile.mkdtemp(prefix="gltf compact ")
+    try:
+        source_gltf = os.path.join(work, "in.gltf")
+        source_bin = os.path.join(work, "in.bin")
+        out_gltf = os.path.join(work, "out.gltf")
+        out_bin = os.path.join(work, "out.bin")
+        with open(source_gltf, "w", encoding="utf-8") as handle:
+            json.dump(gltf, handle)
+        with open(source_bin, "wb") as handle:
+            handle.write(data)
+        result = subprocess.run(
+            ["sh", os.path.join(root, "tools", "tool.sh"), mojo,
+             "carla_gltf_compact", mode, source_gltf, source_bin, out_gltf, out_bin],
+            text=True, capture_output=True, check=False,
+        )
+        if result.returncode != 0:
+            raise ValueError(result.stderr.strip() or "glTF compact failed")
+        with open(out_gltf, encoding="utf-8") as handle:
+            updated = json.load(handle)
+        gltf.clear()
+        gltf.update(updated)
+        with open(out_bin, "rb") as handle:
+            return handle.read()
+    finally:
+        shutil.rmtree(work)
+
+
+def _dedupe_tool(gltf):
+    """Return JSON from `tools/carla_gltf_dedupe.mojo`."""
+    here = os.path.dirname(os.path.abspath(__file__))
+    repo = os.path.abspath(os.path.join(here, "..", "..", "..", ".."))
+    mojo = os.path.join(repo, ".venv", "bin", "mojo")
+    if not os.path.isfile(mojo):
+        mojo = "mojo"
+    folder = tempfile.mkdtemp(prefix="gltf dedupe ")
+    try:
+        path = os.path.join(folder, "mesh.gltf")
+        with open(path, "w", encoding="utf-8") as handle:
+            json.dump(gltf, handle)
+        result = subprocess.run(
+            ["sh", os.path.join(repo, "tools", "tool.sh"), mojo,
+             "carla_gltf_dedupe", path],
+            capture_output=True, text=True,
+        )
+    finally:
+        shutil.rmtree(folder, ignore_errors=True)
+    if result.returncode != 0:
+        raise ValueError(result.stderr.strip() or "material dedupe failed")
+    return json.loads(result.stdout)
+
+
 def dedupe_materials(gltf):
-    """Keep one material of each name. The merge gives each primitive its
-    own copy, so a car's glass is twenty materials."""
-    first = {}
-    kept = []
-    new_index = []
-    for material in gltf.get("materials", []):
-        name = material.get("name", "")
-        if name not in first:
-            first[name] = len(kept)
-            kept.append(material)
-        new_index.append(first[name])
-    for mesh in gltf["meshes"]:
-        for primitive in mesh["primitives"]:
-            if "material" in primitive:
-                primitive["material"] = new_index[primitive["material"]]
-    if kept:
-        gltf["materials"] = kept
+    """Keep one material of each name.
+
+    The merge gives each primitive its own copy, so a car's glass is
+    twenty materials. `tools/carla_gltf_dedupe.mojo` keeps the first name.
+    """
+    updated = _dedupe_tool(gltf)
+    gltf.clear()
+    gltf.update(updated)
+
+
+def _skin_tool(gltf):
+    """Return JSON from `tools/carla_gltf_skin.mojo`."""
+    here = os.path.dirname(os.path.abspath(__file__))
+    repo = os.path.abspath(os.path.join(here, "..", "..", "..", ".."))
+    mojo = os.path.join(repo, ".venv", "bin", "mojo")
+    if not os.path.isfile(mojo):
+        mojo = "mojo"
+    folder = tempfile.mkdtemp(prefix="gltf skin ")
+    try:
+        path = os.path.join(folder, "mesh.gltf")
+        with open(path, "w", encoding="utf-8") as handle:
+            json.dump(gltf, handle)
+        result = subprocess.run(
+            ["sh", os.path.join(repo, "tools", "tool.sh"), mojo,
+             "carla_gltf_skin", path],
+            capture_output=True, text=True,
+        )
+    finally:
+        shutil.rmtree(folder, ignore_errors=True)
+    if result.returncode != 0:
+        raise ValueError(result.stderr.strip() or "skin strip failed")
+    return json.loads(result.stdout)
 
 
 def strip_skin(gltf, data):
@@ -527,57 +588,20 @@ def strip_skin(gltf, data):
     and the mesh's node is the origin, so the vertices already stand
     where the car stands. The skin, the joints and the weights go; the
     bone nodes stay as named markers of the wheels.
+
+    `tools/carla_gltf_skin.mojo` removes the skin data. Unreal's vertex
+    colors are masks and not colors, so they go too.
     """
-    for node in gltf["nodes"]:
-        node.pop("skin", None)
-    gltf.pop("skins", None)
-    for mesh in gltf["meshes"]:
-        for primitive in mesh["primitives"]:
-            attributes = primitive["attributes"]
-            # Unreal's vertex colors are masks for its materials, not
-            # colors: glTF would multiply them into the paint.
-            for key in [k for k in attributes if k.startswith(("JOINTS_", "WEIGHTS_", "COLOR_"))]:
-                del attributes[key]
+    updated = _skin_tool(gltf)
+    gltf.clear()
+    gltf.update(updated)
     return compact(gltf, data)
 
 
 def compact(gltf, data):
     """Return the buffer with only the bytes a primitive reads, and point
     the views and accessors at their new places."""
-    # Keep the accessors a primitive reads, and the views they read.
-    used = []
-    for mesh in gltf["meshes"]:
-        for primitive in mesh["primitives"]:
-            used += list(primitive["attributes"].values())
-            if "indices" in primitive:
-                used.append(primitive["indices"])
-    accessor_of = {old: new for new, old in enumerate(sorted(set(used)))}
-    accessors = [gltf["accessors"][old] for old in sorted(accessor_of)]
-    view_of = {}
-    views = []
-    out = bytearray()
-    for accessor in accessors:
-        old = accessor["bufferView"]
-        if old not in view_of:
-            view = dict(gltf["bufferViews"][old])
-            start = view.get("byteOffset", 0)
-            out += b"\0" * (-len(out) % 4)
-            chunk = data[start:start + view["byteLength"]]
-            view["byteOffset"] = len(out)
-            out += chunk
-            view_of[old] = len(views)
-            views.append(view)
-        accessor["bufferView"] = view_of[old]
-    for mesh in gltf["meshes"]:
-        for primitive in mesh["primitives"]:
-            primitive["attributes"] = {k: accessor_of[v] for k, v in primitive["attributes"].items()}
-            if "indices" in primitive:
-                primitive["indices"] = accessor_of[primitive["indices"]]
-    gltf["accessors"] = accessors
-    gltf["bufferViews"] = views
-    out += b"\0" * (-len(out) % 4)
-    gltf["buffers"] = [{"uri": gltf["buffers"][0]["uri"], "byteLength": len(out)}]
-    return bytes(out)
+    return _gltf_tool(gltf, data, "compact")
 
 
 def main():

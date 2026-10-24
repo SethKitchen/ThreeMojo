@@ -40,7 +40,7 @@ things moved, and all are easy to write back the old way by habit:
   Keep this import inside that file in production code. It uses the pinned
   Mojo `1.2.0` accessor for thread-local `errno` on Linux and macOS.
   Retry only `-1` with `EINTR`. Short writes and other errors must still abort
-  the capture. `tools/check_coverage_protocol.py` tests the accessor without
+  the capture. `tools/check_coverage_protocol.mojo` tests the accessor without
   an interposer, then tests repeated `EINTR`, real pipe interruptions, and
   failed, short, and zero writes on both platforms.
 - `global_idx` is `from max.gpu import global_idx`. Much of `std.gpu` moved

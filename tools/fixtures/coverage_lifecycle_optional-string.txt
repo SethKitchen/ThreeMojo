@@ -1,0 +1,283 @@
+def heap_string() -> String:
+    var text = String(capacity_bytes=256)
+    text += "heap-buffer-abcdefghijklmnopqrstuvwxyz-0123456789"
+    return text^
+
+
+def optional_string(index: Int, full: Bool, flavor: Int, shared: String) -> Optional[String]:
+    print("MAKE STRING", index, full, flavor)
+    if not full:
+        return None
+    if flavor == 0:
+        return String()
+    if flavor == 1:
+        var text = String()
+        text += "tiny"
+        return text^
+    if flavor == 2:
+        return String("static-buffer-abcdefghijklmnopqrstuvwxyz-0123456789")
+    if flavor == 3:
+        return heap_string()
+    return shared.copy()
+
+
+def inspect_string(index: Int, value: Optional[String]):
+    if value:
+        print("STRING", index, True, value.value(), value.value().byte_length(), value.value().capacity_bytes())
+    else:
+        print("STRING", index, False)
+
+
+def mutate_strings(mut left: Optional[String], mut right: Optional[String]) -> Bool:
+    print("MUTATE")
+    inspect_string(0, left)
+    inspect_string(1, right)
+    if left:
+        left.value().write("!")
+    if right:
+        right.value().write("?")
+    inspect_string(0, left)
+    inspect_string(1, right)
+    return True
+
+
+def strings_0(first: Bool, second: Bool, flavor: Int):
+    print("STRING CASE", 0, flavor, first, second)
+    var shared = heap_string()
+    var left = optional_string(0, first, flavor, shared)
+    var right = optional_string(1, second, flavor, shared)
+    if left and right:
+        print("STRING BODY", 0, flavor, first, second, True)
+    else:
+        print("STRING BODY", 0, flavor, first, second, False)
+    inspect_string(0, left)
+    inspect_string(1, right)
+    print("SHARED AFTER", shared, shared.byte_length(), shared.capacity_bytes())
+
+
+def strings_1(first: Bool, second: Bool, flavor: Int):
+    print("STRING CASE", 1, flavor, first, second)
+    var shared = heap_string()
+    if optional_string(0, first, flavor, shared) and optional_string(1, second, flavor, shared):
+        print("STRING BODY", 1, flavor, first, second, True)
+    else:
+        print("STRING BODY", 1, flavor, first, second, False)
+    print("SHARED AFTER", shared, shared.byte_length(), shared.capacity_bytes())
+
+
+def strings_2(first: Bool, second: Bool, flavor: Int):
+    print("STRING CASE", 2, flavor, first, second)
+    var shared = heap_string()
+    var left = optional_string(0, first, flavor, shared)
+    if left and optional_string(1, second, flavor, shared):
+        print("STRING BODY", 2, flavor, first, second, True)
+    else:
+        print("STRING BODY", 2, flavor, first, second, False)
+    inspect_string(0, left)
+    print("SHARED AFTER", shared, shared.byte_length(), shared.capacity_bytes())
+
+
+def strings_3(first: Bool, second: Bool, flavor: Int):
+    print("STRING CASE", 3, flavor, first, second)
+    var shared = heap_string()
+    var right = optional_string(1, second, flavor, shared)
+    if optional_string(0, first, flavor, shared) and right:
+        print("STRING BODY", 3, flavor, first, second, True)
+    else:
+        print("STRING BODY", 3, flavor, first, second, False)
+    inspect_string(1, right)
+    print("SHARED AFTER", shared, shared.byte_length(), shared.capacity_bytes())
+
+
+def strings_4(first: Bool, second: Bool, flavor: Int):
+    print("STRING CASE", 4, flavor, first, second)
+    var shared = heap_string()
+    var left = optional_string(0, first, flavor, shared)
+    var right = optional_string(1, second, flavor, shared)
+    if (left and right) and mutate_strings(left, right):
+        print("STRING BODY", 4, flavor, first, second, True)
+    else:
+        print("STRING BODY", 4, flavor, first, second, False)
+    inspect_string(0, left)
+    inspect_string(1, right)
+    print("SHARED AFTER", shared, shared.byte_length(), shared.capacity_bytes())
+
+
+def strings_5(first: Bool, second: Bool, flavor: Int):
+    print("STRING CASE", 5, flavor, first, second)
+    var shared = heap_string()
+    var left = optional_string(0, first, flavor, shared)
+    var right = optional_string(1, second, flavor, shared)
+    if (left and right) or mutate_strings(left, right):
+        print("STRING BODY", 5, flavor, first, second, True)
+    else:
+        print("STRING BODY", 5, flavor, first, second, False)
+    inspect_string(0, left)
+    inspect_string(1, right)
+    print("SHARED AFTER", shared, shared.byte_length(), shared.capacity_bytes())
+
+
+def strings_6(first: Bool, second: Bool, flavor: Int):
+    print("STRING CASE", 6, flavor, first, second)
+    var shared = heap_string()
+    var left = optional_string(0, first, flavor, shared)
+    var right = optional_string(1, second, flavor, shared)
+    if left or right:
+        print("STRING BODY", 6, flavor, first, second, True)
+    else:
+        print("STRING BODY", 6, flavor, first, second, False)
+    inspect_string(0, left)
+    inspect_string(1, right)
+    print("SHARED AFTER", shared, shared.byte_length(), shared.capacity_bytes())
+
+
+def strings_7(first: Bool, second: Bool, flavor: Int):
+    print("STRING CASE", 7, flavor, first, second)
+    var shared = heap_string()
+    if optional_string(0, first, flavor, shared) or optional_string(1, second, flavor, shared):
+        print("STRING BODY", 7, flavor, first, second, True)
+    else:
+        print("STRING BODY", 7, flavor, first, second, False)
+    print("SHARED AFTER", shared, shared.byte_length(), shared.capacity_bytes())
+
+
+def strings_8(first: Bool, second: Bool, flavor: Int):
+    print("STRING CASE", 8, flavor, first, second)
+    var shared = heap_string()
+    var left = optional_string(0, first, flavor, shared)
+    if left or optional_string(1, second, flavor, shared):
+        print("STRING BODY", 8, flavor, first, second, True)
+    else:
+        print("STRING BODY", 8, flavor, first, second, False)
+    inspect_string(0, left)
+    print("SHARED AFTER", shared, shared.byte_length(), shared.capacity_bytes())
+
+
+def strings_9(first: Bool, second: Bool, flavor: Int):
+    print("STRING CASE", 9, flavor, first, second)
+    var shared = heap_string()
+    var right = optional_string(1, second, flavor, shared)
+    if optional_string(0, first, flavor, shared) or right:
+        print("STRING BODY", 9, flavor, first, second, True)
+    else:
+        print("STRING BODY", 9, flavor, first, second, False)
+    inspect_string(1, right)
+    print("SHARED AFTER", shared, shared.byte_length(), shared.capacity_bytes())
+
+
+def strings_10(first: Bool, second: Bool, flavor: Int):
+    print("STRING CASE", 10, flavor, first, second)
+    var shared = heap_string()
+    var left = optional_string(0, first, flavor, shared)
+    var right = optional_string(1, second, flavor, shared)
+    if (left or right) and mutate_strings(left, right):
+        print("STRING BODY", 10, flavor, first, second, True)
+    else:
+        print("STRING BODY", 10, flavor, first, second, False)
+    inspect_string(0, left)
+    inspect_string(1, right)
+    print("SHARED AFTER", shared, shared.byte_length(), shared.capacity_bytes())
+
+
+def strings_11(first: Bool, second: Bool, flavor: Int):
+    print("STRING CASE", 11, flavor, first, second)
+    var shared = heap_string()
+    var left = optional_string(0, first, flavor, shared)
+    var right = optional_string(1, second, flavor, shared)
+    if (left or right) or mutate_strings(left, right):
+        print("STRING BODY", 11, flavor, first, second, True)
+    else:
+        print("STRING BODY", 11, flavor, first, second, False)
+    inspect_string(0, left)
+    inspect_string(1, right)
+    print("SHARED AFTER", shared, shared.byte_length(), shared.capacity_bytes())
+
+
+def run_string_controls():
+    for flavor in range(5):
+        for first in [False, True]:
+            for second in [False, True]:
+                strings_0(first, second, flavor)
+                strings_1(first, second, flavor)
+                strings_2(first, second, flavor)
+                strings_3(first, second, flavor)
+                strings_4(first, second, flavor)
+                strings_5(first, second, flavor)
+                strings_6(first, second, flavor)
+                strings_7(first, second, flavor)
+                strings_8(first, second, flavor)
+                strings_9(first, second, flavor)
+                strings_10(first, second, flavor)
+                strings_11(first, second, flavor)
+
+
+def nested_string(index: Int, full: Bool, flavor: Int) -> Optional[Optional[String]]:
+    print("MAKE NESTED STRING", index, full, flavor)
+    if not full:
+        return None
+    if flavor == 0:
+        return Optional[String](None)
+    if flavor == 1:
+        return Optional[String](String())
+    return Optional[String](heap_string())
+
+
+def inspect_nested_string(index: Int, value: Optional[Optional[String]]):
+    print("OUTER STRING", index, Bool(value))
+    if value:
+        inspect_string(index, value.value())
+
+
+def nested_strings_0(first: Bool, second: Bool, flavor: Int):
+    print("NESTED STRING CASE", 0, flavor, first, second)
+    var left = nested_string(0, first, flavor)
+    var right = nested_string(1, second, flavor)
+    if left and right:
+        print("NESTED STRING BODY", 0, flavor, first, second, True)
+    else:
+        print("NESTED STRING BODY", 0, flavor, first, second, False)
+    inspect_nested_string(0, left)
+    inspect_nested_string(1, right)
+
+
+def nested_strings_1(first: Bool, second: Bool, flavor: Int):
+    print("NESTED STRING CASE", 1, flavor, first, second)
+    if nested_string(0, first, flavor) and nested_string(1, second, flavor):
+        print("NESTED STRING BODY", 1, flavor, first, second, True)
+    else:
+        print("NESTED STRING BODY", 1, flavor, first, second, False)
+
+
+def nested_strings_2(first: Bool, second: Bool, flavor: Int):
+    print("NESTED STRING CASE", 2, flavor, first, second)
+    var left = nested_string(0, first, flavor)
+    var right = nested_string(1, second, flavor)
+    if left or right:
+        print("NESTED STRING BODY", 2, flavor, first, second, True)
+    else:
+        print("NESTED STRING BODY", 2, flavor, first, second, False)
+    inspect_nested_string(0, left)
+    inspect_nested_string(1, right)
+
+
+def nested_strings_3(first: Bool, second: Bool, flavor: Int):
+    print("NESTED STRING CASE", 3, flavor, first, second)
+    if nested_string(0, first, flavor) or nested_string(1, second, flavor):
+        print("NESTED STRING BODY", 3, flavor, first, second, True)
+    else:
+        print("NESTED STRING BODY", 3, flavor, first, second, False)
+
+
+def run_nested_string_controls():
+    for flavor in range(3):
+        for first in [False, True]:
+            for second in [False, True]:
+                nested_strings_0(first, second, flavor)
+                nested_strings_1(first, second, flavor)
+                nested_strings_2(first, second, flavor)
+                nested_strings_3(first, second, flavor)
+
+
+def main():
+    run_string_controls()
+    run_nested_string_controls()

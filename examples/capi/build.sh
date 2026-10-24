@@ -14,22 +14,20 @@
 #   web     threemojo_core.wasm, threemojo_water.wasm and threemojo_splat.wasm,
 #           and the page that runs them, in out/capi/web. The water also builds for many threads
 #           as threemojo_water_threads.wasm, which a page can run only when
-#           serve.py sends the headers that allow shared memory.
+#           serve.mojo sends the headers that allow shared memory.
 #   host    threemojo_host and ThreeMojo.app, the macOS window (macOS only). The
 #           window draws the splats on Metal.
 #   gpu     libthreemojo_water_gpu, the water shaded on a GPU. It needs MAX and
 #           a GPU. The first build on Apple Metal can take many minutes.
 #
-# Environment: MOJO, PYTHON, CLANG (a clang that has the wasm32 target) and
-# WASM_LD override what this script finds.
+# Environment: MOJO, CLANG (a clang that has the wasm32 target) and WASM_LD
+# override what this script finds.
 set -eu
 
 HERE=$(cd "$(dirname "$0")" && pwd)
 REPO=$(cd "$HERE/../.." && pwd)
 OUT=$REPO/out/capi
 MOJO=${MOJO:-$REPO/.venv/bin/mojo}
-PYTHON=${PYTHON:-$REPO/.venv/bin/python}
-[ -x "$PYTHON" ] || PYTHON=python3
 APPS=${APPS:-core scene water splat}
 # The apps that need MAX and a GPU. They are built only when asked for.
 GPU_APPS=${GPU_APPS:-water_gpu}
@@ -142,7 +140,7 @@ wasm_module() {
     object=$OUT/wasm/mwrt.o
   fi
   mojo_build llvm "$OUT/wasm/$app.ll" "$REPO/window/capi_$app.mojo"
-  "$PYTHON" -I "$HERE/retarget.py" "$clang" "$OUT/wasm/$app.ll" "$OUT/wasm/$app.wasm32.ll"
+  "$MOJO" run -I "$REPO" "$HERE/retarget.mojo" "$clang" "$OUT/wasm/$app.ll" "$OUT/wasm/$app.wasm32.ll"
   # shellcheck disable=SC2086
   "$clang" --target=wasm32-unknown-unknown -O2 $cflags -c "$OUT/wasm/$app.wasm32.ll" -o "$OUT/wasm/$app$suffix.o"
   flags=""
@@ -192,16 +190,7 @@ build_host() {
   # The splat shaders go into the host as a C string, and compile when a window
   # opens, so the build needs no Metal toolchain.
   mkdir -p "$OUT/host"
-  "$PYTHON" -I - "$HERE/splat.metal" "$OUT/host/splat_msl.h" <<'PY'
-import sys
-
-lines = open(sys.argv[1]).read().splitlines()
-text = ["/* Made by build.sh from splat.metal. */", "static const char SPLAT_MSL[] ="]
-for line in lines:
-    text.append('    "' + line.replace("\\", "\\\\").replace('"', '\\"') + '\\n"')
-text.append(";")
-open(sys.argv[2], "w").write("\n".join(text) + "\n")
-PY
+  "$MOJO" run -I "$REPO" "$HERE/metal_string.mojo" "$HERE/splat.metal" "$OUT/host/splat_msl.h"
   cc -O2 -fobjc-arc -mmacosx-version-min=14.0 -I "$REPO/window" -I "$HERE" -I "$OUT/host" \
     -framework Cocoa -framework QuartzCore -framework Metal -Wl,-rpath,"$runtime" \
     -o "$OUT/threemojo_host" "$HERE/macos_host.m" "$HERE/macos_splat.m"

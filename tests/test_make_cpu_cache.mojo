@@ -72,6 +72,7 @@ struct Recipe(Movable):
             self.tree,
             [
                 "tools/compiler_telemetry.mojo",
+                "tools/native_test_support.mojo",
                 "tools/native_test_support.py",
                 "tools/affected.py",
                 "tools/suite_key.py",
@@ -205,4 +206,10 @@ def test_a_failed_build_is_not_stamped_or_hidden() raises:
 
 
 def main() raises:
+    var built = run_program(
+        ["sh", "tools/tool.sh", tool_mojo(), "--build", "native_test_support"],
+        120,
+    )
+    if built.status != 0:
+        raise Error("cannot build native test support: " + built.output)
     TestSuite.discover_tests[__functions_in_module()]().run()

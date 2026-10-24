@@ -1,0 +1,152 @@
+from std.testing import TestSuite, assert_equal
+from std.time import sleep
+from render.tasks import TaskGroup
+
+
+def mark(value: Bool, mut order: String, name: String) -> Bool:
+    order += name
+    return value
+
+
+def recursive(depth: Int, mut order: String) -> Bool:
+    if mark(depth > 0, order, "a") and recursive(depth - 1, order):
+        return True
+    return False
+
+
+def throw_or_recurse(depth: Int, mut order: String) raises -> Bool:
+    if depth == 0:
+        raise Error("nested")
+    try:
+        return catches(depth - 1, order)
+    except error:
+        order += "c"
+        return False
+
+
+def catches(depth: Int, mut order: String) raises -> Bool:
+    if mark(True, order, "b") and throw_or_recurse(depth, order):
+        return True
+    return False
+
+
+def sometimes(index: Int, mut order: String) raises -> Bool:
+    order += "x"
+    if index == 0:
+        raise Error("abandoned")
+    return True
+
+
+def abandoned(mut order: String):
+    for index in range(3):
+        try:
+            if mark(index != 1, order, "p") and sometimes(index, order):
+                order += "y"
+        except error:
+            order += "e"
+
+
+def loop_and_elif(mut order: String):
+    var index = 0
+    while mark(index < 2, order, "w") and mark(True, order, "z"):
+        index += 1
+        if index == 1:
+            continue
+        order += "k"
+    else:
+        order += "q"
+    for choice in range(3):
+        if choice == 0:
+            order += "0"
+        elif mark(choice == 1, order, "l") and mark(True, order, "r"):
+            order += "1"
+        else:
+            order += "2"
+
+
+def invoke[callback: def(Bool) capturing[_] -> Bool]() -> Bool:
+    return callback(True)
+
+
+def nested(mut order: String) -> Bool:
+    def inner(value: Bool) capturing -> Bool:
+        if value and False:
+            return True
+        return False
+    if mark(True, order, "n") and invoke[inner]():
+        return True
+    return False
+
+
+def collision(mut order: String) -> Bool:
+    var _cov_eval_state0 = True
+    if mark(_cov_eval_state0, order, "g") and False:
+        return True
+    return False
+
+
+def shadowed_types(mut order: String) -> Bool:
+    var List = 7
+    var Int = 8
+    if mark(List == 7, order, "s") and Int == 8:
+        return True
+    return False
+
+
+def two_space(mut order: String) -> Bool:
+  if mark(True, order, "t") and False:
+    return True
+  return False
+
+
+def paused(value: Bool) -> Bool:
+    sleep(0.00001)
+    return value
+
+
+def concurrent_case(worker: Int, iteration: Int) -> Bool:
+    if paused((worker + iteration) % 2 == 0) and paused(worker % 2 == 0):
+        return True
+    return False
+
+
+__async def task(worker: Int, totals: MutPointer[Int, MutAnyOrigin]):
+    var total = 0
+    for iteration in range(100):
+        total += Int(concurrent_case(worker, iteration))
+    totals[unsafe_offset=worker] = total
+
+
+def test_sequential() raises:
+    var order = String("")
+    print("RESULT recursion", recursive(3, order), order)
+    order = ""
+    print("RESULT caught", catches(1, order), order)
+    order = ""
+    abandoned(order)
+    print("RESULT abandoned", order)
+    order = ""
+    loop_and_elif(order)
+    print("RESULT loop", order)
+    order = ""
+    print("RESULT nested", nested(order), order)
+    order = ""
+    print("RESULT collision", collision(order), order)
+    order = ""
+    print("RESULT types", shadowed_types(order), order)
+    order = ""
+    print("RESULT indentation", two_space(order), order)
+
+
+def test_concurrent() raises:
+    var totals = List[Int](length=8, fill=0)
+    var group = TaskGroup()
+    for worker in range(8):
+        group.create_task(task(worker, totals.unsafe_ptr().unsafe_origin_cast[MutAnyOrigin]()))
+    group.wait()
+    assert_equal(totals, [50, 0, 50, 0, 50, 0, 50, 0])
+    print("RESULT concurrent", totals)
+
+
+def main() raises:
+    TestSuite.discover_tests[__functions_in_module()]().run()

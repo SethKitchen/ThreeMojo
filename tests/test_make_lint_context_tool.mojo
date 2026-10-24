@@ -20,6 +20,7 @@ from tests._make_recipe import (
     read_calls,
     section,
 )
+from tools._cli import absolute_path
 from tools.compile_fail import shell_split
 from tools._process import ProcessResult, run_program, shell_quote
 
@@ -110,8 +111,13 @@ struct Project(Movable):
         )
 
     def run(self, command: List[String]) raises -> ProcessResult:
+        var settings = List[String]()
+        settings.append(SENTINEL)
+        settings.append(
+            "THREEMOJO_SHELL_LOG=/tmp/threemojo-shell-log-wrapper shell_log"
+        )
         return run_program(
-            clean_command([SENTINEL], command, self.outer),
+            clean_command(settings, command, self.outer),
             5,
             merge_errors=False,
             directory=self.root,
@@ -424,5 +430,35 @@ def test_parent_make_overrides_cannot_invoke_another_compiler() raises:
     project.close()
 
 
+def _install_log() raises:
+    """Point the recipe's log command at the built Mojo program."""
+    var root = absolute_path(".")
+    Path("/tmp/threemojo-shell-log-wrapper").write_text(
+        "#!/bin/sh\nexec sh "
+        + shell_quote(root + "/tools/tool.sh")
+        + " "
+        + shell_quote(root + "/.venv/bin/mojo")
+        + ' "$@"\n'
+    )
+    var mode = run_program(
+        ["chmod", "755", "/tmp/threemojo-shell-log-wrapper"], 10
+    )
+    if mode.status != 0:
+        raise Error(mode.output)
+    var built = run_program(
+        [
+            "sh",
+            root + "/tools/tool.sh",
+            root + "/.venv/bin/mojo",
+            "--build",
+            "shell_log",
+        ],
+        120,
+    )
+    if built.status != 0:
+        raise Error(built.output + built.errors)
+
+
 def main() raises:
+    _install_log()
     TestSuite.discover_tests[__functions_in_module()]().run()

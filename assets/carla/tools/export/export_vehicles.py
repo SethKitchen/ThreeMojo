@@ -16,6 +16,7 @@ import re
 import shutil
 import subprocess
 import sys
+import tempfile
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 # The work folder: the cooked content, UModel and every stage's output.
@@ -75,27 +76,56 @@ VEHICLES = {
 _classes = {}
 
 
+def _paths_tool(kind, root, name):
+    """Return text from `tools/carla_vehicle_paths.mojo`."""
+    here = os.path.dirname(os.path.abspath(__file__))
+    repo = os.path.abspath(os.path.join(here, "..", "..", "..", ".."))
+    mojo = os.path.join(repo, ".venv", "bin", "mojo")
+    if not os.path.isfile(mojo):
+        mojo = "mojo"
+    result = subprocess.run(
+        ["sh", os.path.join(repo, "tools", "tool.sh"), mojo,
+         "carla_vehicle_paths", kind, root, name],
+        capture_output=True, text=True,
+    )
+    if result.returncode != 0:
+        if kind == "blueprint":
+            raise FileNotFoundError(name)
+        raise ValueError(result.stderr.strip() or "vehicle path failed")
+    return result.stdout.rstrip("\n")
+
+
 def find_blueprint(relative):
-    """Return the blueprint file, matching its name without case."""
-    folder = os.path.join(BLUEPRINTS, os.path.dirname(relative))
-    want = os.path.basename(relative).lower() + ".uasset"
-    for name in os.listdir(folder):
-        if name.lower() == want:
-            return os.path.join(folder, name)
-    # Otherwise the folder's one vehicle blueprint: not a wheel's.
-    for name in sorted(os.listdir(folder)):
-        low = name.lower()
-        if low.startswith("bp_") and low.endswith(".uasset") and not re.search(r"_(f|r)(l|r)?w\.uasset$", low):
-            return os.path.join(folder, name)
-    raise FileNotFoundError(relative)
+    """Return the blueprint file, matching its name without case.
+
+    `tools/carla_vehicle_paths.mojo` finds the file.
+    """
+    return _paths_tool("blueprint", BLUEPRINTS, relative)
+
+
+def _refs_tool(path):
+    """Return JSON from `tools/carla_vehicle_refs.mojo`."""
+    here = os.path.dirname(os.path.abspath(__file__))
+    repo = os.path.abspath(os.path.join(here, "..", "..", "..", ".."))
+    mojo = os.path.join(repo, ".venv", "bin", "mojo")
+    if not os.path.isfile(mojo):
+        mojo = "mojo"
+    result = subprocess.run(
+        ["sh", os.path.join(repo, "tools", "tool.sh"), mojo,
+         "carla_vehicle_refs", path],
+        capture_output=True, text=True,
+    )
+    if result.returncode != 0:
+        raise ValueError(result.stderr.strip() or "vehicle references failed")
+    return json.loads(result.stdout)
 
 
 def references(blueprint):
-    """Return the `/Game/Carla/Static/...` packages a blueprint names."""
-    data = open(blueprint, "rb").read()
-    return sorted(
-        set(m.decode() for m in re.findall(rb"/Game/Carla/Static/[A-Za-z0-9_/\-]+", data))
-    )
+    """Return the `/Game/Carla/Static/...` packages a blueprint names.
+
+    `tools/carla_vehicle_refs.mojo` reads the file.
+    """
+    return _refs_tool(blueprint)
 
 
 def package_file(game_path):
@@ -104,25 +134,19 @@ def package_file(game_path):
     A name's number is stored apart from it, so a blueprint can name
     `SK_Volkswagen_T2` for the package `SK_Volkswagen_T2_2021`: a missing
     name falls back to the one package in its folder that extends it.
+
+    `tools/carla_vehicle_paths.mojo` finds the file.
     """
-    rel = game_path[len("/Game/"):] + ".uasset"
-    path = os.path.join(CONTENT, *rel.split("/"))
-    if os.path.exists(path):
-        return path
-    folder = os.path.dirname(path)
-    stem = os.path.basename(game_path) + "_"
-    if os.path.isdir(folder):
-        found = [n for n in os.listdir(folder) if n.startswith(stem) and n.endswith(".uasset")
-                 and not re.search(r"skeleton|physics", n, re.I)]
-        if len(found) == 1:
-            return os.path.join(folder, found[0])
-    return None
+    found = _paths_tool("package", CONTENT, game_path)
+    return found or None
 
 
 def game_path_of(path):
-    """Return the `/Game/...` package path of a cooked `.uasset`."""
-    rel = os.path.relpath(path, CONTENT).replace("\\", "/")[: -len(".uasset")]
-    return "/Game/" + rel
+    """Return the `/Game/...` package path of a cooked `.uasset`.
+
+    `tools/carla_vehicle_paths.mojo` reads the path.
+    """
+    return _paths_tool("game", CONTENT, path)
 
 
 def export_class(game_path):
@@ -166,48 +190,62 @@ def load(path):
     return gltf, bytearray(data)
 
 
+def _tool_root():
+    """Return the repository root that holds `tools/tool.sh`."""
+    return os.path.abspath(os.path.join(HERE, "..", "..", "..", ".."))
+
+
+def _tool_mojo():
+    """Return the Mojo compiler, as the Makefile's `TOOL_MOJO` chooses it."""
+    path = os.path.join(_tool_root(), ".venv", "bin", "mojo")
+    if os.path.isfile(path):
+        return path
+    return "mojo"
+
+
 def merge(base, extra):
-    """Append glTF `extra` (a static mesh) into `base`, both loaded."""
+    """Append glTF `extra` (a static mesh) into `base`, both loaded.
+
+    `tools/carla_vehicle_merge.mojo` appends the buffer and renumbers
+    the views, accessors, materials, meshes and nodes.
+    """
     a, abin = base
     b, bbin = extra
-    while len(abin) % 4:
-        abin.append(0)
-    shift = len(abin)
-    abin.extend(bbin)
-    view0 = len(a["bufferViews"])
-    for view in b["bufferViews"]:
-        view = dict(view)
-        view["buffer"] = 0
-        view["byteOffset"] = view.get("byteOffset", 0) + shift
-        a["bufferViews"].append(view)
-    acc0 = len(a["accessors"])
-    for accessor in b["accessors"]:
-        accessor = dict(accessor)
-        accessor["bufferView"] += view0
-        a["accessors"].append(accessor)
-    mat0 = len(a.get("materials", []))
-    a.setdefault("materials", []).extend(b.get("materials", []))
-    mesh0 = len(a["meshes"])
-    for mesh in b["meshes"]:
-        mesh = json.loads(json.dumps(mesh))
-        for primitive in mesh["primitives"]:
-            primitive["attributes"] = {k: v + acc0 for k, v in primitive["attributes"].items()}
-            if "indices" in primitive:
-                primitive["indices"] += acc0
-            if "material" in primitive:
-                primitive["material"] += mat0
-        a["meshes"].append(mesh)
-    node0 = len(a["nodes"])
-    for node in b["nodes"]:
-        node = dict(node)
-        if "mesh" in node:
-            node["mesh"] += mesh0
-        if "children" in node:
-            node["children"] = [c + node0 for c in node["children"]]
-        a["nodes"].append(node)
-    roots = b["scenes"][b.get("scene", 0)]["nodes"]
-    a["scenes"][a.get("scene", 0)]["nodes"].extend(r + node0 for r in roots)
-    a["buffers"][0]["byteLength"] = len(abin)
+    folder = tempfile.mkdtemp(prefix="vehicle-merge-")
+    try:
+        base_gltf = os.path.join(folder, "base.gltf")
+        base_bin = os.path.join(folder, "base.bin")
+        extra_gltf = os.path.join(folder, "extra.gltf")
+        extra_bin = os.path.join(folder, "extra.bin")
+        out_gltf = os.path.join(folder, "out.gltf")
+        out_bin = os.path.join(folder, "out.bin")
+        with open(base_gltf, "w", encoding="utf-8") as handle:
+            json.dump(a, handle)
+        with open(base_bin, "wb") as handle:
+            handle.write(bytes(abin))
+        with open(extra_gltf, "w", encoding="utf-8") as handle:
+            json.dump(b, handle)
+        with open(extra_bin, "wb") as handle:
+            handle.write(bytes(bbin))
+        root = _tool_root()
+        result = subprocess.run(
+            ["sh", os.path.join(root, "tools", "tool.sh"), _tool_mojo(),
+             "carla_vehicle_merge", base_gltf, base_bin, extra_gltf, extra_bin,
+             out_gltf, out_bin],
+            capture_output=True, text=True,
+        )
+        if result.returncode != 0:
+            raise ValueError(result.stderr.strip() or "vehicle merge failed")
+        with open(out_gltf, encoding="utf-8") as handle:
+            merged = json.load(handle)
+        with open(out_bin, "rb") as handle:
+            data = handle.read()
+    finally:
+        shutil.rmtree(folder, ignore_errors=True)
+    a.clear()
+    a.update(merged)
+    abin.clear()
+    abin.extend(data)
 
 
 def build(vehicle_id):
