@@ -109,6 +109,54 @@ def srgb_to_linear(c):
     return c / 12.92 if c <= 0.04045 else ((c + 0.055) / 1.055) ** 2.4
 
 
+def resize_image(pixels, width, height, bands, out_width, out_height, mode):
+    """Return resized pixels from `tools/carla_image_resize.mojo`.
+
+    `mode` is `lanczos` or `box`. The pixels match Pillow 12.3.
+    """
+    here = os.path.dirname(os.path.abspath(__file__))
+    repo = os.path.abspath(os.path.join(here, "..", "..", "..", ".."))
+    mojo = os.path.join(repo, ".venv", "bin", "mojo")
+    if not os.path.isfile(mojo):
+        mojo = "mojo"
+    folder = tempfile.mkdtemp(prefix="image-resize-")
+    try:
+        path = os.path.join(folder, "resize.json")
+        with open(path, "w", encoding="utf-8") as handle:
+            json.dump({
+                "mode": mode,
+                "width": int(width),
+                "height": int(height),
+                "bands": int(bands),
+                "out_width": int(out_width),
+                "out_height": int(out_height),
+                "pixels": [int(value) for value in pixels],
+            }, handle, separators=(",", ":"))
+        result = subprocess.run(
+            ["sh", os.path.join(repo, "tools", "tool.sh"), mojo,
+             "carla_image_resize", path],
+            capture_output=True, text=True,
+        )
+    finally:
+        shutil.rmtree(folder, ignore_errors=True)
+    if result.returncode != 0:
+        raise ValueError(result.stderr.strip() or "image resize failed")
+    return json.loads(result.stdout)["pixels"]
+
+
+def _pillow_resize(image, size, mode):
+    """Return `image` resized to `size` by the Mojo Pillow filter."""
+    if image.mode not in ("L", "RGB", "RGBA"):
+        filt = Image.Resampling.LANCZOS if mode == "lanczos" else Image.Resampling.BOX
+        return image.resize(size, filt)
+    bands = {"L": 1, "RGB": 3, "RGBA": 4}[image.mode]
+    pixels = resize_image(
+        list(image.tobytes()), image.width, image.height, bands,
+        size[0], size[1], mode,
+    )
+    return Image.frombytes(image.mode, size, bytes(pixels))
+
+
 class Package:
     """The glTF being rebuilt and the textures it has gathered."""
 
@@ -150,13 +198,17 @@ class Package:
         neutral = bool(NEUTRAL.search(stem))
         image = Image.open(source)
         if neutral:
-            average = image.convert("RGB").resize((1, 1), Image.BOX).getpixel((0, 0))
-            image = Image.new("RGB", (8, 8), average)
+            rgb = image.convert("RGB")
+            average = resize_image(
+                list(rgb.tobytes()), rgb.width, rgb.height, 3, 1, 1, "box",
+            )
+            image = Image.new("RGB", (8, 8), tuple(average))
         if max(image.size) > self.max_size:
             scale = self.max_size / max(image.size)
-            image = image.resize(
+            image = _pillow_resize(
+                image,
                 (max(1, round(image.width * scale)), max(1, round(image.height * scale))),
-                Image.LANCZOS,
+                "lanczos",
             )
         if color:
             uri = self._write_texture(image.convert("RGB"), "JPEG", quality=88)
@@ -189,14 +241,15 @@ class Package:
                 return sum(histogram[:16]) + sum(histogram[240:])
 
             alpha = max(channels, key=crispness)
-        alpha = alpha.resize(rgb.size, Image.LANCZOS)
+        alpha = _pillow_resize(alpha, rgb.size, "lanczos")
         image = rgb.copy()
         image.putalpha(alpha)
         if max(image.size) > self.max_size:
             scale = self.max_size / max(image.size)
-            image = image.resize(
+            image = _pillow_resize(
+                image,
                 (max(1, round(image.width * scale)), max(1, round(image.height * scale))),
-                Image.LANCZOS,
+                "lanczos",
             )
         uri = self._write_texture(image, "PNG", optimize=True)
         self.gltf["images"].append({"uri": uri})

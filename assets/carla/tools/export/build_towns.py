@@ -1124,8 +1124,15 @@ def impostor(parts, library, out_dir, name):
                        view["top"], view["height"], view["rows"], fill=True)
         # A texel the tree does not cover takes the mean color of those it
         # does, so filtering at the edge of a leaf does not darken it.
-        picture = Image.fromarray((numpy.clip(image, 0, 1) * 255).astype(numpy.uint8), "RGBA")
-        views.append(picture.resize((IMPOSTOR_SIZE, IMPOSTOR_SIZE), Image.LANCZOS))
+        raw = (numpy.clip(image, 0, 1) * 255).astype(numpy.uint8)
+        # `tools/carla_image_resize.mojo` matches Pillow's Lanczos resize.
+        resized = fix.resize_image(
+            raw.reshape(-1).tolist(), raw.shape[1], raw.shape[0], 4,
+            IMPOSTOR_SIZE, IMPOSTOR_SIZE, "lanczos",
+        )
+        views.append(Image.frombytes(
+            "RGBA", (IMPOSTOR_SIZE, IMPOSTOR_SIZE), bytes(resized),
+        ))
     atlas = Image.new("RGBA", (2 * IMPOSTOR_SIZE, IMPOSTOR_SIZE))
     atlas.paste(views[0], (0, 0))
     atlas.paste(views[1], (IMPOSTOR_SIZE, 0))
