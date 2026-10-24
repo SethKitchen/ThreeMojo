@@ -379,26 +379,40 @@ def read_gltf(path):
     return primitives
 
 
+_CUBE_TEXT = None
+
+
+def _cube_text():
+    """Return the engine cube JSON from `tools/carla_town_cube.mojo`."""
+    root = os.path.abspath(os.path.join(HERE, "..", "..", "..", ".."))
+    mojo = os.path.join(root, ".venv", "bin", "mojo")
+    if not os.path.isfile(mojo):
+        mojo = "mojo"
+    result = subprocess.run(
+        ["sh", os.path.join(root, "tools", "tool.sh"), mojo, "carla_town_cube"],
+        capture_output=True, text=True,
+    )
+    if result.returncode != 0:
+        raise ValueError(result.stderr.strip() or "town cube failed")
+    return result.stdout
+
+
 def cube():
     """Return a one-meter box centered on its origin: the engine's cube,
-    drawn from scratch."""
-    positions, normals, uvs, triangles = [], [], [], []
-    for axis in range(3):
-        for sign in (-1.0, 1.0):
-            normal = numpy.zeros(3)
-            normal[axis] = sign
-            u, v = numpy.zeros(3), numpy.zeros(3)
-            u[(axis + 1) % 3], v[(axis + 2) % 3] = 1.0, 1.0
-            if sign < 0:
-                u, v = v, u
-            base = len(positions)
-            for du, dv in ((0, 0), (1, 0), (1, 1), (0, 1)):
-                positions.append(0.5 * normal + (du - 0.5) * u + (dv - 0.5) * v)
-                normals.append(normal)
-                uvs.append((du, dv))
-            triangles += [(base, base + 1, base + 2), (base, base + 2, base + 3)]
-    return [{"positions": numpy.array(positions), "normals": numpy.array(normals), "uvs": numpy.array(uvs, float),
-             "triangles": numpy.array(triangles), "material": PLAIN}]
+    drawn from scratch.
+
+    `tools/carla_town_cube.mojo` chooses the corners. Each call returns
+    new arrays, so a caller can move one copy.
+    """
+    global _CUBE_TEXT
+    if _CUBE_TEXT is None:
+        _CUBE_TEXT = _cube_text()
+    doc = json.loads(_CUBE_TEXT)
+    return [{"positions": numpy.array(doc["positions"], dtype=numpy.float64),
+             "normals": numpy.array(doc["normals"], dtype=numpy.float64),
+             "uvs": numpy.array(doc["uvs"], dtype=numpy.float64),
+             "triangles": numpy.array(doc["triangles"], dtype=numpy.int64),
+             "material": doc["material"]}]
 
 
 def area_normals(points, faces):
