@@ -805,12 +805,14 @@ def baked_building(parts, library, out_dir, name, target):
 
 
 def _digest_field(values, integral):
-    """Return one field as a shape and C-order values."""
+    """Return one field as a nested array, or a shaped empty field."""
     array = numpy.ascontiguousarray(values, dtype="<i8" if integral else "<f8")
-    return {
-        "shape": [int(dim) for dim in array.shape],
-        "values": array.reshape(-1).tolist(),
-    }
+    if array.size == 0:
+        return {
+            "shape": [int(dim) for dim in array.shape],
+            "values": [],
+        }
+    return array.tolist()
 
 
 def geometry_digests(primitives):
@@ -818,8 +820,8 @@ def geometry_digests(primitives):
 
     Each field is hashed as its JSON shape plus the little-endian
     contiguous array bytes. An empty dimension contributes no payload
-    bytes. `tools/carla_geometry_digest.mojo` packs the arrays and
-    does the hash.
+    bytes. `tools/carla_geometry_digest.mojo` packs a nested array in
+    that same order and does the hash.
     """
     if not primitives:
         return []

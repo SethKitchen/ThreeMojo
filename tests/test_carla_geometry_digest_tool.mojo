@@ -242,6 +242,21 @@ def _zero_primitive(triangles: String) -> String:
     )
 
 
+def test_a_nested_array_matches_its_flat_shape() raises:
+    var nested = (
+        '{"primitives":[{"positions":[[0,0,0]],"normals":[[0,0,0]],'
+        + '"uvs":[[0,0]],"triangles":[[1,-1,0]]}]}'
+    )
+    assert_equal(
+        digest_text(nested)[0], digest_text(_zero_primitive("1,-1,0"))[0]
+    )
+    with assert_raises(contains="geometry rows differ"):
+        _ = digest_text(
+            '{"primitives":[{"positions":[[0,0],[0]],"normals":[[0,0,0]],'
+            + '"uvs":[[0,0]],"triangles":[[0,0,0]]}]}'
+        )
+
+
 def test_json_payloads_match_numpy_bytes() raises:
     var report = _python(
         "import hashlib, json, sys\n"

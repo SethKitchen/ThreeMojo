@@ -18,8 +18,9 @@ A CGD1 file has:
   u32 dimensions, a u64 payload length and the payload bytes.
 
 JSON has `primitives`. Each primitive has those four fields. A field is
-`shape` and flat `values` in C order. Float fields are float64. Triangles
-are int64. An empty dimension contributes no payload bytes.
+`shape` and flat `values` in C order, or a nested array of the same
+values. Float fields are float64. Triangles are int64. An empty
+dimension contributes no payload bytes.
 
 The digest of one primitive is SHA-256 over each field in order. The field
 prefix is the UTF-8 JSON `["name",[dimensions]]` with no spaces, then the
@@ -104,7 +105,7 @@ def digest_text(text: String) raises -> List[String]:
     Args:
         text: A JSON object with a `primitives` list. Each primitive has
             `positions`, `normals`, `uvs` and `triangles`. A field has
-            `shape` and flat `values`.
+            `shape` and flat `values`, or it is a nested array.
 
     Returns:
         The digests, in primitive order. Each one is 64 lowercase hex
@@ -197,6 +198,8 @@ def _is_json(data: Span[UInt8, _]) -> Bool:
 
 def _pack_field(doc: PyJson, node: Int, integral: Bool) raises -> _Packed:
     """Return the little-endian payload of one field."""
+    if doc.kind(node) == PY_LIST:
+        return _pack_nested(doc, node, integral)
     if doc.kind(node) != PY_DICT:
         raise Error("geometry field is not an object")
     var shape_node = doc.at(node, "shape")
@@ -227,6 +230,43 @@ def _pack_field(doc: PyJson, node: Int, integral: Bool) raises -> _Packed:
         else:
             _store_f64(raw, _float(doc, item))
     return _Packed(shape^, raw^)
+
+
+def _pack_nested(doc: PyJson, node: Int, integral: Bool) raises -> _Packed:
+    """Return a nested array packed in C order."""
+    var rows = doc.length(node)
+    var shape = List[Int]()
+    if rows == 0:
+        shape.append(0)
+        return _Packed(shape^, List[UInt8]())
+    var first = doc.item(node, 0)
+    if doc.kind(first) != PY_LIST:
+        shape.append(rows)
+        var raw = List[UInt8]()
+        for index in range(rows):
+            _store_value(doc, doc.item(node, index), integral, raw)
+        return _Packed(shape^, raw^)
+    var width = doc.length(first)
+    shape.append(rows)
+    shape.append(width)
+    var raw = List[UInt8]()
+    for row in range(rows):
+        var line = doc.item(node, row)
+        if doc.kind(line) != PY_LIST or doc.length(line) != width:
+            raise Error("geometry rows differ")
+        for column in range(width):
+            _store_value(doc, doc.item(line, column), integral, raw)
+    return _Packed(shape^, raw^)
+
+
+def _store_value(
+    doc: PyJson, node: Int, integral: Bool, mut raw: List[UInt8]
+) raises:
+    """Append one nested value."""
+    if integral:
+        _store_i64(raw, _triangle(doc, node))
+    else:
+        _store_f64(raw, _float(doc, node))
 
 
 def _shape_dim(doc: PyJson, node: Int) raises -> Int:

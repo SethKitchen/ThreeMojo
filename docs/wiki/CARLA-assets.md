@@ -512,7 +512,7 @@ with different material overrides keeps its own far appearance. Each build
 starts a new cache. Its geometry, materials and texture files must stay fixed
 until that build ends.
 
-The primitive digest is `tools/carla_geometry_digest.mojo`. It packs each field as little-endian bytes and hashes the name, the shape and those bytes.
+The primitive digest is `tools/carla_geometry_digest.mojo`. It packs each field as little-endian bytes and hashes the name, the shape and those bytes. A nested array has the same digest as its flat values.
 
 `tools/carla_texture_plan.mojo` names each packaged texture by the SHA-256 of its encoded bytes. `tools/carla_texture_store.mojo` writes that file. Two material
 overrides can share a color map with different masks without replacing each
