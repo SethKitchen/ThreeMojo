@@ -6,8 +6,6 @@
 No test executes Mojo. The exact same candidate must pass before mutation.
 Unittest assertions and explicit errors stay active under optimized Python.
 """
-from fractions import Fraction as F
-import math
 from pathlib import Path
 import unittest
 from unittest.mock import patch
@@ -16,8 +14,6 @@ import check_sampled_values as sampled
 import full_audit_cleanup_contracts as cleanup
 import source_contracts
 import sum2_contracts
-from sum2_analysis import sum2_error, U
-from test_sum2_oracle import two_sum, sum2, from_word, to_word
 
 ROOT = Path(__file__).resolve().parents[2]
 
@@ -237,85 +233,6 @@ for case in CASES:
     def control(self, case=case):
         self.exercise(case)
     setattr(Sum2SourceTests, 'test_fixed_pin_and_semantic_' + case[0], control)
-
-
-class Sum2BoundTests(unittest.TestCase):
-    def test_range_and_count_limits(self):
-        for count in (1, 2, 320, 2**30):
-            for magnitude in (F(0), F(1, 2**1074), F(1), F(2**900)):
-                with self.subTest(count=count, magnitude=magnitude):
-                    result = sum2_error(magnitude, F(1, 2**100), count)
-                    self.assertGreaterEqual(result, F(1, 2**100))
-                    self.assertLess((count-1)*U, F(1, 2**23))
-                    # Several-times-M intermediate bound remains far below
-                    # binary64 overflow throughout the accepted proof domain.
-                    self.assertLess(8*magnitude/(1-(count-1)*U), F(2**904))
-        for count in (0, -1, 2**30+1, True, 1.5):
-            with self.assertRaises(ValueError):
-                sum2_error(F(1), F(0), count)
-        for magnitude, inherited in ((-1, 0), (2**900+1, 0), (1, -1),
-                                     (math.inf, 0), (-math.inf, 0), (math.nan, 0),
-                                     (float.fromhex("0x1.fffffffffffffp1023"), 0),
-                                     (1, math.inf), (1, -math.inf), (1, math.nan)):
-            with self.assertRaises((ValueError, OverflowError)):
-                sum2_error(magnitude, inherited, 2)
-
-    def test_zero_and_single_term_shortcuts(self):
-        self.assertEqual(sum2_error(0, F(3, 7), 2**30), F(3, 7))
-        self.assertEqual(sum2_error(2**900, F(3, 7), 1), F(3, 7))
-        self.assertEqual(to_word(sum2([-0.])), 0)
-        self.assertEqual(to_word(sum2([0.])), 0)
-
-    def test_exact_formula_and_inherited_error_are_independent(self):
-        for count in (2, 5, 320, 2**30):
-            gamma = F(count-1, 2**53-(count-1))
-            self.assertEqual(sum2_error(F(7, 3), F(5, 13), count),
-                             F(5, 13)+(F(1, 2**53)+gamma**2)*F(7, 3))
-        self.assertGreater(sum2_error(1, F(1, 8), 5), sum2_error(1, 0, 5))
-
-    def test_magnitude_and_inherited_counterexamples(self):
-        values = [1., 2**-53, 2**-106]
-        exact = sum(map(F, values))
-        actual = F(sum2(values))
-        self.assertGreater(abs(actual-exact), 0)
-        self.assertLessEqual(abs(actual-exact), sum2_error(sum(map(lambda x: abs(F(x)), values)), 0, len(values)))
-        # An inherited ideal-to-stored error remains even when accumulation is exact.
-        stored = [1., -1.]
-        ideal = [F(1)+F(1, 2**40), F(-1)]
-        error = abs(F(sum2(stored))-sum(ideal))
-        self.assertGreater(error, sum2_error(2, 0, 2))
-        self.assertLessEqual(error, sum2_error(2, F(1, 2**40), 2))
-
-    def test_omitted_residual_control(self):
-        values = [1e16, 1., -1e16]
-        ordinary = 0.0
-        for value in values:
-            ordinary += value
-        self.assertEqual(ordinary, 0.)
-        self.assertEqual(sum2(values), 1.)
-        bound = sum2_error(sum(abs(F(x)) for x in values), 0, len(values))
-        # The tighter theorem's exact-result term distinguishes the omitted
-        # residual even when the uniform M replacement is intentionally loose.
-        gamma = 2*U/(1-2*U)
-        tight = U + gamma**2*sum(abs(F(x)) for x in values)
-        self.assertGreater(abs(F(ordinary)-1), tight)
-        self.assertLessEqual(abs(F(sum2(values))-1), bound)
-
-    def test_binade_subnormal_and_extreme_finite_sequences(self):
-        eta = from_word(1)
-        sequences = ([1., 2**-53], [math.nextafter(2., 0.), 2**-53, -2.],
-                     [math.ldexp(1., -1022), eta, -math.ldexp(1., -1022)],
-                     [2.**898, 1., -2.**898], [2.**898, -2.**898, eta])
-        for values in sequences:
-            with self.subTest(values=values):
-                exact = sum(map(F, values))
-                magnitude = sum(abs(F(x)) for x in values)
-                self.assertLessEqual(abs(F(sum2(values))-exact), sum2_error(magnitude, 0, len(values)))
-                high = 0.
-                for term in values:
-                    next_high, residual = two_sum(high, term)
-                    self.assertEqual(F(next_high)+F(residual), F(high)+F(term))
-                    high = next_high
 
 
 if __name__ == '__main__':

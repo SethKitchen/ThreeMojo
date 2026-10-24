@@ -14,7 +14,7 @@ Run the rounding, pose, and count reports with Mojo. Run the other controls with
     python3 tools/carla_lane_oracle/translated_parameter_resolution.py
 
 The reports go to `out/carla-lane-oracle`. Set `CARLA_LANE_ORACLE_OUTPUT`
-to choose another directory. The rounding, pose, and count reports run in Mojo. The other scripts do not run Mojo. None of them change source.
+to choose another directory. The rounding, pose, and count reports run in Mojo. The Sum2 bound is `tools/carla_sum2_error.mojo`. The other scripts do not run Mojo. None of them change source.
 
 Reports label earlier measured query outputs as retained observations.
 They do not claim a new native run.
