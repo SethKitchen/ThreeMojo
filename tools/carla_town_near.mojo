@@ -7,11 +7,12 @@
 
     carla_town_near FILE
 
-`FILE` is JSON with `centers`, `queries` and `count`. The centers are the
-original triangles. The program builds the same tree SciPy's `cKDTree`
-builds with its default leaf size, and it returns the `count` nearest
-centers of each query. The nearest center is first. An equal distance
-keeps the center the tree found first.
+`FILE` is JSON with `centers`, `count`, and either `queries` or
+`corners`. The centers are the original triangles. `corners` are the new
+triangles, and each query is their mean. The program builds the same tree
+SciPy's `cKDTree` builds with its default leaf size, and it returns the
+`count` nearest centers of each query. The nearest center is first. An
+equal distance keeps the center the tree found first.
 """
 
 from std.ffi import external_call
@@ -19,8 +20,15 @@ from std.memory import bitcast
 from std.pathlib import Path
 from std.sys import argv, exit, stderr
 
-from tools._python_float import parse_float
-from tools._python_json import PY_DICT, PY_FLOAT, PY_INT, PY_LIST, PyJson
+from tools._python_float import parse_float, python_repr
+from tools._python_json import (
+    MISSING,
+    PY_DICT,
+    PY_FLOAT,
+    PY_INT,
+    PY_LIST,
+    PyJson,
+)
 
 
 comptime LEAF = 16
@@ -56,10 +64,12 @@ def near_text(text: String) raises -> String:
     """Return the nearest centers of each query as JSON.
 
     Args:
-        text: A JSON object with `centers`, `queries` and `count`.
+        text: A JSON object with `centers`, `count`, and `queries` or
+            `corners`.
 
     Returns:
         `near`, a list of index lists. Each list has `count` indexes.
+        `queries` is included when `corners` was given.
 
     Raises:
         Error: If the JSON is not that request, or `count` is out of range.
@@ -75,7 +85,13 @@ def near_text(text: String) raises -> String:
     var qy = List[Float64]()
     var qz = List[Float64]()
     _vec3(doc, doc.at(root, "centers"), xs, ys, zs)
-    _vec3(doc, doc.at(root, "queries"), qx, qy, qz)
+    var corners = doc.get(root, "corners")
+    var report = False
+    if corners != MISSING:
+        _means(doc, corners, qx, qy, qz)
+        report = True
+    else:
+        _vec3(doc, doc.at(root, "queries"), qx, qy, qz)
     var count = _whole(doc, doc.at(root, "count"))
     if count < 1:
         raise Error("count is not positive")
@@ -138,7 +154,21 @@ def near_text(text: String) raises -> String:
                 out += ","
             out += String(found[slot])
         out += "]"
-    out += "]}"
+    out += "]"
+    if report:
+        out += ',"queries":['
+        for query in range(len(qx)):
+            if query > 0:
+                out += ","
+            out += "["
+            out += python_repr(qx[query])
+            out += ","
+            out += python_repr(qy[query])
+            out += ","
+            out += python_repr(qz[query])
+            out += "]"
+        out += "]"
+    out += "}"
     return out^
 
 
@@ -783,6 +813,42 @@ def _nextafter(value: Float64, toward: Float64) -> Float64:
     return external_call["nextafter", Float64](value, toward)
 
 
+def _means(
+    doc: PyJson,
+    node: Int,
+    mut xs: List[Float64],
+    mut ys: List[Float64],
+    mut zs: List[Float64],
+) raises:
+    """Append the mean of each triangle's three corners."""
+    if doc.kind(node) != PY_LIST:
+        raise Error("corners are not a list")
+    for index in range(doc.length(node)):
+        var triangle = doc.item(node, index)
+        if doc.kind(triangle) != PY_LIST or doc.length(triangle) != 3:
+            raise Error("corner triangle is not 3 points")
+        var x0 = _number(doc, _corner(doc, triangle, 0, 0))
+        var y0 = _number(doc, _corner(doc, triangle, 0, 1))
+        var z0 = _number(doc, _corner(doc, triangle, 0, 2))
+        var x1 = _number(doc, _corner(doc, triangle, 1, 0))
+        var y1 = _number(doc, _corner(doc, triangle, 1, 1))
+        var z1 = _number(doc, _corner(doc, triangle, 1, 2))
+        var x2 = _number(doc, _corner(doc, triangle, 2, 0))
+        var y2 = _number(doc, _corner(doc, triangle, 2, 1))
+        var z2 = _number(doc, _corner(doc, triangle, 2, 2))
+        xs.append(_fdiv(_fadd(_fadd(x0, x1), x2), 3.0))
+        ys.append(_fdiv(_fadd(_fadd(y0, y1), y2), 3.0))
+        zs.append(_fdiv(_fadd(_fadd(z0, z1), z2), 3.0))
+
+
+def _corner(doc: PyJson, triangle: Int, point: Int, axis: Int) raises -> Int:
+    """Return one coordinate node of a corner triangle."""
+    var vertex = doc.item(triangle, point)
+    if doc.kind(vertex) != PY_LIST or doc.length(vertex) != 3:
+        raise Error("corner is not 3 numbers")
+    return doc.item(vertex, axis)
+
+
 def _vec3(
     doc: PyJson,
     node: Int,
@@ -817,6 +883,12 @@ def _whole(doc: PyJson, node: Int) raises -> Int:
     if doc.kind(node) != PY_INT:
         raise Error("count is not an integer")
     return Int(parse_float(doc.text(node)))
+
+
+@no_inline
+def _fdiv(left: Float64, right: Float64) -> Float64:
+    """Return one quotient, rounded before the next operation."""
+    return left / right
 
 
 @no_inline

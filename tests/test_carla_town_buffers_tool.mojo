@@ -87,6 +87,29 @@ def test_one_triangle_packs_little_endian_floats() raises:
     _remove(root)
 
 
+def test_a_second_copy_is_shifted_and_a_float_is_rounded() raises:
+    var root = _dir()
+    var printed = buffer_text(
+        '{"bin":"'
+        + root
+        + '/shift.bin","name":"town","lamps":[],"groups":[{'
+        '"lod":0,"kind":"building","cell":[1,-2],"material":0,'
+        '"positions":[[[0,0,0]],[[0.1,0,0]]],'
+        '"normals":[[[0,1,0]],[[0,1,0]]],'
+        '"uvs":[[[0,0]],[[0,0]]],'
+        '"triangles":[[[0,0,0]],[[0,0,0]]]}]}'
+    )
+    assert_true(printed.find("building_1_-2_lod0") >= 0)
+    var data = Path(root + "/shift.bin").read_bytes()
+    assert_equal(Int(data[76]), 1)
+    assert_equal(Int(data[77]), 0)
+    assert_equal(Int(data[12]), 205)
+    assert_equal(Int(data[13]), 204)
+    assert_equal(Int(data[14]), 204)
+    assert_equal(Int(data[15]), 61)
+    _remove(root)
+
+
 def test_kinds_sort_and_an_empty_group_is_refused() raises:
     var root = _dir()
     var printed = buffer_text(

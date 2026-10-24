@@ -772,8 +772,8 @@ def simplify_welded(primitive, target):
             "material": primitive["material"]}
 
 
-def _near_tool(centers, queries, count):
-    """Return neighbor indexes from `tools/carla_town_near.mojo`."""
+def _near_tool(centers, corners, count):
+    """Return neighbor indexes and query centers from `tools/carla_town_near.mojo`."""
     here = os.path.dirname(os.path.abspath(__file__))
     repo = os.path.abspath(os.path.join(here, "..", "..", "..", ".."))
     mojo = os.path.join(repo, ".venv", "bin", "mojo")
@@ -785,7 +785,7 @@ def _near_tool(centers, queries, count):
         with open(path, "w", encoding="utf-8") as handle:
             json.dump({
                 "centers": numpy.asarray(centers, dtype=float).reshape(-1, 3).tolist(),
-                "queries": numpy.asarray(queries, dtype=float).reshape(-1, 3).tolist(),
+                "corners": numpy.asarray(corners, dtype=float).reshape(-1, 3, 3).tolist(),
                 "count": int(count),
             }, handle, separators=(",", ":"), allow_nan=False)
         result = subprocess.run(
@@ -797,7 +797,7 @@ def _near_tool(centers, queries, count):
         shutil.rmtree(folder, ignore_errors=True)
     if result.returncode != 0:
         raise ValueError(result.stderr.strip() or "neighbor search failed")
-    return json.loads(result.stdout)["near"]
+    return json.loads(result.stdout)
 
 
 def _choose_tool(payload):
@@ -883,8 +883,10 @@ def transfer_uvs(primitive, corners, normals, candidates=8):
     centers = numpy.array(gathered["centers"], dtype=numpy.float64)
     normal = numpy.array(gathered["normals"], dtype=numpy.float64)
     count = min(candidates, len(faces))
-    queries = corners.mean(axis=1)
-    near = numpy.array(_near_tool(centers, queries, count), dtype=numpy.int64)
+    # `tools/carla_town_near.mojo` averages each new triangle's corners.
+    found = _near_tool(centers, corners, count)
+    near = numpy.array(found["near"], dtype=numpy.int64)
+    queries = numpy.array(found["queries"], dtype=numpy.float64)
     chosen = _choose_tool({
         "mode": "choose",
         "centers": centers.tolist(),
@@ -1820,12 +1822,13 @@ def build(town, max_size, tile):
                     # detail of a copy fall in the same tile.
                     origin = rows[3, :3] / 100.0
                     cell = (int(numpy.floor(origin[0] / tile)), int(numpy.floor(origin[1] / tile)))
-                    group = groups.setdefault((lod, kind, cell, part_material), [[], [], [], [], 0])
-                    group[0].append(points.astype(numpy.float32))
-                    group[1].append(normals.astype(numpy.float32))
-                    group[2].append(part["uvs"].astype(numpy.float32))
-                    group[3].append(triangles + group[4])
-                    group[4] += len(points)
+                    group = groups.setdefault((lod, kind, cell, part_material), [[], [], [], []])
+                    # `tools/carla_town_buffers.mojo` rounds to float32 and
+                    # shifts each copy's triangles by the copies before it.
+                    group[0].append(points)
+                    group[1].append(normals)
+                    group[2].append(part["uvs"])
+                    group[3].append(triangles)
     # The town's own road network, so a package brings the map it stands on.
     shutil.copy(os.path.join(MAPS, town + ".xodr"), os.path.join(out_dir, town + ".xodr"))
     return write(town, name, out_dir, library, groups, lamps)

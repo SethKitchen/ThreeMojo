@@ -69,6 +69,13 @@ def _refuse(text: String, message: String) raises:
 
 def test_the_nearest_centers_match_the_tree() raises:
     assert_equal(near_text(_split()), '{"near":[[0,3,5],[13,6,4]]}')
+    assert_equal(
+        near_text(
+            '{"centers":[[0.3333333333333333,0.3333333333333333,0]],'
+            '"corners":[[[0,0,0],[1,0,0],[0,1,0]]],"count":1}'
+        ),
+        '{"near":[[0]],"queries":[[0.3333333333333333,0.3333333333333333,0.0]]}',
+    )
     assert_equal(near_text(_slide()), '{"near":[[5,6]]}')
     assert_equal(
         near_text(
@@ -84,6 +91,10 @@ def test_the_nearest_centers_match_the_tree() raises:
         '{"near":[]}',
     )
     _refuse("[]", "near request is not an object")
+    _refuse(
+        '{"centers":[[0,0,0]],"corners":[1],"count":1}',
+        "corner triangle is not 3 points",
+    )
     _refuse(
         '{"centers":[[0,0,0]],"queries":[[0,0,0]],"count":0}',
         "count is not positive",

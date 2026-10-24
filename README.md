@@ -135,7 +135,7 @@ Some portable features remain partial, including [GLSL shaders](https://github.c
 
 - [x] [Collapse map for a simplified mesh](https://github.com/SethKitchen/ThreeMojo/wiki/CARLA-assets#rebuild-the-vehicle-zips): `tools/carla_collapse_map.mojo` keeps the first corner that fell into each new one and copies its texture values [#761](https://github.com/SethKitchen/ThreeMojo/issues/761)
 
-- [x] [Nearest triangles for a simplified town face](https://github.com/SethKitchen/ThreeMojo/wiki/CARLA-assets#the-carla-towns): `tools/carla_town_near.mojo` finds the original triangles nearest that face [#761](https://github.com/SethKitchen/ThreeMojo/issues/761)
+- [x] [Nearest triangles for a simplified town face](https://github.com/SethKitchen/ThreeMojo/wiki/CARLA-assets#the-carla-towns): `tools/carla_town_near.mojo` finds the original triangles nearest that face's center [#761](https://github.com/SethKitchen/ThreeMojo/issues/761)
 
 - [x] [Triangle choice for a simplified town face](https://github.com/SethKitchen/ThreeMojo/wiki/CARLA-assets#the-carla-towns): `tools/carla_town_choose.mojo` picks the original triangle that face reads [#761](https://github.com/SethKitchen/ThreeMojo/issues/761)
 

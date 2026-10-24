@@ -454,7 +454,7 @@ A town's glass is a dark, smooth, partly metal pane that reflects its surroundin
 
 Each mesh keeps a share of its triangles, by its kind. Each town also has a cap for each kind at each level. A town can have more than its cap, as Town04 has with its eight thousand pines. Then every mesh of that kind gives up the same share. A tree gives up leaf cards, and each card that stays grows, so the crown stays full. Other meshes are simplified, and their texture seams stay where they are.
 
-`tools/carla_town_cards.mojo` keeps about the requested share of those cards and grows each card that stays. `tools/carla_town_uv.mojo` gives a simplified triangle the texture of one original triangle. `tools/carla_town_near.mojo` finds the original triangles nearest that face. `tools/carla_town_choose.mojo` picks that original triangle. `tools/carla_collapse_map.mojo` keeps the first corner that fell into each new one and copies its texture values. `tools/carla_town_finish.mojo` keeps each simplified corner inside the original box and turns a flipped face back.
+`tools/carla_town_cards.mojo` keeps about the requested share of those cards and grows each card that stays. `tools/carla_town_uv.mojo` gives a simplified triangle the texture of one original triangle. `tools/carla_town_near.mojo` finds the original triangles nearest that face's center. `tools/carla_town_choose.mojo` picks that original triangle. `tools/carla_collapse_map.mojo` keeps the first corner that fell into each new one and copies its texture values. `tools/carla_town_finish.mojo` keeps each simplified corner inside the original box and turns a flipped face back.
 
 The kind of each mesh and both triangle limits come from `tools/carla_town_budget.mojo`. `build_towns.py` asks that program for every mesh. `tools/carla_simplify_target.mojo` chooses how many of those triangles one mesh keeps.
 
@@ -499,11 +499,11 @@ The towns are made in three steps. The scripts run on Windows, like the vehicle 
    sh tools/tool.sh .venv/bin/mojo carla_export_manifest_towns [--urls urls.json]
    ```
 
-   `carla_export_manifest_towns` writes each town's entry and its binding, `town.<town>`. The URLs file is the same form as the vehicles'. `tools/carla_town_buffers.mojo` packs each tile's vertices into the glTF buffer.
+   `carla_export_manifest_towns` writes each town's entry and its binding, `town.<town>`. The URLs file is the same form as the vehicles'. `tools/carla_town_buffers.mojo` packs each tile's vertices into the glTF buffer and joins each copy's triangles.
 
    `--top` lists the meshes that add the most triangles to each town.
 
-The build needs the `numpy`, `scipy`, `fast-simplification` and `Pillow` Python packages.
+The build needs the `numpy`, `fast-simplification` and `Pillow` Python packages.
 
 Far buildings and tree impostors share a bake only when their ordered
 geometry and resolved materials match. The cache key and atlas name include

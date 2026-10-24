@@ -87,7 +87,14 @@ def buffer_text(text: String) raises -> String:
         if points == 0:
             raise Error("empty vector")
         pos_n.append(points)
-        tri_n.append(_chunk_tris(doc, doc.at(group, "triangles"), indices))
+        tri_n.append(
+            _chunk_tris(
+                doc,
+                doc.at(group, "triangles"),
+                doc.at(group, "positions"),
+                indices,
+            )
+        )
     var order = List[Int]()
     for index in range(len(lods)):
         order.append(index)
@@ -279,12 +286,12 @@ def _attribute(
     var high_y = 0.0
     var high_z = 0.0
     for index in range(count):
-        var x = xs[start + index]
-        var y = ys[start + index]
+        var x = _stored(xs[start + index])
+        var y = _stored(ys[start + index])
         _pack_f32(blob, x)
         _pack_f32(blob, y)
         if width == 3:
-            var z = zs[start + index]
+            var z = _stored(zs[start + index])
             _pack_f32(blob, z)
             if index == 0 or x < low_x:
                 low_x = x
@@ -439,25 +446,32 @@ def _chunks2(
     return added
 
 
-def _chunk_tris(doc: PyJson, node: Int, mut indices: List[Int]) raises -> Int:
-    """Append chunks of triangles and return how many triangles were added."""
-    if doc.kind(node) != PY_LIST:
+def _chunk_tris(
+    doc: PyJson, node: Int, points: Int, mut indices: List[Int]
+) raises -> Int:
+    """Append each copy's triangles, shifted by the copies before it."""
+    if doc.kind(node) != PY_LIST or doc.kind(points) != PY_LIST:
         raise Error("triangles are not a list")
+    if doc.length(node) != doc.length(points):
+        raise Error("triangles do not match the points")
     var added = 0
+    var base = 0
     for index in range(doc.length(node)):
         var chunk = doc.item(node, index)
-        if doc.kind(chunk) != PY_LIST:
+        var cloud = doc.item(points, index)
+        if doc.kind(chunk) != PY_LIST or doc.kind(cloud) != PY_LIST:
             raise Error("triangles are not a list")
         for face in range(doc.length(chunk)):
             var triangle = doc.item(chunk, face)
             if doc.kind(triangle) != PY_LIST or doc.length(triangle) != 3:
                 raise Error("triangle is not three indices")
             for corner in range(3):
-                var value = _whole(doc, doc.item(triangle, corner))
+                var value = _whole(doc, doc.item(triangle, corner)) + base
                 if value < 0 or value > 4294967295:
                     raise Error("index does not fit in uint32")
                 indices.append(value)
             added += 1
+        base += doc.length(cloud)
     return added
 
 
@@ -492,6 +506,11 @@ def _vec2(
             raise Error("vector is not 2 numbers")
         xs.append(_number(doc, doc.item(point, 0)))
         ys.append(_number(doc, doc.item(point, 1)))
+
+
+def _stored(value: Float64) -> Float64:
+    """Return `value` rounded to float32 and back."""
+    return Float64(Float32(value))
 
 
 def _pack_f32(mut out: List[UInt8], value: Float64):
