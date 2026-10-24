@@ -736,37 +736,53 @@ def transfer_uvs(primitive, corners, normals, candidates=8):
     return out, normal[best]
 
 
+def _cards_tool(primitive, keep, seed):
+    """Return JSON from `tools/carla_town_cards.mojo`."""
+    here = os.path.dirname(os.path.abspath(__file__))
+    repo = os.path.abspath(os.path.join(here, "..", "..", "..", ".."))
+    mojo = os.path.join(repo, ".venv", "bin", "mojo")
+    if not os.path.isfile(mojo):
+        mojo = "mojo"
+    folder = tempfile.mkdtemp(prefix="town-cards-")
+    try:
+        request = os.path.join(folder, "cards.json")
+        payload = {
+            "positions": numpy.asarray(primitive["positions"], dtype=float).reshape(-1, 3).tolist(),
+            "normals": numpy.asarray(primitive["normals"], dtype=float).reshape(-1, 3).tolist(),
+            "uvs": numpy.asarray(primitive["uvs"], dtype=float).reshape(-1, 2).tolist(),
+            "triangles": numpy.asarray(primitive["triangles"]).reshape(-1, 3).tolist(),
+            "keep": float(keep),
+            "seed": int(seed),
+        }
+        with open(request, "w", encoding="utf-8") as handle:
+            json.dump(payload, handle, separators=(",", ":"), allow_nan=False)
+        result = subprocess.run(
+            ["sh", os.path.join(repo, "tools", "tool.sh"), mojo,
+             "carla_town_cards", request],
+            capture_output=True, text=True,
+        )
+    finally:
+        shutil.rmtree(folder, ignore_errors=True)
+    if result.returncode != 0:
+        raise ValueError(result.stderr.strip() or "leaf cards failed")
+    return json.loads(result.stdout)
+
+
 def thin_cards(primitive, keep, seed):
     """Return a cut-out primitive with about `keep` of its cards, each
     kept card grown about its center so the canopy stays as full. A card
-    is a piece of connected triangles: a leaf, or a spray of leaves."""
-    from scipy.sparse import coo_matrix
-    from scipy.sparse.csgraph import connected_components
-    faces = primitive["triangles"]
-    count = len(primitive["positions"])
-    rows = numpy.concatenate([faces[:, 0], faces[:, 1], faces[:, 2]])
-    cols = numpy.concatenate([faces[:, 1], faces[:, 2], faces[:, 0]])
-    graph = coo_matrix((numpy.ones(len(rows)), (rows, cols)), shape=(count, count))
-    pieces, label = connected_components(graph, directed=False)
-    if pieces < 8:
+    is a piece of connected triangles: a leaf, or a spray of leaves.
+
+    `tools/carla_town_cards.mojo` chooses and grows the cards.
+    """
+    doc = _cards_tool(primitive, keep, seed)
+    if doc.get("unchanged"):
         return primitive
-    chosen = numpy.random.default_rng(seed).random(pieces) < keep
-    face_piece = label[faces[:, 0]]
-    faces = faces[chosen[face_piece]]
-    if len(faces) == 0:
-        return primitive
-    used = numpy.unique(faces)
-    remap = numpy.full(count, -1)
-    remap[used] = numpy.arange(len(used))
-    points = primitive["positions"][used]
-    piece = label[used]
-    sums = numpy.zeros((pieces, 3))
-    numpy.add.at(sums, piece, points)
-    centers = sums / numpy.maximum(numpy.bincount(piece, minlength=pieces), 1)[:, None]
-    grow = min(2.0, 1.0 / numpy.sqrt(max(keep, 1e-3)))
-    points = centers[piece] + (points - centers[piece]) * grow
-    return {"positions": points, "normals": primitive["normals"][used], "uvs": primitive["uvs"][used],
-            "triangles": remap[faces], "material": primitive["material"]}
+    return {"positions": numpy.array(doc["positions"], dtype=numpy.float64),
+            "normals": numpy.array(doc["normals"], dtype=numpy.float64),
+            "uvs": numpy.array(doc["uvs"], dtype=numpy.float64),
+            "triangles": numpy.array(doc["triangles"], dtype=numpy.int64),
+            "material": primitive["material"]}
 
 
 # ---- Impostors -------------------------------------------------------------
