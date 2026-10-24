@@ -887,13 +887,15 @@ def impostor(parts, library, out_dir, name):
     material's index.
 
     `tools/carla_town_impostor.mojo` sizes the views, builds the quads, and
-    fills the empty texels. `tools/carla_image_pack.mojo` joins the two
-    pictures. `tools/carla_png.mojo` writes the picture.
+    fills the empty texels. `tools/carla_image_pack.mojo` resizes and joins
+    the two pictures. `tools/carla_png.mojo` writes the picture.
     """
-    points = numpy.concatenate([p["positions"] for p, _ in parts])
     frame = _impostor_tool({
         "mode": "frame",
-        "positions": numpy.asarray(points, dtype=float).reshape(-1, 3).tolist(),
+        "parts": [
+            numpy.asarray(part["positions"], dtype=float).reshape(-1, 3).tolist()
+            for part, _ in parts
+        ],
         "size": IMPOSTOR_SIZE,
     })
     views = []
@@ -902,23 +904,14 @@ def impostor(parts, library, out_dir, name):
                        view["top"], view["height"], view["rows"], fill=True)
         # A texel the tree does not cover takes the mean color of those it
         # does, so filtering at the edge of a leaf does not darken it.
-        raw = numpy.array(
-            fix.quantize_image(numpy.asarray(image, dtype=float).reshape(-1)),
-            dtype=numpy.uint8,
-        ).reshape(numpy.shape(image))
-        # `tools/carla_image_resize.mojo` matches Pillow's Lanczos resize.
-        resized = fix.resize_image(
-            raw.reshape(-1).tolist(), raw.shape[1], raw.shape[0], 4,
-            IMPOSTOR_SIZE, IMPOSTOR_SIZE, "lanczos",
-        )
-        views.append(bytes(resized))
-    atlas = fix.pack_stitch(views[0], views[1], IMPOSTOR_SIZE, IMPOSTOR_SIZE)
+        views.append(numpy.asarray(image, dtype=float).tolist())
+    # `tools/carla_image_pack.mojo` stores the floats as bytes, resizes
+    # each view, and joins the two pictures.
+    pixels, width, height = fix.pack_atlas(views, IMPOSTOR_SIZE)
     tag = library._bake_tag(name, "impostor", parts)
     os.makedirs(os.path.join(out_dir, "textures"), exist_ok=True)
     with open(os.path.join(out_dir, "textures", tag + ".png"), "wb") as handle:
-        handle.write(fix.save_png(
-            list(atlas), 2 * IMPOSTOR_SIZE, IMPOSTOR_SIZE, "RGBA", True,
-        ))
+        handle.write(fix.save_png(pixels, width, height, "RGBA", True))
     gltf = library.gltf
     gltf["images"].append({"uri": "textures/" + tag + ".png"})
     gltf["textures"].append({"sampler": 0, "source": len(gltf["images"]) - 1})

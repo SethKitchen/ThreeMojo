@@ -8,8 +8,10 @@
     carla_town_impostor FILE
 
 `FILE` is JSON. `mode` is `frame`, `fill` or `light`. `frame` reads the
-tree's points and the picture's width. It prints the two views and the
-two quads that cross on the trunk. `fill` reads one RGBA picture. A
+tree's points and the picture's width. `parts` is one position list per
+mesh, in order. `positions` is that same list already joined. It prints
+the two views and the two quads that cross on the trunk. `fill` reads
+one RGBA picture. A
 texel the tree does not cover takes the mean color of those it does.
 `light` prints the unit vector `[0.35, 0.85, 0.4]`.
 """
@@ -19,7 +21,14 @@ from std.pathlib import Path
 from std.sys import argv, exit, stderr
 
 from tools._python_float import parse_float, python_repr
-from tools._python_json import PY_DICT, PY_FLOAT, PY_INT, PY_LIST, PyJson
+from tools._python_json import (
+    MISSING,
+    PY_DICT,
+    PY_FLOAT,
+    PY_INT,
+    PY_LIST,
+    PyJson,
+)
 from tools._python_math import round_half_even
 
 
@@ -54,7 +63,14 @@ def _frame(doc: PyJson, root: Int) raises -> String:
     var px = List[Float64]()
     var py = List[Float64]()
     var pz = List[Float64]()
-    _vec3(doc, doc.at(root, "positions"), px, py, pz)
+    var parts = doc.find(root, "parts")
+    if parts != MISSING:
+        if doc.kind(parts) != PY_LIST:
+            raise Error("parts are not a list")
+        for index in range(doc.length(parts)):
+            _vec3(doc, doc.item(parts, index), px, py, pz)
+    else:
+        _vec3(doc, doc.at(root, "positions"), px, py, pz)
     if len(px) == 0:
         raise Error("positions are empty")
     var size = _whole(doc, doc.at(root, "size"))

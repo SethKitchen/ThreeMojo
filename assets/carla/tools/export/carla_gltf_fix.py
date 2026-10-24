@@ -348,6 +348,20 @@ def _pack_tool(payload):
     return json.loads(result.stdout)
 
 
+def pack_atlas(views, size):
+    """Return two float pictures resized and joined side by side.
+
+    `tools/carla_image_pack.mojo` stores each sample as a byte, resizes
+    each picture, and copies one row from each.
+    """
+    packed = _pack_tool({
+        "mode": "atlas",
+        "size": int(size),
+        "views": views,
+    })
+    return packed["pixels"], int(packed["width"]), int(packed["height"])
+
+
 def pack_stitch(left, right, width, height):
     """Return two RGBA pictures joined side by side.
 

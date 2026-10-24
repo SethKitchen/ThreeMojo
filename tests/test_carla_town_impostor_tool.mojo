@@ -64,6 +64,12 @@ def test_a_box_sets_the_views_and_the_crossing_quads() raises:
     assert_equal(impostor_text(_frame()), _built())
     assert_equal(
         impostor_text(
+            '{"mode":"frame","size":256,"parts":[[[0,0,0]],[[2,1,4]]]}'
+        ),
+        _built(),
+    )
+    assert_equal(
+        impostor_text(
             '{"mode":"fill","image":[[[0.2,0.4,0.6,1],[0,0,0,0]],'
             "[[0,0,0,0],[0.5,0.5,0,1]]]}"
         ),

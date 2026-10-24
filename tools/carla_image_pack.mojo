@@ -7,19 +7,22 @@
 
     carla_image_pack FILE
 
-`FILE` is JSON. `mode` is `color`, `masked` or `stitch`. `color` builds
-the RGB samples of one texture, including a neutral 8 pixel square and
-a fitted resize. `masked` builds an RGBA cut-out. `stitch` joins two
-RGBA pictures side by side, one row at a time.
+`FILE` is JSON. `mode` is `color`, `masked`, `stitch` or `atlas`.
+`color` builds the RGB samples of one texture, including a neutral 8
+pixel square and a fitted resize. `masked` builds an RGBA cut-out.
+`stitch` joins two RGBA pictures side by side, one row at a time.
+`atlas` turns two float pictures into bytes, resizes each one, and
+joins them the same way.
 """
 
 from std.pathlib import Path
 from std.sys import argv, exit, stderr
 
-from tools._python_float import parse_float
+from tools._python_float import parse_float, python_repr
 from tools._python_json import (
     PY_BOOL,
     PY_DICT,
+    PY_FLOAT,
     PY_INT,
     PY_LIST,
     PY_STR,
@@ -33,7 +36,8 @@ def pack_text(text: String) raises -> String:
     """Return packaged texture pixels as JSON.
 
     Args:
-        text: A JSON object. `mode` selects `color`, `masked` or `stitch`.
+        text: A JSON object. `mode` selects `color`, `masked`, `stitch`
+            or `atlas`.
 
     Returns:
         `width`, `height`, `bands` and `pixels`. `color` has 3 bands.
@@ -48,7 +52,7 @@ def pack_text(text: String) raises -> String:
         raise Error("pack request is not an object")
     var mode_node = doc.at(root, "mode")
     if doc.kind(mode_node) != PY_STR:
-        raise Error("mode is not color, masked or stitch")
+        raise Error("mode is not color, masked, stitch or atlas")
     var mode = doc.text(mode_node)
     if mode == "color":
         return _color(doc, root)
@@ -56,7 +60,9 @@ def pack_text(text: String) raises -> String:
         return _masked(doc, root)
     if mode == "stitch":
         return _stitch(doc, root)
-    raise Error("mode is not color, masked or stitch")
+    if mode == "atlas":
+        return _atlas(doc, root)
+    raise Error("mode is not color, masked, stitch or atlas")
 
 
 def _color(doc: PyJson, root: Int) raises -> String:
@@ -127,6 +133,86 @@ def _stitch(doc: PyJson, root: Int) raises -> String:
         for offset in range(row):
             out.append(right[start + offset])
     return _emit(width * 2, height, 4, out)
+
+
+def _atlas(doc: PyJson, root: Int) raises -> String:
+    """Quantize two float pictures, resize them, and join them."""
+    var size = _positive(doc, doc.at(root, "size"))
+    var views = doc.at(root, "views")
+    if doc.kind(views) != PY_LIST or doc.length(views) != 2:
+        raise Error("atlas needs two views")
+    var left = _view_bytes(doc, doc.item(views, 0), size)
+    var right = _view_bytes(doc, doc.item(views, 1), size)
+    var row = size * 4
+    var out = List[Int]()
+    for y in range(size):
+        var start = y * row
+        for offset in range(row):
+            out.append(left[start + offset])
+        for offset in range(row):
+            out.append(right[start + offset])
+    return _emit(size * 2, size, 4, out)
+
+
+def _view_bytes(doc: PyJson, node: Int, size: Int) raises -> List[Int]:
+    """Return one float picture as resized RGBA bytes."""
+    var samples = List[Float64]()
+    var width = 0
+    var height = 0
+    _float_image(doc, node, width, height, samples)
+    var request = String('{"mode":"bytes","pixels":[')
+    for index in range(len(samples)):
+        if index > 0:
+            request += ","
+        request += python_repr(samples[index])
+    request += "]}"
+    var quantized = PyJson.parse(resize_text(request))
+    var pixels = _bytes(
+        quantized,
+        quantized.at(quantized.root, "pixels"),
+        width * height * 4,
+    )
+    return _resized(pixels, width, height, 4, size, size, "lanczos")
+
+
+def _float_image(
+    doc: PyJson,
+    node: Int,
+    mut width: Int,
+    mut height: Int,
+    mut samples: List[Float64],
+) raises:
+    """Read one RGBA picture of unit floats."""
+    if doc.kind(node) != PY_LIST or doc.length(node) == 0:
+        raise Error("image is empty")
+    height = doc.length(node)
+    width = 0
+    for row in range(height):
+        var line = doc.item(node, row)
+        if doc.kind(line) != PY_LIST:
+            raise Error("image row is not a list")
+        if row == 0:
+            width = doc.length(line)
+        elif doc.length(line) != width:
+            raise Error("image rows differ")
+        if width == 0:
+            raise Error("image is empty")
+        for column in range(width):
+            var pixel = doc.item(line, column)
+            if doc.kind(pixel) != PY_LIST or doc.length(pixel) != 4:
+                raise Error("pixel is not 4 numbers")
+            for channel in range(4):
+                samples.append(_sample(doc, doc.item(pixel, channel)))
+
+
+def _sample(doc: PyJson, node: Int) raises -> Float64:
+    """Return one unit sample."""
+    var kind = doc.kind(node)
+    if kind == PY_FLOAT:
+        return doc.number(node)
+    if kind == PY_INT:
+        return parse_float(doc.text(node))
+    raise Error("sample is not a number")
 
 
 def _resize_color(

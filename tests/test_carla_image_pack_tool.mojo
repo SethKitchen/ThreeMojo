@@ -177,9 +177,9 @@ def test_packaged_pixels_match_the_channel_steps() raises:
     )
     with assert_raises(contains="pack request is not an object"):
         _ = pack_text("[]")
-    with assert_raises(contains="mode is not color, masked or stitch"):
+    with assert_raises(contains="mode is not color, masked, stitch or atlas"):
         _ = pack_text('{"mode":1}')
-    with assert_raises(contains="mode is not color, masked or stitch"):
+    with assert_raises(contains="mode is not color, masked, stitch or atlas"):
         _ = pack_text('{"mode":"near"}')
     with assert_raises(contains="size is not an integer"):
         _ = pack_text(
@@ -242,6 +242,47 @@ def test_packaged_pixels_match_the_channel_steps() raises:
         _ = pack_text(
             '{"mode":"stitch","width":1,"height":1,"left":[1],"right":[1,2,3,4]}'
         )
+
+
+def test_an_atlas_matches_quantize_resize_and_stitch() raises:
+    var views = (
+        "[[[1,0,0,1],[0,1,0,1]],[[0,0,1,0.5],[1,1,1,0]]],"
+        "[[[0.25,0.5,0.75,1],[1,0,0,0]],[[0,0,0,1],[0.5,0.5,0.5,0.5]]]"
+    )
+    var request = '{"mode":"atlas","size":2,"views":[' + views + "]}"
+    var script = (
+        "import json, sys\n"
+        + "sys.path.insert(0, 'assets/carla/tools/export')\n"
+        + "import carla_gltf_fix as fix\n"
+        + "views = json.loads(sys.argv[1])\n"
+        + "size = 2\n"
+        + "resized = []\n"
+        + "for view in views:\n"
+        + "    flat = [c for row in view for px in row for c in px]\n"
+        + "    raw = fix.quantize_image(flat)\n"
+        + "    resized.append(fix.resize_image(raw, len(view[0]), len(view), 4,"
+        " size, size, 'lanczos'))\n"
+        + "row = size * 4\n"
+        + "atlas = []\n"
+        + "for y in range(size):\n"
+        + "    start = y * row\n"
+        + "    atlas.extend(resized[0][start:start + row])\n"
+        + "    atlas.extend(resized[1][start:start + row])\n"
+        + "print(json.dumps({'width': size * 2, 'height': size, 'bands': 4,"
+        " 'pixels': atlas}, separators=(',', ':')), end='')\n"
+    )
+    var result = run_program(
+        ["python3", "-c", script, "[" + views + "]"],
+        30,
+        merge_errors=False,
+    )
+    if result.status != 0:
+        raise Error(result.errors)
+    assert_equal(pack_text(request), result.output)
+    with assert_raises(contains="atlas needs two views"):
+        _ = pack_text('{"mode":"atlas","size":2,"views":[]}')
+    with assert_raises(contains="image is empty"):
+        _ = pack_text('{"mode":"atlas","size":2,"views":[[],[[1,0,0,1]]]}')
 
 
 def test_the_command_prints_the_pixels_and_refuses_bad_use() raises:
