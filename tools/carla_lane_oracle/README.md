@@ -5,16 +5,16 @@ SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
 
 # Independent town lane controls
 
-Run these controls with Python 3 and mpmath 1.3.0:
+Run the pose report with Mojo. Run the other controls with Python 3 and mpmath 1.3.0.
 
     python3 tools/carla_lane_oracle/oracle.py
     python3 tools/carla_lane_oracle/rounding.py
-    python3 tools/carla_lane_oracle/poses.py
+    mojo run -I . tools/carla_pose_report.mojo
     python3 tools/carla_lane_oracle/counts.py
     python3 tools/carla_lane_oracle/translated_parameter_resolution.py
 
 The reports go to `out/carla-lane-oracle`. Set `CARLA_LANE_ORACLE_OUTPUT`
-to choose another directory. The scripts do not run Mojo or change source.
+to choose another directory. The programs do not change source.
 
 Reports label earlier measured query outputs as retained observations.
 They do not claim a new native run.
@@ -53,7 +53,7 @@ count transitions, ARC quadrant and sinc transitions, and permitted FMA
 contraction. It distinguishes ideal smooth values from operation error.
 It does not assume that rounded evaluation is continuous.
 
-`poses.py` differentiates the stored center expressions and independently
+`tools/carla_pose_report.mojo` differentiates the stored center expressions and independently
 reconstructs the small sampled parabola tables.
 `counts.py` derives the gentle-circle and mesh counts and enumerates the
 26 town lane groups. The town index total is a retained native observation,
