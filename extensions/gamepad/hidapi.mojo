@@ -254,20 +254,13 @@ def _driver_with_device[
         `HID_DRIVER_NONE`.
     """
     var first = device_driver(device)
-    if first == HID_DRIVER_PS4:
-        if Ps4Driver.is_supported_device(source, device):
-            return HID_DRIVER_PS4
-        first = HidDriverKind(1)
-        if not Ps5Driver.is_supported(
-            device.name,
-            device.type,
-            device.vendor,
-            device.product,
-            device.version,
-            device.interface_number,
-        ):
-            return HID_DRIVER_NONE
-    if first == HID_DRIVER_PS5:
+    if first == HID_DRIVER_PS4 and Ps4Driver.is_supported_device(
+        source, device
+    ):
+        return HID_DRIVER_PS4
+    # The PS4 driver takes every pad that the PS5 driver may probe, so a
+    # pad it turns down is the PS5 driver's to ask next.
+    if first == HID_DRIVER_PS4 or first == HID_DRIVER_PS5:
         if Ps5Driver.is_supported_device(source, device):
             return HID_DRIVER_PS5
         return HID_DRIVER_NONE
@@ -719,8 +712,9 @@ struct HidGamepad[S: HidSource](Movable):
         Raises:
             Error: If the device went away, or the driver cannot open it.
         """
-        if not self._update_device(now) and self.device.joysticks == 0:
-            self.gone = True
+        # SDL ignores the result: the driver disconnects a pad that went
+        # away.
+        _ = self._update_device(now)
         if self.device.joysticks == 0:
             raise Error("The HIDAPI device disconnected while opening")
         var joystick: Joystick
@@ -1135,7 +1129,7 @@ struct HidHub[S: HidSource](Movable):
             if serial.byte_length() == 0:
                 continue
             self.pads[at].device.disconnect_bluetooth = ""
-            for other in range(len(self.pads)):
+            for other in range(len(self.pads)):  # pragma: no branch
                 if (
                     self.pads[other].device.is_bluetooth
                     and self.pads[other].device.serial == serial
