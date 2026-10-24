@@ -64,7 +64,7 @@ def test_blend_ideal_rewrite_keeps_the_reviewed_scalar_error() raises:
         [0.5, 1e308, -1e308],
         [0.3, 1e-308, -1e-308],
     ]
-    # Exact words derived by test_sample_blend_migration.py. The coupled
+    # Exact words derived by tests/test_carla_blend_reference_tool.mojo. The coupled
     # candidate is wider for row 3 and two ULPs tighter only for row 4.
     # Rows 5 and 6 retain the original unsupported-range fallback.
     var coupled_error_words: List[UInt64] = [
