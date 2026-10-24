@@ -1,8 +1,8 @@
 # Vegetation
 
-`Meadow` builds open summer grassland: tall grass, poppies, trees and bushes of real leaves, mountains, a clouded sky and a sun with soft shadows.
+`Meadow` builds open summer grassland: tall grass, poppies, trees and bushes of real leaves, a canyon, mountains, a clouded sky and a soft sun.
 
-![A lone pale-trunked tree stands in tall grass, with scattered trees and hazy mountains beyond](out/meadow.png)
+![A lone pale-trunked tree stands in tall grass, with scattered trees, a band of cliffs and hazy mountains beyond](out/meadow.png)
 
 `examples/meadow.mojo` draws this picture. The modules live in `extensions/vegetation/`. See [Extensions](Extensions). [Why grass is drawn in clusters](Why-grass-is-drawn-in-clusters) explains the design.
 
@@ -31,21 +31,25 @@ var stats = meadow.update(scene, assets, camera, Duration(2.0, SECOND))
 var image = renderer.render(scene, assets, camera)
 ```
 
-`Meadow` adds the ground, the mountains, the trees and bushes, the boulders, the sky, the sun, the hemisphere light and the fog to the scene. It adds no grass. `update` grows the grass for one camera and one time. Call `update` before each `render`.
+`Meadow` adds the ground, the cliff wall, the mountains, the plants and the boulders to the scene. It also adds the sky, the sun, the hemisphere light and the fog. It adds no grass. `update` grows the grass for one camera and one time. Call `update` before each `render`.
 
 `meadow_renderer` uses every worker, ACES filmic tone mapping at an exposure of 0.8, soft shadows and four samples a pixel. `meadow_camera` stands the camera 1.6 meters above the ground and looks out over the grassland toward -z. Its last argument walks the camera toward -z.
 
 ## Animate the wind
 
 ```mojo
-var camera = meadow_camera(parameters, 480, 270, Length(0.0, METER))
-for index in range(16):
-    var seconds = Float32(index) * 0.12
+parameters.wind.loop = Duration(2.0, SECOND)
+var meadow = Meadow(scene, assets, renderer, parameters)
+var camera = meadow_camera(parameters, 400, 225, Length(0.0, METER))
+for index in range(48):
+    var seconds = 2.0 * Float32(index) / 48
     _ = meadow.update(scene, assets, camera, Duration(seconds, SECOND))
     frames.append(renderer.render(scene, assets, camera))
 ```
 
-`examples/meadow_wind.mojo` writes this loop as an animated PNG. Each frame culls the clusters again and grows the drawn clusters with the wind at that time. A camera that moves is placed again before each `update`.
+`examples/meadow_wind.mojo` writes this loop as an animated PNG, at 24 frames a second. Each frame culls the clusters again and grows the drawn clusters with the wind at that time. A camera that moves is placed again before each `update`.
+
+A wind with a `loop` repeats itself after that time, so the animation plays round and round with no jump. Divide the loop evenly into the frames. Do not put a frame at the end of the loop: it is the first frame again.
 
 ## What a frame draws
 
@@ -61,7 +65,7 @@ for index in range(16):
 | `blades` | The blades that the drawn clusters read from their streams. |
 | `triangles` | The grass triangles of the drawn clusters. |
 
-`examples/meadow.mojo` prints these counts and the time of each step as JSON. On a four-core Linux host, the meadow builds in 12 seconds, most of it the 21 crowns. `update` takes 0.23 seconds, and the render takes 19 seconds at 1280 by 720. The render time grows with the triangle count. It changes little with the image size or the four samples a pixel.
+`examples/meadow.mojo` prints these counts and the time of each step as JSON. On a four-core Linux host, the meadow builds in 12 seconds, most of it the 21 crowns. `update` takes 0.2 seconds, and the render takes 21 seconds at 1280 by 720. The 48 frames of the wind loop take about 15 minutes at 400 by 225. The render time grows with the triangle count. It changes little with the image size or the four samples a pixel.
 
 ## The parts
 
@@ -72,7 +76,7 @@ for index in range(16):
 | `noise.mojo` | `hash01`, `value_noise` and `layered_noise`. |
 | `wind.mojo` | `Wind`: gusts that travel downwind, and a flutter. |
 | `blade.mojo` | `Blade`, and `BladeMesh`, which bakes blades into one geometry. |
-| `ground.mojo` | `Ground`: hills, the grass masks, the ground mesh and the mountain ring. |
+| `ground.mojo` | `Ground`: hills, a `Canyon`, the grass masks, the ground mesh, the cliff wall and the mountain ring. |
 | `field.mojo` | `GrassField`: clusters, levels of detail and the blade stream. |
 | `foliage.mojo` | `Clump`, the light through clumps, `LeafMesh` and `foliage_program`. |
 | `crown.mojo` | `leafy_tree`: branches from `TreeGenerator`, clumps on the twigs, and leaves with their light. |
@@ -118,6 +122,8 @@ A cluster takes the first level whose reach holds its nearest point. A level tha
 
 A gust also brightens the tips it reaches by up to 80 percent. The field then shows each gust as a wave of light.
 
+With a `loop`, the gusts at a time fade into the gusts a loop earlier. The fade divides by `sqrt((1 - w)^2 + w^2)`, so a gust keeps its contrast in the middle of the loop. The flutter wobbles a whole number of times a loop.
+
 ## Trees
 
 `leafy_tree` grows the branches with `TreeGenerator`. A twig is a tube thinner than `twig_radius` at its tip. Each twig carries a clump of leaves at its tip, and one more every `clump_spacing` back along its thin end. A clump is a sphere of about `clump_radius`.
@@ -154,17 +160,23 @@ A kept leaf grows by the inverse square root of the fraction, so the crown keeps
 
 `MeadowParameters.crowns` lists the kinds of tree and bush. `plantings` lists each tree and bush: the crown it wears, where it stands, and its size. `scatter_plantings` scatters plantings across the view toward -z, between two distances.
 
-`default_crowns` returns three slender trees, two broad trees and two bushes, each of its own seed. `default_plantings` places a lone tree and a bush near the camera, and a second lone tree. It scatters 22 trees from 45 to 250 meters and 26 bushes from 12 to 120 meters. A woodland of 90 broad trees stands from 260 to 420 meters.
+`default_crowns` returns three slender trees, two broad trees and two bushes, each of its own seed. `default_plantings` places a lone tree and a bush near the camera, and a second lone tree. It scatters 22 trees from 45 to 160 meters and 26 bushes from 12 to 120 meters. 45 broad trees stand from 435 to 700 meters, on the far side of the canyon.
 
 ## Ground, sky and light
 
 `Ground` gives the height of rolling hills and four masks: the cover, the dryness, the bloom and the far color. The ground mesh carries the far color. Past the last level of detail, the ground looks like the grass that it stands in for.
 
+A `Canyon` crosses the ground toward -z. Its floor is `depth` below the near side, and its far plateau is `rise` above it. Each rim is a smooth step 6 meters wide. The default canyon's near rim is 300 meters from the origin and its far rim 420 meters. It is 80 meters deep, and the far side rises 38 meters. The far wall then shows above the near rim as a band of cliffs.
+
+`cliff_wall` builds that wall as a dense face of rock. It stands just in front of the far rim, and hides the ground mesh's coarse step there. Buttresses and flutes run down it, a few ledges cross it, and dark strata band it. Moss grows along its top, and its crest is ragged.
+
 `paint_sky` draws Preetham's sky into a small cube and reads it into a large cube. It then paints the clouds. `gain` scales the sky's light, and `saturation` and `tint` deepen its blue. The cube is the scene's background. Its mean color near the horizon is the fog's color.
 
-The sun is a `SunLight` with two cascades of 4,096 texels that reach 150 meters. The trees, the bushes and the boulders cast shadows. The grass, the ground and the wood receive them. A hemisphere light gives the blue light of the sky and the green light that the grass sends back. The blades and the leaves are lit from both sides: `two_sided_program` and `foliage_program` turn the normal of a back face to the front.
+The sun is a `SunLight` with two cascades of 4,096 texels that reach 150 meters. The trees, the bushes, the grass and the boulders cast shadows. The grass, the ground and the wood receive them. A hemisphere light gives the blue light of the sky and the green light that the grass sends back. The blades and the leaves are lit from both sides: `two_sided_program` and `foliage_program` turn the normal of a back face to the front.
 
-The mountains are `ridge_ring`, a ring of rugged peaks 900 meters away. The fog veils them to a hazy blue.
+The mountains are `ridge_ring`, a ring of rugged peaks 900 meters away. Each column of the ring rises to its crest over nine rows, and gullies cut its slopes. Snow lies on the highest tips. The fog veils them to a hazy blue.
+
+`paint_sky` lights each cloud by how much cloud lies between it and the sun. So a cloud is white on its sunward edge and gray where more cloud shades it.
 
 ## Types
 
@@ -178,6 +190,6 @@ The mountains are `ridge_ring`, a ring of rugged peaks 900 meters away. The fog 
 - The CPU culls and grows the clusters, and the CPU rasterizer draws them. There is no GPU path yet.
 - Culling tests each cluster's bound against the view only. A cluster behind a hill is still drawn.
 - There is no visibility buffer. The rasterizer shades each fragment as it draws it.
-- The grass does not cast shadows. The dark roots stand in for its shadow on itself.
+- The grass casts into the same two cascades as the trees. Its shadow on itself is only as sharp as their texels. So the dark roots still stand in for the shadow at the base of each tuft.
 - A crown is shadowed by its own clumps only. The shadow of another tree does not fall on its leaves.
 - The indirect light is a hemisphere light and baked occlusion. The voxel and screen-space passes of the renderer are not used.
