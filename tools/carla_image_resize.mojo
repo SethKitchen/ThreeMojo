@@ -8,7 +8,9 @@
     carla_image_resize FILE
 
 `FILE` is JSON with `mode`, `width`, `height`, `bands`, `out_width`,
-`out_height` and `pixels`. `mode` is `lanczos` or `box`. `bands` is 1,
+`out_height` and `pixels`. `mode` is `lanczos`, `box` or `bytes`.
+`bytes` turns each unit float into a byte: clip to 0..1, multiply by
+255, and drop the fraction. `bands` is 1,
 3 or 4. A 4-band image is premultiplied, resized, then restored. The
 horizontal pass runs before the vertical pass. The pixels match Pillow
 12.3.
@@ -45,11 +47,13 @@ def resize_text(text: String) raises -> String:
     if doc.kind(root) != PY_DICT:
         raise Error("resize request is not an object")
     var mode = doc.text(doc.at(root, "mode"))
+    if mode == "bytes":
+        return _byte_text(doc, root)
     var lanczos = False
     if mode == "lanczos":
         lanczos = True
     elif mode != "box":
-        raise Error("mode is not lanczos or box")
+        raise Error("mode is not lanczos, box, or bytes")
     var width = _whole(doc, doc.at(root, "width"), "size is not an integer")
     var height = _whole(doc, doc.at(root, "height"), "size is not an integer")
     var bands = _whole(doc, doc.at(root, "bands"), "size is not an integer")
@@ -79,6 +83,48 @@ def resize_text(text: String) raises -> String:
         out += String(pixels[index])
     out += "]}"
     return out^
+
+
+def _byte_text(doc: PyJson, root: Int) raises -> String:
+    """Return unit floats clipped and truncated to bytes."""
+    var node = doc.at(root, "pixels")
+    if doc.kind(node) != PY_LIST:
+        raise Error("pixels are not a list")
+    var out = String('{"pixels":[')
+    for index in range(doc.length(node)):
+        if index > 0:
+            out += ","
+        out += String(_unit_byte(_number(doc, doc.item(node, index))))
+    out += "]}"
+    return out^
+
+
+def _unit_byte(value: Float64) -> Int:
+    """Return one byte from a unit float, matching NumPy's cast."""
+    if value != value:
+        return 0
+    var clipped = value
+    if clipped < 0.0:
+        clipped = 0.0
+    if clipped > 1.0:
+        clipped = 1.0
+    var scaled = _fmul(clipped, 255.0)
+    if scaled <= 0.0:
+        return 0
+    var whole = Int(scaled)
+    if whole > 255:
+        return 255
+    return whole
+
+
+def _number(doc: PyJson, node: Int) raises -> Float64:
+    """Return a JSON number as a float."""
+    var kind = doc.kind(node)
+    if kind == PY_FLOAT:
+        return doc.number(node)
+    if kind == PY_INT:
+        return parse_float(doc.text(node))
+    raise Error("sample is not a number")
 
 
 def _horizontal(

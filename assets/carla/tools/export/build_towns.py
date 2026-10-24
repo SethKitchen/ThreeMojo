@@ -1124,7 +1124,10 @@ def impostor(parts, library, out_dir, name):
                        view["top"], view["height"], view["rows"], fill=True)
         # A texel the tree does not cover takes the mean color of those it
         # does, so filtering at the edge of a leaf does not darken it.
-        raw = (numpy.clip(image, 0, 1) * 255).astype(numpy.uint8)
+        raw = numpy.array(
+            fix.quantize_image(numpy.asarray(image, dtype=float).reshape(-1)),
+            dtype=numpy.uint8,
+        ).reshape(numpy.shape(image))
         # `tools/carla_image_resize.mojo` matches Pillow's Lanczos resize.
         resized = fix.resize_image(
             raw.reshape(-1).tolist(), raw.shape[1], raw.shape[0], 4,
@@ -1358,7 +1361,10 @@ def baked_building(parts, library, out_dir, name, target):
     atlas = numpy.array(packed["atlas"], dtype=numpy.float64)
     tag = library._bake_tag(name, "baked", parts, target)
     os.makedirs(os.path.join(out_dir, "textures"), exist_ok=True)
-    Image.fromarray((numpy.clip(atlas, 0, 1) * 255).astype(numpy.uint8), "RGB").save(
+    height, width = atlas.shape[:2]
+    Image.frombytes(
+        "RGB", (width, height), bytes(fix.quantize_image(atlas.reshape(-1))),
+    ).save(
         os.path.join(out_dir, "textures", tag + ".jpg"), quality=85)
     gltf = library.gltf
     gltf["images"].append({"uri": "textures/" + tag + ".jpg"})

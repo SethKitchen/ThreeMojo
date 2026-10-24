@@ -90,7 +90,11 @@ def test_the_command_prints_the_pixels_and_refuses_bad_use() raises:
     assert_equal(failed.status, 1)
     assert_true(failed.errors.startswith("carla_image_resize:"))
     assert_true(failed.errors.find("Crashpad") < 0)
-    with assert_raises(contains="mode is not lanczos or box"):
+    assert_equal(
+        resize_text('{"mode":"bytes","pixels":[-0.2,0,0.5,1,1.2]}'),
+        '{"pixels":[0,0,127,255,255]}',
+    )
+    with assert_raises(contains="mode is not lanczos, box, or bytes"):
         _ = resize_text(
             '{"mode":"near","width":1,"height":1,"bands":1,'
             '"out_width":1,"out_height":1,"pixels":[1]}'

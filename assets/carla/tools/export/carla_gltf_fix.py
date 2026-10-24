@@ -137,6 +137,37 @@ def mask_channel(pixels, width, height):
     return json.loads(result.stdout)
 
 
+def quantize_image(values):
+    """Return unit floats as bytes from `tools/carla_image_resize.mojo`.
+
+    Each value is clipped to 0..1, multiplied by 255, and the fraction
+    is dropped, as NumPy's ``uint8`` cast does.
+    """
+    here = os.path.dirname(os.path.abspath(__file__))
+    repo = os.path.abspath(os.path.join(here, "..", "..", "..", ".."))
+    mojo = os.path.join(repo, ".venv", "bin", "mojo")
+    if not os.path.isfile(mojo):
+        mojo = "mojo"
+    folder = tempfile.mkdtemp(prefix="image-bytes-")
+    try:
+        path = os.path.join(folder, "bytes.json")
+        with open(path, "w", encoding="utf-8") as handle:
+            json.dump({
+                "mode": "bytes",
+                "pixels": [float(value) for value in values],
+            }, handle, separators=(",", ":"), allow_nan=False)
+        result = subprocess.run(
+            ["sh", os.path.join(repo, "tools", "tool.sh"), mojo,
+             "carla_image_resize", path],
+            capture_output=True, text=True,
+        )
+    finally:
+        shutil.rmtree(folder, ignore_errors=True)
+    if result.returncode != 0:
+        raise ValueError(result.stderr.strip() or "image bytes failed")
+    return json.loads(result.stdout)["pixels"]
+
+
 def resize_image(pixels, width, height, bands, out_width, out_height, mode):
     """Return resized pixels from `tools/carla_image_resize.mojo`.
 

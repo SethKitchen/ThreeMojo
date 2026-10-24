@@ -133,7 +133,7 @@ Some portable features remain partial, including [GLSL shaders](https://github.c
 
 - [x] [Cut-out channel of a foliage mask](https://github.com/SethKitchen/ThreeMojo/wiki/CARLA-assets#rebuild-the-vehicle-zips): `tools/carla_mask_channel.mojo` chooses the mask channel with the most extreme samples [#761](https://github.com/SethKitchen/ThreeMojo/issues/761)
 
-- [x] [Pillow image resize for CARLA textures](https://github.com/SethKitchen/ThreeMojo/wiki/CARLA-assets#rebuild-the-vehicle-zips): `tools/carla_image_resize.mojo` resizes textures with Pillow's Lanczos and box filters [#761](https://github.com/SethKitchen/ThreeMojo/issues/761)
+- [x] [Pillow image resize for CARLA textures](https://github.com/SethKitchen/ThreeMojo/wiki/CARLA-assets#rebuild-the-vehicle-zips): `tools/carla_image_resize.mojo` resizes textures with Pillow's Lanczos and box filters and stores unit color as bytes [#761](https://github.com/SethKitchen/ThreeMojo/issues/761)
 
 - [x] [Tile of a placed town copy](https://github.com/SethKitchen/ThreeMojo/wiki/CARLA-assets#the-carla-towns): `tools/carla_town_place.mojo` chooses the tile from the copy's origin [#761](https://github.com/SethKitchen/ThreeMojo/issues/761)
 
