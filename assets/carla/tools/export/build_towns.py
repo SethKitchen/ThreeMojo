@@ -27,7 +27,9 @@ import os
 import re
 import shutil
 import struct
+import subprocess
 import sys
+import tempfile
 import zlib
 
 import numpy
@@ -870,19 +872,31 @@ def slot_materials(row, primitives):
     """Return each primitive's material name for one component: the
     component's material for that slot, by name where UModel named it and
     by position otherwise. A runtime material instance falls back to the
-    mesh's own material for the slot."""
-    slots = [object_path(m) if m else None for m in row["materials"]]
-    names = [s[2] if s else None for s in slots]
-    chosen = []
-    for i, primitive in enumerate(primitives):
-        own = primitive["material"]
-        slot = names.index(own) if own in names else (i if i < len(slots) else None)
-        if slot is None or slots[slot] is None:
-            chosen.append(own)
-            continue
-        cls, _, name = slots[slot]
-        chosen.append(own if cls == "MaterialInstanceDynamic" else name)
-    return chosen
+    mesh's own material for the slot.
+
+    `tools/carla_town_slots.mojo` chooses the names.
+    """
+    folder = tempfile.mkdtemp(prefix="town-slots-")
+    try:
+        request = os.path.join(folder, "slots.json")
+        with open(request, "w", encoding="utf-8") as handle:
+            json.dump({"materials": [m if m else None for m in row["materials"]],
+                       "own": [primitive["material"] for primitive in primitives]},
+                      handle, separators=(",", ":"), allow_nan=False)
+        root = os.path.abspath(os.path.join(HERE, "..", "..", "..", ".."))
+        mojo = os.path.join(root, ".venv", "bin", "mojo")
+        if not os.path.isfile(mojo):
+            mojo = "mojo"
+        result = subprocess.run(
+            ["sh", os.path.join(root, "tools", "tool.sh"), mojo,
+             "carla_town_slots", request],
+            capture_output=True, text=True,
+        )
+        if result.returncode != 0:
+            raise ValueError(result.stderr.strip() or "town slots failed")
+        return json.loads(result.stdout)
+    finally:
+        shutil.rmtree(folder, ignore_errors=True)
 
 
 # ---- Building --------------------------------------------------------------
