@@ -32,7 +32,9 @@ import os
 import re
 import shutil
 import struct
+import subprocess
 import sys
+import tempfile
 
 from PIL import Image
 
@@ -315,15 +317,42 @@ def rebuild(package, material, mats, props, pngs, report):
     report.append((name, parent.rsplit("/", 1)[-1], sorted(k for k in pbr if k.endswith("Texture")) + sorted(k for k in material if k.endswith("Texture"))))
 
 
+def _read_tool(data, gltf, accessor_index):
+    """Return JSON from `tools/carla_gltf_read.mojo`."""
+    here = os.path.dirname(os.path.abspath(__file__))
+    repo = os.path.abspath(os.path.join(here, "..", "..", "..", ".."))
+    mojo = os.path.join(repo, ".venv", "bin", "mojo")
+    if not os.path.isfile(mojo):
+        mojo = "mojo"
+    folder = tempfile.mkdtemp(prefix="gltf read ")
+    try:
+        path = os.path.join(folder, "read.json")
+        with open(path, "w", encoding="utf-8") as handle:
+            json.dump({
+                "bytes": list(data),
+                "accessors": gltf["accessors"],
+                "bufferViews": gltf["bufferViews"],
+                "accessor": accessor_index,
+            }, handle)
+        result = subprocess.run(
+            ["sh", os.path.join(repo, "tools", "tool.sh"), mojo,
+             "carla_gltf_read", path],
+            capture_output=True, text=True,
+        )
+    finally:
+        shutil.rmtree(folder, ignore_errors=True)
+    if result.returncode != 0:
+        raise ValueError(result.stderr.strip() or "accessor read failed")
+    return json.loads(result.stdout)
+
+
 def _read(data, gltf, accessor_index):
-    """Return an accessor's values as a flat list, and its width."""
-    accessor = gltf["accessors"][accessor_index]
-    view = gltf["bufferViews"][accessor["bufferView"]]
-    width = {"SCALAR": 1, "VEC2": 2, "VEC3": 3, "VEC4": 4}[accessor["type"]]
-    form = {5121: "B", 5123: "H", 5125: "I", 5126: "f"}[accessor["componentType"]]
-    start = view.get("byteOffset", 0) + accessor.get("byteOffset", 0)
-    count = accessor["count"] * width
-    return list(struct.unpack_from("<%d%s" % (count, form), data, start)), width
+    """Return an accessor's values as a flat list, and its width.
+
+    `tools/carla_gltf_read.mojo` reads the buffer.
+    """
+    doc = _read_tool(data, gltf, accessor_index)
+    return doc["values"], doc["width"]
 
 
 def split_lamps(gltf, data):
