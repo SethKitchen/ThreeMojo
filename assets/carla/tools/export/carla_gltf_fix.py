@@ -32,6 +32,7 @@ import os
 import re
 import shutil
 import struct
+import subprocess
 import sys
 
 from PIL import Image
@@ -48,13 +49,24 @@ KEEP = 400
 
 
 def index_files(root, suffix):
-    """Map each file stem under `root` with `suffix` to its path."""
-    found = {}
-    for base, _, files in os.walk(root):
-        for name in files:
-            if name.endswith(suffix):
-                found.setdefault(name[: -len(suffix)], os.path.join(base, name))
-    return found
+    """Map each file stem under `root` with `suffix` to its path.
+
+    `tools/carla_file_index.mojo` walks the directory. The first file of a
+    stem is kept.
+    """
+    here = os.path.dirname(os.path.abspath(__file__))
+    repo = os.path.abspath(os.path.join(here, "..", "..", "..", ".."))
+    mojo = os.path.join(repo, ".venv", "bin", "mojo")
+    if not os.path.isfile(mojo):
+        mojo = "mojo"
+    result = subprocess.run(
+        ["sh", os.path.join(repo, "tools", "tool.sh"), mojo,
+         "carla_file_index", root, suffix],
+        capture_output=True, text=True,
+    )
+    if result.returncode != 0:
+        raise ValueError(result.stderr.strip() or "file index failed")
+    return json.loads(result.stdout)
 
 
 def read_mat(path):
