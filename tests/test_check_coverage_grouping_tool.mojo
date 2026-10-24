@@ -29,6 +29,7 @@ from tools.check_coverage_grouping import (
     truth_log,
     truth_model_rows,
     truth_records,
+    mixed_truth_numbers,
 )
 
 
@@ -237,6 +238,24 @@ def test_the_accepted_truth_traces_match_the_pinned_text() raises:
     assert_equal(
         sha256_hex(source.as_bytes()),
         "46007ecd43f76f6d43a8c18730970718b72629968264d111c0d0bddc2ddeee00",
+    )
+
+
+def test_the_mixed_truth_fixtures_match_the_native_functions() raises:
+    assert_equal(len(mixed_truth_numbers()), 30)
+    var native = Path("tools/fixtures/coverage_truth_native.txt").read_text()
+    var blob = String()
+    for number in mixed_truth_numbers():
+        var source = Path(
+            "tools/fixtures/coverage_truth_mixed_" + String(number) + ".txt"
+        ).read_text()
+        blob += source
+        var signature = "def truth_" + String(number) + "("
+        assert_true(native.find(signature) >= 0, signature)
+        assert_true(source.find(signature) >= 0, signature)
+    assert_equal(
+        sha256_hex(blob.as_bytes()),
+        "c6cd61b271f639733d1bbd7c87fe831bd76c558288aa5c08e70ecd5857410482",
     )
 
 

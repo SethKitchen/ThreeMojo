@@ -4609,6 +4609,232 @@ def check_custom_truth_collision(mojo: String) raises:
         _ = run_program(["rm", "-rf", work], 30)
 
 
+def mixed_truth_numbers() -> List[Int]:
+    """Return the custom-truth trees whose instrumentation is refused.
+
+    Returns:
+        The tree numbers, in check order.
+    """
+    var numbers = List[Int]()
+    numbers.append(6)
+    numbers.append(7)
+    numbers.append(8)
+    numbers.append(10)
+    numbers.append(11)
+    numbers.append(12)
+    numbers.append(13)
+    numbers.append(14)
+    numbers.append(16)
+    numbers.append(17)
+    numbers.append(18)
+    numbers.append(19)
+    numbers.append(20)
+    numbers.append(21)
+    numbers.append(22)
+    numbers.append(23)
+    numbers.append(24)
+    numbers.append(25)
+    numbers.append(26)
+    numbers.append(27)
+    numbers.append(28)
+    numbers.append(29)
+    numbers.append(30)
+    numbers.append(32)
+    numbers.append(33)
+    numbers.append(35)
+    numbers.append(36)
+    numbers.append(38)
+    numbers.append(40)
+    numbers.append(42)
+    return numbers^
+
+
+def _strip_ends(text: String) -> String:
+    var copy = text
+    while copy.byte_length() > 0:
+        var first = String(copy[byte=:1])
+        if first == " " or first == "\n" or first == "\t" or first == "\r":
+            var next = String(copy[byte=1:])
+            copy = next
+            continue
+        break
+    while copy.byte_length() > 0:
+        var end = copy.byte_length() - 1
+        var last = String(copy[byte=end:])
+        if last == " " or last == "\n" or last == "\t" or last == "\r":
+            var next = String(copy[byte=:end])
+            copy = next
+            continue
+        break
+    return copy
+
+
+def _function_body(source: String, signature: String) raises -> String:
+    var at = source.find(signature)
+    if at < 0:
+        raise Error("missing " + signature)
+    var rest = String(source[byte = at + signature.byte_length() :])
+    var end = rest.find("\n\ndef ")
+    if end < 0:
+        raise Error("unterminated " + signature)
+    var body = String(rest[byte=:end])
+    return _strip_ends(body)
+
+
+def _require_compound_manifest(
+    rewritten: String, name: String, source: String, width: Int
+) raises:
+    var wanted = List[String]()
+    var compounds = 0
+    var number = 1
+    for line in source.splitlines():
+        var header = String(line).strip()
+        var decision = (
+            header.startswith("if ")
+            or header.startswith("elif ")
+            or header.startswith("while ")
+            or header.startswith("for ")
+        )
+        if decision:
+            if not header.endswith(":"):
+                raise Error("decision has no colon " + header)
+            var this_width = 1
+            if header.find(" and ") >= 0 or header.find(" or ") >= 0:
+                this_width = width
+                compounds += 1
+            wanted.append("B " + name + " " + String(number))
+            if this_width > 1:
+                var slot = 0
+                while slot < this_width:
+                    wanted.append(
+                        "C " + name + " " + String(number) + " " + String(slot)
+                    )
+                    wanted.append(
+                        "M " + name + " " + String(number) + " " + String(slot)
+                    )
+                    slot += 1
+        number += 1
+    if compounds != 1:
+        raise Error(name + " compounds " + String(compounds))
+    var manifest = Path(rewritten + "/manifest.txt").read_text()
+    var actual = List[String]()
+    for line in manifest.splitlines():
+        var row = String(line)
+        var parts = row.split(" ")
+        if (
+            len(parts) >= 2
+            and String(parts[1]) == name
+            and (
+                String(parts[0]) == "B"
+                or String(parts[0]) == "C"
+                or String(parts[0]) == "M"
+            )
+        ):
+            actual.append(row)
+    sort(actual)
+    sort(wanted)
+    if not _same(actual, wanted):
+        var shown = String()
+        for row in actual:
+            shown += "actual " + row + "\n"
+        for row in wanted:
+            shown += "wanted " + row + "\n"
+        raise Error(name + " manifest changed\n" + shown)
+
+
+def check_custom_truth_refusals(mojo: String) raises:
+    """Require each mixed custom-truth tree to keep its manifest and be refused.
+
+    Args:
+        mojo: The Mojo compiler.
+
+    Raises:
+        Error: If a function body, manifest, or refusal message differs.
+    """
+    var root = absolute_path(".")
+    var compiler = absolute_path(mojo)
+    var native_source = Path(
+        "tools/fixtures/coverage_truth_native.txt"
+    ).read_text()
+    var work = mkdtemp(prefix="threemojo-truth-mixed-")
+    try:
+        var native = work + "/native"
+        var rewritten = work + "/rewritten"
+        _ = _must(["mkdir", "-p", native, rewritten], 10)
+        _ = _must(["cp", "-a", root + "/coverage", rewritten + "/coverage"], 30)
+        var built = rewritten + "/coverage/build"
+        if Path(built).exists():
+            _ = _must(["rm", "-rf", built], 10)
+        var build = work + "/build_cli"
+        _ = _must(
+            [
+                compiler,
+                "build",
+                "-Werror",
+                "-I",
+                root,
+                root + "/coverage/build_cli.mojo",
+                "-o",
+                build,
+            ],
+            180,
+        )
+        var count = 0
+        for number in mixed_truth_numbers():
+            var name = "truth-mixed-" + String(number)
+            var source = Path(
+                "tools/fixtures/coverage_truth_mixed_" + String(number) + ".txt"
+            ).read_text()
+            var signature = "def truth_" + String(number) + "("
+            if _function_body(native_source, signature) != _function_body(
+                source, signature
+            ):
+                raise Error(name + " body changed")
+            Path(native + "/" + name + ".mojo").write_text(source)
+            _ = _must([build, rewritten, name + ".mojo"], 60, native)
+            _require_origin(rewritten, name, source)
+            _require_compound_manifest(
+                rewritten, name, source, _truth_width(number)
+            )
+            var rejected = run_program(
+                [
+                    compiler,
+                    "build",
+                    "-Werror",
+                    "-I",
+                    rewritten,
+                    "-I",
+                    root,
+                    rewritten + "/" + name + ".mojo",
+                    "-o",
+                    work + "/rejected",
+                ],
+                180,
+                merge_errors=False,
+            )
+            if rejected.status == 0:
+                raise Error(name + " was accepted")
+            var errors = rejected.errors
+            if (
+                errors.find(
+                    "Coverage cannot yet preserve this compound condition"
+                )
+                < 0
+            ):
+                raise Error(name + "\n" + errors)
+            if errors.find("custom mixed-type operator whose Bool result") < 0:
+                raise Error(name + "\n" + errors)
+            count += 1
+        if count != 30:
+            raise Error("mixed refusal count " + String(count))
+        print(
+            "PASS: 30 mixed custom truth trees keep their manifest and are"
+            " refused"
+        )
+    finally:
+        _ = run_program(["rm", "-rf", work], 30)
+
+
 def main() raises:
     """Compare the Boolean grouping fixture from the command line."""
     var mojo = ".venv/bin/mojo"
@@ -4641,6 +4867,7 @@ def main() raises:
         check_custom_truth_native(mojo)
         check_custom_truth_instrumented(mojo)
         check_custom_truth_collision(mojo)
+        check_custom_truth_refusals(mojo)
     except error:
         print(String(error), file=stderr)
         exit(1)
