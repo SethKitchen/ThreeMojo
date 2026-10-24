@@ -747,6 +747,30 @@ def simplify_welded(primitive, target):
             "material": primitive["material"]}
 
 
+def _choose_tool(payload):
+    """Return JSON from `tools/carla_town_choose.mojo`."""
+    here = os.path.dirname(os.path.abspath(__file__))
+    repo = os.path.abspath(os.path.join(here, "..", "..", "..", ".."))
+    mojo = os.path.join(repo, ".venv", "bin", "mojo")
+    if not os.path.isfile(mojo):
+        mojo = "mojo"
+    folder = tempfile.mkdtemp(prefix="town-choose-")
+    try:
+        path = os.path.join(folder, "choose.json")
+        with open(path, "w", encoding="utf-8") as handle:
+            json.dump(payload, handle, separators=(",", ":"), allow_nan=False)
+        result = subprocess.run(
+            ["sh", os.path.join(repo, "tools", "tool.sh"), mojo,
+             "carla_town_choose", path],
+            capture_output=True, text=True,
+        )
+    finally:
+        shutil.rmtree(folder, ignore_errors=True)
+    if result.returncode != 0:
+        raise ValueError(result.stderr.strip() or "triangle choice failed")
+    return json.loads(result.stdout)
+
+
 def _uv_tool(source, uvs, corners):
     """Return projected coordinates from `tools/carla_town_uv.mojo`."""
     here = os.path.dirname(os.path.abspath(__file__))
@@ -788,23 +812,36 @@ def transfer_uvs(primitive, corners, normals, candidates=8):
     three. Returns the coordinates, three to a triangle, and the normal of
     each triangle's original.
 
+    `tools/carla_town_choose.mojo` picks that original triangle.
     `tools/carla_town_uv.mojo` projects the corners into that triangle.
     """
     from scipy.spatial import cKDTree
     faces = primitive["triangles"]
-    source = primitive["positions"][faces]
-    centers = source.mean(axis=1)
-    normal = numpy.cross(source[:, 1] - source[:, 0], source[:, 2] - source[:, 0])
-    normal /= numpy.maximum(numpy.linalg.norm(normal, axis=1, keepdims=True), 1e-12)
+    if len(faces) == 0 or len(corners) == 0:
+        return numpy.zeros((0, 3, 2)), numpy.zeros((0, 3))
+    positions = numpy.asarray(primitive["positions"], dtype=float).reshape(-1, 3)
+    faces = numpy.asarray(faces).reshape(-1, 3)
+    source = positions[faces]
+    gathered = _choose_tool({
+        "mode": "source",
+        "positions": positions.tolist(),
+        "triangles": faces.tolist(),
+    })
+    centers = numpy.array(gathered["centers"], dtype=numpy.float64)
+    normal = numpy.array(gathered["normals"], dtype=numpy.float64)
     count = min(candidates, len(faces))
-    _, near = cKDTree(centers).query(corners.mean(axis=1), k=count)
-    near = near.reshape(len(corners), count)
-    facing = numpy.einsum("nkd,nd->nk", normal[near], normals)
-    offset = numpy.abs(numpy.einsum("nkd,nkd->nk", normal[near],
-                                    corners.mean(axis=1)[:, None, :] - centers[near]))
-    best = near[numpy.arange(len(corners)), numpy.argmin(offset - numpy.abs(facing), axis=1)]
-    if len(corners) == 0:
-        return numpy.zeros((0, 3, 2)), normal[best]
+    queries = corners.mean(axis=1)
+    _, near = cKDTree(centers).query(queries, k=count)
+    near = numpy.reshape(near, (len(corners), count))
+    chosen = _choose_tool({
+        "mode": "choose",
+        "centers": centers.tolist(),
+        "normals": normal.tolist(),
+        "queries": numpy.asarray(queries, dtype=float).reshape(-1, 3).tolist(),
+        "faces": numpy.asarray(normals, dtype=float).reshape(-1, 3).tolist(),
+        "near": numpy.reshape(near, (len(corners), count)).tolist(),
+    })
+    best = numpy.array(chosen["best"], dtype=numpy.int64)
     projected = _uv_tool(source[best], primitive["uvs"][faces[best]], corners)
     return numpy.array(projected, dtype=numpy.float64).reshape(-1, 3, 2), normal[best]
 
