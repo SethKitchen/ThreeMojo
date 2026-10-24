@@ -16,7 +16,39 @@ from std.tempfile import mkdtemp
 from std.testing import TestSuite, assert_equal, assert_false, assert_true
 
 from tests._make_recipe import clean_command, section
-from tools._process import ProcessResult, run_program
+from tools._process import ProcessResult, run_program, shell_quote
+
+comptime RUNNER = "/tmp/threemojo-parallel-unittest"
+"""The parallel runner built once before the timed tests."""
+
+
+def runner_path() -> String:
+    """Return the built parallel runner.
+
+    Returns:
+        The program path.
+    """
+    return RUNNER
+
+
+def build_runner() raises:
+    """Build `tools/parallel_unittest.mojo` once for the recipe tests."""
+    var mojo = ".venv/bin/mojo" if Path(".venv/bin/mojo").exists() else "mojo"
+    var built = run_program(
+        [
+            mojo,
+            "build",
+            "-I",
+            ".",
+            "-o",
+            RUNNER,
+            "tools/parallel_unittest.mojo",
+        ],
+        60,
+    )
+    if built.status != 0:
+        raise Error("cannot build the oracle runner: " + built.output)
+
 
 comptime STAGES = [
     ("tools", "tools"),
@@ -84,12 +116,17 @@ struct Project(Movable):
             "TOOLS_SHARD ?=\n",
             "\n# The negative-fixture manifest names exactly",
         )
-        # The nested stage runs through the real parallel runner.
-        var runner = "tools/parallel_unittest.py"
-        Path(self.root + "/" + runner).write_bytes(Path(runner).read_bytes())
+        # The nested stage runs through the Mojo parallel runner.
+        var wrapper = self.root + "/oracle-runner"
+        Path(wrapper).write_text(
+            "#!/bin/sh\nshift\nexec " + shell_quote(runner_path()) + ' "$@"\n'
+        )
+        _ = run_program(["chmod", "755", wrapper], 10)
         Path(self.root + "/Makefile").write_text(
             ".PHONY: test-tools test-tools-discovery test-tools-oracle"
-            " repository-check\nJOBS ?= 2\n"
+            " repository-check\nJOBS ?= 2\nTOOL := "
+            + shell_quote(wrapper)
+            + "\n"
             + recipe
             + "\nrepository-check:\n"
             + '\t@echo repository >> "$$ORACLE_WIRING_EVENTS"\n'
@@ -322,4 +359,5 @@ def test_job_split_stops_at_the_next_key() raises:
 
 
 def main() raises:
+    build_runner()
     TestSuite.discover_tests[__functions_in_module()]().run()

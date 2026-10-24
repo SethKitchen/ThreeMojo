@@ -92,6 +92,13 @@ Coverage is exact for each module it measures, because every suite that can reac
 
 The CI workflow checks a pull request with `AFFECTED` set to its base branch. It checks everything on a push to `main`. It runs the checks on Ubuntu and on a macOS runner with Apple Silicon.
 
+## Run the tool tests
+
+`make test-tools` runs the Python tool tests and the CARLA oracle.
+The oracle runner is `tools/parallel_unittest.mojo`.
+It starts several Python test processes at once.
+`TOOLS_SHARD=I/N` gives each runner a different share of those units.
+
 ## Verify generated fixtures
 
 `mojo run -I . tools/fixture_manifest.mojo` checks the accepted hashes. It does not regenerate fixtures. `make repository-check` runs this check. It also checks that the negative-fixture manifest names each file in `tests/compile_fail` and that no job regenerates the manifest. It also checks that the gallery table in `examples/gallery.mk` draws every example and compresses every image. `make test-tools` runs `make repository-check` once.

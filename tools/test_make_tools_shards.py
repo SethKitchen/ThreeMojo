@@ -36,7 +36,8 @@ class ToolsShardTests(unittest.TestCase):
             command.chmod(0o700)
             (root / 'Makefile').write_text(
                 '.PHONY: test-tools test-tools-discovery test-tools-oracle repository-check\n'
-                'JOBS := 3\n' + recipe +
+                'JOBS := 3\n'
+                "TOOL := '" + str(command).replace("'", "'\"'\"'") + "'\n" + recipe +
                 '\nrepository-check:\n\t@python3 repository-check\n')
             env = {key: value for key, value in os.environ.items()
                    if key not in MAKE_ENVIRONMENT}
@@ -60,7 +61,7 @@ class ToolsShardTests(unittest.TestCase):
         self.assertEqual(calls, [
             ['-m', 'unittest', 'discover', '-s', 'tools', '-p', 'test_*.py'],
             ['-m', 'unittest', 'discover', '-s', 'assets/carla/tools', '-p', 'test_*.py'],
-            ['tools/parallel_unittest.py', '--jobs', '3', 'tools/carla_lane_oracle'],
+            ['parallel_unittest', '--jobs', '3', 'tools/carla_lane_oracle'],
             ['tools/carla_lane_oracle/spiral_moments.py', '--check'],
             ['repository-check'],
         ])
@@ -75,8 +76,8 @@ class ToolsShardTests(unittest.TestCase):
                     expected_owner = 1 if count < 5 else 5
                     discovery = [call for call in calls if call[:2] == ['-m', 'unittest']]
                     self.assertEqual(len(discovery), 2 if index == expected_owner else 0)
-                    oracle = [call for call in calls if call[0] == 'tools/parallel_unittest.py']
-                    self.assertEqual(oracle, [['tools/parallel_unittest.py', '--jobs', '3',
+                    oracle = [call for call in calls if call[0] == 'parallel_unittest']
+                    self.assertEqual(oracle, [['parallel_unittest', '--jobs', '3',
                                               '--shard', f'{index}/{count}',
                                               'tools/carla_lane_oracle']])
                     tail = [call for call in calls if call[0] in
@@ -101,9 +102,9 @@ class ToolsShardTests(unittest.TestCase):
 
     def test_oracle_failures_remain_fatal_on_every_shard(self):
         for index in range(1, 7):
-            result, calls = self.run_recipe(f'{index}/6', fail='tools/parallel_unittest.py')
+            result, calls = self.run_recipe(f'{index}/6', fail='parallel_unittest')
             self.assertNotEqual(result.returncode, 0)
-            self.assertEqual(calls[-1][0], 'tools/parallel_unittest.py')
+            self.assertEqual(calls[-1][0], 'parallel_unittest')
 
     def test_dedicated_discovery_runs_only_the_original_plain_discoveries(self):
         for shard in (None, '1/6', '5/6'):
@@ -123,7 +124,7 @@ class ToolsShardTests(unittest.TestCase):
             shard = f'{index}/6'
             result, calls = self.run_recipe(shard, target='test-tools-oracle')
             self.assertEqual(result.returncode, 0, result.stderr)
-            oracle = ['tools/parallel_unittest.py', '--jobs', '3', '--shard',
+            oracle = ['parallel_unittest', '--jobs', '3', '--shard',
                       shard, 'tools/carla_lane_oracle']
             expected.append(oracle)
             self.assertEqual(calls, [oracle] + ([
@@ -142,7 +143,7 @@ class ToolsShardTests(unittest.TestCase):
                  ('test-tools-discovery', None, 'assets/carla/tools'),
                  ('test-tools-oracle', '1/6', 'tools/carla_lane_oracle/spiral_moments.py'),
                  ('test-tools-oracle', '1/6', 'repository-check')]
-        cases.extend(('test-tools-oracle', f'{index}/6', 'tools/parallel_unittest.py')
+        cases.extend(('test-tools-oracle', f'{index}/6', 'parallel_unittest')
                      for index in range(1, 7))
         for target, shard, failed in cases:
             with self.subTest(target=target, shard=shard, failed=failed):
