@@ -350,32 +350,30 @@ def bend(points, normals, spline):
 
 def read_gltf(path):
     """Return a UModel glTF's primitives: positions, normals, texture
-    coordinates, triangles and material name, as numpy arrays."""
-    gltf = json.load(open(path, encoding="utf-8"))
-    data = open(os.path.join(os.path.dirname(path), gltf["buffers"][0]["uri"]), "rb").read()
+    coordinates, triangles and material name, as numpy arrays.
 
-    def array(index):
-        accessor = gltf["accessors"][index]
-        view = gltf["bufferViews"][accessor["bufferView"]]
-        width = {"SCALAR": 1, "VEC2": 2, "VEC3": 3, "VEC4": 4}[accessor["type"]]
-        dtype = {5121: numpy.uint8, 5123: numpy.uint16, 5125: numpy.uint32, 5126: numpy.float32}[accessor["componentType"]]
-        start = view.get("byteOffset", 0) + accessor.get("byteOffset", 0)
-        values = numpy.frombuffer(data, dtype=dtype, count=accessor["count"] * width, offset=start)
-        return values.reshape(-1, width) if width > 1 else values
-
+    `tools/carla_town_mesh.mojo` reads the buffer. A missing normal is
+    `[0, 1, 0]`, and a missing texture coordinate is zero.
+    """
+    root = os.path.abspath(os.path.join(HERE, "..", "..", "..", ".."))
+    mojo = os.path.join(root, ".venv", "bin", "mojo")
+    if not os.path.isfile(mojo):
+        mojo = "mojo"
+    result = subprocess.run(
+        ["sh", os.path.join(root, "tools", "tool.sh"), mojo, "carla_town_mesh", path],
+        capture_output=True, text=True,
+    )
+    if result.returncode != 0:
+        raise ValueError(result.stderr.strip() or "town mesh failed")
     primitives = []
-    for mesh in gltf["meshes"]:
-        for primitive in mesh["primitives"]:
-            attributes = primitive["attributes"]
-            positions = array(attributes["POSITION"]).astype(numpy.float64)
-            normals = (array(attributes["NORMAL"]).astype(numpy.float64) if "NORMAL" in attributes
-                       else numpy.tile([0.0, 1.0, 0.0], (len(positions), 1)))
-            uvs = (array(attributes["TEXCOORD_0"]).astype(numpy.float64) if "TEXCOORD_0" in attributes
-                   else numpy.zeros((len(positions), 2)))
-            triangles = array(primitive["indices"]).astype(numpy.int64).reshape(-1, 3)
-            name = gltf["materials"][primitive["material"]].get("name", "") if "material" in primitive else ""
-            primitives.append({"positions": positions, "normals": normals, "uvs": uvs,
-                               "triangles": triangles, "material": name})
+    for item in json.loads(result.stdout):
+        primitives.append({
+            "positions": numpy.array(item["positions"], dtype=numpy.float64),
+            "normals": numpy.array(item["normals"], dtype=numpy.float64),
+            "uvs": numpy.array(item["uvs"], dtype=numpy.float64),
+            "triangles": numpy.array(item["triangles"], dtype=numpy.int64),
+            "material": item["material"],
+        })
     return primitives
 
 
