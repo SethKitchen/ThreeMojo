@@ -105,20 +105,8 @@ GLASS_METAL = 0.6
 GLASS_ROUGHNESS = 0.06
 # The levels of detail: 0 near, 1 far.
 LODS = (0, 1)
-# The most triangles a town keeps of each kind, near and far.
-CAPS = {
-    "vegetation": (1_200_000, 300_000),
-    "building": (1_500_000, 300_000),
-    "fence": (250_000, 50_000),
-    "pole": (250_000, 50_000),
-    "prop": (300_000, 1),
-    "parked_vehicle": (200_000, 1),
-    "traffic_light": (100_000, 20_000),
-}
 # The folder whose meshes are trees, whose far level is an impostor.
 TREES = "/Vegetation/Trees/"
-# One grass leaf in this many is kept: the ground's texture is the lawn.
-GRASS_KEEP = 10
 # Triangles each mesh adds to the package, for the report.
 STATS = {}
 CREDIT = "CARLA Team, CARLA Simulator 0.9.16, CC-BY 4.0 (https://carla.org)"
@@ -1586,6 +1574,34 @@ def slot_materials(row, primitives):
 
 # ---- Building --------------------------------------------------------------
 
+def _share(payload):
+    """Return JSON from `tools/carla_town_share.mojo`.
+
+    `grass` keeps one copy in ten. `factors` shares each kind's cap.
+    `goal` is the far building target, at least 8.
+    """
+    here = os.path.dirname(os.path.abspath(__file__))
+    repo = os.path.abspath(os.path.join(here, "..", "..", "..", ".."))
+    mojo = os.path.join(repo, ".venv", "bin", "mojo")
+    if not os.path.isfile(mojo):
+        mojo = "mojo"
+    folder = tempfile.mkdtemp(prefix="town-share-")
+    try:
+        path = os.path.join(folder, "share.json")
+        with open(path, "w", encoding="utf-8") as handle:
+            json.dump(payload, handle, separators=(",", ":"), allow_nan=False)
+        result = subprocess.run(
+            ["sh", os.path.join(repo, "tools", "tool.sh"), mojo,
+             "carla_town_share", path],
+            capture_output=True, text=True,
+        )
+    finally:
+        shutil.rmtree(folder, ignore_errors=True)
+    if result.returncode != 0:
+        raise ValueError(result.stderr.strip() or "town share failed")
+    return json.loads(result.stdout)
+
+
 def limit_of(kind, total, mesh_path, lod):
     """Return the most triangles one copy of a mesh keeps at a level of
     detail, before the town's cap for its kind."""
@@ -1837,17 +1853,18 @@ def build(town, max_size, tile):
             continue
         copies = placements(row)
         if "/Vegetation/Grass/" in mesh_path:
-            kept = [c for i, c in enumerate(copies) if (grass + i) % GRASS_KEEP == 0]
-            grass += len(copies)
-            copies = kept
+            kept = _share({"mode": "grass", "start": grass, "count": len(copies)})
+            grass = kept["next"]
+            copies = [copies[index] for index in kept["indices"]]
         total = sum(len(p["triangles"]) for p in primitives)
         for lod in LODS:
             planned[(kind, lod)] = planned.get((kind, lod), 0) + limit_of(kind, total, mesh_path, lod) * len(copies)
         jobs.append((row, mesh_path, kind, primitives, copies))
     # Each kind gives up the same share of every mesh's budget to keep
     # under the town's cap: a forest of eight thousand pines thins them all.
-    factors = {key: min(1.0, CAPS[key[0]][key[1]] / count) if key[0] in CAPS and count else 1.0
-               for key, count in planned.items()}
+    items = [{"kind": kind, "lod": lod, "count": count} for (kind, lod), count in planned.items()]
+    shared = _share({"mode": "factors", "items": items})["factors"]
+    factors = {(item["kind"], item["lod"]): factor for item, factor in zip(items, shared)}
     for row, mesh_path, kind, primitives, copies in jobs:
         names = slot_materials(row, primitives)
         first_visible = next((i for i, name in enumerate(names) if name != GRID), None)
@@ -1873,7 +1890,11 @@ def build(town, max_size, tile):
                     if index != first_visible:
                         continue
                     parts = [(p, library.material(n)) for p, n in zip(primitives, names) if n != GRID]
-                    goal = max(8, int(limit_of(kind, total, mesh_path, 1) * factors[(kind, 1)]))
+                    goal = _share({
+                        "mode": "goal",
+                        "limit": int(limit_of(kind, total, mesh_path, 1)),
+                        "factor": float(factors[(kind, 1)]),
+                    })["goal"]
                     key = library._bake_tag(mesh_path, "baked", parts, goal)
                     if key not in lowered:
                         lowered[key] = baked_building(parts, library, out_dir, mesh_path, goal)

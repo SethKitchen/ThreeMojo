@@ -129,7 +129,9 @@ Some portable features remain partial, including [GLSL shaders](https://github.c
 ### Project tools
 
 <details>
-<summary>Implemented: 35</summary>
+<summary>Implemented: 36</summary>
+
+- [x] [Town triangle share](https://github.com/SethKitchen/ThreeMojo/wiki/CARLA-assets#the-carla-towns): `tools/carla_town_share.mojo` keeps one grass blade in ten and shares each kind's cap [#761](https://github.com/SethKitchen/ThreeMojo/issues/761)
 
 - [x] [Neutral CARLA texture plan](https://github.com/SethKitchen/ThreeMojo/wiki/CARLA-assets#the-carla-towns): `tools/carla_texture_plan.mojo` names a neutral texture and chooses its fitted size [#761](https://github.com/SethKitchen/ThreeMojo/issues/761)
 
