@@ -45,6 +45,10 @@ def splat_text(text: String) raises -> String:
     var samples = _whole(doc, doc.at(root, "samples"))
     var cap = _whole(doc, doc.at(root, "cap"))
     var seed = _whole(doc, doc.at(root, "seed"))
+    var fill = False
+    var named_fill = doc.get(root, "fill")
+    if named_fill != -1:
+        fill = doc.flag(named_fill)
     var lit = doc.get(root, "light") != -1
     var light = List[Float64]()
     if lit:
@@ -147,7 +151,7 @@ def splat_text(text: String) raises -> String:
             sb,
         )
         cursor += totals[part_index] * 2
-    return _paint(sx, sy, sz, sr, sg, sb, columns, image_rows)
+    return _paint(sx, sy, sz, sr, sg, sb, columns, image_rows, fill)
 
 
 def _sample_count(
@@ -488,6 +492,7 @@ def _paint(
     sb: List[Float64],
     columns: Int,
     image_rows: Int,
+    fill: Bool,
 ) raises -> String:
     """Keep the nearest sample in each texel and print the picture."""
     var xs = List[Int]()
@@ -527,6 +532,8 @@ def _paint(
             green[cell] = gs[sample]
             blue[cell] = bs[sample]
             alpha[cell] = 1.0
+    if fill:
+        _mean_fill(red, green, blue, alpha)
     var out = String("[")
     for row in range(image_rows):
         if row > 0:
@@ -548,6 +555,35 @@ def _paint(
         out += "]"
     out += "]"
     return out^
+
+
+def _mean_fill(
+    mut red: List[Float64],
+    mut green: List[Float64],
+    mut blue: List[Float64],
+    alpha: List[Float64],
+):
+    """Give empty texels the mean color of the covered texels."""
+    var count = 0.0
+    var sum_r = 0.0
+    var sum_g = 0.0
+    var sum_b = 0.0
+    for index in range(len(alpha)):
+        if alpha[index] > 0.0:
+            sum_r = _fadd(sum_r, red[index])
+            sum_g = _fadd(sum_g, green[index])
+            sum_b = _fadd(sum_b, blue[index])
+            count += 1.0
+    if count == 0.0:
+        return
+    sum_r = _fdiv(sum_r, count)
+    sum_g = _fdiv(sum_g, count)
+    sum_b = _fdiv(sum_b, count)
+    for index in range(len(alpha)):
+        if alpha[index] <= 0.0:
+            red[index] = sum_r
+            green[index] = sum_g
+            blue[index] = sum_b
 
 
 def _mergesort(

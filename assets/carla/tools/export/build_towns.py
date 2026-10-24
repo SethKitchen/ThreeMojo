@@ -877,16 +877,17 @@ def _raster_tool(parts, library, request):
     return json.loads(result.stdout)
 
 
-def _splat(parts, library, across, left, width, top, height, rows):
+def _splat(parts, library, across, left, width, top, height, rows, fill=False):
     """Return one view of a tree, drawn across axis `across` (0 for x,
     2 for z) and down y from `top`: RGBA floats, `rows` by
     `IMPOSTOR_SIZE` texels. Each triangle is sampled at random points, as
     many as it covers texels times `IMPOSTOR_SAMPLES`, and the nearest
     sample that the cut-out keeps colors each texel.
 
-    `tools/carla_town_splat.mojo` draws the view.
+    `tools/carla_town_splat.mojo` draws the view. With `fill`, an empty
+    texel takes the mean color of the covered texels.
     """
-    doc = _raster_tool(parts, library, {
+    request = {
         "mode": "axis",
         "columns": IMPOSTOR_SIZE,
         "rows": int(rows),
@@ -899,30 +900,59 @@ def _splat(parts, library, across, left, width, top, height, rows):
         "scale_u": IMPOSTOR_SIZE / max(width, 1e-6),
         "scale_v": rows / max(height, 1e-6),
         "light": IMPOSTOR_LIGHT.tolist(),
-    })
-    return numpy.array(doc, dtype=numpy.float64)
+    }
+    if fill:
+        request["fill"] = True
+    return numpy.array(_raster_tool(parts, library, request), dtype=numpy.float64)
+
+
+def _impostor_tool(payload):
+    """Return JSON from `tools/carla_town_impostor.mojo`."""
+    here = os.path.dirname(os.path.abspath(__file__))
+    repo = os.path.abspath(os.path.join(here, "..", "..", "..", ".."))
+    mojo = os.path.join(repo, ".venv", "bin", "mojo")
+    if not os.path.isfile(mojo):
+        mojo = "mojo"
+    folder = tempfile.mkdtemp(prefix="town-impostor-")
+    try:
+        path = os.path.join(folder, "impostor.json")
+        with open(path, "w", encoding="utf-8") as handle:
+            json.dump(payload, handle, separators=(",", ":"), allow_nan=False)
+        result = subprocess.run(
+            ["sh", os.path.join(repo, "tools", "tool.sh"), mojo,
+             "carla_town_impostor", path],
+            capture_output=True, text=True,
+        )
+    finally:
+        shutil.rmtree(folder, ignore_errors=True)
+    if result.returncode != 0:
+        raise ValueError(result.stderr.strip() or "impostor failed")
+    return json.loads(result.stdout)
 
 
 def impostor(parts, library, out_dir, name):
     """Return a tree's far level, two quads that cross on its trunk, each
     showing a picture of the tree drawn from its near level; and the
     picture's material. `parts` are the tree's primitives, each with its
-    material's index."""
+    material's index.
+
+    `tools/carla_town_impostor.mojo` sizes the views, builds the quads, and
+    fills the empty texels.
+    """
     from PIL import Image
     points = numpy.concatenate([p["positions"] for p, _ in parts])
-    low, high = points.min(axis=0), points.max(axis=0)
-    height = high[1] - low[1]
+    frame = _impostor_tool({
+        "mode": "frame",
+        "positions": numpy.asarray(points, dtype=float).reshape(-1, 3).tolist(),
+        "size": IMPOSTOR_SIZE,
+    })
     views = []
-    for across in (0, 2):
-        width = high[across] - low[across]
-        rows = max(8, int(round(IMPOSTOR_SIZE * height / max(width, 1e-6))))
-        view = _splat(parts, library, across, low[across], width, high[1], height, rows)
+    for view in frame["views"]:
+        image = _splat(parts, library, view["across"], view["left"], view["width"],
+                       view["top"], view["height"], view["rows"], fill=True)
         # A texel the tree does not cover takes the mean color of those it
         # does, so filtering at the edge of a leaf does not darken it.
-        covered = view[:, :, 3] > 0
-        if covered.any():
-            view[~covered, :3] = view[covered, :3].mean(axis=0)
-        picture = Image.fromarray((numpy.clip(view, 0, 1) * 255).astype(numpy.uint8), "RGBA")
+        picture = Image.fromarray((numpy.clip(image, 0, 1) * 255).astype(numpy.uint8), "RGBA")
         views.append(picture.resize((IMPOSTOR_SIZE, IMPOSTOR_SIZE), Image.LANCZOS))
     atlas = Image.new("RGBA", (2 * IMPOSTOR_SIZE, IMPOSTOR_SIZE))
     atlas.paste(views[0], (0, 0))
@@ -939,20 +969,11 @@ def impostor(parts, library, out_dir, name):
                                  "metallicFactor": 0.0, "roughnessFactor": 0.9},
         "alphaMode": "MASK", "alphaCutoff": 0.5, "doubleSided": True})
     material = len(gltf["materials"]) - 1
-    center = (low + high) / 2
-    positions, uvs = [], []
-    # Across x at the trunk's z, then across z at its x; each quad takes
-    # its half of the atlas, left to right as its view was drawn.
-    for across, half in ((0, 0.0), (2, 0.5)):
-        start, end = center.copy(), center.copy()
-        start[across], end[across] = low[across], high[across]
-        for base, y, u, v in ((start, low[1], 0.0, 1.0), (end, low[1], 0.5, 1.0),
-                              (end, high[1], 0.5, 0.0), (start, high[1], 0.0, 0.0)):
-            positions.append((base[0], y, base[2]))
-            uvs.append((half + u, v))
     # Lit from above, as a crown is: the picture holds its own shading.
-    return {"positions": numpy.array(positions), "normals": numpy.tile([0.0, 1.0, 0.0], (8, 1)),
-            "uvs": numpy.array(uvs), "triangles": numpy.array([[0, 1, 2], [0, 2, 3], [4, 5, 6], [4, 6, 7]]),
+    return {"positions": numpy.array(frame["positions"], dtype=numpy.float64),
+            "normals": numpy.array(frame["normals"], dtype=numpy.float64),
+            "uvs": numpy.array(frame["uvs"], dtype=numpy.float64),
+            "triangles": numpy.array(frame["triangles"], dtype=numpy.int64),
             "material": tag}, material
 
 

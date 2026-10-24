@@ -72,6 +72,16 @@ def test_a_lit_triangle_keeps_the_near_red_samples() raises:
     var absent = String(_axis())
     absent = absent.replace("}]}", ',"image":null}]}')
     assert_equal(splat_text(absent), splat_text(_axis()))
+    assert_equal(
+        splat_text(
+            _axis().replace('{"mode":"axis"', '{"mode":"axis","fill":true')
+        ),
+        (
+            "[[[0.6694520539436792, 0.0, 0.0, 1.0], [0.6694520539436792, 0.0,"
+            " 0.0, 0.0]], [[0.6694520539436792, 0.0, 0.0, 1.0],"
+            " [0.6694520539436792, 0.0, 0.0, 0.0]]]"
+        ),
+    )
 
 
 def test_a_mask_drops_a_sample_and_two_parts_share_one_stream() raises:
