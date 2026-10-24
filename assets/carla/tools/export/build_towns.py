@@ -625,9 +625,8 @@ def simplify(primitive, target, borders=True, small=False):
     if chosen["whole"]:
         return primitive
     points = primitive["positions"]
-    _, _, collapses = fast_simplification.simplify(
-        points, faces.astype(numpy.int32), target_count=int(chosen["count"]),
-        return_collapses=True, preserve_border=True)
+    # `tools/carla_simplify.mojo` records the collapses. Open edges stay.
+    collapses = fix.quadric_collapses(points, faces, chosen["count"], True)
     new_points, new_faces, mapping = fast_simplification.replay_simplification(
         points, faces.astype(numpy.int32), collapses)
     if len(new_faces) == 0:
@@ -744,9 +743,8 @@ def simplify_welded(primitive, target):
         "target": int(target),
     })
     if not again["whole"]:
-        _, _, collapses = fast_simplification.simplify(
-            points, joined.astype(numpy.int32), target_count=int(again["count"]),
-            return_collapses=True, preserve_border=False)
+        # A welded mesh has no open border to keep.
+        collapses = fix.quadric_collapses(points, joined, again["count"], False)
         points, joined, _ = fast_simplification.replay_simplification(
             points, joined.astype(numpy.int32), collapses)
         if len(joined) == 0:

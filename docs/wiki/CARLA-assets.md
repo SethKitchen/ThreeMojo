@@ -423,7 +423,7 @@ CARLA's vehicles are Unreal Engine 4.26 assets. The scripts in `assets/carla/too
 3. It splits the lamps into head lamps and tail lamps. CARLA's lamp material reads an eight-color mask, and UModel does not export what the colors mean. So a lamp in front of the model's middle is a head lamp, and a lamp behind it is a tail lamp. `tools/carla_gltf_read.mojo` reads each accessor.
 4. It simplifies the model to `--budget` triangles, 35,000 by default, and `tools/carla_simplify_target.mojo` chooses each part's share. The seams stay where they are, so the textures do not tear. The normals are made again from the simplified faces. `tools/carla_area_normals.mojo` weights each normal by the area of the faces that meet there. `tools/carla_collapse_map.mojo` keeps the first corner that fell into each new one and copies its texture values. `tools/carla_gltf_append.mojo` packs each new buffer view.
 
-The simplification needs the `fast-simplification` Python package.
+`tools/carla_simplify.mojo` chooses the quadric collapses. Replaying them still needs the `fast-simplification` Python package.
 
 Use the cooked release, not the carla-content repository. The repository holds uncooked assets, and UModel cannot read an uncooked mesh.
 

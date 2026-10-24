@@ -689,13 +689,48 @@ def simplify_target(payload):
     return json.loads(result.stdout)
 
 
+def quadric_collapses(points, faces, target, border=True):
+    """Return quadric collapses from `tools/carla_simplify.mojo`.
+
+    `border` true keeps every open edge. The pairs are `[keep, drop]`.
+    """
+    import numpy
+
+    here = os.path.dirname(os.path.abspath(__file__))
+    repo = os.path.abspath(os.path.join(here, "..", "..", "..", ".."))
+    mojo = os.path.join(repo, ".venv", "bin", "mojo")
+    if not os.path.isfile(mojo):
+        mojo = "mojo"
+    folder = tempfile.mkdtemp(prefix="simplify-")
+    try:
+        path = os.path.join(folder, "mesh.json")
+        with open(path, "w", encoding="utf-8") as handle:
+            json.dump({
+                "points": numpy.asarray(points, dtype=float).reshape(-1, 3).tolist(),
+                "triangles": numpy.asarray(faces).reshape(-1, 3).tolist(),
+                "target": int(target),
+                "border": bool(border),
+            }, handle, separators=(",", ":"), allow_nan=False)
+        result = subprocess.run(
+            ["sh", os.path.join(repo, "tools", "tool.sh"), mojo,
+             "carla_simplify", path],
+            capture_output=True, text=True,
+        )
+    finally:
+        shutil.rmtree(folder, ignore_errors=True)
+    if result.returncode != 0:
+        raise ValueError(result.stderr.strip() or "simplify failed")
+    return numpy.asarray(json.loads(result.stdout)["collapses"], dtype=numpy.int32)
+
+
 def decimate(gltf, data, budget):
     """Bring a model's triangles down to about `budget`, and return the
     buffer with the new primitives' data added.
 
-    Each primitive is simplified alone with quadric error collapses (the
-    fast-simplification package), so no material bleeds into another, and
-    its open edges stay put: glTF splits a vertex along a texture seam, so
+    Each primitive is simplified alone with quadric error collapses, so
+    no material bleeds into another, and its open edges stay put:
+    `tools/carla_simplify.mojo` records the collapses. glTF splits a
+    vertex along a texture seam, so
     the seams are edges and the textures do not tear. Every primitive
     gives up the same share. `tools/carla_simplify_target.mojo` chooses
     that share. One of fewer than `KEEP` triangles is kept
@@ -741,8 +776,7 @@ def decimate(gltf, data, budget):
             positions, _ = _read(data, gltf, primitive["attributes"]["POSITION"])
             points = numpy.array(positions, dtype=numpy.float64).reshape(-1, 3)
             faces = numpy.array(indices, dtype=numpy.int32).reshape(-1, 3)
-            _, _, collapses = fast_simplification.simplify(
-                points, faces, target_count=target, return_collapses=True, preserve_border=True)
+            collapses = quadric_collapses(points, faces, target, True)
             new_points, new_faces, mapping = fast_simplification.replay_simplification(
                 points, faces, collapses)
             if len(new_faces) == 0:
