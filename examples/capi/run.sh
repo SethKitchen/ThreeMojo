@@ -15,7 +15,7 @@
 #   run.sh web [core|water|splat] [PORT]
 #       Serve the WebAssembly build on localhost and open it in a browser.
 #       A browser with WebGPU draws the water and the splats on its GPU. Add
-#       ?gpu=0 to the address to draw on the CPU. serve.py sends the headers
+#       ?gpu=0 to the address to draw on the CPU. serve.mojo sends the headers
 #       that let the CPU water run on many threads.
 #   run.sh check
 #       Check the native and the WebAssembly builds without a window. A
@@ -106,10 +106,10 @@ web() {
   echo "  splat: http://localhost:$port/?app=splat"
   echo "Press Control-C to stop."
   (sleep 1 && { open "$url" 2>/dev/null || xdg-open "$url" 2>/dev/null || true; }) &
-  # serve.py isolates the page, which the water needs to use many threads.
-  PYTHON=$REPO/.venv/bin/python
-  [ -x "$PYTHON" ] || PYTHON=python3
-  exec "$PYTHON" -I "$HERE/serve.py" "$OUT/web" "$port"
+  # serve.mojo isolates the page, which the water needs to use many threads.
+  MOJO=${MOJO:-$REPO/.venv/bin/mojo}
+  [ -x "$MOJO" ] || MOJO=mojo
+  exec "$MOJO" run -I "$REPO" "$HERE/serve.mojo" "$OUT/web" "$port"
 }
 
 check() {
@@ -138,9 +138,9 @@ check() {
       --dump "$scratch/metal.ppm" | tail -n 1
     "$OUT/threemojo_host" "$OUT/libthreemojo_splat.$EXT" 320 180 --headless --frames 12 --cpu \
       --dump "$scratch/cpu.ppm" | tail -n 1
-    PYTHON=$REPO/.venv/bin/python
-    [ -x "$PYTHON" ] || PYTHON=python3
-    if "$PYTHON" -I "$HERE/compare_ppm.py" "$scratch/metal.ppm" "$scratch/cpu.ppm" 0.3 32 0.001; then
+    MOJO=${MOJO:-$REPO/.venv/bin/mojo}
+    [ -x "$MOJO" ] || MOJO=mojo
+    if "$MOJO" run -I "$REPO" "$HERE/compare_ppm.mojo" "$scratch/metal.ppm" "$scratch/cpu.ppm" 0.3 32 0.001; then
       echo "ok   the Metal splats"
     else
       echo "FAIL the Metal splats"

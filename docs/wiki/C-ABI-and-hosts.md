@@ -41,7 +41,7 @@ The script serves `out/capi/web` on `localhost` and opens the page. The label in
 
 A browser that has WebGPU draws the water and the splats on its GPU, at 1280 by 720 pixels. Add `?gpu=0` to the address to draw on the CPU instead. The page also draws on the CPU when the browser has no WebGPU adapter, or when its device does not take the shader. The label then says why. See [The WebGPU path](#the-webgpu-path).
 
-On the CPU, the water uses one thread for each core. It draws about ten times faster than on one thread. A page can share memory between threads only when it is cross-origin isolated. The script `examples/capi/serve.py` sends the two headers that make it so. Any other server gets the module for one thread, and the label says why.
+On the CPU, the water uses one thread for each core. It draws about ten times faster than on one thread. A page can share memory between threads only when it is cross-origin isolated. The script `examples/capi/serve.mojo` sends the two headers that make it so. Any other server gets the module for one thread, and the label says why.
 
 On the CPU, the page picks the size of the water frame. It chooses the largest size that draws in about 33 milliseconds. On WebGPU, every size in the list takes less than that, so there is no automatic choice. The list goes up to 1920 by 1080.
 
@@ -239,7 +239,7 @@ The blend goes into a half-float picture, as on the web. A last pass writes the 
 
 ### The WebAssembly build
 
-`mojo build --emit llvm` writes LLVM IR for the host. `examples/capi/retarget.py` changes its data layout and its triple to those of wasm32. Then clang compiles it, and `wasm-ld` links it with `examples/capi/mwrt.c`.
+`mojo build --emit llvm` writes LLVM IR for the host. `examples/capi/retarget.mojo` changes its data layout and its triple to those of wasm32. Then clang compiles it, and `wasm-ld` links it with `examples/capi/mwrt.c`.
 
 `mwrt.c` supplies what the Mojo runtime and the C library give on a host:
 
@@ -248,7 +248,7 @@ The blend goes into a half-float picture, as on the web. A last pass writes the 
 - Files that fail, so that the app falls back to its plain bed.
 - A `TaskGroup`. For one thread it runs each task as soon as it is launched. For many threads it puts the tasks in a queue. See [Threads](#threads).
 
-Mojo returns an optional pointer through a slot of 64 bits. A pointer on wasm32 has 4 bytes, so the upper half of the slot held stack garbage. After the first step, `tm_alloc` returned an address like `0x2000000000...`. `retarget.py` clears each such slot before the pointer goes in. The page also keeps the low 32 bits of every address that it reads. `check.mjs` tests that `tm_alloc` and `tm_gpu_part` give addresses with no upper half.
+Mojo returns an optional pointer through a slot of 64 bits. A pointer on wasm32 has 4 bytes, so the upper half of the slot held stack garbage. After the first step, `tm_alloc` returned an address like `0x2000000000...`. `retarget.mojo` clears each such slot before the pointer goes in. The page also keeps the low 32 bits of every address that it reads. `check.mjs` tests that `tm_alloc` and `tm_gpu_part` give addresses with no upper half.
 
 `run.sh check` tests the result. The core module must give the same three frame hashes as `tests/test_capi_core.mojo`. The water module cannot match the native build bit for bit. WebAssembly has no fused multiply-add, and its sine is another implementation. In one test 99.4 percent of the channel values were within one level of the native frame.
 
@@ -309,6 +309,6 @@ The page gets a copy of each frame from the threaded module. `ImageData` does no
 - A window that draws the splats on Metal has no frame hash and no `--dump`. Use `--headless` for them.
 - The CPU splat is slow: about 200 milliseconds for a frame natively at 640 by 360, and 861 in a browser. The sort is small, and the draw takes the time.
 - The Metal splats and the WebGPU splats are ports of the Mojo shader. They agree closely and not to the bit.
-- Mojo is pinned at 1.2.0. A later Mojo with WebAssembly output can replace `retarget.py` and `mwrt.c`. The C functions then stay as they are.
+- Mojo is pinned at 1.2.0. A later Mojo with WebAssembly output can replace `retarget.mojo` and `mwrt.c`. The C functions then stay as they are.
 
 See also [Windowing and controls](Windowing-and-controls) and [Water](Water).
