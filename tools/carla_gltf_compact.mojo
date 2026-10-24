@@ -276,6 +276,21 @@ def _copy(data: Span[UInt8, _]) -> List[UInt8]:
     return out^
 
 
+def gltf_text(doc: PyJson) raises -> String:
+    """Return the glTF as Python's `json.dumps` writes it.
+
+    Args:
+        doc: The document, in its current key order.
+
+    Returns:
+        JSON text with Python's default separators.
+
+    Raises:
+        Error: If a value cannot be written.
+    """
+    return _dumps(doc)
+
+
 def _dumps(doc: PyJson) raises -> String:
     """Return JSON with Python's default separators and key order."""
     var out = List[UInt8]()
@@ -360,7 +375,7 @@ def main() raises:
         var doc = PyJson.parse(Path(arguments[2]).read_text())
         var data = Path(arguments[3]).read_bytes()
         var output = compact_gltf(doc, arguments[1], data)
-        Path(arguments[4]).write_text(_dumps(doc))
+        Path(arguments[4]).write_text(gltf_text(doc))
         Path(arguments[5]).write_bytes(Span(output))
     except error:
         print("carla_gltf_compact:", error, file=stderr)

@@ -872,84 +872,43 @@ def decimate(gltf, data, budget):
     """Bring a model's triangles down to about `budget`, and return the
     buffer with the new primitives' data added.
 
-    Each primitive is simplified alone with quadric error collapses, so
-    no material bleeds into another, and its open edges stay put:
-    `tools/carla_simplify.mojo` records the collapses and replays them.
-    glTF splits a
-    vertex along a texture seam, so
-    the seams are edges and the textures do not tear. Every primitive
-    gives up the same share. `tools/carla_simplify_target.mojo` chooses
-    that share. One of fewer than `KEEP` triangles is kept
-    whole, and so is a cut-out one, a tree's leaves: each leaf is a card
-    of two triangles, all edge, which a collapse would tear. Each new
-    vertex takes the texture coordinates and the tangent of an old vertex
-    that collapsed into it. `tools/carla_collapse_map.mojo` keeps the
-    first of those old vertices and copies its values.
+    `tools/carla_gltf_decimate.mojo` simplifies each free part on its own,
+    so no material bleeds into another. A part of fewer than `KEEP`
+    triangles stays whole, and so does a cut-out one: each leaf is a card
+    of two triangles, all edge, which a collapse would tear. Open edges
+    stay put, so the textures do not tear. Every free part gives up the
+    same share of `budget`.
     """
-    import numpy
-
-    def fixed(primitive):
-        material = gltf["materials"][primitive["material"]] if "material" in primitive else {}
-        count = gltf["accessors"][primitive["indices"]]["count"] // 3
-        return count < KEEP or material.get("alphaMode") == "MASK"
-
-    counts = []
-    fixed_flags = []
-    for mesh in gltf["meshes"]:
-        for primitive in mesh["primitives"]:
-            count = gltf["accessors"][primitive["indices"]]["count"] // 3
-            counts.append(count)
-            fixed_flags.append(bool(fixed(primitive)))
-    chosen = simplify_target({
-        "mode": "vehicle",
-        "counts": counts,
-        "fixed": fixed_flags,
-        "budget": int(budget),
-        "keep": int(KEEP),
-    })
-    if chosen["skip"]:
-        return data
-    out = bytearray(data)
-    slot = 0
-    for mesh in gltf["meshes"]:
-        for primitive in mesh["primitives"]:
-            target = chosen["targets"][slot]
-            slot += 1
-            if fixed(primitive):
-                continue
-            indices, _ = _read(data, gltf, primitive["indices"])
-            positions, _ = _read(data, gltf, primitive["attributes"]["POSITION"])
-            points = numpy.array(positions, dtype=numpy.float64).reshape(-1, 3)
-            faces = numpy.array(indices, dtype=numpy.int32).reshape(-1, 3)
-            collapses = quadric_collapses(points, faces, target, True)
-            new_points, new_faces, mapping = replay_mesh(points, faces, collapses)
-            if len(new_faces) == 0:
-                continue
-            source = collapse_source(mapping, len(new_points))
-            attributes = {"POSITION": _append(out, gltf, [float(v) for v in new_points.reshape(-1)],
-                                              "f", 5126, "VEC3", 34962)}
-            if "NORMAL" in primitive["attributes"]:
-                # The collapses moved the vertices, so an old vertex's normal
-                # no longer fits: each normal is its faces' again, weighted
-                # by their areas. A hard edge is two vertices in glTF, so it
-                # stays hard. `tools/carla_area_normals.mojo` weights them.
-                normals = _area_normals(new_points, new_faces)
-                attributes["NORMAL"] = _append(out, gltf, [float(v) for v in normals.reshape(-1)],
-                                               "f", 5126, "VEC3", 34962)
-            for name, accessor_index in primitive["attributes"].items():
-                if name in ("POSITION", "NORMAL"):
-                    continue
-                values, width = _read(data, gltf, accessor_index)
-                accessor = gltf["accessors"][accessor_index]
-                if accessor["componentType"] != 5126:
-                    continue
-                picked = collapse_gather(source, values, width)
-                attributes[name] = _append(out, gltf, picked, "f", 5126, accessor["type"], 34962)
-            primitive["attributes"] = attributes
-            primitive["indices"] = _append(out, gltf, [int(v) for v in new_faces.reshape(-1)],
-                                           "I", 5125, "SCALAR", 34963)
-    gltf["buffers"][0]["byteLength"] = len(out)
-    return compact(gltf, bytes(out))
+    root = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "..", ".."))
+    mojo = os.path.join(root, ".venv", "bin", "mojo")
+    if not os.path.isfile(mojo):
+        mojo = "mojo"
+    work = tempfile.mkdtemp(prefix="gltf decimate ")
+    try:
+        source_gltf = os.path.join(work, "in.gltf")
+        source_bin = os.path.join(work, "in.bin")
+        out_gltf = os.path.join(work, "out.gltf")
+        out_bin = os.path.join(work, "out.bin")
+        with open(source_gltf, "w", encoding="utf-8") as handle:
+            json.dump(gltf, handle)
+        with open(source_bin, "wb") as handle:
+            handle.write(data)
+        result = subprocess.run(
+            ["sh", os.path.join(root, "tools", "tool.sh"), mojo,
+             "carla_gltf_decimate", str(int(budget)), str(int(KEEP)),
+             source_gltf, source_bin, out_gltf, out_bin],
+            text=True, capture_output=True, check=False,
+        )
+        if result.returncode != 0:
+            raise ValueError(result.stderr.strip() or "decimate failed")
+        with open(out_gltf, encoding="utf-8") as handle:
+            updated = json.load(handle)
+        gltf.clear()
+        gltf.update(updated)
+        with open(out_bin, "rb") as handle:
+            return handle.read()
+    finally:
+        shutil.rmtree(work)
 
 
 def _gltf_tool(gltf, data, mode):
