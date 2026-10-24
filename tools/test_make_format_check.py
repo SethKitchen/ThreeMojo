@@ -11,6 +11,7 @@ import errno
 import json
 import os
 from pathlib import Path
+import shlex
 import subprocess
 import sys
 import tempfile
@@ -76,10 +77,17 @@ class FormatRecipeTests(unittest.TestCase):
                 'for name in paths:\n'
                 '    if any(name.endswith("/" + item) for item in changed):\n'
                 '        Path(name).write_text("formatted\\n")\n')
+            wrapper = Path('/tmp/threemojo-shell-log-wrapper')
+            wrapper.write_text(
+                '#!/bin/sh\nexec sh '
+                + shlex.quote(str(ROOT / 'tools/tool.sh')) + ' '
+                + shlex.quote(str(ROOT / '.venv/bin/mojo')) + ' "$@"\n')
+            wrapper.chmod(0o755)
             makefile = (
                 'CACHE_DIR := cache\nHASH := fixture\n'
                 'FMT_STAMP := cache/fmt-fixture\n'
                 'MOJO := python3 formatter.py\n'
+                'TOOL := /tmp/threemojo-shell-log-wrapper\n'
                 'quote = \'$(subst \',\'"\'"\',$(1))\'\n'
                 'FORMATTED := ' + ' '.join(paths) + '\n' +
                 definition(source, 'run') + '\n' +
