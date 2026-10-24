@@ -129,13 +129,19 @@ Some portable features remain partial, including [GLSL shaders](https://github.c
 ### Project tools
 
 <details>
-<summary>Implemented: 21</summary>
+<summary>Implemented: 25</summary>
+
 - [x] [C ABI host tools in Mojo](https://github.com/SethKitchen/ThreeMojo/wiki/C-ABI-and-hosts#run-it): frame compare, wasm32 retarget, the isolated page server and the Metal string run as Mojo [#761](https://github.com/SethKitchen/ThreeMojo/issues/761)
+
 - [x] [Oracle runner in Mojo](https://github.com/SethKitchen/ThreeMojo/wiki/How-to-run-the-checks#run-the-tool-tests): `tools/parallel_unittest.mojo` runs the CARLA oracle units in parallel [#761](https://github.com/SethKitchen/ThreeMojo/issues/761)
-<summary>Implemented: 20</summary>
+
 - [x] [Native test fixtures in Mojo](https://github.com/SethKitchen/ThreeMojo/wiki/How-to-run-the-checks#run-one-test-suite): `make test-cpu` links the C fixtures with `tools/native_test_support.mojo` [#761](https://github.com/SethKitchen/ThreeMojo/issues/761)
+
 - [x] [Compiled coverage profile check in Mojo](https://github.com/SethKitchen/ThreeMojo/wiki/How-to-measure-coverage#choose-the-capture-profile): `tools/check_coverage_hit_profile.mojo` checks cold and warm phase records [#761](https://github.com/SethKitchen/ThreeMojo/issues/761)
+
 - [x] [Lint and format log in Mojo](https://github.com/SethKitchen/ThreeMojo/wiki/How-to-run-the-checks#rebuild-the-project-tools): `tools/shell_log.mojo` writes the lint lines and the format run id [#761](https://github.com/SethKitchen/ThreeMojo/issues/761)
+
+- [x] [Coverage protocol check in Mojo](https://github.com/SethKitchen/ThreeMojo/wiki/Coverage-tool#evaluation-protocol): `tools/check_coverage_protocol.mojo` checks vectors, pipes, and write faults [#761](https://github.com/SethKitchen/ThreeMojo/issues/761)
 
 - [x] [CI planner in Mojo](https://github.com/SethKitchen/ThreeMojo/wiki/How-to-run-the-checks#rebuild-the-project-tools): `tools/ci_scope.mojo` selects, runs and checks the hosted CI jobs with byte-identical plans [#769](https://github.com/SethKitchen/ThreeMojo/issues/769)
 

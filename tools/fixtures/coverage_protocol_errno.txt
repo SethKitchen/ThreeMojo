@@ -1,0 +1,14 @@
+from std.ffi import external_call
+from std.sys._libc_errno import ErrNo, get_errno
+from std.testing import assert_equal
+
+def main() raises:
+    var record = String("errno probe")
+    var written = external_call["write", Int](
+        Int32(-1),
+        record.unsafe_ptr().unsafe_bitcast[NoneType](),
+        record.byte_length(),
+    )
+    var error = get_errno()
+    assert_equal(written, -1)
+    assert_equal(error, ErrNo.EBADF)

@@ -131,6 +131,7 @@ comptime COVERAGE_TOOLS = [
     "tools/check_coverage_loops.mojo",
     "tools/coverage_hit_faults.mojo",
     "tools/check_coverage_hit_profile.mojo",
+    "tools/check_coverage_protocol.mojo",
 ]
 """The Mojo programs that `make test-coverage-tool` runs. A change to one, or
 to any file it imports, runs the coverage tool check."""
