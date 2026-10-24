@@ -676,37 +676,6 @@ def _append(out, gltf, values, form, component, kind, target):
     return doc["index"]
 
 
-def _area_normals(points, faces):
-    """Return area-weighted normals from `tools/carla_area_normals.mojo`."""
-    import numpy
-    here = os.path.dirname(os.path.abspath(__file__))
-    repo = os.path.abspath(os.path.join(here, "..", "..", "..", ".."))
-    mojo = os.path.join(repo, ".venv", "bin", "mojo")
-    if not os.path.isfile(mojo):
-        mojo = "mojo"
-    folder = tempfile.mkdtemp(prefix="area normals ")
-    try:
-        path = os.path.join(folder, "mesh.json")
-        with open(path, "w", encoding="utf-8") as handle:
-            json.dump({
-                "points": numpy.asarray(points, dtype=float).reshape(-1, 3).tolist(),
-                "faces": numpy.asarray(faces).reshape(-1, 3).tolist(),
-            }, handle)
-        result = subprocess.run(
-            ["sh", os.path.join(repo, "tools", "tool.sh"), mojo,
-             "carla_area_normals", path],
-            capture_output=True, text=True,
-        )
-    finally:
-        shutil.rmtree(folder, ignore_errors=True)
-    if result.returncode != 0:
-        raise ValueError(result.stderr.strip() or "area normals failed")
-    values = json.loads(result.stdout)
-    if not values:
-        return numpy.zeros((0, 3))
-    return numpy.array(values, dtype=numpy.float64)
-
-
 def collapse_source(mapping, count):
     """Return the first old corner that collapsed into each new corner.
 

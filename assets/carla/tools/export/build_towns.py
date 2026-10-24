@@ -565,140 +565,75 @@ def cube():
              "material": doc["material"]}]
 
 
-def _normals_tool(points, faces):
-    """Return JSON from `tools/carla_area_normals.mojo`."""
+def _town_simplify(payload):
+    """Return JSON from `tools/carla_town_simplify.mojo`."""
     here = os.path.dirname(os.path.abspath(__file__))
     repo = os.path.abspath(os.path.join(here, "..", "..", "..", ".."))
     mojo = os.path.join(repo, ".venv", "bin", "mojo")
     if not os.path.isfile(mojo):
         mojo = "mojo"
-    payload = {
-        "points": numpy.asarray(points, dtype=numpy.float64).reshape(-1, 3).tolist(),
-        "faces": numpy.asarray(faces, dtype=numpy.int64).reshape(-1, 3).tolist(),
-    }
-    folder = tempfile.mkdtemp(prefix="area normals ")
+    folder = tempfile.mkdtemp(prefix="town-simplify-")
     try:
         path = os.path.join(folder, "mesh.json")
         with open(path, "w", encoding="utf-8") as handle:
-            json.dump(payload, handle)
+            json.dump(payload, handle, separators=(",", ":"), allow_nan=False)
         result = subprocess.run(
             ["sh", os.path.join(repo, "tools", "tool.sh"), mojo,
-             "carla_area_normals", path],
+             "carla_town_simplify", path],
             capture_output=True, text=True,
         )
     finally:
         shutil.rmtree(folder, ignore_errors=True)
     if result.returncode != 0:
-        raise ValueError(result.stderr.strip() or "area normals failed")
-    values = json.loads(result.stdout)
-    if not values:
-        return numpy.zeros((0, 3))
-    return numpy.array(values, dtype=numpy.float64)
+        raise ValueError(result.stderr.strip() or "town simplify failed")
+    return json.loads(result.stdout)
 
 
-def area_normals(points, faces):
-    """Return each vertex's normal: its faces' normals, weighted by area.
+def _simplified(doc):
+    """Return one simplified primitive as arrays."""
+    return {
+        "positions": numpy.array(doc["positions"], dtype=numpy.float64),
+        "normals": numpy.array(doc["normals"], dtype=numpy.float64),
+        "uvs": numpy.array(doc["uvs"], dtype=numpy.float64),
+        "triangles": numpy.array(doc["triangles"], dtype=numpy.int64),
+        "material": doc["material"],
+    }
 
-    `tools/carla_area_normals.mojo` weights the faces.
-    """
-    return _normals_tool(points, faces)
+
+def _mesh_payload(primitive, mode, target, small=False):
+    """Return the JSON fields shared by both simplification modes."""
+    return {
+        "mode": mode,
+        "positions": numpy.asarray(primitive["positions"], dtype=float).reshape(-1, 3).tolist(),
+        "uvs": numpy.asarray(primitive["uvs"], dtype=float).reshape(-1, 2).tolist(),
+        "triangles": numpy.asarray(primitive["triangles"]).reshape(-1, 3).tolist(),
+        "material": primitive["material"],
+        "target": int(target),
+        "small": bool(small),
+        "keep": int(fix.KEEP),
+    }
 
 
 def simplify(primitive, target, borders=True, small=False):
     """Return a primitive lowered to about `target` triangles by quadric
     collapses. With `borders`, its open edges, the texture seams among
     them, stay in place, so its textures do not tear. Without, it is
-    welded first; see `simplify_welded`."""
-    faces = primitive["triangles"]
+    welded first; see `simplify_welded`.
+
+    `tools/carla_town_simplify.mojo` collapses the mesh.
+    """
     if not borders:
         return simplify_welded(primitive, target)
-    # `tools/carla_simplify_target.mojo` chooses the target. A mesh under
-    # KEEP triangles stays whole unless the town's cap asks for less.
-    chosen = fix.simplify_target({
-        "mode": "collapse",
-        "triangles": len(faces),
-        "target": int(target),
-        "small": bool(small),
-        "keep": int(fix.KEEP),
-    })
-    if chosen["whole"]:
+    doc = _town_simplify(_mesh_payload(primitive, "border", target, small))
+    if doc.get("same"):
         return primitive
-    points = primitive["positions"]
-    # `tools/carla_simplify.mojo` records the collapses and replays them.
-    # Open edges stay.
-    collapses = fix.quadric_collapses(points, faces, chosen["count"], True)
-    new_points, new_faces, mapping = fix.replay_mesh(points, faces, collapses)
-    if len(new_faces) == 0:
-        return primitive
-    # `tools/carla_collapse_map.mojo` keeps the first old corner and copies
-    # its texture coordinates.
-    source = fix.collapse_source(mapping, len(new_points))
-    uvs = numpy.array(
-        fix.collapse_gather(source, numpy.asarray(primitive["uvs"], dtype=float).reshape(-1), 2),
-        dtype=numpy.float64,
-    ).reshape(-1, 2)
-    return {"positions": new_points, "normals": area_normals(new_points, new_faces),
-            "uvs": uvs, "triangles": new_faces.astype(numpy.int64),
-            "material": primitive["material"]}
+    return _simplified(doc)
 
 
 # A far mesh's corners are gathered into cells this fraction of its size.
 CLUSTER_DIVISIONS = 200
 # The smallest cell, in meters.
 CLUSTER_CELL = 0.25
-
-
-def _finish_tool(payload):
-    """Return JSON from `tools/carla_town_finish.mojo`."""
-    here = os.path.dirname(os.path.abspath(__file__))
-    repo = os.path.abspath(os.path.join(here, "..", "..", "..", ".."))
-    mojo = os.path.join(repo, ".venv", "bin", "mojo")
-    if not os.path.isfile(mojo):
-        mojo = "mojo"
-    folder = tempfile.mkdtemp(prefix="town-finish-")
-    try:
-        path = os.path.join(folder, "finish.json")
-        with open(path, "w", encoding="utf-8") as handle:
-            json.dump(payload, handle, allow_nan=True)
-        result = subprocess.run(
-            ["sh", os.path.join(repo, "tools", "tool.sh"), mojo,
-             "carla_town_finish", path],
-            capture_output=True, text=True,
-        )
-    finally:
-        shutil.rmtree(folder, ignore_errors=True)
-    if result.returncode != 0:
-        raise ValueError(result.stderr.strip() or "finish failed")
-    return json.loads(result.stdout)
-
-
-def _weld_tool(positions, triangles):
-    """Return JSON from `tools/carla_town_weld.mojo`."""
-    here = os.path.dirname(os.path.abspath(__file__))
-    repo = os.path.abspath(os.path.join(here, "..", "..", "..", ".."))
-    mojo = os.path.join(repo, ".venv", "bin", "mojo")
-    if not os.path.isfile(mojo):
-        mojo = "mojo"
-    folder = tempfile.mkdtemp(prefix="town-weld-")
-    try:
-        path = os.path.join(folder, "weld.json")
-        with open(path, "w", encoding="utf-8") as handle:
-            json.dump({
-                "positions": numpy.asarray(positions, dtype=float).reshape(-1, 3).tolist(),
-                "triangles": numpy.asarray(triangles).reshape(-1, 3).tolist(),
-                "divisions": CLUSTER_DIVISIONS,
-                "minimum": CLUSTER_CELL,
-            }, handle, separators=(",", ":"), allow_nan=False)
-        result = subprocess.run(
-            ["sh", os.path.join(repo, "tools", "tool.sh"), mojo,
-             "carla_town_weld", path],
-            capture_output=True, text=True,
-        )
-    finally:
-        shutil.rmtree(folder, ignore_errors=True)
-    if result.returncode != 0:
-        raise ValueError(result.stderr.strip() or "weld failed")
-    return json.loads(result.stdout)
 
 
 def simplify_welded(primitive, target):
@@ -714,201 +649,16 @@ def simplify_welded(primitive, target):
     wall stays a wall. Then the joined mesh is collapsed to the target
     with its edges free to move.
 
-    `tools/carla_town_weld.mojo` gathers the corners. Each new triangle is
-    flat, its corners apart, and takes its texture coordinates from one
-    original triangle, by `transfer_uvs`.
+    `tools/carla_town_simplify.mojo` welds the corners, collapses the
+    mesh, and copies each new triangle's texture from one original
+    triangle.
     """
-    faces = primitive["triangles"]
-    # `tools/carla_simplify_target.mojo` keeps a far mesh of at most 8
-    # triangles whole.
-    chosen = fix.simplify_target({
-        "mode": "weld",
-        "triangles": len(faces),
-        "target": int(target),
-    })
-    if chosen["whole"]:
+    doc = _town_simplify(_mesh_payload(primitive, "weld", target))
+    if doc.get("same"):
         return primitive
-    welded = _weld_tool(primitive["positions"], faces)
-    if welded.get("empty"):
+    if doc.get("empty"):
         return None
-    points = numpy.array(welded["points"], dtype=numpy.float64)
-    joined = numpy.array(welded["triangles"], dtype=numpy.int64)
-    if len(joined) == 0:
-        return None
-    again = fix.simplify_target({
-        "mode": "weld",
-        "triangles": len(joined),
-        "target": int(target),
-    })
-    if not again["whole"]:
-        # A welded mesh has no open border to keep.
-        # `tools/carla_simplify.mojo` replays the collapses.
-        collapses = fix.quadric_collapses(points, joined, again["count"], False)
-        points, joined, _ = fix.replay_mesh(points, joined, collapses)
-        if len(joined) == 0:
-            return None
-        prepared = _finish_tool({
-            "mode": "prepare",
-            "points": numpy.asarray(points, dtype=float).reshape(-1, 3).tolist(),
-            "triangles": numpy.asarray(joined).reshape(-1, 3).tolist(),
-            # A collapse can leave a point outside the building. Keep the
-            # original box so a sliver cannot cast a long shadow.
-            "box": numpy.asarray(primitive["positions"], dtype=float).reshape(-1, 3).tolist(),
-        })
-    else:
-        prepared = _finish_tool({
-            "mode": "prepare",
-            "points": numpy.asarray(points, dtype=float).reshape(-1, 3).tolist(),
-            "triangles": numpy.asarray(joined).reshape(-1, 3).tolist(),
-        })
-    if prepared.get("empty"):
-        return None
-    corners = numpy.array(prepared["corners"], dtype=numpy.float64)
-    face = numpy.array(prepared["normals"], dtype=numpy.float64)
-    uvs, facing = transfer_uvs(primitive, corners, face)
-    # Gathering corners can turn a triangle over, and a face turned away
-    # is culled, a hole: each faces as the original it reads its texture
-    # from. `tools/carla_town_finish.mojo` turns that face back.
-    wound = _finish_tool({
-        "mode": "wind",
-        "corners": corners.tolist(),
-        "normals": face.tolist(),
-        "uvs": numpy.asarray(uvs, dtype=float).reshape(-1, 3, 2).tolist(),
-        "facing": numpy.asarray(facing, dtype=float).reshape(-1, 3).tolist(),
-    })
-    return {"positions": numpy.array(wound["positions"], dtype=numpy.float64),
-            "normals": numpy.array(wound["normals"], dtype=numpy.float64),
-            "uvs": numpy.array(wound["uvs"], dtype=numpy.float64),
-            "triangles": numpy.array(wound["triangles"], dtype=numpy.int64),
-            "material": primitive["material"]}
-
-
-def _near_tool(centers, corners, count):
-    """Return neighbor indexes and query centers from `tools/carla_town_near.mojo`."""
-    here = os.path.dirname(os.path.abspath(__file__))
-    repo = os.path.abspath(os.path.join(here, "..", "..", "..", ".."))
-    mojo = os.path.join(repo, ".venv", "bin", "mojo")
-    if not os.path.isfile(mojo):
-        mojo = "mojo"
-    folder = tempfile.mkdtemp(prefix="town-near-")
-    try:
-        path = os.path.join(folder, "near.json")
-        with open(path, "w", encoding="utf-8") as handle:
-            json.dump({
-                "centers": numpy.asarray(centers, dtype=float).reshape(-1, 3).tolist(),
-                "corners": numpy.asarray(corners, dtype=float).reshape(-1, 3, 3).tolist(),
-                "count": int(count),
-            }, handle, separators=(",", ":"), allow_nan=False)
-        result = subprocess.run(
-            ["sh", os.path.join(repo, "tools", "tool.sh"), mojo,
-             "carla_town_near", path],
-            capture_output=True, text=True,
-        )
-    finally:
-        shutil.rmtree(folder, ignore_errors=True)
-    if result.returncode != 0:
-        raise ValueError(result.stderr.strip() or "neighbor search failed")
-    return json.loads(result.stdout)
-
-
-def _choose_tool(payload):
-    """Return JSON from `tools/carla_town_choose.mojo`."""
-    here = os.path.dirname(os.path.abspath(__file__))
-    repo = os.path.abspath(os.path.join(here, "..", "..", "..", ".."))
-    mojo = os.path.join(repo, ".venv", "bin", "mojo")
-    if not os.path.isfile(mojo):
-        mojo = "mojo"
-    folder = tempfile.mkdtemp(prefix="town-choose-")
-    try:
-        path = os.path.join(folder, "choose.json")
-        with open(path, "w", encoding="utf-8") as handle:
-            json.dump(payload, handle, separators=(",", ":"), allow_nan=False)
-        result = subprocess.run(
-            ["sh", os.path.join(repo, "tools", "tool.sh"), mojo,
-             "carla_town_choose", path],
-            capture_output=True, text=True,
-        )
-    finally:
-        shutil.rmtree(folder, ignore_errors=True)
-    if result.returncode != 0:
-        raise ValueError(result.stderr.strip() or "triangle choice failed")
-    return json.loads(result.stdout)
-
-
-def _uv_tool(source, uvs, corners):
-    """Return projected coordinates from `tools/carla_town_uv.mojo`."""
-    here = os.path.dirname(os.path.abspath(__file__))
-    repo = os.path.abspath(os.path.join(here, "..", "..", "..", ".."))
-    mojo = os.path.join(repo, ".venv", "bin", "mojo")
-    if not os.path.isfile(mojo):
-        mojo = "mojo"
-    folder = tempfile.mkdtemp(prefix="town-uv-")
-    try:
-        path = os.path.join(folder, "uv.json")
-        with open(path, "w", encoding="utf-8") as handle:
-            json.dump({
-                "source": numpy.asarray(source, dtype=float).reshape(-1, 3, 3).tolist(),
-                "uvs": numpy.asarray(uvs, dtype=float).reshape(-1, 3, 2).tolist(),
-                "corners": numpy.asarray(corners, dtype=float).reshape(-1, 3, 3).tolist(),
-            }, handle, separators=(",", ":"), allow_nan=False)
-        result = subprocess.run(
-            ["sh", os.path.join(repo, "tools", "tool.sh"), mojo,
-             "carla_town_uv", path],
-            capture_output=True, text=True,
-        )
-    finally:
-        shutil.rmtree(folder, ignore_errors=True)
-    if result.returncode != 0:
-        raise ValueError(result.stderr.strip() or "texture projection failed")
-    return json.loads(result.stdout)["uvs"]
-
-
-def transfer_uvs(primitive, corners, normals, candidates=8):
-    """Return texture coordinates for new triangles `corners` (n, 3, 3)
-    with unit normals `normals`, from the primitive they were simplified
-    from.
-
-    Each new triangle takes one original triangle: of the `candidates`
-    whose centers are nearest its own, the one that lies nearest its
-    plane, facing either way. Its three corners are projected into that
-    triangle's plane and take the texture coordinates its own corners
-    would give there, so the new triangle reads one texture island, not
-    three. Returns the coordinates, three to a triangle, and the normal of
-    each triangle's original.
-
-    `tools/carla_town_near.mojo` finds the nearest original triangles.
-    `tools/carla_town_choose.mojo` picks that original triangle.
-    `tools/carla_town_uv.mojo` projects the corners into that triangle.
-    """
-    faces = primitive["triangles"]
-    if len(faces) == 0 or len(corners) == 0:
-        return numpy.zeros((0, 3, 2)), numpy.zeros((0, 3))
-    positions = numpy.asarray(primitive["positions"], dtype=float).reshape(-1, 3)
-    faces = numpy.asarray(faces).reshape(-1, 3)
-    source = positions[faces]
-    gathered = _choose_tool({
-        "mode": "source",
-        "positions": positions.tolist(),
-        "triangles": faces.tolist(),
-    })
-    centers = numpy.array(gathered["centers"], dtype=numpy.float64)
-    normal = numpy.array(gathered["normals"], dtype=numpy.float64)
-    count = min(candidates, len(faces))
-    # `tools/carla_town_near.mojo` averages each new triangle's corners.
-    found = _near_tool(centers, corners, count)
-    near = numpy.array(found["near"], dtype=numpy.int64)
-    queries = numpy.array(found["queries"], dtype=numpy.float64)
-    chosen = _choose_tool({
-        "mode": "choose",
-        "centers": centers.tolist(),
-        "normals": normal.tolist(),
-        "queries": numpy.asarray(queries, dtype=float).reshape(-1, 3).tolist(),
-        "faces": numpy.asarray(normals, dtype=float).reshape(-1, 3).tolist(),
-        "near": near.reshape(len(corners), count).tolist(),
-    })
-    best = numpy.array(chosen["best"], dtype=numpy.int64)
-    projected = _uv_tool(source[best], primitive["uvs"][faces[best]], corners)
-    return numpy.array(projected, dtype=numpy.float64).reshape(-1, 3, 2), normal[best]
+    return _simplified(doc)
 
 
 def _card_seed(mesh_path, index, lod):
