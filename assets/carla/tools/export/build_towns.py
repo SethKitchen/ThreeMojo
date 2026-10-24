@@ -1299,16 +1299,43 @@ def rows_of(town):
         return [json.loads(line) for line in lines]
 
 
+def _copies_tool(payload):
+    """Return matrices from `tools/carla_town_copies.mojo`."""
+    here = os.path.dirname(os.path.abspath(__file__))
+    repo = os.path.abspath(os.path.join(here, "..", "..", "..", ".."))
+    mojo = os.path.join(repo, ".venv", "bin", "mojo")
+    if not os.path.isfile(mojo):
+        mojo = "mojo"
+    folder = tempfile.mkdtemp(prefix="town copies ")
+    try:
+        path = os.path.join(folder, "row.json")
+        with open(path, "w", encoding="utf-8") as handle:
+            json.dump(payload, handle)
+        result = subprocess.run(
+            ["sh", os.path.join(repo, "tools", "tool.sh"), mojo,
+             "carla_town_copies", path],
+            capture_output=True, text=True,
+        )
+    finally:
+        shutil.rmtree(folder, ignore_errors=True)
+    if result.returncode != 0:
+        raise ValueError(result.stderr.strip() or "placements failed")
+    return json.loads(result.stdout)
+
+
 def placements(row):
-    """Return each copy's Unreal row-vector world matrix."""
-    component = component_rows(row)
-    if "instances" not in row:
-        return [component]
-    out = []
-    for flat in row["instances"]:
-        instance = numpy.array(flat, dtype=numpy.float64).reshape(4, 4)
-        out.append(instance @ component)
-    return out
+    """Return each copy's Unreal row-vector world matrix.
+
+    `tools/carla_town_copies.mojo` builds the matrices.
+    """
+    payload = {
+        "scale": list(row["scale"]),
+        "rotation": list(row["rotation"]),
+        "location": list(row["location"]),
+    }
+    if "instances" in row:
+        payload["instances"] = [list(flat) for flat in row["instances"]]
+    return [numpy.array(matrix, dtype=numpy.float64) for matrix in _copies_tool(payload)]
 
 
 def build(town, max_size, tile):
