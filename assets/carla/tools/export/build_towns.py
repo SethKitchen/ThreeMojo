@@ -550,15 +550,43 @@ def cube():
              "material": doc["material"]}]
 
 
+def _normals_tool(points, faces):
+    """Return JSON from `tools/carla_area_normals.mojo`."""
+    here = os.path.dirname(os.path.abspath(__file__))
+    repo = os.path.abspath(os.path.join(here, "..", "..", "..", ".."))
+    mojo = os.path.join(repo, ".venv", "bin", "mojo")
+    if not os.path.isfile(mojo):
+        mojo = "mojo"
+    payload = {
+        "points": numpy.asarray(points, dtype=numpy.float64).reshape(-1, 3).tolist(),
+        "faces": numpy.asarray(faces, dtype=numpy.int64).reshape(-1, 3).tolist(),
+    }
+    folder = tempfile.mkdtemp(prefix="area normals ")
+    try:
+        path = os.path.join(folder, "mesh.json")
+        with open(path, "w", encoding="utf-8") as handle:
+            json.dump(payload, handle)
+        result = subprocess.run(
+            ["sh", os.path.join(repo, "tools", "tool.sh"), mojo,
+             "carla_area_normals", path],
+            capture_output=True, text=True,
+        )
+    finally:
+        shutil.rmtree(folder, ignore_errors=True)
+    if result.returncode != 0:
+        raise ValueError(result.stderr.strip() or "area normals failed")
+    values = json.loads(result.stdout)
+    if not values:
+        return numpy.zeros((0, 3))
+    return numpy.array(values, dtype=numpy.float64)
+
+
 def area_normals(points, faces):
-    """Return each vertex's normal: its faces' normals, weighted by area."""
-    corners = points[faces]
-    face = numpy.cross(corners[:, 1] - corners[:, 0], corners[:, 2] - corners[:, 0])
-    normals = numpy.zeros_like(points)
-    for k in range(3):
-        numpy.add.at(normals, faces[:, k], face)
-    length = numpy.linalg.norm(normals, axis=1, keepdims=True)
-    return numpy.where(length > 1e-12, normals / numpy.maximum(length, 1e-12), [0.0, 1.0, 0.0])
+    """Return each vertex's normal: its faces' normals, weighted by area.
+
+    `tools/carla_area_normals.mojo` weights the faces.
+    """
+    return _normals_tool(points, faces)
 
 
 def simplify(primitive, target, borders=True, small=False):
