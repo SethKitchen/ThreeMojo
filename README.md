@@ -129,7 +129,9 @@ Some portable features remain partial, including [GLSL shaders](https://github.c
 ### Project tools
 
 <details>
-<summary>Implemented: 33</summary>
+<summary>Implemented: 34</summary>
+
+- [x] [Vehicle body and glass](https://github.com/SethKitchen/ThreeMojo/wiki/CARLA-assets#rebuild-the-vehicle-zips): `tools/carla_vehicle_pick.mojo` chooses the largest skeletal mesh and the static glass [#761](https://github.com/SethKitchen/ThreeMojo/issues/761)
 
 - [x] [Cut-out channel of a foliage mask](https://github.com/SethKitchen/ThreeMojo/wiki/CARLA-assets#rebuild-the-vehicle-zips): `tools/carla_mask_channel.mojo` chooses the mask channel with the most extreme samples [#761](https://github.com/SethKitchen/ThreeMojo/issues/761)
 

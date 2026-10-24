@@ -2,10 +2,11 @@
 # SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
 """Export every CARLA 0.9.16 vehicle to a self-contained glTF package.
 
-For each blueprint id, read the vehicle blueprint's references, ask UModel
-which are skeletal and which are static meshes, export the skeletal body
-and the static attachments it shows (glass, lights) to glTF, merge them
-into one file, and rebuild the materials with `carla_gltf_fix.py`.
+For each blueprint id, read the vehicle blueprint's references and ask
+UModel for each mesh class. `tools/carla_vehicle_pick.mojo` chooses the
+skeletal body and the static glass and lights. The script exports those
+meshes to glTF, merges them into one file, and rebuilds the materials
+with `carla_gltf_fix.py`.
 
     python export_vehicles.py [ID ...]
 """
@@ -248,27 +249,94 @@ def merge(base, extra):
     abin.extend(data)
 
 
+def _pick_tool(refs, extras):
+    """Return the body and glass from `tools/carla_vehicle_pick.mojo`."""
+    folder = tempfile.mkdtemp(prefix="vehicle-pick-")
+    try:
+        path = os.path.join(folder, "pick.json")
+        with open(path, "w", encoding="utf-8") as handle:
+            json.dump({"refs": refs, "extras": extras}, handle, separators=(",", ":"))
+        root = _tool_root()
+        result = subprocess.run(
+            ["sh", os.path.join(root, "tools", "tool.sh"), _tool_mojo(),
+             "carla_vehicle_pick", path],
+            capture_output=True, text=True,
+        )
+    finally:
+        shutil.rmtree(folder, ignore_errors=True)
+    if result.returncode != 0:
+        raise ValueError(result.stderr.strip() or "vehicle pick failed")
+    return json.loads(result.stdout)
+
+
+def _mesh_record(path, kind, size, name=None):
+    """Return one mesh record for `tools/carla_vehicle_pick.mojo`."""
+    record = {"path": path, "class": kind, "size": int(size)}
+    if name is not None:
+        record["name"] = name
+    return record
+
+
+def _uexp_size(game_path):
+    """Return the cooked `.uexp` size used to choose the body."""
+    return os.path.getsize(package_file(game_path)[:-7] + ".uexp")
+
+
+def _choice_records(named):
+    """Return the blueprint meshes, without asking UModel about pedestrians."""
+    records = []
+    for ref in named:
+        if "/Pedestrian/" in ref:
+            records.append(_mesh_record(ref, "", 0))
+            continue
+        kind = export_class(ref) or ""
+        size = _uexp_size(ref) if kind == "SkeletalMesh" else 0
+        records.append(_mesh_record(ref, kind, size))
+    return records
+
+
+def _folder_records(named):
+    """Return skeletal candidates from folders the blueprint already names.
+
+    A file whose name contains `skeleton` or `physics` is left out before
+    UModel runs. The comparison ignores case.
+    """
+    folders = []
+    seen = set()
+    for ref in named:
+        if "/Pedestrian/" in ref:
+            continue
+        package = package_file(ref)
+        if not package:
+            continue
+        folder = os.path.dirname(package)
+        if folder not in seen:
+            seen.add(folder)
+            folders.append(folder)
+    extras = []
+    for folder in sorted(folders):
+        for name in sorted(os.listdir(folder)):
+            if not name.endswith(".uasset") or re.search(r"skeleton|physics", name, re.I):
+                continue
+            candidate = game_path_of(os.path.join(folder, name))
+            kind = export_class(candidate) or ""
+            size = _uexp_size(candidate) if kind == "SkeletalMesh" else 0
+            extras.append(_mesh_record(candidate, kind, size, name))
+    return extras
+
+
 def build(vehicle_id):
     blueprint = find_blueprint(VEHICLES[vehicle_id])
-    refs = [r for r in references(blueprint) if "/Pedestrian/" not in r]
-    skeletal = [r for r in refs if export_class(r) == "SkeletalMesh"]
-    static = [
-        r for r in refs
-        if export_class(r) == "StaticMesh"
-        and not re.search(r"_sc_|/sm_sc|_prop$", r, re.I)
-    ]
-    if not skeletal:
-        # A rig the blueprint does not name, in a folder it does.
-        folders = sorted(set(os.path.dirname(package_file(r)) for r in refs if package_file(r)))
-        for folder in folders:
-            for name in sorted(os.listdir(folder)):
-                if name.endswith(".uasset") and not re.search(r"skeleton|physics", name, re.I):
-                    candidate = game_path_of(os.path.join(folder, name))
-                    if export_class(candidate) == "SkeletalMesh":
-                        skeletal.append(candidate)
-    if not skeletal:
-        return None, "no skeletal mesh among " + ", ".join(os.path.basename(r) for r in refs)
-    skeletal.sort(key=lambda r: os.path.getsize(package_file(r)[:-7] + ".uexp"), reverse=True)
+    named = references(blueprint)
+    records = _choice_records(named)
+    # `tools/carla_vehicle_pick.mojo` chooses the body and the glass.
+    choice = _pick_tool(records, [])
+    if choice["error"]:
+        choice = _pick_tool(records, _folder_records(named))
+    if choice["error"]:
+        return None, choice["error"]
+    skeletal = choice["skeletal"]
+    static = choice["static"]
     body = export(skeletal[0])
     if not body:
         return None, "UModel exported nothing for " + skeletal[0]
