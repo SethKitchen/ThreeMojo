@@ -109,6 +109,34 @@ def srgb_to_linear(c):
     return c / 12.92 if c <= 0.04045 else ((c + 0.055) / 1.055) ** 2.4
 
 
+def mask_channel(pixels, width, height):
+    """Return the cut-out channel from `tools/carla_mask_channel.mojo`."""
+    here = os.path.dirname(os.path.abspath(__file__))
+    repo = os.path.abspath(os.path.join(here, "..", "..", "..", ".."))
+    mojo = os.path.join(repo, ".venv", "bin", "mojo")
+    if not os.path.isfile(mojo):
+        mojo = "mojo"
+    folder = tempfile.mkdtemp(prefix="mask-channel-")
+    try:
+        path = os.path.join(folder, "mask.json")
+        with open(path, "w", encoding="utf-8") as handle:
+            json.dump({
+                "width": int(width),
+                "height": int(height),
+                "pixels": [int(value) for value in pixels],
+            }, handle, separators=(",", ":"))
+        result = subprocess.run(
+            ["sh", os.path.join(repo, "tools", "tool.sh"), mojo,
+             "carla_mask_channel", path],
+            capture_output=True, text=True,
+        )
+    finally:
+        shutil.rmtree(folder, ignore_errors=True)
+    if result.returncode != 0:
+        raise ValueError(result.stderr.strip() or "mask channel failed")
+    return json.loads(result.stdout)
+
+
 def resize_image(pixels, width, height, bands, out_width, out_height, mode):
     """Return resized pixels from `tools/carla_image_resize.mojo`.
 
@@ -234,13 +262,14 @@ class Package:
         if source.mode in ("RGBA", "LA"):
             alpha = source.getchannel("A")
         else:
-            channels = source.convert("RGB").split()
-
-            def crispness(channel):
-                histogram = channel.histogram()
-                return sum(histogram[:16]) + sum(histogram[240:])
-
-            alpha = max(channels, key=crispness)
+            # `tools/carla_mask_channel.mojo` chooses the cut-out channel.
+            rgb_mask = source.convert("RGB")
+            chosen = mask_channel(
+                list(rgb_mask.tobytes()), rgb_mask.width, rgb_mask.height,
+            )
+            alpha = Image.frombytes(
+                "L", rgb_mask.size, bytes(chosen["pixels"]),
+            )
         alpha = _pillow_resize(alpha, rgb.size, "lanczos")
         image = rgb.copy()
         image.putalpha(alpha)
