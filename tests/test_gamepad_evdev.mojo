@@ -1594,6 +1594,14 @@ def test_the_hub_follows_devices_as_sdl_does() raises:
         assert_false(DeviceChangeKind(2).is_valid())
         var missing = EvdevHub[RecordedDevice](root + "/none", sysfs)
         assert_equal(len(missing.detect(database)), 0)
+        # A pad that a HIDAPI driver runs is skipped.
+        var shared = EvdevHub[RecordedDevice](root, sysfs)
+        changes = shared.detect_at(
+            database, Duration64(0), [(0x054C << 16) | 0x9999]
+        )
+        assert_equal(len(changes), 2)
+        assert_equal(changes[0].name, "Sine Pad")
+        assert_equal(changes[1].name, "Late Pad")
         assert_false(folder_change_time(root + "/none"))
 
 

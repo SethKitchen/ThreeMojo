@@ -1245,7 +1245,11 @@ struct _Found(Copyable, Movable):
 
 def _scan[
     S: EvdevSource
-](paths: List[String], known: List[String]) -> List[_Found]:
+](
+    paths: List[String],
+    known: List[String],
+    claimed: List[Int] = List[Int](),
+) -> List[_Found]:
     """Find the joysticks and sensor devices among some paths. SDL:
     `MaybeAddDevice` for each path.
 
@@ -1255,6 +1259,8 @@ def _scan[
     Args:
         paths: The device paths, in order.
         known: The paths to skip, which are open already.
+        claimed: The joysticks another driver runs, as `vendor << 16 |
+            product`. SDL: `SDL_JoystickHandledByAnotherDriver`.
 
     Returns:
         The joysticks and the sensor devices, in the order of the paths.
@@ -1269,6 +1275,11 @@ def _scan[
             var uniq = read_uniq(source)
             var id = uniq.value() if uniq else ""
             if info:
+                var key = (
+                    info.value().id.vendor << 16
+                ) | info.value().id.product
+                if key in claimed:
+                    continue
                 found.append(_Found(path, id, info))
             elif probe_sensor(source):
                 found.append(_Found(path, id, None))
@@ -1442,7 +1453,10 @@ struct EvdevHub[S: EvdevSource](Movable):
         )
 
     def detect_at(
-        mut self, mut database: MappingDatabase, now: Duration64
+        mut self,
+        mut database: MappingDatabase,
+        now: Duration64,
+        claimed: List[Int] = List[Int](),
     ) -> List[DeviceChange]:
         """Add new gamepads and drop unplugged ones.
 
@@ -1452,6 +1466,9 @@ struct EvdevHub[S: EvdevSource](Movable):
         Args:
             database: The mappings.
             now: The time now.
+            claimed: The joysticks another driver runs, as `vendor << 16 |
+                product`, such as `HidHub.claimed()`. They are skipped, as
+                SDL's Linux driver skips the pads its HIDAPI driver runs.
 
         Returns:
             The gamepads added, then those removed.
@@ -1469,7 +1486,9 @@ struct EvdevHub[S: EvdevSource](Movable):
                 for index in range(len(self.pads)):
                     known.append(self.pads[index].info.path)
                 var found = _scan[Self.S](
-                    list_event_nodes(self.directory, self.sysfs), known
+                    list_event_nodes(self.directory, self.sysfs),
+                    known,
+                    claimed,
                 )
                 var opened = _open_found[Self.S](found, database)
                 while len(opened) > 0:
@@ -1493,13 +1512,18 @@ struct EvdevHub[S: EvdevSource](Movable):
                 index += 1
         return changes^
 
-    def detect(mut self, mut database: MappingDatabase) -> List[DeviceChange]:
+    def detect(
+        mut self,
+        mut database: MappingDatabase,
+        claimed: List[Int] = List[Int](),
+    ) -> List[DeviceChange]:
         """Add new gamepads and drop unplugged ones, now.
 
         Args:
             database: The mappings.
+            claimed: The joysticks another driver runs, which are skipped.
 
         Returns:
             The gamepads added, then those removed.
         """
-        return self.detect_at(database, self.now())
+        return self.detect_at(database, self.now(), claimed)
