@@ -386,48 +386,47 @@ def to_three(rows):
     return linear, SWAP @ rows[3, :3] / 100.0
 
 
-def hermite(p0, t0, p1, t1, a):
-    """Return the point and the unit direction of a Hermite curve."""
-    a2, a3 = a * a, a * a * a
-    point = ((2 * a3 - 3 * a2 + 1)[:, None] * p0 + (a3 - 2 * a2 + a)[:, None] * t0
-             + (-2 * a3 + 3 * a2)[:, None] * p1 + (a3 - a2)[:, None] * t1)
-    direction = ((6 * a2 - 6 * a)[:, None] * p0 + (3 * a2 - 4 * a + 1)[:, None] * t0
-                 + (-6 * a2 + 6 * a)[:, None] * p1 + (3 * a2 - 2 * a)[:, None] * t1)
-    length = numpy.linalg.norm(direction, axis=1, keepdims=True)
-    return point, direction / numpy.maximum(length, 1e-9)
-
-
 def bend(points, normals, spline):
     """Bend mesh points (three.js frame, meters) along a spline mesh
     component's curve, as Unreal's spline mesh does, and return them in
-    the component's frame, in Unreal's axes and centimeters."""
-    local = points[:, [0, 2, 1]] * 100.0
-    axis = int(spline["forward_axis"])
-    along = local[:, axis]
-    low, high = along.min(), along.max()
-    alpha = (along - low) / max(high - low, 1e-6)
-    start, end = numpy.array(spline["start"]), numpy.array(spline["end"])
-    position, direction = hermite(start, numpy.array(spline["start_tangent"]), end,
-                                  numpy.array(spline["end_tangent"]), alpha)
-    up = numpy.array([0.0, 0.0, 1.0])
-    base_x = numpy.cross(up, direction)
-    base_x /= numpy.maximum(numpy.linalg.norm(base_x, axis=1, keepdims=True), 1e-9)
-    base_y = numpy.cross(direction, base_x)
-    roll = spline["start_roll"] + (spline["end_roll"] - spline["start_roll"]) * alpha
-    cos, sin = numpy.cos(roll)[:, None], numpy.sin(roll)[:, None]
-    x_vec = cos * base_x - sin * base_y
-    y_vec = cos * base_y + sin * base_x
-    scale = (numpy.array(spline["start_scale"])[None, :]
-             + (numpy.array(spline["end_scale"]) - numpy.array(spline["start_scale"]))[None, :] * alpha[:, None])
-    # The two axes across the curve, in the order Unreal takes them.
-    across = {0: (1, 2), 1: (2, 0), 2: (0, 1)}[axis]
-    out = (position + (local[:, across[0]] * scale[:, 0])[:, None] * x_vec
-           + (local[:, across[1]] * scale[:, 1])[:, None] * y_vec)
-    # Normals: the same frame without the curve's stretch.
-    n = normals[:, [0, 2, 1]]
-    frames = {0: (direction, x_vec, y_vec), 1: (y_vec, direction, x_vec), 2: (x_vec, y_vec, direction)}[axis]
-    bent = n[:, 0:1] * frames[0] + n[:, 1:2] * frames[1] + n[:, 2:3] * frames[2]
-    return out, bent
+    the component's frame, in Unreal's axes and centimeters.
+
+    `tools/carla_town_bend.mojo` bends the points.
+    """
+    folder = tempfile.mkdtemp(prefix="town-bend-")
+    try:
+        request = os.path.join(folder, "bend.json")
+        payload = {
+            "points": numpy.asarray(points, dtype=float).reshape(-1, 3).tolist(),
+            "normals": numpy.asarray(normals, dtype=float).reshape(-1, 3).tolist(),
+            "forward_axis": int(spline["forward_axis"]),
+            "start": list(spline["start"]),
+            "end": list(spline["end"]),
+            "start_tangent": list(spline["start_tangent"]),
+            "end_tangent": list(spline["end_tangent"]),
+            "start_roll": float(spline["start_roll"]),
+            "end_roll": float(spline["end_roll"]),
+            "start_scale": list(spline["start_scale"]),
+            "end_scale": list(spline["end_scale"]),
+        }
+        with open(request, "w", encoding="utf-8") as handle:
+            json.dump(payload, handle, separators=(",", ":"), allow_nan=False)
+        root = os.path.abspath(os.path.join(HERE, "..", "..", "..", ".."))
+        mojo = os.path.join(root, ".venv", "bin", "mojo")
+        if not os.path.isfile(mojo):
+            mojo = "mojo"
+        result = subprocess.run(
+            ["sh", os.path.join(root, "tools", "tool.sh"), mojo,
+             "carla_town_bend", request],
+            capture_output=True, text=True,
+        )
+        if result.returncode != 0:
+            raise ValueError(result.stderr.strip() or "town bend failed")
+        bent = json.loads(result.stdout)
+    finally:
+        shutil.rmtree(folder, ignore_errors=True)
+    return (numpy.array(bent["points"], dtype=numpy.float64),
+            numpy.array(bent["normals"], dtype=numpy.float64))
 
 
 # ---- Meshes ----------------------------------------------------------------

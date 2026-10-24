@@ -431,6 +431,8 @@ Each town package holds one CARLA town as CARLA builds it. It has the town's bui
 
 A package is two files: one binary glTF file, `carla.town.<town>.glb`, with its buffer and its textures inside, and the town's OpenDRIVE map, `<town>.xodr`. The positions are in the renderer's frame, in meters: three.js x, y and z are CARLA's x, z and y. So the package goes at the origin, with no turn and no scale. `tools/carla_town_glb.mojo` packs the loose glTF, its buffer and its textures into that binary glTF. A rigid copy is placed by `tools/carla_town_place.mojo`.
 
+A spline mesh bends along its curve before that placement. `tools/carla_town_bend.mojo` bends the points.
+
 The meshes are merged by tile, by kind and by material. A tile is 32 meters square. Each node has two tags in its `extras`:
 
 | Tag | Values |
