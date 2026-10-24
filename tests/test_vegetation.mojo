@@ -18,7 +18,14 @@ from extensions.vegetation.checks import (
     require_between,
     require_count_between,
 )
-from extensions.vegetation.ground import Ground, ridge_ring
+from extensions.vegetation.ground import (
+    RIM,
+    Canyon,
+    Ground,
+    cliff_wall,
+    no_canyon,
+    ridge_ring,
+)
 from extensions.vegetation.kinds import (
     BEYOND,
     CULLED,
@@ -159,6 +166,8 @@ def test_wind_refuses_each_out_of_range_value() raises:
         _ = Wind(flutter=Angle(31.0, DEGREE))
     with assert_raises(contains="wobbles"):
         _ = Wind(flutter_rate=Frequency(21.0, PER_SECOND))
+    with assert_raises(contains="loop"):
+        _ = Wind(loop=Duration(-1.0, SECOND))
 
 
 def test_gusts_travel_downwind_at_their_speed() raises:
@@ -178,6 +187,56 @@ def test_gusts_travel_downwind_at_their_speed() raises:
         )
         assert_almost_equal(before, after, atol=1e-4)
         assert_true(before >= 0 and before <= 1)
+
+
+def test_a_looping_wind_repeats_itself_with_no_jump() raises:
+    """A wind with a loop has the same gusts and the same bend a loop
+    later, and just before the loop ends it is close to its start. Its
+    gusts keep their range in the middle of the loop."""
+    var wind = Wind(loop=Duration(2.0, SECOND))
+    var lowest = Float32(1)
+    var highest = Float32(0)
+    for i in range(40):
+        var x = Float32(i) * 1.3 - 20
+        var z = Float32(i) * -0.7 + 5
+        var start = wind.gust(x, z, Duration(0.0, SECOND))
+        var again = wind.gust(x, z, Duration(2.0, SECOND))
+        var late = wind.gust(x, z, Duration(5.25, SECOND))
+        var early = wind.gust(x, z, Duration(1.25, SECOND))
+        var end = wind.gust(x, z, Duration(1.999, SECOND))
+        assert_almost_equal(start, again, atol=1e-5)
+        assert_almost_equal(late, early, atol=1e-4)
+        assert_almost_equal(start, end, atol=0.02)
+        var middle = wind.gust(x, z, Duration(1.0, SECOND))
+        lowest = min(lowest, middle)
+        highest = max(highest, middle)
+        var bend = wind.tip_bend(start, 0.3, Duration(0.5, SECOND))
+        var later = wind.tip_bend(start, 0.3, Duration(4.5, SECOND))
+        assert_almost_equal(bend.x, later.x, atol=1e-4)
+        assert_almost_equal(bend.y, later.y, atol=1e-4)
+    assert_true(highest - lowest > 0.5)
+
+
+def test_a_looping_flutter_wobbles_a_whole_number_of_times() raises:
+    """A flutter of 1.6 wobbles a second in a 2 second loop wobbles three
+    times a loop. A slower one still wobbles once."""
+    var wind = Wind(
+        lean=Angle(0.0, DEGREE),
+        flutter_rate=Frequency(1.6, PER_SECOND),
+        loop=Duration(2.0, SECOND),
+    )
+    var slow = Wind(
+        lean=Angle(0.0, DEGREE),
+        flutter_rate=Frequency(0.1, PER_SECOND),
+        loop=Duration(2.0, SECOND),
+    )
+    var a = slow.tip_bend(0, 0.2, Duration(0.3, SECOND))
+    var b = slow.tip_bend(0, 0.2, Duration(2.3, SECOND))
+    assert_almost_equal(a.x, b.x, atol=1e-5)
+    var along = wind.downwind()
+    var peak = wind.tip_bend(0, 0, Duration(0.5 / 3.0, SECOND))
+    var wobble = Angle(8.0, DEGREE).to(RADIAN)
+    assert_almost_equal(peak.x * along.x + peak.y * along.y, wobble, atol=1e-4)
 
 
 def test_tip_bend_leans_downwind_and_still_air_leans_nothing() raises:
@@ -413,6 +472,99 @@ def test_ground_refuses_each_out_of_range_value() raises:
         _ = Ground(patch_length=Length(0.01, METER))
 
 
+def test_a_canyon_cuts_a_floor_and_raises_a_plateau() raises:
+    """The near side is not cut, the floor is `depth` down, and the far
+    plateau is `rise` up. A canyon out of range is refused, and no canyon
+    cuts nothing."""
+    var canyon = Canyon(
+        Length(100.0, METER),
+        Length(150.0, METER),
+        Length(30.0, METER),
+        Length(10.0, METER),
+    )
+    canyon.check()
+    assert_almost_equal(canyon.cut(-50), 0)
+    assert_almost_equal(canyon.cut(-125), -30)
+    assert_almost_equal(canyon.cut(-200), 10)
+    assert_almost_equal(canyon.cut(-100 - RIM * 0.5), -15, atol=1e-4)
+    assert_almost_equal(no_canyon().cut(-1500), 0)
+    var ground = Ground(hill_height=Length(0.0, METER), canyon=canyon)
+    assert_almost_equal(ground.height_at(3, -125), -30)
+    assert_almost_equal(ground.hills_at(3, -125), 0)
+    with assert_raises(contains="near rim"):
+        Canyon(
+            Length(-1.0, METER),
+            Length(150.0, METER),
+            Length(30.0, METER),
+            Length(10.0, METER),
+        ).check()
+    with assert_raises(contains="far rim"):
+        Canyon(
+            Length(100.0, METER),
+            Length(105.0, METER),
+            Length(30.0, METER),
+            Length(10.0, METER),
+        ).check()
+    with assert_raises(contains="deep"):
+        Canyon(
+            Length(100.0, METER),
+            Length(150.0, METER),
+            Length(-30.0, METER),
+            Length(10.0, METER),
+        ).check()
+    with assert_raises(contains="rise"):
+        Canyon(
+            Length(100.0, METER),
+            Length(150.0, METER),
+            Length(30.0, METER),
+            Length(2000.0, METER),
+        ).check()
+    with assert_raises(contains="near rim"):
+        _ = Ground(
+            canyon=Canyon(
+                Length(-5.0, METER),
+                Length(150.0, METER),
+                Length(30.0, METER),
+                Length(10.0, METER),
+            )
+        )
+
+
+def test_a_cliff_wall_faces_the_camera_from_floor_to_plateau() raises:
+    """The wall has a vertex at each corner of its grid. It runs from the
+    floor to just above the plateau, stands in front of the far rim, and
+    is mossy at its top. A canyon with no wall, and a size out of range,
+    are refused."""
+    var ground = Ground(
+        hill_height=Length(0.0, METER),
+        canyon=Canyon(
+            Length(100.0, METER),
+            Length(150.0, METER),
+            Length(30.0, METER),
+            Length(10.0, METER),
+        ),
+    )
+    var wall = cliff_wall(ground, Length(40.0, METER), 8, 4, 2)
+    assert_equal(wall.vertex_count(), 9 * 5)
+    assert_equal(len(wall.index), 8 * 4 * 6)
+    ref p = wall.attribute_view(String(POSITION))
+    ref c = wall.attribute_view(String(COLOR))
+    assert_almost_equal(p.vector3(0).y, -30, atol=1e-4)
+    assert_almost_equal(p.vector3(0).x, -20, atol=1e-4)
+    assert_true(p.vector3(44).y > 10 and p.vector3(44).y < 12.2)
+    for v in range(45):
+        assert_true(p.vector3(v).z > -150 + RIM)
+    assert_true(c.vector3(44).y > c.vector3(44).x)
+    with assert_raises(contains="no wall"):
+        _ = cliff_wall(Ground(), Length(40.0, METER), 8, 4, 2)
+    with assert_raises(contains="wide"):
+        _ = cliff_wall(ground, Length(0.5, METER), 8, 4, 2)
+    with assert_raises(contains="columns"):
+        _ = cliff_wall(ground, Length(40.0, METER), 1, 4, 2)
+    with assert_raises(contains="rows"):
+        _ = cliff_wall(ground, Length(40.0, METER), 8, 1, 2)
+
+
 def test_ground_heights_climb_and_masks_stay_in_range() raises:
     """Level hills climb by `climb` toward -z. Each mask is from zero to
     one, and a normal is of unit length."""
@@ -466,7 +618,7 @@ def test_ground_mesh_spaces_rows_closer_in_the_middle() raises:
 
 
 def test_a_ridge_ring_closes_and_rises() raises:
-    """A ring of eight columns has three rows a column and closes with no
+    """A ring of eight columns has nine rows a column and closes with no
     seam: its first and last columns meet. Its feet are on the ground."""
     var ring = ridge_ring(
         Length(100.0, METER),
@@ -475,16 +627,17 @@ def test_a_ridge_ring_closes_and_rises() raises:
         8,
         3,
     )
-    assert_equal(ring.vertex_count(), 27)
-    assert_equal(len(ring.index), 8 * 2 * 6)
+    assert_equal(ring.vertex_count(), 81)
+    assert_equal(len(ring.index), 8 * 8 * 6)
     ref p = ring.attribute_view(String(POSITION))
-    assert_almost_equal(p.vector3(1).y, p.vector3(25).y, atol=1e-3)
+    assert_almost_equal(p.vector3(4).y, p.vector3(76).y, atol=1e-3)
     assert_almost_equal(p.vector3(0).y, 0, atol=1e-6)
-    assert_almost_equal(p.vector3(2).x, 150, atol=1e-3)
+    assert_almost_equal(p.vector3(8).y, 0, atol=1e-4)
+    assert_almost_equal(p.vector3(8).x, 150, atol=1e-3)
     var highest = Float32(0)
-    for c in range(9):
-        highest = max(highest, p.vector3(3 * c + 1).y)
-    assert_true(highest > 0 and highest <= 30)
+    for v in range(81):
+        highest = max(highest, p.vector3(v).y)
+    assert_true(highest > 0 and highest <= 30 * 1.3)
     with assert_raises(contains="away"):
         _ = ridge_ring(
             Length(1.0, METER), Length(5.0, METER), Length(1.0, METER), 8, 0

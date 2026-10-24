@@ -14,8 +14,10 @@ every pixel of every frame.
 **Clouds.** Each direction above the horizon is projected onto a flat
 layer of cloud overhead. Four octaves of value noise give the cloud's
 thickness there, and `cloud_cover` sets how much of it shows. A cloud is
-white, brighter toward the sun, and gray where it is thick, as the base
-of a summer cumulus is.
+lit by how much cloud lies between it and the sun, read a little way
+along the layer toward the sun. So a cloud is white on its sunward edge,
+gray and a little blue where more cloud shades it, and brighter toward
+the sun, as a summer cumulus is.
 
 **The color.** `gain` scales Preetham's light to the light of the scene.
 `saturation` deepens the blue: Preetham's clear sky is pale once it is
@@ -55,6 +57,9 @@ comptime CLOUD_OCTAVES = 4
 comptime HAZE_BAND = Float32(0.12)
 # Texels on a side of the small cube Preetham's sky is drawn into.
 comptime PREETHAM_SIZE = 48
+# How far along the cloud layer toward the sun a cloud looks for the
+# cloud that shades it, as a change of direction.
+comptime SELF_SHADOW = Float32(0.05)
 
 
 struct SkyLook(ImplicitlyCopyable):
@@ -87,8 +92,8 @@ struct SkyLook(ImplicitlyCopyable):
         self.gain = 0.55
         self.saturation = 1.7
         self.tint = Vector3(0.85, 0.88, 1.12)
-        self.cloud_cover = 0.36
-        self.cloud_scale = 2.2
+        self.cloud_cover = 0.42
+        self.cloud_scale = 1.6
         self.seed = 9
 
     def check(self) raises:
@@ -267,8 +272,14 @@ def paint_sky(
                     zenith = max(zenith, _luminance(c))
         faces.append(data^)
     horizon = horizon / Float32(max(counted, 1))
-    # Pass two: the clouds over the clear sky, and the haze below.
+    # Pass two: the clouds over the clear sky, and the haze below. A
+    # cloud is lit by how much cloud lies between it and the sun: the
+    # density a little way along the layer toward the sun.
     var white = max(zenith, _luminance(horizon)) * 1.8
+    var level = sqrt(sun.x * sun.x + sun.z * sun.z)
+    var sunward = Vector3(sun.x, 0, sun.z) * (
+        SELF_SHADOW / max(level, Float32(1.0e-6))
+    )
     var textures = List[Texture]()
     for face in range(FACE_COUNT):  # pragma: no branch
         ref data = faces[face]
@@ -283,14 +294,25 @@ def paint_sky(
                     data[at + 2] = horizon.z
                     continue
                 var cloud = cloud_density(d, look)
+                var ahead = d + sunward
+                var thick = cloud_density(ahead / ahead.length(), look)
+                var lit = 1 - 0.7 * thick
                 var toward = max(d.dot(sun), 0)
                 var silver = 1 + 0.6 * pow(toward, Float32(6))
-                var body = white * silver * (1 - 0.35 * sqrt(cloud))
+                var body = (
+                    white
+                    * silver
+                    * (0.42 + 0.58 * lit)
+                    * (1 - 0.2 * sqrt(cloud))
+                )
                 var fade = smoothstep(0, HAZE_BAND, d.y)
                 var blend = cloud * (0.4 + 0.6 * fade)
-                data[at] += (body * 0.97 - data[at]) * blend
-                data[at + 1] += (body * 0.99 - data[at + 1]) * blend
-                data[at + 2] += (body * 1.02 - data[at + 2]) * blend
+                var r = body * (0.93 + 0.05 * lit)
+                var g = body * (0.96 + 0.03 * lit)
+                var b = body * 1.03
+                data[at] += (r - data[at]) * blend
+                data[at + 1] += (g - data[at + 1]) * blend
+                data[at + 2] += (b - data[at + 2]) * blend
         textures.append(
             float_texture(
                 size, size, data.copy(), CLAMP, BILINEAR, False, IGNORED

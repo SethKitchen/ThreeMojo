@@ -24,7 +24,7 @@ from extensions.vegetation.crown import (
 )
 from extensions.vegetation.field import LodBand
 from extensions.vegetation.foliage import SKYLIT, SUNLIT
-from extensions.vegetation.ground import Ground
+from extensions.vegetation.ground import Canyon, Ground
 from extensions.vegetation.meadow import (
     EXPOSURE,
     EYE_HEIGHT,
@@ -117,6 +117,15 @@ def _meadow_parameters(crowded: Bool) raises -> MeadowParameters:
     p.rocks = 0
     p.plantings = List[Planting]()
     if crowded:
+        p.ground = Ground(
+            seed=11,
+            canyon=Canyon(
+                Length(20.0, METER),
+                Length(36.0, METER),
+                Length(5.0, METER),
+                Length(3.0, METER),
+            ),
+        )
         p.rocks = 1
         p.plantings = [
             Planting(0, 2.0, -3.0, 1.0),
@@ -415,6 +424,7 @@ def test_the_light_helpers() raises:
     assert_true(renderer.shadow_map_type == PCF_SOFT_SHADOW_MAP)
     assert_true(renderer.antialias)
     var p = MeadowParameters()
+    assert_true(p.ground.canyon.depth.value > 0)
     var camera = meadow_camera(p, 16, 9, Length(2.0, METER))
     assert_almost_equal(camera.position.z, 28, atol=1e-5)
     assert_almost_equal(
@@ -448,7 +458,7 @@ def test_plantings_scatter_across_the_view() raises:
     assert_equal(len(crowns), 7)
     assert_true(crowns[6].leaf_length.value < crowns[0].leaf_length.value)
     var plantings = default_plantings()
-    assert_true(len(plantings) > 100)
+    assert_equal(len(plantings), 3 + 22 + 26 + 45)
     for index in range(len(plantings)):
         assert_true(plantings[index].crown < len(crowns))
 

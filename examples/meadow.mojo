@@ -4,7 +4,7 @@
 # See LICENSE, LICENSE-COMMERCIAL.md and THIRD-PARTY-NOTICES.md.
 
 """Summer grassland at head height: tall grass, a lone tree, scattered
-trees and bushes, and mountains.
+trees and bushes, a band of cliffs, and mountains.
 
     mojo run -I . examples/meadow.mojo [path.png]
 
