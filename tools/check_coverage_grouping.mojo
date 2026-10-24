@@ -3683,6 +3683,38 @@ def truth_log(
     return log
 
 
+def _truth_native_rows(changing: Bool) raises -> String:
+    """Return the native rows for one changing mode."""
+    var text = String()
+    var fail = -1
+    while fail < 4:
+        var mask = 0
+        while mask < 16:
+            var number = 0
+            while number < 43:
+                var log = truth_log(number, mask, fail, changing)
+                var changing_text = "False"
+                if changing:
+                    changing_text = "True"
+                text += (
+                    "TRUTH "
+                    + String(number)
+                    + " "
+                    + String(mask)
+                    + " "
+                    + String(fail)
+                    + " "
+                    + changing_text
+                    + " "
+                    + log
+                    + "\n"
+                )
+                number += 1
+            mask += 1
+        fail += 1
+    return text
+
+
 def truth_model_rows() raises -> String:
     """Return every custom-truth row, with a trailing newline.
 
@@ -3692,35 +3724,82 @@ def truth_model_rows() raises -> String:
     Raises:
         Error: If a reference tree is missing.
     """
+    return _truth_native_rows(False) + _truth_native_rows(True)
+
+
+def _truth_lines(stdout: String) -> String:
+    """Return the `TRUTH` lines, with a trailing newline."""
     var text = String()
-    for changing in [False, True]:
-        var fail = -1
-        while fail < 4:
-            var mask = 0
-            while mask < 16:
-                var number = 0
-                while number < 43:
-                    var log = truth_log(number, mask, fail, changing)
-                    var changing_text = "False"
-                    if changing:
-                        changing_text = "True"
-                    text += (
-                        "TRUTH "
-                        + String(number)
-                        + " "
-                        + String(mask)
-                        + " "
-                        + String(fail)
-                        + " "
-                        + changing_text
-                        + " "
-                        + log
-                        + "\n"
-                    )
-                    number += 1
-                mask += 1
-            fail += 1
+    for line in stdout.splitlines():
+        var row = String(line)
+        if row.startswith("TRUTH "):
+            text += row + "\n"
     return text
+
+
+def check_custom_truth_native(mojo: String) raises:
+    """Require the native custom-truth program to match the model.
+
+    Args:
+        mojo: The Mojo compiler.
+
+    Raises:
+        Error: If the build fails or a stable or changing row differs.
+    """
+    var compiler = absolute_path(mojo)
+    var source = Path("tools/fixtures/coverage_truth_native.txt").read_text()
+    var work = mkdtemp(prefix="threemojo-truth-native-")
+    try:
+        var native = work + "/native"
+        _ = _must(["mkdir", "-p", native], 10)
+        var name = "truth"
+        Path(native + "/" + name + ".mojo").write_text(source)
+        var binary = work + "/" + name + "-native"
+        _ = _must(
+            [
+                compiler,
+                "build",
+                "-Werror",
+                "-I",
+                native,
+                native + "/" + name + ".mojo",
+                "-o",
+                binary,
+            ],
+            180,
+        )
+        for changing in [False, True]:
+            var flag = "0"
+            if changing:
+                flag = "1"
+            var temp = mkdtemp(prefix="threemojo-truth-run-")
+            var ran = _must(
+                _with_env(
+                    [
+                        "TMPDIR=" + temp,
+                        "THREEMOJO_TEST_TMPDIR=" + temp,
+                        "THREEMOJO_TRUTH_CHANGING=" + flag,
+                    ],
+                    [binary],
+                ),
+                10,
+            )
+            _ = _must(["rm", "-rf", temp], 10)
+            if (
+                len(result_errors(ran.output)) > 0
+                or len(slow_tests(ran.output, 5.0)) > 0
+            ):
+                raise Error(ran.output)
+            var actual = _truth_lines(ran.output)
+            var expected = _truth_native_rows(changing)
+            if actual != expected:
+                raise Error(actual)
+        print(
+            "PASS: 43 custom truth trees, 16 masks, and 5 failure positions,"
+            " stable and changing"
+        )
+    finally:
+        _ = run_program(["rm", "-rf", work], 30)
 
 
 def main() raises:
@@ -3752,6 +3831,7 @@ def main() raises:
         check_temporary_identity(mojo)
         check_generic_pair(mojo)
         check_single_generic(mojo)
+        check_custom_truth_native(mojo)
     except error:
         print(String(error), file=stderr)
         exit(1)

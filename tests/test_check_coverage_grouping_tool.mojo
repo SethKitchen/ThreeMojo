@@ -177,6 +177,13 @@ def test_the_custom_truth_model_matches_the_pinned_rows() raises:
     assert_equal(truth_log(39, 2, -1, False), "+00~0=111~1|T~1~2")
     assert_equal(truth_log(41, 4, -1, False), "+00~0+1=33~3|F~2~3")
     assert_equal(truth_log(42, 5, 0, True), "+0|E~1")
+    var source = Path("tools/fixtures/coverage_truth_native.txt").read_text()
+    assert_equal(
+        sha256_hex(source.as_bytes()),
+        "6f45fbda2c547306d100449921a34d47866fb74a5f50e3da9ff52f6b8fe90d98",
+    )
+    assert_true(source.find("def truth_0(") >= 0)
+    assert_true(source.find("def truth_42(") >= 0)
     assert_equal(
         sha256_hex(truth_model_rows().as_bytes()),
         "25f58af42cbb9e5d2118a66f0b95c71d7158d20f5b9f86fdc8b80c46d57c9d85",
