@@ -32,9 +32,29 @@ BATCH = 40
 LIMIT = 55
 
 
+def _paths_tool(arguments):
+    """Return the text from `tools/carla_town_paths.mojo`."""
+    here = os.path.dirname(os.path.abspath(__file__))
+    repo = os.path.abspath(os.path.join(here, "..", "..", "..", ".."))
+    mojo = os.path.join(repo, ".venv", "bin", "mojo")
+    if not os.path.isfile(mojo):
+        mojo = "mojo"
+    result = subprocess.run(
+        ["sh", os.path.join(repo, "tools", "tool.sh"), mojo,
+         "carla_town_paths", *arguments],
+        capture_output=True, text=True,
+    )
+    if result.returncode != 0:
+        raise ValueError(result.stderr.strip() or "town paths failed")
+    return result.stdout
+
+
 def object_path(full_name):
-    """Return `/Game/A/B` from UE4SS's `Class /Game/A/B.B`."""
-    return full_name.split(" ", 1)[1].rsplit(".", 1)[0]
+    """Return `/Game/A/B` from UE4SS's `Class /Game/A/B.B`.
+
+    `tools/carla_town_paths.mojo` reads the name.
+    """
+    return _paths_tool(["object", full_name]).rstrip("\n")
 
 
 def rows(town):
@@ -45,19 +65,23 @@ def rows(town):
 
 def wanted(towns):
     """Return the meshes and the materials the towns place, as `/Game/...`
-    paths, without the engine's."""
-    meshes, materials = set(), set()
+    paths, without the engine's.
+
+    `tools/carla_town_paths.mojo` reads the layouts.
+    """
+    arguments = ["wanted"]
     for town in towns:
-        for row in rows(town):
-            meshes.add(object_path(row["mesh"]))
-            materials.update(object_path(m) for m in row["materials"] if m)
-    game = lambda paths: sorted(p for p in paths if p.startswith("/Game/"))
-    return game(meshes), game(materials)
+        arguments.append(os.path.join(LAYOUT, town + ".jsonl"))
+    doc = json.loads(_paths_tool(arguments))
+    return doc["meshes"], doc["materials"]
 
 
 def relative(game_path):
-    """Return a `/Game/...` path as the cooked package UModel loads."""
-    return game_path[len("/Game/"):] + ".uasset"
+    """Return a `/Game/...` path as the cooked package UModel loads.
+
+    `tools/carla_town_paths.mojo` reads the path.
+    """
+    return _paths_tool(["relative", game_path]).rstrip("\n")
 
 
 def exported(game_path, suffix):
