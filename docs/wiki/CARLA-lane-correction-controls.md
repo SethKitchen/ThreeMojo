@@ -10,7 +10,8 @@ They keep the original queries, map fixtures and numerical tolerances.
 They do not establish that every admitted map is release-qualified.
 The lane implementation remains a held draft until all final gates pass.
 
-The reproducible scripts are in `tools/carla_lane_oracle`. They bind their
+The reproducible scripts are in `tools/carla_lane_oracle`. The rounding
+report is `tools/carla_rounding_bound.mojo`. They bind their
 proofs to evaluator and fixture source hashes and preserve the native-exported
 constant bits. Their README lists the four commands and report directory.
 

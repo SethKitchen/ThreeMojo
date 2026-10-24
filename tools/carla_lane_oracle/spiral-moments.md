@@ -218,7 +218,7 @@ recurrence and correction update. It proves that `_sum2_error_checked` retains
 the initial arithmetic leaf after its function rename. The error formula is
 E + (u + gamma_(n-1)^2) M, where E bounds inherited term error and M bounds the
 sum of absolute rounded terms. Its count and magnitude guards remain required.
-`rounding.py` independently propagates this bound for the finite town controls.
+`tools/carla_rounding_bound.mojo` independently propagates this bound for the finite town controls.
 Nearest rounding, gradual underflow, materialized terms, no reassociation and
 no intermediate overflow are required. FTZ/DAZ is unsupported.
 
