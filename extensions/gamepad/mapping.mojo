@@ -1137,6 +1137,25 @@ struct MappingDatabase(Movable):
                 added += self.add_mapping(line, PRIORITY_API)
         return added
 
+    def add_generated_mapping(
+        mut self, guid: JoystickGuid, mapping: String
+    ) raises -> Int:
+        """Add a mapping that a driver made for a GUID, at the default
+        priority. SDL: `SDL_PrivateAddMappingForGUID`, as the HIDAPI
+        mapping maker calls it.
+
+        Args:
+            guid: The device's GUID.
+            mapping: The whole mapping string.
+
+        Returns:
+            The index of the mapping.
+
+        Raises:
+            Error: If the mapping has no name or no fields.
+        """
+        return self._add_mapping_for_guid(guid, mapping, PRIORITY_DEFAULT)[0]
+
     def mapping_for_name_and_guid(
         mut self, name: String, guid: JoystickGuid
     ) raises -> Int:
