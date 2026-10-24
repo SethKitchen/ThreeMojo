@@ -495,6 +495,30 @@ def collapse_gather(source, values, width):
     return json.loads(result.stdout)["values"]
 
 
+def simplify_target(payload):
+    """Return JSON from `tools/carla_simplify_target.mojo`."""
+    here = os.path.dirname(os.path.abspath(__file__))
+    repo = os.path.abspath(os.path.join(here, "..", "..", "..", ".."))
+    mojo = os.path.join(repo, ".venv", "bin", "mojo")
+    if not os.path.isfile(mojo):
+        mojo = "mojo"
+    folder = tempfile.mkdtemp(prefix="simplify-target-")
+    try:
+        path = os.path.join(folder, "target.json")
+        with open(path, "w", encoding="utf-8") as handle:
+            json.dump(payload, handle, separators=(",", ":"), allow_nan=False)
+        result = subprocess.run(
+            ["sh", os.path.join(repo, "tools", "tool.sh"), mojo,
+             "carla_simplify_target", path],
+            capture_output=True, text=True,
+        )
+    finally:
+        shutil.rmtree(folder, ignore_errors=True)
+    if result.returncode != 0:
+        raise ValueError(result.stderr.strip() or "simplify target failed")
+    return json.loads(result.stdout)
+
+
 def decimate(gltf, data, budget):
     """Bring a model's triangles down to about `budget`, and return the
     buffer with the new primitives' data added.
@@ -503,7 +527,8 @@ def decimate(gltf, data, budget):
     fast-simplification package), so no material bleeds into another, and
     its open edges stay put: glTF splits a vertex along a texture seam, so
     the seams are edges and the textures do not tear. Every primitive
-    gives up the same share. One of fewer than `KEEP` triangles is kept
+    gives up the same share. `tools/carla_simplify_target.mojo` chooses
+    that share. One of fewer than `KEEP` triangles is kept
     whole, and so is a cut-out one, a tree's leaves: each leaf is a card
     of two triangles, all edge, which a collapse would tear. Each new
     vertex takes the texture coordinates and the tangent of an old vertex
@@ -518,26 +543,34 @@ def decimate(gltf, data, budget):
         count = gltf["accessors"][primitive["indices"]]["count"] // 3
         return count < KEEP or material.get("alphaMode") == "MASK"
 
-    total = kept = 0
+    counts = []
+    fixed_flags = []
     for mesh in gltf["meshes"]:
         for primitive in mesh["primitives"]:
             count = gltf["accessors"][primitive["indices"]]["count"] // 3
-            total += count
-            kept += count if fixed(primitive) else 0
-    if total <= budget or total == kept:
+            counts.append(count)
+            fixed_flags.append(bool(fixed(primitive)))
+    chosen = simplify_target({
+        "mode": "vehicle",
+        "counts": counts,
+        "fixed": fixed_flags,
+        "budget": int(budget),
+        "keep": int(KEEP),
+    })
+    if chosen["skip"]:
         return data
-    keep = max(0.05, (budget - kept) / (total - kept))
     out = bytearray(data)
+    slot = 0
     for mesh in gltf["meshes"]:
         for primitive in mesh["primitives"]:
+            target = chosen["targets"][slot]
+            slot += 1
             if fixed(primitive):
                 continue
             indices, _ = _read(data, gltf, primitive["indices"])
-            count = len(indices) // 3
             positions, _ = _read(data, gltf, primitive["attributes"]["POSITION"])
             points = numpy.array(positions, dtype=numpy.float64).reshape(-1, 3)
             faces = numpy.array(indices, dtype=numpy.int32).reshape(-1, 3)
-            target = max(KEEP // 2, int(count * keep))
             _, _, collapses = fast_simplification.simplify(
                 points, faces, target_count=target, return_collapses=True, preserve_border=True)
             new_points, new_faces, mapping = fast_simplification.replay_simplification(

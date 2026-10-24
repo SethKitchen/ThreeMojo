@@ -129,7 +129,9 @@ Some portable features remain partial, including [GLSL shaders](https://github.c
 ### Project tools
 
 <details>
-<summary>Implemented: 29</summary>
+<summary>Implemented: 30</summary>
+
+- [x] [Simplification target for a CARLA mesh](https://github.com/SethKitchen/ThreeMojo/wiki/CARLA-assets#the-carla-towns): `tools/carla_simplify_target.mojo` chooses how many triangles a simplified mesh keeps [#761](https://github.com/SethKitchen/ThreeMojo/issues/761)
 
 - [x] [Collapse map for a simplified mesh](https://github.com/SethKitchen/ThreeMojo/wiki/CARLA-assets#rebuild-the-vehicle-zips): `tools/carla_collapse_map.mojo` keeps the first corner that fell into each new one and copies its texture values [#761](https://github.com/SethKitchen/ThreeMojo/issues/761)
 

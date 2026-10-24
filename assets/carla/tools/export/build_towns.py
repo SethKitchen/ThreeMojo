@@ -598,12 +598,20 @@ def simplify(primitive, target, borders=True, small=False):
     faces = primitive["triangles"]
     if not borders:
         return simplify_welded(primitive, target)
-    floor = fix.KEEP // 2 if not small else 8
-    if len(faces) <= max(target, floor) or (not small and len(faces) < fix.KEEP):
+    # `tools/carla_simplify_target.mojo` chooses the target. A mesh under
+    # KEEP triangles stays whole unless the town's cap asks for less.
+    chosen = fix.simplify_target({
+        "mode": "collapse",
+        "triangles": len(faces),
+        "target": int(target),
+        "small": bool(small),
+        "keep": int(fix.KEEP),
+    })
+    if chosen["whole"]:
         return primitive
     points = primitive["positions"]
     _, _, collapses = fast_simplification.simplify(
-        points, faces.astype(numpy.int32), target_count=max(floor, target),
+        points, faces.astype(numpy.int32), target_count=int(chosen["count"]),
         return_collapses=True, preserve_border=True)
     new_points, new_faces, mapping = fast_simplification.replay_simplification(
         points, faces.astype(numpy.int32), collapses)
@@ -699,7 +707,14 @@ def simplify_welded(primitive, target):
     """
     import fast_simplification
     faces = primitive["triangles"]
-    if len(faces) <= max(target, 8):
+    # `tools/carla_simplify_target.mojo` keeps a far mesh of at most 8
+    # triangles whole.
+    chosen = fix.simplify_target({
+        "mode": "weld",
+        "triangles": len(faces),
+        "target": int(target),
+    })
+    if chosen["whole"]:
         return primitive
     welded = _weld_tool(primitive["positions"], faces)
     if welded.get("empty"):
@@ -708,9 +723,14 @@ def simplify_welded(primitive, target):
     joined = numpy.array(welded["triangles"], dtype=numpy.int64)
     if len(joined) == 0:
         return None
-    if len(joined) > max(target, 8):
+    again = fix.simplify_target({
+        "mode": "weld",
+        "triangles": len(joined),
+        "target": int(target),
+    })
+    if not again["whole"]:
         _, _, collapses = fast_simplification.simplify(
-            points, joined.astype(numpy.int32), target_count=max(8, target),
+            points, joined.astype(numpy.int32), target_count=int(again["count"]),
             return_collapses=True, preserve_border=False)
         points, joined, _ = fast_simplification.replay_simplification(
             points, joined.astype(numpy.int32), collapses)
@@ -1492,17 +1512,25 @@ def lower(primitive, kind, mesh_path, index, total, masked, lod, factor=1.0):
     """Return one primitive of a mesh at a level of detail, or None.
     `factor` is the share of its budget that the town's cap for its kind
     leaves it."""
-    limit = limit_of(kind, total, mesh_path, lod) * factor
-    if limit == 0:
+    # `tools/carla_simplify_target.mojo` chooses the share. A zero budget
+    # keeps nothing. A masked mesh keeps leaf cards.
+    chosen = fix.simplify_target({
+        "mode": "share",
+        "budget": int(limit_of(kind, total, mesh_path, lod)),
+        "factor": float(factor),
+        "triangles": len(primitive["triangles"]),
+        "total": int(total),
+        "masked": bool(masked),
+        "keep": int(fix.KEEP),
+    })
+    if chosen["action"] == "none":
         return None
-    share = limit / max(total, 1)
-    if masked:
-        keep = min(1.0, share * 1.15)
+    if chosen["action"] == "cards":
         seed = zlib.crc32(mesh_path.encode()) + index + 7919 * lod
-        return thin_cards(primitive, keep, seed) if keep < 0.95 else primitive
-    # A part under KEEP triangles stays whole unless the town's cap asks
-    # for less: a guardrail is thousands of small segments.
-    return simplify(primitive, int(len(primitive["triangles"]) * share), borders=lod == 0, small=factor < 1.0)
+        return thin_cards(primitive, chosen["keep"], seed)
+    if chosen["action"] == "whole":
+        return primitive
+    return simplify(primitive, chosen["target"], borders=lod == 0, small=chosen["small"])
 
 
 def _spline_place(local, normals, triangles, rows):

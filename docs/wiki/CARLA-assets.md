@@ -421,7 +421,7 @@ CARLA's vehicles are Unreal Engine 4.26 assets. The scripts in `assets/carla/too
 1. It rebuilds each material from the parameters that UModel writes beside the mesh. It uses the base color, normal and ORM maps, the car paint's color and translucent glass. It scales each texture to 1024 pixels or less.
 2. It removes the skin, because the town takes plain meshes. It removes Unreal's vertex colors, because they are masks and not colors. `tools/carla_gltf_skin.mojo` removes the skin, the joints, the weights and those colors.
 3. It splits the lamps into head lamps and tail lamps. CARLA's lamp material reads an eight-color mask, and UModel does not export what the colors mean. So a lamp in front of the model's middle is a head lamp, and a lamp behind it is a tail lamp. `tools/carla_gltf_read.mojo` reads each accessor.
-4. It simplifies the model to `--budget` triangles, 35,000 by default, one primitive at a time. The seams stay where they are, so the textures do not tear. The normals are made again from the simplified faces. `tools/carla_area_normals.mojo` weights each normal by the area of the faces that meet there. `tools/carla_collapse_map.mojo` keeps the first corner that fell into each new one and copies its texture values. `tools/carla_gltf_append.mojo` packs each new buffer view.
+4. It simplifies the model to `--budget` triangles, 35,000 by default, and `tools/carla_simplify_target.mojo` chooses each part's share. The seams stay where they are, so the textures do not tear. The normals are made again from the simplified faces. `tools/carla_area_normals.mojo` weights each normal by the area of the faces that meet there. `tools/carla_collapse_map.mojo` keeps the first corner that fell into each new one and copies its texture values. `tools/carla_gltf_append.mojo` packs each new buffer view.
 
 The simplification needs the `fast-simplification` Python package.
 
@@ -456,7 +456,7 @@ Each mesh keeps a share of its triangles, by its kind. Each town also has a cap 
 
 `tools/carla_town_cards.mojo` keeps about the requested share of those cards and grows each card that stays. `tools/carla_town_uv.mojo` gives a simplified triangle the texture of one original triangle. `tools/carla_town_near.mojo` finds the original triangles nearest that face. `tools/carla_town_choose.mojo` picks that original triangle. `tools/carla_collapse_map.mojo` keeps the first corner that fell into each new one and copies its texture values. `tools/carla_town_finish.mojo` keeps each simplified corner inside the original box and turns a flipped face back.
 
-The kind of each mesh and both triangle limits come from `tools/carla_town_budget.mojo`. `build_towns.py` asks that program for every mesh.
+The kind of each mesh and both triangle limits come from `tools/carla_town_budget.mojo`. `build_towns.py` asks that program for every mesh. `tools/carla_simplify_target.mojo` chooses how many of those triangles one mesh keeps.
 
 Some textures in CARLA's content show a company's mark, a real person, a real institution or a poster of unclear origin. CARLA's license covers CARLA's own work, not these. Each one becomes one flat color, its average. `NEUTRAL` in `carla_gltf_fix.py` names them, and the vehicle packages use the same list.
 
