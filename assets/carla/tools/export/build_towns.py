@@ -1006,8 +1006,10 @@ _IMPOSTOR_LIGHT = None
 
 def _albedo(library, material):
     """Return a material's base color image as float RGBA, and its
-    factor."""
-    from PIL import Image
+    factor.
+
+    `tools/carla_image.mojo` reads the file.
+    """
     entry = library.gltf["materials"][material]
     pbr = entry.get("pbrMetallicRoughness", {})
     factor = numpy.array(pbr.get("baseColorFactor", [1, 1, 1, 1]), dtype=numpy.float64)
@@ -1016,7 +1018,9 @@ def _albedo(library, material):
         return None, factor
     source = library.gltf["textures"][texture["index"]]["source"]
     path = os.path.join(library.package.out_dir, library.gltf["images"][source]["uri"])
-    return numpy.asarray(Image.open(path).convert("RGBA"), dtype=numpy.float64) / 255.0, factor
+    _, width, height, rgba = fix.open_image(path)
+    image = numpy.array(rgba, dtype=numpy.float64).reshape(height, width, 4) / 255.0
+    return image, factor
 
 
 def _raster_tool(parts, library, request):

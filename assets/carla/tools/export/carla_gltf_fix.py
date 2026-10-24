@@ -25,7 +25,6 @@ pixels, color textures as JPEG and data textures as PNG.
 """
 
 import argparse
-import io
 import json
 import os
 import shutil
@@ -33,8 +32,6 @@ import struct
 import subprocess
 import sys
 import tempfile
-
-from PIL import Image
 
 # A primitive of fewer triangles is not simplified: a badge, a mirror.
 KEEP = 400
@@ -338,27 +335,87 @@ def save_jpeg(pixels, width, height, mode, quality, optimize):
         shutil.rmtree(folder, ignore_errors=True)
 
 
-def _save_texture(package, image, plan):
-    """Encode `image` with the format and options in `plan`."""
+def open_image(path):
+    """Return the mode, size and RGBA samples from `tools/carla_image.mojo`.
+
+    The samples match Pillow's ``convert("RGBA")``. ``mode`` is the mode
+    ``Image.open`` reports.
+    """
+    here = os.path.dirname(os.path.abspath(__file__))
+    repo = os.path.abspath(os.path.join(here, "..", "..", "..", ".."))
+    mojo = os.path.join(repo, ".venv", "bin", "mojo")
+    if not os.path.isfile(mojo):
+        mojo = "mojo"
+    result = subprocess.run(
+        ["sh", os.path.join(repo, "tools", "tool.sh"), mojo, "carla_image", path],
+        capture_output=True,
+    )
+    if result.returncode != 0:
+        raise ValueError(result.stderr.decode("utf-8", "replace").strip()
+                         or "image open failed")
+    doc = json.loads(result.stdout)
+    return doc["mode"], int(doc["width"]), int(doc["height"]), doc["pixels"]
+
+
+def _rgb_of(rgba):
+    """Return the RGB samples of an RGBA list."""
+    out = []
+    for index in range(0, len(rgba), 4):
+        out.extend(rgba[index:index + 3])
+    return out
+
+
+def _alpha_of(rgba):
+    """Return the alpha samples of an RGBA list."""
+    return list(rgba[3::4])
+
+
+def _nearest(rgba, width, height, out_width, out_height):
+    """Return a nearest resize, as Pillow resizes a palette image."""
+    out = []
+    for y in range(out_height):
+        sy = min(height - 1, int((y + 0.5) * height / out_height))
+        for x in range(out_width):
+            sx = min(width - 1, int((x + 0.5) * width / out_width))
+            start = (sy * width + sx) * 4
+            out.extend(rgba[start:start + 4])
+    return out
+
+
+def _resize_rgba(mode, rgba, width, height, out_width, out_height, filt):
+    """Resize one opened image the way Pillow resizes that mode."""
+    if mode == "P":
+        return _nearest(rgba, width, height, out_width, out_height)
+    if mode in ("LA", "RGBA"):
+        return resize_image(rgba, width, height, 4, out_width, out_height, filt)
+    if mode == "L":
+        resized = resize_image(
+            list(rgba[0::4]), width, height, 1, out_width, out_height, filt,
+        )
+        out = []
+        for value in resized:
+            out.extend((value, value, value, 255))
+        return out
+    resized = resize_image(
+        _rgb_of(rgba), width, height, 3, out_width, out_height, filt,
+    )
+    out = []
+    for index in range(0, len(resized), 3):
+        out.extend(resized[index:index + 3])
+        out.append(255)
+    return out
+
+
+def _save_texture(package, pixels, width, height, mode, plan):
+    """Encode `pixels` with the format and options in `plan`."""
     options = {}
     if plan["quality"] >= 0:
         options["quality"] = int(plan["quality"])
     if plan["optimize"]:
         options["optimize"] = True
-    return package._write_texture(image, plan["format"], **options)
-
-
-def _pillow_resize(image, size, mode):
-    """Return `image` resized to `size` by the Mojo Pillow filter."""
-    if image.mode not in ("L", "RGB", "RGBA"):
-        filt = Image.Resampling.LANCZOS if mode == "lanczos" else Image.Resampling.BOX
-        return image.resize(size, filt)
-    bands = {"L": 1, "RGB": 3, "RGBA": 4}[image.mode]
-    pixels = resize_image(
-        list(image.tobytes()), image.width, image.height, bands,
-        size[0], size[1], mode,
+    return package._write_texture(
+        pixels, width, height, mode, plan["format"], **options
     )
-    return Image.frombytes(image.mode, size, bytes(pixels))
 
 
 class Package:
@@ -373,7 +430,7 @@ class Package:
         gltf["textures"] = []
         gltf["samplers"] = [{"magFilter": 9729, "minFilter": 9987, "wrapS": 10497, "wrapT": 10497}]
 
-    def _write_texture(self, image, image_format, **options):
+    def _write_texture(self, pixels, width, height, mode, image_format, **options):
         """Name each packaged texture by its encoded bytes.
 
         Different source paths can have the same stem, and one color can
@@ -383,19 +440,17 @@ class Package:
         """
         if image_format == "PNG":
             data = save_png(
-                list(image.tobytes()), image.width, image.height, image.mode,
+                pixels, width, height, mode,
                 bool(options.get("optimize", False)),
             )
         elif image_format == "JPEG":
             data = save_jpeg(
-                list(image.tobytes()), image.width, image.height, image.mode,
+                pixels, width, height, mode,
                 int(options.get("quality", -1)),
                 bool(options.get("optimize", False)),
             )
         else:
-            with io.BytesIO() as output:
-                image.save(output, format=image_format, **options)
-                data = output.getvalue()
+            raise ValueError("texture format is not JPEG or PNG")
         name = _texture_name(data, image_format)
         os.makedirs(os.path.join(self.out_dir, "textures"), exist_ok=True)
         with open(os.path.join(self.out_dir, "textures", name), "wb") as target:
@@ -410,19 +465,23 @@ class Package:
         key = (source, color)
         if key in self.images:
             return self.images[key]
-        image = Image.open(source)
-        plan = _texture_plan(
-            source, color, self.max_size, image.width, image.height, False,
-        )
+        mode, width, height, rgba = open_image(source)
+        plan = _texture_plan(source, color, self.max_size, width, height, False)
         if plan["neutral"]:
-            rgb = image.convert("RGB")
             average = resize_image(
-                list(rgb.tobytes()), rgb.width, rgb.height, 3, 1, 1, "box",
+                _rgb_of(rgba), width, height, 3, 1, 1, "box",
             )
-            image = Image.new("RGB", (8, 8), tuple(average))
+            rgba = []
+            for _ in range(64):
+                rgba.extend((average[0], average[1], average[2], 255))
+            width, height = 8, 8
+            mode = "RGB"
         if plan["resize"]:
-            image = _pillow_resize(image, (plan["width"], plan["height"]), "lanczos")
-        uri = _save_texture(self, image.convert("RGB"), plan)
+            rgba = _resize_rgba(
+                mode, rgba, width, height, plan["width"], plan["height"], "lanczos",
+            )
+            width, height = plan["width"], plan["height"]
+        uri = _save_texture(self, _rgb_of(rgba), width, height, "RGB", plan)
         self.gltf["images"].append({"uri": uri})
         self.gltf["textures"].append({"sampler": 0, "source": len(self.gltf["images"]) - 1})
         index = len(self.gltf["textures"]) - 1
@@ -438,26 +497,30 @@ class Package:
         key = (color, mask, "masked")
         if key in self.images:
             return self.images[key]
-        rgb = Image.open(color).convert("RGB")
-        source = Image.open(mask)
-        if source.mode in ("RGBA", "LA"):
-            alpha = source.getchannel("A")
+        _, width, height, color_rgba = open_image(color)
+        rgb = _rgb_of(color_rgba)
+        mask_mode, mask_width, mask_height, mask_rgba = open_image(mask)
+        if mask_mode in ("RGBA", "LA"):
+            alpha = _alpha_of(mask_rgba)
         else:
             # `tools/carla_mask_channel.mojo` chooses the cut-out channel.
-            rgb_mask = source.convert("RGB")
-            chosen = mask_channel(
-                list(rgb_mask.tobytes()), rgb_mask.width, rgb_mask.height,
+            chosen = mask_channel(_rgb_of(mask_rgba), mask_width, mask_height)
+            alpha = chosen["pixels"]
+        if (mask_width, mask_height) != (width, height):
+            alpha = resize_image(
+                alpha, mask_width, mask_height, 1, width, height, "lanczos",
             )
-            alpha = Image.frombytes(
-                "L", rgb_mask.size, bytes(chosen["pixels"]),
-            )
-        alpha = _pillow_resize(alpha, rgb.size, "lanczos")
-        image = rgb.copy()
-        image.putalpha(alpha)
-        plan = _texture_plan("", False, self.max_size, image.width, image.height, True)
+        rgba = []
+        for index in range(width * height):
+            rgba.extend(rgb[index * 3:index * 3 + 3])
+            rgba.append(alpha[index])
+        plan = _texture_plan("", False, self.max_size, width, height, True)
         if plan["resize"]:
-            image = _pillow_resize(image, (plan["width"], plan["height"]), "lanczos")
-        uri = _save_texture(self, image, plan)
+            rgba = resize_image(
+                rgba, width, height, 4, plan["width"], plan["height"], "lanczos",
+            )
+            width, height = plan["width"], plan["height"]
+        uri = _save_texture(self, rgba, width, height, "RGBA", plan)
         self.gltf["images"].append({"uri": uri})
         self.gltf["textures"].append({"sampler": 0, "source": len(self.gltf["images"]) - 1})
         index = len(self.gltf["textures"]) - 1
