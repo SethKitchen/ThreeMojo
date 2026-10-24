@@ -622,6 +622,35 @@ CLUSTER_DIVISIONS = 200
 CLUSTER_CELL = 0.25
 
 
+def _weld_tool(positions, triangles):
+    """Return JSON from `tools/carla_town_weld.mojo`."""
+    here = os.path.dirname(os.path.abspath(__file__))
+    repo = os.path.abspath(os.path.join(here, "..", "..", "..", ".."))
+    mojo = os.path.join(repo, ".venv", "bin", "mojo")
+    if not os.path.isfile(mojo):
+        mojo = "mojo"
+    folder = tempfile.mkdtemp(prefix="town-weld-")
+    try:
+        path = os.path.join(folder, "weld.json")
+        with open(path, "w", encoding="utf-8") as handle:
+            json.dump({
+                "positions": numpy.asarray(positions, dtype=float).reshape(-1, 3).tolist(),
+                "triangles": numpy.asarray(triangles).reshape(-1, 3).tolist(),
+                "divisions": CLUSTER_DIVISIONS,
+                "minimum": CLUSTER_CELL,
+            }, handle, separators=(",", ":"), allow_nan=False)
+        result = subprocess.run(
+            ["sh", os.path.join(repo, "tools", "tool.sh"), mojo,
+             "carla_town_weld", path],
+            capture_output=True, text=True,
+        )
+    finally:
+        shutil.rmtree(folder, ignore_errors=True)
+    if result.returncode != 0:
+        raise ValueError(result.stderr.strip() or "weld failed")
+    return json.loads(result.stdout)
+
+
 def simplify_welded(primitive, target):
     """Return a primitive lowered to about `target` triangles for the far
     level of detail.
@@ -635,27 +664,19 @@ def simplify_welded(primitive, target):
     wall stays a wall. Then the joined mesh is collapsed to the target
     with its edges free to move.
 
-    Each new triangle is flat, its corners apart, and takes its texture
-    coordinates from one original triangle, by `transfer_uvs`.
+    `tools/carla_town_weld.mojo` gathers the corners. Each new triangle is
+    flat, its corners apart, and takes its texture coordinates from one
+    original triangle, by `transfer_uvs`.
     """
     import fast_simplification
     faces = primitive["triangles"]
     if len(faces) <= max(target, 8):
         return primitive
-    positions = primitive["positions"]
-    size = numpy.linalg.norm(positions.max(axis=0) - positions.min(axis=0))
-    cell = max(CLUSTER_CELL, size / CLUSTER_DIVISIONS)
-    _, gathered = numpy.unique(numpy.floor(positions / cell).astype(numpy.int64), axis=0, return_inverse=True)
-    gathered = gathered.reshape(-1)
-    sums = numpy.zeros((gathered.max() + 1, 3))
-    numpy.add.at(sums, gathered, positions)
-    points = sums / numpy.bincount(gathered)[:, None]
-    joined = gathered[faces]
-    whole = (joined[:, 0] != joined[:, 1]) & (joined[:, 1] != joined[:, 2]) & (joined[:, 0] != joined[:, 2])
-    joined = joined[whole]
-    # Two pieces that met in the same cells leave the same triangle twice.
-    _, once = numpy.unique(numpy.sort(joined, axis=1), axis=0, return_index=True)
-    joined = joined[numpy.sort(once)]
+    welded = _weld_tool(primitive["positions"], faces)
+    if welded.get("empty"):
+        return None
+    points = numpy.array(welded["points"], dtype=numpy.float64)
+    joined = numpy.array(welded["triangles"], dtype=numpy.int64)
     if len(joined) == 0:
         return None
     if len(joined) > max(target, 8):
