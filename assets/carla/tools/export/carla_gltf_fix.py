@@ -32,11 +32,12 @@ import os
 import re
 import shutil
 import struct
+import subprocess
 import sys
+import tempfile
 
 from PIL import Image
 
-PAINT_PARENTS = ("M_CarExterior_Master", "M_CarPaint", "CarPaint")
 # Textures that show another company's mark, a real person or a real
 # institution, or poster art of unclear origin. CARLA's license covers its
 # own work, not these, so each becomes one flat color: its average.
@@ -55,51 +56,6 @@ def index_files(root, suffix):
             if name.endswith(suffix):
                 found.setdefault(name[: -len(suffix)], os.path.join(base, name))
     return found
-
-
-def read_mat(path):
-    """Return the `key=value` pairs of a UModel `.mat` file."""
-    pairs = {}
-    others = []
-    for line in open(path, encoding="utf-8", errors="replace"):
-        line = line.strip()
-        if "=" not in line:
-            continue
-        key, value = line.split("=", 1)
-        if key.startswith("Other"):
-            others.append(value)
-        else:
-            pairs[key] = value
-    pairs["_others"] = others
-    return pairs
-
-
-def read_props(path):
-    """Return the parent, the vector and the scalar parameters of a
-    UModel `.props.txt` file, and whether it blends."""
-    text = open(path, encoding="utf-8", errors="replace").read()
-    parent = ""
-    m = re.search(r"^Parent = \w+'([^']+)'", text, re.M)
-    if m:
-        parent = m.group(1)
-    vectors = {}
-    for name, r, g, b, a in re.findall(
-        r"Name=([^}]+?) \}\s*ParameterValue = \{ R=([-\d.e]+), G=([-\d.e]+), B=([-\d.e]+), A=([-\d.e]+) \}",
-        text,
-    ):
-        vectors[name.strip()] = [float(r), float(g), float(b), float(a)]
-    scalars = {}
-    for name, value in re.findall(
-        r"Name=([^}]+?) \}\s*ParameterValue = ([-\d.e]+)\s", text
-    ):
-        scalars[name.strip()] = float(value)
-    translucent = bool(re.search(r"BlendMode = BLEND_Translucent", text))
-    masked = bool(re.search(r"BlendMode = BLEND_Masked", text))
-    return parent, vectors, scalars, translucent, masked
-
-
-def srgb_to_linear(c):
-    return c / 12.92 if c <= 0.04045 else ((c + 0.055) / 1.055) ** 2.4
 
 
 class Package:
@@ -199,120 +155,72 @@ class Package:
         return index
 
 
-def by_name(name):
-    """Return factors for a material UModel could not describe."""
-    low = name.lower()
-    if "glass" in low or "window" in low:
-        return [0.08, 0.1, 0.12, 0.35], 0.0, 0.05, True
-    if "rubber" in low or "tire" in low or "tyre" in low:
-        return [0.03, 0.03, 0.03, 1], 0.0, 0.9, False
-    if "chrome" in low or "polished" in low:
-        return [0.9, 0.9, 0.9, 1], 1.0, 0.15, False
-    if "alumin" in low or "metal" in low:
-        return [0.6, 0.6, 0.62, 1], 1.0, 0.35, False
-    if "black" in low:
-        return [0.02, 0.02, 0.02, 1], 0.0, 0.6, False
-    if "grey" in low or "gray" in low:
-        return [0.25, 0.25, 0.25, 1], 0.0, 0.6, False
-    if "light" in low:
-        return [0.9, 0.9, 0.85, 1], 0.0, 0.2, False
-    return [0.5, 0.5, 0.5, 1], 0.0, 0.6, False
+def _material_plan(name, mat_text, props_text, pngs):
+    """Return the Mojo factor and texture decisions for one material."""
+    root = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "..", ".."))
+    mojo = os.path.join(root, ".venv", "bin", "mojo")
+    if not os.path.isfile(mojo):
+        mojo = "mojo"
+    request = {"name": name, "mat": mat_text, "props": props_text, "pngs": list(pngs)}
+    handle = tempfile.NamedTemporaryFile("w", suffix=".json", delete=False, encoding="utf-8")
+    try:
+        json.dump(request, handle)
+        handle.close()
+        result = subprocess.run(
+            ["sh", os.path.join(root, "tools", "tool.sh"), mojo,
+             "carla_gltf_material", handle.name],
+            text=True, capture_output=True, check=False,
+        )
+    finally:
+        os.remove(handle.name)
+    if result.returncode != 0:
+        raise ValueError(result.stderr.strip() or "material plan failed")
+    return json.loads(result.stdout)
 
 
 def rebuild(package, material, mats, props, pngs, report):
     """Rewrite one glTF material from UModel's files."""
     name = material.get("name", "")
-    pbr = {"metallicFactor": 0.0, "roughnessFactor": 0.6}
-    factors = by_name(name)
-    pbr["baseColorFactor"] = factors[0]
-    pbr["metallicFactor"] = factors[1]
-    pbr["roughnessFactor"] = factors[2]
-    blend = factors[3]
-    parent = ""
-    masked = False
+    mat_text = None
+    if name in mats:
+        with open(mats[name], encoding="utf-8", errors="replace") as handle:
+            mat_text = handle.read()
+    props_text = None
     if name in props:
-        parent, vectors, scalars, translucent, masked = read_props(props[name])
-        blend = blend or translucent
-        paint = any(p in parent for p in PAINT_PARENTS)
-        for key in ("Base Color", "BaseColor", "Color", "Tint", "Paint Color"):
-            if key in vectors:
-                rgba = vectors[key]
-                pbr["baseColorFactor"] = [rgba[0], rgba[1], rgba[2], 1.0]
-                break
-        if paint:
-            pbr["metallicFactor"] = 0.5
-            pbr["roughnessFactor"] = 0.3
-        for key in ("Roughness", "roughness"):
-            if key in scalars:
-                pbr["roughnessFactor"] = max(0.0, min(1.0, scalars[key]))
-        for key in ("Metallic", "Metalness", "metallic"):
-            if key in scalars:
-                pbr["metallicFactor"] = max(0.0, min(1.0, scalars[key]))
-    else:
-        paint = False
-    # Glass shows through; its "diffuse" is a dirt or reflection mask,
-    # which would paint the windows opaque.
-    glass = "glass" in name.lower() or "glass" in parent.lower()
-    if glass:
-        blend = True
-        pbr["baseColorFactor"] = [0.08, 0.1, 0.12, 0.35]
-        pbr["metallicFactor"] = 0.0
-        pbr["roughnessFactor"] = 0.05
-    if name in mats and not paint and not glass:
-        entries = read_mat(mats[name])
-        diffuse = entries.get("Diffuse")
-        if not diffuse:
-            # UModel names the color only when the master's parameter is
-            # one it knows; otherwise it is among the others, by its name.
-            named = [o for o in entries["_others"]
-                     if any(w in o.lower() for w in ("basecolor", "diffuse", "albedo"))]
-            diffuse = named[0] if named else None
-        if diffuse and diffuse in pngs:
-            pbr["baseColorTexture"] = {"index": package.texture(pngs[diffuse], True)}
-            pbr["baseColorFactor"] = [1, 1, 1, pbr["baseColorFactor"][3]]
-        normal = entries.get("Normal")
-        if normal and normal in pngs and "flat" not in normal.lower():
-            material["normalTexture"] = {"index": package.texture(pngs[normal], False)}
-        if masked:
-            # A cut-out: a leaf. Its "diffuse" can be the mask itself, with
-            # the color among the others.
-            color = diffuse
-            if not color or any(w in color.lower() for w in ("alpha", "mask")):
-                named = [o for o in entries["_others"]
-                         if any(w in o.lower() for w in ("front", "basecolor", "color"))]
-                color = named[0] if named else color
-            cut = entries.get("Opacity") or diffuse
-            if color in pngs and cut in pngs:
-                pbr["baseColorTexture"] = {"index": package.masked_texture(pngs[color], pngs[cut])}
-                pbr["baseColorFactor"] = [1, 1, 1, 1]
-                material["alphaMode"] = "MASK"
-                # Unreal's default opacity mask clip value.
-                material["alphaCutoff"] = 0.3333
-                material["doubleSided"] = True
-        packed = [o for o in entries["_others"] + [entries.get("Specular", "")] if o.lower().endswith("_orm")]
-        if packed and packed[0] in pngs:
-            index = package.texture(pngs[packed[0]], False)
+        with open(props[name], encoding="utf-8", errors="replace") as handle:
+            props_text = handle.read()
+    decision = _material_plan(name, mat_text, props_text, pngs)
+    pbr = {
+        "baseColorFactor": decision["baseColorFactor"],
+        "metallicFactor": decision["metallicFactor"],
+        "roughnessFactor": decision["roughnessFactor"],
+    }
+    for step in decision["textures"]:
+        kind = step["kind"]
+        if kind == "color":
+            pbr["baseColorTexture"] = {"index": package.texture(pngs[step["stem"]], True)}
+        elif kind == "normal":
+            material["normalTexture"] = {"index": package.texture(pngs[step["stem"]], False)}
+        elif kind == "masked":
+            pbr["baseColorTexture"] = {
+                "index": package.masked_texture(pngs[step["color"]], pngs[step["mask"]]),
+            }
+        elif kind == "orm":
+            index = package.texture(pngs[step["stem"]], False)
             pbr["metallicRoughnessTexture"] = {"index": index}
             material["occlusionTexture"] = {"index": index}
-            pbr["metallicFactor"] = 1.0
-            pbr["roughnessFactor"] = 1.0
-    # CARLA paints a car from its blueprint's color and lights its lamps
-    # from its light state; the tags say which materials those are.
-    lamps = "light" in name.lower() and not glass
-    if paint or "bodywork" in name.lower():
-        material["extras"] = {"carla": "paint"}
-    elif lamps:
-        # The lamps' texture is white at the front and red at the back;
-        # UModel's translucency would make them ghosts.
-        material["extras"] = {"carla": "lamps"}
-        blend = False
-        pbr["baseColorFactor"][3] = 1.0
     material["pbrMetallicRoughness"] = pbr
-    if blend:
-        material["alphaMode"] = "BLEND"
-        pbr["baseColorFactor"][3] = min(pbr["baseColorFactor"][3], 0.4)
+    if "alphaMode" in decision:
+        material["alphaMode"] = decision["alphaMode"]
+    if "alphaCutoff" in decision:
+        material["alphaCutoff"] = decision["alphaCutoff"]
+    if decision.get("doubleSided"):
+        material["doubleSided"] = True
+    if "extras" in decision:
+        material["extras"] = decision["extras"]
     material.pop("extensions", None)
-    report.append((name, parent.rsplit("/", 1)[-1], sorted(k for k in pbr if k.endswith("Texture")) + sorted(k for k in material if k.endswith("Texture"))))
+    parent, textures = decision["report"]
+    report.append((name, parent, textures))
 
 
 def _read(data, gltf, accessor_index):
