@@ -129,7 +129,9 @@ Some portable features remain partial, including [GLSL shaders](https://github.c
 ### Project tools
 
 <details>
-<summary>Implemented: 45</summary>
+<summary>Implemented: 46</summary>
+
+- [x] [CARLA material rebuild](https://github.com/SethKitchen/ThreeMojo/wiki/CARLA-assets#rebuild-the-vehicle-zips): `tools/carla_gltf_rebuild.mojo` applies each material and writes its textures [#761](https://github.com/SethKitchen/ThreeMojo/issues/761)
 
 - [x] [Packaged CARLA texture files](https://github.com/SethKitchen/ThreeMojo/wiki/CARLA-assets#rebuild-the-vehicle-zips): `tools/carla_texture_store.mojo` writes each color and cut-out picture [#761](https://github.com/SethKitchen/ThreeMojo/issues/761)
 

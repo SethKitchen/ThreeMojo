@@ -436,31 +436,59 @@ class Package:
         return self._add_texture(uri, key)
 
 
-def _material_plan(name, mat_text, props_text, pngs):
-    """Return the Mojo factor and texture decisions for one material."""
-    root = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "..", ".."))
-    mojo = os.path.join(root, ".venv", "bin", "mojo")
+def _rebuild_tool(payload):
+    """Return one rebuilt material from `tools/carla_gltf_rebuild.mojo`."""
+    here = os.path.dirname(os.path.abspath(__file__))
+    repo = os.path.abspath(os.path.join(here, "..", "..", "..", ".."))
+    mojo = os.path.join(repo, ".venv", "bin", "mojo")
     if not os.path.isfile(mojo):
         mojo = "mojo"
-    request = {"name": name, "mat": mat_text, "props": props_text, "pngs": list(pngs)}
-    handle = tempfile.NamedTemporaryFile("w", suffix=".json", delete=False, encoding="utf-8")
+    folder = tempfile.mkdtemp(prefix="gltf-rebuild-")
     try:
-        json.dump(request, handle)
-        handle.close()
+        path = os.path.join(folder, "rebuild.json")
+        with open(path, "w", encoding="utf-8") as handle:
+            json.dump(payload, handle)
         result = subprocess.run(
-            ["sh", os.path.join(root, "tools", "tool.sh"), mojo,
-             "carla_gltf_material", handle.name],
-            text=True, capture_output=True, check=False,
+            ["sh", os.path.join(repo, "tools", "tool.sh"), mojo,
+             "carla_gltf_rebuild", path],
+            capture_output=True, text=True,
         )
     finally:
-        os.remove(handle.name)
+        shutil.rmtree(folder, ignore_errors=True)
     if result.returncode != 0:
-        raise ValueError(result.stderr.strip() or "material plan failed")
+        raise ValueError(result.stderr.strip() or "material rebuild failed")
     return json.loads(result.stdout)
 
 
-def rebuild(package, material, mats, props, pngs, report):
-    """Rewrite one glTF material from UModel's files."""
+def _cache_rows(package):
+    """Return the textures `package` has already stored."""
+    rows = []
+    for key, index in package.images.items():
+        if len(key) == 3:
+            rows.append({
+                "op": "masked",
+                "source": key[0],
+                "color": False,
+                "mask": key[1],
+                "index": int(index),
+            })
+        else:
+            rows.append({
+                "op": "color",
+                "source": key[0],
+                "color": bool(key[1]),
+                "mask": "",
+                "index": int(index),
+            })
+    return rows
+
+
+def rebuild(package, material, mats, props, pngs, report, town=False):
+    """Rewrite one glTF material from UModel's files.
+
+    `tools/carla_gltf_rebuild.mojo` applies the factors and writes each
+    texture. `town` true drops vehicle tags and makes a glass pane.
+    """
     name = material.get("name", "")
     mat_text = None
     if name in mats:
@@ -470,37 +498,30 @@ def rebuild(package, material, mats, props, pngs, report):
     if name in props:
         with open(props[name], encoding="utf-8", errors="replace") as handle:
             props_text = handle.read()
-    decision = _material_plan(name, mat_text, props_text, pngs)
-    pbr = {
-        "baseColorFactor": decision["baseColorFactor"],
-        "metallicFactor": decision["metallicFactor"],
-        "roughnessFactor": decision["roughnessFactor"],
-    }
-    for step in decision["textures"]:
-        kind = step["kind"]
-        if kind == "color":
-            pbr["baseColorTexture"] = {"index": package.texture(pngs[step["stem"]], True)}
-        elif kind == "normal":
-            material["normalTexture"] = {"index": package.texture(pngs[step["stem"]], False)}
-        elif kind == "masked":
-            pbr["baseColorTexture"] = {
-                "index": package.masked_texture(pngs[step["color"]], pngs[step["mask"]]),
-            }
-        elif kind == "orm":
-            index = package.texture(pngs[step["stem"]], False)
-            pbr["metallicRoughnessTexture"] = {"index": index}
-            material["occlusionTexture"] = {"index": index}
-    material["pbrMetallicRoughness"] = pbr
-    if "alphaMode" in decision:
-        material["alphaMode"] = decision["alphaMode"]
-    if "alphaCutoff" in decision:
-        material["alphaCutoff"] = decision["alphaCutoff"]
-    if decision.get("doubleSided"):
-        material["doubleSided"] = True
-    if "extras" in decision:
-        material["extras"] = decision["extras"]
-    material.pop("extensions", None)
-    parent, textures = decision["report"]
+    result = _rebuild_tool({
+        "material": material,
+        "mat": mat_text,
+        "props": props_text,
+        "pngs": pngs,
+        "out_dir": package.out_dir,
+        "max_size": int(package.max_size),
+        "texture_count": len(package.gltf["textures"]),
+        "cache": _cache_rows(package),
+        "town": bool(town),
+    })
+    material.clear()
+    material.update(result["material"])
+    for uri in result["images"]:
+        package.gltf["images"].append({"uri": uri})
+        package.gltf["textures"].append(
+            {"sampler": 0, "source": len(package.gltf["images"]) - 1}
+        )
+    for item in result["cache_add"]:
+        if item["op"] == "masked":
+            package.images[(item["source"], item["mask"], "masked")] = item["index"]
+        else:
+            package.images[(item["source"], bool(item["color"]))] = item["index"]
+    parent, textures = result["report"]
     report.append((name, parent, textures))
 
 

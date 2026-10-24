@@ -98,11 +98,6 @@ LAMP_GLASS = "_glass_ext"
 LAMP_TOPS = ("/SM_Lights/SM_StreetLightWall", "/Chainbarrier/SM_LightPost")
 # The `extras` tag of a material that glows when the street lights are on.
 LAMP_TAG = {"carla": "lamp"}
-# A town's glass: a dark pane, smooth and partly metal, so it mirrors the
-# sky and the street.
-GLASS_COLOR = (0.05, 0.065, 0.08, 1.0)
-GLASS_METAL = 0.6
-GLASS_ROUGHNESS = 0.06
 # The levels of detail: 0 near, 1 far.
 LODS = (0, 1)
 # The folder whose meshes are trees, whose far level is an impostor.
@@ -1264,19 +1259,12 @@ class Library:
             material["pbrMetallicRoughness"] = {"baseColorFactor": [0.5, 0.5, 0.5, 1], "metallicFactor": 0.0,
                                                 "roughnessFactor": 0.7}
         else:
-            fix.rebuild(self.package, material, self.mats, self.props, self.pngs, [])
-            # A vehicle's paint and lamp tags do not apply to a town.
-            material.pop("extras", None)
-            if material.get("alphaMode") == "BLEND" and "glass" in name.lower():
-                # A town's glass has nothing behind it: a see-through tower
-                # shows the sky through its windows. So it is a dark,
-                # smooth pane that mirrors its surroundings, as CARLA's is.
-                material.pop("alphaMode")
-                pbr = material.setdefault("pbrMetallicRoughness", {})
-                pbr.pop("baseColorTexture", None)
-                pbr["baseColorFactor"] = list(GLASS_COLOR)
-                pbr["metallicFactor"] = GLASS_METAL
-                pbr["roughnessFactor"] = GLASS_ROUGHNESS
+            # `tools/carla_gltf_rebuild.mojo` drops vehicle tags. A glass
+            # blend becomes the town's dark pane.
+            fix.rebuild(
+                self.package, material, self.mats, self.props, self.pngs, [],
+                town=True,
+            )
         self.gltf["materials"].append(material)
         self.index[name] = len(self.gltf["materials"]) - 1
         self.masked[name] = material.get("alphaMode") == "MASK"
