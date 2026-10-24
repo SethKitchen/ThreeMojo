@@ -216,39 +216,6 @@ def object_path(full_name):
     return parts[0], parts[1], parts[2]
 
 
-def kind_of(mesh_path):
-    """Return a mesh's kind, None to leave it out.
-
-    `tools/carla_town_budget.mojo` chooses the kind.
-    """
-    kind = _budget_ask(["kind", mesh_path])
-    if kind == "skip":
-        return None
-    return kind
-
-
-def budget(kind, triangles, mesh_path):
-    """Return the most triangles one copy of a mesh keeps.
-
-    `tools/carla_town_budget.mojo` chooses the limit. A flat kind keeps
-    every triangle: a road's paint is only a few triangles deep.
-    """
-    if kind is None:
-        kind = ""
-    return int(_budget_ask(["near", str(kind), str(int(triangles)), str(mesh_path)]))
-
-
-def far_budget(kind, triangles, mesh_path):
-    """Return the most triangles one copy keeps in the far level of
-    detail, 0 to leave it out there: what is small at a distance goes.
-
-    `tools/carla_town_budget.mojo` chooses the limit.
-    """
-    if kind is None:
-        kind = ""
-    return int(_budget_ask(["far", str(kind), str(int(triangles)), str(mesh_path)]))
-
-
 # ---- Transforms ------------------------------------------------------------
 
 SWAP = numpy.array([[1.0, 0, 0], [0, 0, 1.0], [0, 1.0, 0]])
@@ -537,22 +504,6 @@ def _mesh_payload(primitive, mode, target, small=False):
     }
 
 
-def simplify(primitive, target, borders=True, small=False):
-    """Return a primitive lowered to about `target` triangles by quadric
-    collapses. With `borders`, its open edges, the texture seams among
-    them, stay in place, so its textures do not tear. Without, it is
-    welded first; see `simplify_welded`.
-
-    `tools/carla_town_simplify.mojo` collapses the mesh.
-    """
-    if not borders:
-        return simplify_welded(primitive, target)
-    doc = _town_simplify(_mesh_payload(primitive, "border", target, small))
-    if doc.get("same"):
-        return primitive
-    return _simplified(doc)
-
-
 # A far mesh's corners are gathered into cells this fraction of its size.
 CLUSTER_DIVISIONS = 200
 # The smallest cell, in meters.
@@ -582,88 +533,6 @@ def simplify_welded(primitive, target):
     if doc.get("empty"):
         return None
     return _simplified(doc)
-
-
-def _card_seed(mesh_path, index, lod):
-    """Return the leaf-card seed from `tools/carla_town_cards.mojo`.
-
-    The seed is `zlib.crc32` of the mesh path, plus the part index, plus
-    7919 times the level of detail.
-    """
-    here = os.path.dirname(os.path.abspath(__file__))
-    repo = os.path.abspath(os.path.join(here, "..", "..", "..", ".."))
-    mojo = os.path.join(repo, ".venv", "bin", "mojo")
-    if not os.path.isfile(mojo):
-        mojo = "mojo"
-    folder = tempfile.mkdtemp(prefix="town-seed-")
-    try:
-        request = os.path.join(folder, "seed.json")
-        with open(request, "w", encoding="utf-8") as handle:
-            json.dump({
-                "mode": "seed",
-                "path": mesh_path,
-                "index": int(index),
-                "lod": int(lod),
-            }, handle, separators=(",", ":"), ensure_ascii=False)
-        result = subprocess.run(
-            ["sh", os.path.join(repo, "tools", "tool.sh"), mojo,
-             "carla_town_cards", request],
-            capture_output=True, text=True,
-        )
-    finally:
-        shutil.rmtree(folder, ignore_errors=True)
-    if result.returncode != 0:
-        raise ValueError(result.stderr.strip() or "leaf card seed failed")
-    return int(json.loads(result.stdout)["seed"])
-
-
-def _cards_tool(primitive, keep, seed):
-    """Return JSON from `tools/carla_town_cards.mojo`."""
-    here = os.path.dirname(os.path.abspath(__file__))
-    repo = os.path.abspath(os.path.join(here, "..", "..", "..", ".."))
-    mojo = os.path.join(repo, ".venv", "bin", "mojo")
-    if not os.path.isfile(mojo):
-        mojo = "mojo"
-    folder = tempfile.mkdtemp(prefix="town-cards-")
-    try:
-        request = os.path.join(folder, "cards.json")
-        payload = {
-            "positions": numpy.asarray(primitive["positions"], dtype=float).reshape(-1, 3).tolist(),
-            "normals": numpy.asarray(primitive["normals"], dtype=float).reshape(-1, 3).tolist(),
-            "uvs": numpy.asarray(primitive["uvs"], dtype=float).reshape(-1, 2).tolist(),
-            "triangles": numpy.asarray(primitive["triangles"]).reshape(-1, 3).tolist(),
-            "keep": float(keep),
-            "seed": int(seed),
-        }
-        with open(request, "w", encoding="utf-8") as handle:
-            json.dump(payload, handle, separators=(",", ":"), allow_nan=False)
-        result = subprocess.run(
-            ["sh", os.path.join(repo, "tools", "tool.sh"), mojo,
-             "carla_town_cards", request],
-            capture_output=True, text=True,
-        )
-    finally:
-        shutil.rmtree(folder, ignore_errors=True)
-    if result.returncode != 0:
-        raise ValueError(result.stderr.strip() or "leaf cards failed")
-    return json.loads(result.stdout)
-
-
-def thin_cards(primitive, keep, seed):
-    """Return a cut-out primitive with about `keep` of its cards, each
-    kept card grown about its center so the canopy stays as full. A card
-    is a piece of connected triangles: a leaf, or a spray of leaves.
-
-    `tools/carla_town_cards.mojo` chooses and grows the cards.
-    """
-    doc = _cards_tool(primitive, keep, seed)
-    if doc.get("unchanged"):
-        return primitive
-    return {"positions": numpy.array(doc["positions"], dtype=numpy.float64),
-            "normals": numpy.array(doc["normals"], dtype=numpy.float64),
-            "uvs": numpy.array(doc["uvs"], dtype=numpy.float64),
-            "triangles": numpy.array(doc["triangles"], dtype=numpy.int64),
-            "material": primitive["material"]}
 
 
 # ---- Impostors -------------------------------------------------------------
@@ -1260,34 +1129,64 @@ def _share(payload):
     return json.loads(result.stdout)
 
 
-def limit_of(kind, total, mesh_path, lod):
-    """Return the most triangles one copy of a mesh keeps at a level of
-    detail, before the town's cap for its kind."""
-    return budget(kind, total, mesh_path) if lod == 0 else far_budget(kind, total, mesh_path)
+def _lower_tool(payload):
+    """Return JSON from `tools/carla_town_lower.mojo`."""
+    here = os.path.dirname(os.path.abspath(__file__))
+    repo = os.path.abspath(os.path.join(here, "..", "..", "..", ".."))
+    mojo = os.path.join(repo, ".venv", "bin", "mojo")
+    if not os.path.isfile(mojo):
+        mojo = "mojo"
+    folder = tempfile.mkdtemp(prefix="town-lower-")
+    try:
+        path = os.path.join(folder, "lower.json")
+        with open(path, "w", encoding="utf-8") as handle:
+            json.dump(payload, handle, separators=(",", ":"), allow_nan=False)
+        result = subprocess.run(
+            ["sh", os.path.join(repo, "tools", "tool.sh"), mojo,
+             "carla_town_lower", path],
+            capture_output=True, text=True,
+        )
+    finally:
+        shutil.rmtree(folder, ignore_errors=True)
+    if result.returncode != 0:
+        raise ValueError(result.stderr.strip() or "town lower failed")
+    return json.loads(result.stdout)
 
 
 def lower(primitive, kind, mesh_path, index, total, masked, lod, factor=1.0):
     """Return one primitive of a mesh at a level of detail, or None.
     `factor` is the share of its budget that the town's cap for its kind
-    leaves it."""
-    # `tools/carla_simplify_target.mojo` chooses the share. A zero budget
-    # keeps nothing. A masked mesh keeps leaf cards.
-    chosen = fix.simplify_target({
-        "mode": "share",
-        "budget": int(limit_of(kind, total, mesh_path, lod)),
-        "factor": float(factor),
-        "triangles": len(primitive["triangles"]),
+    leaves it.
+
+    `tools/carla_town_lower.mojo` chooses that level. A zero budget keeps
+    nothing. A masked mesh keeps leaf cards. Level 0 keeps open edges.
+    """
+    doc = _lower_tool({
+        "positions": numpy.asarray(primitive["positions"], dtype=float).reshape(-1, 3).tolist(),
+        "normals": numpy.asarray(primitive["normals"], dtype=float).reshape(-1, 3).tolist(),
+        "uvs": numpy.asarray(primitive["uvs"], dtype=float).reshape(-1, 2).tolist(),
+        "triangles": numpy.asarray(primitive["triangles"]).reshape(-1, 3).tolist(),
+        "material": primitive["material"],
+        "kind": kind if kind is not None else "",
+        "mesh": mesh_path,
+        "index": int(index),
         "total": int(total),
         "masked": bool(masked),
+        "lod": int(lod),
+        "factor": float(factor),
         "keep": int(fix.KEEP),
     })
-    if chosen["action"] == "none":
+    if doc["action"] == "none":
         return None
-    if chosen["action"] == "cards":
-        return thin_cards(primitive, chosen["keep"], _card_seed(mesh_path, index, lod))
-    if chosen["action"] == "whole":
+    if doc["action"] == "whole":
         return primitive
-    return simplify(primitive, chosen["target"], borders=lod == 0, small=chosen["small"])
+    return {
+        "positions": numpy.array(doc["positions"], dtype=numpy.float64),
+        "normals": numpy.array(doc["normals"], dtype=numpy.float64),
+        "uvs": numpy.array(doc["uvs"], dtype=numpy.float64),
+        "triangles": numpy.array(doc["triangles"], dtype=numpy.int64),
+        "material": primitive["material"],
+    }
 
 
 def _lamp_world(heads, linear, move):

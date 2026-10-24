@@ -3,7 +3,7 @@
 """Synthetic, real-rasterizer bake regressions. Require NumPy, Pillow and Mojo.
 
 Run explicitly with the pinned exporter test environment documented in
-CARLA-assets. No CARLA release is needed. Only mesh simplification is
+CARLA-assets. No CARLA release is needed. The far-building weld is
 substituted; materials, textures, bake pixels and GLB packaging are real.
 """
 
@@ -77,8 +77,6 @@ class TownBakeTests(unittest.TestCase):
         self.stack.enter_context(mock.patch.multiple(
             tool, RAW=str(self.raw), MAPS=str(self.maps), LAYOUT=str(self.layout),
             OUT=str(self.output), STATS={}))
-        self.simplify = self.stack.enter_context(mock.patch.object(
-            tool, 'simplify', side_effect=lambda primitive, *args, **kwargs: primitive))
         self.weld = self.stack.enter_context(mock.patch.object(
             tool, 'simplify_welded', side_effect=lambda primitive, *args, **kwargs: primitive))
 
@@ -153,7 +151,6 @@ class TownBakeTests(unittest.TestCase):
                     self.assertEqual(indices[0], indices[2])
                     self.assertNotEqual(indices[0], indices[1])
         self.assertEqual(calls, (2, 2))
-        self.assertGreater(self.simplify.call_count, 0)
         self.assertGreater(self.weld.call_count, 0)
 
     def test_slot_order_stays_visible_in_near_geometry_and_far_pixels(self):
