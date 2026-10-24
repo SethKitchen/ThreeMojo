@@ -12,8 +12,8 @@ one segment at a time:
 
 - Each segment turns toward the blade's forward side by its share of
   `curl`, the bend of a blade at rest. It turns by its share of the
-  wind's tip bend as well, `WHIP * s ** 1.5` of it, so the top whips and
-  the base stays put. The two turns add as one tilt along the ground, at
+  wind's tip bend as well, `WHIP * s` of it, so the blade arcs over: the
+  base stays put and the top bends the most. The two turns add as one tilt along the ground, at
   most `MAX_TILT`. Each segment keeps its length.
 - The width tapers as `1 - s * s`, where `s` runs from zero at the root
   to one at the tip. A blade is nearly parallel at the root and comes
@@ -32,8 +32,10 @@ neighbors differ.
 
 **A broad leaf** is not a strip: it is a low rosette of five oval leaves,
 as a plantain or a dock is, under the grass. **A poppy** is a thin stem,
-built as a blade, with a cup of five red petals at its tip. **A seed head** is a tall thin stalk with a spike of
-two crossed strips at its tip, which stands above the grass.
+built as a blade, with a cup of five red petals at its tip. **A
+buttercup** is the same, with a small yellow cup. **A seed head** is a
+tall thin stalk with a spike of two crossed strips at its tip, which
+stands above the grass.
 """
 
 from core.buffer_attribute import BufferAttribute
@@ -41,6 +43,7 @@ from core.buffer_geometry import COLOR, NORMAL, POSITION, BufferGeometry
 from extensions.vegetation.checks import require_between
 from extensions.vegetation.kinds import (
     BROADLEAF,
+    BUTTERCUP,
     DRY_GRASS,
     POPPY,
     SEED_HEAD,
@@ -49,7 +52,7 @@ from extensions.vegetation.kinds import (
 )
 from math.vector2 import Vector2
 from math.vector3 import Vector3
-from std.math import cos, pi, pow, sin, sqrt
+from std.math import cos, pi, sin, sqrt
 from units.si import DEGREE, METER, RADIAN, Angle, Length
 
 # How far an edge normal tilts out toward its edge.
@@ -60,8 +63,9 @@ comptime UP_BIAS = Float32(0.35)
 comptime MAX_SEGMENTS = 8
 # The petals of a poppy's cup.
 comptime PETALS = 5
-# The radius of a poppy's cup at a shade of zero.
+# The radius of a poppy's cup at a shade of zero, and a buttercup's.
 comptime CUP_RADIUS = Float32(0.025)
+comptime BUTTERCUP_RADIUS = Float32(0.012)
 # The length and the width of a seed head.
 comptime SPIKE_LENGTH = Float32(0.075)
 comptime SPIKE_WIDTH = Float32(0.01)
@@ -69,9 +73,9 @@ comptime SPIKE_WIDTH = Float32(0.01)
 # tilts its normal from the midrib.
 comptime ROSETTE_LEAVES = 5
 comptime LEAF_FOLD = Float32(0.4)
-# The wind turns a segment by `WHIP * s ** 1.5` of the tip's bend, so the
-# top of a blade whips and its base stays put.
-comptime WHIP = Float32(1.25)
+# The wind turns a segment by `WHIP * s` of the tip's bend, so the blade
+# arcs over: its base stays put and its top bends the most.
+comptime WHIP = Float32(1.15)
 # The most a segment can tilt from upright, in radians: 83 degrees. A
 # segment never lies flat, so a blade never folds into the ground.
 comptime MAX_TILT = Float32(1.45)
@@ -89,7 +93,7 @@ def blade_colors(kind: PlantKind, shade: Float32) raises -> BladeColors:
     """Return the root and tip colors of a blade.
 
     Args:
-        kind: What the blade is. A poppy's colors are its stem's.
+        kind: What the blade is. A flower's colors are its stem's.
         shade: Where between the two tip colors the blade is, from zero to
             one.
 
@@ -105,7 +109,7 @@ def blade_colors(kind: PlantKind, shade: Float32) raises -> BladeColors:
             Vector3(0.035, 0.032, 0.010),
             Vector3(0.36 + 0.12 * shade, 0.30 + 0.08 * shade, 0.10),
         )
-    if kind == POPPY:
+    if kind == POPPY or kind == BUTTERCUP:
         return BladeColors(
             Vector3(0.012, 0.030, 0.006), Vector3(0.060, 0.150, 0.025)
         )
@@ -356,7 +360,7 @@ struct BladeMesh(Movable):
             var mid = s + 0.5 / Float32(segments)
             # The rest curl and the wind are one tilt: an angle along the
             # ground. The wind adds to the curl or takes from it.
-            var whip = WHIP * pow(mid, Float32(1.5))
+            var whip = WHIP * mid
             var tx = -az * curl * mid + bend.x * whip
             var tz = ax * curl * mid + bend.y * whip
             var tilt = sqrt(tx * tx + tz * tz)
@@ -385,7 +389,21 @@ struct BladeMesh(Movable):
         var last = base + 2 * (segments - 1)
         self._triangle(last, last + 1, last + 2)
         if blade.kind == POPPY:
-            self._cup(point, face, blade.shade, sqrt(widen))
+            self._cup(
+                point,
+                face,
+                CUP_RADIUS * (0.8 + 0.4 * blade.shade) * sqrt(widen),
+                Vector3(0.20, 0.008, 0.004),
+                Vector3(0.62, 0.020, 0.010),
+            )
+        if blade.kind == BUTTERCUP:
+            self._cup(
+                point,
+                face,
+                BUTTERCUP_RADIUS * sqrt(widen),
+                Vector3(0.40, 0.22, 0.004),
+                Vector3(0.75, 0.52, 0.012),
+            )
         if blade.kind == SEED_HEAD:
             self._spike(point, top, face, sqrt(widen))
 
@@ -479,16 +497,19 @@ struct BladeMesh(Movable):
             self._triangle(first, first + 3, first + 2)
 
     def _cup(
-        mut self, center: Vector3, face: Float32, shade: Float32, grow: Float32
+        mut self,
+        center: Vector3,
+        face: Float32,
+        radius: Float32,
+        heart: Vector3,
+        rim: Vector3,
     ):
-        """Append a poppy's cup of petals, open upward, at a stem's tip.
+        """Append a flower's cup of petals, open upward, at a stem's tip.
 
         Each petal is one triangle with three vertices of its own, so each
-        petal has its own normal.
+        petal has its own normal. Its color runs from `heart` at the
+        middle to `rim` at its edge.
         """
-        var radius = CUP_RADIUS * (0.8 + 0.4 * shade) * grow
-        var heart = Vector3(0.20, 0.008, 0.004)
-        var rim = Vector3(0.62, 0.020, 0.010)
         var turn = Float32(2) * Float32(pi) / Float32(PETALS)
         for j in range(PETALS):  # pragma: no branch
             var a0 = face + turn * Float32(j)

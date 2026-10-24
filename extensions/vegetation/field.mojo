@@ -50,6 +50,7 @@ from extensions.vegetation.kinds import (
     POPPY,
     SEED_HEAD,
     BROADLEAF,
+    BUTTERCUP,
     ClusterFate,
     PlantKind,
 )
@@ -70,6 +71,7 @@ comptime STEM_WIDTH = Length(0.003, METER)
 # How much taller than the grass round it a poppy stands, and a stalk
 # with a seed head. A stalk stands above even short grass.
 comptime POPPY_LIFT = Float32(1.15)
+comptime BUTTERCUP_LIFT = Float32(0.9)
 comptime SEED_LIFT = Float32(1.45)
 # The height of short grass, as a fraction of the meadow's full height,
 # and how tall the tallest tuft is, as a multiple of it.
@@ -195,6 +197,9 @@ struct FieldParameters(Copyable, Movable):
     # The fraction of the tufts that hold a broad-leaf plant, where weeds
     # grow most.
     var broadleaf_share: Float32
+    # The fraction of the tufts that hold a buttercup, where weeds grow
+    # most.
+    var buttercup_share: Float32
     # The levels of detail, nearest first.
     var bands: List[LodBand]
 
@@ -214,6 +219,7 @@ struct FieldParameters(Copyable, Movable):
         self.poppy_share = 0.9
         self.seed_share = 0.012
         self.broadleaf_share = 0.25
+        self.buttercup_share = 0.12
         self.bands = default_bands()
 
     def check(self) raises:
@@ -298,6 +304,12 @@ struct FieldParameters(Copyable, Movable):
             0,
             1,
             "The broad-leaf share must be from 0 to 1",
+        )
+        require_between(
+            self.buttercup_share,
+            0,
+            1,
+            "The buttercup share must be from 0 to 1",
         )
         require_count_between(
             len(self.bands), 1, 16, "A field must have from 1 to 16 levels"
@@ -654,6 +666,7 @@ struct GrassField(Movable):
         var kind = GRASS
         var poppy = p.poppy_share / Float32(p.tuft_blades)
         var weed = p.broadleaf_share / Float32(p.tuft_blades)
+        var flower = p.buttercup_share / Float32(p.tuft_blades)
         if pick < poppy * self.ground.bloom(tx, tz):
             kind = POPPY
             height *= POPPY_LIFT
@@ -672,6 +685,13 @@ struct GrassField(Movable):
                 0.6 + 0.8 * hash01(index, key + 11, seed + 5)
             )
             width = height * 0.5
+        elif hash01(index, key + 12, seed + 5) < flower * self.ground.weeds(
+            x, z
+        ):
+            kind = BUTTERCUP
+            height *= BUTTERCUP_LIFT
+            width = STEM_WIDTH.to(METER)
+            curl *= 0.3
         # The blade curls out of its tuft, as the blades of a real tuft
         # fan out from the crown: its face turns a quarter turn back from
         # the way out, give or take `SPLAY_JITTER`.

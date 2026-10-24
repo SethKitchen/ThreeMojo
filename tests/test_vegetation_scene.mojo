@@ -646,8 +646,9 @@ def test_an_empty_meadow_draws_its_grass_and_sky() raises:
 
 def test_a_crowded_meadow_grows_again_and_picks_crowns() raises:
     """A second frame replaces each drawn cluster's geometry. A near tree
-    wears its full crown and a far one its thin crown. Trees are never
-    turned. A small frame of it draws."""
+    wears its full crown and a far one its thin crown. Each tree leans a
+    little from its foot, and is never turned about +y. A small frame of
+    it draws."""
     var renderer = Renderer(16, 9)
     var assets = Assets()
     var scene = Scene()
@@ -675,6 +676,11 @@ def test_a_crowded_meadow_grows_again_and_picks_crowns() raises:
             far += 1
     assert_equal(near, 2)
     assert_equal(far, 1)
+    for t in range(len(meadow.trees)):
+        var turn = scene.get(scene.meshes[meadow.trees[t].wood].node).quaternion
+        assert_true(abs(turn.w) < 1)
+        assert_true(abs(turn.w) > 0.999)
+        assert_almost_equal(turn.y, 0, atol=1e-6)
     var image = renderer.render(scene, assets, camera)
     assert_equal(image.width, 16)
 
