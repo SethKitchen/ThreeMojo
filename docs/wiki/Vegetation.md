@@ -1,12 +1,12 @@
 # Vegetation
 
-`Meadow` builds open summer grassland: tall grass, poppies, buttercups, trees and bushes of real leaves, a canyon, mountains, a clouded sky and a soft sun.
+`Meadow` builds open summer grassland: tall grass and flowers, bare dirt and a trail, trees and bushes of real leaves, and a canyon. Mountains, a clouded sky and a soft sun surround it.
 
-![A lone pale-trunked tree with a lobed crown stands in wind-bent grass with poppies, with groves, a band of cliffs and hazy mountains beyond](out/meadow.png)
+![A dirt trail winds through wind-bent grass with poppies past a lone pale-trunked tree, with birches, groves, a band of cliffs and a woodland beyond](out/meadow.png)
 
 `examples/meadow.mojo` draws this picture. The modules live in `extensions/vegetation/`. See [Extensions](Extensions). [Why grass is drawn in clusters](Why-grass-is-drawn-in-clusters) explains the design.
 
-The field holds about ten million blades. A frame grows and draws only the clusters that it can see, each at the level of detail that its distance picks. The frame above draws 512,000 blades as 2.0 million triangles. The lone tree near the camera has 71,000 leaves.
+The field holds about ten million blades. A frame grows and draws only the clusters that it can see, each at the level of detail that its distance picks. The frame above draws 508,000 blades as 1.7 million triangles. The lone tree near the camera has 71,000 leaves.
 
 ## Draw one frame
 
@@ -81,9 +81,9 @@ frames.append(blend_frames(moments))
 | `blades` | The blades that the drawn clusters read from their streams. |
 | `triangles` | The grass triangles of the drawn clusters. |
 
-`examples/meadow.mojo` prints these counts and the time of each step as JSON. On a four-core Linux host, the meadow builds in 2 seconds. Each of its 8 crowns grows once, and each of its 3 levels draws from that. `update` takes 0.4 seconds, and the render takes 20 seconds at 1280 by 720.
+`examples/meadow.mojo` prints these counts and the time of each step as JSON. On a four-core Linux host, the meadow builds in 3 seconds. Each of its 12 crowns grows once, and each of its 4 levels draws from that. `update` takes 0.3 seconds, and the render takes 21 seconds at 1280 by 720.
 
-The wind loop renders 4 moments for each of its 48 frames, and takes about 45 minutes at 640 by 360. The render time grows with the triangle count. It changes little with the image size or the four samples a pixel.
+The wind loop renders 4 moments for each of its 48 frames, and takes about 55 minutes at 640 by 360. The render time grows with the triangle count. It changes little with the image size or the four samples a pixel.
 
 ## The parts
 
@@ -97,7 +97,8 @@ The wind loop renders 4 moments for each of its 48 frames, and takes about 45 mi
 | `ground.mojo` | `Ground`: hills, a `Canyon`, the grass masks, the ground mesh, the cliff wall and the mountain ring. |
 | `field.mojo` | `GrassField`: clusters, levels of detail and the blade stream. |
 | `limbs.mojo` | `CrownShape`, `LimbParameters` and `grow_limbs`: branches grown by space colonization, and `limb_mesh`. |
-| `foliage.mojo` | `LeafShade`, the light through the leaves, `LeafMesh` and `foliage_program`. |
+| `litter.mojo` | `ground_litter`: fallen leaves, twigs and pebbles on bare ground. |
+| `foliage.mojo` | `LeafShade`, the light through the leaves, `LeafMesh`, `foliage_program`, `wood_program` and `sway_offset`. |
 | `crown.mojo` | `grow_crown`, `dress` and `leafy_tree`: the limbs, the leaves on the twigs, and their light. |
 | `rock.mojo` | `boulder`: a stone pushed out by noise, with moss on top. |
 | `sky.mojo` | `paint_sky`: Preetham's sky with clouds, baked into a cube. |
@@ -116,6 +117,7 @@ The blades of a tuft curl out from its middle. A tuft has `tuft_blades` blades a
 - A patch of the field 3.5 meters wide is a deeper or a yellower green.
 - `Ground.tallness` makes islands of tall grass and patches of short grass, a fifth as tall, as on a path or where animals graze.
 - 14 percent of the tufts are laid over by wind and rain. Their blades arch over and lie.
+- Where the ground is bare, no grass grows. Toward a bare patch the grass thins, and it is trodden down to 30 percent of its height. See [Bare ground and litter](#bare-ground-and-litter).
 
 | Kind | Looks |
 |---|---|
@@ -175,11 +177,11 @@ With a `loop`, the gusts at a time fade into the gusts a loop earlier. The fade 
 
 Points close together pull one branch. Points apart split it in two. So a limb grows into each lobe, and the lobes have sky between them. A node's radius to the power `pipe` is the sum of its children's, and each twig tip is `tip_radius` thick. The trunk flares at its foot by `flare`.
 
-`limb_mesh` draws a tube along each chain of nodes. A chain follows the thickest child at each fork. A branch thinner than `wood_radius` is left out, because the leaves hide it. The bark is pale with dark patches, and darker near the ground.
+`limb_mesh` draws a tube along each chain of nodes. A chain follows the thickest child at each fork. A branch thinner than `wood_radius` is left out, because the leaves hide it. The bark is pale with dark patches, and darker near the ground. `bark_marks` patches climb each meter of the trunk: a birch has many short ones.
 
 ### Leaves
 
-Each node within `leaf_reach` of a twig's tip carries `leaves_per_node` leaves on the stretch of twig below it. A leaf splays out from its twig, toward the twig's tip and a little down. It turns its face up and out of the crown. The leaves of one twig make a spray, and the sprays of one limb make a lobe. Neighboring twigs share a tint, so the lobes differ in color.
+Each node within `leaf_reach` of a twig's tip carries `leaves_per_node` leaves on the stretch of twig below it. A leaf splays out from its twig, toward the twig's tip and a little down. It turns its face up and out of the crown. The leaves of one twig make a spray, and the sprays of one limb make a lobe. Neighboring twigs share a tint, and a slow noise makes patches of the crown 2 meters wide lighter or darker.
 
 A near leaf is `OVATE`: a base, three pairs of edge vertices and a tip, six triangles. Its halves tilt their normals apart, so it is lit as if it were folded.
 
@@ -187,6 +189,7 @@ A near leaf is `OVATE`: a base, three pairs of edge vertices and a tip, six tria
 |---|---|
 | `CrownParameters()` | An open tree 14.5 meters tall. Its pale trunk is bare for 5 meters and forks into thin limbs. Its crown is 12 meters across, nine lobes of 15-centimeter leaves. |
 | `windswept_tree()` | A slender tree 12.5 meters tall. Its dark trunk leans and wanders, and its narrow crown is a few wisps of leaves. |
+| `birch_tree()` | A birch 16 meters tall. Its white trunk has short dark marks and is bare for 6 meters. Its narrow crown is small, light leaves on limbs that droop. |
 | `young_tree()` | A young tree 9.4 meters tall. Its crown is a tall oval from 2 meters up, 4 meters across. |
 | `round_tree()` | A dense tree 11 meters tall. Its dark crown reaches nearly to the ground, 9 meters across. |
 | `bush_parameters()` | A bush 1.9 meters tall that forks from the ground, with leaves 12 centimeters long. |
@@ -201,25 +204,52 @@ Each leaf keeps the two numbers as its `sunlit` and `skylit` attributes. `foliag
 
 ### Levels of detail
 
-`default_crown_levels` returns three levels. A crown is grown and lit once, and `dress` draws each level from it.
+`default_crown_levels` returns four levels. A crown is grown and lit once, and `dress` draws each level from it.
 
 | Reach | Keeps | Leaves | Wood |
 |---|---|---|---|
 | 40 meters | every leaf | ovate | full |
 | 110 meters | 40 percent | ovate | full |
-| past that | 16 percent | cards | lean |
+| 300 meters | 16 percent | cards | lean |
+| past that | 5 percent | cards | lean |
 
-A kept leaf grows by the inverse square root of the fraction, so the crown keeps its cover. A card is a diamond of two triangles. Lean wood draws only the branches three times as thick as `wood_radius`, with three vertices round each ring.
+A kept leaf grows by the inverse square root of the fraction, so the crown keeps its cover. A card is a diamond of two triangles. Lean wood draws only the branches three times as thick as `wood_radius`, with three vertices round each ring. A level of ovate leaves sways in the wind, and a level of cards stands still.
+
+### The wind in a crown
+
+`foliage_program(motion)` and `wood_program(motion)` move each vertex of the leaves and of the wood by `sway_offset`. The offset is a swing along the wind and a flutter up and down. `Wind.crown_motion` gives both. In the default wind, an outer twig swings 30 centimeters once a second. A leaf flutters 3.5 centimeters 2.5 times a second.
+
+A vertex sways by its place in the tree. The share is the square of its height over 12 meters, at most 1.5. It is 0.35 of that at the trunk, and all of it 4 meters out from it. A bush only rustles.
+
+The swing's phase changes slowly through the crown, so a limb and its leaves move together and the lobes move apart. The flutter's phase changes fast, so each spray flutters on its own. The leaves and the wood read the same offset, so a leaf stays on its twig.
+
+The time is the `SWAY_TIME` uniform, which `Meadow.update` sets each frame. A looping wind's rates are whole numbers a loop, so the crowns loop with the grass.
 
 ## Layout
 
 `MeadowParameters.crowns` lists the kinds of tree and bush. `plantings` lists each tree and bush: the crown it wears, where it stands, and its size. `scatter_plantings` scatters plantings across the view toward -z, between two distances. `grove_plantings` stands plantings together round a point.
 
-`default_crowns` returns eight crowns: two open trees, a windswept tree, two young trees, a round tree, a green bush and a gray-green bush. `default_plantings` places a lone open tree and a bush near the camera, a second open tree, and a windswept tree. Three groves of mixed trees stand from 60 to 140 meters. 14 trees and 30 bushes are scattered from 12 to 160 meters. 45 young and round trees stand from 435 to 700 meters, on the far side of the canyon.
+`default_crowns` returns twelve crowns: three open trees, a windswept tree, two young trees, two round trees, two birches, a green bush and a gray-green bush.
+
+`default_plantings` places a lone open tree and a bush near the camera, a second open tree, and a windswept tree. A grove of mixed trees, a grove of birches and a grove at the back stand from 60 to 140 meters. 14 trees and 30 bushes are scattered from 12 to 160 meters. A woodland of 120 young and round trees stands from 428 to 520 meters, just past the canyon's far rim. They are 1.3 to 1.9 times their crowns' size, so their tops show above the band of cliffs.
+
+## Bare ground and litter
+
+`Ground.bare` is one where the ground is bare dirt, and the grass's cover is zero there.
+
+- **Dirt patches.** `dirt` sets how much of the field is bare, from 0 to 1. The patches are about 13 meters across, with soft edges. The meadow's ground has a `dirt` of 0.2.
+- **The trail.** A trail `trail_width` wide winds away from the camera's side of the field and drifts toward the groves on the right. Its middle is 92 percent bare, so a few tufts grow on it, and its edge is 1.3 meters wide. The meadow's trail is 1.2 meters wide.
+- **Clearings.** A `Clearing` is the shade round a tree's foot, 80 percent of its crown's radius. `openness` is zero in its inner quarter and rises smoothly to one at its edge. `GrassField.cover_at` thins the grass by it. `litter_shade` browns the ground mesh under it, toward leaf litter. The meadow makes a clearing for each tree and bush near the field.
+
+Bare ground is mottled dirt, light and dark brown.
+
+`ground_litter` scatters fallen leaves, twigs and pebbles on the bare ground. It tries `litter` points within `litter_reach` of the field's middle. A point in full shade is littered 90 times in a hundred, and a point of bare dirt 50 times.
+
+Of the litter, 78 percent is leaves, 17 percent is pebbles and the rest is twigs. A leaf is a diamond that lies on the ground, brown, ochre or a dull green. A pebble has eight faces, each with its own normal. All of it is one mesh that takes the sun's shadow.
 
 ## Ground, sky and light
 
-`Ground` gives the height of rolling hills and its masks: the cover, the tallness, the dryness, the weeds, the bloom and the far color. The ground mesh carries the far color. Past the last level of detail, the ground looks like the grass that it stands in for.
+`Ground` gives the height of rolling hills and its masks. They are the bareness, the cover, the tallness, the dryness, the weeds, the bloom and the far color. The ground mesh carries the far color. Past the last level of detail, the ground looks like the grass that it stands in for. The meadow's ground mesh has 512 cells across, so its cells near the camera are half a meter to a meter wide.
 
 A `Canyon` crosses the ground toward -z. Its floor is `depth` below the near side, and its far plateau is `rise` above it. Each rim is a smooth step 6 meters wide. The default canyon's near rim is 300 meters from the origin and its far rim 420 meters. It is 80 meters deep, and the far side rises 38 meters. The far wall then shows above the near rim as a band of cliffs.
 
@@ -249,6 +279,6 @@ The mountains are `ridge_ring`, a ring of rugged peaks 900 meters away. Each col
 - There is no visibility buffer. The rasterizer shades each fragment as it draws it.
 - The grass casts into the same two cascades as the trees. Its shadow on itself is only as sharp as their texels. So the dark roots still stand in for the shadow at the base of each tuft.
 - A crown is shadowed by its own leaves only. The shadow of another tree does not fall on its leaves.
-- A tree sways as one stiff body from its foot. Its limbs and leaves do not move on their own.
-- The woodland beyond the canyon is small and hazy, and it barely shows above the band of cliffs.
+- A crown sways by the place of each vertex in the tree, not by the gusts that reach it. Only the lean from its foot follows the gusts.
+- Litter lies only within `litter_reach` of the field's middle.
 - The indirect light is a hemisphere light and baked occlusion. The voxel and screen-space passes of the renderer are not used.

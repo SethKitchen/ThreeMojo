@@ -72,3 +72,9 @@ A crown is tens of thousands of small leaves turned every way. Lit by their own 
 So each leaf carries the light that reaches it through the others. The leaves are counted in a grid of cells, and a ray from each leaf steps through the cells toward the sun and the sky. Beer's law gives the light that comes through. The grid holds any shape of crown, and its cost grows with the leaves, not with their square. The sun's share dims only the sun, and the sky's share dims only the sky, as the light of a real crown does. A leaf in the shade then keeps the blue light of the sky.
 
 A far crown keeps fewer leaves and makes each larger, and the farthest uses cards. It stays geometry, so it is lit and it casts a shadow as a near crown does. The crown is grown and lit once, and each level draws from the same leaves.
+
+## Why a crown sways in the vertex stage
+
+A GPU-driven renderer moves a tree's leaves in its vertex shader. The geometry stays as it was built, and a few sines of time and place move each vertex. Here a node program's position output does the same. To grow the crown again on each frame would cost far more.
+
+A position program reads only constants, uniforms, time, math and the vertex's own position and normal. It reads no attribute, so how far a vertex sways cannot be baked into it. So the program works that share out from where the vertex is: higher up and further out from the trunk, it sways more. A twig and its leaves are in the same place, so they move together. A far tree's leaves are a few pixels, and its motion would not show. So the levels of cards stand still, and cost nothing for it.

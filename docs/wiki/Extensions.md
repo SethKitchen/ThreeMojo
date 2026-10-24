@@ -118,7 +118,8 @@ extensions/
     ground.mojo    hills, grass masks, ground and mountains
     field.mojo     clusters, levels of detail, the blade stream
     limbs.mojo     branches grown by space colonization
-    foliage.mojo   leaves, and the light through a crown
+    foliage.mojo   leaves, the light through a crown, and its wind
+    litter.mojo    fallen leaves, twigs and pebbles
     crown.mojo     leafy trees and bushes
     rock.mojo      boulders
     sky.mojo       Preetham's sky with clouds, in a cube
