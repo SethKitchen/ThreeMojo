@@ -48,8 +48,14 @@ the whole Y axis, and left and right both to the whole X axis. Then all
 four directions read as pressed at rest, and left cannot be told from
 right. This port binds each direction to its half of the axis.
 
+A pad's motion sensors are a device of their own, which SDL pairs with
+the pad by its unique id. `SensorLayout` and `SensorState` read that
+device: an accelerometer in meters per second squared and a gyroscope in
+radians per second. `encode_ff_effect` writes the force feedback effect
+that makes a pad rumble.
+
 The device calls are in `extensions.gamepad.linux`. The classic `js`
-interface, the motion sensors, trackballs and rumble are not ported.
+interface and trackballs are not ported.
 """
 from extensions.gamepad.guid import VendorId
 from extensions.gamepad.ids import (
@@ -84,7 +90,12 @@ from extensions.gamepad.ids import (
     GamepadAxis,
     GamepadButton,
 )
-from extensions.gamepad.joystick import Joystick
+from extensions.gamepad.joystick import (
+    SENSOR_ACCEL,
+    SENSOR_GYRO,
+    SENSOR_VALUES,
+    Joystick,
+)
 from extensions.gamepad.mapping import (
     HAT_CENTERED,
     HAT_DOWN,
@@ -99,12 +110,26 @@ from extensions.gamepad.mapping import (
     MappingKind,
 )
 from std.math import floor
+from units.si import Duration64, SECOND
 
 # Event types.
 comptime EV_SYN = 0x00
 comptime EV_KEY = 0x01
 comptime EV_REL = 0x02
 comptime EV_ABS = 0x03
+comptime EV_MSC = 0x04
+comptime EV_FF = 0x15
+# The sensor clock, in microseconds.
+comptime MSC_TIMESTAMP = 0x05
+# Force feedback effects.
+comptime FF_RUMBLE = 0x50
+comptime FF_PERIODIC = 0x51
+comptime FF_SINE = 0x5A
+comptime FF_BITMAP_BYTES = 16
+# The size of `struct ff_effect` on a 64-bit system.
+comptime FF_EFFECT_SIZE = 48
+# Earth's gravity. SDL: `SDL_STANDARD_GRAVITY`.
+comptime STANDARD_GRAVITY = Float32(9.80665)
 # Synchronization codes.
 comptime SYN_REPORT = 0
 comptime SYN_DROPPED = 3
@@ -418,6 +443,18 @@ struct InputId(Equatable, ImplicitlyCopyable, Writable):
         """
         if len(bytes) < 8:
             raise Error("An input_id is 8 bytes")
+        return InputId.from_buffer(bytes)
+
+    @staticmethod
+    def from_buffer(bytes: List[UInt8]) -> InputId:
+        """Read the structure from a buffer known to hold 8 bytes.
+
+        Args:
+            bytes: At least 8 bytes.
+
+        Returns:
+            The identity.
+        """
         return InputId(
             _read_uint16(bytes, 0),
             _read_uint16(bytes, 2),
@@ -1248,3 +1285,270 @@ def automatic_mapping(
         if layout.has_key[KEY_RECORD]:
             raw.buttons[BUTTON_MISC1.value] = _button(layout, KEY_RECORD)
     return raw^
+
+
+struct SensorLayout(ImplicitlyCopyable):
+    """Which motion sensors a sensor device has, and their scales. SDL: the
+    sensor part of `ConfigJoystick`."""
+
+    var has_accelerometer: Bool
+    var has_gyro: Bool
+    # Counts per unit, from each axis's resolution.
+    var accelerometer_scale: SIMD[DType.float32, 4]
+    var gyro_scale: SIMD[DType.float32, 4]
+
+    def __init__(out self):
+        """Create a layout with no sensors."""
+        self.has_accelerometer = False
+        self.has_gyro = False
+        self.accelerometer_scale = SIMD[DType.float32, 4](0)
+        self.gyro_scale = SIMD[DType.float32, 4](0)
+
+    def configure(
+        mut self, absolutes: List[UInt8], absinfo: List[Optional[AbsInfo]]
+    ):
+        """Find the sensors of a sensor device. SDL: the sensor part of
+        `ConfigJoystick`.
+
+        A sensor needs all three axes, and the range of each.
+
+        Args:
+            absolutes: The sensor device's absolute axis bitmap.
+            absinfo: The range of each axis, by code, or None.
+        """
+        if (
+            test_bit(absolutes, ABS_X)
+            and test_bit(absolutes, ABS_Y)
+            and test_bit(absolutes, ABS_Z)
+        ):
+            self.has_accelerometer = True
+            for axis in range(3):  # pragma: no branch
+                if not absinfo[ABS_X + axis]:
+                    self.has_accelerometer = False
+                    break
+                self.accelerometer_scale[axis] = Float32(
+                    absinfo[ABS_X + axis].value().resolution
+                )
+        if (
+            test_bit(absolutes, ABS_RX)
+            and test_bit(absolutes, ABS_RY)
+            and test_bit(absolutes, ABS_RZ)
+        ):
+            self.has_gyro = True
+            for axis in range(3):  # pragma: no branch
+                if not absinfo[ABS_RX + axis]:
+                    self.has_gyro = False
+                    break
+                self.gyro_scale[axis] = Float32(
+                    absinfo[ABS_RX + axis].value().resolution
+                )
+
+    def accelerometer(self, axis: Int, value: Int) -> Float32:
+        """Scale a raw accelerometer value. SDL:
+        `value * SDL_STANDARD_GRAVITY / accelerometer_scale`.
+
+        Args:
+            axis: 0 for X, 1 for Y, 2 for Z.
+            value: The raw value.
+
+        Returns:
+            The acceleration, in meters per second squared.
+        """
+        return (
+            Float32(value) * STANDARD_GRAVITY / self.accelerometer_scale[axis]
+        )
+
+    def gyro(self, axis: Int, value: Int) -> Float32:
+        """Scale a raw gyroscope value. SDL:
+        `value * (SDL_PI_F / 180) / gyro_scale`.
+
+        Args:
+            axis: 0 for X, 1 for Y, 2 for Z.
+            value: The raw value, in counts per degree per second.
+
+        Returns:
+            The turn rate, in radians per second.
+        """
+        return (
+            Float32(value)
+            * (Float32(3.14159265358979323846264338327950288) / 180)
+            / self.gyro_scale[axis]
+        )
+
+
+struct SensorState(ImplicitlyCopyable):
+    """What SDL tracks while it reads a sensor device. SDL: the sensor
+    fields of `struct joystick_hwdata`."""
+
+    var layout: SensorLayout
+    var accel_data: SIMD[DType.float32, SENSOR_VALUES]
+    var gyro_data: SIMD[DType.float32, SENSOR_VALUES]
+    # The sensor clock, in microseconds, and its last raw value.
+    var sensor_tick: Int
+    var last_tick: Int
+    var recovering_from_dropped: Bool
+
+    def __init__(out self, layout: SensorLayout):
+        """Create the state of a sensor device that has not been read.
+
+        Args:
+            layout: The device's sensors.
+        """
+        self.layout = layout
+        self.accel_data = SIMD[DType.float32, SENSOR_VALUES](0)
+        self.gyro_data = SIMD[DType.float32, SENSOR_VALUES](0)
+        self.sensor_tick = 0
+        self.last_tick = 0
+        self.recovering_from_dropped = False
+
+    def timestamp(self) -> Duration64:
+        """Return the sensor clock.
+
+        Returns:
+            The time the sensor reported, by its own clock.
+        """
+        return Duration64(Float64(self.sensor_tick) * 1e-6, SECOND)
+
+    def handle_event(
+        mut self, mut joystick: Joystick, event: EvdevEvent
+    ) -> Bool:
+        """Apply one event of the sensor device. SDL: the sensor loop of
+        `HandleInputEvents`.
+
+        A report sends the gyroscope, then the accelerometer.
+
+        Args:
+            joystick: The joystick to update.
+            event: The event.
+
+        Returns:
+            True when the sensors must be read again, after a report that
+            followed dropped events.
+        """
+        var code = event.code
+        if self.recovering_from_dropped and (
+            event.type != EV_SYN or code != SYN_REPORT
+        ):
+            return False
+        if event.type == EV_ABS:
+            if code >= ABS_X and code <= ABS_Z:
+                self.accel_data[code - ABS_X] = self.layout.accelerometer(
+                    code - ABS_X, event.value
+                )
+            elif code >= ABS_RX and code <= ABS_RZ:
+                self.gyro_data[code - ABS_RX] = self.layout.gyro(
+                    code - ABS_RX, event.value
+                )
+        elif event.type == EV_MSC:
+            if code == MSC_TIMESTAMP:
+                var tick = event.value
+                var delta: Int
+                if self.last_tick < tick:
+                    delta = tick - self.last_tick
+                else:
+                    delta = 0x7FFFFFFF - self.last_tick + tick + 1
+                self.sensor_tick += delta
+                self.last_tick = tick
+        elif event.type == EV_SYN:
+            if code == SYN_DROPPED:
+                self.recovering_from_dropped = True
+            elif code == SYN_REPORT:
+                if self.recovering_from_dropped:
+                    self.recovering_from_dropped = False
+                    return True
+                joystick.send_sensor(
+                    SENSOR_GYRO, self.timestamp(), self.gyro_data
+                )
+                joystick.send_sensor(
+                    SENSOR_ACCEL, self.timestamp(), self.accel_data
+                )
+        return False
+
+    def apply_state(
+        mut self, mut joystick: Joystick, absinfo: List[Optional[AbsInfo]]
+    ):
+        """Send the whole sensor state read from the device. SDL:
+        `PollAllSensors`.
+
+        An axis the device does not describe reads 0.
+
+        Args:
+            joystick: The joystick to update.
+            absinfo: Each axis's range and value, by code, or None.
+        """
+        if self.layout.has_gyro:
+            var data = SIMD[DType.float32, SENSOR_VALUES](0)
+            for axis in range(3):  # pragma: no branch
+                if absinfo[ABS_RX + axis]:
+                    data[axis] = self.layout.gyro(
+                        axis, absinfo[ABS_RX + axis].value().value
+                    )
+            joystick.send_sensor(SENSOR_GYRO, self.timestamp(), data)
+        if self.layout.has_accelerometer:
+            var data = SIMD[DType.float32, SENSOR_VALUES](0)
+            for axis in range(3):  # pragma: no branch
+                if absinfo[ABS_X + axis]:
+                    data[axis] = self.layout.accelerometer(
+                        axis, absinfo[ABS_X + axis].value().value
+                    )
+            joystick.send_sensor(SENSOR_ACCEL, self.timestamp(), data)
+
+
+def _put16(mut bytes: List[UInt8], offset: Int, value: Int):
+    """Write a little-endian 16-bit integer.
+
+    Args:
+        bytes: The bytes.
+        offset: Where it starts.
+        value: The value. Only its low 16 bits are kept.
+    """
+    bytes[offset] = UInt8(value & 0xFF)
+    bytes[offset + 1] = UInt8((value >> 8) & 0xFF)
+
+
+def encode_ff_effect(
+    rumble: Bool, id: Int, low: Int, high: Int, length_ms: Int
+) -> List[UInt8]:
+    """Write the force feedback effect SDL uploads. SDL: the effect of
+    `LINUX_JoystickRumble`. Linux: `struct ff_effect`.
+
+    A pad with `FF_RUMBLE` gets the two strengths. A pad with only
+    `FF_SINE` gets a sine wave with their average.
+
+    Args:
+        rumble: Whether the pad has `FF_RUMBLE`. False uses `FF_SINE`.
+        id: The effect id the kernel gave, or -1 for a new effect.
+        low: The low frequency strength, 0 to 65535.
+        high: The high frequency strength, 0 to 65535.
+        length_ms: How long the effect plays, in milliseconds.
+
+    Returns:
+        The 48 bytes of the effect.
+    """
+    var bytes = List[UInt8](length=FF_EFFECT_SIZE, fill=0)
+    _put16(bytes, 2, id)
+    # The replay length is at offset 10, after the trigger.
+    _put16(bytes, 10, length_ms)
+    if rumble:
+        _put16(bytes, 0, FF_RUMBLE)
+        _put16(bytes, 16, low)
+        _put16(bytes, 18, high)
+    else:
+        _put16(bytes, 0, FF_PERIODIC)
+        _put16(bytes, 16, FF_SINE)
+        # SDL: `(Sint16)(((low / 2) + (high / 2)) / 2)`.
+        _put16(bytes, 20, ((low // 2) + (high // 2)) // 2)
+    return bytes^
+
+
+def ff_effect_id(bytes: List[UInt8]) -> Int:
+    """Read the id the kernel wrote into an uploaded effect.
+
+    Args:
+        bytes: The effect's bytes.
+
+    Returns:
+        The id, as a signed 16-bit value.
+    """
+    var value = _read_uint16(bytes, 2)
+    return value - 0x10000 if value >= 0x8000 else value

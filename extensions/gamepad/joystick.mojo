@@ -39,12 +39,79 @@ motion until it moves by more than 1/80 of the range, so that a device
 that reports noise at rest does not send motion. A hat value is a set of
 `HAT_UP`, `HAT_RIGHT`, `HAT_DOWN` and `HAT_LEFT` bits.
 
+A joystick can also have touchpads and motion sensors. `send_touchpad`
+records a finger, as a position from 0 to 1 on each side and a pressure
+from 0 to 1. `send_sensor` records a reading: an accelerometer in meters
+per second squared, a gyroscope in radians per second. A sensor reports
+only while it is enabled.
+
 SDL drops events while the program has no keyboard focus, unless a hint
 says not to. This port has no focus, so it keeps every event.
 """
-from extensions.gamepad.guid import DRIVER_VIRTUAL, JoystickGuid
-from extensions.gamepad.ids import JOYSTICK_AXIS_MAX
+from extensions.gamepad.guid import (
+    DRIVER_HIDAPI,
+    DRIVER_RAWINPUT,
+    DRIVER_VIRTUAL,
+    DRIVER_WGI,
+    DRIVER_XINPUT,
+    JoystickGuid,
+    joystick_guid_info,
+)
+from extensions.gamepad.ids import (
+    AXIS_COUNT,
+    JOYSTICK_AXIS_MAX,
+    JOYSTICK_AXIS_MIN,
+)
 from core.ordinal import ordinal_valid
+from units.si import Duration64, Frequency
+
+# The number of values a sensor keeps. SDL keeps 6; a SIMD vector needs a
+# power of two, so the last two stay 0. The drivers send 3.
+comptime SENSOR_VALUES = 8
+
+
+@fieldwise_init
+struct SensorType(Equatable, ImplicitlyCopyable, Writable):
+    """What a motion sensor measures. SDL: `SDL_SensorType`."""
+
+    var value: Int
+
+    def is_valid(self) -> Bool:
+        """Return True if this is one of the 7 types.
+
+        Returns:
+            Whether the value is 0 to 6. `SENSOR_INVALID` is not valid.
+        """
+        return ordinal_valid(self.value, 6)
+
+
+comptime SENSOR_INVALID = SensorType(-1)
+comptime SENSOR_UNKNOWN = SensorType(0)
+# An accelerometer, in meters per second squared.
+comptime SENSOR_ACCEL = SensorType(1)
+# A gyroscope, in radians per second.
+comptime SENSOR_GYRO = SensorType(2)
+# The accelerometer of a left Joy-Con.
+comptime SENSOR_ACCEL_L = SensorType(3)
+comptime SENSOR_GYRO_L = SensorType(4)
+comptime SENSOR_ACCEL_R = SensorType(5)
+comptime SENSOR_GYRO_R = SensorType(6)
+
+
+def is_accelerometer(type: SensorType) -> Bool:
+    """Return True if a sensor type measures acceleration.
+
+    Args:
+        type: The sensor type.
+
+    Returns:
+        Whether it is one of the three accelerometers.
+    """
+    return (
+        type == SENSOR_ACCEL
+        or type == SENSOR_ACCEL_L
+        or (type == SENSOR_ACCEL_R)
+    )
 
 
 @fieldwise_init
@@ -54,12 +121,12 @@ struct JoystickEventKind(Equatable, ImplicitlyCopyable, Writable):
     var value: Int
 
     def is_valid(self) -> Bool:
-        """Return True if this is one of the 3 kinds.
+        """Return True if this is one of the 7 kinds.
 
         Returns:
-            Whether the value is 0 to 2.
+            Whether the value is 0 to 6.
         """
-        return ordinal_valid(self.value, 2)
+        return ordinal_valid(self.value, 6)
 
 
 # An axis moved. SDL: `SDL_EVENT_JOYSTICK_AXIS_MOTION`.
@@ -68,17 +135,135 @@ comptime JOYSTICK_AXIS_MOTION = JoystickEventKind(0)
 comptime JOYSTICK_BUTTON = JoystickEventKind(1)
 # A hat moved. SDL: `SDL_EVENT_JOYSTICK_HAT_MOTION`.
 comptime JOYSTICK_HAT_MOTION = JoystickEventKind(2)
+# A finger touched a touchpad. SDL: `SDL_EVENT_GAMEPAD_TOUCHPAD_DOWN`.
+comptime JOYSTICK_TOUCHPAD_DOWN = JoystickEventKind(3)
+# A finger moved. SDL: `SDL_EVENT_GAMEPAD_TOUCHPAD_MOTION`.
+comptime JOYSTICK_TOUCHPAD_MOTION = JoystickEventKind(4)
+# A finger left a touchpad. SDL: `SDL_EVENT_GAMEPAD_TOUCHPAD_UP`.
+comptime JOYSTICK_TOUCHPAD_UP = JoystickEventKind(5)
+# A sensor reported. SDL: `SDL_EVENT_GAMEPAD_SENSOR_UPDATE`.
+comptime JOYSTICK_SENSOR_UPDATE = JoystickEventKind(6)
 
 
-@fieldwise_init
 struct JoystickEvent(ImplicitlyCopyable):
     """One change of a joystick's state."""
 
     var kind: JoystickEventKind
-    # The axis, the button or the hat.
+    # The axis, the button, the hat, the touchpad or the sensor type.
     var index: Int
-    # The axis value, 1 or 0 for a button down or up, or the hat bits.
+    # The axis value, 1 or 0 for a button down or up, the hat bits, or the
+    # finger.
     var value: Int
+    # A finger's position and pressure, from 0 to 1.
+    var x: Float32
+    var y: Float32
+    var pressure: Float32
+    # A sensor's reading, in SI units.
+    var data: SIMD[DType.float32, SENSOR_VALUES]
+    # The sensor's own clock.
+    var sensor_timestamp: Duration64
+
+    def __init__(
+        out self,
+        kind: JoystickEventKind,
+        index: Int,
+        value: Int,
+        x: Float32 = 0,
+        y: Float32 = 0,
+        pressure: Float32 = 0,
+        data: SIMD[DType.float32, SENSOR_VALUES] = 0,
+        sensor_timestamp: Duration64 = Duration64(0),
+    ):
+        """Create an event.
+
+        Args:
+            kind: What changed.
+            index: The axis, button, hat, touchpad or sensor type.
+            value: The new value, or the finger.
+            x: A finger's position across the touchpad.
+            y: A finger's position down the touchpad.
+            pressure: A finger's pressure.
+            data: A sensor's reading.
+            sensor_timestamp: The sensor's clock.
+        """
+        self.kind = kind
+        self.index = index
+        self.value = value
+        self.x = x
+        self.y = y
+        self.pressure = pressure
+        self.data = data
+        self.sensor_timestamp = sensor_timestamp
+
+
+struct TouchpadFinger(ImplicitlyCopyable, Writable):
+    """One finger on a touchpad. SDL: `SDL_JoystickTouchpadFingerInfo`."""
+
+    var down: Bool
+    # From 0 at the left to 1 at the right.
+    var x: Float32
+    # From 0 at the top to 1 at the bottom.
+    var y: Float32
+    # From 0 to 1.
+    var pressure: Float32
+
+    def __init__(
+        out self,
+        down: Bool = False,
+        x: Float32 = 0,
+        y: Float32 = 0,
+        pressure: Float32 = 0,
+    ):
+        """Create a finger.
+
+        Args:
+            down: Whether it touches the pad.
+            x: Its position across.
+            y: Its position down.
+            pressure: Its pressure.
+        """
+        self.down = down
+        self.x = x
+        self.y = y
+        self.pressure = pressure
+
+
+struct JoystickSensor(ImplicitlyCopyable):
+    """One motion sensor. SDL: `SDL_JoystickSensorInfo`."""
+
+    var type: SensorType
+    var rate: Frequency
+    var enabled: Bool
+    # The last reading, in meters per second squared or radians per second.
+    var data: SIMD[DType.float32, SENSOR_VALUES]
+
+    def __init__(out self, type: SensorType, rate: Frequency):
+        """Create a sensor that is off.
+
+        Args:
+            type: What it measures.
+            rate: How often it reports, or 0 when it does not say.
+        """
+        self.type = type
+        self.rate = rate
+        self.enabled = False
+        self.data = SIMD[DType.float32, SENSOR_VALUES](0)
+
+
+def _clamp_unit(value: Float32) -> Float32:
+    """Clamp a value to 0 to 1.
+
+    Args:
+        value: The value.
+
+    Returns:
+        The value, at least 0 and at most 1.
+    """
+    if value < 0:
+        return 0
+    if value > 1:
+        return 1
+    return value
 
 
 struct JoystickAxisInfo(ImplicitlyCopyable):
@@ -124,6 +309,10 @@ struct Joystick(Movable):
     var axes: List[JoystickAxisInfo]
     var buttons: List[Bool]
     var hats: List[Int]
+    var touchpads: List[List[TouchpadFinger]]
+    var sensors: List[JoystickSensor]
+    # How many sensors are enabled. The driver reports while any is.
+    var sensors_enabled: Int
     # The changes since the last `take_events`.
     var events: List[JoystickEvent]
 
@@ -154,7 +343,35 @@ struct Joystick(Movable):
         self.axes = List[JoystickAxisInfo](length=axes, fill=JoystickAxisInfo())
         self.buttons = List[Bool](length=buttons, fill=False)
         self.hats = List[Int](length=hats, fill=0)
+        self.touchpads = List[List[TouchpadFinger]]()
+        self.sensors = List[JoystickSensor]()
+        self.sensors_enabled = 0
         self.events = List[JoystickEvent]()
+        # SDL_OpenJoystick: a two-axis pad, or one SDL knows, is centered
+        # at zero, so its first values are motion.
+        var info = joystick_guid_info(guid)
+        var key = (info.vendor.value << 16) | info.product.value
+        if axes == 2 or key == 0x05A03232 or key == 0x0E8F3013:
+            for index in range(axes):
+                self.axes[index].has_initial_value = True
+        # The drivers that know their triggers rest at -32768.
+        var driver = guid.driver()
+        if (
+            driver == DRIVER_HIDAPI
+            or driver == DRIVER_XINPUT
+            or driver == DRIVER_RAWINPUT
+            or driver == DRIVER_WGI
+        ) and axes >= AXIS_COUNT:
+            var left = 2 if driver == DRIVER_XINPUT else 4
+            var right = 5
+            for index in range(AXIS_COUNT):  # pragma: no branch
+                var rest = JOYSTICK_AXIS_MIN if (
+                    index == left or index == right
+                ) else 0
+                self.axes[index].value = rest
+                self.axes[index].zero = rest
+                self.axes[index].initial_value = rest
+                self.axes[index].has_initial_value = True
 
     def axis_count(self) -> Int:
         """Return the number of axes. SDL: `SDL_GetNumJoystickAxes`.
@@ -289,6 +506,182 @@ struct Joystick(Movable):
             return
         self.hats[hat] = value
         self.events.append(JoystickEvent(JOYSTICK_HAT_MOTION, hat, value))
+
+    def add_touchpad(mut self, fingers: Int) raises:
+        """Add a touchpad. SDL: `SDL_PrivateJoystickAddTouchpad`.
+
+        Args:
+            fingers: How many fingers it tracks at once.
+
+        Raises:
+            Error: If the count is negative.
+        """
+        if fingers < 0:
+            raise Error("A touchpad cannot track a negative number of fingers")
+        self.touchpads.append(
+            List[TouchpadFinger](length=fingers, fill=TouchpadFinger())
+        )
+
+    def add_sensor(mut self, type: SensorType, rate: Frequency) raises:
+        """Add a motion sensor, off. SDL: `SDL_PrivateJoystickAddSensor`.
+
+        Args:
+            type: What it measures.
+            rate: How often it reports, or 0.
+
+        Raises:
+            Error: If the type is not valid.
+        """
+        if not type.is_valid():
+            raise Error("A joystick sensor type is not valid")
+        self.sensors.append(JoystickSensor(type, rate))
+
+    def sensor_index(self, type: SensorType) -> Int:
+        """Return the place of the first sensor of a type.
+
+        Args:
+            type: The sensor type.
+
+        Returns:
+            The index in `sensors`, or -1 when there is none.
+        """
+        for index in range(len(self.sensors)):
+            if self.sensors[index].type == type:
+                return index
+        return -1
+
+    def sensor_switch(self, type: SensorType, enabled: Bool) raises -> Int:
+        """Say what the driver must do to turn a sensor on or off. SDL: the
+        first half of `SDL_SetGamepadSensorEnabled`.
+
+        Args:
+            type: The sensor type.
+            enabled: Whether it is to be on.
+
+        Returns:
+            1 when the driver must start reporting, -1 when it must stop,
+            and 0 when nothing changes for the driver.
+
+        Raises:
+            Error: If the joystick has no sensor of the type.
+        """
+        var index = self.sensor_index(type)
+        if index < 0:
+            raise Error("The joystick has no sensor of this type")
+        if self.sensors[index].enabled == enabled:
+            return 0
+        if enabled and self.sensors_enabled == 0:
+            return 1
+        if not enabled and self.sensors_enabled == 1:
+            return -1
+        return 0
+
+    def set_sensor_enabled(mut self, type: SensorType, enabled: Bool) raises:
+        """Turn a sensor on or off, after the driver agreed. SDL: the second
+        half of `SDL_SetGamepadSensorEnabled`.
+
+        Args:
+            type: The sensor type.
+            enabled: Whether it is on.
+
+        Raises:
+            Error: If the joystick has no sensor of the type.
+        """
+        var index = self.sensor_index(type)
+        if index < 0:
+            raise Error("The joystick has no sensor of this type")
+        if self.sensors[index].enabled == enabled:
+            return
+        self.sensors_enabled += 1 if enabled else -1
+        self.sensors[index].enabled = enabled
+
+    def send_sensor(
+        mut self,
+        type: SensorType,
+        sensor_timestamp: Duration64,
+        data: SIMD[DType.float32, SENSOR_VALUES],
+    ):
+        """Record a sensor reading. SDL: `SDL_SendJoystickSensor`.
+
+        A reading of a sensor that is off, or that the joystick does not
+        have, is dropped.
+
+        Args:
+            type: The sensor type.
+            sensor_timestamp: The sensor's clock.
+            data: The reading, in SI units. Unused values are 0.
+        """
+        var index = self.sensor_index(type)
+        if index < 0 or not self.sensors[index].enabled:
+            return
+        self.sensors[index].data = data
+        self.events.append(
+            JoystickEvent(
+                JOYSTICK_SENSOR_UPDATE,
+                type.value,
+                0,
+                data=data,
+                sensor_timestamp=sensor_timestamp,
+            )
+        )
+
+    def send_touchpad(
+        mut self,
+        touchpad: Int,
+        finger: Int,
+        down: Bool,
+        x: Float32,
+        y: Float32,
+        pressure: Float32,
+    ):
+        """Record a finger on a touchpad. SDL: `SDL_SendJoystickTouchpad`.
+
+        A lifted finger at 0, 0 keeps its last position. Positions and the
+        pressure are clamped to 0 to 1. A lifted finger has no pressure.
+
+        Args:
+            touchpad: The touchpad. One the joystick does not have is
+                ignored.
+            finger: The finger. One the touchpad does not track is ignored.
+            down: Whether it touches.
+            x: Its position across.
+            y: Its position down.
+            pressure: Its pressure.
+        """
+        if touchpad < 0 or touchpad >= len(self.touchpads):
+            return
+        if finger < 0 or finger >= len(self.touchpads[touchpad]):
+            return
+        var info = self.touchpads[touchpad][finger]
+        var at_x = x
+        var at_y = y
+        var force = pressure
+        if not down:
+            if at_x == 0 and at_y == 0:
+                at_x = info.x
+                at_y = info.y
+            force = 0
+        at_x = _clamp_unit(at_x)
+        at_y = _clamp_unit(at_y)
+        force = _clamp_unit(force)
+        if down == info.down and (
+            not down
+            or (at_x == info.x and at_y == info.y and force == info.pressure)
+        ):
+            return
+        var kind: JoystickEventKind
+        if down == info.down:
+            kind = JOYSTICK_TOUCHPAD_MOTION
+        elif down:
+            kind = JOYSTICK_TOUCHPAD_DOWN
+        else:
+            kind = JOYSTICK_TOUCHPAD_UP
+        self.touchpads[touchpad][finger] = TouchpadFinger(
+            down, at_x, at_y, force
+        )
+        self.events.append(
+            JoystickEvent(kind, touchpad, finger, at_x, at_y, force)
+        )
 
     def take_events(mut self) -> List[JoystickEvent]:
         """Return the queued events and empty the queue.

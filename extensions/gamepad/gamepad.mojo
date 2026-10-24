@@ -69,7 +69,23 @@ from extensions.gamepad.ids import (
 from extensions.gamepad.joystick import (
     JOYSTICK_AXIS_MOTION,
     JOYSTICK_BUTTON,
+    JOYSTICK_HAT_MOTION,
+    JOYSTICK_SENSOR_UPDATE,
+    SENSOR_INVALID,
+    SENSOR_VALUES,
     Joystick,
+    JoystickEvent,
+    SensorType,
+    TouchpadFinger,
+    is_accelerometer,
+)
+from units.si import (
+    Acceleration,
+    AngularVelocity,
+    Duration64,
+    Frequency,
+    METER_PER_SECOND_SQUARED,
+    RADIAN_PER_SECOND,
 )
 from extensions.gamepad.mapping import (
     BIND_AXIS,
@@ -96,12 +112,12 @@ struct GamepadEventKind(Equatable, ImplicitlyCopyable, Writable):
     var value: Int
 
     def is_valid(self) -> Bool:
-        """Return True if this is one of the 3 kinds.
+        """Return True if this is one of the 7 kinds.
 
         Returns:
-            Whether the value is 0 to 2.
+            Whether the value is 0 to 6.
         """
-        return ordinal_valid(self.value, 2)
+        return ordinal_valid(self.value, 6)
 
 
 # An axis moved. SDL: `SDL_EVENT_GAMEPAD_AXIS_MOTION`.
@@ -110,6 +126,14 @@ comptime GAMEPAD_AXIS_MOTION = GamepadEventKind(0)
 comptime GAMEPAD_BUTTON_DOWN = GamepadEventKind(1)
 # A button went up. SDL: `SDL_EVENT_GAMEPAD_BUTTON_UP`.
 comptime GAMEPAD_BUTTON_UP = GamepadEventKind(2)
+# A finger touched a touchpad. SDL: `SDL_EVENT_GAMEPAD_TOUCHPAD_DOWN`.
+comptime GAMEPAD_TOUCHPAD_DOWN = GamepadEventKind(3)
+# A finger moved on a touchpad. SDL: `SDL_EVENT_GAMEPAD_TOUCHPAD_MOTION`.
+comptime GAMEPAD_TOUCHPAD_MOTION = GamepadEventKind(4)
+# A finger left a touchpad. SDL: `SDL_EVENT_GAMEPAD_TOUCHPAD_UP`.
+comptime GAMEPAD_TOUCHPAD_UP = GamepadEventKind(5)
+# A sensor reported. SDL: `SDL_EVENT_GAMEPAD_SENSOR_UPDATE`.
+comptime GAMEPAD_SENSOR_UPDATE = GamepadEventKind(6)
 
 
 struct GamepadEvent(ImplicitlyCopyable):
@@ -122,6 +146,17 @@ struct GamepadEvent(ImplicitlyCopyable):
     var axis: GamepadAxis
     # The axis value, from -32768 to 32767.
     var value: Int
+    # The touchpad and the finger, for a touchpad event.
+    var touchpad: Int
+    var finger: Int
+    # The finger's position and pressure, from 0 to 1.
+    var x: Float32
+    var y: Float32
+    var pressure: Float32
+    # The sensor and its reading in SI units, for a sensor event.
+    var sensor: SensorType
+    var data: SIMD[DType.float32, SENSOR_VALUES]
+    var sensor_timestamp: Duration64
 
     def __init__(
         out self,
@@ -130,7 +165,7 @@ struct GamepadEvent(ImplicitlyCopyable):
         axis: GamepadAxis,
         value: Int,
     ):
-        """Create an event.
+        """Create a button or axis event.
 
         Args:
             kind: What happened.
@@ -142,6 +177,43 @@ struct GamepadEvent(ImplicitlyCopyable):
         self.button = button
         self.axis = axis
         self.value = value
+        self.touchpad = 0
+        self.finger = 0
+        self.x = 0
+        self.y = 0
+        self.pressure = 0
+        self.sensor = SENSOR_INVALID
+        self.data = SIMD[DType.float32, SENSOR_VALUES](0)
+        self.sensor_timestamp = Duration64(0)
+
+    @staticmethod
+    def from_joystick(event: JoystickEvent) -> GamepadEvent:
+        """Turn a touchpad or sensor event of a joystick into one of the
+        gamepad. SDL sends those as gamepad events directly.
+
+        Args:
+            event: A touchpad or sensor event.
+
+        Returns:
+            The gamepad event of the same kind.
+        """
+        var result = GamepadEvent(
+            GamepadEventKind(event.kind.value),
+            BUTTON_INVALID,
+            GamepadAxis(0),
+            0,
+        )
+        if event.kind == JOYSTICK_SENSOR_UPDATE:
+            result.sensor = SensorType(event.index)
+            result.data = event.data
+            result.sensor_timestamp = event.sensor_timestamp
+        else:
+            result.touchpad = event.index
+            result.finger = event.value
+            result.x = event.x
+            result.y = event.y
+            result.pressure = event.pressure
+        return result
 
 
 def _in_range(value: Int, a: Int, b: Int) -> Bool:
@@ -551,9 +623,154 @@ struct Gamepad(Movable):
                 self._handle_axis(events, event.index, event.value)
             elif event.kind == JOYSTICK_BUTTON:
                 self._handle_button(events, event.index, event.value != 0)
-            else:
+            elif event.kind == JOYSTICK_HAT_MOTION:
                 self._handle_hat(events, event.index, event.value)
+            else:
+                events.append(GamepadEvent.from_joystick(event))
         return events^
+
+    def touchpad_count(self) -> Int:
+        """Return the number of touchpads. SDL: `SDL_GetNumGamepadTouchpads`.
+
+        Returns:
+            How many there are.
+        """
+        return len(self.joystick.touchpads)
+
+    def touchpad_finger_count(self, touchpad: Int) -> Int:
+        """Return how many fingers a touchpad tracks. SDL:
+        `SDL_GetNumGamepadTouchpadFingers`.
+
+        Args:
+            touchpad: The touchpad.
+
+        Returns:
+            The count, or 0 for a touchpad the gamepad does not have.
+        """
+        if touchpad < 0 or touchpad >= len(self.joystick.touchpads):
+            return 0
+        return len(self.joystick.touchpads[touchpad])
+
+    def touchpad_finger(
+        self, touchpad: Int, finger: Int
+    ) raises -> TouchpadFinger:
+        """Return a finger on a touchpad. SDL: `SDL_GetGamepadTouchpadFinger`.
+
+        Args:
+            touchpad: The touchpad.
+            finger: The finger.
+
+        Returns:
+            Whether it touches, its position and its pressure.
+
+        Raises:
+            Error: If the touchpad or the finger does not exist.
+        """
+        if self.touchpad_finger_count(touchpad) == 0:
+            raise Error("The gamepad has no such touchpad")
+        if finger < 0 or finger >= len(self.joystick.touchpads[touchpad]):
+            raise Error("The touchpad does not track that finger")
+        return self.joystick.touchpads[touchpad][finger]
+
+    def has_sensor(self, type: SensorType) -> Bool:
+        """Return True if the gamepad has a sensor. SDL:
+        `SDL_GamepadHasSensor`.
+
+        Args:
+            type: The sensor type.
+
+        Returns:
+            Whether it has one of that type.
+        """
+        return self.joystick.sensor_index(type) >= 0
+
+    def sensor_enabled(self, type: SensorType) -> Bool:
+        """Return True if a sensor reports. SDL: `SDL_GamepadSensorEnabled`.
+
+        Args:
+            type: The sensor type.
+
+        Returns:
+            Whether the gamepad has it and it is on.
+        """
+        var index = self.joystick.sensor_index(type)
+        return index >= 0 and self.joystick.sensors[index].enabled
+
+    def sensor_data_rate(self, type: SensorType) -> Frequency:
+        """Return how often a sensor reports. SDL:
+        `SDL_GetGamepadSensorDataRate`.
+
+        Args:
+            type: The sensor type.
+
+        Returns:
+            The rate, or 0 when the gamepad has no such sensor or it does
+            not say.
+        """
+        var index = self.joystick.sensor_index(type)
+        if index < 0:
+            return Frequency(0)
+        return self.joystick.sensors[index].rate
+
+    def sensor_data(
+        self, type: SensorType
+    ) raises -> SIMD[DType.float32, SENSOR_VALUES]:
+        """Return a sensor's last reading. SDL: `SDL_GetGamepadSensorData`.
+
+        Args:
+            type: The sensor type.
+
+        Returns:
+            The reading, in meters per second squared or radians per
+            second. Unused values are 0.
+
+        Raises:
+            Error: If the gamepad has no such sensor.
+        """
+        var index = self.joystick.sensor_index(type)
+        if index < 0:
+            raise Error("The gamepad has no sensor of this type")
+        return self.joystick.sensors[index].data
+
+    def acceleration(self, type: SensorType, axis: Int) raises -> Acceleration:
+        """Return one axis of an accelerometer's last reading.
+
+        Args:
+            type: An accelerometer type.
+            axis: 0 for X, 1 for Y, 2 for Z.
+
+        Returns:
+            The acceleration along the axis.
+
+        Raises:
+            Error: If the type is not an accelerometer the gamepad has, or
+                the axis is not 0 to 2.
+        """
+        if not is_accelerometer(type) or axis < 0 or axis > 2:
+            raise Error("An acceleration needs an accelerometer axis")
+        return Acceleration(
+            self.sensor_data(type)[axis], METER_PER_SECOND_SQUARED
+        )
+
+    def angular_velocity(
+        self, type: SensorType, axis: Int
+    ) raises -> AngularVelocity:
+        """Return one axis of a gyroscope's last reading.
+
+        Args:
+            type: A gyroscope type.
+            axis: 0 for X, 1 for Y, 2 for Z.
+
+        Returns:
+            The turn rate about the axis.
+
+        Raises:
+            Error: If the type is not a gyroscope the gamepad has, or the
+                axis is not 0 to 2.
+        """
+        if not type.is_valid() or type.value % 2 != 0 or axis < 0 or axis > 2:
+            raise Error("An angular velocity needs a gyroscope axis")
+        return AngularVelocity(self.sensor_data(type)[axis], RADIAN_PER_SECOND)
 
     def recenter(self) -> List[GamepadEvent]:
         """Return the events that put every control at rest. SDL:

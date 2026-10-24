@@ -176,9 +176,10 @@ comptime ORACLE_MAPPING = (
 
 
 def test_kinds_check_their_range() raises:
-    assert_true(JoystickEventKind(2).is_valid())
-    assert_false(JoystickEventKind(3).is_valid())
-    assert_true(GamepadEventKind(2).is_valid())
+    assert_true(JoystickEventKind(6).is_valid())
+    assert_false(JoystickEventKind(7).is_valid())
+    assert_true(GamepadEventKind(6).is_valid())
+    assert_false(GamepadEventKind(7).is_valid())
     assert_false(GamepadEventKind(-1).is_valid())
 
 

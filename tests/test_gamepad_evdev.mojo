@@ -101,7 +101,12 @@ from extensions.gamepad.evdev import (
     set_bit,
     test_bit,
 )
-from extensions.gamepad.gamepad import GAMEPAD_BUTTON_DOWN
+from extensions.gamepad.gamepad import (
+    GAMEPAD_BUTTON_DOWN,
+    GAMEPAD_SENSOR_UPDATE,
+)
+from extensions.gamepad.joystick import SENSOR_ACCEL, SENSOR_GYRO, SensorType
+from units.si import Duration64, SECOND
 from extensions.gamepad.guid import JoystickGuid, VendorId, guid_to_string
 from extensions.gamepad.ids import (
     AXIS_COUNT,
@@ -126,6 +131,12 @@ from extensions.gamepad.linux import (
     is_event_node,
     jsiocgname,
     list_event_nodes,
+    DeviceChangeKind,
+    EVIOCSFF,
+    EvdevHub,
+    GAMEPAD_ADDED,
+    GAMEPAD_REMOVED,
+    folder_change_time,
     open_gamepads,
     open_gamepads_with,
     probe_joystick,
@@ -160,6 +171,15 @@ struct RecordedDevice(EvdevSource):
     var ended: Bool
     # A classic joystick node answers JSIOCGNAME with its name.
     var classic: Bool
+    # The unique id, or empty for none, and the force feedback bitmap.
+    var uniq: String
+    var ff: List[UInt8]
+    # What was written, the effects uploaded, and the next effect id.
+    var log: List[String]
+    var next_effect: Int
+    # Whether the device was unplugged, and whether writes fail.
+    var unplugged: Bool
+    var write_fails: Bool
 
     def __init__(
         out self,
@@ -183,6 +203,12 @@ struct RecordedDevice(EvdevSource):
         self.failing = List[Int]()
         self.ended = False
         self.classic = False
+        self.uniq = ""
+        self.ff = List[UInt8](length=16, fill=0)
+        self.log = List[String]()
+        self.next_effect = 0
+        self.unplugged = False
+        self.write_fails = False
         set_bit(self.events, EV_SYN)
 
     def key(mut self, code: Int):
@@ -204,13 +230,37 @@ struct RecordedDevice(EvdevSource):
 
     @staticmethod
     def open(path: String) raises -> Self:
-        if path == "sony":
+        var name = String(path[byte = path.rfind("/") + 1 :])
+        if name == "sony":
             return _sony()
-        if path == "keyboard":
+        if name == "keyboard" or name == "event1":
             return _keyboard()
-        if path == "stick":
+        if name == "stick":
             return _flight_stick()
+        if name == "event3":
+            return _paired_sony()
+        if name == "event4":
+            return _motion_sensors()
+        if name == "event10":
+            return _sine_pad()
+        if name == "event20":
+            return _late_pad()
         raise Error("No recorded device at " + path)
+
+    def write_from(mut self, buffer: List[UInt8]) -> Int:
+        var event = decode_input_events(buffer)[0]
+        self.log.append(
+            "write type "
+            + hex(event.type)
+            + " code "
+            + String(event.code)
+            + " value "
+            + String(event.value)
+        )
+        return -1 if self.write_fails else len(buffer)
+
+    def unplug(mut self):
+        self.unplugged = True
 
     def fail(mut self, request: Int):
         self.failing.append(request)
@@ -225,6 +275,11 @@ struct RecordedDevice(EvdevSource):
     def hold_only(mut self, code: Int):
         self.keys_down = List[UInt8](length=96, fill=0)
         set_bit(self.keys_down, code)
+
+    def sensor(mut self, code: Int, value: Int, resolution: Int):
+        set_bit(self.events, EV_ABS)
+        set_bit(self.absolutes, code)
+        self.info[code] = AbsInfo(value, -32768, 32767, 0, 0, resolution)
 
     def push(mut self, type: Int, code: Int, value: Int):
         self.queue += encode_input_event(type, code, value)
@@ -242,6 +297,34 @@ struct RecordedDevice(EvdevSource):
             return len(bytes) + 1
         if type != ord("E"):
             return -1
+        if number == 0x08:
+            if self.uniq.byte_length() == 0:
+                return -1
+            var bytes = self.uniq.as_bytes()
+            for index in range(len(bytes)):
+                buffer[index] = bytes[index]
+            return len(bytes) + 1
+        if number == 0x80:
+            var id = Int(buffer[2]) | (Int(buffer[3]) << 8)
+            if id == 0xFFFF:
+                id = self.next_effect
+                self.next_effect += 1
+                buffer[2] = UInt8(id)
+                buffer[3] = 0
+            var kind = Int(buffer[0]) | (Int(buffer[1]) << 8)
+            var text = "EVIOCSFF type " + hex(kind) + " id " + String(id)
+            text += " length " + String(
+                Int(buffer[10]) | (Int(buffer[11]) << 8)
+            )
+            text += " strong " + String(
+                Int(buffer[16]) | (Int(buffer[17]) << 8)
+            )
+            text += " weak " + String(Int(buffer[18]) | (Int(buffer[19]) << 8))
+            text += " magnitude " + String(
+                Int(buffer[20]) | (Int(buffer[21]) << 8)
+            )
+            self.log.append(text)
+            return 0
         if number == 0x02:
             var words: List[Int] = [
                 self.id.bustype,
@@ -288,6 +371,8 @@ struct RecordedDevice(EvdevSource):
             source = self.absolutes.copy()
         elif number == 0x20 + EV_REL:
             source = self.relatives.copy()
+        elif number == 0x20 + 0x15:
+            source = self.ff.copy()
         else:
             return -1
         var length = min(len(source), size)
@@ -296,9 +381,11 @@ struct RecordedDevice(EvdevSource):
         return length
 
     def readable(mut self) -> Bool:
-        return self.ended or self.consumed < len(self.queue)
+        return self.ended or self.unplugged or self.consumed < len(self.queue)
 
     def read_into(mut self, mut buffer: List[UInt8]) -> Int:
+        if self.unplugged:
+            return -1
         var left = len(self.queue) - self.consumed
         if left <= 0:
             return 0
@@ -370,6 +457,52 @@ def _elite() -> RecordedDevice:
     device.axis(ABS_HAT0Y, 0, -100, 100, 4, 2)
     device.axis(ABS_HAT1X, 0, -1, 1)
     device.axis(ABS_HAT1Y, 0, -1, 1)
+    return device^
+
+
+def _paired_sony() -> RecordedDevice:
+    var device = RecordedDevice("Sony Pad Clone", 3, 0x054C, 0x9999, 0x0100)
+    device.uniq = "aa:bb:cc"
+    for code in [0x130, 0x131, 0x133, 0x134]:
+        device.key(code)
+    device.axis(ABS_X, 128, 0, 255)
+    device.axis(ABS_Y, 128, 0, 255)
+    set_bit(device.events, 0x15)
+    set_bit(device.ff, 0x50)
+    return device^
+
+
+def _motion_sensors() -> RecordedDevice:
+    var device = RecordedDevice(
+        "Sony Pad Clone Motion Sensors", 3, 0x054C, 0x9999, 0x0100
+    )
+    device.uniq = "aa:bb:cc"
+    set_bit(device.properties, INPUT_PROP_ACCELEROMETER)
+    device.sensor(ABS_X, 100, 8192)
+    device.sensor(ABS_Y, -50, 8192)
+    device.sensor(ABS_Z, 8192, 8192)
+    device.sensor(ABS_RX, 1024, 1024)
+    device.sensor(ABS_RY, 0, 1024)
+    device.sensor(ABS_RZ, -2048, 1024)
+    return device^
+
+
+def _sine_pad() -> RecordedDevice:
+    var device = RecordedDevice("Sine Pad", 3, 0x1234, 0x0001, 1)
+    device.key(BTN_A)
+    device.key(BTN_B)
+    device.axis(ABS_X, 0, -32768, 32767)
+    device.axis(ABS_Y, 0, -32768, 32767)
+    set_bit(device.events, 0x15)
+    set_bit(device.ff, 0x5A)
+    return device^
+
+
+def _late_pad() -> RecordedDevice:
+    var device = RecordedDevice("Late Pad", 3, 0x1234, 0x0002, 1)
+    device.key(BTN_A)
+    device.axis(ABS_X, 0, -32768, 32767)
+    device.axis(ABS_Y, 0, -32768, 32767)
     return device^
 
 
@@ -1239,9 +1372,13 @@ def test_state_reads_skip_what_the_device_does_not_say() raises:
     var database = default_mapping_database()
     var pad = _open(_sony(), database)
     pad.source.fail(eviocgabs(ABS_X))
+    pad.source.set_value(ABS_X, 0)
     pad.source.set_value(ABS_Y, 0)
+    # A dropped report reads the whole state again; ABS_X does not answer.
+    pad.source.push(EV_SYN, SYN_DROPPED, 0)
+    pad.source.push(EV_SYN, SYN_REPORT, 0)
     _ = pad.update()
-    assert_equal(pad.gamepad.joystick.get_axis(0), 0)
+    assert_equal(pad.gamepad.joystick.get_axis(0), 128)
     assert_equal(pad.gamepad.joystick.get_axis(1), -32768)
     # A short read decodes to nothing.
     pad.source.push_bytes(3)
@@ -1280,6 +1417,184 @@ def test_node_names_and_sysfs_corners() raises:
         assert_equal(len(open_gamepads(database, root, sysfs)), 0)
         # "js-" sorts last, and has no digits.
         assert_equal(event_joystick_index(sysfs, 4), 0)
+
+
+def _near(a: Float32, b: Float32) raises:
+    assert_true(abs(a - b) < 1e-5, String(a) + " is not " + String(b))
+
+
+def _paired(
+    mut database: MappingDatabase,
+) raises -> EvdevGamepad[RecordedDevice]:
+    var pads = open_gamepads_with[RecordedDevice](
+        database, ["/x/event3", "/x/event4"]
+    )
+    assert_equal(len(pads), 1)
+    return pads.pop(0)
+
+
+def test_motion_sensors_read_as_in_sdl() raises:
+    var database = default_mapping_database()
+    var pad = _paired(database)
+    assert_true(pad.gamepad.has_sensor(SENSOR_GYRO))
+    assert_true(pad.gamepad.has_sensor(SENSOR_ACCEL))
+    assert_equal(pad.gamepad.sensor_data_rate(SENSOR_GYRO).value, 0)
+    assert_true(pad.set_sensor_enabled(SENSOR_ACCEL, True))
+    assert_true(pad.set_sensor_enabled(SENSOR_GYRO, True))
+    assert_true(pad.gamepad.sensor_enabled(SENSOR_GYRO))
+    _ = pad.update_at(Duration64(0))
+    # SDL: "open gyro 0 0 0 accel 0 0 0".
+    assert_equal(pad.gamepad.sensor_data(SENSOR_ACCEL)[0], 0)
+    pad.sensor_sources[0].push(EV_ABS, ABS_X, 4096)
+    pad.sensor_sources[0].push(EV_ABS, ABS_RY, -512)
+    pad.sensor_sources[0].push(4, 5, 1000)
+    pad.sensor_sources[0].push(EV_SYN, SYN_REPORT, 0)
+    var events = pad.update_at(Duration64(0))
+    assert_equal(len(events), 2)
+    assert_equal(events[0].kind, GAMEPAD_SENSOR_UPDATE)
+    assert_equal(events[0].sensor, SENSOR_GYRO)
+    _near(Float32(events[1].sensor_timestamp.value * 1e6), 1000)
+    # SDL: "report gyro 0 -0.008727 0 accel 4.903325 0 0".
+    _near(pad.gamepad.sensor_data(SENSOR_GYRO)[1], -0.008727)
+    _near(pad.gamepad.sensor_data(SENSOR_ACCEL)[0], 4.903325)
+    _near(Float32(pad.gamepad.acceleration(SENSOR_ACCEL, 0).value), 4.903325)
+    _near(
+        Float32(pad.gamepad.angular_velocity(SENSOR_GYRO, 1).value), -0.008727
+    )
+    pad.sensor_sources[0].push(EV_SYN, SYN_DROPPED, 0)
+    pad.sensor_sources[0].push(EV_ABS, ABS_X, 1)
+    pad.sensor_sources[0].push(EV_SYN, SYN_REPORT, 0)
+    _ = pad.update_at(Duration64(0))
+    # SDL: "dropped gyro 0.017453 0 -0.034907 accel 0.119710 -0.059855
+    # 9.806650".
+    var gyro = pad.gamepad.sensor_data(SENSOR_GYRO)
+    _near(gyro[0], 0.017453)
+    _near(gyro[2], -0.034907)
+    var accel = pad.gamepad.sensor_data(SENSOR_ACCEL)
+    _near(accel[0], 0.119710)
+    _near(accel[1], -0.059855)
+    _near(accel[2], 9.806650)
+    assert_true(pad.set_sensor_enabled(SENSOR_GYRO, False))
+    assert_true(pad.set_sensor_enabled(SENSOR_ACCEL, False))
+    assert_false(pad.report_sensor)
+    with assert_raises():
+        _ = pad.set_sensor_enabled(SensorType(5), True)
+    with assert_raises():
+        _ = pad.gamepad.acceleration(SENSOR_GYRO, 0)
+    with assert_raises():
+        _ = pad.gamepad.angular_velocity(SENSOR_ACCEL, 0)
+
+
+def test_rumble_and_lights_follow_sdl() raises:
+    var database = default_mapping_database()
+    var pad = _paired(database)
+    var now = Duration64(0)
+    var ms = Duration64(0.001, SECOND)
+    assert_true(pad.rumble_at(0x1000, 0x2000, ms.scaled(100.0), now))
+    assert_true(pad.rumble_at(0x1000, 0x2000, ms.scaled(100.0), now))
+    assert_true(pad.rumble_at(0x3000, 0, Duration64(0), now))
+    assert_equal(len(pad.source.log), 4)
+    assert_equal(
+        pad.source.log[0],
+        (
+            "EVIOCSFF type 0x50 id 0 length 65535 strong 4096 weak 8192"
+            " magnitude 0"
+        ),
+    )
+    assert_equal(pad.source.log[1], "write type 0x15 code 0 value 1")
+    assert_equal(
+        pad.source.log[2],
+        "EVIOCSFF type 0x50 id 0 length 65535 strong 12288 weak 0 magnitude 0",
+    )
+    assert_false(pad.rumble_triggers_at(1, 2, ms.scaled(100.0), now))
+    assert_true(pad.rumble_triggers_at(0, 0, ms.scaled(100.0), now))
+    assert_false(pad.set_led_at(1, 2, 3, now))
+    assert_true(pad.set_led_at(1, 2, 3, now))
+    assert_false(pad.set_led_at(0, 0, 0, now))
+    with assert_raises():
+        _ = pad.rumble_at(-1, 0, now, now)
+    with assert_raises():
+        _ = pad.set_led_at(0, 256, 0, now)
+    # A sine pad gets the average strength.
+    var sine = open_gamepads_with[RecordedDevice](database, ["/x/event10"])
+    assert_true(sine[0].rumble_at(0x1000, 0x2001, ms.scaled(100.0), now))
+    assert_equal(
+        sine[0].source.log[0],
+        "EVIOCSFF type 0x51 id 0 length 65535 strong 90 weak 0 magnitude 3072",
+    )
+    # After 100 ms the rumble stops; SDL sends a zero sine.
+    _ = sine[0].update_at(ms.scaled(150.0))
+    assert_equal(
+        sine[0].source.log[2],
+        "EVIOCSFF type 0x51 id 0 length 65535 strong 90 weak 0 magnitude 0",
+    )
+
+
+def test_rumble_resends_and_recovers() raises:
+    var database = default_mapping_database()
+    var pad = _paired(database)
+    var second = Duration64(1, SECOND)
+    # A rumble with no end is not sent again.
+    assert_true(pad.rumble_at(100, 200, Duration64(0), Duration64(0)))
+    _ = pad.update_at(second.scaled(5.0))
+    assert_equal(len(pad.source.log), 2)
+    # Every 2 seconds a timed rumble is sent again.
+    assert_true(pad.rumble_at(100, 300, second.scaled(10.0), Duration64(0)))
+    _ = pad.update_at(second)
+    assert_equal(len(pad.source.log), 4)
+    _ = pad.update_at(second.scaled(2.5))
+    assert_equal(len(pad.source.log), 6)
+    # A lost effect is uploaded again as a new one.
+    pad.source.fail(EVIOCSFF)
+    assert_false(pad.rumble_at(5, 6, Duration64(0), second.scaled(3.0)))
+    var plain = open_gamepads_with[RecordedDevice](database, ["/x/event20"])
+    assert_false(plain[0].rumble_at(1, 1, Duration64(0), Duration64(0)))
+    var mute = _paired(database)
+    mute.source.write_fails = True
+    assert_false(mute.rumble_at(1, 1, Duration64(0), Duration64(0)))
+
+
+def test_the_hub_follows_devices_as_sdl_does() raises:
+    with TestScratch():
+        var root = temporary_path("hub")
+        var sysfs = temporary_path("hubsys")
+        makedirs(root)
+        for name in ["event1", "event3", "event4", "event10"]:
+            with open(root + "/" + name, "w") as file:
+                file.write("")
+        var database = default_mapping_database()
+        var hub = EvdevHub[RecordedDevice](root, sysfs)
+        var changes = hub.detect_at(database, Duration64(0))
+        # SDL: "added Sony Pad Clone", "added Sine Pad".
+        assert_equal(len(changes), 2)
+        assert_equal(changes[0].kind, GAMEPAD_ADDED)
+        assert_equal(changes[0].name, "Sony Pad Clone")
+        assert_equal(changes[1].name, "Sine Pad")
+        assert_true(hub.pads[0].gamepad.has_sensor(SENSOR_ACCEL))
+        assert_false(hub.pads[1].gamepad.has_sensor(SENSOR_ACCEL))
+        with open(root + "/event20", "w") as file:
+            file.write("")
+        # Not three seconds yet.
+        assert_equal(len(hub.detect_at(database, Duration64(1, SECOND))), 0)
+        changes = hub.detect_at(database, Duration64(3, SECOND))
+        assert_equal(len(changes), 1)
+        assert_equal(changes[0].name, "Late Pad")
+        # An unplugged pad is dropped.
+        hub.pads[0].source.unplug()
+        _ = hub.pads[0].update_at(Duration64(3, SECOND))
+        assert_true(hub.pads[0].gone)
+        changes = hub.detect_at(database, Duration64(4, SECOND))
+        assert_equal(len(changes), 1)
+        assert_equal(changes[0].kind, GAMEPAD_REMOVED)
+        assert_equal(changes[0].path, root + "/event3")
+        assert_equal(len(hub.pads), 2)
+        # An unchanged folder is not scanned again.
+        assert_equal(len(hub.detect_at(database, Duration64(10, SECOND))), 0)
+        assert_true(DeviceChangeKind(1).is_valid())
+        assert_false(DeviceChangeKind(2).is_valid())
+        var missing = EvdevHub[RecordedDevice](root + "/none", sysfs)
+        assert_equal(len(missing.detect(database)), 0)
+        assert_false(folder_change_time(root + "/none"))
 
 
 def main() raises:
