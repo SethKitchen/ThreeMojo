@@ -251,7 +251,7 @@ TOOLCHAIN := $(shell $(MOJO) --version 2>/dev/null || echo "no-mojo")
 # Native test fixtures are test-only. Their compiler identity also invalidates
 # suite stamps; a missing compiler is a build failure, never a skipped suite.
 export CC
-NATIVE_TOOLCHAIN := $(shell python3 tools/native_test_support.py fingerprint \
+NATIVE_TOOLCHAIN := $(shell $(TOOL) native_test_support fingerprint \
                        --cc $(call quote,$(CC)) 2>/dev/null || echo "no-native-compiler")
 HASH := $(shell $(TOOL) cache_key \
           --setting=$(call quote,$(MOJO)) \
@@ -397,7 +397,7 @@ $(TEST_CPU_STAMP):
 	               "$$(date -u +%Y-%m-%dT%H:%M:%SZ)" "$$1" "$$2" >&3; }; \
 	             progress "$$1" "build-start: $(MOJO) build $(MOJOFLAGS) --Werror -o $$bin $$1"; \
 	             out=$$(sh tools/tool.sh $(TOOL_MOJO) compiler_telemetry --suite "$$1" --log-fd 3 -- \
-	                    python3 tools/native_test_support.py run --root . \
+	                    sh tools/tool.sh $(TOOL_MOJO) native_test_support run --root . \
 	                      --suite "$$1" --cache $(CACHE_DIR)/native -- \
 	                      $(MOJO) build $(MOJOFLAGS) --Werror -o "$$bin" "$$1" \
 	                    2>&1; build_rc=$$?; \

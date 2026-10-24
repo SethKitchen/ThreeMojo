@@ -47,7 +47,7 @@ A missing compiler or fixture fails the check. It does not skip the suite.
 For a direct build and a timed run, use:
 
 ```bash
-python3 tools/native_test_support.py run --root . \
+sh tools/tool.sh .venv/bin/mojo native_test_support run --root . \
   --suite tests/test_carla_sum2_environment.mojo --cache .cache/native -- \
   .venv/bin/mojo build -I . --Werror \
   -o .cache/sum2-environment tests/test_carla_sum2_environment.mojo
