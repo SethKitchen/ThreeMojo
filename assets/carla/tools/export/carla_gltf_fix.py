@@ -500,6 +500,30 @@ def dedupe_materials(gltf):
     gltf.update(updated)
 
 
+def _skin_tool(gltf):
+    """Return JSON from `tools/carla_gltf_skin.mojo`."""
+    here = os.path.dirname(os.path.abspath(__file__))
+    repo = os.path.abspath(os.path.join(here, "..", "..", "..", ".."))
+    mojo = os.path.join(repo, ".venv", "bin", "mojo")
+    if not os.path.isfile(mojo):
+        mojo = "mojo"
+    folder = tempfile.mkdtemp(prefix="gltf skin ")
+    try:
+        path = os.path.join(folder, "mesh.gltf")
+        with open(path, "w", encoding="utf-8") as handle:
+            json.dump(gltf, handle)
+        result = subprocess.run(
+            ["sh", os.path.join(repo, "tools", "tool.sh"), mojo,
+             "carla_gltf_skin", path],
+            capture_output=True, text=True,
+        )
+    finally:
+        shutil.rmtree(folder, ignore_errors=True)
+    if result.returncode != 0:
+        raise ValueError(result.stderr.strip() or "skin strip failed")
+    return json.loads(result.stdout)
+
+
 def strip_skin(gltf, data):
     """Turn a skinned glTF into plain meshes at its bind pose, and return
     the buffer without the bytes nothing reads any more.
@@ -509,8 +533,14 @@ def strip_skin(gltf, data):
     and the mesh's node is the origin, so the vertices already stand
     where the car stands. The skin, the joints and the weights go; the
     bone nodes stay as named markers of the wheels.
+
+    `tools/carla_gltf_skin.mojo` removes the skin data. Unreal's vertex
+    colors are masks and not colors, so they go too.
     """
-    return _gltf_tool(gltf, data, "strip")
+    updated = _skin_tool(gltf)
+    gltf.clear()
+    gltf.update(updated)
+    return compact(gltf, data)
 
 
 def compact(gltf, data):
