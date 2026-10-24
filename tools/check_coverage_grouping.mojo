@@ -3282,11 +3282,13 @@ struct _TruthItem(Copyable, ImplicitlyCopyable, Movable):
     var kind: Int
     var name: Int
     var retained: Bool
+    var slot: Int
 
-    def __init__(out self, kind: Int, name: Int, retained: Bool):
+    def __init__(out self, kind: Int, name: Int, retained: Bool, slot: Int):
         self.kind = kind
         self.name = name
         self.retained = retained
+        self.slot = slot
 
 
 def _tn(kind: Int, index: Int) -> List[_TruthNode]:
@@ -3508,12 +3510,75 @@ def _truth_enter(mut log: String, index: Int, fail: Int) raises:
         raise Error("truth-fail")
 
 
+def _truth_assign(
+    nodes: List[_TruthNode], id: Int, mut slots: List[Int], next: Int
+) -> Int:
+    var kind = nodes[id].kind
+    if kind == _TAND or kind == _TOR or kind == _TNOT:
+        var cursor = next
+        if nodes[id].left >= 0:
+            cursor = _truth_assign(nodes, nodes[id].left, slots, cursor)
+        if nodes[id].right >= 0:
+            cursor = _truth_assign(nodes, nodes[id].right, slots, cursor)
+        if nodes[id].third >= 0:
+            cursor = _truth_assign(nodes, nodes[id].third, slots, cursor)
+        return cursor
+    slots[id] = next
+    return next + 1
+
+
+def _truth_slots(nodes: List[_TruthNode]) -> List[Int]:
+    var slots = List[Int](length=len(nodes), fill=-1)
+    _ = _truth_assign(nodes, len(nodes) - 1, slots, 0)
+    return slots^
+
+
+def _truth_observe(
+    mut records: String,
+    mut states: List[Int],
+    module_name: String,
+    line: Int,
+    slot: Int,
+    value: Bool,
+):
+    if slot < 0:
+        return
+    var bit = 0
+    if value:
+        bit = 1
+    var state = states[slot]
+    if state == bit:
+        return
+    if state < 0:
+        states[slot] = bit
+    else:
+        states[slot] = 2
+    var flag = "F"
+    if value:
+        flag = "T"
+    records += (
+        "COVLINE:"
+        + module_name
+        + ":"
+        + String(line)
+        + "."
+        + String(slot)
+        + ":"
+        + flag
+        + "\n"
+    )
+
+
 def _truth_convert(
     mut log: String,
     mut counts: List[Int],
+    mut records: String,
+    mut states: List[Int],
     item: _TruthItem,
     mask: Int,
     changing: Bool,
+    module_name: String,
+    line: Int,
 ) -> Bool:
     if item.kind == _TB:
         return item.name != 0
@@ -3523,6 +3588,7 @@ def _truth_convert(
     var value = (mask & (1 << item.name)) != 0
     if changing and count % 2 == 1:
         value = not value
+    _truth_observe(records, states, module_name, line, item.slot, value)
     return value
 
 
@@ -3532,36 +3598,44 @@ def _truth_drop(mut log: String, item: _TruthItem):
     log += "~" + String(item.name)
 
 
-def _truth_bit(value: Bool) -> _TruthItem:
+def _truth_bit(value: Bool, slot: Int) -> _TruthItem:
     var bit = 0
     if value:
         bit = 1
-    return _TruthItem(_TB, bit, False)
+    return _TruthItem(_TB, bit, False, slot)
 
 
 def _truth_eval(
     nodes: List[_TruthNode],
     id: Int,
+    slots: List[Int],
     mut log: String,
     mut counts: List[Int],
+    mut records: String,
+    mut states: List[Int],
     mask: Int,
     fail: Int,
     changing: Bool,
+    module_name: String,
+    line: Int,
     owned: Bool,
 ) raises -> _TruthItem:
     var node = nodes[id]
     var kind = node.kind
+    var slot = slots[id]
     if kind == _TS or kind == _TD or kind == _TM or kind == _TQ or kind == _TT:
         _truth_enter(log, node.index, fail)
-        return _TruthItem(kind, node.index, False)
+        return _TruthItem(kind, node.index, False, slot)
     if kind == _TC and owned:
         log += "=" + String(node.index)
-        return _TruthItem(_TS, node.index, False)
+        return _TruthItem(_TS, node.index, False, slot)
     if kind == _TX or kind == _TC or kind == _TP:
-        return _TruthItem(_TS, node.index, True)
+        return _TruthItem(_TS, node.index, True, slot)
     if kind == _TB:
         _truth_enter(log, node.index, fail)
-        return _truth_bit((mask & (1 << node.index)) != 0)
+        var bit_value = (mask & (1 << node.index)) != 0
+        _truth_observe(records, states, module_name, line, slot, bit_value)
+        return _truth_bit(bit_value, slot)
     if kind == _TCHOOSE:
         var cond = nodes[node.left]
         _truth_enter(log, cond.index, fail)
@@ -3570,24 +3644,81 @@ def _truth_eval(
             chosen = node.right
         var chosen_node = nodes[chosen]
         if chosen_node.kind == _TC or chosen_node.kind == _TP:
-            return _truth_eval(
-                nodes, chosen, log, counts, mask, fail, changing, owned
+            var arm = _truth_eval(
+                nodes,
+                chosen,
+                slots,
+                log,
+                counts,
+                records,
+                states,
+                mask,
+                fail,
+                changing,
+                module_name,
+                line,
+                owned,
             )
+            return _TruthItem(arm.kind, arm.name, arm.retained, slot)
         _truth_enter(log, chosen_node.index, fail)
         if chosen_node.kind == _TM:
             log += ">" + String(chosen_node.index)
-        return _TruthItem(_TS, chosen_node.index, False)
+        return _TruthItem(_TS, chosen_node.index, False, slot)
     if kind == _TNOT:
         var item = _truth_eval(
-            nodes, node.left, log, counts, mask, fail, changing, False
+            nodes,
+            node.left,
+            slots,
+            log,
+            counts,
+            records,
+            states,
+            mask,
+            fail,
+            changing,
+            module_name,
+            line,
+            False,
         )
-        var value = _truth_convert(log, counts, item, mask, changing)
+        var value = _truth_convert(
+            log,
+            counts,
+            records,
+            states,
+            item,
+            mask,
+            changing,
+            module_name,
+            line,
+        )
         _truth_drop(log, item)
-        return _truth_bit(not value)
+        return _truth_bit(not value, -1)
     var left = _truth_eval(
-        nodes, node.left, log, counts, mask, fail, changing, False
+        nodes,
+        node.left,
+        slots,
+        log,
+        counts,
+        records,
+        states,
+        mask,
+        fail,
+        changing,
+        module_name,
+        line,
+        False,
     )
-    var value = _truth_convert(log, counts, left, mask, changing)
+    var value = _truth_convert(
+        log,
+        counts,
+        records,
+        states,
+        left,
+        mask,
+        changing,
+        module_name,
+        line,
+    )
     var short = value if kind == _TOR else not value
     var same = _truth_type(nodes, node.left) == _truth_type(nodes, node.right)
     if same:
@@ -3597,17 +3728,51 @@ def _truth_eval(
         var right_kind = nodes[node.right].kind
         var own_right = right_kind == _TC or right_kind == _TCHOOSE
         return _truth_eval(
-            nodes, node.right, log, counts, mask, fail, changing, own_right
+            nodes,
+            node.right,
+            slots,
+            log,
+            counts,
+            records,
+            states,
+            mask,
+            fail,
+            changing,
+            module_name,
+            line,
+            own_right,
         )
     _truth_drop(log, left)
     if short:
-        return _truth_bit(value)
+        return _truth_bit(value, -1)
     var right = _truth_eval(
-        nodes, node.right, log, counts, mask, fail, changing, False
+        nodes,
+        node.right,
+        slots,
+        log,
+        counts,
+        records,
+        states,
+        mask,
+        fail,
+        changing,
+        module_name,
+        line,
+        False,
     )
-    value = _truth_convert(log, counts, right, mask, changing)
+    value = _truth_convert(
+        log,
+        counts,
+        records,
+        states,
+        right,
+        mask,
+        changing,
+        module_name,
+        line,
+    )
     _truth_drop(log, right)
-    return _truth_bit(value)
+    return _truth_bit(value, -1)
 
 
 def _truth_retain(nodes: List[_TruthNode], id: Int, mut log: String):
@@ -3634,6 +3799,104 @@ def _truth_retain(nodes: List[_TruthNode], id: Int, mut log: String):
         _truth_retain(nodes, node.third, log)
 
 
+def _truth_vector(states: List[Int]) -> String:
+    var text = String()
+    var slot = 0
+    while slot < len(states):
+        var state = states[slot]
+        if state < 0:
+            text += "-"
+        elif state == 0:
+            text += "F"
+        elif state == 1:
+            text += "T"
+        else:
+            text += "?"
+        slot += 1
+    return text
+
+
+def _truth_execute(
+    number: Int,
+    mask: Int,
+    fail: Int,
+    changing: Bool,
+    line: Int,
+    module_name: String,
+) raises -> Tuple[String, String]:
+    var nodes = _truth_case(number)
+    var slots = _truth_slots(nodes)
+    var width = 0
+    var index = 0
+    while index < len(slots):
+        if slots[index] >= width:
+            width = slots[index] + 1
+        index += 1
+    var log = String()
+    var records = String()
+    var counts = List[Int](length=8, fill=0)
+    var states = List[Int](length=width, fill=-1)
+    var failed = False
+    var outcome = False
+    try:
+        var item = _truth_eval(
+            nodes,
+            len(nodes) - 1,
+            slots,
+            log,
+            counts,
+            records,
+            states,
+            mask,
+            fail,
+            changing,
+            module_name,
+            line,
+            False,
+        )
+        outcome = _truth_convert(
+            log,
+            counts,
+            records,
+            states,
+            item,
+            mask,
+            changing,
+            module_name,
+            line,
+        )
+        _truth_drop(log, item)
+    except error:
+        if String(error).find("truth-fail") < 0:
+            raise error
+        failed = True
+    if failed:
+        log += "|E"
+    elif outcome:
+        log += "|T"
+        records += "COVLINE:" + module_name + ":" + String(line) + ":T\n"
+    else:
+        log += "|F"
+        records += "COVLINE:" + module_name + ":" + String(line) + ":F\n"
+    if not failed:
+        var mark = "F"
+        if outcome:
+            mark = "T"
+        records += (
+            "COVEVAL2:"
+            + module_name
+            + ":"
+            + String(line)
+            + ":"
+            + mark
+            + ":"
+            + _truth_vector(states)
+            + ";\n"
+        )
+    _truth_retain(nodes, len(nodes) - 1, log)
+    return (log, records)
+
+
 def truth_log(
     number: Int, mask: Int, fail: Int, changing: Bool
 ) raises -> String:
@@ -3651,36 +3914,8 @@ def truth_log(
     Raises:
         Error: If `number` is outside the reference trees.
     """
-    var nodes = _truth_case(number)
-    var log = String()
-    var counts = List[Int](length=8, fill=0)
-    var failed = False
-    var outcome = False
-    try:
-        var item = _truth_eval(
-            nodes,
-            len(nodes) - 1,
-            log,
-            counts,
-            mask,
-            fail,
-            changing,
-            False,
-        )
-        outcome = _truth_convert(log, counts, item, mask, changing)
-        _truth_drop(log, item)
-    except error:
-        if String(error).find("truth-fail") < 0:
-            raise error
-        failed = True
-    if failed:
-        log += "|E"
-    elif outcome:
-        log += "|T"
-    else:
-        log += "|F"
-    _truth_retain(nodes, len(nodes) - 1, log)
-    return log
+    var made = _truth_execute(number, mask, fail, changing, 1, "truth")
+    return made[0]
 
 
 def _truth_native_rows(changing: Bool) raises -> String:
@@ -3802,6 +4037,362 @@ def check_custom_truth_native(mojo: String) raises:
         _ = run_program(["rm", "-rf", work], 30)
 
 
+def _truth_accepted_numbers() -> List[Int]:
+    var numbers = List[Int]()
+    numbers.append(0)
+    numbers.append(1)
+    numbers.append(2)
+    numbers.append(3)
+    numbers.append(4)
+    numbers.append(5)
+    numbers.append(9)
+    numbers.append(15)
+    numbers.append(31)
+    numbers.append(34)
+    numbers.append(37)
+    numbers.append(39)
+    numbers.append(41)
+    return numbers^
+
+
+def _truth_accepted_line(number: Int) raises -> Int:
+    if number == 0:
+        return 166
+    if number == 1:
+        return 180
+    if number == 2:
+        return 194
+    if number == 3:
+        return 208
+    if number == 4:
+        return 222
+    if number == 5:
+        return 236
+    if number == 9:
+        return 250
+    if number == 15:
+        return 264
+    if number == 31:
+        return 280
+    if number == 34:
+        return 299
+    if number == 37:
+        return 317
+    if number == 39:
+        return 334
+    if number == 41:
+        return 352
+    raise Error("not an accepted truth tree " + String(number))
+
+
+def truth_records(
+    number: Int, mask: Int, fail: Int, changing: Bool, line: Int
+) raises -> String:
+    """Return one custom-truth coverage trace, with trailing newlines.
+
+    Args:
+        number: The reference tree, from 0 through 42.
+        mask: The four truth bits.
+        fail: The leaf that raises, or -1.
+        changing: True when a repeated conversion flips.
+        line: The decision line recorded in the trace.
+
+    Returns:
+        The condition hits, the decision hit, and the vector. A thrown
+        evaluation keeps only the hits recorded before the failure.
+
+    Raises:
+        Error: If `number` is outside the reference trees.
+    """
+    var made = _truth_execute(number, mask, fail, changing, line, "truth")
+    return made[1]
+
+
+def truth_accepted_traces(changing: Bool) raises -> String:
+    """Return the accepted-tree traces, with a trailing newline.
+
+    Args:
+        changing: True when a repeated conversion flips.
+
+    Returns:
+        One block per failure, mask, and accepted tree. Each block starts
+        with `CASE` and then the coverage records.
+
+    Raises:
+        Error: If a reference tree is missing.
+    """
+    var text = String()
+    var fail = -1
+    while fail < 4:
+        var mask = 0
+        while mask < 16:
+            for number in _truth_accepted_numbers():
+                text += (
+                    "CASE "
+                    + String(number)
+                    + " "
+                    + String(mask)
+                    + " "
+                    + String(fail)
+                    + "\n"
+                )
+                text += truth_records(
+                    number, mask, fail, changing, _truth_accepted_line(number)
+                )
+            mask += 1
+        fail += 1
+    return text
+
+
+def _truth_accepted_rows(changing: Bool) raises -> String:
+    var text = String()
+    var fail = -1
+    while fail < 4:
+        var mask = 0
+        while mask < 16:
+            for number in _truth_accepted_numbers():
+                var log = truth_log(number, mask, fail, changing)
+                var changing_text = "False"
+                if changing:
+                    changing_text = "True"
+                text += (
+                    "TRUTH "
+                    + String(number)
+                    + " "
+                    + String(mask)
+                    + " "
+                    + String(fail)
+                    + " "
+                    + changing_text
+                    + " "
+                    + log
+                    + "\n"
+                )
+            mask += 1
+        fail += 1
+    return text
+
+
+def _truth_tree_trace(number: Int, changing: Bool) raises -> String:
+    var line = _truth_accepted_line(number)
+    var text = String()
+    var fail = -1
+    while fail < 4:
+        var mask = 0
+        while mask < 16:
+            text += truth_records(number, mask, fail, changing, line)
+            mask += 1
+        fail += 1
+    return text
+
+
+def _truth_coverage(raw: String, name: String, line: Int) -> String:
+    var stem = name + ":" + String(line)
+    var hit = "COVLINE:" + stem
+    var vector = "COVEVAL2:" + stem + ":"
+    var text = String()
+    for row in raw.splitlines():
+        var line_text = String(row)
+        if (
+            line_text.startswith(hit + ":")
+            or line_text.startswith(hit + ".")
+            or line_text.startswith(vector)
+        ):
+            text += line_text + "\n"
+    return text
+
+
+def _truth_width(number: Int) raises -> Int:
+    var nodes = _truth_case(number)
+    var slots = List[Int](length=len(nodes), fill=-1)
+    return _truth_assign(nodes, len(nodes) - 1, slots, 0)
+
+
+def _require_accepted_manifest(
+    rewritten: String, name: String, source: String
+) raises:
+    var widths = Dict[Int, Int]()
+    for number in _truth_accepted_numbers():
+        widths[_truth_accepted_line(number)] = _truth_width(number)
+    var wanted = List[String]()
+    var seen = 0
+    var number = 1
+    for line in source.splitlines():
+        var header = String(line).strip()
+        var decision = (
+            header.startswith("if ")
+            or header.startswith("elif ")
+            or header.startswith("while ")
+            or header.startswith("for ")
+        )
+        if decision:
+            if not header.endswith(":"):
+                raise Error("decision has no colon " + header)
+            var width = 1
+            if number in widths:
+                width = widths[number]
+                seen += 1
+            elif header.find(" and ") >= 0 or header.find(" or ") >= 0:
+                raise Error("unexpected compound " + header)
+            wanted.append("B " + name + " " + String(number))
+            if width > 1:
+                var slot = 0
+                while slot < width:
+                    wanted.append(
+                        "C " + name + " " + String(number) + " " + String(slot)
+                    )
+                    wanted.append(
+                        "M " + name + " " + String(number) + " " + String(slot)
+                    )
+                    slot += 1
+        number += 1
+    if seen != len(widths):
+        raise Error("missing accepted decision")
+    var manifest = Path(rewritten + "/manifest.txt").read_text()
+    var actual = List[String]()
+    for line in manifest.splitlines():
+        var row = String(line)
+        var parts = row.split(" ")
+        if (
+            len(parts) >= 2
+            and String(parts[1]) == name
+            and (
+                String(parts[0]) == "B"
+                or String(parts[0]) == "C"
+                or String(parts[0]) == "M"
+            )
+        ):
+            actual.append(row)
+    sort(actual)
+    sort(wanted)
+    if not _same(actual, wanted):
+        var shown = String()
+        for row in actual:
+            shown += "actual " + row + "\n"
+        for row in wanted:
+            shown += "wanted " + row + "\n"
+        raise Error(name + " manifest changed\n" + shown)
+
+
+def check_custom_truth_instrumented(mojo: String) raises:
+    """Require the supported custom-truth trees to match after instrumentation.
+
+    Args:
+        mojo: The Mojo compiler.
+
+    Raises:
+        Error: If the native rows, the manifest, or an instrumented trace differ.
+    """
+    var root = absolute_path(".")
+    var compiler = absolute_path(mojo)
+    var source = Path("tools/fixtures/coverage_truth_accepted.txt").read_text()
+    var work = mkdtemp(prefix="threemojo-truth-accepted-")
+    try:
+        var native = work + "/native"
+        var rewritten = work + "/rewritten"
+        _ = _must(["mkdir", "-p", native, rewritten], 10)
+        _ = _must(["cp", "-a", root + "/coverage", native + "/coverage"], 30)
+        _ = _must(["cp", "-a", root + "/coverage", rewritten + "/coverage"], 30)
+        for folder in [native, rewritten]:
+            var built = folder + "/coverage/build"
+            if Path(built).exists():
+                _ = _must(["rm", "-rf", built], 10)
+        var name = "truth"
+        Path(native + "/" + name + ".mojo").write_text(source)
+        var binary = work + "/" + name + "-native"
+        _ = _must(
+            [
+                compiler,
+                "build",
+                "-Werror",
+                "-I",
+                native,
+                native + "/" + name + ".mojo",
+                "-o",
+                binary,
+            ],
+            180,
+        )
+        var build = work + "/build_cli"
+        _ = _must(
+            [
+                compiler,
+                "build",
+                "-Werror",
+                "-I",
+                root,
+                root + "/coverage/build_cli.mojo",
+                "-o",
+                build,
+            ],
+            180,
+        )
+        _ = _must([build, rewritten, name + ".mojo"], 60, native)
+        _require_origin(rewritten, name, source)
+        _require_accepted_manifest(rewritten, name, source)
+        var instrumented_binary = work + "/" + name + "-instrumented"
+        _ = _must(
+            [
+                compiler,
+                "build",
+                "-Werror",
+                "-I",
+                rewritten,
+                rewritten + "/" + name + ".mojo",
+                "-o",
+                instrumented_binary,
+            ],
+            180,
+        )
+        for changing in [False, True]:
+            var flag = "0"
+            if changing:
+                flag = "1"
+            var expected = _truth_accepted_rows(changing)
+            for binary_path in [binary, instrumented_binary]:
+                var temp = mkdtemp(prefix="threemojo-truth-accepted-run-")
+                var ran = _must(
+                    _with_env(
+                        [
+                            "TMPDIR=" + temp,
+                            "THREEMOJO_TEST_TMPDIR=" + temp,
+                            "THREEMOJO_TRUTH_CHANGING=" + flag,
+                        ],
+                        [binary_path],
+                    ),
+                    10,
+                )
+                _ = _must(["rm", "-rf", temp], 10)
+                if (
+                    len(result_errors(ran.output)) > 0
+                    or len(slow_tests(ran.output, 5.0)) > 0
+                ):
+                    raise Error(ran.output)
+                if _truth_lines(ran.output) != expected:
+                    raise Error(ran.output)
+                if binary_path == instrumented_binary:
+                    for number in _truth_accepted_numbers():
+                        var seen = _truth_coverage(
+                            ran.errors, name, _truth_accepted_line(number)
+                        )
+                        var wanted = _truth_tree_trace(number, changing)
+                        if seen != wanted:
+                            raise Error(
+                                "trace "
+                                + String(number)
+                                + "\n"
+                                + seen
+                                + "\n"
+                                + wanted
+                            )
+        print(
+            "PASS: 13 instrumented custom truth trees, 16 masks, and 5 failure"
+            " positions, stable and changing"
+        )
+    finally:
+        _ = run_program(["rm", "-rf", work], 30)
+
+
 def main() raises:
     """Compare the Boolean grouping fixture from the command line."""
     var mojo = ".venv/bin/mojo"
@@ -3832,6 +4423,7 @@ def main() raises:
         check_generic_pair(mojo)
         check_single_generic(mojo)
         check_custom_truth_native(mojo)
+        check_custom_truth_instrumented(mojo)
     except error:
         print(String(error), file=stderr)
         exit(1)

@@ -25,8 +25,10 @@ from tools.check_coverage_grouping import (
     reduce_text,
     repeated_truth_source,
     temporary_identity_source,
+    truth_accepted_traces,
     truth_log,
     truth_model_rows,
+    truth_records,
 )
 
 
@@ -187,6 +189,30 @@ def test_the_custom_truth_model_matches_the_pinned_rows() raises:
     assert_equal(
         sha256_hex(truth_model_rows().as_bytes()),
         "25f58af42cbb9e5d2118a66f0b95c71d7158d20f5b9f86fdc8b80c46d57c9d85",
+    )
+
+
+def test_the_accepted_truth_traces_match_the_pinned_text() raises:
+    assert_equal(
+        truth_records(0, 0, -1, False, 166),
+        "COVLINE:truth:166.0:F\nCOVLINE:truth:166.1:F\nCOVLINE:truth:166:F\nCOVEVAL2:truth:166:F:FF;\n",
+    )
+    assert_equal(
+        truth_records(1, 0, -1, False, 180),
+        "COVLINE:truth:180.0:F\nCOVLINE:truth:180:F\nCOVEVAL2:truth:180:F:F-;\n",
+    )
+    assert_equal(
+        sha256_hex(truth_accepted_traces(False).as_bytes()),
+        "f4cd305b17bbbadf58da1cd073318940d95f97868a76ec7c63c747fb3f435a55",
+    )
+    assert_equal(
+        sha256_hex(truth_accepted_traces(True).as_bytes()),
+        "376665be098e1d326ed55ef9445d0892297a2b2cb397cf32b99aabdaa5d92fd5",
+    )
+    var source = Path("tools/fixtures/coverage_truth_accepted.txt").read_text()
+    assert_equal(
+        sha256_hex(source.as_bytes()),
+        "46007ecd43f76f6d43a8c18730970718b72629968264d111c0d0bddc2ddeee00",
     )
 
 
