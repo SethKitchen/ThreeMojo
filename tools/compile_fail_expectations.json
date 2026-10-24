@@ -1440,6 +1440,16 @@
     ],
     "notes": []
   },
+  "tests/compile_fail/a_gamepad_device_change_kind_is_not_a_bare_int.mojo": {
+    "errors": [
+      {
+        "line": 12,
+        "column": 35,
+        "message": "cannot implicitly convert 'IntLiteral[0]' value to 'DeviceChangeKind'"
+      }
+    ],
+    "notes": []
+  },
   "tests/compile_fail/a_gamepad_event_kind_is_not_a_bare_int.mojo": {
     "errors": [
       {
@@ -1842,6 +1852,26 @@
     "notes": [
       "function declared here"
     ]
+  },
+  "tests/compile_fail/a_hid_bus_is_not_a_bare_int.mojo": {
+    "errors": [
+      {
+        "line": 12,
+        "column": 25,
+        "message": "cannot implicitly convert 'IntLiteral[0]' value to 'HidBus'"
+      }
+    ],
+    "notes": []
+  },
+  "tests/compile_fail/a_hid_driver_kind_is_not_a_bare_int.mojo": {
+    "errors": [
+      {
+        "line": 12,
+        "column": 32,
+        "message": "cannot implicitly convert 'IntLiteral[0]' value to 'HidDriverKind'"
+      }
+    ],
+    "notes": []
   },
   "tests/compile_fail/a_hit_kind_is_not_a_bare_int.mojo": {
     "errors": [
