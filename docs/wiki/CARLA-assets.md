@@ -444,7 +444,7 @@ A far building is a baked proxy. Its corners are gathered into cells a 200th of 
 
 A town's glass is a dark, smooth, partly metal pane that reflects its surroundings. A see-through window has nothing behind it, so a tower would show the sky through its windows.
 
-The scene's `extras` list the head of each street lamp, as `carla_lamps`: three numbers for each lamp, in the renderer's frame. The lamps' glass has the material tag `{"carla": "lamp"}`. A renderer draws each tile at one level, chosen by the tile's distance to the camera.
+`tools/carla_town_lamps.mojo` finds each street lamp head. The scene's `extras` list the head of each street lamp, as `carla_lamps`: three numbers for each lamp, in the renderer's frame. The lamps' glass has the material tag `{"carla": "lamp"}`. A renderer draws each tile at one level, chosen by the tile's distance to the camera.
 
 Each mesh keeps a share of its triangles, by its kind. Each town also has a cap for each kind at each level. A town can have more than its cap, as Town04 has with its eight thousand pines. Then every mesh of that kind gives up the same share. A tree gives up leaf cards, and each card that stays grows, so the crown stays full. Other meshes are simplified, and their texture seams stay where they are.
 
@@ -508,8 +508,10 @@ Equal encoded images can share one packaged file.
 ## Test the town exporter
 
 The standard-library identity checks run with `make test-tools`.
-The synthetic bake checks need only NumPy and Pillow. They use two small
-meshes and two colors. They need no CARLA release, server or GPU.
+The synthetic bake checks need NumPy, Pillow and the repository Mojo.
+They use two small meshes and two colors. They need no CARLA release,
+server or GPU. They call `tools/carla_town_lamps.mojo` through
+`tools/tool.sh`.
 
 Only mesh simplification is substituted. The tests use the real material
 reconstruction, texture conversion, bake rasterizers and GLB writer. They
@@ -523,8 +525,9 @@ uv pip install --python .venv-carla-export/bin/python --only-binary :all: "numpy
 .venv-carla-export/bin/python -m unittest discover -s assets/carla/tools/export -p 'test_build_towns.py'
 ```
 
-The existing Linux and macOS lint jobs run this command. They keep the Mojo
-environment unchanged. A missing dependency or wheel fails the check.
+The existing Linux and macOS lint jobs run this command. They install
+Mojo when the bake checks run. The exporter packages stay in a separate
+environment. A missing dependency or wheel fails the check.
 
 ## Why not Poly Haven
 

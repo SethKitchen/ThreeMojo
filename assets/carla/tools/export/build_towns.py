@@ -27,7 +27,9 @@ import os
 import re
 import shutil
 import struct
+import subprocess
 import sys
+import tempfile
 import zlib
 
 import numpy
@@ -946,35 +948,49 @@ def place(part, row, rows):
     return points, normals, (part["triangles"][:, ::-1] if flip else part["triangles"])
 
 
+def _lamps_tool(primitives, mesh_path):
+    """Return JSON from `tools/carla_town_lamps.mojo`."""
+    here = os.path.dirname(os.path.abspath(__file__))
+    repo = os.path.abspath(os.path.join(here, "..", "..", "..", ".."))
+    mojo = os.path.join(repo, ".venv", "bin", "mojo")
+    if not os.path.isfile(mojo):
+        mojo = "mojo"
+    payload = {"mesh": mesh_path, "primitives": []}
+    for primitive in primitives:
+        payload["primitives"].append({
+            "positions": primitive["positions"].tolist(),
+            "triangles": primitive["triangles"].tolist(),
+        })
+    fd, path = tempfile.mkstemp(prefix="carla-town-lamps-", suffix=".json")
+    try:
+        with os.fdopen(fd, "w", encoding="utf-8") as handle:
+            json.dump(payload, handle, separators=(",", ":"))
+        result = subprocess.run(
+            ["sh", os.path.join(repo, "tools", "tool.sh"), mojo,
+             "carla_town_lamps", path],
+            capture_output=True, text=True,
+        )
+    finally:
+        os.remove(path)
+    if result.returncode != 0:
+        message = result.stderr.strip() or "lamp heads failed"
+        if "index out of range" in message:
+            raise IndexError(message)
+        raise ValueError(message)
+    heads = json.loads(result.stdout)
+    if heads is None:
+        return None
+    return numpy.array(heads, dtype=numpy.float64)
+
+
 def lamp_heads(primitives, mesh_path):
-    """Return where a lamp mesh's heads are, in its own frame: the middle
-    of each connected piece of its glass, or the top of a lamp with no
-    glass. None for a mesh that is not a lamp."""
-    if mesh_path.endswith(LAMP_GLASS):
-        from scipy.sparse import coo_matrix
-        from scipy.sparse.csgraph import connected_components
-        points = numpy.concatenate([p["positions"] for p in primitives])
-        faces = numpy.concatenate([p["triangles"] + sum(len(q["positions"]) for q in primitives[:i])
-                                   for i, p in enumerate(primitives)])
-        # Corners that share a place are one, so a piece is whole.
-        _, welded = numpy.unique(numpy.round(points * 1000.0).astype(numpy.int64), axis=0, return_inverse=True)
-        welded = welded.reshape(-1)
-        joined = welded[faces]
-        count = welded.max() + 1
-        rows = numpy.concatenate([joined[:, 0], joined[:, 1]])
-        cols = numpy.concatenate([joined[:, 1], joined[:, 2]])
-        pieces, label = connected_components(
-            coo_matrix((numpy.ones(len(rows)), (rows, cols)), shape=(count, count)), directed=False)
-        heads = []
-        for piece in range(pieces):
-            inside = points[label[welded] == piece]
-            heads.append((inside.min(axis=0) + inside.max(axis=0)) / 2)
-        return numpy.array(heads)
-    if mesh_path.endswith(LAMP_TOPS):
-        points = numpy.concatenate([p["positions"] for p in primitives])
-        low, high = points.min(axis=0), points.max(axis=0)
-        return numpy.array([[(low[0] + high[0]) / 2, high[1] - 0.15, (low[2] + high[2]) / 2]])
-    return None
+    """Return where a lamp mesh's heads are, in its own frame.
+
+    `tools/carla_town_lamps.mojo` finds each connected piece of glass,
+    or the top of a lamp that has no glass. The result is None when
+    the mesh is not a lamp.
+    """
+    return _lamps_tool(primitives, mesh_path)
 
 
 def rows_of(town):
