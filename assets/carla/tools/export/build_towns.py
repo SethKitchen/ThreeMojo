@@ -1303,11 +1303,48 @@ def lower(primitive, kind, mesh_path, index, total, masked, lod, factor=1.0):
     return simplify(primitive, int(len(primitive["triangles"]) * share), borders=lod == 0, small=factor < 1.0)
 
 
+def _spline_place(local, normals, triangles, rows):
+    """Return a bent mesh placed by `tools/carla_town_spline.mojo`."""
+    here = os.path.dirname(os.path.abspath(__file__))
+    repo = os.path.abspath(os.path.join(here, "..", "..", "..", ".."))
+    mojo = os.path.join(repo, ".venv", "bin", "mojo")
+    if not os.path.isfile(mojo):
+        mojo = "mojo"
+    folder = tempfile.mkdtemp(prefix="town-spline-")
+    try:
+        request = os.path.join(folder, "spline.json")
+        payload = {
+            "matrix": numpy.asarray(rows, dtype=float).reshape(4, 4).tolist(),
+            "positions": numpy.asarray(local, dtype=float).reshape(-1, 3).tolist(),
+            "normals": numpy.asarray(normals, dtype=float).reshape(-1, 3).tolist(),
+            "triangles": numpy.asarray(triangles).reshape(-1, 3).tolist(),
+        }
+        with open(request, "w", encoding="utf-8") as handle:
+            json.dump(payload, handle, separators=(",", ":"), allow_nan=False)
+        result = subprocess.run(
+            ["sh", os.path.join(repo, "tools", "tool.sh"), mojo,
+             "carla_town_spline", request],
+            capture_output=True, text=True,
+        )
+    finally:
+        shutil.rmtree(folder, ignore_errors=True)
+    if result.returncode != 0:
+        message = result.stderr.strip() or "spline placement failed"
+        if "singular" in message:
+            raise numpy.linalg.LinAlgError(message)
+        raise ValueError(message)
+    placed = json.loads(result.stdout)
+    return (numpy.array(placed["points"], dtype=numpy.float64),
+            numpy.array(placed["normals"], dtype=numpy.float64),
+            numpy.array(placed["triangles"], dtype=numpy.int64))
+
+
 def place(part, row, rows):
     """Return a primitive's points, normals and triangles placed by one
     copy's world matrix, in the three.js frame.
 
     A rigid copy is placed by `tools/carla_town_place.mojo`.
+    A bent spline mesh is placed by `tools/carla_town_spline.mojo`.
     """
     if "spline" not in row:
         folder = tempfile.mkdtemp(prefix="town-place-")
@@ -1336,13 +1373,7 @@ def place(part, row, rows):
                 numpy.array(placed["normals"], dtype=numpy.float64),
                 numpy.array(placed["triangles"], dtype=numpy.int64))
     local, normals = bend(part["positions"], part["normals"], row["spline"])
-    world = local @ rows[:3, :3] + rows[3, :3]
-    points = world[:, [0, 2, 1]] / 100.0
-    normals = (normals @ numpy.linalg.inv(rows[:3, :3]).T)[:, [0, 2, 1]]
-    flip = numpy.linalg.det(rows[:3, :3]) < 0
-    length = numpy.linalg.norm(normals, axis=1, keepdims=True)
-    normals = normals / numpy.maximum(length, 1e-12)
-    return points, normals, (part["triangles"][:, ::-1] if flip else part["triangles"])
+    return _spline_place(local, normals, part["triangles"], rows)
 
 
 def _lamps_tool(primitives, mesh_path):
