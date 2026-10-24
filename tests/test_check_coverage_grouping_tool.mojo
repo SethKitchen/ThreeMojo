@@ -209,6 +209,30 @@ def test_the_accepted_truth_traces_match_the_pinned_text() raises:
         sha256_hex(truth_accepted_traces(True).as_bytes()),
         "376665be098e1d326ed55ef9445d0892297a2b2cb397cf32b99aabdaa5d92fd5",
     )
+    assert_equal(
+        sha256_hex(truth_accepted_traces(False, "collision").as_bytes()),
+        "d8218fcc54619926f4c438593781c36faad27ac0bd87e94f033c3eb4d09486be",
+    )
+    assert_equal(
+        sha256_hex(truth_accepted_traces(True, "collision").as_bytes()),
+        "401a776c06d8e86af92bdfd03b321341edb0db4f5ea2f780e14772ed22038774",
+    )
+    var collision_native = Path(
+        "tools/fixtures/coverage_truth_collision_native.txt"
+    ).read_text()
+    var collision_accepted = Path(
+        "tools/fixtures/coverage_truth_collision_accepted.txt"
+    ).read_text()
+    assert_equal(
+        sha256_hex(collision_native.as_bytes()),
+        "e5700acdb074d5895d3c73f12e7b29b3a2340cf973866e8fa0a7e348dceabdb6",
+    )
+    assert_equal(
+        sha256_hex(collision_accepted.as_bytes()),
+        "b0ae675b225e8361b804b6eb9ad07942ba4348a09fb662a45a00957fa5642d6c",
+    )
+    assert_true(collision_native.find("def _cov_eval_leaf(") >= 0)
+    assert_true(collision_accepted.find("var List = ") >= 0)
     var source = Path("tools/fixtures/coverage_truth_accepted.txt").read_text()
     assert_equal(
         sha256_hex(source.as_bytes()),

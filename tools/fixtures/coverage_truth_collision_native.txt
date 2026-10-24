@@ -1,0 +1,888 @@
+from std.os import getenv
+from std.testing import TestSuite
+
+
+struct State(Movable):
+    var log: String
+    var mask: Int
+    var fail: Int
+    var changing: Bool
+    var counts: List[Int]
+
+    def __init__(out self, mask: Int, fail: Int, changing: Bool):
+        self.log = String("")
+        self.mask = mask
+        self.fail = fail
+        self.changing = changing
+        self.counts = List[Int](length=8, fill=0)
+
+    def enter(mut self, index: Int) raises:
+        self.log += "+" + String(index)
+        if index == self.fail:
+            raise Error("fixture exception")
+
+    def convert(mut self, index: Int) -> Bool:
+        self.log += String(index)
+        var count = self.counts[index]
+        self.counts[index] = count + 1
+        var value = (self.mask & (1 << index)) != 0
+        return value != (self.changing and count % 2 == 1)
+
+
+comptime Cell = Pointer[State, MutUntrackedOrigin]
+
+
+trait Made(Boolable, Movable, Deinitable):
+    @staticmethod
+    def make(index: Int, state: Cell) -> Self:
+        ...
+
+
+struct Probe(Made):
+    var index: Int
+    var state: Cell
+
+    def __init__(out self, index: Int, state: Cell):
+        self.index = index
+        self.state = state
+
+    @staticmethod
+    def make(index: Int, state: Cell) -> Self:
+        return Self(index, state)
+
+    def __bool__(self) -> Bool:
+        return self.state[].convert(self.index)
+
+    def __deinit__(deinit self):
+        self.state[].log += "~" + String(self.index)
+
+
+struct Other(Made):
+    var index: Int
+    var state: Cell
+
+    def __init__(out self, index: Int, state: Cell):
+        self.index = index
+        self.state = state
+
+    @staticmethod
+    def make(index: Int, state: Cell) -> Self:
+        return Self(index, state)
+
+    def __bool__(self) -> Bool:
+        return self.state[].convert(self.index)
+
+    def __deinit__(deinit self):
+        self.state[].log += "~" + String(self.index)
+
+
+struct Shared(ImplicitlyCopyable, Boolable):
+    var index: Int
+    var state: Cell
+
+    def __init__(out self, index: Int, state: Cell):
+        self.index = index
+        self.state = state
+
+    def __init__(out self, *, copy: Self):
+        self.index = copy.index
+        self.state = copy.state
+        self.state[].log += "=" + String(self.index)
+
+    def __bool__(self) -> Bool:
+        return self.state[].convert(self.index)
+
+    def __deinit__(deinit self):
+        self.state[].log += "~" + String(self.index)
+
+
+struct Moving(Made):
+    var index: Int
+    var state: Cell
+
+    @staticmethod
+    def make(index: Int, state: Cell) -> Self:
+        return Self(index, state)
+
+    def __init__(out self, index: Int, state: Cell):
+        self.index = index
+        self.state = state
+
+    def __init__(out self, *, deinit move: Self):
+        self.index = move.index
+        self.state = move.state
+        self.state[].log += ">" + String(self.index)
+
+    def __bool__(self) -> Bool:
+        return self.state[].convert(self.index)
+
+    def __deinit__(deinit self):
+        self.state[].log += "~" + String(self.index)
+
+
+@fieldwise_init
+struct Bits(ImplicitlyCopyable, Boolable):
+    var index: Int
+    var state: Cell
+
+    def __bool__(self) -> Bool:
+        return self.state[].convert(self.index)
+
+
+def _cov_eval_truth(index: Int, state: Cell) raises -> Bits:
+    state[].enter(index)
+    return Bits(index, state)
+
+
+def _cov_eval_right(index: Int, state: Cell) raises -> Shared:
+    state[].enter(index)
+    return Shared(index, state)
+
+
+def _cov_eval_buffer(index: Int, state: Cell) raises -> Moving:
+    state[].enter(index)
+    return Moving(index, state)
+
+
+def _cov_eval_leaf(index: Int, state: Cell) raises -> Probe:
+    state[].enter(index)
+    return Probe(index, state)
+
+
+def _cov_eval_node(index: Int, state: Cell) raises -> Other:
+    state[].enter(index)
+    return Other(index, state)
+
+
+def _cov_branch(index: Int, state: Cell) raises -> Bool:
+    state[].enter(index)
+    return (state[].mask & (1 << index)) != 0
+
+
+def truth_0(mask: Int, fail: Int, changing: Bool):
+    var _cov_hit = State(mask, fail, changing)
+    var _cov_eval_state0 = Pointer(to=_cov_hit).unsafe_origin_cast[MutUntrackedOrigin]()
+    try:
+        if _cov_eval_leaf(0, _cov_eval_state0) or _cov_eval_leaf(1, _cov_eval_state0):
+            _cov_eval_state0[].log += "|T"
+        else:
+            _cov_eval_state0[].log += "|F"
+    except error:
+        _cov_eval_state0[].log += "|E"
+    print("TRUTH", 0, mask, fail, changing, _cov_eval_state0[].log)
+    _ = _cov_hit^
+
+
+def truth_1(mask: Int, fail: Int, changing: Bool):
+    var _cov_hit = State(mask, fail, changing)
+    var _cov_eval_state0 = Pointer(to=_cov_hit).unsafe_origin_cast[MutUntrackedOrigin]()
+    try:
+        if _cov_eval_leaf(0, _cov_eval_state0) and _cov_eval_leaf(1, _cov_eval_state0):
+            _cov_eval_state0[].log += "|T"
+        else:
+            _cov_eval_state0[].log += "|F"
+    except error:
+        _cov_eval_state0[].log += "|E"
+    print("TRUTH", 1, mask, fail, changing, _cov_eval_state0[].log)
+    _ = _cov_hit^
+
+
+def truth_2(mask: Int, fail: Int, changing: Bool):
+    var _cov_hit = State(mask, fail, changing)
+    var _cov_eval_state0 = Pointer(to=_cov_hit).unsafe_origin_cast[MutUntrackedOrigin]()
+    try:
+        if (_cov_eval_leaf(0, _cov_eval_state0) or _cov_eval_leaf(1, _cov_eval_state0)) or _cov_eval_leaf(2, _cov_eval_state0):
+            _cov_eval_state0[].log += "|T"
+        else:
+            _cov_eval_state0[].log += "|F"
+    except error:
+        _cov_eval_state0[].log += "|E"
+    print("TRUTH", 2, mask, fail, changing, _cov_eval_state0[].log)
+    _ = _cov_hit^
+
+
+def truth_3(mask: Int, fail: Int, changing: Bool):
+    var _cov_hit = State(mask, fail, changing)
+    var _cov_eval_state0 = Pointer(to=_cov_hit).unsafe_origin_cast[MutUntrackedOrigin]()
+    try:
+        if (_cov_eval_leaf(0, _cov_eval_state0) and _cov_eval_leaf(1, _cov_eval_state0)) or _cov_eval_leaf(2, _cov_eval_state0):
+            _cov_eval_state0[].log += "|T"
+        else:
+            _cov_eval_state0[].log += "|F"
+    except error:
+        _cov_eval_state0[].log += "|E"
+    print("TRUTH", 3, mask, fail, changing, _cov_eval_state0[].log)
+    _ = _cov_hit^
+
+
+def truth_4(mask: Int, fail: Int, changing: Bool):
+    var _cov_hit = State(mask, fail, changing)
+    var _cov_eval_state0 = Pointer(to=_cov_hit).unsafe_origin_cast[MutUntrackedOrigin]()
+    try:
+        if _cov_eval_leaf(0, _cov_eval_state0) or (_cov_eval_leaf(1, _cov_eval_state0) and _cov_eval_leaf(2, _cov_eval_state0)):
+            _cov_eval_state0[].log += "|T"
+        else:
+            _cov_eval_state0[].log += "|F"
+    except error:
+        _cov_eval_state0[].log += "|E"
+    print("TRUTH", 4, mask, fail, changing, _cov_eval_state0[].log)
+    _ = _cov_hit^
+
+
+def truth_5(mask: Int, fail: Int, changing: Bool):
+    var _cov_hit = State(mask, fail, changing)
+    var _cov_eval_state0 = Pointer(to=_cov_hit).unsafe_origin_cast[MutUntrackedOrigin]()
+    try:
+        if not (_cov_eval_leaf(0, _cov_eval_state0) or _cov_eval_leaf(1, _cov_eval_state0)):
+            _cov_eval_state0[].log += "|T"
+        else:
+            _cov_eval_state0[].log += "|F"
+    except error:
+        _cov_eval_state0[].log += "|E"
+    print("TRUTH", 5, mask, fail, changing, _cov_eval_state0[].log)
+    _ = _cov_hit^
+
+
+def truth_6(mask: Int, fail: Int, changing: Bool):
+    var _cov_hit = State(mask, fail, changing)
+    var _cov_eval_state0 = Pointer(to=_cov_hit).unsafe_origin_cast[MutUntrackedOrigin]()
+    try:
+        if not _cov_eval_leaf(0, _cov_eval_state0) and _cov_eval_leaf(1, _cov_eval_state0):
+            _cov_eval_state0[].log += "|T"
+        else:
+            _cov_eval_state0[].log += "|F"
+    except error:
+        _cov_eval_state0[].log += "|E"
+    print("TRUTH", 6, mask, fail, changing, _cov_eval_state0[].log)
+    _ = _cov_hit^
+
+
+def truth_7(mask: Int, fail: Int, changing: Bool):
+    var _cov_hit = State(mask, fail, changing)
+    var _cov_eval_state0 = Pointer(to=_cov_hit).unsafe_origin_cast[MutUntrackedOrigin]()
+    try:
+        if _cov_eval_leaf(0, _cov_eval_state0) or _cov_eval_node(1, _cov_eval_state0):
+            _cov_eval_state0[].log += "|T"
+        else:
+            _cov_eval_state0[].log += "|F"
+    except error:
+        _cov_eval_state0[].log += "|E"
+    print("TRUTH", 7, mask, fail, changing, _cov_eval_state0[].log)
+    _ = _cov_hit^
+
+
+def truth_8(mask: Int, fail: Int, changing: Bool):
+    var _cov_hit = State(mask, fail, changing)
+    var _cov_eval_state0 = Pointer(to=_cov_hit).unsafe_origin_cast[MutUntrackedOrigin]()
+    try:
+        if _cov_eval_node(0, _cov_eval_state0) and (_cov_eval_leaf(1, _cov_eval_state0) or _cov_eval_leaf(2, _cov_eval_state0)):
+            _cov_eval_state0[].log += "|T"
+        else:
+            _cov_eval_state0[].log += "|F"
+    except error:
+        _cov_eval_state0[].log += "|E"
+    print("TRUTH", 8, mask, fail, changing, _cov_eval_state0[].log)
+    _ = _cov_hit^
+
+
+def truth_9(mask: Int, fail: Int, changing: Bool):
+    var _cov_hit = State(mask, fail, changing)
+    var _cov_eval_state0 = Pointer(to=_cov_hit).unsafe_origin_cast[MutUntrackedOrigin]()
+    try:
+        if (_cov_eval_leaf(0, _cov_eval_state0) or _cov_eval_leaf(1, _cov_eval_state0)) and (_cov_eval_leaf(2, _cov_eval_state0) or _cov_eval_leaf(3, _cov_eval_state0)):
+            _cov_eval_state0[].log += "|T"
+        else:
+            _cov_eval_state0[].log += "|F"
+    except error:
+        _cov_eval_state0[].log += "|E"
+    print("TRUTH", 9, mask, fail, changing, _cov_eval_state0[].log)
+    _ = _cov_hit^
+
+
+def truth_10(mask: Int, fail: Int, changing: Bool):
+    var _cov_hit = State(mask, fail, changing)
+    var _cov_eval_state0 = Pointer(to=_cov_hit).unsafe_origin_cast[MutUntrackedOrigin]()
+    try:
+        if (_cov_eval_leaf(0, _cov_eval_state0) and _cov_eval_leaf(1, _cov_eval_state0)) or _cov_branch(2, _cov_eval_state0):
+            _cov_eval_state0[].log += "|T"
+        else:
+            _cov_eval_state0[].log += "|F"
+    except error:
+        _cov_eval_state0[].log += "|E"
+    print("TRUTH", 10, mask, fail, changing, _cov_eval_state0[].log)
+    _ = _cov_hit^
+
+
+def truth_11(mask: Int, fail: Int, changing: Bool):
+    var _cov_hit = State(mask, fail, changing)
+    var _cov_eval_state0 = Pointer(to=_cov_hit).unsafe_origin_cast[MutUntrackedOrigin]()
+    try:
+        if _cov_branch(0, _cov_eval_state0) or (_cov_eval_leaf(1, _cov_eval_state0) and _cov_eval_leaf(2, _cov_eval_state0)):
+            _cov_eval_state0[].log += "|T"
+        else:
+            _cov_eval_state0[].log += "|F"
+    except error:
+        _cov_eval_state0[].log += "|E"
+    print("TRUTH", 11, mask, fail, changing, _cov_eval_state0[].log)
+    _ = _cov_hit^
+
+
+def truth_12(mask: Int, fail: Int, changing: Bool):
+    var _cov_hit = State(mask, fail, changing)
+    var _cov_eval_state0 = Pointer(to=_cov_hit).unsafe_origin_cast[MutUntrackedOrigin]()
+    var List = Probe(0, _cov_eval_state0)
+    try:
+        if List or _cov_branch(1, _cov_eval_state0):
+            _cov_eval_state0[].log += "|T"
+        else:
+            _cov_eval_state0[].log += "|F"
+    except error:
+        _cov_eval_state0[].log += "|E"
+    _ = List^
+    print("TRUTH", 12, mask, fail, changing, _cov_eval_state0[].log)
+    _ = _cov_hit^
+
+
+def truth_13(mask: Int, fail: Int, changing: Bool):
+    var _cov_hit = State(mask, fail, changing)
+    var _cov_eval_state0 = Pointer(to=_cov_hit).unsafe_origin_cast[MutUntrackedOrigin]()
+    var Int = Probe(1, _cov_eval_state0)
+    try:
+        if (_cov_branch(0, _cov_eval_state0) and not Int) or _cov_eval_leaf(2, _cov_eval_state0):
+            _cov_eval_state0[].log += "|T"
+        else:
+            _cov_eval_state0[].log += "|F"
+    except error:
+        _cov_eval_state0[].log += "|E"
+    _ = Int^
+    print("TRUTH", 13, mask, fail, changing, _cov_eval_state0[].log)
+    _ = _cov_hit^
+
+
+def truth_14(mask: Int, fail: Int, changing: Bool):
+    var _cov_hit = State(mask, fail, changing)
+    var _cov_eval_state0 = Pointer(to=_cov_hit).unsafe_origin_cast[MutUntrackedOrigin]()
+    var List = Probe(0, _cov_eval_state0)
+    try:
+        if (List and _cov_eval_node(1, _cov_eval_state0)) or _cov_eval_leaf(2, _cov_eval_state0):
+            _cov_eval_state0[].log += "|T"
+        else:
+            _cov_eval_state0[].log += "|F"
+    except error:
+        _cov_eval_state0[].log += "|E"
+    _ = List^
+    print("TRUTH", 14, mask, fail, changing, _cov_eval_state0[].log)
+    _ = _cov_hit^
+
+
+def truth_15(mask: Int, fail: Int, changing: Bool):
+    var _cov_hit = State(mask, fail, changing)
+    var _cov_eval_state0 = Pointer(to=_cov_hit).unsafe_origin_cast[MutUntrackedOrigin]()
+    try:
+        if (_cov_eval_leaf(2, _cov_eval_state0) if _cov_branch(1, _cov_eval_state0) else _cov_eval_leaf(3, _cov_eval_state0)) or _cov_eval_leaf(0, _cov_eval_state0):
+            _cov_eval_state0[].log += "|T"
+        else:
+            _cov_eval_state0[].log += "|F"
+    except error:
+        _cov_eval_state0[].log += "|E"
+    print("TRUTH", 15, mask, fail, changing, _cov_eval_state0[].log)
+    _ = _cov_hit^
+
+
+def truth_16(mask: Int, fail: Int, changing: Bool):
+    var _cov_hit = State(mask, fail, changing)
+    var _cov_eval_state0 = Pointer(to=_cov_hit).unsafe_origin_cast[MutUntrackedOrigin]()
+    try:
+        if (_cov_eval_node(0, _cov_eval_state0) or _cov_eval_node(1, _cov_eval_state0)) and _cov_eval_leaf(2, _cov_eval_state0):
+            _cov_eval_state0[].log += "|T"
+        else:
+            _cov_eval_state0[].log += "|F"
+    except error:
+        _cov_eval_state0[].log += "|E"
+    print("TRUTH", 16, mask, fail, changing, _cov_eval_state0[].log)
+    _ = _cov_hit^
+
+
+def truth_17(mask: Int, fail: Int, changing: Bool):
+    var _cov_hit = State(mask, fail, changing)
+    var _cov_eval_state0 = Pointer(to=_cov_hit).unsafe_origin_cast[MutUntrackedOrigin]()
+    var List = Shared(0, _cov_eval_state0)
+    try:
+        if List or _cov_branch(1, _cov_eval_state0):
+            _cov_eval_state0[].log += "|T"
+        else:
+            _cov_eval_state0[].log += "|F"
+    except error:
+        _cov_eval_state0[].log += "|E"
+    _ = List^
+    print("TRUTH", 17, mask, fail, changing, _cov_eval_state0[].log)
+    _ = _cov_hit^
+
+
+def truth_18(mask: Int, fail: Int, changing: Bool):
+    var _cov_hit = State(mask, fail, changing)
+    var _cov_eval_state0 = Pointer(to=_cov_hit).unsafe_origin_cast[MutUntrackedOrigin]()
+    var Int = Shared(1, _cov_eval_state0)
+    try:
+        if _cov_branch(0, _cov_eval_state0) and Int:
+            _cov_eval_state0[].log += "|T"
+        else:
+            _cov_eval_state0[].log += "|F"
+    except error:
+        _cov_eval_state0[].log += "|E"
+    _ = Int^
+    print("TRUTH", 18, mask, fail, changing, _cov_eval_state0[].log)
+    _ = _cov_hit^
+
+
+def truth_19(mask: Int, fail: Int, changing: Bool):
+    var _cov_hit = State(mask, fail, changing)
+    var _cov_eval_state0 = Pointer(to=_cov_hit).unsafe_origin_cast[MutUntrackedOrigin]()
+    var List = Shared(0, _cov_eval_state0)
+    try:
+        if (List and _cov_eval_leaf(1, _cov_eval_state0)) or _cov_eval_leaf(2, _cov_eval_state0):
+            _cov_eval_state0[].log += "|T"
+        else:
+            _cov_eval_state0[].log += "|F"
+    except error:
+        _cov_eval_state0[].log += "|E"
+    _ = List^
+    print("TRUTH", 19, mask, fail, changing, _cov_eval_state0[].log)
+    _ = _cov_hit^
+
+
+def truth_20(mask: Int, fail: Int, changing: Bool):
+    var _cov_hit = State(mask, fail, changing)
+    var _cov_eval_state0 = Pointer(to=_cov_hit).unsafe_origin_cast[MutUntrackedOrigin]()
+    var Bool = Shared(2, _cov_eval_state0)
+    try:
+        if (_cov_eval_leaf(0, _cov_eval_state0) or _cov_eval_leaf(1, _cov_eval_state0)) and not Bool:
+            _cov_eval_state0[].log += "|T"
+        else:
+            _cov_eval_state0[].log += "|F"
+    except error:
+        _cov_eval_state0[].log += "|E"
+    _ = Bool^
+    print("TRUTH", 20, mask, fail, changing, _cov_eval_state0[].log)
+    _ = _cov_hit^
+
+
+def truth_21(mask: Int, fail: Int, changing: Bool):
+    var _cov_hit = State(mask, fail, changing)
+    var _cov_eval_state0 = Pointer(to=_cov_hit).unsafe_origin_cast[MutUntrackedOrigin]()
+    var List = Shared(0, _cov_eval_state0)
+    var Int = Probe(1, _cov_eval_state0)
+    var Bool = Shared(2, _cov_eval_state0)
+    try:
+        if List or (Int or (Bool and _cov_branch(3, _cov_eval_state0))):
+            _cov_eval_state0[].log += "|T"
+        else:
+            _cov_eval_state0[].log += "|F"
+    except error:
+        _cov_eval_state0[].log += "|E"
+    _ = List^
+    _ = Int^
+    _ = Bool^
+    print("TRUTH", 21, mask, fail, changing, _cov_eval_state0[].log)
+    _ = _cov_hit^
+
+
+def truth_22(mask: Int, fail: Int, changing: Bool):
+    var _cov_hit = State(mask, fail, changing)
+    var _cov_eval_state0 = Pointer(to=_cov_hit).unsafe_origin_cast[MutUntrackedOrigin]()
+    var List = Shared(0, _cov_eval_state0)
+    try:
+        if List and _cov_eval_node(1, _cov_eval_state0):
+            _cov_eval_state0[].log += "|T"
+        else:
+            _cov_eval_state0[].log += "|F"
+    except error:
+        _cov_eval_state0[].log += "|E"
+    _ = List^
+    print("TRUTH", 22, mask, fail, changing, _cov_eval_state0[].log)
+    _ = _cov_hit^
+
+
+def truth_23(mask: Int, fail: Int, changing: Bool):
+    var _cov_hit = State(mask, fail, changing)
+    var _cov_eval_state0 = Pointer(to=_cov_hit).unsafe_origin_cast[MutUntrackedOrigin]()
+    var Bool = Shared(2, _cov_eval_state0)
+    var _cov_eval_finish = Shared(3, _cov_eval_state0)
+    try:
+        if (Bool if _cov_branch(1, _cov_eval_state0) else _cov_eval_finish) or _cov_eval_leaf(0, _cov_eval_state0):
+            _cov_eval_state0[].log += "|T"
+        else:
+            _cov_eval_state0[].log += "|F"
+    except error:
+        _cov_eval_state0[].log += "|E"
+    _ = Bool^
+    _ = _cov_eval_finish^
+    print("TRUTH", 23, mask, fail, changing, _cov_eval_state0[].log)
+    _ = _cov_hit^
+
+
+def truth_24(mask: Int, fail: Int, changing: Bool):
+    var _cov_hit = State(mask, fail, changing)
+    var _cov_eval_state0 = Pointer(to=_cov_hit).unsafe_origin_cast[MutUntrackedOrigin]()
+    try:
+        if _cov_eval_buffer(0, _cov_eval_state0) or _cov_branch(1, _cov_eval_state0):
+            _cov_eval_state0[].log += "|T"
+        else:
+            _cov_eval_state0[].log += "|F"
+    except error:
+        _cov_eval_state0[].log += "|E"
+    print("TRUTH", 24, mask, fail, changing, _cov_eval_state0[].log)
+    _ = _cov_hit^
+
+
+def truth_25(mask: Int, fail: Int, changing: Bool):
+    var _cov_hit = State(mask, fail, changing)
+    var _cov_eval_state0 = Pointer(to=_cov_hit).unsafe_origin_cast[MutUntrackedOrigin]()
+    try:
+        if _cov_branch(0, _cov_eval_state0) and _cov_eval_buffer(1, _cov_eval_state0):
+            _cov_eval_state0[].log += "|T"
+        else:
+            _cov_eval_state0[].log += "|F"
+    except error:
+        _cov_eval_state0[].log += "|E"
+    print("TRUTH", 25, mask, fail, changing, _cov_eval_state0[].log)
+    _ = _cov_hit^
+
+
+def truth_26(mask: Int, fail: Int, changing: Bool):
+    var _cov_hit = State(mask, fail, changing)
+    var _cov_eval_state0 = Pointer(to=_cov_hit).unsafe_origin_cast[MutUntrackedOrigin]()
+    try:
+        if not _cov_eval_buffer(0, _cov_eval_state0) or (_cov_eval_leaf(1, _cov_eval_state0) and _cov_eval_buffer(2, _cov_eval_state0)):
+            _cov_eval_state0[].log += "|T"
+        else:
+            _cov_eval_state0[].log += "|F"
+    except error:
+        _cov_eval_state0[].log += "|E"
+    print("TRUTH", 26, mask, fail, changing, _cov_eval_state0[].log)
+    _ = _cov_hit^
+
+
+def truth_27(mask: Int, fail: Int, changing: Bool):
+    var _cov_hit = State(mask, fail, changing)
+    var _cov_eval_state0 = Pointer(to=_cov_hit).unsafe_origin_cast[MutUntrackedOrigin]()
+    try:
+        if (_cov_eval_buffer(0, _cov_eval_state0) or _cov_eval_node(1, _cov_eval_state0)) and (_cov_eval_leaf(2, _cov_eval_state0) or _cov_eval_leaf(3, _cov_eval_state0)):
+            _cov_eval_state0[].log += "|T"
+        else:
+            _cov_eval_state0[].log += "|F"
+    except error:
+        _cov_eval_state0[].log += "|E"
+    print("TRUTH", 27, mask, fail, changing, _cov_eval_state0[].log)
+    _ = _cov_hit^
+
+
+def truth_28(mask: Int, fail: Int, changing: Bool):
+    var _cov_hit = State(mask, fail, changing)
+    var _cov_eval_state0 = Pointer(to=_cov_hit).unsafe_origin_cast[MutUntrackedOrigin]()
+    var Int = Shared(1, _cov_eval_state0)
+    try:
+        if _cov_eval_buffer(0, _cov_eval_state0) and Int:
+            _cov_eval_state0[].log += "|T"
+        else:
+            _cov_eval_state0[].log += "|F"
+    except error:
+        _cov_eval_state0[].log += "|E"
+    _ = Int^
+    print("TRUTH", 28, mask, fail, changing, _cov_eval_state0[].log)
+    _ = _cov_hit^
+
+
+def truth_29(mask: Int, fail: Int, changing: Bool):
+    var _cov_hit = State(mask, fail, changing)
+    var _cov_eval_state0 = Pointer(to=_cov_hit).unsafe_origin_cast[MutUntrackedOrigin]()
+    var List = Shared(0, _cov_eval_state0)
+    try:
+        if (_cov_eval_buffer(2, _cov_eval_state0) if _cov_branch(1, _cov_eval_state0) else _cov_eval_buffer(3, _cov_eval_state0)) or List:
+            _cov_eval_state0[].log += "|T"
+        else:
+            _cov_eval_state0[].log += "|F"
+    except error:
+        _cov_eval_state0[].log += "|E"
+    _ = List^
+    print("TRUTH", 29, mask, fail, changing, _cov_eval_state0[].log)
+    _ = _cov_hit^
+
+
+def truth_30(mask: Int, fail: Int, changing: Bool):
+    var _cov_hit = State(mask, fail, changing)
+    var _cov_eval_state0 = Pointer(to=_cov_hit).unsafe_origin_cast[MutUntrackedOrigin]()
+    var List = Bits(0, _cov_eval_state0)
+    var Int = Bits(1, _cov_eval_state0)
+    try:
+        if (List or Int) and _cov_branch(2, _cov_eval_state0):
+            _cov_eval_state0[].log += "|T"
+        else:
+            _cov_eval_state0[].log += "|F"
+    except error:
+        _cov_eval_state0[].log += "|E"
+    _ = List^
+    _ = Int^
+    print("TRUTH", 30, mask, fail, changing, _cov_eval_state0[].log)
+    _ = _cov_hit^
+
+
+def truth_31(mask: Int, fail: Int, changing: Bool):
+    var _cov_hit = State(mask, fail, changing)
+    var _cov_eval_state0 = Pointer(to=_cov_hit).unsafe_origin_cast[MutUntrackedOrigin]()
+    var List = Bits(0, _cov_eval_state0)
+    var Int = Bits(1, _cov_eval_state0)
+    try:
+        if List and (Int or _cov_eval_truth(2, _cov_eval_state0)):
+            _cov_eval_state0[].log += "|T"
+        else:
+            _cov_eval_state0[].log += "|F"
+    except error:
+        _cov_eval_state0[].log += "|E"
+    _ = List^
+    _ = Int^
+    print("TRUTH", 31, mask, fail, changing, _cov_eval_state0[].log)
+    _ = _cov_hit^
+
+
+def truth_32(mask: Int, fail: Int, changing: Bool):
+    var _cov_hit = State(mask, fail, changing)
+    var _cov_eval_state0 = Pointer(to=_cov_hit).unsafe_origin_cast[MutUntrackedOrigin]()
+    var Int = Bits(1, _cov_eval_state0)
+    try:
+        if (_cov_eval_truth(0, _cov_eval_state0) or Int) or _cov_branch(2, _cov_eval_state0):
+            _cov_eval_state0[].log += "|T"
+        else:
+            _cov_eval_state0[].log += "|F"
+    except error:
+        _cov_eval_state0[].log += "|E"
+    _ = Int^
+    print("TRUTH", 32, mask, fail, changing, _cov_eval_state0[].log)
+    _ = _cov_hit^
+
+
+def truth_33(mask: Int, fail: Int, changing: Bool):
+    var _cov_hit = State(mask, fail, changing)
+    var _cov_eval_state0 = Pointer(to=_cov_hit).unsafe_origin_cast[MutUntrackedOrigin]()
+    var List = Bits(0, _cov_eval_state0)
+    var Int = Bits(1, _cov_eval_state0)
+    var Bool = Bits(2, _cov_eval_state0)
+    try:
+        if not List and (Int or (Bool or _cov_eval_truth(3, _cov_eval_state0))):
+            _cov_eval_state0[].log += "|T"
+        else:
+            _cov_eval_state0[].log += "|F"
+    except error:
+        _cov_eval_state0[].log += "|E"
+    _ = List^
+    _ = Int^
+    _ = Bool^
+    print("TRUTH", 33, mask, fail, changing, _cov_eval_state0[].log)
+    _ = _cov_hit^
+
+
+def truth_34(mask: Int, fail: Int, changing: Bool):
+    var _cov_hit = State(mask, fail, changing)
+    var _cov_eval_state0 = Pointer(to=_cov_hit).unsafe_origin_cast[MutUntrackedOrigin]()
+    var Bool = Bits(2, _cov_eval_state0)
+    var _cov_eval_finish = Bits(3, _cov_eval_state0)
+    var List = Bits(0, _cov_eval_state0)
+    try:
+        if (Bool if _cov_branch(1, _cov_eval_state0) else _cov_eval_finish) or List:
+            _cov_eval_state0[].log += "|T"
+        else:
+            _cov_eval_state0[].log += "|F"
+    except error:
+        _cov_eval_state0[].log += "|E"
+    _ = Bool^
+    _ = _cov_eval_finish^
+    _ = List^
+    print("TRUTH", 34, mask, fail, changing, _cov_eval_state0[].log)
+    _ = _cov_hit^
+
+
+def truth_35(mask: Int, fail: Int, changing: Bool):
+    var _cov_hit = State(mask, fail, changing)
+    var _cov_eval_state0 = Pointer(to=_cov_hit).unsafe_origin_cast[MutUntrackedOrigin]()
+    var List = Bits(0, _cov_eval_state0)
+    try:
+        if (List and List) or _cov_branch(1, _cov_eval_state0):
+            _cov_eval_state0[].log += "|T"
+        else:
+            _cov_eval_state0[].log += "|F"
+    except error:
+        _cov_eval_state0[].log += "|E"
+    _ = List^
+    print("TRUTH", 35, mask, fail, changing, _cov_eval_state0[].log)
+    _ = _cov_hit^
+
+
+def truth_36(mask: Int, fail: Int, changing: Bool):
+    var _cov_hit = State(mask, fail, changing)
+    var _cov_eval_state0 = Pointer(to=_cov_hit).unsafe_origin_cast[MutUntrackedOrigin]()
+    var List = Bits(0, _cov_eval_state0)
+    var _cov_eval_finish = Bits(3, _cov_eval_state0)
+    try:
+        if (List or _cov_eval_leaf(1, _cov_eval_state0)) and (_cov_eval_truth(2, _cov_eval_state0) or _cov_eval_finish):
+            _cov_eval_state0[].log += "|T"
+        else:
+            _cov_eval_state0[].log += "|F"
+    except error:
+        _cov_eval_state0[].log += "|E"
+    _ = List^
+    _ = _cov_eval_finish^
+    print("TRUTH", 36, mask, fail, changing, _cov_eval_state0[].log)
+    _ = _cov_hit^
+
+
+def truth_37(mask: Int, fail: Int, changing: Bool):
+    var _cov_hit = State(mask, fail, changing)
+    var _cov_eval_state0 = Pointer(to=_cov_hit).unsafe_origin_cast[MutUntrackedOrigin]()
+    var Int = Shared(1, _cov_eval_state0)
+    try:
+        if _cov_eval_right(0, _cov_eval_state0) or Int:
+            _cov_eval_state0[].log += "|T"
+        else:
+            _cov_eval_state0[].log += "|F"
+    except error:
+        _cov_eval_state0[].log += "|E"
+    _ = Int^
+    print("TRUTH", 37, mask, fail, changing, _cov_eval_state0[].log)
+    _ = _cov_hit^
+
+
+def truth_38(mask: Int, fail: Int, changing: Bool):
+    var _cov_hit = State(mask, fail, changing)
+    var _cov_eval_state0 = Pointer(to=_cov_hit).unsafe_origin_cast[MutUntrackedOrigin]()
+    var Int = Shared(1, _cov_eval_state0)
+    try:
+        if (_cov_eval_right(0, _cov_eval_state0) or Int) and _cov_branch(2, _cov_eval_state0):
+            _cov_eval_state0[].log += "|T"
+        else:
+            _cov_eval_state0[].log += "|F"
+    except error:
+        _cov_eval_state0[].log += "|E"
+    _ = Int^
+    print("TRUTH", 38, mask, fail, changing, _cov_eval_state0[].log)
+    _ = _cov_hit^
+
+
+def truth_39(mask: Int, fail: Int, changing: Bool):
+    var _cov_hit = State(mask, fail, changing)
+    var _cov_eval_state0 = Pointer(to=_cov_hit).unsafe_origin_cast[MutUntrackedOrigin]()
+    var Int = Shared(1, _cov_eval_state0)
+    var Bool = Shared(2, _cov_eval_state0)
+    try:
+        if (_cov_eval_right(0, _cov_eval_state0) or Int) or Bool:
+            _cov_eval_state0[].log += "|T"
+        else:
+            _cov_eval_state0[].log += "|F"
+    except error:
+        _cov_eval_state0[].log += "|E"
+    _ = Int^
+    _ = Bool^
+    print("TRUTH", 39, mask, fail, changing, _cov_eval_state0[].log)
+    _ = _cov_hit^
+
+
+def truth_40(mask: Int, fail: Int, changing: Bool):
+    var _cov_hit = State(mask, fail, changing)
+    var _cov_eval_state0 = Pointer(to=_cov_hit).unsafe_origin_cast[MutUntrackedOrigin]()
+    var Bool = Shared(2, _cov_eval_state0)
+    try:
+        if _cov_eval_right(0, _cov_eval_state0) and (_cov_branch(1, _cov_eval_state0) or Bool):
+            _cov_eval_state0[].log += "|T"
+        else:
+            _cov_eval_state0[].log += "|F"
+    except error:
+        _cov_eval_state0[].log += "|E"
+    _ = Bool^
+    print("TRUTH", 40, mask, fail, changing, _cov_eval_state0[].log)
+    _ = _cov_hit^
+
+
+def truth_41(mask: Int, fail: Int, changing: Bool):
+    var _cov_hit = State(mask, fail, changing)
+    var _cov_eval_state0 = Pointer(to=_cov_hit).unsafe_origin_cast[MutUntrackedOrigin]()
+    var Bool = Shared(2, _cov_eval_state0)
+    var _cov_eval_finish = Shared(3, _cov_eval_state0)
+    try:
+        if _cov_eval_right(0, _cov_eval_state0) or (Bool if _cov_branch(1, _cov_eval_state0) else _cov_eval_finish):
+            _cov_eval_state0[].log += "|T"
+        else:
+            _cov_eval_state0[].log += "|F"
+    except error:
+        _cov_eval_state0[].log += "|E"
+    _ = Bool^
+    _ = _cov_eval_finish^
+    print("TRUTH", 41, mask, fail, changing, _cov_eval_state0[].log)
+    _ = _cov_hit^
+
+
+def truth_42(mask: Int, fail: Int, changing: Bool):
+    var _cov_hit = State(mask, fail, changing)
+    var _cov_eval_state0 = Pointer(to=_cov_hit).unsafe_origin_cast[MutUntrackedOrigin]()
+    var Int = Shared(1, _cov_eval_state0)
+    try:
+        if _cov_eval_right(0, _cov_eval_state0) and not Int:
+            _cov_eval_state0[].log += "|T"
+        else:
+            _cov_eval_state0[].log += "|F"
+    except error:
+        _cov_eval_state0[].log += "|E"
+    _ = Int^
+    print("TRUTH", 42, mask, fail, changing, _cov_eval_state0[].log)
+    _ = _cov_hit^
+
+
+def test_truth() raises:
+    var changing = getenv("THREEMOJO_TRUTH_CHANGING", "0") == "1"
+    for fail in range(-1, 4):
+        for mask in range(16):
+            truth_0(mask, fail, changing)
+            truth_1(mask, fail, changing)
+            truth_2(mask, fail, changing)
+            truth_3(mask, fail, changing)
+            truth_4(mask, fail, changing)
+            truth_5(mask, fail, changing)
+            truth_6(mask, fail, changing)
+            truth_7(mask, fail, changing)
+            truth_8(mask, fail, changing)
+            truth_9(mask, fail, changing)
+            truth_10(mask, fail, changing)
+            truth_11(mask, fail, changing)
+            truth_12(mask, fail, changing)
+            truth_13(mask, fail, changing)
+            truth_14(mask, fail, changing)
+            truth_15(mask, fail, changing)
+            truth_16(mask, fail, changing)
+            truth_17(mask, fail, changing)
+            truth_18(mask, fail, changing)
+            truth_19(mask, fail, changing)
+            truth_20(mask, fail, changing)
+            truth_21(mask, fail, changing)
+            truth_22(mask, fail, changing)
+            truth_23(mask, fail, changing)
+            truth_24(mask, fail, changing)
+            truth_25(mask, fail, changing)
+            truth_26(mask, fail, changing)
+            truth_27(mask, fail, changing)
+            truth_28(mask, fail, changing)
+            truth_29(mask, fail, changing)
+            truth_30(mask, fail, changing)
+            truth_31(mask, fail, changing)
+            truth_32(mask, fail, changing)
+            truth_33(mask, fail, changing)
+            truth_34(mask, fail, changing)
+            truth_35(mask, fail, changing)
+            truth_36(mask, fail, changing)
+            truth_37(mask, fail, changing)
+            truth_38(mask, fail, changing)
+            truth_39(mask, fail, changing)
+            truth_40(mask, fail, changing)
+            truth_41(mask, fail, changing)
+            truth_42(mask, fail, changing)
+
+
+def main() raises:
+    TestSuite.discover_tests[__functions_in_module()]().run()

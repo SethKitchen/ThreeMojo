@@ -4086,7 +4086,12 @@ def _truth_accepted_line(number: Int) raises -> Int:
 
 
 def truth_records(
-    number: Int, mask: Int, fail: Int, changing: Bool, line: Int
+    number: Int,
+    mask: Int,
+    fail: Int,
+    changing: Bool,
+    line: Int,
+    module_name: String = "truth",
 ) raises -> String:
     """Return one custom-truth coverage trace, with trailing newlines.
 
@@ -4096,6 +4101,7 @@ def truth_records(
         fail: The leaf that raises, or -1.
         changing: True when a repeated conversion flips.
         line: The decision line recorded in the trace.
+        module_name: The module name recorded in each trace.
 
     Returns:
         The condition hits, the decision hit, and the vector. A thrown
@@ -4104,15 +4110,18 @@ def truth_records(
     Raises:
         Error: If `number` is outside the reference trees.
     """
-    var made = _truth_execute(number, mask, fail, changing, line, "truth")
+    var made = _truth_execute(number, mask, fail, changing, line, module_name)
     return made[1]
 
 
-def truth_accepted_traces(changing: Bool) raises -> String:
+def truth_accepted_traces(
+    changing: Bool, module_name: String = "truth"
+) raises -> String:
     """Return the accepted-tree traces, with a trailing newline.
 
     Args:
         changing: True when a repeated conversion flips.
+        module_name: The module name recorded in each trace.
 
     Returns:
         One block per failure, mask, and accepted tree. Each block starts
@@ -4137,7 +4146,12 @@ def truth_accepted_traces(changing: Bool) raises -> String:
                     + "\n"
                 )
                 text += truth_records(
-                    number, mask, fail, changing, _truth_accepted_line(number)
+                    number,
+                    mask,
+                    fail,
+                    changing,
+                    _truth_accepted_line(number),
+                    module_name,
                 )
             mask += 1
         fail += 1
@@ -4173,14 +4187,18 @@ def _truth_accepted_rows(changing: Bool) raises -> String:
     return text
 
 
-def _truth_tree_trace(number: Int, changing: Bool) raises -> String:
+def _truth_tree_trace(
+    number: Int, changing: Bool, module_name: String = "truth"
+) raises -> String:
     var line = _truth_accepted_line(number)
     var text = String()
     var fail = -1
     while fail < 4:
         var mask = 0
         while mask < 16:
-            text += truth_records(number, mask, fail, changing, line)
+            text += truth_records(
+                number, mask, fail, changing, line, module_name
+            )
             mask += 1
         fail += 1
     return text
@@ -4393,6 +4411,204 @@ def check_custom_truth_instrumented(mojo: String) raises:
         _ = run_program(["rm", "-rf", work], 30)
 
 
+def _require_collision_names(instrumented: String, source: String) raises:
+    """Require renamed coverage aliases to avoid the fixture's own names."""
+    var header = String()
+    for line in instrumented.splitlines():
+        var row = String(line)
+        if row.startswith("from coverage.runtime import "):
+            header = row
+            break
+    if header.byte_length() == 0:
+        raise Error("missing coverage import")
+    var rest = header.removeprefix("from coverage.runtime import ")
+    var aliases = List[String]()
+    for part in rest.split(", "):
+        var piece = String(part)
+        var mark = piece.find(" as ")
+        if mark < 0:
+            raise Error(header)
+        aliases.append(String(piece[byte = mark + 4 :]))
+    if len(aliases) < 3:
+        raise Error(header)
+    var prefix = aliases[2]
+    if prefix.endswith("begin"):
+        var end = prefix.byte_length() - 5
+        var shortened = String(prefix[byte=:end])
+        prefix = shortened
+    var stem = prefix + "state"
+    var flat = instrumented.replace("(", " ")
+    flat = flat.replace(",", " ")
+    flat = flat.replace("\n", " ")
+    var frames = List[String]()
+    for word in flat.split(" "):
+        var token = String(word)
+        if token.startswith(stem):
+            var known = False
+            for frame in frames:
+                if frame == token:
+                    known = True
+            if not known:
+                frames.append(token)
+    if len(frames) == 0:
+        raise Error(header)
+    for name in aliases:
+        if source.find(name) >= 0:
+            raise Error(name + " collides\n" + header)
+    for name in frames:
+        if source.find(name) >= 0:
+            raise Error(name + " collides\n" + header)
+    var required = List[String]()
+    required.append("_cov_eval_leaf")
+    required.append("_cov_eval_buffer")
+    required.append("_cov_eval_truth")
+    required.append("_cov_eval_right")
+    required.append("_cov_eval_state0")
+    required.append("List")
+    required.append("Int")
+    required.append("Bool")
+    for name in required:
+        var as_var = "var " + name + " = "
+        var as_def = "def " + name + "("
+        if source.find(as_var) < 0 and source.find(as_def) < 0:
+            raise Error("missing collision name " + name)
+
+
+def check_custom_truth_collision(mojo: String) raises:
+    """Require collision names to keep the custom-truth rows and traces.
+
+    Args:
+        mojo: The Mojo compiler.
+
+    Raises:
+        Error: If a row, a trace, the manifest, or a renamed alias differs.
+    """
+    var root = absolute_path(".")
+    var compiler = absolute_path(mojo)
+    var native_source = Path(
+        "tools/fixtures/coverage_truth_collision_native.txt"
+    ).read_text()
+    var source = Path(
+        "tools/fixtures/coverage_truth_collision_accepted.txt"
+    ).read_text()
+    var work = mkdtemp(prefix="threemojo-truth-collision-")
+    try:
+        var native = work + "/native"
+        var accepted = work + "/accepted"
+        var rewritten = work + "/rewritten"
+        _ = _must(["mkdir", "-p", native, accepted, rewritten], 10)
+        _ = _must(["cp", "-a", root + "/coverage", rewritten + "/coverage"], 30)
+        var built = rewritten + "/coverage/build"
+        if Path(built).exists():
+            _ = _must(["rm", "-rf", built], 10)
+        var name = "collision"
+        Path(native + "/" + name + ".mojo").write_text(native_source)
+        Path(accepted + "/" + name + ".mojo").write_text(source)
+        var binary = work + "/" + name + "-native"
+        _ = _must(
+            [
+                compiler,
+                "build",
+                "-Werror",
+                "-I",
+                native,
+                native + "/" + name + ".mojo",
+                "-o",
+                binary,
+            ],
+            180,
+        )
+        var build = work + "/build_cli"
+        _ = _must(
+            [
+                compiler,
+                "build",
+                "-Werror",
+                "-I",
+                root,
+                root + "/coverage/build_cli.mojo",
+                "-o",
+                build,
+            ],
+            180,
+        )
+        _ = _must([build, rewritten, name + ".mojo"], 60, accepted)
+        _require_origin(rewritten, name, source)
+        _require_accepted_manifest(rewritten, name, source)
+        var instrumented_text = Path(
+            rewritten + "/" + name + ".mojo"
+        ).read_text()
+        _require_collision_names(instrumented_text, source)
+        var instrumented_binary = work + "/" + name + "-instrumented"
+        _ = _must(
+            [
+                compiler,
+                "build",
+                "-Werror",
+                "-I",
+                rewritten,
+                rewritten + "/" + name + ".mojo",
+                "-o",
+                instrumented_binary,
+            ],
+            180,
+        )
+        for changing in [False, True]:
+            var flag = "0"
+            if changing:
+                flag = "1"
+            var native_expected = _truth_native_rows(changing)
+            var accepted_expected = _truth_accepted_rows(changing)
+            var paths = List[String]()
+            paths.append(binary)
+            paths.append(instrumented_binary)
+            for binary_path in paths:
+                var temp = mkdtemp(prefix="threemojo-truth-collision-run-")
+                var ran = _must(
+                    _with_env(
+                        [
+                            "TMPDIR=" + temp,
+                            "THREEMOJO_TEST_TMPDIR=" + temp,
+                            "THREEMOJO_TRUTH_CHANGING=" + flag,
+                        ],
+                        [binary_path],
+                    ),
+                    10,
+                )
+                _ = _must(["rm", "-rf", temp], 10)
+                if (
+                    len(result_errors(ran.output)) > 0
+                    or len(slow_tests(ran.output, 5.0)) > 0
+                ):
+                    raise Error(ran.output)
+                var expected = native_expected
+                if binary_path == instrumented_binary:
+                    expected = accepted_expected
+                if _truth_lines(ran.output) != expected:
+                    raise Error(ran.output)
+                if binary_path == instrumented_binary:
+                    for number in _truth_accepted_numbers():
+                        var seen = _truth_coverage(
+                            ran.errors, name, _truth_accepted_line(number)
+                        )
+                        var wanted = _truth_tree_trace(number, changing, name)
+                        if seen != wanted:
+                            raise Error(
+                                "trace "
+                                + String(number)
+                                + "\n"
+                                + seen
+                                + "\n"
+                                + wanted
+                            )
+        print(
+            "PASS: collision names keep 43 native and 13 instrumented custom"
+            " truth trees"
+        )
+    finally:
+        _ = run_program(["rm", "-rf", work], 30)
+
+
 def main() raises:
     """Compare the Boolean grouping fixture from the command line."""
     var mojo = ".venv/bin/mojo"
@@ -4424,6 +4640,7 @@ def main() raises:
         check_single_generic(mojo)
         check_custom_truth_native(mojo)
         check_custom_truth_instrumented(mojo)
+        check_custom_truth_collision(mojo)
     except error:
         print(String(error), file=stderr)
         exit(1)
