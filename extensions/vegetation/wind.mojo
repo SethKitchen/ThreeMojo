@@ -79,9 +79,9 @@ comptime TREE_RATE = Float32(0.5)
 # leaf flutters and how many times a second. A wind of another lean moves
 # them in proportion.
 comptime CROWN_LEAN = Float32(50)
-comptime CROWN_REACH = Float32(0.12)
+comptime CROWN_REACH = Float32(0.3)
 comptime CROWN_RATE = Float32(0.8)
-comptime CROWN_FLUTTER = Float32(0.02)
+comptime CROWN_FLUTTER = Float32(0.035)
 comptime CROWN_FLUTTER_RATE = Float32(2.4)
 
 
