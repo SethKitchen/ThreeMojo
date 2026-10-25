@@ -2168,6 +2168,14 @@ def run_cli(arguments: List[String]) raises -> Int:
         for index in range(1, len(arguments)):
             rest.append(arguments[index])
         return _report_main(arguments[0], rest)
+    var verifying = False
+    var words = List[String]()
+    var start = 0
+    if len(arguments) > 0 and arguments[0] == "verify":
+        verifying = True
+        start = 1
+    for index in range(start, len(arguments)):
+        words.append(arguments[index])
     var root = String()
     var build = String()
     var compiler = String()
@@ -2183,15 +2191,15 @@ def run_cli(arguments: List[String]) raises -> Int:
     var saw_suites = False
     var taking = False
     var index = 0
-    while index < len(arguments):
-        var word = arguments[index]
+    while index < len(words):
+        var word = words[index]
         if taking and not word.startswith("--"):
             suites.append(word)
             index += 1
             continue
         taking = False
         if word == "--root":
-            root = _value(arguments, index)
+            root = _value(words, index)
             saw_root = True
             index += 2
         elif word.startswith("--root="):
@@ -2199,7 +2207,7 @@ def run_cli(arguments: List[String]) raises -> Int:
             saw_root = True
             index += 1
         elif word == "--build":
-            build = _value(arguments, index)
+            build = _value(words, index)
             saw_build = True
             index += 2
         elif word.startswith("--build="):
@@ -2207,7 +2215,7 @@ def run_cli(arguments: List[String]) raises -> Int:
             saw_build = True
             index += 1
         elif word == "--compiler":
-            compiler = _value(arguments, index)
+            compiler = _value(words, index)
             saw_compiler = True
             index += 2
         elif word.startswith("--compiler="):
@@ -2215,7 +2223,7 @@ def run_cli(arguments: List[String]) raises -> Int:
             saw_compiler = True
             index += 1
         elif word == "--flags":
-            flags = _value(arguments, index)
+            flags = _value(words, index)
             saw_flags = True
             index += 2
         elif word.startswith("--flags="):
@@ -2223,7 +2231,7 @@ def run_cli(arguments: List[String]) raises -> Int:
             saw_flags = True
             index += 1
         elif word == "--mojo":
-            mojo = _value(arguments, index)
+            mojo = _value(words, index)
             saw_mojo = True
             index += 2
         elif word.startswith("--mojo="):
@@ -2231,7 +2239,7 @@ def run_cli(arguments: List[String]) raises -> Int:
             saw_mojo = True
             index += 1
         elif word == "--capture-cache":
-            cache = _value(arguments, index)
+            cache = _value(words, index)
             index += 2
         elif word.startswith("--capture-cache="):
             cache = String(word[byte=16:])
@@ -2252,6 +2260,11 @@ def run_cli(arguments: List[String]) raises -> Int:
         or not saw_mojo
     ):
         raise Error(_usage())
+    if verifying:
+        _ = _verify_receipt(
+            root, build, compiler, flags, mojo, cache, suites, saw_suites
+        )
+        return 0
     _ = run_seal(
         root, build, compiler, flags, mojo, cache, suites, saw_suites, True
     )

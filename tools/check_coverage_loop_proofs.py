@@ -6,7 +6,8 @@ Runtime probes remain those of the original instrumenter. Each executable
 keeps the five-second limit; this harness never treats compiler failure as a
 passing runtime test. The real raw capture retains compilation, with a new
 180-second integration cap and a native alarm(5) before production calls.
-Capture and report use `tools/coverage_io.mojo`.
+Capture and report use `tools/coverage_io.mojo`. The fixture receipts are
+sealed and checked by `tools/coverage_loop_seal.mojo`.
 Use after the compiler-free normal and -O controls.
 """
 
@@ -164,6 +165,39 @@ def require_runtime_alarm():
 def coverage_io_argv(mojo, mode):
     """Return the production Mojo coverage tool command."""
     return ['sh', str(ROOT / 'tools/tool.sh'), mojo, 'coverage_io', mode]
+
+
+def _mojo_seal_command(root, stage, compiler, flags, mojo, suites=None, *, verify=False):
+    command = ['sh', str(ROOT / 'tools/tool.sh'), mojo, 'coverage_loop_seal']
+    if verify:
+        command.append('verify')
+    command += ['--root', str(root), '--build', str(stage),
+                '--compiler', compiler, '--flags', flags, '--mojo', mojo]
+    if suites is not None:
+        command += ['--suites', *suites]
+    return command
+
+
+def mojo_begin(root, stage, compiler, flags, mojo, names):
+    """Write the generation checkpoint with the Mojo begin tool."""
+    run(['sh', str(ROOT / 'tools/tool.sh'), mojo, 'coverage_loop_begin',
+         '--root', str(root), '--build', str(stage),
+         '--compiler', compiler, '--flags', flags, '--mojo', mojo,
+         '--sources', *names])
+
+
+def mojo_seal(root, stage, compiler, flags, mojo, suites=None, *, success=True):
+    """Seal with the Mojo tool and return the receipt, or the failed process."""
+    result = run(_mojo_seal_command(root, stage, compiler, flags, mojo, suites),
+                 success=success)
+    if not success:
+        return result
+    return proofs.read_receipt(Path(stage) / 'loop-proofs.json')
+
+
+def mojo_verify(root, stage, compiler, flags, mojo, suites=None):
+    """Rederive the receipt with the Mojo tool and require the saved file."""
+    run(_mojo_seal_command(root, stage, compiler, flags, mojo, suites, verify=True))
 
 
 def capture_with_compiler_budget(command, output, capture, *, mojo, loop_proof=None,
@@ -728,7 +762,7 @@ def main():
     def generate(root, stage, names, *, success=True, remove_after_begin=None):
         # The checkpoint precedes the command that loads the producer source.
         # A previously compiled unbound generator cannot attest current tools.
-        proofs.begin_generation(root, stage, compiler, flags, mojo=[mojo], sources=names)
+        mojo_begin(root, stage, compiler, flags, mojo, names)
         if remove_after_begin is not None:
             (root / remove_after_begin).unlink()
         return run([mojo, 'run', '-Werror', '-I', '.', 'coverage/build_cli.mojo',
@@ -777,7 +811,7 @@ def main():
         selected = ''.join(f'B fixture {line}\n' for line in identities.values()).encode()
         for record in selected.splitlines():
             require(record in full_manifest.splitlines(), 'Missing original fixture decision')
-        envelope = proofs.seal(native, rewritten, compiler, flags, mojo=[mojo])
+        envelope = mojo_seal(native, rewritten, compiler, flags, mojo)
         require(len(envelope['receipt']['proofs']) == 3, 'Expected exactly three constant loops')
         totals = envelope['receipt']['denominator']
         require(totals['potential_total'] - totals['required_total'] == 3, 'Reachable outcome removed')
@@ -828,12 +862,9 @@ def main():
         needle = f'_cov_branch("fixture:{identities["fixed"]}", True)'
         require(needle in original_instrumented, 'Mutation target absent')
         source_path.write_text(original_instrumented.replace(needle, needle.replace('True', 'False')))
-        try:
-            proofs.seal(native, rewritten, compiler, flags, mojo=[mojo])
-        except ValueError as error:
-            require('generation origin' in str(error), 'Unexpected mutation rejection')
-        else:
-            raise RuntimeError('Modified stage was accepted against the original source')
+        rejected = mojo_seal(native, rewritten, compiler, flags, mojo, success=False)
+        require(rejected.returncode != 0 and 'generation origin' in rejected.stderr,
+                'Unexpected mutation rejection: ' + rejected.stderr)
         mutant = rewritten / 'mutant'
         run([mojo, 'build', '-Werror', '-I', str(rewritten), str(source_path), '-o', str(mutant)])
         mutant_result = run([str(mutant), '0'], timeout=5)
@@ -844,7 +875,7 @@ def main():
         (evidence / 'mutant-report.out').write_text(failed.stdout + failed.stderr)
         mutated_source = source_path.read_text()
         source_path.write_text(original_instrumented)
-        proofs.verify(rewritten / 'loop-proofs.json', native, rewritten, compiler, flags, mojo=[mojo])
+        mojo_verify(native, rewritten, compiler, flags, mojo)
         results['entry-probe-mutation'] = 'rejected contradictory actual native probe'
         # An explicit imported binding supplies an empty iterable even though
         # the call is spelled range(3). It must keep the original two-outcome
@@ -873,7 +904,7 @@ def main() raises:
         shadow_original = (shadow_build / 'manifest.txt').read_bytes()
         require(shadow_selected.strip() in shadow_original.splitlines(),
                 'Shadow fixture original loop missing')
-        shadow_proof = proofs.seal(native, shadow_build, compiler, flags, mojo=[mojo])
+        shadow_proof = mojo_seal(native, shadow_build, compiler, flags, mojo)
         require(not shadow_proof['receipt']['proofs'], 'Shadowed range incorrectly proved builtin')
         shadow_manifest = evidence / 'shadow-manifest.txt'
         shadow_manifest.write_bytes(diagnostic_manifest(shadow_original, shadow_proof, 'shadow', [shadow_line]))
@@ -897,12 +928,9 @@ def main() raises:
         results['shadowed-range'] = 'native empty custom iterable; both obligations retained; T remains missing'
         (native / 'shadow.mojo').write_text(shadow_source.replace(
             'from shadow_factory import custom_range as range', '# same-line builtin alias drift'))
-        try:
-            proofs.seal(native, shadow_build, compiler, flags, mojo=[mojo])
-        except ValueError as error:
-            require('generation origin' in str(error), 'Unexpected alias-drift rejection')
-        else:
-            raise RuntimeError('Same-line source alias drift was accepted')
+        rejected = mojo_seal(native, shadow_build, compiler, flags, mojo, success=False)
+        require(rejected.returncode != 0 and 'generation origin' in rejected.stderr,
+                'Unexpected alias-drift rejection: ' + rejected.stderr)
         (native / 'shadow.mojo').write_text(shadow_source)
         results['native-alias-drift'] = 'rejected original/staged mismatch'
         # Actual CR/LF/UTF-8 generation records must retain the exact native
@@ -916,7 +944,7 @@ def main() raises:
             stage.mkdir()
             shutil.copytree(ROOT / 'coverage', stage / 'coverage', ignore=shutil.ignore_patterns('build'))
             generate(native, stage, [name])
-            bound = proofs.seal(native, stage, compiler, flags, mojo=[mojo])
+            bound = mojo_seal(native, stage, compiler, flags, mojo)
             require(bound['receipt']['generation']['modules'][name]['source'] == proofs.sha256(original), 'Physical source bytes changed')
             observed = []
             for folder in [native, stage]:
@@ -947,8 +975,8 @@ def main() raises:
             (native/name).write_text(driver)
             (production_stage/name).write_text(driver)
         generate(native, production_stage, ['production.mojo'])
-        production_proof = proofs.seal(native, production_stage, compiler, flags,
-                                       mojo=[mojo], suites=list(drivers))
+        production_proof = mojo_seal(native, production_stage, compiler, flags, mojo,
+                                     suites=list(drivers))
         # Build first, then enforce the unchanged executable runtime limit.
         # The real raw-profile invocation below still includes JIT startup.
         require_runtime_alarm()

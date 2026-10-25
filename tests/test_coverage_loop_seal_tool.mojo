@@ -451,6 +451,93 @@ def test_prepare_report_matches_python() raises:
         _cleanup(parent)
 
 
+def _harness_oracle() -> String:
+    """Return the script that seals the loop-proof harness fixture."""
+    return (
+        "import json, sys\nfrom pathlib import Path\nsys.path.insert(0,"
+        " sys.argv[1])\nimport check_coverage_loop_proofs as harness\nimport"
+        " coverage_loop_proofs as loops\nrepo ="
+        " Path(sys.argv[2]).resolve()\nroot ="
+        " Path(sys.argv[3]).resolve()\nbuild = Path(sys.argv[4]).resolve()\nfor"
+        " name in loops.TOOL_INPUTS:\n    dest = root / name\n   "
+        " dest.parent.mkdir(parents=True, exist_ok=True)\n   "
+        " dest.write_bytes((repo / name).read_bytes())\nsrc ="
+        " harness.SOURCE\n(root / 'fixture.mojo').write_text(src)\n(build /"
+        " 'fixture.mojo').parent.mkdir(parents=True, exist_ok=True)\n(build /"
+        " 'fixture.mojo').write_text(src)\nrows = []\nfor number, line in"
+        " enumerate(src.splitlines(), 1):\n    if line.startswith('def '):\n   "
+        "     rows.append('L fixture %d\\n' % number)\n    if line.startswith('"
+        "    for '):\n        rows.append('B fixture %d\\n' % number)\n(build /"
+        " 'manifest.txt').write_text(''.join(rows))\n(root /"
+        " 'driver').write_text('compiler\\n')\ndriver = str((root /"
+        " 'driver').resolve())\nloops.begin_generation(root, build, 'Mojo"
+        " fixture', '-I .', mojo=driver, sources=['fixture.mojo'])\nmanifest ="
+        " (build / 'manifest.txt').read_bytes()\nname = 'fixture.mojo'\nmodule"
+        " = b'fixture'\nfragment = b''.join(row for row in"
+        " manifest.splitlines(keepends=True)\n    if len(row.split()) >= 2 and"
+        " row.split()[1] == module)\nparts = [name.encode(), (root /"
+        " name).read_bytes(), (build / name).read_bytes(), fragment]\nrecord ="
+        " b'COVORIGIN1 ' + b' '.join(str(len(part)).encode() for part in parts)"
+        " + b'\\n' + b''.join(parts)\n(build / (name +"
+        " '.cov-origin')).write_bytes(record)\ncheckpoint = (build /"
+        " 'generation-inputs.json').read_bytes()\nindex = b'COVORIGIN_INDEX2 1"
+        " ' + str(len(manifest)).encode() + b' ' +"
+        " str(len(checkpoint)).encode() + b'\\n' + manifest + checkpoint +"
+        " str(len(name.encode())).encode() + b'\\n' + name.encode()\n(build /"
+        " 'origins.ready').write_bytes(index)\nenv = loops.seal(root, build,"
+        " 'Mojo fixture', '-I .', mojo=driver, suites=[])\nprint('Loop"
+        " proofs:', env['sha256'], json.dumps(env['receipt']['denominator'],"
+        " sort_keys=True))\n"
+    )
+
+
+def test_harness_fixture_matches_python() raises:
+    var parent = mkdtemp(prefix="coverage-harness-")
+    try:
+        var root = parent + "/repo"
+        var build = root + "/stage"
+        var script = parent + "/oracle.py"
+        Path(script).write_text(_harness_oracle())
+        var sealed = run_program(
+            ["python3", script, realpath("tools"), realpath("."), root, build],
+            30.0,
+            merge_errors=False,
+        )
+        if sealed.status != 0:
+            raise Error(sealed.errors + sealed.output)
+        var expected = _text(build + "/loop-proofs.json")
+        var expected_out = sealed.output
+        _ = run_program(["rm", "-f", build + "/loop-proofs.json"], 10)
+        var output = _seal_mojo(root, build)
+        _same(expected, _text(build + "/loop-proofs.json"))
+        assert_equal(output, expected_out)
+        var checked = run_program(
+            [
+                "sh",
+                "tools/tool.sh",
+                tool_mojo(),
+                "coverage_loop_seal",
+                "verify",
+                "--root",
+                root,
+                "--build",
+                build,
+                "--compiler",
+                "Mojo fixture",
+                "--flags",
+                "-I .",
+                "--mojo",
+                root + "/driver",
+            ],
+            30.0,
+            merge_errors=False,
+        )
+        if checked.status != 0:
+            raise Error(checked.errors + checked.output)
+    finally:
+        _cleanup(parent)
+
+
 def test_usage_exits_2() raises:
     var ran = run_program(
         ["sh", "tools/tool.sh", tool_mojo(), "coverage_loop_seal"],
