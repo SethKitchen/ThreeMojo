@@ -174,7 +174,170 @@ def _lines_0(
     befores.append("        scene.add_mesh(mesh^)\n")
 
 
-def _spans_1(mut befores: List[String], mut afters: List[String]):
+def _lines_1(
+    mut starts: List[Int], mut stops: List[Int], mut befores: List[String]
+):
+    """Fill one reviewed line-edit table, highest line first.
+
+    Args:
+        starts: The 0-based start lines.
+        stops: The exclusive end lines.
+        befores: The predecessor lines for each span.
+    """
+    starts.append(72)
+    stops.append(74)
+    befores.append(
+        "        + local * (_Jet.constant(polynomial.c) + local * _Jet.consta"
+        "nt(polynomial.d))\n"
+    )
+    starts.append(61)
+    stops.append(62)
+    befores.append("from extensions.carla.road_info import info_index\n")
+
+
+def _spans_2(mut befores: List[String], mut afters: List[String]):
+    """Fill one reviewed span-edit table, last edit first.
+
+    Args:
+        befores: The predecessor spans.
+        afters: The successor spans.
+    """
+    befores.append(
+        "def _polynomial_jet(\n    polynomial: CubicPolynomial, s: _Jet, shif"
+        "t: Float64 = 0.0\n) -> _Jet:\n    return (_Jet.constant(polynomial.a"
+        ") - _Jet.constant(shift)) + s * (\n        _Jet.constant(polynomial."
+        "b)\n        + s * (_Jet.constant(polynomial.c) + s * _Jet.constant(p"
+        "olynomial.d))\n    )\n\n\n"
+    )
+    afters.append(
+        "def _polynomial_jet(\n    polynomial: CubicPolynomial, s: _Jet, shif"
+        "t: Float64 = 0.0\n) -> _Jet:\n    var local = s - _Jet.constant(poly"
+        "nomial.s)\n    return (_Jet.constant(polynomial.a) - _Jet.constant(s"
+        "hift)) + local * (\n        _Jet.constant(polynomial.b)\n        + l"
+        "ocal * (_Jet.constant(polynomial.c) + local * _Jet.constant(polynomi"
+        "al.d))\n    )\n\n\n"
+    )
+
+
+def _spans_3(mut befores: List[String], mut afters: List[String]):
+    """Fill one reviewed span-edit table, last edit first.
+
+    Args:
+        befores: The predecessor spans.
+        afters: The successor spans.
+    """
+    befores.append("    if isfinite(coupled_error) and coupled_error >= 0.0:\n")
+    afters.append(
+        "    # The concrete producer returns a nonnegative allowance or infin"
+        "ity.\n    # Keep the finite fallback; a finite negative result is no"
+        "t produced.\n    if isfinite(coupled_error):\n"
+    )
+
+
+def _spans_4(mut befores: List[String], mut afters: List[String]):
+    """Fill one reviewed span-edit table, last edit first.
+
+    Args:
+        befores: The predecessor spans.
+        afters: The successor spans.
+    """
+    befores.append(
+        "def _try_lane_envelope_capture(\n    road: Road,\n    section: Int,"
+        "\n    lane: Int,\n    low: Float64,\n    high: Float64,\n    mut cap"
+        "tured: _SpiralRootCapture,\n    mut terms: Int,\n    max_terms: Int,"
+        "\n) raises -> Optional[Tuple[_Jet, _Jet, _Jet]]:\n    # Eligibility "
+        "does no GL traversal. Original quadrature work is already\n    # res"
+        "erved by the caller. The fixed optional charge covers both count\n  "
+        "  # envelopes, moment reconstruction, and the finite proof checks.\n"
+        "    if terms < 0 or terms > max_terms or 1024 > max_terms - terms:\n"
+        "        return None\n    var at = info_index(road.info.geometries, l"
+        "ow)\n    if at < 0 or info_index(road.info.geometries, high) != at:"
+        "\n        return None\n    ref geometry = road.info.geometries[at].g"
+        "eometry\n    if (\n        geometry.kind != SPIRAL\n        or geome"
+        "try.heading != 0.0\n        or geometry.curvature_start != 0.0\n    "
+        "):\n        return None\n    var d = _geometry_distance(\n        ge"
+        "ometry,\n        _stored_difference(\n            _Jet.variable(low,"
+        " high), _Jet.constant(road.info.geometries[at].s)\n        ),\n    )"
+        "\n    var counts = _spiral_counts(geometry, d)\n    if (\n        co"
+        "unts[0] < 1\n        or counts[1] > 64\n        or counts[1] < count"
+        "s[0]\n        or counts[1] - counts[0] > 1\n    ):\n        return N"
+        "one\n    var branches = 1 if counts[0] == counts[1] else 2\n    var "
+        "optional_work = 1024 * branches\n    if terms < 0 or terms > max_ter"
+        "ms or optional_work > max_terms - terms:\n        return None\n    #"
+        " Debit before attempting either error envelope, including failures."
+        "\n    terms += optional_work\n    var first = _try_spiral_roundoff_e"
+        "nvelope(geometry, d, counts[0])\n    if not first:\n        return N"
+        "one\n    var last = first\n    if counts[1] != counts[0]:\n        l"
+        "ast = _try_spiral_roundoff_envelope(geometry, d, counts[1])\n       "
+        " if not last:\n            return None\n    var proof = _SpiralDomai"
+        "nProof(\n        0,\n        at,\n        d.rounded_value(),\n      "
+        "  counts[0],\n        counts[1],\n        first.value()[0],\n       "
+        " first.value()[1],\n        last.value()[0],\n        last.value()[1"
+        "],\n    )\n    if not _spiral_proof_matches(\n        proof, geometr"
+        "y, at, low, high, low, high, d, counts\n    ):\n        return None"
+        "\n    # Use the one canonical lane graph. If a reordered moment bran"
+        "ch is\n    # nonfinite, that graph executes the original GL fallback"
+        " once under its\n    # existing reservation. Do not run another fall"
+        "back after this call.\n    var point = _lane_jet_with_proof(\n      "
+        "  road, section, lane, low, high, low, high, proof\n    )\n    captu"
+        "red.record_at = at\n    captured.low = low\n    captured.high = high"
+        "\n    captured.d = d\n    captured.first_count = counts[0]\n    capt"
+        "ured.last_count = counts[1]\n    captured.first_x_error = first.valu"
+        "e()[0]\n    captured.first_y_error = first.value()[1]\n    captured."
+        "last_x_error = last.value()[0]\n    captured.last_y_error = last.val"
+        "ue()[1]\n    return point\n\n\n"
+    )
+    afters.append(
+        "def _try_lane_envelope_capture(\n    road: Road,\n    section: Int,"
+        "\n    lane: Int,\n    low: Float64,\n    high: Float64,\n    mut cap"
+        "tured: _SpiralRootCapture,\n    mut terms: Int,\n    max_terms: Int,"
+        "\n) raises -> Optional[Tuple[_Jet, _Jet, _Jet]]:\n    # Eligibility "
+        "does no GL traversal. Original quadrature work is already\n    # res"
+        "erved by the caller. The fixed optional charge covers both count\n  "
+        "  # envelopes, moment reconstruction, and the finite proof checks.\n"
+        "    if terms < 0 or terms > max_terms or 1024 > max_terms - terms:\n"
+        "        return None\n    var at = info_index(road.info.geometries, l"
+        "ow)\n    if at < 0 or info_index(road.info.geometries, high) != at:"
+        "\n        return None\n    ref geometry = road.info.geometries[at].g"
+        "eometry\n    if (\n        geometry.kind != SPIRAL\n        or geome"
+        "try.heading != 0.0\n        or geometry.curvature_start != 0.0\n    "
+        "):\n        return None\n    var d = _geometry_distance(\n        ge"
+        "ometry,\n        _stored_difference(\n            _Jet.variable(low,"
+        " high), _Jet.constant(road.info.geometries[at].s)\n        ),\n    )"
+        "\n    var counts = _spiral_counts(geometry, d)\n    if (\n        co"
+        "unts[0] < 1\n        or counts[1] > 64\n        or counts[1] < count"
+        "s[0]\n        or counts[1] - counts[0] > 1\n    ):\n        return N"
+        "one\n    var branches = 1 if counts[0] == counts[1] else 2\n    var "
+        "optional_work = 1024 * branches\n    # The entry check established 0"
+        " <= terms <= max_terms. No intervening\n    # operation receives eit"
+        "her counter by mutable reference or changes it.\n    if optional_wor"
+        "k > max_terms - terms:\n        return None\n    # Debit before atte"
+        "mpting either error envelope, including failures.\n    terms += opti"
+        "onal_work\n    var first = _try_spiral_roundoff_envelope(geometry, d"
+        ", counts[0])\n    if not first:\n        return None\n    var last ="
+        " first\n    if counts[1] != counts[0]:\n        last = _try_spiral_r"
+        "oundoff_envelope(geometry, d, counts[1])\n        if not last:\n    "
+        "        return None\n    var proof = _SpiralDomainProof(\n        0,"
+        "\n        at,\n        d.rounded_value(),\n        counts[0],\n     "
+        "   counts[1],\n        first.value()[0],\n        first.value()[1],"
+        "\n        last.value()[0],\n        last.value()[1],\n    )\n    if "
+        "not _spiral_proof_matches(\n        proof, geometry, at, low, high, "
+        "low, high, d, counts\n    ):\n        return None\n    # Use the one"
+        " canonical lane graph. If a reordered moment branch is\n    # nonfin"
+        "ite, that graph executes the original GL fallback once under its\n  "
+        "  # existing reservation. Do not run another fallback after this cal"
+        "l.\n    var point = _lane_jet_with_proof(\n        road, section, la"
+        "ne, low, high, low, high, proof\n    )\n    captured.record_at = at"
+        "\n    captured.low = low\n    captured.high = high\n    captured.d ="
+        " d\n    captured.first_count = counts[0]\n    captured.last_count = "
+        "counts[1]\n    captured.first_x_error = first.value()[0]\n    captur"
+        "ed.first_y_error = first.value()[1]\n    captured.last_x_error = las"
+        "t.value()[0]\n    captured.last_y_error = last.value()[1]\n    retur"
+        "n point\n\n\n"
+    )
+
+
+def _spans_5(mut befores: List[String], mut afters: List[String]):
     """Fill one reviewed span-edit table, last edit first.
 
     Args:
@@ -200,7 +363,7 @@ def _spans_1(mut befores: List[String], mut afters: List[String]):
     )
 
 
-def _lines_2(
+def _lines_6(
     mut starts: List[Int], mut stops: List[Int], mut befores: List[String]
 ):
     """Fill one reviewed line-edit table, highest line first.
@@ -239,7 +402,568 @@ def _lines_2(
     )
 
 
-def _lines_3(
+def _lines_7(
+    mut starts: List[Int], mut stops: List[Int], mut befores: List[String]
+):
+    """Fill one reviewed line-edit table, highest line first.
+
+    Args:
+        starts: The 0-based start lines.
+        stops: The exclusive end lines.
+        befores: The predecessor lines for each span.
+    """
+    starts.append(847)
+    stops.append(848)
+    befores.append(
+        "                point, query, road.lane_width(section, lane, cell.lo"
+        "w)\n"
+    )
+    starts.append(817)
+    stops.append(820)
+    befores.append(
+        "        certificate.point, query, road.lane_width(section, lane, cer"
+        "tificate.s)\n"
+    )
+    starts.append(803)
+    stops.append(804)
+    befores.append(
+        "            road.lane_width(section, lane, certificate.s),\n"
+    )
+    starts.append(436)
+    stops.append(437)
+    befores.append(
+        "    var width = abs(road.lane_width(section, lane, best))\n"
+    )
+    starts.append(65)
+    stops.append(66)
+    befores.append("from extensions.carla.road_info import info_index\n")
+
+
+def _spans_8(mut befores: List[String], mut afters: List[String]):
+    """Fill one reviewed span-edit table, last edit first.
+
+    Args:
+        befores: The predecessor spans.
+        afters: The successor spans.
+    """
+    befores.append(
+        "            # A clamped singleton endpoint can have a different jet "
+        "from\n            # the interior branch. Taylor bounds need that sam"
+        "e branch.\n            var center_s = _expansion_center(lo, hi, best"
+        ")\n            var center_work = _reference_work(road, center_s, cen"
+        "ter_s)\n            if center_work >= 0:\n                if certifi"
+        "cate.terms > max_terms - center_work:\n                    raise Err"
+        'or(\n                        "Lane refinement exhausted its quadrat'
+        'ure work limit"\n                    )\n                certificate'
+        ".terms += center_work\n                var fast_center: Optional[_Je"
+        "t] = None\n                # The original full-domain second derivat"
+        "ive and scalar\n                # error also apply to this ideal mom"
+        "ent-backed expansion.\n                # Retain headroom for the unc"
+        "hanged translated fallback.\n                if (\n                 "
+        "   spiral_proof\n                    and domain.second.is_finite()\n"
+        "                    and center_work <= max_terms - certificate.terms"
+        "\n                ):\n                    var station_word = bitcast"
+        "[DType.uint64](center_s)\n                    var scale_word = bitca"
+        "st[DType.uint64](scale)\n                    if (\n                 "
+        "       external_witness\n                        and cached_fast\n  "
+        "                      and _same_cache_key(\n                        "
+        "    cached_fast.value()[0],\n                            cached_fast"
+        ".value()[1],\n                            station_word,\n           "
+        "                 scale_word,\n                        )\n           "
+        "         ):\n                        fast_center = cached_fast.value"
+        "()[2]\n                    else:\n                        fast_cente"
+        "r = _try_proof_expansion_jet(\n                            road,\n  "
+        "                          section,\n                            lane"
+        ",\n                            center_s,\n                          "
+        "  location,\n                            scale,\n                   "
+        "         low,\n                            high,\n                  "
+        "          spiral_proof,\n                        )\n                "
+        "        if external_witness and fast_center:\n                      "
+        "      cached_fast = (\n                                station_word,"
+        "\n                                scale_word,\n                     "
+        "           fast_center.value(),\n                            )\n    "
+        "                if fast_center:\n                        var fast_de"
+        "lta = _Interval(lo, hi) - _Interval.point(\n                        "
+        "    center_s\n                        )\n                        var"
+        " fast_lower = max(\n                            natural,\n          "
+        "                  _global_lower(\n                                do"
+        "main, fast_center.value(), fast_delta\n                            )"
+        ",\n                        )\n                        if fast_lower "
+        "> best_upper:\n                            continue\n               "
+        "         if (\n                            _goal_excludes(fast_lower"
+        ", scale, goal)\n                            or _next_up(best_upper -"
+        " fast_lower) <= tolerance\n                        ):\n             "
+        "               closed.add(\n                                _ClosedI"
+        "nterval(\n                                    lo, hi, task[2], fast_"
+        "lower, scale\n                                )\n                   "
+        "         )\n                            continue\n                  "
+        "      # A failed optional attempt is charged before the\n           "
+        "             # original traversal; neither work cap is enlarged.\n  "
+        "                      certificate.terms += center_work\n            "
+        "    # Only a failed cached proof needs the expensive local GL\n     "
+        "           # error traversal. It is still charged before execution."
+        "\n                if spiral_proof and domain.error > tolerance * 0.2"
+        "5:\n                    if certificate.terms > max_terms - work:\n  "
+        '                      raise Error(\n                            "La'
+        'ne refinement exhausted its quadrature work"\n                     '
+        '       " limit"\n                        )\n                    ce'
+        "rtificate.terms += work\n                    # Original F is prepaid"
+        "; the optional model owns its node\n                    # and whole-"
+        "union C. A decline retains all actual debits.\n                    v"
+        "ar grouped: Optional[Tuple[_Jet, _Jet, _Jet]] = None\n              "
+        "      # Keep the original closed-cell recheck available after\n     "
+        "               # this optional producer. The original F is already p"
+        "aid.\n                    if max_nodes - certificate.nodes >= 2:\n  "
+        "                      grouped = _try_grouped_lane_jet(\n            "
+        "                road,\n                            section,\n       "
+        "                     lane,\n                            lo,\n       "
+        "                     hi,\n                            certificate.no"
+        "des,\n                            certificate.terms,\n              "
+        "              max_nodes,\n                            max_terms,\n  "
+        "                      )\n                    if grouped:\n          "
+        "              point_domain = grouped.value()\n                    el"
+        "se:\n                        point_domain = _lane_jet(road, section,"
+        " lane, lo, hi)\n                    natural = max(\n                "
+        "        natural,\n                        _scaled_point_distance_box"
+        "(\n                            point_domain, location, scale\n      "
+        "                  ).low,\n                    )\n                   "
+        " if natural > best_upper:\n                        continue\n       "
+        "             if _goal_excludes(natural, scale, goal):\n             "
+        "           closed.add(\n                            _ClosedInterval("
+        "lo, hi, task[2], natural, scale)\n                        )\n       "
+        "                 continue\n                    domain = _scaled_poin"
+        "t_distance_jet(\n                        point_domain, location, sca"
+        "le\n                    )\n                    if fast_center:\n    "
+        "                    var tightened_delta = _Interval(\n              "
+        "              lo, hi\n                        ) - _Interval.point(ce"
+        "nter_s)\n                        var tightened_lower = max(\n       "
+        "                     natural,\n                            _global_l"
+        "ower(\n                                domain, fast_center.value(), "
+        "tightened_delta\n                            ),\n                   "
+        "     )\n                        if tightened_lower > best_upper:\n  "
+        "                          continue\n                        if (\n  "
+        "                          _goal_excludes(tightened_lower, scale, goa"
+        "l)\n                            or _next_up(best_upper - tightened_l"
+        "ower)\n                            <= tolerance\n                   "
+        "     ):\n                            closed.add(\n                  "
+        "              _ClosedInterval(\n                                    "
+        "lo, hi, task[2], tightened_lower, scale\n                           "
+        "     )\n                            )\n                            c"
+        "ontinue\n                # A nonfinite second derivative makes _glob"
+        "al_lower ignore\n                # its expansion argument. A finite "
+        "rounded domain value also\n                # establishes that this i"
+        "s an evaluated expression enclosure,\n                # rather than "
+        "an unvalidated whole/unknown record domain.\n                # Retai"
+        "n the original work reservation above. Only skip the\n              "
+        "  # unused traversal; no bound, tolerance, or cap changes.\n        "
+        "        var center = _Jet.constant(0.0)\n                if (\n     "
+        "               domain.second.is_finite()\n                    or not"
+        " domain.rounded_value().is_finite()\n                ):\n           "
+        "         var station_word = bitcast[DType.uint64](center_s)\n       "
+        "             var scale_word = bitcast[DType.uint64](scale)\n        "
+        "            if (\n                        external_witness\n        "
+        "                and cached_expansion\n                        and _s"
+        "ame_cache_key(\n                            cached_expansion.value()"
+        "[0],\n                            cached_expansion.value()[1],\n    "
+        "                        station_word,\n                            s"
+        "cale_word,\n                        )\n                    ):\n     "
+        "                   center = cached_expansion.value()[2]\n           "
+        "         else:\n                        if frozen:\n                "
+        "            center = _frozen_arc_expansion(\n                       "
+        "         frozen.value(), center_s, location, scale\n                "
+        "            )\n                        else:\n                      "
+        "      center = _expansion_distance_jet(\n                           "
+        "     road, section, lane, center_s, location, scale\n               "
+        "             )\n                        if external_witness:\n      "
+        "                      cached_expansion = (\n                        "
+        "        station_word,\n                                scale_word,\n"
+        "                                center,\n                           "
+        " )\n                var delta = _Interval(lo, hi) - _Interval.point("
+        "center_s)\n                var lower = max(natural, _global_lower(do"
+        "main, center, delta))\n                var support = _Interval(lo, h"
+        "i)\n                if external_witness:\n                    suppor"
+        "t = _minimizer_support(\n                        domain, center, cen"
+        "ter_s, best, lo, hi\n                    )\n                if lower"
+        " > best_upper:\n                    continue\n                if (\n"
+        "                    _goal_excludes(lower, scale, goal)\n            "
+        "        or _next_up(best_upper - lower) <= tolerance\n              "
+        "  ):\n                    closed.add(\n                        _Clos"
+        "edInterval(\n                            support.low, support.high, "
+        "task[2], lower, scale\n                        )\n                  "
+        "  )\n                    continue\n                if support.low > "
+        "lo or support.high < hi:\n                    if task[2] >= max_dept"
+        "h:\n                        raise Error(\n                          "
+        '  "Lane refinement exhausted its numerical accuracy"\n            '
+        '                " limit"\n                        )\n             '
+        "       pending.append((support.low, support.high, task[2] + 1))\n   "
+        "                 continue\n"
+    )
+    afters.append(
+        "            var proposal = _try_lane_center_bound(\n                "
+        "road,\n                expansion_context,\n                _Interval"
+        "(lo, hi),\n                best,\n                domain,\n         "
+        "       natural,\n                work,\n                _LaneBoundPo"
+        "licy(best_upper, scale, tolerance, goal),\n                certifica"
+        "te.nodes,\n                certificate.terms,\n                max_n"
+        "odes,\n                max_terms,\n            )\n            if pro"
+        "posal:\n                ref bound = proposal.value()\n              "
+        "  if bound.isa[_LaneBoundDiscard]():\n                    continue\n"
+        "                if bound.isa[_LaneBoundClose]():\n                  "
+        "  var close = bound[_LaneBoundClose]\n                    closed.add"
+        "(\n                        _ClosedInterval(\n                       "
+        "     close.support.low,\n                            close.support.h"
+        "igh,\n                            task[2],\n                        "
+        "    close.lower,\n                            scale,\n              "
+        "          )\n                    )\n                    continue\n  "
+        "              var support = bound[_LaneBoundContract].support\n     "
+        "           if task[2] >= max_depth:\n                    raise Error"
+        '(\n                        "Lane refinement exhausted its numerical'
+        ' accuracy limit"\n                    )\n                pending.ap'
+        "pend((support.low, support.high, task[2] + 1))\n                cont"
+        "inue\n"
+    )
+    befores.append("    while len(pending) > 0 or closed.needs_validation():\n")
+    afters.append(
+        "    var expansion_context = _LaneExpansionContext(\n        section,"
+        "\n        lane,\n        _Interval(low, high),\n        location,\n "
+        "       spiral_proof,\n        frozen,\n        external_witness.copy"
+        "(),\n        None,\n        None,\n    )\n    while len(pending) > 0"
+        " or closed.needs_validation():\n"
+    )
+    befores.append(
+        "    var cached_fast: Optional[Tuple[UInt64, UInt64, _Jet]] = None\n "
+        "   var cached_expansion: Optional[Tuple[UInt64, UInt64, _Jet]] = Non"
+        "e\n    var best = certificate.s\n"
+    )
+    afters.append("    var best = certificate.s\n")
+    befores.append("def _run_lane_search(")
+    afters.append(
+        "@fieldwise_init\nstruct _LaneExpansionContext(Copyable, Movable):\n "
+        "   # One search invocation only. The Road argument must remain uncha"
+        "nged.\n    # Exact station/scale words are meaningful only for this "
+        "owner and query.\n    var section: Int\n    var lane: Int\n    var r"
+        "oot: _Interval\n    var location: Vector3\n    var spiral_proof: Opt"
+        "ional[_SpiralDomainProof]\n    var frozen: Optional[_RoundedArc]\n  "
+        "  var external_witness: Optional[Array[Float64, 3]]\n    var cached_"
+        "fast: Optional[Tuple[UInt64, UInt64, _Jet]]\n    var cached_expansio"
+        "n: Optional[Tuple[UInt64, UInt64, _Jet]]\n\n\n@fieldwise_init\nstruc"
+        "t _LaneBoundPolicy(ImplicitlyCopyable):\n    # Already-computed stop"
+        "ping criteria for this cell and incumbent.\n    var upper: Float64\n"
+        "    var scale: Float64\n    var tolerance: Float64\n    var goal: Op"
+        "tional[_LaneExclusionGoal]\n\n\n@fieldwise_init\nstruct _LaneBoundDi"
+        "scard(ImplicitlyCopyable):\n    var lower: Float64\n    var support:"
+        " _Interval\n\n\n@fieldwise_init\nstruct _LaneBoundClose(ImplicitlyCo"
+        "pyable):\n    var lower: Float64\n    var support: _Interval\n\n\n@f"
+        "ieldwise_init\nstruct _LaneBoundContract(ImplicitlyCopyable):\n    v"
+        "ar lower: Float64\n    var support: _Interval\n\n\n# Named alternati"
+        "ves carry the exact bound/support from their decision site.\n# No nu"
+        "meric tag protocol or re-evaluation of acceptance in the caller.\nco"
+        "mptime _LaneBoundProposal = Variant[\n    _LaneBoundDiscard, _LaneBo"
+        "undClose, _LaneBoundContract\n]\n\n\ndef _try_lane_center_bound(\n  "
+        "  road: Road,\n    mut context: _LaneExpansionContext,\n    cell: _I"
+        "nterval,\n    best: Float64,\n    var domain: _Jet,\n    var natural"
+        ": Float64,\n    whole_work: Int,\n    policy: _LaneBoundPolicy,\n   "
+        " mut nodes: Int,\n    mut terms: Int,\n    max_nodes: Int,\n    max_"
+        "terms: Int,\n) raises -> Optional[_LaneBoundProposal]:\n    # The ca"
+        "ller supplies a real incumbent and the already-paid whole-cell\n    "
+        "# enclosure. An unknown enclosure is valid. This optional phase owns"
+        " no\n    # traversal state. None retains all work/cache effects of a"
+        "n inconclusive\n    # admitted attempt; count refusal returns before"
+        " either kind of effect.\n    # A clamped singleton endpoint can have"
+        " a different jet from\n    # the interior branch. Taylor bounds need"
+        " that same branch.\n    var center_s = _expansion_center(cell.low, c"
+        "ell.high, best)\n    var center_work = _reference_work(road, center_"
+        "s, center_s)\n    if center_work >= 0:\n        if terms > max_terms"
+        ' - center_work:\n            raise Error("Lane refinement exhausted'
+        ' its quadrature work limit")\n        terms += center_work\n       '
+        " var fast_center: Optional[_Jet] = None\n        # The original full"
+        "-domain second derivative and scalar\n        # error also apply to "
+        "this ideal moment-backed expansion.\n        # Retain headroom for t"
+        "he unchanged translated fallback.\n        if (\n            context"
+        ".spiral_proof\n            and domain.second.is_finite()\n          "
+        "  and center_work <= max_terms - terms\n        ):\n            var "
+        "station_word = bitcast[DType.uint64](center_s)\n            var scal"
+        "e_word = bitcast[DType.uint64](policy.scale)\n            if (\n    "
+        "            context.external_witness\n                and context.ca"
+        "ched_fast\n                and _same_cache_key(\n                   "
+        " context.cached_fast.value()[0],\n                    context.cached"
+        "_fast.value()[1],\n                    station_word,\n              "
+        "      scale_word,\n                )\n            ):\n              "
+        "  fast_center = context.cached_fast.value()[2]\n            else:\n "
+        "               fast_center = _try_proof_expansion_jet(\n            "
+        "        road,\n                    context.section,\n               "
+        "     context.lane,\n                    center_s,\n                 "
+        "   context.location,\n                    policy.scale,\n           "
+        "         context.root.low,\n                    context.root.high,\n"
+        "                    context.spiral_proof,\n                )\n      "
+        "          if context.external_witness and fast_center:\n            "
+        "        context.cached_fast = (\n                        station_wor"
+        "d,\n                        scale_word,\n                        fas"
+        "t_center.value(),\n                    )\n            if fast_center"
+        ":\n                var fast_delta = _Interval(\n                    "
+        "cell.low, cell.high\n                ) - _Interval.point(center_s)\n"
+        "                var fast_lower = max(\n                    natural,"
+        "\n                    _global_lower(domain, fast_center.value(), fas"
+        "t_delta),\n                )\n                if fast_lower > policy"
+        ".upper:\n                    return _LaneBoundProposal(\n           "
+        "             _LaneBoundDiscard(fast_lower, cell)\n                  "
+        "  )\n                if (\n                    _goal_excludes(fast_l"
+        "ower, policy.scale, policy.goal)\n                    or _next_up(po"
+        "licy.upper - fast_lower) <= policy.tolerance\n                ):\n  "
+        "                  return _LaneBoundProposal(_LaneBoundClose(fast_low"
+        "er, cell))\n                # A failed optional attempt is charged b"
+        "efore the\n                # original traversal; neither work cap is"
+        " enlarged.\n                terms += center_work\n        # Only a f"
+        "ailed cached proof needs the expensive local GL\n        # error tra"
+        "versal. It is still charged before execution.\n        if context.sp"
+        "iral_proof and domain.error > policy.tolerance * 0.25:\n            "
+        "if terms > max_terms - whole_work:\n                raise Error(\n  "
+        '                  "Lane refinement exhausted its quadrature work li'
+        'mit"\n                )\n            terms += whole_work\n         '
+        "   # Original F is prepaid; the optional model owns its node\n      "
+        "      # and whole-union C. A decline retains all actual debits.\n   "
+        "         var grouped: Optional[Tuple[_Jet, _Jet, _Jet]] = None\n    "
+        "        # Keep the original closed-cell recheck available after\n   "
+        "         # this optional producer. The original F is already paid.\n"
+        "            if max_nodes - nodes >= 2:\n                grouped = _t"
+        "ry_grouped_lane_jet(\n                    road,\n                   "
+        " context.section,\n                    context.lane,\n              "
+        "      cell.low,\n                    cell.high,\n                   "
+        " nodes,\n                    terms,\n                    max_nodes,"
+        "\n                    max_terms,\n                )\n            var"
+        " point_domain: Tuple[_Jet, _Jet, _Jet]\n            if grouped:\n   "
+        "             point_domain = grouped.value()\n            else:\n    "
+        "            point_domain = _lane_jet(\n                    road, con"
+        "text.section, context.lane, cell.low, cell.high\n                )\n"
+        "            natural = max(\n                natural,\n              "
+        "  _scaled_point_distance_box(\n                    point_domain, con"
+        "text.location, policy.scale\n                ).low,\n            )\n"
+        "            if natural > policy.upper:\n                return _Lane"
+        "BoundProposal(_LaneBoundDiscard(natural, cell))\n            if _goa"
+        "l_excludes(natural, policy.scale, policy.goal):\n                ret"
+        "urn _LaneBoundProposal(_LaneBoundClose(natural, cell))\n            "
+        "domain = _scaled_point_distance_jet(\n                point_domain, "
+        "context.location, policy.scale\n            )\n            if fast_c"
+        "enter:\n                var tightened_delta = _Interval(\n          "
+        "          cell.low, cell.high\n                ) - _Interval.point(c"
+        "enter_s)\n                var tightened_lower = max(\n              "
+        "      natural,\n                    _global_lower(domain, fast_cente"
+        "r.value(), tightened_delta),\n                )\n                if "
+        "tightened_lower > policy.upper:\n                    return _LaneBou"
+        "ndProposal(\n                        _LaneBoundDiscard(tightened_low"
+        "er, cell)\n                    )\n                if (\n            "
+        "        _goal_excludes(tightened_lower, policy.scale, policy.goal)\n"
+        "                    or _next_up(policy.upper - tightened_lower)\n   "
+        "                 <= policy.tolerance\n                ):\n          "
+        "          return _LaneBoundProposal(\n                        _LaneB"
+        "oundClose(tightened_lower, cell)\n                    )\n        # A"
+        " nonfinite second derivative makes _global_lower ignore\n        # i"
+        "ts expansion argument. A finite rounded domain value also\n        #"
+        " establishes that this is an evaluated expression enclosure,\n      "
+        "  # rather than an unvalidated whole/unknown record domain.\n       "
+        " # Retain the original work reservation above. Only skip the\n      "
+        "  # unused traversal; no bound, tolerance, or cap changes.\n        "
+        "var center = _Jet.constant(0.0)\n        if domain.second.is_finite("
+        ") or not domain.rounded_value().is_finite():\n            var statio"
+        "n_word = bitcast[DType.uint64](center_s)\n            var scale_word"
+        " = bitcast[DType.uint64](policy.scale)\n            if (\n          "
+        "      context.external_witness\n                and context.cached_e"
+        "xpansion\n                and _same_cache_key(\n                    "
+        "context.cached_expansion.value()[0],\n                    context.ca"
+        "ched_expansion.value()[1],\n                    station_word,\n     "
+        "               scale_word,\n                )\n            ):\n     "
+        "           center = context.cached_expansion.value()[2]\n           "
+        " else:\n                if context.frozen:\n                    cent"
+        "er = _frozen_arc_expansion(\n                        context.frozen."
+        "value(),\n                        center_s,\n                       "
+        " context.location,\n                        policy.scale,\n         "
+        "           )\n                else:\n                    center = _e"
+        "xpansion_distance_jet(\n                        road,\n             "
+        "           context.section,\n                        context.lane,\n"
+        "                        center_s,\n                        context.l"
+        "ocation,\n                        policy.scale,\n                   "
+        " )\n                if context.external_witness:\n                  "
+        "  context.cached_expansion = (\n                        station_word"
+        ",\n                        scale_word,\n                        cent"
+        "er,\n                    )\n        var delta = _Interval(cell.low, "
+        "cell.high) - _Interval.point(center_s)\n        var lower = max(natu"
+        "ral, _global_lower(domain, center, delta))\n        var support = _I"
+        "nterval(cell.low, cell.high)\n        if context.external_witness:\n"
+        "            support = _minimizer_support(\n                domain, c"
+        "enter, center_s, best, cell.low, cell.high\n            )\n        i"
+        "f lower > policy.upper:\n            return _LaneBoundProposal(_Lane"
+        "BoundDiscard(lower, support))\n        if (\n            _goal_exclu"
+        "des(lower, policy.scale, policy.goal)\n            or _next_up(polic"
+        "y.upper - lower) <= policy.tolerance\n        ):\n            return"
+        " _LaneBoundProposal(_LaneBoundClose(lower, support))\n        if sup"
+        "port.low > cell.low or support.high < cell.high:\n            return"
+        " _LaneBoundProposal(_LaneBoundContract(lower, support))\n    return "
+        "None\n\n\ndef _run_lane_search("
+    )
+    befores.append("from std.memory import bitcast\n")
+    afters.append(
+        "from std.memory import bitcast\nfrom std.utils import Variant\n"
+    )
+    befores.append(
+        "    var derivative = _length_up(\n        point[0].second.magnitude("
+        "),\n        point[1].second.magnitude(),\n        point[2].second.ma"
+        "gnitude(),\n    )\n    if not isfinite(derivative):\n        return "
+        "(natural, box, spent)\n    var first_work = _reference_work(road, lo"
+        "w, low)\n    var last_work = _reference_work(road, high, high)\n    "
+        "if first_work < 0 or last_work < 0:\n        return (natural, box, s"
+        "pent)\n"
+    )
+    afters.append(
+        "    # Endpoint admission and a finite second derivative are independ"
+        "ent\n    # requirements for the optional smooth certificate. Check t"
+        "he counts\n    # first, including when the original coarse box is al"
+        "ready unbounded.\n    # Either refusal retains the same natural boun"
+        "d and spent-work ledger.\n    var first_work = _reference_work(road,"
+        " low, low)\n    var last_work = _reference_work(road, high, high)\n "
+        "   if first_work < 0 or last_work < 0:\n        return (natural, box"
+        ", spent)\n    var derivative = _length_up(\n        point[0].second."
+        "magnitude(),\n        point[1].second.magnitude(),\n        point[2]"
+        ".second.magnitude(),\n    )\n    if not isfinite(derivative):\n     "
+        "   return (natural, box, spent)\n"
+    )
+    befores.append(
+        "                if natural > best_upper:\n                    contin"
+        "ue\n                if _goal_excludes(natural, scale, goal):\n"
+    )
+    afters.append(
+        "                # An unchanged seed repeats the admitted bound exact"
+        "ly.\n                # An improved seed is an actual in-cell witness"
+        ", so its\n                # upper distance cannot fall below this na"
+        "tural enclosure.\n                if _goal_excludes(natural, scale, "
+        "goal):\n"
+    )
+    befores.append(
+        "            if (\n                domain.second.low > 0.0\n         "
+        "       and domain.first.contains(0.0)\n                and isfinite("
+        "hi - lo)\n            ):\n"
+    )
+    afters.append(
+        "            # Admit finite interpolation width before the derivative"
+        " tests.\n            # All three predicates are retained. The earlie"
+        "r midpoint already\n            # evaluated this same subtraction, i"
+        "ncluding an overflowing span.\n            if (\n                isf"
+        "inite(hi - lo)\n                and domain.second.low > 0.0\n       "
+        "         and domain.first.contains(0.0)\n            ):\n"
+    )
+    befores.append(
+        "    if isfinite(seed):\n        seed = min(max(seed, lo), hi)\n     "
+        "   var point = _checked_center(road, section, lane, seed, terms, max"
+        "_terms)\n        if point[axis] == query[axis]:\n            return "
+        "(seed, _legacy_square(point, query), point^, nodes, terms)\n        "
+        "if direction * point[axis] < target:\n            lo = seed\n       "
+        "     left = point^\n        else:\n            hi = seed\n          "
+        "  right = point^\n"
+    )
+    afters.append(
+        "    # The accepted rounded context bounds coordinates and nonzero sl"
+        "ope\n    # to 2^-400..2^400. This inverse cannot overflow Float64.\n"
+        "    seed = min(max(seed, lo), hi)\n    var seed_point = _checked_cen"
+        "ter(\n        road, section, lane, seed, terms, max_terms\n    )\n  "
+        "  if seed_point[axis] == query[axis]:\n        return (\n           "
+        " seed,\n            _legacy_square(seed_point, query),\n            "
+        "seed_point^,\n            nodes,\n            terms,\n        )\n   "
+        " if direction * seed_point[axis] < target:\n        lo = seed\n     "
+        "   left = seed_point^\n    else:\n        hi = seed\n        right ="
+        " seed_point^\n"
+    )
+
+
+def _spans_9(mut befores: List[String], mut afters: List[String]):
+    """Fill one reviewed span-edit table, last edit first.
+
+    Args:
+        befores: The predecessor spans.
+        afters: The successor spans.
+    """
+    befores.append("")
+    afters.append(
+        "def _same_cache_key(\n    station: UInt64, scale: UInt64, other_stat"
+        "ion: UInt64, other_scale: UInt64\n) -> Bool:\n    # A cached expansi"
+        "on is keyed by its exact station and scale words. The\n    # pair is"
+        " one key; compare it as one vector.\n    return SIMD[DType.uint64, 2"
+        "](station, scale) == SIMD[DType.uint64, 2](\n        other_station, "
+        "other_scale\n    )\n\n\n"
+    )
+    befores.append(
+        "                        and cached_fast.value()[0] == station_word\n"
+        "                        and cached_fast.value()[1] == scale_word\n"
+    )
+    afters.append(
+        "                        and _same_cache_key(\n                      "
+        "      cached_fast.value()[0],\n                            cached_fa"
+        "st.value()[1],\n                            station_word,\n         "
+        "                   scale_word,\n                        )\n"
+    )
+    befores.append(
+        "                        and cached_expansion.value()[0] == station_w"
+        "ord\n                        and cached_expansion.value()[1] == scal"
+        "e_word\n"
+    )
+    afters.append(
+        "                        and _same_cache_key(\n                      "
+        "      cached_expansion.value()[0],\n                            cach"
+        "ed_expansion.value()[1],\n                            station_word,"
+        "\n                            scale_word,\n                        )"
+        "\n"
+    )
+
+
+def _lines_10(
+    mut starts: List[Int], mut stops: List[Int], mut befores: List[String]
+):
+    """Fill one reviewed line-edit table, highest line first.
+
+    Args:
+        starts: The 0-based start lines.
+        stops: The exclusive end lines.
+        befores: The predecessor lines for each span.
+    """
+    starts.append(1436)
+    stops.append(1439)
+    befores.append("        if lo > 0.0 and isfinite(hi) and hi >= lo:\n")
+
+
+def _lines_11(
+    mut starts: List[Int], mut stops: List[Int], mut befores: List[String]
+):
+    """Fill one reviewed line-edit table, highest line first.
+
+    Args:
+        starts: The 0-based start lines.
+        stops: The exclusive end lines.
+        befores: The predecessor lines for each span.
+    """
+    starts.append(1945)
+    stops.append(1954)
+    befores.append(
+        "                if before >= lo:\n                    if external_wi"
+        "tness and best >= split_at:\n                        pending.append("
+        "(lo, before, task[2] + 1))\n                        pending.append(("
+        "split_at, hi, task[2] + 1))\n                    else:\n            "
+        "            pending.append((split_at, hi, task[2] + 1))\n           "
+        "             pending.append((lo, before, task[2] + 1))\n            "
+        "        continue\n"
+    )
+    starts.append(1931)
+    stops.append(1932)
+    befores.append("        if sampled_cuts and task[2] < max_depth:\n")
+    starts.append(1919)
+    stops.append(1921)
+    befores.append("        if not sampled_checked and task[2] < max_depth:\n")
+    starts.append(383)
+    stops.append(386)
+    befores.append("        if interior > low and interior < high:\n")
+    starts.append(376)
+    stops.append(379)
+    befores.append("        if interior > low and interior < high:\n")
+
+
+def _lines_12(
     mut starts: List[Int], mut stops: List[Int], mut befores: List[String]
 ):
     """Fill one reviewed line-edit table, highest line first.
@@ -254,7 +978,7 @@ def _lines_3(
     befores.append("from extensions.carla.road_info import info_index\n")
 
 
-def _spans_4(mut befores: List[String], mut afters: List[String]):
+def _spans_13(mut befores: List[String], mut afters: List[String]):
     """Fill one reviewed span-edit table, last edit first.
 
     Args:
@@ -280,7 +1004,7 @@ def _spans_4(mut befores: List[String], mut afters: List[String]):
     )
 
 
-def _spans_5(mut befores: List[String], mut afters: List[String]):
+def _spans_14(mut befores: List[String], mut afters: List[String]):
     """Fill one reviewed span-edit table, last edit first.
 
     Args:
@@ -295,7 +1019,7 @@ def _spans_5(mut befores: List[String], mut afters: List[String]):
     )
 
 
-def _lines_6(
+def _lines_15(
     mut starts: List[Int], mut stops: List[Int], mut befores: List[String]
 ):
     """Fill one reviewed line-edit table, highest line first.
@@ -310,7 +1034,7 @@ def _lines_6(
     befores.append("            scene.add_mesh(mesh^)\n")
 
 
-def _lines_7(
+def _lines_16(
     mut starts: List[Int], mut stops: List[Int], mut befores: List[String]
 ):
     """Fill one reviewed line-edit table, highest line first.
@@ -376,7 +1100,7 @@ def _lines_7(
     befores.append("")
 
 
-def _spans_8(mut befores: List[String], mut afters: List[String]):
+def _spans_17(mut befores: List[String], mut afters: List[String]):
     """Fill one reviewed span-edit table, last edit first.
 
     Args:
@@ -458,7 +1182,7 @@ def _spans_8(mut befores: List[String], mut afters: List[String]):
     )
 
 
-def _spans_9(mut befores: List[String], mut afters: List[String]):
+def _spans_18(mut befores: List[String], mut afters: List[String]):
     """Fill one reviewed span-edit table, last edit first.
 
     Args:
@@ -525,7 +1249,7 @@ def _spans_9(mut befores: List[String], mut afters: List[String]):
     )
 
 
-def _spans_10(mut befores: List[String], mut afters: List[String]):
+def _spans_19(mut befores: List[String], mut afters: List[String]):
     """Fill one reviewed span-edit table, last edit first.
 
     Args:
@@ -561,7 +1285,7 @@ def _spans_10(mut befores: List[String], mut afters: List[String]):
     )
 
 
-def _lines_11(
+def _lines_20(
     mut starts: List[Int], mut stops: List[Int], mut befores: List[String]
 ):
     """Fill one reviewed line-edit table, highest line first.
@@ -815,7 +1539,7 @@ def _lines_11(
     )
 
 
-def _spans_12(mut befores: List[String], mut afters: List[String]):
+def _spans_21(mut befores: List[String], mut afters: List[String]):
     """Fill one reviewed span-edit table, last edit first.
 
     Args:
@@ -868,7 +1592,7 @@ def _spans_12(mut befores: List[String], mut afters: List[String]):
     )
 
 
-def _lines_13(
+def _lines_22(
     mut starts: List[Int], mut stops: List[Int], mut befores: List[String]
 ):
     """Fill one reviewed line-edit table, highest line first.
@@ -886,7 +1610,7 @@ def _lines_13(
     befores.append("")
 
 
-def _lines_14(
+def _lines_23(
     mut starts: List[Int], mut stops: List[Int], mut befores: List[String]
 ):
     """Fill one reviewed line-edit table, highest line first.
@@ -905,7 +1629,7 @@ def _lines_14(
     )
 
 
-def _lines_15(
+def _lines_24(
     mut starts: List[Int], mut stops: List[Int], mut befores: List[String]
 ):
     """Fill one reviewed line-edit table, highest line first.
@@ -926,7 +1650,7 @@ def _lines_15(
     befores.append("")
 
 
-def _spans_16(mut befores: List[String], mut afters: List[String]):
+def _spans_25(mut befores: List[String], mut afters: List[String]):
     """Fill one reviewed span-edit table, last edit first.
 
     Args:
@@ -1046,7 +1770,7 @@ def _spans_16(mut befores: List[String], mut afters: List[String]):
     )
 
 
-def _spans_17(mut befores: List[String], mut afters: List[String]):
+def _spans_26(mut befores: List[String], mut afters: List[String]):
     """Fill one reviewed span-edit table, last edit first.
 
     Args:
@@ -1158,7 +1882,7 @@ def _spans_17(mut befores: List[String], mut afters: List[String]):
     )
 
 
-def _spans_18(mut befores: List[String], mut afters: List[String]):
+def _spans_27(mut befores: List[String], mut afters: List[String]):
     """Fill one reviewed span-edit table, last edit first.
 
     Args:
@@ -1384,296 +2108,409 @@ def restored_winner_pins(
     paths.append("extensions/carla/assets.mojo")
     texts.append(text_0_0)
 
-    var live_1 = Path("extensions/carla/curve_distance.mojo").read_text()
+    var live_1 = Path("extensions/carla/curve_bounds.mojo").read_text()
     _require(
         live_1,
+        "17cfb28e3a1f49857173331942e4545030328a0d37eaf41c23b5108fb1422214",
+        "extensions/carla/curve_bounds.mojo",
+    )
+    starts.clear()
+    stops.clear()
+    befores.clear()
+    _lines_1(starts, stops, befores)
+    var text_1_0 = _apply(live_1, starts, stops, befores)
+    _require(
+        text_1_0,
+        "48dc6f87cd9ad4da1b16c5781fd7b7994f8394198a0d8c7ab6cdc5e0f142f19b",
+        "extensions/carla/curve_bounds.mojo",
+    )
+    befores.clear()
+    afters.clear()
+    _spans_2(befores, afters)
+    var text_1_1 = _replace_spans(
+        text_1_0, befores, afters, "extensions/carla/curve_bounds.mojo"
+    )
+    _require(
+        text_1_1,
+        "a5f662df6bc146010b065341143c75223151289dc0cc633590d96b0a199ab8f5",
+        "extensions/carla/curve_bounds.mojo",
+    )
+    befores.clear()
+    afters.clear()
+    _spans_3(befores, afters)
+    var text_1_2 = _replace_spans(
+        text_1_1, befores, afters, "extensions/carla/curve_bounds.mojo"
+    )
+    _require(
+        text_1_2,
+        "a57a5fa078fc6f36389a0abdce1eaa483a1cb7b7325688689a5602e8680ca3fb",
+        "extensions/carla/curve_bounds.mojo",
+    )
+    befores.clear()
+    afters.clear()
+    _spans_4(befores, afters)
+    var text_1_3 = _replace_spans(
+        text_1_2, befores, afters, "extensions/carla/curve_bounds.mojo"
+    )
+    _require(
+        text_1_3,
+        "86ed709bdf9f75b0805754ed15f42fa80e13ee399eab56d91a14181679918e6d",
+        "extensions/carla/curve_bounds.mojo",
+    )
+    paths.append("extensions/carla/curve_bounds.mojo")
+    texts.append(text_1_3)
+
+    var live_2 = Path("extensions/carla/curve_distance.mojo").read_text()
+    _require(
+        live_2,
         "e349b4b9f7bdb417d84a9451d769c59f7ce1285a6ac99d887722dbc0ff1466e3",
         "extensions/carla/curve_distance.mojo",
     )
     befores.clear()
     afters.clear()
-    _spans_1(befores, afters)
-    var text_1_0 = _replace_spans(
-        live_1, befores, afters, "extensions/carla/curve_distance.mojo"
+    _spans_5(befores, afters)
+    var text_2_0 = _replace_spans(
+        live_2, befores, afters, "extensions/carla/curve_distance.mojo"
     )
     _require(
-        text_1_0,
+        text_2_0,
         "46176387129dd37a5887f3aeec7c96bbb386e4980063cb96f09619832cb09a79",
         "extensions/carla/curve_distance.mojo",
     )
     paths.append("extensions/carla/curve_distance.mojo")
-    texts.append(text_1_0)
+    texts.append(text_2_0)
 
-    var live_2 = Path(
+    var live_3 = Path(
         "extensions/carla/curve_minimizer_support.mojo"
     ).read_text()
     _require(
-        live_2,
+        live_3,
         "bdf79d12f2b3b784574fbd95e2e773ddeb29eb9586cf826c2b6142646341292e",
         "extensions/carla/curve_minimizer_support.mojo",
     )
     starts.clear()
     stops.clear()
     befores.clear()
-    _lines_2(starts, stops, befores)
-    var text_2_0 = _apply(live_2, starts, stops, befores)
+    _lines_6(starts, stops, befores)
+    var text_3_0 = _apply(live_3, starts, stops, befores)
     _require(
-        text_2_0,
+        text_3_0,
         "8ba1e7f7964af7bcfa8cad21e857fcb67ee92918c58d44ed36767b843095a260",
         "extensions/carla/curve_minimizer_support.mojo",
     )
     paths.append("extensions/carla/curve_minimizer_support.mojo")
-    texts.append(text_2_0)
+    texts.append(text_3_0)
 
-    var live_3 = Path("extensions/carla/lane_value_bounds.mojo").read_text()
+    var live_4 = Path("extensions/carla/lane_refinement.mojo").read_text()
     _require(
-        live_3,
+        live_4,
+        "deaa26a8d0838a812be85629a1b6066485840166688ed9c38dbbaafc72fc6731",
+        "extensions/carla/lane_refinement.mojo",
+    )
+    starts.clear()
+    stops.clear()
+    befores.clear()
+    _lines_7(starts, stops, befores)
+    var text_4_0 = _apply(live_4, starts, stops, befores)
+    _require(
+        text_4_0,
+        "13ae6d4658458a7d243597428eee762f9bbc40f8fe3507a47beac9ebd4ac1737",
+        "extensions/carla/lane_refinement.mojo",
+    )
+    befores.clear()
+    afters.clear()
+    _spans_8(befores, afters)
+    var text_4_1 = _replace_spans(
+        text_4_0, befores, afters, "extensions/carla/lane_refinement.mojo"
+    )
+    _require(
+        text_4_1,
+        "d6bb8cb266fa350491f71e92295e70bcbfc2566b34db02400b3a6cb5bb5a93ad",
+        "extensions/carla/lane_refinement.mojo",
+    )
+    befores.clear()
+    afters.clear()
+    _spans_9(befores, afters)
+    var text_4_2 = _replace_spans(
+        text_4_1, befores, afters, "extensions/carla/lane_refinement.mojo"
+    )
+    _require(
+        text_4_2,
+        "13afed281e9df7549d3acb022680e2e20a57ea54411817eed6f45bf9042e5938",
+        "extensions/carla/lane_refinement.mojo",
+    )
+    starts.clear()
+    stops.clear()
+    befores.clear()
+    _lines_10(starts, stops, befores)
+    var text_4_3 = _apply(text_4_2, starts, stops, befores)
+    _require(
+        text_4_3,
+        "b607c75982a15122dd8f3de743e48ec66e71f027cb5dd034b459dc46602c5c3e",
+        "extensions/carla/lane_refinement.mojo",
+    )
+    starts.clear()
+    stops.clear()
+    befores.clear()
+    _lines_11(starts, stops, befores)
+    var text_4_4 = _apply(text_4_3, starts, stops, befores)
+    _require(
+        text_4_4,
+        "33d33ba0e481e3eca3b17ae0d02457ab53bae906430b0dca58abcfa876756315",
+        "extensions/carla/lane_refinement.mojo",
+    )
+    paths.append("extensions/carla/lane_refinement.mojo")
+    texts.append(text_4_4)
+
+    var live_5 = Path("extensions/carla/lane_value_bounds.mojo").read_text()
+    _require(
+        live_5,
         "de7a981e6bc56a3e22a75cbc4638882d1e51550322bd87e1f9aa93fa56d32f21",
         "extensions/carla/lane_value_bounds.mojo",
     )
     starts.clear()
     stops.clear()
     befores.clear()
-    _lines_3(starts, stops, befores)
-    var text_3_0 = _apply(live_3, starts, stops, befores)
+    _lines_12(starts, stops, befores)
+    var text_5_0 = _apply(live_5, starts, stops, befores)
     _require(
-        text_3_0,
+        text_5_0,
         "548ca38dd3bb9ecd8fe8a69cce91f2312c9a2493e4fe7925b609a3d64cb44082",
         "extensions/carla/lane_value_bounds.mojo",
     )
     befores.clear()
     afters.clear()
-    _spans_4(befores, afters)
-    var text_3_1 = _replace_spans(
-        text_3_0, befores, afters, "extensions/carla/lane_value_bounds.mojo"
+    _spans_13(befores, afters)
+    var text_5_1 = _replace_spans(
+        text_5_0, befores, afters, "extensions/carla/lane_value_bounds.mojo"
     )
     _require(
-        text_3_1,
+        text_5_1,
         "9028d65fdcb680ec5363f7fc974d8d46532b0f50397d7a348fc16e33821f4121",
         "extensions/carla/lane_value_bounds.mojo",
     )
     befores.clear()
     afters.clear()
-    _spans_5(befores, afters)
-    var text_3_2 = _replace_spans(
-        text_3_1, befores, afters, "extensions/carla/lane_value_bounds.mojo"
+    _spans_14(befores, afters)
+    var text_5_2 = _replace_spans(
+        text_5_1, befores, afters, "extensions/carla/lane_value_bounds.mojo"
     )
     _require(
-        text_3_2,
+        text_5_2,
         "08978a7aa665aca4b82d41e1ff8b99451c647c0f8e7d6ee010fc6a6143f7959c",
         "extensions/carla/lane_value_bounds.mojo",
     )
     paths.append("extensions/carla/lane_value_bounds.mojo")
-    texts.append(text_3_2)
+    texts.append(text_5_2)
 
-    var live_4 = Path("extensions/carla/model_cache.mojo").read_text()
+    var live_6 = Path("extensions/carla/model_cache.mojo").read_text()
     _require(
-        live_4,
+        live_6,
         "6c95fe4a1e5218f26dac0c9889e2246d53ec620cebb1230166a184bbe8af93a9",
         "extensions/carla/model_cache.mojo",
     )
     starts.clear()
     stops.clear()
     befores.clear()
-    _lines_6(starts, stops, befores)
-    var text_4_0 = _apply(live_4, starts, stops, befores)
+    _lines_15(starts, stops, befores)
+    var text_6_0 = _apply(live_6, starts, stops, befores)
     _require(
-        text_4_0,
+        text_6_0,
         "a5832785f758cd6fe99f32cfa04b90399ebfcd4c9ffdf1e286f79c613cb1cd91",
         "extensions/carla/model_cache.mojo",
     )
     paths.append("extensions/carla/model_cache.mojo")
-    texts.append(text_4_0)
+    texts.append(text_6_0)
 
-    var live_5 = Path("extensions/carla/polynomial.mojo").read_text()
+    var live_7 = Path("extensions/carla/polynomial.mojo").read_text()
     _require(
-        live_5,
+        live_7,
         "f04c9195616d9aebe3371d0e10daf44856231931af020770916b52221e121d79",
         "extensions/carla/polynomial.mojo",
     )
     starts.clear()
     stops.clear()
     befores.clear()
-    _lines_7(starts, stops, befores)
-    var text_5_0 = _apply(live_5, starts, stops, befores)
+    _lines_16(starts, stops, befores)
+    var text_7_0 = _apply(live_7, starts, stops, befores)
     _require(
-        text_5_0,
+        text_7_0,
         "7eadcab8f9148a50644fa9bc9d12affcda8e3361f03151cb4595c6eba257ad07",
         "extensions/carla/polynomial.mojo",
     )
     befores.clear()
     afters.clear()
-    _spans_8(befores, afters)
-    var text_5_1 = _replace_spans(
-        text_5_0, befores, afters, "extensions/carla/polynomial.mojo"
+    _spans_17(befores, afters)
+    var text_7_1 = _replace_spans(
+        text_7_0, befores, afters, "extensions/carla/polynomial.mojo"
     )
     _require(
-        text_5_1,
+        text_7_1,
         "ccbb296800e9b493b0617506b05e51d7ed6ee8ea594b9460bb6c7ff359a0d354",
         "extensions/carla/polynomial.mojo",
     )
     paths.append("extensions/carla/polynomial.mojo")
-    texts.append(text_5_1)
+    texts.append(text_7_1)
 
-    var live_6 = Path("extensions/carla/render_sky.mojo").read_text()
+    var live_8 = Path("extensions/carla/render_sky.mojo").read_text()
     _require(
-        live_6,
+        live_8,
         "19e9c8493ffe16a79d24238b480be0904d8ccd490bcee0435554932b5897bff3",
         "extensions/carla/render_sky.mojo",
     )
     befores.clear()
     afters.clear()
-    _spans_9(befores, afters)
-    var text_6_0 = _replace_spans(
-        live_6, befores, afters, "extensions/carla/render_sky.mojo"
+    _spans_18(befores, afters)
+    var text_8_0 = _replace_spans(
+        live_8, befores, afters, "extensions/carla/render_sky.mojo"
     )
     _require(
-        text_6_0,
+        text_8_0,
         "4b99faa687940af925a5cedd09d33d7b44dd7e317f892a1be269ccd8deaedaa7",
         "extensions/carla/render_sky.mojo",
     )
     paths.append("extensions/carla/render_sky.mojo")
-    texts.append(text_6_0)
+    texts.append(text_8_0)
 
-    var live_7 = Path("extensions/carla/render_weather.mojo").read_text()
+    var live_9 = Path("extensions/carla/render_weather.mojo").read_text()
     _require(
-        live_7,
+        live_9,
         "4f6fbd3dd6597a05900dd64a4dcc799f2e9ffed0b22be63bc96c2d0a6f1822c4",
         "extensions/carla/render_weather.mojo",
     )
     befores.clear()
     afters.clear()
-    _spans_10(befores, afters)
-    var text_7_0 = _replace_spans(
-        live_7, befores, afters, "extensions/carla/render_weather.mojo"
+    _spans_19(befores, afters)
+    var text_9_0 = _replace_spans(
+        live_9, befores, afters, "extensions/carla/render_weather.mojo"
     )
     _require(
-        text_7_0,
+        text_9_0,
         "5e2c6ed0db903e2c1dd484d73a100cfb816562655722c69e8461d1079d178460",
         "extensions/carla/render_weather.mojo",
     )
     paths.append("extensions/carla/render_weather.mojo")
-    texts.append(text_7_0)
+    texts.append(text_9_0)
 
-    var live_8 = Path("extensions/carla/road.mojo").read_text()
+    var live_10 = Path("extensions/carla/road.mojo").read_text()
     _require(
-        live_8,
+        live_10,
         "a53c48d28b33fb4f5f26316be902e57607a56012edb5f0b025241df1c0092b04",
         "extensions/carla/road.mojo",
     )
     starts.clear()
     stops.clear()
     befores.clear()
-    _lines_11(starts, stops, befores)
-    var text_8_0 = _apply(live_8, starts, stops, befores)
+    _lines_20(starts, stops, befores)
+    var text_10_0 = _apply(live_10, starts, stops, befores)
     _require(
-        text_8_0,
+        text_10_0,
         "4e5857371a9de89c6e41f74e3cdc421760be45603446dd2b2a471f22b53dfd0c",
         "extensions/carla/road.mojo",
     )
     befores.clear()
     afters.clear()
-    _spans_12(befores, afters)
-    var text_8_1 = _replace_spans(
-        text_8_0, befores, afters, "extensions/carla/road.mojo"
+    _spans_21(befores, afters)
+    var text_10_1 = _replace_spans(
+        text_10_0, befores, afters, "extensions/carla/road.mojo"
     )
     _require(
-        text_8_1,
+        text_10_1,
         "d9b6f60ae0b0b2fe38ef8dbe797a759f3de5e72dc8fb97bff15ca5dfff251db0",
         "extensions/carla/road.mojo",
     )
     paths.append("extensions/carla/road.mojo")
-    texts.append(text_8_1)
+    texts.append(text_10_1)
 
-    var live_9 = Path("extensions/carla/sensor.mojo").read_text()
+    var live_11 = Path("extensions/carla/sensor.mojo").read_text()
     _require(
-        live_9,
+        live_11,
         "3dab708ddf17d214821eee9aaf40fce3da8583f602c86bd058da5d3f016ea12b",
         "extensions/carla/sensor.mojo",
     )
     starts.clear()
     stops.clear()
     befores.clear()
-    _lines_13(starts, stops, befores)
-    var text_9_0 = _apply(live_9, starts, stops, befores)
+    _lines_22(starts, stops, befores)
+    var text_11_0 = _apply(live_11, starts, stops, befores)
     _require(
-        text_9_0,
+        text_11_0,
         "e20a4f8341d36615682dd1820a7a1587ebf32aeabac402b36d0646f277239f75",
         "extensions/carla/sensor.mojo",
     )
     paths.append("extensions/carla/sensor.mojo")
-    texts.append(text_9_0)
+    texts.append(text_11_0)
 
-    var live_10 = Path("extensions/carla/speed_limits.mojo").read_text()
+    var live_12 = Path("extensions/carla/speed_limits.mojo").read_text()
     _require(
-        live_10,
+        live_12,
         "2d9d5401b3dabf53c1c19f0a8098009275e19edb978f5ae369596fe7ac6557a0",
         "extensions/carla/speed_limits.mojo",
     )
     starts.clear()
     stops.clear()
     befores.clear()
-    _lines_14(starts, stops, befores)
-    var text_10_0 = _apply(live_10, starts, stops, befores)
+    _lines_23(starts, stops, befores)
+    var text_12_0 = _apply(live_12, starts, stops, befores)
     _require(
-        text_10_0,
+        text_12_0,
         "1e95ebc085e03a44e4daaef20a94b724dedc4240a2099227e82be54d32b045f6",
         "extensions/carla/speed_limits.mojo",
     )
     starts.clear()
     stops.clear()
     befores.clear()
-    _lines_15(starts, stops, befores)
-    var text_10_1 = _apply(text_10_0, starts, stops, befores)
+    _lines_24(starts, stops, befores)
+    var text_12_1 = _apply(text_12_0, starts, stops, befores)
     _require(
-        text_10_1,
+        text_12_1,
         "5cb2e3393283dcfecd9fba2e795db7ddcfb2e32e123889cf1ea237feafc44fee",
         "extensions/carla/speed_limits.mojo",
     )
     paths.append("extensions/carla/speed_limits.mojo")
-    texts.append(text_10_1)
+    texts.append(text_12_1)
 
-    var live_11 = Path("extensions/carla/spiral_moment_proof.mojo").read_text()
+    var live_13 = Path("extensions/carla/spiral_moment_proof.mojo").read_text()
     _require(
-        live_11,
+        live_13,
         "f42f436b6e616e39bc2cda70491abf2e441aa40d5d8d1aa7f7ecffe3d0b0d5ac",
         "extensions/carla/spiral_moment_proof.mojo",
     )
     befores.clear()
     afters.clear()
-    _spans_16(befores, afters)
-    var text_11_0 = _replace_spans(
-        live_11, befores, afters, "extensions/carla/spiral_moment_proof.mojo"
+    _spans_25(befores, afters)
+    var text_13_0 = _replace_spans(
+        live_13, befores, afters, "extensions/carla/spiral_moment_proof.mojo"
     )
     _require(
-        text_11_0,
+        text_13_0,
         "2771e2f9fc9ee1768707b2f03475309d81a066c6be2d8bd27233001c6d09d1ec",
         "extensions/carla/spiral_moment_proof.mojo",
     )
     paths.append("extensions/carla/spiral_moment_proof.mojo")
-    texts.append(text_11_0)
+    texts.append(text_13_0)
 
-    var live_12 = Path(
+    var live_14 = Path(
         "extensions/carla/spiral_roundoff_proof.mojo"
     ).read_text()
     _require(
-        live_12,
+        live_14,
         "66903c0cfba3315c46e8f48c9af0b3c118db4194236a7e4fe3e893a986c90b0c",
         "extensions/carla/spiral_roundoff_proof.mojo",
     )
     befores.clear()
     afters.clear()
-    _spans_17(befores, afters)
-    var text_12_0 = _replace_spans(
-        live_12, befores, afters, "extensions/carla/spiral_roundoff_proof.mojo"
+    _spans_26(befores, afters)
+    var text_14_0 = _replace_spans(
+        live_14, befores, afters, "extensions/carla/spiral_roundoff_proof.mojo"
     )
     _require(
-        text_12_0,
+        text_14_0,
         "380d8130fd2f18dd93768ed0e7ffb17a45e7b1631a81fbd0f68de1f08fe16ec7",
         "extensions/carla/spiral_roundoff_proof.mojo",
     )
     paths.append("extensions/carla/spiral_roundoff_proof.mojo")
-    texts.append(text_12_0)
+    texts.append(text_14_0)
 
 
 def restored_domain_winner(text: String) raises -> String:
@@ -1695,7 +2532,7 @@ def restored_domain_winner(text: String) raises -> String:
     )
     var befores = List[String]()
     var afters = List[String]()
-    _spans_18(befores, afters)
+    _spans_27(befores, afters)
     var restored = _replace_spans(
         text, befores, afters, "extensions/carla/spiral_domain_proof.mojo"
     )

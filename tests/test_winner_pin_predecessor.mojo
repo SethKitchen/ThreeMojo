@@ -66,7 +66,7 @@ def test_live_consumers_restore_their_winner_pins() raises:
     var paths = List[String]()
     var texts = List[String]()
     restored_winner_pins(paths, texts)
-    assert_equal(len(paths), 13)
+    assert_equal(len(paths), 15)
     var geometry = restored_geometry()
     var direct = 0
     var border_match = 0
