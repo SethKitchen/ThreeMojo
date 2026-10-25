@@ -107,6 +107,11 @@ Seventeen helpers stay at the top level.
 Three reviewed helpers keep their bodies.
 An extra helper or a changed body is refused.
 
+Mojo checks the sampled value copies.
+Ten helpers match their renamed jet sources.
+The blend copy drops two derivative intersections.
+A renamed helper or a changed copy is refused.
+
 ## Candidate certificate
 
 A certificate contains a stored incumbent point and its road parameter.
