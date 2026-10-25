@@ -129,7 +129,9 @@ Some portable features remain partial, including [GLSL shaders](https://github.c
 ### Project tools
 
 <details>
-<summary>Implemented: 58</summary>
+<summary>Implemented: 59</summary>
+
+- [x] [CARLA environment list](https://github.com/SethKitchen/ThreeMojo/wiki/CARLA-assets#the-carla-towns): `tools/carla_town_environment.mojo` writes each town's environment list [#761](https://github.com/SethKitchen/ThreeMojo/issues/761)
 
 - [x] [CARLA town layout dump](https://github.com/SethKitchen/ThreeMojo/wiki/CARLA-assets#rebuild-the-town-packages): `tools/carla_town_layout.mojo` installs the layout mod and dumps each town [#761](https://github.com/SethKitchen/ThreeMojo/issues/761)
 

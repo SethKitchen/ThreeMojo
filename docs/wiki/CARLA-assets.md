@@ -452,7 +452,7 @@ A town's glass is a dark, smooth, partly metal pane that reflects its surroundin
 
 `tools/carla_town_lamps.mojo` finds each street lamp head and places every copy of that lamp. The scene's `extras` list the head of each street lamp, as `carla_lamps`: three numbers for each lamp, in the renderer's frame. The lamps' glass has the material tag `{"carla": "lamp"}`. A renderer draws each tile at one level, chosen by the tile's distance to the camera.
 
-A running server can list each environment object. `dump_environment.py` writes that list. `tools/carla_environment_record.mojo` rounds each position and each angle to four decimal places, half to even.
+A running server can list each environment object. `tools/carla_town_environment.mojo` writes that list. `tools/carla_environment_record.mojo` rounds each position and each angle to four decimal places, half to even.
 
 Each mesh keeps a share of its triangles, by its kind. Each town also has a cap for each kind at each level. A town can have more than its cap, as Town04 has with its eight thousand pines. Then every mesh of that kind gives up the same share, and `tools/carla_town_share.mojo` chooses that share. A tree gives up leaf cards, and each card that stays grows, so the crown stays full. Other meshes are simplified by `tools/carla_town_simplify.mojo`, and their texture seams stay where they are.
 
