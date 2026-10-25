@@ -6,6 +6,7 @@ Runtime probes remain those of the original instrumenter. Each executable
 keeps the five-second limit; this harness never treats compiler failure as a
 passing runtime test. The real raw capture retains compilation, with a new
 180-second integration cap and a native alarm(5) before production calls.
+Capture and report use `tools/coverage_io.mojo`.
 Use after the compiler-free normal and -O controls.
 """
 
@@ -160,7 +161,12 @@ def require_runtime_alarm():
             'Runtime alarm must not be blocked')
 
 
-def capture_with_compiler_budget(command, output, capture, *, loop_proof=None,
+def coverage_io_argv(mojo, mode):
+    """Return the production Mojo coverage tool command."""
+    return ['sh', str(ROOT / 'tools/tool.sh'), mojo, 'coverage_io', mode]
+
+
+def capture_with_compiler_budget(command, output, capture, *, mojo, loop_proof=None,
                                  source_root=None, success=True,
                                  seconds=INTEGRATION_SECONDS):
     """Retain the real sealed raw command and its owned-group supervision."""
@@ -175,7 +181,7 @@ def capture_with_compiler_budget(command, output, capture, *, loop_proof=None,
         deadline = min(deadline, inherited)
     environment = os.environ.copy()
     environment[coverage_io.DEADLINE_ENV] = repr(deadline)
-    arguments = [sys.executable, str(ROOT/'tools/coverage_io.py'), 'capture',
+    arguments = [*coverage_io_argv(mojo, 'capture'),
                  '--out', str(output), '--err', str(capture)]
     if loop_proof is not None:
         arguments += ['--loop-proof', str(loop_proof), '--loop-proof-root', str(source_root)]
@@ -809,7 +815,7 @@ def main():
                 require('never evaluated False' in reported.stdout, 'Dynamic-empty failure not explained')
             (evidence / f'report-{mode}.out').write_text(reported.stdout + reported.stderr)
             replayed = run([
-                sys.executable, str(ROOT / 'tools/coverage_io.py'), 'report',
+                *coverage_io_argv(mojo, 'report'),
                 '--capture-dir', str(reduced.parent), '--', str(reporter), str(derived),
             ], success=False, timeout=5)
             require((replayed.returncode == 0) == (mode == 0), 'Diagnostic raw/reduced reporting changed the result: ' + replayed.stdout + replayed.stderr)
@@ -965,12 +971,12 @@ def main() raises:
                    proofs.expected_capture_command(production_proof['receipt']['execution'], suite_name, 'raw')]
         capture = hits / 'test_production.txt.gz'
         output = hits / 'test_production.out'
-        captured = capture_with_compiler_budget(command, output, capture,
+        captured = capture_with_compiler_budget(command, output, capture, mojo=mojo,
                         loop_proof=production_stage/'loop-proofs.json', source_root=native)
         require(output.read_text() == 'RESULT production capture\n', 'Production capture output changed')
         require(gzip.decompress(capture.read_bytes()) == bytes(expected_records),
                 'Real raw-profile and prebuilt runtime probe evidence differ')
-        reported = run([sys.executable, str(ROOT / 'tools/coverage_io.py'), 'report',
+        reported = run([*coverage_io_argv(mojo, 'report'),
                         '--capture-dir', str(hits), '--loop-proof-root', str(native),
                         '--loop-proof-build', str(production_stage), '--compiler=' + compiler,
                         '--flags=' + flags, '--mojo', mojo, '--suites', *drivers, '--',
@@ -997,7 +1003,7 @@ def main() raises:
             negative_command = [proofs._expand_path(word, native, production_stage) for word in
                 proofs.expected_capture_command(production_proof['receipt']['execution'], name, 'raw')]
             failed = capture_with_compiler_budget(negative_command,bad_output,bad_capture,
-                loop_proof=production_stage/'loop-proofs.json',source_root=native,success=False)
+                mojo=mojo, loop_proof=production_stage/'loop-proofs.json',source_root=native,success=False)
             require(failed.returncode != 0 and failed.returncode != 124,
                     'Runtime alarm or compiler refusal was not observed')
             if expected is not None:
@@ -1035,7 +1041,7 @@ def main() raises:
             scope.callback(restore_deadline)
             os.environ[coverage_io.DEADLINE_ENV] = repr(time.monotonic()-1)
             exhausted = capture_with_compiler_budget(command, expired_output, expired_capture,
-                loop_proof=production_stage/'loop-proofs.json', source_root=native, success=False)
+                mojo=mojo, loop_proof=production_stage/'loop-proofs.json', source_root=native, success=False)
         require(exhausted.returncode == 124, 'Expired integration deadline was extended')
         require(not expired_receipt.exists(), 'Expired capture retained a success receipt')
         (expired/'capture-process.out').write_text(exhausted.stdout+exhausted.stderr)
