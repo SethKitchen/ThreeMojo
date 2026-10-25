@@ -249,6 +249,7 @@ def _tokenize(
                 or three == "//="
                 or three == "<<="
                 or three == ">>="
+                or three == "..."
             ):
                 _push(kinds, texts, _OP, three^)
                 index += 3
