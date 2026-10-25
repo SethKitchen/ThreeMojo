@@ -234,6 +234,12 @@ The length guard and the early term return stay absent.
 The other tokens match the pin.
 A restored guard or a changed body is refused.
 
+Mojo checks the live segment builder.
+The builder stays a Map method.
+The waypoint and the section length keep the SI helpers.
+The other tokens match the pin.
+A moved method or a changed body is refused.
+
 ## Candidate certificate
 
 A certificate contains a stored incumbent point and its road parameter.
