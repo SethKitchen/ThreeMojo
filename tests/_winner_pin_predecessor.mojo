@@ -2402,6 +2402,53 @@ def _spans_30(mut befores: List[String], mut afters: List[String]):
     )
 
 
+def restored_count_bounds() raises -> String:
+    """Return the curve-bounds source bound by the count-loop proof.
+
+    Returns:
+        The count-loop dependency.
+
+    Raises:
+        Error: The live file or the dependency changed.
+    """
+    var path = "extensions/carla/curve_bounds.mojo"
+    var live = Path(path).read_text()
+    _require(
+        live,
+        "17cfb28e3a1f49857173331942e4545030328a0d37eaf41c23b5108fb1422214",
+        path,
+    )
+    var starts = List[Int]()
+    var stops = List[Int]()
+    var befores = List[String]()
+    _lines_1(starts, stops, befores)
+    var first = _apply(live, starts, stops, befores)
+    _require(
+        first,
+        "48dc6f87cd9ad4da1b16c5781fd7b7994f8394198a0d8c7ab6cdc5e0f142f19b",
+        path,
+    )
+    var before_spans = List[String]()
+    var after_spans = List[String]()
+    _spans_2(before_spans, after_spans)
+    var second = _replace_spans(first, before_spans, after_spans, path)
+    _require(
+        second,
+        "a5f662df6bc146010b065341143c75223151289dc0cc633590d96b0a199ab8f5",
+        path,
+    )
+    before_spans.clear()
+    after_spans.clear()
+    _spans_3(before_spans, after_spans)
+    var third = _replace_spans(second, before_spans, after_spans, path)
+    _require(
+        third,
+        "a57a5fa078fc6f36389a0abdce1eaa483a1cb7b7325688689a5602e8680ca3fb",
+        path,
+    )
+    return third
+
+
 def restored_winner_pins(
     mut paths: List[String], mut texts: List[String]
 ) raises:
@@ -2437,44 +2484,7 @@ def restored_winner_pins(
     paths.append("extensions/carla/assets.mojo")
     texts.append(text_0_0)
 
-    var live_1 = Path("extensions/carla/curve_bounds.mojo").read_text()
-    _require(
-        live_1,
-        "17cfb28e3a1f49857173331942e4545030328a0d37eaf41c23b5108fb1422214",
-        "extensions/carla/curve_bounds.mojo",
-    )
-    starts.clear()
-    stops.clear()
-    befores.clear()
-    _lines_1(starts, stops, befores)
-    var text_1_0 = _apply(live_1, starts, stops, befores)
-    _require(
-        text_1_0,
-        "48dc6f87cd9ad4da1b16c5781fd7b7994f8394198a0d8c7ab6cdc5e0f142f19b",
-        "extensions/carla/curve_bounds.mojo",
-    )
-    befores.clear()
-    afters.clear()
-    _spans_2(befores, afters)
-    var text_1_1 = _replace_spans(
-        text_1_0, befores, afters, "extensions/carla/curve_bounds.mojo"
-    )
-    _require(
-        text_1_1,
-        "a5f662df6bc146010b065341143c75223151289dc0cc633590d96b0a199ab8f5",
-        "extensions/carla/curve_bounds.mojo",
-    )
-    befores.clear()
-    afters.clear()
-    _spans_3(befores, afters)
-    var text_1_2 = _replace_spans(
-        text_1_1, befores, afters, "extensions/carla/curve_bounds.mojo"
-    )
-    _require(
-        text_1_2,
-        "a57a5fa078fc6f36389a0abdce1eaa483a1cb7b7325688689a5602e8680ca3fb",
-        "extensions/carla/curve_bounds.mojo",
-    )
+    var text_1_2 = restored_count_bounds()
     befores.clear()
     afters.clear()
     _spans_4(befores, afters)

@@ -3291,6 +3291,39 @@ def _edits_40(
     befores.append("")
 
 
+def restored_dispatch_border() raises -> String:
+    """Return the sample-dispatch border source bound by the count-loop proof.
+
+    Returns:
+        The count-loop consumer.
+
+    Raises:
+        Error: The live file or the border pin changed.
+    """
+    var path = "extensions/carla/curve_sample_dispatch.mojo"
+    var live = Path(path).read_text()
+    if (
+        sha256_hex(live.as_bytes())
+        != "04ff45c12cefcb4dbe3a7b136e77b6baaf02cff52325f6599d99250f820fdebb"
+    ):
+        raise Error(
+            "reviewed border parser successor: border pin changed: " + path
+        )
+    var starts = List[Int]()
+    var stops = List[Int]()
+    var befores = List[String]()
+    _edits_8(starts, stops, befores)
+    var restored = _apply(live, starts, stops, befores)
+    if (
+        sha256_hex(restored.as_bytes())
+        != "91ede65bbc39ac57ca54239513b462d3c71e90cacd085b8bafb2bff514767a86"
+    ):
+        raise Error(
+            "reviewed border parser successor: border pin changed: " + path
+        )
+    return restored
+
+
 def restored_border_pins(
     mut paths: List[String], mut texts: List[String]
 ) raises:
@@ -3506,28 +3539,7 @@ def restored_border_pins(
     paths.append("extensions/carla/curve_rounded_line.mojo")
     texts.append(text_7)
 
-    var live_8 = Path("extensions/carla/curve_sample_dispatch.mojo").read_text()
-    if (
-        sha256_hex(live_8.as_bytes())
-        != "04ff45c12cefcb4dbe3a7b136e77b6baaf02cff52325f6599d99250f820fdebb"
-    ):
-        raise Error(
-            "reviewed border parser successor: border pin changed: "
-            + "extensions/carla/curve_sample_dispatch.mojo"
-        )
-    starts.clear()
-    stops.clear()
-    befores.clear()
-    _edits_8(starts, stops, befores)
-    var text_8 = _apply(live_8, starts, stops, befores)
-    if (
-        sha256_hex(text_8.as_bytes())
-        != "91ede65bbc39ac57ca54239513b462d3c71e90cacd085b8bafb2bff514767a86"
-    ):
-        raise Error(
-            "reviewed border parser successor: border pin changed: "
-            + "extensions/carla/curve_sample_dispatch.mojo"
-        )
+    var text_8 = restored_dispatch_border()
     paths.append("extensions/carla/curve_sample_dispatch.mojo")
     texts.append(text_8)
 
