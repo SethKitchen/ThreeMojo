@@ -139,6 +139,12 @@ Six groups keep their token pins.
 Reviewed sources restore the pins that differ from the live files.
 A changed token or a changed pin is refused.
 
+Mojo checks the fresh spiral heading graph.
+The fresh k0, rate, and heading match the stored half graph.
+Three consumers keep that rate, heading, and ideal u.
+The eligibility phase keeps the original half product.
+A changed graph or a stored-half edit is refused.
+
 ## Candidate certificate
 
 A certificate contains a stored incumbent point and its road parameter.
