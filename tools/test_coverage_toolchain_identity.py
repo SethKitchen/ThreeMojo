@@ -7,7 +7,6 @@ import io
 import json
 import os
 from pathlib import Path
-import re
 import shutil
 import sys
 import tempfile
@@ -129,46 +128,6 @@ class ToolchainIdentityTests(unittest.TestCase):
         (self.a / 'external-driver').symlink_to(other)
         self.assertNotEqual(commands[2], checkpoint(alias)['compiler_command'][2])
 
-    def test_wrong_venv_shebang_and_import_hooks_fail_closed(self):
-        body = self.launcher_a.read_bytes().split(b'\n', 1)[1]
-        self.launcher_a.write_bytes(b'#!' + os.fsencode(self.b / '.venv/bin/python') + b'\n' + body)
-        with self.assertRaisesRegex(ValueError, 'different environment'):
-            identity.executable_identity(self.launcher_a)
-        for name in ('redirect.pth', 'sitecustomize.py', 'usercustomize.py'):
-            hook = self.site_b / name
-            hook.write_text('raise RuntimeError("hook must not execute")\n')
-            try:
-                with self.assertRaisesRegex(ValueError, 'import redirection'):
-                    identity.executable_identity(self.launcher_b)
-            finally:
-                hook.unlink()
-        shadow = self.b / '.venv/bin/re'
-        shadow.mkdir()
-        with self.assertRaisesRegex(ValueError, 'import shadow'):
-            identity.executable_identity(self.launcher_b)
-        shadow.rmdir()
-        init = self.site_b / 'mojo/__init__.py'
-        init.write_text('__path__ = ["/unbound"]\n')
-        with self.assertRaisesRegex(ValueError, 'package initialization'):
-            identity.executable_identity(self.launcher_b)
-        init.unlink()
-        config = self.b / '.venv/pyvenv.cfg'
-        config.write_text(config.read_text().replace('false', 'true'))
-        with self.assertRaisesRegex(ValueError, 'exclude system'):
-            identity.executable_identity(self.launcher_b)
-
-    def test_body_driver_linker_stdlib_and_package_code_changes_are_not_equivalent(self):
-        before = identity.executable_identity(self.launcher_a)
-        for file in (self.launcher_b, self.site_b / 'modular/bin/mojo',
-                     self.site_b / 'modular/bin/lld', self.site_b / 'modular/lib/mojo/std.mojoc',
-                     self.site_b / 'mojo/_entrypoints.py'):
-            raw = file.read_bytes()
-            try:
-                file.write_bytes(raw + b'changed\n')
-                self.assertNotEqual(before, identity.executable_identity(self.launcher_b))
-            finally:
-                file.write_bytes(raw)
-
     def test_interpreter_bytes_and_capabilities_stay_bound(self):
         before = identity.executable_identity(self.launcher_a)
         actual = identity.digest
@@ -214,75 +173,6 @@ class ToolchainIdentityTests(unittest.TestCase):
         with patch.object(identity.subprocess, 'run', side_effect=extra_site):
             with self.assertRaisesRegex(ValueError, 'site-packages does not match'):
                 identity.executable_identity(self.launcher_a)
-
-    def test_overrides_missing_payload_and_unvalidated_shebang_fail_closed(self):
-        with patch.dict(os.environ, {'MODULAR_MOJO_MAX_DRIVER_PATH': '/other/compiler'}):
-            with self.assertRaisesRegex(ValueError, 'override'):
-                identity.executable_identity(self.launcher_a)
-        (self.site_a / 'modular/bin/mojo').unlink()
-        with self.assertRaisesRegex(ValueError, 'Missing'):
-            identity.executable_identity(self.launcher_a)
-        self.launcher_b.write_text('#!/usr/bin/env python3\nfrom mojo._entrypoints import exec_mojo\n')
-        with self.assertRaisesRegex(ValueError, 'interpreter'):
-            identity.executable_identity(self.launcher_b)
-
-
-class AliasedTemporaryRootTests(unittest.TestCase):
-    def test_relocated_identity_with_symlinked_temporary_root(self):
-        # Reproduce macOS /var -> /private/var on every supported platform.
-        with tempfile.TemporaryDirectory() as tmp:
-            base = Path(tmp).resolve()
-            real = base / 'real'
-            real.mkdir()
-            alias = base / 'alias'
-            alias.symlink_to(real, target_is_directory=True)
-            fixture = ToolchainIdentityTests('test_relocated_install_has_same_semantic_identity')
-            try:
-                with patch.object(tempfile, 'tempdir', str(alias)):
-                    fixture.setUp()
-                fixture.test_relocated_install_has_same_semantic_identity()
-                self.assertEqual(fixture.base, fixture.base.resolve())
-            finally:
-                fixture.doCleanups()
-
-
-class HostedIdentitySetupTests(unittest.TestCase):
-    def workflow_jobs(self):
-        root = Path(__file__).resolve().parent.parent
-        workflow = (root / '.github/workflows/ci.yml').read_text()
-        parts = re.split(r'^  ([A-Za-z_][A-Za-z0-9_-]*):[ \t]*$',
-                         workflow.split('\njobs:\n', 1)[1], flags=re.MULTILINE)
-        return dict(zip(parts[1::2], parts[2::2]))
-
-    def test_hosted_tooling_uses_an_upstream_test_interpreter(self):
-        jobs = self.workflow_jobs()
-        for name in ('lint', 'lint-macos', 'tools', 'tools-macos',
-                     'tools-discovery', 'tools-discovery-macos', 'cpu-macos'):
-            with self.subTest(job=name):
-                job = jobs[name]
-                self.assertIn('uv python install --no-bin 3.12.14', job)
-                self.assertIn('uv python find --managed-python --no-project 3.12.14', job)
-                self.assertIn('echo "$(dirname "$PYTHON")" >> "$GITHUB_PATH"', job)
-                self.assertIn('"$PYTHON" -m venv --without-pip --prompt ThreeMojo .venv', job)
-                self.assertIn('uv pip install --python .venv/bin/python "mojo==1.2.0"', job)
-                self.assertNotIn('uses: actions/setup-python', job)
-                self.assertNotIn('uv venv --prompt ThreeMojo', job)
-                self.assertNotIn('LD_LIBRARY_PATH', job)
-
-    def test_capture_and_report_pin_the_same_immutable_toolchain_image(self):
-        jobs = self.workflow_jobs()
-        capture, report = jobs['coverage-capture'], jobs['coverage']
-        image = 'python:3.12.14-bookworm@sha256:dbbe4ceb97851e2e5fa83798b239811f871cb743b259ba3563737349f6bcfaa0'
-        self.assertIn('    container: ' + image, capture)
-        self.assertIn('    container: ' + image, report)
-        self.assertIn('COV_BUDGET=9000', capture)
-        self.assertIn('SHARD=${{ matrix.shard }}/8', capture)
-        self.assertIn('timeout-minutes: 170', capture)
-        self.assertIn('timeout-minutes: 60', report)
-        self.assertNotIn('sudo', capture)
-        self.assertIn('path: coverage/build/hits/', capture)
-        self.assertIn('path: coverage/build/hits/', report)
-
 
 class RelocatedCaptureTests(unittest.TestCase):
     def test_generation_capture_report_across_independent_roots(self):

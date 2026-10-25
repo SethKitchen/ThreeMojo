@@ -28,6 +28,7 @@ from tools._python_json import (
     PY_NONE,
     PY_STR,
     PyJson,
+    dumps_canonical,
     py_repr,
 )
 from tools._sha256 import sha256_hex
@@ -1188,6 +1189,28 @@ def _apply_identity(mut doc: PyJson, item: Int, path: String) raises:
         doc.set(item, "sha256", doc.new_str(_hash_list(raw)))
         return
     _apply_wheel(doc, item, path, raw)
+
+
+def executable_identity(path: String) raises -> String:
+    """Return the canonical JSON identity of one executable.
+
+    A Mojo wheel launcher binds the launcher body, the interpreter, and the
+    compiler payload. Any other file binds its own bytes.
+
+    Args:
+        path: The executable.
+
+    Returns:
+        Canonical JSON, with sorted keys.
+
+    Raises:
+        Error: When a wheel launcher is not a supported entry point, or a
+            file cannot be read.
+    """
+    var doc = PyJson()
+    var item = doc.new_dict()
+    _apply_identity(doc, item, path)
+    return dumps_canonical(doc, item)
 
 
 def _command_words(
