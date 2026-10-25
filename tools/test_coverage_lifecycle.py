@@ -11,7 +11,6 @@ import signal
 import subprocess
 import sys
 import tempfile
-import time
 import unittest
 from unittest.mock import Mock, call, patch
 
@@ -383,11 +382,6 @@ class CoverageGroupCleanupTests(unittest.TestCase):
 
 @unittest.skipUnless(os.name == 'posix', 'POSIX coverage process groups')
 class CoverageLifecycleTests(unittest.TestCase):
-    def setUp(self):
-        self.directory = tempfile.TemporaryDirectory(prefix='coverage lifecycle ')
-        self.addCleanup(self.directory.cleanup)
-        self.root = Path(self.directory.name)
-
     def stopped(self, pid):
         try:
             os.kill(pid, 0)
@@ -438,30 +432,6 @@ class CoverageLifecycleTests(unittest.TestCase):
                     self.assertRaises(type(error)) as raised:
                 self.stopped(123)
             self.assertIs(raised.exception, error)
-
-    def test_expired_queued_capture_does_not_start_a_child(self):
-        with patch.dict(os.environ, {coverage_io.DEADLINE_ENV: repr(time.monotonic() - 1)}), \
-                patch.object(coverage_io.subprocess, 'Popen') as popen, \
-                contextlib.redirect_stdout(io.StringIO()):
-            self.assertEqual(coverage_io.capture(['unused'], self.root / 'out',
-                                                 self.root / 'err.gz'), 124)
-        popen.assert_not_called()
-
-    def test_signal_during_spawn_is_applied_after_child_assignment(self):
-        real_popen = subprocess.Popen
-
-        def spawn(*args, **kwargs):
-            child = real_popen(*args, **kwargs)
-            signal.raise_signal(signal.SIGTERM)
-            return child
-
-        old_handler = signal.getsignal(signal.SIGTERM)
-        with patch.object(coverage_io.subprocess, 'Popen', side_effect=spawn), \
-                contextlib.redirect_stdout(io.StringIO()):
-            self.assertEqual(coverage_io.capture(
-                [sys.executable, '-c', 'import time;time.sleep(30)'],
-                self.root / 'out', self.root / 'err.gz'), 143)
-        self.assertEqual(signal.getsignal(signal.SIGTERM), old_handler)
 
 class PhaseSidecarTests(unittest.TestCase):
     def setUp(self):

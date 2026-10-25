@@ -44,14 +44,24 @@ def test_duplicate_probes_are_kept_once() raises:
 
 
 def test_a_past_deadline_exits_124() raises:
-    var status = _capture(
-        "out=$(mktemp); err=$(mktemp).txt.gz; THREEMOJO_COVERAGE_DEADLINE=1 sh"
-        " tools/tool.sh "
-        + shell_quote(tool_mojo())
-        + ' coverage_io capture --out "$out" --err "$err" -- true',
+    var mojo = shell_quote(tool_mojo())
+    var ran = run_program(
+        [
+            "sh",
+            "-c",
+            "dir=$(mktemp -d); THREEMOJO_COVERAGE_DEADLINE=1 sh tools/tool.sh "
+            + mojo
+            + ' coverage_io capture --out "$dir/out" --err "$dir/err.txt.gz" '
+            + "-- sh -c 'echo ran > \"$dir/ran\"'; status=$?; "
+            + 'test "$status" = 124 || exit 4; '
+            + 'test ! -e "$dir/ran" || exit 5; echo PAST_OK',
+        ],
         20.0,
+        merge_errors=False,
     )
-    assert_equal(status, 124)
+    if ran.status != 0:
+        raise Error(ran.output + ran.errors)
+    assert_true(ran.output.find("PAST_OK") >= 0)
 
 
 def test_a_short_deadline_stops_sleep() raises:
@@ -690,6 +700,48 @@ def test_a_deadline_stops_the_child_and_the_grandchild() raises:
             String(status) + "\n" + Path(root + "/tool.err").read_text()
         )
     _tree_stopped(root, status, 124)
+
+
+def test_a_signal_during_startup_stops_the_command() raises:
+    """SIGTERM during startup still stops the command and exits 143."""
+    var mojo = shell_quote(tool_mojo())
+    var ran = run_program(
+        [
+            "sh",
+            "-c",
+            "dir=$(mktemp -d); "
+            + "sh tools/tool.sh "
+            + mojo
+            + ' coverage_io capture --out "$dir/out" --err "$dir/err.txt.gz" '
+            + "-- sh -c 'echo $$ > \"$dir/child.pid\"; exec sleep 30' "
+            + '> "$dir/progress" 2>"$dir/tool.err" & '
+            + "pid=$!; "
+            + "python3 -c 'import time; print(time.monotonic())' >"
+            ' "$dir/started"; '
+            + "n=0; while true; do "
+            + 'exe=$(readlink "/proc/$pid/exe" 2>/dev/null || true); '
+            + 'case "$exe" in ""|*/*sh|*/*bash|*/*dash) ;; *) break ;; esac; '
+            + 'n=$((n+1)); if [ "$n" -gt 400 ]; then echo not-started; exit 4;'
+            " fi; "
+            + "sleep 0.01; done; "
+            + 'kill -TERM "$pid"; wait "$pid"; status=$?; '
+            + 'test "$status" = 143 || { echo "status $status"; '
+            + 'cat "$dir/tool.err"; exit 5; }; '
+            + "python3 -c 'import time,sys; "
+            + "raise SystemExit(0 if"
+            " time.monotonic()-float(open(sys.argv[1]).read()) < 2 "
+            + 'else 1)\' "$dir/started" || exit 6; '
+            + 'if [ -f "$dir/child.pid" ]; then child=$(cat "$dir/child.pid"); '
+            + 'if kill -0 "$child" 2>/dev/null; then echo live; exit 7; fi;'
+            " fi; "
+            + "echo SIGNAL_OK",
+        ],
+        8.0,
+        merge_errors=False,
+    )
+    if ran.status != 0:
+        raise Error(ran.output + ran.errors)
+    assert_true(ran.output.find("SIGNAL_OK") >= 0)
 
 
 def test_cancellation_stops_the_child_and_the_grandchild() raises:
