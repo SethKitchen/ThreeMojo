@@ -10,7 +10,8 @@
 The command runs in its own session. Its standard error is reduced: each
 `COVLINE` payload, each branch, and each complete `COVEVAL2` record is kept
 once. A passed group deadline stops the session. When `--loop-proof` is
-set, this program checks and binds that receipt.
+set, this program checks and binds that receipt. It prints the start, the
+first probe, a running line every 60 seconds, and completion.
 """
 
 from std.collections import Dict
@@ -83,7 +84,8 @@ def _usage() -> String:
     """Return the usage line."""
     return (
         "usage: coverage_io capture --out FILE --err FILE"
-        + " [--loop-proof FILE] [--loop-proof-root DIR] -- COMMAND..."
+        + " [--loop-proof FILE] [--loop-proof-root DIR]"
+        + " [--progress-seconds N] -- COMMAND..."
     )
 
 
@@ -1358,8 +1360,48 @@ def _start(command: List[String], output: Int) raises -> Tuple[Int, Int]:
     return (pid, errors[0])
 
 
+def _progress(
+    suite: String,
+    stage: String,
+    started: Float64,
+    records: Int,
+    saw_probe: Bool,
+):
+    """Print one capture progress line.
+
+    Args:
+        suite: The capture stem.
+        stage: `start`, `running`, `first probe`, `complete`, or `aborted`.
+        started: The monotonic time the capture started.
+        records: How many standard-error lines have been read.
+        saw_probe: True after the first coverage record.
+    """
+    var phase = "waiting for probes (compile/startup)"
+    if saw_probe:
+        phase = "runtime probes observed"
+    print(
+        "Coverage "
+        + suite
+        + ": "
+        + stage
+        + "; "
+        + _tenth(_now() - started)
+        + "s; "
+        + phase
+        + "; "
+        + String(records)
+        + " stderr records"
+    )
+
+
 def _read_lines(
-    pid: Int, fd: Int, mut reducer: Reducer, deadline: Float64, started: Float64
+    pid: Int,
+    fd: Int,
+    mut reducer: Reducer,
+    deadline: Float64,
+    started: Float64,
+    suite: String,
+    interval: Float64,
 ) raises -> Int:
     """Read the child's standard error until it ends or the deadline passes.
 
@@ -1369,6 +1411,8 @@ def _read_lines(
         reducer: The probe reducer.
         deadline: The monotonic deadline, or a negative value when none is set.
         started: The monotonic time the capture started.
+        suite: The capture stem, used in progress lines.
+        interval: The seconds between running lines.
 
     Returns:
         The child's status, or 124 when the deadline wins.
@@ -1379,11 +1423,16 @@ def _read_lines(
     var poll = List[Int32](length=2, fill=0)
     var chunk = List[UInt8](length=4096, fill=0)
     var pending = String()
-    var records = 0
-    var saw_probe = False
+    var announced = False
+    var next_progress = started + interval
     var cancelled = False
     while True:
-        var limit = 60.0
+        if _now() >= next_progress:
+            _progress(
+                suite, "running", started, reducer.records, reducer.saw_probe
+            )
+            next_progress = _now() + interval
+        var limit = 0.05
         if deadline >= 0:
             limit = deadline - _now()
             if limit <= 0:
@@ -1392,6 +1441,11 @@ def _read_lines(
                 break
             if limit > 0.05:
                 limit = 0.05
+        var until_progress = next_progress - _now()
+        if until_progress < limit:
+            limit = until_progress
+        if limit < 0.001:
+            limit = 0.001
         poll[0] = Int32(fd)
         poll[1] = Int32(1)
         var ready = external_call["poll", c_int](
@@ -1435,21 +1489,20 @@ def _read_lines(
             var line = String(pending[byte=:end])
             var rest = String(pending[byte=end:])
             pending = rest
-            records += 1
-            var probe = _strip(line)
-            if not saw_probe and (
-                probe.startswith(_LINE)
-                or probe.startswith(_BRANCH)
-                or probe.startswith(_EVAL)
-            ):
-                saw_probe = True
             reducer.feed(line)
-        _ = records
-        _ = started
-        _ = saw_probe
+            if not announced and reducer.saw_probe:
+                announced = True
+                _progress(
+                    suite,
+                    "first probe",
+                    started,
+                    reducer.records,
+                    True,
+                )
     if pending.byte_length() > 0:
-        records += 1
         reducer.feed(pending)
+        if not announced and reducer.saw_probe:
+            _progress(suite, "first probe", started, reducer.records, True)
     close_fd(fd)
     var waited = wait_blocking(pid)
     if cancelled:
@@ -1477,6 +1530,7 @@ def _capture(arguments: List[String]) raises -> Int:
     var err_path = String()
     var proof = String()
     var root = "."
+    var interval = 60.0
     var command = List[String]()
     var index = 0
     while index < len(arguments):
@@ -1506,6 +1560,16 @@ def _capture(arguments: List[String]) raises -> Int:
                 root = value
             index += 2
             continue
+        if word == "--progress-seconds":
+            if index + 1 >= len(arguments):
+                raise Error(word + " needs a value")
+            interval = parse_float(arguments[index + 1])
+            index += 2
+            continue
+        if word.startswith("--progress-seconds="):
+            interval = parse_float(String(word[byte=19:]))
+            index += 1
+            continue
         if word == "--help" or word == "-h":
             raise Error(_usage())
         raise Error("unknown argument " + word)
@@ -1515,6 +1579,8 @@ def _capture(arguments: List[String]) raises -> Int:
         or len(command) == 0
     ):
         raise Error(_usage())
+    if not (interval == interval) or interval <= 0 or interval > 1e300:
+        raise Error("progress interval must be positive")
     if proof.byte_length() > 0:
         _proof("preflight", out_path, err_path, proof, root, command)
     var deadline = Float64(-1)
@@ -1535,42 +1601,41 @@ def _capture(arguments: List[String]) raises -> Int:
     _ = setenv("XDG_CACHE_HOME", xdg, True)
     _ = _phase_header(command, out_path, proof)
     var started = _now()
-    print(
-        "Coverage "
-        + _stem(out_path)
-        + ": start; 0.0s; waiting for probes (compile/startup); 0 stderr"
-        " records"
-    )
+    var suite = _stem(out_path)
+    _progress(suite, "start", started, 0, False)
     var records = 0
     var saw_probe = False
     var status: Int
-    if deadline >= 0 and _now() >= deadline:
-        status = 124
-        _gzip("", err_path)
-    else:
-        var output = _open_output(out_path)
-        var child = _start(command, output)
-        var reducer = Reducer()
-        status = _read_lines(child[0], child[1], reducer, deadline, started)
-        records = reducer.records
-        saw_probe = reducer.saw_probe
-        _gzip(reducer.output, err_path)
-    var phase = "waiting for probes (compile/startup)"
-    if saw_probe:
-        phase = "runtime probes observed"
-    print(
-        "Coverage "
-        + _stem(out_path)
-        + ": complete (exit "
-        + String(status)
-        + "); "
-        + _tenth(_now() - started)
-        + "s; "
-        + phase
-        + "; "
-        + String(records)
-        + " stderr records"
-    )
+    try:
+        if deadline >= 0 and _now() >= deadline:
+            status = 124
+            _gzip("", err_path)
+        else:
+            var output = _open_output(out_path)
+            var child = _start(command, output)
+            var reducer = Reducer()
+            status = _read_lines(
+                child[0],
+                child[1],
+                reducer,
+                deadline,
+                started,
+                suite,
+                interval,
+            )
+            records = reducer.records
+            saw_probe = reducer.saw_probe
+            _gzip(reducer.output, err_path)
+        _progress(
+            suite,
+            "complete (exit " + String(status) + ")",
+            started,
+            records,
+            saw_probe,
+        )
+    except error:
+        _progress(suite, "aborted", started, records, saw_probe)
+        raise error
     if status == 0 and proof.byte_length() > 0:
         _proof("bind", out_path, err_path, proof, root, command)
     _ = unsetenv("TMPDIR")

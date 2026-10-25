@@ -88,6 +88,48 @@ def test_report_replays_captures_in_name_order() raises:
     assert_equal(ran.output, "world\nhello\n")
 
 
+def test_progress_reports_the_first_probe_and_a_running_line() raises:
+    var mojo = tool_mojo()
+    var ran = run_program(
+        [
+            "sh",
+            "-c",
+            "out=$(mktemp); err=$(mktemp).txt.gz; sh tools/tool.sh "
+            + shell_quote(mojo)
+            + ' coverage_io capture --progress-seconds 0.02 --out "$out"'
+            + ' --err "$err" -- sh -c \'printf "COVLINE:m:1:T\\n" >&2;'
+            + " sleep 0.12'",
+        ],
+        20.0,
+        merge_errors=False,
+    )
+    assert_equal(ran.status, 0)
+    assert_true(ran.output.find("start;") >= 0)
+    assert_true(ran.output.find("waiting for probes") >= 0)
+    assert_true(ran.output.find("first probe;") >= 0)
+    assert_true(ran.output.find("runtime probes observed") >= 0)
+    assert_true(ran.output.find("running;") >= 0)
+    assert_true(ran.output.find("complete (exit 0)") >= 0)
+
+
+def test_a_missing_command_prints_aborted() raises:
+    var mojo = tool_mojo()
+    var ran = run_program(
+        [
+            "sh",
+            "-c",
+            "out=$(mktemp); err=$(mktemp).txt.gz; sh tools/tool.sh "
+            + shell_quote(mojo)
+            + ' coverage_io capture --out "$out" --err "$err" --'
+            + " /no/such/coverage-command",
+        ],
+        20.0,
+        merge_errors=False,
+    )
+    assert_true(ran.status != 0)
+    assert_true(ran.output.find("aborted;") >= 0)
+
+
 def test_usage_exits_2() raises:
     var ran = run_program(
         ["sh", "tools/tool.sh", tool_mojo(), "coverage_io"],
