@@ -470,8 +470,10 @@ struct X11Window(Movable):
                 self._display
             )
             request[1] = Int32(POLLIN)
+            # The count is C's `nfds_t`, an unsigned long, as the gamepad
+            # modules declare it: a program holds one `poll` declaration.
             _ = external_call["poll", c_int](
-                request.unsafe_ptr(), c_int(1), milliseconds
+                request.unsafe_ptr(), UInt(1), milliseconds
             )
         while self._lib.call["XPending", c_int](self._display) > 0:
             _ = self._lib.call["XNextEvent", c_int](
