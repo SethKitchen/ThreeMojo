@@ -1,9 +1,10 @@
 # Copyright (c) 2026 Seth Kitchen, PE
 # SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
-"""Exact PR780 source and qualification provenance; no physical admission.
+"""Exact PR780 and PR791 source and qualification provenance; no physical admission.
 
 This pure leaf reads no files and accepts no root. Its fixed inverse preserves
-all original PR760 pins. The owning checker still observes current bytes,
+all original PR760 pins. PR791 adds the five sources that the scan renderer
+changes to the same table. The owning checker still observes current bytes,
 checks the complete dependency graph, and binds its final physical reads.
 """
 import hashlib
@@ -20,6 +21,24 @@ _EXECUTED_MODULE_CODE = sys._getframe().f_code
 # BEGIN FIXED PR780 SUCCESSOR DATA
 EDGES = json.loads(r'''
 {
+  "core/deform.mojo": {
+    "before_sha256": "6bc25c6adf469a5bc9ea37ae09a4822e9210a03d56c977a1f0c533ed02b9bf58",
+    "after_sha256": "62edb70d0bb9fa401f0776b7bc8fc5bcb2e0622b41f80d6c6e5cd5c847af62e8",
+    "before_token_sha256": "7d94308b0c36222350314a9a811ace9afc4f3e97762811908a2d80189bc5eb18",
+    "after_token_sha256": "1a68883112123b8313baad5b2fc075a6849b0e025dc500325e3d4b7668b51a07",
+    "edits": [
+      {
+        "start": 359,
+        "stop": 360,
+        "before": [
+          "    return SkinPose(skinned.skeleton.pose(placed), skinned.bind_matrix, undo^)\n"
+        ],
+        "after": [
+          "    return SkinPose(skinned.skeleton.pose(placed), skinned.bind_matrix, undo)\n"
+        ]
+      }
+    ]
+  },
   "core/extent.mojo": {
     "before_sha256": "50f3c4fcc55b672ab1d42505cf70baeb3aae85ebf915927369246ab7e214a023",
     "after_sha256": "90490706baa17456a3ec99374c2a00f72768a0178b4e56436571ab4ca673f068",
@@ -64,6 +83,172 @@ EDGES = json.loads(r'''
           "    if factor != 0 and abs(area) > limit // abs(factor):\n",
           "        raise Error(message)\n",
           "    if Int128(length) != area * factor:\n"
+        ]
+      }
+    ]
+  },
+  "extensions/carla/assets.mojo": {
+    "before_sha256": "0bb273644a6d6cffaad986236e8aaafe9355549b37a10289cd9b14555f4e1acc",
+    "after_sha256": "b051a911885031a06eee4a609ce030ea8629f0ab09e0f12308d89c009e8bde8d",
+    "before_token_sha256": "70261521b837b27b7f0d1068a4422331e927d64089962d57ee20f53c3781cd64",
+    "after_token_sha256": "dbc7c2a25e2d68fa3456e410bf66bf921f4dd87779e342df1d53a49f755bdfd8",
+    "edits": [
+      {
+        "start": 1488,
+        "stop": 1489,
+        "before": [
+          "        scene.add_mesh(mesh^)\n"
+        ],
+        "after": [
+          "        scene.add_mesh(mesh)\n"
+        ]
+      }
+    ]
+  },
+  "extensions/carla/map.mojo": {
+    "before_sha256": "b3862a55a54927b2a1e50186af82f64bdf145adbef5cef9f31ab19d9585749df",
+    "after_sha256": "288d0e5d3a5bc2e5a6b9542868de6566dc6cb4de6eae39192c0289d76a8c99fa",
+    "before_token_sha256": "0263ba183b30437b826ada3ceedb3d2c5a3664dc95245743a17209f568607b79",
+    "after_token_sha256": "6531e0d35cf724f88b0c17c310996830b079056ff173b146504de7850b92dfe1",
+    "edits": [
+      {
+        "start": 189,
+        "stop": 190,
+        "before": [
+          "from std.hashlib import Hasher\n"
+        ],
+        "after": [
+          "from std.hash import Hasher\n"
+        ]
+      }
+    ]
+  },
+  "extensions/carla/map_builder.mojo": {
+    "before_sha256": "f5e28830bb017e42b61d3a40f7e96711ad7aa893d121472f311e36b9a9572d0c",
+    "after_sha256": "6c705c9a40e045c30f70dfbc160e8b8fc706396ccbc0fc0e21e5ca92ab5b6078",
+    "before_token_sha256": "4d153beee1e83966264af944bf260597fbf727785eb193d3710a3b5a0c33a977",
+    "after_token_sha256": "e44cd56000fa29e28c8085c1d5b6dfc810c6a775b80f04db9d7d7f6afe0e30e5",
+    "edits": [
+      {
+        "start": 1384,
+        "stop": 1385,
+        "before": [
+          "            RoadInfoGeometry._from_si(s, geometry^)\n"
+        ],
+        "after": [
+          "            RoadInfoGeometry._from_si(s, geometry)\n"
+        ]
+      }
+    ]
+  },
+  "extensions/carla/model_cache.mojo": {
+    "before_sha256": "a5832785f758cd6fe99f32cfa04b90399ebfcd4c9ffdf1e286f79c613cb1cd91",
+    "after_sha256": "6c95fe4a1e5218f26dac0c9889e2246d53ec620cebb1230166a184bbe8af93a9",
+    "before_token_sha256": "b584c4522bf996506402278ab292de94c65d24a7176f37aeed5ab91b848b2a16",
+    "after_token_sha256": "209c439bf0c9449cc6fc47784fe517076de04f80cf52332695e7b85a4afbc864",
+    "edits": [
+      {
+        "start": 246,
+        "stop": 247,
+        "before": [
+          "            scene.add_mesh(mesh^)\n"
+        ],
+        "after": [
+          "            scene.add_mesh(mesh)\n"
+        ]
+      }
+    ]
+  },
+  "extensions/carla/sensor.mojo": {
+    "before_sha256": "e20a4f8341d36615682dd1820a7a1587ebf32aeabac402b36d0646f277239f75",
+    "after_sha256": "3dab708ddf17d214821eee9aaf40fce3da8583f602c86bd058da5d3f016ea12b",
+    "before_token_sha256": "c58baff8992f6eb88a675fa837c0c962589ec157a41e6e9fbf78b18438fb8119",
+    "after_token_sha256": "c58baff8992f6eb88a675fa837c0c962589ec157a41e6e9fbf78b18438fb8119",
+    "edits": [
+      {
+        "start": 69,
+        "stop": 70,
+        "before": [],
+        "after": [
+          "# fmt: off\n"
+        ]
+      },
+      {
+        "start": 101,
+        "stop": 103,
+        "before": [
+          "]  # fmt: skip\n"
+        ],
+        "after": [
+          "]\n",
+          "# fmt: on\n"
+        ]
+      }
+    ]
+  },
+  "extensions/carla/sensor_manager.mojo": {
+    "before_sha256": "d87069be62eb405cbc976d0cba12c5d0c5e5db3d520111b788b2e9c9ca18029e",
+    "after_sha256": "c0b21899dabe7e21c7d8744548845c9ca31a12c2e1598eac37ba3077565a1567",
+    "before_token_sha256": "fac0a508fbc6540191d09b3a91e449544ebd6557399f2696bc6bf81cbddd86b4",
+    "after_token_sha256": "fac0a508fbc6540191d09b3a91e449544ebd6557399f2696bc6bf81cbddd86b4",
+    "edits": [
+      {
+        "start": 235,
+        "stop": 236,
+        "before": [],
+        "after": [
+          "# fmt: off\n"
+        ]
+      },
+      {
+        "start": 238,
+        "stop": 240,
+        "before": [
+          "]  # fmt: skip\n"
+        ],
+        "after": [
+          "]\n",
+          "# fmt: on\n"
+        ]
+      }
+    ]
+  },
+  "extensions/carla/speed_limits.mojo": {
+    "before_sha256": "1e95ebc085e03a44e4daaef20a94b724dedc4240a2099227e82be54d32b045f6",
+    "after_sha256": "2d9d5401b3dabf53c1c19f0a8098009275e19edb978f5ae369596fe7ac6557a0",
+    "before_token_sha256": "5ba74b5993221135eba428267daafe27011934dbe8fecf9928edd41670572026",
+    "after_token_sha256": "62d358aaefa3590d00cd56121ff2d132a87cbfb05ce8786d22bad6bc9eea850a",
+    "edits": [
+      {
+        "start": 145,
+        "stop": 146,
+        "before": [
+          "    var value: Float64\n",
+          "    try:\n",
+          "        value = Float64(number)\n",
+          "    except:\n",
+          "        raise Error(\"OpenDRIVE speed needs a numeric max value\")\n"
+        ],
+        "after": [
+          "    var value = Float64(number)\n"
+        ]
+      }
+    ]
+  },
+  "extensions/carla/town.mojo": {
+    "before_sha256": "f1917d2fdbe678e0f6623d0bd44f80f54b4e0a9f9c4bb9c486c312ae6cf50ee5",
+    "after_sha256": "dbf66b4953eda09d150e9cec8d7b74b489c5f6bdd38b77049eaddfcda49d3eb8",
+    "before_token_sha256": "63f9e55ab1cf9ff7e2722a6a7e1df4a1bb5475bce1bab89f8a58fd1a7f218e5a",
+    "after_token_sha256": "0ba1fbf1bdf04f174c844c0335c666b49808fc2873a19b5a62fbcec10b029a5b",
+    "edits": [
+      {
+        "start": 1397,
+        "stop": 1398,
+        "before": [
+          "        scene.add_mesh(mesh^)\n"
+        ],
+        "after": [
+          "        scene.add_mesh(mesh)\n"
         ]
       }
     ]
@@ -126,6 +311,78 @@ EDGES = json.loads(r'''
           "        self.vehicle_heading = world.get_transform(\n",
           "            self.owner\n",
           "        ).rotation.forward_vector()\n"
+        ]
+      }
+    ]
+  },
+  "extensions/carla/world.mojo": {
+    "before_sha256": "f8d8f6583eef3ea409f0c057263d9c55337c8d647806400b711afa398b88a4c1",
+    "after_sha256": "e1c17354267d5ba6f49378cb8c04bf3e60ad61b2e07c50044d3eceee2261a16e",
+    "before_token_sha256": "1645044b0a0ccc1d167d981428d28b4739472bc11930348c5c8dc34533a142e4",
+    "after_token_sha256": "056d05b7306a1b03390df568cde37ca711653daaf812294967b9b9be96def22c",
+    "edits": [
+      {
+        "start": 162,
+        "stop": 163,
+        "before": [
+          "from std.hashlib import Hasher\n"
+        ],
+        "after": [
+          "from std.hash import Hasher\n"
+        ]
+      }
+    ]
+  },
+  "extensions/humanoid/skeleton/head/hair/shading.mojo": {
+    "before_sha256": "5cd145858e9175d306ce6b21bc4d8e6e674e6aecfd87dc7e5be4fc102b6caa7e",
+    "after_sha256": "ba53a4ffb93734551c77b2e844de8448a0d1a7d4a5d1dbf248374125215307b2",
+    "before_token_sha256": "0943825a89ef343fdd80c3fb7cb1ede94d9f61d828c9672da52903aaeba252ab",
+    "after_token_sha256": "b11d9263c6e4a7c07a7ed753b090508034b922bbe0e984b0ad6a650b10a4c63b",
+    "edits": [
+      {
+        "start": 284,
+        "stop": 285,
+        "before": [
+          "async def _shade_task(\n"
+        ],
+        "after": [
+          "__async def _shade_task(\n"
+        ]
+      }
+    ]
+  },
+  "extensions/humanoid/skeleton/head/hair/strands.mojo": {
+    "before_sha256": "058c0e6fbfce95ee97c79247622185de968c8de5e0ad23240d667da13776404f",
+    "after_sha256": "81d104e6b65fe1539bf9c244330ae53b6d337ad081529cb0c5f7bcde27887db5",
+    "before_token_sha256": "d7195018a457c231f60d8ccaa36b924288d567c691efd62508554265569a0b4a",
+    "after_token_sha256": "4ccdb2217bcdd1e76b39d66dca7643a93ba82487dbb510784686af504b69062d",
+    "edits": [
+      {
+        "start": 252,
+        "stop": 253,
+        "before": [
+          "async def _depth_task(\n"
+        ],
+        "after": [
+          "__async def _depth_task(\n"
+        ]
+      }
+    ]
+  },
+  "geometries/attribute_utils.mojo": {
+    "before_sha256": "0a87276b9264a028a3220a667e39f8e96ff6fde7e41ed2c180e0aed7484ccda6",
+    "after_sha256": "91d45ff588571ab0bbda20331d1f60a0b55e124985a76f8cad97d682bdca523e",
+    "before_token_sha256": "51190bc7d2e5620e99b873064d00bc4927247686f5726aa262aea1a48268f36b",
+    "after_token_sha256": "fc2bdb93fb28ac7beff5a2a2350ef881efc9d61b8ac4100f1186222cbd433bb1",
+    "edits": [
+      {
+        "start": 139,
+        "stop": 140,
+        "before": [
+          "            stored^, size, first.component_type(), first.is_normalized()\n"
+        ],
+        "after": [
+          "            stored, size, first.component_type(), first.is_normalized()\n"
         ]
       }
     ]
@@ -438,6 +695,45 @@ EDGES = json.loads(r'''
       }
     ]
   },
+  "lights/shadow.mojo": {
+    "before_sha256": "e57aabcefe61cebaa8e57ae129f0cae3873215b7b1c0d2171c972d78d4015b81",
+    "after_sha256": "649970324f8a80cd0ba959f3278d635b12b9886a5ecb09290620b5b61b3c1d20",
+    "before_token_sha256": "c91ae04a499fb4362157f5aa3a48a8b0cc599a85c8504efff633ac7645f3a3d9",
+    "after_token_sha256": "c91ae04a499fb4362157f5aa3a48a8b0cc599a85c8504efff633ac7645f3a3d9",
+    "edits": [
+      {
+        "start": 191,
+        "stop": 192,
+        "before": [],
+        "after": [
+          "# fmt: off\n"
+        ]
+      },
+      {
+        "start": 199,
+        "stop": 202,
+        "before": [
+          ")  # fmt: skip\n"
+        ],
+        "after": [
+          ")\n",
+          "# fmt: on\n",
+          "# fmt: off\n"
+        ]
+      },
+      {
+        "start": 209,
+        "stop": 211,
+        "before": [
+          ")  # fmt: skip\n"
+        ],
+        "after": [
+          ")\n",
+          "# fmt: on\n"
+        ]
+      }
+    ]
+  },
   "loaders/bytes.mojo": {
     "before_sha256": "5600d6d9ca117fc7c7c97a2e5d6a687adc8090627c34cf3181935245dae87c07",
     "after_sha256": "139ca1cb876bdf7b0a7c258d1d3a40375d8f3b73c75af160e26e07e7c9ba062a",
@@ -608,6 +904,24 @@ EDGES = json.loads(r'''
       }
     ]
   },
+  "loaders/draco_mesh.mojo": {
+    "before_sha256": "1ceb206440f4f2d8ba78b46c5ef77e3d6a85c08ca00a650cac2753c668ce6a70",
+    "after_sha256": "ab2f61a4b78469708cb1e5a9aeb33daaea4bc6fae5fbb3d20ffa696a7a97eaee",
+    "before_token_sha256": "d9b801dec66befa1a014921a29d5d0cc3e60b37b3e268f1bcc5af91742ffb659",
+    "after_token_sha256": "e712b8c1f5a12b4c40de478be4c4b241279b7c566c839b2ca3d9d6e68b479e27",
+    "edits": [
+      {
+        "start": 820,
+        "stop": 821,
+        "before": [
+          "        return self._close(active^, faces, invalid^)\n"
+        ],
+        "after": [
+          "        return self._close(active^, faces, invalid)\n"
+        ]
+      }
+    ]
+  },
   "loaders/gltf_layout.mojo": {
     "before_sha256": "6061b8eaf1bf4fbe1e1503833a1e4a742d9d959dd488f7b6e05862e3d7e41067",
     "after_sha256": "a9963c0da350d872feb73695ca98e9ced0e43ae99fb635f44d86d6f6d7e54e27",
@@ -653,1172 +967,6 @@ EDGES = json.loads(r'''
           "            or count > MAX_GLTF_ACCESSOR_COUNT\n",
           "            or count > MAX_GLTF_ACCESSOR_BYTES // (self.width * 8)\n",
           "        ):\n"
-        ]
-      }
-    ]
-  },
-  "loaders/meshopt.mojo": {
-    "before_sha256": "09c9d8e98248fb0f3e05a3e2dcb01f7aafbe691b065e4ec0ec1f6f1de4680aec",
-    "after_sha256": "dd98ac61f878c9202c447d526086c113cb5942d9d262ce39023448c8f793a4e9",
-    "before_token_sha256": "079200d7dc3c70329177a08b7af961f3faf8310dfa1f13291a73c886b054b155",
-    "after_token_sha256": "4fa068fa3453b52162e1ea840c830d3616d8b07ba39985096ce74a6c086e0e19",
-    "edits": [
-      {
-        "start": 30,
-        "stop": 33,
-        "before": [],
-        "after": [
-          "\n",
-          "**Where this port differs.** Each decoded buffer is limited to 1 GiB.\n",
-          "The limit is checked before allocation for all three modes.\n"
-        ]
-      },
-      {
-        "start": 239,
-        "stop": 253,
-        "before": [],
-        "after": [
-          "def require_meshopt_output(count: Int, size: Int) raises:\n",
-          "    \"\"\"Check decoded storage after the mode validates count and size.\n",
-          "\n",
-          "    Args:\n",
-          "        count: The nonnegative element count.\n",
-          "        size: The positive bytes per element.\n",
-          "\n",
-          "    Raises:\n",
-          "        Error: If the decoded buffer would exceed 1 GiB.\n",
-          "    \"\"\"\n",
-          "    if count > (1 << 30) // size:\n",
-          "        raise Error(\"meshopt: a buffer too large to decode\")\n",
-          "\n",
-          "\n"
-        ]
-      },
-      {
-        "start": 306,
-        "stop": 307,
-        "before": [],
-        "after": [
-          "    require_meshopt_output(count, size)\n"
-        ]
-      },
-      {
-        "start": 317,
-        "stop": 325,
-        "before": [],
-        "after": [
-          "    # Even an all-zero block needs one header per four 16-byte groups.\n",
-          "    # Check this lower bound before allocating the decoded buffer.\n",
-          "    var full_headers = (block // _GROUP + 3) // 4\n",
-          "    var remainder = count % block\n",
-          "    var tail_headers = ((remainder + _GROUP - 1) // _GROUP + 3) // 4\n",
-          "    var headers = (count // block * full_headers + tail_headers) * size\n",
-          "    if count > 0 and headers > end - 1 - max(size, _TAIL_MIN):\n",
-          "        raise _malformed(-2)\n"
-        ]
-      },
-      {
-        "start": 438,
-        "stop": 439,
-        "before": [],
-        "after": [
-          "    require_meshopt_output(count, size)\n"
-        ]
-      },
-      {
-        "start": 565,
-        "stop": 566,
-        "before": [],
-        "after": [
-          "    require_meshopt_output(count, size)\n"
-        ]
-      }
-    ]
-  },
-  "math/matrix4.mojo": {
-    "before_sha256": "206877d7335ed69e9055ec69b2ac09bd83b493456bfc43c1083ea235a1a44549",
-    "after_sha256": "1e72ab51f9dbcee3af4c2bfe9da93946616736bf02f4b20e2160ee7b69b448fa",
-    "before_token_sha256": "e081739275371437cd16dd27657c3b19fe6f8b3bc7267aed33ff24fe17fce70f",
-    "after_token_sha256": "739ddcb86f0f39a6eca4737c932358c4cbd96a0d1f4bc87ab28a5f643a6ff070",
-    "edits": [
-      {
-        "start": 36,
-        "stop": 37,
-        "before": [],
-        "after": [
-          "    _pre_multiply,\n"
-        ]
-      },
-      {
-        "start": 244,
-        "stop": 245,
-        "before": [
-          "        var left = Matrix4(copy=other)\n",
-          "        left.multiply(self)\n",
-          "        self.elements = left.elements.copy()\n"
-        ],
-        "after": [
-          "        _pre_multiply[4](self.elements, other.elements)\n"
-        ]
-      }
-    ]
-  },
-  "math/square_matrix.mojo": {
-    "before_sha256": "04a9f011e814455c9d24a94c66df30b8137f7e9802a2a9b552b0d9bb05538c27",
-    "after_sha256": "f1b2e67489949b53594b5f06604a0227260fd961df2fdebe5347d91c82d99a69",
-    "before_token_sha256": "d9091249e49cf9e6abca3f6549987c41f0134c0d7dfeb310c128796f486b7f73",
-    "after_token_sha256": "61cce77fd47e8b3c17409747300b6b19b9090a48f121f37d01ca05200adde66d",
-    "edits": [
-      {
-        "start": 50,
-        "stop": 76,
-        "before": [],
-        "after": [
-          "            result[column * n + row] = total\n",
-          "    left = result^\n",
-          "\n",
-          "\n",
-          "@always_inline\n",
-          "def _pre_multiply[\n",
-          "    n: Int\n",
-          "](mut left: Array[Float32, n * n], right: Array[Float32, n * n]):\n",
-          "    \"\"\"Replace `left` with `right * left`.\n",
-          "\n",
-          "    The matrix stored in `left` is applied to a point first. `n` is three or\n",
-          "    four, so none of the loops can run zero times.\n",
-          "\n",
-          "    Parameters:\n",
-          "        n: The side length.\n",
-          "\n",
-          "    Args:\n",
-          "        left: The matrix applied first. It is replaced.\n",
-          "        right: The matrix applied second.\n",
-          "    \"\"\"\n",
-          "    var result = Array[Float32, n * n](fill=0.0)\n",
-          "    for row in range(n):  # pragma: no branch\n",
-          "        for column in range(n):  # pragma: no branch\n",
-          "            var total = Float32(0)\n",
-          "            for k in range(n):  # pragma: no branch\n",
-          "                total += right[k * n + row] * left[column * n + k]\n"
-        ]
-      }
-    ]
-  },
-  "math/vector4.mojo": {
-    "before_sha256": "44797637aae80c1e92c08592bc2a510e90e14e93d1c74bb4a01ca71034b10ee6",
-    "after_sha256": "db774733a27a706e5d5c940c4533de2c567d7d6ece3c918215052bccfd87b9aa",
-    "before_token_sha256": "ef760bfaac736f0aaeeed0ca854beb94340aa99b6ea4c49176cf8e422d152c95",
-    "after_token_sha256": "ef760bfaac736f0aaeeed0ca854beb94340aa99b6ea4c49176cf8e422d152c95",
-    "edits": [
-      {
-        "start": 49,
-        "stop": 52,
-        "before": [
-          "# diagonal entry is too small to divide by: its literal, not the exact\n",
-          "# square root of a half.\n"
-        ],
-        "after": [
-          "# diagonal entry is too small to divide by. three.js writes the literal\n",
-          "# 0.7071; this port keeps a closer approximation of the exact square\n",
-          "# root of a half instead.\n"
-        ]
-      }
-    ]
-  },
-  "postprocessing/denoise.mojo": {
-    "before_sha256": "0cc2fa358a413e982da70aafbf082c5cde41b1105c98cc3770f3d2149d1f0664",
-    "after_sha256": "03bd377c4458b6801ba5a19e4cedfe32d985a64d541c16a28ab5e8566a0ada19",
-    "before_token_sha256": "3c24d8a6900fb93334b719698dc563ce3d989fb7af36c8cba5e0f49333b1745e",
-    "after_token_sha256": "c354eb80dee8e692fbb73d2690024b34a735d5a41073374713422e5b367a9153",
-    "edits": [
-      {
-        "start": 20,
-        "stop": 25,
-        "before": [],
-        "after": [
-          "\n",
-          "The node multiplies its pixel-space offset by the matrix before dividing\n",
-          "by the image size. This order keeps the taps the same size in pixels on\n",
-          "rectangular frames. The port's upward texture coordinate reverses only\n",
-          "the resulting vertical offset.\n"
-        ]
-      },
-      {
-        "start": 132,
-        "stop": 133,
-        "before": [],
-        "after": [
-          "    # r186's node reads channel zero as radians, unlike the WebGL shader.\n"
-        ]
-      },
-      {
-        "start": 143,
-        "stop": 150,
-        "before": [
-          "        var ox = tap.x * scale / Float32(view.width)\n",
-          "        var oy = tap.y * scale / Float32(view.height)\n",
-          "        # `mat2(n.x, -n.y, n.x, n.y)` times the offset, column-major, on\n",
-          "        # a texture coordinate that grows down.\n",
-          "        var su = u + nx * ox + nx * oy\n",
-          "        var sv = v + ny * ox - ny * oy\n"
-        ],
-        "after": [
-          "        var ox = tap.x * scale\n",
-          "        var oy = tap.y * scale\n",
-          "        # r186 multiplies in pixel space, then divides by resolution.\n",
-          "        # Its mat2 is column-major and its texture coordinate grows down;\n",
-          "        # LightView's v grows up, so negate the matrix's vertical result.\n",
-          "        var su = u + (nx * ox + nx * oy) / Float32(view.width)\n",
-          "        var sv = v + (ny * ox - ny * oy) / Float32(view.height)\n"
-        ]
-      }
-    ]
-  },
-  "render/rasterizer.mojo": {
-    "before_sha256": "e8d1e85a25a771edc28ab063a8ae1b38946ca1589014c0bb6ea6126aa5a9cf25",
-    "after_sha256": "31536268f6086b7b3c88ac5e677cba745564031dd4ee46fe5635f34e83b5701f",
-    "before_token_sha256": "49c113f28ee16d52cbbb50c6f93b18902581fde0c15cede8634e71dfb64e16d0",
-    "after_token_sha256": "ef9436992ae54e881f609f6c3bafabd7ad471d77980184c1ba9391d2211a2748",
-    "edits": [
-      {
-        "start": 3529,
-        "stop": 3530,
-        "before": [],
-        "after": [
-          "    tones.reserve(image.width)\n"
-        ]
-      },
-      {
-        "start": 7257,
-        "stop": 7258,
-        "before": [
-          "async def _frame_band(\n"
-        ],
-        "after": [
-          "__async def _frame_band(\n"
-        ]
-      }
-    ]
-  },
-  "tests/test_byte_extent_boundaries.mojo": {
-    "before_sha256": "0622d29b6948317335a96f7eae18cc78a05d9c7f2dce456c72490a6f0cb06127",
-    "after_sha256": "d6871fc9d1356886cb8aaa97c40ed7000cd86c97677344c2be566bc98b42878e",
-    "before_token_sha256": "35b864d3b151524edd96a28dfe545c9b73b2e04cb0eed259455b2e98d14f0b8f",
-    "after_token_sha256": "8fe2e809ce3061d1abbc190113629540898168ae7b112676c8fdda67e68144cb",
-    "edits": [
-      {
-        "start": 77,
-        "stop": 118,
-        "before": [],
-        "after": [
-          "def test_texel_count_keeps_signed_and_zero_products() raises:\n",
-          "    for width in [-3, 0, 3]:\n",
-          "        for height in [-5, 0, 5]:\n",
-          "            for channels in [-7, 0, 7]:\n",
-          "                var count = width * height * channels\n",
-          "                require_texel_count(count, width, height, channels, \"signed\")\n",
-          "                with assert_raises(contains=\"signed\"):\n",
-          "                    require_texel_count(\n",
-          "                        count + 1, width, height, channels, \"signed\"\n",
-          "                    )\n",
-          "    # The final product fits even when a partial signed product does not.\n",
-          "    require_texel_count(Int.MIN, Int.MIN, -1, -1, \"signed\")\n",
-          "    require_texel_count(Int.MIN, -1, Int.MIN, -1, \"signed\")\n",
-          "    require_texel_count(Int.MIN, -1, -1, Int.MIN, \"signed\")\n",
-          "    require_texel_count(Int.MIN, Int.MIN // 2, 2, 1, \"signed\")\n",
-          "    require_texel_count(Int.MAX, Int.MAX, 1, 1, \"signed\")\n",
-          "    require_texel_count(-Int.MAX, Int.MAX, -1, 1, \"signed\")\n",
-          "    require_texel_count(0, Int.MIN, Int.MIN, 0, \"signed\")\n",
-          "    require_texel_count(0, Int.MIN, 0, Int.MIN, \"signed\")\n",
-          "    require_texel_count(0, 0, Int.MIN, Int.MIN, \"signed\")\n",
-          "\n",
-          "\n",
-          "def test_texel_count_refuses_overflow_with_the_callers_error() raises:\n",
-          "    for factors in [\n",
-          "        (Int.MAX, 2, 1),\n",
-          "        (Int.MAX, 1, 2),\n",
-          "        (Int.MIN, -1, 1),\n",
-          "        (Int.MIN, 1, -1),\n",
-          "        (Int.MIN, 2, 1),\n",
-          "        (Int.MIN, 1, 2),\n",
-          "        (Int.MIN, Int.MIN, 1),\n",
-          "        (Int.MIN, Int.MIN, Int.MIN),\n",
-          "        (Int.MIN // 2, -2, 1),\n",
-          "        (Int.MIN // 2, -1, 2),\n",
-          "    ]:\n",
-          "        with assert_raises(contains=\"too many texels\"):\n",
-          "            require_texel_count(\n",
-          "                0, factors[0], factors[1], factors[2], \"too many texels\"\n",
-          "            )\n",
-          "\n",
-          "\n"
-        ]
-      }
-    ]
-  },
-  "tests/test_carla_sensors_world.mojo": {
-    "before_sha256": "0e1d1728b42cb7f40a227d0d0b009256e2efa316cb7a2512a9de6b367127eb4a",
-    "after_sha256": "4a7596a49fc4f397509d3e1cd06fc50a1f6ba3d699d30cef28572a593967a8ec",
-    "before_token_sha256": "c5693c12310c68e8f5e7dd3c80d2cd81aebbb35bff4eebcc4d31edeaf38db358",
-    "after_token_sha256": "8f192d8af21059c08ad10fadfed76787f32d917c3aa37a9e5719c6f0a2cb4297",
-    "edits": [
-      {
-        "start": 121,
-        "stop": 122,
-        "before": [
-          "from std.math import inf, nan\n"
-        ],
-        "after": [
-          "from std.math import inf, isfinite, nan\n"
-        ]
-      },
-      {
-        "start": 934,
-        "stop": 1019,
-        "before": [],
-        "after": [
-          "def test_cam_snapshots_all_motion_after_a_heading_trigger() raises:\n",
-          "    var world = _world()\n",
-          "    var car = _car(world, 10, 1.75)\n",
-          "    world.set_target_velocity(car, Vector3(2, 0, 0))\n",
-          "    var service = CaService(\n",
-          "        world, car, Duration(0.1), Duration(1), False, CamNoise()\n",
-          "    )\n",
-          "    var rng = SensorRandom(0)\n",
-          "    var projection = world.map.geo_projection.copy()\n",
-          "    var tick = Duration(0.05)\n",
-          "    assert_true(Bool(service.trigger(world, projection, tick, rng)))\n",
-          "    _near(service.last_cam_position, 10, 1.75, 0)\n",
-          "    _near(service.last_cam_heading, 1, 0, 0)\n",
-          "    assert_almost_equal(service.last_cam_speed, 2)\n",
-          "    assert_equal(service.low_dynamics_counter, 0)\n",
-          "    world.elapsed_seconds = 0.2\n",
-          "    assert_false(Bool(service.trigger(world, projection, tick, rng)))\n",
-          "    # A simultaneous turn, move and speed change takes the heading branch.\n",
-          "    var pose = _pose(20, 1.75, 0, 30)\n",
-          "    var heading = pose.rotation.forward_vector()\n",
-          "    world.set_transform(car, pose)\n",
-          "    world.set_target_velocity(car, heading * 4)\n",
-          "    assert_true(Bool(service.trigger(world, projection, tick, rng)))\n",
-          "    _near(service.last_cam_position, 20, 1.75, 0)\n",
-          "    _near(service.last_cam_heading, heading.x, heading.y, heading.z)\n",
-          "    assert_almost_equal(service.last_cam_speed, 4, atol=1e-6)\n",
-          "    # No motion since that CAM must not trigger another minimum-gap CAM.\n",
-          "    world.elapsed_seconds = 0.31\n",
-          "    assert_false(Bool(service.trigger(world, projection, tick, rng)))\n",
-          "\n",
-          "\n",
-          "def test_cam_heading_threshold_and_rounded_antiparallel_cosine() raises:\n",
-          "    var world = _world()\n",
-          "    var car = _car(world, 0, 0)\n",
-          "    var service = CaService(\n",
-          "        world, car, Duration(0.1), Duration(1), False, CamNoise()\n",
-          "    )\n",
-          "    assert_true(service._heading_changed(world))\n",
-          "    service.last_cam_heading = Vector3(1, 0, 0)\n",
-          "    world.set_transform(car, _pose(0, 0, 0, 3.9))\n",
-          "    assert_false(service._heading_changed(world))\n",
-          "    world.set_transform(car, _pose(0, 0, 0, 4.1))\n",
-          "    assert_true(service._heading_changed(world))\n",
-          "    world.set_transform(car, _pose(0, 0, 0, 180))\n",
-          "    assert_true(service._heading_changed(world))\n",
-          "    # At three degrees the Float32 dot and lengths round to a cosine\n",
-          "    # greater than one. Negating one heading gives less than minus one,\n",
-          "    # although the geometric angle is exactly pi, independently of yaw.\n",
-          "    var pose = _pose(0, 0, 0, 3)\n",
-          "    world.set_transform(car, pose)\n",
-          "    var heading = pose.rotation.forward_vector()\n",
-          "    var cosine = Float64(heading.dot(heading)) / (\n",
-          "        Float64(heading.length()) * Float64(heading.length())\n",
-          "    )\n",
-          "    assert_true(cosine > 1)\n",
-          "    service.last_cam_heading = heading\n",
-          "    assert_false(service._heading_changed(world))\n",
-          "    service.last_cam_heading = heading * -1\n",
-          "    assert_true(service._heading_changed(world))\n",
-          "    # World transforms remain mutable. A nonfinite current heading must\n",
-          "    # conservatively count as changed, even with a valid previous sample.\n",
-          "    service.last_cam_heading = Vector3(1, 0, 0)\n",
-          "    world.set_transform(car, _pose(0, 0, 0, nan[DType.float32]()))\n",
-          "    assert_true(service._heading_changed(world))\n",
-          "    assert_false(isfinite(service.vehicle_heading.length()))\n",
-          "\n",
-          "\n",
-          "def test_fixed_rate_cam_also_snapshots_motion() raises:\n",
-          "    var world = _world()\n",
-          "    var car = _car(world, 12, 1.75)\n",
-          "    var pose = _pose(12, 1.75, 0, 90)\n",
-          "    world.set_transform(car, pose)\n",
-          "    var heading = pose.rotation.forward_vector()\n",
-          "    world.set_target_velocity(car, heading * 3)\n",
-          "    var service = CaService(\n",
-          "        world, car, Duration(0.1), Duration(1), True, CamNoise()\n",
-          "    )\n",
-          "    var rng = SensorRandom(0)\n",
-          "    var projection = world.map.geo_projection.copy()\n",
-          "    assert_true(Bool(service.trigger(world, projection, Duration(0.05), rng)))\n",
-          "    _near(service.last_cam_position, 12, 1.75, 0)\n",
-          "    _near(service.last_cam_heading, heading.x, heading.y, heading.z)\n",
-          "    assert_almost_equal(service.last_cam_speed, 3, atol=1e-6)\n",
-          "\n",
-          "\n"
-        ]
-      }
-    ]
-  },
-  "tests/test_denoise.mojo": {
-    "before_sha256": "568ceff912f36950f00fff1711a1780f9378e4a145c1599e514d80603b38ba95",
-    "after_sha256": "812ad9ddd1a35182b784a1fa04736f47b7f72335d72f0a2d861585326ec9c53a",
-    "before_token_sha256": "f7a7255dc7749b3c6e27ee5ab383bbb623b17d48a940f66e0d0f7e21a629a3c7",
-    "after_token_sha256": "19103a81e6833546107a4120b222b201f5f5024bacebec3aca149dbd9f6f0066",
-    "edits": [
-      {
-        "start": 24,
-        "stop": 31,
-        "before": [
-          "from postprocessing.denoise import DenoiseSettings, check_denoise, denoise_light\n"
-        ],
-        "after": [
-          "from postprocessing.denoise import (\n",
-          "    DenoiseSettings,\n",
-          "    check_denoise,\n",
-          "    denoise_light,\n",
-          "    denoise_pixel,\n",
-          ")\n",
-          "from postprocessing.sampling import LightView\n"
-        ]
-      },
-      {
-        "start": 32,
-        "stop": 33,
-        "before": [],
-        "after": [
-          "from math.matrix4 import Matrix4\n"
-        ]
-      },
-      {
-        "start": 49,
-        "stop": 50,
-        "before": [],
-        "after": [
-          "from std.math import cos, sin\n"
-        ]
-      },
-      {
-        "start": 186,
-        "stop": 235,
-        "before": [],
-        "after": [
-          "def test_node_offsets_match_independent_pixel_space_ramps() raises:\n",
-          "    # r186 DenoiseNode.js uses sin(noise[0]), not sin(2*pi*noise[0]).\n",
-          "    # Its column-major mat2 has columns (sin, -cos) and (sin, cos).\n",
-          "    # Apply that matrix to a pixel offset before normalizing by resolution.\n",
-          "    # An affine gray ramp has an exact bilinear sample at that pixel offset.\n",
-          "    for size in [(8, 8), (12, 8), (8, 12)]:\n",
-          "        var width = size[0]\n",
-          "        var height = size[1]\n",
-          "        var pixels = List[FloatColor]()\n",
-          "        for y in range(height):\n",
-          "            for x in range(width):\n",
-          "                var gray = Float32(x) * 0.04 + Float32(y) * 0.07\n",
-          "                pixels.append(FloatColor(gray, gray, gray, 0.3))\n",
-          "        var surface = List[FloatColor](\n",
-          "            length=width * height, fill=FloatColor(0, 0, 1, 1)\n",
-          "        )\n",
-          "        var depth = List[Float32](length=width * height, fill=0)\n",
-          "        var view = DepthView(\n",
-          "            depth, width, height, Matrix4(), Length(0.1), Length(10)\n",
-          "        )\n",
-          "        var source = LightView(pixels, width, height)\n",
-          "        var normals = LightView(surface, width, height)\n",
-          "        var settings = DenoiseSettings()\n",
-          "        settings.radius = 1\n",
-          "        settings.luma_phi = 1\n",
-          "        for turn in [Float32(0), Float32(0.5), Float32(1)]:\n",
-          "            var noise = List[Float32](length=64 * 64, fill=0)\n",
-          "            # DenoiseNode flips only its noise coordinate, so the source\n",
-          "            # row numbered three reads this row in the repeating noise.\n",
-          "            noise[(height - 1 - 3) * 64 + 4] = turn\n",
-          "            for tap in [Vector3(1, 0, 0), Vector3(0, 1, 0), Vector3(1, 2, 0)]:\n",
-          "                var disk: List[Vector3] = [tap]\n",
-          "                var dx = sin(Float64(turn)) * Float64(tap.x + tap.y)\n",
-          "                var dy = cos(Float64(turn)) * Float64(tap.y - tap.x)\n",
-          "                var center = 4.0 * 0.04 + 3.0 * 0.07\n",
-          "                var neighbor = center + dx * 0.04 + dy * 0.07\n",
-          "                var weight = 1.0 - abs(neighbor - center)\n",
-          "                var expected = (center + neighbor * weight) / (1.0 + weight)\n",
-          "                var actual = denoise_pixel(\n",
-          "                    source, view, normals, noise, disk, 4, 3, settings\n",
-          "                )\n",
-          "                assert_almost_equal(Float64(actual.r), expected, atol=1e-6)\n",
-          "                assert_almost_equal(Float64(actual.g), expected, atol=1e-6)\n",
-          "                assert_almost_equal(Float64(actual.b), expected, atol=1e-6)\n",
-          "                assert_almost_equal(actual.a, 0.3, atol=1e-7)\n",
-          "        _ = pixels^\n",
-          "        _ = surface^\n",
-          "\n",
-          "\n"
-        ]
-      }
-    ]
-  },
-  "tests/test_geometry_inputs.mojo": {
-    "before_sha256": "806d6910d12816bafce7a9a291a695a8c685dd5be51c15c72f5064bd426fecd6",
-    "after_sha256": "b1edbdd66935ff760dded7eac58e0c33a00bba5e338bfec1dd9b896cbecd400b",
-    "before_token_sha256": "41506da7bac57eeface2135b9917cf86b60d21e773d1d10dc4a9e0968e1b06d3",
-    "after_token_sha256": "c2ee36a16402f5d4e509d94c829d086b2b2b3a7c959a36d28d7a1d9dd8333876",
-    "edits": [
-      {
-        "start": 5,
-        "stop": 6,
-        "before": [
-          "\"\"\"Finite input contracts for builders without a JSON parameter backstop.\"\"\"\n"
-        ],
-        "after": [
-          "\"\"\"Finite input contracts checked before generated shape allocation.\"\"\"\n"
-        ]
-      },
-      {
-        "start": 7,
-        "stop": 9,
-        "before": [
-          "from core.buffer_geometry import POSITION\n"
-        ],
-        "after": [
-          "from core.buffer_geometry import BufferGeometry, POSITION\n",
-          "from geometries.box import box\n"
-        ]
-      },
-      {
-        "start": 10,
-        "stop": 20,
-        "before": [
-          "from geometries.circle import FULL_TURN, check_sweep\n"
-        ],
-        "after": [
-          "from geometries.circle import FULL_TURN, check_sweep, circle, ring\n",
-          "from geometries.cylinder import cylinder\n",
-          "from geometries.decal import decal\n",
-          "from geometries.plane import plane\n",
-          "from geometries.sphere import sphere\n",
-          "from geometries.surface import require_positive_radius\n",
-          "from geometries.torus import torus, torus_knot\n",
-          "from math.euler import Euler, XYZ\n",
-          "from math.matrix4 import Matrix4\n",
-          "from math.vector3 import Vector3\n"
-        ]
-      },
-      {
-        "start": 97,
-        "stop": 191,
-        "before": [],
-        "after": [
-          "def test_shapes_refuse_each_nonfinite_dimension_before_generation() raises:\n",
-          "    var geometry = box(Length(1, METER), Length(1, METER), Length(1, METER))\n",
-          "    for bad in [\n",
-          "        nan[DType.float32](),\n",
-          "        inf[DType.float32](),\n",
-          "        -inf[DType.float32](),\n",
-          "    ]:\n",
-          "        with assert_raises(contains=\"finite\"):\n",
-          "            require_positive_radius(bad, \"test\")\n",
-          "        with assert_raises(contains=\"finite\"):\n",
-          "            _ = circle(Length(bad, METER))\n",
-          "        with assert_raises(contains=\"finite\"):\n",
-          "            _ = sphere(Length(bad, METER))\n",
-          "        for axis in range(3):\n",
-          "            var values = [Float32(1), Float32(1), Float32(1)]\n",
-          "            values[axis] = bad\n",
-          "            with assert_raises(contains=\"finite\"):\n",
-          "                _ = box(\n",
-          "                    Length(values[0], METER),\n",
-          "                    Length(values[1], METER),\n",
-          "                    Length(values[2], METER),\n",
-          "                )\n",
-          "            with assert_raises(contains=\"finite\"):\n",
-          "                _ = cylinder(\n",
-          "                    Length(values[0], METER),\n",
-          "                    Length(values[1], METER),\n",
-          "                    Length(values[2], METER),\n",
-          "                )\n",
-          "            with assert_raises(contains=\"finite\"):\n",
-          "                _ = decal(\n",
-          "                    geometry,\n",
-          "                    Matrix4(),\n",
-          "                    Vector3(0, 0, 0),\n",
-          "                    Euler(\n",
-          "                        Angle(0, RADIAN),\n",
-          "                        Angle(0, RADIAN),\n",
-          "                        Angle(0, RADIAN),\n",
-          "                        XYZ,\n",
-          "                    ),\n",
-          "                    Length(values[0], METER),\n",
-          "                    Length(values[1], METER),\n",
-          "                    Length(values[2], METER),\n",
-          "                )\n",
-          "        for axis in range(2):\n",
-          "            var values = [Float32(1), Float32(2)]\n",
-          "            values[axis] = bad\n",
-          "            with assert_raises(contains=\"finite\"):\n",
-          "                _ = plane(Length(values[0], METER), Length(values[1], METER))\n",
-          "            with assert_raises(contains=\"finite\"):\n",
-          "                _ = ring(Length(values[0], METER), Length(values[1], METER))\n",
-          "            with assert_raises(contains=\"finite\"):\n",
-          "                _ = torus(Length(values[0], METER), Length(values[1], METER))\n",
-          "            with assert_raises(contains=\"finite\"):\n",
-          "                _ = torus_knot(\n",
-          "                    Length(values[0], METER), Length(values[1], METER)\n",
-          "                )\n",
-          "\n",
-          "\n",
-          "def test_finite_shared_radius_validation_keeps_zero_and_negative_errors() raises:\n",
-          "    require_positive_radius(Float32(1), \"test\")\n",
-          "    for value in [Float32(0), Float32(-1)]:\n",
-          "        with assert_raises(contains=\"positive\"):\n",
-          "            require_positive_radius(value, \"test\")\n",
-          "\n",
-          "\n",
-          "def test_nonfinite_dimensions_fail_before_topology_or_source_reads() raises:\n",
-          "    var bad = Length(inf[DType.float32](), METER)\n",
-          "    var one = Length(1, METER)\n",
-          "    with assert_raises(contains=\"finite\"):\n",
-          "        _ = box(bad, one, one, 0)\n",
-          "    with assert_raises(contains=\"finite\"):\n",
-          "        _ = plane(bad, one, 0)\n",
-          "    with assert_raises(contains=\"finite\"):\n",
-          "        _ = circle(bad, 0)\n",
-          "    with assert_raises(contains=\"finite\"):\n",
-          "        _ = ring(one, bad, 0)\n",
-          "    with assert_raises(contains=\"finite\"):\n",
-          "        _ = cylinder(one, bad, one, 0)\n",
-          "    with assert_raises(contains=\"finite\"):\n",
-          "        _ = torus(one, bad, 0)\n",
-          "    with assert_raises(contains=\"finite\"):\n",
-          "        _ = torus_knot(one, bad, 0)\n",
-          "    with assert_raises(contains=\"finite\"):\n",
-          "        _ = decal(\n",
-          "            BufferGeometry(),\n",
-          "            Matrix4(),\n",
-          "            Vector3(0, 0, 0),\n",
-          "            Euler(Angle(0, RADIAN), Angle(0, RADIAN), Angle(0, RADIAN), XYZ),\n",
-          "            one,\n",
-          "            one,\n",
-          "            bad,\n",
-          "        )\n",
-          "\n",
-          "\n"
-        ]
-      }
-    ]
-  },
-  "tests/test_matrix4.mojo": {
-    "before_sha256": "879a370a7aecda5afc8724d03cc3b6cbb4a3b374208ac2aa74de40c1f490448c",
-    "after_sha256": "a40cb17b07712d350963076d816254a0640c9549b6f796a1b235cbf1837aa8d9",
-    "before_token_sha256": "6d8f2a1cfbef6f0ae37c937fdcc2064ae08522f103f3e2c56cb17cf5c4f6676e",
-    "after_token_sha256": "1c85bdec2aae231509783143de025bf4685d650dac5e326ad93fb2c9795def93",
-    "edits": [
-      {
-        "start": 204,
-        "stop": 259,
-        "before": [],
-        "after": [
-          "\n",
-          "\n",
-          "def test_premultiplication_matches_an_independent_dense_product() raises:\n",
-          "    var a = Matrix4()\n",
-          "    a.set(1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16)\n",
-          "    var b = Matrix4()\n",
-          "    b.set(2, 0, 1, 3, -1, 4, 2, 0, 5, 1, 0, -2, 0, 3, -1, 1)\n",
-          "    var before = a\n",
-          "    var other = b\n",
-          "    a.premultiply(b)\n",
-          "    # b*a, independently worked in row-major order with integer sums.\n",
-          "    var expected = Matrix4()\n",
-          "    expected.set(\n",
-          "        50,\n",
-          "        56,\n",
-          "        62,\n",
-          "        68,\n",
-          "        37,\n",
-          "        42,\n",
-          "        47,\n",
-          "        52,\n",
-          "        -16,\n",
-          "        -12,\n",
-          "        -8,\n",
-          "        -4,\n",
-          "        19,\n",
-          "        22,\n",
-          "        25,\n",
-          "        28,\n",
-          "    )\n",
-          "    assert_same(a, expected)\n",
-          "    assert_same(b, other)\n",
-          "    # Direct self-aliasing is refused by Mojo; an explicit copy squares it.\n",
-          "    var squared = before\n",
-          "    squared.premultiply(Matrix4(copy=squared))\n",
-          "    var expected_square = Matrix4()\n",
-          "    expected_square.set(\n",
-          "        90,\n",
-          "        100,\n",
-          "        110,\n",
-          "        120,\n",
-          "        202,\n",
-          "        228,\n",
-          "        254,\n",
-          "        280,\n",
-          "        314,\n",
-          "        356,\n",
-          "        398,\n",
-          "        440,\n",
-          "        426,\n",
-          "        484,\n",
-          "        542,\n",
-          "        600,\n",
-          "    )\n",
-          "    assert_same(squared, expected_square)\n"
-        ]
-      }
-    ]
-  },
-  "tools/carla_lane_oracle/test_pr760_arithmetic_stage.py": {
-    "before_sha256": "ac51eb5dd58c8e3768f2405108203351194d72d63f2b53f4e30d5b2d4d8c26ab",
-    "after_sha256": "e1511129ab59d3d6a982b0de436f6b42252a20a539e978e628e4a7bc50fe7ae7",
-    "before_token_sha256": "73561ca033b0eef88bf6ce996cfe062f8b2b34bc2652feda12dc5aef15de9e68",
-    "after_token_sha256": "8780a11ccdebf9303033102ac5fcb5aac586783ee459f5504e449d52f7524691",
-    "edits": [
-      {
-        "start": 12,
-        "stop": 13,
-        "before": [],
-        "after": [
-          "import pr780_source_successor as successor\n"
-        ]
-      },
-      {
-        "start": 22,
-        "stop": 24,
-        "before": [
-          "        cls.inputs = {path: (ROOT/path).read_bytes() for path in stage.INPUT_SHA256}\n"
-        ],
-        "after": [
-          "        cls.inputs = {path: successor.predecessor_bytes(path, (ROOT/path).read_bytes())\n",
-          "                      for path in stage.INPUT_SHA256}\n"
-        ]
-      },
-      {
-        "start": 130,
-        "stop": 131,
-        "before": [
-          "            current = (ROOT/path).read_bytes().decode('utf-8')\n"
-        ],
-        "after": [
-          "            current = successor.predecessor_bytes(path, (ROOT/path).read_bytes()).decode('utf-8')\n"
-        ]
-      },
-      {
-        "start": 156,
-        "stop": 158,
-        "before": [
-          "        inputs = {path: (ROOT/path).read_bytes() for path in stage.REGISTRY_INPUT_SHA256}\n"
-        ],
-        "after": [
-          "        inputs = {path: successor.predecessor_bytes(path, (ROOT/path).read_bytes())\n",
-          "                  for path in stage.REGISTRY_INPUT_SHA256}\n"
-        ]
-      }
-    ]
-  },
-  "tools/carla_lane_oracle/test_pr760_physical_image.py": {
-    "before_sha256": "6df971f2bf09c710a4e6ababc6adeea8995fd2e86c3e6866e548d5b193ae3669",
-    "after_sha256": "bb905630d2fe05f7f7a3153536f5fcbb406793b22f5d7300600647ac80308868",
-    "before_token_sha256": "74ca01c4b41870f5b83e81d83ac19063908258e12e2c58026092a958f05e45ec",
-    "after_token_sha256": "48e0b075a1764f210c5d662a4ad87a1b90eaf839a1dcc2dc6a7b7da149c8b8a5",
-    "edits": [
-      {
-        "start": 122,
-        "stop": 123,
-        "before": [],
-        "after": [
-          "            raw = owner.pr780_successor.predecessor_bytes(path, raw)\n"
-        ]
-      },
-      {
-        "start": 241,
-        "stop": 243,
-        "before": [
-          "            previous = (owner.pr776_predecessor_bytes(path, raw) if path in (\n"
-        ],
-        "after": [
-          "            previous = owner.pr780_successor.predecessor_bytes(path, raw)\n",
-          "            previous = (owner.pr776_predecessor_bytes(path, previous) if path in (\n"
-        ]
-      },
-      {
-        "start": 244,
-        "stop": 245,
-        "before": [
-          "                        'tools/carla_lane_oracle/test_typed_boundary_contracts.py') else raw)\n"
-        ],
-        "after": [
-          "                        'tools/carla_lane_oracle/test_typed_boundary_contracts.py') else previous)\n"
-        ]
-      }
-    ]
-  },
-  "tools/carla_lane_oracle/test_pr776_input_successors.py": {
-    "before_sha256": "148a021e1d8173122f231f4e6839d4dfd7bb2bb14d76d70e3725ff310620d2aa",
-    "after_sha256": "0e69f25b38f18cef70ba7751aa45b7e434593a0a900fa9666029806db6e518e4",
-    "before_token_sha256": "a5fbfe1798ba77ac6154f228731a26c54c73174a159328422e2ae95b793c26a5",
-    "after_token_sha256": "10847c0ee458a0c5d32ab01194a460436127c7daff25279d6ddaf8af85586875",
-    "edits": [
-      {
-        "start": 61,
-        "stop": 62,
-        "before": [],
-        "after": [
-          "        raw = owner.pr780_successor.predecessor_bytes(path, raw)\n"
-        ]
-      }
-    ]
-  },
-  "tools/carla_lane_oracle/test_typed_boundary_contracts.py": {
-    "before_sha256": "8dee4d9c4bf42214fb2f10fbdcf71a4ba04398095d8c62a16233ad6fc038fce7",
-    "after_sha256": "5a8d3d51eae53713e6133f4640d101176ac5d228f7e5085e9bebeb6bfa6d9f5f",
-    "before_token_sha256": "f71efcac558cf883d01cc2cf792879074f5275e36fd3cd8c2e2d43b2de380db3",
-    "after_token_sha256": "c45993ef4292b45926aed436aab5964e3f70135bade264194e95bb2618a43b2d",
-    "edits": [
-      {
-        "start": 43,
-        "stop": 45,
-        "before": [
-          "            text = (ROOT/name).read_text()\n",
-          "            return typed.historical_source(name, text)\n"
-        ],
-        "after": [
-          "            raw = audit.pr780_successor.predecessor_bytes(name, (ROOT/name).read_bytes())\n",
-          "            return typed.historical_source(name, raw.decode('utf-8'))\n"
-        ]
-      },
-      {
-        "start": 444,
-        "stop": 445,
-        "before": [],
-        "after": [
-          "                raw = audit.pr780_successor.predecessor_bytes(path, raw)\n"
-        ]
-      }
-    ]
-  },
-  "core/deform.mojo": {
-    "before_sha256": "6bc25c6adf469a5bc9ea37ae09a4822e9210a03d56c977a1f0c533ed02b9bf58",
-    "after_sha256": "62edb70d0bb9fa401f0776b7bc8fc5bcb2e0622b41f80d6c6e5cd5c847af62e8",
-    "before_token_sha256": "7d94308b0c36222350314a9a811ace9afc4f3e97762811908a2d80189bc5eb18",
-    "after_token_sha256": "1a68883112123b8313baad5b2fc075a6849b0e025dc500325e3d4b7668b51a07",
-    "edits": [
-      {
-        "start": 359,
-        "stop": 360,
-        "before": [
-          "    return SkinPose(skinned.skeleton.pose(placed), skinned.bind_matrix, undo^)\n"
-        ],
-        "after": [
-          "    return SkinPose(skinned.skeleton.pose(placed), skinned.bind_matrix, undo)\n"
-        ]
-      }
-    ]
-  },
-  "extensions/carla/assets.mojo": {
-    "before_sha256": "0bb273644a6d6cffaad986236e8aaafe9355549b37a10289cd9b14555f4e1acc",
-    "after_sha256": "b051a911885031a06eee4a609ce030ea8629f0ab09e0f12308d89c009e8bde8d",
-    "before_token_sha256": "70261521b837b27b7f0d1068a4422331e927d64089962d57ee20f53c3781cd64",
-    "after_token_sha256": "dbc7c2a25e2d68fa3456e410bf66bf921f4dd87779e342df1d53a49f755bdfd8",
-    "edits": [
-      {
-        "start": 1488,
-        "stop": 1489,
-        "before": [
-          "        scene.add_mesh(mesh^)\n"
-        ],
-        "after": [
-          "        scene.add_mesh(mesh)\n"
-        ]
-      }
-    ]
-  },
-  "extensions/carla/map.mojo": {
-    "before_sha256": "b3862a55a54927b2a1e50186af82f64bdf145adbef5cef9f31ab19d9585749df",
-    "after_sha256": "288d0e5d3a5bc2e5a6b9542868de6566dc6cb4de6eae39192c0289d76a8c99fa",
-    "before_token_sha256": "0263ba183b30437b826ada3ceedb3d2c5a3664dc95245743a17209f568607b79",
-    "after_token_sha256": "6531e0d35cf724f88b0c17c310996830b079056ff173b146504de7850b92dfe1",
-    "edits": [
-      {
-        "start": 189,
-        "stop": 190,
-        "before": [
-          "from std.hashlib import Hasher\n"
-        ],
-        "after": [
-          "from std.hash import Hasher\n"
-        ]
-      }
-    ]
-  },
-  "extensions/carla/map_builder.mojo": {
-    "before_sha256": "f5e28830bb017e42b61d3a40f7e96711ad7aa893d121472f311e36b9a9572d0c",
-    "after_sha256": "6c705c9a40e045c30f70dfbc160e8b8fc706396ccbc0fc0e21e5ca92ab5b6078",
-    "before_token_sha256": "4d153beee1e83966264af944bf260597fbf727785eb193d3710a3b5a0c33a977",
-    "after_token_sha256": "e44cd56000fa29e28c8085c1d5b6dfc810c6a775b80f04db9d7d7f6afe0e30e5",
-    "edits": [
-      {
-        "start": 1384,
-        "stop": 1385,
-        "before": [
-          "            RoadInfoGeometry._from_si(s, geometry^)\n"
-        ],
-        "after": [
-          "            RoadInfoGeometry._from_si(s, geometry)\n"
-        ]
-      }
-    ]
-  },
-  "extensions/carla/model_cache.mojo": {
-    "before_sha256": "a5832785f758cd6fe99f32cfa04b90399ebfcd4c9ffdf1e286f79c613cb1cd91",
-    "after_sha256": "6c95fe4a1e5218f26dac0c9889e2246d53ec620cebb1230166a184bbe8af93a9",
-    "before_token_sha256": "b584c4522bf996506402278ab292de94c65d24a7176f37aeed5ab91b848b2a16",
-    "after_token_sha256": "209c439bf0c9449cc6fc47784fe517076de04f80cf52332695e7b85a4afbc864",
-    "edits": [
-      {
-        "start": 246,
-        "stop": 247,
-        "before": [
-          "            scene.add_mesh(mesh^)\n"
-        ],
-        "after": [
-          "            scene.add_mesh(mesh)\n"
-        ]
-      }
-    ]
-  },
-  "extensions/carla/sensor.mojo": {
-    "before_sha256": "e20a4f8341d36615682dd1820a7a1587ebf32aeabac402b36d0646f277239f75",
-    "after_sha256": "3dab708ddf17d214821eee9aaf40fce3da8583f602c86bd058da5d3f016ea12b",
-    "before_token_sha256": "c58baff8992f6eb88a675fa837c0c962589ec157a41e6e9fbf78b18438fb8119",
-    "after_token_sha256": "c58baff8992f6eb88a675fa837c0c962589ec157a41e6e9fbf78b18438fb8119",
-    "edits": [
-      {
-        "start": 69,
-        "stop": 70,
-        "before": [],
-        "after": [
-          "# fmt: off\n"
-        ]
-      },
-      {
-        "start": 101,
-        "stop": 103,
-        "before": [
-          "]  # fmt: skip\n"
-        ],
-        "after": [
-          "]\n",
-          "# fmt: on\n"
-        ]
-      }
-    ]
-  },
-  "extensions/carla/sensor_manager.mojo": {
-    "before_sha256": "d87069be62eb405cbc976d0cba12c5d0c5e5db3d520111b788b2e9c9ca18029e",
-    "after_sha256": "c0b21899dabe7e21c7d8744548845c9ca31a12c2e1598eac37ba3077565a1567",
-    "before_token_sha256": "fac0a508fbc6540191d09b3a91e449544ebd6557399f2696bc6bf81cbddd86b4",
-    "after_token_sha256": "fac0a508fbc6540191d09b3a91e449544ebd6557399f2696bc6bf81cbddd86b4",
-    "edits": [
-      {
-        "start": 235,
-        "stop": 236,
-        "before": [],
-        "after": [
-          "# fmt: off\n"
-        ]
-      },
-      {
-        "start": 238,
-        "stop": 240,
-        "before": [
-          "]  # fmt: skip\n"
-        ],
-        "after": [
-          "]\n",
-          "# fmt: on\n"
-        ]
-      }
-    ]
-  },
-  "extensions/carla/speed_limits.mojo": {
-    "before_sha256": "1e95ebc085e03a44e4daaef20a94b724dedc4240a2099227e82be54d32b045f6",
-    "after_sha256": "2d9d5401b3dabf53c1c19f0a8098009275e19edb978f5ae369596fe7ac6557a0",
-    "before_token_sha256": "5ba74b5993221135eba428267daafe27011934dbe8fecf9928edd41670572026",
-    "after_token_sha256": "62d358aaefa3590d00cd56121ff2d132a87cbfb05ce8786d22bad6bc9eea850a",
-    "edits": [
-      {
-        "start": 145,
-        "stop": 146,
-        "before": [
-          "    var value: Float64\n",
-          "    try:\n",
-          "        value = Float64(number)\n",
-          "    except:\n",
-          "        raise Error(\"OpenDRIVE speed needs a numeric max value\")\n"
-        ],
-        "after": [
-          "    var value = Float64(number)\n"
-        ]
-      }
-    ]
-  },
-  "extensions/carla/town.mojo": {
-    "before_sha256": "f1917d2fdbe678e0f6623d0bd44f80f54b4e0a9f9c4bb9c486c312ae6cf50ee5",
-    "after_sha256": "dbf66b4953eda09d150e9cec8d7b74b489c5f6bdd38b77049eaddfcda49d3eb8",
-    "before_token_sha256": "63f9e55ab1cf9ff7e2722a6a7e1df4a1bb5475bce1bab89f8a58fd1a7f218e5a",
-    "after_token_sha256": "0ba1fbf1bdf04f174c844c0335c666b49808fc2873a19b5a62fbcec10b029a5b",
-    "edits": [
-      {
-        "start": 1397,
-        "stop": 1398,
-        "before": [
-          "        scene.add_mesh(mesh^)\n"
-        ],
-        "after": [
-          "        scene.add_mesh(mesh)\n"
-        ]
-      }
-    ]
-  },
-  "extensions/carla/world.mojo": {
-    "before_sha256": "f8d8f6583eef3ea409f0c057263d9c55337c8d647806400b711afa398b88a4c1",
-    "after_sha256": "e1c17354267d5ba6f49378cb8c04bf3e60ad61b2e07c50044d3eceee2261a16e",
-    "before_token_sha256": "1645044b0a0ccc1d167d981428d28b4739472bc11930348c5c8dc34533a142e4",
-    "after_token_sha256": "056d05b7306a1b03390df568cde37ca711653daaf812294967b9b9be96def22c",
-    "edits": [
-      {
-        "start": 162,
-        "stop": 163,
-        "before": [
-          "from std.hashlib import Hasher\n"
-        ],
-        "after": [
-          "from std.hash import Hasher\n"
-        ]
-      }
-    ]
-  },
-  "extensions/humanoid/skeleton/head/hair/shading.mojo": {
-    "before_sha256": "5cd145858e9175d306ce6b21bc4d8e6e674e6aecfd87dc7e5be4fc102b6caa7e",
-    "after_sha256": "ba53a4ffb93734551c77b2e844de8448a0d1a7d4a5d1dbf248374125215307b2",
-    "before_token_sha256": "0943825a89ef343fdd80c3fb7cb1ede94d9f61d828c9672da52903aaeba252ab",
-    "after_token_sha256": "b11d9263c6e4a7c07a7ed753b090508034b922bbe0e984b0ad6a650b10a4c63b",
-    "edits": [
-      {
-        "start": 284,
-        "stop": 285,
-        "before": [
-          "async def _shade_task(\n"
-        ],
-        "after": [
-          "__async def _shade_task(\n"
-        ]
-      }
-    ]
-  },
-  "extensions/humanoid/skeleton/head/hair/strands.mojo": {
-    "before_sha256": "058c0e6fbfce95ee97c79247622185de968c8de5e0ad23240d667da13776404f",
-    "after_sha256": "81d104e6b65fe1539bf9c244330ae53b6d337ad081529cb0c5f7bcde27887db5",
-    "before_token_sha256": "d7195018a457c231f60d8ccaa36b924288d567c691efd62508554265569a0b4a",
-    "after_token_sha256": "4ccdb2217bcdd1e76b39d66dca7643a93ba82487dbb510784686af504b69062d",
-    "edits": [
-      {
-        "start": 252,
-        "stop": 253,
-        "before": [
-          "async def _depth_task(\n"
-        ],
-        "after": [
-          "__async def _depth_task(\n"
-        ]
-      }
-    ]
-  },
-  "geometries/attribute_utils.mojo": {
-    "before_sha256": "0a87276b9264a028a3220a667e39f8e96ff6fde7e41ed2c180e0aed7484ccda6",
-    "after_sha256": "91d45ff588571ab0bbda20331d1f60a0b55e124985a76f8cad97d682bdca523e",
-    "before_token_sha256": "51190bc7d2e5620e99b873064d00bc4927247686f5726aa262aea1a48268f36b",
-    "after_token_sha256": "fc2bdb93fb28ac7beff5a2a2350ef881efc9d61b8ac4100f1186222cbd433bb1",
-    "edits": [
-      {
-        "start": 139,
-        "stop": 140,
-        "before": [
-          "            stored^, size, first.component_type(), first.is_normalized()\n"
-        ],
-        "after": [
-          "            stored, size, first.component_type(), first.is_normalized()\n"
-        ]
-      }
-    ]
-  },
-  "lights/shadow.mojo": {
-    "before_sha256": "e57aabcefe61cebaa8e57ae129f0cae3873215b7b1c0d2171c972d78d4015b81",
-    "after_sha256": "649970324f8a80cd0ba959f3278d635b12b9886a5ecb09290620b5b61b3c1d20",
-    "before_token_sha256": "c91ae04a499fb4362157f5aa3a48a8b0cc599a85c8504efff633ac7645f3a3d9",
-    "after_token_sha256": "c91ae04a499fb4362157f5aa3a48a8b0cc599a85c8504efff633ac7645f3a3d9",
-    "edits": [
-      {
-        "start": 191,
-        "stop": 192,
-        "before": [],
-        "after": [
-          "# fmt: off\n"
-        ]
-      },
-      {
-        "start": 199,
-        "stop": 202,
-        "before": [
-          ")  # fmt: skip\n"
-        ],
-        "after": [
-          ")\n",
-          "# fmt: on\n",
-          "# fmt: off\n"
-        ]
-      },
-      {
-        "start": 209,
-        "stop": 211,
-        "before": [
-          ")  # fmt: skip\n"
-        ],
-        "after": [
-          ")\n",
-          "# fmt: on\n"
-        ]
-      }
-    ]
-  },
-  "loaders/draco_mesh.mojo": {
-    "before_sha256": "1ceb206440f4f2d8ba78b46c5ef77e3d6a85c08ca00a650cac2753c668ce6a70",
-    "after_sha256": "ab2f61a4b78469708cb1e5a9aeb33daaea4bc6fae5fbb3d20ffa696a7a97eaee",
-    "before_token_sha256": "d9b801dec66befa1a014921a29d5d0cc3e60b37b3e268f1bcc5af91742ffb659",
-    "after_token_sha256": "e712b8c1f5a12b4c40de478be4c4b241279b7c566c839b2ca3d9d6e68b479e27",
-    "edits": [
-      {
-        "start": 820,
-        "stop": 821,
-        "before": [
-          "        return self._close(active^, faces, invalid^)\n"
-        ],
-        "after": [
-          "        return self._close(active^, faces, invalid)\n"
         ]
       }
     ]
@@ -1920,6 +1068,84 @@ EDGES = json.loads(r'''
       }
     ]
   },
+  "loaders/meshopt.mojo": {
+    "before_sha256": "09c9d8e98248fb0f3e05a3e2dcb01f7aafbe691b065e4ec0ec1f6f1de4680aec",
+    "after_sha256": "dd98ac61f878c9202c447d526086c113cb5942d9d262ce39023448c8f793a4e9",
+    "before_token_sha256": "079200d7dc3c70329177a08b7af961f3faf8310dfa1f13291a73c886b054b155",
+    "after_token_sha256": "4fa068fa3453b52162e1ea840c830d3616d8b07ba39985096ce74a6c086e0e19",
+    "edits": [
+      {
+        "start": 30,
+        "stop": 33,
+        "before": [],
+        "after": [
+          "\n",
+          "**Where this port differs.** Each decoded buffer is limited to 1 GiB.\n",
+          "The limit is checked before allocation for all three modes.\n"
+        ]
+      },
+      {
+        "start": 239,
+        "stop": 253,
+        "before": [],
+        "after": [
+          "def require_meshopt_output(count: Int, size: Int) raises:\n",
+          "    \"\"\"Check decoded storage after the mode validates count and size.\n",
+          "\n",
+          "    Args:\n",
+          "        count: The nonnegative element count.\n",
+          "        size: The positive bytes per element.\n",
+          "\n",
+          "    Raises:\n",
+          "        Error: If the decoded buffer would exceed 1 GiB.\n",
+          "    \"\"\"\n",
+          "    if count > (1 << 30) // size:\n",
+          "        raise Error(\"meshopt: a buffer too large to decode\")\n",
+          "\n",
+          "\n"
+        ]
+      },
+      {
+        "start": 306,
+        "stop": 307,
+        "before": [],
+        "after": [
+          "    require_meshopt_output(count, size)\n"
+        ]
+      },
+      {
+        "start": 317,
+        "stop": 325,
+        "before": [],
+        "after": [
+          "    # Even an all-zero block needs one header per four 16-byte groups.\n",
+          "    # Check this lower bound before allocating the decoded buffer.\n",
+          "    var full_headers = (block // _GROUP + 3) // 4\n",
+          "    var remainder = count % block\n",
+          "    var tail_headers = ((remainder + _GROUP - 1) // _GROUP + 3) // 4\n",
+          "    var headers = (count // block * full_headers + tail_headers) * size\n",
+          "    if count > 0 and headers > end - 1 - max(size, _TAIL_MIN):\n",
+          "        raise _malformed(-2)\n"
+        ]
+      },
+      {
+        "start": 438,
+        "stop": 439,
+        "before": [],
+        "after": [
+          "    require_meshopt_output(count, size)\n"
+        ]
+      },
+      {
+        "start": 565,
+        "stop": 566,
+        "before": [],
+        "after": [
+          "    require_meshopt_output(count, size)\n"
+        ]
+      }
+    ]
+  },
   "math/convex_hull.mojo": {
     "before_sha256": "a31ec9ca314e401724838b0eb2b488bf033d03dc0a5403a77a4f0ac905034c9c",
     "after_sha256": "3bca4e4ad3bd88bd02d4ac0e1b29d6942c20f148674190d71f22eb8ec60d486b",
@@ -1945,6 +1171,1984 @@ EDGES = json.loads(r'''
         ],
         "after": [
           "    Mojo 1.1 and 1.2 ldexp form a power of two before multiplication. Exponents\n"
+        ]
+      }
+    ]
+  },
+  "math/matrix4.mojo": {
+    "before_sha256": "206877d7335ed69e9055ec69b2ac09bd83b493456bfc43c1083ea235a1a44549",
+    "after_sha256": "1e72ab51f9dbcee3af4c2bfe9da93946616736bf02f4b20e2160ee7b69b448fa",
+    "before_token_sha256": "e081739275371437cd16dd27657c3b19fe6f8b3bc7267aed33ff24fe17fce70f",
+    "after_token_sha256": "739ddcb86f0f39a6eca4737c932358c4cbd96a0d1f4bc87ab28a5f643a6ff070",
+    "edits": [
+      {
+        "start": 36,
+        "stop": 37,
+        "before": [],
+        "after": [
+          "    _pre_multiply,\n"
+        ]
+      },
+      {
+        "start": 244,
+        "stop": 245,
+        "before": [
+          "        var left = Matrix4(copy=other)\n",
+          "        left.multiply(self)\n",
+          "        self.elements = left.elements.copy()\n"
+        ],
+        "after": [
+          "        _pre_multiply[4](self.elements, other.elements)\n"
+        ]
+      }
+    ]
+  },
+  "math/square_matrix.mojo": {
+    "before_sha256": "04a9f011e814455c9d24a94c66df30b8137f7e9802a2a9b552b0d9bb05538c27",
+    "after_sha256": "f1b2e67489949b53594b5f06604a0227260fd961df2fdebe5347d91c82d99a69",
+    "before_token_sha256": "d9091249e49cf9e6abca3f6549987c41f0134c0d7dfeb310c128796f486b7f73",
+    "after_token_sha256": "61cce77fd47e8b3c17409747300b6b19b9090a48f121f37d01ca05200adde66d",
+    "edits": [
+      {
+        "start": 50,
+        "stop": 76,
+        "before": [],
+        "after": [
+          "            result[column * n + row] = total\n",
+          "    left = result^\n",
+          "\n",
+          "\n",
+          "@always_inline\n",
+          "def _pre_multiply[\n",
+          "    n: Int\n",
+          "](mut left: Array[Float32, n * n], right: Array[Float32, n * n]):\n",
+          "    \"\"\"Replace `left` with `right * left`.\n",
+          "\n",
+          "    The matrix stored in `left` is applied to a point first. `n` is three or\n",
+          "    four, so none of the loops can run zero times.\n",
+          "\n",
+          "    Parameters:\n",
+          "        n: The side length.\n",
+          "\n",
+          "    Args:\n",
+          "        left: The matrix applied first. It is replaced.\n",
+          "        right: The matrix applied second.\n",
+          "    \"\"\"\n",
+          "    var result = Array[Float32, n * n](fill=0.0)\n",
+          "    for row in range(n):  # pragma: no branch\n",
+          "        for column in range(n):  # pragma: no branch\n",
+          "            var total = Float32(0)\n",
+          "            for k in range(n):  # pragma: no branch\n",
+          "                total += right[k * n + row] * left[column * n + k]\n"
+        ]
+      }
+    ]
+  },
+  "math/vector4.mojo": {
+    "before_sha256": "44797637aae80c1e92c08592bc2a510e90e14e93d1c74bb4a01ca71034b10ee6",
+    "after_sha256": "db774733a27a706e5d5c940c4533de2c567d7d6ece3c918215052bccfd87b9aa",
+    "before_token_sha256": "ef760bfaac736f0aaeeed0ca854beb94340aa99b6ea4c49176cf8e422d152c95",
+    "after_token_sha256": "ef760bfaac736f0aaeeed0ca854beb94340aa99b6ea4c49176cf8e422d152c95",
+    "edits": [
+      {
+        "start": 49,
+        "stop": 52,
+        "before": [
+          "# diagonal entry is too small to divide by: its literal, not the exact\n",
+          "# square root of a half.\n"
+        ],
+        "after": [
+          "# diagonal entry is too small to divide by. three.js writes the literal\n",
+          "# 0.7071; this port keeps a closer approximation of the exact square\n",
+          "# root of a half instead.\n"
+        ]
+      }
+    ]
+  },
+  "objects/gaussian_splat.mojo": {
+    "before_sha256": "01fe94cc3159b21a70c104ea92a3631e57c217f19ad26f17bd2bd3ad3ff0f80f",
+    "after_sha256": "6b5834369f244c8eaf6a4a6d363bcca7f645a4964f72ddea25df62f63097cf3c",
+    "before_token_sha256": "ba6d8c9dc92963163d2d47f69c5ddb8f0c1e312ee202f941e5efcb4ebdc6e347",
+    "after_token_sha256": "73030c3daaa18367bf29232d859f5e6a3774ba0cd6a1ed0230fa6072b1bb1dd8",
+    "edits": [
+      {
+        "start": 27,
+        "stop": 30,
+        "before": [
+          "  furthest first.\n"
+        ],
+        "after": [
+          "  furthest first. Workers share a large sort out in runs of the splats;\n",
+          "  each run counts its bins, and places its splats after the earlier runs'\n",
+          "  in each bin. So the order is the same for any count of workers.\n"
+        ]
+      },
+      {
+        "start": 54,
+        "stop": 55,
+        "before": [],
+        "after": [
+          "from render.tasks import TaskGroup\n"
+        ]
+      },
+      {
+        "start": 72,
+        "stop": 207,
+        "before": [],
+        "after": [
+          "comptime SORT_RUN = 16384\n",
+          "\"\"\"The fewest splats a sort worker takes: a shorter run is not worth a task.\"\"\"\n",
+          "\n",
+          "\n",
+          "@fieldwise_init\n",
+          "struct _SortKey(ImplicitlyCopyable):\n",
+          "    \"\"\"What `sort_bin` reads of the view, so that a worker reads no splat\n",
+          "    object.\"\"\"\n",
+          "\n",
+          "    var m2: Float64\n",
+          "    \"\"\"The sort matrix's element 2.\"\"\"\n",
+          "    var m6: Float64\n",
+          "    \"\"\"Its element 6.\"\"\"\n",
+          "    var m10: Float64\n",
+          "    \"\"\"Its element 10.\"\"\"\n",
+          "    var m14: Float64\n",
+          "    \"\"\"Its element 14.\"\"\"\n",
+          "    var near: Float64\n",
+          "    \"\"\"The nearest depth the bins span.\"\"\"\n",
+          "    var scale: Float64\n",
+          "    \"\"\"Bins a unit of depth.\"\"\"\n",
+          "\n",
+          "    def bin(self, x: Float32, y: Float32, z: Float32) -> Int:\n",
+          "        \"\"\"Return the bin of a center; see `GaussianSplat.sort_bin`.\n",
+          "\n",
+          "        Args:\n",
+          "            x: The center's x, in the object's space.\n",
+          "            y: Its y.\n",
+          "            z: Its z.\n",
+          "\n",
+          "        Returns:\n",
+          "            0 for the furthest depths up to `BIN_COUNT - 1` for the\n",
+          "            nearest.\n",
+          "        \"\"\"\n",
+          "        var depth = -(\n",
+          "            self.m2 * Float64(x)\n",
+          "            + self.m6 * Float64(y)\n",
+          "            + self.m10 * Float64(z)\n",
+          "            + self.m14\n",
+          "        )\n",
+          "        var bin = min(\n",
+          "            Float64(BIN_COUNT - 1),\n",
+          "            max(Float64(0), floor((depth - self.near) * self.scale)),\n",
+          "        )\n",
+          "        return BIN_COUNT - 1 - Int(bin)\n",
+          "\n",
+          "\n",
+          "def _count_bins(\n",
+          "    centers: MutPointer[Float32, MutAnyOrigin],\n",
+          "    key: _SortKey,\n",
+          "    bins: MutPointer[UInt16, MutAnyOrigin],\n",
+          "    counts: MutPointer[Int, MutAnyOrigin],\n",
+          "    first: Int,\n",
+          "    past: Int,\n",
+          "):\n",
+          "    \"\"\"Find the bins of a run of splats, and count them.\n",
+          "\n",
+          "    Args:\n",
+          "        centers: The splats' centers, three floats a splat.\n",
+          "        key: The view.\n",
+          "        bins: Each splat's bin, written for the run.\n",
+          "        counts: The run's count of each bin.\n",
+          "        first: The run's first splat.\n",
+          "        past: One past its last.\n",
+          "    \"\"\"\n",
+          "    for index in range(first, past):\n",
+          "        var bin = key.bin(\n",
+          "            centers[unsafe_offset=index * 3],\n",
+          "            centers[unsafe_offset=index * 3 + 1],\n",
+          "            centers[unsafe_offset=index * 3 + 2],\n",
+          "        )\n",
+          "        bins[unsafe_offset=index] = UInt16(bin)\n",
+          "        counts[unsafe_offset=bin] += 1\n",
+          "\n",
+          "\n",
+          "__async def _count_task(\n",
+          "    centers: MutPointer[Float32, MutAnyOrigin],\n",
+          "    key: _SortKey,\n",
+          "    bins: MutPointer[UInt16, MutAnyOrigin],\n",
+          "    counts: MutPointer[Int, MutAnyOrigin],\n",
+          "    first: Int,\n",
+          "    past: Int,\n",
+          "):\n",
+          "    \"\"\"`_count_bins` as a task of `GaussianSplat.sort_cpu`.\n",
+          "\n",
+          "    Args:\n",
+          "        centers: The splats' centers.\n",
+          "        key: The view.\n",
+          "        bins: Each splat's bin.\n",
+          "        counts: The run's counts.\n",
+          "        first: The run's first splat.\n",
+          "        past: One past its last.\n",
+          "    \"\"\"\n",
+          "    _count_bins(centers, key, bins, counts, first, past)\n",
+          "\n",
+          "\n",
+          "def _place_bins(\n",
+          "    order: MutPointer[Int, MutAnyOrigin],\n",
+          "    bins: MutPointer[UInt16, MutAnyOrigin],\n",
+          "    offsets: MutPointer[Int, MutAnyOrigin],\n",
+          "    first: Int,\n",
+          "    past: Int,\n",
+          "):\n",
+          "    \"\"\"Place a run of splats in the order, each at its bin's next place.\n",
+          "\n",
+          "    Args:\n",
+          "        order: The draw order.\n",
+          "        bins: Each splat's bin.\n",
+          "        offsets: The run's next place in each bin.\n",
+          "        first: The run's first splat.\n",
+          "        past: One past its last.\n",
+          "    \"\"\"\n",
+          "    for index in range(first, past):\n",
+          "        var bin = Int(bins[unsafe_offset=index])\n",
+          "        order[unsafe_offset=offsets[unsafe_offset=bin]] = index\n",
+          "        offsets[unsafe_offset=bin] += 1\n",
+          "\n",
+          "\n",
+          "__async def _place_task(\n",
+          "    order: MutPointer[Int, MutAnyOrigin],\n",
+          "    bins: MutPointer[UInt16, MutAnyOrigin],\n",
+          "    offsets: MutPointer[Int, MutAnyOrigin],\n",
+          "    first: Int,\n",
+          "    past: Int,\n",
+          "):\n",
+          "    \"\"\"`_place_bins` as a task of `GaussianSplat.sort_cpu`.\n",
+          "\n",
+          "    Args:\n",
+          "        order: The draw order.\n",
+          "        bins: Each splat's bin.\n",
+          "        offsets: The run's next places.\n",
+          "        first: The run's first splat.\n",
+          "        past: One past its last.\n",
+          "    \"\"\"\n",
+          "    _place_bins(order, bins, offsets, first, past)\n"
+        ]
+      },
+      {
+        "start": 666,
+        "stop": 671,
+        "before": [
+          "        mut self, world: Matrix4, view: Matrix4, near: Length\n"
+        ],
+        "after": [
+          "        mut self,\n",
+          "        world: Matrix4,\n",
+          "        view: Matrix4,\n",
+          "        near: Length,\n",
+          "        workers: Int = 1,\n"
+        ]
+      },
+      {
+        "start": 680,
+        "stop": 681,
+        "before": [],
+        "after": [
+          "            workers: How many threads sort; see `sort_cpu`.\n"
+        ]
+      },
+      {
+        "start": 693,
+        "stop": 694,
+        "before": [
+          "        self.sort_cpu()\n"
+        ],
+        "after": [
+          "        self.sort_cpu(workers)\n"
+        ]
+      },
+      {
+        "start": 744,
+        "stop": 755,
+        "before": [],
+        "after": [
+          "        ref c = self.splat_geometry.centers\n",
+          "        return self._sort_key().bin(\n",
+          "            c[index * 3], c[index * 3 + 1], c[index * 3 + 2]\n",
+          "        )\n",
+          "\n",
+          "    def _sort_key(self) -> _SortKey:\n",
+          "        \"\"\"Return what `sort_bin` reads of the view.\n",
+          "\n",
+          "        Returns:\n",
+          "            The sort matrix's depth row, and the bins' near depth and scale.\n",
+          "        \"\"\"\n"
+        ]
+      },
+      {
+        "start": 756,
+        "stop": 764,
+        "before": [
+          "        ref c = self.splat_geometry.centers\n",
+          "        var depth = -(\n",
+          "            Float64(m[2]) * Float64(c[index * 3])\n",
+          "            + Float64(m[6]) * Float64(c[index * 3 + 1])\n",
+          "            + Float64(m[10]) * Float64(c[index * 3 + 2])\n",
+          "            + Float64(m[14])\n"
+        ],
+        "after": [
+          "        var span = max(self.sort_far - self.sort_near, MIN_SORT_RANGE)\n",
+          "        return _SortKey(\n",
+          "            Float64(m[2]),\n",
+          "            Float64(m[6]),\n",
+          "            Float64(m[10]),\n",
+          "            Float64(m[14]),\n",
+          "            self.sort_near,\n",
+          "            Float64(BIN_COUNT - 1) / span,\n"
+        ]
+      },
+      {
+        "start": 765,
+        "stop": 783,
+        "before": [
+          "        var span = max(self.sort_far - self.sort_near, MIN_SORT_RANGE)\n",
+          "        var scale = Float64(BIN_COUNT - 1) / span\n",
+          "        var bin = min(\n",
+          "            Float64(BIN_COUNT - 1),\n",
+          "            max(Float64(0), floor((depth - self.sort_near) * scale)),\n"
+        ],
+        "after": [
+          "\n",
+          "    def sort_cpu(mut self, workers: Int = 1):\n",
+          "        \"\"\"Sort the splats by `sort_bin`, stably, into `order`: three.js's\n",
+          "        `CountingSort.computeCPU`.\n",
+          "\n",
+          "        Args:\n",
+          "            workers: How many threads sort. Each takes a run of at least\n",
+          "                `SORT_RUN` splats. The order is the same for any count.\n",
+          "        \"\"\"\n",
+          "        var count = self.count()\n",
+          "        var runs = max(1, min(workers, count // SORT_RUN))\n",
+          "        var key = self._sort_key()\n",
+          "        var bins = List[UInt16](length=count, fill=0)\n",
+          "        var counts = List[Int](length=runs * BIN_COUNT, fill=0)\n",
+          "        var centers = (\n",
+          "            self.splat_geometry.centers.unsafe_ptr().unsafe_origin_cast[\n",
+          "                MutAnyOrigin\n",
+          "            ]()\n"
+        ]
+      },
+      {
+        "start": 784,
+        "stop": 803,
+        "before": [
+          "        return BIN_COUNT - 1 - Int(bin)\n",
+          "\n",
+          "    def sort_cpu(mut self):\n",
+          "        \"\"\"Sort the splats by `sort_bin`, stably, into `order`: three.js's\n",
+          "        `CountingSort.computeCPU`.\"\"\"\n",
+          "        var count = self.count()\n",
+          "        var bins = List[Int](capacity=count)\n",
+          "        var counts = List[Int](length=BIN_COUNT, fill=0)\n",
+          "        for index in range(count):\n",
+          "            var bin = self.sort_bin(index)\n",
+          "            bins.append(bin)\n",
+          "            counts[bin] += 1\n",
+          "        var offsets = List[Int](length=BIN_COUNT, fill=0)\n"
+        ],
+        "after": [
+          "        var bin_at = bins.unsafe_ptr().unsafe_origin_cast[MutAnyOrigin]()\n",
+          "        var count_at = counts.unsafe_ptr().unsafe_origin_cast[MutAnyOrigin]()\n",
+          "        if runs == 1:\n",
+          "            _count_bins(centers, key, bin_at, count_at, 0, count)\n",
+          "        else:\n",
+          "            var group = TaskGroup()\n",
+          "            for run in range(runs):  # pragma: no branch\n",
+          "                group.create_task(\n",
+          "                    _count_task(\n",
+          "                        centers,\n",
+          "                        key,\n",
+          "                        bin_at,\n",
+          "                        count_at.unsafe_offset(run * BIN_COUNT),\n",
+          "                        run * count // runs,\n",
+          "                        (run + 1) * count // runs,\n",
+          "                    )\n",
+          "                )\n",
+          "            group.wait()\n",
+          "        # Each run's first place in each bin: bin by bin, run by run.\n"
+        ]
+      },
+      {
+        "start": 805,
+        "stop": 832,
+        "before": [
+          "            offsets[bin] = sum\n",
+          "            sum += counts[bin]\n",
+          "        for index in range(count):\n",
+          "            self.order[offsets[bins[index]]] = index\n",
+          "            offsets[bins[index]] += 1\n"
+        ],
+        "after": [
+          "            for run in range(runs):  # pragma: no branch\n",
+          "                var here = counts[run * BIN_COUNT + bin]\n",
+          "                counts[run * BIN_COUNT + bin] = sum\n",
+          "                sum += here\n",
+          "        var order_at = self.order.unsafe_ptr().unsafe_origin_cast[\n",
+          "            MutAnyOrigin\n",
+          "        ]()\n",
+          "        if runs == 1:\n",
+          "            _place_bins(order_at, bin_at, count_at, 0, count)\n",
+          "        else:\n",
+          "            var group = TaskGroup()\n",
+          "            for run in range(runs):  # pragma: no branch\n",
+          "                group.create_task(\n",
+          "                    _place_task(\n",
+          "                        order_at,\n",
+          "                        bin_at,\n",
+          "                        count_at.unsafe_offset(run * BIN_COUNT),\n",
+          "                        run * count // runs,\n",
+          "                        (run + 1) * count // runs,\n",
+          "                    )\n",
+          "                )\n",
+          "            group.wait()\n",
+          "        # The tasks reach the lists through pointers the compiler cannot\n",
+          "        # see. These reads keep them alive until every task has finished.\n",
+          "        _ = len(bins)\n",
+          "        _ = len(counts)\n",
+          "        _ = len(self.splat_geometry.centers)\n"
+        ]
+      },
+      {
+        "start": 850,
+        "stop": 853,
+        "before": [
+          "            var direction = self._center(index) - camera\n",
+          "            direction.normalize()\n",
+          "            ref g = self.splat_geometry\n",
+          "            var rgb = _band_sum(g.sh1, index, 1, direction)\n",
+          "            if degree >= 2:\n",
+          "                rgb = rgb + _band_sum(g.sh2, index, 2, direction)\n",
+          "            if degree >= 3:\n",
+          "                rgb = rgb + _band_sum(g.sh3, index, 3, direction)\n",
+          "            append_vector3(out, rgb)\n"
+        ],
+        "after": [
+          "            append_vector3(\n",
+          "                out, self.spherical_harmonics_color(index, camera, degree)\n",
+          "            )\n"
+        ]
+      },
+      {
+        "start": 854,
+        "stop": 878,
+        "before": [],
+        "after": [
+          "\n",
+          "    def spherical_harmonics_color(\n",
+          "        self, index: Int, camera: Vector3, degree: Int\n",
+          "    ) -> Vector3:\n",
+          "        \"\"\"Return one splat's view-dependent color, as\n",
+          "        `spherical_harmonics_colors` gives it.\n",
+          "\n",
+          "        Args:\n",
+          "            index: Which splat.\n",
+          "            camera: The camera's position, in the object's space.\n",
+          "            degree: The splats' degree, 1 through 3.\n",
+          "\n",
+          "        Returns:\n",
+          "            The three floats added to the splat's color.\n",
+          "        \"\"\"\n",
+          "        var direction = self._center(index) - camera\n",
+          "        direction.normalize()\n",
+          "        ref g = self.splat_geometry\n",
+          "        var rgb = _band_sum(g.sh1, index, 1, direction)\n",
+          "        if degree >= 2:\n",
+          "            rgb = rgb + _band_sum(g.sh2, index, 2, direction)\n",
+          "        if degree >= 3:\n",
+          "            rgb = rgb + _band_sum(g.sh3, index, 3, direction)\n",
+          "        return rgb\n"
+        ]
+      },
+      {
+        "start": 897,
+        "stop": 898,
+        "before": [
+          "def _weights(degree: Int, d: Vector3) -> List[Float32]:\n"
+        ],
+        "after": [
+          "def _weights(degree: Int, d: Vector3) -> SIMD[DType.float32, 8]:\n"
+        ]
+      },
+      {
+        "start": 900,
+        "stop": 902,
+        "before": [],
+        "after": [
+          "\n",
+          "    The weights are lanes of one vector, so that no splat allocates.\n"
+        ]
+      },
+      {
+        "start": 908,
+        "stop": 909,
+        "before": [
+          "        `2 degree + 1` weights.\n"
+        ],
+        "after": [
+          "        `2 degree + 1` weights in the first lanes, and zeros after them.\n"
+        ]
+      },
+      {
+        "start": 913,
+        "stop": 914,
+        "before": [],
+        "after": [
+          "    var w = SIMD[DType.float32, 8](0)\n"
+        ]
+      },
+      {
+        "start": 915,
+        "stop": 919,
+        "before": [
+          "        return [y * -0.4886025, z * 0.4886025, x * -0.4886025]\n"
+        ],
+        "after": [
+          "        w[0] = y * -0.4886025\n",
+          "        w[1] = z * 0.4886025\n",
+          "        w[2] = x * -0.4886025\n",
+          "        return w\n"
+        ]
+      },
+      {
+        "start": 923,
+        "stop": 929,
+        "before": [
+          "        return [\n",
+          "            x * y * 1.0925484,\n",
+          "            y * z * -1.0925484,\n",
+          "            (zz * 2 - xx - yy) * 0.3153915,\n",
+          "            x * z * -1.0925484,\n",
+          "            (xx - yy) * 0.5462742,\n",
+          "        ]\n"
+        ],
+        "after": [
+          "        w[0] = x * y * 1.0925484\n",
+          "        w[1] = y * z * -1.0925484\n",
+          "        w[2] = (zz * 2 - xx - yy) * 0.3153915\n",
+          "        w[3] = x * z * -1.0925484\n",
+          "        w[4] = (xx - yy) * 0.5462742\n",
+          "        return w\n"
+        ]
+      },
+      {
+        "start": 930,
+        "stop": 938,
+        "before": [
+          "    return [\n",
+          "        y * (xx * 3 - yy) * -0.5900436,\n",
+          "        xy * z * 2.8906114,\n",
+          "        y * (zz * 4 - xx - yy) * -0.4570458,\n",
+          "        z * (zz * 2 - xx * 3 - yy * 3) * 0.3731763,\n",
+          "        x * (zz * 4 - xx - yy) * -0.4570458,\n",
+          "        z * (xx - yy) * 1.4453057,\n",
+          "        x * (xx - yy * 3) * -0.5900436,\n",
+          "    ]\n"
+        ],
+        "after": [
+          "    w[0] = y * (xx * 3 - yy) * -0.5900436\n",
+          "    w[1] = xy * z * 2.8906114\n",
+          "    w[2] = y * (zz * 4 - xx - yy) * -0.4570458\n",
+          "    w[3] = z * (zz * 2 - xx * 3 - yy * 3) * 0.3731763\n",
+          "    w[4] = x * (zz * 4 - xx - yy) * -0.4570458\n",
+          "    w[5] = z * (xx - yy) * 1.4453057\n",
+          "    w[6] = x * (xx - yy * 3) * -0.5900436\n",
+          "    return w\n"
+        ]
+      },
+      {
+        "start": 956,
+        "stop": 957,
+        "before": [],
+        "after": [
+          "    var coefficients = degree * 2 + 1\n"
+        ]
+      },
+      {
+        "start": 958,
+        "stop": 961,
+        "before": [
+          "    var words = (len(weights) * 3 + 3) // 4\n",
+          "    var start = index * words * 4\n"
+        ],
+        "after": [
+          "    var words = (coefficients * 3 + 3) // 4\n",
+          "    # The caller's index is a splat of `band`, so its bytes are in range.\n",
+          "    var bytes = band.unsafe_ptr().unsafe_offset(index * words * 4)\n"
+        ]
+      },
+      {
+        "start": 962,
+        "stop": 967,
+        "before": [
+          "    for k in range(len(weights)):  # pragma: no branch\n",
+          "        var at = start + k * 3\n",
+          "        sum.x += (Float32(band[at]) - 128) / 128 * weights[k]\n",
+          "        sum.y += (Float32(band[at + 1]) - 128) / 128 * weights[k]\n",
+          "        sum.z += (Float32(band[at + 2]) - 128) / 128 * weights[k]\n"
+        ],
+        "after": [
+          "    for k in range(coefficients):  # pragma: no branch\n",
+          "        var at = k * 3\n",
+          "        sum.x += (Float32(bytes[unsafe_offset=at]) - 128) / 128 * weights[k]\n",
+          "        sum.y += (Float32(bytes[unsafe_offset=at + 1]) - 128) / 128 * weights[k]\n",
+          "        sum.z += (Float32(bytes[unsafe_offset=at + 2]) - 128) / 128 * weights[k]\n"
+        ]
+      }
+    ]
+  },
+  "postprocessing/denoise.mojo": {
+    "before_sha256": "0cc2fa358a413e982da70aafbf082c5cde41b1105c98cc3770f3d2149d1f0664",
+    "after_sha256": "03bd377c4458b6801ba5a19e4cedfe32d985a64d541c16a28ab5e8566a0ada19",
+    "before_token_sha256": "3c24d8a6900fb93334b719698dc563ce3d989fb7af36c8cba5e0f49333b1745e",
+    "after_token_sha256": "c354eb80dee8e692fbb73d2690024b34a735d5a41073374713422e5b367a9153",
+    "edits": [
+      {
+        "start": 20,
+        "stop": 25,
+        "before": [],
+        "after": [
+          "\n",
+          "The node multiplies its pixel-space offset by the matrix before dividing\n",
+          "by the image size. This order keeps the taps the same size in pixels on\n",
+          "rectangular frames. The port's upward texture coordinate reverses only\n",
+          "the resulting vertical offset.\n"
+        ]
+      },
+      {
+        "start": 132,
+        "stop": 133,
+        "before": [],
+        "after": [
+          "    # r186's node reads channel zero as radians, unlike the WebGL shader.\n"
+        ]
+      },
+      {
+        "start": 143,
+        "stop": 150,
+        "before": [
+          "        var ox = tap.x * scale / Float32(view.width)\n",
+          "        var oy = tap.y * scale / Float32(view.height)\n",
+          "        # `mat2(n.x, -n.y, n.x, n.y)` times the offset, column-major, on\n",
+          "        # a texture coordinate that grows down.\n",
+          "        var su = u + nx * ox + nx * oy\n",
+          "        var sv = v + ny * ox - ny * oy\n"
+        ],
+        "after": [
+          "        var ox = tap.x * scale\n",
+          "        var oy = tap.y * scale\n",
+          "        # r186 multiplies in pixel space, then divides by resolution.\n",
+          "        # Its mat2 is column-major and its texture coordinate grows down;\n",
+          "        # LightView's v grows up, so negate the matrix's vertical result.\n",
+          "        var su = u + (nx * ox + nx * oy) / Float32(view.width)\n",
+          "        var sv = v + (ny * ox - ny * oy) / Float32(view.height)\n"
+        ]
+      }
+    ]
+  },
+  "render/rasterizer.mojo": {
+    "before_sha256": "e8d1e85a25a771edc28ab063a8ae1b38946ca1589014c0bb6ea6126aa5a9cf25",
+    "after_sha256": "31536268f6086b7b3c88ac5e677cba745564031dd4ee46fe5635f34e83b5701f",
+    "before_token_sha256": "49c113f28ee16d52cbbb50c6f93b18902581fde0c15cede8634e71dfb64e16d0",
+    "after_token_sha256": "ef9436992ae54e881f609f6c3bafabd7ad471d77980184c1ba9391d2211a2748",
+    "edits": [
+      {
+        "start": 3529,
+        "stop": 3530,
+        "before": [],
+        "after": [
+          "    tones.reserve(image.width)\n"
+        ]
+      },
+      {
+        "start": 7257,
+        "stop": 7258,
+        "before": [
+          "async def _frame_band(\n"
+        ],
+        "after": [
+          "__async def _frame_band(\n"
+        ]
+      }
+    ]
+  },
+  "render/splat_raster.mojo": {
+    "before_sha256": "5ec9036208ec0d16e12f078a99a49e2ecba067075fda893bc74810ee9c7c119b",
+    "after_sha256": "38d783435e6762dd2c947c89dd2cf0afb33a7fd04bb8f5eb16587a5f89eaa1c5",
+    "before_token_sha256": "45395f0b57e02961ae691bdc96474e37caa9ac519e7348f8dd8537717008e5d3",
+    "after_token_sha256": "66a7babb5b86ef670f9abc458c69c0d005ac13cf7a4d43be165a77a7750a065c",
+    "edits": [
+      {
+        "start": 30,
+        "stop": 40,
+        "before": [],
+        "after": [
+          "\n",
+          "**Workers.** Each step takes a count of workers, one by default. The\n",
+          "sort and the projection share the splats out in runs. The projection\n",
+          "reads the splats in their own order, front to back, and then gathers them\n",
+          "in draw order. The fill shares the rows out in bands. It sorts the splats\n",
+          "by the bands their rows reach, keeping draw order in each band, and every\n",
+          "band blends its own splats in that order. So each pixel takes the same\n",
+          "blends in the same order as on one thread, and the picture is the same to\n",
+          "the bit. A row of a splat visits only the columns of its disc;\n",
+          "`splat_row_span` says why that draws what the whole box draws.\n"
+        ]
+      },
+      {
+        "start": 51,
+        "stop": 53,
+        "before": [],
+        "after": [
+          "    SPLAT_LANES,\n",
+          "    SPLAT_RADIUS_SQ,\n"
+        ]
+      },
+      {
+        "start": 55,
+        "stop": 56,
+        "before": [
+          "    splat_alpha,\n"
+        ],
+        "after": [
+          "    splat_alphas,\n"
+        ]
+      },
+      {
+        "start": 61,
+        "stop": 63,
+        "before": [
+          "from std.math import ceil, floor, max, min\n"
+        ],
+        "after": [
+          "from render.tasks import TaskGroup\n",
+          "from std.math import ceil, floor, fma, isfinite, max, min, sqrt\n"
+        ]
+      },
+      {
+        "start": 65,
+        "stop": 78,
+        "before": [],
+        "after": [
+          "\n",
+          "comptime SPLAT_BANDS_PER_WORKER = 8\n",
+          "\"\"\"How many bands of rows a fill worker has: a scan's splats crowd some rows, and more bands than workers share them out evenly.\"\"\"\n",
+          "comptime SPLAT_RUN = 4096\n",
+          "\"\"\"The fewest splats a projection worker takes: a shorter run is not worth a task.\"\"\"\n",
+          "comptime SPLAT_ROW_SLACK = Float64(1e-6)\n",
+          "\"\"\"How much taller, as a share, the rows that `splat_disc_rows` keeps are\n",
+          "than the disc: more than the rounding of `splat_row_span`'s `Float64`\n",
+          "discriminant.\"\"\"\n",
+          "comptime SPLAT_SPAN_SLACK = Float64(1e-4)\n",
+          "\"\"\"How much wider, as a share of `SPLAT_RADIUS_SQ`, the disc whose row\n",
+          "spans `splat_row_span` finds is: far more than the rounding of\n",
+          "`splat_alpha`'s `Float32` arithmetic.\"\"\"\n"
+        ]
+      },
+      {
+        "start": 106,
+        "stop": 107,
+        "before": [],
+        "after": [
+          "    workers: Int = 1,\n"
+        ]
+      },
+      {
+        "start": 109,
+        "stop": 112,
+        "before": [],
+        "after": [
+          "\n",
+          "    Parameters:\n",
+          "        C: The camera's type.\n"
+        ]
+      },
+      {
+        "start": 122,
+        "stop": 124,
+        "before": [],
+        "after": [
+          "        workers: How many threads sort and project the splats; see the\n",
+          "            module docstring.\n"
+        ]
+      },
+      {
+        "start": 144,
+        "stop": 145,
+        "before": [
+          "            world, view, Length(camera.near_distance(), METER)\n"
+        ],
+        "after": [
+          "            world, view, Length(camera.near_distance(), METER), workers\n"
+        ]
+      },
+      {
+        "start": 153,
+        "stop": 153,
+        "before": [
+          "    var shading = splat.spherical_harmonics_colors(eye)\n",
+          "    var shaded = len(shading) > 0\n"
+        ],
+        "after": []
+      },
+      {
+        "start": 161,
+        "stop": 276,
+        "before": [],
+        "after": [
+          "    var run = _SplatRun(\n",
+          "        place,\n",
+          "        eye,\n",
+          "        splat.splat_geometry.spherical_harmonics_degree(),\n",
+          "        Float32(rect.x),\n",
+          "        Float32(rect.top(height)),\n",
+          "    )\n",
+          "    var count = len(splat.order)\n",
+          "    var tasks = max(1, min(workers, count // SPLAT_RUN))\n",
+          "    # Project the splats in their own order, so that their arrays are read\n",
+          "    # front to back, and then gather them in draw order.\n",
+          "    var projected = List[ProjectedSplat](capacity=count)\n",
+          "    projected.resize(unsafe_uninit_length=count)\n",
+          "    var shown = List[Bool](length=count, fill=False)\n",
+          "    var projected_at = projected.unsafe_ptr().unsafe_origin_cast[MutAnyOrigin]()\n",
+          "    var shown_at = shown.unsafe_ptr().unsafe_origin_cast[MutAnyOrigin]()\n",
+          "    var order_at = splat.order.unsafe_ptr().unsafe_origin_cast[MutAnyOrigin]()\n",
+          "    var starts = List[Int](length=tasks + 1, fill=0)\n",
+          "    if tasks == 1:\n",
+          "        _project_span(projected_at, shown_at, splat, run, 0, count)\n",
+          "        starts[1] = _shown_count(order_at, shown_at, 0, count)\n",
+          "    else:\n",
+          "        var group = TaskGroup()\n",
+          "        for task in range(tasks):  # pragma: no branch\n",
+          "            group.create_task(\n",
+          "                _project_task(\n",
+          "                    projected_at,\n",
+          "                    shown_at,\n",
+          "                    Pointer(to=splat).unsafe_origin_cast[MutAnyOrigin](),\n",
+          "                    Pointer(to=run).unsafe_origin_cast[MutAnyOrigin](),\n",
+          "                    task * count // tasks,\n",
+          "                    (task + 1) * count // tasks,\n",
+          "                )\n",
+          "            )\n",
+          "        group.wait()\n",
+          "        var counting = TaskGroup()\n",
+          "        for task in range(tasks):  # pragma: no branch\n",
+          "            counting.create_task(\n",
+          "                _count_task(\n",
+          "                    starts.unsafe_ptr()\n",
+          "                    .unsafe_offset(task + 1)\n",
+          "                    .unsafe_origin_cast[MutAnyOrigin](),\n",
+          "                    order_at,\n",
+          "                    shown_at,\n",
+          "                    task * count // tasks,\n",
+          "                    (task + 1) * count // tasks,\n",
+          "                )\n",
+          "            )\n",
+          "        counting.wait()\n",
+          "    for task in range(tasks):  # pragma: no branch\n",
+          "        starts[task + 1] += starts[task]\n",
+          "    out.resize(unsafe_uninit_length=starts[tasks])\n",
+          "    var out_at = out.unsafe_ptr().unsafe_origin_cast[MutAnyOrigin]()\n",
+          "    if tasks == 1:\n",
+          "        _gather(out_at, order_at, shown_at, projected_at, 0, count)\n",
+          "    else:\n",
+          "        var gathering = TaskGroup()\n",
+          "        for task in range(tasks):  # pragma: no branch\n",
+          "            gathering.create_task(\n",
+          "                _gather_task(\n",
+          "                    out_at.unsafe_offset(starts[task]),\n",
+          "                    order_at,\n",
+          "                    shown_at,\n",
+          "                    projected_at,\n",
+          "                    task * count // tasks,\n",
+          "                    (task + 1) * count // tasks,\n",
+          "                )\n",
+          "            )\n",
+          "        gathering.wait()\n",
+          "    # The tasks reach the lists, `splat` and `run` through pointers the\n",
+          "    # compiler cannot see. These reads keep them alive until every task\n",
+          "    # has finished.\n",
+          "    _ = len(projected)\n",
+          "    _ = len(shown)\n",
+          "    _ = len(splat.order)\n",
+          "    _ = len(starts)\n",
+          "    _ = run.degree\n",
+          "    return out^\n",
+          "\n",
+          "\n",
+          "@fieldwise_init\n",
+          "struct _SplatRun(ImplicitlyCopyable):\n",
+          "    \"\"\"What projecting a run of the draw order needs of the view.\"\"\"\n",
+          "\n",
+          "    var place: SplatView\n",
+          "    \"\"\"The camera and the camera rectangle.\"\"\"\n",
+          "    var eye: Vector3\n",
+          "    \"\"\"The camera's position, in the object's space.\"\"\"\n",
+          "    var degree: Int\n",
+          "    \"\"\"The splats' spherical harmonics degree.\"\"\"\n",
+          "    var left: Float32\n",
+          "    \"\"\"The camera rectangle's first column in the target.\"\"\"\n",
+          "    var top: Float32\n",
+          "    \"\"\"The camera rectangle's first row in the target, from the top.\"\"\"\n",
+          "\n",
+          "\n",
+          "def _project_span(\n",
+          "    projected: MutPointer[ProjectedSplat, MutAnyOrigin],\n",
+          "    shown: MutPointer[Bool, MutAnyOrigin],\n",
+          "    splat: GaussianSplat,\n",
+          "    run: _SplatRun,\n",
+          "    first: Int,\n",
+          "    past: Int,\n",
+          "):\n",
+          "    \"\"\"Shade and project a run of the splats, in their own order.\n",
+          "\n",
+          "    Args:\n",
+          "        projected: Each splat on the screen, written where `shown` is\n",
+          "            True.\n",
+          "        shown: Whether each splat is on the screen.\n",
+          "        splat: The splats.\n",
+          "        run: The view.\n",
+          "        first: The run's first splat.\n",
+          "        past: One past its last.\n",
+          "    \"\"\"\n"
+        ]
+      },
+      {
+        "start": 277,
+        "stop": 281,
+        "before": [
+          "    for position in range(len(splat.order)):\n",
+          "        var index = splat.order[position]\n"
+        ],
+        "after": [
+          "    # The run is inside the splats, so their arrays are read unchecked.\n",
+          "    var colors = geometry.colors.unsafe_ptr()\n",
+          "    var centers = geometry.centers.unsafe_ptr()\n",
+          "    for index in range(first, past):\n"
+        ]
+      },
+      {
+        "start": 282,
+        "stop": 286,
+        "before": [
+          "            Float32(geometry.colors[index * 4]) / 255,\n",
+          "            Float32(geometry.colors[index * 4 + 1]) / 255,\n",
+          "            Float32(geometry.colors[index * 4 + 2]) / 255,\n",
+          "            Float32(geometry.colors[index * 4 + 3]) / 255,\n"
+        ],
+        "after": [
+          "            Float32(colors[unsafe_offset=index * 4]) / 255,\n",
+          "            Float32(colors[unsafe_offset=index * 4 + 1]) / 255,\n",
+          "            Float32(colors[unsafe_offset=index * 4 + 2]) / 255,\n",
+          "            Float32(colors[unsafe_offset=index * 4 + 3]) / 255,\n"
+        ]
+      },
+      {
+        "start": 287,
+        "stop": 295,
+        "before": [
+          "        if shaded:\n",
+          "            color.r += shading[index * 3]\n",
+          "            color.g += shading[index * 3 + 1]\n",
+          "            color.b += shading[index * 3 + 2]\n",
+          "        var projected = project_splat(\n"
+        ],
+        "after": [
+          "        if run.degree > 0:\n",
+          "            var shading = splat.spherical_harmonics_color(\n",
+          "                index, run.eye, run.degree\n",
+          "            )\n",
+          "            color.r += shading.x\n",
+          "            color.g += shading.y\n",
+          "            color.b += shading.z\n",
+          "        var found = project_splat(\n"
+        ]
+      },
+      {
+        "start": 296,
+        "stop": 299,
+        "before": [
+          "                geometry.centers[index * 3],\n",
+          "                geometry.centers[index * 3 + 1],\n",
+          "                geometry.centers[index * 3 + 2],\n"
+        ],
+        "after": [
+          "                centers[unsafe_offset=index * 3],\n",
+          "                centers[unsafe_offset=index * 3 + 1],\n",
+          "                centers[unsafe_offset=index * 3 + 2],\n"
+        ]
+      },
+      {
+        "start": 303,
+        "stop": 304,
+        "before": [
+          "            place,\n"
+        ],
+        "after": [
+          "            run.place,\n"
+        ]
+      },
+      {
+        "start": 305,
+        "stop": 426,
+        "before": [
+          "        if Bool(projected):\n",
+          "            var placed = projected.value()\n",
+          "            placed.x += Float32(rect.x)\n",
+          "            placed.y += Float32(rect.top(height))\n",
+          "            out.append(placed)\n",
+          "    return out^\n"
+        ],
+        "after": [
+          "        if Bool(found):\n",
+          "            var placed = found.value()\n",
+          "            placed.x += run.left\n",
+          "            placed.y += run.top\n",
+          "            projected[unsafe_offset=index] = placed\n",
+          "            shown[unsafe_offset=index] = True\n",
+          "\n",
+          "\n",
+          "__async def _project_task(\n",
+          "    projected: MutPointer[ProjectedSplat, MutAnyOrigin],\n",
+          "    shown: MutPointer[Bool, MutAnyOrigin],\n",
+          "    splat: MutPointer[GaussianSplat, MutAnyOrigin],\n",
+          "    run: MutPointer[_SplatRun, MutAnyOrigin],\n",
+          "    first: Int,\n",
+          "    past: Int,\n",
+          "):\n",
+          "    \"\"\"`_project_span` as a task of `prepare_gaussian_splat`.\n",
+          "\n",
+          "    The tasks only read the splats and the view, and each writes its own\n",
+          "    run of `projected` and `shown`.\n",
+          "\n",
+          "    Args:\n",
+          "        projected: Each splat on the screen.\n",
+          "        shown: Whether each splat is on the screen.\n",
+          "        splat: The splats.\n",
+          "        run: The view.\n",
+          "        first: The run's first splat.\n",
+          "        past: One past its last.\n",
+          "    \"\"\"\n",
+          "    _project_span(projected, shown, splat[], run[], first, past)\n",
+          "\n",
+          "\n",
+          "def _shown_count(\n",
+          "    order: MutPointer[Int, MutAnyOrigin],\n",
+          "    shown: MutPointer[Bool, MutAnyOrigin],\n",
+          "    first: Int,\n",
+          "    past: Int,\n",
+          ") -> Int:\n",
+          "    \"\"\"Return how many splats of a run of the draw order are on the screen.\n",
+          "\n",
+          "    Args:\n",
+          "        order: The draw order.\n",
+          "        shown: Whether each splat is on the screen.\n",
+          "        first: The run's first place in the order.\n",
+          "        past: One past its last place.\n",
+          "\n",
+          "    Returns:\n",
+          "        The count.\n",
+          "    \"\"\"\n",
+          "    var count = 0\n",
+          "    for position in range(first, past):\n",
+          "        if shown[unsafe_offset=order[unsafe_offset=position]]:\n",
+          "            count += 1\n",
+          "    return count\n",
+          "\n",
+          "\n",
+          "__async def _count_task(\n",
+          "    count: MutPointer[Int, MutAnyOrigin],\n",
+          "    order: MutPointer[Int, MutAnyOrigin],\n",
+          "    shown: MutPointer[Bool, MutAnyOrigin],\n",
+          "    first: Int,\n",
+          "    past: Int,\n",
+          "):\n",
+          "    \"\"\"`_shown_count` as a task of `prepare_gaussian_splat`.\n",
+          "\n",
+          "    Args:\n",
+          "        count: Where the run's count goes.\n",
+          "        order: The draw order.\n",
+          "        shown: Whether each splat is on the screen.\n",
+          "        first: The run's first place in the order.\n",
+          "        past: One past its last place.\n",
+          "    \"\"\"\n",
+          "    count[] = _shown_count(order, shown, first, past)\n",
+          "\n",
+          "\n",
+          "def _gather(\n",
+          "    drawn: MutPointer[ProjectedSplat, MutAnyOrigin],\n",
+          "    order: MutPointer[Int, MutAnyOrigin],\n",
+          "    shown: MutPointer[Bool, MutAnyOrigin],\n",
+          "    projected: MutPointer[ProjectedSplat, MutAnyOrigin],\n",
+          "    first: Int,\n",
+          "    past: Int,\n",
+          "):\n",
+          "    \"\"\"Copy the splats of a run of the draw order that are on the screen,\n",
+          "    in that order.\n",
+          "\n",
+          "    Args:\n",
+          "        drawn: Where the run's splats go.\n",
+          "        order: The draw order.\n",
+          "        shown: Whether each splat is on the screen.\n",
+          "        projected: Each splat on the screen.\n",
+          "        first: The run's first place in the order.\n",
+          "        past: One past its last place.\n",
+          "    \"\"\"\n",
+          "    var at = 0\n",
+          "    for position in range(first, past):\n",
+          "        var index = order[unsafe_offset=position]\n",
+          "        if shown[unsafe_offset=index]:\n",
+          "            drawn[unsafe_offset=at] = projected[unsafe_offset=index]\n",
+          "            at += 1\n",
+          "\n",
+          "\n",
+          "__async def _gather_task(\n",
+          "    drawn: MutPointer[ProjectedSplat, MutAnyOrigin],\n",
+          "    order: MutPointer[Int, MutAnyOrigin],\n",
+          "    shown: MutPointer[Bool, MutAnyOrigin],\n",
+          "    projected: MutPointer[ProjectedSplat, MutAnyOrigin],\n",
+          "    first: Int,\n",
+          "    past: Int,\n",
+          "):\n",
+          "    \"\"\"`_gather` as a task of `prepare_gaussian_splat`.\n",
+          "\n",
+          "    Args:\n",
+          "        drawn: Where the run's splats go.\n",
+          "        order: The draw order.\n",
+          "        shown: Whether each splat is on the screen.\n",
+          "        projected: Each splat on the screen.\n",
+          "        first: The run's first place in the order.\n",
+          "        past: One past its last place.\n",
+          "    \"\"\"\n",
+          "    _gather(drawn, order, shown, projected, first, past)\n"
+        ]
+      },
+      {
+        "start": 429,
+        "stop": 430,
+        "before": [
+          "    mut target: RenderTarget, splats: List[ProjectedSplat]\n"
+        ],
+        "after": [
+          "    mut target: RenderTarget, splats: List[ProjectedSplat], workers: Int = 1\n"
+        ]
+      },
+      {
+        "start": 436,
+        "stop": 438,
+        "before": [],
+        "after": [
+          "        workers: How many bands of rows fill at once; see the module\n",
+          "            docstring.\n"
+        ]
+      },
+      {
+        "start": 443,
+        "stop": 697,
+        "before": [
+          "    for index in range(len(splats)):\n",
+          "        rasterize_splat(target, splats[index], 0, target.height - 1)\n"
+        ],
+        "after": [
+          "    var bands = min(workers * SPLAT_BANDS_PER_WORKER, target.height)\n",
+          "    if workers <= 1 or bands <= 1:\n",
+          "        for index in range(len(splats)):\n",
+          "            rasterize_splat(target, splats[index], 0, target.height - 1)\n",
+          "        return\n",
+          "    # Each band's splats, in draw order: a counting sort of the splats by\n",
+          "    # the bands that their rows reach, in runs, as `GaussianSplat.sort_cpu`\n",
+          "    # sorts. So a band reads only the splats that reach it.\n",
+          "    var count = len(splats)\n",
+          "    var runs = max(1, min(workers, count // SPLAT_RUN))\n",
+          "    var band_of = List[Int](capacity=target.height)\n",
+          "    for band in range(bands):  # pragma: no branch\n",
+          "        for _ in range(\n",
+          "            band * target.height // bands, (band + 1) * target.height // bands\n",
+          "        ):  # pragma: no branch\n",
+          "            band_of.append(band)\n",
+          "    var reach = List[Int32](length=count * 2, fill=0)\n",
+          "    var counts = List[Int](length=runs * bands, fill=0)\n",
+          "    var splats_at = splats.unsafe_ptr().unsafe_origin_cast[ImmutAnyOrigin]()\n",
+          "    var band_at = band_of.unsafe_ptr().unsafe_origin_cast[MutAnyOrigin]()\n",
+          "    var reach_at = reach.unsafe_ptr().unsafe_origin_cast[MutAnyOrigin]()\n",
+          "    var count_at = counts.unsafe_ptr().unsafe_origin_cast[MutAnyOrigin]()\n",
+          "    if runs == 1:\n",
+          "        _band_reach(\n",
+          "            splats_at, band_at, target.height, reach_at, count_at, 0, count\n",
+          "        )\n",
+          "    else:\n",
+          "        var reaching = TaskGroup()\n",
+          "        for run in range(runs):  # pragma: no branch\n",
+          "            reaching.create_task(\n",
+          "                _band_reach_task(\n",
+          "                    splats_at,\n",
+          "                    band_at,\n",
+          "                    target.height,\n",
+          "                    reach_at,\n",
+          "                    count_at.unsafe_offset(run * bands),\n",
+          "                    run * count // runs,\n",
+          "                    (run + 1) * count // runs,\n",
+          "                )\n",
+          "            )\n",
+          "        reaching.wait()\n",
+          "    # Each run's first place in each band: band by band, run by run.\n",
+          "    var starts = List[Int](length=bands + 1, fill=0)\n",
+          "    var sum = 0\n",
+          "    for band in range(bands):  # pragma: no branch\n",
+          "        starts[band] = sum\n",
+          "        for run in range(runs):  # pragma: no branch\n",
+          "            var here = counts[run * bands + band]\n",
+          "            counts[run * bands + band] = sum\n",
+          "            sum += here\n",
+          "    starts[bands] = sum\n",
+          "    var members = List[Int](capacity=sum)\n",
+          "    members.resize(unsafe_uninit_length=sum)\n",
+          "    var member_at = members.unsafe_ptr().unsafe_origin_cast[MutAnyOrigin]()\n",
+          "    if runs == 1:\n",
+          "        _band_place(member_at, reach_at, count_at, 0, count)\n",
+          "    else:\n",
+          "        var placing = TaskGroup()\n",
+          "        for run in range(runs):  # pragma: no branch\n",
+          "            placing.create_task(\n",
+          "                _band_place_task(\n",
+          "                    member_at,\n",
+          "                    reach_at,\n",
+          "                    count_at.unsafe_offset(run * bands),\n",
+          "                    run * count // runs,\n",
+          "                    (run + 1) * count // runs,\n",
+          "                )\n",
+          "            )\n",
+          "        placing.wait()\n",
+          "    var errors = List[String](length=bands, fill=String())\n",
+          "    var group = TaskGroup()\n",
+          "    for band in range(bands):  # pragma: no branch\n",
+          "        group.create_task(\n",
+          "            _splat_band(\n",
+          "                Pointer(to=target).unsafe_origin_cast[MutAnyOrigin](),\n",
+          "                splats_at,\n",
+          "                member_at.unsafe_offset(starts[band]),\n",
+          "                starts[band + 1] - starts[band],\n",
+          "                errors.unsafe_ptr().unsafe_origin_cast[MutAnyOrigin](),\n",
+          "                band,\n",
+          "                band * target.height // bands,\n",
+          "                (band + 1) * target.height // bands - 1,\n",
+          "            )\n",
+          "        )\n",
+          "    group.wait()\n",
+          "    # The tasks read the lists through pointers the compiler cannot see.\n",
+          "    # These reads keep them alive until every task has finished.\n",
+          "    _ = len(splats)\n",
+          "    _ = len(band_of)\n",
+          "    _ = len(reach)\n",
+          "    _ = len(counts)\n",
+          "    _ = len(members)\n",
+          "    raise_splat_band_errors(errors)\n",
+          "\n",
+          "\n",
+          "def _band_reach(\n",
+          "    splats: Pointer[ProjectedSplat, ImmutAnyOrigin],\n",
+          "    band_of: MutPointer[Int, MutAnyOrigin],\n",
+          "    height: Int,\n",
+          "    reach: MutPointer[Int32, MutAnyOrigin],\n",
+          "    counts: MutPointer[Int, MutAnyOrigin],\n",
+          "    first: Int,\n",
+          "    past: Int,\n",
+          "):\n",
+          "    \"\"\"Find the bands that a run of splats reaches, and count them.\n",
+          "\n",
+          "    Args:\n",
+          "        splats: The splats, in draw order.\n",
+          "        band_of: The band of each row.\n",
+          "        height: The target's height in rows.\n",
+          "        reach: Each splat's first and last band, written for the run. The\n",
+          "            last is before the first for a splat that reaches no row.\n",
+          "        counts: The run's count of the splats that reach each band.\n",
+          "        first: The run's first splat.\n",
+          "        past: One past its last.\n",
+          "    \"\"\"\n",
+          "    for index in range(first, past):\n",
+          "        var rows = splat_disc_rows(splats[unsafe_offset=index])\n",
+          "        var top = max(rows[0], 0)\n",
+          "        var bottom = min(rows[1], height - 1)\n",
+          "        var low = 1\n",
+          "        var high = 0\n",
+          "        if top <= bottom:\n",
+          "            low = band_of[unsafe_offset=top]\n",
+          "            high = band_of[unsafe_offset=bottom]\n",
+          "        reach[unsafe_offset=index * 2] = Int32(low)\n",
+          "        reach[unsafe_offset=index * 2 + 1] = Int32(high)\n",
+          "        for band in range(low, high + 1):\n",
+          "            counts[unsafe_offset=band] += 1\n",
+          "\n",
+          "\n",
+          "__async def _band_reach_task(\n",
+          "    splats: Pointer[ProjectedSplat, ImmutAnyOrigin],\n",
+          "    band_of: MutPointer[Int, MutAnyOrigin],\n",
+          "    height: Int,\n",
+          "    reach: MutPointer[Int32, MutAnyOrigin],\n",
+          "    counts: MutPointer[Int, MutAnyOrigin],\n",
+          "    first: Int,\n",
+          "    past: Int,\n",
+          "):\n",
+          "    \"\"\"`_band_reach` as a task of `rasterize_splats`.\n",
+          "\n",
+          "    Args:\n",
+          "        splats: The splats.\n",
+          "        band_of: The band of each row.\n",
+          "        height: The target's height.\n",
+          "        reach: Each splat's bands.\n",
+          "        counts: The run's counts.\n",
+          "        first: The run's first splat.\n",
+          "        past: One past its last.\n",
+          "    \"\"\"\n",
+          "    _band_reach(splats, band_of, height, reach, counts, first, past)\n",
+          "\n",
+          "\n",
+          "def _band_place(\n",
+          "    members: MutPointer[Int, MutAnyOrigin],\n",
+          "    reach: MutPointer[Int32, MutAnyOrigin],\n",
+          "    next: MutPointer[Int, MutAnyOrigin],\n",
+          "    first: Int,\n",
+          "    past: Int,\n",
+          "):\n",
+          "    \"\"\"Put each splat of a run among the members of the bands it reaches.\n",
+          "\n",
+          "    Args:\n",
+          "        members: Each band's splats, band after band.\n",
+          "        reach: Each splat's first and last band.\n",
+          "        next: The run's next place in each band.\n",
+          "        first: The run's first splat.\n",
+          "        past: One past its last.\n",
+          "    \"\"\"\n",
+          "    for index in range(first, past):\n",
+          "        for band in range(\n",
+          "            Int(reach[unsafe_offset=index * 2]),\n",
+          "            Int(reach[unsafe_offset=index * 2 + 1]) + 1,\n",
+          "        ):\n",
+          "            members[unsafe_offset=next[unsafe_offset=band]] = index\n",
+          "            next[unsafe_offset=band] += 1\n",
+          "\n",
+          "\n",
+          "__async def _band_place_task(\n",
+          "    members: MutPointer[Int, MutAnyOrigin],\n",
+          "    reach: MutPointer[Int32, MutAnyOrigin],\n",
+          "    next: MutPointer[Int, MutAnyOrigin],\n",
+          "    first: Int,\n",
+          "    past: Int,\n",
+          "):\n",
+          "    \"\"\"`_band_place` as a task of `rasterize_splats`.\n",
+          "\n",
+          "    Args:\n",
+          "        members: Each band's splats.\n",
+          "        reach: Each splat's bands.\n",
+          "        next: The run's next places.\n",
+          "        first: The run's first splat.\n",
+          "        past: One past its last.\n",
+          "    \"\"\"\n",
+          "    _band_place(members, reach, next, first, past)\n",
+          "\n",
+          "\n",
+          "__async def _splat_band(\n",
+          "    target: MutPointer[RenderTarget, MutAnyOrigin],\n",
+          "    splats: Pointer[ProjectedSplat, ImmutAnyOrigin],\n",
+          "    members: MutPointer[Int, MutAnyOrigin],\n",
+          "    count: Int,\n",
+          "    errors: MutPointer[String, MutAnyOrigin],\n",
+          "    band: Int,\n",
+          "    first_row: Int,\n",
+          "    last_row: Int,\n",
+          "):\n",
+          "    \"\"\"Blend the splats that reach one band of rows into it, a task of\n",
+          "    `rasterize_splats`.\n",
+          "\n",
+          "    A band owns its rows, so no two bands touch one pixel. A task cannot\n",
+          "    raise, so an error goes into the band's slot.\n",
+          "\n",
+          "    Args:\n",
+          "        target: The target.\n",
+          "        splats: The splats, in draw order.\n",
+          "        members: The places in `splats` of the splats that reach the\n",
+          "            band, in draw order.\n",
+          "        count: How many members.\n",
+          "        errors: One slot a band.\n",
+          "        band: This band.\n",
+          "        first_row: Its first row.\n",
+          "        last_row: Its last row, inclusive.\n",
+          "    \"\"\"\n",
+          "    try:\n",
+          "        require_splat_depth(target[].depth_mode)\n",
+          "        for member in range(count):\n",
+          "            rasterize_splat(\n",
+          "                target[],\n",
+          "                splats[unsafe_offset=members[unsafe_offset=member]],\n",
+          "                first_row,\n",
+          "                last_row,\n",
+          "            )\n",
+          "    except error:\n",
+          "        errors[unsafe_offset=band] = String(error)\n",
+          "\n",
+          "\n",
+          "def raise_splat_band_errors(errors: List[String]) raises:\n",
+          "    \"\"\"Raise the first error a band of `rasterize_splats` carried back.\n",
+          "\n",
+          "    `rasterize_splats` checks the depth mode before any band starts, and\n",
+          "    each band clamps its rows and columns to the target, so a band meets no\n",
+          "    error. This net catches a check that a later change puts inside a band.\n",
+          "\n",
+          "    Args:\n",
+          "        errors: One slot a band, empty where the band finished.\n",
+          "\n",
+          "    Raises:\n",
+          "        Error: The first band's error, if any band has one.\n",
+          "    \"\"\"\n",
+          "    for band in range(len(errors)):\n",
+          "        if errors[band] != \"\":\n",
+          "            raise Error(errors[band])\n"
+        ]
+      },
+      {
+        "start": 717,
+        "stop": 730,
+        "before": [
+          "    var left = max(Int(floor(splat.x - reach[0])) - 1, 0)\n",
+          "    var right = min(Int(ceil(splat.x + reach[0])) + 1, target.width - 1)\n",
+          "    var top = max(Int(floor(splat.y - reach[1])) - 1, max(0, first_row))\n"
+        ],
+        "after": [
+          "    # The box, inside the target and its scissor. The scissor's corner\n",
+          "    # counts up from the bottom.\n",
+          "    ref cut = target.scissor\n",
+          "    var left = max(Int(floor(splat.x - reach[0])) - 1, max(0, cut.x))\n",
+          "    var right = min(\n",
+          "        Int(ceil(splat.x + reach[0])) + 1,\n",
+          "        min(target.width - 1, cut.x + cut.width - 1),\n",
+          "    )\n",
+          "    var rule = _row_rule(splat)\n",
+          "    var rows = _rule_rows(rule, splat_rows(splat))\n",
+          "    var top = max(\n",
+          "        rows[0], max(max(0, first_row), target.height - cut.y - cut.height)\n",
+          "    )\n"
+        ]
+      },
+      {
+        "start": 731,
+        "stop": 733,
+        "before": [
+          "        Int(ceil(splat.y + reach[1])) + 1, min(target.height - 1, last_row)\n"
+        ],
+        "after": [
+          "        rows[1],\n",
+          "        min(min(target.height - 1, last_row), target.height - 1 - cut.y),\n"
+        ]
+      },
+      {
+        "start": 735,
+        "stop": 951,
+        "before": [
+          "        _blend_row(target, splat, y, left, right)\n"
+        ],
+        "after": [
+          "        var span = _rule_span(rule, y, left, right)\n",
+          "        _blend_row(target, splat, y, span[0], span[1])\n",
+          "\n",
+          "\n",
+          "def splat_rows(splat: ProjectedSplat) -> Tuple[Int, Int]:\n",
+          "    \"\"\"Return the rows that a splat's box spans, before any clamp.\n",
+          "\n",
+          "    Args:\n",
+          "        splat: The splat.\n",
+          "\n",
+          "    Returns:\n",
+          "        The first and the last row of its quad, with a row of margin at\n",
+          "        each end, as `rasterize_splat` takes them.\n",
+          "    \"\"\"\n",
+          "    var reach = splat_reach(splat)\n",
+          "    return (\n",
+          "        Int(floor(splat.y - reach[1])) - 1,\n",
+          "        Int(ceil(splat.y + reach[1])) + 1,\n",
+          "    )\n",
+          "\n",
+          "\n",
+          "def splat_disc_rows(splat: ProjectedSplat) -> Tuple[Int, Int]:\n",
+          "    \"\"\"Return the rows whose spans can hold a splat's disc.\n",
+          "\n",
+          "    `splat_row_span` solves a quadratic along a row. Its discriminant is\n",
+          "    `4 a R - 4 dy^2 A B (ax^2 + ay^2)^2`, with `A` and `B` the inverse\n",
+          "    squared scales and `R` the slackened radius squared. So a row whose\n",
+          "    center is further than `h = sqrt(a R / (A B (ax^2 + ay^2)^2))` from\n",
+          "    the splat's center spans nothing. These are the rows within `h`, with\n",
+          "    `h` widened by `SPLAT_ROW_SLACK`, inside the box's rows. A tiny splat\n",
+          "    takes one or two rows, where its box takes four or five.\n",
+          "\n",
+          "    Args:\n",
+          "        splat: The splat.\n",
+          "\n",
+          "    Returns:\n",
+          "        The first and the last row. A splat with a scale that is zero,\n",
+          "        infinite or not a number, or with no axis, gets the box's rows, as\n",
+          "        its spans get the box's columns.\n",
+          "    \"\"\"\n",
+          "    return _rule_rows(_row_rule(splat), splat_rows(splat))\n",
+          "\n",
+          "\n",
+          "def _rule_rows(rule: _RowRule, box: Tuple[Int, Int]) -> Tuple[Int, Int]:\n",
+          "    \"\"\"Return the rows of a splat's disc from its quadratic; see\n",
+          "    `splat_disc_rows`.\n",
+          "\n",
+          "    Args:\n",
+          "        rule: The splat's quadratic.\n",
+          "        box: The rows of its box, from `splat_rows`.\n",
+          "\n",
+          "    Returns:\n",
+          "        The first and the last row.\n",
+          "    \"\"\"\n",
+          "    var reach = sqrt(\n",
+          "        rule.a\n",
+          "        * Float64(SPLAT_RADIUS_SQ)\n",
+          "        * (1 + SPLAT_SPAN_SLACK)\n",
+          "        / (rule.across * rule.along * rule.norm * rule.norm)\n",
+          "    ) * (1 + SPLAT_ROW_SLACK)\n",
+          "    # Below these bounds no product of the quadratic can overflow. A\n",
+          "    # reach that is not finite is a splat that crosses every row.\n",
+          "    if not (\n",
+          "        rule.across < 1e30\n",
+          "        and rule.along < 1e30\n",
+          "        and rule.a > 0\n",
+          "        and isfinite(reach)\n",
+          "    ):\n",
+          "        return box\n",
+          "    # A row's center is half a row below its top.\n",
+          "    var center = rule.y - 0.5\n",
+          "    var first = max(Float64(box[0]), ceil(center - reach))\n",
+          "    var last = min(Float64(box[1]), floor(center + reach))\n",
+          "    return (Int(first), Int(last))\n",
+          "\n",
+          "\n",
+          "@fieldwise_init\n",
+          "struct _RowRule(ImplicitlyCopyable):\n",
+          "    \"\"\"What `splat_row_span` needs of a splat for every row: the quadratic\n",
+          "    of the disc along a row, less the row's own terms.\"\"\"\n",
+          "\n",
+          "    var x: Float64\n",
+          "    \"\"\"The splat's center column.\"\"\"\n",
+          "    var y: Float64\n",
+          "    \"\"\"Its center row.\"\"\"\n",
+          "    var a: Float64\n",
+          "    \"\"\"The square term's coefficient.\"\"\"\n",
+          "    var b: Float64\n",
+          "    \"\"\"The linear term's coefficient, a unit of row offset.\"\"\"\n",
+          "    var c: Float64\n",
+          "    \"\"\"The constant term's coefficient, a unit of squared row offset.\"\"\"\n",
+          "    var across: Float64\n",
+          "    \"\"\"The inverse squared scale across the first axis.\"\"\"\n",
+          "    var along: Float64\n",
+          "    \"\"\"The inverse squared scale along it.\"\"\"\n",
+          "    var norm: Float64\n",
+          "    \"\"\"The axis's squared length.\"\"\"\n",
+          "\n",
+          "\n",
+          "def _row_rule(splat: ProjectedSplat) -> _RowRule:\n",
+          "    \"\"\"Return the quadratic of a splat's disc along its rows.\n",
+          "\n",
+          "    Args:\n",
+          "        splat: The splat.\n",
+          "\n",
+          "    Returns:\n",
+          "        The coefficients; see `splat_row_span`.\n",
+          "    \"\"\"\n",
+          "    var ax = Float64(splat.axis_x)\n",
+          "    var ay = Float64(splat.axis_y)\n",
+          "    var across = 1 / (Float64(splat.scale1) * Float64(splat.scale1))\n",
+          "    var along = 1 / (Float64(splat.scale2) * Float64(splat.scale2))\n",
+          "    return _RowRule(\n",
+          "        Float64(splat.x),\n",
+          "        Float64(splat.y),\n",
+          "        ax * ax * across + ay * ay * along,\n",
+          "        2 * ax * ay * (across - along),\n",
+          "        ay * ay * across + ax * ax * along,\n",
+          "        across,\n",
+          "        along,\n",
+          "        ax * ax + ay * ay,\n",
+          "    )\n",
+          "\n",
+          "\n",
+          "def _rule_span(\n",
+          "    rule: _RowRule, y: Int, left: Int, right: Int\n",
+          ") -> Tuple[Int, Int]:\n",
+          "    \"\"\"Return a row's span from a splat's quadratic; see `splat_row_span`.\n",
+          "\n",
+          "    Args:\n",
+          "        rule: The splat's quadratic.\n",
+          "        y: The row, down from the top.\n",
+          "        left: The box's first column.\n",
+          "        right: The box's last column.\n",
+          "\n",
+          "    Returns:\n",
+          "        The first and the last column of the span.\n",
+          "    \"\"\"\n",
+          "    var dy = rule.y - (Float64(y) + 0.5)\n",
+          "    var b = rule.b * dy\n",
+          "    var c = dy * dy * rule.c - Float64(SPLAT_RADIUS_SQ) * (1 + SPLAT_SPAN_SLACK)\n",
+          "    var discriminant = b * b - 4 * rule.a * c\n",
+          "    if not isfinite(discriminant) or not (rule.a > 0):\n",
+          "        return (left, right)\n",
+          "    if discriminant < 0:\n",
+          "        return (left, left - 1)\n",
+          "    var root = sqrt(discriminant)\n",
+          "    var low = (-b - root) / (2 * rule.a)\n",
+          "    var high = (-b + root) / (2 * rule.a)\n",
+          "    # A pixel's center is half a pixel right of its left edge.\n",
+          "    var first = Int(ceil(rule.x + low - 0.5))\n",
+          "    var last = Int(floor(rule.x + high - 0.5))\n",
+          "    return (max(first, left), min(last, right))\n",
+          "\n",
+          "\n",
+          "def splat_row_span(\n",
+          "    splat: ProjectedSplat, y: Int, left: Int, right: Int\n",
+          ") -> Tuple[Int, Int]:\n",
+          "    \"\"\"Return the columns of one row that a splat's disc can cover.\n",
+          "\n",
+          "    The disc is `u^2 + v^2 <= 4`, which along a row is a quadratic in the\n",
+          "    pixel center's offset from the splat's center. Its roots are found for\n",
+          "    a disc wider by `SPLAT_SPAN_SLACK`, in `Float64`, and the span is the\n",
+          "    pixels whose centers are between them. So every pixel whose center\n",
+          "    `splat_alpha` puts in the disc is in the span, and `splat_alpha` still\n",
+          "    decides each pixel: a row draws what its whole box draws, and the\n",
+          "    pixels it skips are the ones that would add nothing.\n",
+          "\n",
+          "    Args:\n",
+          "        splat: The splat.\n",
+          "        y: The row, down from the top.\n",
+          "        left: The box's first column.\n",
+          "        right: The box's last column.\n",
+          "\n",
+          "    Returns:\n",
+          "        The first and the last column of the span, inside `left` and\n",
+          "        `right`. The first is past the last for a row that the disc misses.\n",
+          "        A splat with a scale that is not positive and finite gets the whole\n",
+          "        box.\n",
+          "    \"\"\"\n",
+          "    return _rule_span(_row_rule(splat), y, left, right)\n",
+          "\n",
+          "\n",
+          "def blend_splat_pixel(\n",
+          "    mut target: RenderTarget, slot: Int, splat: ProjectedSplat, alpha: Float32\n",
+          "):\n",
+          "    \"\"\"Blend a splat's color into one pixel: source over, with straight\n",
+          "    alpha, as `RenderTarget.blend` mixes under the normal mode.\n",
+          "\n",
+          "    Each sum of products is one fused multiply-add, which rounds once\n",
+          "    wherever the compiler puts it. So the fill gives a pixel the same bits\n",
+          "    in any band and on any count of workers. `render.blend.blend_fragment`\n",
+          "    leaves the compiler to fuse, so the two can differ in the last bit.\n",
+          "\n",
+          "    Args:\n",
+          "        target: The target. Its normal attachment is left alone, and the\n",
+          "            pixel becomes light.\n",
+          "        slot: The pixel, row by row. It must be inside the target and its\n",
+          "            scissor: it is read and written unchecked.\n",
+          "        splat: The splat.\n",
+          "        alpha: Its opacity at the pixel, above zero.\n",
+          "    \"\"\"\n",
+          "    var colors = target.colors.unsafe_ptr()\n",
+          "    var data = target.data.unsafe_ptr()\n",
+          "    var stored = colors[unsafe_offset=slot]\n",
+          "    # A data pixel is stored straight; see `RenderTarget.light_at`.\n",
+          "    var behind = stored.premultiplied() if data[unsafe_offset=slot] else stored\n",
+          "    data[unsafe_offset=slot] = False\n",
+          "    var share = min(max(alpha, 0), 1)\n",
+          "    var keep = 1 - share\n",
+          "    colors[unsafe_offset=slot] = FloatColor(\n",
+          "        max(Float32(0), fma(splat.r, share, behind.r * keep)),\n",
+          "        max(Float32(0), fma(splat.g, share, behind.g * keep)),\n",
+          "        max(Float32(0), fma(splat.b, share, behind.b * keep)),\n",
+          "        min(max(fma(behind.a, keep, share), 0), 1),\n",
+          "    )\n"
+        ]
+      },
+      {
+        "start": 960,
+        "stop": 962,
+        "before": [
+          "    \"\"\"Blend one splat into one row of pixels.\n"
+        ],
+        "after": [
+          "    \"\"\"Blend one splat into one row of pixels, `SPLAT_LANES` opacities at\n",
+          "    a time.\n"
+        ]
+      },
+      {
+        "start": 971,
+        "stop": 973,
+        "before": [
+          "        Error: Never; the columns and the row are inside the target.\n"
+        ],
+        "after": [
+          "        Error: Never; the columns and the row are inside the target and its\n",
+          "            scissor.\n"
+        ]
+      },
+      {
+        "start": 974,
+        "stop": 994,
+        "before": [
+          "    for x in range(left, right + 1):\n",
+          "        var stored = target.depth[y * target.width + x]\n",
+          "        if not splat_depth_passes(target.depth_mode, splat.depth, stored):\n",
+          "            continue\n",
+          "        target.blend(\n",
+          "            x,\n",
+          "            y,\n",
+          "            FloatColor(splat.r, splat.g, splat.b, splat_alpha(splat, x, y)),\n",
+          "        )\n"
+        ],
+        "after": [
+          "    # The row is inside the target, so it is read and written unchecked.\n",
+          "    var depth = target.depth.unsafe_ptr().unsafe_offset(y * target.width)\n",
+          "    var first = left\n",
+          "    while first <= right:\n",
+          "        var alphas = splat_alphas(splat, first, y)\n",
+          "        for lane in range(\n",
+          "            min(SPLAT_LANES, right - first + 1)\n",
+          "        ):  # pragma: no branch\n",
+          "            var x = first + lane\n",
+          "            # A clear fragment blends nothing under source-over, so the\n",
+          "            # pixels of the box outside the disc stop here.\n",
+          "            var alpha = alphas[lane]\n",
+          "            if not alpha > 0:\n",
+          "                continue\n",
+          "            if not splat_depth_passes(\n",
+          "                target.depth_mode, splat.depth, depth[unsafe_offset=x]\n",
+          "            ):\n",
+          "                continue\n",
+          "            blend_splat_pixel(target, y * target.width + x, splat, alpha)\n",
+          "        first += SPLAT_LANES\n"
+        ]
+      },
+      {
+        "start": 1004,
+        "stop": 1005,
+        "before": [],
+        "after": [
+          "    workers: Int = 1,\n"
+        ]
+      },
+      {
+        "start": 1008,
+        "stop": 1011,
+        "before": [],
+        "after": [
+          "\n",
+          "    Parameters:\n",
+          "        C: The camera's type.\n"
+        ]
+      },
+      {
+        "start": 1019,
+        "stop": 1020,
+        "before": [],
+        "after": [
+          "        workers: How many threads draw; see the module docstring.\n"
+        ]
+      },
+      {
+        "start": 1032,
+        "stop": 1033,
+        "before": [],
+        "after": [
+          "        workers,\n"
+        ]
+      },
+      {
+        "start": 1034,
+        "stop": 1035,
+        "before": [
+          "    rasterize_splats(target, splats)\n"
+        ],
+        "after": [
+          "    rasterize_splats(target, splats, workers)\n"
+        ]
+      }
+    ]
+  },
+  "render/splatrule.mojo": {
+    "before_sha256": "96bf5f834a4bcde8df349b8ff8862b50cacdac296cd34dc640af6af0caf0cb02",
+    "after_sha256": "7a60d54bb1d6f24c24bc19824f19e5041c5e75602985ba608114c2ed738d8997",
+    "before_token_sha256": "b747b01b5e8b9628ca035245fceefb12236d7b7390e33af01afa3b61dda2b1d3",
+    "after_token_sha256": "4ce9bb899d656a518eed76341ff1ed4da812cac4b2f12c5854c0e68557643f94",
+    "edits": [
+      {
+        "start": 57,
+        "stop": 58,
+        "before": [
+          "from std.math import atan2, cos, exp, log2, max, min, sin, sqrt\n"
+        ],
+        "after": [
+          "from std.math import copysign, exp, fma, log2, max, min, sqrt\n"
+        ]
+      },
+      {
+        "start": 144,
+        "stop": 170,
+        "before": [
+          "    var dx = Float32(x) + 0.5 - splat.x\n"
+        ],
+        "after": [
+          "    return _alpha_lanes[1](splat, SIMD[DType.float32, 1](Float32(x)), y)[0]\n",
+          "\n",
+          "\n",
+          "def _alpha_lanes[\n",
+          "    width: Int\n",
+          "](splat: ProjectedSplat, columns: SIMD[DType.float32, width], y: Int) -> SIMD[\n",
+          "    DType.float32, width\n",
+          "]:\n",
+          "    \"\"\"Return the opacities a splat gives pixels of one row.\n",
+          "\n",
+          "    `splat_alpha` and `splat_alphas` both run this one expression, and\n",
+          "    `exp` gives a lane what it gives one number. So a lane of eight is the\n",
+          "    lane of one to the bit.\n",
+          "\n",
+          "    Parameters:\n",
+          "        width: How many pixels.\n",
+          "\n",
+          "    Args:\n",
+          "        splat: The splat.\n",
+          "        columns: The pixels' columns.\n",
+          "        y: Their row, down from the top.\n",
+          "\n",
+          "    Returns:\n",
+          "        Each pixel's opacity; see `splat_alpha`.\n",
+          "    \"\"\"\n",
+          "    var dx = columns + 0.5 - splat.x\n"
+        ]
+      },
+      {
+        "start": 171,
+        "stop": 214,
+        "before": [
+          "    var u = (dx * splat.axis_x + dy * splat.axis_y) / splat.scale1\n",
+          "    var v = (dy * splat.axis_x - dx * splat.axis_y) / splat.scale2\n",
+          "    var r2 = squared_length2[DType.float32](u, v)\n",
+          "    if r2 > SPLAT_RADIUS_SQ:\n",
+          "        return 0\n",
+          "    return exp(r2 * -0.5) * splat.a\n"
+        ],
+        "after": [
+          "    # Explicit fused products: each rounds once, in any width, so the\n",
+          "    # compiler has nothing left to fuse one way in a lane and another way\n",
+          "    # alone.\n",
+          "    var along = SIMD[DType.float32, width](dy * splat.axis_y)\n",
+          "    var across = SIMD[DType.float32, width](dy * splat.axis_x)\n",
+          "    var u = fma(dx, SIMD[DType.float32, width](splat.axis_x), along) / (\n",
+          "        splat.scale1\n",
+          "    )\n",
+          "    var v = fma(-dx, SIMD[DType.float32, width](splat.axis_y), across) / (\n",
+          "        splat.scale2\n",
+          "    )\n",
+          "    var r2 = fma(u, u, v * v)\n",
+          "    return r2.gt(SPLAT_RADIUS_SQ).select(\n",
+          "        SIMD[DType.float32, width](0), exp(r2 * -0.5) * splat.a\n",
+          "    )\n",
+          "\n",
+          "\n",
+          "comptime SPLAT_LANES = 8\n",
+          "\"\"\"How many pixels of a row `splat_alphas` shades at once.\"\"\"\n",
+          "\n",
+          "\n",
+          "def splat_alphas(\n",
+          "    splat: ProjectedSplat, x: Int, y: Int\n",
+          ") -> SIMD[DType.float32, SPLAT_LANES]:\n",
+          "    \"\"\"Return the opacities a splat gives `SPLAT_LANES` pixels of a row.\n",
+          "\n",
+          "    The lanes run the expression of `splat_alpha`. So each lane is\n",
+          "    `splat_alpha` of its pixel, to the bit, at a fraction of the time.\n",
+          "\n",
+          "    Args:\n",
+          "        splat: The splat.\n",
+          "        x: The first pixel's column.\n",
+          "        y: The pixels' row, down from the top.\n",
+          "\n",
+          "    Returns:\n",
+          "        Lane `k` is `splat_alpha(splat, x + k, y)`.\n",
+          "    \"\"\"\n",
+          "    # Columns below 2^24 are exact in `Float32`, so lane k's column is the\n",
+          "    # one `splat_alpha` makes of `x + k`.\n",
+          "    var columns = SIMD[DType.float32, SPLAT_LANES](\n",
+          "        0, 1, 2, 3, 4, 5, 6, 7\n",
+          "    ) + Float32(x)\n",
+          "    return _alpha_lanes[SPLAT_LANES](splat, columns, y)\n"
+        ]
+      },
+      {
+        "start": 319,
+        "stop": 321,
+        "before": [
+          "        at: Where this splat's six floats start.\n"
+        ],
+        "after": [
+          "        at: Where this splat's six floats start. They must be inside\n",
+          "            `covariance`: they are read unchecked.\n"
+        ]
+      },
+      {
+        "start": 348,
+        "stop": 353,
+        "before": [
+          "    var cov0 = Vector3(covariance[at], covariance[at + 1], covariance[at + 2])\n"
+        ],
+        "after": [
+          "    # The caller gives a splat's six floats; they are read unchecked.\n",
+          "    var six = covariance.unsafe_ptr().unsafe_offset(at)\n",
+          "    var cov0 = Vector3(\n",
+          "        six[unsafe_offset=0], six[unsafe_offset=1], six[unsafe_offset=2]\n",
+          "    )\n"
+        ]
+      },
+      {
+        "start": 354,
+        "stop": 355,
+        "before": [
+          "        covariance[at + 1], covariance[at + 3], covariance[at + 4]\n"
+        ],
+        "after": [
+          "        six[unsafe_offset=1], six[unsafe_offset=3], six[unsafe_offset=4]\n"
+        ]
+      },
+      {
+        "start": 357,
+        "stop": 358,
+        "before": [
+          "        covariance[at + 2], covariance[at + 4], covariance[at + 5]\n"
+        ],
+        "after": [
+          "        six[unsafe_offset=2], six[unsafe_offset=4], six[unsafe_offset=5]\n"
+        ]
+      },
+      {
+        "start": 395,
+        "stop": 404,
+        "before": [
+          "    var angle = atan2(b * 2, a - c) * 0.5\n",
+          "    var axis_x = cos(angle)\n",
+          "    var axis_y = sin(angle)\n"
+        ],
+        "after": [
+          "    # The major axis is at half the angle of (a - c, 2 b), three.js's\n",
+          "    # `atan2`. The half-angle formulas give its cosine and sine with two\n",
+          "    # square roots in place of three trigonometric calls.\n",
+          "    # A round splat has no gap: three.js's atan2(0, 0) keeps its axis at\n",
+          "    # (1, 0).\n",
+          "    var gap = sqrt(squared_length2[DType.float32](half_gap, b))\n",
+          "    var cos2 = half_gap / gap if gap > 0 else Float32(1)\n",
+          "    var axis_x = sqrt(max((1 + cos2) * 0.5, 0))\n",
+          "    var axis_y = copysign(sqrt(max((1 - cos2) * 0.5, 0)), b)\n"
         ]
       }
     ]
@@ -1987,9 +3191,9 @@ EDGES = json.loads(r'''
   },
   "renderers/renderer.mojo": {
     "before_sha256": "5cc066092d9b0302c60a6676459efc855e220dc319d1f88b5eb84df768f489f9",
-    "after_sha256": "990d94c815315c910b12c1b126c076183fc35cdeb9f64a26d1f7e574f424bccd",
+    "after_sha256": "c08275ccfea2f32dd84dc5ad54205052f6dfd216104836c858ff259224426332",
     "before_token_sha256": "cda4f5d902566d18ae704ba4bc976141e8324c84d6d2900667739b1e28526ed8",
-    "after_token_sha256": "fa2a55e75f6201dab9fd8fd08e36d0e7f40400556a4881f78e2ee64a2bece4d7",
+    "after_token_sha256": "ddf844bfa5e67de1f0226d5f2e4895ac70043b2e3b495acb55791135103b20de",
     "edits": [
       {
         "start": 2812,
@@ -2049,6 +3253,14 @@ EDGES = json.loads(r'''
         ],
         "after": [
           "__async def _place_renamed(\n"
+        ]
+      },
+      {
+        "start": 8403,
+        "stop": 8404,
+        "before": [],
+        "after": [
+          "                self.workers,\n"
         ]
       }
     ]
@@ -2187,6 +3399,62 @@ EDGES = json.loads(r'''
         ],
         "after": [
           "    var material = assets.materials.add(surface)\n"
+        ]
+      }
+    ]
+  },
+  "tests/test_byte_extent_boundaries.mojo": {
+    "before_sha256": "0622d29b6948317335a96f7eae18cc78a05d9c7f2dce456c72490a6f0cb06127",
+    "after_sha256": "d6871fc9d1356886cb8aaa97c40ed7000cd86c97677344c2be566bc98b42878e",
+    "before_token_sha256": "35b864d3b151524edd96a28dfe545c9b73b2e04cb0eed259455b2e98d14f0b8f",
+    "after_token_sha256": "8fe2e809ce3061d1abbc190113629540898168ae7b112676c8fdda67e68144cb",
+    "edits": [
+      {
+        "start": 77,
+        "stop": 118,
+        "before": [],
+        "after": [
+          "def test_texel_count_keeps_signed_and_zero_products() raises:\n",
+          "    for width in [-3, 0, 3]:\n",
+          "        for height in [-5, 0, 5]:\n",
+          "            for channels in [-7, 0, 7]:\n",
+          "                var count = width * height * channels\n",
+          "                require_texel_count(count, width, height, channels, \"signed\")\n",
+          "                with assert_raises(contains=\"signed\"):\n",
+          "                    require_texel_count(\n",
+          "                        count + 1, width, height, channels, \"signed\"\n",
+          "                    )\n",
+          "    # The final product fits even when a partial signed product does not.\n",
+          "    require_texel_count(Int.MIN, Int.MIN, -1, -1, \"signed\")\n",
+          "    require_texel_count(Int.MIN, -1, Int.MIN, -1, \"signed\")\n",
+          "    require_texel_count(Int.MIN, -1, -1, Int.MIN, \"signed\")\n",
+          "    require_texel_count(Int.MIN, Int.MIN // 2, 2, 1, \"signed\")\n",
+          "    require_texel_count(Int.MAX, Int.MAX, 1, 1, \"signed\")\n",
+          "    require_texel_count(-Int.MAX, Int.MAX, -1, 1, \"signed\")\n",
+          "    require_texel_count(0, Int.MIN, Int.MIN, 0, \"signed\")\n",
+          "    require_texel_count(0, Int.MIN, 0, Int.MIN, \"signed\")\n",
+          "    require_texel_count(0, 0, Int.MIN, Int.MIN, \"signed\")\n",
+          "\n",
+          "\n",
+          "def test_texel_count_refuses_overflow_with_the_callers_error() raises:\n",
+          "    for factors in [\n",
+          "        (Int.MAX, 2, 1),\n",
+          "        (Int.MAX, 1, 2),\n",
+          "        (Int.MIN, -1, 1),\n",
+          "        (Int.MIN, 1, -1),\n",
+          "        (Int.MIN, 2, 1),\n",
+          "        (Int.MIN, 1, 2),\n",
+          "        (Int.MIN, Int.MIN, 1),\n",
+          "        (Int.MIN, Int.MIN, Int.MIN),\n",
+          "        (Int.MIN // 2, -2, 1),\n",
+          "        (Int.MIN // 2, -1, 2),\n",
+          "    ]:\n",
+          "        with assert_raises(contains=\"too many texels\"):\n",
+          "            require_texel_count(\n",
+          "                0, factors[0], factors[1], factors[2], \"too many texels\"\n",
+          "            )\n",
+          "\n",
+          "\n"
         ]
       }
     ]
@@ -2527,6 +3795,116 @@ EDGES = json.loads(r'''
       }
     ]
   },
+  "tests/test_carla_sensors_world.mojo": {
+    "before_sha256": "0e1d1728b42cb7f40a227d0d0b009256e2efa316cb7a2512a9de6b367127eb4a",
+    "after_sha256": "4a7596a49fc4f397509d3e1cd06fc50a1f6ba3d699d30cef28572a593967a8ec",
+    "before_token_sha256": "c5693c12310c68e8f5e7dd3c80d2cd81aebbb35bff4eebcc4d31edeaf38db358",
+    "after_token_sha256": "8f192d8af21059c08ad10fadfed76787f32d917c3aa37a9e5719c6f0a2cb4297",
+    "edits": [
+      {
+        "start": 121,
+        "stop": 122,
+        "before": [
+          "from std.math import inf, nan\n"
+        ],
+        "after": [
+          "from std.math import inf, isfinite, nan\n"
+        ]
+      },
+      {
+        "start": 934,
+        "stop": 1019,
+        "before": [],
+        "after": [
+          "def test_cam_snapshots_all_motion_after_a_heading_trigger() raises:\n",
+          "    var world = _world()\n",
+          "    var car = _car(world, 10, 1.75)\n",
+          "    world.set_target_velocity(car, Vector3(2, 0, 0))\n",
+          "    var service = CaService(\n",
+          "        world, car, Duration(0.1), Duration(1), False, CamNoise()\n",
+          "    )\n",
+          "    var rng = SensorRandom(0)\n",
+          "    var projection = world.map.geo_projection.copy()\n",
+          "    var tick = Duration(0.05)\n",
+          "    assert_true(Bool(service.trigger(world, projection, tick, rng)))\n",
+          "    _near(service.last_cam_position, 10, 1.75, 0)\n",
+          "    _near(service.last_cam_heading, 1, 0, 0)\n",
+          "    assert_almost_equal(service.last_cam_speed, 2)\n",
+          "    assert_equal(service.low_dynamics_counter, 0)\n",
+          "    world.elapsed_seconds = 0.2\n",
+          "    assert_false(Bool(service.trigger(world, projection, tick, rng)))\n",
+          "    # A simultaneous turn, move and speed change takes the heading branch.\n",
+          "    var pose = _pose(20, 1.75, 0, 30)\n",
+          "    var heading = pose.rotation.forward_vector()\n",
+          "    world.set_transform(car, pose)\n",
+          "    world.set_target_velocity(car, heading * 4)\n",
+          "    assert_true(Bool(service.trigger(world, projection, tick, rng)))\n",
+          "    _near(service.last_cam_position, 20, 1.75, 0)\n",
+          "    _near(service.last_cam_heading, heading.x, heading.y, heading.z)\n",
+          "    assert_almost_equal(service.last_cam_speed, 4, atol=1e-6)\n",
+          "    # No motion since that CAM must not trigger another minimum-gap CAM.\n",
+          "    world.elapsed_seconds = 0.31\n",
+          "    assert_false(Bool(service.trigger(world, projection, tick, rng)))\n",
+          "\n",
+          "\n",
+          "def test_cam_heading_threshold_and_rounded_antiparallel_cosine() raises:\n",
+          "    var world = _world()\n",
+          "    var car = _car(world, 0, 0)\n",
+          "    var service = CaService(\n",
+          "        world, car, Duration(0.1), Duration(1), False, CamNoise()\n",
+          "    )\n",
+          "    assert_true(service._heading_changed(world))\n",
+          "    service.last_cam_heading = Vector3(1, 0, 0)\n",
+          "    world.set_transform(car, _pose(0, 0, 0, 3.9))\n",
+          "    assert_false(service._heading_changed(world))\n",
+          "    world.set_transform(car, _pose(0, 0, 0, 4.1))\n",
+          "    assert_true(service._heading_changed(world))\n",
+          "    world.set_transform(car, _pose(0, 0, 0, 180))\n",
+          "    assert_true(service._heading_changed(world))\n",
+          "    # At three degrees the Float32 dot and lengths round to a cosine\n",
+          "    # greater than one. Negating one heading gives less than minus one,\n",
+          "    # although the geometric angle is exactly pi, independently of yaw.\n",
+          "    var pose = _pose(0, 0, 0, 3)\n",
+          "    world.set_transform(car, pose)\n",
+          "    var heading = pose.rotation.forward_vector()\n",
+          "    var cosine = Float64(heading.dot(heading)) / (\n",
+          "        Float64(heading.length()) * Float64(heading.length())\n",
+          "    )\n",
+          "    assert_true(cosine > 1)\n",
+          "    service.last_cam_heading = heading\n",
+          "    assert_false(service._heading_changed(world))\n",
+          "    service.last_cam_heading = heading * -1\n",
+          "    assert_true(service._heading_changed(world))\n",
+          "    # World transforms remain mutable. A nonfinite current heading must\n",
+          "    # conservatively count as changed, even with a valid previous sample.\n",
+          "    service.last_cam_heading = Vector3(1, 0, 0)\n",
+          "    world.set_transform(car, _pose(0, 0, 0, nan[DType.float32]()))\n",
+          "    assert_true(service._heading_changed(world))\n",
+          "    assert_false(isfinite(service.vehicle_heading.length()))\n",
+          "\n",
+          "\n",
+          "def test_fixed_rate_cam_also_snapshots_motion() raises:\n",
+          "    var world = _world()\n",
+          "    var car = _car(world, 12, 1.75)\n",
+          "    var pose = _pose(12, 1.75, 0, 90)\n",
+          "    world.set_transform(car, pose)\n",
+          "    var heading = pose.rotation.forward_vector()\n",
+          "    world.set_target_velocity(car, heading * 3)\n",
+          "    var service = CaService(\n",
+          "        world, car, Duration(0.1), Duration(1), True, CamNoise()\n",
+          "    )\n",
+          "    var rng = SensorRandom(0)\n",
+          "    var projection = world.map.geo_projection.copy()\n",
+          "    assert_true(Bool(service.trigger(world, projection, Duration(0.05), rng)))\n",
+          "    _near(service.last_cam_position, 12, 1.75, 0)\n",
+          "    _near(service.last_cam_heading, heading.x, heading.y, heading.z)\n",
+          "    assert_almost_equal(service.last_cam_speed, 3, atol=1e-6)\n",
+          "\n",
+          "\n"
+        ]
+      }
+    ]
+  },
   "tests/test_carla_speed_parser_exceptions.mojo": {
     "before_sha256": "46ef2fd18fde1f532f06b0027b317f96a3e5f3f2260ddcb7b266f1fe9d58731b",
     "after_sha256": "c6b4a9415cfec9b5929428d0fe9a5c95db56ede90d1802d4f033a78543a4d4d8",
@@ -2635,6 +4013,102 @@ EDGES = json.loads(r'''
         ],
         "after": [
           "            assets.materials.add(dotted),\n"
+        ]
+      }
+    ]
+  },
+  "tests/test_denoise.mojo": {
+    "before_sha256": "568ceff912f36950f00fff1711a1780f9378e4a145c1599e514d80603b38ba95",
+    "after_sha256": "812ad9ddd1a35182b784a1fa04736f47b7f72335d72f0a2d861585326ec9c53a",
+    "before_token_sha256": "f7a7255dc7749b3c6e27ee5ab383bbb623b17d48a940f66e0d0f7e21a629a3c7",
+    "after_token_sha256": "19103a81e6833546107a4120b222b201f5f5024bacebec3aca149dbd9f6f0066",
+    "edits": [
+      {
+        "start": 24,
+        "stop": 31,
+        "before": [
+          "from postprocessing.denoise import DenoiseSettings, check_denoise, denoise_light\n"
+        ],
+        "after": [
+          "from postprocessing.denoise import (\n",
+          "    DenoiseSettings,\n",
+          "    check_denoise,\n",
+          "    denoise_light,\n",
+          "    denoise_pixel,\n",
+          ")\n",
+          "from postprocessing.sampling import LightView\n"
+        ]
+      },
+      {
+        "start": 32,
+        "stop": 33,
+        "before": [],
+        "after": [
+          "from math.matrix4 import Matrix4\n"
+        ]
+      },
+      {
+        "start": 49,
+        "stop": 50,
+        "before": [],
+        "after": [
+          "from std.math import cos, sin\n"
+        ]
+      },
+      {
+        "start": 186,
+        "stop": 235,
+        "before": [],
+        "after": [
+          "def test_node_offsets_match_independent_pixel_space_ramps() raises:\n",
+          "    # r186 DenoiseNode.js uses sin(noise[0]), not sin(2*pi*noise[0]).\n",
+          "    # Its column-major mat2 has columns (sin, -cos) and (sin, cos).\n",
+          "    # Apply that matrix to a pixel offset before normalizing by resolution.\n",
+          "    # An affine gray ramp has an exact bilinear sample at that pixel offset.\n",
+          "    for size in [(8, 8), (12, 8), (8, 12)]:\n",
+          "        var width = size[0]\n",
+          "        var height = size[1]\n",
+          "        var pixels = List[FloatColor]()\n",
+          "        for y in range(height):\n",
+          "            for x in range(width):\n",
+          "                var gray = Float32(x) * 0.04 + Float32(y) * 0.07\n",
+          "                pixels.append(FloatColor(gray, gray, gray, 0.3))\n",
+          "        var surface = List[FloatColor](\n",
+          "            length=width * height, fill=FloatColor(0, 0, 1, 1)\n",
+          "        )\n",
+          "        var depth = List[Float32](length=width * height, fill=0)\n",
+          "        var view = DepthView(\n",
+          "            depth, width, height, Matrix4(), Length(0.1), Length(10)\n",
+          "        )\n",
+          "        var source = LightView(pixels, width, height)\n",
+          "        var normals = LightView(surface, width, height)\n",
+          "        var settings = DenoiseSettings()\n",
+          "        settings.radius = 1\n",
+          "        settings.luma_phi = 1\n",
+          "        for turn in [Float32(0), Float32(0.5), Float32(1)]:\n",
+          "            var noise = List[Float32](length=64 * 64, fill=0)\n",
+          "            # DenoiseNode flips only its noise coordinate, so the source\n",
+          "            # row numbered three reads this row in the repeating noise.\n",
+          "            noise[(height - 1 - 3) * 64 + 4] = turn\n",
+          "            for tap in [Vector3(1, 0, 0), Vector3(0, 1, 0), Vector3(1, 2, 0)]:\n",
+          "                var disk: List[Vector3] = [tap]\n",
+          "                var dx = sin(Float64(turn)) * Float64(tap.x + tap.y)\n",
+          "                var dy = cos(Float64(turn)) * Float64(tap.y - tap.x)\n",
+          "                var center = 4.0 * 0.04 + 3.0 * 0.07\n",
+          "                var neighbor = center + dx * 0.04 + dy * 0.07\n",
+          "                var weight = 1.0 - abs(neighbor - center)\n",
+          "                var expected = (center + neighbor * weight) / (1.0 + weight)\n",
+          "                var actual = denoise_pixel(\n",
+          "                    source, view, normals, noise, disk, 4, 3, settings\n",
+          "                )\n",
+          "                assert_almost_equal(Float64(actual.r), expected, atol=1e-6)\n",
+          "                assert_almost_equal(Float64(actual.g), expected, atol=1e-6)\n",
+          "                assert_almost_equal(Float64(actual.b), expected, atol=1e-6)\n",
+          "                assert_almost_equal(actual.a, 0.3, atol=1e-7)\n",
+          "        _ = pixels^\n",
+          "        _ = surface^\n",
+          "\n",
+          "\n"
         ]
       }
     ]
@@ -2759,6 +4233,155 @@ EDGES = json.loads(r'''
         ],
         "after": [
           "    _ = check_hull(mirrored)\n"
+        ]
+      }
+    ]
+  },
+  "tests/test_geometry_inputs.mojo": {
+    "before_sha256": "806d6910d12816bafce7a9a291a695a8c685dd5be51c15c72f5064bd426fecd6",
+    "after_sha256": "b1edbdd66935ff760dded7eac58e0c33a00bba5e338bfec1dd9b896cbecd400b",
+    "before_token_sha256": "41506da7bac57eeface2135b9917cf86b60d21e773d1d10dc4a9e0968e1b06d3",
+    "after_token_sha256": "c2ee36a16402f5d4e509d94c829d086b2b2b3a7c959a36d28d7a1d9dd8333876",
+    "edits": [
+      {
+        "start": 5,
+        "stop": 6,
+        "before": [
+          "\"\"\"Finite input contracts for builders without a JSON parameter backstop.\"\"\"\n"
+        ],
+        "after": [
+          "\"\"\"Finite input contracts checked before generated shape allocation.\"\"\"\n"
+        ]
+      },
+      {
+        "start": 7,
+        "stop": 9,
+        "before": [
+          "from core.buffer_geometry import POSITION\n"
+        ],
+        "after": [
+          "from core.buffer_geometry import BufferGeometry, POSITION\n",
+          "from geometries.box import box\n"
+        ]
+      },
+      {
+        "start": 10,
+        "stop": 20,
+        "before": [
+          "from geometries.circle import FULL_TURN, check_sweep\n"
+        ],
+        "after": [
+          "from geometries.circle import FULL_TURN, check_sweep, circle, ring\n",
+          "from geometries.cylinder import cylinder\n",
+          "from geometries.decal import decal\n",
+          "from geometries.plane import plane\n",
+          "from geometries.sphere import sphere\n",
+          "from geometries.surface import require_positive_radius\n",
+          "from geometries.torus import torus, torus_knot\n",
+          "from math.euler import Euler, XYZ\n",
+          "from math.matrix4 import Matrix4\n",
+          "from math.vector3 import Vector3\n"
+        ]
+      },
+      {
+        "start": 97,
+        "stop": 191,
+        "before": [],
+        "after": [
+          "def test_shapes_refuse_each_nonfinite_dimension_before_generation() raises:\n",
+          "    var geometry = box(Length(1, METER), Length(1, METER), Length(1, METER))\n",
+          "    for bad in [\n",
+          "        nan[DType.float32](),\n",
+          "        inf[DType.float32](),\n",
+          "        -inf[DType.float32](),\n",
+          "    ]:\n",
+          "        with assert_raises(contains=\"finite\"):\n",
+          "            require_positive_radius(bad, \"test\")\n",
+          "        with assert_raises(contains=\"finite\"):\n",
+          "            _ = circle(Length(bad, METER))\n",
+          "        with assert_raises(contains=\"finite\"):\n",
+          "            _ = sphere(Length(bad, METER))\n",
+          "        for axis in range(3):\n",
+          "            var values = [Float32(1), Float32(1), Float32(1)]\n",
+          "            values[axis] = bad\n",
+          "            with assert_raises(contains=\"finite\"):\n",
+          "                _ = box(\n",
+          "                    Length(values[0], METER),\n",
+          "                    Length(values[1], METER),\n",
+          "                    Length(values[2], METER),\n",
+          "                )\n",
+          "            with assert_raises(contains=\"finite\"):\n",
+          "                _ = cylinder(\n",
+          "                    Length(values[0], METER),\n",
+          "                    Length(values[1], METER),\n",
+          "                    Length(values[2], METER),\n",
+          "                )\n",
+          "            with assert_raises(contains=\"finite\"):\n",
+          "                _ = decal(\n",
+          "                    geometry,\n",
+          "                    Matrix4(),\n",
+          "                    Vector3(0, 0, 0),\n",
+          "                    Euler(\n",
+          "                        Angle(0, RADIAN),\n",
+          "                        Angle(0, RADIAN),\n",
+          "                        Angle(0, RADIAN),\n",
+          "                        XYZ,\n",
+          "                    ),\n",
+          "                    Length(values[0], METER),\n",
+          "                    Length(values[1], METER),\n",
+          "                    Length(values[2], METER),\n",
+          "                )\n",
+          "        for axis in range(2):\n",
+          "            var values = [Float32(1), Float32(2)]\n",
+          "            values[axis] = bad\n",
+          "            with assert_raises(contains=\"finite\"):\n",
+          "                _ = plane(Length(values[0], METER), Length(values[1], METER))\n",
+          "            with assert_raises(contains=\"finite\"):\n",
+          "                _ = ring(Length(values[0], METER), Length(values[1], METER))\n",
+          "            with assert_raises(contains=\"finite\"):\n",
+          "                _ = torus(Length(values[0], METER), Length(values[1], METER))\n",
+          "            with assert_raises(contains=\"finite\"):\n",
+          "                _ = torus_knot(\n",
+          "                    Length(values[0], METER), Length(values[1], METER)\n",
+          "                )\n",
+          "\n",
+          "\n",
+          "def test_finite_shared_radius_validation_keeps_zero_and_negative_errors() raises:\n",
+          "    require_positive_radius(Float32(1), \"test\")\n",
+          "    for value in [Float32(0), Float32(-1)]:\n",
+          "        with assert_raises(contains=\"positive\"):\n",
+          "            require_positive_radius(value, \"test\")\n",
+          "\n",
+          "\n",
+          "def test_nonfinite_dimensions_fail_before_topology_or_source_reads() raises:\n",
+          "    var bad = Length(inf[DType.float32](), METER)\n",
+          "    var one = Length(1, METER)\n",
+          "    with assert_raises(contains=\"finite\"):\n",
+          "        _ = box(bad, one, one, 0)\n",
+          "    with assert_raises(contains=\"finite\"):\n",
+          "        _ = plane(bad, one, 0)\n",
+          "    with assert_raises(contains=\"finite\"):\n",
+          "        _ = circle(bad, 0)\n",
+          "    with assert_raises(contains=\"finite\"):\n",
+          "        _ = ring(one, bad, 0)\n",
+          "    with assert_raises(contains=\"finite\"):\n",
+          "        _ = cylinder(one, bad, one, 0)\n",
+          "    with assert_raises(contains=\"finite\"):\n",
+          "        _ = torus(one, bad, 0)\n",
+          "    with assert_raises(contains=\"finite\"):\n",
+          "        _ = torus_knot(one, bad, 0)\n",
+          "    with assert_raises(contains=\"finite\"):\n",
+          "        _ = decal(\n",
+          "            BufferGeometry(),\n",
+          "            Matrix4(),\n",
+          "            Vector3(0, 0, 0),\n",
+          "            Euler(Angle(0, RADIAN), Angle(0, RADIAN), Angle(0, RADIAN), XYZ),\n",
+          "            one,\n",
+          "            one,\n",
+          "            bad,\n",
+          "        )\n",
+          "\n",
+          "\n"
         ]
       }
     ]
@@ -2953,6 +4576,76 @@ EDGES = json.loads(r'''
         ],
         "after": [
           "__async def _tracked_task(\n"
+        ]
+      }
+    ]
+  },
+  "tests/test_matrix4.mojo": {
+    "before_sha256": "879a370a7aecda5afc8724d03cc3b6cbb4a3b374208ac2aa74de40c1f490448c",
+    "after_sha256": "a40cb17b07712d350963076d816254a0640c9549b6f796a1b235cbf1837aa8d9",
+    "before_token_sha256": "6d8f2a1cfbef6f0ae37c937fdcc2064ae08522f103f3e2c56cb17cf5c4f6676e",
+    "after_token_sha256": "1c85bdec2aae231509783143de025bf4685d650dac5e326ad93fb2c9795def93",
+    "edits": [
+      {
+        "start": 204,
+        "stop": 259,
+        "before": [],
+        "after": [
+          "\n",
+          "\n",
+          "def test_premultiplication_matches_an_independent_dense_product() raises:\n",
+          "    var a = Matrix4()\n",
+          "    a.set(1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16)\n",
+          "    var b = Matrix4()\n",
+          "    b.set(2, 0, 1, 3, -1, 4, 2, 0, 5, 1, 0, -2, 0, 3, -1, 1)\n",
+          "    var before = a\n",
+          "    var other = b\n",
+          "    a.premultiply(b)\n",
+          "    # b*a, independently worked in row-major order with integer sums.\n",
+          "    var expected = Matrix4()\n",
+          "    expected.set(\n",
+          "        50,\n",
+          "        56,\n",
+          "        62,\n",
+          "        68,\n",
+          "        37,\n",
+          "        42,\n",
+          "        47,\n",
+          "        52,\n",
+          "        -16,\n",
+          "        -12,\n",
+          "        -8,\n",
+          "        -4,\n",
+          "        19,\n",
+          "        22,\n",
+          "        25,\n",
+          "        28,\n",
+          "    )\n",
+          "    assert_same(a, expected)\n",
+          "    assert_same(b, other)\n",
+          "    # Direct self-aliasing is refused by Mojo; an explicit copy squares it.\n",
+          "    var squared = before\n",
+          "    squared.premultiply(Matrix4(copy=squared))\n",
+          "    var expected_square = Matrix4()\n",
+          "    expected_square.set(\n",
+          "        90,\n",
+          "        100,\n",
+          "        110,\n",
+          "        120,\n",
+          "        202,\n",
+          "        228,\n",
+          "        254,\n",
+          "        280,\n",
+          "        314,\n",
+          "        356,\n",
+          "        398,\n",
+          "        440,\n",
+          "        426,\n",
+          "        484,\n",
+          "        542,\n",
+          "        600,\n",
+          "    )\n",
+          "    assert_same(squared, expected_square)\n"
         ]
       }
     ]
@@ -3241,6 +4934,156 @@ EDGES = json.loads(r'''
       }
     ]
   },
+  "tools/carla_lane_oracle/test_pr760_arithmetic_stage.py": {
+    "before_sha256": "ac51eb5dd58c8e3768f2405108203351194d72d63f2b53f4e30d5b2d4d8c26ab",
+    "after_sha256": "e1511129ab59d3d6a982b0de436f6b42252a20a539e978e628e4a7bc50fe7ae7",
+    "before_token_sha256": "73561ca033b0eef88bf6ce996cfe062f8b2b34bc2652feda12dc5aef15de9e68",
+    "after_token_sha256": "8780a11ccdebf9303033102ac5fcb5aac586783ee459f5504e449d52f7524691",
+    "edits": [
+      {
+        "start": 12,
+        "stop": 13,
+        "before": [],
+        "after": [
+          "import pr780_source_successor as successor\n"
+        ]
+      },
+      {
+        "start": 22,
+        "stop": 24,
+        "before": [
+          "        cls.inputs = {path: (ROOT/path).read_bytes() for path in stage.INPUT_SHA256}\n"
+        ],
+        "after": [
+          "        cls.inputs = {path: successor.predecessor_bytes(path, (ROOT/path).read_bytes())\n",
+          "                      for path in stage.INPUT_SHA256}\n"
+        ]
+      },
+      {
+        "start": 130,
+        "stop": 131,
+        "before": [
+          "            current = (ROOT/path).read_bytes().decode('utf-8')\n"
+        ],
+        "after": [
+          "            current = successor.predecessor_bytes(path, (ROOT/path).read_bytes()).decode('utf-8')\n"
+        ]
+      },
+      {
+        "start": 156,
+        "stop": 158,
+        "before": [
+          "        inputs = {path: (ROOT/path).read_bytes() for path in stage.REGISTRY_INPUT_SHA256}\n"
+        ],
+        "after": [
+          "        inputs = {path: successor.predecessor_bytes(path, (ROOT/path).read_bytes())\n",
+          "                  for path in stage.REGISTRY_INPUT_SHA256}\n"
+        ]
+      }
+    ]
+  },
+  "tools/carla_lane_oracle/test_pr760_physical_image.py": {
+    "before_sha256": "6df971f2bf09c710a4e6ababc6adeea8995fd2e86c3e6866e548d5b193ae3669",
+    "after_sha256": "bb905630d2fe05f7f7a3153536f5fcbb406793b22f5d7300600647ac80308868",
+    "before_token_sha256": "74ca01c4b41870f5b83e81d83ac19063908258e12e2c58026092a958f05e45ec",
+    "after_token_sha256": "48e0b075a1764f210c5d662a4ad87a1b90eaf839a1dcc2dc6a7b7da149c8b8a5",
+    "edits": [
+      {
+        "start": 122,
+        "stop": 123,
+        "before": [],
+        "after": [
+          "            raw = owner.pr780_successor.predecessor_bytes(path, raw)\n"
+        ]
+      },
+      {
+        "start": 241,
+        "stop": 243,
+        "before": [
+          "            previous = (owner.pr776_predecessor_bytes(path, raw) if path in (\n"
+        ],
+        "after": [
+          "            previous = owner.pr780_successor.predecessor_bytes(path, raw)\n",
+          "            previous = (owner.pr776_predecessor_bytes(path, previous) if path in (\n"
+        ]
+      },
+      {
+        "start": 244,
+        "stop": 245,
+        "before": [
+          "                        'tools/carla_lane_oracle/test_typed_boundary_contracts.py') else raw)\n"
+        ],
+        "after": [
+          "                        'tools/carla_lane_oracle/test_typed_boundary_contracts.py') else previous)\n"
+        ]
+      }
+    ]
+  },
+  "tools/carla_lane_oracle/test_pr776_input_successors.py": {
+    "before_sha256": "148a021e1d8173122f231f4e6839d4dfd7bb2bb14d76d70e3725ff310620d2aa",
+    "after_sha256": "d0f1e87aba0343343f4a06dbc4ab18e911a32357f43076760b183cc8af8c4b91",
+    "before_token_sha256": "a5fbfe1798ba77ac6154f228731a26c54c73174a159328422e2ae95b793c26a5",
+    "after_token_sha256": "1263c3927082f972745b2ddc04e4bd2bf175eab219b5a342541a8eb4e14427d4",
+    "edits": [
+      {
+        "start": 42,
+        "stop": 44,
+        "before": [
+          "        raw = (ROOT/EXPECTATIONS).read_bytes()\n"
+        ],
+        "after": [
+          "        # Later records join through the PR780 table, so this reads the PR776 endpoint.\n",
+          "        raw = owner.pr780_successor.predecessor_bytes(EXPECTATIONS, (ROOT/EXPECTATIONS).read_bytes())\n"
+        ]
+      },
+      {
+        "start": 62,
+        "stop": 63,
+        "before": [],
+        "after": [
+          "        raw = owner.pr780_successor.predecessor_bytes(path, raw)\n"
+        ]
+      },
+      {
+        "start": 92,
+        "stop": 93,
+        "before": [
+          "        raw = (ROOT/EXPECTATIONS).read_bytes()\n"
+        ],
+        "after": [
+          "        raw = owner.pr780_successor.predecessor_bytes(EXPECTATIONS, (ROOT/EXPECTATIONS).read_bytes())\n"
+        ]
+      }
+    ]
+  },
+  "tools/carla_lane_oracle/test_typed_boundary_contracts.py": {
+    "before_sha256": "8dee4d9c4bf42214fb2f10fbdcf71a4ba04398095d8c62a16233ad6fc038fce7",
+    "after_sha256": "5a8d3d51eae53713e6133f4640d101176ac5d228f7e5085e9bebeb6bfa6d9f5f",
+    "before_token_sha256": "f71efcac558cf883d01cc2cf792879074f5275e36fd3cd8c2e2d43b2de380db3",
+    "after_token_sha256": "c45993ef4292b45926aed436aab5964e3f70135bade264194e95bb2618a43b2d",
+    "edits": [
+      {
+        "start": 43,
+        "stop": 45,
+        "before": [
+          "            text = (ROOT/name).read_text()\n",
+          "            return typed.historical_source(name, text)\n"
+        ],
+        "after": [
+          "            raw = audit.pr780_successor.predecessor_bytes(name, (ROOT/name).read_bytes())\n",
+          "            return typed.historical_source(name, raw.decode('utf-8'))\n"
+        ]
+      },
+      {
+        "start": 444,
+        "stop": 445,
+        "before": [],
+        "after": [
+          "                raw = audit.pr780_successor.predecessor_bytes(path, raw)\n"
+        ]
+      }
+    ]
+  },
   "tools/carla_lane_oracle/test_typed_owned_operations.py": {
     "before_sha256": "b71272abd022ff7453099ede5e5cd8ca8fc0dc6ba92057a94bdcd85170e39984",
     "after_sha256": "ff7ce184c8a71b84a523ee6a22652604b76f1e463f37cac7276f37c85a8c7edd",
@@ -3335,6 +5178,133 @@ EDGES = json.loads(r'''
       }
     ]
   },
+  "tools/compile_fail_expectations.json": {
+    "before_sha256": "cae00c1721392c75b10af5793e6de851d963350c8396e405ef0233c19af5b723",
+    "after_sha256": "b0999d4ca1624909e6d1ac2d0c6948b8833b3d25824efd623068457b550e1c43",
+    "before_token_sha256": "f4adb6494fee3e96a00ed12990e3c1979b42e31df987492561c08e8354ac4ba2",
+    "after_token_sha256": "fb3bbe6c365fa7d2886229bea3dbec6a3adaefa3d92d27f2b1e903926e4f5a90",
+    "edits": [
+      {
+        "start": 349,
+        "stop": 361,
+        "before": [],
+        "after": [
+          "    ]\n",
+          "  },\n",
+          "  \"tests/compile_fail/a_cluster_fate_is_not_a_bare_int.mojo\": {\n",
+          "    \"errors\": [\n",
+          "      {\n",
+          "        \"line\": 12,\n",
+          "        \"column\": 26,\n",
+          "        \"message\": \"invalid call to 'require_cluster_fate': value passed to 'fate' cannot be converted from 'IntLiteral[0]' to 'ClusterFate'\"\n",
+          "      }\n",
+          "    ],\n",
+          "    \"notes\": [\n",
+          "      \"function declared here\"\n"
+        ]
+      },
+      {
+        "start": 1827,
+        "stop": 1837,
+        "before": [],
+        "after": [
+          "  \"tests/compile_fail/a_kit_kind_is_not_a_bare_int.mojo\": {\n",
+          "    \"errors\": [\n",
+          "      {\n",
+          "        \"line\": 12,\n",
+          "        \"column\": 25,\n",
+          "        \"message\": \"cannot implicitly convert 'IntLiteral[0]' value to 'KitKind'\"\n",
+          "      }\n",
+          "    ],\n",
+          "    \"notes\": []\n",
+          "  },\n"
+        ]
+      },
+      {
+        "start": 2726,
+        "stop": 2738,
+        "before": [],
+        "after": [
+          "  \"tests/compile_fail/a_plant_kind_is_not_a_bare_int.mojo\": {\n",
+          "    \"errors\": [\n",
+          "      {\n",
+          "        \"line\": 12,\n",
+          "        \"column\": 24,\n",
+          "        \"message\": \"invalid call to 'require_plant_kind': value passed to 'kind' cannot be converted from 'IntLiteral[2]' to 'PlantKind'\"\n",
+          "      }\n",
+          "    ],\n",
+          "    \"notes\": [\n",
+          "      \"function declared here\"\n",
+          "    ]\n",
+          "  },\n"
+        ]
+      },
+      {
+        "start": 3038,
+        "stop": 3078,
+        "before": [],
+        "after": [
+          "      }\n",
+          "    ],\n",
+          "    \"notes\": []\n",
+          "  },\n",
+          "  \"tests/compile_fail/a_scale_source_is_not_a_bare_int.mojo\": {\n",
+          "    \"errors\": [\n",
+          "      {\n",
+          "        \"line\": 12,\n",
+          "        \"column\": 29,\n",
+          "        \"message\": \"cannot implicitly convert 'IntLiteral[0]' value to 'ScaleSource'\"\n",
+          "      }\n",
+          "    ],\n",
+          "    \"notes\": []\n",
+          "  },\n",
+          "  \"tests/compile_fail/a_scan_axis_is_not_a_bare_int.mojo\": {\n",
+          "    \"errors\": [\n",
+          "      {\n",
+          "        \"line\": 12,\n",
+          "        \"column\": 26,\n",
+          "        \"message\": \"cannot implicitly convert 'IntLiteral[0]' value to 'ScanAxis'\"\n",
+          "      }\n",
+          "    ],\n",
+          "    \"notes\": []\n",
+          "  },\n",
+          "  \"tests/compile_fail/a_part_fill_is_not_a_bare_int.mojo\": {\n",
+          "    \"errors\": [\n",
+          "      {\n",
+          "        \"line\": 12,\n",
+          "        \"column\": 26,\n",
+          "        \"message\": \"cannot implicitly convert 'IntLiteral[0]' value to 'PartFill'\"\n",
+          "      }\n",
+          "    ],\n",
+          "    \"notes\": []\n",
+          "  },\n",
+          "  \"tests/compile_fail/a_scan_format_is_not_a_bare_int.mojo\": {\n",
+          "    \"errors\": [\n",
+          "      {\n",
+          "        \"line\": 12,\n",
+          "        \"column\": 28,\n",
+          "        \"message\": \"cannot implicitly convert 'IntLiteral[0]' value to 'ScanFormat'\"\n"
+        ]
+      },
+      {
+        "start": 3392,
+        "stop": 3402,
+        "before": [],
+        "after": [
+          "  },\n",
+          "  \"tests/compile_fail/a_splat_model_is_not_a_bare_int.mojo\": {\n",
+          "    \"errors\": [\n",
+          "      {\n",
+          "        \"line\": 12,\n",
+          "        \"column\": 28,\n",
+          "        \"message\": \"cannot implicitly convert 'IntLiteral[0]' value to 'SplatModel'\"\n",
+          "      }\n",
+          "    ],\n",
+          "    \"notes\": []\n"
+        ]
+      }
+    ]
+  },
   "tools/test_conditioned_coverage_loops.py": {
     "before_sha256": "1c7a6f9f0f32ec579b0609c0cac7fec04dedd342c7e22ec9a9956d6c6042c2dc",
     "after_sha256": "9c2c7d223a88f6a974fbdff0f9fc42246ac44583b73162b46c300b83ec2861dd",
@@ -3360,32 +5330,8 @@ BOUND_INPUTS = {'tests/test_anatomy_muscle.mojo': '3653d6056c1f9f639537eedb7cd80
  'tests/test_animation_strings.mojo': 'f5103e3660a63d3d5d9d348a0d928fa106e5cef03059d432a31335bb7dd14184',
  'tests/test_loader_bounds.mojo': '6e0c1487f1ff21f4654c2790e4460c0adf934bf6b9273e826782eec1bfed2d83',
  'tools/carla_lane_oracle/test_pr780_source_successor.py': 'fad1fe54f34c47efeff20f5d26f3c644dcc6eb129848290bada4235215815606'}
-EDGE_SHA256 = {'core/extent.mojo': '3bde830a747999835ef471ceba2eac3e73bbff4e300162851a8096a194a58726',
- 'extensions/carla/v2x.mojo': 'fe4f85ef760c4b25d99b75ab05b7f137f7e22041129f2e0ed8f8f63f887e99d8',
- 'geometries/box.mojo': '80ff7d14a0be9eccae8909df9c41e69222ccebc87fe30ed16b4edc683540c235',
- 'geometries/circle.mojo': '81b3608094efc619f90385a62e5cc99d94880e4caa6cadedd4445147916683f8',
- 'geometries/cylinder.mojo': '7f355e959a8d44b202c4ecc4f18bce5203ed55b949a18fce1112c7a232c99d9d',
- 'geometries/plane.mojo': '3313fc972f959754018971f81f1cc667d5ae5110c05a7367e465b3fc4b1192e8',
- 'geometries/surface.mojo': '3ec973c7a37d9b1477e686de0c5c96a9021f9202a0b2517f3c8d1d05af1d6a6b',
- 'loaders/bytes.mojo': '7e433bce46cd84a26d82898684ddc565f9ce43e10a147a4ca17f1cbaee424683',
- 'loaders/draco.mojo': 'e50c9ca8beed22e467b2adf8057ea34da9e02402ea0d268bed90ec03ab45eec7',
- 'loaders/gltf_layout.mojo': '3faf915314dbc3859d1a77f8726ff4813141452f119370a9efe62415ee6def4d',
- 'loaders/meshopt.mojo': '2e6e4544b362eb86202877b7d0f59655cf9755392bf2bc6a653e13674da6e1e5',
- 'math/matrix4.mojo': '3a14fb7473be39825f01e0b25141dc11deae32815083038f273f1dc88f0d3b45',
- 'math/square_matrix.mojo': '0654dc0cfd85f05b383961d1507464559d00fefc15e49d682d8d3a4a8aa95ed9',
- 'math/vector4.mojo': '3bf820cf0f2f9ad74083de036282f10d01d9fed78a6a90ac2ff65bfa6bc440d1',
- 'postprocessing/denoise.mojo': 'c5fbccc98a75c90ac9c7ca4954e0403c4fb2e279c25156c54f67226acea5da0a',
- 'render/rasterizer.mojo': '3afd3bd79f9b35ee00ff47136b22a4c6367cdb218e7c32bd69d23b0bcfcc76f7',
- 'tests/test_byte_extent_boundaries.mojo': '546193eda4e2499ca8be0ff495e628de56fc43c6b484ac02fb5ba6ef011c1552',
- 'tests/test_carla_sensors_world.mojo': '2757a7a57aebb6162c7ae58c236a33aa893a55ca07731b3339097d60e481d6bf',
- 'tests/test_denoise.mojo': '5701e5c4cede9ae3ed9268940b601ebdddc9e2cb81120061435ea115399d0cec',
- 'tests/test_geometry_inputs.mojo': '613e723bce7a32c8a0661c1293a5022ca205740fa883c42083682d58c243f91f',
- 'tests/test_matrix4.mojo': '2b259391fe4b483a214d9ed581e3324ecf90a2138ca2a626587777e4effac7cc',
- 'tools/carla_lane_oracle/test_pr760_arithmetic_stage.py': '39c4e84ee8f2480d1039369011c39ab38c055f71fae6bf0962778b558be9b82f',
- 'tools/carla_lane_oracle/test_pr760_physical_image.py': 'fb6a9d7dfab6f5d7e620e6d42ae9dd47ee8fbd609e65a2f82a7e56e888734970',
- 'tools/carla_lane_oracle/test_pr776_input_successors.py': '51a5c68c4717c7afb068b45c3df77e982c0c2b2146e12af3de7c8611fa7c83d9',
- 'tools/carla_lane_oracle/test_typed_boundary_contracts.py': '0be305bc14258206747f94b71996e5e9d29650e7a0a49ccc9dc2ea97b3ce2f89',
- 'core/deform.mojo': 'b6afec67eea77b1a76cae98df1b4399de366b2a82878edf56aa1b53d26c046e9',
+EDGE_SHA256 = {'core/deform.mojo': 'b6afec67eea77b1a76cae98df1b4399de366b2a82878edf56aa1b53d26c046e9',
+ 'core/extent.mojo': '3bde830a747999835ef471ceba2eac3e73bbff4e300162851a8096a194a58726',
  'extensions/carla/assets.mojo': '1f82f569bc1ee02238d2925e063ab4a1bccf71b80d2045d4197695d164123fa9',
  'extensions/carla/map.mojo': '37b62f4b12e627c72d89c6a4a5d7d2d909f362c255a7bebc22bc63ae60d170df',
  'extensions/carla/map_builder.mojo': 'f10f4855653a78039ea7b08e16732f20cd2c810b347dca7ed650bb9bb8ffac39',
@@ -3394,24 +5340,43 @@ EDGE_SHA256 = {'core/extent.mojo': '3bde830a747999835ef471ceba2eac3e73bbff4e3001
  'extensions/carla/sensor_manager.mojo': '26af2114c101807527138252638fa5d85a3a4bed2c4fa63679723d8f62429639',
  'extensions/carla/speed_limits.mojo': '9ea486a37f7b62ff037dcf11d5482153466d6f8ef01f729efe5e85b5c739dac5',
  'extensions/carla/town.mojo': '1602d3b9c429f1d59e235e09a080293adea3b834ec2c7b1d698155268fd2bf20',
+ 'extensions/carla/v2x.mojo': 'fe4f85ef760c4b25d99b75ab05b7f137f7e22041129f2e0ed8f8f63f887e99d8',
  'extensions/carla/world.mojo': 'aeec9ddf2a5c0a2546e82643678125e2dad5bfca9437421f6ba3e8bd7a2db6ca',
  'extensions/humanoid/skeleton/head/hair/shading.mojo': '750bad042961cf21294f6a0c352ca332d42fce673acea3643b4a39a4bf77003f',
  'extensions/humanoid/skeleton/head/hair/strands.mojo': '7448d4398a1552b0fce1ee1a4131c5f667e79f0854c56f45ddda8fa8f37fdc7f',
  'geometries/attribute_utils.mojo': 'b64808aa33e920a8d55294eb65e40e76379642771cbf391f7195b030be8b359d',
+ 'geometries/box.mojo': '80ff7d14a0be9eccae8909df9c41e69222ccebc87fe30ed16b4edc683540c235',
+ 'geometries/circle.mojo': '81b3608094efc619f90385a62e5cc99d94880e4caa6cadedd4445147916683f8',
+ 'geometries/cylinder.mojo': '7f355e959a8d44b202c4ecc4f18bce5203ed55b949a18fce1112c7a232c99d9d',
+ 'geometries/plane.mojo': '3313fc972f959754018971f81f1cc667d5ae5110c05a7367e465b3fc4b1192e8',
+ 'geometries/surface.mojo': '3ec973c7a37d9b1477e686de0c5c96a9021f9202a0b2517f3c8d1d05af1d6a6b',
  'lights/shadow.mojo': '13956ed1900da2198deea2bf357f18d2dd66a337d5584eff918e6b52f62daf43',
+ 'loaders/bytes.mojo': '7e433bce46cd84a26d82898684ddc565f9ce43e10a147a4ca17f1cbaee424683',
+ 'loaders/draco.mojo': 'e50c9ca8beed22e467b2adf8057ea34da9e02402ea0d268bed90ec03ab45eec7',
  'loaders/draco_mesh.mojo': 'a2d7906ebb2a158d60c39600a1715f39575c05b9694887ff9669b13a0a0670dd',
+ 'loaders/gltf_layout.mojo': '3faf915314dbc3859d1a77f8726ff4813141452f119370a9efe62415ee6def4d',
  'loaders/image_batch.mojo': '3cfee85ce4e0e788deee3556bd33866f2e801c23a8d4c08f7e82f3bd3747c4f3',
  'loaders/js_number.mojo': '09c981f063332e9a8eb35102bc63c812e142d74c97d8dd61dc32f526cf68c6b3',
+ 'loaders/meshopt.mojo': '2e6e4544b362eb86202877b7d0f59655cf9755392bf2bc6a653e13674da6e1e5',
  'math/convex_hull.mojo': '7c3f56da413ade65c3f40974cc86c1e2f91029e920206566f9952ebedd589e11',
+ 'math/matrix4.mojo': '3a14fb7473be39825f01e0b25141dc11deae32815083038f273f1dc88f0d3b45',
+ 'math/square_matrix.mojo': '0654dc0cfd85f05b383961d1507464559d00fefc15e49d682d8d3a4a8aa95ed9',
+ 'math/vector4.mojo': '3bf820cf0f2f9ad74083de036282f10d01d9fed78a6a90ac2ff65bfa6bc440d1',
+ 'objects/gaussian_splat.mojo': '4469b3d742b43810e8752266ef1b5f6d10fbf5894d46d434c2bc26cf4ab51483',
+ 'postprocessing/denoise.mojo': 'c5fbccc98a75c90ac9c7ca4954e0403c4fb2e279c25156c54f67226acea5da0a',
+ 'render/rasterizer.mojo': '3afd3bd79f9b35ee00ff47136b22a4c6367cdb218e7c32bd69d23b0bcfcc76f7',
+ 'render/splat_raster.mojo': '20bd5917ffbea0b025994202ce697966f4ec74b6308c04cd2818cbcf297c9c7b',
+ 'render/splatrule.mojo': '54e73c0e96327cdf863613db0b082672240aec0562e09e9bc471a1da2c4a39a6',
  'render/target.mojo': '3812c03012fc2f0eb3d0025f89dac9b8e0f9831d2c6389152f8724272aef43a4',
  'render/tasks.mojo': 'b8dfd9c3417ae3c05156a394811e45a7eb7a990cedb22f8d21652053d9ce61a6',
- 'renderers/renderer.mojo': '4ab27f1610b8cec1e860bb35c44f99f72809d5e72cb132bd0ba376dd83b33060',
+ 'renderers/renderer.mojo': '85775468f02cfc16842c7095c637852fe0dca43553eff0e9a40f7202780f055f',
  'tests/_sample_dispatch_controls.mojo': '1b8250d0cb155e2f0bf7e9d6fbef2c3bd94f1b243c9cf1b43e542c0e67661782',
  'tests/_spiral_domain_controls.mojo': '007f97c95ad5c7e712c93b9c3fd97d8cbd5395544f4b538c1e094dd485137f22',
  'tests/test_animation_paths.mojo': '82400a6046544f6088206cb4458e86edde85e992b42738a8e4f5efde1f89ebe3',
  'tests/test_audit_boundaries.mojo': '70ad35b3a59f6d910f2f434c4665d4a3144b64b310da9b3798b7c8fae18940df',
  'tests/test_audit_regressions.mojo': '82d32882bf4c0f74fe35a9b253ebde6f49f0ef326fb9f150cc0745c19f3e2411',
  'tests/test_audit_slim.mojo': '86faaa5d826e188bbef50589f74f43b5528abb3473cc4067f98a11d8071787af',
+ 'tests/test_byte_extent_boundaries.mojo': '546193eda4e2499ca8be0ff495e628de56fc43c6b484ac02fb5ba6ef011c1552',
  'tests/test_carla_axis_direct_road.mojo': '43c37e0c1c3c90429b161b42539591a2be6436642bdbb0f1d77fd596fb7a11a8',
  'tests/test_carla_centered_bounds.mojo': '6922875f17e44e981fd6a8f1d5e41601b551ce53141ac26a4b324fcb50e98655',
  'tests/test_carla_chord_endpoint_refusals.mojo': 'dd667ee7d581c0222d777f4d654353115b61e1538605bff919400b5b695a266b',
@@ -3430,19 +5395,23 @@ EDGE_SHA256 = {'core/extent.mojo': '3bde830a747999835ef471ceba2eac3e73bbff4e3001
  'tests/test_carla_road_fixed_s.mojo': 'db41f9c38e18a4b9b4a7064a7862931870ca396c92689221f2d3243a32cf867a',
  'tests/test_carla_sampled_box_cover.mojo': '1f89d12d4b3179fdd0e7904560d2f37f944878dddaf92c60e7b652268bda1018',
  'tests/test_carla_scaled_lane_refinement.mojo': 'd0608befa93df7ea91da9f40c42a2844bd49aa66c4aa3f4c093e3d057297484f',
+ 'tests/test_carla_sensors_world.mojo': '2757a7a57aebb6162c7ae58c236a33aa893a55ca07731b3339097d60e481d6bf',
  'tests/test_carla_speed_parser_exceptions.mojo': 'fee54ffb5e01aed94eb2e1951af548bfa7feac04e5dd0bb01c21d486fb4a4941',
  'tests/test_carla_tiny_cell_enumeration.mojo': 'd1c1fe9ab86e767828c87199e938c7a507471943e7ac2bd3b9ba1a28418087d0',
  'tests/test_carla_unsampled_admission.mojo': '4562ded403e057a1950e6e78f657e6488adba27e15593dc97536a13c1cb85b7a',
  'tests/test_cast_shadow.mojo': '7362d06404012c685058a0bd797d7feb980fca71a396aaa7ad0a6c00fab7d5fc',
+ 'tests/test_denoise.mojo': '5701e5c4cede9ae3ed9268940b601ebdddc9e2cb81120061435ea115399d0cec',
  'tests/test_draco.mojo': 'b6d583c0d224af6b2f881d4c5da1d4145f9e5b2119df81b6594cdb122e077ebf',
  'tests/test_draco_export.mojo': '1c60b89e44fd43032acd77dd6c8d1c4d06a692e505617695a9ea0a2696e7fbbd',
  'tests/test_geometry_addons.mojo': '3dbb23ccc62f9d3e57ba6cab730fb89a0ec745b25c284323445cf0f021e1ab3e',
+ 'tests/test_geometry_inputs.mojo': '613e723bce7a32c8a0661c1293a5022ca205740fa883c42083682d58c243f91f',
  'tests/test_geometry_signatures.mojo': '8e98a77013a6545f33dc7e9012716b125cbb5cd92ffa45a9460d9d1fddde1c1e',
  'tests/test_gpu.mojo': 'c205408079bb797a553b1623d15120eb9ad1d58205f366692b742ffe65db35f4',
  'tests/test_gpu_layout.mojo': '0d065631b2e39eed26f83e39036a5d841fa48eee90c7253310d14b61d40e1682',
  'tests/test_gpu_water.mojo': '0e330277b81d1cf8f2d1791b00d34ad63355666a99ad48e1de60893cc9362d89',
  'tests/test_humanoid_bake.mojo': 'fbf4f1b8601b102957f6d52243f89853084b62034ed4230368b4bfc8ae23c9b5',
  'tests/test_image_batch.mojo': 'd5ffbdbbabbfa1359f82c30992bbb22d611723f1f5ee04939fc0303725cc13a0',
+ 'tests/test_matrix4.mojo': '2b259391fe4b483a214d9ed581e3324ecf90a2138ca2a626587777e4effac7cc',
  'tests/test_morph_sequence_indices.mojo': '3cca7e0f9b16ea29b05ce0c13c156c2f7c40703df62c66cc426d7dfbe75500e1',
  'tests/test_norm_review_regressions.mojo': 'd40f259ea7408859c5022cbda00b8cd6251b698e9ca6ce6ad079c94e5e247e6f',
  'tests/test_projector.mojo': 'dc21f222e0babb98bafd7ed4110bfe253853ca74d3013ab55b2b6b6a1661249b',
@@ -3454,11 +5423,16 @@ EDGE_SHA256 = {'core/extent.mojo': '3bde830a747999835ef471ceba2eac3e73bbff4e3001
  'tests/test_visibility.mojo': 'f15d91b888cb658367569400ce7994d1d64c04535d406037998cd2f88028c98f',
  'tests/test_wide_line_workers.mojo': '2df16a02373e7f1145573f41df89971d8483ddddd1439607c114642f3a0e2b09',
  'tools/carla_lane_oracle/source_contracts.py': 'ea592d2bfda0604aff24f0262afe164980221d12138eaa6e8fd485bc2539095a',
+ 'tools/carla_lane_oracle/test_pr760_arithmetic_stage.py': '39c4e84ee8f2480d1039369011c39ab38c055f71fae6bf0962778b558be9b82f',
+ 'tools/carla_lane_oracle/test_pr760_physical_image.py': 'fb6a9d7dfab6f5d7e620e6d42ae9dd47ee8fbd609e65a2f82a7e56e888734970',
+ 'tools/carla_lane_oracle/test_pr776_input_successors.py': 'dde181f02ca49efaa0550a5f9d24847dfc618d14113e2caea7aea3422edd7042',
+ 'tools/carla_lane_oracle/test_typed_boundary_contracts.py': '0be305bc14258206747f94b71996e5e9d29650e7a0a49ccc9dc2ea97b3ce2f89',
  'tools/carla_lane_oracle/test_typed_owned_operations.py': '56a59b04408d344079048ccc8a32e3a5c0e1af4505cb06aa281c01364738b1eb',
  'tools/carla_lane_oracle/test_witness_format_contracts.py': '554b6db980e099747c3d536eaf722f210f0f17d3f78983cf08bb180c588a22ae',
  'tools/carla_lane_oracle/translated_parameter_resolution.py': '1c63297c0097ce50b9f314ba321e7f4d04c009f6379552a84adefb62a2a7f375',
+ 'tools/compile_fail_expectations.json': '727e73ac157caad86d2072e5ea089c454ebe0f078c50e72871906dcf0dfce467',
  'tools/test_conditioned_coverage_loops.py': 'f88451e7313fd84cc788847b1c960dc395b98736779a92c81a1d056ff2977520'}
-DATA_SHA256 = 'b608b56194725149f63f48dc83b4dbf3e08c7880d2850c3e8215319ef844911a'
+DATA_SHA256 = 'aeb09c5ca3cd04196137fd0961187c029631889f821a538347f34b924431fa99'
 # END FIXED PR780 SUCCESSOR DATA
 
 
@@ -3474,7 +5448,7 @@ def sha(raw):
 def _index_snapshot():
     """Authenticate and detach the fixed per-edge digests and bound inputs."""
     require(type(DATA_SHA256) is str, 'authority digest selector is not a builtin string')
-    require(DATA_SHA256 == 'b608b56194725149f63f48dc83b4dbf3e08c7880d2850c3e8215319ef844911a', 'authority digest selector changed')
+    require(DATA_SHA256 == 'aeb09c5ca3cd04196137fd0961187c029631889f821a538347f34b924431fa99', 'authority digest selector changed')
     encoded = json.dumps({'edges': EDGE_SHA256, 'bound_inputs': BOUND_INPUTS},
                          sort_keys=True, separators=(',', ':'))
     require(sha(encoded) == DATA_SHA256, 'fixed source inverse data changed')

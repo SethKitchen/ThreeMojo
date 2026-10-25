@@ -96,6 +96,12 @@ mkdir -p out
 | `frame_modes.mojo` | `frame-analysis.png` | [Frame analysis](Frame-analysis) |
 | `plate.mojo` | `shell-analysis.png` | [Shell analysis](Shell-analysis) |
 | `heat.mojo` | `building-energy.png` | [Building energy](Building-energy) |
+| `building_scan.mojo` | `scanned-buildings.png` | [Scanned buildings](Scanned-buildings) |
+| `scan_parts.mojo` | `scan-parts.png` | [Scan parts](Scan-parts), [Splat level of detail](Splat-level-of-detail) |
+| `scan_view.mojo` | `seem-church.png` | [Cleaning and orienting scans](Cleaning-and-orienting-scans) |
+| `scan_view_gpu.mojo` | `seem-church-gpu.png` | [GPU splats](GPU-splats) |
+| `scan_walk.mojo` | `scan-walk.png` | [Walking through a scan](Walking-through-a-scan) |
+| `scan_walk_gpu.mojo` | `scan-walk-gpu.png` | [GPU splats](GPU-splats) |
 | `spring_modes.mojo` | `numerics.png` | [Numerics](Numerics) |
 | `audio_game_humanoid.mojo` | `audio-character.glb` | [Audio-aligned game faces](Audio-aligned-game-faces) |
 | `carla_towns.mojo` | `carla_towns.png` | [CARLA rendering](CARLA-rendering) |
@@ -125,6 +131,9 @@ mkdir -p out
 | `hairstyles.mojo` | `hairstyles.png` | [Head](Head) |
 | `game_humanoid.mojo` | `game_humanoid.png` | [Game humanoid](Game-humanoid) |
 | `water.mojo` | `water.png` | [Water](Water) |
+| `meadow.mojo` | `meadow.png` | [Vegetation](Vegetation) |
+| `meadow_wind.mojo` | `meadow-wind.png` | [Why grass is drawn in clusters](Why-grass-is-drawn-in-clusters) |
+| `village.mojo` | `village.png` | [Village](Village) |
 | `animals.mojo` | `animals.png` | [Animals](Animals) |
 | `walk.mojo` | `walk.png` | [Animals](Animals) |
 | `animal_anatomy.mojo` | `animal_anatomy.png` | [Animal anatomy](Animal-anatomy) |

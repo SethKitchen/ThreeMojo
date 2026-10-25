@@ -98,8 +98,9 @@ comptime GPU = [
     "bench/hair_frame_bench.mojo",
     "tools/gpu_status.mojo",
 ]
-"""GPU entry points with explicit names in the Makefile. Library modules and
-new device suites follow the naming rules in `is_gpu`."""
+"""GPU entry points with explicit names in the Makefile. Library modules, new
+device suites and examples that end in `_gpu` follow the naming rules in
+`is_gpu`."""
 
 comptime BUILD_TOOLS = [
     "tools/affected.mojo",
@@ -221,7 +222,7 @@ def is_gpu(path: String) -> Bool:
             or name.endswith("_gpu.mojo")
         )
     return (
-        path.startswith("tests/test_")
+        (path.startswith("tests/test_") or path.startswith("examples/"))
         and path.endswith("_gpu.mojo")
         and path.count("/") == 1
     )

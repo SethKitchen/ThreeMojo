@@ -502,7 +502,7 @@ A checked box records implemented scope. It does not establish engineering or cl
 The anatomy combines measured inputs with authored templates. See the [bounded validity report](https://github.com/SethKitchen/ThreeMojo/wiki/Anatomy-validity) for template estimates, numerical evidence and unsupported uses.
 
 <details>
-<summary>Implemented: 47</summary>
+<summary>Implemented: 49</summary>
 
 - [x] [Audio-aligned game faces](https://github.com/SethKitchen/ThreeMojo/wiki/Audio-aligned-game-faces): caller-provided phonemes or visemes, audio-clock transport, preserved facial LOD and validated glTF bakes [#299](https://github.com/SethKitchen/ThreeMojo/issues/299)
 
@@ -535,6 +535,8 @@ The anatomy combines measured inputs with authored templates. See the [bounded v
 - [x] [Segment inertia](https://github.com/SethKitchen/ThreeMojo/wiki/Segment-inertia): mass, center of mass and inertia tensor of a thigh, a shank and a foot [#326](https://github.com/SethKitchen/ThreeMojo/issues/326)
 - [x] [Persistent scene water](https://github.com/SethKitchen/ThreeMojo/wiki/Water#animate-it): `WaterScene` keeps its state and composes with a scene. `GpuWater` shades it on a CUDA or Apple Metal GPU, with CPU comparisons and 1080p benchmarks [#300](https://github.com/SethKitchen/ThreeMojo/issues/300)
 - [x] [Water](https://github.com/SethKitchen/ThreeMojo/wiki/Water): a Clearwater shallow-water still, with spectrum, ripples, caustics and glare [#327](https://github.com/SethKitchen/ThreeMojo/issues/327)
+- [x] [Vegetation](https://github.com/SethKitchen/ThreeMojo/wiki/Vegetation): ten million culled grass blades, gusts, dirt and a trail, swaying trees grown by space colonization, and a clouded sky
+- [x] [Village](https://github.com/SethKitchen/ThreeMojo/wiki/Village): gabled houses and a building cut out of a scan, on lots in the meadow, beside a pond of Clearwater water
 - [x] [CARLA lane borders](https://github.com/SethKitchen/ThreeMojo/wiki/CARLA-lane-borders): border-only OpenDRIVE lanes get width records from their borders, with ASAM's precedence and refusal rules [#577](https://github.com/SethKitchen/ThreeMojo/issues/577)
 - [x] [CARLA map budgets](https://github.com/SethKitchen/ThreeMojo/wiki/CARLA-map-budgets): typed construction and certified-query work limits, checked before the work, with exhaustion kept apart from no lane [#580](https://github.com/SethKitchen/ThreeMojo/issues/580)
 - [x] [Certified CARLA query pruning](https://github.com/SethKitchen/ThreeMojo/wiki/CARLA-index-admission#per-segment-skip): each segment's own curve deviation skips candidates that cannot win, with the same answers [#685](https://github.com/SethKitchen/ThreeMojo/issues/685)
@@ -581,6 +583,19 @@ Procedural buildings for engineering analysis and for games share one canonical 
 - [x] [Frame analysis](https://github.com/SethKitchen/ThreeMojo/wiki/Frame-analysis): 3D frames, static and modal [#648](https://github.com/SethKitchen/ThreeMojo/issues/648)
 - [x] [Shell analysis](https://github.com/SethKitchen/ThreeMojo/wiki/Shell-analysis): flat-shell slabs and walls [#649](https://github.com/SethKitchen/ThreeMojo/issues/649)
 - [x] [Building energy](https://github.com/SethKitchen/ThreeMojo/wiki/Building-energy): zones, transient conduction and a heat balance [#650](https://github.com/SethKitchen/ThreeMojo/issues/650)
+- [x] [Construction kits](https://github.com/SethKitchen/ThreeMojo/wiki/Construction-kits): masonry, stone, concrete and timber materials and constructions that any building model reuses [#783](https://github.com/SethKitchen/ThreeMojo/issues/783)
+- [x] [Bearing walls](https://github.com/SethKitchen/ThreeMojo/wiki/Bearing-walls): the gravity load down a building's walls, storey by storey, and the mass of each element [#784](https://github.com/SethKitchen/ThreeMojo/issues/784)
+- [x] [Scanned buildings](https://github.com/SethKitchen/ThreeMojo/wiki/Scanned-buildings): CC BY splat scans from SuperSplat fitted as building models, with static colliders and a pinned download tool [#782](https://github.com/SethKitchen/ThreeMojo/issues/782)
+- [x] [SOG files](https://github.com/SethKitchen/ThreeMojo/wiki/SOG-files): PlayCanvas's compressed Gaussian splats, read as splat-transform 3.10.1 reads them [#781](https://github.com/SethKitchen/ThreeMojo/issues/781)
+- [x] [Compressed PLY files](https://github.com/SethKitchen/ThreeMojo/wiki/Compressed-PLY-files): SuperSplat's packed splats, bit-identical to splat-transform 3.10.1, and one reader for every scan format [#785](https://github.com/SethKitchen/ThreeMojo/issues/785)
+- [x] [Splats on every core](https://github.com/SethKitchen/ThreeMojo/wiki/Gaussian-splats#the-draw): the CPU sorts, projects and fills splats on all cores, and fills only each splat's disc. The picture is the same to the bit [#787](https://github.com/SethKitchen/ThreeMojo/issues/787)
+- [x] [Splat level of detail](https://github.com/SethKitchen/ThreeMojo/wiki/Splat-level-of-detail): merged splats draw a large scan in real time on the CPU [#790](https://github.com/SethKitchen/ThreeMojo/issues/790)
+- [x] [Scanned buildings on the GPU](https://github.com/SethKitchen/ThreeMojo/wiki/C-ABI-and-hosts): the C ABI splat app draws a scanned building with WebGPU or Metal. Its WebAssembly module builds on Linux [#788](https://github.com/SethKitchen/ThreeMojo/issues/788)
+- [x] [Scan parts](https://github.com/SethKitchen/ThreeMojo/wiki/Scan-parts): a scanned place cut into parts with mass, inertia, bearing pressure and tip angle. Each is a rigid body and splats to place again [#786](https://github.com/SethKitchen/ThreeMojo/issues/786)
+- [x] [Scan parts on terrain](https://github.com/SethKitchen/ThreeMojo/wiki/Scan-parts#find-the-ground-of-a-slope): a hillside's ground as a surface. A scanned site cuts into buildings that bear on the slope [#789](https://github.com/SethKitchen/ThreeMojo/issues/789)
+- [x] [Cleaning and orienting scans](https://github.com/SethKitchen/ThreeMojo/wiki/Cleaning-and-orienting-scans): leave out a scan's sky and floaters, find its up axis, and stand it in a scene [#782](https://github.com/SethKitchen/ThreeMojo/issues/782)
+- [x] [Walking through a scan](https://github.com/SethKitchen/ThreeMojo/wiki/Walking-through-a-scan): a capsule walks a scan's floor in a physics world, with a first-person camera, as a game does [#786](https://github.com/SethKitchen/ThreeMojo/issues/786)
+- [x] [GPU splats](https://github.com/SethKitchen/ThreeMojo/wiki/GPU-splats): a scan kept on the GPU and drawn a tile at a time. A scan of a building draws at 1920 by 1080 in 21 milliseconds, twice as fast as 24 CPU threads [#790](https://github.com/SethKitchen/ThreeMojo/issues/790)
 
 ### Earth retaining
 
