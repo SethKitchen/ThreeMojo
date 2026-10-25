@@ -885,6 +885,99 @@ def test_the_capture_recipe_uses_one_group_budget() raises:
     assert_equal(count, 1)
 
 
+def _long_output(prefix: String) -> String:
+    """Return a shell fragment that builds a deep output directory.
+
+    The phase path stays short enough to remove, and the temporary phase
+    name is past the path limit, so header setup fails after that removal.
+
+    Args:
+        prefix: The shell variable that receives the deep directory.
+    """
+    return (
+        "cur=$(mktemp -d); "
+        + prefix
+        + "=$cur; name=test_fixture.phases.jsonl; target=4089; "
+        + "while true; do rest=$((target - ${#cur} - 1 - ${#name})); "
+        + 'if [ "$rest" -le 0 ]; then break; fi; n=$rest; '
+        + 'if [ "$n" -gt 200 ]; then n=200; fi; '
+        + "comp=$(python3 -c \"print('d'*$n)\"); cur=$cur/$comp; "
+        + 'mkdir "$cur"; done; '
+    )
+
+
+def test_a_failed_phase_setup_keeps_the_program_result() raises:
+    """A phase header that cannot be created keeps the program status and bytes.
+    """
+    var mojo = shell_quote(tool_mojo())
+    var ran = run_program(
+        [
+            "sh",
+            "-c",
+            _long_output("root")
+            + "phase=$cur/test_fixture.phases.jsonl; "
+            + "out=$cur/test_fixture.out; "
+            + "printf 'old adapter_finish status=0\\n' > \"$phase\"; "
+            + "printf '%s\\n' 'import sys' 'print(\"PASS\")' "
+            + "'sys.stderr.write(\"COVLINE:module:2:T\\n\")' "
+            + "'raise SystemExit(17)' > \"$root/coverage_hit_aot.py\"; "
+            + "sh tools/tool.sh "
+            + mojo
+            + ' coverage_io capture --out "$out" --err "$root/err.txt.gz" '
+            + '-- python3 "$root/coverage_hit_aot.py" --profile aot '
+            + '> "$root/tool.out" 2>"$root/tool.err"; status=$?; '
+            + 'test "$status" = 17 || { echo "status $status"; '
+            + 'cat "$root/tool.out" "$root/tool.err"; exit 4; }; '
+            + 'test "$(cat "$out")" = PASS || exit 5; '
+            + 'test "$(gzip -dc "$root/err.txt.gz")" = COVLINE:module:2:T '
+            + "|| exit 6; "
+            + "grep -q 'phase diagnostics unavailable (OSError)' "
+            + '"$root/tool.out" || { cat "$root/tool.out"; exit 7; }; '
+            + 'test ! -e "$phase" || exit 8; '
+            + "left=$(find \"$cur\" -name 'test_fixture.phases.jsonl.*'); "
+            + 'test -z "$left" || exit 9; echo PHASE_OK',
+        ],
+        20.0,
+        merge_errors=False,
+    )
+    if ran.status != 0:
+        raise Error(ran.output + ran.errors)
+    assert_true(ran.output.find("PHASE_OK") >= 0)
+
+
+def test_a_failed_phase_setup_keeps_a_bad_probe() raises:
+    """A phase header failure still reports a malformed branch."""
+    var mojo = shell_quote(tool_mojo())
+    var ran = run_program(
+        [
+            "sh",
+            "-c",
+            _long_output("root")
+            + "out=$cur/test_fixture.out; "
+            + "printf '%s\\n' 'import sys' "
+            + "'sys.stderr.write(\"COVBRANCH:m:1:invalid\\n\")' "
+            + '> "$root/coverage_hit_aot.py"; '
+            + "sh tools/tool.sh "
+            + mojo
+            + ' coverage_io capture --out "$out" --err "$root/err.txt.gz" '
+            + '-- python3 "$root/coverage_hit_aot.py" --profile aot '
+            + '> "$root/tool.out" 2>"$root/tool.err"; status=$?; '
+            + 'test "$status" = 1 || { echo "status $status"; '
+            + 'cat "$root/tool.out" "$root/tool.err"; exit 4; }; '
+            + "grep -q 'Malformed branch outcome' \"$root/tool.err\" || "
+            + '{ cat "$root/tool.err"; exit 5; }; '
+            + "grep -q 'phase diagnostics unavailable (OSError)' "
+            + '"$root/tool.out" || { cat "$root/tool.out"; exit 6; }; '
+            + "echo PARSER_OK",
+        ],
+        20.0,
+        merge_errors=False,
+    )
+    if ran.status != 0:
+        raise Error(ran.output + ran.errors)
+    assert_true(ran.output.find("PARSER_OK") >= 0)
+
+
 def test_usage_exits_2() raises:
     var ran = run_program(
         ["sh", "tools/tool.sh", tool_mojo(), "coverage_io"],

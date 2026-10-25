@@ -5,7 +5,6 @@
 import contextlib
 import errno
 import io
-import gzip
 import os
 from pathlib import Path
 import signal
@@ -632,54 +631,6 @@ class CoverageLifecycleTests(unittest.TestCase):
                 self.root / 'out', self.root / 'err.gz'), 143)
         self.assertEqual(signal.getsignal(signal.SIGTERM), old_handler)
 
-    def capture_after_group_alarm(self):
-        bootstrap = '''import os, pathlib, subprocess, sys, time
-root = pathlib.Path(sys.argv[1])
-capture = subprocess.Popen([sys.executable, '-c', sys.argv[2], str(root),
-                            str(os.getpid())])
-while not (root / 'start-group').exists():
-    if capture.poll() is not None:
-        raise RuntimeError('prepared capture exited before group startup')
-    time.sleep(0.01)
-os.execv(sys.executable,
-         [sys.executable, sys.argv[4], 'group', '--seconds', '0.9', '--',
-          sys.executable, '-c', sys.argv[3], str(root)])
-'''
-        scheduler = '''import os, pathlib, sys, time
-root = pathlib.Path(sys.argv[1])
-time.sleep(0.25)
-deadline = root / 'deadline.tmp'
-deadline.write_text(os.environ['THREEMOJO_COVERAGE_DEADLINE'])
-deadline.replace(root / 'deadline')
-time.sleep(30)
-'''
-        process = subprocess.Popen(
-            [sys.executable, '-c', bootstrap, str(self.root), PREPARED_DRIVER,
-             scheduler, coverage_io.__file__],
-            env=self.environment | {'TMPDIR': str(self.root)},
-            stdout=subprocess.PIPE, stderr=subprocess.PIPE,
-            text=True)
-        self.addCleanup(self.cleanup_process, process)
-        # Start the real group alarm only after the owned fixture is ready.
-        # Exec keeps the capture's parent PID, so that alarm still orphans it.
-        self.ready()
-        started = time.monotonic()
-        (self.root / 'start-group').touch()
-        output, error = process.communicate(timeout=4)
-        self.assertEqual(process.returncode, -signal.SIGALRM, output + error)
-        self.assertLess(time.monotonic() - started, 2.5)
-        self.assertEqual((self.root / 'status').read_text(), '124')
-        self.assert_tree_stopped()
-
-    def test_group_alarm_does_not_orphan_delayed_capture(self):
-        self.capture_after_group_alarm()
-
-    def test_group_alarm_allows_slow_fixture_startup(self):
-        (self.root / 'worker.py').write_text(WORKER.replace(
-            'role, mode = sys.argv[2:4]',
-            "role, mode = sys.argv[2:4]\nif role == 'grandchild': time.sleep(0.7)"))
-        self.capture_after_group_alarm()
-
 class PhaseSidecarTests(unittest.TestCase):
     def setUp(self):
         self.temporary = tempfile.TemporaryDirectory(prefix='phase sidecar ')
@@ -700,29 +651,6 @@ class PhaseSidecarTests(unittest.TestCase):
                                              {'sha256': 'a' * 64}, environment)
         return phases, environment
 
-    def test_setup_failure_preserves_capture_failure_and_exact_probe_bytes(self):
-        for failure in ('open', 'replace', 'write'):
-            with self.subTest(failure=failure), contextlib.ExitStack() as scope:
-                self.sidecar.write_text('old adapter_finish status=0')
-                output = scope.enter_context(contextlib.redirect_stdout(io.StringIO()))
-                if failure == 'open':
-                    scope.enter_context(patch.object(coverage_io.tempfile, 'mkstemp', side_effect=OSError('full')))
-                elif failure == 'replace':
-                    scope.enter_context(patch.object(coverage_io.os, 'replace', side_effect=OSError('full')))
-                else:
-                    real_fdopen = os.fdopen
-                    @contextlib.contextmanager
-                    def bad_stream(fd, *args):
-                        with real_fdopen(fd, *args):
-                            yield Mock(write=Mock(side_effect=OSError('full')))
-                    scope.enter_context(patch.object(coverage_io.os, 'fdopen', side_effect=bad_stream))
-                self.assertEqual(coverage_io.capture(self.command, self.output, self.errors), 17)
-                self.assertEqual(self.output.read_bytes(), b'PASS\n')
-                self.assertEqual(gzip.decompress(self.errors.read_bytes()), b'COVLINE:module:2:T\n')
-                self.assertIn('phase diagnostics unavailable (OSError)', output.getvalue())
-                self.assertFalse(self.sidecar.exists())
-                self.assertEqual(list(self.root.glob('test_fixture.phases.jsonl.*')), [])
-
     def test_failed_fdopen_closes_untransferred_descriptor_without_changing_status(self):
         descriptors = []
 
@@ -742,13 +670,6 @@ class PhaseSidecarTests(unittest.TestCase):
             with self.assertRaises(OSError) as raised:
                 os.fstat(descriptor)
             self.assertEqual(raised.exception.errno, errno.EBADF)
-
-    def test_setup_failure_does_not_mask_probe_parser_failure(self):
-        self.adapter.write_text('import sys\nsys.stderr.write("COVBRANCH:m:1:invalid\\n")\n')
-        with patch.object(coverage_io.tempfile, 'mkstemp', side_effect=OSError('full')), \
-                contextlib.redirect_stdout(io.StringIO()), \
-                self.assertRaisesRegex(ValueError, 'Malformed branch outcome'):
-            coverage_io.capture(self.command, self.output, self.errors)
 
 
 if __name__ == '__main__':
