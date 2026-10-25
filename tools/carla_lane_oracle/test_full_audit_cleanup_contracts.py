@@ -27,7 +27,7 @@ import rounded_line_selector_contracts as selector
 import rounded_line_singleton_contracts as singleton
 import source_contracts as source
 import sum2_guard_contracts as guard
-from test_optional_runtime_contracts import replace_token_fragment
+from _token_fragment import replace_token_fragment
 
 # Complete consumer-first commands measured approximately 392/429/281/596
 # seconds on the reviewed current graph. Keep all faster routes at 120 seconds.
