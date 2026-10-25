@@ -216,6 +216,12 @@ The function keeps the SI directed-point constructor.
 The other tokens match the pin.
 A bare constructor or a changed body is refused.
 
+Mojo checks the live lane-certificate caller.
+Three width calls keep the SI helper.
+One call keeps the trailing comma.
+The other tokens match the pin.
+A bare width call or a changed body is refused.
+
 ## Candidate certificate
 
 A certificate contains a stored incumbent point and its road parameter.
