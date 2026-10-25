@@ -129,7 +129,9 @@ Some portable features remain partial, including [GLSL shaders](https://github.c
 ### Project tools
 
 <details>
-<summary>Implemented: 57</summary>
+<summary>Implemented: 58</summary>
+
+- [x] [CARLA town layout dump](https://github.com/SethKitchen/ThreeMojo/wiki/CARLA-assets#rebuild-the-town-packages): `tools/carla_town_layout.mojo` installs the layout mod and dumps each town [#761](https://github.com/SethKitchen/ThreeMojo/issues/761)
 
 - [x] [CARLA vehicle export](https://github.com/SethKitchen/ThreeMojo/wiki/CARLA-assets#rebuild-the-vehicle-zips): `tools/carla_vehicle_export.mojo` exports each vehicle and merges its meshes [#761](https://github.com/SethKitchen/ThreeMojo/issues/761)
 

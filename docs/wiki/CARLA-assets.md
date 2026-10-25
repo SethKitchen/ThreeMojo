@@ -471,10 +471,10 @@ The towns are made in three steps. The scripts run on Windows, like the vehicle 
 1. Dump each town's layout from a running server:
 
    ```sh
-   python dump_layout.py
+   sh tools/tool.sh .venv/bin/mojo carla_town_layout
    ```
 
-   The Python API does not say which mesh each object uses, and UModel cannot read the cooked levels. So `dump_layout.py` runs CARLA with UE4SS, a scripting runtime, and a Lua mod, `layout_dump/main.lua`. The mod writes each static mesh component: its mesh, its materials, its transform and its instances. `tools/carla_town_rows.mojo` reads that layout. The server runs with `-nullrhi`, so it does not use the GPU. Each run stops after `--limit` seconds, 60 by default.
+   The Python API does not say which mesh each object uses, and UModel cannot read the cooked levels. So `tools/carla_town_layout.mojo` runs CARLA with UE4SS and a Lua mod, `layout_dump/main.lua`. The mod writes each static mesh component: its mesh, its materials, its transform and its instances. `tools/carla_town_rows.mojo` reads that layout. The server runs with `-nullrhi`, so it does not use the GPU. Each run stops after `--limit` seconds, 60 by default.
 
    Use UE4SS experimental build 3.0.1-1152 or later. Version 3.0.1 stops CARLA 0.9.16 at start.
 
