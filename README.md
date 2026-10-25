@@ -129,7 +129,9 @@ Some portable features remain partial, including [GLSL shaders](https://github.c
 ### Project tools
 
 <details>
-<summary>Implemented: 56</summary>
+<summary>Implemented: 57</summary>
+
+- [x] [CARLA vehicle export](https://github.com/SethKitchen/ThreeMojo/wiki/CARLA-assets#rebuild-the-vehicle-zips): `tools/carla_vehicle_export.mojo` exports each vehicle and merges its meshes [#761](https://github.com/SethKitchen/ThreeMojo/issues/761)
 
 - [x] [CARLA environment record](https://github.com/SethKitchen/ThreeMojo/wiki/CARLA-assets#the-carla-towns): `tools/carla_environment_record.mojo` rounds each position to four decimal places [#761](https://github.com/SethKitchen/ThreeMojo/issues/761)
 

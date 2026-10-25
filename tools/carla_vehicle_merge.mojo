@@ -10,7 +10,7 @@
 The extra buffer is appended after the base buffer. The base buffer is
 padded with zero bytes so its length is a multiple of four. Views,
 accessors, materials, meshes, nodes and scene roots are renumbered as
-`export_vehicles.py` did.
+`tools/carla_vehicle_export.mojo` does.
 """
 
 from std.pathlib import Path
