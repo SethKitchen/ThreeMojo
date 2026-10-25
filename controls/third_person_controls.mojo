@@ -184,10 +184,14 @@ struct ThirdPersonControls(Copyable, Movable):
                 "A third-person camera's pitches must be from -89 to 89"
                 " degrees, lowest first"
             )
-        for speed in [self.yaw_speed, self.pitch_speed, self.trail_speed]:
+        var speeds = [self.yaw_speed, self.pitch_speed, self.trail_speed]
+        for speed in speeds:  # pragma: no branch
             var value = speed.to(RADIAN_PER_SECOND)
             if not (value >= 0 and value < 1.0e6):
-                raise Error("A turning speed must not be negative")
+                raise Error(
+                    "A turning speed must not be negative or above a"
+                    " million radians a second"
+                )
         require_positive_finite(
             Float64(self.follow.to(PER_SECOND)),
             "A third-person camera's follow rate must be positive",

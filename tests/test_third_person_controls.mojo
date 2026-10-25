@@ -151,6 +151,10 @@ def test_a_camera_that_cannot_follow_is_refused() raises:
     with assert_raises(contains="speed"):
         view.check()
     view = ThirdPersonControls()
+    view.yaw_speed = AngularVelocity(1.0e9, DEGREE_PER_SECOND)
+    with assert_raises(contains="million"):
+        view.check()
+    view = ThirdPersonControls()
     view.follow = Frequency(0.0, PER_SECOND)
     with assert_raises(contains="follow"):
         view.check()

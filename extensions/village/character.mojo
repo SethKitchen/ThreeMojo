@@ -180,8 +180,10 @@ struct CharacterParameters(ImplicitlyCopyable):
         Raises:
             Error: If a speed, the acceleration, the gravity, the radius or
                 the bounds is not positive; the run is slower than the
-                walk; the air control is not from 0 to 1; or the jump
-                speed, the wade depth or the step down is negative.
+                walk or not below 10 kilometers a second; the air control
+                is not from 0 to 1; or the jump speed, the wade depth or
+                the step down is negative or not below 10 kilometers, or
+                10 kilometers a second.
         """
         require_positive_finite(
             Float64(self.walk_speed.to(METER_PER_SECOND)),
@@ -192,7 +194,10 @@ struct CharacterParameters(ImplicitlyCopyable):
             >= self.walk_speed.to(METER_PER_SECOND)
             and self.run_speed.to(METER_PER_SECOND) < 1.0e4
         ):
-            raise Error("A character must run at least as fast as it walks")
+            raise Error(
+                "A character must run at least as fast as it walks, and slower"
+                " than 10 kilometers a second"
+            )
         require_positive_finite(
             Float64(self.acceleration.to(METER_PER_SECOND_SQUARED)),
             "A character's acceleration must be positive",
@@ -207,7 +212,10 @@ struct CharacterParameters(ImplicitlyCopyable):
             self.jump_speed.to(METER_PER_SECOND) >= 0
             and self.jump_speed.to(METER_PER_SECOND) < 1.0e4
         ):
-            raise Error("A character's jump speed must not be negative")
+            raise Error(
+                "A character's jump speed must be from 0 to 10 kilometers a"
+                " second"
+            )
         require_positive_finite(
             Float64(self.gravity.to(METER_PER_SECOND_SQUARED)),
             "A character's gravity must be positive",
@@ -216,11 +224,11 @@ struct CharacterParameters(ImplicitlyCopyable):
             Float64(self.radius.to(METER)),
             "A character's radius must be positive",
         )
-        for length in [self.wade_depth, self.step_down]:
+        for length in [self.wade_depth, self.step_down]:  # pragma: no branch
             if not (length.to(METER) >= 0 and length.to(METER) < 1.0e4):
                 raise Error(
-                    "A character's wade depth and step down must not be"
-                    " negative"
+                    "A character's wade depth and step down must be from 0 to"
+                    " 10 kilometers"
                 )
         require_positive_finite(
             Float64(self.bounds.to(METER)),
@@ -392,20 +400,20 @@ struct Character(Copyable, Movable):
             obstacles: The round things in the way.
 
         Raises:
-            Error: If the time is negative or not finite, the yaw is not
-                finite, or `parameters.check` refuses a value.
+            Error: If the time is negative or above a billion seconds, the
+                yaw is not finite, or `parameters.check` refuses a value.
         """
         self.parameters.check()
         var seconds = delta.to(SECOND)
         if not (seconds >= 0 and seconds < 1.0e9):
-            raise Error("A frame's time must not be negative")
+            raise Error("A frame's time must not be negative or endless")
         require_finite(Float64(yaw.to(RADIAN)), "A yaw must be finite")
         var left = min(seconds, LONGEST_FRAME)
         var count = max(1, Int(ceil(left / SUBSTEP)))
         var h = left / Float32(count)
         var pressed = input.jump and not self.jump_held
         self.jump_held = input.jump
-        for _ in range(count):
+        for _ in range(count):  # pragma: no branch
             self._substep(input, yaw, h, pressed, ground, lots, obstacles)
             pressed = False
         self._settle()

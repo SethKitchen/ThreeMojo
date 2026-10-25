@@ -368,8 +368,8 @@ def wander_route(
     require_count_between(count, 1, 64, "A route must try from 1 to 64 points")
     require_between(radius, 0, 1000, "A route must reach from 0 to 1 kilometer")
     var points = List[Vector3]()
-    for index in range(count):
-        for attempt in range(TRIES):
+    for index in range(count):  # pragma: no branch
+        for attempt in range(TRIES):  # pragma: no branch
             var angle = hash01(index, attempt, seed) * 2 * pi
             var reach = sqrt(hash01(index, attempt, seed + 1)) * radius
             var px = x + cos(angle) * reach
@@ -634,7 +634,7 @@ struct Residents(Movable):
         self.books = List[Flipbook]()
         self.beasts = List[Beast]()
         var paints = List[MaterialId]()
-        for material in animal_materials():
+        for material in animal_materials():  # pragma: no branch
             paints.append(assets.materials.add(material.copy()))
         for index in range(len(parameters.herds)):
             ref herd = parameters.herds[index]
@@ -660,7 +660,7 @@ struct Residents(Movable):
                 walker.walk_speed = Velocity(
                     max(Float32(0.2), pace), METER_PER_SECOND
                 )
-                for phase in range(parameters.phases):
+                for phase in range(parameters.phases):  # pragma: no branch
                     var pose = walk_pose(
                         animal.rig,
                         Float64(phase) / Float64(parameters.phases),
@@ -675,7 +675,7 @@ struct Residents(Movable):
             walker.run_speed = walker.walk_speed
             var book = len(self.books)
             self.books.append(Flipbook(stand, frames^, stride))
-            for member in range(herd.count):
+            for member in range(herd.count):  # pragma: no branch
                 var route = wander_route(
                     herd.seed * 64 + member,
                     herd.x,

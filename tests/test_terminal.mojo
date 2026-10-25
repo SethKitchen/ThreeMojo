@@ -111,7 +111,7 @@ def _read_ready(fd: c_int) -> String:
     request[0] = Int32(fd)
     request[1] = 1
     var ready = external_call["poll", c_int](
-        request.unsafe_ptr(), c_int(1), c_int(20)
+        request.unsafe_ptr(), UInt(1), c_int(20)
     )
     if ready <= 0:
         return String()

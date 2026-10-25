@@ -276,11 +276,18 @@ def test_a_character_that_cannot_move_is_refused() raises:
     with assert_raises(contains="run"):
         p.check()
     p = CharacterParameters()
+    p.run_speed = Velocity(1.0e5, METER_PER_SECOND)
+    with assert_raises(contains="run"):
+        p.check()
+    p = CharacterParameters()
     p.acceleration = Acceleration(0.0, METER_PER_SECOND_SQUARED)
     with assert_raises(contains="acceleration"):
         p.check()
     p = CharacterParameters()
     p.air_control = 2
+    with assert_raises(contains="air"):
+        p.check()
+    p.air_control = -1
     with assert_raises(contains="air"):
         p.check()
     p = CharacterParameters()
@@ -289,6 +296,9 @@ def test_a_character_that_cannot_move_is_refused() raises:
         p.check()
     p = CharacterParameters()
     p.jump_speed = Velocity(-1.0, METER_PER_SECOND)
+    with assert_raises(contains="jump"):
+        p.check()
+    p.jump_speed = Velocity(1.0e5, METER_PER_SECOND)
     with assert_raises(contains="jump"):
         p.check()
     p = CharacterParameters()
@@ -301,6 +311,9 @@ def test_a_character_that_cannot_move_is_refused() raises:
         p.check()
     p = CharacterParameters()
     p.wade_depth = Length(-1.0, METER)
+    with assert_raises(contains="wade"):
+        p.check()
+    p.wade_depth = Length(1.0e5, METER)
     with assert_raises(contains="wade"):
         p.check()
     p = CharacterParameters()
@@ -332,6 +345,15 @@ def test_a_character_that_cannot_move_is_refused() raises:
             List[Lot](),
             List[Obstacle](),
         )
+    with assert_raises(contains="endless"):
+        walker.step(
+            no_input(),
+            Angle(0.0, RADIAN),
+            Duration(1.0e10, SECOND),
+            ground,
+            List[Lot](),
+            List[Obstacle](),
+        )
     with assert_raises(contains="yaw"):
         walker.step(
             no_input(),
@@ -341,6 +363,62 @@ def test_a_character_that_cannot_move_is_refused() raises:
             List[Lot](),
             List[Obstacle](),
         )
+
+
+def test_a_press_in_the_air_does_not_jump_again() raises:
+    var ground = _flat()
+    var walker = _walker(ground)
+    var still = List[Lot]()
+    var none = List[Obstacle]()
+    var step = Duration(1.0 / 30.0, SECOND)
+    var yaw = Angle(0.0, RADIAN)
+    walker.step(
+        MoveInput(0, 0, 0, 0, False, True), yaw, step, ground, still, none
+    )
+    walker.step(no_input(), yaw, step, ground, still, none)
+    var rising = walker.velocity.y
+    walker.step(
+        MoveInput(0, 0, 0, 0, False, True), yaw, step, ground, still, none
+    )
+    assert_true(walker.velocity.y < rising)
+
+
+def test_a_character_below_the_ground_rises_out_of_it() raises:
+    var ground = _flat()
+    var walker = _walker(ground)
+    walker.grounded = False
+    walker.position = Vector3(0, -1, 0)
+    walker.velocity = Vector3(0, 8, 0)
+    _run(walker, no_input(), 0.1, ground)
+    assert_false(walker.grounded)
+    assert_true(walker.position.y > -1)
+    _run(walker, no_input(), 3, ground)
+    assert_true(walker.grounded)
+
+
+def test_a_character_in_deep_water_stays_and_one_at_the_edge_slides() raises:
+    var pond = Ground(
+        hill_height=Length(0.0, METER),
+        pond=Pond(
+            Length(5.0, METER),
+            Length(0.0, METER),
+            Length(5.0, METER),
+            Length(2.0, METER),
+        ),
+    )
+    # In the deep middle, every step is refused.
+    var stuck = Character(CharacterParameters(), 5, 0, Angle(0.0, RADIAN), pond)
+    _run(stuck, MoveInput(1, 1, 0, 0, False, False), 1, pond)
+    assert_almost_equal(stuck.position.x, 5, atol=1e-6)
+    assert_almost_equal(stuck.position.z, 0, atol=1e-6)
+    # Walk east until the water stops it, then lean east and south: only
+    # the step along z is allowed.
+    var edge = Character(CharacterParameters(), -1, 0, Angle(0.0, RADIAN), pond)
+    _run(edge, MoveInput(0, 1, 0, 0, False, False), 3, pond)
+    var x = edge.position.x
+    _run(edge, MoveInput(-1, 1, 0, 0, False, False), 1, pond)
+    assert_true(edge.position.z > 0.3)
+    assert_true(edge.position.x >= x - 1.0e-3)
 
 
 def main() raises:

@@ -290,5 +290,18 @@ def test_residents_wander_and_stand_in_the_players_way() raises:
     )
 
 
+def test_an_empty_village_has_no_residents() raises:
+    var ground = _flat()
+    var assets = Assets()
+    var scene = Scene()
+    var lots = List[Lot]()
+    var residents = Residents(scene, assets, _small(), ground, lots)
+    residents.update(
+        scene, Duration(0.1, SECOND), ground, lots, List[Obstacle]()
+    )
+    assert_equal(len(residents.obstacles()), 0)
+    assert_equal(len(scene.meshes), 0)
+
+
 def main() raises:
     TestSuite.discover_tests[__functions_in_module()]().run()

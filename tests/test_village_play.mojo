@@ -142,6 +142,9 @@ def test_the_game_village_is_lighter_and_lived_in() raises:
     var trunks = tree_obstacles(_village())
     assert_equal(len(trunks), 1)
     assert_almost_equal(trunks[0].radius, TRUNK * 0.5, atol=1e-6)
+    var bare = _village()
+    bare.meadow.plantings = []
+    assert_equal(len(tree_obstacles(bare)), 0)
 
 
 def test_a_player_walks_jumps_and_is_followed() raises:

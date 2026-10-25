@@ -79,6 +79,7 @@
 - [Vegetation](Vegetation)
   - [Why grass is drawn in clusters](Why-grass-is-drawn-in-clusters)
 - [Village](Village)
+  - [Village walk](Village-walk)
 - [Streamline](Streamline)
 - [Animals](Animals)
   - [Animal anatomy](Animal-anatomy)

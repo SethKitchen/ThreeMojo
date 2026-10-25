@@ -15,6 +15,7 @@
 | `FlyControls` | `controls/fly_controls.mojo` | Flies and rolls on its own axes. |
 | `FirstPersonControls` | `controls/first_person_controls.mojo` | Walks, and turns toward the pointer. |
 | `PointerLockControls` | `controls/pointer_lock_controls.mojo` | Turns by the pointer's movement, and walks. |
+| `ThirdPersonControls` | `controls/third_person_controls.mojo` | Follows a character from behind, turned by a look stick. See [Village walk](Village-walk#the-camera). |
 
 Two more controls move objects, not the camera. [DragControls](#dragcontrols) drags an object across the view. [TransformControls](#transformcontrols) moves, turns and scales one object with a gizmo. [SelectionBox](#selectionbox) selects the objects inside a dragged rectangle.
 
