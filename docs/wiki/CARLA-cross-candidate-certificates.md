@@ -189,6 +189,11 @@ The pin names each caller function.
 Live callers that match the pin keep that token graph.
 A changed caller function or a changed routing is refused.
 
+Mojo checks the Sum2 protected-helper inventory.
+The live production files that use a protected helper match the pin.
+Eight live files keep the pinned use digest.
+A new protected use or a changed digest is refused.
+
 ## Candidate certificate
 
 A certificate contains a stored incumbent point and its road parameter.
