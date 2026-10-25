@@ -257,6 +257,12 @@ Four caller modules keep the road-info alias.
 Restoring that alias matches the pinned routing.
 A bare import or a changed routing is refused.
 
+Mojo checks the live lane-refinement routing.
+The module keeps the road-info alias.
+The expansion block and the Variant import stay in place.
+Restoring those spans matches the pinned routing.
+A moved span or a changed routing is refused.
+
 ## Candidate certificate
 
 A certificate contains a stored incumbent point and its road parameter.
