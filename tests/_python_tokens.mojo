@@ -782,3 +782,85 @@ def stored_word_sha256(
             source, array_names, array_sizes, scalar_names
         ).as_bytes()
     )
+
+
+def def_token_sha256(source: String, name: String) raises -> String:
+    """Return the token digest of one module-level function.
+
+    Args:
+        source: Mojo source.
+        name: The function name.
+
+    Returns:
+        The hex digest of that function, including a preceding decorator.
+
+    Raises:
+        Error: The function is missing, repeated, or has no indented body.
+    """
+    var kinds = List[Int]()
+    var texts = List[String]()
+    _tokenize(source, kinds, texts)
+    var depth = 0
+    var start_stmt = 0
+    var decorator = -1
+    var hits = 0
+    var begin = 0
+    var finish = 0
+    for index in range(len(kinds)):
+        var kind = kinds[index]
+        if kind == _INDENT:
+            depth += 1
+        elif kind == _DEDENT:
+            depth -= 1
+        if kind != _NEWLINE:
+            continue
+        var lead = start_stmt
+        while lead < index and kinds[lead] == _DEDENT:
+            lead += 1
+        var is_decorator = (
+            lead < index and kinds[lead] == _OP and texts[lead] == "@"
+        )
+        var is_def = (
+            lead + 1 < index
+            and kinds[lead] == _NAME
+            and texts[lead] == "def"
+            and kinds[lead + 1] == _NAME
+            and texts[lead + 1] == name
+        )
+        if depth == 0 and is_def:
+            hits += 1
+            if decorator >= 0:
+                begin = decorator
+            else:
+                begin = lead
+            var body = index + 1
+            if body >= len(kinds) or kinds[body] != _INDENT:
+                raise Error("unsupported function body: " + name)
+            var nest = 0
+            var end = body
+            while end < len(kinds):
+                if kinds[end] == _INDENT:
+                    nest += 1
+                elif kinds[end] == _DEDENT:
+                    nest -= 1
+                    if nest == 0:
+                        finish = end + 1
+                        break
+                end += 1
+            if nest != 0:
+                raise Error("unclosed function body: " + name)
+            decorator = -1
+        elif depth == 0 and is_decorator:
+            if decorator < 0:
+                decorator = lead
+        else:
+            decorator = -1
+        start_stmt = index + 1
+    if hits != 1:
+        raise Error("missing or ambiguous function: " + name)
+    var doc = PyJson()
+    var rows = doc.new_list()
+    for index in range(begin, finish):
+        _append_token(doc, rows, kinds[index], texts[index])
+    doc.root = rows
+    return sha256_hex(doc.dumps().as_bytes())
