@@ -15,6 +15,11 @@ first probe, a running line every 60 seconds, and completion. A failed
 capture prints the last 30 lines of standard output and the last 30
 standard-error lines that do not start with `COV`. A compiled capture
 writes a phase file and reports a missing finish record.
+
+Each capture creates a private temporary directory. Its parent is the
+resolved `TMPDIR` when that variable is set. The command sees the directory
+as `TMPDIR` and as `THREEMOJO_TEST_TMPDIR`. The compiler cache is inside
+the directory. The tool removes the directory after any outcome.
 """
 
 from std.collections import Dict
@@ -1941,7 +1946,8 @@ def _capture(arguments: List[String]) raises -> Int:
         The captured command's status.
 
     Raises:
-        Error: If the command line, the proof, or a probe record is wrong.
+        Error: If the command line, the proof, a probe record, or the
+            private directory is wrong.
     """
     var out_path = String()
     var err_path = String()
@@ -2006,15 +2012,26 @@ def _capture(arguments: List[String]) raises -> Int:
         deadline = parse_float(text)
         if not (deadline == deadline) or deadline > 1e300 or deadline < -1e300:
             raise Error("coverage deadline must be finite")
-    var folder = mkdtemp(prefix="threemojo-test-")
-    _ = setenv("TMPDIR", folder, True)
-    _ = setenv("THREEMOJO_TEST_TMPDIR", folder, True)
-    var compiler = folder + "/mojo-cache"
-    var xdg = folder + "/xdg-cache"
+    var parent = getenv("TMPDIR")
+    var folder: String
+    if parent:
+        folder = mkdtemp(prefix="threemojo-test-", dir=parent)
+    else:
+        folder = mkdtemp(prefix="threemojo-test-")
+    var private: String
+    try:
+        private = realpath(folder)
+    except error:
+        _ = run_program(["rm", "-rf", folder], 30.0)
+        raise error
+    var compiler = private + "/mojo-cache"
+    var xdg = private + "/xdg-cache"
     var made = run_program(["mkdir", "-p", compiler, xdg], 10.0)
     if made.status != 0:
         _ = run_program(["rm", "-rf", folder], 30.0)
         raise Error(made.output)
+    _ = setenv("TMPDIR", private, True)
+    _ = setenv("THREEMOJO_TEST_TMPDIR", private, True)
     _ = setenv("MODULAR_CACHE_DIR", compiler, True)
     _ = setenv("XDG_CACHE_HOME", xdg, True)
     var started = _now()

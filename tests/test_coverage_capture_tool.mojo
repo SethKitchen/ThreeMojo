@@ -440,6 +440,160 @@ def test_a_failing_reporter_returns_its_status() raises:
     assert_equal(ran.status, 3)
 
 
+def test_private_roots_follow_tmpdir_and_stay_separate() raises:
+    """Two captures under one symlink TMPDIR keep distinct resolved roots."""
+    var mojo = tool_mojo()
+    var ran = run_program(
+        [
+            "sh",
+            "-c",
+            "set -eu\n"
+            "base=$(mktemp -d)\n"
+            'mkdir -p "$base/parent"\n'
+            'ln -s "$base/parent" "$base/alias"\n'
+            "cat > \"$base/child.sh\" << 'SH'\n"
+            "set -eu\n"
+            "name=$1\n"
+            "content=$2\n"
+            "base=$3\n"
+            "root=$THREEMOJO_TEST_TMPDIR\n"
+            '[ "$TMPDIR" = "$root" ] || exit 9\n'
+            '[ "$MODULAR_CACHE_DIR" = "$root/mojo-cache" ] || exit 10\n'
+            '[ "$XDG_CACHE_HOME" = "$root/xdg-cache" ] || exit 11\n'
+            '[ -d "$MODULAR_CACHE_DIR" ] || exit 12\n'
+            '[ -d "$XDG_CACHE_HOME" ] || exit 13\n'
+            'printf %s "$root" > "$base/$name.root"\n'
+            'printf %s "$content" > "$root/same.bin"\n'
+            'got=$(cat "$root/same.bin")\n'
+            '[ "$got" = "$content" ] || exit 4\n'
+            "i=0\n"
+            'while [ ! -f "$base/go" ]; do\n'
+            "  i=$((i + 1))\n"
+            '  if [ "$i" -gt 600 ]; then exit 8; fi\n'
+            "  sleep 0.005\n"
+            "done\n"
+            "exit 0\n"
+            "SH\n"
+            "launch() {\n"
+            "  name=$1\n"
+            "  content=$2\n"
+            '  TMPDIR="$base/alias" sh tools/tool.sh '
+            + shell_quote(mojo)
+            + ' coverage_io capture --out "$base/$name.out" --err'
+            ' "$base/$name.txt.gz" -- sh "$base/child.sh" "$name"'
+            ' "$content" "$base" > "$base/$name.progress" 2>'
+            ' "$base/$name.toolerr" &\n'
+            '  echo $! > "$base/$name.pid"\n'
+            "}\n"
+            "launch one one\n"
+            "launch two two\n"
+            "i=0\n"
+            'while [ ! -s "$base/one.root" ] || [ ! -s "$base/two.root" ];'
+            " do\n"
+            "  i=$((i + 1))\n"
+            '  if [ "$i" -gt 600 ]; then echo timeout; cat'
+            ' "$base/one.toolerr" "$base/two.toolerr"; exit 8; fi\n'
+            "  sleep 0.005\n"
+            "done\n"
+            'one=$(cat "$base/one.root")\n'
+            'two=$(cat "$base/two.root")\n'
+            '[ "$one" != "$two" ]\n'
+            "parent=$(python3 -c 'import os,sys;"
+            ' print(os.path.realpath(sys.argv[1]))\' "$base/parent")\n'
+            'case "$one" in "$parent"/threemojo-test-*) ;; *) echo "bad'
+            ' $one"; exit 5 ;; esac\n'
+            'case "$two" in "$parent"/threemojo-test-*) ;; *) echo "bad'
+            ' $two"; exit 5 ;; esac\n'
+            "python3 -c 'import os,sys; raise SystemExit(0 if"
+            " os.path.samefile(sys.argv[1], sys.argv[2]) else 1)'"
+            ' "$(dirname "$one")" "$base/alias"\n'
+            "python3 -c 'import os,sys; raise SystemExit(0 if"
+            " os.path.samefile(sys.argv[1], sys.argv[2]) else 1)'"
+            ' "$(dirname "$two")" "$base/alias"\n'
+            '[ "$(cat "$one/same.bin")" = one ]\n'
+            '[ "$(cat "$two/same.bin")" = two ]\n'
+            'touch "$base/go"\n'
+            'wait "$(cat "$base/one.pid")"\n'
+            'wait "$(cat "$base/two.pid")"\n'
+            '[ ! -e "$one" ]\n'
+            '[ ! -e "$two" ]\n'
+            '[ -d "$base/parent" ]\n'
+            '[ -L "$base/alias" ]\n'
+            'test -z "$(ls -A "$base/parent")"\n'
+            "echo SEPARATE_OK\n",
+        ],
+        20.0,
+        merge_errors=False,
+    )
+    if ran.status != 0:
+        raise Error(ran.output + ran.errors)
+    assert_true(ran.output.find("SEPARATE_OK") >= 0)
+
+
+def test_capture_removes_the_private_root_after_every_outcome() raises:
+    """Exit 0, exit 3, and a refused probe each remove the private root."""
+    var mojo = tool_mojo()
+    var ran = run_program(
+        [
+            "sh",
+            "-c",
+            "set -eu\n"
+            "base=$(mktemp -d)\n"
+            'mkdir -p "$base/plain"\n'
+            "cat > \"$base/child.py\" << 'PY'\n"
+            "import os, pathlib, sys\n"
+            "root = os.environ['THREEMOJO_TEST_TMPDIR']\n"
+            "pathlib.Path(sys.argv[1]).write_text(root)\n"
+            "pathlib.Path(root, 'fixture.bin').write_bytes(b'fixture')\n"
+            "raise SystemExit(int(sys.argv[2]))\n"
+            "PY\n"
+            "parent=$(python3 -c 'import os,sys;"
+            ' print(os.path.realpath(sys.argv[1]))\' "$base/plain")\n'
+            "for code in 0 3; do\n"
+            '  marker="$base/mark-$code"\n'
+            "  status=0\n"
+            '  TMPDIR="$base/plain" sh tools/tool.sh '
+            + shell_quote(mojo)
+            + ' coverage_io capture --out "$base/out" --err "$base/err.txt.gz"'
+            ' -- python3 "$base/child.py" "$marker" "$code" >'
+            ' "$base/progress" 2> "$base/toolerr" || status=$?\n'
+            '  test "$status" = "$code"\n'
+            '  root=$(cat "$marker")\n'
+            '  case "$root" in "$parent"/threemojo-test-*) ;; *) echo "bad'
+            ' $root"; exit 5 ;; esac\n'
+            '  test ! -e "$root"\n'
+            "done\n"
+            'marker="$base/mark-bad"\n'
+            "cat > \"$base/bad.py\" << 'PY'\n"
+            "import os, pathlib, sys\n"
+            "root = os.environ['THREEMOJO_TEST_TMPDIR']\n"
+            "pathlib.Path(sys.argv[1]).write_text(root)\n"
+            "pathlib.Path(root, 'fixture.bin').write_bytes(b'fixture')\n"
+            "sys.stderr.write('COVBRANCH:m:4:garbage\\n')\n"
+            "PY\n"
+            'TMPDIR="$base/plain" sh tools/tool.sh '
+            + shell_quote(mojo)
+            + ' coverage_io capture --out "$base/out" --err "$base/err.txt.gz"'
+            ' -- python3 "$base/bad.py" "$marker" > "$base/progress" 2>'
+            ' "$base/toolerr" || status=$?\n'
+            'test "$status" = 1\n'
+            'root=$(cat "$marker")\n'
+            'case "$root" in "$parent"/threemojo-test-*) ;; *) echo "bad'
+            ' $root"; exit 5 ;; esac\n'
+            'test ! -e "$root"\n'
+            'grep -q aborted "$base/progress"\n'
+            'grep -q "Malformed branch outcome" "$base/toolerr"\n'
+            'test -z "$(ls -A "$base/plain")"\n'
+            "echo CLEAN_OK\n",
+        ],
+        20.0,
+        merge_errors=False,
+    )
+    if ran.status != 0:
+        raise Error(ran.output + ran.errors)
+    assert_true(ran.output.find("CLEAN_OK") >= 0)
+
+
 def test_usage_exits_2() raises:
     var ran = run_program(
         ["sh", "tools/tool.sh", tool_mojo(), "coverage_io"],
