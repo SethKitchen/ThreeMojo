@@ -8,7 +8,10 @@
 from std.pathlib import Path
 from std.testing import TestSuite, assert_raises
 
-from tools.sampled_value_copies import sampled_value_copies
+from tools.sampled_value_copies import (
+    sampled_constant_heading,
+    sampled_value_copies,
+)
 
 
 def _text(path: String) raises -> String:
@@ -125,6 +128,65 @@ def test_a_changed_copy_is_refused() raises:
             "def _polynomial_jet():\n    return 0\n  return 1\n",
             trig,
             value,
+        )
+
+
+def test_the_constant_heading_projection_holds() raises:
+    """The value heading helper replaces zero derivatives with unknown."""
+    var trig = _trig()
+    var value = _value()
+    sampled_constant_heading(trig, value)
+    sampled_constant_heading(
+        trig.replace(
+            (
+                "def _constant_sincos_jet(heading: Float64) -> Tuple[_Jet,"
+                " _Jet]:\n"
+            ),
+            (
+                "def _constant_sincos_jet(heading: Float64) -> Tuple[_Jet,"
+                " _Jet]:\n    # reviewed\n"
+            ),
+        ),
+        value,
+    )
+
+
+def test_a_changed_constant_heading_is_refused() raises:
+    """A changed layout, constructor, projection, or value helper is refused."""
+    var trig = _trig()
+    var value = _value()
+    with assert_raises(contains="constant heading layout changed"):
+        sampled_constant_heading(
+            trig.replace("_PHASE_LIMIT", "_HALF_PI"),
+            value,
+        )
+    with assert_raises(
+        contains="constant heading derivative constructor changed"
+    ):
+        sampled_constant_heading(
+            trig.replace(
+                "var zero = _Interval.point(0.0)",
+                "var zero = _Interval.point(1.0)",
+            ),
+            value,
+        )
+    with assert_raises(contains="constant heading field projection changed"):
+        sampled_constant_heading(
+            trig.replace(
+                "_Jet(result[0].rounded_value(), zero, zero, 0.0)",
+                "_Jet(result[0].rounded_value(), zero, result[0], 0.0)",
+            ),
+            value,
+        )
+    with assert_raises(
+        contains="sampled helper diverged: _constant_sincos_value"
+    ):
+        sampled_constant_heading(
+            trig,
+            value.replace(
+                "var unknown = _Interval.whole()",
+                "var unknown = _Interval.point(0.0)",
+            ),
         )
 
 

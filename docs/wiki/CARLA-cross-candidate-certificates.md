@@ -112,6 +112,11 @@ Ten helpers match their renamed jet sources.
 The blend copy drops two derivative intersections.
 A renamed helper or a changed copy is refused.
 
+Mojo checks the constant heading projection.
+The jet helper keeps its guard and its zero derivative slots.
+The value helper replaces that zero with an unknown interval.
+A changed guard, constructor, or projection is refused.
+
 ## Candidate certificate
 
 A certificate contains a stored incumbent point and its road parameter.

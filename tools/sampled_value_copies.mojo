@@ -6,7 +6,8 @@
 """Check the sampled value copies of the jet helpers.
 
 Nine helpers match their renamed jet sources. The blend copy also drops
-the two derivative intersections.
+the two derivative intersections. The constant heading copy replaces zero
+derivatives with an unknown interval.
 """
 
 from tests._python_tokens import _tokenize
@@ -293,25 +294,26 @@ def _span(
     return (at, stop)
 
 
-def _once(text: String, needle: String) raises -> String:
+def _once(text: String, needle: String, message: String) raises -> String:
     """Remove the one occurrence of `needle`.
 
     Args:
         text: The normalized helper.
-        needle: The derivative assignment.
+        needle: The text to remove.
+        message: The failure text when the count is not one.
 
     Returns:
-        The text without that assignment.
+        The text without that occurrence.
 
     Raises:
-        Error: The assignment is missing or repeated.
+        Error: The text is missing or repeated.
     """
     var at = text.find(needle)
     if at < 0:
-        _fail("derivative intersection shape changed")
+        _fail(message)
     var tail = text[byte = at + needle.byte_length() :]
     if tail.find(needle) >= 0:
-        _fail("derivative intersection shape changed")
+        _fail(message)
     var head = text[byte=0:at]
     return String(head) + String(tail)
 
@@ -348,6 +350,7 @@ def _compare(
                 " result . first = _intersect_ideal_bounds ( result . first ,"
                 " ideal . first )"
             ),
+            "derivative intersection shape changed",
         )
         copied = _once(
             copied,
@@ -355,6 +358,7 @@ def _compare(
                 " result . second = _intersect_ideal_bounds ( result . second ,"
                 " ideal . second )"
             ),
+            "derivative intersection shape changed",
         )
     var value_name = _rename(jet)
     var live = _span(value_kinds, value_texts, value_name)
@@ -439,3 +443,56 @@ def sampled_value_copies(bounds: String, trig: String, value: String) raises:
         "_sample_blend_jet",
         True,
     )
+
+
+def sampled_constant_heading(trig: String, value: String) raises:
+    """Require the constant heading projection.
+
+    The jet helper keeps its layout and its zero derivative slots. The
+    value helper replaces that zero with an unknown interval.
+
+    Args:
+        trig: The `curve_trig` module.
+        value: The `lane_value_bounds` module.
+
+    Raises:
+        Error: The layout, the zero constructor, the field projection, or
+        the value helper changed.
+    """
+    var trig_kinds = List[Int]()
+    var trig_texts = List[String]()
+    var value_kinds = List[Int]()
+    var value_texts = List[String]()
+    _load(trig, trig_kinds, trig_texts)
+    _load(value, value_kinds, value_texts)
+    var origin = _span(trig_kinds, trig_texts, "_constant_sincos_jet")
+    var copied = _normalize(trig_kinds, trig_texts, origin[0], origin[1], True)
+    var guard = "if not isfinite ( heading ) or abs ( heading ) > _PHASE_LIMIT"
+    if copied.find(guard) < 0:
+        _fail("constant heading layout changed")
+    var guard_tail = copied[byte = copied.find(guard) + guard.byte_length() :]
+    if guard_tail.find(guard) >= 0:
+        _fail("constant heading layout changed")
+    var zero = "zero = _Interval . point ( 0.0 )"
+    if copied.find(zero) < 0:
+        _fail("constant heading derivative constructor changed")
+    var zero_tail = copied[byte = copied.find(zero) + zero.byte_length() :]
+    if zero_tail.find(zero) >= 0:
+        _fail("constant heading derivative constructor changed")
+    copied = copied.replace(zero, "unknown = _Interval . whole ( )")
+    var slots = ", zero , zero ,"
+    if copied.find(slots) < 0:
+        _fail("constant heading field projection changed")
+    var first = copied.find(slots)
+    var after = copied[byte = first + slots.byte_length() :]
+    if after.find(slots) < 0:
+        _fail("constant heading field projection changed")
+    var second = after.find(slots)
+    var rest = after[byte = second + slots.byte_length() :]
+    if rest.find(slots) >= 0:
+        _fail("constant heading field projection changed")
+    copied = copied.replace(slots, ", unknown , unknown ,")
+    var live = _span(value_kinds, value_texts, "_constant_sincos_value")
+    var actual = _normalize(value_kinds, value_texts, live[0], live[1], False)
+    if copied != actual:
+        _fail("sampled helper diverged: _constant_sincos_value")
