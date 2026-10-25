@@ -521,3 +521,100 @@ def _array_values(
     if len(values) != size:
         raise Error("unsupported stored array")
     return values^
+
+
+def stored_scalar(source: String, name: String) raises -> Float64:
+    """Return one top-level `comptime name = Float64(decimal)`.
+
+    Args:
+        source: Mojo source.
+        name: The constant name.
+
+    Returns:
+        The stored value, as Python `float` reads the spelling.
+
+    Raises:
+        Error: The declaration is missing, repeated, or not one decimal.
+    """
+    var kinds = List[Int]()
+    var texts = List[String]()
+    _tokenize(source, kinds, texts)
+    var depth = 0
+    var part_kinds = List[Int]()
+    var part_texts = List[String]()
+    var values = List[Float64]()
+    for index in range(len(kinds)):
+        var kind = kinds[index]
+        if kind == _INDENT:
+            depth += 1
+            continue
+        if kind == _DEDENT:
+            depth -= 1
+            continue
+        if kind == _NEWLINE:
+            if (
+                depth == 0
+                and len(part_kinds) >= 2
+                and part_kinds[0] == _NAME
+                and part_texts[0] == "comptime"
+                and part_kinds[1] == _NAME
+                and part_texts[1] == name
+            ):
+                if len(values) == 1:
+                    raise Error("Missing or ambiguous selector constant")
+                values.append(_scalar_value(part_kinds, part_texts, name))
+            part_kinds.clear()
+            part_texts.clear()
+            continue
+        part_kinds.append(kind)
+        part_texts.append(texts[index])
+    if len(values) != 1:
+        raise Error("Missing or ambiguous selector constant")
+    return values[0]
+
+
+def _scalar_value(
+    kinds: List[Int], texts: List[String], name: String
+) raises -> Float64:
+    """Return the decimal inside one `Float64` declaration.
+
+    Args:
+        kinds: The statement tokens.
+        texts: The token texts.
+        name: The constant name.
+
+    Returns:
+        The stored value.
+
+    Raises:
+        Error: The statement is not one decimal `Float64` call.
+    """
+    if len(kinds) < 6:
+        raise Error("Unsupported complete selector constant declaration")
+    var last = len(kinds) - 1
+    var complete = (
+        kinds[0] == _NAME
+        and texts[0] == "comptime"
+        and kinds[1] == _NAME
+        and texts[1] == name
+        and kinds[2] == _OP
+        and texts[2] == "="
+        and kinds[3] == _NAME
+        and texts[3] == "Float64"
+        and kinds[4] == _OP
+        and texts[4] == "("
+        and kinds[last] == _OP
+        and texts[last] == ")"
+    )
+    if not complete:
+        raise Error("Unsupported complete selector constant declaration")
+    var entry_kinds = List[Int]()
+    var entry_texts = List[String]()
+    for index in range(5, last):
+        entry_kinds.append(kinds[index])
+        entry_texts.append(texts[index])
+    try:
+        return _literal(entry_kinds, entry_texts)
+    except error:
+        _ = String(error)
+        raise Error("unsupported selector constant " + name)
