@@ -5,7 +5,7 @@
 
 """Print what the gamepads on this Linux machine do.
 
-    mojo run -I . examples/gamepad.mojo [SECONDS]
+    mojo run -I . examples/gamepad/hubs.mojo [SECONDS]
 
 The HID hub runs the pads that SDL's HIDAPI drivers know: DualSense,
 DualShock 4, Switch Pro and Xbox controllers on Bluetooth. Their light
