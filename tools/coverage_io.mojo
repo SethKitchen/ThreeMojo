@@ -60,6 +60,8 @@ from tools.coverage_loop_begin import (
     _which,
 )
 from tools._owned_process import (
+    EPERM,
+    ESRCH,
     SIGKILL,
     ExecPlan,
     SignalHold,
@@ -1816,6 +1818,111 @@ def _progress(
     )
 
 
+def owned_group_kill(
+    pid: Int,
+    macos: Bool,
+    live: Bool,
+    script: List[Int],
+    mut calls: List[Int],
+    reap_ready: Bool,
+    mut waits: Int,
+) raises -> Bool:
+    """Signal an owned group and accept Darwin EPERM only after it is gone.
+
+    A successful signal or a missing group returns without reaping. On
+    Darwin, EPERM can mean the leader is already a zombie. This call then
+    reaps without waiting. Signal 0 must show the group is gone. Any other
+    denial stays a denial, and this call does not send a second SIGKILL.
+
+    Args:
+        pid: The leader, started in its own session.
+        macos: True to apply the Darwin EPERM rule.
+        live: True to call `killpg` and `waitpid`. False reads `script`.
+        script: One errno per signal. The last value repeats.
+        calls: Each signal number this call sends.
+        reap_ready: True when a scripted reap has an exit status.
+        waits: Incremented when this call reaps.
+
+    Returns:
+        True when this call reaped the leader.
+
+    Raises:
+        Error: When the group is denied, still present, or the wait fails.
+    """
+    var failure = _group_errno(pid, SIGKILL, live, script, calls)
+    if failure == 0 or failure == ESRCH:
+        return False
+    if not macos or failure != EPERM:
+        raise Error(
+            "PermissionError: [Errno " + String(failure) + "] kill denied"
+        )
+    waits += 1
+    var ready = reap_ready
+    if live:
+        var state = try_wait(pid)
+        if state.error != 0:
+            raise Error("wait failed: " + strerror(state.error))
+        ready = state.done
+    if not ready:
+        raise Error(
+            "PermissionError: [Errno " + String(failure) + "] kill denied"
+        )
+    var probe = _group_errno(pid, 0, live, script, calls)
+    if probe == ESRCH:
+        return True
+    raise Error("PermissionError: [Errno " + String(failure) + "] kill denied")
+
+
+def _group_errno(
+    pid: Int,
+    number: Int,
+    live: Bool,
+    script: List[Int],
+    mut calls: List[Int],
+) -> Int:
+    """Return the errno for one group signal.
+
+    Args:
+        pid: The process group.
+        number: The signal, or zero to probe.
+        live: True to call `killpg`.
+        script: Scripted errno values. The last value repeats.
+        calls: The signals already sent. This call appends `number`.
+
+    Returns:
+        Zero, or the errno.
+    """
+    calls.append(number)
+    if not live:
+        if len(script) == 0:
+            return 0
+        var index = len(calls) - 1
+        if index >= len(script):
+            index = len(script) - 1
+        return script[index]
+    return signal_group(pid, number)
+
+
+def kill_owned_group(pid: Int) raises -> Bool:
+    """Signal `pid`'s group. Return True when this call reaped the leader.
+
+    Args:
+        pid: The leader, started in its own session.
+
+    Returns:
+        True when Darwin EPERM ended in a completed reap.
+
+    Raises:
+        Error: When a live leader or a present group is denied.
+    """
+    var script = List[Int]()
+    var calls = List[Int]()
+    var waits = 0
+    return owned_group_kill(
+        pid, CompilationTarget.is_macos(), True, script, calls, False, waits
+    )
+
+
 def _read_lines(
     pid: Int,
     fd: Int,
@@ -1848,6 +1955,7 @@ def _read_lines(
     var announced = False
     var next_progress = started + interval
     var cancelled = False
+    var leader_reaped = False
     while True:
         if _now() >= next_progress:
             _progress(
@@ -1858,7 +1966,7 @@ def _read_lines(
         if deadline >= 0:
             limit = deadline - _now()
             if limit <= 0:
-                _ = signal_group(pid, SIGKILL)
+                leader_reaped = kill_owned_group(pid)
                 cancelled = True
                 break
             if limit > 0.05:
@@ -1926,6 +2034,8 @@ def _read_lines(
         if not announced and reducer.saw_probe:
             _progress(suite, "first probe", started, reducer.records, True)
     close_fd(fd)
+    if leader_reaped:
+        return 124
     var waited = wait_blocking(pid)
     if cancelled:
         return 124
