@@ -5,6 +5,8 @@
 
 """Token digests that match CPython 3.12 `tokenize` for these Mojo sources."""
 
+from std.memory import bitcast
+
 from tools._python_float import parse_float
 from tools._python_json import PyJson
 from tools._sha256 import sha256_hex
@@ -618,3 +620,165 @@ def _scalar_value(
     except error:
         _ = String(error)
         raise Error("unsupported selector constant " + name)
+
+
+def _word_text(values: List[Float64]) -> String:
+    """Return the canonical JSON array of IEEE words.
+
+    Args:
+        values: The stored floats, in order.
+
+    Returns:
+        The decimal bit patterns, with no spaces.
+    """
+    var text = String("[")
+    for index in range(len(values)):
+        if index > 0:
+            text += ", "
+        text += String(bitcast[DType.uint64](values[index]))
+    text += "]"
+    return text
+
+
+def _stored_words(source: String, name: String, size: Int) raises -> String:
+    """Return the canonical words of one stored declaration.
+
+    Args:
+        source: Mojo source.
+        name: The constant name.
+        size: The array length, or 0 for one `Float64` scalar.
+
+    Returns:
+        The JSON array of IEEE words.
+
+    Raises:
+        Error: The declaration is missing, repeated, or not a plain decimal.
+    """
+    if size == 0:
+        var one = List[Float64]()
+        one.append(stored_scalar(source, name))
+        return _word_text(one)
+    return _word_text(stored_float_array(source, name, size))
+
+
+def _append_token(mut doc: PyJson, rows: Int, kind: Int, text: String):
+    """Append one `[kind, text]` pair.
+
+    Args:
+        doc: The token document.
+        rows: The token list.
+        kind: The Python token number.
+        text: The token text.
+    """
+    var pair = doc.new_list()
+    doc.append(pair, doc.new_int(kind))
+    doc.append(pair, doc.new_str(text))
+    doc.append(rows, pair)
+
+
+def stored_word_document(
+    source: String,
+    array_names: List[String],
+    array_sizes: List[Int],
+    scalar_names: List[String],
+) raises -> String:
+    """Return the token list with stored declarations replaced by words.
+
+    Args:
+        source: Mojo source.
+        array_names: The `Array[Float64, size]` names.
+        array_sizes: The length of each array, in the same order.
+        scalar_names: The `Float64` scalar names.
+
+    Returns:
+        The canonical JSON token list.
+
+    Raises:
+        Error: A stored declaration is missing, repeated, or not one decimal.
+    """
+    var names = List[String]()
+    var payloads = List[String]()
+    for index in range(len(array_names)):
+        names.append(array_names[index])
+        payloads.append(
+            _stored_words(source, array_names[index], array_sizes[index])
+        )
+    for index in range(len(scalar_names)):
+        names.append(scalar_names[index])
+        payloads.append(_stored_words(source, scalar_names[index], 0))
+    var kinds = List[Int]()
+    var texts = List[String]()
+    _tokenize(source, kinds, texts)
+    var doc = PyJson()
+    var rows = doc.new_list()
+    var depth = 0
+    var part_kinds = List[Int]()
+    var part_texts = List[String]()
+    for index in range(len(kinds)):
+        var kind = kinds[index]
+        if kind == _INDENT:
+            depth += 1
+        elif kind == _DEDENT:
+            depth -= 1
+        if kind == _NEWLINE:
+            var lead = 0
+            while lead < len(part_kinds) and part_kinds[lead] == _DEDENT:
+                lead += 1
+            var payload = -1
+            if (
+                depth == 0
+                and len(part_kinds) >= lead + 2
+                and part_kinds[lead] == _NAME
+                and part_texts[lead] == "comptime"
+                and part_kinds[lead + 1] == _NAME
+            ):
+                var declared = part_texts[lead + 1]
+                for slot in range(len(names)):
+                    if names[slot] == declared:
+                        payload = slot
+            if payload < 0:
+                for slot in range(len(part_kinds)):
+                    _append_token(doc, rows, part_kinds[slot], part_texts[slot])
+            else:
+                for slot in range(lead):
+                    _append_token(doc, rows, part_kinds[slot], part_texts[slot])
+                _append_token(doc, rows, _NAME, "STORED_WORD_DECLARATION")
+                _append_token(doc, rows, _NAME, names[payload])
+                _append_token(doc, rows, _STRING, payloads[payload])
+            _append_token(doc, rows, _NEWLINE, texts[index])
+            part_kinds.clear()
+            part_texts.clear()
+        else:
+            part_kinds.append(kind)
+            part_texts.append(texts[index])
+    for slot in range(len(part_kinds)):
+        _append_token(doc, rows, part_kinds[slot], part_texts[slot])
+    doc.root = rows
+    return doc.dumps()
+
+
+def stored_word_sha256(
+    source: String,
+    array_names: List[String],
+    array_sizes: List[Int],
+    scalar_names: List[String],
+) raises -> String:
+    """Return the token digest with stored declarations replaced by words.
+
+    Args:
+        source: Mojo source.
+        array_names: The `Array[Float64, size]` names.
+        array_sizes: The length of each array, in the same order.
+        scalar_names: The `Float64` scalar names.
+
+    Returns:
+        The hex digest of the canonical token list.
+
+    Raises:
+        Error: A stored declaration is missing, repeated, or not one decimal.
+    """
+    return sha256_hex(
+        stored_word_document(
+            source, array_names, array_sizes, scalar_names
+        ).as_bytes()
+    )
