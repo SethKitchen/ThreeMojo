@@ -271,7 +271,7 @@ The verifier rejects missing, duplicate, extra, truncated, mixed-module or trail
 
 These records are a trusted producer contract, not independent authentication of arbitrary user-forged files or an arbitrary precompiled producer. Direct diagnostic uses of `build_cli` without a checkpoint retain the original unmasked manifest but cannot be sealed for feasibility reporting.
 
-After instrumentation and copy-through, `tools/coverage_loop_proofs.py` writes `loop-proofs.json`. Its literal inference recognizes a conservative subset in nongeneric top-level function bodies. Direct builtin `range` calls can have one or two nonnegative integer literals no larger than 2^31-1. Direct builtin list literals cannot use expansion or comprehension.
+After instrumentation and copy-through, `tools/coverage_loop_proofs.py` writes `loop-proofs.json`. Its literal inference recognizes a conservative subset in nongeneric top-level function bodies. Direct builtin `range` calls can have one or two nonnegative integer literals no larger than 2^31-1. Direct builtin list literals cannot use expansion or comprehension. `tools/coverage_loop_seal.mojo` writes the same receipt when every proved loop is a literal range or a literal list.
 
 The integer limit keeps endpoint and cardinality arithmetic representable on supported CPU targets. Literal inference does not fold named constants or expressions, inspect producer invariants, or infer positive dynamic lengths. For literal inference, methods, nested functions, generic functions, unresolved syntax, and ambiguous bindings retain both requirements.
 
