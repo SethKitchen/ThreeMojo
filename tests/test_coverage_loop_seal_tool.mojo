@@ -534,6 +534,42 @@ def test_harness_fixture_matches_python() raises:
         )
         if checked.status != 0:
             raise Error(checked.errors + checked.output)
+        var py_mask = parent + "/python-mask.txt"
+        var mask_script = parent + "/mask.py"
+        Path(mask_script).write_text(
+            "import sys\nfrom pathlib import Path\nsys.path.insert(0,"
+            " sys.argv[1])\nimport coverage_loop_proofs as loops\nbuild ="
+            " Path(sys.argv[2])\nraw = (build /"
+            " 'manifest.txt').read_bytes()\nenvelope = loops.read_receipt(build"
+            " / 'loop-proofs.json')\nPath(sys.argv[3]).write_bytes(loops.masked_manifest(raw,"
+            " envelope))\n"
+        )
+        var py = run_program(
+            ["python3", mask_script, realpath("tools"), build, py_mask],
+            30.0,
+            merge_errors=False,
+        )
+        if py.status != 0:
+            raise Error(py.errors + py.output)
+        var mojo_mask = parent + "/mojo-mask.txt"
+        var masked = run_program(
+            [
+                "sh",
+                "tools/tool.sh",
+                tool_mojo(),
+                "coverage_loop_seal",
+                "mask",
+                "--build",
+                build,
+                "--output",
+                mojo_mask,
+            ],
+            30.0,
+            merge_errors=False,
+        )
+        if masked.status != 0:
+            raise Error(masked.errors + masked.output)
+        _same(_text(py_mask), _text(mojo_mask))
     finally:
         _cleanup(parent)
 

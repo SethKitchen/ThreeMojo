@@ -1825,6 +1825,26 @@ def _masked_manifest(raw: List[UInt8], envelope: PyJson) raises -> String:
     return text
 
 
+def run_mask(build_text: String, output_text: String) raises -> Int:
+    """Write the masked manifest for one sealed build.
+
+    Args:
+        build_text: The build directory.
+        output_text: The file that receives the masked manifest.
+
+    Returns:
+        Zero after the manifest is written.
+
+    Raises:
+        Error: When the receipt does not match the original manifest.
+    """
+    var build = _resolve(build_text)
+    var raw = Path(_join(build, "manifest.txt")).read_bytes()
+    var envelope = _read_receipt(_join(build, "loop-proofs.json"))
+    Path(output_text).write_text(_masked_manifest(raw, envelope))
+    return 0
+
+
 def _ends_with_manifest(command: List[String], build: String) raises:
     """Require the report command to end with the original manifest.
 
@@ -2166,6 +2186,16 @@ def run_cli(arguments: List[String]) raises -> Int:
             doc.append(items, proof)
         print(doc.dumps())
         return 0
+    if len(arguments) > 0 and arguments[0] == "mask":
+        if (
+            len(arguments) != 5
+            or arguments[1] != "--build"
+            or arguments[3] != "--output"
+        ):
+            raise Error(
+                "usage: coverage_loop_seal mask --build DIR --output FILE"
+            )
+        return run_mask(arguments[2], arguments[4])
     if len(arguments) > 0 and arguments[0] == "reviews":
         if len(arguments) != 3:
             raise Error("usage: coverage_loop_seal reviews ROOT MODULE")

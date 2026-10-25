@@ -250,14 +250,22 @@ def capture_result(result, stem, envelope, command):
     return raw, reduced
 
 
-def diagnostic_manifest(original, envelope, module, lines):
+def mojo_mask(mojo, stage):
+    """Return the masked manifest from the Mojo seal."""
+    target = Path(stage) / 'mojo-masked-manifest.txt'
+    run(['sh', str(ROOT / 'tools/tool.sh'), mojo, 'coverage_loop_seal', 'mask',
+         '--build', str(stage), '--output', str(target)])
+    return target.read_bytes()
+
+
+def diagnostic_manifest(masked, module, lines):
     """Project only the loop outcomes for native reporter unit controls.
 
     Never mutate the original manifest/origin or claim an aggregate gate.
     """
     rows = []
     seen = set()
-    for row in proofs.masked_manifest(original, envelope).splitlines():
+    for row in masked.splitlines():
         fields = row.split()
         if fields and fields[0] == b'P':
             rows.append(row)
@@ -666,7 +674,7 @@ def check_current_generated_include_root(stage, mojo, compiler, flags):
     map_exclusions = (1223,1766,2205,3003,3010,3032,3104,3109,3118,3127,4903,5328,5348)
     require(all(f'B extensions/carla/map {line}'.encode() not in original.splitlines()
                 for line in map_exclusions), 'Existing Map branch exclusion changed')
-    masked = proofs.masked_manifest(original,envelope)
+    masked = mojo_mask(mojo, stage)
     # Independently reconstruct every line, including unrelated obligations.
     # Only the single receipt header and authenticated B-to-R substitutions differ.
     expected_rows = ['P '+proofs.SCHEMA+' '+envelope['sha256']]
@@ -815,7 +823,7 @@ def main():
         evidence = work / 'evidence'
         evidence.mkdir()
         derived = evidence / 'derived-manifest.txt'
-        derived.write_bytes(diagnostic_manifest(full_manifest, envelope, 'fixture', identities.values()))
+        derived.write_bytes(diagnostic_manifest(mojo_mask(mojo, rewritten), 'fixture', identities.values()))
         binaries = []
         for folder in [native, rewritten]:
             binary = folder / 'fixture'
@@ -904,7 +912,7 @@ def main() raises:
         shadow_proof = mojo_seal(native, shadow_build, compiler, flags, mojo)
         require(not shadow_proof['receipt']['proofs'], 'Shadowed range incorrectly proved builtin')
         shadow_manifest = evidence / 'shadow-manifest.txt'
-        shadow_manifest.write_bytes(diagnostic_manifest(shadow_original, shadow_proof, 'shadow', [shadow_line]))
+        shadow_manifest.write_bytes(diagnostic_manifest(mojo_mask(mojo, shadow_build), 'shadow', [shadow_line]))
         shadow_results = []
         for folder in [native, shadow_build]:
             binary = folder / 'shadow'
