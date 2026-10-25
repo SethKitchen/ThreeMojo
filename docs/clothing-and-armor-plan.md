@@ -6,6 +6,31 @@ build the same thing on its humanoid. It is a plan, not a feature. Each phase
 below becomes a GitHub issue, a README checklist line and a wiki page when the
 work starts.
 
+## Status
+
+All five phases are implemented in `extensions/attire/`, with tests, wiki
+pages ([Garments](wiki/Garments.md), [Outfits and armor](wiki/Outfits-and-armor.md),
+[Cloth and spring bones](wiki/Cloth-and-spring-bones.md) and
+[Attire estimates](wiki/Attire-estimates.md)), the example
+`examples/armory.mojo` and the tool `tools/attire_report.mojo`. Issues #851
+to #854 track them.
+
+Where the implementation departs from this plan, and why:
+
+| Plan | Implementation | Why |
+|---|---|---|
+| Shell each garment from the body's distance field. | Shell each garment from the skin mesh: offset along the normals, draped, cut at hems. | The garment shares the skin's vertices until it is cut, so it takes the skin's weights exactly, layers stand off each other vertex by vertex, and hiding is a test per vertex. A field shell would need a second, slower meshing pass for each layer. |
+| Cut hems at section planes. | Cut along the iso-line of a cover value: skin weights times a per-joint span, with 8 cm linear ramps, smoothed three passes. | Hems follow the limb smoothly and land between vertices, with no sawtooth. |
+| `CoverMask` over body regions. | `Cover`: a start and an end along each joint's bone, and an open face. | It expresses sleeves, boots and gloves, which a region mask cannot. Coverage per region is still reported. |
+| Collide cloth with the baked hair collider grid. | Collide cloth and spring chains with capsules on the bones. | Capsules move with the animation at no cost. Games use them for the same reason. |
+| Read and write `VRMC_springBone` through glTF. | Keep chain settings in node extras, which round-trip; write VRM-shaped JSON that names nodes by name. | The exporter writes custom extensions on objects, not at the document root, where VRM needs them. |
+| A GPU cloth kernel with a parity test. | A CPU solve by color on many threads, bit for bit equal to the serial solve. | This environment has no GPU. The coloring is the same schedule a GPU kernel would run. A cloak costs under a millisecond a frame on the CPU. |
+| Mail at 6 kg/m². | Mail at 8.5 kg/m². | Calibrated so the template's hauberk weighs the Cleveland Museum's 9.3 kg. |
+| A `DyeMask` and a wear mask as RGBA textures. | `dye` and `wear` vertex attributes, painted into the vertex colors. Each dye boundary is cut into the mesh. | A boundary is a crisp line at any distance, with no texture resolution, no atlas and no bake step. Both rasterizers read vertex colors at no extra cost. |
+| UVs from the loft sections. | UVs in meters round each chain of bones, cut at a back seam and where one chain meets another. | The shell comes from the skin, not from the lofts. A chain keeps `v` continuous across the elbow and the knee, and the cuts keep every triangle in one frame. |
+| Woven, grain and mail normal maps; a mail metalness and roughness map. | Procedural bump maps for mail, quilting and twill. Leather and plate are smooth. One roughness and metalness for each fabric. | A bump map needs no tangents, as three.js's `bumpMap` needs none. Each height image is a short function, exact at its true size. |
+| Plate finishes: brushed with `anisotropy`, blued with `clearcoat`. | One polished finish under a thin clear coat. | One finish serves the wardrobe. A finish is one `physical_material` call to add. |
+
 ## Recommendation in one paragraph
 
 Build garments as *layers over the skin field*. ThreeMojo already owns the
