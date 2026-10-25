@@ -82,6 +82,11 @@ The four scalars and the four arrays match their pins.
 A longer spelling keeps the same word.
 A changed literal, a suffix, and a second declaration are refused.
 
+Mojo checks the projected ideal spiral graph.
+The legacy source and the live source share one digest.
+Five stored-half calls become half products.
+A changed term and a moved auxiliary are refused.
+
 ## Candidate certificate
 
 A certificate contains a stored incumbent point and its road parameter.
