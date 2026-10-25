@@ -199,6 +199,12 @@ Each protected helper use stays inside a reviewed caller.
 Lane refinement also keeps the center-bound uses.
 A helper use outside those functions is refused.
 
+Mojo checks the raw-cut inverse premises.
+The migration record, the environment guard, and the predecessor binding stay fixed.
+The native fixture and the reference function stay fixed.
+The live dispatch keeps the road-info alias.
+A changed premise or a bare road-info import is refused.
+
 ## Candidate certificate
 
 A certificate contains a stored incumbent point and its road parameter.
