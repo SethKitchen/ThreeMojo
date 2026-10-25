@@ -2116,12 +2116,196 @@ def _report_main(mode: String, arguments: List[String]) -> Int:
         return 1
 
 
-def run_reviews(root_text: String, module: String) raises -> Int:
+def _fold_name(name: String) -> String:
+    """Return `name` with ASCII letters in lowercase.
+
+    Args:
+        name: A directory entry.
+
+    Returns:
+        The folded name.
+    """
+    var folded = String()
+    for byte in name.as_bytes():
+        if byte >= 65 and byte <= 90:
+            folded += chr(Int(byte) + 32)
+        else:
+            folded += chr(Int(byte))
+    return folded
+
+
+def _kept_child(name: String, relative: String) -> Bool:
+    """Return whether a walk descends into this directory.
+
+    Args:
+        name: The directory entry.
+        relative: The path relative to the walk root.
+
+    Returns:
+        False for a cache directory or `coverage/build`.
+    """
+    if (
+        name == ".git"
+        or name == ".venv"
+        or name == ".cache"
+        or name == "out"
+        or name == "node_modules"
+        or name == "__pycache__"
+        or name == ".agents"
+        or name == ".claude"
+    ):
+        return False
+    return relative != "coverage/build"
+
+
+def _walk_blocked(root: String, resolver: Bool) -> Bool:
+    """Return whether `root` hides a renderer-cap resolver surface.
+
+    Args:
+        root: A source or include directory.
+        resolver: True to apply the producer and consumer name rules.
+
+    Returns:
+        True when a symlink, a `std` name, or an alternate package is present.
+    """
+    if not isdir(root):
+        return True
+    var pending = List[String]()
+    pending.append(root)
+    while len(pending) > 0:
+        var directory = pending.pop()
+        var relative = String()
+        if directory != root:
+            relative = String(directory[byte = root.byte_length() + 1 :])
+        var names: List[String]
+        try:
+            names = listdir(directory)
+        except:
+            return True
+        for name in names:
+            var entry = String(name)
+            var full = directory + "/" + entry
+            if islink(full):
+                return True
+            var folded = _fold_name(entry)
+            if folded == "std" or folded.startswith("std."):
+                return True
+            var child = entry
+            if relative.byte_length() > 0:
+                child = relative + "/" + entry
+            if resolver:
+                if (
+                    (relative == "objects" or relative == "renderers")
+                    and folded.startswith("__init__.")
+                    and entry != "__init__.mojo"
+                    and entry != "__init__.mojo.cov-origin"
+                ):
+                    return True
+                var alternate = False
+                for stem in ["objects", "renderers", "line_segments2"]:
+                    if folded == stem or folded.startswith(stem + "."):
+                        alternate = True
+                if alternate and not (
+                    child == "objects"
+                    or child == "renderers"
+                    or child == "objects/line_segments2.mojo"
+                    or child == "objects/line_segments2.mojo.cov-origin"
+                ):
+                    return True
+            if isdir(full) and _kept_child(entry, child):
+                pending.append(full)
+    return False
+
+
+def _renderer_blocked(root: String) -> Bool:
+    """Return whether `root` cannot admit the strand-cap proof.
+
+    Args:
+        root: A source or include directory.
+
+    Returns:
+        True when the standard library or the producer resolver is shadowed.
+    """
+    return _walk_blocked(root, False) or _walk_blocked(root, True)
+
+
+def strand_cap_line(hashes: List[String]) -> Int:
+    """Return the admitted strand-cap line for five dependency digests.
+
+    The digests are `objects/__init__.mojo`, `renderers/__init__.mojo`,
+    `renderers/renderer.mojo`, `objects/line_segments2.mojo`, and
+    `tests/test_small_loop_witnesses.mojo`, in that order. A historical
+    endpoint is admitted only when the producer and the consumer are the
+    same reviewed pair.
+
+    Args:
+        hashes: The five dependency digests.
+
+    Returns:
+        The proof line, or `-1` when the pair is not a reviewed endpoint.
+    """
+    if len(hashes) != 5:
+        return -1
+    var init = (
+        "5f3ace6c2d6162c4a542666c21a966d54d5b98b8d4982794ea5bfbbcc4f52479"
+    )
+    var witness = (
+        "8f768e04ecaebdb132cf359819be03cb039d5a546b823674c22ac06a1b790362"
+    )
+    var old_segments = (
+        "5680f188d71c88465be6f7d8173858221a57525663fb4c75d95721fcc2658e79"
+    )
+    var new_segments = (
+        "fdff9f90123e0d3d8d3ca9b0aaf22e3b2c110c255d01a14927ce1fca8fa7d021"
+    )
+    var renderer = hashes[2]
+    var line = -1
+    if (
+        renderer
+        == "ad8d3a26292683ba744d20fa05f13491e31019540774002809bfad8ba3ae6bf5"
+    ):
+        line = 3757
+    elif (
+        renderer
+        == "08ce4d257874c1107305cc1abf45ec4ebd89a9b183902974085d507974410c45"
+    ):
+        line = 3886
+    var bases = hashes[0] == init and hashes[1] == init and hashes[4] == witness
+    if (
+        bases
+        and renderer
+        == "990d94c815315c910b12c1b126c076183fc35cdeb9f64a26d1f7e574f424bccd"
+        and hashes[3] == new_segments
+    ):
+        return 4049
+    if (
+        bases
+        and renderer
+        == "df552b5bc14d6cc5a0ef4cf919afaf66da620f431b0d4f5bb9c3a61538cb2b84"
+        and hashes[3] == new_segments
+    ):
+        return 4047
+    if (
+        bases
+        and renderer
+        == "2491b99a982cd4bc49b3573d3c6db8313bfdd47372e693e932c03c27d0ff127d"
+        and hashes[3] == new_segments
+    ):
+        return 4047
+    if line < 0 or not bases or hashes[3] != old_segments:
+        return -1
+    return line
+
+
+def run_reviews(
+    root_text: String, module: String, includes: List[String]
+) raises -> Int:
     """Print reviewed proofs for one module.
 
     Args:
         root_text: The source root.
         module: The module name, without `.mojo`.
+        includes: Extra directories checked for resolver shadows.
 
     Returns:
         Zero after the proofs are printed.
@@ -2129,6 +2313,16 @@ def run_reviews(root_text: String, module: String) raises -> Int:
     Raises:
         Error: When the table or a dependency file cannot be read.
     """
+    if module == "renderers/renderer":
+        var blocked = _renderer_blocked(_resolve(root_text))
+        var include_index = 0
+        while include_index < len(includes) and not blocked:
+            if _renderer_blocked(_resolve(includes[include_index])):
+                blocked = True
+            include_index += 1
+        if blocked:
+            print("[]")
+            return 0
     var table = _load_reviews()
     var nodes = _reviewed_nodes(table, _resolve(root_text), module)
     var order = List[Int]()
@@ -2197,9 +2391,23 @@ def run_cli(arguments: List[String]) raises -> Int:
             )
         return run_mask(arguments[2], arguments[4])
     if len(arguments) > 0 and arguments[0] == "reviews":
-        if len(arguments) != 3:
-            raise Error("usage: coverage_loop_seal reviews ROOT MODULE")
-        return run_reviews(arguments[1], arguments[2])
+        if len(arguments) < 3:
+            raise Error(
+                "usage: coverage_loop_seal reviews ROOT MODULE [--include DIR]"
+            )
+        var includes = List[String]()
+        var include_at = 3
+        while include_at < len(arguments):
+            if arguments[include_at] != "--include" or include_at + 1 >= len(
+                arguments
+            ):
+                raise Error(
+                    "usage: coverage_loop_seal reviews ROOT MODULE [--include"
+                    " DIR]"
+                )
+            includes.append(arguments[include_at + 1])
+            include_at += 2
+        return run_reviews(arguments[1], arguments[2], includes)
     if len(arguments) > 0 and (
         arguments[0] == "prepare-report" or arguments[0] == "finish-report"
     ):
