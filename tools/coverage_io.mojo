@@ -1748,6 +1748,35 @@ def _start(command: List[String], output: Int) raises -> Tuple[Int, Int]:
     return (pid, errors[0])
 
 
+def _emit(text: String):
+    """Write `text` and a newline to standard output without buffering.
+
+    Args:
+        text: One progress line, without its newline.
+    """
+    var bytes = List[UInt8]()
+    for byte in text.as_bytes():
+        bytes.append(byte)
+    bytes.append(10)
+    var pending = len(bytes)
+    var sent = 0
+    while sent < pending:
+        var count = external_call["write", Int](
+            Int32(1),
+            OpaquePointer[MutAnyOrigin](
+                unsafe_from_address=Int(bytes.unsafe_ptr()) + sent
+            ),
+            pending - sent,
+        )
+        if count < 0:
+            if errno() == 4:
+                continue
+            return
+        if count == 0:
+            return
+        sent += count
+
+
 def _progress(
     suite: String,
     stage: String,
@@ -1767,7 +1796,7 @@ def _progress(
     var phase = "waiting for probes (compile/startup)"
     if saw_probe:
         phase = "runtime probes observed"
-    print(
+    _emit(
         "Coverage "
         + suite
         + ": "

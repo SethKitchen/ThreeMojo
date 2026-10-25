@@ -315,6 +315,53 @@ def test_a_past_deadline_does_not_launch_a_compiled_capture() raises:
         raise Error(ran.output + ran.errors)
 
 
+def test_progress_is_visible_before_the_child_continues() raises:
+    """A flushed running line lets the child advance, and records stay whole."""
+    var mojo = tool_mojo()
+    var ran = run_program(
+        [
+            "sh",
+            "-c",
+            "dir=$(mktemp -d); cat > \"$dir/child.py\" << 'PY'\n"
+            "import sys, time, pathlib\n"
+            "root = pathlib.Path(sys.argv[1])\n"
+            "for index in range(2):\n"
+            "    marker = root / str(index)\n"
+            "    deadline = time.monotonic() + 8\n"
+            "    while not marker.exists():\n"
+            "        if time.monotonic() > deadline:\n"
+            "            raise SystemExit(9)\n"
+            "        time.sleep(0.001)\n"
+            "    if index == 0:\n"
+            "        sys.stderr.write('COVLINE:m:1\\n')\n"
+            "        sys.stderr.flush()\n"
+            "sys.stdout.write('diagnostic\\n')\n"
+            "raise SystemExit(7)\n"
+            "PY\n"
+            "sh tools/tool.sh "
+            + shell_quote(mojo)
+            + ' coverage_io capture --progress-seconds 0.02 --out "$dir/out"'
+            ' --err "$dir/err.gz" -- python3 "$dir/child.py" "$dir" >'
+            ' "$dir/progress" &\npid=$!\nlimit=1600\nwhile kill -0 "$pid"'
+            ' 2>/dev/null; do\n  text=$(cat "$dir/progress" 2>/dev/null ||'
+            " true)\n  case \"$text\" in\n    *'running;'*'waiting for"
+            ' probes\'*) touch "$dir/0" ;;\n  esac\n  case "$text" in\n   '
+            " *'running;'*'runtime probes observed'*) touch \"$dir/1\" ;;\n"
+            '  esac\n  limit=$((limit - 1))\n  if [ "$limit" -le 0 ]; then'
+            " echo timeout; exit 8; fi\n  sleep 0.005\ndone\nwait"
+            ' "$pid"\nstatus=$?\ntest "$status" = 7\ntest -f "$dir/0" -a -f'
+            ' "$dir/1"\ntest "$(cat "$dir/out")" = diagnostic\ntest "$(gzip'
+            " -dc \"$dir/err.gz\")\" = 'COVLINE:m:1'\ngrep -q 'start;'"
+            ' "$dir/progress"\ngrep -q \'first probe;\' "$dir/progress"\ngrep'
+            " -q 'complete (exit 7)' \"$dir/progress\"\n",
+        ],
+        20.0,
+        merge_errors=False,
+    )
+    if ran.status != 0:
+        raise Error(ran.output + ran.errors)
+
+
 def test_usage_exits_2() raises:
     var ran = run_program(
         ["sh", "tools/tool.sh", tool_mojo(), "coverage_io"],
