@@ -9,10 +9,11 @@ from std.os import makedirs
 from std.os.path import realpath
 from std.pathlib import Path
 from std.tempfile import mkdtemp
-from std.testing import TestSuite, assert_equal, assert_true
+from std.testing import TestSuite, assert_equal, assert_not_equal, assert_true
 
 from tests._tree import tool_mojo
 from tools._process import ProcessResult, run_program
+from tools._python_json import PyJson
 
 
 def _text(path: String) raises -> String:
@@ -260,6 +261,116 @@ def test_wheel_checkpoint_matches_python() raises:
         )
         assert_equal(ran.status, 0)
         _same(expected, _text(build + "/generation-inputs.json"))
+    finally:
+        _cleanup(parent)
+
+
+def _command_paths(text: String) raises -> List[String]:
+    """Return the `path` field of each compiler word."""
+    var doc = PyJson.parse(text)
+    var command = doc.at(doc.root, "compiler_command")
+    var paths = List[String]()
+    var index = 0
+    while index < doc.length(command):
+        var item = doc.item(command, index)
+        paths.append(doc.text(doc.at(item, "path")))
+        index += 1
+    return paths^
+
+
+def test_an_alias_keeps_inside_paths_and_an_external_link_stays_outside() raises:
+    """A checkout alias keeps symbolic paths, and an outside link stays absolute.
+    """
+    var parent = mkdtemp(prefix="coverage-begin-")
+    try:
+        var root = _wheel(parent)
+        var outside_dir = parent + "/external"
+        makedirs(outside_dir, exist_ok=True)
+        var outside = outside_dir + "/driver"
+        Path(outside).write_text(Path(root + "/stage/driver").read_text())
+        _ = run_program(["ln", "-s", outside, root + "/external-driver"], 10)
+        var alias = parent + "/alias"
+        _ = run_program(["ln", "-s", root, alias], 10)
+        var sources = List[String]()
+        sources.append("module.mojo")
+        var direct = (
+            root
+            + "/.venv/bin/mojo "
+            + root
+            + "/stage/driver "
+            + root
+            + "/external-driver"
+        )
+        var linked = (
+            alias
+            + "/.venv/bin/mojo "
+            + alias
+            + "/stage/driver "
+            + alias
+            + "/external-driver"
+        )
+        var ran = _mojo(
+            root, root + "/stage", "Mojo fixture", "-Werror", direct, sources
+        )
+        if ran.status != 0:
+            raise Error(ran.errors + ran.output)
+        var first = _text(root + "/stage/generation-inputs.json")
+        _python(
+            realpath("tools"),
+            root,
+            root + "/stage",
+            "Mojo fixture",
+            "-Werror",
+            direct,
+            sources,
+        )
+        _same(first, _text(root + "/stage/generation-inputs.json"))
+        var paths = _command_paths(first)
+        assert_equal(len(paths), 3)
+        assert_equal(paths[0], "@ROOT@/.venv/bin/mojo")
+        assert_equal(paths[1], "@BUILD@/driver")
+        assert_equal(paths[2], realpath(outside))
+        assert_not_equal(paths[1], paths[2])
+        _ = run_program(
+            ["rm", "-f", root + "/stage/generation-inputs.json"], 10
+        )
+        ran = _mojo(
+            alias, alias + "/stage", "Mojo fixture", "-Werror", linked, sources
+        )
+        if ran.status != 0:
+            raise Error(ran.errors + ran.output)
+        _same(first, _text(root + "/stage/generation-inputs.json"))
+        var staged = root + "/stage/driver"
+        var raw = Path(staged).read_text()
+        Path(staged).write_text(raw + "changed\n")
+        ran = _mojo(
+            alias, alias + "/stage", "Mojo fixture", "-Werror", linked, sources
+        )
+        if ran.status != 0:
+            raise Error(ran.errors + ran.output)
+        var changed = _text(root + "/stage/generation-inputs.json")
+        var changed_paths = _command_paths(changed)
+        assert_equal(changed_paths[0], paths[0])
+        assert_equal(changed_paths[1], paths[1])
+        assert_equal(changed_paths[2], paths[2])
+        assert_not_equal(first, changed)
+        Path(staged).write_text(raw)
+        var other = outside_dir + "/other-driver"
+        Path(other).write_text(Path(outside).read_text())
+        _ = run_program(["rm", "-f", root + "/external-driver"], 10)
+        _ = run_program(["ln", "-s", other, root + "/external-driver"], 10)
+        ran = _mojo(
+            alias, alias + "/stage", "Mojo fixture", "-Werror", linked, sources
+        )
+        if ran.status != 0:
+            raise Error(ran.errors + ran.output)
+        var moved = _command_paths(
+            _text(root + "/stage/generation-inputs.json")
+        )
+        assert_equal(moved[0], paths[0])
+        assert_equal(moved[1], paths[1])
+        assert_equal(moved[2], realpath(other))
+        assert_not_equal(moved[2], paths[2])
     finally:
         _cleanup(parent)
 

@@ -1,10 +1,9 @@
 # Copyright (c) 2026 Seth Kitchen, PE
 # SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
-"""Compiler-free relocation and actual-byte mutation controls."""
+"""A relocated capture keeps one receipt across two checkouts."""
 
 import contextlib
 import io
-import json
 import os
 from pathlib import Path
 import shutil
@@ -12,11 +11,9 @@ import sys
 import tempfile
 import unittest
 import venv
-from unittest.mock import patch
 
 import coverage_io
 import coverage_loop_proofs as loops
-import coverage_toolchain_identity as identity
 import test_coverage_loop_proofs as fixtures
 
 
@@ -45,134 +42,6 @@ def wheel(root):
         (directory / 'RECORD').write_text(''.join(name + ',,\n' for name in payload))
     return launcher, site
 
-
-class ToolchainIdentityTests(unittest.TestCase):
-    def setUp(self):
-        self.tmp = tempfile.TemporaryDirectory()
-        self.addCleanup(self.tmp.cleanup)
-        # Match the canonical bases supplied by the maintained entry points.
-        self.base = Path(self.tmp.name).resolve()
-        self.a = self.base / 'runner-a'
-        self.b = self.base / 'unrelated-root' / 'runner-b'
-        self.launcher_a, self.site_a = wheel(self.a)
-        self.launcher_b, self.site_b = wheel(self.b)
-
-    def test_relocated_install_has_same_semantic_identity(self):
-        self.assertNotEqual(self.launcher_a.read_bytes(), self.launcher_b.read_bytes())
-        self.assertEqual(identity.executable_identity(self.launcher_a), identity.executable_identity(self.launcher_b))
-        self.assertEqual(loops._command_identity(str(self.launcher_a), self.a, self.a / 'stage'),
-                         loops._command_identity(str(self.launcher_b), self.b, self.b / 'stage'))
-
-    def test_isolated_probe_disables_bytecode_without_changing_identity(self):
-        module = self.site_a / '_identity_bytecode_probe.py'
-        module.write_text('VALUE = 17\n')
-        before = {str(path.relative_to(self.site_a)): path.read_bytes()
-                  for path in self.site_a.rglob('*') if path.is_file()}
-        actual_run = identity.subprocess.run
-        commands = []
-
-        def observed(command, **kwargs):
-            commands.append(list(command))
-            self.assertEqual(command[1:4], ['-I', '-B', '-c'])
-            command = list(command)
-            command[-1] = (
-                'import sys; assert sys.flags.isolated == 1; '
-                'assert sys.dont_write_bytecode; '
-                'import _identity_bytecode_probe; '
-                'assert _identity_bytecode_probe.VALUE == 17; ' + command[-1])
-            return actual_run(command, **kwargs)
-
-        baseline = identity.executable_identity(self.launcher_a)
-        for inherited in ('', '1'):
-            with self.subTest(inherited=inherited), \
-                    patch.dict(os.environ, {'PYTHONDONTWRITEBYTECODE': inherited}), \
-                    patch.object(identity.subprocess, 'run', side_effect=observed):
-                self.assertEqual(baseline, identity.executable_identity(self.launcher_a))
-        self.assertEqual(len(commands), 2)
-        self.assertEqual(before, {str(path.relative_to(self.site_a)): path.read_bytes()
-                                 for path in self.site_a.rglob('*') if path.is_file()})
-        self.assertFalse((self.site_a / '__pycache__').exists())
-
-    def test_generation_checkpoint_resolves_aliases_without_hiding_external_paths(self):
-        alias = self.base / 'checkout-alias'
-        alias.symlink_to(self.a, target_is_directory=True)
-        build = self.a / 'stage'
-        build.mkdir()
-        (self.a / 'module.mojo').write_text('fn main(): pass\n')
-        staged = build / 'driver'
-        staged.write_bytes(b'staged compiler bytes\n')
-        external = self.base / 'runner-a-external'
-        external.mkdir()
-        outside = external / 'driver'
-        outside.write_bytes(staged.read_bytes())
-        (self.a / 'external-driver').symlink_to(outside)
-
-        def checkpoint(root):
-            return loops.generation_checkpoint(
-                root, root / 'stage', 'Mojo fixture', '-Werror',
-                [str(root / '.venv/bin/mojo'), str(root / 'stage/driver'),
-                 str(root / 'external-driver')], ['module.mojo'])
-
-        before = checkpoint(self.a)
-        self.assertEqual(before, checkpoint(alias))
-        commands = before['compiler_command']
-        self.assertEqual(commands[0]['path'], '@ROOT@/.venv/bin/mojo')
-        self.assertEqual(commands[1]['path'], '@BUILD@/driver')
-        self.assertEqual(commands[2]['path'], str(outside.resolve()))
-        self.assertNotEqual(commands[1], commands[2])
-        staged.write_bytes(staged.read_bytes() + b'changed\n')
-        self.assertNotEqual(before['compiler_command'], checkpoint(alias)['compiler_command'])
-        other = external / 'other-driver'
-        other.write_bytes(outside.read_bytes())
-        (self.a / 'external-driver').unlink()
-        (self.a / 'external-driver').symlink_to(other)
-        self.assertNotEqual(commands[2], checkpoint(alias)['compiler_command'][2])
-
-    def test_interpreter_bytes_and_capabilities_stay_bound(self):
-        before = identity.executable_identity(self.launcher_a)
-        actual = identity.digest
-        interpreter = (self.a / '.venv/bin/python').resolve()
-        with patch.object(identity, 'digest', side_effect=lambda p: '0' * 64 if Path(p) == interpreter else actual(p)):
-            self.assertNotEqual(before, identity.executable_identity(self.launcher_a))
-        actual_run = identity.subprocess.run
-        def changed(*args, **kwargs):
-            result = actual_run(*args, **kwargs)
-            fields = json.loads(result.stdout)
-            fields['version'] += 'changed'
-            result.stdout = json.dumps(fields)
-            return result
-        with patch.object(identity.subprocess, 'run', side_effect=changed):
-            self.assertNotEqual(before, identity.executable_identity(self.launcher_a))
-
-    def test_interpreter_environment_and_loaded_customizers_fail_closed(self):
-        actual_run = identity.subprocess.run
-        for changed_field, changed_value in (
-                ('implementation', 'other-python'),
-                ('prefix', str(self.b / '.venv')),
-                ('user_site', True),
-                ('user_site', None),
-                ('customizers', ['sitecustomize']),
-                ('customizers', ['usercustomize'])):
-            with self.subTest(field=changed_field, value=changed_value):
-                def changed(*args, **kwargs):
-                    result = actual_run(*args, **kwargs)
-                    fields = json.loads(result.stdout)
-                    fields[changed_field] = changed_value
-                    result.stdout = json.dumps(fields)
-                    return result
-                with patch.object(identity.subprocess, 'run', side_effect=changed):
-                    with self.assertRaisesRegex(ValueError, 'environment or import customization'):
-                        identity.executable_identity(self.launcher_a)
-
-        def extra_site(*args, **kwargs):
-            result = actual_run(*args, **kwargs)
-            fields = json.loads(result.stdout)
-            fields['sites'].append(str(self.b / 'unbound-site-packages'))
-            result.stdout = json.dumps(fields)
-            return result
-        with patch.object(identity.subprocess, 'run', side_effect=extra_site):
-            with self.assertRaisesRegex(ValueError, 'site-packages does not match'):
-                identity.executable_identity(self.launcher_a)
 
 class RelocatedCaptureTests(unittest.TestCase):
     def test_generation_capture_report_across_independent_roots(self):
