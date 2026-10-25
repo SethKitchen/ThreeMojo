@@ -228,6 +228,12 @@ The rounded guard keeps the low and high tests.
 The other tokens match the pin.
 A changed error guard or a changed body is refused.
 
+Mojo checks the live winner-seed room.
+The followup uses the capped cell count.
+The length guard and the early term return stay absent.
+The other tokens match the pin.
+A restored guard or a changed body is refused.
+
 ## Candidate certificate
 
 A certificate contains a stored incumbent point and its road parameter.
