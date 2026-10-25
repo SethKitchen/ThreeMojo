@@ -87,6 +87,11 @@ The legacy source and the live source share one digest.
 Five stored-half calls become half products.
 A changed term and a moved auxiliary are refused.
 
+Mojo checks the try-only reuse refusal.
+The live proof keeps require_reuse with default False.
+The refusal returns the unknown point and keeps one use.
+A changed parameter, refusal, or extra use is refused.
+
 ## Candidate certificate
 
 A certificate contains a stored incumbent point and its road parameter.
