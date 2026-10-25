@@ -184,6 +184,11 @@ The pin keys, schema, and lineage hashes stay fixed.
 The live helper keeps the pinned token graph.
 A changed pin or a changed helper is refused.
 
+Mojo checks the live Sum2 guard callers.
+The pin names each caller function.
+Live callers that match the pin keep that token graph.
+A changed caller function or a changed routing is refused.
+
 ## Candidate certificate
 
 A certificate contains a stored incumbent point and its road parameter.
