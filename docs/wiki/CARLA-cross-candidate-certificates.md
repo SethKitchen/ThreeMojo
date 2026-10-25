@@ -246,6 +246,12 @@ The walk keeps the candidate deviation skip.
 The other tokens match the pin.
 A removed skip or a changed body is refused.
 
+Mojo checks the live lane search.
+Ten reviewed spans keep the live search body.
+Restoring those spans matches the pin.
+The expansion context stays in place.
+A moved span or a changed body is refused.
+
 ## Candidate certificate
 
 A certificate contains a stored incumbent point and its road parameter.
