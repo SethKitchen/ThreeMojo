@@ -1818,8 +1818,13 @@ def _report(arguments: List[String]) raises -> Int:
         var folder = mkdtemp(prefix="threemojo-loop-report-")
         manifest = folder + "/manifest.txt"
         var prepare = List[String]()
-        prepare.append("python3")
-        prepare.append("tools/coverage_io.py")
+        prepare.append("sh")
+        prepare.append("tools/tool.sh")
+        if mojo.byte_length() > 0:
+            prepare.append(mojo)
+        else:
+            prepare.append(".venv/bin/mojo")
+        prepare.append("coverage_loop_seal")
         prepare.append("prepare-report")
         prepare.append("--capture-dir")
         prepare.append(directory)
@@ -1862,8 +1867,13 @@ def _report(arguments: List[String]) raises -> Int:
     var status = _replay(reporter, captures)
     if manifest.byte_length() > 0:
         var finish = List[String]()
-        finish.append("python3")
-        finish.append("tools/coverage_io.py")
+        finish.append("sh")
+        finish.append("tools/tool.sh")
+        if mojo.byte_length() > 0:
+            finish.append(mojo)
+        else:
+            finish.append(".venv/bin/mojo")
+        finish.append("coverage_loop_seal")
         finish.append("finish-report")
         finish.append("--capture-dir")
         finish.append(directory)

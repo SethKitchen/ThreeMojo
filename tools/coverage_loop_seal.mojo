@@ -10,7 +10,8 @@
 
 The file `loop-proofs.json` matches `coverage_loop_proofs.py seal` for
 literal ranges, literal lists, and reviewed proofs whose dependency
-digests match `tools/coverage_reviewed_loops.json`.
+digests match `tools/coverage_reviewed_loops.json`. `prepare-report`
+checks that receipt and writes the masked manifest.
 """
 
 from std.os import listdir
@@ -18,10 +19,18 @@ from std.os.path import isdir, isfile, islink, realpath
 from std.pathlib import Path
 from std.sys import argv, exit, stderr
 
-from tools._python_json import PY_DICT, PyJson, dumps_canonical
+from tools._python_json import PY_DICT, PY_LIST, PY_STR, PyJson, dumps_canonical
 from tools._sha256 import sha256_hex
 from tools.cache_key import input_paths
-from tools.coverage_io import _execution_contract, _hash_inputs
+from tools.coverage_io import (
+    _base_name,
+    _execution_contract,
+    _expected_command,
+    _hash_inputs,
+    _read_receipt,
+    _reject_duplicate_keys,
+    _stem_name,
+)
 from tools.coverage_loop_begin import (
     _checkpoint,
     _hash_file,
@@ -1223,8 +1232,9 @@ def run_seal(
     cache_text: String,
     suites: List[String],
     saw_suites: Bool,
-) raises -> Int:
-    """Write `loop-proofs.json` for one staged tree.
+    publish: Bool,
+) raises -> String:
+    """Build the loop receipt for one staged tree.
 
     Args:
         root_text: The repository root.
@@ -1235,9 +1245,10 @@ def run_seal(
         cache_text: The capture cache, or empty for the default.
         suites: The capture suites.
         saw_suites: True when `--suites` was present.
+        publish: True to write `loop-proofs.json` and print the digest.
 
     Returns:
-        Zero after the receipt is written.
+        The canonical receipt text.
 
     Raises:
         Error: When the stage, the sources, or a proof cannot be bound.
@@ -1504,16 +1515,576 @@ def run_seal(
     doc.set(denominator, "required_total", doc.new_int(counts[7]))
     doc.set(receipt, "denominator", denominator)
     var body = dumps_canonical(doc, receipt)
-    var envelope = PyJson()
-    var holder = envelope.new_dict()
-    envelope.root = holder
-    envelope.set(holder, "receipt", envelope.adopt(doc, receipt))
-    envelope.set(
-        holder, "sha256", envelope.new_str(sha256_hex(body.as_bytes()))
+    var digest = sha256_hex(body.as_bytes())
+    if publish:
+        var envelope = PyJson()
+        var holder = envelope.new_dict()
+        envelope.root = holder
+        envelope.set(holder, "receipt", envelope.adopt(doc, receipt))
+        envelope.set(holder, "sha256", envelope.new_str(digest))
+        Path(_join(build, "loop-proofs.json")).write_text(
+            envelope.dumps() + "\n"
+        )
+        print("Loop proofs:", digest, _denom(counts))
+    return body
+
+
+def _verify_receipt(
+    root: String,
+    build: String,
+    compiler: String,
+    flags: String,
+    mojo: String,
+    cache: String,
+    suites: List[String],
+    saw_suites: Bool,
+) raises -> String:
+    """Rederive the receipt and require it to match the saved file.
+
+    Args:
+        root: The repository root.
+        build: The build directory.
+        compiler: The compiler text.
+        flags: The flag text.
+        mojo: The producer command.
+        cache: The capture cache, or empty for the default.
+        suites: The capture suites.
+        saw_suites: True when `--suites` was present.
+
+    Returns:
+        The canonical receipt text.
+
+    Raises:
+        Error: When the saved receipt does not match the current tree.
+    """
+    var producer = mojo
+    if producer.byte_length() == 0:
+        producer = ".venv/bin/mojo"
+    var expected = run_seal(
+        root,
+        build,
+        compiler,
+        flags,
+        producer,
+        cache,
+        suites,
+        saw_suites,
+        False,
     )
-    Path(_join(build, "loop-proofs.json")).write_text(envelope.dumps() + "\n")
-    print("Loop proofs:", sha256_hex(body.as_bytes()), _denom(counts))
-    return 0
+    var saved = _read_receipt(_join(_resolve(build), "loop-proofs.json"))
+    var body = dumps_canonical(saved, saved.at(saved.root, "receipt"))
+    if body != expected:
+        raise Error(
+            "Stale or modified loop proof, source, tool, manifest, or compiler"
+            " binding"
+        )
+    return body
+
+
+def _report_consumer(doc: PyJson) raises:
+    """Require the receipt to name the executing report wrapper.
+
+    Args:
+        doc: The saved receipt envelope.
+
+    Raises:
+        Error: When `tools/coverage_io.py` is not the sealed wrapper.
+    """
+    var receipt = doc.at(doc.root, "receipt")
+    var recorded = doc.find(
+        doc.at(receipt, "root_inputs"), "tools/coverage_io.py"
+    )
+    var actual = _hash_file(_join(_resolve("."), "tools/coverage_io.py"))
+    if recorded < 0 or doc.text(recorded) != actual:
+        raise Error("Stale or modified executing capture/report wrapper")
+
+
+def _capture_names(directory: String) raises -> List[String]:
+    """Return the `.txt.gz` captures in `directory`, in byte order.
+
+    Args:
+        directory: The capture directory.
+
+    Returns:
+        The capture paths. Empty when the directory has none.
+
+    Raises:
+        Error: If the directory cannot be read.
+    """
+    var names = List[String]()
+    if not isdir(directory):
+        return names^
+    for name in listdir(directory):
+        var text = String(name)
+        if text.endswith(".txt.gz"):
+            names.append(directory + "/" + text)
+    var index = 1
+    while index < len(names):
+        var item = names[index]
+        var place = index
+        while place > 0 and names[place - 1] > item:
+            names[place] = names[place - 1]
+            place -= 1
+        names[place] = item
+        index += 1
+    return names^
+
+
+def _verify_captures(directory: String, envelope: PyJson) raises:
+    """Require each capture binding to match the sealed receipt.
+
+    Args:
+        directory: The capture directory.
+        envelope: The saved receipt envelope.
+
+    Raises:
+        Error: When a capture binding is missing or stale.
+    """
+    var receipt = envelope.at(envelope.root, "receipt")
+    var proof_sha = envelope.text(envelope.at(envelope.root, "sha256"))
+    var execution = envelope.at(receipt, "execution")
+    for capture in _capture_names(directory):
+        var text = Path(capture + ".proof.json").read_text()
+        _reject_duplicate_keys(text)
+        var doc = PyJson.parse(text)
+        var node = doc.root
+        if doc.kind(node) != PY_DICT or doc.length(node) != 9:
+            raise Error(
+                "Malformed coverage capture receipt: " + _base_name(capture)
+            )
+        var wanted = List[String]()
+        wanted.append("schema")
+        wanted.append("proof_sha256")
+        wanted.append("capture")
+        wanted.append("capture_sha256")
+        wanted.append("output")
+        wanted.append("output_sha256")
+        wanted.append("command")
+        wanted.append("suite")
+        wanted.append("profile")
+        for key in wanted:
+            if doc.find(node, key) < 0:
+                raise Error(
+                    "Malformed coverage capture receipt: " + _base_name(capture)
+                )
+        var command = doc.at(node, "command")
+        if doc.kind(command) != PY_LIST or doc.length(command) == 0:
+            raise Error("Missing coverage capture command identity")
+        var words = List[String]()
+        for index in range(doc.length(command)):
+            var item = doc.item(command, index)
+            if doc.kind(item) != PY_STR:
+                raise Error("Missing coverage capture command identity")
+            words.append(doc.text(item))
+        var suite = doc.text(doc.at(node, "suite"))
+        var profile = doc.text(doc.at(node, "profile"))
+        var expected = _expected_command(envelope, execution, suite, profile)
+        if len(words) != len(expected):
+            raise Error("Modified capture command provenance")
+        for index in range(len(words)):
+            if words[index] != expected[index]:
+                raise Error("Modified capture command provenance")
+        var stem = _stem_name(suite)
+        if (
+            doc.text(doc.at(node, "capture")) != stem + ".txt.gz"
+            or doc.text(doc.at(node, "output")) != stem + ".out"
+        ):
+            raise Error("Capture files do not identify the recorded suite")
+        var output = doc.text(doc.at(node, "output"))
+        if (
+            output.byte_length() == 0
+            or output == "."
+            or output == ".."
+            or output.find("/") >= 0
+        ):
+            raise Error("Invalid coverage output identity")
+        var slash = capture.rfind("/")
+        var output_path = output
+        if slash >= 0:
+            output_path = String(capture[byte=:slash]) + "/" + output
+        if (
+            doc.text(doc.at(node, "schema")) != "constant-loops-v2"
+            or doc.text(doc.at(node, "proof_sha256")) != proof_sha
+            or doc.text(doc.at(node, "capture")) != _base_name(capture)
+            or doc.text(doc.at(node, "capture_sha256")) != _hash_file(capture)
+            or doc.text(doc.at(node, "output_sha256"))
+            != _hash_file(output_path)
+        ):
+            raise Error(
+                "Stale or modified coverage capture: " + _base_name(capture)
+            )
+
+
+def _manifest_lines(raw: List[UInt8]) -> List[String]:
+    """Return manifest lines the way Python `splitlines` does.
+
+    Args:
+        raw: The manifest bytes.
+
+    Returns:
+        The lines, without their breaks.
+    """
+    var text = (
+        String(from_utf8_lossy=raw).replace("\r\n", "\n").replace("\r", "\n")
+    )
+    var parts = text.split("\n")
+    var lines = List[String]()
+    var data = text.as_bytes()
+    var limit = len(parts)
+    if len(data) > 0 and data[len(data) - 1] == 10 and limit > 0:
+        limit -= 1
+    var index = 0
+    while index < limit:
+        lines.append(String(parts[index]))
+        index += 1
+    return lines^
+
+
+def _words(line: String) -> List[String]:
+    """Split `line` on ASCII whitespace.
+
+    Args:
+        line: One manifest line.
+
+    Returns:
+        The fields.
+    """
+    var fields = List[String]()
+    var current = String()
+    for byte in line.as_bytes():
+        if byte == 32 or byte == 9 or byte == 11 or byte == 12:
+            if current.byte_length() > 0:
+                fields.append(current)
+                current = String()
+        else:
+            current += chr(Int(byte))
+    if current.byte_length() > 0:
+        fields.append(current)
+    return fields^
+
+
+def _masked_manifest(raw: List[UInt8], envelope: PyJson) raises -> String:
+    """Return the manifest with proved branches masked.
+
+    Args:
+        raw: The original manifest.
+        envelope: The saved receipt envelope.
+
+    Returns:
+        The masked manifest text, including its final newline.
+
+    Raises:
+        Error: When a proof does not name one original branch.
+    """
+    var receipt = envelope.at(envelope.root, "receipt")
+    if _digest(raw) != envelope.text(envelope.at(receipt, "manifest_sha256")):
+        raise Error("Loop-proof manifest binding mismatch")
+    _ = _manifest_records(raw)
+    var proofs = envelope.at(receipt, "proofs")
+    var digest = envelope.text(envelope.at(envelope.root, "sha256"))
+    var text = "P constant-loops-v2 " + digest + "\n"
+    var used = 0
+    for line in _manifest_lines(raw):
+        var fields = _words(line)
+        var replaced = line
+        if len(fields) >= 3 and fields[0] == "B":
+            var index = 0
+            while index < envelope.length(proofs):
+                var proof = envelope.item(proofs, index)
+                var line_text = envelope.text(envelope.at(proof, "line"))
+                if (
+                    envelope.text(envelope.at(proof, "module")) == fields[1]
+                    and line_text == fields[2]
+                ):
+                    replaced = (
+                        "R "
+                        + fields[1]
+                        + " "
+                        + fields[2]
+                        + " "
+                        + envelope.text(envelope.at(proof, "required"))
+                        + " "
+                        + envelope.text(envelope.at(proof, "kind"))
+                        + " "
+                        + envelope.text(envelope.at(proof, "cardinality"))
+                    )
+                    used += 1
+                index += 1
+        text += replaced + "\n"
+    if used != envelope.length(proofs):
+        raise Error("Loop proof does not identify one original branch")
+    return text
+
+
+def _ends_with_manifest(command: List[String], build: String) raises:
+    """Require the report command to end with the original manifest.
+
+    Args:
+        command: The reporter command.
+        build: The resolved build directory.
+
+    Raises:
+        Error: When the last argument is not `manifest.txt`.
+    """
+    if len(command) == 0:
+        raise Error("The report command must end with the original manifest")
+    var original = _resolve(_join(build, "manifest.txt"))
+    var given = _resolve(command[len(command) - 1])
+    if given != original:
+        raise Error("The report command must end with the original manifest")
+
+
+def _report_settings(
+    arguments: List[String],
+) raises -> List[String]:
+    """Read the shared report flags.
+
+    Args:
+        arguments: The arguments after the mode.
+
+    Returns:
+        Root, build, compiler, flags, mojo, cache, capture directory, and
+        manifest path. The manifest path is empty for `finish-report`.
+
+    Raises:
+        Error: When a required flag is absent.
+    """
+    var root = String()
+    var build = String()
+    var compiler = String()
+    var flags = String()
+    var mojo = String()
+    var cache = String()
+    var directory = String()
+    var manifest = String()
+    var index = 0
+    while index < len(arguments):
+        var word = arguments[index]
+        if word == "--":
+            break
+        if word == "--loop-proof-root" and index + 1 < len(arguments):
+            root = arguments[index + 1]
+            index += 2
+        elif word.startswith("--loop-proof-root="):
+            root = String(word[byte=18:])
+            index += 1
+        elif word == "--loop-proof-build" and index + 1 < len(arguments):
+            build = arguments[index + 1]
+            index += 2
+        elif word.startswith("--loop-proof-build="):
+            build = String(word[byte=19:])
+            index += 1
+        elif word == "--capture-dir" and index + 1 < len(arguments):
+            directory = arguments[index + 1]
+            index += 2
+        elif word.startswith("--capture-dir="):
+            directory = String(word[byte=14:])
+            index += 1
+        elif word == "--manifest" and index + 1 < len(arguments):
+            manifest = arguments[index + 1]
+            index += 2
+        elif word.startswith("--manifest="):
+            manifest = String(word[byte=11:])
+            index += 1
+        elif word == "--compiler" and index + 1 < len(arguments):
+            compiler = arguments[index + 1]
+            index += 2
+        elif word.startswith("--compiler="):
+            compiler = String(word[byte=11:])
+            index += 1
+        elif word == "--flags" and index + 1 < len(arguments):
+            flags = arguments[index + 1]
+            index += 2
+        elif word.startswith("--flags="):
+            flags = String(word[byte=8:])
+            index += 1
+        elif word == "--mojo" and index + 1 < len(arguments):
+            mojo = arguments[index + 1]
+            index += 2
+        elif word.startswith("--mojo="):
+            mojo = String(word[byte=7:])
+            index += 1
+        elif word == "--capture-cache" and index + 1 < len(arguments):
+            cache = arguments[index + 1]
+            index += 2
+        elif word.startswith("--capture-cache="):
+            cache = String(word[byte=16:])
+            index += 1
+        elif word == "--suites":
+            index += 1
+        else:
+            index += 1
+    var result = List[String]()
+    result.append(root)
+    result.append(build)
+    result.append(compiler)
+    result.append(flags)
+    result.append(mojo)
+    result.append(cache)
+    result.append(directory)
+    result.append(manifest)
+    return result^
+
+
+def _report_suites(arguments: List[String]) -> List[String]:
+    """Return the suites named after `--suites`.
+
+    Args:
+        arguments: The arguments after the mode.
+
+    Returns:
+        The suite paths. Empty when `--suites` is absent.
+    """
+    var suites = List[String]()
+    var taking = False
+    for word in arguments:
+        if word == "--":
+            break
+        if taking and not word.startswith("--"):
+            suites.append(word)
+            continue
+        taking = False
+        if word == "--suites":
+            taking = True
+    return suites^
+
+
+def _saw_suites(arguments: List[String]) -> Bool:
+    """Return whether `--suites` is present.
+
+    Args:
+        arguments: The arguments after the mode.
+
+    Returns:
+        True when the flag is present.
+    """
+    for word in arguments:
+        if word == "--":
+            break
+        if word == "--suites":
+            return True
+    return False
+
+
+def _report_command(arguments: List[String]) -> List[String]:
+    """Return the command after `--`.
+
+    Args:
+        arguments: The arguments after the mode.
+
+    Returns:
+        The command words.
+    """
+    var command = List[String]()
+    var index = 0
+    while index < len(arguments):
+        if arguments[index] == "--":
+            index += 1
+            while index < len(arguments):
+                command.append(arguments[index])
+                index += 1
+            break
+        index += 1
+    return command^
+
+
+def _prepare_report(arguments: List[String]) raises:
+    """Check the receipt and write the masked manifest.
+
+    Args:
+        arguments: The arguments after `prepare-report`.
+
+    Raises:
+        Error: When the receipt, a capture, or the manifest cannot be bound.
+    """
+    var settings = _report_settings(arguments)
+    var command = _report_command(arguments)
+    var root = _resolve(settings[0])
+    var build = _resolve(settings[1])
+    _ends_with_manifest(command, build)
+    var suites = _report_suites(arguments)
+    var saw = _saw_suites(arguments)
+    _ = _verify_receipt(
+        settings[0],
+        settings[1],
+        settings[2],
+        settings[3],
+        settings[4],
+        settings[5],
+        suites,
+        saw,
+    )
+    var saved = _read_receipt(_join(build, "loop-proofs.json"))
+    _report_consumer(saved)
+    _verify_captures(settings[6], saved)
+    var masked = _masked_manifest(
+        Path(_join(build, "manifest.txt")).read_bytes(), saved
+    )
+    Path(settings[7]).write_text(masked)
+    print(
+        "Validated loop-proof binding "
+        + saved.text(saved.at(saved.root, "sha256"))
+    )
+
+
+def _finish_report(arguments: List[String]) raises:
+    """Require the receipt to stay the same through the report.
+
+    Args:
+        arguments: The arguments after `finish-report`.
+
+    Raises:
+        Error: When the receipt changes or a capture binding is stale.
+    """
+    var settings = _report_settings(arguments)
+    var suites = _report_suites(arguments)
+    var saw = _saw_suites(arguments)
+    var first = _verify_receipt(
+        settings[0],
+        settings[1],
+        settings[2],
+        settings[3],
+        settings[4],
+        settings[5],
+        suites,
+        saw,
+    )
+    var saved = _read_receipt(_join(_resolve(settings[1]), "loop-proofs.json"))
+    _report_consumer(saved)
+    var second = _verify_receipt(
+        settings[0],
+        settings[1],
+        settings[2],
+        settings[3],
+        settings[4],
+        settings[5],
+        suites,
+        saw,
+    )
+    if first != second:
+        raise Error("Loop-proof identity changed during reporting")
+    _verify_captures(settings[6], saved)
+
+
+def _report_main(mode: String, arguments: List[String]) -> Int:
+    """Run one report check and print Python's error text.
+
+    Args:
+        mode: `prepare-report` or `finish-report`.
+        arguments: The arguments after the mode.
+
+    Returns:
+        Zero after the check, or 1 when it fails.
+    """
+    try:
+        if mode == "prepare-report":
+            _prepare_report(arguments)
+        else:
+            _finish_report(arguments)
+        return 0
+    except error:
+        print("coverage_io: " + String(error), file=stderr)
+        return 1
 
 
 def run_reviews(root_text: String, module: String) raises -> Int:
@@ -1590,6 +2161,13 @@ def run_cli(arguments: List[String]) raises -> Int:
         if len(arguments) != 3:
             raise Error("usage: coverage_loop_seal reviews ROOT MODULE")
         return run_reviews(arguments[1], arguments[2])
+    if len(arguments) > 0 and (
+        arguments[0] == "prepare-report" or arguments[0] == "finish-report"
+    ):
+        var rest = List[String]()
+        for index in range(1, len(arguments)):
+            rest.append(arguments[index])
+        return _report_main(arguments[0], rest)
     var root = String()
     var build = String()
     var compiler = String()
@@ -1674,9 +2252,10 @@ def run_cli(arguments: List[String]) raises -> Int:
         or not saw_mojo
     ):
         raise Error(_usage())
-    return run_seal(
-        root, build, compiler, flags, mojo, cache, suites, saw_suites
+    _ = run_seal(
+        root, build, compiler, flags, mojo, cache, suites, saw_suites, True
     )
+    return 0
 
 
 def main() raises:

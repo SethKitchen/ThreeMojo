@@ -297,7 +297,7 @@ Each successful capture receives a `*.txt.gz.proof.json` receipt binding those i
 
 Filenames must identify the same suite. The command stored in the receipt is its validated canonical form, not an unchecked command log. Inputs are checked before and after execution, and a failed replacement attempt removes its old success receipt before preflight. Shard placement and the supported raw/AOT transport choice do not change loop meanings or select different proofs.
 
-The official `coverage_io.py report` path independently rederives proofs, validates all source/tool/capture bindings, and creates a temporary manifest. Its final check must match the exact initial receipt; concurrent source changes followed by a successful reseal cannot return an old success. A `P constant-loops-v2 <sha256>` record identifies the validated proof receipt.
+The official report path rederives the loop receipt in `tools/coverage_loop_seal.mojo`, checks the source, tool, and capture bindings, and writes a temporary manifest. Its final check must match the exact initial receipt; concurrent source changes followed by a successful reseal cannot return an old success. A `P constant-loops-v2 <sha256>` record identifies the validated proof receipt.
 
 Each affected `B module line` becomes an `R` outcome record. Literal records use `literal-range` or `literal-list` and their exact cardinality. Reviewed range records use `reviewed-nonempty-range`. Reviewed byte and child iterators use `reviewed-nonempty-iterator`. Both reasons require True with minimum cardinality one. All other entries remain unchanged.
 

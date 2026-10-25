@@ -312,6 +312,145 @@ def test_density_reviews_match_python() raises:
         _cleanup(parent)
 
 
+def test_prepare_report_matches_python() raises:
+    var parent = mkdtemp(prefix="coverage-report-")
+    try:
+        var root = parent + "/repo"
+        var build = root + "/stage"
+        var script = parent + "/oracle.py"
+        Path(script).write_text(_oracle())
+        var sealed = run_program(
+            ["python3", script, realpath("tools"), realpath("."), root, build],
+            30.0,
+            merge_errors=False,
+        )
+        if sealed.status != 0:
+            raise Error(sealed.errors + sealed.output)
+        var hits = parent + "/hits"
+        _ = run_program(["mkdir", "-p", hits], 10)
+        var py_manifest = parent + "/py-manifest.txt"
+        var prepare = parent + "/prepare.py"
+        Path(prepare).write_text(
+            "import sys\nfrom pathlib import Path\nsys.path.insert(0,"
+            " sys.argv[1])\nimport coverage_io\nroot ="
+            " Path(sys.argv[2]).resolve()\nbuild ="
+            " Path(sys.argv[3]).resolve()\nmanifest ="
+            " Path(sys.argv[4])\ndriver = str((root /"
+            " 'driver').resolve())\ncoverage_io.prepare_report(['reporter',"
+            " str((build / 'manifest.txt').resolve())], [], root, build,"
+            " 'Mojo fixture', '-I .', driver, None, [], manifest)\n"
+        )
+        var py = run_program(
+            [
+                "python3",
+                prepare,
+                realpath("tools"),
+                root,
+                build,
+                py_manifest,
+            ],
+            30.0,
+            merge_errors=False,
+        )
+        if py.status != 0:
+            raise Error(py.errors + py.output)
+        var mojo_manifest = parent + "/mojo-manifest.txt"
+        var ran = run_program(
+            [
+                "sh",
+                "tools/tool.sh",
+                tool_mojo(),
+                "coverage_loop_seal",
+                "prepare-report",
+                "--capture-dir",
+                hits,
+                "--loop-proof-root",
+                root,
+                "--loop-proof-build",
+                build,
+                "--manifest",
+                mojo_manifest,
+                "--compiler",
+                "Mojo fixture",
+                "--flags",
+                "-I .",
+                "--mojo",
+                root + "/driver",
+                "--",
+                "reporter",
+                build + "/manifest.txt",
+            ],
+            30.0,
+            merge_errors=False,
+        )
+        if ran.status != 0:
+            raise Error(ran.errors + ran.output)
+        _same(_text(py_manifest), _text(mojo_manifest))
+        assert_equal(ran.output, py.output)
+        var finished = run_program(
+            [
+                "sh",
+                "tools/tool.sh",
+                tool_mojo(),
+                "coverage_loop_seal",
+                "finish-report",
+                "--capture-dir",
+                hits,
+                "--loop-proof-root",
+                root,
+                "--loop-proof-build",
+                build,
+                "--compiler",
+                "Mojo fixture",
+                "--flags",
+                "-I .",
+                "--mojo",
+                root + "/driver",
+            ],
+            30.0,
+            merge_errors=False,
+        )
+        if finished.status != 0:
+            raise Error(finished.errors + finished.output)
+        var refused = run_program(
+            [
+                "sh",
+                "tools/tool.sh",
+                tool_mojo(),
+                "coverage_loop_seal",
+                "prepare-report",
+                "--capture-dir",
+                hits,
+                "--loop-proof-root",
+                root,
+                "--loop-proof-build",
+                build,
+                "--manifest",
+                mojo_manifest,
+                "--compiler",
+                "Mojo fixture",
+                "--flags",
+                "-I .",
+                "--mojo",
+                root + "/driver",
+                "--",
+                "reporter",
+                "missing-manifest",
+            ],
+            30.0,
+            merge_errors=False,
+        )
+        assert_equal(refused.status, 1)
+        assert_true(
+            refused.errors.find(
+                "The report command must end with the original manifest"
+            )
+            >= 0
+        )
+    finally:
+        _cleanup(parent)
+
+
 def test_usage_exits_2() raises:
     var ran = run_program(
         ["sh", "tools/tool.sh", tool_mojo(), "coverage_loop_seal"],
