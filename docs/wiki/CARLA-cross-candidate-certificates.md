@@ -40,6 +40,10 @@ It checks that table's transcription, not the clothoid itself.
 This repository has no general error bound for the stored spiral against the exact clothoid.
 The [CARLA page](CARLA) reports the retained fixture agreement with a fine numerical integral.
 
+The stored table declaration is read in Mojo.
+A bad encoding, a bad shape, a bad word, and the wrong word count are refused.
+The Python checker still derives the coefficients.
+
 ## Candidate certificate
 
 A certificate contains a stored incumbent point and its road parameter.
