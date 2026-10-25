@@ -59,7 +59,26 @@ The cloth solver is extended position-based dynamics, XPBD. Each frame is cut in
 
 The constraints are colored so that no two of one color share a particle. This is the method of Vivace, by Fratarcangeli, Tibaldo and Pellacini. `color_constraints` colors them greedily. The constraints of one color are solved at once, each on its own two particles. So a step gives the same result, bit for bit, on one thread or on many. `test_many_threads_settle_the_cloth_as_one_does` checks this on a sheet of 1,600 particles.
 
-A GPU kernel can run the same schedule. This repository does not have one yet, because the CPU solve of a cloak takes under a millisecond a frame. A GPU kernel is worth it for many cloaks, or for a garment of many thousand particles.
+## On a GPU
+
+`GpuCloth` steps a `ClothSolver` on a GPU, with the same substeps and the same colors. Make it once from the cloth, then call its `step` where you call the cloth's own.
+
+```mojo
+from extensions.attire.cloth_gpu import GpuCloth
+
+var gpu = GpuCloth(cloak.solver)
+gpu.step(cloak.solver, Duration(1.0 / 30.0, SECOND))
+```
+
+Each substep runs three kernels, as the CPU step runs three loops.
+
+1. `predict_kernel` moves each particle on, one thread to a particle.
+2. `relax_kernel` settles one color, one thread to a constraint. It runs once for each color.
+3. `settle_kernel` holds each free particle to its tether and pushes it out of each capsule.
+
+The kernels call the CPU solver's own arithmetic: `glide`, `predict`, `relax_pair`, `settle` and `push_out`. So the two solves agree but for the device's fused multiplies and adds. `step` reads the pins' targets, the colliders and the settings from the cloth each time, and writes the particles back to it.
+
+A cloak of a few hundred particles steps in well under a millisecond on the CPU. The GPU pays for itself with many cloaks, or with a garment of many thousand particles.
 
 ## Cloaks
 
@@ -69,4 +88,4 @@ A GPU kernel can run the same schedule. This repository does not have one yet, b
 
 ## Tests
 
-`tests/test_attire_springs.mojo` and `tests/test_attire_cloth.mojo` cover this page.
+`tests/test_attire_springs.mojo` and `tests/test_attire_cloth.mojo` cover this page. `tests/test_attire_cloth_gpu.mojo` steps one sheet on the CPU and on a GPU and compares every particle. It runs only on a machine with a GPU. Its bound of two millimeters has not yet been measured on one.

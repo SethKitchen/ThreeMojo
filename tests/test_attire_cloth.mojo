@@ -19,6 +19,10 @@ from extensions.attire.cloth import (
     add_cloak,
     cloth_grid,
     color_constraints,
+    glide,
+    predict,
+    relax_pair,
+    settle,
 )
 from extensions.attire.kinds import FabricKind
 from extensions.attire.springs import SpringCollider
@@ -270,6 +274,37 @@ def test_a_cloak_hangs_from_the_shoulders_and_moves() raises:
     cut.fabric = FabricKind(42)
     with assert_raises(contains="named kind"):
         _ = add_cloak(scene, assets, person, cut)
+
+
+def test_the_shared_arithmetic_moves_one_particle_at_a_time() raises:
+    # A pinned particle glides a share of the way to its target.
+    var halfway = glide(Vector3(0, 0, 0), Vector3(2, 0, 0), 0.5)
+    assert_almost_equal(halfway.x, 1)
+    # A free particle keeps its damped velocity and falls.
+    var next = predict(
+        Vector3(1, 0, 0), Vector3(0, 0, 0), 0.5, Vector3(0, -0.1, 0)
+    )
+    assert_almost_equal(next.x, 1.5)
+    assert_almost_equal(next.y, -0.1)
+    # A stretched pair of equal weights closes evenly; a stiff one closes
+    # all the way.
+    var moved = relax_pair(Vector3(0, 0, 0), Vector3(2, 0, 0), 1, 1, 1, 0, 1)
+    assert_almost_equal(moved[0].x, 0.5)
+    assert_almost_equal(moved[1].x, 1.5)
+    # A pinned end does not move.
+    var held = relax_pair(Vector3(0, 0, 0), Vector3(2, 0, 0), 0, 1, 1, 0, 1)
+    assert_equal(held[0].x, 0)
+    assert_almost_equal(held[1].x, 1)
+    # Two pinned ends, or two particles in one place, do not move.
+    var both = relax_pair(Vector3(0, 0, 0), Vector3(2, 0, 0), 0, 0, 1, 0, 1)
+    assert_equal(both[1].x, 2)
+    var met = relax_pair(Vector3(1, 0, 0), Vector3(1, 0, 0), 1, 1, 1, 0, 1)
+    assert_equal(met[0].x, 1)
+    # A tether holds a particle within its reach.
+    var pulled = settle(Vector3(3, 0, 0), Vector3(0, 0, 0), 1)
+    assert_almost_equal(pulled.x, 1)
+    var free = settle(Vector3(0.5, 0, 0), Vector3(0, 0, 0), 1)
+    assert_equal(free.x, 0.5)
 
 
 def test_an_empty_cloth_steps_and_draws_nothing() raises:

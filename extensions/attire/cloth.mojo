@@ -157,6 +157,101 @@ def color_constraints(
     return colors^
 
 
+def glide(start: Vector3, target: Vector3, share: Float32) -> Vector3:
+    """Return where a pinned particle is, a share of the way to its target.
+
+    Shared by `ClothSolver` and `GpuCloth`.
+
+    Args:
+        start: Where it was at the start of the step.
+        target: Where it is to be at the end of the step.
+        share: How far through the step, zero through one.
+
+    Returns:
+        The particle's place.
+    """
+    return start + (target - start) * share
+
+
+def predict(
+    point: Vector3, previous: Vector3, damping: Float32, fall: Vector3
+) -> Vector3:
+    """Return where a free particle goes in one substep, before the
+    constraints move it: on along its damped velocity, and down.
+
+    Shared by `ClothSolver` and `GpuCloth`.
+
+    Args:
+        point: Where it is.
+        previous: Where it was a substep ago.
+        damping: The share of its velocity lost each substep.
+        fall: Gravity times the substep's length squared.
+
+    Returns:
+        The particle's predicted place.
+    """
+    var velocity = (point - previous) * (1 - damping)
+    return point + velocity + fall
+
+
+def relax_pair(
+    a: Vector3,
+    b: Vector3,
+    weight_a: Float32,
+    weight_b: Float32,
+    rest: Float32,
+    compliance: Float32,
+    scale: Float32,
+) -> Tuple[Vector3, Vector3]:
+    """Settle one distance constraint: XPBD with its multiplier starting
+    at zero, as one pass a substep has it.
+
+    Shared by `ClothSolver` and `GpuCloth`.
+
+    Args:
+        a: One particle.
+        b: The other particle.
+        weight_a: The inverse mass of `a`, zero if it is pinned.
+        weight_b: The inverse mass of `b`.
+        rest: The constraint's rest distance, in meters.
+        compliance: The constraint's compliance.
+        scale: One over the substep's length squared.
+
+    Returns:
+        The two particles' new places. They do not move when they meet or
+        when both are pinned.
+    """
+    var d = b - a
+    var length = d.length()
+    var total = weight_a + weight_b
+    if length <= 1e-9 or total <= 0:
+        return (a, b)
+    var gap = length - rest
+    var step = -gap / (total + compliance * scale)
+    var n = d * (1 / length)
+    return (a - n * (step * weight_a), b + n * (step * weight_b))
+
+
+def settle(point: Vector3, anchor: Vector3, reach: Float32) -> Vector3:
+    """Return a particle held within its reach of the pin it is tethered to.
+
+    Shared by `ClothSolver` and `GpuCloth`.
+
+    Args:
+        point: The particle.
+        anchor: Its pin.
+        reach: How far it may stand from the pin, in meters.
+
+    Returns:
+        The particle, or the point at its reach toward it.
+    """
+    var away = point - anchor
+    var length = away.length()
+    if length > reach:
+        return anchor + away * (reach / length)
+    return point
+
+
 struct ClothSolver(Movable):
     """A cloth's particles, its constraints, and how it moves."""
 
@@ -299,23 +394,23 @@ struct ClothSolver(Movable):
         self.targets[particle] = target
 
     def _relax(mut self, constraint: Int, scale: Float32):
-        """Settle one constraint: XPBD with its multiplier starting at zero,
-        as one pass a substep has it."""
+        """Settle one constraint with `relax_pair`."""
         var i = self.pairs[2 * constraint]
         var j = self.pairs[2 * constraint + 1]
-        var d = self.points[j] - self.points[i]
-        var length = d.length()
-        var total = self.weights[i] + self.weights[j]
-        if length <= 1e-9 or total <= 0:
-            return
         var compliance = self.settings.stretch
         if self.bending[constraint]:
             compliance = self.settings.bend
-        var gap = length - self.rests[constraint]
-        var step = -gap / (total + compliance * scale)
-        var n = d * (1 / length)
-        self.points[i] = self.points[i] - n * (step * self.weights[i])
-        self.points[j] = self.points[j] + n * (step * self.weights[j])
+        var moved = relax_pair(
+            self.points[i],
+            self.points[j],
+            self.weights[i],
+            self.weights[j],
+            self.rests[constraint],
+            compliance,
+            scale,
+        )
+        self.points[i] = moved[0]
+        self.points[j] = moved[1]
 
     def _relax_run(mut self, color: Int, first: Int, past: Int, scale: Float32):
         """Settle a run of one color's constraints."""
@@ -343,23 +438,19 @@ struct ClothSolver(Movable):
         var h = dt / Float32(substeps)
         # A compliance alpha works as alpha / h^2 in a substep of h.
         var scale = 1 / (h * h)
+        var fall = self.settings.gravity * (h * h)
         var from_pins = self.points.copy()
         for s in range(substeps):  # pragma: no branch
             var share = Float32(s + 1) / Float32(substeps)
             for k in range(self.count()):
+                var now = self.points[k]
                 if self.weights[k] == 0:
-                    self.previous[k] = self.points[k]
-                    self.points[k] = (
-                        from_pins[k] + (self.targets[k] - from_pins[k]) * share
+                    self.points[k] = glide(from_pins[k], self.targets[k], share)
+                else:
+                    self.points[k] = predict(
+                        now, self.previous[k], self.settings.damping, fall
                     )
-                    continue
-                var velocity = (self.points[k] - self.previous[k]) * (
-                    1 - self.settings.damping
-                )
-                self.previous[k] = self.points[k]
-                self.points[k] = (
-                    self.points[k] + velocity + self.settings.gravity * (h * h)
-                )
+                self.previous[k] = now
             for color in range(len(self.colors)):
                 var size = len(self.colors[color])
                 var tasks = min(workers, size // TASK_CONSTRAINTS)
@@ -382,12 +473,9 @@ struct ClothSolver(Movable):
                 var pin = self.tethers[k]
                 if pin < 0:
                     continue
-                var away = self.points[k] - self.points[pin]
-                var length = away.length()
-                if length > self.reaches[k]:
-                    self.points[k] = self.points[pin] + away * (
-                        self.reaches[k] / length
-                    )
+                self.points[k] = settle(
+                    self.points[k], self.points[pin], self.reaches[k]
+                )
                 for c in range(len(self.radii)):
                     self.points[k] = push_out(
                         self.points[k],

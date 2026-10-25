@@ -50,6 +50,7 @@ extensions/
     preset.mojo        saved outfits and dressed bakes
     springs.mojo       VRM-style spring chains
     cloth.mojo         XPBD cloth and cloaks
+    cloth_gpu.mojo     the cloth solve on a GPU
     estimate.mojo      mass, cost, coverage and protection
   humanoid/
     spec.mojo          HumanoidSpec: stature, sex, athleticism and genome
