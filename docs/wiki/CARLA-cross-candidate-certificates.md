@@ -222,6 +222,12 @@ One call keeps the trailing comma.
 The other tokens match the pin.
 A bare width call or a changed body is refused.
 
+Mojo checks the live seed-domain caller.
+The error guard keeps the upper bound only.
+The rounded guard keeps the low and high tests.
+The other tokens match the pin.
+A changed error guard or a changed body is refused.
+
 ## Candidate certificate
 
 A certificate contains a stored incumbent point and its road parameter.
