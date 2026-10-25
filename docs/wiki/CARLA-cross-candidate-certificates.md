@@ -268,6 +268,11 @@ Eight reviewed routing spans keep the live signatures.
 Restoring those spans matches the pinned routing.
 A moved span or a changed signature is refused.
 
+Mojo checks the live Map routing.
+23 reviewed routing spans keep the live declarations.
+Restoring those spans matches the pinned routing.
+A moved span or a changed declaration is refused.
+
 ## Candidate certificate
 
 A certificate contains a stored incumbent point and its road parameter.
