@@ -160,6 +160,13 @@ Fresh helpers keep the environment guard.
 The grouped debit, dispatch reserve, and model rooms stay in place.
 A missing edge or a moved guard is refused.
 
+Mojo checks the containing-model consumers.
+The objective-model file keeps its own helper names.
+Every other production module leaves those names out.
+Lane refinement leaves the removed search names out.
+A comment or a string stays allowed.
+A new executable name is refused.
+
 ## Candidate certificate
 
 A certificate contains a stored incumbent point and its road parameter.
