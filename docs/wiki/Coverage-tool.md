@@ -391,7 +391,7 @@ A new suite gets a source-size estimate. The scheduler uses the median measured 
 
 Missing profile entries never remove a suite. Invalid costs fail the scheduling command. Timing data changes only placement and order, never coverage requirements or test validation.
 
-Each capture prints its start, first probe, elapsed time and exit status. A running capture prints progress once per minute. Before the first probe, compilation or startup can still be in progress. Once probes arrive, the log identifies runtime work and gives the record count.
+Each capture prints its start, first probe, elapsed time and exit status. A running capture prints progress once per minute. Before the first probe, compilation or startup can still be in progress. Once probes arrive, the log identifies runtime work and gives the record count. A failed capture prints the last 30 lines of standard output and the last 30 standard-error lines that do not start with `COV`. A compiled capture writes a phase file and reports a missing finish record.
 
 Output is flushed at each update. Failed CI captures upload separate diagnostic artifacts. The report job does not use those artifacts as completed captures.
 

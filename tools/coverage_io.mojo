@@ -11,7 +11,10 @@ The command runs in its own session. Its standard error is reduced: each
 `COVLINE` payload, each branch, and each complete `COVEVAL2` record is kept
 once. A passed group deadline stops the session. When `--loop-proof` is
 set, this program checks and binds that receipt. It prints the start, the
-first probe, a running line every 60 seconds, and completion.
+first probe, a running line every 60 seconds, and completion. A failed
+capture prints the last 30 lines of standard output and the last 30
+standard-error lines that do not start with `COV`. A compiled capture
+writes a phase file and reports a missing finish record.
 """
 
 from std.collections import Dict
@@ -23,7 +26,18 @@ from std.pathlib import Path
 from std.sys import CompilationTarget, argv, exit, stderr
 from std.tempfile import mkdtemp
 
-from tools._carla_files import lstat_id
+from tools._carla_files import (
+    fstat_id,
+    lstat_id,
+    make_temporary,
+    o_nofollow_flag,
+    o_nonblock,
+    o_rdonly,
+    os_error,
+    read_some,
+    remove_file,
+    replace_file,
+)
 from tools.cache_key import input_paths
 from tools.coverage_loop_begin import (
     _command,
@@ -60,6 +74,8 @@ from tools._json_tools import quote_ascii
 from tools._process import run_program, shell_quote
 from tools._python_float import parse_float
 from tools._python_json import (
+    MISSING,
+    PY_BOOL,
     PY_DICT,
     PY_LIST,
     PY_STR,
@@ -1233,34 +1249,103 @@ def _compiled(command: List[String]) -> Bool:
     return named and (profile == "aot" or profile == "aot-hits")
 
 
-def _phase_header(
-    command: List[String], out_path: String, proof: String
-) raises -> String:
-    """Write the phase header when this capture is compiled.
+def _file_stem(path: String) -> String:
+    """Return `Path(path).stem`.
 
     Args:
-        command: The captured command.
-        out_path: The standard-output file. The header replaces its
-            `.phases.jsonl` neighbor.
-        proof: The loop-proof path, or empty.
+        path: A path.
 
     Returns:
-        The header path, or empty when this capture keeps no phases.
+        The last component without its last suffix.
+    """
+    var slash = path.rfind("/")
+    var name = path if slash < 0 else String(path[byte = slash + 1 :])
+    var dot = name.rfind(".")
+    if dot <= 0:
+        return name
+    return String(name[byte=:dot])
+
+
+def _phases_path(out_path: String) raises -> String:
+    """Return the absolute phase path beside `out_path`.
+
+    Args:
+        out_path: The standard-output file.
+
+    Returns:
+        `Path(out_path).with_suffix('.phases.jsonl').absolute()`. A link
+        in the path stays unresolved.
 
     Raises:
-        Error: If the header cannot be written.
+        Error: If the working directory cannot be read.
     """
-    var path = out_path
-    if path.endswith(".out"):
-        var end = path.byte_length() - 4
-        var shortened = String(path[byte=:end])
-        path = shortened
-    path += ".phases.jsonl"
-    if Path(path).exists():
-        remove(Path(path))
-    if not _compiled(command):
-        return ""
-    var words = "["
+    var slash = out_path.rfind("/")
+    var name = out_path if slash < 0 else String(out_path[byte = slash + 1 :])
+    var head = "" if slash < 0 else String(out_path[byte = : slash + 1])
+    var dot = name.rfind(".")
+    var base = name
+    if dot > 0:
+        base = String(name[byte=:dot])
+    var relative = head + base + ".phases.jsonl"
+    if relative.startswith("/"):
+        return relative
+    var cwd = realpath(".")
+    if cwd.endswith("/"):
+        return cwd + relative
+    return cwd + "/" + relative
+
+
+def _unlink_name(path: String) raises:
+    """Remove a file or symlink, as `Path.unlink(missing_ok=True)` does.
+
+    Args:
+        path: The path. A missing path stays missing.
+
+    Raises:
+        Error: With Python's `OSError` text when the name exists and
+            cannot be removed.
+    """
+    try:
+        remove_file(path)
+    except error:
+        var text = String(error)
+        if text.find("No such file") < 0:
+            raise error
+
+
+def _exception_name(error: Error) -> String:
+    """Return the class name at the start of `error`.
+
+    Args:
+        error: An error whose text starts with `Name:`.
+
+    Returns:
+        That name, or `OSError` when the text has none.
+    """
+    var text = String(error)
+    var colon = text.find(":")
+    if colon > 0:
+        return String(text[byte=:colon])
+    return "OSError"
+
+
+def _header_json(
+    suite: String, proof_sha: String, command: List[String]
+) -> String:
+    """Return one phase header line, as `json.dumps` writes it.
+
+    Args:
+        suite: `Path(out_path).stem`.
+        proof_sha: The receipt digest, or empty for JSON null.
+        command: The captured command.
+
+    Returns:
+        The header object and its trailing newline.
+    """
+    var proof_text = "null"
+    if proof_sha.byte_length() > 0:
+        proof_text = quote_ascii(proof_sha)
+    var words = String("[")
     var index = 0
     for word in command:
         if index > 0:
@@ -1269,25 +1354,328 @@ def _phase_header(
         index += 1
     words += "]"
     var digest = sha256_hex(words.as_bytes())
-    var proof_text = "null"
-    if proof.byte_length() > 0:
-        proof_text = '"' + proof + '"'
-    var header = (
-        '{"schema": "coverage-exec-phases-v1", "suite": "'
-        + _stem(out_path)
-        + '", "phase": "capture_header", "proof_sha256": '
+    return (
+        '{"schema": "coverage-exec-phases-v1", "suite": '
+        + quote_ascii(suite)
+        + ', "phase": "capture_header", "proof_sha256": '
         + proof_text
         + ', "command_sha256": "'
         + digest
         + '", "semantics": "launch requests only; missing finish means'
         ' incomplete"}\n'
     )
-    Path(path).write_text(header)
-    var info = lstat_id(path)
-    _ = setenv(_PHASE, path, True)
-    _ = setenv(_PHASE + "_DEVICE", String(info.device), True)
-    _ = setenv(_PHASE + "_INODE", String(info.inode), True)
-    return path
+
+
+def _universal_lines(text: String) -> List[String]:
+    """Split text as a Python text-mode file does.
+
+    Args:
+        text: Decoded text.
+
+    Returns:
+        Each line. CR LF, CR and LF become LF. A final line with no break
+        keeps its text.
+    """
+    var lines = List[String]()
+    var bytes = text.as_bytes()
+    var start = 0
+    var index = 0
+    var size = len(bytes)
+    while index < size:
+        var byte = bytes[index]
+        if byte == 10 or byte == 13:
+            lines.append(String(text[byte=start:index]) + "\n")
+            index += 1
+            if byte == 13 and index < size and bytes[index] == 10:
+                index += 1
+            start = index
+            continue
+        index += 1
+    if start < size:
+        lines.append(String(text[byte=start:size]))
+    return lines^
+
+
+def _last_text(lines: List[String], count: Int) -> String:
+    """Join the last `count` lines.
+
+    Args:
+        lines: The lines. A line keeps its newline when it had one.
+        count: How many lines to keep.
+
+    Returns:
+        The joined tail. It is empty when `lines` is empty.
+    """
+    var start = 0
+    if len(lines) > count:
+        start = len(lines) - count
+    var out = String()
+    while start < len(lines):
+        out += lines[start]
+        start += 1
+    return out^
+
+
+def _read_path(path: String) raises -> List[UInt8]:
+    """Read every byte of a file.
+
+    Args:
+        path: The file.
+
+    Returns:
+        Its bytes.
+
+    Raises:
+        Error: If the file cannot be opened or read.
+    """
+    var fd = open_at(at_cwd(), c_bytes(path), 0)
+    if fd < 0:
+        raise Error("cannot read " + path + ": " + strerror(errno()))
+    var out = List[UInt8]()
+    try:
+        while True:
+            var block = read_some(fd, 4096)
+            if len(block) == 0:
+                break
+            var index = 0
+            while index < len(block):
+                out.append(block[index])
+                index += 1
+    finally:
+        close_fd(fd)
+    return out^
+
+
+def _failure_tail(
+    command: List[String], out_path: String, reduced: String
+) raises:
+    """Print the last lines of a failed capture.
+
+    Args:
+        command: The captured command. The message names its last word.
+        out_path: The standard-output file.
+        reduced: The reduced standard error.
+
+    Raises:
+        Error: If the standard-output file cannot be read.
+    """
+    print(command[len(command) - 1] + " failed under instrumentation:")
+    var raw = _read_path(out_path)
+    print(
+        _last_text(_universal_lines(String(from_utf8_lossy=Span(raw))), 30),
+        end="",
+    )
+    var kept = List[String]()
+    for line in _universal_lines(reduced):
+        if not line.startswith("COV"):
+            kept.append(line)
+    print(_last_text(kept, 30), end="")
+
+
+struct PhaseWatch(ImplicitlyCopyable, Movable):
+    """The phase file a compiled capture must finish."""
+
+    var path: String
+    """The phase file, or empty when this capture keeps none."""
+    var device: UInt64
+    """The device recorded when the header was replaced into place."""
+    var inode: UInt64
+    """The inode recorded when the header was replaced into place."""
+    var active: Bool
+    """True when a header was published."""
+
+    def __init__(out self):
+        """Make an inactive watch."""
+        self.path = ""
+        self.device = 0
+        self.inode = 0
+        self.active = False
+
+
+def _phase_header(
+    command: List[String], out_path: String, proof: String
+) -> PhaseWatch:
+    """Replace the phase file when this capture is compiled.
+
+    A raw capture still removes an old phase file. The published
+    `proof_sha256` is the receipt digest. A write failure prints
+    `phase diagnostics unavailable` and leaves the capture running.
+
+    Args:
+        command: The captured command.
+        out_path: The standard-output file.
+        proof: The loop-proof path, or empty.
+
+    Returns:
+        The watch. It is inactive when this capture keeps no phases.
+    """
+    _ = unsetenv(_PHASE)
+    _ = unsetenv(_PHASE + "_DEVICE")
+    _ = unsetenv(_PHASE + "_INODE")
+    var temporary = String()
+    try:
+        var path = _phases_path(out_path)
+        _unlink_name(path)
+        if not _compiled(command):
+            return PhaseWatch()
+        var proof_sha = String()
+        if proof.byte_length() > 0:
+            var doc = _read_receipt(proof)
+            proof_sha = doc.text(doc.at(doc.root, "sha256"))
+        var slash = path.rfind("/")
+        var directory = "." if slash < 0 else String(path[byte=:slash])
+        if directory.byte_length() == 0:
+            directory = "/"
+        var name = path if slash < 0 else String(path[byte = slash + 1 :])
+        temporary = make_temporary(directory, name + ".", "")
+        Path(temporary).write_text(
+            _header_json(_file_stem(out_path), proof_sha, command)
+        )
+        var info = lstat_id(temporary)
+        replace_file(temporary, path)
+        _ = setenv(_PHASE, path, True)
+        _ = setenv(_PHASE + "_DEVICE", String(info.device), True)
+        _ = setenv(_PHASE + "_INODE", String(info.inode), True)
+        var watch = PhaseWatch()
+        watch.path = path
+        watch.device = info.device
+        watch.inode = info.inode
+        watch.active = True
+        return watch
+    except error:
+        if temporary.byte_length() > 0:
+            try:
+                remove_file(temporary)
+            except:
+                pass
+        print(
+            "Coverage "
+            + _file_stem(out_path)
+            + ": phase diagnostics unavailable ("
+            + _exception_name(error)
+            + "); ignore any existing phase file"
+        )
+        return PhaseWatch()
+
+
+def _read_limit(fd: Int, limit: Int) raises -> List[UInt8]:
+    """Read at most `limit` bytes, plus one when the file is longer.
+
+    Args:
+        fd: The descriptor.
+        limit: The largest accepted size.
+
+    Returns:
+        The bytes read. One extra byte means the file is too long.
+
+    Raises:
+        Error: With Python's `OSError` text if a read fails.
+    """
+    var out = List[UInt8]()
+    while len(out) <= limit:
+        var block = read_some(fd, 4096)
+        if len(block) == 0:
+            return out^
+        var index = 0
+        while index < len(block) and len(out) <= limit:
+            out.append(block[index])
+            index += 1
+    return out^
+
+
+def _require_finish(watch: PhaseWatch) raises:
+    """Raise unless the phase file still holds a complete finish record.
+
+    Args:
+        watch: The published header.
+
+    Raises:
+        Error: `OSError` when the file cannot be read, `JSONDecodeError`
+            when the last line is not JSON, and `ValueError` when the
+            finish record is missing or the file identity changed.
+    """
+    var flags = o_rdonly() | o_nonblock() | o_nofollow_flag()
+    var fd = open_at(at_cwd(), c_bytes(watch.path), flags)
+    if fd < 0:
+        raise os_error(errno(), watch.path)
+    var data: List[UInt8]
+    try:
+        var info = fstat_id(fd)
+        if (
+            not info.is_regular()
+            or info.device != watch.device
+            or info.inode != watch.inode
+        ):
+            raise Error("ValueError: phase file identity changed")
+        data = _read_limit(fd, 128 * 1024)
+    finally:
+        close_fd(fd)
+    if len(data) > 128 * 1024 or len(data) == 0 or data[len(data) - 1] != 10:
+        raise Error("ValueError: phase file is incomplete")
+    var text = String(from_utf8_lossy=Span(data))
+    var parts = text.split("\n")
+    if len(parts) < 2:
+        raise Error("ValueError: phase file is incomplete")
+    var last = String(parts[len(parts) - 2])
+    var doc: PyJson
+    try:
+        doc = PyJson.parse(last)
+    except error:
+        raise Error("JSONDecodeError: " + String(error))
+    var schema = doc.get(doc.root, "schema")
+    var phase = doc.get(doc.root, "phase")
+    var done = doc.get(doc.root, "diagnostics_complete")
+    if (
+        schema == MISSING
+        or phase == MISSING
+        or done == MISSING
+        or doc.kind(schema) != PY_STR
+        or doc.text(schema) != "coverage-exec-phases-v1"
+        or doc.kind(phase) != PY_STR
+        or doc.text(phase) != "adapter_finish"
+        or doc.kind(done) != PY_BOOL
+        or not doc.flag(done)
+    ):
+        raise Error("ValueError: no complete adapter finish")
+
+
+def _finish_phases(watch: PhaseWatch):
+    """Report a compiled capture whose phase file has no finish record.
+
+    Args:
+        watch: The header published for this capture. An inactive watch
+            prints nothing.
+    """
+    if not watch.active:
+        return
+    try:
+        _require_finish(watch)
+    except error:
+        print(
+            "Coverage "
+            + _file_stem(watch.path)
+            + ": phase diagnostics incomplete ("
+            + _exception_name(error)
+            + "); last launch request is advisory"
+        )
+
+
+def _release_capture(folder: String) raises:
+    """Remove the capture's private temporary root.
+
+    Args:
+        folder: The directory created for this capture.
+
+    Raises:
+        Error: If the removal command cannot start or remove the directory.
+    """
+    _ = unsetenv("TMPDIR")
+    _ = unsetenv("THREEMOJO_TEST_TMPDIR")
+    _ = unsetenv("MODULAR_CACHE_DIR")
+    _ = unsetenv("XDG_CACHE_HOME")
+    var removed = run_program(["rm", "-rf", folder], 30.0)
+    if removed.status != 0:
+        raise Error(removed.output)
 
 
 def _start(command: List[String], output: Int) raises -> Tuple[Int, Int]:
@@ -1596,19 +1984,21 @@ def _capture(arguments: List[String]) raises -> Int:
     var xdg = folder + "/xdg-cache"
     var made = run_program(["mkdir", "-p", compiler, xdg], 10.0)
     if made.status != 0:
+        _ = run_program(["rm", "-rf", folder], 30.0)
         raise Error(made.output)
     _ = setenv("MODULAR_CACHE_DIR", compiler, True)
     _ = setenv("XDG_CACHE_HOME", xdg, True)
-    _ = _phase_header(command, out_path, proof)
     var started = _now()
     var suite = _stem(out_path)
     _progress(suite, "start", started, 0, False)
     var records = 0
     var saw_probe = False
-    var status: Int
+    var reduced = String()
+    var watch = _phase_header(command, out_path, proof)
+    var status = 124
     try:
         if deadline >= 0 and _now() >= deadline:
-            status = 124
+            Path(out_path).write_text("")
             _gzip("", err_path)
         else:
             var output = _open_output(out_path)
@@ -1625,7 +2015,8 @@ def _capture(arguments: List[String]) raises -> Int:
             )
             records = reducer.records
             saw_probe = reducer.saw_probe
-            _gzip(reducer.output, err_path)
+            reduced = reducer.output
+            _gzip(reduced, err_path)
         _progress(
             suite,
             "complete (exit " + String(status) + ")",
@@ -1633,14 +2024,17 @@ def _capture(arguments: List[String]) raises -> Int:
             records,
             saw_probe,
         )
+        if status != 0:
+            _failure_tail(command, out_path, reduced)
+        elif proof.byte_length() > 0:
+            _proof("bind", out_path, err_path, proof, root, command)
     except error:
         _progress(suite, "aborted", started, records, saw_probe)
+        _finish_phases(watch)
+        _release_capture(folder)
         raise error
-    if status == 0 and proof.byte_length() > 0:
-        _proof("bind", out_path, err_path, proof, root, command)
-    _ = unsetenv("TMPDIR")
-    _ = unsetenv("THREEMOJO_TEST_TMPDIR")
-    _ = run_program(["rm", "-rf", folder], 30.0)
+    _finish_phases(watch)
+    _release_capture(folder)
     return status
 
 

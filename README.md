@@ -135,7 +135,7 @@ Some portable features remain partial, including [GLSL shaders](https://github.c
 
 - [x] [Coverage generation checkpoint](https://github.com/SethKitchen/ThreeMojo/wiki/Coverage-tool#capture-scheduling-and-progress): `tools/coverage_loop_begin.mojo` writes the generation checkpoint [#761](https://github.com/SethKitchen/ThreeMojo/issues/761)
 
-- [x] [Coverage capture](https://github.com/SethKitchen/ThreeMojo/wiki/Coverage-tool#capture-scheduling-and-progress): `tools/coverage_io.mojo` captures one suite, checks the loop proof, and replays the captures [#761](https://github.com/SethKitchen/ThreeMojo/issues/761)
+- [x] [Coverage capture](https://github.com/SethKitchen/ThreeMojo/wiki/Coverage-tool#capture-scheduling-and-progress): `tools/coverage_io.mojo` captures one suite, reports a failed suite's last lines, checks the loop proof, and replays the captures [#761](https://github.com/SethKitchen/ThreeMojo/issues/761)
 
 - [x] [Compiled coverage profile](https://github.com/SethKitchen/ThreeMojo/wiki/Coverage-tool#capture-scheduling-and-progress): `tools/coverage_hit_aot.mojo` builds a compiled capture and keeps the source path [#761](https://github.com/SethKitchen/ThreeMojo/issues/761)
 
