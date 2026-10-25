@@ -117,6 +117,11 @@ The jet helper keeps its guard and its zero derivative slots.
 The value helper replaces that zero with an unknown interval.
 A changed guard, constructor, or projection is refused.
 
+Mojo checks the sampled reference projection.
+The union body stays one return.
+The sampled reference keeps the guard and the sampled tail.
+A changed dispatcher or a changed tail is refused.
+
 ## Candidate certificate
 
 A certificate contains a stored incumbent point and its road parameter.

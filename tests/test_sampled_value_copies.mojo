@@ -10,6 +10,7 @@ from std.testing import TestSuite, assert_raises
 
 from tools.sampled_value_copies import (
     sampled_constant_heading,
+    sampled_reference_projection,
     sampled_value_copies,
 )
 
@@ -186,6 +187,66 @@ def test_a_changed_constant_heading_is_refused() raises:
             value.replace(
                 "var unknown = _Interval.whole()",
                 "var unknown = _Interval.point(0.0)",
+            ),
+        )
+
+
+def test_the_reference_projection_holds() raises:
+    """The union body and the sampled reference tail match the jet source."""
+    var bounds = _bounds()
+    var value = _value()
+    sampled_reference_projection(bounds, value)
+    sampled_reference_projection(
+        bounds,
+        value.replace(
+            "def _reference_sampled_value(\n",
+            "def _reference_sampled_value(\n    # reviewed\n",
+        ),
+    )
+
+
+def test_a_changed_reference_projection_is_refused() raises:
+    """A changed dispatcher, union, or sampled tail is refused."""
+    var bounds = _bounds()
+    var value = _value()
+    with assert_raises(contains="complete reference dispatcher layout changed"):
+        sampled_reference_projection(
+            bounds.replace(
+                "    if geometry.kind == LINE:\n",
+                "    if geometry.kind == ARC:\n",
+            ),
+            value,
+        )
+    with assert_raises(contains="union complete body shape changed"):
+        sampled_reference_projection(
+            bounds.replace(
+                (
+                    ") -> Tuple[_Jet, _Jet, _Jet]:\n    return (\n       "
+                    " _uncertain(one[0]"
+                ),
+                (
+                    ") -> Tuple[_Jet, _Jet, _Jet]:\n    var extra = 0\n   "
+                    " return (\n        _uncertain(one[0]"
+                ),
+            ),
+            value,
+        )
+    with assert_raises(contains="sampled helper diverged: _union_value_points"):
+        sampled_reference_projection(
+            bounds,
+            value.replace(
+                "_uncertain_value(one[0].rounded_value()",
+                "_uncertain_value(one[1].rounded_value()",
+            ),
+        )
+    with assert_raises(
+        contains="sampled helper diverged: _reference_sampled_value"
+    ):
+        sampled_reference_projection(
+            bounds,
+            value.replace(
+                "geometry.kind != POLY3",
+                "geometry.kind != LINE",
             ),
         )
 

@@ -7,7 +7,8 @@
 
 Nine helpers match their renamed jet sources. The blend copy also drops
 the two derivative intersections. The constant heading copy replaces zero
-derivatives with an unknown interval.
+derivatives with an unknown interval. The sampled reference keeps the
+guard and the sampled tail.
 """
 
 from tests._python_tokens import _tokenize
@@ -294,6 +295,86 @@ def _span(
     return (at, stop)
 
 
+def _body_statements(
+    kinds: List[Int], texts: List[String], name: String, rename: Bool
+) raises -> List[String]:
+    """Return the normalized top-level statements of `name`.
+
+    Args:
+        kinds: The token kinds.
+        texts: The token texts.
+        name: The function name.
+        rename: True when jet names become value names.
+
+    Returns:
+        Each direct body statement, without layout tokens.
+
+    Raises:
+        Error: The function is missing or has no body.
+    """
+    var span = _span(kinds, texts, name)
+    var cursor = span[0] + 2
+    if cursor < len(kinds) and _opens(texts[cursor]):
+        var brackets = 1
+        cursor += 1
+        while cursor < len(kinds) and brackets > 0:
+            if _opens(texts[cursor]):
+                brackets += 1
+            elif _closes(texts[cursor]):
+                brackets -= 1
+            cursor += 1
+    var signature = 0
+    while cursor < len(kinds):
+        if _opens(texts[cursor]):
+            signature += 1
+        elif _closes(texts[cursor]):
+            signature -= 1
+        elif kinds[cursor] == _OP and texts[cursor] == ":" and signature == 0:
+            break
+        cursor += 1
+    cursor += 1
+    while cursor < len(kinds) and kinds[cursor] == _NEWLINE:
+        cursor += 1
+    if cursor < len(kinds) and kinds[cursor] == _INDENT:
+        cursor += 1
+    var depth = 1
+    var bracket = 0
+    var row_kinds = List[Int]()
+    var row_texts = List[String]()
+    var rows = List[String]()
+    var index = cursor
+    while index < span[1]:
+        var kind = kinds[index]
+        var text = texts[index]
+        if kind == _INDENT:
+            depth += 1
+        elif kind == _DEDENT:
+            depth -= 1
+        elif kind == _OP and _opens(text):
+            bracket += 1
+        elif kind == _OP and _closes(text):
+            bracket -= 1
+        row_kinds.append(kind)
+        row_texts.append(text)
+        var done = False
+        if kind == _DEDENT and depth == 1:
+            done = True
+        if kind == _NEWLINE and depth == 1 and bracket == 0:
+            var nxt = index + 1
+            if nxt >= span[1] or kinds[nxt] != _INDENT:
+                done = True
+        if done:
+            rows.append(
+                _normalize(row_kinds, row_texts, 0, len(row_kinds), rename)
+            )
+            row_kinds = List[Int]()
+            row_texts = List[String]()
+        index += 1
+    if len(row_texts) > 0:
+        rows.append(_normalize(row_kinds, row_texts, 0, len(row_texts), rename))
+    return rows^
+
+
 def _once(text: String, needle: String, message: String) raises -> String:
     """Remove the one occurrence of `needle`.
 
@@ -496,3 +577,96 @@ def sampled_constant_heading(trig: String, value: String) raises:
     var actual = _normalize(value_kinds, value_texts, live[0], live[1], False)
     if copied != actual:
         _fail("sampled helper diverged: _constant_sincos_value")
+
+
+def _prefix(text: String, prefix: String) -> Bool:
+    """Return whether `text` starts with `prefix`.
+
+    Args:
+        text: The statement.
+        prefix: The required start.
+
+    Returns:
+        True when `prefix` is the start of `text`.
+    """
+    if text.byte_length() < prefix.byte_length():
+        return False
+    return text[byte = 0 : prefix.byte_length()] == prefix
+
+
+def sampled_reference_projection(bounds: String, value: String) raises:
+    """Require the union body and the sampled reference tail.
+
+    Args:
+        bounds: The `curve_bounds` module.
+        value: The `lane_value_bounds` module.
+
+    Raises:
+        Error: The dispatcher layout changed, the union body changed, or a
+        sampled helper diverged.
+    """
+    var bound_kinds = List[Int]()
+    var bound_texts = List[String]()
+    var value_kinds = List[Int]()
+    var value_texts = List[String]()
+    _load(bounds, bound_kinds, bound_texts)
+    _load(value, value_kinds, value_texts)
+    var union_jet = _body_statements(
+        bound_kinds, bound_texts, "_union_points", True
+    )
+    var union_ok = len(union_jet) == 1
+    if union_ok:
+        union_ok = _prefix(union_jet[0], "return")
+    if not union_ok:
+        _fail("union complete body shape changed")
+    var union_value = _body_statements(
+        value_kinds, value_texts, "_union_value_points", False
+    )
+    var union_same = len(union_value) == 1
+    if union_same:
+        union_same = union_value[0] == union_jet[0]
+    if not union_same:
+        _fail("sampled helper diverged: _union_value_points")
+    var jet = _body_statements(
+        bound_kinds, bound_texts, "_reference_jet_capture", True
+    )
+    var heads = List[String]()
+    heads.append("d =")
+    heads.append("if geometry . kind == LINE")
+    heads.append("if geometry . kind == ARC")
+    heads.append("if geometry . kind == SPIRAL")
+    heads.append("if len ( geometry . samples ) < 2")
+    heads.append("domain =")
+    heads.append("low =")
+    heads.append("high =")
+    heads.append("if high - low > 1")
+    heads.append("first =")
+    heads.append("if low == high")
+    heads.append("return")
+    var layout = len(jet) == len(heads)
+    var index = 0
+    while layout and index < len(heads):
+        if not _prefix(jet[index], heads[index]):
+            layout = False
+        index += 1
+    if not layout:
+        _fail("complete reference dispatcher layout changed")
+    var sampled = _body_statements(
+        value_kinds, value_texts, "_reference_sampled_value", False
+    )
+    var guard = (
+        "if geometry . kind != POLY3 and geometry . kind != PARAM_POLY3 :"
+        " return _unknown_value_point ( )"
+    )
+    var same = len(sampled) == 10
+    if same:
+        same = sampled[0] == guard
+    if same:
+        same = sampled[1] == jet[0]
+    index = 2
+    while same and index < 10:
+        if sampled[index] != jet[index + 2]:
+            same = False
+        index += 1
+    if not same:
+        _fail("sampled helper diverged: _reference_sampled_value")
