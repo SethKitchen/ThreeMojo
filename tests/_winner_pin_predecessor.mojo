@@ -3244,3 +3244,711 @@ def restored_rounded_arc_winner() raises -> String:
         path,
     )
     return restored
+
+
+def _lines_37(
+    mut starts: List[Int], mut stops: List[Int], mut befores: List[String]
+):
+    """Fill one reviewed line-edit table, highest line first.
+
+    Args:
+        starts: The 0-based start lines.
+        stops: The exclusive end lines.
+        befores: The predecessor lines for each span.
+    """
+    starts.append(43)
+    stops.append(44)
+    befores.append(
+        "    for coefficient in [\n        model.start,\n        model.cu"
+        "rvature,\n        model.speed,\n        model.x,\n        model."
+        "y,\n        model.z,\n    ]:\n        if not coefficient.known o"
+        "r coefficient.low != coefficient.high:\n            return None"
+        "\n"
+    )
+
+
+def _lines_38(
+    mut starts: List[Int], mut stops: List[Int], mut befores: List[String]
+):
+    """Fill one reviewed line-edit table, highest line first.
+
+    Args:
+        starts: The 0-based start lines.
+        stops: The exclusive end lines.
+        befores: The predecessor lines for each span.
+    """
+    starts.append(193)
+    stops.append(194)
+    befores.append(
+        "        return LaneInvasionEvent(frame, timestamp.value, transfo"
+        "rm, crossed^)\n"
+    )
+    starts.append(105)
+    stops.append(127)
+    befores.append("")
+    starts.append(102)
+    stops.append(103)
+    befores.append("        self.timestamp = timestamp\n")
+    starts.append(97)
+    stops.append(100)
+    befores.append("")
+    starts.append(94)
+    stops.append(95)
+    befores.append("            timestamp: The snapshot's elapsed seconds.\n")
+    starts.append(89)
+    stops.append(91)
+    befores.append('    ):\n        """Create an event.\n')
+    starts.append(86)
+    stops.append(87)
+    befores.append("        timestamp: Float64,\n")
+    starts.append(77)
+    stops.append(78)
+    befores.append("")
+    starts.append(70)
+    stops.append(75)
+    befores.append(
+        '    """The markings a vehicle crossed in one tick, `LaneInvas'
+        'ionEvent`."""\n'
+    )
+
+
+def _lines_39(
+    mut starts: List[Int], mut stops: List[Int], mut befores: List[String]
+):
+    """Fill one reviewed line-edit table, highest line first.
+
+    Args:
+        starts: The 0-based start lines.
+        stops: The exclusive end lines.
+        befores: The predecessor lines for each span.
+    """
+    starts.append(163)
+    stops.append(164)
+    befores.append(
+        "        return LaneInvasionEvent(frame, timestamp, transform, cr"
+        "ossed^)\n"
+    )
+    starts.append(140)
+    stops.append(142)
+    befores.append("")
+    starts.append(137)
+    stops.append(139)
+    befores.append("            Error: If a map query fails.\n")
+    starts.append(130)
+    stops.append(131)
+    befores.append("            timestamp: The snapshot's elapsed seconds.\n")
+    starts.append(122)
+    stops.append(123)
+    befores.append("        timestamp: Float64,\n")
+    starts.append(29)
+    stops.append(31)
+    befores.append("from std.math import cos, sin\n")
+
+
+def _lines_40(
+    mut starts: List[Int], mut stops: List[Int], mut befores: List[String]
+):
+    """Fill one reviewed line-edit table, highest line first.
+
+    Args:
+        starts: The 0-based start lines.
+        stops: The exclusive end lines.
+        befores: The predecessor lines for each span.
+    """
+    starts.append(696)
+    stops.append(703)
+    befores.append(
+        "        if end > start:\n            end = bitcast[DType.float64"
+        "](bitcast[DType.uint64](end) - 1)\n            start = _next_up("
+        "start)\n            if start <= end:\n                _certify_j"
+        "unction_span(\n                    road, section, lane, start, e"
+        "nd, out, work\n                )\n"
+    )
+    starts.append(645)
+    stops.append(646)
+    befores.append("    var b = min(road.upper_bound(a), road.length)\n")
+    starts.append(421)
+    stops.append(422)
+    befores.append("    var delta = _Interval(low, high) - m\n")
+    starts.append(410)
+    stops.append(412)
+    befores.append("    var m = _Interval.point(_midpoint(low, high))\n")
+    starts.append(343)
+    stops.append(344)
+    befores.append(
+        "    return road.lane_transform(section, lane, s).location\n"
+    )
+    starts.append(271)
+    stops.append(272)
+    befores.append(
+        "        var last = road.directed_point_no_lane_offset(b).to_carl"
+        "a().location\n"
+    )
+    starts.append(267)
+    stops.append(270)
+    befores.append(
+        "        var first = road.directed_point_no_lane_offset(a).to_car"
+        "la().location\n"
+    )
+    starts.append(77)
+    stops.append(78)
+    befores.append("        _insert_break(values, record.distance())\n")
+    starts.append(53)
+    stops.append(57)
+    befores.append(
+        "        max(\n            max(abs(fa), abs(fb)),\n            ma"
+        "x(abs(fa + h * da / 3.0), abs(fb - h * db / 3.0)),\n        )\n "
+        "       * (1.0 + epsilon)\n        + value_error\n        + h * t"
+        "angent_error / 3.0,\n        max(max(abs(da), abs(db)), abs(da +"
+        " h * dda / 2.0)) * (1.0 + epsilon)\n        + tangent_error\n   "
+        "     + h * second_error / 2.0,\n        max(abs(dda), abs(ddb)) "
+        "+ second_error,\n        value_error,\n"
+    )
+    starts.append(47)
+    stops.append(52)
+    befores.append(
+        "    # Bernstein control values bound a cubic and its first two d"
+        "erivatives.\n    var h = b - a\n    var fa = p.evaluate(a)\n    "
+        "var fb = p.evaluate(b)\n    var da = p.tangent(a)\n    var db = "
+        "p.tangent(b)\n    var dda = 2.0 * p.c + 6.0 * p.d * a\n    var d"
+        "db = 2.0 * p.c + 6.0 * p.d * b\n    # Records are re-expanded ab"
+        "out road s. Large s can cause cancellation\n    # even for a sma"
+        "ll local polynomial. Bound Horner error by absolute\n    # coeff"
+        "icient magnitudes, not by the small computed endpoint values.\n "
+        "   comptime epsilon = 8.0 * 2.220446049250313e-16\n    var s = m"
+        "ax(abs(a), abs(b))\n    var value_error = epsilon * (\n        a"
+        "bs(p.a) + s * (abs(p.b) + s * (abs(p.c) + s * abs(p.d)))\n    )"
+        "\n    var tangent_error = epsilon * (\n        abs(p.b) + s * (2"
+        ".0 * abs(p.c) + s * 3.0 * abs(p.d))\n    )\n    var second_error"
+        " = epsilon * (2.0 * abs(p.c) + s * 6.0 * abs(p.d))\n"
+    )
+    starts.append(33)
+    stops.append(34)
+    befores.append(
+        "from extensions.carla.road_info import RoadInfo, info_index\n"
+    )
+    starts.append(17)
+    stops.append(22)
+    befores.append(
+        "from extensions.carla.curve_bounds import _lane_jet, _reference_work\n"
+    )
+
+
+def _lines_41(
+    mut starts: List[Int], mut stops: List[Int], mut befores: List[String]
+):
+    """Fill one reviewed line-edit table, highest line first.
+
+    Args:
+        starts: The 0-based start lines.
+        stops: The exclusive end lines.
+        befores: The predecessor lines for each span.
+    """
+    starts.append(385)
+    stops.append(391)
+    befores.append(
+        "    if (lower and Float64(result) > value) or (\n        not low"
+        "er and Float64(result) < value\n    ):\n"
+    )
+
+
+def _lines_42(
+    mut starts: List[Int], mut stops: List[Int], mut befores: List[String]
+):
+    """Fill one reviewed line-edit table, highest line first.
+
+    Args:
+        starts: The 0-based start lines.
+        stops: The exclusive end lines.
+        befores: The predecessor lines for each span.
+    """
+    starts.append(909)
+    stops.append(919)
+    befores.append("")
+    starts.append(903)
+    stops.append(906)
+    befores.append(
+        "            Error: If the frame's size is not the camera's.\n"
+    )
+    starts.append(896)
+    stops.append(897)
+    befores.append(
+        "            elapsed_seconds: The simulation time of the frame.\n"
+    )
+    starts.append(890)
+    stops.append(891)
+    befores.append(
+        "        mut self, image: Framebuffer, elapsed_seconds: Float64\n"
+    )
+    starts.append(839)
+    stops.append(846)
+    befores.append("")
+    starts.append(105)
+    stops.append(106)
+    befores.append("")
+    starts.append(93)
+    stops.append(94)
+    befores.append("")
+
+
+def _lines_43(
+    mut starts: List[Int], mut stops: List[Int], mut befores: List[String]
+):
+    """Fill one reviewed line-edit table, highest line first.
+
+    Args:
+        starts: The 0-based start lines.
+        stops: The exclusive end lines.
+        befores: The predecessor lines for each span.
+    """
+    starts.append(2056)
+    stops.append(2059)
+    befores.append(
+        "        for landmark in self.map.landmarks_in_distance(waypoint,"
+        " distance):\n"
+    )
+    starts.append(2048)
+    stops.append(2055)
+    befores.append(
+        '            Error: If the lane is not in the map.\n        """\n'
+    )
+    starts.append(2042)
+    stops.append(2043)
+    befores.append("            distance: How far ahead, in meters.\n")
+    starts.append(2035)
+    stops.append(2036)
+    befores.append("        self, waypoint: Waypoint, distance: Float64\n")
+    starts.append(172)
+    stops.append(173)
+    befores.append("")
+
+
+def _lines_44(
+    mut starts: List[Int], mut stops: List[Int], mut befores: List[String]
+):
+    """Fill one reviewed line-edit table, highest line first.
+
+    Args:
+        starts: The 0-based start lines.
+        stops: The exclusive end lines.
+        befores: The predecessor lines for each span.
+    """
+    starts.append(351)
+    stops.append(363)
+    befores.append("")
+    starts.append(330)
+    stops.append(331)
+    befores.append("")
+    starts.append(323)
+    stops.append(325)
+    befores.append(
+        "            Error: If the sensor is not alive or the kind is not"
+        " valid.\n"
+    )
+    starts.append(280)
+    stops.append(285)
+    befores.append('    """What one sensor gives on one tick."""\n')
+    starts.append(274)
+    stops.append(279)
+    befores.append("")
+    starts.append(161)
+    stops.append(162)
+    befores.append("")
+
+
+def _lines_45(
+    mut starts: List[Int], mut stops: List[Int], mut befores: List[String]
+):
+    """Fill one reviewed line-edit table, highest line first.
+
+    Args:
+        starts: The 0-based start lines.
+        stops: The exclusive end lines.
+        befores: The predecessor lines for each span.
+    """
+    starts.append(791)
+    stops.append(792)
+    befores.append("                world.elapsed_seconds,\n")
+    starts.append(707)
+    stops.append(708)
+    befores.append("                        image, world.elapsed_seconds\n")
+    starts.append(167)
+    stops.append(168)
+    befores.append("")
+
+
+def _lines_46(
+    mut starts: List[Int], mut stops: List[Int], mut befores: List[String]
+):
+    """Fill one reviewed line-edit table, highest line first.
+
+    Args:
+        starts: The 0-based start lines.
+        stops: The exclusive end lines.
+        befores: The predecessor lines for each span.
+    """
+    starts.append(1343)
+    stops.append(1352)
+    befores.append("")
+    starts.append(1273)
+    stops.append(1275)
+    befores.append(
+        "                self._add_walker(world, id, scene, assets, registry)\n"
+    )
+    starts.append(1270)
+    stops.append(1272)
+    befores.append(
+        "                self._add_vehicle(world, id, scene, assets, regi"
+        "stry)\n"
+    )
+    starts.append(1242)
+    stops.append(1245)
+    befores.append("        its beam put out.\n")
+    starts.append(1218)
+    stops.append(1227)
+    befores.append(
+        "            WalkerVisual(id, node, limbs^, first, len(scene.mesh"
+        "es) - first)\n"
+    )
+    starts.append(1118)
+    stops.append(1122)
+    befores.append(
+        "        var colors = clothing(id)\n        var shirt = assets.ma"
+        "terials.add(\n            standard_material(\n                co"
+        "lors[0], roughness=0.85, env_map=SCENE_ENVIRONMENT\n            "
+        ")\n        )\n        var trousers = assets.materials.add(\n    "
+        "        standard_material(\n                colors[1], roughness"
+        "=0.85, env_map=SCENE_ENVIRONMENT\n            )\n        )\n    "
+        "    var skin = assets.materials.add(\n            standard_mater"
+        "ial(\n                colors[2], roughness=0.6, env_map=SCENE_EN"
+        "VIRONMENT\n            )\n        )\n"
+    )
+    starts.append(1113)
+    stops.append(1115)
+    befores.append("")
+    starts.append(1078)
+    stops.append(1079)
+    befores.append("")
+    starts.append(875)
+    stops.append(949)
+    befores.append("")
+    starts.append(740)
+    stops.append(746)
+    befores.append("")
+    starts.append(722)
+    stops.append(725)
+    befores.append("")
+
+
+def _lines_47(
+    mut starts: List[Int], mut stops: List[Int], mut befores: List[String]
+):
+    """Fill one reviewed line-edit table, highest line first.
+
+    Args:
+        starts: The 0-based start lines.
+        stops: The exclusive end lines.
+        befores: The predecessor lines for each span.
+    """
+    starts.append(799)
+    stops.append(802)
+    befores.append(
+        "                        _lane_records(doc, builder, id, s, group)\n"
+    )
+    starts.append(797)
+    stops.append(798)
+    befores.append("                    var group = doc.child(section, side)\n")
+    starts.append(784)
+    stops.append(795)
+    befores.append(
+        '            for section in doc.children(lanes, "laneSection"):'
+        '\n                var s = doc.double(section, "s")\n'
+    )
+    starts.append(675)
+    stops.append(683)
+    befores.append("        if len(widths) == 0:\n")
+    starts.append(660)
+    stops.append(662)
+    befores.append("    # `LaneParser`'s `ParseLanes`.\n")
+    starts.append(652)
+    stops.append(659)
+    befores.append(
+        "    doc: _Doc, mut builder: MapBuilder, road_id: RoadId, s: Floa"
+        "t64, group: Int\n"
+    )
+    starts.append(415)
+    stops.append(651)
+    befores.append("")
+    starts.append(65)
+    stops.append(73)
+    befores.append("")
+    starts.append(30)
+    stops.append(36)
+    befores.append("")
+
+
+def restored_frozen_arc_winner() raises -> String:
+    """Restore the frozen-arc winner pin from the live file.
+
+    Returns:
+        The winner pin source.
+
+    Raises:
+        Error: The live file or a restored pin changed.
+    """
+    var path = "extensions/carla/curve_frozen_arc.mojo"
+    var live = Path(path).read_text()
+    _require(
+        live,
+        "fe4a9b4bca0cd23dc2a128fbcb9ff3b4604a870dc0b2b4ff4f8deeb766d2db50",
+        path,
+    )
+    var starts = List[Int]()
+    var stops = List[Int]()
+    var befores = List[String]()
+    _lines_37(starts, stops, befores)
+    var restored = _apply(live, starts, stops, befores)
+    _require(
+        restored,
+        "f7898a57be1c956136f9345675d26c6322c0016243eb095c1d748494fde3c522",
+        "extensions/carla/curve_frozen_arc.mojo",
+    )
+    return restored
+
+
+def restored_lane_invasion_winner() raises -> String:
+    """Restore the lane-invasion winner pin from the live file.
+
+    Returns:
+        The winner pin source.
+
+    Raises:
+        Error: The live file or a restored pin changed.
+    """
+    var path = "extensions/carla/lane_invasion.mojo"
+    var live = Path(path).read_text()
+    _require(
+        live,
+        "c2dfa4b2e3b17434b25dfb1ad637a7901cc044349b1b2eaa34055ce10aaaa981",
+        path,
+    )
+    var starts = List[Int]()
+    var stops = List[Int]()
+    var befores = List[String]()
+    _lines_38(starts, stops, befores)
+    var mid = _apply(live, starts, stops, befores)
+    _require(
+        mid,
+        "3b7262b84e9e170c0e7181e7e013a6763376b34b9e65feddcd98a2c457350850",
+        "extensions/carla/lane_invasion.mojo",
+    )
+    starts.clear()
+    stops.clear()
+    befores.clear()
+    _lines_39(starts, stops, befores)
+    var restored = _apply(mid, starts, stops, befores)
+    _require(
+        restored,
+        "3049273d70f2cf83335533d1a92783bb128fd69fe32530a9d04386b8efd3acec",
+        "extensions/carla/lane_invasion.mojo",
+    )
+    return restored
+
+
+def restored_junction_winner() raises -> String:
+    """Restore the junction-bounds winner pin from the live file.
+
+    Returns:
+        The winner pin source.
+
+    Raises:
+        Error: The live file or a restored pin changed.
+    """
+    var path = "extensions/carla/junction_bounds.mojo"
+    var live = Path(path).read_text()
+    _require(
+        live,
+        "281daed1fdda879c79c34f8ee141685c1df4a358b0efdf96b282b46ff431b19f",
+        path,
+    )
+    var starts = List[Int]()
+    var stops = List[Int]()
+    var befores = List[String]()
+    _lines_40(starts, stops, befores)
+    var mid = _apply(live, starts, stops, befores)
+    _require(
+        mid,
+        "c933e03b6bde0bede8fb0745e9c1ef075d9699fde72b74795368943381d1aa74",
+        "extensions/carla/junction_bounds.mojo",
+    )
+    starts.clear()
+    stops.clear()
+    befores.clear()
+    _lines_41(starts, stops, befores)
+    var restored = _apply(mid, starts, stops, befores)
+    _require(
+        restored,
+        "98fc27702e365e19c3b226d1a7b525bce5aa82b5b11fb6caff79ce39416024e2",
+        "extensions/carla/junction_bounds.mojo",
+    )
+    return restored
+
+
+def restored_cameras_winner(text: String) raises -> String:
+    """Restore the cameras winner pin from the boundary endpoint.
+
+    Args:
+        text: The reviewed endpoint this pin starts from.
+
+    Returns:
+        The winner pin source.
+
+    Raises:
+        Error: The endpoint or a restored pin changed.
+    """
+    _require(
+        text,
+        "dbff553682707e52175a967b7a09618716f1c7c8ba28c17e1fa7f6225725e778",
+        "extensions/carla/cameras.mojo",
+    )
+    var starts = List[Int]()
+    var stops = List[Int]()
+    var befores = List[String]()
+    _lines_42(starts, stops, befores)
+    var restored = _apply(text, starts, stops, befores)
+    _require(
+        restored,
+        "59999d17b9e35d25e56d24a1e88f25738378426c0baf9e69332dfcfdbe26d6b5",
+        "extensions/carla/cameras.mojo",
+    )
+    return restored
+
+
+def restored_world_winner(text: String) raises -> String:
+    """Restore the world winner pin from the boundary endpoint.
+
+    Args:
+        text: The reviewed endpoint this pin starts from.
+
+    Returns:
+        The winner pin source.
+
+    Raises:
+        Error: The endpoint or a restored pin changed.
+    """
+    _require(
+        text,
+        "0c7a44bfda063270715b20dfee7d21d08390f3db97f60c3bb9ddd959eaa6becd",
+        "extensions/carla/world.mojo",
+    )
+    var starts = List[Int]()
+    var stops = List[Int]()
+    var befores = List[String]()
+    _lines_43(starts, stops, befores)
+    var restored = _apply(text, starts, stops, befores)
+    _require(
+        restored,
+        "db35b64842ddac2d5fdea6f4c502e72b19ad892a191ee4614bb33390c4c464eb",
+        "extensions/carla/world.mojo",
+    )
+    return restored
+
+
+def restored_sensor_winner(text: String) raises -> String:
+    """Restore the sensor-manager winner pin from the view endpoint.
+
+    Args:
+        text: The reviewed endpoint this pin starts from.
+
+    Returns:
+        The winner pin source.
+
+    Raises:
+        Error: The endpoint or a restored pin changed.
+    """
+    _require(
+        text,
+        "6c8c81d18596601c31b4bb8e510beb814cbadd237dd8494b954c3e0663eeec82",
+        "extensions/carla/sensor_manager.mojo",
+    )
+    var starts = List[Int]()
+    var stops = List[Int]()
+    var befores = List[String]()
+    _lines_44(starts, stops, befores)
+    var mid = _apply(text, starts, stops, befores)
+    _require(
+        mid,
+        "cf801d357feeaf3c9d0d49dd3953b332243fd398c0ed1c876e4d9301e9251a7b",
+        "extensions/carla/sensor_manager.mojo",
+    )
+    starts.clear()
+    stops.clear()
+    befores.clear()
+    _lines_45(starts, stops, befores)
+    var restored = _apply(mid, starts, stops, befores)
+    _require(
+        restored,
+        "caf4123e0abcbe6cb8ab8dc413b83fb4dced11b3459186b9b21f9e74e86d5d15",
+        "extensions/carla/sensor_manager.mojo",
+    )
+    return restored
+
+
+def restored_render_actor_winner(text: String) raises -> String:
+    """Restore the render-actor winner pin from the ledger endpoint.
+
+    Args:
+        text: The reviewed endpoint this pin starts from.
+
+    Returns:
+        The winner pin source.
+
+    Raises:
+        Error: The endpoint or a restored pin changed.
+    """
+    _require(
+        text,
+        "0169a2466ef2cfe970e5e53b3311ea8cf81e481d11f668c531c2ca545497cdcc",
+        "extensions/carla/render_actors.mojo",
+    )
+    var starts = List[Int]()
+    var stops = List[Int]()
+    var befores = List[String]()
+    _lines_46(starts, stops, befores)
+    var restored = _apply(text, starts, stops, befores)
+    _require(
+        restored,
+        "ae1f86645cb6c7dac99a741619595be18a61c558c56262c27a50fa9b9bacef3b",
+        "extensions/carla/render_actors.mojo",
+    )
+    return restored
+
+
+def restored_opendrive_winner(text: String) raises -> String:
+    """Restore the OpenDRIVE winner pin from the border endpoint.
+
+    Args:
+        text: The reviewed endpoint this pin starts from.
+
+    Returns:
+        The winner pin source.
+
+    Raises:
+        Error: The endpoint or a restored pin changed.
+    """
+    _require(
+        text,
+        "9ff9b750af2c1c1a92fe3f3dfe1e49566e9d6f8c39a3576e0d4cf542bc8cdc28",
+        "extensions/carla/opendrive.mojo",
+    )
+    var starts = List[Int]()
+    var stops = List[Int]()
+    var befores = List[String]()
+    _lines_47(starts, stops, befores)
+    var restored = _apply(text, starts, stops, befores)
+    _require(
+        restored,
+        "4c7ac574196b83d025b84cf6c88261d5e3f3b9ce69923262fcf3cb935e9bf1e5",
+        "extensions/carla/opendrive.mojo",
+    )
+    return restored

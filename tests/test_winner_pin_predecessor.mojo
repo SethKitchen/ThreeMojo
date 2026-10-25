@@ -10,12 +10,24 @@ from std.testing import TestSuite, assert_equal, assert_true
 
 from tests._border_pin_predecessor import restored_border_pins
 from tests._geometry_predecessor import restored_geometry
+from tests._opendrive_border import restored_opendrive
+from tests._render_actor_predecessor import restored_render_actors
+from tests._runtime_boundary_predecessor import restored_cameras, restored_world
+from tests._sensor_view_predecessor import restored_sensor_view
 from tests._winner_pin_predecessor import (
+    restored_cameras_winner,
     restored_dispatch_winner,
     restored_domain_winner,
+    restored_frozen_arc_winner,
+    restored_junction_winner,
+    restored_lane_invasion_winner,
+    restored_opendrive_winner,
+    restored_render_actor_winner,
     restored_rounded_arc_winner,
     restored_rounded_line_winner,
+    restored_sensor_winner,
     restored_winner_pins,
+    restored_world_winner,
 )
 from tools._python_json import PyJson
 from tools._sha256 import sha256_hex
@@ -37,6 +49,22 @@ comptime _ROUNDED = "extensions/carla/curve_rounded_line.mojo"
 """A border pin that is not the winner pin."""
 comptime _DISPATCH = "extensions/carla/curve_sample_dispatch.mojo"
 """A border pin that is not the winner pin."""
+comptime _FROZEN = "extensions/carla/curve_frozen_arc.mojo"
+"""The frozen arc module restored from the live file."""
+comptime _LANE = "extensions/carla/lane_invasion.mojo"
+"""The lane invasion module restored from the live file."""
+comptime _JUNCTION = "extensions/carla/junction_bounds.mojo"
+"""The junction module restored from the live file."""
+comptime _CAMERAS = "extensions/carla/cameras.mojo"
+"""The cameras module restored from its boundary endpoint."""
+comptime _WORLD = "extensions/carla/world.mojo"
+"""The world module restored from its boundary endpoint."""
+comptime _SENSOR = "extensions/carla/sensor_manager.mojo"
+"""The sensor manager restored from its view endpoint."""
+comptime _ACTORS = "extensions/carla/render_actors.mojo"
+"""The render-actor module restored from its ledger endpoint."""
+comptime _OPEN = "extensions/carla/opendrive.mojo"
+"""The OpenDRIVE module restored from its border endpoint."""
 
 
 def _find(paths: List[String], name: String) -> Int:
@@ -76,6 +104,7 @@ def test_live_consumers_restore_their_winner_pins() raises:
     var direct = 0
     var border_match = 0
     var border_differ = 0
+    var covered = 0
     var index = 0
     while index < doc.length(pins):
         var name = doc.key(pins, index)
@@ -115,6 +144,42 @@ def test_live_consumers_restore_their_winner_pins() raises:
                 elif name == _ARC:
                     var arc = restored_rounded_arc_winner()
                     assert_equal(sha256_hex(arc.as_bytes()), expected)
+                elif name == _FROZEN:
+                    var frozen = restored_frozen_arc_winner()
+                    assert_equal(sha256_hex(frozen.as_bytes()), expected)
+                    covered += 1
+                elif name == _LANE:
+                    var lane = restored_lane_invasion_winner()
+                    assert_equal(sha256_hex(lane.as_bytes()), expected)
+                    covered += 1
+                elif name == _JUNCTION:
+                    var junction = restored_junction_winner()
+                    assert_equal(sha256_hex(junction.as_bytes()), expected)
+                    covered += 1
+                elif name == _CAMERAS:
+                    var cameras = restored_cameras_winner(restored_cameras())
+                    assert_equal(sha256_hex(cameras.as_bytes()), expected)
+                    covered += 1
+                elif name == _WORLD:
+                    var world = restored_world_winner(restored_world())
+                    assert_equal(sha256_hex(world.as_bytes()), expected)
+                    covered += 1
+                elif name == _SENSOR:
+                    var sensor = restored_sensor_winner(restored_sensor_view())
+                    assert_equal(sha256_hex(sensor.as_bytes()), expected)
+                    covered += 1
+                elif name == _ACTORS:
+                    var actors = restored_render_actor_winner(
+                        restored_render_actors()
+                    )
+                    assert_equal(sha256_hex(actors.as_bytes()), expected)
+                    covered += 1
+                elif name == _OPEN:
+                    var opendrive = restored_opendrive_winner(
+                        restored_opendrive()
+                    )
+                    assert_equal(sha256_hex(opendrive.as_bytes()), expected)
+                    covered += 1
                 elif sha256_hex(Path(name).read_bytes()) == expected:
                     direct += 1
         index += 1
@@ -122,6 +187,7 @@ def test_live_consumers_restore_their_winner_pins() raises:
     assert_equal(border_match, 38)
     assert_equal(border_differ, 3)
     assert_equal(direct, 45)
+    assert_equal(covered, 8)
 
 
 def test_a_changed_winner_pin_is_refused() raises:
@@ -156,6 +222,41 @@ def test_a_changed_winner_pin_is_refused() raises:
     var arc = restored_rounded_arc_winner()
     assert_true(
         sha256_hex((arc + "\n").as_bytes()) != sha256_hex(arc.as_bytes())
+    )
+    var frozen = restored_frozen_arc_winner()
+    assert_true(
+        sha256_hex((frozen + "\n").as_bytes()) != sha256_hex(frozen.as_bytes())
+    )
+    var lane = restored_lane_invasion_winner()
+    assert_true(
+        sha256_hex((lane + "\n").as_bytes()) != sha256_hex(lane.as_bytes())
+    )
+    var junction = restored_junction_winner()
+    assert_true(
+        sha256_hex((junction + "\n").as_bytes())
+        != sha256_hex(junction.as_bytes())
+    )
+    var cameras = restored_cameras_winner(restored_cameras())
+    assert_true(
+        sha256_hex((cameras + "\n").as_bytes())
+        != sha256_hex(cameras.as_bytes())
+    )
+    var world = restored_world_winner(restored_world())
+    assert_true(
+        sha256_hex((world + "\n").as_bytes()) != sha256_hex(world.as_bytes())
+    )
+    var sensor = restored_sensor_winner(restored_sensor_view())
+    assert_true(
+        sha256_hex((sensor + "\n").as_bytes()) != sha256_hex(sensor.as_bytes())
+    )
+    var actors = restored_render_actor_winner(restored_render_actors())
+    assert_true(
+        sha256_hex((actors + "\n").as_bytes()) != sha256_hex(actors.as_bytes())
+    )
+    var opendrive = restored_opendrive_winner(restored_opendrive())
+    assert_true(
+        sha256_hex((opendrive + "\n").as_bytes())
+        != sha256_hex(opendrive.as_bytes())
     )
 
 
