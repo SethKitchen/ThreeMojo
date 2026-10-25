@@ -155,6 +155,11 @@ Mojo checks the reviewed Sum2 helper bindings.
 Each consumer imports its helpers directly.
 A wildcard, an alias, or a shadowing binding is refused.
 
+Mojo checks the optional runtime edges.
+Fresh helpers keep the environment guard.
+The grouped debit, dispatch reserve, and model rooms stay in place.
+A missing edge or a moved guard is refused.
+
 ## Candidate certificate
 
 A certificate contains a stored incumbent point and its road parameter.
