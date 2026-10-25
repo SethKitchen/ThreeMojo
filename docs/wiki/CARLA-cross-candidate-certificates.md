@@ -252,6 +252,11 @@ Restoring those spans matches the pin.
 The expansion context stays in place.
 A moved span or a changed body is refused.
 
+Mojo checks the live Sum2 alias routing.
+Four caller modules keep the road-info alias.
+Restoring that alias matches the pinned routing.
+A bare import or a changed routing is refused.
+
 ## Candidate certificate
 
 A certificate contains a stored incumbent point and its road parameter.
