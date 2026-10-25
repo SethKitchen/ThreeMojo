@@ -176,3 +176,5 @@ $(call gallery,expressions,expressions)
 $(call gallery,streamline,streamline)
 # Three tomatoes, scanned as 445,409 Gaussian splats, with the camera circling.
 $(call gallery,tomatoes,tomatoes,assets/tomatoes/tomatoes.v4.spz)
+# A pad of the web backend in one fixed state: sticks, triggers and buttons.
+$(call gallery,gamepad,gamepad)

@@ -67,7 +67,7 @@ while running:
             ...
 ```
 
-Give `hid.claimed()` to the evdev hub. The kernel also shows a HIDAPI pad as an evdev device, and SDL reads each pad once. `examples/gamepad/hubs.mojo` runs both hubs.
+Give `hid.claimed()` to the evdev hub. The kernel also shows a HIDAPI pad as an evdev device, and SDL reads each pad once. `examples/gamepad.mojo` runs both hubs.
 
 A hidraw node is often readable only by root. A udev rule gives the user at the seat access. Steam installs such rules for its controllers.
 
