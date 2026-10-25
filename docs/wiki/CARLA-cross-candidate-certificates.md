@@ -145,6 +145,12 @@ Three consumers keep that rate, heading, and ideal u.
 The eligibility phase keeps the original half product.
 A changed graph or a stored-half edit is refused.
 
+Mojo checks the reviewed Sum2 caller graphs.
+The recurrence and the checked leaf match the arithmetic checkpoint.
+The scalar spiral keeps the environment call and the reviewed body.
+The envelope and the roundoff predecessor match their checkpoints.
+A changed graph is refused.
+
 ## Candidate certificate
 
 A certificate contains a stored incumbent point and its road parameter.
