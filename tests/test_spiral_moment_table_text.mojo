@@ -6,10 +6,14 @@
 """The stored spiral-moment table declaration is read in Mojo."""
 
 from std.pathlib import Path
-from std.testing import TestSuite, assert_equal, assert_raises
+from std.testing import TestSuite, assert_equal, assert_raises, assert_true
 
 from tools._sha256 import sha256_hex
-from tools.spiral_moment_table_text import WORD_COUNT, parse_table
+from tools.spiral_moment_table_text import (
+    WORD_COUNT,
+    canonical_table,
+    parse_table,
+)
 
 
 comptime _PATH = "extensions/carla/spiral_moment_table_data.mojo"
@@ -218,6 +222,23 @@ def test_wrong_word_count_is_refused() raises:
     var zeros = _declaration("0002816", 0, "0x0000000000000000", " ")
     with assert_raises(contains="missing or extra"):
         _ = parse_table(Span(zeros))
+
+
+def test_canonical_bytes_match_the_live_table() raises:
+    """The live file is the canonical generated source."""
+    var text = Path(_PATH).read_text()
+    assert_equal(canonical_table(_parse(text)), text)
+
+
+def test_a_paired_layout_is_not_canonical() raises:
+    """A paired layout keeps the words and changes the bytes."""
+    var text = Path(_PATH).read_text()
+    var paired = _replace_once(text, "),\n    UInt64(", "), UInt64(")
+    assert_equal(_payload(_parse(paired)), _payload(_parse(text)))
+    assert_true(canonical_table(_parse(paired)) != paired)
+    var extra = text + "# extra comment\n"
+    assert_equal(_payload(_parse(extra)), _payload(_parse(text)))
+    assert_true(canonical_table(_parse(extra)) != extra)
 
 
 def main() raises:
