@@ -205,6 +205,12 @@ The native fixture and the reference function stay fixed.
 The live dispatch keeps the road-info alias.
 A changed premise or a bare road-info import is refused.
 
+Mojo checks the live winner-seed guard.
+The first operation stays the environment guard.
+The debit statements match the pin after the upper assignment is read as the score high.
+One upper assignment stays `update[1]`.
+A moved guard or a changed debit is refused.
+
 ## Candidate certificate
 
 A certificate contains a stored incumbent point and its road parameter.
