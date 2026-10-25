@@ -167,6 +167,12 @@ Lane refinement leaves the removed search names out.
 A comment or a string stays allowed.
 A new executable name is refused.
 
+Mojo checks the live lane-search edges.
+One frontier loop keeps the current-cell work debit.
+The fresh producer follows that debit.
+The dispatch setup stays after the depth refusal.
+A moved debit or a changed cut is refused.
+
 ## Candidate certificate
 
 A certificate contains a stored incumbent point and its road parameter.
