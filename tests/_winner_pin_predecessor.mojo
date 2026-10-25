@@ -1,0 +1,1707 @@
+# Copyright (c) 2026 Seth Kitchen, PE
+# SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
+# Noncommercial use is free; commercial use requires a paid license.
+# See LICENSE, LICENSE-COMMERCIAL.md and THIRD-PARTY-NOTICES.md.
+
+"""Restore reviewed winner pins from the live consumer files."""
+
+from std.pathlib import Path
+
+from tools._sha256 import sha256_hex
+
+
+def _split(text: String) -> List[String]:
+    """Split `text` into lines that keep their newlines.
+
+    Args:
+        text: The source.
+
+    Returns:
+        Each line, including an unfinished last line.
+    """
+    var lines = List[String]()
+    if text.byte_length() == 0:
+        return lines^
+    var rest = text
+    while True:
+        var at = rest.find("\n")
+        if at < 0:
+            lines.append(rest)
+            return lines^
+        var line = String(rest[byte = : at + 1])
+        var tail = String(rest[byte = at + 1 :])
+        lines.append(line)
+        rest = tail
+
+
+def _join(lines: List[String]) -> String:
+    """Join lines that already carry their separators.
+
+    Args:
+        lines: The lines.
+
+    Returns:
+        The source.
+    """
+    var text = String()
+    for line in lines:
+        text += line
+    return text
+
+
+def _apply(
+    text: String,
+    starts: List[Int],
+    stops: List[Int],
+    befores: List[String],
+) -> String:
+    """Replace each span with its predecessor lines.
+
+    Args:
+        text: The source.
+        starts: The 0-based start lines, highest line first.
+        stops: The exclusive end lines.
+        befores: The predecessor lines for each span.
+
+    Returns:
+        The source with those spans replaced.
+    """
+    var lines = _split(text)
+    for index in range(len(starts)):
+        var start = starts[index]
+        var stop = stops[index]
+        var before = _split(befores[index])
+        var next = List[String]()
+        for slot in range(start):
+            next.append(lines[slot])
+        for line in before:
+            next.append(line)
+        for slot in range(stop, len(lines)):
+            next.append(lines[slot])
+        lines = next^
+    return _join(lines)
+
+
+def _replace_once(
+    text: String, before: String, after: String, path: String
+) raises -> String:
+    """Replace one exact successor span.
+
+    Args:
+        text: The source.
+        before: The predecessor span.
+        after: The successor span.
+        path: The consumer path.
+
+    Returns:
+        The source with that span replaced.
+
+    Raises:
+        Error: The span is missing or repeated.
+    """
+    var at = text.find(after)
+    if at < 0:
+        raise Error(
+            "winner/sign source contract: unreviewed canonical dependency: "
+            + path
+        )
+    var tail = String(text[byte = at + after.byte_length() :])
+    if tail.find(after) >= 0:
+        raise Error(
+            "winner/sign source contract: unreviewed canonical dependency: "
+            + path
+        )
+    var head = String(text[byte=:at])
+    return head + before + tail
+
+
+def _replace_spans(
+    text: String,
+    befores: List[String],
+    afters: List[String],
+    path: String,
+) raises -> String:
+    """Replace each successor span in table order.
+
+    Args:
+        text: The source.
+        befores: The predecessor spans.
+        afters: The successor spans.
+        path: The consumer path.
+
+    Returns:
+        The source with those spans replaced.
+
+    Raises:
+        Error: A span is missing or repeated.
+    """
+    var current = text
+    for index in range(len(befores)):
+        current = _replace_once(current, befores[index], afters[index], path)
+    return current
+
+
+def _require(text: String, expected: String, path: String) raises:
+    """Require one file digest.
+
+    Args:
+        text: The source.
+        expected: The required digest.
+        path: The consumer path.
+
+    Raises:
+        Error: The digest changed.
+    """
+    if sha256_hex(text.as_bytes()) != expected:
+        raise Error(
+            "winner/sign source contract: unreviewed canonical dependency: "
+            + path
+        )
+
+
+def _lines_0(
+    mut starts: List[Int], mut stops: List[Int], mut befores: List[String]
+):
+    """Fill one reviewed line-edit table, highest line first.
+
+    Args:
+        starts: The 0-based start lines.
+        stops: The exclusive end lines.
+        befores: The predecessor lines for each span.
+    """
+    starts.append(1488)
+    stops.append(1489)
+    befores.append("        scene.add_mesh(mesh^)\n")
+
+
+def _spans_1(mut befores: List[String], mut afters: List[String]):
+    """Fill one reviewed span-edit table, last edit first.
+
+    Args:
+        befores: The predecessor spans.
+        afters: The successor spans.
+    """
+    befores.append(
+        '"""\n\nfrom std.math import inf, isfinite, isnan, sqrt\nfrom std.'
+        "memory import bitcast\n\n\ndef _next_up(value: Float64) -> Float64:"
+        "\n    # Observe the rounded bits before any following arithmetic. Un"
+        "like an\n    # epsilon multiplier, this also handles zero and subnor"
+        "mal results.\n    if isnan(value) or value == inf[DType.float64]():"
+        "\n        return value\n    if value == 0.0:\n        return bitcast"
+        "[DType.float64](UInt64(1))\n    var bits = bitcast[DType.uint64](val"
+        "ue)\n    if value < 0.0:\n        return bitcast[DType.float64](bits"
+        " - 1)\n    return bitcast[DType.float64](bits + 1)\n\n\ndef _next_do"
+        "wn(value: Float64) -> Float64:\n    return -_next_up(-value)\n\n\n"
+    )
+    afters.append(
+        '"""\n\nfrom extensions.carla.curve_interval import _next_down, _n'
+        "ext_up\nfrom std.math import inf, isfinite, isnan, sqrt\nfrom std.me"
+        "mory import bitcast\n\n\n"
+    )
+
+
+def _lines_2(
+    mut starts: List[Int], mut stops: List[Int], mut befores: List[String]
+):
+    """Fill one reviewed line-edit table, highest line first.
+
+    Args:
+        starts: The 0-based start lines.
+        stops: The exclusive end lines.
+        befores: The predecessor lines for each span.
+    """
+    starts.append(104)
+    stops.append(106)
+    befores.append(
+        "    # Defensive arithmetic refusal preserves the original conservati"
+        "ve cover.\n    if not _ordered_finite(result) or not result.contains"
+        "(best):\n        return _Interval(low, high)\n"
+    )
+    starts.append(99)
+    stops.append(100)
+    befores.append(
+        "            if _ordered_finite(negative) and negative.high >= 0.0:\n"
+    )
+    starts.append(94)
+    stops.append(95)
+    befores.append(
+        "            if _ordered_finite(positive) and positive.high >= 0.0:\n"
+    )
+    starts.append(72)
+    stops.append(73)
+    befores.append(
+        "            if _ordered_finite(radius) and radius.high >= 0.0:\n"
+    )
+    starts.append(67)
+    stops.append(68)
+    befores.append(
+        "            if _ordered_finite(radius) and radius.high >= 0.0:\n"
+    )
+
+
+def _lines_3(
+    mut starts: List[Int], mut stops: List[Int], mut befores: List[String]
+):
+    """Fill one reviewed line-edit table, highest line first.
+
+    Args:
+        starts: The 0-based start lines.
+        stops: The exclusive end lines.
+        befores: The predecessor lines for each span.
+    """
+    starts.append(52)
+    stops.append(53)
+    befores.append("from extensions.carla.road_info import info_index\n")
+
+
+def _spans_4(mut befores: List[String], mut afters: List[String]):
+    """Fill one reviewed span-edit table, last edit first.
+
+    Args:
+        befores: The predecessor spans.
+        afters: The successor spans.
+    """
+    befores.append(
+        "def _polynomial_value(\n    polynomial: CubicPolynomial, s: _ValueJe"
+        "t, shift: Float64 = 0.0\n) -> _ValueJet:\n    return (\n        _Val"
+        "ueJet.constant(polynomial.a) - _ValueJet.constant(shift)\n    ) + s "
+        "* (\n        _ValueJet.constant(polynomial.b)\n        + s\n        "
+        "* (\n            _ValueJet.constant(polynomial.c)\n            + s *"
+        " _ValueJet.constant(polynomial.d)\n        )\n    )\n\n"
+    )
+    afters.append(
+        "def _polynomial_value(\n    polynomial: CubicPolynomial, s: _ValueJe"
+        "t, shift: Float64 = 0.0\n) -> _ValueJet:\n    var local = s - _Value"
+        "Jet.constant(polynomial.s)\n    return (\n        _ValueJet.constant"
+        "(polynomial.a) - _ValueJet.constant(shift)\n    ) + local * (\n     "
+        "   _ValueJet.constant(polynomial.b)\n        + local\n        * (\n "
+        "           _ValueJet.constant(polynomial.c)\n            + local * _"
+        "ValueJet.constant(polynomial.d)\n        )\n    )\n\n"
+    )
+
+
+def _spans_5(mut befores: List[String], mut afters: List[String]):
+    """Fill one reviewed span-edit table, last edit first.
+
+    Args:
+        befores: The predecessor spans.
+        afters: The successor spans.
+    """
+    befores.append("    if isfinite(coupled_error) and coupled_error >= 0.0:\n")
+    afters.append(
+        "    # The concrete producer returns a nonnegative allowance or infin"
+        "ity.\n    # Keep the finite fallback; a finite negative result is no"
+        "t produced.\n    if isfinite(coupled_error):\n"
+    )
+
+
+def _lines_6(
+    mut starts: List[Int], mut stops: List[Int], mut befores: List[String]
+):
+    """Fill one reviewed line-edit table, highest line first.
+
+    Args:
+        starts: The 0-based start lines.
+        stops: The exclusive end lines.
+        befores: The predecessor lines for each span.
+    """
+    starts.append(246)
+    stops.append(247)
+    befores.append("            scene.add_mesh(mesh^)\n")
+
+
+def _lines_7(
+    mut starts: List[Int], mut stops: List[Int], mut befores: List[String]
+):
+    """Fill one reviewed line-edit table, highest line first.
+
+    Args:
+        starts: The 0-based start lines.
+        stops: The exclusive end lines.
+        befores: The predecessor lines for each span.
+    """
+    starts.append(227)
+    stops.append(281)
+    befores.append("")
+    starts.append(212)
+    stops.append(225)
+    befores.append("")
+    starts.append(207)
+    stops.append(211)
+    befores.append("")
+    starts.append(199)
+    stops.append(200)
+    befores.append("    def tangent(self, x: Float64) -> Float64:\n")
+    starts.append(191)
+    stops.append(198)
+    befores.append(
+        "        var local = x - self.s\n        return self.a + local * (sel"
+        "f.b + local * (self.c + local * self.d))\n"
+    )
+    starts.append(186)
+    stops.append(190)
+    befores.append("")
+    starts.append(178)
+    stops.append(179)
+    befores.append("    def evaluate(self, x: Float64) -> Float64:\n")
+    starts.append(176)
+    stops.append(177)
+    befores.append("        return CubicPolynomial(value, 0, 0, 0, 0)\n")
+    starts.append(172)
+    stops.append(175)
+    befores.append("")
+    starts.append(85)
+    stops.append(165)
+    befores.append("    def constant(value: Float64) -> CubicPolynomial:\n")
+    starts.append(57)
+    stops.append(84)
+    befores.append("")
+    starts.append(50)
+    stops.append(51)
+    befores.append(
+        "            s: Where the record starts along the road, in meters.\n "
+        '       """\n'
+    )
+    starts.append(45)
+    stops.append(46)
+    befores.append("")
+    starts.append(30)
+    stops.append(37)
+    befores.append(
+        "        out self, a: Float64, b: Float64, c: Float64, d: Float64, s:"
+        " Float64\n"
+    )
+    starts.append(15)
+    stops.append(19)
+    befores.append("")
+
+
+def _spans_8(mut befores: List[String], mut afters: List[String]):
+    """Fill one reviewed span-edit table, last edit first.
+
+    Args:
+        befores: The predecessor spans.
+        afters: The successor spans.
+    """
+    befores.append(
+        '        Returns:\n            The slope of the cubic.\n        ""'
+        '"\n        return self.b + x * (2 * self.c + x * 3 * self.d)\n'
+    )
+    afters.append(
+        '        Returns:\n            The slope of the cubic.\n        ""'
+        '"\n        var local = x - self.s\n        return self.b + local * '
+        "(2 * self.c + local * 3 * self.d)\n"
+    )
+    befores.append(
+        '        Returns:\n            The value of the cubic.\n        ""'
+        '"\n        return self.a + x * (self.b + x * (self.c + x * self.d))'
+        '\n\n    def tangent(self, x: Float64) -> Float64:\n        """Ret'
+        "urn df/dx, `CubicPolynomial::Tangent`.\n"
+    )
+    afters.append(
+        '        Returns:\n            The value of the cubic.\n        ""'
+        '"\n        var local = x - self.s\n        return self.a + local * '
+        "(self.b + local * (self.c + local * self.d))\n\n    def tangent(self"
+        ', x: Float64) -> Float64:\n        """Return df/dx, `CubicPolynom'
+        "ial::Tangent`.\n"
+    )
+    befores.append(
+        "            d: The cubic term, per square meter.\n            s: Whe"
+        're the record starts along the road, in meters.\n        """\n   '
+        "     self.a = a - b * s + c * s * s - d * s * s * s\n        self.b "
+        "= b - 2 * c * s + 3 * d * s * s\n        self.c = c - 3 * d * s\n   "
+        "     self.d = d\n        self.s = s\n\n"
+    )
+    afters.append(
+        "            d: The cubic term, per square meter.\n            s: Whe"
+        're the record starts along the road, in meters.\n        """\n   '
+        "     self.a = a\n        self.b = b\n        self.c = c\n        sel"
+        "f.d = d\n        self.s = s\n\n"
+    )
+    befores.append(
+        '    ):\n        """Create the cubic of a record that starts at `s'
+        "`.\n\n        The coefficients are re-expanded about zero, as CARLA "
+        "does, so\n        `evaluate(x)` equals the record's cubic at `x - s`"
+        ".\n\n        Args:\n            a: The constant term, in meters.\n"
+    )
+    afters.append(
+        '    ):\n        """Create the cubic of a record that starts at `s'
+        "`.\n\n        The original coefficients are stored unchanged. Unlike"
+        " CARLA\n        1360bb9, evaluation forms the local coordinate `x - "
+        "s` first.\n        This is a numerical correction, not bit-identical"
+        " legacy behavior.\n\n        Args:\n            a: The constant term"
+        ", in meters.\n"
+    )
+    befores.append(
+        '"""CARLA\'s `geom::CubicPolynomial`: f(x) = a + b x + c x^2 + d x^'
+        "3.\n\nOpenDRIVE writes lane widths, elevations and lane offsets as c"
+        "ubics in a\ndistance ds from the start of their record. CARLA shifts"
+        " each one to the\nroad's own s, so a caller evaluates every record a"
+        "t the same s. The\ncoefficients carry mixed units: a is in meters, b"
+        " has none, c is per\nmeter and d is per square meter. They stay plai"
+        'n numbers for that reason.\n"""\n\n\nstruct CubicPolynomial(Impli'
+        'citlyCopyable):\n    """A cubic in s, shifted so that it reads th'
+        'e road\'s s directly."""\n\n    var a: Float64\n    var b: Float64'
+        "\n"
+    )
+    afters.append(
+        '"""CARLA\'s `geom::CubicPolynomial`: f(x) = a + b x + c x^2 + d x^'
+        "3.\n\nOpenDRIVE writes lane widths, elevations and lane offsets as c"
+        "ubics in a\ndistance ds from the start of their record. The record r"
+        "etains its local coefficients and subtracts the record start\nbefore"
+        " Horner evaluation. This avoids cancellation at a large road station"
+        ".\nThe coefficients carry mixed units: a is in meters, b has none, c"
+        " is per\nmeter and d is per square meter. They stay plain numbers fo"
+        'r that reason.\n"""\n\n\nstruct CubicPolynomial(ImplicitlyCopyabl'
+        'e):\n    """A local cubic evaluated at a road station or an expli'
+        'cit parameter."""\n\n    var a: Float64\n    var b: Float64\n'
+    )
+
+
+def _spans_9(mut befores: List[String], mut afters: List[String]):
+    """Fill one reviewed span-edit table, last edit first.
+
+    Args:
+        befores: The predecessor spans.
+        afters: The successor spans.
+    """
+    befores.append(
+        "                    data[at] * gain, data[at + 1] * gain, data[at + "
+        "2] * gain\n                )\n                var seen = _mix(ground"
+        ", sky, above)\n                data[at] = seen.r\n                da"
+        "ta[at + 1] = seen.g\n                data[at + 2] = seen.b\n    retu"
+        "rn _lighting(assets, cube^)\n\n\ndef _mix(a: FloatColor, b: FloatCol"
+        'or, t: Float32) -> FloatColor:\n    """Return `a` moved toward `b'
+        '` by `t`."""\n    return FloatColor(\n        a.r + (b.r - a.r) *'
+        " t, a.g + (b.g - a.g) * t, a.b + (b.b - a.b) * t\n    )\n"
+    )
+    afters.append(
+        "                    data[at] * gain, data[at + 1] * gain, data[at + "
+        "2] * gain\n                )\n                var seen = mix_opaque("
+        "ground, sky, above)\n                data[at] = seen.r\n            "
+        "    data[at + 1] = seen.g\n                data[at + 2] = seen.b\n  "
+        "  return _lighting(assets, cube^)\n"
+    )
+    befores.append(
+        "        shade + light.b * silver * day + light.b * Float32(0.05) * d"
+        "ay,\n    )\n    var colored = _mix(overcast, lit, cloud)\n    return"
+        " _mix(\n        _ground_color(ground),\n        colored,\n"
+    )
+    afters.append(
+        "        shade + light.b * silver * day + light.b * Float32(0.05) * d"
+        "ay,\n    )\n    var colored = mix_opaque(overcast, lit, cloud)\n    "
+        "return mix_opaque(\n        _ground_color(ground),\n        colored,"
+        "\n"
+    )
+    befores.append(
+        "    # Overcast: the whole sky goes gray as the cover grows.\n    var"
+        " gray = (clear.r + clear.g + clear.b) / 3\n    var overcast = _mix("
+        "\n        clear,\n        FloatColor(gray, gray * 1.02, gray * 1.06)"
+        ",\n"
+    )
+    afters.append(
+        "    # Overcast: the whole sky goes gray as the cover grows.\n    var"
+        " gray = (clear.r + clear.g + clear.b) / 3\n    var overcast = mix_op"
+        "aque(\n        clear,\n        FloatColor(gray, gray * 1.02, gray * "
+        "1.06),\n"
+    )
+    befores.append(
+        '    """\n    var up = max(direction.y, 0)\n    var night = _mix(N'
+        "IGHT_HORIZON, NIGHT_ZENITH, sqrt(up))\n    var clear = FloatColor(\n"
+        "        sky.r * gain * day + night.r,\n"
+    )
+    afters.append(
+        '    """\n    var up = max(direction.y, 0)\n    var night = mix_op'
+        "aque(NIGHT_HORIZON, NIGHT_ZENITH, sqrt(up))\n    var clear = FloatCo"
+        "lor(\n        sky.r * gain * day + night.r,\n"
+    )
+    befores.append(
+        '"""\n\nfrom core.assets import Assets\nfrom core.object3d import '
+        "Object3D\n"
+    )
+    afters.append(
+        '"""\n\nfrom render.color_math import mix_opaque\nfrom core.assets'
+        " import Assets\nfrom core.object3d import Object3D\n"
+    )
+
+
+def _spans_10(mut befores: List[String], mut afters: List[String]):
+    """Fill one reviewed span-edit table, last edit first.
+
+    Args:
+        befores: The predecessor spans.
+        afters: The successor spans.
+    """
+    befores.append(
+        "        Float32(0.3) + Float32(0.3) * rain,\n    )\n\n\ndef _mix(a: "
+        'FloatColor, b: FloatColor, t: Float32) -> FloatColor:\n    """Ret'
+        'urn `a` moved toward `b` by `t`."""\n    return FloatColor(\n    '
+        "    a.r + (b.r - a.r) * t, a.g + (b.g - a.g) * t, a.b + (b.b - a.b) "
+        "* t\n    )\n"
+    )
+    afters.append("        Float32(0.3) + Float32(0.3) * rain,\n    )\n")
+    befores.append(
+        "    var warm = kelvin_color(Temperature(kelvin, KELVIN))\n    var gr"
+        "ay = _percent(weather.cloudiness) * Float32(0.6)\n    return _mix(wa"
+        "rm, FloatColor(0.9, 0.92, 1.0), gray)\n\n\n"
+    )
+    afters.append(
+        "    var warm = kelvin_color(Temperature(kelvin, KELVIN))\n    var gr"
+        "ay = _percent(weather.cloudiness) * Float32(0.6)\n    return mix_opa"
+        "que(warm, FloatColor(0.9, 0.92, 1.0), gray)\n\n\n"
+    )
+    befores.append(
+        '"""\n\nfrom extensions.carla.weather import WeatherParameters\nfr'
+        "om math.smoothstep import smoothstep\n"
+    )
+    afters.append(
+        '"""\n\nfrom render.color_math import mix_opaque\nfrom extensions.'
+        "carla.weather import WeatherParameters\nfrom math.smoothstep import "
+        "smoothstep\n"
+    )
+
+
+def _lines_11(
+    mut starts: List[Int], mut stops: List[Int], mut befores: List[String]
+):
+    """Fill one reviewed line-edit table, highest line first.
+
+    Args:
+        starts: The 0-based start lines.
+        stops: The exclusive end lines.
+        befores: The predecessor lines for each span.
+    """
+    starts.append(2282)
+    stops.append(2293)
+    befores.append("")
+    starts.append(2273)
+    stops.append(2274)
+    befores.append(
+        "        var half = Float32(self.lane_width(section, lane, at)) / 2.0\n"
+    )
+    starts.append(2178)
+    stops.append(2242)
+    befores.append("")
+    starts.append(2163)
+    stops.append(2164)
+    befores.append("        var right = self.directed_point(at)\n")
+    starts.append(2161)
+    stops.append(2162)
+    befores.append(
+        "        var offsets = self.lane_edge_offsets(section, lane, s, extra"
+        "_width)\n"
+    )
+    starts.append(2071)
+    stops.append(2138)
+    befores.append("")
+    starts.append(1989)
+    stops.append(1991)
+    befores.append(
+        "        offset -= lane_offset.value().polynomial.evaluate(s)\n      "
+        "  slope -= lane_offset.value().polynomial.tangent(s)\n"
+    )
+    starts.append(1897)
+    stops.append(1952)
+    befores.append("")
+    starts.append(1864)
+    stops.append(1868)
+    befores.append(
+        "            elevation.tangent(low) * span,\n            (elevation.c"
+        " + 3.0 * (low - elevation.s) * elevation.d) * span * span,\n"
+    )
+    starts.append(1850)
+    stops.append(1851)
+    befores.append("        var elevation = self.elevation_on(low)\n")
+    starts.append(1839)
+    stops.append(1840)
+    befores.append("                q1 += factor * width.tangent(low)\n")
+    starts.append(1813)
+    stops.append(1814)
+    befores.append("        var q1 = -offset.tangent(low)\n")
+    starts.append(1761)
+    stops.append(1764)
+    befores.append(
+        "        var elevation = self.elevation_on(s)\n        point.z = elev"
+        "ation.evaluate(s)\n        point.pitch = elevation.tangent(s)\n"
+    )
+    starts.append(1743)
+    stops.append(1744)
+    befores.append(
+        "        offset -= lane_offset.value().polynomial.evaluate(s)\n"
+    )
+    starts.append(1683)
+    stops.append(1685)
+    befores.append(
+        "            var w = width.value().polynomial.evaluate(s)\n          "
+        "  var t = width.value().polynomial.tangent(s)\n"
+    )
+    starts.append(1641)
+    stops.append(1642)
+    befores.append("            start + self.section_length(section)\n")
+    starts.append(1612)
+    stops.append(1613)
+    befores.append("            return width.value().polynomial.evaluate(s)\n")
+    starts.append(1552)
+    stops.append(1594)
+    befores.append(
+        "    def lane_width(self, section: Int, lane: Int, s: Float64) raises"
+        " -> Float64:\n"
+    )
+    starts.append(1550)
+    stops.append(1551)
+    befores.append("        return self.section_length(section)\n")
+    starts.append(1513)
+    stops.append(1542)
+    befores.append("    def lane_length(self, section: Int) -> Float64:\n")
+    starts.append(1466)
+    stops.append(1467)
+    befores.append(
+        "                var w = width.value().polynomial.evaluate(s)\n"
+    )
+    starts.append(1447)
+    stops.append(1448)
+    befores.append("        zero.z = self.elevation_on(s).evaluate(s)\n")
+    starts.append(1442)
+    stops.append(1443)
+    befores.append(
+        "            offset = lane_offset.value().polynomial.evaluate(clamped"
+        ")\n"
+    )
+    starts.append(1434)
+    stops.append(1435)
+    befores.append("        var lanes = self.lanes_at(s)\n")
+    starts.append(1340)
+    stops.append(1399)
+    befores.append("")
+    starts.append(1330)
+    stops.append(1331)
+    befores.append(
+        "            var d = self.info.geometries[i].geometry.distance_to(loc"
+        "ation)\n"
+    )
+    starts.append(1270)
+    stops.append(1313)
+    befores.append(
+        "    def nearest_point(self, location: Vector3) -> Tuple[Float64, Flo"
+        "at64]:\n"
+    )
+    starts.append(1265)
+    stops.append(1268)
+    befores.append(
+        "        var elevation = self.elevation_on(s)\n        point.z = Floa"
+        "t64(Float32(elevation.evaluate(s)))\n        point.pitch = elevation"
+        ".tangent(s)\n"
+    )
+    starts.append(1260)
+    stops.append(1261)
+    befores.append("        return record.geometry.pos_at(s - record.s)\n")
+    starts.append(1199)
+    stops.append(1241)
+    befores.append(
+        "    def directed_point_no_lane_offset(self, s: Float64) raises -> Di"
+        "rectedPoint:\n"
+    )
+    starts.append(1192)
+    stops.append(1195)
+    befores.append(
+        "            offset = Float32(lane_offset.value().polynomial.evaluate"
+        "(clamped))\n"
+    )
+    starts.append(1129)
+    stops.append(1173)
+    befores.append(
+        "    def directed_point(self, s: Float64) raises -> DirectedPoint:\n"
+    )
+    starts.append(1083)
+    stops.append(1113)
+    befores.append(
+        "    def elevation_on(self, s: Float64) raises -> CubicPolynomial:\n"
+    )
+    starts.append(997)
+    stops.append(1034)
+    befores.append("")
+    starts.append(940)
+    stops.append(977)
+    befores.append("")
+    starts.append(924)
+    stops.append(925)
+    befores.append("        for index in self.sections_at(s):\n")
+    starts.append(876)
+    stops.append(912)
+    befores.append(
+        "    def lanes_at(self, s: Float64) -> List[Tuple[Int, Int]]:\n"
+    )
+    starts.append(871)
+    stops.append(872)
+    befores.append("        for index in self.sections_at(s):\n")
+    starts.append(830)
+    stops.append(862)
+    befores.append(
+        "    def lanes_by_distance(self, s: Float64) -> List[Tuple[Int, Int]]"
+        ":\n"
+    )
+    starts.append(824)
+    stops.append(825)
+    befores.append("        for index in self.sections_at(s):\n")
+    starts.append(775)
+    stops.append(810)
+    befores.append("")
+    starts.append(712)
+    stops.append(748)
+    befores.append("    def sections_at(self, s: Float64) -> List[Int]:\n")
+    starts.append(669)
+    stops.append(699)
+    befores.append("    def upper_bound(self, s: Float64) -> Float64:\n")
+    starts.append(667)
+    stops.append(668)
+    befores.append("        return self.upper_bound(s) - s\n")
+    starts.append(626)
+    stops.append(657)
+    befores.append("    def section_length(self, index: Int) -> Float64:\n")
+    starts.append(602)
+    stops.append(603)
+    befores.append("        var section = LaneSection(id, s)\n")
+    starts.append(558)
+    stops.append(590)
+    befores.append(
+        "    def add_section(mut self, id: SectionId, s: Float64) raises -> I"
+        "nt:\n"
+    )
+    starts.append(524)
+    stops.append(525)
+    befores.append("")
+    starts.append(409)
+    stops.append(515)
+    befores.append("")
+    starts.append(370)
+    stops.append(381)
+    befores.append("")
+    starts.append(348)
+    stops.append(349)
+    befores.append("        self.lanes.insert(at, Lane(id, self.id, self.s))\n")
+    starts.append(291)
+    stops.append(292)
+    befores.append("")
+    starts.append(242)
+    stops.append(288)
+    befores.append(
+        "    def __init__(out self, id: SectionId, s: Float64) raises:\n"
+    )
+    starts.append(221)
+    stops.append(232)
+    befores.append("")
+    starts.append(194)
+    stops.append(210)
+    befores.append("")
+    starts.append(148)
+    stops.append(188)
+    befores.append(
+        "        out self, id: LaneId, section_id: SectionId, distance: Float"
+        '64\n    ):\n        """Create a lane with no type, no links and n'
+        "o records.\n"
+    )
+    starts.append(88)
+    stops.append(96)
+    befores.append(
+        "from units.si import DEGREE, Angle, Length, METER, RADIAN\n"
+    )
+    starts.append(82)
+    stops.append(84)
+    befores.append("    info_at,\n    info_index,\n")
+    starts.append(52)
+    stops.append(58)
+    befores.append(
+        "from extensions.carla.geometry import ARC, DirectedPoint, LINE\n"
+    )
+
+
+def _spans_12(mut befores: List[String], mut afters: List[String]):
+    """Fill one reviewed span-edit table, last edit first.
+
+    Args:
+        befores: The predecessor spans.
+        afters: The successor spans.
+    """
+    befores.append(
+        "            -q3 * span * span * span * c,\n            point.z - Flo"
+        "at64(location.z),\n            elevation.tangent(low) * span,\n     "
+        "       (elevation.c + 3.0 * low * elevation.d) * span * span,\n     "
+        "       elevation.d * span * span * span,\n        ]\n        var sca"
+        "le = span\n"
+    )
+    afters.append(
+        "            -q3 * span * span * span * c,\n            point.z - Flo"
+        "at64(location.z),\n            elevation.tangent(low) * span,\n     "
+        "       (elevation.c + 3.0 * (low - elevation.s) * elevation.d) * spa"
+        "n * span,\n            elevation.d * span * span * span,\n        ]"
+        "\n        var scale = span\n"
+    )
+    befores.append(
+        "                var width = widths[width_at].polynomial\n           "
+        "     var factor = sign * (0.5 if lanes[i].id == id else 1.0)\n      "
+        "          q1 += factor * width.tangent(low)\n                q2 += f"
+        "actor * (width.c + 3.0 * low * width.d)\n                q3 += facto"
+        "r * width.d\n                done = lanes[i].id == id\n        var p"
+        "oint = self._lane_point(section, lane, low)\n"
+    )
+    afters.append(
+        "                var width = widths[width_at].polynomial\n           "
+        "     var factor = sign * (0.5 if lanes[i].id == id else 1.0)\n      "
+        "          q1 += factor * width.tangent(low)\n                q2 += f"
+        "actor * (width.c + 3.0 * (low - width.s) * width.d)\n               "
+        " q3 += factor * width.d\n                done = lanes[i].id == id\n "
+        "       var point = self._lane_point(section, lane, low)\n"
+    )
+    befores.append(
+        "            return List[Float64]()\n        var offset = info_at(sel"
+        "f.info.lane_offsets, low).value().polynomial\n        var q1 = -offs"
+        "et.tangent(low)\n        var q2 = -(offset.c + 3.0 * low * offset.d)"
+        "\n        var q3 = -offset.d\n        ref lanes = self.sections[sect"
+        "ion].lanes\n        var id = lanes[lane].id\n"
+    )
+    afters.append(
+        "            return List[Float64]()\n        var offset = info_at(sel"
+        "f.info.lane_offsets, low).value().polynomial\n        var q1 = -offs"
+        "et.tangent(low)\n        var q2 = -(offset.c + 3.0 * (low - offset.s"
+        ") * offset.d)\n        var q3 = -offset.d\n        ref lanes = self."
+        "sections[section].lanes\n        var id = lanes[lane].id\n"
+    )
+
+
+def _lines_13(
+    mut starts: List[Int], mut stops: List[Int], mut befores: List[String]
+):
+    """Fill one reviewed line-edit table, highest line first.
+
+    Args:
+        starts: The 0-based start lines.
+        stops: The exclusive end lines.
+        befores: The predecessor lines for each span.
+    """
+    starts.append(101)
+    stops.append(103)
+    befores.append("]  # fmt: skip\n")
+    starts.append(69)
+    stops.append(70)
+    befores.append("")
+
+
+def _lines_14(
+    mut starts: List[Int], mut stops: List[Int], mut befores: List[String]
+):
+    """Fill one reviewed line-edit table, highest line first.
+
+    Args:
+        starts: The 0-based start lines.
+        stops: The exclusive end lines.
+        befores: The predecessor lines for each span.
+    """
+    starts.append(145)
+    stops.append(146)
+    befores.append(
+        "    var value: Float64\n    try:\n        value = Float64(number)\n "
+        '   except:\n        raise Error("OpenDRIVE speed needs a numeric ma'
+        'x value")\n'
+    )
+
+
+def _lines_15(
+    mut starts: List[Int], mut stops: List[Int], mut befores: List[String]
+):
+    """Fill one reviewed line-edit table, highest line first.
+
+    Args:
+        starts: The 0-based start lines.
+        stops: The exclusive end lines.
+        befores: The predecessor lines for each span.
+    """
+    starts.append(156)
+    stops.append(158)
+    befores.append("            if byte >= 49 and byte <= 57:\n")
+    starts.append(142)
+    stops.append(145)
+    befores.append("")
+    starts.append(93)
+    stops.append(126)
+    befores.append("")
+
+
+def _spans_16(mut befores: List[String], mut afters: List[String]):
+    """Fill one reviewed span-edit table, last edit first.
+
+    Args:
+        befores: The predecessor spans.
+        afters: The successor spans.
+    """
+    befores.append(
+        "def _try_build_spiral_moments(\n    pieces: Int, mut proof_terms: In"
+        "t, max_proof_terms: Int\n) -> Optional[_SpiralMomentProof]:\n    if "
+        "not _sum2_supported_environment():\n        return None\n    # This "
+        "is a payload-availability ceiling, never a scalar/search count cap."
+        "\n    # A caller must invoke generic evaluation whenever this return"
+        "s None.\n    if pieces < 1 or pieces > 64:\n        return None\n   "
+        " # Conservatively charge one coefficient-node unit per moment per GL"
+        " node.\n    # The complete original chord construction runs first. T"
+        "he caller supplies\n    # a separate remaining budget no larger than"
+        " original_max - original_spent.\n    # Existing construction/query c"
+        "ounters and error boundaries are untouched.\n    var work = 22 * 5 *"
+        " pieces\n    if proof_terms < 0 or max_proof_terms < proof_terms:\n "
+        "       return None\n    if work > max_proof_terms - proof_terms:\n  "
+        "      return None\n    proof_terms += work\n    # No optional arrays"
+        ", loops, or persistent side-table insertion before debit.\n    var m"
+        "oments = Array[_Interval, 22](fill=_Interval.point(0.0))\n    var no"
+        "des = materialize[_GL_NODES]()\n    var weights = materialize[_GL_WE"
+        "IGHTS]()\n    var divisor = _Interval.point(Float64(pieces))\n    va"
+        "r half = _Interval.point(0.5)\n    var weight_sum = _Interval.point("
+        "0.0)\n    for i in range(5):\n        weight_sum = _tight_sum_bound("
+        "weight_sum, _Interval.point(weights[i]))\n    # Exact cancellation o"
+        "f n copies divided by n. Do not substitute 1.0:\n    # the actual st"
+        "ored weights, not ideal GL weights, define this polynomial.\n    mom"
+        "ents[0] = _tight_product_bound(half, weight_sum)\n    for piece in r"
+        "ange(pieces):\n        for i in range(5):\n            # The scalar-"
+        "rounded 1.0 + node is deliberately computed BEFORE\n            # ma"
+        "king the interval constant, exactly as curve_bounds:116-118.\n      "
+        "      var node_sum = 1.0 + nodes[i]\n            var alpha = _tight_"
+        "quotient_bound(\n                _tight_sum_bound(\n                "
+        "    _Interval.point(Float64(piece)),\n                    _tight_pro"
+        "duct_bound(half, _Interval.point(node_sum)),\n                ),\n  "
+        "              divisor,\n            )\n            var alpha2 = _tig"
+        "ht_product_bound(alpha, alpha)\n            var power = alpha2\n    "
+        "        for j in range(1, 22):\n                moments[j] = _tight_"
+        "sum_bound(\n                    moments[j],\n                    _ti"
+        "ght_product_bound(_Interval.point(weights[i]), power),\n            "
+        "    )\n                if j < 21:\n                    power = _tigh"
+        "t_product_bound(power, alpha2)\n    var twice_count = _tight_product"
+        "_bound(_Interval.point(2.0), divisor)\n    for j in range(1, 22):\n "
+        "       moments[j] = _tight_quotient_bound(moments[j], twice_count)\n"
+        "    var cos_coefficients = materialize[_COS_COEFFICIENTS]()\n    var"
+        " sin_coefficients = materialize[_SIN_COEFFICIENTS]()\n    var cosine"
+        " = Array[_Interval, 11](fill=_Interval.point(0.0))\n    var sine = A"
+        "rray[_Interval, 11](fill=_Interval.point(0.0))\n    for j in range(1"
+        "1):\n        cosine[j] = _tight_product_bound(\n            _Interva"
+        "l.point(cos_coefficients[j]), moments[2 * j]\n        )\n        sin"
+        "e[j] = _tight_product_bound(\n            _Interval.point(sin_coeffi"
+        "cients[j]), moments[2 * j + 1]\n        )\n        if not cosine[j]."
+        "is_finite() or not sine[j].is_finite():\n            return None\n  "
+        "  return _SpiralMomentProof(pieces, cosine^, sine^)\n\n\n"
+    )
+    afters.append(
+        "def _try_build_spiral_moments(\n    pieces: Int, mut proof_terms: In"
+        "t, max_proof_terms: Int\n) -> Optional[_SpiralMomentProof]:\n    if "
+        "not _sum2_supported_environment():\n        return None\n    # This "
+        "is a payload-availability ceiling, never a scalar/search count cap."
+        "\n    # A caller must invoke generic evaluation whenever this return"
+        "s None.\n    if pieces < 1 or pieces > 64:\n        return None\n   "
+        " # Conservatively charge one coefficient-node unit per moment per GL"
+        " node.\n    # The complete original chord construction runs first. T"
+        "he caller supplies\n    # a separate remaining budget no larger than"
+        " original_max - original_spent.\n    # Existing construction/query c"
+        "ounters and error boundaries are untouched.\n    var work = 22 * 5 *"
+        " pieces\n    if proof_terms < 0 or max_proof_terms < proof_terms:\n "
+        "       return None\n    if work > max_proof_terms - proof_terms:\n  "
+        "      return None\n    proof_terms += work\n    # No runtime arrays,"
+        " loops, or insertion before debit. These compile-time\n    # bounds "
+        "and the admitted count keep every moment intermediate finite.\n    c"
+        "omptime for index in range(5):\n        comptime assert _GL_NODES[in"
+        "dex] > -1.0 and _GL_NODES[index] < 1.0\n        comptime assert _GL_"
+        "WEIGHTS[index] > 0.0 and _GL_WEIGHTS[index] <= 1.0\n    comptime for"
+        " index in range(11):\n        comptime assert (\n            _COS_CO"
+        "EFFICIENTS[index] >= -1.0 and _COS_COEFFICIENTS[index] <= 1.0\n     "
+        "   )\n        comptime assert (\n            _SIN_COEFFICIENTS[index"
+        "] >= -1.0 and _SIN_COEFFICIENTS[index] <= 1.0\n        )\n    var mo"
+        "ments = Array[_Interval, 22](fill=_Interval.point(0.0))\n    var nod"
+        "es = materialize[_GL_NODES]()\n    var weights = materialize[_GL_WEI"
+        "GHTS]()\n    var divisor = _Interval.point(Float64(pieces))\n    var"
+        " half = _Interval.point(0.5)\n    var weight_sum = _Interval.point(0"
+        ".0)\n    for i in range(5):\n        weight_sum = _tight_sum_bound(w"
+        "eight_sum, _Interval.point(weights[i]))\n    # Exact cancellation of"
+        " n copies divided by n. Do not substitute 1.0:\n    # the actual sto"
+        "red weights, not ideal GL weights, define this polynomial.\n    mome"
+        "nts[0] = _tight_product_bound(half, weight_sum)\n    for piece in ra"
+        "nge(pieces):\n        for i in range(5):\n            # The scalar-r"
+        "ounded 1.0 + node is deliberately computed BEFORE\n            # mak"
+        "ing the interval constant, exactly as curve_bounds:116-118.\n       "
+        "     var node_sum = 1.0 + nodes[i]\n            var alpha = _tight_q"
+        "uotient_bound(\n                _tight_sum_bound(\n                 "
+        "   _Interval.point(Float64(piece)),\n                    _tight_prod"
+        "uct_bound(half, _Interval.point(node_sum)),\n                ),\n   "
+        "             divisor,\n            )\n            var alpha2 = _tigh"
+        "t_product_bound(alpha, alpha)\n            var power = alpha2\n     "
+        "       for j in range(1, 22):\n                moments[j] = _tight_s"
+        "um_bound(\n                    moments[j],\n                    _tig"
+        "ht_product_bound(_Interval.point(weights[i]), power),\n             "
+        "   )\n                if j < 21:\n                    power = _tight"
+        "_product_bound(power, alpha2)\n    var twice_count = _tight_product_"
+        "bound(_Interval.point(2.0), divisor)\n    for j in range(1, 22):\n  "
+        "      moments[j] = _tight_quotient_bound(moments[j], twice_count)\n "
+        "   var cos_coefficients = materialize[_COS_COEFFICIENTS]()\n    var "
+        "sin_coefficients = materialize[_SIN_COEFFICIENTS]()\n    var cosine "
+        "= Array[_Interval, 11](fill=_Interval.point(0.0))\n    var sine = Ar"
+        "ray[_Interval, 11](fill=_Interval.point(0.0))\n    for j in range(11"
+        "):\n        cosine[j] = _tight_product_bound(\n            _Interval"
+        ".point(cos_coefficients[j]), moments[2 * j]\n        )\n        sine"
+        "[j] = _tight_product_bound(\n            _Interval.point(sin_coeffic"
+        "ients[j]), moments[2 * j + 1]\n        )\n    return _SpiralMomentPr"
+        "oof(pieces, cosine^, sine^)\n\n\n"
+    )
+
+
+def _spans_17(mut befores: List[String], mut afters: List[String]):
+    """Fill one reviewed span-edit table, last edit first.
+
+    Args:
+        befores: The predecessor spans.
+        afters: The successor spans.
+    """
+    befores.append(
+        "def _try_spiral_roundoff_envelope(\n    geometry: RoadGeometry, d: _"
+        "Jet, pieces: Int\n) -> Optional[Tuple[Float64, Float64]]:\n    # The"
+        " caller supplies the original clamped distance Jet and fixed count."
+        "\n    # This does not enlarge the existing moment model's heading/k0"
+        " domain.\n    if (\n        geometry.kind != SPIRAL\n        or geom"
+        "etry.heading != 0.0\n        or geometry.curvature_start != 0.0\n   "
+        " ):\n        return None\n    if (\n        pieces < 1\n        or p"
+        "ieces > 64\n        or not isfinite(geometry.length)\n        or geo"
+        "metry.length <= 0.0\n    ):\n        return None\n    if (\n        "
+        "not isfinite(geometry.x)\n        or not isfinite(geometry.y)\n     "
+        "   or not isfinite(geometry.curvature_end)\n    ):\n        return N"
+        "one\n    var rate_value = (\n        geometry.curvature_end - geomet"
+        "ry.curvature_start\n    ) / geometry.length\n    if not isfinite(rat"
+        "e_value):\n        return None\n    var domain = d.rounded_value()\n"
+        "    if (\n        not domain.is_finite()\n        or domain.low <= 0"
+        ".0\n        or domain.high >= geometry.length\n    ):\n        retur"
+        "n None\n    if not d.value.is_finite() or not isfinite(d.error) or d"
+        ".error < 0.0:\n        return None\n    var distance = _ValueJet(\n "
+        "       d.value, _Interval.whole(), _Interval.whole(), d.error\n    )"
+        "\n    var nodes = materialize[_GL_NODES]()\n    var weights = materi"
+        "alize[_GL_WEIGHTS]()\n    var node_low = 1.0 + nodes[0]\n    var nod"
+        "e_high = node_low\n    var weight_low = weights[0]\n    var weight_h"
+        "igh = weight_low\n    for i in range(1, 5):\n        var node = 1.0 "
+        "+ nodes[i]\n        node_low = min(node_low, node)\n        node_hig"
+        "h = max(node_high, node)\n        weight_low = min(weight_low, weigh"
+        "ts[i])\n        weight_high = max(weight_high, weights[i])\n    var "
+        "step = distance / _ValueJet.constant(Float64(pieces))\n    var start"
+        " = step * _envelope_constant(0.0, Float64(pieces - 1))\n    var t = "
+        "start + step * _ValueJet.constant(0.5) * _envelope_constant(\n      "
+        "  node_low, node_high\n    )\n    var theta = _ValueJet.constant(geo"
+        "metry.heading) + t * (\n        _ValueJet.constant(geometry.curvatur"
+        "e_start)\n        + _ValueJet.constant(0.5) * _ValueJet.constant(rat"
+        "e_value) * t\n    )\n    # The complete original rounded phase-selec"
+        "tion graph must select zero.\n    # No ideal beta*d*d estimate repla"
+        "ces the node-specific rounding graph.\n    var phase = theta.rounded"
+        "_value()\n    if not phase.is_finite() or phase.magnitude() > _PHASE"
+        "_LIMIT:\n        return None\n    var selection = (\n        theta *"
+        " _ValueJet.constant(_INV_HALF_PI) + _ValueJet.constant(0.5)\n    ).r"
+        "ounded_value()\n    if (\n        not selection.is_finite()\n       "
+        " or floor(selection.low) != 0.0\n        or floor(selection.high) !="
+        " 0.0\n    ):\n        return None\n    var trig = _sincos_expression"
+        "(theta)\n    var factor = (\n        step\n        * _ValueJet.const"
+        "ant(0.5)\n        * _envelope_constant(weight_low, weight_high)\n   "
+        " )\n    var x = factor * trig[1]\n    var y = factor * trig[0]\n    "
+        "var x_error = _sum2_envelope_error(x, 5 * pieces, geometry.x)\n    v"
+        "ar y_error = _sum2_envelope_error(y, 5 * pieces, geometry.y)\n    if"
+        " not isfinite(x_error) or not isfinite(y_error):\n        return Non"
+        "e\n    return (x_error, y_error)\n"
+    )
+    afters.append(
+        "def _try_spiral_roundoff_envelope(\n    geometry: RoadGeometry, d: _"
+        "Jet, pieces: Int\n) -> Optional[Tuple[Float64, Float64]]:\n    # The"
+        " caller supplies the original clamped distance Jet and fixed count."
+        "\n    # This does not enlarge the existing moment model's heading/k0"
+        " domain.\n    if (\n        geometry.kind != SPIRAL\n        or geom"
+        "etry.heading != 0.0\n        or geometry.curvature_start != 0.0\n   "
+        " ):\n        return None\n    if (\n        pieces < 1\n        or p"
+        "ieces > 64\n        or not isfinite(geometry.length)\n        or geo"
+        "metry.length <= 0.0\n    ):\n        return None\n    if (\n        "
+        "not isfinite(geometry.x)\n        or not isfinite(geometry.y)\n     "
+        "   or not isfinite(geometry.curvature_end)\n    ):\n        return N"
+        "one\n    var rate_value = (\n        geometry.curvature_end - geomet"
+        "ry.curvature_start\n    ) / geometry.length\n    if not isfinite(rat"
+        "e_value):\n        return None\n    var domain = d.rounded_value()\n"
+        "    if (\n        not domain.is_finite()\n        or domain.low <= 0"
+        ".0\n        or domain.high >= geometry.length\n    ):\n        retur"
+        "n None\n    if not d.value.is_finite() or not isfinite(d.error) or d"
+        ".error < 0.0:\n        return None\n    var distance = _ValueJet(\n "
+        "       d.value, _Interval.whole(), _Interval.whole(), d.error\n    )"
+        "\n    var nodes = materialize[_GL_NODES]()\n    var weights = materi"
+        "alize[_GL_WEIGHTS]()\n    var node_low = 1.0 + nodes[0]\n    var nod"
+        "e_high = node_low\n    var weight_low = weights[0]\n    var weight_h"
+        "igh = weight_low\n    for i in range(1, 5):\n        var node = 1.0 "
+        "+ nodes[i]\n        node_low = min(node_low, node)\n        node_hig"
+        "h = max(node_high, node)\n        weight_low = min(weight_low, weigh"
+        "ts[i])\n        weight_high = max(weight_high, weights[i])\n    var "
+        "step = distance / _ValueJet.constant(Float64(pieces))\n    var start"
+        " = step * _envelope_constant(0.0, Float64(pieces - 1))\n    var t = "
+        "start + step * _ValueJet.constant(0.5) * _envelope_constant(\n      "
+        "  node_low, node_high\n    )\n    var theta = _ValueJet.constant(geo"
+        "metry.heading) + t * (\n        _ValueJet.constant(geometry.curvatur"
+        "e_start)\n        + _ValueJet.constant(0.5) * _ValueJet.constant(rat"
+        "e_value) * t\n    )\n    # The complete original rounded phase-selec"
+        "tion graph must select zero.\n    # No ideal beta*d*d estimate repla"
+        "ces the node-specific rounding graph.\n    var phase = theta.rounded"
+        "_value()\n    if not phase.is_finite() or phase.magnitude() > _PHASE"
+        "_LIMIT:\n        return None\n    var selection = (\n        theta *"
+        " _ValueJet.constant(_INV_HALF_PI) + _ValueJet.constant(0.5)\n    ).r"
+        "ounded_value()\n    # The ordered theta and nonnegative error are bo"
+        "unded by the phase gate.\n    # Multiplication by k<=1 and addition "
+        "of 0.5 cannot overflow this selector.\n    comptime assert _INV_HALF"
+        "_PI > 0.0 and _INV_HALF_PI <= 1.0\n    comptime assert _PHASE_LIMIT "
+        "> 0.0 and _PHASE_LIMIT <= 1048576.0\n    if floor(selection.low) != "
+        "0.0 or floor(selection.high) != 0.0:\n        return None\n    var t"
+        "rig = _sincos_expression(theta)\n    var factor = (\n        step\n "
+        "       * _ValueJet.constant(0.5)\n        * _envelope_constant(weigh"
+        "t_low, weight_high)\n    )\n    var x = factor * trig[1]\n    var y "
+        "= factor * trig[0]\n    var x_error = _sum2_envelope_error(x, 5 * pi"
+        "eces, geometry.x)\n    var y_error = _sum2_envelope_error(y, 5 * pie"
+        "ces, geometry.y)\n    if not isfinite(x_error) or not isfinite(y_err"
+        "or):\n        return None\n    return (x_error, y_error)\n"
+    )
+
+
+def _spans_18(mut befores: List[String], mut afters: List[String]):
+    """Fill one reviewed span-edit table, last edit first.
+
+    Args:
+        befores: The predecessor spans.
+        afters: The successor spans.
+    """
+    befores.append(
+        "def _spiral_proof_matches(\n    proof: _SpiralDomainProof,\n    geom"
+        "etry: RoadGeometry,\n    record_at: Int,\n    low: Float64,\n    hig"
+        "h: Float64,\n    root_low: Float64,\n    root_high: Float64,\n    d:"
+        " _Jet,\n    counts: Tuple[Int, Int],\n) -> Bool:\n    if record_at !"
+        "= proof.record_at or not _spiral_proof_geometry(geometry):\n        "
+        "return False\n    if (\n        not isfinite(low)\n        or not is"
+        "finite(high)\n        or not isfinite(root_low)\n        or not isfi"
+        "nite(root_high)\n        or high < low\n        or root_high < root_"
+        "low\n        or low < root_low\n        or high > root_high\n    ):"
+        "\n        return False\n    var domain = d.rounded_value()\n    if ("
+        "\n        not domain.is_finite()\n        or domain.low <= 0.0\n    "
+        "    or domain.high >= geometry.length\n        or not proof.rounded_"
+        "d.is_finite()\n        or proof.rounded_d.low <= 0.0\n        or pro"
+        "of.rounded_d.high >= geometry.length\n        or proof.rounded_d.hig"
+        "h < proof.rounded_d.low\n        or domain.low < proof.rounded_d.low"
+        "\n        or domain.high > proof.rounded_d.high\n        or not d.va"
+        "lue.is_finite()\n        or not d.first.is_finite()\n        or not "
+        "d.second.is_finite()\n    ):\n        return False\n    if counts[0]"
+        " < 1 or counts[1] > 64 or counts[1] < counts[0]:\n        return Fal"
+        "se\n    if counts[1] - counts[0] > 1:\n        return False\n    if "
+        "proof.first_count < 1 or proof.last_count > 64:\n        return Fals"
+        "e\n    if (\n        proof.last_count < proof.first_count\n        o"
+        "r proof.last_count - proof.first_count > 1\n    ):\n        return F"
+        "alse\n    if (\n        not isfinite(proof.first_x_error)\n        o"
+        "r proof.first_x_error < 0.0\n        or not isfinite(proof.first_y_e"
+        "rror)\n        or proof.first_y_error < 0.0\n        or not isfinite"
+        "(proof.last_x_error)\n        or proof.last_x_error < 0.0\n        o"
+        "r not isfinite(proof.last_y_error)\n        or proof.last_y_error < "
+        "0.0\n    ):\n        return False\n    return counts[0] >= proof.fir"
+        "st_count and counts[1] <= proof.last_count\n\n\n"
+    )
+    afters.append(
+        "def _spiral_proof_matches(\n    proof: _SpiralDomainProof,\n    geom"
+        "etry: RoadGeometry,\n    record_at: Int,\n    low: Float64,\n    hig"
+        "h: Float64,\n    root_low: Float64,\n    root_high: Float64,\n    d:"
+        " _Jet,\n    counts: Tuple[Int, Int],\n) -> Bool:\n    if record_at !"
+        "= proof.record_at or not _spiral_proof_geometry(geometry):\n        "
+        "return False\n    if (\n        not isfinite(low)\n        or not is"
+        "finite(high)\n        or not isfinite(root_low)\n        or not isfi"
+        "nite(root_high)\n        or high < low\n        or root_high < root_"
+        "low\n        or low < root_low\n        or high > root_high\n    ):"
+        "\n        return False\n    # These checks do not reconstruct or aut"
+        "henticate the caller's Jet.\n    # They reject malformed numeric rep"
+        "resentation before using its bounds.\n    if (\n        not d.value."
+        "is_finite()\n        or d.value.low > d.value.high\n        or not d"
+        ".first.is_finite()\n        or not d.second.is_finite()\n        or "
+        "not isfinite(d.error)\n        or d.error < 0.0\n    ):\n        ret"
+        "urn False\n    var domain = d.rounded_value()\n    if (\n        not"
+        " domain.is_finite()\n        or domain.low <= 0.0\n        or domain"
+        ".high >= geometry.length\n        or not proof.rounded_d.is_finite()"
+        "\n        or proof.rounded_d.low <= 0.0\n        or proof.rounded_d."
+        "high >= geometry.length\n        or proof.rounded_d.high < proof.rou"
+        "nded_d.low\n        or domain.low < proof.rounded_d.low\n        or "
+        "domain.high > proof.rounded_d.high\n    ):\n        return False\n  "
+        "  if counts[0] < 1 or counts[1] > 64 or counts[1] < counts[0]:\n    "
+        "    return False\n    if counts[1] - counts[0] > 1:\n        return "
+        "False\n    if proof.first_count < 1 or proof.last_count > 64:\n     "
+        "   return False\n    if (\n        proof.last_count < proof.first_co"
+        "unt\n        or proof.last_count - proof.first_count > 1\n    ):\n  "
+        "      return False\n    if (\n        not isfinite(proof.first_x_err"
+        "or)\n        or proof.first_x_error < 0.0\n        or not isfinite(p"
+        "roof.first_y_error)\n        or proof.first_y_error < 0.0\n        o"
+        "r not isfinite(proof.last_x_error)\n        or proof.last_x_error < "
+        "0.0\n        or not isfinite(proof.last_y_error)\n        or proof.l"
+        "ast_y_error < 0.0\n    ):\n        return False\n    return counts[0"
+        "] >= proof.first_count and counts[1] <= proof.last_count\n\n\n"
+    )
+    befores.append(
+        "def _try_pack_spiral_proof(\n    road: Road,\n    low: Float64,\n   "
+        " high: Float64,\n    segment_index: Int,\n    captured: _SpiralRootC"
+        "apture,\n    proof_count: Int,\n    mut construction_terms: Int,\n  "
+        "  mut proof_units: Int,\n    max_terms: Int = 2000000,\n    max_proo"
+        "f_units: Int = 1048576,\n    max_payload_bytes: Int = 1048576,\n) ->"
+        " Optional[_SpiralDomainProof]:\n    if not _sum2_supported_environme"
+        "nt():\n        return None\n    # Logical payload cap, not an alloca"
+        "tor-capacity or RSS claim. Check before\n    # any append can grow t"
+        "he sparse List. Map appends only a complete result.\n    if captured"
+        ".first_count < 1 or captured.last_count > 64:\n        return None\n"
+        "    if captured.last_count < captured.first_count:\n        return N"
+        "one\n    if captured.last_count - captured.first_count > 1:\n       "
+        " return None\n    if segment_index < 0 or proof_count < 0 or max_pay"
+        "load_bytes < 80:\n        return None\n    if proof_count >= max_pay"
+        "load_bytes // 80:\n        return None\n    # Fixed optional units c"
+        "over one/two constant-size phase envelopes and\n    # validation/pac"
+        "king. No new GL traversal and no coefficient construction.\n    # Re"
+        "serve before the optional arithmetic, after original chord/cover wor"
+        "k.\n    var branches = 1 if captured.first_count == captured.last_co"
+        "unt else 2\n    var extra = 16 + 128 * branches\n    if construction"
+        "_terms < 0 or construction_terms > max_terms:\n        return None\n"
+        "    if proof_units < 0 or proof_units > max_proof_units:\n        re"
+        "turn None\n    if extra > max_terms - construction_terms:\n        r"
+        "eturn None\n    if extra > max_proof_units - proof_units:\n        r"
+        "eturn None\n    construction_terms += extra\n    proof_units += extr"
+        "a\n    if not isfinite(low) or not isfinite(high) or low < 0.0 or hi"
+        "gh < low:\n        return None\n    if low != captured.low or high !"
+        "= captured.high:\n        return None\n    var at = info_index(road."
+        "info.geometries, low)\n    if at < 0 or at != captured.record_at:\n "
+        "       return None\n    if info_index(road.info.geometries, high) !="
+        " at:\n        return None\n    ref geometry = road.info.geometries[a"
+        "t].geometry\n    if not _spiral_proof_geometry(geometry):\n        r"
+        "eturn None\n    var domain = captured.d.rounded_value()\n    if (\n "
+        "       not domain.is_finite()\n        or domain.low <= 0.0\n       "
+        " or domain.high >= geometry.length\n    ):\n        return None\n   "
+        " if (\n        not captured.d.value.is_finite()\n        or not capt"
+        "ured.d.first.is_finite()\n        or not captured.d.second.is_finite"
+        "()\n    ):\n        return None\n    if (\n        not isfinite(capt"
+        "ured.first_x_error)\n        or captured.first_x_error < 0.0\n      "
+        "  or not isfinite(captured.first_y_error)\n        or captured.first"
+        "_y_error < 0.0\n        or not isfinite(captured.last_x_error)\n    "
+        "    or captured.last_x_error < 0.0\n        or not isfinite(captured"
+        ".last_y_error)\n        or captured.last_y_error < 0.0\n    ):\n    "
+        "    return None\n    if not _all_spiral_nodes_quadrant_zero(\n      "
+        "  geometry, captured.d, captured.first_count\n    ):\n        return"
+        " None\n    if captured.last_count != captured.first_count:\n        "
+        "if not _all_spiral_nodes_quadrant_zero(\n            geometry, captu"
+        "red.d, captured.last_count\n        ):\n            return None\n   "
+        " return _SpiralDomainProof(\n        segment_index,\n        at,\n  "
+        "      domain,\n        captured.first_count,\n        captured.last_"
+        "count,\n        captured.first_x_error,\n        captured.first_y_er"
+        "ror,\n        captured.last_x_error,\n        captured.last_y_error,"
+        "\n    )\n\n\n"
+    )
+    afters.append(
+        "def _try_pack_spiral_proof(\n    road: Road,\n    low: Float64,\n   "
+        " high: Float64,\n    segment_index: Int,\n    captured: _SpiralRootC"
+        "apture,\n    proof_count: Int,\n    mut construction_terms: Int,\n  "
+        "  mut proof_units: Int,\n    max_terms: Int = 2000000,\n    max_proo"
+        "f_units: Int = 1048576,\n    max_payload_bytes: Int = 1048576,\n) ->"
+        " Optional[_SpiralDomainProof]:\n    if not _sum2_supported_environme"
+        "nt():\n        return None\n    # Logical payload cap, not an alloca"
+        "tor-capacity or RSS claim. Check before\n    # any append can grow t"
+        "he sparse List. Map appends only a complete result.\n    if captured"
+        ".first_count < 1 or captured.last_count > 64:\n        return None\n"
+        "    if captured.last_count < captured.first_count:\n        return N"
+        "one\n    if captured.last_count - captured.first_count > 1:\n       "
+        " return None\n    if segment_index < 0 or proof_count < 0 or max_pay"
+        "load_bytes < 80:\n        return None\n    if proof_count >= max_pay"
+        "load_bytes // 80:\n        return None\n    # Fixed optional units c"
+        "over one/two constant-size phase envelopes and\n    # validation/pac"
+        "king. No new GL traversal and no coefficient construction.\n    # Re"
+        "serve before the optional arithmetic, after original chord/cover wor"
+        "k.\n    var branches = 1 if captured.first_count == captured.last_co"
+        "unt else 2\n    var extra = 16 + 128 * branches\n    if construction"
+        "_terms < 0 or construction_terms > max_terms:\n        return None\n"
+        "    if proof_units < 0 or proof_units > max_proof_units:\n        re"
+        "turn None\n    if extra > max_terms - construction_terms:\n        r"
+        "eturn None\n    if extra > max_proof_units - proof_units:\n        r"
+        "eturn None\n    construction_terms += extra\n    proof_units += extr"
+        "a\n    if not isfinite(low) or not isfinite(high) or low < 0.0 or hi"
+        "gh < low:\n        return None\n    if low != captured.low or high !"
+        "= captured.high:\n        return None\n    var at = info_index(road."
+        "info.geometries, low)\n    if at < 0 or at != captured.record_at:\n "
+        "       return None\n    if info_index(road.info.geometries, high) !="
+        " at:\n        return None\n    ref geometry = road.info.geometries[a"
+        "t].geometry\n    if not _spiral_proof_geometry(geometry):\n        r"
+        "eturn None\n    # Validate distance representation before interval a"
+        "rithmetic. Capture\n    # provenance and association still remain ca"
+        "ller-owned preconditions.\n    if (\n        not captured.d.value.is"
+        "_finite()\n        or captured.d.value.low > captured.d.value.high\n"
+        "        or not captured.d.first.is_finite()\n        or not captured"
+        ".d.second.is_finite()\n        or not isfinite(captured.d.error)\n  "
+        "      or captured.d.error < 0.0\n    ):\n        return None\n    va"
+        "r domain = captured.d.rounded_value()\n    if (\n        not domain."
+        "is_finite()\n        or domain.low <= 0.0\n        or domain.high >="
+        " geometry.length\n    ):\n        return None\n    if (\n        not"
+        " isfinite(captured.first_x_error)\n        or captured.first_x_error"
+        " < 0.0\n        or not isfinite(captured.first_y_error)\n        or "
+        "captured.first_y_error < 0.0\n        or not isfinite(captured.last_"
+        "x_error)\n        or captured.last_x_error < 0.0\n        or not isf"
+        "inite(captured.last_y_error)\n        or captured.last_y_error < 0.0"
+        "\n    ):\n        return None\n    if not _all_spiral_nodes_quadrant"
+        "_zero(\n        geometry, captured.d, captured.first_count\n    ):\n"
+        "        return None\n    if captured.last_count != captured.first_co"
+        "unt:\n        if not _all_spiral_nodes_quadrant_zero(\n            g"
+        "eometry, captured.d, captured.last_count\n        ):\n            re"
+        "turn None\n    return _SpiralDomainProof(\n        segment_index,\n "
+        "       at,\n        domain,\n        captured.first_count,\n        "
+        "captured.last_count,\n        captured.first_x_error,\n        captu"
+        "red.first_y_error,\n        captured.last_x_error,\n        captured"
+        ".last_y_error,\n    )\n\n\n"
+    )
+
+
+def restored_winner_pins(
+    mut paths: List[String], mut texts: List[String]
+) raises:
+    """Restore each reviewed winner pin from its live file.
+
+    Args:
+        paths: The consumer paths.
+        texts: The restored source for each path.
+
+    Raises:
+        Error: A live file or a restored pin changed.
+    """
+    var starts = List[Int]()
+    var stops = List[Int]()
+    var befores = List[String]()
+    var afters = List[String]()
+    var live_0 = Path("extensions/carla/assets.mojo").read_text()
+    _require(
+        live_0,
+        "b051a911885031a06eee4a609ce030ea8629f0ab09e0f12308d89c009e8bde8d",
+        "extensions/carla/assets.mojo",
+    )
+    starts.clear()
+    stops.clear()
+    befores.clear()
+    _lines_0(starts, stops, befores)
+    var text_0_0 = _apply(live_0, starts, stops, befores)
+    _require(
+        text_0_0,
+        "0bb273644a6d6cffaad986236e8aaafe9355549b37a10289cd9b14555f4e1acc",
+        "extensions/carla/assets.mojo",
+    )
+    paths.append("extensions/carla/assets.mojo")
+    texts.append(text_0_0)
+
+    var live_1 = Path("extensions/carla/curve_distance.mojo").read_text()
+    _require(
+        live_1,
+        "e349b4b9f7bdb417d84a9451d769c59f7ce1285a6ac99d887722dbc0ff1466e3",
+        "extensions/carla/curve_distance.mojo",
+    )
+    befores.clear()
+    afters.clear()
+    _spans_1(befores, afters)
+    var text_1_0 = _replace_spans(
+        live_1, befores, afters, "extensions/carla/curve_distance.mojo"
+    )
+    _require(
+        text_1_0,
+        "46176387129dd37a5887f3aeec7c96bbb386e4980063cb96f09619832cb09a79",
+        "extensions/carla/curve_distance.mojo",
+    )
+    paths.append("extensions/carla/curve_distance.mojo")
+    texts.append(text_1_0)
+
+    var live_2 = Path(
+        "extensions/carla/curve_minimizer_support.mojo"
+    ).read_text()
+    _require(
+        live_2,
+        "bdf79d12f2b3b784574fbd95e2e773ddeb29eb9586cf826c2b6142646341292e",
+        "extensions/carla/curve_minimizer_support.mojo",
+    )
+    starts.clear()
+    stops.clear()
+    befores.clear()
+    _lines_2(starts, stops, befores)
+    var text_2_0 = _apply(live_2, starts, stops, befores)
+    _require(
+        text_2_0,
+        "8ba1e7f7964af7bcfa8cad21e857fcb67ee92918c58d44ed36767b843095a260",
+        "extensions/carla/curve_minimizer_support.mojo",
+    )
+    paths.append("extensions/carla/curve_minimizer_support.mojo")
+    texts.append(text_2_0)
+
+    var live_3 = Path("extensions/carla/lane_value_bounds.mojo").read_text()
+    _require(
+        live_3,
+        "de7a981e6bc56a3e22a75cbc4638882d1e51550322bd87e1f9aa93fa56d32f21",
+        "extensions/carla/lane_value_bounds.mojo",
+    )
+    starts.clear()
+    stops.clear()
+    befores.clear()
+    _lines_3(starts, stops, befores)
+    var text_3_0 = _apply(live_3, starts, stops, befores)
+    _require(
+        text_3_0,
+        "548ca38dd3bb9ecd8fe8a69cce91f2312c9a2493e4fe7925b609a3d64cb44082",
+        "extensions/carla/lane_value_bounds.mojo",
+    )
+    befores.clear()
+    afters.clear()
+    _spans_4(befores, afters)
+    var text_3_1 = _replace_spans(
+        text_3_0, befores, afters, "extensions/carla/lane_value_bounds.mojo"
+    )
+    _require(
+        text_3_1,
+        "9028d65fdcb680ec5363f7fc974d8d46532b0f50397d7a348fc16e33821f4121",
+        "extensions/carla/lane_value_bounds.mojo",
+    )
+    befores.clear()
+    afters.clear()
+    _spans_5(befores, afters)
+    var text_3_2 = _replace_spans(
+        text_3_1, befores, afters, "extensions/carla/lane_value_bounds.mojo"
+    )
+    _require(
+        text_3_2,
+        "08978a7aa665aca4b82d41e1ff8b99451c647c0f8e7d6ee010fc6a6143f7959c",
+        "extensions/carla/lane_value_bounds.mojo",
+    )
+    paths.append("extensions/carla/lane_value_bounds.mojo")
+    texts.append(text_3_2)
+
+    var live_4 = Path("extensions/carla/model_cache.mojo").read_text()
+    _require(
+        live_4,
+        "6c95fe4a1e5218f26dac0c9889e2246d53ec620cebb1230166a184bbe8af93a9",
+        "extensions/carla/model_cache.mojo",
+    )
+    starts.clear()
+    stops.clear()
+    befores.clear()
+    _lines_6(starts, stops, befores)
+    var text_4_0 = _apply(live_4, starts, stops, befores)
+    _require(
+        text_4_0,
+        "a5832785f758cd6fe99f32cfa04b90399ebfcd4c9ffdf1e286f79c613cb1cd91",
+        "extensions/carla/model_cache.mojo",
+    )
+    paths.append("extensions/carla/model_cache.mojo")
+    texts.append(text_4_0)
+
+    var live_5 = Path("extensions/carla/polynomial.mojo").read_text()
+    _require(
+        live_5,
+        "f04c9195616d9aebe3371d0e10daf44856231931af020770916b52221e121d79",
+        "extensions/carla/polynomial.mojo",
+    )
+    starts.clear()
+    stops.clear()
+    befores.clear()
+    _lines_7(starts, stops, befores)
+    var text_5_0 = _apply(live_5, starts, stops, befores)
+    _require(
+        text_5_0,
+        "7eadcab8f9148a50644fa9bc9d12affcda8e3361f03151cb4595c6eba257ad07",
+        "extensions/carla/polynomial.mojo",
+    )
+    befores.clear()
+    afters.clear()
+    _spans_8(befores, afters)
+    var text_5_1 = _replace_spans(
+        text_5_0, befores, afters, "extensions/carla/polynomial.mojo"
+    )
+    _require(
+        text_5_1,
+        "ccbb296800e9b493b0617506b05e51d7ed6ee8ea594b9460bb6c7ff359a0d354",
+        "extensions/carla/polynomial.mojo",
+    )
+    paths.append("extensions/carla/polynomial.mojo")
+    texts.append(text_5_1)
+
+    var live_6 = Path("extensions/carla/render_sky.mojo").read_text()
+    _require(
+        live_6,
+        "19e9c8493ffe16a79d24238b480be0904d8ccd490bcee0435554932b5897bff3",
+        "extensions/carla/render_sky.mojo",
+    )
+    befores.clear()
+    afters.clear()
+    _spans_9(befores, afters)
+    var text_6_0 = _replace_spans(
+        live_6, befores, afters, "extensions/carla/render_sky.mojo"
+    )
+    _require(
+        text_6_0,
+        "4b99faa687940af925a5cedd09d33d7b44dd7e317f892a1be269ccd8deaedaa7",
+        "extensions/carla/render_sky.mojo",
+    )
+    paths.append("extensions/carla/render_sky.mojo")
+    texts.append(text_6_0)
+
+    var live_7 = Path("extensions/carla/render_weather.mojo").read_text()
+    _require(
+        live_7,
+        "4f6fbd3dd6597a05900dd64a4dcc799f2e9ffed0b22be63bc96c2d0a6f1822c4",
+        "extensions/carla/render_weather.mojo",
+    )
+    befores.clear()
+    afters.clear()
+    _spans_10(befores, afters)
+    var text_7_0 = _replace_spans(
+        live_7, befores, afters, "extensions/carla/render_weather.mojo"
+    )
+    _require(
+        text_7_0,
+        "5e2c6ed0db903e2c1dd484d73a100cfb816562655722c69e8461d1079d178460",
+        "extensions/carla/render_weather.mojo",
+    )
+    paths.append("extensions/carla/render_weather.mojo")
+    texts.append(text_7_0)
+
+    var live_8 = Path("extensions/carla/road.mojo").read_text()
+    _require(
+        live_8,
+        "a53c48d28b33fb4f5f26316be902e57607a56012edb5f0b025241df1c0092b04",
+        "extensions/carla/road.mojo",
+    )
+    starts.clear()
+    stops.clear()
+    befores.clear()
+    _lines_11(starts, stops, befores)
+    var text_8_0 = _apply(live_8, starts, stops, befores)
+    _require(
+        text_8_0,
+        "4e5857371a9de89c6e41f74e3cdc421760be45603446dd2b2a471f22b53dfd0c",
+        "extensions/carla/road.mojo",
+    )
+    befores.clear()
+    afters.clear()
+    _spans_12(befores, afters)
+    var text_8_1 = _replace_spans(
+        text_8_0, befores, afters, "extensions/carla/road.mojo"
+    )
+    _require(
+        text_8_1,
+        "d9b6f60ae0b0b2fe38ef8dbe797a759f3de5e72dc8fb97bff15ca5dfff251db0",
+        "extensions/carla/road.mojo",
+    )
+    paths.append("extensions/carla/road.mojo")
+    texts.append(text_8_1)
+
+    var live_9 = Path("extensions/carla/sensor.mojo").read_text()
+    _require(
+        live_9,
+        "3dab708ddf17d214821eee9aaf40fce3da8583f602c86bd058da5d3f016ea12b",
+        "extensions/carla/sensor.mojo",
+    )
+    starts.clear()
+    stops.clear()
+    befores.clear()
+    _lines_13(starts, stops, befores)
+    var text_9_0 = _apply(live_9, starts, stops, befores)
+    _require(
+        text_9_0,
+        "e20a4f8341d36615682dd1820a7a1587ebf32aeabac402b36d0646f277239f75",
+        "extensions/carla/sensor.mojo",
+    )
+    paths.append("extensions/carla/sensor.mojo")
+    texts.append(text_9_0)
+
+    var live_10 = Path("extensions/carla/speed_limits.mojo").read_text()
+    _require(
+        live_10,
+        "2d9d5401b3dabf53c1c19f0a8098009275e19edb978f5ae369596fe7ac6557a0",
+        "extensions/carla/speed_limits.mojo",
+    )
+    starts.clear()
+    stops.clear()
+    befores.clear()
+    _lines_14(starts, stops, befores)
+    var text_10_0 = _apply(live_10, starts, stops, befores)
+    _require(
+        text_10_0,
+        "1e95ebc085e03a44e4daaef20a94b724dedc4240a2099227e82be54d32b045f6",
+        "extensions/carla/speed_limits.mojo",
+    )
+    starts.clear()
+    stops.clear()
+    befores.clear()
+    _lines_15(starts, stops, befores)
+    var text_10_1 = _apply(text_10_0, starts, stops, befores)
+    _require(
+        text_10_1,
+        "5cb2e3393283dcfecd9fba2e795db7ddcfb2e32e123889cf1ea237feafc44fee",
+        "extensions/carla/speed_limits.mojo",
+    )
+    paths.append("extensions/carla/speed_limits.mojo")
+    texts.append(text_10_1)
+
+    var live_11 = Path("extensions/carla/spiral_moment_proof.mojo").read_text()
+    _require(
+        live_11,
+        "f42f436b6e616e39bc2cda70491abf2e441aa40d5d8d1aa7f7ecffe3d0b0d5ac",
+        "extensions/carla/spiral_moment_proof.mojo",
+    )
+    befores.clear()
+    afters.clear()
+    _spans_16(befores, afters)
+    var text_11_0 = _replace_spans(
+        live_11, befores, afters, "extensions/carla/spiral_moment_proof.mojo"
+    )
+    _require(
+        text_11_0,
+        "2771e2f9fc9ee1768707b2f03475309d81a066c6be2d8bd27233001c6d09d1ec",
+        "extensions/carla/spiral_moment_proof.mojo",
+    )
+    paths.append("extensions/carla/spiral_moment_proof.mojo")
+    texts.append(text_11_0)
+
+    var live_12 = Path(
+        "extensions/carla/spiral_roundoff_proof.mojo"
+    ).read_text()
+    _require(
+        live_12,
+        "66903c0cfba3315c46e8f48c9af0b3c118db4194236a7e4fe3e893a986c90b0c",
+        "extensions/carla/spiral_roundoff_proof.mojo",
+    )
+    befores.clear()
+    afters.clear()
+    _spans_17(befores, afters)
+    var text_12_0 = _replace_spans(
+        live_12, befores, afters, "extensions/carla/spiral_roundoff_proof.mojo"
+    )
+    _require(
+        text_12_0,
+        "380d8130fd2f18dd93768ed0e7ffb17a45e7b1631a81fbd0f68de1f08fe16ec7",
+        "extensions/carla/spiral_roundoff_proof.mojo",
+    )
+    paths.append("extensions/carla/spiral_roundoff_proof.mojo")
+    texts.append(text_12_0)
+
+
+def restored_domain_winner(text: String) raises -> String:
+    """Restore the spiral-domain winner pin from its border text.
+
+    Args:
+        text: The border pin for `extensions/carla/spiral_domain_proof.mojo`.
+
+    Returns:
+        The winner pin source.
+
+    Raises:
+        Error: The border text or the restored pin changed.
+    """
+    _require(
+        text,
+        "89a8760eee14ff17c682ac69657eb62391e5dfd7e6e1e11fa8a931f8595e9252",
+        "extensions/carla/spiral_domain_proof.mojo",
+    )
+    var befores = List[String]()
+    var afters = List[String]()
+    _spans_18(befores, afters)
+    var restored = _replace_spans(
+        text, befores, afters, "extensions/carla/spiral_domain_proof.mojo"
+    )
+    _require(
+        restored,
+        "da466aa7bec7e6c87fb1e29472e1f28169e7a369e7a1afbdc841f5994276b8e5",
+        "extensions/carla/spiral_domain_proof.mojo",
+    )
+    return restored
