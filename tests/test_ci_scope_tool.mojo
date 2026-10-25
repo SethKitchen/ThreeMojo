@@ -393,7 +393,7 @@ def test_tool_tests_and_the_workflow_only_run_tools() raises:
     var value = _plan(
         _change(
             [
-                "tools/test_build_tools.py",
+                "tools/test_make_format_check.py",
                 "tools/test_coverage_lifecycle.py",
                 "tools/test_parallel_unittest.py",
                 ".github/workflows/ci.yml",
@@ -1083,7 +1083,7 @@ def test_dedicated_discovery_jobs_use_the_tools_selection_flag() raises:
 
 def test_aggregate_requires_success_only_for_applicable_jobs() raises:
     for value in [
-        _plan(_change(["tools/test_build_tools.py"])),
+        _plan(_change(["tools/test_make_format_check.py"])),
         _full(),
         _plan(Dict[String, Bool]()),
     ]:
@@ -1199,7 +1199,7 @@ def test_make_reads_the_scoped_lists_before_the_hash_and_in_recursion() raises:
 
 
 def test_tool_targets_get_no_list_overrides() raises:
-    var value = _plan(_change(["tools/test_build_tools.py"]))
+    var value = _plan(_change(["tools/test_make_format_check.py"]))
     for target in [
         "test-tools",
         "test-tools-discovery",
