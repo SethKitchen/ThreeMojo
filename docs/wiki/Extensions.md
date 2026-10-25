@@ -14,6 +14,8 @@ The geotech subject analyzes earth-retaining walls: earth and water pressure, LR
 
 The CARLA subject ports the CARLA driving simulator without its game engine and its network transport. It covers maps, physics, the world, sensors, traffic, agents, recording and rendering. See [CARLA](CARLA).
 
+The gamepad subject ports the gamepad subsystem of SDL. It reads Xbox, PlayStation, Nintendo and other controllers on Linux and through a host's own gamepad API, and names their controls by position. It runs their rumble, lights, motion sensors and touchpads. See [Gamepads](Gamepads).
+
 The Streamline subject types NVIDIA's DLSS 4.5 Super Resolution and Ray Reconstruction: modes, presets, options, per-frame constants and buffer checks. It has a CPU fallback upscaler. It does not run DLSS yet. See [Streamline](Streamline).
 
 See [Femur](Femur), [Tibia](Tibia), [Fibula](Fibula), [Patella](Patella), [Knee](Knee) and [Muscles](Muscles). See [Vessels](Vessels), [Lymph](Lymph), [Nerves](Nerves), [Integument](Integument), [Leg](Leg) and [Foot](Foot).
