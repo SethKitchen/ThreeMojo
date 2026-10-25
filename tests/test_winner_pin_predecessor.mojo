@@ -13,6 +13,7 @@ from tests._geometry_predecessor import restored_geometry
 from tests._winner_pin_predecessor import (
     restored_dispatch_winner,
     restored_domain_winner,
+    restored_rounded_arc_winner,
     restored_rounded_line_winner,
     restored_winner_pins,
 )
@@ -30,6 +31,8 @@ comptime _GEOMETRY = "extensions/carla/geometry.mojo"
 """The geometry module restored by its own predecessor."""
 comptime _DOMAIN = "extensions/carla/spiral_domain_proof.mojo"
 """The domain module restored from its border pin."""
+comptime _ARC = "extensions/carla/curve_rounded_arc.mojo"
+"""The rounded arc module restored from the live file."""
 comptime _ROUNDED = "extensions/carla/curve_rounded_line.mojo"
 """A border pin that is not the winner pin."""
 comptime _DISPATCH = "extensions/carla/curve_sample_dispatch.mojo"
@@ -109,6 +112,9 @@ def test_live_consumers_restore_their_winner_pins() raises:
                             assert_true(name == _ROUNDED)
                             var line = restored_rounded_line_winner()
                             assert_equal(sha256_hex(line.as_bytes()), expected)
+                elif name == _ARC:
+                    var arc = restored_rounded_arc_winner()
+                    assert_equal(sha256_hex(arc.as_bytes()), expected)
                 elif sha256_hex(Path(name).read_bytes()) == expected:
                     direct += 1
         index += 1
@@ -146,6 +152,10 @@ def test_a_changed_winner_pin_is_refused() raises:
     var line = restored_rounded_line_winner()
     assert_true(
         sha256_hex((line + "\n").as_bytes()) != sha256_hex(line.as_bytes())
+    )
+    var arc = restored_rounded_arc_winner()
+    assert_true(
+        sha256_hex((arc + "\n").as_bytes()) != sha256_hex(arc.as_bytes())
     )
 
 

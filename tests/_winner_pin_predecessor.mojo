@@ -3125,3 +3125,122 @@ def restored_rounded_line_winner() raises -> String:
         path,
     )
     return restored
+
+
+def _lines_35(
+    mut starts: List[Int], mut stops: List[Int], mut befores: List[String]
+):
+    """Fill one reviewed line-edit table, highest line first.
+
+    Args:
+        starts: The 0-based start lines.
+        stops: The exclusive end lines.
+        befores: The predecessor lines for each span.
+    """
+    starts.append(20)
+    stops.append(21)
+    befores.append("from extensions.carla.road_info import info_index\n")
+
+
+def _lines_36(
+    mut starts: List[Int], mut stops: List[Int], mut befores: List[String]
+):
+    """Fill one reviewed line-edit table, highest line first.
+
+    Args:
+        starts: The 0-based start lines.
+        stops: The exclusive end lines.
+        befores: The predecessor lines for each span.
+    """
+    starts.append(237)
+    stops.append(238)
+    befores.append(
+        "            if info_index(widths, low) != 0 or info_index(widths, hi"
+        "gh) != 0:\n"
+    )
+    starts.append(215)
+    stops.append(215)
+    befores.append("        or info_index(road.info.elevations, high) != 0\n")
+    starts.append(214)
+    stops.append(214)
+    befores.append("        or info_index(road.info.lane_offsets, high) != 0\n")
+    starts.append(209)
+    stops.append(209)
+    befores.append(
+        "        return None\n    if info_index(road.info.geometries, high) !"
+        "= 0:\n"
+    )
+    starts.append(207)
+    stops.append(208)
+    befores.append("")
+    starts.append(179)
+    stops.append(180)
+    befores.append(
+        "        if max(abs(half.low), abs(half.high)) > _QUARTER_PI:\n      "
+        "      return [unknown, unknown, unknown]\n"
+    )
+    starts.append(15)
+    stops.append(15)
+    befores.append("    _QUARTER_PI,\n")
+
+
+def restored_rounded_arc_winner() raises -> String:
+    """Restore the rounded-arc winner pin from the live file.
+
+    Returns:
+        The winner pin source.
+
+    Raises:
+        Error: The live file or a restored pin changed.
+    """
+    var path = "extensions/carla/curve_rounded_arc.mojo"
+    var live = Path(path).read_text()
+    _require(
+        live,
+        "f17bf9a6a744971ea6e792a24b27d6157691e70d50c438880abcf88db2a9123d",
+        path,
+    )
+    var starts = List[Int]()
+    var stops = List[Int]()
+    var befores = List[String]()
+    _lines_35(starts, stops, befores)
+    var mid = _apply(live, starts, stops, befores)
+    _require(
+        mid,
+        "d6fbdb466f9e1641f8d3317d03035732883775adfdc46a7913a96178feeb85ec",
+        path,
+    )
+    var earlier = (
+        "\n\ndef _rounded_constant(polynomial: CubicPolynomial) -> _RoundedBo"
+        "x:\n    if polynomial.b != 0.0 or polynomial.c != 0.0 or polynomial."
+        "d != 0.0:\n        return _RoundedBox.unknown()\n    # For finite s,"
+        " all variable terms are exact zero in either graph.\n    return _Rou"
+        "ndedBox.point(polynomial.a)\n\n\n"
+    )
+    var later = (
+        "\n\ndef _rounded_constant(polynomial: CubicPolynomial) -> _RoundedBo"
+        "x:\n    if (\n        not _rounded_operand(polynomial.s)\n        or"
+        " polynomial.b != 0.0\n        or polynomial.c != 0.0\n        or pol"
+        "ynomial.d != 0.0\n    ):\n        return _RoundedBox.unknown()\n    "
+        "# The query station and the stored origin must both fit the supporte"
+        "d\n    # operand range. Their difference is finite, so every variabl"
+        "e term\n    # is exact zero in the conditioned graph.\n    return _R"
+        "oundedBox.point(polynomial.a)\n\n\n"
+    )
+    var reached = _replace_once(mid, earlier, later, path)
+    _require(
+        reached,
+        "7bc84049fed26cb7b14b4fa4603ee36d55cdeb7055c62df50cf10d6a2ce90745",
+        path,
+    )
+    starts.clear()
+    stops.clear()
+    befores.clear()
+    _lines_36(starts, stops, befores)
+    var restored = _apply(reached, starts, stops, befores)
+    _require(
+        restored,
+        "83b4f7620b96860af672f18052b2642d4fb3ab553a58cf7ace15a4616eba396e",
+        path,
+    )
+    return restored
