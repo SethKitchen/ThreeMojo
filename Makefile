@@ -245,7 +245,7 @@ ifeq ($(filter $(COV_PROFILE),raw aot aot-hits),)
 $(error COV_PROFILE must be raw, aot, or aot-hits)
 endif
 ifeq ($(COV_PROFILE),raw)
-COVERAGE_RUN = python3 tools/native_test_support.py run --root $(COV_DIR)
+COVERAGE_RUN = tools/tool.sh $(MOJO) native_test_support run --root $(COV_DIR)
 else
 COVERAGE_RUN = python3 tools/coverage_hit_aot.py --profile $(COV_PROFILE) --root $(COV_DIR)
 endif

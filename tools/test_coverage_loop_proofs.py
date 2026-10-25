@@ -199,6 +199,12 @@ class ProofBindingTests(unittest.TestCase):
         compiler = self.root / '.venv/bin/mojo'
         compiler.parent.mkdir(parents=True)
         compiler.write_text('compiler-free invocation identity\n')
+        launcher = self.root / 'tools/tool.sh'
+        launcher.write_text(
+            '#!/bin/sh\nprintf "PASS\\n"\n'
+            'printf "COVLINE:module:2:T\\n" >&2\n'
+            'exit "${LOOP_FIXTURE_STATUS:-0}"\n')
+        launcher.chmod(0o755)
         for base in [self.root, self.build]:
             suite = base / 'tests/test_fixture.mojo'
             suite.parent.mkdir(parents=True)
@@ -748,9 +754,9 @@ class ProofBindingTests(unittest.TestCase):
 
     @unittest.skipUnless(os.name == 'posix', 'POSIX capture deadline')
     def test_checker_deadline_removes_bound_stale_receipt_after_probe(self):
-        adapter = self.root/'tools/native_test_support.py'
-        adapter.write_text('import sys, time\nsys.stderr.write("COVLINE:module:2:T\\n")\n'
-                           'sys.stderr.flush()\ntime.sleep(60)\n')
+        adapter = self.root/'tools/tool.sh'
+        adapter.write_text('#!/bin/sh\nprintf "COVLINE:module:2:T\\n" >&2\nexec sleep 60\n')
+        adapter.chmod(0o755)
         self.regenerate()
         self.envelope = loops.seal(self.root, self.build, 'Mojo fixture', '-Werror')
         capture, output = self.hits/'test_fixture.txt.gz', self.hits/'test_fixture.out'

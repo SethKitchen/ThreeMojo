@@ -2412,10 +2412,17 @@ def execution_contract(root, build, inputs, *, mojo=None, capture_cache=None, su
 def expected_capture_command(contract, suite, profile):
     if suite not in contract['suites'] or profile not in contract['profiles']:
         raise ValueError('Capture suite/profile is outside the sealed execution contract')
-    runner = (['@ROOT@/tools/native_test_support.py', 'run'] if profile == 'raw'
-              else ['@ROOT@/tools/coverage_hit_aot.py', '--profile', profile])
     compiler = [item.get('path', item.get('literal')) for item in contract['compiler']]
-    return [contract['python']['path'], *runner, '--root', '@BUILD@',
+    if profile == 'raw':
+        # `tools/tool.sh` is inside the repository, so its sealed path does
+        # not depend on where `sh` lives. The cached program starts at once
+        # after the first build.
+        return ['@ROOT@/tools/tool.sh', *compiler, 'native_test_support', 'run',
+                '--root', '@BUILD@', '--suite', '@BUILD@/' + suite,
+                '--cache', contract['cache'], '--',
+                *compiler, 'run', '-I', '@BUILD@', '@BUILD@/' + suite]
+    return [contract['python']['path'], '@ROOT@/tools/coverage_hit_aot.py',
+            '--profile', profile, '--root', '@BUILD@',
             '--suite', '@BUILD@/' + suite, '--cache', contract['cache'], '--',
             *compiler, 'run', '-I', '@BUILD@', '@BUILD@/' + suite]
 

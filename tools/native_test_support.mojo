@@ -14,19 +14,31 @@ suite fails if its fixture or compiler is unavailable. No test is skipped.
     native_test_support copy --root . --destination coverage/build
     native_test_support fingerprint --cc cc
 
-`make test-cpu` runs the first form. `make coverage` still runs the Python
-module for the sealed raw capture command. The fixture table here and in
-`tools/suite_key.mojo` is the same.
+`make test-cpu` runs the first form. `make coverage` runs this program for
+each raw capture. A fixture suite is built and then run in that capture's
+process group. The fixture table here and in `tools/suite_key.mojo` is the
+same.
 """
 
 from std.collections import Set
 from std.ffi import c_int, external_call
-from std.os import getenv
+from std.memory import OpaquePointer
+from std.os import getenv, listdir, remove, rmdir
 from std.pathlib import Path
 from std.sys import CompilationTarget, argv, exit, stderr
+from std.tempfile import mkdtemp
 
 from tools._imports import SourceCache, closure, mojo_files
-from tools._owned_process import ExecPlan, c_bytes, errno, strerror
+from tools._owned_process import (
+    EINTR,
+    ExecPlan,
+    c_bytes,
+    close_fd,
+    errno,
+    make_pipe,
+    strerror,
+    wait_blocking,
+)
 from tools._process import run_program
 from tools._sha256 import sha256_hex
 
@@ -601,6 +613,225 @@ def _exec(command: List[String]) raises:
     raise Error("exec failed: " + strerror(number))
 
 
+def _address(address: Int) -> OpaquePointer[MutAnyOrigin]:
+    """Return `address` as a C pointer.
+
+    Args:
+        address: A live address.
+
+    Returns:
+        The pointer.
+    """
+    return OpaquePointer[MutAnyOrigin](unsafe_from_address=address)
+
+
+def _spawn_same_group(command: List[String]) raises -> Int:
+    """Run `command` in this process group and return its status.
+
+    The child keeps the standard streams, so coverage probes stay on the
+    capture pipe. A signal that stops the child has status 128 plus the
+    signal number.
+
+    Args:
+        command: The program and its arguments.
+
+    Returns:
+        The exit status.
+
+    Raises:
+        Error: If the program cannot start or the wait fails.
+    """
+    if len(command) == 0:
+        raise Error("a Mojo command is required after --")
+    var plan = ExecPlan(command)
+    var pipe = make_pipe()
+    var report = List[Int32](length=1, fill=0)
+    var pid = Int(external_call["fork", c_int]())
+    if pid == 0:
+        report[0] = Int32(plan.run())
+        _ = external_call["write", Int](
+            Int32(pipe[1]),
+            _address(Int(report.unsafe_ptr())),
+            4,
+        )
+        external_call["_exit", NoneType](c_int(127))
+    var fork_error = errno()
+    close_fd(pipe[1])
+    if pid < 0:
+        close_fd(pipe[0])
+        raise Error("fork failed: " + strerror(fork_error))
+    var got = 0
+    while True:
+        var count = external_call["read", Int](
+            Int32(pipe[0]),
+            _address(Int(report.unsafe_ptr()) + got),
+            4 - got,
+        )
+        if count > 0:
+            got += count
+            if got == 4:
+                break
+            continue
+        if count < 0 and errno() == EINTR:
+            continue
+        break
+    close_fd(pipe[0])
+    if got == 4:
+        _ = wait_blocking(pid)
+        raise Error(
+            "cannot start " + command[0] + ": " + strerror(Int(report[0]))
+        )
+    var waited = wait_blocking(pid)
+    if not waited.done:
+        raise Error("wait failed: " + strerror(waited.error))
+    if waited.status < 0:
+        return 128 - waited.status
+    return waited.status
+
+
+def _clear_directory(directory: String) raises:
+    """Remove a flat directory and the files in it.
+
+    Args:
+        directory: The directory. A missing directory is left alone.
+
+    Raises:
+        Error: If a file or the directory cannot be removed.
+    """
+    if not Path(directory).is_dir():
+        return
+    for name in listdir(directory):
+        remove(Path(directory) / name)
+    rmdir(directory)
+
+
+struct _FixtureRun(Movable):
+    """The build command and the program command for one fixture suite."""
+
+    var build: List[String]
+    """The Mojo build command, including the fixture objects."""
+    var execute: List[String]
+    """The program and the arguments that follow the suite."""
+
+    def __init__(out self, var build: List[String], var execute: List[String]):
+        """Make the pair.
+
+        Args:
+            build: The build command.
+            execute: The program command.
+        """
+        self.build = build^
+        self.execute = execute^
+
+
+def _first_source(command: List[String], suite: String) raises -> Int:
+    """Return the first non-option argument that is the suite.
+
+    Args:
+        command: A Mojo run command.
+        suite: The suite path.
+
+    Returns:
+        The index of the suite.
+
+    Raises:
+        Error: If the command is not a run command, or the suite is absent.
+    """
+    if len(command) < 3 or command[1] != "run":
+        raise Error("native fixture execution requires a Mojo run command")
+    var resolved = _normalize(suite)
+    var index = 2
+    while index < len(command):
+        var argument = command[index]
+        if argument.byte_length() > 0 and argument.as_bytes()[0] != 45:
+            if _normalize(argument) == resolved:
+                return index
+        index += 1
+    raise Error("native fixture run is missing its Mojo source")
+
+
+def prepare_run_commands(
+    root: String,
+    suite: String,
+    cache: String,
+    cc: String,
+    command: List[String],
+    executable: String,
+) raises -> _FixtureRun:
+    """Translate a fixture `mojo run` into a build and a program.
+
+    Args:
+        root: The tree that holds the suite and the fixtures.
+        suite: The suite path.
+        cache: The object cache.
+        cc: The C compiler command.
+        command: The Mojo run command and the program arguments.
+        executable: The fresh program path for this run.
+
+    Returns:
+        The build command and the program command.
+
+    Raises:
+        Error: If the command is not a run command, the suite is absent,
+            or a fixture object cannot be built.
+    """
+    var index = _first_source(command, suite)
+    var build = List[String]()
+    build.append(command[0])
+    build.append("build")
+    var cursor = 2
+    while cursor < index:
+        build.append(command[cursor])
+        cursor += 1
+    build.append("-o")
+    build.append(executable)
+    build.append(command[index])
+    var prepared = prepare_command(root, suite, cache, cc, build)
+    var execute = List[String]()
+    execute.append(executable)
+    cursor = index + 1
+    while cursor < len(command):
+        execute.append(command[cursor])
+        cursor += 1
+    return _FixtureRun(prepared^, execute^)
+
+
+def run_fixture(
+    root: String,
+    suite: String,
+    cache: String,
+    cc: String,
+    command: List[String],
+) raises -> Int:
+    """Build a fixture suite and run that program in this process group.
+
+    Args:
+        root: The tree that holds the suite and the fixtures.
+        suite: The suite path.
+        cache: The object cache.
+        cc: The C compiler command.
+        command: The Mojo run command and the program arguments.
+
+    Returns:
+        The build status, or the program status when the build exits 0.
+
+    Raises:
+        Error: If the command cannot be translated or a program cannot
+            start. The fresh program directory is removed either way.
+    """
+    var folder = mkdtemp(prefix="threemojo-native-run-")
+    try:
+        var plan = prepare_run_commands(
+            root, suite, cache, cc, command, folder + "/suite"
+        )
+        var status = _spawn_same_group(plan.build)
+        if status == 0:
+            status = _spawn_same_group(plan.execute)
+        return status
+    finally:
+        _clear_directory(folder)
+
+
 def copy_fixtures(root: String, destination: String) raises:
     """Copy every fixture into an instrumented tree.
 
@@ -728,6 +959,10 @@ def run_cli(arguments: List[String]) raises -> Int:
         or cache.byte_length() == 0
     ):
         raise Error("run requires --root, --suite and --cache")
+    if len(command) >= 2 and command[1] == "run":
+        var needed = dependency_inputs(root, suite)
+        if len(needed) > 0:
+            return run_fixture(root, suite, cache, cc, command)
     var prepared = prepare_command(root, suite, cache, cc, command)
     _exec(prepared)
     return 1

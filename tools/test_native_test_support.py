@@ -334,7 +334,8 @@ class NativeTestSupportTests(unittest.TestCase):
         make = (Path(__file__).resolve().parent.parent/'Makefile').read_text()
         self.assertIn('native_test_support run --root .', make)
         self.assertIn('native_test_support fingerprint', make)
-        self.assertIn('tools/native_test_support.py run --root $(COV_DIR)', make)
+        self.assertIn(
+            'tools/tool.sh $(MOJO) native_test_support run --root $(COV_DIR)', make)
         self.assertIn('tools/native_test_support.py copy --root . --destination $(COV_DIR)', make)
         self.assertGreaterEqual(make.count('native-tests:$(NATIVE_TOOLCHAIN)'), 2)
         self.assertIn('TEST_TIMEOUT := 5', make)
