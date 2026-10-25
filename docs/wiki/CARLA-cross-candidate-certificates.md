@@ -128,6 +128,12 @@ Arc and line move under the geometry flag.
 The sampled call replaces the proof dispatch.
 A changed layout or a changed body is refused.
 
+Mojo checks the sampled qualifier pins.
+The trig and interval modules match the live pins.
+The bounds pin is the count-loop source.
+The lane pin is the winner source.
+A moved qualifier is refused.
+
 ## Candidate certificate
 
 A certificate contains a stored incumbent point and its road parameter.
