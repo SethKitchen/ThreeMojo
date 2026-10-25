@@ -29,6 +29,7 @@ from std.sys import CompilationTarget, argv, exit, stderr
 from std.tempfile import mkdtemp
 
 from tools._imports import SourceCache, closure, mojo_files
+from tools._phase_log import phase_note
 from tools._owned_process import (
     EINTR,
     ExecPlan,
@@ -302,11 +303,24 @@ def _uname_field(index: Int) -> String:
     return String(from_utf8_lossy=text)
 
 
-def compiler_identity(cc: String) raises -> CompilerIdentity:
+def _compiler_flags() -> List[String]:
+    """Return the flags on every test-only C object.
+
+    Returns:
+        The flags, in order.
+    """
+    var flags = List[String]()
+    for flag in materialize[C_FLAGS]():
+        flags.append(flag)
+    return flags^
+
+
+def compiler_identity(cc: String, log: Int = 0) raises -> CompilerIdentity:
     """Bind the compiler command, its version and its executable bytes.
 
     Args:
         cc: The compiler command, as the `CC` environment gives it.
+        log: A phase-log address from `phase_address`, or 0.
 
     Returns:
         The identity. A replacement with the same `--version` text still
@@ -321,6 +335,7 @@ def compiler_identity(cc: String) raises -> CompilerIdentity:
         raise Error("native test compiler command is empty")
     var version_args = _copy(command)
     version_args.append("--version")
+    phase_note(log, command[0], version_args)
     var version = run_program(version_args, 30.0, merge_errors=False)
     if version.status != 0:
         raise Error("native test compiler --version failed: " + version.errors)
@@ -444,7 +459,11 @@ def _rename(source: String, target: String) raises:
 
 
 def build_object(
-    root: String, fixture: String, cache: String, identity: CompilerIdentity
+    root: String,
+    fixture: String,
+    cache: String,
+    identity: CompilerIdentity,
+    log: Int = 0,
 ) raises -> String:
     """Compile one fixture, or return the cached object when its bytes match.
 
@@ -453,6 +472,7 @@ def build_object(
         fixture: The fixture path relative to `root`.
         cache: The object cache directory.
         identity: The compiler identity.
+        log: A phase-log address from `phase_address`, or 0.
 
     Returns:
         The absolute object path.
@@ -486,6 +506,7 @@ def build_object(
     command.append("-o")
     command.append(temporary)
     try:
+        phase_note(log, command[0], command)
         var compiled = run_program(command, 120.0)
         if compiled.status != 0:
             raise Error("native test build failed: " + compiled.output)
@@ -557,6 +578,7 @@ def prepare_command(
     cache: String,
     cc: String,
     command: List[String],
+    log: Int = 0,
 ) raises -> List[String]:
     """Insert fixture objects in front of the suite in a Mojo build command.
 
@@ -566,6 +588,7 @@ def prepare_command(
         cache: The object cache.
         cc: The C compiler command.
         command: The Mojo command. A build command has `build` as argument 2.
+        log: A phase-log address from `phase_address`, or 0.
 
     Returns:
         The command. It is unchanged when the suite links no fixture.
@@ -588,10 +611,10 @@ def prepare_command(
         raise Error(
             "native fixture suite must occur exactly once in the Mojo command"
         )
-    var identity = compiler_identity(cc)
+    var identity = compiler_identity(cc, log)
     var objects = List[String]()
     for name in fixtures:
-        objects.append(build_object(root, name, cache, identity))
+        objects.append(build_object(root, name, cache, identity, log))
     var prepared = List[String]()
     var cursor = 0
     while cursor < index:
@@ -707,7 +730,13 @@ def _wait_child(
     close_fd(read_fd)
     if got == 4:
         _ = wait_blocking(pid)
-        raise Error("cannot start " + name + ": " + strerror(Int(report[0])))
+        var number = Int(report[0])
+        var label = "OSError"
+        if number == 2:
+            label = "FileNotFoundError"
+        elif number == 13 or number == 1:
+            label = "PermissionError"
+        raise Error(label + ": cannot start " + name + ": " + strerror(number))
     var waited = wait_blocking(pid)
     if not waited.done:
         raise Error("wait failed: " + strerror(waited.error))
@@ -833,6 +862,7 @@ def prepare_run_commands(
     cc: String,
     command: List[String],
     executable: String,
+    log: Int = 0,
 ) raises -> _FixtureRun:
     """Translate a fixture `mojo run` into a build and a program.
 
@@ -843,6 +873,7 @@ def prepare_run_commands(
         cc: The C compiler command.
         command: The Mojo run command and the program arguments.
         executable: The fresh program path for this run.
+        log: A phase-log address from `phase_address`, or 0.
 
     Returns:
         The build command and the program command.
@@ -862,7 +893,7 @@ def prepare_run_commands(
     build.append("-o")
     build.append(executable)
     build.append(command[index])
-    var prepared = prepare_command(root, suite, cache, cc, build)
+    var prepared = prepare_command(root, suite, cache, cc, build, log)
     var execute = List[String]()
     execute.append(executable)
     cursor = index + 1
@@ -879,6 +910,7 @@ def run_fixture(
     cc: String,
     command: List[String],
     program_name: String = "",
+    log: Int = 0,
 ) raises -> Int:
     """Build a fixture suite and run that program in this process group.
 
@@ -890,6 +922,7 @@ def run_fixture(
         command: The Mojo run command and the program arguments.
         program_name: The name the program sees, when it differs from the
             built file. Empty keeps the built file's path.
+        log: A phase-log address from `phase_address`, or 0.
 
     Returns:
         The build status, or the program status when the build exits 0.
@@ -901,11 +934,13 @@ def run_fixture(
     var folder = mkdtemp(prefix="threemojo-native-run-")
     try:
         var plan = prepare_run_commands(
-            root, suite, cache, cc, command, folder + "/suite"
+            root, suite, cache, cc, command, folder + "/suite", log
         )
+        phase_note(log, plan.build[0], plan.build)
         var status = _spawn_same_group(plan.build)
         if status == 0:
             if program_name.byte_length() == 0:
+                phase_note(log, plan.execute[0], plan.execute)
                 status = _spawn_same_group(plan.execute)
             else:
                 var argv = List[String]()
@@ -914,6 +949,7 @@ def run_fixture(
                 while index < len(plan.execute):
                     argv.append(plan.execute[index])
                     index += 1
+                phase_note(log, plan.execute[0], argv)
                 status = _spawn_file(plan.execute[0], argv)
         return status
     finally:

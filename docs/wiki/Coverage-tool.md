@@ -395,6 +395,8 @@ Each capture prints its start, first probe, elapsed time and exit status. A runn
 
 Each capture creates a private temporary directory. Its parent is the resolved `TMPDIR` when that variable is set. The command sees the directory as `TMPDIR` and as `THREEMOJO_TEST_TMPDIR`. The compiler cache is inside the directory. The tool removes the directory after any outcome.
 
+A compiled profile records each launch request before that program starts. The build request keeps the compiler arguments. The program request keeps the source path and the number of program arguments. The finish record gives the status. A raw profile records no launch request.
+
 Output is flushed at each update. Failed CI captures upload separate diagnostic artifacts. The report job does not use those artifacts as completed captures.
 
 Refresh the profile when completed capture logs show material changes. Use the per-suite completion times from those logs. Keep the source run, commit, compiler and worker count with the profile. A simulation from the initial estimates gives a longest group of 4554 seconds with longest-first scheduling. This is an estimate, not a guarantee for another runner.

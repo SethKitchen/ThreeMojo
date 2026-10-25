@@ -10,7 +10,10 @@
 
 A compiled profile builds the suite, then runs that program. The program's
 name stays the source path. `aot-hits` also links `tools/coverage_hit_cache.c`.
-One compiler thread is used when the command does not set one.
+One compiler thread is used when the command does not set one. When
+`THREEMOJO_COVERAGE_PHASES` names a phase file, the profile appends the build
+request, the program request and the finish record. The program request keeps
+the source path and the count of later arguments. A raw profile appends nothing.
 """
 
 from std.os import getenv, setenv, unsetenv
@@ -19,8 +22,11 @@ from std.pathlib import Path
 from std.sys import CompilationTarget, argv, exit, stderr
 
 from tools._carla_files import fstat_id
+from tools._phase_log import PHASE_ENV, PhaseLog, phase_address
 from tools.native_test_support import (
+    _compiler_flags,
     _exec,
+    _split_command,
     build_object,
     compiler_identity,
     dependency_inputs,
@@ -29,9 +35,6 @@ from tools.native_test_support import (
 
 comptime HELPER = "tools/coverage_hit_cache.c"
 """The private hit-profile object, relative to the repository root."""
-
-comptime _PHASE = "THREEMOJO_COVERAGE_PHASES"
-"""The phase-file path set by the capture wrapper."""
 
 
 def _usage() -> String:
@@ -155,38 +158,29 @@ def _fifo_stderr() raises -> Bool:
     return info.mode & 0o170000 == 0o010000
 
 
-def _append_finish(path: String, suite: String, status: Int) raises:
-    """Append an adapter-finish record to the phase file.
+def _arm(mut log: PhaseLog, suite: String, command: List[String], cc: String):
+    """Open the phase file when the environment names one.
+
+    A missing source or a rejected file leaves the log closed. The profile
+    still runs.
 
     Args:
-        path: The phase file.
+        log: The log.
         suite: The suite path.
-        status: The profile status.
-
-    Raises:
-        Error: If the file cannot be written.
+        command: The Mojo command.
+        cc: The C compiler command.
     """
-    var stem = suite
-    if stem.endswith(".mojo"):
-        var end = stem.byte_length() - 5
-        var shortened = String(stem[byte=:end])
-        stem = shortened
-    var slash = stem.rfind("/")
-    if slash >= 0:
-        var tail = String(stem[byte = slash + 1 :])
-        stem = tail
-    var line = (
-        '{"schema": "coverage-exec-phases-v1", "suite": "'
-        + stem
-        + '", "phase": "adapter_finish", "diagnostics_complete": true,'
-        ' "status": '
-        + String(status)
-        + "}\n"
-    )
-    var text = ""
-    if Path(path).is_file():
-        text = Path(path).read_text()
-    Path(path).write_text(text + line)
+    var words = List[String]()
+    try:
+        var parsed = _split_command(cc)
+        for word in parsed:
+            words.append(word)
+        var source = _source_argument(command, suite)
+        log.attach(suite, command[0], source, words, _compiler_flags())
+    except:
+        log.armed = True
+        log.complete = False
+        log.close()
 
 
 def _profile(
@@ -197,6 +191,7 @@ def _profile(
     cc: String,
     command: List[String],
     repository: String,
+    log: Int = 0,
 ) raises -> Int:
     """Run one profile.
 
@@ -208,6 +203,7 @@ def _profile(
         cc: The C compiler command.
         command: The Mojo command.
         repository: The tree that holds `tools/coverage_hit_cache.c`.
+        log: A phase-log address from `phase_address`, or 0.
 
     Returns:
         The exit status.
@@ -235,10 +231,10 @@ def _profile(
         var info = fstat_id(2)
         _ = setenv("THREEMOJO_COVERAGE_PIPE_DEVICE", String(info.device), True)
         _ = setenv("THREEMOJO_COVERAGE_PIPE_INODE", String(info.inode), True)
-        var identity = compiler_identity(cc + " -pthread")
-        var object = build_object(repository, HELPER, cache, identity)
+        var identity = compiler_identity(cc + " -pthread", log)
+        var object = build_object(repository, HELPER, cache, identity, log)
         prepared = _insert_helper(prepared, suite, object)
-    return run_fixture(root, suite, cache, cc, prepared, program)
+    return run_fixture(root, suite, cache, cc, prepared, program, log)
 
 
 def run_cli(arguments: List[String]) raises -> Int:
@@ -304,14 +300,24 @@ def run_cli(arguments: List[String]) raises -> Int:
         or len(command) == 0
     ):
         raise Error(_usage())
-    var phase = getenv(_PHASE, "")
-    _ = unsetenv(_PHASE)
-    _ = unsetenv(_PHASE + "_DEVICE")
-    _ = unsetenv(_PHASE + "_INODE")
-    var status = _profile(profile, root, suite, cache, cc, command, repository)
-    if phase.byte_length() > 0 and Path(phase).is_file():
-        _append_finish(phase, suite, status)
-    return status
+    var log = PhaseLog()
+    if profile != "raw":
+        _arm(log, suite, command, cc)
+    _ = unsetenv(PHASE_ENV)
+    _ = unsetenv(PHASE_ENV + "_DEVICE")
+    _ = unsetenv(PHASE_ENV + "_INODE")
+    var watched = phase_address(log)
+    try:
+        var status = _profile(
+            profile, root, suite, cache, cc, command, repository, watched
+        )
+        log.finish_status(status)
+        return status
+    except error:
+        var text = String(error)
+        var again = text
+        log.finish_error(again)
+        raise Error(text)
 
 
 def main() raises:
