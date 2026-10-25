@@ -273,6 +273,11 @@ Mojo checks the live Map routing.
 Restoring those spans matches the pinned routing.
 A moved span or a changed declaration is refused.
 
+Mojo checks the live Sum2 alias inventory.
+Three caller modules keep the road-info alias.
+Restoring that alias matches the pinned use digest.
+A bare import or a changed use is refused.
+
 ## Candidate certificate
 
 A certificate contains a stored incumbent point and its road parameter.
