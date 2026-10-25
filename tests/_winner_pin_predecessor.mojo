@@ -3066,14 +3066,14 @@ def _lines_34(
     befores.append("")
 
 
-def restored_rounded_line_winner() raises -> String:
-    """Restore the rounded-line winner pin from the live file.
+def restored_rounded_line_cleanup() raises -> String:
+    """Return the reviewed rounded-line cleanup successor.
 
     Returns:
-        The winner pin source.
+        The successor source.
 
     Raises:
-        Error: The live file or a restored pin changed.
+        Error: The live file or the successor changed.
     """
     var path = "extensions/carla/curve_rounded_line.mojo"
     var live = Path(path).read_text()
@@ -3102,6 +3102,20 @@ def restored_rounded_line_winner() raises -> String:
         "aeb7b6722b223493d9a86422a17500be9c68d1b7d3de8bd441795001dc513f35",
         path,
     )
+    return mid
+
+
+def restored_rounded_line_winner() raises -> String:
+    """Restore the rounded-line winner pin from the live file.
+
+    Returns:
+        The winner pin source.
+
+    Raises:
+        Error: The live file or a restored pin changed.
+    """
+    var path = "extensions/carla/curve_rounded_line.mojo"
+    var mid = restored_rounded_line_cleanup()
     var restored = _replace_once(
         mid,
         (
@@ -3184,14 +3198,14 @@ def _lines_36(
     befores.append("    _QUARTER_PI,\n")
 
 
-def restored_rounded_arc_winner() raises -> String:
-    """Restore the rounded-arc winner pin from the live file.
+def restored_rounded_arc_cleanup() raises -> String:
+    """Return the reviewed rounded-arc cleanup successor.
 
     Returns:
-        The winner pin source.
+        The successor source.
 
     Raises:
-        Error: The live file or a restored pin changed.
+        Error: The live file or the successor changed.
     """
     var path = "extensions/carla/curve_rounded_arc.mojo"
     var live = Path(path).read_text()
@@ -3233,9 +3247,23 @@ def restored_rounded_arc_winner() raises -> String:
         "7bc84049fed26cb7b14b4fa4603ee36d55cdeb7055c62df50cf10d6a2ce90745",
         path,
     )
-    starts.clear()
-    stops.clear()
-    befores.clear()
+    return reached
+
+
+def restored_rounded_arc_winner() raises -> String:
+    """Restore the rounded-arc winner pin from the live file.
+
+    Returns:
+        The winner pin source.
+
+    Raises:
+        Error: The live file or a restored pin changed.
+    """
+    var path = "extensions/carla/curve_rounded_arc.mojo"
+    var reached = restored_rounded_arc_cleanup()
+    var starts = List[Int]()
+    var stops = List[Int]()
+    var befores = List[String]()
     _lines_36(starts, stops, befores)
     var restored = _apply(reached, starts, stops, befores)
     _require(
@@ -3755,14 +3783,14 @@ def restored_lane_invasion_winner() raises -> String:
     return restored
 
 
-def restored_junction_winner() raises -> String:
-    """Restore the junction-bounds winner pin from the live file.
+def restored_junction_cleanup() raises -> String:
+    """Return the reviewed junction cleanup successor.
 
     Returns:
-        The winner pin source.
+        The successor source.
 
     Raises:
-        Error: The live file or a restored pin changed.
+        Error: The live file or the successor changed.
     """
     var path = "extensions/carla/junction_bounds.mojo"
     var live = Path(path).read_text()
@@ -3779,11 +3807,24 @@ def restored_junction_winner() raises -> String:
     _require(
         mid,
         "c933e03b6bde0bede8fb0745e9c1ef075d9699fde72b74795368943381d1aa74",
-        "extensions/carla/junction_bounds.mojo",
+        path,
     )
-    starts.clear()
-    stops.clear()
-    befores.clear()
+    return mid
+
+
+def restored_junction_winner() raises -> String:
+    """Restore the junction-bounds winner pin from the live file.
+
+    Returns:
+        The winner pin source.
+
+    Raises:
+        Error: The live file or a restored pin changed.
+    """
+    var mid = restored_junction_cleanup()
+    var starts = List[Int]()
+    var stops = List[Int]()
+    var befores = List[String]()
     _lines_41(starts, stops, befores)
     var restored = _apply(mid, starts, stops, befores)
     _require(
