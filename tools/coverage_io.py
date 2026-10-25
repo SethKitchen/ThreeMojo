@@ -625,6 +625,35 @@ def bind_finished(command, out_path, err_path, loop_proof, source_root):
                                       root=proof_root, build=proof_build)
 
 
+def prepare_report(command, captures, root, build, compiler, flags, mojo,
+                    capture_cache, suites, manifest_path):
+    """Validate the proof and write the masked manifest for the reporter."""
+    build = Path(build)
+    original = build / 'manifest.txt'
+    if not command or Path(command[-1]).resolve() != original.resolve():
+        raise ValueError('The report command must end with the original manifest')
+    proof_path = build / 'loop-proofs.json'
+    settings = {'mojo': mojo, 'capture_cache': capture_cache, 'suites': suites}
+    proof = coverage_loop_proofs.verify(proof_path, root, build, compiler, flags, **settings)
+    _check_proof_consumer(proof)
+    coverage_loop_proofs.verify_captures(captures, proof)
+    Path(manifest_path).write_bytes(coverage_loop_proofs.masked_manifest(original.read_bytes(), proof))
+    print('Validated loop-proof binding ' + proof['sha256'], flush=True)
+
+
+def finish_report(captures, root, build, compiler, flags, mojo, capture_cache, suites):
+    """Reject a report whose proof changed while the reporter ran."""
+    build = Path(build)
+    proof_path = build / 'loop-proofs.json'
+    settings = {'mojo': mojo, 'capture_cache': capture_cache, 'suites': suites}
+    proof = coverage_loop_proofs.verify(proof_path, root, build, compiler, flags, **settings)
+    _check_proof_consumer(proof)
+    final_proof = coverage_loop_proofs.verify(proof_path, root, build, compiler, flags, **settings)
+    if final_proof != proof:
+        raise ValueError('Loop-proof identity changed during reporting')
+    coverage_loop_proofs.verify_captures(captures, proof)
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     commands = parser.add_subparsers(dest='mode', required=True)
@@ -649,6 +678,26 @@ def main():
     finish.add_argument('--loop-proof', type=Path, required=True)
     finish.add_argument('--loop-proof-root', type=Path)
     finish.add_argument('command', nargs=argparse.REMAINDER)
+    prepared = commands.add_parser('prepare-report')
+    prepared.add_argument('--capture-dir', type=Path, required=True)
+    prepared.add_argument('--loop-proof-root', type=Path, required=True)
+    prepared.add_argument('--loop-proof-build', type=Path, required=True)
+    prepared.add_argument('--manifest', type=Path, required=True)
+    prepared.add_argument('--compiler', default='')
+    prepared.add_argument('--flags', default='')
+    prepared.add_argument('--mojo')
+    prepared.add_argument('--capture-cache')
+    prepared.add_argument('--suites', nargs='*')
+    prepared.add_argument('command', nargs=argparse.REMAINDER)
+    finished = commands.add_parser('finish-report')
+    finished.add_argument('--capture-dir', type=Path, required=True)
+    finished.add_argument('--loop-proof-root', type=Path, required=True)
+    finished.add_argument('--loop-proof-build', type=Path, required=True)
+    finished.add_argument('--compiler', default='')
+    finished.add_argument('--flags', default='')
+    finished.add_argument('--mojo')
+    finished.add_argument('--capture-cache')
+    finished.add_argument('--suites', nargs='*')
     read = commands.add_parser('report')
     read.add_argument('--capture-dir', type=Path, required=True)
     read.add_argument('--loop-proof-root', type=Path)
@@ -660,10 +709,10 @@ def main():
     read.add_argument('--suites', nargs='*')
     read.add_argument('command', nargs=argparse.REMAINDER)
     args = parser.parse_args()
-    command = args.command
+    command = list(getattr(args, 'command', None) or [])
     if command and command[0] == '--':
         command = command[1:]
-    if not command:
+    if args.mode != 'finish-report' and not command:
         parser.error('a command must follow --')
     if args.mode == 'group':
         return group(command, args.seconds)
@@ -680,6 +729,25 @@ def main():
     if args.mode == 'capture':
         return capture(command, args.out, args.err, loop_proof=args.loop_proof,
                        source_root=args.loop_proof_root)
+    if args.mode in ('prepare-report', 'finish-report'):
+        captures = sorted(args.capture_dir.glob('*.txt.gz'))
+        try:
+            if args.mode == 'prepare-report':
+                if not command:
+                    parser.error('a command must follow --')
+                prepare_report(command, captures, args.loop_proof_root, args.loop_proof_build,
+                               args.compiler, args.flags, args.mojo, args.capture_cache,
+                               args.suites, args.manifest)
+            else:
+                finish_report(captures, args.loop_proof_root, args.loop_proof_build,
+                              args.compiler, args.flags, args.mojo, args.capture_cache,
+                              args.suites)
+        except Exception as error:
+            print('coverage_io: ' + str(error), file=sys.stderr)
+            return 1
+        return 0
+    if not command:
+        parser.error('a command must follow --')
     captures = sorted(args.capture_dir.glob('*.txt.gz'))
     if not captures:
         parser.error('no coverage captures were found')

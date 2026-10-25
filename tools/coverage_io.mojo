@@ -16,7 +16,7 @@ set, `tools/coverage_io.py` still checks and binds that receipt.
 from std.collections import Dict
 from std.ffi import c_int, external_call
 from std.memory import OpaquePointer
-from std.os import getenv, remove, setenv, unsetenv
+from std.os import getenv, listdir, remove, setenv, unsetenv
 from std.pathlib import Path
 from std.sys import CompilationTarget, argv, exit, stderr
 from std.tempfile import mkdtemp
@@ -25,6 +25,7 @@ from tools._carla_files import lstat_id
 from tools._owned_process import (
     SIGKILL,
     ExecPlan,
+    SignalHold,
     at_cwd,
     c_bytes,
     close_fd,
@@ -32,7 +33,9 @@ from tools._owned_process import (
     make_pipe,
     open_at,
     signal_group,
+    spawn,
     strerror,
+    try_wait,
     wait_blocking,
 )
 from tools._json_tools import quote_ascii
@@ -787,19 +790,336 @@ def _capture(arguments: List[String]) raises -> Int:
     return status
 
 
+def _sort_paths(mut names: List[String]):
+    """Sort paths in byte order."""
+    var index = 1
+    while index < len(names):
+        var item = names[index]
+        var place = index
+        while place > 0 and names[place - 1] > item:
+            names[place] = names[place - 1]
+            place -= 1
+        names[place] = item
+        index += 1
+
+
+def _captures(directory: String) raises -> List[String]:
+    """Return the `.txt.gz` captures in `directory`, in byte order.
+
+    Args:
+        directory: The capture directory.
+
+    Returns:
+        The capture paths.
+
+    Raises:
+        Error: If the directory cannot be read, or it has no captures.
+    """
+    var names = List[String]()
+    for name in listdir(directory):
+        var text = String(name)
+        if text.endswith(".txt.gz"):
+            names.append(directory + "/" + text)
+    if len(names) == 0:
+        raise Error("no coverage captures were found")
+    _sort_paths(names)
+    return names^
+
+
+def _fifo(path: String) raises:
+    """Create a FIFO at `path`.
+
+    Args:
+        path: The FIFO path.
+
+    Raises:
+        Error: If `mkfifo` fails.
+    """
+    var name = c_bytes(path)
+    if (
+        external_call["mkfifo", c_int](
+            OpaquePointer[MutAnyOrigin](
+                unsafe_from_address=Int(name.unsafe_ptr())
+            ),
+            c_int(420),
+        )
+        != 0
+    ):
+        raise Error("cannot create " + path + ": " + strerror(errno()))
+
+
+def _open_reader(path: String, pid: Int, mut reaped: List[Int]) raises -> Int:
+    """Open a FIFO for writing once its reader is waiting.
+
+    Args:
+        path: The FIFO.
+        pid: The reporter. A finished reporter ends the wait.
+        reaped: Set to the reporter status when `try_wait` reaps it.
+
+    Returns:
+        The write descriptor, or -1 when the reporter has finished.
+
+    Raises:
+        Error: If the open fails for a reason other than a missing reader.
+    """
+    var flags = 1 | 0x800
+    if not CompilationTarget.is_linux():
+        flags = 1 | 4
+    var spins = 0
+    while spins < 1000:
+        var waited = try_wait(pid)
+        if waited.done:
+            var code = waited.status
+            if code < 0:
+                code = 128 - code
+            reaped[0] = code
+            return -1
+        var fd = open_at(at_cwd(), c_bytes(path), flags)
+        if fd >= 0:
+            close_fd(fd)
+            return open_at(at_cwd(), c_bytes(path), 1)
+        if errno() != 6:
+            raise Error("cannot open " + path + ": " + strerror(errno()))
+        _ = external_call["usleep", c_int](UInt32(10000))
+        spins += 1
+    raise Error("the reporter did not open " + path)
+
+
+def _replay(command: List[String], captures: List[String]) raises -> Int:
+    """Feed each capture through a FIFO, in order, to `command`.
+
+    Args:
+        command: The reporter.
+        captures: The gzip captures, already sorted.
+
+    Returns:
+        The reporter's status, or 1 when a capture cannot be replayed.
+
+    Raises:
+        Error: If a FIFO cannot be created.
+    """
+    var folder = mkdtemp(prefix="threemojo-coverage-")
+    var pipes = List[String]()
+    var index = 0
+    while index < len(captures):
+        var path = folder + "/" + String(index)
+        _fifo(path)
+        pipes.append(path)
+        index += 1
+    var reporter = List[String]()
+    for word in command:
+        reporter.append(word)
+    for path in pipes:
+        reporter.append(path)
+    var pid = spawn(reporter, SignalHold(), -1, False)
+    var reaped = List[Int]()
+    reaped.append(-1)
+    var failed = False
+    index = 0
+    while index < len(pipes):
+        var fd = _open_reader(pipes[index], pid, reaped)
+        if fd < 0:
+            break
+        var gzip_pid = spawn(
+            ["gzip", "-dc", captures[index]], SignalHold(), fd, False
+        )
+        var gzip_done = wait_blocking(gzip_pid)
+        close_fd(fd)
+        if not gzip_done.done or gzip_done.status != 0:
+            failed = True
+            _ = signal_group(pid, SIGKILL)
+            break
+        index += 1
+    if reaped[0] >= 0:
+        _ = run_program(["rm", "-rf", folder], 30.0)
+        return reaped[0]
+    var done = wait_blocking(pid)
+    _ = run_program(["rm", "-rf", folder], 30.0)
+    if failed:
+        print("Coverage replay failed", file=stderr)
+        return 1
+    if not done.done:
+        raise Error("wait failed: " + strerror(done.error))
+    if done.status < 0:
+        return 128 - done.status
+    return done.status
+
+
+def _report(arguments: List[String]) raises -> Int:
+    """Replay captures for one report command.
+
+    Args:
+        arguments: The arguments after `report`.
+
+    Returns:
+        The reporter's status.
+
+    Raises:
+        Error: If the command line or the proof check is wrong.
+    """
+    var directory = String()
+    var proof_root = String()
+    var proof_build = String()
+    var compiler = String()
+    var flags = String()
+    var mojo = String()
+    var cache = String()
+    var suites = List[String]()
+    var command = List[String]()
+    var taking_suites = False
+    var index = 0
+    while index < len(arguments):
+        var word = arguments[index]
+        if word == "--":
+            index += 1
+            while index < len(arguments):
+                command.append(arguments[index])
+                index += 1
+            break
+        if taking_suites and not word.startswith("--"):
+            suites.append(word)
+            index += 1
+            continue
+        taking_suites = False
+        if word.startswith("--compiler="):
+            compiler = String(word[byte=11:])
+        elif word.startswith("--flags="):
+            flags = String(word[byte=8:])
+        elif word.startswith("--mojo="):
+            mojo = String(word[byte=7:])
+        elif word.startswith("--capture-cache="):
+            cache = String(word[byte=16:])
+        elif word == "--capture-dir":
+            directory = arguments[index + 1]
+            index += 1
+        elif word == "--loop-proof-root":
+            proof_root = arguments[index + 1]
+            index += 1
+        elif word == "--loop-proof-build":
+            proof_build = arguments[index + 1]
+            index += 1
+        elif word == "--compiler":
+            compiler = arguments[index + 1]
+            index += 1
+        elif word == "--flags":
+            flags = arguments[index + 1]
+            index += 1
+        elif word == "--mojo":
+            mojo = arguments[index + 1]
+            index += 1
+        elif word == "--capture-cache":
+            cache = arguments[index + 1]
+            index += 1
+        elif word == "--suites":
+            taking_suites = True
+        elif word == "--help" or word == "-h":
+            raise Error(
+                "usage: coverage_io report --capture-dir DIR -- COMMAND..."
+            )
+        else:
+            raise Error("unknown argument " + word)
+        index += 1
+    if directory.byte_length() == 0 or len(command) == 0:
+        raise Error("usage: coverage_io report --capture-dir DIR -- COMMAND...")
+    var captures = _captures(directory)
+    var manifest = String()
+    if proof_root.byte_length() > 0 or proof_build.byte_length() > 0:
+        if proof_root.byte_length() == 0 or proof_build.byte_length() == 0:
+            raise Error("both loop-proof root and build are required")
+        var folder = mkdtemp(prefix="threemojo-loop-report-")
+        manifest = folder + "/manifest.txt"
+        var prepare = List[String]()
+        prepare.append("python3")
+        prepare.append("tools/coverage_io.py")
+        prepare.append("prepare-report")
+        prepare.append("--capture-dir")
+        prepare.append(directory)
+        prepare.append("--loop-proof-root")
+        prepare.append(proof_root)
+        prepare.append("--loop-proof-build")
+        prepare.append(proof_build)
+        prepare.append("--manifest")
+        prepare.append(manifest)
+        prepare.append("--compiler=" + compiler)
+        prepare.append("--flags=" + flags)
+        if mojo.byte_length() > 0:
+            prepare.append("--mojo")
+            prepare.append(mojo)
+        if cache.byte_length() > 0:
+            prepare.append("--capture-cache")
+            prepare.append(cache)
+        if len(suites) > 0:
+            prepare.append("--suites")
+            for suite in suites:
+                prepare.append(suite)
+        prepare.append("--")
+        for word in command:
+            prepare.append(word)
+        var ready = run_program(prepare, 180.0, merge_errors=False)
+        if ready.output.byte_length() > 0:
+            print(ready.output, end="")
+        if ready.status != 0:
+            _ = run_program(["rm", "-rf", folder], 30.0)
+            raise Error(ready.errors)
+    var reporter = List[String]()
+    var last = len(command) - 1
+    var cursor = 0
+    while cursor < len(command):
+        if cursor == last and manifest.byte_length() > 0:
+            reporter.append(manifest)
+        else:
+            reporter.append(command[cursor])
+        cursor += 1
+    var status = _replay(reporter, captures)
+    if manifest.byte_length() > 0:
+        var finish = List[String]()
+        finish.append("python3")
+        finish.append("tools/coverage_io.py")
+        finish.append("finish-report")
+        finish.append("--capture-dir")
+        finish.append(directory)
+        finish.append("--loop-proof-root")
+        finish.append(proof_root)
+        finish.append("--loop-proof-build")
+        finish.append(proof_build)
+        finish.append("--compiler=" + compiler)
+        finish.append("--flags=" + flags)
+        if mojo.byte_length() > 0:
+            finish.append("--mojo")
+            finish.append(mojo)
+        if cache.byte_length() > 0:
+            finish.append("--capture-cache")
+            finish.append(cache)
+        if len(suites) > 0:
+            finish.append("--suites")
+            for suite in suites:
+                finish.append(suite)
+        var checked = run_program(finish, 180.0, merge_errors=False)
+        var slash = manifest.rfind("/")
+        if slash > 0:
+            _ = run_program(["rm", "-rf", String(manifest[byte=:slash])], 30.0)
+        if checked.status != 0:
+            raise Error(checked.errors)
+    return status
+
+
 def main() raises:
-    """Capture one instrumented suite."""
+    """Capture one suite, or replay captures to the reporter."""
     var arguments = List[String]()
     var given = argv()
     for index in range(1, len(given)):
         arguments.append(String(given[index]))
     try:
-        if len(arguments) == 0 or arguments[0] != "capture":
+        if len(arguments) == 0:
             raise Error(_usage())
         var rest = List[String]()
         for index in range(1, len(arguments)):
             rest.append(arguments[index])
-        exit(_capture(rest))
+        if arguments[0] == "capture":
+            exit(_capture(rest))
+        if arguments[0] == "report":
+            exit(_report(rest))
+        raise Error(_usage())
     except error:
         print("coverage_io: " + String(error), file=stderr)
         var text = String(error)

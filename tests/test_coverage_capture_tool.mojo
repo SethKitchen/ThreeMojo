@@ -64,6 +64,30 @@ def test_a_short_deadline_stops_sleep() raises:
     assert_equal(status, 124)
 
 
+def test_report_replays_captures_in_name_order() raises:
+    var ran = run_program(
+        [
+            "sh",
+            "-c",
+            "dir=$(mktemp -d); printf 'hello\\n' | gzip -n -1 >"
+            ' "$dir/b.txt.gz"; '
+            + "printf 'world\\n' | gzip -n -1 > \"$dir/a.txt.gz\"; "
+            + "sh tools/tool.sh "
+            + shell_quote(tool_mojo())
+            + ' coverage_io report --capture-dir "$dir" -- python3 -c '
+            + "'import sys\n"
+            + "for path in sys.argv[1:]:\n"
+            + '    handle = open(path, "rb")\n'
+            + "    sys.stdout.buffer.write(handle.read())\n"
+            + "    handle.close()\n'",
+        ],
+        20.0,
+        merge_errors=False,
+    )
+    assert_equal(ran.status, 0)
+    assert_equal(ran.output, "world\nhello\n")
+
+
 def test_usage_exits_2() raises:
     var ran = run_program(
         ["sh", "tools/tool.sh", tool_mojo(), "coverage_io"],

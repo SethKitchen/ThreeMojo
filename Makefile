@@ -710,7 +710,7 @@ ifneq ($(strip $(COVERED)),)
 	  fi; \
 	done; [ $$missing -eq 0 ] || exit 1
 	@# FIFOs feed the original bytes to the reporter one suite at a time.
-	@python3 tools/coverage_io.py report --capture-dir $(COV_DIR)/hits \
+	@$(TOOL) coverage_io report --capture-dir $(COV_DIR)/hits \
 	  --loop-proof-root . --loop-proof-build $(COV_DIR) \
 	  --compiler=$(call quote,$(TOOLCHAIN)) --flags=$(call quote,$(MOJOFLAGS)) \
 	  --mojo=$(call quote,$(MOJO)) --capture-cache=$(call quote,$(CACHE_DIR)/native-coverage) \
