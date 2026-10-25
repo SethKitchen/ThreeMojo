@@ -1190,14 +1190,14 @@ def _apply_identity(mut doc: PyJson, item: Int, path: String) raises:
     _apply_wheel(doc, item, path, raw)
 
 
-def _command(
-    mut doc: PyJson, command: String, root: String, build: String
+def _command_words(
+    mut doc: PyJson, words: List[String], root: String, build: String
 ) raises -> Int:
-    """Return the identity of a compiler command.
+    """Return the identity of compiler words.
 
     Args:
         doc: The checkpoint document.
-        command: The command text.
+        words: The command words, already split.
         root: The resolved repository root.
         build: The resolved build directory.
 
@@ -1207,7 +1207,6 @@ def _command(
     Raises:
         Error: When the command is empty or an executable is missing.
     """
-    var words = _shlex(command)
     if len(words) == 0:
         raise Error("Compiler invocation identity is required")
     var items = doc.new_list()
@@ -1237,6 +1236,26 @@ def _command(
                 doc.set(item, "literal", doc.new_str(word))
         doc.append(items, item)
     return items
+
+
+def _command(
+    mut doc: PyJson, command: String, root: String, build: String
+) raises -> Int:
+    """Return the identity of a compiler command.
+
+    Args:
+        doc: The checkpoint document.
+        command: The command text.
+        root: The resolved repository root.
+        build: The resolved build directory.
+
+    Returns:
+        A list node.
+
+    Raises:
+        Error: When the command is empty or an executable is missing.
+    """
+    return _command_words(doc, _shlex(command), root, build)
 
 
 def _duplicates(names: List[String]) -> Bool:
