@@ -485,26 +485,33 @@ def build_object(
     command.append(source)
     command.append("-o")
     command.append(temporary)
-    var compiled = run_program(command, 120.0)
-    if compiled.status != 0:
-        raise Error("native test build failed: " + compiled.output)
-    if sha256_hex(Path(source).read_bytes()) != digest:
-        raise Error(
-            "native test fixture changed during compilation: " + fixture
+    try:
+        var compiled = run_program(command, 120.0)
+        if compiled.status != 0:
+            raise Error("native test build failed: " + compiled.output)
+        if sha256_hex(Path(source).read_bytes()) != digest:
+            raise Error(
+                "native test fixture changed during compilation: " + fixture
+            )
+        var object_hash = sha256_hex(Path(temporary).read_bytes())
+        _rename(temporary, output)
+        var record = (
+            '{\n  "command": '
+            + _json_strings(command)
+            + ',\n  "inputs": '
+            + _inputs_json(source, digest, identity)
+            + ',\n  "object_sha256": '
+            + _json_string(object_hash)
+            + "\n}\n"
         )
-    var object_hash = sha256_hex(Path(temporary).read_bytes())
-    _rename(temporary, output)
-    var record = (
-        '{\n  "command": '
-        + _json_strings(command)
-        + ',\n  "inputs": '
-        + _inputs_json(source, digest, identity)
-        + ',\n  "object_sha256": '
-        + _json_string(object_hash)
-        + "\n}\n"
-    )
-    Path(metadata).write_text(record)
-    return output
+        Path(metadata).write_text(record)
+        return output
+    finally:
+        if Path(temporary).is_file():
+            try:
+                remove(temporary)
+            except:
+                pass
 
 
 def _normalize(path: String) raises -> String:
@@ -567,6 +574,8 @@ def prepare_command(
         Error: If a fixture suite is not a build command, or the suite path
             does not occur once.
     """
+    if len(command) == 0:
+        raise Error("a Mojo command is required after --")
     var fixtures = dependency_inputs(root, suite)
     if len(fixtures) == 0:
         return _copy(command)
