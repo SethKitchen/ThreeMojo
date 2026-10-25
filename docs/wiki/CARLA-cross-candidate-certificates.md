@@ -173,6 +173,12 @@ The fresh producer follows that debit.
 The dispatch setup stays after the depth refusal.
 A moved debit or a changed cut is refused.
 
+Mojo checks the live lane-center edges.
+The proof memo and the translated memo keep the station and scale words.
+The grouped caller keeps the prepaid fallback.
+The support call keeps the same ideal and the actual witness.
+A changed memo or a changed caller is refused.
+
 ## Candidate certificate
 
 A certificate contains a stored incumbent point and its road parameter.
