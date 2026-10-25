@@ -61,52 +61,6 @@ class ReviewedAdditionalLoopTests(unittest.TestCase):
             self.assertEqual(loops.reviewed_nonempty_loops(self.root, AXES), {})
         self.assertEqual(len(visits), 2)
 
-    def test_provider_origins_are_include_only_and_exact(self):
-        stage = self.root/'coverage/build'
-        stage.mkdir(parents=True)
-        for module in (PRODUCER, BLEND):
-            sidecar = stage/(module + '.mojo.cov-origin')
-            sidecar.parent.mkdir(parents=True, exist_ok=True)
-            sidecar.write_bytes(b'origin contents belong to the generation verifier')
-        self.assertEqual(set(loops.reviewed_nonempty_loops(
-            self.root, AXES, include_roots=(stage,))), {50})
-        cases = ((self.root, PRODUCER + '.mojo.cov-origin'),
-                 (stage, PRODUCER + '.mojo.cov-origin.extra'),
-                 (stage, PRODUCER + '.mojopkg'),
-                 (stage, 'extensions.mojo.cov-origin'))
-        for location, name in cases:
-            target = location/name
-            target.parent.mkdir(parents=True, exist_ok=True)
-            with self.subTest(location=location, name=name):
-                target.write_bytes(b'unreviewed resolver competitor')
-                try:
-                    self.assertEqual(loops.reviewed_nonempty_loops(
-                        self.root, AXES, include_roots=(stage,)), {})
-                finally:
-                    target.unlink()
-        origin = stage/(PRODUCER + '.mojo.cov-origin')
-        original = origin.read_bytes()
-        case_variant = stage/(PRODUCER + '.MOJO.cov-origin')
-        # Remove the lowercase entry first: on case-insensitive filesystems,
-        # writing the variant while it exists only changes the valid sidecar.
-        origin.unlink()
-        try:
-            case_variant.write_bytes(b'unreviewed resolver competitor')
-            entries = {path.name for path in case_variant.parent.iterdir()}
-            self.assertIn(case_variant.name, entries)
-            self.assertNotIn(origin.name, entries)
-            self.assertEqual(loops.reviewed_nonempty_loops(
-                self.root, AXES, include_roots=(stage,)), {})
-        finally:
-            case_variant.unlink()
-            origin.write_bytes(original)
-        self.assertEqual(set(loops.reviewed_nonempty_loops(
-            self.root, AXES, include_roots=(stage,))), {50})
-        origin.unlink()
-        origin.symlink_to(self.root/(PRODUCER + '.mojo'))
-        self.assertEqual(loops.reviewed_nonempty_loops(
-            self.root, AXES, include_roots=(stage,)), {})
-
 class ReviewedAxisReceiptTests(unittest.TestCase):
     """The real producer verifier with explicitly modeled compiler-free origins."""
     def setUp(self):

@@ -19,7 +19,14 @@ from std.os.path import isdir, isfile, islink, realpath
 from std.pathlib import Path
 from std.sys import argv, exit, stderr
 
-from tools._python_json import PY_DICT, PY_LIST, PY_STR, PyJson, dumps_canonical
+from tools._python_json import (
+    MISSING,
+    PY_DICT,
+    PY_LIST,
+    PY_STR,
+    PyJson,
+    dumps_canonical,
+)
 from tools._sha256 import sha256_hex
 from tools.cache_key import input_paths
 from tools.coverage_io import (
@@ -2217,6 +2224,160 @@ def _walk_blocked(root: String, resolver: Bool) -> Bool:
     return False
 
 
+def _last_stem(path: String) -> String:
+    """Return `path` without its final suffix.
+
+    Args:
+        path: A relative path.
+
+    Returns:
+        The path with the last dotted suffix removed.
+    """
+    var slash = path.rfind("/")
+    var name = path
+    var directory = String()
+    if slash >= 0:
+        directory = String(path[byte=:slash])
+        name = String(path[byte = slash + 1 :])
+    var dot = name.rfind(".")
+    var stem = name
+    if dot > 0:
+        stem = String(name[byte=:dot])
+    if directory.byte_length() == 0:
+        return stem
+    return directory + "/" + stem
+
+
+def _dependency_paths(table: PyJson, module: String) raises -> List[String]:
+    """Return the dependency paths named for `module`.
+
+    Args:
+        table: The reviewed-loop table.
+        module: The module name, without `.mojo`.
+
+    Returns:
+        Each dependency path once. Empty when `module` has no row.
+
+    Raises:
+        Error: When a row is not a list entry.
+    """
+    var paths = List[String]()
+    var rows = table.get(table.root, module)
+    if rows == MISSING or table.kind(rows) != PY_LIST:
+        return paths^
+    var index = 0
+    while index < table.length(rows):
+        var row = table.item(rows, index)
+        var deps = table.get(row, "dependency_sha256")
+        if deps != MISSING and table.kind(deps) == PY_DICT:
+            var key_index = 0
+            while key_index < table.length(deps):
+                var path = table.key(deps, key_index)
+                var seen = False
+                for kept in paths:
+                    if kept == path:
+                        seen = True
+                if not seen:
+                    paths.append(path)
+                key_index += 1
+        index += 1
+    return paths^
+
+
+def _origin_competitor(
+    relative: String, paths: List[String], allow_origin: Bool
+) -> Bool:
+    """Return whether `relative` competes with a reviewed dependency.
+
+    An include root may hold the exact `path.cov-origin` sidecar. Any
+    other suffix, package, or case variant competes. A file in the walk
+    root whose name starts with a dependency namespace also competes.
+
+    Args:
+        relative: The path relative to the walk root.
+        paths: The dependency paths.
+        allow_origin: True when an exact origin sidecar is allowed.
+
+    Returns:
+        True when the proof must be omitted.
+    """
+    for path in paths:
+        if relative == path:
+            return False
+        if allow_origin and relative == path + ".cov-origin":
+            return False
+    var folded = _fold_name(relative)
+    for path in paths:
+        var dep = _fold_name(path)
+        var stem = _fold_name(_last_stem(path))
+        if folded == dep or folded.startswith(dep + "."):
+            return True
+        if _fold_name(_last_stem(relative)) == stem:
+            return True
+        var cursor = 0
+        var bytes = relative.as_bytes()
+        while cursor < len(bytes):
+            if bytes[cursor] == 46:
+                var prefix = _fold_name(String(relative[byte=:cursor]))
+                if prefix == dep:
+                    return True
+            cursor += 1
+        if relative.find("/") < 0:
+            var slash = path.find("/")
+            var top = path
+            if slash > 0:
+                top = String(path[byte=:slash])
+            var dot = relative.find(".")
+            var scoped = relative
+            if dot > 0:
+                scoped = String(relative[byte=:dot])
+            if _fold_name(scoped) == _fold_name(top):
+                return True
+    return False
+
+
+def _origin_blocked(
+    root: String, paths: List[String], allow_origin: Bool
+) -> Bool:
+    """Return whether `root` holds a competing provider file.
+
+    Args:
+        root: A source or include directory.
+        paths: The dependency paths. An empty list checks nothing.
+        allow_origin: True when an exact origin sidecar is allowed.
+
+    Returns:
+        True when a competing file is present or a directory cannot be read.
+    """
+    if len(paths) == 0 or not isdir(root):
+        return False
+    var pending = List[String]()
+    pending.append(root)
+    while len(pending) > 0:
+        var directory = pending.pop()
+        var relative = String()
+        if directory != root:
+            relative = String(directory[byte = root.byte_length() + 1 :])
+        var names: List[String]
+        try:
+            names = listdir(directory)
+        except:
+            return True
+        for name in names:
+            var entry = String(name)
+            var full = directory + "/" + entry
+            var child = entry
+            if relative.byte_length() > 0:
+                child = relative + "/" + entry
+            if isdir(full):
+                if _kept_child(entry, child):
+                    pending.append(full)
+                continue
+            if _origin_competitor(child, paths, allow_origin):
+                return True
+    return False
+
+
 def strand_cap_line(hashes: List[String]) -> Int:
     """Return the admitted strand-cap line for five dependency digests.
 
@@ -2302,13 +2463,17 @@ def run_reviews(
         Error: When the table or a dependency file cannot be read.
     """
     var resolved = _resolve(root_text)
+    var table = _load_reviews()
+    var paths = _dependency_paths(table, module)
     var blocked = _walk_blocked(resolved, False)
+    if not blocked:
+        blocked = _origin_blocked(resolved, paths, False)
     if module == "renderers/renderer" and not blocked:
         blocked = _walk_blocked(resolved, True)
     var include_index = 0
     while include_index < len(includes) and not blocked:
         var extra = _resolve(includes[include_index])
-        if _walk_blocked(extra, False):
+        if _walk_blocked(extra, False) or _origin_blocked(extra, paths, True):
             blocked = True
         elif module == "renderers/renderer" and _walk_blocked(extra, True):
             blocked = True
@@ -2316,7 +2481,6 @@ def run_reviews(
     if blocked:
         print("[]")
         return 0
-    var table = _load_reviews()
     var nodes = _reviewed_nodes(table, _resolve(root_text), module)
     var order = List[Int]()
     var index = 0

@@ -508,6 +508,75 @@ def test_lane_blend_and_hair_edits_and_std_shadows_omit_the_proof() raises:
         _ = run_program(["rm", "-rf", root], 30.0)
 
 
+def test_lane_origin_sidecars_are_include_only() raises:
+    """An origin sidecar belongs in the include root, and only under its exact name.
+    """
+    var root = mkdtemp(prefix="reviewed-origin-")
+    try:
+        var files = List[String]()
+        files.append("extensions/__init__.mojo")
+        files.append("extensions/carla/__init__.mojo")
+        files.append("extensions/carla/curve_distance.mojo")
+        files.append("extensions/carla/curve_interval.mojo")
+        files.append("extensions/carla/lane_distance.mojo")
+        files.append("tools/carla_lane_oracle/shared_helper_contracts.py")
+        for name in files:
+            _stage(root, name)
+        var lane = "extensions/carla/lane_distance"
+        assert_equal(_rows(_reviews(root, lane)), 1)
+        var producer = "extensions/carla/curve_distance.mojo"
+        var blend = "extensions/carla/curve_interval.mojo"
+        var source_origin = root + "/" + producer + ".cov-origin"
+        Path(source_origin).write_text("unreviewed resolver competitor")
+        assert_equal(_rows(_reviews(root, lane)), 0)
+        _ = run_program(["rm", "-f", source_origin], 10.0)
+        var original = Path(root + "/" + blend).read_text()
+        _rewrite(root, blend, _once(original, "bits + 1", "bits + 2"))
+        assert_equal(_rows(_reviews(root, lane)), 0)
+        _rewrite(root, blend, original)
+        assert_equal(_rows(_reviews(root, lane)), 1)
+        var stage = root + "/coverage/build"
+        var made = run_program(
+            ["mkdir", "-p", stage + "/extensions/carla"], 10.0
+        )
+        if made.status != 0:
+            raise Error(made.output)
+        Path(stage + "/" + producer + ".cov-origin").write_text("origin")
+        Path(stage + "/" + blend + ".cov-origin").write_text("origin")
+        assert_equal(_rows_including(root, lane, stage), 1)
+        var extras = List[String]()
+        extras.append(producer + ".cov-origin.extra")
+        extras.append(producer + ".mojopkg")
+        extras.append("extensions.mojo.cov-origin")
+        for name in extras:
+            var path = stage + "/" + name
+            var slash = path.rfind("/")
+            var parent = String(path[byte=:slash])
+            var directory = run_program(["mkdir", "-p", parent], 10.0)
+            if directory.status != 0:
+                raise Error(directory.output)
+            Path(path).write_text("unreviewed resolver competitor")
+            assert_equal(_rows_including(root, lane, stage), 0)
+            _ = run_program(["rm", "-f", path], 10.0)
+        var origin = stage + "/" + producer + ".cov-origin"
+        var variant = stage + "/extensions/carla/curve_distance.MOJO.cov-origin"
+        _ = run_program(["rm", "-f", origin], 10.0)
+        Path(variant).write_text("unreviewed resolver competitor")
+        assert_equal(_rows_including(root, lane, stage), 0)
+        _ = run_program(["rm", "-f", variant], 10.0)
+        Path(origin).write_text("origin")
+        assert_equal(_rows_including(root, lane, stage), 1)
+        _ = run_program(["rm", "-f", origin], 10.0)
+        var linked = run_program(
+            ["ln", "-s", root + "/" + producer, origin], 10.0
+        )
+        if linked.status != 0:
+            raise Error(linked.output)
+        assert_equal(_rows_including(root, lane, stage), 0)
+    finally:
+        _ = run_program(["rm", "-rf", root], 30.0)
+
+
 def main() raises:
     """Build the seal, then run the tests."""
     var built = run_program(
