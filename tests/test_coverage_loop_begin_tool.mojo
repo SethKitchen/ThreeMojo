@@ -322,7 +322,10 @@ def test_make_starts_the_checkpoint_in_mojo() raises:
         >= 0
     )
     assert_true(text.find("coverage_loop_proofs.py begin") < 0)
-    assert_true(text.find("coverage_loop_proofs.py seal") >= 0)
+    assert_true(text.find("coverage_loop_proofs.py seal") < 0)
+    assert_true(
+        text.find("$(TOOL) coverage_loop_seal --root . --build $(COV_DIR)") >= 0
+    )
 
 
 def main() raises:

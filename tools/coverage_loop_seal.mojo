@@ -3,14 +3,14 @@
 # Noncommercial use is free; commercial use requires a paid license.
 # See LICENSE, LICENSE-COMMERCIAL.md and THIRD-PARTY-NOTICES.md.
 
-"""Seal literal loop proofs for one instrumented coverage tree.
+"""Seal loop proofs for one instrumented coverage tree.
 
     coverage_loop_seal --root DIR --build DIR --compiler TEXT --flags TEXT
         --mojo TEXT [--capture-cache PATH] [--suites FILE ...]
 
-The file `loop-proofs.json` matches `coverage_loop_proofs.py seal` for a
-tree whose proofs are literal `range` calls and literal lists. A reviewed
-theorem is not sealed here.
+The file `loop-proofs.json` matches `coverage_loop_proofs.py seal` for
+literal ranges, literal lists, and reviewed proofs whose dependency
+digests match `tools/coverage_reviewed_loops.json`.
 """
 
 from std.os import listdir
@@ -147,6 +147,7 @@ def _tokenize(source: String) -> List[_Tok]:
                 column += 1
             index += 1
         var blank = index >= len(data) or data[index] == 10 or data[index] == 35
+        var at = column
         if depth == 0 and not blank:
             if column > indents[len(indents) - 1]:
                 tokens.append(_Tok("INDENT", "", line, column))
@@ -160,6 +161,10 @@ def _tokenize(source: String) -> List[_Tok]:
         while index < len(data) and data[index] != 10:
             var byte = data[index]
             if byte == 32 or byte == 9:
+                if byte == 9:
+                    at = at - at % 8 + 8
+                else:
+                    at += 1
                 index += 1
                 continue
             if byte == 35:
@@ -170,6 +175,8 @@ def _tokenize(source: String) -> List[_Tok]:
             if byte == 34 or byte == 39:
                 var quote = byte
                 var mark = index
+                var start_line = line
+                var start_col = at
                 index += 1
                 var triple = (
                     index + 1 < len(data)
@@ -194,11 +201,14 @@ def _tokenize(source: String) -> List[_Tok]:
                     if not triple and data[index] == quote:
                         index += 1
                         break
-                    if data[index] == 10 and not triple:
-                        return List[_Tok]()
+                    if data[index] == 10:
+                        if not triple:
+                            return List[_Tok]()
+                        line += 1
                     index += 1
                 var literal = String(text[byte=mark:index])
-                tokens.append(_Tok("STRING", literal, line, 0))
+                tokens.append(_Tok("STRING", literal, start_line, start_col))
+                at = start_col + literal.byte_length()
                 continue
             if (
                 (byte >= 65 and byte <= 90)
@@ -218,22 +228,62 @@ def _tokenize(source: String) -> List[_Tok]:
                     if not name:
                         break
                     index += 1
-                tokens.append(
-                    _Tok("NAME", String(text[byte=mark:index]), line, column)
-                )
+                var name = String(text[byte=mark:index])
+                tokens.append(_Tok("NAME", name, line, at))
+                at += name.byte_length()
                 continue
-            if byte >= 48 and byte <= 57:
+            var number_start = (byte >= 48 and byte <= 57) or (
+                byte == 46
+                and index + 1 < len(data)
+                and data[index + 1] >= 48
+                and data[index + 1] <= 57
+            )
+            if number_start:
                 var mark = index
-                index += 1
-                while (
+                if byte != 46:
+                    while (
+                        index < len(data)
+                        and data[index] >= 48
+                        and data[index] <= 57
+                    ):
+                        index += 1
+                if (
                     index < len(data)
-                    and data[index] >= 48
-                    and data[index] <= 57
+                    and data[index] == 46
+                    and index + 1 < len(data)
+                    and data[index + 1] >= 48
+                    and data[index + 1] <= 57
                 ):
                     index += 1
-                tokens.append(
-                    _Tok("NUMBER", String(text[byte=mark:index]), line, 0)
-                )
+                    while (
+                        index < len(data)
+                        and data[index] >= 48
+                        and data[index] <= 57
+                    ):
+                        index += 1
+                if index < len(data) and (
+                    data[index] == 101 or data[index] == 69
+                ):
+                    var exponent = index + 1
+                    if exponent < len(data) and (
+                        data[exponent] == 43 or data[exponent] == 45
+                    ):
+                        exponent += 1
+                    if (
+                        exponent < len(data)
+                        and data[exponent] >= 48
+                        and data[exponent] <= 57
+                    ):
+                        index = exponent
+                        while (
+                            index < len(data)
+                            and data[index] >= 48
+                            and data[index] <= 57
+                        ):
+                            index += 1
+                var number = String(text[byte=mark:index])
+                tokens.append(_Tok("NUMBER", number, line, at))
+                at += number.byte_length()
                 continue
             var two = String()
             if index + 1 < len(data):
@@ -249,7 +299,8 @@ def _tokenize(source: String) -> List[_Tok]:
                 or two == "+="
                 or two == "-="
             ):
-                tokens.append(_Tok("OP", two, line, 0))
+                tokens.append(_Tok("OP", two, line, at))
+                at += 2
                 index += 2
                 continue
             if byte == 40 or byte == 91 or byte == 123:
@@ -258,7 +309,8 @@ def _tokenize(source: String) -> List[_Tok]:
                 depth -= 1
                 if depth < 0:
                     return List[_Tok]()
-            tokens.append(_Tok("OP", String(chr(Int(byte))), line, 0))
+            tokens.append(_Tok("OP", String(chr(Int(byte))), line, at))
+            at += 1
             index += 1
         if index < len(data) and data[index] == 10:
             index += 1
@@ -361,20 +413,25 @@ def _list_count(tokens: List[_Tok]) -> Int:
     """
     if len(tokens) == 0 or tokens[0].text != "[":
         return -1
-    var depth = 0
+    var brackets = 0
+    var parens = 0
     var count = 0
     var started = False
     for token in tokens:
         if token.text == "[":
-            depth += 1
-            if depth == 1:
+            brackets += 1
+            if brackets == 1 and parens == 0:
                 continue
         elif token.text == "]":
-            depth -= 1
-            if depth == 0:
+            brackets -= 1
+            if brackets == 0 and parens == 0:
                 break
-        if depth != 1:
-            if token.text == "for":
+        elif token.text == "(":
+            parens += 1
+        elif token.text == ")":
+            parens -= 1
+        if brackets != 1 or parens != 0:
+            if token.text == "for" and parens == 0:
                 return -1
             continue
         if token.text == "for" or token.text == "*":
@@ -919,6 +976,161 @@ def _generation(
     return node
 
 
+def _has_line(lines: List[Int], line: Int) -> Bool:
+    """Return whether `lines` contains `line`.
+
+    Args:
+        lines: The line numbers.
+        line: The line to find.
+
+    Returns:
+        True when `line` is present.
+    """
+    for item in lines:
+        if item == line:
+            return True
+    return False
+
+
+def _load_reviews() raises -> PyJson:
+    """Return the reviewed loop table from the executing repository.
+
+    Returns:
+        The table.
+
+    Raises:
+        Error: When the table is missing or is not JSON.
+    """
+    var path = _join(_resolve("."), "tools/coverage_reviewed_loops.json")
+    if not isfile(path):
+        raise Error("Missing reviewed loop table")
+    return PyJson.parse(Path(path).read_text())
+
+
+def _dep_key(table: PyJson, deps: Int) -> String:
+    """Return a stable key for one dependency map.
+
+    Args:
+        table: The reviewed table.
+        deps: The dependency object.
+
+    Returns:
+        The path and digest pairs.
+    """
+    var key = String()
+    var index = 0
+    while index < table.length(deps):
+        key += table.key(deps, index)
+        key += "="
+        key += table.text(table.value(deps, index))
+        key += "\n"
+        index += 1
+    return key^
+
+
+def _deps_match(table: PyJson, root: String, deps: Int) raises -> Bool:
+    """Return whether every dependency file has its reviewed digest.
+
+    Args:
+        table: The reviewed table.
+        root: The source root.
+        deps: The dependency object.
+
+    Returns:
+        True when every file is present and its digest matches.
+
+    Raises:
+        Error: When a present file cannot be read.
+    """
+    var index = 0
+    while index < table.length(deps):
+        var full = _join(root, table.key(deps, index))
+        if not isfile(full):
+            return False
+        if _hash_file(full) != table.text(table.value(deps, index)):
+            return False
+        index += 1
+    return True
+
+
+def _reviewed_nodes(
+    table: PyJson, root: String, module: String
+) raises -> List[Int]:
+    """Return reviewed proofs whose dependency digests match.
+
+    Args:
+        table: The reviewed table.
+        root: The source root.
+        module: The manifest module name.
+
+    Returns:
+        Matching proof nodes in the table. Empty when none match.
+
+    Raises:
+        Error: When a dependency file cannot be read.
+    """
+    var found = table.find(table.root, module)
+    var matched = List[Int]()
+    if found < 0:
+        return matched^
+    var keys = List[String]()
+    var ready = List[Bool]()
+    var index = 0
+    while index < table.length(found):
+        var proof = table.item(found, index)
+        var deps = table.at(proof, "dependency_sha256")
+        var key = _dep_key(table, deps)
+        var seen = -1
+        var cursor = 0
+        while cursor < len(keys):
+            if keys[cursor] == key:
+                seen = cursor
+            cursor += 1
+        if seen >= 0:
+            if ready[seen]:
+                matched.append(proof)
+        else:
+            var matches = _deps_match(table, root, deps)
+            keys.append(key)
+            ready.append(matches)
+            if matches:
+                matched.append(proof)
+        index += 1
+    return matched^
+
+
+def _insert_pick(
+    mut lines: List[Int],
+    mut kinds: List[Int],
+    mut indexes: List[Int],
+    line: Int,
+    kind: Int,
+    index: Int,
+):
+    """Insert one proof pick in ascending line order.
+
+    Args:
+        lines: The line numbers, in order.
+        kinds: Zero for a literal proof and one for a reviewed proof.
+        indexes: The source index of each pick.
+        line: The new line.
+        kind: The new kind.
+        index: The new source index.
+    """
+    var place = len(lines)
+    lines.append(line)
+    kinds.append(kind)
+    indexes.append(index)
+    while place > 0 and lines[place - 1] > line:
+        lines[place] = lines[place - 1]
+        kinds[place] = kinds[place - 1]
+        indexes[place] = indexes[place - 1]
+        place -= 1
+    lines[place] = line
+    kinds[place] = kind
+    indexes[place] = index
+
+
 def _proofs(
     mut doc: PyJson, source: String, module: String, branches: List[Int]
 ) -> Int:
@@ -1123,6 +1335,7 @@ def run_seal(
                     "Stale or modified executing toolchain identity binding"
                 )
         doc.set(tools, name, doc.new_str(fresh.text(recorded)))
+    var reviews = _load_reviews()
     var proof_list = doc.new_list()
     var proved = 0
     for module in sorted_modules:
@@ -1136,36 +1349,118 @@ def run_seal(
             if record[0] == "C" or record[0] == "M":
                 compound.append(_number(record[2]))
         var text = Path(_join(root, module + ".mojo")).read_text()
-        for record in constant_loops(text):
-            var line = _number(record[0])
-            var wanted = False
-            for branch in branches:
-                if branch == line:
-                    wanted = True
-            if not wanted:
+        var literals = constant_loops(text)
+        var reviewed = _reviewed_nodes(reviews, root, module)
+        var pick_lines = List[Int]()
+        var pick_kinds = List[Int]()
+        var pick_indexes = List[Int]()
+        var literal_index = 0
+        while literal_index < len(literals):
+            _insert_pick(
+                pick_lines,
+                pick_kinds,
+                pick_indexes,
+                _number(literals[literal_index][0]),
+                0,
+                literal_index,
+            )
+            literal_index += 1
+        var review_index = 0
+        while review_index < len(reviewed):
+            var line = _number(
+                reviews.text(reviews.at(reviewed[review_index], "line"))
+            )
+            if _has_line(pick_lines, line):
+                raise Error("Conflicting reviewed loop proof: " + module)
+            _insert_pick(
+                pick_lines,
+                pick_kinds,
+                pick_indexes,
+                line,
+                1,
+                review_index,
+            )
+            review_index += 1
+        var source_hash = fresh.text(fresh.at(root_inputs, module + ".mojo"))
+        var pick = 0
+        while pick < len(pick_lines):
+            var line = pick_lines[pick]
+            if not _has_line(branches, line):
+                pick += 1
                 continue
-            for other in compound:
-                if other == line:
-                    raise Error(
-                        "Loop proof conflicts with compound decision: " + module
-                    )
+            if _has_line(compound, line):
+                raise Error(
+                    "Loop proof conflicts with compound decision: " + module
+                )
             var proof = doc.new_dict()
             doc.set(proof, "module", doc.new_str(module))
             doc.set(proof, "line", doc.new_int(line))
-            doc.set(proof, "kind", doc.new_str(record[1]))
-            doc.set(proof, "cardinality", doc.new_int(_number(record[2])))
-            doc.set(proof, "required", doc.new_str(record[3]))
-            doc.set(proof, "impossible", doc.new_str(record[4]))
-            doc.set(proof, "expression", doc.new_str(record[5]))
-            doc.set(
-                proof,
-                "source_sha256",
-                doc.new_str(
-                    fresh.text(fresh.at(root_inputs, module + ".mojo"))
-                ),
-            )
+            if pick_kinds[pick] == 0:
+                var record = literals[pick_indexes[pick]].copy()
+                doc.set(proof, "kind", doc.new_str(record[1]))
+                doc.set(proof, "cardinality", doc.new_int(_number(record[2])))
+                doc.set(proof, "required", doc.new_str(record[3]))
+                doc.set(proof, "impossible", doc.new_str(record[4]))
+                doc.set(proof, "expression", doc.new_str(record[5]))
+            else:
+                var node = reviewed[pick_indexes[pick]]
+                doc.set(
+                    proof,
+                    "kind",
+                    doc.new_str(reviews.text(reviews.at(node, "kind"))),
+                )
+                doc.set(
+                    proof,
+                    "cardinality",
+                    doc.new_int(
+                        _number(reviews.text(reviews.at(node, "cardinality")))
+                    ),
+                )
+                var maximum = reviews.at(node, "maximum_cardinality")
+                if reviews.is_none(maximum):
+                    doc.set(proof, "maximum_cardinality", doc.new_none())
+                else:
+                    doc.set(
+                        proof,
+                        "maximum_cardinality",
+                        doc.new_int(_number(reviews.text(maximum))),
+                    )
+                var minimum = reviews.find(node, "minimum_cardinality")
+                if minimum >= 0:
+                    doc.set(
+                        proof,
+                        "minimum_cardinality",
+                        doc.new_int(_number(reviews.text(minimum))),
+                    )
+                doc.set(
+                    proof,
+                    "required",
+                    doc.new_str(reviews.text(reviews.at(node, "required"))),
+                )
+                doc.set(
+                    proof,
+                    "impossible",
+                    doc.new_str(reviews.text(reviews.at(node, "impossible"))),
+                )
+                doc.set(
+                    proof,
+                    "expression",
+                    doc.new_str(reviews.text(reviews.at(node, "expression"))),
+                )
+                doc.set(
+                    proof,
+                    "proof_id",
+                    doc.new_str(reviews.text(reviews.at(node, "proof_id"))),
+                )
+                doc.set(
+                    proof,
+                    "dependency_sha256",
+                    doc.adopt(reviews, reviews.at(node, "dependency_sha256")),
+                )
+            doc.set(proof, "source_sha256", doc.new_str(source_hash))
             doc.append(proof_list, proof)
             proved += 1
+            pick += 1
     var counts = List[Int]()
     counts.append(0)
     counts.append(0)
@@ -1221,6 +1516,46 @@ def run_seal(
     return 0
 
 
+def run_reviews(root_text: String, module: String) raises -> Int:
+    """Print reviewed proofs for one module.
+
+    Args:
+        root_text: The source root.
+        module: The module name, without `.mojo`.
+
+    Returns:
+        Zero after the proofs are printed.
+
+    Raises:
+        Error: When the table or a dependency file cannot be read.
+    """
+    var table = _load_reviews()
+    var nodes = _reviewed_nodes(table, _resolve(root_text), module)
+    var order = List[Int]()
+    var index = 0
+    while index < len(nodes):
+        var line = _number(table.text(table.at(nodes[index], "line")))
+        var place = len(order)
+        order.append(index)
+        while place > 0:
+            var previous = _number(
+                table.text(table.at(nodes[order[place - 1]], "line"))
+            )
+            if previous <= line:
+                break
+            order[place] = order[place - 1]
+            place -= 1
+        order[place] = index
+        index += 1
+    var doc = PyJson()
+    var items = doc.new_list()
+    doc.root = items
+    for slot in order:
+        doc.append(items, doc.adopt(table, nodes[slot]))
+    print(dumps_canonical(doc, items))
+    return 0
+
+
 def run_cli(arguments: List[String]) raises -> Int:
     """Seal the tree named on the command line.
 
@@ -1233,6 +1568,28 @@ def run_cli(arguments: List[String]) raises -> Int:
     Raises:
         Error: For a bad command line or a receipt that cannot be bound.
     """
+    if len(arguments) > 0 and arguments[0] == "loops":
+        if len(arguments) != 2:
+            raise Error("usage: coverage_loop_seal loops FILE")
+        var records = constant_loops(Path(arguments[1]).read_text())
+        var doc = PyJson()
+        var items = doc.new_list()
+        doc.root = items
+        for record in records:
+            var proof = doc.new_dict()
+            doc.set(proof, "line", doc.new_int(_number(record[0])))
+            doc.set(proof, "kind", doc.new_str(record[1]))
+            doc.set(proof, "cardinality", doc.new_int(_number(record[2])))
+            doc.set(proof, "required", doc.new_str(record[3]))
+            doc.set(proof, "impossible", doc.new_str(record[4]))
+            doc.set(proof, "expression", doc.new_str(record[5]))
+            doc.append(items, proof)
+        print(doc.dumps())
+        return 0
+    if len(arguments) > 0 and arguments[0] == "reviews":
+        if len(arguments) != 3:
+            raise Error("usage: coverage_loop_seal reviews ROOT MODULE")
+        return run_reviews(arguments[1], arguments[2])
     var root = String()
     var build = String()
     var compiler = String()
@@ -1323,7 +1680,7 @@ def run_cli(arguments: List[String]) raises -> Int:
 
 
 def main() raises:
-    """Seal literal loop proofs for one coverage tree."""
+    """Seal loop proofs for one coverage tree."""
     var arguments = List[String]()
     var given = argv()
     for index in range(1, len(given)):
