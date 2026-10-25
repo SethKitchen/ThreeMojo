@@ -61,6 +61,7 @@ from math.finite import require_non_negative_finite
 from math.utils import max3, min3, mix_delta, saturate
 from math.vector3 import Vector3
 from render.color_math import rgb_channels
+from render.game_math import aces_tone
 from render.framebuffer import FloatColor, OPAQUE_WHITE
 from std.math import exp2, log2, max, min
 
@@ -189,13 +190,6 @@ def _cineon(
     )
 
 
-def _rrt_and_odt_fit(v: Float32) -> Float32:
-    """One channel of three.js's `RRTAndODTFit`, the ACES curve itself."""
-    var a = v * (v + 0.0245786) - 0.000090537
-    var b = v * (0.983729 * v + 0.4329510) + 0.238081
-    return a / b
-
-
 def _aces(r: Float32, g: Float32, b: Float32, exposure: Float32) -> FloatColor:
     """three.js's `ACESFilmicToneMapping`.
 
@@ -203,23 +197,10 @@ def _aces(r: Float32, g: Float32, b: Float32, exposure: Float32) -> FloatColor:
     viewing environment; into the ACES working primaries by
     `ACESInputMat`; through the fit; back out by `ACESOutputMat`; clamped.
     Each matrix is applied as its three rows, written out, since the kernel
-    has no matrix type.
+    has no matrix type. `render.game_math.aces_tone` at width one.
     """
-    var scale = exposure / 0.6
-    var sr = r * scale
-    var sg = g * scale
-    var sb = b * scale
-    var ir = 0.59719 * sr + 0.35458 * sg + 0.04823 * sb
-    var ig = 0.07600 * sr + 0.90834 * sg + 0.01566 * sb
-    var ib = 0.02840 * sr + 0.13383 * sg + 0.83777 * sb
-    var fr = _rrt_and_odt_fit(ir)
-    var fg = _rrt_and_odt_fit(ig)
-    var fb = _rrt_and_odt_fit(ib)
-    return FloatColor(
-        saturate(1.60475 * fr - 0.53108 * fg - 0.07367 * fb),
-        saturate(-0.10208 * fr + 1.10813 * fg - 0.00605 * fb),
-        saturate(-0.00327 * fr - 0.07276 * fg + 1.07602 * fb),
-    )
+    var toned = aces_tone[1](r, g, b, exposure)
+    return FloatColor(toned[0], toned[1], toned[2])
 
 
 # three.js's AgX constants: the log2 range the encoding maps to zero to

@@ -6,7 +6,7 @@
 """Walk, run and jump through the village as a person, with a gamepad.
 
     mojo run -I . examples/village_walk.mojo [path.png]
-    mojo run -I . examples/village_walk.mojo --play [WIDTH HEIGHT]
+    mojo run -I . examples/village_walk.mojo --play [WIDTH HEIGHT [QUALITY]]
 
 The page is Village walk. The village has people and animals: a woman by
 the brick house, a man on the trail, a child who runs round the pond,
@@ -14,8 +14,11 @@ sheep, goats, cows, a horse, a pig, a dog, rabbits and deer. Each one
 wanders and rests. The player is a man of six feet, seen from behind by a
 third-person camera.
 
-With `--play`, the program opens an X11 window, 480 by 270 pixels unless
-given, and reads every gamepad on the machine and the keyboard:
+With `--play`, the program opens an X11 window, 1920 by 1080 pixels unless
+given, and reads every gamepad on the machine and the keyboard. QUALITY is
+`low`, `medium`, `high` or `ultra`, `low` unless given: see
+`extensions.village.quality`. `low` keeps 24 frames a second on four
+cores.
 
 | Control | Gamepad | Keyboard |
 |---|---|---|
@@ -31,8 +34,9 @@ standard error.
 
 With a path, or no argument, the program needs no window and no pad. A
 pad of the web backend plays a fixed script: walk, run, jump, look round
-and stop. The program writes the frames as an animated PNG, and prints how
-long each step took, as JSON.
+and stop, at the `medium` quality in a window of 480 by 270. The program
+writes the frames as an animated PNG, and prints how long each step took,
+as JSON.
 """
 
 from controls.held_keys import HeldKeys
@@ -50,7 +54,6 @@ from extensions.gamepad.linux import (
     default_mapping_database,
 )
 from extensions.gamepad.web import WebGamepadState, WebHub
-from extensions.vegetation.meadow import meadow_renderer
 from extensions.village.character import MoveInput, no_input
 from extensions.village.pad_input import (
     KEY_SPACE,
@@ -59,10 +62,19 @@ from extensions.village.pad_input import (
     keyboard_input,
 )
 from extensions.village.play import PlayParameters, VillageGame
+from extensions.village.quality import (
+    HIGH,
+    LOW,
+    MEDIUM,
+    QualityPreset,
+    ULTRA,
+    game_quality,
+)
 from extensions.water.pebbles import pebble_bed
 from render.apng import encode
 from render.framebuffer import Framebuffer
 from render.jpeg import decode
+from renderers.renderer import Renderer
 from std.pathlib import Path
 from std.sys import argv, stderr
 from units.si import MILLISECOND, SECOND, Duration
@@ -72,6 +84,8 @@ comptime DEFAULT_OUTPUT = "out/village_walk.png"
 comptime PEBBLES = "assets/pebbles.jpg"
 comptime WIDTH = 480
 comptime HEIGHT = 270
+comptime PLAY_WIDTH = 1920
+comptime PLAY_HEIGHT = 1080
 comptime FPS = 8
 """The frames a second of the scripted walk."""
 comptime SECONDS = Float32(6)
@@ -117,13 +131,18 @@ def _scripted(destination: String) raises:
     """Play the scripted walk and write it as an animated PNG."""
     var clock = Clock()
     clock.start()
-    var renderer = meadow_renderer(WIDTH, HEIGHT)
-    renderer.set_antialias(False)
     var assets = Assets()
     var scene = Scene()
     var bed = pebble_bed(decode(Path(PEBBLES).read_bytes()))
     var game = VillageGame(
-        scene, assets, renderer, PlayParameters(), bed^, None
+        scene,
+        assets,
+        Renderer(64, 64),
+        PlayParameters(game_quality(MEDIUM)),
+        bed^,
+        None,
+        WIDTH,
+        HEIGHT,
     )
     var built = clock.elapsed().to(MILLISECOND)
     var hub = WebHub()
@@ -140,7 +159,10 @@ def _scripted(destination: String) raises:
         var input = gamepad_input(hub.pads[0].gamepad)
         var began = clock.elapsed().to(MILLISECOND)
         _ = game.tick(scene, assets, input, step)
-        frames.append(game.render(renderer, scene, assets))
+        game.render(scene, assets)
+        frames.append(
+            Framebuffer(game.width, game.height, game.window.pixels.copy())
+        )
         drawing += clock.elapsed().to(MILLISECOND) - began
     Path(destination).write_bytes(encode(frames, delay_ms=1000 // FPS))
     print(
@@ -172,16 +194,34 @@ def _pad_input(
     return input
 
 
-def _play(width: Int, height: Int) raises:
+def _preset(name: String) raises -> QualityPreset:
+    """Return the quality preset a name names."""
+    if name == "low":
+        return LOW
+    if name == "medium":
+        return MEDIUM
+    if name == "high":
+        return HIGH
+    if name == "ultra":
+        return ULTRA
+    raise Error("A quality must be low, medium, high or ultra, not ", name)
+
+
+def _play(width: Int, height: Int, preset: QualityPreset) raises:
     """Open a window and play until the player quits."""
-    var renderer = meadow_renderer(width, height)
-    renderer.set_antialias(False)
     var assets = Assets()
     var scene = Scene()
     var bed = pebble_bed(decode(Path(PEBBLES).read_bytes()))
     print("Building the village...", file=stderr)
     var game = VillageGame(
-        scene, assets, renderer, PlayParameters(), bed^, None
+        scene,
+        assets,
+        Renderer(64, 64),
+        PlayParameters(game_quality(preset)),
+        bed^,
+        None,
+        width,
+        height,
     )
     var window = X11Window(width, height, "ThreeMojo village")
     var database = default_mapping_database()
@@ -237,7 +277,8 @@ def _play(width: Int, height: Int) raises:
             )
             input.jump = input.jump or tapped
             _ = game.tick(scene, assets, input, delta)
-            window.present(game.render(renderer, scene, assets))
+            game.render(scene, assets)
+            window.present(game.window)
             frames += 1
             if frames % 10 == 0:
                 print(
@@ -254,12 +295,13 @@ def main() raises:
     for word in argv():
         words.append(String(word))
     if len(words) > 1 and words[1] == "--play":
-        var width = WIDTH
-        var height = HEIGHT
+        var width = PLAY_WIDTH
+        var height = PLAY_HEIGHT
         if len(words) > 3:
             width = Int(words[2])
             height = Int(words[3])
-        _play(width, height)
+        var preset = _preset(words[4] if len(words) > 4 else "low")
+        _play(width, height, preset)
         return
     var destination = String(DEFAULT_OUTPUT)
     if len(words) > 1:

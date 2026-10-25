@@ -207,6 +207,10 @@ struct Body(Movable):
             hand_detail=half,
             hair_detail=half,
         )
+        # A person casts a shadow, as an animal does.
+        # A humanoid wears at least its body's skin.
+        for skin in self.person.skins:  # pragma: no branch
+            scene.skinned_meshes[skin].cast_shadow = True
         ref rig = self.person.rig
         ref bones = self.person.bones
         self.mixer = AnimationMixer()
@@ -430,9 +434,12 @@ struct ResidentsParameters(Copyable, Movable):
     # Each person's budget of triangles, and the cells along their skin.
     var triangles: Int
     var detail: Int
-    # The poses of each animal's walk, and how finely it is meshed.
+    # The poses of each animal's walk, how finely it is meshed, and how
+    # many times its tier's cell its mesh's cell is: 1 for the tier's own
+    # mesh, more for a coarser one.
     var phases: Int
     var quality: Quality
+    var animal_coarseness: Float64
     # How long a resident rests at each point of its route.
     var rest: Duration
 
@@ -445,6 +452,7 @@ struct ResidentsParameters(Copyable, Movable):
         self.detail = 24
         self.phases = 6
         self.quality = CROWD
+        self.animal_coarseness = 1
         self.rest = Duration(3.0, SECOND)
 
     def check(self) raises:
@@ -455,8 +463,9 @@ struct ResidentsParameters(Copyable, Movable):
                 has not from 1 to 64 animals, or its species is not one;
                 a pasture or a wander reaches further than 1 kilometer;
                 the budget is not from 500 to 100,000 triangles; the detail
-                is not from 8 to 64; there are not from 1 to 32 phases; or
-                the rest is not from 0 to 1 minute.
+                is not from 8 to 64; there are not from 1 to 32 phases; the
+                animals' coarseness is not from 1 to 8; or the rest is not
+                from 0 to 1 minute.
         """
         require_count_between(
             len(self.villagers),
@@ -498,6 +507,8 @@ struct ResidentsParameters(Copyable, Movable):
         require_count_between(
             self.phases, 1, 32, "An animal must have from 1 to 32 phases"
         )
+        if not (self.animal_coarseness >= 1 and self.animal_coarseness <= 8):
+            raise Error("An animal's coarseness must be from 1 to 8")
         require_between(
             self.rest.to(SECOND),
             0,
@@ -642,6 +653,7 @@ struct Residents(Movable):
                 herd.species,
                 animal_options(herd.seed, quality=parameters.quality),
             )
+            animal.cell *= parameters.animal_coarseness
             var stand = assets.geometries.add(
                 mesh_animal(animal, animal.bind_pose(), workers=0)
             )

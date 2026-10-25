@@ -28,9 +28,9 @@ from extensions.village.play import (
     TRUNK,
     VillageGame,
     default_residents,
-    play_village,
     tree_obstacles,
 )
+from extensions.village.quality import LOW, ULTRA, game_quality
 from extensions.village.residents import Herd, ResidentsParameters, Villager
 from extensions.village.village import HousePlacement, VillageParameters
 from extensions.water.pebbles import pebble_bed
@@ -109,7 +109,7 @@ def _village() raises -> VillageParameters:
 def _game_parameters() raises -> PlayParameters:
     """Return a game of the small village, one rabbit, nobody else, and a
     small player."""
-    var p = PlayParameters()
+    var p = PlayParameters(game_quality(LOW))
     p.village = _village()
     var residents = ResidentsParameters()
     residents.triangles = 500
@@ -128,17 +128,17 @@ def _bed() raises -> DecodedImage:
     return DecodedImage(4, 4, List[UInt8](length=64, fill=128), SRGB)
 
 
-def test_the_game_village_is_lighter_and_lived_in() raises:
-    var light = play_village()
-    light.check()
-    assert_equal(len(light.meadow.crown_levels), 3)
-    assert_equal(light.meadow.ground_cells, 128)
+def test_the_game_village_is_planted_at_its_quality_and_lived_in() raises:
+    var game = PlayParameters(game_quality(LOW))
+    game.village.check()
+    assert_equal(len(game.village.meadow.crown_levels), 3)
+    assert_equal(game.village.meadow.ground_cells, 96)
+    assert_almost_equal(game.residents.animal_coarseness, 3, atol=1e-6)
+    assert_almost_equal(game.start_z, 26, atol=1e-6)
     var people = default_residents()
     people.check()
     assert_equal(len(people.villagers), 3)
     assert_equal(len(people.herds), 8)
-    var game = PlayParameters()
-    assert_almost_equal(game.start_z, 26, atol=1e-6)
     var trunks = tree_obstacles(_village())
     assert_equal(len(trunks), 1)
     assert_almost_equal(trunks[0].radius, TRUNK * 0.5, atol=1e-6)
@@ -148,11 +148,18 @@ def test_the_game_village_is_lighter_and_lived_in() raises:
 
 
 def test_a_player_walks_jumps_and_is_followed() raises:
-    var renderer = Renderer(32, 18)
+    var renderer = Renderer(16, 16)
     var assets = Assets()
     var scene = Scene()
     var game = VillageGame(
-        scene, assets, renderer, _game_parameters(), pebble_bed(_bed()), None
+        scene,
+        assets,
+        renderer,
+        _game_parameters(),
+        pebble_bed(_bed()),
+        None,
+        48,
+        27,
     )
     assert_equal(len(game.residents.beasts), 1)
     var start = game.player.position
@@ -179,9 +186,68 @@ def test_a_player_walks_jumps_and_is_followed() raises:
         _ = game.tick(scene, assets, no_input(), step)
     assert_true(game.player.stance == STANDING)
     assert_almost_equal(game.clock, 3.2, atol=1e-4)
-    var image = game.render(renderer, scene, assets)
-    assert_equal(image.width, 32)
-    assert_equal(image.height, 18)
+    # The frame is drawn at a third of the window and stretched to it.
+    game.render(scene, assets)
+    assert_equal(game.fast.width, 16)
+    assert_equal(game.fast.height, 9)
+    assert_equal(game.window.width, 48)
+    assert_equal(game.window.height, 27)
+    assert_true(game.upscale_ms > 0)
+
+
+def test_a_full_size_frame_is_not_stretched() raises:
+    var assets = Assets()
+    var scene = Scene()
+    var parameters = _game_parameters()
+    parameters.quality = game_quality(ULTRA)
+    var game = VillageGame(
+        scene,
+        assets,
+        Renderer(16, 16),
+        parameters,
+        pebble_bed(_bed()),
+        None,
+        24,
+        14,
+    )
+    _ = game.tick(scene, assets, no_input(), Duration(0.1, SECOND))
+    game.render(scene, assets)
+    assert_equal(game.fast.width, 24)
+    assert_equal(game.window.width, 24)
+    assert_equal(game.window.height, 14)
+    assert_equal(game.upscale_ms, 0)
+
+
+def test_a_villager_moves_and_a_frame_one_row_short_is_stretched() raises:
+    var assets = Assets()
+    var scene = Scene()
+    var parameters = _game_parameters()
+    parameters.residents.herds = []
+    parameters.residents.villagers = [
+        Villager(HumanoidSpec(Length(60.0, INCH), FEMALE), 2, -2, 1, 1, False)
+    ]
+    # Nineteen twentieths of 10 by 20 rounds to 10 by 19: as wide as the
+    # window, and a row short.
+    parameters.quality = game_quality(ULTRA)
+    parameters.quality.render_scale = 0.95
+    var game = VillageGame(
+        scene,
+        assets,
+        Renderer(16, 16),
+        parameters,
+        pebble_bed(_bed()),
+        None,
+        10,
+        20,
+    )
+    assert_equal(len(game.residents.bodies), 1)
+    assert_equal(len(game.residents.beasts), 0)
+    _ = game.tick(scene, assets, no_input(), Duration(0.1, SECOND))
+    game.render(scene, assets)
+    assert_equal(game.fast.width, 10)
+    assert_equal(game.fast.height, 19)
+    assert_equal(game.window.height, 20)
+    assert_true(game.upscale_ms > 0)
 
 
 def main() raises:

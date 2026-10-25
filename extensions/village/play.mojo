@@ -22,15 +22,16 @@ and its animals, seen by a third-person camera.
 7. The village prepares the frame: the grass for the camera, and the
    water's clock.
 
-`VillageGame.render` then draws the frame. `play_village` is a lighter
-village for a game: its trees and its grass have fewer leaves and blades
-near the camera, so a frame draws in a few seconds on a CPU instead of
-twenty.
+`VillageGame.render` then draws the frame with `GameRenderer` at the
+quality's size, composes the pond's water into it, and stretches it to the
+window. `GameQuality` says how finely each part of the frame is drawn: see
+`extensions.village.quality`.
 """
 
 from cameras.perspective_camera import PerspectiveCamera
 from controls.third_person_controls import ThirdPersonControls
 from core.assets import Assets
+from core.object3d import NodeId
 from core.scene import Scene
 from extensions.animals.registry import (
     COW,
@@ -46,10 +47,9 @@ from extensions.humanoid.athleticism import TONED, UNTONED
 from extensions.humanoid.genome import random_genome
 from extensions.humanoid.sex import FEMALE, MALE
 from extensions.humanoid.spec import HumanoidSpec
-from extensions.vegetation.crown import CrownLevel
-from extensions.vegetation.field import FieldStats, LodBand
+from extensions.vegetation.field import FieldStats
 from extensions.vegetation.ground import Ground, Lot
-from extensions.vegetation.meadow import FARTHEST
+from extensions.vegetation.meadow import EXPOSURE, FARTHEST
 from extensions.village.character import (
     Character,
     CharacterParameters,
@@ -63,13 +63,21 @@ from extensions.village.residents import (
     ResidentsParameters,
     Villager,
 )
+from extensions.village.quality import (
+    GameQuality,
+    LOW,
+    game_quality,
+    planted,
+)
 from extensions.village.scanned import CutBuilding
 from extensions.village.village import Village, VillageParameters
 from extensions.water.pebbles import PebbleBed
-from extensions.water.resolution import SpectrumResolution
 from math.vector3 import Vector3
 from render.framebuffer import Framebuffer
-from renderers.renderer import Renderer
+from render.game_upscale import upscale_into
+from renderers.game_renderer import GameRenderer
+from renderers.renderer import Renderer, available_workers
+from std.time import perf_counter_ns
 from units.si import (
     DEGREE,
     FOOT,
@@ -89,42 +97,6 @@ comptime TRUNK = Float32(0.35)
 """A tree's trunk radius for a planting of size 1, in meters."""
 comptime CALM = Float32(0.1)
 """A look stick that leans less than this lets the camera trail."""
-
-
-def play_village() raises -> VillageParameters:
-    """Return the default village, made lighter for a game.
-
-    The trees wear every third leaf to 20 meters and cards past that. The
-    grass keeps fewer blades near the camera and ends at 40 meters. There
-    are fewer leaves on the ground, a coarser ground mesh, and smaller
-    water and sky textures.
-
-    Returns:
-        The village.
-
-    Raises:
-        Error: Never; the defaults are in range.
-    """
-    var parameters = VillageParameters()
-    ref meadow = parameters.meadow
-    meadow.crown_levels = [
-        CrownLevel(Length(20.0, METER), 0.35, False),
-        CrownLevel(Length(80.0, METER), 0.1, True),
-        CrownLevel(Length(1.0e5, METER), 0.03, True),
-    ]
-    meadow.field.density = 200
-    meadow.field.bands = [
-        LodBand(Length(6.0, METER), 0.6, 3),
-        LodBand(Length(16.0, METER), 0.2, 2),
-        LodBand(Length(40.0, METER), 0.05, 1),
-    ]
-    meadow.litter = 20000
-    meadow.ground_cells = 128
-    meadow.sky_size = 256
-    parameters.ocean = SpectrumResolution(64)
-    parameters.glare = SpectrumResolution(64)
-    parameters.caustic_resolution = 128
-    return parameters^
 
 
 def default_residents() -> ResidentsParameters:
@@ -184,6 +156,8 @@ struct PlayParameters(Copyable, Movable):
     var village: VillageParameters
     var residents: ResidentsParameters
     var player: HumanoidSpec
+    # How finely each part of a frame is drawn.
+    var quality: GameQuality
     # Where the player starts, in meters, and the way they face.
     var start_x: Float32
     var start_z: Float32
@@ -191,15 +165,22 @@ struct PlayParameters(Copyable, Movable):
     # The camera's field of view.
     var field_of_view: Angle
 
-    def __init__(out self) raises:
-        """Create the default game: the lighter village, its residents,
-        and a man of six feet on the trail who looks toward the houses.
+    def __init__(out self, quality: GameQuality) raises:
+        """Create the default game at a quality: the village with the
+        quality's plants, its residents, and a man of six feet on the
+        trail who looks toward the houses.
+
+        Args:
+            quality: How finely each part of a frame is drawn.
 
         Raises:
-            Error: Never; the defaults are in range.
+            Error: If `GameQuality.check` refuses the quality.
         """
-        self.village = play_village()
+        quality.check()
+        self.quality = quality
+        self.village = planted(VillageParameters(), quality.plants)
         self.residents = default_residents()
+        self.residents.animal_coarseness = Float64(quality.animal_coarseness)
         self.player = HumanoidSpec(Length(6.0, FOOT), MALE, TONED)
         self.start_x = 0
         self.start_z = 26
@@ -237,6 +218,19 @@ struct VillageGame(Movable):
     var trees: List[Obstacle]
     # The game's clock, in seconds.
     var clock: Float32
+    # How finely each part of a frame is drawn, the window's size, and the
+    # renderer that draws the frame at its smaller size.
+    var quality: GameQuality
+    var width: Int
+    var height: Int
+    var fast: GameRenderer
+    # How long the last frame's draw, water and stretch took, in
+    # milliseconds.
+    var render_ms: Float64
+    var water_ms: Float64
+    var upscale_ms: Float64
+    # The last frame, the window's size: `render` draws into it.
+    var window: Framebuffer
 
     def __init__(
         out self,
@@ -246,22 +240,37 @@ struct VillageGame(Movable):
         parameters: PlayParameters,
         var bed: PebbleBed,
         var scan: Optional[CutBuilding],
+        width: Int,
+        height: Int,
     ) raises:
         """Build the game into a scene and its stores.
 
         Args:
             scene: The scene.
             assets: The stores.
-            renderer: The renderer the frames are drawn with. Its size sets
-                the camera's aspect.
+            renderer: What the meadow paints its sky with.
             parameters: What the game holds.
             bed: The pebble photograph the pond's water shows through.
             scan: A scanned building for the village, or None.
+            width: The window's width, in pixels.
+            height: The window's height, in pixels.
 
         Raises:
-            Error: If the village, a resident or the player cannot be
-                built.
+            Error: If the quality or the window's size is refused, or the
+                village, a resident or the player cannot be built.
         """
+        self.quality = parameters.quality
+        var size = self.quality.frame_size(width, height)
+        self.width = width
+        self.height = height
+        self.fast = GameRenderer(size[0], size[1], EXPOSURE)
+        self.fast.sky_step = self.quality.sky_step
+        self.render_ms = 0
+        self.water_ms = 0
+        self.upscale_ms = 0
+        self.window = Framebuffer(
+            width, height, List[UInt8](length=width * height * 4, fill=0)
+        )
         self.village = Village(
             scene, assets, renderer, parameters.village, bed^, scan^
         )
@@ -283,10 +292,13 @@ struct VillageGame(Movable):
             parameters.heading,
             field.ground,
         )
+        self.village.meadow.grass_wind_every = self.quality.grass_wind_every
+        self.village.water.shade_step = self.quality.water_step
+        self.village.water.refresh_every = self.quality.water_refresh_every
         self.view = ThirdPersonControls(parameters.heading)
         self.camera = PerspectiveCamera(
             parameters.field_of_view,
-            Float32(renderer.width) / Float32(renderer.height),
+            Float32(width) / Float32(height),
             Length(0.1, METER),
             Length(
                 parameters.village.meadow.mountain_radius.to(METER) * FARTHEST,
@@ -295,6 +307,16 @@ struct VillageGame(Movable):
         )
         self.trees = tree_obstacles(parameters.village)
         self.clock = 0
+        self.village.meadow.register_shadings(self.fast, assets)
+        self.fast.set_shadows(self.quality.shadows, self.quality.shadow_size)
+        var movers = List[NodeId]()
+        movers.append(self.body.carrier)
+        for index in range(len(self.residents.bodies)):
+            movers.append(self.residents.bodies[index].carrier)
+        for index in range(len(self.residents.beasts)):
+            movers.append(self.residents.beasts[index].node)
+        scene.update()
+        self.fast.set_moving(scene, movers)
 
     def tick(
         mut self,
@@ -340,6 +362,7 @@ struct VillageGame(Movable):
         self.view.follow_target(
             Vector3(feet.x, feet.y + FOCUS_HEIGHT, feet.z), delta
         )
+        self.fast.focus = feet
         var eye = self.view.eye()
         self.view.place(
             self.camera, Length(field.ground.height_at(eye.x, eye.z), METER)
@@ -350,20 +373,34 @@ struct VillageGame(Movable):
             scene, assets, self.camera, Duration(self.clock, SECOND)
         )
 
-    def render(
-        mut self, mut renderer: Renderer, scene: Scene, assets: Assets
-    ) raises -> Framebuffer:
-        """Draw the frame that `tick` prepared.
+    def render(mut self, scene: Scene, assets: Assets) raises:
+        """Draw the frame that `tick` prepared into `window`.
+
+        The frame is drawn at the quality's smaller size, the pond's water
+        is composed into it, and it is stretched over `window`. The window's
+        frame is kept from frame to frame, so it is not allocated again.
 
         Args:
-            renderer: The renderer.
             scene: The scene the game is in.
             assets: The stores.
-
-        Returns:
-            The picture, with the pond's water.
 
         Raises:
             Error: If the scene cannot be drawn.
         """
-        return self.village.render(renderer, scene, assets, self.camera)
+        var began = perf_counter_ns()
+        var image = self.fast.render(
+            scene, assets, self.camera, Duration(self.clock, SECOND)
+        )
+        var drawn = perf_counter_ns()
+        _ = self.village.water.compose(
+            image, scene, self.camera, self.village.level, self.village.bed
+        )
+        var watered = perf_counter_ns()
+        self.render_ms = Float64(drawn - began) / 1.0e6
+        self.water_ms = Float64(watered - drawn) / 1.0e6
+        self.upscale_ms = 0
+        if image.width == self.width and image.height == self.height:
+            self.window = image^
+            return
+        upscale_into(image, self.window, available_workers())
+        self.upscale_ms = Float64(perf_counter_ns() - watered) / 1.0e6

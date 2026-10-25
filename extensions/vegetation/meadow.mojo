@@ -46,6 +46,7 @@ Fog of the sky's haze color veils the far woodland and the mountains.
 from cameras.perspective_camera import PerspectiveCamera
 from core.assets import Assets
 from core.background import cube_background
+from core.buffer_geometry import BufferGeometry
 from core.fog import exp2_fog
 from core.geometry_store import GeometryId
 from core.object3d import NodeId, Object3D
@@ -76,7 +77,10 @@ from extensions.vegetation.field import (
 from extensions.vegetation.foliage import (
     SWAY_TIME,
     foliage_program,
+    game_sway,
+    leaf_shading,
     wood_program,
+    wood_shading,
 )
 from extensions.vegetation.ground import (
     Canyon,
@@ -104,9 +108,11 @@ from math.frustum import Frustum
 from math.vector3 import Vector3
 from objects.mesh import Mesh
 from render.framebuffer import Color, Framebuffer
+from render.tasks import TaskGroup
 from render.tonemap import ACES_FILMIC_TONE_MAPPING
+from renderers.game_renderer import GameRenderer, GameShading
 from renderers.renderer import Renderer, available_workers
-from std.math import cos, pi, pow, sin
+from std.math import cos, max, min, pi, pow, sin
 from units.si import (
     DEGREE,
     METER,
@@ -131,6 +137,85 @@ comptime EYE_HEIGHT = Float32(1.6)
 # meters.
 comptime CLEARING_SHARE = Float32(0.8)
 comptime SHADED_GROUND = Float32(250)
+
+
+__async def _build_task(
+    field: Pointer[GrassField, ImmutAnyOrigin],
+    wind: Pointer[Wind, ImmutAnyOrigin],
+    jobs: Pointer[Int, ImmutAnyOrigin],
+    bands: Pointer[Int, ImmutAnyOrigin],
+    time: Duration,
+    grown: MutPointer[Optional[BufferGeometry], MutAnyOrigin],
+    failed: MutPointer[Bool, MutAnyOrigin],
+    task: Int,
+    first: Int,
+    past: Int,
+):
+    """Grow jobs `first` to `past`. A refused cluster sets the task's flag:
+    no error crosses the task group."""
+    try:
+        for job in range(first, past):  # pragma: no branch
+            grown[unsafe_offset=job] = field[].build(
+                jobs[unsafe_offset=job], bands[unsafe_offset=job], wind[], time
+            )
+    except:
+        failed[unsafe_offset=task] = True
+
+
+def _build_clusters(
+    field: GrassField,
+    wind: Wind,
+    jobs: List[Int],
+    bands: List[Int],
+    time: Duration,
+    workers: Int,
+) raises -> List[Optional[BufferGeometry]]:
+    """Grow clusters at their levels on every core, as `GrassField.build`.
+
+    Returns:
+        Each job's geometry, or None where no blade of its level grows.
+
+    Raises:
+        Error: If a cluster or a level is refused.
+    """
+    var grown = List[Optional[BufferGeometry]](capacity=len(jobs))
+    for _ in range(len(jobs)):  # pragma: no branch
+        grown.append(None)
+    # One task a cluster: the near clusters hold most of the blades, so
+    # even shares of the jobs would leave cores idle.
+    var tasks = len(jobs) if workers > 1 else min(1, len(jobs))
+    var failed = List[Bool](length=tasks, fill=False)
+    var group = TaskGroup()
+    for task in range(tasks):  # pragma: no branch
+        group.create_task(
+            _build_task(
+                Pointer(to=field)
+                .unsafe_mut_cast[False]()
+                .unsafe_origin_cast[ImmutAnyOrigin](),
+                Pointer(to=wind)
+                .unsafe_mut_cast[False]()
+                .unsafe_origin_cast[ImmutAnyOrigin](),
+                jobs.unsafe_ptr()
+                .unsafe_mut_cast[False]()
+                .unsafe_origin_cast[ImmutAnyOrigin](),
+                bands.unsafe_ptr()
+                .unsafe_mut_cast[False]()
+                .unsafe_origin_cast[ImmutAnyOrigin](),
+                time,
+                grown.unsafe_ptr().unsafe_origin_cast[MutAnyOrigin](),
+                failed.unsafe_ptr().unsafe_origin_cast[MutAnyOrigin](),
+                task,
+                task * len(jobs) // tasks,
+                (task + 1) * len(jobs) // tasks,
+            )
+        )
+    group.wait()
+    _ = len(jobs)
+    _ = len(bands)
+    for task in range(tasks):  # pragma: no branch
+        if failed[task]:
+            raise Error("A grass cluster or its level was refused")
+    return grown^
 
 
 def two_sided_program() raises -> NodeProgram:
@@ -519,8 +604,12 @@ struct MeadowParameters(Copyable, Movable):
     # The ground drawn round the field, and its cells along a side.
     var ground_span: Length
     var ground_cells: Int
-    # Where the ring of mountains starts.
+    # Where the ring of mountains starts, and the columns round it.
     var mountain_radius: Length
+    var ridge_columns: Int
+    # The columns and the rows of the canyon's far wall.
+    var cliff_columns: Int
+    var cliff_rows: Int
     # Which boulders to place.
     var seed: Int
 
@@ -558,6 +647,9 @@ struct MeadowParameters(Copyable, Movable):
         self.ground_span = Length(1400.0, METER)
         self.ground_cells = 512
         self.mountain_radius = Length(900.0, METER)
+        self.ridge_columns = 480
+        self.cliff_columns = 1600
+        self.cliff_rows = 96
         self.seed = 5
 
     def check(self) raises:
@@ -574,8 +666,10 @@ struct MeadowParameters(Copyable, Movable):
                 not from 0.05 to 20 times its crown's size; the crowns
                 have not from 1 to 8 levels or a level is refused; the sun
                 is not from 1 to 90 degrees high; the ground is not from 10
-                meters to 100 kilometers across; or the mountains are not
-                from 10 meters to 100 kilometers away.
+                meters to 100 kilometers across; the mountains are not
+                from 10 meters to 100 kilometers away or have not from 8 to
+                4,096 columns; or the canyon's wall has not from 2 to 4,096
+                columns or from 2 to 1,024 rows.
         """
         self.field.check()
         self.ground.check()
@@ -668,6 +762,24 @@ struct MeadowParameters(Copyable, Movable):
             1.0e5,
             "The mountains must be from 10 meters to 100 kilometers away",
         )
+        require_count_between(
+            self.ridge_columns,
+            8,
+            4096,
+            "The mountains must have from 8 to 4,096 columns",
+        )
+        require_count_between(
+            self.cliff_columns,
+            2,
+            4096,
+            "The canyon's wall must have from 2 to 4,096 columns",
+        )
+        require_count_between(
+            self.cliff_rows,
+            2,
+            1024,
+            "The canyon's wall must have from 2 to 1,024 rows",
+        )
 
 
 @fieldwise_init
@@ -708,6 +820,15 @@ struct Meadow(Movable):
     var sway_programs: List[NodeProgramId]
     var sun: SunLight
     var dome: SkyDome
+    # How often a drawn cluster is grown again so the wind bends it: every
+    # frame for 1, every `n`th frame for `n`, the clusters taking turns, and
+    # only when its level changes for 0.
+    var grass_wind_every: Int
+    # The level each cluster was last grown at, or -1, whether it had any
+    # blade then, and how many frames `update` has prepared.
+    var grown_band: List[Int]
+    var grown_shown: List[Bool]
+    var frames: Int
 
     def __init__(
         out self,
@@ -809,6 +930,12 @@ struct Meadow(Movable):
         self.cluster_mesh = List[Optional[Int]](
             length=len(self.field.clusters), fill=None
         )
+        self.grass_wind_every = 1
+        self.grown_band = List[Int](length=len(self.field.clusters), fill=-1)
+        self.grown_shown = List[Bool](
+            length=len(self.field.clusters), fill=False
+        )
+        self.frames = 0
         self.cluster_node = List[NodeId]()
         self.cluster_geometry = List[GeometryId]()
         for _ in range(len(self.field.clusters)):  # pragma: no branch
@@ -834,7 +961,7 @@ struct Meadow(Movable):
             parameters.mountain_radius,
             Length(parameters.mountain_radius.to(METER) * 0.6, METER),
             Length(parameters.mountain_radius.to(METER) * 0.34, METER),
-            480,
+            parameters.ridge_columns,
             parameters.seed,
         )
         ridge.compute_vertex_normals()
@@ -848,7 +975,11 @@ struct Meadow(Movable):
         ref canyon = ground.canyon
         if canyon.depth.value + canyon.rise.value > 0:
             var wall = cliff_wall(
-                ground, Length(1200.0, METER), 1600, 96, parameters.seed
+                ground,
+                Length(1200.0, METER),
+                parameters.cliff_columns,
+                parameters.cliff_rows,
+                parameters.seed,
             )
             wall.compute_vertex_normals()
             scene.add_mesh(
@@ -981,6 +1112,41 @@ struct Meadow(Movable):
         scene.fog = exp2_fog(self.dome.haze(), InverseLength(0.0008, PER_METER))
         scene.update()
 
+    def register_shadings(
+        self, mut renderer: GameRenderer, assets: Assets
+    ) raises:
+        """Tell a game renderer what the meadow's node programs do.
+
+        The grass is lit on both sides, as `two_sided_program` lights it.
+        The leaves are lit by their baked sun and sky, and the swaying
+        leaves and wood move in the wind, as `foliage_program` and
+        `wood_program` move them.
+
+        Args:
+            renderer: The game renderer.
+            assets: The stores the meadow was built into.
+
+        Raises:
+            Error: If a material of the meadow is not in the stores.
+        """
+        var sway = game_sway(self.wind.crown_motion())
+        renderer.register(
+            assets.materials.get(self.grass).nodes.value,
+            GameShading(True, String(""), String(""), None),
+        )
+        renderer.register(
+            assets.materials.get(self.leaf_still).nodes.value,
+            leaf_shading(None),
+        )
+        renderer.register(
+            assets.materials.get(self.leaf_sway).nodes.value,
+            leaf_shading(sway),
+        )
+        renderer.register(
+            assets.materials.get(self.wood_sway).nodes.value,
+            wood_shading(sway),
+        )
+
     def update(
         mut self,
         mut scene: Scene,
@@ -1018,14 +1184,41 @@ struct Meadow(Movable):
         var eye = camera.position
         var choices = self.field.select(eye, frustum)
         var stats = no_stats()
+        # The clusters to grow this frame, and each one's level.
+        var jobs = List[Int]()
+        var bands = List[Int]()
         for index in range(len(choices)):  # pragma: no branch
             var choice = choices[index]
             stats.tally(choice.fate)
             var shown = False
             if choice.fate == DRAWN:
-                shown = self._grow(
-                    scene, assets, index, choice.band, time, stats
-                )
+                var every = self.grass_wind_every
+                var turn = every > 0 and (self.frames + index) % every == 0
+                # A cluster never grown has the band -1.
+                if turn or self.grown_band[index] != choice.band:
+                    jobs.append(index)
+                    bands.append(choice.band)
+                    continue
+                # It keeps the blades it was last grown with.
+                shown = self.grown_shown[index]
+                if shown:
+                    stats.blades += self.field.kept(index, choice.band)
+                else:
+                    stats.empty += 1
+            scene.node(self.cluster_node[index]).visible = shown
+        var grown = _build_clusters(
+            self.field, self.wind, jobs, bands, time, available_workers()
+        )
+        for job in range(len(jobs)):  # pragma: no branch
+            var index = jobs[job]
+            var geometry = Optional[BufferGeometry]()
+            if grown[job]:
+                geometry = grown[job].take()
+            var shown = self._place(
+                scene, assets, index, bands[job], geometry^, stats
+            )
+            self.grown_band[index] = bands[job]
+            self.grown_shown[index] = shown
             scene.node(self.cluster_node[index]).visible = shown
         for t in range(len(self.trees)):
             ref tree = self.trees[t]
@@ -1056,24 +1249,24 @@ struct Meadow(Movable):
             )
         scene.update()
         self.sun.update(scene, camera)
+        self.frames += 1
         return stats
 
-    def _grow(
+    def _place(
         mut self,
         mut scene: Scene,
         mut assets: Assets,
         index: Int,
         band: Int,
-        time: Duration,
+        var grown: Optional[BufferGeometry],
         mut stats: FieldStats,
     ) raises -> Bool:
-        """Build one drawn cluster into its mesh, and count what it holds.
+        """Put one grown cluster into its mesh, and count what it holds.
 
         Returns:
             Whether the cluster has a mesh to show. False, and counted as
             empty, if no blade of its level grows.
         """
-        var grown = self.field.build(index, band, self.wind, time)
         if not grown:
             stats.empty += 1
             return False

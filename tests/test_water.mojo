@@ -15,6 +15,7 @@ from materials.material import BASIC, Material
 from objects.mesh import Mesh
 from renderers.renderer import Renderer
 from extensions.water.caustics import (
+    _Splat,
     _splat,
     CausticField,
     caustic_covers,
@@ -30,6 +31,8 @@ from extensions.water.frame import (
     _blur_rows,
     _compose_plan,
     _depth_rows,
+    _at_rest,
+    _height_bound,
     _grade_rows,
     _graded_image,
     _radiance_image,
@@ -1053,13 +1056,31 @@ def test_spectrum_and_glare_refuse_invalid_sizes_at_entry() raises:
 
 
 def test_caustic_splat_rejects_collapsed_and_caps_tight_focus() raises:
-    var image = CausticField(1, Length(1))
+    var plane = List[Float32](length=1, fill=0)
     var x = List[Float32](length=9, fill=0.5)
     var z = List[Float32](length=9, fill=0.5)
     var live = List[Int](length=9, fill=1)
+    # One texel on a patch of a meter, the green channel, no shift.
+    var splat = _Splat(1, 1, 1, 1, 0, 0, 0.5, 1)
+    var out = plane.unsafe_ptr().unsafe_origin_cast[MutAnyOrigin]()
+    var xs = (
+        x.unsafe_ptr()
+        .unsafe_mut_cast[False]()
+        .unsafe_origin_cast[ImmutAnyOrigin]()
+    )
+    var zs = (
+        z.unsafe_ptr()
+        .unsafe_mut_cast[False]()
+        .unsafe_origin_cast[ImmutAnyOrigin]()
+    )
+    var lives = (
+        live.unsafe_ptr()
+        .unsafe_mut_cast[False]()
+        .unsafe_origin_cast[ImmutAnyOrigin]()
+    )
     # A point has no area and deposits no light, even on a pixel center.
-    _splat(image, x, z, live, 0, 1, 2, 1, 0, 0, 0, 0, 0.5, 1)
-    assert_almost_equal(image.channel(0, 0, 1), Float32(0))
+    _splat(out, xs, zs, lives, 0, 1, 2, 0, 0, splat)
+    assert_almost_equal(plane[0], Float32(0))
     # A small but nonzero triangle retains its energy cap. An epsilon-area
     # rejection would erase this valid focus instead of bounding it.
     x[1] = 0.49
@@ -1068,8 +1089,11 @@ def test_caustic_splat_rejects_collapsed_and_caps_tight_focus() raises:
     z[4] = 0.49
     x[7] = 0.5
     z[7] = 0.51
-    _splat(image, x, z, live, 0, 1, 2, 1, 0, 0, 0, 0, 0.5, 1)
-    assert_almost_equal(image.channel(0, 0, 1), Float32(40))
+    _splat(out, xs, zs, lives, 0, 1, 2, 0, 0, splat)
+    assert_almost_equal(plane[0], Float32(40))
+    _ = len(x)
+    _ = len(z)
+    _ = len(live)
 
 
 def _assert_same_picture(a: Framebuffer, b: Framebuffer) raises:
@@ -1779,6 +1803,8 @@ def test_parallel_post_and_depth_equal_one_serial_pass() raises:
         height,
         0,
         height,
+        _height_bound(surface, water._ripples),
+        False,
     )
     assert_true(shown == serial_shown)
     assert_true(image.depth == reference)
@@ -2003,6 +2029,77 @@ def test_one_worker_draws_and_composes_what_every_core_does() raises:
     )
     assert_true(wide.pixels == serial_image.pixels)
     assert_true(wide.depth == serial_image.depth)
+
+
+def test_cheaper_water_shades_a_grid_and_keeps_its_surface() raises:
+    var stones = _stones()
+    var width = 29
+    var height = 41
+    var camera = _page_camera(width, height)
+    var fine = _scene(Duration(5.0, SECOND))
+    var coarse = _scene(Duration(5.0, SECOND))
+    coarse.shade_step = 4
+    coarse.refresh_every = 3
+    var one = Framebuffer(width, height, Color(0, 0, 0))
+    var two = Framebuffer(width, height, Color(0, 0, 0))
+    var drawn = fine.compose(one, camera, Length(0.0, METER), stones)
+    assert_true(drawn > 0)
+    assert_true(coarse.compose(two, camera, Length(0.0, METER), stones) > 0)
+    # Shaded on a grid and mixed between, the water is near the fine one.
+    var near = 0
+    for i in range(width * height):
+        var a = one.pixels[i * 4]
+        var b = two.pixels[i * 4]
+        if abs(Int(a) - Int(b)) < 40:
+            near += 1
+    assert_true(near > width * height * 3 // 4)
+    # An eye just above the still water, below the highest wave, tests
+    # every pixel where the waves are.
+    var low = _page_camera(width, height)
+    low.place(Vector3(0, 0.002, 0), Vector3(0, -0.5, -3))
+    var skim = Framebuffer(width, height, Color(0, 0, 0))
+    assert_true(fine.compose(skim, low, Length(0.0, METER), stones) > 0)
+    # The surface found on the third call is shown from the fourth.
+    for _ in range(4):
+        var frame = Framebuffer(width, height, Color(0, 0, 0))
+        _ = coarse.compose(frame, camera, Length(0.0, METER), stones)
+    assert_false(Bool(coarse._surface_next))
+    # A view with no water rows draws nothing.
+    var sky = Framebuffer(width, height, Color(0, 0, 0))
+    for i in range(width * height):
+        sky.depth[i] = -1
+    assert_equal(coarse.compose(sky, camera, Length(0.0, METER), stones), 0)
+    with assert_raises(contains="shade step"):
+        coarse.shade_step = 0
+        _ = coarse.compose(sky, camera, Length(0.0, METER), stones)
+    with assert_raises(contains="shade step"):
+        coarse.shade_step = 65
+        _ = coarse.compose(sky, camera, Length(0.0, METER), stones)
+    with assert_raises(contains="refresh"):
+        coarse.shade_step = 2
+        coarse.refresh_every = 0
+        _ = coarse.compose(sky, camera, Length(0.0, METER), stones)
+
+
+def test_calm_ripples_skip_their_step_and_caustics_split_by_channel() raises:
+    var water = _scene(Duration(5.0, SECOND))
+    water.advance(Duration(1.0 / 60.0, SECOND), False)
+    assert_true(water._calm)
+    var still = water._ripples.normal.copy()
+    water.advance(Duration(1.0 / 60.0, SECOND), False)
+    assert_true(water._ripples.normal == still)
+    water.reset()
+    assert_false(water._calm)
+    # A window that is level but still moving is not at rest.
+    water._ripples.velocity[3] = 0.01
+    assert_false(_at_rest(water._ripples))
+    # One worker splats the channels in turn; every core gives its bits.
+    var surface = water._surface()
+    water.workers = 1
+    var serial = water._caustics(surface)
+    water.workers = 0
+    var parallel = water._caustics(surface)
+    assert_true(serial.samples == parallel.samples)
 
 
 def main() raises:

@@ -14,10 +14,12 @@ arithmetic runs on a `CausticField` and on a copy in device memory.
 
 from core.ordinal import require_positive
 from extensions.water.optics import channel_ior, refract
+from extensions.water.rows import row_tasks
 from extensions.water.spectrum import require_ocean_patch
 from extensions.water.surface import SurfaceField, sample_surface
 from math.utils import max3, min3
 from math.vector3 import Vector3
+from render.tasks import TaskGroup
 from math.norm import squared_length3
 from std.math import abs, floor, hypot, sqrt
 from units.si import Length
@@ -249,8 +251,13 @@ def render_caustics(
     depth: Length,
     grid: Int,
     resolution: Int,
+    workers: Int = 0,
 ) raises -> CausticField:
     """Draw the caustic texture for one surface and one sun.
+
+    The three channels are drawn in parallel, each into a plane of its
+    own. Each takes the triangles in the serial order, so each texel sums
+    the same values in the same order, bit for bit.
 
     Args:
         surface: The resolved ocean. Ripples are not part of this pass.
@@ -258,6 +265,8 @@ def render_caustics(
         depth: Mean depth. It must be positive.
         grid: Water cells on one side of the ray grid. It must be positive.
         resolution: Caustic texels on one side. It must be positive.
+        workers: The threads that share the drawing. Zero or less means
+            every logical core, and one draws serially.
 
     Returns:
         The additive caustic image and the flat-surface shift.
@@ -315,124 +324,157 @@ def render_caustics(
     var cell = patch / Float32(grid)
     var source_area = cell * cell * 0.5
     var norm = (Float32(resolution) / patch) * (Float32(resolution) / patch)
+    # Each channel sums into a plane of its own, so no two tasks write
+    # one cache line, and the planes are woven into the image after.
+    var texels = resolution * resolution
+    var planes = List[Float32](length=texels * 3, fill=0.0)
+    var serial = row_tasks(workers, 1, 3) == 1
+    # A task reads its settings where they are kept, so they must outlive
+    # the task group: one entry a channel.
+    var splats = List[_Splat]()
     for channel in range(3):  # pragma: no branch
-        for j in range(grid):  # pragma: no branch
-            for i in range(grid):  # pragma: no branch
-                var a = j * verts + i
-                var b = a + 1
-                var c = a + verts
-                var d = c + 1
-                _splat_pair(
-                    image,
-                    floor_x,
-                    floor_z,
-                    live,
-                    a,
-                    b,
-                    c,
-                    d,
-                    channel,
-                    shift[0],
-                    shift[1],
-                    source_area,
-                    norm,
-                )
+        splats.append(
+            _Splat(
+                image.n,
+                image.patch,
+                grid,
+                channel,
+                shift[0],
+                shift[1],
+                source_area,
+                norm,
+            )
+        )
+    var plane = planes.unsafe_ptr().unsafe_origin_cast[MutAnyOrigin]()
+    var xs = (
+        floor_x.unsafe_ptr()
+        .unsafe_mut_cast[False]()
+        .unsafe_origin_cast[ImmutAnyOrigin]()
+    )
+    var zs = (
+        floor_z.unsafe_ptr()
+        .unsafe_mut_cast[False]()
+        .unsafe_origin_cast[ImmutAnyOrigin]()
+    )
+    var lives = (
+        live.unsafe_ptr()
+        .unsafe_mut_cast[False]()
+        .unsafe_origin_cast[ImmutAnyOrigin]()
+    )
+    var group = TaskGroup()
+    for channel in range(3):  # pragma: no branch
+        var settings = (
+            Pointer(to=splats[channel])
+            .unsafe_mut_cast[False]()
+            .unsafe_origin_cast[ImmutAnyOrigin]()
+        )
+        if serial:
+            _splat_channel(plane, xs, zs, lives, settings)
+        else:
+            group.create_task(_splat_task(plane, xs, zs, lives, settings))
+    group.wait()
+    _ = len(floor_x)
+    _ = len(floor_z)
+    _ = len(live)
+    _ = len(splats)
+    for k in range(texels):  # pragma: no branch
+        for channel in range(3):  # pragma: no branch
+            image.samples[k * 3 + channel] = planes[channel * texels + k]
     _build_caustic_mips(image)
     return image^
 
 
-def _splat_pair(
-    mut image: CausticField,
-    floor_x: List[Float32],
-    floor_z: List[Float32],
-    live: List[Int],
-    a: Int,
-    b: Int,
-    c: Int,
-    d: Int,
-    channel: Int,
-    shift_x: Float32,
-    shift_z: Float32,
-    source_area: Float32,
-    norm: Float32,
+@fieldwise_init
+struct _Splat(ImplicitlyCopyable):
+    """What one channel of the caustic splat needs: the texture's side and
+    patch, the ray grid, the channel, the flat shift, the source area and
+    the norm."""
+
+    var n: Int
+    var patch: Float32
+    var grid: Int
+    var channel: Int
+    var shift_x: Float32
+    var shift_z: Float32
+    var source_area: Float32
+    var norm: Float32
+
+
+__async def _splat_task(
+    plane: MutPointer[Float32, MutAnyOrigin],
+    floor_x: Pointer[Float32, ImmutAnyOrigin],
+    floor_z: Pointer[Float32, ImmutAnyOrigin],
+    live: Pointer[Int, ImmutAnyOrigin],
+    splat: Pointer[_Splat, ImmutAnyOrigin],
 ):
-    for instance in range(9):  # pragma: no branch
-        var ox = Float32(instance % 3 - 1)
-        var oz = Float32(instance // 3 - 1)
-        _splat(
-            image,
-            floor_x,
-            floor_z,
-            live,
-            a,
-            b,
-            c,
-            channel,
-            ox,
-            oz,
-            shift_x,
-            shift_z,
-            source_area,
-            norm,
-        )
-        _splat(
-            image,
-            floor_x,
-            floor_z,
-            live,
-            b,
-            d,
-            c,
-            channel,
-            ox,
-            oz,
-            shift_x,
-            shift_z,
-            source_area,
-            norm,
-        )
+    """Splat one channel on a worker."""
+    _splat_channel(plane, floor_x, floor_z, live, splat)
+
+
+def _splat_channel(
+    plane: MutPointer[Float32, MutAnyOrigin],
+    floor_x: Pointer[Float32, ImmutAnyOrigin],
+    floor_z: Pointer[Float32, ImmutAnyOrigin],
+    live: Pointer[Int, ImmutAnyOrigin],
+    settings: Pointer[_Splat, ImmutAnyOrigin],
+):
+    """Splat every refracted triangle of one channel into its plane, in
+    the serial order."""
+    ref splat = settings[]
+    var verts = splat.grid + 1
+    var at = plane.unsafe_offset(splat.channel * splat.n * splat.n)
+    for j in range(splat.grid):  # pragma: no branch
+        for i in range(splat.grid):  # pragma: no branch
+            var a = j * verts + i
+            var b = a + 1
+            var c = a + verts
+            var d = c + 1
+            for instance in range(9):  # pragma: no branch
+                var ox = Float32(instance % 3 - 1)
+                var oz = Float32(instance // 3 - 1)
+                _splat(at, floor_x, floor_z, live, a, b, c, ox, oz, splat)
+                _splat(at, floor_x, floor_z, live, b, d, c, ox, oz, splat)
 
 
 def _splat(
-    mut image: CausticField,
-    floor_x: List[Float32],
-    floor_z: List[Float32],
-    live: List[Int],
+    plane: MutPointer[Float32, MutAnyOrigin],
+    floor_x: Pointer[Float32, ImmutAnyOrigin],
+    floor_z: Pointer[Float32, ImmutAnyOrigin],
+    live: Pointer[Int, ImmutAnyOrigin],
     a: Int,
     b: Int,
     c: Int,
-    channel: Int,
     ox: Float32,
     oz: Float32,
-    shift_x: Float32,
-    shift_z: Float32,
-    source_area: Float32,
-    norm: Float32,
+    splat: _Splat,
 ):
+    var channel = splat.channel
     var sa = a * 3 + channel
     var sb = b * 3 + channel
     var sc = c * 3 + channel
-    if live[sa] == 0:
+    if live[unsafe_offset=sa] == 0:
         return
-    if live[sb] == 0:
+    if live[unsafe_offset=sb] == 0:
         return
-    if live[sc] == 0:
+    if live[unsafe_offset=sc] == 0:
         return
-    var patch = image.patch
-    var n = image.n
-    var ax = ((floor_x[sa] - shift_x) / patch + ox) * Float32(n)
-    var ay = ((floor_z[sa] - shift_z) / patch + oz) * Float32(n)
-    var bx = ((floor_x[sb] - shift_x) / patch + ox) * Float32(n)
-    var by = ((floor_z[sb] - shift_z) / patch + oz) * Float32(n)
-    var cx = ((floor_x[sc] - shift_x) / patch + ox) * Float32(n)
-    var cy = ((floor_z[sc] - shift_z) / patch + oz) * Float32(n)
+    var patch = splat.patch
+    var n = splat.n
+    var shift_x = splat.shift_x
+    var shift_z = splat.shift_z
+    var ax = ((floor_x[unsafe_offset=sa] - shift_x) / patch + ox) * Float32(n)
+    var ay = ((floor_z[unsafe_offset=sa] - shift_z) / patch + oz) * Float32(n)
+    var bx = ((floor_x[unsafe_offset=sb] - shift_x) / patch + ox) * Float32(n)
+    var by = ((floor_z[unsafe_offset=sb] - shift_z) / patch + oz) * Float32(n)
+    var cx = ((floor_x[unsafe_offset=sc] - shift_x) / patch + ox) * Float32(n)
+    var cy = ((floor_z[unsafe_offset=sc] - shift_z) / patch + oz) * Float32(n)
     var area2 = (bx - ax) * (cy - ay) - (by - ay) * (cx - ax)
     if area2 == 0.0:
         return
     var projected = abs(area2 * 0.5)
     # Pixel area is `projected`. Source meters per pixel times `(C/L)^2`
     # is the shader's `area * uNorm`, and a flat surface lands near 1.
-    var intensity = source_area / projected * norm
+    var intensity = splat.source_area / projected * splat.norm
     if intensity > MAX_CAUSTIC_INTENSITY:
         intensity = MAX_CAUSTIC_INTENSITY
     var min_x = min3(ax, bx, cx)
@@ -456,7 +498,7 @@ def _splat(
             var px = Float32(x) + 0.5
             var py = Float32(y) + 0.5
             if caustic_covers(px, py, ax, ay, bx, by, cx, cy, area2):
-                image.samples[(y * n + x) * 3 + channel] += intensity
+                plane[unsafe_offset=y * n + x] += intensity
 
 
 def caustic_covers(

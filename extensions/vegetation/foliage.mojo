@@ -52,6 +52,7 @@ from materials.nodes import (
 from extensions.vegetation.checks import require_between
 from extensions.vegetation.wind import CrownMotion
 from math.vector3 import Vector3
+from renderers.game_renderer import GameShading, SwayMotion
 from std.math import cos, exp, floor, pi, sin, sqrt
 from units.si import METER, PER_SECOND, Length
 
@@ -369,6 +370,65 @@ def sway_offset(mut graph: NodeGraph, motion: CrownMotion) raises -> NodeRef:
     var up = graph.vec3(0, motion.flutter.to(METER), 0)
     var moved = graph.add(graph.mul(along, swing), graph.mul(up, flutter))
     return graph.mul(moved, weight)
+
+
+def game_sway(motion: CrownMotion) -> SwayMotion:
+    """Return the sway that `sway_offset` makes, for `GameRenderer`.
+
+    The game renderer reckons the same offset at each vertex without the
+    node program: see `SwayMotion`.
+
+    Args:
+        motion: How the wind moves the crown.
+
+    Returns:
+        The sway, its rates in radians a second.
+    """
+    var turn = Float32(2) * Float32(pi)
+    var reach = motion.reach.to(METER)
+    return SwayMotion(
+        motion.downwind.x * reach,
+        motion.downwind.y * reach,
+        motion.flutter.to(METER),
+        turn * motion.rate.to(PER_SECOND),
+        turn * motion.flutter_rate.to(PER_SECOND),
+        SIMD[DType.float32, 4](
+            SWING_PHASE[0], SWING_PHASE[1], SWING_PHASE[2], 0
+        ),
+        SIMD[DType.float32, 4](
+            FLUTTER_PHASE[0], FLUTTER_PHASE[1], FLUTTER_PHASE[2], 0
+        ),
+        SWAY_HEIGHT,
+        SWAY_SPREAD,
+        SWAY_MOST,
+    )
+
+
+def leaf_shading(sway: Optional[SwayMotion]) -> GameShading:
+    """Return what `foliage_program` does, for `GameRenderer`: a back face
+    lit as its front, the baked `SUNLIT` in place of the shadow, the baked
+    `SKYLIT` on the indirect light, and the sway, if any.
+
+    Args:
+        sway: The sway of `foliage_program(motion)`, or None for the still
+            program.
+
+    Returns:
+        The shading.
+    """
+    return GameShading(True, String(SUNLIT), String(SKYLIT), sway)
+
+
+def wood_shading(sway: SwayMotion) -> GameShading:
+    """Return what `wood_program` does, for `GameRenderer`: the sway alone.
+
+    Args:
+        sway: The sway of `wood_program(motion)`.
+
+    Returns:
+        The shading.
+    """
+    return GameShading(False, String(""), String(""), sway)
 
 
 def foliage_program() raises -> NodeProgram:

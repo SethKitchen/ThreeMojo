@@ -1,0 +1,114 @@
+# Game renderer
+
+`GameRenderer` draws the [Village walk](Village-walk) at 24 frames a second or more, at 1920 by 1080 pixels, on four CPU cores. It draws less than `Renderer` draws, and it draws it in a different way. `GameQuality` sets how finely each part of a frame is drawn. A slow machine can turn each part down, and a fast machine can turn each part up.
+
+The modules are `renderers/game_renderer.mojo`, `render/game_math.mojo`, `render/game_upscale.mojo` and `extensions/village/quality.mojo`. See [Renderer](Renderer) for the general renderer.
+
+## Choose a quality
+
+Give a preset to `game_quality`, and give the quality to `PlayParameters`:
+
+```mojo
+from extensions.village.play import PlayParameters
+from extensions.village.quality import LOW, game_quality
+
+var parameters = PlayParameters(game_quality(LOW))
+```
+
+On the command line, give the preset after the window's size:
+
+```sh
+mojo run -I . examples/village_walk.mojo --play 1920 1080 low
+```
+
+| Setting | `LOW` | `MEDIUM` | `HIGH` | `ULTRA` |
+|---|---|---|---|---|
+| `render_scale` | A third | A half | Two thirds | One |
+| `plants` | `FEWEST_PLANTS` | `FEWER_PLANTS` | `MANY_PLANTS` | `ALL_PLANTS` |
+| `grass_wind_every` | 4 frames | 2 frames | 1 frame | 1 frame |
+| `sky_step` | 8 pixels | 4 pixels | 2 pixels | 1 pixel |
+| `water_step` | 8 pixels | 2 pixels | 2 pixels | 1 pixel |
+| `water_refresh_every` | 4 frames | 2 frames | 1 frame | 1 frame |
+| `animal_coarseness` | 3 | 2 | 1.5 | 1 |
+| `shadows` | `CACHED_SHADOWS` | `CACHED_SHADOWS` | `CACHED_SHADOWS` | `FULL_SHADOWS` |
+| `shadow_size` | 1,024 | 2,048 | 2,048 | 4,096 |
+
+You can change each setting alone. `GameQuality.check` refuses a value out of range:
+
+```mojo
+var quality = game_quality(LOW)
+quality.render_scale = 0.5
+quality.shadows = FULL_SHADOWS
+quality.check()
+```
+
+## The settings
+
+- **`render_scale`** is the share of the window's width and height that the frame is drawn at, from a quarter to one. `upscale_into` stretches the frame to the window, bilinear.
+- **`plants`** sets how many leaves and blades grow near the camera. `planted` also draws the ground, the mountains and the canyon's wall more coarsely. `ALL_PLANTS` keeps the still picture's meadow.
+- **`grass_wind_every`** sets how often a cluster of grass grows again for the wind. A cluster grows again when its level changes, too. Zero keeps the grass still.
+- **`sky_step`** is the step between two samples of the sky, from 1 to 32 pixels.
+- **`water_step`** is the step between two shaded samples of the pond's water, from 1 to 64 pixels. The pixels between are mixed from the four samples round them.
+- **`water_refresh_every`** sets how many frames share one ocean surface and its caustics. From two frames, one frame finds the next surface and the next frame finds its caustics.
+- **`animal_coarseness`** multiplies the cell of each animal's mesh, from 1 to 8. A coarser animal has fewer triangles.
+- **`shadows`** and **`shadow_size`** set how the sun's shadows are drawn. See [Shadows](#shadows).
+
+## Measure a frame
+
+```sh
+mojo run -I . bench/village_game_bench.mojo low 1920 1080 240
+```
+
+The bench walks a scripted player through the village. It prints the median, the 95th percentile and the slowest time of each stage, as JSON. These are the times on the four-core host that the project tests on:
+
+| Preset | Frame size | Median frame | 95th percentile | Median frames a second |
+|---|---|---|---|---|
+| `LOW` | 640 by 360 | 25.6 ms | 34.2 ms | 39 |
+| `MEDIUM` | 960 by 540 | 119 ms | 151 ms | 8.4 |
+
+`GameRenderer.timings` holds the time of each stage of the last frame, in milliseconds. The stages are the shadow maps, the gathering, the vertices, the setup, the bins, the raster, the sky and the resolve.
+
+## How a frame is drawn
+
+1. **The geometry is read once.** Each geometry is copied into flat arrays the first time it is drawn. `GeometryStore.replace` gives a geometry a new generation, and the renderer reads it again then.
+2. **The light is found at the vertices.** Each vertex keeps its ambient and sky light apart from its sun light. The fog veils both at the vertex.
+3. **The triangles are binned into tiles.** Each triangle is clipped at the near plane and culled by its facing and its bounds. It is listed in each 64-pixel tile it touches.
+4. **Each tile is drawn on its own core, sixteen pixels at a time.** The raster writes only the depth and the triangle's number. A pixel that is drawn over ten times costs ten depth tests and one shading.
+5. **Each tile is resolved.** A pixel's triangle gives its light, and its shadow is looked up. An empty pixel shows the sky. The light is tone mapped and encoded as sRGB bytes.
+
+The pond's water is composed into the frame before it is stretched, because the water needs the depth.
+
+## Shadows
+
+| Mode | What is drawn |
+|---|---|
+| `NO_SHADOWS` | No shadow. |
+| `STILL_SHADOWS` | One map of the still casters, drawn once. The moving casters cast no shadow. |
+| `CACHED_SHADOWS` | The still map, drawn once, and a small map round `focus` of the moving casters, drawn each frame. |
+| `FULL_SHADOWS` | Both maps, drawn each frame. The swaying trees' shadows sway too. |
+
+`set_moving` names the moving nodes, such as the people and the animals. `refresh_shadows` draws the still map again at the next frame. A pixel takes the darker of the two maps, with a 2 by 2 filter.
+
+## What it draws
+
+- `scene.meshes` and `scene.skinned_meshes`, opaque.
+- `BASIC`, `LAMBERT`, `PHONG`, `STANDARD` and `PHYSICAL` materials. A standard or a physical material is lit as a Lambert one.
+- Vertex colors, a color, an emissive color, and a map read at each vertex.
+- A node program, only as a `GameShading` registered for it says. It can light a back face as its front, read a baked sun and sky, and sway in the wind.
+- Ambient, hemisphere and directional lights. The cascades of one sun count once.
+- Exponential squared fog, or no fog.
+- A color or a cube background.
+
+The renderer refuses other materials, a second hemisphere light, a second sun, and point and spot lights.
+
+## Why it agrees with `Renderer`
+
+The two renderers share the ACES curve, the fog and the sRGB encoding through `render/game_math.mojo`. Both scale each light by three.js's `RECIPROCAL_PI`. A flat floor in the parity tests is within two levels of a byte in each channel.
+
+The two renderers differ in one way. `GameRenderer` lights each vertex and mixes the light across the triangle. `Renderer` lights each pixel. A curved surface and a highlight are therefore less exact in a game frame.
+
+## Limits
+
+- The renderer draws no transparent or alpha-tested surface.
+- A map is read at the vertices, so a map's detail between the vertices is lost.
+- The frame is drawn on the CPU. There is no GPU path for the game renderer yet.

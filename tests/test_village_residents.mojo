@@ -220,6 +220,11 @@ def test_residents_that_cannot_be_built_are_refused() raises:
     p.rest = Duration(-1.0, SECOND)
     with assert_raises(contains="rest"):
         p.check()
+    for coarseness in [Float64(0.5), Float64(9)]:
+        p = _small()
+        p.animal_coarseness = coarseness
+        with assert_raises(contains="coarseness"):
+            p.check()
 
 
 def test_a_body_stands_where_its_character_stands_and_plays_its_stance() raises:

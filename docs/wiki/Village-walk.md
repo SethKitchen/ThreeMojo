@@ -12,10 +12,10 @@ The game needs an X11 window. Linux has one. Windows under WSL 2 with WSLg and m
 
 ```sh
 mojo run -I . examples/village_walk.mojo --play
-mojo run -I . examples/village_walk.mojo --play 640 360
+mojo run -I . examples/village_walk.mojo --play 1280 720 medium
 ```
 
-The window is 480 by 270 pixels by default. Give a width and a height for a different size. The game reads every gamepad on the machine, and the keyboard:
+The window is 1920 by 1080 pixels by default. Give a width and a height for a different size. After the size, give a quality: `low`, `medium`, `high` or `ultra`. The default is `low`. See [Game renderer](Game-renderer). The game reads every gamepad on the machine, and the keyboard:
 
 | Control | Gamepad | Keyboard |
 |---|---|---|
@@ -27,7 +27,7 @@ The window is 480 by 270 pixels by default. Give a width and a height for a diff
 
 The buttons are named by position, as SDL names them. The south button is A on an Xbox controller and the cross on a PlayStation controller.
 
-The game builds for about 25 seconds before the window opens. On a four-core Linux host, a frame at 480 by 270 takes about 3 seconds on the CPU. The game moves by the time each frame takes. So the player crosses the village at a walking pace, in large steps.
+The game builds for about 15 seconds before the window opens. On a four-core Linux host, the `low` quality draws about 39 frames a second at 1920 by 1080 on the CPU. The game moves by the time each frame takes. So a slow frame moves the player as far as many quick frames do.
 
 The game prints the frames a second to the standard error.
 
@@ -36,25 +36,30 @@ The game prints the frames a second to the standard error.
 ```mojo
 from core.assets import Assets
 from core.scene import Scene
-from extensions.vegetation.meadow import meadow_renderer
 from extensions.village.character import MoveInput
 from extensions.village.play import PlayParameters, VillageGame
+from extensions.village.quality import LOW, game_quality
 from extensions.water.pebbles import pebble_bed
 from render.jpeg import decode
+from renderers.renderer import Renderer
 from std.pathlib import Path
 from units.si import SECOND, Duration
 
-var renderer = meadow_renderer(480, 270)
+var painter = Renderer(64, 64)
 var assets = Assets()
 var scene = Scene()
 var bed = pebble_bed(decode(Path("assets/pebbles.jpg").read_bytes()))
-var game = VillageGame(scene, assets, renderer, PlayParameters(), bed^, None)
+var parameters = PlayParameters(game_quality(LOW))
+var game = VillageGame(
+    scene, assets, painter, parameters, bed^, None, 1920, 1080
+)
 var ahead = MoveInput(1, 0, 0, 0, False, False)
 _ = game.tick(scene, assets, ahead, Duration(0.1, SECOND))
-var image = game.render(renderer, scene, assets)
+game.render(scene, assets)
+var image = game.window.pixels.copy()
 ```
 
-`tick` runs one frame of the game. Call it once each frame with the frame's input and its time. Then call `render`.
+`tick` runs one frame of the game. Call it once each frame with the frame's input and its time. Then call `render`. `render` draws the frame into `window`, the window's size. The meadow paints its sky with `painter` once, when the game is built.
 
 To read a gamepad, give its `Gamepad` to `gamepad_input`. To read the keyboard, give the held keys to `keyboard_input`. `combined` adds two inputs:
 
@@ -84,7 +89,8 @@ var input = combined(gamepad_input(pad), keyboard_input(keys, shift))
 | `character.mojo` | `Stance`, `MoveInput`, `Obstacle`, `CharacterParameters`, `Character`, `lot_push` and `obstacle_push`. |
 | `pad_input.mojo` | `stick`, `gamepad_input`, `keyboard_input` and `combined`. |
 | `residents.mojo` | `Body`, `Route`, `wander_route`, `Villager`, `Herd`, `ResidentsParameters`, `Flipbook` and `Residents`. |
-| `play.mojo` | `play_village`, `default_residents`, `PlayParameters`, `tree_obstacles` and `VillageGame`. |
+| `play.mojo` | `default_residents`, `PlayParameters`, `tree_obstacles` and `VillageGame`. |
+| `quality.mojo` | `QualityPreset`, `PlantDetail`, `GameQuality`, `game_quality` and `planted`. See [Game renderer](Game-renderer). |
 
 ## The character
 
@@ -153,19 +159,19 @@ Each resident walks a `Route`. It walks to a point, rests there for 3 seconds, a
 
 ## The lighter village
 
-`play_village` changes the default village so a frame draws in about 3 seconds instead of 20:
+`planted` changes the default village to the quality's plant detail. This table compares the default village with `FEWEST_PLANTS`, the `low` detail:
 
-| Part | Default village | Game village |
+| Part | Default village | `FEWEST_PLANTS` |
 |---|---|---|
-| Tree leaves | Every leaf to 40 meters | 35 percent to 20 meters, then cards |
-| Grass | 700 blades a square meter, to 85 meters | 200 blades a square meter, to 40 meters |
-| Ground litter | 160,000 tries | 20,000 tries |
-| Ground mesh | 512 cells on a side | 128 cells on a side |
+| Tree leaves | Every leaf to 40 meters | Cards of 8 percent of the leaves to 20 meters, and fewer past that |
+| Grass | 700 blades a square meter, to 85 meters | 120 blades a square meter, to 30 meters |
+| Ground litter | 160,000 tries | 8,000 tries |
+| Ground mesh | 512 cells on a side | 96 cells on a side |
 | Sky and water textures | 512 and 256 texels | 256 and 64 texels |
 
 ## Limits
 
-- The renderer draws on the CPU. A frame takes seconds, not milliseconds.
+- The game renderer lights each vertex, not each pixel. See [Game renderer](Game-renderer#why-it-agrees-with-renderer).
 - The people have no clothes. The game humanoid has none.
 - The characters do not swim. Deep water stops them.
 - Residents do not bump into each other. Each resident bumps into the trees and the player.

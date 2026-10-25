@@ -80,6 +80,7 @@
   - [Why grass is drawn in clusters](Why-grass-is-drawn-in-clusters)
 - [Village](Village)
   - [Village walk](Village-walk)
+  - [Game renderer](Game-renderer)
 - [Streamline](Streamline)
 - [Animals](Animals)
   - [Animal anatomy](Animal-anatomy)
