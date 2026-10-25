@@ -362,6 +362,84 @@ def test_progress_is_visible_before_the_child_continues() raises:
         raise Error(ran.output + ran.errors)
 
 
+def test_a_bad_branch_is_not_rewritten_as_false() raises:
+    """An invalid branch fails the capture and is not stored as false."""
+    var mojo = tool_mojo()
+    var ran = run_program(
+        [
+            "sh",
+            "-c",
+            "dir=$(mktemp -d); cat > \"$dir/probe.py\" << 'PY'\nimport"
+            " sys\nsys.stderr.write('COVLINE:m:4\\nCOVBRANCH:m:4:T\\nCOVBRANCH:m:4:garbage\\n')\nPY\nsh"
+            " tools/tool.sh "
+            + shell_quote(mojo)
+            + ' coverage_io capture --out "$dir/out" --err "$dir/err.gz" --'
+            ' python3 "$dir/probe.py" > "$dir/tool.out" 2> "$dir/tool.err"\n'
+            "status=$?\n"
+            "echo STATUS $status\n"
+            'if [ -f "$dir/err.gz" ]; then gzip -dc "$dir/err.gz"; fi\n'
+            'cat "$dir/tool.out" "$dir/tool.err"\n',
+        ],
+        20.0,
+        merge_errors=False,
+    )
+    assert_true(ran.output.find("STATUS 0\n") < 0)
+    assert_true(ran.output.find("COVBRANCH:m:4:F") < 0)
+    assert_true(ran.output.find("Malformed branch outcome") >= 0)
+
+
+def test_a_failed_suite_keeps_its_diagnostics_and_status() raises:
+    """Exit 7 keeps the assertion text and the non-probe error line."""
+    var mojo = tool_mojo()
+    var ran = run_program(
+        [
+            "sh",
+            "-c",
+            "dir=$(mktemp -d); cat > \"$dir/probe.py\" << 'PY'\n"
+            "import sys\n"
+            "sys.stdout.write('failed assertion\\n')\n"
+            "sys.stderr.write('COVLINE:m:1\\nerror detail\\n')\n"
+            "raise SystemExit(7)\n"
+            "PY\n"
+            "sh tools/tool.sh "
+            + shell_quote(mojo)
+            + ' coverage_io capture --out "$dir/out" --err "$dir/err.gz" --'
+            ' python3 "$dir/probe.py" > "$dir/tool.out"\n'
+            "status=$?\n"
+            "echo STATUS $status\n"
+            'printf "FILE %s" "$(cat "$dir/out")"\n'
+            'cat "$dir/tool.out"\n',
+        ],
+        20.0,
+        merge_errors=False,
+    )
+    if ran.status != 0:
+        raise Error(ran.output + ran.errors)
+    assert_true(ran.output.find("STATUS 7") >= 0)
+    assert_true(ran.output.find("FILE failed assertion") >= 0)
+    assert_true(ran.output.find("failed assertion") >= 0)
+    assert_true(ran.output.find("error detail") >= 0)
+
+
+def test_a_failing_reporter_returns_its_status() raises:
+    """A reporter that exits 3 is not turned into a replay success."""
+    var mojo = tool_mojo()
+    var ran = run_program(
+        [
+            "sh",
+            "-c",
+            "dir=$(mktemp -d); printf 'valid\\n' | gzip -n -1 >"
+            ' "$dir/a.txt.gz"; sh tools/tool.sh '
+            + shell_quote(mojo)
+            + ' coverage_io report --capture-dir "$dir" -- python3 -c'
+            " 'raise SystemExit(3)'",
+        ],
+        20.0,
+        merge_errors=False,
+    )
+    assert_equal(ran.status, 3)
+
+
 def test_usage_exits_2() raises:
     var ran = run_program(
         ["sh", "tools/tool.sh", tool_mojo(), "coverage_io"],

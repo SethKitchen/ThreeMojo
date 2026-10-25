@@ -219,6 +219,59 @@ def test_the_cache_is_bounded_and_a_cold_window_bypasses() raises:
     assert_true(window.bypassing)
 
 
+def test_a_bad_branch_writes_nothing_and_repeats_stay_bounded() raises:
+    """A legacy or invalid branch adds no hit, and repeats do not grow."""
+    var legacy = Reducer()
+    with assert_raises(contains="Legacy compound"):
+        legacy.feed("COVBRANCH:m:4.0:T\n")
+    assert_equal(legacy.output, "")
+    assert_equal(len(legacy.evaluations), 0)
+    assert_equal(len(legacy.payloads), 0)
+    var states = List[String]()
+    states.append("")
+    states.append("garbage")
+    states.append("t")
+    states.append("False")
+    states.append("T:extra")
+    var probes = List[String]()
+    probes.append("m:4")
+    probes.append("m:4.0")
+    for state in states:
+        for probe in probes:
+            var reducer = Reducer()
+            with assert_raises(contains="Malformed branch outcome"):
+                reducer.feed("COVBRANCH:" + probe + ":" + state + "\n")
+            assert_equal(reducer.output, "")
+            assert_equal(len(reducer.payloads), 0)
+            assert_equal(len(reducer.evaluations), 0)
+    var bounded = Reducer()
+    var index = 0
+    while index < 10000:
+        bounded.feed("COVLINE:m:4.1:T\n")
+        bounded.feed("COVEVAL2:m:4:F:F-;\n")
+        bounded.feed("COVEVAL2:m:4:F:TF;\n")
+        index += 1
+    assert_equal(
+        bounded.output,
+        "COVLINE:m:4.1:T\nCOVEVAL2:m:4:F:F-;\nCOVEVAL2:m:4:F:TF;\n",
+    )
+    assert_equal(len(bounded.evaluations), 2)
+    assert_equal(len(bounded.payloads), 1)
+    var repeated = Reducer()
+    var copy = 0
+    while copy < 10000:
+        repeated.feed("COVLINE:m:1\n")
+        repeated.feed("COVLINE:m:2.0:T\n")
+        repeated.feed("COVLINE:m:2:T\n")
+        repeated.feed("COVEVAL2:m:2:T:T-;\n")
+        copy += 1
+    repeated.feed("0")
+    assert_equal(
+        repeated.output,
+        "COVLINE:m:1\nCOVLINE:m:2.0:T\nCOVLINE:m:2:T\nCOVEVAL2:m:2:T:T-;\n0",
+    )
+
+
 def test_a_capture_keeps_reduced_records_and_a_signal_status() raises:
     """Repeated probes are stored once, and SIGTERM is 128 plus the signal."""
     var mojo = tool_mojo()
