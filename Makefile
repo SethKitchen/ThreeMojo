@@ -633,7 +633,7 @@ else
 	@[ "$(words $(COVERED))" -eq "$(words $(sort $(COVERED)))" ] || \
 	  { echo "Coverage requires distinct source identities."; exit 1; }
 	@for f in $(sort $(COVERED)); do mkdir -p "$(COV_DIR)/$$(dirname $$f)"; done
-	@python3 tools/coverage_loop_proofs.py begin --root . --build $(COV_DIR) \
+	@$(TOOL) coverage_loop_begin --root . --build $(COV_DIR) \
 	  --compiler=$(call quote,$(TOOLCHAIN)) --flags=$(call quote,$(MOJOFLAGS)) \
 	  --mojo=$(call quote,$(MOJO)) --sources $(sort $(COVERED))
 	@$(call run,$(MOJO) run $(MOJOFLAGS) coverage/build_cli.mojo \
