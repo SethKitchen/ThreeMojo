@@ -179,6 +179,11 @@ The grouped caller keeps the prepaid fallback.
 The support call keeps the same ideal and the actual witness.
 A changed memo or a changed caller is refused.
 
+Mojo checks the Sum2 guard pin.
+The pin keys, schema, and lineage hashes stay fixed.
+The live helper keeps the pinned token graph.
+A changed pin or a changed helper is refused.
+
 ## Candidate certificate
 
 A certificate contains a stored incumbent point and its road parameter.
