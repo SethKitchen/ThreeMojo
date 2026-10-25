@@ -11,6 +11,7 @@ from std.testing import TestSuite, assert_equal, assert_true
 from tests._border_pin_predecessor import restored_border_pins
 from tests._geometry_predecessor import restored_geometry
 from tests._winner_pin_predecessor import (
+    restored_dispatch_winner,
     restored_domain_winner,
     restored_winner_pins,
 )
@@ -96,8 +97,15 @@ def test_live_consumers_restore_their_winner_pins() raises:
                             assert_equal(
                                 sha256_hex(domain.as_bytes()), expected
                             )
+                        elif name == _DISPATCH:
+                            var dispatch = restored_dispatch_winner(
+                                border_texts[border]
+                            )
+                            assert_equal(
+                                sha256_hex(dispatch.as_bytes()), expected
+                            )
                         else:
-                            assert_true(name == _ROUNDED or name == _DISPATCH)
+                            assert_true(name == _ROUNDED)
                 elif sha256_hex(Path(name).read_bytes()) == expected:
                     direct += 1
         index += 1
@@ -125,6 +133,12 @@ def test_a_changed_winner_pin_is_refused() raises:
     var domain = restored_domain_winner(border_texts[domain_at])
     assert_true(
         sha256_hex((domain + "\n").as_bytes()) != sha256_hex(domain.as_bytes())
+    )
+    var dispatch_at = _find(border_paths, _DISPATCH)
+    var dispatch = restored_dispatch_winner(border_texts[dispatch_at])
+    assert_true(
+        sha256_hex((dispatch + "\n").as_bytes())
+        != sha256_hex(dispatch.as_bytes())
     )
 
 

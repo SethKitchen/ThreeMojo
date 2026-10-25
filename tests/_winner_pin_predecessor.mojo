@@ -2920,3 +2920,96 @@ def restored_domain_winner(text: String) raises -> String:
         "extensions/carla/spiral_domain_proof.mojo",
     )
     return restored
+
+
+def _lines_31(
+    mut starts: List[Int], mut stops: List[Int], mut befores: List[String]
+):
+    """Fill one reviewed line-edit table, highest line first.
+
+    Args:
+        starts: The 0-based start lines.
+        stops: The exclusive end lines.
+        befores: The predecessor lines for each span.
+    """
+    starts.append(46)
+    stops.append(62)
+    befores.append(
+        "    var word = bitcast[DType.uint64](start)\n    for i in range(3):"
+        "\n        var bits = word + UInt64(i)\n        if bits >= UInt64(0x7"
+        "FF0000000000000):\n            return None\n        var cut = bitcas"
+        "t[DType.float64](bits)\n        var before = bitcast[DType.float64]("
+        "bits - UInt64(1))\n        if _sample_dispatch_predicate(\n         "
+        "   origin, length, local, cut\n        ) and not _sample_dispatch_pr"
+        "edicate(origin, length, local, before):\n            return cut\n   "
+        " return None\n"
+    )
+    starts.append(7)
+    stops.append(10)
+    befores.append(
+        "A cut is admitted only after its actual stored subtraction/clamp pre"
+        "dicate\nis true and its immediate predecessor's predicate is false. "
+        "The short probe\nis optional; all unsupported or unbracketed cases r"
+        "etain the original solver.\n"
+    )
+
+
+def _lines_32(
+    mut starts: List[Int], mut stops: List[Int], mut befores: List[String]
+):
+    """Fill one reviewed line-edit table, highest line first.
+
+    Args:
+        starts: The 0-based start lines.
+        stops: The exclusive end lines.
+        befores: The predecessor lines for each span.
+    """
+    starts.append(130)
+    stops.append(132)
+    befores.append("        if station <= low or station > high:\n")
+    starts.append(123)
+    stops.append(124)
+    befores.append(
+        "        if threshold_at < 1 or threshold_at >= len(geometry.samples)"
+        " - 1:\n            return None\n"
+    )
+
+
+def restored_dispatch_winner(text: String) raises -> String:
+    """Restore the sample-dispatch winner pin from its border text.
+
+    Args:
+        text: The border pin for `extensions/carla/curve_sample_dispatch.mojo`.
+
+    Returns:
+        The winner pin source.
+
+    Raises:
+        Error: The border text or the restored pin changed.
+    """
+    _require(
+        text,
+        "91ede65bbc39ac57ca54239513b462d3c71e90cacd085b8bafb2bff514767a86",
+        "extensions/carla/curve_sample_dispatch.mojo",
+    )
+    var starts = List[Int]()
+    var stops = List[Int]()
+    var befores = List[String]()
+    _lines_31(starts, stops, befores)
+    var mid = _apply(text, starts, stops, befores)
+    _require(
+        mid,
+        "ee6f220ae3d8f5b2192abc63f993d1f1375528e2b60cec78544de8c9eb11d259",
+        "extensions/carla/curve_sample_dispatch.mojo",
+    )
+    starts.clear()
+    stops.clear()
+    befores.clear()
+    _lines_32(starts, stops, befores)
+    var restored = _apply(mid, starts, stops, befores)
+    _require(
+        restored,
+        "2a74be6de0d0a35f2b17f60280747e42f91c083ebb922ded0ae0b13febe55631",
+        "extensions/carla/curve_sample_dispatch.mojo",
+    )
+    return restored
