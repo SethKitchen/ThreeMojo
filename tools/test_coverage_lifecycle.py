@@ -718,7 +718,7 @@ time.sleep(30)
         recipe = make[make.index('coverage-capture:\n'):make.index('\ncoverage-report:')]
         self.assertIn('coverage_group --seconds $(COV_BUDGET) --', recipe)
         self.assertNotIn('alarm shift', recipe)
-        self.assertEqual(recipe.count('tools/coverage_io.py capture'), 1)
+        self.assertEqual(recipe.count('$(TOOL) coverage_io capture'), 1)
 
 
 class PhaseSidecarTests(unittest.TestCase):

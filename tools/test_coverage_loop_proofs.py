@@ -675,6 +675,23 @@ class ProofBindingTests(unittest.TestCase):
         with gzip.open(capture, 'rb') as stream:
             self.assertEqual(stream.read(), b'COVLINE:module:2:T\n')
 
+    def test_mojo_capture_binds_the_same_reduced_bytes(self):
+        capture, output = self.hits / 'test_fixture.txt.gz', self.hits / 'test_fixture.out'
+        repo = Path(__file__).resolve().parent.parent
+        mojo = repo / '.venv/bin/mojo'
+        if not mojo.is_file():
+            mojo = 'mojo'
+        result = subprocess.run(
+            ['sh', str(repo / 'tools/tool.sh'), str(mojo), 'coverage_io', 'capture',
+             '--out', str(output), '--err', str(capture),
+             '--loop-proof', str(self.receipt), '--loop-proof-root', str(self.root),
+             '--', *self.command()],
+            cwd=repo, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        loops.verify_captures([capture], self.envelope)
+        with gzip.open(capture, 'rb') as stream:
+            self.assertEqual(stream.read(), b'COVLINE:module:2:T\n')
+
     def test_phase_sidecar_cannot_replace_capture_or_success_receipt(self):
         capture, output = self.hits/'test_fixture.txt.gz', self.hits/'test_fixture.out'
         sidecar = self.hits/'test_fixture.phases.jsonl'

@@ -600,6 +600,31 @@ def report_with_loop_proofs(command, captures, *, root, build, compiler, flags,
         return status
 
 
+def preflight(command, out_path, err_path, loop_proof, source_root):
+    """Validate one capture before it starts, and drop any old receipt."""
+    coverage_loop_proofs.capture_receipt_path(err_path).unlink(missing_ok=True)
+    proof = coverage_loop_proofs.read_receipt(loop_proof)
+    _check_proof_consumer(proof)
+    proof_root = Path(source_root) if source_root is not None else Path(__file__).resolve().parent.parent
+    proof_build = Path(loop_proof).resolve().parent
+    coverage_loop_proofs.check_capture_inputs(proof, proof_root, proof_build)
+    coverage_loop_proofs.validate_capture_command(
+        command, proof, proof_root, proof_build, err_path, out_path)
+
+
+def bind_finished(command, out_path, err_path, loop_proof, source_root):
+    """Bind a successful capture to the receipt that authorized it."""
+    proof_root = Path(source_root) if source_root is not None else Path(__file__).resolve().parent.parent
+    proof_build = Path(loop_proof).resolve().parent
+    proof = coverage_loop_proofs.read_receipt(loop_proof)
+    _check_proof_consumer(proof)
+    if coverage_loop_proofs.read_receipt(loop_proof) != proof:
+        raise ValueError('Loop-proof binding changed during capture')
+    coverage_loop_proofs.check_capture_inputs(proof, proof_root, proof_build)
+    coverage_loop_proofs.bind_capture(err_path, out_path, proof, command,
+                                      root=proof_root, build=proof_build)
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     commands = parser.add_subparsers(dest='mode', required=True)
@@ -612,6 +637,18 @@ def main():
     run.add_argument('--loop-proof', type=Path)
     run.add_argument('--loop-proof-root', type=Path)
     run.add_argument('command', nargs=argparse.REMAINDER)
+    check = commands.add_parser('preflight')
+    check.add_argument('--out', type=Path, required=True)
+    check.add_argument('--err', type=Path, required=True)
+    check.add_argument('--loop-proof', type=Path, required=True)
+    check.add_argument('--loop-proof-root', type=Path)
+    check.add_argument('command', nargs=argparse.REMAINDER)
+    finish = commands.add_parser('bind')
+    finish.add_argument('--out', type=Path, required=True)
+    finish.add_argument('--err', type=Path, required=True)
+    finish.add_argument('--loop-proof', type=Path, required=True)
+    finish.add_argument('--loop-proof-root', type=Path)
+    finish.add_argument('command', nargs=argparse.REMAINDER)
     read = commands.add_parser('report')
     read.add_argument('--capture-dir', type=Path, required=True)
     read.add_argument('--loop-proof-root', type=Path)
@@ -630,6 +667,16 @@ def main():
         parser.error('a command must follow --')
     if args.mode == 'group':
         return group(command, args.seconds)
+    if args.mode in ('preflight', 'bind'):
+        try:
+            if args.mode == 'preflight':
+                preflight(command, args.out, args.err, args.loop_proof, args.loop_proof_root)
+            else:
+                bind_finished(command, args.out, args.err, args.loop_proof, args.loop_proof_root)
+        except Exception as error:
+            print('coverage_io: ' + str(error), file=sys.stderr)
+            return 1
+        return 0
     if args.mode == 'capture':
         return capture(command, args.out, args.err, loop_proof=args.loop_proof,
                        source_root=args.loop_proof_root)

@@ -129,7 +129,9 @@ Some portable features remain partial, including [GLSL shaders](https://github.c
 ### Project tools
 
 <details>
-<summary>Implemented: 61</summary>
+<summary>Implemented: 62</summary>
+
+- [x] [Coverage capture](https://github.com/SethKitchen/ThreeMojo/wiki/Coverage-tool#capture-scheduling-and-progress): `tools/coverage_io.mojo` captures one suite and keeps each probe record once [#761](https://github.com/SethKitchen/ThreeMojo/issues/761)
 
 - [x] [Compiled coverage profile](https://github.com/SethKitchen/ThreeMojo/wiki/Coverage-tool#capture-scheduling-and-progress): `tools/coverage_hit_aot.mojo` builds a compiled capture and keeps the source path [#761](https://github.com/SethKitchen/ThreeMojo/issues/761)
 

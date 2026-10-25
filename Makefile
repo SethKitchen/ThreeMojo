@@ -674,7 +674,7 @@ ifneq ($(strip $(COVERED)),)
 	  | $(TOOL) coverage_group --seconds $(COV_BUDGET) -- \
 	      xargs -P $(JOBS) -I {} \
 	      sh -c 'name=$$(basename "$$1" .mojo); \
-	             python3 tools/coverage_io.py capture \
+	             $(TOOL) coverage_io capture \
 	               --out "$(COV_DIR)/hits/$$name.out" \
 	               --err "$(COV_DIR)/hits/$$name.txt.gz" \
 	               --loop-proof "$(COV_DIR)/loop-proofs.json" --loop-proof-root . -- \
