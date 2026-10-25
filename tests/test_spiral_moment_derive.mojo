@@ -6,11 +6,12 @@
 """Stored spiral-moment endpoints are derived in Mojo."""
 
 from std.pathlib import Path
-from std.testing import TestSuite, assert_equal, assert_raises
+from std.testing import TestSuite, assert_equal, assert_raises, assert_true
 
 from tools.spiral_moment_derive import (
     derive_endpoints,
     stored_coefficient_words,
+    stored_scalar_word,
 )
 from tools.spiral_moment_table_text import canonical_table, parse_table
 from tools._bigint import BigInt
@@ -199,6 +200,117 @@ def test_rounded_node_sums_match_their_pins() raises:
     var half = total / Fraction(2)
     var zeroth = Fraction(1) + Fraction.of(BigInt(3), BigInt.power_of_two(55))
     assert_equal(half == zeroth, True)
+
+
+def _words(source: String, name: String, size: Int) raises -> List[UInt64]:
+    """Return one stored array.
+
+    Args:
+        source: The module source.
+        name: The array name.
+        size: The declared length.
+
+    Returns:
+        The stored words.
+
+    Raises:
+        Error: The array is refused.
+    """
+    return stored_coefficient_words(source, name, size)
+
+
+def _expect(words: List[UInt64], values: List[UInt64]) raises:
+    """Require `words` to equal `values`.
+
+    Args:
+        words: The stored words.
+        values: The pin words.
+    """
+    assert_equal(len(words), len(values))
+    var index = 0
+    while index < len(words):
+        assert_equal(words[index], values[index])
+        index += 1
+
+
+def test_stored_scalar_and_array_words_match_their_pins() raises:
+    """The four scalars and the four arrays match their stored words."""
+    var trig = Path(_TRIG).read_text()
+    var geometry = Path(_GEOMETRY).read_text()
+    assert_equal(
+        stored_scalar_word(trig, "_PHASE_LIMIT"), UInt64(0x4130000000000000)
+    )
+    assert_equal(
+        stored_scalar_word(trig, "_INV_HALF_PI"), UInt64(0x3FE45F306DC9C883)
+    )
+    assert_equal(
+        stored_scalar_word(trig, "_HALF_PI_HIGH"), UInt64(0x3FF921FB54400000)
+    )
+    assert_equal(
+        stored_scalar_word(trig, "_HALF_PI_LOW"), UInt64(0x3DD0B4611A626331)
+    )
+    var nodes = _words(geometry, "_GL_NODES", 5)
+    var node_pins = List[UInt64]()
+    node_pins.append(UInt64(0xBFECFF6CE0533A69))
+    node_pins.append(UInt64(0xBFE13B23FD99B705))
+    node_pins.append(UInt64(0))
+    node_pins.append(UInt64(0x3FE13B23FD99B705))
+    node_pins.append(UInt64(0x3FECFF6CE0533A69))
+    _expect(nodes, node_pins)
+    var weights = _words(geometry, "_GL_WEIGHTS", 5)
+    var weight_pins = List[UInt64]()
+    weight_pins.append(UInt64(0x3FCE539EC36E038D))
+    weight_pins.append(UInt64(0x3FDEA1DA25AE415C))
+    weight_pins.append(UInt64(0x3FE23456789ABCDF))
+    weight_pins.append(UInt64(0x3FDEA1DA25AE415C))
+    weight_pins.append(UInt64(0x3FCE539EC36E038D))
+    _expect(weights, weight_pins)
+    var cosine = _words(trig, "_COS_COEFFICIENTS", 11)
+    var cosine_pins = List[UInt64]()
+    cosine_pins.append(UInt64(0x3FF0000000000000))
+    cosine_pins.append(UInt64(0xBFE0000000000000))
+    cosine_pins.append(UInt64(0x3FA5555555555555))
+    cosine_pins.append(UInt64(0xBF56C16C16C16C17))
+    cosine_pins.append(UInt64(0x3EFA01A01A01A01A))
+    cosine_pins.append(UInt64(0xBE927E4FB7789F5C))
+    cosine_pins.append(UInt64(0x3E21EED8EFF8D898))
+    cosine_pins.append(UInt64(0xBDA93974A8C07C9D))
+    cosine_pins.append(UInt64(0x3D2AE7F3E733B81F))
+    cosine_pins.append(UInt64(0xBCA6827863B97D97))
+    cosine_pins.append(UInt64(0x3C1E542BA4020225))
+    _expect(cosine, cosine_pins)
+    var sine = _words(trig, "_SIN_COEFFICIENTS", 11)
+    var sine_pins = List[UInt64]()
+    sine_pins.append(UInt64(0x3FF0000000000000))
+    sine_pins.append(UInt64(0xBFC5555555555555))
+    sine_pins.append(UInt64(0x3F81111111111111))
+    sine_pins.append(UInt64(0xBF2A01A01A01A01A))
+    sine_pins.append(UInt64(0x3EC71DE3A556C734))
+    sine_pins.append(UInt64(0xBE5AE64567F544E4))
+    sine_pins.append(UInt64(0x3DE6124613A86D09))
+    sine_pins.append(UInt64(0xBD6AE7F3E733B81F))
+    sine_pins.append(UInt64(0x3CE952C77030AD4A))
+    sine_pins.append(UInt64(0xBC62F49B46814157))
+    sine_pins.append(UInt64(0x3BD71B8EF6DCF572))
+    _expect(sine, sine_pins)
+
+
+def test_a_changed_scalar_word_is_refused() raises:
+    """A longer spelling keeps the word, and a change or a suffix does not."""
+    var trig = Path(_TRIG).read_text()
+    var original = stored_scalar_word(trig, "_PHASE_LIMIT")
+    var longer = trig.replace("Float64(1048576.0)", "Float64(1048576.000)")
+    assert_equal(stored_scalar_word(longer, "_PHASE_LIMIT"), original)
+    var changed = trig.replace("Float64(1048576.0)", "Float64(1048577.0)")
+    assert_true(stored_scalar_word(changed, "_PHASE_LIMIT") != original)
+    var suffix = trig.replace(
+        "Float64(1048576.0)", "Float64(1048576.0) + Float64(1.0)"
+    )
+    with assert_raises(contains="unsupported scalar"):
+        _ = stored_scalar_word(suffix, "_PHASE_LIMIT")
+    var second = trig + "\ncomptime _PHASE_LIMIT = Float64(1.0)\n"
+    with assert_raises(contains="ambiguous scalar"):
+        _ = stored_scalar_word(second, "_PHASE_LIMIT")
 
 
 def main() raises:

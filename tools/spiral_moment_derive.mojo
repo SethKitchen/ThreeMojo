@@ -456,6 +456,85 @@ def stored_coefficient_words(
     return words^
 
 
+def _scalar_word_at(
+    raw: Span[UInt8, _], start: Int, name: String
+) raises -> Tuple[Int, UInt64]:
+    """Return one scalar word at a `comptime` declaration.
+
+    Args:
+        raw: The masked source.
+        start: The `comptime` identifier.
+        name: The scalar name.
+
+    Returns:
+        A status and a word. Status -1 is another name, -2 is a bad
+        declaration of `name`, and 0 is a stored word.
+
+    Raises:
+        Error: The literal is not a decimal number.
+    """
+    var index = _skip_gaps(raw, start + 8)
+    if not _word_at(raw, index, name):
+        return (-1, UInt64(0))
+    index = _skip_gaps(raw, index + name.byte_length())
+    index = _eat(raw, index, "=")
+    if index < 0:
+        return (-2, UInt64(0))
+    index = _eat(raw, _skip_gaps(raw, index), "Float64")
+    if index < 0:
+        return (-2, UInt64(0))
+    index = _eat(raw, _skip_gaps(raw, index), "(")
+    if index < 0:
+        return (-2, UInt64(0))
+    index = _skip_space(raw, index)
+    var literal = _read_literal(raw, index)
+    index = _skip_space(raw, literal[1])
+    if index >= len(raw) or raw[index] != 41:
+        return (-2, UInt64(0))
+    if not _suffix_clear(raw, index + 1):
+        return (-2, UInt64(0))
+    return (0, decimal_word(literal[0]))
+
+
+def stored_scalar_word(source: String, name: String) raises -> UInt64:
+    """Return the stored binary64 word of one scalar constant.
+
+    Args:
+        source: Mojo source.
+        name: The `comptime` scalar name.
+
+    Returns:
+        The nearest encoding of the decimal literal. `-0.0` keeps its sign.
+
+    Raises:
+        Error: The scalar is missing, repeated, or not one `Float64` literal.
+    """
+    var masked = _mask(source)
+    var raw = masked.as_bytes()
+    var hits = 0
+    var bad = False
+    var word = UInt64(0)
+    var index = 0
+    while index < len(raw):
+        if _word_at(raw, index, "comptime"):
+            var parsed = _scalar_word_at(raw, index, name)
+            if parsed[0] == -2:
+                bad = True
+            elif parsed[0] == 0:
+                hits += 1
+                word = parsed[1]
+            index += 8
+            continue
+        index += 1
+    if hits > 1 or (hits == 1 and bad):
+        _fail("missing or ambiguous scalar: " + name)
+    if hits == 0:
+        if bad:
+            _fail("unsupported scalar declaration: " + name)
+        _fail("missing or ambiguous scalar: " + name)
+    return word
+
+
 def _moment(sum: Fraction, index: Int, count: Int) raises -> Fraction:
     """Return one normalized prefix moment.
 
