@@ -240,6 +240,12 @@ The waypoint and the section length keep the SI helpers.
 The other tokens match the pin.
 A moved method or a changed body is refused.
 
+Mojo checks the live closest-lane certificate.
+The method stays on Map.
+The walk keeps the candidate deviation skip.
+The other tokens match the pin.
+A removed skip or a changed body is refused.
+
 ## Candidate certificate
 
 A certificate contains a stored incumbent point and its road parameter.
