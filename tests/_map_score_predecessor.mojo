@@ -969,3 +969,398 @@ def score_endpoint(text: String) raises -> String:
             " reconstruct fifth seed endpoint"
         ),
     )
+
+
+def _score_spans(
+    mut names: List[String], mut befores: List[String], mut afters: List[String]
+):
+    """Fill the reviewed score spans in forward order.
+
+    Args:
+        names: The span names.
+        befores: The predecessor fragments.
+        afters: The successor fragments.
+    """
+    names.append("extract_finite_winner_score")
+    befores.append("def _try_winner_seed(\n")
+    afters.append(
+        "def _winner_seed_update_score(\n    point: Array[Float64, 3],\n   "
+        " incumbent: Array[Float64, 3],\n    query: Array[Float64, 3],\n   "
+        " scale: Float64,\n) raises -> Tuple[Bool, Float64]:\n    # Borrowed"
+        " points; the caller supplies a positive finite scale and an\n    #"
+        " established FP environment. The second result is unusable on"
+        " refusal.\n    if _wide_point_order(point, incumbent, query) < 0:\n   "
+        "     var score = _refinement_square[3](point, query, scale)\n       "
+        " if not score.is_finite():\n            return (False, 0.0)\n       "
+        " return (True, score.high)\n    return (False, 0.0)\n\n\ndef"
+        " _try_winner_seed(\n"
+    )
+    names.append("call_finite_winner_score")
+    befores.append(
+        "            if _wide_point_order(point, certificate.point, query) <"
+        " 0:\n                var score = _refinement_square[3](\n             "
+        "       point, query, certificate.scale\n                )\n           "
+        "     if not score.is_finite():\n                    continue\n        "
+        "        certificate.s = s\n                certificate.point ="
+        " point^\n                certificate.upper = score.high\n             "
+        "   improved = True\n"
+    )
+    afters.append(
+        "            var update = _winner_seed_update_score(\n               "
+        " point, certificate.point, query, certificate.scale\n            )\n  "
+        "          if update[0]:\n                certificate.s = s\n          "
+        "      certificate.point = point^\n                certificate.upper ="
+        " update[1]\n                improved = True\n"
+    )
+
+
+def _frontier_spans(
+    mut names: List[String], mut befores: List[String], mut afters: List[String]
+):
+    """Fill the reviewed frontier spans in forward order.
+
+    Args:
+        names: The span names.
+        befores: The predecessor fragments.
+        afters: The successor fragments.
+    """
+    names.append("bounded_winner_frontier_guard")
+    befores.append(
+        "        or target_reference <= 0\n        or len(winner.cells) >"
+        " 16372\n        or target_cells < 0\n"
+    )
+    afters.append(
+        "        or target_reference <= 0\n        or target_cells < 0\n"
+    )
+    names.append("saturating_winner_frontier_reservation")
+    befores.append("    var winner_followup = len(winner.cells) + 12\n")
+    afters.append(
+        "    var winner_followup = min(len(winner.cells), 16373) + 12\n"
+    )
+
+
+def _support_spans(
+    mut names: List[String], mut befores: List[String], mut afters: List[String]
+):
+    """Fill the reviewed support spans in forward order.
+
+    Args:
+        names: The span names.
+        befores: The predecessor fragments.
+        afters: The successor fragments.
+    """
+    names.append("nonnegative_stored_difference_error")
+    befores.append(
+        "    if not _seed_exact_interval(d.value) or not (\n        0.0 <="
+        " d.error and d.error < 1.0\n    ):\n"
+    )
+    afters.append(
+        "    if not _seed_exact_interval(d.value) or not d.error < 1.0:\n"
+    )
+    names.append("bounded_finite_rounded_distance")
+    befores.append(
+        "    if (\n        not rounded.is_finite()\n        or rounded.low <="
+        " 0.0\n        or rounded.high >= geometry.length\n    ):\n"
+    )
+    afters.append(
+        "    if rounded.low <= 0.0 or rounded.high >= geometry.length:\n"
+    )
+    names.append("positive_finite_minimizer_support")
+    befores.append(
+        "    var support = _minimizer_support(\n        domain, center,"
+        " original_s, original_s, band_low, band_high\n    )\n    if (\n       "
+        " not support.is_finite()\n        or support.low <= 0.0\n        or"
+        " support.high < support.low\n    ):\n        return False\n"
+    )
+    afters.append(
+        "    var support = _minimizer_support(\n        domain, center,"
+        " original_s, original_s, band_low, band_high\n    )\n"
+    )
+
+
+def _optional_spans(
+    mut names: List[String], mut befores: List[String], mut afters: List[String]
+):
+    """Fill the reviewed optional spans in forward order.
+
+    Args:
+        names: The span names.
+        befores: The predecessor fragments.
+        afters: The successor fragments.
+    """
+    names.append("winner_global_term_refusal")
+    befores.append(
+        "    var terms_left = work.policy.max_terms - work.terms\n    if"
+        " winner_reference > terms_left // winner_units:\n        return"
+        " False\n    terms_left -= winner_units * winner_reference\n"
+    )
+    afters.append(
+        "    var terms_left = work.policy.max_terms - work.terms\n   "
+        " terms_left -= winner_units * winner_reference\n"
+    )
+    names.append("prepaid_retry_step_refusal")
+    befores.append(
+        "    if not domain.first.is_finite() or not"
+        " domain.second.is_finite():\n        if min(work.max_total_steps,"
+        " work.policy.max_steps) - work.steps < 12:\n            return False\n"
+        "        # Separate admission preserves the two-setup smooth-root"
+        " path.\n"
+    )
+    afters.append(
+        "    if not domain.first.is_finite() or not"
+        " domain.second.is_finite():\n        # Separate admission preserves"
+        " the two-setup smooth-root path.\n"
+    )
+    names.append("retry_midpoint_enclosure")
+    befores.append(
+        "            if (\n                not isfinite(narrowed_low)\n        "
+        "        or not isfinite(narrowed_high)\n                or"
+        " narrowed_low > original_s\n                or narrowed_high <"
+        " original_s\n                or narrowed_low >= narrowed_high\n       "
+        "         or (narrowed_low == band_low and narrowed_high =="
+        " band_high)\n            ):\n"
+    )
+    afters.append(
+        "            if narrowed_low >= narrowed_high or (\n               "
+        " narrowed_low == band_low and narrowed_high == band_high\n           "
+        " ):\n"
+    )
+
+
+def _count_spans(
+    mut names: List[String], mut befores: List[String], mut afters: List[String]
+):
+    """Fill the reviewed count spans in forward order.
+
+    Args:
+        names: The span names.
+        befores: The predecessor fragments.
+        afters: The successor fragments.
+    """
+    names.append("center_count_refusal")
+    befores.append(
+        "    certificate.terms += reference\n    var center_reference ="
+        " _reference_work(road, original_s, original_s)\n    if"
+        " center_reference <= 0 or center_reference > reference:\n       "
+        " return False\n    var center = _expansion_distance_jet("
+    )
+    afters.append(
+        "    certificate.terms += reference\n    var center ="
+        " _expansion_distance_jet("
+    )
+    names.append("retry_count_refusal")
+    befores.append(
+        "            band_low = narrowed_low\n            band_high ="
+        " narrowed_high\n            var retry_reference ="
+        " _reference_work(road, band_low, band_high)\n            if"
+        " retry_reference <= 0 or retry_reference > reference:\n               "
+        " return False\n            domain = _scaled_point_distance_jet("
+    )
+    afters.append(
+        "            band_low = narrowed_low\n            band_high ="
+        " narrowed_high\n            domain = _scaled_point_distance_jet("
+    )
+    names.append("proposal_count_refusal")
+    befores.append(
+        "            var point_work = _reference_work(road, s, s)\n           "
+        " if point_work <= 0 or point_work > reference:\n                return"
+        " improved\n            work.charge(0, point_work, node_cost)"
+    )
+    afters.append(
+        "            var point_work = _reference_work(road, s, s)\n           "
+        " work.charge(0, point_work, node_cost)"
+    )
+
+
+comptime _FRONTIER_SHA256 = (
+    "37dcfb47476001ba8633a2c9dbb78b2d5f83bc069a0c4551d32ca6fdbb4c60bf"
+)
+"""The file digest of the frontier endpoint."""
+comptime _SUPPORT_SHA256 = (
+    "b9acf04cb54a84b89928739ea9c4e1098843149b6e926cf043b3333a1cdff518"
+)
+"""The file digest of the support endpoint."""
+comptime _OPTIONAL_SHA256 = (
+    "e4498a5180821de4a1611cbe3c0751bda36d2e80b84c3c53caac2ca1ca0a367c"
+)
+"""The file digest of the optional-guard endpoint."""
+comptime _COUNT_SHA256 = (
+    "9e29cdd57fc37ffa9dc9c09ed9b263ddb7ced5781f938ff13d7fd9b2c6c997a5"
+)
+"""The file digest of the count successor."""
+comptime _HISTORICAL_SHA256 = (
+    "52dd32213d64275be94ba714bc9b6a57c28f5ba1303525ef1a1aac20b4743c07"
+)
+"""The file digest of the historical Map."""
+
+
+def frontier_endpoint(text: String) raises -> String:
+    """Reverse the two score spans.
+
+    Args:
+        text: The score endpoint.
+
+    Returns:
+        The frontier endpoint.
+
+    Raises:
+        Error: The source, a span, or the frontier bytes differ.
+    """
+    var names = List[String]()
+    var befores = List[String]()
+    var afters = List[String]()
+    _score_spans(names, befores, afters)
+    return _reverse_spans(
+        text,
+        names,
+        befores,
+        afters,
+        _SCORE_SHA256,
+        _FRONTIER_SHA256,
+        "reviewed seed-count successor: unknown score-helper successor",
+        (
+            "reviewed seed-count successor: missing or ambiguous score-helper"
+            " inverse: "
+        ),
+        (
+            "reviewed seed-count successor: score-helper inverse does not"
+            " reconstruct frontier endpoint"
+        ),
+    )
+
+
+def support_endpoint(text: String) raises -> String:
+    """Reverse the two frontier spans.
+
+    Args:
+        text: The frontier endpoint.
+
+    Returns:
+        The support endpoint.
+
+    Raises:
+        Error: The source, a span, or the support bytes differ.
+    """
+    var names = List[String]()
+    var befores = List[String]()
+    var afters = List[String]()
+    _frontier_spans(names, befores, afters)
+    return _reverse_spans(
+        text,
+        names,
+        befores,
+        afters,
+        _FRONTIER_SHA256,
+        _SUPPORT_SHA256,
+        "reviewed seed-count successor: unknown frontier-reservation successor",
+        (
+            "reviewed seed-count successor: missing or ambiguous"
+            " frontier-reservation inverse: "
+        ),
+        (
+            "reviewed seed-count successor: frontier inverse does not"
+            " reconstruct separate support endpoint"
+        ),
+    )
+
+
+def optional_endpoint(text: String) raises -> String:
+    """Reverse the three support spans.
+
+    Args:
+        text: The support endpoint.
+
+    Returns:
+        The optional-guard endpoint.
+
+    Raises:
+        Error: The source, a span, or the optional bytes differ.
+    """
+    var names = List[String]()
+    var befores = List[String]()
+    var afters = List[String]()
+    _support_spans(names, befores, afters)
+    return _reverse_spans(
+        text,
+        names,
+        befores,
+        afters,
+        _SUPPORT_SHA256,
+        _OPTIONAL_SHA256,
+        "reviewed seed-count successor: unknown support-guard successor",
+        (
+            "reviewed seed-count successor: missing or ambiguous support-guard"
+            " inverse: "
+        ),
+        (
+            "reviewed seed-count successor: support-guard inverse does not"
+            " reconstruct published optional source"
+        ),
+    )
+
+
+def count_endpoint(text: String) raises -> String:
+    """Reverse the three optional-guard spans.
+
+    Args:
+        text: The optional-guard endpoint.
+
+    Returns:
+        The count successor.
+
+    Raises:
+        Error: The source, a span, or the count bytes differ.
+    """
+    var names = List[String]()
+    var befores = List[String]()
+    var afters = List[String]()
+    _optional_spans(names, befores, afters)
+    return _reverse_spans(
+        text,
+        names,
+        befores,
+        afters,
+        _OPTIONAL_SHA256,
+        _COUNT_SHA256,
+        "reviewed seed-count successor: unknown optional-guard successor",
+        (
+            "reviewed seed-count successor: missing or ambiguous optional-guard"
+            " inverse: "
+        ),
+        (
+            "reviewed seed-count successor: optional-guard inverse does not"
+            " reconstruct prior count source"
+        ),
+    )
+
+
+def historical_map(text: String) raises -> String:
+    """Reverse the three count spans.
+
+    Args:
+        text: The count successor.
+
+    Returns:
+        The historical Map.
+
+    Raises:
+        Error: The source, a span, or the historical bytes differ.
+    """
+    var names = List[String]()
+    var befores = List[String]()
+    var afters = List[String]()
+    _count_spans(names, befores, afters)
+    return _reverse_spans(
+        text,
+        names,
+        befores,
+        afters,
+        _COUNT_SHA256,
+        _HISTORICAL_SHA256,
+        "reviewed seed-count successor: unknown complete after Map",
+        "reviewed seed-count successor: missing or ambiguous inverse anchor: ",
+        (
+            "reviewed seed-count successor: inverse does not reconstruct"
+            " historical Map"
+        ),
+    )
