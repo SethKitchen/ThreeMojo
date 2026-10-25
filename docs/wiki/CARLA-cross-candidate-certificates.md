@@ -283,6 +283,12 @@ Four directed-point calls keep the SI constructor.
 Restoring those calls matches the pinned use digest.
 A bare constructor or a changed use is refused.
 
+Mojo checks the live bound inventories.
+The curve-bounds file keeps two reviewed spans.
+The junction-bounds file keeps seven reviewed spans.
+Restoring those spans matches the pinned use digests.
+A moved span or a changed use is refused.
+
 ## Candidate certificate
 
 A certificate contains a stored incumbent point and its road parameter.
