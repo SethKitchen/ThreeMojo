@@ -375,6 +375,25 @@ def test_a_mesh_without_a_skin_wears_its_blend_shapes() raises:
     assert_equal(smiled.target.index, 0)
 
 
+def test_an_inverse_bind_that_rounds_off_the_last_row_is_kept_affine() raises:
+    # A real bind from a Mixamo file. Its Float32 inverse ends at
+    # (0, 0, 0, 0.99999994) before the loader sets the last row.
+    var knee = String("a: 1,0,0,0,0,1,0,0,0,0,1,0,1,1,0,1")
+    var real = String(
+        "a: 0.9999999999999968,-6.7238402738571e-08,4.426546278275548e-08,0,"
+        "7.211829798733264e-08,0.9925921726345991,-0.12149394562907734,0,"
+        "-3.57684930297053e-08,0.12149394562908016,0.9925921726346006,0,"
+        "-1.2848989892782086e-05,133.57119840012686,-1.1555181104463805,1"
+    )
+    var scene = Scene()
+    var assets = Assets()
+    _ = load(swap(rig(), knee, real), scene, assets)
+    ref bind = scene.skinned_meshes[0].skeleton.bones[1].inverse_bind
+    assert_true(bind.is_affine())
+    assert_almost_equal(bind.elements[5], Float32(0.9925922), atol=1e-6)
+    assert_almost_equal(bind.elements[13], Float32(-132.7), atol=0.1)
+
+
 def test_no_bind_pose_binds_at_the_identity() raises:
     var text = swap(
         rig(),
@@ -404,6 +423,15 @@ def test_refused_skins_and_shapes() raises:
     refused(
         swap(text, link, "*15 {\n\t\t\ta: 1,0,0,0,0,1,0,0,0,0,1,0,1,1,0"),
         "needs sixteen numbers",
+    )
+    # A bind that is not affine, or has no inverse, makes no skeleton.
+    refused(
+        swap(text, link, "*16 {\n\t\t\ta: 1,0,0,1,0,1,0,0,0,0,1,0,1,1,0,1"),
+        "inverse bind must be affine",
+    )
+    refused(
+        swap(text, link, "*16 {\n\t\t\ta: 0,0,0,0,0,0,0,0,0,0,0,0,1,1,0,1"),
+        "inverse bind must be affine",
     )
     refused(
         swap(

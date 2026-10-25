@@ -133,6 +133,7 @@ Look something up.
 - [Genome](Genome)
 - [Game humanoid](Game-humanoid)
 - [Humanoid fidelity](Humanoid-fidelity)
+- [Mixamo animations](Mixamo-animations)
 - [Audio-aligned game faces](Audio-aligned-game-faces)
 - [Converted assets](Converted-assets)
 - [Mesh quality](Mesh-quality)
