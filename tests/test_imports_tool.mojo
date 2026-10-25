@@ -38,6 +38,7 @@ from tools._imports import (
     affected_set,
     closure,
     defines_main,
+    dirname,
     entry_directories,
     imported_names,
     is_documentation,
@@ -582,6 +583,47 @@ def test_nested_helpers_remain_dependencies() raises:
         "tests/test_other.mojo",
     ]:
         assert_true(path in selected, path)
+    tree.close()
+
+
+def _census(
+    root: String, start: String, known: Set[String]
+) raises -> List[String]:
+    """Return the files `start` reaches, resolving each import from its file."""
+    var found = Set[String]()
+    var pending = List[String]()
+    pending.append(start)
+    while len(pending) > 0:
+        var name = pending.pop()
+        if name in found:
+            continue
+        if not name in known:
+            raise Error("missing maintained dependency: " + name)
+        found.add(name)
+        var entries = List[String]()
+        var directory = dirname(name)
+        if directory.byte_length() > 0:
+            entries.append(directory)
+        var text = Path(root + "/" + name).read_text()
+        for imported in imported_names(text):
+            for path in resolve(imported, known, entries):
+                pending.append(path)
+    return sorted_set(found)
+
+
+def test_a_changed_import_keeps_the_live_dependency_closure() raises:
+    """A maintained module's closure follows the import it has now."""
+    var tree = Tree()
+    var module = "extensions/carla/map.mojo"
+    tree.write(module, "import dependency\n")
+    tree.write("dependency.mojo", "def helper():\n    pass\n")
+    var first = _census(tree.root, module, tree.known())
+    var again = _census(tree.root, module, tree.known())
+    _same(first, ["dependency.mojo", module])
+    _same(again, first)
+    tree.write(module, "import other\n")
+    tree.write("other.mojo", "def other():\n    pass\n")
+    _same(_census(tree.root, module, tree.known()), [module, "other.mojo"])
     tree.close()
 
 
