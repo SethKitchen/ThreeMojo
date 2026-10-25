@@ -122,6 +122,12 @@ The union body stays one return.
 The sampled reference keeps the guard and the sampled tail.
 A changed dispatcher or a changed tail is refused.
 
+Mojo checks the lane bound projection.
+The cached-proof refusal is removed.
+Arc and line move under the geometry flag.
+The sampled call replaces the proof dispatch.
+A changed layout or a changed body is refused.
+
 ## Candidate certificate
 
 A certificate contains a stored incumbent point and its road parameter.

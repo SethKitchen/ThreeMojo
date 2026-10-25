@@ -8,7 +8,8 @@
 Nine helpers match their renamed jet sources. The blend copy also drops
 the two derivative intersections. The constant heading copy replaces zero
 derivatives with an unknown interval. The sampled reference keeps the
-guard and the sampled tail.
+guard and the sampled tail. The lane bound drops the proof refusal and
+keeps the sampled call.
 """
 
 from tests._python_tokens import _tokenize
@@ -670,3 +671,144 @@ def sampled_reference_projection(bounds: String, value: String) raises:
         index += 1
     if not same:
         _fail("sampled helper diverged: _reference_sampled_value")
+
+
+def _decorated(kinds: List[Int], texts: List[String], at: Int) -> Bool:
+    """Return whether a decorator precedes the `def` at `at`.
+
+    Args:
+        kinds: The token kinds.
+        texts: The token texts.
+        at: The `def` token.
+
+    Returns:
+        True when an `@` decorator is attached to that function.
+    """
+    var index = at - 1
+    while index >= 0:
+        if kinds[index] == _DEDENT:
+            return False
+        if texts[index] == "@":
+            return True
+        index -= 1
+    return False
+
+
+def _lane_heads() -> List[String]:
+    """Return the lane dispatcher statement prefixes.
+
+    Returns:
+        The prefixes after the cached-proof refusal, in order.
+    """
+    var heads = List[String]()
+    heads.append("geometry_at =")
+    heads.append("elevation_at =")
+    heads.append("offset_at =")
+    heads.append("if geometry_at < 0 or elevation_at < 0 or offset_at < 0")
+    heads.append("if (")
+    heads.append("s =")
+    heads.append("offset =")
+    heads.append("lanes =")
+    heads.append("lane_id =")
+    heads.append("negative =")
+    heads.append("sign =")
+    heads.append("if lane_id . value != 0")
+    heads.append("offset =")
+    heads.append("record =")
+    heads.append("if capture")
+    heads.append("if record . geometry . kind == ARC")
+    heads.append("if record . geometry . kind == LINE")
+    heads.append("reused :")
+    heads.append("if not capture")
+    heads.append("point :")
+    heads.append("if reused")
+    heads.append("elif require_reuse")
+    heads.append("else :")
+    heads.append("trig =")
+    heads.append("return")
+    return heads^
+
+
+def sampled_lane_projection(bounds: String, value: String) raises:
+    """Require the lane bound projection from the jet proof.
+
+    The cached-proof refusal is removed. Arc and line move under the
+    geometry flag. The proof dispatch becomes one sampled call.
+
+    Args:
+        bounds: The `curve_bounds` module.
+        value: The `lane_value_bounds` module.
+
+    Raises:
+        Error: The refusal moved, the dispatcher changed, the capture
+        bookkeeping changed, or the value helper diverged.
+    """
+    var bound_kinds = List[Int]()
+    var bound_texts = List[String]()
+    var value_kinds = List[Int]()
+    var value_texts = List[String]()
+    _load(bounds, bound_kinds, bound_texts)
+    _load(value, value_kinds, value_texts)
+    var jet = _body_statements(
+        bound_kinds, bound_texts, "_lane_jet_model_proof", True
+    )
+    var refusal = (
+        "if proof and not _sum2_supported_environment ( ) : return "
+        "_unknown_value_point ( )"
+    )
+    if jet[0] != refusal:
+        _fail("cached-proof environment refusal changed or moved")
+    var heads = _lane_heads()
+    var layout = len(jet) == len(heads) + 1
+    var index = 0
+    while layout and index < len(heads):
+        if not _prefix(jet[index + 1], heads[index]):
+            layout = False
+        index += 1
+    if not layout:
+        _fail("complete lane dispatcher layout changed")
+    var capture = (
+        "if capture : captured . record_at = geometry_at captured . low = "
+        "low captured . high = high"
+    )
+    if jet[15] != capture:
+        _fail("capture bookkeeping projection changed")
+    var live = _body_statements(
+        value_kinds, value_texts, "_lane_value_bound_impl", False
+    )
+    var span = _span(value_kinds, value_texts, "_lane_value_bound_impl")
+    var signature = (
+        "def _lane_value_bound_impl [ all_geometry : Bool ] ( road : Road "
+        ", section : Int , lane : Int , low : Float64 , high : Float64 ) "
+        "-> Tuple [ _ValueJet , _ValueJet , _ValueJet ] :"
+    )
+    var whole = _normalize(value_kinds, value_texts, span[0], span[1], False)
+    var point = (
+        "point = _reference_sampled_value ( record . geometry , "
+        "_stored_difference ( s , _ValueJet . constant ( record . s ) ) , "
+        "translation )"
+    )
+    var translation = "translation = Vector3 ( 0 , 0 , 0 )"
+    var same = not _decorated(value_kinds, value_texts, span[0])
+    if same:
+        same = _prefix(whole, signature)
+    if same:
+        same = len(live) == 19
+    if same:
+        same = live[0] == translation
+    index = 1
+    while same and index <= 14:
+        if live[index] != jet[index]:
+            same = False
+        index += 1
+    if same:
+        var wrapped = "if all_geometry : " + jet[16] + " " + jet[17]
+        same = live[15] == wrapped
+    if same:
+        same = live[16] == point
+    if same:
+        same = live[17] == jet[24]
+    if same:
+        same = live[18] == jet[25]
+    if not same:
+        _fail("sampled helper diverged: _lane_value_bound_impl")

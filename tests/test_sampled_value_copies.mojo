@@ -10,6 +10,7 @@ from std.testing import TestSuite, assert_raises
 
 from tools.sampled_value_copies import (
     sampled_constant_heading,
+    sampled_lane_projection,
     sampled_reference_projection,
     sampled_value_copies,
 )
@@ -248,6 +249,184 @@ def test_a_changed_reference_projection_is_refused() raises:
                 "geometry.kind != POLY3",
                 "geometry.kind != LINE",
             ),
+        )
+
+
+def test_the_lane_projection_holds() raises:
+    """The lane bound keeps the sampled call and drops the proof refusal."""
+    var bounds = _bounds()
+    var value = _value()
+    sampled_lane_projection(bounds, value)
+    sampled_lane_projection(
+        bounds.replace(
+            "    if proof and not _sum2_supported_environment():\n",
+            (
+                "    # reviewed\n    if proof and not"
+                " _sum2_supported_environment():\n"
+            ),
+        ),
+        value.replace(
+            (
+                ") raises -> Tuple[_ValueJet, _ValueJet, _ValueJet]:\n"
+                "    var translation = Vector3(0, 0, 0)\n"
+            ),
+            (
+                ") raises -> Tuple[_ValueJet, _ValueJet, _ValueJet]:\n"
+                "    # reviewed\n"
+                "    var translation = Vector3(0, 0, 0)\n"
+            ),
+        ),
+    )
+    var marker = "def _lane_value_bound_impl["
+    var at = value.find(marker)
+    sampled_lane_projection(bounds, String(value[byte=at:]))
+
+
+def test_a_changed_lane_projection_is_refused() raises:
+    """A changed refusal, layout, capture, or value helper is refused."""
+    var bounds = _bounds()
+    var value = _value()
+    with assert_raises(
+        contains="cached-proof environment refusal changed or moved"
+    ):
+        sampled_lane_projection(
+            bounds.replace(
+                "    if proof and not _sum2_supported_environment():\n",
+                "    if proof and _sum2_supported_environment():\n",
+            ),
+            value,
+        )
+    with assert_raises(contains="complete lane dispatcher layout changed"):
+        sampled_lane_projection(
+            bounds.replace(
+                "    var geometry_at = info_index(road.info.geometries, low)\n",
+                "    var geometry_ix = info_index(road.info.geometries, low)\n",
+            ),
+            value,
+        )
+    with assert_raises(contains="complete lane dispatcher layout changed"):
+        sampled_lane_projection(
+            bounds.replace(
+                "        return _unknown_point()\n    var geometry_at",
+                (
+                    "        return _unknown_point()\n    var extra = 0\n   "
+                    " var geometry_at"
+                ),
+            ),
+            value,
+        )
+    with assert_raises(contains="capture bookkeeping projection changed"):
+        sampled_lane_projection(
+            bounds.replace(
+                "        captured.record_at = geometry_at\n",
+                "        captured.record_at = offset_at\n",
+            ),
+            value,
+        )
+    with assert_raises(
+        contains="sampled helper diverged: _lane_value_bound_impl"
+    ):
+        sampled_lane_projection(
+            bounds,
+            value.replace(
+                "    var translation = Vector3(0, 0, 0)\n",
+                "    var translation = Vector3(0, 0, 1)\n",
+            ),
+        )
+    with assert_raises(
+        contains="sampled helper diverged: _lane_value_bound_impl"
+    ):
+        sampled_lane_projection(
+            bounds,
+            value.replace(
+                "    all_geometry: Bool\n", "    all_geometry: Int\n"
+            ),
+        )
+    with assert_raises(
+        contains="sampled helper diverged: _lane_value_bound_impl"
+    ):
+        sampled_lane_projection(
+            bounds.replace(
+                (
+                    "        var arc = _arc_offset_jet(record.geometry, d, "
+                    "offset, translation)\n"
+                ),
+                (
+                    "        var arc = _arc_offset_jet(record.geometry, d, "
+                    "translation, translation)\n"
+                ),
+            ),
+            value,
+        )
+    with assert_raises(
+        contains="sampled helper diverged: _lane_value_bound_impl"
+    ):
+        sampled_lane_projection(
+            bounds,
+            value.replace(
+                "def _lane_value_bound_impl[",
+                "@staticmethod\ndef _lane_value_bound_impl[",
+            ),
+        )
+    with assert_raises(
+        contains="sampled helper diverged: _lane_value_bound_impl"
+    ):
+        sampled_lane_projection(
+            bounds,
+            value.replace(
+                "    var translation = Vector3(0, 0, 0)\n",
+                "    var translation = Vector3(0, 0, 0)\n    var extra = 0\n",
+            ),
+        )
+    with assert_raises(
+        contains="sampled helper diverged: _lane_value_bound_impl"
+    ):
+        sampled_lane_projection(
+            bounds,
+            value.replace(
+                "    var geometry_at = info_index(road.info.geometries, low)\n",
+                "    var geometry_ix = info_index(road.info.geometries, low)\n",
+            ),
+        )
+    with assert_raises(
+        contains="sampled helper diverged: _lane_value_bound_impl"
+    ):
+        sampled_lane_projection(
+            bounds,
+            value.replace(
+                "    var point = _reference_sampled_value(\n",
+                "    var point = _reference_sampled_other(\n",
+            ),
+        )
+    with assert_raises(
+        contains="sampled helper diverged: _lane_value_bound_impl"
+    ):
+        sampled_lane_projection(
+            bounds,
+            value.replace(
+                "    var trig = _sincos_expression(point[2])\n",
+                "    var trig = _sincos_expression(point[0])\n",
+            ),
+        )
+    with assert_raises(
+        contains="sampled helper diverged: _lane_value_bound_impl"
+    ):
+        sampled_lane_projection(
+            bounds,
+            value.replace(
+                "        point[0] + offset * trig[0],\n",
+                "        point[1] + offset * trig[0],\n",
+            ),
+        )
+    with assert_raises(
+        contains="missing or ambiguous function: _lane_jet_model_proof"
+    ):
+        sampled_lane_projection(
+            bounds.replace(
+                "def _lane_jet_model_proof[",
+                "def _lane_jet_model_other[",
+            ),
+            value,
         )
 
 
