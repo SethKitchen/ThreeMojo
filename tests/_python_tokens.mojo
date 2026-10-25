@@ -166,6 +166,42 @@ def _tokenize(
                         and data[index] <= 57
                     ):
                         index += 1
+                    if (
+                        index == mark + 1
+                        and data[mark] == 48
+                        and index < len(data)
+                    ):
+                        var base = data[index]
+                        var based = (
+                            base == 120
+                            or base == 88
+                            or base == 98
+                            or base == 66
+                            or base == 111
+                            or base == 79
+                        )
+                        if based:
+                            var end = index + 1
+                            while end < len(data):
+                                var digit = data[end]
+                                var hex_digit = (
+                                    (digit >= 48 and digit <= 57)
+                                    or (digit >= 65 and digit <= 70)
+                                    or (digit >= 97 and digit <= 102)
+                                )
+                                var ok = digit == 48 or digit == 49
+                                if base == 111 or base == 79:
+                                    ok = digit >= 48 and digit <= 55
+                                elif base == 120 or base == 88:
+                                    ok = hex_digit
+                                if not ok:
+                                    break
+                                end += 1
+                            if end > index + 1:
+                                index = end
+                                var prefixed = String(text[byte=mark:index])
+                                _push(kinds, texts, _NUMBER, prefixed^)
+                                continue
                 if (
                     index < len(data)
                     and data[index] == 46
@@ -180,8 +216,40 @@ def _tokenize(
                         and data[index] <= 57
                     ):
                         index += 1
+                if index < len(data) and (
+                    data[index] == 101 or data[index] == 69
+                ):
+                    var exponent = index + 1
+                    if exponent < len(data) and (
+                        data[exponent] == 43 or data[exponent] == 45
+                    ):
+                        exponent += 1
+                    if (
+                        exponent < len(data)
+                        and data[exponent] >= 48
+                        and data[exponent] <= 57
+                    ):
+                        index = exponent + 1
+                        while (
+                            index < len(data)
+                            and data[index] >= 48
+                            and data[index] <= 57
+                        ):
+                            index += 1
                 var number = String(text[byte=mark:index])
                 _push(kinds, texts, _NUMBER, number^)
+                continue
+            var three = String()
+            if index + 2 < len(data):
+                three = String(text[byte = index : index + 3])
+            if (
+                three == "**="
+                or three == "//="
+                or three == "<<="
+                or three == ">>="
+            ):
+                _push(kinds, texts, _OP, three^)
+                index += 3
                 continue
             var two = String()
             if index + 1 < len(data):
@@ -189,6 +257,15 @@ def _tokenize(
             if (
                 two == "!="
                 or two == "+="
+                or two == "-="
+                or two == "*="
+                or two == "/="
+                or two == "%="
+                or two == "&="
+                or two == "|="
+                or two == "^="
+                or two == "<<"
+                or two == ">>"
                 or two == "->"
                 or two == "<="
                 or two == ">="
