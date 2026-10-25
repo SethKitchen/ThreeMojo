@@ -792,6 +792,99 @@ def test_a_closed_standard_error_still_meets_the_deadline() raises:
         raise Error(ran.output + ran.errors)
 
 
+def test_a_stale_phase_file_is_replaced() raises:
+    var mojo = tool_mojo()
+    var ran = run_program(
+        [
+            "sh",
+            "-c",
+            "dir=$(mktemp -d); printf 'keep\\n' > \"$dir/keep\";"
+            + " printf 'old success\\n' > \"$dir/test_fixture.phases.jsonl\";"
+            + " sh tools/tool.sh "
+            + shell_quote(mojo)
+            + ' coverage_io capture --out "$dir/test_fixture.out"'
+            + ' --err "$dir/test_fixture.txt.gz" -- python3 -c'
+            + " 'raise SystemExit(0)' coverage_hit_aot --profile aot"
+            + ' >"$dir/tool.out"; status=$?;'
+            + ' test "$status" = 0 || exit 4;'
+            + ' test "$(cat "$dir/keep")" = keep || exit 5;'
+            + " grep -q 'old success' \"$dir/test_fixture.phases.jsonl\" &&"
+            " exit 6;"
+            + " python3 - \"$dir\" << 'PY'\n"
+            + "import json, pathlib, sys\n"
+            + "folder = pathlib.Path(sys.argv[1])\n"
+            + "header = json.loads((folder /"
+            " 'test_fixture.phases.jsonl').read_text())\n"
+            + "if header['phase'] != 'capture_header' or header['suite'] !="
+            " 'test_fixture':\n"
+            + "    raise SystemExit(header)\n"
+            + "if len(header['command_sha256']) != 64:\n"
+            + "    raise SystemExit(header['command_sha256'])\n"
+            + "print('STALE_OK')\n"
+            + "PY",
+        ],
+        20.0,
+        merge_errors=False,
+    )
+    if ran.status != 0:
+        raise Error(ran.output + ran.errors)
+    assert_true(ran.output.find("STALE_OK") >= 0)
+
+
+def test_an_ambient_phase_path_is_not_given_to_the_command() raises:
+    var mojo = tool_mojo()
+    var ran = run_program(
+        [
+            "sh",
+            "-c",
+            "dir=$(mktemp -d); printf 'old\\n' >"
+            ' "$dir/test_fixture.phases.jsonl";'
+            + " export THREEMOJO_COVERAGE_PHASES=do-not-forward;"
+            + " export THREEMOJO_COVERAGE_PHASES_DEVICE=1;"
+            + " export THREEMOJO_COVERAGE_PHASES_INODE=1;"
+            + " sh tools/tool.sh "
+            + shell_quote(mojo)
+            + ' coverage_io capture --out "$dir/test_fixture.out"'
+            + ' --err "$dir/test_fixture.txt.gz" -- sh -c'
+            + " 'printf %s \"$"
+            + "{THREEMOJO_COVERAGE_PHASES-UNSET}\"'"
+            + ' >"$dir/tool.out"; status=$?;'
+            + ' test "$status" = 0 || exit 4;'
+            + ' test "$(cat "$dir/test_fixture.out")" = UNSET || exit 5;'
+            + ' test ! -e "$dir/test_fixture.phases.jsonl" || exit 6;'
+            + ' test "${THREEMOJO_COVERAGE_PHASES-}" = do-not-forward ||'
+            " exit 7;"
+            + " echo AMBIENT_OK",
+        ],
+        20.0,
+        merge_errors=False,
+    )
+    if ran.status != 0:
+        raise Error(ran.output + ran.errors)
+    assert_true(ran.output.find("AMBIENT_OK") >= 0)
+
+
+def test_the_capture_recipe_uses_one_group_budget() raises:
+    var text = Path("Makefile").read_text()
+    var start = text.find("coverage-capture:\n")
+    var end = text.find("\ncoverage-report:")
+    assert_true(start >= 0 and end > start)
+    var recipe = String(text[byte=start:end])
+    assert_true(recipe.find("coverage_group --seconds $(COV_BUDGET) --") >= 0)
+    assert_equal(recipe.find("alarm shift"), -1)
+    var needle = "$(TOOL) coverage_io capture"
+    var count = 0
+    var rest = recipe
+    while True:
+        var at = rest.find(needle)
+        if at < 0:
+            break
+        count += 1
+        var next = String(rest[byte = at + needle.byte_length() :])
+        rest = next
+    assert_equal(count, 1)
+
+
 def test_usage_exits_2() raises:
     var ran = run_program(
         ["sh", "tools/tool.sh", tool_mojo(), "coverage_io"],
