@@ -19,7 +19,8 @@ writes a phase file and reports a missing finish record.
 Each capture creates a private temporary directory. Its parent is the
 resolved `TMPDIR` when that variable is set. The command sees the directory
 as `TMPDIR` and as `THREEMOJO_TEST_TMPDIR`. The compiler cache is inside
-the directory. The tool removes the directory after any outcome.
+the directory. The tool removes the directory after any outcome. An archive path
+that cannot be written stops the session.
 """
 
 from std.collections import Dict
@@ -412,6 +413,18 @@ def _open_output(path: String) raises -> Int:
     if fd < 0:
         raise Error("cannot open " + path + ": " + strerror(errno()))
     return fd
+
+
+def _require_archive(path: String) raises:
+    """Create or truncate the archive while the captured command is alive.
+
+    Args:
+        path: The `.txt.gz` path.
+
+    Raises:
+        Error: If the path cannot be written. A directory is refused.
+    """
+    Path(path).write_text("")
 
 
 def _gzip(text: String, destination: String) raises:
@@ -1997,6 +2010,7 @@ def _read_lines(
     suite: String,
     interval: Float64,
     hold: SignalHold,
+    err_path: String,
 ) raises -> Int:
     """Read the child's standard error until it ends or the deadline passes.
 
@@ -2009,13 +2023,15 @@ def _read_lines(
         suite: The capture stem, used in progress lines.
         interval: The seconds between running lines.
         hold: The blocked cancellation signals.
+        err_path: The archive. The first reduced line creates it.
 
     Returns:
         The child's status, 124 when the deadline wins, or 128 plus a signal.
 
     Raises:
-        Error: If a probe record is malformed or the wait fails. The session
-            is stopped before that error leaves this function.
+        Error: If a probe record is malformed, the archive cannot be
+            written, or the wait fails. The session is stopped before
+            that error leaves this function.
     """
     var poll = List[Int32](length=2, fill=0)
     var chunk = List[UInt8](length=4096, fill=0)
@@ -2023,6 +2039,8 @@ def _read_lines(
     var announced = False
     var next_progress = started + interval
     var pipe_open = True
+    var archive_ready = False
+    var before = 0
     try:
         while True:
             var number = take_signal(hold)
@@ -2098,14 +2116,21 @@ def _read_lines(
                 var line = String(pending[byte=:end])
                 var rest = String(pending[byte=end:])
                 pending = rest
+                before = reducer.output.byte_length()
                 reducer.feed(line)
+                if not archive_ready and reducer.output.byte_length() != before:
+                    _require_archive(err_path)
+                    archive_ready = True
                 if not announced and reducer.saw_probe:
                     announced = True
                     _progress(
                         suite, "first probe", started, reducer.records, True
                     )
         if pending.byte_length() > 0:
+            before = reducer.output.byte_length()
             reducer.feed(pending)
+            if not archive_ready and reducer.output.byte_length() != before:
+                _require_archive(err_path)
             if not announced and reducer.saw_probe:
                 _progress(suite, "first probe", started, reducer.records, True)
         if pipe_open:
@@ -2246,6 +2271,7 @@ def _capture(arguments: List[String], hold: SignalHold) raises -> Int:
                 suite,
                 interval,
                 hold,
+                err_path,
             )
             records = reducer.records
             saw_probe = reducer.saw_probe

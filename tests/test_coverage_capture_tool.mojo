@@ -978,6 +978,135 @@ def test_a_failed_phase_setup_keeps_a_bad_probe() raises:
     assert_true(ran.output.find("PARSER_OK") >= 0)
 
 
+def _worker_lines() -> String:
+    """Return shell that writes the sleeping child and grandchild."""
+    return (
+        "printf '%s\\n' 'import os, signal, subprocess, sys, time, pathlib' "
+        + "'root = pathlib.Path(sys.argv[1])' 'role = sys.argv[2]' "
+        + "'signal.signal(signal.SIGTERM, signal.SIG_IGN)' "
+        + "'(root / (role + \".pid\")).write_text(str(os.getpid()))' "
+        + "'if role == \"child\":' "
+        + "'    (root /"
+        ' "temporary").write_text(os.environ.get("THREEMOJO_TEST_TMPDIR",'
+        ' ""))\' '
+        + "'    subprocess.Popen([sys.executable, __file__, str(root),"
+        ' "grandchild"])\' '
+        + "'    while not (root / \"grandchild.pid\").exists():' "
+        + "'        time.sleep(0.01)' "
+        + "'    sys.stderr.write(\"COVLINE:m:1\\n\")' "
+        + "'    sys.stderr.flush()' "
+        + "'while True:' '    time.sleep(0.02)' "
+        + '> "$dir/worker.py"; '
+    )
+
+
+def _tree_check() -> String:
+    """Return shell that requires both descendants to be gone."""
+    return (
+        "python3 - \"$dir\" << 'PY'\n"
+        + "import os, sys\n"
+        + "folder = sys.argv[1]\n"
+        + "for name in ('child', 'grandchild'):\n"
+        + "    pid = int(open(folder + '/' + name + '.pid').read())\n"
+        + "    try:\n"
+        + "        os.kill(pid, 0)\n"
+        + "    except ProcessLookupError:\n"
+        + "        continue\n"
+        + "    stat = '/proc/%s/stat' % pid\n"
+        + "    if os.path.exists(stat):\n"
+        + "        text = open(stat).read().rpartition(') ')[2]\n"
+        + "        if text.startswith('Z '):\n"
+        + "            continue\n"
+        + "    raise SystemExit('live ' + name)\n"
+        + "temp = open(folder + '/temporary').read().strip()\n"
+        + "if temp and os.path.exists(temp):\n"
+        + "    raise SystemExit('temp ' + temp)\n"
+        + "PY\n"
+        + '[ "$?" = 0 ] || exit 6; '
+    )
+
+
+def test_an_archive_failure_stops_the_child_and_the_grandchild() raises:
+    """A directory archive stops the captured child and grandchild."""
+    var mojo = shell_quote(tool_mojo())
+    var ran = run_program(
+        [
+            "sh",
+            "-c",
+            "dir=$(mktemp -d); trap 'for name in child grandchild; do "
+            + 'if [ -f "$dir/$name.pid" ]; then pid=$(cat "$dir/$name.pid"); '
+            + 'kill -9 "$pid" 2>/dev/null; kill -9 -- "-$pid" 2>/dev/null; fi; '
+            + 'done; rm -rf "$dir"\' EXIT; '
+            + _worker_lines()
+            + 'mkdir "$dir/err.txt.gz"; '
+            + "sh tools/tool.sh "
+            + mojo
+            + ' coverage_io capture --out "$dir/out" --err "$dir/err.txt.gz" '
+            + '-- python3 "$dir/worker.py" "$dir" child '
+            + '> "$dir/tool.out" 2>"$dir/tool.err"; status=$?; '
+            + 'test "$status" = 1 || { echo "status $status"; '
+            + 'cat "$dir/tool.out" "$dir/tool.err"; exit 4; }; '
+            + "grep -E -q 'directory|Directory|EISDIR' \"$dir/tool.err\" || "
+            + '{ cat "$dir/tool.err"; exit 5; }; '
+            + _tree_check()
+            + "echo ARCHIVE_OK",
+        ],
+        4.0,
+        merge_errors=False,
+    )
+    if ran.status != 0:
+        raise Error(ran.output + ran.errors)
+    assert_true(ran.output.find("ARCHIVE_OK") >= 0)
+
+
+def test_a_slow_start_stays_outside_the_capture_budget() raises:
+    """Startup before the deadline does not consume the 0.6 second budget."""
+    var mojo = shell_quote(tool_mojo())
+    var ran = run_program(
+        [
+            "sh",
+            "-c",
+            "dir=$(mktemp -d); trap 'for name in holder child grandchild; do "
+            + 'if [ -f "$dir/$name.pid" ]; then pid=$(cat "$dir/$name.pid"); '
+            + 'kill -9 "$pid" 2>/dev/null; kill -9 -- "-$pid" 2>/dev/null; fi; '
+            + 'done; rm -rf "$dir"\' EXIT; '
+            + _worker_lines()
+            + '( sleep 0.7; : > "$dir/ready"; '
+            + 'while [ ! -f "$dir/deadline" ]; do sleep 0.01; done; '
+            + 'THREEMOJO_COVERAGE_DEADLINE=$(cat "$dir/deadline"); '
+            + "export THREEMOJO_COVERAGE_DEADLINE; "
+            + "sh tools/tool.sh "
+            + mojo
+            + ' coverage_io capture --out "$dir/out" --err "$dir/err.txt.gz" '
+            + '-- python3 "$dir/worker.py" "$dir" child '
+            + '> "$dir/progress" 2>"$dir/capture.err"; '
+            + 'echo $? > "$dir/status" ) & echo $! > "$dir/holder.pid"; '
+            + 'i=0; while [ ! -f "$dir/ready" ]; do i=$((i+1)); '
+            + 'if [ "$i" -gt 500 ]; then echo ready-timeout; exit 8; fi; '
+            + "sleep 0.01; done; "
+            + "python3 -c 'import time; print(repr(time.monotonic()+0.6))' "
+            + '> "$dir/deadline.tmp"; mv "$dir/deadline.tmp" "$dir/deadline"; '
+            + "start=$(python3 -c 'import time; print(time.monotonic())'); "
+            + 'i=0; while [ ! -f "$dir/status" ]; do i=$((i+1)); '
+            + 'if [ "$i" -gt 300 ]; then echo status-timeout; '
+            + 'cat "$dir/capture.err" "$dir/progress"; exit 9; fi; '
+            + "sleep 0.01; done; "
+            + 'test "$(cat "$dir/status")" = 124 || { echo "status '
+            + '$(cat "$dir/status")"; cat "$dir/capture.err"; exit 4; }; '
+            + "python3 -c 'import sys,time; "
+            + "raise SystemExit(0 if time.monotonic()-float(sys.argv[1]) < 2 "
+            + 'else 1)\' "$start" || exit 5; '
+            + _tree_check()
+            + "echo DEADLINE_OK",
+        ],
+        4.5,
+        merge_errors=False,
+    )
+    if ran.status != 0:
+        raise Error(ran.output + ran.errors)
+    assert_true(ran.output.find("DEADLINE_OK") >= 0)
+
+
 def test_usage_exits_2() raises:
     var ran = run_program(
         ["sh", "tools/tool.sh", tool_mojo(), "coverage_io"],

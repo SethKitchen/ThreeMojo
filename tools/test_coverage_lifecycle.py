@@ -18,90 +18,6 @@ from unittest.mock import Mock, call, patch
 import coverage_io
 
 
-WORKER = '''import os, pathlib, signal, subprocess, sys, time
-root = pathlib.Path(sys.argv[1])
-role, mode = sys.argv[2:4]
-signal.signal(signal.SIGTERM, signal.SIG_IGN)
-(root / (role + '.pid')).write_text(str(os.getpid()))
-if role == 'child':
-    (root / 'temporary').write_text(os.environ['THREEMOJO_TEST_TMPDIR'])
-    subprocess.Popen([sys.executable, __file__, str(root), 'grandchild', mode])
-    while not (root / 'grandchild.pid').exists():
-        time.sleep(0.01)
-    if mode == 'malformed':
-        sys.stderr.write('COVBRANCH:m:1.0:T\\n')
-    else:
-        sys.stderr.write('COVLINE:m:1\\n')
-    sys.stderr.flush()
-while True:
-    time.sleep(0.02)
-'''
-
-DRIVER = '''import pathlib, sys
-import coverage_io
-root = pathlib.Path(sys.argv[1])
-status = coverage_io.capture([sys.executable, str(root / 'worker.py'),
-                             str(root), 'child', sys.argv[2]],
-                            root / 'out', root / 'err.gz')
-(root / 'status').write_text(str(status))
-sys.exit(status)
-'''
-
-PREPARED_DRIVER = '''import contextlib, os, pathlib, signal, subprocess, sys, time
-from unittest.mock import Mock, call, patch
-import coverage_io
-root = pathlib.Path(sys.argv[1])
-parent = int(sys.argv[2]) if len(sys.argv) > 2 else os.getppid()
-if os.getppid() != parent:
-    raise RuntimeError('fixture parent exited before preparing capture')
-command = [sys.executable, str(root / 'worker.py'), str(root), 'child', 'valid']
-with contextlib.ExitStack() as scope:
-    environment = scope.enter_context(coverage_io.isolated_environment())
-    output = scope.enter_context(open(root / 'out', 'wb'))
-    child = subprocess.Popen(command, stdout=output, stderr=subprocess.PIPE,
-                             env=environment, start_new_session=True)
-    try:
-        owned = root / 'owned-child.tmp'
-        owned.write_text(str(child.pid))
-        owned.replace(root / 'owned-child.pid')
-        while not (root / 'deadline').exists():
-            if os.getppid() != parent:
-                raise RuntimeError('fixture parent exited before releasing capture')
-            time.sleep(0.01)
-        os.environ[coverage_io.DEADLINE_ENV] = (root / 'deadline').read_text()
-
-        @contextlib.contextmanager
-        def prepared_environment():
-            with scope:
-                yield environment
-
-        def adopt(*args, **kwargs):
-            if (args != (command,) or kwargs['env'] is not environment
-                    or kwargs['stderr'] != subprocess.PIPE
-                    or kwargs['start_new_session'] is not True):
-                raise AssertionError('capture did not adopt the prepared fixture')
-            return child
-
-        with patch.object(coverage_io.subprocess, 'Popen', side_effect=adopt) as spawn, \\
-                patch.object(coverage_io, 'isolated_environment', prepared_environment):
-            status = coverage_io.capture(command, root / 'out', root / 'err.gz')
-        if spawn.call_count != 1:
-            raise AssertionError('capture must adopt the fixture exactly once')
-        if pathlib.Path(environment['THREEMOJO_TEST_TMPDIR']).exists():
-            raise AssertionError('capture did not remove its temporary directory')
-        (root / 'status').write_text(str(status))
-    except BaseException:
-        # A failed setup must kill the group before reaping its leader.
-        if child.returncode is None:
-            with contextlib.suppress(ProcessLookupError):
-                os.killpg(child.pid, signal.SIGKILL)
-            child.wait(timeout=2)
-        child.stderr.close()
-        raise
-sys.exit(status)
-'''
-
-
 class CoverageGroupCleanupTests(unittest.TestCase):
     def test_successful_group_signal_is_not_repeated_while_reaping(self):
         process = self.process()
@@ -471,18 +387,6 @@ class CoverageLifecycleTests(unittest.TestCase):
         self.directory = tempfile.TemporaryDirectory(prefix='coverage lifecycle ')
         self.addCleanup(self.directory.cleanup)
         self.root = Path(self.directory.name)
-        (self.root / 'worker.py').write_text(WORKER)
-        self.environment = os.environ.copy()
-        self.environment.pop(coverage_io.DEADLINE_ENV, None)
-        self.environment['PYTHONPATH'] = str(Path(coverage_io.__file__).parent)
-        self.environment['PYTHONDONTWRITEBYTECODE'] = '1'
-
-    def ready(self, name='grandchild.pid'):
-        deadline = time.monotonic() + 4
-        while not (self.root / name).exists():
-            if time.monotonic() >= deadline:
-                self.fail('fake coverage process did not start: ' + name)
-            time.sleep(0.01)
 
     def stopped(self, pid):
         try:
@@ -534,78 +438,6 @@ class CoverageLifecycleTests(unittest.TestCase):
                     self.assertRaises(type(error)) as raised:
                 self.stopped(123)
             self.assertIs(raised.exception, error)
-
-    def assert_tree_stopped(self):
-        pids = [int((self.root / (role + '.pid')).read_text())
-                for role in ('child', 'grandchild')]
-        deadline = time.monotonic() + 3
-        while not all(self.stopped(pid) for pid in pids):
-            if time.monotonic() >= deadline:
-                self.fail('capture left a live descendant: ' + repr(pids))
-            time.sleep(0.01)
-        self.assertFalse(Path((self.root / 'temporary').read_text()).exists())
-
-    def cleanup_process(self, process):
-        if process.poll() is None:
-            process.terminate()
-        try:
-            process.communicate(timeout=2)
-        except subprocess.TimeoutExpired:
-            process.kill()
-        # A failed assertion must not leave the deliberately hanging fixture.
-        path = self.root / 'child.pid'
-        if not path.exists():
-            path = self.root / 'owned-child.pid'
-        if path.exists():
-            pid = int(path.read_text())
-            if not self.stopped(pid):
-                with contextlib.suppress(ProcessLookupError):
-                    os.killpg(pid, signal.SIGKILL)
-        # An orphaned capture may still hold these pipes until its tree stops.
-        process.communicate(timeout=2)
-
-    def launch(self, mode='valid', seconds=4):
-        environment = self.environment | {
-            coverage_io.DEADLINE_ENV: repr(time.monotonic() + seconds)}
-        process = subprocess.Popen(
-            [sys.executable, '-c', DRIVER, str(self.root), mode],
-            env=environment, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
-            text=True)
-        self.addCleanup(self.cleanup_process, process)
-        return process
-
-    def capture_prepared_tree(self):
-        # Fixture startup is outside the unchanged 0.6-second capture budget.
-        # The real capture still reads and enforces one absolute deadline.
-        process = subprocess.Popen(
-            [sys.executable, '-c', PREPARED_DRIVER, str(self.root)],
-            env=self.environment | {'TMPDIR': str(self.root)},
-            stdout=subprocess.PIPE, stderr=subprocess.PIPE,
-            text=True)
-        self.addCleanup(self.cleanup_process, process)
-        self.ready()
-        temporary = self.root / 'deadline.tmp'
-        temporary.write_text(repr(time.monotonic() + 0.6))
-        temporary.replace(self.root / 'deadline')
-        output, error = process.communicate(timeout=4)
-        self.assertEqual(process.returncode, 124, output + error)
-        self.assert_tree_stopped()
-
-    def test_shared_deadline_allows_slow_fixture_startup(self):
-        (self.root / 'worker.py').write_text(WORKER.replace(
-            'role, mode = sys.argv[2:4]',
-            "role, mode = sys.argv[2:4]\nif role == 'grandchild': time.sleep(0.7)"))
-        self.capture_prepared_tree()
-
-    def test_output_failure_kills_child_and_grandchild(self):
-        command = [sys.executable, str(self.root / 'worker.py'),
-                   str(self.root), 'child', 'valid']
-        with patch.object(coverage_io.gzip.GzipFile, 'write',
-                          side_effect=OSError('injected output failure')), \
-                contextlib.redirect_stdout(io.StringIO()), \
-                self.assertRaisesRegex(OSError, 'injected output failure'):
-            coverage_io.capture(command, self.root / 'out', self.root / 'err.gz')
-        self.assert_tree_stopped()
 
     def test_expired_queued_capture_does_not_start_a_child(self):
         with patch.dict(os.environ, {coverage_io.DEADLINE_ENV: repr(time.monotonic() - 1)}), \
