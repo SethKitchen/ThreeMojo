@@ -194,6 +194,11 @@ The live production files that use a protected helper match the pin.
 Eight live files keep the pinned use digest.
 A new protected use or a changed digest is refused.
 
+Mojo checks the Sum2 helper use sites.
+Each protected helper use stays inside a reviewed caller.
+Lane refinement also keeps the center-bound uses.
+A helper use outside those functions is refused.
+
 ## Candidate certificate
 
 A certificate contains a stored incumbent point and its road parameter.
