@@ -13,7 +13,14 @@ from tools.spiral_moment_derive import (
     stored_coefficient_words,
 )
 from tools.spiral_moment_table_text import canonical_table, parse_table
-from tools.spiral_moment_words import SIGN, decimal_word
+from tools._bigint import BigInt
+from tools._fraction import Fraction
+from tools.spiral_moment_words import (
+    SIGN,
+    decimal_word,
+    fraction_of_word,
+    nearest_even,
+)
 
 
 comptime _GEOMETRY = "extensions/carla/geometry.mojo"
@@ -168,6 +175,30 @@ def test_one_decimal_literal_keeps_its_encoding() raises:
     var source = "comptime _PHASE: Array[Float64, 1] = [1e1]\n"
     var words = stored_coefficient_words(source, "_PHASE", 1)
     assert_equal(words[0], decimal_word("1e1"))
+
+
+def test_rounded_node_sums_match_their_pins() raises:
+    """The rounded one-plus-node words and the weight sum match their pins."""
+    var geometry = Path(_GEOMETRY).read_text()
+    var nodes = stored_coefficient_words(geometry, "_GL_NODES", 5)
+    var expected = List[UInt64]()
+    expected.append(UInt64(0x3FB80498FD662CB8))
+    expected.append(UInt64(0x3FDD89B804CC91F6))
+    expected.append(UInt64(0x3FF0000000000000))
+    expected.append(UInt64(0x3FF89D91FECCDB82))
+    expected.append(UInt64(0x3FFE7FB670299D34))
+    var index = 0
+    while index < 5:
+        var rounded = nearest_even(Fraction(1) + fraction_of_word(nodes[index]))
+        assert_equal(rounded, expected[index])
+        index += 1
+    var weights = stored_coefficient_words(geometry, "_GL_WEIGHTS", 5)
+    var total = Fraction(0)
+    for weight in weights:
+        total = total + fraction_of_word(weight)
+    var half = total / Fraction(2)
+    var zeroth = Fraction(1) + Fraction.of(BigInt(3), BigInt.power_of_two(55))
+    assert_equal(half == zeroth, True)
 
 
 def main() raises:
