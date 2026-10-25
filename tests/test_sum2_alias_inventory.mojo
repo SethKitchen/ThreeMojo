@@ -37,6 +37,8 @@ def _copy(root: String) raises:
         raise Error(made.output)
     var files = List[String]()
     files.append("extensions/carla/curve_sample_dispatch.mojo")
+    files.append("extensions/carla/lane_box_cover.mojo")
+    files.append("extensions/carla/lane_value_bounds.mojo")
     files.append("extensions/carla/spiral_domain_proof.mojo")
     files.append("extensions/carla/spiral_grouped_lane.mojo")
     files.append("tools/carla_lane_oracle/sum2-guard-pins.json")
@@ -51,7 +53,7 @@ def _copy(root: String) raises:
 
 
 def test_the_live_alias_inventory_holds() raises:
-    """The three caller modules match the pin after the alias restore."""
+    """The five caller modules match the pin after the alias restore."""
     sum2_alias_inventory(".")
     sum2_alias_inventory("./")
     sum2_alias_inventory("extensions/..")
@@ -69,6 +71,23 @@ def test_a_bare_road_info_import_is_refused() raises:
         contains=(
             "global protected-helper use/import inventory changed: "
             + "spiral_grouped_lane"
+        )
+    ):
+        sum2_alias_inventory(root)
+
+
+def test_a_bare_lane_box_import_is_refused() raises:
+    """A bare road-info import in the lane-box module is refused."""
+    var root = "/tmp/sum2-alias-inventory-box"
+    _copy(root)
+    var box = root + "/extensions/carla/lane_box_cover.mojo"
+    Path(box).write_text(
+        Path(box).read_text().replace("_info_index_si as ", "")
+    )
+    with assert_raises(
+        contains=(
+            "global protected-helper use/import inventory changed: "
+            + "lane_box_cover"
         )
     ):
         sum2_alias_inventory(root)

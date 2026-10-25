@@ -5,7 +5,7 @@
 
 """Check the live Sum2 alias inventory.
 
-Three caller modules keep the road-info alias. Restoring that alias matches
+Five caller modules keep the road-info alias. Restoring that alias matches
 the pinned use digest. A bare import or a changed use is refused.
 """
 
@@ -78,6 +78,8 @@ def _modules() -> List[String]:
     """
     var names = List[String]()
     names.append("curve_sample_dispatch")
+    names.append("lane_box_cover")
+    names.append("lane_value_bounds")
     names.append("spiral_domain_proof")
     names.append("spiral_grouped_lane")
     return names^

@@ -274,9 +274,14 @@ Restoring those spans matches the pinned routing.
 A moved span or a changed declaration is refused.
 
 Mojo checks the live Sum2 alias inventory.
-Three caller modules keep the road-info alias.
+Five caller modules keep the road-info alias.
 Restoring that alias matches the pinned use digest.
 A bare import or a changed use is refused.
+
+Mojo checks the live lane-geometry inventory.
+Four directed-point calls keep the SI constructor.
+Restoring those calls matches the pinned use digest.
+A bare constructor or a changed use is refused.
 
 ## Candidate certificate
 
