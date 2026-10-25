@@ -5,6 +5,7 @@
 
 """Token digests that match CPython 3.12 `tokenize` for these Mojo sources."""
 
+from tools._python_float import parse_float
 from tools._python_json import PyJson
 from tools._sha256 import sha256_hex
 
@@ -264,3 +265,182 @@ def token_names(source: String) raises -> List[String]:
         if kinds[index] == _NAME:
             names.append(texts[index])
     return names^
+
+
+def _literal(kinds: List[Int], texts: List[String]) raises -> Float64:
+    """Return one decimal literal.
+
+    Args:
+        kinds: The tokens of one array entry.
+        texts: The token texts.
+
+    Returns:
+        The value, as Python `float` reads the spelling.
+
+    Raises:
+        Error: The entry is not one decimal number.
+    """
+    if len(kinds) == 0:
+        raise Error("unsupported stored array literal")
+    var spelling = texts[0]
+    if len(kinds) == 1 and kinds[0] == _NUMBER:
+        pass
+    elif (
+        len(kinds) == 2
+        and kinds[0] == _OP
+        and (texts[0] == "+" or texts[0] == "-")
+        and kinds[1] == _NUMBER
+    ):
+        spelling = texts[0] + texts[1]
+    else:
+        raise Error("unsupported stored array literal")
+    var index = 0
+    var saw_digit = False
+    var bytes = spelling.as_bytes()
+    if len(bytes) > 0 and (bytes[0] == 43 or bytes[0] == 45):
+        index = 1
+    var dot = False
+    var exponent = False
+    while index < len(bytes):
+        var byte = bytes[index]
+        if byte >= 48 and byte <= 57:
+            saw_digit = True
+        elif byte == 46 and not dot and not exponent:
+            dot = True
+        elif (byte == 101 or byte == 69) and saw_digit and not exponent:
+            exponent = True
+            saw_digit = False
+            if index + 1 < len(bytes) and (
+                bytes[index + 1] == 43 or bytes[index + 1] == 45
+            ):
+                index += 1
+        else:
+            raise Error("unsupported stored array literal")
+        index += 1
+    if not saw_digit:
+        raise Error("unsupported stored array literal")
+    return parse_float(spelling)
+
+
+def stored_float_array(
+    source: String, name: String, size: Int
+) raises -> List[Float64]:
+    """Return one top-level `comptime` `Array[Float64, size]`.
+
+    Args:
+        source: Mojo source.
+        name: The array name.
+        size: The declared length.
+
+    Returns:
+        The stored values, in order.
+
+    Raises:
+        Error: The array is missing, repeated, or not a plain decimal list.
+    """
+    var kinds = List[Int]()
+    var texts = List[String]()
+    _tokenize(source, kinds, texts)
+    var depth = 0
+    var part_kinds = List[Int]()
+    var part_texts = List[String]()
+    var values = List[Float64]()
+    var hits = 0
+    for index in range(len(kinds)):
+        var kind = kinds[index]
+        if kind == _INDENT:
+            depth += 1
+            continue
+        if kind == _DEDENT:
+            depth -= 1
+            continue
+        if kind == _NEWLINE:
+            if (
+                depth == 0
+                and len(part_kinds) >= 2
+                and part_kinds[0] == _NAME
+                and part_texts[0] == "comptime"
+                and part_kinds[1] == _NAME
+                and part_texts[1] == name
+            ):
+                hits += 1
+                if hits > 1:
+                    raise Error("missing or ambiguous stored array: " + name)
+                values = _array_values(part_kinds, part_texts, size)
+            part_kinds.clear()
+            part_texts.clear()
+            continue
+        part_kinds.append(kind)
+        part_texts.append(texts[index])
+    if hits != 1:
+        raise Error("missing or ambiguous stored array: " + name)
+    return values^
+
+
+def _array_values(
+    kinds: List[Int], texts: List[String], size: Int
+) raises -> List[Float64]:
+    """Return the decimals of one array statement.
+
+    Args:
+        kinds: The statement tokens.
+        texts: The token texts.
+        size: The declared length.
+
+    Returns:
+        The stored values.
+
+    Raises:
+        Error: The statement is not `Array[Float64, size] = [decimals]`.
+    """
+    var header = List[String]()
+    header.append("comptime")
+    header.append("")
+    header.append(":")
+    header.append("Array")
+    header.append("[")
+    header.append("Float64")
+    header.append(",")
+    header.append(String(size))
+    header.append("]")
+    header.append("=")
+    header.append("[")
+    var header_kinds = List[Int]()
+    header_kinds.append(_NAME)
+    header_kinds.append(_NAME)
+    header_kinds.append(_OP)
+    header_kinds.append(_NAME)
+    header_kinds.append(_OP)
+    header_kinds.append(_NAME)
+    header_kinds.append(_OP)
+    header_kinds.append(_NUMBER)
+    header_kinds.append(_OP)
+    header_kinds.append(_OP)
+    header_kinds.append(_OP)
+    if (
+        len(kinds) < len(header_kinds) + 1
+        or kinds[len(kinds) - 1] != _OP
+        or texts[len(texts) - 1] != "]"
+    ):
+        raise Error("unsupported stored array")
+    for index in range(len(header_kinds)):
+        if kinds[index] != header_kinds[index]:
+            raise Error("unsupported stored array")
+        if index != 1 and texts[index] != header[index]:
+            raise Error("unsupported stored array")
+    var values = List[Float64]()
+    var entry_kinds = List[Int]()
+    var entry_texts = List[String]()
+    for index in range(len(header_kinds), len(kinds) - 1):
+        if kinds[index] == _OP and texts[index] == ",":
+            values.append(_literal(entry_kinds, entry_texts))
+            entry_kinds.clear()
+            entry_texts.clear()
+        else:
+            entry_kinds.append(kinds[index])
+            entry_texts.append(texts[index])
+    if len(entry_kinds) > 0:
+        values.append(_literal(entry_kinds, entry_texts))
+    if len(values) != size:
+        raise Error("unsupported stored array")
+    return values^
