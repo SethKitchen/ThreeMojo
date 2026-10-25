@@ -134,6 +134,11 @@ The bounds pin is the count-loop source.
 The lane pin is the winner source.
 A moved qualifier is refused.
 
+Mojo checks the runtime source groups.
+Six groups keep their token pins.
+Reviewed sources restore the pins that differ from the live files.
+A changed token or a changed pin is refused.
+
 ## Candidate certificate
 
 A certificate contains a stored incumbent point and its road parameter.
