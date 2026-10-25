@@ -289,6 +289,12 @@ The junction-bounds file keeps seven reviewed spans.
 Restoring those spans matches the pinned use digests.
 A moved span or a changed use is refused.
 
+Mojo checks the live Map and map-builder inventories.
+The Map file keeps 73 reviewed spans.
+The map-builder file keeps 67 reviewed spans.
+Restoring those spans matches the pinned use digests.
+A moved span or a changed use is refused.
+
 ## Candidate certificate
 
 A certificate contains a stored incumbent point and its road parameter.
