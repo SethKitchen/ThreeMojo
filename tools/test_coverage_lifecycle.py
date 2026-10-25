@@ -716,7 +716,7 @@ time.sleep(30)
     def test_make_uses_one_shared_group_budget(self):
         make = (Path(coverage_io.__file__).parent.parent / 'Makefile').read_text()
         recipe = make[make.index('coverage-capture:\n'):make.index('\ncoverage-report:')]
-        self.assertIn('tools/coverage_io.py group --seconds $(COV_BUDGET) --', recipe)
+        self.assertIn('coverage_group --seconds $(COV_BUDGET) --', recipe)
         self.assertNotIn('alarm shift', recipe)
         self.assertEqual(recipe.count('tools/coverage_io.py capture'), 1)
 

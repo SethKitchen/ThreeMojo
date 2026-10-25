@@ -129,7 +129,9 @@ Some portable features remain partial, including [GLSL shaders](https://github.c
 ### Project tools
 
 <details>
-<summary>Implemented: 59</summary>
+<summary>Implemented: 60</summary>
+
+- [x] [Coverage group deadline](https://github.com/SethKitchen/ThreeMojo/wiki/Coverage-tool#capture-scheduling-and-progress): `tools/coverage_group.mojo` gives every capture one deadline [#761](https://github.com/SethKitchen/ThreeMojo/issues/761)
 
 - [x] [CARLA environment list](https://github.com/SethKitchen/ThreeMojo/wiki/CARLA-assets#the-carla-towns): `tools/carla_town_environment.mojo` writes each town's environment list [#761](https://github.com/SethKitchen/ThreeMojo/issues/761)
 

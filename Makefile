@@ -671,7 +671,7 @@ ifneq ($(strip $(COVERED)),)
 	@# Exact streams are compressed as they arrive. MC-DC record order stays
 	@# intact, without keeping tens of gigabytes of repeated probes on disk.
 	@printf '%s\n' $(COVERAGE_SUITES) \
-	  | python3 tools/coverage_io.py group --seconds $(COV_BUDGET) -- \
+	  | $(TOOL) coverage_group --seconds $(COV_BUDGET) -- \
 	      xargs -P $(JOBS) -I {} \
 	      sh -c 'name=$$(basename "$$1" .mojo); \
 	             python3 tools/coverage_io.py capture \
