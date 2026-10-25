@@ -59,8 +59,14 @@ def _prepare_phases(command, out_path, proof, environment):
     try:
         # Invalidate old completion before any step that can fail.
         path.unlink(missing_ok=True)
-        if not (len(command) > 3 and Path(command[1]).name == 'coverage_hit_aot.py'
-                and command[2] == '--profile' and command[3] in ('aot', 'aot-hits')):
+        compiled = (len(command) > 3 and Path(command[1]).name == 'coverage_hit_aot.py'
+                    and command[2] == '--profile' and command[3] in ('aot', 'aot-hits'))
+        if not compiled and '--profile' in command and 'coverage_hit_aot' in command:
+            try:
+                compiled = command[command.index('--profile') + 1] in ('aot', 'aot-hits')
+            except IndexError:
+                compiled = False
+        if not compiled:
             return None
         header = {'schema': PHASE_SCHEMA, 'suite': Path(out_path).stem,
                   'phase': 'capture_header',

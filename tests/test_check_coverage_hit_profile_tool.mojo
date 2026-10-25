@@ -171,7 +171,12 @@ def test_the_adapter_command_stays_in_the_repository() raises:
     )
     var text = "\n".join(command)
     assert_equal(command[0], "env")
-    assert_true(text.find("python3\n/repo/tools/coverage_hit_aot.py\n") >= 0)
+    assert_true(
+        text.find(
+            "/opt/mojo\nrun\n-I\n/repo\n/repo/tools/coverage_hit_aot.mojo\n"
+        )
+        >= 0
+    )
     assert_true(text.find("-I\n/repo\nidentity.mojo\n") >= 0)
     assert_true(text.find("--\n/opt/mojo\nrun\n") >= 0)
     assert_equal(command[len(command) - 1], "argument with spaces")

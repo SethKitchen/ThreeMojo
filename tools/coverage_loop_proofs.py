@@ -2421,7 +2421,7 @@ def expected_capture_command(contract, suite, profile):
                 '--root', '@BUILD@', '--suite', '@BUILD@/' + suite,
                 '--cache', contract['cache'], '--',
                 *compiler, 'run', '-I', '@BUILD@', '@BUILD@/' + suite]
-    return [contract['python']['path'], '@ROOT@/tools/coverage_hit_aot.py',
+    return ['@ROOT@/tools/tool.sh', *compiler, 'coverage_hit_aot',
             '--profile', profile, '--root', '@BUILD@',
             '--suite', '@BUILD@/' + suite, '--cache', contract['cache'], '--',
             *compiler, 'run', '-I', '@BUILD@', '@BUILD@/' + suite]

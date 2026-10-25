@@ -247,7 +247,7 @@ endif
 ifeq ($(COV_PROFILE),raw)
 COVERAGE_RUN = tools/tool.sh $(MOJO) native_test_support run --root $(COV_DIR)
 else
-COVERAGE_RUN = python3 tools/coverage_hit_aot.py --profile $(COV_PROFILE) --root $(COV_DIR)
+COVERAGE_RUN = tools/tool.sh $(MOJO) coverage_hit_aot --profile $(COV_PROFILE) --root $(COV_DIR)
 endif
 
 CACHE_DIR := .cache

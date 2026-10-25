@@ -373,7 +373,7 @@ The reporter reads the captures through named pipes, one suite at a time. Other 
 
 CPU test groups use imported source size. Coverage groups use `tools/coverage_shard.mojo` and `tools/coverage_costs.json`. Probe output can take much longer than compilation. The scheduler puts the longest estimated capture in the group with the lowest total cost. Each group starts its longest captures first. `tools/coverage_group.mojo` gives every capture in a group one deadline and then runs the command.
 
-`make coverage` runs each raw capture with `tools/native_test_support.mojo`. A suite that links the C fixture is built and then run in that capture's process group.
+`make coverage` runs each raw capture with `tools/native_test_support.mojo`. A suite that links the C fixture is built and then run in that capture's process group. `tools/coverage_hit_aot.mojo` runs a compiled capture. It builds the suite and keeps the source path as the program name.
 
 Ties use the suite path and group number. Every affected suite stays in exactly one group. CI uses eight groups and a budget of 9000 seconds a group. The budget is a hang detector, not a target. Hosted runners differ: one took a quarter longer than another on the same group.
 

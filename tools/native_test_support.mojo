@@ -660,10 +660,30 @@ def _spawn_same_group(command: List[String]) raises -> Int:
     if pid < 0:
         close_fd(pipe[0])
         raise Error("fork failed: " + strerror(fork_error))
+    return _wait_child(pid, pipe[0], report, command[0])
+
+
+def _wait_child(
+    pid: Int, read_fd: Int, report: List[Int32], name: String
+) raises -> Int:
+    """Reap a spawned child and return its status.
+
+    Args:
+        pid: The child.
+        read_fd: The pipe that reports an `exec` failure.
+        report: The four-byte `errno` buffer.
+        name: The program name for an `exec` error.
+
+    Returns:
+        The exit status. A signal N has status 128 + N.
+
+    Raises:
+        Error: If the program cannot start or the wait fails.
+    """
     var got = 0
     while True:
         var count = external_call["read", Int](
-            Int32(pipe[0]),
+            Int32(read_fd),
             _address(Int(report.unsafe_ptr()) + got),
             4 - got,
         )
@@ -675,18 +695,65 @@ def _spawn_same_group(command: List[String]) raises -> Int:
         if count < 0 and errno() == EINTR:
             continue
         break
-    close_fd(pipe[0])
+    close_fd(read_fd)
     if got == 4:
         _ = wait_blocking(pid)
-        raise Error(
-            "cannot start " + command[0] + ": " + strerror(Int(report[0]))
-        )
+        raise Error("cannot start " + name + ": " + strerror(Int(report[0])))
     var waited = wait_blocking(pid)
     if not waited.done:
         raise Error("wait failed: " + strerror(waited.error))
     if waited.status < 0:
         return 128 - waited.status
     return waited.status
+
+
+def _spawn_file(file: String, command: List[String]) raises -> Int:
+    """Run `file` with `command` as its arguments, in this process group.
+
+    `command` begins with the name the program sees. That name can differ
+    from `file`, as Python's `executable=` argument does.
+
+    Args:
+        file: The program file.
+        command: The arguments, including the name in the first position.
+
+    Returns:
+        The exit status.
+
+    Raises:
+        Error: If the program cannot start or the wait fails.
+    """
+    if len(command) == 0:
+        raise Error("a Mojo command is required after --")
+    var path = c_bytes(file)
+    var words = List[List[UInt8]]()
+    for word in command:
+        words.append(c_bytes(word))
+    var pointers = List[Int]()
+    for index in range(len(words)):
+        pointers.append(Int(words[index].unsafe_ptr()))
+    pointers.append(0)
+    var pipe = make_pipe()
+    var report = List[Int32](length=1, fill=0)
+    var pid = Int(external_call["fork", c_int]())
+    if pid == 0:
+        _ = external_call["execv", c_int](
+            _address(Int(path.unsafe_ptr())),
+            _address(Int(pointers.unsafe_ptr())),
+        )
+        report[0] = Int32(errno())
+        _ = external_call["write", Int](
+            Int32(pipe[1]),
+            _address(Int(report.unsafe_ptr())),
+            4,
+        )
+        external_call["_exit", NoneType](c_int(127))
+    var fork_error = errno()
+    close_fd(pipe[1])
+    if pid < 0:
+        close_fd(pipe[0])
+        raise Error("fork failed: " + strerror(fork_error))
+    return _wait_child(pid, pipe[0], report, file)
 
 
 def _clear_directory(directory: String) raises:
@@ -802,6 +869,7 @@ def run_fixture(
     cache: String,
     cc: String,
     command: List[String],
+    program_name: String = "",
 ) raises -> Int:
     """Build a fixture suite and run that program in this process group.
 
@@ -811,6 +879,8 @@ def run_fixture(
         cache: The object cache.
         cc: The C compiler command.
         command: The Mojo run command and the program arguments.
+        program_name: The name the program sees, when it differs from the
+            built file. Empty keeps the built file's path.
 
     Returns:
         The build status, or the program status when the build exits 0.
@@ -826,7 +896,16 @@ def run_fixture(
         )
         var status = _spawn_same_group(plan.build)
         if status == 0:
-            status = _spawn_same_group(plan.execute)
+            if program_name.byte_length() == 0:
+                status = _spawn_same_group(plan.execute)
+            else:
+                var argv = List[String]()
+                argv.append(program_name)
+                var index = 1
+                while index < len(plan.execute):
+                    argv.append(plan.execute[index])
+                    index += 1
+                status = _spawn_file(plan.execute[0], argv)
         return status
     finally:
         _clear_directory(folder)
