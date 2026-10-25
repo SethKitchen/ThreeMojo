@@ -242,3 +242,25 @@ def token_sha256(source: String) raises -> String:
         doc.append(rows, pair)
     doc.root = rows
     return sha256_hex(doc.dumps().as_bytes())
+
+
+def token_names(source: String) raises -> List[String]:
+    """Return the NAME tokens of `source`, in order.
+
+    Args:
+        source: Mojo source.
+
+    Returns:
+        Each name, including keywords.
+
+    Raises:
+        Error: The source cannot be tokenized.
+    """
+    var kinds = List[Int]()
+    var texts = List[String]()
+    _tokenize(source, kinds, texts)
+    var names = List[String]()
+    for index in range(len(kinds)):
+        if kinds[index] == _NAME:
+            names.append(texts[index])
+    return names^
