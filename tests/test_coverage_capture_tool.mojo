@@ -5,6 +5,7 @@
 
 """A coverage capture keeps each probe record once."""
 
+from std.pathlib import Path
 from std.testing import TestSuite, assert_equal, assert_true
 
 from tests._tree import tool_mojo
@@ -592,6 +593,203 @@ def test_capture_removes_the_private_root_after_every_outcome() raises:
     if ran.status != 0:
         raise Error(ran.output + ran.errors)
     assert_true(ran.output.find("CLEAN_OK") >= 0)
+
+
+def _worker() -> String:
+    """Return a shell session that records a child and a grandchild."""
+    return (
+        "#!/bin/sh\n"
+        + "root=$1\nrole=$2\n"
+        + 'printf "%s\\n" "$$" > "$root/$role.pid"\n'
+        + 'if [ "$role" = child ]; then\n'
+        + '  printf "%s\\n" "$THREEMOJO_TEST_TMPDIR" > "$root/temporary"\n'
+        + '  "$0" "$root" grandchild &\n'
+        + "  n=0\n"
+        + '  while [ ! -s "$root/grandchild.pid" ]; do\n'
+        + "    n=$((n + 1))\n"
+        + '    if [ "$n" -gt 300 ]; then exit 9; fi\n'
+        + "    sleep 0.01\n"
+        + "  done\n"
+        + '  if [ "${MODE:-}" = malformed ]; then\n'
+        + "    printf 'COVBRANCH:m:1.0:T\\n' >&2\n"
+        + "  else\n"
+        + "    printf 'COVLINE:m:1\\n' >&2\n"
+        + "  fi\n"
+        + "fi\n"
+        + "while true; do sleep 0.05; done\n"
+    )
+
+
+def _tree_stopped(root: String, status: Int, want: Int) raises:
+    """Raise unless both descendants are gone and the private root is gone."""
+    var script = (
+        "import os, pathlib, sys\n"
+        + "root = pathlib.Path(sys.argv[1])\n"
+        + "status, want = int(sys.argv[2]), int(sys.argv[3])\n"
+        + "if status != want:\n"
+        + "    raise SystemExit('status %s' % status)\n"
+        + "def stopped(pid):\n"
+        + "    try:\n"
+        + "        os.kill(pid, 0)\n"
+        + "    except ProcessLookupError:\n"
+        + "        return True\n"
+        + "    stat = pathlib.Path('/proc') / str(pid) / 'stat'\n"
+        + "    if not stat.exists():\n"
+        + "        return False\n"
+        + "    return stat.read_text().rpartition(') ')[2].startswith('Z ')\n"
+        + "for role in ('child', 'grandchild'):\n"
+        + "    path = root / (role + '.pid')\n"
+        + "    if not path.exists():\n"
+        + "        raise SystemExit('missing ' + role)\n"
+        + "    if not stopped(int(path.read_text())):\n"
+        + "        raise SystemExit('live ' + role)\n"
+        + "temp = (root / 'temporary').read_text().strip()\n"
+        + "if pathlib.Path(temp).exists():\n"
+        + "    raise SystemExit('temp remains')\n"
+        + "print('TREE_OK')\n"
+    )
+    var ran = run_program(
+        ["python3", "-c", script, root, String(status), String(want)],
+        10.0,
+        merge_errors=False,
+    )
+    if ran.status != 0:
+        raise Error(ran.output + ran.errors)
+    assert_true(ran.output.find("TREE_OK") >= 0)
+
+
+def test_a_deadline_stops_the_child_and_the_grandchild() raises:
+    var mojo = tool_mojo()
+    var ran = run_program(
+        [
+            "sh",
+            "-c",
+            "dir=$(mktemp -d); cat > \"$dir/worker\" << 'SH'\n"
+            + _worker()
+            + 'SH\nchmod +x "$dir/worker"\n'
+            + "d=$(python3 -c 'import time;"
+            " print(repr(time.monotonic()+1.2))')\n"
+            + "THREEMOJO_COVERAGE_DEADLINE=$d sh tools/tool.sh "
+            + shell_quote(mojo)
+            + ' coverage_io capture --out "$dir/out" --err "$dir/err.txt.gz"'
+            + ' -- "$dir/worker" "$dir" child >"$dir/progress"'
+            ' 2>"$dir/tool.err"\n'
+            + "status=$?\n"
+            + 'printf "%s\\n" "$status" > "$dir/status"\n'
+            + 'printf "%s\\n" "$dir"\n',
+        ],
+        20.0,
+        merge_errors=False,
+    )
+    if ran.status != 0 and ran.output.byte_length() == 0:
+        raise Error(ran.errors)
+    var root = String(ran.output.strip())
+    var status = Int(String(Path(root + "/status").read_text().strip()))
+    if status != 124:
+        raise Error(
+            String(status) + "\n" + Path(root + "/tool.err").read_text()
+        )
+    _tree_stopped(root, status, 124)
+
+
+def test_cancellation_stops_the_child_and_the_grandchild() raises:
+    var mojo = tool_mojo()
+    var ran = run_program(
+        [
+            "sh",
+            "-c",
+            "dir=$(mktemp -d); cat > \"$dir/worker\" << 'SH'\n"
+            + _worker()
+            + 'SH\nchmod +x "$dir/worker"\n'
+            + "sh tools/tool.sh "
+            + shell_quote(mojo)
+            + ' coverage_io capture --out "$dir/out" --err "$dir/err.txt.gz"'
+            + ' -- "$dir/worker" "$dir" child >"$dir/progress"'
+            ' 2>"$dir/tool.err" &\n'
+            + "pid=$!\n"
+            + "n=0\n"
+            + 'while [ ! -s "$dir/grandchild.pid" ]; do\n'
+            + "  n=$((n + 1))\n"
+            + '  if [ "$n" -gt 400 ]; then echo missing; exit 4; fi\n'
+            + "  sleep 0.01\n"
+            + "done\n"
+            + 'kill -TERM "$pid"\n'
+            + "wait $pid\n"
+            + "status=$?\n"
+            + 'printf "%s\\n" "$status" > "$dir/status"\n'
+            + 'printf "%s\\n" "$dir"\n',
+        ],
+        20.0,
+        merge_errors=False,
+    )
+    if ran.status != 0 and ran.output.find("/") < 0:
+        raise Error(ran.output + ran.errors)
+    var root = String(ran.output.strip())
+    var status = Int(String(Path(root + "/status").read_text().strip()))
+    if status != 143:
+        var err = ""
+        if Path(root + "/tool.err").exists():
+            err = Path(root + "/tool.err").read_text()
+        raise Error(String(status) + "\n" + err)
+    _tree_stopped(root, status, 143)
+
+
+def test_a_bad_probe_stops_the_child_and_the_grandchild() raises:
+    var mojo = tool_mojo()
+    var ran = run_program(
+        [
+            "sh",
+            "-c",
+            "dir=$(mktemp -d); cat > \"$dir/worker\" << 'SH'\n"
+            + _worker()
+            + 'SH\nchmod +x "$dir/worker"\n'
+            + "MODE=malformed sh tools/tool.sh "
+            + shell_quote(mojo)
+            + ' coverage_io capture --out "$dir/out" --err "$dir/err.txt.gz"'
+            + ' -- "$dir/worker" "$dir" child >"$dir/progress"'
+            ' 2>"$dir/tool.err"\n'
+            + "status=$?\n"
+            + 'printf "%s\\n" "$status" > "$dir/status"\n'
+            + 'printf "%s\\n" "$dir"\n',
+        ],
+        20.0,
+        merge_errors=False,
+    )
+    var root = String(ran.output.strip())
+    if root.byte_length() == 0 or not Path(root + "/status").exists():
+        raise Error(ran.output + ran.errors)
+    var status = Int(String(Path(root + "/status").read_text().strip()))
+    var err = Path(root + "/tool.err").read_text()
+    if status != 1 or err.find("Legacy compound coverage is ambiguous") < 0:
+        raise Error(String(status) + "\n" + err)
+    _tree_stopped(root, status, 1)
+
+
+def test_a_closed_standard_error_still_meets_the_deadline() raises:
+    var mojo = tool_mojo()
+    var ran = run_program(
+        [
+            "sh",
+            "-c",
+            "out=$(mktemp); err=$(mktemp).txt.gz; "
+            + "d=$(python3 -c 'import time;"
+            " print(repr(time.monotonic()+0.3))'); "
+            + "start=$(python3 -c 'import time; print(time.monotonic())'); "
+            + "THREEMOJO_COVERAGE_DEADLINE=$d sh tools/tool.sh "
+            + shell_quote(mojo)
+            + ' coverage_io capture --out "$out" --err "$err" -- sh -c'
+            + " 'exec 2>&-; sleep 30'; status=$?; "
+            + "python3 -c 'import sys,time;"
+            " elapsed=time.monotonic()-float(sys.argv[1]);"
+            + " raise SystemExit(0 if float(sys.argv[2])==124 and elapsed<2"
+            " else 1)'"
+            + ' "$start" "$status"',
+        ],
+        20.0,
+        merge_errors=False,
+    )
+    if ran.status != 0:
+        raise Error(ran.output + ran.errors)
 
 
 def test_usage_exits_2() raises:

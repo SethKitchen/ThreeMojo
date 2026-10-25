@@ -9,7 +9,7 @@
 
 The command runs in its own session. Its standard error is reduced: each
 `COVLINE` payload, each branch, and each complete `COVEVAL2` record is kept
-once. A passed group deadline stops the session. When `--loop-proof` is
+once. A passed group deadline, SIGINT, SIGTERM, or SIGHUP stops the session. When `--loop-proof` is
 set, this program checks and binds that receipt. It prints the start, the
 first probe, a running line every 60 seconds, and completion. A failed
 capture prints the last 30 lines of standard output and the last 30
@@ -62,18 +62,23 @@ from tools.coverage_loop_begin import (
 from tools._owned_process import (
     EPERM,
     ESRCH,
+    SIGHUP,
+    SIGINT,
     SIGKILL,
+    SIGTERM,
     ExecPlan,
     SignalHold,
     at_cwd,
     c_bytes,
     close_fd,
     errno,
+    hold_signals,
     make_pipe,
     open_at,
     signal_group,
     spawn,
     strerror,
+    take_signal,
     try_wait,
     wait_blocking,
 )
@@ -1923,6 +1928,66 @@ def kill_owned_group(pid: Int) raises -> Bool:
     )
 
 
+def _reap_killed(pid: Int, reaped: Bool):
+    """Reap `pid` when the kill did not already reap it.
+
+    Args:
+        pid: The session leader.
+        reaped: True when the kill already reaped the leader.
+    """
+    if reaped:
+        return
+    _ = wait_blocking(pid)
+
+
+def _stop_session(pid: Int, status: Int) raises -> Int:
+    """Kill `pid`'s session and return `status`.
+
+    Args:
+        pid: The session leader.
+        status: The status the capture reports.
+
+    Returns:
+        `status`.
+
+    Raises:
+        Error: When the group cannot be killed.
+    """
+    var reaped = kill_owned_group(pid)
+    _reap_killed(pid, reaped)
+    return status
+
+
+def _await_child(pid: Int, deadline: Float64, hold: SignalHold) raises -> Int:
+    """Wait for `pid`, a deadline, or a cancellation signal.
+
+    Args:
+        pid: The session leader.
+        deadline: The monotonic deadline, or a negative value when none is set.
+        hold: The blocked cancellation signals.
+
+    Returns:
+        The child's status, 124 at the deadline, or 128 plus a signal.
+
+    Raises:
+        Error: When the wait fails or the group cannot be killed.
+    """
+    while True:
+        var number = take_signal(hold)
+        if number != 0:
+            return _stop_session(pid, 128 + number)
+        if deadline >= 0 and _now() >= deadline:
+            return _stop_session(pid, 124)
+        var waited = try_wait(pid)
+        if waited.error != 0:
+            raise Error("wait failed: " + strerror(waited.error))
+        if waited.done:
+            if waited.status < 0:
+                return 128 - waited.status
+            return waited.status
+        _ = external_call["usleep", c_int](UInt32(20000))
+
+
 def _read_lines(
     pid: Int,
     fd: Int,
@@ -1931,6 +1996,7 @@ def _read_lines(
     started: Float64,
     suite: String,
     interval: Float64,
+    hold: SignalHold,
 ) raises -> Int:
     """Read the child's standard error until it ends or the deadline passes.
 
@@ -1942,115 +2008,126 @@ def _read_lines(
         started: The monotonic time the capture started.
         suite: The capture stem, used in progress lines.
         interval: The seconds between running lines.
+        hold: The blocked cancellation signals.
 
     Returns:
-        The child's status, or 124 when the deadline wins.
+        The child's status, 124 when the deadline wins, or 128 plus a signal.
 
     Raises:
-        Error: If a probe record is malformed or the wait fails.
+        Error: If a probe record is malformed or the wait fails. The session
+            is stopped before that error leaves this function.
     """
     var poll = List[Int32](length=2, fill=0)
     var chunk = List[UInt8](length=4096, fill=0)
     var pending = String()
     var announced = False
     var next_progress = started + interval
-    var cancelled = False
-    var leader_reaped = False
-    while True:
-        if _now() >= next_progress:
-            _progress(
-                suite, "running", started, reducer.records, reducer.saw_probe
-            )
-            next_progress = _now() + interval
-        var limit = 0.05
-        if deadline >= 0:
-            limit = deadline - _now()
-            if limit <= 0:
-                leader_reaped = kill_owned_group(pid)
-                cancelled = True
-                break
-            if limit > 0.05:
-                limit = 0.05
-        var until_progress = next_progress - _now()
-        if until_progress < limit:
-            limit = until_progress
-        if limit < 0.001:
-            limit = 0.001
-        poll[0] = Int32(fd)
-        poll[1] = Int32(1)
-        var ready = external_call["poll", c_int](
-            OpaquePointer[MutAnyOrigin](
-                unsafe_from_address=Int(poll.unsafe_ptr())
-            ),
-            c_int(1),
-            c_int(Int(limit * 1000.0) + 1),
-        )
-        if ready < 0:
-            if errno() == 4:
-                continue
-            raise Error("poll failed: " + strerror(errno()))
-        if ready == 0:
-            continue
-        var count = external_call["read", Int](
-            Int32(fd),
-            OpaquePointer[MutAnyOrigin](
-                unsafe_from_address=Int(chunk.unsafe_ptr())
-            ),
-            4096,
-        )
-        if count < 0:
-            if errno() == 4:
-                continue
-            raise Error("read failed: " + strerror(errno()))
-        if count == 0:
-            break
-        var raw = List[UInt8]()
-        var offset = 0
-        while offset < count:
-            raw.append(chunk[offset])
-            offset += 1
-        var piece = String(from_utf8_lossy=Span(raw))
-        pending += piece
+    var pipe_open = True
+    try:
         while True:
-            var at = pending.find("\n")
-            if at < 0:
-                break
-            var end = at + 1
-            var line = String(pending[byte=:end])
-            var rest = String(pending[byte=end:])
-            pending = rest
-            reducer.feed(line)
-            if not announced and reducer.saw_probe:
-                announced = True
+            var number = take_signal(hold)
+            if number != 0:
+                if pipe_open:
+                    close_fd(fd)
+                    pipe_open = False
+                return _stop_session(pid, 128 + number)
+            if _now() >= next_progress:
                 _progress(
                     suite,
-                    "first probe",
+                    "running",
                     started,
                     reducer.records,
-                    True,
+                    reducer.saw_probe,
                 )
-    if pending.byte_length() > 0:
-        reducer.feed(pending)
-        if not announced and reducer.saw_probe:
-            _progress(suite, "first probe", started, reducer.records, True)
-    close_fd(fd)
-    if leader_reaped:
-        return 124
-    var waited = wait_blocking(pid)
-    if cancelled:
-        return 124
-    if not waited.done:
-        raise Error("wait failed: " + strerror(waited.error))
-    if waited.status < 0:
-        return 128 - waited.status
-    return waited.status
+                next_progress = _now() + interval
+            var limit = 0.05
+            if deadline >= 0:
+                limit = deadline - _now()
+                if limit <= 0:
+                    if pipe_open:
+                        close_fd(fd)
+                        pipe_open = False
+                    return _stop_session(pid, 124)
+                if limit > 0.05:
+                    limit = 0.05
+            var until_progress = next_progress - _now()
+            if until_progress < limit:
+                limit = until_progress
+            if limit < 0.001:
+                limit = 0.001
+            poll[0] = Int32(fd)
+            poll[1] = Int32(1)
+            var ready = external_call["poll", c_int](
+                OpaquePointer[MutAnyOrigin](
+                    unsafe_from_address=Int(poll.unsafe_ptr())
+                ),
+                c_int(1),
+                c_int(Int(limit * 1000.0) + 1),
+            )
+            if ready < 0:
+                if errno() == 4:
+                    continue
+                raise Error("poll failed: " + strerror(errno()))
+            if ready == 0:
+                continue
+            var count = external_call["read", Int](
+                Int32(fd),
+                OpaquePointer[MutAnyOrigin](
+                    unsafe_from_address=Int(chunk.unsafe_ptr())
+                ),
+                4096,
+            )
+            if count < 0:
+                if errno() == 4:
+                    continue
+                raise Error("read failed: " + strerror(errno()))
+            if count == 0:
+                break
+            var raw = List[UInt8]()
+            var offset = 0
+            while offset < count:
+                raw.append(chunk[offset])
+                offset += 1
+            var piece = String(from_utf8_lossy=Span(raw))
+            pending += piece
+            while True:
+                var at = pending.find("\n")
+                if at < 0:
+                    break
+                var end = at + 1
+                var line = String(pending[byte=:end])
+                var rest = String(pending[byte=end:])
+                pending = rest
+                reducer.feed(line)
+                if not announced and reducer.saw_probe:
+                    announced = True
+                    _progress(
+                        suite, "first probe", started, reducer.records, True
+                    )
+        if pending.byte_length() > 0:
+            reducer.feed(pending)
+            if not announced and reducer.saw_probe:
+                _progress(suite, "first probe", started, reducer.records, True)
+        if pipe_open:
+            close_fd(fd)
+            pipe_open = False
+        return _await_child(pid, deadline, hold)
+    except error:
+        if pipe_open:
+            close_fd(fd)
+        try:
+            _ = _stop_session(pid, 1)
+        except:
+            pass
+        raise error
 
 
-def _capture(arguments: List[String]) raises -> Int:
+def _capture(arguments: List[String], hold: SignalHold) raises -> Int:
     """Run one capture described by `arguments`.
 
     Args:
         arguments: The arguments after `capture`, without the program name.
+        hold: The blocked cancellation signals.
 
     Returns:
         The captured command's status.
@@ -2168,6 +2245,7 @@ def _capture(arguments: List[String]) raises -> Int:
                 started,
                 suite,
                 interval,
+                hold,
             )
             records = reducer.records
             saw_probe = reducer.saw_probe
@@ -2603,7 +2681,12 @@ def main() raises:
         for index in range(1, len(arguments)):
             rest.append(arguments[index])
         if arguments[0] == "capture":
-            exit(_capture(rest))
+            var signals = List[Int]()
+            signals.append(SIGHUP)
+            signals.append(SIGINT)
+            signals.append(SIGTERM)
+            var hold = hold_signals(signals)
+            exit(_capture(rest, hold))
         if arguments[0] == "report":
             exit(_report(rest))
         if arguments[0] == "preflight" or arguments[0] == "bind":

@@ -594,33 +594,11 @@ class CoverageLifecycleTests(unittest.TestCase):
         self.assertEqual(process.returncode, 124, output + error)
         self.assert_tree_stopped()
 
-    def test_shared_deadline_kills_child_and_grandchild(self):
-        self.capture_prepared_tree()
-
     def test_shared_deadline_allows_slow_fixture_startup(self):
         (self.root / 'worker.py').write_text(WORKER.replace(
             'role, mode = sys.argv[2:4]',
             "role, mode = sys.argv[2:4]\nif role == 'grandchild': time.sleep(0.7)"))
         self.capture_prepared_tree()
-
-    def test_cancellation_kills_child_and_grandchild(self):
-        for number in (signal.SIGTERM, signal.SIGINT, signal.SIGHUP):
-            with self.subTest(signal=number):
-                for path in self.root.glob('*.pid'):
-                    path.unlink()
-                process = self.launch()
-                self.ready()
-                process.send_signal(number)
-                output, error = process.communicate(timeout=4)
-                self.assertEqual(process.returncode, 128 + number, output + error)
-                self.assert_tree_stopped()
-
-    def test_parser_failure_kills_child_and_grandchild(self):
-        process = self.launch(mode='malformed')
-        output, error = process.communicate(timeout=4)
-        self.assertEqual(process.returncode, 1, output + error)
-        self.assertIn('Legacy compound coverage is ambiguous', error)
-        self.assert_tree_stopped()
 
     def test_output_failure_kills_child_and_grandchild(self):
         command = [sys.executable, str(self.root / 'worker.py'),
@@ -639,15 +617,6 @@ class CoverageLifecycleTests(unittest.TestCase):
             self.assertEqual(coverage_io.capture(['unused'], self.root / 'out',
                                                  self.root / 'err.gz'), 124)
         popen.assert_not_called()
-
-    def test_deadline_also_applies_after_stderr_closes(self):
-        started = time.monotonic()
-        with patch.dict(os.environ, {coverage_io.DEADLINE_ENV: repr(time.monotonic() + 0.15)}), \
-                contextlib.redirect_stdout(io.StringIO()):
-            self.assertEqual(coverage_io.capture(
-                [sys.executable, '-c', 'import os,time;os.close(2);time.sleep(30)'],
-                self.root / 'out', self.root / 'err.gz'), 124)
-        self.assertLess(time.monotonic() - started, 2)
 
     def test_signal_during_spawn_is_applied_after_child_assignment(self):
         real_popen = subprocess.Popen
