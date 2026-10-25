@@ -1650,7 +1650,336 @@ def _lines_24(
     befores.append("")
 
 
-def _spans_25(mut befores: List[String], mut afters: List[String]):
+def _lines_25(
+    mut starts: List[Int], mut stops: List[Int], mut befores: List[String]
+):
+    """Fill one reviewed line-edit table, highest line first.
+
+    Args:
+        starts: The 0-based start lines.
+        stops: The exclusive end lines.
+        befores: The predecessor lines for each span.
+    """
+    starts.append(236)
+    stops.append(239)
+    befores.append(
+        "            if not _grouped_term(y, copies, y_ideal, y_magnitude, y_"
+        "inherited):\n                return None\n"
+    )
+
+
+def _spans_26(mut befores: List[String], mut afters: List[String]):
+    """Fill one reviewed span-edit table, last edit first.
+
+    Args:
+        befores: The predecessor spans.
+        afters: The successor spans.
+    """
+    befores.append(
+        "def _try_spiral_grouped_roundoff_envelope(\n    geometry: RoadGeomet"
+        "ry,\n    d: _Jet,\n    pieces: Int,\n) -> Optional[Tuple[Float64, Fl"
+        "oat64]]:\n    # PRECONDITION: the caller reserved this complete atte"
+        "mpt separately from\n    # any fallback. The metered adapter below s"
+        "upplies that admission policy.\n    # The original caller also owns "
+        "clamping and the complete count union; this\n    # helper must not s"
+        "ilently replace that union with one selected count.\n    if not _sum"
+        "2_supported_environment():\n        return None\n    var rate = _spi"
+        "ral_grouped_domain_rate(geometry, d, pieces)\n    if not rate:\n    "
+        "    return None\n    var rate_value = rate.value()\n    var nodes = "
+        "materialize[_GL_NODES]()\n    var weights = materialize[_GL_WEIGHTS]"
+        "()\n    # Materialized copies come only from these immutable compile"
+        "-time tables.\n    # Reject an incompatible table at compilation, be"
+        "fore this helper can run.\n    # The stored pair multiplicities rema"
+        "in 2,2,1; no ideal weight sum is used.\n    comptime assert _GL_WEIG"
+        "HTS[0] == _GL_WEIGHTS[4]\n    comptime assert _GL_WEIGHTS[1] == _GL_"
+        "WEIGHTS[3]\n    comptime assert _GL_WEIGHTS[0] > 0.0 and _GL_WEIGHTS"
+        "[0] <= 1.0\n    comptime assert _GL_NODES[0] > -1.0 and _GL_NODES[0]"
+        " < 1.0\n    comptime assert _GL_WEIGHTS[1] > 0.0 and _GL_WEIGHTS[1] "
+        "<= 1.0\n    comptime assert _GL_NODES[1] > -1.0 and _GL_NODES[1] < 1"
+        ".0\n    comptime assert _GL_WEIGHTS[2] > 0.0 and _GL_WEIGHTS[2] <= 1"
+        ".0\n    comptime assert _GL_NODES[2] > -1.0 and _GL_NODES[2] < 1.0\n"
+        "    comptime assert _GL_WEIGHTS[3] > 0.0 and _GL_WEIGHTS[3] <= 1.0\n"
+        "    comptime assert _GL_NODES[3] > -1.0 and _GL_NODES[3] < 1.0\n    "
+        "comptime assert _GL_WEIGHTS[4] > 0.0 and _GL_WEIGHTS[4] <= 1.0\n    "
+        "comptime assert _GL_NODES[4] > -1.0 and _GL_NODES[4] < 1.0\n    var "
+        "node_low = inf[DType.float64]()\n    var node_high = -inf[DType.floa"
+        "t64]()\n    for i in range(5):\n        var node = 1.0 + nodes[i]\n "
+        "       node_low = min(node_low, node)\n        node_high = max(node_"
+        "high, node)\n    var distance = _ValueJet(\n        d.value, _Interv"
+        "al.whole(), _Interval.whole(), d.error\n    )\n    var step = distan"
+        "ce / _ValueJet.constant(Float64(pieces))\n    var half_step = _store"
+        "d_half(step)\n    var half_rate = _stored_half(_ValueJet.constant(ra"
+        "te_value))\n    var node_range = _grouped_constant(node_low, node_hi"
+        "gh)\n    var phases = Array[_ValueJet, 4](fill=_ValueJet.constant(0."
+        "0))\n    # Establish every group's original rounded phase branch bef"
+        "ore the first\n    # polynomial evaluation. An ineligible later grou"
+        "p cannot waste trig work.\n    for group in range(4):\n        var l"
+        "ow = group * pieces // 4\n        var high = (group + 1) * pieces //"
+        " 4\n        if low == high:\n            continue\n        var start"
+        " = step * _grouped_constant(Float64(low), Float64(high - 1))\n      "
+        "  var t = start + half_step * node_range\n        var theta = _Value"
+        "Jet.constant(geometry.heading) + t * (\n            _ValueJet.consta"
+        "nt(geometry.curvature_start) + half_rate * t\n        )\n        var"
+        " phase = theta.rounded_value()\n        if not phase.is_finite() or "
+        "phase.magnitude() > _PHASE_LIMIT:\n            return None\n        "
+        "var selection = (\n            theta * _ValueJet.constant(_INV_HALF_"
+        "PI) + _ValueJet.constant(0.5)\n        ).rounded_value()\n        if"
+        " (\n            not selection.is_finite()\n            or floor(sele"
+        "ction.low) != 0.0\n            or floor(selection.high) != 0.0\n    "
+        "    ):\n            return None\n        phases[group] = theta\n    "
+        "var factors = Array[_ValueJet, 3](fill=_ValueJet.constant(0.0))\n   "
+        " for weight in range(3):\n        factors[weight] = half_step * _Val"
+        "ueJet.constant(weights[weight])\n    var x_ideal = _Interval.point(0"
+        ".0)\n    var y_ideal = _Interval.point(0.0)\n    var x_magnitude = _"
+        "Interval.point(0.0)\n    var y_magnitude = _Interval.point(0.0)\n   "
+        " var x_inherited = _Interval.point(0.0)\n    var y_inherited = _Inte"
+        "rval.point(0.0)\n    for group in range(4):\n        var low = group"
+        " * pieces // 4\n        var high = (group + 1) * pieces // 4\n      "
+        "  if low == high:\n            continue\n        var trig = _sincos_"
+        "expression(phases[group])\n        for weight in range(3):\n        "
+        "    var multiplicity = 1 if weight == 2 else 2\n            var copi"
+        "es = (high - low) * multiplicity\n            var x = factors[weight"
+        "] * trig[1]\n            var y = factors[weight] * trig[0]\n        "
+        "    if not _grouped_term(x, copies, x_ideal, x_magnitude, x_inherite"
+        "d):\n                return None\n            if not _grouped_term(y"
+        ", copies, y_ideal, y_magnitude, y_inherited):\n                retur"
+        "n None\n    var x_error = _grouped_origin_error(\n        x_ideal, x"
+        "_magnitude, x_inherited, 5 * pieces, geometry.x\n    )\n    var y_er"
+        "ror = _grouped_origin_error(\n        y_ideal, y_magnitude, y_inheri"
+        "ted, 5 * pieces, geometry.y\n    )\n    if not isfinite(x_error) or "
+        "not isfinite(y_error):\n        return None\n    return (x_error, y_"
+        "error)\n\n\n"
+    )
+    afters.append(
+        "def _try_spiral_grouped_roundoff_envelope(\n    geometry: RoadGeomet"
+        "ry,\n    d: _Jet,\n    pieces: Int,\n) -> Optional[Tuple[Float64, Fl"
+        "oat64]]:\n    # PRECONDITION: the caller reserved this complete atte"
+        "mpt separately from\n    # any fallback. The metered adapter below s"
+        "upplies that admission policy.\n    # The original caller also owns "
+        "clamping and the complete count union; this\n    # helper must not s"
+        "ilently replace that union with one selected count.\n    if not _sum"
+        "2_supported_environment():\n        return None\n    var rate = _spi"
+        "ral_grouped_domain_rate(geometry, d, pieces)\n    if not rate:\n    "
+        "    return None\n    var rate_value = rate.value()\n    var nodes = "
+        "materialize[_GL_NODES]()\n    var weights = materialize[_GL_WEIGHTS]"
+        "()\n    # Materialized copies come only from these immutable compile"
+        "-time tables.\n    # Reject an incompatible table at compilation, be"
+        "fore this helper can run.\n    # The stored pair multiplicities rema"
+        "in 2,2,1; no ideal weight sum is used.\n    comptime assert _GL_WEIG"
+        "HTS[0] == _GL_WEIGHTS[4]\n    comptime assert _GL_WEIGHTS[1] == _GL_"
+        "WEIGHTS[3]\n    comptime assert _GL_WEIGHTS[0] > 0.0 and _GL_WEIGHTS"
+        "[0] <= 1.0\n    comptime assert _GL_NODES[0] > -1.0 and _GL_NODES[0]"
+        " < 1.0\n    comptime assert _GL_WEIGHTS[1] > 0.0 and _GL_WEIGHTS[1] "
+        "<= 1.0\n    comptime assert _GL_NODES[1] > -1.0 and _GL_NODES[1] < 1"
+        ".0\n    comptime assert _GL_WEIGHTS[2] > 0.0 and _GL_WEIGHTS[2] <= 1"
+        ".0\n    comptime assert _GL_NODES[2] > -1.0 and _GL_NODES[2] < 1.0\n"
+        "    comptime assert _GL_WEIGHTS[3] > 0.0 and _GL_WEIGHTS[3] <= 1.0\n"
+        "    comptime assert _GL_NODES[3] > -1.0 and _GL_NODES[3] < 1.0\n    "
+        "comptime assert _GL_WEIGHTS[4] > 0.0 and _GL_WEIGHTS[4] <= 1.0\n    "
+        "comptime assert _GL_NODES[4] > -1.0 and _GL_NODES[4] < 1.0\n    var "
+        "node_low = inf[DType.float64]()\n    var node_high = -inf[DType.floa"
+        "t64]()\n    for i in range(5):\n        var node = 1.0 + nodes[i]\n "
+        "       node_low = min(node_low, node)\n        node_high = max(node_"
+        "high, node)\n    var distance = _ValueJet(\n        d.value, _Interv"
+        "al.whole(), _Interval.whole(), d.error\n    )\n    var step = distan"
+        "ce / _ValueJet.constant(Float64(pieces))\n    var half_step = _store"
+        "d_half(step)\n    var half_rate = _stored_half(_ValueJet.constant(ra"
+        "te_value))\n    var node_range = _grouped_constant(node_low, node_hi"
+        "gh)\n    var phases = Array[_ValueJet, 4](fill=_ValueJet.constant(0."
+        "0))\n    # Establish every group's original rounded phase branch bef"
+        "ore the first\n    # polynomial evaluation. An ineligible later grou"
+        "p cannot waste trig work.\n    for group in range(4):\n        var l"
+        "ow = group * pieces // 4\n        var high = (group + 1) * pieces //"
+        " 4\n        if low == high:\n            continue\n        var start"
+        " = step * _grouped_constant(Float64(low), Float64(high - 1))\n      "
+        "  var t = start + half_step * node_range\n        var theta = _Value"
+        "Jet.constant(geometry.heading) + t * (\n            _ValueJet.consta"
+        "nt(geometry.curvature_start) + half_rate * t\n        )\n        var"
+        " phase = theta.rounded_value()\n        if not phase.is_finite() or "
+        "phase.magnitude() > _PHASE_LIMIT:\n            return None\n        "
+        "var selection = (\n            theta * _ValueJet.constant(_INV_HALF_"
+        "PI) + _ValueJet.constant(0.5)\n        ).rounded_value()\n        # "
+        "The ordered theta and nonnegative error are bounded by the phase gat"
+        "e.\n        # Multiplication by k<=1 and addition of 0.5 cannot over"
+        "flow this selector.\n        comptime assert _INV_HALF_PI > 0.0 and "
+        "_INV_HALF_PI <= 1.0\n        comptime assert _PHASE_LIMIT > 0.0 and "
+        "_PHASE_LIMIT <= 1048576.0\n        if floor(selection.low) != 0.0 or"
+        " floor(selection.high) != 0.0:\n            return None\n        pha"
+        "ses[group] = theta\n    var factors = Array[_ValueJet, 3](fill=_Valu"
+        "eJet.constant(0.0))\n    for weight in range(3):\n        factors[we"
+        "ight] = half_step * _ValueJet.constant(weights[weight])\n    var x_i"
+        "deal = _Interval.point(0.0)\n    var y_ideal = _Interval.point(0.0)"
+        "\n    var x_magnitude = _Interval.point(0.0)\n    var y_magnitude = "
+        "_Interval.point(0.0)\n    var x_inherited = _Interval.point(0.0)\n  "
+        "  var y_inherited = _Interval.point(0.0)\n    for group in range(4):"
+        "\n        var low = group * pieces // 4\n        var high = (group +"
+        " 1) * pieces // 4\n        if low == high:\n            continue\n  "
+        "      var trig = _sincos_expression(phases[group])\n        for weig"
+        "ht in range(3):\n            var multiplicity = 1 if weight == 2 els"
+        "e 2\n            var copies = (high - low) * multiplicity\n         "
+        "   var x = factors[weight] * trig[1]\n            var y = factors[we"
+        "ight] * trig[0]\n            if not _grouped_term(x, copies, x_ideal"
+        ", x_magnitude, x_inherited):\n                return None\n         "
+        "   if not _grouped_term(y, copies, y_ideal, y_magnitude, y_inherited"
+        "):\n                return None\n    var x_error = _grouped_origin_e"
+        "rror(\n        x_ideal, x_magnitude, x_inherited, 5 * pieces, geomet"
+        "ry.x\n    )\n    var y_error = _grouped_origin_error(\n        y_ide"
+        "al, y_magnitude, y_inherited, 5 * pieces, geometry.y\n    )\n    if "
+        "not isfinite(x_error) or not isfinite(y_error):\n        return None"
+        "\n    return (x_error, y_error)\n\n\n"
+    )
+
+
+def _spans_27(mut befores: List[String], mut afters: List[String]):
+    """Fill one reviewed span-edit table, last edit first.
+
+    Args:
+        befores: The predecessor spans.
+        afters: The successor spans.
+    """
+    befores.append(
+        "def _try_spiral_grouped_roundoff_envelope(\n    geometry: RoadGeomet"
+        "ry,\n    d: _Jet,\n    pieces: Int,\n) -> Optional[Tuple[Float64, Fl"
+        "oat64]]:\n    # PRECONDITION: the caller reserved this complete atte"
+        "mpt separately from\n    # any fallback. The metered adapter below s"
+        "upplies that admission policy.\n    # The original caller also owns "
+        "clamping and the complete count union; this\n    # helper must not s"
+        "ilently replace that union with one selected count.\n    if not _sum"
+        "2_supported_environment():\n        return None\n    var rate = _spi"
+        "ral_grouped_domain_rate(geometry, d, pieces)\n    if not rate:\n    "
+        "    return None\n    var rate_value = rate.value()\n    var nodes = "
+        "materialize[_GL_NODES]()\n    var weights = materialize[_GL_WEIGHTS]"
+        "()\n    # Exactly the stored pairs, with actual multiplicities 2,2,1"
+        ". A changed\n    # table must not silently keep a symmetry assumptio"
+        "n or ideal weight sum.\n    if weights[0] != weights[4] or weights[1"
+        "] != weights[3]:\n        return None\n    var node_low = inf[DType."
+        "float64]()\n    var node_high = -inf[DType.float64]()\n    for i in "
+        "range(5):\n        if not isfinite(weights[i]) or weights[i] <= 0.0:"
+        "\n            return None\n        var node = 1.0 + nodes[i]\n      "
+        "  if not isfinite(node):\n            return None\n        node_low "
+        "= min(node_low, node)\n        node_high = max(node_high, node)\n   "
+        " var distance = _ValueJet(\n        d.value, _Interval.whole(), _Int"
+        "erval.whole(), d.error\n    )\n    var step = distance / _ValueJet.c"
+        "onstant(Float64(pieces))\n    var half_step = _stored_half(step)\n  "
+        "  var half_rate = _stored_half(_ValueJet.constant(rate_value))\n    "
+        "var node_range = _grouped_constant(node_low, node_high)\n    var pha"
+        "ses = Array[_ValueJet, 4](fill=_ValueJet.constant(0.0))\n    # Estab"
+        "lish every group's original rounded phase branch before the first\n "
+        "   # polynomial evaluation. An ineligible later group cannot waste t"
+        "rig work.\n    for group in range(4):\n        var low = group * pie"
+        "ces // 4\n        var high = (group + 1) * pieces // 4\n        if l"
+        "ow == high:\n            continue\n        var start = step * _group"
+        "ed_constant(Float64(low), Float64(high - 1))\n        var t = start "
+        "+ half_step * node_range\n        var theta = _ValueJet.constant(geo"
+        "metry.heading) + t * (\n            _ValueJet.constant(geometry.curv"
+        "ature_start) + half_rate * t\n        )\n        var phase = theta.r"
+        "ounded_value()\n        if not phase.is_finite() or phase.magnitude("
+        ") > _PHASE_LIMIT:\n            return None\n        var selection = "
+        "(\n            theta * _ValueJet.constant(_INV_HALF_PI) + _ValueJet."
+        "constant(0.5)\n        ).rounded_value()\n        if (\n            "
+        "not selection.is_finite()\n            or floor(selection.low) != 0."
+        "0\n            or floor(selection.high) != 0.0\n        ):\n        "
+        "    return None\n        phases[group] = theta\n    var factors = Ar"
+        "ray[_ValueJet, 3](fill=_ValueJet.constant(0.0))\n    for weight in r"
+        "ange(3):\n        factors[weight] = half_step * _ValueJet.constant(w"
+        "eights[weight])\n    var x_ideal = _Interval.point(0.0)\n    var y_i"
+        "deal = _Interval.point(0.0)\n    var x_magnitude = _Interval.point(0"
+        ".0)\n    var y_magnitude = _Interval.point(0.0)\n    var x_inherited"
+        " = _Interval.point(0.0)\n    var y_inherited = _Interval.point(0.0)"
+        "\n    for group in range(4):\n        var low = group * pieces // 4"
+        "\n        var high = (group + 1) * pieces // 4\n        if low == hi"
+        "gh:\n            continue\n        var trig = _sincos_expression(pha"
+        "ses[group])\n        for weight in range(3):\n            var multip"
+        "licity = 1 if weight == 2 else 2\n            var copies = (high - l"
+        "ow) * multiplicity\n            var x = factors[weight] * trig[1]\n "
+        "           var y = factors[weight] * trig[0]\n            if not _gr"
+        "ouped_term(x, copies, x_ideal, x_magnitude, x_inherited):\n         "
+        "       return None\n            if not _grouped_term(y, copies, y_id"
+        "eal, y_magnitude, y_inherited):\n                return None\n    va"
+        "r x_error = _grouped_origin_error(\n        x_ideal, x_magnitude, x_"
+        "inherited, 5 * pieces, geometry.x\n    )\n    var y_error = _grouped"
+        "_origin_error(\n        y_ideal, y_magnitude, y_inherited, 5 * piece"
+        "s, geometry.y\n    )\n    if not isfinite(x_error) or not isfinite(y"
+        "_error):\n        return None\n    return (x_error, y_error)\n\n\n"
+    )
+    afters.append(
+        "def _try_spiral_grouped_roundoff_envelope(\n    geometry: RoadGeomet"
+        "ry,\n    d: _Jet,\n    pieces: Int,\n) -> Optional[Tuple[Float64, Fl"
+        "oat64]]:\n    # PRECONDITION: the caller reserved this complete atte"
+        "mpt separately from\n    # any fallback. The metered adapter below s"
+        "upplies that admission policy.\n    # The original caller also owns "
+        "clamping and the complete count union; this\n    # helper must not s"
+        "ilently replace that union with one selected count.\n    if not _sum"
+        "2_supported_environment():\n        return None\n    var rate = _spi"
+        "ral_grouped_domain_rate(geometry, d, pieces)\n    if not rate:\n    "
+        "    return None\n    var rate_value = rate.value()\n    var nodes = "
+        "materialize[_GL_NODES]()\n    var weights = materialize[_GL_WEIGHTS]"
+        "()\n    # Materialized copies come only from these immutable compile"
+        "-time tables.\n    # Reject an incompatible table at compilation, be"
+        "fore this helper can run.\n    # The stored pair multiplicities rema"
+        "in 2,2,1; no ideal weight sum is used.\n    comptime assert _GL_WEIG"
+        "HTS[0] == _GL_WEIGHTS[4]\n    comptime assert _GL_WEIGHTS[1] == _GL_"
+        "WEIGHTS[3]\n    comptime assert _GL_WEIGHTS[0] > 0.0 and _GL_WEIGHTS"
+        "[0] <= 1.0\n    comptime assert _GL_NODES[0] > -1.0 and _GL_NODES[0]"
+        " < 1.0\n    comptime assert _GL_WEIGHTS[1] > 0.0 and _GL_WEIGHTS[1] "
+        "<= 1.0\n    comptime assert _GL_NODES[1] > -1.0 and _GL_NODES[1] < 1"
+        ".0\n    comptime assert _GL_WEIGHTS[2] > 0.0 and _GL_WEIGHTS[2] <= 1"
+        ".0\n    comptime assert _GL_NODES[2] > -1.0 and _GL_NODES[2] < 1.0\n"
+        "    comptime assert _GL_WEIGHTS[3] > 0.0 and _GL_WEIGHTS[3] <= 1.0\n"
+        "    comptime assert _GL_NODES[3] > -1.0 and _GL_NODES[3] < 1.0\n    "
+        "comptime assert _GL_WEIGHTS[4] > 0.0 and _GL_WEIGHTS[4] <= 1.0\n    "
+        "comptime assert _GL_NODES[4] > -1.0 and _GL_NODES[4] < 1.0\n    var "
+        "node_low = inf[DType.float64]()\n    var node_high = -inf[DType.floa"
+        "t64]()\n    for i in range(5):\n        var node = 1.0 + nodes[i]\n "
+        "       node_low = min(node_low, node)\n        node_high = max(node_"
+        "high, node)\n    var distance = _ValueJet(\n        d.value, _Interv"
+        "al.whole(), _Interval.whole(), d.error\n    )\n    var step = distan"
+        "ce / _ValueJet.constant(Float64(pieces))\n    var half_step = _store"
+        "d_half(step)\n    var half_rate = _stored_half(_ValueJet.constant(ra"
+        "te_value))\n    var node_range = _grouped_constant(node_low, node_hi"
+        "gh)\n    var phases = Array[_ValueJet, 4](fill=_ValueJet.constant(0."
+        "0))\n    # Establish every group's original rounded phase branch bef"
+        "ore the first\n    # polynomial evaluation. An ineligible later grou"
+        "p cannot waste trig work.\n    for group in range(4):\n        var l"
+        "ow = group * pieces // 4\n        var high = (group + 1) * pieces //"
+        " 4\n        if low == high:\n            continue\n        var start"
+        " = step * _grouped_constant(Float64(low), Float64(high - 1))\n      "
+        "  var t = start + half_step * node_range\n        var theta = _Value"
+        "Jet.constant(geometry.heading) + t * (\n            _ValueJet.consta"
+        "nt(geometry.curvature_start) + half_rate * t\n        )\n        var"
+        " phase = theta.rounded_value()\n        if not phase.is_finite() or "
+        "phase.magnitude() > _PHASE_LIMIT:\n            return None\n        "
+        "var selection = (\n            theta * _ValueJet.constant(_INV_HALF_"
+        "PI) + _ValueJet.constant(0.5)\n        ).rounded_value()\n        if"
+        " (\n            not selection.is_finite()\n            or floor(sele"
+        "ction.low) != 0.0\n            or floor(selection.high) != 0.0\n    "
+        "    ):\n            return None\n        phases[group] = theta\n    "
+        "var factors = Array[_ValueJet, 3](fill=_ValueJet.constant(0.0))\n   "
+        " for weight in range(3):\n        factors[weight] = half_step * _Val"
+        "ueJet.constant(weights[weight])\n    var x_ideal = _Interval.point(0"
+        ".0)\n    var y_ideal = _Interval.point(0.0)\n    var x_magnitude = _"
+        "Interval.point(0.0)\n    var y_magnitude = _Interval.point(0.0)\n   "
+        " var x_inherited = _Interval.point(0.0)\n    var y_inherited = _Inte"
+        "rval.point(0.0)\n    for group in range(4):\n        var low = group"
+        " * pieces // 4\n        var high = (group + 1) * pieces // 4\n      "
+        "  if low == high:\n            continue\n        var trig = _sincos_"
+        "expression(phases[group])\n        for weight in range(3):\n        "
+        "    var multiplicity = 1 if weight == 2 else 2\n            var copi"
+        "es = (high - low) * multiplicity\n            var x = factors[weight"
+        "] * trig[1]\n            var y = factors[weight] * trig[0]\n        "
+        "    if not _grouped_term(x, copies, x_ideal, x_magnitude, x_inherite"
+        "d):\n                return None\n            if not _grouped_term(y"
+        ", copies, y_ideal, y_magnitude, y_inherited):\n                retur"
+        "n None\n    var x_error = _grouped_origin_error(\n        x_ideal, x"
+        "_magnitude, x_inherited, 5 * pieces, geometry.x\n    )\n    var y_er"
+        "ror = _grouped_origin_error(\n        y_ideal, y_magnitude, y_inheri"
+        "ted, 5 * pieces, geometry.y\n    )\n    if not isfinite(x_error) or "
+        "not isfinite(y_error):\n        return None\n    return (x_error, y_"
+        "error)\n\n\n"
+    )
+
+
+def _spans_28(mut befores: List[String], mut afters: List[String]):
     """Fill one reviewed span-edit table, last edit first.
 
     Args:
@@ -1770,7 +2099,7 @@ def _spans_25(mut befores: List[String], mut afters: List[String]):
     )
 
 
-def _spans_26(mut befores: List[String], mut afters: List[String]):
+def _spans_29(mut befores: List[String], mut afters: List[String]):
     """Fill one reviewed span-edit table, last edit first.
 
     Args:
@@ -1882,7 +2211,7 @@ def _spans_26(mut befores: List[String], mut afters: List[String]):
     )
 
 
-def _spans_27(mut befores: List[String], mut afters: List[String]):
+def _spans_30(mut befores: List[String], mut afters: List[String]):
     """Fill one reviewed span-edit table, last edit first.
 
     Args:
@@ -2470,47 +2799,96 @@ def restored_winner_pins(
     paths.append("extensions/carla/speed_limits.mojo")
     texts.append(text_12_1)
 
-    var live_13 = Path("extensions/carla/spiral_moment_proof.mojo").read_text()
+    var live_13 = Path(
+        "extensions/carla/spiral_grouped_roundoff_proof.mojo"
+    ).read_text()
     _require(
         live_13,
+        "ab0016a54e8a0d2d2dc8235e5954c111f1738ce08868d1c6fc30d454811d7a57",
+        "extensions/carla/spiral_grouped_roundoff_proof.mojo",
+    )
+    starts.clear()
+    stops.clear()
+    befores.clear()
+    _lines_25(starts, stops, befores)
+    var text_13_0 = _apply(live_13, starts, stops, befores)
+    _require(
+        text_13_0,
+        "cb1ebdc6a6eb7b1967c431cfc94b68a0ddff89bd5b2e37ca97608a0aa3115454",
+        "extensions/carla/spiral_grouped_roundoff_proof.mojo",
+    )
+    befores.clear()
+    afters.clear()
+    _spans_26(befores, afters)
+    var text_13_1 = _replace_spans(
+        text_13_0,
+        befores,
+        afters,
+        "extensions/carla/spiral_grouped_roundoff_proof.mojo",
+    )
+    _require(
+        text_13_1,
+        "0e42c79e3bbda283c32886e50ad8b1acd614f651f1d258f4ea4b5e4e0e139299",
+        "extensions/carla/spiral_grouped_roundoff_proof.mojo",
+    )
+    befores.clear()
+    afters.clear()
+    _spans_27(befores, afters)
+    var text_13_2 = _replace_spans(
+        text_13_1,
+        befores,
+        afters,
+        "extensions/carla/spiral_grouped_roundoff_proof.mojo",
+    )
+    _require(
+        text_13_2,
+        "8bb7c5cc0c5c211ae420a3c7329d1a13771f18ef3d89e0d9989b030c0a2b9098",
+        "extensions/carla/spiral_grouped_roundoff_proof.mojo",
+    )
+    paths.append("extensions/carla/spiral_grouped_roundoff_proof.mojo")
+    texts.append(text_13_2)
+
+    var live_14 = Path("extensions/carla/spiral_moment_proof.mojo").read_text()
+    _require(
+        live_14,
         "f42f436b6e616e39bc2cda70491abf2e441aa40d5d8d1aa7f7ecffe3d0b0d5ac",
         "extensions/carla/spiral_moment_proof.mojo",
     )
     befores.clear()
     afters.clear()
-    _spans_25(befores, afters)
-    var text_13_0 = _replace_spans(
-        live_13, befores, afters, "extensions/carla/spiral_moment_proof.mojo"
+    _spans_28(befores, afters)
+    var text_14_0 = _replace_spans(
+        live_14, befores, afters, "extensions/carla/spiral_moment_proof.mojo"
     )
     _require(
-        text_13_0,
+        text_14_0,
         "2771e2f9fc9ee1768707b2f03475309d81a066c6be2d8bd27233001c6d09d1ec",
         "extensions/carla/spiral_moment_proof.mojo",
     )
     paths.append("extensions/carla/spiral_moment_proof.mojo")
-    texts.append(text_13_0)
+    texts.append(text_14_0)
 
-    var live_14 = Path(
+    var live_15 = Path(
         "extensions/carla/spiral_roundoff_proof.mojo"
     ).read_text()
     _require(
-        live_14,
+        live_15,
         "66903c0cfba3315c46e8f48c9af0b3c118db4194236a7e4fe3e893a986c90b0c",
         "extensions/carla/spiral_roundoff_proof.mojo",
     )
     befores.clear()
     afters.clear()
-    _spans_26(befores, afters)
-    var text_14_0 = _replace_spans(
-        live_14, befores, afters, "extensions/carla/spiral_roundoff_proof.mojo"
+    _spans_29(befores, afters)
+    var text_15_0 = _replace_spans(
+        live_15, befores, afters, "extensions/carla/spiral_roundoff_proof.mojo"
     )
     _require(
-        text_14_0,
+        text_15_0,
         "380d8130fd2f18dd93768ed0e7ffb17a45e7b1631a81fbd0f68de1f08fe16ec7",
         "extensions/carla/spiral_roundoff_proof.mojo",
     )
     paths.append("extensions/carla/spiral_roundoff_proof.mojo")
-    texts.append(text_14_0)
+    texts.append(text_15_0)
 
 
 def restored_domain_winner(text: String) raises -> String:
@@ -2532,7 +2910,7 @@ def restored_domain_winner(text: String) raises -> String:
     )
     var befores = List[String]()
     var afters = List[String]()
-    _spans_27(befores, afters)
+    _spans_30(befores, afters)
     var restored = _replace_spans(
         text, befores, afters, "extensions/carla/spiral_domain_proof.mojo"
     )
