@@ -13,6 +13,7 @@ from tests._geometry_predecessor import restored_geometry
 from tests._winner_pin_predecessor import (
     restored_dispatch_winner,
     restored_domain_winner,
+    restored_rounded_line_winner,
     restored_winner_pins,
 )
 from tools._python_json import PyJson
@@ -106,6 +107,8 @@ def test_live_consumers_restore_their_winner_pins() raises:
                             )
                         else:
                             assert_true(name == _ROUNDED)
+                            var line = restored_rounded_line_winner()
+                            assert_equal(sha256_hex(line.as_bytes()), expected)
                 elif sha256_hex(Path(name).read_bytes()) == expected:
                     direct += 1
         index += 1
@@ -139,6 +142,10 @@ def test_a_changed_winner_pin_is_refused() raises:
     assert_true(
         sha256_hex((dispatch + "\n").as_bytes())
         != sha256_hex(dispatch.as_bytes())
+    )
+    var line = restored_rounded_line_winner()
+    assert_true(
+        sha256_hex((line + "\n").as_bytes()) != sha256_hex(line.as_bytes())
     )
 
 

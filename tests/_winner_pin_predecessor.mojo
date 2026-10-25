@@ -3013,3 +3013,115 @@ def restored_dispatch_winner(text: String) raises -> String:
         "extensions/carla/curve_sample_dispatch.mojo",
     )
     return restored
+
+
+def _lines_33(
+    mut starts: List[Int], mut stops: List[Int], mut befores: List[String]
+):
+    """Fill one reviewed line-edit table, highest line first.
+
+    Args:
+        starts: The 0-based start lines.
+        stops: The exclusive end lines.
+        befores: The predecessor lines for each span.
+    """
+    starts.append(21)
+    stops.append(22)
+    befores.append("from extensions.carla.road_info import info_index\n")
+
+
+def _lines_34(
+    mut starts: List[Int], mut stops: List[Int], mut befores: List[String]
+):
+    """Fill one reviewed line-edit table, highest line first.
+
+    Args:
+        starts: The 0-based start lines.
+        stops: The exclusive end lines.
+        befores: The predecessor lines for each span.
+    """
+    starts.append(142)
+    stops.append(143)
+    befores.append(
+        "    if y.low == y.high and cosine.low != 0.0:\n"
+        "        return _RoundedLineAxis(0, cosine.low)\n"
+        "    if x.low == x.high and sine.low != 0.0:\n"
+        "        return _RoundedLineAxis(1, -sine.low)\n"
+        "    return None\n"
+    )
+    starts.append(135)
+    stops.append(137)
+    befores.append(
+        "    if not (x.known and y.known and elevation.low =="
+        " elevation.high):\n"
+    )
+    starts.append(126)
+    stops.append(127)
+    befores.append("    if not d.known:\n        return None\n")
+    starts.append(115)
+    stops.append(117)
+    befores.append("    if not offset.known or offset.low != offset.high:\n")
+    starts.append(28)
+    stops.append(49)
+    befores.append("")
+
+
+def restored_rounded_line_winner() raises -> String:
+    """Restore the rounded-line winner pin from the live file.
+
+    Returns:
+        The winner pin source.
+
+    Raises:
+        Error: The live file or a restored pin changed.
+    """
+    var path = "extensions/carla/curve_rounded_line.mojo"
+    var live = Path(path).read_text()
+    _require(
+        live,
+        "22b70ec9febc6f3d21a8a4d9f1a74650d676e34782fab2812004a1a3aadeb698",
+        path,
+    )
+    var starts = List[Int]()
+    var stops = List[Int]()
+    var befores = List[String]()
+    _lines_33(starts, stops, befores)
+    var border = _apply(live, starts, stops, befores)
+    _require(
+        border,
+        "6741ad9d7434c08070de3c959cb49ac42939ac633d1dcd48c9f5cdfdaa719aed",
+        path,
+    )
+    starts.clear()
+    stops.clear()
+    befores.clear()
+    _lines_34(starts, stops, befores)
+    var mid = _apply(border, starts, stops, befores)
+    _require(
+        mid,
+        "aeb7b6722b223493d9a86422a17500be9c68d1b7d3de8bd441795001dc513f35",
+        path,
+    )
+    var restored = _replace_once(
+        mid,
+        (
+            "    if (\n"
+            "        info_index(road.info.geometries, low) != 0\n"
+            "        or info_index(road.info.geometries, high) != 0\n"
+            "    ):\n"
+            "        return None\n"
+        ),
+        (
+            "    # One record active at low also covers high: the domain is"
+            " ordered.\n"
+            "    if info_index(road.info.geometries, low) != 0:\n"
+            "        return None\n"
+        ),
+        path,
+    )
+    _require(
+        restored,
+        "af00f76f66323ce85b0f794cbe7162d63e6db864c49a052827f565c2332383ec",
+        path,
+    )
+    return restored
