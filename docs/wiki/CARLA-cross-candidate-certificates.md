@@ -92,6 +92,11 @@ The live proof keeps require_reuse with default False.
 The refusal returns the unknown point and keeps one use.
 A changed parameter, refusal, or extra use is refused.
 
+Mojo checks the stored jet derivative gate.
+The live aliases bind True and False.
+The four stored helpers do not read a derivative field.
+A changed alias or a derivative read is refused.
+
 ## Candidate certificate
 
 A certificate contains a stored incumbent point and its road parameter.
