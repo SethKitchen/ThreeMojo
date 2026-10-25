@@ -133,6 +133,8 @@ struct GameHumanoid(Movable):
     var strands: List[HairStrands]
     # Present only when original facial correspondence was requested.
     var face: Optional[GameFace]
+    var hair: Optional[NodeId]
+    """The node of the scalp hair's shell, which a hood or a helmet hides."""
 
     def __init__(
         out self,
@@ -142,6 +144,7 @@ struct GameHumanoid(Movable):
         var skins: List[Int],
         var strands: List[HairStrands],
         var face: Optional[GameFace] = None,
+        hair: Optional[NodeId] = None,
     ):
         """Hold a humanoid's parts.
 
@@ -152,6 +155,7 @@ struct GameHumanoid(Movable):
             skins: Its skinned meshes' indices in the scene.
             strands: Its hair's strands, or none.
             face: Preserved face and mouth binding, or no facial animation.
+            hair: The node of the scalp hair's shell, if it has one.
         """
         self.rig = rig^
         self.root = root
@@ -159,6 +163,7 @@ struct GameHumanoid(Movable):
         self.skins = skins^
         self.strands = strands^
         self.face = face^
+        self.hair = hair
 
 
 def _key(p: Vector3) -> Int:
@@ -533,7 +538,7 @@ def add_game_humanoid(
     holder.set_position(-head.x, -head.y, -head.z)
     var holder_id = scene.attach(holder^, bones[HEAD.value])
     var hair = resolved_paint(assets, hair_paint, hair_phong(spec.genome))
-    _ = place_mesh_node(scene, assets, holder_id, shell^, hair)
+    var hair_node = place_mesh_node(scene, assets, holder_id, shell^, hair)
     var face = Optional[GameFace](None)
     if facial_animation:
         var paints = List[MaterialId]()
@@ -562,7 +567,9 @@ def add_game_humanoid(
                 style=hair_style,
             )
         )
-    return GameHumanoid(rig^, root, bones^, skins^, strands^, face^)
+    return GameHumanoid(
+        rig^, root, bones^, skins^, strands^, face^, Optional(hair_node)
+    )
 
 
 def game_build_settings(
