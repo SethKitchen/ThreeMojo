@@ -263,6 +263,11 @@ The expansion block and the Variant import stay in place.
 Restoring those spans matches the pinned routing.
 A moved span or a changed routing is refused.
 
+Mojo checks the live map-builder routing.
+Eight reviewed routing spans keep the live signatures.
+Restoring those spans matches the pinned routing.
+A moved span or a changed signature is refused.
+
 ## Candidate certificate
 
 A certificate contains a stored incumbent point and its road parameter.
