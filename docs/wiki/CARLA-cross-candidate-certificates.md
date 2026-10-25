@@ -97,6 +97,11 @@ The live aliases bind True and False.
 The four stored helpers do not read a derivative field.
 A changed alias or a derivative read is refused.
 
+Mojo checks the sampled value import gate.
+Eight imports match the pin.
+The road-info import is the reviewed alias.
+An import edit, a derivative read, or a square-root read is refused.
+
 ## Candidate certificate
 
 A certificate contains a stored incumbent point and its road parameter.
