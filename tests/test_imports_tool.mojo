@@ -134,6 +134,52 @@ def test_imported_names_reads_from_and_plain_imports() raises:
     )
 
 
+def test_imported_names_keep_comments_aliases_and_tabs() raises:
+    """A parenthesized import drops comments, and a tab still ends a name."""
+    _same(
+        imported_names(
+            "from math import (\n"
+            "            vector2, # first\n"
+            "            vector3 as vector,\n"
+            "        )\n"
+            "        import core.scene as scene, core.assets # both\n"
+        ),
+        [
+            "math",
+            "math.vector2",
+            "math.vector3",
+            "core.scene",
+            "core.assets",
+        ],
+    )
+    _same(
+        imported_names(
+            "from pkg import bound\tas renamed\nimport core.scene\tas\tscene\n"
+        ),
+        ["pkg", "pkg.bound", "core.scene"],
+    )
+
+
+def test_an_entry_directory_hides_the_root_module() raises:
+    """The compiled file's directory is searched before the repository root."""
+    var known = Set[String]()
+    known.add("math/__init__.mojo")
+    known.add("math/vector3.mojo")
+    known.add("tests/math.mojo")
+    var scene = List[String]()
+    scene.append("core")
+    _same(
+        resolve("math.vector3", known, scene),
+        ["math/__init__.mojo", "math/vector3.mojo"],
+    )
+    var tests = List[String]()
+    tests.append("tests")
+    _same(
+        resolve("math", known, tests),
+        ["tests/math.mojo", "math/__init__.mojo"],
+    )
+
+
 def test_imported_names_keeps_an_unclosed_list_to_the_end() raises:
     _same(
         imported_names("from a import (b,\n c\n"),
@@ -473,6 +519,27 @@ def test_conservative_changes_select_everything_with_a_reason() raises:
             "coverage/a.mojo",
             False,
             "a build input has no narrower dependency rule: coverage/a.mojo",
+        ),
+        (
+            "coverage/instrument.mojo",
+            False,
+            (
+                "a build input has no narrower dependency rule:"
+                " coverage/instrument.mojo"
+            ),
+        ),
+        (
+            "coverage/scanner.mojo",
+            False,
+            (
+                "a build input has no narrower dependency rule:"
+                " coverage/scanner.mojo"
+            ),
+        ),
+        (
+            "tools/new.py",
+            False,
+            "a build input has no narrower dependency rule: tools/new.py",
         ),
         (
             "tests/test_bad.mojo",

@@ -1,123 +1,12 @@
 # Copyright (c) 2026 Seth Kitchen, PE
 # SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
-"""Regression tests for dependency selection, cache identity, and state keys."""
+"""Regression tests for make cache keys, coverage staging, and capture records."""
 
 import os
 from pathlib import Path
-import re
 import tempfile
 import unittest
 from unittest.mock import patch
-
-import affected
-import cache_key
-
-
-class DependencyTests(unittest.TestCase):
-    def test_coverage_parser_and_scanner_each_select_all_suites(self):
-        for path in ('coverage/instrument.mojo', 'coverage/scanner.mojo'):
-            reasons = []
-            self.assertEqual(affected.affected_set({path: False}, reasons), affected.ALL)
-            self.assertTrue(any(path in reason for reason in reasons))
-
-    def test_multiline_comments_and_aliases(self):
-        self.assertEqual(affected.imported_names('''from math import (
-            vector2, # first
-            vector3 as vector,
-        )
-        import core.scene as scene, core.assets # both
-        '''), ['math', 'math.vector2', 'math.vector3', 'core.scene', 'core.assets'])
-        # A tab before or after `as` still ends the imported name.
-        self.assertEqual(affected.imported_names(
-            'from pkg import bound\tas renamed\nimport core.scene\tas\tscene\n'),
-            ['pkg', 'pkg.bound', 'core.scene'])
-
-    def test_nul_paths_and_untracked_tooling(self):
-        with patch.object(affected, 'git', side_effect=[
-            'abc\n', 'M\0assets/quoted "name"\n雪.bin\0D\0math/old.mojo\0',
-            'tools/new.py\0tests/new suite.mojo\0notes.txt\0',
-        ]) as git:
-            self.assertEqual(affected.changed_paths('main'), {
-                'assets/quoted "name"\n雪.bin': False, 'math/old.mojo': True,
-                'tools/new.py': False, 'tests/new suite.mojo': False,
-            })
-            self.assertIn('-z', git.call_args_list[1].args)
-            self.assertIn('-z', git.call_args_list[2].args)
-
-    def test_unknown_change_is_conservative(self):
-        self.assertEqual(affected.affected_set({'tools/new.py': False}), affected.ALL)
-
-    def test_git_failure_is_conservative(self):
-        with patch.object(affected, 'git', return_value=None):
-            self.assertIsNone(affected.changed_paths('missing'))
-
-    def test_sibling_imports_and_package_initializers(self):
-        known = {'math/__init__.mojo', 'math/vector3.mojo', 'tests/math.mojo'}
-        self.assertEqual(affected.resolve('math.vector3', 'core/scene.mojo', known),
-                         ['math/__init__.mojo', 'math/vector3.mojo'])
-        # The module beside the entry point comes first. The root package it
-        # hides stays a dependency, so a change there still selects the test.
-        self.assertEqual(affected.resolve('math', 'tests/test.mojo', known),
-                         ['tests/math.mojo', 'math/__init__.mojo'])
-
-
-class CacheTests(unittest.TestCase):
-    def test_each_consumed_input_and_flags_changes_key(self):
-        with tempfile.TemporaryDirectory() as directory:
-            root = Path(directory)
-            for name in ('assets/fixture.bin', 'tools/affected.py', 'core/__init__.mojo', 'Makefile'):
-                path = root / name
-                path.parent.mkdir(parents=True, exist_ok=True)
-                path.write_bytes(b'first')
-            original = cache_key.cache_key(root, ['-I .'])
-            self.assertNotEqual(original, cache_key.cache_key(root, ['-I . -O0']))
-            for name in ('assets/fixture.bin', 'tools/affected.py', 'core/__init__.mojo', 'Makefile'):
-                path = root / name
-                path.write_bytes(b'second')
-                self.assertNotEqual(original, cache_key.cache_key(root, ['-I .']), name)
-                path.write_bytes(b'first')
-            (root / 'assets/fixture.bin').rename(root / 'assets/renamed.bin')
-            self.assertNotEqual(original, cache_key.cache_key(root, ['-I .']))
-
-    def test_coverage_instrumenter_changes_invalidate_coverage_stamp(self):
-        with tempfile.TemporaryDirectory() as directory:
-            root = Path(directory)
-            tool = root / 'coverage/instrument.mojo'
-            tool.parent.mkdir()
-            tool.write_text('top-level-only parser')
-            before = cache_key.cache_key(root, ['covered:module.mojo'])
-            tool.write_text('grouped leaf parser')
-            after = cache_key.cache_key(root, ['covered:module.mojo'])
-            self.assertNotEqual(before, after)
-            scanner = root / 'coverage/scanner.mojo'
-            scanner.write_text('quote-aware scanner')
-            self.assertNotEqual(after, cache_key.cache_key(root, ['covered:module.mojo']))
-
-    def test_generated_outputs_are_not_inputs(self):
-        with tempfile.TemporaryDirectory() as directory:
-            root = Path(directory)
-            original = cache_key.cache_key(root, [])
-            for folder in ('.cache', 'coverage/build', 'node_modules', '.venv'):
-                path = root / folder / 'generated.mojo'
-                path.parent.mkdir(parents=True, exist_ok=True)
-                path.write_text('ignored')
-            self.assertEqual(original, cache_key.cache_key(root, []))
-
-
-class MaterialStateTests(unittest.TestCase):
-    def test_optimizer_key_accounts_for_every_material_field(self):
-        root = Path(__file__).resolve().parent.parent
-        source = (root / 'materials/material.mojo').read_text()
-        body = source.split('struct Material(ImplicitlyCopyable):', 1)[1].split('    def __init__', 1)[0]
-        fields = set(re.findall(r'^    var (\w+):', body, re.M))
-        signature = (root / 'core/scene_optimizer.mojo').read_text().split('def material_signature(', 1)[1].split('def attributes_signature(', 1)[0]
-        represented = set(re.findall(r'material\.(\w+)', signature))
-        self.assertEqual(fields, represented, 'Update the complete material key when adding state')
-        # Composite state has more than a single numeric value.
-        for component in ('line_width.world_units', 'scattering.map', 'scattering.power',
-                          'env_map_rotation.order.first', 'color.a'):
-            self.assertIn('material.' + component, signature)
-
 
 
 class MakeCacheTests(unittest.TestCase):

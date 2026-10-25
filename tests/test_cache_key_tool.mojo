@@ -80,7 +80,18 @@ def test_the_key_changes_with_inputs_names_and_settings_only() raises:
     assert_equal(before, cache_key(tree.root, ["s"]))
     tree.write("README.md", "changed")
     tree.write("out/p.mojo", "changed")
+    tree.write(".cache/generated.mojo", "ignored")
+    tree.write("coverage/build/generated.mojo", "ignored")
+    tree.write("node_modules/generated.mojo", "ignored")
+    tree.write(".venv/generated.mojo", "ignored")
     assert_equal(before, cache_key(tree.root, ["s"]))
+    tree.write("coverage/instrument.mojo", "top-level-only parser")
+    var instrument = cache_key(tree.root, ["covered:module.mojo"])
+    tree.write("coverage/instrument.mojo", "grouped leaf parser")
+    var grouped = cache_key(tree.root, ["covered:module.mojo"])
+    assert_not_equal(instrument, grouped)
+    tree.write("coverage/scanner.mojo", "quote-aware scanner")
+    assert_not_equal(grouped, cache_key(tree.root, ["covered:module.mojo"]))
     assert_not_equal(before, cache_key(tree.root, ["t"]))
     # A moved boundary between two settings changes the key.
     assert_not_equal(
@@ -92,7 +103,13 @@ def test_the_key_changes_with_inputs_names_and_settings_only() raises:
         assert_not_equal(before, after, path)
         before = after
     tree.write("core/new.mojo", "")
-    assert_not_equal(before, cache_key(tree.root, ["s"]))
+    var added = cache_key(tree.root, ["s"])
+    assert_not_equal(before, added)
+    _ = run_program(
+        ["mv", tree.root + "/assets/i.bin", tree.root + "/assets/renamed.bin"],
+        10,
+    )
+    assert_not_equal(added, cache_key(tree.root, ["s"]))
     tree.close()
 
 

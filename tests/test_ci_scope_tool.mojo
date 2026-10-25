@@ -999,14 +999,16 @@ def test_nul_paths_deletion_and_untracked_sources() raises:
     tree.write('assets/quotes "x"\n雪.bin', "b")
     tree.remove("core/other.mojo")
     tree.write("tools/new.py", "")
+    tree.write("tests/new suite.mojo", "")
     tree.write("notes.txt", "")
     var changed = changed_paths(tree.root, "HEAD")
     assert_true(Bool(changed))
     var value = changed.value().copy()
-    assert_equal(len(value), 3)
+    assert_equal(len(value), 4)
     assert_false(value['assets/quotes "x"\n雪.bin'])
     assert_true(value["core/other.mojo"])
     assert_false(value["tools/new.py"])
+    assert_false(value["tests/new suite.mojo"])
     tree.close()
 
 
