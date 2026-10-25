@@ -10,6 +10,7 @@ loops, the stored-half calls, and the final error writes.
 """
 
 from tools.spiral_moment_graph import normalized_block
+from tools.spiral_moment_words import decimal_word
 
 
 def _fail(message: String) raises:
@@ -319,3 +320,164 @@ def ideal_spiral_layout(text: String) raises:
         if names[index] != expected[index]:
             _fail("expected exactly five reviewed stored-half calls")
         index += 1
+
+
+def _name_char(byte: UInt8, first: Bool) -> Bool:
+    """Return whether `byte` can appear in an identifier.
+
+    Args:
+        byte: One source byte.
+        first: True for the first byte.
+
+    Returns:
+        True for an ASCII letter or underscore, and a digit after that.
+    """
+    if (
+        (byte >= 65 and byte <= 90)
+        or (byte >= 97 and byte <= 122)
+        or byte == 95
+    ):
+        return True
+    if not first and byte >= 48 and byte <= 57:
+        return True
+    return False
+
+
+def _skip_ws(raw: Span[UInt8, _], index: Int) -> Int:
+    """Skip ASCII whitespace.
+
+    Args:
+        raw: The source bytes.
+        index: The first byte.
+
+    Returns:
+        The first non-whitespace byte.
+    """
+    var cursor = index
+    while cursor < len(raw):
+        var byte = raw[cursor]
+        if byte != 32 and byte != 9 and byte != 10 and byte != 13:
+            break
+        cursor += 1
+    return cursor
+
+
+def _word(raw: Span[UInt8, _], index: Int, word: String) -> Int:
+    """Return the index after `word`, or -1.
+
+    Args:
+        raw: The source bytes.
+        index: The first byte.
+        word: The identifier.
+
+    Returns:
+        The byte after the identifier, or -1 when it is not there.
+    """
+    var token = word.as_bytes()
+    if index > 0 and _name_char(raw[index - 1], False):
+        return -1
+    if index + len(token) > len(raw):
+        return -1
+    var offset = 0
+    while offset < len(token):
+        if raw[index + offset] != token[offset]:
+            return -1
+        offset += 1
+    var end = index + len(token)
+    if end < len(raw) and _name_char(raw[end], False):
+        return -1
+    return end
+
+
+def _half_rate_end(raw: Span[UInt8, _], index: Int) raises -> Int:
+    """Return the end of one half-times-rate product, or -1.
+
+    Args:
+        raw: The source bytes.
+        index: A candidate start.
+
+    Returns:
+        The byte after `rate`, or -1 when the product is not here.
+
+    Raises:
+        Error: A number spelling is not a decimal literal.
+    """
+    var cursor = _word(raw, index, "Expression")
+    if cursor < 0:
+        return -1
+    cursor = _skip_ws(raw, cursor)
+    if cursor >= len(raw) or raw[cursor] != 46:
+        return -1
+    cursor = _word(raw, _skip_ws(raw, cursor + 1), "constant")
+    if cursor < 0:
+        return -1
+    cursor = _skip_ws(raw, cursor)
+    if cursor >= len(raw) or raw[cursor] != 40:
+        return -1
+    cursor = _skip_ws(raw, cursor + 1)
+    var start = cursor
+    if cursor < len(raw) and (raw[cursor] == 43 or raw[cursor] == 45):
+        cursor += 1
+    var saw = False
+    while cursor < len(raw) and raw[cursor] >= 48 and raw[cursor] <= 57:
+        saw = True
+        cursor += 1
+    if cursor < len(raw) and raw[cursor] == 46:
+        cursor += 1
+        while cursor < len(raw) and raw[cursor] >= 48 and raw[cursor] <= 57:
+            saw = True
+            cursor += 1
+    if not saw:
+        return -1
+    var spelling = String()
+    var byte = start
+    while byte < cursor:
+        spelling += chr(Int(raw[byte]))
+        byte += 1
+    if decimal_word(spelling) != decimal_word("0.5"):
+        return -1
+    cursor = _skip_ws(raw, cursor)
+    if cursor >= len(raw) or raw[cursor] != 41:
+        return -1
+    cursor = _skip_ws(raw, cursor + 1)
+    if cursor >= len(raw) or raw[cursor] != 42:
+        return -1
+    return _word(raw, _skip_ws(raw, cursor + 1), "rate")
+
+
+def legacy_rate_half_commutations(text: String) raises -> Int:
+    """Return the number of historical half-times-rate products.
+
+    Args:
+        text: The legacy ideal spiral source.
+
+    Returns:
+        How many `Expression.constant(0.5) * rate` products are present.
+
+    Raises:
+        Error: A looked-at number is not a decimal literal.
+    """
+    var raw = text.as_bytes()
+    var count = 0
+    var index = 0
+    while index < len(raw):
+        var end = _half_rate_end(raw, index)
+        if end >= 0:
+            count += 1
+            index = end
+        else:
+            index += 1
+    return count
+
+
+def require_legacy_rate_halves(text: String) raises:
+    """Require exactly two historical half-times-rate products.
+
+    Args:
+        text: The legacy ideal spiral source.
+
+    Raises:
+        Error: The count is not two.
+    """
+    if legacy_rate_half_commutations(text) != 2:
+        _fail("expected exactly two historical rate-half commutations")

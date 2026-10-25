@@ -73,6 +73,10 @@ Nineteen statements keep the guard, the declarations, the loops, and the error w
 The five stored-half calls are step, rate, step, step, and rate.
 A moved guard, declaration, term, or call is refused.
 
+Mojo checks the two historical rate-half commutations.
+The legacy ideal source keeps its digest and exactly two half-times-rate products.
+A removed product and an added product are refused.
+
 Mojo checks the stored scalar and array words.
 The four scalars and the four arrays match their pins.
 A longer spelling keeps the same word.

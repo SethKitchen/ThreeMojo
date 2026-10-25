@@ -6,10 +6,16 @@
 """The live ideal spiral keeps its reviewed statement layout."""
 
 from std.pathlib import Path
-from std.testing import TestSuite, assert_raises
+from std.testing import TestSuite, assert_equal, assert_raises
 
+from tools._python_json import PyJson
+from tools._sha256 import sha256_hex
 from tools.spiral_moment_graph import selected_block
-from tools.spiral_moment_ideal import ideal_spiral_layout
+from tools.spiral_moment_ideal import (
+    ideal_spiral_layout,
+    legacy_rate_half_commutations,
+    require_legacy_rate_halves,
+)
 
 
 def _block() raises -> String:
@@ -56,6 +62,48 @@ def test_a_moved_ideal_statement_is_refused() raises:
         ideal_spiral_layout(
             block.replace("_stored_half(rate) * d", "_stored_half(d) * d")
         )
+
+
+def _legacy() raises -> String:
+    """Return the pinned legacy ideal spiral.
+
+    Returns:
+        The normalized legacy source.
+
+    Raises:
+        Error: The pin file is unreadable.
+    """
+    var text = Path(
+        "tools/carla_lane_oracle/spiral-moment-pins.json"
+    ).read_text()
+    var doc = PyJson.parse(text)
+    var projection = doc.at(doc.root, "ideal_projection")
+    return doc.text(doc.at(projection, "legacy_normalized_source"))
+
+
+def test_the_legacy_source_has_two_rate_halves() raises:
+    """The legacy ideal source keeps two half-times-rate products."""
+    var legacy = _legacy()
+    assert_equal(
+        sha256_hex(legacy.as_bytes()),
+        "270a3cde3b012388ee8fcb6a4ecc59d837d1583f6c406f942ff98fdccd9f5733",
+    )
+    require_legacy_rate_halves(legacy)
+    assert_equal(legacy_rate_half_commutations(legacy), 2)
+    var removed = legacy.replace(
+        "Expression.constant(0.5) * rate", "Expression.constant(0.5) * step"
+    )
+    with assert_raises(contains="exactly two historical rate-half"):
+        require_legacy_rate_halves(removed)
+    var added = legacy + "\nk0 + Expression.constant(0.5) * rate * d\n"
+    with assert_raises(contains="exactly two historical rate-half"):
+        require_legacy_rate_halves(added)
+    assert_equal(
+        legacy_rate_half_commutations(
+            "k0 + rate * Expression.constant(0.5) * t\n"
+        ),
+        0,
+    )
 
 
 def main() raises:
