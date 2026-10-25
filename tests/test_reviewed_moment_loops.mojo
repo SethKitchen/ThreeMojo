@@ -386,6 +386,128 @@ def test_speed_lane_blend_and_hair_proofs_follow_their_files() raises:
         _ = run_program(["rm", "-rf", root], 30.0)
 
 
+def _rows_including(
+    root: String, module: String, include: String
+) raises -> Int:
+    """Return the proof count when `include` is also checked for shadows."""
+    var arguments = List[String]()
+    arguments.append("reviews")
+    arguments.append(root)
+    arguments.append(module)
+    if include.byte_length() > 0:
+        arguments.append("--include")
+        arguments.append(include)
+    return _rows(PyJson.parse(_trim(_run(arguments))))
+
+
+def test_lane_blend_and_hair_edits_and_std_shadows_omit_the_proof() raises:
+    """A changed premise or a std shadow leaves the lane, blend, and hair proofs out.
+    """
+    var root = mkdtemp(prefix="reviewed-lane-")
+    try:
+        var lane_files = List[String]()
+        lane_files.append("extensions/__init__.mojo")
+        lane_files.append("extensions/carla/__init__.mojo")
+        lane_files.append("extensions/carla/curve_distance.mojo")
+        lane_files.append("extensions/carla/curve_interval.mojo")
+        lane_files.append("extensions/carla/lane_distance.mojo")
+        lane_files.append("tools/carla_lane_oracle/shared_helper_contracts.py")
+        for name in lane_files:
+            _stage(root, name)
+        _stage(root, "extensions/humanoid/skeleton/head/hair/strands.mojo")
+        assert_equal(_rows(_reviews(root, "extensions/carla/lane_distance")), 1)
+        var edits = List[String]()
+        edits.append(
+            "extensions/carla/curve_distance.mojo|comptime assert axes >= 1 and"
+            " axes <= 3|comptime assert axes >= 0 and axes <= 3"
+        )
+        edits.append(
+            "extensions/carla/curve_distance.mojo|comptime assert axes >= 1 and"
+            " axes <= 3|comptime assert axes >= 1 and axes <= 4"
+        )
+        edits.append(
+            "extensions/carla/lane_distance.mojo|var bound ="
+            " _distance_normalized_square[axes](point, query, scale)|var bound"
+            " = _Interval(0.0, 0.0)"
+        )
+        edits.append(
+            "extensions/carla/lane_distance.mojo|_normalized_square as"
+            " _distance_normalized_square|_unchecked_square as"
+            " _distance_normalized_square"
+        )
+        edits.append(
+            "extensions/carla/lane_distance.mojo|var original ="
+            " _normalized_square[axes](point, query, scale)|var original ="
+            " _normalized_square[1](point, query, scale)"
+        )
+        edits.append(
+            "extensions/carla/lane_distance.mojo|for axis in range(axes):|for"
+            " axis in range(axes - 1):"
+        )
+        edits.append(
+            "extensions/carla/curve_interval.mojo|[actual_rate.low,"
+            " actual_rate.high, one, two]|List[Float64]()"
+        )
+        edits.append(
+            "extensions/carla/curve_interval.mojo|var low: Float64|var low:"
+            " Float32"
+        )
+        edits.append(
+            "extensions/humanoid/skeleton/head/hair/strands.mojo|for channel in"
+            " range(3):|for channel in range(0):"
+        )
+        for item in edits:
+            var first = item.find("|")
+            var rest = String(item[byte = first + 1 :])
+            var second = rest.find("|")
+            var name = String(item[byte=:first])
+            var before = String(rest[byte=:second])
+            var after = String(rest[byte = second + 1 :])
+            var end = name.byte_length() - 5
+            var module = String(name[byte=:end])
+            if name == "extensions/carla/curve_distance.mojo":
+                module = "extensions/carla/lane_distance"
+            var original = Path(root + "/" + name).read_text()
+            _rewrite(root, name, _once(original, before, after))
+            _empty(root, module)
+            _rewrite(root, name, original)
+        var suffixes = List[String]()
+        suffixes.append(
+            "extensions/carla/lane_distance.mojo|\nfrom custom import range\n"
+        )
+        suffixes.append(
+            "extensions/humanoid/skeleton/head/hair/strands.mojo|\ndef"
+            " range(value: Int) -> List[Int]:\n    return []\n"
+        )
+        suffixes.append(
+            "extensions/carla/curve_interval.mojo|\nfrom custom import List\n"
+        )
+        for item in suffixes:
+            var bar = item.find("|")
+            var name = String(item[byte=:bar])
+            var suffix = String(item[byte = bar + 1 :])
+            var end = name.byte_length() - 5
+            var module = String(name[byte=:end])
+            var original = Path(root + "/" + name).read_text()
+            _rewrite(root, name, original + suffix)
+            _empty(root, module)
+            _rewrite(root, name, original)
+        var hair = "extensions/humanoid/skeleton/head/hair/strands"
+        var stage = root + "/coverage/build"
+        var made = run_program(["mkdir", "-p", stage], 10.0)
+        if made.status != 0:
+            raise Error(made.output)
+        for place in [root, stage]:
+            for shadow in ["std.mojo", "std.mojopkg", "std.unknown"]:
+                var path = place + "/" + shadow
+                Path(path).write_text("unreviewed range provider")
+                assert_equal(_rows_including(root, hair, stage), 0)
+                _ = run_program(["rm", "-f", path], 10.0)
+        assert_equal(_rows_including(root, hair, stage), 2)
+    finally:
+        _ = run_program(["rm", "-rf", root], 30.0)
+
+
 def main() raises:
     """Build the seal, then run the tests."""
     var built = run_program(

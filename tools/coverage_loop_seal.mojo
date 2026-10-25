@@ -2217,18 +2217,6 @@ def _walk_blocked(root: String, resolver: Bool) -> Bool:
     return False
 
 
-def _renderer_blocked(root: String) -> Bool:
-    """Return whether `root` cannot admit the strand-cap proof.
-
-    Args:
-        root: A source or include directory.
-
-    Returns:
-        True when the standard library or the producer resolver is shadowed.
-    """
-    return _walk_blocked(root, False) or _walk_blocked(root, True)
-
-
 def strand_cap_line(hashes: List[String]) -> Int:
     """Return the admitted strand-cap line for five dependency digests.
 
@@ -2313,16 +2301,21 @@ def run_reviews(
     Raises:
         Error: When the table or a dependency file cannot be read.
     """
-    if module == "renderers/renderer":
-        var blocked = _renderer_blocked(_resolve(root_text))
-        var include_index = 0
-        while include_index < len(includes) and not blocked:
-            if _renderer_blocked(_resolve(includes[include_index])):
-                blocked = True
-            include_index += 1
-        if blocked:
-            print("[]")
-            return 0
+    var resolved = _resolve(root_text)
+    var blocked = _walk_blocked(resolved, False)
+    if module == "renderers/renderer" and not blocked:
+        blocked = _walk_blocked(resolved, True)
+    var include_index = 0
+    while include_index < len(includes) and not blocked:
+        var extra = _resolve(includes[include_index])
+        if _walk_blocked(extra, False):
+            blocked = True
+        elif module == "renderers/renderer" and _walk_blocked(extra, True):
+            blocked = True
+        include_index += 1
+    if blocked:
+        print("[]")
+        return 0
     var table = _load_reviews()
     var nodes = _reviewed_nodes(table, _resolve(root_text), module)
     var order = List[Int]()
