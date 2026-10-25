@@ -538,6 +538,131 @@ def test_harness_fixture_matches_python() raises:
         _cleanup(parent)
 
 
+def test_changed_staged_bytes_are_refused() raises:
+    var parent = mkdtemp(prefix="coverage-staged-")
+    try:
+        var root = parent + "/repo"
+        var build = root + "/stage"
+        var script = parent + "/oracle.py"
+        Path(script).write_text(
+            "import sys\nfrom pathlib import Path\nsys.path.insert(0,"
+            " sys.argv[1])\nimport coverage_loop_proofs as loops\nrepo ="
+            " Path(sys.argv[2]).resolve()\nroot ="
+            " Path(sys.argv[3]).resolve()\nbuild ="
+            " Path(sys.argv[4]).resolve()\nfor name in loops.TOOL_INPUTS:\n   "
+            " dest = root / name\n    dest.parent.mkdir(parents=True,"
+            " exist_ok=True)\n    dest.write_bytes((repo /"
+            " name).read_bytes())\nleaf = b'def main():\\n    pass\\n'\n(root /"
+            " 'extra').mkdir()\n(root / 'extra' /"
+            " 'leaf.mojo').write_bytes(leaf)\n(build /"
+            " 'extra').mkdir(parents=True)\n(build / 'extra' /"
+            " 'leaf.mojo').write_bytes(leaf)\nsrc = 'def f():\\n    for item in"
+            " range(3):\\n        pass\\n'\n(root /"
+            " 'module.mojo').write_text(src)\n(build /"
+            " 'module.mojo').parent.mkdir(parents=True, exist_ok=True)\n(build"
+            " / 'module.mojo').write_text(src)\nrows = []\nfor number, line in"
+            " enumerate(src.splitlines(), 1):\n    if line.startswith('def"
+            " '):\n        rows.append('L module %d\\n' % number)\n    if 'for"
+            " item in' in line:\n        rows.append('B module %d\\n' %"
+            " number)\n(build /"
+            " 'manifest.txt').write_text(''.join(rows))\n(root /"
+            " 'driver').write_text('compiler\\n')\ndriver = str((root /"
+            " 'driver').resolve())\nloops.begin_generation(root, build, 'Mojo"
+            " fixture', '-I .', mojo=driver, sources=['module.mojo'])\nmanifest"
+            " = (build / 'manifest.txt').read_bytes()\nname ="
+            " 'module.mojo'\nfragment = b''.join(row for row in"
+            " manifest.splitlines(keepends=True)\n    if len(row.split()) >= 2"
+            " and row.split()[1] == b'module')\nparts = [name.encode(), (root /"
+            " name).read_bytes(), (build / name).read_bytes(),"
+            " fragment]\nrecord = b'COVORIGIN1 ' + b'"
+            " '.join(str(len(part)).encode() for part in parts) + b'\\n' +"
+            " b''.join(parts)\n(build / (name +"
+            " '.cov-origin')).write_bytes(record)\ncheckpoint = (build /"
+            " 'generation-inputs.json').read_bytes()\nindex ="
+            " b'COVORIGIN_INDEX2 1 ' + str(len(manifest)).encode() + b' ' +"
+            " str(len(checkpoint)).encode() + b'\\n' + manifest + checkpoint +"
+            " str(len(name.encode())).encode() + b'\\n' + name.encode()\n(build"
+            " / 'origins.ready').write_bytes(index)\n"
+        )
+        var prepared = run_program(
+            ["python3", script, realpath("tools"), realpath("."), root, build],
+            30.0,
+            merge_errors=False,
+        )
+        if prepared.status != 0:
+            raise Error(prepared.errors + prepared.output)
+        var sealed = _seal_mojo(root, build)
+        if sealed.byte_length() == 0:
+            raise Error("seal produced no receipt line")
+        var leaf = build + "/extra/leaf.mojo"
+        Path(leaf).write_text(Path(leaf).read_text() + "\n# changed\n")
+        var changed = run_program(
+            [
+                "sh",
+                "tools/tool.sh",
+                tool_mojo(),
+                "coverage_loop_seal",
+                "verify",
+                "--root",
+                root,
+                "--build",
+                build,
+                "--compiler",
+                "Mojo fixture",
+                "--flags",
+                "-I .",
+                "--mojo",
+                root + "/driver",
+            ],
+            30.0,
+            merge_errors=False,
+        )
+        assert_equal(changed.status, 1)
+        assert_true(
+            changed.errors.find(
+                "Staged input differs from generation or passthrough source:"
+                " extra/leaf.mojo"
+            )
+            >= 0
+        )
+        Path(leaf).write_text("def main():\n    pass\n")
+        _ = run_program(
+            ["mkdir", "-p", build + "/tests"],
+            10,
+        )
+        Path(build + "/tests/render.mojo").write_text("def main():\n    pass\n")
+        var extra = run_program(
+            [
+                "sh",
+                "tools/tool.sh",
+                tool_mojo(),
+                "coverage_loop_seal",
+                "verify",
+                "--root",
+                root,
+                "--build",
+                build,
+                "--compiler",
+                "Mojo fixture",
+                "--flags",
+                "-I .",
+                "--mojo",
+                root + "/driver",
+            ],
+            30.0,
+            merge_errors=False,
+        )
+        assert_equal(extra.status, 1)
+        assert_true(
+            extra.errors.find(
+                "Unmaintained executable input in stage: tests/render.mojo"
+            )
+            >= 0
+        )
+    finally:
+        _cleanup(parent)
+
+
 def test_usage_exits_2() raises:
     var ran = run_program(
         ["sh", "tools/tool.sh", tool_mojo(), "coverage_loop_seal"],

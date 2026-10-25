@@ -1270,6 +1270,7 @@ def run_seal(
     var staged_doc = PyJson()
     var staged = _hash_inputs(staged_doc, build, String(), True)
     var inputs = doc.new_dict()
+    var modules = doc.at(generation, "modules")
     var index = 0
     while index < staged_doc.length(staged):
         var name = staged_doc.key(staged, index)
@@ -1277,12 +1278,20 @@ def run_seal(
         var source_hash = fresh.find(root_inputs, name)
         if source_hash < 0:
             raise Error("Unmaintained executable input in stage: " + name)
+        var expected = fresh.text(source_hash)
+        var generated = doc.find(modules, name)
+        if generated >= 0:
+            expected = doc.text(doc.at(generated, "instrumented"))
+        if digest != expected:
+            raise Error(
+                "Staged input differs from generation or passthrough source: "
+                + name
+            )
         var item = doc.new_dict()
         doc.set(item, "source", doc.new_str(fresh.text(source_hash)))
         doc.set(item, "instrumented", doc.new_str(digest))
         doc.set(inputs, name, item)
         index += 1
-    var modules = doc.at(generation, "modules")
     var module_names = List[String]()
     for record in records:
         var seen = False

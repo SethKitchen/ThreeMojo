@@ -195,9 +195,12 @@ def mojo_seal(root, stage, compiler, flags, mojo, suites=None, *, success=True):
     return proofs.read_receipt(Path(stage) / 'loop-proofs.json')
 
 
-def mojo_verify(root, stage, compiler, flags, mojo, suites=None):
+def mojo_verify(root, stage, compiler, flags, mojo, suites=None, *, success=True):
     """Rederive the receipt with the Mojo tool and require the saved file."""
-    run(_mojo_seal_command(root, stage, compiler, flags, mojo, suites, verify=True))
+    return run(
+        _mojo_seal_command(root, stage, compiler, flags, mojo, suites, verify=True),
+        success=success,
+    )
 
 
 def capture_with_compiler_budget(command, output, capture, *, mojo, loop_proof=None,
@@ -706,24 +709,18 @@ def check_current_generated_include_root(stage, mojo, compiler, flags):
     for suffix in (b'\n# unsealed same-path change\n', b'\ndef main():\n    pass\n'):
         replace_generated_passthrough(raw+suffix)
         try:
-            try:
-                proofs.build_receipt(ROOT,stage,compiler,flags,mojo=[mojo],suites=[suite])
-            except ValueError as error:
-                require('Staged input differs' in str(error), 'Unexpected same-path rejection')
-            else:
-                raise RuntimeError('Unsealed staged provider received proof admission')
+            failed = mojo_verify(ROOT, stage, compiler, flags, mojo, suites=[suite], success=False)
+            require(failed.returncode != 0 and 'Staged input differs' in failed.stderr,
+                    'Unexpected same-path rejection: ' + failed.stderr)
         finally:
             replace_generated_passthrough(raw)
     shadow = stage/'tests/render.mojo'
     require(not shadow.exists(), 'Lookup-shadow fixture collides with maintained source')
     shadow.write_text('def main():\n    pass\n')
     try:
-        try:
-            proofs.build_receipt(ROOT,stage,compiler,flags,mojo=[mojo],suites=[suite])
-        except ValueError as error:
-            require('Unmaintained executable input' in str(error), 'Unexpected new-provider rejection')
-        else:
-            raise RuntimeError('Unknown lookup-root provider received proof admission')
+        failed = mojo_verify(ROOT, stage, compiler, flags, mojo, suites=[suite], success=False)
+        require(failed.returncode != 0 and 'Unmaintained executable input' in failed.stderr,
+                'Unexpected new-provider rejection: ' + failed.stderr)
     finally:
         shadow.unlink()
     require((stage/'manifest.txt').read_bytes() == original, 'Original denominator changed')
