@@ -249,12 +249,21 @@ COVERAGE_RUN = python3 tools/coverage_hit_aot.py --profile $(COV_PROFILE) --root
 endif
 
 CACHE_DIR := .cache
+# A value given on the command line wins over these three, but make still
+# expands a `:=` right-hand side that loses. So each is computed only when
+# the command line does not give it: the cache key alone hashes every input
+# file, and a run that passes HASH must not pay for it.
+ifneq ($(origin TOOLCHAIN),command line)
 TOOLCHAIN := $(shell $(MOJO) --version 2>/dev/null || echo "no-mojo")
+endif
 # Native test fixtures are test-only. Their compiler identity also invalidates
 # suite stamps; a missing compiler is a build failure, never a skipped suite.
 export CC
+ifneq ($(origin NATIVE_TOOLCHAIN),command line)
 NATIVE_TOOLCHAIN := $(shell python3 tools/native_test_support.py fingerprint \
                        --cc $(call quote,$(CC)) 2>/dev/null || echo "no-native-compiler")
+endif
+ifneq ($(origin HASH),command line)
 HASH := $(shell $(TOOL) cache_key \
           --setting=$(call quote,$(MOJO)) \
           --setting=$(call quote,$(MOJOFLAGS)) \
@@ -273,6 +282,7 @@ HASH := $(shell $(TOOL) cache_key \
           --setting=$(call quote,coverage-loop-proof-schema:constant-loops-v2) \
           --setting=$(call quote,covered:$(COVERED)) \
           --setting=$(call quote,gpu:$(GPU_TESTS) $(GPU_HOST_TESTS) $(GPU_ENTRY_POINTS) $(GPU_LIB_SOURCES)))
+endif
 ifeq ($(strip $(HASH)),)
 $(error Cannot read build inputs for the cache key)
 endif
