@@ -149,8 +149,8 @@ node assets/exr_codecs/compare_three.mjs "$REF/js180/node_modules/three" \
 node assets/exr_codecs/compare_three.mjs "$REF/js186/node_modules/three" \
   186 assets/exr_codecs/three186-results.json
 mojo build --Werror -I . tests/test_exr_codecs.mojo -o "$REF/test_exr_codecs"
-python3 tools/run_suite.py --seconds 5 --suite tests/test_exr_codecs.mojo \
-  -- "$REF/test_exr_codecs"
+sh tools/tool.sh .venv/bin/mojo run_suite --seconds 5 \
+  --suite tests/test_exr_codecs.mojo -- "$REF/test_exr_codecs"
 ```
 
 The forced `cstdint` include supports newer C++ standard libraries without modifying the pinned OpenEXR source.

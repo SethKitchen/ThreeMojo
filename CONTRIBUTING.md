@@ -154,7 +154,7 @@ Use the runner to enforce the five-second gate and clean up after a timeout.
 For a directly built suite, use:
 
 ```sh
-python3 tools/run_suite.py --seconds 5 --suite tests/test_face_model.mojo -- .cache/bin/test_face_model
+sh tools/tool.sh .venv/bin/mojo run_suite --seconds 5 --suite tests/test_face_model.mojo -- .cache/bin/test_face_model
 ```
 
 Do not set `THREEMOJO_TEST_TMPDIR` yourself. Its active test scope or runner

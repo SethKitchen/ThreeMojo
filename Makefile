@@ -656,7 +656,7 @@ else
 	@cp coverage/*.mojo $(COV_DIR)/coverage/
 	@mkdir -p $(COV_DIR)/tests
 	@[ -z "$(strip $(TESTS))" ] || cp $(TESTS) $(COV_DIR)/tests/
-	@python3 tools/native_test_support.py copy --root . --destination $(COV_DIR)
+	@$(TOOL) native_test_support copy --root . --destination $(COV_DIR)
 	@python3 tools/coverage_loop_proofs.py seal --root . --build $(COV_DIR) \
 	  --compiler=$(call quote,$(TOOLCHAIN)) --flags=$(call quote,$(MOJOFLAGS)) \
 	  --mojo=$(call quote,$(MOJO)) --capture-cache=$(call quote,$(CACHE_DIR)/native-coverage) \

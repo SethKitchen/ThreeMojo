@@ -274,6 +274,62 @@ def test_a_fixture_build_still_links_the_object() raises:
         _cleanup(root)
 
 
+def test_copy_keeps_the_fixture_bytes() raises:
+    var destination = mkdtemp(prefix="native-copy-")
+    try:
+        var ran = run_program(
+            [
+                "sh",
+                "tools/tool.sh",
+                tool_mojo(),
+                "native_test_support",
+                "copy",
+                "--root",
+                ".",
+                "--destination",
+                destination,
+            ],
+            30.0,
+            merge_errors=False,
+        )
+        assert_equal(ran.status, 0)
+        var copied = destination + "/tools/fixtures/carla_sum2_fp_state.c"
+        assert_equal(
+            Path(copied).read_text(),
+            Path("tools/fixtures/carla_sum2_fp_state.c").read_text(),
+        )
+    finally:
+        _cleanup(destination)
+
+
+def test_a_missing_fixture_copy_fails() raises:
+    var root = mkdtemp(prefix="native-copy-root-")
+    var destination = mkdtemp(prefix="native-copy-dest-")
+    try:
+        var ran = run_program(
+            [
+                "sh",
+                "tools/tool.sh",
+                tool_mojo(),
+                "native_test_support",
+                "copy",
+                "--root",
+                root,
+                "--destination",
+                destination,
+            ],
+            30.0,
+            merge_errors=False,
+        )
+        assert_equal(ran.status, 1)
+        assert_false(
+            Path(destination + "/tools/fixtures/carla_sum2_fp_state.c").exists()
+        )
+    finally:
+        _cleanup(root)
+        _cleanup(destination)
+
+
 def main() raises:
     """Build the tool, then run the tests."""
     var built = run_program(

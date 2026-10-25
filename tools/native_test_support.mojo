@@ -15,9 +15,9 @@ suite fails if its fixture or compiler is unavailable. No test is skipped.
     native_test_support fingerprint --cc cc
 
 `make test-cpu` runs the first form. `make coverage` runs this program for
-each raw capture. A fixture suite is built and then run in that capture's
-process group. The fixture table here and in `tools/suite_key.mojo` is the
-same.
+each raw capture and for the fixture copy. A fixture suite is built and
+then run in that capture's process group. The fixture table here and in
+`tools/suite_key.mojo` is the same.
 """
 
 from std.collections import Set

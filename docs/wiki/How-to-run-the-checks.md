@@ -23,10 +23,11 @@ Without `-I .` the compiler reports `unable to locate module 'math'`.
 
 Suites that write fixtures use one private temporary directory for each run.
 They honor `TMPDIR` and remove their files on success or an exception.
-The direct run does not enforce a timeout. Use `tools/run_suite.py` for that:
+The direct run does not enforce a timeout. Use `tools/run_suite.mojo` for that:
 
 ```bash
-python3 tools/run_suite.py --seconds 5 --suite tests/test_face_model.mojo -- .cache/bin/test_face_model
+sh tools/tool.sh .venv/bin/mojo run_suite --seconds 5 \
+  --suite tests/test_face_model.mojo -- .cache/bin/test_face_model
 ```
 
 The runner also removes the directory after a timeout.
@@ -51,7 +52,7 @@ sh tools/tool.sh .venv/bin/mojo native_test_support run --root . \
   --suite tests/test_carla_sum2_environment.mojo --cache .cache/native -- \
   .venv/bin/mojo build -I . --Werror \
   -o .cache/sum2-environment tests/test_carla_sum2_environment.mojo
-python3 tools/run_suite.py --seconds 5 \
+sh tools/tool.sh .venv/bin/mojo run_suite --seconds 5 \
   --suite tests/test_carla_sum2_environment.mojo -- .cache/sum2-environment
 ```
 
