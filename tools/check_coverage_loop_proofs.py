@@ -804,83 +804,11 @@ def main():
         reporter = work / 'report'
         run([mojo, 'build', '-Werror', '-I', '.', 'coverage/report_cli.mojo',
              '-o', str(reporter)], cwd=native)
-        generate(native, rewritten, ['fixture.mojo'])
-        full_manifest = (rewritten / 'manifest.txt').read_bytes()
-        identities = {name: line_of(fragment) for name, fragment in {
-            'fixed': 'for index in range(3)', 'empty': 'for index in range(0)',
-            'literal': 'for value in [mark(1, order)', 'dynamic': 'for index in range(n)',
-        }.items()}
-        # A branch-only fixture manifest isolates outcome completeness from
-        # intentionally unreachable literal-empty body lines. The untouched
-        # full native manifest is retained as separate evidence.
-        selected = ''.join(f'B fixture {line}\n' for line in identities.values()).encode()
-        for record in selected.splitlines():
-            require(record in full_manifest.splitlines(), 'Missing original fixture decision')
-        envelope = mojo_seal(native, rewritten, compiler, flags, mojo)
-        require(len(envelope['receipt']['proofs']) == 3, 'Expected exactly three constant loops')
-        totals = envelope['receipt']['denominator']
-        require(totals['potential_total'] - totals['required_total'] == 3, 'Reachable outcome removed')
         evidence = work / 'evidence'
         evidence.mkdir()
-        derived = evidence / 'derived-manifest.txt'
-        derived.write_bytes(diagnostic_manifest(mojo_mask(mojo, rewritten), 'fixture', identities.values()))
-        binaries = []
-        for folder in [native, rewritten]:
-            binary = folder / 'fixture'
-            run([mojo, 'build', '-Werror', '-I', str(folder), str(folder / 'fixture.mojo'), '-o', str(binary)])
-            binaries.append(binary)
         results = {}
-        for mode in [0, 1]:
-            plain = run([str(binaries[0]), str(mode)], timeout=5)
-            instrumented = run([str(binaries[1]), str(mode)], timeout=5)
-            require(plain.stdout == instrumented.stdout == 'RESULT constant loops\n', 'Native output changed')
-            require(not plain.stderr, 'Native program unexpectedly emitted probe records')
-            by_line = defaultdict(list)
-            for record in instrumented.stderr.splitlines():
-                fields = record.split(':')
-                if len(fields) == 4 and fields[:2] == ['COVLINE', 'fixture']:
-                    by_line[int(fields[2])].append(fields[3])
-            expected = {'fixed': 'TTTTTTT', 'empty': 'F', 'literal': 'TTTT',
-                        'dynamic': 'TTTF' if mode == 0 else 'TTT'}
-            for name, outcomes in expected.items():
-                require(by_line[identities[name]] == list(outcomes), f'Loop protocol changed: {name}: {by_line[identities[name]]}')
-            raw, reduced = capture_result(instrumented, evidence / f'case-{mode}' / 'result', envelope, [str(binaries[1]), str(mode)])
-            reported = run([str(reporter), str(derived), str(raw)], success=False, timeout=5)
-            require((reported.returncode == 0) == (mode == 0), 'Missing dynamic-empty obligation was lost')
-            if mode == 0:
-                require('TOTAL' in reported.stdout and '5/5' in reported.stdout, 'Positive report is incomplete')
-                require('DENOMINATOR potential 8, required 5, proven impossible 3' in reported.stdout, 'Denominator lineage missing')
-            else:
-                require('never evaluated False' in reported.stdout, 'Dynamic-empty failure not explained')
-            (evidence / f'report-{mode}.out').write_text(reported.stdout + reported.stderr)
-            replayed = run([
-                *coverage_io_argv(mojo, 'report'),
-                '--capture-dir', str(reduced.parent), '--', str(reporter), str(derived),
-            ], success=False, timeout=5)
-            require((replayed.returncode == 0) == (mode == 0), 'Diagnostic raw/reduced reporting changed the result: ' + replayed.stdout + replayed.stderr)
-            results[f'mode-{mode}'] = {'status': reported.returncode, 'expected': 'complete' if mode == 0 else 'dynamic-empty-missing'}
-        # Mutation control: corrupt the actual native emitted entry probe of
-        # a proved nonempty loop. It must be rejected, never discarded as
-        # an infeasible hit. Counter/closer emissions remain unchanged.
-        source_path = rewritten / 'fixture.mojo'
-        original_instrumented = source_path.read_text()
-        needle = f'_cov_branch("fixture:{identities["fixed"]}", True)'
-        require(needle in original_instrumented, 'Mutation target absent')
-        source_path.write_text(original_instrumented.replace(needle, needle.replace('True', 'False')))
-        rejected = mojo_seal(native, rewritten, compiler, flags, mojo, success=False)
-        require(rejected.returncode != 0 and 'generation origin' in rejected.stderr,
-                'Unexpected mutation rejection: ' + rejected.stderr)
-        mutant = rewritten / 'mutant'
-        run([mojo, 'build', '-Werror', '-I', str(rewritten), str(source_path), '-o', str(mutant)])
-        mutant_result = run([str(mutant), '0'], timeout=5)
-        raw, _ = capture_result(mutant_result, evidence / 'mutation-capture' / 'result', envelope, [str(mutant), '0'])
-        failed = run([str(reporter), str(derived), str(raw)], success=False, timeout=5)
-        require(failed.returncode != 0 and 'Constant-loop proof contradicted' in failed.stderr,
-                'Contradictory native probe was accepted')
-        (evidence / 'mutant-report.out').write_text(failed.stdout + failed.stderr)
-        mutated_source = source_path.read_text()
-        source_path.write_text(original_instrumented)
-        mojo_verify(native, rewritten, compiler, flags, mojo)
+        run(['sh', str(ROOT / 'tools/tool.sh'), mojo,
+             'check_coverage_loop_fixture', '--mojo', mojo])
         results['entry-probe-mutation'] = 'rejected contradictory actual native probe'
         # An explicit imported binding supplies an empty iterable even though
         # the call is spelled range(3). It must keep the original two-outcome
@@ -1087,12 +1015,8 @@ def main() raises:
         results['interrupted-generation'] = 'old origin index invalidated before failing writes'
         if args.output:
             args.output.mkdir(parents=True, exist_ok=True)
-            (args.output / 'full-original-manifest.txt').write_bytes(full_manifest)
-            (args.output / 'original-loop-proofs.json').write_bytes(proofs.canonical(envelope) + b'\n')
             (args.output / 'shadow-loop-proofs.json').write_bytes(proofs.canonical(shadow_proof) + b'\n')
             (args.output / 'native-source.mojo').write_text(SOURCE)
-            (args.output / 'original-instrumented.mojo').write_text(original_instrumented)
-            (args.output / 'mutant-instrumented.mojo').write_text(mutated_source)
             for pattern in ['*.raw.txt', '*.out', '*.txt.gz', '*.proof.json', '*manifest.txt']:
                 for path in evidence.rglob(pattern):
                     target = args.output / path.relative_to(evidence)
