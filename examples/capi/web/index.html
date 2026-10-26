@@ -33,7 +33,7 @@
 
   On the CPU the water draws on a pool of Web Workers that share memory, and
   then it draws a frame in tens of milliseconds. A page can share memory only
-  when it is cross-origin isolated: serve.py sends the headers that make it
+  when it is cross-origin isolated: serve.mojo sends the headers that make it
   so. Any other server gets the module for one thread, which is about eight
   times slower, and the page says so.
 -->
@@ -212,7 +212,7 @@ const wantsThreads = !gpu && "threaded" in app_info && app_info.threaded && want
 let threads = 0;
 try {
   if (wantsThreads && !crossOriginIsolated) {
-    why ||= "the page is not cross-origin isolated (serve it with examples/capi/serve.py)";
+    why ||= "the page is not cross-origin isolated (serve it with examples/capi/run.sh web)";
   } else if (wantsThreads) {
     try {
       library = await loadThreads(`threemojo_${name}_threads.wasm`, { threads: wanted });

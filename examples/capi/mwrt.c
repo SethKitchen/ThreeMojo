@@ -5,7 +5,7 @@
  *
  * A freestanding runtime for Mojo code that was retargeted to wasm32.
  *
- * Mojo 1.1 has no WebAssembly backend, so retarget.py turns the host's LLVM
+ * Mojo 1.2 has no WebAssembly backend, so retarget.mojo turns the host's LLVM
  * IR into wasm32 IR. That IR still calls the functions that the Mojo runtime
  * and the C library supply on a host. This file supplies them for a
  * browser, in five groups:

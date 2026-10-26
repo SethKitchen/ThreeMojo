@@ -262,7 +262,7 @@ The blend goes into a half-float picture, as on the web. A last pass writes the 
 
 Mojo returns an optional pointer through a slot of 64 bits. A pointer on wasm32 has 4 bytes, so the upper half of the slot held stack garbage. After the first step, `tm_alloc` returned an address like `0x2000000000...`. `retarget.mojo` clears each such slot before the pointer goes in. The page also keeps the low 32 bits of every address that it reads. `check.mjs` tests that `tm_alloc` and `tm_gpu_part` give addresses with no upper half.
 
-Mojo's LLVM is newer than any release of clang, so `retarget.py` also rewrites what an older reader refuses:
+Mojo's LLVM is newer than any release of clang, so `retarget.mojo` also rewrites what an older reader refuses:
 
 - A floating-point constant in a new form. It can be a decimal that is not exactly a float, or a float's or a double's bits (`f0x...`). It can also be `+inf`, `-qnan`, or a NaN with a payload. Each becomes the hexadecimal double of the same number.
 - A call to `llvm.x86.ssse3.pshuf.b.128`, the byte shuffle of the standard library's UTF-8 check. It becomes a call to a function that does the same with WebAssembly's swizzle.

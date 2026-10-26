@@ -129,7 +129,7 @@ Some portable features remain partial, including [GLSL shaders](https://github.c
 ### Project tools
 
 <details>
-<summary>Implemented: 64</summary>
+<summary>Implemented: 65</summary>
 
 - [x] [Literal loop receipt](https://github.com/SethKitchen/ThreeMojo/wiki/Coverage-tool#constant-loop-outcome-proofs): `tools/coverage_loop_seal.mojo` writes and checks the sealed loop receipt [#761](https://github.com/SethKitchen/ThreeMojo/issues/761)
 

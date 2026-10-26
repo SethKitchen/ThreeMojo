@@ -6,7 +6,7 @@
 """Check phase, argv and complete-vector contracts of compiled coverage.
 
 Every native test keeps its five-second limit. Raw protocol checks remain in
-`tools/check_coverage_protocol.py`. On Linux, the private profile also checks
+`tools/check_coverage_protocol.mojo`. On Linux, the private profile also checks
 the transport with `tools/coverage_hit_faults.mojo`.
 
     check_coverage_hit_profile --mojo .venv/bin/mojo
