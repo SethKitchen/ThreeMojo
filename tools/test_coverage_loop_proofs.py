@@ -27,6 +27,27 @@ from carla_lane_oracle import _full_audit_test_fixtures as audit_fixtures
 
 
 _HISTORICAL_BOUNDARY_ROOT = None
+# The pinned compiler that runs the Mojo capture tool.
+MOJO = str(native_check.ROOT/'.venv/bin/mojo')
+# A child that ignores SIGTERM, starts a grandchild and writes one record.
+WORKER = '''import os, pathlib, signal, subprocess, sys, time
+root = pathlib.Path(sys.argv[1])
+role, mode = sys.argv[2:4]
+signal.signal(signal.SIGTERM, signal.SIG_IGN)
+(root / (role + '.pid')).write_text(str(os.getpid()))
+if role == 'child':
+    (root / 'temporary').write_text(os.environ['THREEMOJO_TEST_TMPDIR'])
+    subprocess.Popen([sys.executable, __file__, str(root), 'grandchild', mode])
+    while not (root / 'grandchild.pid').exists():
+        time.sleep(0.01)
+    if mode == 'malformed':
+        sys.stderr.write('COVBRANCH:m:1.0:T\\n')
+    else:
+        sys.stderr.write('COVLINE:m:1\\n')
+    sys.stderr.flush()
+while True:
+    time.sleep(0.02)
+'''
 
 
 def _clear_historical_boundary_root():
@@ -784,7 +805,7 @@ class ProofBindingTests(unittest.TestCase):
         with patch.dict(os.environ):
             os.environ.pop(coverage_io.DEADLINE_ENV, None)
             result = native_check.capture_with_compiler_budget(
-                self.command(), output, capture, loop_proof=self.receipt,
+                self.command(), output, capture, mojo=MOJO, loop_proof=self.receipt,
                 source_root=self.root, success=False, seconds=2)
         self.assertEqual(result.returncode, 124)
         self.assertEqual(gzip.decompress(capture.read_bytes()), b'COVLINE:module:2:T\n')
@@ -1805,10 +1826,10 @@ class NativeCheckerBoundaryTests(unittest.TestCase):
                 patch.object(native_check.time, 'monotonic', return_value=100), \
                 patch.object(coverage_io, 'shared_deadline', return_value=None):
             native_check.capture_with_compiler_budget(command, Path('out'), Path('err.gz'),
-                loop_proof=Path('proof.json'), source_root=Path('source'))
+                mojo='bound-tool-mojo', loop_proof=Path('proof.json'), source_root=Path('source'))
         args, kwargs = run.call_args
-        self.assertEqual(args[0], [sys.executable, str(native_check.ROOT/'tools/coverage_io.py'),
-            'capture', '--out', 'out', '--err', 'err.gz', '--loop-proof', 'proof.json',
+        self.assertEqual(args[0], [*native_check.coverage_io_argv('bound-tool-mojo', 'capture'),
+            '--out', 'out', '--err', 'err.gz', '--loop-proof', 'proof.json',
             '--loop-proof-root', 'source', '--', *command])
         self.assertEqual(float(kwargs['env'][coverage_io.DEADLINE_ENV]), 280)
         self.assertNotIn('timeout', kwargs)
@@ -1819,7 +1840,7 @@ class NativeCheckerBoundaryTests(unittest.TestCase):
             with self.subTest(inherited=inherited), patch.object(native_check, 'run') as run, \
                     patch.object(native_check.time, 'monotonic', return_value=100), \
                     patch.object(coverage_io, 'shared_deadline', return_value=inherited):
-                native_check.capture_with_compiler_budget(['command'], 'out', 'err', success=False)
+                native_check.capture_with_compiler_budget(['command'], 'out', 'err', mojo=MOJO, success=False)
                 self.assertEqual(float(run.call_args.kwargs['env'][coverage_io.DEADLINE_ENV]), expected)
                 self.assertFalse(run.call_args.kwargs['success'])
 
@@ -1827,29 +1848,29 @@ class NativeCheckerBoundaryTests(unittest.TestCase):
         for seconds in (0, -1, 181, float('inf'), float('nan'), True, '5'):
             with self.subTest(seconds=seconds), patch.object(native_check, 'run') as run:
                 with self.assertRaises(RuntimeError):
-                    native_check.capture_with_compiler_budget(['command'], 'out', 'err', seconds=seconds)
+                    native_check.capture_with_compiler_budget(['command'], 'out', 'err', mojo=MOJO, seconds=seconds)
                 run.assert_not_called()
         for arguments in ({'loop_proof': Path('proof')}, {'source_root': Path('root')}):
             with patch.object(native_check, 'run') as run, self.assertRaises(RuntimeError):
-                native_check.capture_with_compiler_budget(['command'], 'out', 'err', **arguments)
+                native_check.capture_with_compiler_budget(['command'], 'out', 'err', mojo=MOJO, **arguments)
             run.assert_not_called()
 
     def test_ignored_or_blocked_alarm_is_refused(self):
         with patch.object(native_check.signal, 'getsignal', return_value=signal.SIG_IGN), \
                 patch.object(native_check, 'run') as run, self.assertRaises(RuntimeError):
-            native_check.capture_with_compiler_budget(['command'], 'out', 'err')
+            native_check.capture_with_compiler_budget(['command'], 'out', 'err', mojo=MOJO)
         run.assert_not_called()
         previous = signal.pthread_sigmask(signal.SIG_BLOCK, [signal.SIGALRM])
         try:
             with patch.object(native_check, 'run') as run, self.assertRaises(RuntimeError):
-                native_check.capture_with_compiler_budget(['command'], 'out', 'err')
+                native_check.capture_with_compiler_budget(['command'], 'out', 'err', mojo=MOJO)
             run.assert_not_called()
         finally:
             signal.pthread_sigmask(signal.SIG_SETMASK, previous)
 
     def test_integration_deadline_reaps_descendants_and_private_environment(self):
         # Exercise the maintained watchdog through this helper's actual CLI.
-        from test_coverage_lifecycle import CoverageLifecycleTests, WORKER
+        from test_coverage_lifecycle import CoverageLifecycleTests
         with tempfile.TemporaryDirectory(prefix='loop checker deadline ') as directory:
             root = Path(directory)
             worker = root/'worker.py'
@@ -1859,7 +1880,7 @@ class NativeCheckerBoundaryTests(unittest.TestCase):
                     os.environ.pop(coverage_io.DEADLINE_ENV, None)
                     result = native_check.capture_with_compiler_budget(
                         [sys.executable, str(worker), str(root), 'child', 'valid'],
-                        root/'out', root/'err.gz', success=False, seconds=2)
+                        root/'out', root/'err.gz', mojo=MOJO, success=False, seconds=2)
                 self.assertEqual(result.returncode, 124)
                 for role in ('child', 'grandchild'):
                     pid = int((root/(role+'.pid')).read_text())
