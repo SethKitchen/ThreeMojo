@@ -203,18 +203,6 @@ def _discover_tools() -> List[String]:
     return call^
 
 
-def _discover_assets() -> List[String]:
-    var call = List[String]()
-    call.append("-m")
-    call.append("unittest")
-    call.append("discover")
-    call.append("-s")
-    call.append("assets/carla/tools")
-    call.append("-p")
-    call.append("test_*.py")
-    return call^
-
-
 def _oracle(shard: String) -> List[String]:
     var call = List[String]()
     call.append("parallel_unittest")
@@ -252,13 +240,12 @@ def test_unsharded_runs_all_original_commands_in_order() raises:
     var result = _run(python, "test-tools")
     assert_equal(result[0], 0, result[1])
     var calls = result[2].copy()
-    assert_equal(len(calls), 6)
+    assert_equal(len(calls), 5)
     _equal(calls[0], _format())
     _equal(calls[1], _discover_tools())
-    _equal(calls[2], _discover_assets())
-    _equal(calls[3], _oracle(""))
-    _equal(calls[4], _spiral())
-    _equal(calls[5], _repository())
+    _equal(calls[2], _oracle(""))
+    _equal(calls[3], _spiral())
+    _equal(calls[4], _repository())
 
 
 def test_small_shard_counts_keep_each_auxiliary_check_once() raises:
@@ -286,7 +273,7 @@ def test_small_shard_counts_keep_each_auxiliary_check_once() raises:
                     seen.append(call[0])
             var expected_discovery = 0
             if index == 1:
-                expected_discovery = 2
+                expected_discovery = 1
             assert_equal(discovery, expected_discovery, shard)
             var expected_tail = 0
             if index == 1:
@@ -294,14 +281,12 @@ def test_small_shard_counts_keep_each_auxiliary_check_once() raises:
             assert_equal(tail, expected_tail, shard)
             _equal(oracle, _oracle(shard))
         assert_true(_has(seen, "tools"))
-        assert_true(_has(seen, "assets/carla/tools"))
 
 
 def test_large_shard_counts_keep_discovery_on_shard_five() raises:
     var python = _python()
     for count in [5, 6, 7, 12]:
         var tools = 0
-        var assets = 0
         var spiral = 0
         var repository = 0
         for index in range(1, count + 1):
@@ -316,8 +301,6 @@ def test_large_shard_counts_keep_discovery_on_shard_five() raises:
                     discovery += 1
                     if call[4] == "tools":
                         tools += 1
-                    if call[4] == "assets/carla/tools":
-                        assets += 1
                 elif len(call) > 0 and call[0] == "parallel_unittest":
                     oracle = call.copy()
                 elif (
@@ -331,7 +314,7 @@ def test_large_shard_counts_keep_discovery_on_shard_five() raises:
                     repository += 1
             var expected_discovery = 0
             if index == 5:
-                expected_discovery = 2
+                expected_discovery = 1
             var expected_tail = 0
             if index == 1:
                 expected_tail = 2
@@ -339,7 +322,6 @@ def test_large_shard_counts_keep_discovery_on_shard_five() raises:
             assert_equal(tail, expected_tail, shard)
             _equal(oracle, _oracle(shard))
         assert_equal(tools, 1, String(count))
-        assert_equal(assets, 1, String(count))
         assert_equal(spiral, 1, String(count))
         assert_equal(repository, 1, String(count))
 
@@ -348,7 +330,6 @@ def test_auxiliary_failures_stop_the_owning_shard() raises:
     var python = _python()
     var cases = List[String]()
     cases.append("5/6|tools")
-    cases.append("5/6|assets/carla/tools")
     cases.append("1/6|tools/carla_lane_oracle/spiral_moments.py")
     cases.append("1/6|repository-check")
     for entry in cases:
@@ -374,10 +355,9 @@ def test_dedicated_discovery_runs_only_the_plain_discoveries() raises:
     for shard in ["", "1/6", "5/6"]:
         var result = _run(python, "test-tools-discovery", shard)
         assert_equal(result[0], 0, shard + "\n" + result[1])
-        assert_equal(len(result[2]), 3, shard)
+        assert_equal(len(result[2]), 2, shard)
         _equal(result[2][0], _format())
         _equal(result[2][1], _discover_tools())
-        _equal(result[2][2], _discover_assets())
 
 
 def test_discovery_and_oracle_shards_partition_every_command() raises:
@@ -404,7 +384,7 @@ def test_discovery_and_oracle_shards_partition_every_command() raises:
     assert_equal(oracle_runs, 6)
     assert_equal(spiral, 1)
     assert_equal(repository, 1)
-    assert_equal(len(discovery[2]), 3)
+    assert_equal(len(discovery[2]), 2)
 
 
 def test_each_component_failure_stops_its_target() raises:
@@ -412,9 +392,6 @@ def test_each_component_failure_stops_its_target() raises:
     var result = _run(python, "test-tools-discovery", "", "tools")
     assert_true(result[0] != 0)
     assert_true(_has(result[2][len(result[2]) - 1], "tools"))
-    result = _run(python, "test-tools-discovery", "", "assets/carla/tools")
-    assert_true(result[0] != 0)
-    assert_true(_has(result[2][len(result[2]) - 1], "assets/carla/tools"))
     result = _run(
         python,
         "test-tools-oracle",
