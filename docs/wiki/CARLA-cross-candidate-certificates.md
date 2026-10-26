@@ -496,6 +496,10 @@ Mojo checks the reviewed density successor inputs.
 10 inputs keep their reviewed digests.
 A changed density successor input is refused.
 
+Mojo checks the reviewed PR776 bound inputs.
+5 inputs keep their reviewed digests.
+A changed PR776 bound input is refused.
+
 ## Candidate certificate
 
 A certificate contains a stored incumbent point and its road parameter.
