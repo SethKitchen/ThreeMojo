@@ -418,6 +418,11 @@ The live witness keeps its file digest and its token digest.
 Two formatting edits restore the historical witness.
 A changed witness or a missing edit is refused.
 
+Mojo checks the reviewed cubic operation graphs.
+Four modules keep their reviewed operation spans.
+Each span appears once.
+A missing span or a repeated span is refused.
+
 ## Candidate certificate
 
 A certificate contains a stored incumbent point and its road parameter.
