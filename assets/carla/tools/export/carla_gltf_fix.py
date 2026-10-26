@@ -21,10 +21,9 @@ each material as glTF PBR:
 Textures are copied beside the glTF, scaled down to at most `--max-size`
 pixels, color textures as JPEG and data textures as PNG.
 
-    python carla_gltf_fix.py EXPORT_ROOT MESH.gltf OUT_DIR NAME [--max-size 1024]
+    sh tools/tool.sh .venv/bin/mojo carla_gltf_package EXPORT_ROOT MESH.gltf OUT_DIR NAME [--max-size 1024]
 """
 
-import argparse
 import json
 import os
 import shutil
@@ -971,32 +970,3 @@ def compact(gltf, data):
     """Return the buffer with only the bytes a primitive reads, and point
     the views and accessors at their new places."""
     return _gltf_tool(gltf, data, "compact")
-
-
-def main():
-    """Write one vehicle package with `tools/carla_gltf_package.mojo`."""
-    parser = argparse.ArgumentParser()
-    parser.add_argument("export_root")
-    parser.add_argument("mesh")
-    parser.add_argument("out_dir")
-    parser.add_argument("name")
-    parser.add_argument("--max-size", type=int, default=1024)
-    parser.add_argument("--budget", type=int, default=35000,
-                        help="the triangles a model is simplified to; 0 keeps them all")
-    args = parser.parse_args()
-    here = os.path.dirname(os.path.abspath(__file__))
-    repo = os.path.abspath(os.path.join(here, "..", "..", "..", ".."))
-    mojo = os.path.join(repo, ".venv", "bin", "mojo")
-    if not os.path.isfile(mojo):
-        mojo = "mojo"
-    result = subprocess.run(
-        ["sh", os.path.join(repo, "tools", "tool.sh"), mojo, "carla_gltf_package",
-         args.export_root, args.mesh, args.out_dir, args.name,
-         "--max-size", str(args.max_size), "--budget", str(args.budget)],
-    )
-    if result.returncode != 0:
-        raise SystemExit(result.returncode)
-
-
-if __name__ == "__main__":
-    main()
