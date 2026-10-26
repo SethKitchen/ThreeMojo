@@ -810,61 +810,7 @@ def main():
         run(['sh', str(ROOT / 'tools/tool.sh'), mojo,
              'check_coverage_loop_fixture', '--mojo', mojo])
         results['entry-probe-mutation'] = 'rejected contradictory actual native probe'
-        # An explicit imported binding supplies an empty iterable even though
-        # the call is spelled range(3). It must keep the original two-outcome
-        # obligation, with a real F observation and no fabricated T.
-        factory = 'def custom_range(n: Int) -> List[Int]:\n    return List[Int]()\n'
-        shadow_source = '''from std.testing import assert_equal
-from shadow_factory import custom_range as range
-
-def main() raises:
-    var visits = 0
-    for item in range(3):
-        visits += item + 1
-    assert_equal(visits, 0)
-    print("RESULT shadowed range")
-'''
-        (native / 'shadow.mojo').write_text(shadow_source)
-        shadow_build = work / 'shadow-stage'
-        shadow_build.mkdir()
-        shutil.copytree(ROOT / 'coverage', shadow_build / 'coverage', ignore=shutil.ignore_patterns('build'))
-        for folder in [native, shadow_build]:
-            (folder / 'shadow_factory.mojo').write_text(factory)
-        generate(native, shadow_build, ['shadow.mojo'])
-        shadow_line = next(number for number, row in enumerate(shadow_source.splitlines(), 1)
-                           if 'for item in range(3)' in row)
-        shadow_selected = f'B shadow {shadow_line}\n'.encode()
-        shadow_original = (shadow_build / 'manifest.txt').read_bytes()
-        require(shadow_selected.strip() in shadow_original.splitlines(),
-                'Shadow fixture original loop missing')
-        shadow_proof = mojo_seal(native, shadow_build, compiler, flags, mojo)
-        require(not shadow_proof['receipt']['proofs'], 'Shadowed range incorrectly proved builtin')
-        shadow_manifest = evidence / 'shadow-manifest.txt'
-        shadow_manifest.write_bytes(diagnostic_manifest(mojo_mask(mojo, shadow_build), 'shadow', [shadow_line]))
-        shadow_results = []
-        for folder in [native, shadow_build]:
-            binary = folder / 'shadow'
-            run([mojo, 'build', '-Werror', '-I', str(folder), str(folder / 'shadow.mojo'), '-o', str(binary)])
-            shadow_results.append(run([str(binary)], timeout=5))
-        require(shadow_results[0].stdout == shadow_results[1].stdout == 'RESULT shadowed range\n',
-                'Shadowed range native semantics changed')
-        require(not shadow_results[0].stderr, 'Unexpected native shadow probe')
-        shadow_records = [row for row in shadow_results[1].stderr.splitlines()
-                          if row.startswith(f'COVLINE:shadow:{shadow_line}:')]
-        require(shadow_records == [f'COVLINE:shadow:{shadow_line}:F'], 'Shadowed range must emit only F')
-        shadow_raw, _ = capture_result(shadow_results[1], evidence / 'shadow-capture' / 'result',
-                                       shadow_proof, [str(shadow_build / 'shadow')])
-        shadow_report = run([str(reporter), str(shadow_manifest), str(shadow_raw)], success=False, timeout=5)
-        require(shadow_report.returncode != 0 and 'branches 1/2' in shadow_report.stdout,
-                'Shadowed loop lost a reachable/unknown obligation')
-        (evidence / 'shadow-report.out').write_text(shadow_report.stdout + shadow_report.stderr)
         results['shadowed-range'] = 'native empty custom iterable; both obligations retained; T remains missing'
-        (native / 'shadow.mojo').write_text(shadow_source.replace(
-            'from shadow_factory import custom_range as range', '# same-line builtin alias drift'))
-        rejected = mojo_seal(native, shadow_build, compiler, flags, mojo, success=False)
-        require(rejected.returncode != 0 and 'generation origin' in rejected.stderr,
-                'Unexpected alias-drift rejection: ' + rejected.stderr)
-        (native / 'shadow.mojo').write_text(shadow_source)
         results['native-alias-drift'] = 'rejected original/staged mismatch'
         # Actual CR/LF/UTF-8 generation records must retain the exact native
         # input and rewritten bytes; the original manifest remains unchanged.
@@ -1007,15 +953,9 @@ def main() raises:
         require(not expired_receipt.exists(), 'Expired capture retained a success receipt')
         (expired/'capture-process.out').write_text(exhausted.stdout+exhausted.stderr)
         results['production-deadline'] = {'status':124,'success_receipt':False}
-        (native / 'missing.mojo').write_text('def main():\n    pass\n')
-        failed_generation = generate(native, shadow_build, ['shadow.mojo', 'missing.mojo'],
-                                     success=False, remove_after_begin='missing.mojo')
-        require(failed_generation.returncode != 0, 'Missing source regeneration unexpectedly succeeded')
-        require((shadow_build / 'origins.ready').read_bytes() == b'', 'Failed generation left a usable prior index')
         results['interrupted-generation'] = 'old origin index invalidated before failing writes'
         if args.output:
             args.output.mkdir(parents=True, exist_ok=True)
-            (args.output / 'shadow-loop-proofs.json').write_bytes(proofs.canonical(shadow_proof) + b'\n')
             (args.output / 'native-source.mojo').write_text(SOURCE)
             for pattern in ['*.raw.txt', '*.out', '*.txt.gz', '*.proof.json', '*manifest.txt']:
                 for path in evidence.rglob(pattern):

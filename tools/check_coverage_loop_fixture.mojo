@@ -3,14 +3,12 @@
 # Noncommercial use is free; commercial use requires a paid license.
 # See LICENSE, LICENSE-COMMERCIAL.md and THIRD-PARTY-NOTICES.md
 
-"""Qualify the constant-loop fixture with the Mojo coverage tools.
+"""Qualify coverage loop fixtures with the Mojo coverage tools.
 
     check_coverage_loop_fixture [--mojo PATH]
 
-The program copies the coverage tools, instruments `fixture.mojo`, and
-checks the three constant loops, both runtime modes, and a contradictory
-entry probe. The profiled owner controls stay in
-`tools/check_coverage_loop_proofs.py`.
+The program checks the three constant loops and a shadowed `range`. The
+profiled owner controls stay in `tools/check_coverage_loop_proofs.py`.
 """
 
 from std.pathlib import Path
@@ -599,8 +597,258 @@ def _reduce(stderr_text: String) raises -> String:
     return reducer.output
 
 
+comptime _FACTORY = (
+    "def custom_range(n: Int) -> List[Int]:\n    return List[Int]()\n"
+)
+
+comptime _SHADOW = """from std.testing import assert_equal
+from shadow_factory import custom_range as range
+
 def main() raises:
-    """Qualify the constant-loop fixture."""
+    var visits = 0
+    for item in range(3):
+        visits += item + 1
+    assert_equal(visits, 0)
+    print(\"RESULT shadowed range\")
+"""
+
+
+def qualify_shadowed_range(mojo: String) raises:
+    """Keep both outcomes when `range` names an empty function.
+
+    Args:
+        mojo: The Mojo compiler used to build and run the fixture.
+
+    Raises:
+        Error: The shadowed loop is proved, drops an outcome, or accepts
+            an aliased source.
+    """
+    var version = _run([mojo, "--version"], 30.0, "")
+    var compiler = String(version.strip())
+    var flags = "-Werror -I ."
+    var work = mkdtemp(prefix="loop shadow ")
+    var native = work + "/native"
+    var stage = work + "/shadow-stage"
+    _ = _run(["mkdir", "-p", native, stage], 10.0, "")
+    _ = _run(["cp", "-a", "coverage/.", native + "/coverage/"], 30.0, "")
+    _ = _run(["rm", "-rf", native + "/coverage/build"], 10.0, "")
+    _ = _run(["mkdir", "-p", stage + "/coverage"], 10.0, "")
+    _ = _run(["cp", "-a", "coverage/.", stage + "/coverage/"], 30.0, "")
+    _ = _run(["rm", "-rf", stage + "/coverage/build"], 10.0, "")
+    _ = _run(["cp", "-a", "tools/.", native + "/tools/"], 60.0, "")
+    _ = _run(["rm", "-rf", native + "/tools/__pycache__"], 10.0, "")
+    for name in ["core/__init__.mojo", "core/search.mojo", "core/binary.mojo"]:
+        _copy(name, native + "/" + name)
+    var inputs = List[String]()
+    inputs.append("coverage/build_cli.mojo")
+    inputs.append("coverage/instrument.mojo")
+    inputs.append("coverage/scanner.mojo")
+    inputs.append("coverage/runtime.mojo")
+    inputs.append("coverage/report.mojo")
+    inputs.append("coverage/report_cli.mojo")
+    inputs.append("coverage/mcdc.mojo")
+    inputs.append("tools/coverage_loop_proofs.py")
+    inputs.append("tools/coverage_io.py")
+    inputs.append("tools/cache_key.py")
+    inputs.append("tools/native_test_support.py")
+    inputs.append("tools/coverage_toolchain_identity.py")
+    inputs.append("tools/coverage_hit_aot.mojo")
+    inputs.append("tools/coverage_hit_cache.c")
+    inputs.append("tools/coverage_write_interposer.c")
+    inputs.append("tools/run_suite.mojo")
+    inputs.append("Makefile")
+    for name in inputs:
+        _copy(name, native + "/" + name)
+    Path(native + "/shadow.mojo").write_text(_SHADOW)
+    Path(native + "/shadow_factory.mojo").write_text(_FACTORY)
+    Path(stage + "/shadow_factory.mojo").write_text(_FACTORY)
+    var reporter = work + "/report"
+    var build_report = List[String]()
+    build_report.append(mojo)
+    build_report.append("build")
+    build_report.append("-Werror")
+    build_report.append("-I")
+    build_report.append(".")
+    build_report.append("coverage/report_cli.mojo")
+    build_report.append("-o")
+    build_report.append(reporter)
+    _ = _run(build_report, 180.0, native)
+    var begin = _tool(mojo, "coverage_loop_begin")
+    begin.append("--root")
+    begin.append(native)
+    begin.append("--build")
+    begin.append(stage)
+    begin.append("--compiler")
+    begin.append(compiler)
+    begin.append("--flags")
+    begin.append(flags)
+    begin.append("--mojo")
+    begin.append(mojo)
+    begin.append("--sources")
+    begin.append("shadow.mojo")
+    _ = _run(begin, 180.0, "")
+    var generate = List[String]()
+    generate.append(mojo)
+    generate.append("run")
+    generate.append("-Werror")
+    generate.append("-I")
+    generate.append(".")
+    generate.append("coverage/build_cli.mojo")
+    generate.append(stage)
+    generate.append("shadow.mojo")
+    _ = _run(generate, 180.0, native)
+    var line = _line(_SHADOW, "for item in range(3)")
+    var manifest = Path(stage + "/manifest.txt").read_text()
+    if manifest.find("B shadow " + String(line) + "\n") < 0:
+        _fail("Shadow fixture original loop missing")
+    var seal = _tool(mojo, "coverage_loop_seal")
+    seal.append("--root")
+    seal.append(native)
+    seal.append("--build")
+    seal.append(stage)
+    seal.append("--compiler")
+    seal.append(compiler)
+    seal.append("--flags")
+    seal.append(flags)
+    seal.append("--mojo")
+    seal.append(mojo)
+    _ = _run(seal, 180.0, "")
+    var receipt = PyJson.parse(Path(stage + "/loop-proofs.json").read_text())
+    var proofs = receipt.at(receipt.at(receipt.root, "receipt"), "proofs")
+    if receipt.length(proofs) != 0:
+        _fail("Shadowed range incorrectly proved builtin")
+    var lines = List[Int]()
+    lines.append(line)
+    var masked_path = stage + "/mojo-masked-manifest.txt"
+    var mask = _tool(mojo, "coverage_loop_seal")
+    mask.append("mask")
+    mask.append("--build")
+    mask.append(stage)
+    mask.append("--output")
+    mask.append(masked_path)
+    _ = _run(mask, 60.0, "")
+    var derived = diagnostic_manifest(
+        Path(masked_path).read_text(), "shadow", lines
+    )
+    var derived_path = work + "/shadow-manifest.txt"
+    Path(derived_path).write_text(derived)
+    var plain_bin = native + "/shadow"
+    var inst_bin = stage + "/shadow"
+    var plain_build = List[String]()
+    plain_build.append(mojo)
+    plain_build.append("build")
+    plain_build.append("-Werror")
+    plain_build.append("-I")
+    plain_build.append(native)
+    plain_build.append(native + "/shadow.mojo")
+    plain_build.append("-o")
+    plain_build.append(plain_bin)
+    _ = _run(plain_build, 180.0, "")
+    var inst_build = List[String]()
+    inst_build.append(mojo)
+    inst_build.append("build")
+    inst_build.append("-Werror")
+    inst_build.append("-I")
+    inst_build.append(stage)
+    inst_build.append(stage + "/shadow.mojo")
+    inst_build.append("-o")
+    inst_build.append(inst_bin)
+    _ = _run(inst_build, 180.0, "")
+    var plain = _run_both([plain_bin], 5.0, "")
+    var instrumented = _run_both([inst_bin], 5.0, "")
+    if plain[0] != 0 or instrumented[0] != 0:
+        _fail("Shadowed range program failed")
+    if (
+        plain[1] != "RESULT shadowed range\n"
+        or instrumented[1] != "RESULT shadowed range\n"
+    ):
+        _fail("Shadowed range native semantics changed")
+    if plain[2].byte_length() != 0:
+        _fail("Unexpected native shadow probe")
+    var needle = "COVLINE:shadow:" + String(line) + ":"
+    var records = String("")
+    var start = 0
+    var count = instrumented[2].byte_length()
+    var bytes = instrumented[2].as_bytes()
+    while start < count:
+        var end = start
+        while end < count and bytes[end] != 10:
+            end += 1
+        var row = String(instrumented[2][byte=start:end])
+        if row.startswith(needle):
+            if records.byte_length() != 0:
+                records += "\n"
+            records += row
+        start = end + 1
+    if records != needle + "F":
+        _fail("Shadowed range must emit only F")
+    var raw_path = work + "/shadow.raw.txt"
+    Path(raw_path).write_text(instrumented[2])
+    var report = _run_both([reporter, derived_path, raw_path], 5.0, "")
+    if report[0] == 0 or report[1].find("branches 1/2") < 0:
+        _fail("Shadowed loop lost a reachable/unknown obligation")
+    var drifted = String(_SHADOW).replace(
+        "from shadow_factory import custom_range as range",
+        "# same-line builtin alias drift",
+    )
+    Path(native + "/shadow.mojo").write_text(drifted)
+    var rejected = _tool(mojo, "coverage_loop_seal")
+    rejected.append("--root")
+    rejected.append(native)
+    rejected.append("--build")
+    rejected.append(stage)
+    rejected.append("--compiler")
+    rejected.append(compiler)
+    rejected.append("--flags")
+    rejected.append(flags)
+    rejected.append("--mojo")
+    rejected.append(mojo)
+    var refusal = _run_both(rejected, 180.0, "")
+    var refusal_text = refusal[1] + refusal[2]
+    if refusal[0] == 0 or refusal_text.find("generation origin") < 0:
+        _fail("Unexpected alias-drift rejection: " + refusal_text)
+    Path(native + "/shadow.mojo").write_text(_SHADOW)
+    Path(native + "/missing.mojo").write_text("def main():\n    pass\n")
+    var again = _tool(mojo, "coverage_loop_begin")
+    again.append("--root")
+    again.append(native)
+    again.append("--build")
+    again.append(stage)
+    again.append("--compiler")
+    again.append(compiler)
+    again.append("--flags")
+    again.append(flags)
+    again.append("--mojo")
+    again.append(mojo)
+    again.append("--sources")
+    again.append("shadow.mojo")
+    again.append("missing.mojo")
+    _ = _run(again, 180.0, "")
+    _ = _run(["rm", "-f", native + "/missing.mojo"], 10.0, "")
+    var regenerate = List[String]()
+    regenerate.append(mojo)
+    regenerate.append("run")
+    regenerate.append("-Werror")
+    regenerate.append("-I")
+    regenerate.append(".")
+    regenerate.append("coverage/build_cli.mojo")
+    regenerate.append(stage)
+    regenerate.append("shadow.mojo")
+    regenerate.append("missing.mojo")
+    var failed = _run_both(regenerate, 180.0, native)
+    if failed[0] == 0:
+        _fail("Missing source regeneration unexpectedly succeeded")
+    if len(Path(stage + "/origins.ready").read_bytes()) != 0:
+        _fail("Failed generation left a usable prior index")
+    _ = _run(["rm", "-rf", work], 30.0, "")
+    print(
+        "PASS: shadowed range stays unknown; both obligations retained;"
+        " alias drift rejected"
+    )
+
+
+def main() raises:
+    """Qualify the constant-loop fixture and the shadowed range."""
     var mojo = ".venv/bin/mojo"
     var arguments = argv()
     var index = 1
@@ -620,6 +868,7 @@ def main() raises:
         exit(2)
     try:
         qualify_constant_loops(mojo)
+        qualify_shadowed_range(mojo)
     except error:
         print("check_coverage_loop_fixture: " + String(error), file=stderr)
         exit(1)
