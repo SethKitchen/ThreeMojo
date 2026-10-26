@@ -4,6 +4,7 @@
 
 import argparse
 from collections import deque
+from contextlib import contextmanager
 import gzip
 import hashlib
 import json
@@ -21,8 +22,19 @@ import threading
 import time
 
 from coverage_process_group import kill_owned_group
-from test_environment import isolated_environment
 import coverage_loop_proofs
+
+
+@contextmanager
+def isolated_environment():
+    """Yield a child environment and remove its private files afterward."""
+    parent = os.environ.get('TMPDIR') or None
+    with tempfile.TemporaryDirectory(prefix='threemojo-test-', dir=parent) as folder:
+        environment = os.environ.copy()
+        root = str(Path(folder).resolve())
+        environment['THREEMOJO_TEST_TMPDIR'] = root
+        environment['TMPDIR'] = root
+        yield environment
 
 ACTIVE_SOURCE_SHA256 = coverage_loop_proofs.file_sha256(Path(__file__))
 

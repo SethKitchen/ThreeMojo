@@ -23,6 +23,7 @@ Without `-I .` the compiler reports `unable to locate module 'math'`.
 
 Suites that write fixtures use one private temporary directory for each run.
 They honor `TMPDIR` and remove their files on success or an exception.
+The Python coverage capture and the suite runner keep that private root.
 The direct run does not enforce a timeout. Use `tools/run_suite.mojo` for that:
 
 ```bash

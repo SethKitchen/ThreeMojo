@@ -32,11 +32,25 @@ has three parts:
 
 import argparse
 from collections import Counter
+from contextlib import contextmanager
+import os
+from pathlib import Path
 import re
 import subprocess
 import sys
+import tempfile
 
-from test_environment import isolated_environment
+
+@contextmanager
+def isolated_environment():
+    """Yield a child environment and remove its private files afterward."""
+    parent = os.environ.get('TMPDIR') or None
+    with tempfile.TemporaryDirectory(prefix='threemojo-test-', dir=parent) as folder:
+        environment = os.environ.copy()
+        root = str(Path(folder).resolve())
+        environment['THREEMOJO_TEST_TMPDIR'] = root
+        environment['TMPDIR'] = root
+        yield environment
 
 # `PASS [ 2000.245 ] test_name`, after the color codes are removed.
 TIME = r"[0-9]+(?:\.[0-9]+)?(?:[eE][+-]?[0-9]+)?"

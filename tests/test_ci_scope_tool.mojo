@@ -818,7 +818,7 @@ def test_unknown_inputs_select_the_full_audit() raises:
         "Makefile",
         "unknown.cfg",
         "tools/new_runtime.py",
-        "tools/test_environment.py",
+        "tools/cache_key.py",
         ".github/workflows/other.yml",
         "new_package/module.mojo",
         "untracked.mojo",
