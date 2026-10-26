@@ -436,6 +436,12 @@ Mojo checks the reviewed PR780 bound inputs.
 Four bound tests keep their reviewed digests.
 A changed bound input is refused.
 
+Mojo checks the reviewed full-audit authority files.
+The cleanup record keeps its reviewed digest.
+The PR760 image and the owner predecessor keep their digests.
+The consumer ledger keeps its reviewed digest.
+A changed authority file is refused.
+
 ## Candidate certificate
 
 A certificate contains a stored incumbent point and its road parameter.
