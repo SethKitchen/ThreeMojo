@@ -9439,13 +9439,13 @@ EDGES = json.loads(r'''
   },
   "math/utils.mojo": {
     "before_sha256": "d32e99704324833af194084f0b1d646a894c63bdd0b8ce1baa0da8a287c1d690",
-    "after_sha256": "1619ce851c806fb1748e524be4b470fda289665a05ef0a31de12ad774758fcad",
+    "after_sha256": "e3175365216326a0ff59a6dcfc86a4926489198081f9b03b10d3bb9d415b8b5b",
     "before_token_sha256": "09aae4effc4236d14e85367f694c436b5b761ba75fb37e6b7df93006804cb915",
-    "after_token_sha256": "70be9aea224ae21aabf8a2a3cd5a17e476f76a3b700f5b907c536f2654436b6f",
+    "after_token_sha256": "339964117ec4f38eb8f5d35b416dd194125eb2c7aa2a9052f84dbe726e743a14",
     "edits": [
       {
         "start": 153,
-        "stop": 239,
+        "stop": 227,
         "before": [],
         "after": [
           "\n",
@@ -9463,9 +9463,6 @@ EDGES = json.loads(r'''
           "\n",
           "    Returns:\n",
           "        The center, from just above zero through just below one.\n",
-          "\n",
-          "    Raises:\n",
-          "        Error: Never.\n",
           "    \"\"\"\n",
           "    if count > 8388608:\n",
           "        return Float32((Float64(pixel) + 0.5) / Float64(count))\n",
@@ -9484,9 +9481,6 @@ EDGES = json.loads(r'''
           "\n",
           "    Returns:\n",
           "        One minus the center.\n",
-          "\n",
-          "    Raises:\n",
-          "        Error: Never.\n",
           "    \"\"\"\n",
           "    if count > 8388608:\n",
           "        return Float32(1 - (Float64(pixel) + 0.5) / Float64(count))\n",
@@ -9506,9 +9500,6 @@ EDGES = json.loads(r'''
           "\n",
           "    Returns:\n",
           "        The center, from just above minus one through just below one.\n",
-          "\n",
-          "    Raises:\n",
-          "        Error: Never.\n",
           "    \"\"\"\n",
           "    if count > 8388608:\n",
           "        return Float32((Float64(pixel) + 0.5) / Float64(count) * 2 - 1)\n",
@@ -9527,9 +9518,6 @@ EDGES = json.loads(r'''
           "\n",
           "    Returns:\n",
           "        The center, from just below one through just above minus one.\n",
-          "\n",
-          "    Raises:\n",
-          "        Error: Never.\n",
           "    \"\"\"\n",
           "    if count > 8388608:\n",
           "        return Float32(1 - (Float64(pixel) + 0.5) / Float64(count) * 2)\n",
@@ -9537,8 +9525,8 @@ EDGES = json.loads(r'''
         ]
       },
       {
-        "start": 890,
-        "stop": 907,
+        "start": 878,
+        "stop": 895,
         "before": [],
         "after": [
           "def _difference_fits(high: Int, low: Int) -> Bool:\n",
@@ -9561,8 +9549,8 @@ EDGES = json.loads(r'''
         ]
       },
       {
-        "start": 982,
-        "stop": 985,
+        "start": 970,
+        "stop": 973,
         "before": [],
         "after": [
           "        A width that does not fit in an integer is drawn in `Float64` and\n",
@@ -9571,8 +9559,8 @@ EDGES = json.loads(r'''
         ]
       },
       {
-        "start": 990,
-        "stop": 991,
+        "start": 978,
+        "stop": 979,
         "before": [
           "            The number.\n"
         ],
@@ -9581,8 +9569,8 @@ EDGES = json.loads(r'''
         ]
       },
       {
-        "start": 992,
-        "stop": 1002,
+        "start": 980,
+        "stop": 990,
         "before": [
           "        return low + Int(floor(self.next() * Float64(high - low + 1)))\n"
         ],
@@ -18195,7 +18183,7 @@ EDGE_SHA256 = {'core/deform.mojo': 'b6afec67eea77b1a76cae98df1b4399de366b2a82878
  'math/matrix4.mojo': '3a14fb7473be39825f01e0b25141dc11deae32815083038f273f1dc88f0d3b45',
  'math/path.mojo': '6c2cd1c42f7df845460b128c2765c02410dfd1ebbbe057c2623ac1fa283ccf2c',
  'math/square_matrix.mojo': '0654dc0cfd85f05b383961d1507464559d00fefc15e49d682d8d3a4a8aa95ed9',
- 'math/utils.mojo': '6aa1bae26d991b83e1a4c8a1f40bb7bdf6f3ae196fe5357660e728b1e910bddb',
+ 'math/utils.mojo': '24723e8dc9b370ef2b6dec395b92ff425e75c4f1fcd04e7b4a0d4fa5590c75e7',
  'math/vector4.mojo': '3bf820cf0f2f9ad74083de036282f10d01d9fed78a6a90ac2ff65bfa6bc440d1',
  'objects/gaussian_splat.mojo': '4469b3d742b43810e8752266ef1b5f6d10fbf5894d46d434c2bc26cf4ab51483',
  'objects/line_segments2.mojo': '289763b1859e683324ce7cfaee1096753f2c3c92ad0bf0e7f0d96f95c790db0e',
@@ -18378,7 +18366,7 @@ EDGE_SHA256 = {'core/deform.mojo': 'b6afec67eea77b1a76cae98df1b4399de366b2a82878
  'tools/carla_lane_oracle/translated_parameter_resolution.py': '1c63297c0097ce50b9f314ba321e7f4d04c009f6379552a84adefb62a2a7f375',
  'tools/compile_fail_expectations.json': 'a15d4cff3d89429312350a4da95604569da83be105f69a0690025904c2cfbc84',
  'tools/test_conditioned_coverage_loops.py': 'f88451e7313fd84cc788847b1c960dc395b98736779a92c81a1d056ff2977520'}
-DATA_SHA256 = '8bc746ee4471af17e7077975295d14f0d16a36133c41ed23a252043c34183c24'
+DATA_SHA256 = '257ae90cf30b2a8b9c217a68d0d0f9a117207d6f246770bf72f6512a19e95bea'
 # END FIXED PR780 SUCCESSOR DATA
 
 
@@ -18394,7 +18382,7 @@ def sha(raw):
 def _index_snapshot():
     """Authenticate and detach the fixed per-edge digests and bound inputs."""
     require(type(DATA_SHA256) is str, 'authority digest selector is not a builtin string')
-    require(DATA_SHA256 == '8bc746ee4471af17e7077975295d14f0d16a36133c41ed23a252043c34183c24', 'authority digest selector changed')
+    require(DATA_SHA256 == '257ae90cf30b2a8b9c217a68d0d0f9a117207d6f246770bf72f6512a19e95bea', 'authority digest selector changed')
     encoded = json.dumps({'edges': EDGE_SHA256, 'bound_inputs': BOUND_INPUTS},
                          sort_keys=True, separators=(',', ':'))
     require(sha(encoded) == DATA_SHA256, 'fixed source inverse data changed')

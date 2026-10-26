@@ -166,9 +166,6 @@ def texel_center(pixel: Int, count: Int) -> Float32:
 
     Returns:
         The center, from just above zero through just below one.
-
-    Raises:
-        Error: Never.
     """
     if count > 8388608:
         return Float32((Float64(pixel) + 0.5) / Float64(count))
@@ -187,9 +184,6 @@ def texel_center_from_end(pixel: Int, count: Int) -> Float32:
 
     Returns:
         One minus the center.
-
-    Raises:
-        Error: Never.
     """
     if count > 8388608:
         return Float32(1 - (Float64(pixel) + 0.5) / Float64(count))
@@ -209,9 +203,6 @@ def texel_ndc(pixel: Int, count: Int) -> Float32:
 
     Returns:
         The center, from just above minus one through just below one.
-
-    Raises:
-        Error: Never.
     """
     if count > 8388608:
         return Float32((Float64(pixel) + 0.5) / Float64(count) * 2 - 1)
@@ -230,9 +221,6 @@ def texel_ndc_up(pixel: Int, count: Int) -> Float32:
 
     Returns:
         The center, from just below one through just above minus one.
-
-    Raises:
-        Error: Never.
     """
     if count > 8388608:
         return Float32(1 - (Float64(pixel) + 0.5) / Float64(count) * 2)
