@@ -18,6 +18,8 @@ from std.pathlib import Path
 from std.sys import argv, exit, stderr
 from std.tempfile import mkdtemp
 
+from tools._process import _remove_tree
+
 from tools._python_float import parse_float
 from tools._python_json import (
     MISSING,
@@ -151,6 +153,7 @@ def _border(doc: PyJson, root: Int) raises -> String:
         + "}"
     )
     var normals = PyJson.parse(normals_text(normal_path))
+    _remove_tree(folder)
     var out = String('{"positions":')
     out += _dump(replay, points)
     out += ',"normals":'

@@ -197,8 +197,9 @@ struct LidarDescription(ImplicitlyCopyable):
     def points_per_laser(self, tick: Duration) raises -> Int:
         """Return how many rays one laser fires in one tick.
 
-        The quotient is a `Float64`. A `Float32` point count drops whole
-        points past 2^24.
+        The quotient and its rounding are `Float32`, as CARLA's
+        `RoundHalfFromZero(PointsPerSecond * DeltaTime / float(ChannelCount))`
+        is: 5 points a second on one channel for 0.7 seconds is 4 points.
 
         Args:
             tick: The simulation step.
@@ -212,11 +213,11 @@ struct LidarDescription(ImplicitlyCopyable):
                 an integer.
         """
         var exact = (
-            Float64(self.points_per_second)
-            * Float64(tick.to(SECOND))
-            / Float64(self.channels)
+            Float32(self.points_per_second)
+            * tick.to(SECOND)
+            / Float32(self.channels)
         )
-        var scaled = exact + 0.5
+        var scaled = Float64(exact + 0.5)
         # `Float64(Int.MAX)` is 2^63. `Int` of a float at or past it is not
         # a count. A float below `-2^63` is not one either.
         if (

@@ -284,7 +284,7 @@ def test_a_wide_blur_reads_the_center_texel() raises:
     values[8388608] = 1
     var depth = List[Float32](length=width, fill=0)
     var view = DepthView(
-        depth^,
+        depth,
         width,
         1,
         Matrix4(),

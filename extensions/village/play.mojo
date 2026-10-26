@@ -75,7 +75,7 @@ from extensions.water.pebbles import PebbleBed
 from math.vector3 import Vector3
 from render.framebuffer import Framebuffer
 from render.game_upscale import upscale_into
-from renderers.game_renderer import GameRenderer
+from renderers.game_renderer import FULL_SHADOWS, GameRenderer
 from renderers.renderer import Renderer, available_workers
 from std.time import perf_counter_ns
 from units.si import (
@@ -293,6 +293,11 @@ struct VillageGame(Movable):
             field.ground,
         )
         self.village.meadow.grass_wind_every = self.quality.grass_wind_every
+        # A still shadow map is drawn once, and the grass changes as the
+        # player walks, so only full shadows take the grass.
+        self.village.meadow.set_grass_shadows(
+            scene, self.quality.shadows == FULL_SHADOWS
+        )
         self.village.water.shade_step = self.quality.water_step
         self.village.water.refresh_every = self.quality.water_refresh_every
         self.view = ThirdPersonControls(parameters.heading)

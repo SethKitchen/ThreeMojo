@@ -89,6 +89,8 @@ The pond's water is composed into the frame before it is stretched, because the 
 
 `set_moving` names the moving nodes, such as the people and the animals. `refresh_shadows` draws the still map again at the next frame. A pixel takes the darker of the two maps, with a 2 by 2 filter.
 
+The still map keeps the casters as they were when it was drawn. So in the village game, the grass casts only with `FULL_SHADOWS`: its clusters are shown, hidden and grown again as the player walks. A tree's shadow keeps the crown level that the tree wore in the first frame. Call `refresh_shadows` after the still casters change.
+
 ## What it draws
 
 - `scene.meshes` and `scene.skinned_meshes`, opaque.

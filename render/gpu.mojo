@@ -388,6 +388,7 @@ from render.texture import (
     Wrap,
     anisotropic_footprint,
     gradient_sample_coordinate,
+    sample_coordinate,
     texture_grad_finite,
     blend_texels,
     fetch_level,
@@ -4780,9 +4781,11 @@ def _sample_filtered(
     of memory on the kernel with five."""
     var wide = _extent(image.width, level)
     var tall = _extent(image.height, level)
-    var from_top = row_coordinate(v, image.flip_y)
+    var su = sample_coordinate(u, image.wrap_s)
+    var sv = sample_coordinate(v, image.wrap_t)
+    var from_top = row_coordinate(sv, image.flip_y)
     var nearest = filter == NEAREST
-    var across = u * Float32(wide)
+    var across = su * Float32(wide)
     var down = from_top * Float32(tall)
     if not nearest:
         # Texel centers sit at half-integers; see Texture.sample.

@@ -1291,9 +1291,11 @@ def test_the_inventory_matches_the_makefile() raises:
         ("coverage_tests", "COVERAGE_TESTS"),
     ]
     var tree = Tree()
+    # Make prints each list itself: one shell argument of every formatted
+    # path is past Linux's 128 KiB limit on a single argument.
     var wrapper = String("include Makefile\ninventory:\n")
     for entry in variables:
-        wrapper += "\t@printf '%s\\n' '" + entry[0] + "=$(" + entry[1] + ")'\n"
+        wrapper += "\t@:$(info " + entry[0] + "=$(" + entry[1] + "))\n"
     tree.write("inventory.mk", wrapper)
     var result = run_program(
         [

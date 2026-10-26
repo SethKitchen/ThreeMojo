@@ -197,6 +197,46 @@ def _scanline_bytes(
     return height * stride
 
 
+def _image_bytes(
+    width: Int, height: Int, bit_depth: Int, color_type: Int, interlaced: Bool
+) raises -> Int:
+    """Return the filtered bytes of an image, interlaced or not.
+
+    An Adam7 image is seven smaller images, the passes, each with its own
+    filter byte a row. A pass with no row or no column has no bytes.
+
+    Args:
+        width: The image width, in pixels.
+        height: The image height, in pixels.
+        bit_depth: Bits per sample.
+        color_type: The PNG color type.
+        interlaced: Whether the image is Adam7 interlaced.
+
+    Returns:
+        The byte count.
+
+    Raises:
+        Error: If the color type is not known, or the count does not fit.
+    """
+    if not interlaced:
+        return _scanline_bytes(width, height, bit_depth, color_type)
+    var starts: List[Int] = [0, 4, 0, 2, 0, 1, 0]
+    var steps: List[Int] = [8, 8, 4, 4, 2, 2, 1]
+    var rows: List[Int] = [0, 0, 4, 0, 2, 0, 1]
+    var row_steps: List[Int] = [8, 8, 8, 4, 4, 2, 2]
+    var total = 0
+    for p in range(7):  # pragma: no branch
+        var columns = (width - starts[p] + steps[p] - 1) // steps[p]
+        var lines = (height - rows[p] + row_steps[p] - 1) // row_steps[p]
+        if columns <= 0 or lines <= 0:
+            continue
+        var part = _scanline_bytes(columns, lines, bit_depth, color_type)
+        if total > Int.MAX - part:
+            raise Error("A PNG larger than this decoder will build")
+        total += part
+    return total
+
+
 def recompress(
     stream: List[UInt8], limit: Int = NO_LIMIT
 ) raises -> List[UInt8]:
@@ -289,22 +329,25 @@ def optimize(data: List[UInt8]) raises -> List[UInt8]:
             raise Error("A PNG header chunk is the wrong size")
         var bit_depth = Int(header[8])
         var color_type = Int(header[9])
-        var idat_limit = _scanline_bytes(
+        var interlaced = header[12] == 1
+        var idat_limit = _image_bytes(
             Int(_be32(header, 0)),
             Int(_be32(header, 4)),
             bit_depth,
             color_type,
+            interlaced,
         )
         var frame_limit = idat_limit
         var next_run = 0
         for i in range(len(chunks)):  # pragma: no branch
             if chunks.types[i] == FCTL:
                 var body = chunks.bodies[i].copy()
-                frame_limit = _scanline_bytes(
+                frame_limit = _image_bytes(
                     Int(_be32(body, 4)),
                     Int(_be32(body, 8)),
                     bit_depth,
                     color_type,
+                    interlaced,
                 )
             if next_run < len(runs) and i == runs[next_run][0]:
                 var limit = idat_limit

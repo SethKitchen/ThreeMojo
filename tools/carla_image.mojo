@@ -171,6 +171,9 @@ def _jpeg(data: List[UInt8]) raises -> String:
     var header = library.call["jpeg_read_header", Int32](cinfo_ptr, Int32(1))
     if header != 1:
         library.call["jpeg_destroy_decompress", NoneType](cinfo_ptr)
+        # libjpeg holds bare addresses of both, so they live to here.
+        _ = len(cinfo)
+        _ = len(jerr)
         raise Error("jpeg header was not read")
     var mode = String("RGB")
     var out_space = _JCS_RGB
@@ -181,12 +184,18 @@ def _jpeg(data: List[UInt8]) raises -> String:
     var started = library.call["jpeg_start_decompress", Int32](cinfo_ptr)
     if started == 0:
         library.call["jpeg_destroy_decompress", NoneType](cinfo_ptr)
+        # libjpeg holds bare addresses of both, so they live to here.
+        _ = len(cinfo)
+        _ = len(jerr)
         raise Error("jpeg image did not start")
     var width = Int(_load_u32(cinfo, _OUTPUT_WIDTH))
     var height = Int(_load_u32(cinfo, _OUTPUT_HEIGHT))
     var bands = _load_i32(cinfo, _OUTPUT_COMPONENTS)
     if bands != 1 and bands != 3:
         library.call["jpeg_destroy_decompress", NoneType](cinfo_ptr)
+        # libjpeg holds bare addresses of both, so they live to here.
+        _ = len(cinfo)
+        _ = len(jerr)
         raise Error("jpeg image is not gray or rgb")
     var row = List[UInt8](length=width * bands, fill=0)
     var row_ptr = List[UInt64](length=1, fill=0)
@@ -198,6 +207,9 @@ def _jpeg(data: List[UInt8]) raises -> String:
         )
         if read != 1:
             library.call["jpeg_destroy_decompress", NoneType](cinfo_ptr)
+            # libjpeg holds bare addresses of both, so they live to here.
+            _ = len(cinfo)
+            _ = len(jerr)
             raise Error("jpeg scanline was not read")
         for index in range(width):
             if bands == 1:
@@ -214,6 +226,9 @@ def _jpeg(data: List[UInt8]) raises -> String:
                 pixels.append(255)
     _ = library.call["jpeg_finish_decompress", Int32](cinfo_ptr)
     library.call["jpeg_destroy_decompress", NoneType](cinfo_ptr)
+    # libjpeg holds bare addresses of both, so they live to here.
+    _ = len(cinfo)
+    _ = len(jerr)
     return _emit(mode, width, height, pixels)
 
 

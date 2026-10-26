@@ -20,6 +20,8 @@ from std.pathlib import Path
 from std.sys import argv, exit, stderr
 from std.tempfile import mkdtemp
 
+from tools._process import _remove_tree
+
 from tools._python_float import parse_float
 from tools._python_json import (
     MISSING,
@@ -225,7 +227,9 @@ def _spread(rgba_text: String) raises -> String:
     Path(file).write_text(
         '{"image":' + colors + ',"covered":' + covered + ',"passes":6}'
     )
-    return dilate_text(file)
+    var dilated = dilate_text(file)
+    _remove_tree(folder)
+    return dilated^
 
 
 def _pack_request(

@@ -18,7 +18,7 @@ from std.pathlib import Path
 from std.sys import argv, exit, stderr
 from std.tempfile import mkdtemp
 
-from tools._process import run_program
+from tools._process import _remove_tree, run_program
 from tools._python_float import parse_float
 from tools._python_json import (
     MISSING,
@@ -87,7 +87,9 @@ def package_vehicle(
     if doc.kind(doc.root) != PY_DICT:
         raise Error("glTF is not an object")
     _reset_textures(doc)
-    doc = _reload(dedupe_text(_write_gltf(doc)))
+    var written = _write_gltf(doc)
+    doc = _reload(dedupe_text(written))
+    _remove_tree(_folder_of(written))
     var rows = List[_Report]()
     var cache = String("[]")
     var materials = doc.get(doc.root, "materials")
@@ -125,7 +127,9 @@ def package_vehicle(
         _prepare_output(out_dir)
     var bin_path = _join(_dirname(mesh), _buffer_uri(doc))
     var data = Path(bin_path).read_bytes()
-    doc = _reload(strip_text(_write_gltf(doc)))
+    var stripped = _write_gltf(doc)
+    doc = _reload(strip_text(stripped))
+    _remove_tree(_folder_of(stripped))
     var packed = compact_gltf(doc, "compact", data)
     var lamps = split_lamps(doc, Span(packed))
     if budget > 0:
@@ -270,7 +274,9 @@ def _decimate(
     decimate_files(budget, KEEP, source_gltf, source_bin, out_gltf, out_bin)
     var updated = PyJson.parse(Path(out_gltf).read_text())
     doc = updated^
-    return Path(out_bin).read_bytes()
+    var packed = Path(out_bin).read_bytes()
+    _remove_tree(folder)
+    return packed^
 
 
 def _finish(mut doc: PyJson, name: String) raises:
@@ -325,8 +331,15 @@ def _file_text(path: String) raises -> String:
     return String(unsafe_from_utf8=Span(cleaned))
 
 
+def _folder_of(path: String) -> String:
+    """Return the folder a file path names, the part before its last
+    slash."""
+    return String(path[byte = : path.rfind("/")])
+
+
 def _write_gltf(doc: PyJson) raises -> String:
-    """Write `doc` to a temporary file and return that path."""
+    """Write `doc` to a temporary file and return that path. The caller
+    removes its folder."""
     var folder = mkdtemp(prefix="gltf package ")
     var path = _join(folder, "mesh.gltf")
     Path(path).write_text(gltf_text(doc))

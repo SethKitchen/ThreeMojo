@@ -179,6 +179,32 @@ def test_pins_move_their_rows() raises:
         sheet.step(_frame(), 0)
 
 
+def test_a_cloth_with_no_pin_still_meets_the_capsules() raises:
+    # A falling sheet with no pin: each free particle is its own tether,
+    # and the bar under it holds it off.
+    var grid = cloth_grid(
+        Vector3(0, 0, 0), Vector3(0.2, 0, 0), Vector3(0, 0, -0.2), 6, 6
+    )
+    var sheet = ClothSolver(
+        grid[0].copy(),
+        List[Bool](length=36, fill=False),
+        grid[1].copy(),
+        grid[2].copy(),
+        ClothSettings(),
+    )
+    for k in range(sheet.count()):
+        assert_equal(sheet.tethers[k], k)
+    sheet.set_colliders(
+        [Vector3(-1, -0.5, -0.5)], [Vector3(2, -0.5, -0.5)], [Float32(0.1)]
+    )
+    for _ in range(60):
+        sheet.step(_frame())
+    for k in range(sheet.count()):
+        var p = sheet.points[k]
+        var gap = Vector3(0, p.y + 0.5, p.z + 0.5).length()
+        assert_true(gap >= 0.1 + sheet.settings.thickness - 1e-3)
+
+
 def test_a_capsule_holds_the_cloth_off() raises:
     var sheet = _hanging(6, 6)
     # A bar across the sheet, half a meter down: the cloth drapes over it.

@@ -824,10 +824,16 @@ struct Meadow(Movable):
     # frame for 1, every `n`th frame for `n`, the clusters taking turns, and
     # only when its level changes for 0.
     var grass_wind_every: Int
+    # Whether the grass casts the sun's shadow. A renderer that keeps a
+    # still shadow map, drawn once, must not take the grass into it: the
+    # clusters are shown, hidden and grown again as the camera moves.
+    var grass_casts_shadow: Bool
     # The level each cluster was last grown at, or -1, whether it had any
-    # blade then, and how many frames `update` has prepared.
+    # blade then, its triangles then, and how many frames `update` has
+    # prepared.
     var grown_band: List[Int]
     var grown_shown: List[Bool]
+    var grown_triangles: List[Int]
     var frames: Int
 
     def __init__(
@@ -931,9 +937,13 @@ struct Meadow(Movable):
             length=len(self.field.clusters), fill=None
         )
         self.grass_wind_every = 1
+        self.grass_casts_shadow = True
         self.grown_band = List[Int](length=len(self.field.clusters), fill=-1)
         self.grown_shown = List[Bool](
             length=len(self.field.clusters), fill=False
+        )
+        self.grown_triangles = List[Int](
+            length=len(self.field.clusters), fill=0
         )
         self.frames = 0
         self.cluster_node = List[NodeId]()
@@ -1112,6 +1122,21 @@ struct Meadow(Movable):
         scene.fog = exp2_fog(self.dome.haze(), InverseLength(0.0008, PER_METER))
         scene.update()
 
+    def set_grass_shadows(mut self, mut scene: Scene, casts: Bool):
+        """Choose whether the grass casts the sun's shadow, for the clusters
+        grown already and the ones grown later.
+
+        Args:
+            scene: The scene the meadow is in.
+            casts: Whether the grass casts.
+        """
+        self.grass_casts_shadow = casts
+        for index in range(len(self.cluster_mesh)):  # pragma: no branch
+            if self.cluster_mesh[index]:
+                scene.meshes[
+                    self.cluster_mesh[index].value()
+                ].cast_shadow = casts
+
     def register_shadings(
         self, mut renderer: GameRenderer, assets: Assets
     ) raises:
@@ -1203,6 +1228,7 @@ struct Meadow(Movable):
                 shown = self.grown_shown[index]
                 if shown:
                     stats.blades += self.field.kept(index, choice.band)
+                    stats.triangles += self.grown_triangles[index]
                 else:
                     stats.empty += 1
             scene.node(self.cluster_node[index]).visible = shown
@@ -1272,7 +1298,8 @@ struct Meadow(Movable):
             return False
         var geometry = grown.take()
         stats.blades += self.field.kept(index, band)
-        stats.triangles += len(geometry.index) // 3
+        self.grown_triangles[index] = len(geometry.index) // 3
+        stats.triangles += self.grown_triangles[index]
         if self.cluster_mesh[index]:
             assets.geometries.replace(self.cluster_geometry[index], geometry^)
             return True
@@ -1283,7 +1310,7 @@ struct Meadow(Movable):
                 id,
                 self.grass,
                 self.cluster_node[index],
-                cast_shadow=True,
+                cast_shadow=self.grass_casts_shadow,
                 receive_shadow=True,
             )
         )

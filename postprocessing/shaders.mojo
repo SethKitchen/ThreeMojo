@@ -68,6 +68,7 @@ from render.framebuffer import TRANSPARENT_BLACK, Color, FloatColor
 from render.target import RenderTarget
 from std.math import cos, isfinite, pow, sin, sqrt
 from units.si import Angle, RADIAN
+from math.scaled_side import scaled_side
 
 
 @fieldwise_init
@@ -1366,8 +1367,9 @@ def god_rays_size(size: Int, scale: Float32) raises -> Int:
     """Return the rays' width or height: the frame's times the scale, cut
     to a whole number as WebGL cuts a target's size, and at least one.
 
-    The product is a `Float64`, as JavaScript's number is. A `Float32`
-    product drops whole sizes past 2^24. The cut is toward zero.
+    The product is `math.scaled_side`'s: `Float32` to 2^24, so 1000 times
+    0.9 is 900 as in JavaScript, and `Float64` past it. The cut is toward
+    zero.
 
     Args:
         size: The frame's width or height.
@@ -1379,7 +1381,7 @@ def god_rays_size(size: Int, scale: Float32) raises -> Int:
     Raises:
         Error: If the product is not finite or does not fit in an integer.
     """
-    var scaled = Float64(size) * Float64(scale)
+    var scaled = scaled_side(size, scale)
     # `Float64(Int.MAX)` is 2^63. `Int` of a float at or past it is not
     # the size. A float below `-2^63` is not one either.
     if (

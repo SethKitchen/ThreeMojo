@@ -462,6 +462,31 @@ def test_a_zlib_block_past_its_header_size_is_refused() raises:
         )
 
 
+def test_a_full_last_zlib_block_reads_as_vtk_writes_it() raises:
+    # VTK writes the last block's size as 0 when that block is full, and
+    # as its size when it is not: both give the same three numbers.
+    for encoded in [
+        "AQAAAAwAAAAAAAAAFwAAAAAAeAEBDADz/wAAgD8AAABAAABAQAlDAYA=",
+        "AQAAAAwAAAAMAAAAFwAAAAAAeAEBDADz/wAAgD8AAABAAABAQAlDAYA=",
+    ]:
+        var read = parse_vtk_xml(
+            _vtp(
+                ' header_type="UInt32" compressor="z"',
+                _PIECE
+                + '<Points><DataArray type="Float32" NumberOfComponents="3"'
+                + ' format="binary">'
+                + encoded
+                + "</DataArray></Points>"
+                + _POLYS
+                + "</Piece>",
+            )
+        )
+        var points = read.attribute_view(String(POSITION)).packed()
+        assert_equal(len(points), 3)
+        assert_equal(points[0], 1)
+        assert_equal(points[2], 3)
+
+
 def test_text_edges_are_read_as_three_js_reads_them() raises:
     var points = "POINTS 3 float\n0 0 0 1 0 0 0 1 0\n"
     # An index of four hundred nines is Infinity, which a typed array

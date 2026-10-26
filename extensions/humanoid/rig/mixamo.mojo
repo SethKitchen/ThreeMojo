@@ -482,12 +482,14 @@ def _sample_times(seconds: Float32, per_second: Int) -> List[Float32]:
 
 def _take_out_travel(mut travel: List[Vector3], at: List[Float32]):
     """Take the straight line from the first frame to the last out of the
-    travel along x and z, and start both at zero."""
+    travel along x and z, and start both at zero. A clip of no length only
+    starts at zero."""
     var first = travel[0]
     var last = travel[len(travel) - 1]
     var span = at[len(at) - 1]
     for k in range(len(travel)):  # pragma: no branch
-        var along = at[k] / span
+        # A clip of no length, a still pose, has one frame and no line.
+        var along = at[k] / span if span > 0 else Float32(0)
         travel[k].x -= first.x + (last.x - first.x) * along
         travel[k].z -= first.z + (last.z - first.z) * along
 

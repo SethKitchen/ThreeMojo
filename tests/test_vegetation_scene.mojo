@@ -691,6 +691,14 @@ def test_an_empty_meadow_draws_its_grass_and_sky() raises:
     var kept = meadow.update(scene, assets, camera, Duration(1.5, SECOND))
     assert_equal(kept.empty, stats.empty)
     assert_equal(kept.blades, stats.blades)
+    assert_equal(kept.triangles, stats.triangles)
+    # The grass can stop casting, the clusters grown already too.
+    meadow.set_grass_shadows(scene, False)
+    for index in range(len(meadow.cluster_mesh)):
+        if meadow.cluster_mesh[index]:
+            assert_false(
+                scene.meshes[meadow.cluster_mesh[index].value()].cast_shadow
+            )
     # A cluster the field lacks is refused, on every core.
     with assert_raises(contains="refused"):
         _ = _build_clusters(

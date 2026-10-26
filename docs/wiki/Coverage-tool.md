@@ -361,7 +361,7 @@ The runtime obeys these rules:
 
 ## Capture storage
 
-The Makefile reduces each suite's stderr as it arrives, and compresses what is left. The report reads two things: the set of distinct probe payloads, and each decision's distinct MC/DC evaluations. A probe in a loop repeats both millions of times. `tools/coverage_io.py`'s `Reducer` keeps each payload once, as a `COVLINE:` record, and each distinct complete `COVEVAL2` record once.
+The Makefile reduces each suite's stderr as it arrives, and compresses what is left. The report reads two things: the set of distinct probe payloads, and each decision's distinct MC/DC evaluations. A probe in a loop repeats both millions of times. `tools/coverage_io.mojo`'s `Reducer` keeps each payload once, as a `COVLINE:` record, and each distinct complete `COVEVAL2` record once.
 
 The report receives evaluations in first-completion order. The reducer has no pending evaluation state. Its storage depends on distinct hits and vectors, not the number of repeated or abandoned evaluations.
 

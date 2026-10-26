@@ -18,6 +18,8 @@ from std.pathlib import Path
 from std.sys import argv, exit, stderr
 from std.tempfile import mkdtemp
 
+from tools._process import _remove_tree
+
 from tools._python_float import parse_float, python_repr
 from tools._python_json import (
     MISSING,
@@ -122,6 +124,7 @@ def _decimate(
             chosen, chosen.item(targets, slot), "target is not an integer"
         )
         _simplify_one(doc, data, source, places[slot], target, folder)
+    _remove_tree(folder)
     var buffers = doc.at(doc.root, "buffers")
     var buffer = doc.item(buffers, 0)
     doc.set(buffer, "byteLength", doc.new_int(len(data)))

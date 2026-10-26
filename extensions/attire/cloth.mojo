@@ -272,7 +272,8 @@ struct ClothSolver(Movable):
     var colors: List[List[Int]]
     """The constraints of each color."""
     var tethers: List[Int]
-    """For each particle, its nearest pinned particle, or -1."""
+    """For each particle, its nearest pinned particle; itself when the cloth
+    has no pin; -1 for a pinned particle."""
     var reaches: List[Float32]
     """For each particle, how far it may stand from that pin."""
     var settings: ClothSettings
@@ -335,6 +336,12 @@ struct ClothSolver(Movable):
                 if d < closest:
                     closest = d
                     best = p
+            # A cloth with no pin tethers each free particle to itself,
+            # at no reach: it stays where it is, and the colliders still
+            # push it out.
+            if best < 0:
+                best = k
+                closest = 0
             self.tethers[k] = best
             self.reaches[k] = closest
         self.previous = points.copy()

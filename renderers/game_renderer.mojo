@@ -2104,9 +2104,12 @@ def _light_range(
         var albedo_g = g * look.color[1] * look.map_color[1]
         var albedo_b = b * look.color[2] * look.map_color[2]
         for face in range(2 if d.lit_twice else 1):  # pragma: no branch
-            var fx = mx if face == 0 else -mx
-            var fy = my if face == 0 else -my
-            var fz = mz if face == 0 else -mz
+            # A back face, and a `BACK_SIDE` material's front, is lit on
+            # the normal turned round, as three.js's `FLIP_SIDED` does.
+            var away = (face == 1) != (look.side == BACK_SIDE.value)
+            var fx = -mx if away else mx
+            var fy = -my if away else my
+            var fz = -mz if away else mz
             var ar = F(0)
             var ag = F(0)
             var ab = F(0)
@@ -2584,7 +2587,9 @@ __async def _resolve_task(
             var b = F(0)
             if not drawn.reduce_and():
                 # The sky, mixed from the four grid samples round each pixel.
-                var column = lane + Int32(x)
+                # A lane past the image's right edge reads the last
+                # column, so no gather goes past the grid.
+                var column = min(lane + Int32(x), Int32(width - 1))
                 var gx = column / Int32(step)
                 var fx = (column - gx * Int32(step)).cast[
                     DType.float32

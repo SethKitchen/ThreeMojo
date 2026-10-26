@@ -63,6 +63,7 @@ from math.vector3 import Vector3
 from std.math import inf, isfinite, pi, tan
 from units.measure import angle_radians
 from units.si import Angle, Duration, Length, METER, RADIAN, SECOND
+from math.scaled_side import scaled_side
 
 # A change smaller than this, squared, is no change. three.js: `_EPS`.
 comptime EPSILON = Float32(1e-6)
@@ -976,8 +977,10 @@ def _per_pixel(span: Float32, pixels: Int) -> Float32:
 def _view_width(height: Int, aspect: Float32) raises -> Int:
     """Return `max(round(height * aspect), 1)`, as JavaScript rounds.
 
-    The product is a `Float64`. Adding one half in `Float32` rounds an
-    odd height at or above 2^23 to the next even integer.
+    The product is `math.scaled_side`'s: `Float32` to 2^24, as
+    JavaScript gets the whole width of an aspect such as 0.9, and `Float64`
+    past it. The half is added in `Float64`: in `Float32` it rounds an odd
+    height at or above 2^23 to the next even integer.
 
     Args:
         height: The view's height, in pixels.
@@ -990,7 +993,7 @@ def _view_width(height: Int, aspect: Float32) raises -> Int:
         Error: If the rounded width is not finite or does not fit in an
             integer.
     """
-    var scaled = Float64(height) * Float64(aspect) + 0.5
+    var scaled = scaled_side(height, aspect) + 0.5
     # `Float64(Int.MAX)` is 2^63. `Int` of a float at or past it is not
     # the width. A float below `-2^63` is not one either.
     if (

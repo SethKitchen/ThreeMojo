@@ -125,8 +125,8 @@ struct RadarDescription(ImplicitlyCopyable):
     def points_in(self, tick: Duration) raises -> Int:
         """Return how many rays one tick fires.
 
-        The product is a `Float64`. A `Float32` point count drops whole
-        points past 2^24.
+        The product is a `Float32`, as CARLA's `PointsPerSecond *
+        DeltaTime` is: 10 points a second for 0.7 seconds is 7 points.
 
         Args:
             tick: The time since the last measurement.
@@ -138,7 +138,7 @@ struct RadarDescription(ImplicitlyCopyable):
             Error: If the product is not finite or does not fit in an
                 integer.
         """
-        var count = Float64(self.points_per_second) * Float64(tick.to(SECOND))
+        var count = Float64(Float32(self.points_per_second) * tick.to(SECOND))
         # `Float64(Int.MAX)` is 2^63. `Int` of a float at or past it is not
         # a count. A float below `-2^63` is not one either.
         if (

@@ -335,6 +335,33 @@ def test_an_image_whose_scanline_bytes_do_not_fit_is_refused() raises:
         _ = optimize(write_chunks(short))
 
 
+def test_an_interlaced_image_holds_a_filter_byte_a_pass_row() raises:
+    # A 2 by 2 RGBA image in Adam7: passes 1, 6 and 7 hold one, one and
+    # two pixels, so 19 bytes, one more than the image's rows hold.
+    var raw = List[UInt8]()
+    for row in [1, 1, 2]:
+        raw.append(0)
+        for _ in range(row * 4):
+            raw.append(0x40)
+    var chunks = PngChunks()
+    var header = _be32_bytes([2, 2])
+    header.extend(Span([UInt8(8), 6, 0, 0, 1]))
+    chunks.append(IHDR, header^)
+    chunks.append(IDAT, zlib_deflate(Span(raw), 0))
+    chunks.append(IEND, List[UInt8]())
+    var smaller = optimize(write_chunks(chunks))
+    assert_true(len(smaller) > 0)
+    # Passes that each fit can still sum past an `Int`.
+    var huge = PngChunks()
+    var big = _be32_bytes([1200000000, 1200000000])
+    big.extend(Span([UInt8(16), 6, 0, 0, 1]))
+    huge.append(IHDR, big^)
+    huge.append(IDAT, _bytes("x"))
+    huge.append(IEND, List[UInt8]())
+    with assert_raises(contains="larger than this decoder will build"):
+        _ = optimize(write_chunks(huge))
+
+
 def test_rejects_bad_zlib_and_extra_streams() raises:
     var single = zlib_deflate(Span(_bytes("a")), 9)
     var short = _slice(single, 0, len(single) - 1)

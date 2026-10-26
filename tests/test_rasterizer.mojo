@@ -85,6 +85,7 @@ from render.packing import (
 )
 from render.srgb import LINEAR, SRGB, ColorSpace
 from render.rasterizer import (
+    _bounds,
     Corner,
     Surface,
     corner_of,
@@ -333,6 +334,14 @@ def test_a_coordinate_past_an_integer_lies_past_the_image() raises:
     for y in range(4):
         for x in range(4):
             assert_equal(fb.get_pixel(x, y).r, background.r)
+    # Corners that are not numbers bound no column: the box is empty.
+    var lost = nan[DType.float32]()
+    var box = _bounds(
+        Triangle(Vector2(lost, lost), Vector2(lost, lost), Vector2(lost, lost)),
+        4,
+        4,
+    )
+    assert_true(box.left > box.right)
     var corners = List[RasterVertex]()
     corners.append(RasterVertex(0, Float32(1e20), 0, 1, FloatColor(0, 0, 0)))
     corners.append(RasterVertex(0, Float32(1e20), 0, 1, FloatColor(0, 0, 0)))

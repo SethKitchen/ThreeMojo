@@ -30,6 +30,7 @@ from core.scene import Scene
 from render.framebuffer import Color, Framebuffer
 from renderers.renderer import Renderer
 from std.math import floor, isfinite
+from math.scaled_side import scaled_side
 
 # The character set three.js's constructor takes by default.
 comptime ASCII_CHARACTERS = " .:-+*=%@#"
@@ -123,8 +124,9 @@ def ascii_size(size: Int, resolution: Float32) raises -> Int:
     """Return the small image's width or height: three.js's
     `Math.floor(size * resolution)`.
 
-    The product is a `Float64`, as JavaScript's number is. A `Float32`
-    product drops whole sizes past 2^24.
+    The product is `math.scaled_side`'s: `Float32` to 2^24, as
+    JavaScript gets the whole size of a scale such as 0.9, and `Float64`
+    past it.
 
     Args:
         size: The renderer's width or height.
@@ -136,7 +138,7 @@ def ascii_size(size: Int, resolution: Float32) raises -> Int:
     Raises:
         Error: If the product is not finite or does not fit in an integer.
     """
-    var scaled = floor(Float64(size) * Float64(resolution))
+    var scaled = floor(scaled_side(size, resolution))
     # `Float64(Int.MAX)` is 2^63. `Int` of a float at or past it is not
     # the size. A float below `-2^63` is not one either.
     if (

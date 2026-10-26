@@ -1806,16 +1806,8 @@ struct Texture(Movable):
         """
         if self.is_blank():
             return OPAQUE_WHITE
-        var su = u
-        var sv = v
-        if not isfinite(su):
-            su = 0
-        else:
-            su = gradient_sample_coordinate(su, self.wrap_s)
-        if not isfinite(sv):
-            sv = 0
-        else:
-            sv = gradient_sample_coordinate(sv, self.wrap_t)
+        var su = sample_coordinate(u, self.wrap_s)
+        var sv = sample_coordinate(v, self.wrap_t)
         var wide = self.level_width(level)
         var tall = self.level_height(level)
         var from_top = row_coordinate(sv, self.flip_y)
@@ -2084,6 +2076,25 @@ def texture_grad_finite(
         Whether all six components are finite.
     """
     return isfinite(u) and isfinite(v) and dx.is_finite() and dy.is_finite()
+
+
+def sample_coordinate(value: Float32, mode: Wrap) -> Float32:
+    """Return the coordinate a sampler reads at: 0 for one that is not
+    finite, and `gradient_sample_coordinate` of the others.
+
+    `Texture._sample_at` and the GPU's `_sample_filtered` both call this,
+    so the two backends read the same texel.
+
+    Args:
+        value: The coordinate.
+        mode: The texture's checked wrap mode.
+
+    Returns:
+        The coordinate to sample at.
+    """
+    if not isfinite(value):
+        return 0
+    return gradient_sample_coordinate(value, mode)
 
 
 def gradient_sample_coordinate(value: Float32, mode: Wrap) -> Float32:
