@@ -16,7 +16,7 @@ is that channel's bytes.
 from std.pathlib import Path
 from std.sys import argv, exit, stderr
 
-from tools._python_float import parse_float
+from tools._python_float import append_ascii, ascii_text, parse_float
 from tools._python_json import PY_DICT, PY_INT, PY_LIST, PyJson
 
 
@@ -58,15 +58,18 @@ def mask_text(text: String) raises -> String:
         best = 1
     if score[2] > score[best]:
         best = 2
-    var out = String('{"channel":')
-    out += String(best)
-    out += ',"pixels":['
+    var out = List[UInt8]()
+    append_ascii(out, '{"channel":')
+    append_ascii(out, String(best))
+    append_ascii(out, ',"pixels":[')
     for index in range(count):
         if index > 0:
-            out += ","
-        out += String(_byte(doc, doc.item(pixels, index * 3 + best)))
-    out += "]}"
-    return out^
+            append_ascii(out, ",")
+        append_ascii(
+            out, String(_byte(doc, doc.item(pixels, index * 3 + best)))
+        )
+    append_ascii(out, "]}")
+    return ascii_text(out)
 
 
 def _byte(doc: PyJson, node: Int) raises -> Int:

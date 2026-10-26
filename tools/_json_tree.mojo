@@ -36,7 +36,12 @@ from loaders.json import (
     JsonKind,
 )
 from tools._json_tools import quote_ascii
-from tools._python_float import parse_float, python_repr
+from tools._python_float import (
+    append_ascii,
+    ascii_text,
+    parse_float,
+    python_repr,
+)
 
 comptime NOTHING = -1
 """The index of a missing value. It acts as Python's `None`."""
@@ -969,22 +974,24 @@ struct JsonTree(Movable):
             Error: For a float that is not finite, as `allow_nan=False`
                 refuses it.
         """
-        var out = String()
+        var out = List[UInt8]()
         self._write(out, node, 0, indent)
-        return out^
+        return ascii_text(out)
 
     def _write(
-        mut self, mut out: String, node: Int, depth: Int, indent: Bool
+        mut self, mut out: List[UInt8], node: Int, depth: Int, indent: Bool
     ) raises:
         """Append one value's text."""
         var kind = self.kind(node)
         if kind == NULL:
-            out += "null"
+            append_ascii(out, "null")
         elif kind == BOOLEAN:
-            out += "true" if self.values[node].integer != 0 else "false"
+            append_ascii(
+                out, "true" if self.values[node].integer != 0 else "false"
+            )
         elif kind == NUMBER:
             if self.values[node].integral:
-                out += String(self.values[node].integer)
+                append_ascii(out, String(self.values[node].integer))
             else:
                 var number = self.values[node].number
                 if isnan(number) or isinf(number):
@@ -992,29 +999,32 @@ struct JsonTree(Movable):
                         "Out of range float values are not JSON compliant: "
                         + python_repr(number)
                     )
-                out += self._float_text(number)
+                append_ascii(out, self._float_text(number))
         elif kind == STRING:
-            out += quote_ascii(self.values[node].text)
+            append_ascii(out, quote_ascii(self.values[node].text))
         else:
             var opener = "[" if kind == ARRAY else "{"
             var closer = "]" if kind == ARRAY else "}"
             var count = len(self.values[node].items)
             if count == 0:
-                out += opener + closer
+                append_ascii(out, opener + closer)
                 return
-            out += opener
+            append_ascii(out, opener)
             for index in range(count):
                 if index > 0:
-                    out += "," if indent else ", "
+                    append_ascii(out, "," if indent else ", ")
                 if indent:
-                    out += "\n" + "  " * (depth + 1)
+                    append_ascii(out, "\n" + "  " * (depth + 1))
                 if kind == OBJECT:
-                    out += quote_ascii(self.values[node].names[index]) + ": "
+                    append_ascii(
+                        out,
+                        quote_ascii(self.values[node].names[index]) + ": ",
+                    )
                 var child = self.values[node].items[index]
                 self._write(out, child, depth + 1, indent)
             if indent:
-                out += "\n" + "  " * depth
-            out += closer
+                append_ascii(out, "\n" + "  " * depth)
+            append_ascii(out, closer)
 
 
 def equal(left: JsonTree, a: Int, right: JsonTree, b: Int) raises -> Bool:

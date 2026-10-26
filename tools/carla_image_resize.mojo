@@ -21,7 +21,7 @@ from std.math import ceil
 from std.pathlib import Path
 from std.sys import argv, exit, stderr
 
-from tools._python_float import parse_float
+from tools._python_float import append_ascii, ascii_text, parse_float
 from tools._python_json import PY_DICT, PY_FLOAT, PY_INT, PY_LIST, PyJson
 
 
@@ -76,13 +76,14 @@ def resize_text(text: String) raises -> String:
             pixels = _vertical(pixels, width, height, bands, out_h, lanczos)
         if bands == 4:
             _unpremultiply(pixels)
-    var out = String('{"pixels":[')
+    var out = List[UInt8]()
+    append_ascii(out, '{"pixels":[')
     for index in range(len(pixels)):
         if index > 0:
-            out += ","
-        out += String(pixels[index])
-    out += "]}"
-    return out^
+            append_ascii(out, ",")
+        append_ascii(out, String(pixels[index]))
+    append_ascii(out, "]}")
+    return ascii_text(out)
 
 
 def _byte_text(doc: PyJson, root: Int) raises -> String:
@@ -90,12 +91,30 @@ def _byte_text(doc: PyJson, root: Int) raises -> String:
     var node = doc.at(root, "pixels")
     if doc.kind(node) != PY_LIST:
         raise Error("pixels are not a list")
-    var out = String('{"pixels":[')
+    var out = List[UInt8]()
+    append_ascii(out, '{"pixels":[')
     for index in range(doc.length(node)):
         if index > 0:
-            out += ","
-        out += String(_unit_byte(_number(doc, doc.item(node, index))))
-    out += "]}"
+            append_ascii(out, ",")
+        append_ascii(
+            out, String(_unit_byte(_number(doc, doc.item(node, index))))
+        )
+    append_ascii(out, "]}")
+    return ascii_text(out)
+
+
+def unit_bytes(samples: List[Float64]) -> List[Int]:
+    """Return unit floats clipped and truncated to bytes.
+
+    Args:
+        samples: Unit floats, one sample per channel.
+
+    Returns:
+        One byte per sample, matching NumPy's cast to `uint8`.
+    """
+    var out = List[Int]()
+    for index in range(len(samples)):
+        out.append(_unit_byte(samples[index]))
     return out^
 
 

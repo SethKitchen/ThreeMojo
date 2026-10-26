@@ -23,7 +23,12 @@ from std.pathlib import Path
 from std.sys import argv, exit, stderr
 
 from render.png import decode
-from tools._python_float import parse_float, python_repr
+from tools._python_float import (
+    append_ascii,
+    ascii_text,
+    parse_float,
+    python_repr,
+)
 from tools._python_json import MISSING, PY_DICT, PY_INT, PY_LIST, PyJson
 
 comptime _DECOMPRESS_BYTES = 632
@@ -92,19 +97,20 @@ def _emit(
     mode: String, width: Int, height: Int, pixels: List[UInt8]
 ) raises -> String:
     """Return the RGBA image as JSON."""
-    var out = String('{"mode":"')
-    out += mode
-    out += '","width":'
-    out += String(width)
-    out += ',"height":'
-    out += String(height)
-    out += ',"pixels":['
+    var out = List[UInt8]()
+    append_ascii(out, '{"mode":"')
+    append_ascii(out, mode)
+    append_ascii(out, '","width":')
+    append_ascii(out, String(width))
+    append_ascii(out, ',"height":')
+    append_ascii(out, String(height))
+    append_ascii(out, ',"pixels":[')
     for index in range(len(pixels)):
         if index > 0:
-            out += ","
-        out += String(Int(pixels[index]))
-    out += "]}"
-    return out^
+            append_ascii(out, ",")
+        append_ascii(out, String(Int(pixels[index])))
+    append_ascii(out, "]}")
+    return ascii_text(out)
 
 
 def _png_mode(data: List[UInt8]) raises -> String:
@@ -259,6 +265,7 @@ def _search_jpeg() raises -> String:
         ".venv-carla-export/lib/python3.12/site-packages/pillow.libs"
     )
     folders.append(".venv/lib/python3.12/site-packages/pillow.libs")
+    _append_env_pillow_libs(folders)
     for index in range(len(folders)):
         var folder = folders[index]
         if not Path(folder).exists():
@@ -271,6 +278,43 @@ def _search_jpeg() raises -> String:
                 continue
             return folder + "/" + text
     return String("")
+
+
+def _append_env_pillow_libs(mut folders: List[String]):
+    """Add Pillow's library folder for the active Python."""
+    _append_pillow_root(folders, getenv("VIRTUAL_ENV", ""))
+    var path = getenv("PATH", "")
+    var raw = path.as_bytes()
+    var start = 0
+    for index in range(len(raw) + 1):
+        if index < len(raw) and raw[index] != 58:
+            continue
+        var entry = String(path[byte=start:index])
+        start = index + 1
+        var bytes = entry.as_bytes()
+        var count = len(bytes)
+        if count < 4:
+            continue
+        if (
+            bytes[count - 4] == 47
+            and bytes[count - 3] == 98
+            and bytes[count - 2] == 105
+            and bytes[count - 1] == 110
+        ):
+            _append_pillow_root(folders, String(entry[byte = : count - 4]))
+
+
+def _append_pillow_root(mut folders: List[String], root: String):
+    """Add `pillow.libs` under one Python prefix."""
+    if root.byte_length() == 0:
+        return
+    for version in range(9, 15):
+        folders.append(
+            root
+            + "/lib/python3."
+            + String(version)
+            + "/site-packages/pillow.libs"
+        )
 
 
 def _pointer(address: Int) -> OpaquePointer[MutAnyOrigin]:

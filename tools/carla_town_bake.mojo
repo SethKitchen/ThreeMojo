@@ -22,7 +22,7 @@ from std.tempfile import mkdtemp
 
 from tools._process import _remove_tree
 
-from tools._python_float import parse_float
+from tools._python_float import append_ascii, ascii_text, parse_float
 from tools._python_json import (
     MISSING,
     PY_BOOL,
@@ -184,48 +184,54 @@ def _spread(rgba_text: String) raises -> String:
     var image = PyJson.parse(rgba_text)
     if image.kind(image.root) != PY_LIST or image.length(image.root) == 0:
         raise Error("view is empty")
-    var colors = String("[")
-    var covered = String("[")
+    var colors = List[UInt8]()
+    var covered = List[UInt8]()
+    append_ascii(colors, "[")
+    append_ascii(covered, "[")
     var height = image.length(image.root)
     for row in range(height):
         if row > 0:
-            colors += ","
-            covered += ","
+            append_ascii(colors, ",")
+            append_ascii(covered, ",")
         var line = image.item(image.root, row)
         if image.kind(line) != PY_LIST:
             raise Error("view row is not a list")
-        colors += "["
-        covered += "["
+        append_ascii(colors, "[")
+        append_ascii(covered, "[")
         var width = image.length(line)
         for column in range(width):
             if column > 0:
-                colors += ","
-                covered += ","
+                append_ascii(colors, ",")
+                append_ascii(covered, ",")
             var pixel = image.item(line, column)
             if image.kind(pixel) != PY_LIST or image.length(pixel) != 4:
                 raise Error("pixel is not RGBA")
-            colors += "["
-            colors += _compact(image, image.item(pixel, 0))
-            colors += ","
-            colors += _compact(image, image.item(pixel, 1))
-            colors += ","
-            colors += _compact(image, image.item(pixel, 2))
-            colors += "]"
+            append_ascii(colors, "[")
+            append_ascii(colors, _compact(image, image.item(pixel, 0)))
+            append_ascii(colors, ",")
+            append_ascii(colors, _compact(image, image.item(pixel, 1)))
+            append_ascii(colors, ",")
+            append_ascii(colors, _compact(image, image.item(pixel, 2)))
+            append_ascii(colors, "]")
             if (
                 _number(image, image.item(pixel, 3), "alpha is not a number")
                 > 0.0
             ):
-                covered += "true"
+                append_ascii(covered, "true")
             else:
-                covered += "false"
-        colors += "]"
-        covered += "]"
-    colors += "]"
-    covered += "]"
+                append_ascii(covered, "false")
+        append_ascii(colors, "]")
+        append_ascii(covered, "]")
+    append_ascii(colors, "]")
+    append_ascii(covered, "]")
     var folder = mkdtemp(prefix="town bake ")
     var file = folder + "/view.json"
     Path(file).write_text(
-        '{"image":' + colors + ',"covered":' + covered + ',"passes":6}'
+        '{"image":'
+        + ascii_text(colors)
+        + ',"covered":'
+        + ascii_text(covered)
+        + ',"passes":6}'
     )
     var dilated = dilate_text(file)
     _remove_tree(folder)

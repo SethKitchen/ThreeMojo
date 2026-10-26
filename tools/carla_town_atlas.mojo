@@ -17,7 +17,13 @@ from std.math import ceil, sqrt
 from std.pathlib import Path
 from std.sys import argv, exit, stderr
 
-from tools._python_float import parse_float, python_repr
+from tools._python_float import (
+    append_ascii,
+    ascii_text,
+    cached_repr,
+    parse_float,
+    python_repr,
+)
 from tools._python_json import PY_DICT, PY_FLOAT, PY_INT, PY_LIST, PyJson
 
 
@@ -531,25 +537,27 @@ def _atlas(
     height: Int,
 ) raises -> String:
     """Return an RGB picture as JSON rows."""
-    var out = String("[")
+    var out = List[UInt8]()
+    var cache = Dict[UInt64, String]()
+    append_ascii(out, "[")
     for row in range(height):
         if row > 0:
-            out += ", "
-        out += "["
+            append_ascii(out, ", ")
+        append_ascii(out, "[")
         for col in range(width):
             if col > 0:
-                out += ", "
+                append_ascii(out, ", ")
             var cell = row * width + col
-            out += "["
-            out += python_repr(red[cell])
-            out += ", "
-            out += python_repr(green[cell])
-            out += ", "
-            out += python_repr(blue[cell])
-            out += "]"
-        out += "]"
-    out += "]"
-    return out^
+            append_ascii(out, "[")
+            append_ascii(out, cached_repr(red[cell], cache))
+            append_ascii(out, ", ")
+            append_ascii(out, cached_repr(green[cell], cache))
+            append_ascii(out, ", ")
+            append_ascii(out, cached_repr(blue[cell], cache))
+            append_ascii(out, "]")
+        append_ascii(out, "]")
+    append_ascii(out, "]")
+    return ascii_text(out)
 
 
 def _vec3(

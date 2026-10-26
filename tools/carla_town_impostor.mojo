@@ -20,7 +20,13 @@ from std.ffi import external_call
 from std.pathlib import Path
 from std.sys import argv, exit, stderr
 
-from tools._python_float import parse_float, python_repr
+from tools._python_float import (
+    append_ascii,
+    ascii_text,
+    cached_repr,
+    parse_float,
+    python_repr,
+)
 from tools._python_json import (
     MISSING,
     PY_DICT,
@@ -227,27 +233,29 @@ def _fill(doc: PyJson, root: Int) raises -> String:
                 red[index] = sum_r
                 green[index] = sum_g
                 blue[index] = sum_b
-    var out = String("[")
+    var out = List[UInt8]()
+    var cache = Dict[UInt64, String]()
+    append_ascii(out, "[")
     for row in range(height):
         if row > 0:
-            out += ","
-        out += "["
+            append_ascii(out, ",")
+        append_ascii(out, "[")
         for col in range(width):
             if col > 0:
-                out += ","
+                append_ascii(out, ",")
             var cell = row * width + col
-            out += "["
-            out += python_repr(red[cell])
-            out += ","
-            out += python_repr(green[cell])
-            out += ","
-            out += python_repr(blue[cell])
-            out += ","
-            out += python_repr(alpha[cell])
-            out += "]"
-        out += "]"
-    out += "]"
-    return out^
+            append_ascii(out, "[")
+            append_ascii(out, cached_repr(red[cell], cache))
+            append_ascii(out, ",")
+            append_ascii(out, cached_repr(green[cell], cache))
+            append_ascii(out, ",")
+            append_ascii(out, cached_repr(blue[cell], cache))
+            append_ascii(out, ",")
+            append_ascii(out, cached_repr(alpha[cell], cache))
+            append_ascii(out, "]")
+        append_ascii(out, "]")
+    append_ascii(out, "]")
+    return ascii_text(out)
 
 
 def _rgba(

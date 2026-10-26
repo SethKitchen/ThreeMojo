@@ -416,7 +416,7 @@ CARLA's vehicles are Unreal Engine 4.26 assets. The scripts in `assets/carla/too
 
 `tools/carla_vehicle_export.mojo` reads each vehicle blueprint and exports its meshes. `tools/carla_vehicle_paths.mojo` finds that blueprint, its cooked package, the exported glTF path, and the other meshes in those folders. `tools/carla_vehicle_refs.mojo` lists the static packages in that file. `tools/carla_vehicle_pick.mojo` chooses the largest skeletal body and the static glass, and it leaves out pedestrians, collision meshes and props. It exports the skeletal body and the static glass and lights, and `tools/carla_umodel_class.mojo` reads each package class. `tools/carla_vehicle_merge.mojo` appends the static mesh buffer and renumbers its views, accessors, materials, meshes and nodes.
 
-`carla_gltf_fix.py` then does these steps. `tools/carla_gltf_package.mojo` runs those steps and writes the package. `tools/carla_file_index.mojo` indexes the files. `tools/carla_mat_text.mojo` reads the `.mat` and `.props.txt` files. `tools/carla_gltf_dedupe.mojo` keeps one material of each name.
+`tools/carla_gltf_package.mojo` writes the vehicle package. The Python command `carla_gltf_fix.py` is removed. `tools/carla_file_index.mojo` indexes the files. `tools/carla_mat_text.mojo` reads the `.mat` and `.props.txt` files. `tools/carla_gltf_dedupe.mojo` keeps one material of each name.
 
 1. It rebuilds each material from the parameters that UModel writes beside the mesh. It uses the base color, normal and ORM maps, the car paint's color and translucent glass. It scales each texture to 1024 pixels or less. `tools/carla_image_resize.mojo` uses Pillow's Lanczos filter and turns unit color into bytes. `tools/carla_mask_channel.mojo` chooses the cut-out channel of a mask. `tools/carla_texture_plan.mojo` names a neutral texture and chooses its fitted size. `tools/carla_png.mojo` writes an optimized PNG with Pillow's row filters. `tools/carla_jpeg.mojo` writes a JPEG with Pillow's libjpeg settings. `tools/carla_image.mojo` reads a PNG or a JPEG into the pixels Pillow reads. `tools/carla_image_pack.mojo` builds each packaged color and each cut-out picture. `tools/carla_texture_store.mojo` writes that picture beside the glTF. `tools/carla_gltf_rebuild.mojo` applies the material choices and writes each texture.
 2. It removes the skin, because the town takes plain meshes. It removes Unreal's vertex colors, because they are masks and not colors. `tools/carla_gltf_skin.mojo` removes the skin, the joints, the weights and those colors.
@@ -491,10 +491,11 @@ The towns are made in three steps. The scripts run on Windows, like the vehicle 
 3. Build and zip the packages:
 
    ```sh
-   python build_towns.py [--top 20]
+   sh tools/tool.sh .venv/bin/mojo carla_town_build --summary [--top 20]
    ```
 
-   `python build_towns.py` calls `tools/carla_town_build.mojo`.
+   `tools/carla_town_build.mojo` writes each town package.
+   `--summary` prints the triangle counts and the package size.
 
    Then, with `CARLA_EXPORT_DIR` set to the absolute path of the work folder:
 

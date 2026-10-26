@@ -7,13 +7,16 @@
 
     carla_town_build TOWN [--max-size N] [--tile N]
         [--raw DIR] [--layout DIR] [--maps DIR] [--out DIR]
+        [--summary] [--top N]
 
 The program reads the town layout, lowers each mesh, bakes far buildings
 and tree impostors, and writes one binary glTF plus the OpenDRIVE map.
 A repeated build of the same inputs writes the same bytes.
 """
 
-from std.os import getenv, makedirs
+from std.ffi import c_int, external_call
+from std.os import getenv, listdir, makedirs
+from std.os.path import isdir, islink
 from std.pathlib import Path
 from std.sys import argv, exit, stderr
 from std.tempfile import mkdtemp
@@ -648,9 +651,15 @@ def main() raises:
     var layout = base + "/layout"
     var maps = base + "/release/CarlaUE4/Content/Carla/Maps/OpenDrive"
     var out_root = base + "/town_packages"
+    var summary = False
+    var top = 0
     var index = 1
     while index < len(arguments):
         var argument = arguments[index]
+        if argument == "--summary":
+            summary = True
+            index += 1
+            continue
         if (
             argument == "--max-size"
             or argument == "--tile"
@@ -658,6 +667,7 @@ def main() raises:
             or argument == "--layout"
             or argument == "--maps"
             or argument == "--out"
+            or argument == "--top"
         ):
             if index + 1 >= len(arguments):
                 _usage()
@@ -672,6 +682,9 @@ def main() raises:
                 layout = value
             elif argument == "--maps":
                 maps = value
+            elif argument == "--top":
+                top = _whole(value)
+                summary = True
             else:
                 out_root = value
             index += 2
@@ -689,10 +702,213 @@ def main() raises:
         towns.append("Town10HD")
     try:
         for town in towns:
-            print(build_town(town, max_size, tile, raw, layout, maps, out_root))
+            var text = build_town(
+                town, max_size, tile, raw, layout, maps, out_root
+            )
+            if not summary:
+                print(text)
+                continue
+            var doc = PyJson.parse(text)
+            var triangles = doc.at(doc.root, "triangles")
+            var folder = out_root + "/carla.town." + _lower_ascii(town)
+            print(
+                town_summary_line(
+                    town,
+                    Int(doc.text(doc.item(triangles, 0))),
+                    Int(doc.text(doc.item(triangles, 1))),
+                    Int(doc.text(doc.at(doc.root, "nodes"))),
+                    directory_byte_count(folder),
+                )
+            )
+            var ranks = ranked_mesh_lines(doc, top)
+            if ranks.byte_length() > 0:
+                print(ranks)
     except error:
         print("carla_town_build:", error, file=stderr)
         exit(1)
+
+
+def grouped_digits(value: Int) -> String:
+    """Return `value` with a comma between each group of three digits.
+
+    Args:
+        value: A non-negative count.
+
+    Returns:
+        The text Python `format(value, ",")` gives. A negative value keeps
+        its sign and groups the magnitude.
+    """
+    var sign = String("")
+    var number = value
+    if number < 0:
+        sign = "-"
+        number = -number
+    var digits = String(number)
+    var out = String("")
+    var count = 0
+    var index = digits.byte_length()
+    while index > 0:
+        index -= 1
+        out = String(digits[byte=index:index + 1]) + out
+        count += 1
+        if count == 3 and index > 0:
+            out = "," + out
+            count = 0
+    return sign + out
+
+
+def package_megabytes(byte_count: Int) -> String:
+    """Return `byte_count / 1e6` with one digit after the point.
+
+    Args:
+        byte_count: The package size, in bytes.
+
+    Returns:
+        The text Python `%.1f` gives for that quotient.
+    """
+    var buffer = List[UInt8](length=64, fill=0)
+    var format = "%.1f"
+    var value = Float64(byte_count) / 1000000.0
+    _ = external_call["snprintf", c_int](
+        buffer.unsafe_ptr(),
+        Int(64),
+        format.as_c_string_span().ptr(),
+        value,
+    )
+    var end = 0
+    while end < 64 and buffer[end] != 0:
+        end += 1
+    var bytes = List[UInt8]()
+    var index = 0
+    while index < end:
+        bytes.append(buffer[index])
+        index += 1
+    return String(from_utf8_lossy=Span(bytes))
+
+
+def town_summary_line(
+    town: String,
+    near: Int,
+    far: Int,
+    nodes: Int,
+    byte_count: Int,
+) -> String:
+    """Return one town's triangle and size line.
+
+    Args:
+        town: The town name.
+        near: The near-level triangle count.
+        far: The far-level triangle count.
+        nodes: The mesh node count.
+        byte_count: The package size, in bytes.
+
+    Returns:
+        The line `python build_towns.py` printed for that town.
+    """
+    return (
+        town
+        + ": "
+        + grouped_digits(near)
+        + " triangles near, "
+        + grouped_digits(far)
+        + " far, "
+        + String(nodes)
+        + " meshes, "
+        + package_megabytes(byte_count)
+        + " MB"
+    )
+
+
+def directory_byte_count(root: String) raises -> Int:
+    """Return the sum of the file sizes under `root`.
+
+    Args:
+        root: A package directory.
+
+    Returns:
+        The byte count. A symbolic link is not followed.
+
+    Raises:
+        Error: If a directory cannot be read.
+    """
+    var total = 0
+    var pending = List[String]()
+    pending.append(root)
+    while len(pending) > 0:
+        var directory = pending.pop()
+        var names: List[String]
+        try:
+            names = listdir(directory)
+        except:
+            raise Error("cannot read " + directory)
+        for name in names:
+            var full = directory + "/" + String(name)
+            if isdir(full) and not islink(full):
+                pending.append(full)
+            elif not isdir(full):
+                total += len(Path(full).read_bytes())
+    return total
+
+
+def ranked_mesh_lines(doc: PyJson, top: Int) raises -> String:
+    """Return the largest mesh lines, highest triangle count first.
+
+    Args:
+        doc: A town result whose `meshes` list has `path` and `triangles`.
+        top: How many lines to return. Zero returns an empty string.
+
+    Returns:
+        One line per mesh, padded like the Python command. An equal count
+        keeps the earlier mesh.
+
+    Raises:
+        Error: If a mesh record is missing a field.
+    """
+    if top <= 0:
+        return ""
+    var meshes = doc.at(doc.root, "meshes")
+    var count = doc.length(meshes)
+    var order = List[Int]()
+    var index = 0
+    while index < count:
+        var triangles = Int(doc.text(doc.at(doc.item(meshes, index), "triangles")))
+        var place = len(order)
+        order.append(index)
+        while place > 0:
+            var previous = order[place - 1]
+            var previous_count = Int(
+                doc.text(doc.at(doc.item(meshes, previous), "triangles"))
+            )
+            if previous_count >= triangles:
+                break
+            order[place] = previous
+            place -= 1
+        order[place] = index
+        index += 1
+    var shown = top
+    if shown > count:
+        shown = count
+    var out = String("")
+    var line = 0
+    while line < shown:
+        var slot = order[line]
+        var item = doc.item(meshes, slot)
+        var path = doc.text(doc.at(item, "path"))
+        var marker = "/Static/"
+        var at = path.rfind(marker)
+        var tail = path
+        if at >= 0:
+            tail = String(path[byte = at + marker.byte_length() :])
+        var count_text = grouped_digits(
+            Int(doc.text(doc.at(item, "triangles")))
+        )
+        while count_text.byte_length() < 10:
+            count_text = " " + count_text
+        if out.byte_length() > 0:
+            out += "\n"
+        out += "  " + count_text + "  " + tail
+        line += 1
+    return out
 
 
 def _usage() raises:
@@ -700,7 +916,7 @@ def _usage() raises:
     print(
         (
             "usage: carla_town_build TOWN [--max-size N] [--tile N] [--raw DIR]"
-            " [--layout DIR] [--maps DIR] [--out DIR]"
+            " [--layout DIR] [--maps DIR] [--out DIR] [--summary] [--top N]"
         ),
         file=stderr,
     )
