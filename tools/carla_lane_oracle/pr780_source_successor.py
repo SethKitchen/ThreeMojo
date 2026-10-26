@@ -1028,9 +1028,9 @@ EDGES = json.loads(r'''
   },
   "lights/shadow.mojo": {
     "before_sha256": "e57aabcefe61cebaa8e57ae129f0cae3873215b7b1c0d2171c972d78d4015b81",
-    "after_sha256": "dacefbbef183ce021248ccc7dab069733f5268c972b77ce80cb660b097b1a82a",
+    "after_sha256": "36394e7969cf0f6a8647011e5d49b057440600004b35fdd97479107def5d0793",
     "before_token_sha256": "c91ae04a499fb4362157f5aa3a48a8b0cc599a85c8504efff633ac7645f3a3d9",
-    "after_token_sha256": "774ca08bbb0af3cfdf6b62cc5defd22457f1572873994efdcdd42d9d8be396f1",
+    "after_token_sha256": "d5290fbe9f8e613317647b54d1420af1b9b03caf6e9a51cc1c1abdeabfbf639c",
     "edits": [
       {
         "start": 163,
@@ -1162,7 +1162,7 @@ EDGES = json.loads(r'''
       },
       {
         "start": 1291,
-        "stop": 1327,
+        "stop": 1329,
         "before": [],
         "after": [
           "def _shadow_index(value: Float32) -> Int:\n",
@@ -1177,12 +1177,14 @@ EDGES = json.loads(r'''
           "    Returns:\n",
           "        The floor, or `Int.MAX` or `Int.MIN` when `value` does not fit.\n",
           "    \"\"\"\n",
-          "    var wide = Float64(value)\n",
-          "    if not isfinite(wide) or wide >= Float64(Int.MAX):\n",
+          "    # `Float32(Int.MAX)` is 2^63, as `Float64(Int.MAX)` is, and the floor\n",
+          "    # of a `Float32` is a `Float32`: the same test and index without\n",
+          "    # `Float64`, which a Metal kernel cannot run.\n",
+          "    if not isfinite(value) or value >= Float32(Int.MAX):\n",
           "        return Int.MAX\n",
-          "    if wide <= -Float64(Int.MAX):\n",
+          "    if value <= -Float32(Int.MAX):\n",
           "        return Int.MIN\n",
-          "    return Int(floor(wide))\n",
+          "    return Int(floor(value))\n",
           "\n",
           "\n",
           "def _shifted_shadow_index(value: Float32, shift: Int) -> Int:\n",
@@ -1204,8 +1206,8 @@ EDGES = json.loads(r'''
         ]
       },
       {
-        "start": 1345,
-        "stop": 1349,
+        "start": 1347,
+        "stop": 1351,
         "before": [
           "    var column = Int(floor(place.x * Float32(size) + 0.5)) + tap % 4 - 2\n",
           "    var row = Int(floor(place.y * Float32(size) + 0.5)) + tap // 4 - 2\n"
@@ -1218,8 +1220,8 @@ EDGES = json.loads(r'''
         ]
       },
       {
-        "start": 1364,
-        "stop": 1366,
+        "start": 1366,
+        "stop": 1368,
         "before": [],
         "after": [
           "    if not isfinite(texels):\n",
@@ -1227,8 +1229,8 @@ EDGES = json.loads(r'''
         ]
       },
       {
-        "start": 1424,
-        "stop": 1426,
+        "start": 1426,
+        "stop": 1428,
         "before": [
           "    var column = Int(floor(across - 0.5)) + corner % 2\n",
           "    var row = Int(floor(down - 0.5)) + corner // 2\n"
@@ -1239,8 +1241,8 @@ EDGES = json.loads(r'''
         ]
       },
       {
-        "start": 1439,
-        "stop": 1443,
+        "start": 1441,
+        "stop": 1445,
         "before": [
           "    return fraction(at - 0.5)\n"
         ],
@@ -1252,8 +1254,8 @@ EDGES = json.loads(r'''
         ]
       },
       {
-        "start": 1530,
-        "stop": 1531,
+        "start": 1532,
+        "stop": 1533,
         "before": [
           ") -> List[Float32]:\n"
         ],
@@ -1262,8 +1264,8 @@ EDGES = json.loads(r'''
         ]
       },
       {
-        "start": 1551,
-        "stop": 1555,
+        "start": 1553,
+        "stop": 1557,
         "before": [],
         "after": [
           "\n",
@@ -1273,8 +1275,8 @@ EDGES = json.loads(r'''
         ]
       },
       {
-        "start": 1556,
-        "stop": 1561,
+        "start": 1558,
+        "stop": 1563,
         "before": [
           "    # `LightShadow.validate` holds the size and the samples at one or\n",
           "    # more, so no loop below runs zero times.\n"
@@ -1288,8 +1290,8 @@ EDGES = json.loads(r'''
         ]
       },
       {
-        "start": 1562,
-        "stop": 1564,
+        "start": 1564,
+        "stop": 1566,
         "before": [],
         "after": [
           "    if len(depths) != square:\n",
@@ -2457,9 +2459,9 @@ EDGES = json.loads(r'''
   },
   "render/rasterizer.mojo": {
     "before_sha256": "e8d1e85a25a771edc28ab063a8ae1b38946ca1589014c0bb6ea6126aa5a9cf25",
-    "after_sha256": "13eef4df6868aa3d30060a0fe36becdcd4487bbaebbef884c0f79f6afba0e137",
+    "after_sha256": "27ddb80f3915f1a76797029bba82fbd9b0b94b749e7a82d604a05f2632f6a8ed",
     "before_token_sha256": "49c113f28ee16d52cbbb50c6f93b18902581fde0c15cede8634e71dfb64e16d0",
-    "after_token_sha256": "b2b6d21799a0c807667a772f6b54bcd77de9298c7dcab13f350f86089abb7a13",
+    "after_token_sha256": "d1583719b722dd15129d6fc7b3b0d36e3f10816bfa7a06af90ea53adc5c9fcb3",
     "edits": [
       {
         "start": 17,
@@ -2495,7 +2497,7 @@ EDGES = json.loads(r'''
       },
       {
         "start": 480,
-        "stop": 523,
+        "stop": 525,
         "before": [],
         "after": [
           "def _screen_index(value: Float32, round_up: Bool) -> Int:\n",
@@ -2512,14 +2514,16 @@ EDGES = json.loads(r'''
           "    Returns:\n",
           "        The index, or `Int.MAX` or `Int.MIN` when `value` does not fit.\n",
           "    \"\"\"\n",
-          "    var wide = Float64(value)\n",
-          "    if not isfinite(wide) or wide >= Float64(Int.MAX):\n",
+          "    # `Float32(Int.MAX)` is 2^63, as `Float64(Int.MAX)` is, and the floor\n",
+          "    # of a `Float32` is a `Float32`: the same test and index without\n",
+          "    # `Float64`, which a Metal kernel cannot run.\n",
+          "    if not isfinite(value) or value >= Float32(Int.MAX):\n",
           "        return Int.MAX\n",
-          "    if wide <= -Float64(Int.MAX):\n",
+          "    if value <= -Float32(Int.MAX):\n",
           "        return Int.MIN\n",
           "    if round_up:\n",
-          "        return Int(ceil(wide))\n",
-          "    return Int(floor(wide))\n",
+          "        return Int(ceil(value))\n",
+          "    return Int(floor(value))\n",
           "\n",
           "\n",
           "def _shifted_index(value: Float32, round_up: Bool, pad: Int) -> Int:\n",
@@ -2544,8 +2548,8 @@ EDGES = json.loads(r'''
         ]
       },
       {
-        "start": 552,
-        "stop": 556,
+        "start": 554,
+        "stop": 558,
         "before": [
           "        max(0, Int(floor(left))),\n",
           "        min(width - 1, Int(ceil(right))),\n",
@@ -2560,16 +2564,16 @@ EDGES = json.loads(r'''
         ]
       },
       {
-        "start": 3587,
-        "stop": 3588,
+        "start": 3589,
+        "stop": 3590,
         "before": [],
         "after": [
           "    tones.reserve(image.width)\n"
         ]
       },
       {
-        "start": 7274,
-        "stop": 7276,
+        "start": 7276,
+        "stop": 7278,
         "before": [
           "        rows.append(Int(floor(top)) - pad)\n",
           "        rows.append(Int(ceil(bottom)) + pad)\n"
@@ -2580,8 +2584,8 @@ EDGES = json.loads(r'''
         ]
       },
       {
-        "start": 7295,
-        "stop": 7297,
+        "start": 7297,
+        "stop": 7299,
         "before": [
           "        rows.append(Int(floor(points[index].y - half)))\n",
           "        rows.append(Int(ceil(points[index].y + half)))\n"
@@ -2592,8 +2596,8 @@ EDGES = json.loads(r'''
         ]
       },
       {
-        "start": 7315,
-        "stop": 7316,
+        "start": 7317,
+        "stop": 7318,
         "before": [
           "async def _frame_band(\n"
         ],
@@ -2602,8 +2606,8 @@ EDGES = json.loads(r'''
         ]
       },
       {
-        "start": 7516,
-        "stop": 7518,
+        "start": 7518,
+        "stop": 7520,
         "before": [
           "        rows.append(Int(floor(top)))\n",
           "        rows.append(Int(ceil(bottom)))\n"
@@ -2617,9 +2621,9 @@ EDGES = json.loads(r'''
   },
   "render/splat_raster.mojo": {
     "before_sha256": "5ec9036208ec0d16e12f078a99a49e2ecba067075fda893bc74810ee9c7c119b",
-    "after_sha256": "8932372ffe5e26376f8405bc49b4ebbd1dc55d921ee490d6f5d74f210021445c",
+    "after_sha256": "13b4b346d0b4af1ed276241f812f19e4411640a56949f008330d2707b19c6cef",
     "before_token_sha256": "45395f0b57e02961ae691bdc96474e37caa9ac519e7348f8dd8537717008e5d3",
-    "after_token_sha256": "7c79c4f5e100efe806a2349ae482b42df4a0075de384ca62f7add3c17d0e3c98",
+    "after_token_sha256": "d381c6315e1af0718cf53dd1a009e7b8d9300f71d3522c3c46f73e337772a845",
     "edits": [
       {
         "start": 19,
@@ -3097,7 +3101,7 @@ EDGES = json.loads(r'''
       },
       {
         "start": 443,
-        "stop": 756,
+        "stop": 758,
         "before": [
           "    for index in range(len(splats)):\n",
           "        rasterize_splat(target, splats[index], 0, target.height - 1)\n"
@@ -3372,14 +3376,16 @@ EDGES = json.loads(r'''
           "    Returns:\n",
           "        The index, or `Int.MAX` or `Int.MIN` when `value` does not fit.\n",
           "    \"\"\"\n",
-          "    var wide = Float64(value)\n",
-          "    if not isfinite(wide) or wide >= Float64(Int.MAX):\n",
+          "    # `Float32(Int.MAX)` is 2^63, as `Float64(Int.MAX)` is, and the floor\n",
+          "    # of a `Float32` is a `Float32`: the same test and index without\n",
+          "    # `Float64`, which a Metal kernel cannot run.\n",
+          "    if not isfinite(value) or value >= Float32(Int.MAX):\n",
           "        return Int.MAX\n",
-          "    if wide <= -Float64(Int.MAX):\n",
+          "    if value <= -Float32(Int.MAX):\n",
           "        return Int.MIN\n",
           "    if round_up:\n",
-          "        return Int(ceil(wide))\n",
-          "    return Int(floor(wide))\n",
+          "        return Int(ceil(value))\n",
+          "    return Int(floor(value))\n",
           "\n",
           "\n",
           "def _splat_low(value: Float32, floor_at: Int) -> Int:\n",
@@ -3419,8 +3425,8 @@ EDGES = json.loads(r'''
         ]
       },
       {
-        "start": 776,
-        "stop": 789,
+        "start": 778,
+        "stop": 791,
         "before": [
           "    var left = max(Int(floor(splat.x - reach[0])) - 1, 0)\n",
           "    var right = min(Int(ceil(splat.x + reach[0])) + 1, target.width - 1)\n",
@@ -3443,8 +3449,8 @@ EDGES = json.loads(r'''
         ]
       },
       {
-        "start": 790,
-        "stop": 792,
+        "start": 792,
+        "stop": 794,
         "before": [
           "        Int(ceil(splat.y + reach[1])) + 1, min(target.height - 1, last_row)\n"
         ],
@@ -3454,8 +3460,8 @@ EDGES = json.loads(r'''
         ]
       },
       {
-        "start": 793,
-        "stop": 795,
+        "start": 795,
+        "stop": 797,
         "before": [],
         "after": [
           "    if left > right or top > bottom:\n",
@@ -3463,8 +3469,8 @@ EDGES = json.loads(r'''
         ]
       },
       {
-        "start": 796,
-        "stop": 1014,
+        "start": 798,
+        "stop": 1016,
         "before": [
           "        _blend_row(target, splat, y, left, right)\n"
         ],
@@ -3690,8 +3696,8 @@ EDGES = json.loads(r'''
         ]
       },
       {
-        "start": 1023,
-        "stop": 1025,
+        "start": 1025,
+        "stop": 1027,
         "before": [
           "    \"\"\"Blend one splat into one row of pixels.\n"
         ],
@@ -3701,8 +3707,8 @@ EDGES = json.loads(r'''
         ]
       },
       {
-        "start": 1034,
-        "stop": 1036,
+        "start": 1036,
+        "stop": 1038,
         "before": [
           "        Error: Never; the columns and the row are inside the target.\n"
         ],
@@ -3712,8 +3718,8 @@ EDGES = json.loads(r'''
         ]
       },
       {
-        "start": 1037,
-        "stop": 1057,
+        "start": 1039,
+        "stop": 1059,
         "before": [
           "    for x in range(left, right + 1):\n",
           "        var stored = target.depth[y * target.width + x]\n",
@@ -3749,16 +3755,16 @@ EDGES = json.loads(r'''
         ]
       },
       {
-        "start": 1067,
-        "stop": 1068,
+        "start": 1069,
+        "stop": 1070,
         "before": [],
         "after": [
           "    workers: Int = 1,\n"
         ]
       },
       {
-        "start": 1071,
-        "stop": 1074,
+        "start": 1073,
+        "stop": 1076,
         "before": [],
         "after": [
           "\n",
@@ -3767,24 +3773,24 @@ EDGES = json.loads(r'''
         ]
       },
       {
-        "start": 1082,
-        "stop": 1083,
+        "start": 1084,
+        "stop": 1085,
         "before": [],
         "after": [
           "        workers: How many threads draw; see the module docstring.\n"
         ]
       },
       {
-        "start": 1095,
-        "stop": 1096,
+        "start": 1097,
+        "stop": 1098,
         "before": [],
         "after": [
           "        workers,\n"
         ]
       },
       {
-        "start": 1097,
-        "stop": 1098,
+        "start": 1099,
+        "stop": 1100,
         "before": [
           "    rasterize_splats(target, splats)\n"
         ],
@@ -9429,13 +9435,21 @@ EDGES = json.loads(r'''
   },
   "math/utils.mojo": {
     "before_sha256": "d32e99704324833af194084f0b1d646a894c63bdd0b8ce1baa0da8a287c1d690",
-    "after_sha256": "b7ae3e885db62a19f678595b2e3b36aa8689c7d6943ab00605c52a8dda3fb6b0",
+    "after_sha256": "fb4335138e5fe5ec4c1761105343a01996dae1152f3a9e1b2779f62a6323c772",
     "before_token_sha256": "09aae4effc4236d14e85367f694c436b5b761ba75fb37e6b7df93006804cb915",
-    "after_token_sha256": "41fd4fb380e9531298972cdf45763daac4d7d283a151d7dfb37c61be6d77928d",
+    "after_token_sha256": "1f3a1816f2ab539359659e372492f4f1851a66d57e4673d238b5e80c3f498695",
     "edits": [
       {
-        "start": 153,
-        "stop": 227,
+        "start": 28,
+        "stop": 29,
+        "before": [],
+        "after": [
+          "from std.sys import is_gpu\n"
+        ]
+      },
+      {
+        "start": 154,
+        "stop": 236,
         "before": [],
         "after": [
           "\n",
@@ -9454,8 +9468,10 @@ EDGES = json.loads(r'''
           "    Returns:\n",
           "        The center, from just above zero through just below one.\n",
           "    \"\"\"\n",
-          "    if count > 8388608:\n",
-          "        return Float32((Float64(pixel) + 0.5) / Float64(count))\n",
+          "    # Metal has no `Float64`, and no GPU image is 2^23 pixels a side.\n",
+          "    comptime if not is_gpu():\n",
+          "        if count > 8388608:\n",
+          "            return Float32((Float64(pixel) + 0.5) / Float64(count))\n",
           "    return (Float32(pixel) + 0.5) / Float32(count)\n",
           "\n",
           "\n",
@@ -9472,8 +9488,10 @@ EDGES = json.loads(r'''
           "    Returns:\n",
           "        One minus the center.\n",
           "    \"\"\"\n",
-          "    if count > 8388608:\n",
-          "        return Float32(1 - (Float64(pixel) + 0.5) / Float64(count))\n",
+          "    # Metal has no `Float64`, and no GPU image is 2^23 pixels a side.\n",
+          "    comptime if not is_gpu():\n",
+          "        if count > 8388608:\n",
+          "            return Float32(1 - (Float64(pixel) + 0.5) / Float64(count))\n",
           "    return 1 - (Float32(pixel) + 0.5) / Float32(count)\n",
           "\n",
           "\n",
@@ -9491,8 +9509,10 @@ EDGES = json.loads(r'''
           "    Returns:\n",
           "        The center, from just above minus one through just below one.\n",
           "    \"\"\"\n",
-          "    if count > 8388608:\n",
-          "        return Float32((Float64(pixel) + 0.5) / Float64(count) * 2 - 1)\n",
+          "    # Metal has no `Float64`, and no GPU image is 2^23 pixels a side.\n",
+          "    comptime if not is_gpu():\n",
+          "        if count > 8388608:\n",
+          "            return Float32((Float64(pixel) + 0.5) / Float64(count) * 2 - 1)\n",
           "    return (Float32(pixel) + 0.5) / Float32(count) * 2 - 1\n",
           "\n",
           "\n",
@@ -9509,14 +9529,16 @@ EDGES = json.loads(r'''
           "    Returns:\n",
           "        The center, from just below one through just above minus one.\n",
           "    \"\"\"\n",
-          "    if count > 8388608:\n",
-          "        return Float32(1 - (Float64(pixel) + 0.5) / Float64(count) * 2)\n",
+          "    # Metal has no `Float64`, and no GPU image is 2^23 pixels a side.\n",
+          "    comptime if not is_gpu():\n",
+          "        if count > 8388608:\n",
+          "            return Float32(1 - (Float64(pixel) + 0.5) / Float64(count) * 2)\n",
           "    return 1 - (Float32(pixel) + 0.5) / Float32(count) * 2\n"
         ]
       },
       {
-        "start": 878,
-        "stop": 895,
+        "start": 887,
+        "stop": 904,
         "before": [],
         "after": [
           "def _difference_fits(high: Int, low: Int) -> Bool:\n",
@@ -9539,8 +9561,8 @@ EDGES = json.loads(r'''
         ]
       },
       {
-        "start": 970,
-        "stop": 973,
+        "start": 979,
+        "stop": 982,
         "before": [],
         "after": [
           "        A width that does not fit in an integer is drawn in `Float64` and\n",
@@ -9549,8 +9571,8 @@ EDGES = json.loads(r'''
         ]
       },
       {
-        "start": 978,
-        "stop": 979,
+        "start": 987,
+        "stop": 988,
         "before": [
           "            The number.\n"
         ],
@@ -9559,8 +9581,8 @@ EDGES = json.loads(r'''
         ]
       },
       {
-        "start": 980,
-        "stop": 990,
+        "start": 989,
+        "stop": 999,
         "before": [
           "        return low + Int(floor(self.next() * Float64(high - low + 1)))\n"
         ],
@@ -9578,8 +9600,8 @@ EDGES = json.loads(r'''
         ]
       },
       {
-        "start": 1212,
-        "stop": 1241,
+        "start": 1221,
+        "stop": 1250,
         "before": [],
         "after": [
           "\n",
@@ -11059,24 +11081,25 @@ EDGES = json.loads(r'''
   },
   "postprocessing/sampling.mojo": {
     "before_sha256": "310d11eb570ce5ed1cb0a2d35f5cadf759935b3b5d674c0b4a1bc59dec28fe0d",
-    "after_sha256": "86b3b794c9dfcd9ce16c9cf8737d0d7bb377b35ee253db84c438c2166d21ef4b",
+    "after_sha256": "09080c213e2d3e8d899c127ac53019894a50008df1916300cad60011908d7144",
     "before_token_sha256": "027ae468f0a6ea4cbb1c5b2d3219d06fda94968b63b4dc42c13b00145b0e872a",
-    "after_token_sha256": "b92dc630d5233ac7eced0e2ed813857143c40ec3cea70eaccca90102ebcafdb0",
+    "after_token_sha256": "6322c83ff7fc5904bcaee344228b31c9a17c05c80b0861362b4cac010fd47294",
     "edits": [
       {
         "start": 15,
-        "stop": 17,
+        "stop": 18,
         "before": [
           "from math.utils import edge_index\n"
         ],
         "after": [
           "from math.utils import edge_index, texel_center, texel_center_from_end\n",
+          "from std.sys import is_gpu\n",
           "from std.math import floor, isfinite\n"
         ]
       },
       {
-        "start": 190,
-        "stop": 212,
+        "start": 191,
+        "stop": 213,
         "before": [],
         "after": [
           "def nearest_held_index(unit: Float32, count: Int) -> Int:\n",
@@ -11104,8 +11127,8 @@ EDGES = json.loads(r'''
         ]
       },
       {
-        "start": 248,
-        "stop": 251,
+        "start": 249,
+        "stop": 252,
         "before": [],
         "after": [
           "    A width above 2^23 is measured in `Float64`, so the last column stays\n",
@@ -11114,8 +11137,8 @@ EDGES = json.loads(r'''
         ]
       },
       {
-        "start": 258,
-        "stop": 259,
+        "start": 259,
+        "stop": 260,
         "before": [
           "    return (Float32(x) + 0.5) / Float32(width)\n"
         ],
@@ -11124,8 +11147,8 @@ EDGES = json.loads(r'''
         ]
       },
       {
-        "start": 263,
-        "stop": 266,
+        "start": 264,
+        "stop": 267,
         "before": [],
         "after": [
           "\n",
@@ -11134,8 +11157,8 @@ EDGES = json.loads(r'''
         ]
       },
       {
-        "start": 274,
-        "stop": 275,
+        "start": 275,
+        "stop": 276,
         "before": [
           "    return 1 - (Float32(y) + 0.5) / Float32(height)\n"
         ],
@@ -11144,8 +11167,8 @@ EDGES = json.loads(r'''
         ]
       },
       {
-        "start": 284,
-        "stop": 287,
+        "start": 285,
+        "stop": 288,
         "before": [],
         "after": [
           "    A count past 2^24 is not a whole `Float32`. That count is multiplied\n",
@@ -11154,26 +11177,28 @@ EDGES = json.loads(r'''
         ]
       },
       {
-        "start": 294,
-        "stop": 308,
+        "start": 295,
+        "stop": 311,
         "before": [
           "    return min(max(coordinate * Float32(count) - 0.5, 0), Float32(count - 1))\n"
         ],
         "after": [
           "    # Every integer through 2^24 is a `Float32`. The bit-exact clamps for\n",
           "    # those counts stay in `Float32`.\n",
-          "    if count <= 16777216:\n",
-          "        return min(\n",
-          "            max(coordinate * Float32(count) - 0.5, Float32(0)),\n",
-          "            Float32(count - 1),\n",
-          "        )\n",
-          "    var span = Float64(coordinate) * Float64(count) - 0.5\n",
-          "    var limit = Float64(count) - 1\n",
-          "    if span < 0:\n",
-          "        span = 0\n",
-          "    if span > limit:\n",
-          "        span = limit\n",
-          "    return Float32(span)\n"
+          "    # Metal has no `Float64`, and no GPU image is 2^24 texels a side.\n",
+          "    comptime if not is_gpu():\n",
+          "        if count > 16777216:\n",
+          "            var span = Float64(coordinate) * Float64(count) - 0.5\n",
+          "            var limit = Float64(count) - 1\n",
+          "            if span < 0:\n",
+          "                span = 0\n",
+          "            if span > limit:\n",
+          "                span = limit\n",
+          "            return Float32(span)\n",
+          "    return min(\n",
+          "        max(coordinate * Float32(count) - 0.5, Float32(0)),\n",
+          "        Float32(count - 1),\n",
+          "    )\n"
         ]
       }
     ]
@@ -12582,13 +12607,21 @@ EDGES = json.loads(r'''
   },
   "render/texture.mojo": {
     "before_sha256": "3552ba623c9c6c8dd2ea0d7b6f4eb0aac924854086a0ddd9b90865e3f1978c15",
-    "after_sha256": "4d8f34399877c4c4c4ffdf9db6cd695396c28e50cb1a56979aae4bc5d159c1ac",
+    "after_sha256": "608965e963ad8753c64777ed0b3127dc1c6cf950a3c3156e953c4e72bb02b1d5",
     "before_token_sha256": "44e314755a6659caf4e1994252ad35a083c779d9c584675209e31729db8c0781",
-    "after_token_sha256": "1a27f66c8305f242db58734877577cfb3e6d08730c39059d0c3cd96719831bc2",
+    "after_token_sha256": "139877be559cee5e17f6ca9815fcca9bfce451931408261e0fcccc8789dffcc9",
     "edits": [
       {
-        "start": 853,
-        "stop": 892,
+        "start": 140,
+        "stop": 141,
+        "before": [],
+        "after": [
+          "from std.sys import is_gpu\n"
+        ]
+      },
+      {
+        "start": 854,
+        "stop": 897,
         "before": [],
         "after": [
           "\n",
@@ -12608,8 +12641,10 @@ EDGES = json.loads(r'''
           "    Returns:\n",
           "        The texel index, before wrapping.\n",
           "    \"\"\"\n",
-          "    if count > 16777216:\n",
-          "        return Int(floor(Float64(unit) * Float64(count)))\n",
+          "    # Metal has no `Float64`, and no GPU image is 2^24 texels a side.\n",
+          "    comptime if not is_gpu():\n",
+          "        if count > 16777216:\n",
+          "            return Int(floor(Float64(unit) * Float64(count)))\n",
           "    return Int(floor(unit * Float32(count)))\n",
           "\n",
           "\n",
@@ -12627,22 +12662,24 @@ EDGES = json.loads(r'''
           "    Returns:\n",
           "        The place, in texels from a center.\n",
           "    \"\"\"\n",
-          "    if count > 16777216:\n",
-          "        return Float32(Float64(unit) * Float64(count) - 0.5)\n",
+          "    # Metal has no `Float64`, and no GPU image is 2^24 texels a side.\n",
+          "    comptime if not is_gpu():\n",
+          "        if count > 16777216:\n",
+          "            return Float32(Float64(unit) * Float64(count) - 0.5)\n",
           "    return unit * Float32(count) - 0.5\n"
         ]
       },
       {
-        "start": 1758,
-        "stop": 1759,
+        "start": 1763,
+        "stop": 1764,
         "before": [],
         "after": [
           "        A side above 16777216 texels is scaled in `Float64`.\n"
         ]
       },
       {
-        "start": 1802,
-        "stop": 1804,
+        "start": 1807,
+        "stop": 1809,
         "before": [],
         "after": [
           "        var su = sample_coordinate(u, self.wrap_s)\n",
@@ -12650,8 +12687,8 @@ EDGES = json.loads(r'''
         ]
       },
       {
-        "start": 1806,
-        "stop": 1807,
+        "start": 1811,
+        "stop": 1812,
         "before": [
           "        var from_top = row_coordinate(v, self.flip_y)\n"
         ],
@@ -12660,8 +12697,8 @@ EDGES = json.loads(r'''
         ]
       },
       {
-        "start": 1810,
-        "stop": 1812,
+        "start": 1815,
+        "stop": 1817,
         "before": [
           "                Int(floor(u * Float32(wide))),\n",
           "                Int(floor(from_top * Float32(tall))),\n"
@@ -12672,8 +12709,8 @@ EDGES = json.loads(r'''
         ]
       },
       {
-        "start": 1817,
-        "stop": 1819,
+        "start": 1822,
+        "stop": 1824,
         "before": [
           "        var across = u * Float32(wide) - 0.5\n",
           "        var down = from_top * Float32(tall) - 0.5\n"
@@ -12684,8 +12721,8 @@ EDGES = json.loads(r'''
         ]
       },
       {
-        "start": 2072,
-        "stop": 2091,
+        "start": 2077,
+        "stop": 2096,
         "before": [],
         "after": [
           "\n",
@@ -18334,7 +18371,7 @@ EDGE_SHA256 = {'core/deform.mojo': 'b6afec67eea77b1a76cae98df1b4399de366b2a82878
  'geometries/sphere.mojo': 'cf8ce17c7391467ced87e7b7d4ae4b2be7769d862d240e16f5c811194556e5c2',
  'geometries/surface.mojo': '400741e666390985d0d97040de3bbc06f7e1b002d460fd07e765266ac1681dd5',
  'lights/csm.mojo': 'dd3e60b605242700c39f701f066c2419c955beabbaa17fef51f5c8c6953fdaf3',
- 'lights/shadow.mojo': 'a2eb4ef926f6f8b2f862de0222ebc7d3cc7cfb23eac1990a47f952127508b623',
+ 'lights/shadow.mojo': '1565cd6fc6da6dab3f851c7217596f8ba72aa9a29516375877664b34c6ff7861',
  'loaders/bytes.mojo': '7e433bce46cd84a26d82898684ddc565f9ce43e10a147a4ca17f1cbaee424683',
  'loaders/draco.mojo': 'e50c9ca8beed22e467b2adf8057ea34da9e02402ea0d268bed90ec03ab45eec7',
  'loaders/draco_mesh.mojo': 'a2d7906ebb2a158d60c39600a1715f39575c05b9694887ff9669b13a0a0670dd',
@@ -18351,7 +18388,7 @@ EDGE_SHA256 = {'core/deform.mojo': 'b6afec67eea77b1a76cae98df1b4399de366b2a82878
  'math/matrix4.mojo': '3a14fb7473be39825f01e0b25141dc11deae32815083038f273f1dc88f0d3b45',
  'math/path.mojo': '6c2cd1c42f7df845460b128c2765c02410dfd1ebbbe057c2623ac1fa283ccf2c',
  'math/square_matrix.mojo': '0654dc0cfd85f05b383961d1507464559d00fefc15e49d682d8d3a4a8aa95ed9',
- 'math/utils.mojo': '8bda7b753b9f6855217266e9f0c63cf5dac26a6b2600c3e780489d2ef68c2269',
+ 'math/utils.mojo': 'f7ec709a20c0823399e0948bf9b6b7a60739516317789053a06bce248741214e',
  'math/vector4.mojo': '3bf820cf0f2f9ad74083de036282f10d01d9fed78a6a90ac2ff65bfa6bc440d1',
  'objects/gaussian_splat.mojo': '4469b3d742b43810e8752266ef1b5f6d10fbf5894d46d434c2bc26cf4ab51483',
  'objects/line_segments2.mojo': '289763b1859e683324ce7cfaee1096753f2c3c92ad0bf0e7f0d96f95c790db0e',
@@ -18363,7 +18400,7 @@ EDGE_SHA256 = {'core/deform.mojo': 'b6afec67eea77b1a76cae98df1b4399de366b2a82878
  'postprocessing/filter_nodes.mojo': 'e4418b40903991eda041b79ba1a8f43d06ed36ca9d8c1e06cf99f88bf8f5fd50',
  'postprocessing/gtao.mojo': 'c0fd6ed0a7662e96e548e7b5b90f6ddef4dd5f155a565493438c2e02e341c98a',
  'postprocessing/render_passes.mojo': '9eb2200bfdf9efe3c4db4c342dc9c7e1e2ff0f43d30ca28e7be0e2306c8daf7e',
- 'postprocessing/sampling.mojo': 'cfc4c18f6c21a10bef53ff3bd88e299f3a6f0b9e5b5767fe82d5c9ccd0d96a93',
+ 'postprocessing/sampling.mojo': 'c5c15e4de46908a89b6be38cbc88faa68e1039383450a47a28e261d31d8ac537',
  'postprocessing/screen_space.mojo': '8b775f0e8c9dadc722649e591537cf4a6c7919bfdc2660b0a7821325cbd88a5f',
  'postprocessing/shaders.mojo': '6e045ed0a008b33c9cbbe387c39b3a5c2a2c438052142ec7910c625f5e7ec203',
  'postprocessing/ssgi.mojo': '2e2f13286c83e2299f64e95d7b1c4e6ccaa6942c436398f27709762e768dc4e4',
@@ -18381,12 +18418,12 @@ EDGE_SHA256 = {'core/deform.mojo': 'b6afec67eea77b1a76cae98df1b4399de366b2a82878
  'render/linerule.mojo': 'f26043bc934bac2a377b1d015dd593953e13fad7381cc41c8d5961deb99dae4b',
  'render/pmrem.mojo': 'edaf56fcf886c01ac6d7d4b47c0f9fa4491ecd6643e49a9a7a59746f690afcd7',
  'render/pointrule.mojo': 'd7394adf9e10c8bdff437647c6d2f339c89b68c04f5dae322262391d9351a2ae',
- 'render/rasterizer.mojo': 'e958391ac25415fd39cd96196b38aaf2ec54f860bd6c84d45c4a489ab1fc7daf',
- 'render/splat_raster.mojo': '377f405d4f36d938aee6dfca9fd6b4e511c5ced0e4868bb3d563b850e92e15b6',
+ 'render/rasterizer.mojo': '74c15deb20687b15b91a6b1201eea01161bc5c97c77062b1a8904eb4f35e2e62',
+ 'render/splat_raster.mojo': '5b7448b8e4877479abe7f152473e926ade771b6918e1f2e0af58aceadd423304',
  'render/splatrule.mojo': '54e73c0e96327cdf863613db0b082672240aec0562e09e9bc471a1da2c4a39a6',
  'render/target.mojo': '5d33e908ee6d26cee44948ff3800f48cda2759a5f7ca0e3e8993c2b377df76ee',
  'render/tasks.mojo': 'b8dfd9c3417ae3c05156a394811e45a7eb7a990cedb22f8d21652053d9ce61a6',
- 'render/texture.mojo': '5091a394a8c2039e3e3e144bf4c7161cd20074c9943a18e8c986bbc4eca9ca07',
+ 'render/texture.mojo': '369e10cc6ae69358660ca656d7f92c674a3dc3104a21a0773c9cd6ce04d40822',
  'render/tonemap.mojo': '9b7ec9c567c09176ccd5b338302b4d59985869c7035855754b819444464f1065',
  'render/transmission.mojo': 'bb1b8248c04478e3845e9f1b4f76e18f0294f0181ac3ae5d23ed093124d938c4',
  'render/uastc.mojo': 'e6833f17255cf058e2f4356e45c0fc7123d971c524fadd0fd3dda02d9d590a77',
@@ -18534,7 +18571,7 @@ EDGE_SHA256 = {'core/deform.mojo': 'b6afec67eea77b1a76cae98df1b4399de366b2a82878
  'tools/carla_lane_oracle/translated_parameter_resolution.py': '1c63297c0097ce50b9f314ba321e7f4d04c009f6379552a84adefb62a2a7f375',
  'tools/compile_fail_expectations.json': 'a15d4cff3d89429312350a4da95604569da83be105f69a0690025904c2cfbc84',
  'tools/test_conditioned_coverage_loops.py': 'f88451e7313fd84cc788847b1c960dc395b98736779a92c81a1d056ff2977520'}
-DATA_SHA256 = '883b545b0584273415842767f7928578e4ebd39213f573602f3e72624a8f418f'
+DATA_SHA256 = 'a50615dac9e72efd6c1dbe295550a825011abd8bcd6353f07fd98c9f0791714c'
 # END FIXED PR780 SUCCESSOR DATA
 
 
@@ -18550,7 +18587,7 @@ def sha(raw):
 def _index_snapshot():
     """Authenticate and detach the fixed per-edge digests and bound inputs."""
     require(type(DATA_SHA256) is str, 'authority digest selector is not a builtin string')
-    require(DATA_SHA256 == '883b545b0584273415842767f7928578e4ebd39213f573602f3e72624a8f418f', 'authority digest selector changed')
+    require(DATA_SHA256 == 'a50615dac9e72efd6c1dbe295550a825011abd8bcd6353f07fd98c9f0791714c', 'authority digest selector changed')
     encoded = json.dumps({'edges': EDGE_SHA256, 'bound_inputs': BOUND_INPUTS},
                          sort_keys=True, separators=(',', ':'))
     require(sha(encoded) == DATA_SHA256, 'fixed source inverse data changed')

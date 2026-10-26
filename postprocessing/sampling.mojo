@@ -14,6 +14,7 @@ buffers through the same `LightView`; see `render.gpu.GpuComposer`.
 
 from render.framebuffer import FloatColor
 from math.utils import edge_index, texel_center, texel_center_from_end
+from std.sys import is_gpu
 from std.math import floor, isfinite
 
 
@@ -294,15 +295,17 @@ def clamped_texel(coordinate: Float32, count: Int) -> Float32:
     """
     # Every integer through 2^24 is a `Float32`. The bit-exact clamps for
     # those counts stay in `Float32`.
-    if count <= 16777216:
-        return min(
-            max(coordinate * Float32(count) - 0.5, Float32(0)),
-            Float32(count - 1),
-        )
-    var span = Float64(coordinate) * Float64(count) - 0.5
-    var limit = Float64(count) - 1
-    if span < 0:
-        span = 0
-    if span > limit:
-        span = limit
-    return Float32(span)
+    # Metal has no `Float64`, and no GPU image is 2^24 texels a side.
+    comptime if not is_gpu():
+        if count > 16777216:
+            var span = Float64(coordinate) * Float64(count) - 0.5
+            var limit = Float64(count) - 1
+            if span < 0:
+                span = 0
+            if span > limit:
+                span = limit
+            return Float32(span)
+    return min(
+        max(coordinate * Float32(count) - 0.5, Float32(0)),
+        Float32(count - 1),
+    )

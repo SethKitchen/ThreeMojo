@@ -138,6 +138,7 @@ from render.raster_state import (
 )
 from std.math import ceil, floor, fma, isfinite, log2, sqrt
 from std.memory import bitcast
+from std.sys import is_gpu
 from units.si import Angle, RADIAN
 
 
@@ -868,8 +869,10 @@ def _nearest_texel(unit: Float32, count: Int) -> Int:
     Returns:
         The texel index, before wrapping.
     """
-    if count > 16777216:
-        return Int(floor(Float64(unit) * Float64(count)))
+    # Metal has no `Float64`, and no GPU image is 2^24 texels a side.
+    comptime if not is_gpu():
+        if count > 16777216:
+            return Int(floor(Float64(unit) * Float64(count)))
     return Int(floor(unit * Float32(count)))
 
 
@@ -887,8 +890,10 @@ def _bilinear_place(unit: Float32, count: Int) -> Float32:
     Returns:
         The place, in texels from a center.
     """
-    if count > 16777216:
-        return Float32(Float64(unit) * Float64(count) - 0.5)
+    # Metal has no `Float64`, and no GPU image is 2^24 texels a side.
+    comptime if not is_gpu():
+        if count > 16777216:
+            return Float32(Float64(unit) * Float64(count) - 0.5)
     return unit * Float32(count) - 0.5
 
 

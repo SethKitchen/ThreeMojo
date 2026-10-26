@@ -21,6 +21,7 @@ from extensions.water.rows import row_tasks
 from render.tasks import TaskGroup
 from math.norm import squared_length2
 from std.math import cos, hypot, sin
+from std.sys import is_gpu
 
 
 def aperture_open(dx: Float32, dy: Float32, radius: Float32, n: Int) -> Bool:
@@ -345,10 +346,18 @@ def glare_sample_x(x: Int, sw: Int, width: Int) -> Int:
     # Past 2^53 that coordinate is one again.
     if sw < 1 or width < 1:
         return 0
-    var u = (Float64(x) + 0.5) / Float64(sw)
+    # Metal has no `Float64`. Up to 2^23 a side, `Float32` is what the GPU
+    # kernel computes too.
+    comptime if not is_gpu():
+        if sw > 8388608 or width > 8388608:
+            var wide = (Float64(x) + 0.5) / Float64(sw)
+            if not (wide < 1):
+                return width - 1
+            return Int(wide * Float64(width))
+    var u = (Float32(x) + 0.5) / Float32(sw)
     if not (u < 1):
         return width - 1
-    return Int(u * Float64(width))
+    return Int(u * Float32(width))
 
 
 def glare_sample_y(y: Int, sh: Int, height: Int) -> Int:
@@ -365,10 +374,18 @@ def glare_sample_y(y: Int, sh: Int, height: Int) -> Int:
     """
     if sh < 1 or height < 1:
         return 0
-    var v = (Float64(y) + 0.5) / Float64(sh)
+    # Metal has no `Float64`. Up to 2^23 a side, `Float32` is what the GPU
+    # kernel computes too.
+    comptime if not is_gpu():
+        if sh > 8388608 or height > 8388608:
+            var wide = (Float64(y) + 0.5) / Float64(sh)
+            if not (wide < 1):
+                return height - 1
+            return Int(wide * Float64(height))
+    var v = (Float32(y) + 0.5) / Float32(sh)
     if not (v < 1):
         return height - 1
-    return Int(v * Float64(height))
+    return Int(v * Float32(height))
 
 
 def glare_cell_x(x: Int, width: Int, sw: Int) -> Int:
@@ -389,10 +406,18 @@ def glare_cell_x(x: Int, width: Int, sw: Int) -> Int:
     # 2^53 the same ratio is one again.
     if width < 1 or sw < 1:
         return 0
-    var ratio = Float64(x) / Float64(width)
+    # Metal has no `Float64`. Up to 2^23 a side, `Float32` is what the GPU
+    # kernel computes too.
+    comptime if not is_gpu():
+        if width > 8388608 or sw > 8388608:
+            var wide = Float64(x) / Float64(width)
+            if not (wide < 1):
+                return sw - 1
+            return Int(wide * Float64(sw))
+    var ratio = Float32(x) / Float32(width)
     if not (ratio < 1):
         return sw - 1
-    return Int(ratio * Float64(sw))
+    return Int(ratio * Float32(sw))
 
 
 def glare_cell_y(y: Int, height: Int, sh: Int) -> Int:
@@ -409,10 +434,18 @@ def glare_cell_y(y: Int, height: Int, sh: Int) -> Int:
     """
     if height < 1 or sh < 1:
         return 0
-    var ratio = Float64(y) / Float64(height)
+    # Metal has no `Float64`. Up to 2^23 a side, `Float32` is what the GPU
+    # kernel computes too.
+    comptime if not is_gpu():
+        if height > 8388608 or sh > 8388608:
+            var wide = Float64(y) / Float64(height)
+            if not (wide < 1):
+                return sh - 1
+            return Int(wide * Float64(sh))
+    var ratio = Float32(y) / Float32(height)
     if not (ratio < 1):
         return sh - 1
-    return Int(ratio * Float64(sh))
+    return Int(ratio * Float32(sh))
 
 
 def glare_convolve(

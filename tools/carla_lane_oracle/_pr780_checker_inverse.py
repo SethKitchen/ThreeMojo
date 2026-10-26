@@ -418,7 +418,7 @@ EDGES = {'coverage_loop_proofs.py': {'after_sha256': '0d082e17f3401a607c056e24aa
                                         ('        if typed.is_current(name, '
                                          '_typed_endpoint(name, '
                                          'current)):\n',)))},
- 'full_audit_cleanup_contracts.py': {'after_sha256': '3fb19e4661ce9504c30ced06c8e66d7410116317d64d75b43cf684c956bc5940',
+ 'full_audit_cleanup_contracts.py': {'after_sha256': '876799b2058c67546a5d3ec768011e121a37c6dd520ad91a7303acd374485dec',
                                      'before_sha256': 'f62dbe69ddd5d15bd79aa4b0a8237d9475fe1a00cea06c2f7124c59af237c833',
                                      'edits': ((56,
                                                 57,
@@ -437,7 +437,7 @@ EDGES = {'coverage_loop_proofs.py': {'after_sha256': '0d082e17f3401a607c056e24aa
                                                 (),
                                                 (' '
                                                  "'tools/carla_lane_oracle/pr780_source_successor.py': "
-                                                 "'df501b942c350eae4afd9ad475897321c55abe44f927c889a1b49d39dfd0a6a5',\n",)),
+                                                 "'2e2ffd0564f0cd41184d4d7ce0e268e9e3a626a5ae05a2690abb0ac1004f310e',\n",)),
                                                (162,
                                                 163,
                                                 (" 'tools/affected.py': "
@@ -1195,7 +1195,7 @@ def predecessor(name, raw):
     """Compose exact current checkers into the retained 5e91dad comparison."""
     if type(raw) is not bytes:
         raise AssertionError('checker source must be physical builtin bytes')
-    if hashlib.sha256(json.dumps(EDGES, sort_keys=True, separators=(',', ':')).encode()).hexdigest() != '94c8a9bd276c5315aa6201bd2c9f4000d7d4a86377fe2e170679d222dc1708e5':
+    if hashlib.sha256(json.dumps(EDGES, sort_keys=True, separators=(',', ':')).encode()).hexdigest() != '4077670e0ef08035d0fbc0584b465078bb4aea9b42fcfa311755e8f105e676a6':
         raise AssertionError('PR780 checker inverse data changed')
     digest = hashlib.sha256(raw).hexdigest()
     edge = EDGES.get(name)

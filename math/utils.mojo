@@ -26,6 +26,7 @@ from math.random import mulberry32_step
 from math.remainder import remainder_float64
 from math.sine import fraction
 from math.smoothstep import smoothstep
+from std.sys import is_gpu
 from std.math import cos, exp, floor, isfinite, sin
 from std.memory import bitcast
 from units.si import Angle, Duration, SECOND
@@ -167,8 +168,10 @@ def texel_center(pixel: Int, count: Int) -> Float32:
     Returns:
         The center, from just above zero through just below one.
     """
-    if count > 8388608:
-        return Float32((Float64(pixel) + 0.5) / Float64(count))
+    # Metal has no `Float64`, and no GPU image is 2^23 pixels a side.
+    comptime if not is_gpu():
+        if count > 8388608:
+            return Float32((Float64(pixel) + 0.5) / Float64(count))
     return (Float32(pixel) + 0.5) / Float32(count)
 
 
@@ -185,8 +188,10 @@ def texel_center_from_end(pixel: Int, count: Int) -> Float32:
     Returns:
         One minus the center.
     """
-    if count > 8388608:
-        return Float32(1 - (Float64(pixel) + 0.5) / Float64(count))
+    # Metal has no `Float64`, and no GPU image is 2^23 pixels a side.
+    comptime if not is_gpu():
+        if count > 8388608:
+            return Float32(1 - (Float64(pixel) + 0.5) / Float64(count))
     return 1 - (Float32(pixel) + 0.5) / Float32(count)
 
 
@@ -204,8 +209,10 @@ def texel_ndc(pixel: Int, count: Int) -> Float32:
     Returns:
         The center, from just above minus one through just below one.
     """
-    if count > 8388608:
-        return Float32((Float64(pixel) + 0.5) / Float64(count) * 2 - 1)
+    # Metal has no `Float64`, and no GPU image is 2^23 pixels a side.
+    comptime if not is_gpu():
+        if count > 8388608:
+            return Float32((Float64(pixel) + 0.5) / Float64(count) * 2 - 1)
     return (Float32(pixel) + 0.5) / Float32(count) * 2 - 1
 
 
@@ -222,8 +229,10 @@ def texel_ndc_up(pixel: Int, count: Int) -> Float32:
     Returns:
         The center, from just below one through just above minus one.
     """
-    if count > 8388608:
-        return Float32(1 - (Float64(pixel) + 0.5) / Float64(count) * 2)
+    # Metal has no `Float64`, and no GPU image is 2^23 pixels a side.
+    comptime if not is_gpu():
+        if count > 8388608:
+            return Float32(1 - (Float64(pixel) + 0.5) / Float64(count) * 2)
     return 1 - (Float32(pixel) + 0.5) / Float32(count) * 2
 
 

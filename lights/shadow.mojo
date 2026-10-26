@@ -1301,12 +1301,14 @@ def _shadow_index(value: Float32) -> Int:
     Returns:
         The floor, or `Int.MAX` or `Int.MIN` when `value` does not fit.
     """
-    var wide = Float64(value)
-    if not isfinite(wide) or wide >= Float64(Int.MAX):
+    # `Float32(Int.MAX)` is 2^63, as `Float64(Int.MAX)` is, and the floor
+    # of a `Float32` is a `Float32`: the same test and index without
+    # `Float64`, which a Metal kernel cannot run.
+    if not isfinite(value) or value >= Float32(Int.MAX):
         return Int.MAX
-    if wide <= -Float64(Int.MAX):
+    if value <= -Float32(Int.MAX):
         return Int.MIN
-    return Int(floor(wide))
+    return Int(floor(value))
 
 
 def _shifted_shadow_index(value: Float32, shift: Int) -> Int:

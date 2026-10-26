@@ -31,6 +31,7 @@ from extensions.water.spectrum import (
 )
 from math.norm import squared_length2
 from std.math import floor, isfinite
+from std.sys import is_gpu
 from units.si import SECOND, Duration, Length
 
 
@@ -277,10 +278,9 @@ def _index_fits(px: Float32) -> Bool:
     Returns:
         True when `Int` of its floor is that coordinate.
     """
-    var wide = Float64(px)
-    return (
-        isfinite(wide) and wide < Float64(Int.MAX) and wide > -Float64(Int.MAX)
-    )
+    # `Float32(Int.MAX)` is 2^63, as `Float64(Int.MAX)` is, so the test is
+    # the same in `Float32`, which a Metal kernel can run.
+    return isfinite(px) and px < Float32(Int.MAX) and px > -Float32(Int.MAX)
 
 
 def _local_meters(coord: Float32, patch: Float32) -> Tuple[Bool, Float32]:
@@ -293,11 +293,18 @@ def _local_meters(coord: Float32, patch: Float32) -> Tuple[Bool, Float32]:
     Returns:
         Whether the position is finite, and its place in the first patch.
     """
-    var turns = Float64(coord) / Float64(patch)
+    # Metal has no `Float64`. A kernel folds in `Float32`; only a position
+    # past 2^63 texels comes here.
+    comptime if not is_gpu():
+        var wide = Float64(coord) / Float64(patch)
+        if not isfinite(wide):
+            return (False, Float32(0))
+        var part = wide - floor(wide)
+        return (True, Float32(part * Float64(patch)))
+    var turns = coord / patch
     if not isfinite(turns):
         return (False, Float32(0))
-    var frac = turns - floor(turns)
-    return (True, Float32(frac * Float64(patch)))
+    return (True, (turns - floor(turns)) * patch)
 
 
 def _local_turn(turns: Float32) -> Tuple[Bool, Float32]:
@@ -309,10 +316,15 @@ def _local_turn(turns: Float32) -> Tuple[Bool, Float32]:
     Returns:
         Whether the coordinate is finite, and its fraction.
     """
-    var wide = Float64(turns)
-    if not isfinite(wide):
+    # Metal has no `Float64`. A kernel folds in `Float32`.
+    comptime if not is_gpu():
+        var wide = Float64(turns)
+        if not isfinite(wide):
+            return (False, Float32(0))
+        return (True, Float32(wide - floor(wide)))
+    if not isfinite(turns):
         return (False, Float32(0))
-    return (True, Float32(wide - floor(wide)))
+    return (True, turns - floor(turns))
 
 
 def _wrap(index: Int, n: Int) -> Int:
