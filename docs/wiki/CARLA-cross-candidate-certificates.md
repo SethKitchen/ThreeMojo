@@ -372,6 +372,12 @@ The count endpoint reverses to that Map.
 Each admitted source keeps its token digest.
 A third Map variant is refused.
 
+Mojo checks the reviewed score-family predecessor.
+The deviation, station, and score endpoints project to one frontier.
+Each endpoint keeps its token digest.
+The score endpoint reverses through the two score edits.
+A third Map variant is refused.
+
 ## Candidate certificate
 
 A certificate contains a stored incumbent point and its road parameter.
