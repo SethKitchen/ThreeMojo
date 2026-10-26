@@ -32,7 +32,7 @@ from tools._python_json import (
     py_repr,
 )
 from tools._sha256 import sha256_hex
-from tools.cache_key import input_paths
+from tools.cache_key import input_paths, memo_digests
 
 comptime _MARKER = "from mojo._entrypoints import exec_mojo\n"
 """The line that marks an official Mojo wheel launcher."""
@@ -53,6 +53,8 @@ comptime _PROBE = (
 """The isolated probe the wheel identity runs in the launcher interpreter."""
 comptime _PACKAGES = ["mojo_compiler", "mojo_compiler_mojo_libs"]
 """The two wheel distributions the identity binds."""
+comptime _PAYLOAD_MEMO = ".cache/toolchain-payload-files"
+"""The digest list of the compiler payload, below the executing root."""
 
 
 def _usage() -> String:
@@ -1149,7 +1151,11 @@ def _apply_wheel(
         var full = paths[index]
         if not isfile(full) or not _inside(_resolve(full), site_real):
             raise Error("Missing or escaped Mojo payload file")
-        doc.set(payload, names[index], doc.new_str(_hash_file(full)))
+    # The payload is hundreds of megabytes, and one report binds it several
+    # times. An unchanged file keeps the digest its last read gave.
+    var digests = memo_digests(_resolve("."), _PAYLOAD_MEMO, paths)
+    for index in range(len(names)):
+        doc.set(payload, names[index], doc.new_str(digests[index]))
     var body = List[UInt8]()
     for index in range(newline + 1, len(raw)):
         body.append(raw[index])

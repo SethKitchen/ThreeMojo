@@ -127,8 +127,20 @@ def _memo(root: String) -> Dict[String, _Seen]:
         Each path whose entry predates the list's own write by more than
         `RACY_NS`. Empty when there is no list or it cannot be read.
     """
+    return _memo_at(root + "/" + MEMO)
+
+
+def _memo_at(path: String) -> Dict[String, _Seen]:
+    """Return the digests a list holds that can still be trusted.
+
+    Args:
+        path: The digest list.
+
+    Returns:
+        Each path whose entry predates the list's own write by more than
+        `RACY_NS`. Empty when there is no list or it cannot be read.
+    """
     var seen = Dict[String, _Seen]()
-    var path = root + "/" + MEMO
     try:
         var written = _stamp(path)[1]
         for line in Path(path).read_text().splitlines():
@@ -153,9 +165,19 @@ def _write_memo(root: String, lines: String):
         root: The repository root.
         lines: The new list.
     """
+    _write_memo_at(root, root + "/" + MEMO, lines)
+
+
+def _write_memo_at(root: String, target: String, lines: String):
+    """Replace a digest list in one step, if `root/.cache` exists.
+
+    Args:
+        root: The repository root.
+        target: The digest list.
+        lines: The new list.
+    """
     if not isdir(root + "/.cache"):
         return
-    var target = root + "/" + MEMO
     var temporary = (
         target + "." + String(Int(external_call["getpid", c_int]())) + ".tmp"
     )
@@ -174,6 +196,50 @@ def _write_memo(root: String, lines: String):
         )
     except:
         pass
+
+
+def memo_digests(
+    root: String, memo: String, paths: List[String]
+) raises -> List[String]:
+    """Return the SHA-256 of each file, read again only when it changed.
+
+    The digests are kept in `root/memo` as the key keeps its own: with the
+    size, the change and modification times and the inode of each file. A
+    file whose four values are the same is not read again. A file that
+    changed less than two seconds before the list was written is read again.
+    The list is written only when `root/.cache` exists.
+
+    Args:
+        root: The repository root.
+        memo: The digest list, below the root.
+        paths: The files, as absolute paths.
+
+    Returns:
+        The lowercase hexadecimal digest of each file, in order.
+
+    Raises:
+        Error: If a file cannot be read.
+    """
+    var target = root + "/" + memo
+    var seen = _memo_at(target)
+    var digests = List[String]()
+    var lines = String()
+    var read = 0
+    for path in paths:
+        var stamp = _stamp(path)
+        var digest: String
+        var known = seen.get(path)
+        if known and known.value().stamp == stamp[0]:
+            digest = known.value().digest
+        else:
+            digest = sha256_hex(Span(Path(path).read_bytes()))
+            read += 1
+        digests.append(digest)
+        lines += stamp[0] + " " + String(stamp[1]) + " " + digest + " " + path
+        lines += "\n"
+    if read > 0:
+        _write_memo_at(root, target, lines)
+    return digests^
 
 
 def _is_input(path: String, name: String) -> Bool:

@@ -13,8 +13,17 @@ from std.testing import (
 )
 
 from tests._tree import Tree
+from std.pathlib import Path
+
 from tools._process import run_program
-from tools.cache_key import cache_key, input_paths, installed_packages, run
+from tools._sha256 import sha256_hex
+from tools.cache_key import (
+    cache_key,
+    input_paths,
+    installed_packages,
+    memo_digests,
+    run,
+)
 
 
 def _tree() raises -> Tree:
@@ -110,6 +119,32 @@ def test_the_key_changes_with_inputs_names_and_settings_only() raises:
         10,
     )
     assert_not_equal(added, cache_key(tree.root, ["s"]))
+    tree.close()
+
+
+def test_memo_digests_follow_each_file() raises:
+    """A memo digest is the file's SHA-256 before and after a change."""
+    var tree = Tree()
+    tree.write(".cache/keep", "")
+    tree.write("one.bin", "first")
+    tree.write("two.bin", "second")
+    var paths: List[String] = [tree.root + "/one.bin", tree.root + "/two.bin"]
+    var memo = ".cache/test-files"
+    var first = memo_digests(tree.root, memo, paths)
+    assert_equal(first[0], sha256_hex("first".as_bytes()))
+    assert_equal(first[1], sha256_hex("second".as_bytes()))
+    assert_equal(len(first), 2)
+    var again = memo_digests(tree.root, memo, paths)
+    assert_equal(again[0], first[0])
+    assert_equal(again[1], first[1])
+    tree.write("one.bin", "a longer first")
+    var changed = memo_digests(tree.root, memo, paths)
+    assert_equal(changed[0], sha256_hex("a longer first".as_bytes()))
+    assert_equal(changed[1], first[1])
+    assert_equal(
+        Path(tree.root + "/" + memo).exists(),
+        True,
+    )
     tree.close()
 
 
