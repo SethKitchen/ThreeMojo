@@ -384,6 +384,23 @@ That assignment is read as the score high.
 The fresh guard and the ordered debits match the historical caller.
 A missing assignment or a changed debit is refused.
 
+Mojo checks the reviewed seed-count premises.
+Forty-five declarations keep their score-era token digests.
+Map premises use the later guard digests.
+Road info premises come from the restored border pin.
+A changed premise is refused.
+
+Mojo checks the reviewed score-live premises.
+The score helper and the winner-seed caller keep their token digests.
+Three optional premises and eight support premises keep their digests.
+The score fixture keeps its file digest.
+A changed premise or a changed fixture is refused.
+
+Mojo checks the reviewed Map deviation declarations.
+The query certificate and the segment builder keep their token digests.
+Both declarations stay on Map.
+A changed query or a changed builder is refused.
+
 ## Candidate certificate
 
 A certificate contains a stored incumbent point and its road parameter.
