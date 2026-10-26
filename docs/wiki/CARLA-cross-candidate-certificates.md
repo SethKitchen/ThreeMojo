@@ -462,6 +462,11 @@ Mojo checks the reviewed typed-boundary current dependencies.
 497 dependencies keep their reviewed digests.
 A changed dependency is refused.
 
+Mojo checks the reviewed dependency checker bytes.
+Fifteen executing checkers keep their reviewed digests.
+Six public checkers keep their reviewed digests.
+A changed checker or a linked public checker is refused.
+
 ## Candidate certificate
 
 A certificate contains a stored incumbent point and its road parameter.
