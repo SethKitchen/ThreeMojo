@@ -7,8 +7,8 @@
 
     sh tools/tool.sh .venv/bin/mojo check_build_tools
 
-`make test-tools` runs these checks, as it ran their Python version. Each
-one runs `make` itself: a cache key reads the whole tree, and a coverage
+`make test-coverage-tool` runs these checks. `make test-tools` ran their
+Python version. Each one runs `make` itself: a cache key reads the whole tree, and a coverage
 staging run binds every maintained input. One check takes longer than the
 five seconds that a suite test must keep to.
 """

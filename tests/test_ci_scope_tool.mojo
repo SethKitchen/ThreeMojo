@@ -1293,7 +1293,9 @@ def test_the_inventory_matches_the_makefile() raises:
     var tree = Tree()
     var wrapper = String("include Makefile\ninventory:\n")
     for entry in variables:
-        wrapper += "\t@printf '%s\\n' '" + entry[0] + "=$(" + entry[1] + ")'\n"
+        # make prints each list itself: a list as one shell argument is
+        # longer than Linux allows.
+        wrapper += "\t@:$(info " + entry[0] + "=$(" + entry[1] + "))\n"
     tree.write("inventory.mk", wrapper)
     var result = run_program(
         [
