@@ -377,6 +377,8 @@ CPU test groups use imported source size. Coverage groups use `tools/coverage_sh
 
 `make coverage` runs each raw capture with `tools/native_test_support.mojo`. A suite that links the C fixture is built and then run in that capture's process group. `tools/coverage_hit_aot.mojo` runs a compiled capture. It builds the suite and keeps the source path as the program name. `tools/coverage_io.mojo` captures one suite, keeps each probe record once, checks the loop proof, and replays the captures to the reporter. `tools/coverage_loop_begin.mojo` writes the generation checkpoint before the producer runs.
 
+The loop receipt binds `tools/coverage_hit_aot.mojo`. The Python file `tools/coverage_hit_aot.py` is removed.
+
 Ties use the suite path and group number. Every affected suite stays in exactly one group. CI uses eight groups and a budget of 9000 seconds a group. The budget is a hang detector, not a target. Hosted runners differ: one took a quarter longer than another on the same group.
 
 The current profile uses attempt 1 of [CI run 37725421233](https://github.com/SethKitchen/ThreeMojo/actions/runs/37725421233), from October 8, 2026. Its source commit is `6c0391ea03bfe4ec28b3ae23e497f51e1ba43806`; its merge checkout is `fdd972921b9f179119815acd4e10f1486786d9f8`. It used Mojo `1.1.0` (`8189361e`), the `aot-hits` profile, eight groups and four capture workers per runner. The profile contains 717 successful capture durations and one explicit scheduling estimate.

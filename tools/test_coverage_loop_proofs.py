@@ -740,7 +740,7 @@ class ProofBindingTests(unittest.TestCase):
         capture, output = self.hits/'test_fixture.txt.gz', self.hits/'test_fixture.out'
         capture.write_bytes(b'capture')
         output.write_text('PASS\n')
-        for name in ('tools/coverage_io.py', 'tools/coverage_hit_aot.py'):
+        for name in ('tools/coverage_io.py', 'tools/coverage_hit_aot.mojo'):
             with self.subTest(helper=name):
                 self.bind(capture, output)
                 old = self.envelope
