@@ -7,8 +7,9 @@
 
     check_coverage_loop_fixture [--mojo PATH]
 
-The program checks the three constant loops and a shadowed `range`. The
-profiled owner controls stay in `tools/check_coverage_loop_proofs.py`.
+The program checks the three constant loops, a shadowed `range`, and
+three physical line endings. The profiled owner controls stay in
+`tools/check_coverage_loop_proofs.py`.
 """
 
 from std.pathlib import Path
@@ -17,6 +18,7 @@ from std.tempfile import mkdtemp
 
 from tools._process import run_program
 from tools._python_json import PyJson
+from tools._sha256 import sha256_hex
 from tools.coverage_io import Reducer
 
 
@@ -847,8 +849,173 @@ def qualify_shadowed_range(mojo: String) raises:
     )
 
 
+comptime _PHYSICAL = """from std.testing import assert_equal
+
 def main() raises:
-    """Qualify the constant-loop fixture and the shadowed range."""
+    var text = String(\"é\tλ\")
+    var total = 0
+    for index in range(2):
+        total += index
+    assert_equal(total, 1)
+    assert_equal(text, \"é\tλ\")
+    print(\"RESULT physical\")
+"""
+
+
+def _ending(index: Int) -> String:
+    """Return one of the three physical line endings."""
+    if index == 0:
+        return "\n"
+    if index == 1:
+        return "\r\n"
+    return "\r"
+
+
+def _utf8(text: String) -> List[UInt8]:
+    """Copy `text` into a byte list."""
+    var raw = List[UInt8]()
+    for item in text.as_bytes():
+        raw.append(item)
+    return raw^
+
+
+def qualify_physical_endings(mojo: String) raises:
+    """Keep LF, CRLF, and CR source bytes in the generation receipt.
+
+    Args:
+        mojo: The Mojo compiler used to build and run the fixture.
+
+    Raises:
+        Error: A physical source digest or native result changes.
+    """
+    var version = _run([mojo, "--version"], 30.0, "")
+    var compiler = String(version.strip())
+    var flags = "-Werror -I ."
+    var work = mkdtemp(prefix="loop physical ")
+    var native = work + "/native"
+    _ = _run(["mkdir", "-p", native], 10.0, "")
+    _ = _run(["cp", "-a", "coverage/.", native + "/coverage/"], 30.0, "")
+    _ = _run(["rm", "-rf", native + "/coverage/build"], 10.0, "")
+    _ = _run(["cp", "-a", "tools/.", native + "/tools/"], 60.0, "")
+    _ = _run(["rm", "-rf", native + "/tools/__pycache__"], 10.0, "")
+    for name in ["core/__init__.mojo", "core/search.mojo", "core/binary.mojo"]:
+        _copy(name, native + "/" + name)
+    var inputs = List[String]()
+    inputs.append("coverage/build_cli.mojo")
+    inputs.append("coverage/instrument.mojo")
+    inputs.append("coverage/scanner.mojo")
+    inputs.append("coverage/runtime.mojo")
+    inputs.append("coverage/report.mojo")
+    inputs.append("coverage/report_cli.mojo")
+    inputs.append("coverage/mcdc.mojo")
+    inputs.append("tools/coverage_loop_proofs.py")
+    inputs.append("tools/coverage_io.py")
+    inputs.append("tools/cache_key.py")
+    inputs.append("tools/native_test_support.py")
+    inputs.append("tools/coverage_toolchain_identity.py")
+    inputs.append("tools/coverage_hit_aot.mojo")
+    inputs.append("tools/coverage_hit_cache.c")
+    inputs.append("tools/coverage_write_interposer.c")
+    inputs.append("tools/run_suite.mojo")
+    inputs.append("Makefile")
+    for name in inputs:
+        _copy(name, native + "/" + name)
+    var index = 0
+    while index < 3:
+        var ending = _ending(index)
+        var source_name = "physical_" + String(index) + ".mojo"
+        var original = _utf8(String(_PHYSICAL).replace("\n", ending))
+        var source_path = native + "/" + source_name
+        Path(source_path).write_bytes(original)
+        var stage = work + "/physical-" + String(index)
+        _ = _run(["mkdir", "-p", stage + "/coverage"], 10.0, "")
+        _ = _run(["cp", "-a", "coverage/.", stage + "/coverage/"], 30.0, "")
+        _ = _run(["rm", "-rf", stage + "/coverage/build"], 10.0, "")
+        var begin = _tool(mojo, "coverage_loop_begin")
+        begin.append("--root")
+        begin.append(native)
+        begin.append("--build")
+        begin.append(stage)
+        begin.append("--compiler")
+        begin.append(compiler)
+        begin.append("--flags")
+        begin.append(flags)
+        begin.append("--mojo")
+        begin.append(mojo)
+        begin.append("--sources")
+        begin.append(source_name)
+        _ = _run(begin, 180.0, "")
+        var generate = List[String]()
+        generate.append(mojo)
+        generate.append("run")
+        generate.append("-Werror")
+        generate.append("-I")
+        generate.append(".")
+        generate.append("coverage/build_cli.mojo")
+        generate.append(stage)
+        generate.append(source_name)
+        _ = _run(generate, 180.0, native)
+        var seal = _tool(mojo, "coverage_loop_seal")
+        seal.append("--root")
+        seal.append(native)
+        seal.append("--build")
+        seal.append(stage)
+        seal.append("--compiler")
+        seal.append(compiler)
+        seal.append("--flags")
+        seal.append(flags)
+        seal.append("--mojo")
+        seal.append(mojo)
+        _ = _run(seal, 180.0, "")
+        var receipt = PyJson.parse(
+            Path(stage + "/loop-proofs.json").read_text()
+        )
+        var generation = receipt.at(
+            receipt.at(receipt.root, "receipt"), "generation"
+        )
+        var modules = receipt.at(generation, "modules")
+        var item = receipt.at(modules, source_name)
+        var recorded = receipt.text(receipt.at(item, "source"))
+        if recorded != sha256_hex(Span(original)):
+            _fail("Physical source bytes changed")
+        var plain_bin = native + "/physical-" + String(index)
+        var inst_bin = stage + "/physical-" + String(index)
+        var plain_build = List[String]()
+        plain_build.append(mojo)
+        plain_build.append("build")
+        plain_build.append("-Werror")
+        plain_build.append("-I")
+        plain_build.append(native)
+        plain_build.append(source_path)
+        plain_build.append("-o")
+        plain_build.append(plain_bin)
+        _ = _run(plain_build, 180.0, "")
+        var inst_build = List[String]()
+        inst_build.append(mojo)
+        inst_build.append("build")
+        inst_build.append("-Werror")
+        inst_build.append("-I")
+        inst_build.append(stage)
+        inst_build.append(stage + "/" + source_name)
+        inst_build.append("-o")
+        inst_build.append(inst_bin)
+        _ = _run(inst_build, 180.0, "")
+        var plain = _run_both([plain_bin], 5.0, "")
+        var instrumented = _run_both([inst_bin], 5.0, "")
+        if plain[0] != 0 or instrumented[0] != 0:
+            _fail("Physical program failed")
+        if (
+            plain[1] != "RESULT physical\n"
+            or instrumented[1] != "RESULT physical\n"
+        ):
+            _fail("Physical-byte native parity failed")
+        index += 1
+    _ = _run(["rm", "-rf", work], 30.0, "")
+    print("PASS: native LF, CRLF, CR and UTF-8 pairs verified")
+
+
+def main() raises:
+    """Qualify the constant-loop, shadow, and physical fixtures."""
     var mojo = ".venv/bin/mojo"
     var arguments = argv()
     var index = 1
@@ -869,6 +1036,7 @@ def main() raises:
     try:
         qualify_constant_loops(mojo)
         qualify_shadowed_range(mojo)
+        qualify_physical_endings(mojo)
     except error:
         print("check_coverage_loop_fixture: " + String(error), file=stderr)
         exit(1)

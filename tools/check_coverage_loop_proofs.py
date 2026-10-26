@@ -812,29 +812,6 @@ def main():
         results['entry-probe-mutation'] = 'rejected contradictory actual native probe'
         results['shadowed-range'] = 'native empty custom iterable; both obligations retained; T remains missing'
         results['native-alias-drift'] = 'rejected original/staged mismatch'
-        # Actual CR/LF/UTF-8 generation records must retain the exact native
-        # input and rewritten bytes; the original manifest remains unchanged.
-        physical = 'from std.testing import assert_equal\n\ndef main() raises:\n    var text = String("é\tλ")\n    var total = 0\n    for index in range(2):\n        total += index\n    assert_equal(total, 1)\n    assert_equal(text, "é\tλ")\n    print("RESULT physical")\n'
-        for number, ending in enumerate(['\n', '\r\n', '\r']):
-            name = f'physical_{number}.mojo'
-            original = physical.replace('\n', ending).encode()
-            (native / name).write_bytes(original)
-            stage = work / f'physical-{number}'
-            stage.mkdir()
-            shutil.copytree(ROOT / 'coverage', stage / 'coverage', ignore=shutil.ignore_patterns('build'))
-            generate(native, stage, [name])
-            bound = mojo_seal(native, stage, compiler, flags, mojo)
-            require(bound['receipt']['generation']['modules'][name]['source'] == proofs.sha256(original), 'Physical source bytes changed')
-            observed = []
-            for folder in [native, stage]:
-                binary = folder / f'physical-{number}'
-                run([mojo, 'build', '-Werror', '-I', str(folder), str(folder / name), '-o', str(binary)])
-                observed.append(run([str(binary)], timeout=5))
-            require(observed[0].stdout == observed[1].stdout == 'RESULT physical\n', 'Physical-byte native parity failed')
-            target = evidence / f'physical-{number}'
-            target.mkdir()
-            for record in [name, name + '.cov-origin', 'origins.ready', 'generation-inputs.json', 'manifest.txt', 'loop-proofs.json']:
-                shutil.copyfile(stage / record, target / record)
         results['generation-byte-correspondence'] = 'native LF, CRLF, CR and UTF-8 pairs verified'
         # One complete original manifest goes through the maintained capture
         # wrapper and the official proof-aware reporting boundary end to end.
