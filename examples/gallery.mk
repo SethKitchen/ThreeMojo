@@ -166,6 +166,9 @@ $(call gallery,meadow,meadow)
 $(call gallery,meadow-wind,meadow_wind)
 # A brick house and a timber barn on the meadow, beside a pond of still water.
 $(call gallery,village,village,assets/pebbles.jpg)
+# A player walks, runs and jumps through the village by a scripted gamepad,
+# among people and animals, seen by a third-person camera.
+$(call gallery,village_walk,village_walk,assets/pebbles.jpg)
 # Every procedural animal, one to a tile, turning.
 $(call gallery,animals,animals)
 # A wolf walks one stride, re-meshed in each pose.

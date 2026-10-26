@@ -352,8 +352,10 @@ struct TerminalWindow(Movable):
         var request = List[Int32](length=2, fill=0)
         request[0] = Int32(self.input_fd)
         request[1] = Int32(POLLIN)
+        # The count is C's `nfds_t`, an unsigned long, as the gamepad
+        # modules declare it: a program holds one `poll` declaration.
         var ready = external_call["poll", c_int](
-            request.unsafe_ptr(), c_int(1), milliseconds
+            request.unsafe_ptr(), UInt(1), milliseconds
         )
         if ready <= 0:
             return List[InputEvent]()

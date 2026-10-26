@@ -441,6 +441,7 @@ Every other CPU bench is named here.
 | `bench/noop.mojo` | Host baselines | A program that does nothing |
 | `bench/animation_loop_bench.mojo` | [Animation](Animation) | Actions and the mixer |
 | `bench/renderer_sort_bench.mojo` | [Renderer](Renderer) | Draw-list sort against the previous sort |
+| `bench/village_game_bench.mojo` | [Game renderer](Game-renderer#measure-a-frame) | Village game frames by stage, at a quality preset |
 | `bench/image_decode.mojo` | [Image decode queue](Image-decode-queue) | glTF and CARLA image preload |
 | `bench/periodic_remainder_bench.mojo` | [Math](Math#periodic-scalar-helpers) | Euclidean remainder and pingpong |
 | `bench/exact_predicates_bench.mojo` | [Geometry](Geometry#convex-hull) | Exact orientation predicates |

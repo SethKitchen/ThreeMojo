@@ -10,7 +10,7 @@
 - the building models of [Building model](Building-model) and [Scanned buildings](Scanned-buildings),
 - the Clearwater water of [Water](Water).
 
-See [Extensions](Extensions).
+See [Extensions](Extensions). To put people and animals in the village and walk through it, see [Village walk](Village-walk).
 
 ## Draw one frame
 

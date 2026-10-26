@@ -45,6 +45,9 @@ struct GeometryStore(Movable):
     """Owns geometries and hands out ids naming them."""
 
     var geometries: List[BufferGeometry]
+    # How many times each geometry has been replaced. A cache of a
+    # geometry's data reads it again when this changes.
+    var _generations: List[Int]
 
     # Retained allocation identity for resource caches. Moving this store
     # preserves it; a fresh store gets a new identity. A cache retains the
@@ -54,6 +57,7 @@ struct GeometryStore(Movable):
     def __init__(out self):
         """Create an empty store."""
         self.geometries = List[BufferGeometry]()
+        self._generations = List[Int]()
         self._cache_owner = ArcPointer(Int(0))
 
     def count(self) -> Int:
@@ -70,7 +74,14 @@ struct GeometryStore(Movable):
             Its id, which stays valid for the life of the store.
         """
         self.geometries.append(geometry^)
-        return GeometryId(len(self.geometries) - 1)
+        var index = len(self.geometries) - 1
+        # A caller that popped a geometry off `geometries` reuses its id,
+        # and the id's new geometry must read as changed.
+        if index < len(self._generations):
+            self._generations[index] += 1
+        else:
+            self._generations.append(0)
+        return GeometryId(index)
 
     def _require_geometry(self, id: GeometryId) raises:
         """Refuse a geometry id the store does not have.
@@ -123,3 +134,24 @@ struct GeometryStore(Movable):
         """
         self._require_geometry(id)
         self.geometries[id.value] = geometry^
+        self._generations[id.value] += 1
+
+    def generation(self, id: GeometryId) raises -> Int:
+        """Return how many times a geometry has been replaced.
+
+        A cache of a geometry's data keeps the generation it read, and reads
+        the geometry again when `replace` gives it a new one. A geometry
+        changed in place through `geometries` keeps its generation.
+
+        Args:
+            id: Which geometry.
+
+        Returns:
+            Zero for a geometry never replaced, and one more for each
+            `replace`.
+
+        Raises:
+            Error: If no geometry has that id.
+        """
+        self._require_geometry(id)
+        return self._generations[id.value]

@@ -2806,6 +2806,18 @@
       "candidate not viable: value passed to 'run' cannot be converted from 'IntLiteral[1]' to 'PipeRun'"
     ]
   },
+  "tests/compile_fail/a_plant_detail_is_not_a_bare_int.mojo": {
+    "errors": [
+      {
+        "line": 13,
+        "column": 51,
+        "message": "invalid call to 'planted': value passed to 'plants' cannot be converted from 'IntLiteral[1]' to 'PlantDetail'"
+      }
+    ],
+    "notes": [
+      "function declared here"
+    ]
+  },
   "tests/compile_fail/a_plant_kind_is_not_a_bare_int.mojo": {
     "errors": [
       {
@@ -2930,6 +2942,18 @@
         "column": 26,
         "line": 12,
         "message": "invalid call to 'anatomy_detail': value passed to 'quality' cannot be converted from 'IntLiteral[2]' to 'Quality'"
+      }
+    ],
+    "notes": [
+      "function declared here"
+    ]
+  },
+  "tests/compile_fail/a_quality_preset_is_not_a_bare_int.mojo": {
+    "errors": [
+      {
+        "line": 12,
+        "column": 32,
+        "message": "invalid call to 'game_quality': value passed to 'preset' cannot be converted from 'IntLiteral[0]' to 'QualityPreset'"
       }
     ],
     "notes": [
@@ -3331,6 +3355,16 @@
     ],
     "notes": []
   },
+  "tests/compile_fail/a_shadow_mode_is_not_a_bare_int.mojo": {
+    "errors": [
+      {
+        "line": 13,
+        "column": 24,
+        "message": "cannot implicitly convert 'IntLiteral[2]' value to 'ShadowMode'"
+      }
+    ],
+    "notes": []
+  },
   "tests/compile_fail/a_shape_kind_is_not_a_bare_int.mojo": {
     "errors": [
       {
@@ -3603,6 +3637,18 @@
         "column": 63,
         "line": 13,
         "message": "invalid call to 'sprite_material': value passed to 'rotation' cannot be converted from 'FloatLiteral[1.5]' to 'Quantity[Int(0), Int(0), Int(0), Int(1)]'"
+      }
+    ],
+    "notes": [
+      "function declared here"
+    ]
+  },
+  "tests/compile_fail/a_stance_is_not_a_bare_int.mojo": {
+    "errors": [
+      {
+        "line": 12,
+        "column": 19,
+        "message": "invalid call to 'clip_of': value passed to 'stance' cannot be converted from 'IntLiteral[2]' to 'Stance'"
       }
     ],
     "notes": [

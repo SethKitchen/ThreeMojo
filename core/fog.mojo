@@ -64,6 +64,7 @@ from core.ordinal import ordinal_valid, require_valid
 from math.finite import require_non_negative_finite
 from math.smoothstep import smoothstep
 from render.framebuffer import Color, FloatColor
+from render.game_math import exp2_veil
 from std.math import exp, isfinite
 from units.si import InverseLength, Length, METER, PER_METER
 
@@ -265,8 +266,7 @@ def fog_factor(
     if kind == LINEAR_FOG:
         return smoothstep(near, far, depth)
     if kind == EXP2_FOG:
-        var scaled = density * depth
-        return 1 - exp(-scaled * scaled)
+        return exp2_veil[1](density, depth)
     return 0
 
 
