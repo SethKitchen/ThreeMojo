@@ -698,40 +698,8 @@ def check_current_generated_include_root(stage, mojo, compiler, flags):
                 'Current theorem weakened its required true outcome')
         require(f'B {module} {line}'.encode() in original.splitlines(), 'Missing original branch')
         require(f'L {module} {line}'.encode() in masked.splitlines(), 'Original line was removed')
-    # Exercise unsealed same-path bytes, a novel entry context, and an unknown
-    # actual lookup-root provider through the real generation owner.
-    changed = stage/'extensions/animals/anatomy/render.mojo'
-    raw = changed.read_bytes()
-    def replace_generated_passthrough(data):
-        require(not changed.is_symlink() and changed.is_file()
-                and changed.resolve().is_relative_to(stage.resolve()),
-                'Mutation target is not a regular contained generated file')
-        source = ROOT/'extensions/animals/anatomy/render.mojo'
-        generated_stat, source_stat = changed.stat(), source.stat()
-        require((generated_stat.st_dev,generated_stat.st_ino)
-                != (source_stat.st_dev,source_stat.st_ino),
-                'Generated mutation target aliases the sealed source')
-        changed.unlink()
-        with changed.open('xb') as stream:
-            stream.write(data)
-    for suffix in (b'\n# unsealed same-path change\n', b'\ndef main():\n    pass\n'):
-        replace_generated_passthrough(raw+suffix)
-        try:
-            failed = mojo_verify(ROOT, stage, compiler, flags, mojo, suites=[suite], success=False)
-            require(failed.returncode != 0 and 'Staged input differs' in failed.stderr,
-                    'Unexpected same-path rejection: ' + failed.stderr)
-        finally:
-            replace_generated_passthrough(raw)
-    shadow = stage/'tests/render.mojo'
-    require(not shadow.exists(), 'Lookup-shadow fixture collides with maintained source')
-    shadow.write_text('def main():\n    pass\n')
-    try:
-        failed = mojo_verify(ROOT, stage, compiler, flags, mojo, suites=[suite], success=False)
-        require(failed.returncode != 0 and 'Unmaintained executable input' in failed.stderr,
-                'Unexpected new-provider rejection: ' + failed.stderr)
-    finally:
-        shadow.unlink()
-    require((stage/'manifest.txt').read_bytes() == original, 'Original denominator changed')
+    run(['sh', str(ROOT / 'tools/tool.sh'), mojo,
+         'check_coverage_loop_fixture', '--mojo', mojo, '--mutations', str(stage)])
     owner_result = check_generated_receipt_owner(stage, mojo, compiler, flags)
     require(owner_result == {'fresh_receipts': 3, 'counted_receipts': 2,
                              'full_per_counted_receipt': 1, 'typed_per_counted_receipt': 1,

@@ -8,8 +8,8 @@
     check_coverage_loop_fixture [--mojo PATH]
 
 The program checks the constant loops, a shadowed `range`, physical line
-endings, and the production capture. The profiled owner controls stay in
-`tools/check_coverage_loop_proofs.py`.
+endings, the production capture, and generated-stage mutations. The
+profiled owner controls stay in `tools/check_coverage_loop_proofs.py`.
 """
 
 from std.os import setenv
@@ -1363,30 +1363,151 @@ def qualify_production_capture(mojo: String) raises:
     )
 
 
+def _refuse_verify(
+    mojo: String,
+    root: String,
+    stage: String,
+    compiler: String,
+    flags: String,
+    suite: String,
+) raises -> String:
+    """Return the refusal text from one seal verify."""
+    var command = _tool(mojo, "coverage_loop_seal")
+    command.append("verify")
+    command.append("--root")
+    command.append(root)
+    command.append("--build")
+    command.append(stage)
+    command.append("--compiler")
+    command.append(compiler)
+    command.append("--flags")
+    command.append(flags)
+    command.append("--mojo")
+    command.append(mojo)
+    command.append("--suites")
+    command.append(suite)
+    var refusal = _run_both(command, 180.0, "")
+    return String(refusal[0]) + "\n" + refusal[1] + refusal[2]
+
+
+def qualify_generated_mutations(mojo: String, stage: String) raises:
+    """Reject a changed passthrough file and a new provider in a generated stage.
+
+    Args:
+        mojo: The Mojo compiler that sealed `stage`.
+        stage: The generated include-root directory.
+
+    Raises:
+        Error: A mutation is accepted or the manifest changes.
+    """
+    var version = _run([mojo, "--version"], 30.0, "")
+    var compiler = String(version.strip())
+    var flags = "-Werror -I ."
+    var suite = "tests/test_carla_lane_geometry_guard_controls.mojo"
+    var changed = stage + "/extensions/animals/anatomy/render.mojo"
+    var source = "extensions/animals/anatomy/render.mojo"
+    var link = _run_both(["test", "-L", changed], 10.0, "")
+    if link[0] == 0:
+        _fail("Mutation target is not a regular contained generated file")
+    var regular = _run_both(["test", "-f", changed], 10.0, "")
+    if regular[0] != 0:
+        _fail("Mutation target is not a regular contained generated file")
+    var changed_real = String(_run(["realpath", changed], 10.0, "").strip())
+    var stage_real = String(_run(["realpath", stage], 10.0, "").strip())
+    if not changed_real.startswith(stage_real + "/"):
+        _fail("Mutation target is not a regular contained generated file")
+    var changed_id = String(
+        _run(["stat", "-c", "%d:%i", changed], 10.0, "").strip()
+    )
+    var source_id = String(
+        _run(["stat", "-c", "%d:%i", source], 10.0, "").strip()
+    )
+    if changed_id == source_id:
+        _fail("Generated mutation target aliases the sealed source")
+    var original = Path(changed).read_bytes()
+    var manifest = sha256_hex(Span(Path(stage + "/manifest.txt").read_bytes()))
+    var suffixes = List[String]()
+    suffixes.append("\n# unsealed same-path change\n")
+    suffixes.append("\ndef main():\n    pass\n")
+    for suffix in suffixes:
+        var mutated = List[UInt8]()
+        for byte in original:
+            mutated.append(byte)
+        for byte in String(suffix).as_bytes():
+            mutated.append(byte)
+        _ = _run(["rm", "-f", changed], 10.0, "")
+        Path(changed).write_bytes(mutated)
+        var refusal = _refuse_verify(mojo, ".", stage, compiler, flags, suite)
+        _ = _run(["rm", "-f", changed], 10.0, "")
+        Path(changed).write_bytes(original.copy())
+        if not (
+            refusal.startswith("1\n")
+            or refusal.startswith("2\n")
+            or (not refusal.startswith("0\n"))
+        ):
+            _fail("Unexpected same-path rejection: " + refusal)
+        if refusal.find("Staged input differs") < 0:
+            _fail("Unexpected same-path rejection: " + refusal)
+    var shadow = stage + "/tests/render.mojo"
+    var shadow_exists = _run_both(["test", "-e", shadow], 10.0, "")
+    if shadow_exists[0] == 0:
+        _fail("Lookup-shadow fixture collides with maintained source")
+    Path(shadow).write_text("def main():\n    pass\n")
+    var provider = _refuse_verify(mojo, ".", stage, compiler, flags, suite)
+    _ = _run(["rm", "-f", shadow], 10.0, "")
+    if (
+        provider.startswith("0\n")
+        or provider.find("Unmaintained executable input") < 0
+    ):
+        _fail("Unexpected new-provider rejection: " + provider)
+    if sha256_hex(Span(Path(stage + "/manifest.txt").read_bytes())) != manifest:
+        _fail("Original denominator changed")
+    print(
+        "PASS: changed passthrough bytes and a new provider are rejected;"
+        " the manifest stays"
+    )
+
+
 def main() raises:
     """Qualify the constant-loop, shadow, and physical fixtures."""
     var mojo = ".venv/bin/mojo"
+    var mutations = String("")
     var arguments = argv()
     var index = 1
     while index < len(arguments):
         var word = arguments[index]
-        if word == "--mojo":
+        if word == "--mojo" or word == "--mutations":
             if index + 1 >= len(arguments):
                 print(
-                    "usage: check_coverage_loop_fixture [--mojo PATH]",
+                    (
+                        "usage: check_coverage_loop_fixture [--mojo PATH]"
+                        " [--mutations STAGE]"
+                    ),
                     file=stderr,
                 )
                 exit(2)
-            mojo = arguments[index + 1]
+            if word == "--mojo":
+                mojo = arguments[index + 1]
+            else:
+                mutations = arguments[index + 1]
             index += 2
             continue
-        print("usage: check_coverage_loop_fixture [--mojo PATH]", file=stderr)
+        print(
+            (
+                "usage: check_coverage_loop_fixture [--mojo PATH] [--mutations"
+                " STAGE]"
+            ),
+            file=stderr,
+        )
         exit(2)
     try:
-        qualify_constant_loops(mojo)
-        qualify_shadowed_range(mojo)
-        qualify_physical_endings(mojo)
-        qualify_production_capture(mojo)
+        if mutations.byte_length() > 0:
+            qualify_generated_mutations(mojo, mutations)
+        else:
+            qualify_constant_loops(mojo)
+            qualify_shadowed_range(mojo)
+            qualify_physical_endings(mojo)
+            qualify_production_capture(mojo)
     except error:
         print("check_coverage_loop_fixture: " + String(error), file=stderr)
         exit(1)
