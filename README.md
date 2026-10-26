@@ -129,7 +129,7 @@ Some portable features remain partial, including [GLSL shaders](https://github.c
 ### Project tools
 
 <details>
-<summary>Implemented: 80</summary>
+<summary>Implemented: 81</summary>
 
 - [x] [Literal loop receipt](https://github.com/SethKitchen/ThreeMojo/wiki/Coverage-tool#constant-loop-outcome-proofs): `tools/coverage_loop_seal.mojo` writes and checks the sealed loop receipt [#761](https://github.com/SethKitchen/ThreeMojo/issues/761)
 
@@ -218,6 +218,8 @@ Some portable features remain partial, including [GLSL shaders](https://github.c
 - [x] [Include-root proofs](https://github.com/SethKitchen/ThreeMojo/wiki/Coverage-tool#capture-scheduling-and-progress): `tools/check_coverage_include_root.mojo` instruments the lane modules and checks the six closed loop proofs [#761](https://github.com/SethKitchen/ThreeMojo/issues/761)
 
 - [x] [Spiral-domain token gate](https://github.com/SethKitchen/ThreeMojo/wiki/CARLA-lane-correction-controls): `tools/carla_distance_gate.mojo` checks the spiral-domain token digest and the interval token digest [#761](https://github.com/SethKitchen/ThreeMojo/issues/761)
+
+- [x] [Moment producer bounds](https://github.com/SethKitchen/ThreeMojo/wiki/CARLA-lane-correction-controls): `tools/carla_moment_gate.mojo` checks the moment-producer token digests and the stored coefficient bounds [#761](https://github.com/SethKitchen/ThreeMojo/issues/761)
 
 - [x] [Neutral CARLA texture plan](https://github.com/SethKitchen/ThreeMojo/wiki/CARLA-assets#the-carla-towns): `tools/carla_texture_plan.mojo` names a neutral texture and chooses its fitted size [#761](https://github.com/SethKitchen/ThreeMojo/issues/761)
 
