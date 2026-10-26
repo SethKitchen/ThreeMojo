@@ -75,7 +75,6 @@ struct Recipe(Movable):
                 "tools/native_test_support.mojo",
                 "tools/native_test_support.py",
                 "tools/affected.py",
-                "tools/suite_key.py",
             ],
         )
         var program = "#!/bin/sh\nprintf '%s' '" + String(OUTPUT) + "'\n"
