@@ -330,6 +330,12 @@ The winner-seed caller keeps its reviewed token digest.
 Each declaration stays unique.
 A changed operation is refused.
 
+Mojo checks the live score caller inventory.
+The score helper name appears twice, only in the Map module.
+The station helper name appears three times, only in the Map module.
+A comment or a string stays allowed.
+A new executable name is refused.
+
 ## Candidate certificate
 
 A certificate contains a stored incumbent point and its road parameter.
