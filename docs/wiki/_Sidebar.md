@@ -139,6 +139,10 @@
 - [Audio-aligned game faces](Audio-aligned-game-faces)
 - [Converted assets](Converted-assets)
 - [Mesh quality](Mesh-quality)
+- [Garments](Garments)
+- [Outfits and armor](Outfits-and-armor)
+- [Cloth and spring bones](Cloth-and-spring-bones)
+- [Attire estimates](Attire-estimates)
 - [Segment inertia](Segment-inertia)
 
 **Explanation**

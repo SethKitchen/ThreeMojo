@@ -592,7 +592,7 @@ A checked box records implemented scope. It does not establish engineering or cl
 The anatomy combines measured inputs with authored templates. See the [bounded validity report](https://github.com/SethKitchen/ThreeMojo/wiki/Anatomy-validity) for template estimates, numerical evidence and unsupported uses.
 
 <details>
-<summary>Implemented: 56</summary>
+<summary>Implemented: 60</summary>
 
 - [x] [Mixamo animations](https://github.com/SethKitchen/ThreeMojo/wiki/Mixamo-animations): download every Mixamo animation from your own Adobe account, retarget it onto the game humanoid, and bake one `.glb`. Run live against Mixamo [#849](https://github.com/SethKitchen/ThreeMojo/issues/849)
 - [x] [Audio-aligned game faces](https://github.com/SethKitchen/ThreeMojo/wiki/Audio-aligned-game-faces): caller-provided phonemes or visemes, audio-clock transport, preserved facial LOD and validated glTF bakes [#299](https://github.com/SethKitchen/ThreeMojo/issues/299)
@@ -624,6 +624,10 @@ The anatomy combines measured inputs with authored templates. See the [bounded v
 - [x] [Canonical anatomy pair diagnostics](https://github.com/SethKitchen/ThreeMojo/wiki/Anatomy-validity#geometry-diagnostics): complete selected-side pair inventory, tissue-class execution, bounded sampling and explicit unsupported domains [#596](https://github.com/SethKitchen/ThreeMojo/issues/596)
 - [x] [Canonical anatomy overlap repair](https://github.com/SethKitchen/ThreeMojo/wiki/Anatomy-validity#localize-sampled-overlaps): source-bound witness localization at three grids, classified bone, knee and spine overlaps, and zero-volume interface rules [#595](https://github.com/SethKitchen/ThreeMojo/issues/595)
 - [x] [Segment inertia](https://github.com/SethKitchen/ThreeMojo/wiki/Segment-inertia): mass, center of mass and inertia tensor of a thigh, a shank and a foot [#326](https://github.com/SethKitchen/ThreeMojo/issues/326)
+- [x] [Garments](https://github.com/SethKitchen/ThreeMojo/wiki/Garments): skin shells with clean hems, fabrics with true-size bump maps, dyes, wear, a wardrobe, and garments fitted to any body [#851](https://github.com/SethKitchen/ThreeMojo/issues/851)
+- [x] [Outfits and armor](https://github.com/SethKitchen/ThreeMojo/wiki/Outfits-and-armor): dressing from the skin out, rigid and lamed plate, sockets, a shield and a sword, saved outfits [#852](https://github.com/SethKitchen/ThreeMojo/issues/852)
+- [x] [Cloth and spring bones](https://github.com/SethKitchen/ThreeMojo/wiki/Cloth-and-spring-bones): VRM-style spring chains, and XPBD cloaks solved by color on CPU threads or a GPU [#853](https://github.com/SethKitchen/ThreeMojo/issues/853)
+- [x] [Attire estimates](https://github.com/SethKitchen/ThreeMojo/wiki/Attire-estimates): garment and worn mass, locomotion cost, coverage, protection at a point, noise and visibility, with evidence grades [#854](https://github.com/SethKitchen/ThreeMojo/issues/854)
 - [x] [Persistent scene water](https://github.com/SethKitchen/ThreeMojo/wiki/Water#animate-it): `WaterScene` keeps its state and composes with a scene. `GpuWater` shades it on a CUDA or Apple Metal GPU, with CPU comparisons and 1080p benchmarks [#300](https://github.com/SethKitchen/ThreeMojo/issues/300)
 - [x] [Water](https://github.com/SethKitchen/ThreeMojo/wiki/Water): a Clearwater shallow-water still, with spectrum, ripples, caustics and glare [#327](https://github.com/SethKitchen/ThreeMojo/issues/327)
 - [x] [Vegetation](https://github.com/SethKitchen/ThreeMojo/wiki/Vegetation): ten million culled grass blades, gusts, dirt and a trail, swaying trees grown by space colonization, and a clouded sky

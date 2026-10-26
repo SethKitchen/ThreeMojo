@@ -4,6 +4,8 @@
 
 The first subject is the humanoid. The leg bones are the femur, tibia, fibula and patella, plus the knee tissues. Named muscles, vessels, lymph, nerves, skin and hair complete that limb. `assemble_leg` connects the limb. The foot adds twenty-six bones and the soft tissues distal to the plafond. `assemble_foot` connects that foot.
 
+The attire subject dresses the game humanoid. Each garment is a shell of the wearer's own skin, cut at clean hems and layered from the skin out. Plate rides its bones, cloaks and scabbards swing, and estimates give mass, cost and protection. See [Garments](Garments), [Outfits and armor](Outfits-and-armor), [Cloth and spring bones](Cloth-and-spring-bones) and [Attire estimates](Attire-estimates).
+
 The water subject ports Clearwater. See [Water](Water).
 
 The vegetation subject grows a summer meadow: grass in clusters with levels of detail, wind, poppies, leafy trees, boulders and a painted sky. See [Vegetation](Vegetation) and [Why grass is drawn in clusters](Why-grass-is-drawn-in-clusters).
@@ -30,6 +32,26 @@ See [Femur](Femur), [Tibia](Tibia), [Fibula](Fibula), [Patella](Patella), [Knee]
 
 ```text
 extensions/
+  attire/
+    kinds.mojo         slots, layers, fabrics, articulations, dyes and wear
+    quantities.mojo    ArealDensity
+    fabric.mojo        each fabric's constants and look
+    cover.mojo         what a garment covers, joint by joint
+    mesh_ops.mojo      weld, cut along a level, merge
+    shell.mojo         a garment's shell from the skin
+    garment.mojo       Garment and the wardrobe
+    dye.mojo           dye patterns, wear and paint
+    surface.mojo       texture coordinates and bump maps
+    plates.mojo        rigid plate and lames
+    outfit.mojo        Outfit and dress
+    binding.mojo       garments made elsewhere, fitted to any body
+    sockets.mojo       named places that ride bones
+    props.mojo         a heater shield, a sword in its scabbard
+    preset.mojo        saved outfits and dressed bakes
+    springs.mojo       VRM-style spring chains
+    cloth.mojo         XPBD cloth and cloaks
+    cloth_gpu.mojo     the cloth solve on a GPU
+    estimate.mojo      mass, cost, coverage and protection
   humanoid/
     spec.mojo          HumanoidSpec: stature, sex, athleticism and genome
     genome.mojo        Genome, Gene, Expression, inheritance

@@ -1,0 +1,198 @@
+# Copyright (c) 2026 Seth Kitchen, PE
+# SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
+# Noncommercial use is free; commercial use requires a paid license.
+# See LICENSE, LICENSE-COMMERCIAL.md and THIRD-PARTY-NOTICES.md.
+
+"""Tests for a garment's dyes, its patterns and its wear."""
+
+from core.buffer_attribute import BufferAttribute
+from core.buffer_geometry import COLOR, POSITION, BufferGeometry
+from extensions.attire.dye import (
+    DYE,
+    TRIM_LEVEL,
+    WEAR,
+    dye_pattern,
+    paint,
+    pattern_values,
+    soil,
+    stain,
+    worn_color,
+)
+from extensions.attire.kinds import (
+    BLOOD,
+    DAMAGE,
+    DIRT,
+    PARTY,
+    PRIMARY_DYE,
+    QUARTERLY,
+    SECONDARY_DYE,
+    SOLID,
+    STRIPES,
+    TRIM_DYE,
+    WET,
+    DyePattern,
+    WearKind,
+)
+from extensions.attire.shell import COVER
+from extensions.humanoid.rig.joints import HIPS, RIGHT_UPPER_ARM, SPINE
+from math.vector3 import Vector3
+from render.framebuffer import Color
+from std.math import nan
+from std.testing import (
+    TestSuite,
+    assert_almost_equal,
+    assert_equal,
+    assert_raises,
+    assert_true,
+)
+from tests._attire_fixtures import empty_mesh, line_rig, strip
+from units.si import Length, METER
+
+
+def _sheet() raises -> BufferGeometry:
+    """Return a strip from x = -0.5 to 0.5, y = 0 to -1, fully covered."""
+    var mesh = strip(0, 4, HIPS)
+    mesh.set_attribute(
+        String(COVER), BufferAttribute(List[Float32](length=10, fill=1), 1)
+    )
+    return mesh^
+
+
+def test_patterns_sign_each_vertex() raises:
+    var rig = line_rig()
+    var mesh = _sheet()
+    # Vertex 0 is at x = -0.5, vertex 1 at x = 0.5; the line rig's right
+    # arm stands at plus x.
+    var solid = pattern_values(mesh, rig, SOLID)
+    assert_equal(solid[0], 1)
+    var party = pattern_values(mesh, rig, PARTY)
+    assert_true(party[0] < 0 and party[1] > 0)
+    # Mirror the rig: the right arm at minus x. The wearer's right still
+    # takes the primary dye.
+    var mirrored = rig.copy()
+    mirrored.joints[RIGHT_UPPER_ARM.value] = Vector3(-5, 0, 0)
+    var flipped = pattern_values(mesh, mirrored, PARTY)
+    assert_true(flipped[0] > 0 and flipped[1] < 0)
+    var quarters = pattern_values(mesh, rig, QUARTERLY)
+    assert_true(quarters[2] > 0 and quarters[3] < 0)
+    var stripes = pattern_values(mesh, rig, STRIPES)
+    assert_equal(len(stripes), 10)
+    with assert_raises(contains="named pattern"):
+        _ = pattern_values(mesh, rig, DyePattern(8))
+
+
+def test_a_pattern_cuts_crisp_boundaries_and_trims_hems() raises:
+    var rig = line_rig()
+    var mesh = _sheet()
+    # The lowest rung is on the hem.
+    var covered = mesh.clone_attribute(String(COVER))
+    covered.set_component(8, 0, TRIM_LEVEL - 0.3)
+    covered.set_component(9, 0, TRIM_LEVEL - 0.3)
+    mesh.set_attribute(String(COVER), covered^)
+    var dyed = dye_pattern(mesh, rig, PARTY)
+    ref weights = dyed.attribute_view(String(DYE))
+    var channels = List[Int](length=4, fill=0)
+    for v in range(weights.count()):
+        var total = Float32(0)
+        for c in range(4):
+            total += weights.component(v, c)
+            if weights.component(v, c) == 1:
+                channels[c] += 1
+        assert_equal(total, 1)
+    assert_true(channels[PRIMARY_DYE.value] > 0)
+    assert_true(channels[SECONDARY_DYE.value] > 0)
+    assert_true(channels[TRIM_DYE.value] > 0)
+    # Every pattern makes a mesh; a stripe's boundary splits the sheet.
+    for pattern in [SOLID, STRIPES, QUARTERLY]:
+        assert_true(dye_pattern(_sheet(), rig, pattern).triangle_count() > 0)
+    with assert_raises(contains="named pattern"):
+        _ = dye_pattern(mesh, rig, DyePattern(-2))
+
+
+def test_stains_and_dirt_add_wear() raises:
+    var mesh = _sheet()
+    stain(mesh, BLOOD, Vector3(0.5, 0, 0), Length(0.3, METER), 0.8)
+    ref wear = mesh.attribute_view(String(WEAR))
+    assert_almost_equal(wear.component(1, BLOOD.value), 0.8)
+    assert_equal(wear.component(0, BLOOD.value), 0)
+    # A second stain adds, and no channel passes one.
+    stain(mesh, BLOOD, Vector3(0.5, 0, 0), Length(0.3, METER), 0.8)
+    assert_equal(mesh.attribute_view(String(WEAR)).component(1, 1), 1)
+    soil(mesh, Length(0.5, METER), 0.6)
+    ref soiled = mesh.attribute_view(String(WEAR))
+    # The lowest rung is dirtiest; above the reach there is no dirt.
+    assert_almost_equal(soiled.component(8, DIRT.value), 0.6)
+    assert_equal(soiled.component(0, DIRT.value), 0)
+    soil(mesh, Length(0.5, METER), 0.6)
+    assert_equal(mesh.attribute_view(String(WEAR)).component(8, 0), 1)
+    # A fresh garment gets wear from dirt alone.
+    var fresh = _sheet()
+    soil(fresh, Length(2, METER), 0.1)
+    assert_true(fresh.has_attribute(String(WEAR)))
+    var spot = Vector3(0, 0, 0)
+    with assert_raises(contains="named channel"):
+        stain(mesh, WearKind(9), spot, Length(1, METER), 0.5)
+    with assert_raises(contains="positive radius"):
+        stain(mesh, DIRT, spot, Length(0, METER), 0.5)
+    with assert_raises(contains="positive radius"):
+        stain(mesh, DIRT, spot, Length(nan[DType.float32](), METER), 0.5)
+    with assert_raises(contains="zero through one"):
+        stain(mesh, DIRT, spot, Length(1, METER), -0.1)
+    with assert_raises(contains="zero through one"):
+        stain(mesh, DIRT, spot, Length(1, METER), 1.1)
+    with assert_raises(contains="positive reach"):
+        soil(mesh, Length(-1, METER), 0.5)
+    with assert_raises(contains="zero through one"):
+        soil(mesh, Length(1, METER), -0.5)
+    with assert_raises(contains="zero through one"):
+        soil(mesh, Length(1, METER), 2)
+
+
+def test_wear_darkens_reddens_and_scorches() raises:
+    var white = Vector3(1, 1, 1)
+    var clean = worn_color(white, [0, 0, 0, 0])
+    assert_equal(clean.x, 1)
+    var bloody = worn_color(white, [0, 1, 0, 0])
+    assert_true(bloody.x > bloody.y)
+    var wet = worn_color(white, [0, 0, 1, 0])
+    assert_almost_equal(wet.y, 0.6)
+    var dirty = worn_color(white, [1, 0, 0, 0])
+    assert_true(dirty.x < 0.5 and dirty.x > dirty.z)
+    var burnt = worn_color(white, [0, 0, 0, 1])
+    assert_true(burnt.x < 0.5)
+
+
+def test_paint_mixes_dyes_then_wear() raises:
+    var rig = line_rig()
+    var dyed = dye_pattern(_sheet(), rig, SOLID)
+    var dyes = List[Color](length=4, fill=Color(255, 255, 255))
+    dyes[0] = Color(255, 0, 0)
+    paint(dyed, dyes)
+    ref colors = dyed.attribute_view(String(COLOR))
+    assert_almost_equal(colors.component(0, 0), 1)
+    assert_almost_equal(colors.component(0, 1), 0)
+    stain(dyed, WET, Vector3(0, 0, 0), Length(5, METER), 1)
+    paint(dyed, dyes)
+    assert_true(dyed.attribute_view(String(COLOR)).component(0, 0) < 1)
+    with assert_raises(contains="four dyes"):
+        paint(dyed, [Color(0, 0, 0)])
+
+
+def test_an_empty_garment_dyes_and_wears_nothing() raises:
+    var rig = line_rig()
+    var empty = empty_mesh()
+    empty.set_attribute(String(COVER), BufferAttribute(List[Float32](), 1))
+    assert_equal(len(pattern_values(empty, rig, QUARTERLY)), 0)
+    var piece = dye_pattern(empty, rig, PARTY)
+    assert_equal(piece.vertex_count(), 0)
+    stain(piece, BLOOD, Vector3(0, 0, 0), Length(0.1, METER), 1)
+    soil(piece, Length(0.3, METER), 0.5)
+    paint(
+        piece,
+        [Color(1, 2, 3), Color(4, 5, 6), Color(7, 8, 9), Color(10, 11, 12)],
+    )
+    assert_equal(piece.attribute_view(String(COLOR)).count(), 0)
+
+
+def main() raises:
+    TestSuite.discover_tests[__functions_in_module()]().run()

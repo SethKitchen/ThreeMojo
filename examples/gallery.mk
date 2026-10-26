@@ -176,6 +176,8 @@ $(call gallery,game_humanoid,game_humanoid)
 $(call gallery,hairstyles,hairstyles)
 $(call gallery,genomes,genomes)
 $(call gallery,family,family)
+# Three people dressed from the skin out walk: cloth, mail, plate, a cloak and a sword.
+$(call gallery,armory,armory)
 $(call gallery,talking,talking)
 $(call gallery,expressions,expressions)
 # The CPU fallback upscaler beside the full-size render. It is not DLSS, and no image of it is tracked.

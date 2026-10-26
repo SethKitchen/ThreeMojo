@@ -5180,13 +5180,51 @@ EDGES = json.loads(r'''
   },
   "tools/compile_fail_expectations.json": {
     "before_sha256": "cae00c1721392c75b10af5793e6de851d963350c8396e405ef0233c19af5b723",
-    "after_sha256": "b0999d4ca1624909e6d1ac2d0c6948b8833b3d25824efd623068457b550e1c43",
+    "after_sha256": "14a1c703e3e3b7c5ba2f4fc3954a824124306f71ca2f9d9394f2f9768a4b9dad",
     "before_token_sha256": "f4adb6494fee3e96a00ed12990e3c1979b42e31df987492561c08e8354ac4ba2",
-    "after_token_sha256": "fb3bbe6c365fa7d2886229bea3dbec6a3adaefa3d92d27f2b1e903926e4f5a90",
+    "after_token_sha256": "70f6d2cf91222bfd5c960140358c42b6eaab50cc460a64f7dfa5749112aca8bf",
     "edits": [
       {
-        "start": 349,
-        "stop": 361,
+        "start": 83,
+        "stop": 95,
+        "before": [],
+        "after": [
+          "    ]\n",
+          "  },\n",
+          "  \"tests/compile_fail/a_blow_outcome_is_not_a_bare_int.mojo\": {\n",
+          "    \"errors\": [\n",
+          "      {\n",
+          "        \"line\": 12,\n",
+          "        \"column\": 21,\n",
+          "        \"message\": \"invalid call to 'require_outcome': value passed to 'outcome' cannot be converted from 'IntLiteral[1]' to 'BlowOutcome'\"\n",
+          "      }\n",
+          "    ],\n",
+          "    \"notes\": [\n",
+          "      \"function declared here\"\n"
+        ]
+      },
+      {
+        "start": 257,
+        "stop": 269,
+        "before": [],
+        "after": [
+          "  \"tests/compile_fail/a_bump_is_not_a_bare_int.mojo\": {\n",
+          "    \"errors\": [\n",
+          "      {\n",
+          "        \"line\": 12,\n",
+          "        \"column\": 18,\n",
+          "        \"message\": \"invalid call to 'require_bump': value passed to 'bump' cannot be converted from 'IntLiteral[1]' to 'Bump'\"\n",
+          "      }\n",
+          "    ],\n",
+          "    \"notes\": [\n",
+          "      \"function declared here\"\n",
+          "    ]\n",
+          "  },\n"
+        ]
+      },
+      {
+        "start": 373,
+        "stop": 385,
         "before": [],
         "after": [
           "    ]\n",
@@ -5204,33 +5242,40 @@ EDGES = json.loads(r'''
         ]
       },
       {
-        "start": 1827,
-        "stop": 1837,
+        "start": 1151,
+        "stop": 1187,
         "before": [],
         "after": [
-          "  \"tests/compile_fail/a_kit_kind_is_not_a_bare_int.mojo\": {\n",
+          "  \"tests/compile_fail/a_dye_channel_is_not_a_bare_int.mojo\": {\n",
           "    \"errors\": [\n",
           "      {\n",
           "        \"line\": 12,\n",
           "        \"column\": 25,\n",
-          "        \"message\": \"cannot implicitly convert 'IntLiteral[0]' value to 'KitKind'\"\n",
+          "        \"message\": \"invalid call to 'require_dye_channel': value passed to 'channel' cannot be converted from 'IntLiteral[1]' to 'DyeChannel'\"\n",
           "      }\n",
           "    ],\n",
-          "    \"notes\": []\n",
-          "  },\n"
-        ]
-      },
-      {
-        "start": 2726,
-        "stop": 2738,
-        "before": [],
-        "after": [
-          "  \"tests/compile_fail/a_plant_kind_is_not_a_bare_int.mojo\": {\n",
+          "    \"notes\": [\n",
+          "      \"function declared here\"\n",
+          "    ]\n",
+          "  },\n",
+          "  \"tests/compile_fail/a_dye_pattern_is_not_a_bare_int.mojo\": {\n",
           "    \"errors\": [\n",
           "      {\n",
           "        \"line\": 12,\n",
-          "        \"column\": 24,\n",
-          "        \"message\": \"invalid call to 'require_plant_kind': value passed to 'kind' cannot be converted from 'IntLiteral[2]' to 'PlantKind'\"\n",
+          "        \"column\": 25,\n",
+          "        \"message\": \"invalid call to 'require_dye_pattern': value passed to 'pattern' cannot be converted from 'IntLiteral[1]' to 'DyePattern'\"\n",
+          "      }\n",
+          "    ],\n",
+          "    \"notes\": [\n",
+          "      \"function declared here\"\n",
+          "    ]\n",
+          "  },\n",
+          "  \"tests/compile_fail/a_fabric_kind_is_not_a_bare_int.mojo\": {\n",
+          "    \"errors\": [\n",
+          "      {\n",
+          "        \"line\": 12,\n",
+          "        \"column\": 25,\n",
+          "        \"message\": \"invalid call to 'require_fabric_kind': value passed to 'kind' cannot be converted from 'IntLiteral[1]' to 'FabricKind'\"\n",
           "      }\n",
           "    ],\n",
           "    \"notes\": [\n",
@@ -5240,14 +5285,82 @@ EDGES = json.loads(r'''
         ]
       },
       {
-        "start": 3038,
-        "stop": 3078,
+        "start": 1463,
+        "stop": 1475,
         "before": [],
         "after": [
+          "  },\n",
+          "  \"tests/compile_fail/a_garment_layer_is_not_a_bare_int.mojo\": {\n",
+          "    \"errors\": [\n",
+          "      {\n",
+          "        \"line\": 12,\n",
+          "        \"column\": 19,\n",
+          "        \"message\": \"invalid call to 'require_layer': value passed to 'layer' cannot be converted from 'IntLiteral[1]' to 'Layer'\"\n",
+          "      }\n",
+          "    ],\n",
+          "    \"notes\": [\n",
+          "      \"function declared here\"\n",
+          "    ]\n"
+        ]
+      },
+      {
+        "start": 1898,
+        "stop": 1908,
+        "before": [],
+        "after": [
+          "  },\n",
+          "  \"tests/compile_fail/a_kit_kind_is_not_a_bare_int.mojo\": {\n",
+          "    \"errors\": [\n",
+          "      {\n",
+          "        \"line\": 12,\n",
+          "        \"column\": 25,\n",
+          "        \"message\": \"cannot implicitly convert 'IntLiteral[0]' value to 'KitKind'\"\n",
+          "      }\n",
+          "    ],\n",
+          "    \"notes\": []\n"
+        ]
+      },
+      {
+        "start": 2606,
+        "stop": 2616,
+        "before": [],
+        "after": [
+          "  \"tests/compile_fail/a_part_fill_is_not_a_bare_int.mojo\": {\n",
+          "    \"errors\": [\n",
+          "      {\n",
+          "        \"line\": 12,\n",
+          "        \"column\": 26,\n",
+          "        \"message\": \"cannot implicitly convert 'IntLiteral[0]' value to 'PartFill'\"\n",
           "      }\n",
           "    ],\n",
           "    \"notes\": []\n",
+          "  },\n"
+        ]
+      },
+      {
+        "start": 2806,
+        "stop": 2818,
+        "before": [],
+        "after": [
+          "    ]\n",
           "  },\n",
+          "  \"tests/compile_fail/a_plant_kind_is_not_a_bare_int.mojo\": {\n",
+          "    \"errors\": [\n",
+          "      {\n",
+          "        \"line\": 12,\n",
+          "        \"column\": 24,\n",
+          "        \"message\": \"invalid call to 'require_plant_kind': value passed to 'kind' cannot be converted from 'IntLiteral[2]' to 'PlantKind'\"\n",
+          "      }\n",
+          "    ],\n",
+          "    \"notes\": [\n",
+          "      \"function declared here\"\n"
+        ]
+      },
+      {
+        "start": 3124,
+        "stop": 3154,
+        "before": [],
+        "after": [
           "  \"tests/compile_fail/a_scale_source_is_not_a_bare_int.mojo\": {\n",
           "    \"errors\": [\n",
           "      {\n",
@@ -5268,27 +5381,59 @@ EDGES = json.loads(r'''
           "    ],\n",
           "    \"notes\": []\n",
           "  },\n",
-          "  \"tests/compile_fail/a_part_fill_is_not_a_bare_int.mojo\": {\n",
-          "    \"errors\": [\n",
-          "      {\n",
-          "        \"line\": 12,\n",
-          "        \"column\": 26,\n",
-          "        \"message\": \"cannot implicitly convert 'IntLiteral[0]' value to 'PartFill'\"\n",
-          "      }\n",
-          "    ],\n",
-          "    \"notes\": []\n",
-          "  },\n",
           "  \"tests/compile_fail/a_scan_format_is_not_a_bare_int.mojo\": {\n",
           "    \"errors\": [\n",
           "      {\n",
           "        \"line\": 12,\n",
           "        \"column\": 28,\n",
-          "        \"message\": \"cannot implicitly convert 'IntLiteral[0]' value to 'ScanFormat'\"\n"
+          "        \"message\": \"cannot implicitly convert 'IntLiteral[0]' value to 'ScanFormat'\"\n",
+          "      }\n",
+          "    ],\n",
+          "    \"notes\": []\n",
+          "  },\n"
         ]
       },
       {
-        "start": 3392,
-        "stop": 3402,
+        "start": 3427,
+        "stop": 3439,
+        "before": [],
+        "after": [
+          "  \"tests/compile_fail/a_slot_is_not_a_bare_int.mojo\": {\n",
+          "    \"errors\": [\n",
+          "      {\n",
+          "        \"line\": 12,\n",
+          "        \"column\": 18,\n",
+          "        \"message\": \"invalid call to 'require_slot': value passed to 'slot' cannot be converted from 'IntLiteral[1]' to 'Slot'\"\n",
+          "      }\n",
+          "    ],\n",
+          "    \"notes\": [\n",
+          "      \"function declared here\"\n",
+          "    ]\n",
+          "  },\n"
+        ]
+      },
+      {
+        "start": 3445,
+        "stop": 3457,
+        "before": [],
+        "after": [
+          "      }\n",
+          "    ],\n",
+          "    \"notes\": [\n",
+          "      \"function declared here\"\n",
+          "    ]\n",
+          "  },\n",
+          "  \"tests/compile_fail/a_socket_is_not_a_bare_int.mojo\": {\n",
+          "    \"errors\": [\n",
+          "      {\n",
+          "        \"line\": 12,\n",
+          "        \"column\": 22,\n",
+          "        \"message\": \"invalid call to 'socket_joint': value passed to 'socket' cannot be converted from 'IntLiteral[1]' to 'Socket'\"\n"
+        ]
+      },
+      {
+        "start": 3554,
+        "stop": 3564,
         "before": [],
         "after": [
           "  },\n",
@@ -5301,6 +5446,44 @@ EDGES = json.loads(r'''
           "      }\n",
           "    ],\n",
           "    \"notes\": []\n"
+        ]
+      },
+      {
+        "start": 4467,
+        "stop": 4479,
+        "before": [],
+        "after": [
+          "  \"tests/compile_fail/a_wear_kind_is_not_a_bare_int.mojo\": {\n",
+          "    \"errors\": [\n",
+          "      {\n",
+          "        \"line\": 12,\n",
+          "        \"column\": 23,\n",
+          "        \"message\": \"invalid call to 'require_wear_kind': value passed to 'kind' cannot be converted from 'IntLiteral[1]' to 'WearKind'\"\n",
+          "      }\n",
+          "    ],\n",
+          "    \"notes\": [\n",
+          "      \"function declared here\"\n",
+          "    ]\n",
+          "  },\n"
+        ]
+      },
+      {
+        "start": 4980,
+        "stop": 4992,
+        "before": [],
+        "after": [
+          "      }\n",
+          "    ],\n",
+          "    \"notes\": [\n",
+          "      \"function declared here\"\n",
+          "    ]\n",
+          "  },\n",
+          "  \"tests/compile_fail/an_articulation_is_not_a_bare_int.mojo\": {\n",
+          "    \"errors\": [\n",
+          "      {\n",
+          "        \"line\": 12,\n",
+          "        \"column\": 26,\n",
+          "        \"message\": \"invalid call to 'require_articulation': value passed to 'articulation' cannot be converted from 'IntLiteral[1]' to 'Articulation'\"\n"
         ]
       }
     ]
@@ -5430,9 +5613,9 @@ EDGE_SHA256 = {'core/deform.mojo': 'b6afec67eea77b1a76cae98df1b4399de366b2a82878
  'tools/carla_lane_oracle/test_typed_owned_operations.py': '56a59b04408d344079048ccc8a32e3a5c0e1af4505cb06aa281c01364738b1eb',
  'tools/carla_lane_oracle/test_witness_format_contracts.py': '554b6db980e099747c3d536eaf722f210f0f17d3f78983cf08bb180c588a22ae',
  'tools/carla_lane_oracle/translated_parameter_resolution.py': '1c63297c0097ce50b9f314ba321e7f4d04c009f6379552a84adefb62a2a7f375',
- 'tools/compile_fail_expectations.json': '727e73ac157caad86d2072e5ea089c454ebe0f078c50e72871906dcf0dfce467',
+ 'tools/compile_fail_expectations.json': 'ccf12a11df75fdd6967d1c3af3efaadc5ed579ddfa897533a7200538b098c1a0',
  'tools/test_conditioned_coverage_loops.py': 'f88451e7313fd84cc788847b1c960dc395b98736779a92c81a1d056ff2977520'}
-DATA_SHA256 = 'aeb09c5ca3cd04196137fd0961187c029631889f821a538347f34b924431fa99'
+DATA_SHA256 = '3623304d6513ada068e1d6262a8816227568389c1e9487e83fa47f0b486ad8be'
 # END FIXED PR780 SUCCESSOR DATA
 
 
@@ -5448,7 +5631,7 @@ def sha(raw):
 def _index_snapshot():
     """Authenticate and detach the fixed per-edge digests and bound inputs."""
     require(type(DATA_SHA256) is str, 'authority digest selector is not a builtin string')
-    require(DATA_SHA256 == 'aeb09c5ca3cd04196137fd0961187c029631889f821a538347f34b924431fa99', 'authority digest selector changed')
+    require(DATA_SHA256 == '3623304d6513ada068e1d6262a8816227568389c1e9487e83fa47f0b486ad8be', 'authority digest selector changed')
     encoded = json.dumps({'edges': EDGE_SHA256, 'bound_inputs': BOUND_INPUTS},
                          sort_keys=True, separators=(',', ':'))
     require(sha(encoded) == DATA_SHA256, 'fixed source inverse data changed')

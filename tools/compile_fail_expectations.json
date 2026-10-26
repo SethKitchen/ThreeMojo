@@ -83,6 +83,18 @@
       "candidate not viable: value passed to 'blend' cannot be converted from 'IntLiteral[7]' to 'Blending'"
     ]
   },
+  "tests/compile_fail/a_blow_outcome_is_not_a_bare_int.mojo": {
+    "errors": [
+      {
+        "line": 12,
+        "column": 21,
+        "message": "invalid call to 'require_outcome': value passed to 'outcome' cannot be converted from 'IntLiteral[1]' to 'BlowOutcome'"
+      }
+    ],
+    "notes": [
+      "function declared here"
+    ]
+  },
   "tests/compile_fail/a_body_id_is_not_a_bare_int.mojo": {
     "errors": [
       {
@@ -241,6 +253,18 @@
       "candidate not viable: missing required argument: 'copy'",
       "candidate not viable: missing required argument: 'move'",
       "candidate not viable: value passed to 'kind' cannot be converted from 'IntLiteral[2]' to 'BufferKind'"
+    ]
+  },
+  "tests/compile_fail/a_bump_is_not_a_bare_int.mojo": {
+    "errors": [
+      {
+        "line": 12,
+        "column": 18,
+        "message": "invalid call to 'require_bump': value passed to 'bump' cannot be converted from 'IntLiteral[1]' to 'Bump'"
+      }
+    ],
+    "notes": [
+      "function declared here"
     ]
   },
   "tests/compile_fail/a_bvh_channel_is_not_a_bare_int.mojo": {
@@ -1125,6 +1149,42 @@
     ],
     "notes": []
   },
+  "tests/compile_fail/a_dye_channel_is_not_a_bare_int.mojo": {
+    "errors": [
+      {
+        "line": 12,
+        "column": 25,
+        "message": "invalid call to 'require_dye_channel': value passed to 'channel' cannot be converted from 'IntLiteral[1]' to 'DyeChannel'"
+      }
+    ],
+    "notes": [
+      "function declared here"
+    ]
+  },
+  "tests/compile_fail/a_dye_pattern_is_not_a_bare_int.mojo": {
+    "errors": [
+      {
+        "line": 12,
+        "column": 25,
+        "message": "invalid call to 'require_dye_pattern': value passed to 'pattern' cannot be converted from 'IntLiteral[1]' to 'DyePattern'"
+      }
+    ],
+    "notes": [
+      "function declared here"
+    ]
+  },
+  "tests/compile_fail/a_fabric_kind_is_not_a_bare_int.mojo": {
+    "errors": [
+      {
+        "line": 12,
+        "column": 25,
+        "message": "invalid call to 'require_fabric_kind': value passed to 'kind' cannot be converted from 'IntLiteral[1]' to 'FabricKind'"
+      }
+    ],
+    "notes": [
+      "function declared here"
+    ]
+  },
   "tests/compile_fail/a_facade_style_is_not_a_bare_int.mojo": {
     "errors": [
       {
@@ -1401,6 +1461,18 @@
       }
     ],
     "notes": []
+  },
+  "tests/compile_fail/a_garment_layer_is_not_a_bare_int.mojo": {
+    "errors": [
+      {
+        "line": 12,
+        "column": 19,
+        "message": "invalid call to 'require_layer': value passed to 'layer' cannot be converted from 'IntLiteral[1]' to 'Layer'"
+      }
+    ],
+    "notes": [
+      "function declared here"
+    ]
   },
   "tests/compile_fail/a_gear_is_not_a_bare_int.mojo": {
     "errors": [
@@ -2532,6 +2604,16 @@
       "function declared here"
     ]
   },
+  "tests/compile_fail/a_part_fill_is_not_a_bare_int.mojo": {
+    "errors": [
+      {
+        "line": 12,
+        "column": 26,
+        "message": "cannot implicitly convert 'IntLiteral[0]' value to 'PartFill'"
+      }
+    ],
+    "notes": []
+  },
   "tests/compile_fail/a_part_id_is_not_a_bare_int.mojo": {
     "errors": [
       {
@@ -3060,16 +3142,6 @@
     ],
     "notes": []
   },
-  "tests/compile_fail/a_part_fill_is_not_a_bare_int.mojo": {
-    "errors": [
-      {
-        "line": 12,
-        "column": 26,
-        "message": "cannot implicitly convert 'IntLiteral[0]' value to 'PartFill'"
-      }
-    ],
-    "notes": []
-  },
   "tests/compile_fail/a_scan_format_is_not_a_bare_int.mojo": {
     "errors": [
       {
@@ -3353,12 +3425,36 @@
       "function declared here"
     ]
   },
+  "tests/compile_fail/a_slot_is_not_a_bare_int.mojo": {
+    "errors": [
+      {
+        "line": 12,
+        "column": 18,
+        "message": "invalid call to 'require_slot': value passed to 'slot' cannot be converted from 'IntLiteral[1]' to 'Slot'"
+      }
+    ],
+    "notes": [
+      "function declared here"
+    ]
+  },
   "tests/compile_fail/a_snapshot_owner_is_not_a_bare_int.mojo": {
     "errors": [
       {
         "column": 26,
         "line": 15,
         "message": "invalid call to 'check_owner': value passed to 'owner' cannot be converted from 'IntLiteral[0]' to 'SnapshotOwner'"
+      }
+    ],
+    "notes": [
+      "function declared here"
+    ]
+  },
+  "tests/compile_fail/a_socket_is_not_a_bare_int.mojo": {
+    "errors": [
+      {
+        "line": 12,
+        "column": 22,
+        "message": "invalid call to 'socket_joint': value passed to 'socket' cannot be converted from 'IntLiteral[1]' to 'Socket'"
       }
     ],
     "notes": [
@@ -3390,16 +3486,6 @@
       "candidate not viable: missing required argument: 'move'",
       "candidate not viable: value passed to 'kind' cannot be converted from 'IntLiteral[0]' to 'SoftTissueKind'"
     ]
-  },
-  "tests/compile_fail/a_splat_model_is_not_a_bare_int.mojo": {
-    "errors": [
-      {
-        "line": 12,
-        "column": 28,
-        "message": "cannot implicitly convert 'IntLiteral[0]' value to 'SplatModel'"
-      }
-    ],
-    "notes": []
   },
   "tests/compile_fail/a_solve_status_is_not_a_bare_int.mojo": {
     "errors": [
@@ -3466,6 +3552,16 @@
     "notes": [
       "function declared here"
     ]
+  },
+  "tests/compile_fail/a_splat_model_is_not_a_bare_int.mojo": {
+    "errors": [
+      {
+        "line": 12,
+        "column": 28,
+        "message": "cannot implicitly convert 'IntLiteral[0]' value to 'SplatModel'"
+      }
+    ],
+    "notes": []
   },
   "tests/compile_fail/a_splat_part_is_not_a_bare_int.mojo": {
     "errors": [
@@ -4369,6 +4465,18 @@
       "function declared here"
     ]
   },
+  "tests/compile_fail/a_wear_kind_is_not_a_bare_int.mojo": {
+    "errors": [
+      {
+        "line": 12,
+        "column": 23,
+        "message": "invalid call to 'require_wear_kind': value passed to 'kind' cannot be converted from 'IntLiteral[1]' to 'WearKind'"
+      }
+    ],
+    "notes": [
+      "function declared here"
+    ]
+  },
   "tests/compile_fail/a_webp_transform_is_not_a_bare_int.mojo": {
     "errors": [
       {
@@ -4870,6 +4978,18 @@
         "column": 66,
         "line": 13,
         "message": "invalid call to 'arrow_helper': value passed to 'length' cannot be converted from 'FloatLiteral[2]' to 'Quantity[Int(1), Int(0), Int(0), Int(0)]'"
+      }
+    ],
+    "notes": [
+      "function declared here"
+    ]
+  },
+  "tests/compile_fail/an_articulation_is_not_a_bare_int.mojo": {
+    "errors": [
+      {
+        "line": 12,
+        "column": 26,
+        "message": "invalid call to 'require_articulation': value passed to 'articulation' cannot be converted from 'IntLiteral[1]' to 'Articulation'"
       }
     ],
     "notes": [

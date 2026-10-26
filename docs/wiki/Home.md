@@ -146,6 +146,10 @@ Look something up.
 - [Converted assets](Converted-assets)
 - [Mesh quality](Mesh-quality)
 - [Segment inertia](Segment-inertia)
+- [Garments](Garments)
+- [Outfits and armor](Outfits-and-armor)
+- [Cloth and spring bones](Cloth-and-spring-bones)
+- [Attire estimates](Attire-estimates)
 
 ## Explanation
 
