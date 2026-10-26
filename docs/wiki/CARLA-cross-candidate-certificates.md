@@ -418,6 +418,34 @@ The live witness keeps its file digest and its token digest.
 Two formatting edits restore the historical witness.
 A changed witness or a missing edit is refused.
 
+Mojo checks the reviewed cubic operation graphs.
+Four modules keep their reviewed operation spans.
+Each span appears once.
+A missing span or a repeated span is refused.
+
+Mojo checks the reviewed shared-helper package files.
+Four package files keep their reviewed digests.
+A changed package file is refused.
+
+Mojo checks the reviewed PR760 implementation sources.
+Four predecessor texts keep their reviewed digests.
+Four successor modules keep their reviewed digests.
+A changed implementation source is refused.
+
+Mojo checks the reviewed PR780 bound inputs.
+Four bound tests keep their reviewed digests.
+A changed bound input is refused.
+
+Mojo checks the reviewed full-audit authority files.
+The cleanup record keeps its reviewed digest.
+The PR760 image and the owner predecessor keep their digests.
+The consumer ledger keeps its reviewed digest.
+A changed authority file is refused.
+
+Mojo checks the reviewed migration records.
+Seventeen records keep their reviewed digests.
+A changed migration record is refused.
+
 ## Candidate certificate
 
 A certificate contains a stored incumbent point and its road parameter.
