@@ -318,6 +318,12 @@ The historical helper replaces that successor.
 The proof drops the try-only refusal.
 A changed graph is refused.
 
+Mojo checks the live shared bridge graphs.
+Eight trig helpers keep their reviewed function graphs.
+Six curve-bounds helpers keep their reviewed function graphs.
+The bounds helpers come from the reviewed reference source.
+A changed bridge is refused.
+
 ## Candidate certificate
 
 A certificate contains a stored incumbent point and its road parameter.

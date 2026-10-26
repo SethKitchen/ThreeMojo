@@ -470,6 +470,8 @@ struct _Parser:
     var alias_value: Int
     var jet_alias: String
     var value_alias: String
+    var fn_names: List[String]
+    var fn_nodes: List[String]
 
     def __init__(out self):
         """Create an empty parser."""
@@ -485,6 +487,8 @@ struct _Parser:
         self.alias_value = 0
         self.jet_alias = ""
         self.value_alias = ""
+        self.fn_names = List[String]()
+        self.fn_nodes = List[String]()
 
     def _done(self) -> Bool:
         """Return whether every token has been read.
@@ -1345,6 +1349,7 @@ struct _Parser:
         Raises:
             Error: The function is incomplete.
         """
+        var top = self.depth == 0
         _ = self._bump()
         var ident = self._expect_name()
         var generic = self._take_generic()
@@ -1370,7 +1375,11 @@ struct _Parser:
             fields += "," + _pair("returns", returns)
         if generic != "":
             fields += "," + _pair("mojo_type_parameters", generic)
-        return _node("FunctionDef", fields)
+        var node = _node("FunctionDef", fields)
+        if top:
+            self.fn_names.append(ident)
+            self.fn_nodes.append(node)
+        return node
 
     def _class(mut self, decorators: String) raises -> String:
         """Parse one class.
@@ -1590,6 +1599,35 @@ def reference_module_graph(source: String) raises -> String:
         Error: The source is not a supported reference module.
     """
     return sha256_hex(module_graph_json(source).as_bytes())
+
+
+def function_graph(source: String, name: String) raises -> String:
+    """Return the SHA-256 of one top-level function.
+
+    Args:
+        source: One module.
+        name: The function name.
+
+    Returns:
+        The hex digest of that function node.
+
+    Raises:
+        Error: The function is missing or repeated, or the source cannot
+            be parsed.
+    """
+    var parser = _Parser()
+    _ = parser.parse(source)
+    var found = 0
+    var node = String()
+    var index = 0
+    while index < len(parser.fn_names):
+        if parser.fn_names[index] == name:
+            found += 1
+            node = parser.fn_nodes[index]
+        index += 1
+    if found != 1:
+        _fail("missing or ambiguous function: " + name)
+    return sha256_hex(node.as_bytes())
 
 
 def primitive_graph(source: String) raises -> String:
