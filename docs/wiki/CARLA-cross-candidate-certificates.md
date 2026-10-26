@@ -301,6 +301,11 @@ Three cache-key edits restore the predecessor.
 That predecessor keeps the pinned use digest.
 A moved span or a changed record is refused.
 
+Mojo checks the live sampled reference graphs.
+The trig module keeps its reviewed token digest.
+The interval module keeps its reviewed token digest.
+A changed token is refused.
+
 ## Candidate certificate
 
 A certificate contains a stored incumbent point and its road parameter.
