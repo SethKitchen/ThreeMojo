@@ -312,6 +312,12 @@ The interval module keeps its reviewed syntax graph.
 The jet class keeps its reviewed primitive graph.
 A changed graph is refused.
 
+Mojo checks the live curve-bounds reference graph.
+The count-loop source keeps the reviewed envelope successor.
+The historical helper replaces that successor.
+The proof drops the try-only refusal.
+A changed graph is refused.
+
 ## Candidate certificate
 
 A certificate contains a stored incumbent point and its road parameter.

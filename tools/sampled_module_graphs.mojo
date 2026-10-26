@@ -520,6 +520,19 @@ struct _Parser:
             return False
         return self.texts[self.at] == text
 
+    def _keyword_next(self) -> Bool:
+        """Return whether the next tokens are a keyword argument.
+
+        Returns:
+            True when a name is followed by `=`.
+        """
+        if not self._kind(_NAME):
+            return False
+        var nxt = self.at + 1
+        if nxt >= len(self.kinds):
+            return False
+        return self.kinds[nxt] == _OP and self.texts[nxt] == "="
+
     def _is(self, text: String) -> Bool:
         """Return whether the next token is the name `text`.
 
@@ -618,7 +631,7 @@ struct _Parser:
             if word == "False":
                 return _node("Constant", _pair("value", "false"))
             if word == "None":
-                return _node("Constant", _pair("value", "null"))
+                return '["Constant",[]]'
             return _name(word, _load())
         if self._kind(_NUMBER):
             return _number(self._bump())
@@ -705,13 +718,33 @@ struct _Parser:
         """
         _ = self._bump()
         var args = String("[")
-        var first = True
+        var keywords = String("[")
+        var first_arg = True
+        var first_keyword = True
+        var saw_keyword = False
         if not self._op(")"):
             while True:
-                if not first:
-                    args += ","
-                first = False
-                args += self._expr()
+                if self._keyword_next():
+                    saw_keyword = True
+                    var name = self._bump()
+                    _ = self._bump()
+                    var value = self._expr()
+                    if not first_keyword:
+                        keywords += ","
+                    first_keyword = False
+                    keywords += _node(
+                        "keyword",
+                        _pair("arg", _json_str(name))
+                        + ","
+                        + _pair("value", value),
+                    )
+                else:
+                    if saw_keyword:
+                        _fail("unsupported reference syntax: keyword")
+                    if not first_arg:
+                        args += ","
+                    first_arg = False
+                    args += self._expr()
                 if self._op(","):
                     _ = self._bump()
                     if self._op(")"):
@@ -720,13 +753,14 @@ struct _Parser:
                 break
         self._expect_op(")")
         args += "]"
+        keywords += "]"
         return _node(
             "Call",
             _pair("func", func)
             + ","
             + _pair("args", args)
             + ","
-            + _pair("keywords", "[]"),
+            + _pair("keywords", keywords),
         )
 
     def _subscript(mut self, value: String) raises -> String:
@@ -821,8 +855,12 @@ struct _Parser:
             Error: A factor is not an expression.
         """
         var left = self._unary()
-        while self._op("*") or self._op("/"):
-            var op = "Mult" if self._op("*") else "Div"
+        while self._op("*") or self._op("/") or self._op("//"):
+            var op = "Mult"
+            if self._op("/"):
+                op = "Div"
+            elif self._op("//"):
+                op = "FloorDiv"
             _ = self._bump()
             var right = self._unary()
             left = _node(
@@ -1119,24 +1157,32 @@ struct _Parser:
         if not self._is("import"):
             _fail("unsupported reference syntax: import")
         _ = self._bump()
+        var wrapped = self._op("(")
+        if wrapped:
+            _ = self._bump()
         var names = String("[")
         var first = True
-        while True:
-            if not first:
-                names += ","
-            first = False
-            var ident = self._expect_name()
-            var fields = _pair("name", _json_str(ident))
-            if self._is("as"):
-                _ = self._bump()
-                fields += "," + _pair("asname", _json_str(self._expect_name()))
-            names += _node("alias", fields)
-            if self._op(","):
-                _ = self._bump()
-                if self._kind(_NEWLINE) or self._done():
-                    break
-                continue
-            break
+        if not (wrapped and self._op(")")):
+            while True:
+                if not first:
+                    names += ","
+                first = False
+                var ident = self._expect_name()
+                var fields = _pair("name", _json_str(ident))
+                if self._is("as"):
+                    _ = self._bump()
+                    fields += "," + _pair(
+                        "asname", _json_str(self._expect_name())
+                    )
+                names += _node("alias", fields)
+                if self._op(","):
+                    _ = self._bump()
+                    if self._kind(_NEWLINE) or self._done() or self._op(")"):
+                        break
+                    continue
+                break
+        if wrapped:
+            self._expect_op(")")
         names += "]"
         return _node(
             "ImportFrom",
@@ -1164,6 +1210,13 @@ struct _Parser:
             _ = self._bump()
             var test = self._expr()
             return _node("Assert", _pair("test", test))
+        if self._is("continue"):
+            _ = self._bump()
+            return '["Continue",[]]'
+        if self._is("raise"):
+            _ = self._bump()
+            var exc = self._expr()
+            return _node("Raise", _pair("exc", exc))
         if self._is("from"):
             return self._import()
         return self._expr_stmt()
@@ -1234,7 +1287,10 @@ struct _Parser:
         """
         self._expect_op("(")
         var args = String("[")
+        var defaults = String("[")
         var first = True
+        var first_default = True
+        var saw_default = False
         if not self._op(")"):
             while True:
                 if not first:
@@ -1245,6 +1301,15 @@ struct _Parser:
                 if self._op(":"):
                     _ = self._bump()
                     fields += "," + _pair("annotation", self._expr())
+                if self._op("="):
+                    _ = self._bump()
+                    if not first_default:
+                        defaults += ","
+                    first_default = False
+                    defaults += self._expr()
+                    saw_default = True
+                elif saw_default:
+                    _fail("unsupported reference syntax: default")
                 args += _node("arg", fields)
                 if self._op(","):
                     _ = self._bump()
@@ -1254,6 +1319,7 @@ struct _Parser:
                 break
         self._expect_op(")")
         args += "]"
+        defaults += "]"
         return _node(
             "arguments",
             _pair("posonlyargs", "[]")
@@ -1264,7 +1330,7 @@ struct _Parser:
             + ","
             + _pair("kw_defaults", "[]")
             + ","
-            + _pair("defaults", "[]"),
+            + _pair("defaults", defaults),
         )
 
     def _def(mut self, decorators: String) raises -> String:
