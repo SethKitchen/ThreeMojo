@@ -360,6 +360,12 @@ The three optional edits keep their reviewed names.
 Reversing those edits restores the count endpoint.
 A changed optional endpoint is refused.
 
+Mojo checks the reviewed count predecessor.
+The count endpoint keeps its file digest and its token digest.
+The three count edits keep their reviewed names.
+Reversing those edits restores the historical Map.
+A changed count endpoint is refused.
+
 ## Candidate certificate
 
 A certificate contains a stored incumbent point and its road parameter.
