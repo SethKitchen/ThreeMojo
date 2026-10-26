@@ -500,6 +500,10 @@ Mojo checks the reviewed PR776 bound inputs.
 5 inputs keep their reviewed digests.
 A changed PR776 bound input is refused.
 
+Mojo checks the reviewed shared-helper fixtures.
+4 fixtures keep their reviewed digests.
+A changed shared-helper fixture is refused.
+
 ## Candidate certificate
 
 A certificate contains a stored incumbent point and its road parameter.
