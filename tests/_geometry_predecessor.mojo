@@ -13,7 +13,7 @@ from tools._sha256 import sha256_hex
 comptime _GEOMETRY = "extensions/carla/geometry.mojo"
 """The live geometry file."""
 comptime _LIVE_SHA256 = (
-    "374fd1621142ec8354a29b24357503db7f45ce419cb39089b913b5c39b4e983e"
+    "94c59e3951b4137461c3f0f2d4c897e81b7a4dcb21d793feb0e4c8f8fa34cf4a"
 )
 """The file digest of the live geometry module."""
 comptime _RESTORED_SHA256 = (
@@ -71,162 +71,166 @@ def _load_edits(
         stops: The exclusive end lines.
         befores: The predecessor lines for each span.
     """
-    starts.append(1346)
-    stops.append(1805)
+    starts.append(1351)
+    stops.append(1810)
     befores.append("")
-    starts.append(1344)
-    stops.append(1345)
+    starts.append(1349)
+    stops.append(1350)
     befores.append("")
-    starts.append(1331)
-    stops.append(1339)
+    starts.append(1336)
+    stops.append(1344)
     befores.append(
-        "        var total = last.s + sqrt(du * du + dv * dv)\n        last ="
-        " _Sample(pu, pv, total, u.tangent(p), v.tangent(p))\n"
+        "        var total = last.s + sqrt(du * du + dv * dv)\n      "
+        "  last = _Sample(pu, pv, total, u.tangent(p), v.tangent(p))"
+        "\n"
     )
-    starts.append(1323)
-    stops.append(1329)
+    starts.append(1328)
+    stops.append(1334)
     befores.append(
-        "        p += delta_p\n        var pu = u.evaluate(p)\n        var pv ="
-        " v.evaluate(p)\n"
+        "        p += delta_p\n        var pu = u.evaluate(p)\n      "
+        "  var pv = v.evaluate(p)\n"
     )
-    starts.append(1315)
-    stops.append(1320)
+    starts.append(1320)
+    stops.append(1325)
     befores.append(
-        "        u.evaluate(0.0), v.evaluate(0.0), 0.0, u.tangent(0.0),"
-        " v.tangent(0.0)\n"
+        "        u.evaluate(0.0), v.evaluate(0.0), 0.0, u.tangent(0.0"
+        "), v.tangent(0.0)\n"
     )
-    starts.append(1304)
-    stops.append(1310)
+    starts.append(1309)
+    stops.append(1315)
     befores.append("    var intervals = max(Int(base.length / 0.5), 5)\n")
-    starts.append(1301)
-    stops.append(1303)
+    starts.append(1306)
+    stops.append(1308)
     befores.append("    base.u_poly = u\n    base.v_poly = v\n")
+    starts.append(1294)
+    stops.append(1305)
+    befores.append("")
     starts.append(1289)
-    stops.append(1300)
+    stops.append(1292)
     befores.append("")
-    starts.append(1284)
-    stops.append(1287)
+    starts.append(1281)
+    stops.append(1282)
     befores.append("")
-    starts.append(1276)
-    stops.append(1277)
+    starts.append(1272)
+    stops.append(1273)
     befores.append("")
     starts.append(1267)
     stops.append(1268)
-    befores.append("")
-    starts.append(1262)
-    stops.append(1263)
     befores.append("def with_param_poly3(\n")
-    starts.append(1253)
-    stops.append(1259)
+    starts.append(1258)
+    stops.append(1264)
     befores.append(
-        "    return with_param_poly3(\n        RoadGeometry(PARAM_POLY3, s, x,"
-        " y, heading, length), u, v, p_range\n"
+        "    return with_param_poly3(\n        RoadGeometry(PARAM_POL"
+        "Y3, s, x, y, heading, length), u, v, p_range\n"
     )
-    starts.append(1244)
-    stops.append(1245)
+    starts.append(1249)
+    stops.append(1250)
     befores.append("")
-    starts.append(1228)
-    stops.append(1229)
+    starts.append(1233)
+    stops.append(1234)
     befores.append("")
-    starts.append(1219)
-    stops.append(1220)
+    starts.append(1224)
+    stops.append(1225)
     befores.append("def param_poly3(\n")
-    starts.append(1215)
-    stops.append(1216)
+    starts.append(1220)
+    stops.append(1221)
     befores.append("")
-    starts.append(1207)
-    stops.append(1214)
+    starts.append(1212)
+    stops.append(1219)
     befores.append(
-        "        total += sqrt(du * du + dv * dv)\n        last = _Sample(u, v,"
-        " total, 1.0, base.u_poly.tangent(u))\n"
+        "        total += sqrt(du * du + dv * dv)\n        last = _Sa"
+        "mple(u, v, total, 1.0, base.u_poly.tangent(u))\n"
     )
-    starts.append(1196)
-    stops.append(1205)
+    starts.append(1201)
+    stops.append(1210)
     befores.append(
-        "    while total < base.length + delta_u:\n        u += delta_u\n      "
-        "  var v = base.u_poly.evaluate(u)\n"
+        "    while total < base.length + delta_u:\n        u += delta"
+        "_u\n        var v = base.u_poly.evaluate(u)\n"
     )
-    starts.append(1189)
-    stops.append(1194)
+    starts.append(1194)
+    stops.append(1199)
     befores.append(
-        "        0.0, base.u_poly.evaluate(0.0), 0.0, 1.0,"
-        " base.u_poly.tangent(0.0)\n"
+        "        0.0, base.u_poly.evaluate(0.0), 0.0, 1.0, base.u_pol"
+        "y.tangent(0.0)\n"
     )
-    starts.append(1183)
-    stops.append(1184)
+    starts.append(1188)
+    stops.append(1189)
     befores.append("    base.u_poly = CubicPolynomial(a, b, c, d, 0.0)\n")
-    starts.append(1174)
-    stops.append(1182)
+    starts.append(1179)
+    stops.append(1187)
     befores.append("")
-    starts.append(1168)
-    stops.append(1173)
+    starts.append(1173)
+    stops.append(1178)
     befores.append("")
-    starts.append(1164)
-    stops.append(1165)
+    starts.append(1169)
+    stops.append(1170)
     befores.append("")
-    starts.append(1148)
-    stops.append(1156)
+    starts.append(1153)
+    stops.append(1161)
     befores.append(
-        "def with_poly3(\n    var base: RoadGeometry, a: Float64, b: Float64,"
-        " c: Float64, d: Float64\n) -> RoadGeometry:\n"
+        "def with_poly3(\n    var base: RoadGeometry, a: Float64, b: "
+        "Float64, c: Float64, d: Float64\n) -> RoadGeometry:\n"
     )
-    starts.append(1138)
-    stops.append(1146)
+    starts.append(1143)
+    stops.append(1151)
     befores.append(
-        "    return with_poly3(RoadGeometry(POLY3, s, x, y, heading, length),"
-        " a, b, c, d)\n"
+        "    return with_poly3(RoadGeometry(POLY3, s, x, y, heading, "
+        "length), a, b, c, d)\n"
     )
-    starts.append(1130)
-    stops.append(1131)
+    starts.append(1135)
+    stops.append(1136)
     befores.append("")
-    starts.append(1114)
-    stops.append(1115)
+    starts.append(1119)
+    stops.append(1120)
     befores.append("")
-    starts.append(1104)
-    stops.append(1105)
+    starts.append(1109)
+    stops.append(1110)
     befores.append("def poly3(\n")
+    starts.append(1099)
+    stops.append(1103)
+    befores.append("")
     starts.append(1094)
     stops.append(1098)
     befores.append("")
-    starts.append(1089)
-    stops.append(1093)
-    befores.append("")
-    starts.append(1079)
-    stops.append(1080)
+    starts.append(1084)
+    stops.append(1085)
     befores.append(") -> RoadGeometry:\n")
-    starts.append(1077)
-    stops.append(1078)
+    starts.append(1082)
+    stops.append(1083)
     befores.append("def with_spiral(\n")
-    starts.append(1070)
-    stops.append(1072)
+    starts.append(1075)
+    stops.append(1077)
     befores.append(
-        "    return with_spiral(\n        RoadGeometry(SPIRAL, s, x, y,"
-        " heading, length),\n"
+        "    return with_spiral(\n        RoadGeometry(SPIRAL, s, x, "
+        "y, heading, length),\n"
     )
-    starts.append(1033)
-    stops.append(1036)
+    starts.append(1038)
+    stops.append(1041)
     befores.append("")
-    starts.append(1018)
-    stops.append(1021)
+    starts.append(1023)
+    stops.append(1026)
     befores.append(
-        "def with_arc(var base: RoadGeometry, curvature: Float64) raises ->"
-        " RoadGeometry:\n"
+        "def with_arc(var base: RoadGeometry, curvature: Float64) rai"
+        "ses -> RoadGeometry:\n"
     )
-    starts.append(1012)
-    stops.append(1015)
+    starts.append(1017)
+    stops.append(1020)
     befores.append(
-        "    return with_arc(\n        RoadGeometry(ARC, s, x, y, heading,"
-        " length), Float64(curvature.value)\n"
+        "    return with_arc(\n        RoadGeometry(ARC, s, x, y, hea"
+        "ding, length), Float64(curvature.value)\n"
     )
-    starts.append(984)
-    stops.append(985)
+    starts.append(989)
+    stops.append(990)
     befores.append("    return RoadGeometry(LINE, s, x, y, heading, length)\n")
-    starts.append(870)
-    stops.append(947)
+    starts.append(875)
+    stops.append(952)
     befores.append("")
-    starts.append(864)
-    stops.append(865)
+    starts.append(869)
+    stops.append(870)
     befores.append("        return DirectedPoint(\n")
+    starts.append(782)
+    stops.append(787)
+    befores.append("")
     starts.append(746)
     stops.append(747)
     befores.append("        return DirectedPoint(\n")
@@ -239,35 +243,31 @@ def _load_edits(
     starts.append(646)
     stops.append(685)
     befores.append(
-        "    def distance_to(self, point: Vector3) -> Tuple[Float32,"
-        " Float32]:\n"
+        "    def distance_to(self, point: Vector3) -> Tuple[Float32, "
+        "Float32]:\n"
     )
     starts.append(634)
     stops.append(635)
     befores.append("            return DirectedPoint(\n")
-    starts.append(561)
+    starts.append(554)
     stops.append(623)
     befores.append("    def pos_at(self, dist: Float64) -> DirectedPoint:\n")
-    starts.append(559)
-    stops.append(560)
-    befores.append("        return self.pos_at(Float64(dist.value))\n")
     starts.append(553)
-    stops.append(558)
-    befores.append("")
+    stops.append(553)
+    befores.append(
+        '        """\n        return self.pos_at(Float64(dist.value))\n'
+    )
     starts.append(549)
     stops.append(550)
     befores.append("")
-    starts.append(541)
+    starts.append(533)
     stops.append(544)
     befores.append(
         "    def pos_from_dist(self, dist: Length) -> DirectedPoint:\n"
     )
-    starts.append(537)
-    stops.append(540)
-    befores.append("        return self.s + self.length\n")
     starts.append(532)
-    stops.append(536)
-    befores.append("")
+    stops.append(532)
+    befores.append('        """\n        return self.s + self.length\n')
     starts.append(481)
     stops.append(528)
     befores.append("    def end_s(self) -> Float64:\n")
@@ -304,8 +304,9 @@ def _load_edits(
     starts.append(326)
     stops.append(329)
     befores.append(
-        "    # A poly3 uses `u_poly` as v(u). A paramPoly3 uses both.\n    var"
-        " u_poly: CubicPolynomial\n    var v_poly: CubicPolynomial\n"
+        "    # A poly3 uses `u_poly` as v(u). A paramPoly3 uses both."
+        "\n    var u_poly: CubicPolynomial\n    var v_poly: CubicPoly"
+        "nomial\n"
     )
     starts.append(256)
     stops.append(300)
@@ -316,18 +317,16 @@ def _load_edits(
     starts.append(234)
     stops.append(237)
     befores.append("")
-    starts.append(229)
+    starts.append(220)
     stops.append(230)
     befores.append("    def heading(self) -> Angle:\n")
-    starts.append(223)
-    stops.append(228)
-    befores.append(
-        "        var t = Float64(offset.value)\n        self.x += t *"
-        " sin(self.tangent)\n        self.y -= t * cos(self.tangent)\n"
-    )
     starts.append(219)
-    stops.append(222)
-    befores.append("")
+    stops.append(219)
+    befores.append(
+        '        """\n        var t = Float64(offset.value)\n     '
+        "   self.x += t * sin(self.tangent)\n        self.y -= t * co"
+        "s(self.tangent)\n"
+    )
     starts.append(214)
     stops.append(215)
     befores.append("    def apply_lateral_offset(mut self, offset: Length):\n")

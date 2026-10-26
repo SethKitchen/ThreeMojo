@@ -184,9 +184,9 @@ def test_live_consumers_restore_their_winner_pins() raises:
                     direct += 1
         index += 1
     assert_equal(doc.length(pins), 112)
-    assert_equal(border_match, 38)
+    assert_equal(border_match, 42)
     assert_equal(border_differ, 3)
-    assert_equal(direct, 45)
+    assert_equal(direct, 41)
     assert_equal(covered, 8)
 
 

@@ -23,7 +23,7 @@ comptime _RECORD_SHA256 = (
 comptime _CAMERAS = "extensions/carla/cameras.mojo"
 """The cameras consumer."""
 comptime _CAMERAS_LIVE_TOKEN = (
-    "b631e1dbe6630902a5c0522836b854066a038d20ad40fe8bfc1015cad22008fb"
+    "ab8b6c3d8030b1ba929296f118198a9a2b5f7cbe5e7757e3c67ce5a9084088b8"
 )
 """The token digest of the live cameras module."""
 comptime _CAMERAS_TOKEN = (

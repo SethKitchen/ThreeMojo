@@ -13,7 +13,7 @@ from tools._sha256 import sha256_hex
 comptime _CAMERAS = "extensions/carla/cameras.mojo"
 """The live cameras module."""
 comptime _CAMERAS_LIVE_SHA256 = (
-    "f4c1bd63d6a68df99b23db9f668f8de29a50260c587c97f65d0f5e5ab80f7dd0"
+    "f979c362a03bcc4c0670c2214e229d3bed94d9fb4f9cf8353d2ac6d9688965fb"
 )
 """The file digest of the live cameras module."""
 comptime _CAMERAS_RESTORED_SHA256 = (
@@ -118,6 +118,24 @@ def _camera_edits(
         stops: The exclusive end lines.
         befores: The predecessor lines for each span.
     """
+    starts.append(1091)
+    stops.append(1092)
+    befores.append("")
+    starts.append(1051)
+    stops.append(1052)
+    befores.append("")
+    starts.append(1036)
+    stops.append(1038)
+    befores.append("                an `Int`.\n")
+    starts.append(1034)
+    stops.append(1035)
+    befores.append(
+        "            Error: If the frame's size is not the camera's, "
+        "or the time is\n"
+    )
+    starts.append(944)
+    stops.append(970)
+    befores.append("")
     starts.append(808)
     stops.append(844)
     befores.append("")
@@ -135,8 +153,9 @@ def _camera_edits(
     starts.append(289)
     stops.append(291)
     befores.append(
-        "        var n = d - kannala_brandt_polynomial(theta, coefficients)\n  "
-        "      var slope = -kannala_brandt_derivative(theta, coefficients)\n"
+        "        var n = d - kannala_brandt_polynomial(theta, coeffic"
+        "ients)\n        var slope = -kannala_brandt_derivative(theta"
+        ", coefficients)\n"
     )
     starts.append(227)
     stops.append(228)
