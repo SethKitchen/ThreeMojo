@@ -146,6 +146,19 @@ def test_a_cut_out_keeps_the_color_and_the_mask() raises:
         + '/mask.png"}'
     )
     assert_equal(again, opaque)
+    var opaque_path = root + "/mask-out/" + opaque_uri
+    var before = Path(opaque_path).read_bytes()
+    var later = store_text(
+        '{"op":"masked","out_dir":"'
+        + root
+        + '/mask-out","max_size":512,"color":"'
+        + root
+        + '/red.png","mask":"'
+        + root
+        + '/clear.png"}'
+    )
+    assert_true(_uri(later) != opaque_uri)
+    assert_equal(Path(opaque_path).read_bytes(), before)
 
 
 def test_cli_writes_the_file() raises:

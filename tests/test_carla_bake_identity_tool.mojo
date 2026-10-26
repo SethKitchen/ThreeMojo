@@ -16,6 +16,7 @@ from std.testing import (
 )
 
 from tools.carla_bake_identity import bake_key, bake_key_reads
+from tools.carla_geometry_digest import digest_text
 
 
 def _request(
@@ -241,6 +242,50 @@ def test_a_missing_file_and_a_nonfinite_number_fail() raises:
         _ = bake_key(
             '{"gltf":{"materials":[{"factor":NaN}]},"out_dir":"/tmp","mesh":"mesh","kind":"baked","parts":[["shape",0]],"settings":{}}'
         )
+
+
+def _primitive(x: String) -> String:
+    """Return one primitive whose first position is `x`."""
+    return (
+        '{"primitives":[{"positions":{"shape":[1,3],"values":['
+        + x
+        + ',0,0]},"normals":{"shape":[1,3],"values":[0,1,0]},'
+        + '"uvs":{"shape":[1,2],"values":[0,0]},'
+        + '"triangles":{"shape":[1,3],"values":[0,0,0]}}]}'
+    )
+
+
+def test_a_geometry_or_setting_change_changes_the_atlas_tag() raises:
+    """The atlas name follows the geometry digest, the target, and the density.
+    """
+    var first = digest_text(_primitive("0"))[0]
+    var second = digest_text(_primitive("1"))[0]
+    assert_not_equal(first, second)
+    var nested = digest_text(
+        '{"primitives":[{"positions":[[0,0,0]],"normals":[[0,1,0]],'
+        + '"uvs":[[0,0]],"triangles":[[0,0,0]]}]}'
+    )[0]
+    assert_equal(first, nested)
+    var gltf = '{"materials":[{"name":"plain"}]}'
+    var original = bake_key(
+        _request(gltf, "/tmp", '[["' + first + '",0]]', "[24,6.0]")
+    )
+    assert_not_equal(
+        original,
+        bake_key(_request(gltf, "/tmp", '[["' + second + '",0]]', "[24,6.0]")),
+    )
+    assert_equal(
+        original,
+        bake_key(_request(gltf, "/tmp", '[["' + nested + '",0]]', "[24,6.0]")),
+    )
+    assert_not_equal(
+        original,
+        bake_key(_request(gltf, "/tmp", '[["' + first + '",0]]', "[8,6.0]")),
+    )
+    assert_not_equal(
+        original,
+        bake_key(_request(gltf, "/tmp", '[["' + first + '",0]]', "[24,7.0]")),
+    )
 
 
 def main() raises:
