@@ -189,6 +189,8 @@ Some portable features remain partial, including [GLSL shaders](https://github.c
 
 - [x] [Town triangle share](https://github.com/SethKitchen/ThreeMojo/wiki/CARLA-assets#the-carla-towns): `tools/carla_town_share.mojo` keeps one grass blade in ten and shares each kind's cap [#761](https://github.com/SethKitchen/ThreeMojo/issues/761)
 
+- [x] [CARLA town package](https://github.com/SethKitchen/ThreeMojo/wiki/CARLA-assets#rebuild-the-town-packages): `tools/carla_town_build.mojo` builds one town package from its layout [#761](https://github.com/SethKitchen/ThreeMojo/issues/761)
+
 - [x] [Neutral CARLA texture plan](https://github.com/SethKitchen/ThreeMojo/wiki/CARLA-assets#the-carla-towns): `tools/carla_texture_plan.mojo` names a neutral texture and chooses its fitted size [#761](https://github.com/SethKitchen/ThreeMojo/issues/761)
 
 - [x] [Vehicle body and glass](https://github.com/SethKitchen/ThreeMojo/wiki/CARLA-assets#rebuild-the-vehicle-zips): `tools/carla_vehicle_pick.mojo` chooses the largest skeletal mesh and the static glass [#761](https://github.com/SethKitchen/ThreeMojo/issues/761)

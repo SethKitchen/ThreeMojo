@@ -1247,134 +1247,28 @@ def build(town, max_size, tile):
     """Write one town's package, and return the triangle counts of its
     two levels of detail and its node count.
 
-    `tools/carla_town_plan.mojo` chooses which meshes stay and which far
-    level each one uses. `tools/carla_town_group.mojo` places each copy
-    and merges copies that share a tile, a kind and a material.
+    `tools/carla_town_build.mojo` reads the layout, lowers each mesh,
+    bakes the far levels, and writes the package.
     """
-    name = "carla.town." + town.lower()
-    out_dir = os.path.join(OUT, name)
-    shutil.rmtree(out_dir, ignore_errors=True)
-    os.makedirs(out_dir)
-    library = Library(out_dir, max_size)
-    meshes = {}
-    lowered = {}
-    pending = []
-    # Each lamp head, in the three.js frame, and each lamp mesh's heads.
-    lamps = []
-    heads_of = {}
-    visible = []
-    for row in rows_of(town):
-        if not row["visible"]:
-            continue
-        _, mesh_path, _ = object_path(row["mesh"])
-        visible.append((row, mesh_path))
-    chosen = _plan({
-        "mode": "select",
-        "rows": [{"mesh": mesh_path, "visible": True} for _, mesh_path in visible],
-    })["rows"]
-    prepared = []
-    for slot in chosen:
-        row, mesh_path = visible[slot]
-        if mesh_path not in meshes:
-            if mesh_path.startswith("/Engine/"):
-                meshes[mesh_path] = cube()
-            else:
-                path = _export_file(RAW, mesh_path, ".gltf")
-                meshes[mesh_path] = read_gltf(path) if os.path.exists(path) else []
-        primitives = meshes[mesh_path]
-        if not primitives:
-            continue
-        copies = placements(row)
-        prepared.append({
-            "row": row,
-            "mesh": mesh_path,
-            "primitives": primitives,
-            "copies": copies,
-            "materials": slot_materials(row, primitives),
-            "triangles": sum(len(p["triangles"]) for p in primitives),
-        })
-    plan = _plan({
-        "mode": "jobs",
-        "rows": [{
-            "mesh": item["mesh"],
-            "copies": len(item["copies"]),
-            "triangles": int(item["triangles"]),
-            "materials": item["materials"],
-        } for item in prepared],
-    })
-    for item, job in zip(prepared, plan["jobs"]):
-        row = item["row"]
-        mesh_path = item["mesh"]
-        primitives = item["primitives"]
-        names = item["materials"]
-        kind = job["kind"]
-        copies = [item["copies"][index] for index in job["copies"]]
-        if mesh_path not in heads_of:
-            heads_of[mesh_path] = lamp_heads(primitives, mesh_path)
-        heads = heads_of[mesh_path]
-        if heads is not None and copies:
-            lamps.extend(_lamp_copies(heads, copies))
-        total = item["triangles"]
-        for part in job["parts"]:
-            index = part["index"]
-            material_name = part["material"]
-            primitive = primitives[index]
-            material = library.material(material_name)
-            if job["lamp_glass"]:
-                library.gltf["materials"][material]["extras"] = dict(LAMP_TAG)
-            for level in part["levels"]:
-                if level["action"] == "skip":
-                    continue
-                lod = level["lod"]
-                part_material = material
-                if level["action"] == "baked":
-                    # A building's far level is its baked proxy, made once
-                    # for all its primitives.
-                    parts = [(p, library.material(n)) for p, n in zip(primitives, names) if n != GRID]
-                    goal = level["goal"]
-                    key = library._bake_tag(mesh_path, "baked", parts, goal)
-                    if key not in lowered:
-                        lowered[key] = baked_building(parts, library, out_dir, mesh_path, goal)
-                    part_mesh, part_material = lowered[key]
-                elif level["action"] == "impostor":
-                    # A tree's far level is its impostor, drawn once for
-                    # all its primitives.
-                    parts = [(p, library.material(n)) for p, n in zip(primitives, names) if n != GRID]
-                    key = library._bake_tag(mesh_path, "impostor", parts)
-                    if key not in lowered:
-                        lowered[key] = impostor(parts, library, out_dir, mesh_path)
-                    part_mesh, part_material = lowered[key]
-                else:
-                    key = (mesh_path, index, material_name, lod)
-                    if key not in lowered:
-                        lowered[key] = lower(primitive, kind, mesh_path, index, total,
-                                             library.masked[material_name], lod, level["factor"])
-                    part_mesh = lowered[key]
-                if part_mesh is None:
-                    continue
-                STATS[mesh_path] = STATS.get(mesh_path, 0) + len(part_mesh["triangles"]) * len(copies)
-                one_copies = []
-                for rows in copies:
-                    entry = {
-                        "matrix": numpy.asarray(rows, dtype=float).reshape(4, 4).tolist(),
-                    }
-                    if "spline" in row:
-                        entry["spline"] = row["spline"]
-                    one_copies.append(entry)
-                pending.append({
-                    "lod": int(lod),
-                    "kind": kind,
-                    "material": int(part_material),
-                    "positions": numpy.asarray(part_mesh["positions"], dtype=float).reshape(-1, 3).tolist(),
-                    "normals": numpy.asarray(part_mesh["normals"], dtype=float).reshape(-1, 3).tolist(),
-                    "uvs": numpy.asarray(part_mesh["uvs"], dtype=float).reshape(-1, 2).tolist(),
-                    "triangles": numpy.asarray(part_mesh["triangles"]).reshape(-1, 3).tolist(),
-                    "copies": one_copies,
-                })
-    grouped = _group({"tile": float(tile), "parts": pending})
-    # The town's own road network, so a package brings the map it stands on.
-    shutil.copy(os.path.join(MAPS, town + ".xodr"), os.path.join(out_dir, town + ".xodr"))
-    return write(town, name, out_dir, library, grouped, lamps)
+    root = os.path.abspath(os.path.join(HERE, "..", "..", "..", ".."))
+    mojo = os.path.join(root, ".venv", "bin", "mojo")
+    if not os.path.isfile(mojo):
+        mojo = "mojo"
+    result = subprocess.run(
+        ["sh", os.path.join(root, "tools", "tool.sh"), mojo, "carla_town_build",
+         town, "--max-size", str(int(max_size)), "--tile", str(float(tile)),
+         "--raw", RAW, "--layout", LAYOUT, "--maps", MAPS, "--out", OUT],
+        capture_output=True, text=True,
+    )
+    if result.returncode != 0:
+        message = result.stderr.strip()
+        if message.startswith("carla_town_build: "):
+            message = message[len("carla_town_build: "):]
+        if message.startswith("unclean "):
+            raise SystemExit(message)
+        raise ValueError(message or "town build failed")
+    doc = json.loads(result.stdout)
+    return doc["triangles"], doc["nodes"], doc.get("meshes", [])
 
 
 def write(town, name, out_dir, library, groups, lamps):
@@ -1463,12 +1357,12 @@ def main(argv=None):
     parser.add_argument("--top", type=int, default=0, help="list the meshes that add the most triangles")
     args = parser.parse_args(argv)
     for town in args.towns or TOWNS:
-        (near, far), nodes = build(town, args.max_size, args.tile)
+        (near, far), nodes, meshes = build(town, args.max_size, args.tile)
         size = sum(os.path.getsize(os.path.join(b, f)) for b, _, fs in os.walk(os.path.join(OUT, "carla.town." + town.lower())) for f in fs)
         print("%s: %s triangles near, %s far, %d meshes, %.1f MB" % (town, format(near, ","), format(far, ","), nodes, size / 1e6), flush=True)
-        for mesh_path, count in sorted(STATS.items(), key=lambda item: -item[1])[:args.top]:
-            print("  %10s  %s" % (format(count, ","), mesh_path.rsplit("/Static/", 1)[-1]))
-        STATS.clear()
+        ranked = sorted(meshes, key=lambda item: -item["triangles"])
+        for item in ranked[:args.top]:
+            print("  %10s  %s" % (format(item["triangles"], ","), item["path"].rsplit("/Static/", 1)[-1]))
 
 
 if __name__ == "__main__":

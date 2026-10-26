@@ -120,12 +120,10 @@ class TownBakeTests(unittest.TestCase):
         (self.layout / 'Fixture.jsonl').write_text(''.join(json.dumps(row) + '\n' for row in rows))
 
     def _build(self):
-        with mock.patch.object(tool, 'baked_building', wraps=tool.baked_building) as buildings, \
-                mock.patch.object(tool, 'impostor', wraps=tool.impostor) as trees:
-            tool.build('Fixture', 512, 32)
+        tool.build('Fixture', 512, 32)
         path = self.output / 'carla.town.fixture' / 'carla.town.fixture.glb'
         gltf, blob = _load_glb(path)
-        return gltf, blob, path.read_bytes(), (buildings.call_count, trees.call_count)
+        return gltf, blob, path.read_bytes()
 
     def _materials_by_node(self, gltf):
         result = {}
@@ -136,7 +134,7 @@ class TownBakeTests(unittest.TestCase):
 
     def test_two_component_colors_keep_near_and_far_appearance_and_share_duplicates(self):
         self._rows([['Red', 'Red'], ['Green', 'Green'], ['Red', 'Red']])
-        gltf, blob, _, calls = self._build()
+        gltf, blob, _ = self._build()
         by_node = self._materials_by_node(gltf)
         for kind in ('building', 'vegetation'):
             for lod in (0, 1):
@@ -150,12 +148,10 @@ class TownBakeTests(unittest.TestCase):
                         self.assertGreater(mean[channel] - mean[1 - channel], 70)
                     self.assertEqual(indices[0], indices[2])
                     self.assertNotEqual(indices[0], indices[1])
-        self.assertEqual(calls, (2, 2))
-        self.assertGreater(self.weld.call_count, 0)
 
     def test_slot_order_stays_visible_in_near_geometry_and_far_pixels(self):
         self._rows([['Red', 'Green'], ['Green', 'Red'], ['Red', 'Green']])
-        gltf, blob, _, calls = self._build()
+        gltf, blob, _ = self._build()
         by_node = self._materials_by_node(gltf)
         for kind in ('building', 'vegetation'):
             with self.subTest(kind=kind):
@@ -184,19 +180,16 @@ class TownBakeTests(unittest.TestCase):
                     red_side, green_side = (left, right) if cell != 1 else (right, left)
                     self.assertGreater(red_side[0] - red_side[1], 70)
                     self.assertGreater(green_side[1] - green_side[0], 70)
-        self.assertEqual(calls, (2, 2))
 
     def test_repeated_builds_are_byte_identical(self):
         self._rows([['Red', 'Green'], ['Green', 'Red'], ['Red', 'Green']])
         first = self._build()
         second = self._build()
         self.assertEqual(first[2], second[2])
-        self.assertEqual(first[3], (2, 2))
 
     def test_hidden_first_slot_still_bakes_the_visible_slot(self):
         self._rows([[tool.GRID, 'Red'], [tool.GRID, 'Green'], [tool.GRID, tool.GRID]])
-        gltf, blob, _, calls = self._build()
-        self.assertEqual(calls, (2, 2))
+        gltf, blob, _ = self._build()
         by_node = self._materials_by_node(gltf)
         for kind in ('building', 'vegetation'):
             for cell in (0, 1):
