@@ -488,6 +488,10 @@ Mojo checks the reviewed main rebase inputs.
 18 inputs keep their reviewed digests.
 A changed main input is refused.
 
+Mojo checks the reviewed construction-boundary inputs.
+24 inputs keep their reviewed digests.
+A changed construction-boundary input is refused.
+
 ## Candidate certificate
 
 A certificate contains a stored incumbent point and its road parameter.
