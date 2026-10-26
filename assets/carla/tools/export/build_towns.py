@@ -12,7 +12,7 @@ and draws few meshes. Each mesh node names its kind in its extras, as
 `{"carla_kind": "building"}`, so the renderer can leave out what it
 draws itself.
 
-    python build_towns.py [TOWN ...] [--max-size 512] [--tile 32]
+    sh tools/tool.sh .venv/bin/mojo carla_town_build --summary [--top 20]
 
 It writes `town_packages/carla.town.<town>/`: one binary glTF,
 `carla.town.<town>.glb`, with its textures inside, and the town's
@@ -21,7 +21,6 @@ and no engine path: `check_clean` refuses one that does.
 """
 
 import atexit
-import argparse
 import json
 import os
 import shutil
@@ -86,7 +85,6 @@ RAW = os.path.join(BASE, "raw_town")
 LAYOUT = os.path.join(BASE, "layout")
 MAPS = os.path.join(BASE, "release", "CarlaUE4", "Content", "Carla", "Maps", "OpenDrive")
 OUT = os.path.join(BASE, "town_packages")
-TOWNS = ["Town01", "Town02", "Town03", "Town04", "Town05", "Town10HD"]
 
 # Engine materials: the grid marks a brush's hidden faces; the basic
 # shape's material is plain.
@@ -1347,23 +1345,3 @@ def check_clean(out_dir):
     )
     if result.returncode != 0:
         raise SystemExit(result.stderr.strip() or "town package is unclean")
-
-
-def main(argv=None):
-    parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    parser.add_argument("towns", nargs="*")
-    parser.add_argument("--max-size", type=int, default=512)
-    parser.add_argument("--tile", type=float, default=32.0)
-    parser.add_argument("--top", type=int, default=0, help="list the meshes that add the most triangles")
-    args = parser.parse_args(argv)
-    for town in args.towns or TOWNS:
-        (near, far), nodes, meshes = build(town, args.max_size, args.tile)
-        size = sum(os.path.getsize(os.path.join(b, f)) for b, _, fs in os.walk(os.path.join(OUT, "carla.town." + town.lower())) for f in fs)
-        print("%s: %s triangles near, %s far, %d meshes, %.1f MB" % (town, format(near, ","), format(far, ","), nodes, size / 1e6), flush=True)
-        ranked = sorted(meshes, key=lambda item: -item["triangles"])
-        for item in ranked[:args.top]:
-            print("  %10s  %s" % (format(item["triangles"], ","), item["path"].rsplit("/Static/", 1)[-1]))
-
-
-if __name__ == "__main__":
-    main()

@@ -129,7 +129,7 @@ Some portable features remain partial, including [GLSL shaders](https://github.c
 ### Project tools
 
 <details>
-<summary>Implemented: 72</summary>
+<summary>Implemented: 73</summary>
 
 - [x] [Literal loop receipt](https://github.com/SethKitchen/ThreeMojo/wiki/Coverage-tool#constant-loop-outcome-proofs): `tools/coverage_loop_seal.mojo` writes and checks the sealed loop receipt [#761](https://github.com/SethKitchen/ThreeMojo/issues/761)
 
@@ -202,6 +202,8 @@ Some portable features remain partial, including [GLSL shaders](https://github.c
 - [x] [Mojo suite runner](https://github.com/SethKitchen/ThreeMojo/wiki/How-to-run-the-checks#run-one-test-suite): the loop receipt binds `tools/run_suite.mojo` [#761](https://github.com/SethKitchen/ThreeMojo/issues/761)
 
 - [x] [Mojo suite key](https://github.com/SethKitchen/ThreeMojo/wiki/How-to-run-the-checks#rebuild-the-project-tools): `tools/suite_key.mojo` keys the suite stamps [#761](https://github.com/SethKitchen/ThreeMojo/issues/761)
+
+- [x] [Town build summary](https://github.com/SethKitchen/ThreeMojo/wiki/CARLA-assets#rebuild-the-town-packages): `tools/carla_town_build.mojo` prints each town's triangle counts and package size [#761](https://github.com/SethKitchen/ThreeMojo/issues/761)
 
 - [x] [Neutral CARLA texture plan](https://github.com/SethKitchen/ThreeMojo/wiki/CARLA-assets#the-carla-towns): `tools/carla_texture_plan.mojo` names a neutral texture and chooses its fitted size [#761](https://github.com/SethKitchen/ThreeMojo/issues/761)
 

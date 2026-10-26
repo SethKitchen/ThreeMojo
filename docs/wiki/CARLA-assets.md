@@ -491,10 +491,11 @@ The towns are made in three steps. The scripts run on Windows, like the vehicle 
 3. Build and zip the packages:
 
    ```sh
-   python build_towns.py [--top 20]
+   sh tools/tool.sh .venv/bin/mojo carla_town_build --summary [--top 20]
    ```
 
-   `python build_towns.py` calls `tools/carla_town_build.mojo`.
+   `tools/carla_town_build.mojo` writes each town package.
+   `--summary` prints the triangle counts and the package size.
 
    Then, with `CARLA_EXPORT_DIR` set to the absolute path of the work folder:
 
