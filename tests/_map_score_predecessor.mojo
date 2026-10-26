@@ -12,10 +12,14 @@ from tools._sha256 import sha256_hex
 
 comptime _MODULE = "extensions/carla/map.mojo"
 """The live Map module."""
+comptime _CURRENT_SHA256 = (
+    "4ac668239112e81ac0b2bc84eaed32d1efbee1f70e61d1d97ca02324f914f35c"
+)
+"""The file digest of the live Map module."""
 comptime _LIVE_SHA256 = (
     "288d0e5d3a5bc2e5a6b9542868de6566dc6cb4de6eae39192c0289d76a8c99fa"
 )
-"""The file digest of the live Map module."""
+"""The file digest after the waypoint guard is removed."""
 comptime _MID_SHA256 = (
     "b3862a55a54927b2a1e50186af82f64bdf145adbef5cef9f31ab19d9585749df"
 )
@@ -826,23 +830,64 @@ def _station_spans(
     )
 
 
-def restored_deviation_map() raises -> String:
-    """Return the reviewed Map deviation endpoint.
+def _without_waypoint_guard(text: String) raises -> String:
+    """Remove the live waypoint-count guard.
+
+    Args:
+        text: The live Map module.
 
     Returns:
-        The live Map module with the reviewed line edits removed.
+        The module without that guard.
 
     Raises:
-        Error: The live file or the restored module changed.
+        Error: A guard span is missing or repeated.
     """
-    var live = Path(_MODULE).read_text()
-    if sha256_hex(live.as_bytes()) != _LIVE_SHA256:
+    var note = (
+        "            Error: If the distance is not positive, or a road needs"
+        " more\n                waypoints than this port walks.\n"
+    )
+    var guard = (
+        "        for road in self.roads:\n            if not (road.length /"
+        " distance < Float64(16777216)):\n                raise Error(\n      "
+        '              "A generated waypoint count is larger than this port'
+        ' walks"\n                )\n            var s = EPSILON\n'
+    )
+    if _count(text, note) != 1 or _count(text, guard) != 1:
+        raise Error("reviewed Map deviation successor: live map changed")
+    var previous = _replace_first(
+        text,
+        note,
+        "            Error: If the distance is not positive.\n",
+    )
+    return _replace_first(
+        previous,
+        guard,
+        "        for road in self.roads:\n            var s = EPSILON\n",
+    )
+
+
+def restored_deviation(text: String) raises -> String:
+    """Return the reviewed deviation endpoint of one Map module.
+
+    Args:
+        text: The live Map module.
+
+    Returns:
+        The module with the reviewed line edits removed.
+
+    Raises:
+        Error: The module or the restored bytes differ.
+    """
+    if sha256_hex(text.as_bytes()) != _CURRENT_SHA256:
+        raise Error("reviewed Map deviation successor: live map changed")
+    var previous = _without_waypoint_guard(text)
+    if sha256_hex(previous.as_bytes()) != _LIVE_SHA256:
         raise Error("reviewed Map deviation successor: live map changed")
     var starts = List[Int]()
     var stops = List[Int]()
     var befores = List[String]()
     _live_edits(starts, stops, befores)
-    var middle = _apply(live, starts, stops, befores)
+    var middle = _apply(previous, starts, stops, befores)
     if sha256_hex(middle.as_bytes()) != _MID_SHA256:
         raise Error("reviewed Map deviation successor: map midpoint changed")
     starts.clear()
@@ -855,6 +900,18 @@ def restored_deviation_map() raises -> String:
             "reviewed Map deviation successor: deviation endpoint changed"
         )
     return restored
+
+
+def restored_deviation_map() raises -> String:
+    """Return the reviewed Map deviation endpoint.
+
+    Returns:
+        The live Map module with the reviewed line edits removed.
+
+    Raises:
+        Error: The live file or the restored module changed.
+    """
+    return restored_deviation(Path(_MODULE).read_text())
 
 
 def _reverse_spans(
