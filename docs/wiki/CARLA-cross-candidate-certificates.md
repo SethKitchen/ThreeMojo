@@ -413,6 +413,11 @@ One import edit restores the local helpers.
 Those helpers match the interval module.
 A changed module or a changed helper is refused.
 
+Mojo checks the reviewed width-overflow witness.
+The live witness keeps its file digest and its token digest.
+Two formatting edits restore the historical witness.
+A changed witness or a missing edit is refused.
+
 ## Candidate certificate
 
 A certificate contains a stored incumbent point and its road parameter.
