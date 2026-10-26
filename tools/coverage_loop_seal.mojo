@@ -66,7 +66,7 @@ comptime _TOOLS = [
     "tools/coverage_hit_aot.mojo",
     "tools/coverage_hit_cache.c",
     "tools/coverage_write_interposer.c",
-    "tools/run_suite.py",
+    "tools/run_suite.mojo",
     "Makefile",
 ]
 """The tool files a receipt must bind."""

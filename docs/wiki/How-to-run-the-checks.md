@@ -33,6 +33,7 @@ sh tools/tool.sh .venv/bin/mojo run_suite --seconds 5 \
 ```
 
 The runner also removes the directory after a timeout.
+The loop receipt binds `tools/run_suite.mojo`. The Python file `tools/run_suite.py` is removed.
 Run `make test-portability` to check asset roots from another working directory
 and temporary-file isolation across concurrent native processes.
 `make check-cpu` includes this check.
