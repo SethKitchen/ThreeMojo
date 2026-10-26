@@ -3,7 +3,7 @@
 # Noncommercial use is free; commercial use requires a paid license.
 # See LICENSE, LICENSE-COMMERCIAL.md and THIRD-PARTY-NOTICES.md
 
-"""Packaged texture pixels match the Python channel steps."""
+"""Packaged texture pixels match the resize and byte steps."""
 
 from std.pathlib import Path
 from std.tempfile import mkdtemp
@@ -11,7 +11,9 @@ from std.testing import TestSuite, assert_equal, assert_raises, assert_true
 
 from tests._tree import tool_mojo
 from tools._process import run_program
+from tools._python_json import PyJson
 from tools.carla_image_pack import pack_text
+from tools.carla_image_resize import resize_text, unit_bytes
 
 
 def _tile(sample: String) -> String:
@@ -248,41 +250,121 @@ def test_packaged_pixels_match_the_channel_steps() raises:
         )
 
 
+def _joined(pixels: List[Int]) -> String:
+    """Return `pixels` as a JSON number list."""
+    var out = String()
+    for index in range(len(pixels)):
+        if index > 0:
+            out += ","
+        out += String(pixels[index])
+    return out
+
+
+def _picture(width: Int, height: Int, bands: Int, pixels: List[Int]) -> String:
+    """Return the packaged JSON for one picture."""
+    return (
+        '{"width":'
+        + String(width)
+        + ',"height":'
+        + String(height)
+        + ',"bands":'
+        + String(bands)
+        + ',"pixels":['
+        + _joined(pixels)
+        + "]}"
+    )
+
+
+def _resize_bytes(
+    pixels: List[Int],
+    width: Int,
+    height: Int,
+    bands: Int,
+    out_width: Int,
+    out_height: Int,
+) raises -> List[Int]:
+    """Return one Lanczos resize as bytes."""
+    var request = (
+        '{"mode":"lanczos","width":'
+        + String(width)
+        + ',"height":'
+        + String(height)
+        + ',"bands":'
+        + String(bands)
+        + ',"out_width":'
+        + String(out_width)
+        + ',"out_height":'
+        + String(out_height)
+        + ',"pixels":['
+        + _joined(pixels)
+        + "]}"
+    )
+    var doc = PyJson.parse(resize_text(request))
+    var node = doc.at(doc.root, "pixels")
+    var out = List[Int]()
+    for index in range(doc.length(node)):
+        out.append(Int(doc.text(doc.item(node, index))))
+    return out^
+
+
 def test_an_atlas_matches_quantize_resize_and_stitch() raises:
+    var left = List[Float64]()
+    for value in [
+        1.0,
+        0.0,
+        0.0,
+        1.0,
+        0.0,
+        1.0,
+        0.0,
+        1.0,
+        0.0,
+        0.0,
+        1.0,
+        0.5,
+        1.0,
+        1.0,
+        1.0,
+        0.0,
+    ]:
+        left.append(value)
+    var right = List[Float64]()
+    for value in [
+        0.25,
+        0.5,
+        0.75,
+        1.0,
+        1.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        1.0,
+        0.5,
+        0.5,
+        0.5,
+        0.5,
+    ]:
+        right.append(value)
+    var size = 2
+    var left_bytes = _resize_bytes(unit_bytes(left), 2, 2, 4, size, size)
+    var right_bytes = _resize_bytes(unit_bytes(right), 2, 2, 4, size, size)
+    var row = size * 4
+    var atlas = List[Int]()
+    for y in range(size):
+        var start = y * row
+        for offset in range(row):
+            atlas.append(left_bytes[start + offset])
+        for offset in range(row):
+            atlas.append(right_bytes[start + offset])
     var views = (
         "[[[1,0,0,1],[0,1,0,1]],[[0,0,1,0.5],[1,1,1,0]]],"
         "[[[0.25,0.5,0.75,1],[1,0,0,0]],[[0,0,0,1],[0.5,0.5,0.5,0.5]]]"
     )
     var request = '{"mode":"atlas","size":2,"views":[' + views + "]}"
-    var script = (
-        "import json, sys\n"
-        + "sys.path.insert(0, 'assets/carla/tools/export')\n"
-        + "import carla_gltf_fix as fix\n"
-        + "views = json.loads(sys.argv[1])\n"
-        + "size = 2\n"
-        + "resized = []\n"
-        + "for view in views:\n"
-        + "    flat = [c for row in view for px in row for c in px]\n"
-        + "    raw = fix.quantize_image(flat)\n"
-        + "    resized.append(fix.resize_image(raw, len(view[0]), len(view), 4,"
-        " size, size, 'lanczos'))\n"
-        + "row = size * 4\n"
-        + "atlas = []\n"
-        + "for y in range(size):\n"
-        + "    start = y * row\n"
-        + "    atlas.extend(resized[0][start:start + row])\n"
-        + "    atlas.extend(resized[1][start:start + row])\n"
-        + "print(json.dumps({'width': size * 2, 'height': size, 'bands': 4,"
-        " 'pixels': atlas}, separators=(',', ':')), end='')\n"
-    )
-    var result = run_program(
-        ["python3", "-c", script, "[" + views + "]"],
-        30,
-        merge_errors=False,
-    )
-    if result.status != 0:
-        raise Error(result.errors)
-    assert_equal(pack_text(request), result.output)
+    assert_equal(pack_text(request), _picture(size * 2, size, 4, atlas))
     with assert_raises(contains="atlas needs two views"):
         _ = pack_text('{"mode":"atlas","size":2,"views":[]}')
     with assert_raises(contains="image is empty"):
@@ -291,24 +373,25 @@ def test_an_atlas_matches_quantize_resize_and_stitch() raises:
 
 def test_a_float_picture_becomes_bytes() raises:
     var image = "[[[1.2,-0.2,0.5],[0,1,0.0]],[[0.5,0.5,0.5],[1,1,1]]]"
-    var script = (
-        "import json, sys\n"
-        + "sys.path.insert(0, 'assets/carla/tools/export')\n"
-        + "import carla_gltf_fix as fix\n"
-        + "image = json.loads(sys.argv[1])\n"
-        + "flat = [c for row in image for px in row for c in px]\n"
-        + "pixels = fix.quantize_image(flat)\n"
-        + "print(json.dumps({'width': len(image[0]), 'height': len(image),\n"
-        + " 'bands': len(image[0][0]), 'pixels': pixels}, separators=(',',"
-        " ':')), end='')\n"
-    )
-    var result = run_program(
-        ["python3", "-c", script, image], 30, merge_errors=False
-    )
-    if result.status != 0:
-        raise Error(result.errors)
+    var samples = List[Float64]()
+    for value in [
+        1.2,
+        -0.2,
+        0.5,
+        0.0,
+        1.0,
+        0.0,
+        0.5,
+        0.5,
+        0.5,
+        1.0,
+        1.0,
+        1.0,
+    ]:
+        samples.append(value)
     assert_equal(
-        pack_text('{"mode":"quantize","image":' + image + "}"), result.output
+        pack_text('{"mode":"quantize","image":' + image + "}"),
+        _picture(2, 2, 3, unit_bytes(samples)),
     )
     with assert_raises(contains="pixel is not RGB or RGBA"):
         _ = pack_text('{"mode":"quantize","image":[[[1,2]]]}')
