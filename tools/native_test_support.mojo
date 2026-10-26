@@ -497,7 +497,8 @@ def build_object(
             and saved.find(_json_string(identity.version)) >= 0
         ):
             return output
-    var temporary = cache_dir + "/" + key + ".tmp.o"
+    var pid = external_call["getpid", c_int]()
+    var temporary = cache_dir + "/" + key + "." + String(pid) + ".tmp.o"
     var command = _copy(identity.command)
     for flag in materialize[C_FLAGS]():
         command.append(flag)
