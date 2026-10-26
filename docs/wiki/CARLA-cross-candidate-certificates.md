@@ -476,6 +476,10 @@ Mojo checks the reviewed PR760 registry inputs.
 392 inputs keep their reviewed digests.
 A changed registry input is refused.
 
+Mojo checks the reviewed density inputs.
+311 inputs keep their reviewed digests.
+A changed density input is refused.
+
 ## Candidate certificate
 
 A certificate contains a stored incumbent point and its road parameter.
