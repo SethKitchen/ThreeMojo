@@ -248,3 +248,303 @@ def sampled_value_gate(source: String) raises:
     if not _same(_imports(kinds, texts), _expected()):
         _fail("sampled graph imports changed")
     _fields(kinds, texts)
+
+
+def _ident_start(byte: UInt8) -> Bool:
+    """Return whether `byte` can start a Python name."""
+    return (
+        byte == 95
+        or (byte >= 65 and byte <= 90)
+        or (byte >= 97 and byte <= 122)
+    )
+
+
+def _ident_continue(byte: UInt8) -> Bool:
+    """Return whether `byte` can continue a Python name."""
+    return _ident_start(byte) or (byte >= 48 and byte <= 57)
+
+
+def _renamed(name: String) -> String:
+    """Return the value-only spelling of `name`, or empty."""
+    if name == "_polynomial_jet":
+        return "_polynomial_value"
+    if name == "_unknown_point":
+        return "_unknown_value_point"
+    if name == "_geometry_distance":
+        return "_value_geometry_distance"
+    if name == "_sample_blend_jet":
+        return "_sample_blend_value"
+    if name == "_sample_jet":
+        return "_sample_value"
+    if name == "_atan_branch":
+        return "_atan_value_branch"
+    if name == "_atan_jet":
+        return "_atan_value"
+    if name == "_atan2_jet":
+        return "_atan2_value"
+    if name == "_jet_polynomial":
+        return "_expression_polynomial"
+    if name == "_uncertain":
+        return "_uncertain_value"
+    if name == "_Jet":
+        return "_ValueJet"
+    if name == "_sinc_jet":
+        return "_sinc_value"
+    if name == "_sincos_jet":
+        return "_sincos_expression"
+    if name == "_arc_offset_jet":
+        return "_arc_offset_value"
+    if name == "_constant_sincos_jet":
+        return "_constant_sincos_value"
+    if name == "_union_points":
+        return "_union_value_points"
+    return ""
+
+
+def sampled_identifier(name: String) -> String:
+    """Return the value-only spelling of one identifier.
+
+    Args:
+        name: A Python name token.
+
+    Returns:
+        The renamed spelling, or `name` when the checker keeps it.
+    """
+    var renamed = _renamed(name)
+    if renamed == "":
+        return name
+    return renamed
+
+
+def _string_prefix(name: String) -> Bool:
+    """Return whether `name` is a Python string prefix."""
+    if name == "r" or name == "R" or name == "b" or name == "B":
+        return True
+    if name == "f" or name == "F" or name == "u" or name == "U":
+        return True
+    if name == "rf" or name == "rF" or name == "Rf" or name == "RF":
+        return True
+    if name == "fr" or name == "fR" or name == "Fr" or name == "FR":
+        return True
+    if name == "rb" or name == "rB" or name == "Rb" or name == "RB":
+        return True
+    if name == "br" or name == "bR" or name == "Br" or name == "BR":
+        return True
+    return False
+
+
+def _has_f(name: String) -> Bool:
+    """Return whether a string prefix formats expressions."""
+    var raw = name.as_bytes()
+    for index in range(len(raw)):
+        if raw[index] == 102 or raw[index] == 70:
+            return True
+    return False
+
+
+def _append_slice(mut out: String, text: String, start: Int, end: Int):
+    """Append `text[start:end]` to `out`."""
+    out += String(text[byte=start:end])
+
+
+def rename_sampled_identifiers(text: String) -> String:
+    """Rename jet identifiers the way `check_sampled_values.translated` does.
+
+    Names inside comments and ordinary strings stay. A formatted string
+    renames names in its expressions. The spelling is the value-only name.
+
+    Args:
+        text: Source text.
+
+    Returns:
+        The text with those names replaced.
+    """
+    var raw = text.as_bytes()
+    var count = len(raw)
+    var out = String()
+    var index = 0
+    while index < count:
+        var byte = raw[index]
+        if byte == 35:
+            var end = index
+            while end < count and raw[end] != 10:
+                end += 1
+            _append_slice(out, text, index, end)
+            index = end
+            continue
+        if _ident_start(byte):
+            var end = index + 1
+            while end < count and _ident_continue(raw[end]):
+                end += 1
+            var name = String(text[byte=index:end])
+            if (
+                end < count
+                and (raw[end] == 34 or raw[end] == 39)
+                and _string_prefix(name)
+            ):
+                _append_slice(out, text, index, end)
+                index = _copy_string(
+                    out, text, end, raw[end], _has_f(name), _is_raw(name)
+                )
+                continue
+            var replacement = _renamed(name)
+            if replacement.byte_length() == 0:
+                out += name
+            else:
+                out += replacement
+            index = end
+            continue
+        if byte == 34 or byte == 39:
+            index = _copy_string(out, text, index, byte, False, False)
+            continue
+        out += String(text[byte = index : index + 1])
+        index += 1
+    return out
+
+
+def _is_raw(name: String) -> Bool:
+    """Return whether a string prefix is raw."""
+    var raw = name.as_bytes()
+    for index in range(len(raw)):
+        if raw[index] == 114 or raw[index] == 82:
+            return True
+    return False
+
+
+def _copy_string(
+    mut out: String,
+    text: String,
+    start: Int,
+    quote: UInt8,
+    formatted: Bool,
+    raw_string: Bool,
+) -> Int:
+    """Copy one string and return the index after it.
+
+    Args:
+        out: The renamed text.
+        text: The source.
+        start: The opening quote.
+        quote: The quote byte.
+        formatted: True when expressions inside braces are code.
+        raw_string: True when backslashes are ordinary characters.
+
+    Returns:
+        The index of the first byte after the string.
+    """
+    var raw = text.as_bytes()
+    var count = len(raw)
+    var triple = (
+        start + 2 < count
+        and raw[start + 1] == quote
+        and raw[start + 2] == quote
+    )
+    var mark = start
+    var index = start + 1
+    if triple:
+        index = start + 3
+    var depth = 0
+    while index < count:
+        if formatted and depth == 0 and raw[index] == 123:
+            if index + 1 < count and raw[index + 1] == 123:
+                index += 2
+                continue
+            _append_slice(out, text, mark, index + 1)
+            depth = 1
+            index += 1
+            mark = index
+            while index < count and depth > 0:
+                if _ident_start(raw[index]):
+                    var end = index + 1
+                    while end < count and _ident_continue(raw[end]):
+                        end += 1
+                    _append_slice(out, text, mark, index)
+                    var name = String(text[byte=index:end])
+                    var replacement = _renamed(name)
+                    if replacement.byte_length() == 0:
+                        out += name
+                    else:
+                        out += replacement
+                    index = end
+                    mark = index
+                    continue
+                if raw[index] == 123:
+                    depth += 1
+                elif raw[index] == 125:
+                    depth -= 1
+                    if depth == 0:
+                        _append_slice(out, text, mark, index)
+                        mark = index
+                        break
+                index += 1
+            continue
+        if not raw_string and raw[index] == 92 and index + 1 < count:
+            index += 2
+            continue
+        if raw[index] == quote:
+            if not triple:
+                _append_slice(out, text, mark, index + 1)
+                return index + 1
+            if (
+                index + 2 < count
+                and raw[index + 1] == quote
+                and raw[index + 2] == quote
+            ):
+                _append_slice(out, text, mark, index + 3)
+                return index + 3
+        index += 1
+    _append_slice(out, text, mark, count)
+    return count
+
+
+def extract_sampled_function(text: String, name: String) raises -> String:
+    """Return one top-level function, as `check_sampled_values.function` does.
+
+    Args:
+        text: The module source.
+        name: The function name, without a rename.
+
+    Returns:
+        The function text, through the line before the next `def` or decorator.
+
+    Raises:
+        Error: The function is missing or appears twice.
+    """
+    var needle = "def " + name
+    var raw = text.as_bytes()
+    var count = len(raw)
+    var found = -1
+    var open_end = -1
+    var index = 0
+    while index < count:
+        var line = index == 0 or raw[index - 1] == 10
+        if line and index + len(needle.as_bytes()) <= count:
+            var word = String(
+                text[byte = index : index + len(needle.as_bytes())]
+            )
+            if word == needle:
+                var after = index + len(needle.as_bytes())
+                if after < count and (raw[after] == 40 or raw[after] == 91):
+                    if found >= 0:
+                        raise Error("missing or ambiguous function: " + name)
+                    found = index
+                    open_end = after + 1
+        index += 1
+    if found < 0:
+        raise Error("missing or ambiguous function: " + name)
+    var cursor = open_end
+    var stop = count
+    while cursor < count:
+        var line = raw[cursor - 1] == 10
+        if line:
+            if (
+                cursor + 4 <= count
+                and String(text[byte = cursor : cursor + 4]) == "def "
+            ):
+                stop = cursor
+                break
+            if raw[cursor] == 64:
+                stop = cursor
+                break
+        cursor += 1
+    return String(text[byte=found:stop])

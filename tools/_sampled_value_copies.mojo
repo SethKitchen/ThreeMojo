@@ -13,6 +13,7 @@ keeps the sampled call.
 """
 
 from tests._python_tokens import _tokenize
+from tools._sampled_value_gate import sampled_identifier
 
 
 comptime _NAME = 1
@@ -104,39 +105,7 @@ def _rename(text: String) -> String:
     Returns:
         The value-graph name, or `text` when it is not renamed.
     """
-    if text == "_polynomial_jet":
-        return "_polynomial_value"
-    if text == "_unknown_point":
-        return "_unknown_value_point"
-    if text == "_geometry_distance":
-        return "_value_geometry_distance"
-    if text == "_sample_blend_jet":
-        return "_sample_blend_value"
-    if text == "_sample_jet":
-        return "_sample_value"
-    if text == "_atan_branch":
-        return "_atan_value_branch"
-    if text == "_atan_jet":
-        return "_atan_value"
-    if text == "_atan2_jet":
-        return "_atan2_value"
-    if text == "_jet_polynomial":
-        return "_expression_polynomial"
-    if text == "_uncertain":
-        return "_uncertain_value"
-    if text == "_Jet":
-        return "_ValueJet"
-    if text == "_sinc_jet":
-        return "_sinc_value"
-    if text == "_sincos_jet":
-        return "_sincos_expression"
-    if text == "_arc_offset_jet":
-        return "_arc_offset_value"
-    if text == "_constant_sincos_jet":
-        return "_constant_sincos_value"
-    if text == "_union_points":
-        return "_union_value_points"
-    return text
+    return sampled_identifier(text)
 
 
 def _dropped(kind: Int, text: String) -> Bool:
