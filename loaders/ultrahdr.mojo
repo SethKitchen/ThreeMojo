@@ -296,9 +296,6 @@ def _require_ultrahdr_extent(width: Int, height: Int) raises:
         width: The image width.
         height: The image height.
 
-    Returns:
-        Nothing. The call returns when the image fits.
-
     Raises:
         Error: If a side is below one, or four bytes a pixel do not fit.
     """

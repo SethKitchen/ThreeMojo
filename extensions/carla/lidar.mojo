@@ -56,9 +56,6 @@ def require_lidar_channels(channels: Int) raises:
     Args:
         channels: How many lasers.
 
-    Returns:
-        Nothing.
-
     Raises:
         Error: If the count is above 16777216.
     """

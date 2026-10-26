@@ -867,9 +867,6 @@ def _nearest_texel(unit: Float32, count: Int) -> Int:
 
     Returns:
         The texel index, before wrapping.
-
-    Raises:
-        Error: Never.
     """
     if count > 16777216:
         return Int(floor(Float64(unit) * Float64(count)))
@@ -889,9 +886,6 @@ def _bilinear_place(unit: Float32, count: Int) -> Float32:
 
     Returns:
         The place, in texels from a center.
-
-    Raises:
-        Error: Never.
     """
     if count > 16777216:
         return Float32(Float64(unit) * Float64(count) - 0.5)

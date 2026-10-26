@@ -153,9 +153,6 @@ def _require_stored_keys(count: Int) raises:
     Args:
         count: How many keys `_key_count` returned.
 
-    Returns:
-        Nothing.
-
     Raises:
         Error: If the count is above 16777216.
     """

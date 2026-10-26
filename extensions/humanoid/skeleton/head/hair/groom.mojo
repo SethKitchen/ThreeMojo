@@ -756,9 +756,6 @@ def require_groom_counts(guides: Int, followers: Int, root_tries: Int) raises:
         followers: How many follow strands round each guide.
         root_tries: How many roots are tried for each guide.
 
-    Returns:
-        Nothing.
-
     Raises:
         Error: If a guide count is outside one through 20000, a follower
             count is outside zero through 64, or a root try count is
@@ -783,9 +780,6 @@ def require_hair_steps(step: Float32, span: Float32) raises:
     Args:
         step: How far one sample moves, in meters.
         span: How far the walk may run, in meters.
-
-    Returns:
-        Nothing.
 
     Raises:
         Error: If `step` is not a positive finite length, or the sample

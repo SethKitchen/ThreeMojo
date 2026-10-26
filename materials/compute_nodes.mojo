@@ -474,9 +474,6 @@ def require_compute_dispatch(
         workgroup_size: How many invocations a workgroup has.
         results: How many values each invocation keeps.
 
-    Returns:
-        Nothing.
-
     Raises:
         Error: If the count is not positive, the workgroup size is out of
             range, or the dispatch does not fit in an integer.

@@ -956,9 +956,6 @@ def _require_crossing_step(
         current: The gray level of this frame.
         step: The positive contrast threshold for this direction.
 
-    Returns:
-        Nothing. The call returns when the step changes both levels.
-
     Raises:
         Error: If the step does not change the previous level or the
             current level.

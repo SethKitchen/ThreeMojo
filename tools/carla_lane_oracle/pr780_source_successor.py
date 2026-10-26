@@ -7019,13 +7019,13 @@ EDGES = json.loads(r'''
   },
   "extensions/carla/cameras.mojo": {
     "before_sha256": "f4c1bd63d6a68df99b23db9f668f8de29a50260c587c97f65d0f5e5ab80f7dd0",
-    "after_sha256": "f979c362a03bcc4c0670c2214e229d3bed94d9fb4f9cf8353d2ac6d9688965fb",
+    "after_sha256": "1635205c929008c0fe3eae1eb77c363d1cbb6927572f8dbd76eee4b3a7e7c17a",
     "before_token_sha256": "b631e1dbe6630902a5c0522836b854066a038d20ad40fe8bfc1015cad22008fb",
-    "after_token_sha256": "ab8b6c3d8030b1ba929296f118198a9a2b5f7cbe5e7757e3c67ce5a9084088b8",
+    "after_token_sha256": "64b062c8938248045dd97ea3de8dbc3294922196b6efc057bc8a3f52a8c9a352",
     "edits": [
       {
         "start": 944,
-        "stop": 970,
+        "stop": 967,
         "before": [],
         "after": [
           "def _require_crossing_step(\n",
@@ -7042,9 +7042,6 @@ EDGES = json.loads(r'''
           "        current: The gray level of this frame.\n",
           "        step: The positive contrast threshold for this direction.\n",
           "\n",
-          "    Returns:\n",
-          "        Nothing. The call returns when the step changes both levels.\n",
-          "\n",
           "    Raises:\n",
           "        Error: If the step does not change the previous level or the\n",
           "            current level.\n",
@@ -7057,8 +7054,8 @@ EDGES = json.loads(r'''
         ]
       },
       {
-        "start": 1034,
-        "stop": 1035,
+        "start": 1031,
+        "stop": 1032,
         "before": [
           "            Error: If the frame's size is not the camera's, or the time is\n"
         ],
@@ -7067,8 +7064,8 @@ EDGES = json.loads(r'''
         ]
       },
       {
-        "start": 1036,
-        "stop": 1038,
+        "start": 1033,
+        "stop": 1035,
         "before": [
           "                an `Int`.\n"
         ],
@@ -7078,16 +7075,16 @@ EDGES = json.loads(r'''
         ]
       },
       {
-        "start": 1051,
-        "stop": 1052,
+        "start": 1048,
+        "stop": 1049,
         "before": [],
         "after": [
           "        self.config.validate()\n"
         ]
       },
       {
-        "start": 1091,
-        "stop": 1092,
+        "start": 1088,
+        "stop": 1089,
         "before": [],
         "after": [
           "                _require_crossing_step(it, itdt, c)\n"
@@ -7171,9 +7168,9 @@ EDGES = json.loads(r'''
   },
   "extensions/carla/lidar.mojo": {
     "before_sha256": "919e2efbb74445d59c45dd7ae32b4ba21f6558cf9115b2d0d15c6ce24d5c8783",
-    "after_sha256": "329de8a01e55dabb778622e60e7a278eaed254824df8da0861bea676365902e2",
+    "after_sha256": "7e6c49a3e8ec17858eafbc74b7051492da1f9da6c6f7302010b5ff38c42741db",
     "before_token_sha256": "17e7bf74b87e3013c1ed6b97a9ea4b3dbe72548fd0b926618c31adf081749824",
-    "after_token_sha256": "dfa9d1889afc76757c9d08cace4ea51a0861410254442408e87faba59010c9f0",
+    "after_token_sha256": "2639355bf471ab087d2389ef4caf5551defb7d39e98ebfd12209b93502554880",
     "edits": [
       {
         "start": 28,
@@ -7187,7 +7184,7 @@ EDGES = json.loads(r'''
       },
       {
         "start": 42,
-        "stop": 66,
+        "stop": 63,
         "before": [],
         "after": [
           "\n",
@@ -7206,9 +7203,6 @@ EDGES = json.loads(r'''
           "    Args:\n",
           "        channels: How many lasers.\n",
           "\n",
-          "    Returns:\n",
-          "        Nothing.\n",
-          "\n",
           "    Raises:\n",
           "        Error: If the count is above 16777216.\n",
           "    \"\"\"\n",
@@ -7217,16 +7211,16 @@ EDGES = json.loads(r'''
         ]
       },
       {
-        "start": 138,
-        "stop": 139,
+        "start": 135,
+        "stop": 136,
         "before": [],
         "after": [
           "        require_lidar_channels(self.channels)\n"
         ]
       },
       {
-        "start": 174,
-        "stop": 175,
+        "start": 171,
+        "stop": 172,
         "before": [
           "    def laser_angles(self) -> List[Angle]:\n"
         ],
@@ -7235,8 +7229,8 @@ EDGES = json.loads(r'''
         ]
       },
       {
-        "start": 180,
-        "stop": 183,
+        "start": 177,
+        "stop": 180,
         "before": [],
         "after": [
           "\n",
@@ -7245,16 +7239,16 @@ EDGES = json.loads(r'''
         ]
       },
       {
-        "start": 184,
-        "stop": 185,
+        "start": 181,
+        "stop": 182,
         "before": [],
         "after": [
           "        require_lidar_channels(self.channels)\n"
         ]
       },
       {
-        "start": 196,
-        "stop": 197,
+        "start": 193,
+        "stop": 194,
         "before": [
           "    def points_per_laser(self, tick: Duration) -> Int:\n"
         ],
@@ -7263,8 +7257,8 @@ EDGES = json.loads(r'''
         ]
       },
       {
-        "start": 198,
-        "stop": 202,
+        "start": 195,
+        "stop": 199,
         "before": [],
         "after": [
           "\n",
@@ -7274,8 +7268,8 @@ EDGES = json.loads(r'''
         ]
       },
       {
-        "start": 209,
-        "stop": 213,
+        "start": 206,
+        "stop": 210,
         "before": [],
         "after": [
           "\n",
@@ -7285,8 +7279,8 @@ EDGES = json.loads(r'''
         ]
       },
       {
-        "start": 219,
-        "stop": 229,
+        "start": 216,
+        "stop": 226,
         "before": [
           "        return Int(exact + 0.5)\n"
         ],
@@ -7304,8 +7298,8 @@ EDGES = json.loads(r'''
         ]
       },
       {
-        "start": 320,
-        "stop": 322,
+        "start": 317,
+        "stop": 319,
         "before": [
           "            or a mesh cannot be tested.\n"
         ],
@@ -7920,9 +7914,9 @@ EDGES = json.loads(r'''
   },
   "extensions/carla/semantic_lidar.mojo": {
     "before_sha256": "057c4be981b28dcd16a5a536706eea66bc6ecb547ac75d8aa8dae7e33aae6f55",
-    "after_sha256": "23e3c9be3cce84f6955cbf6e140d37ca3eadbb6e15e8a78eee75b4f04fb0e183",
+    "after_sha256": "b0f93217b8a55ca63c5904397673f57d264efa8b46e5b3691b2d68eb93269b84",
     "before_token_sha256": "f2c83ee9bffd103e60a6f508ae0a667ab7ffa70e8160e6c377af66960e4547e8",
-    "after_token_sha256": "44d5fb6836dd63f0315b0802247488ec814406d7a691f4cb6dbeb2d3e3fe9e8e",
+    "after_token_sha256": "589c877baf5a5a2a7f3e214719bcc87afcf464a488e50f14d65b3ba135ed334a",
     "edits": [
       {
         "start": 63,
@@ -7934,7 +7928,7 @@ EDGES = json.loads(r'''
       },
       {
         "start": 312,
-        "stop": 336,
+        "stop": 333,
         "before": [
           "def _per_laser(description: LidarDescription, tick: Duration) -> Int:\n",
           "    return round_half_from_zero(\n",
@@ -7960,9 +7954,6 @@ EDGES = json.loads(r'''
           "        channels: How many lasers.\n",
           "        per_laser: How many rays one laser fires.\n",
           "\n",
-          "    Returns:\n",
-          "        Nothing.\n",
-          "\n",
           "    Raises:\n",
           "        Error: If the product does not fit in an integer.\n",
           "    \"\"\"\n",
@@ -7971,24 +7962,24 @@ EDGES = json.loads(r'''
         ]
       },
       {
-        "start": 400,
-        "stop": 401,
+        "start": 397,
+        "stop": 398,
         "before": [],
         "after": [
           "    require_lidar_rays(description.channels, per_laser)\n"
         ]
       },
       {
-        "start": 503,
-        "stop": 504,
+        "start": 500,
+        "stop": 501,
         "before": [],
         "after": [
           "    require_lidar_rays(description.channels, per_laser)\n"
         ]
       },
       {
-        "start": 542,
-        "stop": 544,
+        "start": 539,
+        "stop": 541,
         "before": [
           "        Error: If the resolution or field of view is nonfinite.\n"
         ],
@@ -7998,8 +7989,8 @@ EDGES = json.loads(r'''
         ]
       },
       {
-        "start": 553,
-        "stop": 561,
+        "start": 550,
+        "stop": 558,
         "before": [
           "    return round_half_from_zero(fov / step)\n"
         ],
@@ -8015,8 +8006,8 @@ EDGES = json.loads(r'''
         ]
       },
       {
-        "start": 595,
-        "stop": 596,
+        "start": 592,
+        "stop": 593,
         "before": [],
         "after": [
           "    require_lidar_rays(description.channels, per_laser)\n"
@@ -8249,9 +8240,9 @@ EDGES = json.loads(r'''
   },
   "extensions/humanoid/skeleton/head/hair/groom.mojo": {
     "before_sha256": "67f8ea34485c0f1a8b561dece38a933cdc5d0e6aea47d038196d68ee0b617fbd",
-    "after_sha256": "d8bb68a4e468a22d6427705c981df8da01ab22a05ee7dda51a4f4af51987d18c",
+    "after_sha256": "48a2324a527b58e63546a562e168744656fbc8a02ba8f6c9aa3274b66ebc85e5",
     "before_token_sha256": "e7e6c80b6c258755e97cdad8c169705a4ff5236df2f3066a7a3c989b7a00af94",
-    "after_token_sha256": "c4df9fe6acbccfc66827f0dec7f2af3ad7de83ff14e1a6712d5700862c5a3be6",
+    "after_token_sha256": "d355297e8a8460217cfa2f03c290b33817cbd7dcf2b6dfa252babeabb0c9f4cf",
     "edits": [
       {
         "start": 78,
@@ -8315,7 +8306,7 @@ EDGES = json.loads(r'''
       },
       {
         "start": 744,
-        "stop": 797,
+        "stop": 791,
         "before": [],
         "after": [
           "\n",
@@ -8331,9 +8322,6 @@ EDGES = json.loads(r'''
           "        guides: How many guide strands.\n",
           "        followers: How many follow strands round each guide.\n",
           "        root_tries: How many roots are tried for each guide.\n",
-          "\n",
-          "    Returns:\n",
-          "        Nothing.\n",
           "\n",
           "    Raises:\n",
           "        Error: If a guide count is outside one through 20000, a follower\n",
@@ -8360,9 +8348,6 @@ EDGES = json.loads(r'''
           "        step: How far one sample moves, in meters.\n",
           "        span: How far the walk may run, in meters.\n",
           "\n",
-          "    Returns:\n",
-          "        Nothing.\n",
-          "\n",
           "    Raises:\n",
           "        Error: If `step` is not a positive finite length, or the sample\n",
           "            count is above 16777216.\n",
@@ -8374,8 +8359,8 @@ EDGES = json.loads(r'''
         ]
       },
       {
-        "start": 834,
-        "stop": 838,
+        "start": 828,
+        "stop": 832,
         "before": [
           "            not named or its file cannot be read, or if no guide finds a\n",
           "            root.\n"
@@ -8388,16 +8373,16 @@ EDGES = json.loads(r'''
         ]
       },
       {
-        "start": 839,
-        "stop": 840,
+        "start": 833,
+        "stop": 834,
         "before": [],
         "after": [
           "    require_groom_counts(spec.guides, spec.followers, spec.root_tries)\n"
         ]
       },
       {
-        "start": 841,
-        "stop": 844,
+        "start": 835,
+        "stop": 838,
         "before": [],
         "after": [
           "    require_hair_steps(spec.step, spec.longest)\n",
@@ -8406,8 +8391,8 @@ EDGES = json.loads(r'''
         ]
       },
       {
-        "start": 1180,
-        "stop": 1181,
+        "start": 1174,
+        "stop": 1175,
         "before": [
           "):\n"
         ],
@@ -8416,16 +8401,16 @@ EDGES = json.loads(r'''
         ]
       },
       {
-        "start": 1198,
-        "stop": 1199,
+        "start": 1192,
+        "stop": 1193,
         "before": [],
         "after": [
           "    require_hair_steps(step, length)\n"
         ]
       },
       {
-        "start": 1220,
-        "stop": 1221,
+        "start": 1214,
+        "stop": 1215,
         "before": [
           ") -> Float32:\n"
         ],
@@ -8434,8 +8419,8 @@ EDGES = json.loads(r'''
         ]
       },
       {
-        "start": 1239,
-        "stop": 1242,
+        "start": 1233,
+        "stop": 1236,
         "before": [
           "    var count = max(1, Int(angle * (ra + rb) / 2 / spec.step))\n"
         ],
@@ -8446,8 +8431,8 @@ EDGES = json.loads(r'''
         ]
       },
       {
-        "start": 1270,
-        "stop": 1271,
+        "start": 1264,
+        "stop": 1265,
         "before": [
           "):\n"
         ],
@@ -8456,16 +8441,16 @@ EDGES = json.loads(r'''
         ]
       },
       {
-        "start": 1283,
-        "stop": 1284,
+        "start": 1277,
+        "stop": 1278,
         "before": [],
         "after": [
           "    require_hair_steps(step, length)\n"
         ]
       },
       {
-        "start": 1301,
-        "stop": 1302,
+        "start": 1295,
+        "stop": 1296,
         "before": [
           "):\n"
         ],
@@ -8474,16 +8459,16 @@ EDGES = json.loads(r'''
         ]
       },
       {
-        "start": 1314,
-        "stop": 1315,
+        "start": 1308,
+        "stop": 1309,
         "before": [],
         "after": [
           "    require_hair_steps(step, length)\n"
         ]
       },
       {
-        "start": 1332,
-        "stop": 1333,
+        "start": 1326,
+        "stop": 1327,
         "before": [
           "):\n"
         ],
@@ -8492,8 +8477,8 @@ EDGES = json.loads(r'''
         ]
       },
       {
-        "start": 1352,
-        "stop": 1354,
+        "start": 1346,
+        "stop": 1348,
         "before": [
           "    var climb = Int(\n",
           "        acos(min(Float32(1), max(Float32(-1), bottom.dot(first))))\n",
@@ -8506,8 +8491,8 @@ EDGES = json.loads(r'''
         ]
       },
       {
-        "start": 1355,
-        "stop": 1357,
+        "start": 1349,
+        "stop": 1351,
         "before": [],
         "after": [
           "    require_hair_steps(step, climb_span)\n",
@@ -8515,8 +8500,8 @@ EDGES = json.loads(r'''
         ]
       },
       {
-        "start": 1361,
-        "stop": 1364,
+        "start": 1355,
+        "stop": 1358,
         "before": [
           "    var count = Int(turns * Float32(2 * pi) * radius / step) + 1\n"
         ],
@@ -8527,8 +8512,8 @@ EDGES = json.loads(r'''
         ]
       },
       {
-        "start": 1377,
-        "stop": 1378,
+        "start": 1371,
+        "stop": 1372,
         "before": [
           "):\n"
         ],
@@ -8537,8 +8522,8 @@ EDGES = json.loads(r'''
         ]
       },
       {
-        "start": 1394,
-        "stop": 1395,
+        "start": 1388,
+        "stop": 1389,
         "before": [],
         "after": [
           "    require_hair_steps(spacing, total)\n"
@@ -11074,9 +11059,9 @@ EDGES = json.loads(r'''
   },
   "postprocessing/sampling.mojo": {
     "before_sha256": "310d11eb570ce5ed1cb0a2d35f5cadf759935b3b5d674c0b4a1bc59dec28fe0d",
-    "after_sha256": "7d77bc9958c613810e5c84a3a509c94c884d5be51b4cfaa71b06b302851761b2",
+    "after_sha256": "86b3b794c9dfcd9ce16c9cf8737d0d7bb377b35ee253db84c438c2166d21ef4b",
     "before_token_sha256": "027ae468f0a6ea4cbb1c5b2d3219d06fda94968b63b4dc42c13b00145b0e872a",
-    "after_token_sha256": "3263d4a77729278f380b3a7a8539b8a42d0559479ea6c69629b3699e7dc6fd7b",
+    "after_token_sha256": "b92dc630d5233ac7eced0e2ed813857143c40ec3cea70eaccca90102ebcafdb0",
     "edits": [
       {
         "start": 15,
@@ -11091,7 +11076,7 @@ EDGES = json.loads(r'''
       },
       {
         "start": 190,
-        "stop": 215,
+        "stop": 212,
         "before": [],
         "after": [
           "def nearest_held_index(unit: Float32, count: Int) -> Int:\n",
@@ -11108,9 +11093,6 @@ EDGES = json.loads(r'''
           "\n",
           "    Returns:\n",
           "        The pixel, from zero through `count - 1`.\n",
-          "\n",
-          "    Raises:\n",
-          "        Error: Never.\n",
           "    \"\"\"\n",
           "    if not isfinite(unit) or unit <= 0:\n",
           "        return 0\n",
@@ -11122,8 +11104,8 @@ EDGES = json.loads(r'''
         ]
       },
       {
-        "start": 251,
-        "stop": 254,
+        "start": 248,
+        "stop": 251,
         "before": [],
         "after": [
           "    A width above 2^23 is measured in `Float64`, so the last column stays\n",
@@ -11132,8 +11114,8 @@ EDGES = json.loads(r'''
         ]
       },
       {
-        "start": 261,
-        "stop": 262,
+        "start": 258,
+        "stop": 259,
         "before": [
           "    return (Float32(x) + 0.5) / Float32(width)\n"
         ],
@@ -11142,8 +11124,8 @@ EDGES = json.loads(r'''
         ]
       },
       {
-        "start": 266,
-        "stop": 269,
+        "start": 263,
+        "stop": 266,
         "before": [],
         "after": [
           "\n",
@@ -11152,8 +11134,8 @@ EDGES = json.loads(r'''
         ]
       },
       {
-        "start": 277,
-        "stop": 278,
+        "start": 274,
+        "stop": 275,
         "before": [
           "    return 1 - (Float32(y) + 0.5) / Float32(height)\n"
         ],
@@ -11162,8 +11144,8 @@ EDGES = json.loads(r'''
         ]
       },
       {
-        "start": 287,
-        "stop": 290,
+        "start": 284,
+        "stop": 287,
         "before": [],
         "after": [
           "    A count past 2^24 is not a whole `Float32`. That count is multiplied\n",
@@ -11172,8 +11154,8 @@ EDGES = json.loads(r'''
         ]
       },
       {
-        "start": 297,
-        "stop": 311,
+        "start": 294,
+        "stop": 308,
         "before": [
           "    return min(max(coordinate * Float32(count) - 0.5, 0), Float32(count - 1))\n"
         ],
@@ -11198,9 +11180,9 @@ EDGES = json.loads(r'''
   },
   "postprocessing/screen_space.mojo": {
     "before_sha256": "efc4c80b5308c811da4bc8492619bd256ecd1eac7f82fca8214fd45f4867b6f7",
-    "after_sha256": "02d0faae2c83d79d34b6b3085fdaf2dd5e6fae7470ac48ac5685fa30fd6237e0",
+    "after_sha256": "ed64de612ccaca008a041bc1cc984aad2a3b19720ffa96b959799ce4c1061ac8",
     "before_token_sha256": "3db7447cb83f42be8063848e510e64e98977f2950c0f20484fbc5cc0ffb662d0",
-    "after_token_sha256": "36d798c938276c878d05cb0da1b1ae0ba8820adb27f7074a50f829b65d331390",
+    "after_token_sha256": "1335f7884da890b574388d985e24464b11660f9c7c37c5e04000bbe1728c27d4",
     "edits": [
       {
         "start": 550,
@@ -11372,18 +11354,19 @@ EDGES = json.loads(r'''
       },
       {
         "start": 1100,
-        "stop": 1101,
+        "stop": 1102,
         "before": [
           "        radius: The farthest tap.\n",
           "        std_dev: The standard deviation, in pixels.\n"
         ],
         "after": [
-          "        radius: The farthest tap. Zero through 16777216.\n"
+          "        radius: The farthest tap. Zero through 16777216.\n",
+          "        std_dev: The standard deviation of the Gaussian, in taps.\n"
         ]
       },
       {
-        "start": 1104,
-        "stop": 1107,
+        "start": 1105,
+        "stop": 1108,
         "before": [],
         "after": [
           "\n",
@@ -11392,8 +11375,8 @@ EDGES = json.loads(r'''
         ]
       },
       {
-        "start": 1108,
-        "stop": 1112,
+        "start": 1109,
+        "stop": 1113,
         "before": [],
         "after": [
           "    if radius < 0:\n",
@@ -11403,8 +11386,8 @@ EDGES = json.loads(r'''
         ]
       },
       {
-        "start": 1376,
-        "stop": 1403,
+        "start": 1377,
+        "stop": 1404,
         "before": [],
         "after": [
           "def _ssr_max_step(width: Int, height: Int) -> Float32:\n",
@@ -11437,8 +11420,8 @@ EDGES = json.loads(r'''
         ]
       },
       {
-        "start": 1454,
-        "stop": 1455,
+        "start": 1455,
+        "stop": 1456,
         "before": [
           "    var max_step = Float32(Int(sqrt(Float32(width * width + height * height))))\n"
         ],
@@ -11447,8 +11430,8 @@ EDGES = json.loads(r'''
         ]
       },
       {
-        "start": 1504,
-        "stop": 1505,
+        "start": 1505,
+        "stop": 1506,
         "before": [
           ") -> List[FloatColor]:\n"
         ],
@@ -11457,8 +11440,8 @@ EDGES = json.loads(r'''
         ]
       },
       {
-        "start": 1516,
-        "stop": 1519,
+        "start": 1517,
+        "stop": 1520,
         "before": [],
         "after": [
           "\n",
@@ -11467,8 +11450,8 @@ EDGES = json.loads(r'''
         ]
       },
       {
-        "start": 1520,
-        "stop": 1521,
+        "start": 1521,
+        "stop": 1522,
         "before": [],
         "after": [
           "    require_screen_extent(width, height)\n"
@@ -12599,13 +12582,13 @@ EDGES = json.loads(r'''
   },
   "render/texture.mojo": {
     "before_sha256": "3552ba623c9c6c8dd2ea0d7b6f4eb0aac924854086a0ddd9b90865e3f1978c15",
-    "after_sha256": "747820784c4d4b6f5bab12bf4466b58054fc14662869db593f0e0f4c3ab0e981",
+    "after_sha256": "4d8f34399877c4c4c4ffdf9db6cd695396c28e50cb1a56979aae4bc5d159c1ac",
     "before_token_sha256": "44e314755a6659caf4e1994252ad35a083c779d9c584675209e31729db8c0781",
-    "after_token_sha256": "fa2ab485695797da4929b2fb48dcf8aefcffb1cdda5bd47a3e77e4728ace6953",
+    "after_token_sha256": "1a27f66c8305f242db58734877577cfb3e6d08730c39059d0c3cd96719831bc2",
     "edits": [
       {
         "start": 853,
-        "stop": 898,
+        "stop": 892,
         "before": [],
         "after": [
           "\n",
@@ -12624,9 +12607,6 @@ EDGES = json.loads(r'''
           "\n",
           "    Returns:\n",
           "        The texel index, before wrapping.\n",
-          "\n",
-          "    Raises:\n",
-          "        Error: Never.\n",
           "    \"\"\"\n",
           "    if count > 16777216:\n",
           "        return Int(floor(Float64(unit) * Float64(count)))\n",
@@ -12646,9 +12626,6 @@ EDGES = json.loads(r'''
           "\n",
           "    Returns:\n",
           "        The place, in texels from a center.\n",
-          "\n",
-          "    Raises:\n",
-          "        Error: Never.\n",
           "    \"\"\"\n",
           "    if count > 16777216:\n",
           "        return Float32(Float64(unit) * Float64(count) - 0.5)\n",
@@ -12656,16 +12633,16 @@ EDGES = json.loads(r'''
         ]
       },
       {
-        "start": 1764,
-        "stop": 1765,
+        "start": 1758,
+        "stop": 1759,
         "before": [],
         "after": [
           "        A side above 16777216 texels is scaled in `Float64`.\n"
         ]
       },
       {
-        "start": 1808,
-        "stop": 1810,
+        "start": 1802,
+        "stop": 1804,
         "before": [],
         "after": [
           "        var su = sample_coordinate(u, self.wrap_s)\n",
@@ -12673,8 +12650,8 @@ EDGES = json.loads(r'''
         ]
       },
       {
-        "start": 1812,
-        "stop": 1813,
+        "start": 1806,
+        "stop": 1807,
         "before": [
           "        var from_top = row_coordinate(v, self.flip_y)\n"
         ],
@@ -12683,8 +12660,8 @@ EDGES = json.loads(r'''
         ]
       },
       {
-        "start": 1816,
-        "stop": 1818,
+        "start": 1810,
+        "stop": 1812,
         "before": [
           "                Int(floor(u * Float32(wide))),\n",
           "                Int(floor(from_top * Float32(tall))),\n"
@@ -12695,8 +12672,8 @@ EDGES = json.loads(r'''
         ]
       },
       {
-        "start": 1823,
-        "stop": 1825,
+        "start": 1817,
+        "stop": 1819,
         "before": [
           "        var across = u * Float32(wide) - 0.5\n",
           "        var down = from_top * Float32(tall) - 0.5\n"
@@ -12707,8 +12684,8 @@ EDGES = json.loads(r'''
         ]
       },
       {
-        "start": 2078,
-        "stop": 2097,
+        "start": 2072,
+        "stop": 2091,
         "before": [],
         "after": [
           "\n",
@@ -12846,9 +12823,9 @@ EDGES = json.loads(r'''
   },
   "render/volume_texture.mojo": {
     "before_sha256": "e599b4924490cdd8d828749ae4e25cea751f59bfa59198cd3350b5823bda52bf",
-    "after_sha256": "b441a9c8f11da16ca9d26f4c7f020cf40382edb1a9e18a9f5995069c0f1c320f",
+    "after_sha256": "4887e63a767ffb7cc8c764be1bc8256c2b4589bc149b4486e8a1c7446ac09557",
     "before_token_sha256": "83ed6ab119ab59fceeb4908da67588e807ab53e43ffb30a07111f014cc76d0e0",
-    "after_token_sha256": "bd333eb36e3a1bff5e9d185e1def07df0f968c787390bf96bd90a6872d031d36",
+    "after_token_sha256": "9c94bfe94b558d41f4e1cb3e0fbf668c3f6d8ce1aaf23601a3c671d2f52b8bfd",
     "edits": [
       {
         "start": 60,
@@ -12881,7 +12858,7 @@ EDGES = json.loads(r'''
       },
       {
         "start": 614,
-        "stop": 636,
+        "stop": 633,
         "before": [],
         "after": [
           "def _bounded_axis(value: Float32, mode: Wrap) -> Float32:\n",
@@ -12897,9 +12874,6 @@ EDGES = json.loads(r'''
           "\n",
           "    Returns:\n",
           "        The coordinate the sampler indexes.\n",
-          "\n",
-          "    Raises:\n",
-          "        Error: Never.\n",
           "    \"\"\"\n",
           "    if not isfinite(value):\n",
           "        return 0\n",
@@ -12909,8 +12883,8 @@ EDGES = json.loads(r'''
         ]
       },
       {
-        "start": 657,
-        "stop": 660,
+        "start": 654,
+        "stop": 657,
         "before": [
           "    levels. Each index is wrapped by its axis's mode.\n"
         ],
@@ -12921,8 +12895,8 @@ EDGES = json.loads(r'''
         ]
       },
       {
-        "start": 677,
-        "stop": 680,
+        "start": 674,
+        "stop": 677,
         "before": [],
         "after": [
           "    var ss = _bounded_axis(s, wrap_s)\n",
@@ -12931,8 +12905,8 @@ EDGES = json.loads(r'''
         ]
       },
       {
-        "start": 685,
-        "stop": 688,
+        "start": 682,
+        "stop": 685,
         "before": [
           "            wrap_index(Int(floor(s * wide)), width, wrap_s),\n",
           "            wrap_index(Int(floor(t * tall)), height, wrap_t),\n",
@@ -12945,8 +12919,8 @@ EDGES = json.loads(r'''
         ]
       },
       {
-        "start": 689,
-        "stop": 692,
+        "start": 686,
+        "stop": 689,
         "before": [
           "    var across = s * wide - 0.5\n",
           "    var up = t * tall - 0.5\n",
@@ -12959,8 +12933,8 @@ EDGES = json.loads(r'''
         ]
       },
       {
-        "start": 888,
-        "stop": 890,
+        "start": 885,
+        "stop": 887,
         "before": [
           "    inside the stack. `floor(layer + 0.5)`, so a half rounds up.\n"
         ],
@@ -12970,8 +12944,8 @@ EDGES = json.loads(r'''
         ]
       },
       {
-        "start": 899,
-        "stop": 901,
+        "start": 896,
+        "stop": 898,
         "before": [],
         "after": [
           "    if isnan(rounded):\n",
@@ -12979,8 +12953,8 @@ EDGES = json.loads(r'''
         ]
       },
       {
-        "start": 1017,
-        "stop": 1021,
+        "start": 1014,
+        "stop": 1018,
         "before": [
           "        blends the four around it. Two layers are never blended.\n"
         ],
@@ -12992,8 +12966,8 @@ EDGES = json.loads(r'''
         ]
       },
       {
-        "start": 1063,
-        "stop": 1066,
+        "start": 1060,
+        "stop": 1063,
         "before": [
           "    blends the four around it. Two layers are never blended.\n"
         ],
@@ -13004,8 +12978,8 @@ EDGES = json.loads(r'''
         ]
       },
       {
-        "start": 1083,
-        "stop": 1085,
+        "start": 1080,
+        "stop": 1082,
         "before": [],
         "after": [
           "    var su = _bounded_axis(u, wrap_s)\n",
@@ -13013,8 +12987,8 @@ EDGES = json.loads(r'''
         ]
       },
       {
-        "start": 1089,
-        "stop": 1091,
+        "start": 1086,
+        "stop": 1088,
         "before": [
           "            wrap_index(Int(floor(u * wide)), width, wrap_s),\n",
           "            wrap_index(Int(floor(v * tall)), height, wrap_t),\n"
@@ -13025,8 +12999,8 @@ EDGES = json.loads(r'''
         ]
       },
       {
-        "start": 1093,
-        "stop": 1095,
+        "start": 1090,
+        "stop": 1092,
         "before": [
           "    var across = u * wide - 0.5\n",
           "    var up = v * tall - 0.5\n"
@@ -18318,10 +18292,10 @@ EDGE_SHA256 = {'core/deform.mojo': 'b6afec67eea77b1a76cae98df1b4399de366b2a82878
  'extensions/carla/agents.mojo': '7dc1f0300ff6b23cbd8d6190647ca17c544baeaa826d1085863a5e3a51eb3477',
  'extensions/carla/agents_route.mojo': 'a71d4f7a33296671ff481134438f871ccd313299563e6c865972359e0508c4d3',
  'extensions/carla/assets.mojo': '1f82f569bc1ee02238d2925e063ab4a1bccf71b80d2045d4197695d164123fa9',
- 'extensions/carla/cameras.mojo': 'b454c92ad2e521ecd53b2af87f0ee87bb1739eb7ffcd262b02cb74b5cbd8031a',
+ 'extensions/carla/cameras.mojo': '5eb8f2f38290d3328361cd4c8c03775fd11d4c21bfcdd01c483afe2231832d1e',
  'extensions/carla/geometry.mojo': '8e4dc462a9a4544066ba162b7afe9739456342ac778d159d77855e5fb4019683',
  'extensions/carla/lane_geometry.mojo': '2bd5a91d7e40d2b3e40314f753184002ba7aee0eccab46900a9dddbb53d7e382',
- 'extensions/carla/lidar.mojo': '05a697f4b10c692862a57acd96fe9902f85fa7161da85f09700c0217660ba6ec',
+ 'extensions/carla/lidar.mojo': '0412a9fb327c1134e1ddde0b9411197172b9f1867d66279e85f1fbe4d3841cdf',
  'extensions/carla/map.mojo': '2a739d144b8f137c6d6af536c9f4937709f15152dbdb92d113b3d95892672a1a',
  'extensions/carla/map_builder.mojo': 'f10f4855653a78039ea7b08e16732f20cd2c810b347dca7ed650bb9bb8ffac39',
  'extensions/carla/math.mojo': '4d0770dc31ef89a0438eb1ad4cda697ec09bee8ca71aa69dbf82085c62f40500',
@@ -18333,7 +18307,7 @@ EDGE_SHA256 = {'core/deform.mojo': 'b6afec67eea77b1a76cae98df1b4399de366b2a82878
  'extensions/carla/render_sky.mojo': '35caf04e12b7137690c73ba9aafc16234bd33379d47412fdd6a62ccdcd10d236',
  'extensions/carla/render_textures.mojo': '7816aa15fb9eed608183777ab26769688540e84453eb0021bf64b2a930b39e2a',
  'extensions/carla/render_weather.mojo': 'df1f076e52c856b2279c50293edfadb81bb22ee1968cc4f2f7604b31d2133b72',
- 'extensions/carla/semantic_lidar.mojo': 'b90c41a609d72ead493f4ad512ed9e6321e5a87674ea8f5d8a2009b0d7137623',
+ 'extensions/carla/semantic_lidar.mojo': 'e72064a4b99d643585b07bc1d0e888248710d71de3dd8dbf8e249e545b08b0a3',
  'extensions/carla/sensor.mojo': '4f8123d63ba83d79627b57c8f15bce7027a8c40f622a8c187e4bcdb4b89496df',
  'extensions/carla/sensor_data.mojo': 'fd7f9bed3a11bfc5d48c8397259e16957d187a747dc83d49cff31133f854ad3b',
  'extensions/carla/sensor_manager.mojo': '26af2114c101807527138252638fa5d85a3a4bed2c4fa63679723d8f62429639',
@@ -18343,7 +18317,7 @@ EDGE_SHA256 = {'core/deform.mojo': 'b6afec67eea77b1a76cae98df1b4399de366b2a82878
  'extensions/carla/traffic_sign.mojo': '361bd58742d1d9f96051bf8a4aa312a8711bbaf20bb5868c6d1f30a9f53ead56',
  'extensions/carla/v2x.mojo': 'fe4f85ef760c4b25d99b75ab05b7f137f7e22041129f2e0ed8f8f63f887e99d8',
  'extensions/carla/world.mojo': 'aeec9ddf2a5c0a2546e82643678125e2dad5bfca9437421f6ba3e8bd7a2db6ca',
- 'extensions/humanoid/skeleton/head/hair/groom.mojo': '5e50ddd81bfc8eac5d5e0f57d1e0e8a0e45ea30b025c99acb8f2ad5e0864ad7f',
+ 'extensions/humanoid/skeleton/head/hair/groom.mojo': '35bf93c386804e0836a953b981790af7378e42362f4cb72e0d1622f785542c00',
  'extensions/humanoid/skeleton/head/hair/shading.mojo': '750bad042961cf21294f6a0c352ca332d42fce673acea3643b4a39a4bf77003f',
  'extensions/humanoid/skeleton/head/hair/strands.mojo': '7448d4398a1552b0fce1ee1a4131c5f667e79f0854c56f45ddda8fa8f37fdc7f',
  'extensions/physics/world.mojo': '651e723bc91bf4571740dbb09bd87b79f87ba09557886dd01818a6fc58ca9652',
@@ -18389,8 +18363,8 @@ EDGE_SHA256 = {'core/deform.mojo': 'b6afec67eea77b1a76cae98df1b4399de366b2a82878
  'postprocessing/filter_nodes.mojo': 'e4418b40903991eda041b79ba1a8f43d06ed36ca9d8c1e06cf99f88bf8f5fd50',
  'postprocessing/gtao.mojo': 'c0fd6ed0a7662e96e548e7b5b90f6ddef4dd5f155a565493438c2e02e341c98a',
  'postprocessing/render_passes.mojo': '9eb2200bfdf9efe3c4db4c342dc9c7e1e2ff0f43d30ca28e7be0e2306c8daf7e',
- 'postprocessing/sampling.mojo': 'b37ef64ff8d4af67b290c2fc4c210cebbb7fb08d7f5301b3ec5f35666cdc3093',
- 'postprocessing/screen_space.mojo': '34f074a7be8bde8c3037d56ed6a3b9381ce756627ecea82bf57d0279c4dad514',
+ 'postprocessing/sampling.mojo': 'cfc4c18f6c21a10bef53ff3bd88e299f3a6f0b9e5b5767fe82d5c9ccd0d96a93',
+ 'postprocessing/screen_space.mojo': '8b775f0e8c9dadc722649e591537cf4a6c7919bfdc2660b0a7821325cbd88a5f',
  'postprocessing/shaders.mojo': '6e045ed0a008b33c9cbbe387c39b3a5c2a2c438052142ec7910c625f5e7ec203',
  'postprocessing/ssgi.mojo': '2e2f13286c83e2299f64e95d7b1c4e6ccaa6942c436398f27709762e768dc4e4',
  'postprocessing/ssr_node.mojo': '1db558f15ab39622488a946dff80d96ddc3eb9a7aceaba245716d3fd37145bb0',
@@ -18412,12 +18386,12 @@ EDGE_SHA256 = {'core/deform.mojo': 'b6afec67eea77b1a76cae98df1b4399de366b2a82878
  'render/splatrule.mojo': '54e73c0e96327cdf863613db0b082672240aec0562e09e9bc471a1da2c4a39a6',
  'render/target.mojo': '5d33e908ee6d26cee44948ff3800f48cda2759a5f7ca0e3e8993c2b377df76ee',
  'render/tasks.mojo': 'b8dfd9c3417ae3c05156a394811e45a7eb7a990cedb22f8d21652053d9ce61a6',
- 'render/texture.mojo': 'c0b465bae96926e966ae3dcca28e998562fee200f683b40fad8624440661a351',
+ 'render/texture.mojo': '5091a394a8c2039e3e3e144bf4c7161cd20074c9943a18e8c986bbc4eca9ca07',
  'render/tonemap.mojo': '9b7ec9c567c09176ccd5b338302b4d59985869c7035855754b819444464f1065',
  'render/transmission.mojo': 'bb1b8248c04478e3845e9f1b4f76e18f0294f0181ac3ae5d23ed093124d938c4',
  'render/uastc.mojo': 'e6833f17255cf058e2f4356e45c0fc7123d971c524fadd0fd3dda02d9d590a77',
  'render/uastc_hdr.mojo': 'a5b7c10868d00d06ec33ea6f8c8b42ad836e8f833a413b6b9b484a6e5cc0def4',
- 'render/volume_texture.mojo': '37b13120189492deb97c736da09810194e8e7ec1a409f1665e23be722a973a28',
+ 'render/volume_texture.mojo': 'dce742109273a9f46fe0c39f3b234ff89a835e69ee266557d83f95c2018744d3',
  'renderers/draw_filter.mojo': '3c97c433033ee0b0e6c0de6c712395b621b14969d017dbd47ae62bf0849a0291',
  'renderers/renderer.mojo': '20e908a01406c82b262ded794b8f11bdeac37231f47efd2013eb7e942d7b4a8b',
  'tests/_sample_dispatch_controls.mojo': '1b8250d0cb155e2f0bf7e9d6fbef2c3bd94f1b243c9cf1b43e542c0e67661782',
@@ -18560,7 +18534,7 @@ EDGE_SHA256 = {'core/deform.mojo': 'b6afec67eea77b1a76cae98df1b4399de366b2a82878
  'tools/carla_lane_oracle/translated_parameter_resolution.py': '1c63297c0097ce50b9f314ba321e7f4d04c009f6379552a84adefb62a2a7f375',
  'tools/compile_fail_expectations.json': 'a15d4cff3d89429312350a4da95604569da83be105f69a0690025904c2cfbc84',
  'tools/test_conditioned_coverage_loops.py': 'f88451e7313fd84cc788847b1c960dc395b98736779a92c81a1d056ff2977520'}
-DATA_SHA256 = 'fbb6045c34ee89d6909add5d7c40b33cc1066846d909bababf8d563ee9ebc9df'
+DATA_SHA256 = '883b545b0584273415842767f7928578e4ebd39213f573602f3e72624a8f418f'
 # END FIXED PR780 SUCCESSOR DATA
 
 
@@ -18576,7 +18550,7 @@ def sha(raw):
 def _index_snapshot():
     """Authenticate and detach the fixed per-edge digests and bound inputs."""
     require(type(DATA_SHA256) is str, 'authority digest selector is not a builtin string')
-    require(DATA_SHA256 == 'fbb6045c34ee89d6909add5d7c40b33cc1066846d909bababf8d563ee9ebc9df', 'authority digest selector changed')
+    require(DATA_SHA256 == '883b545b0584273415842767f7928578e4ebd39213f573602f3e72624a8f418f', 'authority digest selector changed')
     encoded = json.dumps({'edges': EDGE_SHA256, 'bound_inputs': BOUND_INPUTS},
                          sort_keys=True, separators=(',', ':'))
     require(sha(encoded) == DATA_SHA256, 'fixed source inverse data changed')

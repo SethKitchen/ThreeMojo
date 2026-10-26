@@ -272,9 +272,6 @@ def _grid_index(value: Float32) -> Int:
     Returns:
         The index, or `Int.MAX` / `Int.MIN` when the coordinate lies past
         the grid.
-
-    Raises:
-        Error: Never.
     """
     if not (isfinite(value) and value < Float32(Int.MAX)):
         return Int.MAX

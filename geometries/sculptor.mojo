@@ -119,9 +119,6 @@ def _stamp_count(distance: Float64, spacing: Float64) -> Int:
 
     Returns:
         The stamp count, from zero through `MAX_STROKE_STAMPS`.
-
-    Raises:
-        Error: Never.
     """
     if not isfinite(distance) or not isfinite(spacing) or not (spacing > 0):
         return 0

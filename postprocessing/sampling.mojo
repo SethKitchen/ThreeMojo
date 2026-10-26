@@ -202,9 +202,6 @@ def nearest_held_index(unit: Float32, count: Int) -> Int:
 
     Returns:
         The pixel, from zero through `count - 1`.
-
-    Raises:
-        Error: Never.
     """
     if not isfinite(unit) or unit <= 0:
         return 0

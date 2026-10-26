@@ -3599,41 +3599,35 @@ def _edits_41(
         stops: The exclusive end lines.
         befores: The predecessor lines for each span.
     """
-    starts.append(319)
-    stops.append(321)
+    starts.append(317)
+    stops.append(319)
     befores.append("            or a mesh cannot be tested.\n")
-    starts.append(218)
-    stops.append(228)
+    starts.append(216)
+    stops.append(226)
     befores.append("        return Int(exact + 0.5)\n")
-    starts.append(214)
-    stops.append(217)
-    befores.append(
-        "            Float32(self.points_per_second)\n            * t"
-        "ick.to(SECOND)\n            / Float32(self.channels)\n"
-    )
-    starts.append(208)
-    stops.append(212)
+    starts.append(206)
+    stops.append(210)
     befores.append("")
-    starts.append(198)
-    stops.append(201)
+    starts.append(195)
+    stops.append(199)
     befores.append("")
-    starts.append(196)
-    stops.append(197)
+    starts.append(193)
+    stops.append(194)
     befores.append("    def points_per_laser(self, tick: Duration) -> Int:\n")
-    starts.append(184)
-    stops.append(185)
+    starts.append(181)
+    stops.append(182)
     befores.append("")
-    starts.append(180)
-    stops.append(183)
+    starts.append(177)
+    stops.append(180)
     befores.append("")
-    starts.append(174)
-    stops.append(175)
+    starts.append(171)
+    stops.append(172)
     befores.append("    def laser_angles(self) -> List[Angle]:\n")
-    starts.append(138)
-    stops.append(139)
+    starts.append(135)
+    stops.append(136)
     befores.append("")
     starts.append(42)
-    stops.append(66)
+    stops.append(63)
     befores.append("")
     starts.append(28)
     stops.append(29)
@@ -3729,25 +3723,25 @@ def _edits_44(
         stops: The exclusive end lines.
         befores: The predecessor lines for each span.
     """
-    starts.append(598)
-    stops.append(599)
+    starts.append(592)
+    stops.append(593)
     befores.append("")
-    starts.append(553)
-    stops.append(564)
+    starts.append(550)
+    stops.append(558)
     befores.append("    return round_half_from_zero(fov / step)\n")
-    starts.append(542)
-    stops.append(544)
+    starts.append(539)
+    stops.append(541)
     befores.append(
         "        Error: If the resolution or field of view is nonfinite.\n"
     )
-    starts.append(503)
-    stops.append(504)
+    starts.append(500)
+    stops.append(501)
     befores.append("")
-    starts.append(400)
-    stops.append(401)
+    starts.append(397)
+    stops.append(398)
     befores.append("")
     starts.append(312)
-    stops.append(336)
+    stops.append(333)
     befores.append(
         "def _per_laser(description: LidarDescription, tick: Duration"
         ") -> Int:\n    return round_half_from_zero(\n        Float32"
@@ -4219,7 +4213,7 @@ def restored_border_pins(
     var live_18 = Path("extensions/carla/radar.mojo").read_text()
     if (
         sha256_hex(live_18.as_bytes())
-        != "a170331af50d754af2058d15f0357cee7d3d18a0506b4f89cfe406d5e99c64d4"
+        != "79d31d62991aa60a35e008098fda25c9ba559e94c5823bbfe768061a5005f775"
     ):
         raise Error(
             "reviewed border parser successor: border pin changed: "
@@ -4832,7 +4826,7 @@ def restored_border_pins(
     var live_41 = Path("extensions/carla/lidar.mojo").read_text()
     if (
         sha256_hex(live_41.as_bytes())
-        != "a23d53c2c0fdb93c1a2bfb9c9f68a28ad046040b33e47932508d5ee98d2cc8f2"
+        != "7e6c49a3e8ec17858eafbc74b7051492da1f9da6c6f7302010b5ff38c42741db"
     ):
         raise Error(
             "reviewed border parser successor: border pin changed: "
@@ -4907,7 +4901,7 @@ def restored_border_pins(
     var live_44 = Path("extensions/carla/semantic_lidar.mojo").read_text()
     if (
         sha256_hex(live_44.as_bytes())
-        != "0408f4c71106fe2c7089793ccf6438326a5e9320dddb82a169ecfa669444a685"
+        != "b0f93217b8a55ca63c5904397673f57d264efa8b46e5b3691b2d68eb93269b84"
     ):
         raise Error(
             "reviewed border parser successor: border pin changed: "

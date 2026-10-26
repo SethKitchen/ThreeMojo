@@ -224,9 +224,6 @@ def check_mass_box(
         step: Cell size. The caller has already required a usable step.
         kind: The sample name used in the error text.
 
-    Returns:
-        Nothing.
-
     Raises:
         Error: If a bound is not finite, the box is unordered, or a
             span's rounded cell count does not fit in `Int`.

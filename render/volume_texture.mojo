@@ -625,9 +625,6 @@ def _bounded_axis(value: Float32, mode: Wrap) -> Float32:
 
     Returns:
         The coordinate the sampler indexes.
-
-    Raises:
-        Error: Never.
     """
     if not isfinite(value):
         return 0

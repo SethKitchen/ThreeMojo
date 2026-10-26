@@ -426,9 +426,6 @@ def require_computation_size(size_x: Int, size_y: Int) raises:
         size_x: How many texels across.
         size_y: How many texels up.
 
-    Returns:
-        Nothing.
-
     Raises:
         Error: If either size is not positive, or the texel buffer does
             not fit in an integer.

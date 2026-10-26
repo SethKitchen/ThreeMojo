@@ -221,9 +221,6 @@ def require_lut_steps(count: Int) raises:
     Args:
         count: How many steps.
 
-    Returns:
-        Nothing.
-
     Raises:
         Error: If `count` is below one or above 16777216.
     """

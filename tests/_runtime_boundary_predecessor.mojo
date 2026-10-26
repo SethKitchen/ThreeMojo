@@ -13,7 +13,7 @@ from tools._sha256 import sha256_hex
 comptime _CAMERAS = "extensions/carla/cameras.mojo"
 """The live cameras module."""
 comptime _CAMERAS_LIVE_SHA256 = (
-    "f979c362a03bcc4c0670c2214e229d3bed94d9fb4f9cf8353d2ac6d9688965fb"
+    "1635205c929008c0fe3eae1eb77c363d1cbb6927572f8dbd76eee4b3a7e7c17a"
 )
 """The file digest of the live cameras module."""
 comptime _CAMERAS_RESTORED_SHA256 = (
@@ -118,23 +118,23 @@ def _camera_edits(
         stops: The exclusive end lines.
         befores: The predecessor lines for each span.
     """
-    starts.append(1091)
-    stops.append(1092)
+    starts.append(1088)
+    stops.append(1089)
     befores.append("")
-    starts.append(1051)
-    stops.append(1052)
+    starts.append(1048)
+    stops.append(1049)
     befores.append("")
-    starts.append(1036)
-    stops.append(1038)
-    befores.append("                an `Int`.\n")
-    starts.append(1034)
+    starts.append(1033)
     stops.append(1035)
+    befores.append("                an `Int`.\n")
+    starts.append(1031)
+    stops.append(1032)
     befores.append(
         "            Error: If the frame's size is not the camera's, "
         "or the time is\n"
     )
     starts.append(944)
-    stops.append(970)
+    stops.append(967)
     befores.append("")
     starts.append(808)
     stops.append(844)

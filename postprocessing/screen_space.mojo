@@ -1099,6 +1099,7 @@ def blur_weights(radius: Int, std_dev: Float32) raises -> List[Float32]:
 
     Args:
         radius: The farthest tap. Zero through 16777216.
+        std_dev: The standard deviation of the Gaussian, in taps.
 
     Returns:
         One weight per tap, the center first.

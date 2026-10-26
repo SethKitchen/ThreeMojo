@@ -326,9 +326,6 @@ def require_lidar_rays(channels: Int, per_laser: Int) raises:
         channels: How many lasers.
         per_laser: How many rays one laser fires.
 
-    Returns:
-        Nothing.
-
     Raises:
         Error: If the product does not fit in an integer.
     """

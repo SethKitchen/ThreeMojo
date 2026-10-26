@@ -225,9 +225,6 @@ def _clip_half(
 
     Returns:
         The corners that stay, with a new corner where an edge crosses.
-
-    Raises:
-        Error: Never.
     """
     var out = List[Vector3]()
     var count = len(points)
@@ -258,9 +255,6 @@ def _clip_triangle(
     Returns:
         The clipped polygon, in order. Empty when the triangle misses
         the box.
-
-    Raises:
-        Error: Never.
     """
     var polygon = List[Vector3]()
     polygon.append(a)
