@@ -69,12 +69,14 @@ from tools._owned_process import (
     SIGTERM,
     ExecPlan,
     SignalHold,
+    SignalSet,
     at_cwd,
     c_bytes,
     close_fd,
     errno,
     hold_signals,
     make_pipe,
+    mask_how_set,
     open_at,
     signal_group,
     spawn,
@@ -1703,12 +1705,19 @@ def _release_capture(folder: String) raises:
         raise Error(removed.output)
 
 
-def _start(command: List[String], output: Int) raises -> Tuple[Int, Int]:
-    """Start `command` in a new session.
+def _start(
+    command: List[String], output: Int, hold: SignalHold
+) raises -> Tuple[Int, Int]:
+    """Start `command` in a new session, with the first start's signal mask.
+
+    The capture blocks its cancellation signals. The child must not inherit
+    that block, or a `SIGTERM` that the command sends to itself waits until
+    the command ends, and the command then reports success.
 
     Args:
         command: The program and its arguments.
         output: The standard-output descriptor.
+        hold: The blocked cancellation signals.
 
     Returns:
         The process id and the standard-error read end.
@@ -1717,6 +1726,8 @@ def _start(command: List[String], output: Int) raises -> Tuple[Int, Int]:
         Error: If the program cannot start.
     """
     var plan = ExecPlan(command)
+    var mask = hold.child_mask()
+    var replaced = SignalSet()
     var errors = make_pipe()
     var report_pipe = make_pipe()
     var report = List[Int32](length=1, fill=0)
@@ -1729,6 +1740,11 @@ def _start(command: List[String], output: Int) raises -> Tuple[Int, Int]:
         close_fd(errors[0])
         close_fd(errors[1])
         close_fd(report_pipe[0])
+        _ = external_call["pthread_sigmask", c_int](
+            mask_how_set(),
+            OpaquePointer[MutAnyOrigin](unsafe_from_address=mask.address()),
+            OpaquePointer[MutAnyOrigin](unsafe_from_address=replaced.address()),
+        )
         report[0] = Int32(plan.run())
         _ = external_call["write", Int](
             Int32(report_pipe[1]),
@@ -2260,7 +2276,7 @@ def _capture(arguments: List[String], hold: SignalHold) raises -> Int:
             _gzip("", err_path)
         else:
             var output = _open_output(out_path)
-            var child = _start(command, output)
+            var child = _start(command, output, hold)
             var reducer = Reducer()
             status = _read_lines(
                 child[0],
