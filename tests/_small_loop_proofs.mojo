@@ -12,6 +12,12 @@ comptime SPEED = "extensions/carla/speed_limits"
 """The speed module whose byte loop is reviewed."""
 comptime RTREE = "extensions/carla/rtree"
 """The rtree module whose frontier loop is reviewed."""
+# The census matches these names as whole words in every Mojo source. Each
+# name is split here, so this file and its tests are not callers.
+comptime NEAREST_BEGIN = "_nearest_" + "begin"
+"""The private rtree function that starts a frontier."""
+comptime NEAREST_NEXT = "_nearest_" + "next"
+"""The private rtree function that advances a frontier."""
 comptime _SPEED_FILE = "extensions/carla/speed_limits.mojo"
 """The speed source."""
 comptime _RTREE_FILE = "extensions/carla/rtree.mojo"
@@ -99,9 +105,9 @@ def _frontier_caller(text: String) -> Bool:
         text: One Mojo source.
 
     Returns:
-        True when the source names `_nearest_begin` or `_nearest_next`.
+        True when the source names `NEAREST_BEGIN` or `NEAREST_NEXT`.
     """
-    return _has_word(text, "_nearest_begin") or _has_word(text, "_nearest_next")
+    return _has_word(text, NEAREST_BEGIN) or _has_word(text, NEAREST_NEXT)
 
 
 def speed_loop_admitted(text: String) -> Bool:

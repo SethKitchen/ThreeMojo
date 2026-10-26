@@ -19,6 +19,8 @@ from tests._map_score_predecessor import (
     support_endpoint,
 )
 from tests._small_loop_proofs import (
+    NEAREST_BEGIN,
+    NEAREST_NEXT,
     RTREE,
     SPEED,
     rtree_loop_admitted,
@@ -150,7 +152,7 @@ def test_a_changed_small_loop_source_is_refused() raises:
         assert_false(rtree_loop_admitted(paths, mutated))
     var map_changed = _replace_all(
         historical,
-        "var frontier = self._tree._nearest_begin(location, work)",
+        "var frontier = self._tree." + NEAREST_BEGIN + "(location, work)",
         "var frontier = _Heap()",
     )
     var map_texts = List[String]()
@@ -161,7 +163,7 @@ def test_a_changed_small_loop_source_is_refused() raises:
     assert_false(rtree_loop_admitted(paths, map_texts))
     var selector = _replace_all(
         texts[2],
-        "var frontier = map._tree._nearest_begin(location, work)",
+        "var frontier = map._tree." + NEAREST_BEGIN + "(location, work)",
         "var frontier = _Heap()",
     )
     var selector_texts = List[String]()
@@ -191,8 +193,9 @@ def test_a_changed_small_loop_source_is_refused() raises:
     extra_texts.append(texts[3])
     extra_paths.append("new_caller.mojo")
     extra_texts.append(
-        "def call(tree, heap, work):\n    return tree._nearest_next(point,"
-        " filter, heap, work)\n"
+        "def call(tree, heap, work):\n    return tree."
+        + NEAREST_NEXT
+        + "(point, filter, heap, work)\n"
     )
     assert_false(rtree_loop_admitted(extra_paths, extra_texts))
     assert_true(speed_loop_admitted(speed))

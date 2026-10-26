@@ -8,6 +8,7 @@
 from std.pathlib import Path
 from std.testing import TestSuite, assert_raises
 
+from tests._small_loop_proofs import NEAREST_BEGIN
 from tools._process import run_program
 from tools.map_deviation_live import map_deviation_live
 
@@ -55,8 +56,10 @@ def test_a_changed_query_is_refused() raises:
         Path(path)
         .read_text()
         .replace(
-            "var frontier = self._tree._nearest_begin(location, work)",
-            "var frontier = self._tree._nearest_begin(location, work, work)",
+            "var frontier = self._tree." + NEAREST_BEGIN + "(location, work)",
+            "var frontier = self._tree."
+            + NEAREST_BEGIN
+            + "(location, work, work)",
         )
     )
     with assert_raises(
