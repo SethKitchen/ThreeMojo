@@ -354,6 +354,12 @@ The three support edits keep their reviewed names.
 Reversing those edits restores the optional endpoint.
 A changed support endpoint is refused.
 
+Mojo checks the reviewed optional predecessor.
+The optional endpoint keeps its file digest and its token digest.
+The three optional edits keep their reviewed names.
+Reversing those edits restores the count endpoint.
+A changed optional endpoint is refused.
+
 ## Candidate certificate
 
 A certificate contains a stored incumbent point and its road parameter.
