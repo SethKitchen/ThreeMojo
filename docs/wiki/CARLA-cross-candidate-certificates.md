@@ -342,6 +342,48 @@ The two score declarations keep their reviewed token digests.
 Reversing the two score edits restores the frontier endpoint.
 A changed score endpoint is refused.
 
+Mojo checks the reviewed frontier predecessor.
+The frontier endpoint keeps its file digest and its token digest.
+The two frontier edits keep their reviewed names.
+Reversing those edits restores the support endpoint.
+A changed frontier endpoint is refused.
+
+Mojo checks the reviewed support predecessor.
+The support endpoint keeps its file digest and its token digest.
+The three support edits keep their reviewed names.
+Reversing those edits restores the optional endpoint.
+A changed support endpoint is refused.
+
+Mojo checks the reviewed optional predecessor.
+The optional endpoint keeps its file digest and its token digest.
+The three optional edits keep their reviewed names.
+Reversing those edits restores the count endpoint.
+A changed optional endpoint is refused.
+
+Mojo checks the reviewed count predecessor.
+The count endpoint keeps its file digest and its token digest.
+The three count edits keep their reviewed names.
+Reversing those edits restores the historical Map.
+A changed count endpoint is refused.
+
+Mojo checks the reviewed count source.
+The historical Map stays an admitted source.
+The count endpoint reverses to that Map.
+Each admitted source keeps its token digest.
+A third Map variant is refused.
+
+Mojo checks the reviewed score-family predecessor.
+The deviation, station, and score endpoints project to one frontier.
+Each endpoint keeps its token digest.
+The score endpoint reverses through the two score edits.
+A third Map variant is refused.
+
+Mojo checks the reviewed score observables.
+The winner-seed caller keeps one upper assignment.
+That assignment is read as the score high.
+The fresh guard and the ordered debits match the historical caller.
+A missing assignment or a changed debit is refused.
+
 ## Candidate certificate
 
 A certificate contains a stored incumbent point and its road parameter.
