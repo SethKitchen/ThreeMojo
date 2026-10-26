@@ -455,9 +455,21 @@ def _position_only(matrix: Matrix4) -> Matrix4:
 
 def _inverse(matrix: Matrix4) -> Matrix4:
     """Return the inverse of a matrix, zeros for a singular one, as
-    three.js's `invert` gives."""
+    three.js's `invert` gives.
+
+    The inverse of an affine matrix is affine, but Float32 arithmetic can
+    leave its last row at (0, 0, 0, 0.99999994). A skeleton refuses such a
+    bind, and real files hold binds that do this. So the last row of the
+    inverse of an affine matrix is set to (0, 0, 0, 1), unless the matrix is
+    singular and the inverse is all zeros.
+    """
     var out = Matrix4(copy=matrix)
     out.invert()
+    if matrix.is_affine() and out.elements[15] != 0:
+        out.elements[3] = 0
+        out.elements[7] = 0
+        out.elements[11] = 0
+        out.elements[15] = 1
     return out^
 
 

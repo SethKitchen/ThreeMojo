@@ -66,7 +66,7 @@ The thighs touch, so the skin over them is one surface. For a game the body's sk
 | `jump_clip` | 1.4 s, once | A crouch, a spring with the arms thrown up, a tuck, and a landing on bent knees. |
 | `wave_clip` | 2 s, loops | The right arm raised and the hand waving. |
 
-The angles follow the joint ranges of an ordinary gait (Winter 1991). The clips move in place: a game moves the humanoid's root node itself. `clip_from_poses` makes a clip from any poses.
+The angles follow the joint ranges of an ordinary gait (Winter 1991). The clips move in place: a game moves the humanoid's root node itself. `clip_from_poses` makes a clip from any poses. For clips from Mixamo, see [Mixamo animations](Mixamo-animations).
 
 ## Baking and speed
 
