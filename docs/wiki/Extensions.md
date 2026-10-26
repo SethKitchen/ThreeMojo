@@ -6,13 +6,21 @@ The first subject is the humanoid. The leg bones are the femur, tibia, fibula an
 
 The water subject ports Clearwater. See [Water](Water).
 
+The vegetation subject grows a summer meadow: grass in clusters with levels of detail, wind, poppies, leafy trees, boulders and a painted sky. See [Vegetation](Vegetation) and [Why grass is drawn in clusters](Why-grass-is-drawn-in-clusters).
+
+The village subject joins the meadow, buildings and water in one scene. Houses of the building model and a building cut out of a scan stand on lots where nothing grows, beside a pond of Clearwater water. See [Village](Village).
+
 The animals subject ports procedural-animals: 24 species sculpted as distance fields, posed and painted. See [Animals](Animals). Its distance field sculpting and meshing live in `extensions/sdf/`, so other subjects can use them. Its anatomy, mass and muscles build on `extensions/anatomy/`, which the humanoid shares. See [Animal anatomy](Animal-anatomy).
 
 The building subject generates buildings for engineering analysis and for games from one canonical model. It has shared numerics, a cell complex, the building model, IFC exchange and procedural towers and interiors. Frame, shell and energy analysis read the same model. See [Why buildings have one canonical model](Why-buildings-have-one-canonical-model).
 
+The scan subject reads splat scans of real places, in SOG and other formats, and puts them in meters with z up. It fills an occupancy grid that gives a static collider, and cuts the grid into parts to weigh, simulate and use again. It also cleans a scan and walks a physics capsule through it. The building subject fits a building model of a reusable construction kit to the grid, and takes the gravity load down its walls. A pinned manifest downloads the scans, and a GPU draws one at 50 frames a second at 1920 by 1080. See [Scanned buildings](Scanned-buildings), [Scan parts](Scan-parts), [Cleaning and orienting scans](Cleaning-and-orienting-scans), [Walking through a scan](Walking-through-a-scan) and [GPU splats](GPU-splats).
+
 The geotech subject analyzes earth-retaining walls: earth and water pressure, LRFD stability and slip circles. The visual subject draws engineering results with meshes, labels and textures. See [Retaining walls](Retaining-walls) and [Engineering views](Engineering-views).
 
 The CARLA subject ports the CARLA driving simulator without its game engine and its network transport. It covers maps, physics, the world, sensors, traffic, agents, recording and rendering. See [CARLA](CARLA).
+
+The gamepad subject ports the gamepad subsystem of SDL. It reads Xbox, PlayStation, Nintendo and other controllers on Linux and through a host's own gamepad API, and names their controls by position. It runs their rumble, lights, motion sensors and touchpads. See [Gamepads](Gamepads).
 
 The Streamline subject types NVIDIA's DLSS 4.5 Super Resolution and Ray Reconstruction: modes, presets, options, per-frame constants and buffer checks. It has a CPU fallback upscaler. It does not run DLSS yet. See [Streamline](Streamline).
 
@@ -103,6 +111,21 @@ extensions/
     frame.mojo     one shaded picture
     pebbles.mojo   the pebble photograph
     filter.mojo    mipmaps and anisotropy
+  vegetation/
+    kinds.mojo     plant kinds and cluster fates
+    checks.mojo    shared range checks
+    noise.mojo     a lattice hash and value noise
+    wind.mojo      traveling gusts, a sway and a flutter
+    blade.mojo     one blade, and a buffer of many
+    ground.mojo    hills, grass masks, ground and mountains
+    field.mojo     clusters, levels of detail, the blade stream
+    limbs.mojo     branches grown by space colonization
+    foliage.mojo   leaves, the light through a crown, and its wind
+    litter.mojo    fallen leaves, twigs and pebbles
+    crown.mojo     leafy trees and bushes
+    rock.mojo      boulders
+    sky.mojo       Preetham's sky with clouds, in a cube
+    meadow.mojo    the whole scene, frame by frame
   carla/
     transform.mojo, math.mojo, geo.mojo, ...   frames and geometry
     opendrive.mojo, map.mojo, mesh_factory.mojo  OpenDRIVE maps

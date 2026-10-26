@@ -59,8 +59,11 @@ def test_historical_pairs_reject_a_mixture() raises:
     var camera = (
         "df552b5bc14d6cc5a0ef4cf919afaf66da620f431b0d4f5bb9c3a61538cb2b84"
     )
-    var current = (
+    var formatted = (
         "990d94c815315c910b12c1b126c076183fc35cdeb9f64a26d1f7e574f424bccd"
+    )
+    var current = (
+        "c08275ccfea2f32dd84dc5ad54205052f6dfd216104836c858ff259224426332"
     )
     assert_equal(
         strand_cap_line(_five(init, init, first, old_segments, witness)), 3757
@@ -75,7 +78,15 @@ def test_historical_pairs_reject_a_mixture() raises:
         strand_cap_line(_five(init, init, camera, new_segments, witness)), 4047
     )
     assert_equal(
+        strand_cap_line(_five(init, init, formatted, new_segments, witness)),
+        4049,
+    )
+    assert_equal(
         strand_cap_line(_five(init, init, current, new_segments, witness)), 4049
+    )
+    assert_equal(
+        strand_cap_line(_five(init, init, formatted, old_segments, witness)),
+        -1,
     )
     assert_equal(
         strand_cap_line(_five(init, init, current, old_segments, witness)), -1

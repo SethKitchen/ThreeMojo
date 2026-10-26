@@ -1013,3 +1013,88 @@ AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
 LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
+
+---
+
+## SDL
+
+<https://github.com/libsdl-org/SDL>
+
+`extensions/gamepad/` is an altered version of the gamepad subsystem of SDL
+3.2.24: `src/joystick/SDL_gamepad.c`, `SDL_gamepad_db.h`, `SDL_joystick.c`,
+`controller_type.c`, `controller_list.h`, `linux/SDL_sysjoystick.c`,
+`emscripten/SDL_sysjoystick.c`, `hidapi/SDL_hidapijoystick.c`,
+`hidapi/SDL_hidapi_ps4.c`, `hidapi/SDL_hidapi_ps5.c`,
+`hidapi/SDL_hidapi_switch.c`, `hidapi/SDL_hidapi_xboxone.c`,
+`src/core/linux/SDL_evdev_capabilities.c`, `src/SDL_guid.c`,
+`src/SDL_utils.c` and `src/stdlib/SDL_crc16.c`. It is a translation from C to
+Mojo and is not the original software. Each ported file repeats the notice
+below. `controller_list.h` is Copyright (C) Valve Corporation, under the same
+terms.
+
+```
+Simple DirectMedia Layer
+Copyright (C) 1997-2025 Sam Lantinga <slouken@libsdl.org>
+
+This software is provided 'as-is', without any express or implied
+warranty.  In no event will the authors be held liable for any damages
+arising from the use of this software.
+
+Permission is granted to anyone to use this software for any purpose,
+including commercial applications, and to alter it and redistribute it
+freely, subject to the following restrictions:
+
+1. The origin of this software must not be misrepresented; you must not
+   claim that you wrote the original software. If you use this software
+   in a product, an acknowledgment in the product documentation would be
+   appreciated but is not required.
+2. Altered source versions must be plainly marked as such, and must not be
+   misrepresented as being the original software.
+3. This notice may not be removed or altered from any source distribution.
+```
+
+## splat-transform
+
+<https://github.com/playcanvas/splat-transform>
+
+`extensions/scan/sog.mojo` reads the SOG format as `readSog` in
+`@playcanvas/splat-transform` 3.10.1 reads it, and decodes each field with
+the same arithmetic. `assets/sog/make_sog.mjs` runs that package to write
+the SOG test files. splat-transform is distributed under the MIT License,
+reproduced below.
+
+```
+Copyright (c) 2011-2026 PlayCanvas Ltd.
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+```
+
+## Scanned buildings
+
+The scanned buildings are not in the repository. `tools/building_scans.mojo`
+downloads them from SuperSplat into `.cache/building-scans/`.
+`assets/building_scans/manifest.json` records each scan's author, scene
+page, license and changes. The tool refuses any license other than CC BY 4.0
+and CC0 1.0. Each scan is separate from ThreeMojo's code.
+
+Credit the author, link the scene page and the license, and say what you
+changed, when you share a scan or a render that uses it. The
+[asset credit](assets/building_scans/ATTRIBUTION.md) holds the wording, and
+`building_scans credits` prints it for the scans in a cache. ThreeMojo's code
+license does not replace or restrict these asset licenses.

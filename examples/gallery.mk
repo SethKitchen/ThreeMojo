@@ -160,6 +160,12 @@ $(call gallery,hand,hand)
 # A neck and a head, with skin and without.
 $(call gallery,head,head)
 $(call gallery,water,water,assets/pebbles.jpg)
+# A lone tree with a lobed crown in wind-bent grass, with groves, cliffs and mountains.
+$(call gallery,meadow,meadow)
+# Gusts sweep across the meadow and bend the tall grass, in a seamless loop.
+$(call gallery,meadow-wind,meadow_wind)
+# A brick house and a timber barn on the meadow, beside a pond of still water.
+$(call gallery,village,village,assets/pebbles.jpg)
 # Every procedural animal, one to a tile, turning.
 $(call gallery,animals,animals)
 # A wolf walks one stride, re-meshed in each pose.
@@ -176,3 +182,10 @@ $(call gallery,expressions,expressions)
 $(call gallery,streamline,streamline)
 # Three tomatoes, scanned as 445,409 Gaussian splats, with the camera circling.
 $(call gallery,tomatoes,tomatoes,assets/tomatoes/tomatoes.v4.spz)
+# A pad of the web backend in one fixed state: sticks, triggers and buttons.
+$(call gallery,gamepad,gamepad)
+# A building model fitted to a scan of a two-story room, turning.
+$(call gallery,scanned-buildings,building_scan)
+# A demonstration site of splats on a hillside, cut into parts, with a copy of
+# its largest part beside it, drawn with levels of detail on every core.
+$(call gallery,scan-parts,scan_parts)

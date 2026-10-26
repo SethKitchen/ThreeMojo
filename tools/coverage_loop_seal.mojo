@@ -2420,6 +2420,15 @@ def strand_cap_line(hashes: List[String]) -> Int:
     ):
         line = 3886
     var bases = hashes[0] == init and hashes[1] == init and hashes[4] == witness
+    # PR791 passes the worker count to the splat prepare call, far below the
+    # cap loop. The cap function, its producer and its line are unchanged.
+    if (
+        bases
+        and renderer
+        == "c08275ccfea2f32dd84dc5ad54205052f6dfd216104836c858ff259224426332"
+        and hashes[3] == new_segments
+    ):
+        return 4049
     if (
         bases
         and renderer

@@ -40,7 +40,8 @@ class ExactSuccessorControls(unittest.TestCase):
             self.assertEqual((ROOT/path).read_bytes(), raw)
 
     def test_expectations_append_exactly_four_records_and_preserve_all_704(self):
-        raw = (ROOT/EXPECTATIONS).read_bytes()
+        # Later records join through the PR780 table, so this reads the PR776 endpoint.
+        raw = owner.pr780_successor.predecessor_bytes(EXPECTATIONS, (ROOT/EXPECTATIONS).read_bytes())
         prior = owner.pr776_predecessor_bytes(EXPECTATIONS, raw)
         old, current = json.loads(prior), json.loads(raw)
         self.assertEqual((len(old), len(current)), (704, 708))
@@ -89,7 +90,7 @@ class ExactSuccessorControls(unittest.TestCase):
             owner.pr776_predecessor_bytes('unreviewed', b'')
 
     def test_missing_extra_old_changed_and_added_changed_diagnostics_are_refused(self):
-        raw = (ROOT/EXPECTATIONS).read_bytes()
+        raw = owner.pr780_successor.predecessor_bytes(EXPECTATIONS, (ROOT/EXPECTATIONS).read_bytes())
         current = json.loads(raw)
         missing = copy.deepcopy(current)
         del missing[sorted(ADDED)[0]]

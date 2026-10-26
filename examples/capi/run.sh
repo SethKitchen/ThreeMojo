@@ -6,12 +6,13 @@
 #
 # Run the C ABI examples. Each run builds first if a source is newer.
 #
-#   run.sh native [core|scene|water|water-gpu|splat] [WIDTH HEIGHT] [--frames N] [--dump F.ppm] [--headless] [--crisp] [--cpu]
+#   run.sh native [core|scene|water|water-gpu|splat] [WIDTH HEIGHT] [--frames N] [--dump F.ppm] [--headless] [--crisp] [--cpu] [--scan FILE]
 #       Open a macOS window. The title and a label show the frame rate.
 #       The window scales the frame smoothly. --crisp keeps hard pixels.
 #       The splats are drawn on Metal at the window's size in pixels. --cpu
-#       draws them on the CPU. Escape, Command+Q or Control-C in the terminal
-#       quits it.
+#       draws them on the CPU. --scan FILE gives the splat app another scan,
+#       such as one that tools/building_scans.mojo fetched.
+#       Escape, Command+Q or Control-C in the terminal quits it.
 #   run.sh web [core|water|splat] [PORT]
 #       Serve the WebAssembly build on localhost and open it in a browser.
 #       A browser with WebGPU draws the water and the splats on its GPU. Add

@@ -25,7 +25,15 @@ from examples.capi.compare_ppm import (
     read_ppm,
 )
 from examples.capi.metal_string import metal_command, metal_header
-from examples.capi.retarget import retarget_command, retarget_ir, wasm_layout
+from examples.capi.retarget import (
+    exact_float,
+    exact_floats,
+    float_bits,
+    replace_shuffle,
+    retarget_command,
+    retarget_ir,
+    wasm_layout,
+)
 from examples.capi.serve import (
     http_response,
     listen_local,
@@ -285,6 +293,91 @@ def test_retarget_matches_the_python_rewrites() raises:
         '  %no = alloca {ptr}, align 8\nnot a target datalayout = "no"\n'
     )
     assert_equal(retarget_ir(untouched, "unused"), untouched)
+
+
+def test_retarget_writes_float_constants_an_older_llvm_reads() raises:
+    # Each pair is a line and the Python script's rewrite of it.
+    var cases: List[String] = [
+        "  %3 = fmul contract float %2, 1.000000e-03",
+        "  %3 = fmul contract float %2, 0x3F50624DE0000000",
+        "  %c = fcmp olt float %a, 3.000000e-01",
+        "  %c = fcmp olt float %a, 0x3FD3333340000000",
+        "  %c = fcmp fast olt float %a, 3.000000e-01",
+        "  %c = fcmp fast olt float %a, 3.000000e-01",
+        (
+            "  %p = phi float [ 1.000000e-01, %b0 ], [ -2.500000e-01, %b1 ],"
+            " [ 7.000000e-01, %b2 ]"
+        ),
+        (
+            "  %p = phi float [ 0x3FB99999A0000000, %b0 ], [ -2.500000e-01,"
+            " %b1 ], [ 0x3FE6666660000000, %b2 ]"
+        ),
+        "  %d = fadd double %a, 1.000000e-01",
+        "  %d = fadd double %a, 1.000000e-01",
+        "  %v = fadd fast float %a, f0x3F3504F3",
+        "  %v = fadd fast float %a, 0x3FE6A09E60000000",
+        "  ret double f0x3FF0000000000000",
+        "  ret double 0x3FF0000000000000",
+        "  %x = select i1 %c, float +inf, float -inf",
+        (
+            "  %x = select i1 %c, float 0x7FF0000000000000, float"
+            " 0xFFF0000000000000"
+        ),
+        "  %q = fadd double %a, -qnan",
+        "  %q = fadd double %a, 0xFFF8000000000000",
+        "  call void @f(float +nan(0x2), double -nan(0x3), float +snan(0x4))",
+        (
+            "  call void @f(float 0x7FF8000040000000, double"
+            " 0xFFF8000000000003, float 0x7FF0000080000000)"
+        ),
+        (
+            "  call void @g(ptr @s, float 1.000000e-01)"
+            ' "fn-attr"="1.000000e-01" float 3.000000e-01'
+        ),
+        (
+            "  call void @g(ptr @s, float 0x3FB99999A0000000)"
+            ' "fn-attr"="1.000000e-01" float 0x3FD3333340000000'
+        ),
+        "  %w = fmul fastmath float %x, 2.000000e-01",
+        "  %w = fmul fastmath float %x, 2.000000e-01",
+        "x.+inf a+inf +infinity -inf) (+qnan,",
+        "x.+inf a+inf +infinity 0xFFF0000000000000) (0x7FF8000000000000,",
+        "f0x123 af0x3F3504F3 .f0x3F3504F3 f0x3F3504F3a f0x3FF00000000000001",
+        (
+            "f0x123 af0x3F3504F3 .0x3FE6A09E60000000 f0x3F3504F3a"
+            " f0x3FF00000000000001"
+        ),
+        "  %u = fsub float 3.402823e+38, 1.175494e-38",
+        "  %u = fsub float 0x47EFFFFFA0000000, 0x380FFFFF40000000",
+        "  %b = fadd float %a, 1.000000e-03 ; = fmul float 2.000000e-01",
+        (
+            "  %b = fadd float %a, 0x3F50624DE0000000 ; = fmul float"
+            " 0x3FC99999A0000000"
+        ),
+    ]
+    for index in range(0, len(cases), 2):
+        assert_equal(exact_floats(cases[index]), cases[index + 1])
+    assert_equal(exact_float("1.500000e+00"), "1.500000e+00")
+    assert_equal(exact_float("-1.234567e+08"), "0xC19D6F3300000000")
+    assert_equal(float_bits("3F3504F3"), "0x3FE6A09E60000000")
+
+
+def test_retarget_swaps_the_x86_byte_shuffle_for_a_swizzle() raises:
+    var source = (
+        "declare <16 x i8> @llvm.x86.ssse3.pshuf.b.128(<16 x i8>, <16 x i8>)\n"
+        "  %r = call <16 x i8> @llvm.x86.ssse3.pshuf.b.128(<16 x i8> %a,"
+        " <16 x i8> %b)\n"
+    )
+    var shuffled = replace_shuffle(source)
+    assert_true(shuffled.startswith("\n  %r = call <16 x i8> @tm_pshufb("))
+    assert_true(shuffled.find("@llvm.x86.ssse3.pshuf.b.128") < 0)
+    assert_true(
+        shuffled.endswith(
+            "declare <16 x i8> @llvm.wasm.swizzle(<16 x i8>, <16 x i8>)\n"
+        )
+    )
+    assert_true(shuffled.find("splat (i8 -113)") > 0)
+    assert_equal(replace_shuffle("no shuffle\n"), "no shuffle\n")
 
 
 def _chmod(path: String) raises:

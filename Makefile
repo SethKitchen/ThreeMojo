@@ -97,8 +97,10 @@ GPU_HOST_TESTS   := tests/test_gpu_layout.mojo \
 # A suite that opens a device and is not listed above is named test_*_gpu.mojo.
 GPU_TESTS        := tests/test_gpu.mojo tests/test_gpu_water.mojo $(GPU_HOST_TESTS) \
                     $(filter tests/test_%_gpu.mojo,$(TESTS))
+# An example that needs MAX is named examples/*_gpu.mojo, and a new one needs
+# no edit here.
 GPU_ENTRY_POINTS := $(GPU_TESTS) bench/raster_bench.mojo bench/water_gpu_bench.mojo bench/hair_frame_bench.mojo \
-                    tools/gpu_status.mojo
+                    tools/gpu_status.mojo $(filter examples/%_gpu.mojo,$(ENTRY_POINTS))
 
 CPU_LIB_SOURCES  := $(filter-out $(GPU_LIB_SOURCES),$(LIB_SOURCES))
 CPU_TESTS        := $(filter-out $(GPU_TESTS),$(TESTS))
@@ -307,7 +309,7 @@ endef
         test-coverage-tool test-portability \
         coverage-instrument coverage-capture coverage-report \
         lint lint-cpu lint-gpu compile-gpu gpu-status docstrings fmt fmt-check coverage \
-        compile-fail example animation viewer bench bench-scene bench-examples \
+        compile-fail example animation scan-images scan-images-gpu viewer bench bench-scene bench-examples \
         clean clean-images optimize-images draco-export-check audio-game-humanoid \
         repository-check
 
@@ -903,6 +905,41 @@ $(OUT_DIR)/carla_town.png: $(EXAMPLE_INPUTS_carla_town) assets/carla/ATTRIBUTION
 	[ $$rc -eq 0 ] || exit 1
 	@$(MOJO) run $(MOJOFLAGS) tools/optimize_png.mojo $@ $(patsubst %.png,%_*.png,$@)
 	@$(TOOL) carla_assets credits --all --output $(@:.png=.credits.md)
+
+# The scan examples draw a scan that `building_scans fetch` downloads, so
+# `make scan-images` renders them and `make animation` does not. The GPU
+# examples need MAX and a GPU, so they have their own target.
+scan-images: $(OUT_DIR)/seem-church.png $(OUT_DIR)/scan-walk.png
+
+scan-images-gpu: $(OUT_DIR)/seem-church-gpu.png $(OUT_DIR)/scan-walk-gpu.png
+
+$(OUT_DIR)/seem-church.png: $(EXAMPLE_INPUTS_scan_view)
+	@mkdir -p $(OUT_DIR)
+	@$(TOOL) building_scans fetch seem-church
+	@$(call run,$(MOJO) run $(MOJOFLAGS) examples/scan_view.mojo $@ seem-church auto 12 1.15 480 270); \
+	[ $$rc -eq 0 ] || exit 1
+	@$(MOJO) run $(MOJOFLAGS) tools/optimize_png.mojo $@
+
+$(OUT_DIR)/scan-walk.png: $(EXAMPLE_INPUTS_scan_walk)
+	@mkdir -p $(OUT_DIR)
+	@$(TOOL) building_scans fetch studio-11
+	@$(call run,$(MOJO) run $(MOJOFLAGS) examples/scan_walk.mojo $@ studio-11 240 320 180); \
+	[ $$rc -eq 0 ] || exit 1
+	@$(MOJO) run $(MOJOFLAGS) tools/optimize_png.mojo $@
+
+$(OUT_DIR)/seem-church-gpu.png: $(EXAMPLE_INPUTS_scan_view_gpu)
+	@mkdir -p $(OUT_DIR)
+	@$(TOOL) building_scans fetch seem-church
+	@$(call run,$(MOJO) run $(MOJOFLAGS) examples/scan_view_gpu.mojo $@ seem-church auto 36 1.15 640 360); \
+	[ $$rc -eq 0 ] || exit 1
+	@$(MOJO) run $(MOJOFLAGS) tools/optimize_png.mojo $@
+
+$(OUT_DIR)/scan-walk-gpu.png: $(EXAMPLE_INPUTS_scan_walk_gpu)
+	@mkdir -p $(OUT_DIR)
+	@$(TOOL) building_scans fetch studio-11
+	@$(call run,$(MOJO) run $(MOJOFLAGS) examples/scan_walk_gpu.mojo $@ studio-11 240 640 360); \
+	[ $$rc -eq 0 ] || exit 1
+	@$(MOJO) run $(MOJOFLAGS) tools/optimize_png.mojo $@
 
 # Existing tracked gallery files keep their identity and history. New renders
 # are ignored; use an explicit git add -f only for a reviewed documentation image.

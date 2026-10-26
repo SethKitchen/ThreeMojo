@@ -1,0 +1,396 @@
+{
+  "format": 1,
+  "about": "Scanned buildings as Gaussian splats, for extensions/building/scan. Each entry is one scan under CC BY 4.0 or CC0: one splat file, or a SuperSplat scene's SOG folder. tools/building_scans.mojo downloads the files into .cache/building-scans/ and checks their sums; a SuperSplat entry with no files is resolved from its scene page by 'fetch --pin'. The kit, the use and the frame say how extensions/building/scan reads the scan.",
+  "entries": [
+    {
+      "id": "reading-room",
+      "title": "Reading Room (No Lidar， Only Photos)",
+      "author": "ethan3111",
+      "author_url": "https://superspl.at/user?id=ethan3111",
+      "license": "CC-BY-4.0",
+      "source": "https://superspl.at/scene/9d370db9",
+      "scene": "9d370db9",
+      "provenance": "The scene page says the room was captured from photos only, with no lidar, and trained in MipMap Desktop. Its listing advertised a 62.65 MB CC BY 4.0 download on 2026-10-20. A comment on the page says the scene is larger than one unit to the meter, so the scale stays declared. Confirm the author and the license on the scene page before you publish a render.",
+      "changes": "None. ThreeMojo reads the published SOG files as they are.",
+      "kit": "concrete",
+      "use": "meeting",
+      "frame": {
+        "up": "-y",
+        "north": "-z",
+        "unit_m": 1,
+        "scale": "declared"
+      },
+      "files": [
+        {
+          "role": "meta",
+          "url": "https://d28zzqy0iyovbz.cloudfront.net/9d370db9/v1/meta.json",
+          "sha256": "c6a6dd77b003eee20f01c8aa728a84570f6cf41f271dbd71c8c53c9116004c9b",
+          "path": "reading-room/meta.json"
+        },
+        {
+          "role": "image",
+          "url": "https://d28zzqy0iyovbz.cloudfront.net/9d370db9/v1/means_l.webp",
+          "sha256": "155532c9d49229c882f34e06e03621633b1187305e752d6fb76f6a72c9616e20",
+          "path": "reading-room/means_l.webp"
+        },
+        {
+          "role": "image",
+          "url": "https://d28zzqy0iyovbz.cloudfront.net/9d370db9/v1/means_u.webp",
+          "sha256": "250f91b4ef41cd94949f729780b58203e7b3ba0657939d337f5f51298f65fa2f",
+          "path": "reading-room/means_u.webp"
+        },
+        {
+          "role": "image",
+          "url": "https://d28zzqy0iyovbz.cloudfront.net/9d370db9/v1/scales.webp",
+          "sha256": "25073526393b7d1f00c6476edc277c32b4fa7af508002291939e0b0d2110b132",
+          "path": "reading-room/scales.webp"
+        },
+        {
+          "role": "image",
+          "url": "https://d28zzqy0iyovbz.cloudfront.net/9d370db9/v1/quats.webp",
+          "sha256": "8eff0f9c21069eff18bd4b6f6e9f3457dabf81f3a17618037cee1a6478acba63",
+          "path": "reading-room/quats.webp"
+        },
+        {
+          "role": "image",
+          "url": "https://d28zzqy0iyovbz.cloudfront.net/9d370db9/v1/sh0.webp",
+          "sha256": "19c5170184411db9cc8442b36f57c60e0d5848f2fa8f0e1e72d31ad9ce9c3b8e",
+          "path": "reading-room/sh0.webp"
+        }
+      ]
+    },
+    {
+      "id": "studio-11",
+      "title": "Studio 11",
+      "author": "milanoski",
+      "author_url": "https://superspl.at/user?id=milanoski",
+      "license": "CC-BY-4.0",
+      "source": "https://superspl.at/scene/c37cb759",
+      "scene": "c37cb759",
+      "provenance": "The scene page says this small furnished studio apartment was made in Unreal Engine 5, reconstructed with the Unreal to Colmap plugin and trained in LichtFeld Studio, so it is a synthetic scan. Its listing advertised a 54.69 MB CC BY 4.0 download on 2026-10-20. Confirm the author and the license on the scene page before you publish a render.",
+      "changes": "None. ThreeMojo reads the published SOG files as they are.",
+      "kit": "concrete",
+      "use": "living",
+      "frame": {
+        "up": "-y",
+        "north": "-z",
+        "unit_m": 1,
+        "scale": "declared"
+      },
+      "files": [
+        {
+          "role": "meta",
+          "url": "https://d28zzqy0iyovbz.cloudfront.net/c37cb759/v1/meta.json",
+          "sha256": "22492590f504cc59463bb16e181243b04af1e4f05fb68bf86a1f4e53f8736c18",
+          "path": "studio-11/meta.json"
+        },
+        {
+          "role": "image",
+          "url": "https://d28zzqy0iyovbz.cloudfront.net/c37cb759/v1/means_l.webp",
+          "sha256": "254ce8551920bf96bb525f96afca8059a66b103a48f63c7446c8af29eb095e6f",
+          "path": "studio-11/means_l.webp"
+        },
+        {
+          "role": "image",
+          "url": "https://d28zzqy0iyovbz.cloudfront.net/c37cb759/v1/means_u.webp",
+          "sha256": "314faed3714527e39a32b311b81aa326c882eb00d11bb8b5f8b5a50e80501ccc",
+          "path": "studio-11/means_u.webp"
+        },
+        {
+          "role": "image",
+          "url": "https://d28zzqy0iyovbz.cloudfront.net/c37cb759/v1/quats.webp",
+          "sha256": "eff617f4b0820e164b6a9be4da9b9ec49130aa28dbcd39fd88d0d21c431035f0",
+          "path": "studio-11/quats.webp"
+        },
+        {
+          "role": "image",
+          "url": "https://d28zzqy0iyovbz.cloudfront.net/c37cb759/v1/scales.webp",
+          "sha256": "bd355e9f47beaae415a962e16e2269818d7cacefb57fab92010e7db1d48f38d6",
+          "path": "studio-11/scales.webp"
+        },
+        {
+          "role": "image",
+          "url": "https://d28zzqy0iyovbz.cloudfront.net/c37cb759/v1/sh0.webp",
+          "sha256": "6f52f84aacca0fb7a5ed7a1202b94c7b30267cbe2203776f76bd00c7b19811c2",
+          "path": "studio-11/sh0.webp"
+        }
+      ]
+    },
+    {
+      "id": "pantheon",
+      "title": "The Pantheon Interior",
+      "author": "artfletch",
+      "author_url": "https://superspl.at/user?id=artfletch",
+      "license": "CC-BY-4.0",
+      "source": "https://superspl.at/scene/dac6e508",
+      "scene": "dac6e508",
+      "provenance": "The scene page says that 1,068 photos of the Pantheon in Rome, from February 2026 with a Sony a7R V, were processed in RealityScan and Postshot, and that the floor was recreated because it could not be photographed. It holds 3,999,998 splats, 58.9 MB, with spherical harmonics. Its download and CC BY 4.0 license were enabled on 2026-10-20. The scale is declared, not measured.",
+      "changes": "None. ThreeMojo reads the published SOG files as they are.",
+      "kit": "concrete",
+      "use": "meeting",
+      "frame": {
+        "up": "-y",
+        "north": "-z",
+        "unit_m": 1,
+        "scale": "declared"
+      },
+      "files": [
+        {
+          "role": "meta",
+          "url": "https://d28zzqy0iyovbz.cloudfront.net/dac6e508/v1/meta.json",
+          "sha256": "04fe86b55c91416fe1a6bff92a8de904e8cd936eef8f42fe1b9e9704eff6e9e6",
+          "path": "pantheon/meta.json"
+        },
+        {
+          "role": "image",
+          "url": "https://d28zzqy0iyovbz.cloudfront.net/dac6e508/v1/means_l.webp",
+          "sha256": "ab92e880ff3243796c3c0563778a76ca2cbe98d096d4bd0295cb16286ba8464e",
+          "path": "pantheon/means_l.webp"
+        },
+        {
+          "role": "image",
+          "url": "https://d28zzqy0iyovbz.cloudfront.net/dac6e508/v1/means_u.webp",
+          "sha256": "6e7203054df0b46951150848c431d7a132eae03d5811362bc96b41eec9f251e5",
+          "path": "pantheon/means_u.webp"
+        },
+        {
+          "role": "image",
+          "url": "https://d28zzqy0iyovbz.cloudfront.net/dac6e508/v1/scales.webp",
+          "sha256": "f6ee7bfae3fa9de6026552cc767e532438f42197692c0586defbf818744367d0",
+          "path": "pantheon/scales.webp"
+        },
+        {
+          "role": "image",
+          "url": "https://d28zzqy0iyovbz.cloudfront.net/dac6e508/v1/quats.webp",
+          "sha256": "995efbb7bfa17b89e598a3f6b27137da3563fb497f103ececce60db538bffb90",
+          "path": "pantheon/quats.webp"
+        },
+        {
+          "role": "image",
+          "url": "https://d28zzqy0iyovbz.cloudfront.net/dac6e508/v1/sh0.webp",
+          "sha256": "93c8a4adbddd57b721b399cd697cc12c5073eb7edb66c1472f9a3cb60c3d9d37",
+          "path": "pantheon/sh0.webp"
+        },
+        {
+          "role": "image",
+          "url": "https://d28zzqy0iyovbz.cloudfront.net/dac6e508/v1/shN_centroids.webp",
+          "sha256": "fcd41d4dd7df9bfa8562a95d01b9a245dba2db1e14da62aa2795be69c7fb14f8",
+          "path": "pantheon/shN_centroids.webp"
+        },
+        {
+          "role": "image",
+          "url": "https://d28zzqy0iyovbz.cloudfront.net/dac6e508/v1/shN_labels.webp",
+          "sha256": "bbae11ce411a4b56b98535164d54db5c0a58f912a2ebbb060fee890549beb98d",
+          "path": "pantheon/shN_labels.webp"
+        }
+      ]
+    },
+    {
+      "id": "seem-church",
+      "title": "Seem Kirke, Danmark",
+      "author": "roedsgaard",
+      "author_url": "https://superspl.at/user?id=roedsgaard",
+      "license": "CC-BY-4.0",
+      "source": "https://superspl.at/scene/e832997f",
+      "scene": "e832997f",
+      "provenance": "The scene page says that a DJI drone shot Seem church, which has an apse, a chancel and a nave from the early 13th century and a tower from about 1500, in brick after the restoration of 1900-1901. The author aligned the images in RealityScan and trained the scene in LichtFeld Studio. It holds 960,991 splats, 11.9 MB, with spherical harmonics. Its download and CC BY 4.0 license were enabled on 2026-10-20. The scale is declared, not measured.",
+      "changes": "None. ThreeMojo reads the published SOG files as they are.",
+      "kit": "masonry",
+      "use": "meeting",
+      "frame": {
+        "up": "-y",
+        "north": "-z",
+        "unit_m": 1,
+        "scale": "declared"
+      },
+      "files": [
+        {
+          "role": "meta",
+          "url": "https://d28zzqy0iyovbz.cloudfront.net/e832997f/v1/meta.json",
+          "sha256": "29d26ce46ef80eec801b41fe27f04c8d31a77aa929f25112d6cd0b10cbb02f65",
+          "path": "seem-church/meta.json"
+        },
+        {
+          "role": "image",
+          "url": "https://d28zzqy0iyovbz.cloudfront.net/e832997f/v1/means_l.webp",
+          "sha256": "4af1a1be093c613ad48083bb206758d6001b109c30698a3d7a19e0468fb9acc9",
+          "path": "seem-church/means_l.webp"
+        },
+        {
+          "role": "image",
+          "url": "https://d28zzqy0iyovbz.cloudfront.net/e832997f/v1/means_u.webp",
+          "sha256": "da31d2d59c8ecac55811da5a14d2c02f39eaed9edbfc996e5846ff271c5c8d86",
+          "path": "seem-church/means_u.webp"
+        },
+        {
+          "role": "image",
+          "url": "https://d28zzqy0iyovbz.cloudfront.net/e832997f/v1/scales.webp",
+          "sha256": "7016723d4f6b14cd50772eed2c9606c3cbf13ee4a716aae80cf0ad33ed1c1964",
+          "path": "seem-church/scales.webp"
+        },
+        {
+          "role": "image",
+          "url": "https://d28zzqy0iyovbz.cloudfront.net/e832997f/v1/quats.webp",
+          "sha256": "b044c8876ed8ca5641ab36b3ba70cfa8d7c0ff05c5925eb29ff6e3450672bd16",
+          "path": "seem-church/quats.webp"
+        },
+        {
+          "role": "image",
+          "url": "https://d28zzqy0iyovbz.cloudfront.net/e832997f/v1/sh0.webp",
+          "sha256": "c2bb729c7972291fd527895103ea161969f43342ef7995310c62105d15a3d1f9",
+          "path": "seem-church/sh0.webp"
+        },
+        {
+          "role": "image",
+          "url": "https://d28zzqy0iyovbz.cloudfront.net/e832997f/v1/shN_centroids.webp",
+          "sha256": "860ee94ae09eb7c37ca5d0adbfefcb53a956ecedd6a1202936267f53601d5608",
+          "path": "seem-church/shN_centroids.webp"
+        },
+        {
+          "role": "image",
+          "url": "https://d28zzqy0iyovbz.cloudfront.net/e832997f/v1/shN_labels.webp",
+          "sha256": "08ff45f6153bdd3e11d656ff3387144382443caa285271052ed832571b9b181a",
+          "path": "seem-church/shN_labels.webp"
+        }
+      ]
+    },
+    {
+      "id": "roxby-church",
+      "title": "St Nicholas Church, Roxby",
+      "author": "muckshifter",
+      "author_url": "https://superspl.at/user?id=muckshifter",
+      "license": "CC-BY-4.0",
+      "source": "https://superspl.at/scene/4c2fbd16",
+      "scene": "4c2fbd16",
+      "provenance": "The scene page says that St Nicholas Church at Roxby on the North York Moors is Grade II listed and dates largely to the 17th century. A DJI Mini 3 captured the images and Postshot processed them. It holds 2,429,353 splats, 37.5 MB, with spherical harmonics. Its download and CC BY 4.0 license were enabled on 2026-10-20. The scale is declared, not measured.",
+      "changes": "None. ThreeMojo reads the published SOG files as they are.",
+      "kit": "stone",
+      "use": "meeting",
+      "frame": {
+        "up": "-y",
+        "north": "-z",
+        "unit_m": 1,
+        "scale": "declared"
+      },
+      "files": [
+        {
+          "role": "meta",
+          "url": "https://d28zzqy0iyovbz.cloudfront.net/4c2fbd16/v1/meta.json",
+          "sha256": "b2d09d3078445381803945e025283486cc9aa1865235e6f9e261ab5c7f27f38a",
+          "path": "roxby-church/meta.json"
+        },
+        {
+          "role": "image",
+          "url": "https://d28zzqy0iyovbz.cloudfront.net/4c2fbd16/v1/means_l.webp",
+          "sha256": "f7898c51d45ca8c30f412c5f5d0dbb6ddac9229f87903a2dd4abeee585b7aa80",
+          "path": "roxby-church/means_l.webp"
+        },
+        {
+          "role": "image",
+          "url": "https://d28zzqy0iyovbz.cloudfront.net/4c2fbd16/v1/means_u.webp",
+          "sha256": "98ef022ad014d128082b05482020d00666de94e1e6c6734f29514a685070c8bc",
+          "path": "roxby-church/means_u.webp"
+        },
+        {
+          "role": "image",
+          "url": "https://d28zzqy0iyovbz.cloudfront.net/4c2fbd16/v1/scales.webp",
+          "sha256": "3ae73d72532d3dc116db8e8b44594188d5b63533daef8edc943f51b280b4192a",
+          "path": "roxby-church/scales.webp"
+        },
+        {
+          "role": "image",
+          "url": "https://d28zzqy0iyovbz.cloudfront.net/4c2fbd16/v1/quats.webp",
+          "sha256": "d6891fed0b31325e4c3a18737ee2078c21283b96cd773c050684a4e29f0429fd",
+          "path": "roxby-church/quats.webp"
+        },
+        {
+          "role": "image",
+          "url": "https://d28zzqy0iyovbz.cloudfront.net/4c2fbd16/v1/sh0.webp",
+          "sha256": "49033759622e036f90bbf830582a077e970d3d9d7d7d390174a0345b236ad830",
+          "path": "roxby-church/sh0.webp"
+        },
+        {
+          "role": "image",
+          "url": "https://d28zzqy0iyovbz.cloudfront.net/4c2fbd16/v1/shN_centroids.webp",
+          "sha256": "99e543a354809208c8a714b2e9678074a13bb321372b136ae56189b83023d0ed",
+          "path": "roxby-church/shN_centroids.webp"
+        },
+        {
+          "role": "image",
+          "url": "https://d28zzqy0iyovbz.cloudfront.net/4c2fbd16/v1/shN_labels.webp",
+          "sha256": "8c6b62e17873045882afddc52cc77fd7430b0033d1a234cbba43d14da321b567",
+          "path": "roxby-church/shN_labels.webp"
+        }
+      ]
+    },
+    {
+      "id": "front-house",
+      "title": "Front House",
+      "author": "jeastaman",
+      "author_url": "https://superspl.at/user?id=jeastaman",
+      "license": "CC-BY-4.0",
+      "source": "https://superspl.at/scene/6ec0c97a",
+      "scene": "6ec0c97a",
+      "provenance": "The scene page says that an iPhone 17 Pro took 243 images of the front of this house with the Blackmagic Camera app, and that LichtFeld Studio trained the scene. It holds 4,807,827 splats, 69.7 MB, with spherical harmonics. Its download and CC BY 4.0 license were enabled on 2026-10-20. The scale is declared, not measured.",
+      "changes": "None. ThreeMojo reads the published SOG files as they are.",
+      "kit": "timber",
+      "use": "living",
+      "frame": {
+        "up": "-y",
+        "north": "-z",
+        "unit_m": 1,
+        "scale": "declared"
+      },
+      "files": [
+        {
+          "role": "meta",
+          "url": "https://d28zzqy0iyovbz.cloudfront.net/6ec0c97a/v1/meta.json",
+          "sha256": "53e6502d37dde49df6ffa8367d2e252a41857590ac70a8b08716ced24ffa1b69",
+          "path": "front-house/meta.json"
+        },
+        {
+          "role": "image",
+          "url": "https://d28zzqy0iyovbz.cloudfront.net/6ec0c97a/v1/means_l.webp",
+          "sha256": "c49579f13283109b57baebebb239ac41b2cf64fda87e432e954a1d5232438988",
+          "path": "front-house/means_l.webp"
+        },
+        {
+          "role": "image",
+          "url": "https://d28zzqy0iyovbz.cloudfront.net/6ec0c97a/v1/means_u.webp",
+          "sha256": "e2e3114e20c1449a0e4d932196af65f9b55c00e9d3fc89c834d0c556dbe0337f",
+          "path": "front-house/means_u.webp"
+        },
+        {
+          "role": "image",
+          "url": "https://d28zzqy0iyovbz.cloudfront.net/6ec0c97a/v1/scales.webp",
+          "sha256": "c23c71e3f544d72448acf1f804096994bd194e1a4c5cc30d3297be267c8b4fa3",
+          "path": "front-house/scales.webp"
+        },
+        {
+          "role": "image",
+          "url": "https://d28zzqy0iyovbz.cloudfront.net/6ec0c97a/v1/quats.webp",
+          "sha256": "3792ae52dbba3364ad92cea24b154d6ce0ef9091d8a7dd0fafe5368e539df441",
+          "path": "front-house/quats.webp"
+        },
+        {
+          "role": "image",
+          "url": "https://d28zzqy0iyovbz.cloudfront.net/6ec0c97a/v1/sh0.webp",
+          "sha256": "44fe93dcc89e8f4d63ad8e170336a1baf1da0ca4a8834e1e0bb60d3f8b891470",
+          "path": "front-house/sh0.webp"
+        },
+        {
+          "role": "image",
+          "url": "https://d28zzqy0iyovbz.cloudfront.net/6ec0c97a/v1/shN_centroids.webp",
+          "sha256": "d3807f62bccb4a4bd9208dfca85ef11ebda4b5f831f1b511329b15193cdae50f",
+          "path": "front-house/shN_centroids.webp"
+        },
+        {
+          "role": "image",
+          "url": "https://d28zzqy0iyovbz.cloudfront.net/6ec0c97a/v1/shN_labels.webp",
+          "sha256": "48f6afebe898eb7096e3aa81e06677f7eb8f66420d25f993c8c31dc6c0dfd032",
+          "path": "front-house/shN_labels.webp"
+        }
+      ]
+    }
+  ]
+}

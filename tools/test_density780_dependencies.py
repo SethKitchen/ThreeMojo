@@ -109,7 +109,7 @@ class Density780DependencyTests(unittest.TestCase):
         self.assertEqual(set(loops.DENSITY780_DEPENDENCY_SHA256), {
             'core/extent.mojo', 'geometries/surface.mojo', 'loaders/bytes.mojo',
             'math/matrix4.mojo', 'math/square_matrix.mojo', 'math/vector4.mojo',
-            'geometries/attribute_utils.mojo', 'lights/shadow.mojo', 'render/tasks.mojo',
+            'objects/gaussian_splat.mojo', 'geometries/attribute_utils.mojo', 'lights/shadow.mojo', 'render/tasks.mojo',
             *PORT_INVERSE,
         })
 

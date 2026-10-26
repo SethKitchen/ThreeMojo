@@ -1220,11 +1220,11 @@ DENSITY760_INPUTS = {'core/__init__.mojo': '5f3ace6c2d6162c4a542666c21a966d54d5b
  'units/measure.mojo': 'b7531458ae7a74d6b9213f55672073137dbac41c2634787f7d6a78a16b526b85',
  'units/quantity.mojo': 'bb77541cdb757cd63b59ac01134c6a6ebce88863bee69c84ff77b8c03aff6223',
  'units/si.mojo': 'd149a23f2ee4a9bde17875615e7251285cb56af535716b66c7d8959c80f48c02'}
-# PR780 and the Mojo 1.2 port change twelve imported helpers, but leave
-# density, groom, their tests, and every theorem coordinate unchanged. Retain
-# the complete PR760 closure above and admit only this exact local successor
-# cohort. The broader CARLA successor is not a premise for these four local
-# domination theorems.
+# PR780, the Mojo 1.2 port and PR791 change thirteen imported helpers, but
+# leave density, groom, their tests, and every theorem coordinate unchanged.
+# Retain the complete PR760 closure above and admit only this exact local
+# successor cohort. The broader CARLA successor is not a premise for these
+# four local domination theorems.
 DENSITY780_DEPENDENCY_SHA256 = {
     'core/extent.mojo': '90490706baa17456a3ec99374c2a00f72768a0178b4e56436571ab4ca673f068',
     'extensions/humanoid/skeleton/head/assembly.mojo': '813a09e4b30a5a9682e606cdabb2e22188866f4153318a18f9df62f091c0435e',
@@ -1237,6 +1237,7 @@ DENSITY780_DEPENDENCY_SHA256 = {
     'math/matrix4.mojo': '1e72ab51f9dbcee3af4c2bfe9da93946616736bf02f4b20e2160ee7b69b448fa',
     'math/square_matrix.mojo': 'f1b2e67489949b53594b5f06604a0227260fd961df2fdebe5347d91c82d99a69',
     'math/vector4.mojo': 'db774733a27a706e5d5c940c4533de2c567d7d6ece3c918215052bccfd87b9aa',
+    'objects/gaussian_splat.mojo': '6b5834369f244c8eaf6a4a6d363bcca7f645a4964f72ddea25df62f63097cf3c',
     'render/tasks.mojo': '9b80dcaceec958190ade19bff6d106617c8c4c99e80d37eb0205609741ca2934',
 }
 
@@ -1257,7 +1258,7 @@ def _density780_dependencies():
     dependencies = dict(declared)
     if (any(type(name) is not str or type(digest) is not str
             for name, digest in dependencies.items())
-            or sha256(canonical(dependencies)) != '245d9fb1d888fbe3265ee9d6ef4a58aa391671199c9b3d11598622b00ce3c403'):
+            or sha256(canonical(dependencies)) != 'e9be8cbe0aa84f423064541280e5800d6de67582a30dfe1a21a1b567ac8ef44a'):
         raise ValueError('Unreviewed density dependency successor endpoints')
     return dependencies
 
@@ -1446,6 +1447,15 @@ STRAND_CAP_FORMATTED_SUCCESSOR = ({
 }, 4049)
 
 
+# PR791 passes the worker count to the splat prepare call, far below the cap
+# loop. The cap function, its producer and its line are unchanged.
+STRAND_CAP_SPLAT_WORKERS_SUCCESSOR = ({
+    **STRAND_CAP_FORMATTED_SUCCESSOR[0],
+    'renderers/renderer.mojo':
+        'c08275ccfea2f32dd84dc5ad54205052f6dfd216104836c858ff259224426332',
+}, 4049)
+
+
 def _strand_cap_resolver_unshadowed(root):
     """Refuse alternate packages/modules at the producer's resolver surfaces."""
     root = Path(root)
@@ -1494,7 +1504,9 @@ def strand_cap_loops(root, *, include_roots=(), _operation=None):
         renderer = 'renderers/renderer.mojo'
         line = STRAND_CAP_RENDERER_ENDPOINTS.get(actual[renderer])
         expected = {**STRAND_CAP_SOURCES, renderer: actual[renderer]}
-        if actual == STRAND_CAP_FORMATTED_SUCCESSOR[0]:
+        if actual == STRAND_CAP_SPLAT_WORKERS_SUCCESSOR[0]:
+            line = STRAND_CAP_SPLAT_WORKERS_SUCCESSOR[1]
+        elif actual == STRAND_CAP_FORMATTED_SUCCESSOR[0]:
             line = STRAND_CAP_FORMATTED_SUCCESSOR[1]
         elif actual == STRAND_CAP_CAMERA_ORDER_SUCCESSOR[0]:
             line = STRAND_CAP_CAMERA_ORDER_SUCCESSOR[1]
