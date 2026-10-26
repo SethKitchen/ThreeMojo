@@ -306,6 +306,12 @@ The trig module keeps its reviewed token digest.
 The interval module keeps its reviewed token digest.
 A changed token is refused.
 
+Mojo checks the live sampled module graphs.
+The trig module keeps its reviewed syntax graph.
+The interval module keeps its reviewed syntax graph.
+The jet class keeps its reviewed primitive graph.
+A changed graph is refused.
+
 ## Candidate certificate
 
 A certificate contains a stored incumbent point and its road parameter.
