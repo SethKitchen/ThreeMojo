@@ -450,6 +450,28 @@ Mojo checks the reviewed typed-boundary new inputs.
 232 inputs keep their reviewed digests.
 A changed new input is refused.
 
+Mojo checks the reviewed typed-boundary tests.
+352 tests keep their reviewed digests.
+A changed test is refused.
+
+Mojo checks the reviewed typed-boundary binding inputs.
+Five binding inputs keep their reviewed digests.
+A changed binding input is refused.
+
+Mojo checks the reviewed typed-boundary current dependencies.
+497 dependencies keep their reviewed digests.
+A changed dependency is refused.
+
+Mojo checks the reviewed dependency checker bytes.
+Fifteen executing checkers keep their reviewed digests.
+Six public checkers keep their reviewed digests.
+A changed checker or a linked public checker is refused.
+
+Mojo checks the reviewed typed-boundary conditioned inputs.
+Five conditioned inputs keep their reviewed digests.
+Two contract leaves keep their reviewed digests.
+A changed conditioned input is refused.
+
 ## Candidate certificate
 
 A certificate contains a stored incumbent point and its road parameter.
