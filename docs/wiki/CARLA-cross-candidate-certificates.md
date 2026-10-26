@@ -396,6 +396,11 @@ Three optional premises and eight support premises keep their digests.
 The score fixture keeps its file digest.
 A changed premise or a changed fixture is refused.
 
+Mojo checks the reviewed Map deviation declarations.
+The query certificate and the segment builder keep their token digests.
+Both declarations stay on Map.
+A changed query or a changed builder is refused.
+
 ## Candidate certificate
 
 A certificate contains a stored incumbent point and its road parameter.
