@@ -116,10 +116,13 @@ struct Project(Movable):
             "TOOLS_SHARD ?=\n",
             "\n# The negative-fixture manifest names exactly",
         )
-        # The nested stage runs through the Mojo parallel runner.
+        # The nested stage runs through the Mojo parallel runner. The other
+        # tools of the recipe are not stages, so they do nothing here.
         var wrapper = self.root + "/oracle-runner"
         Path(wrapper).write_text(
-            "#!/bin/sh\nshift\nexec " + shell_quote(runner_path()) + ' "$@"\n'
+            '#!/bin/sh\n[ "$1" = parallel_unittest ] || exit 0\nshift\nexec '
+            + shell_quote(runner_path())
+            + ' "$@"\n'
         )
         _ = run_program(["chmod", "755", wrapper], 10)
         Path(self.root + "/Makefile").write_text(

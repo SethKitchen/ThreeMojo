@@ -185,6 +185,12 @@ def _equal(actual: List[String], expected: List[String]) raises:
         assert_equal(actual[index], expected[index])
 
 
+def _format() -> List[String]:
+    var call = List[String]()
+    call.append("check_format_arguments")
+    return call^
+
+
 def _discover_tools() -> List[String]:
     var call = List[String]()
     call.append("-m")
@@ -246,12 +252,13 @@ def test_unsharded_runs_all_original_commands_in_order() raises:
     var result = _run(python, "test-tools")
     assert_equal(result[0], 0, result[1])
     var calls = result[2].copy()
-    assert_equal(len(calls), 5)
-    _equal(calls[0], _discover_tools())
-    _equal(calls[1], _discover_assets())
-    _equal(calls[2], _oracle(""))
-    _equal(calls[3], _spiral())
-    _equal(calls[4], _repository())
+    assert_equal(len(calls), 6)
+    _equal(calls[0], _format())
+    _equal(calls[1], _discover_tools())
+    _equal(calls[2], _discover_assets())
+    _equal(calls[3], _oracle(""))
+    _equal(calls[4], _spiral())
+    _equal(calls[5], _repository())
 
 
 def test_small_shard_counts_keep_each_auxiliary_check_once() raises:
@@ -367,9 +374,10 @@ def test_dedicated_discovery_runs_only_the_plain_discoveries() raises:
     for shard in ["", "1/6", "5/6"]:
         var result = _run(python, "test-tools-discovery", shard)
         assert_equal(result[0], 0, shard + "\n" + result[1])
-        assert_equal(len(result[2]), 2, shard)
-        _equal(result[2][0], _discover_tools())
-        _equal(result[2][1], _discover_assets())
+        assert_equal(len(result[2]), 3, shard)
+        _equal(result[2][0], _format())
+        _equal(result[2][1], _discover_tools())
+        _equal(result[2][2], _discover_assets())
 
 
 def test_discovery_and_oracle_shards_partition_every_command() raises:
@@ -396,7 +404,7 @@ def test_discovery_and_oracle_shards_partition_every_command() raises:
     assert_equal(oracle_runs, 6)
     assert_equal(spiral, 1)
     assert_equal(repository, 1)
-    assert_equal(len(discovery[2]), 2)
+    assert_equal(len(discovery[2]), 3)
 
 
 def test_each_component_failure_stops_its_target() raises:
