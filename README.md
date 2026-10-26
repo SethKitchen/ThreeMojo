@@ -129,7 +129,7 @@ Some portable features remain partial, including [GLSL shaders](https://github.c
 ### Project tools
 
 <details>
-<summary>Implemented: 78</summary>
+<summary>Implemented: 79</summary>
 
 - [x] [Literal loop receipt](https://github.com/SethKitchen/ThreeMojo/wiki/Coverage-tool#constant-loop-outcome-proofs): `tools/coverage_loop_seal.mojo` writes and checks the sealed loop receipt [#761](https://github.com/SethKitchen/ThreeMojo/issues/761)
 
@@ -214,6 +214,8 @@ Some portable features remain partial, including [GLSL shaders](https://github.c
 - [x] [Python town bake removal](https://github.com/SethKitchen/ThreeMojo/wiki/CARLA-assets#test-the-town-exporter): the Python files `build_towns.py`, `carla_gltf_fix.py`, and `test_build_towns.py` are removed [#761](https://github.com/SethKitchen/ThreeMojo/issues/761)
 
 - [x] [Constant-loop fixture](https://github.com/SethKitchen/ThreeMojo/wiki/Coverage-tool#capture-scheduling-and-progress): `tools/check_coverage_loop_fixture.mojo` checks the constant loops, a shadowed range, physical line endings, the production capture, and generated-stage mutations [#761](https://github.com/SethKitchen/ThreeMojo/issues/761)
+
+- [x] [Include-root proofs](https://github.com/SethKitchen/ThreeMojo/wiki/Coverage-tool#capture-scheduling-and-progress): `tools/check_coverage_include_root.mojo` instruments the lane modules and checks the six closed loop proofs [#761](https://github.com/SethKitchen/ThreeMojo/issues/761)
 
 - [x] [Neutral CARLA texture plan](https://github.com/SethKitchen/ThreeMojo/wiki/CARLA-assets#the-carla-towns): `tools/carla_texture_plan.mojo` names a neutral texture and chooses its fitted size [#761](https://github.com/SethKitchen/ThreeMojo/issues/761)
 

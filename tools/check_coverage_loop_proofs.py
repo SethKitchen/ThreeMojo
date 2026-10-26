@@ -9,6 +9,8 @@ passing runtime test. The real raw capture retains compilation, with a new
 Capture and report use `tools/coverage_io.mojo`. The fixture receipts are
 sealed and checked by `tools/coverage_loop_seal.mojo`.
 Use after the compiler-free normal and -O controls.
+The generated include-root inventory runs in
+`tools/check_coverage_include_root.mojo`.
 """
 
 import argparse
@@ -52,10 +54,6 @@ RUNTIME_SECONDS = 5
 # This new finite harness-only bound includes compilation and capture setup.
 # It does not replace the runtime alarm or change production capture budgets.
 INTEGRATION_SECONDS = 180
-# Full maintained generation copies and authenticates the complete include
-# layout, unlike the small180-second fixture compiler/capture calls below.
-# Keep its separately reviewed finite cap and the unchanged native alarm.
-CURRENT_INCLUDE_SECONDS = 1200
 PRODUCTION_DRIVER = '''from production import total
 from std.testing import assert_equal
 from std.ffi import external_call
@@ -604,102 +602,9 @@ def check_generated_receipt_owner(stage, mojo, compiler, flags, *, mutable_sourc
 
 def check_current_generated_include_root(stage, mojo, compiler, flags):
     """Exercise real maintained generation with the complete passthrough layout."""
-    modules = ('extensions/carla/curve_rounded_arc',
-               'extensions/carla/curve_rounded_line',
-               'extensions/carla/curve_sample_dispatch',
-               'extensions/carla/map')
-    suite = 'tests/test_carla_lane_geometry_guard_controls.mojo'
-    require(not stage.exists(), 'Generated include regression needs a fresh stage')
-    run(['make', '--no-print-directory', 'coverage-instrument',
-         'COV_DIR='+str(stage), 'MOJO='+mojo, 'TOOLCHAIN='+compiler,
-         'MOJOFLAGS='+flags, 'COVERED='+' '.join(name+'.mojo' for name in modules),
-         'COVERAGE_TESTS='+suite], cwd=ROOT, timeout=CURRENT_INCLUDE_SECONDS)
-    for name in ('extensions/animals/anatomy/render.mojo',
-                 'extensions/building/views/render.mojo'):
-        require((stage/name).read_bytes() == (ROOT/name).read_bytes(),
-                'Maintained nested-render passthrough is missing')
-    envelope = proofs.read_receipt(stage/'loop-proofs.json')
-    # Close the complete four-module census. Map exercises historical station
-    # borrowing during normal profiled derivation, not a profile callback.
-    rows = {
-        ('extensions/carla/curve_rounded_arc',235): (
-            'rounded-arc-validated-lane-list','range(len(lanes))','reviewed-nonempty-range',None,
-            'f17bf9a6a744971ea6e792a24b27d6157691e70d50c438880abcf88db2a9123d'),
-        ('extensions/carla/curve_rounded_line',93): (
-            'rounded-line-validated-lane-list','range(len(lanes))','reviewed-nonempty-range',None,
-            '22b70ec9febc6f3d21a8a4d9f1a74650d676e34782fab2812004a1a3aadeb698'),
-        ('extensions/carla/curve_sample_dispatch',126): (
-            'sample-dispatch-count-1-or-2','range(count)','reviewed-nonempty-range',2,
-            '04ff45c12cefcb4dbe3a7b136e77b6baaf02cff52325f6599d99250f820fdebb'),
-        ('extensions/carla/map',5025): (
-            'construction-geometry-boundary-list','boundaries','reviewed-nonempty-iterator',None,
-            '4ac668239112e81ac0b2bc84eaed32d1efbee1f70e61d1d97ca02324f914f35c'),
-    }
-    ordinary = {
-        ('extensions/carla/map',line): {
-            'module':'extensions/carla/map', 'line':line,
-            'kind':'literal-range', 'cardinality':count, 'required':'T', 'impossible':'F',
-            'expression':expression,
-            'source_sha256':'4ac668239112e81ac0b2bc84eaed32d1efbee1f70e61d1d97ca02324f914f35c'}
-        for line,count,expression in ((2170,3,'range (3 )'),(2201,8,'range (8 )'))}
-    expected = set(rows) | set(ordinary)
-    observed = {(row['module'],row['line']):row for row in envelope['receipt']['proofs']}
-    require(len(observed) == len(envelope['receipt']['proofs']) == 6
-            and set(observed) == expected, 'Closed six-row proof inventory differs')
-    require({key for key,row in observed.items() if 'proof_id' in row} == set(rows),
-            'Reviewed and ordinary proof inventories differ')
-    for key,(proof_id,expression,kind,maximum,digest) in rows.items():
-        raw = (ROOT/(key[0]+'.mojo')).read_bytes()
-        require(proofs.sha256(raw) == digest, 'Current integration source endpoint changed')
-        row = observed[key]
-        require((row['proof_id'],row['expression'],row['kind'],row['cardinality'],
-                 row['maximum_cardinality'],row['required'],row['impossible'],row['source_sha256'])
-                == (proof_id,expression,kind,1,maximum,'T','F',digest),
-                'Current proof contract or required True outcome differs')
-        constants = {line:{field:value for field,value in item.items()
-                           if field not in ('module','source_sha256')}
-                     for (module,line),item in ordinary.items() if module == key[0]}
-        require(proofs.constant_loops(raw.decode('utf-8')) == constants,
-                'Ordinary proof census differs from the reviewed exact set')
-    require(observed['extensions/carla/map',5025]['minimum_cardinality'] == 1,
-            'Constructor boundary minimum changed')
-    require(all(observed[key] == row for key,row in ordinary.items()),
-            'Ordinary literal-range proof contract differs')
-    original = (stage/'manifest.txt').read_bytes()
-    require({fields[1] for fields in (line.split() for line in original.decode().splitlines())
-             if fields and fields[0] in ('L','B','C','M')} == set(modules),
-            'Original selected-module denominator differs')
-    # Preserve the source's existing branch exclusions explicitly. None is
-    # evidence for a new proof or permission to discard another obligation.
-    map_exclusions = (1223,1766,2205,3003,3010,3032,3104,3109,3118,3127,4908,5333,5353)
-    require(all(f'B extensions/carla/map {line}'.encode() not in original.splitlines()
-                for line in map_exclusions), 'Existing Map branch exclusion changed')
-    masked = mojo_mask(mojo, stage)
-    # Independently reconstruct every line, including unrelated obligations.
-    # Only the single receipt header and authenticated B-to-R substitutions differ.
-    expected_rows = ['P '+proofs.SCHEMA+' '+envelope['sha256']]
-    used = set()
-    for original_row in original.decode('utf-8').splitlines():
-        fields = original_row.split()
-        key = (fields[1],int(fields[2])) if len(fields) >= 3 and fields[0] == 'B' else None
-        if key in observed:
-            row = observed[key]
-            expected_rows.append(' '.join(('R',key[0],str(key[1]),row['required'],
-                                            row['kind'],str(row['cardinality']))))
-            used.add(key)
-        else:
-            expected_rows.append(original_row)
-    require(used == set(observed), 'Proof does not identify an original branch')
-    require(masked == ('\n'.join(expected_rows)+'\n').encode(),
-            'An unrelated manifest row or its order changed')
-    for module,line in expected:
-        require((module,line) in observed, 'Current generated-layout theorem was refused')
-        require((observed[module,line]['required'],observed[module,line]['impossible']) == ('T','F'),
-                'Current theorem weakened its required true outcome')
-        require(f'B {module} {line}'.encode() in original.splitlines(), 'Missing original branch')
-        require(f'L {module} {line}'.encode() in masked.splitlines(), 'Original line was removed')
     run(['sh', str(ROOT / 'tools/tool.sh'), mojo,
-         'check_coverage_loop_fixture', '--mojo', mojo, '--mutations', str(stage)])
+         'check_coverage_include_root', '--mojo', mojo, '--stage', str(stage),
+         '--compiler', compiler, '--flags', flags], cwd=ROOT)
     owner_result = check_generated_receipt_owner(stage, mojo, compiler, flags)
     require(owner_result == {'fresh_receipts': 3, 'counted_receipts': 2,
                              'full_per_counted_receipt': 1, 'typed_per_counted_receipt': 1,
@@ -719,7 +624,7 @@ def check_current_generated_include_root(stage, mojo, compiler, flags):
         'root-only-seed-and-shared-positive', 'root-only-wrong-nonempty-root',
         'root-only-stage-tamper-at-finish'], 'fresh_receipts': 3},
         'Maintained root-only receipt controls did not complete')
-    return len(expected)
+    return 6
 
 
 

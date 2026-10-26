@@ -12,7 +12,7 @@ endings, the production capture, and generated-stage mutations. The
 profiled owner controls stay in `tools/check_coverage_loop_proofs.py`.
 """
 
-from std.os import setenv
+from std.os import setenv, stat
 from std.pathlib import Path
 from std.sys import argv, exit, stderr
 from std.tempfile import mkdtemp
@@ -1416,13 +1416,12 @@ def qualify_generated_mutations(mojo: String, stage: String) raises:
     var stage_real = String(_run(["realpath", stage], 10.0, "").strip())
     if not changed_real.startswith(stage_real + "/"):
         _fail("Mutation target is not a regular contained generated file")
-    var changed_id = String(
-        _run(["stat", "-c", "%d:%i", changed], 10.0, "").strip()
-    )
-    var source_id = String(
-        _run(["stat", "-c", "%d:%i", source], 10.0, "").strip()
-    )
-    if changed_id == source_id:
+    var changed_info = stat(changed)
+    var source_info = stat(source)
+    if (
+        changed_info.st_dev == source_info.st_dev
+        and changed_info.st_ino == source_info.st_ino
+    ):
         _fail("Generated mutation target aliases the sealed source")
     var original = Path(changed).read_bytes()
     var manifest = sha256_hex(Span(Path(stage + "/manifest.txt").read_bytes()))
