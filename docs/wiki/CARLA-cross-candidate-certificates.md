@@ -348,6 +348,12 @@ The two frontier edits keep their reviewed names.
 Reversing those edits restores the support endpoint.
 A changed frontier endpoint is refused.
 
+Mojo checks the reviewed support predecessor.
+The support endpoint keeps its file digest and its token digest.
+The three support edits keep their reviewed names.
+Reversing those edits restores the optional endpoint.
+A changed support endpoint is refused.
+
 ## Candidate certificate
 
 A certificate contains a stored incumbent point and its road parameter.
