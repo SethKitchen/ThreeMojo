@@ -267,6 +267,14 @@ ifneq ($(origin NATIVE_TOOLCHAIN),command line)
 NATIVE_TOOLCHAIN := $(shell $(TOOL) native_test_support fingerprint \
                        --cc $(call quote,$(CC)) 2>/dev/null || echo "no-native-compiler")
 endif
+# A list setting goes to cache_key in pieces of 400 words. One argument
+# past 128 KiB fails exec with "Argument list too long", and the format
+# list alone passed that once the tools moved into Mojo. Each later piece
+# is named NAME+, so a word moved across a piece boundary changes the key.
+list_setting = --setting=$(call quote,$(1):$(wordlist 1,400,$(2))) \
+  $(call list_setting_rest,$(1)+,$(wordlist 401,$(words $(2)),$(2)))
+list_setting_rest = $(if $(strip $(2)),--setting=$(call quote,$(1):$(wordlist 1,400,$(2))) \
+  $(call list_setting_rest,$(1),$(wordlist 401,$(words $(2)),$(2))))
 ifneq ($(origin HASH),command line)
 HASH := $(shell $(TOOL) cache_key \
           --setting=$(call quote,$(MOJO)) \
@@ -275,17 +283,17 @@ HASH := $(shell $(TOOL) cache_key \
           --setting=$(call quote,$(TOOLCHAIN)) \
           --setting=$(call quote,native-tests:$(NATIVE_TOOLCHAIN)) \
           --setting=$(call quote,$(AFFECTED) $(AFFECTED_CHANGE)) \
-          --setting=$(call quote,cpu-tests:$(CPU_TESTS)) \
+          $(call list_setting,cpu-tests,$(CPU_TESTS)) \
           --setting=$(call quote,shard:$(SHARD)) \
           --setting=$(call quote,test-timeout:$(TEST_TIMEOUT)) \
-          --setting=$(call quote,cpu-entries:$(CPU_ENTRY_POINTS)) \
-          --setting=$(call quote,cpu-docs:$(CPU_DOC_SOURCES)) \
-          --setting=$(call quote,negative:$(COMPILE_FAIL_RUN)) \
-          --setting=$(call quote,format:$(FORMATTED)) \
+          $(call list_setting,cpu-entries,$(CPU_ENTRY_POINTS)) \
+          $(call list_setting,cpu-docs,$(CPU_DOC_SOURCES)) \
+          $(call list_setting,negative,$(COMPILE_FAIL_RUN)) \
+          $(call list_setting,format,$(FORMATTED)) \
           --setting=$(call quote,coverage-profile:$(COV_PROFILE)) \
           --setting=$(call quote,coverage-loop-proof-schema:constant-loops-v2) \
-          --setting=$(call quote,covered:$(COVERED)) \
-          --setting=$(call quote,gpu:$(GPU_TESTS) $(GPU_HOST_TESTS) $(GPU_ENTRY_POINTS) $(GPU_LIB_SOURCES)))
+          $(call list_setting,covered,$(COVERED)) \
+          $(call list_setting,gpu,$(GPU_TESTS) $(GPU_HOST_TESTS) $(GPU_ENTRY_POINTS) $(GPU_LIB_SOURCES)))
 endif
 ifeq ($(strip $(HASH)),)
 $(error Cannot read build inputs for the cache key)
