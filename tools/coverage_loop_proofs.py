@@ -2619,16 +2619,17 @@ def build_receipt(root, build, compiler, flags, *, mojo=None, capture_cache=None
         'execution': execution_contract(root, build, inputs, mojo=mojo,
                                         capture_cache=capture_cache, suites=suites)}
     cleanup = None
-    if importlib.util.find_spec('carla_lane_oracle') is None:
-        # Standalone plain receipts need no CARLA semantic authority. A known
-        # reviewed source may never silently become a plain-only receipt.
-        reviewed_modules = (set(REVIEWED_LOOP_RULES)
-                            | {row[0] for row in GUARDED_LOOP_RULES}
-                            | {'renderers/renderer', 'extensions/carla/map',
-                               DENSITY_SOURCE.removesuffix('.mojo')})
-        if reviewed_modules & {name.removesuffix('.mojo') for name in generation['modules']}:
-            raise ValueError('Reviewed loop authority is unavailable')
-    else:
+    # Standalone plain receipts need no CARLA semantic authority. A known
+    # reviewed source may never silently become a plain-only receipt.
+    reviewed_modules = (set(REVIEWED_LOOP_RULES)
+                        | {row[0] for row in GUARDED_LOOP_RULES}
+                        | {'renderers/renderer', 'extensions/carla/map',
+                           DENSITY_SOURCE.removesuffix('.mojo')})
+    needs_authority = bool(reviewed_modules & {
+        name.removesuffix('.mojo') for name in generation['modules']})
+    if needs_authority and importlib.util.find_spec('carla_lane_oracle') is None:
+        raise ValueError('Reviewed loop authority is unavailable')
+    if needs_authority:
         # A present but broken authority installation is an error, not fallback.
         from carla_lane_oracle import full_audit_cleanup_contracts as cleanup
     _plain_seed = canonical(_receipt_seed) if cleanup is None else None
