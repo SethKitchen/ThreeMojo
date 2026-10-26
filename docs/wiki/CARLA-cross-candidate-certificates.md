@@ -423,6 +423,10 @@ Four modules keep their reviewed operation spans.
 Each span appears once.
 A missing span or a repeated span is refused.
 
+Mojo checks the reviewed shared-helper package files.
+Four package files keep their reviewed digests.
+A changed package file is refused.
+
 ## Candidate certificate
 
 A certificate contains a stored incumbent point and its road parameter.
