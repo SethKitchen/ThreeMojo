@@ -119,7 +119,7 @@ change to one, or to any file it imports, changes the selection itself."""
 comptime GLOBAL_TOOLS = [
     "tools/cache_key.py",
     "tools/suite_key.py",
-    "tools/run_suite.py",
+    "tools/run_suite.mojo",
     "tools/native_test_support.py",
     "tools/native_test_support.mojo",
     "tools/fixture_runtime.mojo",

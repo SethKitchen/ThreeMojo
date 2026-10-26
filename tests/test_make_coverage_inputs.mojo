@@ -36,7 +36,7 @@ def _tools() -> List[String]:
     names.append("tools/coverage_hit_aot.mojo")
     names.append("tools/coverage_hit_cache.c")
     names.append("tools/coverage_write_interposer.c")
-    names.append("tools/run_suite.py")
+    names.append("tools/run_suite.mojo")
     return names^
 
 

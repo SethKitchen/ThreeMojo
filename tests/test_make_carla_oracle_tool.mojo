@@ -52,7 +52,6 @@ def build_runner() raises:
 
 comptime STAGES = [
     ("tools", "tools"),
-    ("assets", "assets/carla/tools"),
     ("nested", "tools/carla_lane_oracle"),
 ]
 """Each discovery stage and its directory."""
@@ -116,10 +115,13 @@ struct Project(Movable):
             "TOOLS_SHARD ?=\n",
             "\n# The negative-fixture manifest names exactly",
         )
-        # The nested stage runs through the Mojo parallel runner.
+        # The nested stage runs through the Mojo parallel runner. The other
+        # tools of the recipe are not stages, so they do nothing here.
         var wrapper = self.root + "/oracle-runner"
         Path(wrapper).write_text(
-            "#!/bin/sh\nshift\nexec " + shell_quote(runner_path()) + ' "$@"\n'
+            '#!/bin/sh\n[ "$1" = parallel_unittest ] || exit 0\nshift\nexec '
+            + shell_quote(runner_path())
+            + ' "$@"\n'
         )
         _ = run_program(["chmod", "755", wrapper], 10)
         Path(self.root + "/Makefile").write_text(
@@ -178,13 +180,13 @@ def test_official_target_runs_all_discoveries_and_read_only_check_once() raises:
     var project = Project()
     var run = project.make()
     assert_equal(run[0].status, 0, run[0].output + run[0].errors)
-    assert_equal(_words(run[1].copy()), "tools assets nested check repository")
+    assert_equal(_words(run[1].copy()), "tools nested check repository")
     project.close()
 
 
 def test_each_discovery_failure_fails_target_before_later_stages() raises:
     var project = Project()
-    var stages: List[String] = ["tools", "assets", "nested"]
+    var stages: List[String] = ["tools", "nested"]
     for index in range(len(stages)):
         var run = project.make(stages[index])
         assert_true(run[0].status != 0, run[0].output + run[0].errors)
@@ -199,7 +201,7 @@ def test_read_only_checker_failure_fails_the_official_target() raises:
     var project = Project()
     var run = project.make("check")
     assert_true(run[0].status != 0, run[0].output + run[0].errors)
-    assert_equal(_words(run[1].copy()), "tools assets nested check")
+    assert_equal(_words(run[1].copy()), "tools nested check")
     project.close()
 
 
@@ -283,12 +285,12 @@ def test_groups_together_run_every_stage_once() raises:
         var run = project.make(shard=String(index) + "/2")
         assert_equal(run[0].status, 0, run[0].output + run[0].errors)
         if index > 1:
-            for name in ["tools", "assets", "check", "repository"]:
+            for name in ["tools", "check", "repository"]:
                 for event in run[1]:
                     assert_true(event != name, name)
         seen.extend(run[1].copy())
     sort(seen)
-    assert_equal(_words(seen^), "assets check nested repository tools")
+    assert_equal(_words(seen^), "check nested repository tools")
     project.close()
 
 
@@ -298,7 +300,7 @@ def test_six_groups_keep_serial_checks_on_their_actual_owners() raises:
     for index in range(1, 7):
         var run = project.make(shard=String(index) + "/6")
         assert_equal(run[0].status, 0, run[0].output + run[0].errors)
-        for name in ["tools", "assets"]:
+        for name in ["tools"]:
             var count = 0
             for event in run[1]:
                 if event == name:
@@ -312,7 +314,7 @@ def test_six_groups_keep_serial_checks_on_their_actual_owners() raises:
             assert_equal(count, 1 if index == 1 else 0, name)
         seen.extend(run[1].copy())
     sort(seen)
-    assert_equal(_words(seen^), "assets check nested repository tools")
+    assert_equal(_words(seen^), "check nested repository tools")
     project.close()
 
 
@@ -322,7 +324,7 @@ def test_dedicated_ci_targets_together_run_every_stage_once() raises:
     assert_equal(
         discovery[0].status, 0, discovery[0].output + discovery[0].errors
     )
-    assert_equal(_words(discovery[1].copy()), "tools assets")
+    assert_equal(_words(discovery[1].copy()), "tools")
     var seen = discovery[1].copy()
     for index in range(1, 7):
         var run = project.make(
@@ -330,24 +332,20 @@ def test_dedicated_ci_targets_together_run_every_stage_once() raises:
         )
         assert_equal(run[0].status, 0, run[0].output + run[0].errors)
         for event in run[1]:
-            assert_true(event != "tools" and event != "assets", event)
+            assert_true(event != "tools", event)
             if index > 1:
                 assert_true(event != "check" and event != "repository", event)
         seen.extend(run[1].copy())
     sort(seen)
-    assert_equal(_words(seen^), "assets check nested repository tools")
+    assert_equal(_words(seen^), "check nested repository tools")
     project.close()
 
 
 def test_dedicated_discovery_failure_keeps_later_stages_unrun() raises:
     var project = Project()
-    for stage in ["tools", "assets"]:
-        var run = project.make(fail=stage, target="test-tools-discovery")
-        assert_true(run[0].status != 0, run[0].output + run[0].errors)
-        assert_equal(
-            _words(run[1].copy()),
-            "tools" if stage == "tools" else "tools assets",
-        )
+    var run = project.make(fail="tools", target="test-tools-discovery")
+    assert_true(run[0].status != 0, run[0].output + run[0].errors)
+    assert_equal(_words(run[1].copy()), "tools")
     project.close()
 
 

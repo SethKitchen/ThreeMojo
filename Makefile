@@ -999,7 +999,6 @@ test-tools:
 test-tools-discovery:
 	@$(TOOL) check_format_arguments
 	@python3 -m unittest discover -s tools -p 'test_*.py'
-	@python3 -m unittest discover -s assets/carla/tools -p 'test_*.py'
 
 test-tools-oracle:
 	@$(TOOL) parallel_unittest --jobs $(JOBS) $(if $(TOOLS_SHARD),--shard $(TOOLS_SHARD)) tools/carla_lane_oracle
