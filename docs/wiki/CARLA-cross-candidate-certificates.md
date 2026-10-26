@@ -401,6 +401,12 @@ The query certificate and the segment builder keep their token digests.
 Both declarations stay on Map.
 A changed query or a changed builder is refused.
 
+Mojo checks the reviewed shared-helper routing.
+Four consumers keep one reviewed import.
+Each helper call keeps its reviewed count.
+A local helper must not hide that import.
+A changed import or a changed call is refused.
+
 ## Candidate certificate
 
 A certificate contains a stored incumbent point and its road parameter.
