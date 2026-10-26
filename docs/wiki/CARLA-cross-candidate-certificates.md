@@ -446,6 +446,10 @@ Mojo checks the reviewed migration records.
 Seventeen records keep their reviewed digests.
 A changed migration record is refused.
 
+Mojo checks the reviewed typed-boundary new inputs.
+232 inputs keep their reviewed digests.
+A changed new input is refused.
+
 ## Candidate certificate
 
 A certificate contains a stored incumbent point and its road parameter.
