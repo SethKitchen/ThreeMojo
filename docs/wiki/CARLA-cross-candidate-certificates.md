@@ -504,6 +504,10 @@ Mojo checks the reviewed shared-helper fixtures.
 4 fixtures keep their reviewed digests.
 A changed shared-helper fixture is refused.
 
+Mojo checks four reviewed fixtures that still match their digests.
+The station test, the scaled note, the witness note, and the expectation binding stay fixed.
+A changed fixture is refused.
+
 ## Candidate certificate
 
 A certificate contains a stored incumbent point and its road parameter.
