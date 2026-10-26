@@ -324,6 +324,12 @@ Six curve-bounds helpers keep their reviewed function graphs.
 The bounds helpers come from the reviewed reference source.
 A changed bridge is refused.
 
+Mojo checks the live score operation graphs.
+The score helper keeps its reviewed token digest.
+The winner-seed caller keeps its reviewed token digest.
+Each declaration stays unique.
+A changed operation is refused.
+
 ## Candidate certificate
 
 A certificate contains a stored incumbent point and its road parameter.
