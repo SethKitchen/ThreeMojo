@@ -100,6 +100,38 @@ def test_report_replays_captures_in_name_order() raises:
     assert_equal(ran.output, "world\nhello\n")
 
 
+def test_report_replays_every_capture_of_many() raises:
+    """Each of 64 captures reaches the reporter, in name order.
+
+    The FIFO writer once closed its probe before it opened the blocking end.
+    A reporter that read in that gap saw the end of the file and moved on,
+    and the replay waited for it forever.
+    """
+    var ran = run_program(
+        [
+            "sh",
+            "-c",
+            "dir=$(mktemp -d); i=10; while [ $i -lt 74 ]; do printf"
+            " 'line%s\\n' $i | gzip -n -1 > \"$dir/c$i.txt.gz\"; i=$((i + 1));"
+            " done; sh tools/tool.sh "
+            + shell_quote(tool_mojo())
+            + ' coverage_io report --capture-dir "$dir" -- python3 -c '
+            + "'import sys\n"
+            + "for path in sys.argv[1:]:\n"
+            + '    handle = open(path, "rb")\n'
+            + "    sys.stdout.buffer.write(handle.read())\n"
+            + '    handle.close()\n\'; status=$?; rm -rf "$dir"; exit $status',
+        ],
+        20.0,
+        merge_errors=False,
+    )
+    assert_equal(ran.status, 0)
+    var expected = String()
+    for line in range(10, 74):
+        expected += "line" + String(line) + "\n"
+    assert_equal(ran.output, expected)
+
+
 def test_progress_reports_the_first_probe_and_a_running_line() raises:
     var mojo = tool_mojo()
     var ran = run_program(
