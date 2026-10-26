@@ -62,7 +62,7 @@ from math.utils import max3, min3, mix_delta, saturate
 from math.vector3 import Vector3
 from render.color_math import rgb_channels
 from render.framebuffer import FloatColor, OPAQUE_WHITE
-from std.math import exp2, log2, max, min
+from std.math import exp2, fma, log2, max, min
 
 
 @fieldwise_init
@@ -223,8 +223,13 @@ def aces_fit[w: Int](v: SIMD[DType.float32, w]) -> SIMD[DType.float32, w]:
     Returns:
         The fitted channel.
     """
-    var a = v * (v + 0.0245786) - 0.000090537
-    var b = v * (0.983729 * v + 0.4329510) + 0.238081
+    # One `fma` order, so a wide lane matches the scalar bits. A bare
+    # `a * b + c` contracts differently at width 1 and at a vector width
+    # on x86-64-v3.
+    var a = fma(v, v + 0.0245786, -0.000090537)
+    var b = fma(
+        v, fma(SIMD[DType.float32, w](0.983729), v, 0.4329510), 0.238081
+    )
     return a / b
 
 
@@ -261,16 +266,45 @@ def aces_tone[
     var sr = r * scale
     var sg = g * scale
     var sb = b * scale
-    var ir = 0.59719 * sr + 0.35458 * sg + 0.04823 * sb
-    var ig = 0.07600 * sr + 0.90834 * sg + 0.01566 * sb
-    var ib = 0.02840 * sr + 0.13383 * sg + 0.83777 * sb
+    var ir = _row(0.59719, sr, 0.35458, sg, 0.04823, sb)
+    var ig = _row(0.07600, sr, 0.90834, sg, 0.01566, sb)
+    var ib = _row(0.02840, sr, 0.13383, sg, 0.83777, sb)
     var fr = aces_fit(ir)
     var fg = aces_fit(ig)
     var fb = aces_fit(ib)
     return (
-        saturate_lanes(1.60475 * fr - 0.53108 * fg - 0.07367 * fb),
-        saturate_lanes(-0.10208 * fr + 1.10813 * fg - 0.00605 * fb),
-        saturate_lanes(-0.00327 * fr - 0.07276 * fg + 1.07602 * fb),
+        saturate_lanes(_row(1.60475, fr, -0.53108, fg, -0.07367, fb)),
+        saturate_lanes(_row(-0.10208, fr, 1.10813, fg, -0.00605, fb)),
+        saturate_lanes(_row(-0.00327, fr, -0.07276, fg, 1.07602, fb)),
+    )
+
+
+@always_inline
+def _row[
+    w: Int
+](
+    a: Float32,
+    x: SIMD[DType.float32, w],
+    b: Float32,
+    y: SIMD[DType.float32, w],
+    c: Float32,
+    z: SIMD[DType.float32, w],
+) -> SIMD[DType.float32, w]:
+    """Return `a * x + b * y + c * z` with one `fma` order.
+
+    Args:
+        a: The coefficient of `x`.
+        x: The first channel.
+        b: The coefficient of `y`.
+        y: The second channel.
+        c: The coefficient of `z`.
+        z: The third channel.
+
+    Returns:
+        The row, each product folded in from the left.
+    """
+    return fma(
+        SIMD[DType.float32, w](c), z, fma(SIMD[DType.float32, w](b), y, a * x)
     )
 
 

@@ -265,6 +265,7 @@ def _search_jpeg() raises -> String:
         ".venv-carla-export/lib/python3.12/site-packages/pillow.libs"
     )
     folders.append(".venv/lib/python3.12/site-packages/pillow.libs")
+    _append_env_pillow_libs(folders)
     for index in range(len(folders)):
         var folder = folders[index]
         if not Path(folder).exists():
@@ -277,6 +278,43 @@ def _search_jpeg() raises -> String:
                 continue
             return folder + "/" + text
     return String("")
+
+
+def _append_env_pillow_libs(mut folders: List[String]):
+    """Add Pillow's library folder for the active Python."""
+    _append_pillow_root(folders, getenv("VIRTUAL_ENV", ""))
+    var path = getenv("PATH", "")
+    var raw = path.as_bytes()
+    var start = 0
+    for index in range(len(raw) + 1):
+        if index < len(raw) and raw[index] != 58:
+            continue
+        var entry = String(path[byte=start:index])
+        start = index + 1
+        var bytes = entry.as_bytes()
+        var count = len(bytes)
+        if count < 4:
+            continue
+        if (
+            bytes[count - 4] == 47
+            and bytes[count - 3] == 98
+            and bytes[count - 2] == 105
+            and bytes[count - 1] == 110
+        ):
+            _append_pillow_root(folders, String(entry[byte = : count - 4]))
+
+
+def _append_pillow_root(mut folders: List[String], root: String):
+    """Add `pillow.libs` under one Python prefix."""
+    if root.byte_length() == 0:
+        return
+    for version in range(9, 15):
+        folders.append(
+            root
+            + "/lib/python3."
+            + String(version)
+            + "/site-packages/pillow.libs"
+        )
 
 
 def _pointer(address: Int) -> OpaquePointer[MutAnyOrigin]:

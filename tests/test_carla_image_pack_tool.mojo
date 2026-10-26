@@ -372,4 +372,10 @@ def main() raises:
     )
     if built.status != 0:
         raise Error(built.output)
+    var resize = run_program(
+        ["sh", "tools/tool.sh", tool_mojo(), "--build", "carla_image_resize"],
+        180,
+    )
+    if resize.status != 0:
+        raise Error(resize.output)
     TestSuite.discover_tests[__functions_in_module()]().run()
