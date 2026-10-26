@@ -458,11 +458,11 @@ Each mesh keeps a share of its triangles, by its kind. Each town also has a cap 
 
 `tools/carla_town_cards.mojo` keeps about the requested share of those cards and grows each card that stays, using a CRC-32 seed. `tools/carla_town_uv.mojo` gives a simplified triangle the texture of one original triangle. `tools/carla_town_near.mojo` finds the original triangles nearest that face's center. `tools/carla_town_choose.mojo` picks that original triangle. `tools/carla_collapse_map.mojo` keeps the first corner that fell into each new one and copies its texture values. `tools/carla_town_finish.mojo` keeps each simplified corner inside the original box and turns a flipped face back.
 
-The kind of each mesh and both triangle limits come from `tools/carla_town_budget.mojo`. `tools/carla_town_plan.mojo` chooses which meshes stay and which far level each one uses. `build_towns.py` asks those programs for every mesh. `tools/carla_simplify_target.mojo` chooses how many of those triangles one mesh keeps. `tools/carla_town_lower.mojo` lowers one mesh to that count, or keeps its leaf cards.
+The kind of each mesh and both triangle limits come from `tools/carla_town_budget.mojo`. `tools/carla_town_plan.mojo` chooses which meshes stay and which far level each one uses. `tools/carla_town_build.mojo` asks those programs for every mesh. `tools/carla_simplify_target.mojo` chooses how many of those triangles one mesh keeps. `tools/carla_town_lower.mojo` lowers one mesh to that count, or keeps its leaf cards.
 
 Some textures in CARLA's content show a company's mark, a real person, a real institution or a poster of unclear origin. CARLA's license covers CARLA's own work, not these. Each one becomes one flat color, its average. `tools/carla_texture_plan.mojo` names them, chooses the fitted size, and the vehicle packages use the same list.
 
-A package names no engine and no engine path. `build_towns.py` stops with an error when it finds one. `tools/carla_town_clean.mojo` reads each file name, and the text of each glTF and OpenDRIVE file.
+A package names no engine and no engine path. `tools/carla_town_build.mojo` stops with an error when it finds one. `tools/carla_town_clean.mojo` reads each file name, and the text of each glTF and OpenDRIVE file.
 
 ## Rebuild the town packages
 
@@ -484,15 +484,17 @@ The towns are made in three steps. The scripts run on Windows, like the vehicle 
    sh tools/tool.sh .venv/bin/mojo carla_town_paths drive
    ```
 
-   It reads the release's own `CarlaUE4/Content`, not `cooked/`. It does not export the engine's own content, which is licensed for use in the engine only. `build_towns.py` draws its own box for the engine's cube from `tools/carla_town_cube.mojo`.
+   It reads the release's own `CarlaUE4/Content`, not `cooked/`. It does not export the engine's own content, which is licensed for use in the engine only. `tools/carla_town_build.mojo` draws its own box for the engine's cube from `tools/carla_town_cube.mojo`.
 
-   `tools/carla_town_paths.mojo` names the packages. It skips a package that is already exported and groups the rest into batches of 40. It runs UModel on each batch, cuts a batch that takes more than 55 seconds in half, and gives up on one package. It builds the UModel arguments for one batch. It also names each mesh file the town build reads. `build_towns.py` reads each mesh with `tools/carla_town_mesh.mojo`.
+   `tools/carla_town_paths.mojo` names the packages. It skips a package that is already exported and groups the rest into batches of 40. It runs UModel on each batch, cuts a batch that takes more than 55 seconds in half, and gives up on one package. It builds the UModel arguments for one batch. It also names each mesh file the town build reads. `tools/carla_town_build.mojo` reads each mesh with `tools/carla_town_mesh.mojo`.
 
 3. Build and zip the packages:
 
    ```sh
    python build_towns.py [--top 20]
    ```
+
+   `python build_towns.py` calls `tools/carla_town_build.mojo`.
 
    Then, with `CARLA_EXPORT_DIR` set to the absolute path of the work folder:
 

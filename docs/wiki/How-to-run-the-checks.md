@@ -23,6 +23,8 @@ Without `-I .` the compiler reports `unable to locate module 'math'`.
 
 Suites that write fixtures use one private temporary directory for each run.
 They honor `TMPDIR` and remove their files on success or an exception.
+The Python coverage capture and the suite runner keep that private root.
+The coverage capture kills its owned process group from that same module.
 The direct run does not enforce a timeout. Use `tools/run_suite.mojo` for that:
 
 ```bash
@@ -95,7 +97,8 @@ The CI workflow checks a pull request with `AFFECTED` set to its base branch. It
 
 ## Run the tool tests
 
-`make test-tools` runs the Python tool tests and the CARLA oracle.
+`make test-tools` runs the tool tests and the CARLA oracle.
+`tools/check_format_arguments.mojo` checks 1789 formatter paths.
 The oracle runner is `tools/parallel_unittest.mojo`.
 It starts several Python test processes at once.
 `TOOLS_SHARD=I/N` gives each runner a different share of those units.

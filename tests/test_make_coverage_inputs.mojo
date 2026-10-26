@@ -33,11 +33,9 @@ def _tools() -> List[String]:
     names.append("tools/cache_key.py")
     names.append("tools/native_test_support.py")
     names.append("tools/coverage_toolchain_identity.py")
-    names.append("tools/coverage_process_group.py")
-    names.append("tools/coverage_hit_aot.py")
+    names.append("tools/coverage_hit_aot.mojo")
     names.append("tools/coverage_hit_cache.c")
     names.append("tools/coverage_write_interposer.c")
-    names.append("tools/test_environment.py")
     names.append("tools/run_suite.py")
     return names^
 

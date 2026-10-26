@@ -122,7 +122,6 @@ comptime GLOBAL_TOOLS = [
     "tools/run_suite.py",
     "tools/native_test_support.py",
     "tools/native_test_support.mojo",
-    "tools/test_environment.py",
     "tools/fixture_runtime.mojo",
     "tools/compiler_telemetry.mojo",
 ]

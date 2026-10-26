@@ -4,6 +4,7 @@
 
 import argparse
 from collections import deque
+from contextlib import contextmanager
 import gzip
 import hashlib
 import json
@@ -20,9 +21,55 @@ import tempfile
 import threading
 import time
 
-from coverage_process_group import kill_owned_group
-from test_environment import isolated_environment
 import coverage_loop_proofs
+
+
+@contextmanager
+def isolated_environment():
+    """Yield a child environment and remove its private files afterward."""
+    parent = os.environ.get('TMPDIR') or None
+    with tempfile.TemporaryDirectory(prefix='threemojo-test-', dir=parent) as folder:
+        environment = os.environ.copy()
+        root = str(Path(folder).resolve())
+        environment['THREEMOJO_TEST_TMPDIR'] = root
+        environment['TMPDIR'] = root
+        yield environment
+
+
+def kill_owned_group(child, *, reap):
+    """Signal an owned group and accept Darwin EPERM only after absence.
+
+    Args:
+        child: An unreaped child started with `start_new_session=True`.
+        reap: The owner wait callback. It accepts `timeout=0`.
+
+    Returns:
+        None after SIGKILL succeeds or the group is confirmed absent.
+
+    Raises:
+        PermissionError: A live leader or a denied group remains.
+        BaseException: The owner reap or the group probe fails.
+    """
+    try:
+        os.killpg(child.pid, signal.SIGKILL)
+    except ProcessLookupError:
+        pass
+    except PermissionError as error:
+        if sys.platform != 'darwin' or error.errno != errno.EPERM:
+            raise
+        # EPERM alone cannot distinguish a zombie-only group from denial.
+        try:
+            reap(timeout=0)
+        except subprocess.TimeoutExpired:
+            raise error
+        # The owner disarmed the identity before releasing its PID. Never
+        # send another destructive signal, and add no fresh settling budget.
+        try:
+            os.killpg(child.pid, 0)
+        except ProcessLookupError:
+            return
+        raise error
+
 
 ACTIVE_SOURCE_SHA256 = coverage_loop_proofs.file_sha256(Path(__file__))
 

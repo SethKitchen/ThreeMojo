@@ -63,11 +63,9 @@ comptime _TOOLS = [
     "tools/cache_key.py",
     "tools/native_test_support.py",
     "tools/coverage_toolchain_identity.py",
-    "tools/coverage_process_group.py",
-    "tools/coverage_hit_aot.py",
+    "tools/coverage_hit_aot.mojo",
     "tools/coverage_hit_cache.c",
     "tools/coverage_write_interposer.c",
-    "tools/test_environment.py",
     "tools/run_suite.py",
     "Makefile",
 ]
