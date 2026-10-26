@@ -418,7 +418,7 @@ EDGES = {'coverage_loop_proofs.py': {'after_sha256': '0d082e17f3401a607c056e24aa
                                         ('        if typed.is_current(name, '
                                          '_typed_endpoint(name, '
                                          'current)):\n',)))},
- 'full_audit_cleanup_contracts.py': {'after_sha256': 'c9af501610da7ebe5fee030c5f5613d8cf4fc291c5941fbd228af33d3f5220b0',
+ 'full_audit_cleanup_contracts.py': {'after_sha256': '7cbc828190f69e9ce7a29d9887fdaa8da40b59305fb68e56be25490255000555',
                                      'before_sha256': 'f62dbe69ddd5d15bd79aa4b0a8237d9475fe1a00cea06c2f7124c59af237c833',
                                      'edits': ((56,
                                                 57,
@@ -675,6 +675,34 @@ EDGES = {'coverage_loop_proofs.py': {'after_sha256': '0d082e17f3401a607c056e24aa
                                                 (),
                                                 ('    '
                                                  'pr780_successor.verify_data()\n',)),
+                                               (3089,
+                                                3092,
+                                                (
+                                                 "        prior = (_pr760['predecessors'][path] if _pr760 and path in _pr760['predecessors']\n",
+                                                 "                 else pr760_stage.predecessor_source(path, raw.decode('utf-8'))\n",
+                                                 "                 if current and path in pr760_stage.CARLA_REGISTRY_PATHS else raw.decode('utf-8'))\n",
+                                                ),
+                                                (
+                                                 "        retained = pr780_successor.predecessor_bytes(path, raw).decode('utf-8') if pr780_successor.reviewed_edge(path) is not None and sha(raw) == pr780_successor.reviewed_edge(path)['after_sha256'] else raw.decode('utf-8')\n",
+                                                 "        prior = (_pr760['predecessors'][path] if _pr760 and path in _pr760['predecessors']\n",
+                                                 '                 else pr760_stage.predecessor_source(path, retained) if current and path in pr760_stage.CARLA_REGISTRY_PATHS else retained)\n',
+                                                )),
+                                               (3113,
+                                                3114,
+                                                (
+                                                 '        if path in tests and typed_boundary.is_current(path, raw):\n',
+                                                ),
+                                                (
+                                                 "        if path in tests and (typed_boundary.is_current(path, raw) or pr780_successor.reviewed_edge(path) is not None and sha(raw) == pr780_successor.reviewed_edge(path)['after_sha256']):\n",
+                                                )),
+                                               (3122,
+                                                3123,
+                                                (
+                                                 "    texts = {path: raw.decode('utf-8') for path, raw in sources.items()}\n",
+                                                ),
+                                                (
+                                                 "    texts = {path: (pr780_successor.predecessor_bytes(path, raw).decode('utf-8') if pr780_successor.reviewed_edge(path) is not None and sha(raw) == pr780_successor.reviewed_edge(path)['after_sha256'] else raw.decode('utf-8')) for path, raw in sources.items()}\n",
+                                                )),
                                                (3540,
                                                 3543,
                                                 (),
@@ -1195,7 +1223,7 @@ def predecessor(name, raw):
     """Compose exact current checkers into the retained 5e91dad comparison."""
     if type(raw) is not bytes:
         raise AssertionError('checker source must be physical builtin bytes')
-    if hashlib.sha256(json.dumps(EDGES, sort_keys=True, separators=(',', ':')).encode()).hexdigest() != '5c2c7ab4c0a8a1fa592574b0bb54566bd7392997e83ab6a11851719af28d464c':
+    if hashlib.sha256(json.dumps(EDGES, sort_keys=True, separators=(',', ':')).encode()).hexdigest() != '8f70d99e7cfce0889ff71902c1e0433b600dd5c191952b76421abb427cb0d02a':
         raise AssertionError('PR780 checker inverse data changed')
     digest = hashlib.sha256(raw).hexdigest()
     edge = EDGES.get(name)

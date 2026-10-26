@@ -33,22 +33,53 @@ def string_literals(text: String) -> List[String]:
 
     Returns:
         The content of each literal, with escapes left as written. A
-        literal in a comment is returned too.
+        literal in a comment is returned too. A single-quoted string is
+        skipped, so a double quote inside it is not a literal.
     """
     var found = List[String]()
     var bytes = text.as_bytes()
     var index = 0
-    while index < len(bytes):
-        if bytes[index] != UInt8(ord('"')):
+    var comment = False
+    var count = len(bytes)
+    while index < count:
+        var byte = bytes[index]
+        if comment:
+            if byte == UInt8(ord("\n")):
+                comment = False
+            elif byte == UInt8(ord('"')):
+                var start = index + 1
+                var end = start
+                while end < count and bytes[end] != UInt8(ord('"')):
+                    if bytes[end] == UInt8(ord("\\")):
+                        end += 1
+                    end += 1
+                found.append(String(text[byte = start : min(end, count)]))
+                index = end + 1
+                continue
+            index += 1
+            continue
+        if byte == UInt8(ord("#")):
+            comment = True
+            index += 1
+            continue
+        if byte == UInt8(ord("'")):
+            var end = index + 1
+            while end < count and bytes[end] != UInt8(ord("'")):
+                if bytes[end] == UInt8(ord("\\")):
+                    end += 1
+                end += 1
+            index = end + 1
+            continue
+        if byte != UInt8(ord('"')):
             index += 1
             continue
         var start = index + 1
         var end = start
-        while end < len(bytes) and bytes[end] != UInt8(ord('"')):
+        while end < count and bytes[end] != UInt8(ord('"')):
             if bytes[end] == UInt8(ord("\\")):
                 end += 1
             end += 1
-        found.append(String(text[byte = start : min(end, len(bytes))]))
+        found.append(String(text[byte = start : min(end, count)]))
         index = end + 1
     return found^
 

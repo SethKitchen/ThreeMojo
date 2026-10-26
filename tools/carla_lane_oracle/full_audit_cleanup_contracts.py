@@ -3087,9 +3087,9 @@ def _shared_helper_bindings(root, *, paths=None, _snapshots=None, _inputs=None,
                     _operation=_operation, _selection=_pr760)
     active = []
     for path, raw in sources.items():
+        retained = pr780_successor.predecessor_bytes(path, raw).decode('utf-8') if pr780_successor.reviewed_edge(path) is not None and sha(raw) == pr780_successor.reviewed_edge(path)['after_sha256'] else raw.decode('utf-8')
         prior = (_pr760['predecessors'][path] if _pr760 and path in _pr760['predecessors']
-                 else pr760_stage.predecessor_source(path, raw.decode('utf-8'))
-                 if current and path in pr760_stage.CARLA_REGISTRY_PATHS else raw.decode('utf-8'))
+                 else pr760_stage.predecessor_source(path, retained) if current and path in pr760_stage.CARLA_REGISTRY_PATHS else retained)
         raw = prior.encode('utf-8')
         require(sha(raw) in (shared_helpers.BEFORE_SHA256[path], shared_helpers.AFTER_SHA256[path]),
                 'unknown shared-helper endpoint: ' + path)
@@ -3111,7 +3111,7 @@ def _shared_helper_bindings(root, *, paths=None, _snapshots=None, _inputs=None,
         if current and path in pr760_stage.CARLA_REGISTRY_PATHS:
             historical = (_pr760['predecessors'][path] if _pr760 else
                 pr760_stage.predecessor_source(path, raw.decode('utf-8'))).encode('utf-8')
-        if path in tests and typed_boundary.is_current(path, raw):
+        if path in tests and (typed_boundary.is_current(path, raw) or pr780_successor.reviewed_edge(path) is not None and sha(raw) == pr780_successor.reviewed_edge(path)['after_sha256']):
             # Arithmetic capture has no typed fixture edge. Supplemental native
             # fixtures use the complete current graph before exact provenance;
             # source/provider extraction identities remain unchanged.
@@ -3120,7 +3120,7 @@ def _shared_helper_bindings(root, *, paths=None, _snapshots=None, _inputs=None,
                 _operation=_operation, _inputs=_inputs, _input_owner=_input_owner).encode('utf-8')
             typed_fixtures[path] = raw
         require(sha(historical) == expected[path], 'shared-helper fixture changed: ' + path)
-    texts = {path: raw.decode('utf-8') for path, raw in sources.items()}
+    texts = {path: (pr780_successor.predecessor_bytes(path, raw).decode('utf-8') if pr780_successor.reviewed_edge(path) is not None and sha(raw) == pr780_successor.reviewed_edge(path)['after_sha256'] else raw.decode('utf-8')) for path, raw in sources.items()}
     texts.update({path: bound[path].decode('utf-8') for path in providers})
     if current:
         texts = {path: (_pr760['predecessors'][path] if _pr760 and path in _pr760['predecessors']

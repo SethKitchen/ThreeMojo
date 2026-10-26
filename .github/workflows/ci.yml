@@ -282,6 +282,9 @@ jobs:
 
       - name: Install the pinned Mojo toolchain
         run: |
+          # The toolchain identity suite builds its own environment from this
+          # interpreter. The image venv on PATH is CPython with distro hooks.
+          uv python install --no-bin 3.12.14
           uv venv --prompt ThreeMojo
           uv pip install "mojo==1.2.0"
           .venv/bin/mojo --version
@@ -583,14 +586,19 @@ jobs:
 
       # The native window's suite runs under coverage too.
       - name: Install Xvfb
-        run: apt-get update && apt-get install -y --no-install-recommends xvfb libx11-6
+        run: apt-get update && apt-get install -y --no-install-recommends xvfb libx11-6 passwd
 
       # Linux-only private probe profile; raw/JIT remains available locally.
       # Keep the full suite inventory and the original group deadline.
       - name: capture
         run: |
-          sh tools/tool.sh .venv/bin/mojo ci_scope run -- coverage-instrument
-          sh tools/tool.sh .venv/bin/mojo ci_scope run -- coverage-capture SHARD=${{ matrix.shard }}/8 COV_BUDGET=9000 COV_PROFILE=aot-hits
+          # The image's root user can read a mode 000 directory, so the
+          # inventory refusal checks would not run. Capture as a normal user.
+          id runner >/dev/null 2>&1 || useradd --create-home --uid 1001 --shell /bin/bash runner
+          chown -R runner:runner "$GITHUB_WORKSPACE"
+          runuser --user runner --preserve-environment -- env HOME=/home/runner \
+            bash -c 'cd "$1" && sh tools/tool.sh .venv/bin/mojo ci_scope run -- coverage-instrument && sh tools/tool.sh .venv/bin/mojo ci_scope run -- coverage-capture SHARD='"${{ matrix.shard }}"'/8 COV_BUDGET=9000 COV_PROFILE=aot-hits' \
+            bash "$GITHUB_WORKSPACE"
 
       # Compressed as captured, so a group's streams are megabytes, not the
       # gigabytes the raw probes would be. Nothing to upload when no measured

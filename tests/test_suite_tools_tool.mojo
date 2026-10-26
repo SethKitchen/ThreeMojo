@@ -39,6 +39,28 @@ def test_other_build_flags_and_unknown_tools_are_left_out() raises:
     assert_equal(len(built_tools(".", text)), 0)
 
 
+def test_a_single_quoted_string_keeps_the_following_build() raises:
+    var text = String(
+        'var prefix = String(\'{"uri":"\')\n'
+        + "var label = 'it\\'s'\n"
+        + "# the project's make\n"
+        + 'run(["sh", "tools/tool.sh", tool_mojo(), "--build",'
+        ' "suite_tools"])\n'
+    )
+    var names = built_tools(".", text)
+    assert_equal(len(names), 1)
+    assert_equal(names[0], "suite_tools")
+
+
+def test_the_texture_store_suite_names_its_tool() raises:
+    var names = run(".", ["tests/test_carla_texture_store_tool.mojo"])
+    var found = False
+    for name in names:
+        if name == "carla_texture_store":
+            found = True
+    assert_true(found)
+
+
 def test_the_repository_suites_name_their_tools() raises:
     var names = run(
         ".",
