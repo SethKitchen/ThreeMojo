@@ -312,6 +312,30 @@ The interval module keeps its reviewed syntax graph.
 The jet class keeps its reviewed primitive graph.
 A changed graph is refused.
 
+Mojo checks the live curve-bounds reference graph.
+The count-loop source keeps the reviewed envelope successor.
+The historical helper replaces that successor.
+The proof drops the try-only refusal.
+A changed graph is refused.
+
+Mojo checks the live shared bridge graphs.
+Eight trig helpers keep their reviewed function graphs.
+Six curve-bounds helpers keep their reviewed function graphs.
+The bounds helpers come from the reviewed reference source.
+A changed bridge is refused.
+
+Mojo checks the live score operation graphs.
+The score helper keeps its reviewed token digest.
+The winner-seed caller keeps its reviewed token digest.
+Each declaration stays unique.
+A changed operation is refused.
+
+Mojo checks the live score caller inventory.
+The score helper name appears twice, only in the Map module.
+The station helper name appears three times, only in the Map module.
+A comment or a string stays allowed.
+A new executable name is refused.
+
 ## Candidate certificate
 
 A certificate contains a stored incumbent point and its road parameter.
