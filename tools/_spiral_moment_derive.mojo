@@ -11,7 +11,7 @@ The moments share one unscaled prefix sum across the counts 1 through 64.
 
 from tools._bigint import BigInt
 from tools._fraction import Fraction
-from tools.spiral_moment_words import (
+from tools._spiral_moment_words import (
     bracket,
     decimal_word,
     fraction_of_word,

@@ -9,7 +9,7 @@ from std.pathlib import Path
 from std.testing import TestSuite, assert_raises
 
 from tools._process import run_program
-from tools.optional_model_consumers import containing_model_consumers
+from tools._optional_model_consumers import containing_model_consumers
 
 
 def _make(root: String, relative: String, text: String) raises:

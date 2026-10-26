@@ -21,7 +21,7 @@ from tests._python_tokens import _tokenize
 from tools.count_source import count_source
 from tools.frontier_predecessor import frontier_predecessor_source
 from tools.optional_predecessor import optional_predecessor_source
-from tools.score_operation_graphs import _declaration, score_operation_graphs
+from tools._score_operation_graphs import _declaration, score_operation_graphs
 from tools.score_predecessor import score_predecessor_source
 from tools.support_predecessor import support_predecessor_source
 

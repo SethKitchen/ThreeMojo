@@ -9,7 +9,7 @@ from std.pathlib import Path
 from std.testing import TestSuite, assert_raises
 
 from tools._process import run_program
-from tools.score_operation_graphs import (
+from tools._score_operation_graphs import (
     sampled_score_graphs,
     score_operation_graphs,
 )

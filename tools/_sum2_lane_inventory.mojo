@@ -13,7 +13,7 @@ from std.pathlib import Path
 
 from tools._python_json import PY_STR, PyJson
 from tools._sha256 import sha256_hex
-from tools.sum2_guard_inventory import _digest
+from tools._sum2_guard_inventory import _digest
 
 
 comptime _PINS = "tools/carla_lane_oracle/sum2-guard-pins.json"

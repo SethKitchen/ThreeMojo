@@ -8,7 +8,7 @@
 from std.pathlib import Path
 from std.testing import TestSuite, assert_raises
 
-from tools.sampled_value_copies import (
+from tools._sampled_value_copies import (
     sampled_constant_heading,
     sampled_lane_projection,
     sampled_reference_projection,

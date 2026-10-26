@@ -8,7 +8,7 @@
 from std.pathlib import Path
 from std.testing import TestSuite, assert_raises
 
-from tools.optional_runtime_semantics import optional_runtime_semantics
+from tools._optional_runtime_semantics import optional_runtime_semantics
 
 
 def _text(name: String) raises -> String:

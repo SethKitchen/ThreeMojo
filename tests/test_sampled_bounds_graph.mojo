@@ -11,7 +11,7 @@ from std.testing import TestSuite, assert_raises
 from tests._winner_pin_predecessor import restored_count_bounds
 from tools._process import run_program
 from tools._python_json import loads
-from tools.sampled_bounds_graph import (
+from tools._sampled_bounds_graph import (
     reviewed_bounds_source,
     sampled_bounds_graph,
 )

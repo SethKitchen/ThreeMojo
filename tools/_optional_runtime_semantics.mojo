@@ -10,7 +10,7 @@ reserve, and the model rooms stay in the reviewed order.
 """
 
 from tests._python_tokens import _tokenize
-from tools.sampled_value_copies import _body_statements, _normalize, _span
+from tools._sampled_value_copies import _body_statements, _normalize, _span
 
 
 def _fail(message: String) raises:

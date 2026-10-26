@@ -3,55 +3,53 @@
 # Noncommercial use is free; commercial use requires a paid license.
 # See LICENSE, LICENSE-COMMERCIAL.md and THIRD-PARTY-NOTICES.md.
 
-"""Check the live winner-seed room.
+"""Check the live seed-domain caller.
 
-The followup uses the capped cell count. The length guard and the early
-term return stay absent. The other tokens match the pinned caller.
+The error guard keeps the upper bound only. The rounded guard keeps the
+low and high tests. The other tokens match the pinned caller.
 """
 
 from std.pathlib import Path
 
 from tests._python_tokens import token_sha256
 from tools._python_json import PY_STR, PyJson
-from tools.sum2_guard_callers import _function_text
+from tools._sum2_guard_callers import _function_text
 
 
 comptime _PINS = "tools/carla_lane_oracle/sum2-guard-pins.json"
 comptime _MAP = "extensions/carla/map.mojo"
-comptime _NAME = "_winner_seed_room"
-comptime _LIVE_CELLS = "target_reference <= 0\n        or target_cells < 0"
-comptime _PIN_CELLS = (
-    "target_reference <= 0\n"
-    + "        or len(winner.cells) > 16372\n"
-    + "        or target_cells < 0"
+comptime _NAME = "_seed_reference_domain"
+comptime _LIVE_ERROR = (
+    "if not _seed_exact_interval(d.value) or not d.error < 1.0:"
 )
-comptime _LIVE_FOLLOWUP = (
-    "var winner_followup = min(len(winner.cells), 16373) + 12"
+comptime _PIN_ERROR = (
+    "if not _seed_exact_interval(d.value) or not (\n"
+    + "        0.0 <= d.error and d.error < 1.0\n"
+    + "    ):"
 )
-comptime _PIN_FOLLOWUP = "var winner_followup = len(winner.cells) + 12"
-comptime _LIVE_TERMS = (
-    "terms_left = work.policy.max_terms - work.terms\n"
-    + "    terms_left -= winner_units * winner_reference"
+comptime _LIVE_ROUNDED = (
+    "if rounded.low <= 0.0 or rounded.high >= geometry.length:"
 )
-comptime _PIN_TERMS = (
-    "terms_left = work.policy.max_terms - work.terms\n"
-    + "    if winner_reference > terms_left // winner_units:\n"
-    + "        return False\n"
-    + "    terms_left -= winner_units * winner_reference"
+comptime _PIN_ROUNDED = (
+    "if (\n"
+    + "        not rounded.is_finite()\n"
+    + "        or rounded.low <= 0.0\n"
+    + "        or rounded.high >= geometry.length\n"
+    + "    ):"
 )
 comptime _MESSAGE = (
-    "Sum2 complete guarded caller changed: map:_winner_seed_room"
+    "Sum2 complete guarded caller changed: map:_seed_reference_domain"
 )
 
 
 def _fail(message: String) raises:
-    """Raise a winner-room error.
+    """Raise a seed-domain error.
 
     Args:
         message: The failure text.
 
     Raises:
-        Error: The live winner-seed room changed.
+        Error: The live seed-domain caller changed.
     """
     raise Error(message)
 
@@ -80,14 +78,14 @@ def _count(text: String, needle: String) -> Int:
     return count
 
 
-def sum2_winner_room(root: String) raises:
-    """Require the live winner-seed room.
+def sum2_seed_domain(root: String) raises:
+    """Require the live seed-domain caller.
 
     Args:
         root: The repository root.
 
     Raises:
-        Error: A room edge or the caller body changed.
+        Error: A guard or the caller body changed.
     """
     var base = root
     if base.byte_length() > 1 and base.endswith("/"):
@@ -102,14 +100,11 @@ def sum2_winner_room(root: String) raises:
     if doc.kind(pinned) != PY_STR:
         _fail(_MESSAGE)
     var live = _function_text(Path(base + "/" + _MAP).read_text(), _NAME)
-    if _count(live, _LIVE_CELLS) != 1:
+    if _count(live, _LIVE_ERROR) != 1:
         _fail(_MESSAGE)
-    if _count(live, _LIVE_FOLLOWUP) != 1:
+    if _count(live, _LIVE_ROUNDED) != 1:
         _fail(_MESSAGE)
-    if _count(live, _LIVE_TERMS) != 1:
-        _fail(_MESSAGE)
-    var restored = live.replace(_LIVE_CELLS, _PIN_CELLS)
-    restored = restored.replace(_LIVE_FOLLOWUP, _PIN_FOLLOWUP)
-    restored = restored.replace(_LIVE_TERMS, _PIN_TERMS)
+    var restored = live.replace(_LIVE_ERROR, _PIN_ERROR)
+    restored = restored.replace(_LIVE_ROUNDED, _PIN_ROUNDED)
     if token_sha256(restored) != token_sha256(doc.text(pinned)):
         _fail(_MESSAGE)

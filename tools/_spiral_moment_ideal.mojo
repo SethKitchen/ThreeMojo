@@ -9,8 +9,8 @@ The layout keeps the environment guard, the auxiliary declarations, the
 loops, the stored-half calls, and the final error writes.
 """
 
-from tools.spiral_moment_graph import normalized_block
-from tools.spiral_moment_words import decimal_word
+from tools._spiral_moment_graph import normalized_block
+from tools._spiral_moment_words import decimal_word
 
 
 def _fail(message: String) raises:

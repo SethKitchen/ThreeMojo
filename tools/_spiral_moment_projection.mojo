@@ -9,7 +9,7 @@ The helper starts with one half product. Later statements may read that
 result, return it, or write its error. They must not redefine it.
 """
 
-from tools.spiral_moment_graph import normalized_block
+from tools._spiral_moment_graph import normalized_block
 
 
 def _fail(message: String) raises:

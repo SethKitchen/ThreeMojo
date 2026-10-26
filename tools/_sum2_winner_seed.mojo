@@ -13,7 +13,7 @@ from std.pathlib import Path
 
 from tests._python_tokens import _tokenize
 from tools._python_json import PY_STR, PyJson
-from tools.sum2_guard_callers import _esc, _function_text
+from tools._sum2_guard_callers import _esc, _function_text
 
 
 comptime _PINS = "tools/carla_lane_oracle/sum2-guard-pins.json"

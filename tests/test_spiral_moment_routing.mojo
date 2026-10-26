@@ -9,7 +9,7 @@ from std.pathlib import Path
 from std.testing import TestSuite, assert_equal, assert_raises, assert_true
 
 from tools._sha256 import sha256_hex
-from tools.spiral_moment_routing import routing_json
+from tools._spiral_moment_routing import routing_json
 
 
 def _digest(text: String, strip: Bool) raises -> String:

@@ -10,8 +10,8 @@ follows that debit. Dispatch setup stays after the depth refusal.
 """
 
 from tests._python_tokens import _tokenize
-from tools.optional_runtime_semantics import _extract
-from tools.sampled_value_copies import _normalize
+from tools._optional_runtime_semantics import _extract
+from tools._sampled_value_copies import _normalize
 
 
 comptime _NEWLINE = 4

@@ -9,7 +9,7 @@ from std.pathlib import Path
 from std.testing import TestSuite, assert_raises
 
 from tools._process import run_program
-from tools.sum2_lane_routing import sum2_lane_routing
+from tools._sum2_lane_routing import sum2_lane_routing
 
 
 comptime _MESSAGE = (

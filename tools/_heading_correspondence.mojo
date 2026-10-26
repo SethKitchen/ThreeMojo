@@ -11,7 +11,7 @@ keeps the original half product.
 """
 
 from tests._python_tokens import _tokenize
-from tools.sampled_value_copies import _body_statements
+from tools._sampled_value_copies import _body_statements
 
 
 def _fail(message: String) raises:

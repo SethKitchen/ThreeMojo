@@ -12,7 +12,7 @@ from tests._winner_pin_predecessor import (
     restored_count_bounds,
     restored_winner_pins,
 )
-from tools.sampled_qualifier_gate import sampled_qualifier_gate
+from tools._sampled_qualifier_gate import sampled_qualifier_gate
 
 
 def _text(path: String) raises -> String:

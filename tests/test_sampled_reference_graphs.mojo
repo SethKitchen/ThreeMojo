@@ -9,7 +9,7 @@ from std.pathlib import Path
 from std.testing import TestSuite, assert_raises
 
 from tools._process import run_program
-from tools.sampled_reference_graphs import sampled_reference_graphs
+from tools._sampled_reference_graphs import sampled_reference_graphs
 
 
 def _copy(root: String) raises:

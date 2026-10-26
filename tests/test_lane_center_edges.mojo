@@ -8,7 +8,7 @@
 from std.pathlib import Path
 from std.testing import TestSuite, assert_raises
 
-from tools.lane_center_edges import lane_center_edges
+from tools._lane_center_edges import lane_center_edges
 
 
 def _text() raises -> String:

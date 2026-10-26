@@ -9,7 +9,7 @@ from std.pathlib import Path
 from std.testing import TestSuite, assert_raises
 
 from tools._process import run_program
-from tools.sum2_closest_lane import sum2_closest_lane
+from tools._sum2_closest_lane import sum2_closest_lane
 
 
 def _copy(root: String) raises:

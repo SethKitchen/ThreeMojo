@@ -16,7 +16,7 @@ from std.pathlib import Path
 from tests._python_tokens import _tokenize
 from tools._python_json import PY_DICT, PY_STR, PyJson
 from tools._sha256 import sha256_hex
-from tools.sum2_guard_callers import _esc, _routing
+from tools._sum2_guard_callers import _esc, _routing
 
 
 comptime _PINS = "tools/carla_lane_oracle/sum2-guard-pins.json"

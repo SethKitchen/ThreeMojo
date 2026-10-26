@@ -14,7 +14,7 @@ from std.pathlib import Path
 from tests._python_tokens import token_sha256
 from tools._python_json import PY_DICT, PY_INT, PY_STR, PyJson
 from tools._sha256 import sha256_hex
-from tools.sum2_guard_callers import _function_text
+from tools._sum2_guard_callers import _function_text
 
 
 comptime _MIGRATION = "tools/carla_lane_oracle/raw-cut-inverse-migration.json"

@@ -8,7 +8,7 @@
 from std.pathlib import Path
 from std.testing import TestSuite, assert_raises
 
-from tools.heading_correspondence import heading_correspondence
+from tools._heading_correspondence import heading_correspondence
 
 
 def _text(path: String) raises -> String:

@@ -8,7 +8,7 @@
 from std.pathlib import Path
 from std.testing import TestSuite, assert_raises
 
-from tools.spiral_moment_projection import stored_half_projection
+from tools._spiral_moment_projection import stored_half_projection
 
 
 def _helper() raises -> String:

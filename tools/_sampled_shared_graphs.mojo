@@ -15,8 +15,8 @@ from std.pathlib import Path
 from tests._winner_pin_predecessor import restored_count_bounds
 from tools._python_json import PY_STR, loads
 from tools._sha256 import sha256_hex
-from tools.sampled_bounds_graph import reviewed_bounds_source
-from tools.sampled_module_graphs import function_graph
+from tools._sampled_bounds_graph import reviewed_bounds_source
+from tools._sampled_module_graphs import function_graph
 
 
 comptime _TRIG = "extensions/carla/curve_trig.mojo"

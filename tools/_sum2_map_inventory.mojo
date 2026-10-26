@@ -12,7 +12,7 @@ reviewed spans. Restoring those spans matches the pinned use digests.
 from std.pathlib import Path
 
 from tools._python_json import PY_STR, PyJson
-from tools.sum2_guard_inventory import _digest
+from tools._sum2_guard_inventory import _digest
 
 
 comptime _PINS = "tools/carla_lane_oracle/sum2-guard-pins.json"

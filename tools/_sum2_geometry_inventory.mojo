@@ -3,40 +3,35 @@
 # Noncommercial use is free; commercial use requires a paid license.
 # See LICENSE, LICENSE-COMMERCIAL.md and THIRD-PARTY-NOTICES.md.
 
-"""Check the live lane-certificate caller.
+"""Check the live lane-geometry inventory.
 
-Three width calls keep the SI helper. One call keeps the trailing comma.
-The other tokens match the pinned caller.
+Four directed-point calls keep the SI constructor. Restoring those calls
+matches the pinned use digest. A bare constructor or a changed use is refused.
 """
 
 from std.pathlib import Path
 
-from tests._python_tokens import token_sha256
 from tools._python_json import PY_STR, PyJson
-from tools.sum2_guard_callers import _function_text
+from tools._sum2_guard_inventory import _digest
 
 
 comptime _PINS = "tools/carla_lane_oracle/sum2-guard-pins.json"
-comptime _LANE = "extensions/carla/lane_refinement.mojo"
-comptime _NAME = "_lane_certificate_contains"
-comptime _SI = "_lane_width_si("
-comptime _BARE = "lane_width("
-comptime _COMMA = "road._lane_width_si(section, lane, certificate.s),\n    )"
-comptime _PLAIN = "road.lane_width(section, lane, certificate.s)\n    )"
+comptime _LANE = "extensions/carla/lane_geometry.mojo"
+comptime _LIVE = "DirectedPoint._from_si("
+comptime _PIN = "DirectedPoint("
 comptime _MESSAGE = (
-    "Sum2 complete guarded caller changed: "
-    + "lane_refinement:_lane_certificate_contains"
+    "global protected-helper use/import inventory changed: lane_geometry"
 )
 
 
 def _fail(message: String) raises:
-    """Raise a lane-contains error.
+    """Raise a lane-geometry inventory error.
 
     Args:
         message: The failure text.
 
     Raises:
-        Error: The live lane-certificate caller changed.
+        Error: The live lane-geometry inventory changed.
     """
     raise Error(message)
 
@@ -65,14 +60,14 @@ def _count(text: String, needle: String) -> Int:
     return count
 
 
-def sum2_lane_contains(root: String) raises:
-    """Require the live lane-certificate caller.
+def sum2_geometry_inventory(root: String) raises:
+    """Require the live lane-geometry inventory.
 
     Args:
         root: The repository root.
 
     Raises:
-        Error: A width call, the trailing comma, or the body changed.
+        Error: A directed-point constructor or the use digest changed.
     """
     var base = root
     if base.byte_length() > 1 and base.endswith("/"):
@@ -80,18 +75,13 @@ def sum2_lane_contains(root: String) raises:
         var trimmed = String(base[byte=0:end])
         base = trimmed
     var doc = PyJson.parse(Path(base + "/" + _PINS).read_text())
-    var callers = doc.at(doc.root, "callers")
-    var record = doc.at(callers, "lane_refinement")
-    var functions = doc.at(record, "functions")
-    var pinned = doc.at(functions, _NAME)
+    var inventory = doc.at(doc.root, "protected_inventory")
+    var pinned = doc.at(inventory, _LANE)
     if doc.kind(pinned) != PY_STR:
         _fail(_MESSAGE)
-    var live = _function_text(Path(base + "/" + _LANE).read_text(), _NAME)
-    if _count(live, _SI) != 3:
+    var source = Path(base + "/" + _LANE).read_text()
+    if _count(source, _LIVE) != 4:
         _fail(_MESSAGE)
-    if _count(live, _COMMA) != 1:
-        _fail(_MESSAGE)
-    var restored = live.replace(_COMMA, _PLAIN)
-    restored = restored.replace(_SI, _BARE)
-    if token_sha256(restored) != token_sha256(doc.text(pinned)):
+    var restored = source.replace(_LIVE, _PIN)
+    if _digest(restored) != doc.text(pinned):
         _fail(_MESSAGE)

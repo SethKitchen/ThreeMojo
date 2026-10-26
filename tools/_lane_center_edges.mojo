@@ -11,9 +11,9 @@ same ideal and the actual witness.
 """
 
 from tests._python_tokens import _tokenize
-from tools.lane_search_edges import _count, _snippet, _spans, _suite
-from tools.optional_runtime_semantics import _extract
-from tools.sampled_value_copies import _normalize
+from tools._lane_search_edges import _count, _snippet, _spans, _suite
+from tools._optional_runtime_semantics import _extract
+from tools._sampled_value_copies import _normalize
 
 
 def _fail(message: String) raises:

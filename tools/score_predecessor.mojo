@@ -22,7 +22,7 @@ from tests._map_score_predecessor import (
 )
 from tests._python_tokens import token_sha256
 from tools._sha256 import sha256_hex
-from tools.score_operation_graphs import score_operation_graphs
+from tools._score_operation_graphs import score_operation_graphs
 
 
 comptime _MAP = "extensions/carla/map.mojo"

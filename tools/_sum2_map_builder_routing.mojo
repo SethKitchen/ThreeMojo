@@ -13,7 +13,7 @@ is refused.
 from std.pathlib import Path
 
 from tools._python_json import PY_STR, PyJson
-from tools.sum2_guard_callers import _routing
+from tools._sum2_guard_callers import _routing
 
 
 comptime _PINS = "tools/carla_lane_oracle/sum2-guard-pins.json"

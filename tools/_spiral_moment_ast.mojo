@@ -13,7 +13,7 @@ The two graphs must be the same JSON Python's `ast` dump produces.
 from tests._python_tokens import _tokenize
 from tools._python_float import parse_float, python_repr
 from tools._sha256 import sha256_hex
-from tools.spiral_moment_projection import stored_half_projection
+from tools._spiral_moment_projection import stored_half_projection
 
 
 comptime _NAME = 1

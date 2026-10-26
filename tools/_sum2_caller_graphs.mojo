@@ -11,7 +11,7 @@ The envelope and the roundoff predecessor match their checkpoints.
 """
 
 from tests._python_tokens import _tokenize
-from tools.sampled_value_copies import _body_statements, _normalize, _span
+from tools._sampled_value_copies import _body_statements, _normalize, _span
 
 
 comptime _HELPER = """

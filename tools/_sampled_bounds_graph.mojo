@@ -15,7 +15,7 @@ from std.pathlib import Path
 from tests._winner_pin_predecessor import restored_count_bounds
 from tools._python_json import PY_STR, loads
 from tools._sha256 import sha256_hex
-from tools.sampled_module_graphs import reference_module_graph
+from tools._sampled_module_graphs import reference_module_graph
 
 
 comptime _RECORD = "tools/carla_lane_oracle/envelope-budget-contract.json"
