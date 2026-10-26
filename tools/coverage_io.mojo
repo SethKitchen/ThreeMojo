@@ -2398,10 +2398,15 @@ def _open_reader(path: String, pid: Int, mut reaped: List[Int]) raises -> Int:
                 code = 128 - code
             reaped[0] = code
             return -1
-        var fd = open_at(at_cwd(), c_bytes(path), flags)
-        if fd >= 0:
-            close_fd(fd)
-            return open_at(at_cwd(), c_bytes(path), 1)
+        var probe = open_at(at_cwd(), c_bytes(path), flags)
+        if probe >= 0:
+            # Open the blocking end while the probe still holds the FIFO. A
+            # reader that reads while no writer holds it sees the end of the
+            # file and moves to the next FIFO, and this open would then wait
+            # for it forever.
+            var fd = open_at(at_cwd(), c_bytes(path), 1)
+            close_fd(probe)
+            return fd
         if errno() != 6:
             raise Error("cannot open " + path + ": " + strerror(errno()))
         _ = external_call["usleep", c_int](UInt32(10000))
