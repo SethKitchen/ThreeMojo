@@ -35,6 +35,79 @@ def test_a_higher_cutoff_clears_the_masked_picture() raises:
         _ = run_program(["rm", "-rf", root], 10.0)
 
 
+def test_a_clear_mask_clears_the_picture() raises:
+    """An opaque red mask stays red, and a clear mask stores black."""
+    var root = mkdtemp(prefix="town mask ")
+    try:
+        var solid = _masked_tree(root, 1.0)
+        var clear = _masked_tree(root, 0.0)
+        assert_true(_mean(solid, 0) > 100.0)
+        assert_equal(_max(solid, 3), 255)
+        assert_equal(_max_rgb(clear), 0)
+        assert_equal(_max(clear, 3), 0)
+        var solid_bake = _masked_bake(root, 1.0)
+        var clear_bake = _masked_bake(root, 0.0)
+        assert_true(_mean(solid_bake, 0) > 100.0)
+        assert_equal(_max_rgb(clear_bake), 0)
+    finally:
+        _ = run_program(["rm", "-rf", root], 10.0)
+
+
+def _masked_tree(root: String, alpha: Float64) raises -> DecodedImage:
+    """Draw one far tree through a one-pixel mask."""
+    var path = root + "/mask-tree-" + String(alpha) + ".png"
+    _ = tree_text(
+        '{"size":16,"samples":1,"out":"'
+        + path
+        + '","parts":['
+        + _masked_quad(alpha)
+        + "]}"
+    )
+    return decode_png(Path(path).read_bytes())
+
+
+def _masked_bake(root: String, alpha: Float64) raises -> DecodedImage:
+    """Draw one far building through a one-pixel mask."""
+    var path = root + "/mask-bake-" + String(alpha) + ".jpg"
+    _ = bake_text(
+        '{"out":"'
+        + path
+        + '","density":6,"most":32,"whole":{"positions":[[0,0,0],[1,0,0],[0,1,1]]},'
+        + '"far":{"positions":[[0,0,0],[1,0,0],[0,1,1]],'
+        + '"normals":[[0,0,1],[0,0,1],[0,0,1]]},'
+        + '"parts":['
+        + _masked_triangle(alpha)
+        + '],"views":[{"forward":[0,0,1],"right":[1,0,0],"up":[0,1,0]}]}'
+    )
+    return decode_jpeg(Path(path).read_bytes())
+
+
+def _masked_quad(alpha: Float64) -> String:
+    """Return one quad textured by a red pixel of `alpha`."""
+    return (
+        '{"positions":[[0,0,0],[1,0,0],[1,1,1],[0,1,0]],'
+        + '"normals":[[0,0,1],[0,0,1],[0,0,1],[0,0,1]],'
+        + '"uvs":[[0,0],[1,0],[1,1],[0,1]],"triangles":[[0,1,2],[0,2,3]],'
+        + '"factor":[1,1,1,1],"cut":0.5,"masked":true,"image":{"width":1,'
+        + '"height":1,"rgba":[1,0,0,'
+        + String(alpha)
+        + "]}}"
+    )
+
+
+def _masked_triangle(alpha: Float64) -> String:
+    """Return one triangle textured by a red pixel of `alpha`."""
+    return (
+        '{"positions":[[0,0,0],[1,0,0],[0,1,1]],'
+        + '"normals":[[0,0,1],[0,0,1],[0,0,1]],'
+        + '"uvs":[[0,0],[1,0],[0,1]],"triangles":[[0,1,2]],'
+        + '"factor":[1,1,1,1],"cut":0.5,"masked":true,"image":{"width":1,'
+        + '"height":1,"rgba":[1,0,0,'
+        + String(alpha)
+        + "]}}"
+    )
+
+
 def _tree(root: String, cut: Float64) raises -> DecodedImage:
     """Draw one far tree at `cut` and return its picture."""
     var path = root + "/tree-" + String(cut) + ".png"

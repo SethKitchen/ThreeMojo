@@ -526,28 +526,9 @@ Equal encoded images can share one packaged file.
 
 ## Test the town exporter
 
-The standard-library identity checks run with `make test-tools`.
-The synthetic bake checks need NumPy, Pillow and the repository Mojo.
-They use two small meshes and two colors. They need no CARLA release,
-server or GPU. They call the Mojo export programs through
-`tools/tool.sh`.
-The package color, slot, repeat, and grid checks are `tests/test_carla_town_package.mojo`, and the masked cutoff checks are `tests/test_carla_town_cutoff.mojo`.
+The town package checks run in the standard test suite. They need no CARLA release, server, or GPU.
 
-Only mesh simplification is substituted. The tests use the real material
-reconstruction, texture conversion, bake rasterizers and GLB writer. They
-check the packed pixels, shared bakes and byte-identical repeated builds.
-
-Use a separate test environment with Python 3.11 or later:
-
-```sh
-uv venv .venv-carla-export --python "$(command -v python3)"
-uv pip install --python .venv-carla-export/bin/python --only-binary :all: "numpy==2.3.5" "Pillow==12.3.0"
-.venv-carla-export/bin/python -m unittest discover -s assets/carla/tools/export -p 'test_build_towns.py'
-```
-
-The existing Linux and macOS lint jobs run this command. They install
-Mojo when the bake checks run. The exporter packages stay in a separate
-environment. A missing dependency or wheel fails the check.
+`tests/test_carla_town_package.mojo` checks colors, slots, a repeated build, and a hidden grid cell. `tests/test_carla_town_cutoff.mojo` checks a masked cutoff of 0.2 and 0.4. The Python files `test_build_towns.py`, `build_towns.py`, and `carla_gltf_fix.py` are removed.
 
 ## Why not Poly Haven
 

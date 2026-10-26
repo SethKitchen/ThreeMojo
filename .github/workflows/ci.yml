@@ -167,15 +167,6 @@ jobs:
         if: needs.scope.outputs.run_docs == 'true'
         run: sh tools/tool.sh .venv/bin/mojo ci_scope run -- docs-check
 
-      # Only the offline CARLA exporter fixture needs these two packages.
-      # Keep its exact wheels in a separate environment from Mojo/MAX.
-      - name: Test CARLA far-asset baking
-        if: needs.scope.outputs.run_export == 'true'
-        run: |
-          uv venv .venv-carla-export --python .venv/bin/python
-          uv pip install --python .venv-carla-export/bin/python --only-binary :all: "numpy==2.3.5" "Pillow==12.3.0"
-          .venv-carla-export/bin/python -m unittest discover -s assets/carla/tools/export -p 'test_build_towns.py'
-
   # The #333 oracle proofs take hours of processor time, more than one
   # lint job holds, so the tool regressions run over several runners.
   # General and asset discovery runs in a separate job on each platform.
@@ -391,15 +382,6 @@ jobs:
       - name: Documentation
         if: needs.scope.outputs.run_docs == 'true'
         run: sh tools/tool.sh .venv/bin/mojo ci_scope run -- docs-check
-
-      # Only the offline CARLA exporter fixture needs these two packages.
-      # Keep its exact wheels in a separate environment from Mojo/MAX.
-      - name: Test CARLA far-asset baking
-        if: needs.scope.outputs.run_export == 'true'
-        run: |
-          uv venv .venv-carla-export --python .venv/bin/python
-          uv pip install --python .venv-carla-export/bin/python --only-binary :all: "numpy==2.3.5" "Pillow==12.3.0"
-          .venv-carla-export/bin/python -m unittest discover -s assets/carla/tools/export -p 'test_build_towns.py'
 
   tools-macos:
     needs: scope
