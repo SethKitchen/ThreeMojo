@@ -531,6 +531,7 @@ The synthetic bake checks need NumPy, Pillow and the repository Mojo.
 They use two small meshes and two colors. They need no CARLA release,
 server or GPU. They call the Mojo export programs through
 `tools/tool.sh`.
+The package color, slot, repeat, and grid checks are `tests/test_carla_town_package.mojo`.
 
 Only mesh simplification is substituted. The tests use the real material
 reconstruction, texture conversion, bake rasterizers and GLB writer. They

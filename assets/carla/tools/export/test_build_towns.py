@@ -13,7 +13,6 @@ import hashlib
 import io
 import json
 from pathlib import Path
-import struct
 import tempfile
 import unittest
 from unittest import mock
@@ -22,29 +21,6 @@ import numpy
 from PIL import Image
 
 import build_towns as tool
-
-
-def _load_glb(path):
-    data = path.read_bytes()
-    magic, version, size = struct.unpack_from('<III', data)
-    assert (magic, version, size) == (0x46546C67, 2, len(data))
-    length, kind = struct.unpack_from('<II', data, 12)
-    assert kind == 0x4E4F534A
-    gltf = json.loads(data[20:20 + length])
-    binary_size, kind = struct.unpack_from('<II', data, 20 + length)
-    assert kind == 0x004E4942
-    blob = data[28 + length:]
-    assert len(blob) == binary_size
-    return gltf, blob
-
-
-def _image(gltf, blob, material):
-    texture = gltf['materials'][material]['pbrMetallicRoughness']['baseColorTexture']['index']
-    image = gltf['images'][gltf['textures'][texture]['source']]
-    view = gltf['bufferViews'][image['bufferView']]
-    start = view.get('byteOffset', 0)
-    with Image.open(io.BytesIO(blob[start:start + view['byteLength']])) as picture:
-        return numpy.asarray(picture.convert('RGBA')).copy()
 
 
 class TownBakeTests(unittest.TestCase):
@@ -108,94 +84,6 @@ class TownBakeTests(unittest.TestCase):
             gltf['meshes'][0]['primitives'].append(primitive)
         path.write_text(json.dumps(gltf))
         path.with_suffix('.bin').write_bytes(blob)
-
-    def _rows(self, overrides):
-        rows = []
-        for mesh in self.meshes:
-            for index, materials in enumerate(overrides):
-                rows.append({'visible': True, 'mesh': 'StaticMesh ' + mesh + '.Fixture',
-                             'location': [index * 3200, 0, 0], 'rotation': [0, 0, 0], 'scale': [1, 1, 1],
-                             'materials': ['MaterialInstanceConstant /Game/Fixture/' + n + '.' + n
-                                           if n else None for n in materials]})
-        (self.layout / 'Fixture.jsonl').write_text(''.join(json.dumps(row) + '\n' for row in rows))
-
-    def _build(self):
-        tool.build('Fixture', 512, 32)
-        path = self.output / 'carla.town.fixture' / 'carla.town.fixture.glb'
-        gltf, blob = _load_glb(path)
-        return gltf, blob, path.read_bytes()
-
-    def _materials_by_node(self, gltf):
-        result = {}
-        for node in gltf['nodes']:
-            primitive = gltf['meshes'][node['mesh']]['primitives'][0]
-            result.setdefault(node['name'], []).append(primitive['material'])
-        return result
-
-    def test_two_component_colors_keep_near_and_far_appearance_and_share_duplicates(self):
-        self._rows([['Red', 'Red'], ['Green', 'Green'], ['Red', 'Red']])
-        gltf, blob, _ = self._build()
-        by_node = self._materials_by_node(gltf)
-        for kind in ('building', 'vegetation'):
-            for lod in (0, 1):
-                with self.subTest(kind=kind, lod=lod):
-                    indices = [by_node[f'{kind}_{cell}_0_lod{lod}'][0] for cell in range(3)]
-                    for material, channel in zip(indices[:2], (0, 1)):
-                        pixels = _image(gltf, blob, material)
-                        covered = pixels[:, :, 3] > 0
-                        mean = pixels[covered, :3].mean(axis=0)
-                        self.assertGreater(mean[channel], 80)
-                        self.assertGreater(mean[channel] - mean[1 - channel], 70)
-                    self.assertEqual(indices[0], indices[2])
-                    self.assertNotEqual(indices[0], indices[1])
-
-    def test_slot_order_stays_visible_in_near_geometry_and_far_pixels(self):
-        self._rows([['Red', 'Green'], ['Green', 'Red'], ['Red', 'Green']])
-        gltf, blob, _ = self._build()
-        by_node = self._materials_by_node(gltf)
-        for kind in ('building', 'vegetation'):
-            with self.subTest(kind=kind):
-                for cell in range(3):
-                    for node in gltf['nodes']:
-                        if node['name'] != f'{kind}_{cell}_0_lod0':
-                            continue
-                        primitive = gltf['meshes'][node['mesh']]['primitives'][0]
-                        material = gltf['materials'][primitive['material']]['name']
-                        accessor = gltf['accessors'][primitive['attributes']['POSITION']]
-                        view = gltf['bufferViews'][accessor['bufferView']]
-                        points = numpy.frombuffer(blob, '<f4', count=accessor['count'] * 3,
-                                                  offset=view['byteOffset']).reshape(-1, 3)
-                        left = (material == 'Red') == (cell != 1)
-                        self.assertAlmostEqual(points[:, 0].mean() - cell * 32, -0.75 if left else 0.75)
-                    material = by_node[f'{kind}_{cell}_0_lod1'][0]
-                    pixels = _image(gltf, blob, material)
-                    # The building's +z view follows two six-texel side views.
-                    # The tree's left atlas half is its +z view, across x.
-                    if kind == 'building':
-                        left = pixels[1:5, 13:16, :3].mean(axis=(0, 1))
-                        right = pixels[1:5, 23:26, :3].mean(axis=(0, 1))
-                    else:
-                        left = pixels[120:136, 43:59, :3].mean(axis=(0, 1))
-                        right = pixels[120:136, 197:213, :3].mean(axis=(0, 1))
-                    red_side, green_side = (left, right) if cell != 1 else (right, left)
-                    self.assertGreater(red_side[0] - red_side[1], 70)
-                    self.assertGreater(green_side[1] - green_side[0], 70)
-
-    def test_repeated_builds_are_byte_identical(self):
-        self._rows([['Red', 'Green'], ['Green', 'Red'], ['Red', 'Green']])
-        first = self._build()
-        second = self._build()
-        self.assertEqual(first[2], second[2])
-
-    def test_hidden_first_slot_still_bakes_the_visible_slot(self):
-        self._rows([[tool.GRID, 'Red'], [tool.GRID, 'Green'], [tool.GRID, tool.GRID]])
-        gltf, blob, _ = self._build()
-        by_node = self._materials_by_node(gltf)
-        for kind in ('building', 'vegetation'):
-            for cell in (0, 1):
-                self.assertIn(f'{kind}_{cell}_0_lod1', by_node)
-            self.assertNotIn(f'{kind}_2_0_lod0', by_node)
-            self.assertNotIn(f'{kind}_2_0_lod1', by_node)
 
     def test_atlas_names_cover_direct_bakes_and_changed_texture_bytes(self):
         tags = []
