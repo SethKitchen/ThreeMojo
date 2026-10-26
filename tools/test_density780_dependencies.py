@@ -34,12 +34,72 @@ PORT_INVERSE = {
          (344, 345, ('async def _vertex_task[\n',), ('__async def _vertex_task[\n',)))),
 }
 
+# PR843 adds the #792 work limits to four cohort helpers that the PR780
+# successor does not pin. Each row inverts those edits to the bytes before
+# them: the PR760 image, or the Mojo 1.2 port for the surface net.
+PR843_INVERSE = {
+    'extensions/humanoid/skeleton/loft.mojo': (
+        'fe36bfbe8b8022fcf37a145368865b5841a194cbb2549a3335bc1f07aaab4e91',
+        (
+         (569, 575, ('    var steps = Int(run / (Float32(0.5) * finest)) + 2\n', '    if steps > 16:\n', '        steps = 16\n'),
+          ('    # Sixteen slices is the cap. A ratio of fifteen or more, or one that\n', '    # is not a number, is not a count `Int` can hold.\n', '    var ratio = run / (Float32(0.5) * finest)\n', '    var steps = 16\n', '    if ratio < Float32(15):\n', '        steps = Int(ratio) + 2\n')),)),
+    'extensions/humanoid/skeleton/surface_nets.mojo': (
+        '05a7d079446a90673256f9f38529922c861c3c137151edd332195cd00d011e81',
+        (
+         (40, 41, ('from std.math import atan2, ceil, max, min, pi, sqrt\n',),
+          ('from std.math import atan2, ceil, isfinite, max, min, pi, sqrt\n',)),
+         (44, 46, (),
+          ('# Each pass walks every vertex. The maximum integer never finishes.\n', 'comptime MAX_SMOOTH_PASSES = 16777216\n')),
+         (81, 100, ('def _blocks(span: Float32, cell: Float32) -> Int:\n', '    """Return how many whole blocks hold `span` at `cell`, at least one."""\n', '    return max(1, Int(ceil(span / (cell * Float32(BLOCK)))))\n'),
+          ('def _blocks(span: Float32, cell: Float32) raises -> Int:\n', '    """Return how many whole blocks hold `span` at `cell`, at least one.\n', '\n', '    Args:\n', "        span: The length to cover, in the field's units.\n", '        cell: The fine cell size. It must be positive.\n', '\n', '    Returns:\n', '        The block count.\n', '\n', '    Raises:\n', '        Error: If the count is not a positive finite integer this port\n', '            stores, including after the block is widened to fine cells.\n', '    """\n', '    var count = ceil(Float64(span) / (Float64(cell) * Float64(BLOCK)))\n', '    # `Int.MAX // BLOCK` keeps `blocks * BLOCK` inside an integer.\n', '    if not isfinite(count) or count <= 0 or count > Float64(Int.MAX // BLOCK):\n', '        raise Error("A surface net is larger than this port builds")\n', '    return Int(count)\n')),
+         (461, 464, ('        Error: If `detail` is out of range, or the field makes no\n', '            surface in the box.\n'),
+          ('        Error: If `detail` is out of range, `smoothing` is above\n', "            16777216, the box's block count does not fit in an integer,\n", '            or the field makes no surface in the box.\n')),
+         (466, 471, (),
+          ('    if smoothing > MAX_SMOOTH_PASSES:\n', '        raise Error(\n', '            "A surface net\'s smoothing count is larger than this port"\n', '            + " smooths"\n', '        )\n')),
+         (482, 487, (),
+          ('    var nx = bx * BLOCK + 1\n', '    var ny = by * BLOCK + 1\n', '    var nz = bz * BLOCK + 1\n', '    if nx > Int.MAX // ny or nx * ny > Int.MAX // nz:\n', '        raise Error("A surface net is larger than this port builds")\n')),
+         (488, 489, ('    var total = (grid.nx + 1) * (grid.ny + 1) * (grid.nz + 1)\n',),
+          ('    var total = nx * ny * nz\n',)),)),
+    'extensions/humanoid/skeleton/torso/bones/dimensions.mojo': (
+        '7da0adc38b32b78766ec9685c53015e215a814c7eb92b44d0663ee27b188d332',
+        (
+         (692, 693, ('def rib_path(dimensions: TorsoDimensions, rib: Int) -> List[Vector3]:\n',),
+          ('def rib_path(dimensions: TorsoDimensions, rib: Int) raises -> List[Vector3]:\n',)),
+         (702, 705, (),
+          ('\n', '    Raises:\n', '        Error: If the spline sample count is refused.\n')),
+         (790, 791, ('def _rib(dimensions: TorsoDimensions, rib: Int) -> Sweep:\n',),
+          ('def _rib(dimensions: TorsoDimensions, rib: Int) raises -> Sweep:\n',)),
+         (899, 900, ('def clavicle_path(dimensions: TorsoDimensions) -> List[Vector3]:\n',),
+          ('def clavicle_path(dimensions: TorsoDimensions) raises -> List[Vector3]:\n',)),
+         (911, 914, (),
+          ('\n', '    Raises:\n', '        Error: If the spline sample count is refused.\n')),
+         (927, 928, ('def _clavicle(dimensions: TorsoDimensions) -> Sweep:\n',),
+          ('def _clavicle(dimensions: TorsoDimensions) raises -> Sweep:\n',)),
+         (1171, 1172, ('):\n',),
+          (') raises:\n',)),
+         (1180, 1183, (),
+          ('\n', '    Raises:\n', '        Error: If the spline sample count is refused.\n')),)),
+    'extensions/humanoid/skeleton/torso/sweep.mojo': (
+        '1eb865b559862c5d27371f4ae9e5a576b827eb49f7b2e0906c7e00bee8aa34a1',
+        (
+         (425, 432, ('def spline_points(points: List[Vector3], steps: Int) -> List[Vector3]:\n',),
+          ('# Samples between two control points. `steps + 1` wraps at `Int.MAX`,\n', '# so the span walk is empty, and `range` of one below that never ends.\n', '# `Float32` also stops telling those steps apart past 2^24.\n', 'comptime MAX_SPLINE_STEPS = 16777216\n', '\n', '\n', 'def spline_points(points: List[Vector3], steps: Int) raises -> List[Vector3]:\n')),
+         (436, 437, ('        steps: Samples between two control points.\n',),
+          ('        steps: Samples between two control points. One through 16777216.\n',)),
+         (441, 444, (),
+          ('\n', '    Raises:\n', '        Error: If `steps` is below one or above 16777216.\n')),
+         (445, 449, (),
+          ('    if steps < 1:\n', '        raise Error("A spline needs one sample between control points or more")\n', '    if steps > MAX_SPLINE_STEPS:\n', '        raise Error("A spline sample count is larger than this port builds")\n')),)),
+}
 
-def historical_bytes(name, raw):
-    """Return the PR760 bytes of a cohort helper from its current bytes."""
-    if name not in PORT_INVERSE:
-        return successor.predecessor_bytes(name, raw)
-    digest, edits = PORT_INVERSE[name]
+# The CSS color successor writes through this module, so the successor
+# cohort's closure holds it as well.
+CLOSURE_ADDITIONS = ('loaders/js_number.mojo',)
+
+
+def _inverted(name, raw, table):
+    """Undo one table row's edits when `raw` is its exact endpoint."""
+    digest, edits = table[name]
     if loops.sha256(raw) != digest:
         return raw
     lines = raw.decode().splitlines(keepends=True)
@@ -49,12 +109,21 @@ def historical_bytes(name, raw):
     return ''.join(lines).encode()
 
 
+def historical_bytes(name, raw):
+    """Return the PR760 bytes of a cohort helper from its current bytes."""
+    if name in PR843_INVERSE:
+        raw = _inverted(name, raw, PR843_INVERSE)
+    if name not in PORT_INVERSE:
+        return successor.predecessor_bytes(name, raw)
+    return _inverted(name, raw, PORT_INVERSE)
+
+
 class Density780DependencyTests(unittest.TestCase):
     def setUp(self):
         temporary = tempfile.TemporaryDirectory(prefix='density780-local-')
         self.addCleanup(temporary.cleanup)
         self.root = Path(temporary.name).resolve()
-        for name in loops.DENSITY760_INPUTS:
+        for name in (*loops.DENSITY760_INPUTS, *CLOSURE_ADDITIONS):
             target = self.root/name
             target.parent.mkdir(parents=True, exist_ok=True)
             target.write_bytes((ROOT/name).read_bytes())
@@ -111,6 +180,14 @@ class Density780DependencyTests(unittest.TestCase):
             'math/matrix4.mojo', 'math/square_matrix.mojo', 'math/vector4.mojo',
             'objects/gaussian_splat.mojo', 'geometries/attribute_utils.mojo', 'lights/shadow.mojo', 'render/tasks.mojo',
             *PORT_INVERSE,
+            # PR843
+            'core/fog.mojo', 'core/gaussian_splat_utils.mojo', 'core/geometry_store.mojo',
+            'core/morph.mojo', 'extensions/humanoid/skeleton/head/hair/groom.mojo',
+            'materials/material.mojo', 'math/curve.mojo', 'math/curve_checks.mojo',
+            'math/path.mojo', 'math/utils.mojo', 'objects/line_segments2.mojo',
+            'render/css_color.mojo', 'render/cube_texture.mojo', 'render/cube_uv.mojo',
+            'render/framebuffer.mojo', 'render/linerule.mojo', 'render/texture.mojo',
+            'render/volume_texture.mojo', *PR843_INVERSE,
         })
 
     def test_historical_local_cohort_keeps_original_receipt_digests(self):

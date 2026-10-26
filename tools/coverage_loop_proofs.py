@@ -1222,23 +1222,51 @@ DENSITY760_INPUTS = {'core/__init__.mojo': '5f3ace6c2d6162c4a542666c21a966d54d5b
  'units/si.mojo': 'd149a23f2ee4a9bde17875615e7251285cb56af535716b66c7d8959c80f48c02'}
 # PR780, the Mojo 1.2 port and PR791 change thirteen imported helpers, but
 # leave density, groom, their tests, and every theorem coordinate unchanged.
+# PR843 changes groom and 23 more helpers. Groom refuses a root try or hair
+# step count it cannot finish, before any guide grows. The helpers refuse
+# sizes they cannot hold, take shared fog, tone and texel helpers, or keep
+# Float64 out of a GPU build. Each edit adds a refusal, a helper or a
+# docstring line. A returned groom is still nonempty by `require_hair_roots`,
+# and no counted range changes, so the four rows keep their cardinalities.
+# Groom reaches its guarded predecessor through its PR780 edge.
 # Retain the complete PR760 closure above and admit only this exact local
 # successor cohort. The broader CARLA successor is not a premise for these
 # four local domination theorems.
 DENSITY780_DEPENDENCY_SHA256 = {
     'core/extent.mojo': '90490706baa17456a3ec99374c2a00f72768a0178b4e56436571ab4ca673f068',
+    'core/fog.mojo': '5fc886a7eb9fdc5e78a9f68bfec300db4d88e95d14c3c6fa8af2add0abfdd342',
+    'core/gaussian_splat_utils.mojo': '596021972df04a9f2b0721de3ae422147b808fd463a99fbf6ece93ea75376d29',
+    'core/geometry_store.mojo': '771d8d8b068353bf23c0f572511c981a2a67c375cfaa2b8c63a5a5ab103a16c3',
+    'core/morph.mojo': '9b16bcef0cd08741f84c1e256965781cb0bbd081ad2a9c37043bb46676b66c3d',
     'extensions/humanoid/skeleton/head/assembly.mojo': '813a09e4b30a5a9682e606cdabb2e22188866f4153318a18f9df62f091c0435e',
+    'extensions/humanoid/skeleton/head/hair/groom.mojo': '48a2324a527b58e63546a562e168744656fbc8a02ba8f6c9aa3274b66ebc85e5',
+    'extensions/humanoid/skeleton/loft.mojo': 'fe36bfbe8b8022fcf37a145368865b5841a194cbb2549a3335bc1f07aaab4e91',
     'extensions/humanoid/skeleton/look.mojo': '662665a1ea3c291b45030fcf90d732b2a7900f0c1a591e4d94d854201e8caa48',
-    'extensions/humanoid/skeleton/surface_nets.mojo': '98b354cea54d1d1dc33ee23f02b0e89f80466ddb2fc06a6415ea224a3a93aeee',
+    'extensions/humanoid/skeleton/surface_nets.mojo': '05a7d079446a90673256f9f38529922c861c3c137151edd332195cd00d011e81',
+    'extensions/humanoid/skeleton/torso/bones/dimensions.mojo': '7da0adc38b32b78766ec9685c53015e215a814c7eb92b44d0663ee27b188d332',
+    'extensions/humanoid/skeleton/torso/sweep.mojo': '1eb865b559862c5d27371f4ae9e5a576b827eb49f7b2e0906c7e00bee8aa34a1',
     'geometries/attribute_utils.mojo': '91d45ff588571ab0bbda20331d1f60a0b55e124985a76f8cad97d682bdca523e',
-    'geometries/surface.mojo': 'deeba40777e10da75651f07b8d8f86abb609d4c916b098f1dc28be228f20d3cd',
-    'lights/shadow.mojo': '649970324f8a80cd0ba959f3278d635b12b9886a5ecb09290620b5b61b3c1d20',
+    'geometries/surface.mojo': '28c95efe56afc7b247ab47ecbf93f595cfa5ccb16c3ca1ed12885daca3069dff',
+    'lights/shadow.mojo': '36394e7969cf0f6a8647011e5d49b057440600004b35fdd97479107def5d0793',
     'loaders/bytes.mojo': '139ca1cb876bdf7b0a7c258d1d3a40375d8f3b73c75af160e26e07e7c9ba062a',
+    'materials/material.mojo': 'a9d7e4f2aa4096a9c768d8bd68a696ddd619bd75da5a2e710136242dbea82ff5',
+    'math/curve.mojo': 'd0a404a892191700a00bcda9f5bc92837995d5166c0c953933453e79dcf25c45',
+    'math/curve_checks.mojo': '1c6cf558aaf2102941d874ff9d814423b71fea1a9eb159eae7c549325ee274ff',
     'math/matrix4.mojo': '1e72ab51f9dbcee3af4c2bfe9da93946616736bf02f4b20e2160ee7b69b448fa',
+    'math/path.mojo': '124ac09790b335df31554c6a7744bf6b49954d2a6faa456632d779409951468f',
     'math/square_matrix.mojo': 'f1b2e67489949b53594b5f06604a0227260fd961df2fdebe5347d91c82d99a69',
+    'math/utils.mojo': 'fb4335138e5fe5ec4c1761105343a01996dae1152f3a9e1b2779f62a6323c772',
     'math/vector4.mojo': 'db774733a27a706e5d5c940c4533de2c567d7d6ece3c918215052bccfd87b9aa',
     'objects/gaussian_splat.mojo': '6b5834369f244c8eaf6a4a6d363bcca7f645a4964f72ddea25df62f63097cf3c',
+    'objects/line_segments2.mojo': '2557d496f1dc49c204314d389bd105c9eaaab4c7762920b7b0d5f97613d4c3cd',
+    'render/css_color.mojo': 'c8150acb98edb979bb217d44099dc935f47a5f61128f27ca1a5affe4fec080c9',
+    'render/cube_texture.mojo': '28aac07dfc280acbea10d121c32db300e772cc42de75f43ccab7c3e6cdda3300',
+    'render/cube_uv.mojo': '6fa1910f90bf4ac79240570a2b1a483229f158838fc8bcf884ac2db2cf88c97b',
+    'render/framebuffer.mojo': 'c6b8bf7ff701e94efeae63aa0526e564290351519eab9bd33cfc87818f7a34c0',
+    'render/linerule.mojo': '2aa592b2b8e171fd31997c558495ba52228d101c683a48d901417146f6f4aab2',
     'render/tasks.mojo': '9b80dcaceec958190ade19bff6d106617c8c4c99e80d37eb0205609741ca2934',
+    'render/texture.mojo': '608965e963ad8753c64777ed0b3127dc1c6cf950a3c3156e953c4e72bb02b1d5',
+    'render/volume_texture.mojo': '4887e63a767ffb7cc8c764be1bc8256c2b4589bc149b4486e8a1c7446ac09557',
 }
 
 
@@ -1251,14 +1279,14 @@ DENSITY760_RULES = (
 
 
 def _density780_dependencies():
-    """Snapshot only the six exact local successor endpoints from live data."""
+    """Snapshot only the exact local successor endpoints from live data."""
     declared = globals().get('DENSITY780_DEPENDENCY_SHA256')
     if type(declared) is not dict:
         raise ValueError('Invalid density dependency successor namespace')
     dependencies = dict(declared)
     if (any(type(name) is not str or type(digest) is not str
             for name, digest in dependencies.items())
-            or sha256(canonical(dependencies)) != 'e9be8cbe0aa84f423064541280e5800d6de67582a30dfe1a21a1b567ac8ef44a'):
+            or sha256(canonical(dependencies)) != '04e451c1901d3dec8993c7c620104719ba4750845d6d8e87a1d6a004a4d7bd7b'):
         raise ValueError('Unreviewed density dependency successor endpoints')
     return dependencies
 
@@ -1332,14 +1360,27 @@ def density760_loops(root, *, include_roots=(), _operation=None):
             dependency_sha256[name] = digest
         if any(successor) and not all(successor):
             return {}
+        # The PR843 CSS color successor writes a channel through the
+        # JavaScript number module. Only the complete successor cohort adds
+        # that one exact file to the closure; the historical cohort has none.
+        added = {}
+        if all(successor):
+            for name, expected in (('loaders/js_number.mojo',
+                    'a7f8cd0bdaf91756b5583de24cf27e7d8ee86c7cc91cb68ab2da2dec3bd9b19d'),):
+                value = _coverage_observe_bytes(root, name,
+                    relative_source(root, name, **operation_args).read_bytes(), _operation=_operation)
+                if sha256(value) != expected:
+                    return {}
+                added[name] = value
         leaf = 'tools/carla_lane_oracle/pr760_arithmetic_stage.py'
         _density760_stage_identity(snapshots[leaf])
         groom = 'extensions/humanoid/skeleton/head/hair/groom.mojo'
         if sha256(stage.predecessor_source(DENSITY_SOURCE, snapshots[DENSITY_SOURCE].decode()).encode()) != DENSITY_AFTER_SHA256:
             return {}
-        if sha256(stage.predecessor_source(groom, snapshots[groom].decode()).encode()) != GUARDED_LOOP_SOURCE_SHA256[groom]:
+        physical_groom = cleanup.pr780_successor.predecessor_bytes(groom, snapshots[groom])
+        if sha256(stage.predecessor_source(groom, physical_groom.decode()).encode()) != GUARDED_LOOP_SOURCE_SHA256[groom]:
             return {}
-        paths = {name for name in snapshots if name.endswith('.mojo')}
+        paths = {name for name in snapshots if name.endswith('.mojo')} | set(added)
         entries, source_image = cleanup._helper_entry_census(root, **operation_args)
         contexts = [(root, entries, source_image)]
         for location in include_roots:
@@ -1365,7 +1406,7 @@ def density760_loops(root, *, include_roots=(), _operation=None):
                 for index, (location, local_entries, image) in enumerate(contexts))
         if not resolver_ok():
             return {}
-        for name, value in snapshots.items():
+        for name, value in (snapshots | added).items():
             if _coverage_observe_bytes(root, name,
                     relative_source(root, name, **operation_args).read_bytes(), _operation=_operation) != value:
                 return {}
