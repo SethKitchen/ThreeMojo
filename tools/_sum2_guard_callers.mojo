@@ -13,6 +13,7 @@ from std.pathlib import Path
 
 from tests._python_tokens import _tokenize
 from tools._python_json import PY_DICT, PY_STR, PyJson
+from tools._sum2_successor import reviewed_source
 
 
 comptime _PINS = "tools/carla_lane_oracle/sum2-guard-pins.json"
@@ -622,7 +623,9 @@ def sum2_guard_callers(root: String) raises:
                 _fail("wrong Sum2 guard caller function set: " + module)
             name_index += 1
         var path = base + "/extensions/carla/" + module + ".mojo"
-        var source = Path(path).read_text()
+        var source = reviewed_source(
+            "extensions/carla/" + module + ".mojo", Path(path).read_text()
+        )
         if _live_routing(module):
             var routing = doc.at(record, "routing")
             if doc.kind(routing) != PY_STR or _routing(source) != doc.text(

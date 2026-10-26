@@ -430,7 +430,7 @@ def test_footprint_and_faces() raises:
     var huge = _small()
     huge.footprint_width = Length(1e8, METER)
     with assert_raises(contains="larger than this port"):
-        _ = SkyscraperStyle(huge^)
+        _ = SkyscraperStyle(huge)
 
 
 def test_modules_match_three_counts() raises:

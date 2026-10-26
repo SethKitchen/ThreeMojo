@@ -14,6 +14,7 @@ from std.pathlib import Path
 from tests._python_tokens import token_sha256
 from tools._python_json import PY_STR, PyJson
 from tools._sum2_guard_callers import _function_text
+from tools._sum2_successor import reviewed_source
 
 
 comptime _PINS = "tools/carla_lane_oracle/sum2-guard-pins.json"
@@ -83,7 +84,9 @@ def sum2_scalar_caller(root: String) raises:
     var pinned = doc.at(functions, _NAME)
     if doc.kind(pinned) != PY_STR:
         _fail(_MESSAGE)
-    var live = _function_text(Path(base + "/" + _LANE).read_text(), _NAME)
+    var live = _function_text(
+        reviewed_source(_LANE, Path(base + "/" + _LANE).read_text()), _NAME
+    )
     if _count(live, _LIVE) != 1:
         _fail(_MESSAGE)
     var restored = live.replace(_LIVE, _PIN)

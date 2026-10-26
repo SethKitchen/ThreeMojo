@@ -13,6 +13,7 @@ from std.pathlib import Path
 
 from tools._python_json import PY_STR, PyJson
 from tools._sum2_guard_inventory import _digest
+from tools._sum2_successor import reviewed_source
 
 
 comptime _PINS = "tools/carla_lane_oracle/sum2-guard-pins.json"
@@ -4649,7 +4650,7 @@ def _check(base: String, doc: PyJson, module: String, builder: Bool) raises:
     var pinned = doc.at(inventory, path)
     if doc.kind(pinned) != PY_STR:
         _fail(_message(module))
-    var source = Path(base + "/" + path).read_text()
+    var source = reviewed_source(path, Path(base + "/" + path).read_text())
     if builder:
         var restored = _apply_builder(source)
         if _digest(restored) != doc.text(pinned):

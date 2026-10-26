@@ -189,6 +189,12 @@ The pin names each caller function.
 Live callers that match the pin keep that token graph.
 A changed caller function or a changed routing is refused.
 
+The #792 work limits changed the lane geometry and the Map after the Sum2 review.
+The PR780 successor table admits those edits.
+The Sum2 checks undo the edits before they compare, but only for the exact admitted bytes.
+They compare other bytes as they are.
+`tools/_sum2_successor.mojo` holds the edits.
+
 Mojo checks the Sum2 protected-helper inventory.
 The live production files that use a protected helper match the pin.
 Eight live files keep the pinned use digest.

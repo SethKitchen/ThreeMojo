@@ -113,13 +113,14 @@ def test_nine_live_blocks_match_their_pins() raises:
 
 
 def test_the_live_scalar_spiral_differs_from_its_pin() raises:
-    """Restoring the scalar spiral call matches the recorded digest."""
+    """Restoring the scalar spiral call and the piece count matches the
+    recorded digest."""
     var lane = Path("extensions/carla/lane_geometry.mojo").read_text()
     var begin = "def _lane_spiral(geometry: RoadGeometry, d: Float64)"
     var end = "def _lane_geometry_derivative_at("
     var live = _digest(lane, begin, end)
     assert_equal(
-        live, "9cd5b0ade7510b903f1a034f041df234d3643470cc16d351ef2bb4cede5901eb"
+        live, "577f845d3960f1d32961c9cec78bc7fcb022b784d853a25f54f469ea996d9740"
     )
     assert_true(
         live
@@ -132,6 +133,19 @@ def test_the_live_scalar_spiral_differs_from_its_pin() raises:
             " x_correction),"
         ),
         "return DirectedPoint(\n        geometry.x + (x + x_correction),",
+    )
+    # The work limit came after the review. The reviewed block converts the
+    # estimate at once.
+    restored = _replace_once(
+        restored,
+        (
+            "    # The public geometry query refuses this estimate before `Int`"
+            " conversion.\n    var work = ceil(d * (1.0 + reach))\n    if not"
+            " isfinite(work) or work >= 9223372036854775807.0 or work >="
+            ' 4194304.0:\n        raise Error("Geometry query exceeds its'
+            ' spiral work limit")\n    var pieces = 1 + Int(work)\n'
+        ),
+        "    var pieces = 1 + Int(ceil(d * (1.0 + reach)))\n",
     )
     assert_equal(
         _digest(restored, begin, end),

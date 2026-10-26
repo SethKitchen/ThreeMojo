@@ -16754,9 +16754,9 @@ EDGES = json.loads(r'''
   },
   "tests/test_skyscraper_generator.mojo": {
     "before_sha256": "99cf01ec3304968b51337b2f43c7e989f3a3aa99ebfdafe5ed02ba1d1cf60a03",
-    "after_sha256": "58077c0468aa92738f9ddbc6e8201523de57d3447973b75ba6c996dff2a0186f",
+    "after_sha256": "c4645788d8764bd1d401dfea547069b319eb5f14eb8152f5c0d8ee7d4438500c",
     "before_token_sha256": "326cad5fff7823414e6f4be20165bd0eb81e79266c34decbb5585e946f448f0b",
-    "after_token_sha256": "a2c5f9ad4610c8fba60634819927e426923f7934a45fe69c0d3daeb1be7f7c87",
+    "after_token_sha256": "eb8ecafe8fefe1408388f9ffd01c1b77248ba736e7ba8b5670bd6dcd3cc09ef3",
     "edits": [
       {
         "start": 423,
@@ -16772,7 +16772,7 @@ EDGES = json.loads(r'''
           "    var huge = _small()\n",
           "    huge.footprint_width = Length(1e8, METER)\n",
           "    with assert_raises(contains=\"larger than this port\"):\n",
-          "        _ = SkyscraperStyle(huge^)\n"
+          "        _ = SkyscraperStyle(huge)\n"
         ]
       }
     ]
@@ -18541,7 +18541,7 @@ EDGE_SHA256 = {'core/deform.mojo': 'b6afec67eea77b1a76cae98df1b4399de366b2a82878
  'tests/test_shadow.mojo': '24a5b863e7bfc82e22049aeb0a48af7fce8024cf5afbd57a825c04ff720bf255',
  'tests/test_shadow_casters.mojo': '0e5ff505a7c7167989697737467d0e0bdaaba482c8acc23daa99f9cdb47abca0',
  'tests/test_shape.mojo': '99203f726a7b3b35ea49a48b314f3ac87e598501610da748056669cf3f9ddb61',
- 'tests/test_skyscraper_generator.mojo': '0c907f0d3e8f49e285a46dece3daef8003808abdded1a70196fcb016f7a40e5a',
+ 'tests/test_skyscraper_generator.mojo': '5ca5e897dfd5f2b4c9b88020c7811bda604e9749a99b2d0d9cb2886c7fa430f8',
  'tests/test_ssgi.mojo': '55c764733217a1e0a6fd3c08571f1c6661fde380fa7f3bfc515851823d8053ee',
  'tests/test_ssr_node.mojo': 'c479fdc478c07aafc41e699d9fc021ac9bdad65982166685633bbe6bce49bc76',
  'tests/test_strand_triangles.mojo': '159581520b40d67559cd7e7c39d4030ab6ae225c3ef5dca580b91200dda81099',
@@ -18571,7 +18571,7 @@ EDGE_SHA256 = {'core/deform.mojo': 'b6afec67eea77b1a76cae98df1b4399de366b2a82878
  'tools/carla_lane_oracle/translated_parameter_resolution.py': '1c63297c0097ce50b9f314ba321e7f4d04c009f6379552a84adefb62a2a7f375',
  'tools/compile_fail_expectations.json': 'a15d4cff3d89429312350a4da95604569da83be105f69a0690025904c2cfbc84',
  'tools/test_conditioned_coverage_loops.py': 'f88451e7313fd84cc788847b1c960dc395b98736779a92c81a1d056ff2977520'}
-DATA_SHA256 = 'a50615dac9e72efd6c1dbe295550a825011abd8bcd6353f07fd98c9f0791714c'
+DATA_SHA256 = '9265def3156e502213df1665162dcc18aa79574dde38fb2f402c7066971fef76'
 # END FIXED PR780 SUCCESSOR DATA
 
 
@@ -18587,7 +18587,7 @@ def sha(raw):
 def _index_snapshot():
     """Authenticate and detach the fixed per-edge digests and bound inputs."""
     require(type(DATA_SHA256) is str, 'authority digest selector is not a builtin string')
-    require(DATA_SHA256 == 'a50615dac9e72efd6c1dbe295550a825011abd8bcd6353f07fd98c9f0791714c', 'authority digest selector changed')
+    require(DATA_SHA256 == '9265def3156e502213df1665162dcc18aa79574dde38fb2f402c7066971fef76', 'authority digest selector changed')
     encoded = json.dumps({'edges': EDGE_SHA256, 'bound_inputs': BOUND_INPUTS},
                          sort_keys=True, separators=(',', ':'))
     require(sha(encoded) == DATA_SHA256, 'fixed source inverse data changed')

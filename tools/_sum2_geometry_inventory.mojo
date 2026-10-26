@@ -13,6 +13,7 @@ from std.pathlib import Path
 
 from tools._python_json import PY_STR, PyJson
 from tools._sum2_guard_inventory import _digest
+from tools._sum2_successor import reviewed_source
 
 
 comptime _PINS = "tools/carla_lane_oracle/sum2-guard-pins.json"
@@ -79,7 +80,7 @@ def sum2_geometry_inventory(root: String) raises:
     var pinned = doc.at(inventory, _LANE)
     if doc.kind(pinned) != PY_STR:
         _fail(_MESSAGE)
-    var source = Path(base + "/" + _LANE).read_text()
+    var source = reviewed_source(_LANE, Path(base + "/" + _LANE).read_text())
     if _count(source, _LIVE) != 4:
         _fail(_MESSAGE)
     var restored = source.replace(_LIVE, _PIN)

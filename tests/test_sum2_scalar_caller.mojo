@@ -63,8 +63,8 @@ def test_a_changed_scalar_spiral_body_is_refused() raises:
         Path(lane)
         .read_text()
         .replace(
-            "pieces = 1 + Int(ceil(d * (1.0 + reach)))",
-            "pieces = 2 + Int(ceil(d * (1.0 + reach)))",
+            "var work = ceil(d * (1.0 + reach))",
+            "var work = ceil(d * (2.0 + reach))",
         )
     )
     with assert_raises(
