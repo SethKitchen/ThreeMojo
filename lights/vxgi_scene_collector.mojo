@@ -266,12 +266,12 @@ def _clip_triangle(
     polygon.append(a)
     polygon.append(b)
     polygon.append(c)
-    polygon = _clip_half(polygon^, Vector3(-1, 0, 0), -low.x)
-    polygon = _clip_half(polygon^, Vector3(1, 0, 0), high.x)
-    polygon = _clip_half(polygon^, Vector3(0, -1, 0), -low.y)
-    polygon = _clip_half(polygon^, Vector3(0, 1, 0), high.y)
-    polygon = _clip_half(polygon^, Vector3(0, 0, -1), -low.z)
-    polygon = _clip_half(polygon^, Vector3(0, 0, 1), high.z)
+    polygon = _clip_half(polygon, Vector3(-1, 0, 0), -low.x)
+    polygon = _clip_half(polygon, Vector3(1, 0, 0), high.x)
+    polygon = _clip_half(polygon, Vector3(0, -1, 0), -low.y)
+    polygon = _clip_half(polygon, Vector3(0, 1, 0), high.y)
+    polygon = _clip_half(polygon, Vector3(0, 0, -1), -low.z)
+    polygon = _clip_half(polygon, Vector3(0, 0, 1), high.z)
     return polygon^
 
 
