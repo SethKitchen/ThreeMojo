@@ -3,7 +3,15 @@
 # Noncommercial use is free; commercial use requires a paid license.
 # See LICENSE, LICENSE-COMMERCIAL.md and THIRD-PARTY-NOTICES.md.
 
-"""Make cache keys stay distinct, and coverage staging copies the helpers."""
+"""Make cache keys stay distinct, and coverage staging copies the helpers.
+
+    sh tools/tool.sh .venv/bin/mojo check_build_tools
+
+`make test-tools` runs these checks, as it ran their Python version. Each
+one runs `make` itself: a cache key reads the whole tree, and a coverage
+staging run binds every maintained input. One check takes longer than the
+five seconds that a suite test must keep to.
+"""
 
 from std.collections import Set
 from std.os.path import realpath
@@ -280,5 +288,5 @@ def test_unselected_sibling_modules_are_staged() raises:
 
 
 def main() raises:
-    """Run the build-tool tests."""
+    """Run the build-tool checks."""
     TestSuite.discover_tests[__functions_in_module()]().run()

@@ -994,6 +994,7 @@ test-tools:
 
 test-tools-discovery:
 	@python3 -m unittest discover -s tools -p 'test_*.py'
+	@$(TOOL) check_build_tools
 	@python3 -m unittest discover -s assets/carla/tools -p 'test_*.py'
 
 test-tools-oracle:

@@ -95,7 +95,10 @@ The CI workflow checks a pull request with `AFFECTED` set to its base branch. It
 
 ## Run the tool tests
 
-`make test-tools` runs the Python tool tests and the CARLA oracle.
+`make test-tools` runs the Python tool tests, the CARLA oracle and `tools/check_build_tools.mojo`.
+
+`tools/check_build_tools.mojo` runs `make` to check the cache keys and the coverage staging. Each of its checks takes longer than five seconds. A suite test must take five seconds or less, so the program is not a suite.
+
 The oracle runner is `tools/parallel_unittest.mojo`.
 It starts several Python test processes at once.
 `TOOLS_SHARD=I/N` gives each runner a different share of those units.
