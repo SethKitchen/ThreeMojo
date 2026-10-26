@@ -295,6 +295,12 @@ The map-builder file keeps 67 reviewed spans.
 Restoring those spans matches the pinned use digests.
 A moved span or a changed use is refused.
 
+Mojo checks the live lane-refinement inventory.
+Fourteen reviewed spans restore the cache-key successor.
+Three cache-key edits restore the predecessor.
+That predecessor keeps the pinned use digest.
+A moved span or a changed record is refused.
+
 ## Candidate certificate
 
 A certificate contains a stored incumbent point and its road parameter.
