@@ -1298,11 +1298,21 @@ def _density760_stage_identity(raw):
     filename = Path(__file__).resolve().parent/'carla_lane_oracle/pr760_arithmetic_stage.py'
     cleanup.require(Path(stage.__file__).resolve() == filename,
                     'density inverse executing origin changed')
-    compiled = compile(raw, str(filename), 'exec', dont_inherit=True, optimize=sys.flags.optimize)
-    cleanup.require(cleanup._code_identity(stage._EXECUTED_MODULE_CODE)
-                    == cleanup._code_identity(compiled), 'density inverse module code changed')
-    defaults = cleanup._compiled_defaults(raw)
-    for name, expected in cleanup._compiled_functions(raw, str(filename)).items():
+    # Import already compiled this source and compared it with the executing
+    # module. The same bytes and the same code object need no second compile.
+    key = str(filename.resolve())
+    executed = stage._EXECUTED_MODULE_CODE
+    if (cleanup._IMPORT_IDENTITIES.get(key) == cleanup.sha(raw)
+            and cleanup._IMPORT_MODULE_CODE.get(key) is executed):
+        functions = cleanup._IMPORT_CODE[key]
+        defaults = cleanup._IMPORT_DEFAULTS[key]
+    else:
+        compiled = compile(raw, str(filename), 'exec', dont_inherit=True, optimize=sys.flags.optimize)
+        cleanup.require(cleanup._code_identity(executed)
+                        == cleanup._code_identity(compiled), 'density inverse module code changed')
+        functions = cleanup._compiled_functions(raw, str(filename))
+        defaults = cleanup._compiled_defaults(raw)
+    for name, expected in functions.items():
         if name.startswith('<'):
             continue
         live = getattr(stage, name, None)

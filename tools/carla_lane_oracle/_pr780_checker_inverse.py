@@ -625,7 +625,7 @@ EDGES = {'coverage_loop_proofs.py': {'after_sha256': '5bc20208b2fc105d75616c2967
                                          "*compiler, 'coverage_hit_aot',\n",
                                          "            '--profile', profile, "
                                          "'--root', '@BUILD@',\n")))},
- 'full_audit_cleanup_contracts.py': {'after_sha256': '7cbc828190f69e9ce7a29d9887fdaa8da40b59305fb68e56be25490255000555',
+ 'full_audit_cleanup_contracts.py': {'after_sha256': '87de28c8bb98b74bdef281e1864b7016e65777b11f39f88b554823b5e4bcc2a7',
                                      'before_sha256': 'f62dbe69ddd5d15bd79aa4b0a8237d9475fe1a00cea06c2f7124c59af237c833',
                                      'edits': ((56,
                                                 57,
@@ -787,6 +787,10 @@ EDGES = {'coverage_loop_proofs.py': {'after_sha256': '5bc20208b2fc105d75616c2967
                                                  'constant_equal\n',
                                                  '\n',
                                                  '\n')),
+                                               (728,
+                                                729,
+                                                ("    module_code = compile(raw, filename, 'exec', dont_inherit=True, optimize=sys.flags.optimize)\n",),
+                                                ("    module_code = compile(raw, filename, 'exec', dont_inherit=True, optimize=sys.flags.optimize); _compiled_functions.last = module_code\n",)),
                                                (774,
                                                 775,
                                                 ('for _module in (source, '
@@ -811,6 +815,12 @@ EDGES = {'coverage_loop_proofs.py': {'after_sha256': '5bc20208b2fc105d75616c2967
                                                  'conditioned_cubic, '
                                                  'scaled_float32, pr760_stage, '
                                                  'pr780_successor):\n',)),
+                                               (788,
+                                                790,
+                                                ("            and _code_identity(_executed) == _code_identity(compile(_raw, _module.__file__, 'exec',\n",
+                                                 "                dont_inherit=True, optimize=sys.flags.optimize)),\n"),
+                                                ("            and _code_identity(_executed) == _code_identity(\n",
+                                                 "                _compiled_functions.last),\n")),
                                                (823,
                                                 834,
                                                 (),
@@ -882,6 +892,10 @@ EDGES = {'coverage_loop_proofs.py': {'after_sha256': '5bc20208b2fc105d75616c2967
                                                 (),
                                                 ('    '
                                                  'pr780_successor.verify_data()\n',)),
+                                               (1250,
+                                                1251,
+                                                ("        {path: _physical_text(raw) for path, raw in image.items()}))\n",),
+                                                ("        {path: _physical_text(raw) for path, raw in image.items() if b'main' in raw}))\n",)),
                                                (3089,
                                                 3092,
                                                 ('        prior = '
@@ -1458,7 +1472,7 @@ def predecessor(name, raw):
     """Compose exact current checkers into the retained 5e91dad comparison."""
     if type(raw) is not bytes:
         raise AssertionError('checker source must be physical builtin bytes')
-    if hashlib.sha256(json.dumps(EDGES, sort_keys=True, separators=(',', ':')).encode()).hexdigest() != '288763d0b1d54f72c571fb97e3d92a2d201bcdc0c4c4a38188f6943d72acd446':
+    if hashlib.sha256(json.dumps(EDGES, sort_keys=True, separators=(',', ':')).encode()).hexdigest() != 'a10be312cf6f04edd06cd1163c51bec919c1caa46a05024be05d026f5c14cb0d':
         raise AssertionError('PR780 checker inverse data changed')
     digest = hashlib.sha256(raw).hexdigest()
     edge = EDGES.get(name)
