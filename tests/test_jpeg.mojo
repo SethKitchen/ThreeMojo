@@ -34,6 +34,7 @@ from render.png import DecodedImage
 from render.png import decode as decode_png
 from render.srgb import SRGB
 from render.texture import BILINEAR, REPEAT, texture_from
+from std.math import inf, nan
 from std.pathlib import Path
 from std.testing import (
     TestSuite,
@@ -260,6 +261,11 @@ def test_a_sample_is_rounded_and_clamped() raises:
     assert_equal(clamp_sample(127.6), UInt8(128))
     assert_equal(clamp_sample(-3), UInt8(0))
     assert_equal(clamp_sample(300), UInt8(255))
+    assert_equal(clamp_sample(Float32(1e20)), UInt8(255))
+    assert_equal(clamp_sample(Float32(-1e20)), UInt8(0))
+    assert_equal(clamp_sample(inf[DType.float32]()), UInt8(255))
+    assert_equal(clamp_sample(-inf[DType.float32]()), UInt8(0))
+    assert_equal(clamp_sample(nan[DType.float32]()), UInt8(0))
 
 
 def test_neutral_chroma_is_gray_and_the_extremes_clamp() raises:

@@ -37,6 +37,7 @@ from math.vector3 import Vector3
 from std.testing import (
     TestSuite,
     assert_almost_equal,
+    assert_equal,
     assert_false,
     assert_raises,
     assert_true,
@@ -203,6 +204,20 @@ def test_the_buttons_move_forward_and_back() raises:
     _near(controls.move_vector(), 0, 0, -1)
     controls.handle(InputEvent(POINTER_DOWN, button=SECONDARY), SIZE, SIZE)
     _near(controls.move_vector(), 0, 0, 1)
+
+
+def test_a_wide_view_keeps_the_last_pixel_inside() raises:
+    var controls = FlyControls()
+    var wide = 16777217
+    controls.handle(
+        InputEvent(POINTER_MOVE, x=wide - 1, y=wide // 2), wide, wide
+    )
+    var half = Float64(wide) / 2
+    var yaw = Float32(-(Float64(wide - 1) - half) / half)
+    assert_equal(controls.rotation_vector().y, yaw)
+    assert_true(yaw > -1)
+    var pitch = Float32((Float64(wide // 2) - half) / half)
+    assert_equal(controls.rotation_vector().x, -pitch)
 
 
 def test_drag_to_look_turns_only_while_a_button_is_held() raises:

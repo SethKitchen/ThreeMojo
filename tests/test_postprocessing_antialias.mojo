@@ -752,6 +752,19 @@ def test_fxaa_and_smaa_run_in_the_composer_after_the_output() raises:
     assert_equal(len(composer.accumulations), 3)
 
 
+def test_an_smaa_frame_must_fit() raises:
+    with assert_raises(contains="at least one pixel"):
+        _ = EdgeMap(0, 1)
+    with assert_raises(contains="at least one pixel"):
+        _ = EdgeMap(1, 0)
+    with assert_raises(contains="larger than this port"):
+        _ = EdgeMap(1 << 32, 1 << 32)
+    with assert_raises(contains="at least one pixel"):
+        _ = BlendWeights(0, 1)
+    with assert_raises(contains="larger than this port"):
+        _ = BlendWeights(1 << 32, 1 << 32)
+
+
 def test_a_horizontal_edge_can_end_without_a_crossing_edge() raises:
     var edges = EdgeMap(7, 3)
     edges.top[7 + 2] = True

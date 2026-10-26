@@ -259,6 +259,31 @@ def require_positive_radius(radius: Float32, name: String) raises:
         raise Error("A " + name + " needs a positive radius")
 
 
+# A grid past this many cells does not finish. A side past 2^24 also
+# collapses in `Float32`. 4096 by 4096 is this many cells, and so is one
+# row of 16777216.
+comptime MAX_GRID_CELLS = 16777216
+
+
+def require_grid_cells(across: Int, down: Int, message: String) raises:
+    """Refuse a grid this port does not build.
+
+    Nothing. The call returns when the cell count fits. `across` must
+    already be at least one, so the division stands. A side of `Int.MAX`
+    wraps the extra vertex and the walk does not finish.
+
+    Args:
+        across: Cells along the first side.
+        down: Cells along the second side.
+        message: The error text for this solid.
+
+    Raises:
+        Error: If the grid has more than 16777216 cells.
+    """
+    if down > MAX_GRID_CELLS // across:
+        raise Error(message)
+
+
 def require_three_segments(count: Int, message: String) raises:
     """Refuse a loop of fewer than three segments.
 

@@ -548,18 +548,28 @@ struct SsaoSettings(ImplicitlyCopyable):
         self.output = DEFAULT_OUTPUT
 
 
-def require_ssao_samples(size: Int) raises:
-    """Refuse an SSAO kernel that holds no sample.
+# The sample index is a `Float32`, and the loop adds one each sample.
+# Past 16777216 the index is no longer that sample. The maximum integer
+# wraps the counter, so the walk never ends.
+comptime MAX_SSAO_SAMPLES = 16777216
 
-    Nothing. The call returns when the kernel holds at least one sample.
+
+def require_ssao_samples(size: Int) raises:
+    """Refuse an SSAO kernel that holds no sample, or more than this
+    port walks.
+
+    Nothing. The call returns when the kernel holds from one sample
+    through 16777216.
 
     Args:
         size: How many samples the kernel holds.
 
     Raises:
-        Error: If `size` is below one.
+        Error: If `size` is below one or above 16777216.
     """
     require_positive(size, "An SSAO kernel holds at least one sample")
+    if size > MAX_SSAO_SAMPLES:
+        raise Error("An SSAO kernel is larger than this port takes")
 
 
 def check_ssao(settings: SsaoSettings) raises:
@@ -570,7 +580,8 @@ def check_ssao(settings: SsaoSettings) raises:
 
     Raises:
         Error: If the output is none of the six, the radius or a distance
-            is negative or not finite, or the kernel is empty.
+            is negative or not finite, or the kernel is empty or above
+            16777216.
     """
     require_screen_output(settings.output)
     if not (
@@ -604,7 +615,7 @@ def ssao_kernel(size: Int, seed: Int) raises -> List[Vector3]:
         The samples, in the surface's tangent space, `z` along the normal.
 
     Raises:
-        Error: If the size is not positive.
+        Error: If the size is below one or above 16777216.
     """
     require_ssao_samples(size)
     var random = SeededRandom(seed)
@@ -746,7 +757,28 @@ def _ssao_pixel(
     return 1 - min(Float32(1), Float32(occluded) / Float32(len(kernel)))
 
 
-def ssao_blur(values: List[Float32], width: Int, height: Int) -> List[Float32]:
+def require_screen_extent(width: Int, height: Int) raises:
+    """Refuse a screen-space frame that is empty or whose pixel count wraps.
+
+    Nothing. The call returns when both sides are at least one and their
+    product fits in an integer.
+
+    Args:
+        width: The frame's width in pixels.
+        height: The frame's height in pixels.
+
+    Raises:
+        Error: If a side is below one, or the pixel count does not fit.
+    """
+    if width < 1 or height < 1:
+        raise Error("A screen-space frame must be at least one pixel each way")
+    if width > Int.MAX // height:
+        raise Error("A screen-space frame is larger than this port builds")
+
+
+def ssao_blur(
+    values: List[Float32], width: Int, height: Int
+) raises -> List[Float32]:
     """Return each value averaged with the five by five around it, held at
     the edges: three.js's `SSAOBlurShader`.
 
@@ -757,7 +789,11 @@ def ssao_blur(values: List[Float32], width: Int, height: Int) -> List[Float32]:
 
     Returns:
         The averages.
+
+    Raises:
+        Error: If a side is below one, or the pixel count does not fit.
     """
+    require_screen_extent(width, height)
     var out = List[Float32](length=width * height, fill=0)
     var taps = Float32((2 * SSAO_BLUR_REACH + 1) * (2 * SSAO_BLUR_REACH + 1))
     var y = 0
@@ -875,6 +911,12 @@ struct SaoSettings(ImplicitlyCopyable):
         self.output = DEFAULT_OUTPUT
 
 
+# A blur tap index is a `Float32`. Past 16777216 it is no longer that
+# index. One more than the maximum integer wraps the weight count, so
+# the center weight is missing, and one below that does not finish.
+comptime MAX_SAO_BLUR_RADIUS = 16777216
+
+
 def check_sao(settings: SaoSettings) raises:
     """Refuse SAO settings no pass could run.
 
@@ -884,8 +926,8 @@ def check_sao(settings: SaoSettings) raises:
     Raises:
         Error: If the output is none of the six, a setting is not finite,
             the intensity, minimum resolution, blur radius or depth cutoff
-            is negative, or the scale, kernel radius or standard deviation
-            is not positive.
+            is negative, the blur radius is above 16777216, or the scale,
+            kernel radius or standard deviation is not positive.
     """
     require_screen_output(settings.output)
     if not (
@@ -905,6 +947,8 @@ def check_sao(settings: SaoSettings) raises:
         or settings.blur_depth_cutoff < 0
     ):
         raise Error("An SAO setting must not be negative")
+    if settings.blur_radius > MAX_SAO_BLUR_RADIUS:
+        raise Error("An SAO blur radius is larger than this port takes")
     if not (
         settings.scale > 0
         and settings.kernel_radius > 0
@@ -1049,17 +1093,23 @@ def _sao_pixel(
     return 1 - sum * (settings.intensity / weight)
 
 
-def blur_weights(radius: Int, std_dev: Float32) -> List[Float32]:
+def blur_weights(radius: Int, std_dev: Float32) raises -> List[Float32]:
     """Return the Gaussian weights of taps zero through `radius` pixels
     out: three.js's `BlurShaderUtils.createSampleWeights`.
 
     Args:
-        radius: The farthest tap.
-        std_dev: The standard deviation, in pixels.
+        radius: The farthest tap. Zero through 16777216.
 
     Returns:
         One weight per tap, the center first.
+
+    Raises:
+        Error: If `radius` is negative or above 16777216.
     """
+    if radius < 0:
+        raise Error("An SAO blur radius must not be negative")
+    if radius > MAX_SAO_BLUR_RADIUS:
+        raise Error("An SAO blur radius is larger than this port takes")
     var weights = List[Float32](capacity=radius + 1)
     for tap in range(radius + 1):  # pragma: no branch
         # A radius is never negative, so the center tap is always there.
@@ -1324,6 +1374,33 @@ def ssr_reflections(
     return out^
 
 
+def _ssr_max_step(width: Int, height: Int) -> Float32:
+    """Return the frame's diagonal in pixels, three.js's `MAX_STEP`.
+
+    The squares are `Float64`. An `Int` product wraps a wide frame, and
+    `Int` of the square root is then not the diagonal.
+
+    Args:
+        width: The frame's width, in pixels.
+        height: The frame's height, in pixels.
+
+    Returns:
+        The diagonal, cut toward zero. A diagonal past what an integer
+        holds is the `Float32` of that square root.
+
+    Error: Never.
+    """
+    var span = Float64(width) * Float64(width) + Float64(height) * Float64(
+        height
+    )
+    var steps = floor(sqrt(span))
+    # `Float64(Int.MAX)` is 2^63. `Int` of a float at or past it is not
+    # the step count.
+    if steps >= Float64(Int.MAX):
+        return Float32(steps)
+    return Float32(Int(steps))
+
+
 def _ssr_pixel(
     view: DepthView,
     colors: List[FloatColor],
@@ -1375,7 +1452,7 @@ def _ssr_pixel(
     var y_span = y_len / total_step
     # three.js's `MAX_STEP`, the frame's diagonal, and its break once the
     # walk reaches the end.
-    var max_step = Float32(Int(sqrt(Float32(width * width + height * height))))
+    var max_step = _ssr_max_step(width, height)
     var steps = min(total_step, max_step)
     var i = Float32(0)
     while i < steps:
@@ -1425,7 +1502,7 @@ def _ssr_pixel(
 
 def ssr_blur(
     source: List[FloatColor], width: Int, height: Int
-) -> List[FloatColor]:
+) raises -> List[FloatColor]:
     """Return the reflections blurred with their four neighbors, each
     weighed by its strength: three.js's `SSRBlurShader`.
 
@@ -1437,7 +1514,11 @@ def ssr_blur(
     Returns:
         The blurred reflections. Where no neighbor reflects anything, the
         light is black, which three.js leaves divided by zero.
+
+    Raises:
+        Error: If a side is below one, or the pixel count does not fit.
     """
+    require_screen_extent(width, height)
     var out = List[FloatColor](length=width * height, fill=TRANSPARENT_BLACK)
     var y = 0
     while y < height:

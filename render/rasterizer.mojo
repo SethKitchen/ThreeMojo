@@ -15,7 +15,8 @@ translucent.
 Each triangle is scanned only inside its own bounding box. Walking the whole
 framebuffer per triangle is the obvious way to write this and costs the same
 for a triangle covering four pixels as for one covering the screen; a sphere
-of several hundred triangles made that difference impossible to ignore.
+of several hundred triangles made that difference impossible to ignore. A
+screen coordinate that does not fit in an integer lies past the image.
 
 Which pixels a triangle covers is decided by `render.fillrule`, in exact
 integer arithmetic, and that module explains why. It is shared with the GPU
@@ -463,6 +464,49 @@ struct _Bounds(ImplicitlyCopyable):
     var bottom: Int
 
 
+def _screen_index(value: Float32, round_up: Bool) -> Int:
+    """Return the pixel index of a screen coordinate.
+
+    A value that is not finite, or that does not fit in an integer, is
+    past every pixel: positive past the last, negative before the first.
+    `Int` of such a float is not that coordinate.
+
+    Args:
+        value: The coordinate, in pixels.
+        round_up: True to round toward positive infinity.
+
+    Returns:
+        The index, or `Int.MAX` or `Int.MIN` when `value` does not fit.
+    """
+    var wide = Float64(value)
+    if not isfinite(wide) or wide >= Float64(Int.MAX):
+        return Int.MAX
+    if wide <= -Float64(Int.MAX):
+        return Int.MIN
+    if round_up:
+        return Int(ceil(wide))
+    return Int(floor(wide))
+
+
+def _shifted_index(value: Float32, round_up: Bool, pad: Int) -> Int:
+    """Return `_screen_index` moved by `pad` without wrapping.
+
+    Args:
+        value: The coordinate, in pixels.
+        round_up: True to round toward positive infinity.
+        pad: Rows to add when rounding up, or to subtract otherwise.
+
+    Returns:
+        The shifted index, held at `Int.MAX` or `Int.MIN`.
+    """
+    var index = _screen_index(value, round_up)
+    if index == Int.MAX or index == Int.MIN or pad == 0:
+        return index
+    if round_up:
+        return index + pad
+    return index - pad
+
+
 def _bounds(
     triangle: Triangle,
     width: Int,
@@ -492,10 +536,10 @@ def _bounds(
     if last_row >= 0:
         lowest = min(lowest, last_row)
     return _Bounds(
-        max(0, Int(floor(left))),
-        min(width - 1, Int(ceil(right))),
-        max(first_row, Int(floor(top))),
-        min(lowest, Int(ceil(bottom))),
+        max(0, _screen_index(left, False)),
+        min(width - 1, _screen_index(right, True)),
+        max(first_row, _screen_index(top, False)),
+        min(lowest, _screen_index(bottom, True)),
     )
 
 
@@ -7214,8 +7258,8 @@ def _rows_of(
             var y = corners[index * stride + corner].y
             top = min(top, y)
             bottom = max(bottom, y)
-        rows.append(Int(floor(top)) - pad)
-        rows.append(Int(ceil(bottom)) + pad)
+        rows.append(_shifted_index(top, False, pad))
+        rows.append(_shifted_index(bottom, True, pad))
     return rows^
 
 
@@ -7235,8 +7279,8 @@ def _point_rows(points: List[RasterVertex]) -> List[Int]:
     rows.reserve(len(points) * 2)
     for index in range(len(points)):
         var half = points[index].point_size / 2
-        rows.append(Int(floor(points[index].y - half)))
-        rows.append(Int(ceil(points[index].y + half)))
+        rows.append(_screen_index(points[index].y - half, False))
+        rows.append(_screen_index(points[index].y + half, True))
     return rows^
 
 
@@ -7456,8 +7500,8 @@ def _rows_of_corners(corners: List[Corner]) -> List[Int]:
             var y = corners[index * 3 + corner].y
             top = min(top, y)
             bottom = max(bottom, y)
-        rows.append(Int(floor(top)))
-        rows.append(Int(ceil(bottom)))
+        rows.append(_screen_index(top, False))
+        rows.append(_screen_index(bottom, True))
     return rows^
 
 

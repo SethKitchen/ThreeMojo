@@ -5823,9 +5823,9 @@ def test_map_rejects_nonfinite_and_invalid_distance_domains() raises:
         _ = map.previous(start, Length64(0))
     with assert_raises():
         _ = map.generate_waypoints(Length64(0))
-    # The smallest spacing fails immediately when adding it cannot advance.
+    # The smallest spacing is more stations than this port walks.
     var eta = bitcast[DType.float64](UInt64(1))
-    with assert_raises(contains="advance"):
+    with assert_raises(contains="larger than this port"):
         _ = map.generate_waypoints(Length64(eta))
     with assert_raises():
         _ = map.next_until_lane_end(start, Length64(eta))

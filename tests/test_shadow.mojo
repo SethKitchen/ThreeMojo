@@ -309,6 +309,9 @@ def test_a_map_holds_a_square_of_depths() raises:
         _ = ShadowMap(0, 0, flat_frame(), List[Float32](), 0, 0, 1)
     with assert_raises():
         _ = ShadowMap(0, 2, flat_frame(), [Float32(0), 0, 0], 0, 0, 1)
+    # 3037000500 squared does not fit in a signed integer.
+    with assert_raises(contains="larger than this port"):
+        _ = ShadowMap(0, 3037000500, flat_frame(), List[Float32](), 0, 0, 1)
 
 
 def test_a_world_position_lands_on_the_map_by_the_frame() raises:
@@ -1214,6 +1217,15 @@ def test_the_sixteen_soft_taps_surround_the_nearest_corner() raises:
     var high = Vector3(1, 1, 0.5)
     assert_equal(soft_texel(high, 15, 4), 15)
     assert_equal(soft_texel(high, 0, 4), 2 * 4 + 2)
+    # Past an integer, still the edge. The cast is not that texel.
+    var far = Vector3(Float32(1e20), 0.5, 0.5)
+    assert_equal(soft_texel(far, 0, 4), 3)
+    var behind = Vector3(Float32(-1e20), 0.5, 0.5)
+    assert_equal(soft_texel(behind, 15, 4), 12)
+    var missing = Vector3(nan[DType.float32](), 0.5, 0.5)
+    assert_equal(soft_texel(missing, 0, 4), 3)
+    assert_equal(soft_fraction(Float32(1e20), 4), Float32(0))
+    assert_equal(soft_fraction(nan[DType.float32](), 4), Float32(0))
     assert_equal(SOFT_TAPS, 16)
 
 
@@ -1276,6 +1288,10 @@ def test_a_linear_read_takes_the_four_nearest_centers() raises:
     # Past an edge, the edge.
     assert_equal(bilinear_texel(0.2, 0.2, 0, 4), 0)
     assert_equal(bilinear_texel(3.9, 3.9, 3, 4), 15)
+    assert_equal(bilinear_texel(Float32(1e20), 2.5, 0, 4), 2 * 4 + 3)
+    assert_equal(bilinear_texel(0.2, Float32(-1e20), 0, 4), 0)
+    assert_equal(bilinear_fraction(Float32(1e20)), Float32(0))
+    assert_equal(bilinear_fraction(nan[DType.float32]()), Float32(0))
     var corners = SIMD[DType.float32, 8](0, 1, 2, 3, 10, 10, 10, 10)
     assert_almost_equal(
         bilinear(corners, 0, 1.75, 2.5), Float32(0.25), atol=1e-6
@@ -1312,6 +1328,17 @@ def test_the_blur_reads_its_samples_from_minus_to_plus_one() raises:
     assert_equal(vsm_depth(-1), Float32(0))
     assert_equal(vsm_depth(0), Float32(0.5))
     assert_equal(vsm_depth(inf[DType.float32]()), Float32(1))
+
+
+def test_a_variance_map_refuses_a_size_that_does_not_fit() raises:
+    with assert_raises(contains="at least one texel"):
+        _ = vsm_moments(List[Float32](), 0, 1, 1)
+    with assert_raises(contains="larger than this port"):
+        _ = vsm_moments(List[Float32](), 3037000500, 1, 1)
+    with assert_raises(contains="must fill its square"):
+        _ = vsm_moments([Float32(0)], 2, 1, 1)
+    with assert_raises(contains="at least one sample"):
+        _ = vsm_moments([Float32(0)], 1, 1, 0)
 
 
 def test_the_moments_are_the_blurred_mean_and_spread() raises:

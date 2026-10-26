@@ -30,11 +30,13 @@ from extensions.carla.render_sky import (
     cloud_shadow_density,
     hdri_sun_azimuth,
     hemisphere_illuminance,
+    texel_solid_angle,
 )
 from extensions.carla.render_weather import height_fog
 from extensions.carla.weather import weather_preset
 from lights.shadow import ShadowMap
 from math.matrix4 import Matrix4
+from math.utils import texel_ndc, texel_ndc_up
 from math.noise import ImprovedNoise
 from math.vector3 import Vector3
 from postprocessing.screen_space import DepthView
@@ -44,6 +46,7 @@ from render.png import DecodedImage, decode as decode_png
 from render.srgb import LINEAR
 from render.target import RenderTarget
 from render.texture import BILINEAR, IGNORED, REPEAT, Texture
+from std.math import pow
 from std.pathlib import Path
 from std.testing import (
     TestSuite,
@@ -143,6 +146,27 @@ def test_a_fog_with_nothing_in_it_lets_the_sun_through() raises:
     assert_almost_equal(share, 1, atol=1e-6)
 
 
+def test_a_wide_sky_texel_stays_inside_its_face() raises:
+    var small = texel_solid_angle(0, 0, 4)
+    var place = (Float32(0) + 0.5) / Float32(4) * 2 - 1
+    var side = Float32(2) / Float32(4)
+    assert_equal(
+        small,
+        side * side / pow(1 + place * place + place * place, Float32(1.5)),
+    )
+    var size = 16777217
+    var wide = texel_solid_angle(size - 1, 0, size)
+    var edge = (Float32(size - 1) + 0.5) / Float32(size) * 2 - 1
+    var across = (Float32(0) + 0.5) / Float32(size) * 2 - 1
+    var wide_side = Float32(2) / Float32(size)
+    assert_true(
+        wide
+        != wide_side
+        * wide_side
+        / pow(1 + edge * edge + across * across, Float32(1.5))
+    )
+
+
 def test_the_sky_readers_refuse_byte_textures() raises:
     # No cloud stands between a point and a sun below the horizon.
     assert_equal(
@@ -190,6 +214,15 @@ def test_a_shaft_of_no_steps_lets_the_sun_through() raises:
             stride=1,
             steps=0,
         )
+
+
+def test_a_wide_view_keeps_the_last_pixel_inside() raises:
+    var wide = 16777217
+    var rays = ViewRays(wide, 4, Matrix4(), Matrix4())
+    var point = rays.view_point(wide - 1, 0, 0)
+    assert_equal(point.x, texel_ndc(wide - 1, wide))
+    assert_true(point.x < 1)
+    assert_equal(point.y, texel_ndc_up(0, 4))
 
 
 def main() raises:

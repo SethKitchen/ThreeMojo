@@ -78,7 +78,7 @@ from extensions.carla.road_info import LaneId, RoadId, SectionId
 from extensions.carla.transform import CarlaRotation, CarlaTransform
 from extensions.carla.world import EpisodeSettings, World
 from math.vector3 import Vector3
-from std.math import floor, isnan
+from std.math import floor, inf, isnan
 from std.testing import (
     TestSuite,
     assert_almost_equal,
@@ -893,6 +893,20 @@ def test_turn_decisions() raises:
 def test_route_planner_checks_its_resolution() raises:
     with assert_raises(contains="more than zero"):
         _ = GlobalRoutePlanner(_town(), Length(0, METER))
+    with assert_raises(contains="finite"):
+        _ = GlobalRoutePlanner(
+            load_opendrive("<OpenDRIVE/>"),
+            Length(inf[DType.float32](), METER),
+        )
+    with assert_raises(contains="move the waypoint"):
+        _ = GlobalRoutePlanner(
+            load_opendrive("<OpenDRIVE/>"),
+            Length(Float32(1e-20), METER),
+        )
+    with assert_raises(contains="larger than this port"):
+        _ = GlobalRoutePlanner(
+            load_opendrive(TWO_LANE), Length(Float32(1e-6), METER)
+        )
 
 
 def test_route_on_an_empty_map() raises:

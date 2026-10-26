@@ -55,6 +55,9 @@ from units.si import Duration, SECOND
 
 # How many keys a second the shake and the pulse take, three.js's `* 10`.
 comptime KEYS_A_SECOND = Float32(10)
+# A key index is a Float32 time. Past 2^24 those times repeat, and a
+# count near the integer limit never finishes the key loop.
+comptime MAX_ANIMATION_KEYS = 16777216
 # Where a rotation clip ends, in radians, three.js's `360`.
 comptime ROTATION_END = Float32(360)
 
@@ -141,6 +144,25 @@ def _key_count(duration: Duration) raises -> Int:
     return Int(ceil(limit))
 
 
+def _require_stored_keys(count: Int) raises:
+    """Refuse a key count this port does not store.
+
+    Nothing. The call returns when the count is at most 16777216.
+    `_key_count` may still report a larger representable count.
+
+    Args:
+        count: How many keys `_key_count` returned.
+
+    Returns:
+        Nothing.
+
+    Raises:
+        Error: If the count is above 16777216.
+    """
+    if count > MAX_ANIMATION_KEYS:
+        raise Error("An animation's key count is larger than this port stores")
+
+
 def create_shake_animation(
     node: NodeId,
     duration: Duration,
@@ -161,11 +183,13 @@ def create_shake_animation(
 
     Raises:
         Error: If the duration is not positive and finite, or its key
-            count cannot fit in the track arrays.
+            count cannot fit in the track arrays or is above 16777216.
     """
     var times = List[Duration]()
     var values = List[Float32]()
-    for key in range(_key_count(duration)):
+    var count = _key_count(duration)
+    _require_stored_keys(count)
+    for key in range(count):
         times.append(Duration(Float32(key) / KEYS_A_SECOND, SECOND))
         var x = Float32(random.next() * 2.0 - 1.0)
         var y = Float32(random.next() * 2.0 - 1.0)
@@ -198,11 +222,13 @@ def create_pulsation_animation(
 
     Raises:
         Error: If the duration is not positive and finite, or its key
-            count cannot fit in the track arrays.
+            count cannot fit in the track arrays or is above 16777216.
     """
     var times = List[Duration]()
     var values = List[Float32]()
-    for key in range(_key_count(duration)):
+    var count = _key_count(duration)
+    _require_stored_keys(count)
+    for key in range(count):
         times.append(Duration(Float32(key) / KEYS_A_SECOND, SECOND))
         var factor = Float32(random.next()) * pulse_scale
         values.append(factor)

@@ -51,7 +51,9 @@ A zero child count stops branching. A level past the end of a parameter list reu
 
 ## Terrain
 
-`TerrainGenerator(parameters).build()` bakes a mountain range into one indexed geometry in the ground plane, y up. The generator keeps the height grid. Then `sample_height` and `sample_slope` read the surface.
+`TerrainGenerator(parameters).build()` bakes a mountain range into one indexed geometry in the ground plane, y up. The generator keeps the height grid. Then `sample_height` and `sample_slope` read the surface. The size and every other parameter must be finite.
+
+A segment count above 4096 is refused. An octave count above 32 is refused. More than 64 erosion passes is refused.
 
 - The height is a sum of Perlin octaves from `ImprovedNoise`. A steep running slope damps each octave, so ridges stay sharp and valleys stay smooth.
 - A slow noise warps the sample point first, so the ridges wander.
@@ -62,18 +64,20 @@ A zero child count stops branching. A level past the end of a parameter list reu
 
 ## Forest
 
-`ForestGenerator(parameters).build(terrain)` scatters trees over a built terrain. It returns a `ForestInstances`: one blob geometry and one matrix a tree.
+`ForestGenerator(parameters).build(terrain)` scatters trees over a built terrain. It returns a `ForestInstances`: one blob geometry and one matrix a tree. Cull distances and the other parameters must be finite.
 
-- The blob is an icosahedron welded to twelve vertices. It is squashed into a lumpy teardrop, and its `ao` attribute runs from zero at the base to one at the crown.
+- The blob is an icosahedron welded to twelve vertices. It is squashed into a lumpy teardrop, and its `ao` attribute runs from zero at the base to one at the crown. A blob detail above 256 is refused.
 - A tree stands only in the altitude band, on ground flatter than `min_slope`, and inside a density mask of slow noise.
-- The draw stops after fourteen tries a tree.
+- The draw stops after fourteen tries a tree. A tree count whose fourteen tries do not fit in an integer is refused.
 - `instances.values` holds three.js's `cull` attribute, and `region` holds its color drift.
 
 The forest material culls far trees in a shader. `keeps(index, camera)` answers the same question on the CPU. A tree is drawn while its random threshold is at least its place in the band from `from_distance` to `to_distance`.
 
 ## City
 
-`CityGenerator(parameters).plan()` lays the city out. It gives every tower's parameters and every placement of the furniture, and builds nothing. `build()` builds everything. It returns a `City` with one geometry a tower, the sidewalk, and the furniture as `Instances`.
+`CityGenerator(parameters).plan()` lays the city out. It gives every tower's parameters and every placement of the furniture, and builds nothing. `build()` builds everything. It returns a `City` with one geometry a tower, the sidewalk, and the furniture as `Instances`. A lot, a street, and a sidewalk width must be finite.
+
+A lot, a street, or a sidewalk of 2000 meters or more is refused. More than 16 blocks or lots along one axis is refused. A block side of 2000 meters or more is refused.
 
 - The city is a grid of blocks. A block is cut into lots inside a sidewalk strip.
 - Each lot takes a skyscraper of its own seed, height and footprint. Only the four corner lots of a block cut a chamfer, toward their own corner.
@@ -96,6 +100,8 @@ The bake transforms normals as directions. A rigid placement rotates the normal 
 - The seed fills each style field that is left empty: the footprint, the tier split, the piers, the reveals and the arches.
 - The floor and the bay snap to the brick module, three tenths of a meter high and six tenths long.
 
+A face whose bay count passes 16777216 is refused. A tower whose floors times its bays passes 16777216 is refused.
+
 ## Street furniture
 
 Each piece is one merged geometry with a `partId`. `build(placements)` returns it as `Instances`, one matrix an instance. Each model stands on y equals zero and faces +z.
@@ -112,7 +118,7 @@ Each piece is one merged geometry with a `partId`. `build(placements)` returns i
 
 `CarGenerator().build(cars)` deals each car a body: `SEDAN`, `SUV` or `TAXI`. The taxi's yellow takes the taxi. It returns one set of instances a body, with the linear paint of each car in `values`.
 
-`PersonGenerator().build(placements)` deals each figure a pose, `WALK` or `STAND`, and its proportions. It returns the walking figures, then the standing figures. `values` holds each figure's seed.
+`PersonGenerator().build(placements)` deals each figure a pose, `WALK` or `STAND`, and its proportions. It returns the walking figures, then the standing figures. `values` holds each figure's seed. A person's height must be positive and finite.
 
 ## Loft
 

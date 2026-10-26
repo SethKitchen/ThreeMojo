@@ -282,7 +282,11 @@ def distance_arc_to_point(
     return (length, end_dist)
 
 
-def generate_range(a: Int, b: Int) -> List[Int]:
+# Inclusive. A wider list does not finish.
+comptime _MAX_GENERATED_RANGE = 16777216
+
+
+def generate_range(a: Int, b: Int) raises -> List[Int]:
     """Return the whole numbers from `a` to `b`, `Math::GenerateRange`.
 
     Args:
@@ -292,14 +296,34 @@ def generate_range(a: Int, b: Int) -> List[Int]:
     Returns:
         The list a, a + 1, ..., b when a < b, else a, a - 1, ..., b.
         Both ends are included.
+
+    Raises:
+        Error: If the list would hold more than 16777216 numbers.
     """
+    var low = a
+    var high = b
+    if high < low:
+        low = b
+        high = a
+    # `high - low` overflows when the ends are too far apart.
+    if low < 0 and high > Int.MAX + low:
+        raise Error("A generated range is larger than this port walks")
+    if high - low > _MAX_GENERATED_RANGE - 1:
+        raise Error("A generated range is larger than this port walks")
     var result = List[Int]()
+    var i = a
     if a < b:
-        for i in range(a, b + 1):  # pragma: no branch
+        while True:
             result.append(i)
+            if i == b:
+                break
+            i += 1
     else:
-        for i in range(a, b - 1, -1):  # pragma: no branch
+        while True:
             result.append(i)
+            if i == b:
+                break
+            i -= 1
     return result^
 
 

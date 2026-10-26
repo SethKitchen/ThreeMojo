@@ -280,6 +280,14 @@ def test_sweeps_measure_themselves() raises:
     assert_almost_equal(pow_mean(Vector3(1, 1, 1)), 1, atol=TOLERANCE)
     var path = spline_points(template_list(), 2)
     assert_equal(len(path), 5)
+    with assert_raises(contains="one sample"):
+        _ = spline_points(template_list(), 0)
+    with assert_raises(contains="one sample"):
+        _ = spline_points(template_list(), -1)
+    with assert_raises(contains="larger than this port"):
+        _ = spline_points(template_list(), 16777217)
+    with assert_raises(contains="larger than this port"):
+        _ = spline_points(template_list(), Int.MAX)
     assert_equal(len(floats(1, 2, 3)), 3)
     assert_equal(len(tube(template_list(), 0.01, 0.02).stations), 3)
 

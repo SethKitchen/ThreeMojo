@@ -47,7 +47,7 @@ three.js's helper materials are not tone mapped. Tone mapping here is applied on
 
 The colors are authored bytes, as three.js's `Color(0x444444)` is, and are decoded to linear light on the way in. See [Why color is linear](Why-color-is-linear).
 
-An odd division count has no center line. three.js compares the step to `divisions / 2`, a float that no integer step reaches when the count is odd. The lines straddle the origin, and none takes the center color. That is what three.js draws.
+An odd division count has no center line. three.js compares the step to `divisions / 2`, a float that no integer step reaches when the count is odd. The lines straddle the origin, and none takes the center color. That is what three.js draws. A division count above 16777216 is refused.
 
 ## PolarGridHelper
 
@@ -62,7 +62,7 @@ An odd division count has no center line. three.js compares the step to `divisio
 | `color1` | `Color(0x44, 0x44, 0x44)` | The odd spokes and rings. |
 | `color2` | `Color(0x88, 0x88, 0x88)` | The even spokes and rings, the first included. |
 
-A count must not be negative. A count of zero draws nothing of that part, so the result can be empty.
+A count must not be negative. A count of zero draws nothing of that part, so the result can be empty. A count above 16777216 is refused.
 
 ## BoxHelper
 
@@ -309,7 +309,7 @@ if gizmo.animating:
 | `update(delta, camera)` | Turn the camera by a `Duration`, a full turn in a second at most. It clears `animating` when the turn ends. |
 | `center` | The point the camera turns around. The origin by default. |
 
-`x` and `y` are pixels from the top left corner of the image, as the `clientX` and `clientY` of three.js are. The click finds the disk nearest to the camera of the helper, as the `Raycaster` of three.js does.
+`x` and `y` are pixels from the top left corner of the image, as the `clientX` and `clientY` of three.js are. The click finds the disk nearest to the camera of the helper, as the `Raycaster` of three.js does. A side above 16777216 pixels measures the helper's corner in `Float64`.
 
 The helper draws into a target of its own, cleared to transparent black. Then it blends that image over the corner of your image. Each translucent disk then looks the same as when it is drawn over your image directly. A target smaller than 128 pixels gets the part of the corner that fits.
 
@@ -372,6 +372,8 @@ three.js's helper is a group that copies the camera's position, rotation and sca
 `uvs_debug(geometry, size)` in `helpers/uvs_debug.mojo` draws a geometry's texture coordinates as an image. It is three.js's `UVsDebug`. Each triangle's outline is dark gray on white, where its coordinates put it.
 
 three.js also writes each triangle's number and each corner's letter on the image. This port has no canvas text. So `labels` holds each label: its text, its place, its size and its color. `outlines` holds each triangle's corners in pixels. A canvas antialiases its lines. Here a line is the pixels that a one-pixel pen crosses.
+
+A coordinate that does not fit in an integer is left off the image.
 
 ## Members
 

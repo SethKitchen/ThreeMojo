@@ -40,6 +40,7 @@ from postprocessing.temporal_denoise import (
     vogel_disk,
 )
 from render.framebuffer import FloatColor
+from std.math import nan
 from std.testing import (
     TestSuite,
     assert_almost_equal,
@@ -242,6 +243,27 @@ def denoise_inputs(
     )
 
 
+def test_a_depth_past_an_integer_reads_the_edge() raises:
+    var depth = List[Float32]()
+    for index in range(SIDE * SIDE):
+        depth.append(Float32(index))
+    var inputs = DenoiseInputs(
+        SIDE,
+        SIDE,
+        plane_of(FloatColor(0, 0, 0, 1)),
+        plane_of(FloatColor(0, 0, 0, 1)),
+        depth^,
+        plane_of(Vector3(0, 0, 1)),
+        Matrix4(),
+        Matrix4(),
+    )
+    assert_equal(inputs.depth_at(0.1, 0.1), 0)
+    assert_equal(inputs.depth_at(1, 0.1), 3)
+    assert_equal(inputs.depth_at(Float32(1e20), 0.1), 3)
+    assert_equal(inputs.depth_at(Float32(-1e20), 0.1), 0)
+    assert_equal(inputs.depth_at(nan[DType.float32](), 0.1), 0)
+
+
 def test_an_even_frame_denoises_to_karis_s_blend() raises:
     # Every tap is alike, so the denoise leaves the history and the raw
     # signal as they are and mixes them by Karis's weights.
@@ -369,6 +391,55 @@ def test_a_newer_neighbor_smooths_the_frame_count() raises:
             plane_of(Vector3(0, 0, 1)),
             Matrix4(),
             flat,
+        )
+
+
+def test_a_denoise_frame_must_fit() raises:
+    with assert_raises(contains="at least one pixel"):
+        _ = ReprojectInputs(
+            0,
+            1,
+            List[FloatColor](),
+            List[FloatColor](),
+            List[Float32](),
+            List[Float32](),
+            List[Vector3](),
+            List[Vector3](),
+            List[Vector2](),
+        )
+    with assert_raises(contains="at least one pixel"):
+        _ = DenoiseInputs(
+            1,
+            0,
+            List[FloatColor](),
+            List[FloatColor](),
+            List[Float32](),
+            List[Vector3](),
+            Matrix4(),
+            Matrix4(),
+        )
+    with assert_raises(contains="larger than this port"):
+        _ = ReprojectInputs(
+            1 << 32,
+            1 << 32,
+            List[FloatColor](),
+            List[FloatColor](),
+            List[Float32](),
+            List[Float32](),
+            List[Vector3](),
+            List[Vector3](),
+            List[Vector2](),
+        )
+    with assert_raises(contains="larger than this port"):
+        _ = DenoiseInputs(
+            1 << 32,
+            1 << 32,
+            List[FloatColor](),
+            List[FloatColor](),
+            List[Float32](),
+            List[Vector3](),
+            Matrix4(),
+            Matrix4(),
         )
 
 

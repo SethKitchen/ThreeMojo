@@ -363,11 +363,15 @@ struct MeshBuilder(Movable):
             inside_color: The bore's color.
 
         Raises:
-            Error: If the radii or the segments are not valid, or the ends
-                are the same point.
+            Error: If the radii or the segments are not valid, the segment
+                count is above 16777216, or the ends are the same point.
         """
         if segments < 3:
             raise Error("A tube needs at least three segments")
+        if segments > 16777216:
+            raise Error(
+                "A tube's segment count is larger than this port builds"
+            )
         if not (outer > 0 and inner >= 0 and inner < outer):
             raise Error("A tube's radii must have 0 <= inner < outer")
         var axis = end - start
@@ -454,12 +458,17 @@ struct MeshBuilder(Movable):
 
         Raises:
             Error: If the grid is smaller than 2 by 2, the spacings are not
-                positive, or the lists are the wrong length.
+                positive, the point count does not fit, or the lists are
+                the wrong length.
         """
         if columns < 2 or rows < 2:
             raise Error("A heightfield needs at least 2 by 2 points")
         if not (step_x > 0 and step_y > 0):
             raise Error("A heightfield's spacing must be positive")
+        # A grid of 2^32 by 2^32 wraps the point count to zero, so an
+        # empty height list looks complete and the loops do not finish.
+        if columns > Int.MAX // rows:
+            raise Error("A heightfield is larger than this port builds")
         if len(heights) != columns * rows:
             raise Error("A heightfield needs one height per point")
         if len(colors) != 0 and len(colors) != columns * rows:

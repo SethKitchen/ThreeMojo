@@ -275,10 +275,11 @@ int splat_metal_draw(SplatMetal *metal, int32_t ready) {
       if (sorted != r->order_made[slot]) {
         int32_t size;
         const void *order = words(r, TM_SPLAT_ORDER, &size);
-        if (order && (size_t)size * 4 <= r->order[slot].length) {
+        /* A missed copy must stay stale, so the next frame tries again. */
+        if (order && (size_t)size * 4 == (size_t)r->order[slot].length) {
           memcpy(r->order[slot].contents, order, (size_t)size * 4);
+          r->order_made[slot] = sorted;
         }
-        r->order_made[slot] = sorted;
       }
       int32_t size;
       const float *view = words(r, TM_SPLAT_VIEW, &size);

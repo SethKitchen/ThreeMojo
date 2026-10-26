@@ -58,12 +58,13 @@ from render.texture import (
     Filter,
     TexelType,
     Wrap,
+    gradient_sample_coordinate,
     mix_straight,
     require_float_linear,
     wrap_index,
 )
 from math.finite import require_finite
-from std.math import floor
+from std.math import floor, isfinite, isnan
 from core.ordinal import require_valid
 
 
@@ -539,7 +540,8 @@ struct Data3DTexture(Movable, VolumeSampler, VolumeTexels):
 
     def sample(self, s: Float32, t: Float32, r: Float32) -> FloatColor:
         """Return the color at a coordinate: GLSL's `texture` on a
-        `sampler3D`, by `filter_volume`.
+        `sampler3D`, by `filter_volume`. A coordinate past 1048576, or one
+        that is not finite, is reduced before the index is taken.
 
         Args:
             s: Across, zero at the first column's edge.
@@ -610,6 +612,28 @@ trait VolumeSampler:
         ...
 
 
+def _bounded_axis(value: Float32, mode: Wrap) -> Float32:
+    """Return a coordinate that can become a texel index.
+
+    A coordinate that is not finite is read at zero. A finite coordinate
+    past 1048576 is reduced by its wrap mode. A smaller coordinate is
+    unchanged, so an ordinary sample stays the same.
+
+    Args:
+        value: The coordinate on one axis.
+        mode: That axis's wrap mode.
+
+    Returns:
+        The coordinate the sampler indexes.
+
+    Raises:
+        Error: Never.
+    """
+    if not isfinite(value):
+        return 0
+    return gradient_sample_coordinate(value, mode)
+
+
 def filter_volume[
     T: VolumeTexels
 ](
@@ -631,7 +655,9 @@ def filter_volume[
     Under `NEAREST`, the texel the coordinate lands in. Under `BILINEAR`,
     the eight around it blended by distance, the texel centers at
     half-integers: trilinear in the sense of three axes, not of mip
-    levels. Each index is wrapped by its axis's mode.
+    levels. Each index is wrapped by its axis's mode. A coordinate past
+    1048576, or one that is not finite, is reduced before the index is
+    taken.
 
     Args:
         texels: Where the texels are read from.
@@ -649,18 +675,21 @@ def filter_volume[
     Returns:
         The color, straight.
     """
+    var ss = _bounded_axis(s, wrap_s)
+    var tt = _bounded_axis(t, wrap_t)
+    var rr = _bounded_axis(r, wrap_r)
     var wide = Float32(width)
     var tall = Float32(height)
     var deep = Float32(depth)
     if filter == NEAREST:
         return texels.texel_at(
-            wrap_index(Int(floor(s * wide)), width, wrap_s),
-            wrap_index(Int(floor(t * tall)), height, wrap_t),
-            wrap_index(Int(floor(r * deep)), depth, wrap_r),
+            wrap_index(Int(floor(ss * wide)), width, wrap_s),
+            wrap_index(Int(floor(tt * tall)), height, wrap_t),
+            wrap_index(Int(floor(rr * deep)), depth, wrap_r),
         )
-    var across = s * wide - 0.5
-    var up = t * tall - 0.5
-    var into = r * deep - 0.5
+    var across = ss * wide - 0.5
+    var up = tt * tall - 0.5
+    var into = rr * deep - 0.5
     var x = Int(floor(across))
     var y = Int(floor(up))
     var z = Int(floor(into))
@@ -857,7 +886,8 @@ def array_layer(layer: Float32, depth: Int) -> Int:
     """Return the layer a `sampler2DArray` reads for a layer coordinate.
 
     The OpenGL rule: round to the nearest whole number, then hold it
-    inside the stack. `floor(layer + 0.5)`, so a half rounds up.
+    inside the stack. `floor(layer + 0.5)`, so a half rounds up. A
+    coordinate that is not a number reads the first layer.
 
     Args:
         layer: The coordinate, a layer number, fractional.
@@ -867,6 +897,8 @@ def array_layer(layer: Float32, depth: Int) -> Int:
         A layer, zero through `depth - 1`.
     """
     var rounded = floor(layer + 0.5)
+    if isnan(rounded):
+        return 0
     if rounded < 0:
         return 0
     if rounded > Float32(depth - 1):
@@ -983,7 +1015,10 @@ struct DataArrayTexture(Movable, VolumeTexels):
 
         The layer is `array_layer` of the third coordinate. Within it,
         `NEAREST` takes the texel the coordinate lands in and `BILINEAR`
-        blends the four around it. Two layers are never blended.
+        blends the four around it. Two layers are never blended. A
+        coordinate past 1048576, or one that is not finite, is reduced
+        before the index is taken. A layer that is not a number reads the
+        first layer.
 
         Args:
             u: Across, zero at the first column's edge.
@@ -1026,7 +1061,9 @@ def filter_array[
 
     The layer is `array_layer` of the third coordinate. Within it,
     `NEAREST` takes the texel the coordinate lands in and `BILINEAR`
-    blends the four around it. Two layers are never blended.
+    blends the four around it. Two layers are never blended. A coordinate
+    past 1048576, or one that is not finite, is reduced before the index
+    is taken. A layer that is not a number reads the first layer.
 
     Args:
         texels: Where the texels are read from.
@@ -1044,16 +1081,18 @@ def filter_array[
         The color, straight.
     """
     var slice = array_layer(layer, depth)
+    var su = _bounded_axis(u, wrap_s)
+    var sv = _bounded_axis(v, wrap_t)
     var wide = Float32(width)
     var tall = Float32(height)
     if filter == NEAREST:
         return texels.texel_at(
-            wrap_index(Int(floor(u * wide)), width, wrap_s),
-            wrap_index(Int(floor(v * tall)), height, wrap_t),
+            wrap_index(Int(floor(su * wide)), width, wrap_s),
+            wrap_index(Int(floor(sv * tall)), height, wrap_t),
             slice,
         )
-    var across = u * wide - 0.5
-    var up = v * tall - 0.5
+    var across = su * wide - 0.5
+    var up = sv * tall - 0.5
     var x = Int(floor(across))
     var y = Int(floor(up))
     var fx = across - Float32(x)

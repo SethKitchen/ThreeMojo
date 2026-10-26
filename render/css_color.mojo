@@ -31,11 +31,12 @@ Here that string is refused.
 """
 
 from loaders.bytes import ascii_digit, ascii_space, hex_digit_value
+from loaders.js_number import js_to_fixed
 from loaders.js_text import is_js_word
 from render.framebuffer import FloatColor
 from render.srgb import LINEAR, SRGB, ColorSpace, linear_to_srgb, srgb_to_linear
-from math.utils import js_round_int
-from std.math import floor
+from math.utils import js_round
+from std.math import isfinite
 
 # The CSS color names and their sRGB values, three.js's `Color.NAMES`, in
 # its order.
@@ -663,17 +664,45 @@ def _from_hex(value: Int, space: ColorSpace) raises -> FloatColor:
     )
 
 
-def _fixed3(value: Float32) -> String:
-    """Return `value` with three decimals, as JavaScript's `toFixed(3)`
-    writes it: a tie rounds away from zero, and a negative value keeps its
-    sign even when it rounds to zero."""
-    var magnitude = abs(Float64(value))
-    var thousandths = Int(floor(magnitude * 1000 + 0.5))
-    var fraction = String(thousandths % 1000)
-    while fraction.byte_length() < 3:
-        fraction = "0" + fraction
-    var sign = "-" if value < 0 else ""
-    return sign + String(thousandths // 1000) + "." + fraction
+def _fixed3(value: Float32) raises -> String:
+    """Return `value` with three decimals, JavaScript's `toFixed(3)`.
+
+    A tie rounds away from zero. A negative value keeps its sign even
+    when it rounds to zero. From `1e21` up, and for NaN and the
+    infinities, the text is JavaScript's `String`.
+
+    Args:
+        value: The channel.
+
+    Returns:
+        The text.
+
+    Raises:
+        Error: If the digit count is refused. This call passes three.
+    """
+    return js_to_fixed(Float64(value), 3)
+
+
+def _channel_text(value: Float32) raises -> String:
+    """Return one encoded channel as JavaScript's `Math.round` writes it.
+
+    Args:
+        value: The linear channel.
+
+    Returns:
+        The whole number. A rounded value at or past 2^63, or one that
+        is not finite, is written by `toFixed`, which uses exponent text
+        from `1e21`.
+
+    Raises:
+        Error: If the digit count is refused. This call passes zero.
+    """
+    var rounded = js_round(Float64(linear_to_srgb(value)) * 255)
+    # `Float64(Int.MAX)` is 2^63. `Int` of a float at or past it is not
+    # the number. From 2^53 the value is already a whole number.
+    if not isfinite(rounded) or abs(rounded) >= Float64(Int.MAX):
+        return js_to_fixed(rounded, 0)
+    return String(Int(rounded))
 
 
 def format_style(color: FloatColor, space: ColorSpace = SRGB) raises -> String:
@@ -696,11 +725,11 @@ def format_style(color: FloatColor, space: ColorSpace = SRGB) raises -> String:
     if space == SRGB:
         return (
             "rgb("
-            + String(js_round_int(Float64(linear_to_srgb(color.r)) * 255))
+            + _channel_text(color.r)
             + ","
-            + String(js_round_int(Float64(linear_to_srgb(color.g)) * 255))
+            + _channel_text(color.g)
             + ","
-            + String(js_round_int(Float64(linear_to_srgb(color.b)) * 255))
+            + _channel_text(color.b)
             + ")"
         )
     if space != LINEAR:

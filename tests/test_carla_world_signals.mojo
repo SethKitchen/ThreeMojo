@@ -1179,6 +1179,25 @@ def test_parts_on_empty_input() raises:
     assert_equal(len(m.notified), 0)
 
 
+def test_stop_waypoints_refuse_an_extent_that_does_not_finish() raises:
+    var empty = load_opendrive("<OpenDRIVE></OpenDRIVE>")
+    var pose = _pose(0, 0, 0, 0)
+    # 1e7 m still steps, and the step count does not finish.
+    var wide = BoundingBox(Vector3(0, 0, 0), Vector3(1e7, 1, 1))
+    with assert_raises(contains="larger than this port"):
+        _ = stop_waypoints(empty, pose, wide)
+    # 2e7 m does not move when the walk adds one meter.
+    var stuck = BoundingBox(Vector3(0, 0, 0), Vector3(2e7, 1, 1))
+    with assert_raises(contains="larger than this port"):
+        _ = stop_waypoints(empty, pose, stuck)
+    var bad = BoundingBox(Vector3(0, 0, 0), Vector3(1, 1, 1))
+    bad.extent.x = inf[DType.float32]()
+    with assert_raises(contains="must be finite"):
+        _ = stop_waypoints(empty, pose, bad)
+    var zero = BoundingBox(Vector3(0, 0, 0), Vector3(0, 1, 1))
+    assert_equal(len(stop_waypoints(empty, pose, zero)), 0)
+
+
 def test_stop_waypoints_across_lanes_and_roads() raises:
     var map = load_opendrive(_town())
     # Across road 1 at x = 20, from y = -2.7 to 2.3: lane 1, then lane -1.

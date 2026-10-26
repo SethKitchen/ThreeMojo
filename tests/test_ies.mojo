@@ -26,7 +26,7 @@ from loaders.ies import (
 )
 from loaders.json import JsonDocument, parse_json
 from render.exr import half_to_float
-from std.math import isnan, nan
+from std.math import inf, isnan, nan
 from std.pathlib import Path
 from std.testing import (
     TestSuite,
@@ -130,6 +130,11 @@ def test_textures() raises:
     assert_false(IesType(-1).is_valid())
     assert_equal(ies_byte(-0.0347222238779068), 248)
     assert_equal(ies_byte(2), 255)
+    # A positive product is held at 255. A negative product at or past
+    # 2^63, and negative infinity, are zero.
+    assert_equal(ies_byte(1e20), 255)
+    assert_equal(ies_byte(-1e20), 0)
+    assert_equal(ies_byte(-inf[DType.float64]()), 0)
     # Halves: zero, a tiny value, a subnormal, a normal one, one past the
     # range and a negative one.
     assert_equal(to_half_float(0), 0)
@@ -157,6 +162,8 @@ def test_refusals() raises:
         _ = parse_ies(head + "0 1e999\n")
     with assert_raises(contains="vertical angles is not a whole number"):
         _ = parse_ies("TILT=NONE\n1 1 1 2.5 1 1 1 0 0 0\n1 1 1\n")
+    with assert_raises(contains="vertical angles is not a whole number"):
+        _ = parse_ies("TILT=NONE\n1 1 1 1e20 1 1 1 0 0 0\n1 1 1\n")
     with assert_raises(contains="horizontal angles is not a whole number"):
         _ = parse_ies("TILT=NONE\n1 1 1 2 -1 1 1 0 0 0\n1 1 1\n")
     with assert_raises(contains="tilt angles is not a whole number"):

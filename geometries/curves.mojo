@@ -36,6 +36,14 @@ def _check_order(order: List[Int], count: Int) raises:
             raise Error("A Hilbert curve visits each corner once")
 
 
+# One more split multiplies the points by four or by eight. Eleven splits
+# of a square, and seven of a cube, are 16777216 points. The next split
+# does not finish, and a count near `Int.MAX` never returns from the
+# recursion.
+comptime MAX_HILBERT2D_ITERATIONS = 11
+comptime MAX_HILBERT3D_ITERATIONS = 7
+
+
 def require_hilbert_iterations(iterations: Int) raises:
     """Refuse a Hilbert curve with a negative iteration count.
 
@@ -73,10 +81,14 @@ def hilbert2d(
         Four points for each cell, in the order the curve visits them.
 
     Raises:
-        Error: If `iterations` is negative, or `order` is not the four
-            corners once each.
+        Error: If `iterations` is negative or above 11, or `order` is not
+            the four corners once each.
     """
     require_hilbert_iterations(iterations)
+    if iterations > MAX_HILBERT2D_ITERATIONS:
+        raise Error(
+            "A Hilbert square's iteration count is larger than this port builds"
+        )
     _check_order(order, 4)
     var out = List[Vector3]()
     _hilbert2d(out, center, size.to(METER), iterations, order)
@@ -134,10 +146,14 @@ def hilbert3d(
         Eight points for each cell, in the order the curve visits them.
 
     Raises:
-        Error: If `iterations` is negative, or `order` is not the eight
-            corners once each.
+        Error: If `iterations` is negative or above 7, or `order` is not
+            the eight corners once each.
     """
     require_hilbert_iterations(iterations)
+    if iterations > MAX_HILBERT3D_ITERATIONS:
+        raise Error(
+            "A Hilbert cube's iteration count is larger than this port builds"
+        )
     _check_order(order, 8)
     var out = List[Vector3]()
     _hilbert3d(out, center, size.to(METER), iterations, order)

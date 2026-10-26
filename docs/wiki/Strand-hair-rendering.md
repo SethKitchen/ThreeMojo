@@ -6,7 +6,9 @@ It does not use sorted alpha blending. Issue [298](https://github.com/SethKitche
 
 ## Draw a groom
 
-Use `add_groom` to grow and attach a humanoid groom. Use `add_strands` to attach a `HairGroom` that already exists. Both return `HairStrands` and create one geometry, one material and one child node. The child starts on its parent's current layers.
+Use `add_groom` to grow and attach a humanoid groom. Use `add_strands` to attach a `HairGroom` that already exists. Both return `HairStrands` and create one geometry, one material and one child node. The child starts on its parent's current layers. A hair step that is not a positive length is refused. A step count above 16777216 is refused.
+
+A guide count outside one through 20000 is refused. A follower count outside zero through 64 is refused. A root try count below zero is refused. A root try count above 16777216 is refused.
 
 Its layers can then be set separately.
 
@@ -62,7 +64,7 @@ The existing `HairLook.shadows` limit still bounds the darkness. The scalp-facin
 
 ## Motion fields
 
-`HairSimulation.step` reuses its particle arrays. It does not allocate a work list for each strand on every step. By default every follower has its own simulated particles. With `guides_only=True` the step lays each follower from its moved guide. No GPU dynamics are used.
+`HairSimulation.step` reuses its particle arrays. It does not allocate a work list for each strand on every step. By default every follower has its own simulated particles. With `guides_only=True` the step lays each follower from its moved guide. No GPU dynamics are used. A settle count above 16777216 is refused.
 
 `write` checks the strand topology before changing the groom. It rotates each rest normal with the shortest rotation of the local tangent. A reversed tangent uses a deterministic half-turn axis. The scalp-depth value is a rest-surface proxy: outward displacement reduces it, and inward displacement increases it.
 

@@ -24,6 +24,8 @@ from loaders.json import BOOLEAN, JsonDocument, NULL, NUMBER, STRING, parse_json
 from loaders.lwo import (
     _MaterialParser,
     _Params,
+    _split_indices,
+    _split_material_indices,
     LwoMap,
     LwoMaterial,
     LwoMesh,
@@ -379,6 +381,58 @@ def test_auv_normal_chunk_is_skipped_in_lwo2() raises:
     ]
     var tree = parse_lwo_tree(bytes)
     assert_equal(tree.format, "LWO2")
+
+
+def test_a_polygon_corner_count_that_does_not_fit_is_refused() raises:
+    var indices = List[Float64]()
+    indices.append(0)
+    indices.append(1)
+    indices.append(2)
+    var triangle = List[Float64]()
+    triangle.append(3)
+    var split = _split_indices(indices, triangle)
+    assert_equal(len(split), 3)
+    assert_equal(split[0], 0)
+    assert_equal(split[2], 2)
+    var huge = List[Float64]()
+    huge.append(1e20)
+    huge.append(3)
+    with assert_raises(contains="does not fit"):
+        _ = _split_indices(indices, huge)
+    with assert_raises(contains="does not fit"):
+        _ = _split_material_indices(huge, indices)
+    var negative = List[Float64]()
+    negative.append(-1)
+    with assert_raises(contains="does not fit"):
+        _ = _split_indices(indices, negative)
+    var fraction = List[Float64]()
+    fraction.append(3.5)
+    with assert_raises(contains="whole number"):
+        _ = _split_indices(indices, fraction)
+    var wide = List[Float64]()
+    wide.append(5)
+    with assert_raises(contains="past its indices"):
+        _ = _split_indices(indices, wide)
+    # A vertex index of 1e20 is not a point. `Int` of it is the minimum
+    # integer, which the later range check keeps.
+    var named = List[Float64]()
+    named.append(1e20)
+    named.append(1)
+    named.append(2)
+    with assert_raises(contains="index does not fit"):
+        _ = _split_indices(named, triangle)
+    var backwards = List[Float64]()
+    backwards.append(-1)
+    backwards.append(0)
+    backwards.append(1)
+    with assert_raises(contains="index does not fit"):
+        _ = _split_indices(backwards, triangle)
+    var half = List[Float64]()
+    half.append(1.5)
+    half.append(0)
+    half.append(1)
+    with assert_raises(contains="index must be a whole number"):
+        _ = _split_indices(half, triangle)
 
 
 def main() raises:

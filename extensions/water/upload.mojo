@@ -135,7 +135,8 @@ def glare_grid(
         The width and the height of the glare grid.
 
     Raises:
-        Error: If the kernels cannot be made.
+        Error: If the kernels cannot be made, or the image is below one
+            pixel either way.
     """
     if not scene._glare:
         scene._glare = glare_kernels(scene.glare_resolution)

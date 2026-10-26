@@ -47,6 +47,8 @@ The grid has four lines along the footprint's longest edge: 0.5 m inside each lo
 
 The crown's columns stand on the shaft's columns, because both come from one grid. The [structural view](Frame-analysis) can then carry the crown's loads to the ground.
 
+A frame whose column count passes 16777216 is refused.
+
 ## Use the tower
 
 ```mojo

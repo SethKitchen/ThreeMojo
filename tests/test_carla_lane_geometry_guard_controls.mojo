@@ -5,7 +5,12 @@
 
 """Finite tiny-curvature and canonical derivative boundary controls."""
 
-from extensions.carla.geometry import ARC, LINE, RoadGeometry
+from extensions.carla.geometry import (
+    ARC,
+    LINE,
+    RoadGeometry,
+    with_spiral_si,
+)
 from extensions.carla.lane_geometry import (
     _lane_arc_offset,
     _lane_arc_offset_derivative,
@@ -60,6 +65,22 @@ def test_canonical_derivative_keeps_both_clamped_sides_zero() raises:
         assert_equal(
             _lane_geometry_derivative_at(geometry, distance), (1.0, 0.0, 0.0)
         )
+
+
+def test_canonical_spiral_derivative_refuses_a_finite_piece_count() raises:
+    # 1e18 fits in an integer. The quadrature would not finish.
+    var geometry = with_spiral_si(
+        RoadGeometry.from_meters(LINE, 0.0, 0.0, 0.0, 0.0, 2.0), 1e18, 1e18
+    )
+    with assert_raises(contains="spiral work limit"):
+        _ = _lane_geometry_derivative_at(geometry, 2.0)
+    var smooth = with_spiral_si(
+        RoadGeometry.from_meters(LINE, 0.0, 0.0, 0.0, 0.0, 2.0), 0.1, 0.1
+    )
+    var derivative = _lane_geometry_derivative_at(smooth, 0.0)
+    assert_almost_equal(derivative[0], 1.0, atol=1e-12, rtol=0)
+    assert_almost_equal(derivative[1], 0.0, atol=1e-12, rtol=0)
+    assert_almost_equal(derivative[2], 0.1, atol=1e-12, rtol=0)
 
 
 def main() raises:

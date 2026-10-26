@@ -248,6 +248,36 @@ def test_a_line_is_clipped_to_the_image() raises:
     assert_equal(lit(target), 8)
 
 
+def test_an_endpoint_past_an_integer_lies_past_the_image() raises:
+    var far = Float32(1e20)
+    var near = Float32(-1e20)
+    # Both ends on one side of every image: one step, and it is not here.
+    assert_equal(span_of(Vector2(far, 0.5), Vector2(far, 0.5)), 1)
+    assert_equal(major_at(Vector2(far, 0.5), Vector2(far, 0.5), 0), 1 << 62)
+    assert_equal(
+        major_at(Vector2(near, 0.5), Vector2(near, 0.5), 0), -(1 << 62)
+    )
+    assert_equal(span_of(Vector2(near, 0.5), Vector2(far, 0.5)), Int.MAX)
+    assert_false(covers(Vector2(far, 0.5), Vector2(far, 0.5), 4, 0))
+    assert_false(covers(Vector2(near, 3.5), Vector2(near, 3.5), 0, 3))
+    # A finite end still names the pixels the line crosses on the image.
+    var onto = Vector2(3.5, 0.5)
+    assert_true(covers(Vector2(near, 0.5), onto, 0, 0))
+    assert_true(covers(Vector2(near, 0.5), onto, 3, 0))
+    assert_false(covers(Vector2(near, 0.5), onto, 4, 0))
+    assert_equal(other_at(Vector2(0.5, far), Vector2(4.5, far), 2), 1 << 62)
+    var off = RenderTarget(8, 8, Color(0, 0, 0))
+    rasterize_line(end(far, 0.5), end(far, 0.5), off)
+    rasterize_line(end(near, 3.5), end(near, 3.5), off)
+    rasterize_line(end(nan[DType.float32](), 3.5), end(4.5, 3.5), off)
+    assert_equal(lit(off), 0)
+    var crossing = RenderTarget(8, 8, Color(0, 0, 0))
+    rasterize_line(end(near, 0.5), end(3.5, 0.5), crossing)
+    assert_equal(lit(crossing), 4)
+    for x in range(4):
+        assert_true(is_lit(crossing, x, 0))
+
+
 def test_a_row_range_outside_the_image_is_held_inside_it() raises:
     # A band's rows are always inside, but the argument is public and a
     # caller may name rows the image does not have.

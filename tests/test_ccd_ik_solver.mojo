@@ -246,6 +246,24 @@ def test_the_solver_refuses_what_it_cannot_solve() raises:
     chains.append(backward^)
     with assert_raises(contains="negative"):
         _ = CCDIKSolver(scene, 0, chains^)
+    var too_many = reach(two_links())
+    too_many.iteration = 16777217
+    chains = List[IkChain]()
+    chains.append(too_many^)
+    with assert_raises(contains="larger than this port"):
+        _ = CCDIKSolver(scene, 0, chains^)
+    var maximum = reach(two_links())
+    maximum.iteration = Int.MAX
+    chains = List[IkChain]()
+    chains.append(maximum^)
+    with assert_raises(contains="larger than this port"):
+        _ = CCDIKSolver(scene, 0, chains^)
+    var at_cap = IkChain(3, 2, List[IkLink]())
+    at_cap.iteration = 16777216
+    chains = List[IkChain]()
+    chains.append(at_cap^)
+    var capped = CCDIKSolver(scene, 0, chains^)
+    capped.update(scene)
     for wrong in [Float32(-0.5), Float32(1.5)]:
         var blended = reach(two_links())
         blended.blend_factor = wrong

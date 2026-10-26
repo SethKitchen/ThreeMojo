@@ -68,6 +68,7 @@ from extensions.carla.render_weather import (
 from extensions.carla.weather import WeatherParameters
 from math.noise import ImprovedNoise
 from math.smoothstep import smoothstep
+from math.utils import texel_ndc
 from math.vector3 import Vector3
 from objects.sky import Sky
 from render.cube_texture import (
@@ -316,6 +317,8 @@ def _ground_color(ground: Float32) -> FloatColor:
 def texel_solid_angle(x: Int, y: Int, size: Int) -> Float32:
     """Return the solid angle a cube face's texel covers.
 
+    A face above 8388608 texels measures the center in `Float64`.
+
     Args:
         x: The texel's column.
         y: The texel's row.
@@ -325,8 +328,14 @@ def texel_solid_angle(x: Int, y: Int, size: Int) -> Float32:
         `(2 / size)^2 / (1 + a^2 + b^2)^1.5`, with `a` and `b` the texel
         center's place on the face, from -1 to 1.
     """
-    var a = (Float32(x) + 0.5) / Float32(size) * 2 - 1
-    var b = (Float32(y) + 0.5) / Float32(size) * 2 - 1
+    var a: Float32
+    var b: Float32
+    if size > 8388608:
+        a = texel_ndc(x, size)
+        b = texel_ndc(y, size)
+    else:
+        a = (Float32(x) + 0.5) / Float32(size) * 2 - 1
+        b = (Float32(y) + 0.5) / Float32(size) * 2 - 1
     var side = Float32(2) / Float32(size)
     return side * side / pow(1 + a * a + b * b, Float32(1.5))
 

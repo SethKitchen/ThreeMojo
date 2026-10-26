@@ -260,6 +260,48 @@ def object_uuid(kind: Int, index: Int) -> String:
     return out + String(unsafe_from_utf8=digits)
 
 
+def _matrix_texture_side(count: Int) raises -> Int:
+    """Return the side of three.js's instance-matrix texture.
+
+    Four texels hold one matrix. The side is a multiple of four, and at
+    least four. The count is multiplied in `Float64`. A count past 2^53
+    is not an exact integer there, so it is refused before the product
+    wraps.
+
+    Args:
+        count: How many instance matrices.
+
+    Returns:
+        The side, in texels.
+
+    Raises:
+        Error: If the count is past 2^53.
+    """
+    if count > 9007199254740992:
+        raise Error("A batched mesh texture does not fit")
+    return max(Int(ceil(sqrt(Float64(count) * 4) / 4)) * 4, _MATRICES_SIDE)
+
+
+def _instance_texture_side(count: Int) raises -> Int:
+    """Return the side of three.js's indirect and color textures.
+
+    One texel holds one instance. A count past 2^53 is refused, as
+    `_matrix_texture_side` refuses it.
+
+    Args:
+        count: How many instances.
+
+    Returns:
+        The side, in texels. Zero when there are no instances.
+
+    Raises:
+        Error: If the count is past 2^53.
+    """
+    if count > 9007199254740992:
+        raise Error("A batched mesh texture does not fit")
+    return Int(ceil(sqrt(Float64(count))))
+
+
 def _matrix(mut writer: JsonWriter, matrix: Matrix4) raises:
     """Write a matrix's sixteen numbers, column by column."""
     var values = copy_elements(matrix.elements)
@@ -1935,9 +1977,7 @@ struct _Writer(Movable):
         writer.boolean(True)
         # three.js's `_initMatricesTexture`: four texels a matrix, in a
         # square whose side is a multiple of four.
-        var side = max(
-            Int(ceil(sqrt(Float64(count * 4)) / 4)) * 4, _MATRICES_SIDE
-        )
+        var side = _matrix_texture_side(count)
         var matrices = List[Float32](length=side * side * 4, fill=0)
         for at in range(count):
             ref matrix = batch.instances[at].matrix
@@ -1951,7 +1991,7 @@ struct _Writer(Movable):
         )
         # `_initIndirectTexture` and `_initColorsTexture`: a texel an
         # instance. The indirect texture is filled when three.js draws.
-        var square = Int(ceil(sqrt(Float64(count))))
+        var square = _instance_texture_side(count)
         writer.key("indirectTexture")
         writer.raw(
             self.library.data_texture(

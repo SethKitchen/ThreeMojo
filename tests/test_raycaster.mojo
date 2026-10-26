@@ -225,6 +225,22 @@ def test_a_pixel_ray_passes_through_what_the_camera_projected_there() raises:
     assert_point(caster.ray.direction, 0, 0, -1)
 
 
+def test_a_wide_image_keeps_the_last_pixel_inside() raises:
+    var scene = Scene()
+    var camera = square_camera()
+    var wide = 16777217
+    var last = down_z()
+    last.set_from_pixel(Float32(wide - 1), 0.5, wide, 100, camera, scene)
+    var edge = down_z()
+    edge.set_from_camera(Vector2(1, 0), camera, scene)
+    assert_true(last.ray.direction.x < edge.ray.direction.x)
+    var tall = down_z()
+    tall.set_from_pixel(0.5, Float32(wide - 1), 100, wide, camera, scene)
+    var bottom = down_z()
+    bottom.set_from_camera(Vector2(0, -1), camera, scene)
+    assert_true(tall.ray.direction.y > bottom.ray.direction.y)
+
+
 def test_a_pixel_ray_refuses_an_image_with_no_size() raises:
     var scene = Scene()
     var caster = down_z()

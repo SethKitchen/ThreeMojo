@@ -128,10 +128,60 @@ def test_the_mesher_refuses_what_it_cannot_mesh() raises:
         _ = mesh_surface(
             _Ball(0.1), Vector3(-1, -1, -1), Vector3(1, 1, 1), 7, "ball"
         )
+    with assert_raises(contains="larger than this port"):
+        _ = mesh_surface(
+            _Ball(0.1),
+            Vector3(-1, -1, -1),
+            Vector3(1, 1, 1),
+            8,
+            "ball",
+            smoothing=16777217,
+        )
+    with assert_raises(contains="larger than this port"):
+        _ = mesh_surface(
+            _Ball(0.1),
+            Vector3(-1, -1, -1),
+            Vector3(1, 1, 1),
+            8,
+            "ball",
+            smoothing=Int.MAX,
+        )
     # A box that holds none of the surface.
     with assert_raises(contains="no surface"):
         _ = mesh_surface(
             _Ball(0.1), Vector3(1, 1, 1), Vector3(1.2, 1.2, 1.2), 8, "ball"
+        )
+    with assert_raises(contains="larger than this port"):
+        _ = mesh_surface(
+            _Ball(0.1), Vector3(0, 0, 0), Vector3(1, 0, 1), 8, "flat"
+        )
+    with assert_raises(contains="larger than this port"):
+        _ = mesh_surface(
+            _Ball(0.1), Vector3(0, 0, 0), Vector3(-1, 1, 1), 8, "back"
+        )
+    with assert_raises(contains="larger than this port"):
+        _ = mesh_surface(
+            _Ball(0.1),
+            Vector3(0, 0, 0),
+            Vector3(Float32(1e20), 1, 1),
+            8,
+            "long",
+        )
+    with assert_raises(contains="larger than this port"):
+        _ = mesh_surface(
+            _Ball(0.1),
+            Vector3(0, 0, 0),
+            Vector3(Float32(1 << 57), 1, 1),
+            8,
+            "longer",
+        )
+    with assert_raises(contains="larger than this port"):
+        _ = mesh_surface(
+            _Ball(0.1),
+            Vector3(0, 0, 0),
+            Vector3(Float32(1 << 27), 1, Float32(1 << 27)),
+            8,
+            "wide",
         )
 
 

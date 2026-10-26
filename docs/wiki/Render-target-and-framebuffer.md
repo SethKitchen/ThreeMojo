@@ -68,9 +68,11 @@ This port differs from three.js in three ways:
 - The alpha of `rgba` and `hsla` is read and then dropped, as in three.js. The color is opaque.
 - A space is an ASCII space, tab or line break. JavaScript also accepts the Unicode spaces.
 
-`format_style(color, space=SRGB)` and `hex_string(color)` write a color back. `format_style` does not clamp a channel above one or below zero, as three.js does not.
+`format_style(color, space=SRGB)` and `hex_string(color)` write a color back. `format_style` does not clamp a channel above one or below zero, as three.js does not. A channel whose rounded value does not fit in an integer is written as `toFixed` writes it.
 
 ## RenderTarget
+
+A width or a height below one is refused. A pixel count that does not fit in an integer is refused.
 
 | Member | Meaning |
 |---|---|
@@ -228,7 +230,7 @@ var target = RenderTarget(WIDTH, HEIGHT, Color(0, 0, 0), FLOAT_TARGET, samples=4
 renderer.render_into(target, scene, assets, camera)
 ```
 
-The samples lie on a regular grid inside each pixel. So the count must be zero, one, or a square: 4, 9 or 16. `check_samples` refuses any other count, and `MAX_SAMPLES` is 16. `sample_grid(samples)` gives the side of the grid.
+The samples lie on a regular grid inside each pixel. So the count must be zero, one, or a square: 4, 9 or 16. `check_samples` refuses any other count, and `MAX_SAMPLES` is 16. `sample_grid(samples)` gives the side of the grid. A count past sixteen still gives a side of four.
 
 `render_into` draws the frame with `Renderer.multisampled(samples)`, a renderer `sample_grid(samples)` times the size. It draws into `multisample_buffer()`, then calls `resolve_samples`. Each sample of that buffer starts as its pixel. Only the pixels inside the scissor are resolved, so a scissored draw keeps the other pixels.
 
@@ -311,7 +313,7 @@ A 2D source region is a `Rect`. A volume source region is a `TexelBox`: a corner
 
 A copy into level zero of a texture with a chain rebuilds the chain with `Texture.regenerate_mipmaps`. three.js calls `generateMipmap` in the same case.
 
-`copy_framebuffer_to_texture` copies a rectangle the size of the texture's level. From a `Framebuffer` it copies the sRGB bytes into a byte texture. The default `SRGB` color space of `framebuffer_texture` reads them back as the light they show. From a `RenderTarget` it copies `attachment(0)`: a byte target fills a byte texture, and a half float or float target fills a float texture.
+`copy_framebuffer_to_texture` copies a rectangle the size of the texture's level. From a `Framebuffer` it copies the sRGB bytes into a byte texture. The default `SRGB` color space of `framebuffer_texture` reads them back as the light they show. From a `RenderTarget` it copies `attachment(0)`: a byte target fills a byte texture, and a half float or float target fills a float texture. A byte target's channel is held from zero to one and rounded to a byte. NaN and positive infinity are 255, and negative infinity is zero.
 
 `GpuRenderer.copy_framebuffer_to_texture(texture, position, level)` does the same copy from the device's image. See [GPU backend](GPU-backend#gpurenderer).
 
@@ -356,7 +358,7 @@ Bit-for-bit equality with another implementation is not promised, because `exp2`
 
 The pixel layout is row-major RGBA from the top, the same as a `Texture`. An image this renderer produces can be fed back in as a texture.
 
-Every accessor raises for a coordinate outside the image.
+A width or a height below one is refused. A byte count that does not fit in an integer is refused. Every accessor raises for a coordinate outside the image.
 
 ## Why
 

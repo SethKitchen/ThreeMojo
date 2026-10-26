@@ -111,6 +111,8 @@ The window manager's close button does not close the window. It sets `close_requ
 ### What is refused
 
 - A size that is not positive.
+- A size that does not fit in a native integer.
+- A size whose four bytes a pixel do not fit in an integer.
 - A display that cannot be opened.
 - A display whose visual is not 24-bit TrueColor with red in the high byte.
 - A frame of another size.
@@ -134,7 +136,7 @@ The window manager's close button does not close the window. It sets `close_requ
 | `WHEEL` | `wheel` | `wheel`: 1 a notch toward the user, -1 away |
 | `RESIZE` | the window's `resize` | `x` and `y`: the size of the largest frame that fits |
 
-Every event also carries `shift`, `alt` and `ctrl`. The window gives `x` and `y` in the frame's pixels. The decoder gives a cell's column and row, from zero.
+Every event also carries `shift`, `alt` and `ctrl`. The window gives `x` and `y` in the frame's pixels. The decoder gives a cell's column and row, from zero. `pixel_center_ndc` reads a pixel's center. A side above 8388608 pixels is measured in `Float64`.
 
 `InputKind`, `PointerButton` and `Key` are types, not bare integers. A `Key` is an ASCII code from 0 to 127, one of `ARROW_UP`, `ARROW_DOWN`, `ARROW_LEFT` and `ARROW_RIGHT`, or `NO_KEY`. The buttons are `PRIMARY`, `MIDDLE` and `SECONDARY`, with the browser's numbers.
 
@@ -194,17 +196,19 @@ Every event also carries `shift`, `alt` and `ctrl`. The window gives `x` and `y`
 
 The camera's offset from the target is a radius and two angles, as three.js's `Spherical` holds them. `theta` turns about y from +z. `phi` goes down from +y. A rotation adds to the angles, and a dolly scales the radius. A pan moves the target and the camera together.
 
+The width is the height times the aspect, rounded in `Float64`. A rounded width that is not finite or does not fit in an integer is refused. The meters one pixel of pan moves are divided in `Float64`.
+
 The polar angle stays a millionth of a radian away from each pole. At a pole, the camera's right is undefined. A range about y with its low limit above its high limit passes through a half turn. An angle outside it goes to the nearer limit, as in three.js.
 
 With damping, `damping_factor` of each pending rotation and pan applies each frame. The rest waits. A dolly is not damped, as in three.js.
 
 ### Orthographic cameras
 
-`handle(event, camera, width, height)`, `update(camera, delta)` and `pan(dx, dy, camera, width, height)` take an `OrthographicCamera` too. A dolly changes the camera's `zoom` rather than its distance, kept between `min_zoom` and `max_zoom`. A pan moves by the extent the volume covers at that zoom, over the view's size, as three.js's `pan` measures it.
+`handle(event, camera, width, height)`, `update(camera, delta)` and `pan(dx, dy, camera, width, height)` take an `OrthographicCamera` too. A dolly changes the camera's `zoom` rather than its distance, kept between `min_zoom` and `max_zoom`. A pan moves by the extent the volume covers at that zoom, over the view's size, as three.js's `pan` measures it. That division is a `Float64`.
 
 ### Zoom to the cursor
 
-With `zoom_to_cursor` set, a wheel notch or a dolly drag goes toward the point under the pointer. A perspective camera moves down the ray through the pointer by what the dolly takes off the distance. An orthographic camera moves so that the point under the pointer stays under it as the zoom changes. The target then sits straight ahead of the camera at the new distance, as in three.js.
+With `zoom_to_cursor` set, a wheel notch or a dolly drag goes toward the point under the pointer. A perspective camera moves down the ray through the pointer by what the dolly takes off the distance. An orthographic camera moves so that the point under the pointer stays under it as the zoom changes. The target then sits straight ahead of the camera at the new distance, as in three.js. A pixel center on a side above 8388608 pixels is measured in `Float64`.
 
 ### The camera's up
 
@@ -267,6 +271,8 @@ The default `key_timeout` is 0.3 seconds, a `Duration`. A keyboard repeats a hel
 | `auto_forward` | `False` | Move forward with nothing held. |
 | `key_timeout` | 0.3 s | See [Held keys](#held-keys). |
 
+The pointer's distance from the middle of the view is a `Float64`.
+
 A turn is three.js's quaternion `(x, y, z, 1)`, normalized. Here `x`, `y` and `z` are the pitch, yaw and roll held, times half of `roll_speed` and the time. three.js's `rollSpeed` is that half. Its default of 0.005 is 0.01 radians a second here, the same turn.
 
 A roll changes the camera's `up`. The target stays ahead of the camera at the same distance. `update` returns `True` when the camera moved or turned past three.js's threshold.
@@ -300,7 +306,7 @@ three.js sets a speed multiplier on Shift and never reads it. The port leaves it
 | `vertical_min`, `vertical_max` | 0, a half turn | That range, as an `Angle`. |
 | `key_timeout` | 0.3 s | See [Held keys](#held-keys). |
 
-The direction is a latitude and a longitude, as in three.js. The latitude stays within 85 degrees of level. `look_at(camera, point)` turns the camera and reads the new direction. The camera keeps its `up`.
+The direction is a latitude and a longitude, as in three.js. The latitude stays within 85 degrees of level. `look_at(camera, point)` turns the camera and reads the new direction. The camera keeps its `up`. The pixels from the middle of the view are a `Float64`.
 
 A terminal reports the pointer only while a button is held. The camera keeps turning toward where the pointer last was. A browser's camera does the same while the pointer rests.
 
@@ -348,7 +354,7 @@ three.js leaves the keys to its example. Here `update(camera, delta)` walks by t
 | `primary_action`, `middle_action`, `secondary_action` | `ROTATE`, `DOLLY`, `PAN` | three.js: `mouseButtons`. |
 | `key_timeout` | 0.3 s | See [Held keys](#held-keys). |
 
-The arithmetic is three.js's. A position is read on a circle as wide as the view. A turn is the distance the pointer moved on that circle, times `rotate_speed`. A zoom scales the distance by one plus the part of the view the drag covered, times `zoom_speed`. A wheel notch is 0.025 of the view.
+The arithmetic is three.js's. A position is read on a circle as wide as the view. A turn is the distance the pointer moved on that circle, times `rotate_speed`. A zoom scales the distance by one plus the part of the view the drag covered, times `zoom_speed`. A wheel notch is 0.025 of the view. The pointer and an orthographic pan are measured in `Float64`.
 
 Unless `static_moving` is set, each frame keeps `1 - dynamic_damping_factor` of a pan or a zoom. A turn keeps the square root of it. `reset(camera)` puts the camera and the target back. A turn that is dying away goes on after a reset, as in three.js.
 
@@ -523,7 +529,7 @@ A focus moves the center to the point that a double click hits on a mesh. A line
 
 The camera is read at each call and written back. Its `up` is always its own y axis. After a turn, three.js sets `up` to the first `up` turned by the camera. That is the same for a first `up` of +y. For another first `up`, three.js's `up` can point along the view.
 
-The controls read time from `update`. An event happens at the time of the last `update`. A pointer is read at the center of its pixel. A camera that rides a scene node is refused, as three.js requires.
+The controls read time from `update`. An event happens at the time of the last `update`. A pointer is read at the center of its pixel. On a side above 8388608 pixels that center is a `Float64`. A camera that rides a scene node is refused, as three.js requires.
 
 `enable_gizmos` hides the gizmo, as three.js documents. three.js has the member but does not read it. three.js works out the grid's cells in floating point, and here they are 60.
 

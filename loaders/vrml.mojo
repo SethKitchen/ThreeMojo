@@ -632,7 +632,20 @@ def _hex_pair(hex: String, start: Int) -> UInt8:
 
 def _intensity(value: VrmlValue) raises -> UInt8:
     """Return three.js's `parseInt( hex )` of an intensity, as a
-    `Uint8Array` stores it: modulo 256."""
+    `Uint8Array` stores it: modulo 256.
+
+    A magnitude at 2^63 is a multiple of 2048, so the byte is zero.
+    `Int` of that magnitude is not the number.
+
+    Args:
+        value: A hex field or a number.
+
+    Returns:
+        The byte, from zero to 255.
+
+    Raises:
+        Error: If a number is one three.js reads by its exponent.
+    """
     if value.kind == VRML_HEX_VALUE:
         var bytes = value.text.as_bytes()
         var low = 0
@@ -644,6 +657,9 @@ def _intensity(value: VrmlValue) raises -> UInt8:
     var plain = v == 0 or (abs(v) >= 1e-6 and abs(v) < 1e21)
     if not plain:
         raise Error("VRML: a pixel value that three.js reads by its exponent")
+    # A magnitude at 2^63 is a multiple of 2048, so the byte is zero.
+    if not (abs(v) < Float64(Int.MAX)):
+        return UInt8(0)
     var whole = Int(trunc(v))
     return UInt8(((whole % 256) + 256) % 256)
 
@@ -1659,8 +1675,12 @@ struct _Builder(Movable):
         x_dimension: Int,
         z_dimension: Int,
         indices: List[Float64],
-    ) -> List[Float64]:
-        """Return an elevation grid's colors or normals, a vertex each."""
+    ) raises -> List[Float64]:
+        """Return an elevation grid's colors or normals, a vertex each.
+
+        Raises:
+            Error: If the grid's index length does not fit in an integer.
+        """
         var values = grid_values(data, x_dimension, z_dimension, per_vertex)
         if per_vertex:
             return to_non_indexed(indices, values, 3)
@@ -1843,6 +1863,10 @@ def _pixels(field: VrmlField, name: String) raises -> VrmlTexture:
         and (components >= 1 and components <= 4) else 0
     )
     record.pending_type = kind
+    # Divide before multiplying. A width and a height under `1e15` can
+    # still wrap the byte count.
+    if record.height != 0 and record.width > (Int.MAX // 4) // record.height:
+        raise Error("VRML: an image is larger than this port reads")
     var size = 4 * record.width * record.height
     record.data = List[UInt8](length=size, fill=0)
     var rgba: List[UInt8] = [0, 0, 0, 0]

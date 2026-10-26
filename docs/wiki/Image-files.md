@@ -46,7 +46,7 @@ Path("out/turn.png").write_bytes(encode(frames, delay_ms=60))
 mojo run -I . tools/optimize_png.mojo out/NAME.png
 ```
 
-The tool decodes each image stream and encodes it again at DEFLATE level 9. A stream is a run of `IDAT` chunks, or a run of `fdAT` chunks after one `fcTL` chunk. The new stream goes into the first chunk of the run. The other chunks of the run become empty.
+The tool decodes each image stream and encodes it again at DEFLATE level 9. A stream is a run of `IDAT` chunks, or a run of `fdAT` chunks after one `fcTL` chunk. The new stream goes into the first chunk of the run. The other chunks of the run become empty. A stream that expands past the image is refused before the extra bytes are stored.
 
 The tool keeps the position of each chunk. The metadata, frame delays, blend and disposal operations, APNG sequence numbers and filtered scanlines do not change. The tool replaces the file only when the new file is smaller. It writes a temporary file, gives it the mode of the old file, and renames it over the old file.
 
@@ -118,6 +118,8 @@ The decoder checks the order of the scans. A coefficient's first bits must come 
 ### What the decoder computes
 
 The inverse cosine transform is the separable float one, the standard's own definition, rounded once at the end. A chroma component stored at half size is read through a triangle filter. The standard leaves the reconstruction filter to the decoder, and this one uses the filter libjpeg calls fancy upsampling so that the two agree. At the right and bottom edges, the filter repeats the component's last real sample, as libjpeg does. It does not read the encoder's padding.
+
+A sample at 1e20 is byte 255. A sample at -1e20 is byte zero. A sample that is not a number is byte zero.
 
 Two decoders agree on a JPEG to within a level or two and never to the bit. `tests/test_jpeg.mojo` holds this one to two levels of libjpeg's output. One checkered test picture with sharp chroma edges is held to three levels.
 
@@ -195,6 +197,7 @@ The decoder keeps these UTIF behaviors:
 - CMYK with four samples reads a fifth sample anyway, times zero. Past the end of the data that is NaN, so the last pixel is transparent.
 - An uncompressed image of one strip is read as long as the image, whatever its byte count says. A Deflate strip that does not fit is dropped.
 - An LZW code past the table is read as the next code.
+- A 32-bit float gray sample at 2^63, or one that is not finite, is byte zero. That magnitude is a multiple of 2048.
 
 ### Errors
 
@@ -205,6 +208,8 @@ The decoder refuses these, with a message that names the problem:
 - An LZW code past the table right after a clear code. UTIF reads it from a table that it shares between decodes, so its output depends on what it decoded before.
 - Strips that cover fewer rows than the image. UTIF cuts the data short, and each photometric form reads the missing bytes in its own way.
 - An image of no width or no height, and a file that starts with neither `II` nor `MM`. Also a tile with no offset or no byte count. three.js gives an empty image for the first two. For such a tile, UTIF reads what it can, differently for each compression.
+- An image whose pixel count or sample buffer does not fit.
+- A tile whose width or height is not positive.
 
 The tests read 96 files that `assets/tiff/make_tiff.py` wrote, with Pillow and by hand. Each one must have the bytes that three.js 0.180 gives, or be one of the seven that the decoder refuses on purpose.
 

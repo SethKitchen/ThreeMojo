@@ -130,6 +130,13 @@ def test_a_storage_buffer_holds_whole_elements() raises:
         _ = StorageBuffer([1, 2, 3], NODE_VEC2)
     with assert_raises(contains="whole number"):
         _ = StorageBuffer(List[Float32](), NODE_FLOAT)
+    with assert_raises(contains="larger than this port"):
+        _ = StorageBuffer(Int.MAX // 4 + 1, NODE_VEC4)
+    with assert_raises(contains="larger than this port"):
+        _ = StorageBuffer(Int.MAX // 2 + 1, NODE_VEC2)
+    var wide = StorageBufferStore()
+    with assert_raises(contains="larger than this port"):
+        _ = wide.storage_texture(Int.MAX, 2)
 
 
 def test_a_store_names_its_buffers() raises:
@@ -316,6 +323,41 @@ def test_the_latest_store_wins_and_a_barrier_starts_no_empty_step() raises:
     assert_equal(_floats(store, echo)[0], 2)
 
 
+def test_a_compute_dispatch_this_port_cannot_run_is_refused() raises:
+    var store = StorageBufferStore()
+    var data = store.instanced_array(1, NODE_FLOAT)
+    var kernel = ComputeKernel()
+    kernel.assign(data, kernel.graph.float(0), kernel.graph.float(1))
+    var node = kernel.compute(4, 64)
+    node.count = 0
+    with assert_raises(contains="one invocation"):
+        run_compute(store, node)
+    node.count = Int.MAX
+    with assert_raises(contains="larger than this port"):
+        run_compute(store, node)
+    node.count = Int.MAX // 4 + 1
+    node.results = 1
+    with assert_raises(contains="larger than this port"):
+        run_compute(store, node)
+    node.count = 4
+    node.workgroup_size = 0
+    with assert_raises(contains="workgroup"):
+        run_compute(store, node)
+    node.workgroup_size = 1025
+    with assert_raises(contains="workgroup"):
+        run_compute(store, node)
+    node.workgroup_size = 64
+    node.results = -1
+    with assert_raises(contains="larger than this port"):
+        run_compute(store, node)
+    node.results = 1 << 62
+    with assert_raises(contains="larger than this port"):
+        run_compute(store, node)
+    node.results = 1
+    run_compute(store, node)
+    assert_equal(_floats(store, data)[0], 1)
+
+
 def test_a_store_in_a_branch_is_kept_where_the_branch_runs() raises:
     var store = StorageBufferStore()
     var data = store.instanced_array([5, 5, 5, 5], NODE_FLOAT)
@@ -416,6 +458,23 @@ def test_a_workgroup_array_refuses_what_it_is_not() raises:
         )
     with assert_raises(contains="no such workgroup array"):
         _ = kernel.element(WorkgroupArrayNode(local.array, NODE_VEC2, 5), zero)
+
+
+def test_a_workgroup_copy_that_does_not_fit_is_refused() raises:
+    var store = StorageBufferStore()
+    var data = store.instanced_array(1, NODE_FLOAT)
+    var kernel = ComputeKernel()
+    _ = kernel.workgroup_array(NODE_VEC4, Int.MAX // 4 + 1)
+    kernel.add_assign(data, kernel.instance_index(), kernel.graph.float(1))
+    var node = kernel.compute(1)
+    with assert_raises(contains="larger than this port"):
+        _ = pack_storage(store, node)
+    var wide = ComputeKernel()
+    _ = wide.workgroup_array(NODE_FLOAT, Int.MAX // 2)
+    wide.add_assign(data, wide.instance_index(), wide.graph.float(1))
+    var many = wide.compute(3, 1)
+    with assert_raises(contains="larger than this port"):
+        _ = pack_storage(store, many)
 
 
 # --- atomics -----------------------------------------------------------------

@@ -36,6 +36,7 @@ from extensions.carla.opendrive import load_opendrive, load_opendrive_file
 from extensions.carla.transform import CarlaRotation, CarlaTransform
 from extensions.carla.world import EpisodeSettings, World
 from math.vector3 import Vector3
+from std.math import inf
 from std.testing import (
     TestSuite,
     assert_almost_equal,
@@ -377,6 +378,13 @@ def test_mesh_building_corners() raises:
     )
     var long = load_opendrive(String(LONG_ROAD).replace("crosswalk", "pole"))
     assert_equal(len(crosswalk_outlines(long)), 0)
+    with assert_raises(contains="finite"):
+        _ = build_navigation_mesh(
+            load_opendrive("<OpenDRIVE/>"),
+            Length(inf[DType.float32](), METER),
+        )
+    with assert_raises(contains="larger than this port"):
+        _ = build_navigation_mesh(long, Length(Float32(1e-6), METER))
     var plain = build_navigation_mesh(long)
     for p in plain.polygons:
         assert_true(p.area != AREA_CROSSWALK)

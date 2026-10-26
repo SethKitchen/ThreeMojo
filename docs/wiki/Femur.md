@@ -104,7 +104,7 @@ These values are sourced research metadata. This extension does not implement a 
 
 ## Mass and weight
 
-The mesh is the outer surface. The interior is not solid cortical bone. `femur_mass(spec)` samples the field. Each cell is empty, cortical region, trabecular region or marrow.
+The mesh is the outer surface. The interior is not solid cortical bone. `femur_mass(spec)` samples the field. Each cell is empty, cortical region, trabecular region or marrow. A box that is not finite and ordered is refused. A span whose cell count does not fit in an integer is refused.
 
 Apparent density already includes porosity. The mass formula applies that factor once.
 

@@ -29,6 +29,7 @@ texture is not squeezed where the surface bends.
 from core.ordinal import require_non_negative
 from geometries.surface import (
     require_finite_extents,
+    require_grid_cells,
     require_positive_extents,
     textured_surface,
 )
@@ -170,7 +171,8 @@ def rounded_box(
 
     Raises:
         Error: If an extent is not finite and positive, `segments` is less
-            than one, or the radius is not finite or is negative.
+            than one, a face has more than 16777216 cells, or the radius
+            is not finite or is negative.
     """
     require_finite_extents(
         width.value, height.value, depth.value, "rounded box"
@@ -182,6 +184,12 @@ def rounded_box(
     require_at_least_one(
         segments, "A rounded box needs one segment round each edge"
     )
+    # The face grid is `2 * segments + 1` cells each way. A segment count
+    # of `Int.MAX` wraps that sum, and the walk then does not finish.
+    if segments > (Int.MAX - 1) // 2:
+        raise Error(
+            "A rounded box's segment count is larger than this port builds"
+        )
     require_non_negative(
         radius.value, "A rounded box needs a radius of zero or more"
     )
@@ -196,6 +204,11 @@ def rounded_box(
         min(sizes[2] / 2, Float64(radius.value)),
     )
     var total_segments = segments * 2 + 1
+    require_grid_cells(
+        total_segments,
+        total_segments,
+        "A rounded box's segment count is larger than this port builds",
+    )
     var unit = _unit_box(total_segments)
     var inner = [sizes[0] / 2 - r, sizes[1] / 2 - r, sizes[2] / 2 - r]
     var half_segment = 0.5 / Float64(total_segments)

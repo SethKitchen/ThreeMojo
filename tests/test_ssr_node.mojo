@@ -33,6 +33,7 @@ from postprocessing.ssr_node import (
     check_ssr_node,
     ssr_node_light,
     ssr_node_pixel,
+    ssr_node_blur,
 )
 from render.framebuffer import Color, FloatColor
 from render.rect import Rect
@@ -117,6 +118,13 @@ def test_the_settings_are_checked() raises:
     bad = SsrNodeSettings()
     bad.blur_quality = -1
     with assert_raises(contains="negative"):
+        check_ssr_node(bad)
+    bad = SsrNodeSettings()
+    bad.blur_quality = 2048
+    with assert_raises(contains="larger than this port"):
+        check_ssr_node(bad)
+    bad.blur_quality = Int.MAX
+    with assert_raises(contains="larger than this port"):
         check_ssr_node(bad)
     with assert_raises(contains="positive"):
         _ = ssr_node_pass(max_distance=Length(-1, METER))
@@ -430,6 +438,22 @@ def test_normals_without_metalness_are_refused() raises:
     var frame = RenderTarget(SIZE, SIZE, Color(0, 0, 0), FLOAT_TARGET, outputs)
     with assert_raises(contains="attachments"):
         ssr_node_light(frame, view_of(frame), world_of(), SsrNodeSettings())
+
+
+def test_an_ssr_blur_must_fit() raises:
+    var colors = List[FloatColor](length=1, fill=FloatColor(0, 0, 0, 0))
+    var source = LightView(colors, 1, 1)
+    with assert_raises(contains="at least one pixel"):
+        _ = ssr_node_blur(source, 0, 1, 1, 1)
+    with assert_raises(contains="at least one pixel"):
+        _ = ssr_node_blur(source, 1, 0, 1, 1)
+    with assert_raises(contains="larger than this port"):
+        _ = ssr_node_blur(source, 1 << 32, 1 << 32, 1, 1)
+    with assert_raises(contains="larger than this port"):
+        _ = ssr_node_blur(source, 1, 1, 2048, 1)
+    with assert_raises(contains="larger than this port"):
+        _ = ssr_node_blur(source, 1, 1, Int.MAX, 1)
+    _ = colors^
 
 
 def test_a_ray_with_only_vertical_projection_overflow_reflects_nothing() raises:

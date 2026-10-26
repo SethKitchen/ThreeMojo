@@ -161,6 +161,24 @@ def require_shadow_size(size: Int) raises:
     require_positive(size, "A shadow map must be at least one texel a side")
 
 
+def _map_texels(size: Int, factor: Int) raises -> Int:
+    """Return `factor * size * size`, or refuse a product that does not fit.
+
+    Args:
+        size: Texels a side. The caller has checked that it is positive.
+        factor: How many squares. One or more.
+
+    Returns:
+        The texel count.
+
+    Raises:
+        Error: If the product does not fit in an integer.
+    """
+    if size > (Int.MAX // factor) // size:
+        raise Error("A shadow map is larger than this port reads")
+    return factor * size * size
+
+
 # three.js's `LightShadow` defaults: a map five hundred and twelve texels
 # a side, no bias, one texel of blur, and eight blur samples for a
 # variance map.
@@ -485,18 +503,19 @@ struct ShadowMap(Copyable, LightSlot, Movable):
                 texel from the top; empty for none.
 
         Raises:
-            Error: If the size is not positive, the type is none of the
-                four, the depths do not fill the square, or two squares
-                under `VSM_SHADOW_MAP`, or the colors fill no square.
+            Error: If the size is not positive, the texel count does not
+                fit, the type is none of the four, the depths do not fill
+                the square, or two squares under `VSM_SHADOW_MAP`, or the
+                colors fill no square.
         """
         require_shadow_size(size)
         require_shadow_type(shadow_type)
         var squares = 1
         if shadow_type == VSM_SHADOW_MAP:
             squares = 2
-        if len(depths) != squares * size * size:
+        if len(depths) != _map_texels(size, squares):
             raise Error("A shadow map's depths must fill its square")
-        if len(colors) != 0 and len(colors) != 4 * size * size:
+        if len(colors) != 0 and len(colors) != _map_texels(size, 4):
             raise Error("A shadow map's colors must fill its square")
         self.light = light
         self.size = size
@@ -553,15 +572,18 @@ struct ShadowMap(Copyable, LightSlot, Movable):
                 texel, face by face as the depths are; empty for none.
 
         Raises:
-            Error: If the size is not positive, the type is none of the
-                four, the depths or the colors do not fill six squares, or
-                the far plane does not lie beyond the near plane.
+            Error: If the size is not positive, the texel count does not
+                fit, the type is none of the four, the depths or the colors
+                do not fill six squares, or the far plane does not lie
+                beyond the near plane.
         """
         require_shadow_size(size)
         require_shadow_type(shadow_type)
-        if len(depths) != CUBE_FACES * size * size:
+        if len(depths) != _map_texels(size, CUBE_FACES):
             raise Error("A point light's shadow must fill six square faces")
-        if len(colors) != 0 and len(colors) != 4 * CUBE_FACES * size * size:
+        if len(colors) != 0 and len(colors) != _map_texels(
+            size, 4 * CUBE_FACES
+        ):
             raise Error("A point light's shadow colors must fill six faces")
         if not (far > near):
             raise Error(
@@ -1267,6 +1289,42 @@ def _texel_at(column: Int, row: Int, size: Int) -> Int:
     return clamped_texel(column, row, size, size)
 
 
+def _shadow_index(value: Float32) -> Int:
+    """Return the floor of a shadow-map coordinate.
+
+    A value that is not finite, or that does not fit in an integer, lies
+    past the map. `Int` of such a float is not that texel.
+
+    Args:
+        value: The coordinate, in texels.
+
+    Returns:
+        The floor, or `Int.MAX` or `Int.MIN` when `value` does not fit.
+    """
+    var wide = Float64(value)
+    if not isfinite(wide) or wide >= Float64(Int.MAX):
+        return Int.MAX
+    if wide <= -Float64(Int.MAX):
+        return Int.MIN
+    return Int(floor(wide))
+
+
+def _shifted_shadow_index(value: Float32, shift: Int) -> Int:
+    """Return `_shadow_index` moved by `shift` without wrapping.
+
+    Args:
+        value: The coordinate, in texels.
+        shift: Texels to add. A sentinel is left where it is.
+
+    Returns:
+        The shifted index, held at `Int.MAX` or `Int.MIN`.
+    """
+    var index = _shadow_index(value)
+    if index == Int.MAX or index == Int.MIN:
+        return index
+    return index + shift
+
+
 def soft_texel(place: Vector3, tap: Int, size: Int) -> Int:
     """Return which texel one of `PCF_SOFT_SHADOW_MAP`'s sixteen taps reads.
 
@@ -1285,8 +1343,10 @@ def soft_texel(place: Vector3, tap: Int, size: Int) -> Int:
     Returns:
         The texel's index, row-major from the top.
     """
-    var column = Int(floor(place.x * Float32(size) + 0.5)) + tap % 4 - 2
-    var row = Int(floor(place.y * Float32(size) + 0.5)) + tap // 4 - 2
+    var column = _shifted_shadow_index(
+        place.x * Float32(size) + 0.5, tap % 4 - 2
+    )
+    var row = _shifted_shadow_index(place.y * Float32(size) + 0.5, tap // 4 - 2)
     return _texel_at(column, row, size)
 
 
@@ -1302,6 +1362,8 @@ def soft_fraction(coordinate: Float32, size: Int) -> Float32:
         Zero up to one.
     """
     var texels = coordinate * Float32(size) + 0.5
+    if not isfinite(texels):
+        return Float32(0)
     return fraction(texels)
 
 
@@ -1360,8 +1422,8 @@ def bilinear_texel(
     Returns:
         The texel's index, row-major from the top.
     """
-    var column = Int(floor(across - 0.5)) + corner % 2
-    var row = Int(floor(down - 0.5)) + corner // 2
+    var column = _shifted_shadow_index(across - 0.5, corner % 2)
+    var row = _shifted_shadow_index(down - 0.5, corner // 2)
     return _texel_at(column, row, size)
 
 
@@ -1375,7 +1437,10 @@ def bilinear_fraction(at: Float32) -> Float32:
     Returns:
         Zero up to one.
     """
-    return fraction(at - 0.5)
+    var past = at - 0.5
+    if not isfinite(past):
+        return Float32(0)
+    return fraction(past)
 
 
 def bilinear(
@@ -1463,7 +1528,7 @@ def vsm_offset(sample: Int, samples: Int) -> Float32:
 
 def vsm_moments(
     depths: List[Float32], size: Int, radius: Float32, samples: Int
-) -> List[Float32]:
+) raises -> List[Float32]:
     """Return a variance map's blurred mean and spread from its depths:
     three.js's `VSMPass`.
 
@@ -1484,10 +1549,19 @@ def vsm_moments(
 
     Returns:
         `size * size` means, then `size * size` standard deviations.
+
+    Raises:
+        Error: If the size is below one, two squares do not fit, the
+            depths do not fill one square, or there is no sample.
     """
-    # `LightShadow.validate` holds the size and the samples at one or
-    # more, so no loop below runs zero times.
+    require_shadow_size(size)
+    if samples < 1:
+        raise Error("A variance map takes at least one sample")
+    # Two squares are stored: the means and the spreads.
+    _ = _map_texels(size, 2)
     var square = size * size
+    if len(depths) != square:
+        raise Error("A variance map's depths must fill its square")
     var stored = List[Float32](capacity=square)
     for texel in range(square):  # pragma: no branch
         stored.append(vsm_depth(depths[texel]))

@@ -14,13 +14,13 @@ zlib stream. Each stream is decoded and encoded again at level 9. The new
 stream goes into the first chunk of its run, and the other chunks of the
 run become empty, which PNG allows. A stream that does not get smaller
 keeps its original bytes. A file that does not get smaller is returned
-unchanged.
+unchanged. Decoding stops at that image's scanline bytes.
 """
 
 from render.checksum import Crc32
 from render.deflate import zlib_deflate
-from render.inflate import zlib_inflate
-from render.png import push_be32, push_signature
+from render.inflate import NO_LIMIT, zlib_inflate
+from render.png import _channels_for, push_be32, push_signature
 
 # Chunk type tags: the four ASCII bytes of the type, read big-endian.
 comptime IHDR = UInt32(0x49484452)
@@ -169,20 +169,54 @@ def write_chunks(chunks: PngChunks) -> List[UInt8]:
     return out^
 
 
-def recompress(stream: List[UInt8]) raises -> List[UInt8]:
+def _scanline_bytes(
+    width: Int, height: Int, bit_depth: Int, color_type: Int
+) raises -> Int:
+    """Return the filtered scanline bytes of an image.
+
+    One filter byte per row, then the packed samples. This is the most a
+    stream for that image may expand to.
+
+    Args:
+        width: The image width, in pixels.
+        height: The image height, in pixels.
+        bit_depth: Bits per sample.
+        color_type: The PNG color type.
+
+    Returns:
+        The byte count.
+
+    Raises:
+        Error: If the color type is not known, or the count does not fit.
+    """
+    var channels = _channels_for(color_type)
+    var sample_bits = width * channels * bit_depth
+    var stride = (sample_bits + 7) // 8 + 1
+    if height > Int.MAX // stride:
+        raise Error("A PNG larger than this decoder will build")
+    return height * stride
+
+
+def recompress(
+    stream: List[UInt8], limit: Int = NO_LIMIT
+) raises -> List[UInt8]:
     """Return a smaller equivalent zlib stream, or the original bytes.
 
     Args:
         stream: A complete zlib stream.
+        limit: The most bytes the stream may expand to. `NO_LIMIT` keeps
+            the old unbound decode for a stream whose image size is not
+            known here.
 
     Returns:
         A level-9 stream of the same data when it is smaller, otherwise a
         copy of `stream`.
 
     Raises:
-        Error: If `stream` is not one complete, valid zlib stream.
+        Error: If `stream` is not one complete, valid zlib stream, or it
+            expands past `limit`.
     """
-    var raw = zlib_inflate(stream)
+    var raw = zlib_inflate(stream, limit)
     # `zlib_inflate` ignores bytes after the Adler-32. Without its last
     # byte, a stream that ends at its checksum loses part of it and fails.
     # So a stream that still decodes without that byte has trailing bytes.
@@ -190,7 +224,7 @@ def recompress(stream: List[UInt8]) raises -> List[UInt8]:
     shorter.extend(Span(stream)[: len(stream) - 1])
     var trailing = True
     try:
-        _ = zlib_inflate(shorter)
+        _ = zlib_inflate(shorter, limit)
     except:
         trailing = False
     if trailing:
@@ -242,15 +276,50 @@ def optimize(data: List[UInt8]) raises -> List[UInt8]:
         `data`.
 
     Raises:
-        Error: If the file or one of its zlib streams is not valid.
+        Error: If the file or one of its zlib streams is not valid, the
+            header is too short for a data stream, or a stream expands
+            past its image.
     """
     var chunks = read_chunks(data)
-    for run in _data_runs(chunks):
+    var runs = _data_runs(chunks)
+    var limits = List[Int]()
+    if len(runs) > 0:
+        var header = chunks.bodies[0].copy()
+        if len(header) < 13:
+            raise Error("A PNG header chunk is the wrong size")
+        var bit_depth = Int(header[8])
+        var color_type = Int(header[9])
+        var idat_limit = _scanline_bytes(
+            Int(_be32(header, 0)),
+            Int(_be32(header, 4)),
+            bit_depth,
+            color_type,
+        )
+        var frame_limit = idat_limit
+        var next_run = 0
+        for i in range(len(chunks)):  # pragma: no branch
+            if chunks.types[i] == FCTL:
+                var body = chunks.bodies[i].copy()
+                frame_limit = _scanline_bytes(
+                    Int(_be32(body, 4)),
+                    Int(_be32(body, 8)),
+                    bit_depth,
+                    color_type,
+                )
+            if next_run < len(runs) and i == runs[next_run][0]:
+                var limit = idat_limit
+                if chunks.types[i] == FDAT:
+                    limit = frame_limit
+                limits.append(limit)
+                next_run += 1
+    var run_index = 0
+    for run in runs:
         var skip = SEQUENCE_SIZE if chunks.types[run[0]] == FDAT else 0
         var stream = List[UInt8]()
         for i in run:  # pragma: no branch
             stream.extend(Span(chunks.bodies[i])[skip:])
-        var compressed = recompress(stream)
+        var compressed = recompress(stream, limits[run_index])
+        run_index += 1
         if len(compressed) >= len(stream):
             continue
         # Keep chunk positions, metadata and APNG sequence numbers.

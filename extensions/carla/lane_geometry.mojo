@@ -9,7 +9,8 @@ Separate reference APIs retain the public geometry implementation. Canonical
 SPIRAL positions use stored-term Sum2 accumulation. These helpers keep the
 authored lane expression, with the current public-pose
 refusals before unsafe indexing or integer conversion. They do not replace
-scalar witnesses with an ideal trigonometric or moment approximation.
+scalar witnesses with an ideal trigonometric or moment approximation. A
+spiral derivative also refuses a piece count past the query work limit.
 """
 
 from extensions.carla.geometry import (
@@ -51,7 +52,8 @@ def _lane_geometry_pos_at(
         The point and heading, with z zero.
 
     Raises:
-        Error: If a SPIRAL uses an unsupported arithmetic mode.
+        Error: If a SPIRAL uses an unsupported arithmetic mode, or its
+            piece count passes the query work limit.
     """
     var d = min(max(dist, 0.0), geometry.length)
     if geometry.kind == LINE:
@@ -129,7 +131,11 @@ def _lane_spiral(geometry: RoadGeometry, d: Float64) raises -> DirectedPoint:
         geometry.curvature_end - geometry.curvature_start
     ) / geometry.length
     var reach = max(abs(k0), abs(k0 + rate * d))
-    var pieces = 1 + Int(ceil(d * (1.0 + reach)))
+    # The public geometry query refuses this estimate before `Int` conversion.
+    var work = ceil(d * (1.0 + reach))
+    if not isfinite(work) or work >= 9223372036854775807.0 or work >= 4194304.0:
+        raise Error("Geometry query exceeds its spiral work limit")
+    var pieces = 1 + Int(work)
     var step = d / Float64(pieces)
     var nodes = materialize[_GL_NODES]()
     var weights = materialize[_GL_WEIGHTS]()
@@ -194,6 +200,9 @@ def _lane_geometry_derivative_at(
         var work = ceil(d * (1.0 + reach))
         if not isfinite(work) or work >= 9223372036854775807.0:
             raise Error("Spiral derivative work is not representable")
+        # A finite count past the query budget does not finish this loop.
+        if work >= 4194304.0:
+            raise Error("Spiral derivative work exceeds its spiral work limit")
         var pieces = 1 + Int(work)
         var step = d / Float64(pieces)
         var dstep = 1.0 / Float64(pieces)

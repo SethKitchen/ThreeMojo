@@ -194,6 +194,10 @@ struct _CCDImpact(ImplicitlyCopyable):
     var impulse: Vector3
 
 
+# Each solver pass walks every contact. The maximum integer never finishes.
+comptime MAX_SOLVER_ITERATIONS = 16777216
+
+
 struct PhysicsWorld(Movable):
     """Bodies, static meshes, and the solver that steps them."""
 
@@ -347,13 +351,22 @@ struct PhysicsWorld(Movable):
             dt: The step. It must be more than zero and finite.
 
         Raises:
-            Error: If the step is not more than zero and finite, or a
-                body's mode or mass state is inconsistent.
+            Error: If the step is not more than zero and finite, a
+                velocity or position iteration count is above 16777216,
+                or a body's mode or mass state is inconsistent.
         """
         var h = dt.value
         require_positive_finite(
             Float64(h), "A physics step must be more than zero"
         )
+        if self.velocity_iterations > MAX_SOLVER_ITERATIONS:
+            raise Error(
+                "A velocity iteration count is larger than this port solves"
+            )
+        if self.position_iterations > MAX_SOLVER_ITERATIONS:
+            raise Error(
+                "A position iteration count is larger than this port solves"
+            )
         # Validate the complete batch before any body or pending force changes.
         for body in self.bodies:
             body.validate()

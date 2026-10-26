@@ -55,7 +55,7 @@ sculptor.pointer_move(camera, scene, assets, 420, 310)
 sculptor.pointer_up()
 ```
 
-The pointer's ray starts on the near plane. The brush radius is `size` pixels at the hit, carried back to world units. A move stamps each `0.15 * size` pixels along the path. Only the primary button of the primary pointer begins a stroke, and only that pointer continues it.
+The pointer's ray starts on the near plane. The brush radius is `size` pixels at the hit, carried back to world units. A move stamps each `0.15 * size` pixels along the path. A move of more than 4096 stamps is held at 4096. Only the primary button of the primary pointer begins a stroke, and only that pointer continues it.
 
 `pick_from_pointer(camera, scene, x, y)` finds the hit under a pixel and does not sculpt. `disconnect` ends the stroke and forgets the view.
 

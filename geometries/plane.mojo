@@ -37,6 +37,7 @@ from geometries.surface import (
     record_grid_segments,
     record_kind,
     record_width_height,
+    require_grid_cells,
 )
 from units.si import Length
 
@@ -60,8 +61,9 @@ def plane(
         index buffer, wound counter-clockwise seen from +z.
 
     Raises:
-        Error: If either extent is not finite or not positive, or either
-            segment count is less than one.
+        Error: If either extent is not finite or not positive, either
+            segment count is less than one, or the grid has more than
+            16777216 cells.
     """
     require_finite(Float64(width.value), "A plane needs finite extents")
     require_finite(Float64(height.value), "A plane needs finite extents")
@@ -71,6 +73,11 @@ def plane(
         raise Error("A plane needs positive extents")
     if width_segments < 1 or height_segments < 1:
         raise Error("A plane needs at least one segment each way")
+    require_grid_cells(
+        width_segments,
+        height_segments,
+        "A plane's segment count is larger than this port builds",
+    )
 
     var half_width = width.value / 2
     var half_height = height.value / 2

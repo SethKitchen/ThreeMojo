@@ -139,9 +139,12 @@ struct LayeredWall(Copyable, Movable):
             var rho_c = material.density.value * material.specific_heat.value
             var thickness = layer.thickness.to(METER)
             var largest = sqrt(k / rho_c * dt / fourier)
-            var count = min(
-                max(1, Int(ceil(thickness / largest))), MAX_ELEMENTS_PER_LAYER
-            )
+            # Cap the real ratio. `Int` of a ratio past 2^63 is not that
+            # count, so a later minimum would keep one element.
+            var ratio = thickness / largest
+            var count = MAX_ELEMENTS_PER_LAYER
+            if ratio < Float64(MAX_ELEMENTS_PER_LAYER):
+                count = max(1, Int(ceil(ratio)))
             var dx = thickness / Float64(count)
             for _ in range(count):  # pragma: no branch
                 var half = rho_c * dx / 2

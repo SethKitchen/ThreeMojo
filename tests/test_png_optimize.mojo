@@ -275,6 +275,66 @@ def test_frame_data_right_after_image_data_is_a_new_stream() raises:
     _assert_same_lists(_semantics(after), _semantics(data))
 
 
+def test_a_stream_past_its_image_is_refused() raises:
+    # One gray pixel is two scanline bytes. Three bytes of output are past
+    # that, and still far under the default image of a 64-pixel frame.
+    var raw = List[UInt8]()
+    raw.append(0)
+    raw.append(1)
+    raw.append(2)
+    var stream = zlib_deflate(Span(raw), 0)
+    var still = PngChunks()
+    var gray = _be32_bytes([1, 1])
+    gray.extend(Span([UInt8(8), 0, 0, 0, 0]))
+    still.append(IHDR, gray^)
+    still.append(IDAT, stream.copy())
+    still.append(IEND, List[UInt8]())
+    with assert_raises(contains="more than was expected"):
+        _ = optimize(write_chunks(still))
+    # A 1 by 1 RGB frame is four scanline bytes. The default image is a
+    # 64-pixel row, so this only fails when the frame size is the limit.
+    var wide = List[UInt8]()
+    wide.append(0)
+    for _ in range(4):
+        wide.append(1)
+    var wide_stream = zlib_deflate(Span(wide), 0)
+    var frame = PngChunks()
+    var header = _be32_bytes([64, 1])
+    header.extend(Span([UInt8(8), 2, 0, 0, 0]))
+    frame.append(IHDR, header^)
+    var control = _be32_bytes([0, 1, 1, 0, 0])
+    control.append(0)
+    control.append(1)
+    control.append(0)
+    control.append(1)
+    control.append(0)
+    control.append(0)
+    frame.append(FCTL, control^)
+    var body = _be32_bytes([1])
+    body.extend(Span(wide_stream))
+    frame.append(FDAT, body^)
+    frame.append(IEND, List[UInt8]())
+    with assert_raises(contains="more than was expected"):
+        _ = optimize(write_chunks(frame))
+
+
+def test_an_image_whose_scanline_bytes_do_not_fit_is_refused() raises:
+    var chunks = PngChunks()
+    var header = _be32_bytes([4294967295, 4294967295])
+    header.extend(Span([UInt8(16), 6, 0, 0, 0]))
+    chunks.append(IHDR, header^)
+    chunks.append(IDAT, _bytes("x"))
+    chunks.append(IEND, List[UInt8]())
+    with assert_raises(contains="larger than this decoder will build"):
+        _ = optimize(write_chunks(chunks))
+    var short = PngChunks()
+    short.append(IHDR, _be32_bytes([1, 1]))
+    short.append(IDAT, _bytes("x"))
+    short.append(IEND, List[UInt8]())
+    with assert_raises(contains="wrong size"):
+        _ = optimize(write_chunks(short))
+
+
 def test_rejects_bad_zlib_and_extra_streams() raises:
     var single = zlib_deflate(Span(_bytes("a")), 9)
     var short = _slice(single, 0, len(single) - 1)

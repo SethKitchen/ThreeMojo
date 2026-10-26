@@ -252,7 +252,10 @@ def _read_joint(
         if len(channels) < 2:
             raise Error("BVH: CHANNELS needs a count")
         var count = js_parse_int(channels[1])
-        var matches = count >= 0 and Int(count) == len(channels) - 2
+        # A count at or above 2^63 does not fit. `Int` of it is not the
+        # number, so it is refused before the conversion.
+        var fits = count >= 0 and count < Float64(Int.MAX)
+        var matches = fits and Int(count) == len(channels) - 2
         if not matches:
             raise Error("BVH: CHANNELS does not name as many as it counts")
         for name in channels[2:]:
@@ -373,7 +376,11 @@ def parse_bvh(
     var frames = js_parse_int(frames_line[1]) if len(frames_line) > 1 else (
         js_parse_int("")
     )
-    if isnan(frames):
+    if (
+        isnan(frames)
+        or frames <= -Float64(Int.MAX)
+        or frames >= Float64(Int.MAX)
+    ):
         raise Error("BVH: the number of frames is not a number")
     var time_line = lines.tokens()
     var time = js_parse_float(time_line[2]) if len(time_line) > 2 else (

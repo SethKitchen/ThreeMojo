@@ -6,6 +6,7 @@
 """Tests for `controls.input`: the event types and the terminal decoder."""
 
 from controls.input import (
+    pixel_center_ndc,
     ARROW_DOWN,
     ARROW_LEFT,
     ARROW_RIGHT,
@@ -213,6 +214,15 @@ def test_the_terminals_size_report_is_a_resize() raises:
     assert_equal(len(_decode(decoder, "\x1b[8;24t")), 0)
     assert_true(RESIZE.is_valid())
     assert_true(KEY_UP.is_valid())
+
+
+def test_a_wide_side_keeps_the_pixel_center_inside() raises:
+    var small = pixel_center_ndc(50, 100)
+    assert_equal(small, (Float32(50) + 0.5) / Float32(100) * 2 - 1)
+    var count = 8388609
+    var center = Float32((Float64(count - 1) + 0.5) / Float64(count) * 2 - 1)
+    assert_equal(pixel_center_ndc(count - 1, count), center)
+    assert_true(center < 1)
 
 
 def test_an_event_holds_what_it_is_given() raises:

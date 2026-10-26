@@ -28,7 +28,7 @@ var image = target.resolve()
 | `colors` | Four bytes: red, green, blue and opacity. A byte `b` is `b / 255`. |
 | `sh1`, `sh2`, `sh3` | The bytes of the higher spherical harmonics bands. A byte `b` is `(b - 128) / 128`. |
 
-A band of degree `d` has `2d + 1` coefficients, with three channels each. The bytes of one splat hold one coefficient after the other, and red, green and blue in each. `sh_band_words(d)` gives the 32-bit words of one splat in a band: 3, 4 or 6. `band_words` gives the words as three.js packs them.
+A band of degree `d` has `2d + 1` coefficients, with three channels each. The bytes of one splat hold one coefficient after the other, and red, green and blue in each. `sh_band_words(d)` gives the 32-bit words of one splat in a band: 3, 4 or 6. `band_words` gives the words as three.js packs them. A band whose byte count does not fit in an integer is refused.
 
 `create_gaussian_splat_geometry` checks the lengths. It refuses a band that has no band below it. `to_buffer_geometry` and `gaussian_splat_geometry_of` convert to and from three.js's splat `BufferGeometry`.
 
@@ -105,7 +105,7 @@ The standalone `draw_gaussian_splat` API still draws into an existing target.
 Pass its optional `viewport` to project into a rectangle. By default, it uses
 the whole target. Call it in the order required by other transparent draws.
 
-`prepare_gaussian_splat` sorts the splats when `auto_sort` is on. It adds the spherical harmonics to the colors. Then it projects each splat with `render/splatrule.mojo`. `rasterize_splats` blends the projected splats in draw order.
+`prepare_gaussian_splat` sorts the splats when `auto_sort` is on. It adds the spherical harmonics to the colors. Then it projects each splat with `render/splatrule.mojo`. `rasterize_splats` blends the projected splats in draw order. A center that does not fit in an integer lies past the image.
 
 Each of the three takes a count of `workers`, one by default. `Renderer` passes its own. The sort counts its bins in runs of the splats. Then each run puts its splats after the earlier runs' splats in each bin, so the order is the order of one thread. The projection reads the splats in their own order, front to back, and then gathers them in draw order.
 
@@ -200,7 +200,7 @@ examples/capi/run.sh web splat
 
 `KsplatCompressionLevel` is a type with `is_valid`. `ksplat_layout` refuses a level that is not 0, 1 or 2.
 
-The SPZ reader uses `loaders.nrrd.gunzip` for gzip and `render.zstd` for Zstandard. A version 4 file needs no other decoder.
+The SPZ reader uses `loaders.nrrd.gunzip` for gzip and `render.zstd` for Zstandard. A version 4 file needs no other decoder. Gzip output stops at the most bytes a supported file can hold.
 
 `read_gltf_gaussian_splat_scene(path, scene)` places splat meshes on the selected
 scene's nodes. It reads matrix or TRS transforms, node names and extras.

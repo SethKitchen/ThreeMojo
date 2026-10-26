@@ -1,6 +1,6 @@
 # Rasterization
 
-`render/rasterizer.mojo`, `render/fillrule.mojo` and `renderers/clip.mojo`. The rasterizer fills screen-space triangles into a `RenderTarget`. It decides coverage in fixed point, tests depth, interpolates with perspective correction, and shades every fragment.
+`render/rasterizer.mojo`, `render/fillrule.mojo` and `renderers/clip.mojo`. The rasterizer fills screen-space triangles into a `RenderTarget`. It decides coverage in fixed point, tests depth, interpolates with perspective correction, and shades every fragment. A screen coordinate that does not fit in an integer lies past the image.
 
 ![A cube walks through the near plane and is sliced](out/clipping.png)
 

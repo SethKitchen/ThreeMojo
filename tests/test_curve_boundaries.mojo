@@ -270,7 +270,11 @@ def test_extra_point_parameters_remain_unbounded_and_kinds_are_checked() raises:
 
 def test_count_arithmetic_does_not_wrap_or_allocate() raises:
     assert_equal(curve_sample_count(1), 2)
-    assert_equal(curve_sample_count(Int.MAX - 1), Int.MAX)
+    assert_equal(curve_sample_count(16777216), 16777217)
+    with assert_raises(contains="larger than this port"):
+        _ = curve_sample_count(16777217)
+    with assert_raises(contains="larger than this port"):
+        _ = curve_sample_count(Int.MAX - 1)
     assert_equal(curve_count_sum(Int.MAX, 0), Int.MAX)
     assert_equal(curve_count_product(Int.MAX, 1), Int.MAX)
     assert_equal(curve_count_product(Int.MAX, 0), 0)
@@ -302,22 +306,38 @@ def test_curve_and_path_sample_overflow_is_refused() raises:
     for curve in planar:
         with assert_raises():
             _ = curve.sample(Int.MAX)
+        with assert_raises(contains="larger than this port"):
+            _ = curve.sample(Int.MAX - 1)
+        with assert_raises(contains="larger than this port"):
+            _ = curve.sample(16777217)
         with assert_raises():
             _ = curve.lengths(Int.MAX)
+        with assert_raises(contains="larger than this port"):
+            _ = curve.lengths(Int.MAX - 1)
         with assert_raises():
             _ = curve.spaced_points(Int.MAX)
+        with assert_raises(contains="larger than this port"):
+            _ = curve.spaced_points(16777217)
         assert_equal(len(curve.sample(1)), 2)
         assert_equal(len(curve.lengths(1)), 2)
         assert_equal(len(curve.spaced_points(1)), 2)
     for curve in spatial:
         with assert_raises():
             _ = curve.sample(Int.MAX)
+        with assert_raises(contains="larger than this port"):
+            _ = curve.sample(Int.MAX - 1)
+        with assert_raises(contains="larger than this port"):
+            _ = curve.sample(16777217)
         with assert_raises():
             _ = curve.lengths(Int.MAX)
         with assert_raises():
             _ = curve.spaced_points(Int.MAX)
+        with assert_raises(contains="larger than this port"):
+            _ = curve.spaced_points(16777217)
         with assert_raises():
             _ = curve.frenet_frames(Int.MAX, False)
+        with assert_raises(contains="larger than this port"):
+            _ = curve.frenet_frames(Int.MAX - 1, False)
         assert_equal(len(curve.sample(1)), 2)
         assert_equal(len(curve.lengths(1)), 2)
         assert_equal(len(curve.spaced_points(1)), 2)
@@ -325,15 +345,24 @@ def test_curve_and_path_sample_overflow_is_refused() raises:
     path.add(spatial[1].copy())
     with assert_raises():
         _ = path.sample(Int.MAX)
+    with assert_raises(contains="larger than this port"):
+        _ = path.sample(Int.MAX - 1)
+    with assert_raises(contains="larger than this port"):
+        _ = path.sample(16777217)
     with assert_raises():
         _ = path.spaced_points(Int.MAX)
+    with assert_raises(contains="larger than this port"):
+        _ = path.spaced_points(Int.MAX - 1)
     with assert_raises():
         _ = path.frenet_frames(Int.MAX, False)
+    with assert_raises(contains="larger than this port"):
+        _ = path.frenet_frames(16777217, False)
     assert_equal(len(path.sample(1)), 2)
     assert_equal(len(path.spaced_points(1)), 2)
     var straight = CurvePath3()
     straight.add(spatial[0].copy())
     assert_equal(len(straight.sample(Int.MAX)), 2)
+    assert_equal(len(straight.sample(Int.MAX - 1)), 2)
     assert_equal(straight.frenet_frames(1, False).count(), 2)
     assert_equal(spatial[0].frenet_frames(1, False).count(), 2)
     with assert_raises():
@@ -345,6 +374,7 @@ def test_curve_and_path_sample_overflow_is_refused() raises:
     var pen = Path(Vector2(0, 0))
     pen.line_to(Vector2(1, 0))
     assert_equal(len(pen.sample(Int.MAX)), 2)
+    assert_equal(len(pen.sample(16777217)), 2)
     pen.curves.append(planar[3].copy())
     with assert_raises():
         _ = pen.sample(Int.MAX // 2)
@@ -354,13 +384,19 @@ def test_curve_and_path_sample_overflow_is_refused() raises:
     later.curves.append(planar[3].copy())
     with assert_raises():
         _ = later.sample(Int.MAX // 2)
-    # Each piece fits, but their total sample count does not. No huge
-    # first-piece allocation may precede the total-count check.
+    # Each piece asks for more runs than this port samples. The preflight
+    # refuses that before it samples the first piece.
     var total = Path(Vector2(0, 0))
     total.curves.append(planar[1].copy())
     total.curves.append(planar[1].copy())
-    with assert_raises():
+    with assert_raises(contains="larger than this port"):
         _ = total.sample(Int.MAX // 2 + 1)
+    # A spline multiplies the division count by its point count. Three
+    # points at 5592406 runs is 16777218, which the sample refuses.
+    var wide = Path(Vector2(0, 0))
+    wide.curves.append(planar[3].copy())
+    with assert_raises(contains="larger than this port"):
+        _ = wide.sample(5592406)
     with assert_raises():
         _ = Path().sample(1)
     var empty = CurvePath3()
@@ -376,10 +412,16 @@ def test_space_sample_and_frame_counts_are_checked_before_allocation() raises:
     var curve = SpaceCurve3(line3(Vector3(0, 0, 0), Vector3(1, 0, 0)))
     with assert_raises():
         _ = lengths_of(curve, Int.MAX)
+    with assert_raises(contains="larger than this port"):
+        _ = lengths_of(curve, Int.MAX - 1)
+    with assert_raises(contains="larger than this port"):
+        _ = lengths_of(curve, 16777217)
     with assert_raises():
         _ = length_of(curve, Int.MAX)
     with assert_raises():
         _ = points_of(curve, Int.MAX)
+    with assert_raises(contains="larger than this port"):
+        _ = points_of(curve, 16777217)
     with assert_raises():
         _ = spaced_points3(curve, Int.MAX)
     with assert_raises():
@@ -392,8 +434,12 @@ def test_space_sample_and_frame_counts_are_checked_before_allocation() raises:
         _ = tangent_at(curve, 0.5, Int.MAX)
     with assert_raises():
         _ = frames3_of(curve, Int.MAX)
+    with assert_raises(contains="larger than this port"):
+        _ = frames3_of(curve, Int.MAX - 1)
     with assert_raises():
         _ = frames_of(curve, Int.MAX)
+    with assert_raises(contains="larger than this port"):
+        _ = frames_of(curve, 16777217)
     with assert_raises():
         _ = frames3_of(curve, 1, False, Int.MAX)
     assert_equal(len(lengths_of(curve, 1)), 2)

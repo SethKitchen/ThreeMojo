@@ -89,6 +89,16 @@ def test_waypoint_spacing_rejects_a_station_that_overflows() raises:
         _ = map.generate_waypoints_meters(1e308)
 
 
+def test_waypoint_spacing_rejects_a_walk_that_does_not_finish() raises:
+    var map = _map()
+    var kept = map.generate_waypoints_meters(2.0)
+    assert_true(len(kept) > 0)
+    # Fifty meters at one micrometer is more than 16777216 stations.
+    map.roads[0].length = 50.0
+    with assert_raises(contains="larger than this port"):
+        _ = map.generate_waypoints_meters(1e-6)
+
+
 def test_param_poly3_rejects_an_unknown_range() raises:
     var u = CubicPolynomial._from_coefficients(0, 1, 0, 0, 0)
     var v = CubicPolynomial._from_coefficients(0, 0, 0, 0, 0)

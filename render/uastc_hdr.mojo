@@ -1312,9 +1312,15 @@ def uastc_hdr_image(
         row or column are dropped.
 
     Raises:
-        Error: If `data` is not one block per four by four texels, or a
-            block is malformed; see `uastc_hdr_block`.
+        Error: If the size is not positive, the image would decode to
+            more than `MAX_DECODED_BYTES`, `data` is not one block per
+            four by four texels, or a block is malformed; see
+            `uastc_hdr_block`.
     """
+    require_positive_extent(
+        width, height, "UASTC HDR: dimensions must be positive"
+    )
+    check_decoded_size(width, height, True)
     var across = (width + 3) // 4
     var down = (height + 3) // 4
     if len(data) != across * down * UASTC_BLOCK_BYTES:

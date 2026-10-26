@@ -528,6 +528,8 @@ The floor accepts every positive `Int`, including `Int.MAX`.
 
 For finite bounds with `low < high`, `float_in` returns a finite value at least `low` and below `high`. Equal finite bounds return that bound. Each call uses one draw. The conversion handles intervals whose width overflows and clamps rounding at the upper end. `Vector2.random` and `Vector3.random` use this same conversion for each component.
 
+An `int_in` range whose width does not fit in an integer still draws inside the range.
+
 ### Periodic scalar helpers
 
 `euclidean_modulo(n, m)` accepts Float32 inputs. For finite inputs and a

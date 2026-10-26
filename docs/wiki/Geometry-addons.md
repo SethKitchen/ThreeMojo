@@ -25,7 +25,7 @@ The geometry addons of three.js's `examples/jsm/`: two more geometries, four mod
 
 ## Teapot
 
-`teapot(size, segments, bottom, lid, body, fit_lid, blinn)` is the Utah teapot. It has 32 bicubic Bezier patches. Each patch is a grid of `segments + 1` by `segments + 1` vertices.
+`teapot(size, segments, bottom, lid, body, fit_lid, blinn)` is the Utah teapot. It has 32 bicubic Bezier patches. Each patch is a grid of `segments + 1` by `segments + 1` vertices. A patch of more than 16777216 cells is refused.
 
 ![The Utah teapot turns under a lamp](out/teapot.png)
 
@@ -43,11 +43,11 @@ A triangle with two corners in one place is dropped, as in three.js. three.js ra
 
 ## Box lines
 
-`box_line(width, height, depth, width_segments, height_segments, depth_segments)` is a box as line segments. Draw it with a `LineSegments`. Each segment boundary gives a ring of four sticks round the box. The three extents must be finite and positive.
+`box_line(width, height, depth, width_segments, height_segments, depth_segments)` is a box as line segments. Draw it with a `LineSegments`. Each segment boundary gives a ring of four sticks round the box. The three extents must be finite and positive. More than 16777216 segments on one side is refused.
 
 ## Tessellate
 
-`tessellate(geometry, max_edge_length, max_iterations)` cuts every triangle in two across its longest edge until no edge is longer than the limit. The passes stop after `max_iterations`, so an edge can stay long.
+`tessellate(geometry, max_edge_length, max_iterations)` cuts every triangle in two across its longest edge until no edge is longer than the limit. The passes stop after `max_iterations`, so an edge can stay long. A pass count above 20 is refused.
 
 The midpoint takes the average position, normal, color and both texture coordinates. Only `position`, `normal`, `color`, `uv` and `uv1` are kept. The result has no index.
 
@@ -181,9 +181,11 @@ A named curve and a NURBS curve are each a `SpaceCurve`. The functions of `math/
 
 `hilbert2d(center, size, iterations, order)` and `hilbert3d(...)` return the corners of a Hilbert curve across a square in the xz plane or through a cube. The points come in the order that the curve visits them. `order` is three.js's `v0` to `v7`. `gosper(size)` returns the points of a Gosper curve in the xy plane, three numbers for each point. Draw each as a line strip.
 
+A square of more than 11 iterations is refused. A cube of more than 7 iterations is refused.
+
 ## Roller coaster
 
-`geometries/roller_coaster.mojo` builds three.js's roller coaster example. Each function takes a `SpaceCurve` and a number of divisions, and samples the curve at even steps of its length.
+`geometries/roller_coaster.mojo` builds three.js's roller coaster example. Each function takes a `SpaceCurve` and a number of divisions, and samples the curve at even steps of its length. A division count above 16777216 is refused.
 
 | Function | What it builds |
 |---|---|

@@ -242,6 +242,25 @@ comptime SMAA_MAX_DISTANCE_RIGHT = 2 * SMAA_MAX_SEARCH_STEPS
 comptime SMAA_SMOOTH_MAX_DISTANCE = Float32(32)
 
 
+def require_smaa_extent(width: Int, height: Int) raises:
+    """Refuse an SMAA frame that is empty or whose pixel count would wrap.
+
+    Nothing. The call returns when both sides are at least one and their
+    product fits in an integer.
+
+    Args:
+        width: The frame's width in pixels.
+        height: The frame's height in pixels.
+
+    Raises:
+        Error: If a side is below one, or the pixel count does not fit.
+    """
+    if width < 1 or height < 1:
+        raise Error("An SMAA frame must be at least one pixel each way")
+    if width > Int.MAX // height:
+        raise Error("An SMAA frame is larger than this port builds")
+
+
 struct EdgeMap(Movable):
     """Which pixels differ from the pixel to their left and from the pixel
     above: the red and green of SMAA's edges texture.
@@ -254,13 +273,17 @@ struct EdgeMap(Movable):
     # One per pixel: an edge between it and the pixel above it.
     var top: List[Bool]
 
-    def __init__(out self, width: Int, height: Int):
+    def __init__(out self, width: Int, height: Int) raises:
         """Start a map of the given size with no edges.
 
         Args:
             width: The frame's width in pixels.
             height: The frame's height in pixels.
+
+        Raises:
+            Error: If a side is below one, or the pixel count does not fit.
         """
+        require_smaa_extent(width, height)
         self.width = width
         self.height = height
         self.left = List[Bool](length=width * height, fill=False)
@@ -290,7 +313,7 @@ struct EdgeMap(Movable):
         """
         return self.top[clamped_texel(x, y, self.width, self.height)]
 
-    def transposed(self) -> EdgeMap:
+    def transposed(self) raises -> EdgeMap:
         """Return the map mirrored across its diagonal, so a column of left
         edges becomes a row of top edges.
 
@@ -300,6 +323,9 @@ struct EdgeMap(Movable):
 
         Returns:
             The map, `height` wide and `width` high.
+
+        Raises:
+            Error: If the turned pixel count does not fit.
         """
         var turned = EdgeMap(self.height, self.width)
         for y in range(self.height):  # pragma: no branch
@@ -316,7 +342,9 @@ def _color_step(a: FloatColor, b: FloatColor) -> Float32:
     return max(max(abs(a.r - b.r), abs(a.g - b.g)), abs(a.b - b.b))
 
 
-def smaa_edges(colors: List[FloatColor], width: Int, height: Int) -> EdgeMap:
+def smaa_edges(
+    colors: List[FloatColor], width: Int, height: Int
+) raises -> EdgeMap:
     """Return where the frame has edges: three.js's `SMAAEdgesShader`, its
     color edge detection.
 
@@ -332,6 +360,9 @@ def smaa_edges(colors: List[FloatColor], width: Int, height: Int) -> EdgeMap:
 
     Returns:
         The edges.
+
+    Raises:
+        Error: If a side is below one, or the pixel count does not fit.
     """
     var edges = EdgeMap(width, height)
     var y = 0
@@ -556,13 +587,17 @@ struct BlendWeights(Movable):
     # pixel to the left takes from it.
     var rgba: List[SIMD[DType.float32, 4]]
 
-    def __init__(out self, width: Int, height: Int):
+    def __init__(out self, width: Int, height: Int) raises:
         """Start a set of weights of the given size, all zero.
 
         Args:
             width: The frame's width in pixels.
             height: The frame's height in pixels.
+
+        Raises:
+            Error: If a side is below one, or the pixel count does not fit.
         """
+        require_smaa_extent(width, height)
         self.width = width
         self.height = height
         self.rgba = List[SIMD[DType.float32, 4]](
@@ -582,7 +617,7 @@ struct BlendWeights(Movable):
         return self.rgba[clamped_texel(x, y, self.width, self.height)]
 
 
-def smaa_weights(edges: EdgeMap) -> BlendWeights:
+def smaa_weights(edges: EdgeMap) raises -> BlendWeights:
     """Return how much each pixel blends across each edge: three.js's
     `SMAAWeightsShader`, walking one pixel at a time and computing the
     area rather than reading it.
@@ -592,6 +627,9 @@ def smaa_weights(edges: EdgeMap) -> BlendWeights:
 
     Returns:
         The weights.
+
+    Raises:
+        Error: If the pixel count does not fit.
     """
     var width = edges.width
     var height = edges.height
@@ -685,12 +723,15 @@ def smaa_blend(
     return out^
 
 
-def smaa_light(mut frame: RenderTarget):
+def smaa_light(mut frame: RenderTarget) raises:
     """Smooth the frame's jagged edges by their shape: three.js's
     `SMAAPass`, its edges, weights and blend in turn.
 
     Args:
         frame: The frame, changed in place.
+
+    Raises:
+        Error: If the frame's pixel count does not fit.
     """
     var edges = smaa_edges(frame.colors, frame.width, frame.height)
     var weights = smaa_weights(edges)

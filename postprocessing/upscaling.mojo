@@ -463,7 +463,7 @@ def _clamp4(
     return min(max(value, low), high)
 
 
-def fsr1_light(mut frame: RenderTarget, settings: UpscaleSettings):
+def fsr1_light(mut frame: RenderTarget, settings: UpscaleSettings) raises:
     """Run three.js's `FSR1Node` over the frame: read the frame at the
     resolution scale, upsample it back to the frame's size with EASU, and
     sharpen it with RCAS.
@@ -472,6 +472,9 @@ def fsr1_light(mut frame: RenderTarget, settings: UpscaleSettings):
         frame: The frame, replaced.
         settings: The sharpness, whether RCAS denoises, and the scale the
             input is read at.
+
+    Raises:
+        Error: If the scaled side does not fit in an integer.
     """
     var w = frame.width
     var h = frame.height

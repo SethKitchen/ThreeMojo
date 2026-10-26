@@ -124,6 +124,7 @@ from render.rasterizer import (
     packed_depth,
     rasterize,
     rasterize_depth,
+    _rows_of,
     rasterize_all,
     rasterize_shaded,
 )
@@ -308,6 +309,51 @@ def test_rasterize_leaves_background_when_nothing_is_covered() raises:
     for y in range(4):
         for x in range(4):
             assert_equal(fb.get_pixel(x, y).r, background.r)
+
+
+def test_a_coordinate_past_an_integer_lies_past_the_image() raises:
+    var background = Color(20, 24, 32)
+    var fb = Framebuffer(4, 4, background)
+    var off = Triangle(
+        Vector2(Float32(1e20), 0),
+        Vector2(Float32(1e20), 4),
+        Vector2(Float32(1e20), 2),
+    )
+    rasterize(off, fb, Color(255, 0, 0))
+    var missing = Triangle(
+        Vector2(nan[DType.float32](), 1), Vector2(1, 1), Vector2(1, 3)
+    )
+    rasterize(missing, fb, Color(255, 0, 0))
+    var before = Triangle(
+        Vector2(Float32(-1e20), 0),
+        Vector2(Float32(-1e20), 4),
+        Vector2(Float32(-1e20), 2),
+    )
+    rasterize(before, fb, Color(255, 0, 0))
+    for y in range(4):
+        for x in range(4):
+            assert_equal(fb.get_pixel(x, y).r, background.r)
+    var corners = List[RasterVertex]()
+    corners.append(RasterVertex(0, Float32(1e20), 0, 1, FloatColor(0, 0, 0)))
+    corners.append(RasterVertex(0, Float32(1e20), 0, 1, FloatColor(0, 0, 0)))
+    var below = _rows_of(corners, 2, 2)
+    assert_equal(below[0], Int.MAX)
+    assert_equal(below[1], Int.MAX)
+    var above = List[RasterVertex]()
+    above.append(RasterVertex(0, Float32(-1e20), 0, 1, FloatColor(0, 0, 0)))
+    above.append(RasterVertex(0, Float32(-1e20), 0, 1, FloatColor(0, 0, 0)))
+    var high = _rows_of(above, 2, 2)
+    assert_equal(high[0], Int.MIN)
+    assert_equal(high[1], Int.MIN)
+    var near = List[RasterVertex]()
+    near.append(RasterVertex(0, 3.2, 0, 1, FloatColor(0, 0, 0)))
+    near.append(RasterVertex(0, 5.2, 0, 1, FloatColor(0, 0, 0)))
+    var band = _rows_of(near, 2, 0)
+    assert_equal(band[0], 3)
+    assert_equal(band[1], 6)
+    var wide = _rows_of(near, 2, 2)
+    assert_equal(wide[0], 1)
+    assert_equal(wide[1], 8)
 
 
 def flat_vertex(

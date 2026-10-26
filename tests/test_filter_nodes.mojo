@@ -10,6 +10,7 @@ three.js's, their settings, and their passes."""
 from cameras.perspective_camera import PerspectiveCamera
 from core.assets import Assets
 from core.scene import Scene
+from math.matrix4 import Matrix4
 from math.vector3 import Vector3
 from postprocessing.composer import (
     BILATERAL_BLUR,
@@ -40,6 +41,7 @@ from postprocessing.filter_nodes import (
     depth_aware_blend_light,
     depth_aware_blend_pixel,
     depth_aware_blur_light,
+    depth_aware_blur_value,
     interleaved_gradient_noise,
     perspective_depth_to_view_z,
     radial_blur_light,
@@ -134,6 +136,16 @@ def test_the_settings_are_checked() raises:
         _ = crt_pass(curvature=0.7)
     assert_true(crt_pass().kind == CRT)
     assert_true(radial_blur_pass().kind == RADIAL_BLUR)
+    with assert_raises(contains="larger than this port"):
+        _ = radial_blur_pass(count=16777217)
+    with assert_raises(contains="larger than this port"):
+        _ = radial_blur_pass(count=Int.MAX)
+    var frame = RenderTarget(2, 2, Color(0, 0, 0), FLOAT_TARGET)
+    frame.colors[0] = FloatColor(0.25, 0.5, 0.75, 1)
+    var heavy = FilterSettings()
+    heavy.count = Int.MAX
+    radial_blur_light(frame, heavy)
+    assert_almost_equal(frame.colors[0].g, Float32(0.5), atol=1e-5)
     assert_true(bilateral_blur_pass().kind == BILATERAL_BLUR)
     assert_true(depth_aware_blur_pass().kind == DEPTH_AWARE_BLUR)
     var blend = depth_aware_blend_pass(TextureId(0), Color(255, 0, 0))
@@ -264,6 +276,25 @@ def test_the_depth_aware_blur_stops_at_a_depth_step() raises:
     assert_almost_equal(frame.colors[3 * SIZE + 3].r, 0, atol=1e-3)
     assert_almost_equal(frame.colors[3 * SIZE + 4].r, 1, atol=1e-3)
     assert_almost_equal(frame.colors[3 * SIZE + 4].a, 1, atol=1e-6)
+
+
+def test_a_wide_blur_reads_the_center_texel() raises:
+    var width = 16777217
+    var values = List[Float32](length=width, fill=0)
+    values[8388608] = 1
+    var depth = List[Float32](length=width, fill=0)
+    var view = DepthView(
+        depth^,
+        width,
+        1,
+        Matrix4(),
+        Length(0.1, METER),
+        Length(50.0, METER),
+    )
+    var got = depth_aware_blur_value(
+        values, width, 1, view, 8388608, 0, 0, 0, FilterSettings()
+    )
+    assert_equal(got, 1)
 
 
 def test_the_depth_aware_blend_mixes_by_the_mask() raises:

@@ -460,6 +460,11 @@ comptime BinNode = def(mut ComputeKernel) raises thin -> NodeRef
 """What builds a counting sort's bin for the invocation's place, three.js's
 `binNode`: a `float` from zero to `bin_count - 1`."""
 
+# Places and bin indexes are `Float32` values. A count above this repeats
+# an earlier index, and the maximum integer never finishes the fill or the
+# prefix walk.
+comptime MAX_COUNTING_SORT = 16777216
+
 
 struct CountingSort(Movable):
     """A counting sort of the places `0` to `count - 1` by a bin each,
@@ -497,10 +502,13 @@ struct CountingSort(Movable):
             workgroup_size: How many invocations a workgroup has.
 
         Raises:
-            Error: If a count is not positive.
+            Error: If a count is not positive, or a place count or a bin
+                count is above 16777216.
         """
         if count <= 0 or bin_count <= 0 or workgroup_size <= 0:
             raise Error("A counting sort needs places, bins and a workgroup")
+        if count > MAX_COUNTING_SORT or bin_count > MAX_COUNTING_SORT:
+            raise Error("A counting sort is larger than this port sorts")
         self.count = count
         self.bin_count = bin_count
         self.workgroup_size = workgroup_size

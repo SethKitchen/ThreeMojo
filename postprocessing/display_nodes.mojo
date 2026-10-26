@@ -139,6 +139,17 @@ struct DisplaySettings(ImplicitlyCopyable):
         self.bokeh_scale = 1
 
 
+# A display tap index is a `Float32`. Past 16777216 it is no longer that
+# index. A count of the maximum integer does not finish the walk, and one
+# more than it wraps a motion blur's loop bound.
+comptime MAX_DISPLAY_TAPS = 16777216
+
+# A box blur is a square of `2 * size + 1` taps. Size 2047 is 4095 taps
+# on a side. One more side is more than 16777216 taps, and the maximum
+# integer wraps `size + 1`, so the square is empty.
+comptime MAX_BOX_BLUR_SIZE = 2047
+
+
 def check_display(settings: DisplaySettings) raises:
     """Refuse settings no display pass could run.
 
@@ -150,7 +161,9 @@ def check_display(settings: DisplaySettings) raises:
             resolution scale or the down sample ratio is not positive; a
             size, a separation, a repeat count, a sample count, a ghost
             count or a motion blur's sample count is below what each
-            needs; or a depth of field's focal length is not positive.
+            needs; a hash blur, an anamorphic streak, a lens flare, or a
+            motion blur has more than 16777216 taps; a box blur's size is
+            above 2047; or a depth of field's focal length is not positive.
     """
     var finite = (
         isfinite(settings.sigma)
@@ -184,6 +197,8 @@ def check_display(settings: DisplaySettings) raises:
         raise Error("A display pass's scale and ratio must be positive")
     if settings.size < 0 or settings.separation < 0:
         raise Error("A box blur's size and separation must not be negative")
+    if settings.size > MAX_BOX_BLUR_SIZE:
+        raise Error("A box blur's size is larger than this port takes")
     if settings.repeats < 1 or settings.samples < 2:
         raise Error("A hash blur needs a repeat, an anamorphic two samples")
     require_non_negative(
@@ -192,6 +207,18 @@ def check_display(settings: DisplaySettings) raises:
     )
     if settings.motion_samples < 2:
         raise Error("A motion blur takes at least two samples")
+    if settings.repeats > MAX_DISPLAY_TAPS:
+        raise Error("A hash blur's repeat count is larger than this port takes")
+    if settings.samples > MAX_DISPLAY_TAPS:
+        raise Error(
+            "An anamorphic streak's sample count is larger than this port takes"
+        )
+    if settings.ghost_samples > MAX_DISPLAY_TAPS:
+        raise Error("A lens flare's ghost count is larger than this port takes")
+    if settings.motion_samples > MAX_DISPLAY_TAPS:
+        raise Error(
+            "A motion blur's sample count is larger than this port takes"
+        )
     require_positive(
         settings.focal_length.value,
         "A depth of field's focal length must be positive",
@@ -229,9 +256,37 @@ def _add(a: FloatColor, b: FloatColor, weight: Float32) -> FloatColor:
     )
 
 
-def scaled_size(size: Int, scale: Float32) -> Int:
+def _rounded_side(value: Float64) raises -> Int:
+    """Return `Math.max(Math.round(value), 1)`.
+
+    Args:
+        value: The side before rounding.
+
+    Returns:
+        The side, at least one.
+
+    Raises:
+        Error: If the rounded side is not finite or does not fit in an
+            integer.
+    """
+    var scaled = floor(value + 0.5)
+    # `Float64(Int.MAX)` is 2^63. `Int` of a float at or past it is not
+    # the side. A float below `-2^63` is not one either.
+    if (
+        not isfinite(scaled)
+        or scaled < -Float64(Int.MAX)
+        or scaled >= Float64(Int.MAX)
+    ):
+        raise Error("A scaled size does not fit in an integer")
+    return max(Int(scaled), 1)
+
+
+def scaled_size(size: Int, scale: Float32) raises -> Int:
     """Return a target's side at a resolution scale, three.js's
     `Math.max( Math.round( size * scale ), 1 )`.
+
+    The product is a `Float64`, as JavaScript's number is. A `Float32`
+    product drops whole sizes past 2^24.
 
     Args:
         size: The frame's side, in pixels.
@@ -239,8 +294,29 @@ def scaled_size(size: Int, scale: Float32) -> Int:
 
     Returns:
         The side, at least one.
+
+    Raises:
+        Error: If the rounded side is not finite or does not fit in an
+            integer.
     """
-    return max(Int(floor(Float32(size) * scale + 0.5)), 1)
+    return _rounded_side(Float64(size) * Float64(scale))
+
+
+def require_scaled_extent(width: Int, height: Int) raises:
+    """Refuse a scaled frame whose pixel count would wrap.
+
+    Both sides are already at least one. Nothing. The call returns when
+    their product fits in an integer.
+
+    Args:
+        width: The scaled width in pixels.
+        height: The scaled height in pixels.
+
+    Raises:
+        Error: If the pixel count does not fit.
+    """
+    if width > Int.MAX // height:
+        raise Error("A scaled frame is larger than this port builds")
 
 
 def _read_back(
@@ -259,17 +335,25 @@ def _read_back(
 # --- GaussianBlurNode --------------------------------------------------------
 
 
-def gaussian_coefficients(sigma: Float32) -> List[Float32]:
+def gaussian_coefficients(sigma: Float32) raises -> List[Float32]:
     """Return `GaussianBlurNode`'s weights: `3 + 2 * sigma` of them, of a
     Gaussian of a third of that, not normalized, as three.js leaves them.
+
+    The loop index is a `Float32`. Past 16777216 that index is no longer
+    the integer it counts, and a kernel of that size does not finish.
 
     Args:
         sigma: The node's `sigma`.
 
     Returns:
         The center weight, then one per step out.
+
+    Raises:
+        Error: If the kernel has more than 16777216 weights.
     """
     var kernel_size = 3 + 2 * sigma
+    if kernel_size > Float32(16777216):
+        raise Error("A Gaussian blur's kernel is larger than this port builds")
     var spread = kernel_size / 3
     var out = List[Float32]()
     var i = 0
@@ -321,7 +405,9 @@ def _gaussian_along(
     return out^
 
 
-def gaussian_blur_light(mut frame: RenderTarget, settings: DisplaySettings):
+def gaussian_blur_light(
+    mut frame: RenderTarget, settings: DisplaySettings
+) raises:
     """Blur the frame across and then down, three.js's `GaussianBlurNode`,
     at its resolution scale, and read the result back at the frame's size.
 
@@ -329,9 +415,15 @@ def gaussian_blur_light(mut frame: RenderTarget, settings: DisplaySettings):
         frame: The frame, replaced.
         settings: The sigma, the direction, the resolution scale and
             whether the blur is premultiplied.
+
+    Raises:
+        Error: If a scaled side does not fit in an integer, the scaled
+            pixel count does not fit, or the kernel has more than
+            16777216 weights.
     """
     var width = scaled_size(frame.width, settings.resolution_scale)
     var height = scaled_size(frame.height, settings.resolution_scale)
+    require_scaled_extent(width, height)
     var weights = gaussian_coefficients(settings.sigma)
     var premultiplied = settings.premultiplied_alpha
     var source = frame.colors.copy()
@@ -377,13 +469,20 @@ def box_blur_pixel(
         x: The column.
         y: The row, down from the top.
         settings: The size, the separation and whether the blur is
-            premultiplied.
+            premultiplied. A size above 2047, or below zero, returns the
+            pixel.
 
     Returns:
-        The mean, as the frame holds it.
+        The mean, as the frame holds it. The pixel alone when the size is
+        below zero or above 2047.
     """
     var u = u_of(x, source.width)
     var v = v_of(y, source.height)
+    if settings.size < 0 or settings.size > MAX_BOX_BLUR_SIZE:
+        return _stored(
+            _tap(source, u, v, settings.premultiplied_alpha),
+            settings.premultiplied_alpha,
+        )
     var sep = Float32(max(settings.separation, 1))
     var step_u = 1 / Float32(source.width) * sep
     var step_v = 1 / Float32(source.height) * sep
@@ -417,13 +516,19 @@ def hash_blur_pixel(
         x: The column.
         y: The row, down from the top.
         settings: The blur amount, the repeats and whether the blur is
-            premultiplied.
+            premultiplied. More than 16777216 repeats returns the pixel.
 
     Returns:
-        The mean, as the frame holds it.
+        The mean, as the frame holds it. The pixel alone when the repeat
+        count is above 16777216.
     """
     var u = u_of(x, source.width)
     var v = v_of(y, source.height)
+    if settings.repeats > MAX_DISPLAY_TAPS:
+        return _stored(
+            _tap(source, u, v, settings.premultiplied_alpha),
+            settings.premultiplied_alpha,
+        )
     var repeats = Float32(settings.repeats)
     var amount = settings.blur_amount
     var sum = TRANSPARENT_BLACK
@@ -523,13 +628,17 @@ def motion_blur_pixel(
         velocity: The pixel's velocity, scaled by the pass's amount, in
             texture coordinates: three.js adds it to the uv as it is, and
             its uv grows down.
-        samples: `numSamples`, at least two.
+        samples: `numSamples`, at least two. A count above 16777216
+            returns the pixel.
 
     Returns:
-        The mean, as the frame holds it.
+        The mean, as the frame holds it. The pixel alone when `samples`
+        is above 16777216.
     """
     var u = u_of(x, source.width)
     var v = v_of(y, source.height)
+    if samples > MAX_DISPLAY_TAPS:
+        return _stored(_tap(source, u, v, False), False)
     var count = Float32(samples)
     var sum = _tap(source, u, v, False)
     # At least two samples, so the loop runs.
@@ -714,7 +823,7 @@ def dof_spread(
 
 def dof_light(
     mut frame: RenderTarget, view: DepthView, settings: DisplaySettings
-):
+) raises:
     """Run three.js's `DepthOfFieldNode` over the frame.
 
     The circle of confusion is worked out at every pixel from its view
@@ -728,6 +837,9 @@ def dof_light(
         view: The frame's depth, which gives each pixel's view distance.
         settings: The focus distance, the focal length and the bokeh's
             scale.
+
+    Raises:
+        Error: If a halved side does not fit in an integer.
     """
     var w = frame.width
     var h = frame.height
@@ -893,7 +1005,7 @@ def luminance_of(r: Float32, g: Float32, b: Float32) -> Float32:
     return 0.2126729 * r + 0.7151522 * g + 0.0721750 * b
 
 
-def anamorphic_light(mut frame: RenderTarget, settings: DisplaySettings):
+def anamorphic_light(mut frame: RenderTarget, settings: DisplaySettings) raises:
     """Add three.js's `AnamorphicNode` to the frame: the light above a
     luminance threshold, smeared along the row and tinted blue, at the
     node's resolution scale.
@@ -906,9 +1018,18 @@ def anamorphic_light(mut frame: RenderTarget, settings: DisplaySettings):
         frame: The frame, changed in place.
         settings: The threshold, the scale, the samples and the resolution
             scale.
+
+    Raises:
+        Error: If there are more than 16777216 samples, a scaled side does
+            not fit in an integer, or the scaled pixel count does not fit.
     """
+    if settings.samples > MAX_DISPLAY_TAPS:
+        raise Error(
+            "An anamorphic streak's sample count is larger than this port takes"
+        )
     var width = scaled_size(frame.width, settings.resolution_scale)
     var height = scaled_size(frame.height, settings.resolution_scale)
+    require_scaled_extent(width, height)
     var before = frame.colors.copy()
     var view = LightView(before, frame.width, frame.height)
     var half = settings.samples // 2
@@ -953,7 +1074,7 @@ def anamorphic_light(mut frame: RenderTarget, settings: DisplaySettings):
 # --- LensflareNode -----------------------------------------------------------
 
 
-def lensflare_light(mut frame: RenderTarget, settings: DisplaySettings):
+def lensflare_light(mut frame: RenderTarget, settings: DisplaySettings) raises:
     """Add three.js's `LensflareNode` to the frame: ghosts of the light
     above a threshold, mirrored through the center, at a smaller size.
 
@@ -966,13 +1087,20 @@ def lensflare_light(mut frame: RenderTarget, settings: DisplaySettings):
         frame: The frame, changed in place.
         settings: The ghosts' tint, threshold, count, spacing and
             attenuation, and the down sample ratio.
+
+    Raises:
+        Error: If there are more than 16777216 ghosts, a flare side does
+            not fit in an integer, or the flare's pixel count does not fit.
     """
-    var width = max(
-        Int(floor(Float32(frame.width) / settings.down_sample_ratio + 0.5)), 1
+    if settings.ghost_samples > MAX_DISPLAY_TAPS:
+        raise Error("A lens flare's ghost count is larger than this port takes")
+    var width = _rounded_side(
+        Float64(frame.width) / Float64(settings.down_sample_ratio)
     )
-    var height = max(
-        Int(floor(Float32(frame.height) / settings.down_sample_ratio + 0.5)), 1
+    var height = _rounded_side(
+        Float64(frame.height) / Float64(settings.down_sample_ratio)
     )
+    require_scaled_extent(width, height)
     var before = frame.colors.copy()
     var view = LightView(before, frame.width, frame.height)
     var flare = List[FloatColor](capacity=width * height)

@@ -484,6 +484,57 @@ def test_refusals() raises:
         ),
         "needs a hex number",
     )
+    refuses(
+        (
+            "Shape { appearance Appearance { texture PixelTexture { image"
+            " 2000000000 2000000000 1 } } }"
+        ),
+        "larger than this port",
+    )
+    # 3037000500 * 3037000500 wraps in Int. The old index length was a
+    # short loop, so the grid looked small enough to build.
+    refuses(
+        (
+            "Shape { geometry ElevationGrid { xDimension 3037000500"
+            " zDimension 3037000500 } }"
+        ),
+        "larger than this port",
+    )
+    # 2^31 points on a side: the point count fits, and `index * 3` does not.
+    refuses(
+        (
+            "Shape { geometry ElevationGrid { xDimension 2147483648"
+            " zDimension 2147483648 } }"
+        ),
+        "larger than this port",
+    )
+    # 1e20 is a multiple of 2048, so the byte is zero. 257 keeps its remainder.
+    var model = parse_vrml(
+        (
+            "#VRML V2.0 utf8\nShape { appearance Appearance { texture"
+            " PixelTexture { image 5 1 1 255 257 1e20 -1e20 -1 } } }"
+        ),
+        scene,
+        assets,
+    )
+    ref pixels = model.textures[0].data
+    assert_equal(Int(pixels[0]), 255)
+    assert_equal(Int(pixels[4]), 1)
+    assert_equal(Int(pixels[8]), 0)
+    assert_equal(Int(pixels[12]), 0)
+    assert_equal(Int(pixels[16]), 255)
+    assert_equal(Int(pixels[19]), 1)
+    # A zero height makes no bytes. It is not an overflow.
+    var empty = Scene()
+    var empty_assets = Assets()
+    _ = parse_vrml(
+        (
+            "#VRML V2.0 utf8\nShape { appearance Appearance { texture"
+            " PixelTexture { image 1 0 1 } } }"
+        ),
+        empty,
+        empty_assets,
+    )
     # A material refuses an opacity above one.
     refuses(
         (

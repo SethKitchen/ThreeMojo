@@ -15,7 +15,7 @@ piece or a clearance already placed, stands in the swing of a door, or is
 a tall piece in front of a window. Among the places left, the piece takes
 the best one by a score: a desk prefers a window, a bed prefers a wall far
 from the door, and a small seeded term breaks ties. A piece with no place
-left is skipped.
+left is skipped. A room that needs more than 16777216 places is refused.
 
 The rules follow the interior layout guidelines of Merrell, Schkufza, Li,
 Agrawala and Koltun, "Interactive furniture layout using interior design
@@ -60,6 +60,8 @@ from units.si import Angle64, Length64, METER, RADIAN, SQUARE_METER
 # How a piece is placed.
 comptime _WALL = 0
 comptime _CENTER = 1
+# Places along a wall, or cells of the open grid. A longer walk does not finish.
+comptime _MAX_FURNITURE_STEPS = 16777216
 
 
 @fieldwise_init
@@ -211,9 +213,14 @@ struct _Place(ImplicitlyCopyable):
     var score: Float64
 
 
+def _require_furniture_steps(span: Float64, step: Float64) raises:
+    if not (span / step < Float64(_MAX_FURNITURE_STEPS)):
+        raise Error("A furniture walk is larger than this port places")
+
+
 def _wall_places(
     room: _Room, piece: _Piece, mut random: SeededRandom
-) -> List[_Place]:
+) raises -> List[_Place]:
     """Return candidate places with the piece's back to a wall."""
     var out = List[_Place]()
     var n = len(room.outline)
@@ -227,6 +234,7 @@ def _wall_places(
         var inward = t.perpendicular()
         var angle = atan2(inward.y, inward.x) - pi / 2
         var s = piece.width / 2 + 0.05
+        _require_furniture_steps(length, 0.25)
         while s <= length - piece.width / 2 - 0.05:
             var offset = piece.depth / 2 + 0.02
             var center = a + t * s + inward * offset
@@ -237,7 +245,7 @@ def _wall_places(
 
 def _center_places(
     room: _Room, piece: _Piece, mut random: SeededRandom
-) -> List[_Place]:
+) raises -> List[_Place]:
     """Return candidate places in the open, on a grid, along the room's
     longest edge."""
     var out = List[_Place]()
@@ -260,6 +268,8 @@ def _center_places(
         )
     var d = room.outline[(best + 1) % n] - room.outline[best]
     var angle = atan2(d.y, d.x)
+    var span = max(high.x - low.x, high.y - low.y)
+    _require_furniture_steps(span, 0.3)
     var y = low.y + 0.15
     while y < high.y:
         var x = low.x + 0.15
@@ -425,7 +435,7 @@ def furnish(mut building: Building, seed: Int) raises -> Int:
         The number of furnishings added, chairs included.
 
     Raises:
-        Error: Never, for a model that validates.
+        Error: If a room needs more places than this port walks.
     """
     var before = len(building.furnishings)
     var random = SeededRandom(seed if seed != 0 else 1)

@@ -523,6 +523,7 @@ from render.computation import (
     GPUComputationRenderer,
     compute_texel,
     require_computation_ready,
+    require_computation_size,
 )
 from materials.compute_ids import ATOMIC_LOAD
 from materials.compute_nodes import (
@@ -534,6 +535,7 @@ from materials.compute_nodes import (
     StorageMemory,
     atomic_result,
     pack_storage,
+    require_compute_dispatch,
     run_statements,
     unpack_storage,
 )
@@ -12770,8 +12772,15 @@ struct GpuComposer(Movable):
             self._per_pixel(LUMINOSITY)
         elif kind == AFTERIMAGE:
             # The trail is kept on the host, in the composer, so both
-            # backends share it and `reset` forgets it.
-            if len(composer.memories[index]) == count:
+            # backends share it and `reset` forgets it. The same list is
+            # read back into: `_put_colors` has already copied it to the
+            # device, and a new frame-sized list every frame dominates the
+            # pass.
+            if len(composer.memories[index]) != count:
+                composer.memories[index] = List[FloatColor](
+                    length=count, fill=TRANSPARENT_BLACK
+                )
+            else:
                 self._put_colors(composer.memories[index])
                 self.context.enqueue_function[afterimage_kernel](
                     self.light.unsafe_ptr(),
@@ -12782,14 +12791,13 @@ struct GpuComposer(Movable):
                     grid_dim=grid,
                     block_dim=(TILE, TILE),
                 )
-            var trail = List[FloatColor](length=count, fill=TRANSPARENT_BLACK)
+            ref trail = composer.memories[index]
             with self.light.map_to_host() as host:
                 unsafe_memcpy(
                     dest=trail.unsafe_ptr().unsafe_bitcast[Float32](),
                     src=host.unsafe_ptr(),
                     count=count * 4,
                 )
-            composer.memories[index] = trail^
         elif kind == OUTPUT:
             var curve = renderer.tone_curve()
             if curve != NO_TONE_MAPPING:
@@ -13278,8 +13286,11 @@ struct GpuComputation(Movable):
                 written back to it.
 
         Raises:
-            Error: If `init` has not compiled the shaders.
+            Error: If either size is not positive, the texel buffer does
+                not fit in an integer, or `init` has not compiled the
+                shaders.
         """
+        require_computation_size(computation.size_x, computation.size_y)
         require_computation_ready(
             len(computation.programs), len(computation.variables)
         )
@@ -13751,9 +13762,10 @@ struct GpuCompute(ComputeRunner, Movable):
             node: The node.
 
         Raises:
-            Error: If the store has no buffer the node names, or holds it
-                as another type.
+            Error: If the dispatch does not fit, or the store has no buffer
+                the node names, or holds it as another type.
         """
+        require_compute_dispatch(node.count, node.workgroup_size, node.results)
         var packed = pack_storage(store, node)
         ref memory = packed[0]
         ref regions = packed[1]

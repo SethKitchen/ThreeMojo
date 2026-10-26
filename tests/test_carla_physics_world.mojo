@@ -259,6 +259,23 @@ def test_empty_world() raises:
     var world = PhysicsWorld()
     world.step(Duration(H, SECOND))
     assert_equal(world.contact_count, 0)
+
+
+def test_a_solver_iteration_count_this_port_cannot_run_is_refused() raises:
+    var world = PhysicsWorld()
+    world.velocity_iterations = 16777217
+    with assert_raises(contains="larger than this port"):
+        world.step(Duration(H, SECOND))
+    world.velocity_iterations = Int.MAX
+    with assert_raises(contains="larger than this port"):
+        world.step(Duration(H, SECOND))
+    world.velocity_iterations = 10
+    world.position_iterations = 16777217
+    with assert_raises(contains="larger than this port"):
+        world.step(Duration(H, SECOND))
+    world.position_iterations = Int.MAX
+    with assert_raises(contains="larger than this port"):
+        world.step(Duration(H, SECOND))
     assert_false(
         world.raycast(Vector3(0, 0, 0), Vector3(1, 0, 0), _m(10), BodyId(-1))
     )

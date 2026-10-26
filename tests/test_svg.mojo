@@ -602,6 +602,10 @@ def test_curves() raises:
         _ = SvgCurve(CUBIC, [SvgVector(0, 0)]).point(0)
     with assert_raises(contains="at least one division"):
         _ = line.get_points(0)
+    with assert_raises(contains="larger than this port"):
+        _ = line.get_points(16777217)
+    with assert_raises(contains="larger than this port"):
+        _ = line.get_points(Int.MAX)
     # An ellipse: its angles the same, turned back, past a turn, and
     # clockwise through a whole turn.
     var dot = SvgCurve(SvgVector(1, 1), 2, 3, 1, 1, True, 0)
@@ -658,6 +662,17 @@ def test_sub_paths_and_conversion() raises:
     one.auto_close = True
     one.line_to(0, 0)
     assert_equal(len(one.get_points()), 1)
+    # A straight line stays one run. An ellipse doubles the count, and
+    # that product is refused past 16777216 runs.
+    var straight = SvgSubPath()
+    straight.line_to(1, 0)
+    assert_equal(len(straight.get_points(Int.MAX)), 2)
+    var arc = SvgSubPath()
+    arc.abs_arc(0, 0, 1, 0, 1)
+    with assert_raises(contains="larger than this port"):
+        _ = arc.get_points(8388609)
+    with assert_raises(contains="larger than this port"):
+        _ = arc.get_points(Int.MAX)
     var shape_path = SvgShapePath()
     with assert_raises(contains="draws before it moves"):
         shape_path.line_to(1, 1)

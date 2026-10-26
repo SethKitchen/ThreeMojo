@@ -22,7 +22,7 @@ from generators.forest import (
 from generators.terrain import TerrainGenerator, TerrainParameters
 from math.matrix4 import Matrix4
 from math.vector3 import Vector3
-from std.math import nan
+from std.math import inf, nan
 from std.testing import (
     TestSuite,
     assert_almost_equal,
@@ -219,8 +219,20 @@ def test_forest_parameters_are_checked() raises:
     with assert_raises(contains="count"):
         _ = ForestGenerator(p^).build(terrain)
     p = ForestParameters()
+    p.count = Int.MAX
+    with assert_raises(contains="does not fit"):
+        _ = ForestGenerator(p^).build(terrain)
+    p = ForestParameters()
     p.detail = -1
     with assert_raises(contains="detail"):
+        _ = ForestGenerator(p^).build(terrain)
+    p = ForestParameters()
+    p.detail = 257
+    with assert_raises(contains="larger than this port"):
+        _ = ForestGenerator(p^).build(terrain)
+    p = ForestParameters()
+    p.detail = Int.MAX
+    with assert_raises(contains="larger than this port"):
         _ = ForestGenerator(p^).build(terrain)
     p = ForestParameters()
     p.to_distance = Length(300, METER)
@@ -230,6 +242,19 @@ def test_forest_parameters_are_checked() raises:
     p.max_scale = nan[DType.float64]()
     with assert_raises(contains="scale"):
         _ = ForestGenerator(p^).build(terrain)
+    for bad in [
+        nan[DType.float32](),
+        inf[DType.float32](),
+        -inf[DType.float32](),
+    ]:
+        p = ForestParameters()
+        p.from_distance = Length(bad, METER)
+        with assert_raises(contains="finite"):
+            _ = ForestGenerator(p^).build(terrain)
+        p = ForestParameters()
+        p.to_distance = Length(bad, METER)
+        with assert_raises(contains="finite"):
+            _ = ForestGenerator(p^).build(terrain)
     with assert_raises(contains="built terrain"):
         _ = ForestGenerator().build(TerrainGenerator())
 

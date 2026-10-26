@@ -52,6 +52,7 @@ from geometries.sculptor import (
     SculptTool,
     Sculptor,
     SculptorEventKind,
+    _stamp_count,
 )
 from geometries.sculptor_mesh import NO_CELL, OCTREE_MAX_DEPTH, SculptorMesh
 from geometries.sculptor_tools import (
@@ -333,6 +334,16 @@ def _tool_case(tool: SculptTool, negative: Bool, e: Expected) raises:
 
 
 # --- the helpers ---------------------------------------------------------------
+
+
+def test_a_long_pointer_move_stamps_a_bounded_count() raises:
+    assert_equal(_stamp_count(1.0, 0.15), 6)
+    assert_equal(_stamp_count(0.1, 0.15), 0)
+    assert_equal(_stamp_count(Float64(1e18), 0.15), 4096)
+    assert_equal(_stamp_count(Float64(1e20), 0.15), 4096)
+    assert_equal(_stamp_count(nan[DType.float64](), 0.15), 0)
+    assert_equal(_stamp_count(10.0, nan[DType.float64]()), 0)
+    assert_equal(_stamp_count(10.0, 0.0), 0)
 
 
 def test_falloff_is_one_at_the_center_and_zero_at_the_rim() raises:

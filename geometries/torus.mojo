@@ -49,6 +49,7 @@ from geometries.surface import (
     indexed_surface,
     record_kind,
     record_tube,
+    require_grid_cells,
     require_three_segments,
 )
 from geometries.circle import FULL_TURN, check_sweep
@@ -130,8 +131,8 @@ def torus(
 
     Raises:
         Error: If either radius is not positive, either segment count is
-            less than three, or the arc is not positive or is more than a
-            turn.
+            less than three, the grid has more than 16777216 cells, or the
+            arc is not positive or is more than a turn.
     """
     _require_tube_radii(radius.value, tube.value, "torus")
     require_three_segments(
@@ -139,6 +140,11 @@ def torus(
     )
     require_three_segments(
         tubular_segments, "A torus needs at least three segments along its tube"
+    )
+    require_grid_cells(
+        radial_segments,
+        tubular_segments,
+        "A torus's segment count is larger than this port builds",
     )
     check_sweep(arc)
 
@@ -224,7 +230,8 @@ def torus_knot(
 
     Raises:
         Error: If either radius is not positive, either segment count is
-            less than three, or `p` or `q` is less than one.
+            less than three, the grid has more than 16777216 cells, or
+            `p` or `q` is less than one.
     """
     _require_tube_radii(radius.value, tube.value, "torus knot")
     require_three_segments(
@@ -232,6 +239,11 @@ def torus_knot(
     )
     require_three_segments(
         radial_segments, "A torus knot needs at least three segments around it"
+    )
+    require_grid_cells(
+        radial_segments,
+        tubular_segments,
+        "A torus knot's segment count is larger than this port builds",
     )
     if p < 1 or q < 1:
         raise Error("A torus knot's p and q must be at least one")

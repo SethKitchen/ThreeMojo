@@ -206,6 +206,14 @@ def test_a_counting_sort_refuses_what_it_cannot_sort() raises:
         _ = CountingSort(store, 4, 0)
     with assert_raises(contains="places, bins and a workgroup"):
         _ = CountingSort(store, 4, 4, 0)
+    with assert_raises(contains="larger than this port"):
+        _ = CountingSort(store, 16777217)
+    with assert_raises(contains="larger than this port"):
+        _ = CountingSort(store, Int.MAX)
+    with assert_raises(contains="larger than this port"):
+        _ = CountingSort(store, 4, 16777217)
+    with assert_raises(contains="larger than this port"):
+        _ = CountingSort(store, 4, Int.MAX)
     var sort = CountingSort(store, 3, 2, 2)
     var runner = HostCompute()
     with assert_raises(contains="needs a bin node"):

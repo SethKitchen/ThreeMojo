@@ -28,6 +28,7 @@ bytes a splat that are skipped.
   hold them. Degree 4 is read past; only the bands up to 3 are kept.
 
 The gzip is read by `loaders.nrrd.gunzip`, which is fflate's `gunzipSync`.
+The expansion stops at the most bytes a supported file can hold.
 
 **Version 4** is not gzipped. Its header starts `NGSP`, version 4, and
 gives the count, the degree, the fractional bits, the flags, the number
@@ -71,6 +72,14 @@ comptime SPZ_FLAG_LOD = 0x80
 comptime SPZ_FLAG_EXTENSIONS = 0x02
 # The most splats a file is read with, as `MAX_KSPLAT_SPLATS`.
 comptime MAX_SPZ_SPLATS = 10000000
+# Widest version 1 to 3 splat: version 3 centers (9), alpha, color and
+# scale (7), a version 3 rotation (4), degree-4 harmonics (24 * 3) and
+# six bytes of level of detail.
+comptime MAX_SPZ_BYTES_PER_SPLAT = 9 + 7 + 4 + 24 * 3 + 6
+# Header plus that widest splat, so gunzip stops before a larger member.
+comptime MAX_SPZ_GZIP_BYTES = (
+    SPZ_HEADER_BYTES + MAX_SPZ_SPLATS * MAX_SPZ_BYTES_PER_SPLAT
+)
 
 
 def spz_vectors(degree: Int) raises -> Int:
@@ -219,7 +228,7 @@ def parse_spz(bytes: List[UInt8]) raises -> GaussianSplatGeometry:
                 "SPZ: SPZ version " + String(version) + " is not supported"
             )
         return parse_raw_spz_v4(bytes)
-    return parse_raw_spz(gunzip(bytes))
+    return parse_raw_spz(gunzip(bytes, MAX_SPZ_GZIP_BYTES))
 
 
 def parse_raw_spz(bytes: List[UInt8]) raises -> GaussianSplatGeometry:

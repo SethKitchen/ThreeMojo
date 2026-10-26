@@ -427,6 +427,19 @@ def test_the_motion_blur_settings_and_the_frame_are_checked() raises:
         check_display(bad)
     with assert_raises(contains="at least two samples"):
         _ = motion_blur_pass(1, 1)
+    with assert_raises(contains="larger than this port"):
+        _ = motion_blur_pass(1, 16777217)
+    with assert_raises(contains="larger than this port"):
+        _ = motion_blur_pass(1, Int.MAX)
+    var held = a_bright_column()
+    var huge = DisplaySettings()
+    huge.motion_samples = Int.MAX
+    motion_blur_light(held, huge)
+    assert_almost_equal(held.colors[4 * SIZE + 8].r, 3, atol=1e-5)
+    held = a_bright_column()
+    huge.motion_samples = 16777217
+    motion_blur_light(held, huge)
+    assert_almost_equal(held.colors[4 * SIZE + 8].r, 3, atol=1e-5)
     assert_true(motion_blur_pass().kind == MOTION_BLUR)
     # The frame keeps velocities while a motion blur is enabled.
     var steps: List[Pass] = [render_pass(), motion_blur_pass()]

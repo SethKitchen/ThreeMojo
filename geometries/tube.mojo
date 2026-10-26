@@ -34,12 +34,16 @@ folds straight back on itself, so two consecutive tangents point opposite
 ways: there is no axis to turn the frame about, and carrying it across
 unturned would flip the binormal by a half turn, which is a choice no
 transport made. three.js checks neither; here both raise.
+
+A path point must be finite. NaN and either infinity raise before a frame
+is built. This differs from the unchecked three.js r186 input path.
 """
 
 from core.buffer_geometry import BufferGeometry, TUBE_GEOMETRY
 from geometries.surface import (
     indexed_surface,
     record_kind,
+    require_grid_cells,
     require_positive_radius,
     require_three_segments,
 )
@@ -153,15 +157,18 @@ def tube(
         distance and `v` around the tube.
 
     Raises:
-        Error: If the path is too short, two consecutive points coincide,
-            the path returns to the point before the last or folds straight
-            back on itself, the radius is not positive, or there are fewer
-            than three segments around.
+        Error: If the path is too short, a point is not finite, two
+            consecutive points coincide, the path returns to the point
+            before the last or folds straight back on itself, the radius
+            is not positive, there are fewer than three segments around,
+            or the grid has more than 16777216 cells.
     """
     var count = len(path)
     if count < 2 or (closed and count < 3):
         raise Error("A tube needs at least two points, or three to close")
     for index in range(count):  # pragma: no branch
+        if not path[index].is_finite():
+            raise Error("A tube's path points must be finite")
         var next = (index + 1) % count
         if next == 0 and not closed:
             continue
@@ -173,6 +180,11 @@ def tube(
     var rings = count
     if not closed:
         rings = count - 1
+    require_grid_cells(
+        radial_segments,
+        rings,
+        "A tube's segment count is larger than this port builds",
+    )
     var frames = transport_frames(_tangents(path, closed), closed)
     var along = _distances(path, rings)
     var centers = List[Vector3]()
@@ -210,15 +222,20 @@ def tube(
 
     Raises:
         Error: If there are fewer than one segment along or three around,
-            the radius is not positive, or the curve's frames cannot be
-            built: it stops at a ring, or two rings point straight
-            opposite ways.
+            the grid has more than 16777216 cells, the radius is not
+            positive, or the curve's frames cannot be built: it stops at a
+            ring, or two rings point straight opposite ways.
     """
     require_at_least_one(
         tubular_segments, "A tube needs at least one segment along it"
     )
     require_tube_radius(radius)
     require_tube_segments(radial_segments)
+    require_grid_cells(
+        radial_segments,
+        tubular_segments,
+        "A tube's segment count is larger than this port builds",
+    )
     var frames = curve.frenet_frames(tubular_segments, closed)
     var centers = curve.spaced_points(tubular_segments)
     if closed:

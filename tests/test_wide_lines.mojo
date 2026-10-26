@@ -295,6 +295,26 @@ def test_dash_spans_follow_the_fold() raises:
     assert_equal(len(dash_spans(1.5, 1.5, 1, 1)), 0)
     with assert_raises(contains="too fine"):
         _ = dash_spans(0, 10000, 0.5, 0.5)
+    # The repeat count is 2^63. The old subtraction overflowed, and the
+    # walk did not finish.
+    var far = Float32(4611686018427387904.0)
+    with assert_raises(contains="too fine"):
+        _ = dash_spans(-far, far, 0.5, 0.5)
+    # A quotient past 2^63 is not a repeat index. The segment used to
+    # draw nothing.
+    var huge = Float32(1e20)
+    with assert_raises(contains="too fine"):
+        _ = dash_spans(0, huge, 1, 1)
+    with assert_raises(contains="too fine"):
+        _ = dash_spans(-huge, 0, 1, 1)
+    with assert_raises(contains="distance must be finite"):
+        _ = dash_spans(nan[DType.float32](), 4, 1, 1)
+    with assert_raises(contains="distance must be finite"):
+        _ = dash_spans(0, inf[DType.float32](), 1, 1)
+    with assert_raises(contains="pattern must be finite"):
+        _ = dash_spans(0, 4, nan[DType.float32](), 1)
+    with assert_raises(contains="pattern must be finite"):
+        _ = dash_spans(0, 4, -1, 1)
 
 
 def test_a_scene_takes_a_wide_line_on_one_of_its_nodes() raises:

@@ -345,6 +345,18 @@ def test_ascii_refusals() raises:
         _ = parse_pcd(
             text_bytes("FIELDS label\nSIZE 4\nTYPE F\nDATA ascii\n2.5\n")
         )
+    with assert_raises(contains="whole number"):
+        _ = parse_pcd(
+            text_bytes("FIELDS label\nSIZE 4\nTYPE F\nDATA ascii\n1e20\n")
+        )
+    with assert_raises(contains="does not fit"):
+        _ = parse_pcd(
+            text_bytes("FIELDS rgb\nSIZE 4\nTYPE U\nDATA ascii\n1e20\n")
+        )
+    with assert_raises(contains="does not fit"):
+        _ = parse_pcd(
+            text_bytes("FIELDS rgb\nSIZE 4\nTYPE I\nDATA ascii\n-1e20\n")
+        )
 
 
 def test_an_empty_cloud_has_no_attributes() raises:
@@ -433,6 +445,32 @@ def test_binary_compressed_counts() raises:
     small.extend(packed^)
     with assert_raises(contains="too small"):
         _ = parse_pcd(small)
+
+
+def test_pcd_products_that_do_not_fit_are_refused() raises:
+    # 3037000500 squared is past the largest Int. The header must fail
+    # before it multiplies the dimensions.
+    var wide = (
+        "FIELDS x y z\nSIZE 4 4 4\nTYPE F F F\nCOUNT 1 1 1\n"
+        "WIDTH 3037000500\nHEIGHT 3037000500\nDATA binary\n"
+    )
+    with assert_raises(contains="not fit"):
+        _ = parse_pcd(text_bytes(wide))
+    var points = (
+        "FIELDS x y z\nSIZE 4 4 4\nTYPE F F F\nCOUNT 1 1 1\n"
+        "POINTS 9223372036854775807\nDATA binary\n"
+    )
+    with assert_raises(contains="not fit"):
+        _ = parse_pcd(text_bytes(points))
+    var field = (
+        "FIELDS x\nSIZE 4\nTYPE F\nCOUNT 9223372036854775807\n"
+        "POINTS 1\nDATA binary\n"
+    )
+    with assert_raises(contains="not fit"):
+        _ = parse_pcd_header(text_bytes(field))
+    var empty = "POINTS 1000000\nDATA binary\n"
+    with assert_raises(contains="not fit"):
+        _ = parse_pcd(text_bytes(empty))
 
 
 def main() raises:

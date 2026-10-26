@@ -102,6 +102,35 @@ from units.si import Length
 
 # The largest `Float32`, three.js's `MAX_FLOAT32`.
 comptime MAX_FLOAT32 = 3.4028234663852886e38
+# The most stamps one pointer move walks. A longer move keeps this many
+# steps, spread along the whole move, so the walk finishes.
+comptime MAX_STROKE_STAMPS = 4096
+
+
+def _stamp_count(distance: Float64, spacing: Float64) -> Int:
+    """Return how many stamps a pointer move takes.
+
+    A distance or a spacing that is not finite is no stamps. A count at
+    or past `MAX_STROKE_STAMPS` is held there, so the walk finishes.
+
+    Args:
+        distance: The pointer move, in pixels.
+        spacing: The gap between stamps, in pixels.
+
+    Returns:
+        The stamp count, from zero through `MAX_STROKE_STAMPS`.
+
+    Raises:
+        Error: Never.
+    """
+    if not isfinite(distance) or not isfinite(spacing) or not (spacing > 0):
+        return 0
+    var steps = distance / spacing
+    if not (steps < Float64(MAX_STROKE_STAMPS)):
+        return MAX_STROKE_STAMPS
+    return Int(floor(steps))
+
+
 # How far apart, as a share of the brush size, a pointer stroke stamps.
 comptime STAMP_SPACING_RATIO = 0.15
 # The ratio of the split length to the collapse length, squared: above
@@ -1232,9 +1261,11 @@ struct Sculptor(Movable):
         if distance <= min_spacing:
             return False
         # A pointer at no finite place stamps nothing, as in three.js.
-        var count = Int(floor(distance / min_spacing)) if isfinite(
-            distance
-        ) else 0
+        var count = _stamp_count(distance, min_spacing)
+        if count < 1:
+            self._last_pointer_x = client_x
+            self._last_pointer_y = client_y
+            return False
         var step_x = dx / Float64(count)
         var step_y = dy / Float64(count)
         var x = self._last_pointer_x + step_x
@@ -1309,9 +1340,13 @@ struct Sculptor(Movable):
         if distance == 0:
             return
         var min_spacing = STAMP_SPACING_RATIO * self._size
-        var count = max(1, Int(floor(distance / min_spacing))) if isfinite(
-            distance
-        ) else 0
+        var count = 0
+        if isfinite(distance):
+            count = max(1, _stamp_count(distance, min_spacing))
+        if count < 1:
+            self._last_pointer_x = client_x
+            self._last_pointer_y = client_y
+            return
         var step_x = dx / Float64(count)
         var step_y = dy / Float64(count)
         var x = self._last_pointer_x + step_x

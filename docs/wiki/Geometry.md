@@ -170,8 +170,11 @@ The cost is memory. An integer attribute holds its numbers twice.
 Box and plane extents, circle and sphere radii, ring radii, cylinder radii
 and height, torus radii, and decal projector extents must be finite.
 The shared positive-radius check also applies to capsule, tube, and
-polyhedron builders. NaN and either infinity raise before vertex generation.
-Zero and negative dimensions keep each builder's existing rules.
+polyhedron builders. A capsule length, tube path points, and an
+extrusion depth must be finite. A bevel thickness, size, and offset
+must be finite when the bevel is on. NaN and either infinity raise
+before vertex generation. Zero and negative dimensions keep each
+builder's existing rules.
 
 This input check differs from three.js r186, which can produce nonfinite
 vertices from these dimensions. Finite supported inputs keep their vertex
@@ -186,7 +189,7 @@ var brick = box(Length(2.0, METER), Length(1.0, METER), Length(0.5, METER))
 var grid = box(Length(2.0, METER), Length(1.0, METER), Length(0.5, METER), 4, 2, 1)
 ```
 
-The box is three.js's `BoxGeometry`, built by its `buildPlane`. The three counts after the sizes are `width_segments`, `height_segments` and `depth_segments`, one each by default. Each face is a grid of segments, with its own normal and texture coordinates, and the whole image covers each face once.
+The box is three.js's `BoxGeometry`, built by its `buildPlane`. The three counts after the sizes are `width_segments`, `height_segments` and `depth_segments`, one each by default. Each face is a grid of segments, with its own normal and texture coordinates, and the whole image covers each face once. A face of more than 16777216 cells is refused.
 
 The faces come in three.js's order: +x, -x, +y, -y, +z, -z. Each face is a group, with material indices 0 to 5 in that order. The vertices, the triangles and the texture coordinates are three.js's, in three.js's order. So a hit's `triangle` is three.js's `faceIndex`, and an exported box matches three.js's.
 
@@ -203,7 +206,7 @@ var band = sphere(
 )
 ```
 
-A latitude and longitude sphere, three.js's `SphereGeometry`. Each normal points away from the center, so shading is smooth. `u` runs once around the part drawn. `v` runs from one at the top of the part to zero at its bottom. It needs at least three segments and two rings.
+A latitude and longitude sphere, three.js's `SphereGeometry`. Each normal points away from the center, so shading is smooth. `u` runs once around the part drawn. `v` runs from one at the top of the part to zero at its bottom. It needs at least three segments and two rings. A grid of more than 16777216 cells is refused.
 
 `phi_start` and `phi_length` say where the surface starts around the y axis and how far it runs, a whole turn by default. `theta_start` and `theta_length` say where it starts down from the north pole and how far it runs, pole to pole by default. As in three.js, a part that reaches a pole ends in a point there. A part that stops short of a pole has a full ring of triangles at its edge. An angle that is not finite is refused.
 
@@ -214,7 +217,7 @@ var sheet = plane(Length(2.0, METER), Length(1.0, METER))        # one quad
 var grid = plane(Length(20.0, METER), Length(20.0, METER), 4, 4)  # sixteen quads
 ```
 
-A rectangle in the xy plane, facing +z, centered on the origin. The vertex order, winding and texture coordinates match three.js. Turn the node a quarter turn about x to make a floor.
+A rectangle in the xy plane, facing +z, centered on the origin. The vertex order, winding and texture coordinates match three.js. Turn the node a quarter turn about x to make a floor. A grid of more than 16777216 cells is refused.
 
 The texture coordinates run once across the rectangle. To tile an image, rewrite the `uv` attribute, as `examples/floor.mojo` does.
 
@@ -225,7 +228,7 @@ var disk = circle(Length(1.0, METER), 32)                                       
 var slice = circle(Length(1.0, METER), 8, Angle(90.0, DEGREE), Angle(180.0, DEGREE))  # a pie slice
 ```
 
-A disk in the xy plane, facing +z, centered on the origin. Vertex zero is the center. The rim follows it, one vertex per segment and one more to close the seam. Each triangle runs from a rim vertex to the next one and back to the center.
+A disk in the xy plane, facing +z, centered on the origin. Vertex zero is the center. The rim follows it, one vertex per segment and one more to close the seam. Each triangle runs from a rim vertex to the next one and back to the center. More than 16777216 segments is refused.
 
 The third argument is where the rim starts, counter-clockwise from +x. The fourth is how far it sweeps. A full turn is the default. A shorter sweep makes a pie slice.
 
@@ -240,7 +243,7 @@ var arc = ring(Length(0.5, METER), Length(1.0, METER), 16, 1, Angle(0.0, DEGREE)
 
 A flat ring in the xy plane, facing +z, centered on the origin. The first radius is the hole. The second is the outer edge. Vertices run in rows from the inner edge outwards, one per segment around and one more for the seam. The start angle and the sweep work as they do for the circle. A shorter sweep makes an arc.
 
-The texture coordinates map the square around the outer edge onto the image, as the circle's do.
+The texture coordinates map the square around the outer edge onto the image, as the circle's do. A grid of more than 16777216 cells is refused.
 
 An inner radius of zero makes a disk, as in three.js. The inner row is then every vertex at the center.
 
@@ -254,7 +257,7 @@ var pipe = cylinder(Length(1.0, METER), Length(1.0, METER), Length(2.0, METER), 
 
 A cylinder stands on the y axis, centered on the origin. The first radius is at the top and the second at the bottom. Different radii make a frustum. The side comes first, in rows from the top down, one vertex per segment around and one more for the seam. A cap follows at each end unless `open_ended` is true. Each cap has one center vertex per segment, as in three.js.
 
-The side's triangles come column by column, in three.js's order. The caps are the only closing faces. A partial sweep leaves its two cut faces open, as in three.js.
+The side's triangles come column by column, in three.js's order. The caps are the only closing faces. A partial sweep leaves its two cut faces open, as in three.js. A grid of more than 16777216 cells is refused.
 
 Side normals lean with the side, so a frustum shades smoothly. Cap normals point along the axis. `u` runs once around the side. `v` runs from one at the top to zero at the bottom. Each cap maps the square around it onto the image.
 
@@ -277,7 +280,7 @@ var bend = torus(Length(2.0, METER), Length(0.5, METER), 12, 48, Angle(90.0, DEG
 
 A tube bent around a circle in the xy plane, centered on the origin. The first radius runs from the center to the middle of the tube. The second is the tube's own. Vertices run in rows, one row per step around the tube, one vertex per step along it and one more for the seam. Each normal points away from the middle of the tube, so the shading is smooth. `u` runs along the tube and `v` around it.
 
-The arc runs from +x toward +y. A full turn is the default. A shorter arc makes a bent pipe with open ends.
+The arc runs from +x toward +y. A full turn is the default. A shorter arc makes a bent pipe with open ends. A grid of more than 16777216 cells is refused.
 
 ## Torus knot
 
@@ -285,7 +288,7 @@ The arc runs from +x toward +y. A full turn is the default. A shorter arc makes 
 var trefoil = torus_knot(Length(2.0, METER), Length(0.4, METER), 64, 8, 2, 3)   # radius, tube, along, around, p, q
 ```
 
-A tube bent around a knot that winds `p` times around the axis and `q` times through the hole. The curve is three.js's. It lies between half and one and a half of the radius from the axis. Vertices run in rings along the curve, one vertex per step around the tube and one more for the seam. Each ring is built in three.js's frame, so a texture lands as it does there.
+A tube bent around a knot that winds `p` times around the axis and `q` times through the hole. The curve is three.js's. It lies between half and one and a half of the radius from the axis. Vertices run in rings along the curve, one vertex per step around the tube and one more for the seam. Each ring is built in three.js's frame, so a texture lands as it does there. A grid of more than 16777216 cells is refused.
 
 ## Polyhedra
 
@@ -297,7 +300,7 @@ var dome = dodecahedron(Length(1.0, METER))
 var own = polyhedron(vertices, indices, Length(1.0, METER), detail)
 ```
 
-A polyhedron is a list of vertices and a list of triangles over them. Every vertex is pushed out to the radius. `detail` cuts each edge that many times, so each face becomes `(detail + 1)` squared triangles, on the way to a sphere. The four regular solids have three.js's vertices and faces in three.js's order.
+A polyhedron is a list of vertices and a list of triangles over them. Every vertex is pushed out to the radius. `detail` cuts each edge that many times, so each face becomes `(detail + 1)` squared triangles, on the way to a sphere. The four regular solids have three.js's vertices and faces in three.js's order. A detail above 256 is refused.
 
 The geometry is not indexed. Each triangle owns its three vertices. At a detail of zero the normals are flat, one per face. At a detail of one or more each normal points away from the center.
 
@@ -311,7 +314,7 @@ var pill = capsule(Length(0.5, METER), Length(2.0, METER), 4, 16)   # radius, le
 
 A cylinder with a hemisphere on each end, standing on the y axis and centered on the origin. The length is the straight side between the caps, three.js's `height`. The builder is three.js's `CapsuleGeometry`, number for number.
 
-Vertices run in rows from the bottom pole to the top, one vertex per step around and one more for the seam. The sweep starts at -x. A capsule of no length keeps both rims and a side of no height between them.
+Vertices run in rows from the bottom pole to the top, one vertex per step around and one more for the seam. The sweep starts at -x. A capsule of no length keeps both rims and a side of no height between them. A grid of more than 16777216 cells is refused.
 
 `u` runs around, and a pole's vertices sit half a step round, as in three.js. `v` runs up the profile by distance along it, from zero at the bottom pole to one at the top. A texture stays put when the segment counts change.
 
@@ -324,7 +327,7 @@ var vase = lathe(points, 24)                                        # a profile 
 var half = lathe(points, 24, Angle(0.0, DEGREE), Angle(180.0, DEGREE))
 ```
 
-A profile revolved around the y axis. Each point has `x` out from the axis and `y` along it, in meters. Vertices run in columns, one per step around, one vertex per point.
+A profile revolved around the y axis. Each point has `x` out from the axis and `y` along it, in meters. Vertices run in columns, one per step around, one vertex per point. A grid of more than 16777216 cells is refused.
 
 The normals come from the profile's segments, as in three.js. A corner faces the sum of its two segments' normals, each as long as its segment, made unit length. A longer segment pulls the corner its way. The first point faces the way its segment does.
 
@@ -342,7 +345,7 @@ var loop = tube(path, Length(0.2, METER), 8, closed=True)
 var bent = tube(curve, Length(0.2, METER), 64, 8)                   # a Curve3, cells along, cells around
 ```
 
-A tube of one radius swept along a path of points. Each point gets a ring, built in a frame that follows the path. The frames are three.js's parallel transport, so the tube does not twist where the path only bends. A closed path is given without repeating its first point. Its last ring repeats its first, and the twist the path built up is spread evenly back along it.
+A tube of one radius swept along a path of points. Each point gets a ring, built in a frame that follows the path. The frames are three.js's parallel transport, so the tube does not twist where the path only bends. A closed path is given without repeating its first point. Its last ring repeats its first, and the twist the path built up is spread evenly back along it. A grid of more than 16777216 cells is refused.
 
 With a list of points, the path is the points. `u` runs along the path by distance, the closing segment included. `v` runs around the tube.
 
@@ -506,7 +509,7 @@ var sheet = parametric(SurfaceFunction[my_function](), 24, 12)
 var dome = parametric(Dome(Float32(2)), 24, 12)              # a struct that holds a radius
 ```
 
-A grid sampled from a function of `u` and `v`, each from zero to one. The function returns a point in meters. There are `slices` cells along `u` and `stacks` cells along `v`, and each cell is two triangles. The texture coordinate of a vertex is its `(u, v)`.
+A grid sampled from a function of `u` and `v`, each from zero to one. The function returns a point in meters. There are `slices` cells along `u` and `stacks` cells along `v`, and each cell is two triangles. The texture coordinate of a vertex is its `(u, v)`. A grid of more than 16777216 cells is refused.
 
 The surface is a type, not a closure. Any struct that implements `ParametricSurface` is a surface: it has `point(self, u, v) -> Vector3`. `SurfaceFunction[f]` makes a surface from a plain function `def f(u: Float32, v: Float32) -> Vector3`. A surface that needs its own numbers is a struct that holds them.
 
@@ -623,7 +626,7 @@ var pill = rounded_box(Length(1, METER), Length(1, METER), Length(1, METER), 4, 
 
 A box with rounded edges and corners, centered on the origin: three.js's `RoundedBoxGeometry` addon. `segments` is the number of cells round each edge. `radius` is the radius of the edges. A radius larger than half the shortest side is cut down to that half. The extents and radius must be finite.
 
-The builder starts from a unit box with `2 * segments + 1` cells each way on every face. Each vertex gets a normal from the center of that box, pulled half a cell in on each axis. The vertex moves to the corner of a box smaller by the radius, plus the radius along the normal. The middle band of each face stays flat.
+The builder starts from a unit box with `2 * segments + 1` cells each way on every face. Each vertex gets a normal from the center of that box, pulled half a cell in on each axis. The vertex moves to the corner of a box smaller by the radius, plus the radius along the normal. The middle band of each face stays flat. A face of more than 16777216 cells is refused.
 
 The texture coordinates are three.js's. They measure the arc of each rounded edge and the flat band between, so a texture is not squeezed where the surface bends.
 
@@ -828,7 +831,7 @@ A target's name is three.js's `name` on its morph attribute. A target without a 
 
 ### Any number of targets
 
-A geometry carries any number of targets, and a mesh wears any number. three.js on WebGL2 passes its targets in a texture and has no cap. This port had a cap of eight until a mesh held its weights in a list. `MorphInfluences` is that list. A weight past its end reads as zero, and `set` grows it with zeros.
+A geometry carries any number of targets, and a mesh wears any number. three.js on WebGL2 passes its targets in a texture and has no cap. This port had a cap of eight until a mesh held its weights in a list. `MorphInfluences` is that list. A weight past its end reads as zero, and `set` grows it with zeros. A weight list above 16777216, or an index that would grow it that far, is refused.
 
 ### What is drawn is what is picked
 
@@ -927,31 +930,40 @@ A per-instance `position`, `normal`, `uv` or `tangent` is refused when drawn. Th
 
 - A negative or zero extent raises.
 - A sphere with too few segments or rings raises.
+- A sphere grid of more than 16777216 cells is refused.
 - A plane with fewer than one segment raises.
+- A plane grid of more than 16777216 cells is refused.
 - A circle needs a positive radius and at least three segments.
+- A circle of more than 16777216 segments is refused.
 - A ring needs an inner radius of zero or more, a larger outer radius, three segments around and one across.
+- A ring grid of more than 16777216 cells is refused.
 - A cylinder needs a positive height, radii that are not negative and not both zero, three segments around and one down the side.
+- A cylinder or a cone grid of more than 16777216 cells is refused.
+- A box face, a torus, a torus knot, a capsule, a lathe, or a tube of more than 16777216 cells is refused.
 - A cone needs a positive radius and a positive height.
 - A torus needs positive radii and three segments each way.
 - A torus knot needs positive radii, three segments each way, and `p` and `q` of at least one.
 - A polyhedron needs a positive radius, a detail of zero or more, whole vertices and faces, and faces that name vertices it has.
-- A capsule needs a positive radius, a length of zero or more, one cap row, three segments around and one row up its side.
+- A polyhedron detail above 256 is refused.
+- A capsule needs a finite positive radius, finite length of zero or more, one cap row, three segments around and one side row.
 - A lathe needs at least two points, one segment, and a sweep of at most one turn. No point can have a negative `x`, and no two consecutive points can be the same. A profile that turns straight back to the point before raises, because that corner has no normal.
-- A tube needs at least two points, or three when closed, no two consecutive the same, a positive radius and three segments around. A path that returns to the point before the last raises, because that tangent is zero. A path that folds straight back on itself raises, because there is no axis to turn the frame about.
+- A tube needs at least two finite points, or three when closed, no two consecutive the same, a positive radius and three segments around. A path that returns to the point before the last raises, because that tangent is zero. A path that folds straight back on itself raises, because there is no axis to turn the frame about.
 - A sweep must be finite, positive and at most one turn.
-- A morph target must cover every vertex, three numbers each, and a geometry holds at most eight.
+- A morph target must cover every vertex, three numbers each.
 - Either every morph target carries normals or none does.
-- A morph influence must be a number, and there are eight of them.
+- A morph influence must be a number. A weight list above 16777216, or an index that would grow it that far, is refused.
 - A shape's contour needs three corners and an area. A contour drawn in a line, or out and back, has neither.
 - A shape's hole must lie strictly inside its outline and outside every other hole. Sampled boundaries must not cross or touch.
 - An outline that crosses itself raises, because it has no inside and runs out of ears.
-- An extrusion needs a positive depth, one step and one curve segment. A bevel needs a positive thickness, a size that is not negative, and one band.
+- An extrusion needs a finite positive depth, one step and one curve segment. A bevel needs a finite positive thickness, a finite size that is not negative, a finite offset, and one band. A step count, a bevel band count, or a curve segment count above 16777216 is refused.
 - A text needs the same options as an extrusion and a positive size. Every character needs a glyph, or the font needs a `?` glyph.
 - An extrusion along a path needs one step, one curve segment and a curve path with one curve. The curve must have a frame at each step.
 - A parametric surface needs one slice and one stack, and its function must give finite points.
+- A parametric grid of more than 16777216 cells is refused.
 - A convex hull needs four finite points, not all on one point, one line or one plane.
 - A decal needs positive extents. A mesh with normals needs a world matrix that does not flatten a dimension.
 - A rounded box needs positive extents, one segment and a radius that is not negative.
+- A rounded box face of more than 16777216 cells is refused.
 - An index entry beyond the last vertex raises.
 - A group needs a start and a count that are not negative, and a material index of zero or more.
 - A draw range needs a start and a count that are not negative.

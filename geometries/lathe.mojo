@@ -36,7 +36,12 @@ made of plain points.
 """
 
 from core.buffer_geometry import BufferGeometry, LATHE_GEOMETRY
-from geometries.surface import indexed_surface, record_kind, record_phi
+from geometries.surface import (
+    indexed_surface,
+    record_kind,
+    record_phi,
+    require_grid_cells,
+)
 from math.curve_checks import require_at_least_one
 from core.user_data import json_number_text
 from geometries.circle import FULL_TURN, check_sweep
@@ -156,8 +161,9 @@ def lathe(
         Error: If there are fewer than two points, a point is not finite
             or has a negative `x`, two consecutive points coincide, the profile turns
             straight back to the point before, there are fewer than one
-            segment, the final profile normal cannot fit in Float32, or the
-            sweep is not positive or is more than a turn.
+            segment, the grid has more than 16777216 cells, the final
+            profile normal cannot fit in Float32, or the sweep is not
+            positive or is more than a turn.
     """
     if len(points) < 2:
         raise Error("A lathe needs a profile of at least two points")
@@ -175,6 +181,11 @@ def lathe(
         ):
             raise Error("A lathe's profile cannot repeat a point")
     require_at_least_one(segments, "A lathe needs at least one segment around")
+    require_grid_cells(
+        segments,
+        len(points) - 1,
+        "A lathe's segment count is larger than this port builds",
+    )
     check_sweep(phi_length)
 
     var normals_2d = _profile_normals(points)

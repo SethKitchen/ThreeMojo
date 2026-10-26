@@ -220,12 +220,16 @@ struct FlyControls(Copyable, Movable):
                 self._pitch_down = 0
         elif event.kind == POINTER_MOVE:
             if not self.drag_to_look or self._status > 0:
-                var half_width = Float32(viewport_width) / 2
-                var half_height = Float32(viewport_height) / 2
-                self._yaw_left = -(Float32(event.x) - half_width) / half_width
-                self._pitch_down = (
-                    Float32(event.y) - half_height
-                ) / half_height
+                # A `Float32` side past 2^24 loses the half pixel at the
+                # middle, so the last pixel reads as the edge.
+                var half_width = Float64(viewport_width) / 2
+                var half_height = Float64(viewport_height) / 2
+                self._yaw_left = Float32(
+                    -(Float64(event.x) - half_width) / half_width
+                )
+                self._pitch_down = Float32(
+                    (Float64(event.y) - half_height) / half_height
+                )
 
     def _button(mut self, event: InputEvent, state: Float32):
         """Press or let go of a button.

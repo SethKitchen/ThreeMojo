@@ -423,17 +423,30 @@ def floats(*values: Float32) -> List[Float32]:
     return out^
 
 
-def spline_points(points: List[Vector3], steps: Int) -> List[Vector3]:
+# Samples between two control points. `steps + 1` wraps at `Int.MAX`,
+# so the span walk is empty, and `range` of one below that never ends.
+# `Float32` also stops telling those steps apart past 2^24.
+comptime MAX_SPLINE_STEPS = 16777216
+
+
+def spline_points(points: List[Vector3], steps: Int) raises -> List[Vector3]:
     """Return a Catmull-Rom curve through `points`.
 
     Args:
         points: Control points, in order.
-        steps: Samples between two control points.
+        steps: Samples between two control points. One through 16777216.
 
     Returns:
         The first point, then `steps` samples per span, ending on the
         last point.
+
+    Raises:
+        Error: If `steps` is below one or above 16777216.
     """
+    if steps < 1:
+        raise Error("A spline needs one sample between control points or more")
+    if steps > MAX_SPLINE_STEPS:
+        raise Error("A spline sample count is larger than this port builds")
     var out = List[Vector3]()
     var last = len(points) - 1
     out.append(points[0])

@@ -899,6 +899,50 @@ def test_what_a_document_cannot_say_is_refused() raises:
         graph
         + '<extract name="n" type="float">'
         + '<input name="in" type="vector3" value="1, 2, 3" />'
+        + '<input name="index" type="integer" value="1e20" /></extract>'
+        + tail,
+        "extract reads a component zero to three",
+    )
+    refused(
+        graph
+        + '<extract name="n" type="float">'
+        + '<input name="in" type="vector3" value="1, 2, 3" />'
+        + '<input name="index" type="integer" value="1.5" /></extract>'
+        + tail,
+        "extract reads a component zero to three",
+    )
+    refused(
+        graph
+        + '<fractal3d name="n" type="float">'
+        + '<input name="octaves" type="integer" value="1e20" /></fractal3d>'
+        + tail,
+        "1024",
+    )
+    refused(
+        graph
+        + '<fractal3d name="n" type="float">'
+        + '<input name="octaves" type="integer" value="2000" /></fractal3d>'
+        + tail,
+        "1024",
+    )
+    refused(
+        graph
+        + '<fractal3d name="n" type="float">'
+        + '<input name="octaves" type="integer" value="3.5" /></fractal3d>'
+        + tail,
+        "1024",
+    )
+    refused(
+        graph
+        + '<fractal3d name="n" type="float">'
+        + '<input name="octaves" type="integer" value="-1" /></fractal3d>'
+        + tail,
+        "1024",
+    )
+    refused(
+        graph
+        + '<extract name="n" type="float">'
+        + '<input name="in" type="vector3" value="1, 2, 3" />'
         + '<input name="index" type="integer" nodename="n" /></extract>'
         + tail,
         "the input index of extract must be a value",

@@ -420,6 +420,15 @@ def test_influences_read_zero_past_the_end() raises:
     worn.set(2, 0.25)
     assert_true(worn.is_worn())
     assert_equal(worn[2], 0.25)
+    assert_equal(worn.get(16777216), 0)
+    with assert_raises(contains="larger than this port"):
+        worn.set(16777216, 1)
+    with assert_raises(contains="larger than this port"):
+        worn.set(Int.MAX, 1)
+    with assert_raises(contains="larger than this port"):
+        _ = MorphInfluences(count=16777217)
+    with assert_raises(contains="larger than this port"):
+        _ = MorphInfluences(count=Int.MAX)
     var sized = MorphInfluences(count=3)
     assert_equal(len(sized), 3)
     assert_false(sized.is_worn())

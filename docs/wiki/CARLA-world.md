@@ -135,7 +135,7 @@ A stage changes on the first tick that takes the elapsed time past the stage's t
 
 `set_traffic_light_state` sets one light. The controller does not know, and its next stage sets the light again. `freeze` stops every light, as in CARLA.
 
-`get_traffic_lights_from_waypoint` finds the lights within a distance ahead of a waypoint. The distance is a `Length64`, so a long search keeps its Float64 meters. It must be finite and nonnegative.
+`get_traffic_lights_from_waypoint` finds the lights within a distance ahead of a waypoint. The distance is a `Length64`, so a long search keeps its Float64 meters. It must be finite and nonnegative. A stop walk refuses an extent that does not advance one meter. An extent whose one-meter steps pass 16777216 is refused.
 
 ### A light's boxes
 
@@ -162,7 +162,7 @@ The world places a stop sign for each signal of type 206, except the painted "St
 - A yield sign checks at once, and again after 0.5 s.
 - A vehicle that leaves a check box starts a check after 0.5 s.
 
-The check boxes cover each junction road that crosses the sign's road and does not come from the same road. They are cubes 0.9 of a lane wide, along the road. They also reach back along the lanes before it, for 0.1 s at the road's speed.
+The check boxes cover each junction road that crosses the sign's road and does not come from the same road. They are cubes 0.9 of a lane wide, along the road. They also reach back along the lanes before it, for 0.1 s at the road's speed. A walk that repeats its lane is refused. A speed that does not shorten the anticipation time is refused.
 
 The delayed checks are a scheduled-callback queue in each sign. A timer fires on the first tick that brings it to zero or below.
 
@@ -200,6 +200,7 @@ The sun's angles are `Angle`s and the fog distance is a `Length`. The other fiel
 - An actor's box is a `bounding_box.BoundingBox`. A pose is a `transform.CarlaTransform`.
 - A color attribute reads as a `render.framebuffer.Color`, and a semantic tag is a `sensor.SemanticTag`.
 - `math.generate_range` walks a signal's lanes, as CARLA's `Math::GenerateRange` does.
+- A generated range of more than 16777216 numbers is refused.
 
 ## Differences from CARLA
 

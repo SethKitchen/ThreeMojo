@@ -134,11 +134,16 @@ struct ProgressiveLightMap(Movable):
             resolution: The map's width and height in pixels.
 
         Raises:
-            Error: If the resolution is not positive.
+            Error: If the resolution is not positive, or its texel buffer
+                does not fit in an integer.
         """
         require_positive(
             resolution, "A light map's resolution must be positive"
         )
+        # Four floats a texel. A resolution past 2^31 wraps that product,
+        # so the map looks empty.
+        if resolution > (Int.MAX // 4) // resolution:
+            raise Error("A light map is larger than this port builds")
         self.resolution = resolution
         self.maps = List[TextureId]()
         for index in range(2):  # pragma: no branch

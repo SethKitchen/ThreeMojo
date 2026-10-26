@@ -103,6 +103,15 @@ def test_scaling() raises:
 
 def test_refusals() raises:
     var metadata = UltraHdrMetadata()
+    with assert_raises(contains="at least one pixel"):
+        _ = scale_gain_map(_image(1, 1, 0), 0, 1)
+    with assert_raises(contains="at least one pixel"):
+        _ = scale_gain_map(_image(1, 1, 0), 1, 0)
+    with assert_raises(contains="larger than this port"):
+        _ = scale_gain_map(_image(1, 1, 0), 1 << 31, 1 << 31)
+    var huge = DecodedImage(1 << 31, 1 << 31, List[UInt8](), SRGB)
+    with assert_raises(contains="larger than this port"):
+        _ = apply_gain_map(huge, huge, metadata)
     with assert_raises(contains="one aspect ratio"):
         _ = apply_gain_map(_image(4, 2, 0), _image(2, 2, 0), metadata)
     metadata.hdr_capacity_max = 0

@@ -860,8 +860,9 @@ def opaque_from_linear(red: Float64, green: Float64, blue: Float64) -> Color:
 def unit_byte(value: Float32) -> UInt8:
     """Return a unit fraction as a byte.
 
-    The fraction is multiplied by 255, one half is added, and the whole
-    number is kept.
+    The fraction is held from zero to one, multiplied by 255, and rounded
+    to the nearest byte. A half rounds up. NaN and positive infinity are
+    one, so the byte is 255. Negative infinity is zero.
 
     Error: Never.
 
@@ -872,7 +873,10 @@ def unit_byte(value: Float32) -> UInt8:
         The byte.
 
     """
-    return UInt8(Int(value * 255 + 0.5))
+    # `clamp` holds NaN at one and an infinity at the nearer end. The
+    # product then stays inside 0.5 through 255.5, so the cast fits.
+    var held = clamp(value, 0, 1)
+    return UInt8(Int(held * 255 + 0.5))
 
 
 def rounded_byte(value: Float64) -> UInt8:
@@ -1014,11 +1018,16 @@ def require_framebuffer_size(width: Int, height: Int) raises:
         height: The height, in pixels.
 
     Raises:
-        Error: If the width or the height is not positive.
+        Error: If the width or the height is not positive, or four bytes
+            a pixel does not fit in an integer.
     """
     require_positive_extent(
         width, height, "Framebuffer dimensions must be positive"
     )
+    # Four bytes a pixel is the larger product. A wrapped count would
+    # allocate the wrong buffer.
+    if width > (Int.MAX // 4) // height:
+        raise Error("A framebuffer is larger than this port stores")
 
 
 def require_depth_length(length: Int, width: Int, height: Int) raises:

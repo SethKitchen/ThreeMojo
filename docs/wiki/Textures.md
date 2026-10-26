@@ -19,7 +19,7 @@ float_texture(width, height, floats, wrap=CLAMP, filter=BILINEAR, mipmapped=Fals
 float_texture_from(hdr_image, wrap=CLAMP, filter=BILINEAR, mipmapped=False, alpha=COVERAGE)
 ```
 
-Every texture clamps its edges by default, as three.js's `ClampToEdgeWrapping` does. Pass `REPEAT` to tile a texture. The glTF, OBJ, FBX and Collada loaders repeat by default, as their three.js loaders do.
+Every texture clamps its edges by default, as three.js's `ClampToEdgeWrapping` does. Pass `REPEAT` to tile a texture. The glTF, OBJ, FBX and Collada loaders repeat by default, as their three.js loaders do. A side above 16777216 texels is scaled in `Float64`. A coordinate past 1048576, or one that is not finite, is reduced before it becomes a texel index.
 
 `checkerboard` builds a test pattern. `texture_from` takes a `DecodedImage` from the PNG reader. `Texture` takes row-major RGBA bytes from the top. The next three are below. The float textures are in [HDR images](#hdr-images).
 
@@ -302,6 +302,7 @@ The tests decode frames that libzstd 1.5.7 wrote at levels -5 to 19. Frames buil
 
 - Each container refuses a wrong identifier or magic, a size that is not positive, and a file that ends early.
 - A size that decodes to more than `MAX_DECODED_BYTES` is refused before any allocation. A float format counts sixteen bytes a texel.
+- `uastc_image` and `uastc_hdr_image` refuse a size that is not positive, or that decodes past `MAX_DECODED_BYTES`.
 - A KTX2 file refuses a descriptor or a level outside the file, and a level whose length is not its size.
 - A KTX2 half or float format with the sRGB transfer function is refused.
 - A KTX2 file with ETC1S data must use BasisLZ, and BasisLZ must hold ETC1S. UASTC and ETC1S data must name no Vulkan format. UASTC HDR data must name no Vulkan format or ASTC 4x4 SFLOAT.
@@ -433,6 +434,7 @@ An UltraHDR file holds two JPEG files: the SDR image and a gain map. The SDR ima
 - `parse_ultrahdr(bytes)` reads the bytes of a file. `apply_gain_map(sdr, gain, metadata)` applies a gain map to decoded images.
 - `render.jpeg` decodes the two JPEG files. It agrees with libjpeg to one level. A browser decodes them in three.js.
 - A gain map of another size is scaled bilinearly by `scale_gain_map`. A browser's canvas scales it in three.js, with a filter of its own.
+- An image below one pixel, or whose pixel count does not fit in an integer, is refused.
 - The alpha is one. three.js fills each alpha with 255.
 - An APP1 segment that is not XMP, such as EXIF data, is read past. three.js throws a `TypeError`.
 - A number in the metadata that is not finite, or an HDR capacity range of zero, is refused. three.js gives an image of `NaN`s.
@@ -471,7 +473,7 @@ Each reader refuses a file that three.js reads wrongly. three.js reads every EXR
 
 ## Flakes
 
-`flakes_texture(width, height, seed)` in `render.flakes_texture` is three.js's `FlakesTexture`: a normal map of small discs, each with a random normal. Use it as a car paint's normal map, as three.js's `webgl_materials_car` example does. The texture holds data, not color, and it repeats.
+`flakes_texture(width, height, seed)` in `render.flakes_texture` is three.js's `FlakesTexture`: a normal map of small discs, each with a random normal. Use it as a car paint's normal map, as three.js's `webgl_materials_car` example does. The texture holds data, not color, and it repeats. A side whose texel buffer does not fit in an integer is refused.
 
 ```mojo
 var flakes = assets.textures.add(flakes_texture(512, 512, seed=7))
@@ -641,7 +643,7 @@ A physical surface asks `CubeTexture.sample_rough(direction, roughness)`. It rea
 
 ### How it is built
 
-The sharpest copy reads the source in the direction of each texel. Each copy after it is the one before, blurred by a Gaussian on the sphere. The blurs add up to each copy's own width: `1 / size` for the halving copies, and three.js's `extra_lod_sigma()` for the six others. three.js chose those widths to follow the GGX lobe at each roughness.
+The sharpest copy reads the source in the direction of each texel. Each copy after it is the one before, blurred by a Gaussian on the sphere. The blurs add up to each copy's own width: `1 / size` for the halving copies, and three.js's `extra_lod_sigma()` for the six others. three.js chose those widths to follow the GGX lobe at each roughness. A source past the sizes an integer can name is read at the largest power of two that fits.
 
 Each blur is two passes. The first turns about a pole and the second turns toward it. The pole changes each time among ten axes of a dodecahedron, `pole_axis`. This is three.js's `SphericalGaussianBlur`, run on the host once.
 
@@ -697,7 +699,7 @@ A texel with fewer than four channels fills red first. A color channel that it d
 | `texel_fetch(x, y, z) -> FloatColor` | `texelFetch(sampler3D, ivec3, 0)` | The texel at an index. |
 | `validate()` | | Refuse a field edited into nonsense. |
 
-Under `NEAREST`, `sample` returns the texel that the coordinate lands in. Under `BILINEAR`, three.js's `LinearFilter`, it blends the eight texels around the coordinate. Texel centers are at half-integers. Each index is wrapped on its own axis by `wrap_s`, `wrap_t` or `wrap_r`.
+Under `NEAREST`, `sample` returns the texel that the coordinate lands in. Under `BILINEAR`, three.js's `LinearFilter`, it blends the eight texels around the coordinate. Texel centers are at half-integers. Each index is wrapped on its own axis by `wrap_s`, `wrap_t` or `wrap_r`. A coordinate past 1048576, or one that is not finite, is reduced before it becomes a texel index.
 
 A byte is read as a fraction of 255. With `SRGB`, the three color channels are decoded through the sRGB curve, and alpha is not. A float is read as it is.
 
@@ -730,6 +732,8 @@ The image is a `VolumeImage`. Its `depth` is the number of layers. `DataArrayTex
 | `validate()` | | Refuse a field edited into nonsense. |
 
 `array_layer(layer, depth)` finds the layer that `sample` reads. It rounds the coordinate to the nearest whole number, and a half rounds up. Then it holds the result inside the stack. That is the OpenGL rule. A sample never blends two layers. Within the layer, the filter and the wrap modes work as they do for a [3D texture](#3d-textures).
+
+A layer that is not a number reads the first layer.
 
 ### The stores
 

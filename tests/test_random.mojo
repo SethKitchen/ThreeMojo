@@ -8,7 +8,7 @@ from math.random import mulberry32_step
 from math.utils import SeededRandom
 from math.vector2 import Vector2
 from math.vector3 import Vector3
-from std.math import inf, isfinite, isnan, nan
+from std.math import floor, inf, isfinite, isnan, nan
 from std.memory import bitcast
 from std.testing import TestSuite, assert_equal, assert_true
 
@@ -100,6 +100,36 @@ def test_equal_bounds_keep_value_and_advance_once() raises:
         )
         _ = control.next()
         assert_equal(rng.state, control.state)
+
+
+def test_an_integer_range_past_the_word_stays_inside_it() raises:
+    """A width of `Int.MAX + 1` used to wrap to the minimum integer."""
+    var seeds = List[Int]()
+    seeds.append(0)
+    seeds.append(1)
+    seeds.append(42)
+    seeds.append(52078625)
+    seeds.append(-1)
+    for seed in seeds:
+        var wide = SeededRandom(seed)
+        var drawn = wide.int_in(0, Int.MAX)
+        assert_true(drawn >= 0)
+        var full = SeededRandom(seed)
+        var both = full.int_in(Int.MIN, Int.MAX)
+        assert_true(both <= Int.MAX)
+        var upper = SeededRandom(seed)
+        var top = upper.int_in(-1, Int.MAX)
+        assert_true(top >= -1)
+        assert_true(top <= Int.MAX)
+        var swapped = SeededRandom(seed)
+        assert_equal(swapped.int_in(Int.MAX, Int.MIN), Int.MAX)
+        var control = SeededRandom(seed)
+        _ = control.next()
+        assert_equal(wide.state, control.state)
+    var narrow = SeededRandom(42)
+    var counted = SeededRandom(42)
+    var unit = counted.next()
+    assert_equal(narrow.int_in(-5, 10), -5 + Int(floor(unit * 16)))
 
 
 def test_ordinary_float_arithmetic_and_integer_sequence_are_unchanged() raises:

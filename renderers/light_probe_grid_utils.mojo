@@ -17,7 +17,7 @@ an equal-area Fibonacci sphere, each sample times the basis, times
 **Bounces.** With `bounces` above zero, the bake runs again that many
 times. Each pass draws the scene lit by a copy of the grid as the pass
 before left it, so light bounces once more each pass. The first pass
-draws the scene without the grid.
+draws the scene without the grid. A count above 16777216 is refused.
 
 **Suns.** A sun's shadow is fit to one view camera, and a cube has six.
 So the bake does as three.js's `replaceSunLights` does. Each sun that
@@ -50,6 +50,11 @@ comptime DEFAULT_CUBEMAP_SIZE = 8
 comptime DEFAULT_PROBE_NEAR = Length(0.1, METER)
 comptime DEFAULT_PROBE_FAR = Length(100.0, METER)
 comptime DEFAULT_SAMPLE_COUNT = 512
+# Extra passes and sample directions this port runs. The maximum integer
+# wraps `bounces + 1` into an empty bake, and one below that never
+# finishes. A sample count past 2^24 is not the float the sphere divides
+# by, and the maximum integer never finishes the read.
+comptime MAX_LIGHT_PROBE_COUNT = 16777216
 # What `count` means when it is left out: every probe from `start` on.
 comptime ALL_PROBES = -1
 # three.js's `GOLDEN_ANGLE`, the turn between two Fibonacci directions.
@@ -83,9 +88,13 @@ def require_probe_samples(sample_count: Int) raises:
         sample_count: How many directions to read.
 
     Raises:
-        Error: If the count is below one.
+        Error: If the count is below one or above 16777216.
     """
     require_positive(sample_count, "A probe bake reads one direction or more")
+    if sample_count > MAX_LIGHT_PROBE_COUNT:
+        raise Error(
+            "A probe bake's sample count is larger than this port reads"
+        )
 
 
 def project_sh(
@@ -104,8 +113,8 @@ def project_sh(
         The coefficients, linear.
 
     Raises:
-        Error: If the sample count is below one, or the cube is refused by
-            `CubeTexture.validate`.
+        Error: If the sample count is below one or above 16777216, or the
+            cube is refused by `CubeTexture.validate`.
     """
     require_probe_samples(sample_count)
     cube.validate()
@@ -298,9 +307,10 @@ def bake_light_probe_grid(
 
     Raises:
         Error: If the grid is refused by `LightProbeGrid.validate`; the
-            range is outside the grid; `bounces` is negative, or above
-            zero for a range that is not the whole grid; the sample count
-            is below one; or `scene_cube` refuses a probe's cube.
+            range is outside the grid; `bounces` is negative, above
+            16777216, or above zero for a range that is not the whole
+            grid; the sample count is below one or above 16777216; or
+            `scene_cube` refuses a probe's cube.
     """
     grid.validate()
     var total = grid.count()
@@ -313,6 +323,11 @@ def bake_light_probe_grid(
     require_non_negative(
         bounces, "A light probe grid bake's bounces cannot be negative"
     )
+    if bounces > MAX_LIGHT_PROBE_COUNT:
+        raise Error(
+            "A light probe grid bake's bounce count is larger than this port"
+            + " bakes"
+        )
     if bounces > 0 and amount != total:
         raise Error(
             "A light probe grid bakes every probe when the light bounces"

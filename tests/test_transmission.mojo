@@ -36,7 +36,7 @@ from render.transmission import (
     volume_attenuation,
     volume_refraction,
 )
-from std.math import inf
+from std.math import inf, nan
 from std.testing import (
     TestSuite,
     assert_almost_equal,
@@ -191,6 +191,18 @@ def test_a_bicubic_sample_blurs_an_edge_and_a_coarser_level_more() raises:
     var soft = texture_bicubic(source, Vector2(0.6875, 0.5), 1)
     assert_true(sharp.r > soft.r)
     assert_true(sharp.r > 0.9)
+    # A level past 2^63 is not an index. It reads the last level, as a
+    # level past the chain does, and a level below zero reads the first.
+    var past = texture_bicubic(source, Vector2(0.6875, 0.5), 9.5)
+    var huge = texture_bicubic(source, Vector2(0.6875, 0.5), Float32(1e20))
+    var missing = texture_bicubic(
+        source, Vector2(0.6875, 0.5), nan[DType.float32]()
+    )
+    var below = texture_bicubic(source, Vector2(0.6875, 0.5), -1)
+    assert_almost_equal(huge.r, past.r, atol=TOLERANCE)
+    assert_almost_equal(missing.r, past.r, atol=TOLERANCE)
+    assert_almost_equal(below.r, sharp.r, atol=TOLERANCE)
+    assert_true(past.r < sharp.r)
 
 
 def test_a_volume_refraction_is_the_scene_times_the_transmittance() raises:
