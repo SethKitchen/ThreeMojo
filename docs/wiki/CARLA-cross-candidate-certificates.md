@@ -407,6 +407,12 @@ Each helper call keeps its reviewed count.
 A local helper must not hide that import.
 A changed import or a changed call is refused.
 
+Mojo checks the reviewed distance helper successor.
+The live module keeps its file digest and its token digest.
+One import edit restores the local helpers.
+Those helpers match the interval module.
+A changed module or a changed helper is refused.
+
 ## Candidate certificate
 
 A certificate contains a stored incumbent point and its road parameter.
