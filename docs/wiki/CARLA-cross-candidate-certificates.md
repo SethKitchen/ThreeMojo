@@ -467,6 +467,11 @@ Fifteen executing checkers keep their reviewed digests.
 Six public checkers keep their reviewed digests.
 A changed checker or a linked public checker is refused.
 
+Mojo checks the reviewed typed-boundary conditioned inputs.
+Five conditioned inputs keep their reviewed digests.
+Two contract leaves keep their reviewed digests.
+A changed conditioned input is refused.
+
 ## Candidate certificate
 
 A certificate contains a stored incumbent point and its road parameter.
