@@ -631,16 +631,16 @@ def check_current_generated_include_root(stage, mojo, compiler, flags):
         ('extensions/carla/curve_sample_dispatch',126): (
             'sample-dispatch-count-1-or-2','range(count)','reviewed-nonempty-range',2,
             '04ff45c12cefcb4dbe3a7b136e77b6baaf02cff52325f6599d99250f820fdebb'),
-        ('extensions/carla/map',5020): (
+        ('extensions/carla/map',5025): (
             'construction-geometry-boundary-list','boundaries','reviewed-nonempty-iterator',None,
-            '288d0e5d3a5bc2e5a6b9542868de6566dc6cb4de6eae39192c0289d76a8c99fa'),
+            '4ac668239112e81ac0b2bc84eaed32d1efbee1f70e61d1d97ca02324f914f35c'),
     }
     ordinary = {
         ('extensions/carla/map',line): {
             'module':'extensions/carla/map', 'line':line,
             'kind':'literal-range', 'cardinality':count, 'required':'T', 'impossible':'F',
             'expression':expression,
-            'source_sha256':'288d0e5d3a5bc2e5a6b9542868de6566dc6cb4de6eae39192c0289d76a8c99fa'}
+            'source_sha256':'4ac668239112e81ac0b2bc84eaed32d1efbee1f70e61d1d97ca02324f914f35c'}
         for line,count,expression in ((2170,3,'range (3 )'),(2201,8,'range (8 )'))}
     expected = set(rows) | set(ordinary)
     observed = {(row['module'],row['line']):row for row in envelope['receipt']['proofs']}
@@ -661,7 +661,7 @@ def check_current_generated_include_root(stage, mojo, compiler, flags):
                      for (module,line),item in ordinary.items() if module == key[0]}
         require(proofs.constant_loops(raw.decode('utf-8')) == constants,
                 'Ordinary proof census differs from the reviewed exact set')
-    require(observed['extensions/carla/map',5020]['minimum_cardinality'] == 1,
+    require(observed['extensions/carla/map',5025]['minimum_cardinality'] == 1,
             'Constructor boundary minimum changed')
     require(all(observed[key] == row for key,row in ordinary.items()),
             'Ordinary literal-range proof contract differs')
@@ -671,7 +671,7 @@ def check_current_generated_include_root(stage, mojo, compiler, flags):
             'Original selected-module denominator differs')
     # Preserve the source's existing branch exclusions explicitly. None is
     # evidence for a new proof or permission to discard another obligation.
-    map_exclusions = (1223,1766,2205,3003,3010,3032,3104,3109,3118,3127,4903,5328,5348)
+    map_exclusions = (1223,1766,2205,3003,3010,3032,3104,3109,3118,3127,4908,5333,5353)
     require(all(f'B extensions/carla/map {line}'.encode() not in original.splitlines()
                 for line in map_exclusions), 'Existing Map branch exclusion changed')
     masked = mojo_mask(mojo, stage)

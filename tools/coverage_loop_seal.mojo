@@ -1106,17 +1106,144 @@ def _reviewed_nodes(
             if keys[cursor] == key:
                 seen = cursor
             cursor += 1
+        var matches: Bool
         if seen >= 0:
-            if ready[seen]:
-                matched.append(proof)
+            matches = ready[seen]
         else:
-            var matches = _deps_match(table, root, deps)
+            matches = _deps_match(table, root, deps)
             keys.append(key)
             ready.append(matches)
-            if matches:
-                matched.append(proof)
+        var census = table.find(proof, "census")
+        if matches and census >= 0:
+            matches = _census_match(table, root, deps, census)
+        if matches:
+            matched.append(proof)
         index += 1
     return matched^
+
+
+def _mojo_image(
+    root: String, mut paths: List[String], mut digests: List[String]
+) raises:
+    """Hash every Mojo input below `root`, in input order.
+
+    A typed-boundary proof binds the whole Mojo image, as the Python seal's
+    typed admission does, plus the authority files its row names.
+
+    Args:
+        root: The source root.
+        paths: Receives the Mojo input paths.
+        digests: Receives each path's SHA-256 digest.
+
+    Raises:
+        Error: When a source cannot be read.
+    """
+    for path in input_paths(root):
+        if path.endswith(".mojo"):
+            paths.append(path)
+            digests.append(_hash_file(_join(root, path)))
+
+
+def _identifier_byte(byte: UInt8) -> Bool:
+    """Return whether `byte` can be part of a Mojo identifier.
+
+    Args:
+        byte: One source byte.
+
+    Returns:
+        True for an ASCII letter, digit, or underscore.
+    """
+    return (
+        (byte >= 48 and byte <= 57)
+        or (byte >= 65 and byte <= 90)
+        or (byte >= 97 and byte <= 122)
+        or byte == 95
+    )
+
+
+def _names(text: String, name: String) -> Bool:
+    """Return whether `text` holds `name` as a whole identifier.
+
+    Args:
+        text: One source.
+        name: The identifier.
+
+    Returns:
+        True when `name` occurs and is not part of a longer identifier.
+    """
+    var data = text.as_bytes()
+    var size = name.byte_length()
+    var start = 0
+    while True:
+        var at = text.find(name, start)
+        if at < 0:
+            return False
+        var before = at == 0 or not _identifier_byte(data[at - 1])
+        var end = at + size
+        var after = end >= len(data) or not _identifier_byte(data[end])
+        if before and after:
+            return True
+        start = at + 1
+
+
+def _census_match(
+    table: PyJson, root: String, deps: Int, census: Int
+) raises -> Bool:
+    """Return whether a proof's census still names only its pinned files.
+
+    A census lists identifiers and the Mojo files that name them. The proof
+    holds while exactly those files below `root` name one of the
+    identifiers, and each of them is a pinned dependency. A new file that
+    names one, in code or in a string, withdraws the proof.
+
+    Args:
+        table: The reviewed table.
+        root: The source root.
+        deps: The proof's dependency object.
+        census: The proof's census object.
+
+    Returns:
+        True when the files that name an identifier are the listed files.
+
+    Raises:
+        Error: When a source cannot be read.
+    """
+    var names_node = table.at(census, "names")
+    var files_node = table.at(census, "files")
+    var names = List[String]()
+    var index = 0
+    while index < table.length(names_node):
+        names.append(table.text(table.item(names_node, index)))
+        index += 1
+    var expected = List[String]()
+    index = 0
+    while index < table.length(files_node):
+        var path = table.text(table.item(files_node, index))
+        if table.find(deps, path) < 0:
+            return False
+        expected.append(path)
+        index += 1
+    var found = 0
+    for path in input_paths(root):
+        if not path.endswith(".mojo"):
+            continue
+        var text = Path(_join(root, path)).read_text()
+        var named = False
+        for name in names:
+            if _names(text, name):
+                named = True
+                break
+        if not named:
+            continue
+        var listed = False
+        for want in expected:
+            if want == path:
+                listed = True
+                break
+        if not listed:
+            return False
+        found += 1
+    return found == len(expected)
 
 
 def _insert_pick(
@@ -1369,6 +1496,9 @@ def run_seal(
     var reviews = _load_reviews()
     var proof_list = doc.new_list()
     var proved = 0
+    var image_paths = List[String]()
+    var image_digests = List[String]()
+    var image_ready = False
     for module in sorted_modules:
         var branches = List[Int]()
         var compound = List[Int]()
@@ -1483,11 +1613,38 @@ def run_seal(
                     "proof_id",
                     doc.new_str(reviews.text(reviews.at(node, "proof_id"))),
                 )
-                doc.set(
-                    proof,
-                    "dependency_sha256",
-                    doc.adopt(reviews, reviews.at(node, "dependency_sha256")),
-                )
+                var image = reviews.find(node, "image")
+                if image < 0:
+                    doc.set(
+                        proof,
+                        "dependency_sha256",
+                        doc.adopt(
+                            reviews, reviews.at(node, "dependency_sha256")
+                        ),
+                    )
+                else:
+                    if not image_ready:
+                        _mojo_image(root, image_paths, image_digests)
+                        image_ready = True
+                    var bound = doc.new_dict()
+                    var at = 0
+                    while at < len(image_paths):
+                        doc.set(
+                            bound,
+                            image_paths[at],
+                            doc.new_str(image_digests[at]),
+                        )
+                        at += 1
+                    at = 0
+                    while at < reviews.length(image):
+                        var name = reviews.text(reviews.item(image, at))
+                        doc.set(
+                            bound,
+                            name,
+                            doc.new_str(_hash_file(_join(root, name))),
+                        )
+                        at += 1
+                    doc.set(proof, "dependency_sha256", bound)
             doc.set(proof, "source_sha256", doc.new_str(source_hash))
             doc.append(proof_list, proof)
             proved += 1

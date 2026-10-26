@@ -3064,20 +3064,28 @@ def _shared_helper_bindings(root, *, paths=None, _snapshots=None, _inputs=None,
             require(_snapshots.setdefault(path, raw) == raw,
                     'helper input changed after consumption: ' + path)
         return raw
+    def image(path, raw):
+        # A reviewed PR780 successor compares as its exact predecessor bytes,
+        # as _historical_typed_text projects it. The physical bytes stay bound.
+        extension = pr780_successor.reviewed_edge(path)
+        if extension is not None and sha(raw) == extension['after_sha256']:
+            return pr780_successor.predecessor_bytes(path, raw)
+        return raw
     selected = shared_helpers.ARITHMETIC_PATHS if paths is None else paths
     require(type(selected) is tuple and bool(selected)
             and len(set(selected)) == len(selected)
             and set(selected) <= set(shared_helpers.SOURCE_PATHS), 'invalid helper input scope')
     sources = {path: observe(path) for path in selected}
+    images = {path: image(path, raw) for path, raw in sources.items()}
     current = bool(_pr760) or any(name in pr760_stage.CARLA_REGISTRY_PATHS
         and sha(raw) == pr760_stage.EDGES[name]['after_sha256']
-        for name, raw in sources.items())
+        for name, raw in images.items())
     if not current:
         # Exact pre-extraction sources do not import their helper provider.
         # Probe only live edges; a current source still selects full PR760
         # admission above, including every physical provider it requires.
         for name in {name for path in selected
-                     if sha(sources[path]) != shared_helpers.BEFORE_SHA256[path]
+                     if sha(images[path]) != shared_helpers.BEFORE_SHA256[path]
                      for name in shared_helpers.PROVIDER_PATHS[path]}:
             raw = observe(name)
             if name in pr760_stage.CARLA_REGISTRY_PATHS and sha(raw) == pr760_stage.EDGES[name]['after_sha256']:
@@ -3086,7 +3094,7 @@ def _shared_helper_bindings(root, *, paths=None, _snapshots=None, _inputs=None,
         _pr760_admit(root, _inputs=_inputs, _input_owner=_input_owner,
                     _operation=_operation, _selection=_pr760)
     active = []
-    for path, raw in sources.items():
+    for path, raw in images.items():
         prior = (_pr760['predecessors'][path] if _pr760 and path in _pr760['predecessors']
                  else pr760_stage.predecessor_source(path, raw.decode('utf-8'))
                  if current and path in pr760_stage.CARLA_REGISTRY_PATHS else raw.decode('utf-8'))
@@ -3107,11 +3115,12 @@ def _shared_helper_bindings(root, *, paths=None, _snapshots=None, _inputs=None,
     bound = {path: observe(path) for path in expected}
     typed_fixtures = {}
     for path, raw in bound.items():
-        historical = raw
+        # A typed fixture still gives its physical bytes to the typed owner.
+        historical = image(path, raw)
         if current and path in pr760_stage.CARLA_REGISTRY_PATHS:
             historical = (_pr760['predecessors'][path] if _pr760 else
-                pr760_stage.predecessor_source(path, raw.decode('utf-8'))).encode('utf-8')
-        if path in tests and typed_boundary.is_current(path, raw):
+                pr760_stage.predecessor_source(path, historical.decode('utf-8'))).encode('utf-8')
+        if path in tests and typed_boundary.is_current(path, image(path, raw)):
             # Arithmetic capture has no typed fixture edge. Supplemental native
             # fixtures use the complete current graph before exact provenance;
             # source/provider extraction identities remain unchanged.
@@ -3120,8 +3129,8 @@ def _shared_helper_bindings(root, *, paths=None, _snapshots=None, _inputs=None,
                 _operation=_operation, _inputs=_inputs, _input_owner=_input_owner).encode('utf-8')
             typed_fixtures[path] = raw
         require(sha(historical) == expected[path], 'shared-helper fixture changed: ' + path)
-    texts = {path: raw.decode('utf-8') for path, raw in sources.items()}
-    texts.update({path: bound[path].decode('utf-8') for path in providers})
+    texts = {path: raw.decode('utf-8') for path, raw in images.items()}
+    texts.update({path: image(path, bound[path]).decode('utf-8') for path in providers})
     if current:
         texts = {path: (_pr760['predecessors'][path] if _pr760 and path in _pr760['predecessors']
             else pr760_stage.predecessor_source(path, text)
