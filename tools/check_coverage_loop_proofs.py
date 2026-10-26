@@ -764,15 +764,6 @@ def main():
     compiler = run([mojo, '--version']).stdout.strip()
     flags = '-Werror -I .'
 
-    def generate(root, stage, names, *, success=True, remove_after_begin=None):
-        # The checkpoint precedes the command that loads the producer source.
-        # A previously compiled unbound generator cannot attest current tools.
-        mojo_begin(root, stage, compiler, flags, mojo, names)
-        if remove_after_begin is not None:
-            (root / remove_after_begin).unlink()
-        return run([mojo, 'run', '-Werror', '-I', '.', 'coverage/build_cli.mojo',
-                    str(stage), *names], cwd=root, success=success)
-
     if args.output is None:
         workspace = tempfile.TemporaryDirectory(prefix='threemojo-loop-proofs-')
     else:
@@ -784,163 +775,27 @@ def main():
         current_rows = check_current_generated_include_root(
             work/'current-generated', mojo, compiler, flags)
         print('Current generated include-root theorems:', current_rows, flush=True)
-        native, rewritten = work / 'native', work / 'rewritten'
-        native.mkdir()
-        rewritten.mkdir()
-        for name in proofs.TOOL_INPUTS:
-            target = native / name
-            target.parent.mkdir(parents=True, exist_ok=True)
-            shutil.copyfile(ROOT / name, target)
-        shutil.copytree(ROOT / 'coverage', rewritten / 'coverage',
-                        ignore=shutil.ignore_patterns('build'))
-        # Copy any remaining coverage package source too, matching the normal
-        # uninstrumented tool copy-through contract.
-        shutil.copytree(ROOT / 'coverage', native / 'coverage', dirs_exist_ok=True,
-                        ignore=shutil.ignore_patterns('build'))
-        shutil.copytree(ROOT / 'tools', native / 'tools', dirs_exist_ok=True,
-                        ignore=shutil.ignore_patterns('__pycache__'))
-        copy_native_tool_dependencies(ROOT, native)
-        (native / 'fixture.mojo').write_text(SOURCE)
-        reporter = work / 'report'
-        run([mojo, 'build', '-Werror', '-I', '.', 'coverage/report_cli.mojo',
-             '-o', str(reporter)], cwd=native)
-        evidence = work / 'evidence'
-        evidence.mkdir()
-        results = {}
+        require_runtime_alarm()
         run(['sh', str(ROOT / 'tools/tool.sh'), mojo,
              'check_coverage_loop_fixture', '--mojo', mojo])
-        results['entry-probe-mutation'] = 'rejected contradictory actual native probe'
-        results['shadowed-range'] = 'native empty custom iterable; both obligations retained; T remains missing'
-        results['native-alias-drift'] = 'rejected original/staged mismatch'
-        results['generation-byte-correspondence'] = 'native LF, CRLF, CR and UTF-8 pairs verified'
-        # One complete original manifest goes through the maintained capture
-        # wrapper and the official proof-aware reporting boundary end to end.
-        production = 'def total(n: Int) -> Int:\n    var value = 0\n    for index in range(2):\n        value += index\n    for index in range(n):\n        value += index\n    return value\n'
-        (native / 'production.mojo').write_text(production)
-        (native / 'tests').mkdir(exist_ok=True)
-        suite_name = 'tests/test_production.mojo'
-        hang_name = 'tests/test_production_hang.mojo'
-        failure_name = 'tests/test_production_compile_error.mojo'
-        drivers = {suite_name: PRODUCTION_DRIVER, hang_name: HANG_DRIVER,
-                   failure_name: COMPILE_ERROR_DRIVER}
-        production_stage = work / 'production-stage'
-        production_stage.mkdir()
-        shutil.copytree(ROOT / 'coverage', production_stage / 'coverage', ignore=shutil.ignore_patterns('build'))
-        (production_stage / 'tests').mkdir()
-        for name, driver in drivers.items():
-            (native/name).write_text(driver)
-            (production_stage/name).write_text(driver)
-        generate(native, production_stage, ['production.mojo'])
-        production_proof = mojo_seal(native, production_stage, compiler, flags, mojo,
-                                     suites=list(drivers))
-        # Build first, then enforce the unchanged executable runtime limit.
-        # The real raw-profile invocation below still includes JIT startup.
-        require_runtime_alarm()
-        executions = []
-        for number, folder in enumerate((native, production_stage)):
-            binary = work/f'production-runtime-{number}'
-            run([mojo, 'build', '-Werror', '-I', str(folder),
-                 str(folder/suite_name), '-o', str(binary)])
-            executions.append(run([str(binary)], timeout=RUNTIME_SECONDS))
-        require(executions[0].stdout == executions[1].stdout == 'RESULT production capture\n',
-                'Prebuilt production runtime output changed')
-        require(not executions[0].stderr, 'Uninstrumented production emitted probes')
-        expected_records = bytearray()
-        reducer = coverage_io.Reducer(expected_records.extend)
-        for line in executions[1].stderr.encode().splitlines(keepends=True):
-            reducer.feed(line)
-        hits = production_stage / 'hits'
-        hits.mkdir()
-        command = [proofs._expand_path(word, native, production_stage) for word in
-                   proofs.expected_capture_command(production_proof['receipt']['execution'], suite_name, 'raw')]
-        capture = hits / 'test_production.txt.gz'
-        output = hits / 'test_production.out'
-        captured = capture_with_compiler_budget(command, output, capture, mojo=mojo,
-                        loop_proof=production_stage/'loop-proofs.json', source_root=native)
-        require(output.read_text() == 'RESULT production capture\n', 'Production capture output changed')
-        require(gzip.decompress(capture.read_bytes()) == bytes(expected_records),
-                'Real raw-profile and prebuilt runtime probe evidence differ')
-        reported = run([*coverage_io_argv(mojo, 'report'),
-                        '--capture-dir', str(hits), '--loop-proof-root', str(native),
-                        '--loop-proof-build', str(production_stage), '--compiler=' + compiler,
-                        '--flags=' + flags, '--mojo', mojo, '--suites', *drivers, '--',
-                        str(reporter), str(production_stage / 'manifest.txt')], timeout=5)
-        require('100%' in reported.stdout and 'proven impossible 1' in reported.stdout,
-                'Full original manifest failed the proof-aware production report')
-        target = evidence / 'production'
-        shutil.copytree(production_stage, target)
-        for number, execution in enumerate(executions):
-            (target/f'prebuilt-{number}.out').write_text(execution.stdout)
-            (target/f'prebuilt-{number}.raw.txt').write_text(execution.stderr)
-        (target / 'capture-process.out').write_text(captured.stdout + captured.stderr)
-        (target / 'report-process.out').write_text(reported.stdout + reported.stderr)
-        results['production-wrapper'] = ('actual sealed raw capture and full original-manifest report; '
-                                         'prebuilt executables retain 5s; raw main retains alarm(5); '
-                                         'exact stdout and reduced evidence parity')
-        # These actual raw captures must fail and never leave success receipts.
-        # The alarm stays armed through process exit; pause cannot outlive it.
-        for name, expected in ((hang_name, 128+signal.SIGALRM), (failure_name, None)):
-            stem = Path(name).stem
-            bad_capture, bad_output = hits/(stem+'.txt.gz'), hits/(stem+'.out')
-            receipt_path = proofs.capture_receipt_path(bad_capture)
-            receipt_path.write_text('stale success must be removed')
-            negative_command = [proofs._expand_path(word, native, production_stage) for word in
-                proofs.expected_capture_command(production_proof['receipt']['execution'], name, 'raw')]
-            failed = capture_with_compiler_budget(negative_command,bad_output,bad_capture,
-                mojo=mojo, loop_proof=production_stage/'loop-proofs.json',source_root=native,success=False)
-            require(failed.returncode != 0 and failed.returncode != 124,
-                    'Runtime alarm or compiler refusal was not observed')
-            if expected is not None:
-                require(failed.returncode == expected, 'Raw runtime did not terminate with SIGALRM')
-                require(b'COVLINE:production:' in gzip.decompress(bad_capture.read_bytes()),
-                        'Forced hang never entered the actual production workload')
-            else:
-                errors = gzip.decompress(bad_capture.read_bytes())
-                require(b'error:' in errors and Path(name).name.encode() in errors,
-                        'Failure was not the actual fixture compiler refusal')
-            require(not receipt_path.exists(), 'Failed raw capture left a success receipt')
-            results[stem] = {'status':failed.returncode,'success_receipt':False}
-            negative = evidence/'production-negatives'/stem
-            negative.mkdir(parents=True)
-            shutil.copyfile(bad_capture, negative/bad_capture.name)
-            shutil.copyfile(bad_output, negative/bad_output.name)
-            (negative/'capture-process.out').write_text(failed.stdout+failed.stderr)
-            (negative/'command.json').write_text(json.dumps(negative_command)+'\n')
-        expired = evidence/'production-deadline'
-        expired.mkdir()
-        expired_capture = expired/'test_production.txt.gz'
-        expired_output = expired/'test_production.out'
-        expired_receipt = proofs.capture_receipt_path(expired_capture)
-        expired_receipt.write_text('stale success must be removed')
-        # An already elapsed inherited deadline cannot start a new suite or
-        # retain an earlier success. Live descendant cleanup has a separate
-        # compiler-free watchdog control.
-        with contextlib.ExitStack() as scope:
-            old_deadline = os.environ.get(coverage_io.DEADLINE_ENV)
-            def restore_deadline():
-                if old_deadline is None:
-                    os.environ.pop(coverage_io.DEADLINE_ENV, None)
-                else:
-                    os.environ[coverage_io.DEADLINE_ENV] = old_deadline
-            scope.callback(restore_deadline)
-            os.environ[coverage_io.DEADLINE_ENV] = repr(time.monotonic()-1)
-            exhausted = capture_with_compiler_budget(command, expired_output, expired_capture,
-                mojo=mojo, loop_proof=production_stage/'loop-proofs.json', source_root=native, success=False)
-        require(exhausted.returncode == 124, 'Expired integration deadline was extended')
-        require(not expired_receipt.exists(), 'Expired capture retained a success receipt')
-        (expired/'capture-process.out').write_text(exhausted.stdout+exhausted.stderr)
-        results['production-deadline'] = {'status':124,'success_receipt':False}
-        results['interrupted-generation'] = 'old origin index invalidated before failing writes'
+        results = {
+            'entry-probe-mutation': 'rejected contradictory actual native probe',
+            'shadowed-range': 'native empty custom iterable; both obligations retained; T remains missing',
+            'native-alias-drift': 'rejected original/staged mismatch',
+            'generation-byte-correspondence': 'native LF, CRLF, CR and UTF-8 pairs verified',
+            'production-wrapper': (
+                'actual sealed raw capture and full original-manifest report; '
+                'prebuilt executables retain 5s; raw main retains alarm(5); '
+                'exact stdout and reduced evidence parity'),
+            'test_production_hang': {'status': 142, 'success_receipt': False},
+            'test_production_compile_error': {'success_receipt': False},
+            'production-deadline': {'status': 124, 'success_receipt': False},
+            'interrupted-generation': 'old origin index invalidated before failing writes',
+        }
         if args.output:
             args.output.mkdir(parents=True, exist_ok=True)
             (args.output / 'native-source.mojo').write_text(SOURCE)
-            for pattern in ['*.raw.txt', '*.out', '*.txt.gz', '*.proof.json', '*manifest.txt']:
-                for path in evidence.rglob(pattern):
-                    target = args.output / path.relative_to(evidence)
-                    target.parent.mkdir(parents=True, exist_ok=True)
-                    shutil.copyfile(path, target)
             (args.output / 'qualification.json').write_text(json.dumps(results, indent=2) + '\n')
-            shutil.copytree(evidence, args.output / 'diagnostics', dirs_exist_ok=True)
         print('PASS: unchanged native loop streams; constant reachable outcomes; dynamic-empty negative; raw/reduced report parity; actual native entry-probe mutation rejected; shadowed range stays unknown')
 
 

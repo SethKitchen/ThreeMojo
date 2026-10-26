@@ -379,7 +379,7 @@ CPU test groups use imported source size. Coverage groups use `tools/coverage_sh
 
 `make coverage` runs each raw capture with `tools/native_test_support.mojo`. A suite that links the C fixture is built and then run in that capture's process group. `tools/coverage_hit_aot.mojo` runs a compiled capture. It builds the suite and keeps the source path as the program name. `tools/coverage_io.mojo` captures one suite, keeps each probe record once, checks the loop proof, and replays the captures to the reporter. `tools/coverage_loop_begin.mojo` writes the generation checkpoint before the producer runs.
 
-The loop receipt binds `tools/coverage_hit_aot.mojo`. The Python file `tools/coverage_hit_aot.py` is removed. `tools/check_coverage_loop_fixture.mojo` checks the constant-loop fixture, a shadowed range, and physical line endings.
+The loop receipt binds `tools/coverage_hit_aot.mojo`. The Python file `tools/coverage_hit_aot.py` is removed. `tools/check_coverage_loop_fixture.mojo` checks the constant-loop fixture, a shadowed range, physical line endings, and the production capture.
 
 Ties use the suite path and group number. Every affected suite stays in exactly one group. CI uses eight groups and a budget of 9000 seconds a group. The budget is a hang detector, not a target. Hosted runners differ: one took a quarter longer than another on the same group.
 

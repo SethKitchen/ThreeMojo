@@ -7,11 +7,12 @@
 
     check_coverage_loop_fixture [--mojo PATH]
 
-The program checks the three constant loops, a shadowed `range`, and
-three physical line endings. The profiled owner controls stay in
+The program checks the constant loops, a shadowed `range`, physical line
+endings, and the production capture. The profiled owner controls stay in
 `tools/check_coverage_loop_proofs.py`.
 """
 
+from std.os import setenv
 from std.pathlib import Path
 from std.sys import argv, exit, stderr
 from std.tempfile import mkdtemp
@@ -19,7 +20,7 @@ from std.tempfile import mkdtemp
 from tools._process import run_program
 from tools._python_json import PyJson
 from tools._sha256 import sha256_hex
-from tools.coverage_io import Reducer
+from tools.coverage_io import Reducer, _expected_command, _now
 
 
 comptime _SOURCE = """from std.testing import assert_equal
@@ -1014,6 +1015,354 @@ def qualify_physical_endings(mojo: String) raises:
     print("PASS: native LF, CRLF, CR and UTF-8 pairs verified")
 
 
+comptime _TOTAL = """def total(n: Int) -> Int:
+    var value = 0
+    for index in range(2):
+        value += index
+    for index in range(n):
+        value += index
+    return value
+"""
+
+comptime _PRODUCTION = """from production import total
+from std.testing import assert_equal
+from std.ffi import external_call
+
+def main() raises:
+    assert_equal(external_call[\"alarm\", UInt32](UInt32(5)), UInt32(0))
+    assert_equal(total(0), 1)
+    assert_equal(total(2), 2)
+    print(\"RESULT production capture\")
+"""
+
+comptime _HANG = """from production import total
+from std.testing import assert_equal
+from std.ffi import external_call
+
+def main() raises:
+    assert_equal(external_call[\"alarm\", UInt32](UInt32(5)), UInt32(0))
+    assert_equal(total(0), 1)
+    while True:
+        _ = external_call[\"pause\", Int32]()
+"""
+
+comptime _BROKEN = """from production import total
+
+def main() raises:
+    var broken =
+"""
+
+
+def _expand(value: String, root: String, build: String) -> String:
+    """Replace `@ROOT@` and `@BUILD@` in one capture word."""
+    if value == "@ROOT@":
+        return root
+    if value == "@BUILD@":
+        return build
+    if value.startswith("@ROOT@/"):
+        return root + String(value[byte=6:])
+    if value.startswith("@BUILD@/"):
+        return build + String(value[byte=7:])
+    return value
+
+
+def _gunzip(path: String) raises -> String:
+    """Return the decoded text of a gzip file."""
+    return _run(["gzip", "-dc", path], 30.0, "")
+
+
+def _capture(
+    mojo: String,
+    output: String,
+    archive: String,
+    proof: String,
+    root: String,
+    command: List[String],
+    deadline: Float64,
+) raises -> Tuple[Int, String, String]:
+    """Run one sealed capture under `deadline`."""
+    _ = setenv("THREEMOJO_COVERAGE_DEADLINE", String(deadline), True)
+    var launch = _tool(mojo, "coverage_io")
+    launch.append("capture")
+    launch.append("--out")
+    launch.append(output)
+    launch.append("--err")
+    launch.append(archive)
+    launch.append("--loop-proof")
+    launch.append(proof)
+    launch.append("--loop-proof-root")
+    launch.append(root)
+    launch.append("--")
+    for word in command:
+        launch.append(word)
+    return _run_both(launch, 180.0, "")
+
+
+def qualify_production_capture(mojo: String) raises:
+    """Capture the production suite and reject a hang, a bad compile, and an expired deadline.
+
+    Args:
+        mojo: The Mojo compiler used to build and run the fixture.
+
+    Raises:
+        Error: The runtime, the reduced capture, or a negative result changes.
+    """
+    var version = _run([mojo, "--version"], 30.0, "")
+    var compiler = String(version.strip())
+    var flags = "-Werror -I ."
+    var work = mkdtemp(prefix="loop production ")
+    var native = work + "/native"
+    var stage = work + "/production-stage"
+    _ = _run(["mkdir", "-p", native + "/tests", stage + "/tests"], 10.0, "")
+    _ = _run(["cp", "-a", "coverage/.", native + "/coverage/"], 30.0, "")
+    _ = _run(["rm", "-rf", native + "/coverage/build"], 10.0, "")
+    _ = _run(["cp", "-a", "coverage/.", stage + "/coverage/"], 30.0, "")
+    _ = _run(["rm", "-rf", stage + "/coverage/build"], 10.0, "")
+    _ = _run(["cp", "-a", "tools/.", native + "/tools/"], 60.0, "")
+    _ = _run(["rm", "-rf", native + "/tools/__pycache__"], 10.0, "")
+    for name in ["core/__init__.mojo", "core/search.mojo", "core/binary.mojo"]:
+        _copy(name, native + "/" + name)
+    var inputs = List[String]()
+    inputs.append("coverage/build_cli.mojo")
+    inputs.append("coverage/instrument.mojo")
+    inputs.append("coverage/scanner.mojo")
+    inputs.append("coverage/runtime.mojo")
+    inputs.append("coverage/report.mojo")
+    inputs.append("coverage/report_cli.mojo")
+    inputs.append("coverage/mcdc.mojo")
+    inputs.append("tools/coverage_loop_proofs.py")
+    inputs.append("tools/coverage_io.py")
+    inputs.append("tools/cache_key.py")
+    inputs.append("tools/native_test_support.py")
+    inputs.append("tools/coverage_toolchain_identity.py")
+    inputs.append("tools/coverage_hit_aot.mojo")
+    inputs.append("tools/coverage_hit_cache.c")
+    inputs.append("tools/coverage_write_interposer.c")
+    inputs.append("tools/run_suite.mojo")
+    inputs.append("Makefile")
+    for name in inputs:
+        _copy(name, native + "/" + name)
+    Path(native + "/production.mojo").write_text(_TOTAL)
+    var suite = "tests/test_production.mojo"
+    var hang = "tests/test_production_hang.mojo"
+    var broken = "tests/test_production_compile_error.mojo"
+    Path(native + "/" + suite).write_text(_PRODUCTION)
+    Path(stage + "/" + suite).write_text(_PRODUCTION)
+    Path(native + "/" + hang).write_text(_HANG)
+    Path(stage + "/" + hang).write_text(_HANG)
+    Path(native + "/" + broken).write_text(_BROKEN)
+    Path(stage + "/" + broken).write_text(_BROKEN)
+    var reporter = work + "/report"
+    var build_report = List[String]()
+    build_report.append(mojo)
+    build_report.append("build")
+    build_report.append("-Werror")
+    build_report.append("-I")
+    build_report.append(".")
+    build_report.append("coverage/report_cli.mojo")
+    build_report.append("-o")
+    build_report.append(reporter)
+    _ = _run(build_report, 180.0, native)
+    var begin = _tool(mojo, "coverage_loop_begin")
+    begin.append("--root")
+    begin.append(native)
+    begin.append("--build")
+    begin.append(stage)
+    begin.append("--compiler")
+    begin.append(compiler)
+    begin.append("--flags")
+    begin.append(flags)
+    begin.append("--mojo")
+    begin.append(mojo)
+    begin.append("--sources")
+    begin.append("production.mojo")
+    _ = _run(begin, 180.0, "")
+    var generate = List[String]()
+    generate.append(mojo)
+    generate.append("run")
+    generate.append("-Werror")
+    generate.append("-I")
+    generate.append(".")
+    generate.append("coverage/build_cli.mojo")
+    generate.append(stage)
+    generate.append("production.mojo")
+    _ = _run(generate, 180.0, native)
+    var seal = _tool(mojo, "coverage_loop_seal")
+    seal.append("--root")
+    seal.append(native)
+    seal.append("--build")
+    seal.append(stage)
+    seal.append("--compiler")
+    seal.append(compiler)
+    seal.append("--flags")
+    seal.append(flags)
+    seal.append("--mojo")
+    seal.append(mojo)
+    seal.append("--suites")
+    seal.append(suite)
+    seal.append(hang)
+    seal.append(broken)
+    _ = _run(seal, 180.0, "")
+    var plain_bin = work + "/production-runtime-0"
+    var inst_bin = work + "/production-runtime-1"
+    var plain_build = List[String]()
+    plain_build.append(mojo)
+    plain_build.append("build")
+    plain_build.append("-Werror")
+    plain_build.append("-I")
+    plain_build.append(native)
+    plain_build.append(native + "/" + suite)
+    plain_build.append("-o")
+    plain_build.append(plain_bin)
+    _ = _run(plain_build, 180.0, "")
+    var inst_build = List[String]()
+    inst_build.append(mojo)
+    inst_build.append("build")
+    inst_build.append("-Werror")
+    inst_build.append("-I")
+    inst_build.append(stage)
+    inst_build.append(stage + "/" + suite)
+    inst_build.append("-o")
+    inst_build.append(inst_bin)
+    _ = _run(inst_build, 180.0, "")
+    var plain = _run_both([plain_bin], 5.0, "")
+    var instrumented = _run_both([inst_bin], 5.0, "")
+    if plain[0] != 0 or instrumented[0] != 0:
+        _fail("Production program failed")
+    if (
+        plain[1] != "RESULT production capture\n"
+        or instrumented[1] != "RESULT production capture\n"
+    ):
+        _fail("Prebuilt production runtime output changed")
+    if plain[2].byte_length() != 0:
+        _fail("Uninstrumented production emitted probes")
+    var reduced = _reduce(instrumented[2])
+    var hits = stage + "/hits"
+    _ = _run(["mkdir", "-p", hits], 10.0, "")
+    var receipt = PyJson.parse(Path(stage + "/loop-proofs.json").read_text())
+    var execution = receipt.at(receipt.at(receipt.root, "receipt"), "execution")
+    var symbolic = _expected_command(receipt, execution, suite, "raw")
+    var command = List[String]()
+    for word in symbolic:
+        command.append(_expand(word, native, stage))
+    var proof = stage + "/loop-proofs.json"
+    var capture = hits + "/test_production.txt.gz"
+    var output = hits + "/test_production.out"
+    var captured = _capture(
+        mojo, output, capture, proof, native, command, _now() + 180.0
+    )
+    if captured[0] != 0:
+        _fail("Production capture failed: " + captured[1] + captured[2])
+    if Path(output).read_text() != "RESULT production capture\n":
+        _fail("Production capture output changed")
+    if _gunzip(capture) != reduced:
+        _fail("Real raw-profile and prebuilt runtime probe evidence differ")
+    var report = _tool(mojo, "coverage_io")
+    report.append("report")
+    report.append("--capture-dir")
+    report.append(hits)
+    report.append("--loop-proof-root")
+    report.append(native)
+    report.append("--loop-proof-build")
+    report.append(stage)
+    report.append("--compiler=" + compiler)
+    report.append("--flags=" + flags)
+    report.append("--mojo")
+    report.append(mojo)
+    report.append("--suites")
+    report.append(suite)
+    report.append(hang)
+    report.append(broken)
+    report.append("--")
+    report.append(reporter)
+    report.append(stage + "/manifest.txt")
+    var reported = _run_both(report, 30.0, "")
+    if (
+        reported[0] != 0
+        or reported[1].find("100%") < 0
+        or reported[1].find("proven impossible 1") < 0
+    ):
+        _fail(
+            "Full original manifest failed the proof-aware production report: "
+            + reported[1]
+            + reported[2]
+        )
+    var hang_capture = hits + "/test_production_hang.txt.gz"
+    var hang_output = hits + "/test_production_hang.out"
+    var hang_receipt = hang_capture + ".proof.json"
+    Path(hang_receipt).write_text("stale success must be removed")
+    var hang_symbolic = _expected_command(receipt, execution, hang, "raw")
+    var hang_command = List[String]()
+    for word in hang_symbolic:
+        hang_command.append(_expand(word, native, stage))
+    var hung = _capture(
+        mojo,
+        hang_output,
+        hang_capture,
+        proof,
+        native,
+        hang_command,
+        _now() + 180.0,
+    )
+    if hung[0] == 0 or hung[0] == 124 or hung[0] != 142:
+        _fail("Raw runtime did not terminate with SIGALRM")
+    if _gunzip(hang_capture).find("COVLINE:production:") < 0:
+        _fail("Forced hang never entered the actual production workload")
+    if Path(hang_receipt).exists():
+        _fail("Failed raw capture left a success receipt")
+    var bad_capture = hits + "/test_production_compile_error.txt.gz"
+    var bad_output = hits + "/test_production_compile_error.out"
+    var bad_receipt = bad_capture + ".proof.json"
+    Path(bad_receipt).write_text("stale success must be removed")
+    var bad_symbolic = _expected_command(receipt, execution, broken, "raw")
+    var bad_command = List[String]()
+    for word in bad_symbolic:
+        bad_command.append(_expand(word, native, stage))
+    var refused = _capture(
+        mojo,
+        bad_output,
+        bad_capture,
+        proof,
+        native,
+        bad_command,
+        _now() + 180.0,
+    )
+    if refused[0] == 0 or refused[0] == 124:
+        _fail("Runtime alarm or compiler refusal was not observed")
+    var errors = _gunzip(bad_capture)
+    if (
+        errors.find("error:") < 0
+        or errors.find("test_production_compile_error.mojo") < 0
+    ):
+        _fail("Failure was not the actual fixture compiler refusal")
+    if Path(bad_receipt).exists():
+        _fail("Failed raw capture left a success receipt")
+    var expired_dir = work + "/expired"
+    _ = _run(["mkdir", "-p", expired_dir], 10.0, "")
+    var expired_capture = expired_dir + "/test_production.txt.gz"
+    var expired_output = expired_dir + "/test_production.out"
+    var expired_receipt = expired_capture + ".proof.json"
+    Path(expired_receipt).write_text("stale success must be removed")
+    var exhausted = _capture(
+        mojo,
+        expired_output,
+        expired_capture,
+        proof,
+        native,
+        command,
+        _now() - 1.0,
+    )
+    if exhausted[0] != 124:
+        _fail("Expired integration deadline was extended")
+    if Path(expired_receipt).exists():
+        _fail("Expired capture retained a success receipt")
+    _ = _run(["rm", "-rf", work], 30.0, "")
+    print(
+        "PASS: production capture matches the prebuilt runtime; hang,"
+        " compile refusal, and expired deadline stay failures"
+    )
+
+
 def main() raises:
     """Qualify the constant-loop, shadow, and physical fixtures."""
     var mojo = ".venv/bin/mojo"
@@ -1037,6 +1386,7 @@ def main() raises:
         qualify_constant_loops(mojo)
         qualify_shadowed_range(mojo)
         qualify_physical_endings(mojo)
+        qualify_production_capture(mojo)
     except error:
         print("check_coverage_loop_fixture: " + String(error), file=stderr)
         exit(1)

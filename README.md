@@ -213,7 +213,7 @@ Some portable features remain partial, including [GLSL shaders](https://github.c
 
 - [x] [Python town bake removal](https://github.com/SethKitchen/ThreeMojo/wiki/CARLA-assets#test-the-town-exporter): the Python files `build_towns.py`, `carla_gltf_fix.py`, and `test_build_towns.py` are removed [#761](https://github.com/SethKitchen/ThreeMojo/issues/761)
 
-- [x] [Constant-loop fixture](https://github.com/SethKitchen/ThreeMojo/wiki/Coverage-tool#capture-scheduling-and-progress): `tools/check_coverage_loop_fixture.mojo` checks the constant loops, a shadowed range, and physical line endings [#761](https://github.com/SethKitchen/ThreeMojo/issues/761)
+- [x] [Constant-loop fixture](https://github.com/SethKitchen/ThreeMojo/wiki/Coverage-tool#capture-scheduling-and-progress): `tools/check_coverage_loop_fixture.mojo` checks the constant loops, a shadowed range, physical line endings, and the production capture [#761](https://github.com/SethKitchen/ThreeMojo/issues/761)
 
 - [x] [Neutral CARLA texture plan](https://github.com/SethKitchen/ThreeMojo/wiki/CARLA-assets#the-carla-towns): `tools/carla_texture_plan.mojo` names a neutral texture and chooses its fitted size [#761](https://github.com/SethKitchen/ThreeMojo/issues/761)
 
