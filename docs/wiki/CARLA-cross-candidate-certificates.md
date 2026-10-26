@@ -432,6 +432,10 @@ Four predecessor texts keep their reviewed digests.
 Four successor modules keep their reviewed digests.
 A changed implementation source is refused.
 
+Mojo checks the reviewed PR780 bound inputs.
+Four bound tests keep their reviewed digests.
+A changed bound input is refused.
+
 ## Candidate certificate
 
 A certificate contains a stored incumbent point and its road parameter.
