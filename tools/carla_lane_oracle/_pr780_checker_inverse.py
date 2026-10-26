@@ -10,7 +10,7 @@ never replaces a production observation or grants a source admission.
 import hashlib
 import json
 
-EDGES = {'coverage_loop_proofs.py': {'after_sha256': '5bc20208b2fc105d75616c296784834252304705b8b7f9e6bed2e71dc4d120d9',
+EDGES = {'coverage_loop_proofs.py': {'after_sha256': 'ec5d25f4bfb5bddce07a1b6c542b70755f8db3539c89216b6656db379d2d6c54',
                              'before_sha256': '21e3a9637a69c6abbf27e9c8dd193a1addf7ed8537dd8f2734c35ff1a468304d',
                              'edits': ((45,
                                         49,
@@ -330,8 +330,46 @@ EDGES = {'coverage_loop_proofs.py': {'after_sha256': '5bc20208b2fc105d75616c2967
                                          'density dependency successor '
                                          "endpoints')\n",
                                          '    return dependencies\n')),
-                                       (1330,
-                                        1348,
+                                       (1297,
+                                        1318,
+                                        (
+                                         "    filename = Path(__file__).resolve().parent/'carla_lane_oracle/pr760_arithmetic_stage.py'\n",
+                                         '    cleanup.require(Path(stage.__file__).resolve() == filename,\n',
+                                         "                    'density inverse executing origin changed')\n",
+                                         "    compiled = compile(raw, str(filename), 'exec', dont_inherit=True, optimize=sys.flags.optimize)\n",
+                                         '    cleanup.require(cleanup._code_identity(stage._EXECUTED_MODULE_CODE)\n',
+                                         "                    == cleanup._code_identity(compiled), 'density inverse module code changed')\n",
+                                         '    defaults = cleanup._compiled_defaults(raw)\n',
+                                         '    for name, expected in cleanup._compiled_functions(raw, str(filename)).items():\n',
+                                         "        if name.startswith('<'):\n",
+                                         '            continue\n',
+                                         '        live = getattr(stage, name, None)\n',
+                                        ),
+                                        (
+                                         "    filename = Path(__file__).resolve().parent/'carla_lane_oracle/pr760_arithmetic_stage.py'\n",
+                                         '    cleanup.require(Path(stage.__file__).resolve() == filename,\n',
+                                         "                    'density inverse executing origin changed')\n",
+                                         '    # Import already compiled this source and compared it with the executing\n',
+                                         '    # module. The same bytes and the same code object need no second compile.\n',
+                                         '    key = str(filename.resolve())\n',
+                                         '    executed = stage._EXECUTED_MODULE_CODE\n',
+                                         '    if (cleanup._IMPORT_IDENTITIES.get(key) == cleanup.sha(raw)\n',
+                                         '            and cleanup._IMPORT_MODULE_CODE.get(key) is executed):\n',
+                                         '        functions = cleanup._IMPORT_CODE[key]\n',
+                                         '        defaults = cleanup._IMPORT_DEFAULTS[key]\n',
+                                         '    else:\n',
+                                         "        compiled = compile(raw, str(filename), 'exec', dont_inherit=True, optimize=sys.flags.optimize)\n",
+                                         '        cleanup.require(cleanup._code_identity(executed)\n',
+                                         "                        == cleanup._code_identity(compiled), 'density inverse module code changed')\n",
+                                         '        functions = cleanup._compiled_functions(raw, str(filename))\n',
+                                         '        defaults = cleanup._compiled_defaults(raw)\n',
+                                         '    for name, expected in functions.items():\n',
+                                         "        if name.startswith('<'):\n",
+                                         '            continue\n',
+                                         '        live = getattr(stage, name, None)\n',
+                                        )),
+                                       (1340,
+                                        1358,
                                         ('        snapshots = {}\n',),
                                         ('        # The generated receipt '
                                          'authenticates its direct producer, '
@@ -375,8 +413,8 @@ EDGES = {'coverage_loop_proofs.py': {'after_sha256': '5bc20208b2fc105d75616c2967
                                          '        snapshots, '
                                          'dependency_sha256, successor = {}, '
                                          '{}, []\n')),
-                                       (1351,
-                                        1357,
+                                       (1361,
+                                        1367,
                                         ('            if sha256(value) != '
                                          'expected:\n',),
                                         ('            digest = sha256(value)\n',
@@ -390,8 +428,8 @@ EDGES = {'coverage_loop_proofs.py': {'after_sha256': '5bc20208b2fc105d75616c2967
                                          'expected)\n',
                                          '            elif digest != '
                                          'expected:\n')),
-                                       (1359,
-                                        1374,
+                                       (1369,
+                                        1384,
                                         (),
                                         ('            dependency_sha256[name] '
                                          '= digest\n',
@@ -425,8 +463,8 @@ EDGES = {'coverage_loop_proofs.py': {'after_sha256': '5bc20208b2fc105d75616c2967
                                          '                    return {}\n',
                                          '                added[name] = '
                                          'value\n')),
-                                       (1379,
-                                        1381,
+                                       (1389,
+                                        1391,
                                         ('        if '
                                          'sha256(stage.predecessor_source(groom, '
                                          'snapshots[groom].decode()).encode()) '
@@ -440,22 +478,22 @@ EDGES = {'coverage_loop_proofs.py': {'after_sha256': '5bc20208b2fc105d75616c2967
                                          'physical_groom.decode()).encode()) '
                                          '!= '
                                          'GUARDED_LOOP_SOURCE_SHA256[groom]:\n')),
-                                       (1382,
-                                        1383,
+                                       (1392,
+                                        1393,
                                         ('        paths = {name for name in '
                                          'snapshots if '
                                          "name.endswith('.mojo')}\n",),
                                         ('        paths = {name for name in '
                                          "snapshots if name.endswith('.mojo')} "
                                          '| set(added)\n',)),
-                                       (1408,
-                                        1409,
+                                       (1418,
+                                        1419,
                                         ('        for name, value in '
                                          'snapshots.items():\n',),
                                         ('        for name, value in '
                                          '(snapshots | added).items():\n',)),
-                                       (1415,
-                                        1417,
+                                       (1425,
+                                        1427,
                                         ('        if '
                                          'cleanup.executing_checker_bindings() '
                                          '!= executing or not '
@@ -465,22 +503,22 @@ EDGES = {'coverage_loop_proofs.py': {'after_sha256': '5bc20208b2fc105d75616c2967
                                          '!= executing or not resolver_ok()\n',
                                          '                or dependency_pins() '
                                          '!= successor_pins):\n')),
-                                       (1422,
-                                        1423,
+                                       (1432,
+                                        1433,
                                         ("            'proof_id': proof_id, "
                                          "'dependency_sha256': "
                                          'dict(DENSITY760_INPUTS),\n',),
                                         ("            'proof_id': proof_id, "
                                          "'dependency_sha256': "
                                          'dict(dependency_sha256),\n',)),
-                                       (1486,
-                                        1487,
+                                       (1496,
+                                        1497,
                                         ('        '
                                          "'5cc066092d9b0302c60a6676459efc855e220dc319d1f88b5eb84df768f489f9',\n",),
                                         ('        '
                                          "'990d94c815315c910b12c1b126c076183fc35cdeb9f64a26d1f7e574f424bccd',\n",)),
-                                       (1488,
-                                        1509,
+                                       (1498,
+                                        1519,
                                         (),
                                         ('\n',
                                          '\n',
@@ -519,8 +557,8 @@ EDGES = {'coverage_loop_proofs.py': {'after_sha256': '5bc20208b2fc105d75616c2967
                                          '        '
                                          "'2557d496f1dc49c204314d389bd105c9eaaab4c7762920b7b0d5f97613d4c3cd',\n",
                                          '}, 4056)\n')),
-                                       (1559,
-                                        1564,
+                                       (1569,
+                                        1574,
                                         ('        if actual == '
                                          'STRAND_CAP_FORMATTED_SUCCESSOR[0]:\n',),
                                         ('        if actual == '
@@ -533,39 +571,39 @@ EDGES = {'coverage_loop_proofs.py': {'after_sha256': '5bc20208b2fc105d75616c2967
                                          'STRAND_CAP_SPLAT_WORKERS_SUCCESSOR[1]\n',
                                          '        elif actual == '
                                          'STRAND_CAP_FORMATTED_SUCCESSOR[0]:\n')),
-                                       (1693,
-                                        1695,
+                                       (1703,
+                                        1705,
                                         ('        if typed.is_current(name, '
                                          'raw):\n',),
                                         ('        endpoint = '
                                          '_typed_endpoint(name, raw)\n',
                                          '        if typed.is_current(name, '
                                          'endpoint):\n')),
-                                       (1705,
-                                        1706,
+                                       (1715,
+                                        1716,
                                         ('            checked = '
                                          'typed.historical_source(name, '
                                          "raw.decode('utf-8'))\n",),
                                         ('            checked = '
                                          'typed.historical_source(name, '
                                          "endpoint.decode('utf-8'))\n",)),
-                                       (1902,
-                                        1903,
+                                       (1912,
+                                        1913,
                                         ('            if '
                                          'typed.is_current(name, current):\n',),
                                         ('            if '
                                          'typed.is_current(name, '
                                          '_typed_endpoint(name, '
                                          'current)):\n',)),
-                                       (1912,
-                                        1913,
+                                       (1922,
+                                        1923,
                                         ('        if (typed.is_current(name, '
                                          'current) and _operation is None\n',),
                                         ('        if (typed.is_current(name, '
                                          '_typed_endpoint(name, current)) and '
                                          '_operation is None\n',)),
-                                       (1947,
-                                        1950,
+                                       (1957,
+                                        1960,
                                         (),
                                         ('        if not typed_current:\n',
                                          '            typed_current = '
@@ -573,8 +611,8 @@ EDGES = {'coverage_loop_proofs.py': {'after_sha256': '5bc20208b2fc105d75616c2967
                                          '                module_path, '
                                          '_typed_endpoint(module_path, '
                                          'current))\n')),
-                                       (2171,
-                                        2172,
+                                       (2181,
+                                        2182,
                                         ('            or not '
                                          'typed.is_current(name, '
                                          'current)):\n',),
@@ -582,15 +620,15 @@ EDGES = {'coverage_loop_proofs.py': {'after_sha256': '5bc20208b2fc105d75616c2967
                                          'typed.is_current(name, '
                                          '_typed_endpoint(name, '
                                          'current))):\n',)),
-                                       (2234,
-                                        2235,
+                                       (2244,
+                                        2245,
                                         ('        if typed.is_current(name, '
                                          'current):\n',),
                                         ('        if typed.is_current(name, '
                                          '_typed_endpoint(name, '
                                          'current)):\n',)),
-                                       (2481,
-                                        2481,
+                                       (2491,
+                                        2491,
                                         ('    runner = '
                                          "(['@ROOT@/tools/native_test_support.py', "
                                          "'run'] if profile == 'raw'\n",
@@ -598,8 +636,8 @@ EDGES = {'coverage_loop_proofs.py': {'after_sha256': '5bc20208b2fc105d75616c2967
                                          "['@ROOT@/tools/coverage_hit_aot.py', "
                                          "'--profile', profile])\n"),
                                         ()),
-                                       (2482,
-                                        2492,
+                                       (2492,
+                                        2502,
                                         ('    return '
                                          "[contract['python']['path'], "
                                          "*runner, '--root', '@BUILD@',\n",),
@@ -624,8 +662,47 @@ EDGES = {'coverage_loop_proofs.py': {'after_sha256': '5bc20208b2fc105d75616c2967
                                          "    return ['@ROOT@/tools/tool.sh', "
                                          "*compiler, 'coverage_hit_aot',\n",
                                          "            '--profile', profile, "
-                                         "'--root', '@BUILD@',\n")))},
- 'full_audit_cleanup_contracts.py': {'after_sha256': '7cbc828190f69e9ce7a29d9887fdaa8da40b59305fb68e56be25490255000555',
+                                         "'--root', '@BUILD@',\n")),
+                                       (2618,
+                                        2635,
+                                        (
+                                         "        'execution': execution_contract(root, build, inputs, mojo=mojo,\n",
+                                         '                                        capture_cache=capture_cache, suites=suites)}\n',
+                                         '    cleanup = None\n',
+                                         "    if importlib.util.find_spec('carla_lane_oracle') is None:\n",
+                                         '        # Standalone plain receipts need no CARLA semantic authority. A known\n',
+                                         '        # reviewed source may never silently become a plain-only receipt.\n',
+                                         '        reviewed_modules = (set(REVIEWED_LOOP_RULES)\n',
+                                         '                            | {row[0] for row in GUARDED_LOOP_RULES}\n',
+                                         "                            | {'renderers/renderer', 'extensions/carla/map',\n",
+                                         "                               DENSITY_SOURCE.removesuffix('.mojo')})\n",
+                                         "        if reviewed_modules & {name.removesuffix('.mojo') for name in generation['modules']}:\n",
+                                         "            raise ValueError('Reviewed loop authority is unavailable')\n",
+                                         '    else:\n',
+                                         '        # A present but broken authority installation is an error, not fallback.\n',
+                                         '        from carla_lane_oracle import full_audit_cleanup_contracts as cleanup\n',
+                                         '    _plain_seed = canonical(_receipt_seed) if cleanup is None else None\n',
+                                        ),
+                                        (
+                                         "        'execution': execution_contract(root, build, inputs, mojo=mojo,\n",
+                                         '                                        capture_cache=capture_cache, suites=suites)}\n',
+                                         '    cleanup = None\n',
+                                         '    # Standalone plain receipts need no CARLA semantic authority. A known\n',
+                                         '    # reviewed source may never silently become a plain-only receipt.\n',
+                                         '    reviewed_modules = (set(REVIEWED_LOOP_RULES)\n',
+                                         '                        | {row[0] for row in GUARDED_LOOP_RULES}\n',
+                                         "                        | {'renderers/renderer', 'extensions/carla/map',\n",
+                                         "                           DENSITY_SOURCE.removesuffix('.mojo')})\n",
+                                         '    needs_authority = bool(reviewed_modules & {\n',
+                                         "        name.removesuffix('.mojo') for name in generation['modules']})\n",
+                                         "    if needs_authority and importlib.util.find_spec('carla_lane_oracle') is None:\n",
+                                         "        raise ValueError('Reviewed loop authority is unavailable')\n",
+                                         '    if needs_authority:\n',
+                                         '        # A present but broken authority installation is an error, not fallback.\n',
+                                         '        from carla_lane_oracle import full_audit_cleanup_contracts as cleanup\n',
+                                         '    _plain_seed = canonical(_receipt_seed) if cleanup is None else None\n',
+                                        )))},
+ 'full_audit_cleanup_contracts.py': {'after_sha256': '87de28c8bb98b74bdef281e1864b7016e65777b11f39f88b554823b5e4bcc2a7',
                                      'before_sha256': 'f62dbe69ddd5d15bd79aa4b0a8237d9475fe1a00cea06c2f7124c59af237c833',
                                      'edits': ((56,
                                                 57,
@@ -787,6 +864,10 @@ EDGES = {'coverage_loop_proofs.py': {'after_sha256': '5bc20208b2fc105d75616c2967
                                                  'constant_equal\n',
                                                  '\n',
                                                  '\n')),
+                                               (728,
+                                                729,
+                                                ("    module_code = compile(raw, filename, 'exec', dont_inherit=True, optimize=sys.flags.optimize)\n",),
+                                                ("    module_code = compile(raw, filename, 'exec', dont_inherit=True, optimize=sys.flags.optimize); _compiled_functions.last = module_code\n",)),
                                                (774,
                                                 775,
                                                 ('for _module in (source, '
@@ -811,6 +892,12 @@ EDGES = {'coverage_loop_proofs.py': {'after_sha256': '5bc20208b2fc105d75616c2967
                                                  'conditioned_cubic, '
                                                  'scaled_float32, pr760_stage, '
                                                  'pr780_successor):\n',)),
+                                               (788,
+                                                790,
+                                                ("            and _code_identity(_executed) == _code_identity(compile(_raw, _module.__file__, 'exec',\n",
+                                                 "                dont_inherit=True, optimize=sys.flags.optimize)),\n"),
+                                                ("            and _code_identity(_executed) == _code_identity(\n",
+                                                 "                _compiled_functions.last),\n")),
                                                (823,
                                                 834,
                                                 (),
@@ -882,6 +969,10 @@ EDGES = {'coverage_loop_proofs.py': {'after_sha256': '5bc20208b2fc105d75616c2967
                                                 (),
                                                 ('    '
                                                  'pr780_successor.verify_data()\n',)),
+                                               (1250,
+                                                1251,
+                                                ("        {path: _physical_text(raw) for path, raw in image.items()}))\n",),
+                                                ("        {path: _physical_text(raw) for path, raw in image.items() if b'main' in raw}))\n",)),
                                                (3089,
                                                 3092,
                                                 ('        prior = '
@@ -1458,7 +1549,7 @@ def predecessor(name, raw):
     """Compose exact current checkers into the retained 5e91dad comparison."""
     if type(raw) is not bytes:
         raise AssertionError('checker source must be physical builtin bytes')
-    if hashlib.sha256(json.dumps(EDGES, sort_keys=True, separators=(',', ':')).encode()).hexdigest() != '288763d0b1d54f72c571fb97e3d92a2d201bcdc0c4c4a38188f6943d72acd446':
+    if hashlib.sha256(json.dumps(EDGES, sort_keys=True, separators=(',', ':')).encode()).hexdigest() != '4145449bb04b651550e55f43d7c8043115eab46a5b66650d245a8af32920e8e3':
         raise AssertionError('PR780 checker inverse data changed')
     digest = hashlib.sha256(raw).hexdigest()
     edge = EDGES.get(name)

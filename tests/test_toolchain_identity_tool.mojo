@@ -547,7 +547,10 @@ def test_hosted_jobs_pin_the_upstream_interpreter_and_one_image() raises:
     )
     assert_true(text.find("    container: " + image) >= 0)
     assert_true(text.find("COV_BUDGET=9000") >= 0)
-    assert_true(text.find("SHARD=${{ matrix.shard }}/8") >= 0)
+    assert_true(
+        text.find("SHARD='\"${{ matrix.shard }}\"'/8") >= 0,
+        "coverage capture shard",
+    )
     assert_true(text.find("timeout-minutes: 170") >= 0)
     assert_true(text.find("timeout-minutes: 60") >= 0)
     assert_true(text.find("path: coverage/build/hits/") >= 0)

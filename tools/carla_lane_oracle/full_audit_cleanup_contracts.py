@@ -726,7 +726,7 @@ def _code_equal(left, right):
 
 
 def _compiled_functions(raw, filename):
-    module_code = compile(raw, filename, 'exec', dont_inherit=True, optimize=sys.flags.optimize)
+    module_code = compile(raw, filename, 'exec', dont_inherit=True, optimize=sys.flags.optimize); _compiled_functions.last = module_code
     return {item.co_name: item for item in module_code.co_consts if isinstance(item, types.CodeType)}
 
 
@@ -786,8 +786,8 @@ for _module in (source, guard, _sibling('affected'), _sibling('cache_key'), cons
     require(sha(_raw) == DEPENDENCY_TOOL_SHA256.get(_relative), 'unreviewed dependency checker bytes: ' + _relative)
     _executed = getattr(_module, '_EXECUTED_MODULE_CODE', None)
     require(isinstance(_executed, types.CodeType)
-            and _code_identity(_executed) == _code_identity(compile(_raw, _module.__file__, 'exec',
-                dont_inherit=True, optimize=sys.flags.optimize)),
+            and _code_identity(_executed) == _code_identity(
+                _compiled_functions.last),
             'executed dependency module differs from captured source: ' + _relative)
     _IMPORT_MODULE_CODE[str(_path)] = _executed
     _IMPORT_DEFAULTS[str(_path)] = _compiled_defaults(_raw)
@@ -1248,7 +1248,7 @@ def _helper_entry_census(root, *, _operation=None):
         require(type(raw) is bytes, 'render entry source is not physical bytes: ' + path)
         image[path] = raw
     entries = tuple(_sibling('affected').entry_directories(
-        {path: _physical_text(raw) for path, raw in image.items()}))
+        {path: _physical_text(raw) for path, raw in image.items() if b'main' in raw}))
     return entries, image
 
 

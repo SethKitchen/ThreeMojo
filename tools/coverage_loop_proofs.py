@@ -1298,11 +1298,21 @@ def _density760_stage_identity(raw):
     filename = Path(__file__).resolve().parent/'carla_lane_oracle/pr760_arithmetic_stage.py'
     cleanup.require(Path(stage.__file__).resolve() == filename,
                     'density inverse executing origin changed')
-    compiled = compile(raw, str(filename), 'exec', dont_inherit=True, optimize=sys.flags.optimize)
-    cleanup.require(cleanup._code_identity(stage._EXECUTED_MODULE_CODE)
-                    == cleanup._code_identity(compiled), 'density inverse module code changed')
-    defaults = cleanup._compiled_defaults(raw)
-    for name, expected in cleanup._compiled_functions(raw, str(filename)).items():
+    # Import already compiled this source and compared it with the executing
+    # module. The same bytes and the same code object need no second compile.
+    key = str(filename.resolve())
+    executed = stage._EXECUTED_MODULE_CODE
+    if (cleanup._IMPORT_IDENTITIES.get(key) == cleanup.sha(raw)
+            and cleanup._IMPORT_MODULE_CODE.get(key) is executed):
+        functions = cleanup._IMPORT_CODE[key]
+        defaults = cleanup._IMPORT_DEFAULTS[key]
+    else:
+        compiled = compile(raw, str(filename), 'exec', dont_inherit=True, optimize=sys.flags.optimize)
+        cleanup.require(cleanup._code_identity(executed)
+                        == cleanup._code_identity(compiled), 'density inverse module code changed')
+        functions = cleanup._compiled_functions(raw, str(filename))
+        defaults = cleanup._compiled_defaults(raw)
+    for name, expected in functions.items():
         if name.startswith('<'):
             continue
         live = getattr(stage, name, None)
@@ -2609,16 +2619,17 @@ def build_receipt(root, build, compiler, flags, *, mojo=None, capture_cache=None
         'execution': execution_contract(root, build, inputs, mojo=mojo,
                                         capture_cache=capture_cache, suites=suites)}
     cleanup = None
-    if importlib.util.find_spec('carla_lane_oracle') is None:
-        # Standalone plain receipts need no CARLA semantic authority. A known
-        # reviewed source may never silently become a plain-only receipt.
-        reviewed_modules = (set(REVIEWED_LOOP_RULES)
-                            | {row[0] for row in GUARDED_LOOP_RULES}
-                            | {'renderers/renderer', 'extensions/carla/map',
-                               DENSITY_SOURCE.removesuffix('.mojo')})
-        if reviewed_modules & {name.removesuffix('.mojo') for name in generation['modules']}:
-            raise ValueError('Reviewed loop authority is unavailable')
-    else:
+    # Standalone plain receipts need no CARLA semantic authority. A known
+    # reviewed source may never silently become a plain-only receipt.
+    reviewed_modules = (set(REVIEWED_LOOP_RULES)
+                        | {row[0] for row in GUARDED_LOOP_RULES}
+                        | {'renderers/renderer', 'extensions/carla/map',
+                           DENSITY_SOURCE.removesuffix('.mojo')})
+    needs_authority = bool(reviewed_modules & {
+        name.removesuffix('.mojo') for name in generation['modules']})
+    if needs_authority and importlib.util.find_spec('carla_lane_oracle') is None:
+        raise ValueError('Reviewed loop authority is unavailable')
+    if needs_authority:
         # A present but broken authority installation is an error, not fallback.
         from carla_lane_oracle import full_audit_cleanup_contracts as cleanup
     _plain_seed = canonical(_receipt_seed) if cleanup is None else None
