@@ -297,6 +297,28 @@ def test_the_sun_casts_shadows_in_each_mode() raises:
     assert_true(_shadowed(bare, lit) < 5)
 
 
+def test_a_frame_of_an_odd_width_shows_the_sky_to_its_edge() raises:
+    # 77 pixels: the last run of sixteen in a row is partly past the edge.
+    var assets = Assets()
+    var scene = _floor_scene(assets, Material(Color(180, 160, 140)))
+    var camera = PerspectiveCamera(
+        Angle(50.0, DEGREE),
+        77.0 / 45.0,
+        Length(0.1, METER),
+        Length(100.0, METER),
+    )
+    camera.place(Vector3(0, 6, 4), Vector3(0, 0, 0))
+    var fast = GameRenderer(77, 45)
+    fast.sky_step = 1
+    var image = fast.render(scene, assets, camera, NOW)
+    var renderer = Renderer(77, 45)
+    renderer.set_tone_mapping(ACES_FILMIC_TONE_MAPPING, 1)
+    var want = renderer.render(scene, assets, camera)
+    for x in [0, 64, 76]:
+        assert_true(_near(_pixel(image, x, 0), _pixel(want, x, 0), 2))
+        assert_true(_near(_pixel(image, x, 44), _pixel(want, x, 44), 2))
+
+
 def test_the_shadow_settings_are_checked() raises:
     var fast = GameRenderer(16, 16)
     with assert_raises(contains="shadow mode"):
@@ -345,9 +367,12 @@ def test_a_back_face_is_drawn_as_its_side_says() raises:
     var back = _floor_scene(
         assets, Material(Color(200, 200, 200), side=BACK_SIDE)
     )
-    assert_true(
-        fast.render(back, assets, under, NOW).depth[30 * WIDTH + 40] < 1
-    )
+    var seen = fast.render(back, assets, under, NOW)
+    assert_true(seen.depth[30 * WIDTH + 40] < 1)
+    # A back-side floor seen from below faces away from the sun above, as
+    # the general renderer lights it.
+    var want = _reference(back, assets, under)
+    assert_true(_near(_pixel(seen, 40, 30), _pixel(want, 40, 30), 2))
     assert_equal(
         fast.render(back, assets, _above(), NOW).depth[30 * WIDTH + 40],
         inf[DType.float32](),

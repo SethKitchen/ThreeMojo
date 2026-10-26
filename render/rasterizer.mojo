@@ -297,6 +297,20 @@ struct _Coverage(ImplicitlyCopyable):
             self.cx = tx
             self.cy = ty
             area = -area
+        # A corner that is not finite snaps to some grid point, which can
+        # give the triangle an area. It covers no pixel.
+        var corners = SIMD[DType.float32, 8](
+            triangle.a.x,
+            triangle.a.y,
+            triangle.b.x,
+            triangle.b.y,
+            triangle.c.x,
+            triangle.c.y,
+            0,
+            0,
+        )
+        if not isfinite(corners).reduce_and():
+            area = 0
         self.area = area
         # A degenerate triangle has no area and is never scanned, so the
         # reciprocal of zero is never read; it is kept finite anyway.

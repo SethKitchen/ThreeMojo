@@ -96,8 +96,8 @@ def test_3dl_edges_and_refusals() raises:
     with assert_raises(contains="is not a number"):
         _ = parse_lut_3dl("0 1\n1e999 2 3\n")
     # A number of many digits is read and rounded, as JavaScript reads it.
-    var wide = parse_lut_3dl("0 1\n" + "9" * 30 + " 0 0\n")
-    assert_equal(wide.max_bit_value, 2.0**100)
+    var digits = parse_lut_3dl("0 1\n" + "9" * 30 + " 0 0\n")
+    assert_equal(digits.max_bit_value, 2.0**100)
     with assert_raises(contains="not above zero"):
         _ = parse_lut_3dl("99999999999999999999999 1\n")
     with assert_raises(contains="not above zero"):

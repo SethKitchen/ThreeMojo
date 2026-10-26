@@ -18,14 +18,20 @@ is found.
 """
 
 from std.ffi import c_int, external_call
-from std.os import listdir
+from std.os import listdir, remove, rmdir
 from std.os.path import realpath
 from std.pathlib import Path
 from std.sys import argv, exit, stderr
 from std.tempfile import mkdtemp
 from std.time import perf_counter_ns
 
-from tools._owned_process import c_bytes, errno, strerror, wait_blocking
+from tools._owned_process import (
+    c_bytes,
+    errno,
+    strerror,
+    wait_any,
+    wait_blocking,
+)
 from tools._process import shell_quote
 from tools._python_json import PY_BOOL, loads
 
@@ -275,6 +281,10 @@ def _spawn(
             _pointer(Int(pointers.unsafe_ptr())),
         )
         external_call["_exit", NoneType](c_int(127))
+    # `pointers` holds bare addresses, so nothing else keeps the strings
+    # alive until `execv` has read them.
+    _ = len(flag)
+    _ = len(body)
     if pid < 0:
         raise Error("fork failed: " + strerror(errno()))
     return pid
@@ -309,7 +319,15 @@ def run_unit(
     var waited = wait_blocking(pid)
     var seconds = Float64(perf_counter_ns() - started) / 1e9
     var text = _read(output)
+    _remove_folder(folder)
     return UnitResult(label, waited.status, seconds, text)
+
+
+def _remove_folder(folder: String) raises:
+    """Remove a flat folder of output files, and the folder."""
+    for name in listdir(folder):
+        remove(folder + "/" + name)
+    rmdir(folder)
 
 
 def _append_unit(
@@ -487,32 +505,13 @@ def _print_failure(mut output: String, result: UnitResult):
         output += "\n"
 
 
-def _reap(
-    pid: Int, label: String, started: Int, output: String
-) raises -> UnitResult:
-    """Wait for one child and read its output.
-
-    Args:
-        pid: The process id.
-        label: The failure label.
-        started: `perf_counter_ns` at spawn.
-        output: The output file.
-
-    Returns:
-        The unit result.
-
-    Raises:
-        Error: If the output cannot be read.
-    """
-    var waited = wait_blocking(pid)
-    var seconds = Float64(perf_counter_ns() - started) / 1e9
-    return UnitResult(label, waited.status, seconds, _read(output))
-
-
 def _run_parallel(
     directory: String, var work: List[Unit], jobs: Int, folder: String
 ) raises -> List[UnitResult]:
     """Run units with at most `jobs` processes, and keep their start order.
+
+    A slot is filled again as soon as any process ends, as Python's
+    `ThreadPoolExecutor` does, so one slow unit does not hold the others.
 
     Args:
         directory: The working directory.
@@ -524,33 +523,46 @@ def _run_parallel(
         The results in the order of `work`.
 
     Raises:
-        Error: If a process cannot be created or its output cannot be read.
+        Error: If a process cannot be created, a wait fails, or an output
+            cannot be read.
     """
-    var results = List[UnitResult]()
+    var slots = List[Optional[UnitResult]]()
     var pids = List[Int]()
-    var labels = List[String]()
     var started_at = List[Int]()
     var outputs = List[String]()
     var next = 0
-    var head = 0
+    var live = 0
     var limit = jobs if jobs > 0 else 1
-    while next < len(work) or head < len(pids):
-        while next < len(work) and len(pids) - head < limit:
+    while next < len(work) or live > 0:
+        while next < len(work) and live < limit:
             var output = folder + "/unit-" + String(next)
             Path(output).write_text("")
             var command = _copy_command(work[next].command)
-            var pid = _spawn(command, directory, output)
-            pids.append(pid)
-            labels.append(work[next].label)
+            pids.append(_spawn(command, directory, output))
             started_at.append(perf_counter_ns())
             outputs.append(output)
+            slots.append(None)
             next += 1
-        if head >= len(pids):
-            break
-        results.append(
-            _reap(pids[head], labels[head], started_at[head], outputs[head])
-        )
-        head += 1
+            live += 1
+        var reaped = wait_any()
+        if reaped[0] < 0:
+            raise Error("waitpid failed: " + strerror(reaped[1].error))
+        for index in range(len(pids)):
+            if pids[index] == reaped[0] and not slots[index]:
+                var seconds = (
+                    Float64(perf_counter_ns() - started_at[index]) / 1e9
+                )
+                slots[index] = UnitResult(
+                    work[index].label,
+                    reaped[1].status,
+                    seconds,
+                    _read(outputs[index]),
+                )
+                live -= 1
+                break
+    var results = List[UnitResult]()
+    for index in range(len(slots)):
+        results.append(slots[index].value().copy())
     return results^
 
 
@@ -584,6 +596,7 @@ def execute(
     var folder = mkdtemp(prefix="parallel-unittest-")
     var results = _run_parallel(directory, exclusive^, 1, folder)
     var rest = _run_parallel(directory, ordinary^, jobs, folder)
+    _remove_folder(folder)
     results.extend(rest^)
     return results^
 

@@ -31,7 +31,8 @@ stays refused; nothing here is a validated engineering result.
   left. The energies follow Alan Williams's tests: a hand blow carries
   60 to 130 J; mail over a padded jack needs about 120 J; mild steel
   plate needs about 55 J at 1 mm and 175 J at 2 mm. Plate's energy goes
-  with the square of its thickness.
+  with the square of its thickness, fitted to 2 mm: 1 mm needs about
+  44 J here, less than the tests' 55 J.
 - `attire_report` gathers every estimate for one dressed outfit into one
   record. `tools/attire_report.mojo` prints it.
 - `noise` and `visibility` are zero-through-one hooks for a game's

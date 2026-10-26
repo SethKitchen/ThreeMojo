@@ -267,7 +267,9 @@ export class GpuSplat {
       if (order !== this.sorted) {
         const indices = this.words(Part.ORDER, Uint32Array);
         // A missed copy must stay stale, so the next frame tries again.
-        if (indices.byteLength === this.buffers.order.size) {
+        // `buffer` gives every buffer at least 16 bytes, so a scan of
+        // fewer than four splats fills only the start of its buffer.
+        if (Math.max(16, indices.byteLength) === this.buffers.order.size) {
           device.queue.writeBuffer(this.buffers.order, 0, indices);
           this.sorted = order;
         }

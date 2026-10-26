@@ -311,8 +311,8 @@ def _next_angle(
 
 
 def _per_laser(description: LidarDescription, tick: Duration) raises -> Int:
-    # The same `Float64` quotient as `points_per_laser`, so a count past
-    # 2^24 stays exact and one past 2^63 is refused before `Int`.
+    # The same `Float32` quotient as `points_per_laser`, as CARLA has it,
+    # and one past 2^63 is refused before `Int`.
     return description.points_per_laser(tick)
 
 
@@ -554,12 +554,9 @@ def hss_points_per_laser(
     var quotient = fov / step
     var scaled = Float64(quotient) + 0.5
     # `Float64(Int.MAX)` is 2^63. `Int` of a float at or past it is not
-    # a count.
-    if (
-        not isfinite(scaled)
-        or scaled < -Float64(Int.MAX)
-        or scaled >= Float64(Int.MAX)
-    ):
+    # a count. The field of view is held at zero or more and the step is
+    # positive, so the quotient is never negative.
+    if not isfinite(scaled) or scaled >= Float64(Int.MAX):
         raise Error("A LiDAR point count does not fit in an integer")
     return round_half_from_zero(quotient)
 

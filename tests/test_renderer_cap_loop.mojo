@@ -62,8 +62,11 @@ def test_historical_pairs_reject_a_mixture() raises:
     var formatted = (
         "990d94c815315c910b12c1b126c076183fc35cdeb9f64a26d1f7e574f424bccd"
     )
-    var current = (
+    var splat = (
         "c08275ccfea2f32dd84dc5ad54205052f6dfd216104836c858ff259224426332"
+    )
+    var current = (
+        "7fcdce220f3420c7a7739c0419d8af1087a06f79343a9f86cac4f8313fa6fa18"
     )
     assert_equal(
         strand_cap_line(_five(init, init, first, old_segments, witness)), 3757
@@ -82,7 +85,16 @@ def test_historical_pairs_reject_a_mixture() raises:
         4049,
     )
     assert_equal(
-        strand_cap_line(_five(init, init, current, new_segments, witness)), 4049
+        strand_cap_line(_five(init, init, splat, new_segments, witness)), 4049
+    )
+    var guarded = (
+        "2557d496f1dc49c204314d389bd105c9eaaab4c7762920b7b0d5f97613d4c3cd"
+    )
+    assert_equal(
+        strand_cap_line(_five(init, init, current, guarded, witness)), 4056
+    )
+    assert_equal(
+        strand_cap_line(_five(init, init, current, new_segments, witness)), -1
     )
     assert_equal(
         strand_cap_line(_five(init, init, formatted, old_segments, witness)),
@@ -152,7 +164,7 @@ def _empty(root: String) raises:
     """Require the renderer proof to be absent."""
     var text = _reviews(root, "")
     assert_true(text.find("[]") >= 0, text)
-    assert_true(text.find("4049") < 0, text)
+    assert_true(text.find("4056") < 0, text)
 
 
 def _once(text: String, before: String, after: String) raises -> String:
@@ -166,11 +178,11 @@ def _once(text: String, before: String, after: String) raises -> String:
 
 
 def test_the_current_pair_keeps_the_runtime_true_edge() raises:
-    """A clean copy admits line 4049, and another module admits nothing."""
+    """A clean copy admits line 4056, and another module admits nothing."""
     var root = _stage()
     try:
         var text = _reviews(root, "")
-        assert_true(text.find('"line":4049') >= 0, text)
+        assert_true(text.find('"line":4056') >= 0, text)
         assert_true(text.find('"minimum_cardinality":2') >= 0, text)
         assert_true(text.find('"maximum_cardinality":64') >= 0, text)
         assert_true(text.find('"required":"T"') >= 0, text)
@@ -300,10 +312,10 @@ def test_cap_edits_and_shadows_revoke_the_proof() raises:
         _ = run_program(["mkdir", "-p", stage], 10.0)
         Path(stage + "/std.mojo").write_text("unreviewed shadow")
         var included = _reviews(root, stage)
-        assert_true(included.find("4049") < 0, included)
+        assert_true(included.find("4056") < 0, included)
         _ = run_program(["rm", stage + "/std.mojo"], 10.0)
         var restored = _reviews(root, stage)
-        assert_true(restored.find('"line":4049') >= 0, restored)
+        assert_true(restored.find('"line":4056') >= 0, restored)
         var shadow = root + "/objects.mojo"
         Path(shadow).write_text("unreviewed module")
         _empty(root)

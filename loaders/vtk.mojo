@@ -1298,13 +1298,17 @@ def _data_array(
             var size = _header_value(bytes, i * width + 3 * width, width)
             offsets.append(offsets[len(offsets) - 1] + size)
         # Word one is every full block's uncompressed size. Word two is
-        # the last block's. Both are read as three.js reads the header.
+        # the last block's, or 0 when the last block is full. Both are read
+        # as three.js reads the header.
         var block_size = _header_value(bytes, width, width)
         var last_size = _header_value(bytes, width * 2, width)
         for i in range(len(offsets) - 1):
             var a = _relative(Float64(offsets[i]), len(bytes))
             var b = _relative(Float64(offsets[i + 1]), len(bytes))
-            var room = last_size if i == len(offsets) - 2 else block_size
+            # A last block that is full has the size 0: VTK writes the
+            # remainder after the full blocks.
+            var partial = i == len(offsets) - 2 and last_size > 0
+            var room = last_size if partial else block_size
             var data = _inflated(Span(bytes)[a : max(a, b)], room)
             values.extend(_typed(data, type, "a compressed block"))
         if type == "Int64":

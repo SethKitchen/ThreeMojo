@@ -1456,6 +1456,18 @@ STRAND_CAP_SPLAT_WORKERS_SUCCESSOR = ({
 }, 4049)
 
 
+# PR843 adds texel helpers to the imports and a line to a docstring above the
+# cap loop, which moves it seven lines down, and refuses a dash count past an
+# integer in the producer. `cap_steps` and its two-to-64 clamp are unchanged.
+STRAND_CAP_GUARDED_SUCCESSOR = ({
+    **STRAND_CAP_SPLAT_WORKERS_SUCCESSOR[0],
+    'renderers/renderer.mojo':
+        '7fcdce220f3420c7a7739c0419d8af1087a06f79343a9f86cac4f8313fa6fa18',
+    'objects/line_segments2.mojo':
+        '2557d496f1dc49c204314d389bd105c9eaaab4c7762920b7b0d5f97613d4c3cd',
+}, 4056)
+
+
 def _strand_cap_resolver_unshadowed(root):
     """Refuse alternate packages/modules at the producer's resolver surfaces."""
     root = Path(root)
@@ -1504,7 +1516,9 @@ def strand_cap_loops(root, *, include_roots=(), _operation=None):
         renderer = 'renderers/renderer.mojo'
         line = STRAND_CAP_RENDERER_ENDPOINTS.get(actual[renderer])
         expected = {**STRAND_CAP_SOURCES, renderer: actual[renderer]}
-        if actual == STRAND_CAP_SPLAT_WORKERS_SUCCESSOR[0]:
+        if actual == STRAND_CAP_GUARDED_SUCCESSOR[0]:
+            line = STRAND_CAP_GUARDED_SUCCESSOR[1]
+        elif actual == STRAND_CAP_SPLAT_WORKERS_SUCCESSOR[0]:
             line = STRAND_CAP_SPLAT_WORKERS_SUCCESSOR[1]
         elif actual == STRAND_CAP_FORMATTED_SUCCESSOR[0]:
             line = STRAND_CAP_FORMATTED_SUCCESSOR[1]

@@ -139,8 +139,11 @@ def _clip_segment(
     var y0 = start.y
     var x1 = end.x
     var y1 = end.y
-    var right = Float32(width - 1)
-    var bottom = Float32(height - 1)
+    # A pixel is the half-open square from its corner, so the image runs
+    # to `width` and `height`. A point on the far edge marks no pixel:
+    # `_line` keeps only the pixels on the image.
+    var right = Float32(width)
+    var bottom = Float32(height)
     # Each step clips one end to one side. An accept or a reject ends it.
     while True:
         var c0 = _outcode(x0, y0, right, bottom)
@@ -277,5 +280,7 @@ def _line(mut image: Framebuffer, start: Vector2, end: Vector2) raises:
         var t = Float32(step) / Float32(steps)
         var x = Int(floor(kept[1].x + dx * t))
         var y = Int(floor(kept[1].y + dy * t))
-        if x >= 0 and x < image.width and y >= 0 and y < image.height:
+        # The clipped ends are at zero or more, so every step is too. The
+        # far edge of the image is a point, and marks no pixel.
+        if x < image.width and y < image.height:
             image.set_pixel(x, y, UVS_LINE)

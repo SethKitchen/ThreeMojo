@@ -177,8 +177,40 @@ def listen_local(port: Int) raises -> ListeningSocket:
     return ListeningSocket(fd, actual)
 
 
+comptime _READ_SECONDS = 5
+"""How long a client may send nothing before the server drops it. The
+server answers one client at a time, so a browser's idle preconnect must
+not hold the others."""
+
+
+def _guard_client(fd: Int):
+    """Give a client socket a read timeout, and on macOS stop a write to a
+    closed peer from raising `SIGPIPE`; Linux writes with `MSG_NOSIGNAL`."""
+    var linux = CompilationTarget.is_linux()
+    var wait = List[Int64](length=2, fill=0)
+    wait[0] = _READ_SECONDS
+    _ = external_call["setsockopt", c_int](
+        c_int(fd),
+        c_int(_reuse_level()),
+        c_int(20 if linux else 0x1006),
+        _pointer(Int(wait.unsafe_ptr())),
+        c_int(16),
+    )
+    if not linux:
+        var one = List[Int32](length=1, fill=1)
+        _ = external_call["setsockopt", c_int](
+            c_int(fd),
+            c_int(_reuse_level()),
+            c_int(0x1022),
+            _pointer(Int(one.unsafe_ptr())),
+            c_int(4),
+        )
+        _ = len(one)
+    _ = len(wait)
+
+
 def _accept(fd: Int) raises -> Int:
-    """Accept one connection.
+    """Accept one connection, with `_guard_client`'s options.
 
     Args:
         fd: The listening descriptor.
@@ -194,6 +226,7 @@ def _accept(fd: Int) raises -> Int:
             external_call["accept", c_int](c_int(fd), _pointer(0), _pointer(0))
         )
         if client >= 0:
+            _guard_client(client)
             return client
         var number = errno()
         if number != EINTR:
@@ -274,10 +307,13 @@ def _write_all(fd: Int, data: List[UInt8]) raises:
     """
     var sent = 0
     while sent < len(data):
-        var count = external_call["write", Int](
-            Int32(fd),
+        # A peer that closed must give an error here, not end the server
+        # by `SIGPIPE`: `MSG_NOSIGNAL` on Linux, `SO_NOSIGPIPE` on macOS.
+        var count = external_call["send", Int](
+            c_int(fd),
             _pointer(Int(data.unsafe_ptr()) + sent),
             len(data) - sent,
+            c_int(0x4000 if CompilationTarget.is_linux() else 0),
         )
         if count < 0:
             if errno() == EINTR:

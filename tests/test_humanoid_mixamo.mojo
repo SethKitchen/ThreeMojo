@@ -39,6 +39,7 @@ from extensions.humanoid.rig.mixamo import (
     ROLE_COUNT,
     MixamoOptions,
     _clip_name,
+    _take_out_travel,
     mixamo_key,
     mixamo_role,
     read_mixamo,
@@ -314,6 +315,16 @@ def test_the_hips_travel_by_the_ratio_of_the_hip_heights() raises:
     assert_almost_equal(
         scene.world_position(bones[HIPS.value]).z, rest.z, atol=1e-4
     )
+
+
+def test_a_still_pose_keeps_its_hips_where_they_start() raises:
+    # A clip of no length is one frame at time zero: no line to take out,
+    # and no division by its length.
+    var travel: List[Vector3] = [Vector3(0.3, 1.0, -0.2)]
+    _take_out_travel(travel, [Float32(0)])
+    assert_equal(travel[0].x, 0)
+    assert_equal(travel[0].y, 1)
+    assert_equal(travel[0].z, 0)
 
 
 def test_a_clip_is_sampled_every_step_and_at_its_end() raises:

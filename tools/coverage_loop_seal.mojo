@@ -14,6 +14,7 @@ digests match `tools/coverage_reviewed_loops.json`. `prepare-report`
 checks that receipt and writes the masked manifest.
 """
 
+from std.collections import Set
 from std.os import listdir
 from std.os.path import isdir, isfile, islink, realpath
 from std.pathlib import Path
@@ -84,6 +85,11 @@ struct _Tok(Copyable, Movable):
         self.text = text
         self.line = line
         self.column = column
+
+
+comptime PREPARED = "loop-proofs.prepared"
+"""The file in the build where `prepare-report` keeps the receipt identity
+it verified, for `finish-report`."""
 
 
 def _usage() -> String:
@@ -2040,7 +2046,7 @@ def _prepare_report(arguments: List[String]) raises:
     _ends_with_manifest(command, build)
     var suites = _report_suites(arguments)
     var saw = _saw_suites(arguments)
-    _ = _verify_receipt(
+    var identity = _verify_receipt(
         settings[0],
         settings[1],
         settings[2],
@@ -2050,6 +2056,8 @@ def _prepare_report(arguments: List[String]) raises:
         suites,
         saw,
     )
+    # `finish-report` compares the receipt after the report with this one.
+    Path(_join(build, PREPARED)).write_text(identity)
     var saved = _read_receipt(_join(build, "loop-proofs.json"))
     _report_consumer(saved)
     _verify_captures(settings[6], saved)
@@ -2064,7 +2072,8 @@ def _prepare_report(arguments: List[String]) raises:
 
 
 def _finish_report(arguments: List[String]) raises:
-    """Require the receipt to stay the same through the report.
+    """Require the receipt to stay the same through the report: the same
+    as `prepare-report` saw before the reporter ran.
 
     Args:
         arguments: The arguments after `finish-report`.
@@ -2075,6 +2084,7 @@ def _finish_report(arguments: List[String]) raises:
     var settings = _report_settings(arguments)
     var suites = _report_suites(arguments)
     var saw = _saw_suites(arguments)
+    var prepared = _join(_resolve(settings[1]), PREPARED)
     var first = _verify_receipt(
         settings[0],
         settings[1],
@@ -2097,6 +2107,10 @@ def _finish_report(arguments: List[String]) raises:
         suites,
         saw,
     )
+    # The identity `prepare-report` saw before the reporter ran, when it
+    # ran in this build.
+    if Path(prepared).exists():
+        first = Path(prepared).read_text()
     if first != second:
         raise Error("Loop-proof identity changed during reporting")
     _verify_captures(settings[6], saved)
@@ -2284,8 +2298,48 @@ def _dependency_paths(table: PyJson, module: String) raises -> List[String]:
     return paths^
 
 
+struct _Providers(Movable):
+    """The dependency paths of a proof, folded once for `_origin_competitor`.
+
+    A walk tests every file of a tree against every path. Folding each path
+    again for each file made a proof of 345 dependencies take seconds."""
+
+    var exact: Set[String]
+    """The paths themselves."""
+    var origins: Set[String]
+    """Each path's exact `.cov-origin` sidecar."""
+    var folded: Set[String]
+    """Each path, folded."""
+    var stems: Set[String]
+    """Each path without its final suffix, folded."""
+    var tops: Set[String]
+    """Each path's first directory, or the path itself, folded."""
+
+    def __init__(out self, paths: List[String]):
+        """Fold the paths.
+
+        Args:
+            paths: The dependency paths.
+        """
+        self.exact = Set[String]()
+        self.origins = Set[String]()
+        self.folded = Set[String]()
+        self.stems = Set[String]()
+        self.tops = Set[String]()
+        for path in paths:
+            self.exact.add(path)
+            self.origins.add(path + ".cov-origin")
+            self.folded.add(_fold_name(path))
+            self.stems.add(_fold_name(_last_stem(path)))
+            var slash = path.find("/")
+            var top = path
+            if slash > 0:
+                top = String(path[byte=:slash])
+            self.tops.add(_fold_name(top))
+
+
 def _origin_competitor(
-    relative: String, paths: List[String], allow_origin: Bool
+    relative: String, providers: _Providers, allow_origin: Bool
 ) -> Bool:
     """Return whether `relative` competes with a reviewed dependency.
 
@@ -2295,44 +2349,37 @@ def _origin_competitor(
 
     Args:
         relative: The path relative to the walk root.
-        paths: The dependency paths.
+        providers: The dependency paths, folded.
         allow_origin: True when an exact origin sidecar is allowed.
 
     Returns:
         True when the proof must be omitted.
     """
-    for path in paths:
-        if relative == path:
-            return False
-        if allow_origin and relative == path + ".cov-origin":
-            return False
+    if relative in providers.exact:
+        return False
+    if allow_origin and relative in providers.origins:
+        return False
+    if len(providers.exact) == 0:
+        return False
+    # Folding keeps every byte's place, so a folded prefix that ends before
+    # a dot is the fold of the same prefix of `relative`.
     var folded = _fold_name(relative)
-    for path in paths:
-        var dep = _fold_name(path)
-        var stem = _fold_name(_last_stem(path))
-        if folded == dep or folded.startswith(dep + "."):
-            return True
-        if _fold_name(_last_stem(relative)) == stem:
-            return True
-        var cursor = 0
-        var bytes = relative.as_bytes()
-        while cursor < len(bytes):
-            if bytes[cursor] == 46:
-                var prefix = _fold_name(String(relative[byte=:cursor]))
-                if prefix == dep:
-                    return True
-            cursor += 1
-        if relative.find("/") < 0:
-            var slash = path.find("/")
-            var top = path
-            if slash > 0:
-                top = String(path[byte=:slash])
-            var dot = relative.find(".")
-            var scoped = relative
-            if dot > 0:
-                scoped = String(relative[byte=:dot])
-            if _fold_name(scoped) == _fold_name(top):
+    if folded in providers.folded:
+        return True
+    var bytes = folded.as_bytes()
+    for cursor in range(len(bytes)):
+        if bytes[cursor] == 46:
+            if String(folded[byte=:cursor]) in providers.folded:
                 return True
+    if _fold_name(_last_stem(relative)) in providers.stems:
+        return True
+    if relative.find("/") < 0:
+        var dot = relative.find(".")
+        var scoped = relative
+        if dot > 0:
+            scoped = String(relative[byte=:dot])
+        if _fold_name(scoped) in providers.tops:
+            return True
     return False
 
 
@@ -2351,6 +2398,7 @@ def _origin_blocked(
     """
     if len(paths) == 0 or not isdir(root):
         return False
+    var providers = _Providers(paths)
     var pending = List[String]()
     pending.append(root)
     while len(pending) > 0:
@@ -2373,7 +2421,7 @@ def _origin_blocked(
                 if _kept_child(entry, child):
                     pending.append(full)
                 continue
-            if _origin_competitor(child, paths, allow_origin):
+            if _origin_competitor(child, providers, allow_origin):
                 return True
     return False
 
@@ -2407,6 +2455,11 @@ def strand_cap_line(hashes: List[String]) -> Int:
     var new_segments = (
         "fdff9f90123e0d3d8d3ca9b0aaf22e3b2c110c255d01a14927ce1fca8fa7d021"
     )
+    # PR843 refuses a dash count past an integer. `cap_steps` and its
+    # two-to-64 clamp are unchanged.
+    var guarded_segments = (
+        "2557d496f1dc49c204314d389bd105c9eaaab4c7762920b7b0d5f97613d4c3cd"
+    )
     var renderer = hashes[2]
     var line = -1
     if (
@@ -2420,6 +2473,16 @@ def strand_cap_line(hashes: List[String]) -> Int:
     ):
         line = 3886
     var bases = hashes[0] == init and hashes[1] == init and hashes[4] == witness
+    # PR843 adds texel helpers to the imports and a line to a docstring
+    # above the cap loop, which moves it seven lines down. The cap function
+    # and its producer are unchanged.
+    if (
+        bases
+        and renderer
+        == "7fcdce220f3420c7a7739c0419d8af1087a06f79343a9f86cac4f8313fa6fa18"
+        and hashes[3] == guarded_segments
+    ):
+        return 4056
     # PR791 passes the worker count to the splat prepare call, far below the
     # cap loop. The cap function, its producer and its line are unchanged.
     if (

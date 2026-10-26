@@ -138,17 +138,29 @@ def _encode(
         )
         if wrote != 1:
             library.call["jpeg_destroy_compress", NoneType](cinfo_ptr)
+            # libjpeg holds bare addresses of both, so they live to here.
+            _ = len(cinfo)
+            _ = len(jerr)
             raise Error("jpeg scanline was not written")
     library.call["jpeg_finish_compress", NoneType](cinfo_ptr)
     var address = Int(out_ptr[0])
     var size = Int(out_size[0])
     if address == 0 or size < 1 or size > capacity:
         library.call["jpeg_destroy_compress", NoneType](cinfo_ptr)
+        # libjpeg holds bare addresses of both, so they live to here.
+        _ = len(cinfo)
+        _ = len(jerr)
         raise Error("jpeg file is empty")
     if UInt64(address) != owned:
         library.call["jpeg_destroy_compress", NoneType](cinfo_ptr)
+        # libjpeg holds bare addresses of both, so they live to here.
+        _ = len(cinfo)
+        _ = len(jerr)
         raise Error("jpeg output grew past the buffer")
     library.call["jpeg_destroy_compress", NoneType](cinfo_ptr)
+    # libjpeg holds bare addresses of both, so they live to here.
+    _ = len(cinfo)
+    _ = len(jerr)
     storage.resize(size, 0)
     return storage^
 

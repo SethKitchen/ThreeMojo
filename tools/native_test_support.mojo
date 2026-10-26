@@ -787,6 +787,9 @@ def _spawn_file(file: String, command: List[String]) raises -> Int:
         )
         external_call["_exit", NoneType](c_int(127))
     var fork_error = errno()
+    # `pointers` holds bare addresses, so nothing else keeps the strings
+    # alive until `execv` has read them.
+    _ = len(words)
     close_fd(pipe[1])
     if pid < 0:
         close_fd(pipe[0])
