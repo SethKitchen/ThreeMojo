@@ -480,6 +480,14 @@ Mojo checks the reviewed density inputs.
 311 inputs keep their reviewed digests.
 A changed density input is refused.
 
+Mojo checks the reviewed protected authorities.
+44 authorities keep their reviewed digests.
+A changed protected authority is refused.
+
+Mojo checks the reviewed main rebase inputs.
+18 inputs keep their reviewed digests.
+A changed main input is refused.
+
 ## Candidate certificate
 
 A certificate contains a stored incumbent point and its road parameter.
