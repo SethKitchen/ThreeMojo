@@ -14,6 +14,7 @@ The reproducible scripts are in `tools/carla_lane_oracle`. The rounding
 report is `tools/carla_rounding_bound.mojo`. They bind their
 proofs to evaluator and fixture source hashes and preserve the native-exported
 constant bits. Their README lists the four commands and report directory.
+`tools/carla_distance_gate.mojo` checks the spiral-domain token digest and the interval token digest.
 
 ## Lane poses
 

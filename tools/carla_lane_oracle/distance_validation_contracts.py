@@ -5,23 +5,32 @@ if __package__:
 else:
     import source_contracts as _typed_source
 
-if __package__:
-    from . import source_contracts as source
-else:
-    import source_contracts as source
 from pathlib import Path
-if __package__:
-    from . import source_contracts
-else:
-    import source_contracts
 MODULE='extensions/carla/spiral_domain_proof.mojo'
-EXPECTED='7263f3e46da6496d3b3a6054870b4238d9f4767c07e90161065c5c87e6d18813'
-INTERVAL='e2e87c519ed45fb4ec77d9a54aad08406461b17805287874c9b05ddb6bf49b11'
 
-def verify_text(module,interval):
-    if source_contracts.token_sha256(module)!=EXPECTED:raise ValueError('Distance validation, derivative/association checks or debit/routing changed')
-    if source_contracts.token_sha256(interval)!=INTERVAL:raise ValueError('Ordered nonnegative-error widening operation changed')
-    return {'status':'PASS','scope':'Finite ordered raw value and finite nonnegative error; original derivative and association checks retained','provenance_authenticated':False,'original_debit_retained':True}
+def verify_text(module, interval):
+    import json
+    import os
+    import subprocess
+    import tempfile
+    root = Path(__file__).resolve().parents[2]
+    mojo = os.environ.get('MOJO', str(root / '.venv' / 'bin' / 'mojo'))
+    with tempfile.TemporaryDirectory(prefix='distance-gate-') as directory:
+        folder = Path(directory)
+        module_path = folder / 'module.mojo'
+        interval_path = folder / 'interval.mojo'
+        module_path.write_text(module)
+        interval_path.write_text(interval)
+        result = subprocess.run(
+            ['sh', str(root / 'tools' / 'tool.sh'), mojo, 'carla_distance_gate',
+             '--module', str(module_path), '--interval', str(interval_path)],
+            capture_output=True, text=True)
+    if result.returncode != 0:
+        lines = [line.strip() for line in result.stderr.splitlines()
+                 if line.strip() and 'Crashpad' not in line]
+        message = lines[-1] if lines else result.stdout.strip()
+        raise ValueError(message)
+    return json.loads(result.stdout)
 
 def verify(root, *, _operation=None):
     root=Path(root)
