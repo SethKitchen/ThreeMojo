@@ -61,7 +61,6 @@ from math.finite import require_non_negative_finite
 from math.utils import max3, min3, mix_delta, saturate
 from math.vector3 import Vector3
 from render.color_math import rgb_channels
-from render.game_math import aces_tone
 from render.framebuffer import FloatColor, OPAQUE_WHITE
 from std.math import exp2, log2, max, min
 
@@ -190,6 +189,91 @@ def _cineon(
     )
 
 
+@always_inline
+def saturate_lanes[
+    w: Int
+](value: SIMD[DType.float32, w]) -> SIMD[DType.float32, w]:
+    """Return each lane held from zero to one, as GLSL's `saturate`.
+
+    `max(0, min(1, value))`, the operations of `math.utils.saturate` in
+    its order, so a lane gives the bits that the scalar call gives.
+
+    Parameters:
+        w: The SIMD width.
+
+    Args:
+        value: The lanes.
+
+    Returns:
+        Each lane within zero and one.
+    """
+    return max(SIMD[DType.float32, w](0), min(SIMD[DType.float32, w](1), value))
+
+
+@always_inline
+def aces_fit[w: Int](v: SIMD[DType.float32, w]) -> SIMD[DType.float32, w]:
+    """Return three.js's `RRTAndODTFit`, the ACES curve itself, on each lane.
+
+    Parameters:
+        w: The SIMD width.
+
+    Args:
+        v: One channel in the ACES working primaries.
+
+    Returns:
+        The fitted channel.
+    """
+    var a = v * (v + 0.0245786) - 0.000090537
+    var b = v * (0.983729 * v + 0.4329510) + 0.238081
+    return a / b
+
+
+@always_inline
+def aces_tone[
+    w: Int
+](
+    r: SIMD[DType.float32, w],
+    g: SIMD[DType.float32, w],
+    b: SIMD[DType.float32, w],
+    exposure: Float32,
+) -> Tuple[
+    SIMD[DType.float32, w], SIMD[DType.float32, w], SIMD[DType.float32, w]
+]:
+    """Return three.js's `ACESFilmicToneMapping` of linear light.
+
+    Scaled by the exposure over 0.6, into the ACES working primaries by
+    `ACESInputMat`, through `aces_fit`, back out by `ACESOutputMat`, and
+    clamped.
+
+    Parameters:
+        w: The SIMD width.
+
+    Args:
+        r: The red channel, linear.
+        g: The green channel, linear.
+        b: The blue channel, linear.
+        exposure: The exposure.
+
+    Returns:
+        The tone-mapped red, green and blue, each from zero to one.
+    """
+    var scale = exposure / 0.6
+    var sr = r * scale
+    var sg = g * scale
+    var sb = b * scale
+    var ir = 0.59719 * sr + 0.35458 * sg + 0.04823 * sb
+    var ig = 0.07600 * sr + 0.90834 * sg + 0.01566 * sb
+    var ib = 0.02840 * sr + 0.13383 * sg + 0.83777 * sb
+    var fr = aces_fit(ir)
+    var fg = aces_fit(ig)
+    var fb = aces_fit(ib)
+    return (
+        saturate_lanes(1.60475 * fr - 0.53108 * fg - 0.07367 * fb),
+        saturate_lanes(-0.10208 * fr + 1.10813 * fg - 0.00605 * fb),
+        saturate_lanes(-0.00327 * fr - 0.07276 * fg + 1.07602 * fb),
+    )
+
+
 def _aces(r: Float32, g: Float32, b: Float32, exposure: Float32) -> FloatColor:
     """three.js's `ACESFilmicToneMapping`.
 
@@ -197,7 +281,7 @@ def _aces(r: Float32, g: Float32, b: Float32, exposure: Float32) -> FloatColor:
     viewing environment; into the ACES working primaries by
     `ACESInputMat`; through the fit; back out by `ACESOutputMat`; clamped.
     Each matrix is applied as its three rows, written out, since the kernel
-    has no matrix type. `render.game_math.aces_tone` at width one.
+    has no matrix type. `aces_tone` at width one.
     """
     var toned = aces_tone[1](r, g, b, exposure)
     return FloatColor(toned[0], toned[1], toned[2])

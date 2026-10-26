@@ -6,19 +6,16 @@
 """The arithmetic the renderers share: each width gives the scalar bits,
 and the fast sine agrees with the C library's."""
 
-from core.fog import EXP2_FOG, fog_factor
-from render.game_math import (
-    GAME_LANES,
+from core.fog import EXP2_FOG, exp2_veil, fog_factor
+from render.game_math import GAME_LANES, fast_sin, hemisphere_share, lambert
+from render.framebuffer import FloatColor
+from render.tonemap import (
+    ACES_FILMIC_TONE_MAPPING,
     aces_fit,
     aces_tone,
-    exp2_veil,
-    fast_sin,
-    hemisphere_share,
-    lambert,
     saturate_lanes,
+    tone_map,
 )
-from render.framebuffer import FloatColor
-from render.tonemap import ACES_FILMIC_TONE_MAPPING, tone_map
 from std.math import sin
 from std.testing import (
     TestSuite,

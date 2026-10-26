@@ -103,7 +103,7 @@ The renderer refuses other materials, a second hemisphere light, a second sun, a
 
 ## Why it agrees with `Renderer`
 
-The two renderers share the ACES curve, the fog and the sRGB encoding through `render/game_math.mojo`. Both scale each light by three.js's `RECIPROCAL_PI`. A flat floor in the parity tests is within two levels of a byte in each channel.
+The two renderers share the ACES curve, the fog and the sRGB encoding. The ACES curve is `aces_tone` in `render/tonemap.mojo`, and the fog is `exp2_veil` in `core/fog.mojo`. The game renderer calls each of them at sixteen lanes. Both scale each light by three.js's `RECIPROCAL_PI`. A flat floor in the parity tests is within two levels of a byte in each channel.
 
 The two renderers differ in one way. `GameRenderer` lights each vertex and mixes the light across the triangle. `Renderer` lights each pixel. A curved surface and a highlight are therefore less exact in a game frame.
 

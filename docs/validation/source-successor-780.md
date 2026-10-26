@@ -61,6 +61,13 @@ other three come from PR843 and PR850.
 and only its after side changes. The table then has 249 edges. The rules of
 the PR791 sources apply to these sources too.
 
+The village walk then changes five more pinned sources: `core/fog.mojo`,
+`core/geometry_store.mojo`, `render/tonemap.mojo`, `tests/test_water.mojo`
+and the compile-fail expectations. Each gets an edge, and the table has 252
+edges. The fog veil and the ACES curve stay in `core/fog.mojo` and
+`render/tonemap.mojo`, and the game renderer imports them from there. So the
+fixed dependency closures do not change.
+
 ## Qualification controls
 
 The Python controls require exact forward and inverse reconstruction. They
