@@ -8,9 +8,9 @@
 Mojo 1.2 has no WebAssembly backend, but `mojo build --emit llvm` writes
 plain LLVM IR. This program swaps the module's data layout and triple for
 those of wasm32 and drops the host CPU attributes, so that a stock clang can
-compile the module. Use it like this:
+compile the module. Its command line is in `tools/`:
 
-    retarget.mojo CLANG IN.ll OUT.ll
+    tools/capi_retarget.mojo CLANG IN.ll OUT.ll
 
 The module must not use threads, lists, strings or errors, because `mwrt.c`
 does not supply the runtime they need. The rewrites match the former Python
@@ -33,7 +33,7 @@ is set gives zero, and any other byte picks by its low four bits.
 
 from std.memory import bitcast
 from std.pathlib import Path
-from std.sys import argv, exit, stderr
+from std.sys import stderr
 
 from tools._process import run_program
 
@@ -43,7 +43,7 @@ comptime TRIPLE = "wasm32-unknown-unknown"
 comptime USAGE = (
     "Retarget the LLVM IR that Mojo writes for the host to wasm32.\n"
     "\n"
-    "    retarget.mojo CLANG IN.ll OUT.ll\n"
+    "    tools/capi_retarget.mojo CLANG IN.ll OUT.ll\n"
     "\n"
     "The module must not use threads, lists, strings or errors, because\n"
     "mwrt.c does not supply the runtime they need."
@@ -818,12 +818,3 @@ def retarget_command(arguments: List[String]) raises -> Int:
         print("retarget.mojo:", error, file=stderr)
         return 1
     return 0
-
-
-def main() raises:
-    """Retarget one LLVM IR file from the command line."""
-    var arguments = List[String]()
-    var given = argv()
-    for index in range(1, len(given)):
-        arguments.append(String(given[index]))
-    exit(retarget_command(arguments))

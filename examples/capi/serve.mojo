@@ -7,10 +7,10 @@
 
 A page can make shared memory, and so can run WebAssembly on many Web
 Workers, only when it is cross-origin isolated. Two headers make it so:
-Cross-Origin-Opener-Policy and Cross-Origin-Embedder-Policy. Use it like
-this:
+Cross-Origin-Opener-Policy and Cross-Origin-Embedder-Policy. Its command
+line is in `tools/`:
 
-    serve.mojo [FOLDER] [PORT]
+    tools/capi_serve.mojo [FOLDER] [PORT]
 
 The folder is the current one by default, and the port is 8000. The server
 listens on 127.0.0.1 only, and it tells the browser not to cache, so that a
@@ -22,7 +22,7 @@ not list directories.
 from std.ffi import c_int, external_call
 from std.os.path import realpath
 from std.pathlib import Path
-from std.sys import CompilationTarget, argv, exit, stderr
+from std.sys import CompilationTarget, stderr
 
 from tools._owned_process import EINTR, close_fd, errno, strerror
 
@@ -622,16 +622,3 @@ def serve_command(arguments: List[String]) raises -> Int:
             return 2
     serve_forever(folder, port)
     return 0
-
-
-def main() raises:
-    """Serve a folder from the command line."""
-    var arguments = List[String]()
-    var given = argv()
-    for index in range(1, len(given)):
-        arguments.append(String(given[index]))
-    try:
-        exit(serve_command(arguments))
-    except error:
-        print("serve.mojo:", error, file=stderr)
-        exit(1)

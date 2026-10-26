@@ -110,7 +110,7 @@ web() {
   # serve.mojo isolates the page, which the water needs to use many threads.
   MOJO=${MOJO:-$REPO/.venv/bin/mojo}
   [ -x "$MOJO" ] || MOJO=mojo
-  exec "$MOJO" run -I "$REPO" "$HERE/serve.mojo" "$OUT/web" "$port"
+  exec "$MOJO" run -I "$REPO" "$REPO/tools/capi_serve.mojo" "$OUT/web" "$port"
 }
 
 check() {
@@ -141,7 +141,7 @@ check() {
       --dump "$scratch/cpu.ppm" | tail -n 1
     MOJO=${MOJO:-$REPO/.venv/bin/mojo}
     [ -x "$MOJO" ] || MOJO=mojo
-    if "$MOJO" run -I "$REPO" "$HERE/compare_ppm.mojo" "$scratch/metal.ppm" "$scratch/cpu.ppm" 0.3 32 0.001; then
+    if "$MOJO" run -I "$REPO" "$REPO/tools/capi_compare_ppm.mojo" "$scratch/metal.ppm" "$scratch/cpu.ppm" 0.3 32 0.001; then
       echo "ok   the Metal splats"
     else
       echo "FAIL the Metal splats"

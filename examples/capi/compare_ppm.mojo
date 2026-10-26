@@ -5,7 +5,7 @@
 
 """Compare two PPM frames, as `run.sh check` does for the GPU and the CPU.
 
-    compare_ppm.mojo A.ppm B.ppm MEAN OUTLIER FRACTION
+    tools/capi_compare_ppm.mojo A.ppm B.ppm MEAN OUTLIER FRACTION
 
 The frames pass when their mean difference is at most MEAN (of 255), and at
 most FRACTION of the values differ by more than OUTLIER. Exit status 0 is a
@@ -15,7 +15,7 @@ rounding: half to even, on the exact value of the double.
 
 from std.memory import bitcast
 from std.pathlib import Path
-from std.sys import argv, exit, stderr
+from std.sys import stderr
 
 from tools._bigint import BigInt
 from tools._fraction import Fraction
@@ -24,7 +24,7 @@ from tools._python_float import parse_float
 comptime USAGE = (
     "Compare two PPM frames, as run.sh check does for the GPU and the CPU.\n"
     "\n"
-    "    compare_ppm.mojo A.ppm B.ppm MEAN OUTLIER FRACTION\n"
+    "    tools/capi_compare_ppm.mojo A.ppm B.ppm MEAN OUTLIER FRACTION\n"
     "\n"
     "The frames pass if their mean difference is at most MEAN (of 255), and"
     " at most\n"
@@ -290,12 +290,3 @@ def compare_command(arguments: List[String]) raises -> Int:
     except error:
         print(error, file=stderr)
         return 1
-
-
-def main() raises:
-    """Compare two PPM files from the command line."""
-    var arguments = List[String]()
-    var given = argv()
-    for index in range(1, len(given)):
-        arguments.append(String(given[index]))
-    exit(compare_command(arguments))

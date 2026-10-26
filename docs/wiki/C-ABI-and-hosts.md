@@ -47,7 +47,7 @@ The script serves `out/capi/web` on `localhost` and opens the page. Copy a scan 
 
 A browser that has WebGPU draws the water and the splats on its GPU, at 1280 by 720 pixels. Add `?gpu=0` to the address to draw on the CPU instead. The page also draws on the CPU when the browser has no WebGPU adapter, or when its device does not take the shader. The label then says why. See [The WebGPU path](#the-webgpu-path).
 
-On the CPU, the water uses one thread for each core. It draws about ten times faster than on one thread. A page can share memory between threads only when it is cross-origin isolated. The script `examples/capi/serve.mojo` sends the two headers that make it so. Any other server gets the module for one thread, and the label says why.
+On the CPU, the water uses one thread for each core. It draws about ten times faster than on one thread. A page can share memory between threads only when it is cross-origin isolated. The module `examples/capi/serve.mojo` sends the two headers that make it so. Its command line is `tools/capi_serve.mojo`. Any other server gets the module for one thread, and the label says why.
 
 On the CPU, the page picks the size of the water frame. It chooses the largest size that draws in about 33 milliseconds. On WebGPU, every size in the list takes less than that, so there is no automatic choice. The list goes up to 1920 by 1080.
 
@@ -251,7 +251,7 @@ The blend goes into a half-float picture, as on the web. A last pass writes the 
 
 ### The WebAssembly build
 
-`mojo build --emit llvm` writes LLVM IR for the host. `examples/capi/retarget.mojo` changes its data layout and its triple to those of wasm32. Then clang compiles it, and `wasm-ld` links it with `examples/capi/mwrt.c`.
+`mojo build --emit llvm` writes LLVM IR for the host. `examples/capi/retarget.mojo` changes its data layout and its triple to those of wasm32. The build runs it with `tools/capi_retarget.mojo`. The four host tools keep their `main` in `tools/`, so `examples/capi` has no entry point. Then clang compiles it, and `wasm-ld` links it with `examples/capi/mwrt.c`.
 
 `mwrt.c` supplies what the Mojo runtime and the C library give on a host:
 

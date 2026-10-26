@@ -10,7 +10,7 @@ same text: each source line becomes one quoted C string that ends in `\\n`.
 """
 
 from std.pathlib import Path
-from std.sys import argv, exit, stderr
+from std.sys import stderr
 
 
 def _split_lines(text: String) -> List[String]:
@@ -86,7 +86,7 @@ def metal_command(arguments: List[String]) raises -> Int:
     """
     if len(arguments) != 2:
         print(
-            "metal_string.mojo IN.metal OUT.h",
+            "tools/capi_metal_string.mojo IN.metal OUT.h",
             file=stderr,
         )
         return 1
@@ -97,12 +97,3 @@ def metal_command(arguments: List[String]) raises -> Int:
         print("metal_string.mojo:", error, file=stderr)
         return 1
     return 0
-
-
-def main() raises:
-    """Write a Metal source into a C string header."""
-    var arguments = List[String]()
-    var given = argv()
-    for index in range(1, len(given)):
-        arguments.append(String(given[index]))
-    exit(metal_command(arguments))

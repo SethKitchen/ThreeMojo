@@ -140,7 +140,7 @@ wasm_module() {
     object=$OUT/wasm/mwrt.o
   fi
   mojo_build llvm "$OUT/wasm/$app.ll" "$REPO/window/capi_$app.mojo"
-  "$MOJO" run -I "$REPO" "$HERE/retarget.mojo" "$clang" "$OUT/wasm/$app.ll" "$OUT/wasm/$app.wasm32.ll"
+  "$MOJO" run -I "$REPO" "$REPO/tools/capi_retarget.mojo" "$clang" "$OUT/wasm/$app.ll" "$OUT/wasm/$app.wasm32.ll"
   # shellcheck disable=SC2086
   "$clang" --target=wasm32-unknown-unknown -O2 $cflags -c "$OUT/wasm/$app.wasm32.ll" -o "$OUT/wasm/$app$suffix.o"
   flags=""
@@ -190,7 +190,7 @@ build_host() {
   # The splat shaders go into the host as a C string, and compile when a window
   # opens, so the build needs no Metal toolchain.
   mkdir -p "$OUT/host"
-  "$MOJO" run -I "$REPO" "$HERE/metal_string.mojo" "$HERE/splat.metal" "$OUT/host/splat_msl.h"
+  "$MOJO" run -I "$REPO" "$REPO/tools/capi_metal_string.mojo" "$HERE/splat.metal" "$OUT/host/splat_msl.h"
   cc -O2 -fobjc-arc -mmacosx-version-min=14.0 -I "$REPO/window" -I "$HERE" -I "$OUT/host" \
     -framework Cocoa -framework QuartzCore -framework Metal -Wl,-rpath,"$runtime" \
     -o "$OUT/threemojo_host" "$HERE/macos_host.m" "$HERE/macos_splat.m"

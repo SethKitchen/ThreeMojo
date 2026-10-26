@@ -617,13 +617,24 @@ def test_one_connection_serves_index() raises:
 def test_shell_scripts_call_the_mojo_tools() raises:
     var build = Path("examples/capi/build.sh").read_text()
     var run = Path("examples/capi/run.sh").read_text()
-    assert_true(build.find("retarget.mojo") > 0)
-    assert_true(build.find("metal_string.mojo") > 0)
+    assert_true(build.find("tools/capi_retarget.mojo") > 0)
+    assert_true(build.find("tools/capi_metal_string.mojo") > 0)
     assert_false(build.find("retarget.py") >= 0)
-    assert_true(run.find("serve.mojo") > 0)
-    assert_true(run.find("compare_ppm.mojo") > 0)
+    assert_true(run.find("tools/capi_serve.mojo") > 0)
+    assert_true(run.find("tools/capi_compare_ppm.mojo") > 0)
     assert_false(run.find("serve.py") >= 0)
     assert_false(run.find("compare_ppm.py") >= 0)
+
+
+def test_the_capi_folder_holds_no_entry_point() raises:
+    # A main beside the modules would make examples/capi an entry directory,
+    # and change how Mojo resolves the imports there.
+    for name in ["compare_ppm", "metal_string", "retarget", "serve"]:
+        var module = Path("examples/capi/" + name + ".mojo").read_text()
+        var command = Path("tools/capi_" + name + ".mojo").read_text()
+        assert_false(module.find("\ndef main(") >= 0, name)
+        assert_true(command.find("\ndef main(") >= 0, name)
+        assert_true(command.find("from examples.capi." + name + " import") > 0)
 
 
 def main() raises:
