@@ -311,6 +311,13 @@ jobs:
       - name: Install Xvfb
         run: sudo apt-get update && sudo apt-get install -y xvfb
 
+      # Town image tests compare with NumPy 2.3.5 and Pillow 12.3.0.
+      - name: Install NumPy and Pillow
+        run: |
+          python3 -m venv "$RUNNER_TEMP/image-python"
+          "$RUNNER_TEMP/image-python/bin/pip" install --only-binary :all: "numpy==2.3.5" "Pillow==12.3.0"
+          echo "$RUNNER_TEMP/image-python/bin" >> "$GITHUB_PATH"
+
       - name: test-cpu
         env:
           THREEMOJO_COMPILER_TELEMETRY: "1"
@@ -527,6 +534,11 @@ jobs:
       - name: Install Xvfb
         run: brew install xorg-server
 
+      # Town image tests compare with NumPy 2.3.5 and Pillow 12.3.0.
+      - name: Install NumPy and Pillow
+        run: |
+          uv pip install --python python3 --only-binary :all: "numpy==2.3.5" "Pillow==12.3.0"
+
       # Serialize outer compiler processes to limit oversubscription while
       # preserving every check and the per-test time limit.
       - name: check-cpu
@@ -585,6 +597,7 @@ jobs:
           python3 -m venv --prompt ThreeMojo .venv
           .venv/bin/python -m pip install "mojo==1.2.0"
           .venv/bin/mojo --version
+          python3 -m pip install --only-binary :all: "numpy==2.3.5" "Pillow==12.3.0"
 
       # The native window's suite runs under coverage too.
       - name: Install Xvfb
