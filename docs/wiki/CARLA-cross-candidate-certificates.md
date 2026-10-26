@@ -390,6 +390,12 @@ Map premises use the later guard digests.
 Road info premises come from the restored border pin.
 A changed premise is refused.
 
+Mojo checks the reviewed score-live premises.
+The score helper and the winner-seed caller keep their token digests.
+Three optional premises and eight support premises keep their digests.
+The score fixture keeps its file digest.
+A changed premise or a changed fixture is refused.
+
 ## Candidate certificate
 
 A certificate contains a stored incumbent point and its road parameter.
