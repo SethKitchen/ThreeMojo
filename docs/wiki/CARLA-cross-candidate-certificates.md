@@ -450,6 +450,10 @@ Mojo checks the reviewed typed-boundary new inputs.
 232 inputs keep their reviewed digests.
 A changed new input is refused.
 
+Mojo checks the reviewed typed-boundary tests.
+352 tests keep their reviewed digests.
+A changed test is refused.
+
 ## Candidate certificate
 
 A certificate contains a stored incumbent point and its road parameter.
