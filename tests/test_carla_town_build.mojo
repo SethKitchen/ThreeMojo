@@ -71,7 +71,10 @@ def test_ranked_meshes_keep_the_earlier_tie() raises:
     )
     assert_equal(
         ranked_mesh_lines(doc, 3),
-        "          10  Building/A\n          10  plain\n           2  Building/B",
+        (
+            "          10  Building/A\n          10  plain\n           2 "
+            " Building/B"
+        ),
     )
     assert_equal(ranked_mesh_lines(doc, 1), "          10  Building/A")
     assert_equal(ranked_mesh_lines(doc, 0), "")

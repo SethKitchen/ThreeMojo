@@ -749,7 +749,7 @@ def grouped_digits(value: Int) -> String:
     var index = digits.byte_length()
     while index > 0:
         index -= 1
-        out = String(digits[byte=index:index + 1]) + out
+        out = String(digits[byte = index : index + 1]) + out
         count += 1
         if count == 3 and index > 0:
             out = "," + out
@@ -871,7 +871,9 @@ def ranked_mesh_lines(doc: PyJson, top: Int) raises -> String:
     var order = List[Int]()
     var index = 0
     while index < count:
-        var triangles = Int(doc.text(doc.at(doc.item(meshes, index), "triangles")))
+        var triangles = Int(
+            doc.text(doc.at(doc.item(meshes, index), "triangles"))
+        )
         var place = len(order)
         order.append(index)
         while place > 0:
