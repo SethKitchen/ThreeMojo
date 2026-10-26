@@ -95,7 +95,8 @@ The CI workflow checks a pull request with `AFFECTED` set to its base branch. It
 
 ## Run the tool tests
 
-`make test-tools` runs the Python tool tests and the CARLA oracle.
+`make test-tools` runs the tool tests and the CARLA oracle.
+`tools/check_format_arguments.mojo` checks 1789 formatter paths.
 The oracle runner is `tools/parallel_unittest.mojo`.
 It starts several Python test processes at once.
 `TOOLS_SHARD=I/N` gives each runner a different share of those units.

@@ -129,7 +129,7 @@ Some portable features remain partial, including [GLSL shaders](https://github.c
 ### Project tools
 
 <details>
-<summary>Implemented: 65</summary>
+<summary>Implemented: 67</summary>
 
 - [x] [Literal loop receipt](https://github.com/SethKitchen/ThreeMojo/wiki/Coverage-tool#constant-loop-outcome-proofs): `tools/coverage_loop_seal.mojo` writes and checks the sealed loop receipt [#761](https://github.com/SethKitchen/ThreeMojo/issues/761)
 
@@ -190,6 +190,8 @@ Some portable features remain partial, including [GLSL shaders](https://github.c
 - [x] [Town triangle share](https://github.com/SethKitchen/ThreeMojo/wiki/CARLA-assets#the-carla-towns): `tools/carla_town_share.mojo` keeps one grass blade in ten and shares each kind's cap [#761](https://github.com/SethKitchen/ThreeMojo/issues/761)
 
 - [x] [CARLA town package](https://github.com/SethKitchen/ThreeMojo/wiki/CARLA-assets#rebuild-the-town-packages): `tools/carla_town_build.mojo` builds one town package from its layout [#761](https://github.com/SethKitchen/ThreeMojo/issues/761)
+
+- [x] [Format argument batches](https://github.com/SethKitchen/ThreeMojo/wiki/How-to-run-the-checks#run-the-tool-tests): `tools/check_format_arguments.mojo` checks 1789 formatter paths [#761](https://github.com/SethKitchen/ThreeMojo/issues/761)
 
 - [x] [Neutral CARLA texture plan](https://github.com/SethKitchen/ThreeMojo/wiki/CARLA-assets#the-carla-towns): `tools/carla_texture_plan.mojo` names a neutral texture and chooses its fitted size [#761](https://github.com/SethKitchen/ThreeMojo/issues/761)
 
