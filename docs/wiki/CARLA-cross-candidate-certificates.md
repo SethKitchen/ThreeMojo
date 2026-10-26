@@ -427,6 +427,11 @@ Mojo checks the reviewed shared-helper package files.
 Four package files keep their reviewed digests.
 A changed package file is refused.
 
+Mojo checks the reviewed PR760 implementation sources.
+Four predecessor texts keep their reviewed digests.
+Four successor modules keep their reviewed digests.
+A changed implementation source is refused.
+
 ## Candidate certificate
 
 A certificate contains a stored incumbent point and its road parameter.
