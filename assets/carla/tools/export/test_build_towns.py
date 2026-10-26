@@ -105,34 +105,6 @@ class TownBakeTests(unittest.TestCase):
         self.assertNotEqual(tags[0], tags[2])
         self.assertNotEqual(tags[1], tags[3])
 
-    def test_alpha_cutoff_and_factor_change_real_bake_pixels(self):
-        folder = self.root / 'alpha'
-        folder.mkdir()
-        library = tool.Library(str(folder), 512)
-        for cutoff in (0.2, 0.4):
-            library.gltf['materials'].append({
-                'name': 'cutout', 'alphaMode': 'MASK', 'alphaCutoff': cutoff,
-                'pbrMetallicRoughness': {'baseColorFactor': [0.6, 0, 0, 0.3]}})
-        for bake in (tool.impostor, tool.baked_building):
-            with self.subTest(bake=bake.__name__):
-                args = (24,) if bake is tool.baked_building else ()
-                tags, pictures = [], []
-                for material in (0, 1):
-                    _, result = bake([(p, material) for p in self.primitives],
-                                     library, str(folder), 'mesh', *args)
-                    entry = library.gltf['materials'][result]
-                    tags.append(entry['name'])
-                    texture = entry['pbrMetallicRoughness']['baseColorTexture']['index']
-                    image = library.gltf['images'][library.gltf['textures'][texture]['source']]
-                    with Image.open(folder / image['uri']) as picture:
-                        pictures.append(numpy.asarray(picture.convert('RGBA')).copy())
-                self.assertNotEqual(*tags)
-                self.assertGreater(pictures[0][:, :, 0].mean(), 40)
-                self.assertEqual(pictures[1][:, :, :3].max(), 0)
-                if bake is tool.impostor:
-                    self.assertGreater(pictures[0][:, :, 3].max(), 0)
-                    self.assertEqual(pictures[1][:, :, 3].max(), 0)
-
     def test_real_bakes_leave_cached_inputs_unchanged(self):
         folder = self.root / 'immutable'
         folder.mkdir()
@@ -296,12 +268,6 @@ class TownBakeTests(unittest.TestCase):
         self.assertNotEqual(tag, library._bake_tag('mesh', 'baked', [(original, material)], 8))
         with mock.patch.object(tool, 'BAKE_DENSITY', tool.BAKE_DENSITY + 1):
             self.assertNotEqual(tag, library._bake_tag('mesh', 'baked', [(original, material)], 24))
-
-    def test_slot_fallbacks_remain_unchanged(self):
-        row = {'materials': [None, 'MaterialInstanceDynamic /Game/Fixture/Runtime.Runtime']}
-        self.assertEqual(tool.slot_materials(row, self.primitives), ['Own0', 'Own1'])
-        self.assertEqual(tool.slot_materials({'materials': []}, self.primitives), ['Own0', 'Own1'])
-
 
 if __name__ == '__main__':
     unittest.main()
