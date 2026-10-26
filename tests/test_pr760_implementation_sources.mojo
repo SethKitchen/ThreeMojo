@@ -38,10 +38,10 @@ def _copy(root: String) raises:
     files.append("tools/carla_lane_oracle/seed_count_contracts.py")
     files.append("tools/carla_lane_oracle/source_contracts.py")
     files.append("tools/carla_lane_oracle/winner_sign_contracts.py")
+    # Copied in this process: one `cp` for each file took most of the
+    # five seconds a test may run.
     for path in files:
-        var copied = run_program(["cp", path, root + "/" + path], 10.0)
-        if copied.status != 0:
-            raise Error(copied.output)
+        Path(root + "/" + path).write_bytes(Path(path).read_bytes())
 
 
 def test_the_live_implementation_sources_hold() raises:

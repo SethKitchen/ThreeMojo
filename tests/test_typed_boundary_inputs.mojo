@@ -696,10 +696,10 @@ def _copy(root: String) raises:
     files.append("tests/test_carla_remaining_quantities.mojo")
     files.append("tests/test_carla_traffic_actor_boundaries.mojo")
 
+    # Copied in this process: one `cp` for each file took most of the
+    # five seconds a test may run.
     for path in files:
-        var copied = run_program(["cp", path, root + "/" + path], 10.0)
-        if copied.status != 0:
-            raise Error(copied.output)
+        Path(root + "/" + path).write_bytes(Path(path).read_bytes())
 
 
 def test_the_live_new_inputs_hold() raises:
