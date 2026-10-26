@@ -20,7 +20,7 @@
 //   const library = await loadThreads("threemojo_water_threads.wasm", { threads: 7 });
 //
 // A page can make shared memory only when it is cross-origin isolated, which
-// needs the headers that examples/capi/serve.mojo sends. Test `crossOriginIsolated`
+// needs the headers that tools/capi_serve.mojo sends. Test `crossOriginIsolated`
 // and fall back to `load` without it. A frame from a threaded module is a copy,
 // because ImageData does not take a view of shared memory.
 

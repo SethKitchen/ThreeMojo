@@ -47,7 +47,7 @@ The script serves `out/capi/web` on `localhost` and opens the page. Copy a scan 
 
 A browser that has WebGPU draws the water and the splats on its GPU, at 1280 by 720 pixels. Add `?gpu=0` to the address to draw on the CPU instead. The page also draws on the CPU when the browser has no WebGPU adapter, or when its device does not take the shader. The label then says why. See [The WebGPU path](#the-webgpu-path).
 
-On the CPU, the water uses one thread for each core. It draws about ten times faster than on one thread. A page can share memory between threads only when it is cross-origin isolated. The module `examples/capi/serve.mojo` sends the two headers that make it so. Its command line is `tools/capi_serve.mojo`. Any other server gets the module for one thread, and the label says why.
+On the CPU, the water uses one thread for each core. It draws about ten times faster than on one thread. A page can share memory between threads only when it is cross-origin isolated. The program `tools/capi_serve.mojo` sends the two headers that make it so. Any other server gets the module for one thread, and the label says why.
 
 On the CPU, the page picks the size of the water frame. It chooses the largest size that draws in about 33 milliseconds. On WebGPU, every size in the list takes less than that, so there is no automatic choice. The list goes up to 1920 by 1080.
 
@@ -251,7 +251,7 @@ The blend goes into a half-float picture, as on the web. A last pass writes the 
 
 ### The WebAssembly build
 
-`mojo build --emit llvm` writes LLVM IR for the host. `examples/capi/retarget.mojo` changes its data layout and its triple to those of wasm32. The build runs it with `tools/capi_retarget.mojo`. The four host tools keep their `main` in `tools/`, so `examples/capi` has no entry point. Then clang compiles it, and `wasm-ld` links it with `examples/capi/mwrt.c`.
+`mojo build --emit llvm` writes LLVM IR for the host. `tools/capi_retarget.mojo` changes its data layout and its triple to those of wasm32. The four host tools are in `tools/`, so `examples/capi` has no Mojo program. Then clang compiles it, and `wasm-ld` links it with `examples/capi/mwrt.c`.
 
 `mwrt.c` supplies what the Mojo runtime and the C library give on a host:
 
@@ -260,9 +260,9 @@ The blend goes into a half-float picture, as on the web. A last pass writes the 
 - Files that fail, so that the app falls back to its plain bed.
 - A `TaskGroup`. For one thread it runs each task as soon as it is launched. For many threads it puts the tasks in a queue. See [Threads](#threads).
 
-Mojo returns an optional pointer through a slot of 64 bits. A pointer on wasm32 has 4 bytes, so the upper half of the slot held stack garbage. After the first step, `tm_alloc` returned an address like `0x2000000000...`. `retarget.mojo` clears each such slot before the pointer goes in. The page also keeps the low 32 bits of every address that it reads. `check.mjs` tests that `tm_alloc` and `tm_gpu_part` give addresses with no upper half.
+Mojo returns an optional pointer through a slot of 64 bits. A pointer on wasm32 has 4 bytes, so the upper half of the slot held stack garbage. After the first step, `tm_alloc` returned an address like `0x2000000000...`. `capi_retarget.mojo` clears each such slot before the pointer goes in. The page also keeps the low 32 bits of every address that it reads. `check.mjs` tests that `tm_alloc` and `tm_gpu_part` give addresses with no upper half.
 
-Mojo's LLVM is newer than any release of clang, so `retarget.mojo` also rewrites what an older reader refuses:
+Mojo's LLVM is newer than any release of clang, so `capi_retarget.mojo` also rewrites what an older reader refuses:
 
 - A floating-point constant in a new form. It can be a decimal that is not exactly a float, or a float's or a double's bits (`f0x...`). It can also be `+inf`, `-qnan`, or a NaN with a payload. Each becomes the hexadecimal double of the same number.
 - A call to `llvm.x86.ssse3.pshuf.b.128`, the byte shuffle of the standard library's UTF-8 check. It becomes a call to a function that does the same with WebAssembly's swizzle.
@@ -329,6 +329,6 @@ The page gets a copy of each frame from the threaded module. `ImageData` does no
 - The CPU splat is slow in a browser: 861 milliseconds for a frame at 640 by 360, on one thread. Natively it draws on every core.
 - The WebAssembly build reads `.spz` and compressed PLY scans. A SOG bundle and a plain splat PLY need strings, which its runtime does not have, so the page cannot take them.
 - The Metal splats and the WebGPU splats are ports of the Mojo shader. They agree closely and not to the bit.
-- Mojo is pinned at 1.2.0. A later Mojo with WebAssembly output can replace `retarget.mojo` and `mwrt.c`. The C functions then stay as they are.
+- Mojo is pinned at 1.2.0. A later Mojo with WebAssembly output can replace `capi_retarget.mojo` and `mwrt.c`. The C functions then stay as they are.
 
 See also [Windowing and controls](Windowing-and-controls) and [Water](Water).

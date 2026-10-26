@@ -16,8 +16,8 @@
 #   run.sh web [core|water|splat] [PORT]
 #       Serve the WebAssembly build on localhost and open it in a browser.
 #       A browser with WebGPU draws the water and the splats on its GPU. Add
-#       ?gpu=0 to the address to draw on the CPU. serve.mojo sends the headers
-#       that let the CPU water run on many threads.
+#       ?gpu=0 to the address to draw on the CPU. capi_serve.mojo sends the
+#       headers that let the CPU water run on many threads.
 #   run.sh check
 #       Check the native and the WebAssembly builds without a window. A
 #       headless Chrome checks the WebGPU water and splats, where there is a
@@ -107,7 +107,7 @@ web() {
   echo "  splat: http://localhost:$port/?app=splat"
   echo "Press Control-C to stop."
   (sleep 1 && { open "$url" 2>/dev/null || xdg-open "$url" 2>/dev/null || true; }) &
-  # serve.mojo isolates the page, which the water needs to use many threads.
+  # capi_serve.mojo isolates the page, which the water needs to use many threads.
   MOJO=${MOJO:-$REPO/.venv/bin/mojo}
   [ -x "$MOJO" ] || MOJO=mojo
   exec "$MOJO" run -I "$REPO" "$REPO/tools/capi_serve.mojo" "$OUT/web" "$port"
