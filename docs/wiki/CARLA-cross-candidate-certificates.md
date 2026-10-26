@@ -384,6 +384,12 @@ That assignment is read as the score high.
 The fresh guard and the ordered debits match the historical caller.
 A missing assignment or a changed debit is refused.
 
+Mojo checks the reviewed seed-count premises.
+Forty-five declarations keep their score-era token digests.
+Map premises use the later guard digests.
+Road info premises come from the restored border pin.
+A changed premise is refused.
+
 ## Candidate certificate
 
 A certificate contains a stored incumbent point and its road parameter.
