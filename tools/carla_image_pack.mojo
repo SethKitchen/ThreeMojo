@@ -19,7 +19,7 @@ bytes.
 from std.pathlib import Path
 from std.sys import argv, exit, stderr
 
-from tools._python_float import parse_float, python_repr
+from tools._python_float import append_ascii, ascii_text, parse_float
 from tools._python_json import (
     PY_BOOL,
     PY_DICT,
@@ -29,7 +29,7 @@ from tools._python_json import (
     PY_STR,
     PyJson,
 )
-from tools.carla_image_resize import resize_text
+from tools.carla_image_resize import resize_text, unit_bytes
 from tools.carla_mask_channel import mask_text
 
 
@@ -145,19 +145,7 @@ def _quantize(doc: PyJson, root: Int) raises -> String:
     var height = 0
     var bands = 0
     _picture(doc, doc.at(root, "image"), width, height, bands, samples)
-    var request = String('{"mode":"bytes","pixels":[')
-    for index in range(len(samples)):
-        if index > 0:
-            request += ","
-        request += python_repr(samples[index])
-    request += "]}"
-    var quantized = PyJson.parse(resize_text(request))
-    var pixels = _bytes(
-        quantized,
-        quantized.at(quantized.root, "pixels"),
-        width * height * bands,
-    )
-    return _emit(width, height, bands, pixels)
+    return _emit(width, height, bands, unit_bytes(samples))
 
 
 def _picture(
@@ -217,25 +205,79 @@ def _atlas(doc: PyJson, root: Int) raises -> String:
     return _emit(size * 2, size, 4, out)
 
 
+def joined_rgba(
+    left: List[Float64],
+    left_width: Int,
+    left_height: Int,
+    right: List[Float64],
+    right_width: Int,
+    right_height: Int,
+    size: Int,
+) raises -> List[Int]:
+    """Quantize two RGBA pictures, fit each one to `size`, and join them.
+
+    Args:
+        left: The left picture, four samples per texel, row by row.
+        left_width: The left picture's width.
+        left_height: The left picture's height.
+        right: The right picture, four samples per texel, row by row.
+        right_width: The right picture's width.
+        right_height: The right picture's height.
+        size: The width and height of each fitted view, in pixels.
+
+    Returns:
+        RGBA bytes of the joined picture. The width is twice `size`.
+        The height is `size`.
+
+    Raises:
+        Error: If a size is not positive, a picture does not match its
+            size, or a view cannot be fitted.
+    """
+    if (
+        size < 1
+        or left_width < 1
+        or left_height < 1
+        or right_width < 1
+        or right_height < 1
+    ):
+        raise Error("size is not positive")
+    if (
+        len(left) != left_width * left_height * 4
+        or len(right) != right_width * right_height * 4
+    ):
+        raise Error("pixels do not match the image")
+    var fitted_left = _resized(
+        unit_bytes(left), left_width, left_height, 4, size, size, "lanczos"
+    )
+    var fitted_right = _resized(
+        unit_bytes(right),
+        right_width,
+        right_height,
+        4,
+        size,
+        size,
+        "lanczos",
+    )
+    var row = size * 4
+    var out = List[Int]()
+    for y in range(size):
+        var start = y * row
+        for offset in range(row):
+            out.append(fitted_left[start + offset])
+        for offset in range(row):
+            out.append(fitted_right[start + offset])
+    return out^
+
+
 def _view_bytes(doc: PyJson, node: Int, size: Int) raises -> List[Int]:
     """Return one float picture as resized RGBA bytes."""
     var samples = List[Float64]()
     var width = 0
     var height = 0
     _float_image(doc, node, width, height, samples)
-    var request = String('{"mode":"bytes","pixels":[')
-    for index in range(len(samples)):
-        if index > 0:
-            request += ","
-        request += python_repr(samples[index])
-    request += "]}"
-    var quantized = PyJson.parse(resize_text(request))
-    var pixels = _bytes(
-        quantized,
-        quantized.at(quantized.root, "pixels"),
-        width * height * 4,
+    return _resized(
+        unit_bytes(samples), width, height, 4, size, size, "lanczos"
     )
-    return _resized(pixels, width, height, 4, size, size, "lanczos")
 
 
 def _float_image(
@@ -344,25 +386,28 @@ def _resized(
     mode: String,
 ) raises -> List[Int]:
     """Return samples from `tools/carla_image_resize.mojo`."""
-    var request = String('{"mode":"')
-    request += mode
-    request += '","width":'
-    request += String(width)
-    request += ',"height":'
-    request += String(height)
-    request += ',"bands":'
-    request += String(bands)
-    request += ',"out_width":'
-    request += String(out_w)
-    request += ',"out_height":'
-    request += String(out_h)
-    request += ',"pixels":['
+    if width == out_w and height == out_h:
+        return pixels.copy()
+    var request = List[UInt8]()
+    append_ascii(request, '{"mode":"')
+    append_ascii(request, mode)
+    append_ascii(request, '","width":')
+    append_ascii(request, String(width))
+    append_ascii(request, ',"height":')
+    append_ascii(request, String(height))
+    append_ascii(request, ',"bands":')
+    append_ascii(request, String(bands))
+    append_ascii(request, ',"out_width":')
+    append_ascii(request, String(out_w))
+    append_ascii(request, ',"out_height":')
+    append_ascii(request, String(out_h))
+    append_ascii(request, ',"pixels":[')
     for index in range(len(pixels)):
         if index > 0:
-            request += ","
-        request += String(pixels[index])
-    request += "]}"
-    var parsed = PyJson.parse(resize_text(request))
+            append_ascii(request, ",")
+        append_ascii(request, String(pixels[index]))
+    append_ascii(request, "]}")
+    var parsed = PyJson.parse(resize_text(ascii_text(request)))
     return _bytes(
         parsed, parsed.at(parsed.root, "pixels"), out_w * out_h * bands
     )
@@ -370,17 +415,18 @@ def _resized(
 
 def _mask_alpha(rgb: List[Int], width: Int, height: Int) raises -> List[Int]:
     """Return the cut-out channel from `tools/carla_mask_channel.mojo`."""
-    var request = String('{"width":')
-    request += String(width)
-    request += ',"height":'
-    request += String(height)
-    request += ',"pixels":['
+    var request = List[UInt8]()
+    append_ascii(request, '{"width":')
+    append_ascii(request, String(width))
+    append_ascii(request, ',"height":')
+    append_ascii(request, String(height))
+    append_ascii(request, ',"pixels":[')
     for index in range(len(rgb)):
         if index > 0:
-            request += ","
-        request += String(rgb[index])
-    request += "]}"
-    var parsed = PyJson.parse(mask_text(request))
+            append_ascii(request, ",")
+        append_ascii(request, String(rgb[index]))
+    append_ascii(request, "]}")
+    var parsed = PyJson.parse(mask_text(ascii_text(request)))
     return _bytes(parsed, parsed.at(parsed.root, "pixels"), width * height)
 
 
@@ -443,19 +489,20 @@ def _compose(rgb: List[Int], alpha: List[Int]) raises -> List[Int]:
 
 def _emit(width: Int, height: Int, bands: Int, pixels: List[Int]) -> String:
     """Return one picture as JSON."""
-    var out = String('{"width":')
-    out += String(width)
-    out += ',"height":'
-    out += String(height)
-    out += ',"bands":'
-    out += String(bands)
-    out += ',"pixels":['
+    var out = List[UInt8]()
+    append_ascii(out, '{"width":')
+    append_ascii(out, String(width))
+    append_ascii(out, ',"height":')
+    append_ascii(out, String(height))
+    append_ascii(out, ',"bands":')
+    append_ascii(out, String(bands))
+    append_ascii(out, ',"pixels":[')
     for index in range(len(pixels)):
         if index > 0:
-            out += ","
-        out += String(pixels[index])
-    out += "]}"
-    return out^
+            append_ascii(out, ",")
+        append_ascii(out, String(pixels[index]))
+    append_ascii(out, "]}")
+    return ascii_text(out)
 
 
 def _mode_name(doc: PyJson, node: Int) raises -> String:

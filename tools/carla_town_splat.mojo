@@ -18,9 +18,32 @@ from std.math import ceil, floor, sqrt
 from std.pathlib import Path
 from std.sys import argv, exit, stderr
 
-from tools._python_float import parse_float, python_repr
+from tools._python_float import (
+    append_ascii,
+    ascii_text,
+    cached_repr,
+    parse_float,
+)
 from tools._python_json import PY_DICT, PY_FLOAT, PY_INT, PY_LIST, PyJson
 from tools.carla_town_cards import numpy_random
+
+
+@fieldwise_init
+struct SplatView(Movable):
+    """One drawn view. Each list has one sample per texel."""
+
+    var columns: Int
+    """The number of texels across the view."""
+    var rows: Int
+    """The number of texels down the view."""
+    var red: List[Float64]
+    """Red, row by row."""
+    var green: List[Float64]
+    """Green, row by row."""
+    var blue: List[Float64]
+    """Blue, row by row."""
+    var alpha: List[Float64]
+    """Alpha, row by row. A covered texel is 1."""
 
 
 def splat_text(text: String) raises -> String:
@@ -31,6 +54,21 @@ def splat_text(text: String) raises -> String:
 
     Returns:
         A JSON array of rows. Each texel is red, green, blue and alpha.
+
+    Raises:
+        Error: If the JSON is not that view, or an index is out of range.
+    """
+    return _format(splat_view(text))
+
+
+def splat_view(text: String) raises -> SplatView:
+    """Return one view as one sample per channel.
+
+    Args:
+        text: A JSON object with the view and its mesh parts.
+
+    Returns:
+        The texels. Empty texels are 0 until `fill` replaces them.
 
     Raises:
         Error: If the JSON is not that view, or an index is out of range.
@@ -498,8 +536,8 @@ def _paint(
     columns: Int,
     image_rows: Int,
     fill: Bool,
-) raises -> String:
-    """Keep the nearest sample in each texel and print the picture."""
+) raises -> SplatView:
+    """Keep the nearest sample in each texel."""
     var xs = List[Int]()
     var ys = List[Int]()
     var zs = List[Float64]()
@@ -539,27 +577,34 @@ def _paint(
             alpha[cell] = 1.0
     if fill:
         _mean_fill(red, green, blue, alpha)
-    var out = String("[")
-    for row in range(image_rows):
+    return SplatView(columns, image_rows, red^, green^, blue^, alpha^)
+
+
+def _format(view: SplatView) raises -> String:
+    """Return one view as JSON rows of RGBA texels."""
+    var out = List[UInt8]()
+    var cache = Dict[UInt64, String]()
+    append_ascii(out, "[")
+    for row in range(view.rows):
         if row > 0:
-            out += ", "
-        out += "["
-        for col in range(columns):
+            append_ascii(out, ", ")
+        append_ascii(out, "[")
+        for col in range(view.columns):
             if col > 0:
-                out += ", "
-            var cell = row * columns + col
-            out += "["
-            out += python_repr(red[cell])
-            out += ", "
-            out += python_repr(green[cell])
-            out += ", "
-            out += python_repr(blue[cell])
-            out += ", "
-            out += python_repr(alpha[cell])
-            out += "]"
-        out += "]"
-    out += "]"
-    return out^
+                append_ascii(out, ", ")
+            var cell = row * view.columns + col
+            append_ascii(out, "[")
+            append_ascii(out, cached_repr(view.red[cell], cache))
+            append_ascii(out, ", ")
+            append_ascii(out, cached_repr(view.green[cell], cache))
+            append_ascii(out, ", ")
+            append_ascii(out, cached_repr(view.blue[cell], cache))
+            append_ascii(out, ", ")
+            append_ascii(out, cached_repr(view.alpha[cell], cache))
+            append_ascii(out, "]")
+        append_ascii(out, "]")
+    append_ascii(out, "]")
+    return ascii_text(out)
 
 
 def _mean_fill(
@@ -592,7 +637,10 @@ def _mean_fill(
 
 
 def _mergesort(
-    mut order: List[Int], z: List[Float64], texel: List[Int], by_texel: Bool
+    mut order: List[Int],
+    ref z: List[Float64],
+    ref texel: List[Int],
+    by_texel: Bool,
 ):
     """Sort stably. Texel is the primary key. Larger depth wins inside it."""
     var aux = List[Int](length=len(order), fill=0)
@@ -604,8 +652,8 @@ def _merge_range(
     mut aux: List[Int],
     start: Int,
     end: Int,
-    z: List[Float64],
-    texel: List[Int],
+    ref z: List[Float64],
+    ref texel: List[Int],
     by_texel: Bool,
 ):
     """Sort `order[start:end]`."""
@@ -640,8 +688,8 @@ def _merge_range(
 def _before(
     right: Int,
     left: Int,
-    z: List[Float64],
-    texel: List[Int],
+    ref z: List[Float64],
+    ref texel: List[Int],
     by_texel: Bool,
 ) -> Bool:
     """Return whether `right` sorts before `left`."""

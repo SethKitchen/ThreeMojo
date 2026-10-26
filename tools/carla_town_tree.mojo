@@ -30,10 +30,10 @@ from tools._python_json import (
     PY_STR,
     PyJson,
 )
-from tools.carla_image_pack import pack_text
+from tools.carla_image_pack import joined_rgba
 from tools.carla_png import png_bytes
 from tools.carla_town_impostor import impostor_text
-from tools.carla_town_splat import splat_text
+from tools.carla_town_splat import SplatView, splat_view
 
 
 def tree_text(text: String) raises -> String:
@@ -105,8 +105,8 @@ def _draw(
     samples: Int,
     light: String,
     parts_json: String,
-) raises -> String:
-    """Return one view as a JSON picture."""
+) raises -> SplatView:
+    """Return one drawn view."""
     var request = String('{"mode":"axis","columns":')
     request += String(size)
     request += ',"rows":'
@@ -128,38 +128,49 @@ def _draw(
     request += ',"parts":'
     request += parts_json
     request += "}"
-    return splat_text(request)
+    return splat_view(request)
 
 
-def _write_png(path: String, size: Int, left: String, right: String) raises:
+def _write_png(
+    path: String, size: Int, left: SplatView, right: SplatView
+) raises:
     """Join two views and write the PNG."""
-    var packed = PyJson.parse(
-        pack_text(
-            '{"mode":"atlas","size":'
-            + String(size)
-            + ',"views":['
-            + left
-            + ","
-            + right
-            + "]}"
-        )
+    var left_width = left.columns
+    var left_height = left.rows
+    var right_width = right.columns
+    var right_height = right.rows
+    var values = joined_rgba(
+        _rgba(left),
+        left_width,
+        left_height,
+        _rgba(right),
+        right_width,
+        right_height,
+        size,
     )
-    var width = _whole(packed, packed.at(packed.root, "width"), "width")
-    var height = _whole(packed, packed.at(packed.root, "height"), "height")
-    var node = packed.at(packed.root, "pixels")
-    if packed.kind(node) != PY_LIST:
-        raise Error("pixels are not a list")
     var pixels = List[UInt8]()
-    for index in range(packed.length(node)):
-        var value = _whole(packed, packed.item(node, index), "pixel")
+    for index in range(len(values)):
+        var value = values[index]
         if value < 0 or value > 255:
             raise Error("pixel is out of range")
         pixels.append(UInt8(value))
-    var png = png_bytes("RGBA", width, height, pixels, True, 4, 6)
+    var png = png_bytes("RGBA", size * 2, size, pixels, True, 4, 6)
     var folder = _directory(path)
     if folder.byte_length() > 0:
         makedirs(folder, exist_ok=True)
     Path(path).write_bytes(Span(png))
+
+
+def _rgba(view: SplatView) -> List[Float64]:
+    """Return one view as interleaved RGBA samples."""
+    var count = view.columns * view.rows
+    var out = List[Float64]()
+    for index in range(count):
+        out.append(view.red[index])
+        out.append(view.green[index])
+        out.append(view.blue[index])
+        out.append(view.alpha[index])
+    return out^
 
 
 def _quads(frame_text: String) raises -> String:

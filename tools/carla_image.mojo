@@ -23,7 +23,12 @@ from std.pathlib import Path
 from std.sys import argv, exit, stderr
 
 from render.png import decode
-from tools._python_float import parse_float, python_repr
+from tools._python_float import (
+    append_ascii,
+    ascii_text,
+    parse_float,
+    python_repr,
+)
 from tools._python_json import MISSING, PY_DICT, PY_INT, PY_LIST, PyJson
 
 comptime _DECOMPRESS_BYTES = 632
@@ -92,19 +97,20 @@ def _emit(
     mode: String, width: Int, height: Int, pixels: List[UInt8]
 ) raises -> String:
     """Return the RGBA image as JSON."""
-    var out = String('{"mode":"')
-    out += mode
-    out += '","width":'
-    out += String(width)
-    out += ',"height":'
-    out += String(height)
-    out += ',"pixels":['
+    var out = List[UInt8]()
+    append_ascii(out, '{"mode":"')
+    append_ascii(out, mode)
+    append_ascii(out, '","width":')
+    append_ascii(out, String(width))
+    append_ascii(out, ',"height":')
+    append_ascii(out, String(height))
+    append_ascii(out, ',"pixels":[')
     for index in range(len(pixels)):
         if index > 0:
-            out += ","
-        out += String(Int(pixels[index]))
-    out += "]}"
-    return out^
+            append_ascii(out, ",")
+        append_ascii(out, String(Int(pixels[index])))
+    append_ascii(out, "]}")
+    return ascii_text(out)
 
 
 def _png_mode(data: List[UInt8]) raises -> String:
