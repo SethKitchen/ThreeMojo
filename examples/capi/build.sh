@@ -14,7 +14,7 @@
 #   web     threemojo_core.wasm, threemojo_water.wasm and threemojo_splat.wasm,
 #           and the page that runs them, in out/capi/web. The water also builds for many threads
 #           as threemojo_water_threads.wasm, which a page can run only when
-#           serve.mojo sends the headers that allow shared memory.
+#           capi_serve.mojo sends the headers that allow shared memory.
 #   host    threemojo_host and ThreeMojo.app, the macOS window (macOS only). The
 #           window draws the splats on Metal.
 #   gpu     libthreemojo_water_gpu, the water shaded on a GPU. It needs MAX and

@@ -336,6 +336,170 @@ The station helper name appears three times, only in the Map module.
 A comment or a string stays allowed.
 A new executable name is refused.
 
+Mojo checks the reviewed score predecessor.
+The score endpoint keeps its file digest and its token digest.
+The two score declarations keep their reviewed token digests.
+Reversing the two score edits restores the frontier endpoint.
+A changed score endpoint is refused.
+
+Mojo checks the reviewed frontier predecessor.
+The frontier endpoint keeps its file digest and its token digest.
+The two frontier edits keep their reviewed names.
+Reversing those edits restores the support endpoint.
+A changed frontier endpoint is refused.
+
+Mojo checks the reviewed support predecessor.
+The support endpoint keeps its file digest and its token digest.
+The three support edits keep their reviewed names.
+Reversing those edits restores the optional endpoint.
+A changed support endpoint is refused.
+
+Mojo checks the reviewed optional predecessor.
+The optional endpoint keeps its file digest and its token digest.
+The three optional edits keep their reviewed names.
+Reversing those edits restores the count endpoint.
+A changed optional endpoint is refused.
+
+Mojo checks the reviewed count predecessor.
+The count endpoint keeps its file digest and its token digest.
+The three count edits keep their reviewed names.
+Reversing those edits restores the historical Map.
+A changed count endpoint is refused.
+
+Mojo checks the reviewed count source.
+The historical Map stays an admitted source.
+The count endpoint reverses to that Map.
+Each admitted source keeps its token digest.
+A third Map variant is refused.
+
+Mojo checks the reviewed score-family predecessor.
+The deviation, station, and score endpoints project to one frontier.
+Each endpoint keeps its token digest.
+The score endpoint reverses through the two score edits.
+A third Map variant is refused.
+
+Mojo checks the reviewed score observables.
+The winner-seed caller keeps one upper assignment.
+That assignment is read as the score high.
+The fresh guard and the ordered debits match the historical caller.
+A missing assignment or a changed debit is refused.
+
+Mojo checks the reviewed seed-count premises.
+Forty-five declarations keep their score-era token digests.
+Map premises use the later guard digests.
+Road info premises come from the restored border pin.
+A changed premise is refused.
+
+Mojo checks the reviewed score-live premises.
+The score helper and the winner-seed caller keep their token digests.
+Three optional premises and eight support premises keep their digests.
+The score fixture keeps its file digest.
+A changed premise or a changed fixture is refused.
+
+Mojo checks the reviewed Map deviation declarations.
+The query certificate and the segment builder keep their token digests.
+Both declarations stay on Map.
+A changed query or a changed builder is refused.
+
+Mojo checks the reviewed shared-helper routing.
+Four consumers keep one reviewed import.
+Each helper call keeps its reviewed count.
+A local helper must not hide that import.
+A changed import or a changed call is refused.
+
+Mojo checks the reviewed distance helper successor.
+The live module keeps its file digest and its token digest.
+One import edit restores the local helpers.
+Those helpers match the interval module.
+A changed module or a changed helper is refused.
+
+Mojo checks the reviewed width-overflow witness.
+The live witness keeps its file digest and its token digest.
+Two formatting edits restore the historical witness.
+A changed witness or a missing edit is refused.
+
+Mojo checks the reviewed cubic operation graphs.
+Four modules keep their reviewed operation spans.
+Each span appears once.
+A missing span or a repeated span is refused.
+
+Mojo checks the reviewed shared-helper package files.
+Four package files keep their reviewed digests.
+A changed package file is refused.
+
+Mojo checks the reviewed PR760 implementation sources.
+Four predecessor texts keep their reviewed digests.
+Four successor modules keep their reviewed digests.
+A changed implementation source is refused.
+
+Mojo checks the reviewed PR780 bound inputs.
+Four bound tests keep their reviewed digests.
+A changed bound input is refused.
+
+Mojo checks the reviewed full-audit authority files.
+The cleanup record keeps its reviewed digest.
+The PR760 image and the owner predecessor keep their digests.
+The consumer ledger keeps its reviewed digest.
+A changed authority file is refused.
+
+Mojo checks the reviewed migration records.
+Seventeen records keep their reviewed digests.
+A changed migration record is refused.
+
+Mojo checks the reviewed typed-boundary new inputs.
+232 inputs keep their reviewed digests.
+A changed new input is refused.
+
+Mojo checks the reviewed typed-boundary tests.
+352 tests keep their reviewed digests.
+A changed test is refused.
+
+Mojo checks the reviewed typed-boundary binding inputs.
+Five binding inputs keep their reviewed digests.
+A changed binding input is refused.
+
+Mojo checks the reviewed typed-boundary current dependencies.
+497 dependencies keep their reviewed digests.
+A changed dependency is refused.
+
+Mojo checks the reviewed dependency checker bytes.
+Fifteen executing checkers keep their reviewed digests.
+Six public checkers keep their reviewed digests.
+A changed checker or a linked public checker is refused.
+
+Mojo checks the reviewed typed-boundary conditioned inputs.
+Five conditioned inputs keep their reviewed digests.
+Two contract leaves keep their reviewed digests.
+A changed conditioned input is refused.
+
+Mojo checks the reviewed PR760 registry inputs.
+392 inputs keep their reviewed digests.
+A changed registry input is refused.
+
+Mojo checks the reviewed density inputs.
+311 inputs keep their reviewed digests.
+A changed density input is refused.
+
+Mojo checks the reviewed protected authorities.
+44 authorities keep their reviewed digests.
+A changed protected authority is refused.
+
+Mojo checks the reviewed main rebase inputs.
+18 inputs keep their reviewed digests.
+A changed main input is refused.
+
+Mojo checks the reviewed construction-boundary inputs.
+24 inputs keep their reviewed digests.
+A changed construction-boundary input is refused.
+
+Mojo checks the reviewed density successor inputs.
+10 inputs keep their reviewed digests.
+A changed density successor input is refused.
+
+Mojo checks the reviewed PR776 bound inputs.
+5 inputs keep their reviewed digests.
+A changed PR776 bound input is refused.
+
 ## Candidate certificate
 
 A certificate contains a stored incumbent point and its road parameter.

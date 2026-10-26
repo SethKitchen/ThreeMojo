@@ -54,7 +54,7 @@ from objects.skinned_mesh import (
     SKIN_WEIGHT,
     require_skin_width,
 )
-from core.fog import EXP2_FOG, NO_FOG
+from core.fog import EXP2_FOG, NO_FOG, exp2_veil
 from core.geometry_store import GeometryId
 from core.object3d import NodeId
 from core.ordinal import ordinal_valid
@@ -79,13 +79,12 @@ from math.vector3 import Vector3
 from render.framebuffer import Color, FloatColor, Framebuffer, SrgbBytes
 from render.game_math import (
     GAME_LANES,
-    aces_tone,
-    exp2_veil,
     fast_sin,
     hemisphere_share,
     lambert,
 )
 from render.tasks import TaskGroup
+from render.tonemap import aces_tone
 from render.texture_store import TextureId
 from std.math import ceil, exp2, floor, inf, log2, max, min, sin, sqrt
 from std.memory import unsafe_memcpy

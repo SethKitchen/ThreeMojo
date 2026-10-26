@@ -58,7 +58,8 @@ def _find(paths: List[String], name: String) -> Int:
 
 
 def test_live_consumers_restore_their_border_pins() raises:
-    """Forty-one consumers and the geometry module restore their border pins."""
+    """Forty-five consumers and the geometry module restore their border pins.
+    """
     if sha256_hex(Path(_RECORD).read_bytes()) != _RECORD_SHA256:
         raise Error(
             "reviewed border parser successor: immutable successor record"
@@ -69,7 +70,7 @@ def test_live_consumers_restore_their_border_pins() raises:
     var paths = List[String]()
     var texts = List[String]()
     restored_border_pins(paths, texts)
-    assert_equal(len(paths), 41)
+    assert_equal(len(paths), 45)
     var geometry = restored_geometry()
     var direct = 0
     var index = 0
@@ -85,7 +86,7 @@ def test_live_consumers_restore_their_border_pins() raises:
             elif sha256_hex(Path(name).read_bytes()) == expected:
                 direct += 1
         index += 1
-    assert_equal(direct, 50)
+    assert_equal(direct, 46)
 
 
 def test_a_changed_border_pin_is_refused() raises:

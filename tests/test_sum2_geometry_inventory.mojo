@@ -9,7 +9,7 @@ from std.pathlib import Path
 from std.testing import TestSuite, assert_raises
 
 from tools._process import run_program
-from tools.sum2_geometry_inventory import sum2_geometry_inventory
+from tools._sum2_geometry_inventory import sum2_geometry_inventory
 
 
 comptime _MESSAGE = (

@@ -19,15 +19,25 @@ changes it:
 
 The walk leaves out the directories named in `SKIP` at any depth, and
 `coverage/build`. It does not enter a symbolic link to a directory.
+
+Each file enters the key as its path and the SHA-256 of its content. The
+digests are kept in `.cache/cache-key-files`, when `.cache` exists, with
+the size, the change and modification times and the inode of each file.
+A file whose four values are the same is not read again, as git's index
+works. A file that changed less than two seconds before that list was
+written is read again: a second change in the same clock tick would keep
+the same times. A key over an unchanged tree then costs a walk and a
+`stat` for each file, not a read of every byte.
 """
 
-from std.os import listdir
+from std.ffi import c_int, external_call
+from std.os import listdir, stat
 from std.os.path import isdir, islink
 from std.pathlib import Path
 from std.sys import argv, exit, stderr
 
 from tools._imports import sorted_strings
-from tools._sha256 import Sha256
+from tools._sha256 import Sha256, sha256_hex
 
 comptime SKIP = [
     ".git",
@@ -53,6 +63,117 @@ comptime SUFFIXES = [
     ".h",
 ]
 """The file kinds that are build inputs anywhere."""
+
+
+comptime MEMO = ".cache/cache-key-files"
+"""The digest list, below the root."""
+
+comptime RACY_NS = 2_000_000_000
+"""How close to the list's own write a change may be, in nanoseconds, and
+still be read again."""
+
+
+@fieldwise_init
+struct _Seen(Copyable, Movable):
+    """One file as the digest list saw it."""
+
+    var stamp: String
+    """The size, change time, modification time and inode, as text."""
+    var changed: Int
+    """The later of the change and modification times, in nanoseconds."""
+    var digest: String
+    """The SHA-256 of the content."""
+
+
+def _stamp(full: String) raises -> Tuple[String, Int]:
+    """Return what `stat` says of a file, and its latest time.
+
+    Args:
+        full: The file.
+
+    Returns:
+        The size, change time, modification time and inode as text, and
+        the later of the two times in nanoseconds.
+
+    Raises:
+        Error: If the file cannot be read.
+    """
+    var info = stat(full)
+    var modified = Int(info.st_mtimespec.tv_sec) * 1_000_000_000 + Int(
+        info.st_mtimespec.tv_nsec
+    )
+    var changed = Int(info.st_ctimespec.tv_sec) * 1_000_000_000 + Int(
+        info.st_ctimespec.tv_nsec
+    )
+    var text = (
+        String(Int(info.st_size))
+        + ":"
+        + String(changed)
+        + ":"
+        + String(modified)
+        + ":"
+        + String(Int(info.st_ino))
+    )
+    return (text, max(changed, modified))
+
+
+def _memo(root: String) -> Dict[String, _Seen]:
+    """Return the digests the last key wrote that can still be trusted.
+
+    Args:
+        root: The repository root.
+
+    Returns:
+        Each path whose entry predates the list's own write by more than
+        `RACY_NS`. Empty when there is no list or it cannot be read.
+    """
+    var seen = Dict[String, _Seen]()
+    var path = root + "/" + MEMO
+    try:
+        var written = _stamp(path)[1]
+        for line in Path(path).read_text().splitlines():
+            var fields = line.split(" ", 3)
+            if len(fields) != 4:
+                continue
+            var changed = Int(fields[1])
+            if changed + RACY_NS >= written:
+                continue
+            seen[String(fields[3])] = _Seen(
+                String(fields[0]), changed, String(fields[2])
+            )
+    except:
+        return Dict[String, _Seen]()
+    return seen^
+
+
+def _write_memo(root: String, lines: String):
+    """Replace the digest list in one step, if `.cache` exists.
+
+    Args:
+        root: The repository root.
+        lines: The new list.
+    """
+    if not isdir(root + "/.cache"):
+        return
+    var target = root + "/" + MEMO
+    var temporary = (
+        target + "." + String(Int(external_call["getpid", c_int]())) + ".tmp"
+    )
+    try:
+        Path(temporary).write_text(lines)
+        var source = List[UInt8](capacity=temporary.byte_length() + 1)
+        for byte in temporary.as_bytes():
+            source.append(byte)
+        source.append(0)
+        var destination = List[UInt8](capacity=target.byte_length() + 1)
+        for byte in target.as_bytes():
+            destination.append(byte)
+        destination.append(0)
+        _ = external_call["rename", c_int](
+            source.unsafe_ptr(), destination.unsafe_ptr()
+        )
+    except:
+        pass
 
 
 def _is_input(path: String, name: String) -> Bool:
@@ -160,10 +281,25 @@ def cache_key(root: String, settings: List[String]) raises -> String:
     var hash = Sha256()
     for setting in settings:
         _add(hash, setting.as_bytes())
+    var seen = _memo(root)
+    var lines = String()
+    var read = 0
     for path in input_paths(root):
+        var full = root + "/" + path
+        var stamp = _stamp(full)
+        var digest: String
+        var known = seen.get(path)
+        if known and known.value().stamp == stamp[0]:
+            digest = known.value().digest
+        else:
+            digest = sha256_hex(Span(Path(full).read_bytes()))
+            read += 1
         _add(hash, path.as_bytes())
-        var data = Path(root + "/" + path).read_bytes()
-        _add(hash, Span(data))
+        _add(hash, digest.as_bytes())
+        lines += stamp[0] + " " + String(stamp[1]) + " " + digest + " " + path
+        lines += "\n"
+    if read > 0:
+        _write_memo(root, lines)
     return String(hash^.hexdigest()[byte=:20])
 
 

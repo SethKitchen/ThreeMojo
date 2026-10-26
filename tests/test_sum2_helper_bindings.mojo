@@ -8,7 +8,7 @@
 from std.pathlib import Path
 from std.testing import TestSuite, assert_raises
 
-from tools.sum2_helper_bindings import sum2_helper_bindings
+from tools._sum2_helper_bindings import sum2_helper_bindings
 
 
 def _text(path: String) raises -> String:

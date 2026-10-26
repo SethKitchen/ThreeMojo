@@ -111,6 +111,7 @@ comptime BUILD_TOOLS = [
     "tools/example_inputs.mojo",
     "tools/run_suite.mojo",
     "tools/shell_log.mojo",
+    "tools/suite_tools.mojo",
 ]
 """The Mojo tools the Makefile runs to select, split, key and judge the checks. A
 change to one, or to any file it imports, changes the selection itself."""
@@ -133,6 +134,7 @@ comptime COVERAGE_TOOLS = [
     "tools/coverage_hit_faults.mojo",
     "tools/check_coverage_hit_profile.mojo",
     "tools/check_coverage_protocol.mojo",
+    "tools/check_build_tools.mojo",
 ]
 """The Mojo programs that `make test-coverage-tool` runs. A change to one, or
 to any file it imports, runs the coverage tool check."""

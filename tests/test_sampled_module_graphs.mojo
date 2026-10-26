@@ -9,7 +9,7 @@ from std.pathlib import Path
 from std.testing import TestSuite, assert_raises
 
 from tools._process import run_program
-from tools.sampled_module_graphs import (
+from tools._sampled_module_graphs import (
     primitive_graph,
     require_primitive,
     sampled_module_graphs,

@@ -10,8 +10,8 @@ from std.testing import TestSuite, assert_equal, assert_raises
 
 from tools._python_json import PyJson
 from tools._sha256 import sha256_hex
-from tools.spiral_moment_graph import selected_block
-from tools.spiral_moment_ideal import (
+from tools._spiral_moment_graph import selected_block
+from tools._spiral_moment_ideal import (
     ideal_spiral_layout,
     legacy_rate_half_commutations,
     require_legacy_rate_halves,

@@ -138,7 +138,11 @@ def test_a_head_is_placed_by_the_copy_matrix() raises:
             + "    heads = rng.normal(size=(int(rng.integers(1, 5)), 3))\n"
             + "    linear = rng.normal(size=(3, 3))\n"
             + "    move = rng.normal(size=3)\n"
-            + "    got = (heads @ linear.T + move).tolist()\n"
+            # Each product and sum rounded in turn, as the tool computes
+            # it. `heads @ linear.T` goes to BLAS, which may fuse a
+            # multiply and an add, so its last bit depends on the machine.
+            + "    got = (((heads[:, 0:1] * linear[:, 0] + heads[:, 1:2] *"
+            " linear[:, 1]) + heads[:, 2:3] * linear[:, 2]) + move).tolist()\n"
             + "    print(json.dumps({'heads': heads.tolist(), 'linear':"
             " linear.tolist(), 'move': move.tolist()}, separators=(',',"
             " ':')))\n"

@@ -64,8 +64,7 @@ from core.ordinal import ordinal_valid, require_valid
 from math.finite import require_non_negative_finite
 from math.smoothstep import smoothstep
 from render.framebuffer import Color, FloatColor
-from render.game_math import exp2_veil
-from std.math import exp, isfinite
+from std.math import exp, exp2, isfinite
 from units.si import InverseLength, Length, METER, PER_METER
 
 
@@ -236,6 +235,32 @@ def exp2_fog(
     var fog = Fog(EXP2_FOG, color, _NO_LENGTH, _NO_LENGTH, density)
     fog.validate()
     return fog
+
+
+comptime LOG2_E = Float32(1.4426950408889634)
+"""`log2(e)`, to take `exp(x)` as `exp2(x * LOG2_E)`."""
+
+
+@always_inline
+def exp2_veil[
+    w: Int
+](density: Float32, depth: SIMD[DType.float32, w]) -> SIMD[DType.float32, w]:
+    """Return how much of an exponential-squared fog's color shows.
+
+    Parameters:
+        w: The SIMD width.
+
+    Args:
+        density: How fast the fog thickens.
+        depth: The camera-space depth of each lane.
+
+    Returns:
+        `1 - exp(-(density * depth)^2)` for each lane, with the power
+        taken as `exp2` of the exponent times `log2(e)`: `exp2` is one
+        vector instruction on every width, and `exp` is a call a lane.
+    """
+    var scaled = density * depth
+    return 1 - exp2(-(scaled * scaled) * LOG2_E)
 
 
 def fog_factor(

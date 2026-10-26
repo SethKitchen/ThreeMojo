@@ -6289,9 +6289,9 @@ EDGES = json.loads(r'''
   },
   "tools/compile_fail_expectations.json": {
     "before_sha256": "cae00c1721392c75b10af5793e6de851d963350c8396e405ef0233c19af5b723",
-    "after_sha256": "14a1c703e3e3b7c5ba2f4fc3954a824124306f71ca2f9d9394f2f9768a4b9dad",
+    "after_sha256": "2383eb3c4f6b812c24b88bf777eb74809691036f5c9dc62b7fbce63b3b625a52",
     "before_token_sha256": "f4adb6494fee3e96a00ed12990e3c1979b42e31df987492561c08e8354ac4ba2",
-    "after_token_sha256": "70f6d2cf91222bfd5c960140358c42b6eaab50cc460a64f7dfa5749112aca8bf",
+    "after_token_sha256": "6b9ab7c588d1eb981ea9b993503e4f180b38ca2b45c09dd17d4e44865094c930",
     "edits": [
       {
         "start": 83,
@@ -6447,10 +6447,20 @@ EDGES = json.loads(r'''
         ]
       },
       {
-        "start": 2806,
-        "stop": 2818,
+        "start": 2808,
+        "stop": 2832,
         "before": [],
         "after": [
+          "  \"tests/compile_fail/a_plant_detail_is_not_a_bare_int.mojo\": {\n",
+          "    \"errors\": [\n",
+          "      {\n",
+          "        \"line\": 13,\n",
+          "        \"column\": 51,\n",
+          "        \"message\": \"invalid call to 'planted': value passed to 'plants' cannot be converted from 'IntLiteral[1]' to 'PlantDetail'\"\n",
+          "      }\n",
+          "    ],\n",
+          "    \"notes\": [\n",
+          "      \"function declared here\"\n",
           "    ]\n",
           "  },\n",
           "  \"tests/compile_fail/a_plant_kind_is_not_a_bare_int.mojo\": {\n",
@@ -6462,12 +6472,33 @@ EDGES = json.loads(r'''
           "      }\n",
           "    ],\n",
           "    \"notes\": [\n",
-          "      \"function declared here\"\n"
+          "      \"function declared here\"\n",
+          "    ]\n",
+          "  },\n"
         ]
       },
       {
-        "start": 3124,
-        "stop": 3154,
+        "start": 2944,
+        "stop": 2956,
+        "before": [],
+        "after": [
+          "      }\n",
+          "    ],\n",
+          "    \"notes\": [\n",
+          "      \"function declared here\"\n",
+          "    ]\n",
+          "  },\n",
+          "  \"tests/compile_fail/a_quality_preset_is_not_a_bare_int.mojo\": {\n",
+          "    \"errors\": [\n",
+          "      {\n",
+          "        \"line\": 12,\n",
+          "        \"column\": 32,\n",
+          "        \"message\": \"invalid call to 'game_quality': value passed to 'preset' cannot be converted from 'IntLiteral[0]' to 'QualityPreset'\"\n"
+        ]
+      },
+      {
+        "start": 3148,
+        "stop": 3178,
         "before": [],
         "after": [
           "  \"tests/compile_fail/a_scale_source_is_not_a_bare_int.mojo\": {\n",
@@ -6503,8 +6534,25 @@ EDGES = json.loads(r'''
         ]
       },
       {
-        "start": 3427,
-        "stop": 3439,
+        "start": 3357,
+        "stop": 3367,
+        "before": [],
+        "after": [
+          "  \"tests/compile_fail/a_shadow_mode_is_not_a_bare_int.mojo\": {\n",
+          "    \"errors\": [\n",
+          "      {\n",
+          "        \"line\": 13,\n",
+          "        \"column\": 24,\n",
+          "        \"message\": \"cannot implicitly convert 'IntLiteral[2]' value to 'ShadowMode'\"\n",
+          "      }\n",
+          "    ],\n",
+          "    \"notes\": []\n",
+          "  },\n"
+        ]
+      },
+      {
+        "start": 3461,
+        "stop": 3473,
         "before": [],
         "after": [
           "  \"tests/compile_fail/a_slot_is_not_a_bare_int.mojo\": {\n",
@@ -6522,8 +6570,8 @@ EDGES = json.loads(r'''
         ]
       },
       {
-        "start": 3445,
-        "stop": 3457,
+        "start": 3479,
+        "stop": 3491,
         "before": [],
         "after": [
           "      }\n",
@@ -6541,11 +6589,10 @@ EDGES = json.loads(r'''
         ]
       },
       {
-        "start": 3554,
-        "stop": 3564,
+        "start": 3589,
+        "stop": 3599,
         "before": [],
         "after": [
-          "  },\n",
           "  \"tests/compile_fail/a_splat_model_is_not_a_bare_int.mojo\": {\n",
           "    \"errors\": [\n",
           "      {\n",
@@ -6554,12 +6601,32 @@ EDGES = json.loads(r'''
           "        \"message\": \"cannot implicitly convert 'IntLiteral[0]' value to 'SplatModel'\"\n",
           "      }\n",
           "    ],\n",
-          "    \"notes\": []\n"
+          "    \"notes\": []\n",
+          "  },\n"
         ]
       },
       {
-        "start": 4467,
-        "stop": 4479,
+        "start": 3639,
+        "stop": 3651,
+        "before": [],
+        "after": [
+          "      }\n",
+          "    ],\n",
+          "    \"notes\": [\n",
+          "      \"function declared here\"\n",
+          "    ]\n",
+          "  },\n",
+          "  \"tests/compile_fail/a_stance_is_not_a_bare_int.mojo\": {\n",
+          "    \"errors\": [\n",
+          "      {\n",
+          "        \"line\": 12,\n",
+          "        \"column\": 19,\n",
+          "        \"message\": \"invalid call to 'clip_of': value passed to 'stance' cannot be converted from 'IntLiteral[2]' to 'Stance'\"\n"
+        ]
+      },
+      {
+        "start": 4513,
+        "stop": 4525,
         "before": [],
         "after": [
           "  \"tests/compile_fail/a_wear_kind_is_not_a_bare_int.mojo\": {\n",
@@ -6577,8 +6644,8 @@ EDGES = json.loads(r'''
         ]
       },
       {
-        "start": 4980,
-        "stop": 4992,
+        "start": 5026,
+        "stop": 5038,
         "before": [],
         "after": [
           "      }\n",
@@ -17354,22 +17421,23 @@ EDGES = json.loads(r'''
   },
   "tests/test_water.mojo": {
     "before_sha256": "179f2cb6ef20a44c9f862453d56fdb967b5ba1c6978996ecc750f7da3a4e5d7a",
-    "after_sha256": "faa1c48d6d95dad5270b848c34a1227c55af0c04678d43a3b34bc1903011f2dd",
+    "after_sha256": "e6aa25d0d73c8bbc28df3e80e85741c030f8dde4ff1bd859b5f766944923a838",
     "before_token_sha256": "cd69d45240dd263bfdb1212253e04b8487c2282a06943ef26770c34ae4a6e415",
-    "after_token_sha256": "75b25fc22bc218f85b07f7306659729eab8002d590ff0917c61463cb82761d66",
+    "after_token_sha256": "eddf66c2e98af2602ed7512c672dd999d4c9311e7ae0c23680edb53fc1d31f95",
     "edits": [
       {
         "start": 17,
-        "stop": 19,
+        "stop": 20,
         "before": [],
         "after": [
+          "    _Splat,\n",
           "    _caustic_high,\n",
           "    _caustic_low,\n"
         ]
       },
       {
-        "start": 26,
-        "stop": 27,
+        "start": 27,
+        "stop": 28,
         "before": [
           "from extensions.water.filter import anisotropic_step\n"
         ],
@@ -17378,8 +17446,17 @@ EDGES = json.loads(r'''
         ]
       },
       {
-        "start": 266,
-        "stop": 275,
+        "start": 35,
+        "stop": 37,
+        "before": [],
+        "after": [
+          "    _at_rest,\n",
+          "    _height_bound,\n"
+        ]
+      },
+      {
+        "start": 269,
+        "stop": 278,
         "before": [],
         "after": [
           "    var missing_x = sample_ripple(field, nan[DType.float32](), 0.0)\n",
@@ -17394,8 +17471,8 @@ EDGES = json.loads(r'''
         ]
       },
       {
-        "start": 361,
-        "stop": 363,
+        "start": 364,
+        "stop": 366,
         "before": [],
         "after": [
           "    with assert_raises(contains=\"larger than this port\"):\n",
@@ -17403,8 +17480,8 @@ EDGES = json.loads(r'''
         ]
       },
       {
-        "start": 382,
-        "stop": 398,
+        "start": 385,
+        "stop": 401,
         "before": [],
         "after": [
           "    with assert_raises(contains=\"larger than this port\"):\n",
@@ -17426,8 +17503,8 @@ EDGES = json.loads(r'''
         ]
       },
       {
-        "start": 476,
-        "stop": 486,
+        "start": 479,
+        "stop": 489,
         "before": [],
         "after": [
           "    # A Float32 height of 2^25 + 1 is 2^25, so the wide side rounds to 2.\n",
@@ -17443,8 +17520,8 @@ EDGES = json.loads(r'''
         ]
       },
       {
-        "start": 503,
-        "stop": 524,
+        "start": 506,
+        "stop": 527,
         "before": [],
         "after": [
           "    # A width past 2^24 is not a whole `Float32`. The last column and the\n",
@@ -17471,8 +17548,8 @@ EDGES = json.loads(r'''
         ]
       },
       {
-        "start": 875,
-        "stop": 925,
+        "start": 878,
+        "stop": 928,
         "before": [],
         "after": [
           "    var values = List[Float32]()\n",
@@ -17528,8 +17605,8 @@ EDGES = json.loads(r'''
         ]
       },
       {
-        "start": 1134,
-        "stop": 1156,
+        "start": 1137,
+        "stop": 1159,
         "before": [],
         "after": [
           "    # 2^63 meters is not a texel index. The patch is 8 m, so it repeats\n",
@@ -17557,8 +17634,8 @@ EDGES = json.loads(r'''
         ]
       },
       {
-        "start": 1160,
-        "stop": 1164,
+        "start": 1163,
+        "stop": 1167,
         "before": [],
         "after": [
           "    var missing_u = sample_pebble(bed, nan[DType.float32](), 0.5)\n",
@@ -17568,8 +17645,8 @@ EDGES = json.loads(r'''
         ]
       },
       {
-        "start": 1167,
-        "stop": 1177,
+        "start": 1170,
+        "stop": 1180,
         "before": [],
         "after": [
           "    var missing_grad = sample_pebble_grad(\n",
@@ -17582,6 +17659,155 @@ EDGES = json.loads(r'''
           "    assert_almost_equal(missing_grad_v.r, 0)\n",
           "    with assert_raises(contains=\"larger than this port\"):\n",
           "        _ = PebbleBed(1 << 31, 1 << 31, List[Float32]())\n"
+        ]
+      },
+      {
+        "start": 1204,
+        "stop": 1205,
+        "before": [
+          "    var image = CausticField(1, Length(1))\n"
+        ],
+        "after": [
+          "    var plane = List[Float32](length=1, fill=0)\n"
+        ]
+      },
+      {
+        "start": 1208,
+        "stop": 1226,
+        "before": [],
+        "after": [
+          "    # One texel on a patch of a meter, the green channel, no shift.\n",
+          "    var splat = _Splat(1, 1, 1, 1, 0, 0, 0.5, 1)\n",
+          "    var out = plane.unsafe_ptr().unsafe_origin_cast[MutAnyOrigin]()\n",
+          "    var xs = (\n",
+          "        x.unsafe_ptr()\n",
+          "        .unsafe_mut_cast[False]()\n",
+          "        .unsafe_origin_cast[ImmutAnyOrigin]()\n",
+          "    )\n",
+          "    var zs = (\n",
+          "        z.unsafe_ptr()\n",
+          "        .unsafe_mut_cast[False]()\n",
+          "        .unsafe_origin_cast[ImmutAnyOrigin]()\n",
+          "    )\n",
+          "    var lives = (\n",
+          "        live.unsafe_ptr()\n",
+          "        .unsafe_mut_cast[False]()\n",
+          "        .unsafe_origin_cast[ImmutAnyOrigin]()\n",
+          "    )\n"
+        ]
+      },
+      {
+        "start": 1227,
+        "stop": 1229,
+        "before": [
+          "    _splat(image, x, z, live, 0, 1, 2, 1, 0, 0, 0, 0, 0.5, 1)\n",
+          "    assert_almost_equal(image.channel(0, 0, 1), Float32(0))\n"
+        ],
+        "after": [
+          "    _splat(out, xs, zs, lives, 0, 1, 2, 0, 0, splat)\n",
+          "    assert_almost_equal(plane[0], Float32(0))\n"
+        ]
+      },
+      {
+        "start": 1237,
+        "stop": 1242,
+        "before": [
+          "    _splat(image, x, z, live, 0, 1, 2, 1, 0, 0, 0, 0, 0.5, 1)\n",
+          "    assert_almost_equal(image.channel(0, 0, 1), Float32(40))\n"
+        ],
+        "after": [
+          "    _splat(out, xs, zs, lives, 0, 1, 2, 0, 0, splat)\n",
+          "    assert_almost_equal(plane[0], Float32(40))\n",
+          "    _ = len(x)\n",
+          "    _ = len(z)\n",
+          "    _ = len(live)\n"
+        ]
+      },
+      {
+        "start": 1951,
+        "stop": 1953,
+        "before": [],
+        "after": [
+          "        _height_bound(surface, water._ripples),\n",
+          "        False,\n"
+        ]
+      },
+      {
+        "start": 2179,
+        "stop": 2250,
+        "before": [],
+        "after": [
+          "def test_cheaper_water_shades_a_grid_and_keeps_its_surface() raises:\n",
+          "    var stones = _stones()\n",
+          "    var width = 29\n",
+          "    var height = 41\n",
+          "    var camera = _page_camera(width, height)\n",
+          "    var fine = _scene(Duration(5.0, SECOND))\n",
+          "    var coarse = _scene(Duration(5.0, SECOND))\n",
+          "    coarse.shade_step = 4\n",
+          "    coarse.refresh_every = 3\n",
+          "    var one = Framebuffer(width, height, Color(0, 0, 0))\n",
+          "    var two = Framebuffer(width, height, Color(0, 0, 0))\n",
+          "    var drawn = fine.compose(one, camera, Length(0.0, METER), stones)\n",
+          "    assert_true(drawn > 0)\n",
+          "    assert_true(coarse.compose(two, camera, Length(0.0, METER), stones) > 0)\n",
+          "    # Shaded on a grid and mixed between, the water is near the fine one.\n",
+          "    var near = 0\n",
+          "    for i in range(width * height):\n",
+          "        var a = one.pixels[i * 4]\n",
+          "        var b = two.pixels[i * 4]\n",
+          "        if abs(Int(a) - Int(b)) < 40:\n",
+          "            near += 1\n",
+          "    assert_true(near > width * height * 3 // 4)\n",
+          "    # An eye just above the still water, below the highest wave, tests\n",
+          "    # every pixel where the waves are.\n",
+          "    var low = _page_camera(width, height)\n",
+          "    low.place(Vector3(0, 0.002, 0), Vector3(0, -0.5, -3))\n",
+          "    var skim = Framebuffer(width, height, Color(0, 0, 0))\n",
+          "    assert_true(fine.compose(skim, low, Length(0.0, METER), stones) > 0)\n",
+          "    # The surface found on the third call is shown from the fourth.\n",
+          "    for _ in range(4):\n",
+          "        var frame = Framebuffer(width, height, Color(0, 0, 0))\n",
+          "        _ = coarse.compose(frame, camera, Length(0.0, METER), stones)\n",
+          "    assert_false(Bool(coarse._surface_next))\n",
+          "    # A view with no water rows draws nothing.\n",
+          "    var sky = Framebuffer(width, height, Color(0, 0, 0))\n",
+          "    for i in range(width * height):\n",
+          "        sky.depth[i] = -1\n",
+          "    assert_equal(coarse.compose(sky, camera, Length(0.0, METER), stones), 0)\n",
+          "    with assert_raises(contains=\"shade step\"):\n",
+          "        coarse.shade_step = 0\n",
+          "        _ = coarse.compose(sky, camera, Length(0.0, METER), stones)\n",
+          "    with assert_raises(contains=\"shade step\"):\n",
+          "        coarse.shade_step = 65\n",
+          "        _ = coarse.compose(sky, camera, Length(0.0, METER), stones)\n",
+          "    with assert_raises(contains=\"refresh\"):\n",
+          "        coarse.shade_step = 2\n",
+          "        coarse.refresh_every = 0\n",
+          "        _ = coarse.compose(sky, camera, Length(0.0, METER), stones)\n",
+          "\n",
+          "\n",
+          "def test_calm_ripples_skip_their_step_and_caustics_split_by_channel() raises:\n",
+          "    var water = _scene(Duration(5.0, SECOND))\n",
+          "    water.advance(Duration(1.0 / 60.0, SECOND), False)\n",
+          "    assert_true(water._calm)\n",
+          "    var still = water._ripples.normal.copy()\n",
+          "    water.advance(Duration(1.0 / 60.0, SECOND), False)\n",
+          "    assert_true(water._ripples.normal == still)\n",
+          "    water.reset()\n",
+          "    assert_false(water._calm)\n",
+          "    # A window that is level but still moving is not at rest.\n",
+          "    water._ripples.velocity[3] = 0.01\n",
+          "    assert_false(_at_rest(water._ripples))\n",
+          "    # One worker splats the channels in turn; every core gives its bits.\n",
+          "    var surface = water._surface()\n",
+          "    water.workers = 1\n",
+          "    var serial = water._caustics(surface)\n",
+          "    water.workers = 0\n",
+          "    var parallel = water._caustics(surface)\n",
+          "    assert_true(serial.samples == parallel.samples)\n",
+          "\n",
+          "\n"
         ]
       }
     ]
@@ -17620,6 +17846,279 @@ EDGES = json.loads(r'''
         ]
       }
     ]
+  },
+  "core/fog.mojo": {
+    "before_sha256": "8026f0db83e2eef31d0e63793f65a449cb9eebae917e081e950a851ab98ca66c",
+    "after_sha256": "5fc886a7eb9fdc5e78a9f68bfec300db4d88e95d14c3c6fa8af2add0abfdd342",
+    "before_token_sha256": "f9977a301ec01207ac7e7ab352e95305d7c7e1b611c3a7a85dbeea92ee498261",
+    "after_token_sha256": "f61b6984ab2c72744a6f681956f22410d5627efbd6e25304c47fa76c3ff36810",
+    "edits": [
+      {
+        "start": 66,
+        "stop": 67,
+        "before": [
+          "from std.math import exp, isfinite\n"
+        ],
+        "after": [
+          "from std.math import exp, exp2, isfinite\n"
+        ]
+      },
+      {
+        "start": 239,
+        "stop": 265,
+        "before": [],
+        "after": [
+          "comptime LOG2_E = Float32(1.4426950408889634)\n",
+          "\"\"\"`log2(e)`, to take `exp(x)` as `exp2(x * LOG2_E)`.\"\"\"\n",
+          "\n",
+          "\n",
+          "@always_inline\n",
+          "def exp2_veil[\n",
+          "    w: Int\n",
+          "](density: Float32, depth: SIMD[DType.float32, w]) -> SIMD[DType.float32, w]:\n",
+          "    \"\"\"Return how much of an exponential-squared fog's color shows.\n",
+          "\n",
+          "    Parameters:\n",
+          "        w: The SIMD width.\n",
+          "\n",
+          "    Args:\n",
+          "        density: How fast the fog thickens.\n",
+          "        depth: The camera-space depth of each lane.\n",
+          "\n",
+          "    Returns:\n",
+          "        `1 - exp(-(density * depth)^2)` for each lane, with the power\n",
+          "        taken as `exp2` of the exponent times `log2(e)`: `exp2` is one\n",
+          "        vector instruction on every width, and `exp` is a call a lane.\n",
+          "    \"\"\"\n",
+          "    var scaled = density * depth\n",
+          "    return 1 - exp2(-(scaled * scaled) * LOG2_E)\n",
+          "\n",
+          "\n"
+        ]
+      },
+      {
+        "start": 293,
+        "stop": 294,
+        "before": [
+          "        var scaled = density * depth\n",
+          "        return 1 - exp(-scaled * scaled)\n"
+        ],
+        "after": [
+          "        return exp2_veil[1](density, depth)\n"
+        ]
+      }
+    ]
+  },
+  "core/geometry_store.mojo": {
+    "before_sha256": "c42cde4b1e8c5668b138d462a997ac23d36cfe9789cddd22eaee142a2cec6f06",
+    "after_sha256": "771d8d8b068353bf23c0f572511c981a2a67c375cfaa2b8c63a5a5ab103a16c3",
+    "before_token_sha256": "095e5b75ab174c143d40a630c09ad230114fa2052e50fef1c47944c5f7f8f5c0",
+    "after_token_sha256": "cf12dc2c69d05624c5a04ed6e9362d436ddf65a4e01f74a423cca56e8ed1823d",
+    "edits": [
+      {
+        "start": 47,
+        "stop": 50,
+        "before": [],
+        "after": [
+          "    # How many times each geometry has been replaced. A cache of a\n",
+          "    # geometry's data reads it again when this changes.\n",
+          "    var _generations: List[Int]\n"
+        ]
+      },
+      {
+        "start": 59,
+        "stop": 60,
+        "before": [],
+        "after": [
+          "        self._generations = List[Int]()\n"
+        ]
+      },
+      {
+        "start": 76,
+        "stop": 84,
+        "before": [
+          "        return GeometryId(len(self.geometries) - 1)\n"
+        ],
+        "after": [
+          "        var index = len(self.geometries) - 1\n",
+          "        # A caller that popped a geometry off `geometries` reuses its id,\n",
+          "        # and the id's new geometry must read as changed.\n",
+          "        if index < len(self._generations):\n",
+          "            self._generations[index] += 1\n",
+          "        else:\n",
+          "            self._generations.append(0)\n",
+          "        return GeometryId(index)\n"
+        ]
+      },
+      {
+        "start": 136,
+        "stop": 157,
+        "before": [],
+        "after": [
+          "        self._generations[id.value] += 1\n",
+          "\n",
+          "    def generation(self, id: GeometryId) raises -> Int:\n",
+          "        \"\"\"Return how many times a geometry has been replaced.\n",
+          "\n",
+          "        A cache of a geometry's data keeps the generation it read, and reads\n",
+          "        the geometry again when `replace` gives it a new one. A geometry\n",
+          "        changed in place through `geometries` keeps its generation.\n",
+          "\n",
+          "        Args:\n",
+          "            id: Which geometry.\n",
+          "\n",
+          "        Returns:\n",
+          "            Zero for a geometry never replaced, and one more for each\n",
+          "            `replace`.\n",
+          "\n",
+          "        Raises:\n",
+          "            Error: If no geometry has that id.\n",
+          "        \"\"\"\n",
+          "        self._require_geometry(id)\n",
+          "        return self._generations[id.value]\n"
+        ]
+      }
+    ]
+  },
+  "render/tonemap.mojo": {
+    "before_sha256": "b76247c94eb39a631b0b0cc24711e29babc23ef5fc1fd20b99ea4ea561995f5e",
+    "after_sha256": "3728b3c1585ba0a2c62745c6f0752cd42d4298de184c1886b292ef530117f85a",
+    "before_token_sha256": "2f181f1b161344e188b9a9b96c4a024b877856e27ee2686f3937f6936b3f90be",
+    "after_token_sha256": "cba4eb4dd92cb96f307042ecd2bffc387dd316ae88dc252cf1c9022c22e1e72b",
+    "edits": [
+      {
+        "start": 191,
+        "stop": 225,
+        "before": [
+          "def _rrt_and_odt_fit(v: Float32) -> Float32:\n",
+          "    \"\"\"One channel of three.js's `RRTAndODTFit`, the ACES curve itself.\"\"\"\n"
+        ],
+        "after": [
+          "@always_inline\n",
+          "def saturate_lanes[\n",
+          "    w: Int\n",
+          "](value: SIMD[DType.float32, w]) -> SIMD[DType.float32, w]:\n",
+          "    \"\"\"Return each lane held from zero to one, as GLSL's `saturate`.\n",
+          "\n",
+          "    `max(0, min(1, value))`, the operations of `math.utils.saturate` in\n",
+          "    its order, so a lane gives the bits that the scalar call gives.\n",
+          "\n",
+          "    Parameters:\n",
+          "        w: The SIMD width.\n",
+          "\n",
+          "    Args:\n",
+          "        value: The lanes.\n",
+          "\n",
+          "    Returns:\n",
+          "        Each lane within zero and one.\n",
+          "    \"\"\"\n",
+          "    return max(SIMD[DType.float32, w](0), min(SIMD[DType.float32, w](1), value))\n",
+          "\n",
+          "\n",
+          "@always_inline\n",
+          "def aces_fit[w: Int](v: SIMD[DType.float32, w]) -> SIMD[DType.float32, w]:\n",
+          "    \"\"\"Return three.js's `RRTAndODTFit`, the ACES curve itself, on each lane.\n",
+          "\n",
+          "    Parameters:\n",
+          "        w: The SIMD width.\n",
+          "\n",
+          "    Args:\n",
+          "        v: One channel in the ACES working primaries.\n",
+          "\n",
+          "    Returns:\n",
+          "        The fitted channel.\n",
+          "    \"\"\"\n"
+        ]
+      },
+      {
+        "start": 228,
+        "stop": 274,
+        "before": [],
+        "after": [
+          "\n",
+          "\n",
+          "@always_inline\n",
+          "def aces_tone[\n",
+          "    w: Int\n",
+          "](\n",
+          "    r: SIMD[DType.float32, w],\n",
+          "    g: SIMD[DType.float32, w],\n",
+          "    b: SIMD[DType.float32, w],\n",
+          "    exposure: Float32,\n",
+          ") -> Tuple[\n",
+          "    SIMD[DType.float32, w], SIMD[DType.float32, w], SIMD[DType.float32, w]\n",
+          "]:\n",
+          "    \"\"\"Return three.js's `ACESFilmicToneMapping` of linear light.\n",
+          "\n",
+          "    Scaled by the exposure over 0.6, into the ACES working primaries by\n",
+          "    `ACESInputMat`, through `aces_fit`, back out by `ACESOutputMat`, and\n",
+          "    clamped.\n",
+          "\n",
+          "    Parameters:\n",
+          "        w: The SIMD width.\n",
+          "\n",
+          "    Args:\n",
+          "        r: The red channel, linear.\n",
+          "        g: The green channel, linear.\n",
+          "        b: The blue channel, linear.\n",
+          "        exposure: The exposure.\n",
+          "\n",
+          "    Returns:\n",
+          "        The tone-mapped red, green and blue, each from zero to one.\n",
+          "    \"\"\"\n",
+          "    var scale = exposure / 0.6\n",
+          "    var sr = r * scale\n",
+          "    var sg = g * scale\n",
+          "    var sb = b * scale\n",
+          "    var ir = 0.59719 * sr + 0.35458 * sg + 0.04823 * sb\n",
+          "    var ig = 0.07600 * sr + 0.90834 * sg + 0.01566 * sb\n",
+          "    var ib = 0.02840 * sr + 0.13383 * sg + 0.83777 * sb\n",
+          "    var fr = aces_fit(ir)\n",
+          "    var fg = aces_fit(ig)\n",
+          "    var fb = aces_fit(ib)\n",
+          "    return (\n",
+          "        saturate_lanes(1.60475 * fr - 0.53108 * fg - 0.07367 * fb),\n",
+          "        saturate_lanes(-0.10208 * fr + 1.10813 * fg - 0.00605 * fb),\n",
+          "        saturate_lanes(-0.00327 * fr - 0.07276 * fg + 1.07602 * fb),\n",
+          "    )\n"
+        ]
+      },
+      {
+        "start": 283,
+        "stop": 284,
+        "before": [
+          "    has no matrix type.\n"
+        ],
+        "after": [
+          "    has no matrix type. `aces_tone` at width one.\n"
+        ]
+      },
+      {
+        "start": 285,
+        "stop": 287,
+        "before": [
+          "    var scale = exposure / 0.6\n",
+          "    var sr = r * scale\n",
+          "    var sg = g * scale\n",
+          "    var sb = b * scale\n",
+          "    var ir = 0.59719 * sr + 0.35458 * sg + 0.04823 * sb\n",
+          "    var ig = 0.07600 * sr + 0.90834 * sg + 0.01566 * sb\n",
+          "    var ib = 0.02840 * sr + 0.13383 * sg + 0.83777 * sb\n",
+          "    var fr = _rrt_and_odt_fit(ir)\n",
+          "    var fg = _rrt_and_odt_fit(ig)\n",
+          "    var fb = _rrt_and_odt_fit(ib)\n",
+          "    return FloatColor(\n",
+          "        saturate(1.60475 * fr - 0.53108 * fg - 0.07367 * fb),\n",
+          "        saturate(-0.10208 * fr + 1.10813 * fg - 0.00605 * fb),\n",
+          "        saturate(-0.00327 * fr - 0.07276 * fg + 1.07602 * fb),\n",
+          "    )\n"
+        ],
+        "after": [
+          "    var toned = aces_tone[1](r, g, b, exposure)\n",
+          "    return FloatColor(toned[0], toned[1], toned[2])\n"
+        ]
+      }
+    ]
   }
 }
 ''')
@@ -17629,7 +18128,9 @@ BOUND_INPUTS = {'tests/test_anatomy_muscle.mojo': '3653d6056c1f9f639537eedb7cd80
  'tools/carla_lane_oracle/test_pr780_source_successor.py': 'fad1fe54f34c47efeff20f5d26f3c644dcc6eb129848290bada4235215815606'}
 EDGE_SHA256 = {'core/deform.mojo': 'b6afec67eea77b1a76cae98df1b4399de366b2a82878edf56aa1b53d26c046e9',
  'core/extent.mojo': '3bde830a747999835ef471ceba2eac3e73bbff4e300162851a8096a194a58726',
+ 'core/fog.mojo': '169cba41367e8b43aa03669352d7cd95b4cbda487c1a2cbd9ec5b762268e8083',
  'core/gaussian_splat_utils.mojo': 'f2cfee48e9ad27ec981475898fc9be0b00e0f89c11d14c1f8775d6354e44aaef',
+ 'core/geometry_store.mojo': 'abc0642924c935f50f727de2bfb9ebe5e6ef00f1bf3cb21c2090c15e15f20483',
  'core/morph.mojo': '920451971fca0b7d64687981ecea353290f959fa88cc8a6406dd4b070119d25a',
  'core/raycaster.mojo': 'da6491a955938b7fd883bd44ad72b0d2c20ee978e8156e98a120e263d18c4d95',
  'extensions/carla/agents.mojo': '7dc1f0300ff6b23cbd8d6190647ca17c544baeaa826d1085863a5e3a51eb3477',
@@ -17730,6 +18231,7 @@ EDGE_SHA256 = {'core/deform.mojo': 'b6afec67eea77b1a76cae98df1b4399de366b2a82878
  'render/target.mojo': '5d33e908ee6d26cee44948ff3800f48cda2759a5f7ca0e3e8993c2b377df76ee',
  'render/tasks.mojo': 'b8dfd9c3417ae3c05156a394811e45a7eb7a990cedb22f8d21652053d9ce61a6',
  'render/texture.mojo': '18bbc1aad072aa0114ebf4a32dc78cc8455e169fbdd755d394736bdae9d14c28',
+ 'render/tonemap.mojo': '9b7ec9c567c09176ccd5b338302b4d59985869c7035855754b819444464f1065',
  'render/transmission.mojo': 'bb1b8248c04478e3845e9f1b4f76e18f0294f0181ac3ae5d23ed093124d938c4',
  'render/uastc.mojo': 'e6833f17255cf058e2f4356e45c0fc7123d971c524fadd0fd3dda02d9d590a77',
  'render/uastc_hdr.mojo': 'a5b7c10868d00d06ec33ea6f8c8b42ad836e8f833a413b6b9b484a6e5cc0def4',
@@ -17863,7 +18365,7 @@ EDGE_SHA256 = {'core/deform.mojo': 'b6afec67eea77b1a76cae98df1b4399de366b2a82878
  'tests/test_vxgi_node.mojo': 'a9b81a644740f46bf692bbfe358960aec2f38ef491b72cd0fba05f979fb1df81',
  'tests/test_vxgi_scene_collector.mojo': '56b671e6a45634e3ebcce39dd30dbc6b2a741d88d8669a2cfb9d16535dbdad02',
  'tests/test_vxgi_volume.mojo': '0f184955ac3f6bb95f8a9b432a3f7d0b9efc3b8d65b70b2d2f5fb7110aef9bfd',
- 'tests/test_water.mojo': '708a0e061299031881e39b0c1fd4c080d370ad6d92a77abf680bbf34ddea5d51',
+ 'tests/test_water.mojo': 'ca06948cf38d875767eac56f56daca02ecf819c7ae528bb245a643fd4609feb5',
  'tests/test_wide_line_workers.mojo': '2df16a02373e7f1145573f41df89971d8483ddddd1439607c114642f3a0e2b09',
  'tests/test_wide_lines.mojo': '7682cd7250d40b39523caf930ca435d094260c23881fcea0a0d37fdc3029ec5f',
  'tools/carla_lane_oracle/source_contracts.py': 'ea592d2bfda0604aff24f0262afe164980221d12138eaa6e8fd485bc2539095a',
@@ -17874,9 +18376,9 @@ EDGE_SHA256 = {'core/deform.mojo': 'b6afec67eea77b1a76cae98df1b4399de366b2a82878
  'tools/carla_lane_oracle/test_typed_owned_operations.py': '56a59b04408d344079048ccc8a32e3a5c0e1af4505cb06aa281c01364738b1eb',
  'tools/carla_lane_oracle/test_witness_format_contracts.py': '554b6db980e099747c3d536eaf722f210f0f17d3f78983cf08bb180c588a22ae',
  'tools/carla_lane_oracle/translated_parameter_resolution.py': '1c63297c0097ce50b9f314ba321e7f4d04c009f6379552a84adefb62a2a7f375',
- 'tools/compile_fail_expectations.json': 'ccf12a11df75fdd6967d1c3af3efaadc5ed579ddfa897533a7200538b098c1a0',
+ 'tools/compile_fail_expectations.json': 'a15d4cff3d89429312350a4da95604569da83be105f69a0690025904c2cfbc84',
  'tools/test_conditioned_coverage_loops.py': 'f88451e7313fd84cc788847b1c960dc395b98736779a92c81a1d056ff2977520'}
-DATA_SHA256 = '45072b6523151acb171269bb748c18300307b4526d8153c37059d82b221b0f98'
+DATA_SHA256 = '8bc746ee4471af17e7077975295d14f0d16a36133c41ed23a252043c34183c24'
 # END FIXED PR780 SUCCESSOR DATA
 
 
@@ -17892,7 +18394,7 @@ def sha(raw):
 def _index_snapshot():
     """Authenticate and detach the fixed per-edge digests and bound inputs."""
     require(type(DATA_SHA256) is str, 'authority digest selector is not a builtin string')
-    require(DATA_SHA256 == '45072b6523151acb171269bb748c18300307b4526d8153c37059d82b221b0f98', 'authority digest selector changed')
+    require(DATA_SHA256 == '8bc746ee4471af17e7077975295d14f0d16a36133c41ed23a252043c34183c24', 'authority digest selector changed')
     encoded = json.dumps({'edges': EDGE_SHA256, 'bound_inputs': BOUND_INPUTS},
                          sort_keys=True, separators=(',', ':'))
     require(sha(encoded) == DATA_SHA256, 'fixed source inverse data changed')

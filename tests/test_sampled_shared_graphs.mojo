@@ -9,9 +9,9 @@ from std.pathlib import Path
 from std.testing import TestSuite, assert_raises
 
 from tools._python_json import loads
-from tools.sampled_bounds_graph import reviewed_bounds_source
+from tools._sampled_bounds_graph import reviewed_bounds_source
 from tests._winner_pin_predecessor import restored_count_bounds
-from tools.sampled_shared_graphs import sampled_shared_graphs, shared_bridges
+from tools._sampled_shared_graphs import sampled_shared_graphs, shared_bridges
 
 
 def _bounds() raises -> String:

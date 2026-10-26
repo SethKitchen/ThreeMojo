@@ -9,7 +9,7 @@ from std.pathlib import Path
 from std.testing import TestSuite, assert_raises
 
 from tools._process import run_program
-from tools.sum2_map_builder_routing import sum2_map_builder_routing
+from tools._sum2_map_builder_routing import sum2_map_builder_routing
 
 
 comptime _MESSAGE = "Sum2 guard import/declaration routing changed: map_builder"

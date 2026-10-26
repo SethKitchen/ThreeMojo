@@ -9,7 +9,7 @@ from std.pathlib import Path
 from std.testing import TestSuite, assert_raises
 
 from tools._process import run_program
-from tools.sum2_guard_pins import sum2_guard_pins
+from tools._sum2_guard_pins import sum2_guard_pins
 
 
 def _copy(root: String) raises:

@@ -92,18 +92,36 @@ def _edits_0(
         stops: The exclusive end lines.
         befores: The predecessor lines for each span.
     """
-    starts.append(862)
-    stops.append(863)
+    starts.append(880)
+    stops.append(884)
+    befores.append("")
+    starts.append(877)
+    stops.append(878)
+    befores.append("        distance += Float64(\n")
+    starts.append(873)
+    stops.append(874)
     befores.append("        var nexts = map.next(last.waypoint, step)\n")
-    starts.append(834)
-    stops.append(835)
+    starts.append(845)
+    stops.append(846)
     befores.append(
-        "            var nexts = map.next(plan[len(plan) - 1].waypoint,"
-        " across)\n"
+        "            var nexts = map.next(plan[len(plan) - 1].waypoin"
+        "t, across)\n"
     )
-    starts.append(58)
-    stops.append(59)
+    starts.append(826)
+    stops.append(834)
+    befores.append("")
+    starts.append(815)
+    stops.append(818)
+    befores.append(
+        "            Error: If the direction is not a valid road opti"
+        "on, or a map\n"
+    )
+    starts.append(59)
+    stops.append(60)
     befores.append("    from_kmh,\n")
+    starts.append(46)
+    stops.append(47)
+    befores.append("")
 
 
 def _edits_1(
@@ -173,18 +191,52 @@ def _edits_4(
         stops: The exclusive end lines.
         befores: The predecessor lines for each span.
     """
-    starts.append(458)
-    stops.append(459)
+    starts.append(476)
+    stops.append(477)
     befores.append("                nexts = map.next(reached, res)\n")
-    starts.append(449)
-    stops.append(450)
+    starts.append(466)
+    stops.append(468)
     befores.append("            var nexts = map.next(end, res)\n")
-    starts.append(362)
-    stops.append(363)
+    starts.append(379)
+    stops.append(380)
     befores.append("                    var step = map.next(w, res)\n")
-    starts.append(355)
-    stops.append(356)
+    starts.append(375)
+    stops.append(376)
+    befores.append("")
+    starts.append(371)
+    stops.append(372)
     befores.append("            var first = map.next(pair[0], res)\n")
+    starts.append(333)
+    stops.append(341)
+    befores.append(
+        "        if not (sampling_resolution.value > 0.0):\n         "
+        '   raise Error("The sampling resolution must be more than z'
+        'ero")\n'
+    )
+    starts.append(329)
+    stops.append(332)
+    befores.append(
+        "            Error: If the resolution is not more than zero, "
+        "or a map query\n                fails.\n"
+    )
+    starts.append(255)
+    stops.append(261)
+    befores.append("")
+    starts.append(94)
+    stops.append(95)
+    befores.append("")
+    starts.append(85)
+    stops.append(86)
+    befores.append("from std.math import floor, sqrt\n")
+    starts.append(74)
+    stops.append(75)
+    befores.append("from extensions.carla.map import Map, Waypoint\n")
+    starts.append(12)
+    stops.append(15)
+    befores.append(
+        "   `sampling_resolution`, and stops one resolution short of "
+        "the exit.\n"
+    )
 
 
 def _edits_5(
@@ -509,18 +561,35 @@ def _edits_12(
         stops: The exclusive end lines.
         befores: The predecessor lines for each span.
     """
-    starts.append(278)
-    stops.append(279)
+    starts.append(287)
+    stops.append(288)
     befores.append("    return DirectedPoint(\n")
-    starts.append(158)
-    stops.append(159)
+    starts.append(202)
+    stops.append(205)
+    befores.append("")
+    starts.append(164)
+    stops.append(165)
     befores.append("    return DirectedPoint(\n")
-    starts.append(83)
-    stops.append(84)
+    starts.append(133)
+    stops.append(138)
+    befores.append("    var pieces = 1 + Int(ceil(d * (1.0 + reach)))\n")
+    starts.append(85)
+    stops.append(86)
     befores.append("    return DirectedPoint(\n")
-    starts.append(57)
-    stops.append(58)
+    starts.append(59)
+    stops.append(60)
     befores.append("        return DirectedPoint(\n")
+    starts.append(54)
+    stops.append(56)
+    befores.append(
+        "        Error: If a SPIRAL uses an unsupported arithmetic mode.\n"
+    )
+    starts.append(11)
+    stops.append(13)
+    befores.append(
+        "scalar witnesses with an ideal trigonometric or moment appro"
+        "ximation.\n"
+    )
 
 
 def _edits_13(
@@ -1088,6 +1157,32 @@ def _edits_14(
         stops: The exclusive end lines.
         befores: The predecessor lines for each span.
     """
+    starts.append(323)
+    stops.append(326)
+    befores.append("")
+    starts.append(321)
+    stops.append(322)
+    befores.append(
+        "        for i in range(a, b - 1, -1):  # pragma: no branch\n"
+    )
+    starts.append(317)
+    stops.append(320)
+    befores.append("")
+    starts.append(315)
+    stops.append(316)
+    befores.append("        for i in range(a, b + 1):  # pragma: no branch\n")
+    starts.append(313)
+    stops.append(314)
+    befores.append("")
+    starts.append(302)
+    stops.append(312)
+    befores.append("")
+    starts.append(298)
+    stops.append(301)
+    befores.append("")
+    starts.append(284)
+    stops.append(289)
+    befores.append("def generate_range(a: Int, b: Int) -> List[Int]:\n")
     starts.append(192)
     stops.append(193)
     befores.append("    var l2 = distance_squared_2d(v, w)\n")
@@ -1372,29 +1467,60 @@ def _edits_16(
         stops: The exclusive end lines.
         befores: The predecessor lines for each span.
     """
-    starts.append(1348)
-    stops.append(1350)
+    starts.append(1358)
+    stops.append(1360)
     befores.append(
-        "                    var a = road.lane_corners(sec, ln, stations[k])\n "
-        "                   var b = road.lane_corners(sec, ln, stations[k +"
-        " 1])\n"
+        "                    var a = road.lane_corners(sec, ln, stati"
+        "ons[k])\n                    var b = road.lane_corners(sec, "
+        "ln, stations[k + 1])\n"
     )
-    starts.append(1336)
-    stops.append(1337)
+    starts.append(1346)
+    stops.append(1347)
     befores.append(
         "                s0, s0 + road.section_length(sec), step, cuts\n"
     )
-    starts.append(517)
-    stops.append(518)
+    starts.append(1339)
+    stops.append(1339)
+    befores.append("    var step = Float64(resolution.value)\n")
+    starts.append(1332)
+    stops.append(1337)
+    befores.append(
+        '    if not (resolution.value > 0.0):\n        raise Error("'
+        'The mesh resolution must be more than zero")\n'
+    )
+    starts.append(1328)
+    stops.append(1331)
+    befores.append(
+        "        Error: If the resolution is not more than zero, or a"
+        " map query\n            fails.\n"
+    )
+    starts.append(1295)
+    stops.append(1298)
+    befores.append("")
+    starts.append(1293)
+    stops.append(1294)
+    befores.append(") -> List[Float64]:\n")
+    starts.append(521)
+    stops.append(522)
     befores.append(
         "            return Vector3(point.x, point.y, self.height_at(point))\n"
     )
-    starts.append(429)
-    stops.append(478)
+    starts.append(433)
+    stops.append(482)
     befores.append("    def height_at(self, point: Vector3) -> Float32:\n")
-    starts.append(44)
-    stops.append(46)
+    starts.append(87)
+    stops.append(89)
     befores.append("")
+    starts.append(46)
+    stops.append(48)
+    befores.append("")
+    starts.append(14)
+    stops.append(18)
+    befores.append(
+        "  ends of each crosswalk. Each strip is a convex quad from t"
+        "he lane's two\n  edges, `Road.lane_corners`, which also rais"
+        "e a sidewalk by its curb. A\n"
+    )
 
 
 def _edits_17(
@@ -1425,17 +1551,38 @@ def _edits_18(
         stops: The exclusive end lines.
         befores: The predecessor lines for each span.
     """
-    starts.append(337)
-    stops.append(338)
+    starts.append(354)
+    stops.append(355)
     befores.append("")
-    starts.append(144)
-    stops.append(216)
+    starts.append(309)
+    stops.append(311)
+    befores.append("                or the scene cannot be tested.\n")
+    starts.append(160)
+    stops.append(232)
     befores.append("")
-    starts.append(136)
-    stops.append(136)
+    starts.append(152)
+    stops.append(152)
     befores.append("@fieldwise_init\n")
-    starts.append(29)
-    stops.append(37)
+    starts.append(140)
+    stops.append(150)
+    befores.append(
+        "        return Int(Float32(self.points_per_second) * tick.to"
+        "(SECOND))\n"
+    )
+    starts.append(135)
+    stops.append(139)
+    befores.append("")
+    starts.append(126)
+    stops.append(129)
+    befores.append("")
+    starts.append(124)
+    stops.append(125)
+    befores.append("    def points_in(self, tick: Duration) -> Int:\n")
+    starts.append(49)
+    stops.append(50)
+    befores.append("from std.math import atan2, cos, sin, sqrt, tan\n")
+    starts.append(30)
+    stops.append(38)
     befores.append("")
 
 
@@ -1944,23 +2091,28 @@ def _edits_25(
         stops: The exclusive end lines.
         befores: The predecessor lines for each span.
     """
+    starts.append(532)
+    stops.append(533)
+    befores.append("")
     starts.append(528)
-    stops.append(529)
+    stops.append(531)
     befores.append("")
-    starts.append(524)
-    stops.append(527)
-    befores.append("")
-    starts.append(513)
-    stops.append(514)
+    starts.append(517)
+    stops.append(518)
     befores.append(") -> List[UInt8]:\n")
-    starts.append(492)
-    stops.append(512)
+    starts.append(496)
+    stops.append(516)
     befores.append("")
-    starts.append(481)
+    starts.append(483)
+    stops.append(486)
+    befores.append("")
+    starts.append(480)
     stops.append(482)
-    befores.append("")
+    befores.append(
+        "        Error: If `flow` does not hold two numbers a pixel.\n"
+    )
     starts.append(445)
-    stops.append(465)
+    stops.append(466)
     befores.append("")
     starts.append(431)
     stops.append(432)
@@ -1968,8 +2120,8 @@ def _edits_25(
     starts.append(395)
     stops.append(417)
     befores.append(
-        "def image_data(image: Framebuffer, fov: Float32) raises ->"
-        " List[UInt8]:\n"
+        "def image_data(image: Framebuffer, fov: Float32) raises -> L"
+        "ist[UInt8]:\n"
     )
     starts.append(373)
     stops.append(374)
@@ -2022,9 +2174,67 @@ def _edits_28(
         stops: The exclusive end lines.
         befores: The predecessor lines for each span.
     """
-    starts.append(1397)
-    stops.append(1398)
+    starts.append(1416)
+    stops.append(1417)
     befores.append("        scene.add_mesh(mesh^)\n")
+    starts.append(708)
+    stops.append(712)
+    befores.append("")
+    starts.append(687)
+    stops.append(689)
+    befores.append(
+        "        Error: Never for finite corners; the geometry's chec"
+        "ks are passed\n            on.\n"
+    )
+    starts.append(654)
+    stops.append(656)
+    befores.append("")
+    starts.append(648)
+    stops.append(650)
+    befores.append("")
+    starts.append(647)
+    stops.append(647)
+    befores.append(
+        '    if not (spacing.to(METER) > 0):\n        raise Error("S'
+        'treet lamps need a positive spacing")\n'
+    )
+    starts.append(644)
+    stops.append(646)
+    befores.append(
+        "        Error: If the spacing is not positive, or a map query fails.\n"
+    )
+    starts.append(601)
+    stops.append(603)
+    befores.append("")
+    starts.append(597)
+    stops.append(598)
+    befores.append("        Error: If the count is less than one.\n")
+    starts.append(534)
+    stops.append(536)
+    befores.append("")
+    starts.append(527)
+    stops.append(529)
+    befores.append("        Error: If a map query fails.\n")
+    starts.append(192)
+    stops.append(196)
+    befores.append("")
+    starts.append(164)
+    stops.append(165)
+    befores.append("from std.math import atan2, cos, pow, sin, sqrt\n")
+    starts.append(32)
+    stops.append(34)
+    befores.append("  night.\n")
+    starts.append(25)
+    stops.append(30)
+    befores.append(
+        "  another road or another lot is left empty. Each building h"
+        "as a row of\n  shops on its ground floor, a cornice above it"
+        ", floors of windows, and\n  a parapet round its roof. A ring"
+        " of tall buildings far out makes the\n  skyline.\n"
+    )
+    starts.append(21)
+    stops.append(23)
+    befores.append("  each crosswalk outline of `Map.all_crosswalk_zones`.\n")
 
 
 def _edits_28_b(
@@ -2080,9 +2290,43 @@ def _edits_29(
         stops: The exclusive end lines.
         befores: The predecessor lines for each span.
     """
-    starts.append(693)
-    stops.append(694)
+    starts.append(714)
+    stops.append(725)
+    befores.append(
+        "    var x = Float32(-0.9) * trigger_volume.extent.x\n    var"
+        " end = Float32(0.9) * trigger_volume.extent.x\n"
+    )
+    starts.append(708)
+    stops.append(710)
+    befores.append("        Error: If a map query fails.\n")
+    starts.append(682)
+    stops.append(683)
     befores.append("                var w = map.waypoint_xodr(\n")
+    starts.append(679)
+    stops.append(680)
+    befores.append(
+        "            var lanes = List[Int]()\n            if v.from_l"
+        "ane.value < v.to_lane.value:\n                # from < to, s"
+        "o the range holds two lanes at least.\n                for l"
+        "ane in range(\n                    v.from_lane.value, v.to_l"
+        "ane.value + 1\n                ):  # pragma: no branch\n    "
+        "                lanes.append(lane)\n            else:\n     "
+        "           # from >= to, so the range holds one lane at leas"
+        "t.\n                for lane in range(\n                    "
+        "v.from_lane.value, v.to_lane.value - 1, -1\n                "
+        "):  # pragma: no branch\n                    lanes.append(la"
+        "ne)\n            # Either range above holds one lane at leas"
+        "t.\n            for lane in lanes:  # pragma: no branch\n"
+    )
+    starts.append(672)
+    stops.append(674)
+    befores.append("        Error: If the id is not valid.\n")
+    starts.append(62)
+    stops.append(63)
+    befores.append("")
+    starts.append(57)
+    stops.append(58)
+    befores.append("")
 
 
 def _edits_30(
@@ -3021,36 +3265,57 @@ def _edits_38(
         stops: The exclusive end lines.
         befores: The predecessor lines for each span.
     """
-    starts.append(625)
-    stops.append(655)
+    starts.append(645)
+    stops.append(675)
     befores.append(
         "    def tick_timers(mut self, dt: Float32) -> List[SignalUpdate]:\n"
     )
-    starts.append(401)
-    stops.append(402)
+    starts.append(421)
+    stops.append(422)
     befores.append("                var found = map.waypoint_xodr(\n")
-    starts.append(356)
-    stops.append(357)
+    starts.append(409)
+    stops.append(411)
+    befores.append("        Error: If the id is not valid.\n")
+    starts.append(375)
+    stops.append(376)
     befores.append("                var found = map.waypoint_xodr(\n")
-    starts.append(310)
-    stops.append(311)
+    starts.append(362)
+    stops.append(364)
+    befores.append("        Error: If the id is not valid.\n")
+    starts.append(328)
+    stops.append(329)
     befores.append(
         "                    for before in map.previous(item[1], step):\n"
     )
-    starts.append(293)
-    stops.append(294)
+    starts.append(321)
+    stops.append(327)
+    befores.append("")
+    starts.append(305)
+    stops.append(306)
     befores.append("            for before in map.previous(w, step):\n")
-    starts.append(287)
-    stops.append(288)
+    starts.append(303)
+    stops.append(304)
+    befores.append("")
+    starts.append(296)
+    stops.append(299)
     befores.append("                var ahead = map.next(next, step)\n")
-    starts.append(243)
-    stops.append(244)
+    starts.append(289)
+    stops.append(295)
+    befores.append("")
+    starts.append(246)
+    stops.append(247)
     befores.append("                var found = map.waypoint_xodr(\n")
-    starts.append(184)
-    stops.append(185)
+    starts.append(234)
+    stops.append(236)
+    befores.append("        Error: If the id is not valid.\n")
+    starts.append(186)
+    stops.append(187)
     befores.append(
         "    return (road.sections[section].s, road.section_length(section))\n"
     )
+    starts.append(84)
+    stops.append(86)
+    befores.append("")
     starts.append(70)
     stops.append(71)
     befores.append("    info_at,\n")
@@ -3324,6 +3589,176 @@ def restored_dispatch_border() raises -> String:
     return restored
 
 
+def _edits_41(
+    mut starts: List[Int], mut stops: List[Int], mut befores: List[String]
+):
+    """Fill one reviewed line-edit table, highest line first.
+
+    Args:
+        starts: The 0-based start lines.
+        stops: The exclusive end lines.
+        befores: The predecessor lines for each span.
+    """
+    starts.append(319)
+    stops.append(321)
+    befores.append("            or a mesh cannot be tested.\n")
+    starts.append(218)
+    stops.append(228)
+    befores.append("        return Int(exact + 0.5)\n")
+    starts.append(214)
+    stops.append(217)
+    befores.append(
+        "            Float32(self.points_per_second)\n            * t"
+        "ick.to(SECOND)\n            / Float32(self.channels)\n"
+    )
+    starts.append(208)
+    stops.append(212)
+    befores.append("")
+    starts.append(198)
+    stops.append(201)
+    befores.append("")
+    starts.append(196)
+    stops.append(197)
+    befores.append("    def points_per_laser(self, tick: Duration) -> Int:\n")
+    starts.append(184)
+    stops.append(185)
+    befores.append("")
+    starts.append(180)
+    stops.append(183)
+    befores.append("")
+    starts.append(174)
+    stops.append(175)
+    befores.append("    def laser_angles(self) -> List[Angle]:\n")
+    starts.append(138)
+    stops.append(139)
+    befores.append("")
+    starts.append(42)
+    stops.append(66)
+    befores.append("")
+    starts.append(28)
+    stops.append(29)
+    befores.append("from std.math import cos, exp, log, sin, sqrt, trunc\n")
+
+
+def _edits_42(
+    mut starts: List[Int], mut stops: List[Int], mut befores: List[String]
+):
+    """Fill one reviewed line-edit table, highest line first.
+
+    Args:
+        starts: The 0-based start lines.
+        stops: The exclusive end lines.
+        befores: The predecessor lines for each span.
+    """
+    starts.append(522)
+    stops.append(524)
+    befores.append(
+        "            var u = (Float32(x) + 0.5) / w * 2 - 1\n        "
+        "    var v = (Float32(y) + 0.5) / h * 2 - 1\n"
+    )
+    starts.append(506)
+    stops.append(509)
+    befores.append("")
+    starts.append(304)
+    stops.append(307)
+    befores.append("")
+    starts.append(290)
+    stops.append(291)
+    befores.append("):\n")
+    starts.append(138)
+    stops.append(140)
+    befores.append(
+        "        var u = (Float32(x) + 0.5) / Float32(self.width) * 2"
+        " - 1\n        var v = 1 - (Float32(y) + 0.5) / Float32(self."
+        "height) * 2\n"
+    )
+    starts.append(132)
+    stops.append(134)
+    befores.append("                the near plane and 1 at the far.\n")
+    starts.append(34)
+    stops.append(35)
+    befores.append("from math.utils import SeededRandom\n")
+
+
+def _edits_43(
+    mut starts: List[Int], mut stops: List[Int], mut befores: List[String]
+):
+    """Fill one reviewed line-edit table, highest line first.
+
+    Args:
+        starts: The 0-based start lines.
+        stops: The exclusive end lines.
+        befores: The predecessor lines for each span.
+    """
+    starts.append(653)
+    stops.append(655)
+    befores.append("")
+    starts.append(640)
+    stops.append(651)
+    befores.append('    """Refuse a texture of no texels."""\n')
+    starts.append(375)
+    stops.append(376)
+    befores.append("        Error: If `size` is less than one.\n")
+    starts.append(338)
+    stops.append(339)
+    befores.append("        Error: If `size` is less than one.\n")
+    starts.append(283)
+    stops.append(285)
+    befores.append("        Error: If `size` or `slabs` is less than one.\n")
+    starts.append(231)
+    stops.append(232)
+    befores.append("        Error: If `size` is less than one.\n")
+    starts.append(160)
+    stops.append(162)
+    befores.append(
+        "        Error: If `size` is less than one, or the heights ar"
+        "e not\n            `size * size`.\n"
+    )
+    starts.append(31)
+    stops.append(32)
+    befores.append("The sizes and colors are this port's own choices.\n")
+
+
+def _edits_44(
+    mut starts: List[Int], mut stops: List[Int], mut befores: List[String]
+):
+    """Fill one reviewed line-edit table, highest line first.
+
+    Args:
+        starts: The 0-based start lines.
+        stops: The exclusive end lines.
+        befores: The predecessor lines for each span.
+    """
+    starts.append(598)
+    stops.append(599)
+    befores.append("")
+    starts.append(553)
+    stops.append(564)
+    befores.append("    return round_half_from_zero(fov / step)\n")
+    starts.append(542)
+    stops.append(544)
+    befores.append(
+        "        Error: If the resolution or field of view is nonfinite.\n"
+    )
+    starts.append(503)
+    stops.append(504)
+    befores.append("")
+    starts.append(400)
+    stops.append(401)
+    befores.append("")
+    starts.append(312)
+    stops.append(336)
+    befores.append(
+        "def _per_laser(description: LidarDescription, tick: Duration"
+        ") -> Int:\n    return round_half_from_zero(\n        Float32"
+        "(description.points_per_second)\n        * tick.to(SECOND)\n"
+        "        / Float32(description.channels)\n    )\n"
+    )
+    starts.append(63)
+    stops.append(64)
+    befores.append("")
+
+
 def restored_border_pins(
     mut paths: List[String], mut texts: List[String]
 ) raises:
@@ -3342,7 +3777,7 @@ def restored_border_pins(
     var live_0 = Path("extensions/carla/agents.mojo").read_text()
     if (
         sha256_hex(live_0.as_bytes())
-        != "76fdfa47c0504e409b2c2655fb4fdff1843fb7cdaf316ac4c2845ed4361ec6ab"
+        != "0789e9056ca117b2474f7daede991044a7b885f03175f606af55ad2871d472d6"
     ):
         raise Error(
             "reviewed border parser successor: border pin changed: "
@@ -3442,7 +3877,7 @@ def restored_border_pins(
     var live_4 = Path("extensions/carla/agents_route.mojo").read_text()
     if (
         sha256_hex(live_4.as_bytes())
-        != "3a42c429be8013319fb9e60cbd92ffcfc8b5ce68e446ec47d3b1e5e1b71f782c"
+        != "e53221dee2acec98cee82cb2191aa0d713eee2c0f3b202d6454c569c3438c939"
     ):
         raise Error(
             "reviewed border parser successor: border pin changed: "
@@ -3621,7 +4056,7 @@ def restored_border_pins(
     var live_12 = Path("extensions/carla/lane_geometry.mojo").read_text()
     if (
         sha256_hex(live_12.as_bytes())
-        != "c43bf5bff2304e580beb59d1d10b125f04b1c5e7bc7897784bed54e2dd93d49b"
+        != "f0a4900cc046cf42e925ed912b6557db494eeab3f342a71d72387fe49c667be5"
     ):
         raise Error(
             "reviewed border parser successor: border pin changed: "
@@ -3684,7 +4119,7 @@ def restored_border_pins(
     var live_14 = Path("extensions/carla/math.mojo").read_text()
     if (
         sha256_hex(live_14.as_bytes())
-        != "9fa94b3bb8850c4f6d282ef70795004c2c1217f22fd1c1a6eee448c8ac62ee2e"
+        != "fc4fa96bbb1470dc10a4ea894003055610ffb1d08e7d6b2558f204bb243045f0"
     ):
         raise Error(
             "reviewed border parser successor: border pin changed: "
@@ -3734,7 +4169,7 @@ def restored_border_pins(
     var live_16 = Path("extensions/carla/navigation_mesh.mojo").read_text()
     if (
         sha256_hex(live_16.as_bytes())
-        != "9e02190556addad6e00c58b4c2416b83f51e88eb6ec2051d69533db2c271724a"
+        != "19314a6e5db27de8843bbd93f52e9ac185c62af1e8fc71e5de54a79659015e9b"
     ):
         raise Error(
             "reviewed border parser successor: border pin changed: "
@@ -3784,7 +4219,7 @@ def restored_border_pins(
     var live_18 = Path("extensions/carla/radar.mojo").read_text()
     if (
         sha256_hex(live_18.as_bytes())
-        != "cf8db5cb57b7010212de7688e0e4f10659a26185d70577b1543b2c7e6aae4428"
+        != "a170331af50d754af2058d15f0357cee7d3d18a0506b4f89cfe406d5e99c64d4"
     ):
         raise Error(
             "reviewed border parser successor: border pin changed: "
@@ -3959,7 +4394,7 @@ def restored_border_pins(
     var live_25 = Path("extensions/carla/sensor_data.mojo").read_text()
     if (
         sha256_hex(live_25.as_bytes())
-        != "68338226a0a0a1cee1176aeb01224d3916c2c51fd3a3eaf9afc0595baf256b8c"
+        != "ce3e3089c75c25090f534c988506c2739d494ff4269ee5014b068af4e66481c8"
     ):
         raise Error(
             "reviewed border parser successor: border pin changed: "
@@ -4034,7 +4469,7 @@ def restored_border_pins(
     var live_28 = Path("extensions/carla/town.mojo").read_text()
     if (
         sha256_hex(live_28.as_bytes())
-        != "dbf66b4953eda09d150e9cec8d7b74b489c5f6bdd38b77049eaddfcda49d3eb8"
+        != "966c0050ee1e67e77c6371a6f415f0afe9bef561804d167dd35e50aa5633c73d"
     ):
         raise Error(
             "reviewed border parser successor: border pin changed: "
@@ -4072,7 +4507,7 @@ def restored_border_pins(
     var live_29 = Path("extensions/carla/traffic_light.mojo").read_text()
     if (
         sha256_hex(live_29.as_bytes())
-        != "42e87ab1f73a8d23817bef09364c737a3a92ab559c579929614e85b5439dc961"
+        != "dea4519729e449d63121655f7d2b4bee2df58b4266764236bb9d108ae766e3da"
     ):
         raise Error(
             "reviewed border parser successor: border pin changed: "
@@ -4309,7 +4744,7 @@ def restored_border_pins(
     var live_38 = Path("extensions/carla/traffic_sign.mojo").read_text()
     if (
         sha256_hex(live_38.as_bytes())
-        != "8cb7e5a0fdc30d80e9589ec787b3fcd3c35219454ec5d3f6e7f6f67453ae6502"
+        != "70997f536d06786103665c5c70aa9e710f0645df0bc5e67bfb57886b15cf370a"
     ):
         raise Error(
             "reviewed border parser successor: border pin changed: "
@@ -4393,3 +4828,103 @@ def restored_border_pins(
         )
     paths.append("extensions/carla/weather.mojo")
     texts.append(text_40)
+
+    var live_41 = Path("extensions/carla/lidar.mojo").read_text()
+    if (
+        sha256_hex(live_41.as_bytes())
+        != "a23d53c2c0fdb93c1a2bfb9c9f68a28ad046040b33e47932508d5ee98d2cc8f2"
+    ):
+        raise Error(
+            "reviewed border parser successor: border pin changed: "
+            + "extensions/carla/lidar.mojo"
+        )
+    starts.clear()
+    stops.clear()
+    befores.clear()
+    _edits_41(starts, stops, befores)
+    var text_41 = _apply(live_41, starts, stops, befores)
+    if (
+        sha256_hex(text_41.as_bytes())
+        != "919e2efbb74445d59c45dd7ae32b4ba21f6558cf9115b2d0d15c6ce24d5c8783"
+    ):
+        raise Error(
+            "reviewed border parser successor: border pin changed: "
+            + "extensions/carla/lidar.mojo"
+        )
+    paths.append("extensions/carla/lidar.mojo")
+    texts.append(text_41)
+
+    var live_42 = Path("extensions/carla/render_post.mojo").read_text()
+    if (
+        sha256_hex(live_42.as_bytes())
+        != "24c2f807ef5cc5d1b6025aa951feedb8c33d2df665185c63bb91a996de7b73fb"
+    ):
+        raise Error(
+            "reviewed border parser successor: border pin changed: "
+            + "extensions/carla/render_post.mojo"
+        )
+    starts.clear()
+    stops.clear()
+    befores.clear()
+    _edits_42(starts, stops, befores)
+    var text_42 = _apply(live_42, starts, stops, befores)
+    if (
+        sha256_hex(text_42.as_bytes())
+        != "8fe64d4c0ba39b549e714e640b2283d70d60a1bdf1816497bc295319b2f009c7"
+    ):
+        raise Error(
+            "reviewed border parser successor: border pin changed: "
+            + "extensions/carla/render_post.mojo"
+        )
+    paths.append("extensions/carla/render_post.mojo")
+    texts.append(text_42)
+
+    var live_43 = Path("extensions/carla/render_textures.mojo").read_text()
+    if (
+        sha256_hex(live_43.as_bytes())
+        != "12a198cbcef1d0c43df2b8feebfcf4c332f8e1366295adf3aade78ffb46ea16a"
+    ):
+        raise Error(
+            "reviewed border parser successor: border pin changed: "
+            + "extensions/carla/render_textures.mojo"
+        )
+    starts.clear()
+    stops.clear()
+    befores.clear()
+    _edits_43(starts, stops, befores)
+    var text_43 = _apply(live_43, starts, stops, befores)
+    if (
+        sha256_hex(text_43.as_bytes())
+        != "d79c12e55dff9ad3ca829f7219365a8bbe1ac5ca6a6be799ce10cc56e0feb42b"
+    ):
+        raise Error(
+            "reviewed border parser successor: border pin changed: "
+            + "extensions/carla/render_textures.mojo"
+        )
+    paths.append("extensions/carla/render_textures.mojo")
+    texts.append(text_43)
+
+    var live_44 = Path("extensions/carla/semantic_lidar.mojo").read_text()
+    if (
+        sha256_hex(live_44.as_bytes())
+        != "0408f4c71106fe2c7089793ccf6438326a5e9320dddb82a169ecfa669444a685"
+    ):
+        raise Error(
+            "reviewed border parser successor: border pin changed: "
+            + "extensions/carla/semantic_lidar.mojo"
+        )
+    starts.clear()
+    stops.clear()
+    befores.clear()
+    _edits_44(starts, stops, befores)
+    var text_44 = _apply(live_44, starts, stops, befores)
+    if (
+        sha256_hex(text_44.as_bytes())
+        != "057c4be981b28dcd16a5a536706eea66bc6ecb547ac75d8aa8dae7e33aae6f55"
+    ):
+        raise Error(
+            "reviewed border parser successor: border pin changed: "
+            + "extensions/carla/semantic_lidar.mojo"
+        )
+    paths.append("extensions/carla/semantic_lidar.mojo")
+    texts.append(text_44)

@@ -118,23 +118,19 @@ struct Sha256(Movable):
         self.length = 0
 
     def _compress(mut self, block: Span[UInt8, _]):
-        """Fold one 64-byte block into the state."""
-        var w = Array[UInt32, 64](fill=0)
-        for t in range(16):
+        """Fold one 64-byte block into the state.
+
+        The rounds are unrolled, and the message schedule keeps only the
+        sixteen words a round can still read.
+        """
+        var w = Array[UInt32, 16](fill=0)
+        comptime for t in range(16):
             w[t] = (
                 UInt32(block[4 * t]) << 24
                 | UInt32(block[4 * t + 1]) << 16
                 | UInt32(block[4 * t + 2]) << 8
                 | UInt32(block[4 * t + 3])
             )
-        for t in range(16, 64):
-            var s0 = (
-                _rotr(w[t - 15], 7) ^ _rotr(w[t - 15], 18) ^ (w[t - 15] >> 3)
-            )
-            var s1 = (
-                _rotr(w[t - 2], 17) ^ _rotr(w[t - 2], 19) ^ (w[t - 2] >> 10)
-            )
-            w[t] = w[t - 16] + s0 + w[t - 7] + s1
         var a = self.state[0]
         var b = self.state[1]
         var c = self.state[2]
@@ -143,11 +139,17 @@ struct Sha256(Movable):
         var f = self.state[5]
         var g = self.state[6]
         var h = self.state[7]
-        var k = materialize[_K]()
-        for t in range(64):
+        comptime for t in range(64):
+            comptime if t >= 16:
+                var w15 = w[(t - 15) % 16]
+                var w2 = w[(t - 2) % 16]
+                var s0 = _rotr(w15, 7) ^ _rotr(w15, 18) ^ (w15 >> 3)
+                var s1 = _rotr(w2, 17) ^ _rotr(w2, 19) ^ (w2 >> 10)
+                w[t % 16] = w[t % 16] + s0 + w[(t - 7) % 16] + s1
             var big1 = _rotr(e, 6) ^ _rotr(e, 11) ^ _rotr(e, 25)
             var choose = (e & f) ^ (~e & g)
-            var t1 = h + big1 + choose + k[t] + w[t]
+            comptime k = _K[t]
+            var t1 = h + big1 + choose + k + w[t % 16]
             var big0 = _rotr(a, 2) ^ _rotr(a, 13) ^ _rotr(a, 22)
             var majority = (a & b) ^ (a & c) ^ (b & c)
             var t2 = big0 + majority

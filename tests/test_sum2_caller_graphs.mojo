@@ -9,7 +9,7 @@ from std.pathlib import Path
 from std.testing import TestSuite, assert_raises
 
 from tests._border_pin_predecessor import restored_border_pins
-from tools.sum2_caller_graphs import sum2_caller_graphs
+from tools._sum2_caller_graphs import sum2_caller_graphs
 
 
 def _text(path: String) raises -> String:

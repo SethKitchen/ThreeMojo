@@ -31,7 +31,7 @@ from tests._winner_pin_predecessor import (
     restored_rounded_arc_cleanup,
     restored_winner_pins,
 )
-from tools.runtime_source_groups import runtime_source_groups
+from tools._runtime_source_groups import runtime_source_groups
 
 
 def _pins() raises -> String:

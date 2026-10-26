@@ -9,7 +9,7 @@ from std.testing import TestSuite, assert_equal, assert_raises
 
 from tools._bigint import BigInt
 from tools._fraction import Fraction
-from tools.spiral_moment_words import (
+from tools._spiral_moment_words import (
     INFINITY,
     MAX_FINITE,
     SIGN,

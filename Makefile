@@ -413,6 +413,10 @@ $(TEST_CPU_STAMP):
 	    $(TEST_SUITES) > $(CACHE_DIR)/suites-to-run || exit 1
 	@sh tools/tool.sh $(TOOL_MOJO) --build run_suite
 	@sh tools/tool.sh $(TOOL_MOJO) --build compiler_telemetry
+	@# A suite that drives a tool builds it in main(), inside the time that
+	@# run_suite gives the whole suite. Build those tools first, in parallel.
+	@cut -d ' ' -f 1 $(CACHE_DIR)/suites-to-run | xargs $(TOOL) suite_tools \
+	  | xargs -P $(JOBS) -I {} sh tools/tool.sh $(TOOL_MOJO) --build {}
 	@xargs -n 2 -P $(JOBS) \
 	      sh -c '[ "$$#" -eq 0 ] && exit 0; \
 	             name=$$(basename "$$1" .mojo); bin=$(BIN_DIR)/$$name; \
@@ -1021,6 +1025,7 @@ test-coverage-tool:
 	@$(TOOL) check_coverage_loops --mojo $(MOJO)
 	@python3 tools/check_coverage_loop_proofs.py --mojo $(MOJO)
 	@$(TOOL) check_coverage_hit_profile --mojo $(MOJO)
+	@$(TOOL) check_build_tools
 
 # Subprocess-only contracts need native children with different environments.
 # Metal kernels as AIR, emitted for a Metal target without a GPU or Apple's

@@ -18,14 +18,14 @@ from std.testing import (
     assert_true,
 )
 
-from examples.capi.compare_ppm import (
+from tools.capi_compare_ppm import (
     compare_command,
     compare_frames,
     fixed_decimal,
     read_ppm,
 )
-from examples.capi.metal_string import metal_command, metal_header
-from examples.capi.retarget import (
+from tools.capi_metal_string import metal_command, metal_header
+from tools.capi_retarget import (
     exact_float,
     exact_floats,
     float_bits,
@@ -34,7 +34,7 @@ from examples.capi.retarget import (
     retarget_ir,
     wasm_layout,
 )
-from examples.capi.serve import (
+from tools.capi_serve import (
     http_response,
     listen_local,
     serve_command,
@@ -626,15 +626,14 @@ def test_shell_scripts_call_the_mojo_tools() raises:
     assert_false(run.find("compare_ppm.py") >= 0)
 
 
-def test_the_capi_folder_holds_no_entry_point() raises:
-    # A main beside the modules would make examples/capi an entry directory,
-    # and change how Mojo resolves the imports there.
+def test_the_capi_host_tools_live_in_tools() raises:
+    # A Mojo file in examples/capi is linted as a program, and a program
+    # there would make examples/capi an entry directory. Each tool and its
+    # main are in tools/ instead.
     for name in ["compare_ppm", "metal_string", "retarget", "serve"]:
-        var module = Path("examples/capi/" + name + ".mojo").read_text()
-        var command = Path("tools/capi_" + name + ".mojo").read_text()
-        assert_false(module.find("\ndef main(") >= 0, name)
-        assert_true(command.find("\ndef main(") >= 0, name)
-        assert_true(command.find("from examples.capi." + name + " import") > 0)
+        assert_false(Path("examples/capi/" + name + ".mojo").exists(), name)
+        var tool = Path("tools/capi_" + name + ".mojo").read_text()
+        assert_true(tool.find("\ndef main(") >= 0, name)
 
 
 def main() raises:

@@ -9,7 +9,7 @@ from std.pathlib import Path
 from std.testing import TestSuite, assert_raises
 
 from tools._process import run_program
-from tools.sum2_segment_builder import sum2_segment_builder
+from tools._sum2_segment_builder import sum2_segment_builder
 
 
 def _copy(root: String) raises:

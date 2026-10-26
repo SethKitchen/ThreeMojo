@@ -8,7 +8,7 @@
 from std.pathlib import Path
 from std.testing import TestSuite, assert_raises
 
-from tools.sampled_value_gate import sampled_value_gate
+from tools._sampled_value_gate import sampled_value_gate
 
 
 def _source() raises -> String:

@@ -8,7 +8,7 @@
 from std.pathlib import Path
 from std.testing import TestSuite, assert_raises
 
-from tools.spiral_moment_try import try_only_refusal
+from tools._spiral_moment_try import try_only_refusal
 
 
 def _source() raises -> String:

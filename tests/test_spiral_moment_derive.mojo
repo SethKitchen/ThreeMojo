@@ -8,15 +8,15 @@
 from std.pathlib import Path
 from std.testing import TestSuite, assert_equal, assert_raises, assert_true
 
-from tools.spiral_moment_derive import (
+from tools._spiral_moment_derive import (
     derive_endpoints,
     stored_coefficient_words,
     stored_scalar_word,
 )
-from tools.spiral_moment_table_text import canonical_table, parse_table
+from tools._spiral_moment_table_text import canonical_table, parse_table
 from tools._bigint import BigInt
 from tools._fraction import Fraction
-from tools.spiral_moment_words import (
+from tools._spiral_moment_words import (
     SIGN,
     decimal_word,
     fraction_of_word,

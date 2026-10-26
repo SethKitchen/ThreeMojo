@@ -359,6 +359,8 @@ The runtime obeys these rules:
 
 `make test-coverage-tool` checks these rules. `tools/check_coverage_grouping.mojo` fails if a compile-time helper of `node` calls `startswith` or `find`. It compares `_starts` and `_bracket` with `startswith` and `find` on 272 name pairs. It also builds a fixture of mixed pure operators with one compiler thread. The build must stop in 120 seconds, and the native and instrumented output must agree.
 
+`make test-coverage-tool` also runs `tools/check_build_tools.mojo`. That program runs `make`. It checks that each partial check has its own cache key. It also checks that coverage staging copies the helper libraries beside their suites. Each check takes longer than five seconds, so the checks are a program and not a suite.
+
 ## Capture storage
 
 The Makefile reduces each suite's stderr as it arrives, and compresses what is left. The report reads two things: the set of distinct probe payloads, and each decision's distinct MC/DC evaluations. A probe in a loop repeats both millions of times. `tools/coverage_io.mojo`'s `Reducer` keeps each payload once, as a `COVLINE:` record, and each distinct complete `COVEVAL2` record once.

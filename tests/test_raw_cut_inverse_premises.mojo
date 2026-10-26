@@ -9,7 +9,7 @@ from std.pathlib import Path
 from std.testing import TestSuite, assert_raises
 
 from tools._process import run_program
-from tools.raw_cut_inverse_premises import raw_cut_inverse_premises
+from tools._raw_cut_inverse_premises import raw_cut_inverse_premises
 
 
 def _copy(root: String) raises:
