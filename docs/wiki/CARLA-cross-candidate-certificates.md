@@ -442,6 +442,10 @@ The PR760 image and the owner predecessor keep their digests.
 The consumer ledger keeps its reviewed digest.
 A changed authority file is refused.
 
+Mojo checks the reviewed migration records.
+Seventeen records keep their reviewed digests.
+A changed migration record is refused.
+
 ## Candidate certificate
 
 A certificate contains a stored incumbent point and its road parameter.
