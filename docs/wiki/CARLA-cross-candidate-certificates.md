@@ -472,6 +472,10 @@ Five conditioned inputs keep their reviewed digests.
 Two contract leaves keep their reviewed digests.
 A changed conditioned input is refused.
 
+Mojo checks the reviewed PR760 registry inputs.
+392 inputs keep their reviewed digests.
+A changed registry input is refused.
+
 ## Candidate certificate
 
 A certificate contains a stored incumbent point and its road parameter.
