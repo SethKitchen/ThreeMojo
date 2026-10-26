@@ -378,6 +378,12 @@ Each endpoint keeps its token digest.
 The score endpoint reverses through the two score edits.
 A third Map variant is refused.
 
+Mojo checks the reviewed score observables.
+The winner-seed caller keeps one upper assignment.
+That assignment is read as the score high.
+The fresh guard and the ordered debits match the historical caller.
+A missing assignment or a changed debit is refused.
+
 ## Candidate certificate
 
 A certificate contains a stored incumbent point and its road parameter.
