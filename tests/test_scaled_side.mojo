@@ -6,7 +6,7 @@
 """A side times a `Float32` scale: the whole sizes JavaScript gets, and
 every whole side past 2^24."""
 
-from math.scaled_side import EXACT_SIDES, scaled_side
+from math.utils import EXACT_SIDES, scaled_side
 from postprocessing.display_nodes import scaled_size
 from postprocessing.shaders import god_rays_size
 from renderers.ascii_effect import ascii_size

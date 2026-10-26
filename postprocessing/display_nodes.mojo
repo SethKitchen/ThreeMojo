@@ -49,7 +49,7 @@ from units.si import Length, METER
 from render.framebuffer import TRANSPARENT_BLACK, FloatColor
 from render.target import RenderTarget
 from std.math import cos, floor, isfinite, pi, pow, sin, sqrt
-from math.scaled_side import scaled_side
+from math.utils import scaled_side
 
 
 # --- the settings ------------------------------------------------------------
@@ -286,7 +286,7 @@ def scaled_size(size: Int, scale: Float32) raises -> Int:
     """Return a target's side at a resolution scale, three.js's
     `Math.max( Math.round( size * scale ), 1 )`.
 
-    The product is `math.scaled_side`'s: `Float32` to 2^24, as
+    The product is `math.utils.scaled_side`'s: `Float32` to 2^24, as
     JavaScript gets the whole size of a scale such as 0.9, and `Float64`
     past it.
 

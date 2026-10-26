@@ -68,7 +68,7 @@ from render.framebuffer import TRANSPARENT_BLACK, Color, FloatColor
 from render.target import RenderTarget
 from std.math import cos, isfinite, pow, sin, sqrt
 from units.si import Angle, RADIAN
-from math.scaled_side import scaled_side
+from math.utils import scaled_side
 
 
 @fieldwise_init
@@ -1367,7 +1367,7 @@ def god_rays_size(size: Int, scale: Float32) raises -> Int:
     """Return the rays' width or height: the frame's times the scale, cut
     to a whole number as WebGL cuts a target's size, and at least one.
 
-    The product is `math.scaled_side`'s: `Float32` to 2^24, so 1000 times
+    The product is `math.utils.scaled_side`'s: `Float32` to 2^24, so 1000 times
     0.9 is 900 as in JavaScript, and `Float64` past it. The cut is toward
     zero.
 

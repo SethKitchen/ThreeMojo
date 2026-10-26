@@ -30,7 +30,7 @@ from core.scene import Scene
 from render.framebuffer import Color, Framebuffer
 from renderers.renderer import Renderer
 from std.math import floor, isfinite
-from math.scaled_side import scaled_side
+from math.utils import scaled_side
 
 # The character set three.js's constructor takes by default.
 comptime ASCII_CHARACTERS = " .:-+*=%@#"
@@ -124,7 +124,7 @@ def ascii_size(size: Int, resolution: Float32) raises -> Int:
     """Return the small image's width or height: three.js's
     `Math.floor(size * resolution)`.
 
-    The product is `math.scaled_side`'s: `Float32` to 2^24, as
+    The product is `math.utils.scaled_side`'s: `Float32` to 2^24, as
     JavaScript gets the whole size of a scale such as 0.9, and `Float64`
     past it.
 

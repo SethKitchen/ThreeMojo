@@ -2457,9 +2457,9 @@ EDGES = json.loads(r'''
   },
   "render/rasterizer.mojo": {
     "before_sha256": "e8d1e85a25a771edc28ab063a8ae1b38946ca1589014c0bb6ea6126aa5a9cf25",
-    "after_sha256": "c95028cb72d1588feb86de7031cdb80912871567115bf2ece38120dc2bfb06b5",
+    "after_sha256": "13eef4df6868aa3d30060a0fe36becdcd4487bbaebbef884c0f79f6afba0e137",
     "before_token_sha256": "49c113f28ee16d52cbbb50c6f93b18902581fde0c15cede8634e71dfb64e16d0",
-    "after_token_sha256": "f4de83eacb284e1531ea168665e195f8c3eed5f0a7e71d9c4cfe0d0dde66f4a3",
+    "after_token_sha256": "b2b6d21799a0c807667a772f6b54bcd77de9298c7dcab13f350f86089abb7a13",
     "edits": [
       {
         "start": 17,
@@ -2473,8 +2473,29 @@ EDGES = json.loads(r'''
         ]
       },
       {
-        "start": 466,
-        "stop": 509,
+        "start": 299,
+        "stop": 313,
+        "before": [],
+        "after": [
+          "        # A corner that is not finite snaps to some grid point, which can\n",
+          "        # give the triangle an area. It covers no pixel.\n",
+          "        var corners = SIMD[DType.float32, 8](\n",
+          "            triangle.a.x,\n",
+          "            triangle.a.y,\n",
+          "            triangle.b.x,\n",
+          "            triangle.b.y,\n",
+          "            triangle.c.x,\n",
+          "            triangle.c.y,\n",
+          "            0,\n",
+          "            0,\n",
+          "        )\n",
+          "        if not isfinite(corners).reduce_and():\n",
+          "            area = 0\n"
+        ]
+      },
+      {
+        "start": 480,
+        "stop": 523,
         "before": [],
         "after": [
           "def _screen_index(value: Float32, round_up: Bool) -> Int:\n",
@@ -2523,8 +2544,8 @@ EDGES = json.loads(r'''
         ]
       },
       {
-        "start": 538,
-        "stop": 542,
+        "start": 552,
+        "stop": 556,
         "before": [
           "        max(0, Int(floor(left))),\n",
           "        min(width - 1, Int(ceil(right))),\n",
@@ -2539,16 +2560,16 @@ EDGES = json.loads(r'''
         ]
       },
       {
-        "start": 3573,
-        "stop": 3574,
+        "start": 3587,
+        "stop": 3588,
         "before": [],
         "after": [
           "    tones.reserve(image.width)\n"
         ]
       },
       {
-        "start": 7260,
-        "stop": 7262,
+        "start": 7274,
+        "stop": 7276,
         "before": [
           "        rows.append(Int(floor(top)) - pad)\n",
           "        rows.append(Int(ceil(bottom)) + pad)\n"
@@ -2559,8 +2580,8 @@ EDGES = json.loads(r'''
         ]
       },
       {
-        "start": 7281,
-        "stop": 7283,
+        "start": 7295,
+        "stop": 7297,
         "before": [
           "        rows.append(Int(floor(points[index].y - half)))\n",
           "        rows.append(Int(ceil(points[index].y + half)))\n"
@@ -2571,8 +2592,8 @@ EDGES = json.loads(r'''
         ]
       },
       {
-        "start": 7301,
-        "stop": 7302,
+        "start": 7315,
+        "stop": 7316,
         "before": [
           "async def _frame_band(\n"
         ],
@@ -2581,8 +2602,8 @@ EDGES = json.loads(r'''
         ]
       },
       {
-        "start": 7502,
-        "stop": 7504,
+        "start": 7516,
+        "stop": 7518,
         "before": [
           "        rows.append(Int(floor(top)))\n",
           "        rows.append(Int(ceil(bottom)))\n"
@@ -7150,9 +7171,9 @@ EDGES = json.loads(r'''
   },
   "extensions/carla/lidar.mojo": {
     "before_sha256": "919e2efbb74445d59c45dd7ae32b4ba21f6558cf9115b2d0d15c6ce24d5c8783",
-    "after_sha256": "a23d53c2c0fdb93c1a2bfb9c9f68a28ad046040b33e47932508d5ee98d2cc8f2",
+    "after_sha256": "329de8a01e55dabb778622e60e7a278eaed254824df8da0861bea676365902e2",
     "before_token_sha256": "17e7bf74b87e3013c1ed6b97a9ea4b3dbe72548fd0b926618c31adf081749824",
-    "after_token_sha256": "e5aabeceb0ddc643d75405f4f3d742cfb47cb37308a4dc50bbf5bc67186e5340",
+    "after_token_sha256": "dfa9d1889afc76757c9d08cace4ea51a0861410254442408e87faba59010c9f0",
     "edits": [
       {
         "start": 28,
@@ -7243,17 +7264,18 @@ EDGES = json.loads(r'''
       },
       {
         "start": 198,
-        "stop": 201,
+        "stop": 202,
         "before": [],
         "after": [
           "\n",
-          "        The quotient is a `Float64`. A `Float32` point count drops whole\n",
-          "        points past 2^24.\n"
+          "        The quotient and its rounding are `Float32`, as CARLA's\n",
+          "        `RoundHalfFromZero(PointsPerSecond * DeltaTime / float(ChannelCount))`\n",
+          "        is: 5 points a second on one channel for 0.7 seconds is 4 points.\n"
         ]
       },
       {
-        "start": 208,
-        "stop": 212,
+        "start": 209,
+        "stop": 213,
         "before": [],
         "after": [
           "\n",
@@ -7263,27 +7285,13 @@ EDGES = json.loads(r'''
         ]
       },
       {
-        "start": 214,
-        "stop": 217,
-        "before": [
-          "            Float32(self.points_per_second)\n",
-          "            * tick.to(SECOND)\n",
-          "            / Float32(self.channels)\n"
-        ],
-        "after": [
-          "            Float64(self.points_per_second)\n",
-          "            * Float64(tick.to(SECOND))\n",
-          "            / Float64(self.channels)\n"
-        ]
-      },
-      {
-        "start": 218,
-        "stop": 228,
+        "start": 219,
+        "stop": 229,
         "before": [
           "        return Int(exact + 0.5)\n"
         ],
         "after": [
-          "        var scaled = exact + 0.5\n",
+          "        var scaled = Float64(exact + 0.5)\n",
           "        # `Float64(Int.MAX)` is 2^63. `Int` of a float at or past it is not\n",
           "        # a count. A float below `-2^63` is not one either.\n",
           "        if (\n",
@@ -7296,8 +7304,8 @@ EDGES = json.loads(r'''
         ]
       },
       {
-        "start": 319,
-        "stop": 321,
+        "start": 320,
+        "stop": 322,
         "before": [
           "            or a mesh cannot be tested.\n"
         ],
@@ -7534,9 +7542,9 @@ EDGES = json.loads(r'''
   },
   "extensions/carla/radar.mojo": {
     "before_sha256": "cf8db5cb57b7010212de7688e0e4f10659a26185d70577b1543b2c7e6aae4428",
-    "after_sha256": "a170331af50d754af2058d15f0357cee7d3d18a0506b4f89cfe406d5e99c64d4",
+    "after_sha256": "79d31d62991aa60a35e008098fda25c9ba559e94c5823bbfe768061a5005f775",
     "before_token_sha256": "3488f9430a2195094123a95e7c0da06d21da8c22860be16252e3e6255ddb3cb3",
-    "after_token_sha256": "7b83206df6459a1c1d22ecf7b74d482e73be172a13f70a46ff893b97f9124f31",
+    "after_token_sha256": "5b88320412919d5c6913c514c919eb92d412317149d82b2071e56837c2c04ccf",
     "edits": [
       {
         "start": 49,
@@ -7564,8 +7572,8 @@ EDGES = json.loads(r'''
         "before": [],
         "after": [
           "\n",
-          "        The product is a `Float64`. A `Float32` point count drops whole\n",
-          "        points past 2^24.\n"
+          "        The product is a `Float32`, as CARLA's `PointsPerSecond *\n",
+          "        DeltaTime` is: 10 points a second for 0.7 seconds is 7 points.\n"
         ]
       },
       {
@@ -7586,7 +7594,7 @@ EDGES = json.loads(r'''
           "        return Int(Float32(self.points_per_second) * tick.to(SECOND))\n"
         ],
         "after": [
-          "        var count = Float64(self.points_per_second) * Float64(tick.to(SECOND))\n",
+          "        var count = Float64(Float32(self.points_per_second) * tick.to(SECOND))\n",
           "        # `Float64(Int.MAX)` is 2^63. `Int` of a float at or past it is not\n",
           "        # a count. A float below `-2^63` is not one either.\n",
           "        if (\n",
@@ -7912,9 +7920,9 @@ EDGES = json.loads(r'''
   },
   "extensions/carla/semantic_lidar.mojo": {
     "before_sha256": "057c4be981b28dcd16a5a536706eea66bc6ecb547ac75d8aa8dae7e33aae6f55",
-    "after_sha256": "0408f4c71106fe2c7089793ccf6438326a5e9320dddb82a169ecfa669444a685",
+    "after_sha256": "23e3c9be3cce84f6955cbf6e140d37ca3eadbb6e15e8a78eee75b4f04fb0e183",
     "before_token_sha256": "f2c83ee9bffd103e60a6f508ae0a667ab7ffa70e8160e6c377af66960e4547e8",
-    "after_token_sha256": "6b7b53e57b5493dedbfee60407fd8cee87ae2563bcf159c73bb34dc7a075defc",
+    "after_token_sha256": "44d5fb6836dd63f0315b0802247488ec814406d7a691f4cb6dbeb2d3e3fe9e8e",
     "edits": [
       {
         "start": 63,
@@ -7937,8 +7945,8 @@ EDGES = json.loads(r'''
         ],
         "after": [
           "def _per_laser(description: LidarDescription, tick: Duration) raises -> Int:\n",
-          "    # The same `Float64` quotient as `points_per_laser`, so a count past\n",
-          "    # 2^24 stays exact and one past 2^63 is refused before `Int`.\n",
+          "    # The same `Float32` quotient as `points_per_laser`, as CARLA has it,\n",
+          "    # and one past 2^63 is refused before `Int`.\n",
           "    return description.points_per_laser(tick)\n",
           "\n",
           "\n",
@@ -7991,7 +7999,7 @@ EDGES = json.loads(r'''
       },
       {
         "start": 553,
-        "stop": 564,
+        "stop": 561,
         "before": [
           "    return round_half_from_zero(fov / step)\n"
         ],
@@ -7999,19 +8007,16 @@ EDGES = json.loads(r'''
           "    var quotient = fov / step\n",
           "    var scaled = Float64(quotient) + 0.5\n",
           "    # `Float64(Int.MAX)` is 2^63. `Int` of a float at or past it is not\n",
-          "    # a count.\n",
-          "    if (\n",
-          "        not isfinite(scaled)\n",
-          "        or scaled < -Float64(Int.MAX)\n",
-          "        or scaled >= Float64(Int.MAX)\n",
-          "    ):\n",
+          "    # a count. The field of view is held at zero or more and the step is\n",
+          "    # positive, so the quotient is never negative.\n",
+          "    if not isfinite(scaled) or scaled >= Float64(Int.MAX):\n",
           "        raise Error(\"A LiDAR point count does not fit in an integer\")\n",
           "    return round_half_from_zero(quotient)\n"
         ]
       },
       {
-        "start": 598,
-        "stop": 599,
+        "start": 595,
+        "stop": 596,
         "before": [],
         "after": [
           "    require_lidar_rays(description.channels, per_laser)\n"
@@ -9439,9 +9444,9 @@ EDGES = json.loads(r'''
   },
   "math/utils.mojo": {
     "before_sha256": "d32e99704324833af194084f0b1d646a894c63bdd0b8ce1baa0da8a287c1d690",
-    "after_sha256": "e3175365216326a0ff59a6dcfc86a4926489198081f9b03b10d3bb9d415b8b5b",
+    "after_sha256": "b7ae3e885db62a19f678595b2e3b36aa8689c7d6943ab00605c52a8dda3fb6b0",
     "before_token_sha256": "09aae4effc4236d14e85367f694c436b5b761ba75fb37e6b7df93006804cb915",
-    "after_token_sha256": "339964117ec4f38eb8f5d35b416dd194125eb2c7aa2a9052f84dbe726e743a14",
+    "after_token_sha256": "41fd4fb380e9531298972cdf45763daac4d7d283a151d7dfb37c61be6d77928d",
     "edits": [
       {
         "start": 153,
@@ -9585,6 +9590,42 @@ EDGES = json.loads(r'''
           "        var width = Float64(high) - Float64(low)\n",
           "        var value = Float64(low) + floor(unit * (width + 1))\n",
           "        return Int(value)\n"
+        ]
+      },
+      {
+        "start": 1212,
+        "stop": 1241,
+        "before": [],
+        "after": [
+          "\n",
+          "\n",
+          "# A side of an image or a view times a `Float32` scale.\n",
+          "#\n",
+          "# A scale such as 0.9 is stored as the `Float32` nearest it, a little\n",
+          "# below 0.9. The `Float32` product of an ordinary side rounds back up to\n",
+          "# the whole number that JavaScript gets from its `Float64` 0.9: 1000 times\n",
+          "# 0.9 is 900. The `Float64` product of the same `Float32` scale stays\n",
+          "# below, at 899.99998. Past 2^24 a `Float32` cannot hold every whole side,\n",
+          "# so the product is a `Float64` there.\n",
+          "comptime EXACT_SIDES = 16777216\n",
+          "\"\"\"The largest side whose every whole value a `Float32` holds: 2^24.\"\"\"\n",
+          "\n",
+          "\n",
+          "def scaled_side(size: Int, scale: Float32) -> Float64:\n",
+          "    \"\"\"Return a side times a scale, as the renderers have scaled it.\n",
+          "\n",
+          "    Args:\n",
+          "        size: The side, in pixels.\n",
+          "        scale: The scale.\n",
+          "\n",
+          "    Returns:\n",
+          "        The `Float32` product, as a `Float64`, for a side of at most 2^24\n",
+          "        either way. The `Float64` product for a larger side. Either can\n",
+          "        be infinite, for the caller to refuse.\n",
+          "    \"\"\"\n",
+          "    if size <= EXACT_SIDES and size >= -EXACT_SIDES:\n",
+          "        return Float64(Float32(size) * scale)\n",
+          "    return Float64(size) * Float64(scale)\n"
         ]
       }
     ]
@@ -9891,13 +9932,21 @@ EDGES = json.loads(r'''
   },
   "postprocessing/display_nodes.mojo": {
     "before_sha256": "8f5c82c9cb63f5d611a854ba0a5e912c1c7cd16a2d237badd6b287f0bec515f2",
-    "after_sha256": "edc42ea6f5074554253ffeb3fb5ccb73aadeba15150c6b8aa146bf97848a36fb",
+    "after_sha256": "63b8aa00f7339c4c7d1bcfd917cf2c4a0a9da029ea6e88579f3145f5e07a8b50",
     "before_token_sha256": "7a715e6659c3d083e77a96cf2c6bd85bc64bfcf4763a8c4bb96f14bc7356b80a",
-    "after_token_sha256": "486729a36fe8739ed6bcc3e0bb18accc0e86bfc3d2e6ff1a103990c1ce87519c",
+    "after_token_sha256": "489f4df80a39e48ae4f155c263988a832e9646f18f7880114366af2b88a4ef7f",
     "edits": [
       {
-        "start": 141,
-        "stop": 152,
+        "start": 51,
+        "stop": 52,
+        "before": [],
+        "after": [
+          "from math.utils import scaled_side\n"
+        ]
+      },
+      {
+        "start": 142,
+        "stop": 153,
         "before": [],
         "after": [
           "# A display tap index is a `Float32`. Past 16777216 it is no longer that\n",
@@ -9914,8 +9963,8 @@ EDGES = json.loads(r'''
         ]
       },
       {
-        "start": 163,
-        "stop": 166,
+        "start": 164,
+        "stop": 167,
         "before": [
           "            needs; or a depth of field's focal length is not positive.\n"
         ],
@@ -9926,8 +9975,8 @@ EDGES = json.loads(r'''
         ]
       },
       {
-        "start": 199,
-        "stop": 201,
+        "start": 200,
+        "stop": 202,
         "before": [],
         "after": [
           "    if settings.size > MAX_BOX_BLUR_SIZE:\n",
@@ -9935,8 +9984,8 @@ EDGES = json.loads(r'''
         ]
       },
       {
-        "start": 209,
-        "stop": 221,
+        "start": 210,
+        "stop": 222,
         "before": [],
         "after": [
           "    if settings.repeats > MAX_DISPLAY_TAPS:\n",
@@ -9954,8 +10003,8 @@ EDGES = json.loads(r'''
         ]
       },
       {
-        "start": 258,
-        "stop": 284,
+        "start": 259,
+        "stop": 285,
         "before": [
           "def scaled_size(size: Int, scale: Float32) -> Int:\n"
         ],
@@ -9989,18 +10038,19 @@ EDGES = json.loads(r'''
         ]
       },
       {
-        "start": 286,
-        "stop": 289,
+        "start": 287,
+        "stop": 291,
         "before": [],
         "after": [
           "\n",
-          "    The product is a `Float64`, as JavaScript's number is. A `Float32`\n",
-          "    product drops whole sizes past 2^24.\n"
+          "    The product is `math.utils.scaled_side`'s: `Float32` to 2^24, as\n",
+          "    JavaScript gets the whole size of a scale such as 0.9, and `Float64`\n",
+          "    past it.\n"
         ]
       },
       {
-        "start": 296,
-        "stop": 300,
+        "start": 298,
+        "stop": 302,
         "before": [],
         "after": [
           "\n",
@@ -10010,13 +10060,13 @@ EDGES = json.loads(r'''
         ]
       },
       {
-        "start": 301,
-        "stop": 319,
+        "start": 303,
+        "stop": 321,
         "before": [
           "    return max(Int(floor(Float32(size) * scale + 0.5)), 1)\n"
         ],
         "after": [
-          "    return _rounded_side(Float64(size) * Float64(scale))\n",
+          "    return _rounded_side(scaled_side(size, scale))\n",
           "\n",
           "\n",
           "def require_scaled_extent(width: Int, height: Int) raises:\n",
@@ -10037,8 +10087,8 @@ EDGES = json.loads(r'''
         ]
       },
       {
-        "start": 337,
-        "stop": 338,
+        "start": 339,
+        "stop": 340,
         "before": [
           "def gaussian_coefficients(sigma: Float32) -> List[Float32]:\n"
         ],
@@ -10047,8 +10097,8 @@ EDGES = json.loads(r'''
         ]
       },
       {
-        "start": 340,
-        "stop": 343,
+        "start": 342,
+        "stop": 345,
         "before": [],
         "after": [
           "\n",
@@ -10057,8 +10107,8 @@ EDGES = json.loads(r'''
         ]
       },
       {
-        "start": 349,
-        "stop": 352,
+        "start": 351,
+        "stop": 354,
         "before": [],
         "after": [
           "\n",
@@ -10067,8 +10117,8 @@ EDGES = json.loads(r'''
         ]
       },
       {
-        "start": 354,
-        "stop": 356,
+        "start": 356,
+        "stop": 358,
         "before": [],
         "after": [
           "    if kernel_size > Float32(16777216):\n",
@@ -10076,8 +10126,8 @@ EDGES = json.loads(r'''
         ]
       },
       {
-        "start": 407,
-        "stop": 410,
+        "start": 409,
+        "stop": 412,
         "before": [
           "def gaussian_blur_light(mut frame: RenderTarget, settings: DisplaySettings):\n"
         ],
@@ -10088,8 +10138,8 @@ EDGES = json.loads(r'''
         ]
       },
       {
-        "start": 417,
-        "stop": 422,
+        "start": 419,
+        "stop": 424,
         "before": [],
         "after": [
           "\n",
@@ -10100,16 +10150,16 @@ EDGES = json.loads(r'''
         ]
       },
       {
-        "start": 425,
-        "stop": 426,
+        "start": 427,
+        "stop": 428,
         "before": [],
         "after": [
           "    require_scaled_extent(width, height)\n"
         ]
       },
       {
-        "start": 471,
-        "stop": 473,
+        "start": 473,
+        "stop": 475,
         "before": [
           "            premultiplied.\n"
         ],
@@ -10119,8 +10169,8 @@ EDGES = json.loads(r'''
         ]
       },
       {
-        "start": 475,
-        "stop": 477,
+        "start": 477,
+        "stop": 479,
         "before": [
           "        The mean, as the frame holds it.\n"
         ],
@@ -10130,8 +10180,8 @@ EDGES = json.loads(r'''
         ]
       },
       {
-        "start": 480,
-        "stop": 485,
+        "start": 482,
+        "stop": 487,
         "before": [],
         "after": [
           "    if settings.size < 0 or settings.size > MAX_BOX_BLUR_SIZE:\n",
@@ -10142,8 +10192,8 @@ EDGES = json.loads(r'''
         ]
       },
       {
-        "start": 518,
-        "stop": 519,
+        "start": 520,
+        "stop": 521,
         "before": [
           "            premultiplied.\n"
         ],
@@ -10152,8 +10202,8 @@ EDGES = json.loads(r'''
         ]
       },
       {
-        "start": 521,
-        "stop": 523,
+        "start": 523,
+        "stop": 525,
         "before": [
           "        The mean, as the frame holds it.\n"
         ],
@@ -10163,8 +10213,8 @@ EDGES = json.loads(r'''
         ]
       },
       {
-        "start": 526,
-        "stop": 531,
+        "start": 528,
+        "stop": 533,
         "before": [],
         "after": [
           "    if settings.repeats > MAX_DISPLAY_TAPS:\n",
@@ -10175,8 +10225,8 @@ EDGES = json.loads(r'''
         ]
       },
       {
-        "start": 630,
-        "stop": 632,
+        "start": 632,
+        "stop": 634,
         "before": [
           "        samples: `numSamples`, at least two.\n"
         ],
@@ -10186,8 +10236,8 @@ EDGES = json.loads(r'''
         ]
       },
       {
-        "start": 634,
-        "stop": 636,
+        "start": 636,
+        "stop": 638,
         "before": [
           "        The mean, as the frame holds it.\n"
         ],
@@ -10197,8 +10247,8 @@ EDGES = json.loads(r'''
         ]
       },
       {
-        "start": 639,
-        "stop": 641,
+        "start": 641,
+        "stop": 643,
         "before": [],
         "after": [
           "    if samples > MAX_DISPLAY_TAPS:\n",
@@ -10206,8 +10256,8 @@ EDGES = json.loads(r'''
         ]
       },
       {
-        "start": 825,
-        "stop": 826,
+        "start": 827,
+        "stop": 828,
         "before": [
           "):\n"
         ],
@@ -10216,8 +10266,8 @@ EDGES = json.loads(r'''
         ]
       },
       {
-        "start": 839,
-        "stop": 842,
+        "start": 841,
+        "stop": 844,
         "before": [],
         "after": [
           "\n",
@@ -10226,8 +10276,8 @@ EDGES = json.loads(r'''
         ]
       },
       {
-        "start": 1007,
-        "stop": 1008,
+        "start": 1009,
+        "stop": 1010,
         "before": [
           "def anamorphic_light(mut frame: RenderTarget, settings: DisplaySettings):\n"
         ],
@@ -10236,8 +10286,8 @@ EDGES = json.loads(r'''
         ]
       },
       {
-        "start": 1020,
-        "stop": 1024,
+        "start": 1022,
+        "stop": 1026,
         "before": [],
         "after": [
           "\n",
@@ -10247,8 +10297,8 @@ EDGES = json.loads(r'''
         ]
       },
       {
-        "start": 1025,
-        "stop": 1029,
+        "start": 1027,
+        "stop": 1031,
         "before": [],
         "after": [
           "    if settings.samples > MAX_DISPLAY_TAPS:\n",
@@ -10258,16 +10308,16 @@ EDGES = json.loads(r'''
         ]
       },
       {
-        "start": 1031,
-        "stop": 1032,
+        "start": 1033,
+        "stop": 1034,
         "before": [],
         "after": [
           "    require_scaled_extent(width, height)\n"
         ]
       },
       {
-        "start": 1076,
-        "stop": 1077,
+        "start": 1078,
+        "stop": 1079,
         "before": [
           "def lensflare_light(mut frame: RenderTarget, settings: DisplaySettings):\n"
         ],
@@ -10276,8 +10326,8 @@ EDGES = json.loads(r'''
         ]
       },
       {
-        "start": 1089,
-        "stop": 1093,
+        "start": 1091,
+        "stop": 1095,
         "before": [],
         "after": [
           "\n",
@@ -10287,8 +10337,8 @@ EDGES = json.loads(r'''
         ]
       },
       {
-        "start": 1094,
-        "stop": 1098,
+        "start": 1096,
+        "stop": 1100,
         "before": [
           "    var width = max(\n",
           "        Int(floor(Float32(frame.width) / settings.down_sample_ratio + 0.5)), 1\n"
@@ -10301,8 +10351,8 @@ EDGES = json.loads(r'''
         ]
       },
       {
-        "start": 1099,
-        "stop": 1101,
+        "start": 1101,
+        "stop": 1103,
         "before": [
           "    var height = max(\n",
           "        Int(floor(Float32(frame.height) / settings.down_sample_ratio + 0.5)), 1\n"
@@ -10313,8 +10363,8 @@ EDGES = json.loads(r'''
         ]
       },
       {
-        "start": 1102,
-        "stop": 1103,
+        "start": 1104,
+        "stop": 1105,
         "before": [],
         "after": [
           "    require_scaled_extent(width, height)\n"
@@ -11428,13 +11478,21 @@ EDGES = json.loads(r'''
   },
   "postprocessing/shaders.mojo": {
     "before_sha256": "052526c1ec9b91c7e1e250ca7ace945d2403aec55abfa0c678c9a82081864b7f",
-    "after_sha256": "76bdb806e847b113331281f5266ef184dd017606b80bb941b9dad73f8ab7db97",
+    "after_sha256": "f28e9e019ac662c453a68f6851c86a5fcdee0670dbb8e4d0d142ba362906718b",
     "before_token_sha256": "228105d752af61ab95ca249aaf16a74d158e5fa4868f7b6436645a639d7d5731",
-    "after_token_sha256": "0e6dbd06a6cc3542a0bc40e3646e9441600df3f20c2b983f323fbfadabc9833a",
+    "after_token_sha256": "e6b495a42388097a71051dd32de816ec51a8999c73ee65e3cb9ab22fbdf81b5c",
     "edits": [
       {
-        "start": 1364,
-        "stop": 1365,
+        "start": 70,
+        "stop": 71,
+        "before": [],
+        "after": [
+          "from math.utils import scaled_side\n"
+        ]
+      },
+      {
+        "start": 1365,
+        "stop": 1366,
         "before": [
           "def god_rays_size(size: Int, scale: Float32) -> Int:\n"
         ],
@@ -11443,18 +11501,19 @@ EDGES = json.loads(r'''
         ]
       },
       {
-        "start": 1367,
-        "stop": 1370,
+        "start": 1368,
+        "stop": 1372,
         "before": [],
         "after": [
           "\n",
-          "    The product is a `Float64`, as JavaScript's number is. A `Float32`\n",
-          "    product drops whole sizes past 2^24. The cut is toward zero.\n"
+          "    The product is `math.utils.scaled_side`'s: `Float32` to 2^24, so 1000 times\n",
+          "    0.9 is 900 as in JavaScript, and `Float64` past it. The cut is toward\n",
+          "    zero.\n"
         ]
       },
       {
-        "start": 1377,
-        "stop": 1380,
+        "start": 1379,
+        "stop": 1382,
         "before": [],
         "after": [
           "\n",
@@ -11463,13 +11522,13 @@ EDGES = json.loads(r'''
         ]
       },
       {
-        "start": 1381,
-        "stop": 1391,
+        "start": 1383,
+        "stop": 1393,
         "before": [
           "    return max(1, Int(Float32(size) * scale))\n"
         ],
         "after": [
-          "    var scaled = Float64(size) * Float64(scale)\n",
+          "    var scaled = scaled_side(size, scale)\n",
           "    # `Float64(Int.MAX)` is 2^63. `Int` of a float at or past it is not\n",
           "    # the size. A float below `-2^63` is not one either.\n",
           "    if (\n",
@@ -11482,8 +11541,8 @@ EDGES = json.loads(r'''
         ]
       },
       {
-        "start": 1625,
-        "stop": 1626,
+        "start": 1627,
+        "stop": 1628,
         "before": [
           ") -> List[FloatColor]:\n"
         ],
@@ -11492,8 +11551,8 @@ EDGES = json.loads(r'''
         ]
       },
       {
-        "start": 1637,
-        "stop": 1640,
+        "start": 1639,
+        "stop": 1642,
         "before": [],
         "after": [
           "\n",
@@ -11502,8 +11561,8 @@ EDGES = json.loads(r'''
         ]
       },
       {
-        "start": 1670,
-        "stop": 1671,
+        "start": 1672,
+        "stop": 1673,
         "before": [
           "):\n"
         ],
@@ -11512,8 +11571,8 @@ EDGES = json.loads(r'''
         ]
       },
       {
-        "start": 1679,
-        "stop": 1682,
+        "start": 1681,
+        "stop": 1684,
         "before": [],
         "after": [
           "\n",
@@ -12540,9 +12599,9 @@ EDGES = json.loads(r'''
   },
   "render/texture.mojo": {
     "before_sha256": "3552ba623c9c6c8dd2ea0d7b6f4eb0aac924854086a0ddd9b90865e3f1978c15",
-    "after_sha256": "b567715c01d76008a7b0fd8771f971337527874f370fbfea5ee7ce1482356df6",
+    "after_sha256": "747820784c4d4b6f5bab12bf4466b58054fc14662869db593f0e0f4c3ab0e981",
     "before_token_sha256": "44e314755a6659caf4e1994252ad35a083c779d9c584675209e31729db8c0781",
-    "after_token_sha256": "300d4b771cef80aa2b3f2fc7c705f1aeb0c49560442c6d674e4f4c1e60cfd724",
+    "after_token_sha256": "fa2ab485695797da4929b2fb48dcf8aefcffb1cdda5bd47a3e77e4728ace6953",
     "edits": [
       {
         "start": 853,
@@ -12606,24 +12665,16 @@ EDGES = json.loads(r'''
       },
       {
         "start": 1808,
-        "stop": 1818,
+        "stop": 1810,
         "before": [],
         "after": [
-          "        var su = u\n",
-          "        var sv = v\n",
-          "        if not isfinite(su):\n",
-          "            su = 0\n",
-          "        else:\n",
-          "            su = gradient_sample_coordinate(su, self.wrap_s)\n",
-          "        if not isfinite(sv):\n",
-          "            sv = 0\n",
-          "        else:\n",
-          "            sv = gradient_sample_coordinate(sv, self.wrap_t)\n"
+          "        var su = sample_coordinate(u, self.wrap_s)\n",
+          "        var sv = sample_coordinate(v, self.wrap_t)\n"
         ]
       },
       {
-        "start": 1820,
-        "stop": 1821,
+        "start": 1812,
+        "stop": 1813,
         "before": [
           "        var from_top = row_coordinate(v, self.flip_y)\n"
         ],
@@ -12632,8 +12683,8 @@ EDGES = json.loads(r'''
         ]
       },
       {
-        "start": 1824,
-        "stop": 1826,
+        "start": 1816,
+        "stop": 1818,
         "before": [
           "                Int(floor(u * Float32(wide))),\n",
           "                Int(floor(from_top * Float32(tall))),\n"
@@ -12644,8 +12695,8 @@ EDGES = json.loads(r'''
         ]
       },
       {
-        "start": 1831,
-        "stop": 1833,
+        "start": 1823,
+        "stop": 1825,
         "before": [
           "        var across = u * Float32(wide) - 0.5\n",
           "        var down = from_top * Float32(tall) - 0.5\n"
@@ -12653,6 +12704,32 @@ EDGES = json.loads(r'''
         "after": [
           "        var across = _bilinear_place(su, wide)\n",
           "        var down = _bilinear_place(from_top, tall)\n"
+        ]
+      },
+      {
+        "start": 2078,
+        "stop": 2097,
+        "before": [],
+        "after": [
+          "\n",
+          "\n",
+          "def sample_coordinate(value: Float32, mode: Wrap) -> Float32:\n",
+          "    \"\"\"Return the coordinate a sampler reads at: 0 for one that is not\n",
+          "    finite, and `gradient_sample_coordinate` of the others.\n",
+          "\n",
+          "    `Texture._sample_at` and the GPU's `_sample_filtered` both call this,\n",
+          "    so the two backends read the same texel.\n",
+          "\n",
+          "    Args:\n",
+          "        value: The coordinate.\n",
+          "        mode: The texture's checked wrap mode.\n",
+          "\n",
+          "    Returns:\n",
+          "        The coordinate to sample at.\n",
+          "    \"\"\"\n",
+          "    if not isfinite(value):\n",
+          "        return 0\n",
+          "    return gradient_sample_coordinate(value, mode)\n"
         ]
       }
     ]
@@ -13625,13 +13702,29 @@ EDGES = json.loads(r'''
   },
   "tests/test_carla_sensors.mojo": {
     "before_sha256": "4ef9bda07b4d524dea636828529dd6ae5feebbbe7373c6158e00f6be906a145b",
-    "after_sha256": "7742555b4ca9b972657089cbab2f0014881c3c99ea7454cb7ec8dc2d109f8b9a",
+    "after_sha256": "bb829a327acdc1c72c00eb3d8087d909b5229638f5b5987abb115139615830e2",
     "before_token_sha256": "cb85d0a8e7533bafc32225e86902e5983d8b44958b4a732b413ca36fdca6b111",
-    "after_token_sha256": "949f602ec8abf2479444b910b850e493f4d83345d6da2b53ef20256d0ad0c3ec",
+    "after_token_sha256": "ac41288ed2b6cd5c530894f758b43ad47a0c2b962f4a08f6550cb593e8ac6ddb",
     "edits": [
       {
-        "start": 487,
-        "stop": 501,
+        "start": 92,
+        "stop": 93,
+        "before": [],
+        "after": [
+          "    _postprocess,\n"
+        ]
+      },
+      {
+        "start": 98,
+        "stop": 99,
+        "before": [],
+        "after": [
+          "    require_lidar_rays,\n"
+        ]
+      },
+      {
+        "start": 489,
+        "stop": 503,
         "before": [],
         "after": [
           "def test_a_lidar_channel_count_this_port_cannot_cast_is_refused() raises:\n",
@@ -13651,17 +13744,21 @@ EDGES = json.loads(r'''
         ]
       },
       {
-        "start": 553,
-        "stop": 572,
+        "start": 555,
+        "stop": 578,
         "before": [],
         "after": [
-          "def test_a_lidar_keeps_every_point_past_2_24() raises:\n",
+          "def test_a_lidar_counts_its_points_in_float_as_carla_does() raises:\n",
           "    var d = LidarDescription()\n",
           "    d.channels = 32\n",
           "    assert_equal(d.points_per_laser(_s(0.05)), 88)\n",
+          "    # CARLA's float product: 5 points a second for 0.7 seconds is 4, and\n",
+          "    # one past 2^24 rounds to 2^24.\n",
           "    d.channels = 1\n",
+          "    d.points_per_second = 5\n",
+          "    assert_equal(d.points_per_laser(_s(0.7)), 4)\n",
           "    d.points_per_second = 16777217\n",
-          "    assert_equal(d.points_per_laser(_s(1)), 16777217)\n",
+          "    assert_equal(d.points_per_laser(_s(1)), 16777216)\n",
           "    d.points_per_second = 56000\n",
           "    with assert_raises(contains=\"does not fit\"):\n",
           "        _ = d.points_per_laser(_s(Float32(1e20)))\n",
@@ -13677,8 +13774,8 @@ EDGES = json.loads(r'''
         ]
       },
       {
-        "start": 589,
-        "stop": 598,
+        "start": 595,
+        "stop": 623,
         "before": [],
         "after": [
           "    var wide = _lidar()\n",
@@ -13686,6 +13783,25 @@ EDGES = json.loads(r'''
           "    wide.horizontal_fov = Angle(Float32(1e20), DEGREE)\n",
           "    with assert_raises(contains=\"does not fit\"):\n",
           "        _ = hss_points_per_laser(wide, _deg(0.01))\n",
+          "    # The widest finite field over the finest step overflows to infinity.\n",
+          "    wide.horizontal_fov = Angle(Float32(3e38), DEGREE)\n",
+          "    with assert_raises(contains=\"does not fit\"):\n",
+          "        _ = hss_points_per_laser(wide, _deg(0.01))\n",
+          "    # A laser of no ray fits whatever the channel count, and a laser whose\n",
+          "    # rays all miss keeps no detection.\n",
+          "    require_lidar_rays(16777216, 0)\n",
+          "    var none = _lidar()\n",
+          "    none.channels = 1\n",
+          "    var quiet = _postprocess(\n",
+          "        _pose(0, 0, 2),\n",
+          "        none,\n",
+          "        [List[SensorHit]()],\n",
+          "        0,\n",
+          "        0,\n",
+          "        _deg(0),\n",
+          "        rng,\n",
+          "    )\n",
+          "    assert_equal(len(quiet.detections), 0)\n",
           "    wide.channels = 16777216\n",
           "    wide.horizontal_fov = Angle(Float32(1e10), DEGREE)\n",
           "    with assert_raises(contains=\"larger than this port\"):\n",
@@ -13693,12 +13809,16 @@ EDGES = json.loads(r'''
         ]
       },
       {
-        "start": 707,
-        "stop": 718,
+        "start": 732,
+        "stop": 747,
         "before": [],
         "after": [
+          "    # CARLA's float product: 10 points a second for 0.7 seconds is 7, and\n",
+          "    # one past 2^24 rounds to 2^24.\n",
+          "    d.points_per_second = 10\n",
+          "    assert_equal(d.points_in(_s(0.7)), 7)\n",
           "    d.points_per_second = 16777217\n",
-          "    assert_equal(d.points_in(_s(1)), 16777217)\n",
+          "    assert_equal(d.points_in(_s(1)), 16777216)\n",
           "    d.points_per_second = 1500\n",
           "    with assert_raises(contains=\"does not fit\"):\n",
           "        _ = d.points_in(_s(Float32(1e20)))\n",
@@ -13711,8 +13831,8 @@ EDGES = json.loads(r'''
         ]
       },
       {
-        "start": 1204,
-        "stop": 1224,
+        "start": 1233,
+        "stop": 1253,
         "before": [],
         "after": [
           "def test_event_camera_refuses_a_step_that_does_not_move() raises:\n",
@@ -13738,8 +13858,8 @@ EDGES = json.loads(r'''
         ]
       },
       {
-        "start": 1641,
-        "stop": 1643,
+        "start": 1670,
+        "stop": 1672,
         "before": [],
         "after": [
           "    with assert_raises(contains=\"larger than this port\"):\n",
@@ -14469,9 +14589,9 @@ EDGES = json.loads(r'''
   },
   "tests/test_display_nodes.mojo": {
     "before_sha256": "1629091c28886f5bb7933d74cfb520fb66d7f8d6ea41593766a0f468230b1767",
-    "after_sha256": "8c35b4c6708bd03b134c06abf5ed04f31e42f2d440d538b2afed4a38d5227306",
+    "after_sha256": "0d202176df4b933a883dd8666d157b0475d0a43687b27e105444dce28131eb4e",
     "before_token_sha256": "ef54b06b2aaf57f60472cd88965f0525229cd620cf545c289a62dc469123c3dc",
-    "after_token_sha256": "f596e7e1cd4bbd2e9073b78278c0a460391e09945b357baf1930b33ba7bc8b45",
+    "after_token_sha256": "5287bd4696b4d2d27de87f1769db70672404c3a09a944bf09ed256a65b1b5314",
     "edits": [
       {
         "start": 46,
@@ -14528,7 +14648,7 @@ EDGES = json.loads(r'''
       },
       {
         "start": 249,
-        "stop": 281,
+        "stop": 287,
         "before": [],
         "after": [
           "    with assert_raises(contains=\"larger than this port\"):\n",
@@ -14540,6 +14660,12 @@ EDGES = json.loads(r'''
           "    broad.size = Int.MAX\n",
           "    box_blur_light(boxed, broad)\n",
           "    assert_almost_equal(boxed.colors[20].g, Float32(0.5), atol=1e-5)\n",
+          "    # A size below zero also keeps the pixel.\n",
+          "    var shrunk = even(FloatColor(0.25, 0.5, 0.75, 1))\n",
+          "    var below = DisplaySettings()\n",
+          "    below.size = -1\n",
+          "    box_blur_light(shrunk, below)\n",
+          "    assert_almost_equal(shrunk.colors[20].g, Float32(0.5), atol=1e-5)\n",
           "    with assert_raises(contains=\"larger than this port\"):\n",
           "        _ = hash_blur_pass(repeats=16777217)\n",
           "    with assert_raises(contains=\"larger than this port\"):\n",
@@ -14695,9 +14821,9 @@ EDGES = json.loads(r'''
   },
   "tests/test_filter_nodes.mojo": {
     "before_sha256": "2d1316af4a32e400a62549301d2588917e547fd6073925103004c126fa32510d",
-    "after_sha256": "106378c47b6720dd242f1b066f0f122ac04b836070f7e825e43c3c2c091192b3",
+    "after_sha256": "8bc193eff0b50106f4eac7a517bf6bc9570545db1b304668876f31d09d435f1d",
     "before_token_sha256": "0aed49ecacc7206c17bcd8848c3a4de31c3c3ba5ce8df7df9ba919a3b02de1ff",
-    "after_token_sha256": "be54fe18fe73d812d01b9fb7255530d69993070f6c17be5f7892f23049fee17b",
+    "after_token_sha256": "214985a737ac95a537ebd067f7ede2b6fea38f685a22d22930390f2b9f461ad5",
     "edits": [
       {
         "start": 12,
@@ -14743,7 +14869,7 @@ EDGES = json.loads(r'''
           "    values[8388608] = 1\n",
           "    var depth = List[Float32](length=width, fill=0)\n",
           "    var view = DepthView(\n",
-          "        depth^,\n",
+          "        depth,\n",
           "        width,\n",
           "        1,\n",
           "        Matrix4(),\n",
@@ -15000,13 +15126,29 @@ EDGES = json.loads(r'''
   },
   "tests/test_geometry_tools.mojo": {
     "before_sha256": "2ed2203286ad368106da3c17b7f1e24fb2cf463fc9aec87fc3a7ab88a151d709",
-    "after_sha256": "785f8f4cb6a29b33f5d99a2156ed23a6a95f8e838e0b970776452a5b93433344",
+    "after_sha256": "3d91253eadeaaac830466f93aca1a363de0474cc5ca3a7f9c256ce7b37458889",
     "before_token_sha256": "61481fdfe1cd6157c9bb92b2e4b3570b6e701ac8e27b671e2f3fdef8d57c3a83",
-    "after_token_sha256": "2ae54e825ce6f701fd4d6dd95280ea26feb65496962e725269f4267f0b245ae3",
+    "after_token_sha256": "70f83b93221a16eae1118028f4f9be1c20a064eab17cb820e0f25c6264e5bdce",
     "edits": [
       {
-        "start": 41,
-        "stop": 42,
+        "start": 26,
+        "stop": 33,
+        "before": [
+          "from helpers.uvs_debug import UVS_BACKGROUND, UVS_LINE, uvs_debug\n"
+        ],
+        "after": [
+          "from helpers.uvs_debug import (\n",
+          "    UVS_BACKGROUND,\n",
+          "    UVS_LINE,\n",
+          "    _clip_segment,\n",
+          "    _wrap,\n",
+          "    uvs_debug,\n",
+          ")\n"
+        ]
+      },
+      {
+        "start": 47,
+        "stop": 48,
         "before": [
           "from std.math import cos, pi, sin\n"
         ],
@@ -15015,8 +15157,16 @@ EDGES = json.loads(r'''
         ]
       },
       {
-        "start": 119,
-        "stop": 127,
+        "start": 49,
+        "stop": 50,
+        "before": [],
+        "after": [
+          "from math.vector2 import Vector2\n"
+        ]
+      },
+      {
+        "start": 126,
+        "stop": 134,
         "before": [],
         "after": [
           "    with assert_raises(contains=\"larger than this port\"):\n",
@@ -15030,8 +15180,8 @@ EDGES = json.loads(r'''
         ]
       },
       {
-        "start": 316,
-        "stop": 322,
+        "start": 323,
+        "stop": 329,
         "before": [],
         "after": [
           "    with assert_raises(contains=\"larger than this port\"):\n",
@@ -15043,10 +15193,38 @@ EDGES = json.loads(r'''
         ]
       },
       {
-        "start": 646,
-        "stop": 696,
+        "start": 653,
+        "stop": 731,
         "before": [],
         "after": [
+          "def test_a_coordinate_that_is_not_a_number_is_left_off_the_image() raises:\n",
+          "    assert_equal(_wrap(nan[DType.float32]()), 0)\n",
+          "    assert_equal(_wrap(Float32(1e30)), 0)\n",
+          "    var a = Vector2(1, 1)\n",
+          "    for bad in [\n",
+          "        Vector2(1, nan[DType.float32]()),\n",
+          "        Vector2(nan[DType.float32](), 1),\n",
+          "    ]:\n",
+          "        assert_false(_clip_segment(a, bad, 8, 8)[0])\n",
+          "        assert_false(_clip_segment(bad, a, 8, 8)[0])\n",
+          "\n",
+          "\n",
+          "def test_an_outline_in_the_last_column_is_drawn() raises:\n",
+          "    # A pixel is `u * (size - 2) + 0.5` across. Every corner lies in the\n",
+          "    # last column of a 16-pixel image, from 15.06 to 15.9 pixels across.\n",
+          "    var geometry = BufferGeometry()\n",
+          "    geometry.set_attribute(\n",
+          "        String(UV),\n",
+          "        BufferAttribute([Float32(1.04), 0.3, 1.06, 0.5, 1.1, 0.7], 2),\n",
+          "    )\n",
+          "    var drawn = uvs_debug(geometry, 16)\n",
+          "    var inked = 0\n",
+          "    for y in range(16):\n",
+          "        if drawn.image.get_pixel(15, y).r == UVS_LINE.r:\n",
+          "            inked += 1\n",
+          "    assert_true(inked > 0)\n",
+          "\n",
+          "\n",
           "def test_a_uv_past_an_integer_is_left_off_the_image() raises:\n",
           "    var geometry = BufferGeometry()\n",
           "    geometry.set_attribute(\n",
@@ -16286,21 +16464,29 @@ EDGES = json.loads(r'''
   },
   "tests/test_rasterizer.mojo": {
     "before_sha256": "c9b8ef35771ba133ae0d6fffee64bc356be659d36319b0317093f07991aa9ef6",
-    "after_sha256": "29a9821acc757f2933ea1724d3cadf41dda8b467754af93414a4c677fffccb26",
+    "after_sha256": "2b625bee444cebe0d840222e78c1d6af1d808e5160bb7d814169bb77da541f06",
     "before_token_sha256": "0a82afc332fe35999429acd3fda68168d25d23b5530fdee00279392984042428",
-    "after_token_sha256": "dd2d9f5fcb2037ba46ca304075fb2532ed3128e5783eb11db6bbe9378db93439",
+    "after_token_sha256": "a38d73bd7cbf71eccf7da8bd1eb85cffc1cc712bce187fb469f8cd40c768a9f7",
     "edits": [
       {
-        "start": 126,
-        "stop": 127,
+        "start": 87,
+        "stop": 88,
+        "before": [],
+        "after": [
+          "    _bounds,\n"
+        ]
+      },
+      {
+        "start": 127,
+        "stop": 128,
         "before": [],
         "after": [
           "    _rows_of,\n"
         ]
       },
       {
-        "start": 311,
-        "stop": 356,
+        "start": 312,
+        "stop": 365,
         "before": [],
         "after": [
           "\n",
@@ -16327,6 +16513,14 @@ EDGES = json.loads(r'''
           "    for y in range(4):\n",
           "        for x in range(4):\n",
           "            assert_equal(fb.get_pixel(x, y).r, background.r)\n",
+          "    # Corners that are not numbers bound no column: the box is empty.\n",
+          "    var lost = nan[DType.float32]()\n",
+          "    var box = _bounds(\n",
+          "        Triangle(Vector2(lost, lost), Vector2(lost, lost), Vector2(lost, lost)),\n",
+          "        4,\n",
+          "        4,\n",
+          "    )\n",
+          "    assert_true(box.left > box.right)\n",
           "    var corners = List[RasterVertex]()\n",
           "    corners.append(RasterVertex(0, Float32(1e20), 0, 1, FloatColor(0, 0, 0)))\n",
           "    corners.append(RasterVertex(0, Float32(1e20), 0, 1, FloatColor(0, 0, 0)))\n",
@@ -18127,19 +18321,19 @@ EDGE_SHA256 = {'core/deform.mojo': 'b6afec67eea77b1a76cae98df1b4399de366b2a82878
  'extensions/carla/cameras.mojo': 'b454c92ad2e521ecd53b2af87f0ee87bb1739eb7ffcd262b02cb74b5cbd8031a',
  'extensions/carla/geometry.mojo': '8e4dc462a9a4544066ba162b7afe9739456342ac778d159d77855e5fb4019683',
  'extensions/carla/lane_geometry.mojo': '2bd5a91d7e40d2b3e40314f753184002ba7aee0eccab46900a9dddbb53d7e382',
- 'extensions/carla/lidar.mojo': 'be5206a344e74969f413d6b2d11f1ef5a057a77328eb6f7f79807250cec5ebc5',
+ 'extensions/carla/lidar.mojo': '05a697f4b10c692862a57acd96fe9902f85fa7161da85f09700c0217660ba6ec',
  'extensions/carla/map.mojo': '2a739d144b8f137c6d6af536c9f4937709f15152dbdb92d113b3d95892672a1a',
  'extensions/carla/map_builder.mojo': 'f10f4855653a78039ea7b08e16732f20cd2c810b347dca7ed650bb9bb8ffac39',
  'extensions/carla/math.mojo': '4d0770dc31ef89a0438eb1ad4cda697ec09bee8ca71aa69dbf82085c62f40500',
  'extensions/carla/model_cache.mojo': '33f5acadc7a3efbab1fa2481da70d2c920034f337d646c85caf87e432c7d1d1d',
  'extensions/carla/navigation_mesh.mojo': '31e8ea1ce205256e623588ddaee54e745d40ee08d91941cdb9ec16af1ba79961',
  'extensions/carla/physics/simulation.mojo': 'f07fa2f08961b9b087d6e0b9849c4a05ccef52276ceefe57211fe806c9638867',
- 'extensions/carla/radar.mojo': 'e8d12931c686a7e0cbcda412fe2949e2efbddc3d7754e8e7218f55b5068f92ab',
+ 'extensions/carla/radar.mojo': '6a15d7c7edcb813a2cf627d328a7450c5c9ad1b3456af39eb1df669a3546772e',
  'extensions/carla/render_post.mojo': 'c0a2820c6a6e1434f89e73a6385ef9ff749d67e5ccc1e50577ca19ccaa24a1e7',
  'extensions/carla/render_sky.mojo': '35caf04e12b7137690c73ba9aafc16234bd33379d47412fdd6a62ccdcd10d236',
  'extensions/carla/render_textures.mojo': '7816aa15fb9eed608183777ab26769688540e84453eb0021bf64b2a930b39e2a',
  'extensions/carla/render_weather.mojo': 'df1f076e52c856b2279c50293edfadb81bb22ee1968cc4f2f7604b31d2133b72',
- 'extensions/carla/semantic_lidar.mojo': '89c5b07e199e9222aeccf544b639ab03d8bc4f8817616370af2b1904319c638d',
+ 'extensions/carla/semantic_lidar.mojo': 'b90c41a609d72ead493f4ad512ed9e6321e5a87674ea8f5d8a2009b0d7137623',
  'extensions/carla/sensor.mojo': '4f8123d63ba83d79627b57c8f15bce7027a8c40f622a8c187e4bcdb4b89496df',
  'extensions/carla/sensor_data.mojo': 'fd7f9bed3a11bfc5d48c8397259e16957d187a747dc83d49cff31133f854ad3b',
  'extensions/carla/sensor_manager.mojo': '26af2114c101807527138252638fa5d85a3a4bed2c4fa63679723d8f62429639',
@@ -18183,21 +18377,21 @@ EDGE_SHA256 = {'core/deform.mojo': 'b6afec67eea77b1a76cae98df1b4399de366b2a82878
  'math/matrix4.mojo': '3a14fb7473be39825f01e0b25141dc11deae32815083038f273f1dc88f0d3b45',
  'math/path.mojo': '6c2cd1c42f7df845460b128c2765c02410dfd1ebbbe057c2623ac1fa283ccf2c',
  'math/square_matrix.mojo': '0654dc0cfd85f05b383961d1507464559d00fefc15e49d682d8d3a4a8aa95ed9',
- 'math/utils.mojo': '24723e8dc9b370ef2b6dec395b92ff425e75c4f1fcd04e7b4a0d4fa5590c75e7',
+ 'math/utils.mojo': '8bda7b753b9f6855217266e9f0c63cf5dac26a6b2600c3e780489d2ef68c2269',
  'math/vector4.mojo': '3bf820cf0f2f9ad74083de036282f10d01d9fed78a6a90ac2ff65bfa6bc440d1',
  'objects/gaussian_splat.mojo': '4469b3d742b43810e8752266ef1b5f6d10fbf5894d46d434c2bc26cf4ab51483',
  'objects/line_segments2.mojo': '289763b1859e683324ce7cfaee1096753f2c3c92ad0bf0e7f0d96f95c790db0e',
  'postprocessing/antialiasing.mojo': '93b3732b150959edfd3cca78e5df6c151aa2cf3939bfc548be3043e261fe7372',
  'postprocessing/composer.mojo': 'cf71d82388dfbaee968e0bfaf9b9fdc175aaa576bc8d7314552c30001b284006',
  'postprocessing/denoise.mojo': '66a3f8468a202f4c1874e3c1d16c323e92ab095cfa2ed9a97e64d4bfc1c868c7',
- 'postprocessing/display_nodes.mojo': '79c11373230676414018ff7c5397998215dbe2d50e994af32327a183c82fb31b',
+ 'postprocessing/display_nodes.mojo': '971406c79c83b54b0e9057b69f4b5ac6604140bd483d18053645048c857d8577',
  'postprocessing/effects.mojo': '035bac80d3148af61d2c77cd2b3130e24656a3bcf4025943a426714871dbd60a',
  'postprocessing/filter_nodes.mojo': 'e4418b40903991eda041b79ba1a8f43d06ed36ca9d8c1e06cf99f88bf8f5fd50',
  'postprocessing/gtao.mojo': 'c0fd6ed0a7662e96e548e7b5b90f6ddef4dd5f155a565493438c2e02e341c98a',
  'postprocessing/render_passes.mojo': '9eb2200bfdf9efe3c4db4c342dc9c7e1e2ff0f43d30ca28e7be0e2306c8daf7e',
  'postprocessing/sampling.mojo': 'b37ef64ff8d4af67b290c2fc4c210cebbb7fb08d7f5301b3ec5f35666cdc3093',
  'postprocessing/screen_space.mojo': '34f074a7be8bde8c3037d56ed6a3b9381ce756627ecea82bf57d0279c4dad514',
- 'postprocessing/shaders.mojo': '909b202eafceb8da0610fd7546ceec1c1c154a400d2c5741c6c419c6095466d3',
+ 'postprocessing/shaders.mojo': '6e045ed0a008b33c9cbbe387c39b3a5c2a2c438052142ec7910c625f5e7ec203',
  'postprocessing/ssgi.mojo': '2e2f13286c83e2299f64e95d7b1c4e6ccaa6942c436398f27709762e768dc4e4',
  'postprocessing/ssr_node.mojo': '1db558f15ab39622488a946dff80d96ddc3eb9a7aceaba245716d3fd37145bb0',
  'postprocessing/taau.mojo': '5b17a928ea6bdd319d7ceab2386d3666bc8b623fc9ae753e9da54f0acb171e59',
@@ -18213,12 +18407,12 @@ EDGE_SHA256 = {'core/deform.mojo': 'b6afec67eea77b1a76cae98df1b4399de366b2a82878
  'render/linerule.mojo': 'f26043bc934bac2a377b1d015dd593953e13fad7381cc41c8d5961deb99dae4b',
  'render/pmrem.mojo': 'edaf56fcf886c01ac6d7d4b47c0f9fa4491ecd6643e49a9a7a59746f690afcd7',
  'render/pointrule.mojo': 'd7394adf9e10c8bdff437647c6d2f339c89b68c04f5dae322262391d9351a2ae',
- 'render/rasterizer.mojo': 'ab9506c18ffe673cf8e4ffdc977afcace2067f31dd04a650f6241283128b34f9',
+ 'render/rasterizer.mojo': 'e958391ac25415fd39cd96196b38aaf2ec54f860bd6c84d45c4a489ab1fc7daf',
  'render/splat_raster.mojo': '377f405d4f36d938aee6dfca9fd6b4e511c5ced0e4868bb3d563b850e92e15b6',
  'render/splatrule.mojo': '54e73c0e96327cdf863613db0b082672240aec0562e09e9bc471a1da2c4a39a6',
  'render/target.mojo': '5d33e908ee6d26cee44948ff3800f48cda2759a5f7ca0e3e8993c2b377df76ee',
  'render/tasks.mojo': 'b8dfd9c3417ae3c05156a394811e45a7eb7a990cedb22f8d21652053d9ce61a6',
- 'render/texture.mojo': '18bbc1aad072aa0114ebf4a32dc78cc8455e169fbdd755d394736bdae9d14c28',
+ 'render/texture.mojo': 'c0b465bae96926e966ae3dcca28e998562fee200f683b40fad8624440661a351',
  'render/tonemap.mojo': '9b7ec9c567c09176ccd5b338302b4d59985869c7035855754b819444464f1065',
  'render/transmission.mojo': 'bb1b8248c04478e3845e9f1b4f76e18f0294f0181ac3ae5d23ed093124d938c4',
  'render/uastc.mojo': 'e6833f17255cf058e2f4356e45c0fc7123d971c524fadd0fd3dda02d9d590a77',
@@ -18262,7 +18456,7 @@ EDGE_SHA256 = {'core/deform.mojo': 'b6afec67eea77b1a76cae98df1b4399de366b2a82878
  'tests/test_carla_road_fixed_s.mojo': 'db41f9c38e18a4b9b4a7064a7862931870ca396c92689221f2d3243a32cf867a',
  'tests/test_carla_sampled_box_cover.mojo': '1f89d12d4b3179fdd0e7904560d2f37f944878dddaf92c60e7b652268bda1018',
  'tests/test_carla_scaled_lane_refinement.mojo': 'd0608befa93df7ea91da9f40c42a2844bd49aa66c4aa3f4c093e3d057297484f',
- 'tests/test_carla_sensors.mojo': 'c6db262782d76455a521c6122dca9a2ff87e4e0b21e9e4db303d9c073dd92362',
+ 'tests/test_carla_sensors.mojo': '7e0d87bc082d57700b69a298d7823c5e59b5090a26394cb9b866b48a62b90503',
  'tests/test_carla_sensors_world.mojo': '2757a7a57aebb6162c7ae58c236a33aa893a55ca07731b3339097d60e481d6bf',
  'tests/test_carla_speed_parser_exceptions.mojo': 'fee54ffb5e01aed94eb2e1951af548bfa7feac04e5dd0bb01c21d486fb4a4941',
  'tests/test_carla_tight_rounding.mojo': '1ec90a5ed03883465957404e01c1f4e9b3c046d4b91b3632149f42073dcb3709',
@@ -18281,18 +18475,18 @@ EDGE_SHA256 = {'core/deform.mojo': 'b6afec67eea77b1a76cae98df1b4399de366b2a82878
  'tests/test_curve3.mojo': 'fc07cf18840e3079a7d4badf39330dd0300e4652a059c7b7af398b61ff324694',
  'tests/test_curve_boundaries.mojo': 'c6e5ab3305c8095911e34d76d2daedb218b5f9ccb1f0f68621672fb68032b694',
  'tests/test_denoise.mojo': 'd50947f898060041c068114c6368a74e49ae2e36c38916f5ec1cc67e19c386b9',
- 'tests/test_display_nodes.mojo': '50b03d1815835127ec6339ce4882b6cc91c0322947798ac7c942945a541a2d8f',
+ 'tests/test_display_nodes.mojo': '550c6ce47c52e28c7e9d77b8034c65899a536282513bddccc91c343baadcba2a',
  'tests/test_draco.mojo': 'b6d583c0d224af6b2f881d4c5da1d4145f9e5b2119df81b6594cdb122e077ebf',
  'tests/test_draco_export.mojo': '1c60b89e44fd43032acd77dd6c8d1c4d06a692e505617695a9ea0a2696e7fbbd',
  'tests/test_fbx.mojo': '0d8e8b8a7dc1c154f1ca8efa38fdea56df8e3411cbc523a620abecb05700aade',
  'tests/test_fbx_rig.mojo': '71c35db1b0577a0a0fb5e01a4d12306a7964fb1395d62638d9b7e498005c5bbf',
- 'tests/test_filter_nodes.mojo': '14d3edd223c4bb13d23346f4c820594cb7fcea2dadad14a06d35b3b05533c29f',
+ 'tests/test_filter_nodes.mojo': 'b5dbd6a7828668c2a984d76673a71537e296eec21f6ae3cc41071b176dd9badc',
  'tests/test_gaussian_splat.mojo': 'cc385bc98e800e70867d07160e0384c8fe0d24a8a1ed0a66f5ea0bc0b9adbc69',
  'tests/test_geometry.mojo': 'f5fd9f04e809630209caafe91cf4299ba8d7bb2010a1ac43fb87e0f611bbd95c',
  'tests/test_geometry_addons.mojo': 'e4a2ecdea11428330fd71b7a3c71a6bddb71d0b30daff381b7b4b053c2d61fba',
  'tests/test_geometry_inputs.mojo': 'f6fe97ba4e3fee2c95861e6d37dad6eeba84a3538bfc82726fc5c977464d108b',
  'tests/test_geometry_signatures.mojo': '8e98a77013a6545f33dc7e9012716b125cbb5cd92ffa45a9460d9d1fddde1c1e',
- 'tests/test_geometry_tools.mojo': 'e922f340bd654634f4b798bf9067bb12589631131e08ce7682c9638250a199ea',
+ 'tests/test_geometry_tools.mojo': 'a342bb28290820411cb8cdb80690aa6c9666e088ab38b17e9aeeddbbbf18d9ac',
  'tests/test_gpgpu_sort.mojo': '0914b784255e675365549f1778f24bf578e2496fd5e1d6e458a7081ccf1ff2e9',
  'tests/test_gpu.mojo': 'c205408079bb797a553b1623d15120eb9ad1d58205f366692b742ffe65db35f4',
  'tests/test_gpu_layout.mojo': '0d065631b2e39eed26f83e39036a5d841fa48eee90c7253310d14b61d40e1682',
@@ -18327,7 +18521,7 @@ EDGE_SHA256 = {'core/deform.mojo': 'b6afec67eea77b1a76cae98df1b4399de366b2a82878
  'tests/test_postprocessing_shaders.mojo': '2b5b1263e102088c31b13ebac763182d2c809129114a9cd3d5297b7f953ef093',
  'tests/test_progressive_light_map.mojo': '4df79c1b5e917ea781a6b7091504e564d5f9033c97373e6e76aa652995a15348',
  'tests/test_projector.mojo': 'dc21f222e0babb98bafd7ed4110bfe253853ca74d3013ab55b2b6b6a1661249b',
- 'tests/test_rasterizer.mojo': 'e9f3b2c73bb6205837caed82f757080474d1169f2b46e3131407847a9057f39f',
+ 'tests/test_rasterizer.mojo': '54bd2bafe99201a0f9dd7908ac71fcccba158500de61762b54791e445c7ff5c9',
  'tests/test_raycaster.mojo': '8175ebce8b5a4644974ab5bceef63fd39e35308f1a19df18cdedb00340c5690f',
  'tests/test_renderer_effects.mojo': '6a4b6917e27263d91c1260b26327a3cbb4d0d83fea157abf248ef244b4eae5b9',
  'tests/test_scene_optimizer.mojo': '94f9557fdb7bd5a59efb11c4b632160dd8ac7bb16c0cab43d3eb05672e160ed9',
@@ -18366,7 +18560,7 @@ EDGE_SHA256 = {'core/deform.mojo': 'b6afec67eea77b1a76cae98df1b4399de366b2a82878
  'tools/carla_lane_oracle/translated_parameter_resolution.py': '1c63297c0097ce50b9f314ba321e7f4d04c009f6379552a84adefb62a2a7f375',
  'tools/compile_fail_expectations.json': 'a15d4cff3d89429312350a4da95604569da83be105f69a0690025904c2cfbc84',
  'tools/test_conditioned_coverage_loops.py': 'f88451e7313fd84cc788847b1c960dc395b98736779a92c81a1d056ff2977520'}
-DATA_SHA256 = '257ae90cf30b2a8b9c217a68d0d0f9a117207d6f246770bf72f6512a19e95bea'
+DATA_SHA256 = 'fbb6045c34ee89d6909add5d7c40b33cc1066846d909bababf8d563ee9ebc9df'
 # END FIXED PR780 SUCCESSOR DATA
 
 
@@ -18382,7 +18576,7 @@ def sha(raw):
 def _index_snapshot():
     """Authenticate and detach the fixed per-edge digests and bound inputs."""
     require(type(DATA_SHA256) is str, 'authority digest selector is not a builtin string')
-    require(DATA_SHA256 == '257ae90cf30b2a8b9c217a68d0d0f9a117207d6f246770bf72f6512a19e95bea', 'authority digest selector changed')
+    require(DATA_SHA256 == 'fbb6045c34ee89d6909add5d7c40b33cc1066846d909bababf8d563ee9ebc9df', 'authority digest selector changed')
     encoded = json.dumps({'edges': EDGE_SHA256, 'bound_inputs': BOUND_INPUTS},
                          sort_keys=True, separators=(',', ':'))
     require(sha(encoded) == DATA_SHA256, 'fixed source inverse data changed')
