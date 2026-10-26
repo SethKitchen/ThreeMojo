@@ -342,6 +342,12 @@ The two score declarations keep their reviewed token digests.
 Reversing the two score edits restores the frontier endpoint.
 A changed score endpoint is refused.
 
+Mojo checks the reviewed frontier predecessor.
+The frontier endpoint keeps its file digest and its token digest.
+The two frontier edits keep their reviewed names.
+Reversing those edits restores the support endpoint.
+A changed frontier endpoint is refused.
+
 ## Candidate certificate
 
 A certificate contains a stored incumbent point and its road parameter.
