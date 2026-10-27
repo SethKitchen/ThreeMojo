@@ -36,6 +36,7 @@
     carla_cleanup_gate --try-only PATH
     carla_cleanup_gate --import-scope PATH
     carla_cleanup_gate --splice DIR
+    carla_cleanup_gate --replace-first DIR
     carla_cleanup_gate --syntax PATH
     carla_cleanup_gate --slice PATH --name NAME
     carla_cleanup_gate --fragment DIR
@@ -80,6 +81,7 @@ from tests._python_tokens import (
     try_only_refusal,
     import_scope_prefix,
     replace_line_span,
+    replace_first,
     moment_payload_json,
     moment_source,
     moment_words_json,
@@ -567,7 +569,7 @@ def _usage():
             " --imports PATH | --heading PATH | --function-dump PATH |"
             " --plain-dump PATH | --sum2-dump PATH | --statement-dump PATH |"
             " --fragment-count PATH | --try-only PATH | --import-scope PATH |"
-            " --splice DIR |"
+            " --splice DIR | --replace-first DIR |"
             " --syntax PATH |"
             " --slice PATH --name NAME | --fragment DIR | --normalize PATH |"
             " --table PATH --count N | --moment-source PATH | --moment-payload"
@@ -624,6 +626,7 @@ def main() raises:
     var try_only = String("")
     var import_scope = String("")
     var splice = String("")
+    var replace_first_path = String("")
     var syntax = String("")
     var slice_path = String("")
     var fragment = String("")
@@ -682,6 +685,7 @@ def main() raises:
             or word == "--try-only"
             or word == "--import-scope"
             or word == "--splice"
+            or word == "--replace-first"
             or word == "--syntax"
             or word == "--slice"
             or word == "--fragment"
@@ -777,6 +781,8 @@ def main() raises:
                 import_scope = value
             elif word == "--splice":
                 splice = value
+            elif word == "--replace-first":
+                replace_first_path = value
             elif word == "--syntax":
                 syntax = value
             elif word == "--slice":
@@ -883,6 +889,8 @@ def main() raises:
     if import_scope.byte_length() > 0:
         modes += 1
     if splice.byte_length() > 0:
+        modes += 1
+    if replace_first_path.byte_length() > 0:
         modes += 1
     if syntax.byte_length() > 0:
         modes += 1
@@ -1159,6 +1167,16 @@ def main() raises:
                     first,
                     last,
                     Path(splice + "/replacement.text").read_text(),
+                ),
+                end="",
+            )
+            return
+        if replace_first_path.byte_length() > 0:
+            print(
+                replace_first(
+                    Path(replace_first_path + "/source.text").read_text(),
+                    Path(replace_first_path + "/old.text").read_text(),
+                    Path(replace_first_path + "/new.text").read_text(),
                 ),
                 end="",
             )

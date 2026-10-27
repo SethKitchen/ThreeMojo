@@ -23,6 +23,7 @@ from tests._python_tokens import (
     try_only_refusal,
     import_scope_prefix,
     replace_line_span,
+    replace_first,
     moment_source,
     moment_words_json,
     normalized_block,
@@ -540,6 +541,18 @@ def test_an_if_expression_and_annotation_match_cpython() raises:
         ),
         '["FunctionDef",[["name","f"],["args",["arguments",[["posonlyargs",[]],["args",[]],["kwonlyargs",[]],["kw_defaults",[]],["defaults",[]]]]],["body",[["Assign",[["targets",[["Name",[["id","fixed"],["ctx",["Store",[]]]]]]],["value",["IfExp",[["test",["Name",[["id","goal"],["ctx",["Load",[]]]]]],["body",["Constant",[["value",26]]]],["orelse",["Constant",[["value",20]]]]]]]]],["AnnAssign",[["target",["Name",[["id","point_domain"],["ctx",["Store",[]]]]]],["annotation",["Subscript",[["value",["Name",[["id","Tuple"],["ctx",["Load",[]]]]]],["slice",["Tuple",[["elts",[["Name",[["id","Int"],["ctx",["Load",[]]]]],["Name",[["id","Int"],["ctx",["Load",[]]]]]]],["ctx",["Load",[]]]]]],["ctx",["Load",[]]]]]],["simple",1]]],["AnnAssign",[["target",["Name",[["id","x"],["ctx",["Store",[]]]]]],["annotation",["Name",[["id","Int"],["ctx",["Load",[]]]]]],["value",["Constant",[["value",1]]]],["simple",1]]]]],["decorator_list",[]]]]',
     )
+
+
+def test_the_first_declaration_name_is_replaced() raises:
+    """Only the first matching declaration name changes."""
+    assert_equal(
+        replace_first("def foo(\ndef foo(", "def foo(", "def _referencefoo("),
+        "def _referencefoo(\ndef foo(",
+    )
+    assert_equal(
+        replace_first("none", "def foo(", "def _referencefoo("), "none"
+    )
+    assert_equal(replace_first("abc", "", "X"), "Xabc")
 
 
 def test_a_line_span_keeps_the_surrounding_lines() raises:

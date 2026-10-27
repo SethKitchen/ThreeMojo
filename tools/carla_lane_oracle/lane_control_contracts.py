@@ -17,6 +17,30 @@ RECORD_SHA256 = '73d95d594e740205bad4cd900288a68d9f82897474fdc33e4d6043a15679017
 PREDECESSOR_SHA256 = '33d33ba0e481e3eca3b17ae0d02457ab53bae906430b0dca58abcfa876756315'
 
 
+def _replace_first(text, old, new):
+    """Replace the first occurrence of `old` in `text`."""
+    import os
+    import subprocess
+    import tempfile
+    root = Path(__file__).resolve().parents[2]
+    mojo = os.environ.get('MOJO', str(root / '.venv' / 'bin' / 'mojo'))
+    with tempfile.TemporaryDirectory(prefix='replace-first-') as directory:
+        folder = Path(directory)
+        (folder / 'source.text').write_text(text)
+        (folder / 'old.text').write_text(old)
+        (folder / 'new.text').write_text(new)
+        result = subprocess.run(
+            ['sh', str(root / 'tools' / 'tool.sh'), mojo, 'carla_cleanup_gate',
+             '--replace-first', str(folder)],
+            capture_output=True, text=True)
+    if result.returncode != 0:
+        lines = [line.strip() for line in result.stderr.splitlines()
+                 if line.strip() and 'Crashpad' not in line]
+        message = lines[-1] if lines else result.stdout.strip()
+        raise ValueError(message)
+    return result.stdout
+
+
 def _check_operation(root, operation):
     if __package__:
         from . import full_audit_cleanup_contracts as full_audit
@@ -160,7 +184,8 @@ def verify(root, *, _operation=None):
                              (root / 'tests/test_carla_lane_control_successor.mojo').read_text(),
                              _operation=_operation), _operation=_operation)
         frozen = _declaration(test, '_reference' + name, ())
-        expected = item['before'].replace('def ' + name + '(', 'def _reference' + name + '(', 1)
+        expected = _replace_first(
+            item['before'], 'def ' + name + '(', 'def _reference' + name + '(')
         pairs.append((frozen, expected, 'lane-control frozen predecessor changed'))
     for item in record['premises']:
         actual = _declaration(_typed_source.historical_text(root, item['path'], _observe_text(root, item['path'], (root / item['path']).read_text(), _operation=_operation), _operation=_operation), item['name'], ())

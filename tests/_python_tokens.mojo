@@ -2275,6 +2275,26 @@ def _find_byte(source: String, needle: String) -> Int:
     return -1
 
 
+def replace_first(source: String, old: String, new: String) -> String:
+    """Replace the first occurrence of `old` in `source`.
+
+    Args:
+        source: The original text.
+        old: The text to replace. An empty value is inserted at the start.
+        new: The replacement text.
+
+    Returns:
+        `source` when `old` is absent. Otherwise the first match is replaced.
+    """
+    if old.byte_length() == 0:
+        return new + source
+    var at = _find_byte(source, old)
+    if at < 0:
+        return source
+    var end = at + old.byte_length()
+    return String(source[byte=0:at]) + new + String(source[byte=end:])
+
+
 def import_scope_prefix(source: String) -> String:
     """Return the module prefix before the first definition.
 
