@@ -1727,6 +1727,116 @@ def body_role_json(source: String) raises -> String:
     return doc.dumps()
 
 
+def _split_roles(text: String) -> List[String]:
+    """Split a pipe-joined role list.
+
+    Args:
+        text: Roles separated by `|`.
+
+    Returns:
+        The roles in order.
+    """
+    var out = List[String]()
+    var at = 0
+    var limit = text.byte_length()
+    while at <= limit:
+        var comma = text.find("|", at)
+        var end = limit
+        if comma >= 0:
+            end = comma
+        out.append(String(text[byte=at:end]))
+        if comma < 0:
+            at = limit + 1
+        else:
+            at = comma + 1
+    return out^
+
+
+def _match_roles(
+    doc: PyJson, start: Int, expected_text: String, message: String
+) raises:
+    """Require roles from `start` to equal `expected_text`.
+
+    Args:
+        doc: A JSON list of roles.
+        start: The first role index to compare.
+        expected_text: The required roles, separated by `|`.
+        message: The failure text.
+
+    Raises:
+        Error: The role list changed.
+    """
+    var expected = _split_roles(expected_text)
+    var count = doc.length(doc.root)
+    var want = len(expected)
+    if count - start != want:
+        raise Error(message)
+    var index = 0
+    while index < want:
+        if doc.text(doc.item(doc.root, start + index)) != expected[index]:
+            raise Error(message)
+        index += 1
+
+
+def require_sampled_roles(source: String, kind: String) raises:
+    """Require one sampled declaration to keep its reviewed statement roles.
+
+    Args:
+        source: Mojo source for one function.
+        kind: `union`, `reference`, `constant`, or `lane`.
+
+    Raises:
+        Error: The role list changed, or `kind` is unknown.
+    """
+    var doc = PyJson.parse(body_role_json(source))
+    if kind == "union":
+        _match_roles(doc, 0, "return", "union complete body shape changed")
+        return
+    if kind == "reference":
+        _match_roles(
+            doc,
+            0,
+            (
+                "assign:d|if:geometry.kind == LINE|if:geometry.kind =="
+                " ARC|if:geometry.kind == SPIRAL|if:len(geometry.samples) <"
+                " 2|assign:domain|assign:low|assign:high|if:high - low >"
+                " 1|assign:first|if:low == high|return"
+            ),
+            "complete reference dispatcher layout changed",
+        )
+        return
+    if kind == "constant":
+        _match_roles(
+            doc,
+            0,
+            (
+                "assign:result|if:not isfinite(heading) or abs(heading) >"
+                " _PHASE_LIMIT|assign:zero|return"
+            ),
+            "constant heading layout changed",
+        )
+        return
+    if kind == "lane":
+        _match_roles(
+            doc,
+            1,
+            (
+                "assign:geometry_at|assign:elevation_at|assign:offset_at|if:geometry_at"
+                " < 0 or elevation_at < 0 or offset_at <"
+                " 0|if:info_index(road.info.geometries, high) != geometry_at or"
+                " info_index(road.info.elevations, high) != elevation_at or"
+                " info_index(road.info.lane_offsets, high) !="
+                " offset_at|assign:s|assign:offset|assign:lanes|assign:lane_id|assign:negative|assign:sign|if:lane_id.value"
+                " != 0|assign:offset|assign:record|if:capture|if:record.geometry.kind"
+                " == ARC|if:record.geometry.kind == LINE|annotate:reused|if:not"
+                " capture|annotate:point|if:reused|assign:trig|return"
+            ),
+            "complete lane dispatcher layout changed",
+        )
+        return
+    raise Error("unknown sampled role layout")
+
+
 def body_statement_json(source: String, index: Int) raises -> String:
     """Return the normalized dump of one function-body statement.
 

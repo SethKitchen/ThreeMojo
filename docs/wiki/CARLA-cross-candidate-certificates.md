@@ -323,6 +323,8 @@ It checks stored helpers and the value-only imports.
 
 It checks the statement roles of four sampled declarations.
 
+The lane role check starts at the second statement.
+
 It checks the heading constructor, its projection, and two lane proof statements.
 
 It checks the sampled helper names and top-level statements.

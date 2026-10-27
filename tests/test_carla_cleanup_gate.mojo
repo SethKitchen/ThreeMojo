@@ -19,10 +19,15 @@ from tests._python_expr import (
     require_half_arguments,
     require_ideal_prefix,
     require_same_projection,
+    require_sampled_roles,
     statement_dump,
     sum2_graph_dump,
 )
 from tools._python_json import PyJson
+from tools._sampled_value_gate import (
+    extract_sampled_function,
+    rename_sampled_identifiers,
+)
 from tests._python_tokens import (
     declaration_place,
     declaration_text,
@@ -637,6 +642,39 @@ def test_an_ideal_half_count_or_name_change_is_refused() raises:
         contains="expected exactly two historical rate-half commutations"
     ):
         _ = ideal_legacy_dump(one)
+
+
+def test_the_sampled_role_lists_stay_reviewed() raises:
+    """The four sampled declarations keep their reviewed statement roles."""
+    require_sampled_roles("def f():\n    return 1\n", "union")
+    with assert_raises(contains="union complete body shape changed"):
+        require_sampled_roles("def f():\n    x = 1\n", "union")
+    with assert_raises(contains="unknown sampled role layout"):
+        require_sampled_roles("def f():\n    return 1\n", "other")
+    var bounds = Path("extensions/carla/curve_bounds.mojo").read_text()
+    var trig = Path("extensions/carla/curve_trig.mojo").read_text()
+    var union = rename_sampled_identifiers(
+        extract_sampled_function(bounds, "_union_points")
+    )
+    var reference = rename_sampled_identifiers(
+        extract_sampled_function(bounds, "_reference_jet_capture")
+    )
+    var lane = rename_sampled_identifiers(
+        extract_sampled_function(bounds, "_lane_jet_model_proof")
+    )
+    var constant = rename_sampled_identifiers(
+        extract_sampled_function(trig, "_constant_sincos_jet")
+    )
+    require_sampled_roles(union, "union")
+    require_sampled_roles(reference, "reference")
+    require_sampled_roles(constant, "constant")
+    require_sampled_roles(lane, "lane")
+    with assert_raises(contains="complete reference dispatcher layout changed"):
+        require_sampled_roles(union, "reference")
+    with assert_raises(contains="constant heading layout changed"):
+        require_sampled_roles(union, "constant")
+    with assert_raises(contains="complete lane dispatcher layout changed"):
+        require_sampled_roles(union, "lane")
 
 
 def test_the_checked_leaf_name_is_replaced_before_the_dump() raises:

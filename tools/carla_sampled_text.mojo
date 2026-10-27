@@ -9,6 +9,7 @@
     carla_sampled_text --rename PATH
     carla_sampled_text --drop-intersection PATH --name first|second
     carla_sampled_text --body-roles PATH
+    carla_sampled_text --check-roles PATH --name KIND
     carla_sampled_text --body-dump PATH --index N
     carla_sampled_text --return-elts PATH --index N
     carla_sampled_text --top-level PATH --name NAMES
@@ -26,6 +27,7 @@
 The extract mode prints one top-level function. The rename mode prints the
 declaration with sampled identifiers renamed. The drop mode removes the first
 derivative intersection. The body-roles mode prints JSON statement roles.
+The check-roles mode requires one reviewed role list.
 The body-dump mode prints one statement dump. The return-elts mode prints
 JSON dumps of a returned tuple, or null. The top-level mode checks helper
 names and statement kinds. The project-constant mode prints the unknown-interval
@@ -47,6 +49,7 @@ from std.sys import argv, exit, stderr
 from tests._python_expr import (
     body_role_json,
     body_statement_json,
+    require_sampled_roles,
     return_elements_json,
 )
 from tests._python_tokens import (
@@ -79,7 +82,8 @@ def _usage():
             "usage: carla_sampled_text --extract PATH --name NAME | --rename"
             " PATH | --drop-intersection PATH --name first|second |"
             " --helper-fields PATH | --value-fields PATH | --value-imports PATH"
-            " | --body-roles PATH | --body-dump PATH --index N | --return-elts"
+            " | --body-roles PATH | --check-roles PATH --name KIND |"
+            " --body-dump PATH --index N | --return-elts"
             " PATH --index N | --top-level PATH --name NAMES |"
             " --project-constant PATH | --project-union PATH |"
             " --project-reference PATH | --project-lane PATH | --decorators"
@@ -105,6 +109,7 @@ def main() raises:
     var value_fields = String("")
     var value_imports = String("")
     var body_roles = String("")
+    var check_roles = String("")
     var body_dump = String("")
     var return_elts = String("")
     var top_level = String("")
@@ -133,6 +138,7 @@ def main() raises:
             or word == "--value-fields"
             or word == "--value-imports"
             or word == "--body-roles"
+            or word == "--check-roles"
             or word == "--body-dump"
             or word == "--return-elts"
             or word == "--top-level"
@@ -167,6 +173,8 @@ def main() raises:
                 value_imports = value
             elif word == "--body-roles":
                 body_roles = value
+            elif word == "--check-roles":
+                check_roles = value
             elif word == "--body-dump":
                 body_dump = value
             elif word == "--return-elts":
@@ -217,6 +225,8 @@ def main() raises:
         modes += 1
     if body_roles.byte_length() > 0:
         modes += 1
+    if check_roles.byte_length() > 0:
+        modes += 1
     if body_dump.byte_length() > 0:
         modes += 1
     if return_elts.byte_length() > 0:
@@ -251,6 +261,7 @@ def main() raises:
         or top_level.byte_length() > 0
         or decorators.byte_length() > 0
         or replace_path.byte_length() > 0
+        or check_roles.byte_length() > 0
     ) and name.byte_length() == 0:
         _usage()
     if rename.byte_length() > 0 and name.byte_length() > 0:
@@ -313,6 +324,9 @@ def main() raises:
             return
         if body_roles.byte_length() > 0:
             print(body_role_json(Path(body_roles).read_text()), end="")
+            return
+        if check_roles.byte_length() > 0:
+            require_sampled_roles(Path(check_roles).read_text(), name)
             return
         if body_dump.byte_length() > 0:
             print(

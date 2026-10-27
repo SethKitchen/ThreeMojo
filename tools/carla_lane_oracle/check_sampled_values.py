@@ -381,23 +381,15 @@ def verify(root):
             return _sampled_text(
                 '--rename', _sampled_text('--extract', texts[filename], name))
 
-        def body_roles(text):
-            return json.loads(_sampled_text('--body-roles', text))
-
         def with_decorators(filename, original, text):
             return _sampled_text('--decorators', texts[filename], original) + text
 
         old = renamed_source('curve_bounds.mojo', '_union_points')
-        require(body_roles(old) == ['return'], 'union complete body shape changed')
+        _sampled_text('--check-roles', old, 'union')
         expected['_union_value_points'] = _sampled_text('--project-union', old)
 
         old = renamed_source('curve_bounds.mojo', '_reference_jet_capture')
-        require(body_roles(old) == [
-            'assign:d', 'if:geometry.kind == LINE', 'if:geometry.kind == ARC',
-            'if:geometry.kind == SPIRAL', 'if:len(geometry.samples) < 2',
-            'assign:domain', 'assign:low', 'assign:high', 'if:high - low > 1',
-            'assign:first', 'if:low == high', 'return',
-        ], 'complete reference dispatcher layout changed')
+        _sampled_text('--check-roles', old, 'reference')
         # Remove precisely the three complete non-sampled branches. The new
         # leading guard rejects those kinds; the independent broad wrapper
         # provides the full-Jet SPIRAL bridge. All 12 statements are accounted for.
@@ -409,9 +401,7 @@ def verify(root):
                 filename, name, renamed_source(filename, name))
 
         constant = renamed_source('curve_trig.mojo', '_constant_sincos_jet')
-        require(body_roles(constant) == ['assign:result',
-            'if:not isfinite(heading) or abs(heading) > _PHASE_LIMIT',
-            'assign:zero', 'return'], 'constant heading layout changed')
+        _sampled_text('--check-roles', constant, 'constant')
         require(_sampled_text('--body-dump', constant, index=2) == dump(ast.parse(
             'zero = _Interval.point(0.0)').body[0]),
                 'constant heading derivative constructor changed')
@@ -450,17 +440,7 @@ def verify(root):
         require(_sampled_text('--body-dump', old, index=0) == dump(ast.parse("""if proof and not _sum2_supported_environment():
         return _unknown_value_point()
     """).body[0]), 'cached-proof environment refusal changed or moved')
-        require(body_roles(old)[1:] == [
-            'assign:geometry_at', 'assign:elevation_at', 'assign:offset_at',
-            'if:geometry_at < 0 or elevation_at < 0 or offset_at < 0',
-            'if:info_index(road.info.geometries, high) != geometry_at or info_index(road.info.elevations, high) != elevation_at or info_index(road.info.lane_offsets, high) != offset_at',
-            'assign:s', 'assign:offset', 'assign:lanes', 'assign:lane_id',
-            'assign:negative', 'assign:sign', 'if:lane_id.value != 0',
-            'assign:offset', 'assign:record', 'if:capture',
-            'if:record.geometry.kind == ARC', 'if:record.geometry.kind == LINE',
-            'annotate:reused', 'if:not capture', 'annotate:point', 'if:reused',
-            'assign:trig', 'return',
-        ], 'complete lane dispatcher layout changed')
+        _sampled_text('--check-roles', old, 'lane')
         require(_sampled_text('--body-dump', old, index=15) == dump(ast.parse('''if capture:
             captured.record_at = geometry_at
             captured.low = low
