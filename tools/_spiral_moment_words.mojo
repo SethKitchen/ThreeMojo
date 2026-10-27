@@ -574,3 +574,84 @@ def fraction_texts_payload(payload: String) raises -> String:
         out.append(rows, out.new_str(text))
     out.root = rows
     return out.dumps()
+
+
+def _u64_decimal(text: String) raises -> UInt64:
+    """Return the value of an unsigned decimal integer.
+
+    Args:
+        text: Decimal digits, with no sign.
+
+    Returns:
+        The value.
+
+    Raises:
+        Error: The text is empty, not decimal, or larger than 64 bits.
+    """
+    var data = text.as_bytes()
+    if len(data) == 0:
+        raise Error("invalid UInt64 word")
+    var value = UInt64(0)
+    var index = 0
+    while index < len(data):
+        var byte = data[index]
+        if byte < 48 or byte > 57:
+            raise Error("invalid UInt64 word")
+        var digit = UInt64(Int(byte - 48))
+        if value > UInt64(1844674407370955161) or (
+            value == UInt64(1844674407370955161) and digit > UInt64(5)
+        ):
+            raise Error("invalid UInt64 word")
+        value = value * UInt64(10) + digit
+        index += 1
+    return value
+
+
+def hex_words_json(payload: String) raises -> String:
+    """Return the `0x` spelling of each decimal word.
+
+    Args:
+        payload: A JSON list of unsigned decimal integers.
+
+    Returns:
+        A JSON list of `0x` words with 16 uppercase digits.
+
+    Raises:
+        Error: A word is empty, not decimal, or larger than 64 bits.
+    """
+    var doc = PyJson.parse(payload)
+    var count = doc.length(doc.root)
+    var out = PyJson()
+    var rows = out.new_list()
+    var index = 0
+    while index < count:
+        var word = _u64_decimal(doc.text(doc.item(doc.root, index)))
+        out.append(rows, out.new_str(_hex_word(word)))
+        index += 1
+    out.root = rows
+    return out.dumps()
+
+
+def require_stored_words(payload: String) raises:
+    """Require decimal words to match a pinned `0x` list.
+
+    Args:
+        payload: JSON with `words`, `expected`, and `message`. `words` are
+            unsigned decimals. `expected` are `0x` spellings.
+
+    Raises:
+        Error: A word is invalid, or the lists differ. The text is `message`.
+    """
+    var doc = PyJson.parse(payload)
+    var words = doc.at(doc.root, "words")
+    var expected = doc.at(doc.root, "expected")
+    var message = doc.text(doc.at(doc.root, "message"))
+    var count = doc.length(words)
+    if count != doc.length(expected):
+        raise Error(message)
+    var index = 0
+    while index < count:
+        var spelled = _hex_word(_u64_decimal(doc.text(doc.item(words, index))))
+        if spelled != doc.text(doc.item(expected, index)):
+            raise Error(message)
+        index += 1

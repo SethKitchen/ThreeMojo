@@ -1,0 +1,51 @@
+# Copyright (c) 2026 Seth Kitchen, PE
+# SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
+# Noncommercial use is free; commercial use requires a paid license.
+# See LICENSE, LICENSE-COMMERCIAL.md and THIRD-PARTY-NOTICES.md
+
+"""Spell stored binary64 words as `0x` text.
+
+    carla_stored_words --hex PATH
+    carla_stored_words --require PATH
+
+`--hex` reads a JSON list of unsigned decimals and prints `0x` words.
+`--require` reads `words`, `expected`, and `message`, and prints nothing
+when the spellings match.
+"""
+
+from std.pathlib import Path
+from std.sys import argv, exit, stderr
+
+from tools._spiral_moment_words import hex_words_json, require_stored_words
+
+
+def _usage():
+    """Print the command usage and stop."""
+    print(
+        "usage: carla_stored_words --hex PATH | --require PATH",
+        file=stderr,
+    )
+    exit(2)
+
+
+def main() raises:
+    """Spell or check one list of stored words.
+
+    Raises:
+        Error: The command is invalid, or a word changed.
+    """
+    var arguments = argv()
+    if len(arguments) != 3:
+        _usage()
+    var mode = arguments[1]
+    if mode != "--hex" and mode != "--require":
+        _usage()
+    try:
+        var text = Path(arguments[2]).read_text()
+        if mode == "--hex":
+            print(hex_words_json(text), end="")
+            return
+        require_stored_words(text)
+    except error:
+        print(String(error), file=stderr)
+        exit(1)

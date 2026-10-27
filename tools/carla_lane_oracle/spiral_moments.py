@@ -109,8 +109,11 @@ def digest(data):
     return hashlib.sha256(data).hexdigest()
 
 
-def hexword(word):
-    return f'0x{word:016X}'
+def _require_stored_words(words, expected, message):
+    try:
+        ideal_projection.require_stored_words(words, expected, message)
+    except ValueError as error:
+        raise CheckError(str(error)) from error
 
 
 def fraction_of_word(word):
@@ -289,8 +292,8 @@ def verify_inputs(root):
                 'wrong array pin path/shape: ' + name)
         words = parse_array(_typed_source.historical_text(root, root / record['path'], (root / record['path']).read_text(encoding='utf-8')),
                             name, len(record['words']))
-        require([hexword(word) for word in words] == record['words'],
-                'stored constant words changed: ' + name)
+        _require_stored_words(words, record['words'],
+                              'stored constant words changed: ' + name)
         stored_words[name] = words
         flat_words.extend(words)
         flat_names.append(name)
@@ -323,8 +326,8 @@ def verify_inputs(root):
     scalar_words = _rounded_words(scalar_literals)
     require(len(scalar_words) == len(scalar_names), 'binary64 overflow')
     for name, record, word in zip(scalar_names, scalar_records, scalar_words):
-        require(hexword(word) == record['word'],
-                'stored scalar word changed: ' + name)
+        _require_stored_words([word], [record['word']],
+                              'stored scalar word changed: ' + name)
     blocks = {}
     block_items = []
     for name, record in pins['blocks'].items():
@@ -411,8 +414,8 @@ def verify_inputs(root):
             stored_words['_GL_NODES'], stored_words['_GL_WEIGHTS'])
     except ValueError as error:
         raise CheckError(str(error)) from error
-    require([hexword(word) for word in sums] == pins['rounded_node_sums'],
-            'rounded 1 + node words changed')
+    _require_stored_words(sums, pins['rounded_node_sums'],
+                          'rounded 1 + node words changed')
     constants['node_sums'] = [F(text) for text in _fraction_texts(sums)]
     return constants, pins
 

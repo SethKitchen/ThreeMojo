@@ -298,6 +298,57 @@ def decimal_words(literals):
     return [int(item, 16) for item in json.loads(result.stdout)]
 
 
+def hex_words(words):
+    """Return each word as ``0x`` and 16 uppercase hex digits."""
+    import os
+    import subprocess
+    import tempfile
+    from pathlib import Path
+    root = Path(__file__).resolve().parents[2]
+    mojo = os.environ.get('MOJO', str(root / '.venv' / 'bin' / 'mojo'))
+    payload = json.dumps([str(word) for word in words], separators=(',', ':'))
+    with tempfile.TemporaryDirectory(prefix='hex-words-') as directory:
+        path = Path(directory) / 'words.json'
+        path.write_text(payload)
+        result = subprocess.run(
+            ['sh', str(root / 'tools' / 'tool.sh'), mojo, 'carla_stored_words',
+             '--hex', str(path)],
+            capture_output=True, text=True)
+    if result.returncode != 0:
+        lines = [line.strip() for line in result.stderr.splitlines()
+                 if line.strip() and 'Crashpad' not in line]
+        message = lines[-1] if lines else result.stdout.strip()
+        raise ValueError(message)
+    return json.loads(result.stdout)
+
+
+def require_stored_words(words, expected, message):
+    """Require each word to match its pinned ``0x`` spelling."""
+    import os
+    import subprocess
+    import tempfile
+    from pathlib import Path
+    root = Path(__file__).resolve().parents[2]
+    mojo = os.environ.get('MOJO', str(root / '.venv' / 'bin' / 'mojo'))
+    payload = json.dumps({
+        'words': [str(word) for word in words],
+        'expected': list(expected),
+        'message': message,
+    }, separators=(',', ':'))
+    with tempfile.TemporaryDirectory(prefix='stored-words-') as directory:
+        path = Path(directory) / 'words.json'
+        path.write_text(payload)
+        result = subprocess.run(
+            ['sh', str(root / 'tools' / 'tool.sh'), mojo, 'carla_stored_words',
+             '--require', str(path)],
+            capture_output=True, text=True)
+    if result.returncode != 0:
+        lines = [line.strip() for line in result.stderr.splitlines()
+                 if line.strip() and 'Crashpad' not in line]
+        message = lines[-1] if lines else result.stdout.strip()
+        raise ValueError(message)
+
+
 def derive_rows(nodes, weights, cosine, sine):
     """Return the 64 derived moment rows for four stored word lists."""
     import os
@@ -305,14 +356,11 @@ def derive_rows(nodes, weights, cosine, sine):
     import tempfile
     from pathlib import Path
 
-    def spell(words):
-        return [f'0x{word:016X}' for word in words]
-
     root = Path(__file__).resolve().parents[2]
     mojo = os.environ.get('MOJO', str(root / '.venv' / 'bin' / 'mojo'))
     payload = json.dumps({
-        'nodes': spell(nodes), 'weights': spell(weights),
-        'cosine': spell(cosine), 'sine': spell(sine),
+        'nodes': hex_words(nodes), 'weights': hex_words(weights),
+        'cosine': hex_words(cosine), 'sine': hex_words(sine),
     }, separators=(',', ':'))
     with tempfile.TemporaryDirectory(prefix='moment-rows-') as directory:
         path = Path(directory) / 'words.json'
@@ -339,13 +387,10 @@ def rounded_node_sums(nodes, weights):
     import tempfile
     from pathlib import Path
 
-    def spell(words):
-        return [f'0x{word:016X}' for word in words]
-
     root = Path(__file__).resolve().parents[2]
     mojo = os.environ.get('MOJO', str(root / '.venv' / 'bin' / 'mojo'))
     payload = json.dumps(
-        {'nodes': spell(nodes), 'weights': spell(weights)},
+        {'nodes': hex_words(nodes), 'weights': hex_words(weights)},
         separators=(',', ':'))
     with tempfile.TemporaryDirectory(prefix='node-sums-') as directory:
         path = Path(directory) / 'words.json'
@@ -394,8 +439,7 @@ def fraction_texts(words):
     from pathlib import Path
     root = Path(__file__).resolve().parents[2]
     mojo = os.environ.get('MOJO', str(root / '.venv' / 'bin' / 'mojo'))
-    payload = json.dumps(
-        [f'0x{word:016X}' for word in words], separators=(',', ':'))
+    payload = json.dumps(hex_words(words), separators=(',', ':'))
     with tempfile.TemporaryDirectory(prefix='fraction-texts-') as directory:
         path = Path(directory) / 'words.json'
         path.write_text(payload)
