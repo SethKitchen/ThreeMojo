@@ -76,6 +76,8 @@ It admits trig and geometry word changes only for their reviewed token.
 
 It selects each reviewed declaration and checks that each premise fragment occurs once, in order.
 
+It keeps the five reviewed premise fragment lists.
+
 The singleton, frozen ARC, dispatch, raw-cut, and optional-runtime contracts use that declaration text.
 
 It also builds the significant token lists for the singleton, frozen ARC, dispatch, raw-cut, and selection contracts.

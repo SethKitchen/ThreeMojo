@@ -188,7 +188,8 @@ def read_record(root):
     return record
 
 
-def _gate_premises(groups):
+def _cleanup_premises(texts):
+    """Check the five reviewed premise declarations."""
     import json
     import os
     import subprocess
@@ -198,14 +199,10 @@ def _gate_premises(groups):
     mojo = os.environ.get('MOJO', str(root / '.venv' / 'bin' / 'mojo'))
     with tempfile.TemporaryDirectory(prefix='cleanup-premises-') as directory:
         folder = Path(directory)
-        rows = []
-        for index, (text, fragments, label) in enumerate(groups):
-            (folder / f'{index}.mojo').write_text(text)
-            rows.append({'label': label, 'fragments': list(fragments)})
-        (folder / 'labels.json').write_text(json.dumps(rows))
+        (folder / 'sources.json').write_text(json.dumps(texts, separators=(',', ':')))
         result = subprocess.run(
-            ['sh', str(root / 'tools' / 'tool.sh'), mojo, 'carla_cleanup_gate',
-             '--premises', str(folder)],
+            ['sh', str(root / 'tools' / 'tool.sh'), mojo,
+             'carla_cleanup_premises', str(folder)],
             capture_output=True, text=True)
     if result.returncode != 0:
         lines = [line.strip() for line in result.stderr.splitlines()
@@ -252,48 +249,13 @@ def verify_premises(root, *, _operation=None):
     bounds = _declaration(arc, 'bounds', ('_RoundedBox',))
     center = _declaration(arc, 'center', ('_RoundedArc',))
     outward = _declaration(junction, '_outward_float', ())
-    _gate_premises((
-        (line_context, (
-            'road._check_lane(section, lane)',
-            'if len(road.info.geometries) != 1: return None',
-            'not _RoundedBox.bounds(low, high).known',
-            'if info_index(road.info.geometries, low) != 0: return None',
-            'or info_index(road.info.lane_offsets, high) != offset_at',
-            'or info_index(road.info.elevations, high) != elevation_at',
-            'if width_at < 0 or info_index(widths, high) != width_at: return None',
-        ), 'LINE singleton/domain/low lookup and multi-record profile premises'),
-        (arc_context, (
-            'road._check_lane(section, lane)',
-            'if len(road.info.geometries) != 1: return None',
-            'if not _RoundedBox.bounds(low, high).known or high > road.length: return None',
-            'if info_index(road.info.geometries, low) != 0: return None',
-            'if len(road.info.lane_offsets) != 1 or len(road.info.elevations) != 1: return None',
-            'info_index(road.info.lane_offsets, low) != 0',
-            'or info_index(road.info.elevations, low) != 0',
-            'if len(widths) != 1: return None',
-            'if info_index(widths, low) != 0: return None',
-        ), 'ARC singleton/domain/low lookup premises'),
-        (bounds, ('_rounded_operand(low)', '_rounded_operand(high)',
-                  'and low <= high'), 'ordered finite domain premise'),
-        (center, (
-            'if not half.known: return [unknown, unknown, unknown]',
-            'var selector = _rounded_madd('
-            'half, _RoundedBox.point(_INV_HALF_PI), _RoundedBox.point(0.5))',
-            'if not selector.known or selector.low < 0.0 or selector.high >= 1.0: '
-            'return [unknown, unknown, unknown]',
-            'var square = half * half',
-        ), 'quarter implication requires the same accepted selector hull'),
-        (outward, (
-            'var result = Float32(value)',
-            'var outside: Bool',
-            'if lower: outside = Float64(result) > value',
-            'else: outside = Float64(result) < value',
-            'if outside:',
-            'UInt32(0x80000001) if lower else UInt32(1)',
-            'if (result > 0.0) == lower: bits -= 1 else: bits += 1',
-            'result = bitcast[DType.float32](bits)',
-        ), 'outward conversion direction and adjacent-word premises'),
-    ))
+    _cleanup_premises({
+        'line': line_context,
+        'arc': arc_context,
+        'bounds': bounds,
+        'center': center,
+        'outward': outward,
+    })
 
 
 
