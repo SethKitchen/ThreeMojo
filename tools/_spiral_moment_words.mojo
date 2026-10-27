@@ -11,6 +11,7 @@ conversion is used.
 
 from tools._bigint import BigInt
 from tools._fraction import Fraction
+from tools._python_json import PyJson
 
 
 comptime SIGN: UInt64 = 0x8000000000000000
@@ -313,3 +314,137 @@ def decimal_word(token: String) raises -> UInt64:
     if value.is_zero() and token.startswith("-"):
         return SIGN
     return nearest_even(value)
+
+
+def _hex_word(word: UInt64) -> String:
+    """Return `word` as `0x` and sixteen uppercase hexadecimal digits.
+
+    Args:
+        word: One binary64 encoding.
+
+    Returns:
+        The canonical literal.
+    """
+    var digits = "0123456789ABCDEF"
+    var text = String("0x")
+    var shift = 60
+    while shift >= 0:
+        var nibble = Int((word >> UInt64(shift)) & 15)
+        text += String(digits[byte = nibble : nibble + 1])
+        shift -= 4
+    return text
+
+
+def _parse_word(text: String) raises -> UInt64:
+    """Return one `0x` word.
+
+    Args:
+        text: A hexadecimal encoding with an optional `0x` prefix.
+
+    Returns:
+        The encoding.
+
+    Raises:
+        Error: The text is not one to sixteen hexadecimal digits.
+    """
+    var data = text.as_bytes()
+    var index = 0
+    if len(data) >= 2 and data[0] == 48 and (data[1] == 120 or data[1] == 88):
+        index = 2
+    if index >= len(data):
+        raise Error("malformed coefficient word")
+    var value = UInt64(0)
+    var digits = 0
+    while index < len(data):
+        var byte = data[index]
+        var nibble = -1
+        if byte >= 48 and byte <= 57:
+            nibble = Int(byte) - 48
+        elif byte >= 65 and byte <= 70:
+            nibble = Int(byte) - 55
+        elif byte >= 97 and byte <= 102:
+            nibble = Int(byte) - 87
+        if nibble < 0 or digits == 16:
+            raise Error("malformed coefficient word")
+        value = (value << 4) | UInt64(nibble)
+        digits += 1
+        index += 1
+    return value
+
+
+def _word_list(doc: PyJson, key: String) raises -> List[UInt64]:
+    """Return one hex list from a node-sum payload.
+
+    Args:
+        doc: The payload document.
+        key: `nodes` or `weights`.
+
+    Returns:
+        The encodings in order.
+
+    Raises:
+        Error: A word is malformed.
+    """
+    var node = doc.at(doc.root, key)
+    var count = doc.length(node)
+    var words = List[UInt64]()
+    var index = 0
+    while index < count:
+        words.append(_parse_word(doc.text(doc.item(node, index))))
+        index += 1
+    return words^
+
+
+def rounded_node_sums(
+    nodes: List[UInt64], weights: List[UInt64]
+) raises -> List[UInt64]:
+    """Return the rounded `1 + node` words and check the weight sum.
+
+    Args:
+        nodes: The five stored Gauss-Legendre nodes.
+        weights: The five stored Gauss-Legendre weights.
+
+    Returns:
+        The five nearest encodings of `1 + node`, ties to even.
+
+    Raises:
+        Error: A list does not hold five words, or the stored weights do
+            not keep the zeroth moment.
+    """
+    if len(nodes) != 5 or len(weights) != 5:
+        raise Error("wrong constant-array shape")
+    var sums = List[UInt64]()
+    for node in nodes:
+        sums.append(nearest_even(Fraction(1) + fraction_of_word(node)))
+    var total = Fraction(0)
+    for weight in weights:
+        total = total + fraction_of_word(weight)
+    var zeroth = Fraction(1) + Fraction.of(BigInt(3), BigInt.power_of_two(55))
+    if total / Fraction(2) != zeroth:
+        raise Error("stored zeroth moment must not be normalized to one")
+    return sums^
+
+
+def rounded_node_sums_payload(payload: String) raises -> String:
+    """Return the rounded node sums for one JSON word document.
+
+    Args:
+        payload: JSON with `nodes` and `weights`.
+
+    Returns:
+        A JSON list of five `0x` words.
+
+    Raises:
+        Error: A word is malformed, a list does not hold five words, or
+            the stored weights do not keep the zeroth moment.
+    """
+    var doc = PyJson.parse(payload)
+    var sums = rounded_node_sums(
+        _word_list(doc, "nodes"), _word_list(doc, "weights")
+    )
+    var out = PyJson()
+    var rows = out.new_list()
+    for word in sums:
+        out.append(rows, out.new_str(_hex_word(word)))
+    out.root = rows
+    return out.dumps()

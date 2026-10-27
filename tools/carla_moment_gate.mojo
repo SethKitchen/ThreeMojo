@@ -7,6 +7,7 @@
 
     carla_moment_gate --module PATH --interval PATH --geometry PATH --trig PATH
     carla_moment_gate --rows PATH
+    carla_moment_gate --node-sums PATH
 
 The program checks the texts it is given. It does not roll a successor
 back to a historical source. The caller does that before it starts the
@@ -22,7 +23,10 @@ from tools._spiral_moment_derive import (
     coefficient_rows_payload,
     stored_coefficient_words,
 )
-from tools._spiral_moment_words import fraction_of_word
+from tools._spiral_moment_words import (
+    fraction_of_word,
+    rounded_node_sums_payload,
+)
 
 
 comptime _MODULE = (
@@ -128,7 +132,7 @@ def _usage():
     print(
         (
             "usage: carla_moment_gate --module PATH --interval PATH"
-            " --geometry PATH --trig PATH | --rows PATH"
+            " --geometry PATH --trig PATH | --rows PATH | --node-sums PATH"
         ),
         file=stderr,
     )
@@ -136,12 +140,13 @@ def _usage():
 
 
 def main() raises:
-    """Check four source files, or print the derived moment rows."""
+    """Check four source files, or print derived rows or node sums."""
     var module = String("")
     var interval = String("")
     var geometry = String("")
     var trig = String("")
     var rows = String("")
+    var node_sums = String("")
     var arguments = argv()
     var index = 1
     while index < len(arguments):
@@ -152,6 +157,7 @@ def main() raises:
             or word == "--geometry"
             or word == "--trig"
             or word == "--rows"
+            or word == "--node-sums"
         ):
             if index + 1 >= len(arguments):
                 _usage()
@@ -164,21 +170,30 @@ def main() raises:
                 geometry = value
             elif word == "--rows":
                 rows = value
+            elif word == "--node-sums":
+                node_sums = value
             else:
                 trig = value
             index += 2
             continue
         _usage()
-    if rows.byte_length() > 0:
+    if rows.byte_length() > 0 or node_sums.byte_length() > 0:
         if (
             module.byte_length() > 0
             or interval.byte_length() > 0
             or geometry.byte_length() > 0
             or trig.byte_length() > 0
+            or (rows.byte_length() > 0 and node_sums.byte_length() > 0)
         ):
             _usage()
         try:
-            print(coefficient_rows_payload(Path(rows).read_text()), end="")
+            if node_sums.byte_length() > 0:
+                print(
+                    rounded_node_sums_payload(Path(node_sums).read_text()),
+                    end="",
+                )
+            else:
+                print(coefficient_rows_payload(Path(rows).read_text()), end="")
         except error:
             print(String(error), file=stderr)
             exit(1)

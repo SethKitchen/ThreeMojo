@@ -359,12 +359,14 @@ def verify_inputs(root):
         sum2_contracts.verify(root)
     except ValueError as error:
         raise CheckError('stored-half dependency closure: ' + str(error)) from error
-    sums = [nearest_even(F(1) + node) for node in constants['_GL_NODES']]
+    try:
+        sums = ideal_projection.rounded_node_sums(
+            stored_words['_GL_NODES'], stored_words['_GL_WEIGHTS'])
+    except ValueError as error:
+        raise CheckError(str(error)) from error
     require([hexword(word) for word in sums] == pins['rounded_node_sums'],
             'rounded 1 + node words changed')
     constants['node_sums'] = [fraction_of_word(word) for word in sums]
-    require(sum(constants['_GL_WEIGHTS']) / 2 == F(1) + F(3, 1 << 55),
-            'stored zeroth moment must not be normalized to one')
     return constants, pins
 
 

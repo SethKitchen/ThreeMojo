@@ -23,6 +23,7 @@ from tools._spiral_moment_words import (
     decimal_word,
     fraction_of_word,
     nearest_even,
+    rounded_node_sums,
 )
 
 
@@ -207,6 +208,30 @@ def test_one_decimal_literal_keeps_its_encoding() raises:
     var source = "comptime _PHASE: Array[Float64, 1] = [1e1]\n"
     var words = stored_coefficient_words(source, "_PHASE", 1)
     assert_equal(words[0], decimal_word("1e1"))
+
+
+def test_the_preface_rounds_nodes_and_checks_the_weight_sum() raises:
+    """Five live nodes round together, and five ones do not keep the moment."""
+    var geometry = Path(_GEOMETRY).read_text()
+    var sums = rounded_node_sums(
+        stored_coefficient_words(geometry, "_GL_NODES", 5),
+        stored_coefficient_words(geometry, "_GL_WEIGHTS", 5),
+    )
+    assert_equal(len(sums), 5)
+    assert_equal(sums[0], UInt64(0x3FB80498FD662CB8))
+    assert_equal(sums[2], UInt64(0x3FF0000000000000))
+    assert_equal(sums[4], UInt64(0x3FFE7FB670299D34))
+    var one_nodes = List[UInt64]()
+    var one_weights = List[UInt64]()
+    var index = 0
+    while index < 5:
+        one_nodes.append(UInt64(0x3FF0000000000000))
+        one_weights.append(UInt64(0x3FF0000000000000))
+        index += 1
+    with assert_raises(
+        contains="stored zeroth moment must not be normalized to one"
+    ):
+        _ = rounded_node_sums(one_nodes, one_weights)
 
 
 def test_rounded_node_sums_match_their_pins() raises:

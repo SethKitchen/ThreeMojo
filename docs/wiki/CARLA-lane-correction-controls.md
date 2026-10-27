@@ -74,6 +74,8 @@ It reads the decimal literals in one stored array or scalar declaration.
 
 It rounds one stored decimal literal to a binary64 word.
 
+It rounds one plus each stored node before the moment rows.
+
 It derives the stored moment rows in exact arithmetic.
 
 It checks the stored moment table against the derived words.

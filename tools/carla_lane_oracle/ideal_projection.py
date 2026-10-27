@@ -421,6 +421,36 @@ def derive_rows(nodes, weights, cosine, sine):
     return json.loads(result.stdout)
 
 
+def rounded_node_sums(nodes, weights):
+    """Return the rounded `1 + node` words for the stored nodes and weights."""
+    import os
+    import subprocess
+    import tempfile
+    from pathlib import Path
+
+    def spell(words):
+        return [f'0x{word:016X}' for word in words]
+
+    root = Path(__file__).resolve().parents[2]
+    mojo = os.environ.get('MOJO', str(root / '.venv' / 'bin' / 'mojo'))
+    payload = json.dumps(
+        {'nodes': spell(nodes), 'weights': spell(weights)},
+        separators=(',', ':'))
+    with tempfile.TemporaryDirectory(prefix='node-sums-') as directory:
+        path = Path(directory) / 'words.json'
+        path.write_text(payload)
+        result = subprocess.run(
+            ['sh', str(root / 'tools' / 'tool.sh'), mojo, 'carla_moment_gate',
+             '--node-sums', str(path)],
+            capture_output=True, text=True)
+    if result.returncode != 0:
+        lines = [line.strip() for line in result.stderr.splitlines()
+                 if line.strip() and 'Crashpad' not in line]
+        message = lines[-1] if lines else result.stdout.strip()
+        raise ValueError(message)
+    return [int(item, 16) for item in json.loads(result.stdout)]
+
+
 def verify_moment_table(text, words):
     """Return the table words when they match the derived canonical source."""
     import os
