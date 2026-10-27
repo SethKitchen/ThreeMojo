@@ -781,6 +781,46 @@ def _kept_lines(source: String) -> List[String]:
     return lines^
 
 
+def replace_line_span(
+    source: String, first: Int, last: Int, replacement: String
+) -> String:
+    """Replace one half-open line span and keep every other line.
+
+    Args:
+        source: The original module text.
+        first: The first line index to replace. A negative index starts at
+            the beginning.
+        last: The line index after the replaced span. A negative index starts
+            the tail at the beginning.
+        replacement: The text that takes the place of that span.
+
+    Returns:
+        The module with that span replaced. Each kept line retains its
+        newline.
+    """
+    var lines = _kept_lines(source)
+    var count = len(lines)
+    var prefix = first
+    if prefix < 0:
+        prefix = 0
+    if prefix > count:
+        prefix = count
+    var tail = last
+    if tail < 0:
+        tail = 0
+    var out = String("")
+    var index = 0
+    while index < prefix:
+        out += lines[index]
+        index += 1
+    out += replacement
+    index = tail
+    while index < count:
+        out += lines[index]
+        index += 1
+    return out
+
+
 def _leading_indent(line: String) -> String:
     """Return the leading spaces and tabs of a content line.
 

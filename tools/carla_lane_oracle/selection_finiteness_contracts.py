@@ -201,6 +201,30 @@ def _declaration_bounds(text, name, owner):
     return body, int(first), int(last)
 
 
+def _replace_span(text, first, last, replacement):
+    """Replace one half-open line span in `text`."""
+    import os
+    import subprocess
+    import tempfile
+    root = Path(__file__).resolve().parents[2]
+    mojo = os.environ.get('MOJO', str(root / '.venv' / 'bin' / 'mojo'))
+    with tempfile.TemporaryDirectory(prefix='line-span-') as directory:
+        folder = Path(directory)
+        (folder / 'source.text').write_text(text)
+        (folder / 'replacement.text').write_text(replacement)
+        (folder / 'span.text').write_text(str(first) + ' ' + str(last) + '\n')
+        result = subprocess.run(
+            ['sh', str(root / 'tools' / 'tool.sh'), mojo, 'carla_cleanup_gate',
+             '--splice', str(folder)],
+            capture_output=True, text=True)
+    if result.returncode != 0:
+        lines = [line.strip() for line in result.stderr.splitlines()
+                 if line.strip() and 'Crashpad' not in line]
+        message = lines[-1] if lines else result.stdout.strip()
+        raise ValueError(message)
+    return result.stdout
+
+
 def predecessor_text(root, path, *, _operation=None):
     """Verify both actual producers before reconstructing one legacy module."""
 # #333 explicit historical provenance views; current inputs remain operation-owned.
@@ -221,7 +245,6 @@ def predecessor_text(root, path, *, _operation=None):
         body, item['after_complete_function']])
     if current_doc != recorded_doc:
         raise ValueError('Selection complete successor body changed')
-    lines=text.splitlines(keepends=True)
-    restored=''.join(lines[:first])+item['before_complete_function']+''.join(lines[last:])
+    restored=_replace_span(text, first, last, item['before_complete_function'])
     _gate_restored(restored, item['before_token_sha256'])
     return restored

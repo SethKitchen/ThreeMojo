@@ -18,6 +18,8 @@ constant bits. Their README lists the four commands and report directory.
 
 `tools/carla_selection_gate.mojo` checks the selection-producer token digests and the phase-constant bounds.
 
+It restores one selection function inside its line span.
+
 `tools/carla_grouped_gate.mojo` checks the grouped-table token digest and the stored node and weight bounds.
 
 `tools/carla_y_gate.mojo` checks the five Y-finiteness token digests, the successor record digests, and the module token identity.

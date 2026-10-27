@@ -35,6 +35,7 @@
     carla_cleanup_gate --fragment-count PATH
     carla_cleanup_gate --try-only PATH
     carla_cleanup_gate --import-scope PATH
+    carla_cleanup_gate --splice DIR
     carla_cleanup_gate --syntax PATH
     carla_cleanup_gate --slice PATH --name NAME
     carla_cleanup_gate --fragment DIR
@@ -78,6 +79,7 @@ from tests._python_tokens import (
     function_slice,
     try_only_refusal,
     import_scope_prefix,
+    replace_line_span,
     moment_payload_json,
     moment_source,
     moment_words_json,
@@ -565,6 +567,7 @@ def _usage():
             " --imports PATH | --heading PATH | --function-dump PATH |"
             " --plain-dump PATH | --sum2-dump PATH | --statement-dump PATH |"
             " --fragment-count PATH | --try-only PATH | --import-scope PATH |"
+            " --splice DIR |"
             " --syntax PATH |"
             " --slice PATH --name NAME | --fragment DIR | --normalize PATH |"
             " --table PATH --count N | --moment-source PATH | --moment-payload"
@@ -620,6 +623,7 @@ def main() raises:
     var fragment_count_path = String("")
     var try_only = String("")
     var import_scope = String("")
+    var splice = String("")
     var syntax = String("")
     var slice_path = String("")
     var fragment = String("")
@@ -677,6 +681,7 @@ def main() raises:
             or word == "--fragment-count"
             or word == "--try-only"
             or word == "--import-scope"
+            or word == "--splice"
             or word == "--syntax"
             or word == "--slice"
             or word == "--fragment"
@@ -770,6 +775,8 @@ def main() raises:
                 try_only = value
             elif word == "--import-scope":
                 import_scope = value
+            elif word == "--splice":
+                splice = value
             elif word == "--syntax":
                 syntax = value
             elif word == "--slice":
@@ -874,6 +881,8 @@ def main() raises:
     if try_only.byte_length() > 0:
         modes += 1
     if import_scope.byte_length() > 0:
+        modes += 1
+    if splice.byte_length() > 0:
         modes += 1
     if syntax.byte_length() > 0:
         modes += 1
@@ -1109,6 +1118,50 @@ def main() raises:
             return
         if import_scope.byte_length() > 0:
             print(import_scope_prefix(Path(import_scope).read_text()), end="")
+            return
+        if splice.byte_length() > 0:
+            var span = Path(splice + "/span.text").read_text()
+            var first = 0
+            var last = 0
+            var seen = 0
+            var current = String("")
+            var data = span.as_bytes()
+            var cursor = 0
+            while cursor <= len(data):
+                var boundary = (
+                    cursor == len(data)
+                    or data[cursor] == 32
+                    or data[cursor] == 10
+                )
+                if boundary and current.byte_length() > 0:
+                    var number = 0
+                    try:
+                        number = Int(current)
+                    except error:
+                        _ = String(error)
+                        _usage()
+                    if seen == 0:
+                        first = number
+                    elif seen == 1:
+                        last = number
+                    else:
+                        _usage()
+                    seen += 1
+                    current = String("")
+                elif not boundary:
+                    current += chr(Int(data[cursor]))
+                cursor += 1
+            if seen != 2:
+                _usage()
+            print(
+                replace_line_span(
+                    Path(splice + "/source.text").read_text(),
+                    first,
+                    last,
+                    Path(splice + "/replacement.text").read_text(),
+                ),
+                end="",
+            )
             return
         if starts.byte_length() > 0:
             print(top_level_starts_json(Path(starts).read_text()), end="")
