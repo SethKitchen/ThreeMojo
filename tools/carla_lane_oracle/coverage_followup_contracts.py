@@ -67,18 +67,52 @@ def require(condition, message):
     if not condition:
         raise ValueError('coverage followup successor: ' + message)
 
+
+def _gate(migration, prior=None, components=None):
+    import os
+    import subprocess
+    import tempfile
+    from pathlib import Path
+    root = Path(__file__).resolve().parents[2]
+    mojo = os.environ.get('MOJO', str(root / '.venv' / 'bin' / 'mojo'))
+    with tempfile.TemporaryDirectory(prefix='followup-gate-') as directory:
+        folder = Path(directory)
+        record = folder / 'migration.json'
+        record.write_bytes(migration)
+        arguments = ['sh', str(root / 'tools' / 'tool.sh'), mojo,
+                     'carla_followup_gate', '--migration', str(record)]
+        if prior is not None:
+            prior_path = folder / 'prior.json'
+            prior_path.write_bytes(prior)
+            arguments.extend(['--prior', str(prior_path)])
+            if components is not None:
+                component_dir = folder / 'components'
+                component_dir.mkdir()
+                for name, payload in components:
+                    target = component_dir / name
+                    if target.parent != component_dir:
+                        raise ValueError('coverage followup successor: component migration record changed: ' + name)
+                    target.write_bytes(payload)
+                arguments.extend(['--components', str(component_dir)])
+        result = subprocess.run(arguments, capture_output=True, text=True)
+    if result.returncode != 0:
+        lines = [line.strip() for line in result.stderr.splitlines()
+                 if line.strip() and 'Crashpad' not in line]
+        message = lines[-1] if lines else result.stdout.strip()
+        raise ValueError(message)
+
+
 def read_record(root):
     payload = _typed_source.historical_bytes(root, root/MIGRATION, (root/MIGRATION).read_bytes())
-    require(hashlib.sha256(payload).hexdigest() == MIGRATION_SHA256, 'unreviewed migration record')
+    _gate(payload)
     record = json.loads(payload, object_pairs_hook=source.unique_keys)
-    require(type(record['schema']) is int and record['schema'] == 1
-            and set(record['sources']) == set(SOURCE_PATHS), 'wrong exact successor set')
     prior = root/'tools/carla_lane_oracle/coverage-invariant-migration.json'
-    require(hashlib.sha256(_typed_source.historical_bytes(root, prior, prior.read_bytes())).hexdigest() ==
-            record['prior_invariant_migration_sha256'], 'historical invariant record changed')
-    for name, digest in record['components'].items():
-        require(hashlib.sha256(_typed_source.historical_bytes(root, root/'tools/carla_lane_oracle'/name, (root/'tools/carla_lane_oracle'/name).read_bytes())).hexdigest()
-                == digest, 'component migration record changed: ' + name)
+    prior_bytes = _typed_source.historical_bytes(root, prior, prior.read_bytes())
+    _gate(payload, prior_bytes)
+    components = []
+    for name, _digest in record['components'].items():
+        components.append((name, _typed_source.historical_bytes(root, root/'tools/carla_lane_oracle'/name, (root/'tools/carla_lane_oracle'/name).read_bytes())))
+    _gate(payload, prior_bytes, components)
     return record
 
 def predecessor_pins(root, filename):

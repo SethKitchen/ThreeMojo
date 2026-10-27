@@ -7442,7 +7442,9 @@ _TYPED_CHECKER_SOURCE_EDITS = {
    "            'unreviewed supplied lane source')\n"))),
     'coverage_followup_contracts.py': (
         (3, 8,
-         (),
+         (
+
+         ),
          (
           'if __package__:\n',
           '    from . import source_contracts as _typed_source\n',
@@ -7452,43 +7454,103 @@ _TYPED_CHECKER_SOURCE_EDITS = {
          ),
         ),
         (9, 10,
-         (),
+         (
+
+         ),
          (
           '# #333 explicit historical provenance views; current inputs remain operation-owned.\n',
          ),
         ),
         (64, 65,
-         (),
+         (
+
+         ),
          (
           '\n',
          ),
         ),
-        (70, 71,
+        (69, 104,
+         (
+
+         ),
+         (
+          '\n',
+          'def _gate(migration, prior=None, components=None):\n',
+          '    import os\n',
+          '    import subprocess\n',
+          '    import tempfile\n',
+          '    from pathlib import Path\n',
+          '    root = Path(__file__).resolve().parents[2]\n',
+          "    mojo = os.environ.get('MOJO', str(root / '.venv' / 'bin' / 'mojo'))\n",
+          "    with tempfile.TemporaryDirectory(prefix='followup-gate-') as directory:\n",
+          '        folder = Path(directory)\n',
+          "        record = folder / 'migration.json'\n",
+          '        record.write_bytes(migration)\n',
+          "        arguments = ['sh', str(root / 'tools' / 'tool.sh'), mojo,\n",
+          "                     'carla_followup_gate', '--migration', str(record)]\n",
+          '        if prior is not None:\n',
+          "            prior_path = folder / 'prior.json'\n",
+          '            prior_path.write_bytes(prior)\n',
+          "            arguments.extend(['--prior', str(prior_path)])\n",
+          '            if components is not None:\n',
+          "                component_dir = folder / 'components'\n",
+          '                component_dir.mkdir()\n',
+          '                for name, payload in components:\n',
+          '                    target = component_dir / name\n',
+          '                    if target.parent != component_dir:\n',
+          "                        raise ValueError('coverage followup successor: component migration record changed: ' + name)\n",
+          '                    target.write_bytes(payload)\n',
+          "                arguments.extend(['--components', str(component_dir)])\n",
+          '        result = subprocess.run(arguments, capture_output=True, text=True)\n',
+          '    if result.returncode != 0:\n',
+          '        lines = [line.strip() for line in result.stderr.splitlines()\n',
+          "                 if line.strip() and 'Crashpad' not in line]\n",
+          '        message = lines[-1] if lines else result.stdout.strip()\n',
+          '        raise ValueError(message)\n',
+          '\n',
+          '\n',
+         ),
+        ),
+        (105, 107,
          (
           '    payload = (root/MIGRATION).read_bytes()\n',
+          "    require(hashlib.sha256(payload).hexdigest() == MIGRATION_SHA256, 'unreviewed migration record')\n",
          ),
          (
           '    payload = _typed_source.historical_bytes(root, root/MIGRATION, (root/MIGRATION).read_bytes())\n',
+          '    _gate(payload)\n',
          ),
         ),
-        (76, 77,
+        (108, 108,
+         (
+          "    require(type(record['schema']) is int and record['schema'] == 1\n",
+          "            and set(record['sources']) == set(SOURCE_PATHS), 'wrong exact successor set')\n",
+         ),
+         (
+
+         ),
+        ),
+        (109, 115,
          (
           '    require(hashlib.sha256(prior.read_bytes()).hexdigest() ==\n',
-         ),
-         (
-          '    require(hashlib.sha256(_typed_source.historical_bytes(root, prior, prior.read_bytes())).hexdigest() ==\n',
-         ),
-        ),
-        (79, 80,
-         (
+          "            record['prior_invariant_migration_sha256'], 'historical invariant record changed')\n",
+          "    for name, digest in record['components'].items():\n",
           "        require(hashlib.sha256((root/'tools/carla_lane_oracle'/name).read_bytes()).hexdigest()\n",
+          "                == digest, 'component migration record changed: ' + name)\n",
          ),
          (
-          "        require(hashlib.sha256(_typed_source.historical_bytes(root, root/'tools/carla_lane_oracle'/name, (root/'tools/carla_lane_oracle'/name).read_bytes())).hexdigest()\n",
+          '    prior_bytes = _typed_source.historical_bytes(root, prior, prior.read_bytes())\n',
+          '    _gate(payload, prior_bytes)\n',
+          '    components = []\n',
+          "    for name, _digest in record['components'].items():\n",
+          "        components.append((name, _typed_source.historical_bytes(root, root/'tools/carla_lane_oracle'/name, (root/'tools/carla_lane_oracle'/name).read_bytes())))\n",
+          '    _gate(payload, prior_bytes, components)\n',
          ),
         ),
-        (104, 117,
-         (),
+        (138, 151,
+         (
+
+         ),
          (
           'def _source_view(root, path, physical_text, *, _operation=None):\n',
           '    """Keep supplied physical views only for the helper\'s named authority domain."""\n',
@@ -7505,7 +7567,7 @@ _TYPED_CHECKER_SOURCE_EDITS = {
           '\n',
          ),
         ),
-        (127, 128,
+        (161, 162,
          (
           "        require(source.token_sha256(accepted.predecessor_text(root, path, **operation_args) if path in accepted.SOURCE_PATHS else cache_key.reviewed_text(root, path, _observe_text(root, path, (root/path).read_text(), _operation=_operation), **operation_args)) == item['after_token_sha256'],\n",
          ),
