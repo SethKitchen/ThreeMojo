@@ -45,43 +45,6 @@ SIGN = 1 << 63
 INFINITY = 0x7FF0000000000000
 MAX_FINITE = INFINITY - 1
 WORD_COUNT = 64 * 22 * 2
-ARRAY_SPECS = {
-    '_GL_NODES': ('extensions/carla/geometry.mojo', 5),
-    '_GL_WEIGHTS': ('extensions/carla/geometry.mojo', 5),
-    '_COS_COEFFICIENTS': ('extensions/carla/curve_trig.mojo', 11),
-    '_SIN_COEFFICIENTS': ('extensions/carla/curve_trig.mojo', 11),
-}
-SCALAR_NAMES = {'_PHASE_LIMIT', '_INV_HALF_PI', '_HALF_PI_HIGH', '_HALF_PI_LOW'}
-BLOCK_PATHS = {
-    'geometry_trig_aliases': 'extensions/carla/lane_geometry.mojo',
-    'scalar_spiral': 'extensions/carla/lane_geometry.mojo',
-    'scalar_horner': 'extensions/carla/curve_trig.mojo',
-    'scalar_sincos': 'extensions/carla/curve_trig.mojo',
-    'scalar_trig_wrappers': 'extensions/carla/curve_trig.mojo',
-    'ideal_sincos_selector': 'extensions/carla/curve_trig.mojo',
-    'ideal_horner': 'extensions/carla/curve_trig.mojo',
-    'ideal_sincos_branch': 'extensions/carla/curve_trig.mojo',
-    'ideal_spiral': 'extensions/carla/curve_bounds.mojo',
-    'ideal_uncertain': 'extensions/carla/curve_trig.mojo',
-}
-BLOCK_BOUNDARIES = {
-    'geometry_trig_aliases': ('from extensions.carla.curve_trig import (', 'from std.math import ceil'),
-    'scalar_spiral': ('def _lane_spiral(geometry: RoadGeometry, d: Float64)', 'def _lane_geometry_derivative_at('),
-    'scalar_horner': ('def _scalar_polynomial[', 'def _jet_polynomial['),
-    'scalar_sincos': ('@no_inline\ndef _curve_sincos(value: Float64)', 'def _curve_sin(value: Float64)'),
-    'scalar_trig_wrappers': ('def _curve_sin(value: Float64)', '@no_inline\ndef _curve_atan('),
-    'ideal_sincos_selector': ('def _sincos_expression[', 'def _constant_sincos_jet('),
-    'ideal_horner': ('def _expression_polynomial[', '@no_inline\ndef _curve_sincos('),
-    'ideal_sincos_branch': ('def _sincos_branch_expression[', 'def _uncertain(value:'),
-    'ideal_spiral': ('def _spiral_expression[', 'def _sample_index('),
-    'ideal_uncertain': ('def _uncertain_expression[', 'def _sincos_jet('),
-}
-ROUTING_PATHS = {
-    'ideal_caller': 'extensions/carla/curve_bounds.mojo',
-    'trig_dependencies': 'extensions/carla/curve_trig.mojo',
-    'canonical_scalar': 'extensions/carla/lane_geometry.mojo',
-    'stored_geometry': 'extensions/carla/geometry.mojo',
-}
 DEPENDENCIES = {
     'group': 'stored_arithmetic',
     'pin_file': 'tools/carla_lane_oracle/runtime-source-pins.json',
@@ -286,18 +249,76 @@ def _moment_guard(mode, payload):
         raise CheckError(str(error)) from error
 
 
+_NAME_SPEC = None
+
+
+def _moment_pin_spec(dependencies):
+    import os
+    import subprocess
+    import tempfile
+    root = Path(__file__).resolve().parents[2]
+    mojo = os.environ.get('MOJO', str(root / '.venv' / 'bin' / 'mojo'))
+    text = json.dumps({'dependencies': dependencies}, separators=(',', ':'))
+    with tempfile.TemporaryDirectory(prefix='moment-pin-spec-') as directory:
+        path = Path(directory) / 'spec.json'
+        path.write_text(text)
+        result = subprocess.run(
+            ['sh', str(root / 'tools' / 'tool.sh'), mojo, 'carla_moment_pin_spec',
+             str(path)],
+            capture_output=True, text=True)
+    if result.returncode != 0:
+        lines = [line.strip() for line in result.stderr.splitlines()
+                 if line.strip() and 'Crashpad' not in line]
+        message = lines[-1] if lines else result.stdout.strip()
+        raise CheckError(message)
+    return json.loads(result.stdout)
+
+
+def _name_spec():
+    global _NAME_SPEC
+    if _NAME_SPEC is None:
+        _NAME_SPEC = _moment_pin_spec({})
+    return _NAME_SPEC
+
+
+def _array_specs():
+    return {name: (record['path'], record['size'])
+            for name, record in _name_spec()['arrays'].items()}
+
+
+def _scalar_names():
+    return set(_name_spec()['scalars'])
+
+
+def _block_paths():
+    return dict(_name_spec()['block_paths'])
+
+
+def _block_boundaries():
+    return {name: (record['begin'], record['end'])
+            for name, record in _name_spec()['boundaries'].items()}
+
+
+def _routing_paths():
+    return dict(_name_spec()['routing_paths'])
+
+
+def __getattr__(name):
+    if name == 'ARRAY_SPECS':
+        return _array_specs()
+    if name == 'SCALAR_NAMES':
+        return _scalar_names()
+    if name == 'BLOCK_PATHS':
+        return _block_paths()
+    if name == 'BLOCK_BOUNDARIES':
+        return _block_boundaries()
+    if name == 'ROUTING_PATHS':
+        return _routing_paths()
+    raise AttributeError(f'module {__name__!r} has no attribute {name!r}')
+
+
 def _require_moment_pins(pins):
-    spec = {
-        'arrays': {name: {'path': path, 'size': size}
-                   for name, (path, size) in ARRAY_SPECS.items()},
-        'scalars': {name: 1 for name in SCALAR_NAMES},
-        'scalar_path': 'extensions/carla/curve_trig.mojo',
-        'block_paths': BLOCK_PATHS,
-        'boundaries': {name: {'begin': begin, 'end': end}
-                       for name, (begin, end) in BLOCK_BOUNDARIES.items()},
-        'routing_paths': ROUTING_PATHS,
-        'dependencies': DEPENDENCIES,
-    }
+    spec = _moment_pin_spec(DEPENDENCIES)
     try:
         ideal_projection.require_moment_pins(pins, spec)
     except ValueError as error:
@@ -377,7 +398,7 @@ def verify_inputs(root):
         except ValueError as error:
             raise CheckError(str(error)) from error
         source = _typed_source.historical_text(root, root / record['path'], (root / record['path']).read_text(encoding='utf-8'))
-        current = ideal_projection.module_routing(source, set(ARRAY_SPECS) | SCALAR_NAMES)
+        current = ideal_projection.module_routing(source, set(_array_specs()) | _scalar_names())
         if name == 'ideal_caller':
             # Keep the historical routing pin. Validate the exact additive
             # try-only refusal, then project only its default-False parameter.

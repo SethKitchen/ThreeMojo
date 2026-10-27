@@ -196,6 +196,8 @@ It reads each stored hexadecimal word as an integer.
 
 It checks the moment pin sets, paths, dependency closure, legacy digest, and result pins.
 
+It keeps the moment array paths, scalar names, block boundaries, and routing paths.
+
 It writes the canonical stored-moment table source.
 
 It returns one normalized source block between two markers.
