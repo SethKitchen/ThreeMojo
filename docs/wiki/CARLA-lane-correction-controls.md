@@ -56,6 +56,8 @@ It keeps a component name inside its directory.
 
 It uses the last path part as the pin file name.
 
+It writes each historical pin with two-space indentation.
+
 It compares each successor token digest before the predecessor fallback.
 
 `tools/carla_dispatch_gate.mojo` checks the curve support and dispatch record, the predecessor edge, and the operation graphs.

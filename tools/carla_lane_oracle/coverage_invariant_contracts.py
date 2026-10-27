@@ -196,6 +196,31 @@ def _path_basename(text):
     return _component_tool('--base', text)
 
 
+def _indent_json(value):
+    """Return `json.dumps(value, indent=2)` plus a newline, as bytes."""
+    import os
+    import subprocess
+    import tempfile
+    from pathlib import Path
+    payload = json.dumps(value, separators=(',', ':'))
+    root = Path(__file__).resolve().parents[2]
+    mojo = os.environ.get('MOJO', str(root / '.venv' / 'bin' / 'mojo'))
+    with tempfile.TemporaryDirectory(prefix='json-indent-') as directory:
+        path = Path(directory) / 'value.json'
+        path.write_text(payload)
+        result = subprocess.run(
+            ['sh', str(root / 'tools' / 'tool.sh'), mojo,
+             'carla_json_indent', str(path)],
+            capture_output=True)
+    if result.returncode != 0:
+        lines = [line.strip() for line in result.stderr.splitlines()
+                 if line.strip() and b'Crashpad' not in line]
+        message = (lines[-1] if lines else result.stdout).decode(
+            'utf-8', 'replace').strip()
+        raise ValueError(message)
+    return result.stdout + b'\n'
+
+
 def predecessor_pins(root, filename):
     """Verify active bytes, reverse every admitted edit, verify historical bytes."""
     filename = _path_basename(str(filename))
@@ -208,7 +233,7 @@ def predecessor_pins(root, filename):
     _gate_digest(payload, record['after_sha256'], 'after', filename)
     pins = json.loads(payload, object_pairs_hook=source.unique_keys)
     _apply_transitions(pins, record['transitions'])
-    original = (json.dumps(pins, indent=2)+'\n').encode()
+    original = _indent_json(pins)
     _gate_digest(original, record['before_sha256'], 'before', filename)
     return original
 
@@ -267,7 +292,7 @@ def _pin_predecessor(payload, record, filename):
     _gate_digest(payload, record['after_sha256'], 'after', filename)
     pins = json.loads(payload, object_pairs_hook=source.unique_keys)
     _apply_transitions(pins, record['transitions'])
-    original = (json.dumps(pins, indent=2)+'\n').encode()
+    original = _indent_json(pins)
     _gate_digest(original, record['before_sha256'], 'before', filename)
     return original
 
